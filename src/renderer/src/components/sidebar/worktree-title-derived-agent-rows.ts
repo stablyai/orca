@@ -1,6 +1,7 @@
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { formatAgentTypeLabel, isClaudeManagementTitle } from '@/lib/agent-status'
 import { isCursorAgentTitle } from '../../../../shared/agent-title-core'
+import { isShellProcess } from '../../../../shared/agent-detection'
 import { classifyTitleActivity, resolveTitleActivityLabel } from '@/lib/pane-agent-evidence'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import type {
@@ -149,11 +150,20 @@ function buildTitleDerivedAgentRow(args: {
   // Why (cursor): the native `cursor agent` literal is deliberately status-less so a
   // redraw cannot stomp hook state — but it still identifies a live pane, so the row
   // reads idle instead of vanishing (#10258).
-  const status = isClaudeAgentsTitle
+  const classifiedStatus = isClaudeAgentsTitle
     ? 'idle'
     : (classifyTitleActivity(title) ?? (isCursorAgentTitle(title) ? 'idle' : null))
-  const label = isClaudeAgentsTitle ? 'Claude Code' : resolveTitleActivityLabel(title)
-  if (!status || !label) {
+  const classifiedLabel = isClaudeAgentsTitle ? 'Claude Code' : resolveTitleActivityLabel(title)
+  // Why: Grok keeps identity because session titles still contain "grok". Cursor
+  // replaces the native identity title with an arbitrary conversation name that
+  // has no provider token, so the pane's known owner has to supply identity.
+  // Shell/default titles still mean exit — same gate as use-tab-agent — so this
+  // cannot mint a row from zsh.
+  const owner = args.ownerAgentType && args.ownerAgentType !== 'unknown' ? args.ownerAgentType : null
+  const ownerClaimsSessionTitle =
+    owner === 'cursor' && !titleShowsNoAgent(title, args.tab.defaultTitle)
+  const status = classifiedStatus ?? (ownerClaimsSessionTitle ? 'idle' : null)
+  if (!status || (!classifiedLabel && !ownerClaimsSessionTitle)) {
     return null
   }
   if (!isTerminalLeafId(args.leafId)) {
@@ -161,19 +171,23 @@ function buildTitleDerivedAgentRow(args: {
   }
   const paneKey = makePaneKey(args.tab.id, args.leafId)
   const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
-  const titleAgentType = isClaudeAgentsTitle
-    ? 'claude'
-    : resolveTitleDerivedAgentType(title, label, args.ownerAgentType)
+  let titleAgentType: AgentType | null = null
+  if (classifiedLabel) {
+    titleAgentType = isClaudeAgentsTitle
+      ? 'claude'
+      : resolveTitleDerivedAgentType(title, classifiedLabel, args.ownerAgentType)
+  }
   // Why: a status frame proves activity, not identity, so the resolver drops it.
   // Hook-less agents over SSH (Codex, #8711; OpenCode's '. '/'* ' frames, #8940)
   // surface only decorated task titles; fall back to the pane's known owner instead
-  // of hiding the pane. Safe because the `!status || !label` gate above already
-  // rejects plain shell titles — this path must never manufacture a row from one.
-  const agentType = titleAgentType ?? args.ownerAgentType
+  // of hiding the pane. Safe because the gate above already rejects plain shell
+  // titles — this path must never manufacture a row from one.
+  const agentType = titleAgentType ?? owner
   if (!agentType) {
     return null
   }
-  const rowLabel = titleAgentType ? label : formatAgentTypeLabel(agentType)
+  const rowLabel =
+    titleAgentType && classifiedLabel ? classifiedLabel : formatAgentTypeLabel(agentType)
   const rowState = titleStatusToRowState(status)
   const secondary =
     status === 'permission' ? 'Needs input' : status === 'working' ? 'Running' : 'Idle'
@@ -272,6 +286,13 @@ export function resolveAgentTypeFromTerminalTitle(
         ownerAgentType
       ) ?? null)
     : null
+}
+
+// Why: matches use-tab-agent.titleShowsNoAgent so sidebar rows and tab-icon
+// identity agree on when a live title is just a shell / default prompt.
+function titleShowsNoAgent(title: string, defaultTitle?: string): boolean {
+  const trimmed = title.trim()
+  return trimmed.length > 0 && (isShellProcess(trimmed) || trimmed === defaultTitle?.trim())
 }
 
 function titleStatusToRowState(

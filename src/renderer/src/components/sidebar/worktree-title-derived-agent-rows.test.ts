@@ -304,6 +304,54 @@ describe('buildTitleDerivedAgentRows', () => {
     expect(rows.map((row) => [row.agentType, row.state])).toEqual([['cursor', 'working']])
   })
 
+  // Why: cursor-agent replaces its native identity title with whatever conversation
+  // name it generated. Grok can keep a trailing " - grok" token; Cursor cannot,
+  // so the launched owner has to keep the sidebar row for any non-shell title.
+  it('keeps a launched Cursor pane visible under an arbitrary session title', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'cursor' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: 'Rename the auth helper' } },
+      ptyIdsByTabId: { 'tab-1': ['pty-cursor'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state, row.entry.prompt])).toEqual([
+      ['cursor', 'idle', 'Cursor']
+    ])
+    expect(rows[0]?.entry.terminalTitle).toBe('Rename the auth helper')
+  })
+
+  it('does not keep a launched Cursor pane after the title returns to the shell', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'cursor', defaultTitle: 'Terminal 1' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: 'zsh' } },
+      ptyIdsByTabId: { 'tab-1': ['pty-cursor'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+
+  it('does not invent a Cursor row from an arbitrary title without launch identity', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-1': { 1: 'Rename the auth helper' } },
+      ptyIdsByTabId: { 'tab-1': ['pty-anon'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows).toHaveLength(0)
+  })
+
   // #8940: an OpenCode pane's own task text must not hand the row to Claude Code.
   it('keeps an OpenCode-launched pane OpenCode across its own status frames', () => {
     const frames: [string, string][] = [
