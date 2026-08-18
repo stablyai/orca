@@ -259,14 +259,17 @@ jobs:
           # non-zero and would red this required check over something unrelated to the
           # PR. Every fish outcome is judged by the version gate below instead, so only
           # the zsh install (which has no such gate) stays fatal here.
-          sudo apt-get update || true
           # Why retry only here: adding the PPA is the network-flaky step, and the
           # version gate below is fatal, so a transient Launchpad blip would
           # otherwise red a required check on PRs unrelated to shells.
+          # Why -n: add-apt-repository refreshes every configured repo on its own. With
+          # an update on each side of it this step refreshed them three times over, and
+          # the Azure archive mirror alone costs ~15-30s a pass. The PPA index is the
+          # only thing the repo list gains here, and the single update below fetches it.
           for attempt in 1 2 3; do
-            sudo add-apt-repository -y ppa:fish-shell/release-4 && break
+            sudo add-apt-repository -y -n ppa:fish-shell/release-4 && break
             echo "add-apt-repository attempt ${attempt} failed; retrying" >&2
-            sudo add-apt-repository -y -r ppa:fish-shell/release-4 || true
+            sudo add-apt-repository -y -n -r ppa:fish-shell/release-4 || true
             sleep 5
           done
           sudo apt-get update || true
