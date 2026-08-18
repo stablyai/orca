@@ -13923,6 +13923,19 @@
         },
         "AutomationListLocalRows": {
           "c92c9463c6": "Acciones de automatización"
+        },
+        "AutomationListFilterMenu": {
+          "926e785e4d": "Agentes de búsqueda...",
+          "491043ee45": "Ningún agente coincide con su búsqueda.",
+          "agent": "Agente",
+          "lastRun": "Última ejecución",
+          "all": "Todas",
+          "failed": "Fallida",
+          "succeeded": "Correcta",
+          "neverRan": "Nunca se ejecutó",
+          "filters": "Filtros",
+          "clear": "Limpiar filtros",
+          "removeFilter": "Eliminar filtro de {{value0}}"
         }
       },
       "agent": {

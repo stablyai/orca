@@ -13923,6 +13923,19 @@
         },
         "AutomationListLocalRows": {
           "c92c9463c6": "自動化の操作"
+        },
+        "AutomationListFilterMenu": {
+          "926e785e4d": "Agent を検索…",
+          "491043ee45": "検索に一致する Agent はありません。",
+          "agent": "Agent",
+          "lastRun": "前回の実行",
+          "all": "すべて",
+          "failed": "失敗",
+          "succeeded": "成功",
+          "neverRan": "未実行",
+          "filters": "フィルター",
+          "clear": "フィルターをクリア",
+          "removeFilter": "{{value0}} フィルターを解除"
         }
       },
       "agent": {

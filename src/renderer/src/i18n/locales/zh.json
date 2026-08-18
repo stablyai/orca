@@ -13943,6 +13943,19 @@
         },
         "AutomationListLocalRows": {
           "c92c9463c6": "自动化操作"
+        },
+        "AutomationListFilterMenu": {
+          "926e785e4d": "搜索智能体...",
+          "491043ee45": "没有智能体符合您的搜索。",
+          "agent": "智能体",
+          "lastRun": "上次运行",
+          "all": "全部",
+          "failed": "失败",
+          "succeeded": "成功",
+          "neverRan": "从未运行",
+          "filters": "筛选器",
+          "clear": "清除筛选器",
+          "removeFilter": "移除 {{value0}} 筛选器"
         }
       },
       "agent": {
