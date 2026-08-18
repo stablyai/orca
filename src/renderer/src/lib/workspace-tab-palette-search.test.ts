@@ -7,6 +7,7 @@ import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-r
 import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import { PALETTE_QUERY_MAX_TOKENS } from './palette-match/palette-query'
 import { buildSearchableWorkspaceTabs, searchWorkspaceTabs } from './workspace-tab-palette-search'
 
 const WT_ROOT = path.join('tmp', 'wt-1')
@@ -233,10 +234,9 @@ describe('workspace-tab-palette-search', () => {
 
     expect(entries.map((entry) => entry.tab.id)).toEqual(['editor-preview'])
     expect(searchWorkspaceTabs(entries, 'preview')[0]?.title).toBe('readme.md (preview)')
-    expect(searchWorkspaceTabs(entries, path.join('docs', 'readme'))[0]?.secondaryRange).toEqual({
-      start: 0,
-      end: 11
-    })
+    expect(searchWorkspaceTabs(entries, path.join('docs', 'readme'))[0]?.secondaryRanges).toEqual([
+      { start: 0, end: 11 }
+    ])
   })
 
   it('indexes all editor-family content types when their backing file is open', () => {
@@ -473,10 +473,7 @@ describe('workspace-tab-palette-search', () => {
 
     expect(searchWorkspaceTabs(entries, 'workspace-tab-search')[0]).toMatchObject({
       worktreeName: 'feature/workspace-tab-search',
-      worktreeRange: {
-        start: 'feature/'.length,
-        end: 'feature/workspace-tab-search'.length
-      }
+      worktreeRanges: [{ start: 'feature/'.length, end: 'feature/workspace-tab-search'.length }]
     })
   })
 
@@ -490,7 +487,7 @@ describe('workspace-tab-palette-search', () => {
 
     expect(searchWorkspaceTabs(entries, '')[0]).toMatchObject({
       worktreeName: 'design-review',
-      worktreeRange: null
+      worktreeRanges: []
     })
   })
 
@@ -500,27 +497,66 @@ describe('workspace-tab-palette-search', () => {
     expect(emptyQuery).toMatchObject({
       contentType: 'terminal',
       secondaryText: '',
-      secondaryRange: null
+      secondaryRanges: []
     })
     expect(entries[0]?.secondarySearchTexts).toEqual([])
   })
 
   it('still finds terminals via type aliases without showing a secondary', () => {
-    const entries = buildEntries()
     // Title is agent-named so the hit has to come from the type alias, not the title.
-    const renamed = entries.map((entry, index) =>
-      index === 0 ? { ...entry, title: 'Fix login race', titleSearchText: 'Fix login race' } : entry
-    )
-    const hit = searchWorkspaceTabs(renamed, 'terminal')[0]
+    const entries = buildEntries({
+      tabsByWorktree: { 'wt-1': [] },
+      unifiedTabsByWorktree: { 'wt-1': [makeUnifiedTab({ label: 'Fix login race' })] }
+    })
+    const hit = searchWorkspaceTabs(entries, 'terminal')[0]
     expect(hit).toMatchObject({
       contentType: 'terminal',
       title: 'Fix login race',
       secondaryText: '',
-      secondaryRange: null,
-      typeAliasMatch: {
-        text: 'terminal tab',
-        range: { start: 0, end: 8 }
+      secondaryRanges: [],
+      // The bare alias matches exactly, so it outranks "terminal tab"; its range
+      // indexes the alias string, not the row.
+      typeAliasMatch: { text: 'terminal', ranges: [{ start: 0, end: 8 }] }
+    })
+  })
+
+  it('matches a query spanning the tab title and the worktree branch', () => {
+    const entries = buildEntries({
+      tabsByWorktree: { 'wt-1': [] },
+      unifiedTabsByWorktree: { 'wt-1': [makeUnifiedTab({ label: 'Fix login race' })] }
+    })
+
+    const hit = searchWorkspaceTabs(entries, 'login workspace-tab-search')[0]
+    expect(hit?.titleRanges).toEqual([{ start: 4, end: 9 }])
+    expect(hit?.branchRanges).toEqual([
+      { start: 'feature/'.length, end: 'feature/workspace-tab-search'.length }
+    ])
+  })
+
+  it('keeps an agent-snippet-only hit but sorts it after every structured hit', () => {
+    const entries = buildEntries({
+      tabsByWorktree: { 'wt-1': [] },
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          makeUnifiedTab({ id: 'tab-agent', entityId: 'terminal-agent', label: 'Claude Code' }),
+          makeUnifiedTab({ id: 'tab-title', entityId: 'terminal-title', label: 'Websocket notes' })
+        ]
+      },
+      agentStatusByPaneKey: {
+        'terminal-agent:leaf-a': makeAgentEntry({ tabId: 'terminal-agent' })
+      },
+      groupsByWorktree: {
+        'wt-1': [makeGroup({ activeTabId: 'tab-agent', tabOrder: ['tab-agent', 'tab-title'] })]
       }
     })
+
+    const results = searchWorkspaceTabs(entries, 'websocket')
+    expect(results.map((result) => result.tabId)).toEqual(['tab-title', 'tab-agent'])
+    expect(results[1].secondaryText).toBe('Implement the websocket retry loop')
+  })
+
+  it('rejects a query with more unique tokens than the matcher accepts', () => {
+    const query = Array.from({ length: PALETTE_QUERY_MAX_TOKENS + 1 }, (_, i) => `t${i}`).join(' ')
+    expect(searchWorkspaceTabs(buildEntries(), query)).toEqual([])
   })
 })

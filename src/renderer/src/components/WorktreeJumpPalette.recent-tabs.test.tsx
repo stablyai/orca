@@ -376,12 +376,12 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     })
     await flushEffects()
 
-    // Why the two word-start rows keep their input order: relevance ranks by where the match sits
-    // relative to a word boundary, not by raw offset — equal hits still defer to smart sort.
+    // Why word-b beats word-a despite input order: `perf` is a whole word in
+    // `rc-perf-update-channels` but only a prefix of `performance`.
     expect(getRenderedRowIds().filter((id) => id.startsWith('worktree:'))).toEqual([
       'worktree:wt-prefix',
-      'worktree:wt-word-a',
-      'worktree:wt-word-b'
+      'worktree:wt-word-b',
+      'worktree:wt-word-a'
     ])
   })
 

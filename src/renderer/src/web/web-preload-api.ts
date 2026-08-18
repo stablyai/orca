@@ -942,6 +942,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       drop: () => {},
       dropByTabPrefix: () => {},
       retirePaneAuthority: () => {},
+      restorePaneAuthority: () => {},
       transferPaneAuthority: () => {}
     },
     mobile: {

@@ -98,7 +98,6 @@ inline src/renderer/src/components/UpdateCard.tsx
 inline src/renderer/src/components/WorktreeJumpPalette.tsx
 inline src/renderer/src/components/activity/ActivityPrototypePage.tsx
 inline src/renderer/src/components/automations/AutomationsPage.tsx
-inline src/renderer/src/components/browser-pane/BrowserPane.tsx
 inline src/renderer/src/components/editor/CombinedDiffViewer.tsx
 inline src/renderer/src/components/editor/EditorContent.tsx
 inline src/renderer/src/components/editor/IpynbViewer.tsx

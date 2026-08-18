@@ -18,62 +18,20 @@ import {
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { isSshTargetConnecting, type SshTargetBusyAction } from './ssh-target-action-state'
-import { formatSshUserFacingError } from './ssh-user-facing-error'
 import { translate } from '@/i18n/i18n'
 
 // ── Shared status helpers ────────────────────────────────────────────
 
-export function getSshConnectionStatusLabel(status: SshConnectionStatus): string {
-  switch (status) {
-    case 'disconnected':
-      return translate('auto.components.settings.SshTargetCard.statusDisconnected', 'Disconnected')
-    case 'connecting':
-      return translate('auto.components.settings.SshTargetCard.statusConnecting', 'Connecting…')
-    case 'auth-failed':
-      return translate('auto.components.settings.SshTargetCard.statusAuthFailed', 'Auth failed')
-    case 'deploying-relay':
-      return translate(
-        'auto.components.settings.SshTargetCard.statusDeployingRelay',
-        'Deploying Relay…'
-      )
-    case 'connected':
-      return translate('auto.components.settings.SshTargetCard.statusConnected', 'Connected')
-    case 'reconnecting':
-      return translate('auto.components.settings.SshTargetCard.statusReconnecting', 'Reconnecting…')
-    case 'reconnection-failed':
-      return translate(
-        'auto.components.settings.SshTargetCard.statusReconnectionFailed',
-        'Reconnection failed'
-      )
-    case 'error':
-      return translate('auto.components.settings.SshTargetCard.18968ede9e', 'Error')
-  }
-}
-
 export const STATUS_LABELS: Record<SshConnectionStatus, string> = {
-  get disconnected() {
-    return getSshConnectionStatusLabel('disconnected')
-  },
-  get connecting() {
-    return getSshConnectionStatusLabel('connecting')
-  },
-  get 'auth-failed'() {
-    return getSshConnectionStatusLabel('auth-failed')
-  },
-  get 'deploying-relay'() {
-    return getSshConnectionStatusLabel('deploying-relay')
-  },
-  get connected() {
-    return getSshConnectionStatusLabel('connected')
-  },
-  get reconnecting() {
-    return getSshConnectionStatusLabel('reconnecting')
-  },
-  get 'reconnection-failed'() {
-    return getSshConnectionStatusLabel('reconnection-failed')
-  },
+  disconnected: 'Disconnected',
+  connecting: 'Connecting\u2026',
+  'auth-failed': 'Auth failed',
+  'deploying-relay': 'Deploying relay\u2026',
+  connected: 'Connected',
+  reconnecting: 'Reconnecting\u2026',
+  'reconnection-failed': 'Reconnection failed',
   get error() {
-    return getSshConnectionStatusLabel('error')
+    return translate('auto.components.settings.SshTargetCard.18968ede9e', 'Error')
   }
 }
 
@@ -343,10 +301,10 @@ export function SshTargetCard({
           {target.identityFile ? ` \u2022 ${target.identityFile}` : ''}
           {` \u2022 ${terminalPersistence}`}
         </p>
+        {/* Why not truncate: host key failures put the remedy (`ssh-keygen -R <host>`) at the end,
+            and a one-line clamp with no tooltip made it unreachable even on hover. */}
         {state?.error ? (
-          <p className="mt-0.5 truncate text-xs text-red-400">
-            {formatSshUserFacingError(state.error)}
-          </p>
+          <p className="mt-0.5 text-xs text-red-400 [overflow-wrap:anywhere]">{state.error}</p>
         ) : null}
       </div>
 

@@ -162,6 +162,45 @@ export function tokenizeStartupCommand(
     : tokenizeCustomCommandTemplate(value)
 }
 
+/** True when every byte of `value` is accounted for by `tokens`/`spans` under
+ * `shell` — the precondition for splicing an argument in by source span.
+ *
+ * Why: any token the tokenizer cannot model for this shell — an operator,
+ * comment, expansion, or cmd single-quoted region — means a splice could cut
+ * live syntax or misread a literal as a flag. The whole command must be
+ * modelable, including the executable itself; only PowerShell's leading call
+ * operator is a known-safe divergent token. A bare `--%` makes PowerShell pass
+ * the rest of the line to the child literally, so spliced quoting would arrive
+ * as literal bytes.
+ */
+export function isFullyModelableStartupCommand(
+  value: string,
+  tokens: readonly string[],
+  spans: readonly CommandTokenSpan[],
+  shell: AgentStartupShell
+): boolean {
+  for (let i = 0; i <= tokens.length; i += 1) {
+    const gapStart = i === 0 ? 0 : spans[i - 1].end
+    const gapEnd = i === tokens.length ? value.length : spans[i].start
+    if (!/^[ \t]*$/.test(value.slice(gapStart, gapEnd))) {
+      return false
+    }
+    if (i === tokens.length) {
+      break
+    }
+    if (shell === 'powershell' && value.slice(spans[i].start, spans[i].end) === '--%') {
+      return false
+    }
+    if (spans[i].divergesFromShell) {
+      const isCallOperator = shell === 'powershell' && i === 0 && tokens[i] === '&'
+      if (!isCallOperator) {
+        return false
+      }
+    }
+  }
+  return true
+}
+
 export function resolveStartupShell(
   platform: NodeJS.Platform,
   shell?: AgentStartupShell

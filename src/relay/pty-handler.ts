@@ -1760,7 +1760,23 @@ export class PtyHandler {
         ...(sourceActivation ? { sourceActivation } : {})
       }
     }
-    if (activation === 'existing' && this.sourcePublication?.accepts(id)) {
+    // `existing` means a delivery is already open for this client, so it is already receiving live
+    // output and does not need its screen re-sent. That is true for a duplicate attach — and false
+    // for the case this skipped: an SSH reconnect. The client keeps its id there (the dispatcher
+    // refuses to detach the primary, and setWrite revives that same id), so the delivery outlives
+    // the dead transport, while the renderer has thrown its terminal away — a reconnect bumps
+    // tab.generation, which is the React key, so the pane remounts with a brand-new empty xterm and
+    // nothing captures the old buffer. Answering "you already have it" leaves the pane blank
+    // forever, until new output happens to arrive.
+    //
+    // So the client says which it is. Falling through rather than returning the replay inline is
+    // deliberate: the path below already drops the pending batched bytes that are also in the
+    // buffer, which is what stops the live delivery double-rendering them.
+    if (
+      activation === 'existing' &&
+      this.sourcePublication?.accepts(id) &&
+      params.requireReplay !== true
+    ) {
       return {
         incarnationId: managed.incarnationId,
         ...(sourceActivation ? { sourceActivation } : {})

@@ -3,7 +3,7 @@ import type { AppState } from '../types'
 import {
   registerPersistentWebview,
   unregisterPersistentWebview
-} from '../../components/browser-pane/webview-registry'
+} from '../../components/browser-pane/host-guest/webview-registry'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import { makeDetectedResult } from './worktrees-detected-listing-fixtures'
 import {

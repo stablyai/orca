@@ -21,7 +21,7 @@ import {
   focusRuntimeTerminalSurface
 } from '@/runtime/sync-runtime-graph'
 import type { SplitTerminalPaneDetail, CloseTerminalPaneDetail } from '@/constants/terminal'
-import { getVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
+import { getVisibleWorktreeShortcutTargets } from '@/components/sidebar/visible-worktrees'
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
 import { emitCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
 import { nextEditorFontZoomLevel, computeEditorFontSize } from '@/lib/editor-font-zoom'
@@ -85,12 +85,12 @@ import {
   hydrateBrowserDrivers,
   setDriverForBrowserPage
 } from '@/lib/pane-manager/browser-mobile-driver-state'
-import { destroyPersistentWebview } from '@/components/browser-pane/webview-registry'
-import { rememberLiveBrowserUrl } from '@/components/browser-pane/browser-runtime'
+import { destroyPersistentWebview } from '@/components/browser-pane/host-guest/webview-registry'
+import { rememberLiveBrowserUrl } from '@/components/browser-pane/describe-page/live-browser-url-registry'
 import {
   acquireBrowserAutomationVisibility,
   releaseBrowserAutomationVisibility
-} from '@/components/browser-pane/browser-automation-visibility'
+} from '@/components/browser-pane/host-guest/browser-automation-visibility'
 import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
 import { closeMobileSessionTabInStore } from '@/runtime/mobile-session-tab-close'
 import { createWorktreeChangeRefreshQueue } from './worktree-change-refresh-queue'
@@ -1396,7 +1396,12 @@ export function useIpcEvents(): void {
           ) {
             return
           }
-          runWorktreeDelete(store.activeWorktreeId)
+          runWorktreeDelete(
+            store.activeWorktreeId,
+            store.activeWorkspaceExecutionHostId
+              ? { expectedHostId: store.activeWorkspaceExecutionHostId }
+              : {}
+          )
         })
       )
     }
@@ -1436,9 +1441,14 @@ export function useIpcEvents(): void {
         if (store.activeView !== 'terminal') {
           return
         }
-        const visibleIds = getVisibleWorktreeIds()
-        if (index < visibleIds.length) {
-          activateAndRevealWorkspace(visibleIds[index])
+        const visibleTargets = getVisibleWorktreeShortcutTargets()
+        const target = visibleTargets[index]
+        if (target) {
+          if (target.executionHostId) {
+            activateAndRevealWorkspace(target.id, { executionHostId: target.executionHostId })
+          } else {
+            activateAndRevealWorkspace(target.id)
+          }
         }
       })
     )

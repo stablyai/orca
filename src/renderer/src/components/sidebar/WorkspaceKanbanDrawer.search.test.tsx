@@ -8,6 +8,7 @@ import { useAppStore } from '@/store'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import WorkspaceKanbanDrawer from './WorkspaceKanbanDrawer'
 import type { WorkspaceKanbanLaneView } from './workspace-kanban-search'
 
@@ -92,7 +93,7 @@ vi.mock('./WorkspaceKanbanPinDropTarget', () => ({ default: () => <div /> }))
 
 vi.mock('./use-visible-workspace-kanban-worktree-ids', () => ({
   useVisibleWorkspaceKanbanWorktreeIds: ({ allWorktrees }: { allWorktrees: readonly Worktree[] }) =>
-    new Set(allWorktrees.map((worktree) => worktree.id))
+    new Set(allWorktrees.map(getWorktreeHostIdentity))
 }))
 
 vi.mock('./use-workspace-kanban-selection', () => ({
@@ -103,7 +104,7 @@ vi.mock('./use-workspace-kanban-selection', () => ({
   ) => {
     selectionScopeState.current = renderedWorktrees ?? boardWorktrees
     return {
-      selectedWorktreeIds: new Set(selectionState.current.map((worktree) => worktree.id)),
+      selectedWorktreeIds: new Set(selectionState.current.map(getWorktreeHostIdentity)),
       selectedWorktrees: selectionState.current,
       selectionAnchorId: null,
       updateSelectionForGesture: vi.fn(),
@@ -346,7 +347,7 @@ describe('WorkspaceKanbanDrawer search', () => {
     renderDrawer()
     typeQuery('gamma')
 
-    expect(gridState.current?.selectedWorktreeIds.has(alpha.id)).toBe(true)
+    expect(gridState.current?.selectedWorktreeIds.has(getWorktreeHostIdentity(alpha))).toBe(true)
     expect(gridState.current?.selectedWorktrees).toEqual([gamma])
   })
 

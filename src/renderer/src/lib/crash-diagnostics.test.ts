@@ -46,7 +46,7 @@ describe('renderer crash diagnostics', () => {
         }
       }
     })
-    vi.doMock('../components/browser-pane/webview-registry', () => ({
+    vi.doMock('../components/browser-pane/host-guest/webview-registry', () => ({
       getBrowserWebviewMemoryProfile: () => ({
         browserWebviewCount: 4,
         registeredBrowserGuestCount: 3

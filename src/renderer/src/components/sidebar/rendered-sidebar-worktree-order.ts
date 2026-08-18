@@ -35,10 +35,10 @@ const EMPTY_PENDING_CREATIONS = Object.freeze([]) as never
  * Why worktrees are passed in: keeps the dependency on visible-worktrees.ts
  * one-way, since test suites mock that module's path.
  */
-export function computeRenderedSidebarWorktreeOrder(
+export function computeRenderedSidebarWorktrees(
   state: AppState,
   visibleWorktrees: readonly Worktree[]
-): string[] {
+): Worktree[] {
   const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
   const pinnedDisplayPolicy = getPinnedWorktreeDisplayPolicy(state.settings)
   const projection = getProjectHostSetupProjectionFromState(state)
@@ -113,11 +113,14 @@ export function computeRenderedSidebarWorktreeOrder(
       })
     : rows
 
+  return getRenderedWorktreesInSidebarOrder(sectionRows, pinnedDisplayPolicy)
+}
+
+export function computeRenderedSidebarWorktreeOrder(
+  state: AppState,
+  visibleWorktrees: readonly Worktree[]
+): string[] {
   return Array.from(
-    new Set(
-      getRenderedWorktreesInSidebarOrder(sectionRows, pinnedDisplayPolicy).map(
-        (worktree) => worktree.id
-      )
-    )
+    new Set(computeRenderedSidebarWorktrees(state, visibleWorktrees).map((worktree) => worktree.id))
   )
 }

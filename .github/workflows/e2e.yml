@@ -193,7 +193,9 @@ jobs:
     needs: build
     if: inputs.test_files != ''
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Why 45: pr.yml now maps SSH source edits onto Docker-backed specs, so this lane can
+    # pay a container image build plus ~22 serial SSH tests on top of the changed specs.
+    timeout-minutes: 45
 
     steps:
       - name: Checkout
@@ -202,7 +204,9 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
 
       - name: Install native build and headless UI tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential python3 xvfb zsh
+        # Why openssh-client: the Docker-SSH fixture shells out to ssh/ssh-keygen, and this
+        # lane now receives those specs from pr.yml's SSH source mapping.
+        run: sudo apt-get update && sudo apt-get install -y build-essential openssh-client python3 xvfb zsh
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -241,7 +245,11 @@ jobs:
             exit 0
           fi
           E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1)
-          if printf '%s\n' "${TEST_FILES[@]}" | grep -qx 'tests/e2e/ephemeral-vm-provisioned-root.spec.ts'; then
+          # Second clause: a spec that reads ORCA_E2E_SSH_DOCKER test.skip()s itself without it, so
+          # naming only one trigger silently skipped every other Docker-SSH spec in this lane.
+          # The first clause stays because that spec needs Docker without referencing the variable.
+          if printf '%s\n' "${TEST_FILES[@]}" | grep -qx 'tests/e2e/ephemeral-vm-provisioned-root.spec.ts' \
+            || grep -l 'ORCA_E2E_SSH_DOCKER' "${TEST_FILES[@]}" >/dev/null 2>&1; then
             E2E_ENV+=(ORCA_E2E_SSH_DOCKER=1)
           fi
           E2E_PROJECT_ARGS=()

@@ -30,7 +30,7 @@ type WorkspaceKanbanStatusLaneProps = {
   hasQuery?: boolean
   fullWorktreeIds?: readonly string[]
   repoMap: Map<string, Repo>
-  activeWorktreeId: string | null
+  activeWorktreeIdentity: string | null
   columnWidth: number
   isResizingColumn: boolean
   isDragTarget: boolean
@@ -61,7 +61,7 @@ function WorkspaceKanbanStatusLane({
   hasQuery = false,
   fullWorktreeIds,
   repoMap,
-  activeWorktreeId,
+  activeWorktreeIdentity,
   columnWidth,
   isResizingColumn,
   isDragTarget,
@@ -200,7 +200,7 @@ function WorkspaceKanbanStatusLane({
             <WorkspaceKanbanLaneCardList
               items={items}
               repoMap={repoMap}
-              activeWorktreeId={activeWorktreeId}
+              activeWorktreeIdentity={activeWorktreeIdentity}
               scrollRef={laneScrollRef}
               selectedWorktreeIds={selectedWorktreeIds}
               selectedWorktrees={selectedWorktrees}

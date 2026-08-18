@@ -2667,19 +2667,19 @@
       "invariant": "A current remote browser stream that closes must retry transient failures on one counted, capped backoff chain. Cancellation, pane or runtime supersession, missing pages, and permanent failures stop that chain without stale state mutation. A stream that stays healthy refills the budget; a silent or flapping stream cannot retry forever. Exhaustion and every non-retrying failure leave an actionable Reconnect control, and manual reconnect creates a fresh stream without resurrecting stale subscriptions.",
       "oracle": "With one fake clock and exact pane, operation, stream, page, and runtime identities, drop a confirmed stream and require the counted delay sequence, one active chain, stale-token rejection, exact cancellation, full cleanup, and either a new live subscription or one stopped state with Reconnect after exhaustion. Inject transport error without close, close racing rejection, never-ready subscriptions, ready-then-end flapping, viewport supersession, missing pages, and permanent failures. In a separate paired client against an isolated headless Orca host, paint one remote frame, disconnect the owning runtime, require the bounded-retry notice and Reconnect control, reconnect, click once, and require a different frame object URL from the recovered stream.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/remote-browser-stream-errors.test.ts src/renderer/src/components/browser-pane/remote-browser-stream-lifecycle.test.ts src/renderer/src/components/browser-pane/remote-browser-stream-restart-scheduler.test.ts src/renderer/src/components/browser-pane/remote-browser-stream-status.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-errors.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-lifecycle.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-restart-scheduler.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-status.test.ts",
         "pnpm exec playwright test tests/e2e/paired-remote-browser-stream-reconnect.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
-        "src/renderer/src/components/browser-pane/remote-browser-stream-errors.test.ts",
-        "src/renderer/src/components/browser-pane/remote-browser-stream-lifecycle.test.ts",
-        "src/renderer/src/components/browser-pane/remote-browser-stream-restart-scheduler.test.ts",
-        "src/renderer/src/components/browser-pane/remote-browser-stream-status.test.ts",
+        "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-errors.test.ts",
+        "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-lifecycle.test.ts",
+        "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-restart-scheduler.test.ts",
+        "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-status.test.ts",
         "tests/e2e/paired-remote-browser-stream-reconnect.spec.ts"
       ],
       "assertionRefs": [
         {
-          "file": "src/renderer/src/components/browser-pane/remote-browser-stream-restart-scheduler.test.ts",
+          "file": "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-restart-scheduler.test.ts",
           "assertions": [
             "transient failures retry until recovery on counted delays",
             "budget exhaustion stops exactly once",
@@ -2688,7 +2688,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/browser-pane/remote-browser-stream-lifecycle.test.ts",
+          "file": "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-lifecycle.test.ts",
           "assertions": [
             "dropped, silent, and flapping streams converge on a bounded retry or actionable stop",
             "stale, superseded, missing-page, and permanent-failure work cannot mutate the current pane",
@@ -2710,7 +2710,7 @@
           "date": "2026-08-07",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/remote-browser-stream-errors.test.ts src/renderer/src/components/browser-pane/remote-browser-stream-lifecycle.test.ts src/renderer/src/components/browser-pane/remote-browser-stream-restart-scheduler.test.ts src/renderer/src/components/browser-pane/remote-browser-stream-status.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-errors.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-lifecycle.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-restart-scheduler.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-status.test.ts",
           "result": "passed",
           "durationSeconds": 0.36,
           "summary": "Four focused files passed 61 deterministic error, status, scheduler, lifecycle, in-flight ownership, stale-rejection, liveness, and cleanup tests."
@@ -9119,7 +9119,7 @@
       "oracle": "A quarter-circle Claude task title authorizes without a provider lookup only on the exact PTY incarnation carrying verified managed-Claude launch identity; the same title in a bare pane, with an unverified launch hint, or after PTY incarnation replacement is refused while current Claude activity remains a working signal. Fresh explicit state plus ordinary PowerShell plus confirmed recognized agent is sendable on the same PTY. Confirmed shell/non-agent, unavailable confirmation, PTY exit, handle rebind, or a callback PTY mismatch returns a refusal or not-writable result and writes zero bytes.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/quarter-circle-title-send-authorization.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send-explicit-target.test.ts src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send-explicit-target.test.ts src/renderer/src/components/browser-pane/annotate/BrowserAnnotationSendMenuContent.test.tsx"
       ],
       "testFiles": [
         "src/main/runtime/quarter-circle-title-send-authorization.test.ts",
@@ -9132,7 +9132,7 @@
         "src/main/daemon/daemon-foreground-confirmation-protocol.test.ts",
         "src/main/daemon/pty-subprocess.test.ts",
         "src/renderer/src/lib/active-agent-note-send-explicit-target.test.ts",
-        "src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx"
+        "src/renderer/src/components/browser-pane/annotate/BrowserAnnotationSendMenuContent.test.tsx"
       ],
       "assertionRefs": [
         {
@@ -9202,7 +9202,7 @@
           "assertions": ["selected active-agent note sends retain guarded paste and submit routing"]
         },
         {
-          "file": "src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx",
+          "file": "src/renderer/src/components/browser-pane/annotate/BrowserAnnotationSendMenuContent.test.tsx",
           "assertions": [
             "browser annotation send content routes through review-notes send so existing agent sessions remain selectable",
             "both browser annotation send surfaces wire the shared menu content"
@@ -9223,7 +9223,7 @@
           "date": "2026-07-11",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send-explicit-target.test.ts src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send-explicit-target.test.ts src/renderer/src/components/browser-pane/annotate/BrowserAnnotationSendMenuContent.test.tsx",
           "result": "passed",
           "durationSeconds": 9.58,
           "summary": "Ten focused test files passed (1183 tests), covering runtime confirmation and PTY revalidation, guarded RPC zero-write behavior, PTY controller routing, local/daemon fresh scans, exact ConPTY membership, and unchanged renderer note routing."

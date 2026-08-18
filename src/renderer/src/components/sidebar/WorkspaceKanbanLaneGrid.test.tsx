@@ -67,16 +67,19 @@ vi.mock('./WorkspaceKanbanStatusLane', () => ({
   default: ({
     status,
     items,
-    renderCards
+    renderCards,
+    activeWorktreeIdentity
   }: {
     status: WorkspaceStatusDefinition
     items: readonly Worktree[]
     renderCards: boolean
+    activeWorktreeIdentity: string | null
   }) => (
     <section
       data-workspace-status={status.id}
       data-item-count={items.length}
       data-render-cards={renderCards ? 'true' : 'false'}
+      data-active-worktree-identity={activeWorktreeIdentity ?? ''}
     >
       <button type="button">{status.label}</button>
     </section>
@@ -92,7 +95,7 @@ const STATUSES = Array.from({ length: 21 }, (_, index) => ({
 }))
 const REPO_MAP = new Map<string, Repo>()
 
-function makeGrid(): React.JSX.Element {
+function makeGrid(activeWorktreeIdentity: string | null = null): React.JSX.Element {
   return (
     <WorkspaceKanbanLaneGrid
       laneScrollerRef={createRef()}
@@ -101,7 +104,7 @@ function makeGrid(): React.JSX.Element {
       laneFullWorktreeIds={new Map()}
       hasQuery={false}
       repoMap={REPO_MAP}
-      activeWorktreeId={null}
+      activeWorktreeIdentity={activeWorktreeIdentity}
       columnWidth={308}
       isResizingColumn={false}
       dragOverStatus={null}
@@ -226,5 +229,14 @@ describe('WorkspaceKanbanLaneGrid', () => {
     expect(renderedLaneCount()).toBe(1)
     flushNextAnimationFrame()
     expect(renderedLaneCount()).toBe(2)
+  })
+
+  it('passes the host-qualified active workspace through virtualized lanes', () => {
+    const { container } = render(makeGrid('ssh:builder|repo::/workspace'))
+
+    expect(
+      container.querySelector<HTMLElement>('[data-workspace-status]')?.dataset
+        .activeWorktreeIdentity
+    ).toBe('ssh:builder|repo::/workspace')
   })
 })

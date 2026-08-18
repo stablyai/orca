@@ -3,7 +3,6 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
-import { normalizeTerminalPadding } from '../../../../shared/terminal-padding-settings'
 import {
   getBuiltinTheme,
   resolvePaneStyleOptions,
@@ -159,23 +158,6 @@ export function applyTerminalAppearance(
     settings.terminalLigatures,
     settings.terminalFontFamily
   )
-  // FitAddon parses each CSS padding as an integer, so normalize imported half-pixels before styling and fitting.
-  const paddingX = normalizeTerminalPadding(settings.terminalPaddingX ?? 4)
-  const paddingY = normalizeTerminalPadding(settings.terminalPaddingY ?? 4)
-
-  // Why before the pane loop: FitAddon subtracts live .xterm padding, so the
-  // CSS vars must be stamped before safeFit or a padding shrink leaves a stale grid.
-  manager.setPaneStyleOptions({
-    splitBackground: paneBackground,
-    paneBackground,
-    inactivePaneOpacity: paneStyles.inactivePaneOpacity,
-    activePaneOpacity: paneStyles.activePaneOpacity,
-    opacityTransitionMs: paneStyles.opacityTransitionMs,
-    dividerThicknessPx: paneStyles.dividerThicknessPx,
-    focusFollowsMouse: paneStyles.focusFollowsMouse,
-    paddingX,
-    paddingY
-  })
 
   for (const pane of manager.getPanes()) {
     // Why value-gated: writing options.theme rebuilds the palette, discarding TUI OSC 4/10/11/12 mutations; skip on no-op change.
@@ -245,4 +227,16 @@ export function applyTerminalAppearance(
       safeFit(pane)
     }
   }
+
+  manager.setPaneStyleOptions({
+    splitBackground: paneBackground,
+    paneBackground,
+    inactivePaneOpacity: paneStyles.inactivePaneOpacity,
+    activePaneOpacity: paneStyles.activePaneOpacity,
+    opacityTransitionMs: paneStyles.opacityTransitionMs,
+    dividerThicknessPx: paneStyles.dividerThicknessPx,
+    focusFollowsMouse: paneStyles.focusFollowsMouse,
+    paddingX: settings.terminalPaddingX,
+    paddingY: settings.terminalPaddingY
+  })
 }
