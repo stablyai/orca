@@ -46,7 +46,7 @@ export function createLocalHerdrPtyProvider(
         transport = new HerdrCliHostTransport({
           commandFor: (args) => ({
             file: 'wsl.exe',
-            args: ['-d', wslDistro, '--', executable, ...args]
+            args: ['-d', wslDistro, '--exec', executable, ...args]
           }),
           serverCommandFor: (sessionName) => {
             const envKeysToRemove = Object.keys(process.env).filter((k) => k.startsWith('HERDR_'))
@@ -55,7 +55,7 @@ export function createLocalHerdrPtyProvider(
               args: [
                 '-d',
                 wslDistro,
-                '--',
+                '--exec',
                 'env',
                 ...envKeysToRemove.flatMap((k) => ['-u', k]),
                 executable,
