@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   WorkspaceSpaceAnalysis,
@@ -66,10 +67,16 @@ function createAnalyzeResult(scannedAt: number): WorkspaceSpaceAnalyzeResult {
 }
 
 function createEvent() {
+  let destroyed = false
+  const sender = Object.assign(new EventEmitter(), {
+    isDestroyed: vi.fn(() => destroyed),
+    send: vi.fn()
+  })
   return {
-    sender: {
-      isDestroyed: vi.fn(() => false),
-      send: vi.fn()
+    sender,
+    destroy: () => {
+      destroyed = true
+      sender.emit('destroyed')
     }
   }
 }
@@ -121,6 +128,34 @@ describe('registerWorkspaceSpaceHandlers', () => {
 
     await expect(handler!(createEvent())).resolves.toEqual(createAnalyzeResult(2))
     expect(analyzeWorkspaceSpaceMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('starts a fresh scan after the owning renderer is destroyed', async () => {
+    const store = {} as Store
+    analyzeWorkspaceSpaceMock
+      .mockImplementationOnce((_store, options) => {
+        return new Promise<WorkspaceSpaceAnalysis>((_resolve, reject) => {
+          options.signal.addEventListener(
+            'abort',
+            () => reject(new WorkspaceSpaceScanCancelledErrorMock()),
+            { once: true }
+          )
+        })
+      })
+      .mockResolvedValueOnce(createAnalysis(2))
+
+    registerWorkspaceSpaceHandlers(store)
+    const analyzeHandler = handlers.get('workspaceSpace:analyze')
+    const owner = createEvent()
+    const first = analyzeHandler!(owner)
+
+    owner.destroy()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const replacement = analyzeHandler!(createEvent())
+
+    expect(analyzeWorkspaceSpaceMock).toHaveBeenCalledTimes(2)
+    await expect(first).resolves.toEqual({ ok: false, cancelled: true })
+    await expect(replacement).resolves.toEqual(createAnalyzeResult(2))
   })
 
   it('forwards scan progress to the requesting renderer', async () => {

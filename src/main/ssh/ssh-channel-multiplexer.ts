@@ -27,13 +27,13 @@ type PendingRequest = {
   resolve: (result: unknown) => void
   reject: (error: Error) => void
   beforeResolve?: (result: unknown) => void
-  timer: ReturnType<typeof setTimeout>
+  timer: ReturnType<typeof setTimeout> | null
   cleanup: () => void
 }
 
 export type SshMultiplexerRequestOptions = {
   signal?: AbortSignal
-  timeoutMs?: number
+  timeoutMs?: number | null
   beforeResolve?: (result: unknown) => void
 }
 
@@ -238,12 +238,14 @@ export class SshChannelMultiplexer {
       method,
       ...(params !== undefined ? { params } : {})
     }
-    const timeoutMs = options?.timeoutMs ?? REQUEST_TIMEOUT_MS
+    const timeoutMs = options?.timeoutMs === undefined ? REQUEST_TIMEOUT_MS : options.timeoutMs
 
     return new Promise((resolve, reject) => {
-      let timer: ReturnType<typeof setTimeout>
+      let timer: ReturnType<typeof setTimeout> | null = null
       const cleanup = (): void => {
-        clearTimeout(timer)
+        if (timer) {
+          clearTimeout(timer)
+        }
         if (options?.signal) {
           options.signal.removeEventListener('abort', onAbort)
         }
@@ -262,17 +264,19 @@ export class SshChannelMultiplexer {
         error.name = 'AbortError'
         pending.reject(error)
       }
-      timer = setTimeout(() => {
-        const pending = this.pendingRequests.get(id)
-        if (pending) {
-          pending.cleanup()
-          // Why: request timeouts should stop relay-side long-running work,
-          // not just detach the client from the eventual response.
-          this.notify('rpc.cancel', { id })
-        }
-        this.pendingRequests.delete(id)
-        reject(sshMuxRequestTimeoutError(method, timeoutMs))
-      }, timeoutMs)
+      if (timeoutMs !== null) {
+        timer = setTimeout(() => {
+          const pending = this.pendingRequests.get(id)
+          if (pending) {
+            pending.cleanup()
+            // Why: request timeouts should stop relay-side long-running work,
+            // not just detach the client from the eventual response.
+            this.notify('rpc.cancel', { id })
+          }
+          this.pendingRequests.delete(id)
+          reject(sshMuxRequestTimeoutError(method, timeoutMs))
+        }, timeoutMs)
+      }
 
       if (options?.signal) {
         options.signal.addEventListener('abort', onAbort, { once: true })
