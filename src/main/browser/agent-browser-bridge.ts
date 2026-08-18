@@ -1794,7 +1794,7 @@ export class AgentBrowserBridge {
           key: parsed.key,
           code: parsed.code,
           modifiers: parsed.modifiers,
-          location: 0
+          location: parsed.location
         }
         const lease = acquireElectronDebugger(wc)
         try {
@@ -1805,7 +1805,12 @@ export class AgentBrowserBridge {
             ...event,
             ...(parsed.text === null ? {} : { text: parsed.text, unmodifiedText: parsed.text })
           })
-          await wc.debugger.sendCommand('Input.dispatchKeyEvent', { type: 'keyUp', ...event })
+          await wc.debugger.sendCommand('Input.dispatchKeyEvent', {
+            type: 'keyUp',
+            ...event,
+            // Why: the self bit is keydown-only -- Blink reports shiftKey false on the Shift keyup.
+            modifiers: parsed.modifiers & ~parsed.selfModifier
+          })
           return { pressed: key }
         } finally {
           lease.release()

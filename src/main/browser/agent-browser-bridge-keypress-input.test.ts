@@ -149,6 +149,25 @@ describe('AgentBrowserBridge keypress input', () => {
     })
   })
 
+  it('reports the modifier bit on a bare Shift keydown but not on its keyup', async () => {
+    await bridge.keypress('Shift', undefined, 'tab-1')
+
+    expect(keyEventCalls(wc)[0]?.[1]).toMatchObject({
+      type: 'rawKeyDown',
+      windowsVirtualKeyCode: 16,
+      code: 'ShiftLeft',
+      modifiers: 8,
+      location: 1
+    })
+    expect(keyEventCalls(wc)[1]?.[1]).toMatchObject({ type: 'keyUp', modifiers: 0, location: 1 })
+  })
+
+  it('keeps held modifiers on the keyup of a non-modifier shortcut key', async () => {
+    await bridge.keypress('Ctrl+Shift+K', undefined, 'tab-1')
+
+    expect(keyEventCalls(wc)[1]?.[1]).toMatchObject({ type: 'keyUp', modifiers: 10 })
+  })
+
   it('presses Enter with its carriage-return text so fields submit', async () => {
     await bridge.keypress('Enter', undefined, 'tab-1')
 

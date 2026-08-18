@@ -70,6 +70,32 @@ describe('parseCdpKeyEvent', () => {
     expect(parseCdpKeyEvent(raw)).toMatchObject(expected)
   })
 
+  it.each([
+    ['Shift', { keyCode: 16, key: 'Shift', code: 'ShiftLeft', modifiers: 8, selfModifier: 8 }],
+    ['Ctrl', { keyCode: 17, key: 'Control', code: 'ControlLeft', modifiers: 2, selfModifier: 2 }],
+    ['Alt', { keyCode: 18, key: 'Alt', code: 'AltLeft', modifiers: 1, selfModifier: 1 }],
+    ['Meta', { keyCode: 91, key: 'Meta', code: 'MetaLeft', modifiers: 4, selfModifier: 4 }]
+  ])(
+    'reports the own modifier bit and left-side location for a bare %s press',
+    (raw: string, expected: object) => {
+      expect(parseCdpKeyEvent(raw)).toMatchObject({ ...expected, location: 1, text: null })
+    }
+  )
+
+  it('adds the self bit on top of held modifiers for a modifier-only chord', () => {
+    expect(parseCdpKeyEvent('Ctrl+Shift')).toMatchObject({
+      keyCode: 16,
+      modifiers: 10,
+      selfModifier: 8
+    })
+  })
+
+  it('reports no self bit or location for non-modifier keys', () => {
+    expect(parseCdpKeyEvent('Enter')).toMatchObject({ location: 0, selfModifier: 0 })
+    expect(parseCdpKeyEvent('a')).toMatchObject({ location: 0, selfModifier: 0 })
+    expect(parseCdpKeyEvent('Ctrl+A')).toMatchObject({ location: 0, selfModifier: 0 })
+  })
+
   it.each([['MediaPlayPause'], ['F25'], [''], ['NoSuchKey']])(
     'returns null for %s so the caller can fall back',
     (raw: string) => {
@@ -87,6 +113,8 @@ describe('imeFallbackKeyEvent', () => {
         key: ch,
         code: '',
         modifiers: 0,
+        location: 0,
+        selfModifier: 0,
         text: ch
       })
     }

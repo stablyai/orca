@@ -140,6 +140,10 @@ export type CdpKeyEvent = {
   key: string
   code: string
   modifiers: number
+  // Why: 1 = left-side key -- the table pins bare modifiers to ShiftLeft/ControlLeft/etc.
+  location: number
+  // Why: a modifier key's own bit is set during its keydown but already cleared on its keyup.
+  selfModifier: number
   // Why: null means the key produces no character (a rawKeyDown, not a keyDown with text).
   text: string | null
 }
@@ -156,7 +160,7 @@ export function imeFallbackKeyEvent(raw: string): CdpKeyEvent | null {
   if (codePoint < 0xa0 || (codePoint >= 0xd800 && codePoint <= 0xdfff)) {
     return null
   }
-  return { keyCode: 229, key: raw, code: '', modifiers: 0, text: raw }
+  return { keyCode: 229, key: raw, code: '', modifiers: 0, location: 0, selfModifier: 0, text: raw }
 }
 
 export function parseCdpKeyEvent(raw: string): CdpKeyEvent | null {
@@ -185,6 +189,8 @@ export function parseCdpKeyEvent(raw: string): CdpKeyEvent | null {
   let key: string
   let code: string
   let text: string | null
+  let location = 0
+  let selfModifier = 0
   if (rest.length === 1) {
     const mapped = usKeyboardKeyForChar(rest)
     if (mapped === null) {
@@ -205,11 +211,19 @@ export function parseCdpKeyEvent(raw: string): CdpKeyEvent | null {
       modifiers |= 8
     }
   } else if (Object.hasOwn(CDP_NAMED_KEYS, rest.toLowerCase())) {
-    const named = CDP_NAMED_KEYS[rest.toLowerCase()]
+    const name = rest.toLowerCase()
+    const named = CDP_NAMED_KEYS[name]
     keyCode = named[0]
     key = named[1]
     code = named[2]
     text = named[3]
+    // Why: Blink reports a modifier's own bit during its keydown (shiftKey is true while
+    // Shift goes down), and the table's modifier entries are the left-side keys.
+    selfModifier = CDP_MODIFIER_BITS[name] ?? 0
+    if (selfModifier !== 0) {
+      modifiers |= selfModifier
+      location = 1
+    }
   } else {
     const functionKey = /^f([1-9]|1[0-9]|2[0-4])$/i.exec(rest)
     if (functionKey === null) {
@@ -233,5 +247,5 @@ export function parseCdpKeyEvent(raw: string): CdpKeyEvent | null {
     text = null
   }
 
-  return { keyCode, key, code, modifiers, text }
+  return { keyCode, key, code, modifiers, location, selfModifier, text }
 }
