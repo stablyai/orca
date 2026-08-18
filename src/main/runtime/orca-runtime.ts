@@ -128,6 +128,7 @@ import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { OrchestrationDb } from './orchestration/db'
+import type { DispatchStatus } from './orchestration/types'
 import { reconcileRequestedWorkerTerminalReleases } from './orchestration/worker-terminal-release-reconciliation'
 import {
   classifyWorkerTerminalProcessIncarnation,
@@ -16828,26 +16829,94 @@ export class OrcaRuntimeService {
     }
 
     const errorContext = `Agent exited with code ${exitCode}`
-    this._orchestrationDb.failDispatch(dispatch.id, errorContext, { workerProcessExited: true })
+    const settled = this._orchestrationDb.failDispatch(dispatch.id, errorContext, {
+      workerProcessExited: true
+    })
 
-    // Why: create an escalation message so the coordinator is notified about
-    // the unexpected exit on its next check cycle, even if the circuit breaker
-    // hasn't tripped yet.
-    const run = this._orchestrationDb.getActiveCoordinatorRun()
-    if (run) {
-      this._orchestrationDb.insertMessage({
+    // Why: failDispatch above is the authoritative state transition and has already
+    // committed. Everything below is best-effort mail on top of it — resolving the
+    // recipient reads the database too — and onPtyExit runs this synchronously per leaf,
+    // so letting any of it escape would abandon the remaining leaves and the pty record
+    // pruning that close out this exit.
+    try {
+      // Why: create an escalation message so the coordinator is notified about
+      // the unexpected exit, even if the circuit breaker hasn't tripped yet.
+      const recipient = this.resolveExitEscalationRecipient(dispatch.run_id)
+      if (!recipient) {
+        return
+      }
+      const escalation = this._orchestrationDb.insertMessage({
         from: handle,
-        to: run.coordinator_handle,
+        to: recipient.to,
         subject: `Agent exited unexpectedly (code ${exitCode})`,
+        body: this.describeWorkerExit(dispatch, exitCode, handle, settled?.status),
         type: 'escalation',
         priority: 'high',
+        // Why: applyEscalationToDispatch rejects an escalation without an exact Dispatch
+        // binding, and a coordinator reading this needs to know which Dispatch died.
         payload: JSON.stringify({
           taskId: dispatch.task_id,
+          dispatchId: dispatch.id,
           exitCode,
           handle
-        })
+        }),
+        ...(recipient.runId ? { runId: recipient.runId } : {})
+      })
+      // Why: worker death is the one escalation nobody will poll for — the dead pane
+      // can't nudge the coordinator, so wake its check --wait the way every other
+      // message producer does.
+      this.notifyMessageArrived(escalation.to_handle, escalation.type)
+    } catch (error) {
+      // Why: log the Run rather than the recipient — resolution itself can be what failed.
+      console.warn('[orchestration] failed to escalate worker exit', {
+        dispatchId: dispatch.id,
+        runId: dispatch.run_id,
+        error
       })
     }
+  }
+
+  // Why: the banner shows the subject and a raw payload, so without prose the coordinator
+  // has to resolve ids by hand to learn what died and whether the task is still retryable.
+  private describeWorkerExit(
+    dispatch: { id: string; task_id: string; run_id: string },
+    exitCode: number,
+    handle: string,
+    settledStatus: DispatchStatus | undefined
+  ): string {
+    const task = this._orchestrationDb?.getTask?.(dispatch.task_id, dispatch.run_id)
+    const title =
+      typeof task?.spec === 'string'
+        ? buildOrchestrationTaskDisplayMetadata({
+            spec: task.spec,
+            taskTitle: task.task_title,
+            displayName: task.display_name
+          }).taskTitle
+        : ''
+    const named = title ? `"${title}" (${dispatch.task_id})` : dispatch.task_id
+    const outcome =
+      settledStatus === 'circuit_broken'
+        ? ' This task has now failed too many times, so it will not be retried automatically.'
+        : settledStatus === 'failed'
+          ? ' The task is ready to be dispatched again.'
+          : ''
+    return `Worker ${handle} exited with code ${exitCode} while running task ${named}.${outcome}`
+  }
+
+  // Why: a lightweight Run keeps its coordinator in runs/run_coordinator_handles and
+  // never writes the legacy coordinator_runs table, so gating solely on that table
+  // dropped every worker-death escalation (STA-4604). Address the Run mailbox the
+  // coordinator's `orchestration check` actually reads, and leave legacy Runs on the
+  // legacy gate.
+  private resolveExitEscalationRecipient(
+    runId: string
+  ): { to: string; runId?: string } | undefined {
+    const owningRun = this._orchestrationDb?.getRun?.(runId)
+    if (owningRun && owningRun.legacy !== 1) {
+      return { to: `run:${owningRun.id}`, runId: owningRun.id }
+    }
+    const legacyRun = this._orchestrationDb?.getActiveCoordinatorRun?.()
+    return legacyRun ? { to: legacyRun.coordinator_handle } : undefined
   }
 
   async listTerminals(
