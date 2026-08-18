@@ -5,6 +5,9 @@ const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 const SHOW_CURSOR = '\x1b[?25h'
 const HIDE_CURSOR = '\x1b[?25l'
 const CODEX_PROMPT = '\x1b[1m›\x1b[0m Ask Codex to do anything'
+const CODEX_DYNAMIC_PROMPT = '\x1b[1m›\x1b[0m Implement {feature}'
+const ALT_SCREEN_ENTER = '\x1b[?1049h'
+const ALT_SCREEN_LEAVE = '\x1b[?1049l'
 const GROK_ALT_SCREEN_ENTER = '\x1b[?1049h\x1b[?2004h\x1b[?25l'
 const GROK_ALT_SCREEN_LEAVE = '\x1b[?1049l\x1b[?25h'
 const GROK_COMPOSER_FRAME = '\x1b[38;2;80;80;88m│\x1b[38;2;200;200;200m❯ \x1b[0m'
@@ -95,7 +98,7 @@ describe('createDraftPasteReadyScanner', () => {
     })
   })
 
-  describe('codex-composer-prompt (unchanged behavior)', () => {
+  describe('codex-composer-prompt', () => {
     it('is ready on the composer glyph after bracketed paste and never arms the quiet timer', () => {
       const scanner = createDraftPasteReadyScanner('codex-composer-prompt')
       expect(scanner.observe(DECSET_BRACKETED_PASTE)).toEqual({
@@ -110,6 +113,39 @@ describe('createDraftPasteReadyScanner', () => {
       expect(scanner.observe(`${DECSET_BRACKETED_PASTE}${CODEX_PROMPT}${'x'.repeat(900)}`)).toEqual(
         { ready: true, armQuietTimer: false }
       )
+    })
+
+    it('is ready when Codex renders its composer before enabling bracketed paste', () => {
+      const scanner = createDraftPasteReadyScanner('codex-composer-prompt')
+      expect(scanner.observe(`${ALT_SCREEN_ENTER}${CODEX_DYNAMIC_PROMPT}`)).toEqual({
+        ready: false,
+        armQuietTimer: false
+      })
+      expect(scanner.observe(DECSET_BRACKETED_PASTE)).toEqual({
+        ready: true,
+        armQuietTimer: false
+      })
+    })
+
+    it('forgets a pre-anchor glyph when Codex leaves the alternate screen', () => {
+      const scanner = createDraftPasteReadyScanner('codex-composer-prompt')
+      scanner.observe(`${ALT_SCREEN_ENTER}${CODEX_DYNAMIC_PROMPT}${ALT_SCREEN_LEAVE}`)
+      expect(scanner.observe(DECSET_BRACKETED_PASTE)).toEqual({
+        ready: false,
+        armQuietTimer: false
+      })
+    })
+
+    it('ignores a stale shell glyph before bracketed paste is enabled', () => {
+      const scanner = createDraftPasteReadyScanner('codex-composer-prompt')
+      expect(scanner.observe('› codex\r\nstartup output')).toEqual({
+        ready: false,
+        armQuietTimer: false
+      })
+      expect(scanner.observe(DECSET_BRACKETED_PASTE)).toEqual({
+        ready: false,
+        armQuietTimer: false
+      })
     })
 
     it('never arms the quiet-window fallback', () => {

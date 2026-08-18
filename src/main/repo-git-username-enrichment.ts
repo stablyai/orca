@@ -1,9 +1,14 @@
-import type { Repo } from '../shared/types'
+import { getRepoExecutionHostId } from '../shared/execution-host'
+import type { Repo } from '../shared/repo-types'
 import { resolveLocalGitUsernameDetailed } from './git/git-username'
 
 type RepoUsernameStore = {
   getRepos(): Repo[]
-  setResolvedRepoGitUsername(id: string, username: string): boolean
+  // Why the repo and not its id: duplicate repo ids across execution hosts make an id-only write ambiguous.
+  setResolvedRepoGitUsername(
+    target: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>,
+    username: string
+  ): boolean
 }
 
 type EnrichmentOptions = {
@@ -17,8 +22,10 @@ const attemptedLocations = new Set<string>()
 let enrichmentInFlight: Promise<void> | null = null
 let rerunRequested = false
 
-function getRepoLocationKey(repo: Pick<Repo, 'path' | 'connectionId'>): string {
-  return `${repo.connectionId ?? 'local'}\0${repo.path}`
+// Why the execution host and not connectionId: a runtime repo has no connectionId, so a
+// connectionId-only key collides with a local repo at the same path and blocks one of them for the session.
+function getRepoLocationKey(repo: Pick<Repo, 'path' | 'connectionId' | 'executionHostId'>): string {
+  return `${getRepoExecutionHostId(repo)}\0${repo.path}`
 }
 
 async function enrichRepoGitUsernamesInBackground(
@@ -44,7 +51,7 @@ async function enrichRepoGitUsernamesInBackground(
     if (!authoritative && !username) {
       continue
     }
-    if (store.setResolvedRepoGitUsername(repo.id, username)) {
+    if (store.setResolvedRepoGitUsername(repo, username)) {
       changed = true
     }
   }

@@ -2,7 +2,7 @@ import { open, realpath, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, relative, sep } from 'node:path'
 import { summarizeSkillMarkdown } from '../../shared/skill-metadata'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import type {
   DiscoveredSkill,
   SkillDiscoveryResult,
@@ -19,7 +19,12 @@ import {
 import { discoverClaudePluginSkillSources } from './claude-plugin-skill-sources'
 import { findSkillFiles } from './skill-root-file-walk'
 import { runSkillCandidateTasks } from './skill-candidate-concurrency'
-import { SkillScanCoalescer, type SkillScanOutcome } from './skill-scan-coalescer'
+import {
+  isSkillRootUnavailableError,
+  SkillScanCoalescer,
+  type SkillScanOutcome
+} from './skill-scan-coalescer'
+import type { SkillProviderRootOverrides } from './skill-provider-destinations'
 
 export { buildSkillDiscoverySources } from './skill-discovery-sources'
 
@@ -43,14 +48,55 @@ const MAX_CACHED_SKILL_ROOTS = 1_024
 // line grow with the install. Root *ids* are safe to log where labels and paths
 // are not — a repo/plugin id is already a hash.
 export const MAX_LOGGED_ROOT_IDS = 12
+// Why: a root that did not answer holds unknown skills, not zero, so serving what
+// it last held is what stops an installed skill flipping to "Install" while a
+// mount is wedged. Bounded rather than forever: it covers a stall
+// (MAX_JOINABLE_SCAN_AGE_MS) many times over without pinning a permanently dead
+// root to rows that can no longer be checked.
+export const LAST_KNOWN_ROOT_SCAN_RETENTION_MS = 5 * 60_000
 
-type RootScan = { exists: boolean; skills: ScannedSkill[] }
+type RootScan = { exists: boolean; skills: ScannedSkill[]; unavailable?: boolean }
 
 const rootScans = new SkillScanCoalescer<RootScan>(MAX_CACHED_SKILL_ROOTS)
+/** Last answered scan per root key, read only when a later scan goes unavailable. */
+const lastKnownRootScans = new Map<string, { skills: ScannedSkill[]; recordedAt: number }>()
 
 /** Drop every shared root scan, e.g. after a skill install/update mutates disk. */
 export function clearSkillRootScanCache(): void {
   rootScans.clear()
+  // A mutation invalidates the retained copy too — it is a pre-mutation answer.
+  lastKnownRootScans.clear()
+}
+
+function recordLastKnownRootScan(key: string, scan: RootScan): void {
+  if (!scan.exists) {
+    // Why: a root that scanned as absent is known-empty, so keeping an older copy
+    // would resurrect skills the user actually removed the next time it stalls.
+    lastKnownRootScans.delete(key)
+    return
+  }
+  // Delete first so re-insert refreshes recency under the LRU bound below.
+  lastKnownRootScans.delete(key)
+  lastKnownRootScans.set(key, { skills: scan.skills, recordedAt: Date.now() })
+  while (lastKnownRootScans.size > MAX_CACHED_SKILL_ROOTS) {
+    const oldestKey = lastKnownRootScans.keys().next().value
+    if (oldestKey === undefined) {
+      break
+    }
+    lastKnownRootScans.delete(oldestKey)
+  }
+}
+
+function readLastKnownRootScan(key: string): ScannedSkill[] {
+  const retained = lastKnownRootScans.get(key)
+  if (!retained) {
+    return []
+  }
+  if (Date.now() - retained.recordedAt > LAST_KNOWN_ROOT_SCAN_RETENTION_MS) {
+    lastKnownRootScans.delete(key)
+    return []
+  }
+  return retained.skills
 }
 
 async function pathExists(pathValue: string): Promise<boolean> {
@@ -89,14 +135,17 @@ async function readSkillSummary(skillFilePath: string): Promise<{
 
 type ScannedSkill = DiscoveredSkill & { canonicalSkillFilePath: string }
 
-async function scanRoot(root: SkillScanRoot): Promise<ScannedSkill[]> {
+async function scanRoot(root: SkillScanRoot, signal: AbortSignal): Promise<ScannedSkill[]> {
   const maxDepth = root.sourceKind === 'plugin' ? 9 : 4
-  const skillFiles = await findSkillFiles(root.path, maxDepth)
+  const skillFiles = await findSkillFiles(root.path, maxDepth, signal)
   // Why: a root can hold many packages and each one costs a summary read plus a
   // package walk. Unbounded fan-out here is what turned one scan into a burst of
   // filesystem-metadata work across every core.
   const skills = await runSkillCandidateTasks(
     skillFiles.map((skillFilePath) => async (): Promise<ScannedSkill | null> => {
+      // Why: these tasks drain long after the walk, so an abandoned scan would
+      // keep spending a realpath + stat + read per remaining candidate.
+      signal.throwIfAborted()
       // Why: path identity belongs to the scanning host; canonicalizing before
       // returning prevents symlinked roots from becoming duplicate picker rows.
       const canonicalSkillFilePath = await realpath(skillFilePath).catch(() => skillFilePath)
@@ -134,14 +183,43 @@ function rootScanKey(root: SkillScanRoot): string {
   return `${root.sourceKind}\0${root.path}`
 }
 
-function scanRootShared(
+async function scanRootShared(
   root: SkillScanRoot,
   refresh: boolean
 ): Promise<SkillScanOutcome<RootScan>> {
-  return rootScans.run(rootScanKey(root), { ttlMs: SKILL_ROOT_SCAN_TTL_MS, refresh }, async () => {
-    const exists = await pathExists(root.path)
-    return { exists, skills: exists ? await scanRoot(root) : [] }
-  })
+  const key = rootScanKey(root)
+  try {
+    const outcome = await rootScans.run(
+      key,
+      { ttlMs: SKILL_ROOT_SCAN_TTL_MS, refresh },
+      async (signal) => {
+        const exists = await pathExists(root.path)
+        return { exists, skills: exists ? await scanRoot(root, signal) : [] }
+      }
+    )
+    recordLastKnownRootScan(key, outcome.value)
+    return outcome
+  } catch (error) {
+    if (!isSkillRootUnavailableError(error)) {
+      throw error
+    }
+    // Why degrade instead of rejecting: one unreachable root must not fail the
+    // whole discovery and empty the picker for every healthy root beside it.
+    // `unavailable` keeps that distinct from a root that genuinely is not there.
+    //
+    // The abort case matters as much as the shed one: callers already waiting on
+    // a scan that is later abandoned for age see it reject, and re-throwing here
+    // would turn one slow root into a failed discovery for every root.
+    //
+    // Empty skills here is not the same claim as `exists: false`: every consumer
+    // that derives "installed" does it from the skill list, so shipping an empty
+    // one turned an unanswered root into proof the skill is gone. Serve what the
+    // root last held and let `unavailable` carry the uncertainty.
+    return {
+      value: { exists: true, skills: readLastKnownRootScan(key), unavailable: true },
+      cached: false
+    }
+  }
 }
 
 function mergeScannedSkill(seen: Map<string, DiscoveredSkill>, skill: ScannedSkill): void {
@@ -182,6 +260,7 @@ export async function discoverSkills(args: {
   homeDir?: string
   cwd?: string
   includeCwd?: boolean
+  providerRootOverrides?: SkillProviderRootOverrides
   refresh?: boolean
 }): Promise<SkillDiscoveryResult> {
   const startedAt = Date.now()
@@ -200,7 +279,11 @@ export async function discoverSkills(args: {
     ...root,
     providers: [...root.providers],
     exists: scans[index].value.exists,
-    skippedReason: scans[index].value.exists ? undefined : 'missing'
+    skippedReason: scans[index].value.unavailable
+      ? 'unavailable'
+      : scans[index].value.exists
+        ? undefined
+        : 'missing'
   }))
   const seen = new Map<string, DiscoveredSkill>()
   for (const { value } of scans) {

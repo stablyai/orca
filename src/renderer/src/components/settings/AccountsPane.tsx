@@ -4,12 +4,12 @@
    error handling and restart prompts below; splitting them into separate files
    would scatter those flows without a meaningful abstraction boundary. */
 import { useEffect, useRef, useState } from 'react'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
-  CodexSystemDefaultIdentity,
-  GlobalSettings
-} from '../../../../shared/types'
+  CodexSystemDefaultIdentity
+} from '../../../../shared/managed-account-types'
 import { resolveLocalAccountRuntimeTarget } from '../../../../shared/local-account-runtime'
 import { getRendererAppPlatform } from '../../lib/renderer-app-platform'
 import { Badge } from '../ui/badge'
@@ -95,6 +95,49 @@ import {
   selectCodexProviderAccount,
   watchProviderAccounts
 } from '@/runtime/runtime-provider-accounts-client'
+
+// Why: bounded so a permanently unreadable home cannot poll forever; ~5 minutes
+// total is long enough to outlast an antivirus scan or backup pass.
+const CODEX_CONFIG_SYNC_RETRY_MS = 30_000
+const CODEX_CONFIG_SYNC_RETRY_LIMIT = 10
+
+function watchCodexConfigSyncStatus(
+  onStatus: (status: CodexConfigSyncStatus | null) => void
+): () => void {
+  let cancelled = false
+  let attempts = 0
+  let retryTimer: ReturnType<typeof setTimeout> | null = null
+  const poll = (): void => {
+    void window.api.codexConfigSync
+      .status()
+      .then((status) => {
+        if (cancelled) {
+          return
+        }
+        onStatus(status)
+        if (
+          status.state === 'stalled' &&
+          status.reason === 'managed-home-unavailable' &&
+          attempts < CODEX_CONFIG_SYNC_RETRY_LIMIT
+        ) {
+          attempts += 1
+          retryTimer = setTimeout(poll, CODEX_CONFIG_SYNC_RETRY_MS)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          onStatus(null)
+        }
+      })
+  }
+  poll()
+  return () => {
+    cancelled = true
+    if (retryTimer !== null) {
+      clearTimeout(retryTimer)
+    }
+  }
+}
 
 export { getAccountsPaneSearchEntries }
 
@@ -452,22 +495,12 @@ export function AccountsPane({
       setCodexConfigSync(null)
       return
     }
-    let cancelled = false
-    void window.api.codexConfigSync
-      .status()
-      .then((status) => {
-        if (!cancelled) {
-          setCodexConfigSync(status)
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setCodexConfigSync(null)
-        }
-      })
-    return () => {
-      cancelled = true
-    }
+    // Why: a temporarily locked managed home clears on its own, but this effect
+    // only reruns on scope/runtime/selection changes — none of which a lock
+    // release triggers. Without a retry the warning would stick until remount.
+    // Serialized (timeout, not interval) so a slow response can never be
+    // overwritten by an older one.
+    return watchCodexConfigSyncStatus(setCodexConfigSync)
     // Why: the status resolves whichever home the ACTIVE selection mirrors into
     // (per-account, shared, or none for the real-home lane), so switching
     // accounts must refetch or the banner describes the previous account.
@@ -1180,23 +1213,28 @@ export function AccountsPane({
             <div className="flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
               <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
               <span>
-                {codexConfigSyncWarning === 'missing-source'
+                {codexConfigSyncWarning === 'managed-home-unavailable'
                   ? translate(
-                      'auto.components.settings.AccountsPane.codexConfigSyncMissingSource',
-                      'Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.',
-                      { value0: codexConfigSync?.systemConfigPath ?? '' }
+                      'auto.components.settings.AccountsPane.codexConfigSyncManagedHomeUnavailable',
+                      'Orca could not read this account\u2019s Codex files just now, so settings may not be syncing. This usually clears on its own \u2014 antivirus or a backup tool briefly locks them.'
                     )
-                  : codexConfigSyncWarning === 'blank-source'
+                  : codexConfigSyncWarning === 'missing-source'
                     ? translate(
-                        'auto.components.settings.AccountsPane.codexConfigSyncBlankSource',
-                        'Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.',
+                        'auto.components.settings.AccountsPane.codexConfigSyncMissingSource',
+                        'Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.',
                         { value0: codexConfigSync?.systemConfigPath ?? '' }
                       )
-                    : translate(
-                        'auto.components.settings.AccountsPane.codexConfigSyncUnreadableSource',
-                        "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
-                        { value0: codexConfigSync?.systemConfigPath ?? '' }
-                      )}
+                    : codexConfigSyncWarning === 'blank-source'
+                      ? translate(
+                          'auto.components.settings.AccountsPane.codexConfigSyncBlankSource',
+                          'Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.',
+                          { value0: codexConfigSync?.systemConfigPath ?? '' }
+                        )
+                      : translate(
+                          'auto.components.settings.AccountsPane.codexConfigSyncUnreadableSource',
+                          "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions.",
+                          { value0: codexConfigSync?.systemConfigPath ?? '' }
+                        )}
               </span>
             </div>
           ) : null}

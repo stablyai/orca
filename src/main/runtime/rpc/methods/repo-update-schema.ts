@@ -6,7 +6,7 @@ import { normalizeRepoSourceControlAiOverrides } from '../../../../shared/source
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
-} from '../../../../shared/worktree-visibility-sources'
+} from '../../../../shared/worktree/visibility-sources'
 
 export const RepoSourceControlAiOverrides = z
   .unknown()
@@ -54,11 +54,11 @@ export function createRepoUpdateSchema<T extends z.ZodRawShape>(
       symlinkPaths: z.array(z.string()).optional(),
       issueSourcePreference: z.enum(['auto', 'upstream', 'origin']).optional(),
       forkSyncMode: z.enum(['ask', 'safe-auto', 'off']).optional(),
-      externalWorktreeVisibility: z.enum(['hide', 'show']).optional(),
+      externalWorktreeVisibility: z.enum(['hide', 'show']).nullable().optional(),
       externalWorktreeVisibilityPromptDismissedAt: z.number().finite().optional(),
       externalWorktreeInboxBaselinePaths: z.array(z.string()).optional(),
       importedExternalWorktreePaths: z.array(z.string()).optional(),
-      agentWorktreeVisibility: z.enum(['hide', 'show']).optional(),
+      agentWorktreeVisibility: z.enum(['hide', 'show']).nullable().optional(),
       customWorktreeVisibilitySources: z
         .unknown()
         .transform((value) => normalizeCustomWorktreeVisibilitySources(value))

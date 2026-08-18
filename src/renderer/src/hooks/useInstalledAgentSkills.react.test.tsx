@@ -6,10 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   DiscoveredSkill,
   SkillDiscoveryResult,
+  SkillDiscoverySource,
   SkillDiscoveryTarget
 } from '../../../shared/skills'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
@@ -45,11 +46,29 @@ function skill(overrides: Partial<DiscoveredSkill>): DiscoveredSkill {
   }
 }
 
-function discoveryResult(skills: DiscoveredSkill[] = []): SkillDiscoveryResult {
+function discoveryResult(
+  skills: DiscoveredSkill[] = [],
+  sources: SkillDiscoverySource[] = []
+): SkillDiscoveryResult {
   return {
     skills,
-    sources: [],
+    sources,
     scannedAt: Date.now()
+  }
+}
+
+/** A root the host could not read: it reports `exists` because it cannot prove otherwise. */
+function unavailableSource(overrides: Partial<SkillDiscoverySource> = {}): SkillDiscoverySource {
+  return {
+    id: 'home',
+    label: 'Agent skills home',
+    path: '/Users/test/.agents/skills',
+    sourceKind: 'home',
+    providers: ['agent-skills'],
+    owner: null,
+    exists: true,
+    skippedReason: 'unavailable',
+    ...overrides
   }
 }
 
@@ -152,6 +171,71 @@ beforeEach(() => {
 })
 
 describe('useInstalledAgentSkill', () => {
+  // A root that did not answer holds unknown skills, not zero. Reporting a bare
+  // "not installed" there is what offered Install for an already-installed skill.
+  it('says the scan was incomplete when an in-scope root did not answer', async () => {
+    const scan = deferred<SkillDiscoveryResult>()
+    const discover = vi
+      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+      .mockReturnValue(scan.promise)
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover } }
+    })
+
+    await renderProbe()
+    scan.resolve(discoveryResult([], [unavailableSource()]))
+    await act(async () => {
+      await scan.promise
+    })
+
+    expect(latestState?.installed).toBe(false)
+    expect(latestState?.error).toContain('did not respond')
+  })
+
+  it('keeps a negative authoritative when the unread root is out of scope', async () => {
+    const scan = deferred<SkillDiscoveryResult>()
+    const discover = vi
+      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+      .mockReturnValue(scan.promise)
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover } }
+    })
+
+    await renderProbe()
+    // The probe asks only about home roots, so a stalled repo root proves nothing.
+    scan.resolve(
+      discoveryResult([], [unavailableSource({ id: 'repo', sourceKind: 'repo', path: '/repo' })])
+    )
+    await act(async () => {
+      await scan.promise
+    })
+
+    expect(latestState?.installed).toBe(false)
+    expect(latestState?.error).toBeNull()
+  })
+
+  it('does not flag an incomplete scan once the skill is found anyway', async () => {
+    const scan = deferred<SkillDiscoveryResult>()
+    const discover = vi
+      .fn<(target?: SkillDiscoveryTarget) => Promise<SkillDiscoveryResult>>()
+      .mockReturnValue(scan.promise)
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills: { discover } }
+    })
+
+    await renderProbe()
+    scan.resolve(discoveryResult([skill({ name: 'orca-linear' })], [unavailableSource()]))
+    await act(async () => {
+      await scan.promise
+    })
+
+    expect(latestState?.installed).toBe(true)
+    expect(latestState?.error).toBeNull()
+  })
+
   it('ignores stale discovery results after the discovery target changes', async () => {
     const hostScan = deferred<SkillDiscoveryResult>()
     const wslScan = deferred<SkillDiscoveryResult>()

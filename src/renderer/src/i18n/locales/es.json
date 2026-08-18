@@ -196,6 +196,7 @@
         },
         "editor": {
           "dcb521ed29": "Este archivo está en conflicto, pero no hay una copia editable en el worktree.",
+          "conflictPlaceholderGuidance": "Resuelve el conflicto en Git o restaura uno de los lados antes de volver a abrirlo.",
           "51f15c37d3": "No se puede abrir la carpeta: {{value0}}",
           "f2e00db373": "No se encontró el archivo: {{value0}}",
           "checkRunDetailsUnavailable": "No hay detalles disponibles para este check.",
@@ -903,7 +904,7 @@
         "e52bed9264": "Aún no se reportaron checks",
         "90020cc1f3": "Este pull request aún no tiene checks reportados.",
         "ecffebc251": "No se encontraron checks",
-        "5dddefdf58": "Abrir en GitHub",
+        "checkOpenInBrowser": "Abrir en el navegador",
         "744197c84d": "No hay output inline disponible para este check.",
         "08d072664d": "Jobs",
         "96d8f36798": "Anotaciones",
@@ -1242,6 +1243,7 @@
         "519c3587f3": "Agregar al proyecto",
         "openAttachedWorkspace": "Abrir el espacio de trabajo vinculado al issue",
         "openWorkspace": "Abrir espacio de trabajo",
+        "openOnLinear": "Abrir en Linear",
         "moreWorkspaceActions": "Más acciones del espacio de trabajo del issue",
         "startNewWorkspace": "Iniciar un espacio de trabajo nuevo",
         "workspaceSection": "Espacio de trabajo",
@@ -1438,7 +1440,6 @@
         "c57873d721": "Pull request mergeado",
         "a63b3c159c": "Esto actualizará el pull request en GitHub.",
         "eec3706a6a": "{{value0}} PR #{{value1}}?",
-        "b8c6cbb8c4": "No se pudo {{value0}} PR",
         "710e47aa06": "Pull request reabierto",
         "7aa3b5f706": "Pull request cerrado",
         "3d77438c92": "Esto reabrirá el pull request en GitHub.",
@@ -1537,7 +1538,13 @@
         "dd5d9a4f17": "actualizado {{value0}}",
         "71a3c0f9d2": "Iniciar espacio de trabajo",
         "filesUnavailable": "Couldn't load changed files.",
-        "filesRetry": "Retry"
+        "filesRetry": "Reintentar",
+        "77482513f8": "Cerrar",
+        "2f5195c6a0": "Reabrir",
+        "4b8ae7303f": "No se pudo cargar la diferencia.",
+        "closePullRequestFailed": "No se pudo cerrar el pull request",
+        "reopenPullRequestFailed": "No se pudo reabrir el pull request",
+        "diffLoadTimedOut": "Se agotó el tiempo de espera al cargar esta diferencia."
       },
       "QuickOpen": {
         "1dbd3f59ff": "Mover",
@@ -2639,7 +2646,7 @@
               "346d409ab2": "Elige agente",
               "0adba8fa0c": "Agente",
               "ec8f081919": "Acción",
-              "ed04233b3e": "Guarda comandos de terminal o prompts de agente para acceso rápido.",
+              "ed04233b3e": "Los elementos guardados aparecen en el menú de la barra de pestañas para ejecutarlos con un clic.",
               "ca414324ee": "Texto de comando",
               "dc921c17ee": "Prompt",
               "5b3f634a55": "Agregar comando rápido",
@@ -2859,7 +2866,7 @@
             "removedBody": "El host SSH de este espacio de trabajo fue eliminado, por lo que ya no puede conectarse. Elimina el espacio de trabajo para limpiarlo — los archivos remotos permanecen intactos.",
             "removeWorkspaceButton": "Eliminar espacio de trabajo"
           },
-          "TerminalPaneDisconnectedBanner": {
+          "TerminalRemoteRuntimeReconnectBanner": {
             "retryingTitle": "Reconnecting to remote runtime",
             "disconnectedTitle": "Remote runtime disconnected",
             "retryingBody": "Orca will retry for up to one minute. This terminal will resume if the connection returns.",
@@ -3136,7 +3143,7 @@
             "67c4ecda49": "Fuerza el cierre de este terminal. Cualquier trabajo sin guardar en el panel se perderá. Esto no se puede deshacer.",
             "4bb076fa89": "Terminar",
             "996295bff2": "terminal huérfano",
-            "92924a14e3": "Revisar espacios de trabajo inactivos ({{value0}})",
+            "92924a14e3": "Limpiar espacios de trabajo",
             "27a74f91f0": "No hay nada ejecutándose ahora mismo",
             "1b24a32d3a": "Memoria",
             "298f4be7f2": "CPU",
@@ -3269,7 +3276,9 @@
             "antigravityUsageDetails": "Abrir detalles de uso de Antigravity",
             "grokUsageAria": "Abrir detalles de uso de Grok",
             "grokUsageMenu": "Uso de Grok",
-            "floatingTerminalNewActivity": "{{label}}, nueva actividad"
+            "floatingTerminalNewActivity": "{{label}}, nueva actividad",
+            "codexSignInSuccess": "Sesión iniciada en Codex",
+            "codexSignInError": "No se pudo iniciar sesión en Codex. Inténtalo de nuevo."
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Conectar una cuenta",
@@ -4702,7 +4711,9 @@
           "noneFound": "No se encontraron worktrees ajenos a Orca",
           "tryDifferentSearch": "Prueba con otro nombre o ruta.",
           "disableSource": "Desactiva una fuente para gestionar sus worktrees individualmente.",
-          "appearWhenDetected": "Los worktrees nuevos aparecerán aquí cuando Orca los detecte."
+          "appearWhenDetected": "Los worktrees nuevos aparecerán aquí cuando Orca los detecte.",
+          "openGlobalSettings": "Gestionar en Ajustes globales",
+          "globalSettingsSources": "Estas fuentes tienen una configuración global que puedes anular aquí:"
         },
         "WorktreeVisibilitySourceList": {
           "claude": "Claude Code",
@@ -4714,15 +4725,21 @@
           "duplicatePath": "Esta ubicación ya está en la lista.",
           "limit": "Elimina una ubicación personalizada antes de añadir otra.",
           "sources": "Fuentes",
-          "sourcesDescription": "Las fuentes activadas incluyen los worktrees actuales y futuros en la barra lateral.",
+          "sourcesDescription": "Las fuentes mostradas incluyen los worktrees actuales y futuros en la barra lateral.",
           "found": "Encontrados: {{value0}}",
           "remove": "Eliminar {{value0}}",
           "removeLocation": "Eliminar ubicación personalizada",
-          "toggle": "Mostrar los worktrees actuales y futuros de {{value0}}",
           "addLocation": "Añadir ubicación",
           "worktreeRoot": "Raíz de worktrees",
           "add": "Añadir",
-          "rootHelp": "Orca reconocerá los worktrees dentro de esta carpeta."
+          "rootHelp": "Orca reconocerá los worktrees dentro de esta carpeta.",
+          "visibility": "Visibilidad de {{value0}}",
+          "show": "Mostrar",
+          "hide": "Ocultar",
+          "overridingGlobal": "Anulando la configuración global: {{value0}}",
+          "projectOnly": "Añadida solo en este proyecto.",
+          "useGlobalFor": "Usar la configuración global para {{value0}}",
+          "useGlobal": "Usar global"
         },
         "add": {
           "repo": {
@@ -5323,6 +5340,7 @@
           "codexSystemDefaultNeedsSignIn": "No se encontró ningún inicio de sesión de Codex para {{value0}}.",
           "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
           "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
+          "codexConfigSyncManagedHomeUnavailable": "Orca no pudo leer los archivos de Codex de esta cuenta en este momento, por lo que es posible que la configuración no se esté sincronizando. Normalmente se resuelve solo: un antivirus o una herramienta de copia de seguridad puede bloquearlos brevemente.",
           "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
         },
         "AdvancedPane": {
@@ -5967,7 +5985,11 @@
           "5567191a6e": "Examinar",
           "0e9fc0eadc": "Directorio de espacio de trabajo",
           "e2955d9ccb": "Configura dónde se crean nuevos espacios de trabajo.",
-          "7511097c5d": "Espacio de trabajo"
+          "7511097c5d": "Espacio de trabajo",
+          "externalWorktrees": "Worktrees externos",
+          "externalWorktreesDescription": "Elige si los worktrees creados fuera de Orca aparecen de forma predeterminada.",
+          "show": "Mostrar",
+          "hide": "Ocultar"
         },
         "GhosttyImportModal": {
           "9d3e56ca36": "Aplicar cambios",
@@ -6630,7 +6652,14 @@
           "projectRuntimeDescription": "Elige si este proyecto se ejecuta en Windows o WSL.",
           "hostStateDisconnected": "Disconnected",
           "hostStateUnknown": "Unknown",
-          "nestedHostLabel": "{{value0}} via {{value1}}"
+          "nestedHostLabel": "{{value0}} mediante {{value1}}",
+          "externalWorktrees": "Worktrees externos",
+          "externalWorktreesDescription": "Sobrescribe si los worktrees creados fuera de Orca aparecen en este proyecto.",
+          "externalWorktreesInherited": "Usando el valor global: {{value0}}",
+          "show": "Mostrar",
+          "hide": "Ocultar",
+          "externalWorktreesGlobal": "Valor global predeterminado: {{value0}}",
+          "useGlobal": "Usar valor global"
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Plantilla de comando",
@@ -8251,7 +8280,9 @@
             "e61157e926": "Ajuste de línea en el editor",
             "005be5c699": "Ajusta las líneas largas en editores de archivos en lugar de requerir desplazamiento horizontal.",
             "editorFontFamily": "Fuente del editor",
-            "editorFontFamilyDesc": "Fuente utilizada por los editores de archivos y vistas de diferencias. Dejar vacío para seguir la fuente de la terminal."
+            "editorFontFamilyDesc": "Fuente utilizada por los editores de archivos y vistas de diferencias. Dejar vacío para seguir la fuente de la terminal.",
+            "externalWorktrees": "Worktrees externos",
+            "externalWorktreesDescription": "Elige si los worktrees creados fuera de Orca aparecen de forma predeterminada."
           }
         },
         "git": {
@@ -8735,6 +8766,8 @@
             "keepForkUpToDateDescription": "Avanza este fork de forma segura desde upstream con fast-forward.",
             "projectRuntime": "Runtime del proyecto",
             "projectRuntimeDescription": "Elige si este proyecto se ejecuta en Windows o WSL.",
+            "externalWorktrees": "Worktrees externos",
+            "externalWorktreesDescription": "Sobrescribe si los worktrees creados fuera de Orca aparecen en este proyecto.",
             "copy": "copy",
             "clone": "clone",
             "apfs": "apfs"
@@ -8760,6 +8793,9 @@
               "4575341c77": "Agrega un servidor Orca remoto guardado, genera una URL de emparejamiento o ajusta el runtime predeterminado avanzado."
             }
           }
+        },
+        "shortcutDefinitionCatalog": {
+          "missionControlConflict": "Bloqueado por Mission Control. Reasigna aquí o cámbialo en Ajustes del Sistema."
         },
         "shortcuts": {
           "search": {
@@ -10111,6 +10147,11 @@
           "setupRecipe": "Configura una receta de entorno para tu proveedor de nube.",
           "createWorkspace": "Crea un espacio de trabajo y selecciona esa receta en Ejecutar en.",
           "openSetup": "Configurar recetas de entorno"
+        },
+        "GlobalWorktreeVisibilitySourcesSetting": {
+          "saveFailed": "No se pudieron guardar los valores predeterminados de visibilidad.",
+          "updateServer": "Actualiza este servidor para configurar los valores predeterminados de las fuentes.",
+          "updateServerDefaults": "Actualiza este servidor para configurar los valores predeterminados de visibilidad."
         }
       },
       "right": {

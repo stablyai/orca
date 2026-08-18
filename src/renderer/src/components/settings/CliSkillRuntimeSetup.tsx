@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   deriveGlobalWindowsRuntimeDefaultFromLegacySettings,
   normalizeGlobalWindowsRuntimeDefault
@@ -229,9 +229,8 @@ function wrapWindowsSkillCommandWithNpxPrerequisite(
 }
 
 function isPosixFamilyWindowsShellConfigured(): boolean {
-  return (
-    resolveWindowsShellStartupFamily(useAppStore.getState().settings?.terminalWindowsShell) ===
-    'posix'
+  return ['posix', 'unix'].includes(
+    resolveWindowsShellStartupFamily(useAppStore.getState().settings?.terminalWindowsShell)
   )
 }
 

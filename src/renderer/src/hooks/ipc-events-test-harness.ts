@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import type * as ReactModule from 'react'
-import type { TerminalPaneLayoutNode } from '../../../shared/types'
+import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 
 export type CreateTerminalRequest = {
   requestId?: string
@@ -133,6 +133,7 @@ export type IpcEventsHarness = {
 export type IpcEventsHarnessOptions = {
   /** Sidebar order the workspace digit chord indexes into. */
   visibleWorktreeIds?: string[]
+  visibleWorktreeTargets?: { id: string; executionHostId?: 'local' | `ssh:${string}` }[]
 }
 
 /**
@@ -169,7 +170,9 @@ export async function loadIpcEventsHarness(
     ensureWorktreeHasInitialTerminal: vi.fn()
   }))
   vi.doMock('@/components/sidebar/visible-worktrees', () => ({
-    getVisibleWorktreeIds: () => options.visibleWorktreeIds ?? []
+    getVisibleWorktreeIds: () => options.visibleWorktreeIds ?? [],
+    getVisibleWorktreeShortcutTargets: () =>
+      options.visibleWorktreeTargets ?? (options.visibleWorktreeIds ?? []).map((id) => ({ id }))
   }))
   vi.doMock('@/lib/floating-workspace-terminal-actions', () => ({
     createFloatingWorkspaceTerminalTab: vi.fn(),
@@ -196,6 +199,7 @@ export async function loadIpcEventsHarness(
         ui: createApiNamespaceStub({
           getZoomLevel: () => 0,
           consumePendingOpenSettings: () => Promise.resolve(false),
+          consumePendingSkillShare: () => Promise.resolve(null),
           set: vi.fn(),
           replyTabCreate: vi.fn(),
           replyTabClose: vi.fn(),

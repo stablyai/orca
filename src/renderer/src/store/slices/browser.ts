@@ -2,18 +2,18 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type {
+  BrowserCertificateFailure,
   BrowserCookieImportResult,
   BrowserCookieImportSummary,
-  BrowserCertificateFailure,
   BrowserHistoryEntry,
   BrowserLoadError,
   BrowserPage,
   BrowserSessionProfile,
   BrowserSessionProfileCreateOptions,
   BrowserViewportPresetId,
-  BrowserWorkspace,
-  WorkspaceSessionState
-} from '../../../../shared/types'
+  BrowserWorkspace
+} from '../../../../shared/browser-workspace-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { GRAB_BUDGET, type BrowserPageAnnotation } from '../../../../shared/browser-grab-types'
 import { FLOATING_TERMINAL_WORKTREE_ID, ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -68,6 +68,7 @@ import {
 
 type CreateBrowserTabOptions = {
   activate?: boolean
+  browserPageId?: string
   title?: string
   sessionProfileId?: string | null
   sessionPartition?: string | null
@@ -390,11 +391,12 @@ function buildBrowserPage(
   worktreeId: string,
   url: string,
   title?: string,
-  browserRuntimeEnvironmentId?: string | null
+  browserRuntimeEnvironmentId?: string | null,
+  browserPageId?: string
 ): BrowserPage {
   const normalizedUrl = normalizeUrl(url)
   return {
-    id: createBrowserUuid(),
+    id: browserPageId ?? createBrowserUuid(),
     workspaceId,
     worktreeId,
     url: normalizedUrl,
@@ -599,12 +601,21 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   createBrowserTab: (worktreeId, url, options) => {
     assertManagedBrowserMaterializationAllowed(get(), options?.browserRuntimeEnvironmentId)
     const workspaceId = createBrowserUuid()
+    const browserPageId = options?.browserPageId
+    if (
+      browserPageId &&
+      (findWorkspace(get().browserTabsByWorktree, browserPageId) ||
+        findPage(get().browserPagesByWorkspace, browserPageId))
+    ) {
+      throw new Error(`Browser page ${browserPageId} already exists`)
+    }
     const page = buildBrowserPage(
       workspaceId,
       worktreeId,
       url,
       options?.title,
-      options?.browserRuntimeEnvironmentId
+      options?.browserRuntimeEnvironmentId,
+      browserPageId
     )
     // Why: with no explicit profile, inherit the user's default so a Settings preference applies to new tabs.
     const sessionProfileId =
@@ -2190,7 +2201,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         const result = await callRuntimeRpc<BrowserProfileImportFromBrowserResult>(
           { kind: 'environment', environmentId: runtimeEnvironmentId },
           'browser.profileImportFromBrowser',
-          { profileId, browserFamily, browserProfile },
+          { profileId, browserFamily, browserProfile, supportsPartitionSkippedCookies: true },
           { timeoutMs: 30_000 }
         )
         if (result.ok) {

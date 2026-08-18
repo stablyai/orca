@@ -11,7 +11,7 @@ import type {
   CodexManagedAccountSummary,
   CodexRateLimitAccountsState,
   CodexSystemDefaultIdentity
-} from '../../shared/types'
+} from '../../shared/managed-account-types'
 import type {
   CodexRateLimitResetOutcome,
   CodexRateLimitResetResult,
@@ -56,7 +56,10 @@ import {
   setSelectedCodexAccountIdForTarget,
   type CodexAccountSelectionTarget
 } from './runtime-selection'
-import { assertOwnedHostCodexManagedHomePath } from './host-codex-managed-home-ownership'
+import {
+  assertOwnedHostCodexManagedHomePath,
+  ManagedCodexHomeTemporarilyUnavailableError
+} from './host-codex-managed-home-ownership'
 
 const LOGIN_TIMEOUT_MS = 120_000
 const MAX_LOGIN_OUTPUT_CHARS = 4_000
@@ -90,6 +93,15 @@ type CanonicalCodexConfig = {
 export type CodexAccountAddTarget = {
   runtime?: 'host' | 'wsl'
   wslDistro?: string | null
+}
+
+export type CodexAccountReauthenticateOptions = {
+  /**
+   * Local-only intent from the status bar's "Sign in to see usage" action: when
+   * this account's runtime lane had no selection before login, activate the
+   * account that just signed in instead of restoring the empty selection.
+   */
+  activateIfSelectionWasEmpty?: boolean
 }
 
 export type CodexAccountServiceLifecycle = {
@@ -139,6 +151,10 @@ type CodexResetCreditAttempt = {
   promise: Promise<CodexResetCreditConsumeResult> | null
   settledOutcome: CodexRateLimitResetOutcome | null
 }
+
+type CodexResetCreditScopeValidation =
+  | { kind: 'settledReplay' }
+  | { kind: 'providerMutation'; requireCurrentOffer: boolean }
 
 class CodexResetCreditScopeRejection extends Error {
   constructor(
@@ -297,8 +313,11 @@ export class CodexAccountService {
     return this.serializeMutation(() => this.doAddAccountFromHome(sourceHome, target))
   }
 
-  async reauthenticateAccount(accountId: string): Promise<CodexRateLimitAccountsState> {
-    return this.serializeMutation(() => this.doReauthenticateAccount(accountId))
+  async reauthenticateAccount(
+    accountId: string,
+    options?: CodexAccountReauthenticateOptions
+  ): Promise<CodexRateLimitAccountsState> {
+    return this.serializeMutation(() => this.doReauthenticateAccount(accountId, options))
   }
 
   async removeAccount(accountId: string): Promise<CodexRateLimitAccountsState> {
@@ -332,7 +351,9 @@ export class CodexAccountService {
       }
       if (existing.state === 'settled' && existing.settledOutcome) {
         return this.serializeMutation(async () => {
-          const { rateLimits } = this.validateResetCreditScope(expectedScope, false)
+          const { rateLimits } = this.validateResetCreditScope(expectedScope, {
+            kind: 'settledReplay'
+          })
           return {
             outcome: existing.settledOutcome!,
             scope: existing.expectedScope,
@@ -424,7 +445,13 @@ export class CodexAccountService {
       if (this.hasPendingResetForTarget(target)) {
         throw new Error('A previous reset attempt for this target still has an unknown outcome.')
       }
-      const codexHomePath = this.runtimeHome.prepareForRateLimitFetch(target)
+      const homeResolution = this.runtimeHome.prepareForRateLimitFetch(target)
+      // Why: reject before the provider mutation — a skip must never be spent
+      // against the system-default home (#STA-4422).
+      if (homeResolution.kind === 'skip') {
+        throw new ManagedCodexHomeTemporarilyUnavailableError()
+      }
+      const codexHomePath = homeResolution.codexHomePath
       return this.rateLimits.consumeCodexRateLimitResetCredit({
         idempotencyKey: randomUUID(),
         target,
@@ -471,7 +498,10 @@ export class CodexAccountService {
       const isFresh = attempt.state === 'fresh'
       let validation: { managedHomePath: string; rateLimits: RateLimitState }
       try {
-        validation = this.validateResetCreditScope(expectedScope, isFresh)
+        validation = this.validateResetCreditScope(expectedScope, {
+          kind: 'providerMutation',
+          requireCurrentOffer: isFresh
+        })
       } catch (error) {
         if (isFresh && error instanceof CodexResetCreditScopeRejection) {
           this.releaseFreshResetAttempt(idempotencyKey, attempt)
@@ -538,7 +568,7 @@ export class CodexAccountService {
 
   private validateResetCreditScope(
     expectedScope: CodexResetCreditExpectedScope,
-    requireCurrentOffer: boolean
+    validation: CodexResetCreditScopeValidation
   ): { managedHomePath: string; rateLimits: RateLimitState } {
     const rateLimitState = this.rateLimits.getState()
     if (!sameRateLimitTarget(rateLimitState.codexTarget, expectedScope.target)) {
@@ -580,30 +610,35 @@ export class CodexAccountService {
       )
     }
 
-    const currentScope = buildCodexResetCreditExpectedScope({
-      target: rateLimitState.codexTarget,
-      account: this.toSummary(account),
-      limits: rateLimitState.codex
-    })
-    // Why: a same-key replay resolves an already-started provider mutation;
-    // its credit snapshot may have refreshed, but its account/runtime identity may not change.
-    if (requireCurrentOffer && !currentScope) {
-      throw new CodexResetCreditScopeRejection(
-        'offerUnavailable',
-        rateLimitState,
-        'The Codex reset-credit offer is no longer available.'
-      )
+    if (validation.kind === 'providerMutation' && validation.requireCurrentOffer) {
+      const currentScope = buildCodexResetCreditExpectedScope({
+        target: rateLimitState.codexTarget,
+        account: this.toSummary(account),
+        limits: rateLimitState.codex
+      })
+      if (!currentScope) {
+        throw new CodexResetCreditScopeRejection(
+          'offerUnavailable',
+          rateLimitState,
+          'The Codex reset-credit offer is no longer available.'
+        )
+      }
+      if (resetScopeKey(expectedScope) !== resetScopeKey(currentScope)) {
+        throw new CodexResetCreditScopeRejection(
+          'offerChanged',
+          rateLimitState,
+          'The Codex reset-credit offer changed before reset.'
+        )
+      }
     }
-    if (
-      requireCurrentOffer &&
-      currentScope &&
-      resetScopeKey(expectedScope) !== resetScopeKey(currentScope)
-    ) {
-      throw new CodexResetCreditScopeRejection(
-        'offerChanged',
-        rateLimitState,
-        'The Codex reset-credit offer changed before reset.'
-      )
+
+    if (validation.kind === 'providerMutation' && expectedScope.target.runtime === 'host') {
+      assertOwnedHostCodexManagedHomePath({
+        candidatePath: account.managedHomePath,
+        managedAccountsRoot: join(app.getPath('userData'), 'codex-accounts'),
+        systemCodexHomePath: getSystemCodexHomePath(),
+        expectedAccountId: account.id
+      })
     }
 
     return { managedHomePath: account.managedHomePath, rateLimits: rateLimitState }
@@ -847,7 +882,10 @@ export class CodexAccountService {
     return this.getSnapshot()
   }
 
-  private async doReauthenticateAccount(accountId: string): Promise<CodexRateLimitAccountsState> {
+  private async doReauthenticateAccount(
+    accountId: string,
+    options?: CodexAccountReauthenticateOptions
+  ): Promise<CodexRateLimitAccountsState> {
     const account = this.requireAccount(accountId)
     const managedHomePath = this.ensureManagedHomeForReauthentication(account)
     const accountTarget = getCodexSelectionTargetForAccount(account)
@@ -855,6 +893,11 @@ export class CodexAccountService {
       this.store.getSettings(),
       accountTarget
     )
+    // Why: decided from the pre-login capture, never a post-login read — the
+    // runtime-home poll runs outside the mutation queue and can clear this lane
+    // while OAuth is open, which would look like an empty selection to activate.
+    const activateAfterLogin =
+      options?.activateIfSelectionWasEmpty === true && selectedAccountId === null
 
     this.safeSyncCanonicalConfigIntoManagedHome(managedHomePath, undefined, account.id)
     await this.runCodexLogin(managedHomePath)
@@ -880,7 +923,7 @@ export class CodexAccountService {
     )
     const activeSelection = setSelectedCodexAccountIdForTarget(
       normalizeCodexRuntimeSelection(settings),
-      selectedAccountId,
+      activateAfterLogin ? accountId : selectedAccountId,
       accountTarget
     )
 

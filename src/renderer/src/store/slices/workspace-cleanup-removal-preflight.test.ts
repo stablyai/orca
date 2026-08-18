@@ -1,3 +1,7 @@
+import {
+  getWorkspaceCleanupCandidateIdentity,
+  getWorkspaceCleanupHostIdentity
+} from '../../../../shared/workspace-cleanup-host-identity'
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import type { WorkspaceCleanupScanResult } from '../../../../shared/workspace-cleanup'
@@ -12,9 +16,7 @@ import {
 } from './workspace-cleanup-slice-test-harness'
 
 describe('workspace cleanup removal and protection', () => {
-  it('preflights cleanup removals concurrently and deletes nested workspaces globally deepest first', async () => {
-    let activePreflights = 0
-    let maxActivePreflights = 0
+  it('preflights cleanup removals in one batched scan and deletes nested workspaces globally deepest first', async () => {
     let activeDeletes = 0
     let maxActiveDeletes = 0
     const deleteOrder: string[] = []
@@ -41,21 +43,18 @@ describe('workspace cleanup removal and protection', () => {
       })
     ]
     const candidateById = new Map(candidates.map((candidate) => [candidate.worktreeId, candidate]))
-    const scan = vi.fn(async (args?: { worktreeId?: string }) => {
-      activePreflights += 1
-      maxActivePreflights = Math.max(maxActivePreflights, activePreflights)
+    const scan = vi.fn(async (args?: { worktreeIds?: string[] }) => {
       await new Promise((resolve) => setTimeout(resolve, 5))
-      activePreflights -= 1
       return {
         scannedAt: NOW,
-        candidates: args?.worktreeId ? [candidateById.get(args.worktreeId)!] : [],
+        candidates: (args?.worktreeIds ?? []).map((id) => candidateById.get(id)!),
         errors: []
       } satisfies WorkspaceCleanupScanResult
     })
     installWorkspaceCleanupApi(scan)
 
-    const removeWorktree = vi.fn(async (worktreeId: string) => {
-      deleteOrder.push(worktreeId)
+    const removeWorktree = vi.fn(async (target: { id: string }) => {
+      deleteOrder.push(target.id)
       activeDeletes += 1
       maxActiveDeletes = Math.max(maxActiveDeletes, activeDeletes)
       await new Promise((resolve) => setTimeout(resolve, 5))
@@ -73,19 +72,29 @@ describe('workspace cleanup removal and protection', () => {
         .removeWorkspaceCleanupCandidates(candidates.map((candidate) => candidate.worktreeId))
     ).resolves.toEqual({
       removedIds: expect.arrayContaining(candidates.map((candidate) => candidate.worktreeId)),
+      removedIdentities: expect.arrayContaining(
+        candidates.map((candidate) => getWorkspaceCleanupCandidateIdentity(candidate))
+      ),
       failures: []
     })
 
-    expect(maxActivePreflights).toBeGreaterThan(1)
+    // Why: one batched scan covers every selected row; deletes stay serial.
+    expect(scan).toHaveBeenCalledTimes(1)
     expect(maxActiveDeletes).toBe(1)
     expect(deleteOrder).toEqual([
       'repo-b::/repo/parent/child',
       'repo-a::/repo/parent',
       'repo-c::/other'
     ])
-    expect(removeWorktree).toHaveBeenCalledWith('repo-c::/other', true, {
-      suppressPreservedBranchToast: true
-    })
+    // No approvedCandidates here, so there is no confirmed row to qualify: the
+    // internal-caller compatibility path leaves the host unqualified.
+    expect(removeWorktree).toHaveBeenCalledWith(
+      { id: 'repo-c::/other', executionHostId: null },
+      true,
+      {
+        suppressPreservedBranchToast: true
+      }
+    )
     expect(store.getState().workspaceCleanupScan?.candidates).toEqual([])
   })
 
@@ -107,6 +116,7 @@ describe('workspace cleanup removal and protection', () => {
       store.getState().removeWorkspaceCleanupCandidates([candidate.worktreeId])
     ).resolves.toEqual({
       removedIds: [candidate.worktreeId],
+      removedIdentities: [getWorkspaceCleanupHostIdentity('local', candidate.worktreeId)],
       failures: [],
       preservedBranches: [
         {
@@ -116,9 +126,35 @@ describe('workspace cleanup removal and protection', () => {
         }
       ]
     })
-    expect(removeWorktree).toHaveBeenCalledWith(candidate.worktreeId, false, {
-      suppressPreservedBranchToast: true
+    expect(removeWorktree).toHaveBeenCalledWith(
+      { id: candidate.worktreeId, executionHostId: null },
+      false,
+      {
+        suppressPreservedBranchToast: true
+      }
+    )
+  })
+
+  it('forwards the snapshot batch through each successful removal', async () => {
+    const candidate = makeCandidate({ executionHostId: 'ssh:ssh-1' })
+    installWorkspaceCleanupApi(
+      vi.fn(async () => ({ scannedAt: NOW, candidates: [candidate], errors: [] }))
+    )
+    const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
+    const store = createCleanupTestStore(removeWorktree)
+
+    await store.getState().removeWorkspaceCleanupCandidates([candidate.worktreeId], {
+      snapshotPruneBatchId: 'batch-1'
     })
+
+    expect(removeWorktree).toHaveBeenCalledWith(
+      { id: candidate.worktreeId, executionHostId: null },
+      false,
+      {
+        suppressPreservedBranchToast: true,
+        snapshotPruneBatchId: 'batch-1'
+      }
+    )
   })
 
   it('demotes an active suggested workspace when it was not viewed from cleanup', async () => {
@@ -228,9 +264,10 @@ describe('workspace cleanup removal and protection', () => {
 
     await expect(removal).resolves.toEqual({
       removedIds: [WORKTREE_ID],
+      removedIdentities: [getWorkspaceCleanupHostIdentity('local', WORKTREE_ID)],
       failures: []
     })
-    expect(removeWorktree).toHaveBeenCalledWith(WORKTREE_ID, false, {
+    expect(removeWorktree).toHaveBeenCalledWith({ id: WORKTREE_ID, executionHostId: null }, false, {
       suppressPreservedBranchToast: true
     })
   })
@@ -269,6 +306,8 @@ describe('workspace cleanup removal and protection', () => {
 
     expect(scan).toHaveBeenCalledWith(
       {
+        includeAllWorkspaces: true,
+        scanId: expect.any(String),
         skipGitWorktreeIds: expect.arrayContaining([WORKTREE_ID, 'repo1::/tmp/terminal-workspace'])
       },
       expect.any(Function)
@@ -300,7 +339,11 @@ describe('workspace cleanup removal and protection', () => {
 
     await store.getState().removeWorkspaceCleanupCandidates([WORKTREE_ID])
 
-    expect(scan).toHaveBeenCalledWith({ worktreeId: WORKTREE_ID })
+    expect(scan).toHaveBeenCalledWith({
+      worktreeIds: [WORKTREE_ID],
+      scanId: expect.any(String),
+      refreshActivity: true
+    })
   })
 
   it('lets explicitly selected not-suggested workspaces reach the removal path', async () => {
@@ -335,17 +378,19 @@ describe('workspace cleanup removal and protection', () => {
     await expect(store.getState().removeWorkspaceCleanupCandidates([WORKTREE_ID])).resolves.toEqual(
       {
         removedIds: [WORKTREE_ID],
+        removedIdentities: [getWorkspaceCleanupHostIdentity('local', WORKTREE_ID)],
         failures: []
       }
     )
-    expect(removeWorktree).toHaveBeenCalledWith(WORKTREE_ID, false, {
+    expect(removeWorktree).toHaveBeenCalledWith({ id: WORKTREE_ID, executionHostId: null }, false, {
       suppressPreservedBranchToast: true
     })
   })
 
   it('fails a queued removal that now needs a force the user never approved', async () => {
-    const approvedCandidate = makeCandidate()
+    const approvedCandidate = makeCandidate({ executionHostId: 'local' })
     const dirtySinceConfirmation = makeCandidate({
+      executionHostId: 'local',
       tier: 'review',
       blockers: ['dirty-files'],
       git: { clean: false, upstreamAhead: 0, upstreamBehind: 0, checkedAt: NOW }
@@ -365,9 +410,11 @@ describe('workspace cleanup removal and protection', () => {
       })
     ).resolves.toEqual({
       removedIds: [],
+      removedIdentities: [],
       failures: [
         {
           worktreeId: WORKTREE_ID,
+          executionHostId: 'local',
           displayName: 'old-workspace',
           message: 'Workspace changed after confirmation. Refresh to review it before removing.'
         }
@@ -378,6 +425,7 @@ describe('workspace cleanup removal and protection', () => {
 
   it('still force-removes rows whose approved candidate already carried git risk', async () => {
     const approvedCandidate = makeCandidate({
+      executionHostId: 'local',
       tier: 'review',
       blockers: ['dirty-files'],
       git: { clean: false, upstreamAhead: 0, upstreamBehind: 0, checkedAt: NOW }
@@ -395,19 +443,29 @@ describe('workspace cleanup removal and protection', () => {
       store.getState().removeWorkspaceCleanupCandidates([WORKTREE_ID], {
         approvedCandidates: [approvedCandidate]
       })
-    ).resolves.toEqual({ removedIds: [WORKTREE_ID], failures: [] })
-    expect(removeWorktree).toHaveBeenCalledWith(WORKTREE_ID, true, {
-      suppressPreservedBranchToast: true
+    ).resolves.toEqual({
+      removedIds: [WORKTREE_ID],
+      removedIdentities: [getWorkspaceCleanupHostIdentity('local', WORKTREE_ID)],
+      failures: []
     })
+    expect(removeWorktree).toHaveBeenCalledWith(
+      { id: WORKTREE_ID, executionHostId: 'local' },
+      true,
+      {
+        suppressPreservedBranchToast: true
+      }
+    )
   })
 
   it('fails a removal that reveals concrete git risk after an unverified force approval', async () => {
     const approvedCandidate = makeCandidate({
+      executionHostId: 'local',
       tier: 'review',
       blockers: ['git-status-error'],
       git: { clean: null, upstreamAhead: null, upstreamBehind: null, checkedAt: null }
     })
     const nowRevealsUnpushed = makeCandidate({
+      executionHostId: 'local',
       tier: 'review',
       blockers: ['unpushed-commits'],
       git: { clean: true, upstreamAhead: 3, upstreamBehind: 0, checkedAt: NOW }
@@ -427,9 +485,11 @@ describe('workspace cleanup removal and protection', () => {
       })
     ).resolves.toEqual({
       removedIds: [],
+      removedIdentities: [],
       failures: [
         {
           worktreeId: WORKTREE_ID,
+          executionHostId: 'local',
           displayName: 'old-workspace',
           message: 'Workspace changed after confirmation. Refresh to review it before removing.'
         }

@@ -1,10 +1,34 @@
 import { toast } from 'sonner'
-import type { BrowserCookieImportSummary } from '../../../shared/types'
+import type { BrowserCookieImportSummary } from '../../../shared/browser-workspace-types'
+import { isHandledWireDiscriminant } from '../../../shared/handled-wire-discriminant'
 import { translate } from '@/i18n/i18n'
 
 type CookieImportWarning = NonNullable<BrowserCookieImportSummary['warning']>
+type CookieImportWarningCode = CookieImportWarning['code']
+type UndecryptableReason = Extract<CookieImportWarning, { code: 'cookies-undecryptable' }>['reason']
+
+// Why: the summary is cast, not decoded, on the way off the runtime RPC wire, so a newer host can
+// send a code/reason this build has never heard of. The Record keys are the union itself, so a new
+// member fails typecheck here instead of silently falling out of the switch (#14683 follow-up).
+const HANDLED_WARNING_CODES: Record<CookieImportWarningCode, true> = {
+  'restart-fallback-unavailable': true,
+  'cookies-undecryptable': true
+}
+
+const HANDLED_UNDECRYPTABLE_REASONS: Record<UndecryptableReason, true> = {
+  'app-bound-encryption': true,
+  'linux-keyring-unavailable': true,
+  unknown: true
+}
 
 function formatCookieImportWarning(warning: CookieImportWarning): string {
+  const code: unknown = warning.code
+  if (!isHandledWireDiscriminant(code, HANDLED_WARNING_CODES)) {
+    return translate(
+      'auto.lib.browser.cookie.import.toast.unrecognizedWarning',
+      'The cookie import finished with a warning this version of Orca does not recognize. Update Orca to see the details, then check this profile before relying on its cookies.'
+    )
+  }
   switch (warning.code) {
     case 'restart-fallback-unavailable':
       return warning.loadedCookies === 0
@@ -21,6 +45,48 @@ function formatCookieImportWarning(warning: CookieImportWarning): string {
               value1: warning.loadedCookies + warning.failedCookies
             }
           )
+    case 'cookies-undecryptable': {
+      const reason: unknown = warning.reason
+      if (!isHandledWireDiscriminant(reason, HANDLED_UNDECRYPTABLE_REASONS)) {
+        return translate(
+          'auto.lib.browser.cookie.import.toast.undecryptableUnrecognizedReason',
+          '{{value0}} cookies could not be decrypted and were skipped for a reason this version of Orca does not recognize. Update Orca to see the details, then try the import again.',
+          { value0: warning.failedCookies }
+        )
+      }
+      switch (warning.reason) {
+        case 'app-bound-encryption':
+          return warning.otherFailedCookies
+            ? translate(
+                'auto.lib.browser.cookie.import.toast.undecryptableAppBoundMixed',
+                "Orca cannot decrypt {{value0}} of this browser's cookies because they use app-bound encryption; {{value1}} more could not be decrypted for another reason. You can import cookies from a file using “From File…”.",
+                { value0: warning.failedCookies, value1: warning.otherFailedCookies }
+              )
+            : translate(
+                'auto.lib.browser.cookie.import.toast.undecryptableAppBound',
+                "Orca cannot decrypt {{value0}} of this browser's cookies because they use app-bound encryption. You can import cookies from a file using “From File…”.",
+                { value0: warning.failedCookies }
+              )
+        case 'linux-keyring-unavailable':
+          return warning.otherFailedCookies
+            ? translate(
+                'auto.lib.browser.cookie.import.toast.undecryptableKeyringMixed',
+                '{{value0}} cookies could not be decrypted because the system keyring was unavailable; {{value1}} more could not be decrypted for another reason. Unlock your login keyring (or install a Secret Service provider such as gnome-keyring) and import again.',
+                { value0: warning.failedCookies, value1: warning.otherFailedCookies }
+              )
+            : translate(
+                'auto.lib.browser.cookie.import.toast.undecryptableKeyring',
+                '{{value0}} cookies could not be decrypted because the system keyring was unavailable. Unlock your login keyring (or install a Secret Service provider such as gnome-keyring) and import again.',
+                { value0: warning.failedCookies }
+              )
+        case 'unknown':
+          return translate(
+            'auto.lib.browser.cookie.import.toast.undecryptableUnknown',
+            '{{value0}} cookies could not be decrypted and were skipped. Close the source browser completely and try the import again.',
+            { value0: warning.failedCookies }
+          )
+      }
+    }
   }
 }
 
@@ -41,6 +107,22 @@ function emitGoogleCookieImportWarning(
   )
 }
 
+// Why (STA-4300): these cookies were skipped rather than downgraded to unpartitioned, so the import
+// is lossy in a way the success count alone would hide.
+function emitPartitionSkippedImportWarning(summary: BrowserCookieImportSummary): void {
+  if (!summary.partitionSkippedCookies) {
+    return
+  }
+  toast.warning(
+    translate(
+      'auto.lib.browser.cookie.import.toast.partitionSkipped',
+      '{{value0}} cookies were not imported because their site-partition could not be read. Sign in to those sites again in Orca.',
+      { value0: summary.partitionSkippedCookies }
+    ),
+    { duration: 12000 }
+  )
+}
+
 // Why: a degraded import returns ok:true with a warning, so every call site must route it to a
 // warning toast instead of reporting an unqualified success (#9355).
 export function emitBrowserCookieImportToast(
@@ -55,4 +137,5 @@ export function emitBrowserCookieImportToast(
     toast.success(successMessage)
   }
   emitGoogleCookieImportWarning(summary, executionHostLabel)
+  emitPartitionSkippedImportWarning(summary)
 }

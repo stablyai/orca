@@ -1,6 +1,10 @@
 import { chmodSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { renderLegacyTerminalPosixTombstone } from './legacy-terminal-posix-tombstone'
+import {
+  readVerifiedShebangInterpreter,
+  renderLegacyTerminalPosixTombstone,
+  resolvePosixTombstoneInterpreter
+} from './legacy-terminal-posix-tombstone'
 import {
   renderLegacyTerminalWindowsCmdTombstone,
   renderLegacyTerminalWindowsPowerShellTombstone
@@ -95,8 +99,19 @@ function writeNeutralWrappers(rootDir: string): void {
   const win32Dir = join(rootDir, 'win32')
   mkdirSync(posixDir, { recursive: true })
   mkdirSync(win32Dir, { recursive: true })
+  // Why: a tombstone with no verifiable absolute interpreter would need an ambient shebang and
+  // could take bash from the current directory. Falling back to the shebang of the wrapper being
+  // replaced keeps a shell that has the path hashed working -- deleting the file strands it on
+  // 127 rather than falling through to PATH. Deleting is the last resort, not the first.
+  const interpreter = resolvePosixTombstoneInterpreter()
   for (const command of ['git', 'gh'] as const) {
-    writeFileAtomically(join(posixDir, command), renderLegacyTerminalPosixTombstone(command), 0o755)
+    const posixPath = join(posixDir, command)
+    const resolved = interpreter ?? readVerifiedShebangInterpreter(posixPath)
+    if (resolved === null) {
+      rmSync(posixPath, { force: true })
+    } else {
+      writeFileAtomically(posixPath, renderLegacyTerminalPosixTombstone(command, resolved), 0o755)
+    }
     writeFileAtomically(
       join(win32Dir, `${command}.cmd`),
       renderLegacyTerminalWindowsCmdTombstone(command),
@@ -126,12 +141,60 @@ function writeFileAtomically(filePath: string, contents: string, mode: number): 
   }
 }
 
+// Why: the captured directory and the PATH entry naming it can differ by a trailing separator (or
+// its slash style on Windows). A literal compare missed that and left the shim dir on PATH. The
+// literal compare itself has to stay: a shim path may contain the PATH delimiter, which splitting
+// would fragment.
+function pathEntrySpellings(dir: string, windows: boolean): string[] {
+  const base = stripTrailingSeparators(dir, windows)
+  if (!base) {
+    return [dir]
+  }
+  const spellings = new Set<string>([dir, base, `${base}/`])
+  if (windows) {
+    spellings.add(`${base}\\`)
+  }
+  return [...spellings]
+}
+
+// Why purely lexical, and why `..` is deliberately not collapsed: collapsing it textually is not
+// the same as resolving it. If `<shim>/posix` is a symlink, `<shim>/posix/../posix` resolves
+// somewhere else entirely, and treating it as the shim directory deletes a legitimate PATH entry
+// and leaves git unresolvable. Resolving for real is not an option either: this env is also built
+// for remote and WSL panes, where these paths do not name anything on the local filesystem.
+// A `..` spelling that does slip through costs nothing at runtime -- the directory now holds the
+// pass-through tombstone, and the tombstone excludes its own directory by -ef, so the lookup still
+// reaches the real git.
 export function isLegacyTerminalShimPathEntry(entry: string): boolean {
-  const normalized = entry.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase()
+  // Why `windows` unconditionally here: this classifier only ever matches Orca's own
+  // `orca-terminal-attribution/{posix,win32}` layout, and a Windows PATH can reach it through the
+  // remote env, so both slash styles must be understood regardless of the local platform.
+  const normalized = stripTrailingSeparators(entry.replaceAll('\\', '/'), true).toLowerCase()
   return (
     normalized.endsWith(`/${LEGACY_SHIM_ROOT_DIR}/posix`) ||
     normalized.endsWith(`/${LEGACY_SHIM_ROOT_DIR}/win32`)
   )
+}
+
+// Why: `pathEntrySpellings` can only enumerate one added separator, so an entry repeating it
+// survived the literal removal. Comparing separator-stripped forms covers any number of them.
+// Why platform-specific: a backslash is a legal filename character on POSIX, so treating it as a
+// separator there made `/tmp/captured\` and `/tmp/captured` compare equal and deleted a real
+// directory from PATH.
+function stripTrailingSeparators(value: string, windows: boolean): string {
+  return value.replace(windows ? /[\\/]+$/ : /\/+$/, '')
+}
+
+function namesCapturedShimDir(entry: string, shimDirs: string[], windows: boolean): boolean {
+  const candidate = stripTrailingSeparators(entry, windows)
+  return shimDirs.some((shimDir) => {
+    const target = stripTrailingSeparators(shimDir, windows)
+    return target
+      ? windows
+        ? candidate.toLowerCase() === target.toLowerCase()
+        : candidate === target
+      : false
+  })
 }
 
 export function stripLegacyTerminalShimEnv(
@@ -164,12 +227,21 @@ export function stripLegacyTerminalShimEnv(
       continue
     }
     const withoutExplicitDirs = explicitShimDirs.reduce(
-      (pathValue, shimDir) => removeLiteralPathEntry(pathValue, shimDir, delimiter, windows),
+      (pathValue, shimDir) =>
+        pathEntrySpellings(shimDir, windows).reduce(
+          (value, spelling) => removeLiteralPathEntry(value, spelling, delimiter, windows),
+          pathValue
+        ),
       current
     )
     const cleaned = withoutExplicitDirs
       .split(delimiter)
-      .filter((entry) => entry && !isLegacyTerminalShimPathEntry(entry))
+      .filter(
+        (entry) =>
+          entry &&
+          !isLegacyTerminalShimPathEntry(entry) &&
+          !namesCapturedShimDir(entry, explicitShimDirs, windows)
+      )
       .join(delimiter)
     if (cleaned) {
       env[pathKey] = cleaned

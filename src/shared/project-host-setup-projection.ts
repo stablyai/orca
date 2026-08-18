@@ -1,12 +1,9 @@
 import { getRepoExecutionHostId } from './execution-host'
-import { githubRepoIdentityKey, isDefaultGitHubHost } from './github-repository-identity-key'
-import type {
-  Project,
-  ProjectHostSetup,
-  ProjectProviderIdentity,
-  Repo,
-  WorktreeMeta
-} from './types'
+import { normalizeGitHubRemoteHost } from './git-remote-host-alias'
+import { githubRepoIdentityKey, isDefaultGitHubHost } from './github/repository-identity-key'
+import type { Project, ProjectHostSetup, ProjectProviderIdentity } from './project-types'
+import type { Repo } from './repo-types'
+import type { WorktreeMeta } from './worktree/meta-types'
 
 type ProjectAccumulator = {
   project: Project
@@ -17,7 +14,7 @@ export type ProjectHostSetupProjection = {
   setups: readonly ProjectHostSetup[]
 }
 
-function getProjectProviderIdentity(
+export function getProjectProviderIdentity(
   repo: Pick<Repo, 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
 ): ProjectProviderIdentity | null {
   const owner = typeof repo.upstream?.owner === 'string' ? repo.upstream.owner.trim() : ''
@@ -96,6 +93,8 @@ export function isProjectRemoteIdentityPending(
   return repo.gitRemoteIdentity === undefined && !hasProjectRemoteIdentity(repo)
 }
 
+const HOST_LOCAL_PROJECT_ID_PREFIX = 'repo:'
+
 export function getProjectIdentityKey(
   repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
 ): string {
@@ -107,7 +106,16 @@ export function getProjectIdentityKey(
   if (gitRemoteIdentity) {
     return `git:${gitRemoteIdentity.canonicalKey}`
   }
-  return `repo:${repo.id}`
+  return `${HOST_LOCAL_PROJECT_ID_PREFIX}${repo.id}`
+}
+
+/**
+ * True for the `repo:<id>` fallback above — a folder project, or a git repo with no
+ * remote. The id is a per-host repo id, so the same project on another host derives a
+ * different one and can never be matched there.
+ */
+export function isHostLocalProjectId(projectId: string): boolean {
+  return projectId.startsWith(HOST_LOCAL_PROJECT_ID_PREFIX)
 }
 
 export function getProjectIdForProviderIdentity(identity: ProjectProviderIdentity): string {
@@ -118,11 +126,6 @@ function getProjectId(
   repo: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>
 ): string {
   return getProjectIdentityKey(repo)
-}
-
-function normalizeGitHubRemoteHost(host: string): string {
-  const normalizedHost = host.toLowerCase()
-  return normalizedHost === 'ssh.github.com' ? 'github.com' : normalizedHost
 }
 
 function isGitHubRemoteHost(host: string): boolean {

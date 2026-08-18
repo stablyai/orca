@@ -1,5 +1,8 @@
+import { isIP } from 'node:net'
 import type { Cookie, Cookies } from 'electron'
 import { parse as parseDomain } from 'psl'
+// Why: type-only, so this does not create a runtime cycle with the clear module.
+import type { CookieClearIdentity } from './browser-cookie-import-clear'
 
 const GOOGLE_SOURCE_BOUND_COOKIE_NAMES = new Set([
   'SIDCC',
@@ -36,6 +39,40 @@ export function normalizeCookieDomain(domain: string): string | null {
   } catch {
     return null
   }
+}
+
+// Why (STA-4300): one definition of "family" for every consumer of the partition skip set — the
+// planner, the per-coordinate removal filter, and the path A domain comparison. Deriving it inline
+// in several places is what let the removal scope and the write set disagree (STA-4090, STA-4170).
+//
+// The IP test MUST run on normalizeCookieDomain's output, never the raw string: Chromium accepts
+// many spellings of one address and psl mangles all of them (psl.parse('2130706433').domain is
+// null, psl.parse('127.0.0.1').domain is '0.1'). normalizeCookieDomain runs the value through
+// `new URL()`, which canonicalises 127.1 / 2130706433 / 0x7f.1 / 010.0.0.1 / a trailing dot to a
+// dotted quad first, so isIP() then recognises every one of them.
+//
+// Returns null when no family can be named (a bare public suffix). A helper that named `com` as a
+// family would preserve an entire TLD from removal, silently turning an import into a no-op.
+export function registrableFamily(domain: string): string | null {
+  const host = normalizeCookieDomain(domain)
+  if (!host) {
+    return null
+  }
+  if (isIP(host)) {
+    return host
+  }
+  // Why: isIP('[::1]') is 0 — the brackets have to come off before the check.
+  if (host.startsWith('[') && host.endsWith(']') && isIP(host.slice(1, -1)) === 6) {
+    return host
+  }
+  const parsed = parseDomain(host)
+  if ('error' in parsed) {
+    return host
+  }
+  if (parsed.domain === null) {
+    return parsed.listed ? null : host
+  }
+  return parsed.domain
 }
 
 export function normalizeCookieImportDomain(domain: string): string | null {
@@ -167,69 +204,102 @@ export function cookieRemovalUrl(cookie: Cookie, domain: string): string | null 
   }
 }
 
-export async function restoreImportedDomainCookies(
-  store: Pick<Cookies, 'set'>,
-  cookies: readonly Cookie[]
-): Promise<void> {
-  const failures: unknown[] = []
-  for (const cookie of cookies) {
-    try {
-      const domain = cookie.domain ? normalizeCookieDomain(cookie.domain) : null
-      const url = domain ? cookieRemovalUrl(cookie, domain) : null
-      if (!url) {
-        continue
-      }
-      await store.set({
-        url,
-        name: cookie.name,
-        value: cookie.value,
-        ...(cookie.hostOnly ? {} : { domain: cookie.domain }),
-        ...(cookie.path ? { path: cookie.path } : {}),
-        secure: cookie.secure,
-        httpOnly: cookie.httpOnly,
-        sameSite: cookie.sameSite,
-        ...(cookie.expirationDate ? { expirationDate: cookie.expirationDate } : {})
-      })
-    } catch (err) {
-      failures.push(err)
+// Why (STA-4097): 'set' stays out so the partition-dropping reconstruction cannot return.
+// Undoing a removal is only possible through CDP identities, which carry partitionKey.
+export type ImportedDomainReplaceStore = Pick<Cookies, 'get' | 'remove'> & {
+  snapshotClearIdentities(
+    cookies: readonly { cookie: Cookie; url: string }[]
+  ): Promise<CookieClearIdentity[]>
+  restoreClearIdentities(identities: readonly CookieClearIdentity[]): Promise<void>
+}
+
+export type ReplacedImportedDomainCookies = {
+  removed: Cookie[]
+  identities: CookieClearIdentity[]
+}
+
+function replaceRemovalKey(url: string, name: string): string {
+  return JSON.stringify([url, name])
+}
+
+function assertIdentitiesCoverRemovable(
+  removable: readonly { cookie: Cookie; url: string }[],
+  identities: readonly CookieClearIdentity[]
+): void {
+  const covered = new Set(
+    identities.map((identity) => replaceRemovalKey(identity.url, identity.name))
+  )
+  for (const item of removable) {
+    if (!covered.has(replaceRemovalKey(item.url, item.cookie.name))) {
+      throw new Error('Could not replace existing cookies; the session was left unchanged')
     }
-  }
-  if (failures.length > 0) {
-    throw new AggregateError(failures, 'Could not restore replaced cookies')
   }
 }
 
 export async function replaceCookiesForImportedDomains(
-  store: Pick<Cookies, 'get' | 'remove' | 'set'>,
+  store: ImportedDomainReplaceStore,
   importedDomains: readonly string[]
-): Promise<Cookie[]> {
+): Promise<ReplacedImportedDomainCookies> {
   const scopes = importedDomainScopes(importedDomains)
   if (scopes.exact.size === 0) {
-    return []
+    return { removed: [], identities: [] }
   }
 
+  // Why (STA-4170): the removal plan is fixed here, beside the identities that can undo it, so
+  // the restorable set always equals the mutated set. Re-reading the jar later would widen the
+  // removal past what the snapshot can restore.
   const existingCookies = await store.get({})
-  const removedCookies: Cookie[] = []
+  const removable: { cookie: Cookie; url: string }[] = []
   for (const cookie of existingCookies) {
     const domain = cookie.domain ? normalizeCookieDomain(cookie.domain) : null
     if (!domain || !overlapsImportedDomain(cookie, domain, scopes)) {
       continue
     }
     const url = cookieRemovalUrl(cookie, domain)
-    if (!url) {
-      continue
+    if (url) {
+      removable.push({ cookie, url })
+    }
+  }
+  if (removable.length === 0) {
+    return { removed: [], identities: [] }
+  }
+
+  // Why: snapshotting before the first removal is what makes the rollback lossless; an
+  // incomplete snapshot aborts while the session is still untouched.
+  const identities = await store.snapshotClearIdentities(removable)
+  assertIdentitiesCoverRemovable(removable, identities)
+  const identitiesByKey = new Map<string, CookieClearIdentity[]>()
+  for (const identity of identities) {
+    const key = replaceRemovalKey(identity.url, identity.name)
+    const group = identitiesByKey.get(key) ?? []
+    group.push(identity)
+    identitiesByKey.set(key, group)
+  }
+
+  const removed: Cookie[] = []
+  // Why: one remove(url, name) deletes every cookie at that coordinate, partitioned twins
+  // included, so the rollback set is tracked per coordinate rather than per cookie.
+  const attemptedKeys = new Set<string>()
+  const attemptedIdentities: CookieClearIdentity[] = []
+  for (const { cookie, url } of removable) {
+    const key = replaceRemovalKey(url, cookie.name)
+    if (!attemptedKeys.has(key)) {
+      attemptedKeys.add(key)
+      attemptedIdentities.push(...(identitiesByKey.get(key) ?? []))
     }
     try {
       await store.remove(url, cookie.name)
-      removedCookies.push(cookie)
+      removed.push(cookie)
     } catch (err) {
       try {
-        await restoreImportedDomainCookies(store, removedCookies)
+        // Why: the failing coordinate is included because a rejected remove cannot prove the
+        // cookie survived; restoring a live cookie rewrites the value it was snapshotted with.
+        await store.restoreClearIdentities(attemptedIdentities.toReversed())
       } catch (restoreError) {
         throw new AggregateError([err, restoreError], 'Cookie replacement and rollback failed')
       }
       throw err
     }
   }
-  return removedCookies
+  return { removed, identities }
 }

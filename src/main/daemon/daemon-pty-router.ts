@@ -77,23 +77,24 @@ export class DaemonPtyRouter implements IPtyProvider {
     return await this.adapterFor(id).attach(id)
   }
 
-  hasPty(id: string): boolean | null {
+  hasPty(id: string): boolean {
     const routed = this.sessionAdapters.get(id)
     if (routed) {
       return routed.hasPty(id)
     }
-    // Why: one adapter's ignorance is not another's absence proof — only a unanimous
-    // proven-absence across every generation may read as false.
-    const answers = this.allAdapters().map((adapter) => adapter.hasPty(id))
-    return answers.includes(true) ? true : answers.includes(null) ? null : false
+    return this.current.hasPty(id) || this.legacy.some((adapter) => adapter.hasPty(id))
   }
 
   async probePtyLiveness(id: string): Promise<boolean | null> {
     return await this.ownerResolver.probe(id)
   }
 
-  write(id: string, data: string): void {
-    this.adapterFor(id).write(id, data)
+  write(id: string, data: string): boolean {
+    return this.adapterFor(id).write(id, data)
+  }
+
+  writeWithSettlement(id: string, data: string): Promise<boolean> {
+    return this.adapterFor(id).writeWithSettlement(id, data)
   }
 
   resize(id: string, cols: number, rows: number): void {
@@ -317,19 +318,14 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   private adapterForInspection(sessionId: string): DaemonPtyAdapter {
-    const owner =
+    const adapter =
       this.sessionAdapters.get(sessionId) ??
-      this.allAdapters().find((candidate) => candidate.hasPty(sessionId) === true)
-    if (owner) {
-      this.sessionAdapters.set(sessionId, owner)
-      return owner
-    }
-    // Why: only unanimous proven absence is gone; an adapter that cannot answer routes
-    // to current without memoizing a route we never established.
-    if (this.hasPty(sessionId) === false) {
+      this.allAdapters().find((candidate) => candidate.hasPty(sessionId))
+    if (!adapter) {
       throw new Error('terminal_gone')
     }
-    return this.current
+    this.sessionAdapters.set(sessionId, adapter)
+    return adapter
   }
 
   private allAdapters(): DaemonPtyAdapter[] {

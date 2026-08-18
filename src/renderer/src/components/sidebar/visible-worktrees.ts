@@ -1,13 +1,31 @@
-import type { Worktree, Repo, TerminalTab, WorktreeLineage } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+export type { SidebarFilterState } from './visible-worktree-kinds'
+export {
+  isAutomationGeneratedWorkspace,
+  isCliCreatedWorkspace,
+  isDetachedHeadWorkspace,
+  isSleepingSweepExemptionNarrowingList,
+  isSleepingSweepExemptWorkspace
+} from './visible-worktree-kinds'
+export { sidebarHasActiveFilters, computeClearFilterActions } from './sidebar-filter-actions'
+export type { ClearFilterActions } from './sidebar-filter-actions'
+import {
+  isAutomationGeneratedWorkspace,
+  isCliCreatedWorkspace,
+  isDetachedHeadWorkspace,
+  isSleepingSweepExemptWorkspace
+} from './visible-worktree-kinds'
+import {
+  getVisibleWorkspaceHostIdSet,
+  worktreeMatchesVisibleHost
+} from './visible-worktree-host-scope'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
 import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { useAppStore } from '@/store'
-import {
-  getAllWorktreesFromState,
-  getRepoMapFromState,
-  getWorktreeMapFromState
-} from '@/store/selectors'
-import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
+import { getAllWorktreesFromState, getRepoMapFromState } from '@/store/selectors'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getSettingsFocusedExecutionHostId,
@@ -19,16 +37,17 @@ import {
   getCyclicProjectedWorktreeLineageIds,
   getLineageRenderInfo
 } from './worktree-lineage-projection'
-import { computeRenderedSidebarWorktreeOrder } from './rendered-sidebar-worktree-order'
-import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
+import {
+  computeRenderedSidebarWorktreeOrder,
+  computeRenderedSidebarWorktrees
+} from './rendered-sidebar-worktree-order'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment,
   isWorkspaceFromOtherDevice
 } from './workspace-creator-visibility'
 import { isDefaultBranchWorkspace } from './default-branch-workspace'
-
-export { isDefaultBranchWorkspace } from './default-branch-workspace'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 /**
  * Whether the "Hide sleeping" sweep must keep this row (#8873).
@@ -42,172 +61,34 @@ export { isDefaultBranchWorkspace } from './default-branch-workspace'
  * Why shared: the sidebar pipeline and the jump palette both apply this, and a
  * second copy is how the two surfaces drift.
  */
-export function isSleepingSweepExemptWorkspace(
-  worktree: Worktree,
-  alwaysShowDefaultBranchWorkspace: boolean | undefined
-): boolean {
-  return alwaysShowDefaultBranchWorkspace !== false && worktree.isMainWorktree
-}
-
-/**
- * Whether turning the exemption off is currently narrowing the list. It only
- * bites during the "Hide sleeping" sweep, so its row — and the filter badge on
- * both menu surfaces — ignores it while sleeping workspaces are shown.
- */
-export function isSleepingSweepExemptionNarrowingList(
-  showSleepingWorkspaces: boolean,
-  alwaysShowDefaultBranchWorkspace: boolean | undefined
-): boolean {
-  return !showSleepingWorkspaces && alwaysShowDefaultBranchWorkspace === false
-}
-
-export function isAutomationGeneratedWorkspace(worktree: Worktree): boolean {
-  return worktree.automationProvenance?.kind === 'created-by-automation'
-}
-
-export function isCliCreatedWorkspace(worktree: Worktree): boolean {
-  return worktree.cliProvenance?.kind === 'created-by-cli'
-}
-
-/**
- * Whether a worktree sits on a detached HEAD (a commit, not a branch).
- *
- * Why the head check: folder workspaces and SSH-synthesized rows carry both an
- * empty branch and an empty head, so branch-emptiness alone would sweep them
- * into this filter. Requiring a real head keeps the predicate to genuine
- * detached-HEAD checkouts, matching what DetachedHeadBadge renders on the card.
- */
-export function isDetachedHeadWorkspace(worktree: Worktree): boolean {
-  return getWorktreeGitIdentityDisplay(worktree)?.kind === 'detached'
-}
-
-/** Inputs describing sidebar filter settings that the Clear Filters path owns. */
-export type SidebarFilterState = {
-  showSleepingWorkspaces: boolean
+type VisibleWorktreeOptions = {
   filterRepoIds: readonly string[]
+  showSleepingWorkspaces: boolean
+  tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
+  ptyIdsByTabId: Record<string, string[]> | null
+  browserTabsByWorktree?: Record<string, { id: string }[]> | null
+  worktreeIdsWithLiveAgent: ReadonlySet<string>
   hideDefaultBranchWorkspace: boolean
   hideAutomationGeneratedWorkspaces: boolean
   hideCliCreatedWorkspaces: boolean
   hideDetachedHeadWorkspaces: boolean
   hideWorkspacesFromOtherDevices: boolean
-  /** Keeps each project's main workspace out of the "Hide sleeping" sweep; absent means on. */
+  pairedDeviceIdsByEnvironment: ReadonlyMap<string, string>
   alwaysShowDefaultBranchWorkspace?: boolean
+  repoMap: Map<string, Repo>
+  workspaceHostScope: ExecutionHostScope
   visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
-  workspaceHostScope?: ExecutionHostScope
+  defaultHostId: ExecutionHostId
+  worktreeLineageById: Record<string, WorktreeLineage>
+  injectLineageAncestors?: boolean
+  forcedVisibleWorktreeIds?: readonly string[]
 }
 
-/**
- * Whether at least one sidebar filter is active — drives the "Clear Filters"
- * escape hatch in the empty-state message. Kept pure so it can be unit-tested
- * alongside the sorting pipeline.
- *
- * Why include hideDefaultBranchWorkspace here: without it, a user whose only
- * worktree is the default-branch row and who toggles hide-on would see the
- * "No workspaces found" message with no in-sidebar recovery path.
- */
-export function sidebarHasActiveFilters(state: SidebarFilterState): boolean {
-  return (
-    state.showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES ||
-    state.filterRepoIds.length > 0 ||
-    state.hideDefaultBranchWorkspace ||
-    state.hideAutomationGeneratedWorkspaces ||
-    state.hideCliCreatedWorkspaces ||
-    state.hideDetachedHeadWorkspaces ||
-    state.hideWorkspacesFromOtherDevices ||
-    // Why: turning this off is the only way to narrow the list below the
-    // default, so Clear Filters must be able to undo it like any other filter.
-    state.alwaysShowDefaultBranchWorkspace === false ||
-    state.visibleWorkspaceHostIds != null ||
-    (state.workspaceHostScope != null && state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE)
-  )
-}
-
-/** Describes which mutators the Clear Filters button must invoke, separated
- *  from the mutators themselves so the decision logic is testable. */
-export type ClearFilterActions = {
-  resetShowSleepingWorkspaces: boolean
-  resetFilterRepoIds: boolean
-  resetHideDefaultBranchWorkspace: boolean
-  resetHideAutomationGeneratedWorkspaces: boolean
-  resetHideCliCreatedWorkspaces: boolean
-  resetHideDetachedHeadWorkspaces: boolean
-  resetHideWorkspacesFromOtherDevices: boolean
-  resetAlwaysShowDefaultBranchWorkspace: boolean
-  resetVisibleWorkspaceHostIds: boolean
-}
-
-/**
- * Determines which sidebar filters the Clear Filters button needs to reset.
- * Returning an explicit action plan (rather than just calling the setters)
- * keeps the pure decision separate from the impure mutations, so tests can
- * verify the logic without mounting the component.
- *
- * Why reset only the ones that are set: keeps Clear Filters from churning
- * UI state (and the debounced ui.set write-back) on every click when the
- * flag was already off.
- */
-export function computeClearFilterActions(state: SidebarFilterState): ClearFilterActions {
-  return {
-    resetShowSleepingWorkspaces: state.showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES,
-    resetFilterRepoIds: state.filterRepoIds.length > 0,
-    resetHideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
-    resetHideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
-    resetHideCliCreatedWorkspaces: state.hideCliCreatedWorkspaces,
-    resetHideDetachedHeadWorkspaces: state.hideDetachedHeadWorkspaces,
-    resetHideWorkspacesFromOtherDevices: state.hideWorkspacesFromOtherDevices,
-    resetAlwaysShowDefaultBranchWorkspace: state.alwaysShowDefaultBranchWorkspace === false,
-    resetVisibleWorkspaceHostIds:
-      state.visibleWorkspaceHostIds != null ||
-      (state.workspaceHostScope != null && state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE)
-  }
-}
-
-/**
- * Shared pure utility that computes the ordered list of visible (non-archived,
- * non-filtered) worktree IDs. Both the App-level Cmd+1–9 handler and
- * WorktreeList's render pipeline consume this function so the numbering and
- * card order can never diverge.
- *
- * Why a shared function: if the filter/sort pipeline lived in two places, a
- * new filter added in one but not the other would silently break the mapping
- * between badge numbers and the Cmd+N shortcut target.
- */
-export function computeVisibleWorktreeIds(
+export function computeVisibleWorktrees(
   worktreesByRepo: Record<string, Worktree[]>,
   sortedIds: string[],
-  opts: {
-    filterRepoIds: readonly string[]
-    showSleepingWorkspaces: boolean
-    tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
-    ptyIdsByTabId: Record<string, string[]> | null
-    browserTabsByWorktree?: Record<string, { id: string }[]> | null
-    // Why required: every filter caller must preserve running agents through
-    // temporary PTY gaps instead of silently reverting #7197.
-    worktreeIdsWithLiveAgent: ReadonlySet<string>
-    // Why required: every caller (WorktreeList, getVisibleWorktreeIds
-    // fallback, tests) reads the flag from the UI store. Making the field
-    // required prevents a future caller from silently dropping the filter by
-    // forgetting to pass it.
-    hideDefaultBranchWorkspace: boolean
-    hideAutomationGeneratedWorkspaces: boolean
-    hideCliCreatedWorkspaces: boolean
-    hideDetachedHeadWorkspaces: boolean
-    hideWorkspacesFromOtherDevices: boolean
-    pairedDeviceIdsByEnvironment: ReadonlyMap<string, string>
-    // Why optional here, against the "why required" rule above: omitting it
-    // must fail *open*. A caller that forgets the flag then shows an extra row
-    // instead of silently re-hiding the project's entry point, which is the
-    // exact regression #8873 reports.
-    alwaysShowDefaultBranchWorkspace?: boolean
-    repoMap: Map<string, Repo>
-    workspaceHostScope: ExecutionHostScope
-    visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
-    defaultHostId: ExecutionHostId
-    worktreeLineageById: Record<string, WorktreeLineage>
-    injectLineageAncestors?: boolean
-    forcedVisibleWorktreeIds?: readonly string[]
-  }
-): string[] {
+  opts: VisibleWorktreeOptions
+): Worktree[] {
   let all: Worktree[] = getAllWorktreesFromState({ worktreesByRepo })
 
   // Filter archived
@@ -296,48 +177,52 @@ export function computeVisibleWorktreeIds(
     return ai - bi
   })
 
-  const visibleIds = all.map((w) => w.id)
   return opts.injectLineageAncestors === false
-    ? visibleIds
-    : addVisibleLineageAncestors(visibleIds, lineageAncestorById, opts.worktreeLineageById)
+    ? all
+    : addVisibleLineageAncestors(all, lineageAncestorById, opts.worktreeLineageById)
 }
 
 function addVisibleLineageAncestors(
-  ids: string[],
+  worktrees: Worktree[],
   worktreeById: Map<string, Worktree>,
   lineageById: Record<string, WorktreeLineage>
-): string[] {
-  const result: string[] = []
+): Worktree[] {
+  const result: Worktree[] = []
   const included = new Set<string>()
   const visiting = new Set<string>()
   const cyclicLineageIds = getCyclicProjectedWorktreeLineageIds(lineageById, worktreeById)
 
-  const addWithAncestors = (id: string): void => {
-    if (included.has(id) || visiting.has(id)) {
+  const addWithAncestors = (worktree: Worktree): void => {
+    const identity = getWorktreeHostIdentity(worktree)
+    if (included.has(identity) || visiting.has(identity)) {
       return
     }
-    const worktree = worktreeById.get(id)
-    if (!worktree) {
-      return
-    }
-    visiting.add(id)
+    visiting.add(identity)
     const lineage = getLineageRenderInfo(worktree, lineageById, worktreeById, cyclicLineageIds)
     if (lineage.state === 'valid') {
       // Why: sidebar lineage is structural. If a filtered child is visible,
       // its valid parent must be rendered too so the hierarchy remains legible.
-      addWithAncestors(lineage.parent.id)
+      addWithAncestors(lineage.parent)
     }
-    visiting.delete(id)
-    if (!included.has(id)) {
-      included.add(id)
-      result.push(id)
+    visiting.delete(identity)
+    if (!included.has(identity)) {
+      included.add(identity)
+      result.push(worktree)
     }
   }
 
-  for (const id of ids) {
-    addWithAncestors(id)
+  for (const worktree of worktrees) {
+    addWithAncestors(worktree)
   }
   return result
+}
+
+export function computeVisibleWorktreeIds(
+  worktreesByRepo: Record<string, Worktree[]>,
+  sortedIds: string[],
+  opts: VisibleWorktreeOptions
+): string[] {
+  return computeVisibleWorktrees(worktreesByRepo, sortedIds, opts).map((worktree) => worktree.id)
 }
 
 /**
@@ -355,14 +240,20 @@ function addVisibleLineageAncestors(
  * null means WorktreeList is unmounted.
  */
 let _publishedVisibleIds: string[] | null = null
+export type VisibleWorktreeShortcutTarget = {
+  id: string
+  executionHostId?: Worktree['hostId']
+}
+let _publishedVisibleShortcutTargets: VisibleWorktreeShortcutTarget[] | null = null
 
-/**
- * Called by WorktreeList after computing visible worktrees so the Cmd+1–9
- * handler can read the exact same ordering the user sees on screen. Pass null
- * on unmount.
- */
 export function setVisibleWorktreeIds(ids: string[] | null): void {
   _publishedVisibleIds = ids
+}
+
+export function setVisibleWorktreeShortcutTargets(
+  targets: VisibleWorktreeShortcutTarget[] | null
+): void {
+  _publishedVisibleShortcutTargets = targets
 }
 
 /**
@@ -438,10 +329,40 @@ export function getVisibleWorktreeIds(): string[] {
     worktreeLineageById: state.worktreeLineageById
   })
 
-  const worktreeMap = getWorktreeMapFromState(state)
+  const visibleIdRank = new Map(visibleIds.map((id, index) => [id, index]))
+  const visibleHostIds = getVisibleWorkspaceHostIdSet(state)
+  const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
+  const visibleWorktrees = allWorktrees
+    .filter(
+      (worktree) =>
+        visibleIdRank.has(worktree.id) &&
+        worktreeMatchesVisibleHost(worktree, visibleHostIds, repoMap, defaultHostId)
+    )
+    .sort((a, b) => (visibleIdRank.get(a.id) ?? 0) - (visibleIdRank.get(b.id) ?? 0))
   // Why the row pipeline: grouping, pinning and main-worktree hoisting reorder cards, so a flat sort numbers the wrong workspace.
-  return computeRenderedSidebarWorktreeOrder(
-    state,
-    visibleIds.map((id) => worktreeMap.get(id)).filter((w): w is Worktree => w != null)
-  )
+  return computeRenderedSidebarWorktreeOrder(state, visibleWorktrees)
+}
+
+export function getVisibleWorktreeShortcutTargets(): VisibleWorktreeShortcutTarget[] {
+  if (_publishedVisibleShortcutTargets) {
+    return _publishedVisibleShortcutTargets
+  }
+  const state = useAppStore.getState()
+  const visibleIds = getVisibleWorktreeIds()
+  const visibleIdRank = new Map(visibleIds.map((id, index) => [id, index]))
+  const repoMap = getRepoMapFromState(state)
+  const visibleHostIds = getVisibleWorkspaceHostIdSet(state)
+  const defaultHostId = getSettingsFocusedExecutionHostId(state.settings)
+  const worktrees = getAllWorktreesFromState(state)
+    .filter(
+      (worktree) =>
+        !worktree.isArchived &&
+        visibleIdRank.has(worktree.id) &&
+        worktreeMatchesVisibleHost(worktree, visibleHostIds, repoMap, defaultHostId)
+    )
+    .sort((a, b) => (visibleIdRank.get(a.id) ?? 0) - (visibleIdRank.get(b.id) ?? 0))
+  return computeRenderedSidebarWorktrees(state, worktrees).map((worktree) => ({
+    id: worktree.id,
+    ...(worktree.hostId ? { executionHostId: worktree.hostId } : {})
+  }))
 }

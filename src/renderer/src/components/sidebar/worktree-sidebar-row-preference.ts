@@ -1,11 +1,9 @@
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { HostSectionRow } from './host-section-rows'
-import {
-  PINNED_GROUP_KEY,
-  type PinnedWorktreeDisplayPolicy,
-  type WorktreeRow
-} from './worktree-list-groups'
+import { PINNED_GROUP_KEY } from './worktree-list/grouping/group-keys'
+import type { PinnedWorktreeDisplayPolicy, WorktreeRow } from './worktree-list/grouping/row-types'
 
 export function getPreferredWorktreeRows(
   rows: readonly WorktreeRow[],
@@ -16,10 +14,11 @@ export function getPreferredWorktreeRows(
   if (pinnedDisplayPolicy === 'single-location') {
     const seen = new Set<string>()
     return rows.filter((row) => {
-      if (seen.has(row.worktree.id)) {
+      const identity = getWorktreeHostIdentity(row.worktree)
+      if (seen.has(identity)) {
         return false
       }
-      seen.add(row.worktree.id)
+      seen.add(identity)
       return true
     })
   }
@@ -27,18 +26,20 @@ export function getPreferredWorktreeRows(
   const preferredRows: WorktreeRow[] = []
   const seen = new Set<string>()
   for (const row of rows) {
-    if (row.sectionKey === PINNED_GROUP_KEY || seen.has(row.worktree.id)) {
+    const identity = getWorktreeHostIdentity(row.worktree)
+    if (row.sectionKey === PINNED_GROUP_KEY || seen.has(identity)) {
       continue
     }
     preferredRows.push(row)
-    seen.add(row.worktree.id)
+    seen.add(identity)
   }
   for (const row of rows) {
-    if (seen.has(row.worktree.id)) {
+    const identity = getWorktreeHostIdentity(row.worktree)
+    if (seen.has(identity)) {
       continue
     }
     preferredRows.push(row)
-    seen.add(row.worktree.id)
+    seen.add(identity)
   }
   return preferredRows
 }

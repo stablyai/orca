@@ -3,7 +3,7 @@ import type { LegacySshProjectionSemantics } from './ssh-pty-legacy-projection'
 import {
   createSshPtyOutputIntakeHarness as createHarness,
   sshPtyOutputEvent as event
-} from './__tests__/ssh-pty-output-intake-test-harness'
+} from './ssh-pty-output-intake-test-harness'
 
 describe('SshPtyOutputIntake', () => {
   it('plateaus at the model and pressure budgets, then resumes below low water', async () => {

@@ -1,7 +1,10 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo, Worktree, WorktreeLineage } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 const mocks = vi.hoisted(() => {
   const state = {
@@ -45,7 +48,16 @@ vi.mock('@/store', () => ({
 vi.mock('@/store/selectors', () => ({
   useAllWorktrees: () => mocks.state.allWorktrees(),
   getWorktreeMapFromState: () =>
-    new Map(mocks.state.allWorktrees().map((worktree) => [worktree.id, worktree]))
+    new Map(mocks.state.allWorktrees().map((worktree) => [worktree.id, worktree])),
+  // Host-qualified lookup (STA-4343): resolve on the named host, else first-wins.
+  getWorktreeOnHostFromState: (_state: unknown, worktreeId: string, hostId?: string) => {
+    const rows = mocks.state
+      .allWorktrees()
+      .filter((worktree: { id: string }) => worktree.id === worktreeId)
+    return hostId
+      ? rows.find((worktree: { hostId?: string }) => worktree.hostId === hostId)
+      : rows[0]
+  }
 }))
 
 vi.mock('@/components/ui/dialog', () => ({
@@ -155,6 +167,54 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     mocks.state.deleteStateByWorktreeId = {}
     mocks.buttonProps = []
     vi.mocked(runWorktreeDeletesInParallel).mockResolvedValue([])
+  })
+
+  it('previews the confirmed host row when workspace ids collide', async () => {
+    const local = {
+      ...makeWorktree('shared', '/workspaces/local'),
+      instanceId: 'local-instance',
+      displayName: 'Local sibling',
+      hostId: 'local' as const
+    }
+    const ssh = {
+      ...makeWorktree('shared', '/workspaces/ssh'),
+      instanceId: 'ssh-instance',
+      displayName: 'SSH target',
+      hostId: 'ssh:builder' as const
+    }
+    mocks.state.modalData = {
+      worktreeId: ssh.id,
+      worktreeDeleteIdentities: [{ id: ssh.id, instanceId: ssh.instanceId, hostId: ssh.hostId }]
+    }
+    mocks.state.allWorktrees.mockReturnValue([local, ssh])
+
+    const { default: DeleteWorktreeDialog } = await import('./DeleteWorktreeDialog')
+    const markup = renderToStaticMarkup(<DeleteWorktreeDialog />)
+
+    expect(markup).toContain('SSH target')
+    expect(markup).not.toContain('Local sibling')
+  })
+
+  it('keeps Space safety-checked confirmation non-force', async () => {
+    const workspace = makeWorktree('Workspace', '/workspaces/workspace')
+    mocks.state.modalData = {
+      worktreeId: workspace.id,
+      worktreeDeleteIdentities: [{ id: workspace.id, instanceId: workspace.instanceId }],
+      forceOnConfirm: false
+    }
+    mocks.state.allWorktrees.mockReturnValue([workspace])
+
+    const { default: DeleteWorktreeDialog } = await import('./DeleteWorktreeDialog')
+    renderToStaticMarkup(<DeleteWorktreeDialog />)
+    const deleteButton = mocks.buttonProps.find((props) => props.variant === 'destructive') as
+      | { onClick?: () => void }
+      | undefined
+    deleteButton?.onClick?.()
+
+    expect(runWorktreeDeletesInParallel).toHaveBeenCalledWith([workspace], {
+      force: false,
+      onForceDeleted: expect.any(Function)
+    })
   })
 
   it('shows child-delete copy and only a delete-all action when the workspace has children', async () => {
@@ -327,11 +387,11 @@ describe('DeleteWorktreeDialog lineage copy', () => {
       onForceDeleted: expect.any(Function)
     })
     const options = vi.mocked(runWorktreeDeletesInParallel).mock.calls[0]?.[1] as
-      | { onForceDeleted?: (worktreeId: string) => void }
+      | { onForceDeleted?: (target: WorktreeRemovalTarget) => void }
       | undefined
-    options?.onForceDeleted?.(workspace.id)
+    options?.onForceDeleted?.({ id: workspace.id, executionHostId: null })
 
-    expect(onDeleted).toHaveBeenCalledWith([workspace.id])
+    expect(onDeleted).toHaveBeenCalledWith([{ id: workspace.id, executionHostId: null }])
   })
 
   it('rejects confirmation when the workspace instance changed after the dialog opened', async () => {

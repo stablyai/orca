@@ -6,7 +6,7 @@ import {
   type CatalogOption
 } from './agent-session-option-catalog'
 import { isTuiAgent } from './tui-agent-config'
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 
 export type OrchestrationWorkerModels = Partial<Record<TuiAgent, string>>
 export type OrchestrationWorkerEfforts = Partial<Record<TuiAgent, string>>

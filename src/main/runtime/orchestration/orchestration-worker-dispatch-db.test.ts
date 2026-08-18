@@ -54,6 +54,29 @@ describe('OrchestrationDb worker Dispatch state', () => {
     ])
   })
 
+  it('retains an active supervised worker terminal', () => {
+    const d = createDb()
+    const task = d.createTask({ spec: 'retain active worker' })
+    const started = d.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+    d.prepareStartingWorkerAuthority({
+      dispatchId: started.dispatch.id,
+      handle: 'term_worker',
+      paneKey: 'tab_worker:leaf_worker',
+      processIncarnation: 'runtime:pty:1',
+      worktreeId: 'repo::worktree',
+      setupState: 'not_applicable',
+      effects: [],
+      terminalOwnership: 'created'
+    })
+    d.markWorkerDispatchReady(started.dispatch.id)
+
+    expect(d.retainWorkerTerminalResource(started.dispatch.id)).toMatchObject({
+      disposition: 'retained',
+      resource: { release_state: 'retained', retained_reason: 'user_requested' }
+    })
+    expect(d.getWorkerDispatch(started.dispatch.id)?.state).toBe('ready')
+  })
+
   it('requeues an active Task before settling a worker whose terminal is missing', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'recover missing worker' })
@@ -237,7 +260,7 @@ describe('OrchestrationDb worker Dispatch state', () => {
     })
     d.markWorkerDispatchReady(started.dispatch.id)
 
-    expect(d.beginWorkerStop(started.dispatch.id).disposition).toBe('stopping')
+    expect(d.beginWorkerStop(started.dispatch.id, 'runtime_test').disposition).toBe('stopping')
     expect(
       d.settleWorkerReport({
         taskId: task.id,
@@ -256,7 +279,7 @@ describe('OrchestrationDb worker Dispatch state', () => {
     const started = d.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
     d.markWorkerStartUnknown(started.dispatch.id, 'agent_readiness', 'connection lost')
 
-    expect(d.beginWorkerStop(started.dispatch.id)).toMatchObject({
+    expect(d.beginWorkerStop(started.dispatch.id, 'runtime_test')).toMatchObject({
       disposition: 'stopping',
       worker: { state: 'stopping' }
     })
@@ -288,6 +311,51 @@ describe('OrchestrationDb worker Dispatch state', () => {
     })
   })
 
+  it('bounds remote attachment lookup across pane remints and malformed suffix collisions', () => {
+    const d = createDb()
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const attach = (dispatchId: string, paneKey: string): void => {
+      d.createRemoteDispatchAttachment({
+        dispatchId,
+        taskId: `task_${dispatchId}`,
+        homePeerFingerprint: 'home_peer',
+        protocolVersion: 1,
+        runtimeEpoch: 'worker_epoch',
+        mutationReceipt: {
+          callerFingerprint: 'home_peer',
+          requestId: `request_${dispatchId}`,
+          method: 'orchestration.federationAttachStart',
+          payloadHash: `payload_${dispatchId}`
+        }
+      })
+      d.prepareRemoteAttachmentAuthority({
+        dispatchId,
+        paneKey,
+        processIncarnation: `process_${dispatchId}`,
+        worktreeId: 'repo::worktree',
+        terminalHandle: `term_${dispatchId}`,
+        setupState: 'not_applicable',
+        effects: []
+      })
+    }
+
+    attach('ctx_valid_old', `tab_old:${leafId}`)
+    for (let index = 0; index < 64; index += 1) {
+      attach(`ctx_malformed_${index}`, `:${leafId}`)
+    }
+
+    expect(d.findActiveRemoteAttachmentForPane(`tab_reminted:${leafId}`)?.dispatch_id).toBe(
+      'ctx_valid_old'
+    )
+    attach('ctx_valid_new', `tab_new:${leafId}`)
+    expect(d.findActiveRemoteAttachmentForPane(`tab_reminted:${leafId}`)?.dispatch_id).toBe(
+      'ctx_valid_new'
+    )
+    expect(d.findActiveRemoteAttachmentForPane(`tab_old:${leafId}`)?.dispatch_id).toBe(
+      'ctx_valid_new'
+    )
+  })
+
   it('returns already-settled when completion wins before stop', () => {
     const d = createDb()
     const task = d.createTask({ spec: 'race' })
@@ -311,7 +379,7 @@ describe('OrchestrationDb worker Dispatch state', () => {
       })
     ).toMatchObject({ action: 'settled' })
 
-    expect(d.beginWorkerStop(started.dispatch.id)).toMatchObject({
+    expect(d.beginWorkerStop(started.dispatch.id, 'runtime_test')).toMatchObject({
       disposition: 'already_settled',
       worker: { state: 'succeeded' }
     })

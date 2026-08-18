@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type Database from '../../../sqlite/sync-database'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import { ORCHESTRATION_METHODS } from './orchestration'
@@ -103,7 +104,8 @@ describe('manual Dispatch release', () => {
   it('fences a superseded context without blocking its current replacement', async () => {
     const task = createTask('superseded')
     const superseded = await dispatchTask(task, TARGET)
-    db.updateTaskStatus(task, 'ready')
+    // Why: recovery still needs coverage for contradictory rows persisted before ready resets were guarded.
+    sqliteFor(db).prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task)
     const current = await dispatchTask(task, OTHER)
 
     await expect(call('orchestration.workerStop', { dispatch: superseded })).resolves.toMatchObject(
@@ -183,4 +185,8 @@ describe('manual Dispatch release', () => {
 
 function paneKey(handle: string): string {
   return `tab:${handle}`
+}
+
+function sqliteFor(db: OrchestrationDb): Database.Database {
+  return (db as unknown as { db: Database.Database }).db
 }

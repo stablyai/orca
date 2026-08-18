@@ -25,6 +25,7 @@ type HeroFlowProps = {
   onOpenInstallUrl: () => void
   onCopyInstallUrl: () => void
   pairQrDataUrl: string | null
+  pairQrSize?: number | null
   pairingUrl: string | null
   pairingQrError: boolean
   relayMintFailure: MobileRelayMintFailure | null
@@ -63,6 +64,7 @@ export function HeroFlow({
   onOpenInstallUrl,
   onCopyInstallUrl,
   pairQrDataUrl,
+  pairQrSize = null,
   pairingUrl,
   pairingQrError,
   relayMintFailure,
@@ -222,6 +224,7 @@ export function HeroFlow({
         >
           <MobileHeroPairingStep
             pairQrDataUrl={pairQrDataUrl}
+            pairQrSize={pairQrSize}
             pairingUrl={pairingUrl}
             pairingQrError={pairingQrError}
             relayMintFailure={relayMintFailure}

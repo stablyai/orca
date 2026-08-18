@@ -29,7 +29,7 @@ import { handleRichMarkdownCitationKey } from './rich-markdown-citation-keyboard
 import { resolveRichMarkdownWorktreeRoot } from './useRichMarkdownSuperscriptLinkSetup'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
-import type { FolderWorkspace } from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
 import {
   inspectRichMarkdownSourceOwningSlice,
   RICH_MARKDOWN_SOURCE_OWNING_PASTE_LIMIT

@@ -1,11 +1,15 @@
 import type { AgentHookEventPayload } from '../../shared/agent-hook-listener'
 import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
 
-type KnownStatus = { connectionId: string | null; payload: ParsedAgentStatusPayload }
+type KnownStatus = {
+  connectionId: string | null
+  payload: ParsedAgentStatusPayload
+  restoredUnconfirmed: boolean
+}
 
 /** Reports whether a hook status event changed anything the `session.tabs`
  *  projection publishes, so a repeated same-state ping costs no snapshot rebuild.
- *  Mirrors `retainAgentRowSnapshot`'s change set so both carriers invalidate alike. */
+ *  Mirrors `retainAgentRowSnapshot`'s change set plus hook restore provenance. */
 export function createHookStatusSessionTabsInvalidator(): {
   (event: AgentHookEventPayload): boolean
   forgetPane: (paneKey: string) => void
@@ -18,17 +22,25 @@ export function createHookStatusSessionTabsInvalidator(): {
     if (event.providerSessionOnly === true) {
       return false
     }
-    const previous = known.get(event.paneKey)?.payload
+    const previous = known.get(event.paneKey)
     const next = event.payload
-    known.set(event.paneKey, { connectionId: event.connectionId, payload: next })
+    const restoredUnconfirmed = event.restoredUnconfirmed === true
+    known.set(event.paneKey, {
+      connectionId: event.connectionId,
+      payload: next,
+      restoredUnconfirmed
+    })
     return (
       !previous ||
-      previous.state !== next.state ||
-      previous.prompt !== next.prompt ||
-      (previous.agentType ?? null) !== (next.agentType ?? null) ||
-      (previous.toolName ?? null) !== (next.toolName ?? null) ||
-      (previous.interactivePrompt ?? null) !== (next.interactivePrompt ?? null) ||
-      (previous.interrupted ?? false) !== (next.interrupted ?? false)
+      previous.payload.state !== next.state ||
+      previous.payload.prompt !== next.prompt ||
+      (previous.payload.agentType ?? null) !== (next.agentType ?? null) ||
+      (previous.payload.toolName ?? null) !== (next.toolName ?? null) ||
+      (previous.payload.interactivePrompt ?? null) !== (next.interactivePrompt ?? null) ||
+      (previous.payload.interrupted ?? false) !== (next.interrupted ?? false) ||
+      (previous.payload.turnCompletedAt ?? null) !== (next.turnCompletedAt ?? null) ||
+      (previous.payload.lastAssistantMessage ?? null) !== (next.lastAssistantMessage ?? null) ||
+      previous.restoredUnconfirmed !== restoredUnconfirmed
     )
   }
   // Why: a cleared pane must re-arm, else the memo swallows the first event of the

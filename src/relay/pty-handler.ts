@@ -2,7 +2,7 @@
 import type { IPty } from 'node-pty'
 import type * as NodePty from 'node-pty'
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { resolveWindowsGitBashShellPath } from '../main/git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../shared/windows-terminal-shell'
@@ -25,8 +25,7 @@ import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../shared/cross-platform-path'
-import { splitWorktreeId } from '../shared/worktree-id'
-import { formatPtyExitedError } from '../shared/ssh-pty-failure-tokens'
+import { splitWorktreeId } from '../shared/worktree/id'
 import { PhysicalExitTracker } from '../shared/physical-exit-tracker'
 import { SHELL_READY_MARKER_PREFIX } from '../main/shell-ready-marker-scanner'
 import {
@@ -45,7 +44,7 @@ import {
   mergeGitConfigEnvProtocol
 } from '../shared/git-credential-prompt-env'
 import { isTuiAgent } from '../shared/tui-agent-config'
-import type { TuiAgent } from '../shared/types'
+import type { TuiAgent } from '../shared/tui-agent'
 import { forceKillPosixPtyProcessGroups } from '../main/pty/posix-pty-process-groups'
 import { stripInheritedBuildModeEnv } from '../main/pty/build-mode-env'
 import { stripLegacyTerminalShimEnv } from '../main/pty/legacy-terminal-shim-dir'
@@ -80,6 +79,12 @@ import {
   type AgentSessionOwnerBinding
 } from '../shared/agent-session-host-authority'
 import { createPtySlaveEchoProbe, readPtySlavePath } from '../shared/pty-slave-line-discipline-echo'
+import {
+  deleteRelayFishHistory,
+  deleteRelayHistory,
+  injectRelayFishHistoryEnv,
+  injectRelayHistoryEnv
+} from './terminal-history'
 
 // Why: only Linux compiles node-pty (no prebuilt), so the build-tools remedy is a closable setup gap
 // there and wrong advice anywhere node-pty ships one. The relay only sees an unloadable binding, never
@@ -159,6 +164,7 @@ type ManagedPty = {
   shellPathEnv?: string
   envToDelete: string[]
   gitCredentialPromptGuarded: boolean
+  historyIsolationEnabled?: boolean
   startupCommand?: ManagedStartupCommand
   physicalExit?: PhysicalExitTracker
   forceKillSent?: boolean
@@ -176,12 +182,6 @@ type RelayAgentSessionCreateResult = {
   agentSessionEnsure?: unknown
   sourceActivation?: PtySourceReceivingActivation
 }
-
-/** Enough to cover every pane a host could plausibly have lost since the client last looked. */
-const MAX_REMEMBERED_PTY_EXITS = 256
-
-/** No exit status to report: the relay found the pid gone rather than watching it go. */
-const PTY_EXIT_CODE_OBSERVED_GONE = -1
 
 const AGENT_SESSION_CREATE_OPERATION_ID_PATTERN = /^[A-Za-z0-9_-]{43}$/
 const AGENT_SESSION_CREATE_OPERATION_RETENTION_MS = 24 * 60 * 60 * 1000
@@ -334,6 +334,8 @@ type SerializedPtyEntry = {
   envToDelete?: string[]
   /** Optional for state serialized by relays predating the credential guard. */
   gitCredentialPromptGuarded?: boolean
+  /** Optional for state serialized by relays predating scoped history. */
+  historyIsolationEnabled?: boolean
   agentSessionOwners?: AgentSessionOwnerBinding[]
 }
 
@@ -349,15 +351,16 @@ export type PtyExitListener = (event: { id: string; paneKey?: string }) => void
 
 type PtyIdentity = { paneKey?: string; tabId?: string }
 
-/** Fallback fence for a client too old to name a shell by incarnation. It froze paneKey/tabId at
- *  spawn, so it refuses a pane that merely moved tabs — which is why a client that CAN name the
- *  shell is fenced on that instead. Not deleted, because the relay is shared: an upgraded host
- *  would otherwise leave every not-yet-updated client attaching a recycled id unchecked. */
-function attachIdentityMismatches(expected: PtyIdentity, managed: PtyIdentity): boolean {
-  // Pane key only. The tab is a location a pane can be moved to, and this identity was frozen at
-  // spawn, so comparing it refused panes that had merely moved — a live shell the client could
-  // then never reach, and an identity mismatch never grounds a respawn.
-  return Boolean(expected.paneKey && managed.paneKey && expected.paneKey !== managed.paneKey)
+/**
+ * True when a reattach's expected pane identity contradicts the target PTY's own.
+ * Rejects cross-relay-generation id collisions (a reset relay reuses `pty-N`).
+ * Only compares fields present on both sides; absent identity stays permissive.
+ */
+export function attachIdentityMismatches(expected: PtyIdentity, managed: PtyIdentity): boolean {
+  return Boolean(
+    (expected.paneKey && managed.paneKey && expected.paneKey !== managed.paneKey) ||
+    (expected.tabId && managed.tabId && expected.tabId !== managed.tabId)
+  )
 }
 /** Returns env to merge into the PTY's spawn env. Receives spawn context so augmenters can derive per-PTY identity from paneKey.
  *  `command` is the renderer-chosen agent launch command (`pi`, `omp`, …); undefined for CLI-launched bare shells. */
@@ -383,10 +386,6 @@ export class PtyHandler {
   private outputFlushTimer: ReturnType<typeof setTimeout> | null = null
   private pendingOutputByPty = new Map<string, PendingPtyOutput[]>()
   private pendingExitByPty = new Map<string, { id: string; code: number; incarnationId: string }>()
-  /** Exits this process WATCHED, kept past publication so attach can prove death rather than report
-   *  an unknown id. Bounded and oldest-evicted; losing one costs a user-asked respawn, never a
-   *  wrong one, and a crash losing all of them correctly reads as no knowledge. */
-  private exitedPtys = new Map<string, { code: number; incarnationId: string }>()
   private pausedOutputPtys = new Set<string>()
   private consumerPausedOutputPtys = new Set<string>()
   private removeLegacyCapacityListener: (() => void) | null = null
@@ -810,7 +809,6 @@ export class PtyHandler {
         code: exitCode,
         incarnationId: managed.incarnationId
       })
-      this.rememberPtyExit(managed.id, exitCode, managed.incarnationId)
       this.publishPendingExit(managed.id)
       this.notifyExitListener(managed)
       this.agentSessionOwners.release(managed.id)
@@ -819,29 +817,6 @@ export class PtyHandler {
       // Why: release the ptmx fd on natural exit, else the master fd leaks until GC (docs/fix-pty-fd-leak.md).
       disposeManagedPty(managed)
     })
-  }
-
-  /** Proof must name the caller's own shell: present and matching. Both gone-paths ask this, so a
-   *  change to the rule cannot reach one and miss the other. */
-  private exitProofAnswersCaller(
-    expectedIncarnationId: string | undefined,
-    exitedIncarnationId: string,
-    clientUnderstandsExitProof: boolean
-  ): boolean {
-    return clientUnderstandsExitProof && expectedIncarnationId === exitedIncarnationId
-  }
-
-  /** Oldest-evicted: a Map iterates in insertion order, so the first key is the oldest. */
-  private rememberPtyExit(id: string, code: number, incarnationId: string): void {
-    this.exitedPtys.delete(id)
-    this.exitedPtys.set(id, { code, incarnationId })
-    while (this.exitedPtys.size > MAX_REMEMBERED_PTY_EXITS) {
-      const oldest = this.exitedPtys.keys().next()
-      if (oldest.done) {
-        break
-      }
-      this.exitedPtys.delete(oldest.value)
-    }
   }
 
   private releaseRelayIngress(managed: ManagedPty): void {
@@ -894,6 +869,13 @@ export class PtyHandler {
     this.dispatcher.onRequest('pty.serialize', (p) => this.serialize(p))
     this.dispatcher.onRequest('pty.revive', (p) => this.revive(p))
     this.dispatcher.onRequest('pty.getProfiles', async () => listShellProfiles())
+    this.dispatcher.onRequest('pty.deleteWorktreeHistory', async (p) => {
+      if (typeof p.worktreeId === 'string') {
+        deleteRelayFishHistory(p.worktreeId)
+        deleteRelayHistory(p.worktreeId)
+      }
+      return { ok: true }
+    })
     this.dispatcher.onRequest('pty.closeStartupQueryAuthority', (p) =>
       this.closeStartupQueryAuthority(p)
     )
@@ -1421,7 +1403,8 @@ export class PtyHandler {
     context?: RequestContext
   ): Promise<RelayAgentSessionCreateResult> {
     const env = params.env as Record<string, string> | undefined
-    const worktreeId = env?.ORCA_WORKTREE_ID
+    const worktreeId =
+      typeof params.worktreeId === 'string' ? params.worktreeId : env?.ORCA_WORKTREE_ID
     const worktreePath = worktreeId ? splitWorktreeId(worktreeId)?.worktreePath : undefined
     const cwd = typeof params.cwd === 'string' ? params.cwd : resolveDefaultCwd()
     const finishCreation = this.beginPtyCreation([worktreePath, cwd])
@@ -1537,7 +1520,9 @@ export class PtyHandler {
     const shellOverride =
       typeof params.shellOverride === 'string' ? params.shellOverride.trim() : ''
     const resolvedShellOverride = resolvePtyShellOverride(shellOverride)
-    const shell = resolvedShellOverride || resolveDefaultShell()
+    const requestedEnvShell =
+      process.platform !== 'win32' && typeof env?.SHELL === 'string' ? env.SHELL.trim() : ''
+    const shell = resolvedShellOverride || requestedEnvShell || resolveDefaultShell()
     let id: string
     do {
       id = `pty-${this.nextId++}`
@@ -1559,6 +1544,15 @@ export class PtyHandler {
       { id, paneKey, shell, command, launchAgent },
       envToDelete
     )
+    const worktreeId =
+      typeof params.worktreeId === 'string' ? params.worktreeId : env?.ORCA_WORKTREE_ID
+    const historyIsolationEnabled = params.historyIsolationEnabled === true
+    if (historyIsolationEnabled && worktreeId && basename(shell).toLowerCase().startsWith('fish')) {
+      injectRelayFishHistoryEnv(spawnEnv, worktreeId)
+    }
+    if (historyIsolationEnabled && worktreeId) {
+      injectRelayHistoryEnv(spawnEnv, worktreeId, shell)
+    }
     const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(spawnEnv, command)
     // Why: SSH PTYs bypass main's host-env builder, so apply the guard after the relay merges its authoritative env.
     const gitCredentialPromptGuarded = applyTerminalGitCredentialPromptGuard(spawnEnv, {
@@ -1625,7 +1619,6 @@ export class PtyHandler {
       paneKey: typeof params.paneKey === 'string' ? params.paneKey : paneKey,
       tabId: typeof params.tabId === 'string' ? params.tabId : tabId
     }
-    const worktreeId = typeof env?.ORCA_WORKTREE_ID === 'string' ? env.ORCA_WORKTREE_ID : undefined
     const startupIngressIntent =
       params.startupIngressVersion === PTY_STARTUP_INGRESS_VERSION
         ? parsePtyStartupIngressIntent(params.startupIngress)
@@ -1646,6 +1639,7 @@ export class PtyHandler {
       ...(explicitTerm !== undefined ? { explicitTerm } : {}),
       envToDelete,
       gitCredentialPromptGuarded,
+      ...(historyIsolationEnabled ? { historyIsolationEnabled: true } : {}),
       shellPath: shell,
       shellCwd: cwd,
       shellPathEnv: spawnEnv.PATH,
@@ -1711,29 +1705,9 @@ export class PtyHandler {
     sourceActivation?: PtySourceReceivingActivation
   }> {
     const id = params.id as string
-    const expectedIncarnationId =
-      typeof params.expectedIncarnationId === 'string' ? params.expectedIncarnationId : undefined
-    // Gated because the host's answer reaches clients predating it, which read an unrecognized
-    // attach error as neither death nor recovery and strand the pane.
-    const clientUnderstandsExitProof = params.exitProofSupported === true
     const managed = this.ptys.get(id)
     // Why: after dispose, pty.kill is a POSIX no-op; treat disposed as not-found so failures aren't silent.
     if (!managed || managed.disposed) {
-      // `disposed` is teardown, not an observed exit, so only a genuinely absent pty may be
-      // answered from what this process watched exit.
-      if (!managed) {
-        const exited = this.exitedPtys.get(id)
-        if (
-          exited &&
-          this.exitProofAnswersCaller(
-            expectedIncarnationId,
-            exited.incarnationId,
-            clientUnderstandsExitProof
-          )
-        ) {
-          throw new Error(formatPtyExitedError(id, exited.code, exited.incarnationId))
-        }
-      }
       throw new Error(`PTY "${id}" not found`)
     }
 
@@ -1747,43 +1721,19 @@ export class PtyHandler {
       disposeManagedPty(managed)
       this.removePty(id)
       this.clearPtyFlowState(id)
-      // The reap runs whoever asked, but the ANSWER depends on whose shell died: under this id a
-      // replacement relay may hold a different one entirely, and the caller's may be orphaned and
-      // alive under the relay this one replaced.
-      this.rememberPtyExit(id, PTY_EXIT_CODE_OBSERVED_GONE, managed.incarnationId)
-      if (expectedIncarnationId && expectedIncarnationId !== managed.incarnationId) {
-        throw new Error(`PTY "${id}" identity mismatch`)
-      }
-      throw new Error(
-        this.exitProofAnswersCaller(
-          expectedIncarnationId,
-          managed.incarnationId,
-          clientUnderstandsExitProof
-        )
-          ? formatPtyExitedError(id, PTY_EXIT_CODE_OBSERVED_GONE, managed.incarnationId)
-          : `PTY "${id}" not found`
-      )
+      throw new Error(`PTY "${id}" not found`)
     }
 
-    // A reset relay restarts ids at pty-1, so an id alone can name somebody else's shell. The
-    // incarnation is the shell's own identity, so it catches that without caring where the pane
-    // lives — unlike the pane identity below, which froze the tab at spawn and refused moved panes.
-    if (
-      !expectedIncarnationId &&
-      attachIdentityMismatches(
-        {
-          paneKey: typeof params.expectedPaneKey === 'string' ? params.expectedPaneKey : undefined,
-          tabId: typeof params.expectedTabId === 'string' ? params.expectedTabId : undefined
-        },
-        managed.attachIdentity ?? { paneKey: managed.paneKey, tabId: managed.tabId }
-      )
-    ) {
-      throw new Error(`PTY "${id}" identity mismatch`)
-    }
-    if (expectedIncarnationId && expectedIncarnationId !== managed.incarnationId) {
-      // Deliberately NOT worded "not found": that phrasing is what the client maps to an expired
-      // session, and expiry authorizes a respawn onto a shell this branch just proved is alive.
-      throw new Error(`PTY "${id}" identity mismatch`)
+    // Why: generation resets can reuse PTY IDs; reject conflicting identities.
+    const mismatch = attachIdentityMismatches(
+      {
+        paneKey: typeof params.expectedPaneKey === 'string' ? params.expectedPaneKey : undefined,
+        tabId: typeof params.expectedTabId === 'string' ? params.expectedTabId : undefined
+      },
+      managed.attachIdentity ?? { paneKey: managed.paneKey, tabId: managed.tabId }
+    )
+    if (mismatch) {
+      throw new Error(`PTY "${id}" not found (identity mismatch)`)
     }
 
     managed.startupIngress?.snapshotBarrier()
@@ -1810,7 +1760,23 @@ export class PtyHandler {
         ...(sourceActivation ? { sourceActivation } : {})
       }
     }
-    if (activation === 'existing' && this.sourcePublication?.accepts(id)) {
+    // `existing` means a delivery is already open for this client, so it is already receiving live
+    // output and does not need its screen re-sent. That is true for a duplicate attach — and false
+    // for the case this skipped: an SSH reconnect. The client keeps its id there (the dispatcher
+    // refuses to detach the primary, and setWrite revives that same id), so the delivery outlives
+    // the dead transport, while the renderer has thrown its terminal away — a reconnect bumps
+    // tab.generation, which is the React key, so the pane remounts with a brand-new empty xterm and
+    // nothing captures the old buffer. Answering "you already have it" leaves the pane blank
+    // forever, until new output happens to arrive.
+    //
+    // So the client says which it is. Falling through rather than returning the replay inline is
+    // deliberate: the path below already drops the pending batched bytes that are also in the
+    // buffer, which is what stops the live delivery double-rendering them.
+    if (
+      activation === 'existing' &&
+      this.sourcePublication?.accepts(id) &&
+      params.requireReplay !== true
+    ) {
       return {
         incarnationId: managed.incarnationId,
         ...(sourceActivation ? { sourceActivation } : {})
@@ -2112,6 +2078,7 @@ export class PtyHandler {
         ...(managed.explicitTerm !== undefined ? { explicitTerm: managed.explicitTerm } : {}),
         envToDelete: managed.envToDelete,
         gitCredentialPromptGuarded: managed.gitCredentialPromptGuarded,
+        ...(managed.historyIsolationEnabled ? { historyIsolationEnabled: true } : {}),
         ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {})
       })
     }
@@ -2175,11 +2142,22 @@ export class PtyHandler {
     // Why: serialized state may come from an older/untrusted client; reapply fresh-spawn bounds.
     const envToDelete = sanitizeEnvToDelete(entry.envToDelete)
     const shell = resolveDefaultShell()
+    const historyIsolationEnabled = entry.historyIsolationEnabled === true
     const spawnEnv = this.buildSpawnEnv(
       revivedEnv,
       { id: entry.id, paneKey: entry.paneKey, shell },
       envToDelete
     )
+    if (
+      historyIsolationEnabled &&
+      entry.worktreeId &&
+      basename(shell).toLowerCase().startsWith('fish')
+    ) {
+      injectRelayFishHistoryEnv(spawnEnv, entry.worktreeId)
+    }
+    if (historyIsolationEnabled && entry.worktreeId) {
+      injectRelayHistoryEnv(spawnEnv, entry.worktreeId, shell)
+    }
     // Why: revive lacks the original launch command, so reuse the fresh-spawn guard decision (legacy defaults to unguarded).
     const gitCredentialPromptGuarded = entry.gitCredentialPromptGuarded === true
     if (gitCredentialPromptGuarded) {
@@ -2215,6 +2193,7 @@ export class PtyHandler {
       ...(explicitTerm !== undefined ? { explicitTerm } : {}),
       envToDelete,
       gitCredentialPromptGuarded,
+      ...(historyIsolationEnabled ? { historyIsolationEnabled: true } : {}),
       ownerBackend: resolvePtyOwnerBackend({
         platform: process.platform,
         shellPath: shell

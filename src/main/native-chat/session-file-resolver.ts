@@ -108,6 +108,8 @@ export async function resolveSessionFilePath(
         return hostReadable
       }
     } catch (error) {
+      // A caller abort that races the refusal stays authoritative.
+      signal?.throwIfAborted()
       // Why: the id-based search may still hit; surface the refusal only when
       // it does not, so a stalled distro reads as unavailable, never "missing".
       unavailable = wslTranscriptFsRefusal(error)
@@ -232,6 +234,8 @@ async function findCodexRolloutInDirs(
         return files
       }
     } catch (error) {
+      // A caller abort that races the refusal stays authoritative.
+      signal?.throwIfAborted()
       // Why: one stalled distro must not hide another root's hit.
       unavailable = wslTranscriptFsRefusal(error)
     }

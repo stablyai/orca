@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { CommitMessageModelCapability } from '../../../../shared/commit-message-agent-spec'
 import { getCommitMessageAgentSpec } from '../../../../shared/commit-message-agent-spec'
 import type {

@@ -14,7 +14,6 @@ import type {
 import {
   adoptOwningProvider,
   attachDaemonOwnedSession,
-  ownerForDaemonOwnedOperation,
   findDaemonAdapter,
   listProviderSessionIds
 } from './degraded-daemon-session-routing'
@@ -90,30 +89,14 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   attach = (id: string): ReturnType<IPtyProvider['attach']> =>
     attachDaemonOwnedSession(this.providerFor(id), this.fallback, id)
 
-  /** Routing for anything that changes or feeds a session; see ownerForDaemonOwnedOperation. */
-  private ownerFor(id: string): IPtyProvider {
-    return ownerForDaemonOwnedOperation(this.providerFor(id), this.fallback, id)
-  }
-
-  hasPty(id: string): boolean | null {
+  hasPty(id: string): boolean {
     const mapped = this.sessionProviders.get(id)
-    if (mapped) {
-      // Why not `?? true`: a route outlives the session it was memoized for, so an
-      // owner that cannot answer must stay unknown rather than become a liveness proof.
-      return mapped.hasPty ? mapped.hasPty(id) : true
-    }
-    if (this.findProviderForExistingSession(id)) {
-      return true
-    }
-    // Why: one provider that cannot answer makes absence unknown; only unanimous proof is false.
-    return this.allProviders().every((provider) => provider.hasPty?.(id) === false) ? false : null
+    return mapped ? (mapped.hasPty?.(id) ?? true) : this.findProviderForExistingSession(id) !== null
   }
 
   async probePtyLiveness(id: string): Promise<boolean | null> {
     const mapped = this.sessionProviders.get(id)
-    // Why only an explicit true short-circuits: an owner that cannot answer must
-    // fall through to the real probe instead of skipping it on a fabricated proof.
-    if (mapped && (mapped.hasPty ? mapped.hasPty(id) === true : true)) {
+    if (mapped && (mapped.hasPty?.(id) ?? true)) {
       return true
     }
     return await this.ownerRecovery.probe(id)
@@ -125,12 +108,19 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
       this.sessionProviders.get(ptyId) ?? this.findProviderForExistingSession(ptyId)
     )?.providesAgentSessionOwnerListings?.(ptyId) === true
 
-  write(id: string, data: string): void {
-    this.ownerFor(id).write(id, data)
+  write(id: string, data: string): boolean | void {
+    return this.providerFor(id).write(id, data)
+  }
+
+  async writeWithSettlement(id: string, data: string): Promise<boolean> {
+    const provider = this.providerFor(id)
+    return provider.writeWithSettlement
+      ? await provider.writeWithSettlement(id, data)
+      : provider.write(id, data) !== false
   }
 
   resize(id: string, cols: number, rows: number): void {
-    this.ownerFor(id).resize(id, cols, rows)
+    this.providerFor(id).resize(id, cols, rows)
   }
 
   pauseProducer(id: string): void {
@@ -149,14 +139,14 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     id: string,
     opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
   ): Promise<void> {
-    await this.ownerFor(id).shutdown(id, opts)
+    await this.providerFor(id).shutdown(id, opts)
     if (!opts.keepHistory) {
       this.sessionProviders.delete(id)
     }
   }
 
   async sendSignal(id: string, signal: string): Promise<void> {
-    await this.ownerFor(id).sendSignal(id, signal)
+    await this.providerFor(id).sendSignal(id, signal)
   }
 
   async getCwd(id: string): Promise<string> {
@@ -197,9 +187,9 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     return this.providerFor(id).getForegroundProcess(id)
   }
   inspectProcess(id: string) {
-    return this.hasPty(id) === false
-      ? Promise.reject(new Error('terminal_gone'))
-      : inspectPtyProviderProcess(this.providerFor(id), id)
+    return this.hasPty(id)
+      ? inspectPtyProviderProcess(this.providerFor(id), id)
+      : Promise.reject(new Error('terminal_gone'))
   }
   async confirmForegroundProcess(id: string): Promise<string | null> {
     return this.providerFor(id).confirmForegroundProcess?.(id) ?? null

@@ -22,7 +22,7 @@ import {
 import { probeSocketConnect } from './daemon-endpoint-probe'
 import { startDaemon, type DaemonHandle } from './daemon-main'
 import { DaemonClient } from './client'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import { PROTOCOL_VERSION } from './types'
 
 function createTestDir(): string {

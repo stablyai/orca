@@ -1,5 +1,5 @@
 import { ghExecFileAsync } from '../git/runner'
-import type { GitHubOwnerRepo } from '../../shared/types'
+import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
@@ -18,6 +18,11 @@ import {
 } from './github-remote-identity-parsing'
 import { resolveSshConfigHostname } from './github-ssh-host-alias-resolution'
 import { parseWslPath } from '../wsl'
+import {
+  getSshGitProvider,
+  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
+} from '../providers/ssh-git-dispatch'
+import { isStableMissingGitRemoteError } from '../git/stable-missing-git-remote-error'
 
 export type GitHubEnterpriseRepoSlug = GitHubOwnerRepo & { host: string }
 
@@ -214,15 +219,25 @@ export async function getEnterpriseGitHubRepoSlugForRemote(
   repoPath: string,
   remoteName: string,
   connectionId?: string | null,
-  options: HostedReviewExecutionOptions = {}
+  options: HostedReviewExecutionOptions = {},
+  requireVerifiedSshProbe = false
 ): Promise<GitHubEnterpriseRepoSlug | null | undefined> {
   const localGitOptions = getHostedReviewLocalGitOptions(options)
   const context = githubRepoContext(repoPath, connectionId, localGitOptions)
+  if (requireVerifiedSshProbe && connectionId && !getSshGitProvider(connectionId)) {
+    throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
+  }
   let remoteUrl: string | null
   try {
     remoteUrl = await getRemoteUrlForRepo(context, remoteName)
-  } catch {
+  } catch (error) {
+    if (requireVerifiedSshProbe && connectionId && !isStableMissingGitRemoteError(error)) {
+      throw error
+    }
     return null
+  }
+  if (requireVerifiedSshProbe && connectionId && !remoteUrl && !getSshGitProvider(connectionId)) {
+    throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
   }
   const identity = remoteUrl ? parseGitHubRemoteIdentity(remoteUrl) : null
   if (!identity) {
@@ -234,6 +249,9 @@ export async function getEnterpriseGitHubRepoSlugForRemote(
   if (aliasHost) {
     const { hostname, resolved } = await resolveSshConfigHostname(aliasHost, context)
     if (!resolved || !hostname) {
+      if (requireVerifiedSshProbe && connectionId) {
+        throw new Error('Remote repository identity is unverifiable.')
+      }
       const authenticatedLiteralHost = await resolveAuthenticatedGitHubHost(
         identity.host,
         repoPath,
@@ -266,7 +284,14 @@ export async function getEnterpriseGitHubRepoSlugForRemote(
 export async function getEnterpriseGitHubRepoSlug(
   repoPath: string,
   connectionId?: string | null,
-  options: HostedReviewExecutionOptions = {}
+  options: HostedReviewExecutionOptions = {},
+  requireVerifiedSshProbe = false
 ): Promise<GitHubEnterpriseRepoSlug | null | undefined> {
-  return getEnterpriseGitHubRepoSlugForRemote(repoPath, 'origin', connectionId, options)
+  return getEnterpriseGitHubRepoSlugForRemote(
+    repoPath,
+    'origin',
+    connectionId,
+    options,
+    requireVerifiedSshProbe
+  )
 }

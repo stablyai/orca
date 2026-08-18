@@ -1,11 +1,11 @@
 import React, { useMemo, useRef } from 'react'
 import { Plus } from 'lucide-react'
+import type { Repo } from '../../../../shared/repo-types'
 import type {
-  Repo,
   WorkspaceStatus,
   WorkspaceStatusDefinition,
   Worktree
-} from '../../../../shared/types'
+} from '../../../../shared/worktree/types'
 import {
   WORKSPACE_BOARD_COLUMN_WIDTH_MAX,
   WORKSPACE_BOARD_COLUMN_WIDTH_MIN
@@ -26,7 +26,7 @@ type WorkspaceKanbanStatusLaneProps = {
   hasQuery?: boolean
   fullWorktreeIds?: readonly string[]
   repoMap: Map<string, Repo>
-  activeWorktreeId: string | null
+  activeWorktreeIdentity: string | null
   columnWidth: number
   isResizingColumn: boolean
   isDragTarget: boolean
@@ -57,7 +57,7 @@ function WorkspaceKanbanStatusLane({
   hasQuery = false,
   fullWorktreeIds,
   repoMap,
-  activeWorktreeId,
+  activeWorktreeIdentity,
   columnWidth,
   isResizingColumn,
   isDragTarget,
@@ -192,7 +192,7 @@ function WorkspaceKanbanStatusLane({
             <WorkspaceKanbanLaneCardList
               items={items}
               repoMap={repoMap}
-              activeWorktreeId={activeWorktreeId}
+              activeWorktreeIdentity={activeWorktreeIdentity}
               scrollRef={laneScrollRef}
               selectedWorktreeIds={selectedWorktreeIds}
               selectedWorktrees={selectedWorktrees}

@@ -28,6 +28,7 @@ describe('getProvisionedRootCreateOptions', () => {
         request({
           ephemeralVmCheckoutMode: 'provisioned-root',
           ephemeralVmRuntimeId: 'runtime-1',
+          ephemeralVmExpectedRefHead: 'abc123',
           workspaceRunContext: {
             kind: 'workspace-run',
             projectId: 'project-1',
@@ -41,7 +42,8 @@ describe('getProvisionedRootCreateOptions', () => {
     ).toEqual({
       runtimeId: 'runtime-1',
       executionHostId: 'ssh:runtime-ssh-one',
-      expectedPath: '/workspace/repo'
+      expectedPath: '/workspace/repo',
+      expectedRefHead: 'abc123'
     })
   })
 
@@ -49,6 +51,24 @@ describe('getProvisionedRootCreateOptions', () => {
     expect(() =>
       getProvisionedRootCreateOptions(
         request({ ephemeralVmCheckoutMode: 'provisioned-root', ephemeralVmRuntimeId: 'runtime-1' })
+      )
+    ).toThrow('identity is incomplete')
+
+    expect(() =>
+      getProvisionedRootCreateOptions(
+        request({
+          ephemeralVmCheckoutMode: 'provisioned-root',
+          ephemeralVmRuntimeId: 'runtime-1',
+          baseBranch: 'origin/main',
+          workspaceRunContext: {
+            kind: 'workspace-run',
+            projectId: 'project-1',
+            hostId: 'ssh:runtime-ssh-one',
+            projectHostSetupId: 'setup-1',
+            repoId: 'repo-runtime',
+            path: '/workspace/repo'
+          }
+        })
       )
     ).toThrow('identity is incomplete')
   })
