@@ -19,7 +19,7 @@ class ResizeObserverStub {
 
 // happy-dom performs no layout, so xterm measures every cell as 0 and cannot map
 // a click to a cell. Fill in only the boxes that measurement reads.
-function stubLayout(): void {
+function stubLayout(): () => void {
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
     measureText: () => ({ width: 10 }),
     clearRect: () => {},
@@ -36,7 +36,11 @@ function stubLayout(): void {
     fill: () => {},
     createLinearGradient: () => ({ addColorStop: () => {} })
   } as unknown as CanvasRenderingContext2D)
+  // Why the descriptors: vi.restoreAllMocks() only unwinds spies, so a prototype
+  // redefinition would outlive the suite.
+  const originalDescriptors = new Map<string, PropertyDescriptor | undefined>()
   for (const prop of ['offsetWidth', 'offsetHeight'] as const) {
+    originalDescriptors.set(prop, Object.getOwnPropertyDescriptor(HTMLElement.prototype, prop))
     Object.defineProperty(HTMLElement.prototype, prop, {
       configurable: true,
       get: () => (prop === 'offsetWidth' ? 800 : 600)
@@ -53,6 +57,15 @@ function stubLayout(): void {
     height: 600,
     toJSON: () => ({})
   } as DOMRect)
+  return () => {
+    for (const [prop, descriptor] of originalDescriptors) {
+      if (descriptor) {
+        Object.defineProperty(HTMLElement.prototype, prop, descriptor)
+      } else {
+        delete (HTMLElement.prototype as unknown as Record<string, unknown>)[prop]
+      }
+    }
+  }
 }
 
 function terminalElement(pane: ManagedPane): HTMLElement {
@@ -96,10 +109,13 @@ function clickPane(pane: ManagedPane, altKey = false): void {
 describe('clicking a pane whose TUI tracks the mouse', () => {
   let root: HTMLElement
   let manager: PaneManager
+  let restoreLayout: () => void
+  let originalResizeObserver: PropertyDescriptor | undefined
 
   beforeEach(() => {
+    originalResizeObserver = Object.getOwnPropertyDescriptor(globalThis, 'ResizeObserver')
     ;(globalThis as { ResizeObserver?: unknown }).ResizeObserver ??= ResizeObserverStub
-    stubLayout()
+    restoreLayout = stubLayout()
     root = document.createElement('div')
     document.body.appendChild(root)
     manager = new PaneManager(root, { linkOpenHint: () => '' })
@@ -109,6 +125,12 @@ describe('clicking a pane whose TUI tracks the mouse', () => {
     manager.destroy()
     root.remove()
     vi.restoreAllMocks()
+    restoreLayout()
+    if (originalResizeObserver) {
+      Object.defineProperty(globalThis, 'ResizeObserver', originalResizeObserver)
+    } else {
+      delete (globalThis as { ResizeObserver?: unknown }).ResizeObserver
+    }
   })
 
   // Why not applyTerminalAppearance: it repaints, and xterm's renderer needs a real
