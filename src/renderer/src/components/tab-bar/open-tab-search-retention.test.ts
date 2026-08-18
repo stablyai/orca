@@ -76,7 +76,8 @@ function makeWorkspaceTab({
       ? [{ paneKey: `${id}-pane`, textParts: [], snippetCandidates: agentSnippets }]
       : [],
     isCurrentTab: false,
-    isCurrentWorktree: true
+    isCurrentWorktree: true,
+    document: null
   }
 }
 
@@ -125,7 +126,8 @@ function makeBrowserPage({
     repoName: 'octo/rocket',
     worktreeSortIndex: 0,
     isCurrentPage: false,
-    isCurrentWorktree: true
+    isCurrentWorktree: true,
+    document: null
   }
 }
 
