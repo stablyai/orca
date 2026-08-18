@@ -15513,7 +15513,8 @@
           "openExternal": "Open task",
           "untitled": "Untitled task",
           "loading": "Loading task details.",
-          "descriptionUnavailable": "No description is available here yet. Open the task to read it in full."
+          "descriptionUnavailable": "No description is readable here for this provider yet. Open the task to read it in full.",
+          "descriptionEmpty": "This task has no description."
         }
       },
       "link": {

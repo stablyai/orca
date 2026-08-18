@@ -138,3 +138,70 @@ describe('formatWorkspaceLinkedTaskReference', () => {
     ).toBe('#4')
   })
 })
+
+describe('resolveWorkspaceLinkedTask repo context', () => {
+  it("falls back to the workspace's repo when the stored link records none", () => {
+    // Why: links created from a task source carry title and URL but no repoId,
+    // and without a repo there is no path to read the item's details against.
+    const task = resolveWorkspaceLinkedTask(
+      links({
+        repoId: 'repo-1',
+        linkedWorkItem: {
+          provider: 'github',
+          type: 'pr',
+          number: 493,
+          title: 'Release R14 scheduling start',
+          url: 'https://github.com/acme/app/pull/493'
+        },
+        linkedTaskSourceContext: {
+          kind: 'task-source',
+          provider: 'github',
+          projectId: 'github:acme/app',
+          hostId: 'local',
+          repoId: 'repo-from-source'
+        }
+      })
+    )
+    expect(task?.repoId).toBe('repo-1')
+  })
+
+  it('prefers the repo the link itself recorded', () => {
+    const task = resolveWorkspaceLinkedTask(
+      links({
+        repoId: 'repo-1',
+        linkedWorkItem: {
+          provider: 'github',
+          type: 'issue',
+          number: 7,
+          title: 'Linked issue',
+          url: 'https://github.com/acme/other/issues/7',
+          repoId: 'repo-on-link'
+        }
+      })
+    )
+    expect(task?.repoId).toBe('repo-on-link')
+  })
+
+  it('falls back to the source context repo when the workspace has none', () => {
+    const task = resolveWorkspaceLinkedTask({
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      linkedWorkItem: {
+        provider: 'github',
+        type: 'issue',
+        number: 9,
+        title: 'Linked issue',
+        url: 'https://github.com/acme/app/issues/9'
+      },
+      linkedTaskSourceContext: {
+        kind: 'task-source',
+        provider: 'github',
+        projectId: 'github:acme/app',
+        hostId: 'local',
+        repoId: 'repo-from-source'
+      }
+    } as Parameters<typeof resolveWorkspaceLinkedTask>[0])
+    expect(task?.repoId).toBe('repo-from-source')
+  })
+})

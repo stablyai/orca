@@ -16,6 +16,9 @@ export type GitHubItemDialogProps = {
   sourceContext?: TaskSourceContext | null
   initialTab?: ItemDialogTab
   backLabel?: string
+  /** 'panel' drops the page chrome that has no meaning inside a sidebar panel:
+   *  the back affordance and the start-workspace CTA. */
+  variant?: 'page' | 'panel'
   /** Called when the user clicks the primary CTA to start work from this item. */
   onUse: (item: GitHubWorkItem) => void
   onReviewRequestsChange?: (

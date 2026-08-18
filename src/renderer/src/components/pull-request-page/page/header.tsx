@@ -31,6 +31,7 @@ export function PullRequestPageHeader({
   workItem,
   displayWorkItem,
   backLabel,
+  embedded,
   onClose,
   linkCopied,
   setLinkCopyButtonRef,
@@ -45,6 +46,8 @@ export function PullRequestPageHeader({
   workItem: GitHubWorkItem
   displayWorkItem: GitHubWorkItem | null
   backLabel: string
+  /** Rendered inside a sidebar panel: no back affordance, no workspace CTA. */
+  embedded: boolean
   onClose: () => void
   linkCopied: boolean
   setLinkCopyButtonRef: (node: HTMLButtonElement | null) => void
@@ -68,18 +71,22 @@ export function PullRequestPageHeader({
       {/* Row 1: page header strip — breadcrumb-style row mirroring Primer canvas-subtle */}
       <div className="flex-none border-b border-border/60 bg-muted/30 px-6 py-2.5">
         <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={onClose}
-            className="-ml-2 h-7 gap-1 px-2 text-muted-foreground hover:text-foreground"
-            aria-label={backLabel}
-          >
-            <ChevronLeft className="size-4" />
-            {backLabel}
-          </Button>
-          <span className="text-muted-foreground/40">·</span>
+          {embedded ? null : (
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onClose}
+                className="-ml-2 h-7 gap-1 px-2 text-muted-foreground hover:text-foreground"
+                aria-label={backLabel}
+              >
+                <ChevronLeft className="size-4" />
+                {backLabel}
+              </Button>
+              <span className="text-muted-foreground/40">·</span>
+            </>
+          )}
           {ownerRepo ? (
             <>
               <span className="truncate">
@@ -149,58 +156,63 @@ export function PullRequestPageHeader({
               #{workItem.number}
             </span>
           </h1>
-          <div className="flex shrink-0 items-center gap-2">
-            {/* Why: Orca's signature affordance — keep primary so it stands out against GitHub's familiar surface. */}
-            <DropdownMenu modal={false}>
-              <ButtonGroup>
-                <Button
-                  type="button"
-                  onClick={onOpenOrUsePR}
-                  className="w-[180px] justify-center gap-1.5 whitespace-nowrap"
-                  aria-label={
-                    hasAttachedWorkspace
-                      ? translate(
-                          'auto.components.PullRequestPage.a459866967',
-                          'Resume workspace attached to PR'
-                        )
-                      : translate(
-                          'auto.components.PullRequestPage.25690a3855',
-                          'Start workspace from PR'
-                        )
-                  }
-                >
-                  {hasAttachedWorkspace
-                    ? translate('auto.components.PullRequestPage.c9e7094a7b', 'Resume workspace')
-                    : translate('auto.components.PullRequestPage.71a3c0f9d2', 'Start workspace')}
-                  <ArrowRight className="size-4" />
-                </Button>
-                <DropdownMenuTrigger asChild>
+          {embedded ? null : (
+            <div className="flex shrink-0 items-center gap-2">
+              {/* Why: Orca's signature affordance — keep primary so it stands out against GitHub's familiar surface. */}
+              <DropdownMenu modal={false}>
+                <ButtonGroup>
                   <Button
                     type="button"
-                    size="icon"
-                    aria-label={translate(
-                      'auto.components.PullRequestPage.57c13a5aa4',
-                      'More PR workspace actions'
-                    )}
+                    onClick={onOpenOrUsePR}
+                    className="w-[180px] justify-center gap-1.5 whitespace-nowrap"
+                    aria-label={
+                      hasAttachedWorkspace
+                        ? translate(
+                            'auto.components.PullRequestPage.a459866967',
+                            'Resume workspace attached to PR'
+                          )
+                        : translate(
+                            'auto.components.PullRequestPage.25690a3855',
+                            'Start workspace from PR'
+                          )
+                    }
                   >
-                    <ChevronDown className="size-4" />
+                    {hasAttachedWorkspace
+                      ? translate('auto.components.PullRequestPage.c9e7094a7b', 'Resume workspace')
+                      : translate('auto.components.PullRequestPage.71a3c0f9d2', 'Start workspace')}
+                    <ArrowRight className="size-4" />
                   </Button>
-                </DropdownMenuTrigger>
-              </ButtonGroup>
-              <DropdownMenuContent align="end">
-                {hasAttachedWorkspace ? (
-                  <DropdownMenuItem onSelect={onUseWorkItem}>
-                    <Plus className="size-4" />
-                    {translate('auto.components.PullRequestPage.1a2570e18e', 'Start new workspace')}
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      size="icon"
+                      aria-label={translate(
+                        'auto.components.PullRequestPage.57c13a5aa4',
+                        'More PR workspace actions'
+                      )}
+                    >
+                      <ChevronDown className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </ButtonGroup>
+                <DropdownMenuContent align="end">
+                  {hasAttachedWorkspace ? (
+                    <DropdownMenuItem onSelect={onUseWorkItem}>
+                      <Plus className="size-4" />
+                      {translate(
+                        'auto.components.PullRequestPage.1a2570e18e',
+                        'Start new workspace'
+                      )}
+                    </DropdownMenuItem>
+                  ) : null}
+                  <DropdownMenuItem onSelect={() => window.api.shell.openUrl(workItem.url)}>
+                    <ExternalLink className="size-4" />
+                    {translate('auto.components.PullRequestPage.8ecda455a0', 'Open on GitHub')}
                   </DropdownMenuItem>
-                ) : null}
-                <DropdownMenuItem onSelect={() => window.api.shell.openUrl(workItem.url)}>
-                  <ExternalLink className="size-4" />
-                  {translate('auto.components.PullRequestPage.8ecda455a0', 'Open on GitHub')}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
         </div>
         <div className="mt-4 flex flex-wrap items-center gap-x-2.5 gap-y-2 text-[13px] text-muted-foreground">
           <span

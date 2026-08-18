@@ -40,8 +40,14 @@ export function formatWorkspaceLinkedTaskReference(
 
 function fromLinkedWorkItem(
   item: WorkspaceLinkedItem,
-  sourceContext: TaskSourceContext | null
+  sourceContext: TaskSourceContext | null,
+  workspaceRepoId: string | undefined
 ): WorkspaceLinkedTask {
+  // Why: the link does not always record a repo. Items linked through a task
+  // source carry the repo on the source context instead, and older links carry
+  // it nowhere at all. Without a repo the panel has no path to read details
+  // against, so fall back to the workspace's own repo before giving up.
+  const repoId = item.repoId ?? workspaceRepoId ?? sourceContext?.repoId ?? undefined
   return {
     provider: item.provider,
     type: item.type,
@@ -51,7 +57,7 @@ function fromLinkedWorkItem(
     url: item.url,
     ...(item.linearIdentifier ? { linearIdentifier: item.linearIdentifier } : {}),
     ...(item.jiraIdentifier ? { jiraIdentifier: item.jiraIdentifier } : {}),
-    ...(item.repoId ? { repoId: item.repoId } : {}),
+    ...(repoId ? { repoId } : {}),
     sourceContext
   }
 }
@@ -84,10 +90,11 @@ export function resolveWorkspaceLinkedTask(
   }
   const sourceContext = worktree.linkedTaskSourceContext ?? null
   if (worktree.linkedWorkItem) {
-    return fromLinkedWorkItem(worktree.linkedWorkItem, sourceContext)
+    return fromLinkedWorkItem(worktree.linkedWorkItem, sourceContext, worktree.repoId)
   }
   const legacy = ((): Omit<WorkspaceLinkedTask, 'reference' | 'sourceContext'> | null => {
-    const base = { title: '', url: '', ...(worktree.repoId ? { repoId: worktree.repoId } : {}) }
+    const repoId = worktree.repoId ?? sourceContext?.repoId ?? undefined
+    const base = { title: '', url: '', ...(repoId ? { repoId } : {}) }
     if (worktree.linkedIssue !== null && worktree.linkedIssue !== undefined) {
       return { provider: 'github', type: 'issue', number: worktree.linkedIssue, ...base }
     }
