@@ -42,7 +42,7 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['automations', 'create'],
     summary: 'Create a scheduled Orca automation',
     usage:
-      'orca automations create --name <name> --trigger <preset|cron|rrule> --prompt <text> --provider <agent> [--precheck <command>] [--repo <selector>|--workspace <selector>|--project <id> [--host <id>]|--project-host-setup <id>] [--json]',
+      'orca automations create --name <name> --trigger <preset|cron|rrule> --prompt <text> --provider <agent> [--precheck <command>] [--repo <selector>|--workspace <selector>|--project <id> [--host <id>]|--project-host-setup <id>] [--linked-task <json>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'name',
@@ -73,7 +73,8 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['automations', 'edit'],
     summary: 'Edit an Orca automation',
-    usage: 'orca automations edit <id> [--name <name>] [--trigger <preset|cron|rrule>] [--json]',
+    usage:
+      'orca automations edit <id> [--name <name>] [--trigger <preset|cron|rrule>] [--linked-task <json|null>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'id',
