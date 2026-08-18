@@ -7,6 +7,11 @@ import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
 import type { NativeChatLaunchPrompt } from '@/lib/native-chat-launch-prompt'
 import {
+  nativeChatCommandMarkerMessageId,
+  nativeChatLaunchPromptMessageId,
+  nativeChatPendingMessageId
+} from './native-chat-synthetic-message-ids'
+import {
   advancedNativeChatUserContentCounts,
   advancedNativeChatUserTexts,
   assignNativeChatPendingOccurrence,
@@ -38,6 +43,11 @@ export type NativeChatPendingSend = {
   matchingOccurrence?: number
   /** Shared time boundary when that message boundary is unavailable. */
   matchingAfterTimestamp?: number
+  /** True when the agent was already replying at send time, so this prompt is
+   *  queued behind the in-flight turn and renders after its streaming bubble.
+   *  Absent (idle send) means the turn now streaming is the reply TO this echo,
+   *  which must therefore render above it. */
+  queuedWhileWorking?: boolean
 }
 
 export type NativeChatPendingSendScope = {
@@ -231,7 +241,7 @@ export function pendingSendsAsMessages(
       return openIndex === -1 || !gluedRepresented.has(openIndex)
     })
     .map((entry) => ({
-      id: `pending:${entry.id}`,
+      id: nativeChatPendingMessageId(entry.id, entry.queuedWhileWorking),
       role: 'user' as const,
       blocks: [
         ...(entry.imagePaths ?? []).map((path) => ({ type: 'image-ref' as const, path })),
@@ -240,11 +250,6 @@ export function pendingSendsAsMessages(
       timestamp: entry.sentAt,
       source: 'scrape' as const
     }))
-}
-
-/** True when a message id was minted for an optimistic pending send. */
-export function isPendingMessageId(id: string): boolean {
-  return id.startsWith('pending:')
 }
 
 // Why: the seeded prompt has a synthetic id that never matches the real turn's,
@@ -268,7 +273,7 @@ export function launchPromptAsMessage(
     return null
   }
   return {
-    id: `launch-pending:${entry.tabId}`,
+    id: nativeChatLaunchPromptMessageId(entry.tabId),
     role: 'user' as const,
     blocks: entry.text.trim().length > 0 ? [{ type: 'text' as const, text: entry.text }] : [],
     timestamp: entry.createdAt,
@@ -294,10 +299,6 @@ export function shouldPruneLaunchPrompt(
 export function nextNativeChatPendingSendId(now = Date.now()): string {
   pendingSendCounter += 1
   return `${now}-${pendingSendCounter}`
-}
-
-export function isLaunchPromptMessageId(id: string): boolean {
-  return id.startsWith('launch-pending:')
 }
 
 /** A locally-recorded slash command (e.g. `/clear`). Slash commands dispatch to
@@ -391,15 +392,10 @@ export function commandMarkersAsMessages(
   markers: readonly NativeChatCommandMarker[]
 ): NativeChatMessage[] {
   return markers.map((marker) => ({
-    id: `command:${marker.id}`,
+    id: nativeChatCommandMarkerMessageId(marker.id),
     role: 'system' as const,
     blocks: [{ type: 'text' as const, text: `Ran ${marker.command}` }],
     timestamp: marker.sentAt,
     source: 'scrape' as const
   }))
-}
-
-/** True when a message id was minted for a slash-command marker. */
-export function isCommandMarkerId(id: string): boolean {
-  return id.startsWith('command:')
 }

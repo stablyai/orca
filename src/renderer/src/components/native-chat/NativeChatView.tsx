@@ -236,12 +236,15 @@ function NativeChatResolvedView({
         sentAt,
         afterMessageId: boundary?.id ?? null,
         afterMessageTimestamp: boundary?.timestamp ?? null,
-        ...(imagePaths ? { imagePaths } : {})
+        ...(imagePaths ? { imagePaths } : {}),
+        // Sending into an already-working agent queues this prompt behind the
+        // in-flight reply; sending while idle means that reply answers it.
+        ...(liveWorking ? { queuedWhileWorking: true } : {})
       }
       setPending(appendPendingSendCache(pendingScope, entry))
       return entry.id
     },
-    [pendingScope, session.messages]
+    [pendingScope, session.messages, liveWorking]
   )
   const onOptimisticSendCanceled = useCallback(
     (pendingId: string) => {
@@ -292,12 +295,10 @@ function NativeChatResolvedView({
   )
   const streamingText = useMemo(() => {
     return deriveNativeChatStreamingText({
-      messages:
-        pendingMessages.length > 0
-          ? [...sessionAfterCommandBoundaries.messages, ...pendingMessages]
-          : sessionAfterCommandBoundaries.messages,
+      messages: sessionAfterCommandBoundaries.messages,
       previewText: hookPreview,
-      working: liveWorking
+      working: liveWorking,
+      hasOpenOptimisticSend: pendingMessages.length > 0
     })
   }, [sessionAfterCommandBoundaries.messages, pendingMessages, hookPreview, liveWorking])
   const sessionWithPending = useMemo<typeof session>(() => {

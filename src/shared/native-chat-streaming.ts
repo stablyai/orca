@@ -22,21 +22,46 @@ function assistantText(message: NativeChatMessage | undefined): string {
     .trim()
 }
 
+/** Assistant prose already landed for the newest turn: scan back from the tail
+ *  and stop at the newest user turn, so a previous turn's reply is never mistaken
+ *  for this one's. Empty when this turn has produced nothing yet. */
+function landedAssistantText(messages: readonly NativeChatMessage[]): string {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+    if (message?.role === 'user') {
+      return ''
+    }
+    const text = assistantText(message)
+    if (text) {
+      return text
+    }
+  }
+  return ''
+}
+
 /**
  * Decide the streaming text to show, or null to show nothing. Returns the
  * preview only while it leads the transcript — i.e. it's longer than (and not
- * already contained in) the last assistant turn. Once the real turn lands with
- * the same (or more) text, the preview is suppressed so the bubble doesn't
- * duplicate or flicker as the transcript catches up.
+ * already contained in) the reply already landed for this turn. Once the real
+ * turn lands with the same (or more) text, the preview is suppressed so the
+ * bubble doesn't duplicate or flicker as the transcript catches up.
  *
  * `working` gates it: a stale preview from a finished turn never shows.
+ *
+ * Pass only authoritative turns in `messages` — optimistic echoes are described
+ * by `hasOpenOptimisticSend` instead. Threading them in as tail messages hid the
+ * landed reply behind a user bubble, which kept a stale preview alive as a
+ * duplicate of the turn it came from.
  */
 export function deriveNativeChatStreamingText(args: {
   messages: readonly NativeChatMessage[]
   previewText: string | null | undefined
   working: boolean
+  /** True while an optimistic echo is still open — its prompt has not reached the
+   *  transcript, so any landed reply belongs to an earlier turn. */
+  hasOpenOptimisticSend?: boolean
 }): string | null {
-  const { messages, previewText, working } = args
+  const { messages, previewText, working, hasOpenOptimisticSend = false } = args
   if (!working) {
     return null
   }
@@ -44,8 +69,15 @@ export function deriveNativeChatStreamingText(args: {
   if (!text) {
     return null
   }
-  const lastText = assistantText(messages.at(-1))
-  if (lastText.includes(text) || text.length <= lastText.length) {
+  const landed = landedAssistantText(messages)
+  // Already in the transcript: suppress whatever the turn boundaries look like,
+  // so a preview can never duplicate the turn that produced it.
+  if (landed.includes(text)) {
+    return null
+  }
+  // Length is only a "preview still leads" heuristic within one turn. An open
+  // echo means `landed` is a previous turn's reply and must not gate this one.
+  if (!hasOpenOptimisticSend && text.length <= landed.length) {
     return null
   }
   return text

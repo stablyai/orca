@@ -15,7 +15,12 @@ import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { orderNativeChatMessages } from './native-chat-message-grouping'
 import { stripNoiseMessages } from './native-chat-noise'
 import { foldToolMessages, splitNativeChatBlocks } from './native-chat-tool-fold'
-import { isNearBottom, shouldShowJumpToLatest, type ScrollGeometry } from './native-chat-autoscroll'
+import {
+  isNearBottom,
+  resolvePrependAnchor,
+  shouldShowJumpToLatest,
+  type ScrollGeometry
+} from './native-chat-autoscroll'
 import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
@@ -329,18 +334,28 @@ export function NativeChatMessageList({
   // When an older page just prepended, restore the prior position instead.
   useLayoutEffect(() => {
     const el = scrollRef.current
-    if (el && prependAnchorRef.current) {
-      // Preserve the viewport: shift scrollTop by however much taller the content
-      // got, so the message the user was reading stays put.
-      const grew = el.scrollHeight - prependAnchorRef.current.scrollHeight
-      el.scrollTop = prependAnchorRef.current.scrollTop + grew
-      prependAnchorRef.current = null
-      return
+    const anchor = el ? prependAnchorRef.current : null
+    if (el && anchor) {
+      const outcome = resolvePrependAnchor({
+        anchorScrollHeight: anchor.scrollHeight,
+        scrollHeight: el.scrollHeight,
+        loadingEarlier
+      })
+      if (outcome === 'restore') {
+        // Preserve the viewport: shift scrollTop by however much taller the content
+        // got, so the message the user was reading stays put.
+        el.scrollTop = anchor.scrollTop + (el.scrollHeight - anchor.scrollHeight)
+        prependAnchorRef.current = null
+        return
+      }
+      if (outcome === 'discard') {
+        prependAnchorRef.current = null
+      }
     }
     if (stuckToBottomRef.current) {
       scrollToBottom()
     }
-  }, [messages.length, isWorking, showTypingIndicator, scrollToBottom])
+  }, [messages.length, isWorking, showTypingIndicator, scrollToBottom, loadingEarlier])
 
   // Content growing without a message-count change (a streaming assistant turn
   // extends its own message in place) never re-fires the layout effect above.

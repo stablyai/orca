@@ -47,20 +47,39 @@ describe('deriveNativeChatStreamingText', () => {
     ).toBe('Working on it')
   })
 
-  it('treats an optimistic user echo as the active streaming-turn boundary', () => {
-    const optimistic = {
-      ...user('new prompt'),
-      id: 'pending:send-1',
-      timestamp: 20,
-      source: 'scrape' as const
-    }
+  it('treats an open optimistic echo as the active streaming-turn boundary', () => {
     expect(
       deriveNativeChatStreamingText({
-        messages: [assistant('A much longer answer from the completed prior turn'), optimistic],
+        messages: [assistant('A much longer answer from the completed prior turn')],
         previewText: 'New reply',
-        working: true
+        working: true,
+        hasOpenOptimisticSend: true
       })
     ).toBe('New reply')
+  })
+
+  // The echo used to be threaded in as a tail message, which hid the landed reply
+  // behind a user bubble — so a preview of an already-flushed turn kept rendering
+  // as a duplicate assistant bubble for as long as the echo stayed open.
+  it('drops a preview the transcript already contains even with an echo open', () => {
+    expect(
+      deriveNativeChatStreamingText({
+        messages: [user('do the thing'), assistant('Working on it, here is the full answer.')],
+        previewText: 'Working on it',
+        working: true,
+        hasOpenOptimisticSend: true
+      })
+    ).toBeNull()
+  })
+
+  it('ignores a previous turn reply when this turn has not replied yet', () => {
+    expect(
+      deriveNativeChatStreamingText({
+        messages: [assistant('A very long answer from the previous turn'), user('next prompt')],
+        previewText: 'Short',
+        working: true
+      })
+    ).toBe('Short')
   })
 
   it('drops the preview once the real assistant turn contains it (no duplicate)', () => {
