@@ -71,9 +71,12 @@ describe('dev-safe-storage-keychain', () => {
       outcome: 'exists'
     })
     expect(run.mock.calls[0]?.[0]).not.toContain('-U')
-    // The probe must not capture the password into this process.
+    // The probe must not capture the password into this process, and must be scoped by account:
+    // `add` collided on (service, account), so a service-only match could validate a different item.
     expect(run.mock.calls[1]?.[0]).toEqual([
       'find-generic-password',
+      '-a',
+      'Orca Dev Key',
       '-s',
       'Orca Dev Safe Storage',
       '-w'
@@ -95,9 +98,23 @@ describe('dev-safe-storage-keychain', () => {
 
   it('offers a repair that preserves the existing password', () => {
     const command = getDevSafeStorageRepairCommand()
-    expect(command).toContain('find-generic-password -s "Orca Dev Safe Storage" -w')
-    expect(command).toContain('delete-generic-password')
+    expect(command).toContain(
+      'find-generic-password -a "Orca Dev Key" -s "Orca Dev Safe Storage" -w'
+    )
     expect(command).toContain('-w "$PW" -A')
+  })
+
+  it('scopes every repair lookup by account so it cannot delete a different credential', () => {
+    // Verified against a real keychain: with two items sharing a service, a service-only
+    // `delete-generic-password` removes an arbitrary one.
+    const command = getDevSafeStorageRepairCommand()
+    expect(command).toContain(
+      'delete-generic-password -a "Orca Dev Key" -s "Orca Dev Safe Storage"'
+    )
+    for (const subcommand of ['find-generic-password', 'delete-generic-password']) {
+      const index = command.indexOf(subcommand)
+      expect(command.slice(index, index + subcommand.length + 20)).toContain('-a "Orca Dev Key"')
+    }
   })
 
   it('never returns the underlying error, which embeds the generated password', () => {

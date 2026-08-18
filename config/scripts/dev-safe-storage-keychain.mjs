@@ -18,7 +18,9 @@ export function getDevSafeStorageKeychainNames(appName = DEV_SAFE_STORAGE_APP_NA
 /** Copy-pasteable repair that keeps the existing password, so no dev secrets are lost. */
 export function getDevSafeStorageRepairCommand(appName = DEV_SAFE_STORAGE_APP_NAME) {
   const { service, account } = getDevSafeStorageKeychainNames(appName)
-  return `PW=$(security find-generic-password -s "${service}" -w) && security delete-generic-password -s "${service}" && security add-generic-password -a "${account}" -s "${service}" -w "$PW" -A`
+  // Every lookup is scoped by account as well as service: matching on service alone picks an
+  // arbitrary item when several share it, so a service-only delete can destroy a different credential.
+  return `PW=$(security find-generic-password -a "${account}" -s "${service}" -w) && security delete-generic-password -a "${account}" -s "${service}" && security add-generic-password -a "${account}" -s "${service}" -w "$PW" -A`
 }
 
 function runSecurity(args, timeoutMs = SECURITY_TIMEOUT_MS) {
@@ -40,9 +42,11 @@ function runSecurity(args, timeoutMs = SECURITY_TIMEOUT_MS) {
  * on the prompt until the timeout. That case does surface a dialog — but only when the developer
  * is already being prompted at app launch, and it converts a silent stuck state into an actionable one.
  */
-function existingItemIsReadable(service, run) {
+function existingItemIsReadable(account, service, run) {
   try {
-    run(['find-generic-password', '-s', service, '-w'], READ_PROBE_TIMEOUT_MS)
+    // Scoped by account too: `add` collided on (service, account), so that exact pair is what must
+    // be probed. A service-only match could validate a different item entirely.
+    run(['find-generic-password', '-a', account, '-s', service, '-w'], READ_PROBE_TIMEOUT_MS)
     return true
   } catch {
     return false
@@ -87,7 +91,7 @@ export function ensureDevSafeStorageKeychainItem({
     // The item predates us — e.g. a run where provisioning failed and Electron created its own
     // with an ACL bound to that one branch's cdhash. Left unchecked, every later run would report
     // `exists` while the prompt kept coming back.
-    return existingItemIsReadable(service, run)
+    return existingItemIsReadable(account, service, run)
       ? { outcome: 'exists', service }
       : { outcome: 'restricted', service }
   }
