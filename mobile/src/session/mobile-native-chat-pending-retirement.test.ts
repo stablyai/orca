@@ -60,6 +60,33 @@ describe('selectGluedPendingIds', () => {
     expect(retiredIds(messages, pending)).toEqual(['p1', 'p2'])
   })
 
+  // `first\` + Enter is a newline request to the agent TUI, not a submit, so the
+  // next send lands in the SAME turn with the backslash dropped. The echo keeps
+  // a character the transcript row never has.
+  it('retires a pair whose first send ended in a continuation backslash', () => {
+    const messages = [
+      assistantTurn('m1', 'ready', 1000),
+      userTurn('m2', 'run the tests\nagain', 5000)
+    ]
+    const pending = [pendingSend('p1', 'run the tests\\', 'm1'), pendingSend('p2', 'again', 'm1')]
+    expect(retiredIds(messages, pending)).toEqual(['p1', 'p2'])
+  })
+
+  it('retires a lone continuation echo absorbed into a longer turn', () => {
+    const messages = [
+      assistantTurn('m1', 'ready', 1000),
+      userTurn('m2', 'run the tests\nfrom another client', 5000)
+    ]
+    const pending = [pendingSend('p1', 'run the tests\\', 'm1')]
+    expect(retiredIds(messages, pending)).toEqual(['p1'])
+  })
+
+  it('keeps a continuation echo when a later row only shares its prefix', () => {
+    const messages = [assistantTurn('m1', 'ready', 1000), userTurn('m2', 'history repeats', 5000)]
+    const pending = [pendingSend('p1', 'hi\\', 'm1')]
+    expect(retiredIds(messages, pending)).toEqual([])
+  })
+
   it('retires three collapsed prompts in one row', () => {
     const messages = [assistantTurn('m1', 'ready', 1000), userTurn('m2', 'one two three', 5000)]
     const pending = [
