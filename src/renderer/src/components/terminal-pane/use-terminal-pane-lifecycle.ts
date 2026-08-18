@@ -451,6 +451,13 @@ export function resolvePaneSeedCwd(splitPaneCwd: string | undefined, fallbackCwd
   return splitPaneCwd ?? fallbackCwd
 }
 
+// Why > 1, matching isIOSWebView in mobile/src/terminal/terminal-webview-html.ts: a Mac with a
+// touch peripheral can report exactly 1, and it must keep the forwarder. Real iPads report 5.
+// Why UA rather than that helper's platform check: an iPhone reports platform "iPhone", not "MacIntel".
+export function isTouchIOSUserAgent(userAgent: string, maxTouchPoints: number): boolean {
+  return userAgent.includes('Mac') && maxTouchPoints > 1
+}
+
 type SplitStartupPayload = { command: string; env?: Record<string, string> }
 
 type SplitWithStartupDeps = {
@@ -995,6 +1002,8 @@ export function useTerminalPaneLifecycle({
           !isMac &&
           navigator.userAgent.includes('Linux') &&
           !/Android|CrOS/.test(navigator.userAgent)
+        // Why: gates the forwarder only — isMac stays as-is for the Ctrl+C, clipboard, JIS-yen and 229 policies.
+        const isTouchIOS = isTouchIOSUserAgent(navigator.userAgent, navigator.maxTouchPoints)
         const linuxImeCandidateState = isLinux
           ? installTerminalImeLinuxCandidateState(pane.terminal.element)
           : null
@@ -1006,18 +1015,20 @@ export function useTerminalPaneLifecycle({
           }
         })
         // Why: macOS commits an input source's substituted text through the input event alone, so printable keydowns must not reach xterm's encoder.
-        const imeNativeTextForwarder = isMac
-          ? installTerminalImeNativeTextForwarder({
-              terminalElement: pane.terminal.element,
-              isComposing: () => imeCompositionTracker.isActive(),
-              sendInput: (data) => pane.terminal.input(data),
-              getKittyKeyboardFlags: () =>
-                paneKittyKeyboardModesRef.current.get(pane.id)?.flags ?? 0
-            })
-          : {
-              claimKeyEvent: () => false,
-              dispose: () => undefined
-            }
+        // Not on touch iOS/iPadOS: the forwarder stands aside for IME input via composition events, which iPad Hangul appears not to fire (#13345).
+        const imeNativeTextForwarder =
+          isMac && !isTouchIOS
+            ? installTerminalImeNativeTextForwarder({
+                terminalElement: pane.terminal.element,
+                isComposing: () => imeCompositionTracker.isActive(),
+                sendInput: (data) => pane.terminal.input(data),
+                getKittyKeyboardFlags: () =>
+                  paneKittyKeyboardModesRef.current.get(pane.id)?.flags ?? 0
+              })
+            : {
+                claimKeyEvent: () => false,
+                dispose: () => undefined
+              }
         imeNativeTextForwarderDisposablesRef.current.set(pane.id, imeNativeTextForwarder)
         pane.terminal.attachCustomKeyEventHandler((e) => {
           const linuxCandidateClassification = linuxImeCandidateState?.classifyKeyboardEvent(e) ?? {
