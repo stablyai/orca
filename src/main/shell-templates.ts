@@ -12,11 +12,11 @@ fi`
 
 // Why: daemon, local, and relay wrappers must preserve one Bash prompt-hook contract.
 export { BASH_PROMPT_COMMAND_COMPOSITION_BLOCK } from './bash-prompt-command-composition'
-export function getZshEnvTemplate(zshDir: string, headerPrefix = ''): string {
-  const header = headerPrefix
-    ? `Orca ${headerPrefix} zsh shell-ready wrapper`
-    : 'Orca zsh shell-ready wrapper'
-  return `# ${header}
+export function getZshEnvTemplate(
+  zshDir: string,
+  headerLabel = 'Orca zsh shell-ready wrapper'
+): string {
+  return `# ${headerLabel}
 ${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
 # Why: capture the runtime wrapper dir before it is unset below. On WSL this
 # file is generated with a Windows path but sourced via /mnt/c, so the baked
@@ -100,6 +100,30 @@ else
   export ZDOTDIR=${quotePosixSingle(zshDir)}
 fi
 unset _orca_spawn_orig_zdotdir _orca_user_zdotdir _orca_zshenv_source_dir _orca_zshenv_path _orca_discovered_zdotdir _orca_wrapper_zdotdir_self
+`
+}
+
+/**
+ * The relay variant of the .zshenv above: it trusts the ZDOTDIR the remote
+ * shell already inherited instead of re-deriving one, and republishes it as
+ * ORCA_USER_ZDOTDIR for the later wrapper files.
+ *
+ * Why separate: this diverged from the discovery template before unification
+ * and is preserved verbatim here — reconciling the two is a follow-up.
+ */
+export function getZshOverlayEnvTemplate(zshDir: string, headerLabel: string): string {
+  return `# ${headerLabel}
+${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
+export ORCA_ORIG_ZDOTDIR="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
+case "\${ORCA_ORIG_ZDOTDIR%/}" in
+  */shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;
+esac
+[[ -f "$ORCA_ORIG_ZDOTDIR/.zshenv" ]] && source "$ORCA_ORIG_ZDOTDIR/.zshenv"
+export ORCA_USER_ZDOTDIR="\${ZDOTDIR:-\${ORCA_ORIG_ZDOTDIR:-$HOME}}"
+case "\${ORCA_USER_ZDOTDIR%/}" in
+  */shell-ready/zsh) export ORCA_USER_ZDOTDIR="$HOME" ;;
+esac
+export ZDOTDIR=${quotePosixSingle(zshDir)}
 `
 }
 

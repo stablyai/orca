@@ -3,12 +3,13 @@ import { dirname, join } from 'node:path'
 import { getPosixOmpShellWrapper } from '../main/pty/omp-shell-wrapper'
 import {
   BASH_PROMPT_COMMAND_COMPOSITION_BLOCK,
-  getZshFinalZdotdirRestoreBlock,
-  getZshShellReadyMarkerRegistrationBlock,
   SHELL_STARTUP_IDENTITY_MARKER_BLOCK,
-  ZSH_HISTFILE_RESTORE_BLOCK,
-  getZshStartupFileSourceBlock
+  ZSH_HISTFILE_RESTORE_BLOCK
 } from '../main/shell-templates'
+import {
+  buildZshStartupWrapperFiles,
+  type ZshStartupWrapperSpec
+} from '../main/zsh-startup-wrapper-builder'
 
 /** Writes the zsh/bash overlay wrapper files a relay-spawned shell sources.
  *  Split from pty-shell-launch.ts so the launch-config decisions stay readable
@@ -16,66 +17,37 @@ import {
 
 const SHELL_READY_MARKER_ESCAPED = '\\033]777;orca-shell-ready\\007'
 
-function quotePosixSingle(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`
+// Why: the relay .zshenv republishes the inherited ZDOTDIR as ORCA_USER_ZDOTDIR,
+// so later wrapper files prefer it over the spawn-time ORCA_ORIG_ZDOTDIR.
+const RELAY_HOME_EXPRESSION = '"${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"'
+
+function getRelayZshWrapperSpec(zshDir: string): ZshStartupWrapperSpec {
+  return {
+    headerLabel: 'Orca relay zsh overlay wrapper',
+    zshDir,
+    zshenvStrategy: 'overlay-user-zdotdir',
+    homeExpression: RELAY_HOME_EXPRESSION,
+    readyMarkerEscaped: SHELL_READY_MARKER_ESCAPED,
+    osc133CommandMarkers: false,
+    skipUserZshrcWhenHomeIsWrapperDir: false,
+    interactiveRestoreComment:
+      '# Why: remote startup files can re-export user defaults after relay spawn.',
+    loginRestoreComment: '# Why: .zlogin is the final zsh login startup file before the prompt.',
+    restores: {
+      agentTeamsPath: false,
+      remoteCliBinDir: true,
+      codexHome: false,
+      codexLaunchPreflight: false
+    },
+    readyMarkerOrder: 'after-zdotdir-restore'
+  }
 }
 
 export function ensureOverlayRestoreWrappers(root: string): void {
   const zshDir = join(root, 'zsh')
   const bashDir = join(root, 'bash')
 
-  const zshEnv = `# Orca relay zsh overlay wrapper
-${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
-export ORCA_ORIG_ZDOTDIR="\${ORCA_ORIG_ZDOTDIR:-$HOME}"
-case "\${ORCA_ORIG_ZDOTDIR%/}" in
-  */shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;
-esac
-[[ -f "$ORCA_ORIG_ZDOTDIR/.zshenv" ]] && source "$ORCA_ORIG_ZDOTDIR/.zshenv"
-export ORCA_USER_ZDOTDIR="\${ZDOTDIR:-\${ORCA_ORIG_ZDOTDIR:-$HOME}}"
-case "\${ORCA_USER_ZDOTDIR%/}" in
-  */shell-ready/zsh) export ORCA_USER_ZDOTDIR="$HOME" ;;
-esac
-export ZDOTDIR=${quotePosixSingle(zshDir)}
-`
-  const zshProfile = `# Orca relay zsh overlay wrapper
-${getZshStartupFileSourceBlock({
-  fileName: '.zprofile',
-  homeExpression: '"${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"'
-})}
-`
-  const zshRc = `# Orca relay zsh overlay wrapper
-${getZshStartupFileSourceBlock({
-  fileName: '.zshrc',
-  homeExpression: '"${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"',
-  interactiveOnly: true
-})}
-if [[ ! -o login ]]; then
-  # Why: remote startup files can re-export user defaults after relay spawn.
-  [[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
-  [[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
-  [[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
-  ${getPosixOmpShellWrapper()}
-${ZSH_HISTFILE_RESTORE_BLOCK}
-fi
-if [[ ! -o login ]]; then
-${getZshFinalZdotdirRestoreBlock('"${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"')}
-fi
-`
-  const zshLogin = `# Orca relay zsh overlay wrapper
-${getZshStartupFileSourceBlock({
-  fileName: '.zlogin',
-  homeExpression: '"${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"',
-  interactiveOnly: true
-})}
-# Why: .zlogin is the final zsh login startup file before the prompt.
-[[ -n "\${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="\${ORCA_OPENCODE_CONFIG_DIR}"
-[[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
-[[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
-${getPosixOmpShellWrapper()}
-${ZSH_HISTFILE_RESTORE_BLOCK}
-${getZshFinalZdotdirRestoreBlock('"${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"')}
-${getZshShellReadyMarkerRegistrationBlock(SHELL_READY_MARKER_ESCAPED)}
-`
+  const zsh = buildZshStartupWrapperFiles(getRelayZshWrapperSpec(zshDir))
   const bashRc = `# Orca relay bash overlay wrapper
 ${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
 [[ -f /etc/profile ]] && source /etc/profile
@@ -181,10 +153,10 @@ unset __orca_initializing_wrapper
 `
 
   const files = [
-    [join(zshDir, '.zshenv'), zshEnv],
-    [join(zshDir, '.zprofile'), zshProfile],
-    [join(zshDir, '.zshrc'), zshRc],
-    [join(zshDir, '.zlogin'), zshLogin],
+    [join(zshDir, '.zshenv'), zsh.zshenv],
+    [join(zshDir, '.zprofile'), zsh.zprofile],
+    [join(zshDir, '.zshrc'), zsh.zshrc],
+    [join(zshDir, '.zlogin'), zsh.zlogin],
     [join(bashDir, 'rcfile'), bashRc]
   ] as const
 

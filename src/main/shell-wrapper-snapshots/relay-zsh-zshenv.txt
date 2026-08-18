@@ -1,0 +1,15 @@
+# Orca relay zsh overlay wrapper
+if [[ "${ORCA_SHELL_STARTUP_IDENTITY:-0}" == "1" ]]; then
+  unset ORCA_SHELL_STARTUP_IDENTITY
+  printf "\033]777;orca-shell-start:%s\007" "$$"
+fi
+export ORCA_ORIG_ZDOTDIR="${ORCA_ORIG_ZDOTDIR:-$HOME}"
+case "${ORCA_ORIG_ZDOTDIR%/}" in
+  */shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;
+esac
+[[ -f "$ORCA_ORIG_ZDOTDIR/.zshenv" ]] && source "$ORCA_ORIG_ZDOTDIR/.zshenv"
+export ORCA_USER_ZDOTDIR="${ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"
+case "${ORCA_USER_ZDOTDIR%/}" in
+  */shell-ready/zsh) export ORCA_USER_ZDOTDIR="$HOME" ;;
+esac
+export ZDOTDIR='<WRAPPER_ROOT>/zsh'
