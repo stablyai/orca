@@ -9,6 +9,7 @@ import { isWslUncPath } from '../../shared/wsl-paths'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from '../ai-vault/session-scanner-omp-subagent-transcripts'
 import { normalizeAgentSessionsDir } from '../ai-vault/session-scanner-values'
+import { hasHermesSession } from './hermes-state-db-reader'
 import { resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
 import {
   findGrokChatHistoryBySessionId,
@@ -57,8 +58,11 @@ function ompSessionsDir(): string {
   )
 }
 
+const hermesHome = (): string => process.env.HERMES_HOME?.trim() || join(homedir(), '.hermes')
+const hermesStateDb = (): string => join(hermesHome(), 'state.db')
+
 function hermesSessionsDir(): string {
-  return join(process.env.HERMES_HOME?.trim() || join(homedir(), '.hermes'), 'sessions')
+  return join(hermesHome(), 'sessions')
 }
 
 export type ResolveSessionFileOptions = {
@@ -302,18 +306,17 @@ async function resolveOmpSessionFile(
   return files[0] ?? null
 }
 
+/**
+ * Hermes stores current sessions in state.db, not a transcript directory. The
+ * resolver returns the database path because the transcript reader opens it
+ * read-only and selects messages by session_id.
+ */
 async function resolveHermesSessionFile(
   sessionId: string,
-  sessionsDir: string,
+  _sessionsDir: string,
   signal?: AbortSignal
 ): Promise<string | null> {
-  const files = await walkSessionFiles(sessionsDir, 'hermes', [], {
-    extensions: new Set(['.jsonl']),
-    filePredicate: (path) => {
-      const name = basename(path, extname(path))
-      return name === sessionId || name.endsWith(`_${sessionId}`)
-    },
-    signal
-  })
-  return files[0] ?? null
+  signal?.throwIfAborted()
+  const path = hermesStateDb()
+  return existsSync(path) && hasHermesSession(path, sessionId) ? path : null
 }

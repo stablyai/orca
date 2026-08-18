@@ -1,4 +1,6 @@
+/* eslint-disable max-lines -- this module owns both transcript tailing and pagination */
 import type { FileHandle } from 'node:fs/promises'
+
 import type {
   AgentType,
   NativeChatMessage,
@@ -25,6 +27,7 @@ import {
   wslGatedStat
 } from './wsl-transcript-fs-access'
 import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
+import { readHermesStateDb } from './hermes-state-db-reader'
 
 export const MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES = 2 * 1024 * 1024
 const TAIL_CHUNK_BYTES = 64 * 1024
@@ -51,6 +54,7 @@ export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineD
   return null
 }
 
+// eslint-disable-next-line max-lines -- legacy tail reader plus Hermes DB adapter
 export async function readNativeChatTranscriptTailFile(
   filePath: string,
   limit: number,
@@ -243,6 +247,41 @@ async function findLastCompleteLineEnd(
   return 0
 }
 
+async function readHermesTranscript(
+  args: ResolveSessionFileOptions & {
+    agent: AgentType
+    sessionId: string
+    filePath?: string
+    limit: number
+    beforeOffset?: number
+  },
+  signal?: AbortSignal
+): Promise<
+  | { messages: NativeChatMessage[]; hasMore: boolean; beforeOffset: number }
+  | { error: string; notFound?: true }
+> {
+  const dbPath =
+    args.filePath ?? (await resolveSessionFilePath(args.agent, args.sessionId, args, signal))
+  if (!dbPath) {
+    return { error: 'Transcript unavailable', notFound: true }
+  }
+  const messages = readHermesStateDb(dbPath, args.sessionId)
+  if (!messages) {
+    return { error: 'Transcript unavailable', notFound: true }
+  }
+  const selected =
+    args.beforeOffset === undefined
+      ? messages.slice(-Math.max(0, args.limit))
+      : messages
+          .filter((message) => Number(message.id) < args.beforeOffset)
+          .slice(-Math.max(0, args.limit))
+  return {
+    messages: selected,
+    hasMore: selected.length < messages.length,
+    beforeOffset: selected[0] ? Number(selected[0].id) : 0
+  }
+}
+
 export async function readNativeChatTranscriptTail(
   args: ResolveSessionFileOptions & {
     agent: AgentType
@@ -266,6 +305,9 @@ export async function readNativeChatTranscriptTail(
   const decodeLifecycle = nativeChatTurnLifecycleDecoderForAgent(args.agent)
   if (!decode) {
     return { error: 'Transcript unavailable' }
+  }
+  if (resolveNativeChatTranscriptAgent(args.agent) === 'hermes') {
+    return readHermesTranscript(args, signal)
   }
   let filePath: string | null
   try {
