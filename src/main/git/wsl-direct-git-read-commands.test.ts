@@ -71,4 +71,21 @@ describe('isWslDirectGitReadCommand', () => {
       expect(isWslDirectGitReadCommand(args)).toBe(true)
     }
   )
+
+  // Why: a write hidden behind global options must never reach the shell-free
+  // route, and an unparsed global form must fall back to the login shell rather
+  // than guess. Both directions fail safe.
+  it.each([
+    [['-c', 'k=v', 'push', 'origin', 'main']],
+    [['-C', '/repo', 'commit', '-m', 'x']],
+    [['-c', 'k=v', 'fetch', '--all']],
+    [['--git-dir=/x', 'push']],
+    // Space-separated global values are not parsed; the value reads as the
+    // subcommand, which is in no read set, so it stays on the login shell.
+    [['--git-dir', '/x', 'log']],
+    [['--work-tree', '/x', 'status']],
+    [['-c', 'k=v']]
+  ])('keeps %j on the login shell behind global options', (args) => {
+    expect(isWslDirectGitReadCommand(args)).toBe(false)
+  })
 })
