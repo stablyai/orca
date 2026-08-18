@@ -125,7 +125,8 @@ import { createWorktreeCreateTimingRecorder } from '../worktree-create-timing'
 import {
   markCodexProjectTrusted,
   markCopilotFolderTrusted,
-  markCursorWorkspaceTrusted
+  markCursorWorkspaceTrusted,
+  markQoderWorkspaceTrusted
 } from '../agent-trust-presets'
 import {
   getLocalProjectGitExecOptions,
@@ -312,6 +313,8 @@ async function spawnLocalStartupAndSetupTerminals(args: {
           markCopilotFolderTrusted(worktree.path)
         } else if (preset === 'codex') {
           markCodexProjectTrusted(worktree.path)
+        } else if (preset === 'qoder') {
+          markQoderWorkspaceTrusted(worktree.path)
         }
       } catch {
         // Best-effort: launch still proceeds and the agent can ask interactively.

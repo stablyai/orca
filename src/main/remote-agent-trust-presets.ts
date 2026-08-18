@@ -26,6 +26,8 @@ export async function markRemoteAgentWorkspaceTrusted(args: {
     await markRemoteCursorWorkspaceTrusted(fsProvider, home, workspacePath)
   } else if (args.preset === 'copilot') {
     await markRemoteCopilotFolderTrusted(fsProvider, home, workspacePath)
+  } else if (args.preset === 'qoder') {
+    await markRemoteQoderWorkspaceTrusted(fsProvider, workspacePath)
   }
 }
 
@@ -145,4 +147,18 @@ async function markRemoteCopilotFolderTrusted(
   config.trustedFolders = [...existing.filter((entry) => typeof entry === 'string'), workspacePath]
   await fsProvider.createDir(configDir)
   await fsProvider.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`)
+}
+
+// Why: qodercli reads a workspace-local `.trusted` marker; mirror the local
+// preset by writing an empty marker on the remote checkout root.
+async function markRemoteQoderWorkspaceTrusted(
+  fsProvider: IFilesystemProvider,
+  workspacePath: string
+): Promise<void> {
+  const trustPath = `${workspacePath.replace(/\/$/, '')}/.trusted`
+  try {
+    await fsProvider.writeFile(trustPath, '')
+  } catch {
+    // Best-effort: the user can accept the remote trust prompt manually.
+  }
 }

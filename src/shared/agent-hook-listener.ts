@@ -2516,6 +2516,9 @@ function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
     case 'devin':
       // Why: SessionStart is handled by an early return in normalizeDevinEvent, so UserPromptSubmit is Devin's real new-turn boundary here.
       return eventName === 'UserPromptSubmit'
+    case 'qoder':
+      // Why: qoder emits Claude-compatible hooks; SessionStart and UserPromptSubmit are its new-turn boundaries.
+      return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
   }
 }
 
@@ -2607,6 +2610,9 @@ function extractToolFields(
     case 'hermes':
       return extractHermesToolFields(eventName, hookPayload)
     case 'devin':
+      return extractClaudeToolFields(eventName, hookPayload)
+    // Why: qoder emits Claude-compatible payload fields (tool_name/tool_input).
+    case 'qoder':
       return extractClaudeToolFields(eventName, hookPayload)
   }
 }
@@ -4506,6 +4512,10 @@ export function normalizeHookPayload(
     case 'gemini':
       payload = normalizeGeminiEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
       break
+    case 'qoder':
+      // Why: qoder emits Claude-compatible hooks (PreToolUse/PostToolUse/SessionStart/UserPromptSubmit/Stop).
+      payload = normalizeClaudeEvent(state, eventName, promptText, paneKey, hookPayloadRecord)
+      break
     case 'antigravity':
       if (isNewTurnEvent('antigravity', eventName)) {
         resolvedPromptText =
@@ -4685,6 +4695,7 @@ export const HOOK_SOURCE_BY_PATHNAME: Readonly<Record<string, AgentHookSource>> 
   '/hook/claude': 'claude',
   '/hook/codex': 'codex',
   '/hook/gemini': 'gemini',
+  '/hook/qoder': 'qoder',
   '/hook/antigravity': 'antigravity',
   '/hook/amp': 'amp',
   '/hook/opencode': 'opencode',

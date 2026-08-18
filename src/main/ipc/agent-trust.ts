@@ -3,7 +3,8 @@ import {
   type AgentTrustPreset,
   markCodexProjectTrusted,
   markCopilotFolderTrusted,
-  markCursorWorkspaceTrusted
+  markCursorWorkspaceTrusted,
+  markQoderWorkspaceTrusted
 } from '../agent-trust-presets'
 import { markRemoteAgentWorkspaceTrusted } from '../remote-agent-trust-presets'
 
@@ -43,6 +44,8 @@ export function registerAgentTrustHandlers(): void {
           markCopilotFolderTrusted(args.workspacePath)
         } else if (args.preset === 'codex') {
           markCodexProjectTrusted(args.workspacePath)
+        } else if (args.preset === 'qoder') {
+          markQoderWorkspaceTrusted(args.workspacePath)
         }
       } catch {
         // Best-effort: see Why above. The user can still accept the trust

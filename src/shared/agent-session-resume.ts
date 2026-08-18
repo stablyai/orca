@@ -6,6 +6,7 @@ export const RESUMABLE_TUI_AGENTS = [
   'claude',
   'codex',
   'gemini',
+  'qoder',
   'antigravity',
   'opencode',
   'pi',
@@ -200,6 +201,11 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['session_id'])
       return id ? { key: 'session_id', id } : null
     }
+    // Why: qoder posts Claude-compatible hooks carrying `session_id` (e.g. session_<uuid>).
+    case 'qoder': {
+      const id = readSessionId(payload, ['session_id'])
+      return id ? withTranscriptPath({ key: 'session_id', id }, payload) : null
+    }
     case 'antigravity': {
       const id = readSessionId(payload, ['conversationId'])
       return id ? { key: 'conversation_id', id } : null
@@ -252,6 +258,8 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['codex', 'resume', id] : null
     case 'gemini':
       return providerSession.key === 'session_id' ? ['gemini', '--resume', id] : null
+    case 'qoder':
+      return providerSession.key === 'session_id' ? ['qodercli', '--resume', id] : null
     case 'antigravity':
       return providerSession.key === 'conversation_id' ? ['agy', '--conversation', id] : null
     case 'opencode':

@@ -41,6 +41,7 @@ export const SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT = {
   kimi: 'kimi-code-cli',
   'mistral-vibe': 'mistral-vibe',
   'qwen-code': 'qwen-code',
+  qoder: 'qoder',
   rovo: 'rovodev',
   hermes: 'hermes-agent',
   openclaw: 'openclaw',

@@ -5,7 +5,7 @@ import { writeFileAtomically } from './codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath } from './codex/codex-home-paths'
 import { upsertProjectTrustLevel } from './codex/config-toml-trust'
 
-export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex'
+export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex' | 'qoder'
 
 /**
  * Pre-mark a workspace as trusted for cursor-agent, GitHub Copilot CLI, or
@@ -115,6 +115,24 @@ export function markCodexProjectTrusted(workspacePath: string): void {
   // Why: Orca-launched Codex runs with an Orca-owned CODEX_HOME, so the trust
   // preset must also update the runtime config Codex will actually read.
   upsertProjectTrustLevel(join(getOrcaManagedCodexHomePath(), 'config.toml'), absPath, 'trusted')
+}
+
+/**
+ * Qoder CLI keeps a workspace-local trust marker at `<workspace>/.trusted`
+ * (verified empirically: launching qodercli in a directory containing an
+ * empty `.trusted` file skips the "Trust folder" menu entirely).
+ */
+export function markQoderWorkspaceTrusted(workspacePath: string): void {
+  const absPath = canonicalize(workspacePath)
+  if (!absPath) {
+    return
+  }
+  const trustFile = join(absPath, '.trusted')
+  if (existsSync(trustFile)) {
+    return
+  }
+  // Why: an empty marker is all qodercli reads — no payload contract.
+  writeFileAtomically(trustFile, '')
 }
 
 function resolveCodexProjectTrustRoot(workspacePath: string): string {
