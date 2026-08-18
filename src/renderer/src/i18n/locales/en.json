@@ -15017,6 +15017,7 @@
           "e46c1aa9ad": "Create",
           "a9d9dccf77": "Save",
           "777548c2d6": "Save Changes",
+          "e8c2a14f70": "Once saved, runs automatically until paused.",
           "ff5db28639": "existing"
         },
         "AutomationEditorDialogHeader": {
@@ -15028,7 +15029,8 @@
           "4133d33862": "Create automation",
           "0a75e5e2fa": "Create Hermes automation",
           "03142e7721": "Edit Hermes automation",
-          "17086b48ee": "Edit automation"
+          "17086b48ee": "Edit automation",
+          "4c8e1a72b9": "A recurring agent task"
         },
         "AutomationMissedRunGraceField": {
           "0f4459e91d": "48 hours",
@@ -15041,6 +15043,9 @@
           "3d70c185c8": "If Orca or the execution host was unavailable at the scheduled time, Orca runs one missed occurrence when it becomes available within this window. Older missed runs are skipped.",
           "3df53d554a": "Missed-run grace help",
           "fc089e5fde": "Grace"
+        },
+        "AutomationEditorPromptSection": {
+          "a7c3e91b04": "Edit name"
         },
         "AutomationPrecheckFields": {
           "d2a2ac89ac": "10 min",

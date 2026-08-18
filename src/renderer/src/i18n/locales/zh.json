@@ -13652,6 +13652,7 @@
           "e46c1aa9ad": "创建",
           "a9d9dccf77": "保存",
           "777548c2d6": "保存更改",
+          "e8c2a14f70": "保存后，将自动运行，直到暂停。",
           "ff5db28639": "现存的"
         },
         "AutomationEditorDialogHeader": {

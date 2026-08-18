@@ -13632,6 +13632,7 @@
           "e46c1aa9ad": "Crear",
           "a9d9dccf77": "Guardar",
           "777548c2d6": "Guardar cambios",
+          "e8c2a14f70": "Una vez guardado, se ejecutará automáticamente hasta que se ponga en pausa.",
           "ff5db28639": "existente"
         },
         "AutomationEditorDialogHeader": {
