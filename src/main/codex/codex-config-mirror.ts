@@ -1,6 +1,5 @@
-import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { readAgentStateFileSync } from '../agent-state-file-reader'
+import { observeAgentStateFile } from './codex-path-observation'
 import {
   recoverInterruptedGuardedFileOperation,
   writeFileAtomically,
@@ -67,6 +66,17 @@ export function syncSystemConfigIntoManagedCodexHome(
     reportCodexConfigSyncOutcome(homes.runtimeHomePath, getCodexConfigSyncStatus(homes), error)
     return
   }
+  if (mirrorResult.status === 'refused-indeterminate') {
+    // Why: no mirror ran, so this must behave exactly like the throwing path
+    // above — surface the reason and advance nothing. Advancing the baseline
+    // here would record an unmirrored runtime change as promoted and strand it.
+    reportCodexConfigSyncOutcome(
+      homes.runtimeHomePath,
+      getCodexConfigSyncStatus(homes),
+      mirrorResult.error
+    )
+    return
+  }
   // Why: report from the same pass that decided, so the surfaced status can
   // never disagree with what the mirror actually did.
   reportCodexConfigSyncOutcome(homes.runtimeHomePath, getCodexConfigSyncStatus(homes))
@@ -106,18 +116,24 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
   const systemConfigPath = join(homes.systemHomePath, 'config.toml')
   const runtimeConfigPath = join(homes.runtimeHomePath, 'config.toml')
   recoverInterruptedGuardedFileOperation(runtimeConfigPath)
-  const rawSystemConfig = existsSync(systemConfigPath)
-    ? readAgentStateFileSync(systemConfigPath)
-    : ''
+  const systemConfigObservation = observeAgentStateFile(systemConfigPath)
+  if (systemConfigObservation.kind === 'indeterminate') {
+    throw systemConfigObservation.error
+  }
+  const rawSystemConfig =
+    systemConfigObservation.kind === 'present' ? systemConfigObservation.value : ''
   // Why: a missing cloud-synced source is not proof the user cleared config.
   if (rawSystemConfig.trim() === '') {
     return
   }
 
   const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(homes.systemHomePath)
-  const runtimeConfigBeforeMirror = existsSync(runtimeConfigPath)
-    ? readAgentStateFileSync(runtimeConfigPath)
-    : null
+  const runtimeConfigObservation = observeAgentStateFile(runtimeConfigPath)
+  if (runtimeConfigObservation.kind === 'indeterminate') {
+    throw runtimeConfigObservation.error
+  }
+  const runtimeConfigBeforeMirror =
+    runtimeConfigObservation.kind === 'present' ? runtimeConfigObservation.value : null
   const nextRuntimeConfig =
     runtimeConfigBeforeMirror !== null
       ? mergeSystemCodexConfigIntoRuntime(
@@ -135,6 +151,7 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
 
 type CodexConfigMirrorResult =
   | { status: 'skipped-missing-source' }
+  | { status: 'refused-indeterminate'; error: unknown }
   | { status: 'mirrored'; preservedConflictKeys: ReadonlySet<string> }
 
 function syncSystemConfigIntoManagedCodexHomeUnsafe(
@@ -143,9 +160,21 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
 ): CodexConfigMirrorResult {
   const systemConfigPath = join(systemHomePath, 'config.toml')
   const runtimeConfigPath = join(runtimeHomePath, 'config.toml')
-  const systemConfigExists = existsSync(systemConfigPath)
-  const runtimeConfigExists = existsSync(runtimeConfigPath)
-  const rawSystemConfig = systemConfigExists ? readAgentStateFileSync(systemConfigPath) : ''
+  // Why: `existsSync` answered `false` for a locked file exactly as for an absent
+  // one, so a held handle on the RUNTIME config read as "no runtime config yet"
+  // and the fresh-mirror branch below overwrote it wholesale. Neither side may
+  // be acted on unless it was actually observed.
+  const systemConfigObservation = observeAgentStateFile(systemConfigPath)
+  if (systemConfigObservation.kind === 'indeterminate') {
+    return { status: 'refused-indeterminate', error: systemConfigObservation.error }
+  }
+  const runtimeConfigObservation = observeAgentStateFile(runtimeConfigPath)
+  if (runtimeConfigObservation.kind === 'indeterminate') {
+    return { status: 'refused-indeterminate', error: runtimeConfigObservation.error }
+  }
+  const runtimeConfigExists = runtimeConfigObservation.kind === 'present'
+  const rawSystemConfig =
+    systemConfigObservation.kind === 'present' ? systemConfigObservation.value : ''
   // Why: a missing or blank source is not an authoritative empty config. Merging
   // it would erase every ordinary setting from an existing managed runtime, and
   // a 0-byte file is what a half-written or unhydrated cloud-synced home shows.
@@ -165,7 +194,9 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
   }
 
   const systemConfig = prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir)
-  const runtimeConfig = readAgentStateFileSync(runtimeConfigPath)
+  // Why: reuse the bytes already observed above rather than re-reading. A second
+  // read could succeed where the first failed and re-open the gap this closes.
+  const runtimeConfig = runtimeConfigObservation.value
   const preserved = preserveRuntimeConflictValues(
     mergeSystemCodexConfigIntoRuntime(runtimeConfig, systemConfig),
     promotionPlan.runtimeValuesToPreserve
