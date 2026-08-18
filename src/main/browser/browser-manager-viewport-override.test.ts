@@ -450,12 +450,16 @@ describe('browserManager', () => {
       willRedirect({ preventDefault: vi.fn() }, 'https://accounts.google.com/same', false, true)
       didStartNavigation(null, 'https://accounts.google.com/same', false, true)
       await flushViewportOps()
+      expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({
+        userAgent: googleAuthUserAgent()
+      })
 
       debuggerSendCommand.mockClear()
       didFailLoad(null, -3, 'Aborted', 'https://accounts.google.com/same', true)
       await flushViewportOps()
 
-      expect(guest.setUserAgent).toHaveBeenLastCalledWith(googleAuthUserAgent())
+      // Why: the redirect path never writes the WebContents UA — that write cancels the navigation.
+      expect(guest.setUserAgent).not.toHaveBeenCalled()
       expect(debuggerSendCommand).not.toHaveBeenCalledWith(
         'Emulation.setUserAgentOverride',
         expect.objectContaining({ userAgent: GUEST_CLEAN_UA })
@@ -507,14 +511,17 @@ describe('browserManager', () => {
       )
       await flushViewportOps()
 
-      expect(guest.setUserAgent).toHaveBeenLastCalledWith(googleAuthUserAgent())
+      // Why: the identity switch for a redirect goes over CDP only. WebContents.setUserAgent() here
+      // makes Chromium cancel the in-flight navigation and replay the original request, which is what
+      // left Google sign-in on a blank tab.
+      expect(guest.setUserAgent).not.toHaveBeenCalled()
       expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({
         userAgent: googleAuthUserAgent()
       })
 
       didFailLoad(null, -3, 'Aborted', 'https://accounts.google.com/redirected', true)
       await flushViewportOps()
-      expect(guest.setUserAgent).toHaveBeenLastCalledWith(GUEST_ELECTRON_UA)
+      expect(guest.setUserAgent).not.toHaveBeenCalled()
       expect(lastUserAgentOverride(debuggerSendCommand)).toEqual({ userAgent: GUEST_CLEAN_UA })
     })
 
