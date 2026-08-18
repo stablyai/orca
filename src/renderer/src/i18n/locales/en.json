@@ -15726,8 +15726,6 @@
           "deleteDescription": "“{{name}}” will no longer be available at its public link.",
           "delete": "Delete",
           "deleteFailed": "Could not delete the artifact.",
-          "closeArtifacts": "Close artifacts",
-          "closeTooltip": "Close · Esc",
           "title": "Artifacts",
           "refresh": "Refresh",
           "signInHeading": "Sign in to Orca",
@@ -15744,8 +15742,6 @@
           "publishingOff": "Publishing is turned off",
           "publishingOffCopy": "Nothing on this device can create a public artifact link yet. Allow publishing in Settings → Artifacts, then share from an open HTML or Markdown file or ask your agent.",
           "openArtifactsSettings": "Open Settings → Artifacts",
-          "loadedCountMore": "{{count}} loaded · more available",
-          "loadedCount": "{{count}} shared",
           "retry": "Retry",
           "reconnectHeading": "Sign in to Orca again",
           "reconnectCopy": "Sign in again to view and manage the artifacts shared through your account.",
@@ -15761,16 +15757,16 @@
         "previewUnavailable": "Preview unavailable",
         "previewUnavailableDescription": "Open this artifact in your browser to view it.",
         "actions": "Artifact actions",
+        "ArtifactActions": {
+          "more": "More artifact actions"
+        },
         "ArtifactCollection": {
-          "loadMore": "Load more"
+          "loadMore": "Load more",
+          "noMatches": "No matches"
         },
         "ArtifactDetailHeader": {
-          "publicLink": "Anyone with this link can view it"
-        },
-        "ArtifactListPane": {
-          "search": "Search artifacts",
-          "listLabel": "Shared artifacts",
-          "noMatches": "No matches"
+          "publicLink": "Anyone with this link can view it",
+          "close": "Close"
         },
         "updatedAt": "Updated {{when}}",
         "updatedRecently": "recently",
@@ -15814,7 +15810,29 @@
           "openLink": "Open link",
           "updating": "Updating…",
           "update": "Update shared content"
-        }
+        },
+        "ArtifactDetailDrawer": {
+          "description": "Preview and manage this shared artifact."
+        },
+        "ArtifactListSearchField": {
+          "label": "Search artifacts",
+          "placeholder": "Search...",
+          "clear": "Clear search"
+        },
+        "ArtifactListTableHeader": {
+          "name": "Name",
+          "type": "Type",
+          "size": "Size",
+          "updated": "Updated",
+          "expires": "Expires",
+          "actions": "Actions"
+        },
+        "ArtifactsPageSkeleton": {
+          "loading": "Loading artifacts"
+        },
+        "expiredCompact": "Expired",
+        "typeMarkdown": "Markdown",
+        "typeHtml": "HTML"
       }
     },
     "i18n": {

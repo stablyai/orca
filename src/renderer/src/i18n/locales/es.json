@@ -14279,6 +14279,13 @@
         "pendingChip": "{{value0}} pendiente",
         "needsActionChip": "{{value0}} requiere acción",
         "unresolvedChip": "{{value0}} sin resolver"
+      },
+      "artifacts": {
+        "ArtifactsPage": {
+          "deleteTitle": "¿Eliminar el artefacto?",
+          "deleteDescription": "“{{name}}” ya no estará disponible en su enlace público.",
+          "delete": "Eliminar"
+        }
       }
     },
     "i18n": {

@@ -20,7 +20,7 @@ import type { AutomationPaneTab } from './automation-page-state'
 import { getAutomationTemplates, type AutomationTemplate } from './automation-templates'
 import { AutomationListLocalRows } from './AutomationListLocalRows'
 import { AutomationListExternalRows } from './AutomationListExternalRows'
-import { AUTOMATIONS_TABLE_CONTAINER_CLASS } from './automations-table-layout'
+import { LIST_TABLE_CONTAINER_CLASS } from '@/lib/list-table-layout'
 import { translate } from '@/i18n/i18n'
 import type {
   AutomationListFilter,
@@ -183,7 +183,7 @@ export function AutomationsListPanel({
           <div
             className={cn(
               'scrollbar-sleek min-h-0 flex-1 overflow-auto',
-              AUTOMATIONS_TABLE_CONTAINER_CLASS
+              LIST_TABLE_CONTAINER_CLASS
             )}
           >
             {hasFilteredListItems ? (

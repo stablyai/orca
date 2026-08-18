@@ -14299,6 +14299,13 @@
         "pendingChip": "{{value0}} 待处理",
         "needsActionChip": "{{value0}} 个需要操作",
         "unresolvedChip": "{{value0}} 个未解决"
+      },
+      "artifacts": {
+        "ArtifactsPage": {
+          "deleteTitle": "删除工件？",
+          "deleteDescription": "“{{name}}” 将无法再通过其公共链接访问。",
+          "delete": "删除"
+        }
       }
     },
     "i18n": {

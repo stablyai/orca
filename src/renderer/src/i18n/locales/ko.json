@@ -14308,6 +14308,13 @@
         "pendingChip": "{{value0}} 보류 중",
         "needsActionChip": "{{value0}}개 조치 필요",
         "unresolvedChip": "{{value0}}개 미해결"
+      },
+      "artifacts": {
+        "ArtifactsPage": {
+          "deleteTitle": "아티팩트를 삭제할까요?",
+          "deleteDescription": "“{{name}}”은(는) 공개 링크에서 더 이상 사용할 수 없습니다.",
+          "delete": "삭제"
+        }
       }
     },
     "i18n": {
