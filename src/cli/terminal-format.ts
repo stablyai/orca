@@ -113,8 +113,21 @@ export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): s
     `ptyId: ${terminal.ptyId ?? 'none'}`,
     `connected: ${terminal.connected}`,
     `writable: ${terminal.writable}`,
+    // Why listed above the preview: the preview is where a reader would otherwise have to
+    // spot the prompt by eye, which is the work this line exists to remove.
+    `agentWait: ${formatAgentWait(terminal.agentWait)}`,
     `preview: ${terminal.preview || '<empty>'}`
   ].join('\n')
+}
+
+function formatAgentWait(agentWait: RuntimeTerminalShow['agentWait']): string {
+  if (agentWait === undefined) {
+    return 'unknown (not evaluated)'
+  }
+  if (!agentWait) {
+    return 'none'
+  }
+  return `${agentWait.reason ?? 'interactive prompt'} (via ${agentWait.source})`
 }
 
 export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): string {
