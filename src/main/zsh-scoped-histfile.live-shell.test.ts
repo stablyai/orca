@@ -22,6 +22,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { ensureOverlayRestoreWrappers } from '../relay/pty-shell-overlay-wrappers'
 import { getShellLaunchConfig } from './providers/local-pty-shell-ready'
 import { selectShellStartupFeatures } from './shell-startup-features'
 import { hasZsh, makeZshHome, MARKERS, runZshPty, ZSH_PATH } from './zsh-startup-hook-pty-harness'
@@ -373,3 +374,49 @@ describe.skipIf(process.platform === 'win32')(
     )
   }
 )
+
+/**
+ * The relay writes its own variant of the hook: no OSC 133 (its bash rcfile owns
+ * those on remote hosts) and a remote CLI bin dir on PATH instead of the
+ * agent-teams shim. It used to have a whole second ZDOTDIR shape too, which is
+ * why it drifted from the desktop template; now the only differences are the
+ * spec flags, and this pins that the variant still works in a real shell.
+ */
+describe.skipIf(process.platform === 'win32')('the relay variant of the hook', () => {
+  itWithZsh(
+    'scopes history and restores the remote CLI path without emitting OSC 133',
+    withHome(USER_FILES, async (home) => {
+      const relayRoot = mkdtempSync(join(tmpdir(), 'orca-relay-wrapper-'))
+      try {
+        expect(ensureOverlayRestoreWrappers(relayRoot)).toBe(true)
+        const scoped = join(home, 'orca-history', 'zsh_history')
+
+        const { output, values } = await runZshPty({
+          env: {
+            PATH: '/usr/bin:/bin',
+            HOME: home,
+            ZDOTDIR: join(relayRoot, 'zsh'),
+            ORCA_ORIG_ZDOTDIR: home,
+            ORCA_SHELL_FEATURES: 'overlay,history,ready',
+            ORCA_HISTFILE: scoped,
+            ORCA_REMOTE_CLI_BIN_DIR: '/orca/remote-bin'
+          },
+          commands: ['true'],
+          report: ['HISTFILE', 'ZDOTDIR', 'PATH', 'ORCA_HISTFILE']
+        })
+
+        expect(values.HISTFILE).toBe(scoped)
+        expect(values.ZDOTDIR).toBe(home)
+        expect(values.ORCA_HISTFILE).toBe('UNSET')
+        expect(values.PATH.startsWith('/orca/remote-bin:')).toBe(true)
+        expect(output).toContain(MARKERS.ready)
+        // Remote panes get their command lifecycle from the bash rcfile, so the
+        // zsh variant must stay silent here.
+        expect(output).not.toContain(MARKERS.promptStart)
+        expect(output).not.toContain(MARKERS.commandStart)
+      } finally {
+        rmSync(relayRoot, { recursive: true, force: true })
+      }
+    })
+  )
+})
