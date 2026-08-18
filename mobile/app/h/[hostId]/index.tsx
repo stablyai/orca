@@ -1099,8 +1099,8 @@ export function HostScreen({
         )}
       </View>
 
-      {/* Auth failed banner */}
-      {connState === 'auth-failed' && (
+      {/* Auth failed: a latched relay rejection must reach the same re-pair affordance. */}
+      {(connState === 'auth-failed' || relayRecovery.pairingRejected) && (
         <AuthFailedBanner
           canRetry={!!hostId}
           onRetry={() => hostId && void forceReconnectHost(hostId)}

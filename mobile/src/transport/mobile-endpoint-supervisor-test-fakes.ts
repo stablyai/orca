@@ -129,6 +129,13 @@ export class FakeLogicalClient extends FakeSession implements StableLogicalRpcCl
     }
   })
   isPairingRejected = () => this.pairingRejected
+  // Mirrors LogicalClientConnectionPath.clearAfterConnected.
+  publishState(state: ConnectionState): void {
+    if (state === 'connected') {
+      this.pairingRejected = false
+    }
+    super.publishState(state)
+  }
   setRecoveryAttempt = vi.fn((attempt: number) => {
     const previous = this.getReconnectAttempt()
     this.recoveryAttempt = attempt

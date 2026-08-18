@@ -236,8 +236,11 @@ export class RelayReconnectController {
 
   registerFailure(error: Error | null, scheduleRetry = true): void {
     // Why: the gated early return below skips every later failure, so a revoked
-    // pairing must bank its evidence first or the UI waits forever (STA-4681).
-    this.pairingRejection.record(error)
+    // pairing must bank its evidence first or the UI waits forever (STA-4681). A live
+    // authenticated relay is the desktop accepting this device right now, so a failed
+    // replacement dial is not revocation — banking it would fire a false re-pair alarm
+    // the moment that healthy session drops for an unrelated transport error.
+    this.pairingRejection.record(this.activeSession ? null : error)
     const code = error instanceof RelayOuterError ? error.code : null
     const recovery =
       code != null && isMobileRelayCloseCode(code)

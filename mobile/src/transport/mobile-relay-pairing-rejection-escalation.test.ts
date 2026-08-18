@@ -143,6 +143,59 @@ describe('continuous Relay pairing-rejection escalation', () => {
     logical.close()
   })
 
+  it('escalates inside a bounded window, and never on a brief blip', async () => {
+    // Why: the budget is only meaningful with a cadence. Three rejections cost one fast
+    // transport retry plus two gated reprobes (60s and 120s bases, jittered 0.75-1.25x),
+    // so the floor is ~2m15s and the ceiling ~3m45s in production.
+    const { activeRelay, logical, supervisor } = harness(new MobileE2EEAuthenticationError())
+
+    await supervisor.start()
+    activeRelay.publishState('disconnected')
+
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(logical.isPairingRejected()).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(4 * 60_000)
+    expect(logical.isPairingRejected()).toBe(true)
+    supervisor.stop()
+    logical.close()
+  })
+
+  it('clears the verdict end to end when the desktop accepts the pairing again', async () => {
+    // Why: the unit tests clear the latch through controller methods directly. If the
+    // supervisor's success wiring regressed, a re-paired phone would stay on "re-pair"
+    // forever with every other assertion still green.
+    const { activeRelay, logical, supervisor } = harness(new MobileE2EEAuthenticationError(), 4)
+
+    await supervisor.start()
+    activeRelay.publishState('disconnected')
+    await vi.advanceTimersByTimeAsync(4 * 60_000)
+    expect(logical.isPairingRejected()).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(FOUR_HOURS_MS)
+
+    expect(logical.isPairingRejected()).toBe(false)
+    expect(logical.getActivePath()).toBe('relay')
+    expect(verdict(logical)).toMatchObject({ kind: 'normal' })
+    supervisor.stop()
+    logical.close()
+  })
+
+  it('never reports re-pair for a rejected relay credential', async () => {
+    // Why: a 4401 close enters the fresh-credential gate, not the pairing-rejection
+    // path. It is repaired by credential rotation, so it must not accuse the pairing.
+    const { activeRelay, logical, supervisor } = harness(new RelayOuterError(4401))
+
+    await supervisor.start()
+    activeRelay.publishState('disconnected')
+    await vi.advanceTimersByTimeAsync(FOUR_HOURS_MS)
+
+    expect(logical.isPairingRejected()).toBe(false)
+    expect(verdict(logical).kind).not.toBe('auth-failed')
+    supervisor.stop()
+    logical.close()
+  })
+
   it('leaves a plain transport outage on the Relay-unreachable verdict', async () => {
     const { activeRelay, logical, supervisor } = harness(new RelayOuterError(4408))
 
