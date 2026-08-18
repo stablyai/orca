@@ -37,6 +37,14 @@ const LOGIN_ENVIRONMENT = {
   path: '/home/user/bin:/usr/bin:/bin'
 }
 
+/** Stand in for the guest shell: rc chatter first, then the payload inside the command's own fence. */
+function fencedProbeStdout(command: unknown, payload: string): string {
+  const nonce = /__ORCA_WSL_CAPTURE_BEGIN_([^_]+)__/.exec(String(command))?.[1] ?? ''
+  return `profile banner\n__ORCA_WSL_CAPTURE_BEGIN_${nonce}__${payload}__ORCA_WSL_CAPTURE_END_${nonce}__`
+}
+
+const LOGIN_ENVIRONMENT_FIELDS = `${LOGIN_ENVIRONMENT.path}\0${LOGIN_ENVIRONMENT.gitPath}\0${LOGIN_ENVIRONMENT.home}`
+
 type MockChild = EventEmitter & {
   stdout: EventEmitter
   stderr: EventEmitter
@@ -97,7 +105,10 @@ describe('WSL direct Git reads', () => {
     expect(execFileMock).toHaveBeenCalledTimes(1)
     completeProbe?.(
       null,
-      'profile banner\n\0ORCA_WSL_GIT_READ_ENV_V1\0/home/user/bin:/usr/bin\0/home/user/bin/git\0/home/user\0',
+      fencedProbeStdout(
+        execFileMock.mock.calls[0]?.[1]?.[5],
+        '/home/user/bin:/usr/bin\0/home/user/bin/git\0/home/user'
+      ),
       ''
     )
 
@@ -131,7 +142,7 @@ describe('WSL direct Git reads', () => {
         queueMicrotask(() =>
           callback?.(
             null,
-            `\0ORCA_WSL_GIT_READ_ENV_V1\0${LOGIN_ENVIRONMENT.path}\0${LOGIN_ENVIRONMENT.gitPath}\0${LOGIN_ENVIRONMENT.home}\0`,
+            fencedProbeStdout(execFileMock.mock.calls.at(-1)?.[1]?.[5], LOGIN_ENVIRONMENT_FIELDS),
             ''
           )
         )
@@ -184,7 +195,7 @@ describe('WSL direct Git reads', () => {
       let completeProbe: ((error: Error | null, stdout: string, stderr: string) => void) | undefined
       execFileMock.mockImplementation((_command, args, _options, callback) => {
         const child = createMockChild()
-        if ((args as string[])[5]?.includes('ORCA_WSL_GIT_READ_ENV_V1')) {
+        if ((args as string[])[5]?.includes('^GIT_')) {
           completeProbe = callback
         } else {
           queueMicrotask(() => callback?.(null, 'ok', ''))
@@ -203,7 +214,7 @@ describe('WSL direct Git reads', () => {
       expect(execFileMock.mock.calls[1]?.[1]?.slice(3, 5)).toEqual(['sh', '-lc'])
       completeProbe?.(
         null,
-        `\0ORCA_WSL_GIT_READ_ENV_V1\0${LOGIN_ENVIRONMENT.path}\0${LOGIN_ENVIRONMENT.gitPath}\0${LOGIN_ENVIRONMENT.home}\0`,
+        fencedProbeStdout(execFileMock.mock.calls[1]?.[1]?.[5], LOGIN_ENVIRONMENT_FIELDS),
         ''
       )
       await Promise.resolve()

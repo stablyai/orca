@@ -1,5 +1,6 @@
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
 import {
+  buildWslCapturedLoginShellCommand,
   buildWslExecArgs,
   buildWslLoginShellCommand,
   quotePosixShell
@@ -13,7 +14,22 @@ export function buildWslCodexAvailabilityArgs(distro: string): string[] {
   return buildWslCodexShellArgs(distro, command)
 }
 
-export function buildWslCodexIdentityArgs(distro: string): string[] {
+export type WslCodexIdentityProbe = {
+  args: string[]
+  /** The `<path>\n<version>` payload, or null when the fence never appeared. */
+  readStdout: (stdout: string) => string | null
+}
+
+/**
+ * Probe the distro's Codex path and version.
+ *
+ * Why fenced: this reads the login shell's stdout positionally (path before the
+ * first newline, version after), and an interactive login shell prints the
+ * distro rc/motd to stdout ahead of it — which silently moves that split into
+ * the banner. The payload ends in `exec`, so no closing fence is ever written;
+ * `readStdout` returns everything after the opening one.
+ */
+export function buildWslCodexIdentityProbe(distro: string): WslCodexIdentityProbe {
   const command = [
     buildCodexPathLookup(),
     'if [ -z "$resolved" ]; then',
@@ -23,7 +39,11 @@ export function buildWslCodexIdentityArgs(distro: string): string[] {
     'printf \'%s\\n\' "$resolved"',
     'exec "$resolved" --version'
   ].join('\n')
-  return buildWslCodexShellArgs(distro, command)
+  const captured = buildWslCapturedLoginShellCommand(command)
+  return {
+    args: buildWslExecArgs(distro, ['sh', '-c', captured.command]),
+    readStdout: captured.readStdout
+  }
 }
 
 export function buildWslCodexAppServerArgs(distro: string, linuxHomePath: string): string[] {

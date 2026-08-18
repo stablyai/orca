@@ -3,7 +3,7 @@ import { resolveCodexCommand } from '../codex-cli/command'
 import { getSpawnArgsForWindows } from '../win32-utils'
 import {
   buildWslCodexAppServerArgs,
-  buildWslCodexIdentityArgs,
+  buildWslCodexIdentityProbe,
   WSL_CODEX_AVAILABILITY_TIMEOUT_MS
 } from '../codex-accounts/wsl-codex-command'
 import type { CodexHookTrustGrantRequest } from './codex-app-server-client'
@@ -82,11 +82,18 @@ function buildWslCodexBinaryStamp(distro: string): CodexTrustGrantBinaryStamp | 
   try {
     // Why: WSL PATH resolution happens inside the distro's login shell. The
     // resolved path plus CLI version detects upgrades without assuming UNC access.
-    const output = execFileSync('wsl.exe', buildWslCodexIdentityArgs(distro), {
+    const probe = buildWslCodexIdentityProbe(distro)
+    const stdout = execFileSync('wsl.exe', probe.args, {
       encoding: 'utf-8',
       timeout: WSL_CODEX_AVAILABILITY_TIMEOUT_MS,
       windowsHide: true
     })
+    // Why: the split below is positional, so login-shell rc output ahead of the
+    // payload would silently become the "path" and destabilize the stamp.
+    const output = probe.readStdout(stdout)
+    if (output === null) {
+      return null
+    }
     const lineBreak = output.indexOf('\n')
     const path = lineBreak === -1 ? '' : output.slice(0, lineBreak).trim()
     const version = lineBreak === -1 ? '' : output.slice(lineBreak + 1).trim()

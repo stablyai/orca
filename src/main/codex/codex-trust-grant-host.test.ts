@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { buildWslCodexIdentityArgs } from '../codex-accounts/wsl-codex-command'
+
 
 const { execFileSyncMock, resolveCodexCommandMock } = vi.hoisted(() => ({
   execFileSyncMock: vi.fn(),
@@ -16,7 +16,15 @@ import { resolveCodexTrustGrantHost } from './codex-trust-grant-host'
 
 beforeEach(() => {
   execFileSyncMock.mockReset()
-  execFileSyncMock.mockReturnValue('/home/alice/.local/bin/codex\ncodex-cli 1.2.3\n')
+  // Stand in for the guest shell: rc banner first, then the payload inside the
+  // command's own fence. The identity script execs, so no closing fence is written.
+  execFileSyncMock.mockImplementation((_command: string, args: string[]) => {
+    const nonce = /__ORCA_WSL_CAPTURE_BEGIN_([^_]+)__/.exec(String(args.at(-1)))?.[1] ?? ''
+    return (
+      'To run a command as administrator (user "root"), use "sudo <command>".\n\n' +
+      `__ORCA_WSL_CAPTURE_BEGIN_${nonce}__/home/alice/.local/bin/codex\ncodex-cli 1.2.3\n`
+    )
+  })
   resolveCodexCommandMock.mockReset()
   resolveCodexCommandMock.mockReturnValue(process.execPath)
 })
@@ -60,7 +68,7 @@ describe('resolveCodexTrustGrantHost', () => {
     expect(request.invocation.command).toBe('wsl.exe')
     expect(execFileSyncMock).toHaveBeenCalledWith(
       'wsl.exe',
-      buildWslCodexIdentityArgs('Ubuntu'),
+      expect.arrayContaining(['-d', 'Ubuntu', '--exec', 'sh', '-c']),
       expect.objectContaining({ encoding: 'utf-8', timeout: 5_000, windowsHide: true })
     )
     expect(resolveCodexCommandMock).not.toHaveBeenCalled()
