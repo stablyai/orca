@@ -2569,14 +2569,14 @@ export function registerPtyHandlers(
         return env
       },
       onSpawned: (id, incarnationId) => runtime?.onPtySpawned(id, incarnationId),
-      onExit: (id, code, incarnationId) => {
+      onExit: (id, code, incarnationId, cause) => {
         if (!isCurrentPtyExit({ id, incarnationId })) {
           return
         }
         clearProviderPtyState(id)
         ptyOwnership.delete(id)
         markClaudePtyExited(id)
-        runtime?.onPtyExit(id, code, incarnationId)
+        runtime?.onPtyExit(id, code, incarnationId, cause ? { cause } : undefined)
       },
       onData: (id, data, timestamp, sequenceChars, transformed) =>
         runtime?.onPtyData(id, data, timestamp, sequenceChars ?? data.length, transformed)
@@ -4121,9 +4121,20 @@ export function registerPtyHandlers(
         clearProviderPtyState(payload.id)
         ptyOwnership.delete(payload.id)
         markClaudePtyExited(payload.id)
-        runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId)
+        runtime?.onPtyExit(
+          payload.id,
+          payload.code,
+          payload.incarnationId,
+          payload.cause ? { cause: payload.cause } : undefined
+        )
       }
-      sendPtyExitToRenderer(payload)
+      // Why not the whole payload: the exit cause is a main-process fact for the
+      // runtime's records; the renderer's pty:exit contract stays as it was.
+      sendPtyExitToRenderer({
+        id: payload.id,
+        code: payload.code,
+        ...(payload.incarnationId ? { incarnationId: payload.incarnationId } : {})
+      })
     })
   }
 
@@ -5591,6 +5602,7 @@ export function registerPtyHandlers(
       }
     },
     kill: (ptyId) => {
+      runtime?.markPtyStopRequested?.(ptyId)
       let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
       const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
       connectionId ??= parsedSshId?.connectionId
@@ -5724,6 +5736,7 @@ export function registerPtyHandlers(
       }
     },
     stopAndWait: async (ptyId, opts) => {
+      runtime?.markPtyStopRequested?.(ptyId)
       let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
       const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
       connectionId ??= parsedSshId?.connectionId
@@ -7708,6 +7721,7 @@ export function registerPtyHandlers(
       // Why: runtime terminal handles belong to terminal.close; unowned PTY routing could target the local provider.
       throw new Error('Invalid PTY provider id')
     }
+    runtime?.markPtyStopRequested?.(args.id)
     const ownedConnectionId = ptyOwnership.get(args.id)
     const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
     const connectionId = ownedConnectionId ?? parsedSshId?.connectionId

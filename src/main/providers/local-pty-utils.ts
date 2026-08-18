@@ -1,7 +1,10 @@
 import { basename, isAbsolute, join } from 'node:path'
 import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants } from 'node:fs'
 import type * as pty from 'node-pty'
-import { wrapShellSpawnForMacosTccAttribution } from './macos-tcc-login-shell'
+import {
+  hostReportsChildExitStatus,
+  wrapShellSpawnForMacosTccAttribution
+} from './macos-tcc-login-shell'
 import { formatLocalPtyEnvironmentDiag } from './working-directory-validation'
 
 export {
@@ -145,6 +148,9 @@ export type ShellSpawnParams = {
 export type ShellSpawnResult = {
   process: pty.IPty
   shellPath: string
+  /** False when a wrapper owns the reported status, so no exit code or signal
+   *  from this process describes the shell (STA-4536). */
+  reportsChildExitStatus?: boolean
   /** True when the winning shell's startup command was already embedded in its
    *  argv, so callers must not re-deliver it through stdin. Only set when a
    *  Windows fallback attempt other than the primary was used. */
@@ -234,7 +240,8 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
           env,
           ...windowsConptyDllOptions()
         }),
-        shellPath
+        shellPath,
+        reportsChildExitStatus: hostReportsChildExitStatus(wrapped.file)
       }
     } catch (err) {
       primaryError = err instanceof Error ? err.message : String(err)
@@ -285,7 +292,11 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
         console.warn(
           `[pty] Primary shell "${shellPath}" failed (${primaryError ?? 'unknown error'}), fell back to "${fallback}"`
         )
-        return { process: proc, shellPath: fallback }
+        return {
+          process: proc,
+          shellPath: fallback,
+          reportsChildExitStatus: hostReportsChildExitStatus(wrapped.file)
+        }
       } catch {
         // Fallback also failed -- try next.
       }

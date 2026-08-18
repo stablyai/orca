@@ -1168,17 +1168,18 @@ export class DaemonServer {
                   seq
                 })
               },
-              onExit: (code, incarnationId) => {
+              onExit: (code, incarnationId, cause) => {
                 // Why: exit tears down renderer handlers, so it must ride the ordered queue behind final output.
                 this.log.log('session-exited', {
                   sessionId: routedSessionId,
-                  code
+                  code,
+                  cause: cause?.kind
                 })
                 this.streamDataBatcher.enqueueControlEvent(clientId, routedSessionId, {
                   type: 'event',
                   event: 'exit',
                   sessionId: routedSessionId,
-                  payload: { code, incarnationId }
+                  payload: { code, incarnationId, ...(cause ? { cause } : {}) }
                 })
                 this.streamDataBatcher.flush(clientId)
                 recordDaemonStreamBacklogEvent('sessionExit', {

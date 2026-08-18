@@ -39,6 +39,7 @@ import type { RemoteServerUpdateSupport } from './remote-server-update'
 import type { ExecutionHostId } from './execution-host'
 import type { PtyIncarnationId } from './pty-incarnation'
 import type { RasterImageDimensions } from './raster-image-dimensions'
+import type { TerminalExitCause } from './terminal-exit-cause'
 
 export type { RuntimeMarkdownReadTabResult, RuntimeMarkdownSaveTabResult }
 
@@ -465,6 +466,10 @@ export type RuntimeTerminalSummary = {
   writable: boolean
   lastOutputAt: number | null
   preview: string
+  /** Why this terminal's process is gone. Absent while it is still running, and
+   *  absent from a host predating the field — never read an absent value as a
+   *  clean finish (STA-4536). */
+  exitCause?: TerminalExitCause
   /** Where this terminal actually runs. Absent when the host predates the field
    *  or could not name the host — never read an absent value as local. */
   executionHostId?: ExecutionHostId
@@ -759,6 +764,8 @@ export type RuntimeTerminalWait = {
   satisfied: boolean
   status: RuntimeTerminalState
   exitCode: number | null
+  /** Why it exited. `exitCode` alone cannot answer that — see {@link TerminalExitCause}. */
+  exitCause?: TerminalExitCause
   blockedReason?: RuntimeTerminalWaitBlockedReason
 }
 

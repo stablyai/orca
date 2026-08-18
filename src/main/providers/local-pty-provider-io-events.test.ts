@@ -313,7 +313,12 @@ describe('LocalPtyProvider', () => {
       // Simulate node-pty exit event
       exitCb?.({ exitCode: 0 })
 
-      expect(exitHandler).toHaveBeenCalledWith({ id, code: 0, incarnationId })
+      expect(exitHandler).toHaveBeenCalledWith({
+        id,
+        code: 0,
+        incarnationId,
+        cause: { kind: 'exited', exitCode: 0 }
+      })
     })
 
     it('allows unsubscribing from events', async () => {

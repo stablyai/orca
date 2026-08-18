@@ -736,7 +736,10 @@ describe('Session', () => {
 
       expect(onData).toHaveBeenCalledWith('late output')
       expect(onExit).toHaveBeenCalledTimes(1)
-      expect(onExit).toHaveBeenCalledWith(23, session.incarnationId)
+      expect(onExit).toHaveBeenCalledWith(23, session.incarnationId, {
+        kind: 'exited',
+        exitCode: 23
+      })
       expect(session.exitCode).toBe(23)
     })
   })

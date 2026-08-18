@@ -30,7 +30,8 @@ vi.mock('../wsl', () => ({
 }))
 
 vi.mock('./macos-tcc-login-shell', () => ({
-  wrapShellSpawnForMacosTccAttribution: wrapSpawnMock
+  wrapShellSpawnForMacosTccAttribution: wrapSpawnMock,
+  hostReportsChildExitStatus: (file: string) => file !== '/usr/bin/login'
 }))
 
 import {
