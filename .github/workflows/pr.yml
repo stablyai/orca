@@ -615,6 +615,7 @@ jobs:
               'tests/e2e/terminal-hangul-wrap-boundary-bytes.spec.ts' \
               'tests/e2e/terminal-ime-exact-byte.spec.ts' \
               'tests/e2e/terminal-korean-composing-chord-order.spec.ts' \
+              'tests/e2e/terminal-korean-endofrow-preedit-cell-span.spec.ts' \
               'tests/e2e/terminal-korean-midline-preedit-occlusion.spec.ts' \
               'tests/e2e/terminal-korean-preedit-visibility.spec.ts' | sort -u)"
           fi
