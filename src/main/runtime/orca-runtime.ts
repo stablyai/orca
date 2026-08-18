@@ -33673,6 +33673,25 @@ export class OrcaRuntimeService {
     if (!status || !pty) {
       return status
     }
+    // Why: pending a human answer is hook-only evidence an idle title cannot renew. A title
+    // reads `permission` only from a vendor glyph or a synthesized `<Agent> - action required`
+    // label, and SYNTHETIC_AGENT_TITLE_PROFILES has no Claude entry (OpenCode opts out), so
+    // `titleConfirmsState` below is unreachable for them. Timestamps can't arbitrate either:
+    // lastAgentStatusRichInvalidatedAtEpochMs moves only on a status-CLASS change while
+    // lastOscTitleEpochMs moves on EVERY write, so Claude's one same-class repaint ~123ms
+    // after PermissionRequest pushed title evidence past a still-current hook and published
+    // `done` — retiring the card while the user was still being asked.
+    // Only under an `idle` title: idle is the ABSENCE of activity evidence, but a `working`
+    // title (agent resumed) or a null/shell/identity-only one (agent released the pane)
+    // contradicts the hook and must still retire the row and its stale question (#11761).
+    // Both names: Claude's PermissionRequest normalizes to `waiting`, not `blocked`.
+    if (
+      (status.state === 'waiting' || status.state === 'blocked') &&
+      pty.lastAgentStatus === 'idle' &&
+      Date.now() - status.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
+    ) {
+      return status
+    }
     if (
       options.preserveQuestionUnderShellTitle &&
       status.interactivePrompt != null &&
