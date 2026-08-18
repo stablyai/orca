@@ -56,8 +56,14 @@ export type IFilesystemProvider = {
   search(opts: SearchOptions): Promise<SearchResult>
   listFiles(
     rootPath: string,
-    options?: { excludePaths?: string[]; signal?: AbortSignal; maxResults?: number }
+    options?: {
+      excludePaths?: string[]
+      signal?: AbortSignal
+      maxResults?: number
+      searchQuery?: string
+    }
   ): Promise<string[]>
+  supportsQuickOpenSearch?(options?: { signal?: AbortSignal }): Promise<boolean>
   scanWorkspaceSpace?(
     rootPath: string,
     options?: { signal?: AbortSignal }

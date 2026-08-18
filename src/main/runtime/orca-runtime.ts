@@ -10075,6 +10075,8 @@ export class OrcaRuntimeService {
   )
   searchMobileFilePaths: RuntimeFileCommands['searchMobileFilePaths'] =
     this.fileCommands.searchMobileFilePaths.bind(this.fileCommands)
+  searchQuickOpenFilePaths: RuntimeFileCommands['searchQuickOpenFilePaths'] =
+    this.fileCommands.searchQuickOpenFilePaths.bind(this.fileCommands)
   openMobileFile: RuntimeFileCommands['openMobileFile'] = this.fileCommands.openMobileFile.bind(
     this.fileCommands
   )

@@ -215,9 +215,11 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
 
       - name: Install native build and headless UI tools
+        # Why ripgrep: Quick Open's bounded host-side search requires rg instead of an
+        # unbounded inventory fallback; the paired fixture exercises that real boundary.
         # Why openssh-client: the Docker-SSH fixture shells out to ssh/ssh-keygen, and this
         # lane now receives those specs from pr.yml's SSH source mapping.
-        run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk openssh-client python3 xvfb zsh
+        run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk openssh-client python3 ripgrep xvfb zsh
 
       # Why pnpm first: setup-node needs pnpm on PATH to locate the store it caches.
       # Without that cache every E2E job re-downloaded the whole dependency set.
@@ -225,7 +227,6 @@ jobs:
         uses: pnpm/action-setup@v6
         with:
           run_install: false
-
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:

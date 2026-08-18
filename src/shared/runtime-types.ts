@@ -381,6 +381,7 @@ export type RuntimeFileListResult = {
   files: RuntimeFileListEntry[]
   totalCount: number
   truncated: boolean
+  quickOpenSearchVersion?: number
 }
 
 export type RuntimeFileOpenResult = {
