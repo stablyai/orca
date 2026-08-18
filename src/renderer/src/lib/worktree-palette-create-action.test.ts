@@ -13,7 +13,6 @@ import { WORKTREE_PALETTE_QUERY_MAX_BYTES } from './worktree-palette-query-bound
 describe('worktree-palette-create-action', () => {
   it('shows create for typed queries with workspace matches but selects the first workspace row', () => {
     const state = getWorktreePaletteCreateActionState({
-      canCreateWorktree: true,
       query: 'feature'
     })
 
@@ -33,7 +32,6 @@ describe('worktree-palette-create-action', () => {
 
   it('skips create for free text even when it is listed before every other row', () => {
     const state = getWorktreePaletteCreateActionState({
-      canCreateWorktree: true,
       query: 'opencode-issue'
     })
 
@@ -77,7 +75,6 @@ describe('worktree-palette-create-action', () => {
 
   it('leaves Enter unarmed for typed queries with no real matches', () => {
     const state = getWorktreePaletteCreateActionState({
-      canCreateWorktree: true,
       query: 'new-workspace'
     })
 
@@ -156,19 +153,17 @@ describe('worktree-palette-create-action', () => {
     ).toBe(CREATE_WORKTREE_ITEM_ID)
   })
 
-  it('hides create when no project is available to create a workspace in', () => {
+  it('offers create with no projects, since the composer adds the first one inline', () => {
     expect(
       getWorktreePaletteCreateActionState({
-        canCreateWorktree: false,
         query: 'new-workspace'
       })
-    ).toEqual({ createWorktreeName: 'new-workspace', showCreateAction: false })
+    ).toEqual({ createWorktreeName: 'new-workspace', showCreateAction: true })
   })
 
   it('hides create for an empty query', () => {
     expect(
       getWorktreePaletteCreateActionState({
-        canCreateWorktree: true,
         query: '   '
       }).showCreateAction
     ).toBe(false)
@@ -179,7 +174,6 @@ describe('worktree-palette-create-action', () => {
 
     expect(
       getWorktreePaletteCreateActionState({
-        canCreateWorktree: true,
         query: oversizedQuery
       })
     ).toEqual({

@@ -203,7 +203,7 @@ function WorkspaceKanbanDrawerContent({
   const activeWorktreeIdentity = activeWorktreeId
     ? composeWorktreeHostIdentity(activeWorkspaceExecutionHostId ?? undefined, activeWorktreeId)
     : null
-  const { canCreateWorktree, createWorktreeForStatus } = useWorkspaceKanbanCreateWorktree()
+  const { createWorktreeForStatus } = useWorkspaceKanbanCreateWorktree()
   const visibleWorktreeIdSet = useVisibleWorkspaceKanbanWorktreeIds({
     allWorktrees,
     repoMap
@@ -944,7 +944,6 @@ function WorkspaceKanbanDrawerContent({
               columnWidth={columnWidth}
               isResizingColumn={isResizingColumn}
               dragOverStatus={dragOverStatus}
-              canCreateWorktree={canCreateWorktree}
               renderCards={renderCards}
               selectedWorktreeIds={selectedWorktreeIds}
               selectedWorktrees={renderedSelectedWorktrees}

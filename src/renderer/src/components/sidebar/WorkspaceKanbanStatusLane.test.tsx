@@ -62,7 +62,6 @@ function renderLane(props: {
         columnWidth={308}
         isResizingColumn={false}
         isDragTarget={false}
-        canCreateWorktree={true}
         renderCards={true}
         selectedWorktreeIds={new Set()}
         selectedWorktrees={[]}

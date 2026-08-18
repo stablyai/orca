@@ -130,7 +130,6 @@ vi.mock('./use-workspace-kanban-column-resize', () => ({
 
 vi.mock('./use-workspace-kanban-create-worktree', () => ({
   useWorkspaceKanbanCreateWorktree: () => ({
-    canCreateWorktree: true,
     createWorktreeForStatus: vi.fn()
   })
 }))

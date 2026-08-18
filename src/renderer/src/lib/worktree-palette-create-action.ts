@@ -8,10 +8,8 @@ export type WorktreePaletteCreateActionState = {
 }
 
 export function getWorktreePaletteCreateActionState({
-  canCreateWorktree,
   query
 }: {
-  canCreateWorktree: boolean
   query: string
 }): WorktreePaletteCreateActionState {
   const createWorktreeName = query.trim()
@@ -21,12 +19,11 @@ export function getWorktreePaletteCreateActionState({
       showCreateAction: false
     }
   }
-  // Why gate on eligibility: creation must not be offered — or reachable by Enter —
-  // when there is no repo to create a workspace in.
-  const showCreateAction = canCreateWorktree && createWorktreeName.length > 0
+  // Why no project gate: the composer can add the first project inline, so
+  // creation stays offered with zero projects.
   return {
     createWorktreeName,
-    showCreateAction
+    showCreateAction: createWorktreeName.length > 0
   }
 }
 

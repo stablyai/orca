@@ -848,7 +848,6 @@ function WorktreeJumpPaletteContent({
       hostLabelOverrides
     ]
   )
-  const canCreateWorktree = repos.length > 0
 
   // Why: host-less repos and worktrees inherit the focused runtime host, exactly
   // as the sidebar's host headers do — otherwise the two disagree on bucketing.
@@ -1815,14 +1814,13 @@ function WorktreeJumpPaletteContent({
   } = useMemo(
     () =>
       getWorktreePaletteCreateActionState({
-        canCreateWorktree,
         query: deferredQuery
       }),
-    [canCreateWorktree, deferredQuery]
+    [deferredQuery]
   )
   const createWorktreeName = taskSourceUrl ? query.trim() : deferredCreateWorktreeName
-  // Why still gated: a task URL bypasses query deferral, not creation eligibility.
-  const showCreateAction = deferredShowCreateAction || (taskSourceUrl !== null && canCreateWorktree)
+  // Why: a task URL bypasses query deferral, so it arms create on its own.
+  const showCreateAction = deferredShowCreateAction || taskSourceUrl !== null
 
   // Why: arm the lookup before Enter can target the newly rendered Linear row.
   useLayoutEffect(() => {
