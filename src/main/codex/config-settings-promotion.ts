@@ -23,11 +23,18 @@ import { tuiStructuredKey, upsertPromotedSettingsInContent } from './codex-confi
 import {
   readCodexSettingsBaseline,
   writeCodexSettingsBaseline,
-  type CodexSettingsBaseline,
   type CodexSettingsConflict
 } from './config-settings-baseline'
-import { resolveUntrackedCodexSetting } from './config-settings-conflict-resolution'
+import {
+  collectCodexSettingPromotionChanges,
+  type CodexPromotedSettingValue
+} from './config-settings-conflict-resolution'
 import { extractOrdinaryCodexSettings } from './config-toml-runtime-owned-sections'
+import {
+  applyCodexPluginRegistrationChanges,
+  collectCodexPluginRegistrationChanges,
+  readCodexPluginRegistrationTables
+} from './codex-plugin-registration-config'
 
 // Why: the mirror reverts in-Codex config changes each launch; promotion salvages them by diffing the last baseline.
 
@@ -78,12 +85,6 @@ function matchTuiStructuredKey(
   return tuiBodyActive && tuiKey && isPromotedTuiKey(tuiKey) ? tuiStructuredKey(tuiKey) : null
 }
 
-type TopLevelSettingValue = {
-  raw: string
-  // Why: a multiline string/array value can't be replaced line-by-line, so it's excluded from promotion.
-  multiline: boolean
-}
-
 function matchPromotedStructuredKey(
   line: string,
   inPreamble: boolean,
@@ -110,8 +111,8 @@ function matchPromotedStructuredKey(
 // collected from the first bare [tui] table body or the dotted preamble form,
 // keyed by structured path. Any table header (including [tui.*] subtables) ends
 // the [tui] body, and [profiles.*]/other tables are still ignored.
-function readPromotedSettingValues(configPath: string): Map<string, TopLevelSettingValue> {
-  const result = new Map<string, TopLevelSettingValue>()
+function readPromotedSettingValues(configPath: string): Map<string, CodexPromotedSettingValue> {
+  const result = new Map<string, CodexPromotedSettingValue>()
   if (!existsSync(configPath)) {
     return result
   }
@@ -175,7 +176,10 @@ export function snapshotCodexRuntimeSettingsBaseline(
         settings.set(key, value?.raw ?? null)
       }
     }
-    writeCodexSettingsBaseline(runtimeHomePath, { settings, conflicts })
+    const pluginRegistrations = new Map(
+      [...readCodexPluginRegistrationTables(runtimeTomlPath)].filter(([key]) => !conflicts.has(key))
+    )
+    writeCodexSettingsBaseline(runtimeHomePath, { settings, conflicts, pluginRegistrations })
   } catch (error) {
     console.warn('[codex-settings-promotion] failed to snapshot settings baseline', error)
   }
@@ -235,9 +239,13 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   const runtimeValues = readPromotedSettingValues(runtimeTomlPath)
   const systemValues = readPromotedSettingValues(systemTomlPath)
   const updates = new Map<string, string>()
+  const runtimeRegistrations = readCodexPluginRegistrationTables(runtimeTomlPath)
+  const systemRegistrations = readCodexPluginRegistrationTables(systemTomlPath)
+  const registrationChanges = new Map<string, string | null>()
   const conflicts = new Map<string, CodexSettingsConflict>()
   const runtimeValuesToPreserve = new Map<string, string | null>()
-  collectPromotionChanges({
+  collectCodexSettingPromotionChanges({
+    keys: PROMOTED_STRUCTURED_KEYS,
     baseline,
     runtimeValues,
     systemValues,
@@ -245,7 +253,15 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
     conflicts,
     runtimeValuesToPreserve
   })
-  if (updates.size === 0) {
+  collectCodexPluginRegistrationChanges({
+    baseline,
+    runtimeRegistrations,
+    systemRegistrations,
+    registrationChanges,
+    conflicts,
+    runtimeValuesToPreserve
+  })
+  if (updates.size === 0 && registrationChanges.size === 0) {
     return { conflicts, runtimeValuesToPreserve }
   }
   // Why: a fresh host has no ~/.codex; create it owner-only (holds auth.json) or the atomic write ENOENTs and the mirror wipes it.
@@ -261,8 +277,15 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   const systemContent = targetExists
     ? readAgentStateFileSync(writeTarget.path)
     : extractOrdinaryCodexSettings(readAgentStateFileSync(runtimeTomlPath))
-  const nextContent = upsertPromotedSettingsInContent(systemContent, updates)
-  if (nextContent === systemContent) {
+  const nextContent = targetExists
+    ? applyCodexPluginRegistrationChanges(
+        upsertPromotedSettingsInContent(systemContent, updates),
+        registrationChanges
+      )
+    : systemContent.length > 0
+      ? `${systemContent}\n`
+      : systemContent
+  if (targetExists && nextContent === systemContent) {
     return { conflicts, runtimeValuesToPreserve }
   }
   if (targetExists && parseWslUncPath(writeTarget.path)) {
@@ -274,54 +297,6 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
     mode: writeTarget.mode
   })
   return { conflicts, runtimeValuesToPreserve }
-}
-
-type PromotionCollectionContext = {
-  baseline: CodexSettingsBaseline
-  runtimeValues: ReadonlyMap<string, TopLevelSettingValue>
-  systemValues: ReadonlyMap<string, TopLevelSettingValue>
-  updates: Map<string, string>
-  conflicts: Map<string, CodexSettingsConflict>
-  runtimeValuesToPreserve: Map<string, string | null>
-}
-
-function collectPromotionChanges(context: PromotionCollectionContext): void {
-  for (const key of PROMOTED_STRUCTURED_KEYS) {
-    const runtimeRaw = getComparableRaw(context.runtimeValues.get(key))
-    const systemRaw = getComparableRaw(context.systemValues.get(key))
-    if (runtimeRaw === undefined || systemRaw === undefined) {
-      continue
-    }
-
-    const existingConflict = context.baseline.conflicts.get(key)
-    if (existingConflict || !context.baseline.settings.has(key)) {
-      const resolution = resolveUntrackedCodexSetting(runtimeRaw, systemRaw, existingConflict)
-      if (resolution.action === 'promote-runtime') {
-        context.updates.set(key, resolution.raw)
-      } else if (resolution.action === 'preserve') {
-        // Why: a schema-new key has no three-way ancestor; preserve both values until content changes one side.
-        context.conflicts.set(key, resolution.conflict)
-        context.runtimeValuesToPreserve.set(key, runtimeRaw)
-      }
-      continue
-    }
-
-    if (runtimeRaw === null || runtimeRaw === context.baseline.settings.get(key)) {
-      continue
-    }
-    // Why: ~/.codex remains source of truth when both sides changed from a known baseline.
-    if (systemRaw !== context.baseline.settings.get(key)) {
-      continue
-    }
-    context.updates.set(key, runtimeRaw)
-  }
-}
-
-function getComparableRaw(value: TopLevelSettingValue | undefined): string | null | undefined {
-  if (!value) {
-    return null
-  }
-  return value.multiline ? undefined : value.raw
 }
 
 function emptyPromotionPlan(): CodexSettingsPromotionPlan {

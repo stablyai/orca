@@ -1,5 +1,9 @@
 import { removePromotedSettingsFromContent } from './codex-config-settings-removal'
 import { upsertPromotedSettingsInContent } from './codex-config-settings-upsert'
+import {
+  applyCodexPluginRegistrationChanges,
+  isCodexPluginRegistrationKey
+} from './codex-plugin-registration-config'
 
 export function preserveRuntimeConflictValues(
   content: string,
@@ -9,10 +13,14 @@ export function preserveRuntimeConflictValues(
   const keys = new Set<string>()
   for (const [key, raw] of values) {
     const previous = result
-    result =
-      raw === null
-        ? removePromotedSettingsFromContent(result, new Set([key]))
-        : upsertPromotedSettingsInContent(result, new Map([[key, raw]]))
+    if (isCodexPluginRegistrationKey(key)) {
+      result = applyCodexPluginRegistrationChanges(result, new Map([[key, raw]]))
+    } else {
+      result =
+        raw === null
+          ? removePromotedSettingsFromContent(result, new Set([key]))
+          : upsertPromotedSettingsInContent(result, new Map([[key, raw]]))
+    }
     if (result !== previous) {
       keys.add(key)
     }

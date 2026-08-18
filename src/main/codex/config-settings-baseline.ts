@@ -12,12 +12,14 @@ export type CodexSettingsConflict = {
 export type CodexSettingsBaseline = {
   settings: ReadonlyMap<string, string | null>
   conflicts: ReadonlyMap<string, CodexSettingsConflict>
+  pluginRegistrations: ReadonlyMap<string, string> | null
 }
 
 type StoredSettingsBaseline = {
   version: 1 | 2
   settings: Record<string, string | null>
   conflicts?: Record<string, CodexSettingsConflict>
+  pluginRegistrations?: Record<string, string>
 }
 
 export function readCodexSettingsBaseline(runtimeHomePath: string): CodexSettingsBaseline | null {
@@ -45,7 +47,14 @@ export function readCodexSettingsBaseline(runtimeHomePath: string): CodexSetting
         conflicts.set(key, conflict)
       }
     }
-    return { settings, conflicts }
+    const pluginRegistrations = Object.hasOwn(parsed, 'pluginRegistrations')
+      ? new Map(
+          Object.entries(parsed.pluginRegistrations ?? {}).filter(
+            (entry): entry is [string, string] => typeof entry[1] === 'string'
+          )
+        )
+      : null
+    return { settings, conflicts, pluginRegistrations }
   } catch {
     return null
   }
@@ -58,6 +67,9 @@ export function writeCodexSettingsBaseline(
   const file: StoredSettingsBaseline = {
     version: 2,
     settings: Object.fromEntries(baseline.settings)
+  }
+  if (baseline.pluginRegistrations !== null) {
+    file.pluginRegistrations = Object.fromEntries(baseline.pluginRegistrations)
   }
   if (baseline.conflicts.size > 0) {
     file.conflicts = Object.fromEntries(baseline.conflicts)
@@ -84,6 +96,11 @@ function isStoredSettingsBaseline(value: unknown): value is StoredSettingsBaseli
     (candidate.version === 1 || candidate.version === 2) &&
     !!candidate.settings &&
     typeof candidate.settings === 'object' &&
-    !Array.isArray(candidate.settings)
+    !Array.isArray(candidate.settings) &&
+    (!Object.hasOwn(candidate, 'pluginRegistrations') ||
+      (!!candidate.pluginRegistrations &&
+        typeof candidate.pluginRegistrations === 'object' &&
+        !Array.isArray(candidate.pluginRegistrations) &&
+        Object.values(candidate.pluginRegistrations).every((value) => typeof value === 'string')))
   )
 }
