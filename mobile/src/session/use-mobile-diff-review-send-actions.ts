@@ -1,4 +1,5 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
+import { frameMultilineTerminalPasteText } from '../../../src/shared/terminal-bracketed-paste-bytes'
 import * as Clipboard from 'expo-clipboard'
 import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/diff-comment-types'
 import type { ConnectionState } from '../transport/types'
@@ -82,7 +83,7 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       }
       const response = await client.sendRequest('terminal.send', {
         terminal,
-        text: formatMobileDiffReviewPrompt(comments),
+        text: frameMultilineTerminalPasteText(formatMobileDiffReviewPrompt(comments)),
         enter: true
       })
       if (!response.ok) {

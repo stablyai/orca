@@ -105,6 +105,12 @@ describe('useMobileDiffReviewSendActions', () => {
     expect(sendRequest.mock.calls[1]?.[1]).toMatchObject({ terminal: 'terminal-1', enter: true })
     // The second call is the notes themselves, not another clear.
     expect(String(sendRequest.mock.calls[1]?.[1]?.text)).toContain('rename this')
+    // Notes are multi-line prose: unframed, each line break submits early and one
+    // send becomes a turn per line.
+    const notes = String(sendRequest.mock.calls[1]?.[1]?.text)
+    expect(notes.startsWith('\u001b[200~')).toBe(true)
+    expect(notes.endsWith('\u001b[201~')).toBe(true)
+    expect(notes).not.toContain('\n')
     expect(isMobileNativeChatInputStale('terminal-1')).toBe(false)
     expect(setActionError).toHaveBeenCalledWith('Review notes sent')
   })

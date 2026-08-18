@@ -1,4 +1,5 @@
 import type { RpcClient } from '../transport/rpc-client'
+import { frameMultilineTerminalPasteText } from '../../../src/shared/terminal-bracketed-paste-bytes'
 import {
   readMobileReviewCreatedTerminal,
   readMobileReviewTerminalSendAccepted
@@ -30,7 +31,8 @@ export async function createTerminalAndSendPrompt(
   }
   const sent = await client.sendRequest('terminal.send', {
     terminal: terminalTab.terminal,
-    text: prompt,
+    // Prose for an agent TUI: unframed, every newline would submit early.
+    text: frameMultilineTerminalPasteText(prompt),
     enter: true
   })
   if (!sent.ok) {

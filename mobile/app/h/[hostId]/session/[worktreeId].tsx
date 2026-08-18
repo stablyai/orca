@@ -170,6 +170,7 @@ import {
   removeDeliveredMobileDiffComments,
   removeMobileDiffComments
 } from '../../../../src/session/mobile-diff-comments'
+import { buildDiffNotesAgentLaunchPrompt } from '../../../../src/session/diff-notes-agent-launch-prompt'
 import {
   buildPlainMobileDiffSyntaxLines,
   highlightMobileCode,
@@ -4271,7 +4272,7 @@ export default function SessionScreen() {
                   return
                 }
                 void handleCreateTerminal(option.agent, {
-                  initialPrompt: delivery.prompt,
+                  initialPrompt: buildDiffNotesAgentLaunchPrompt(delivery.prompt),
                   onPromptSent: () => void clearDeliveredDiffComments(delivery.comments)
                 })
               }
