@@ -23,17 +23,9 @@ import {
   toHostRemovalPath
 } from './local-worktree-filesystem'
 
-// Stand in for the guest shell: rc banner first, then the payload inside the
-// fence the command itself carries. Reads are rejected without one.
 function completeExecFile(stdout = ''): void {
-  execFileMock.mockImplementation((_file, args, _options, callback) => {
-    const nonce = /__ORCA_WSL_CAPTURE_BEGIN_([^_]+)__/.exec(String(args.at(-1)))?.[1] ?? ''
-    callback(
-      null,
-      'To run a command as administrator (user "root"), use "sudo <command>".\n\n' +
-        `__ORCA_WSL_CAPTURE_BEGIN_${nonce}__${stdout}__ORCA_WSL_CAPTURE_END_${nonce}__`,
-      ''
-    )
+  execFileMock.mockImplementation((_file, _args, _options, callback) => {
+    callback(null, stdout, '')
   })
 }
 
@@ -176,9 +168,25 @@ describe('local worktree filesystem runtime access', () => {
       const removeArgs = execFileMock.mock.calls[2]?.[1] as string[]
       expect(removeArgs.at(-1)).toContain('rm -rf --')
       expect(removeArgs.at(-1)).toContain(
-        String.raw`rm -rf -- '\''/mnt/c/Users/me/repo feature'\''`
+        String.raw`rm -rf -- '/mnt/c/Users/me/repo feature'`
       )
       expect(rmMock).not.toHaveBeenCalled()
+    })
+  })
+
+  it('never starts a login or interactive shell for filesystem reads', async () => {
+    await withPlatform('win32', async () => {
+      completeExecFile('file')
+      await getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' }).statPath('/home/me/repo/.git')
+
+      // Why: a login/interactive shell is what puts the distro's rc banner on the
+      // stdout these callers parse. cat/stat/rm need nothing from the user's PATH,
+      // so the shell mode is the fix rather than filtering what it prints.
+      const args = execFileMock.mock.calls[0]?.[1] as string[]
+      expect(args).toContain('-c')
+      expect(args).not.toContain('-lc')
+      expect(args).not.toContain('-ilc')
+      expect(args.at(-1)).not.toContain('getent passwd')
     })
   })
 

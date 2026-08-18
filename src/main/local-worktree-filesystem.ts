@@ -1,10 +1,6 @@
 import { execFile } from 'node:child_process'
 import { lstat, readFile } from 'node:fs/promises'
-import {
-  buildWslCapturedLoginShellCommand,
-  buildWslExecArgs,
-  quotePosixShell
-} from '../shared/wsl-login-shell-command'
+import { buildWslExecArgs, quotePosixShell } from '../shared/wsl-login-shell-command'
 import { removeHostTree } from './host-tree-removal'
 import { toLinuxPath } from './wsl'
 import type { ReadPath, StatPath } from './worktree-orphan-gitdir-proof'
@@ -55,26 +51,18 @@ function execFileText(
   })
 }
 
-async function runWslLoginShellCommand(
-  distro: string,
-  command: string
-): Promise<ExecFileTextResult> {
-  // Why: file contents and the stat marker are read straight out of stdout, so the
-  // distro's rc banner would otherwise be prepended to every file Orca reads.
-  const captured = buildWslCapturedLoginShellCommand(command)
-  const result = await execFileText(
-    'wsl.exe',
-    buildWslExecArgs(distro, ['sh', '-lc', captured.command]),
-    { timeout: WSL_FILE_OPERATION_TIMEOUT_MS }
-  )
-  const payload = captured.readStdout(result.stdout)
-  if (payload === null) {
-    // Why throw: falling back to the raw stream would hand callers the banner as
-    // if it were file contents or a stat result -- the exact bug the fence fixes,
-    // but silently. A missing fence means the shell never reached the payload.
-    throw new Error('WSL command produced no fenced output')
-  }
-  return { ...result, stdout: payload }
+/**
+ * Run a filesystem command inside the distro.
+ *
+ * Why no login shell: these are coreutils at standard paths plus shell builtins,
+ * and need nothing from the user's PATH. A login shell would only add its rc/motd
+ * output to the stdout these callers parse -- the banner problem -- so the fix is
+ * to not start one rather than to fence what it prints.
+ */
+function runWslCommand(distro: string, command: string): Promise<ExecFileTextResult> {
+  return execFileText('wsl.exe', buildWslExecArgs(distro, ['sh', '-c', command]), {
+    timeout: WSL_FILE_OPERATION_TIMEOUT_MS
+  })
 }
 
 function isWslMissingPathError(error: unknown): boolean {
@@ -108,7 +96,7 @@ export function getLocalWorktreePathAccess(
   return {
     statPath: async (path) => {
       const target = quotePosixShell(toLinuxPath(path))
-      const { stdout } = await runWslLoginShellCommand(
+      const { stdout } = await runWslCommand(
         distro,
         [
           `target=${target}`,
@@ -124,7 +112,7 @@ export function getLocalWorktreePathAccess(
     },
     readPath: async (path) => {
       const target = quotePosixShell(toLinuxPath(path))
-      const { stdout } = await runWslLoginShellCommand(distro, `cat -- ${target}`)
+      const { stdout } = await runWslCommand(distro, `cat -- ${target}`)
       return stdout
     }
   }
@@ -142,5 +130,5 @@ export async function removeLocalWorktreePath(
 
   // Why: WSL-owned worktree directories may be POSIX paths that Node on
   // Windows cannot delete safely. Run the deletion inside the selected distro.
-  await runWslLoginShellCommand(distro, `rm -rf -- ${quotePosixShell(toLinuxPath(targetPath))}`)
+  await runWslCommand(distro, `rm -rf -- ${quotePosixShell(toLinuxPath(targetPath))}`)
 }

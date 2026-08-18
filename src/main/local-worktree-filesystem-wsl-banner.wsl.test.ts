@@ -37,7 +37,7 @@ async function readThroughRawLoginShell(linuxPath: string): Promise<string> {
   return stdout
 }
 
-describe.skipIf(!runRealWsl)('WSL worktree reads are fenced from login-shell chatter', () => {
+describe.skipIf(!runRealWsl)('WSL worktree reads carry no shell chatter', () => {
   let fixtureRoot: string
 
   beforeAll(async () => {
@@ -57,13 +57,13 @@ describe.skipIf(!runRealWsl)('WSL worktree reads are fenced from login-shell cha
     expect(await readPath(unc(`${fixtureRoot}/file.txt`))).toBe(FILE_CONTENTS)
   }, 60_000)
 
-  it('drops whatever the distro login shell printed ahead of the payload', async () => {
+  it('is unaffected by what a login shell would have printed', async () => {
     const { readPath } = getLocalWorktreePathAccess({ wslDistro: DISTRO })
     const raw = await readThroughRawLoginShell(`${fixtureRoot}/file.txt`)
 
-    // On a distro whose rc files are silent the two agree; on a chatty one (stock
-    // Ubuntu ships a sudo hint) the raw read carries a prefix. Either way the
-    // fenced read must be exactly the file.
+    // Contrast: routed through a login shell the read carries whatever the rc
+    // files printed (stock Ubuntu ships a sudo hint). These reads use a plain
+    // `sh -c`, which runs no rc at all, so they are exactly the file.
     expect(raw.endsWith(FILE_CONTENTS)).toBe(true)
     expect(await readPath(unc(`${fixtureRoot}/file.txt`))).toBe(FILE_CONTENTS)
   }, 60_000)
