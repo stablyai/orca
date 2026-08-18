@@ -132,6 +132,7 @@ async function runInteractiveZshRc(args: {
   return output
 }
 
+<<<<<<< HEAD
 function expectZdotdirSourceContext(content: string, fileName: '.zprofile' | '.zshrc' | '.zlogin') {
   expect(content).toContain('export ZDOTDIR="$_orca_home"')
   expect(content).toContain(`source "$_orca_home/${fileName}"`)
@@ -143,6 +144,100 @@ function expectFinalZdotdirRestoreContext(content: string) {
   expect(content).toContain('export ZDOTDIR="$_orca_resolved_config_dir"')
 }
 
+||||||| parent of a8202791d01 (refactor(shell): collapse the zsh wrapper to one .zshenv and a precmd hook (STA-4786))
+function runInteractiveBashRcfile(rcfileContent: string, tempDir: string): string {
+  const rcfile = join(tempDir, 'bash-osc133-rcfile')
+  writeFileSync(rcfile, rcfileContent)
+
+  const result = spawnSync(
+    'bash',
+    ['-lc', 'bash --noprofile --rcfile "$1" -i 2>&1', 'bash', rcfile],
+    {
+      input: 'true\nfalse\nexit 0\n',
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        HOME: tempDir,
+        ORCA_SHELL_FEATURES: 'ready',
+        TERM: process.env.TERM || 'xterm'
+      },
+      timeout: 5000
+    }
+  )
+
+  expect(result.error).toBeUndefined()
+  expect(result.status).toBe(0)
+  return result.stdout
+}
+
+function expectBashOsc133Lifecycle(output: string): void {
+  const oscA = '\x1b]133;A\x07'
+  const oscC = '\x1b]133;C\x07'
+  const oscD = '\x1b]133;D;'
+  const firstPromptMarker = output.indexOf(oscA)
+
+  expect(firstPromptMarker).toBeGreaterThanOrEqual(0)
+  expect(output.slice(0, firstPromptMarker)).not.toContain(oscC)
+  expect(output.slice(0, firstPromptMarker)).not.toContain(oscD)
+  expect(output).toContain(`${oscD}0\x07${oscA}`)
+  expect(output).toContain(`${oscD}1\x07${oscA}`)
+  expect(output.split(oscC)).toHaveLength(4)
+  expect(output.split(oscD)).toHaveLength(3)
+}
+
+function expectZdotdirSourceContext(content: string, fileName: '.zprofile' | '.zshrc' | '.zlogin') {
+  expect(content).toContain('export ZDOTDIR="$_orca_home"')
+  expect(content).toContain(`source "$_orca_home/${fileName}"`)
+  expect(content).toContain('export ZDOTDIR="$_orca_wrapper_zdotdir"')
+}
+
+function expectFinalZdotdirRestoreContext(content: string) {
+  expect(content).toContain("after Orca's last wrapper file has loaded")
+  expect(content).toContain('export ZDOTDIR="$_orca_resolved_config_dir"')
+}
+
+=======
+function runInteractiveBashRcfile(rcfileContent: string, tempDir: string): string {
+  const rcfile = join(tempDir, 'bash-osc133-rcfile')
+  writeFileSync(rcfile, rcfileContent)
+
+  const result = spawnSync(
+    'bash',
+    ['-lc', 'bash --noprofile --rcfile "$1" -i 2>&1', 'bash', rcfile],
+    {
+      input: 'true\nfalse\nexit 0\n',
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        HOME: tempDir,
+        ORCA_SHELL_FEATURES: 'ready',
+        TERM: process.env.TERM || 'xterm'
+      },
+      timeout: 5000
+    }
+  )
+
+  expect(result.error).toBeUndefined()
+  expect(result.status).toBe(0)
+  return result.stdout
+}
+
+function expectBashOsc133Lifecycle(output: string): void {
+  const oscA = '\x1b]133;A\x07'
+  const oscC = '\x1b]133;C\x07'
+  const oscD = '\x1b]133;D;'
+  const firstPromptMarker = output.indexOf(oscA)
+
+  expect(firstPromptMarker).toBeGreaterThanOrEqual(0)
+  expect(output.slice(0, firstPromptMarker)).not.toContain(oscC)
+  expect(output.slice(0, firstPromptMarker)).not.toContain(oscD)
+  expect(output).toContain(`${oscD}0\x07${oscA}`)
+  expect(output).toContain(`${oscD}1\x07${oscA}`)
+  expect(output.split(oscC)).toHaveLength(4)
+  expect(output.split(oscD)).toHaveLength(3)
+}
+
+>>>>>>> a8202791d01 (refactor(shell): collapse the zsh wrapper to one .zshenv and a precmd hook (STA-4786))
 describePosix('daemon shell-ready launch config', () => {
   // Always runs, so the CI lane cannot report green with every live fish test skipped.
   it('has the fish the live tests need when CI requires one', () => {
@@ -353,7 +448,7 @@ describePosix('daemon shell-ready launch config', () => {
     15_000
   )
 
-  it('falls back to HOME for ORCA_ORIG_ZDOTDIR when inherited ZDOTDIR points at a wrapper dir', async () => {
+  it('sets no ORCA_ORIG_ZDOTDIR when the inherited ZDOTDIR points at a wrapper dir', async () => {
     // Why: an Orca-PTY parent has ZDOTDIR=.../shell-ready/zsh; propagating it makes the wrapper source itself (recursion loop).
     const previousZdotdir = process.env.ZDOTDIR
     const previousHome = process.env.HOME
@@ -362,8 +457,7 @@ describePosix('daemon shell-ready launch config', () => {
     try {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
-      expect(config.env.ORCA_ORIG_ZDOTDIR).toBe('/Users/alice')
-      expect(config.env.ORCA_ZSHENV_SOURCE_DIR).toBe('/Users/alice')
+      expect(config.env.ORCA_ORIG_ZDOTDIR).toBeUndefined()
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -390,7 +484,6 @@ describePosix('daemon shell-ready launch config', () => {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
       expect(config.env.ORCA_ORIG_ZDOTDIR).toBe(userZdotdir)
-      expect(config.env.ORCA_ZSHENV_SOURCE_DIR).toBe(userDataPath)
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -410,7 +503,7 @@ describePosix('daemon shell-ready launch config', () => {
     }
   })
 
-  it('falls back to HOME when inherited ORCA_ORIG_ZDOTDIR points at a wrapper dir', async () => {
+  it('sets no ORCA_ORIG_ZDOTDIR when the inherited one points at a wrapper dir', async () => {
     const previousZdotdir = process.env.ZDOTDIR
     const previousOrigZdotdir = process.env.ORCA_ORIG_ZDOTDIR
     const previousHome = process.env.HOME
@@ -420,8 +513,7 @@ describePosix('daemon shell-ready launch config', () => {
     try {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
-      expect(config.env.ORCA_ORIG_ZDOTDIR).toBe('/Users/alice')
-      expect(config.env.ORCA_ZSHENV_SOURCE_DIR).toBe('/Users/alice')
+      expect(config.env.ORCA_ORIG_ZDOTDIR).toBeUndefined()
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -441,34 +533,37 @@ describePosix('daemon shell-ready launch config', () => {
     }
   })
 
-  it('writes zsh wrappers that guard against ORCA_ORIG_ZDOTDIR self-loops', async () => {
+  it('writes a zsh hook that hands ZDOTDIR back before any user file loads', async () => {
     const { getShellReadyLaunchConfig } = await importFreshShellReady()
 
     getShellReadyLaunchConfig('/bin/zsh')
 
+<<<<<<< HEAD
     const zshenv = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
     const zprofile = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zprofile'), 'utf8')
     const zshrc = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshrc'), 'utf8')
     const zlogin = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zlogin'), 'utf8')
     expect(zshenv).toContain('__orca_resolve_inherited_config_dir "${ORCA_ORIG_ZDOTDIR:-$HOME}"')
+||||||| parent of a8202791d01 (refactor(shell): collapse the zsh wrapper to one .zshenv and a precmd hook (STA-4786))
+    const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+    const zprofile = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zprofile'), 'utf8')
+    const zshrc = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshrc'), 'utf8')
+    const zlogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
+    expect(zshenv).toContain('__orca_resolve_inherited_config_dir "${ORCA_ORIG_ZDOTDIR:-$HOME}"')
+=======
+    const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+    expect(zshenv).toContain('builtin export ZDOTDIR="$ORCA_ORIG_ZDOTDIR"')
+    expect(zshenv).toContain('builtin unset ORCA_ORIG_ZDOTDIR ORCA_ZSHENV_SOURCE_DIR')
+>>>>>>> a8202791d01 (refactor(shell): collapse the zsh wrapper to one .zshenv and a precmd hook (STA-4786))
     expect(zshenv).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
-    expect(zshenv).toContain('"$_orca_resolved_config_dir" == */shell-ready/zsh ]]; then')
-    expect(zshenv).toContain('export ORCA_ORIG_ZDOTDIR="$_orca_resolved_config_dir"')
-    expectZdotdirSourceContext(zprofile, '.zprofile')
-    expectZdotdirSourceContext(zshrc, '.zshrc')
-    expectZdotdirSourceContext(zlogin, '.zlogin')
-    // Why .zshenv: the final restore is the last step of the single epilogue,
-    // which .zshrc (non-login) and .zlogin (login) each invoke once.
-    expectFinalZdotdirRestoreContext(zshenv)
-    // Why the emulation probe: sh/ksh emulation makes zsh read $HOME/.zlogin
-    // rather than the wrapper's, so the epilogue has to run from here instead.
-    // Why the option test in front of it: the probe forks, and all-off proves
-    // zsh emulation without one.
-    expect(zshrc).toContain(
-      'if [[ ! -o login ]] || { [[ -o ksharrays || -o shwordsplit || -o shglob ]] 2>/dev/null && ' +
-        '[[ "$(emulate 2>/dev/null)" != zsh ]]; }; then'
+    expect(zshenv.indexOf('builtin export ZDOTDIR=')).toBeLessThan(
+      zshenv.indexOf('builtin source -- "$_orca_user_zshenv"')
     )
-    expect(zshrc).toContain('(( ${+functions[__orca_shell_epilogue]} )) && __orca_shell_epilogue')
+    // Why nothing else: zsh reads .zprofile, .zshrc and .zlogin through ZDOTDIR,
+    // which is the user's own again by the time it looks for them.
+    for (const name of ['.zprofile', '.zshrc', '.zlogin']) {
+      expect(existsSync(join(userDataPath, 'shell-ready', 'zsh', name))).toBe(false)
+    }
   })
 
   it('owns zle-line-init for the shell-ready marker instead of an azhw hook', async () => {
@@ -476,9 +571,19 @@ describePosix('daemon shell-ready launch config', () => {
 
     getShellReadyLaunchConfig('/bin/zsh')
 
+<<<<<<< HEAD
     // Why .zshenv: the widget registration lives in the epilogue, which .zlogin
     // (login) and .zshrc (non-login) both call exactly once.
     const zshenv = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
+||||||| parent of a8202791d01 (refactor(shell): collapse the zsh wrapper to one .zshenv and a precmd hook (STA-4786))
+    // Why .zshenv: the widget registration lives in the epilogue, which .zlogin
+    // (login) and .zshrc (non-login) both call exactly once.
+    const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+=======
+    // Why .zshenv: the widget registration lives in the deferred hook, which the
+    // first prompt's precmd sweep calls exactly once.
+    const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+>>>>>>> a8202791d01 (refactor(shell): collapse the zsh wrapper to one .zshenv and a precmd hook (STA-4786))
     expect(zshenv).toContain('zle -N zle-line-init __orca_prompt_mark')
     expect(zshenv).toContain('__orca_prev_line_init_fn="${widgets[zle-line-init]#user:}"')
     expect(zshenv).toContain('printf "\\033]777;orca-shell-ready\\007"')
@@ -652,7 +757,6 @@ describePosix('daemon shell-ready launch config', () => {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
       expect(config.env.ORCA_ORIG_ZDOTDIR).toBe(userZdotdir)
-      expect(config.env.ORCA_ZSHENV_SOURCE_DIR).toBe(userZdotdir)
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -671,7 +775,7 @@ describePosix('daemon shell-ready launch config', () => {
     try {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
-      expect(config.env.ORCA_ORIG_ZDOTDIR).toBe('/Users/alice')
+      expect(config.env.ORCA_ORIG_ZDOTDIR).toBeUndefined()
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -695,7 +799,7 @@ describePosix('daemon shell-ready launch config', () => {
     try {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
-      expect(config.env.ORCA_ORIG_ZDOTDIR).toBe('/Users/alice')
+      expect(config.env.ORCA_ORIG_ZDOTDIR).toBeUndefined()
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -728,14 +832,16 @@ describePosix('daemon shell-ready launch config', () => {
     }
   })
 
-  it('sources user .zshenv at wrapper top level before repinning ZDOTDIR', async () => {
-    // Why: PR #1737 sourced .zshenv in a wrapper function, breaking "typeset -U path"; keep it at zsh top level.
+  it('sources the user .zshenv at wrapper top level, not inside a function', async () => {
+    // Why: PR #1737 sourced .zshenv in a wrapper function, breaking `typeset -U
+    // path`. Top-level sourcing is still the contract.
     const { getShellReadyLaunchConfig } = await importFreshShellReady()
 
     getShellReadyLaunchConfig('/bin/zsh')
 
     const zshenv = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
 
+<<<<<<< HEAD
     expect(zshenv).toContain('unset ZDOTDIR')
     expect(zshenv).toContain('__orca_resolve_inherited_config_dir "${ORCA_ZSHENV')
     expect(zshenv).toContain('source "${_orca_zshenv_path}"')
@@ -757,5 +863,35 @@ describePosix('daemon shell-ready launch config', () => {
 
     // Fallback chain: discovered → normalized spawn-env path → HOME
     expect(zshenv).toContain('${_orca_discovered_zdotdir:-${_orca_user_zdotdir:-$HOME}}')
+||||||| parent of a8202791d01 (refactor(shell): collapse the zsh wrapper to one .zshenv and a precmd hook (STA-4786))
+    expect(zshenv).toContain('unset ZDOTDIR')
+    expect(zshenv).toContain('__orca_resolve_inherited_config_dir "${ORCA_ZSHENV')
+    expect(zshenv).toContain('source "${_orca_zshenv_path}"')
+    expect(zshenv).toContain('_orca_discovered_zdotdir="${ZDOTDIR:-}"')
+    expect(zshenv).toContain('${_orca_discovered_zdotdir:-${_orca_user_zdotdir:-$HOME}}')
+    expect(zshenv).toContain('export ZDOTDIR=')
+  })
+
+  it('preserves spawn-env ORCA_ORIG_ZDOTDIR as fallback when discovery yields nothing', async () => {
+    // Why: when user .zshenv sets no ZDOTDIR, the wrapper falls back to spawn-env ORCA_ORIG_ZDOTDIR, then HOME.
+    const { getShellReadyLaunchConfig } = await importFreshShellReady()
+
+    getShellReadyLaunchConfig('/bin/zsh')
+
+    const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+
+    // Save spawn-env value before sourcing user .zshenv
+    expect(zshenv).toContain('_orca_user_zdotdir="$_orca_resolved_config_dir"')
+
+    // Fallback chain: discovered → normalized spawn-env path → HOME
+    expect(zshenv).toContain('${_orca_discovered_zdotdir:-${_orca_user_zdotdir:-$HOME}}')
+=======
+    expect(zshenv).toContain('builtin source -- "$_orca_user_zshenv"')
+    // Every function the hook needs is defined above the source, so a user
+    // `emulate sh` cannot leave the rest of this file unparseable.
+    expect(zshenv.indexOf('__orca_deferred_init() {')).toBeLessThan(
+      zshenv.indexOf('builtin source -- "$_orca_user_zshenv"')
+    )
+>>>>>>> a8202791d01 (refactor(shell): collapse the zsh wrapper to one .zshenv and a precmd hook (STA-4786))
   })
 })
