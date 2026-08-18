@@ -23,6 +23,12 @@ describe('isAgentScratchWorktreePath', () => {
     ).toBe(true)
   })
 
+  it('matches Codex home-level and in-repo scratch worktrees', () => {
+    expect(isAgentScratchWorktreePath(repoPath, '/Users/dev/.codex/worktrees/1621/app')).toBe(true)
+    expect(isAgentScratchWorktreePath(repoPath, '/Users/dev/app/.codex/worktrees/review')).toBe(true)
+    expect(isAgentScratchWorktreePath(repoPath, '/Users/dev/.codex/checkouts/app')).toBe(false)
+  })
+
   it('matches scratch worktrees created from a linked checkout', () => {
     const matchesAgentScratch = createAgentScratchWorktreePathMatcher([
       repoPath,
@@ -124,6 +130,7 @@ describe('isAgentScratchRepoRootPath', () => {
   it('matches scratch worktree containers used as repo roots', () => {
     expect(isAgentScratchRepoRootPath('/Users/dev/app/.claude/worktrees/agent-a04ccaaa')).toBe(true)
     expect(isAgentScratchRepoRootPath('/Users/dev/app/.gsd-workspaces/phase-1')).toBe(true)
+    expect(isAgentScratchRepoRootPath('/Users/dev/.codex/worktrees/1621/app')).toBe(true)
   })
 
   it('matches Windows separators and casing', () => {

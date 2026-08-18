@@ -19,9 +19,12 @@ const MAX_SOURCE_PATH_LENGTH = 4096
 export const BUILT_IN_WORKTREE_VISIBILITY_SOURCES: readonly {
   id: BuiltInWorktreeVisibilitySourceId
   relativeRootSegments: readonly string[]
+  /** Home-level Codex capsules live at ~/.codex/worktrees/<id>/<repo>, not under the checkout. */
+  matchUnanchored?: boolean
 }[] = [
   { id: 'claude', relativeRootSegments: ['.claude', 'worktrees'] },
-  { id: 'gsd', relativeRootSegments: ['.gsd-workspaces'] }
+  { id: 'gsd', relativeRootSegments: ['.gsd-workspaces'] },
+  { id: 'codex', relativeRootSegments: ['.codex', 'worktrees'], matchUnanchored: true }
 ]
 
 export type WorktreeVisibilitySourceMatch =
@@ -150,7 +153,7 @@ export function createWorktreeVisibilitySourceMatcher(
         const checkoutPathKey = /^[a-z]:$/i.test(checkoutPath)
           ? `${checkoutPath}/`
           : checkoutPath || '/'
-        if (checkoutPathKeys.has(checkoutPathKey)) {
+        if (checkoutPathKeys.has(checkoutPathKey) || source.matchUnanchored === true) {
           return { kind: 'built-in', id: source.id }
         }
       }

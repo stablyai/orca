@@ -8,7 +8,8 @@ import {
  *  can hide legitimate user worktrees (#9388). */
 const AGENT_SCRATCH_PATH_PREFIXES: readonly (readonly string[])[] = [
   ['.claude', 'worktrees'],
-  ['.gsd-workspaces']
+  ['.gsd-workspaces'],
+  ['.codex', 'worktrees']
 ]
 
 export type AgentScratchWorktreePathMatcher = (worktreePath: string) => boolean

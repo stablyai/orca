@@ -38,6 +38,20 @@ describe('worktree visibility sources', () => {
     expect(classify('/other/.claude/worktrees/review')).toBeNull()
   })
 
+  it('classifies home-level Codex capsules without a registered checkout', () => {
+    const classify = createWorktreeVisibilitySourceMatcher(['/Users/dev/app'])
+    expect(classify('/Users/dev/.codex/worktrees/1621/app')).toEqual({
+      kind: 'built-in',
+      id: 'codex'
+    })
+    expect(classify('/Users/dev/app/.codex/worktrees/review')).toEqual({
+      kind: 'built-in',
+      id: 'codex'
+    })
+    expect(classify('/Users/dev/.codex/checkouts/app')).toBeNull()
+    expect(classify('/Users/dev/.codex/worktrees')).toBeNull()
+  })
+
   it('matches custom descendants with Windows and WSL comparison semantics', () => {
     const windows = createWorktreeVisibilitySourceMatcher(
       [],
@@ -92,7 +106,7 @@ describe('worktree visibility sources', () => {
     expect(effectiveBuiltInWorktreeSourceVisibility(legacy, 'gsd')).toBe('show')
     expect(
       buildWorktreeSourcePreferenceUpdate(legacy, { kind: 'built-in', id: 'claude' }, 'hide')
-    ).toEqual({ builtIn: { claude: 'hide', gsd: 'show' } })
+    ).toEqual({ builtIn: { claude: 'hide', gsd: 'show', codex: 'show' } })
   })
 
   it('inherits global built-in and custom visibility without stamping sibling defaults', () => {

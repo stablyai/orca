@@ -27,7 +27,7 @@ export type RepoKind = 'git' | 'folder'
 export type IssueSourcePreference = 'upstream' | 'origin' | 'auto'
 export type ExternalWorktreeVisibility = 'hide' | 'show'
 
-export type BuiltInWorktreeVisibilitySourceId = 'claude' | 'gsd'
+export type BuiltInWorktreeVisibilitySourceId = 'claude' | 'gsd' | 'codex'
 
 export type CustomWorktreeVisibilitySource = {
   id: string

@@ -13,7 +13,11 @@ function legacyBuiltInPreferences(
   repo: Pick<Repo, 'agentWorktreeVisibility'>
 ): WorktreeVisibilitySourcePreferences['builtIn'] {
   return repo.agentWorktreeVisibility
-    ? { claude: repo.agentWorktreeVisibility, gsd: repo.agentWorktreeVisibility }
+    ? {
+        claude: repo.agentWorktreeVisibility,
+        gsd: repo.agentWorktreeVisibility,
+        codex: repo.agentWorktreeVisibility
+      }
     : {}
 }
 

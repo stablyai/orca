@@ -49,6 +49,7 @@ describe('listInheritedWorktreeVisibilitySources', () => {
     expect(listInheritedWorktreeVisibilitySources(repo(), shownClaude)).toEqual([
       { source: { kind: 'built-in', id: 'claude' }, globalVisibility: 'show' },
       { source: { kind: 'built-in', id: 'gsd' }, globalVisibility: 'hide' },
+      { source: { kind: 'built-in', id: 'codex' }, globalVisibility: 'hide' },
       { source: { kind: 'other' }, globalVisibility: 'hide' }
     ])
   })
