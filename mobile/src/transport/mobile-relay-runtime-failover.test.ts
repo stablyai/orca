@@ -91,6 +91,7 @@ class FakeRelaySession extends FakeSession implements MobileRelayRpcSession {
 class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
   private path: MobileConnectionPath
   private recoveryPath: MobileConnectionPath | null = null
+  private recoveryAttempt = 0
   private generation = 1
   private readonly pathListeners = new Set<() => void>()
 
@@ -106,17 +107,34 @@ class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
     }
     this.path = path
     this.recoveryPath = null
+    this.recoveryAttempt = 0
     this.generation += 1
     // Connected-state publication carries the migration cleanup.
     this.publishState('connected')
   })
   suspendActiveSession = vi.fn(() => this.publishState('disconnected'))
+  getReconnectAttempt = () => (this.getPendingPath() === 'relay' ? this.recoveryAttempt : 0)
   getActivePath = () => this.path
   getPendingPath = () => (this.getState() === 'connected' ? null : this.recoveryPath)
-  setRecoveryPath = vi.fn((path: MobileConnectionPath | null) => {
+  setRecoveryPath = vi.fn((path: MobileConnectionPath | null, attempt?: number) => {
     const previous = this.getPendingPath()
+    const previousAttempt = this.getReconnectAttempt()
     this.recoveryPath = path
-    if (previous !== this.getPendingPath()) {
+    if (path === null) {
+      this.recoveryAttempt = 0
+    } else if (attempt !== undefined) {
+      this.recoveryAttempt = attempt
+    }
+    if (previous !== this.getPendingPath() || previousAttempt !== this.getReconnectAttempt()) {
+      for (const listener of this.pathListeners) {
+        listener()
+      }
+    }
+  })
+  setRecoveryAttempt = vi.fn((attempt: number) => {
+    const previous = this.getReconnectAttempt()
+    this.recoveryAttempt = attempt
+    if (previous !== this.getReconnectAttempt()) {
       for (const listener of this.pathListeners) {
         listener()
       }
@@ -266,7 +284,7 @@ describe('relay runtime recovery without direct connectivity', () => {
     await vi.advanceTimersByTimeAsync(60_000)
 
     expect(deps.openRelay).toHaveBeenCalledOnce()
-    expect(logical.setRecoveryPath).toHaveBeenCalledWith('relay')
+    expect(logical.setRecoveryPath).toHaveBeenCalledWith('relay', 0)
     expect(logical.getActivePath()).toBe('relay')
     supervisor.stop()
   })

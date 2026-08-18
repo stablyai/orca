@@ -9,16 +9,19 @@ export function applyEscalationToDispatch(
   onLog: (msg: string) => void
 ): string | null {
   let taskId: string | undefined
+  let dispatchId: string | undefined
   if (msg.payload) {
     try {
       const payload = JSON.parse(msg.payload)
       taskId = payload.taskId
+      dispatchId = payload.dispatchId
     } catch {
       // Escalation without structured payload — log subject as context
     }
   }
 
-  if (!taskId) {
+  if (!taskId || !dispatchId) {
+    onLog(`Rejected escalation from ${msg.from_handle}: missing exact Dispatch binding`)
     return null
   }
 
@@ -27,8 +30,28 @@ export function applyEscalationToDispatch(
     return null
   }
 
-  const dispatch = db.getDispatchContext(taskId)
-  if (!dispatch) {
+  const dispatch = db.getDispatchContextById(dispatchId)
+  if (!dispatch || dispatch.task_id !== taskId) {
+    onLog(`Rejected escalation from ${msg.from_handle}: Dispatch does not own Task ${taskId}`)
+    return null
+  }
+  if (
+    !db.isDispatchMessageSender({
+      dispatchId: dispatch.id,
+      handle: msg.from_handle,
+      paneKey: msg.sender_pane_key,
+      allowCanonicalDispatchHandle: true
+    })
+  ) {
+    onLog(`Rejected escalation from ${msg.from_handle}: it does not own Task ${taskId}`)
+    return null
+  }
+
+  const worker = db.getWorkerDispatch(dispatch.id)
+  if (worker && !['failed', 'succeeded', 'stopped', 'abandoned'].includes(worker.state)) {
+    onLog(
+      `Task ${taskId} remains dispatched until supervised worker ${dispatch.id} stops or reports.`
+    )
     return null
   }
 

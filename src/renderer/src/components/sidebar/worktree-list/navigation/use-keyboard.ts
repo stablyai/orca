@@ -3,13 +3,18 @@ import type React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  composeWorktreeHostIdentity,
+  getWorktreeHostIdentity
+} from '../../../../../../shared/worktree/host-qualified-identity'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings'
 import type { HostSectionRow } from '../../host-section-rows'
 import type { PinnedWorktreeDisplayPolicy } from '../grouping/row-types'
 import type { RenderRow } from '../listing/render-row'
-import { getCyclableWorktreeIds, resolveCycledWorktreeId } from '../../worktree-keyboard-cycle'
-import { findPreferredRenderRowIndexForWorktree } from './render-row-lookup'
+import { getCyclableWorktrees, resolveCycledWorktreeId } from '../../worktree-keyboard-cycle'
+import { findPreferredRenderRowIndexForWorktreeIdentity } from './render-row-lookup'
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -35,6 +40,7 @@ export function useWorktreeListKeyboardNavigation(args: {
   rows: HostSectionRow[]
   renderRows: RenderRow[]
   activeWorktreeId: string | null
+  activeWorkspaceExecutionHostId: ExecutionHostId | null
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   virtualizer: Virtualizer<HTMLDivElement, HTMLDivElement>
   scrollRef: React.RefObject<HTMLDivElement | null>
@@ -45,6 +51,7 @@ export function useWorktreeListKeyboardNavigation(args: {
     rows,
     renderRows,
     activeWorktreeId,
+    activeWorkspaceExecutionHostId,
     pinnedDisplayPolicy,
     virtualizer,
     scrollRef,
@@ -58,28 +65,51 @@ export function useWorktreeListKeyboardNavigation(args: {
       // Why: cycle over the rows the sidebar actually rendered — collapsing a group
       // means "not now", and a rebuilt near-copy would drift from what is on screen
       // (host sections, pinned placement, folder workspaces).
-      const nextWorktreeId = resolveCycledWorktreeId({
-        worktreeIds: getCyclableWorktreeIds(rows, pinnedDisplayPolicy),
-        activeWorktreeId,
+      const worktrees = getCyclableWorktrees(rows, pinnedDisplayPolicy)
+      const worktreeIdentities = worktrees.map(getWorktreeHostIdentity)
+      const nextWorktreeIdentity = resolveCycledWorktreeId({
+        worktreeIds: worktreeIdentities,
+        activeWorktreeId: activeWorktreeId
+          ? composeWorktreeHostIdentity(
+              activeWorkspaceExecutionHostId ?? undefined,
+              activeWorktreeId
+            )
+          : null,
         direction
       })
-      if (nextWorktreeId === null) {
+      if (nextWorktreeIdentity === null) {
+        return
+      }
+      const nextWorktree = worktrees.find(
+        (worktree) => getWorktreeHostIdentity(worktree) === nextWorktreeIdentity
+      )
+      if (!nextWorktree) {
         return
       }
 
       // Why: keyboard cycling is real navigation; route through the activation helper that records history.
-      activateAndRevealWorktree(nextWorktreeId)
+      activateAndRevealWorktree(
+        nextWorktree.id,
+        nextWorktree.hostId ? { executionHostId: nextWorktree.hostId } : {}
+      )
 
-      const rowIndex = findPreferredRenderRowIndexForWorktree(
+      const rowIndex = findPreferredRenderRowIndexForWorktreeIdentity(
         renderRows,
-        nextWorktreeId,
+        nextWorktree,
         pinnedDisplayPolicy
       )
       if (rowIndex !== -1) {
         virtualizer.scrollToIndex(rowIndex, { align: 'auto' })
       }
     },
-    [rows, renderRows, activeWorktreeId, virtualizer, pinnedDisplayPolicy]
+    [
+      rows,
+      renderRows,
+      activeWorktreeId,
+      activeWorkspaceExecutionHostId,
+      virtualizer,
+      pinnedDisplayPolicy
+    ]
   )
 
   useEffect(() => {

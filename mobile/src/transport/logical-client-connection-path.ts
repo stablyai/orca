@@ -3,6 +3,7 @@ import type { MobileConnectionPath } from './stable-logical-rpc-client'
 export class LogicalClientConnectionPath {
   private migration: MobileConnectionPath | null = null
   private recovery: MobileConnectionPath | null = null
+  private recoveryAttempt = 0
   private readonly listeners = new Set<() => void>()
 
   constructor(private readonly isConnected: () => boolean) {}
@@ -17,14 +18,32 @@ export class LogicalClientConnectionPath {
     })
   }
 
+  reconnectAttempt(activeAttempt: number): number {
+    return this.pending() === 'relay'
+      ? Math.max(activeAttempt, this.recoveryAttempt)
+      : activeAttempt
+  }
+
   clearAfterConnected(): void {
     this.migration = null
     this.recovery = null
+    this.recoveryAttempt = 0
   }
 
-  setRecovery(path: MobileConnectionPath | null): void {
+  setRecovery(path: MobileConnectionPath | null, attempt?: number): void {
     this.update(() => {
       this.recovery = path
+      if (path === null) {
+        this.recoveryAttempt = 0
+      } else if (attempt !== undefined) {
+        this.recoveryAttempt = Math.max(0, Math.trunc(attempt))
+      }
+    })
+  }
+
+  setRecoveryAttempt(attempt: number): void {
+    this.update(() => {
+      this.recoveryAttempt = Math.max(0, Math.trunc(attempt))
     })
   }
 
@@ -34,9 +53,10 @@ export class LogicalClientConnectionPath {
   }
 
   private update(apply: () => void): void {
-    const previous = this.pending()
+    const previousPath = this.pending()
+    const previousAttempt = this.reconnectAttempt(0)
     apply()
-    if (previous === this.pending()) {
+    if (previousPath === this.pending() && previousAttempt === this.reconnectAttempt(0)) {
       return
     }
     for (const listener of this.listeners) {

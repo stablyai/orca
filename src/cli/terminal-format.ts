@@ -1,3 +1,4 @@
+import { PTY_LIVE_NOTE, describeUnconfirmedStop } from '../shared/pty-liveness-verdict'
 import type {
   RuntimeTerminalClose,
   RuntimeTerminalCreate,
@@ -185,12 +186,25 @@ export function formatTerminalFocus(result: { focus: RuntimeTerminalFocus }): st
   return `Focused terminal ${result.focus.handle} (tab ${result.focus.tabId}).`
 }
 
+/** "PTY killed." is a claim of observed death, so only a confirmed kill earns it. */
+function describePtyStop(close: RuntimeTerminalClose): string {
+  if (close.ptyKilled) {
+    return ' PTY killed.'
+  }
+  if (close.ptyStopVerdict === 'live') {
+    return ` ${PTY_LIVE_NOTE}`
+  }
+  if (close.ptyStopVerdict === 'unverifiable') {
+    return ` ${describeUnconfirmedStop(close.ptyStopReason ?? 'its host could not be reached')}`
+  }
+  return ''
+}
+
 export function formatTerminalClose(result: { close: RuntimeTerminalClose }): string {
   if (result.close.closeMode === 'tab') {
     return `Closed terminal tab ${result.close.tabId} (${result.close.handle}).`
   }
-  const ptyNote = result.close.ptyKilled ? ' PTY killed.' : ''
-  return `Closed terminal ${result.close.handle}.${ptyNote}`
+  return `Closed terminal ${result.close.handle}.${describePtyStop(result.close)}`
 }
 
 export function formatTerminalWait(result: { wait: RuntimeTerminalWait }): string {

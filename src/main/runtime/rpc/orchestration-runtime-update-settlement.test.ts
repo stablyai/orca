@@ -192,7 +192,7 @@ function entityCounts(db: OrchestrationDb): Record<string, number> {
 }
 
 function resultOf(response: RpcResponse): Record<string, unknown> {
-  expect(response.ok).toBe(true)
+  expect(response.ok, JSON.stringify(response)).toBe(true)
   if (!response.ok) {
     throw new Error(response.error.message)
   }
@@ -352,6 +352,9 @@ describe('orchestration runtime update settlement', () => {
 
   it('routes ordinary mail with the same attested authority without settling work', async () => {
     const harness = createUpdateHarness()
+    expect(harness.db.getRunMailboxOwnerIdsForHandle(COORDINATOR_HANDLE)).toEqual([
+      harness.adoptedRunId
+    ])
     const response = await harness.createDispatcher().dispatch(
       request(
         'orchestration.send',

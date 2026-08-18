@@ -60,6 +60,25 @@ export function normalizeNotificationSettings(value: unknown): NotificationSetti
   }
 }
 
+/**
+ * Whether normalization had to repair the persisted notification block. Callers use this to mark the
+ * load dirty; an in-memory-only repair is redone on every launch until some other write lands.
+ * A missing block is not a repair — nothing on disk was overridden.
+ */
+export function persistedNotificationSettingsRepaired(
+  value: unknown,
+  normalized: NotificationSettings
+): boolean {
+  if (value === undefined) {
+    return false
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return true
+  }
+  const raw = value as Record<string, unknown>
+  return Object.entries(normalized).some(([key, normalizedValue]) => raw[key] !== normalizedValue)
+}
+
 export type SanitizeOnboardingUpdateOptions = {
   migrateLegacyProgress?: boolean
 }

@@ -734,6 +734,14 @@ export type RuntimeTerminalClose = {
   /** Present for the durable whole-tab lifecycle without changing legacy receipts. */
   closeMode?: 'tab'
   ptyKilled: boolean
+  /**
+   * Why the PTY was not killed, when we know. Absent means today's answer —
+   * nothing observed either way — so older clients reading only `ptyKilled` are
+   * unaffected. `exited` never appears here: that is what `ptyKilled` reports.
+   */
+  ptyStopVerdict?: 'live' | 'unverifiable'
+  /** Set with `ptyStopVerdict: 'unverifiable'`; names what we lost contact with. */
+  ptyStopReason?: string
 }
 
 export type RuntimeTerminalWaitCondition = 'exit' | 'tui-idle'

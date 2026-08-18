@@ -113,7 +113,9 @@
       "issue": "Issue",
       "mr": "MR",
       "port": "Port",
-      "pr": "PR"
+      "pr": "PR",
+      "task": "Task",
+      "automation": "Run"
     },
     "linearIssue": {
       "createLabel": "Create worktree from Linear issue {{value0}}: {{value1}}",
@@ -697,13 +699,15 @@
           "missing": "Folder not found",
           "notDirectory": "Path is not a folder",
           "ambiguousConnection": "Cannot determine connection",
-          "unavailable": "Cannot check folder"
+          "unavailable": "Cannot check folder",
+          "unrecognized": "Folder is not usable"
         },
         "description": {
           "missing": "Orca cannot find {{path}}. Remove and re-import this folder workspace.",
           "notDirectory": "{{path}} exists, but it is not a folder.",
           "ambiguousConnection": "Orca cannot tell which SSH connection owns this folder scope.",
-          "unavailable": "Orca cannot verify this folder right now. Check the runtime or SSH connection and try again."
+          "unavailable": "Orca cannot verify this folder right now. Check the runtime or SSH connection and try again.",
+          "unrecognized": "Orca cannot use {{path}}, and this version does not recognize the reason. Update Orca to see the details."
         },
         "createError": {
           "title": {
@@ -788,7 +792,10 @@
               "undecryptableAppBoundMixed": "Orca cannot decrypt {{value0}} of this browser's cookies because they use app-bound encryption; {{value1}} more could not be decrypted for another reason. You can import cookies from a file using “From File…”.",
               "undecryptableKeyring": "{{value0}} cookies could not be decrypted because the system keyring was unavailable. Unlock your login keyring (or install a Secret Service provider such as gnome-keyring) and import again.",
               "undecryptableKeyringMixed": "{{value0}} cookies could not be decrypted because the system keyring was unavailable; {{value1}} more could not be decrypted for another reason. Unlock your login keyring (or install a Secret Service provider such as gnome-keyring) and import again.",
-              "undecryptableUnknown": "{{value0}} cookies could not be decrypted and were skipped. Close the source browser completely and try the import again."
+              "undecryptableUnknown": "{{value0}} cookies could not be decrypted and were skipped. Close the source browser completely and try the import again.",
+              "unrecognizedWarning": "The cookie import finished with a warning this version of Orca does not recognize. Update Orca to see the details, then check this profile before relying on its cookies.",
+              "undecryptableUnrecognizedReason": "{{value0}} cookies could not be decrypted and were skipped for a reason this version of Orca does not recognize. Update Orca to see the details, then try the import again.",
+              "partitionSkipped": "{{value0}} cookies were not imported because their site-partition could not be read. Sign in to those sites again in Orca."
             }
           }
         }
@@ -954,6 +961,9 @@
       },
       "useLargeTextControlPaste": {
         "pasteTooLarge": "Paste is too large."
+      },
+      "useInstalledAgentSkills": {
+        "unreadableSkillSource": "A skill folder did not respond, so this status may be incomplete."
       },
       "useMacosTccPromptNotice": {
         "title": "Seeing “Orca would like to access…” prompts?",
@@ -2801,12 +2811,15 @@
           "commands": {
             "TerminalQuickCommandActionToggle": {
               "b0d58e37ed": "Agent Prompt",
-              "b5ea4d64f6": "Terminal Command"
+              "b5ea4d64f6": "Terminal Command",
+              "terminal_short": "Terminal",
+              "agent_short": "Agent"
             },
             "TerminalQuickCommandAppendEnterSwitch": {
               "e4e5fed3b3": "Toggle append Enter",
               "c936c2d6d2": "Submit immediately instead of only inserting text.",
-              "5fa607d807": "Append Enter"
+              "5fa607d807": "Append Enter",
+              "767e4be3e3": "Append Enter — run immediately"
             },
             "TerminalQuickCommandDialog": {
               "925b8e0f6e": "Advanced",
@@ -2818,12 +2831,16 @@
               "346d409ab2": "Choose agent",
               "0adba8fa0c": "Agent",
               "ec8f081919": "Action",
-              "ed04233b3e": "Save terminal commands or agent prompts for quick access.",
+              "ed04233b3e": "Saved items appear in the tab bar menu for one-click run.",
               "ca414324ee": "Command Text",
               "dc921c17ee": "Prompt",
               "5b3f634a55": "Add Quick Command",
               "f9b184fc16": "Edit Quick Command",
-              "6751598542": "edit"
+              "6751598542": "edit",
+              "command_label": "Command",
+              "agent_toolbar_hint": "Supports /goal, skills, paths",
+              "agent_footer_hint": "Multi-line prompts are fine — keep them focused.",
+              "resize_hint": "Drag corner to resize"
             },
             "TerminalQuickCommandDialogFooter": {
               "2e2b958dfc": "Save",
@@ -3482,7 +3499,9 @@
             "antigravityUsageDetails": "Open Antigravity usage details",
             "grokUsageAria": "Open Grok usage details",
             "grokUsageMenu": "Grok Usage",
-            "floatingTerminalNewActivity": "{{label}}, new activity"
+            "floatingTerminalNewActivity": "{{label}}, new activity",
+            "codexSignInSuccess": "Signed in to Codex",
+            "codexSignInError": "Codex sign-in failed. Please try again."
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -4396,7 +4415,8 @@
           "01c5a12e06": "Cancelled",
           "01c5a12e07": "Bundle installation needs attention.",
           "01c5a12e08": "Skills installed and verified.",
-          "01c5a12e09": "{{value0}} selected skills checked."
+          "01c5a12e09": "{{value0}} selected skills checked.",
+          "01c5a12e10": "Needs retry"
         },
         "SkillBundleInstallReview": {
           "01c5a11e01": "Immutable version",
@@ -6117,6 +6137,7 @@
           "codexSystemDefaultNeedsSignIn": "No Codex sign-in was found for {{value0}}.",
           "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
           "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
+          "codexConfigSyncManagedHomeUnavailable": "Orca could not read this account’s Codex files just now, so settings may not be syncing. This usually clears on its own — antivirus or a backup tool briefly locks them.",
           "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
         },
         "AdvancedPane": {
@@ -13107,7 +13128,10 @@
           "pairThisPc": "Pair this PC.",
           "pairThisComputer": "Pair this computer.",
           "directAddressDisclosure": "Also use a faster local path",
-          "directAddressHint": "Optional. Pick the Wi‑Fi or Tailscale address your phone should use when nearby — usually faster than Relay. Relay still works when you’re away."
+          "directAddressHint": "Optional. Pick the Wi‑Fi or Tailscale address your phone should use when nearby — usually faster than Relay. Relay still works when you’re away.",
+          "androidHelp": {
+            "guide": "Install guide"
+          }
         },
         "MobilePage": {
           "e17393c6a3": "Phone preview",
@@ -14752,7 +14776,8 @@
             "a6914ee43f": "Take back",
             "f4ecd61552": "This tab is being controlled from your phone. Take back to use it on desktop.",
             "d9768ec642": "Browser input is paused",
-            "20539eca03": "Mobile is driving this browser"
+            "20539eca03": "Mobile is driving this browser",
+            "7c31b0da94": "Couldn't take back this tab. Check the phone session, then try again."
           },
           "BrowserPane": {
             "1ded0d3168": "Copy Screenshot",
@@ -14915,6 +14940,35 @@
             "storageWrites": "Storage writes",
             "webSocketMessages": "WebSocket messages",
             "rightClickHint": "Right-click the record button to change what gets logged."
+          },
+          "annotate": {
+            "use": {
+              "browser": {
+                "page": {
+                  "grab": {
+                    "annotations": {
+                      "0c7b9b2b7a": "Copied",
+                      "c937229f19": "Screenshotted",
+                      "1f5cb19034": "Annotation added"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "navigate": {
+            "use": {
+              "browser": {
+                "page": {
+                  "navigation": {
+                    "downloads": {
+                      "8683b84b9e": "Browser page is not ready for file drops.",
+                      "22272f2784": "Drop files over the browser page, not the toolbar."
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "profile": {
@@ -14989,6 +15043,7 @@
           "e46c1aa9ad": "Create",
           "a9d9dccf77": "Save",
           "777548c2d6": "Save Changes",
+          "e8c2a14f70": "Once saved, runs automatically until paused.",
           "ff5db28639": "existing"
         },
         "AutomationEditorDialogHeader": {
@@ -15000,7 +15055,8 @@
           "4133d33862": "Create automation",
           "0a75e5e2fa": "Create Hermes automation",
           "03142e7721": "Edit Hermes automation",
-          "17086b48ee": "Edit automation"
+          "17086b48ee": "Edit automation",
+          "4c8e1a72b9": "A recurring agent task"
         },
         "AutomationMissedRunGraceField": {
           "0f4459e91d": "48 hours",
@@ -15013,6 +15069,9 @@
           "3d70c185c8": "If Orca or the execution host was unavailable at the scheduled time, Orca runs one missed occurrence when it becomes available within this window. Older missed runs are skipped.",
           "3df53d554a": "Missed-run grace help",
           "fc089e5fde": "Grace"
+        },
+        "AutomationEditorPromptSection": {
+          "a7c3e91b04": "Edit name"
         },
         "AutomationPrecheckFields": {
           "d2a2ac89ac": "10 min",
@@ -15291,13 +15350,17 @@
           "c92c9463c6": "Automation actions"
         },
         "AutomationListFilterMenu": {
+          "926e785e4d": "Search agents...",
+          "491043ee45": "No agents match your search.",
           "removeFilter": "Remove {{value0}} filter",
           "failed": "Failed",
           "succeeded": "Succeeded",
           "neverRan": "Never ran",
           "filters": "Filters",
           "all": "All",
-          "clear": "Clear filters"
+          "clear": "Clear filters",
+          "agent": "Agent",
+          "lastRun": "Last run"
         },
         "AutomationListSortHeader": {
           "sortedAscending": "{{value0}}, sorted ascending",
@@ -15688,8 +15751,6 @@
           "deleteDescription": "“{{name}}” will no longer be available at its public link.",
           "delete": "Delete",
           "deleteFailed": "Could not delete the artifact.",
-          "closeArtifacts": "Close artifacts",
-          "closeTooltip": "Close · Esc",
           "title": "Artifacts",
           "refresh": "Refresh",
           "signInHeading": "Sign in to Orca",
@@ -15706,8 +15767,6 @@
           "publishingOff": "Publishing is turned off",
           "publishingOffCopy": "Nothing on this device can create a public artifact link yet. Allow publishing in Settings → Artifacts, then share from an open HTML or Markdown file or ask your agent.",
           "openArtifactsSettings": "Open Settings → Artifacts",
-          "loadedCountMore": "{{count}} loaded · more available",
-          "loadedCount": "{{count}} shared",
           "retry": "Retry",
           "reconnectHeading": "Sign in to Orca again",
           "reconnectCopy": "Sign in again to view and manage the artifacts shared through your account.",
@@ -15723,16 +15782,16 @@
         "previewUnavailable": "Preview unavailable",
         "previewUnavailableDescription": "Open this artifact in your browser to view it.",
         "actions": "Artifact actions",
+        "ArtifactActions": {
+          "more": "More artifact actions"
+        },
         "ArtifactCollection": {
-          "loadMore": "Load more"
+          "loadMore": "Load more",
+          "noMatches": "No matches"
         },
         "ArtifactDetailHeader": {
-          "publicLink": "Anyone with this link can view it"
-        },
-        "ArtifactListPane": {
-          "search": "Search artifacts",
-          "listLabel": "Shared artifacts",
-          "noMatches": "No matches"
+          "publicLink": "Anyone with this link can view it",
+          "close": "Close"
         },
         "updatedAt": "Updated {{when}}",
         "updatedRecently": "recently",
@@ -15776,7 +15835,29 @@
           "openLink": "Open link",
           "updating": "Updating…",
           "update": "Update shared content"
-        }
+        },
+        "ArtifactDetailDrawer": {
+          "description": "Preview and manage this shared artifact."
+        },
+        "ArtifactListSearchField": {
+          "label": "Search artifacts",
+          "placeholder": "Search...",
+          "clear": "Clear search"
+        },
+        "ArtifactListTableHeader": {
+          "name": "Name",
+          "type": "Type",
+          "size": "Size",
+          "updated": "Updated",
+          "expires": "Expires",
+          "actions": "Actions"
+        },
+        "ArtifactsPageSkeleton": {
+          "loading": "Loading artifacts"
+        },
+        "expiredCompact": "Expired",
+        "typeMarkdown": "Markdown",
+        "typeHtml": "HTML"
       }
     },
     "i18n": {
@@ -16148,6 +16229,11 @@
           "minutesAgo": "{{value0}}m ago",
           "hoursAgo": "{{value0}}h ago",
           "daysAgo": "{{value0}}d ago"
+        },
+        "host": {
+          "label": "Host: {{value0}}",
+          "unknown": "Unknown host",
+          "candidateName": "{{value0}} on {{value1}}"
         }
       }
     },
