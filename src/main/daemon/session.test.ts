@@ -114,9 +114,11 @@ describe('Session', () => {
     }
     ownerBackend?: 'posix-pty' | 'windows-conpty' | 'windows-wsl'
     wslDistro?: string
+    reportReadinessEvent?: (event: string, details: Record<string, unknown>) => void
   }): Session {
     session = new Session({
       sessionId: 'test-session',
+      ...(opts?.reportReadinessEvent ? { reportReadinessEvent: opts.reportReadinessEvent } : {}),
       cols: opts?.cols ?? 80,
       rows: opts?.rows ?? 24,
       ...(opts?.launchAgent ? { launchAgent: opts.launchAgent } : {}),
@@ -556,6 +558,45 @@ describe('Session', () => {
 
     it('transitions to timed_out after 15 seconds', () => {
       createSession({ shellReadySupported: true })
+      session.write('waiting input')
+
+      vi.advanceTimersByTime(15_000)
+
+      expect(session.shellState).toBe('timed_out' satisfies ShellReadyState)
+      expect(subprocess.written).toEqual(['waiting input'])
+    })
+
+    // Why this matters: the detached daemon runs with stdio 'ignore', so a
+    // console.warn here reaches nobody. This path costs every startup command
+    // the full timeout, and diagnosing it from a silent log is what made the
+    // original report expensive -- so it has to reach the daemon's file log.
+    it('reports the timeout to the daemon log rather than the void', () => {
+      const events: { event: string; details: Record<string, unknown> }[] = []
+      createSession({
+        shellReadySupported: true,
+        reportReadinessEvent: (event, details) => events.push({ event, details })
+      })
+
+      vi.advanceTimersByTime(15_000)
+
+      expect(events).toHaveLength(1)
+      expect(events[0]?.event).toBe('shell-ready-timeout')
+      expect(events[0]?.details).toMatchObject({ sessionId: 'test-session', timeoutMs: 15_000 })
+      // Why a basename: the shell path can carry a home dir, and the basename is
+      // all a diagnosis needs.
+      expect(String(events[0]?.details.shell)).not.toContain('/')
+    })
+
+    // Why: the report runs before the transition that releases held PTY bytes and
+    // flushes queued stdin, and the ready timer is already cleared by then. A
+    // throwing sink must not leave the barrier stuck in `pending` forever.
+    it('still releases the barrier when the diagnostic sink throws', () => {
+      createSession({
+        shellReadySupported: true,
+        reportReadinessEvent: () => {
+          throw new Error('log sink unavailable')
+        }
+      })
       session.write('waiting input')
 
       vi.advanceTimersByTime(15_000)

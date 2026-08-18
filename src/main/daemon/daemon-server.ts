@@ -240,6 +240,9 @@ export class DaemonServer {
     this.onAuthenticatedClientPair = opts.onAuthenticatedClientPair ?? (() => {})
     this.host = new TerminalHost({
       spawnSubprocess: opts.spawnSubprocess,
+      // Why a closure: this.log is assigned after this constructor call, and the
+      // callback only fires once a session is live.
+      reportReadinessEvent: (event, details) => this.log.log(event, details),
       // Why host-level and not the attach callback: a session whose client transport already dropped
       // has no attachment left to fire exit bookkeeping, and the daemon must still notice it can idle.
       onSessionReaped: (sessionId) => {

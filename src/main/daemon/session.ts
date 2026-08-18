@@ -67,6 +67,7 @@ export class Session {
       subprocess: this.subprocess,
       responderParser: this.output.responderParser,
       shellReadySupported: opts.shellReadySupported,
+      ...(opts.reportReadinessEvent ? { reportReadinessEvent: opts.reportReadinessEvent } : {}),
       shellReadyTimeoutMs: opts.shellReadyTimeoutMs,
       installDeviceAttributesFilter: () => this.output.installDeviceAttributesFilter(),
       releaseDeviceAttributesFilter: () => this.output.releaseDeviceAttributesFilter(),

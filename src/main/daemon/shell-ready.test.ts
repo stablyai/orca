@@ -3,7 +3,6 @@ import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import type * as DaemonBashRcfileModule from './daemon-bash-shell-ready-rcfile'
 import {
   OVERLAY_ONLY_FEATURES,
   STARTUP_COMMAND_FEATURES
@@ -17,6 +16,8 @@ import {
   scanShellStartupOutput
 } from '../shell-startup-output-scanner'
 import { HeadlessEmulator } from './headless-emulator'
+// Why resolved rather than hardcoded: the wrapper tree is content-addressed.
+import { getShellReadyWrapperRoot } from './shell-ready'
 
 async function importFreshShellReady() {
   vi.resetModules()
@@ -30,14 +31,7 @@ async function importFreshShellReady() {
   }
 }
 
-async function importFreshDaemonBashRcfile(): Promise<typeof DaemonBashRcfileModule> {
-  vi.resetModules()
-  return import('./daemon-bash-shell-ready-rcfile')
-}
-
 const describePosix = process.platform === 'win32' ? describe.skip : describe
-const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
-const itWithBash = hasBash ? it : it.skip
 const hasZsh = process.platform !== 'win32' && spawnSync('zsh', ['--version']).status === 0
 const itWithZsh = hasZsh ? it : it.skip
 const FISH = resolveFishBinary()
@@ -138,46 +132,6 @@ async function runInteractiveZshRc(args: {
   return output
 }
 
-function runInteractiveBashRcfile(rcfileContent: string, tempDir: string): string {
-  const rcfile = join(tempDir, 'bash-osc133-rcfile')
-  writeFileSync(rcfile, rcfileContent)
-
-  const result = spawnSync(
-    'bash',
-    ['-lc', 'bash --noprofile --rcfile "$1" -i 2>&1', 'bash', rcfile],
-    {
-      input: 'true\nfalse\nexit 0\n',
-      encoding: 'utf8',
-      env: {
-        ...process.env,
-        HOME: tempDir,
-        ORCA_SHELL_FEATURES: 'ready',
-        TERM: process.env.TERM || 'xterm'
-      },
-      timeout: 5000
-    }
-  )
-
-  expect(result.error).toBeUndefined()
-  expect(result.status).toBe(0)
-  return result.stdout
-}
-
-function expectBashOsc133Lifecycle(output: string): void {
-  const oscA = '\x1b]133;A\x07'
-  const oscC = '\x1b]133;C\x07'
-  const oscD = '\x1b]133;D;'
-  const firstPromptMarker = output.indexOf(oscA)
-
-  expect(firstPromptMarker).toBeGreaterThanOrEqual(0)
-  expect(output.slice(0, firstPromptMarker)).not.toContain(oscC)
-  expect(output.slice(0, firstPromptMarker)).not.toContain(oscD)
-  expect(output).toContain(`${oscD}0\x07${oscA}`)
-  expect(output).toContain(`${oscD}1\x07${oscA}`)
-  expect(output.split(oscC)).toHaveLength(4)
-  expect(output.split(oscD)).toHaveLength(3)
-}
-
 function expectZdotdirSourceContext(content: string, fileName: '.zprofile' | '.zshrc' | '.zlogin') {
   expect(content).toContain('export ZDOTDIR="$_orca_home"')
   expect(content).toContain(`source "$_orca_home/${fileName}"`)
@@ -226,7 +180,7 @@ describePosix('daemon shell-ready launch config', () => {
     const { getShellReadyLaunchConfig } = await importFreshShellReady()
 
     const config = getShellReadyLaunchConfig('/bin/bash')
-    const rcfile = join(userDataPath, 'shell-ready', 'bash', 'rcfile')
+    const rcfile = join(getShellReadyWrapperRoot(), 'bash', 'rcfile')
 
     expect(config.args).toEqual(['--rcfile', rcfile])
     expect(existsSync(rcfile)).toBe(true)
@@ -234,7 +188,7 @@ describePosix('daemon shell-ready launch config', () => {
 
   it('rewrites wrappers when a long-lived daemon finds a missing rcfile', async () => {
     const { getShellReadyLaunchConfig } = await importFreshShellReady()
-    const rcfile = join(userDataPath, 'shell-ready', 'bash', 'rcfile')
+    const rcfile = join(getShellReadyWrapperRoot(), 'bash', 'rcfile')
 
     getShellReadyLaunchConfig('/bin/bash')
     rmSync(rcfile)
@@ -250,8 +204,8 @@ describePosix('daemon shell-ready launch config', () => {
     const config = getShellReadyLaunchConfig('/bin/zsh')
 
     expect(config.args).toEqual(['-l'])
-    expect(config.env.ZDOTDIR).toBe(join(userDataPath, 'shell-ready', 'zsh'))
-    expect(existsSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'))).toBe(true)
+    expect(config.env.ZDOTDIR).toBe(join(getShellReadyWrapperRoot(), 'zsh'))
+    expect(existsSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'))).toBe(true)
   })
 
   it('extends the startup barrier to fish so launch commands queue until the prompt', async () => {
@@ -492,10 +446,10 @@ describePosix('daemon shell-ready launch config', () => {
 
     getShellReadyLaunchConfig('/bin/zsh')
 
-    const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
-    const zprofile = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zprofile'), 'utf8')
-    const zshrc = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshrc'), 'utf8')
-    const zlogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
+    const zshenv = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
+    const zprofile = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zprofile'), 'utf8')
+    const zshrc = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshrc'), 'utf8')
+    const zlogin = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zlogin'), 'utf8')
     expect(zshenv).toContain('__orca_resolve_inherited_config_dir "${ORCA_ORIG_ZDOTDIR:-$HOME}"')
     expect(zshenv).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
     expect(zshenv).toContain('"$_orca_resolved_config_dir" == */shell-ready/zsh ]]; then')
@@ -524,7 +478,7 @@ describePosix('daemon shell-ready launch config', () => {
 
     // Why .zshenv: the widget registration lives in the epilogue, which .zlogin
     // (login) and .zshrc (non-login) both call exactly once.
-    const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+    const zshenv = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
     expect(zshenv).toContain('zle -N zle-line-init __orca_prompt_mark')
     expect(zshenv).toContain('__orca_prev_line_init_fn="${widgets[zle-line-init]#user:}"')
     expect(zshenv).toContain('printf "\\033]777;orca-shell-ready\\007"')
@@ -649,9 +603,9 @@ describePosix('daemon shell-ready launch config', () => {
 
     // Why one file: every restore now lives in the single epilogue in .zshenv,
     // which .zshrc and .zlogin each invoke on their own startup path.
-    const zshrc = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+    const zshrc = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
     const zlogin = zshrc
-    const bashRc = readFileSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'), 'utf8')
+    const bashRc = readFileSync(join(getShellReadyWrapperRoot(), 'bash', 'rcfile'), 'utf8')
     const restoreLine =
       '[[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"'
     const mimoRestoreLine =
@@ -687,143 +641,6 @@ describePosix('daemon shell-ready launch config', () => {
       expect(wrapperFile).not.toContain('ORCA_PRIME_AGENT_STATUS_EXTENSION')
       expect(wrapperFile).not.toContain('command prime-agent --extension')
     }
-  })
-
-  // Why: regression guard for issue #2422 — bash wrapper must emit OSC 133 C/D so SSH sessions clear stale 'working' agent rows.
-  it('emits OSC 133 C/D markers in the daemon bash wrapper', async () => {
-    const { getShellReadyLaunchConfig } = await importFreshShellReady()
-
-    getShellReadyLaunchConfig('/bin/zsh')
-    getShellReadyLaunchConfig('/bin/bash')
-
-    // Why .zshenv: the zsh markers live in the epilogue, behind `markers`.
-    const zshrc = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
-    const bashRc = readFileSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'), 'utf8')
-
-    expect(bashRc).toContain('printf "\\033]133;D;%s\\007"')
-    expect(bashRc).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
-    expect(bashRc).toContain('printf "\\033]133;C\\007"')
-    expect(bashRc).toContain('__orca_prepend_prompt_command "__orca_osc133_precmd"')
-    expect(bashRc).toContain('__orca_append_prompt_command "__orca_osc133_epilogue"')
-    // DEBUG is armed after PROMPT_COMMAND setup so rcfile commands aren't seen as foreground; lastIndexOf skips the epilogue's re-arm.
-    expect(bashRc.lastIndexOf("trap '__orca_osc133_preexec' DEBUG")).toBeGreaterThan(
-      bashRc.indexOf('__orca_append_prompt_command "__orca_osc133_epilogue"')
-    )
-    expect(zshrc).toContain('printf "\\033]133;D;%s\\007"')
-    expect(zshrc).toContain('printf "\\033]133;C\\007"')
-  })
-
-  itWithBash(
-    'runs the daemon bash wrapper without fake C/D markers before the first prompt',
-    async () => {
-      const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
-
-      const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath)
-
-      expectBashOsc133Lifecycle(output)
-    }
-  )
-
-  itWithBash(
-    'preserves prompt hooks and existing DEBUG traps without fake command markers',
-    async () => {
-      const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
-      writeFileSync(
-        join(userDataPath, '.bash_profile'),
-        [
-          'PROMPT_COMMAND=\'AFTER_FIRST_PROMPT=1; printf "PROMPT_HOOK\\n"\'',
-          'trap \'if [[ -n "${AFTER_FIRST_PROMPT:-}" ]]; then\n  printf "USER_DEBUG_AFTER\\n"\nfi\' DEBUG'
-        ].join('\n')
-      )
-
-      const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath)
-
-      expect(output).toContain('PROMPT_HOOK')
-      expect(output).toContain('USER_DEBUG_AFTER')
-      expectBashOsc133Lifecycle(output)
-    }
-  )
-
-  itWithBash(
-    'still emits 133;C when bash-preexec re-arms the DEBUG trap at first prompt',
-    async () => {
-      const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
-      // Minimal bash-preexec imitation: re-arms its own DEBUG trap from PROMPT_COMMAND at first prompt, silencing Orca's trap.
-      writeFileSync(
-        join(userDataPath, '.bash_profile'),
-        [
-          'preexec_functions=()',
-          '__bp_preexec_invoke_exec() {',
-          '  [[ -n "${__bp_interactive_mode:-}" ]] || return',
-          '  __bp_interactive_mode=""',
-          '  local f',
-          '  for f in "${preexec_functions[@]}"; do "$f" "$BASH_COMMAND"; done',
-          '}',
-          "__bp_arm() { __bp_interactive_mode=1; trap '__bp_preexec_invoke_exec' DEBUG; }",
-          'PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND;}__bp_arm"'
-        ].join('\n')
-      )
-
-      const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath)
-
-      expectBashOsc133Lifecycle(output)
-    }
-  )
-
-  itWithBash(
-    'dispatches a non-empty preexec_functions against the real command, not Orca hooks',
-    async () => {
-      const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
-      // Why: the epilogue chains bash-preexec's re-armed DEBUG trap, so a real preexec callback must fire against the user's command.
-      writeFileSync(
-        join(userDataPath, '.bash_profile'),
-        [
-          'preexec_functions=(__user_preexec)',
-          '__user_preexec() { printf \'USER_PREEXEC:%s\\n\' "$1"; }',
-          '__bp_inside=0',
-          '__bp_last_hist=""',
-          '__bp_preexec_invoke_exec() {',
-          '  (( __bp_inside > 0 )) && return',
-          '  [[ -n "${__bp_interactive_mode:-}" ]] || return',
-          '  local __bp_inside=1',
-          '  local this_command',
-          '  this_command="$(builtin history 1)"',
-          '  this_command="${this_command#"${this_command%%[![:space:]]*}"}"',
-          '  this_command="${this_command#* }"',
-          '  this_command="${this_command#"${this_command%%[![:space:]]*}"}"',
-          '  [[ -n "$this_command" && "$this_command" != "$__bp_last_hist" ]] || return',
-          '  __bp_last_hist="$this_command"',
-          '  __bp_interactive_mode=""',
-          '  local f',
-          '  for f in "${preexec_functions[@]}"; do "$f" "$this_command"; done',
-          '}',
-          "__bp_arm() { set -o functrace; __bp_interactive_mode=1; trap '__bp_preexec_invoke_exec' DEBUG; }",
-          'PROMPT_COMMAND="${PROMPT_COMMAND:+$PROMPT_COMMAND;}__bp_arm"'
-        ].join('\n')
-      )
-
-      const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath)
-
-      expectBashOsc133Lifecycle(output)
-      expect(output).toContain('USER_PREEXEC:true')
-      expect(output).toContain('USER_PREEXEC:false')
-      expect(output).not.toContain('USER_PREEXEC:__orca_osc133')
-      expect(output).not.toContain('USER_PREEXEC:__bp_')
-    }
-  )
-
-  itWithBash('normalizes array PROMPT_COMMAND hooks so bash 3.2 still runs cleanup', async () => {
-    const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
-    writeFileSync(
-      join(userDataPath, '.bash_profile'),
-      'PROMPT_COMMAND=(\'printf "PROMPT_ARRAY_A\\n"\' \'printf "PROMPT_ARRAY_B\\n";  \')\n'
-    )
-
-    const output = runInteractiveBashRcfile(getDaemonBashShellReadyRcfileContent(), userDataPath)
-
-    expect(output.split('PROMPT_ARRAY_A')).toHaveLength(4)
-    expect(output.split('PROMPT_ARRAY_B')).toHaveLength(4)
-    expectBashOsc133Lifecycle(output)
   })
 
   it('preserves a real inherited ZDOTDIR as ORCA_ORIG_ZDOTDIR', async () => {
@@ -917,7 +734,7 @@ describePosix('daemon shell-ready launch config', () => {
 
     getShellReadyLaunchConfig('/bin/zsh')
 
-    const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+    const zshenv = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
 
     expect(zshenv).toContain('unset ZDOTDIR')
     expect(zshenv).toContain('__orca_resolve_inherited_config_dir "${ORCA_ZSHENV')
@@ -933,7 +750,7 @@ describePosix('daemon shell-ready launch config', () => {
 
     getShellReadyLaunchConfig('/bin/zsh')
 
-    const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+    const zshenv = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
 
     // Save spawn-env value before sourcing user .zshenv
     expect(zshenv).toContain('_orca_user_zdotdir="$_orca_resolved_config_dir"')

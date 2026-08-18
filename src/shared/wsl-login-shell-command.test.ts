@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -156,9 +156,7 @@ describe('wsl login shell command helpers', () => {
     // Why the captured form: an interactive login shell also prints the distro's
     // rc/motd to stdout (stock Ubuntu ships a sudo hint), so a raw login-shell
     // read cannot be compared byte-for-byte on a real distro.
-    const captured = buildWslCapturedLoginShellCommand(
-      'orca_value=ok; printf "<%s>" "$orca_value"'
-    )
+    const captured = buildWslCapturedLoginShellCommand('orca_value=ok; printf "<%s>" "$orca_value"')
 
     expect(
       captured.readStdout(
@@ -307,5 +305,37 @@ describe('wsl login shell command helpers', () => {
     expect(command).toContain('export ZDOTDIR="${_orca_shell_ready_root}/zsh"')
     expect(command).toContain('exec "$_orca_wsl_shell" -l')
     expectValidShSyntax(command)
+  })
+})
+
+describe('in-guest wrapper root resolution', () => {
+  // Why this test exists: the wrapper tree is content-addressed, so its path
+  // carries a hash the guest cannot derive. A previous revision of this script
+  // rebuilt the root as `${ORCA_USER_DATA_PATH}/shell-ready`, which stopped
+  // matching -- every WSL pane then fell through to an unwrapped `exec $shell -l`
+  // and silently lost the ready marker, OSC 133, and the launch preflight.
+  it('prefers the host-published root over the legacy user-data guess', () => {
+    const script = buildWslInteractiveLoginShellCommand()
+    expect(script).toContain('if [ -n "${ORCA_SHELL_READY_ROOT:-}" ]; then')
+    expect(script).toContain('_orca_shell_ready_root="${ORCA_SHELL_READY_ROOT%/}"')
+    // The legacy branch must remain reachable only as a fallback, so an older
+    // host that exports just ORCA_USER_DATA_PATH still wraps its shells.
+    expect(script).toContain('elif [ -n "${ORCA_USER_DATA_PATH:-}" ]; then')
+  })
+
+  it('resolves the published root ahead of the legacy path under a real shell', () => {
+    const script = buildWslInteractiveLoginShellCommand()
+    // Run only the root-resolution prologue, then report what it picked.
+    const prologue = script.split('_orca_wsl_shell_name=')[0] as string
+    const probe = [
+      'ORCA_SHELL_READY_ROOT=/mnt/c/ud/shell-wrappers/deadbeefdeadbeef/shell-ready',
+      'ORCA_USER_DATA_PATH=/mnt/c/ud',
+      'export ORCA_SHELL_READY_ROOT ORCA_USER_DATA_PATH',
+      prologue,
+      'printf "%s" "$_orca_shell_ready_root"'
+    ].join('\n')
+    const result = spawnSync('sh', ['-c', probe], { encoding: 'utf8' })
+    expect(result.status).toBe(0)
+    expect(result.stdout).toBe('/mnt/c/ud/shell-wrappers/deadbeefdeadbeef/shell-ready')
   })
 })

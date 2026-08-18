@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { buildWslInteractiveLoginShellCommand } from '../../shared/wsl-login-shell-command'
 import { resolveSetupRunnerCommand } from '../../shared/setup-runner-command'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
+// Why resolved rather than hardcoded: the wrapper tree is content-addressed.
+import { getShellReadyWrapperRoot } from './local-pty-shell-ready-wrapper-root'
 
 const CODEX_LAUNCH_PREFLIGHT = 'C:\\Program Files\\Orca\\orca.exe'
 const CMD_CODEX_LAUNCH_PREFLIGHT =
@@ -378,14 +380,14 @@ describe('resolveWindowsShellLaunchArgs', () => {
     )
 
     expect(result.shellArgs).toEqual(expectedWslArgs('/mnt/c/Users/alice/code'))
-    expect(existsSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'))).toBe(true)
-    expect(existsSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'))).toBe(true)
+    expect(existsSync(join(getShellReadyWrapperRoot(), 'bash', 'rcfile'))).toBe(true)
+    expect(existsSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'))).toBe(true)
 
     // Why: typed OMP keeps its existing shell integration, while typed Prime
     // commands must reach the user's binary without Orca rewriting argv.
-    const bashRcfile = readFileSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'), 'utf8')
+    const bashRcfile = readFileSync(join(getShellReadyWrapperRoot(), 'bash', 'rcfile'), 'utf8')
     // Why .zshenv: the omp wrapper is part of the epilogue defined there.
-    const zshEnv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+    const zshEnv = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
     for (const wrapperFile of [bashRcfile, zshEnv]) {
       expect(wrapperFile).toContain('command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"')
       expect(wrapperFile).toContain('omp() { __orca_omp "$@"; }')
