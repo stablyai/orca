@@ -37937,6 +37937,9 @@ export class OrcaRuntimeService {
   browserProfileClearDefaultCookies: RuntimeBrowserCommands['browserProfileClearDefaultCookies'] =
     this.browserCommands.browserProfileClearDefaultCookies.bind(this.browserCommands)
 
+  browserProfileClearGoogleCookies: RuntimeBrowserCommands['browserProfileClearGoogleCookies'] =
+    this.browserCommands.browserProfileClearGoogleCookies.bind(this.browserCommands)
+
   browserTabClose: RuntimeBrowserCommands['browserTabClose'] =
     this.browserCommands.browserTabClose.bind(this.browserCommands)
 

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   appGetPathMock,
   clearPendingCookieImportMock,
+  clearPendingCookieImportNonTransplantableMock,
   disposeClearStoreMock,
   execFileSyncMock,
   restoreClearIdentitiesMock,
@@ -12,6 +13,7 @@ const {
 } = vi.hoisted(() => ({
   appGetPathMock: vi.fn(),
   clearPendingCookieImportMock: vi.fn(),
+  clearPendingCookieImportNonTransplantableMock: vi.fn(),
   disposeClearStoreMock: vi.fn(),
   execFileSyncMock: vi.fn(),
   restoreClearIdentitiesMock: vi.fn(),
@@ -23,7 +25,10 @@ const {
 vi.mock('./browser-session-registry', () => ({
   browserSessionRegistry: {
     setPendingCookieImport: setPendingCookieImportMock,
-    clearPendingCookieImport: clearPendingCookieImportMock
+    clearPendingCookieImport: clearPendingCookieImportMock,
+    clearPendingCookieImportNonTransplantable: clearPendingCookieImportNonTransplantableMock,
+    nonTransplantableClearMark: () => 0,
+    profileCookieClearMark: () => 0
   }
 }))
 vi.mock('node:child_process', () => ({ execFileSync: execFileSyncMock }))

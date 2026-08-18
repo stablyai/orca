@@ -1,6 +1,8 @@
 import { app } from 'electron'
 import { copyFileSync, existsSync, mkdirSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
+import { NON_TRANSPLANTABLE_HOST_KEY_SQL } from './browser-cookie-import-policy'
 import { loadBrowserSessionMeta, persistBrowserSessionMeta } from './browser-session-meta-store'
 import { isValidPersistedBrowserSessionProfile } from './browser-session-persisted-profile-validation'
 import { resolveChromiumCookiesPath } from './chromium-cookie-path'
@@ -41,6 +43,16 @@ export function applyPendingBrowserCookieImports({
 
     for (const [partition, stagedPath] of pendingEntries) {
       if (!knownPartitions.has(partition)) {
+        // Why (#14686): the staged DB is a full copy of that profile's jar. Dropping only the
+        // pointer here — a profile deleted while its import was in flight, or corrupt persisted
+        // metadata — would strand that copy in userData with nothing left able to reclaim it.
+        for (const suffix of ['', '-wal', '-shm']) {
+          try {
+            unlinkSync(stagedPath + suffix)
+          } catch {
+            /* best-effort */
+          }
+        }
         delete remainingEntries[partition]
         continue
       }
@@ -133,5 +145,59 @@ export function clearPendingBrowserCookieImport({
     } catch {
       /* best-effort */
     }
+  }
+}
+
+// Why (#14686): the staged DB is a copy of the LIVE jar with only the non-transplantable rows kept
+// (browser-cookie-import.ts deletes everything else), so a Google clear that touches the live
+// session alone is silently undone the next time the replay copies that DB back over the jar. Strip
+// the same family from the staged DB so the clear survives a cold start without discarding the
+// imported cookies the replay exists to deliver.
+// This strips ROWS and deliberately KEEPS the pending entry registered: an import that registers
+// its snapshot before a clear arrives relies on the clear finding that entry here. Unregistering
+// instead would drop the restart replay AND reopen that window.
+export function clearPendingBrowserCookieImportNonTransplantable({
+  resolveMetadataPath,
+  defaultPartition,
+  partition
+}: PendingCookieImportTarget & { partition: string }): void {
+  const stagedPath = loadBrowserSessionMeta(resolveMetadataPath, defaultPartition)
+    .pendingCookieImports[partition]
+  if (!stagedPath || !existsSync(stagedPath)) {
+    return
+  }
+  let edited = false
+  let db: InstanceType<typeof DatabaseSync> | null = null
+  try {
+    db = new DatabaseSync(stagedPath)
+    // Why: the replay copies the main DB and only -wal/-shm beside it, so a deletion left in a
+    // sidecar is not load-bearing — it is simply lost, and the rows come back. Rollback-journal
+    // mode checkpoints any existing WAL into the main file and keeps this edit self-contained.
+    // The pragma reports the resulting mode instead of failing, so read it rather than assuming.
+    const journalMode = db.prepare('PRAGMA journal_mode = DELETE').get() as
+      | { journal_mode?: string }
+      | undefined
+    if (journalMode?.journal_mode !== 'delete') {
+      throw new Error(
+        `Could not make the staged cookie database self-contained: ${String(journalMode?.journal_mode)}`
+      )
+    }
+    db.exec(`DELETE FROM cookies WHERE ${NON_TRANSPLANTABLE_HOST_KEY_SQL}`)
+    edited = true
+  } catch {
+    // Why: handled after the handle is closed — Windows refuses to unlink an open file, and
+    // `new DatabaseSync` succeeds on a non-database file, so the throw arrives with it open.
+  } finally {
+    try {
+      db?.close()
+    } catch {
+      /* best-effort */
+    }
+  }
+  if (!edited) {
+    // Why: a staged DB we cannot edit would replay the cleared session back. Dropping the replay
+    // costs the cookies that still needed a restart — recoverable by importing again — whereas
+    // keeping it would resurrect a session the user explicitly asked us to delete.
+    clearPendingBrowserCookieImport({ resolveMetadataPath, defaultPartition, partition })
   }
 }

@@ -147,6 +147,13 @@ export type BrowserCookieImportSummary = {
   partitionSkippedCookies?: number
   domains: string[]
   warning?:
+    // Why (#14686): this code is BROADER than its name — it means "cookies that needed a restart
+    // are not coming back", whatever the cause. Staging being unwritable is one cause; another is
+    // the import deliberately discarding its staged replay because the user wiped the profile
+    // mid-import. The rendered copy is deliberately cause-neutral. Do not add a sibling code for a
+    // new cause: an old client in a mixed-version pair does not know it and falls through to the
+    // generic "warning this version does not recognize" string, which is a worse message for
+    // everyone in order to sharpen a rare one.
     | {
         code: 'restart-fallback-unavailable'
         loadedCookies: number

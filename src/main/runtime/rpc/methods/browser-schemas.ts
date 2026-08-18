@@ -143,7 +143,7 @@ export const ProfileCreate = z.object({
   userAgentMode: z.enum(['clean', 'native']).optional()
 })
 
-export const ProfileDelete = z.object({ profileId: requiredString('Missing required --profile') })
+export const ProfileTarget = z.object({ profileId: requiredString('Missing required --profile') })
 
 export const ProfileImportFromBrowser = z.object({
   profileId: requiredString('Missing required --profile'),

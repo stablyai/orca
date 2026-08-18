@@ -15,7 +15,7 @@ import {
   Keypress,
   LimitParam,
   ProfileCreate,
-  ProfileDelete,
+  ProfileTarget,
   ProfileImportFromBrowser,
   Screenshot,
   Scroll,
@@ -147,7 +147,7 @@ export const BROWSER_CORE_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'browser.profileDelete',
-    params: ProfileDelete,
+    params: ProfileTarget,
     handler: async (params, { runtime }) => runtime.browserProfileDelete(params)
   }),
   defineMethod({
@@ -164,6 +164,11 @@ export const BROWSER_CORE_METHODS: RpcMethod[] = [
     name: 'browser.profileClearDefaultCookies',
     params: null,
     handler: async (_params, { runtime }) => runtime.browserProfileClearDefaultCookies()
+  }),
+  defineMethod({
+    name: 'browser.profileClearGoogleCookies',
+    params: ProfileTarget,
+    handler: async (params, { runtime }) => runtime.browserProfileClearGoogleCookies(params)
   }),
   defineMethod({
     name: 'browser.hover',

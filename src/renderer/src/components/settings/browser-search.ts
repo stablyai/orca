@@ -217,7 +217,18 @@ export function getBrowserPaneSearchEntries(
         ...translateSearchKeyword('auto.components.settings.browser.search.75a0d435b7', 'chrome'),
         ...translateSearchKeyword('auto.components.settings.browser.search.533a253deb', 'edge'),
         ...translateSearchKeyword('auto.components.settings.browser.search.1c1e097985', 'arc'),
-        ...translateSearchKeyword('auto.components.settings.browser.search.7539f6336c', 'profile')
+        ...translateSearchKeyword('auto.components.settings.browser.search.7539f6336c', 'profile'),
+        // Why: the skipped-Google-cookies toast sends users here to clear cookies, so the words in
+        // that instruction have to find this section — otherwise search hides the only remedy.
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.googleKeyword',
+          'google'
+        ),
+        ...translateSearchKeyword('auto.components.settings.browser.search.clearKeyword', 'clear'),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.signOutKeyword',
+          'sign out'
+        )
       ]
     }
   ]

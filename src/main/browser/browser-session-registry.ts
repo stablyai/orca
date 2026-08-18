@@ -15,8 +15,10 @@ import type {
 import {
   applyPendingBrowserCookieImports,
   clearPendingBrowserCookieImport,
+  clearPendingBrowserCookieImportNonTransplantable,
   setPendingBrowserCookieImport
 } from './browser-session-cookie-staging'
+import { removeNonTransplantableCookies } from './browser-cookie-import-clear'
 import {
   BROWSER_SESSION_META_FILE_NAME,
   loadBrowserSessionMeta,
@@ -43,6 +45,15 @@ class BrowserSessionRegistry {
   private activeOrcaProfileId = DEFAULT_LOCAL_ORCA_PROFILE_ID
   private metadataPathOverride: string | null = null
   private defaultPartition = ORCA_BROWSER_PARTITION
+  // Why: in-memory is enough because every comparison lives inside ONE importCookiesFromBrowser
+  // call — the mark is read beside the snapshot and compared before that call returns, so no
+  // comparison can span a restart, and a restart that zeroes these also guarantees there is no
+  // in-flight snapshot to compare against.
+  private nonTransplantableClearMarks = new Map<string, number>()
+  // Why: a profile-wide wipe is a strict superset of a Google clear but needs a DIFFERENT remedy —
+  // drop the staged replay entirely rather than strip one family from it — so registration has to
+  // be able to tell which kind of clear moved. One counter could not carry that distinction.
+  private profileCookieClearMarks = new Map<string, number>()
 
   constructor() {
     this.resetDefaultProfile()
@@ -131,6 +142,43 @@ class BrowserSessionRegistry {
       defaultPartition: this.defaultPartition,
       partition,
       stagingDbPath
+    })
+  }
+
+  // Why: the staged DB preserves the live Google rows on the live session's behalf. Once the live
+  // session no longer has them, that preservation is a resurrection — strip it at the source.
+  // Why (#14686): a staged replay snapshots the jar at the START of an import but registers it at
+  // the END, so a clear in between must still reach it. Asking "does the jar hold Google cookies
+  // now?" cannot answer that — live browsing repopulates it — so registration compares this
+  // monotonic per-partition mark against the one taken when the snapshot was made. A counter, not a
+  // clock, so a system time change cannot mask a clear.
+  /**
+   * A mark is ONLY meaningful compared against another mark read earlier in the same process. It is
+   * not a "was this ever cleared?" answer: it resets to 0 on restart, so asking that outside an
+   * import reads every partition as never-cleared — the exact false negative these exist to prevent.
+   * Never persist one, and never compare marks across a restart.
+   */
+  nonTransplantableClearMark(partition: string): number {
+    return this.nonTransplantableClearMarks.get(partition) ?? 0
+  }
+
+  /** Same comparability rule as {@link nonTransplantableClearMark}. */
+  profileCookieClearMark(partition: string): number {
+    return this.profileCookieClearMarks.get(partition) ?? 0
+  }
+
+  private bumpProfileCookieClearMark(): void {
+    this.profileCookieClearMarks.set(
+      this.defaultPartition,
+      this.profileCookieClearMark(this.defaultPartition) + 1
+    )
+  }
+
+  clearPendingCookieImportNonTransplantable(partition: string): void {
+    clearPendingBrowserCookieImportNonTransplantable({
+      resolveMetadataPath: () => this.metadataPath,
+      defaultPartition: this.defaultPartition,
+      partition
     })
   }
 
@@ -233,13 +281,9 @@ class BrowserSessionRegistry {
     }
     this.profiles.delete(profileId)
     this.persistProfiles()
-    const meta = this.loadPersistedMeta()
-    const pendingCookieImports = { ...meta.pendingCookieImports }
-    delete pendingCookieImports[profile.partition]
-    this.persistMeta({
-      pendingCookieImports,
-      pendingCookieDbPath: pendingCookieImports[this.defaultPartition] ?? null
-    })
+    // Why: same leak as the cookie clear — the staged DB is a full copy of this profile's jar, so
+    // dropping only the pointer would outlive the profile the user just deleted.
+    this.clearPendingCookieImport(profile.partition)
 
     // Why: clear the partition's storage so deleting a profile doesn't leave orphaned cookies/cache behind.
     try {
@@ -262,17 +306,57 @@ class BrowserSessionRegistry {
       if (defaultProfile) {
         this.profiles.set('default', { ...defaultProfile, source: null })
       }
-      const meta = this.loadPersistedMeta()
-      const pendingCookieImports = { ...meta.pendingCookieImports }
-      delete pendingCookieImports[this.defaultPartition]
-      this.persistMeta({
-        defaultSource: null,
-        pendingCookieDbPath: null,
-        pendingCookieImports
-      })
+      // Why (#14686): bump on BOTH sides of the await below, because one bump only swaps which half
+      // of the wipe window is open. This one covers an import that snapshotted before the wipe and
+      // registers during it; the one after the await covers an import that snapshots mid-wipe (its
+      // snapshot still holds the pre-wipe rows) and registers later. Only an entire import running
+      // inside a single clearStorageData call survives both, which is not reachable.
+      // Contrast clearProfileNonTransplantableCookies, which bumps only after its await: that path
+      // ends in an UNCONDITIONAL strip of whatever entry exists, so it already covers registrations
+      // during its removal. This one drops the entry before the await, so it has no such cover.
+      this.bumpProfileCookieClearMark()
+      // Why: dropping the metadata pointer inline would leave the staged DB itself on disk — a
+      // complete copy of this jar, Google rows included — after we told the user every cookie in
+      // the profile was deleted. clearPendingCookieImport unlinks the file and its WAL/SHM too.
+      this.clearPendingCookieImport(this.defaultPartition)
+      this.persistMeta({ defaultSource: null, pendingCookieDbPath: null })
 
       const sess = session.fromPartition(this.defaultPartition)
       await sess.clearStorageData({ storages: ['cookies'] })
+      // Why: closes the other half — a snapshot taken mid-wipe read the first bump and would
+      // otherwise compare equal at registration.
+      this.bumpProfileCookieClearMark()
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  // Why: the same lock owner an import takes, so a clear cannot interleave with one. Only get/remove
+  // are needed, so this skips the CDP snapshot store an atomic import clear has to attach.
+  async clearProfileNonTransplantableCookies(profileId: string): Promise<boolean> {
+    const profile = this.profiles.get(profileId)
+    if (!profile) {
+      return false
+    }
+    try {
+      const targetSession = session.fromPartition(profile.partition)
+      await removeNonTransplantableCookies(targetSession, targetSession.cookies)
+      // Why: bump only after the live removal succeeded, so a failed clear cannot make a staged
+      // replay look stale and discard rows the user never cleared. Bump BEFORE the strip below and
+      // keep that order: an import registering between the two sees the changed mark and strips
+      // itself, whereas strip-then-bump would let it register after the strip and skip.
+      this.nonTransplantableClearMarks.set(
+        profile.partition,
+        this.nonTransplantableClearMark(profile.partition) + 1
+      )
+      // Why: a pending staged DB carries the pre-clear rows of this very family, so clearing only
+      // the live session would hand the session back at the next cold start.
+      clearPendingBrowserCookieImportNonTransplantable({
+        resolveMetadataPath: () => this.metadataPath,
+        defaultPartition: this.defaultPartition,
+        partition: profile.partition
+      })
       return true
     } catch {
       return false

@@ -40,7 +40,7 @@ describe('emitBrowserCookieImportToast', () => {
     )
 
     expect(warningToastMock).toHaveBeenCalledWith(
-      'None of the 3 cookies could be loaded, and the restart fallback was unavailable. The previous cookies for this profile were replaced. Try the import again.'
+      'None of the 3 cookies could be loaded and they were not kept for a retry. The previous cookies for this profile are gone. Try the import again.'
     )
     expect(successToastMock).not.toHaveBeenCalled()
   })
@@ -82,12 +82,24 @@ describe('emitBrowserCookieImportToast', () => {
 
     expect(successToastMock).toHaveBeenCalledWith('Imported 2 cookies.')
     expect(warningToastMock).toHaveBeenCalledWith(
-      'Google cookies were not imported. Open a browser in Orca on Remote Mac with this profile, then sign into Google.',
+      "Google cookies were not imported. Sign in to Google directly in Orca on Remote Mac. If sign-in does not work, clear this profile's Google cookies from Settings → Browser.",
       { duration: 12000 }
     )
     expect(successToastMock.mock.invocationCallOrder[0]).toBeLessThan(
       warningToastMock.mock.invocationCallOrder[0]
     )
+  })
+
+  // Why (#14686): an import never writes Google cookies, so a Google cookie in the profile is the
+  // user's own live session. The toast must stay informational — no one-click delete of that session.
+  it('offers no action on the Google guidance toast', () => {
+    emitBrowserCookieImportToast(
+      { ...summary, googleCookiesSkipped: 1 },
+      'Imported 3 cookies.',
+      'Remote Mac'
+    )
+
+    expect(warningToastMock.mock.calls[0]?.[1]).toEqual({ duration: 12000 })
   })
 
   // Why (STA-4300): these cookies were skipped rather than written unpartitioned, so the success
@@ -227,10 +239,10 @@ describe('emitBrowserCookieImportToast', () => {
     expect(successToastMock).not.toHaveBeenCalled()
     expect(warningToastMock.mock.calls).toEqual([
       [
-        'Imported 1 of 2 cookies. The rest could not be loaded, and the restart fallback was unavailable. Try the import again.'
+        'Imported 1 of 2 cookies. The rest could not be loaded and were not kept for a retry. Try the import again.'
       ],
       [
-        'Google cookies were not imported. Open a browser in Orca on Remote Mac with this profile, then sign into Google.',
+        "Google cookies were not imported. Sign in to Google directly in Orca on Remote Mac. If sign-in does not work, clear this profile's Google cookies from Settings → Browser.",
         { duration: 12000 }
       ]
     ])

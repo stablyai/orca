@@ -142,7 +142,7 @@ async function runFixture(): Promise<FixtureResult> {
   ]).close()
   writeFileSync(
     registryStubPath,
-    'exports.browserSessionRegistry = { clearPendingCookieImport() {}, setPendingCookieImport() {} }\n'
+    'exports.browserSessionRegistry = { clearPendingCookieImport() {}, clearPendingCookieImportNonTransplantable() {}, nonTransplantableClearMark() { return 0 }, profileCookieClearMark() { return 0 }, setPendingCookieImport() {} }\n'
   )
   await buildVite({
     configFile: false,

@@ -9,6 +9,7 @@ const {
   dialogShowOpenDialogMock,
   setPendingCookieImportMock,
   clearPendingCookieImportMock,
+  clearPendingCookieImportNonTransplantableMock,
   writeCookieIdentityMock
 } = vi.hoisted(() => ({
   appGetPathMock: vi.fn(),
@@ -18,13 +19,17 @@ const {
   dialogShowOpenDialogMock: vi.fn(),
   setPendingCookieImportMock: vi.fn(),
   clearPendingCookieImportMock: vi.fn(),
+  clearPendingCookieImportNonTransplantableMock: vi.fn(),
   writeCookieIdentityMock: vi.fn()
 }))
 
 vi.mock('./browser-session-registry', () => ({
   browserSessionRegistry: {
     setPendingCookieImport: setPendingCookieImportMock,
-    clearPendingCookieImport: clearPendingCookieImportMock
+    clearPendingCookieImport: clearPendingCookieImportMock,
+    clearPendingCookieImportNonTransplantable: clearPendingCookieImportNonTransplantableMock,
+    nonTransplantableClearMark: () => 0,
+    profileCookieClearMark: () => 0
   }
 }))
 

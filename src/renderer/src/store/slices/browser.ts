@@ -36,6 +36,7 @@ import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import type {
   BrowserDetectProfilesResult,
   BrowserProfileClearDefaultCookiesResult,
+  BrowserProfileClearGoogleCookiesResult,
   BrowserProfileCreateResult,
   BrowserProfileDeleteResult,
   BrowserProfileImportFromBrowserResult,
@@ -237,6 +238,7 @@ export type BrowserSlice = {
     browserProfile?: string
   ) => Promise<BrowserCookieImportExecutionResult>
   clearDefaultSessionCookies: () => Promise<boolean>
+  clearBrowserProfileGoogleCookies: (profileId: string) => Promise<boolean>
   browserUrlHistory: BrowserHistoryEntry[]
   addBrowserHistoryEntry: (url: string, title: string) => void
   clearBrowserHistory: () => void
@@ -2306,22 +2308,30 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
 
   clearDefaultSessionCookies: async () => {
     const hostId = getBrowserSettingsHostId(get())
-    const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
-    if (runtimeEnvironmentId) {
+    const host = parseExecutionHostId(hostId)
+    if (host?.kind === 'runtime') {
       try {
         const result = await callRuntimeRpc<BrowserProfileClearDefaultCookiesResult>(
-          { kind: 'environment', environmentId: runtimeEnvironmentId },
+          { kind: 'environment', environmentId: host.environmentId },
           'browser.profileClearDefaultCookies',
           undefined,
           { timeoutMs: 15_000 }
         )
-        if (result.cleared && getBrowserSettingsHostId(get()) === hostId) {
+        // Why: the RPC result crosses the wire as `unknown` and is cast, not decoded, so a host that
+        // never answered this method can hand back a shape with no `cleared` at all.
+        const cleared = result.cleared === true
+        if (cleared && getBrowserSettingsHostId(get()) === hostId) {
           await get().fetchBrowserSessionProfiles()
         }
-        return result.cleared
+        return cleared
       } catch {
         return false
       }
+    }
+    // Why: the settings-focused host can be an SSH target the profile picker never offers, and
+    // falling through to local IPC would wipe this computer's cookies instead of that host's.
+    if (host?.kind !== 'local') {
+      return false
     }
     try {
       const ok = await window.api.browser.sessionClearDefaultCookies()
@@ -2330,6 +2340,31 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         await get().fetchBrowserSessionProfiles()
       }
       return ok
+    } catch {
+      return false
+    }
+  },
+
+  clearBrowserProfileGoogleCookies: async (profileId) => {
+    const host = parseExecutionHostId(getBrowserSettingsHostId(get()))
+    try {
+      if (host?.kind === 'runtime') {
+        const result = await callRuntimeRpc<BrowserProfileClearGoogleCookiesResult>(
+          { kind: 'environment', environmentId: host.environmentId },
+          'browser.profileClearGoogleCookies',
+          { profileId },
+          { timeoutMs: 15_000 }
+        )
+        return result.cleared === true
+      }
+      if (host?.kind !== 'local') {
+        return false
+      }
+      const cleared = await window.api.browser.sessionClearGoogleCookies({ profileId })
+      if (cleared) {
+        get().recordFeatureInteraction?.('cookie-import')
+      }
+      return cleared
     } catch {
       return false
     }

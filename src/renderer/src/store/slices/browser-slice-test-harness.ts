@@ -17,6 +17,7 @@ export type BrowserMockApi = {
     sessionDetectBrowsers: Mock
     sessionImportFromBrowser: Mock
     sessionClearDefaultCookies: Mock
+    sessionClearGoogleCookies: Mock
     notifyActiveTabChanged: Mock
   }
   runtimeEnvironments: { call: Mock }
@@ -32,6 +33,7 @@ export function createBrowserMockApi(runtimeEnvironmentTransportCall: Mock): Bro
       sessionDetectBrowsers: vi.fn().mockResolvedValue([]),
       sessionImportFromBrowser: vi.fn().mockResolvedValue({ ok: false, reason: 'canceled' }),
       sessionClearDefaultCookies: vi.fn().mockResolvedValue(false),
+      sessionClearGoogleCookies: vi.fn().mockResolvedValue(false),
       notifyActiveTabChanged: vi.fn().mockResolvedValue(undefined)
     },
     runtimeEnvironments: {

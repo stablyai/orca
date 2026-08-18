@@ -10,7 +10,10 @@ export function getRuntimeFeatureInteractionId(
   if (method === 'browser.profileImportFromBrowser') {
     return hasBooleanResult(result, 'ok') ? 'cookie-import' : null
   }
-  if (method === 'browser.profileClearDefaultCookies') {
+  if (
+    method === 'browser.profileClearDefaultCookies' ||
+    method === 'browser.profileClearGoogleCookies'
+  ) {
     return hasBooleanResult(result, 'cleared') ? 'cookie-import' : null
   }
   if (method === 'browser.screencast.unsubscribe') {

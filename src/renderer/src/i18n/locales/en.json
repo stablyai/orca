@@ -785,9 +785,8 @@
         "cookie": {
           "import": {
             "toast": {
-              "restartFallbackUnavailableNone": "None of the {{value0}} cookies could be loaded, and the restart fallback was unavailable. The previous cookies for this profile were replaced. Try the import again.",
-              "restartFallbackUnavailablePartial": "Imported {{value0}} of {{value1}} cookies. The rest could not be loaded, and the restart fallback was unavailable. Try the import again.",
-              "googleCookiesSkipped": "Google cookies were not imported. Open a browser in Orca on {{value0}} with this profile, then sign into Google.",
+              "restartFallbackUnavailableNone": "None of the {{value0}} cookies could be loaded and they were not kept for a retry. The previous cookies for this profile are gone. Try the import again.",
+              "restartFallbackUnavailablePartial": "Imported {{value0}} of {{value1}} cookies. The rest could not be loaded and were not kept for a retry. Try the import again.",
               "undecryptableAppBound": "Orca cannot decrypt {{value0}} of this browser's cookies because they use app-bound encryption. You can import cookies from a file using “From File…”.",
               "undecryptableAppBoundMixed": "Orca cannot decrypt {{value0}} of this browser's cookies because they use app-bound encryption; {{value1}} more could not be decrypted for another reason. You can import cookies from a file using “From File…”.",
               "undecryptableKeyring": "{{value0}} cookies could not be decrypted because the system keyring was unavailable. Unlock your login keyring (or install a Secret Service provider such as gnome-keyring) and import again.",
@@ -795,6 +794,7 @@
               "undecryptableUnknown": "{{value0}} cookies could not be decrypted and were skipped. Close the source browser completely and try the import again.",
               "unrecognizedWarning": "The cookie import finished with a warning this version of Orca does not recognize. Update Orca to see the details, then check this profile before relying on its cookies.",
               "undecryptableUnrecognizedReason": "{{value0}} cookies could not be decrypted and were skipped for a reason this version of Orca does not recognize. Update Orca to see the details, then try the import again.",
+              "googleCookiesSkipped": "Google cookies were not imported. Sign in to Google directly in Orca on {{value0}}. If sign-in does not work, clear this profile's Google cookies from Settings → Browser.",
               "partitionSkipped": "{{value0}} cookies were not imported because their site-partition could not be read. Sign in to those sites again in Orca."
             }
           }
@@ -6404,7 +6404,17 @@
           "a3f8c2d1e0b4": "Imported {{value0}} cookies from {{value1}} ({{value2}}) into {{value3}}.",
           "b4e9d3f2a1c5": "Imported {{value0}} cookies from {{value1}} into {{value2}}.",
           "c5a273a809": "From {{value0}}",
-          "b5c0479e21": "Unmodified user agent"
+          "b5c0479e21": "Unmodified user agent",
+          "clearProfileCookies": "Clear profile cookies",
+          "clearGoogleCookies": "Clear Google cookies",
+          "profileActions": "More actions for {{value0}}",
+          "clearProfileCookiesConfirmTitle": "Clear all cookies for this profile?",
+          "clearProfileCookiesConfirmDescription": "This deletes every cookie in the {{value0}} browser profile on {{value1}} and signs you out of every site in it, including Google. Cookies from a recent import that were still waiting for a restart go too, and Orca stops showing which browser this profile was imported from. Import again to restore the cookies.",
+          "profileCookiesClearFailed": "Failed to clear profile cookies.",
+          "clearGoogleCookiesConfirmTitle": "Clear Google cookies?",
+          "clearGoogleCookiesConfirmDescription": "This signs you out of Google in the {{value0}} browser profile on {{value1}}. Cookies for other sites are kept, though an import still waiting for a restart may have to be run again.",
+          "googleCookiesCleared": "Google cookies cleared.",
+          "googleCookiesClearFailed": "Failed to clear Google cookies."
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Open Computer Use",
@@ -8811,7 +8821,10 @@
             "a942905148": "URL opened when creating a new browser tab. Leave empty to open a blank tab.",
             "c3903322d2": "Default Home Page",
             "19ea5607cf": "Localhost Worktree Labels",
-            "4e0fdf0a3f": "Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart."
+            "4e0fdf0a3f": "Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart.",
+            "googleKeyword": "google",
+            "clearKeyword": "clear",
+            "signOutKeyword": "sign out"
           },
           "use": {
             "search": {
@@ -11271,6 +11284,9 @@
         },
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "Blocked by Mission Control. Remap here or change it in System Settings."
+        },
+        "BrowserSessionCookiesSection": {
+          "hostFallback": "this host"
         }
       },
       "right": {

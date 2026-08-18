@@ -105,6 +105,18 @@ export function registerBrowserSessionProfileHandlers(): void {
     return browserSessionRegistry.clearDefaultSessionCookies()
   })
 
+  ipcMain.removeHandler('browser:session:clearGoogleCookies')
+
+  ipcMain.handle(
+    'browser:session:clearGoogleCookies',
+    async (event, args: { profileId: string }): Promise<boolean> => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
+        return false
+      }
+      return browserSessionRegistry.clearProfileNonTransplantableCookies(args.profileId)
+    }
+  )
+
   ipcMain.removeHandler('browser:session:detectBrowsers')
   ipcMain.removeHandler('browser:session:importFromBrowser')
 

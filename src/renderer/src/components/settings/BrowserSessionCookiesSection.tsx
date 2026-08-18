@@ -42,6 +42,9 @@ export function BrowserSessionCookiesSection({
   onSelectProfile
 }: BrowserSessionCookiesSectionProps): React.JSX.Element {
   const selectedHost = hostOptions.find((host) => host.id === selectedHostId) ?? hostOptions[0]
+  const executionHostLabel =
+    selectedHost?.label ??
+    translate('auto.components.settings.BrowserSessionCookiesSection.hostFallback', 'this host')
   return (
     <SearchableSetting
       id="browser-session-cookies"
@@ -129,6 +132,7 @@ export function BrowserSessionCookiesSection({
           detectedBrowsers={detectedBrowsers}
           importState={importState}
           isActive={(defaultBrowserSessionProfileId ?? 'default') === 'default'}
+          executionHostLabel={executionHostLabel}
           onSelect={onSelectDefaultProfile}
           isDefault
         />
@@ -139,6 +143,7 @@ export function BrowserSessionCookiesSection({
             detectedBrowsers={detectedBrowsers}
             importState={importState}
             isActive={(defaultBrowserSessionProfileId ?? 'default') === profile.id}
+            executionHostLabel={executionHostLabel}
             onSelect={() => onSelectProfile(profile.id)}
           />
         ))}

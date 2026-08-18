@@ -34,12 +34,12 @@ function formatCookieImportWarning(warning: CookieImportWarning): string {
       return warning.loadedCookies === 0
         ? translate(
             'auto.lib.browser.cookie.import.toast.restartFallbackUnavailableNone',
-            'None of the {{value0}} cookies could be loaded, and the restart fallback was unavailable. The previous cookies for this profile were replaced. Try the import again.',
+            'None of the {{value0}} cookies could be loaded and they were not kept for a retry. The previous cookies for this profile are gone. Try the import again.',
             { value0: warning.failedCookies }
           )
         : translate(
             'auto.lib.browser.cookie.import.toast.restartFallbackUnavailablePartial',
-            'Imported {{value0}} of {{value1}} cookies. The rest could not be loaded, and the restart fallback was unavailable. Try the import again.',
+            'Imported {{value0}} of {{value1}} cookies. The rest could not be loaded and were not kept for a retry. Try the import again.',
             {
               value0: warning.loadedCookies,
               value1: warning.loadedCookies + warning.failedCookies
@@ -90,6 +90,9 @@ function formatCookieImportWarning(warning: CookieImportWarning): string {
   }
 }
 
+// Why: an import never writes Google cookies, so a Google cookie already in the profile is almost
+// always the user's own live session. The toast therefore only reports and points at the deliberate
+// settings surface; it never offers to delete a session whose provenance it cannot establish.
 function emitGoogleCookieImportWarning(
   summary: BrowserCookieImportSummary,
   executionHostLabel: string
@@ -100,7 +103,7 @@ function emitGoogleCookieImportWarning(
   toast.warning(
     translate(
       'auto.lib.browser.cookie.import.toast.googleCookiesSkipped',
-      'Google cookies were not imported. Open a browser in Orca on {{value0}} with this profile, then sign into Google.',
+      "Google cookies were not imported. Sign in to Google directly in Orca on {{value0}}. If sign-in does not work, clear this profile's Google cookies from Settings → Browser.",
       { value0: executionHostLabel }
     ),
     { duration: 12000 }

@@ -22,7 +22,11 @@ const {
 vi.mock('./browser-session-registry', () => ({
   browserSessionRegistry: {
     setPendingCookieImport: setPendingCookieImportMock,
-    clearPendingCookieImport: clearPendingCookieImportMock
+    clearPendingCookieImport: clearPendingCookieImportMock,
+    // Why: the import snapshots this mark and re-reads it before writing back, so a mock without it
+    // throws before the partition assertions this file exists to make.
+    nonTransplantableClearMark: () => 0,
+    profileCookieClearMark: () => 0
   }
 }))
 vi.mock('node:child_process', () => ({ execFileSync: execFileSyncMock }))

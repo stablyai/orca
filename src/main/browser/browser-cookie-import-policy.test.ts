@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite'
 import type { Cookie } from 'electron'
 import {
   identitiesFromClearCookies,
+  removeNonTransplantableCookies,
   removeTransplantableCookies,
   type CookieClearIdentity
 } from './browser-cookie-import-clear'
@@ -230,6 +231,52 @@ describe('isNonTransplantableCookieDomain', () => {
   it('deliberately leaves youtube.com transplantable', () => {
     expect(isNonTransplantableCookieDomain('.youtube.com')).toBe(false)
     expect(isNonTransplantableCookieDomain('accounts.youtube.com')).toBe(false)
+  })
+})
+
+describe('Google cookie clear', () => {
+  // Why: the settings confirmation promises "cookies for other sites are kept", so the clear has to
+  // be provably domain-scoped and remove-only — a `set` on this path would silently falsify it.
+  it('removes only the google.com family and never writes a cookie back', async () => {
+    let cookies = [
+      cookie('.google.com', 'SID'),
+      cookie('accounts.google.com', 'ACCOUNT'),
+      cookie('.withgoogle.com', 'LOOKALIKE'),
+      cookie('.github.com', 'user_session'),
+      cookie('.linear.app', 'linear_session')
+    ]
+    const store = {
+      get: vi.fn(async () => cookies),
+      remove: vi.fn(async (_url: string, name: string) => {
+        cookies = cookies.filter((entry) => entry.name !== name)
+      })
+    }
+    const lockOwner = {}
+
+    await removeNonTransplantableCookies(lockOwner, store)
+
+    expect(store.remove.mock.calls).toEqual([
+      ['https://google.com/', 'SID'],
+      ['https://accounts.google.com/', 'ACCOUNT']
+    ])
+    expect(cookies.map(({ domain, name }) => ({ domain, name }))).toEqual([
+      { domain: '.withgoogle.com', name: 'LOOKALIKE' },
+      { domain: '.github.com', name: 'user_session' },
+      { domain: '.linear.app', name: 'linear_session' }
+    ])
+  })
+
+  it('reports a failed removal instead of claiming the profile is clean', async () => {
+    const store = {
+      get: vi.fn(async () => [cookie('.google.com', 'SID')]),
+      remove: vi.fn(async () => {
+        throw new Error('cookie store busy')
+      })
+    }
+
+    await expect(removeNonTransplantableCookies({}, store)).rejects.toThrow(
+      'Could not clear all non-transplantable cookies'
+    )
   })
 })
 

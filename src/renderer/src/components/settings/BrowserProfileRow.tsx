@@ -1,4 +1,5 @@
-import { Import, Loader2, Trash2 } from 'lucide-react'
+import { useState } from 'react'
+import { Import, Loader2, MoreHorizontal, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
 import type {
@@ -6,6 +7,7 @@ import type {
   BrowserSessionProfile
 } from '../../../../shared/browser-workspace-types'
 import { Button } from '../ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,6 +20,13 @@ import {
   DropdownMenuTrigger
 } from '../ui/dropdown-menu'
 import { BrowserCookieImportDisclosure } from '../BrowserCookieImportDisclosure'
+import { useConfirmationDialog } from '../confirmation-dialog-context'
+import {
+  clearGoogleCookiesLabel,
+  clearProfileCookiesLabel,
+  confirmAndClearGoogleCookies,
+  confirmAndClearProfileCookies
+} from './browser-profile-cookie-clear-actions'
 import { useAppStore } from '../../store'
 import { BROWSER_FAMILY_LABELS } from '../../../../shared/constants'
 import { translate } from '@/i18n/i18n'
@@ -39,6 +48,8 @@ export type BrowserProfileRowProps = {
     error: string | null
   } | null
   isActive: boolean
+  /** Names the host in the destructive confirmations, since profiles are per-host. */
+  executionHostLabel: string
   onSelect: () => void
   isDefault?: boolean
 }
@@ -48,10 +59,17 @@ export function BrowserProfileRow({
   detectedBrowsers,
   importState,
   isActive,
+  executionHostLabel,
   onSelect,
   isDefault
 }: BrowserProfileRowProps): React.JSX.Element {
   const isImporting = importState?.profileId === profile.id && importState.status === 'importing'
+  const [isClearingCookies, setIsClearingCookies] = useState(false)
+  const [isClearingGoogleCookies, setIsClearingGoogleCookies] = useState(false)
+  // Why (#14686): an import snapshots this jar at its start and registers the snapshot at its end.
+  // The registry marks make a clear landing in between safe, but there is no reason to invite it —
+  // these are the only realistic user path into that window.
+  const confirm = useConfirmationDialog()
   const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
 
   const handleImportFromBrowser = async (
@@ -116,6 +134,18 @@ export function BrowserProfileRow({
     profile.userAgentMode === 'native'
       ? translate('auto.components.settings.BrowserProfileRow.b5c0479e21', 'Unmodified user agent')
       : null
+  const clearProfileCookies = clearProfileCookiesLabel()
+  const clearGoogleCookies = clearGoogleCookiesLabel()
+  const profileActionsLabel = translate(
+    'auto.components.settings.BrowserProfileRow.profileActions',
+    'More actions for {{value0}}',
+    { value0: profile.label }
+  )
+  const clearOptions = {
+    confirm,
+    profileLabel: profile.label,
+    executionHostLabel
+  }
 
   // Why: uses div[role=button] instead of <button> to avoid nested <button>
   // elements — the dropdown trigger and trash actions inside also render as
@@ -126,6 +156,9 @@ export function BrowserProfileRow({
       tabIndex={0}
       onClick={onSelect}
       onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) {
+          return
+        }
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
           onSelect()
@@ -222,26 +255,72 @@ export function BrowserProfileRow({
             <BrowserCookieImportDisclosure />
           </DropdownMenuContent>
         </DropdownMenu>
-        {isDefault ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-7 text-muted-foreground hover:text-destructive"
-            disabled={!profile.source}
-            onClick={async () => {
-              const ok = await useAppStore.getState().clearDefaultSessionCookies()
-              if (ok) {
-                toast.success(
-                  translate(
-                    'auto.components.settings.BrowserProfileRow.2d4bea7f35',
-                    'Default cookies cleared.'
-                  )
-                )
+        <DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-7 text-muted-foreground"
+                  aria-label={profileActionsLabel}
+                  disabled={isClearingGoogleCookies || isImporting}
+                >
+                  {isClearingGoogleCookies ? (
+                    <Loader2 className="size-3 animate-spin" />
+                  ) : (
+                    <MoreHorizontal className="size-3" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {profileActionsLabel}
+            </TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              variant="destructive"
+              disabled={isClearingGoogleCookies || isImporting}
+              onSelect={() =>
+                void confirmAndClearGoogleCookies({
+                  ...clearOptions,
+                  profileId: profile.id,
+                  onPendingChange: setIsClearingGoogleCookies
+                })
               }
-            }}
-          >
-            <Trash2 className="size-3" />
-          </Button>
+            >
+              {clearGoogleCookies}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {isDefault ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 text-muted-foreground hover:text-destructive"
+                aria-label={clearProfileCookies}
+                disabled={isClearingCookies || isImporting}
+                onClick={() =>
+                  void confirmAndClearProfileCookies({
+                    ...clearOptions,
+                    onPendingChange: setIsClearingCookies
+                  })
+                }
+              >
+                {isClearingCookies ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  <Trash2 className="size-3" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {clearProfileCookies}
+            </TooltipContent>
+          </Tooltip>
         ) : (
           <Button
             variant="ghost"

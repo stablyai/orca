@@ -114,6 +114,11 @@ const METHODS = [
     handler: () => ({ cleared: false })
   }),
   defineMethod({
+    name: 'browser.profileClearGoogleCookies',
+    params: z.object({}),
+    handler: () => ({ cleared: true })
+  }),
+  defineMethod({
     name: 'computer.permissions',
     params: z.object({}),
     handler: () => ({ opened: true })
@@ -169,6 +174,15 @@ describe('RpcDispatcher feature interactions', () => {
     expect(runtime.recordFeatureInteraction).toHaveBeenCalledWith('computer-use-setup')
     expect(runtime.recordFeatureInteraction).toHaveBeenCalledWith('cookie-import')
     expect(runtime.recordFeatureInteraction).toHaveBeenCalledTimes(2)
+  })
+
+  it('records the Google cookie clear as cookie-import setup, not runtime use', async () => {
+    const runtime = makeRuntime()
+    const dispatcher = new RpcDispatcher({ runtime, methods: METHODS })
+
+    await dispatcher.dispatch(makeRequest('browser.profileClearGoogleCookies'))
+
+    expect(runtime.recordFeatureInteraction).toHaveBeenCalledExactlyOnceWith('cookie-import')
   })
 
   it('does not record failed runtime methods', async () => {

@@ -97,7 +97,9 @@ export function normalizeCookieImportDomain(domain: string): string | null {
 // live session is always more valuable than anything an import could put in its place.
 // Entries must be canonical lowercase ASCII (punycode) registrable domains, never subdomains or
 // public suffixes, because clearData derives one excluded origin and matches at that boundary.
-// Adding a site is one entry here.
+// Adding a site is one entry here — but not only here: the settings clear this list drives is
+// labelled "Clear Google cookies" and promises "cookies for other sites are kept", so a second
+// entry silently makes both strings wrong. Update BrowserProfileRow's copy in the same change.
 // youtube.com is deliberately NOT listed: YouTube accepts a transplanted session and re-issues
 // its cookies via the accounts.youtube.com relay, so excluding it would silently drop imports
 // users actually asked for.

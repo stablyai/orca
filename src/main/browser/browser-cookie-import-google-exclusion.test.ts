@@ -7,12 +7,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const {
   appGetPathMock,
   clearPendingCookieImportMock,
+  clearPendingCookieImportNonTransplantableMock,
+  nonTransplantableClearMarkMock,
+  profileCookieClearMarkMock,
   execFileSyncMock,
   sessionFromPartitionMock,
   setPendingCookieImportMock
 } = vi.hoisted(() => ({
   appGetPathMock: vi.fn(),
   clearPendingCookieImportMock: vi.fn(),
+  clearPendingCookieImportNonTransplantableMock: vi.fn(),
+  nonTransplantableClearMarkMock: vi.fn(),
+  profileCookieClearMarkMock: vi.fn(),
   execFileSyncMock: vi.fn(),
   sessionFromPartitionMock: vi.fn(),
   setPendingCookieImportMock: vi.fn()
@@ -21,7 +27,10 @@ const {
 vi.mock('./browser-session-registry', () => ({
   browserSessionRegistry: {
     setPendingCookieImport: setPendingCookieImportMock,
-    clearPendingCookieImport: clearPendingCookieImportMock
+    clearPendingCookieImport: clearPendingCookieImportMock,
+    clearPendingCookieImportNonTransplantable: clearPendingCookieImportNonTransplantableMock,
+    nonTransplantableClearMark: nonTransplantableClearMarkMock,
+    profileCookieClearMark: profileCookieClearMarkMock
   }
 }))
 vi.mock('node:child_process', () => ({ execFileSync: execFileSyncMock }))
@@ -134,6 +143,8 @@ describe('file import excludes the Google cookie family', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     tmpDir = mkdtempSync(join(tmpdir(), 'orca-google-exclusion-file-'))
+    nonTransplantableClearMarkMock.mockReturnValue(0)
+    profileCookieClearMarkMock.mockReturnValue(0)
     cookiesGetMock = vi.fn().mockResolvedValue([])
     cookiesRemoveMock = vi.fn().mockResolvedValue(undefined)
     cookiesSetMock = vi.fn().mockResolvedValue(undefined)
@@ -211,6 +222,7 @@ describe('native Chromium import excludes the Google cookie family', () => {
       throw new Error('OS browser version lookup unavailable')
     })
     clearDataMock = vi.fn().mockResolvedValue(undefined)
+    nonTransplantableClearMarkMock.mockReturnValue(0)
     cookiesGetMock = vi.fn().mockResolvedValue([])
     cookiesRemoveMock = vi.fn().mockResolvedValue(undefined)
     cookiesSetMock = vi.fn().mockResolvedValue(undefined)
@@ -319,6 +331,98 @@ describe('native Chromium import excludes the Google cookie family', () => {
     expect(execFileSyncMock).not.toHaveBeenCalled()
     expect(clearDataMock).not.toHaveBeenCalled()
     expect(cookiesSetMock).not.toHaveBeenCalled()
+  })
+
+  // Why (#14686): the staged copy is taken at the TOP of the import but registered at the END, so a
+  // clear that lands in between must still reach it. This is driven by the registry's clear MARK,
+  // not by inspecting the jar — see the repopulation case below for why state cannot answer it.
+  it('strips the staged Google rows when a clear landed after the snapshot', async () => {
+    const sourceCookiesPath = seedSource([
+      { domain: '.example.com', name: 'session', value: 'new' }
+    ])
+    seedTarget([{ domain: '.google.com', name: 'SID', value: 'live-sid' }])
+    cookiesSetMock.mockRejectedValue(new Error('cookie rejected'))
+    // Why: models the user confirming "Clear Google cookies" while this import is still running.
+    nonTransplantableClearMarkMock.mockReturnValueOnce(0).mockReturnValue(1)
+
+    await importCookiesFromBrowser(chromeBrowser(sourceCookiesPath), 'persist:test')
+
+    expect(setPendingCookieImportMock).toHaveBeenCalledTimes(1)
+    expect(clearPendingCookieImportNonTransplantableMock).toHaveBeenCalledWith('persist:test')
+  })
+
+  // Why: THE case a live-jar probe gets wrong. The clear happened, then the user's own Google tab
+  // in this profile signed back in, so the jar holds Google cookies again at registration time. A
+  // state probe reads that as "never cleared" and keeps a staged DB whose rows predate the clear —
+  // and the replay overwrites the whole jar, so the fresh session is destroyed and the stale one
+  // reinstated. The mark records that a clear happened at all, which repopulation cannot erase.
+  it('still strips when the jar was repopulated after the clear', async () => {
+    const sourceCookiesPath = seedSource([
+      { domain: '.example.com', name: 'session', value: 'new' }
+    ])
+    seedTarget([{ domain: '.google.com', name: 'SID', value: 'live-sid' }])
+    cookiesSetMock.mockRejectedValue(new Error('cookie rejected'))
+    // Why: the jar looks exactly like "never cleared" — signed in, Google cookies present.
+    cookiesGetMock.mockResolvedValue([existingCookie('.google.com', 'SID')])
+    nonTransplantableClearMarkMock.mockReturnValueOnce(0).mockReturnValue(1)
+
+    await importCookiesFromBrowser(chromeBrowser(sourceCookiesPath), 'persist:test')
+
+    expect(clearPendingCookieImportNonTransplantableMock).toHaveBeenCalledWith('persist:test')
+  })
+
+  // Why (#14686): the profile-wide clear has the SAME window as the Google clear, but its remedy is
+  // different — the user confirmed that every cookie goes, including ones still waiting for a
+  // restart, so the whole replay must be dropped rather than stripped of one family.
+  it('drops the whole staged replay when a profile-wide clear landed after the snapshot', async () => {
+    const sourceCookiesPath = seedSource([
+      { domain: '.example.com', name: 'session', value: 'new' }
+    ])
+    seedTarget([{ domain: '.google.com', name: 'SID', value: 'live-sid' }])
+    cookiesSetMock.mockRejectedValue(new Error('cookie rejected'))
+    profileCookieClearMarkMock.mockReturnValueOnce(0).mockReturnValue(1)
+
+    await importCookiesFromBrowser(chromeBrowser(sourceCookiesPath), 'persist:test')
+
+    expect(setPendingCookieImportMock).toHaveBeenCalledTimes(1)
+    expect(clearPendingCookieImportMock).toHaveBeenCalledWith('persist:test')
+    // Why: a full wipe supersedes the family strip — stripping would leave the import replaying.
+    expect(clearPendingCookieImportNonTransplantableMock).not.toHaveBeenCalled()
+  })
+
+  // Why: dropping the replay is right, but those cookies are gone for good. Returning ok with no
+  // warning is the same false-success this whole toast path exists to prevent — the sibling branch
+  // for an unavailable staging DB has warned about exactly this since #9355.
+  it('warns that the discarded replay lost cookies instead of reporting a clean success', async () => {
+    const sourceCookiesPath = seedSource([
+      { domain: '.example.com', name: 'session', value: 'new' }
+    ])
+    seedTarget([{ domain: '.google.com', name: 'SID', value: 'live-sid' }])
+    cookiesSetMock.mockRejectedValue(new Error('cookie rejected'))
+    profileCookieClearMarkMock.mockReturnValueOnce(0).mockReturnValue(1)
+
+    const result = await importCookiesFromBrowser(chromeBrowser(sourceCookiesPath), 'persist:test')
+
+    expect(result.ok && result.summary.warning).toEqual({
+      code: 'restart-fallback-unavailable',
+      loadedCookies: 0,
+      failedCookies: 1
+    })
+  })
+
+  it('leaves the staged Google rows alone when no clear happened during the import', async () => {
+    const sourceCookiesPath = seedSource([
+      { domain: '.example.com', name: 'session', value: 'new' }
+    ])
+    seedTarget([{ domain: '.google.com', name: 'SID', value: 'live-sid' }])
+    cookiesSetMock.mockRejectedValue(new Error('cookie rejected'))
+    cookiesGetMock.mockResolvedValue([])
+    nonTransplantableClearMarkMock.mockReturnValue(3)
+
+    await importCookiesFromBrowser(chromeBrowser(sourceCookiesPath), 'persist:test')
+
+    expect(setPendingCookieImportMock).toHaveBeenCalledTimes(1)
+    expect(clearPendingCookieImportNonTransplantableMock).not.toHaveBeenCalled()
   })
 
   it('keeps the live Google rows in the staged restart-fallback database', async () => {

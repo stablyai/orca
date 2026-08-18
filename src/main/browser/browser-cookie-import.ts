@@ -1610,6 +1610,16 @@ export async function importCookiesFromBrowser(
   // Why: #9355 — staging only backs the cold-restart replay for cookies the in-memory
   // import rejects, so losing it must degrade that fallback rather than abort the import.
   let stagingAvailable = false
+  // Why (#14686): the snapshot below captures the jar's Google rows as they are NOW. Recording the
+  // clear marks alongside it is what lets registration tell "no clear happened" from "a clear
+  // happened and the user has since signed back in" — a state probe cannot separate those.
+  // Read them BEFORE the copy, never after: a clear landing between copy and read would be
+  // invisible, whereas one landing between read and copy only causes a conservative over-drop.
+  // These reads and the copy below are ONE synchronous block, so a snapshot and its marks are taken
+  // atomically. That is load-bearing: an await inserted anywhere between here and the copy — say if
+  // copyFileWithWindowsRetry's retry loop were made async — silently breaks the whole scheme.
+  const clearMarkAtSnapshot = browserSessionRegistry.nonTransplantableClearMark(targetPartition)
+  const profileClearMarkAtSnapshot = browserSessionRegistry.profileCookieClearMark(targetPartition)
   try {
     mkdirSync(stagingDir, { recursive: true })
     copyFileWithWindowsRetry(liveCookiesPath, stagingCookiesPath)
@@ -2064,7 +2074,37 @@ export async function importCookiesFromBrowser(
     if (memoryFailed > 0 && stagingAvailable) {
       // Why: keep the staging DB so the failed cookies load from SQLite on next cold start, where CookieMonster skips validation.
       browserSessionRegistry.setPendingCookieImport(targetPartition, stagingCookiesPath)
-      diag(`  staged at ${stagingCookiesPath} for ${memoryFailed} cookies that need restart`)
+      // Why (#14686): a clear that ran while this import was in flight found no pending entry to
+      // strip, so the snapshot above still holds its pre-clear rows. Registering first means any
+      // clear from here on finds the entry itself; comparing marks covers every clear before that.
+      // Register and compare stay in one synchronous block on purpose — no await between them, so
+      // no clear can land in the middle and see the entry registered but the mark unread.
+      if (
+        browserSessionRegistry.profileCookieClearMark(targetPartition) !==
+        profileClearMarkAtSnapshot
+      ) {
+        // Why: the user wiped the whole profile after this snapshot was taken, and the confirmation
+        // they accepted says cookies still waiting for a restart go too. Replaying anything here
+        // would restore both the pre-wipe jar and this import.
+        browserSessionRegistry.clearPendingCookieImport(targetPartition)
+        diag('  profile cookies were cleared since the snapshot; dropped the staged replay')
+        // Why: dropping it is correct, but those cookies are now gone for good — reporting an
+        // unqualified success is the same false-success shape this toast path exists to prevent.
+        // The advice the code carries, re-run the import, is exactly right after a wipe.
+        warning = {
+          code: 'restart-fallback-unavailable',
+          loadedCookies: memoryLoaded,
+          failedCookies: memoryFailed
+        }
+      } else {
+        if (
+          browserSessionRegistry.nonTransplantableClearMark(targetPartition) !== clearMarkAtSnapshot
+        ) {
+          browserSessionRegistry.clearPendingCookieImportNonTransplantable(targetPartition)
+          diag('  non-transplantable cookies were cleared since the snapshot; stripped them')
+        }
+        diag(`  staged at ${stagingCookiesPath} for ${memoryFailed} cookies that need restart`)
+      }
     } else if (memoryFailed > 0) {
       // Why: never register a path that was never written — cold start would replay a missing
       // or partial DB over the live partition.
