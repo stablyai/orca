@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabContentType } from '../../../../shared/tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { SearchableBrowserPage } from '@/lib/browser-palette-search'
+import {
+  buildSearchableBrowserPageDocument,
+  type SearchableBrowserPage
+} from '@/lib/browser-palette-search'
+import { buildPaletteTabDocument } from '@/lib/palette-match/tab-document'
 import type { SearchableWorkspaceTab } from '@/lib/workspace-tab-palette-search'
 import { TERMINAL_TYPE_SEARCH_ALIASES } from '@/lib/workspace-tab-palette-search'
 import { searchOpenTabs } from './open-tab-search'
@@ -59,7 +63,7 @@ function makeWorkspaceTab({
   agentSnippets?: string[]
   typeSearchAliases?: readonly string[]
 }): SearchableWorkspaceTab {
-  return {
+  const baseEntry = {
     tab: makeTab(id, contentType) as SearchableWorkspaceTab['tab'],
     worktree,
     repoName: 'octo/rocket',
@@ -76,8 +80,21 @@ function makeWorkspaceTab({
       ? [{ paneKey: `${id}-pane`, textParts: [], snippetCandidates: agentSnippets }]
       : [],
     isCurrentTab: false,
-    isCurrentWorktree: true,
-    document: null
+    isCurrentWorktree: true
+  }
+  return {
+    ...baseEntry,
+    document: buildPaletteTabDocument({
+      id,
+      title,
+      secondaryTexts: secondarySearchTexts,
+      typeAliases:
+        typeSearchAliases ??
+        (contentType === 'terminal' ? TERMINAL_TYPE_SEARCH_ALIASES : undefined),
+      repoName: 'octo/rocket',
+      worktreeName: worktree.displayName,
+      branch: worktree.branch ?? ''
+    })
   }
 }
 
@@ -119,15 +136,18 @@ function makeBrowserPage({
     loadError: null,
     createdAt: 0
   }
-  return {
+  const baseEntry = {
     page,
     workspace,
     worktree,
     repoName: 'octo/rocket',
     worktreeSortIndex: 0,
     isCurrentPage: false,
-    isCurrentWorktree: true,
-    document: null
+    isCurrentWorktree: true
+  }
+  return {
+    ...baseEntry,
+    document: buildSearchableBrowserPageDocument(baseEntry)
   }
 }
 
