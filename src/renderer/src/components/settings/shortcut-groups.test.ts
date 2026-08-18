@@ -29,6 +29,16 @@ describe('shortcut groups', () => {
     )
   })
 
+  it('exposes the agent dashboard toggle as a customizable Global row', () => {
+    const global = groupDefinitions([]).find((group) => group.title === 'Global')
+
+    expect(global?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'dashboard.toggle', title: 'Toggle Agent Dashboard' })
+      ])
+    )
+  })
+
   it('reports a plugin default that shadows a built-in shortcut', () => {
     const command: ActivePluginCommand = {
       pluginKey: 'orca-samples.tasks',

@@ -100,6 +100,38 @@ describe('keybindings', () => {
     )
   })
 
+  it('keeps the agent dashboard toggle unassigned until users customize it', () => {
+    const platforms: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
+
+    for (const platform of platforms) {
+      expect(getEffectiveKeybindingsForAction('dashboard.toggle', platform)).toEqual([])
+    }
+
+    const binding = {
+      key: 'd',
+      code: 'KeyD',
+      control: true,
+      meta: false,
+      alt: true,
+      shift: false
+    }
+
+    expect(keybindingMatchesAction('dashboard.toggle', binding, 'linux')).toBe(false)
+    expect(
+      keybindingMatchesAction('dashboard.toggle', binding, 'linux', {
+        'dashboard.toggle': ['Mod+Alt+D']
+      })
+    ).toBe(true)
+
+    const definition = getKeybindingDefinition('dashboard.toggle')
+    expect(definition?.title).toBe('Toggle Agent Dashboard')
+    expect(definition?.group).toBe('Global')
+    expect(definition?.allowInTerminal).toBe(true)
+    expect(definition?.searchKeywords).toEqual(
+      expect.arrayContaining(['agent', 'dashboard', 'kanban', 'toggle', 'open', 'close'])
+    )
+  })
+
   it('keeps the quick commands menu toggle unassigned until users customize it', () => {
     const platforms: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
 
