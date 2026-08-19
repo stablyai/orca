@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { isTextBlock, type NativeChatMessage } from '../../shared/native-chat-types'
 import { QUEUED_PROMPT_TRACE, QUEUED_PROMPT_TEXT } from './__fixtures__/queued-prompt-trace'
+import { createQueuedPromptAnchor } from './queued-prompt-anchor'
 import { readIncrementalTranscriptMessages } from './transcript-incremental-reader'
 import { readNativeChatTranscript } from './transcript-reader'
 import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
@@ -94,15 +95,34 @@ describe('a prompt sent while the agent was mid-turn', () => {
       throw new Error('no claude decoder')
     }
 
-    await writeFile(filePath, `${QUEUED_PROMPT_TRACE.slice(0, split).join('\n')}\n`)
-    const before = await readIncrementalTranscriptMessages(filePath, state, decode)
-    await appendFile(filePath, `${QUEUED_PROMPT_TRACE.slice(split).join('\n')}\n`)
-    const after = await readIncrementalTranscriptMessages(filePath, state, decode)
+    // The reader hands back physical file order, but the pane sorts by
+    // timestamp — so the batches go through the same anchor the watcher holds
+    // across reads, and the assertion sorts the way the pane would.
+    const anchor = createQueuedPromptAnchor()
 
-    expect(conversationTexts([...before, ...after])).toStrictEqual([
+    await writeFile(filePath, `${QUEUED_PROMPT_TRACE.slice(0, split).join('\n')}\n`)
+    const before = anchor.apply(await readIncrementalTranscriptMessages(filePath, state, decode))
+    await appendFile(filePath, `${QUEUED_PROMPT_TRACE.slice(split).join('\n')}\n`)
+    const after = anchor.apply(await readIncrementalTranscriptMessages(filePath, state, decode))
+
+    const fileOrder = [...before, ...after]
+    const rendered = [...fileOrder].sort(
+      (left, right) => (left.timestamp ?? 0) - (right.timestamp ?? 0)
+    )
+
+    expect(conversationTexts(rendered)).toStrictEqual([
       'ASSISTANT_TEXT_1',
       QUEUED_PROMPT_TEXT,
       'ASSISTANT_TEXT_2'
     ])
+
+    // Why: the record the prompt has to stay behind is a tool result, which
+    // carries no conversation text — so the text assertion above cannot see the
+    // anchoring at all. Its enqueue stamp predates that record; only the anchor
+    // moves it past.
+    const queuedIndex = fileOrder.findIndex((message) => textOf(message) === QUEUED_PROMPT_TEXT)
+    const predecessor = fileOrder[queuedIndex - 1]
+    expect(predecessor).toBeDefined()
+    expect(fileOrder[queuedIndex]?.timestamp ?? 0).toBeGreaterThan(predecessor?.timestamp ?? 0)
   })
 })
