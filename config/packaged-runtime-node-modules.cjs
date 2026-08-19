@@ -27,6 +27,9 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   'qrcode',
   'ssh2',
   'tweetnacl',
+  // Why: the Linear transport requires undici at runtime for its system-trust
+  // dispatcher (src/main/linear/linear-api-dispatcher.ts).
+  'undici',
   'ws',
   'yaml',
   'zod'

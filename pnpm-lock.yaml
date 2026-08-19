@@ -88,6 +88,9 @@ importers:
       tweetnacl:
         specifier: ^1.0.3
         version: 1.0.3
+      undici:
+        specifier: ^7.29.0
+        version: 7.29.0
       ws:
         specifier: ^8.21.0
         version: 8.21.0
@@ -3378,6 +3381,7 @@ packages:
   '@xmldom/xmldom@0.8.13':
     resolution: {integrity: sha512-KRYzxepc14G/CEpEGc3Yn+JKaAeT63smlDr+vjB8jRfgTBBI9wRj/nkQEO+ucV8p8I9bfKLWp37uHgFrbntPvw==}
     engines: {node: '>=10.0.0'}
+    deprecated: this version has critical issues, please update to the latest version
 
   '@xterm/addon-fit@0.12.0-beta.287':
     resolution: {integrity: sha512-2MDj+J4x67bjOS/SuBPxSYEWH38NbX6ENV18RbKVOhfRYCX3yERnuHBOrgH9hYdY8rCtsLQmuVgF6cmvCJiV2w==}

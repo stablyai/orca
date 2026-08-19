@@ -108,7 +108,8 @@ async function loadClientModule(options: SafeStorageMockOptions = {}) {
     loadLinearSdk: () => ({
       AuthenticationLinearError,
       LinearClient: linearClientMock
-    })
+    }),
+    createLinearClient: (options: { apiKey: string }) => new linearClientMock(options)
   }))
 
   return import('./client')

@@ -1,5 +1,5 @@
 import type { LinearClient } from '@linear/sdk'
-import { loadLinearSdk } from './linear-sdk'
+import { createLinearClient } from './linear-sdk'
 import type {
   LinearIssueRelationship,
   LinearIssueRelationWriteResult
@@ -37,7 +37,7 @@ export async function writeIssueRelation(params: {
   await acquire()
   try {
     const client = params.signal
-      ? new (loadLinearSdk().LinearClient)({ apiKey: entry.apiKey, signal: params.signal })
+      ? createLinearClient({ apiKey: entry.apiKey, signal: params.signal })
       : entry.client
     const existing = await findExistingRelation(client, params)
     if (params.operation === 'add' && existing) {
