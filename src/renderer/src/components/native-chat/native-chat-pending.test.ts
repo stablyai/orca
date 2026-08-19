@@ -77,6 +77,28 @@ describe('prunePendingSends', () => {
     expect(next).toEqual([])
   })
 
+  // Why: a prompt typed mid-turn used to leave no user row at all, so its echo
+  // never matched, and the echo carries the send time — it sat below the turns
+  // that landed after it rather than in place.
+  it('strands the echo while the mid-turn prompt leaves no user turn behind', () => {
+    const pending = [pendingOf('p1', 'also check the cache')]
+    const next = prunePendingSends(pending, [
+      assistantMessage('m1', 'reading the file'),
+      assistantMessage('m2', 'done')
+    ])
+    expect(next).toBe(pending)
+  })
+
+  it('drops the echo once that prompt is decoded as a queued user turn', () => {
+    const pending = [pendingOf('p1', 'also check the cache')]
+    const next = prunePendingSends(pending, [
+      assistantMessage('m1', 'reading the file'),
+      { ...userMessage('m2', 'also check the cache'), queued: true },
+      assistantMessage('m3', 'done')
+    ])
+    expect(next).toEqual([])
+  })
+
   it('matches advanced turns ignoring surrounding/collapsed whitespace', () => {
     const pending = [pendingOf('p1', '  do   the   thing ')]
     const next = prunePendingSends(pending, [
