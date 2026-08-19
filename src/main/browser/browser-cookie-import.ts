@@ -118,6 +118,7 @@ import {
   type DiscoveredBrowserCandidate
 } from './installed-browser-discovery'
 import { customBrowsersFromCandidates } from './custom-browser-detection'
+import { queryHttpsHandlersMacOS } from './installed-browser-query-macos'
 
 // ---------------------------------------------------------------------------
 // Browser detection
@@ -437,7 +438,8 @@ export async function detectAllBrowsers(opts?: {
   const appSupportRoot = join(process.env.HOME ?? '', 'Library', 'Application Support')
   const candidates = await discoverInstalledBrowsers({
     platform: process.platform,
-    queryHttpsHandlers: opts?.queryHttpsHandlers
+    queryHttpsHandlers:
+      opts?.queryHttpsHandlers ?? (() => Promise.resolve(queryHttpsHandlersMacOS()))
   })
   const chromium = filterChromiumCandidates(candidates, { appSupportRoot })
   // Hardcoded roots let the resolution ladder drop already-known browsers (dedup).
