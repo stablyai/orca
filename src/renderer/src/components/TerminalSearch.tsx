@@ -132,7 +132,7 @@ export default function TerminalSearch({
   return (
     <div
       data-terminal-search-root
-      className="absolute top-2 right-2 z-50 flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/95 px-2 py-1 shadow-lg backdrop-blur-sm"
+      className="absolute top-2 right-2 z-50 flex items-center gap-1 rounded-lg border border-border bg-popover/95 text-popover-foreground px-2 py-1 shadow-lg backdrop-blur-sm"
       style={{ width: 300 }}
       onKeyDown={handleKeyDown}
     >
@@ -142,7 +142,7 @@ export default function TerminalSearch({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder={translate('auto.components.TerminalSearch.e07012f26e', 'Search...')}
-        className="min-w-0 flex-1 border-none bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
+        className="min-w-0 flex-1 border-none bg-transparent text-sm text-popover-foreground outline-none placeholder:text-muted-foreground"
       />
 
       <Button
@@ -151,7 +151,9 @@ export default function TerminalSearch({
         size="icon-xs"
         onClick={() => setCaseSensitive((v) => !v)}
         className={`flex size-6 shrink-0 items-center justify-center rounded ${
-          caseSensitive ? 'bg-zinc-700/50 text-blue-400' : 'text-zinc-400 hover:text-zinc-200'
+          caseSensitive
+            ? 'bg-accent text-accent-foreground'
+            : 'text-muted-foreground hover:text-popover-foreground'
         }`}
         title={translate('auto.components.TerminalSearch.90c61387d9', 'Case sensitive')}
       >
@@ -164,21 +166,23 @@ export default function TerminalSearch({
         size="icon-xs"
         onClick={() => setRegex((v) => !v)}
         className={`flex size-6 shrink-0 items-center justify-center rounded ${
-          regex ? 'bg-zinc-700/50 text-blue-400' : 'text-zinc-400 hover:text-zinc-200'
+          regex
+            ? 'bg-accent text-accent-foreground'
+            : 'text-muted-foreground hover:text-popover-foreground'
         }`}
         title={translate('auto.components.TerminalSearch.42e466b9f1', 'Regex')}
       >
         <Regex size={14} />
       </Button>
 
-      <div className="mx-0.5 h-4 w-px bg-zinc-700" />
+      <div className="mx-0.5 h-4 w-px bg-border" />
 
       <Button
         type="button"
         variant="ghost"
         size="icon-xs"
         onClick={findPrevious}
-        className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
+        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-popover-foreground"
         title={translate('auto.components.TerminalSearch.0f3066256e', 'Previous match')}
       >
         <ChevronUp size={14} />
@@ -189,20 +193,20 @@ export default function TerminalSearch({
         variant="ghost"
         size="icon-xs"
         onClick={findNext}
-        className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
+        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-popover-foreground"
         title={translate('auto.components.TerminalSearch.7cb40c04eb', 'Next match')}
       >
         <ChevronDown size={14} />
       </Button>
 
-      <div className="mx-0.5 h-4 w-px bg-zinc-700" />
+      <div className="mx-0.5 h-4 w-px bg-border" />
 
       <Button
         type="button"
         variant="ghost"
         size="icon-xs"
         onClick={onClose}
-        className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
+        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-popover-foreground"
         title={translate('auto.components.TerminalSearch.db234b7519', 'Close')}
       >
         <X size={14} />
