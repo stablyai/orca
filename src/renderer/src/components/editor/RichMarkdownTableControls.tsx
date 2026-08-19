@@ -148,7 +148,11 @@ function TableActionMenu({
           {label}
         </TooltipContent>
       </Tooltip>
-      <DropdownMenuContent align="start" side={isRow ? 'right' : 'bottom'}>
+      <DropdownMenuContent
+        align="start"
+        side={isRow ? 'right' : 'bottom'}
+        className="rich-markdown-editor-portal"
+      >
         <DropdownMenuItem
           disabled={isRow && isHeader}
           onSelect={() => run(isRow ? 'insert-row-above' : 'insert-column-left')}

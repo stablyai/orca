@@ -63,7 +63,7 @@ function RichMarkdownMoreBlocksMenu({ editor }: { editor: Editor | null }): Reac
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
-      <DropdownMenuContent align="end" side="bottom">
+      <DropdownMenuContent align="end" side="bottom" className="rich-markdown-editor-portal">
         <DropdownMenuLabel>
           {translate('auto.components.editor.RichMarkdownToolbar.2cd9e0bbb3', 'Headings')}
         </DropdownMenuLabel>
