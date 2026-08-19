@@ -24,7 +24,7 @@ const passthroughDedupe = <T>(_repo: string, _id: string | undefined, run: () =>
 describe('worktree.create navigation authority', () => {
   it.each([
     ['runtime', 'caller'],
-    // Why: a phone has no renderer to provision setup/default tabs off the activation,
+    // Why: no phone renderer provisions the host's setup/default tabs off the activation,
     // so mobile creates keep the all-surface reveal until that work moves to the runtime.
     ['mobile', 'all']
   ] as const)(

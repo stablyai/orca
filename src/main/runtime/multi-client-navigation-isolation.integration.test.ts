@@ -350,14 +350,30 @@ describe('paired runtime navigation isolation', () => {
       harness.clientB.ws.close()
     })
 
+    // Why navigation 'all': a caller-scoped create emits no activation at all, so the
+    // reconnect assertion below would pass vacuously — there must be a real frame to miss.
     send(harness.clientA, {
       id: 'create-while-b-offline',
       method: 'worktree.create',
-      params: { repo: FOLDER_REPO_ID, name: 'offline-observer-workspace', activate: true }
+      params: {
+        repo: FOLDER_REPO_ID,
+        name: 'offline-observer-workspace',
+        activate: true,
+        navigation: 'all'
+      }
     })
     await expect(harness.readerA.next('create-while-b-offline')).resolves.toMatchObject({
       ok: true
     })
+    // The still-connected client proves the activation really was emitted while B was down.
+    expect(
+      resultType(
+        await harness.readerA.next(
+          'events-a',
+          (response) => resultType(response) === 'activateWorktree'
+        )
+      )
+    ).toBe('activateWorktree')
 
     const reconnectedB = await authenticate(harness.pairingUrlB)
     sessions.push(reconnectedB)
