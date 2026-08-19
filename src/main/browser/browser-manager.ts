@@ -153,6 +153,15 @@ type PendingMainFrameNavigation = {
   currentUrl: string
   supersededUrls: string[]
 }
+type AuthUserAgentOverrideOperation = {
+  sequence: number
+  userAgent: string
+}
+type AuthUserAgentOverrideState = {
+  confirmed: AuthUserAgentOverrideOperation | null
+  nextSequence: number
+  pending: AuthUserAgentOverrideOperation[]
+}
 const SAFE_POPUP_WINDOW_OPTIONS = {
   alwaysOnTop: false,
   closable: true,
@@ -229,10 +238,12 @@ export class BrowserManager {
   // Why: presence means the preset requires a CDP UA override (installed or in flight), so navigation
   // can re-issue it against the target URL's identity.
   private readonly viewportUaOverrideMobileByTabId = new Map<string, boolean>()
-  // Why: the auth-host UA of a guest whose identity moved to the CDP override. That override outranks
-  // WebContents.setUserAgent, so once it is installed getUserAgent() no longer reports what the
-  // document sees and this is the only accurate reading of the guest's current identity.
-  private readonly authUserAgentOverrideByGuestId = new Map<number, string>()
+  // Why: the confirmed CDP identity outranks getUserAgent; pending intent keeps rapid navigations
+  // ordered without claiming a failed write was installed.
+  private readonly authUserAgentOverrideStateByGuestId = new Map<
+    number,
+    AuthUserAgentOverrideState
+  >()
   // Why: the in-flight main-frame navigation target, held only until commit or failure — getURL()
   // still reports the outgoing page until then. See resolveTabNavigationUrl.
   private readonly pendingNavigationByGuestId = new Map<number, PendingMainFrameNavigation>()
@@ -319,6 +330,7 @@ export class BrowserManager {
 
     // Why: proxy/bridge stop detaches the debugger and drops injections; re-attach (500ms delay to avoid racing a mid-restart) to keep overrides.
     const onDetach = (): void => {
+      this.authUserAgentOverrideStateByGuestId.delete(guest.id)
       if (!disposed && !guest.isDestroyed() && reattachTimer === null) {
         reattachTimer = setTimeout(() => {
           reattachTimer = null
@@ -969,8 +981,14 @@ export class BrowserManager {
       return
     }
     const firefoxUa = googleAuthUserAgent()
-    const overriddenUa = this.authUserAgentOverrideByGuestId.get(guest.id)
-    const currentUa = overriddenUa ?? guest.getUserAgent()
+    const overrideState = this.authUserAgentOverrideStateByGuestId.get(guest.id)
+    const latestPendingOverride = overrideState?.pending.at(-1)
+    const confirmedOverride = overrideState?.confirmed
+    const currentOverride =
+      latestPendingOverride && latestPendingOverride.sequence > (confirmedOverride?.sequence ?? -1)
+        ? latestPendingOverride
+        : confirmedOverride
+    const currentUa = currentOverride?.userAgent ?? guest.getUserAgent()
     const nextUa = isGoogleAuthUrl(url)
       ? firefoxUa
       : // Only restore when the auth-host override is actually in place, so normal
@@ -978,6 +996,7 @@ export class BrowserManager {
         currentUa === firefoxUa
         ? guest.session.getUserAgent()
         : null
+    let authOverrideIssuedOverCdp = false
     if (nextUa !== null && nextUa !== currentUa) {
       // Why: WebContents.setUserAgent() during a redirect makes Chromium cancel the in-flight
       // navigation (ERR_ABORTED) and replay the original request, which a POST-started OAuth chain
@@ -985,19 +1004,20 @@ export class BrowserManager {
       // touching the navigation, and it outranks the WebContents UA from then on, so a guest that
       // switches to it stays on it. The wire UA never depended on this write: setupClientHintsOverride
       // rewrites User-Agent per request for auth-host URLs on its own.
-      if (options.duringRedirect === true || overriddenUa !== undefined) {
+      if (options.duringRedirect === true || overrideState !== undefined) {
         if (this.canOverrideUserAgentOverCdp(guest)) {
-          this.authUserAgentOverrideByGuestId.set(guest.id, nextUa)
+          authOverrideIssuedOverCdp = true
           // Why: go through the viewport builder rather than writing nextUa raw, so both CDP writers
           // resolve one identity for this URL — Firefox on auth hosts, the profile's clean base off
           // them, any mobile preset preserved. Writing the session UA directly would put the
           // unlaundered Electron token back on the wire.
-          void this.sendViewportUserAgentOverride(
+          void this.applyAuthUserAgentOverrideOverCdp(
             guest,
-            (ownerTabId ? this.viewportUaOverrideMobileByTabId.get(ownerTabId) : undefined) ??
+            (browserPageId ? this.viewportUaOverrideMobileByTabId.get(browserPageId) : undefined) ??
               false,
-            url
-          ).catch(() => {})
+            url,
+            nextUa
+          )
         }
         // Why: with no debugger there is no way to retarget the identity without cancelling the
         // redirect. A stale navigator.userAgent is recoverable; a dead navigation is not.
@@ -1007,7 +1027,7 @@ export class BrowserManager {
     }
     // Why: gate on the DIRECT page id, not ownerTabId — a popup has no device-metrics override of
     // its own, so inheriting the owner tab's preset UA would pair a mobile UA with a desktop viewport.
-    if (browserPageId) {
+    if (browserPageId && !authOverrideIssuedOverCdp) {
       this.reapplyViewportUserAgentOverride(guest, browserPageId, url)
     }
   }
@@ -1018,6 +1038,54 @@ export class BrowserManager {
     } catch {
       return false
     }
+  }
+
+  private applyAuthUserAgentOverrideOverCdp(
+    guest: Electron.WebContents,
+    mobile: boolean,
+    url: string,
+    userAgent: string
+  ): Promise<boolean> {
+    if (!this.canOverrideUserAgentOverCdp(guest)) {
+      return Promise.resolve(false)
+    }
+    const state = this.authUserAgentOverrideStateByGuestId.get(guest.id) ?? {
+      confirmed: null,
+      nextSequence: 0,
+      pending: []
+    }
+    const operation = { sequence: ++state.nextSequence, userAgent }
+    state.pending.push(operation)
+    this.authUserAgentOverrideStateByGuestId.set(guest.id, state)
+    return this.sendViewportUserAgentOverride(guest, mobile, url, userAgent).then(
+      () => this.settleAuthUserAgentOverride(guest.id, state, operation, true),
+      () => {
+        this.settleAuthUserAgentOverride(guest.id, state, operation, false)
+        return false
+      }
+    )
+  }
+
+  private settleAuthUserAgentOverride(
+    guestId: number,
+    state: AuthUserAgentOverrideState,
+    operation: AuthUserAgentOverrideOperation,
+    succeeded: boolean
+  ): boolean {
+    if (this.authUserAgentOverrideStateByGuestId.get(guestId) !== state) {
+      return false
+    }
+    if (succeeded && (state.confirmed?.sequence ?? -1) < operation.sequence) {
+      state.confirmed = operation
+    }
+    const pendingIndex = state.pending.indexOf(operation)
+    if (pendingIndex !== -1) {
+      state.pending.splice(pendingIndex, 1)
+    }
+    if (state.confirmed === null && state.pending.length === 0) {
+      this.authUserAgentOverrideStateByGuestId.delete(guestId)
+    }
+    return true
   }
 
   private startPendingNavigation(guestId: number, url: string): void {
@@ -1086,7 +1154,8 @@ export class BrowserManager {
   private async sendViewportUserAgentOverride(
     guest: Electron.WebContents,
     mobile: boolean,
-    url?: string
+    url?: string,
+    baseUserAgent?: string
   ): Promise<void> {
     if (guest.isDestroyed() || !guest.debugger.isAttached()) {
       return
@@ -1096,7 +1165,7 @@ export class BrowserManager {
       buildViewportUserAgentOverride({
         url: url ?? this.resolveTabNavigationUrl(guest),
         mobile,
-        baseUserAgent: cleanElectronUserAgent(guest.getUserAgent())
+        baseUserAgent: cleanElectronUserAgent(baseUserAgent ?? guest.getUserAgent())
       })
     )
   }
@@ -1149,7 +1218,7 @@ export class BrowserManager {
     this.clickedLinkFrameNameByGuestId.delete(guestWebContentsId)
     this.offscreenGuestIds.delete(guestWebContentsId)
     this.popupOwnerContextByGuestId.delete(guestWebContentsId)
-    this.authUserAgentOverrideByGuestId.delete(guestWebContentsId)
+    this.authUserAgentOverrideStateByGuestId.delete(guestWebContentsId)
     this.pendingNavigationByGuestId.delete(guestWebContentsId)
     // Why: a popup must stop inheriting authorization the moment its owner retires, before Chromium destroys the child.
     if (isPrimaryGuest) {
@@ -1354,7 +1423,7 @@ export class BrowserManager {
     this.sessionProfileIdByPageId.clear()
     this.userAgentModeByPageId.clear()
     this.viewportUaOverrideMobileByTabId.clear()
-    this.authUserAgentOverrideByGuestId.clear()
+    this.authUserAgentOverrideStateByGuestId.clear()
     this.pendingNavigationByGuestId.clear()
     this.pendingLoadFailuresByGuestId.clear()
     this.loadErrorsByGuestId.clear()
@@ -1774,9 +1843,22 @@ export class BrowserManager {
         const trackedMobile = this.viewportUaOverrideMobileByTabId.get(browserTabId)
         // A navigation after this point must not re-install the override behind the clear.
         this.viewportUaOverrideMobileByTabId.delete(browserTabId)
-        // Why: passing an empty string restores the session default UA.
         try {
-          await dbg.sendCommand('Emulation.setUserAgentOverride', { userAgent: '' })
+          if (this.authUserAgentOverrideStateByGuestId.has(guest.id)) {
+            const url = this.resolveTabNavigationUrl(guest)
+            const restored = await this.applyAuthUserAgentOverrideOverCdp(
+              guest,
+              false,
+              url,
+              isGoogleAuthUrl(url) ? googleAuthUserAgent() : guest.session.getUserAgent()
+            )
+            if (!restored) {
+              throw new Error('Failed to preserve auth user agent')
+            }
+          } else {
+            // Why: passing an empty string restores the session default UA.
+            await dbg.sendCommand('Emulation.setUserAgentOverride', { userAgent: '' })
+          }
         } catch (error) {
           if (trackedMobile !== undefined) {
             this.viewportUaOverrideMobileByTabId.set(browserTabId, trackedMobile)
