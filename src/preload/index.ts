@@ -3021,6 +3021,8 @@ const api = {
     sessionImportFromBrowser: (args: {
       profileId: string
       browserFamily: string
+      browserProfile?: string
+      customBrowserId?: string
     }): Promise<
       { ok: true; profileId: string; summary: unknown } | { ok: false; reason: string }
     > => ipcRenderer.invoke('browser:session:importFromBrowser', args),

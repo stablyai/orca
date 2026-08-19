@@ -1,9 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handleMock, removeHandlerMock, createProfileMock } = vi.hoisted(() => ({
+const {
+  handleMock,
+  removeHandlerMock,
+  createProfileMock,
+  getProfileMock,
+  updateProfileSourceMock,
+  detectAllBrowsersMock,
+  importCookiesFromBrowserMock
+} = vi.hoisted(() => ({
   handleMock: vi.fn(),
   removeHandlerMock: vi.fn(),
-  createProfileMock: vi.fn()
+  createProfileMock: vi.fn(),
+  getProfileMock: vi.fn(),
+  updateProfileSourceMock: vi.fn(),
+  detectAllBrowsersMock: vi.fn(),
+  importCookiesFromBrowserMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -21,13 +33,15 @@ vi.mock('../browser/browser-manager', () => ({
 
 vi.mock('../browser/browser-session-registry', () => ({
   browserSessionRegistry: {
-    createProfile: createProfileMock
+    createProfile: createProfileMock,
+    getProfile: getProfileMock,
+    updateProfileSource: updateProfileSourceMock
   }
 }))
 
 vi.mock('../browser/browser-cookie-import', () => ({
-  detectInstalledBrowsers: vi.fn(() => []),
-  importCookiesFromBrowser: vi.fn(),
+  detectAllBrowsers: detectAllBrowsersMock,
+  importCookiesFromBrowser: importCookiesFromBrowserMock,
   importCookiesFromFile: vi.fn(),
   pickCookieFile: vi.fn(),
   selectBrowserProfile: vi.fn()
@@ -41,8 +55,27 @@ describe('browser session profile IPC', () => {
     handleMock.mockReset()
     removeHandlerMock.mockReset()
     createProfileMock.mockReset()
+    getProfileMock.mockReset()
+    updateProfileSourceMock.mockReset()
+    detectAllBrowsersMock.mockReset()
+    importCookiesFromBrowserMock.mockReset()
     setTrustedBrowserRendererWebContentsId(null)
   })
+
+  const trustedSender = {
+    id: 91,
+    isDestroyed: () => false,
+    getType: () => 'window',
+    getURL: () => 'file:///renderer/index.html'
+  } as Electron.WebContents
+
+  function getHandler(channel: string): (...args: unknown[]) => unknown {
+    registerBrowserHandlers()
+    setTrustedBrowserRendererWebContentsId(trustedSender.id)
+    return handleMock.mock.calls.find(([registered]) => registered === channel)?.[1] as (
+      ...args: unknown[]
+    ) => unknown
+  }
 
   it('forwards the user-agent mode from a trusted renderer', () => {
     const profile = {
@@ -74,5 +107,76 @@ describe('browser session profile IPC', () => {
     expect(createProfileMock).toHaveBeenCalledWith('isolated', 'Google', {
       userAgentMode: 'native'
     })
+  })
+
+  it('exposes customBrowserId but strips filesystem paths and keychain identifiers', async () => {
+    detectAllBrowsersMock.mockResolvedValue([
+      {
+        family: 'custom',
+        label: 'Vivaldi',
+        cookiesPath: '/Users/x/Library/Application Support/Vivaldi/Default/Cookies',
+        keychainService: 'Vivaldi Safe Storage',
+        keychainAccount: 'Vivaldi',
+        profiles: [{ name: 'Default', directory: 'Default' }],
+        selectedProfile: 'Default',
+        customBrowserId: 'com.vivaldi.Vivaldi'
+      }
+    ])
+    const detectHandler = getHandler('browser:session:detectBrowsers')
+
+    const detected = (await detectHandler({ sender: trustedSender })) as Record<string, unknown>[]
+
+    expect(detected).toEqual([
+      {
+        family: 'custom',
+        label: 'Vivaldi',
+        profiles: [{ name: 'Default', directory: 'Default' }],
+        selectedProfile: 'Default',
+        customBrowserId: 'com.vivaldi.Vivaldi'
+      }
+    ])
+    // Why: the security strip must never leak these to the renderer.
+    expect(detected[0]).not.toHaveProperty('cookiesPath')
+    expect(detected[0]).not.toHaveProperty('keychainService')
+    expect(detected[0]).not.toHaveProperty('keychainAccount')
+  })
+
+  it('matches a custom browser by customBrowserId on import, not by family', async () => {
+    getProfileMock.mockReturnValue({ id: 'default', partition: 'persist:default' })
+    importCookiesFromBrowserMock.mockResolvedValue({
+      ok: true,
+      summary: { totalCookies: 1, importedCookies: 1, skippedCookies: 0, domains: [] }
+    })
+    const vivaldi = {
+      family: 'custom',
+      label: 'Vivaldi',
+      cookiesPath: '/vivaldi/Cookies',
+      profiles: [{ name: 'Default', directory: 'Default' }],
+      selectedProfile: 'Default',
+      customBrowserId: 'com.vivaldi.Vivaldi'
+    }
+    const opera = {
+      family: 'custom',
+      label: 'Opera',
+      cookiesPath: '/opera/Cookies',
+      profiles: [{ name: 'Default', directory: 'Default' }],
+      selectedProfile: 'Default',
+      customBrowserId: 'com.operasoftware.Opera'
+    }
+    // Two 'custom'-family browsers: only customBrowserId disambiguates them.
+    detectAllBrowsersMock.mockResolvedValue([vivaldi, opera])
+    const importHandler = getHandler('browser:session:importFromBrowser')
+
+    const result = await importHandler(
+      { sender: trustedSender },
+      { profileId: 'default', browserFamily: 'custom', customBrowserId: 'com.operasoftware.Opera' }
+    )
+
+    expect(result).toMatchObject({ ok: true, profileId: 'default' })
+    expect(importCookiesFromBrowserMock).toHaveBeenCalledWith(opera, 'persist:default')
+    expect(updateProfileSourceMock).toHaveBeenCalledWith(
+      'default',
+      expect.objectContaining({ browserFamily: 'custom', profileName: 'Default' })
+    )
   })
 })

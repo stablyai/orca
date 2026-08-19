@@ -149,6 +149,8 @@ export const ProfileImportFromBrowser = z.object({
   profileId: requiredString('Missing required --profile'),
   browserFamily: requiredString('Missing required --browser-family'),
   browserProfile: OptionalString,
+  // Additive/wire-safe: disambiguates 'custom'-family browsers; old clients omit it.
+  customBrowserId: OptionalString,
   supportsPartitionSkippedCookies: z.literal(true).optional()
 })
 

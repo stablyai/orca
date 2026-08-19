@@ -41,14 +41,17 @@ export function BrowserUseCookieImportStep({
 
   const handleImportFromBrowser = async (
     browserFamily: string,
-    browserProfile?: string
+    browserProfile?: string,
+    customBrowserId?: string
   ): Promise<void> => {
     const profileId = 'default'
     const result = await useAppStore
       .getState()
-      .importCookiesFromBrowser(profileId, browserFamily, browserProfile)
+      .importCookiesFromBrowser(profileId, browserFamily, browserProfile, customBrowserId)
     if (result.ok) {
-      const browser = detectedBrowsers.find((b) => b.family === browserFamily)
+      const browser = customBrowserId
+        ? detectedBrowsers.find((b) => b.customBrowserId === customBrowserId)
+        : detectedBrowsers.find((b) => b.family === browserFamily)
       emitBrowserCookieImportToast(
         result.summary,
         translate(
@@ -167,7 +170,7 @@ export function BrowserUseCookieImportStep({
           <DropdownMenuContent align="end">
             {detectedBrowsers.map((browser) =>
               browser.profiles.length > 1 ? (
-                <DropdownMenuSub key={browser.family}>
+                <DropdownMenuSub key={browser.customBrowserId ?? browser.family}>
                   <DropdownMenuSubTrigger>
                     {translate(
                       'auto.components.settings.BrowserUsePane.5301857d88',
@@ -181,7 +184,11 @@ export function BrowserUseCookieImportStep({
                         <DropdownMenuItem
                           key={bp.directory}
                           onSelect={() =>
-                            void handleImportFromBrowser(browser.family, bp.directory)
+                            void handleImportFromBrowser(
+                              browser.family,
+                              bp.directory,
+                              browser.customBrowserId
+                            )
                           }
                         >
                           {bp.name}
@@ -192,8 +199,10 @@ export function BrowserUseCookieImportStep({
                 </DropdownMenuSub>
               ) : (
                 <DropdownMenuItem
-                  key={browser.family}
-                  onSelect={() => void handleImportFromBrowser(browser.family)}
+                  key={browser.customBrowserId ?? browser.family}
+                  onSelect={() =>
+                    void handleImportFromBrowser(browser.family, undefined, browser.customBrowserId)
+                  }
                 >
                   {translate(
                     'auto.components.settings.BrowserUsePane.5301857d88',

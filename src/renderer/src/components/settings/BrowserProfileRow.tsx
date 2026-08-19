@@ -27,6 +27,7 @@ type DetectedBrowser = {
   label: string
   profiles: { name: string; directory: string }[]
   selectedProfile: string
+  customBrowserId?: string
 }
 
 export type BrowserProfileRowProps = {
@@ -56,13 +57,16 @@ export function BrowserProfileRow({
 
   const handleImportFromBrowser = async (
     browserFamily: string,
-    browserProfile?: string
+    browserProfile?: string,
+    customBrowserId?: string
   ): Promise<void> => {
     const result = await useAppStore
       .getState()
-      .importCookiesFromBrowser(profile.id, browserFamily, browserProfile)
+      .importCookiesFromBrowser(profile.id, browserFamily, browserProfile, customBrowserId)
     if (result.ok) {
-      const browser = detectedBrowsers.find((b) => b.family === browserFamily)
+      const browser = customBrowserId
+        ? detectedBrowsers.find((b) => b.customBrowserId === customBrowserId)
+        : detectedBrowsers.find((b) => b.family === browserFamily)
       emitBrowserCookieImportToast(
         result.summary,
         browserProfile
@@ -179,7 +183,7 @@ export function BrowserProfileRow({
           <DropdownMenuContent align="end">
             {detectedBrowsers.map((browser) =>
               browser.profiles.length > 1 ? (
-                <DropdownMenuSub key={browser.family}>
+                <DropdownMenuSub key={browser.customBrowserId ?? browser.family}>
                   <DropdownMenuSubTrigger>
                     {translate(
                       'auto.components.settings.BrowserProfileRow.c5a273a809',
@@ -193,7 +197,11 @@ export function BrowserProfileRow({
                         <DropdownMenuItem
                           key={bp.directory}
                           onSelect={() =>
-                            void handleImportFromBrowser(browser.family, bp.directory)
+                            void handleImportFromBrowser(
+                              browser.family,
+                              bp.directory,
+                              browser.customBrowserId
+                            )
                           }
                         >
                           {bp.name}
@@ -204,8 +212,10 @@ export function BrowserProfileRow({
                 </DropdownMenuSub>
               ) : (
                 <DropdownMenuItem
-                  key={browser.family}
-                  onSelect={() => void handleImportFromBrowser(browser.family)}
+                  key={browser.customBrowserId ?? browser.family}
+                  onSelect={() =>
+                    void handleImportFromBrowser(browser.family, undefined, browser.customBrowserId)
+                  }
                 >
                   {translate(
                     'auto.components.settings.BrowserProfileRow.c5a273a809',

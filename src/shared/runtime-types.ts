@@ -1126,6 +1126,8 @@ export type BrowserDetectedInfo = {
   label: string
   profiles: BrowserDetectedProfileInfo[]
   selectedProfile: string
+  // Disambiguator for auto-discovered 'custom'-family browsers; absent for hardcoded ones.
+  customBrowserId?: string
 }
 
 export type BrowserDetectProfilesResult = {

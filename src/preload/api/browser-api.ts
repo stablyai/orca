@@ -123,6 +123,7 @@ export type BrowserApi = {
     profileId: string
     browserFamily: string
     browserProfile?: string
+    customBrowserId?: string
   }) => Promise<BrowserCookieImportResult>
   sessionClearDefaultCookies: () => Promise<boolean>
   notifyActiveTabChanged: (args: { browserPageId: string }) => Promise<boolean>
@@ -138,4 +139,6 @@ export type DetectedBrowserInfo = {
   label: string
   profiles: DetectedBrowserProfileInfo[]
   selectedProfile: string
+  // Disambiguator for auto-discovered 'custom'-family browsers; absent for hardcoded ones.
+  customBrowserId?: string
 }

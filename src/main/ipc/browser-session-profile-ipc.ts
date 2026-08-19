@@ -4,7 +4,7 @@ import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import {
   pickCookieFile,
   importCookiesFromFile,
-  detectInstalledBrowsers,
+  detectAllBrowsers,
   selectBrowserProfile,
   importCookiesFromBrowser
 } from '../browser/browser-cookie-import'
@@ -110,25 +110,31 @@ export function registerBrowserSessionProfileHandlers(): void {
 
   ipcMain.handle(
     'browser:session:detectBrowsers',
-    (
+    async (
       event
-    ): {
-      family: string
-      label: string
-      profiles: { name: string; directory: string }[]
-      selectedProfile: string
-    }[] => {
+    ): Promise<
+      {
+        family: string
+        label: string
+        profiles: { name: string; directory: string }[]
+        selectedProfile: string
+        customBrowserId?: string
+      }[]
+    > => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return []
       }
       // Why: the renderer only needs family/label/profiles for the UI picker.
       // Strip cookiesPath, keychainService, and keychainAccount to avoid
       // exposing filesystem paths and credential store identifiers to the renderer.
-      return detectInstalledBrowsers().map((b) => ({
+      // customBrowserId is the only safe disambiguator for 'custom'-family browsers.
+      const browsers = await detectAllBrowsers()
+      return browsers.map((b) => ({
         family: b.family,
         label: b.label,
         profiles: b.profiles,
-        selectedProfile: b.selectedProfile
+        selectedProfile: b.selectedProfile,
+        ...(b.customBrowserId ? { customBrowserId: b.customBrowserId } : {})
       }))
     }
   )
@@ -137,7 +143,12 @@ export function registerBrowserSessionProfileHandlers(): void {
     'browser:session:importFromBrowser',
     async (
       event,
-      args: { profileId: string; browserFamily: string; browserProfile?: string }
+      args: {
+        profileId: string
+        browserFamily: string
+        browserProfile?: string
+        customBrowserId?: string
+      }
     ): Promise<BrowserCookieImportResult> => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return { ok: false, reason: 'Not authorized' }
@@ -157,8 +168,12 @@ export function registerBrowserSessionProfileHandlers(): void {
         return { ok: false, reason: 'Invalid browser profile name.' }
       }
 
-      const browsers = detectInstalledBrowsers()
-      let browser = browsers.find((b) => b.family === args.browserFamily)
+      const browsers = await detectAllBrowsers()
+      // Why: custom browsers all share family 'custom', so a customBrowserId request must match on
+      // that id; older clients omit it and fall back to family match.
+      let browser = args.customBrowserId
+        ? browsers.find((b) => b.customBrowserId === args.customBrowserId)
+        : browsers.find((b) => b.family === args.browserFamily)
       if (!browser) {
         return { ok: false, reason: 'Browser not found on this system.' }
       }

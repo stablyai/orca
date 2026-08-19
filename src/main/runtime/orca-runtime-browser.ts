@@ -61,7 +61,7 @@ import { startBrowserScreencast } from '../browser/browser-screencast-stream'
 import type { BrowserScreencastSession } from '../browser/browser-screencast-stream-types'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import {
-  detectInstalledBrowsers,
+  detectAllBrowsers,
   importCookiesFromBrowser,
   selectBrowserProfile
 } from '../browser/browser-cookie-import'
@@ -1535,13 +1535,16 @@ export class RuntimeBrowserCommands {
   }
 
   async browserProfileDetectBrowsers(): Promise<BrowserDetectProfilesResult> {
+    const browsers = await detectAllBrowsers()
     return {
-      // Why: expose only display metadata; filesystem paths and keychain identifiers stay on the runtime server.
-      browsers: detectInstalledBrowsers().map((browser) => ({
+      // Why: expose only display metadata; filesystem paths and keychain identifiers stay on the
+      // runtime server. customBrowserId is the only safe disambiguator for 'custom'-family browsers.
+      browsers: browsers.map((browser) => ({
         family: browser.family,
         label: browser.label,
         profiles: browser.profiles,
-        selectedProfile: browser.selectedProfile
+        selectedProfile: browser.selectedProfile,
+        ...(browser.customBrowserId ? { customBrowserId: browser.customBrowserId } : {})
       }))
     }
   }
@@ -1550,6 +1553,7 @@ export class RuntimeBrowserCommands {
     profileId: string
     browserFamily: string
     browserProfile?: string
+    customBrowserId?: string
     supportsPartitionSkippedCookies?: true
   }): Promise<BrowserProfileImportFromBrowserResult> {
     const profile = browserSessionRegistry.getProfile(params.profileId)
@@ -1563,8 +1567,12 @@ export class RuntimeBrowserCommands {
       return { ok: false, reason: 'Invalid browser profile name.' }
     }
 
-    const browsers = detectInstalledBrowsers()
-    let browser = browsers.find((candidate) => candidate.family === params.browserFamily)
+    const browsers = await detectAllBrowsers()
+    // Why: custom browsers all share family 'custom', so a customBrowserId request must match on
+    // that id; older clients omit it and fall back to family match.
+    let browser = params.customBrowserId
+      ? browsers.find((candidate) => candidate.customBrowserId === params.customBrowserId)
+      : browsers.find((candidate) => candidate.family === params.browserFamily)
     if (!browser) {
       return { ok: false, reason: 'Browser not found on this system.' }
     }
