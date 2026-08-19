@@ -7,6 +7,9 @@ export type Worktree = {
   worktreeId: string
   repoId: string
   hostId?: ExecutionHostId
+  /** Opaque filter identity when one list combines multiple desktop catalogs. */
+  executionHostFilterId?: string
+  executionHostFilterLabel?: string
   terminalPlatform?: NodeJS.Platform
   repo: string
   branch: string
@@ -54,6 +57,19 @@ export type FilterState = {
   hideDefaultBranch: boolean
   /** Absent means on: #8873's exemption must fail open on older host payloads. */
   alwaysShowDefaultBranch?: boolean
+  /**
+   * Execution hosts (local / WSL / SSH) to keep, mirroring the desktop sidebar's
+   * visibleWorkspaceHostIds. Absent or empty means every host, so a payload from
+   * a runtime that omits hostId is never filtered away.
+   */
+  filterExecutionHostIds?: ReadonlySet<string>
 }
 
-export type Section = { key: string; title: string; icon?: 'pin'; data: Worktree[] }
+// Generic over the row shape so a merged cross-desktop list keeps its own row
+// type through the filter/group/sort pipeline instead of widening to Worktree.
+export type Section<T extends Worktree = Worktree> = {
+  key: string
+  title: string
+  icon?: 'pin'
+  data: T[]
+}

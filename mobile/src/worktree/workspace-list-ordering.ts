@@ -51,11 +51,11 @@ function compareByAgentAttention(a: Worktree, b: Worktree, now: number): number 
   )
 }
 
-export function sortWorktrees(
-  worktrees: Worktree[],
+export function sortWorktrees<T extends Worktree>(
+  worktrees: T[],
   mode: MobileSortMode,
   now = Date.now()
-): Worktree[] {
+): T[] {
   if (mode === 'manual') {
     return [...worktrees].sort((a, b) => {
       const aRank = getManualSortRank(a)

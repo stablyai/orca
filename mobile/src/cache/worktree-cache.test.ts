@@ -1,5 +1,38 @@
 import { describe, expect, it } from 'vitest'
-import { setCachedWorktrees, getCachedWorktrees, getProvenCachedWorktrees } from './worktree-cache'
+import {
+  getCachedWorktrees,
+  getCachedWorkspaceCatalog,
+  getProvenCachedWorktrees,
+  setCachedWorktrees
+} from './worktree-cache'
+import type { Worktree } from '../worktree/workspace-list-types'
+
+function summary(worktreeId: string, displayName = worktreeId) {
+  return {
+    worktreeId,
+    repo: 'orca',
+    branch: 'main',
+    displayName,
+    liveTerminalCount: 0
+  }
+}
+
+function workspace(worktreeId: string): Worktree {
+  return {
+    worktreeId,
+    repoId: 'repo-1',
+    repo: 'orca',
+    branch: 'main',
+    displayName: worktreeId,
+    path: `/tmp/${worktreeId}`,
+    liveTerminalCount: 0,
+    hasAttachedPty: false,
+    preview: '',
+    unread: false,
+    isPinned: false,
+    linkedPR: null
+  }
+}
 
 // Why: AC #8498 guarantees a reconnect refetch writes through the
 // same cache path the host detail screen seeds from, so a reconnect can't
@@ -7,11 +40,8 @@ import { setCachedWorktrees, getCachedWorktrees, getProvenCachedWorktrees } from
 describe('worktree-cache write-through', () => {
   it('returns the most-recently written snapshot, not a stale one', () => {
     const hostId = 'host-write-through'
-    const stale = [{ worktreeId: 'a', name: 'stale' }]
-    const fresh = [
-      { worktreeId: 'a', name: 'fresh' },
-      { worktreeId: 'b', name: 'added' }
-    ]
+    const stale = [summary('a', 'stale')]
+    const fresh = [summary('a', 'fresh'), summary('b', 'added')]
 
     setCachedWorktrees(hostId, stale)
     expect(getCachedWorktrees(hostId)).toEqual(stale)
@@ -28,13 +58,10 @@ describe('worktree-cache write-through', () => {
     // on (re)mount as its initialCache. A reconnect that writes
     // through must therefore surface here instead of the pre-reconnect data.
     const hostId = 'host-remount'
-    setCachedWorktrees(hostId, [{ worktreeId: 'old', name: 'pre-reconnect' }])
+    setCachedWorktrees(hostId, [summary('old', 'pre-reconnect')])
 
     // Reconnect refetch lands a fresh snapshot and writes it through.
-    const reconnected = [
-      { worktreeId: 'old', name: 'post-reconnect' },
-      { worktreeId: 'new', name: 'now-visible' }
-    ]
+    const reconnected = [summary('old', 'post-reconnect'), summary('new', 'now-visible')]
     setCachedWorktrees(hostId, reconnected)
 
     // A fresh screen mount reads the cache — must see the connected set.
@@ -48,7 +75,7 @@ describe('worktree-cache write-through', () => {
 describe('worktree-cache provenance', () => {
   it('withholds unmarked writes from the proven reader', () => {
     const hostId = 'host-seeded'
-    const seeded = [{ worktreeId: 'a' }]
+    const seeded = [summary('a')]
 
     setCachedWorktrees(hostId, seeded)
 
@@ -58,7 +85,7 @@ describe('worktree-cache provenance', () => {
 
   it('exposes a host-listed catalog to the proven reader', () => {
     const hostId = 'host-proven'
-    const listed = [{ worktreeId: 'a' }, { worktreeId: 'b' }]
+    const listed = [summary('a'), summary('b')]
 
     setCachedWorktrees(hostId, listed, { proven: true })
 
@@ -67,25 +94,46 @@ describe('worktree-cache provenance', () => {
 
   it('keeps a fresh proven catalog when an unproven seed lands after it', () => {
     const hostId = 'host-kept'
-    const listed = [{ worktreeId: 'a' }, { worktreeId: 'b' }]
+    const listed = [summary('a'), summary('b')]
     setCachedWorktrees(hostId, listed, { proven: true })
 
     // A cold-start snapshot seed must neither truncate nor de-prove the host-listed rows.
-    setCachedWorktrees(hostId, [{ worktreeId: 'a' }])
+    setCachedWorktrees(hostId, [summary('a')])
 
     expect(getProvenCachedWorktrees(hostId)).toEqual(listed)
   })
 
   it('lets an unproven seed replace another unproven entry', () => {
     const hostId = 'host-reseeded'
-    setCachedWorktrees(hostId, [{ worktreeId: 'a' }])
-    setCachedWorktrees(hostId, [{ worktreeId: 'b' }])
+    setCachedWorktrees(hostId, [summary('a')])
+    setCachedWorktrees(hostId, [summary('b')])
 
-    expect(getCachedWorktrees(hostId)).toEqual([{ worktreeId: 'b' }])
+    expect(getCachedWorktrees(hostId)).toEqual([summary('b')])
     expect(getProvenCachedWorktrees(hostId)).toBeNull()
+  })
+
+  it('keeps a valid summary entry when the full-catalog reader cannot use it', () => {
+    const hostId = 'host-summary-shape'
+    const seeded = [summary('a')]
+    setCachedWorktrees(hostId, seeded)
+
+    expect(getCachedWorkspaceCatalog(hostId)).toBeNull()
+    expect(getCachedWorktrees(hostId)).toEqual(seeded)
   })
 
   it('reports nothing proven for a host it has never cached', () => {
     expect(getProvenCachedWorktrees('host-never-seen')).toBeNull()
+  })
+
+  it('keeps a safe full catalog when a malformed full payload tries to replace it', () => {
+    const hostId = 'host-poisoned'
+    const safe = workspace('safe')
+    setCachedWorktrees(hostId, [safe], { proven: true })
+
+    setCachedWorktrees(hostId, [
+      { ...workspace('poison'), linkedPR: { number: '7', state: 'open' } }
+    ])
+
+    expect(getCachedWorkspaceCatalog(hostId)).toEqual([safe])
   })
 })

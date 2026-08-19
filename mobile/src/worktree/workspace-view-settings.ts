@@ -38,6 +38,18 @@ const GROUP_FROM_DESKTOP: Record<NonNullable<WorkspaceViewSettings['groupBy']>, 
 
 const SORT_VALUES: readonly MobileSortMode[] = ['smart', 'name', 'recent', 'repo', 'manual']
 
+const GROUP_LABELS: Record<MobileGroupMode, string> = {
+  none: 'Group',
+  workspaceStatus: 'Status',
+  repo: 'Repo',
+  prStatus: 'PR'
+}
+
+/** Short toolbar label for the group-by control (not the picker's own labels). */
+export function groupModeLabel(mode: MobileGroupMode): string {
+  return GROUP_LABELS[mode]
+}
+
 export function groupModeToDesktop(
   mode: MobileGroupMode
 ): NonNullable<WorkspaceViewSettings['groupBy']> {

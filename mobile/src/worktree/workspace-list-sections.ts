@@ -1,3 +1,4 @@
+import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host'
 import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
 import {
   DEFAULT_MOBILE_WORKSPACE_STATUSES,
@@ -14,13 +15,17 @@ import { sortWorktrees } from './workspace-list-ordering'
 export type { FilterState, Section, Worktree } from './workspace-list-types'
 export { CREATE_GRACE_MS, getWorktreeStatus, sortWorktrees } from './workspace-list-ordering'
 
-function makeSection(
+function sectionIdentity(...parts: string[]): string {
+  return JSON.stringify(parts)
+}
+
+function makeSection<T extends Worktree>(
   key: string,
   title: string,
-  data: Worktree[],
+  data: T[],
   icon?: 'pin',
   collapsedGroups?: ReadonlySet<string>
-): Section {
+): Section<T> {
   const rows = collapsedGroups ? applyMobileWorkspaceLineage(data, collapsedGroups) : data
   return {
     key,
@@ -28,7 +33,7 @@ function makeSection(
     ...(icon ? { icon } : {}),
     data: rows.map((worktree) => ({
       ...worktree,
-      sectionListKey: `${key}:${worktree.worktreeId}`
+      sectionListKey: sectionIdentity('row', key, worktree.worktreeId)
     }))
   }
 }
@@ -78,7 +83,7 @@ function isSleepingSweepExempt(w: Worktree, alwaysShowDefaultBranch: boolean | u
   return w.isMainWorktree ?? (w.workspaceKind === 'folder-workspace' || isDefaultBranchWorkspace(w))
 }
 
-function orderMainWorktreeFirst(worktrees: Worktree[]): Worktree[] {
+function orderMainWorktreeFirst<T extends Worktree>(worktrees: T[]): T[] {
   const mainWorktrees = worktrees.filter((worktree) => worktree.isMainWorktree)
   if (mainWorktrees.length === 0) {
     return worktrees
@@ -86,11 +91,11 @@ function orderMainWorktreeFirst(worktrees: Worktree[]): Worktree[] {
   return [...mainWorktrees, ...worktrees.filter((worktree) => !worktree.isMainWorktree)]
 }
 
-export function filterWorktrees(
-  worktrees: Worktree[],
+export function filterWorktrees<T extends Worktree>(
+  worktrees: T[],
   filters: FilterState,
   search: string
-): Worktree[] {
+): T[] {
   let result = worktrees.filter((w) => !w.isArchived)
   if (filters.hideSleeping) {
     result = result.filter(
@@ -102,6 +107,13 @@ export function filterWorktrees(
   }
   if (filters.filterRepoIds.size > 0) {
     result = result.filter((w) => filters.filterRepoIds.has(w.repoId))
+  }
+  const executionHostIds = filters.filterExecutionHostIds
+  if (executionHostIds && executionHostIds.size > 0) {
+    // Merged rows carry a desktop-scoped id; legacy per-host rows fall back local.
+    result = result.filter((w) =>
+      executionHostIds.has(w.executionHostFilterId ?? w.hostId ?? LOCAL_EXECUTION_HOST_ID)
+    )
   }
   if (search.trim()) {
     const q = search.toLowerCase()
@@ -119,8 +131,8 @@ export function isWorktreePinned(w: Worktree, localPins: Set<string>): boolean {
   return w.isPinned || localPins.has(w.worktreeId)
 }
 
-export function buildSections(
-  worktrees: Worktree[],
+export function buildSections<T extends Worktree>(
+  worktrees: T[],
   sortMode: MobileSortMode,
   filters: FilterState,
   search: string,
@@ -129,7 +141,7 @@ export function buildSections(
   repoIdsByName: ReadonlyMap<string, string> = new Map(),
   workspaceStatuses: readonly WorkspaceStatusDefinition[] = DEFAULT_MOBILE_WORKSPACE_STATUSES,
   collapsedGroups: ReadonlySet<string> = new Set()
-): Section[] {
+): Section<T>[] {
   const filtered = filterWorktrees(worktrees, filters, search)
   const sorted = sortWorktrees(filtered, sortMode)
 
@@ -138,7 +150,7 @@ export function buildSections(
   // groups preserves exact cross-surface order and literal section counts.
   const canonicalGroupWorktrees = sorted
 
-  const sections: Section[] = []
+  const sections: Section<T>[] = []
   if (pinned.length > 0) {
     sections.push(makeSection('pinned', 'Pinned', pinned, 'pin'))
   }
@@ -148,14 +160,14 @@ export function buildSections(
       sections.push(makeSection('all', 'All', canonicalGroupWorktrees, undefined, collapsedGroups))
     }
   } else if (groupMode === 'repo') {
-    const byRepo = new Map<string, Worktree[]>()
+    const byRepo = new Map<string, { title: string; items: T[] }>()
     for (const w of canonicalGroupWorktrees) {
-      const key = w.repo || 'Unknown'
-      const list = byRepo.get(key)
-      if (list) {
-        list.push(w)
+      const key = w.repoId || w.repo || 'Unknown'
+      const group = byRepo.get(key)
+      if (group) {
+        group.items.push(w)
       } else {
-        byRepo.set(key, [w])
+        byRepo.set(key, { title: w.repo || 'Unknown', items: [w] })
       }
     }
     const representedRepoIds = new Set(worktrees.map((w) => w.repoId))
@@ -170,19 +182,25 @@ export function buildSections(
       if (query && !displayName.toLowerCase().includes(query)) {
         continue
       }
-      if (!byRepo.has(displayName)) {
-        byRepo.set(displayName, [])
+      if (!byRepo.has(id)) {
+        byRepo.set(id, { title: displayName, items: [] })
       }
     }
-    for (const [repo, items] of byRepo) {
-      const key = `repo:${repoIdsByName.get(repo) ?? repo}`
+    for (const [repoId, group] of byRepo) {
+      const key = sectionIdentity('repo', repoId)
       sections.push(
-        makeSection(key, repo, orderMainWorktreeFirst(items), undefined, collapsedGroups)
+        makeSection(
+          key,
+          group.title,
+          orderMainWorktreeFirst(group.items),
+          undefined,
+          collapsedGroups
+        )
       )
     }
   } else if (groupMode === 'workspaceStatus') {
     const renderableWorkspaceStatuses = coerceMobileWorkspaceStatuses(workspaceStatuses)
-    const byStatus = new Map<string, Worktree[]>()
+    const byStatus = new Map<string, T[]>()
     for (const w of canonicalGroupWorktrees) {
       const key = getMobileWorkspaceStatus(w, renderableWorkspaceStatuses)
       const list = byStatus.get(key)
@@ -207,7 +225,7 @@ export function buildSections(
       }
     }
   } else if (groupMode === 'prStatus') {
-    const byGroup = new Map<string, Worktree[]>()
+    const byGroup = new Map<string, T[]>()
     for (const w of canonicalGroupWorktrees) {
       const key = getPRGroupKey(w)
       const list = byGroup.get(key)
@@ -222,7 +240,7 @@ export function buildSections(
       if (items && items.length > 0) {
         sections.push(
           makeSection(
-            `pr:${groupKey}`,
+            sectionIdentity('pr', groupKey),
             PR_GROUP_LABELS[groupKey],
             items,
             undefined,
