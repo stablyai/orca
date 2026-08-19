@@ -51,7 +51,7 @@ export type CookieClearSession = {
   restoreClearIdentities: CookieClearStore['restoreClearIdentities']
 }
 
-const clearLocks = new WeakMap<object, Promise<void>>()
+const mutationLocks = new WeakMap<object, Promise<void>>()
 
 function cookieClearKey(url: string, name: string): string {
   return JSON.stringify([url, name])
@@ -74,17 +74,30 @@ export function identitiesFromClearCookies(
   }))
 }
 
-export async function withCookieClearLock<T>(owner: object, run: () => Promise<T>): Promise<T> {
-  const previous = clearLocks.get(owner) ?? Promise.resolve()
+/**
+ * Serialises every live-jar mutation for one owner.
+ *
+ * Why (STA-4601): an import's clear, its writes, and its rollback are one transaction. Holding the
+ * lock for the clear alone lets a second import interleave between them, so a stale rollback can
+ * remove cookies the newer import already reported as written. Callers that need the lock across a
+ * try/finally take it directly; callers with a single callback use the wrapper below.
+ */
+export async function acquireCookieMutationLock(owner: object): Promise<() => void> {
+  const previous = mutationLocks.get(owner) ?? Promise.resolve()
   let release!: () => void
   const current = new Promise<void>((resolve) => {
     release = resolve
   })
-  clearLocks.set(
+  mutationLocks.set(
     owner,
     previous.then(() => current)
   )
   await previous
+  return release
+}
+
+export async function withCookieMutationLock<T>(owner: object, run: () => Promise<T>): Promise<T> {
+  const release = await acquireCookieMutationLock(owner)
   try {
     return await run()
   } finally {
@@ -165,11 +178,22 @@ async function restoreClearedCookies(
   )
 }
 
+/**
+ * Clears the transplantable cookies from a jar.
+ *
+ * Why (STA-4601): this takes the mutation lock on the object it is PASSED, which serialises direct
+ * callers that hand it a real Session — pinned by "serializes concurrent clears on the same
+ * session" in the atomicity suite. It does NOT serialise the importer, because both import paths
+ * build a fresh adapter object per call, so the key is new every time and this lock is a no-op for
+ * them. That is deliberate and safe: the importer holds the real per-partition lock, keyed on the
+ * Electron Session, across its whole clear-and-write transaction — a scope this function cannot
+ * see. Do not remove the importer's outer lock on the assumption that this one covers it.
+ */
 export async function removeTransplantableCookies(
   targetSession: CookieClearSession,
   preserveFamilies: ReadonlySet<string> = new Set()
 ): Promise<void> {
-  return withCookieClearLock(targetSession, async () => {
+  return withCookieMutationLock(targetSession, async () => {
     const store = targetSession.cookies
     const initialCookies = await store.get({})
     if (initialCookies.length === 0) {

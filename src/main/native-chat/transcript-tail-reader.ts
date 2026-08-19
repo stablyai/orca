@@ -21,6 +21,11 @@ import {
   type NativeChatTurnLifecycleDecoder
 } from './transcript-turn-lifecycle'
 import {
+  findLastCompleteLineEnd,
+  readTranscriptByteAt,
+  TAIL_CHUNK_BYTES
+} from './transcript-tail-boundary'
+import {
   closeTranscriptHandle,
   wslGatedOpen,
   wslGatedRead,
@@ -30,7 +35,6 @@ import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 import { readHermesStateDbPage } from './hermes-state-db-reader'
 
 export const MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES = 2 * 1024 * 1024
-const TAIL_CHUNK_BYTES = 64 * 1024
 
 export type NativeChatLineDecoder = (line: string, fallbackId: string) => NativeChatMessage | null
 
@@ -98,11 +102,13 @@ export async function readNativeChatTranscriptTailFile(
       return { messages: [], consumedTo: 0, hasMore: false, beforeOffset: 0 }
     }
     const newestFirst: { message: NativeChatMessage; offset: number }[] = []
-    const finalByte = Buffer.allocUnsafe(1)
-    await wslGatedRead(handle, filePath, finalByte, 0, 1, consumedTo - 1, 'exact', signal)
-    signal?.throwIfAborted()
-    ignoreNextMalformedRecord = finalByte[0] !== 0x0a
-    let cursor = consumedTo - (finalByte[0] === 0x0a ? 1 : 0)
+    const finalByte = await readTranscriptByteAt(handle, filePath, consumedTo - 1, signal)
+    if (finalByte === null) {
+      // File shrank between stat and probe: report empty, the next poll re-stats.
+      return { messages: [], consumedTo: 0, hasMore: false, beforeOffset: 0 }
+    }
+    ignoreNextMalformedRecord = finalByte !== 0x0a
+    let cursor = consumedTo - (finalByte === 0x0a ? 1 : 0)
     while (cursor > 0 && newestFirst.length <= limit) {
       signal?.throwIfAborted()
       const start = Math.max(0, cursor - TAIL_CHUNK_BYTES)
@@ -118,6 +124,11 @@ export async function readNativeChatTranscriptTailFile(
         signal
       )
       signal?.throwIfAborted()
+      // A short read means the file shrank mid-walk: stop paging back rather
+      // than stitch non-adjacent bytes into records.
+      if (bytesRead < buffer.length) {
+        break
+      }
       let segmentEnd = bytesRead
       for (let index = bytesRead - 1; index >= 0 && newestFirst.length <= limit; index--) {
         if (buffer[index] !== 0x0a) {

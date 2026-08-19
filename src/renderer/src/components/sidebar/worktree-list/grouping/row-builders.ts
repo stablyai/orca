@@ -5,7 +5,9 @@ import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-
 import { isValidResolvedWorktreeLineageEdge } from '../../../../../../shared/resolved-worktree-lineage'
 import { getProjectedWorktreeLineage } from '../../worktree-lineage-projection'
 import { getWorktreeLineageGroupKey } from './group-keys'
+import type { RenderableFolderWorkspace } from './folder-workspace-lanes'
 import type {
+  FolderWorkspaceRow,
   ImportedWorktreesCardCandidate,
   ImportedWorktreesCardRow,
   NewExternalWorktreesInboxCandidate,
@@ -238,5 +240,21 @@ export function appendWorktreeRows(
         emit(worktree, 0, [], true)
       }
     }
+  }
+}
+
+/** The one folder-workspace row constructor, shared by the project-group,
+ *  grouped-lane and flat emitters so their rows cannot diverge. */
+export function buildFolderWorkspaceRow(
+  pair: RenderableFolderWorkspace,
+  groupDepth: number
+): FolderWorkspaceRow {
+  return {
+    type: 'folder-workspace',
+    key: `folder-workspace:${pair.folderWorkspace.id}`,
+    folderWorkspace: pair.folderWorkspace,
+    projectGroup: pair.projectGroup,
+    depth: 0,
+    groupDepth
   }
 }

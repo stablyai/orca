@@ -139,14 +139,14 @@ function makeBrowserPage({
     worktree,
     repoName: 'octo/rocket',
     worktreeSortIndex: 0,
-    isCurrentPage: false,
-    isCurrentWorktree: true,
     document: buildSearchableBrowserPageDocument({
       page,
       workspace,
       worktree,
       repoName: 'octo/rocket'
-    })
+    }),
+    isCurrentPage: false,
+    isCurrentWorktree: true
   }
 }
 

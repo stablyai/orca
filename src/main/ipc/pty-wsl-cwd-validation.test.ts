@@ -8,6 +8,9 @@ import {
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { _setWslCachesForTests } from '../wsl'
 import { registerPtyHandlers } from './pty'
+import { join } from 'node:path'
+// Why resolved rather than hardcoded: the wrapper tree is content-addressed.
+import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -166,7 +169,7 @@ describe('registerPtyHandlers', () => {
       if (target === missingCwd) {
         throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
       }
-      return { isDirectory: () => true, mode: 0o755 }
+      return { isDirectory: () => true, mode: 0o755, size: 1 }
     })
 
     try {
@@ -229,7 +232,7 @@ describe('registerPtyHandlers', () => {
       if (target === '/repo/app/deleted-folder') {
         throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
       }
-      return { isDirectory: () => true, mode: 0o755 }
+      return { isDirectory: () => true, mode: 0o755, size: 1 }
     })
 
     // Why: without the renderer opt-in the provider surfaces its normal missing-directory error — API/runtime callers keep exact cwd semantics.
@@ -266,7 +269,7 @@ describe('registerPtyHandlers', () => {
       if (target === '/repo/app/deleted-folder') {
         throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
       }
-      return { isDirectory: () => true, mode: 0o755 }
+      return { isDirectory: () => true, mode: 0o755, size: 1 }
     })
 
     // Why: a reattach must keep the session's exact cwd; remapping would silently detach the restored terminal from its recorded state.
@@ -351,7 +354,7 @@ describe('registerPtyHandlers', () => {
       })
       expect(shell).toBe('/bin/zsh')
       expect(args).toEqual(['-l'])
-      expect(options.env.ZDOTDIR).toBe('/tmp/orca-user-data/shell-ready/zsh')
+      expect(options.env.ZDOTDIR).toBe(join(getShellReadyWrapperRoot(), 'zsh'))
       expect(options.env.ORCA_ORIG_ZDOTDIR).toBe(process.env.HOME)
     } finally {
       Object.defineProperty(process, 'platform', {

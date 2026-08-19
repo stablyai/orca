@@ -8,6 +8,13 @@ import {
 import { searchWorktrees, type PaletteSearchResult } from './worktree-palette-search'
 import { buildWorktreePaletteDocuments } from './worktree-palette-document'
 import { PALETTE_QUERY_MAX_TOKENS, preparePaletteQuery } from './palette-match/palette-query'
+import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
+
+function documentKey(worktreeId: string): string {
+  return getWorktreeHostIdentity(
+    CMD_J_FIXTURE_WORKTREES.find((worktree) => worktree.id === worktreeId)!
+  )
+}
 
 function search(query: string, extra: Record<string, unknown> = {}): PaletteSearchResult[] {
   return searchWorktrees(CMD_J_FIXTURE_WORKTREES, query, CMD_J_FIXTURE_REPO_MAP, {
@@ -162,15 +169,22 @@ describe('document invalidation inputs', () => {
       repoMap: CMD_J_FIXTURE_REPO_MAP,
       workspacePortsByWorktreeId: CMD_J_FIXTURE_PORTS
     })
-    expect(before.get('wt-main-orca')?.evidenceUnits.has('port:3000')).toBe(false)
-    expect(after.get('wt-main-orca')?.evidenceUnits.has('port:3000')).toBe(true)
+    // Documents are keyed by host identity so two same-id workspaces on different hosts
+    // keep separate entries.
+    const key = documentKey('wt-main-orca')
+    expect(before.get(key)?.evidenceUnits.has('port:3000')).toBe(false)
+    expect(after.get(key)?.evidenceUnits.has('port:3000')).toBe(true)
   })
 
   it('keeps recency and current-tab state out of normalized field data', () => {
     const documents = buildWorktreePaletteDocuments(CMD_J_FIXTURE_WORKTREES, {
       repoMap: CMD_J_FIXTURE_REPO_MAP
     })
-    const fieldIds = [...(documents.get('wt-docs')?.fields ?? [])].map((field) => field.id)
+    const fieldIds = [...(documents.get(documentKey('wt-docs'))?.fields ?? [])].map(
+      (field) => field.id
+    )
+    // Guard the guard: a missing document would make the assertions below vacuous.
+    expect(fieldIds.length).toBeGreaterThan(0)
     expect(fieldIds).not.toContain('recency')
     expect(fieldIds).not.toContain('isCurrent')
   })

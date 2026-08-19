@@ -1,27 +1,13 @@
-import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import type { OpenFile } from '@/store/slices/editor'
-import { buildPaletteTabDocument } from './palette-match/tab-document'
 import type { PaletteDocument } from './palette-match/palette-document'
-import {
-  resolveWorktreeBranchLabel,
-  resolveWorktreeDisplayName
-} from './worktree-default-display-name'
-import {
-  resolveTerminalTabTitle,
-  resolveUnifiedTabLabel
-} from '../../../shared/tab-title-resolution'
-import type { Tab, TabContentType, TabGroup } from '../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { Worktree } from '../../../shared/worktree/types'
-import { resolveOpenTabOccupantAgent } from './open-tab-occupant-agent'
-import {
-  buildAgentMetadataTabIndex,
-  collectAgentMetadataFromIndex,
-  type AgentMetadata,
-  type WorkspaceTabAgentMetadataState
-} from './workspace-tab-agent-metadata'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { AgentMetadata, WorkspaceTabAgentMetadataState } from './workspace-tab-agent-metadata'
+import { buildSearchableWorkspaceTabEntries } from './workspace-tab-palette-entry-builder'
 export {
   searchWorkspaceTabs,
   type WorkspaceTabPaletteSearchResult
@@ -68,6 +54,7 @@ type WorkspaceTabPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'sim
 export type BuildSearchableWorkspaceTabsOptions = WorkspaceTabAgentMetadataState & {
   worktrees: readonly Worktree[]
   repoMap: ReadonlyMap<string, { displayName?: string | null }>
+  repoMapByHostIdentity?: ReadonlyMap<string, { displayName?: string | null }>
   worktreeOrder: ReadonlyMap<string, number>
   unifiedTabsByWorktree: Record<string, readonly Tab[] | undefined>
   tabsByWorktree: Record<string, readonly TerminalTab[] | undefined>
@@ -75,6 +62,7 @@ export type BuildSearchableWorkspaceTabsOptions = WorkspaceTabAgentMetadataState
   activeGroupIdByWorktree: Record<string, string | undefined>
   groupsByWorktree: Record<string, readonly TabGroup[] | undefined>
   activeWorktreeId: string | null
+  activeWorkspaceExecutionHostId?: ExecutionHostId | null
   activeTabType: WorkspaceTabPaletteActiveTabType
   activeTabId: string | null
   activeTabIdByWorktree: Record<string, string | null | undefined>
@@ -86,233 +74,4 @@ export type BuildSearchableWorkspaceTabsOptions = WorkspaceTabAgentMetadataState
   paneForegroundAgentByPaneKey?: Record<string, PaneForegroundAgentEntry>
 }
 
-function getActiveUnifiedTabId({
-  worktreeId,
-  activeWorktreeId,
-  activeTabType,
-  activeGroupIdByWorktree,
-  groupsByWorktree
-}: Pick<
-  BuildSearchableWorkspaceTabsOptions,
-  'activeGroupIdByWorktree' | 'activeTabType' | 'activeWorktreeId' | 'groupsByWorktree'
-> & {
-  worktreeId: string
-}): string | null {
-  if (activeWorktreeId !== worktreeId) {
-    return null
-  }
-  const activeGroupId = activeGroupIdByWorktree[worktreeId]
-  const activeGroup = activeGroupId
-    ? (groupsByWorktree[worktreeId] ?? []).find((group) => group.id === activeGroupId)
-    : undefined
-  const activeUnifiedTabId = activeGroup?.activeTabId ?? null
-  return activeTabType === 'terminal' || activeTabType === 'editor' ? activeUnifiedTabId : null
-}
-
-function isCurrentWorkspaceTab({
-  tab,
-  activeWorktreeId,
-  activeTabType,
-  activeTabId,
-  activeTabIdByWorktree,
-  activeFileId,
-  activeFileIdByWorktree,
-  activeTabTypeByWorktree,
-  activeUnifiedTabId
-}: Pick<
-  BuildSearchableWorkspaceTabsOptions,
-  | 'activeFileId'
-  | 'activeFileIdByWorktree'
-  | 'activeTabId'
-  | 'activeTabIdByWorktree'
-  | 'activeTabType'
-  | 'activeTabTypeByWorktree'
-  | 'activeWorktreeId'
-> & {
-  tab: Tab & { contentType: WorkspaceTabContentType }
-  activeUnifiedTabId: string | null
-}): boolean {
-  if (tab.worktreeId !== activeWorktreeId) {
-    return false
-  }
-  const visibleType = tab.contentType === 'terminal' ? 'terminal' : 'editor'
-  const storedType = activeTabTypeByWorktree[tab.worktreeId] ?? activeTabType
-  if (storedType !== visibleType || activeUnifiedTabId !== tab.id) {
-    return false
-  }
-  if (visibleType === 'terminal') {
-    return (activeTabIdByWorktree[tab.worktreeId] ?? activeTabId) === tab.entityId
-  }
-  return (activeFileIdByWorktree[tab.worktreeId] ?? activeFileId) === tab.entityId
-}
-
-function isWorkspaceTabContentType(
-  contentType: TabContentType
-): contentType is WorkspaceTabContentType {
-  return (
-    contentType === 'terminal' ||
-    contentType === 'editor' ||
-    contentType === 'diff' ||
-    contentType === 'conflict-review' ||
-    contentType === 'check-details'
-  )
-}
-
-export function buildSearchableWorkspaceTabs({
-  worktrees,
-  repoMap,
-  worktreeOrder,
-  unifiedTabsByWorktree,
-  tabsByWorktree,
-  openFiles,
-  agentStatusByPaneKey,
-  retainedAgentsByPaneKey,
-  sleepingAgentSessionsByPaneKey,
-  activeGroupIdByWorktree,
-  groupsByWorktree,
-  activeWorktreeId,
-  activeTabType,
-  activeTabId,
-  activeTabIdByWorktree,
-  activeFileId,
-  activeFileIdByWorktree,
-  activeTabTypeByWorktree,
-  generatedTitlesEnabled,
-  terminalLayoutsByTabId,
-  paneForegroundAgentByPaneKey
-}: BuildSearchableWorkspaceTabsOptions): SearchableWorkspaceTab[] {
-  const entries: SearchableWorkspaceTab[] = []
-  const openFilesById = new Map(openFiles.map((file) => [file.id, file]))
-  const agentIndex = buildAgentMetadataTabIndex({
-    agentStatusByPaneKey,
-    retainedAgentsByPaneKey,
-    sleepingAgentSessionsByPaneKey
-  })
-
-  for (const worktree of worktrees) {
-    const repoName = repoMap.get(worktree.repoId)?.displayName ?? ''
-    const worktreeName = resolveWorktreeDisplayName(worktree)
-    const branch = resolveWorktreeBranchLabel(worktree)
-    const worktreeSortIndex = worktreeOrder.get(worktree.id) ?? Number.MAX_SAFE_INTEGER
-    const activeUnifiedTabId = getActiveUnifiedTabId({
-      worktreeId: worktree.id,
-      activeWorktreeId,
-      activeTabType,
-      activeGroupIdByWorktree,
-      groupsByWorktree
-    })
-    const groups = groupsByWorktree[worktree.id] ?? []
-    const groupOrder = new Map(groups.map((group, index) => [group.id, index]))
-    const tabOrder = new Map<string, number>()
-    for (const group of groups) {
-      group.tabOrder.forEach((tabId, index) => tabOrder.set(tabId, index))
-    }
-    const terminalTabs = new Map((tabsByWorktree[worktree.id] ?? []).map((tab) => [tab.id, tab]))
-
-    for (const rawTab of unifiedTabsByWorktree[worktree.id] ?? []) {
-      if (!isWorkspaceTabContentType(rawTab.contentType)) {
-        continue
-      }
-      const tab = rawTab as Tab & { contentType: WorkspaceTabContentType }
-      const isCurrentTab = isCurrentWorkspaceTab({
-        tab,
-        activeWorktreeId,
-        activeTabType,
-        activeTabId,
-        activeTabIdByWorktree,
-        activeFileId,
-        activeFileIdByWorktree,
-        activeTabTypeByWorktree,
-        activeUnifiedTabId
-      })
-      const baseEntry = {
-        tab,
-        worktree,
-        repoName,
-        worktreeSortIndex,
-        groupSortIndex: groupOrder.get(tab.groupId) ?? Number.MAX_SAFE_INTEGER,
-        tabSortIndex: tabOrder.get(tab.id) ?? tab.sortOrder,
-        isCurrentTab,
-        isCurrentWorktree: activeWorktreeId === worktree.id
-      }
-
-      if (tab.contentType === 'terminal') {
-        const terminalTab = terminalTabs.get(tab.entityId)
-        // Match the tab strip: useTabGroupWorkspaceModel resolves the visible
-        // title from the unified tab, not tabsByWorktree. Those two can desync
-        // (live OSC on the label, stale "Terminal N" on the terminal record).
-        const terminalTitle = terminalTab
-          ? resolveTerminalTabTitle(terminalTab, generatedTitlesEnabled, 'Terminal')
-          : 'Terminal'
-        const title = resolveUnifiedTabLabel(
-          {
-            ...tab,
-            customLabel: tab.customLabel ?? terminalTab?.customTitle ?? null,
-            quickCommandLabel: tab.quickCommandLabel ?? terminalTab?.quickCommandLabel,
-            generatedLabel: tab.generatedLabel ?? terminalTab?.generatedTitle
-          },
-          generatedTitlesEnabled,
-          terminalTitle
-        )
-        entries.push({
-          ...baseEntry,
-          title,
-          // Why: type is already clear from the status/content icon; a fixed
-          // "Terminal tab" label only crowds the row (and used to leave a bare "· ·").
-          secondaryText: '',
-          titleSearchText: title,
-          secondarySearchTexts: [],
-          typeSearchAliases: TERMINAL_TYPE_SEARCH_ALIASES,
-          document: buildPaletteTabDocument({
-            id: tab.id,
-            title,
-            secondaryTexts: [],
-            worktreeName,
-            branch,
-            repoName,
-            typeAliases: TERMINAL_TYPE_SEARCH_ALIASES
-          }),
-          agentMetadata: collectAgentMetadataFromIndex(agentIndex, tab.entityId, worktree.id),
-          occupantAgent: resolveOpenTabOccupantAgent({
-            tabId: tab.entityId,
-            // The unified label, not terminalTab.title: the record can lag it (see above).
-            title,
-            defaultTitle: terminalTab?.defaultTitle,
-            launchAgent: terminalTab?.launchAgent,
-            layout: terminalLayoutsByTabId?.[tab.entityId],
-            agentStatusByPaneKey,
-            retainedAgentsByPaneKey,
-            sleepingAgentSessionsByPaneKey,
-            paneForegroundAgentByPaneKey
-          })
-        })
-        continue
-      }
-
-      const file = openFilesById.get(tab.entityId)
-      if (!file || file.worktreeId !== worktree.id) {
-        continue
-      }
-      const title = getEditorDisplayLabel(file)
-      entries.push({
-        ...baseEntry,
-        title,
-        secondaryText: file.relativePath,
-        titleSearchText: title,
-        secondarySearchTexts: [file.relativePath, file.filePath],
-        document: buildPaletteTabDocument({
-          id: tab.id,
-          title,
-          secondaryTexts: [file.relativePath, file.filePath],
-          worktreeName,
-          branch,
-          repoName
-        }),
-        agentMetadata: [],
-        occupantAgent: null
-      })
-    }
-  }
-
-  return entries
-}
+export const buildSearchableWorkspaceTabs = buildSearchableWorkspaceTabEntries

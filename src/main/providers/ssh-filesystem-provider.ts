@@ -27,8 +27,8 @@ import type { DirEntry, FsChangeEvent } from '../../shared/filesystem-entry-type
 import { routeSshFilesystemWatchNotification } from './ssh-filesystem-watch-notifications'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from '../ssh/ssh-remote-platform'
+import { probeSshQuickOpenSearchCapability } from './ssh-filesystem-provider-capabilities'
 const WORKSPACE_SPACE_SCAN_TIMEOUT_MS = 130_000
-
 export class SshFilesystemProvider implements IFilesystemProvider {
   private connectionId: string
   private mux: SshChannelMultiplexer
@@ -304,7 +304,7 @@ export class SshFilesystemProvider implements IFilesystemProvider {
 
   async listFiles(
     rootPath: string,
-    options?: { excludePaths?: string[]; signal?: AbortSignal; maxResults?: number }
+    options?: Parameters<IFilesystemProvider['listFiles']>[1]
   ): Promise<string[]> {
     const params: Record<string, unknown> = { rootPath }
     if (options?.excludePaths && options.excludePaths.length > 0) {
@@ -312,6 +312,9 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     }
     if (options?.maxResults !== undefined) {
       params.maxResults = options.maxResults
+    }
+    if (options?.searchQuery !== undefined) {
+      params.searchQuery = options.searchQuery
     }
     // Why #7721: the signal lets a workspace switch send rpc.cancel so the
     // relay aborts the full-tree scan instead of stacking abandoned scans
@@ -321,6 +324,8 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     })) as string[]
   }
 
+  supportsQuickOpenSearch = (options: { signal?: AbortSignal } = {}): Promise<boolean> =>
+    probeSshQuickOpenSearchCapability(this.mux, options.signal)
   async watch(
     rootPath: string,
     callback: (events: FsChangeEvent[]) => void,

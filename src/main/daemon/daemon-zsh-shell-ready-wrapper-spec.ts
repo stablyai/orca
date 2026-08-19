@@ -10,16 +10,13 @@ export function getDaemonZshWrapperSpec(zshDir: string): ZshStartupWrapperSpec {
     readyMarkerEscaped: SHELL_READY_MARKER,
     osc133CommandMarkers: true,
     skipUserZshrcWhenHomeIsWrapperDir: true,
-    interactiveRestoreComment:
+    overlayRestoreComment:
       "# Why: ~/.zshrc can export the user's default OpenCode config after spawn.",
-    loginRestoreComment:
-      '# Why: .zlogin is the final login startup file before the prompt is shown.',
     restores: {
       agentTeamsPath: true,
       remoteCliBinDir: false,
       codexHome: true,
       codexLaunchPreflight: true
-    },
-    readyMarkerOrder: 'before-zdotdir-restore'
+    }
   }
 }

@@ -48,22 +48,26 @@ describe('RuntimeClient module-graph deferral', () => {
     process.exitCode = 0
   })
 
-  // Why: the whole point of the change. These five modules load on EVERY
+  // Why: the whole point of the change. These six modules load on EVERY
   // invocation, so a value-import of the barrel from any of them drags the
   // RuntimeClient graph (zod, ws, tweetnacl) back onto the --help path.
-  it.each(['args.ts', 'flags.ts', 'dispatch.ts', 'format.ts', 'selectors.ts'])(
-    '%s imports error classes from ./runtime/types, not the barrel',
-    (file) => {
-      const source = readFileSync(join(CLI_DIR, file), 'utf8')
-      const valueImports = source
-        .split('\n')
-        .filter((line) => line.startsWith('import ') && line.includes("'./runtime-client'"))
-      for (const line of valueImports) {
-        expect(line, `${file}: "${line}" must be type-only`).toMatch(/^import type /)
-      }
-      expect(source).toContain("} from './runtime/types'")
+  it.each([
+    'args.ts',
+    'flags.ts',
+    'dispatch.ts',
+    'format.ts',
+    'selectors.ts',
+    'execution-host-flag.ts'
+  ])('%s imports error classes from ./runtime/types, not the barrel', (file) => {
+    const source = readFileSync(join(CLI_DIR, file), 'utf8')
+    const valueImports = source
+      .split('\n')
+      .filter((line) => line.startsWith('import ') && line.includes("'./runtime-client'"))
+    for (const line of valueImports) {
+      expect(line, `${file}: "${line}" must be type-only`).toMatch(/^import type /)
     }
-  )
+    expect(source).toContain("} from './runtime/types'")
+  })
 
   it('index.ts has no eager value-import of the runtime client', () => {
     const source = readFileSync(join(CLI_DIR, 'index.ts'), 'utf8')
