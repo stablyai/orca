@@ -99,7 +99,18 @@ export async function listSshTargets(client: RuntimeClient): Promise<SshTargetSu
   try {
     const result = await client.call<{ targets: SshTargetSummary[] }>('ssh.listTargetSummaries')
     return result.result.targets
-  } catch {
+  } catch (error) {
+    // Why: hosts predating listTargetSummaries still answer listTargets, and both are served by
+    // the same summariser. Without this an old host looks like one with no SSH targets at all,
+    // which would reject a target id that is actually valid there.
+    if (error instanceof Error && 'code' in error && error.code === 'method_not_found') {
+      try {
+        const legacy = await client.call<{ targets: SshTargetSummary[] }>('ssh.listTargets')
+        return legacy.result.targets
+      } catch {
+        return []
+      }
+    }
     return []
   }
 }

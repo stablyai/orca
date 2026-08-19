@@ -103,6 +103,21 @@ describe('resolveSshHostTargetId', () => {
 })
 
 describe('listSshTargets', () => {
+  // Why: an older host answers listTargets but not listTargetSummaries. Treating that as "no
+  // targets" would reject an ssh id that is valid on that host.
+  it('falls back to the older listing when the newer method is absent', async () => {
+    const { RuntimeClientError } = await import('./runtime/types.js')
+    const call = vi.fn(async (method: string) => {
+      if (method === 'ssh.listTargetSummaries') {
+        throw new RuntimeClientError('method_not_found', 'Unknown method')
+      }
+      return { result: { targets: SSH_TARGETS } }
+    })
+
+    await expect(listSshTargets({ call } as unknown as RuntimeClient)).resolves.toEqual(SSH_TARGETS)
+    expect(call).toHaveBeenCalledWith('ssh.listTargets')
+  })
+
   // Why: this only ever runs to enrich an error we are already reporting; a failure here must
   // not replace that error with a confusing one about SSH enumeration.
   it('returns nothing rather than masking the error it was enriching', async () => {
