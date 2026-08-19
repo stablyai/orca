@@ -70,6 +70,9 @@ export const WorktreeCreate = z
     runHooks: OptionalBoolean,
     activate: OptionalBoolean,
     // Why: activation on create is view intent, so it is addressed like worktree.activate.
+    // Contract: a paired desktop/web caller resolves to 'caller' and therefore receives NO
+    // activateWorktree event — it must reveal from this call's result, which carries setup,
+    // startup and defaultTabs. Pass an explicit target to opt into an all-surface reveal.
     navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional(),
     parentWorkspace: OptionalString,
     envParentWorkspace: OptionalString,
