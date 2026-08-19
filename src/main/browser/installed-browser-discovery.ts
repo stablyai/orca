@@ -26,7 +26,7 @@ export async function discoverInstalledBrowsers(opts: {
 
 // Why: mirror resolveChromiumCookiesPath — Chromium 96+ moved the cookie DB under
 // Network, older profiles keep it at the profile root. Injected existsSync keeps it testable.
-function resolveChromiumCookiesPath(
+export function resolveChromiumCookiesPath(
   profileDir: string,
   existsSync: typeof realExistsSync
 ): string | null {
