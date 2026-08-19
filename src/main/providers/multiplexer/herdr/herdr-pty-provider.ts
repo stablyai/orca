@@ -8,7 +8,7 @@ import type {
   PtyDataEvent
 } from '../../types'
 import { HerdrRuntimeError } from './herdr-runtime-contract'
-import { writeSharedHerdrInput } from './herdr-pty-attach'
+import { applyHerdrPaneSize, writeSharedHerdrInput } from './herdr-pty-attach'
 import { decodeHerdrPtyId } from './herdr-pty-types'
 import { spawnHerdrPtyPane } from './herdr-pty-spawn'
 import type {
@@ -194,6 +194,8 @@ export class HerdrPtyProvider implements IPtyProvider {
     }
     binding.cols = cols
     binding.rows = rows
+    binding.controller.resize(cols, rows)
+    applyHerdrPaneSize(binding)
   }
 
   pauseProducer(_id: string): void {}

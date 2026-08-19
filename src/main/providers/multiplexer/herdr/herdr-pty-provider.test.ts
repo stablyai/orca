@@ -121,28 +121,61 @@ function transport(closeBeforeFrame = false) {
   const value: HerdrHostTransport = {
     ensureSession: vi.fn(async () => undefined),
     request,
-    controlTerminal: vi.fn(() => {
-      setTimeout(() => {
-        if (closeBeforeFrame) {
-          for (const listener of closedListeners) {
-            listener({ type: 'terminal.closed', reason: 'closed' })
-          }
-        } else {
-          for (const listener of frameListeners) {
+    controlTerminal: vi.fn(
+      (
+        _session: string,
+        _target: string,
+        options?: { cols: number; rows: number; observe?: boolean }
+      ) => {
+        if (options?.observe === true) {
+          setTimeout(() => {
+            if (closeBeforeFrame) {
+              for (const listener of closedListeners) {
+                listener({ type: 'terminal.closed', reason: 'closed' })
+              }
+            } else {
+              for (const listener of frameListeners) {
+                listener({
+                  type: 'terminal.frame',
+                  seq: 1,
+                  encoding: 'ansi',
+                  width: 120,
+                  height: 40,
+                  full: true,
+                  bytes: Buffer.from('prompt$ ', 'utf8').toString('base64')
+                })
+              }
+            }
+          }, 0)
+          return controller
+        }
+        const pulseFrameListeners = new Set<(frame: HerdrTerminalFrame) => void>()
+        const pulse: HerdrTerminalController = {
+          write: vi.fn(),
+          resize: vi.fn(),
+          release: vi.fn(),
+          onFrame: (listener) => {
+            pulseFrameListeners.add(listener)
+            return () => pulseFrameListeners.delete(listener)
+          },
+          onClosed: () => () => undefined
+        }
+        setTimeout(() => {
+          for (const listener of pulseFrameListeners) {
             listener({
               type: 'terminal.frame',
               seq: 1,
               encoding: 'ansi',
-              width: 120,
-              height: 40,
+              width: options?.cols ?? 80,
+              height: options?.rows ?? 24,
               full: true,
-              bytes: Buffer.from('prompt$ ', 'utf8').toString('base64')
+              bytes: ''
             })
           }
-        }
-      }, 0)
-      return controller
-    })
+        }, 0)
+        return pulse
+      }
+    )
   }
   return { value, requestMock }
 }
@@ -383,11 +416,20 @@ describe('HerdrPtyProvider', () => {
     await expect(provider.getAppliedSize(spawned.id)).resolves.toEqual({ cols: 120, rows: 40 })
     provider.resize(spawned.id, 100, 30)
     await expect(provider.getAppliedSize(spawned.id)).resolves.toEqual({ cols: 100, rows: 30 })
-    const controller = host.value.controlTerminal as unknown as ReturnType<typeof vi.fn>
-    const spawnedController = controller.mock.results[0]?.value as
+    const controlTerminal = host.value.controlTerminal as unknown as ReturnType<typeof vi.fn>
+    const spawnedController = controlTerminal.mock.results[0]?.value as
       | HerdrTerminalController
       | undefined
-    expect(spawnedController?.resize).not.toHaveBeenCalled()
+    expect(spawnedController?.resize).toHaveBeenCalledWith(100, 30)
+    await vi.waitFor(() => {
+      expect(
+        controlTerminal.mock.calls.some(
+          (call) =>
+            (call[2] as { cols?: number; observe?: boolean } | undefined)?.cols === 100 &&
+            (call[2] as { observe?: boolean } | undefined)?.observe !== true
+        )
+      ).toBe(true)
+    })
   })
 
   it('clears the local snapshot without sending keys', async () => {

@@ -20,7 +20,12 @@ import {
   type HerdrTerminalFrame
 } from './herdr-runtime-contract'
 import { bytesFromTerminalLogicalKey } from '../../../../shared/terminal-logical-key'
-import { openSharedHerdrPaneController, writeSharedHerdrInput } from './herdr-pty-attach'
+import {
+  applyHerdrPaneSize,
+  cancelHerdrPaneSizePulse,
+  openSharedHerdrPaneController,
+  writeSharedHerdrInput
+} from './herdr-pty-attach'
 
 function decodeFrame(frame: HerdrTerminalFrame): string {
   return Buffer.from(frame.bytes, 'base64').toString('utf8')
@@ -178,6 +183,7 @@ function detachBinding(binding: HerdrPtyBinding, bindings: Map<string, HerdrPtyB
   for (const unsubscribe of binding.unsubscribe.splice(0)) {
     unsubscribe()
   }
+  cancelHerdrPaneSizePulse(binding)
   binding.controller.release()
   bindings.delete(binding.id)
 }
@@ -191,6 +197,7 @@ function disposeProvider(
     for (const unsubscribe of binding.unsubscribe.splice(0)) {
       unsubscribe()
     }
+    cancelHerdrPaneSizePulse(binding)
     binding.controller.release()
     bindings.delete(binding.id)
   }
@@ -432,6 +439,7 @@ export async function attachHerdrPty(args: {
     cols: 80,
     rows: 24
   })
+  applyHerdrPaneSize(binding)
   const firstFrame = await args.waitForFirstFrame(binding)
   if (firstFrame) {
     args.emitReplay({ id: args.id, data: firstFrame.data })

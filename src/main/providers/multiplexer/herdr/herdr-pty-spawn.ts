@@ -12,7 +12,11 @@ import {
   type HerdrPtyTarget
 } from './herdr-pty-types'
 import { startHerdrAgentIfRequested } from './herdr-pty-provider-runtime'
-import { openSharedHerdrPaneController, writeSharedHerdrInput } from './herdr-pty-attach'
+import {
+  applyHerdrPaneSize,
+  openSharedHerdrPaneController,
+  writeSharedHerdrInput
+} from './herdr-pty-attach'
 import type { HerdrRuntimeManager } from './herdr-runtime-manager'
 
 export async function spawnHerdrPtyPane(args: {
@@ -89,6 +93,7 @@ export async function spawnHerdrPtyPane(args: {
     cols: opts.cols,
     rows: opts.rows
   })
+  applyHerdrPaneSize(binding)
   const firstFrame = await args.waitForFirstFrame(binding)
   await startHerdrAgentIfRequested({
     sessionId: opts.sessionId,
