@@ -6548,10 +6548,17 @@ export class OrcaRuntimeService {
     worktreeId: string,
     setup?: CreateWorktreeResult['setup'],
     startup?: WorktreeStartupLaunch,
-    defaultTabs?: CreateWorktreeResult['defaultTabs']
+    defaultTabs?: CreateWorktreeResult['defaultTabs'],
+    // Why: 'caller' means the requester already owns the navigation (its RPC result carries
+    // setup/startup/defaultTabs), so broadcasting would steer every other viewer (STA-2802).
+    navigation: RuntimeNavigationTarget = 'all'
   ): void {
-    this.notifyHostActivateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
-    this.notifyClientsActivateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
+    if (navigationTargetsHost(navigation)) {
+      this.notifyHostActivateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
+    }
+    if (navigationTargetsClients(navigation)) {
+      this.notifyClientsActivateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
+    }
   }
 
   private notifyHostActivateWorktree(
@@ -24012,6 +24019,9 @@ export class OrcaRuntimeService {
     pushTarget?: GitPushTarget
     runHooks?: boolean
     activate?: boolean
+    /** Who the create's activation is addressed to. Defaults to 'all' so host/CLI callers keep
+     *  revealing on every surface; the RPC layer narrows it to 'caller' for paired clients. */
+    navigation?: RuntimeNavigationTarget
     setupDecision?: 'run' | 'skip' | 'inherit'
     awaitTerminalProvisioning?: boolean
     observeSetupCompletion?: boolean
@@ -24175,9 +24185,23 @@ export class OrcaRuntimeService {
       }
       if (shouldActivate) {
         if (effectiveStartup && !didSpawnStartup) {
-          this.notifyActivateWorktree(repo.id, worktree.id, undefined, effectiveStartup)
+          this.notifyActivateWorktree(
+            repo.id,
+            worktree.id,
+            undefined,
+            effectiveStartup,
+            undefined,
+            args.navigation
+          )
         } else {
-          this.notifyActivateWorktree(repo.id, worktree.id)
+          this.notifyActivateWorktree(
+            repo.id,
+            worktree.id,
+            undefined,
+            undefined,
+            undefined,
+            args.navigation
+          )
         }
       } else if (this.ptyController?.spawn && !didSpawnStartup) {
         try {
@@ -25008,7 +25032,8 @@ export class OrcaRuntimeService {
           worktree.id,
           activationSetup,
           effectiveStartup,
-          activationDefaultTabs
+          activationDefaultTabs,
+          args.navigation
         )
       } else {
         this.notifyActivateWorktree(
@@ -25016,7 +25041,8 @@ export class OrcaRuntimeService {
           worktree.id,
           activationSetup,
           undefined,
-          activationDefaultTabs
+          activationDefaultTabs,
+          args.navigation
         )
       }
     } else if (this.ptyController?.spawn && (setup || defaultTabs || didSpawnStartup)) {
@@ -25157,6 +25183,7 @@ export class OrcaRuntimeService {
       pushTarget?: GitPushTarget
       runHooks?: boolean
       activate?: boolean
+      navigation?: RuntimeNavigationTarget
       setupDecision?: 'run' | 'skip' | 'inherit'
       awaitTerminalProvisioning?: boolean
       observeSetupCompletion?: boolean
@@ -25352,7 +25379,8 @@ export class OrcaRuntimeService {
           result.worktree.id,
           activationSetup,
           args.startup,
-          activationDefaultTabs
+          activationDefaultTabs,
+          args.navigation
         )
       } else {
         this.notifyActivateWorktree(
@@ -25360,7 +25388,8 @@ export class OrcaRuntimeService {
           result.worktree.id,
           activationSetup,
           undefined,
-          activationDefaultTabs
+          activationDefaultTabs,
+          args.navigation
         )
       }
     }

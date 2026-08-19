@@ -1,6 +1,7 @@
 import type { z } from 'zod'
+import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import type { WorktreeCreate } from './worktree-schemas'
+import type { WorktreeCreate } from './worktree-create-schemas'
 
 type WorktreeCreateParams = z.infer<typeof WorktreeCreate>
 type ManagedWorktreeCreateArgs = Parameters<OrcaRuntimeService['createManagedWorktree']>[0]
@@ -13,7 +14,8 @@ type CreateProvenance = Pick<
  *  the schema without the table becoming unreadable. */
 export function buildManagedWorktreeCreateArgs(
   params: WorktreeCreateParams,
-  provenance: CreateProvenance
+  provenance: CreateProvenance,
+  origin: { clientKind?: 'mobile' | 'runtime' } = {}
 ): ManagedWorktreeCreateArgs {
   return {
     repoSelector: params.repo,
@@ -44,6 +46,12 @@ export function buildManagedWorktreeCreateArgs(
     pushTarget: params.pushTarget,
     runHooks: params.runHooks === true,
     activate: params.activate === true,
+    // Why: create-activation is the caller's own view intent; without this a paired
+    // client's create dragged every other connected client and the host with it.
+    navigation: resolveRuntimeNavigationTarget({
+      ...(params.navigation ? { navigation: params.navigation } : {}),
+      ...(origin.clientKind ? { clientKind: origin.clientKind } : {})
+    }),
     setupDecision: params.setupDecision,
     createdWithAgent: params.createdWithAgent ?? params.startupAgent,
     ...provenance,

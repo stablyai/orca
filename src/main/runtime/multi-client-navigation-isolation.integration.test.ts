@@ -11,6 +11,7 @@ import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from './rpc/e2ee-c
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 
 const REPO_ID = 'repo-1'
+const FOLDER_REPO_ID = 'folder-repo-1'
 const worktreeId = (name: string): string => `${REPO_ID}::/tmp/${name}`
 const HOST_WORKTREE_ID = worktreeId('host')
 const CLIENT_A_WORKTREE_ID = worktreeId('client-a')
@@ -70,22 +71,36 @@ function makeStore() {
       }
     ])
   )
+  const repos = [
+    {
+      id: REPO_ID,
+      path: '/tmp/repo',
+      displayName: 'repo',
+      badgeColor: 'blue',
+      addedAt: 1
+    },
+    // Why: a folder project reaches the same create-activation notifier without a real git worktree add.
+    {
+      id: FOLDER_REPO_ID,
+      path: '/tmp/folder-project',
+      displayName: 'folder-project',
+      kind: 'folder',
+      badgeColor: 'blue',
+      addedAt: 2
+    }
+  ]
   return {
-    getRepo: (id: string) => (id === REPO_ID ? makeStore().getRepos()[0] : undefined),
-    getRepos: () => [
-      {
-        id: REPO_ID,
-        path: '/tmp/repo',
-        displayName: 'repo',
-        badgeColor: 'blue',
-        addedAt: 1
-      }
-    ],
+    getRepo: (id: string) => repos.find((repo) => repo.id === id),
+    getRepos: () => repos,
     addRepo: () => {},
     updateRepo: () => undefined as never,
     getAllWorktreeMeta: () => worktreeMeta,
     getWorktreeMeta: (id: string) => worktreeMeta[id],
-    setWorktreeMeta: () => undefined as never,
+    setWorktreeMeta: (id: string, patch: Record<string, unknown>) => {
+      const next = { ...worktreeMeta[id], ...patch }
+      worktreeMeta[id] = next as (typeof worktreeMeta)[string]
+      return next as never
+    },
     removeWorktreeMeta: () => {},
     getSettings: () => ({
       workspaceDir: '/tmp/workspaces',
@@ -446,6 +461,106 @@ describe('paired runtime navigation isolation', () => {
     })
     expect(harness.hostSelections.worktreeId).toBe(HOST_WORKTREE_ID)
     expect(harness.activateWorktree).not.toHaveBeenCalled()
+  })
+
+  async function subscribeBothClientEventStreams(harness: {
+    clientA: PairedSession
+    clientB: PairedSession
+    readerA: ResponseReader
+    readerB: ResponseReader
+  }): Promise<void> {
+    for (const [session, id] of [
+      [harness.clientA, 'events-a'],
+      [harness.clientB, 'events-b']
+    ] as const) {
+      send(session, { id, method: 'runtime.clientEvents.subscribe' })
+    }
+    await Promise.all([
+      harness.readerA.next('events-a', (response) => resultType(response) === 'ready'),
+      harness.readerB.next('events-b', (response) => resultType(response) === 'ready')
+    ])
+  }
+
+  it('keeps a paired client workspace create-with-activate off every other client and the host', async () => {
+    const harness = await startHarness()
+    await subscribeBothClientEventStreams(harness)
+
+    // Negative control: repeated ordinary navigation by A never reaches B or the host.
+    for (const [index, target] of [
+      CLIENT_A2_WORKTREE_ID,
+      CLIENT_A_WORKTREE_ID,
+      CLIENT_A2_WORKTREE_ID
+    ].entries()) {
+      send(harness.clientA, {
+        id: `nav-${index}`,
+        method: 'worktree.activate',
+        params: { worktree: `id:${target}` }
+      })
+      await expect(harness.readerA.next(`nav-${index}`)).resolves.toMatchObject({ ok: true })
+    }
+
+    send(harness.clientA, {
+      id: 'create-with-agent',
+      method: 'worktree.create',
+      params: {
+        repo: FOLDER_REPO_ID,
+        name: 'teammate-agent-workspace',
+        activate: true
+      }
+    })
+    await expect(harness.readerA.next('create-with-agent')).resolves.toMatchObject({ ok: true })
+
+    // Fence: a shared-catalog event emitted after the create must be the next frame each
+    // client sees. An activation frame would be delivered ahead of it on the ordered stream.
+    harness.runtime.notifyReposChangedForRemoteClients()
+    const observed: Record<'a' | 'b', string[]> = { a: [], b: [] }
+    for (const [key, reader, id] of [
+      ['a', harness.readerA, 'events-a'],
+      ['b', harness.readerB, 'events-b']
+    ] as const) {
+      for (;;) {
+        const type = resultType(await reader.next(id))
+        observed[key].push(type ?? 'unknown')
+        if (type === 'reposChanged' || type === 'activateWorktree') {
+          break
+        }
+      }
+    }
+
+    // The observer must never be navigated by the creator...
+    expect(observed.b).not.toContain('activateWorktree')
+    expect(observed.b.at(-1)).toBe('reposChanged')
+    expect(harness.activateWorktree).not.toHaveBeenCalled()
+    expect(harness.hostSelections.worktreeId).toBe(HOST_WORKTREE_ID)
+    // ...nor is the creator's own view driven from the host stream (it navigates from its RPC result)...
+    expect(observed.a).not.toContain('activateWorktree')
+    expect(observed.a.at(-1)).toBe('reposChanged')
+    // ...while shared catalog state still reaches both clients.
+    expect(observed.a).toContain('worktreesChanged')
+    expect(observed.b).toContain('worktreesChanged')
+  })
+
+  it('still reveals a host-originated create-with-activate on the host and every client', async () => {
+    const harness = await startHarness()
+    await subscribeBothClientEventStreams(harness)
+
+    // Why: a headless server's only viewer is a remote client, so an in-process/CLI
+    // create must keep reaching clients; only paired-client callers are scoped.
+    await harness.runtime.createManagedWorktree({
+      repoSelector: `id:${FOLDER_REPO_ID}`,
+      name: 'cli-created-workspace',
+      activate: true
+    })
+
+    const [eventA, eventB] = await Promise.all([
+      harness.readerA.next('events-a', (response) => resultType(response) === 'activateWorktree'),
+      harness.readerB.next('events-b', (response) => resultType(response) === 'activateWorktree')
+    ])
+    expect([resultType(eventA), resultType(eventB)]).toEqual([
+      'activateWorktree',
+      'activateWorktree'
+    ])
+    expect(harness.activateWorktree).toHaveBeenCalled()
   })
 
   it('projects session-tab activation only to the paired caller across fanout and reconnect', async () => {
