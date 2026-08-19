@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as fsModule from 'node:fs'
 import type { DiscoveredBrowserCandidate } from './installed-browser-discovery'
 
 // Why: this module never touches Electron, but mirror the browser-cookie-import
@@ -16,9 +17,13 @@ function slashPath(pathValue: string): string {
 // Fixture mirroring a real macOS machine: three Chromium browsers, one terminal, one WebKit browser.
 const MACHINE_CANDIDATES: DiscoveredBrowserCandidate[] = [
   { bundleId: 'ai.perplexity.comet', displayName: 'Comet', appPath: '/Applications/Comet.app' },
-  { bundleId: 'company.thebrowser.aside', displayName: 'Aside', appPath: '/Applications/Aside.app' },
+  { bundleId: 'at.studio.AsideBrowser', displayName: 'Aside', appPath: '/Applications/Aside.app' },
   { bundleId: 'com.apple.Safari', displayName: 'Safari', appPath: '/Applications/Safari.app' },
-  { bundleId: 'com.google.Chrome', displayName: 'Google Chrome', appPath: '/Applications/Google Chrome.app' },
+  {
+    bundleId: 'com.google.Chrome',
+    displayName: 'Google Chrome',
+    appPath: '/Applications/Google Chrome.app'
+  },
   { bundleId: 'com.googlecode.iterm2', displayName: 'iTerm', appPath: '/Applications/iTerm.app' }
 ]
 
@@ -63,17 +68,31 @@ describe('filterChromiumCandidates — darwin', () => {
     const { filterChromiumCandidates } = await import('./installed-browser-discovery')
 
     // Aside/Comet on the modern Network/Cookies path, Chrome on the legacy Cookies path.
-    const existsSync = ((rawPath: import('node:fs').PathLike): boolean => {
+    const existsSync = ((rawPath: fsModule.PathLike): boolean => {
       const p = slashPath(String(rawPath))
-      if (p.endsWith('Aside/Local State')) return true
-      if (p.endsWith('Aside/Default/Network/Cookies')) return true
-      if (p.endsWith('Comet/Local State')) return true
-      if (p.endsWith('Comet/Default/Network/Cookies')) return true
-      if (p.endsWith('Google Chrome/Local State')) return true
-      if (p.endsWith('Google Chrome/Default/Network/Cookies')) return false
-      if (p.endsWith('Google Chrome/Default/Cookies')) return true
+      if (p.endsWith('Aside/Local State')) {
+        return true
+      }
+      if (p.endsWith('Aside/Default/Network/Cookies')) {
+        return true
+      }
+      if (p.endsWith('Comet/Local State')) {
+        return true
+      }
+      if (p.endsWith('Comet/Default/Network/Cookies')) {
+        return true
+      }
+      if (p.endsWith('Google Chrome/Local State')) {
+        return true
+      }
+      if (p.endsWith('Google Chrome/Default/Network/Cookies')) {
+        return false
+      }
+      if (p.endsWith('Google Chrome/Default/Cookies')) {
+        return true
+      }
       return false
-    }) as typeof import('node:fs').existsSync
+    }) as typeof fsModule.existsSync
 
     const kept = filterChromiumCandidates(MACHINE_CANDIDATES, {
       appSupportRoot: APP_SUPPORT_ROOT,
@@ -88,11 +107,11 @@ describe('filterChromiumCandidates — darwin', () => {
   it('drops a candidate whose Local State exists but has no resolvable cookies DB', async () => {
     const { filterChromiumCandidates } = await import('./installed-browser-discovery')
 
-    const existsSync = ((rawPath: import('node:fs').PathLike): boolean => {
+    const existsSync = ((rawPath: fsModule.PathLike): boolean => {
       const p = slashPath(String(rawPath))
       // Local State present, but neither cookies path resolves.
       return p.endsWith('Comet/Local State')
-    }) as typeof import('node:fs').existsSync
+    }) as typeof fsModule.existsSync
 
     const kept = filterChromiumCandidates(MACHINE_CANDIDATES, {
       appSupportRoot: APP_SUPPORT_ROOT,
