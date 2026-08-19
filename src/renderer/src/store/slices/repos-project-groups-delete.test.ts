@@ -112,17 +112,18 @@ describe('project group deletion store routing', () => {
       result: { deleted: false },
       _meta: { runtimeId: 'runtime-remote' }
     })
+    const remoteOwnedGroup: ProjectGroup = { ...projectGroup, executionHostId: 'runtime:env-1' }
     const groupedRepo = { ...remoteRepo, projectGroupId: projectGroup.id }
     const store = createTestStore()
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      projectGroups: [projectGroup],
+      projectGroups: [remoteOwnedGroup],
       repos: [groupedRepo]
     })
 
     await expect(store.getState().deleteProjectGroup(projectGroup.id)).resolves.toBe(false)
 
-    expect(store.getState().projectGroups).toEqual([projectGroup])
+    expect(store.getState().projectGroups).toEqual([remoteOwnedGroup])
     expect(store.getState().repos).toEqual([groupedRepo])
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',

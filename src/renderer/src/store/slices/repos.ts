@@ -1567,6 +1567,32 @@ function settingsForRepoOwner(
   return state.settings
 }
 
+function settingsForProjectGroupOwner(
+  state: Pick<AppState, 'projectGroups' | 'settings'>,
+  groupId: string
+) {
+  const group = state.projectGroups.find((entry) => entry.id === groupId)
+  if (!group) {
+    return state.settings
+  }
+  if (!group.executionHostId && !group.connectionId) {
+    return state.settings
+  }
+  const parsed = parseExecutionHostId(getProjectGroupHostId(group))
+  if (parsed?.kind === 'runtime') {
+    return state.settings
+      ? { ...state.settings, activeRuntimeEnvironmentId: parsed.environmentId }
+      : ({ activeRuntimeEnvironmentId: parsed.environmentId } as AppState['settings'])
+  }
+  if (
+    (parsed?.kind === 'local' || parsed?.kind === 'ssh') &&
+    state.settings?.activeRuntimeEnvironmentId
+  ) {
+    return { ...state.settings, activeRuntimeEnvironmentId: null }
+  }
+  return state.settings
+}
+
 function getFolderWorkspacePathStatusScopeKey(request: FolderWorkspacePathStatusRequest): string {
   if (request.scope === 'project-group') {
     return `project-group:${request.projectGroupId}`
@@ -2992,8 +3018,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   updateProjectGroup: async (groupId, updates) => {
     try {
-      // Why: project groups are focused-host-scoped by design; all CRUD routes by the focused host and the list is replaced, not merged.
-      const target = getActiveRuntimeTarget(get().settings)
+      // Why: the sidebar lists groups from every host, so the focused host may not own this one.
+      const target = getActiveRuntimeTarget(settingsForProjectGroupOwner(get(), groupId))
       const updated =
         target.kind === 'local'
           ? await window.api.projectGroups.update({ groupId, updates })
@@ -3022,8 +3048,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   deleteProjectGroup: async (groupId) => {
     try {
-      // Why: project groups are focused-host-scoped by design (see updateProjectGroup).
-      const target = getActiveRuntimeTarget(get().settings)
+      // Why: groups are routed by their owning host, not the focused one (see updateProjectGroup).
+      const target = getActiveRuntimeTarget(settingsForProjectGroupOwner(get(), groupId))
       const deleted =
         target.kind === 'local'
           ? await window.api.projectGroups.delete({ groupId })
