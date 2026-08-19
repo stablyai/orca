@@ -20,8 +20,10 @@ import {
   resetSessionParseCacheForTests
 } from './session-scanner-parse-cache'
 import {
+  WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS,
   WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS,
-  WslTranscriptFsError
+  WslTranscriptFsError,
+  resetWslTranscriptFsGateForTests
 } from '../native-chat/wsl-transcript-fs-gate'
 
 type ReadResult = { bytesRead: number; buffer: Buffer }
@@ -77,19 +79,25 @@ function candidate(path: string, bytes: Buffer, mtimeMs: number): SessionFileCan
   }
 }
 
+// A result that lands past the deadline never lifts the route quarantine, so
+// recovery waits out the back-off window the same way production does.
 async function releaseAndSettle(): Promise<void> {
   releaseStall?.()
   releaseStall = undefined
-  await vi.advanceTimersByTimeAsync(0)
+  await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS)
 }
 
 beforeEach(() => {
+  // blockedRoutes is persistent gate state: a prior stall must not quarantine
+  // this test's route.
+  resetWslTranscriptFsGateForTests()
   resetSessionParseCacheForTests()
   mocks.open.mockReset()
   mocks.readdir.mockReset()
   mocks.readdir.mockResolvedValue([])
   releaseStall = undefined
-  vi.useFakeTimers()
+  // performance.now drives the route quarantine clock, so it must be faked too.
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] })
 })
 
 afterEach(async () => {
