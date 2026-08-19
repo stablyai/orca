@@ -195,6 +195,16 @@ const CHROMIUM_BROWSERS: ChromiumBrowserDef[] = [
     keychainAccount: 'Helium',
     macRoot: 'net.imput.helium'
     // winRoot/linuxRoot intentionally omitted — only the macOS install is verified
+  },
+  {
+    family: 'aside',
+    // Why: Aside follows the standard '<Browser> Safe Storage' Keychain convention
+    // and keeps cookies at the legacy <Profile>/Cookies path (verified on 1.0.813.1).
+    label: 'Aside',
+    keychainService: 'Aside Safe Storage',
+    keychainAccount: 'Aside',
+    macRoot: 'Aside'
+    // winRoot/linuxRoot omitted — only the macOS install is verified (cf. #14295).
   }
 ]
 
