@@ -39,7 +39,9 @@ function seedDatabase(sessionId: string, rows: HermesRow[]): DatabaseSync {
       timestamp REAL,
       reasoning TEXT,
       reasoning_content TEXT,
-      reasoning_details TEXT
+      reasoning_details TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
+      compacted INTEGER NOT NULL DEFAULT 0
     )
   `)
   db.prepare('INSERT INTO sessions (id) VALUES (?)').run(sessionId)

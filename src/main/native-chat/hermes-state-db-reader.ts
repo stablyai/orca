@@ -63,6 +63,7 @@ export function readHermesStateDbPage(
       return { messages: [], hasMore: false, beforeOffset: 0 }
     }
     const id = columns.has('id') ? 'id' : 'rowid'
+    const activityClause = columns.has('active') ? ' AND active = 1' : ''
     const cursor = beforeOffset === undefined ? null : beforeOffset
     const rows = db
       .prepare(`
@@ -75,7 +76,7 @@ export function readHermesStateDbPage(
                ${optionalColumn(columns, 'reasoning_content')} AS reasoning_content,
                ${optionalColumn(columns, 'reasoning_details')} AS reasoning_details
           FROM messages
-         WHERE session_id = ? AND (? IS NULL OR ${id} < ?)
+         WHERE session_id = ?${activityClause} AND (? IS NULL OR ${id} < ?)
          ORDER BY ${id} DESC
          LIMIT ?
       `)
