@@ -80,6 +80,26 @@ describe('createSshSlice', () => {
         [targetId]: { phase: 'offline' },
         [otherTargetId]: { phase: 'synced' }
       },
+      remoteWorkspaceHostAckByTargetId: {
+        [targetId]: {
+          namespace: 'ns-removed',
+          listingsByPublisherId: {
+            'peer-1': {
+              revision: 3,
+              tabsById: { 'tab-ssh': { worktreePath: '/remote/ssh' } }
+            }
+          }
+        },
+        [otherTargetId]: {
+          namespace: 'ns-other',
+          listingsByPublisherId: {
+            'peer-2': {
+              revision: 4,
+              tabsById: { 'tab-other': { worktreePath: '/remote/other' } }
+            }
+          }
+        }
+      },
       portForwardsByConnection: {
         [targetId]: [
           {
@@ -172,6 +192,9 @@ describe('createSshSlice', () => {
     expect(state.sshTargetLabels.has(targetId)).toBe(false)
     expect(state.remoteWorkspaceHydratedTargetIds.has(targetId)).toBe(false)
     expect(state.remoteWorkspaceSyncStatusByTargetId[targetId]).toBeUndefined()
+    // Why it must go with the rest: a revision from a target's previous host must never authorize
+    // retiring a live tab after the target is re-added.
+    expect(state.remoteWorkspaceHostAckByTargetId[targetId]).toBeUndefined()
     expect(state.portForwardsByConnection[targetId]).toBeUndefined()
     expect(state.detectedPortsByConnection[targetId]).toBeUndefined()
     expect(state.sshCredentialQueue.map((req) => req.targetId)).toEqual([otherTargetId])
@@ -205,6 +228,10 @@ describe('createSshSlice', () => {
     expect(state.sshTargetLabels.get(otherTargetId)).toBe('Other target')
     expect(state.remoteWorkspaceHydratedTargetIds.has(otherTargetId)).toBe(true)
     expect(state.remoteWorkspaceSyncStatusByTargetId[otherTargetId]).toEqual({ phase: 'synced' })
+    expect(
+      state.remoteWorkspaceHostAckByTargetId[otherTargetId]?.listingsByPublisherId['peer-2']
+        ?.revision
+    ).toBe(4)
     expect(state.portForwardsByConnection[otherTargetId]).toHaveLength(1)
     expect(state.detectedPortsByConnection[otherTargetId]).toHaveLength(1)
     expect(state.tabsByWorktree[otherWorktreeId][0]?.ptyId).toBe(otherPtyId)

@@ -44,7 +44,11 @@ export type RemoteWorkspaceTargetSyncDeps = {
 
 export type RemoteWorkspaceTargetSync = {
   syncAfterConnect: (token: DirectSshPreparationToken) => Promise<void>
-  applyUnsolicitedSnapshot: (targetId: string, snapshot: RemoteWorkspaceSnapshot) => Promise<void>
+  applyUnsolicitedSnapshot: (
+    targetId: string,
+    snapshot: RemoteWorkspaceSnapshot,
+    publisherClientId?: string | null
+  ) => Promise<void>
   stop: () => void
 }
 
@@ -211,7 +215,10 @@ export function createRemoteWorkspaceTargetSync(
 
   const applyUnsolicitedSnapshot = async (
     targetId: string,
-    snapshot: RemoteWorkspaceSnapshot
+    snapshot: RemoteWorkspaceSnapshot,
+    // Why threaded rather than derived: only the client that wrote a listing can retract it, and
+    // this is the one place that identity is available (pulls have none and so retire nothing).
+    publisherClientId?: string | null
   ): Promise<void> => {
     const arrival = beginArrival(targetId)
     const authority = deps.getCurrentAuthority(targetId)
@@ -240,7 +247,8 @@ export function createRemoteWorkspaceTargetSync(
         isArrivalCurrent,
         isPreparationTokenCurrent: deps.isPreparationTokenCurrent,
         waitForWorkspaceSessionReady,
-        finalizeHydratedTerminals: deps.finalizeHydratedTerminals
+        finalizeHydratedTerminals: deps.finalizeHydratedTerminals,
+        publisherClientId
       })
     }
   }

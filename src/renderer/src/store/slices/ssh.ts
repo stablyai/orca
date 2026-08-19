@@ -6,6 +6,12 @@ import type {
   EnrichedDetectedPort,
   SshTarget
 } from '../../../../shared/ssh-types'
+import type { RemoteWorkspaceSnapshot } from '../../../../shared/remote-workspace-types'
+import {
+  clearRemoteWorkspaceHostAck,
+  recordRemoteWorkspaceHostAck,
+  type RemoteWorkspaceHostAckLedger
+} from '../../hooks/remote-workspace-host-ack-ledger'
 import {
   buildRemovedSshTargetCleanupPatch,
   sshConnectionStatesEqual,
@@ -44,6 +50,9 @@ export type SshSlice = {
   sshTargetsHydrated: boolean
   remoteWorkspaceHydratedTargetIds: Set<string>
   remoteWorkspaceSyncStatusByTargetId: Record<string, RemoteWorkspaceSyncStatus>
+  /** What each CLIENT of a host has itself published about that host's tab list. Lets a snapshot
+   * retire a tab its publisher once listed, without letting a peer that never knew the tab delete it. */
+  remoteWorkspaceHostAckByTargetId: RemoteWorkspaceHostAckLedger
   sshCredentialQueue: SshCredentialRequest[]
   /** Incremented when an SSH target transitions to 'connected'. Allows
    * components like the file explorer to re-trigger data loads that failed
@@ -65,6 +74,11 @@ export type SshSlice = {
   markRemoteWorkspaceHydrated: (targetId: string) => void
   clearRemoteWorkspaceHydrated: (targetId: string) => void
   setRemoteWorkspaceSyncStatus: (targetId: string, status: RemoteWorkspaceSyncStatus) => void
+  recordRemoteWorkspaceHostAck: (
+    targetId: string,
+    snapshot: RemoteWorkspaceSnapshot,
+    publisherClientId: string | null | undefined
+  ) => void
   enqueueSshCredentialRequest: (req: SshCredentialRequest) => void
   removeSshCredentialRequest: (requestId: string) => void
   setPortForwards: (targetId: string, forwards: PortForwardEntry[]) => void
@@ -89,6 +103,7 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
   sshTargetsHydrated: false,
   remoteWorkspaceHydratedTargetIds: new Set(),
   remoteWorkspaceSyncStatusByTargetId: {},
+  remoteWorkspaceHostAckByTargetId: {},
   sshCredentialQueue: [],
   sshConnectedGeneration: 0,
   portForwardsByConnection: {},
@@ -145,7 +160,15 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
     set((s) => {
       const next = new Set(s.remoteWorkspaceHydratedTargetIds)
       next.delete(targetId)
-      return { remoteWorkspaceHydratedTargetIds: next }
+      // Why the listings go too: they are keyed by target but only meaningful for one namespace/
+      // authority, and a stale revision from a previous one must never authorize retiring a live tab.
+      return {
+        remoteWorkspaceHydratedTargetIds: next,
+        remoteWorkspaceHostAckByTargetId: clearRemoteWorkspaceHostAck(
+          s.remoteWorkspaceHostAckByTargetId,
+          targetId
+        )
+      }
     }),
   setRemoteWorkspaceSyncStatus: (targetId, status) =>
     set((s) => ({
@@ -153,6 +176,19 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
         ...s.remoteWorkspaceSyncStatusByTargetId,
         [targetId]: status
       }
+    })),
+  recordRemoteWorkspaceHostAck: (targetId, snapshot, publisherClientId) =>
+    set((s) => ({
+      remoteWorkspaceHostAckByTargetId: recordRemoteWorkspaceHostAck(
+        s.remoteWorkspaceHostAckByTargetId,
+        targetId,
+        snapshot,
+        // Why the whole map and not a flattened id set: bounding the ledger only needs the worktrees
+        // this target's own listings named, and the ledger reads exactly those — flattening here
+        // would walk every repo on every host on every listing.
+        s.tabsByWorktree,
+        publisherClientId
+      )
     })),
   enqueueSshCredentialRequest: (req) =>
     set((s) => ({ sshCredentialQueue: [...s.sshCredentialQueue, req] })),

@@ -3127,8 +3127,10 @@ export function useIpcEvents(): void {
             if (event.sourceClientId && clientId && event.sourceClientId === clientId) {
               return
             }
+            // Why sourceClientId reaches the apply: a snapshot can only retire a tab its own
+            // publisher once listed, so absence from a peer that never knew the tab is inert.
             await remoteWorkspaceTargetSync
-              ?.applyUnsolicitedSnapshot(event.targetId, event.snapshot)
+              ?.applyUnsolicitedSnapshot(event.targetId, event.snapshot, event.sourceClientId)
               .catch((err) => {
                 useAppStore.getState().setRemoteWorkspaceSyncStatus(event.targetId, {
                   phase: 'error',

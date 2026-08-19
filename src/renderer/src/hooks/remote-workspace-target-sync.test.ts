@@ -121,6 +121,8 @@ function appState(overrides: Record<string, unknown> = {}): AppState {
     hydrateBrowserSession: vi.fn(),
     markRemoteWorkspaceHydrated: vi.fn(),
     setRemoteWorkspaceSyncStatus: vi.fn(),
+    remoteWorkspaceHostAckByTargetId: {},
+    recordRemoteWorkspaceHostAck: vi.fn(),
     reconnectPersistedTerminals: vi.fn(async () => {}),
     ...overrides
   } as unknown as AppState
@@ -213,6 +215,28 @@ describe('createRemoteWorkspaceTargetSync', () => {
     expect(harness.setForConnectedTargets).toHaveBeenCalledOnce()
     expect(harness.setForConnectedTargets).toHaveBeenCalledWith(
       expect.objectContaining({ hydratedTargetIds: ['target-a'] })
+    )
+  })
+
+  it('records the publisher of an unsolicited snapshot, and nobody for a pull', async () => {
+    // Only the client that wrote a listing can retract it, so the identity has to reach the ledger.
+    // A pull has no publisher and therefore can never authorize a retirement.
+    const state = appState()
+    const pulled = snapshot(7, { '/remote/work': [] })
+    const harness = createHarness(state, async () => pulled)
+
+    await harness.sync.syncAfterConnect(token())
+    await harness.sync.applyUnsolicitedSnapshot('target-a', snapshot(8, {}), 'peer-client-1')
+
+    expect(state.recordRemoteWorkspaceHostAck).toHaveBeenCalledWith(
+      'target-a',
+      expect.objectContaining({ revision: 7 }),
+      undefined
+    )
+    expect(state.recordRemoteWorkspaceHostAck).toHaveBeenCalledWith(
+      'target-a',
+      expect.objectContaining({ revision: 8 }),
+      'peer-client-1'
     )
   })
 

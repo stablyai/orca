@@ -16,6 +16,9 @@ import {
   mergeDirectSshRemoteWorkspaceSession,
   uniqueWorktreeIdByPath
 } from './remote-workspace-session-merge'
+import { selectHostRetiredTabIdsByWorktree } from './remote-workspace-host-ack-ledger'
+import { retireHostClosedTabsFromSession } from './remote-workspace-host-tab-retirement'
+import { sweepRetiredTerminalTabState } from '../store/slices/retired-terminal-tab-state-sweep'
 
 const REMOTE_WORKSPACE_SNAPSHOT_WRITE_SUPPRESS_MS = 1_000
 const SNAPSHOT_TERMINAL_RECONNECT_TIMEOUT_MS = 30_000
@@ -35,6 +38,8 @@ type RemoteWorkspaceSnapshotApplyInput = {
   isPreparationTokenCurrent: (token: DirectSshPreparationToken) => boolean
   waitForWorkspaceSessionReady: () => Promise<boolean>
   finalizeHydratedTerminals: (authority: DirectSshAuthority) => number
+  /** `workspace.changed`'s sourceClientId: which client wrote this listing. Absent for pulls. */
+  publisherClientId?: string | null
 }
 
 function exactTargetWorktreeIds(state: AppState, authority: DirectSshAuthority): Set<string> {
@@ -81,7 +86,8 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
   isArrivalCurrent,
   isPreparationTokenCurrent,
   waitForWorkspaceSessionReady,
-  finalizeHydratedTerminals
+  finalizeHydratedTerminals,
+  publisherClientId
 }: RemoteWorkspaceSnapshotApplyInput): Promise<void> {
   const { authority } = token
   if (!isArrivalCurrent(authority.targetId, arrival)) {
@@ -111,12 +117,38 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
   const remoteSession = importRemoteWorkspaceSession(snapshot.session, {
     resolveWorktreeId: uniqueWorktreeIdByPath(worktreeIds)
   })
-  const merged = mergeDirectSshRemoteWorkspaceSession(
-    buildWorkspaceSessionPayload(state),
-    remoteSession,
-    worktreeIds,
-    state.tabsByWorktree,
-    currentRecoveryTabIds(state, authority, worktreeIds)
+  // Why the ids are selected BEFORE the merge: the merge is what preserves a host-unknown tab, so
+  // afterwards absence and preservation are indistinguishable again. Read against pre-merge local
+  // state, an id here means the client publishing this snapshot once listed the tab and now does not.
+  //
+  // What makes that safe is the retraction rule alone (see selectHostRetiredTabIdsByWorktree): only a
+  // publisher that itself listed the id, under a path it still describes, can drop it. No local-pty
+  // predicate is consulted, deliberately — this apply ends by running finalizeHydratedTerminals,
+  // which is retryDirectSshTargetPanes (useIpcEvents.ts:731-733), so by the time the next snapshot
+  // arrives every tab of the target has a retry entry and a bumped generation (and a live binding
+  // once its pane settles). Any veto built on those is satisfied by every tab and silently disables
+  // retirement.
+  const retiredTabIdsByWorktreeId = selectHostRetiredTabIdsByWorktree({
+    ledger: state.remoteWorkspaceHostAckByTargetId,
+    targetId: authority.targetId,
+    snapshot,
+    publisherId: publisherClientId,
+    localTabsByWorktree: state.tabsByWorktree,
+    worktreeIds
+  })
+  // Why collected: a peer's close owes the tab the same renderer-side sweep a local closeTab runs.
+  // Only ids the primitive really removed land here, so a pinned tab keeps its agent status.
+  const retiredWorktreeIdByTabId = new Map<string, string>()
+  const merged = retireHostClosedTabsFromSession(
+    mergeDirectSshRemoteWorkspaceSession(
+      buildWorkspaceSessionPayload(state),
+      remoteSession,
+      worktreeIds,
+      state.tabsByWorktree,
+      currentRecoveryTabIds(state, authority, worktreeIds)
+    ),
+    retiredTabIdsByWorktreeId,
+    { onTabRetired: (tabId, worktreeId) => retiredWorktreeIdByTabId.set(tabId, worktreeId) }
   )
   if (!isArrivalCurrent(authority.targetId, arrival) || !isPreparationTokenCurrent(token)) {
     return
@@ -130,6 +162,14 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
       replaceWorkspaceKeys
     })
     currentStore.hydrateTabsSession(merged, { replaceWorkspaceKeys })
+    // Why here: the retired tabs are out of tabsByWorktree now (the completed-orphan sweep is defined
+    // against that), and snapshotApplyDepth still suppresses the store writes from re-publishing.
+    for (const [tabId, worktreeId] of retiredWorktreeIdByTabId) {
+      sweepRetiredTerminalTabState(currentStore, tabId, worktreeId)
+    }
+    // Why after hydrate: this listing is now what its publisher is known to hold, so a LATER listing
+    // from the SAME publisher is what its omissions are judged against.
+    currentStore.recordRemoteWorkspaceHostAck(authority.targetId, snapshot, publisherClientId)
     // Why: direct SSH snapshots project terminal state only; global editor/browser hydration would reset unrelated hosts.
     currentStore.markRemoteWorkspaceHydrated(authority.targetId)
     currentStore.setRemoteWorkspaceSyncStatus(authority.targetId, {

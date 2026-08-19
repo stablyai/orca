@@ -2,6 +2,7 @@ import type { AppState } from '../types'
 import type { SshConnectionState, SshTarget } from '../../../../shared/ssh-types'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { resolveDirectSshTargetScope } from '../../lib/direct-ssh-target-scope'
+import { clearRemoteWorkspaceHostAck } from '../../hooks/remote-workspace-host-ack-ledger'
 
 export function sshConnectionStatesEqual(
   a: SshConnectionState | undefined,
@@ -209,6 +210,8 @@ export function buildRemovedSshTargetCleanupPatch(
   const nextHydrated = new Set(state.remoteWorkspaceHydratedTargetIds)
   const removedHydrated = nextHydrated.delete(targetId)
   const removedSyncStatus = Object.hasOwn(state.remoteWorkspaceSyncStatusByTargetId, targetId)
+  const nextHostAck = clearRemoteWorkspaceHostAck(state.remoteWorkspaceHostAckByTargetId, targetId)
+  const removedHostAck = nextHostAck !== state.remoteWorkspaceHostAckByTargetId
   const removedPortForwards = Object.hasOwn(state.portForwardsByConnection, targetId)
   const removedDetectedPorts = Object.hasOwn(state.detectedPortsByConnection, targetId)
   const nextSyncStatus = { ...state.remoteWorkspaceSyncStatusByTargetId }
@@ -227,6 +230,7 @@ export function buildRemovedSshTargetCleanupPatch(
     removedLabel ||
     removedHydrated ||
     removedSyncStatus ||
+    removedHostAck ||
     removedPortForwards ||
     removedDetectedPorts ||
     tabPtyState.changed ||
@@ -249,6 +253,7 @@ export function buildRemovedSshTargetCleanupPatch(
     ...(removedLabel ? { sshTargetLabels: nextLabels } : {}),
     ...(removedHydrated ? { remoteWorkspaceHydratedTargetIds: nextHydrated } : {}),
     ...(removedSyncStatus ? { remoteWorkspaceSyncStatusByTargetId: nextSyncStatus } : {}),
+    ...(removedHostAck ? { remoteWorkspaceHostAckByTargetId: nextHostAck } : {}),
     ...(removedPortForwards ? { portForwardsByConnection: nextPortForwards } : {}),
     ...(removedDetectedPorts ? { detectedPortsByConnection: nextDetectedPorts } : {}),
     ...(tabPtyState.changed
