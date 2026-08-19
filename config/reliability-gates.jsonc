@@ -7745,12 +7745,13 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-provider-reattach-incarnation.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/remote-workspace-patch-authority.test.ts src/main/ipc/remote-workspace-cache.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/workspace-session-partition-adoption.test.ts src/main/persistence-host-partitioned-sessions.test.ts src/main/ipc/session.test.ts src/renderer/src/lib/workspace-session-host-persistence.test.ts src/main/ipc/remote-workspace.test.ts src/main/ipc/remote-workspace-patch-queue.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/workspace-session-partition-adoption.test.ts src/main/persistence-ssh-partition-adoption.test.ts src/main/ipc/session.test.ts src/renderer/src/lib/workspace-session-host-persistence.test.ts src/main/ipc/remote-workspace.test.ts src/main/ipc/remote-workspace-patch-queue.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/startup/ssh-startup-reconnect.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/components/terminal/background-terminal-worktree-mount.test.ts src/renderer/src/runtime/sync-runtime-graph-scheduling.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.test.ts src/renderer/src/components/terminal-pane/pty-connection-direct-ssh-spawn-retry.test.ts src/renderer/src/components/terminal-pane/pty-connection-direct-ssh-reattach-retry.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-surface-replacement.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-stream-reconnect.test.ts src/renderer/src/runtime/remote-runtime-session-tabs-inflight.test.ts src/renderer/src/runtime/web-session-terminal-handle-events.test.ts src/renderer/src/store/slices/terminal-pty-identity-replacement.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport-reattach-admission.test.ts src/renderer/src/components/terminal-pane/pty-transport-detach-attach-handoff.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-attach-subscription.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-host-surface-replacement.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-stream-reconnect.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-expired-pane-recovery.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-create-outcome-recovery.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-create-handoff.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-recovery-state.test.ts src/renderer/src/components/terminal-pane/TerminalRemoteRuntimeReconnectBanner.test.tsx src/renderer/src/components/terminal-pane/terminal-remote-runtime-recovery-ui-state.test.ts src/shared/remote-runtime-socket-liveness.test.ts src/shared/remote-runtime-shared-control-connection.test.ts src/shared/remote-runtime-shared-control-socket-generation.test.ts src/shared/remote-runtime-client-error-classification.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/methods/terminal-create-idempotency.test.ts src/main/runtime/orca-runtime-terminal-create-idempotency.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/direct-ssh-terminal-retry.test.ts src/renderer/src/store/slices/direct-ssh-pane-detach-ledger.test.ts src/renderer/src/store/slices/direct-ssh-terminal-recovery.test.ts src/renderer/src/store/slices/direct-ssh-terminal-workspace-scope.test.ts src/renderer/src/store/slices/terminals-hydration.test.ts src/renderer/src/store/slices/repos-ssh-host-reconciliation.test.ts src/renderer/src/hooks/direct-ssh-reconnect-coordinator.test.ts src/renderer/src/hooks/direct-ssh-host-hydration.test.ts src/renderer/src/hooks/direct-ssh-state-routing.test.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/components/terminal-pane/pty-connection-direct-ssh-spawn-retry.test.ts src/renderer/src/components/terminal-pane/pty-connection-direct-ssh-reattach-retry.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/repos-remote.test.ts src/main/ipc/ssh.test.ts src/main/ipc/worktrees-ssh-repo-owner-resolution.test.ts src/main/ipc/worktrees-lineage-hydration.test.ts src/main/runtime/public-ssh-state.test.ts src/main/ssh/ssh-connection-manager.test.ts src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-provider-authority.test.ts src/preload/ssh-authority-forwarding.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/runtime/runtime-environment-ssh-state.test.ts src/shared/ssh-retained-payload-admission.test.ts src/shared/ssh-types.test.ts --reporter=dot",        "pnpm exec electron-vite build --mode e2e",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/repos-remote.test.ts src/main/ipc/ssh.test.ts src/main/ipc/worktrees-ssh-repo-owner-resolution.test.ts src/main/ipc/worktrees-lineage-hydration.test.ts src/main/runtime/public-ssh-state.test.ts src/main/ssh/ssh-connection-manager.test.ts src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-provider-authority.test.ts src/preload/ssh-authority-forwarding.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/runtime/runtime-environment-ssh-state.test.ts src/shared/ssh-retained-payload-admission.test.ts src/shared/ssh-types.test.ts --reporter=dot",
+        "pnpm exec electron-vite build --mode e2e",
         "pnpm run build:web-from-renderer",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-materialization-reconnect.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-cold-activation-deferral.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
@@ -7761,14 +7762,13 @@
       "testFiles": [
         "src/main/providers/ssh-pty-provider-reattach-incarnation.test.ts",
         "src/shared/workspace-session-partition-adoption.test.ts",
-        "src/main/persistence.test.ts",
+        "src/main/persistence-ssh-partition-adoption.test.ts",
         "src/main/ipc/session.test.ts",
         "src/renderer/src/lib/workspace-session-host-persistence.test.ts",
         "src/main/ipc/remote-workspace.test.ts",
         "src/main/ipc/remote-workspace-patch-queue.test.ts",
         "src/main/ipc/remote-workspace-patch-authority.test.ts",
         "src/main/ipc/remote-workspace-cache.test.ts",
-        "src/renderer/src/hooks/remote-workspace-session-merge.test.ts",
         "src/renderer/src/hooks/remote-workspace-target-sync.test.ts",
         "src/renderer/src/hooks/remote-workspace-snapshot-duplicate-tab-repair.test.ts",
         "src/renderer/src/startup/ssh-startup-reconnect.test.ts",
@@ -7842,7 +7842,7 @@
           ]
         },
         {
-          "file": "src/main/persistence.test.ts",
+          "file": "src/main/persistence-ssh-partition-adoption.test.ts",
           "assertions": [
             "one transaction enumerates every persisted SSH partition and preserves non-SSH partitions",
             "equal- or unequal-revision duplicate repository keys preserve non-empty local state and every ambiguous SSH source while reconciled sources prune independently",
@@ -7884,16 +7884,7 @@
         {
           "file": "src/renderer/src/hooks/remote-workspace-target-sync.test.ts",
           "assertions": [
-            "identity-free target snapshots preserve the exact local tab, active leaf binding, provider session, and shutdown reconnect owner before hydration"
-          ]
-        },
-        {
-          "file": "src/renderer/src/hooks/remote-workspace-session-merge.test.ts",
-          "assertions": [
-            "local retention is keyed by worktree plus tab plus exact DirectSshAuthority instead of a bare tab id",
-            "foreign target tab, layout, mounted-leaf, pending-reconnect, and remote-session PTYs are rejected before merge",
-            "duplicate ownership across git or folder workspaces fails closed even when both PTYs belong to the same target",
-            "exact-target equal and unequal generations preserve coherent PTY bundles"
+            "the connected-target push carries the session target id and authority alongside the hydrated target set"
           ]
         },
         {

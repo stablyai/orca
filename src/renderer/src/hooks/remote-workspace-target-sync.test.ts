@@ -329,6 +329,40 @@ describe('createRemoteWorkspaceTargetSync', () => {
     expect(state.hydrateBrowserSession).not.toHaveBeenCalled()
   })
 
+  it('preserves a higher local generation from an older remote snapshot', async () => {
+    const hydrateTabsSession = vi.fn()
+    const state = appState({
+      tabsByWorktree: {
+        'repo-a::/remote/work': [
+          {
+            id: 'stable-tab',
+            worktreeId: 'repo-a::/remote/work',
+            ptyId: 'local-pty',
+            generation: 7
+          }
+        ]
+      },
+      hydrateTabsSession
+    })
+    const harness = createHarness(state, async () => null)
+    const incoming = snapshot(5, {
+      '/remote/work': [
+        {
+          id: 'stable-tab',
+          worktreePath: '/remote/work',
+          ptyId: 'old-remote-pty',
+          generation: 1
+        } as RemoteWorkspaceSnapshot['session']['tabsByWorktreePath'][string][number]
+      ]
+    })
+
+    await harness.sync.applyUnsolicitedSnapshot('target-a', incoming)
+
+    expect(
+      hydrateTabsSession.mock.calls[0][0].tabsByWorktree['repo-a::/remote/work'][0]
+    ).toMatchObject({ generation: 7, ptyId: 'local-pty' })
+  })
+
   it('admits a genuinely newer remote generation without local recovery state', async () => {
     const hydrateTabsSession = vi.fn()
     const state = appState({
