@@ -9,7 +9,7 @@ import type {
   AgentStatusState,
   AgentType
 } from '../../../../shared/agent-status-types'
-import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
+import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
@@ -66,61 +66,79 @@ export function buildTitleDerivedAgentRows(args: {
   const terminalLayoutsByTabId = args.terminalLayoutsByTabId ?? EMPTY_TERMINAL_LAYOUTS
 
   for (const tab of args.tabs) {
-    if (!tabHasLivePty(ptyIdsByTabId, tab.id)) {
+    const hasLivePty = tabHasLivePty(ptyIdsByTabId, tab.id)
+    // Why: phone-created agent tabs often exist in the host store before the
+    // desktop mounts a PTY or receives a hook ping. launchAgent is enough to
+    // keep them on the worktree card; a later live status replaces this row.
+    if (!hasLivePty && !tab.launchAgent) {
       continue
     }
     const layout = terminalLayoutsByTabId[tab.id]
-    const paneTitles = runtimePaneTitlesByTabId[tab.id]
-    const paneTitleEntries =
-      paneTitles && Object.keys(paneTitles).length > 0
-        ? Object.entries(paneTitles).sort(([a], [b]) => Number(a) - Number(b))
-        : []
+    if (hasLivePty) {
+      const paneTitles = runtimePaneTitlesByTabId[tab.id]
+      const paneTitleEntries =
+        paneTitles && Object.keys(paneTitles).length > 0
+          ? Object.entries(paneTitles).sort(([a], [b]) => Number(a) - Number(b))
+          : []
 
-    if (paneTitleEntries.length > 0) {
-      for (const [paneId, title] of paneTitleEntries) {
-        const leafId = resolveLeafIdForTitleFallback({
-          layout,
-          paneTitleEntries,
-          paneId: Number(paneId),
-          title
-        })
-        if (!leafId) {
-          continue
+      if (paneTitleEntries.length > 0) {
+        for (const [paneId, title] of paneTitleEntries) {
+          const leafId = resolveLeafIdForTitleFallback({
+            layout,
+            paneTitleEntries,
+            paneId: Number(paneId),
+            title
+          })
+          if (!leafId) {
+            continue
+          }
+          const row = buildTitleDerivedAgentRow({
+            tab,
+            leafId,
+            title,
+            ownerAgentType: resolveTitleDerivedPaneOwner(tab, layout, leafId),
+            now: args.now,
+            runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey
+          })
+          if (!row || args.seenPaneKeys.has(row.paneKey)) {
+            continue
+          }
+          rows.push(row)
+          args.seenPaneKeys.add(row.paneKey)
         }
+        continue
+      }
+
+      const liveLeafId = layout?.activeLeafId ?? collectLeafIds(layout?.root ?? null)[0]
+      if (liveLeafId) {
         const row = buildTitleDerivedAgentRow({
           tab,
-          leafId,
-          title,
-          ownerAgentType: resolveTitleDerivedPaneOwner(tab, layout, leafId),
+          leafId: liveLeafId,
+          title: tab.title,
+          ownerAgentType: resolveTitleDerivedPaneOwner(tab, layout, liveLeafId),
           now: args.now,
           runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey
         })
-        if (!row || args.seenPaneKeys.has(row.paneKey)) {
+        if (row && !args.seenPaneKeys.has(row.paneKey)) {
+          rows.push(row)
+          args.seenPaneKeys.add(row.paneKey)
           continue
         }
-        rows.push(row)
-        args.seenPaneKeys.add(row.paneKey)
       }
-      continue
     }
 
-    const leafId = layout?.activeLeafId ?? collectLeafIds(layout?.root ?? null)[0]
-    if (!leafId) {
-      continue
-    }
-    const row = buildTitleDerivedAgentRow({
+    const launchAgentRow = buildLaunchAgentFallbackRow({
       tab,
-      leafId,
-      title: tab.title,
-      ownerAgentType: resolveTitleDerivedPaneOwner(tab, layout, leafId),
+      layout,
+      seenPaneKeys: args.seenPaneKeys,
       now: args.now,
       runtimeAgentOrchestrationByPaneKey: args.runtimeAgentOrchestrationByPaneKey
     })
-    if (!row || args.seenPaneKeys.has(row.paneKey)) {
+    if (!launchAgentRow) {
       continue
     }
-    rows.push(row)
-    args.seenPaneKeys.add(row.paneKey)
+    rows.push(launchAgentRow)
+    args.seenPaneKeys.add(launchAgentRow.paneKey)
   }
 
   return rows
@@ -238,6 +256,79 @@ export function resolveTitleDerivedAgentType(
     return null
   }
   return agentType
+}
+
+function launchAgentFallbackLeafId(tabId: string): string {
+  let h1 = 0x811c9dc5
+  let h2 = 0x01000193
+  for (let index = 0; index < tabId.length; index += 1) {
+    const code = tabId.charCodeAt(index)
+    h1 = Math.imul(h1 ^ code, 0x01000193)
+    h2 = Math.imul(h2 ^ code, 0x811c9dc5)
+  }
+  const hex = [
+    (h1 >>> 0).toString(16).padStart(8, '0'),
+    (h2 >>> 0).toString(16).padStart(8, '0'),
+    ((h1 ^ h2) >>> 0).toString(16).padStart(8, '0'),
+    ((h1 + h2) >>> 0).toString(16).padStart(8, '0')
+  ].join('')
+  // Why: makePaneKey requires a UUID leaf; this is only for unmounted
+  // launchAgent tabs whose layout has not been minted yet.
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`
+}
+
+function tabHasSeenPaneKey(seenPaneKeys: ReadonlySet<string>, tabId: string): boolean {
+  for (const paneKey of seenPaneKeys) {
+    if (parsePaneKey(paneKey)?.tabId === tabId) {
+      return true
+    }
+  }
+  return false
+}
+
+function buildLaunchAgentFallbackRow(args: {
+  tab: TerminalTab
+  layout: TerminalLayoutSnapshot | undefined
+  seenPaneKeys: ReadonlySet<string>
+  now: number
+  runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
+}): DashboardAgentRow | null {
+  if (!args.tab.launchAgent || tabHasSeenPaneKey(args.seenPaneKeys, args.tab.id)) {
+    return null
+  }
+  const layoutLeafId = args.layout?.activeLeafId ?? collectLeafIds(args.layout?.root ?? null)[0]
+  const leafId =
+    layoutLeafId && isTerminalLeafId(layoutLeafId)
+      ? layoutLeafId
+      : launchAgentFallbackLeafId(args.tab.id)
+  const agentType =
+    resolveCompatibleAgentTypeForOwner(args.tab.launchAgent, args.tab.launchAgent) ??
+    args.tab.launchAgent
+  const paneKey = makePaneKey(args.tab.id, leafId)
+  const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
+  const rowLabel = formatAgentTypeLabel(agentType)
+  const entry: AgentStatusEntry = {
+    paneKey,
+    state: 'working',
+    prompt: rowLabel,
+    updatedAt: args.now,
+    stateStartedAt: args.tab.createdAt || args.now,
+    stateHistory: [],
+    agentType,
+    terminalTitle: args.tab.title,
+    lastAssistantMessage: 'Idle',
+    worktreeId: args.tab.worktreeId,
+    ...(orchestration ? { orchestration } : {})
+  }
+  return {
+    paneKey,
+    entry,
+    tab: args.tab,
+    agentType,
+    rowSource: 'live',
+    state: 'idle',
+    startedAt: args.tab.createdAt
+  }
 }
 
 function resolveTitleDerivedPaneOwner(
