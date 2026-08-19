@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
-import { applyDocumentTheme } from '@/lib/document-theme'
+import { applyDocumentAppearance } from '@/lib/app-appearance-document'
 import { track } from '@/lib/telemetry'
 import { buildAgentPickedPayload } from './agent-picked-payload'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -26,6 +26,15 @@ import { useOnboardingFlowActions } from './use-onboarding-flow-actions'
 import { useOnboardingFlowTelemetry } from './use-onboarding-flow-telemetry'
 export { STEPS } from './use-onboarding-flow-types'
 export type { StepId, StepNumber } from './use-onboarding-flow-types'
+
+function applyOnboardingTheme(
+  settings: GlobalSettings | null,
+  theme: GlobalSettings['theme']
+): void {
+  applyDocumentAppearance(settings, window.matchMedia('(prefers-color-scheme: dark)').matches, {
+    theme
+  })
+}
 
 export function useOnboardingFlow(
   onboarding: OnboardingState,
@@ -180,6 +189,10 @@ export function useOnboardingFlow(
   // Why: ref so the unmount-only revert reads the freshest theme without retriggering on each settings change.
   const persistedThemeRef = useRef<GlobalSettings['theme']>(settings?.theme ?? 'dark')
   persistedThemeRef.current = settings?.theme ?? 'dark'
+  const persistedSettingsRef = useRef(settings)
+  useEffect(() => {
+    persistedSettingsRef.current = settings
+  }, [settings])
   const themeStepEntryThemeRef = useRef<GlobalSettings['theme'] | null>(null)
   const themeStepEntryCapturedRef = useRef(false)
   useEffect(() => {
@@ -195,10 +208,15 @@ export function useOnboardingFlow(
     themeStepEntryThemeRef.current = settings.theme
   }, [currentStep.id, settings])
 
+  const applyThemePreview = useCallback(
+    (nextTheme: GlobalSettings['theme']) => applyOnboardingTheme(settings, nextTheme),
+    [settings]
+  )
+
   // Apply preview when local theme changes.
   useEffect(() => {
-    applyDocumentTheme(theme)
-  }, [theme])
+    applyThemePreview(theme)
+  }, [applyThemePreview, theme])
 
   useEffect(() => {
     void refreshPreflightStatus()
@@ -246,6 +264,7 @@ export function useOnboardingFlow(
       remappedLastCompletedStep,
       currentStep,
       persistedThemeRef,
+      persistedSettingsRef,
       preflightStatus,
       preflightStatusLoading,
       linearStatus,
@@ -304,6 +323,7 @@ export function useOnboardingFlow(
     setStepIndex,
     selectedAgent,
     themeStepEntryThemeRef,
+    applyTheme: applyThemePreview,
     setTheme,
     updateSettings,
     skipOptions

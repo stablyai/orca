@@ -1,6 +1,5 @@
 import { useCallback, useRef, type Dispatch, type SetStateAction } from 'react'
 import { toast } from 'sonner'
-import { applyDocumentTheme } from '@/lib/document-theme'
 import { track } from '@/lib/telemetry'
 import { translate } from '@/i18n/i18n'
 import { ONBOARDING_FINAL_STEP } from '../../../../shared/constants'
@@ -46,6 +45,7 @@ type OnboardingFlowActionsArgs = {
   selectedAgent: TuiAgent | null
   themeStepEntryThemeRef: { current: GlobalSettings['theme'] | null }
   setTheme: Dispatch<SetStateAction<GlobalSettings['theme']>>
+  applyTheme: (theme: GlobalSettings['theme']) => void
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
   skipOptions: OnboardingStepSkipOptions
 }
@@ -68,6 +68,7 @@ export function useOnboardingFlowActions({
   selectedAgent,
   themeStepEntryThemeRef,
   setTheme,
+  applyTheme,
   updateSettings,
   skipOptions
 }: OnboardingFlowActionsArgs) {
@@ -185,7 +186,7 @@ export function useOnboardingFlowActions({
       settingsTheme: settings?.theme,
       selectedAgent,
       setTheme,
-      applyTheme: applyDocumentTheme,
+      applyTheme,
       updateSettings,
       setError
     })
@@ -243,6 +244,7 @@ export function useOnboardingFlowActions({
     setBusyLabel,
     setError,
     setTheme,
+    applyTheme,
     themeStepEntryThemeRef
   ])
 
