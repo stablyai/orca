@@ -299,8 +299,8 @@ describe('GitHandler', () => {
         worktreePath: tmpDir,
         limit: 10
       })) as {
-        items: { subject: string; displayId?: string }[]
-        currentRef?: { category?: string; revision?: string }
+        items: { subject: string; displayId?: string; references?: { name: string }[] }[]
+        currentRef?: { name?: string; category?: string; revision?: string }
         hasMore: boolean
         limit: number
       }
@@ -311,6 +311,8 @@ describe('GitHandler', () => {
       expect(result.items[0]?.displayId).toHaveLength(7)
       expect(result.hasMore).toBe(false)
       expect(result.limit).toBe(10)
+      // Why: decorations come from a post-2.25 log placeholder, so assert the refs the fallback recovers.
+      expect(result.items[0]?.references?.map((ref) => ref.name)).toContain(result.currentRef?.name)
     })
   })
 

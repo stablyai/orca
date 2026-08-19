@@ -1,10 +1,13 @@
 import type { GitHistoryItem, GitHistoryItemRef } from './git-history-types'
+import { GIT_LOG_DECORATE_PLACEHOLDER } from './git-log-decorate-capability'
 import { iterateNulDelimitedFields } from './nul-delimited-fields'
 
 const GIT_HISTORY_DECORATION_SEPARATOR = '\x1f'
 
-export const GIT_HISTORY_COMMIT_FORMAT =
-  '%H%n%aN%n%aE%n%at%n%ct%n%P%n%(decorate:prefix=,suffix=,separator=%x1f)%n%B'
+export const GIT_HISTORY_COMMIT_FORMAT = `%H%n%aN%n%aE%n%at%n%ct%n%P%n${GIT_LOG_DECORATE_PLACEHOLDER}%n%B`
+
+// Why: %D predates the placeholder but joins refs with commas, which ref names may contain.
+export const GIT_HISTORY_FALLBACK_COMMIT_FORMAT = '%H%n%aN%n%aE%n%at%n%ct%n%P%n%D%n%B'
 
 export function shortGitHash(hash: string): string {
   return hash.slice(0, 7)
@@ -23,9 +26,11 @@ function parseGitDecorationRefs(raw: string, revision: string): GitHistoryItemRe
   const refs: GitHistoryItemRef[] = []
   // Why: Git permits commas in ref names, so Orca's git log format uses a
   // control-character separator that Git ref names cannot contain.
+  // Why: %D joins refs with ", " and Git rejects spaces in ref names, so a comma
+  // inside a name cannot split it apart.
   const parts = raw.includes(GIT_HISTORY_DECORATION_SEPARATOR)
     ? raw.split(GIT_HISTORY_DECORATION_SEPARATOR)
-    : raw.split(',')
+    : raw.split(', ')
 
   for (const part of parts) {
     const ref = part.trim()
@@ -97,20 +102,29 @@ export function compareGitHistoryItemRefsByCategory(
   return categoryOrder || ref1.name.localeCompare(ref2.name)
 }
 
-export function parseGitHistoryLog(stdout: string): GitHistoryItem[] {
-  const items: GitHistoryItem[] = []
+function* iterateGitHistoryRecords(stdout: string): Generator<string[]> {
   for (const rawRecord of iterateNulDelimitedFields(stdout)) {
     const record = rawRecord.replace(/^\n+/, '')
     if (!record.trim()) {
       continue
     }
-
     const lines = record.split('\n')
-    const hash = lines[0]?.trim() ?? ''
-    if (!/^[0-9a-fA-F]{40,64}$/.test(hash)) {
+    if (!/^[0-9a-fA-F]{40,64}$/.test(lines[0]?.trim() ?? '')) {
       continue
     }
+    yield lines
+  }
+}
 
+// Why: the capability probe must read decorations only; commit messages are attacker text.
+export function readGitHistoryDecorations(stdout: string): string[] {
+  return [...iterateGitHistoryRecords(stdout)].map((lines) => lines[6] ?? '')
+}
+
+export function parseGitHistoryLog(stdout: string): GitHistoryItem[] {
+  const items: GitHistoryItem[] = []
+  for (const lines of iterateGitHistoryRecords(stdout)) {
+    const hash = lines[0]?.trim() ?? ''
     const authorName = lines[1] ?? ''
     const authorEmail = lines[2] ?? ''
     const authorDateSeconds = Number.parseInt(lines[3] ?? '', 10)

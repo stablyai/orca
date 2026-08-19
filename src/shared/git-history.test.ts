@@ -5,6 +5,7 @@ import {
   loadGitHistoryFromExecutor,
   parseGitHistoryLog
 } from './git-history'
+import { GitCapabilityCache } from './git-capability-cache'
 import { GIT_HISTORY_COMMIT_FORMAT } from './git-history-log-parser'
 
 const HEAD_OID = 'a'.repeat(40)
@@ -114,6 +115,21 @@ describe('git history parsing', () => {
       ['refs/heads/feature', 'feature', 'branches'],
       ['refs/remotes/origin/feature', 'origin/feature', 'remote branches'],
       ['refs/tags/v1.0.0', 'v1.0.0', 'tags']
+    ])
+  })
+
+  it('keeps a comma inside a ref name whole in the %D fallback format', () => {
+    const stdout = logRecord({
+      hash: HEAD_OID,
+      decorations: 'HEAD -> refs/heads/a,refs/remotes/origin/release, refs/heads/main',
+      message: 'initial'
+    })
+
+    const [item] = parseGitHistoryLog(stdout)
+
+    expect(item?.references?.map((ref) => [ref.id, ref.category])).toEqual([
+      ['refs/heads/a,refs/remotes/origin/release', 'branches'],
+      ['refs/heads/main', 'branches']
     ])
   })
 
@@ -323,5 +339,161 @@ describe('symbolic full-name resolution', () => {
     const result = await loadGitHistoryFromExecutor(executor, '/repo', { baseRef: 'some-rev' })
 
     expect(result.baseRef).toMatchObject({ category: 'commits' })
+  })
+})
+
+describe('git log decorate placeholder compatibility', () => {
+  const UNEXPANDED_DECORATE_ECHO = `%(decorate:prefix=,suffix=,separator=${DECORATION_SEPARATOR})`
+
+  function createDecorateExecutor(supportsPlaceholder: boolean): {
+    executor: GitHistoryExecutor
+    logFormats: string[]
+  } {
+    const logFormats: string[] = []
+    const executor = vi.fn(async (args: string[]) => {
+      const command = args[0]
+      if (command === 'rev-parse' && args.includes('--symbolic-full-name')) {
+        return { stdout: 'refs/heads/feature\n' }
+      }
+      if (command === 'rev-parse') {
+        return { stdout: `${HEAD_OID}\n` }
+      }
+      if (command === 'symbolic-ref') {
+        return { stdout: 'feature\n' }
+      }
+      if (command === 'for-each-ref') {
+        return { stdout: '\n' }
+      }
+      if (command === 'log') {
+        const format = args.find((arg) => arg.startsWith('--format='))?.slice('--format='.length)
+        logFormats.push(format ?? '')
+        const usesPlaceholder = format?.includes('%(decorate:') ?? false
+        return {
+          stdout: logRecord({
+            hash: HEAD_OID,
+            decorations:
+              usesPlaceholder && !supportsPlaceholder
+                ? UNEXPANDED_DECORATE_ECHO
+                : 'HEAD -> refs/heads/feature',
+            message: 'feat: add graph'
+          })
+        }
+      }
+      throw new Error(`unexpected git command: ${args.join(' ')}`)
+    })
+    return { executor, logFormats }
+  }
+
+  it('recovers decorations when git echoes the unexpanded placeholder', async () => {
+    const { executor, logFormats } = createDecorateExecutor(false)
+
+    const result = await loadGitHistoryFromExecutor(executor, '/repo')
+
+    expect(result.items[0]?.references?.map((ref) => ref.name)).toEqual(['feature'])
+    expect(logFormats.some((format) => format.includes('%D'))).toBe(true)
+  })
+
+  it('keeps the placeholder format when git expands it', async () => {
+    const { executor, logFormats } = createDecorateExecutor(true)
+
+    const result = await loadGitHistoryFromExecutor(executor, '/repo')
+
+    expect(result.items[0]?.references?.map((ref) => ref.name)).toEqual(['feature'])
+    expect(logFormats).toHaveLength(1)
+    expect(logFormats[0]).toContain('%(decorate:')
+  })
+
+  it('does not downgrade modern git when a commit message carries the echoed placeholder', async () => {
+    const echoed = UNEXPANDED_DECORATE_ECHO
+    const logFormats: string[] = []
+    const executor = vi.fn(async (args: string[]) => {
+      const command = args[0]
+      if (command === 'rev-parse' && args.includes('--symbolic-full-name')) {
+        return { stdout: 'refs/heads/feature\n' }
+      }
+      if (command === 'rev-parse') {
+        return { stdout: `${HEAD_OID}\n` }
+      }
+      if (command === 'symbolic-ref') {
+        return { stdout: 'feature\n' }
+      }
+      if (command === 'for-each-ref') {
+        return { stdout: '\n' }
+      }
+      if (command === 'log') {
+        logFormats.push(args.find((arg) => arg.startsWith('--format=')) ?? '')
+        return {
+          stdout: logRecord({
+            hash: HEAD_OID,
+            decorations: 'HEAD -> refs/heads/feature',
+            message: `poison\n\n${echoed}`
+          })
+        }
+      }
+      throw new Error(`unexpected git command: ${args.join(' ')}`)
+    })
+
+    const capabilities = new GitCapabilityCache()
+    const result = await loadGitHistoryFromExecutor(executor, '/repo', {}, capabilities)
+
+    expect(logFormats).toHaveLength(1)
+    expect(logFormats[0]).toContain('%(decorate:')
+    expect(result.items[0]?.references?.map((ref) => ref.name)).toEqual(['feature'])
+  })
+
+  it('propagates a log failure instead of recording an unsupported placeholder', async () => {
+    const capabilities = new GitCapabilityCache()
+    const logFormats: string[] = []
+    const executor = vi.fn(async (args: string[]) => {
+      const command = args[0]
+      if (command === 'rev-parse' && args.includes('--symbolic-full-name')) {
+        return { stdout: 'refs/heads/feature\n' }
+      }
+      if (command === 'rev-parse') {
+        return { stdout: `${HEAD_OID}\n` }
+      }
+      if (command === 'symbolic-ref') {
+        return { stdout: 'feature\n' }
+      }
+      if (command === 'for-each-ref') {
+        return { stdout: '\n' }
+      }
+      if (command === 'log') {
+        logFormats.push(args.find((arg) => arg.startsWith('--format=')) ?? '')
+        throw new Error('fatal: unable to read the object store')
+      }
+      throw new Error(`unexpected git command: ${args.join(' ')}`)
+    })
+
+    await expect(loadGitHistoryFromExecutor(executor, '/repo', {}, capabilities)).rejects.toThrow(
+      'unable to read the object store'
+    )
+    expect(logFormats).toHaveLength(1)
+    expect(capabilities.shouldTry('log-decorate-placeholder')).toBe(true)
+  })
+
+  it('skips the placeholder probe on later loads for the same execution host', async () => {
+    const capabilities = new GitCapabilityCache()
+    const first = createDecorateExecutor(false)
+    await loadGitHistoryFromExecutor(first.executor, '/repo', {}, capabilities)
+
+    const second = createDecorateExecutor(false)
+    const result = await loadGitHistoryFromExecutor(second.executor, '/repo', {}, capabilities)
+
+    expect(result.items[0]?.references?.map((ref) => ref.name)).toEqual(['feature'])
+    expect(second.logFormats).toHaveLength(1)
+    expect(second.logFormats[0]).not.toContain('%(decorate:')
+  })
+
+  it('coalesces the placeholder probe across concurrent loads', async () => {
+    const capabilities = new GitCapabilityCache()
+    const { executor, logFormats } = createDecorateExecutor(false)
+
+    await Promise.all([
+      loadGitHistoryFromExecutor(executor, '/repo', {}, capabilities),
+      loadGitHistoryFromExecutor(executor, '/repo', {}, capabilities)
+    ])
+
+    expect(logFormats.filter((format) => format.includes('%(decorate:'))).toHaveLength(1)
   })
 })
