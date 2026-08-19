@@ -149,6 +149,38 @@ describe('applyAppAppearanceToDocument', () => {
     }
   })
 
+  it('pins the configured base colors before applying an opposite scheme', () => {
+    const root = document.documentElement
+    const style = document.createElement('style')
+    style.textContent = `
+      :root {
+        --app-appearance-base-background: #ffffff;
+        --app-appearance-base-foreground: #0a0a0a;
+      }
+      .dark {
+        --app-appearance-base-background: #0a0a0a;
+        --app-appearance-base-foreground: #fafafa;
+      }
+    `
+    document.head.append(style)
+    root.classList.add('light')
+
+    applyAppAppearanceToDocument(
+      settings({
+        theme: 'light',
+        leftSidebarAppearanceMode: 'match-terminal',
+        terminalColorOverrides: { background: '#000000', foreground: '#ffffff' },
+        terminalBackgroundOpacity: 0.8
+      }),
+      false,
+      root
+    )
+
+    expect(root.classList.contains('dark')).toBe(true)
+    expect(root.style.getPropertyValue('--app-appearance-base-background')).toBe('#ffffff')
+    expect(root.style.getPropertyValue('--app-appearance-base-foreground')).toBe('#0a0a0a')
+  })
+
   it('clears every managed token and marker when returning to default', () => {
     const root = document.createElement('div')
     applyAppAppearanceToDocument(
@@ -162,6 +194,8 @@ describe('applyAppAppearanceToDocument', () => {
     expect(root.hasAttribute('data-app-appearance-base-scheme')).toBe(false)
     expect(root.style.getPropertyValue('--orca-editor-base-background')).toBe('')
     expect(root.style.getPropertyValue('--orca-editor-base-editor-surface')).toBe('')
+    expect(root.style.getPropertyValue('--app-appearance-base-background')).toBe('')
+    expect(root.style.getPropertyValue('--app-appearance-base-foreground')).toBe('')
     for (const property of APP_APPEARANCE_STYLE_PROPERTIES) {
       expect(root.style.getPropertyValue(property)).toBe('')
     }
