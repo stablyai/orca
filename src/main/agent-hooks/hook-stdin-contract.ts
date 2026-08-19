@@ -25,6 +25,9 @@ export function buildPosixHookPayloadCapture(
 export const WINDOWS_HOOK_STDIN_DRAIN_LABEL = 'orca_agent_hook_drain_stdin'
 // Why: qualify the stdin reader because Windows searches the worktree for
 // executables before PATH and hook payloads must not reach repo-local code.
+// Why (#8419/#13285): more.com fully drains closed stdin (large payloads too); it has no
+// native timeout, so a held-open pipe is bounded only by the provider's host timeout.
+// Do not replace with `curl -T -` to a dead port — that EPIPE-abandons large writers.
 export const WINDOWS_HOOK_STDIN_READER = '"%SystemRoot%\\System32\\more.com"'
 export const WINDOWS_HOOK_STDIN_DRAIN_COMMAND = `${WINDOWS_HOOK_STDIN_READER} >nul 2>nul`
 
@@ -43,6 +46,16 @@ export function buildWindowsHookEnvironmentGuardLines(): string[] {
   ]
 }
 
-export function buildWindowsHookStdinDrainEpilogue(): string[] {
-  return [`:${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`, WINDOWS_HOOK_STDIN_DRAIN_COMMAND, 'exit /b 0']
+export function buildWindowsHookStdinDrainEpilogue(
+  payloadFileEnvironmentVariable?: string
+): string[] {
+  if (!payloadFileEnvironmentVariable) {
+    return [`:${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`, WINDOWS_HOOK_STDIN_DRAIN_COMMAND, 'exit /b 0']
+  }
+  return [
+    `:${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`,
+    `if defined ${payloadFileEnvironmentVariable} ${WINDOWS_HOOK_STDIN_READER} < "%${payloadFileEnvironmentVariable}%" >nul 2>nul`,
+    `if not defined ${payloadFileEnvironmentVariable} ${WINDOWS_HOOK_STDIN_DRAIN_COMMAND}`,
+    'exit /b 0'
+  ]
 }

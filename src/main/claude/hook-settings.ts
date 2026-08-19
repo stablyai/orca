@@ -14,6 +14,7 @@ import {
   type HooksConfig
 } from '../agent-hooks/installer-utils'
 import { wrapRuntimeHomeHookCommand } from '../agent-hooks/runtime-home-hook-command'
+import { buildWindowsClaudeHookStdinBuffer } from './windows-hook-stdin-buffer'
 
 export type ClaudeCompatibleHookSettings = {
   configDirName: '.claude' | '.openclaude'
@@ -145,9 +146,10 @@ export function getManagedCommand(
 
 export function getManagedLifecycleHook(
   scriptPath: string,
-  settings = CLAUDE_HOOK_SETTINGS
+  settings = CLAUDE_HOOK_SETTINGS,
+  platform: NodeJS.Platform = process.platform
 ): HookCommandConfig {
-  if (process.platform !== 'win32' || !settings.usesWindowsPowerShellLauncher) {
+  if (platform !== 'win32' || !settings.usesWindowsPowerShellLauncher) {
     return buildManagedCommandHook(getManagedCommand(scriptPath, { neutralJsonWhenMissing: true }))
   }
   return getWindowsManagedLifecycleHook(scriptPath)
@@ -159,13 +161,15 @@ export function getWindowsManagedLifecycleHook(scriptPath: string): HookCommandC
   // Why: runtime profile resolution keeps the managed entry portable across users (STA-3348).
   const quotedRelativePath = quotePowerShellString(`.orca\\agent-hooks\\${scriptFileName}`)
   // Why: compat consumers require neutral JSON even when the managed script is missing (#14818).
-  const innerCommand =
+  const scriptInvocation =
     `$scriptPath = Join-Path $env:USERPROFILE ${quotedRelativePath}; ` +
-    'if (Test-Path -LiteralPath $scriptPath -PathType Leaf) { & $scriptPath; exit $LASTEXITCODE }; ' +
-    "[Console]::In.ReadToEnd() | Out-Null; Write-Output '{}'; exit 0"
+    "if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) { Write-Output '{}'; exit 0 }; " +
+    '& $scriptPath'
   return {
     type: 'command',
-    command: wrapWindowsPowerShellEncodedCommand(innerCommand),
+    command: wrapWindowsPowerShellEncodedCommand(
+      buildWindowsClaudeHookStdinBuffer(scriptInvocation)
+    ),
     timeout: MANAGED_HOOK_TIMEOUT_SECONDS
   }
 }

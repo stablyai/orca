@@ -261,13 +261,20 @@ describe('Windows managed hook stdin structure', () => {
         )
         // Why: the epilogue stays shared — claude-hook.cmd still jumps to it from the
         // Devin-imports-.claude skip, which now sits below these guards.
-        expect(script, `${fileName} drain epilogue`).toContain(
-          [
-            ':orca_agent_hook_drain_stdin',
-            '"%SystemRoot%\\System32\\more.com" >nul 2>nul',
-            'exit /b 0'
-          ].join('\r\n')
-        )
+        const drain =
+          fileName === 'claude-hook.cmd'
+            ? [
+                ':orca_agent_hook_drain_stdin',
+                'if defined ORCA_AGENT_HOOK_PAYLOAD_FILE "%SystemRoot%\\System32\\more.com" < "%ORCA_AGENT_HOOK_PAYLOAD_FILE%" >nul 2>nul',
+                'if not defined ORCA_AGENT_HOOK_PAYLOAD_FILE "%SystemRoot%\\System32\\more.com" >nul 2>nul',
+                'exit /b 0'
+              ]
+            : [
+                ':orca_agent_hook_drain_stdin',
+                '"%SystemRoot%\\System32\\more.com" >nul 2>nul',
+                'exit /b 0'
+              ]
+        expect(script, `${fileName} drain epilogue`).toContain(drain.join('\r\n'))
       }
 
       // Why (#11549): the Devin skip is the only remaining in-script jump to more.com, so it

@@ -413,7 +413,7 @@ describe('ClaudeHookService.install', () => {
           'utf-8'
         )
         expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
-        expect(script).toContain('--data-urlencode "payload@-"')
+        expect(script).toContain('--data-urlencode "payload@%ORCA_AGENT_HOOK_PAYLOAD_FILE%"')
         expect(script).toContain('/hook/claude')
         expect(script).not.toMatch(/Invoke-WebRequest/i)
         // Why: guard and Devin-skip paths must still return neutral JSON (#14818).

@@ -44,6 +44,7 @@ import {
   removeManagedStatusLine,
   type ClaudeCompatibleHookSettings
 } from './hook-settings'
+import { WINDOWS_CLAUDE_HOOK_PAYLOAD_FILE_ENV } from './windows-hook-stdin-buffer'
 
 type ClaudeHookServiceOptions = {
   agent: AgentHookInstallStatus['agent']
@@ -59,9 +60,12 @@ const DEFAULT_CLAUDE_HOOK_SERVICE_OPTIONS: ClaudeHookServiceOptions = {
 
 function getManagedScript(
   target: 'local' | 'posix' = 'local',
-  options: { skipWhenDevinImportsClaude?: boolean } = {}
+  options: { isClaude?: boolean } = {}
 ): string {
   if (target === 'local' && process.platform === 'win32') {
+    const payloadFileEnvironmentVariable = options.isClaude
+      ? WINDOWS_CLAUDE_HOOK_PAYLOAD_FILE_ENV
+      : undefined
     return [
       '@echo off',
       'setlocal',
@@ -72,16 +76,16 @@ function getManagedScript(
       // Why (#11549): the env guards must outrank the Devin skip — the Devin skip parks in more.com,
       // and outside an Orca pane the caller can abandon stdin, so more.com never returns.
       ...buildWindowsHookEnvironmentGuardLines(),
-      ...(options.skipWhenDevinImportsClaude
+      ...(options.isClaude
         ? [
             // Why: Devin imports .claude hooks by default; skip Orca's managed hook there so status posts stay attributed to Devin.
             `if not "%DEVIN_PROJECT_DIR%"=="" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`
           ]
         : []),
       // Why: use curl.exe to avoid an extra PowerShell startup per hook.
-      buildWindowsAgentHookCurlPostCommand('claude'),
+      buildWindowsAgentHookCurlPostCommand('claude', payloadFileEnvironmentVariable),
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
+      ...buildWindowsHookStdinDrainEpilogue(payloadFileEnvironmentVariable),
       ''
     ].join('\r\n')
   }
@@ -91,7 +95,7 @@ function getManagedScript(
     // Why: Claude-compatible permission hooks fail closed on empty stdout (#14818).
     'printf "{}\\n"',
     ...buildPosixHookPayloadCapture(),
-    ...(options.skipWhenDevinImportsClaude
+    ...(options.isClaude
       ? [
           // Why: Devin imports .claude hooks by default; skip Orca's managed hook there so status posts stay attributed to Devin.
           'if [ -n "$DEVIN_PROJECT_DIR" ]; then',
@@ -182,7 +186,7 @@ export class ClaudeHookService {
   async refreshManagedScripts(): Promise<void> {
     await refreshManagedScriptIfPresent(
       getManagedScriptPath(this.options.settings),
-      getManagedScript('local', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
+      getManagedScript('local', { isClaude: this.options.agent === 'claude' })
     )
     // Why: no agent gate — the statusline script only ever exists for claude, so presence is the gate.
     await refreshManagedScriptIfPresent(
@@ -213,7 +217,7 @@ export class ClaudeHookService {
     )
     writeManagedScript(
       scriptPath,
-      getManagedScript('local', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
+      getManagedScript('local', { isClaude: this.options.agent === 'claude' })
     )
     // Why: the statusline usage feed is Claude-only — OpenClaude data would be misattributed to the Claude provider.
     if (this.options.agent === 'claude') {
@@ -275,7 +279,7 @@ export class ClaudeHookService {
       await writeManagedScriptRemote(
         sftp,
         remoteScriptPath,
-        getManagedScript('posix', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
+        getManagedScript('posix', { isClaude: this.options.agent === 'claude' })
       )
       // Why: no statusline install here — this path serves SSH remotes and WSL guests, whose relay hook
       // listener doesn't route /statusline/claude, and an SSH box's Claude login can be a different

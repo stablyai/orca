@@ -25,6 +25,7 @@
     "../src/main/antigravity/hooks-json-bundle.ts",
     "../src/main/claude/hook-settings.ts",
     "../src/main/claude/hook-service.ts",
+    "../src/main/claude/windows-hook-stdin-buffer.ts",
     "../src/main/claude/statusline-script.ts",
     "../src/main/claude-accounts/keychain.ts",
     "../src/main/codex/codex-app-server-capability-cache.ts",
