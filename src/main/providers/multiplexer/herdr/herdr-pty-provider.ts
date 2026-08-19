@@ -172,11 +172,7 @@ export class HerdrPtyProvider implements IPtyProvider {
       return
     }
     if (input.kind === 'bytes') {
-      if (binding.sharedAttach) {
-        void writeSharedHerdrInput(binding, input.data)
-        return
-      }
-      binding.controller.write(input.data)
+      void writeSharedHerdrInput(binding, input.data)
       return
     }
     const bytes =
@@ -184,7 +180,7 @@ export class HerdrPtyProvider implements IPtyProvider {
         ? null
         : bytesFromTerminalLogicalKey(input.name)
     if (bytes !== null) {
-      binding.controller.write(bytes)
+      void writeSharedHerdrInput(binding, bytes)
       return
     }
     void sendHerdrNamedKey(binding, input.name)
@@ -198,9 +194,6 @@ export class HerdrPtyProvider implements IPtyProvider {
     }
     binding.cols = cols
     binding.rows = rows
-    if (!binding.sharedAttach) {
-      binding.controller.resize(cols, rows)
-    }
   }
 
   pauseProducer(_id: string): void {}

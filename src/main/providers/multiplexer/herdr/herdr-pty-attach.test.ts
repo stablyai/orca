@@ -1,79 +1,45 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { HerdrHostTransport, HerdrTerminalController } from './herdr-runtime-contract'
-import { isHerdrAttachBusy, openSharedHerdrPaneController } from './herdr-pty-attach'
-
-function closedController(reason: string): HerdrTerminalController {
-  return {
-    write: vi.fn(),
-    resize: vi.fn(),
-    release: vi.fn(),
-    onFrame: () => () => undefined,
-    onClosed: (listener) => {
-      listener({ type: 'terminal.closed', reason })
-      return () => undefined
-    }
-  }
-}
-
-function frameController(): HerdrTerminalController {
-  return {
-    write: vi.fn(),
-    resize: vi.fn(),
-    release: vi.fn(),
-    onFrame: (listener) => {
-      listener({
-        type: 'terminal.frame',
-        seq: 1,
-        encoding: 'ansi',
-        width: 80,
-        height: 24,
-        full: true,
-        bytes: ''
-      })
-      return () => undefined
-    },
-    onClosed: () => () => undefined
-  }
-}
+import type { HerdrPtyBinding } from './herdr-pty-types'
+import { openSharedHerdrPaneController, writeSharedHerdrInput } from './herdr-pty-attach'
 
 describe('openSharedHerdrPaneController', () => {
-  it('keeps exclusive control when the pane is free', async () => {
-    const exclusive = frameController()
+  it('observes so a Herdr TUI can keep exclusive control', () => {
+    const observer = {
+      write: vi.fn(),
+      resize: vi.fn(),
+      release: vi.fn(),
+      onFrame: vi.fn(() => () => undefined),
+      onClosed: vi.fn(() => () => undefined)
+    } as unknown as HerdrTerminalController
     const transport = {
-      controlTerminal: vi.fn(() => exclusive)
+      controlTerminal: vi.fn(() => observer)
     } as unknown as HerdrHostTransport
-    const opened = await openSharedHerdrPaneController(transport, 'orca', 'w1:p1', {
+    const controller = openSharedHerdrPaneController(transport, 'orca', 'w1:p1', {
       cols: 80,
       rows: 24
     })
-    expect(opened.sharedAttach).toBe(false)
-    expect(transport.controlTerminal).toHaveBeenCalledTimes(1)
-    const onFrame = vi.fn()
-    opened.controller.onFrame(onFrame)
-    expect(onFrame).toHaveBeenCalled()
-  })
-
-  it('observes when another client already owns exclusive control', async () => {
-    const busy = closedController('pane already has an attached client; retry with --takeover')
-    const observer = frameController()
-    const transport = {
-      controlTerminal: vi.fn().mockReturnValueOnce(busy).mockReturnValueOnce(observer)
-    } as unknown as HerdrHostTransport
-    const opened = await openSharedHerdrPaneController(transport, 'orca', 'w1:p1', {
-      cols: 80,
-      rows: 24
-    })
-    expect(opened.sharedAttach).toBe(true)
-    expect(busy.release).toHaveBeenCalled()
-    expect(transport.controlTerminal).toHaveBeenLastCalledWith('orca', 'w1:p1', {
+    expect(controller).toBe(observer)
+    expect(transport.controlTerminal).toHaveBeenCalledWith('orca', 'w1:p1', {
       cols: 80,
       rows: 24,
       observe: true
     })
   })
+})
 
-  it('detects Herdr attach-busy errors', () => {
-    expect(isHerdrAttachBusy('already has an attached client; retry with --takeover')).toBe(true)
-    expect(isHerdrAttachBusy('connection reset')).toBe(false)
+describe('writeSharedHerdrInput', () => {
+  it('types through pane.send_text so observe does not steal exclusive control', async () => {
+    const request = vi.fn(async () => ({ id: '1', result: { type: 'ok' } }))
+    const binding = {
+      sessionName: 'orca',
+      paneId: 'w1:p1',
+      transport: { request }
+    } as unknown as HerdrPtyBinding
+    await writeSharedHerdrInput(binding, 'hello')
+    expect(request).toHaveBeenCalledWith('orca', 'pane.send_text', {
+      pane_id: 'w1:p1',
+      text: 'hello'
+    })
   })
 })

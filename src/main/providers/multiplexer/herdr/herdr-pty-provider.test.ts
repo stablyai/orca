@@ -108,6 +108,7 @@ function transport(closeBeforeFrame = false) {
         method === 'pane.close' ||
         method === 'workspace.close' ||
         method === 'pane.send_keys' ||
+        method === 'pane.send_text' ||
         method === 'agent.start'
       ) {
         return { id: method, result: { type: 'ok' } }
@@ -243,7 +244,11 @@ describe('HerdrPtyProvider', () => {
       'workspace.close',
       { workspace_id: 'w1' }
     )
-    expect(host.value.controlTerminal).toHaveBeenCalled()
+    expect(host.value.controlTerminal).toHaveBeenCalledWith(
+      herdrSessionNameForProject({ id: 'project-1' }, 'test-session'),
+      'p1',
+      { cols: 120, rows: 40, observe: true }
+    )
   })
 
   it('reports live bindings to the acknowledged write path', async () => {
@@ -267,7 +272,7 @@ describe('HerdrPtyProvider', () => {
     expect(provider.hasPty(spawned.id)).toBe(false)
   })
 
-  it('writes live keys on the control stream and interrupts through pane.send_keys', async () => {
+  it('writes live keys through pane.send_text and interrupts through pane.send_keys', async () => {
     const host = transport()
     const provider = new HerdrPtyProvider(
       () => host.value,
@@ -306,8 +311,15 @@ describe('HerdrPtyProvider', () => {
         host.requestMock.mock.calls.filter((call) => call[1] === 'pane.send_keys')
       ).toHaveLength(2)
     })
+    await vi.waitFor(() => {
+      expect(
+        host.requestMock.mock.calls.filter((call) => call[1] === 'pane.send_text')
+      ).toHaveLength(6)
+    })
 
-    expect(write.mock.calls.map((call) => call[0])).toEqual([
+    expect(write).not.toHaveBeenCalled()
+    const sendText = host.requestMock.mock.calls.filter((call) => call[1] === 'pane.send_text')
+    expect(sendText.map((call) => (call[2] as { text: string }).text)).toEqual([
       'hello',
       '\r',
       '\x7f',
@@ -371,6 +383,11 @@ describe('HerdrPtyProvider', () => {
     await expect(provider.getAppliedSize(spawned.id)).resolves.toEqual({ cols: 120, rows: 40 })
     provider.resize(spawned.id, 100, 30)
     await expect(provider.getAppliedSize(spawned.id)).resolves.toEqual({ cols: 100, rows: 30 })
+    const controller = host.value.controlTerminal as unknown as ReturnType<typeof vi.fn>
+    const spawnedController = controller.mock.results[0]?.value as
+      | HerdrTerminalController
+      | undefined
+    expect(spawnedController?.resize).not.toHaveBeenCalled()
   })
 
   it('clears the local snapshot without sending keys', async () => {
@@ -432,6 +449,31 @@ describe('HerdrPtyProvider', () => {
         return params?.pane_id === spawned.id
       })
     ).toBe(false)
+  })
+
+  it('writes a shell command through pane.send_text when no agent is launched', async () => {
+    const host = transport()
+    const provider = new HerdrPtyProvider(
+      () => host.value,
+      async () => target(),
+      () => 'test-session'
+    )
+    await provider.spawn({
+      cols: 80,
+      rows: 24,
+      cwd: '/repo',
+      worktreeId: 'repo-1::/repo',
+      tabId: 'tab-1',
+      paneKey: 'tab-1:leaf-1',
+      command: 'ls'
+    })
+    await vi.waitFor(() => {
+      expect(host.requestMock).toHaveBeenCalledWith(
+        herdrSessionNameForProject({ id: 'project-1' }, 'test-session'),
+        'pane.send_text',
+        { pane_id: 'p1', text: 'ls\r' }
+      )
+    })
   })
 
   it('starts a stock Herdr agent instead of writing a shell command', async () => {

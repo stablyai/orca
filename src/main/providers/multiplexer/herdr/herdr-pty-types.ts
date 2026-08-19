@@ -74,8 +74,6 @@ export type HerdrPtyBinding = {
   snapshot: string
   detached: boolean
   unsubscribe: (() => void)[]
-  /** True when another Herdr client already owns exclusive control. */
-  sharedAttach?: boolean
 }
 
 export type HerdrPaneProcessInfo = {

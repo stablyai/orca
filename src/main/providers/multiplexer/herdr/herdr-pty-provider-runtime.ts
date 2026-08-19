@@ -20,7 +20,7 @@ import {
   type HerdrTerminalFrame
 } from './herdr-runtime-contract'
 import { bytesFromTerminalLogicalKey } from '../../../../shared/terminal-logical-key'
-import { openSharedHerdrPaneController } from './herdr-pty-attach'
+import { openSharedHerdrPaneController, writeSharedHerdrInput } from './herdr-pty-attach'
 
 function decodeFrame(frame: HerdrTerminalFrame): string {
   return Buffer.from(frame.bytes, 'base64').toString('utf8')
@@ -290,7 +290,7 @@ export async function sendHerdrNamedKey(binding: HerdrPtyBinding, name: string):
   } catch (error: unknown) {
     const bytes = bytesFromTerminalLogicalKey(name)
     if (bytes !== null) {
-      binding.controller.write(bytes)
+      await writeSharedHerdrInput(binding, bytes)
       return
     }
     console.warn(`[herdr] pane.send_keys ${name} failed:`, error)
@@ -416,13 +416,13 @@ export async function attachHerdrPty(args: {
   if (!paneId) {
     throw new Error(`Herdr pane is not reconciled: ${identity.leafId}`)
   }
-  const stream = await openSharedHerdrPaneController(runtime.transport, sessionName, paneId, {
+  const controller = openSharedHerdrPaneController(runtime.transport, sessionName, paneId, {
     cols: 80,
     rows: 24
   })
   const binding = args.bind({
     id: args.id,
-    controller: stream.controller,
+    controller,
     transport: runtime.transport,
     identity,
     paneId,
@@ -430,8 +430,7 @@ export async function attachHerdrPty(args: {
     incarnationId: randomUUID(),
     cwd: '',
     cols: 80,
-    rows: 24,
-    sharedAttach: stream.sharedAttach
+    rows: 24
   })
   const firstFrame = await args.waitForFirstFrame(binding)
   if (firstFrame) {
