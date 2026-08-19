@@ -77,6 +77,7 @@ import {
 import { detectRemoteHostPlatform } from './ssh-remote-platform-detection'
 import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh-remote-powershell'
 import { relaySocketNameForInstanceId } from './ssh-relay-instance-id'
+import { terminateRelaySocketHolderScript } from './ssh-relay-socket-termination'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
 import {
   isWindowsRelayPipePath,
@@ -1439,14 +1440,18 @@ async function launchRelay(
           '[ssh-relay] Socket reconnect failed, launching fresh relay:',
           err instanceof Error ? err.message : String(err)
         )
-        // Why: stale socket from a crashed relay — remove it so the fresh launch can bind at the same path.
-        await execCommand(conn, `rm -f ${shellEscape(sockFile)}`, { signal }).catch(
-          (cleanupErr) => {
-            if (isUnconfirmedSshCommandTermination(cleanupErr)) {
-              throw cleanupErr
-            }
+        // Why: kill the daemon before dropping its socket — the socket path is the only
+        // handle left on a detached relay, so unlinking first strands it and every PTY it
+        // owns with nothing able to reach or reap them (#8585).
+        await execCommand(
+          conn,
+          terminateRelaySocketHolderScript(shellEscape(sockFile), shellEscape(sockName)).join('\n'),
+          { signal }
+        ).catch((cleanupErr) => {
+          if (isUnconfirmedSshCommandTermination(cleanupErr)) {
+            throw cleanupErr
           }
-        )
+        })
         signal?.throwIfAborted()
       }
     }
