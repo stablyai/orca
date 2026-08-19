@@ -6,6 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { clearAppAppearanceFromDocument } from '../lib/app-appearance-document'
 import { APP_APPEARANCE_STYLE_PROPERTIES } from '../lib/left-sidebar-appearance'
 import { useDocumentAppearance } from './use-document-appearance'
 
@@ -70,6 +71,7 @@ describe('useDocumentAppearance', () => {
   afterEach(async () => {
     await act(async () => root.unmount())
     container.remove()
+    clearAppAppearanceFromDocument()
     document.documentElement.removeAttribute('data-app-appearance')
     document.documentElement.className = ''
     for (const property of APP_APPEARANCE_STYLE_PROPERTIES) {
@@ -86,7 +88,10 @@ describe('useDocumentAppearance', () => {
 
     expect(document.documentElement.dataset.appAppearance).toBe('match-terminal')
     expect(document.documentElement.style.getPropertyValue('--background')).not.toBe(darkBackground)
-    expect(mocks.applyDocumentTheme).toHaveBeenLastCalledWith('system')
+    expect(mocks.applyDocumentTheme).toHaveBeenLastCalledWith(
+      'system',
+      expect.objectContaining({ disableTransitions: undefined })
+    )
     expect(mocks.scheduleRuntimeGraphSync).toHaveBeenCalledOnce()
   })
 })

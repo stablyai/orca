@@ -24,7 +24,7 @@ import { isFolderRepo } from '../../../../shared/repo-kind'
 import { useAppStore } from '../../store'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
-import { applyDocumentTheme } from '@/lib/document-theme'
+import { applyDocumentAppearance } from '@/lib/app-appearance-document'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import {
   SCROLLBACK_PRESETS_ROWS,
@@ -735,9 +735,12 @@ function Settings(): React.JSX.Element {
     }
   }
 
-  const applyTheme = useCallback((theme: 'system' | 'dark' | 'light') => {
-    applyDocumentTheme(theme)
-  }, [])
+  const applyTheme = useCallback(
+    (theme: 'system' | 'dark' | 'light') => {
+      applyDocumentAppearance(settings, systemPrefersDark, { theme })
+    },
+    [settings, systemPrefersDark]
+  )
 
   const displayedGitUsername = repos[0]?.gitUsername ?? ''
   const baseNavSections = useSettingsNavigationMetadata()

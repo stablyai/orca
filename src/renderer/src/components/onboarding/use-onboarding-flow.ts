@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
-import { applyDocumentTheme } from '@/lib/document-theme'
+import { applyDocumentAppearance } from '@/lib/app-appearance-document'
 import { track } from '@/lib/telemetry'
 import { buildAgentPickedPayload } from './agent-picked-payload'
 import { ONBOARDING_FINAL_STEP, ONBOARDING_FLOW_VERSION } from '../../../../shared/constants'
@@ -35,6 +35,15 @@ function shouldSkipIntegrationsStep(
 
 function shouldSkipWindowsTerminalStep(isWindows: boolean): boolean {
   return !isWindows
+}
+
+function applyOnboardingTheme(
+  settings: GlobalSettings | null,
+  theme: GlobalSettings['theme']
+): void {
+  applyDocumentAppearance(settings, window.matchMedia('(prefers-color-scheme: dark)').matches, {
+    theme
+  })
 }
 
 type OnboardingStepSkipOptions = {
@@ -336,6 +345,10 @@ export function useOnboardingFlow(
   // Why: ref so the unmount-only revert reads the freshest theme without retriggering on each settings change.
   const persistedThemeRef = useRef<GlobalSettings['theme']>(settings?.theme ?? 'dark')
   persistedThemeRef.current = settings?.theme ?? 'dark'
+  const persistedSettingsRef = useRef(settings)
+  useEffect(() => {
+    persistedSettingsRef.current = settings
+  }, [settings])
   const themeStepEntryThemeRef = useRef<GlobalSettings['theme'] | null>(null)
   const themeStepEntryCapturedRef = useRef(false)
   useEffect(() => {
@@ -351,10 +364,15 @@ export function useOnboardingFlow(
     themeStepEntryThemeRef.current = settings.theme
   }, [currentStep.id, settings])
 
+  const applyThemePreview = useCallback(
+    (nextTheme: GlobalSettings['theme']) => applyOnboardingTheme(settings, nextTheme),
+    [settings]
+  )
+
   // Apply preview when local theme changes.
   useEffect(() => {
-    applyDocumentTheme(theme)
-  }, [theme])
+    applyThemePreview(theme)
+  }, [applyThemePreview, theme])
 
   useEffect(() => {
     void refreshPreflightStatus()
@@ -439,7 +457,7 @@ export function useOnboardingFlow(
       return
     }
     // Why: theme preview mutates state outside this component, so revert on modal-root detach rather than a passive Effect.
-    applyDocumentTheme(persistedThemeRef.current)
+    applyOnboardingTheme(persistedSettingsRef.current, persistedThemeRef.current)
   }, [])
 
   const trackTaskSourcesSnapshot = useCallback(
@@ -602,7 +620,7 @@ export function useOnboardingFlow(
       settingsTheme: settings?.theme,
       selectedAgent,
       setTheme,
-      applyTheme: applyDocumentTheme,
+      applyTheme: applyThemePreview,
       updateSettings,
       setError
     })
@@ -651,6 +669,7 @@ export function useOnboardingFlow(
     currentStep.stepNumber,
     currentStep.valueKind,
     openModal,
+    applyThemePreview,
     selectedAgent,
     settings,
     trackTaskSourcesSnapshot,
