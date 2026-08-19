@@ -6,7 +6,14 @@ export type TerminalImeCompositionTracker = IDisposable & {
    *  IME-owned: during a live composition, and briefly after compositionend to
    *  absorb the committing key's trailing press/release. */
   isCandidateKeyGuardActive: () => boolean
+  /** True when the most recent preedit was Hangul, where a bare digit ends the
+   *  syllable as literal text instead of picking a candidate. */
+  isHangulPreedit: () => boolean
 }
+
+// Jamo, compatibility jamo, extended jamo, and precomposed syllables — every
+// form a Hangul preedit can take while a syllable is being assembled.
+const HANGUL_PREEDIT_PATTERN = /[ᄀ-ᇿ㄰-㆏ꥠ-꥿가-힣]/
 
 // Why: suppressed candidate keys are preventDefault-ed and fire no input
 // event, so a stale tracker (missed compositionend) has no natural unstick
@@ -26,6 +33,10 @@ export function installTerminalImeCompositionTracker(
   let lastCompositionEventAt: number | null = null
   let compositionEndedAt: number | null = null
   let sawEmptyCompositionUpdate = false
+  // Why the preedit and not compositionend data: a Pinyin IME's preedit is the
+  // Latin spelling it is picking candidates for, while its compositionend data
+  // is the committed Han text. Reading the commit would misclassify Pinyin.
+  let hangulPreedit = false
 
   const isActiveAt = (at: number): boolean =>
     active &&
@@ -47,6 +58,7 @@ export function installTerminalImeCompositionTracker(
     return {
       isActive: () => active,
       isCandidateKeyGuardActive,
+      isHangulPreedit: () => hangulPreedit,
       dispose: () => undefined
     }
   }
@@ -69,6 +81,7 @@ export function installTerminalImeCompositionTracker(
       sawEmptyCompositionUpdate = true
       return
     }
+    hangulPreedit = HANGUL_PREEDIT_PATTERN.test(event.data)
     active = true
   }
   const handleCompositionEnd = (): void => {
@@ -93,6 +106,7 @@ export function installTerminalImeCompositionTracker(
     lastCompositionEventAt = null
     compositionEndedAt = null
     sawEmptyCompositionUpdate = false
+    hangulPreedit = false
   }
 
   terminalElement.addEventListener('compositionstart', markActive, true)
@@ -104,6 +118,7 @@ export function installTerminalImeCompositionTracker(
   return {
     isActive: () => isActiveAt(now()),
     isCandidateKeyGuardActive,
+    isHangulPreedit: () => hangulPreedit,
     dispose: () => {
       terminalElement.removeEventListener('compositionstart', markActive, true)
       terminalElement.removeEventListener('compositionupdate', updateComposition, true)

@@ -50,6 +50,10 @@ export type XtermImeKeyboardOptions = {
   /** True for the narrow Linux path where the IME emits an orphaned letter
    *  keyup but no composition/input events before its candidate digit. */
   linuxOrphanCandidateDigitGuardActive?: boolean
+  /** True when the most recent preedit was Hangul. No Hangul engine indexes
+   *  candidates by digit over a Hangul preedit — the digit ends the syllable
+   *  and is literal text — so neither digit guard may claim it (#15299). */
+  hangulPreedit?: boolean
   // Required so no caller silently falls back to non-mac 229 suppression,
   // which re-swallows the first key after a macOS IME input-source switch.
   isMac: boolean
@@ -102,10 +106,18 @@ export function shouldSuppressTerminalImeKeyboardEvent(
     isMac,
     isLinux
   } = options
+  // Why both guards and not just the orphan one: a Hangul commit can leave either
+  // window open, and a digit is literal under both.
+  const digitIsLiteralHangulText =
+    options.hangulPreedit === true && isTerminalImeCandidateDigitKeyEvent(event)
   const suppressOrphanCandidateDigit =
-    isLinux && linuxOrphanCandidateDigitGuardActive && isTerminalImeCandidateDigitKeyEvent(event)
+    isLinux &&
+    linuxOrphanCandidateDigitGuardActive &&
+    isTerminalImeCandidateDigitKeyEvent(event) &&
+    !digitIsLiteralHangulText
   const suppressCandidateKey =
     isLinux &&
+    !digitIsLiteralHangulText &&
     (pendingCandidateKeyReleaseActive ||
       (candidateKeyGuardActive && isTerminalImeCandidateSelectionKeyEvent(event)) ||
       suppressOrphanCandidateDigit)
@@ -143,6 +155,9 @@ export function shouldPreventDefaultTerminalImeCandidateKey(
   // preventDefault — the candidate keydown would still fire a keypress and
   // write into the helper textarea, where a later 229 diff could flush the
   // leaked selector to the PTY.
+  if (options.hangulPreedit === true && isTerminalImeCandidateDigitKeyEvent(event)) {
+    return false
+  }
   return (
     event.type === 'keydown' &&
     options.isLinux &&
