@@ -22,6 +22,7 @@ import {
   orchestrationSkillRecoveryData
 } from '../../../../shared/orchestration-rpc-contract'
 import { clampOrchestrationAskTimeoutMs } from '../../../../shared/orchestration-ask-timeout'
+import { buildOrchestrationDeliveryState } from '../../../../shared/orchestration-check-output'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
 import {
   resolveBareOrchestrationRecipient,
@@ -1009,6 +1010,15 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             consumerGeneration: generation,
             wakeTypes
           })
+        const deliveryState = (current: NonNullable<ReturnType<typeof readDelivery>>) =>
+          buildOrchestrationDeliveryState({
+            deliveryId: current.delivery.id,
+            blockedSince: current.delivery.created_at,
+            deliveryCount: current.messages.length,
+            mailboxUnreadCount: current.mailboxUnreadCount,
+            pendingBehind: current.pendingBehind,
+            replayed: current.replayed
+          })
         let peeked = params.peek ? readPeek() : []
         if (params.peek && peeked.length > 0) {
           return peekResult(peeked)
@@ -1021,6 +1031,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             messages: current.messages,
             count: current.messages.length,
             replayed: current.replayed,
+            ...deliveryState(current),
             acknowledged: acknowledged?.delivery.id ?? null,
             timedOut: false,
             cancelled: false,
@@ -1131,6 +1142,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           messages: current?.messages ?? [],
           count: current?.messages.length ?? 0,
           replayed: current?.replayed ?? false,
+          ...(current ? deliveryState(current) : {}),
           acknowledged: acknowledged?.delivery.id ?? null,
           timedOut: false,
           cancelled: false,

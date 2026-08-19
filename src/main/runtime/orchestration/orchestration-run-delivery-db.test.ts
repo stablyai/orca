@@ -51,6 +51,8 @@ describe('OrchestrationDb Run state', () => {
       expect(first?.messages[49].subject).toBe('message 49')
       expect(replay?.delivery.id).toBe(first?.delivery.id)
       expect(replay?.replayed).toBe(true)
+      expect(first).toMatchObject({ mailboxUnreadCount: 55, pendingBehind: 5 })
+      expect(replay).toMatchObject({ mailboxUnreadCount: 55, pendingBehind: 5 })
 
       d.acknowledgeRunDelivery({
         runId: run.id,

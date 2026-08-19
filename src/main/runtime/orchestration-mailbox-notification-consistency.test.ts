@@ -655,10 +655,29 @@ describe('orchestration notification mailbox consistency', () => {
     expect(pointerCount(harness.write)).toBe(0)
     expect(replayed.messages).toEqual([expect.objectContaining({ id: firstMessage.id })])
     expect(replayed.deliveryId).toBe(firstDelivery.deliveryId)
+    expect(replayed).toMatchObject({
+      replayed: true,
+      pendingBehind: 1,
+      mailboxUnreadCount: 2,
+      checkCountDiverged: true,
+      deliveryWarning: {
+        code: 'delivery_fifo_blocked',
+        requiredAction: 'acknowledge_delivery',
+        deliveryId: firstDelivery.deliveryId
+      }
+    })
+    expect(replayed.blockedSince).toEqual(expect.any(String))
 
     const next = await checkBoundMailbox(harness.runtime, { ack: firstDelivery.deliveryId! })
     expect(next.messages).toEqual([expect.objectContaining({ id: newerMessage.id })])
     expect(next.deliveryId).not.toBe(firstDelivery.deliveryId)
+    expect(next).toMatchObject({
+      replayed: false,
+      pendingBehind: 0,
+      mailboxUnreadCount: 1,
+      checkCountDiverged: false
+    })
+    expect(next.deliveryWarning).toBeUndefined()
     db.close()
   })
 

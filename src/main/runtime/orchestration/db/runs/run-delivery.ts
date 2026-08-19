@@ -38,6 +38,34 @@ export function getDeliveryMessages(this: OrchestrationDb, delivery: DeliveryRow
   )
 }
 
+function getRunDeliveryMailboxCounts(
+  db: OrchestrationDb,
+  runId: string,
+  deliveredCount: number
+): { mailboxUnreadCount: number; pendingBehind: number } {
+  const address = `run:${runId}`
+  const row = db.db
+    .prepare(
+      `SELECT COUNT(*) AS count FROM messages
+       WHERE run_id = ? AND to_handle = ? AND read = 0
+         AND delivery_contract = 'current_delivery'`
+    )
+    .get(runId, address) as { count: number }
+  const mailboxUnreadCount = row.count
+  return {
+    mailboxUnreadCount,
+    pendingBehind: Math.max(0, mailboxUnreadCount - deliveredCount)
+  }
+}
+
+export type RunDeliveryResult = {
+  delivery: DeliveryRow
+  messages: MessageRow[]
+  replayed: boolean
+  mailboxUnreadCount: number
+  pendingBehind: number
+}
+
 export function getOrCreateRunDelivery(
   this: OrchestrationDb,
   params: {
@@ -46,7 +74,7 @@ export function getOrCreateRunDelivery(
     limit?: number
     wakeTypes?: MessageType[]
   }
-): { delivery: DeliveryRow; messages: MessageRow[]; replayed: boolean } | undefined {
+): RunDeliveryResult | undefined {
   const limit = Math.min(
     Math.max(params.limit ?? ORCHESTRATION_DELIVERY_BATCH_LIMIT, 1),
     ORCHESTRATION_DELIVERY_BATCH_LIMIT
@@ -65,8 +93,14 @@ export function getOrCreateRunDelivery(
         )
       }
       const messages = this.getDeliveryMessages(existing)
+      const counts = getRunDeliveryMailboxCounts(this, params.runId, messages.length)
       this.db.exec('COMMIT')
-      return { delivery: exposeDeliveryTimestamps(existing), messages, replayed: true }
+      return {
+        delivery: exposeDeliveryTimestamps(existing),
+        messages,
+        replayed: true,
+        ...counts
+      }
     }
 
     const address = `run:${params.runId}`
@@ -114,8 +148,14 @@ export function getOrCreateRunDelivery(
         JSON.stringify(messages.map((message) => message.id))
       )
     const delivery = this.getDeliveryRaw(deliveryId) as DeliveryRow
+    const counts = getRunDeliveryMailboxCounts(this, params.runId, messages.length)
     this.db.exec('COMMIT')
-    return { delivery: exposeDeliveryTimestamps(delivery), messages, replayed: false }
+    return {
+      delivery: exposeDeliveryTimestamps(delivery),
+      messages,
+      replayed: false,
+      ...counts
+    }
   } catch (error) {
     this.db.exec('ROLLBACK')
     throw error

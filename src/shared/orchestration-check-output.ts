@@ -31,6 +31,21 @@ export type LegacyCompatibilityResult = {
   resumeCommand?: string
 }
 
+export type OrchestrationDeliveryWarning = {
+  code: 'delivery_fifo_blocked'
+  message: string
+  requiredAction: 'acknowledge_delivery'
+  deliveryId: string
+}
+
+export type OrchestrationDeliveryState = {
+  blockedSince: string
+  pendingBehind: number
+  mailboxUnreadCount: number
+  checkCountDiverged: boolean
+  deliveryWarning?: OrchestrationDeliveryWarning
+}
+
 export type OrchestrationCheckOutput = {
   messages: OrchestrationMessageSummary[]
   count: number
@@ -39,7 +54,48 @@ export type OrchestrationCheckOutput = {
   timedOut?: boolean
   cancelled?: boolean
   connectionLost?: boolean
+  blockedSince?: string
+  pendingBehind?: number
+  mailboxUnreadCount?: number
+  checkCountDiverged?: boolean
+  deliveryWarning?: OrchestrationDeliveryWarning
   legacyCompatibility?: LegacyCompatibilityResult
+}
+
+export function buildOrchestrationDeliveryState(params: {
+  deliveryId: string
+  blockedSince: string
+  deliveryCount: number
+  mailboxUnreadCount: number
+  pendingBehind: number
+  replayed: boolean
+}): OrchestrationDeliveryState {
+  const checkCountDiverged = params.deliveryCount !== params.mailboxUnreadCount
+  const state: OrchestrationDeliveryState = {
+    blockedSince: params.blockedSince,
+    pendingBehind: params.pendingBehind,
+    mailboxUnreadCount: params.mailboxUnreadCount,
+    checkCountDiverged
+  }
+  if (!params.replayed && !checkCountDiverged) {
+    return state
+  }
+  const warningReason = params.replayed
+    ? `Delivery ${params.deliveryId} was replayed without acknowledgment.`
+    : `Delivery ${params.deliveryId} contains only part of the unread mailbox.`
+  const blockedDescription =
+    params.pendingBehind === 0
+      ? 'No newer messages are waiting behind it yet.'
+      : `${params.pendingBehind} newer message${params.pendingBehind === 1 ? '' : 's'} remain hidden behind this batch until it is acknowledged.`
+  return {
+    ...state,
+    deliveryWarning: {
+      code: 'delivery_fifo_blocked',
+      message: `${warningReason} ${blockedDescription}`,
+      requiredAction: 'acknowledge_delivery',
+      deliveryId: params.deliveryId
+    }
+  }
 }
 
 export function formatMessageReadOnlyTag(
@@ -80,20 +136,21 @@ export function formatOrchestrationCheckText(
         : '[LEGACY COMPATIBILITY]\n'
     : ''
   const deliveryNotice = formatCurrentDeliveryNotice(prepared.legacyCompatibility?.currentDelivery)
+  const deliveryWarning = formatDeliveryWarning(prepared)
   if (prepared.formatted) {
-    return `${legacyHeader}${prepared.formatted}${deliveryNotice}`
+    return `${legacyHeader}${deliveryWarning}${prepared.formatted}${deliveryNotice}`
   }
   if (prepared.count === 0) {
     if (prepared.timedOut) {
-      return `${legacyHeader}Wait timed out; no messages were consumed.${deliveryNotice}`
+      return `${legacyHeader}${deliveryWarning}Wait timed out; no messages were consumed.${deliveryNotice}`
     }
     if (prepared.cancelled) {
       const cancelled = prepared.connectionLost
         ? 'Wait cancelled because the connection closed; no messages were consumed.'
         : 'Wait cancelled; no messages were consumed.'
-      return `${legacyHeader}${cancelled}${deliveryNotice}`
+      return `${legacyHeader}${deliveryWarning}${cancelled}${deliveryNotice}`
     }
-    return `${legacyHeader}No messages.${deliveryNotice}`
+    return `${legacyHeader}${deliveryWarning}No messages.${deliveryNotice}`
   }
   const rendered = prepared.messages
     .map(
@@ -105,7 +162,23 @@ export function formatOrchestrationCheckText(
     )
     .join('\n')
   const output = prepared.deliveryId ? `Delivery ${prepared.deliveryId}\n${rendered}` : rendered
-  return `${legacyHeader}${output}${deliveryNotice}`
+  return `${legacyHeader}${deliveryWarning}${output}${deliveryNotice}`
+}
+
+function formatDeliveryWarning(result: OrchestrationCheckOutput): string {
+  const warning = result.deliveryWarning
+  if (!warning) {
+    return ''
+  }
+  const pending = result.pendingBehind ?? 0
+  const unread = result.mailboxUnreadCount ?? result.count + pending
+  return (
+    `[ORCHESTRATION_WARNING ${warning.code}]\n` +
+    `${warning.message}\n` +
+    `blockedSince=${result.blockedSince ?? 'unknown'} pendingBehind=${pending} ` +
+    `checkCount=${result.count} mailboxUnreadCount=${unread}\n` +
+    `After processing this batch, acknowledge it with: orca orchestration check --ack ${warning.deliveryId}\n`
+  )
 }
 
 export function prepareOrchestrationCheckOutput<T extends OrchestrationCheckOutput>(

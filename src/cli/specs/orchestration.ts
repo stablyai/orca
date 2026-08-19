@@ -84,6 +84,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'orca orchestration check [--terminal <handle>] [--run <run_id>] [--ack <delivery_id>] [--unread | --peek | --all] [--types <type,...>] [--format] [--wait] [--timeout-ms <n>] [--retry-request <id>] [--json]\n' +
       "  default: return the bound Run's oldest unacknowledged FIFO batch.\n" +
       '  --ack: acknowledge the prior whole batch before checking/waiting.\n' +
+      '         A partial batch or unacknowledged replay returns a delivery_fifo_blocked warning\n' +
+      '         with blockedSince, pendingBehind, and the total unread count.\n' +
       '  --peek: return only unread messages without marking them read.\n' +
       '  --all: return every message for the handle; does not mark read.\n' +
       '  --wait: block until a matching message arrives or --timeout-ms expires.\n' +
@@ -108,7 +110,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'On Windows PowerShell, quote comma-separated type filters, e.g. --types "worker_done,escalation".',
       '--format renders the returned rows as local text only; it never writes to another terminal.',
-      'A bound Run replays the same Delivery until --ack; process every message before acknowledging.'
+      'A bound Run replays the same Delivery until --ack; process every message before acknowledging. The first replay warns when that Delivery blocks the FIFO.'
     ]
   },
   {
