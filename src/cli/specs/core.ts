@@ -2,6 +2,8 @@ import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
 import { SERVE_COMMAND_SPECS } from './serve'
 
+const TERMINAL_SELECTOR_USAGE = '[--terminal <handle> | --terminal pty:<ptyId>]'
+
 export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['open'],
@@ -111,6 +113,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'By default, Orca records the new worktree as a child of the caller context when it can infer one from the Orca terminal or current directory.',
       'If --repo is omitted, Orca infers the repo from the current Orca-managed worktree.',
       'Use --project with --host to create on a ready project host setup without spelling the backing repo id.',
+      '--host runtime:<environment-id> creates on that paired Orca server; use the id from `orca environment list`, not the environment name.',
       'For related work, use the inferred parent or pass --parent-worktree active, folder:<id>, or worktree:<worktreeId> to make the relationship explicit. Worktree ids are the full <repo-id>::<path> values returned by `orca worktree list --json`.',
       'Use --no-parent when the new worktree should be independent of the current context.',
       '--no-parent only affects Orca lineage; omit --base-branch to use the repo default base, or pass the default base ref explicitly for independent top-level work.',
@@ -124,7 +127,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     examples: [
       'orca worktree create --name agent-task --agent codex --prompt "hi" --json',
       'orca worktree create --repo id:<repoId> --name related-task --json',
-      'orca worktree create --project github:stablyai/orca --host runtime:gpu --name benchmark --json',
+      'orca worktree create --project github:stablyai/orca --host runtime:03ef704c-b180-4b10-998d-e28fbd5de9a3 --name benchmark --json',
       'orca worktree create --repo id:<repoId> --name linear-task --linear-issue https://linear.app/stably/issue/STA-335/test-issue --json',
       'orca worktree create --repo id:<repoId> --name agent-task --agent codex --prompt "hi" --json',
       'orca worktree create --repo id:<repoId> --name folder-child --parent-worktree folder:<folderId> --json',
@@ -191,7 +194,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['terminal', 'show'],
     summary: 'Show terminal metadata and preview',
-    usage: 'orca terminal show [--terminal <handle> | --terminal pty:<ptyId>] [--json]',
+    usage: `orca terminal show ${TERMINAL_SELECTOR_USAGE} [--json]`,
     allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
     notes: [
       '--terminal accepts a runtime handle or pty:<ptyId> from terminal list (ptyId survives restarts; handles do not).'
@@ -200,32 +203,34 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['terminal', 'read'],
     summary: 'Read bounded terminal output',
-    usage:
-      'orca terminal read [--terminal <handle> | --terminal pty:<ptyId>] [--cursor <n>] [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'cursor', 'limit'],
+    usage: `orca terminal read ${TERMINAL_SELECTOR_USAGE} [--cursor <n>] [--limit <n>] [--screen] [--json]`,
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'cursor', 'limit', 'screen'],
     notes: [
       'Omit --terminal to target the active terminal in the current worktree.',
+      'By default this returns accumulated terminal output with escape sequences stripped, not the rendered screen. Any program that repaints a line — shells, progress bars, TUIs — comes back as stacked fragments, so one `clear` keystroke by keystroke reads as `cclclecleaclear`, and spaces a prompt draws by moving the cursor are absent.',
+      'Use --screen to read what the terminal actually renders. Prefer it whenever the answer depends on how output looks rather than what was emitted over time; the default is unsuitable for verifying rendered output.',
+      'The result reports source: stream or screen, so a caller can tell which question was answered. A --screen read falls back to source: stream when no rendered state exists rather than passing the stream off as a screen.',
+      '--screen and --cursor are mutually exclusive: a screen read is the current frame and has no history to page.',
       'Use --cursor with the nextCursor value from a previous read to get only new output since that read.',
       'Use --limit to request more retained lines for long agent responses; output reports oldestCursor when older lines were dropped.',
       'Useful for capturing the response to a command: read before sending, then read --cursor <prev> after waiting.'
     ],
     examples: [
       'orca terminal read --json',
-      'orca terminal read --terminal term_abc123 --cursor 42 --limit 1000 --json'
+      'orca terminal read --terminal term_abc123 --cursor 42 --limit 1000 --json',
+      'orca terminal read --terminal term_abc123 --screen --json'
     ]
   },
   {
     path: ['terminal', 'send'],
     summary: 'Send input to a live terminal',
-    usage:
-      'orca terminal send [--terminal <handle> | --terminal pty:<ptyId>] [--text <text>] [--enter] [--interrupt] [--json]',
+    usage: `orca terminal send ${TERMINAL_SELECTOR_USAGE} [--text <text>] [--enter] [--interrupt] [--json]`,
     allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'text', 'enter', 'interrupt']
   },
   {
     path: ['terminal', 'wait'],
     summary: 'Wait for a terminal condition',
-    usage:
-      'orca terminal wait [--terminal <handle> | --terminal pty:<ptyId>] --for exit|tui-idle [--timeout-ms <ms>] [--json]',
+    usage: `orca terminal wait ${TERMINAL_SELECTOR_USAGE} --for exit|tui-idle [--timeout-ms <ms>] [--json]`,
     allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'for', 'timeout-ms']
   },
   {
@@ -257,14 +262,14 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     // alias rather than a duplicate spec + handler registration.
     aliases: [['terminal', 'focus']],
     summary: 'Switch to a terminal tab in the UI',
-    usage: 'orca terminal switch [--terminal <handle> | --terminal pty:<ptyId>] [--json]',
+    usage: `orca terminal switch ${TERMINAL_SELECTOR_USAGE} [--json]`,
     allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
     examples: ['orca terminal switch --terminal term_abc123']
   },
   {
     path: ['terminal', 'close'],
     summary: 'Close a terminal pane/session, or its whole tab with --tab',
-    usage: 'orca terminal close [--terminal <handle> | --terminal pty:<ptyId>] [--tab] [--json]',
+    usage: `orca terminal close ${TERMINAL_SELECTOR_USAGE} [--tab] [--json]`,
     allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'tab'],
     notes: [
       'Without --tab, preserves the existing pane/session close behavior. With --tab, waits until the whole tab is durably removed.'
@@ -277,8 +282,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['terminal', 'rename'],
     summary: 'Set or clear the title of a terminal tab',
-    usage:
-      'orca terminal rename [--terminal <handle> | --terminal pty:<ptyId>] [--title <text>] [--json]',
+    usage: `orca terminal rename ${TERMINAL_SELECTOR_USAGE} [--title <text>] [--json]`,
     allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'title'],
     notes: ['Omit --title or pass an empty string to reset to the auto-generated title.'],
     examples: [
@@ -289,8 +293,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['terminal', 'split'],
     summary: 'Split an existing terminal pane',
-    usage:
-      'orca terminal split [--terminal <handle> | --terminal pty:<ptyId>] [--direction horizontal|vertical] [--command <text>] [--json]',
+    usage: `orca terminal split ${TERMINAL_SELECTOR_USAGE} [--direction horizontal|vertical] [--command <text>] [--json]`,
     allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'direction', 'command'],
     examples: [
       'orca terminal split --terminal term_abc123 --direction horizontal --json',

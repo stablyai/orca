@@ -1,7 +1,6 @@
 import { resolve as resolvePath } from 'node:path'
 import type {
   ComputerAppQuery,
-  RuntimeTerminalListResult,
   RuntimeWorktreeListResult,
   RuntimeWorktreeRecord
 } from '../shared/runtime-types'
@@ -9,6 +8,9 @@ import { isPathInsideOrEqual } from '../shared/cross-platform-path'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
 import { getOptionalStringFlag, getRequiredStringFlag } from './flags'
+import { resolveTerminalSelector } from './terminal-selector'
+
+export { resolveTerminalSelector } from './terminal-selector'
 
 export type BrowserCliTarget = {
   worktree?: string
@@ -158,64 +160,6 @@ export async function getTerminalHandle(
   const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
   const response = await client.call<{ handle: string }>('terminal.resolveActive', { worktree })
   return response.result.handle
-}
-
-/**
- * Resolve `pty:<ptyId>` to the current handle. Handles rotate across restarts;
- * ptyId is the stable field on terminal list (#13206).
- */
-export async function resolveTerminalSelector(
-  selector: string,
-  client: RuntimeClient
-): Promise<string> {
-  const trimmed = selector.trim()
-  if (!trimmed.toLowerCase().startsWith('pty:')) {
-    return trimmed
-  }
-  const ptyId = trimmed.slice(trimmed.indexOf(':') + 1).trim()
-  if (!ptyId) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      'Empty pty id after pty:. Use a ptyId from `orca terminal list --json`.'
-    )
-  }
-  const params = {
-    limit: 200,
-    ptyId,
-    requireFreshPtyLiveness: true,
-    includeVisualLayouts: false
-  }
-  let listed: { result: RuntimeTerminalListResult }
-  try {
-    listed = await client.call<RuntimeTerminalListResult>('terminal.list', params)
-  } catch (error) {
-    if (!(error instanceof Error) || error.message !== 'terminal_liveness_unavailable') {
-      throw error
-    }
-    // Why: transient controller inventory gaps on SSH do not prove the cached terminal is dead.
-    listed = await client.call<RuntimeTerminalListResult>('terminal.list', {
-      limit: params.limit,
-      ptyId,
-      includeVisualLayouts: false
-    })
-  }
-  const match = listed.result.terminals.find(
-    (terminal) => terminal.ptyId === ptyId && terminal.connected
-  )
-  if (!match) {
-    if (listed.result.truncated) {
-      const total = listed.result.totalCount ?? listed.result.terminals.length
-      throw new RuntimeClientError(
-        'terminal_not_found',
-        `No terminal with ptyId ${ptyId} in the first ${listed.result.terminals.length} of ${total} terminals (list truncated). Upgrade the host, or re-list with a worktree filter and pass the resulting handle.`
-      )
-    }
-    throw new RuntimeClientError(
-      'terminal_not_found',
-      `No live terminal with ptyId ${ptyId}. Re-run terminal list after restart or rehydration.`
-    )
-  }
-  return match.handle
 }
 
 export async function getBrowserCommandTarget(

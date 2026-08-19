@@ -23,6 +23,10 @@ export function isRepoBackedProjectHostSetup(
   return repoId.length > 0 && (currentRepoIds.has(repoId) || setup.id === repoId)
 }
 
+function projectHostKey(setup: Pick<ProjectHostSetup, 'projectId' | 'hostId'>): string {
+  return `${setup.projectId}\u0000${setup.hostId}`
+}
+
 export function mergeProjectHostSetupCompatibilityState(
   state: Pick<PersistedState, 'projects' | 'projectHostSetups'>,
   repos: readonly Repo[]
@@ -35,6 +39,7 @@ export function mergeProjectHostSetupCompatibilityState(
   const currentRepoIds = new Set(repos.map((repo) => repo.id))
   const projectedProjectIds = new Set(projection.projects.map((project) => project.id))
   const projectedSetupIds = new Set(projection.setups.map((setup) => setup.id))
+  const projectedHosts = new Set(projection.setups.map(projectHostKey))
   // Why: legacy/repo-backed setup rows reuse the repo id; keep only independent rows so repo deletion leaves no ghosts.
   const independentSetups = (state.projectHostSetups ?? [])
     .filter((setup) => {
@@ -48,6 +53,10 @@ export function mergeProjectHostSetupCompatibilityState(
       const remappedProjectId = succession.remappedProjectIds.get(setup.projectId)
       return remappedProjectId ? { ...setup, projectId: remappedProjectId } : setup
     })
+    // Why: a project resolves to one setup per host. Once a repo projection covers that
+    // pair, a leftover placeholder is a ghost that shadows the ready row — it sorts first
+    // and reads back as "not set up". Runs after the remap so renamed rows are caught too.
+    .filter((setup) => !projectedHosts.has(projectHostKey(setup)))
   const independentProjectIds = new Set(independentSetups.map((setup) => setup.projectId))
   const independentProjects = (state.projects ?? [])
     .filter(

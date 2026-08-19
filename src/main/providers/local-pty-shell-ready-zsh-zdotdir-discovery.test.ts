@@ -10,6 +10,8 @@ import {
   restoreUserDataPathAfterEach,
   setTestUserDataPath
 } from './local-pty-shell-ready-test-harness'
+// Why resolved rather than hardcoded: the wrapper tree is content-addressed.
+import { getShellReadyWrapperRoot } from './local-pty-shell-ready-wrapper-root'
 
 restoreUserDataPathAfterEach()
 
@@ -99,7 +101,12 @@ path=(/custom/bin $path)
         delete cleanEnv.ZDOTDIR
         delete cleanEnv.ORCA_ORIG_ZDOTDIR
         delete cleanEnv.USER_ZSHRC_LOADED
-        cleanEnv.ZDOTDIR = join(movedUserData, 'shell-ready', 'zsh')
+        // Why the prefix swap: the tree is content-addressed under the user data
+        // dir, so the relocated ZDOTDIR has to follow the resolved root.
+        cleanEnv.ZDOTDIR = join(
+          getShellReadyWrapperRoot().replace(userDataPath, movedUserData),
+          'zsh'
+        )
 
         // Cover both the WSL login shell (`exec zsh -l`) and the non-login local-pane flow so both restore paths stay pinned.
         for (const args of [['-i'], ['-l', '-i']] as const) {
@@ -146,7 +153,12 @@ path=(/custom/bin $path)
         delete cleanEnv.ZDOTDIR
         delete cleanEnv.ORCA_ORIG_ZDOTDIR
         delete cleanEnv.USER_ZSHRC_LOADED
-        cleanEnv.ZDOTDIR = join(nonAsciiUserData, 'shell-ready', 'zsh')
+        // Why the prefix swap: the tree is content-addressed under the user data
+        // dir, so the relocated ZDOTDIR has to follow the resolved root.
+        cleanEnv.ZDOTDIR = join(
+          getShellReadyWrapperRoot().replace(userDataPath, nonAsciiUserData),
+          'zsh'
+        )
 
         for (const args of [['-i'], ['-l', '-i']] as const) {
           const result = spawnSync(

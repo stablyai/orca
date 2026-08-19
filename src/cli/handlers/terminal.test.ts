@@ -113,6 +113,9 @@ describe('terminal selector help', () => {
     for (const command of TERMINAL_SELECTOR_COMMANDS) {
       expect(help).toMatch(new RegExp(`orca terminal ${command} .*pty:<ptyId>`))
     }
+    expect(help).toContain(
+      'orca terminal read [--terminal <handle> | --terminal pty:<ptyId>] [--cursor <n>] [--limit <n>] [--screen] [--json]'
+    )
   })
 })
 

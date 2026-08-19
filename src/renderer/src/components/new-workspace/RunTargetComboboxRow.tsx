@@ -1,6 +1,7 @@
 import React from 'react'
 import { AlertTriangle, ChevronRight, LoaderCircle, Monitor, Server } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import { ProjectOptionDetail } from './ProjectComboboxRow'
@@ -171,5 +172,54 @@ export function ConnectHostButton({
         translate('auto.components.NewWorkspaceComposerCard.connectHost', 'Connect')
       )}
     </Button>
+  )
+}
+
+/** Inline Set project location action on a host that still needs a project path. */
+export function SetLocationButton({
+  hostLabel,
+  onSetLocation
+}: {
+  hostLabel: string
+  onSetLocation: () => void
+}): React.JSX.Element {
+  const label = translate(
+    'auto.components.NewWorkspaceComposerCard.setLocation',
+    'Set project location'
+  )
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="xs"
+          className="ml-auto shrink-0 self-center"
+          aria-label={translate(
+            'auto.components.NewWorkspaceComposerCard.setLocationOnHost',
+            'Set project location on {{host}}',
+            { host: hostLabel }
+          )}
+          onMouseDown={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+          }}
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            onSetLocation()
+          }}
+        >
+          {label}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={6}>
+        {translate(
+          'auto.components.NewWorkspaceComposerCard.setLocationTooltip',
+          'Choose a folder or clone this project onto {{host}}.',
+          { host: hostLabel }
+        )}
+      </TooltipContent>
+    </Tooltip>
   )
 }

@@ -129,6 +129,9 @@ module.exports = {
     '!out/**/*.test.js',
     // Why: Vite's manifest is only used to project the paired web client.
     '!out/renderer/.vite{,/**/*}',
+    // Why: out/electron-dev caches `pnpm dev`'s per-branch Electron.app copies (~270MB each).
+    // CI never creates it, but packaging on a machine that has run dev would pack them all.
+    '!out/electron-dev{,/**/*}',
     '!electron.vite.config.{js,ts,mjs,cjs}',
     '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,CHANGELOG.md,README.md}',
     '!{.env,.env.*,.npmrc,pnpm-lock.yaml}',
@@ -189,6 +192,7 @@ module.exports = {
     'out/main/hermes/**',
     'out/main/daemon-entry.js',
     'out/main/session-scanner-service-entry.js',
+    'out/main/wsl-transcript-fs-process-entry.js',
     'out/main/session-scanner-opencode-sqlite-worker-entry.js',
     'out/main/plugin-host-entry.js',
     'out/main/computer-sidecar.js',

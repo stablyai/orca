@@ -21,7 +21,7 @@ import {
 } from './TabBarCreateEntryRow'
 import { dropFileEntriesCoveredByTabResults } from './open-tab-entry-dedupe'
 import { activateOpenTabSearchResult } from './open-tab-selection-routing'
-import { useOpenTabSearch } from './use-open-tab-search'
+import { useTabCreateEntrySearchResults } from './use-tab-create-entry-search-results'
 import { DEFAULT_SEARCH_ENGINE } from '../../../../shared/browser-url'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { useAppStore } from '@/store'
@@ -33,11 +33,7 @@ import {
   getTabEntryChooseActionMessage,
   getTabEntryOmniboxPlaceholder
 } from './tab-create-entry-copy'
-import {
-  EMPTY_AGENT_OPTIONS,
-  EMPTY_MENU_OPTIONS,
-  EMPTY_TAB_RESULTS
-} from './tab-create-entry-empty-options'
+import { EMPTY_AGENT_OPTIONS, EMPTY_MENU_OPTIONS } from './tab-create-entry-empty-options'
 import type { TabBarCreateEntryProps } from './tab-create-entry-props'
 
 export default function TabBarCreateEntry(props: TabBarCreateEntryProps): React.JSX.Element {
@@ -77,16 +73,11 @@ function TabBarCreateEntrySession({
   const rawQueryOversized = isQuickOpenQueryTooLarge(query)
   const forcedSearch = parseForcedSearchQuery(query)
   const terminalQueryMode = rawQueryOversized || forcedSearch.forced
-  const tabSearchQuery = terminalQueryMode ? '' : query
-  const tabSearch = useOpenTabSearch({
+  const tabResults = useTabCreateEntrySearchResults({
     enabled: menuOpen && !terminalQueryMode,
-    query: tabSearchQuery,
+    query,
     worktreeId
   })
-  // Why gate on the query: the search defers, so its rows can still describe an
-  // earlier query — Enter must never submit a tab the current query never matched.
-  const tabResults =
-    !terminalQueryMode && tabSearch.query === query ? tabSearch.results : EMPTY_TAB_RESULTS
   const shouldResolveAbsolutePaths =
     menuOpen && !terminalQueryMode && isTabEntryAbsolutePathLike(query.trim())
   const allowAbsolutePathsSelector = useMemo(

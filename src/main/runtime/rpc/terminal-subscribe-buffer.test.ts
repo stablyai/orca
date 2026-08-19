@@ -3,6 +3,7 @@ import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { TERMINAL_METHODS } from './methods/terminal'
+import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 import {
   TerminalStreamOpcode,
@@ -82,7 +83,7 @@ describe('terminal subscribe buffering', () => {
 
   it('captures live queries before awaiting mobile fit and delivers them after the snapshot', async () => {
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     let dataListener:
       | ((data: string, meta?: { seq?: number; rawLength?: number }) => void)
       | undefined
@@ -112,13 +113,9 @@ describe('terminal subscribe buffering', () => {
       isTerminalAlternateScreen: vi.fn().mockReturnValue(false),
       subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => {
-        cleanups.get(id)?.()
-        cleanups.delete(id)
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     })
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
@@ -199,7 +196,7 @@ describe('terminal subscribe buffering', () => {
 
   it('marks legacy scrollback previews truncated when the uncursored read is limited', async () => {
     const messages: string[] = []
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({
@@ -213,13 +210,9 @@ describe('terminal subscribe buffering', () => {
       getLayout: vi.fn().mockReturnValue({ seq: 1 }),
       subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => {
-        cleanups.get(id)?.()
-        cleanups.delete(id)
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     })
     const dispatcher = new RpcDispatcher({
@@ -256,6 +249,7 @@ describe('terminal subscribe buffering', () => {
     try {
       const messages: string[] = []
       const controller = new AbortController()
+      const registry = createSubscriptionRegistryDouble()
       let resolveSnapshot: (value: { data: string; cols: number; rows: number }) => void = () => {}
       const runtime = stubRuntime({
         resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
@@ -271,8 +265,9 @@ describe('terminal subscribe buffering', () => {
         getLayout: vi.fn().mockReturnValue({ seq: 1 }),
         subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-        registerSubscriptionCleanup: vi.fn(),
-        cleanupSubscription: vi.fn(),
+        registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+        registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+        cleanupSubscription: vi.fn(registry.cleanupSubscription),
         waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
       })
       const dispatcher = new RpcDispatcher({
@@ -303,14 +298,15 @@ describe('terminal subscribe buffering', () => {
       expect(runtime.subscribeToFitOverrideChanges).not.toHaveBeenCalled()
       // Cleanup must exist before snapshot work so an abort cannot orphan a
       // desktop width floor, but the abort must consume it before listeners start.
-      expect(runtime.registerSubscriptionCleanup).toHaveBeenCalledWith(
+      expect(runtime.registerOwnedSubscriptionCleanup).toHaveBeenCalledWith(
         'terminal-1:desktop-1',
         expect.any(Function),
         'conn-legacy-json'
       )
-      expect(runtime.cleanupSubscription).toHaveBeenCalledWith('terminal-1:desktop-1')
+      expect(registry.peekCleanup('terminal-1:desktop-1')).toBeUndefined()
       expect(runtime.waitForTerminal).not.toHaveBeenCalled()
-      expect(messages).toEqual([])
+      // The consumed cleanup emits the terminating frame; no snapshot/data may leak past it.
+      expect(messages.map((msg) => JSON.parse(msg).result?.type)).toEqual(['end'])
     } finally {
       vi.useRealTimers()
     }
@@ -319,7 +315,7 @@ describe('terminal subscribe buffering', () => {
   it('keeps a limited retained-tail fallback usable for binary first paint', async () => {
     const messages: string[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({
@@ -334,13 +330,9 @@ describe('terminal subscribe buffering', () => {
       subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
       subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => {
-        cleanups.get(id)?.()
-        cleanups.delete(id)
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
       sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
       updateMobileViewport: vi.fn().mockResolvedValue(false)
@@ -390,7 +382,7 @@ describe('terminal subscribe buffering', () => {
   it('does not mark binary snapshot frames truncated from an overflowed read when serialized data is available', async () => {
     const messages: string[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({
@@ -409,13 +401,9 @@ describe('terminal subscribe buffering', () => {
       subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
       subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => {
-        cleanups.get(id)?.()
-        cleanups.delete(id)
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
       sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
       updateMobileViewport: vi.fn().mockResolvedValue(false)
@@ -462,7 +450,7 @@ describe('terminal subscribe buffering', () => {
     try {
       const messages: string[] = []
       const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-      const cleanups = new Map<string, () => void>()
+      const registry = createSubscriptionRegistryDouble()
       const dataListenerRef: {
         current?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
       } = {}
@@ -497,14 +485,9 @@ describe('terminal subscribe buffering', () => {
         }),
         subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-        registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-          cleanups.set(id, cleanup)
-        }),
-        cleanupSubscription: vi.fn((id: string) => {
-          const cleanup = cleanups.get(id)
-          cleanups.delete(id)
-          cleanup?.()
-        }),
+        registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+        registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+        cleanupSubscription: vi.fn(registry.cleanupSubscription),
         waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
         sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
         updateMobileViewport: vi.fn().mockResolvedValue(false)
@@ -591,7 +574,7 @@ describe('terminal subscribe buffering', () => {
   it('drops stale mobile resize re-stream completions for legacy binary streams', async () => {
     const messages: string[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-    const cleanups = new Map<string, () => void>()
+    const registry = createSubscriptionRegistryDouble()
     let resizeListener:
       | ((event: {
           cols: number
@@ -647,14 +630,9 @@ describe('terminal subscribe buffering', () => {
         return vi.fn()
       }),
       subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-      registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-        cleanups.set(id, cleanup)
-      }),
-      cleanupSubscription: vi.fn((id: string) => {
-        const cleanup = cleanups.get(id)
-        cleanups.delete(id)
-        cleanup?.()
-      }),
+      registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+      registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+      cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
       sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
       updateMobileViewport: vi.fn().mockResolvedValue({ updated: true, applied: true })
@@ -742,7 +720,7 @@ describe('terminal subscribe buffering', () => {
     try {
       const messages: string[] = []
       const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-      const cleanups = new Map<string, () => void>()
+      const registry = createSubscriptionRegistryDouble()
       const dataListenerRef: {
         current?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
       } = {}
@@ -777,14 +755,9 @@ describe('terminal subscribe buffering', () => {
         }),
         subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
-        registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-          cleanups.set(id, cleanup)
-        }),
-        cleanupSubscription: vi.fn((id: string) => {
-          const cleanup = cleanups.get(id)
-          cleanups.delete(id)
-          cleanup?.()
-        }),
+        registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+        registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+        cleanupSubscription: vi.fn(registry.cleanupSubscription),
         waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
         sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
         updateMobileViewport: vi.fn().mockResolvedValue(false)

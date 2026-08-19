@@ -24,7 +24,11 @@ import { observeSkillPackage, type ObservedSkillPackage } from './skill-package-
 import { writeSkillTarGzip, type SkillTarWriteEntry } from './skill-package-tar'
 import { startSkillPhaseOperation } from './skill-operation-observability'
 
-export type SkillBundleSource = { id?: string; sourceDirectory: string }
+export type SkillBundleSource = {
+  id?: string
+  sourceDirectory: string
+  executablePaths?: ReadonlySet<string>
+}
 
 export type CreatedSkillBundle = {
   pluginManifest: AgentPluginManifestV1
@@ -92,7 +96,14 @@ async function stageSkill(input: {
     force: false,
     errorOnExist: true
   })
-  const stagedObservation = await observeSkillPackage(stagedDirectory)
+  const stagedObservation = await observeSkillPackage(
+    stagedDirectory,
+    undefined,
+    input.source.executablePaths,
+    undefined,
+    process.platform,
+    process.platform === 'win32'
+  )
   if (!observationsMatch(input.sourceObservation, stagedObservation)) {
     throw new Error('skill-package-source-changed-during-staging')
   }
@@ -135,7 +146,14 @@ async function createSkillBundleArchiveUnobserved(
     const observed = await Promise.all(
       batch.map(async (source) => {
         const [observation, markdown] = await Promise.all([
-          observeSkillPackage(source.sourceDirectory),
+          observeSkillPackage(
+            source.sourceDirectory,
+            undefined,
+            source.executablePaths,
+            undefined,
+            process.platform,
+            process.platform === 'win32'
+          ),
           readFile(join(source.sourceDirectory, 'SKILL.md'), 'utf8')
         ])
         const summary = summarizeSkillMarkdown(markdown)

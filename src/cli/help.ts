@@ -241,7 +241,7 @@ Common Commands:
   orca file open-changed [--mode edit|diff|both] [--worktree <selector>] [--json]
   orca terminal list [--worktree <selector>] [--limit <n>] [--include-visual-layouts] [--json]
   orca terminal show [--terminal <handle> | --terminal pty:<ptyId>] [--json]
-  orca terminal read [--terminal <handle> | --terminal pty:<ptyId>] [--cursor <n>] [--limit <n>] [--json]
+  orca terminal read [--terminal <handle> | --terminal pty:<ptyId>] [--cursor <n>] [--limit <n>] [--screen] [--json]
   orca terminal send [--terminal <handle> | --terminal pty:<ptyId>] [--text <text>] [--enter] [--interrupt] [--json]
   orca terminal wait [--terminal <handle> | --terminal pty:<ptyId>] --for exit|tui-idle [--timeout-ms <ms>] [--json]
   orca terminal stop --worktree <selector> [--json]

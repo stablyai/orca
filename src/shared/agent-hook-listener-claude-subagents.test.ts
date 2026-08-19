@@ -37,6 +37,64 @@ describe('shared agent-hook-listener', () => {
       const stop = claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
       expect(stop?.payload.state).toBe('done')
       expect(stop?.payload.subagents).toBeUndefined()
+      expect(stop?.payload.turnCompletedAt).toBeUndefined()
+    })
+
+    it('stamps turnCompletedAt on a gated lead Stop and repeats it on the all-clear', () => {
+      vi.useFakeTimers()
+      try {
+        vi.setSystemTime(1_700_000_005_000)
+        claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'review the PR' })
+        claudeEvent({
+          hook_event_name: 'SubagentStart',
+          agent_id: 'a1',
+          agent_type: 'general-purpose'
+        })
+        const stop = claudeEvent({
+          hook_event_name: 'Stop',
+          last_assistant_message: 'Which cells need hand-verification?',
+          background_tasks: [
+            {
+              id: 'a1',
+              type: 'subagent',
+              status: 'running',
+              description: 'Review loop',
+              agent_type: 'general-purpose'
+            }
+          ]
+        })
+        expect(stop?.payload.state).toBe('working')
+        expect(stop?.payload.turnCompletedAt).toBe(1_700_000_005_000)
+        expect(stop?.payload.lastAssistantMessage).toBe('Which cells need hand-verification?')
+
+        vi.setSystemTime(1_700_000_055_000)
+        const drained = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
+        expect(drained?.payload.state).toBe('done')
+        expect(drained?.payload.turnCompletedAt).toBe(1_700_000_005_000)
+
+        claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'next turn' })
+        const nextStop = claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
+        expect(nextStop?.payload.state).toBe('done')
+        expect(nextStop?.payload.turnCompletedAt).toBeUndefined()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('does not stamp an interrupted Stop even while a child still gates the pane', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'review the PR' })
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a1',
+        agent_type: 'general-purpose'
+      })
+      const stop = claudeEvent({
+        hook_event_name: 'Stop',
+        is_interrupt: true,
+        background_tasks: [{ id: 'a1', type: 'subagent', status: 'running' }]
+      })
+      expect(stop?.payload.state).toBe('working')
+      expect(stop?.payload.turnCompletedAt).toBeUndefined()
     })
 
     it.each([
@@ -631,8 +689,14 @@ describe('shared agent-hook-listener', () => {
 
       // Why: the lead already finished; the answer resumes the child, so the
       // emitted state is gated up to working only while that child still runs.
-      expect(clearClaudeAnsweredQuestionWait(state, PANE_KEY)).toEqual({ state: 'working' })
-      expect(state.claudeLeadStateByPaneKey.get(PANE_KEY)).toEqual({ state: 'done' })
+      expect(clearClaudeAnsweredQuestionWait(state, PANE_KEY)).toEqual({
+        state: 'working',
+        turnCompletedAt: expect.any(Number)
+      })
+      expect(state.claudeLeadStateByPaneKey.get(PANE_KEY)).toEqual({
+        state: 'done',
+        turnCompletedAt: expect.any(Number)
+      })
 
       const drained = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
       expect(drained?.payload.state).toBe('done')

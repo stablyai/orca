@@ -1,6 +1,7 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { RESET_GRAPHIC_RENDITION } from '../../../../shared/terminal-mode-reset-profiles'
 import { flushAsyncTicks } from './pty-connection-test-async'
 import {
   LEAF_1,
@@ -260,7 +261,7 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, createManager(1) as never, deps as never)
     await flushAsyncTicks(20)
 
-    const snapshotIndex = writes.indexOf('authoritative-snapshot')
+    const snapshotIndex = writes.indexOf(`${RESET_GRAPHIC_RENDITION}authoritative-snapshot`)
     expect(snapshotIndex).toBeGreaterThanOrEqual(0)
     expect(writes).not.toContain('post-snapshot-live')
     for (let step = 0; step < 40; step += 1) {

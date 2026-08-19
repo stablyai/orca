@@ -12,6 +12,7 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
 }))
 
 import {
+  resetWslTranscriptFsGateForTests,
   WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS,
   WslTranscriptFsError
 } from '../native-chat/wsl-transcript-fs-gate'
@@ -20,8 +21,19 @@ import { discoverFiles, walkSessionFiles } from './session-scanner-discovery'
 const SLOW_MESSAGE =
   'WSL transcript files are temporarily unavailable because filesystem access is taking too long. Try again shortly or restart Orca if the issue continues.'
 
+// Complete: UNC readdir results pass through the child dispatcher's dirent
+// serializer, which reads every kind flag.
 function dirent(name: string): Dirent {
-  return { name, isDirectory: () => false, isFile: () => true } as Dirent
+  return {
+    name,
+    isBlockDevice: () => false,
+    isCharacterDevice: () => false,
+    isDirectory: () => false,
+    isFIFO: () => false,
+    isFile: () => true,
+    isSocket: () => false,
+    isSymbolicLink: () => false
+  } as Dirent
 }
 
 let releaseStall: (() => void) | undefined
@@ -33,6 +45,7 @@ function stalls<T>(): Promise<T> {
 }
 
 beforeEach(() => {
+  resetWslTranscriptFsGateForTests()
   fsMocks.readdir.mockReset()
   fsMocks.stat.mockReset()
   fsMocks.readdir.mockResolvedValue([])

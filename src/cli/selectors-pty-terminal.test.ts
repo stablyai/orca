@@ -98,6 +98,35 @@ describe('resolveTerminalSelector', () => {
     })
   })
 
+  it('falls back when fresh liveness omits the requested SSH host', async () => {
+    const ptyId = 'ssh:box-1@@pty-7'
+    const call = vi
+      .fn()
+      .mockResolvedValueOnce({
+        result: {
+          terminals: [],
+          hostScope: { hostIds: ['local'], omittedHostIds: ['ssh:box-1'] },
+          truncated: false,
+          totalCount: 0
+        }
+      })
+      .mockResolvedValueOnce({
+        result: {
+          terminals: [{ handle: 'term_cached', ptyId, connected: true }],
+          truncated: false,
+          totalCount: 1
+        }
+      })
+    const client = { call } as unknown as RuntimeClient
+
+    await expect(resolveTerminalSelector(`pty:${ptyId}`, client)).resolves.toBe('term_cached')
+    expect(call).toHaveBeenNthCalledWith(2, 'terminal.list', {
+      limit: 200,
+      ptyId,
+      includeVisualLayouts: false
+    })
+  })
+
   it('rejects empty pty ids', async () => {
     const client = { call: vi.fn() } as unknown as RuntimeClient
     await expect(resolveTerminalSelector('pty:', client)).rejects.toMatchObject({

@@ -274,7 +274,8 @@ export type GlobalSettings = {
   claudeManagedAccounts: ClaudeManagedAccount[]
   activeClaudeManagedAccountId: string | null
   activeClaudeManagedAccountIdsByRuntime?: ClaudeManagedAccountRuntimeSelection
-  /** Per-worktree shell history file so ArrowUp doesn't surface other worktrees' commands. Defaults to true. */
+  /** Per-worktree shell history so ArrowUp doesn't surface other worktrees' commands (a HISTFILE for
+   *  bash/zsh, a `fish_history` session name for fish). Defaults to true. */
   terminalScopeHistoryByWorktree: boolean
   /** Kill switch for hidden terminal view parking: unmount long-hidden panes while a pane-less watcher keeps PTY side effects alive. */
   terminalHiddenViewParking?: boolean

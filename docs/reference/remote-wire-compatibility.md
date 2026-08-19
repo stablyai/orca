@@ -99,3 +99,42 @@ The harness covers the terminal stream only. It does **not** cover the session-t
 sync channel, agent-session publications, file or Git RPCs, mobile/E2EE framing, or
 the relay transport. A change on those paths still needs its own reasoning against
 the three rules above.
+
+## Worked example: `agentWait` on terminal and worker reads
+
+`terminal.show`, `orchestration.workerShow` and `orchestration.federationShow` carry an
+optional `agentWait` naming a pane parked on a prompt only a human can answer. It is Rule 1 —
+a new optional field — but it has a second state that Rule 1 alone does not describe, and
+getting that wrong turns a skew into a false "nothing is blocked".
+
+- **present object** — this pane is waiting, with the evidence that proved it.
+- **present `null`** — the host evaluated this pane and nothing proves a wait.
+- **absent** — the host never evaluated it: it predates the field, the worker identity was
+  unverifiable, the pane was unreadable, or the agent probe did not answer in time.
+
+A new client against an old host sees the field absent, which is why absence must read as
+*unknown* and never as *not waiting*. Collapsing absent into `null` at any hop — including a
+convenience `?? null` in an RPC handler — makes an old or unreachable peer indistinguishable
+from a healthy idle worker, which is the exact failure the field exists to remove.
+
+An old client against a new host ignores the key, as Rule 1 allows. New members added to
+`RuntimeTerminalWaitBlockedReason` are also Rule 1: no consumer switches exhaustively on it,
+and both the CLI and worker-start interpolate it as an opaque string.
+
+## Known debt: JSON-RPC errors drop Node's string code
+
+An error raised on an SSH host crosses the relay as JSON-RPC, and
+`ssh-channel-multiplexer` rebuilds it with the TRANSPORT's numeric `code`. Node's
+string code — `'ENOENT'`, `'EACCES'` — does not survive, so a caller on this side
+cannot ask what kind of failure it was.
+
+`isENOENT` in `src/main/ipc/filesystem-path-containment.ts` pays for that by also
+matching Node's canonical message text, which is what makes remote worktree creation
+work. The cost is that a host can make an unrelated failure read as "absent" by
+putting that sentence in a message.
+
+The exit is Rule 1: carry the original string code in a new optional field on the
+error payload and read that instead. An old host omits it and the message match still
+covers them; once hosts that send it are the floor, the message match can be deleted
+rather than lived with at its ~10 call sites. Narrowing `isENOENT` back to `.code`
+without doing this reinstates the bug — the transport has already overwritten it.

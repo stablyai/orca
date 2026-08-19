@@ -107,6 +107,22 @@ function isPrintableLogByte(value: number): boolean {
   return value === 0x09 || (value >= 0x20 && value <= 0x7e)
 }
 
+/**
+ * `lastIndexOf(byte, from)` restricted to `within` bytes before `from`. An
+ * unbounded search scans the whole dump backward on a miss only for the result
+ * to be thrown away by the same prefix limit; zero-filled regions are normal in
+ * a minidump, so that miss is the common case, not the adversarial one.
+ */
+function lastIndexOfWithin(dump: Buffer, byte: number, from: number, within: number): number {
+  const floor = Math.max(0, from - within)
+  for (let at = from; at >= floor; at -= 1) {
+    if (dump[at] === byte) {
+      return at
+    }
+  }
+  return -1
+}
+
 /** Electron 43 omits LOG_FATAL but keeps Chromium's formatted log line in memory. */
 function findEmbeddedCheckMessage(dump: Buffer): LocatedCheckMessage | undefined {
   for (const marker of CHROMIUM_LOG_MARKERS) {
@@ -117,8 +133,8 @@ function findEmbeddedCheckMessage(dump: Buffer): LocatedCheckMessage | undefined
         break
       }
       from = markerAt + marker.length
-      const start = dump.lastIndexOf(0x5b, markerAt)
-      if (start === -1 || markerAt - start > MAX_LOG_PREFIX_BYTES) {
+      const start = lastIndexOfWithin(dump, 0x5b, markerAt, MAX_LOG_PREFIX_BYTES)
+      if (start === -1) {
         continue
       }
       let end = markerAt + marker.length
@@ -170,11 +186,24 @@ function findFaultingModule(
   return undefined
 }
 
+export type MinidumpParseOptions = {
+  /**
+   * Process type the caller will accept. A dump from any other process is
+   * discarded by the caller anyway, so parsing stops at `processType` and the
+   * returned signature is deliberately partial — read only `processType` when
+   * it does not match.
+   */
+  readonly expectedProcessType?: string
+}
+
 /**
  * Parses a Crashpad minidump into the fields that make a CHECK failure
  * nameable. Returns null when the buffer is not a minidump.
  */
-export function parseMinidumpCrashSignature(dump: Buffer): MinidumpCrashSignature | null {
+export function parseMinidumpCrashSignature(
+  dump: Buffer,
+  options: MinidumpParseOptions = {}
+): MinidumpCrashSignature | null {
   if (!isMinidump(dump)) {
     return null
   }
@@ -184,6 +213,16 @@ export function parseMinidumpCrashSignature(dump: Buffer): MinidumpCrashSignatur
   const signature: {
     -readonly [K in keyof MinidumpCrashSignature]: MinidumpCrashSignature[K]
   } = { annotations }
+
+  const processType = annotations['ptype']
+  if (processType) {
+    signature.processType = processType
+  }
+  // Annotations are bounded; the scans below are not. A renderer crash would
+  // otherwise scan every fresh GPU/utility dump end to end before rejecting it.
+  if (options.expectedProcessType !== undefined && processType !== options.expectedProcessType) {
+    return signature
+  }
 
   const annotatedCheckMessage = annotations['LOG_FATAL'] ?? annotations['abort-message']
   const embeddedCheck = annotatedCheckMessage ? undefined : findEmbeddedCheckMessage(dump)
@@ -198,10 +237,6 @@ export function parseMinidumpCrashSignature(dump: Buffer): MinidumpCrashSignatur
       signature.checkLine = location.line
     }
   }
-  if (annotations['ptype']) {
-    signature.processType = annotations['ptype']
-  }
-
   const exception = findStream(view, STREAM_TYPE_EXCEPTION)
   if (exception) {
     const code = view.u32(exception.rva + EXCEPTION_CODE_OFFSET)

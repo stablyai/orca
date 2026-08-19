@@ -92,7 +92,28 @@ describe('OrcaRuntimeRpcServer', () => {
       id: 'req_list',
       ok: true,
       result: {
-        terminals: expect.arrayContaining([expect.objectContaining({ ptyId: 'pty-1' })])
+        terminals: [
+          expect.objectContaining({ ptyId: 'pty-1' }),
+          expect.objectContaining({ ptyId: 'pty-2' })
+        ]
+      }
+    })
+
+    const maxLengthPtyResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
+      id: 'req_list_max_length_pty',
+      authToken: metadata!.authToken,
+      method: 'terminal.list',
+      params: {
+        ptyId: 'p'.repeat(512)
+      }
+    })
+    expect(maxLengthPtyResponse).toMatchObject({
+      id: 'req_list_max_length_pty',
+      ok: true,
+      result: {
+        terminals: [],
+        totalCount: 0,
+        truncated: false
       }
     })
 
