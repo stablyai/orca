@@ -34,6 +34,39 @@ export function canMoveTabToNewPaneColumn(unifiedTabId: string, groupId: string)
   return canMoveTabToNewPaneColumnFromState(useAppStore.getState(), unifiedTabId, groupId)
 }
 
+type ActiveTabPaneColumnState = Pick<
+  ReturnType<typeof useAppStore.getState>,
+  'activeTabId' | 'activeWorktreeId' | 'unifiedTabsByWorktree'
+>
+
+// Why: the context menu carries the clicked tab, but a command only knows the active one.
+export function findActiveTabForPaneColumnMove(
+  state: ActiveTabPaneColumnState
+): { unifiedTabId: string; groupId: string } | null {
+  const { activeTabId, activeWorktreeId } = state
+  if (!activeTabId || !activeWorktreeId) {
+    return null
+  }
+  const tab = (state.unifiedTabsByWorktree[activeWorktreeId] ?? []).find(
+    (candidate) => candidate.id === activeTabId
+  )
+  return tab ? { unifiedTabId: tab.id, groupId: tab.groupId } : null
+}
+
+export function canMoveActiveTabToNewPaneColumn(): boolean {
+  const state = useAppStore.getState()
+  const target = findActiveTabForPaneColumnMove(state)
+  return (
+    target !== null &&
+    canMoveTabToNewPaneColumnFromState(state, target.unifiedTabId, target.groupId)
+  )
+}
+
+export function moveActiveTabToNewPaneColumn(direction: TabSplitDirection): boolean {
+  const target = findActiveTabForPaneColumnMove(useAppStore.getState())
+  return target === null ? false : moveTabToNewPaneColumn({ ...target, direction })
+}
+
 export function moveTabToNewPaneColumn(args: {
   unifiedTabId: string
   groupId: string

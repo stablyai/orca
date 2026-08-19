@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../../store'
 import type { Tab } from '../../../../shared/tab-types'
-import { canMoveTabToNewPaneColumn, moveTabToNewPaneColumn } from './tab-move-to-pane-column'
+import {
+  canMoveActiveTabToNewPaneColumn,
+  canMoveTabToNewPaneColumn,
+  findActiveTabForPaneColumnMove,
+  moveActiveTabToNewPaneColumn,
+  moveTabToNewPaneColumn
+} from './tab-move-to-pane-column'
 
 const WT = 'wt-1'
 
@@ -103,6 +109,37 @@ describe('tab-move-to-pane-column', () => {
       tabId: 'tab-b',
       targetGroupId: 'group-1',
       splitDirection: 'right'
+    })
+  })
+
+  it('resolves the active tab and its group for command-driven moves', () => {
+    useAppStore.setState({ activeTabId: 'tab-b' })
+
+    expect(findActiveTabForPaneColumnMove(useAppStore.getState())).toEqual({
+      unifiedTabId: 'tab-b',
+      groupId: 'group-1'
+    })
+    expect(canMoveActiveTabToNewPaneColumn()).toBe(true)
+  })
+
+  it('resolves nothing when the active tab belongs to another worktree', () => {
+    useAppStore.setState({ activeTabId: 'tab-from-elsewhere' })
+
+    expect(findActiveTabForPaneColumnMove(useAppStore.getState())).toBeNull()
+    expect(canMoveActiveTabToNewPaneColumn()).toBe(false)
+    expect(moveActiveTabToNewPaneColumn('right')).toBe(false)
+  })
+
+  it('moves the active tab in the requested direction', () => {
+    const dropUnifiedTab = vi.fn(() => true)
+    useAppStore.setState({ activeTabId: 'tab-b', dropUnifiedTab } as Partial<
+      ReturnType<typeof useAppStore.getState>
+    >)
+
+    expect(moveActiveTabToNewPaneColumn('down')).toBe(true)
+    expect(dropUnifiedTab).toHaveBeenCalledWith('tab-b', {
+      groupId: 'group-1',
+      splitDirection: 'down'
     })
   })
 

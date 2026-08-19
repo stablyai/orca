@@ -5,8 +5,13 @@ import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { shouldShowWorktreeHistoryControls } from '../lib/titlebar-worktree-history-controls'
 import { TOGGLE_WORKSPACE_BOARD_EVENT } from '../components/sidebar/useWorkspaceBoardPanel'
+import {
+  canMoveActiveTabToNewPaneColumn,
+  moveActiveTabToNewPaneColumn
+} from '../components/tab-bar/tab-move-to-pane-column'
 import { useAppStore } from '../store'
 import type { usePluginCommands } from '@/store/plugin-panels'
+import type { TabSplitDirection } from '../store/slices/tabs'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import type {
   KeybindingActionId,
@@ -112,6 +117,14 @@ export function createAppCommandHandlers(
     run()
     return true
   }
+  // Why: an unmovable tab (alone in its group) must not swallow the chord — fall through instead.
+  const claimMoveTabToSplit = (
+    actionId: KeybindingActionId,
+    direction: TabSplitDirection
+  ): boolean =>
+    workspaceChromeActive && !floatingWorkspaceFocused && canMoveActiveTabToNewPaneColumn()
+      ? claim(actionId, () => moveActiveTabToNewPaneColumn(direction))
+      : false
   const revealRightSidebarTab = (
     actionId: KeybindingActionId,
     tab: Parameters<AppShortcutActions['setRightSidebarTab']>[0]
@@ -179,6 +192,10 @@ export function createAppCommandHandlers(
         return claim('tab.rename', () => store.setRenamingTabId(store.activeTabId!))
       }
     ],
+    ['tab.moveToSplitRight', () => claimMoveTabToSplit('tab.moveToSplitRight', 'right')],
+    ['tab.moveToSplitLeft', () => claimMoveTabToSplit('tab.moveToSplitLeft', 'left')],
+    ['tab.moveToSplitUp', () => claimMoveTabToSplit('tab.moveToSplitUp', 'up')],
+    ['tab.moveToSplitDown', () => claimMoveTabToSplit('tab.moveToSplitDown', 'down')],
     [
       'workspace.rename',
       () => {

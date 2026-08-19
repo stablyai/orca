@@ -68,6 +68,10 @@ export type KeybindingActionId =
   | 'tab.closeAll'
   | 'tab.rename'
   | 'tab.reopenClosed'
+  | 'tab.moveToSplitRight'
+  | 'tab.moveToSplitLeft'
+  | 'tab.moveToSplitUp'
+  | 'tab.moveToSplitDown'
   | 'tab.nextSameType'
   | 'tab.previousSameType'
   | 'tab.nextAllTypes'
@@ -632,6 +636,38 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'tabs',
     searchKeywords: ['shortcut', 'tab', 'reopen', 'restore', 'closed'],
     defaultBindings: platformBindings(['Mod+Shift+T'])
+  },
+  {
+    id: 'tab.moveToSplitRight',
+    title: 'Move tab to split right',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'split', 'move', 'right'],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'tab.moveToSplitLeft',
+    title: 'Move tab to split left',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'split', 'move', 'left'],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'tab.moveToSplitUp',
+    title: 'Move tab to split up',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'split', 'move', 'up'],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'tab.moveToSplitDown',
+    title: 'Move tab to split down',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'tab', 'split', 'move', 'down'],
+    defaultBindings: platformBindings([])
   },
   {
     id: 'tab.nextSameType',
