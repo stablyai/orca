@@ -13412,6 +13412,225 @@
       "demotionRule": "Keep experimental or demote if either signal traps, returns nonzero, retains its listener/Xvfb/run-owned process identity, touches the unrelated canary, or the focused gate flakes without an identified product or harness defect."
     },
     {
+      "id": "cli-launch.macos-pre-js-abort-refusal",
+      "title": "CLI entrypoints refuse or classify before macOS can abort a second Electron main",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime-platform",
+      "layer": "cli-launch-routing",
+      "surfaces": [
+        "orca serve",
+        "orca serve --recipe-json",
+        "orca open",
+        "sandboxed and SSH invocations without a GUI login"
+      ],
+      "platforms": ["macos"],
+      "providers": ["local-daemon"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local-daemon"],
+      "coverageNotes": "A sandbox-exec seatbelt profile allows everything except mach-lookup for com.apple.lsd.* and com.apple.coreservices.launchservicesd, so a difference in outcome can only come from Launch Services being unreachable. The same harness runs against packaged 1.4.177, latest main, and the candidate. Vitest covers the refusal wiring, the EPERM ownership case, and the open classification deterministically on every platform; the sandbox scenarios are macOS-only and run locally because PR CI unit shards are Linux.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/14541",
+        "https://linear.app/stably/issue/STA-4336",
+        "https://github.com/electron/electron/issues/52815"
+      ],
+      "invariant": "When macOS Launch Services is unreachable, every CLI entrypoint that would start a GUI Electron main either reuses the runtime that already owns the userData profile, refuses with the single-instance exit code before spawning, or fails exactly once with a classified diagnostic naming _RegisterApplication — never a bare pre-JS SIGABRT a supervisor can retry.",
+      "oracle": "For each scenario, create a short-path isolated userData profile under /tmp, optionally start an owning headless runtime by direct bundle exec with --user-data-dir, snapshot ~/Library/Logs/DiagnosticReports, run the CLI entrypoint under sandbox-exec with the Launch Services mach services denied, and record the exit code, whether the attempt reported SIGABRT, whether a new crash report names _RegisterApplication, whether the spawned child reached Orca JavaScript, and the wall-clock duration. The CLI is pointed at a wrapper that execs the build under test with --user-data-dir pinned to the run profile, so a packaged arm cannot reach the developer's real profile; the wrapper sits at a <name>.app/Contents/MacOS/ path so the CLI's bundle-shape branch is unchanged. Duplicate scenarios must exit 3 with no abort; open must refuse promptly with a machine-readable cause; a fresh serve must fail nonzero once carrying the _RegisterApplication diagnostic. A duplicate scenario whose owner never published metadata is reported ungraded rather than passed. The 45-second attempt and owner-readiness bounds (three attempts, 60-second cooldown) are failure deadlines, never success conditions, and cleanup only signals PIDs holding the run's own profile path.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/serve-duplicate-refusal.test.ts src/cli/runtime/serving-profile-owner.test.ts src/cli/runtime/runtime-listener-probe.test.ts src/cli/runtime/open-launch-failure.test.ts src/cli/runtime/launch-exit-diagnostic.test.ts src/cli/runtime/status.test.ts src/cli/runtime/launch.test.ts config/scripts/run-macos-launch-abort-oracle.test.mjs --reporter=dot",
+        "node config/scripts/run-macos-launch-abort-oracle.mjs --label candidate --electron node_modules/electron/dist/Electron.app/Contents/MacOS/Electron --cli out/cli/index.js --app-root .",
+        "node config/scripts/run-macos-launch-abort-oracle.mjs --label <arm> --electron <arm-electron> --cli <arm-cli> [--app-root <arm-root>]"
+      ],
+      "testFiles": [
+        "src/cli/runtime/serve-duplicate-refusal.test.ts",
+        "src/cli/runtime/serving-profile-owner.test.ts",
+        "src/cli/runtime/runtime-listener-probe.test.ts",
+        "src/cli/runtime/open-launch-failure.test.ts",
+        "src/cli/runtime/launch-exit-diagnostic.test.ts",
+        "src/cli/runtime/status.test.ts",
+        "src/cli/runtime/launch.test.ts",
+        "config/scripts/run-macos-launch-abort-oracle.test.mjs",
+        "config/scripts/run-macos-launch-abort-oracle.mjs"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/cli/runtime/serve-duplicate-refusal.test.ts",
+          "assertions": [
+            "a served profile refuses without spawning and returns the single-instance exit code",
+            "--recipe-json takes the same refusal path as plain serve",
+            "an unowned profile still spawns"
+          ]
+        },
+        {
+          "file": "src/cli/runtime/serving-profile-owner.test.ts",
+          "assertions": [
+            "a runtime whose socket still accepts owns the profile even before it answers RPC",
+            "an endpoint that neither accepted nor refused leaves the profile owned rather than free",
+            "a stale profile whose endpoint refuses is not treated as an owner",
+            "the refusal message names the owning pid and how to inspect it"
+          ]
+        },
+        {
+          "file": "src/cli/runtime/runtime-listener-probe.test.ts",
+          "assertions": [
+            "a listening but silent runtime reads as accepting",
+            "an endpoint a killed owner left on disk reads as not-listening",
+            "an endpoint that could not be reached, or that ran out of time, reads as unproven"
+          ]
+        },
+        {
+          "file": "src/cli/runtime/open-launch-failure.test.ts",
+          "assertions": [
+            "a launch that exits reports the launch failure instead of the window timeout",
+            "a healthy launch still waits out its window budget"
+          ]
+        },
+        {
+          "file": "src/cli/runtime/launch-exit-diagnostic.test.ts",
+          "assertions": [
+            "the macOS abort diagnostic names _RegisterApplication and states that retrying cannot help",
+            "the crash-report hint follows the executable name so packaged and dev builds point at the right .ips",
+            "non-macOS platforms keep their existing signal wording"
+          ]
+        },
+        {
+          "file": "src/cli/runtime/status.test.ts",
+          "assertions": [
+            "an unreachable runtime owned by another user counts as running rather than stale"
+          ]
+        },
+        {
+          "file": "src/cli/runtime/launch.test.ts",
+          "assertions": [
+            "serve still hands off to the packaged executable when no runtime owns the profile"
+          ]
+        },
+        {
+          "file": "config/scripts/run-macos-launch-abort-oracle.test.mjs",
+          "assertions": [
+            "the pre-fix behaviour is graded red",
+            "a duplicate scenario whose owner never came up is ungraded, not failed",
+            "the seatbelt profile denies only the Launch Services mach services"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-15",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/serve-duplicate-refusal.test.ts src/cli/runtime/serving-profile-owner.test.ts src/cli/runtime/runtime-listener-probe.test.ts src/cli/runtime/open-launch-failure.test.ts src/cli/runtime/launch-exit-diagnostic.test.ts src/cli/runtime/status.test.ts src/cli/runtime/launch.test.ts config/scripts/run-macos-launch-abort-oracle.test.mjs --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 3,
+          "summary": "The refusal wiring, owner classification, open failure classification, diagnostic wording, EPERM ownership, and oracle grading contracts all passed."
+        },
+        {
+          "date": "2026-08-15",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node config/scripts/run-macos-launch-abort-oracle.mjs --label candidate --electron node_modules/electron/dist/Electron.app/Contents/MacOS/Electron --cli out/cli/index.js --app-root .",
+          "result": "passed",
+          "durationSeconds": 140,
+          "summary": "All six scenarios passed on the candidate: duplicate serve, duplicate serve with a reachable owner, and --recipe-json each exited 3 in under 150ms without spawning, open refused in 604ms with a machine-readable cause, and a fresh sandboxed serve failed once with the _RegisterApplication diagnostic."
+        },
+        {
+          "date": "2026-08-15",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node config/scripts/run-macos-launch-abort-oracle.mjs --label <arm> --electron <arm-electron> --cli <arm-cli> [--app-root <arm-root>]",
+          "result": "failed",
+          "durationSeconds": 120,
+          "summary": "Ran as --label main-92fb2760 against a worktree at latest main. Latest main 92fb276040, which already contains PR #12212, failed four of six: duplicate serve and --recipe-json each launched a second Electron main that died on SIGABRT with exit 1, open sat 15231ms with no machine-readable cause, and a fresh sandboxed serve aborted with no diagnostic. This is the intended red arm."
+        },
+        {
+          "date": "2026-08-15",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node config/scripts/run-macos-launch-abort-oracle.mjs --label <arm> --electron <arm-electron> --cli <arm-cli> [--app-root <arm-root>]",
+          "result": "failed",
+          "durationSeconds": 120,
+          "summary": "Ran as --label packaged-1.4.177 against the extracted 1.4.177 bundle with no --app-root. The signed and notarized shipped 1.4.177 build failed the same four scenarios as main, and its open-duplicate run also aborted a second Electron main. Confirms the defect is in released software, not only in a source build."
+        },
+        {
+          "date": "2026-08-15",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node config/scripts/run-macos-launch-abort-oracle.mjs --label <arm> --electron <arm-electron> --cli <arm-cli> [--app-root <arm-root>]",
+          "result": "failed",
+          "durationSeconds": 120,
+          "summary": "Ran as --label revert-disabled against a worktree at the fix commit with `git revert --no-commit` applied. That build failed the same four scenarios as main, so the green arm is attributable to this change and not to the harness or the machine."
+        },
+        {
+          "date": "2026-08-15",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node config/scripts/run-macos-launch-abort-oracle.mjs --label <arm> --electron <arm-electron> --cli <arm-cli> [--app-root <arm-root>]",
+          "result": "passed",
+          "durationSeconds": 140,
+          "summary": "Ran as --label candidate-w3 after the refusal message gained the runtime metadata path, re-confirming 6/6 green at the final branch head so the wording change is covered by the oracle and not only by unit assertions."
+        },
+        {
+          "date": "2026-08-15",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node config/scripts/run-macos-launch-abort-oracle.mjs --label <arm> --electron <arm-electron> --cli <arm-cli> [--app-root <arm-root>]",
+          "result": "passed",
+          "durationSeconds": 140,
+          "summary": "Ran as --label candidate-w9 at the final branch head, after ownership moved to a definitive-refusal rule, after the merge of main, and after the probe began rejecting a malformed endpoint. 6/6 green: duplicate serve 98ms, duplicate serve with a reachable owner 88ms and --recipe-json 96ms all exit 3 without spawning, open classified in 352ms, and a fresh sandboxed serve failed once carrying the diagnostic."
+        },
+        {
+          "date": "2026-08-15",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node config/scripts/run-macos-launch-abort-oracle.mjs --label <arm> --electron <arm-electron> --cli <arm-cli> [--app-root <arm-root>]",
+          "result": "failed",
+          "durationSeconds": 120,
+          "summary": "Ran as --label disabled-c0a7754 against a worktree built at main c0a775454a, the branch's merge base. Because the branch diff against that commit is exactly this change, the same build is both the refreshed main arm and the fix-disabled arm. It failed the same four scenarios: duplicate serve 537ms and --recipe-json 404ms each launched a second Electron main that aborted with exit 1, open sat 15236ms with no machine-readable cause, and a fresh sandboxed serve aborted with no diagnostic. The two unsandboxed scenarios stayed green, as on every arm."
+        },
+        {
+          "date": "2026-08-15",
+          "runner": "local",
+          "platform": "macos",
+          "command": "node config/scripts/run-macos-launch-abort-oracle.mjs --label <arm> --electron <arm-electron> --cli <arm-cli> [--app-root <arm-root>]",
+          "result": "passed",
+          "durationSeconds": 140,
+          "summary": "Ran as --label candidate-w10 at the final branch head, back to back with the disabled-c0a7754 arm on the same machine. 6/6 green: duplicate serve 127ms, duplicate serve with a reachable owner 88ms and --recipe-json 96ms all exit 3 without spawning, open classified in 613ms, and a fresh sandboxed serve failed once carrying the diagnostic."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 240,
+        "scope": "six sandboxed scenarios, two of which intentionally run a healthy serve to its bound"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "The harness is new. The only observed instability is an owning runtime that occasionally fails to publish metadata — seen once in eight runs, when the machine's Launch Services was already wedged before the run started and all three owner attempts stalled before the single-instance lock. The oracle reported every affected scenario as ungraded rather than as a product failure, and the immediate re-run was 6/6 green."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "One byte-identical harness graded four arms. Packaged 1.4.177 (archive SHA-256 e6689a30d627131c6d6b7585351a2650b28469472370aa63a574f1e73b1e6826, signed and notarized): 4/6 red. Latest main 92fb276040, which already contains PR #12212: 4/6 red — duplicate serve and --recipe-json each aborted a second Electron main, open sat 15231ms with no machine-readable cause, and a fresh serve aborted with no diagnostic. The candidate with the fix reverted: the same 4/6 red, so the difference is the change and not the harness or the machine. The candidate: 6/6 green. All arms stayed green on the two unsandboxed scenarios, proving the in-process single-instance rule is correct but sits behind the boundary that aborts."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The product change adds one local status read on the `orca serve` path before spawning — the same read `orca status` already performs. It costs one synchronous metadata read, and only when that metadata names a transport does it open the existing local RPC socket with a 1s idle timeout, falling back to a single process.kill(pid, 0). That timeout is refreshed by keepalive frames, as it is for every other CLI command, so the bound is 1s of silence rather than 1s absolute. When the RPC does not answer, one further connect to the same local endpoint runs under a hard 250ms cap and is closed the moment it settles; that probe never runs on the common reachable path, and every outcome that frees the profile was measured under 1ms, so the cap is a ceiling rather than a latency the user pays. No polling loop, subprocess, provider fanout, renderer work, retained payload, or recurring hot-path work is added; the only new listener is one `once('exit')` on the already-spawned detached child. `orca open` gets strictly faster on the direct-exec path by failing at the first launch exit instead of waiting out its 15s window — 604ms against 15231ms measured."
+      },
+      "promotionCriteria": [
+        "Collect 20 consecutive local macOS oracle runs with all six scenarios green and no ungraded owner.",
+        "Add a macOS CI lane that runs the sandboxed scenarios so the gate does not depend on a developer machine.",
+        "Keep the vitest wiring assertions green on every platform shard."
+      ],
+      "knownGaps": [
+        "PR CI unit shards run on Linux, so the sandbox-exec scenarios are local-only until a macOS lane exists.",
+        "The open-duplicate scenario reaches either runtime_open_failed or desktop_activation_blocked depending on whether the owning headless runtime already reports a blocked desktop window; the runtime_open_failed path is pinned deterministically by open-launch-failure.test.ts instead.",
+        "The packaged arm is profile-safe only because the harness pins --user-data-dir through its exec wrapper; a future scenario that spawns Electron by any other route must re-establish that isolation before it may run packaged.",
+        "The CLI refusal reads an owner that already exists; two `orca serve` invocations racing on an ownerless profile can still both spawn, and the second is then rejected by the in-process single-instance lock — which is exactly the pre-JS boundary this gate is about. Narrowing that window needs a lock taken before the exec, not a status read, and is not covered here.",
+        "Ownership is decided by what the published endpoint proves, never by the recorded pid, because pid recycling would otherwise let a crashed runtime's metadata refuse serve forever; the pid only names the owner in the message. A profile is treated as free only when the endpoint disowns itself definitively — ENOENT (a runtime that unlinked its socket on shutdown) or ECONNREFUSED (a path a killed runtime left behind), both measured under 1ms locally. An accepted connect is an owner, and so is any other outcome, including the 250ms cap expiring: those prove nothing, and guessing free is what spawns the second main that aborts pre-JS. The residual gap is the reverse error — an endpoint held by something that is not a live Orca runtime refuses serve until the user stops it or deletes orca-runtime.json, which the refusal message names.",
+        "`orca open` on a packaged macOS build launches through /usr/bin/open, which exits 0 as soon as Launch Services accepts the request. The new exit watcher therefore classifies launches on the direct-exec path (ORCA_APP_EXECUTABLE, dev, and this oracle) but cannot observe an Electron abort that happens after /usr/bin/open returns; that case still falls back to the 15s no-window timeout. Verified separately that a Launch-Services-denied seatbelt does not make /usr/bin/open fail, because the app it requests is launched outside the caller's sandbox.",
+        "orca-runtime.json is parsed without validation, so the probe requires a non-blank string endpoint and treats anything else as an unowned profile: a missing or blank endpoint makes createConnection throw synchronously, and a numeric one is read as a TCP port that would dial loopback and could be answered by a process that is not Orca. Junk metadata therefore frees the profile rather than refusing forever, and the in-process single-instance rule remains the backstop for it.",
+        "The harness covers macOS Launch Services unavailability and does not replace Linux headless, Windows, updater, or SSH launch coverage."
+      ],
+      "demotionRule": "Demote if any entrypoint reaches NSApplication against a profile that already has an owner, if a fresh failure loses its classified diagnostic, if open regresses to an unclassified timeout, or if the focused vitest command flakes without an identified product or harness defect."
+    },
+    {
       "id": "ssh-managed-hooks.node18-runtime-compatibility",
       "title": "SSH managed-hook companions load and install hooks on Node 18",
       "maturity": "experimental",

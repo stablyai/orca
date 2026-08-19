@@ -106,7 +106,10 @@ function isProcessRunning(pid: number | null | undefined): boolean {
   try {
     process.kill(pid, 0)
     return true
-  } catch {
-    return false
+  } catch (error) {
+    const failure = error as NodeJS.ErrnoException | null
+    // Why: only ESRCH proves the pid is gone (same rule as runtime-metadata-ownership-watch);
+    // a pid the OS rejects outright throws without an errno and is no evidence of an owner.
+    return typeof failure?.errno === 'number' && failure.code !== 'ESRCH'
   }
 }

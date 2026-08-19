@@ -7,6 +7,7 @@ import {
 } from '../../shared/orchestration-rpc-contract'
 import { parsePairingCode, type PairingOffer } from '../../shared/pairing'
 import { launchOrcaApp } from './launch'
+import { openLaunchExitError } from './launch-exit-diagnostic'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
 import { getCliStatus, resolveDesktopWindowStatus } from './status'
 import { sendRequest } from './transport'
@@ -223,7 +224,7 @@ export class RuntimeClient {
     if (initial.result.app.desktopWindowStatus === 'blocked') {
       throwDesktopActivationBlocked()
     }
-    launchOrcaApp()
+    const launch = launchOrcaApp()
     if (initial.result.app.desktopWindowStatus === 'available') {
       return initial
     }
@@ -236,6 +237,12 @@ export class RuntimeClient {
       }
       if (status.result.app.desktopWindowStatus === 'available') {
         return status
+      }
+      // Why: a macOS pre-JS abort kills the launch in ~200ms; waiting out the
+      // full timeout would report "no window" instead of the real cause.
+      const failedExit = launch.failedExit()
+      if (failedExit) {
+        throw openLaunchExitError(failedExit)
       }
       await delay(250)
     }

@@ -1,6 +1,10 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { serveSignalExitError } from './serve-signal-exit-diagnostic'
+import {
+  macCrashReportGlob,
+  openLaunchExitError,
+  serveSignalExitError
+} from './launch-exit-diagnostic'
 import { superviseForegroundServe } from './serve-update-supervisor'
 import { RuntimeClientError } from './types'
 
@@ -41,11 +45,16 @@ describe('serveSignalExitError', () => {
     expect(error).toBeInstanceOf(RuntimeClientError)
     expect(error.code).toBe('runtime_serve_failed')
     expect(error.message).toContain('aborted with SIGABRT on macOS')
-    expect(error.message).toContain('macOS window server')
+    // Why: naming the aborting frame is what makes the report searchable against
+    // electron/electron#52815 instead of a generic "window server" guess.
+    expect(error.message).toContain('_RegisterApplication')
+    expect(error.message).toContain('before any Orca JavaScript ran')
+    expect(error.message).toContain('Retrying cannot help')
     expect(error.data).toMatchObject({
       nextSteps: [
         expect.stringContaining('macOS desktop login'),
-        expect.stringContaining('~/Library/Logs/DiagnosticReports/Orca-*.ips')
+        expect.stringContaining('com.apple.lsd'),
+        expect.stringContaining('_RegisterApplication')
       ]
     })
   })
@@ -95,5 +104,50 @@ describe('superviseForegroundServe signal exits', () => {
 
     await expect(superviseUntilExit(0, null)).resolves.toBe(0)
     await expect(superviseUntilExit(7, null)).resolves.toBe(7)
+  })
+})
+
+describe('macCrashReportGlob', () => {
+  it('names the report after the binary that actually aborts', () => {
+    expect(macCrashReportGlob('/Applications/Orca.app/Contents/MacOS/Orca')).toBe(
+      '~/Library/Logs/DiagnosticReports/Orca-*.ips'
+    )
+    // Why: a source/dev run execs Electron, so pointing at Orca-*.ips sends
+    // people looking for a file macOS never wrote.
+    expect(
+      macCrashReportGlob('/repo/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron')
+    ).toBe('~/Library/Logs/DiagnosticReports/Electron-*.ips')
+  })
+})
+
+describe('openLaunchExitError', () => {
+  it('explains the pre-JS abort instead of blaming a missing window', () => {
+    const error = openLaunchExitError({ code: null, signal: 'SIGABRT' }, 'darwin')
+
+    expect(error.code).toBe('runtime_open_failed')
+    expect(error.message).toContain('_RegisterApplication')
+    expect(error.message).toContain('Retrying cannot help')
+  })
+
+  it('reports a command that never started without the abort guidance', () => {
+    // Why: nothing ran, so Launch Services and crash reports are the wrong
+    // place to send the user — the executable path is what they must fix.
+    const error = openLaunchExitError(
+      { code: null, signal: null, spawnError: 'spawn /missing/Orca ENOENT' },
+      'darwin'
+    )
+
+    expect(error.code).toBe('runtime_open_failed')
+    expect(error.message).toBe('Could not start Orca: spawn /missing/Orca ENOENT')
+    expect(error.message).not.toContain('_RegisterApplication')
+  })
+
+  it('reports a plain failed launch without claiming the macOS cause', () => {
+    expect(openLaunchExitError({ code: 1, signal: null }, 'darwin').message).toBe(
+      'Orca exited with exit code 1 while starting up, before a desktop window appeared.'
+    )
+    expect(openLaunchExitError({ code: null, signal: 'SIGABRT' }, 'linux').message).toBe(
+      'Orca exited via SIGABRT while starting up, before a desktop window appeared.'
+    )
   })
 })

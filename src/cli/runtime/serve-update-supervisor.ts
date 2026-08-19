@@ -6,7 +6,7 @@ import {
   parseServeUpdateHandoffState,
   type ServeUpdateHandoffState
 } from '../../shared/serve-update-handoff'
-import { serveSignalExitError } from './serve-signal-exit-diagnostic'
+import { serveSignalExitError } from './launch-exit-diagnostic'
 import { waitForMacBundleVersion } from './mac-app-update-bundle'
 
 export const SERVE_REPLACEMENT_READY_TIMEOUT_MS = 60_000
