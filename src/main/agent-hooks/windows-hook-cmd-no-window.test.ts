@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { spawn, spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { wrapWindowsHookCommand } from './installer-utils'
 import { getWindowsPowerShellExecutablePath } from './windows-powershell-hook-launcher'
 
 const GROK_MIN_HOOK_STDIN = '{"hook_event_name":"PreToolUse"}\n'
-const titledWindowSampleMs = 5_000
+const titledWindowSamplerCommand =
+  '$seen = New-Object System.Collections.Generic.HashSet[string]; while ($true) { Get-Process -Name cmd,conhost -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle } | ForEach-Object { $line = "$($_.Id)|$($_.ProcessName)|$($_.MainWindowTitle)"; if ($seen.Add($line)) { $line } }; Start-Sleep -Milliseconds 40 }'
 
 let tmpDir: string
 
@@ -120,6 +121,52 @@ describe('Windows .cmd hook CreateNoWindow launcher', () => {
     }
   )
 
+  it.skipIf(process.platform !== 'win32')(
+    'preserves literal exclamation marks in .cmd output and percent-expanded env values',
+    () => {
+      const scriptPath = join(tmpDir, 'orca-14828-bang.cmd')
+      writeFileSync(
+        scriptPath,
+        '@echo off\r\necho bang-!foo!bar\r\necho %ORCA_BANG_TEST%\r\nexit /b 0\r\n',
+        'utf-8'
+      )
+      const command = wrapWindowsHookCommand(scriptPath)
+      const result = spawnSync(
+        getWindowsPowerShellExecutablePath(),
+        ['-NoProfile', '-NonInteractive', '-Command', `${command}; exit $LASTEXITCODE`],
+        {
+          encoding: 'utf8',
+          input: GROK_MIN_HOOK_STDIN,
+          windowsHide: false,
+          timeout: 20_000,
+          env: { ...process.env, ORCA_BANG_TEST: 'hello!world!' }
+        }
+      )
+
+      expect(result.error).toBeUndefined()
+      expect(result.status).toBe(0)
+      expect(String(result.stdout ?? '').replaceAll('\r\n', '\n')).toContain('bang-!foo!bar')
+      expect(String(result.stdout ?? '').replaceAll('\r\n', '\n')).toContain('hello!world!')
+    }
+  )
+
+  it.skipIf(process.platform !== 'win32')(
+    'executes a script path containing a literal exclamation mark',
+    () => {
+      const scriptDir = join(tmpDir, 'home with ! bang', '.orca', 'agent-hooks')
+      mkdirSync(scriptDir, { recursive: true })
+      const scriptPath = join(scriptDir, 'codex-hook.cmd')
+      writeFileSync(scriptPath, '@echo off\r\necho path-bang-ok\r\nexit /b 7\r\n', 'utf-8')
+
+      const result = spawnSync('cmd.exe', ['/d', '/c', wrapWindowsHookCommand(scriptPath)], {
+        encoding: 'utf8'
+      })
+
+      expect(result.status).toBe(7)
+      expect(String(result.stdout ?? '').replaceAll('\r\n', '\n')).toContain('path-bang-ok')
+    }
+  )
+
   it.skipIf(
     process.platform !== 'win32' || Boolean(process.env.CI) || Boolean(process.env.GITHUB_ACTIONS)
   )('does not open a titled cmd/conhost window under Grok-style powershell', async () => {
@@ -139,7 +186,7 @@ describe('Windows .cmd hook CreateNoWindow launcher', () => {
         '-WindowStyle',
         'Hidden',
         '-Command',
-        `$deadline = (Get-Date).AddMilliseconds(${titledWindowSampleMs}); $found = New-Object System.Collections.Generic.HashSet[string]; while ((Get-Date) -lt $deadline) { Get-Process -Name cmd,conhost -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle } | ForEach-Object { [void]$found.Add("$($_.Id)|$($_.ProcessName)|$($_.MainWindowTitle)") }; Start-Sleep -Milliseconds 40 }; [string]::Join([Environment]::NewLine, $found)`
+        titledWindowSamplerCommand
       ],
       { windowsHide: true }
     )
@@ -158,10 +205,15 @@ describe('Windows .cmd hook CreateNoWindow launcher', () => {
 
     const hookOutput = collectProcessOutput(hook)
     const samplerOutput = collectProcessOutput(sampler)
-    const [hookCode, hookStdout, samplerStdout] = await Promise.all([
+    const [hookCode, hookStdout] = await Promise.all([
       hookOutput.close,
       hookOutput.stdout,
+      hookOutput.stderr
+    ])
+    sampler.kill()
+    const [samplerStdout] = await Promise.all([
       samplerOutput.stdout,
+      samplerOutput.stderr,
       samplerOutput.close
     ])
     const sampled = samplerStdout

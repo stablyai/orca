@@ -33,6 +33,7 @@ function quotePowerShellSingleQuoted(value: string): string {
 // Why: `& .cmd` allocates a new console when Hidden PowerShell has none to inherit (#14828).
 // Why: relay stdout/stderr so Claude-hooks-compat consumers still see hook JSON (#14818).
 // Why: CreateProcess needs a backslash cmd.exe path; delayed expansion keeps spaces/^/% as data (#6078).
+// Why: `/v:on` is only for that path indirection; a nested `/v:off` cmd runs the hook so literal `!` survives.
 export function buildWindowsNoWindowCmdHookInvocation(quotedScriptPath: string): string {
   const quotedCmd = quotePowerShellSingleQuoted(
     getWindowsSystem32Path('cmd.exe').replaceAll('/', '\\')
@@ -40,12 +41,14 @@ export function buildWindowsNoWindowCmdHookInvocation(quotedScriptPath: string):
   return [
     '$psi = [System.Diagnostics.ProcessStartInfo]::new()',
     `$psi.FileName = ${quotedCmd}`,
-    `$psi.Arguments = '/d /s /v:on /c ""!ORCA_WINDOWS_HOOK_CMD!""'`,
+    `$psi.Arguments = '/d /s /v:on /c ""' + ${quotedCmd} + '" /v:off /d /s /c ""!ORCA_WINDOWS_HOOK_CMD!"""'`,
     '$psi.UseShellExecute = $false',
     '$psi.CreateNoWindow = $true',
     '$psi.RedirectStandardInput = $true',
     '$psi.RedirectStandardOutput = $true',
     '$psi.RedirectStandardError = $true',
+    '$psi.StandardOutputEncoding = [Console]::OutputEncoding',
+    '$psi.StandardErrorEncoding = [Console]::OutputEncoding',
     `$psi.EnvironmentVariables['ORCA_WINDOWS_HOOK_CMD'] = ${quotedScriptPath}`,
     '$stdin = [Console]::In.ReadToEnd()',
     '$p = [System.Diagnostics.Process]::Start($psi)',
