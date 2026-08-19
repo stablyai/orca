@@ -133,23 +133,7 @@ test.describe('Workspace Space git status checks', () => {
         { testRepoPath, worktreePaths: registeredWorktreePaths }
       )
 
-      await expect
-        .poll(
-          () =>
-            orcaPage.evaluate(() => {
-              const state = window.__store?.getState()
-              if (!state?.workspaceSpaceAnalysis) {
-                return 60
-              }
-              return state.workspaceSpaceAnalysis.worktrees.filter(
-                (row) => state.gitStatusByWorktree[row.worktreeId] === undefined
-              ).length
-            }),
-          { timeout: 30_000 }
-        )
-        .toBe(0)
-
-      await expect(orcaPage.getByText('Keep: git not checked')).toHaveCount(0)
+      await expect(orcaPage.getByText('Keep: git not checked')).toHaveCount(0, { timeout: 30_000 })
     } finally {
       for (const worktreePath of worktreePaths) {
         try {

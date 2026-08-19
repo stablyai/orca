@@ -19,6 +19,10 @@ import type {
 
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-retired-worker-'))
 const lifecycleLedgerPath = path.join(fakeCliDir, 'codex-lifecycle.jsonl')
+export const completedWorkerFakeCodexCommand = path.join(
+  fakeCliDir,
+  process.platform === 'win32' ? 'codex.cmd' : 'codex'
+)
 const fakeCodexSource = `
 const { appendFileSync } = require('node:fs')
 const ledger = process.env.ORCA_E2E_CODEX_LIFECYCLE_LEDGER
@@ -37,7 +41,8 @@ process.stdin.on('data', (chunk) => {
     append({ event: 'normal-exit' })
     process.exit(0)
   }
-  if (input.includes('\\r')) process.stdout.write('ACK\\n')
+  // Mirror Codex's post-paste cursor marker so settled prompt delivery can finish.
+  if (input.includes('\\r')) process.stdout.write('\\x1b[?25hACK\\n')
 })
 process.stdin.resume()
 setInterval(() => {}, 60_000)

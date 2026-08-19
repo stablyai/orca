@@ -34,9 +34,11 @@ import {
 } from './helpers/store'
 import { clickFileInExplorer, openFileExplorer } from './helpers/file-explorer'
 
+type CreatedWorktreeTarget = { id: string; executionHostId: string | null }
+
 async function createIsolatedWorktree(
   page: Parameters<typeof getActiveWorktreeId>[0]
-): Promise<string> {
+): Promise<CreatedWorktreeTarget> {
   const name = `e2e-lifecycle-${Date.now()}`
   return page.evaluate(async (worktreeName) => {
     const store = window.__store
@@ -59,32 +61,32 @@ async function createIsolatedWorktree(
 
     const result = await state.createWorktree(activeWorktree.repoId, worktreeName)
     await state.fetchWorktrees(activeWorktree.repoId)
-    return result.worktree.id
+    return { id: result.worktree.id, executionHostId: result.worktree.hostId ?? null }
   }, name)
 }
 
 async function removeWorktreeViaStore(
   page: Parameters<typeof getActiveWorktreeId>[0],
-  worktreeId: string
+  target: CreatedWorktreeTarget
 ): Promise<{ ok: boolean; error?: string }> {
-  return page.evaluate(async (id) => {
+  return page.evaluate(async (removalTarget) => {
     const store = window.__store
     if (!store) {
       return { ok: false as const, error: 'store unavailable' }
     }
 
-    const result = await store.getState().removeWorktree(id, true)
+    const result = await store.getState().removeWorktree(removalTarget, true)
     return result
-  }, worktreeId)
+  }, target)
 }
 
 test.describe('Worktree Lifecycle', () => {
   // Why: `createIsolatedWorktree` materializes a real on-disk worktree in the
   // worker-scoped seed repo. If a mid-test assertion fails, that branch +
   // working directory leaks across subsequent tests in the same worker. Track
-  // the ID here and best-effort remove it in afterEach so fixture state stays
+  // the removal target here and best-effort remove it in afterEach so fixture state stays
   // clean even when a test aborts before its own cleanup runs.
-  let createdWorktreeId: string | null = null
+  let createdWorktreeTarget: CreatedWorktreeTarget | null = null
 
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
@@ -93,19 +95,19 @@ test.describe('Worktree Lifecycle', () => {
   })
 
   test.afterEach(async ({ orcaPage }) => {
-    if (!createdWorktreeId) {
+    if (!createdWorktreeTarget) {
       return
     }
-    const idToClean = createdWorktreeId
-    createdWorktreeId = null
+    const targetToClean = createdWorktreeTarget
+    createdWorktreeTarget = null
     await orcaPage
-      .evaluate(async (id) => {
+      .evaluate(async (target) => {
         try {
-          await window.__store?.getState().removeWorktree(id, true)
+          await window.__store?.getState().removeWorktree(target, true)
         } catch {
           /* best-effort cleanup */
         }
-      }, idToClean)
+      }, targetToClean)
       .catch(() => undefined)
   })
 
@@ -118,8 +120,8 @@ test.describe('Worktree Lifecycle', () => {
   }) => {
     const originalWorktreeId = await waitForActiveWorktree(orcaPage)
 
-    createdWorktreeId = await createIsolatedWorktree(orcaPage)
-    const newWorktreeId = createdWorktreeId
+    createdWorktreeTarget = await createIsolatedWorktree(orcaPage)
+    const newWorktreeId = createdWorktreeTarget.id
     await switchToWorktree(orcaPage, newWorktreeId)
     await expect
       .poll(async () => getActiveWorktreeId(orcaPage), { timeout: 10_000 })
@@ -158,10 +160,10 @@ test.describe('Worktree Lifecycle', () => {
       .poll(async () => getActiveWorktreeId(orcaPage), { timeout: 10_000 })
       .toBe(originalWorktreeId)
 
-    const result = await removeWorktreeViaStore(orcaPage, newWorktreeId)
+    const result = await removeWorktreeViaStore(orcaPage, createdWorktreeTarget)
     expect(result.ok).toBe(true)
     // Successful removal — afterEach hook no longer needs to clean this up.
-    createdWorktreeId = null
+    createdWorktreeTarget = null
 
     // Tabs / open files / browser tabs keyed by the removed worktree must all
     // be dropped. A regression that leaves any of these behind will show up
