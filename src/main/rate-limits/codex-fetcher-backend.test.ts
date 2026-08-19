@@ -192,6 +192,70 @@ describe('Codex backend rate-limit requests', () => {
     ).resolves.toMatchObject({ monthly: { usedPercent: 65, windowMinutes: 43_200 } })
   })
 
+  it.each([
+    {
+      name: 'without a plan label',
+      payload: {
+        rate_limit: null,
+        spend_control: { individual_limit: { used_percent: 65, remaining_percent: 35 } }
+      }
+    },
+    {
+      name: 'with a non-Business plan label',
+      payload: {
+        plan_type: 'plus',
+        rate_limit: null,
+        spend_control: { individual_limit: { used_percent: 65, remaining_percent: 35 } }
+      }
+    }
+  ])('maps a usable individual limit $name', async ({ payload }) => {
+    readFileMock.mockResolvedValue(
+      JSON.stringify({ tokens: { access_token: 'access-token', account_id: 'account-id' } })
+    )
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => payload
+    } as Response)
+
+    await expect(
+      fetchCodexRateLimits({ codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex' })
+    ).resolves.toMatchObject({ monthly: { usedPercent: 65, windowMinutes: 43_200 }, status: 'ok' })
+  })
+
+  it.each([
+    {
+      name: 'a malformed numeric field',
+      individual_limit: { limit: 'not-a-number', used: '1' }
+    },
+    {
+      name: 'a zero limit',
+      individual_limit: { limit: 0, used: 0 }
+    }
+  ])('rejects $name without spawning a fallback', async ({ individual_limit }) => {
+    readFileMock.mockResolvedValue(
+      JSON.stringify({ tokens: { access_token: 'access-token', account_id: 'account-id' } })
+    )
+    childSpawnMock.mockImplementationOnce(() => {
+      throw new Error('RPC fallback')
+    })
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        plan_type: 'business',
+        rate_limit: null,
+        spend_control: { individual_limit }
+      })
+    } as Response)
+
+    await expect(
+      fetchCodexRateLimits({
+        codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex',
+        allowPtyFallback: false
+      })
+    ).resolves.toMatchObject({ status: 'error', session: null, weekly: null })
+    expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
   it('accepts a standard backend shape without plan_type and rejects an empty shape', async () => {
     readFileMock.mockResolvedValue(
       JSON.stringify({ tokens: { access_token: 'access-token', account_id: 'account-id' } })

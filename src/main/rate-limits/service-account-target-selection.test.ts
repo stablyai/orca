@@ -470,6 +470,43 @@ describe('RateLimitService', () => {
     )
   })
 
+  it('caches an outgoing monthly-only Codex account so the switcher keeps its usage preview', async () => {
+    const service = new RateLimitService()
+    service.setInactiveCodexAccountsResolver(() => [
+      inactiveCodexAccount('account-monthly', '/tmp/account-monthly/home')
+    ])
+
+    const monthlyOnly: ProviderRateLimits = {
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      monthly: { usedPercent: 65, windowMinutes: 43_200, resetsAt: null, resetDescription: null },
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits)
+      .mockResolvedValueOnce(monthlyOnly)
+      .mockResolvedValueOnce(okProvider('codex', 40, Date.now()))
+
+    await service.refresh()
+    await service.refreshForCodexAccountChange('account-monthly')
+
+    expect(service.getState().inactiveCodexAccounts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          accountId: 'account-monthly',
+          rateLimits: expect.objectContaining({
+            session: null,
+            weekly: null,
+            monthly: expect.objectContaining({ usedPercent: 65 })
+          })
+        })
+      ])
+    )
+  })
+
   it('does not cache an outgoing Codex account that has no usage windows', async () => {
     const service = new RateLimitService()
     service.setInactiveCodexAccountsResolver(() => [

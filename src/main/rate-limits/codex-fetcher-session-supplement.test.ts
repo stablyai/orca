@@ -1,15 +1,16 @@
 import { EventEmitter } from 'node:events'
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 
-const { childSpawnMock, readFileMock } = vi.hoisted(() => ({
+const { childSpawnMock, ptySpawnMock, readFileMock } = vi.hoisted(() => ({
   childSpawnMock: vi.fn(),
+  ptySpawnMock: vi.fn(),
   readFileMock: vi.fn()
 }))
 
 vi.mock('node:child_process', () => ({ spawn: childSpawnMock }))
 vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
 vi.mock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
-vi.mock('node-pty', () => ({ spawn: vi.fn() }))
+vi.mock('node-pty', () => ({ spawn: ptySpawnMock }))
 vi.mock('./codex-auth-presence', () => ({
   probeCodexAuthPresence: vi.fn(async () => 'present')
 }))
@@ -200,6 +201,40 @@ describe('Codex backend session supplement credits', () => {
     })
   })
 
+  it('falls back to remaining percent when direct usage is absent', async () => {
+    await expect(
+      fetchWeeklyOnly(
+        undefined,
+        {
+          planType: 'business',
+          individualLimit: { remainingPercent: 20 }
+        },
+        {}
+      )
+    ).resolves.toMatchObject({ monthly: { usedPercent: 80, windowMinutes: 43_200 } })
+    expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).not.toContain(
+      'https://chatgpt.com/backend-api/wham/usage'
+    )
+  })
+
+  it('rejects a negative used amount even when a direct percentage is present', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({})
+    } as Response)
+
+    await expect(
+      fetchWeeklyOnly(
+        undefined,
+        {
+          planType: 'business',
+          individualLimit: { used: -1, usedPercent: 20 }
+        },
+        {}
+      )
+    ).resolves.toMatchObject({ monthly: null })
+  })
+
   it('clamps finite over-cap usage instead of discarding the monthly window', async () => {
     await expect(
       fetchWeeklyOnly(
@@ -315,6 +350,46 @@ describe('Codex backend session supplement credits', () => {
     await expect(resultPromise).resolves.toMatchObject({
       session: null,
       weekly: { usedPercent: 22, windowMinutes: 10_080 },
+      status: 'ok'
+    })
+    expect(
+      vi
+        .mocked(fetch)
+        .mock.calls.filter(([url]) => url === 'https://chatgpt.com/backend-api/wham/usage')
+    ).toHaveLength(1)
+  })
+
+  it('uses PTY after an RPC error without retrying the WSL backend', async () => {
+    vi.mocked(fetch).mockRejectedValueOnce(new Error('backend unavailable'))
+    const child = makeRpcChild()
+    child.stdin.write.mockImplementation(() => {})
+    childSpawnMock.mockReturnValue(child)
+
+    let onDataHandler: ((data: string) => void) | undefined
+    ptySpawnMock.mockReturnValue({
+      onData: vi.fn((callback: (data: string) => void) => {
+        onDataHandler = callback
+        return { dispose: vi.fn() }
+      }),
+      onExit: vi.fn(() => ({ dispose: vi.fn() })),
+      write: vi.fn(),
+      kill: vi.fn()
+    })
+
+    const resultPromise = fetchCodexRateLimits({
+      codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex'
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    child.emit('close')
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(ptySpawnMock).toHaveBeenCalledOnce()
+    onDataHandler?.('>')
+    onDataHandler?.('Weekly limit: 12%\n')
+    await vi.advanceTimersByTimeAsync(500)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      weekly: { usedPercent: 12 },
       status: 'ok'
     })
     expect(
