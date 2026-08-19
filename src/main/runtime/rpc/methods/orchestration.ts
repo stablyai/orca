@@ -164,6 +164,9 @@ const CheckParams = z
         params.wait === true ||
         params.all === true ||
         params.unread === true ||
+        // Why: {unread:false} without {peek:true} is the CLI's pre-peek spelling of --all, so it
+        // asks for every message while a count can only answer the unread total.
+        (params.unread === false && params.peek !== true) ||
         params.format === true ||
         params.inject === true)
     ) {

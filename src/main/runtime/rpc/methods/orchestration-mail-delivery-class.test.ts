@@ -136,4 +136,17 @@ describe('orchestration mail delivery class and presence count', () => {
     ).toThrow()
     expect(() => method.params?.parse({ terminal: 'term_coord', count: true, all: true })).toThrow()
   })
+
+  it('refuses the legacy all-message encoding with a presence probe, and keeps the peek pair', () => {
+    const method = findMethod('orchestration.check')
+
+    // Why: {unread:false} without {peek:true} is how the CLI spells --all for a pre-peek runtime.
+    // A count answers unread-only totals, so accepting it would silently answer a different question.
+    expect(() =>
+      method.params?.parse({ terminal: 'term_coord', count: true, unread: false })
+    ).toThrow()
+    expect(() =>
+      method.params?.parse({ terminal: 'term_coord', count: true, peek: true, unread: false })
+    ).not.toThrow()
+  })
 })
