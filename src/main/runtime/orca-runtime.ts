@@ -826,6 +826,7 @@ import {
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
 import { resolveTerminalOrchestrationCliCommand } from './orchestration/cli-command'
+import { resolveTrustedPiRpcCliInvocation } from './orchestration/pi-rpc-cli-invocation'
 import {
   scanLocalRepoWorktreesForResolution,
   type RuntimeWorktreeScanResult
@@ -13907,6 +13908,20 @@ export class OrcaRuntimeService {
     return this.store && worktreeId
       ? resolveLocalProjectRuntimeForWorktreeId(this.requireStore(), worktreeId)
       : undefined
+  }
+
+  getPiRpcWorkerCliInvocation(cliCommand: 'orca' | 'orca-ide' | 'orca-dev', workspacePath: string) {
+    if (cliCommand === 'orca-dev' && app.isPackaged) {
+      throw new Error('pi_rpc_worker_cli_invocation_untrusted')
+    }
+    const cliEntryPath = app.isPackaged
+      ? join(process.resourcesPath, 'app.asar.unpacked', 'out', 'cli', 'index.js')
+      : join(app.getAppPath(), 'out', 'cli', 'index.js')
+    return resolveTrustedPiRpcCliInvocation({
+      executablePath: process.execPath,
+      cliEntryPath,
+      workspacePath
+    })
   }
 
   getTerminalOrchestrationCliCommand(handle: string): 'orca' | 'orca-ide' {

@@ -53,6 +53,16 @@ export async function main(
   argv = process.argv.slice(2),
   cwd = resolveInvocationCwd()
 ): Promise<void> {
+  if (argv[0] === 'pi-rpc-worker') {
+    try {
+      const { runPiRpcWorker } = await import('./pi-rpc-worker/index.js')
+      await runPiRpcWorker(argv.slice(1))
+    } catch (error) {
+      reportCliError(error, false, { commandPath: ['pi-rpc-worker'] })
+      process.exitCode = 1
+    }
+    return
+  }
   if (argv[0] === 'agent-teams-tmux') {
     await runAgentTeamsTmuxShim(argv.slice(1))
     return
