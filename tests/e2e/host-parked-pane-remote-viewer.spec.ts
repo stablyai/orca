@@ -23,7 +23,8 @@
  * override was not the cause.
  *
  * After the fix (parked panes keep publishing their runtime-graph leaf):
- *   H-/connected x45,  input-reached=true within one 2s sample.
+ *   H-/connected x45,  the typed line reaches the host PTY AND its echo paints
+ *   back in the client's own xterm within one 2s sample.
  *
  * Run:
  *   pnpm exec playwright test tests/e2e/host-parked-pane-remote-viewer.spec.ts \
@@ -328,6 +329,7 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
     const timeline: string[] = []
     const timelineDeadline = Date.now() + 90_000
     let inputReached = false
+    let clientEchoed = false
     while (Date.now() < timelineDeadline) {
       const hostMounted = await orcaPage.evaluate(
         (id) => window.__paneManagers?.has(id) ?? false,
@@ -339,12 +341,17 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
         return pane?.container?.dataset?.ptyRecoveryState ?? 'unmounted'
       }, webTabId)
       inputReached ||= readSink(sinkPath).includes(`LINE:${token}`)
-      timeline.push(`${hostMounted ? 'H+' : 'H-'}/${clientPhase}${inputReached ? '/in' : ''}`)
+      // Signal 2, and the reason this is not merely a host-side test: the echo
+      // has to come back out to the client's own xterm.
+      clientEchoed ||= (await readPaneContent(client.page, webTabId)).includes(`LINE:${token}`)
+      timeline.push(
+        `${hostMounted ? 'H+' : 'H-'}/${clientPhase}${inputReached ? '/in' : ''}${clientEchoed ? '/echo' : ''}`
+      )
       await new Promise((resolve) => setTimeout(resolve, 2_000))
     }
     console.log(`[sta2854] timeline=${JSON.stringify(timeline)}`)
     console.log(
-      `[sta2854] input-reached=${inputReached} sink=${JSON.stringify(readSink(sinkPath))}`
+      `[sta2854] input-reached=${inputReached} client-echoed=${clientEchoed} sink=${JSON.stringify(readSink(sinkPath))}`
     )
 
     const disruptedSamples = timeline.filter((entry) => !entry.includes('/connected'))
@@ -353,9 +360,9 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
       'host-local cold parking disrupted the paired client transport'
     ).toEqual({ disrupted: 0, timeline })
     expect(
-      inputReached,
-      'input typed at the moment of the host park never reached the host PTY'
-    ).toBe(true)
+      { inputReached, clientEchoed },
+      'the parked host pane did not carry a full round trip for its remote viewer'
+    ).toEqual({ inputReached: true, clientEchoed: true })
 
     // 5. PTY identity: one process, never respawned across the park.
     const readyLines = readSink(sinkPath)

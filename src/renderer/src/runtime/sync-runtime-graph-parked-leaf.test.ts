@@ -21,6 +21,10 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', async (importOriginal) => {
 })
 
 import { getEagerPtyBufferHandle } from '@/components/terminal-pane/pty-dispatcher'
+import {
+  bufferPreHandlerPtyExit,
+  clearPreHandlerPtyState
+} from '@/components/terminal-pane/pty-pre-handler-buffer'
 import { parkedWatchersByTabId } from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import { setRuntimeGraphStoreStateGetter, setRuntimeGraphSyncEnabled } from './sync-runtime-graph'
 
@@ -93,6 +97,7 @@ afterEach(() => {
   setRuntimeGraphSyncEnabled(false)
   setRuntimeGraphStoreStateGetter(null)
   parkedWatchersByTabId.clear()
+  clearPreHandlerPtyState(PARKED_PTY)
   vi.mocked(getEagerPtyBufferHandle).mockReturnValue(undefined)
   vi.useRealTimers()
   vi.unstubAllGlobals()
@@ -128,6 +133,35 @@ describe('syncRuntimeGraph cold-parked tabs', () => {
 
     expect(graph.leaves).not.toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
     expect(graph.tabs).not.toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
+  })
+
+  // Why these two cases exist: `paneIdByPtyId` and `tabPtyId` both survive the
+  // states below, so a predicate reading either one would pass every other test
+  // here while publishing a dead terminal.
+  it('drops the leaf when per-PTY disposal leaves only the pane-id slot behind', async () => {
+    // Exactly what handlePtyExit and disposeParkedTerminalWatchersForPtyIds
+    // leave: the disposer is gone, the pane-id slot and tabPtyId remain.
+    parkedWatchersByTabId.set(TAB_ID, {
+      worktreeId: 'wt-1',
+      tabPtyId: PARKED_PTY,
+      paneIdByPtyId: new Map([[PARKED_PTY, 1]]),
+      disposersByPtyId: new Map()
+    })
+
+    const graph = await captureGraph()
+
+    expect(graph.leaves).not.toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
+  })
+
+  it('drops the leaf when the PTY exited into the park handoff gap', async () => {
+    // The watcher entry looks live, but the exit arrived while no handler owned
+    // the PTY, so it was buffered and the watcher's sidecar never saw it.
+    installParkedWatcher(PARKED_PTY)
+    bufferPreHandlerPtyExit(PARKED_PTY, 0)
+
+    const graph = await captureGraph()
+
+    expect(graph.leaves).not.toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
   })
 
   it('does not publish a stale saved PTY that no watcher owns', async () => {

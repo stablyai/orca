@@ -7,7 +7,7 @@
  * mid-evaluation. Keeping the maps and pure disposal here lets the slice
  * import cycle-free, mirroring how pty-dispatcher exports its handler maps.
  */
-import { discardPreHandlerPtyState } from './pty-pre-handler-buffer'
+import { discardPreHandlerPtyState, hasPreHandlerPtyExit } from './pty-pre-handler-buffer'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 export type ParkedTerminalPaneCapture = {
@@ -73,8 +73,21 @@ export function isTerminalTabParked(tabId: string): boolean {
  * teardown — so this is the renderer's proof that an unmounted pane's PTY is
  * still alive, which the runtime graph needs to keep publishing its leaf
  * (STA-2854: a dropped leaf orphans every paired subscriber of that terminal).
+ *
+ * Read `disposersByPtyId`, never `paneIdByPtyId`: exit and per-PTY disposal
+ * delete only the disposer and deliberately keep the pane-id slot so the dead
+ * leaf's runtime title can still be cleared.
+ *
+ * The unowned-exit guard closes the park handoff gap: the pane's primary exit
+ * handler is gone from unmount, and the watcher's sidecar is installed a
+ * passive-effect later, so an exit landing in between is buffered and replayed
+ * to nobody. Publishing on watcher presence alone would then advertise a dead
+ * PTY as a live leaf until reveal or close.
  */
 export function hasParkedTerminalWatcherForPty(ptyId: string): boolean {
+  if (hasPreHandlerPtyExit(ptyId)) {
+    return false
+  }
   for (const entry of parkedWatchersByTabId.values()) {
     if (entry.disposersByPtyId.has(ptyId)) {
       return true
