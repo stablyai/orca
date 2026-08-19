@@ -24,16 +24,32 @@ vi.mock('./usePetUrl', () => ({
 
 import { PetOverlay } from './PetOverlay'
 import { PET_WALK_SPEED_PX_PER_SEC } from './pet-walk-lane'
+import { PET_LANDING_SQUASH_MS } from './usePetFallToLane'
 
 let root: Root | null = null
 let container: HTMLDivElement | null = null
 let frameCallbacks: FrameRequestCallback[] = []
 
-function firePointer(target: Element, type: string, clientX: number, clientY: number): void {
+// Why: happy-dom stamps every synthetic event with the same timeStamp, so the
+// throw-velocity window can't be exercised without setting it explicitly.
+// Defaulting to 0 makes every other test a zero-velocity drop, deterministically.
+function firePointer(
+  target: Element,
+  type: string,
+  clientX: number,
+  clientY: number,
+  timeStamp = 0
+): void {
+  const event = new PointerEvent(type, {
+    clientX,
+    clientY,
+    button: 0,
+    pointerId: 1,
+    bubbles: true
+  })
+  Object.defineProperty(event, 'timeStamp', { value: timeStamp })
   act(() => {
-    target.dispatchEvent(
-      new PointerEvent(type, { clientX, clientY, button: 0, pointerId: 1, bubbles: true })
-    )
+    target.dispatchEvent(event)
   })
 }
 
@@ -146,10 +162,16 @@ describe('PetOverlay bottom lane', () => {
     expect(box.style.left).toBe('550px')
     expect(box.style.top).toBe('164px')
 
+    firePointer(grab, 'pointermove', 600, 200)
     firePointer(grab, 'pointerup', 600, 200)
+    for (let t = 0; t <= 2000 && box.style.top !== '564px'; t += 100) {
+      stepFrame(t)
+    }
 
-    expect(box.style.left).toBe('550px')
+    // Lands under where it was dropped — the fall is vertical, the walk only
+    // resumes afterwards.
     expect(box.style.top).toBe('564px')
+    expect(Number.parseFloat(box.style.left)).toBeCloseTo(550, 0)
   })
 
   it('picks the pet up from the lane rather than a stale persisted y', () => {
@@ -169,6 +191,105 @@ describe('PetOverlay bottom lane', () => {
     // And the grab offset is measured from the lane, so a move tracks the pointer.
     firePointer(grab, 'pointermove', 350, 500)
     expect(box.style.top).toBe('464px')
+  })
+
+  it('falls to the lane when dropped from above instead of snapping', () => {
+    window.localStorage.setItem('pet-overlay-position', JSON.stringify({ x: 300, y: 564 }))
+
+    const box = renderOverlay()
+    const grab = container?.querySelector('.pointer-events-auto') as HTMLElement
+
+    firePointer(grab, 'pointerdown', 350, 600)
+    firePointer(grab, 'pointermove', 350, 200)
+    // Settling before letting go makes this a drop, not a throw.
+    firePointer(grab, 'pointermove', 350, 200)
+    firePointer(grab, 'pointerup', 350, 200)
+
+    // Released mid-air: it stays where it was let go, then falls under gravity.
+    expect(box.style.top).toBe('164px')
+
+    stepFrame(0)
+    stepFrame(100)
+    const afterFirstFrames = Number.parseFloat(box.style.top)
+    expect(afterFirstFrames).toBeGreaterThan(164)
+    expect(afterFirstFrames).toBeLessThan(564)
+
+    for (let t = 200; t <= 2000; t += 100) {
+      stepFrame(t)
+    }
+    expect(box.style.top).toBe('564px')
+  })
+
+  it('squashes on impact, pivoting on the floor, then returns to the bob', () => {
+    // Why: only the squash timer — faking rAF too would hijack the manual
+    // frame stepping this file relies on.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    window.localStorage.setItem('pet-overlay-position', JSON.stringify({ x: 300, y: 564 }))
+
+    const box = renderOverlay()
+    const grab = container?.querySelector('.pointer-events-auto') as HTMLElement
+
+    firePointer(grab, 'pointerdown', 350, 600)
+    firePointer(grab, 'pointermove', 350, 200)
+    firePointer(grab, 'pointermove', 350, 200)
+    firePointer(grab, 'pointerup', 350, 200)
+    for (let t = 0; t <= 2000 && box.style.top !== '564px'; t += 100) {
+      stepFrame(t)
+    }
+
+    expect(grab.style.animation).toContain('pet-land-squash')
+    expect(grab.style.transformOrigin).toBe('50% 100%')
+
+    act(() => {
+      vi.advanceTimersByTime(PET_LANDING_SQUASH_MS + 20)
+    })
+
+    expect(grab.style.animation).toContain('pet-bob')
+    vi.useRealTimers()
+  })
+
+  it('throws the pet along the flick before gravity takes over', () => {
+    window.localStorage.setItem('pet-overlay-position', JSON.stringify({ x: 300, y: 564 }))
+
+    const box = renderOverlay()
+    const grab = container?.querySelector('.pointer-events-auto') as HTMLElement
+
+    // Flicked upward at 1000px/s and released while still moving.
+    firePointer(grab, 'pointerdown', 350, 600, 0)
+    firePointer(grab, 'pointermove', 350, 400, 100)
+    firePointer(grab, 'pointermove', 350, 300, 200)
+    firePointer(grab, 'pointerup', 350, 300, 210)
+
+    const releasedAt = Number.parseFloat(box.style.top)
+    stepFrame(0)
+    stepFrame(40)
+
+    // Momentum carries it up past the release point first.
+    expect(Number.parseFloat(box.style.top)).toBeLessThan(releasedAt)
+
+    for (let t = 100; t <= 4000; t += 50) {
+      stepFrame(t)
+    }
+    expect(box.style.top).toBe('564px')
+  })
+
+  it('snaps straight to the lane when the user prefers reduced motion', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === '(prefers-reduced-motion: reduce)',
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {}
+    }))
+    window.localStorage.setItem('pet-overlay-position', JSON.stringify({ x: 300, y: 564 }))
+
+    const box = renderOverlay()
+    const grab = container?.querySelector('.pointer-events-auto') as HTMLElement
+
+    firePointer(grab, 'pointerdown', 350, 600)
+    firePointer(grab, 'pointermove', 350, 200)
+    firePointer(grab, 'pointerup', 350, 200)
+
+    expect(box.style.top).toBe('564px')
   })
 
   it('swaps the idle bob for a hanging sway while the pet is in hand', () => {

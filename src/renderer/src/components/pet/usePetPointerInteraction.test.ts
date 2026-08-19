@@ -21,20 +21,23 @@ function fakeTarget(): {
 
 function setup() {
   const moveTo = vi.fn()
+  const onRelease = vi.fn()
   const target = fakeTarget()
-  const { result } = renderHook(() => usePetPointerInteraction({ x: 0, y: 0 }, moveTo))
+  const { result } = renderHook(() => usePetPointerInteraction({ x: 0, y: 0 }, moveTo, onRelease))
 
   const event = (props: {
     clientX?: number
     clientY?: number
     pointerId?: number
     button?: number
+    timeStamp?: number
   }) =>
     ({
       button: 0,
       pointerId: 1,
       clientX: 0,
       clientY: 0,
+      timeStamp: 0,
       currentTarget: target,
       preventDefault: () => {},
       ...props
@@ -46,7 +49,7 @@ function setup() {
     act(() => result.current.handlers[name](event(props)))
   }
 
-  return { result, moveTo, fire, event }
+  return { result, moveTo, onRelease, fire, event }
 }
 
 describe('usePetPointerInteraction', () => {
@@ -138,5 +141,30 @@ describe('usePetPointerInteraction', () => {
     fire('onLostPointerCapture', { pointerId: 1 })
     expect(result.current.dragging).toBe(false)
     expect(result.current.dragAnimation).toBe(null)
+  })
+
+  it('reports the throw velocity from the final movement on release', () => {
+    const { fire, onRelease } = setup()
+    fire('onPointerDown', { clientX: 0, clientY: 0, timeStamp: 0 })
+    fire('onPointerMove', { clientX: 20, clientY: 10, timeStamp: 100 })
+    // 30px right and 20px down over the last 100ms -> 300/200 px per second.
+    fire('onPointerMove', { clientX: 50, clientY: 30, timeStamp: 200 })
+    fire('onPointerUp', { clientX: 50, clientY: 30, timeStamp: 210 })
+
+    expect(onRelease).toHaveBeenCalledTimes(1)
+    const [velocity] = onRelease.mock.calls[0]
+    expect(velocity.vx).toBeCloseTo(300, 5)
+    expect(velocity.vy).toBeCloseTo(200, 5)
+  })
+
+  it('reports no throw when the pet was held still before release', () => {
+    const { fire, onRelease } = setup()
+    fire('onPointerDown', { clientX: 0, clientY: 0, timeStamp: 0 })
+    fire('onPointerMove', { clientX: 20, clientY: 10, timeStamp: 100 })
+    fire('onPointerMove', { clientX: 50, clientY: 30, timeStamp: 200 })
+    // Held motionless for a while, then let go: a drop, not a throw.
+    fire('onPointerUp', { clientX: 50, clientY: 30, timeStamp: 900 })
+
+    expect(onRelease).toHaveBeenCalledWith({ vx: 0, vy: 0 })
   })
 })

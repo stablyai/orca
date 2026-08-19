@@ -16,7 +16,7 @@ import {
 // keep working without knowing about the cache module split.
 export { revokeCustomPetBlobUrl } from './pet-blob-cache'
 
-export type ResolvedPet =
+type ResolvedPetArt =
   | { url: string; ready: boolean; sprite: null; detected: null }
   | {
       url: string
@@ -25,6 +25,11 @@ export type ResolvedPet =
       detected: null
     }
   | { url: string; ready: boolean; sprite: null; detected: DetectedSpriteCacheEntry }
+
+/** `heldUrl` is the optional "picked up" pose. Only bundled pets can ship one —
+ *  the Codex bundle contract has no held row, so imported pets fall back to the
+ *  sway alone. */
+export type ResolvedPet = ResolvedPetArt & { heldUrl?: string }
 
 /** Resolve the active pet to a URL the overlay can render.
  *
@@ -104,7 +109,7 @@ export function usePetUrl(): ResolvedPet {
 
   if (bundled) {
     const pet = findBundledPet(petId) ?? BUNDLED_PET
-    return { url: pet.url, ready: true, sprite: null, detected: null }
+    return { url: pet.url, ready: true, sprite: null, detected: null, heldUrl: pet.heldUrl }
   }
   if (customMeta && customUrl) {
     // Why: guard against manifest entries with zero/negative dims or fps —

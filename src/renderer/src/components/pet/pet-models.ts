@@ -16,6 +16,8 @@ export type BundledPet = {
   id: BundledPetId
   label: string
   url: string
+  /** Optional "held in hand" artwork shown while the pet is being dragged. */
+  heldUrl?: string
 }
 
 export const BUNDLED_PETS: readonly BundledPet[] = [

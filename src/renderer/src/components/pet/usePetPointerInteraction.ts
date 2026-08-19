@@ -3,6 +3,37 @@ import { nextPetDragAnimation, type PetDragAnimation } from './pet-agent-state'
 
 type Point = { x: number; y: number }
 
+export type PetThrowVelocity = { vx: number; vy: number }
+
+type PointerSample = Point & { t: number }
+
+/** Beyond this gap the last movement is stale — the user held still, so letting
+ *  go is a drop, not a throw. Mirrors Shimeji seeding Thrown from cursor.dx/dy
+ *  only while the cursor is actually moving. */
+const THROW_SAMPLE_MAX_AGE_MS = 120
+/** Keeps a frantic flick from launching the pet across the screen. */
+const THROW_MAX_PX_PER_SEC = 2500
+
+function throwVelocityFrom(
+  previous: PointerSample | null,
+  last: PointerSample | null,
+  releaseT: number
+): PetThrowVelocity {
+  if (!previous || !last) {
+    return { vx: 0, vy: 0 }
+  }
+  const span = last.t - previous.t
+  if (span <= 0 || releaseT - last.t > THROW_SAMPLE_MAX_AGE_MS) {
+    return { vx: 0, vy: 0 }
+  }
+  const clamp = (v: number): number =>
+    Math.max(-THROW_MAX_PX_PER_SEC, Math.min(THROW_MAX_PX_PER_SEC, v))
+  return {
+    vx: clamp(((last.x - previous.x) / span) * 1000),
+    vy: clamp(((last.y - previous.y) / span) * 1000)
+  }
+}
+
 export type PetPointerInteraction = {
   dragging: boolean
   dragAnimation: PetDragAnimation
@@ -25,8 +56,13 @@ export type PetPointerInteraction = {
 // top-left corner and `moveTo` receives the unclamped position the drag wants.
 export function usePetPointerInteraction(
   position: Point,
-  moveTo: (next: Point) => void
+  moveTo: (next: Point) => void,
+  onRelease?: (velocity: PetThrowVelocity) => void
 ): PetPointerInteraction {
+  const lastSampleRef = useRef<PointerSample | null>(null)
+  const previousSampleRef = useRef<PointerSample | null>(null)
+  const onReleaseRef = useRef(onRelease)
+  onReleaseRef.current = onRelease
   const [dragging, setDragging] = useState(false)
   const [dragAnimation, setDragAnimation] = useState<PetDragAnimation>(null)
   const [hovering, setHovering] = useState(false)
@@ -56,6 +92,8 @@ export function usePetPointerInteraction(
     }
     dragBaselineXRef.current = event.clientX
     dragDirectionRef.current = null
+    lastSampleRef.current = { x: event.clientX, y: event.clientY, t: event.timeStamp }
+    previousSampleRef.current = null
     event.currentTarget.setPointerCapture(event.pointerId)
     setDragging(true)
     setDragAnimation(null)
@@ -78,6 +116,8 @@ export function usePetPointerInteraction(
         setDragAnimation(next.animation)
       }
     }
+    previousSampleRef.current = lastSampleRef.current
+    lastSampleRef.current = { x: event.clientX, y: event.clientY, t: event.timeStamp }
     moveTo({
       x: event.clientX - dragOffsetRef.current.x,
       y: event.clientY - dragOffsetRef.current.y
@@ -95,6 +135,11 @@ export function usePetPointerInteraction(
     }
     setDragging(false)
     setDragAnimation(null)
+    onReleaseRef.current?.(
+      throwVelocityFrom(previousSampleRef.current, lastSampleRef.current, event.timeStamp)
+    )
+    lastSampleRef.current = null
+    previousSampleRef.current = null
   }
 
   return {
