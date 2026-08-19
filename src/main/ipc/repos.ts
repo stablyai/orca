@@ -105,6 +105,7 @@ import {
   getProjectIdForProviderIdentity
 } from '../../shared/project-host-setup-projection'
 import {
+  coerceProjectExecutionHostId,
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
@@ -841,7 +842,22 @@ const ProjectHostSetupExistingFolderIpcArgs = z.object({
       host: z.string().min(1).optional()
     })
     .optional(),
-  hostId: z.string().min(1),
+  hostId: z
+    .string()
+    .min(1)
+    .transform((value, ctx) => {
+      const hostId = coerceProjectExecutionHostId(value)
+      if (!hostId) {
+        ctx.addIssue({
+          code: 'custom',
+          message:
+            'Invalid host ID. Use local, ssh:<targetId>, or runtime:<environmentId> ' +
+            '(bare ids from environment list are accepted as runtime:<id>).'
+        })
+        return z.NEVER
+      }
+      return hostId
+    }),
   path: z.string().min(1),
   kind: z.enum(['git', 'folder']).optional(),
   displayName: z.string().min(1).optional(),
@@ -867,9 +883,15 @@ const ProjectHostSetupCreateIpcArgs = z.object({
     .string()
     .min(1)
     .transform((value, ctx) => {
-      const hostId = normalizeExecutionHostId(value)
+      // Why: bare environment-list ids need runtime: prefix (#7810).
+      const hostId = coerceProjectExecutionHostId(value)
       if (!hostId) {
-        ctx.addIssue({ code: 'custom', message: 'Invalid host ID' })
+        ctx.addIssue({
+          code: 'custom',
+          message:
+            'Invalid host ID. Use local, ssh:<targetId>, or runtime:<environmentId> ' +
+            '(bare ids from environment list are accepted as runtime:<id>).'
+        })
         return z.NEVER
       }
       return hostId
