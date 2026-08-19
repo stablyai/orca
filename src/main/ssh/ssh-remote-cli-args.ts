@@ -16,6 +16,7 @@ const REMOTE_BOOLEAN_FLAGS = new Set([
   'relations',
   'parent-current',
   'unread',
+  'updates',
   'wait'
 ])
 const REPEATED_FLAG_SEPARATOR = '\u0000'

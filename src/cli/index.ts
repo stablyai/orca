@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 import {
   findCommandSpec,
-  isCommandGroup,
   normalizeCommandPositionals,
   parseArgs,
   resolveHelpPath,
   specPaths,
   validateCommandAndFlags
 } from './args'
+import { isCommandPathGroup } from './command-path-groups'
 import { dispatch } from './dispatch'
 import { resolveHostFlagEnvironmentId } from './execution-host-flag'
 import { reportCliError } from './format'
@@ -69,7 +69,7 @@ export async function main(
     if (
       helpPath.length > 0 &&
       !findCommandSpec(COMMAND_SPECS, helpPath) &&
-      !isCommandGroup(helpPath)
+      !isCommandPathGroup(COMMAND_SPECS, helpPath)
     ) {
       process.exitCode = 1
     }
@@ -77,6 +77,15 @@ export async function main(
   }
   if (parsed.commandPath.length === 0) {
     printHelp(COMMAND_SPECS, [])
+    return
+  }
+  // Why: a bare group path names a namespace, not a command — print its help
+  // before any runtime client exists so no RPC is attempted.
+  if (
+    !findCommandSpec(COMMAND_SPECS, parsed.commandPath) &&
+    isCommandPathGroup(COMMAND_SPECS, parsed.commandPath)
+  ) {
+    printHelp(COMMAND_SPECS, parsed.commandPath)
     return
   }
   const json = parsed.flags.has('json')

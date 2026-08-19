@@ -47,6 +47,34 @@ export const LINEAR_PROJECT_LIST_FLAGS = new Set([
   'limit',
   'workspace'
 ])
+export const LINEAR_PROJECT_SHOW_FLAGS = new Set([
+  'help',
+  'json',
+  'pairing-code',
+  'environment',
+  'id',
+  'updates',
+  'updates-limit',
+  'workspace'
+])
+export const LINEAR_PROJECT_STATUSES_FLAGS = new Set([
+  'help',
+  'json',
+  'pairing-code',
+  'environment',
+  'query',
+  'limit',
+  'workspace'
+])
+export const LINEAR_PROJECT_LABELS_FLAGS = new Set([
+  'help',
+  'json',
+  'pairing-code',
+  'environment',
+  'query',
+  'limit',
+  'workspace'
+])
 export const LINEAR_LIST_FLAGS = new Set([
   'help',
   'json',

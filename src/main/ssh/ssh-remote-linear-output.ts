@@ -21,6 +21,7 @@ import {
   formatLinearProjectListRows,
   linearProjectListWarningLines
 } from '../../shared/linear/project-list-format'
+import { formatRemoteLinearProjectCli } from './ssh-remote-linear-project-output'
 import {
   isLinearAttachResult,
   isLinearCommentAddResult,
@@ -67,6 +68,10 @@ export function formatRemoteLinearCli(result: unknown): { stdout: string; stderr
       stdout: `${formatLinearProjectListRows(result)}\n`,
       stderr: linearProjectListWarnings(result)
     }
+  }
+  const project = formatRemoteLinearProjectCli(result)
+  if (project) {
+    return project
   }
   if (isLinearTeamListResult(result)) {
     return { stdout: `${formatLinearTeamList(result)}\n`, stderr: linearListWarnings(result) }

@@ -8,6 +8,7 @@ import type { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import type { RpcResponse } from '../runtime/rpc/core'
 import { RemoteCliArgumentError, type ParsedRemoteCli } from './ssh-remote-cli-argument-error'
 import { dispatchRemoteLinearListIssues } from './ssh-remote-linear-list-issues'
+import { tryDispatchRemoteLinearProjectReadCli } from './ssh-remote-linear-project-read-cli'
 
 import {
   LINEAR_ISSUE_FLAGS,
@@ -95,6 +96,10 @@ export async function tryDispatchRemoteLinearReadCli(
       limit: clampLinearSearchLimit(optionalPositiveInteger(parsed.flags, 'limit')),
       workspaceId: optionalString(parsed.flags, 'workspace')
     })
+  }
+  const projectRead = await tryDispatchRemoteLinearProjectReadCli(dispatcher, parsed)
+  if (projectRead) {
+    return projectRead
   }
   if (isRemoteCommand(parsed, 'linear', 'list')) {
     validateLinearRemoteArgs(parsed, {

@@ -156,6 +156,19 @@ describe('parseArgs', () => {
     expect(parsed.flags.get('label')).toBe(`Bug${REPEATED_FLAG_SEPARATOR}Regression`)
   })
 
+  it('parses --updates as a boolean flag without swallowing the next token', () => {
+    const parsed = parseArgs(['linear', 'project', 'show', '--updates', 'launch-q3'])
+
+    expect(parsed.commandPath).toEqual(['linear', 'project', 'show', 'launch-q3'])
+    expect(parsed.flags.get('updates')).toBe(true)
+  })
+
+  it('parses --updates-limit as a value flag', () => {
+    const parsed = parseArgs(['linear', 'project', 'show', 'launch-q3', '--updates-limit', '10'])
+
+    expect(parsed.flags.get('updates-limit')).toBe('10')
+  })
+
   it('does not apply repeated flag encoding to ordinary string flags', () => {
     const parsed = parseArgs(['linear', 'list', '--workspace', 'old', '--workspace', 'new'])
 

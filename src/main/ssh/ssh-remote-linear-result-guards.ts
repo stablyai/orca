@@ -9,6 +9,9 @@ import type {
   LinearIssueTaskUpdateResult,
   LinearIssueRelationWriteResult,
   LinearProjectListResult,
+  LinearProjectLabelsResult,
+  LinearProjectShowResult,
+  LinearProjectStatusesResult,
   LinearSearchResult,
   LinearStatusSetResult,
   LinearTeamLabelsResult,
@@ -71,6 +74,31 @@ export function isLinearProjectListResult(result: unknown): result is LinearProj
     typeof result.meta.partial === 'boolean' &&
     Array.isArray(result.meta.workspaceErrors) &&
     result.meta.workspaceErrors.every(isLinearWorkspaceError)
+  )
+}
+
+export function isLinearProjectShowResult(result: unknown): result is LinearProjectShowResult {
+  return (
+    isRecord(result) &&
+    isRecord(result.project) &&
+    isRecord(result.meta) &&
+    typeof result.project.slugId === 'string' &&
+    isRecord(result.project.status) &&
+    typeof result.meta.resolvedBy === 'string'
+  )
+}
+
+export function isLinearProjectStatusesResult(
+  result: unknown
+): result is LinearProjectStatusesResult {
+  return (
+    isRecord(result) && Array.isArray(result.statuses) && isLinearWorkspaceFanoutMeta(result.meta)
+  )
+}
+
+export function isLinearProjectLabelsResult(result: unknown): result is LinearProjectLabelsResult {
+  return (
+    isRecord(result) && Array.isArray(result.labels) && isLinearWorkspaceFanoutMeta(result.meta)
   )
 }
 
@@ -196,6 +224,18 @@ function isLinearProjectTeam(team: unknown): boolean {
     typeof team.id === 'string' &&
     typeof team.name === 'string' &&
     (team.key === undefined || typeof team.key === 'string')
+  )
+}
+
+// Why: distinguishes the project fan-out meta from `team labels`, which returns a plain team meta.
+function isLinearWorkspaceFanoutMeta(meta: unknown): boolean {
+  return (
+    isRecord(meta) &&
+    typeof meta.limit === 'number' &&
+    typeof meta.returned === 'number' &&
+    typeof meta.partial === 'boolean' &&
+    Array.isArray(meta.workspaceResults) &&
+    Array.isArray(meta.workspaceErrors)
   )
 }
 

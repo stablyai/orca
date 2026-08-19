@@ -231,6 +231,12 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/linear.js')).LINEAR_HANDLERS
   },
   {
+    name: 'linear-project-reads',
+    keys: ['linear project show', 'linear project statuses', 'linear project labels'],
+    load: async () =>
+      (await import('./handlers/linear-project-reads.js')).LINEAR_PROJECT_READS_HANDLERS
+  },
+  {
     name: 'vm',
     keys: ['vm recipe doctor'],
     load: async () => (await import('./handlers/vm.js')).VM_HANDLERS

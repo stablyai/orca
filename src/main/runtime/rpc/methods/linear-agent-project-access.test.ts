@@ -1,6 +1,31 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type * as LinearIssuesModule from '../../../linear/issues'
+import type * as LinearProjectTargetResolutionModule from '../../../linear/project-target-resolution'
+
+// Why: the real lookup selects a connected Linear workspace, so the shared read is stubbed at the module seam.
+const { findProjectTargetCandidates } = vi.hoisted(() => ({
+  findProjectTargetCandidates: vi.fn()
+}))
+
+vi.mock('../../../linear/project-target-resolution', async (importOriginal) => {
+  const actual = await importOriginal<typeof LinearProjectTargetResolutionModule>()
+  return { ...actual, findLinearProjectTargetCandidates: findProjectTargetCandidates }
+})
+
+type ProjectTargetCandidatesStub = {
+  candidates: { id: string; name: string; slugId?: string; teams?: unknown[] }[]
+  slugMatchIds?: string[]
+  ambiguous?: boolean
+}
+
+function stubProjectTargetCandidates(stub: ProjectTargetCandidatesStub): void {
+  findProjectTargetCandidates.mockResolvedValue({
+    candidates: stub.candidates,
+    slugMatchIds: new Set(stub.slugMatchIds ?? []),
+    ambiguous: stub.ambiguous ?? false
+  })
+}
 
 type LinearProjectResolverTester = {
   resolveLinearCreateProject(
@@ -10,9 +35,6 @@ type LinearProjectResolverTester = {
     id: string
     name: string
   }>
-  readLinearProjectByIdForCreate(id: string, workspaceId: string): Promise<unknown>
-  readLinearProjectsForCreate(query: string, workspaceId: string): Promise<unknown[]>
-  readLinearProjectsByExactNameForCreate(name: string, workspaceId: string): Promise<unknown[]>
 }
 
 type LinearCreateTester = LinearProjectResolverTester & {
@@ -24,17 +46,22 @@ type LinearCreateTester = LinearProjectResolverTester & {
 }
 
 describe('Linear agent project access helpers', () => {
+  beforeEach(() => {
+    findProjectTargetCandidates.mockReset()
+  })
+
   it('resolves Linear projects by UUID before searching names', async () => {
     const runtime = new OrcaRuntimeService()
     const tester = runtime as unknown as LinearProjectResolverTester
-    const readById = vi.spyOn(tester, 'readLinearProjectByIdForCreate').mockResolvedValue({
-      id: '11111111-1111-4111-8111-111111111111',
-      name: 'Launch',
-      teams: [{ id: 'team-1', name: 'Engineering', key: 'ENG' }]
-    } as never)
-    const readByName = vi
-      .spyOn(tester, 'readLinearProjectsForCreate')
-      .mockResolvedValue([] as never)
+    stubProjectTargetCandidates({
+      candidates: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          name: 'Launch',
+          teams: [{ id: 'team-1', name: 'Engineering', key: 'ENG' }]
+        }
+      ]
+    })
 
     await expect(
       tester.resolveLinearCreateProject('11111111-1111-4111-8111-111111111111', {
@@ -42,51 +69,60 @@ describe('Linear agent project access helpers', () => {
         workspaceId: 'workspace-1'
       })
     ).resolves.toMatchObject({ id: '11111111-1111-4111-8111-111111111111' })
-    expect(readById).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111', 'workspace-1')
-    expect(readByName).not.toHaveBeenCalled()
+    expect(findProjectTargetCandidates).toHaveBeenCalledTimes(1)
+    expect(findProjectTargetCandidates).toHaveBeenCalledWith(
+      '11111111-1111-4111-8111-111111111111',
+      'workspace-1'
+    )
+  })
+
+  it('rejects a UUID target that no project matches instead of falling through to names', async () => {
+    const runtime = new OrcaRuntimeService()
+    const tester = runtime as unknown as LinearProjectResolverTester
+    stubProjectTargetCandidates({ candidates: [] })
+
+    await expect(
+      tester.resolveLinearCreateProject('11111111-1111-4111-8111-111111111111', {
+        id: 'team-1',
+        workspaceId: 'workspace-1'
+      })
+    ).rejects.toMatchObject({ code: 'linear_invalid_project', data: { projects: [] } })
+    expect(findProjectTargetCandidates).toHaveBeenCalledTimes(1)
   })
 
   it('resolves Linear projects by trimmed case-insensitive exact name', async () => {
     const runtime = new OrcaRuntimeService()
     const tester = runtime as unknown as LinearProjectResolverTester
-    vi.spyOn(tester, 'readLinearProjectByIdForCreate').mockResolvedValue(null as never)
-    const readByName = vi.spyOn(tester, 'readLinearProjectsForCreate').mockResolvedValue([
-      {
-        id: 'project-1',
-        name: 'Launch',
-        teams: [{ id: 'team-1', name: 'Engineering', key: 'ENG' }]
-      }
-    ] as never)
-    const readExactName = vi
-      .spyOn(tester, 'readLinearProjectsByExactNameForCreate')
-      .mockResolvedValue([
+    stubProjectTargetCandidates({
+      candidates: [
         {
           id: 'project-1',
           name: 'Launch',
           teams: [{ id: 'team-1', name: 'Engineering', key: 'ENG' }]
         }
-      ] as never)
+      ]
+    })
 
     await expect(
       tester.resolveLinearCreateProject(' launch ', { id: 'team-1', workspaceId: 'workspace-1' })
     ).resolves.toMatchObject({ id: 'project-1' })
-    expect(readByName).toHaveBeenCalledWith('launch', 'workspace-1')
-    expect(readExactName).toHaveBeenCalledWith('launch', 'workspace-1')
+    expect(findProjectTargetCandidates).toHaveBeenCalledWith('launch', 'workspace-1')
   })
 
   it('resolves Linear projects by URL slug without a paginated exact-name scan', async () => {
     const runtime = new OrcaRuntimeService()
     const tester = runtime as unknown as LinearProjectResolverTester
-    vi.spyOn(tester, 'readLinearProjectByIdForCreate').mockResolvedValue(null as never)
-    vi.spyOn(tester, 'readLinearProjectsForCreate').mockResolvedValue([
-      {
-        id: 'project-1',
-        slugId: 'launch-d8f6c7e7',
-        name: 'Launch',
-        teams: [{ id: 'team-1', name: 'Engineering', key: 'ENG' }]
-      }
-    ] as never)
-    const readExactName = vi.spyOn(tester, 'readLinearProjectsByExactNameForCreate')
+    stubProjectTargetCandidates({
+      candidates: [
+        {
+          id: 'project-1',
+          slugId: 'launch-d8f6c7e7',
+          name: 'Launch',
+          teams: [{ id: 'team-1', name: 'Engineering', key: 'ENG' }]
+        }
+      ],
+      slugMatchIds: ['project-1']
+    })
 
     await expect(
       tester.resolveLinearCreateProject('LAUNCH-D8F6C7E7', {
@@ -94,26 +130,64 @@ describe('Linear agent project access helpers', () => {
         workspaceId: 'workspace-1'
       })
     ).resolves.toMatchObject({ id: 'project-1' })
-    expect(readExactName).not.toHaveBeenCalled()
+    expect(findProjectTargetCandidates).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects a target that matches one project slug and another project name', async () => {
+    const runtime = new OrcaRuntimeService()
+    const tester = runtime as unknown as LinearProjectResolverTester
+    stubProjectTargetCandidates({
+      candidates: [
+        {
+          id: 'project-1',
+          slugId: 'launch-d8f6c7e7',
+          name: 'Launch',
+          teams: [{ id: 'team-1', name: 'Engineering', key: 'ENG' }]
+        },
+        {
+          id: 'project-2',
+          slugId: 'rename-a1b2c3d4',
+          name: 'LAUNCH-D8F6C7E7',
+          teams: [{ id: 'team-1', name: 'Engineering', key: 'ENG' }]
+        }
+      ],
+      slugMatchIds: ['project-1']
+    })
+
+    await expect(
+      tester.resolveLinearCreateProject('launch-d8f6c7e7', {
+        id: 'team-1',
+        workspaceId: 'workspace-1'
+      })
+    ).rejects.toMatchObject({
+      code: 'linear_invalid_project',
+      data: {
+        projects: [
+          { id: 'project-1', name: 'Launch' },
+          { id: 'project-2', name: 'LAUNCH-D8F6C7E7' }
+        ]
+      }
+    })
+    expect(findProjectTargetCandidates).toHaveBeenCalledTimes(1)
   })
 
   it('resolves same-named Linear projects by target team compatibility', async () => {
     const runtime = new OrcaRuntimeService()
     const tester = runtime as unknown as LinearProjectResolverTester
-    vi.spyOn(tester, 'readLinearProjectByIdForCreate').mockResolvedValue(null as never)
-    vi.spyOn(tester, 'readLinearProjectsForCreate').mockResolvedValue([] as never)
-    vi.spyOn(tester, 'readLinearProjectsByExactNameForCreate').mockResolvedValue([
-      {
-        id: 'project-1',
-        name: 'Launch',
-        teams: [{ id: 'team-other', name: 'Other', key: 'OTH' }]
-      },
-      {
-        id: 'project-2',
-        name: 'launch',
-        teams: [{ id: 'team-1', name: 'Engineering', key: 'ENG' }]
-      }
-    ] as never)
+    stubProjectTargetCandidates({
+      candidates: [
+        {
+          id: 'project-1',
+          name: 'Launch',
+          teams: [{ id: 'team-other', name: 'Other', key: 'OTH' }]
+        },
+        {
+          id: 'project-2',
+          name: 'launch',
+          teams: [{ id: 'team-1', name: 'Engineering', key: 'ENG' }]
+        }
+      ]
+    })
 
     await expect(
       tester.resolveLinearCreateProject('Launch', { id: 'team-1', workspaceId: 'workspace-1' })
@@ -123,20 +197,20 @@ describe('Linear agent project access helpers', () => {
   it('rejects ambiguous Linear project names with candidate ids', async () => {
     const runtime = new OrcaRuntimeService()
     const tester = runtime as unknown as LinearProjectResolverTester
-    vi.spyOn(tester, 'readLinearProjectByIdForCreate').mockResolvedValue(null as never)
-    vi.spyOn(tester, 'readLinearProjectsForCreate').mockResolvedValue([] as never)
-    vi.spyOn(tester, 'readLinearProjectsByExactNameForCreate').mockResolvedValue([
-      {
-        id: 'project-1',
-        name: 'Launch',
-        teams: [{ id: 'team-1', name: 'Engineering', key: 'ENG' }]
-      },
-      {
-        id: 'project-2',
-        name: 'launch',
-        teams: [{ id: 'team-1', name: 'Engineering', key: 'ENG' }]
-      }
-    ] as never)
+    stubProjectTargetCandidates({
+      candidates: [
+        {
+          id: 'project-1',
+          name: 'Launch',
+          teams: [{ id: 'team-1', name: 'Engineering', key: 'ENG' }]
+        },
+        {
+          id: 'project-2',
+          name: 'launch',
+          teams: [{ id: 'team-1', name: 'Engineering', key: 'ENG' }]
+        }
+      ]
+    })
 
     await expect(
       tester.resolveLinearCreateProject('Launch', { id: 'team-1', workspaceId: 'workspace-1' })
@@ -151,17 +225,32 @@ describe('Linear agent project access helpers', () => {
     })
   })
 
+  it('rejects an exact-name target the lookup could not prove unique', async () => {
+    const runtime = new OrcaRuntimeService()
+    const tester = runtime as unknown as LinearProjectResolverTester
+    stubProjectTargetCandidates({
+      candidates: [
+        {
+          id: 'project-1',
+          name: 'Launch',
+          teams: [{ id: 'team-1', name: 'Engineering', key: 'ENG' }]
+        }
+      ],
+      ambiguous: true
+    })
+
+    await expect(
+      tester.resolveLinearCreateProject('Launch', { id: 'team-1', workspaceId: 'workspace-1' })
+    ).rejects.toMatchObject({
+      code: 'linear_invalid_project',
+      data: { projects: [{ id: 'project-1', name: 'Launch' }] }
+    })
+  })
+
   it('fails closed when Linear project team membership cannot be verified', async () => {
     const runtime = new OrcaRuntimeService()
     const tester = runtime as unknown as LinearProjectResolverTester
-    vi.spyOn(tester, 'readLinearProjectByIdForCreate').mockResolvedValue(null as never)
-    vi.spyOn(tester, 'readLinearProjectsForCreate').mockResolvedValue([] as never)
-    vi.spyOn(tester, 'readLinearProjectsByExactNameForCreate').mockResolvedValue([
-      {
-        id: 'project-1',
-        name: 'Launch'
-      }
-    ] as never)
+    stubProjectTargetCandidates({ candidates: [{ id: 'project-1', name: 'Launch' }] })
 
     await expect(
       tester.resolveLinearCreateProject('Launch', { id: 'team-1', workspaceId: 'workspace-1' })

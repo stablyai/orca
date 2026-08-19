@@ -101,6 +101,42 @@ export type {
   LinearIssueRelationWriteRequest,
   LinearIssueRelationWriteResult
 } from './issue-relation-write'
+export {
+  LINEAR_PROJECT_ENTITY_OUTPUT_CAP,
+  LINEAR_PROJECT_LABEL_SCAN_CAP,
+  LINEAR_PROJECT_METADATA_DEFAULT_LIMIT,
+  LINEAR_PROJECT_METADATA_MAX_LIMIT,
+  LINEAR_PROJECT_STATUS_TYPES,
+  LINEAR_PROJECT_UPDATE_HEALTH_API_VALUES,
+  LINEAR_PROJECT_UPDATES_DEFAULT_LIMIT,
+  LINEAR_PROJECT_UPDATES_MAX_LIMIT,
+  clampLinearProjectMetadataLimit,
+  clampLinearProjectUpdatesLimit
+} from './project-agent-access'
+export type {
+  LinearBoundedEntityCollection,
+  LinearBoundedNullableString,
+  LinearBoundedString,
+  LinearProjectFieldSnapshot,
+  LinearProjectLabelRef,
+  LinearProjectLabelsResult,
+  LinearProjectLabelSummary,
+  LinearProjectRef,
+  LinearProjectResolvedBy,
+  LinearProjectShowRequest,
+  LinearProjectShowResult,
+  LinearProjectStatusesResult,
+  LinearProjectStatusRef,
+  LinearProjectStatusSummary,
+  LinearProjectStatusType,
+  LinearProjectTargetRequest,
+  LinearProjectTeamRef,
+  LinearProjectUpdateHealth,
+  LinearProjectUpdateNode,
+  LinearProjectUserRef,
+  LinearProjectWorkspaceReadRequest,
+  LinearWorkspaceFanoutMeta
+} from './project-agent-access'
 
 export type LinearWriteTargetRequest = {
   input?: string

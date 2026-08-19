@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: root and generated command help text live together so CLI discovery stays greppable. */
 import type { CommandSpec } from './args'
-import { findCommandSpec, isCommandGroup, supportsBrowserPageFlag } from './args'
+import { findCommandSpec, supportsBrowserPageFlag } from './args'
+import { commandPathGroupSpecs, isCommandPathGroup } from './command-path-groups'
 import { unknownCommandData } from './command-suggestion'
 
 const ROOT_HELP_TEXT = `orca
@@ -370,8 +371,8 @@ export function printHelp(specs: CommandSpec[], commandPath: string[] = []): voi
     return
   }
 
-  if (isCommandGroup(commandPath)) {
-    console.log(formatGroupHelp(specs, commandPath[0]))
+  if (isCommandPathGroup(specs, commandPath)) {
+    console.log(formatGroupHelp(specs, commandPath))
     return
   }
 
@@ -417,14 +418,18 @@ export function formatCommandHelp(spec: CommandSpec): string {
   return lines.join('\n')
 }
 
-export function formatGroupHelp(specs: CommandSpec[], group: string): string {
-  const groupSpecs = specs.filter((spec) => spec.path[0] === group)
-  const lines = [`orca ${group}`, '', `Usage: orca ${group} <command> [options]`, '', 'Commands:']
-  for (const spec of groupSpecs) {
-    lines.push(`  ${spec.path.slice(1).join(' ').padEnd(18)} ${spec.summary}`)
+export function formatGroupHelp(specs: CommandSpec[], group: string[]): string {
+  const label = group.join(' ')
+  const lines = [`orca ${label}`, '', `Usage: orca ${label} <command> [options]`, '', 'Commands:']
+  for (const spec of commandPathGroupSpecs(specs, group)) {
+    lines.push(`  ${spec.path.slice(group.length).join(' ').padEnd(18)} ${spec.summary}`)
   }
-  lines.push('', `Run \`orca ${group} <command> --help\` for command-specific usage.`)
+  lines.push('', `Run \`orca ${label} <command> --help\` for command-specific usage.`)
   return lines.join('\n')
+}
+
+function isLinearProjectMetadataCommand(command: string): boolean {
+  return command === 'linear project statuses' || command === 'linear project labels'
 }
 
 function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
@@ -460,6 +465,21 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
     return '--terminal-state <state> Terminal accounting filter: active, reclaimable, retained, release_pending, release_unknown, or released'
   }
   if (command === 'linear list-issues' && flag === 'workspace') {
+    return '--workspace <id|all>  Connected Linear workspace id, or all'
+  }
+  if (command === 'linear project show' && flag === 'id') {
+    return '--id <project>        Linear project UUID, slugId, URL, or unique exact name'
+  }
+  if (command === 'linear project show' && flag === 'updates') {
+    return '--updates             Include the recent Linear project update feed'
+  }
+  if (command === 'linear project show' && flag === 'updates-limit') {
+    return '--updates-limit <n>   Project updates to include; requires --updates (max 25)'
+  }
+  if (isLinearProjectMetadataCommand(command) && flag === 'query') {
+    return '--query <text>        Case-insensitive filter over project metadata names'
+  }
+  if (isLinearProjectMetadataCommand(command) && flag === 'workspace') {
     return '--workspace <id|all>  Connected Linear workspace id, or all'
   }
   if (command.startsWith('linear ') && flag === 'workspace') {

@@ -405,7 +405,12 @@ import type {
   LinearErrorCode,
   LinearIssueListFilter,
   LinearIssueListResult,
+  LinearProjectLabelsResult,
   LinearProjectListResult,
+  LinearProjectShowRequest,
+  LinearProjectShowResult,
+  LinearProjectStatusesResult,
+  LinearProjectWorkspaceReadRequest,
   LinearIssueSummary,
   LinearIssueRequest,
   LinearIssueTaskUpdateRequest,
@@ -492,8 +497,9 @@ import {
   RuntimeGraphReloadLifecycle
 } from './runtime-graph-reload-lifecycle'
 import {
-  LINEAR_SEARCH_MAX_LIMIT,
   LINEAR_WRITE_BODY_CAP,
+  clampLinearProjectMetadataLimit,
+  clampLinearProjectUpdatesLimit,
   clampLinearSearchLimit
 } from '../../shared/linear/agent-access'
 import { isLinearUuid } from '../../shared/linear/uuid'
@@ -913,12 +919,21 @@ import {
   listCustomViewIssues as listLinearCustomViewIssues,
   listCustomViewProjects as listLinearCustomViewProjects,
   listCustomViews as listLinearCustomViews,
-  listProjectsByExactName as listLinearProjectsByExactName,
   listProjectIssues as listLinearProjectIssues,
   listProjectTeams as listLinearProjectTeams,
   listProjects as listLinearProjects,
   type LinearProjectCreateInput
 } from '../linear/projects'
+import {
+  findLinearProjectTargetCandidates,
+  resolveLinearProjectTarget,
+  type LinearProjectTargetCandidates
+} from '../linear/project-target-resolution'
+import { getProjectShowForAgent } from '../linear/project-agent-read'
+import {
+  listProjectLabelsForAgent,
+  listProjectStatusesForAgent
+} from '../linear/project-agent-metadata'
 import {
   getTeamLabels as getLinearTeamLabels,
   getTeamLabelsOrThrow as getLinearTeamLabelsOrThrow,
@@ -35557,6 +35572,53 @@ export class OrcaRuntimeService {
     }
   }
 
+  async linearProjectShowForAgents(
+    request: LinearProjectShowRequest
+  ): Promise<LinearProjectShowResult> {
+    if (request.workspaceId === 'all') {
+      throw linearError(
+        'linear_invalid_workspace',
+        '--workspace all is only valid for project list, statuses, and labels.'
+      )
+    }
+    const updates = request.updates === true
+    const updatesLimit = clampLinearProjectUpdatesLimit(request.updatesLimit)
+    try {
+      const project = await resolveLinearProjectTarget(request.input, request.workspaceId)
+      return await getProjectShowForAgent(project, { updates, updatesLimit })
+    } catch (error) {
+      throw this.mapLinearReadFailure(error)
+    }
+  }
+
+  async linearProjectStatusesForAgents(
+    request: LinearProjectWorkspaceReadRequest
+  ): Promise<LinearProjectStatusesResult> {
+    try {
+      return await listProjectStatusesForAgent({
+        query: request.query,
+        limit: clampLinearProjectMetadataLimit(request.limit),
+        workspaceId: request.workspaceId
+      })
+    } catch (error) {
+      throw this.mapLinearReadFailure(error)
+    }
+  }
+
+  async linearProjectLabelsForAgents(
+    request: LinearProjectWorkspaceReadRequest
+  ): Promise<LinearProjectLabelsResult> {
+    try {
+      return await listProjectLabelsForAgent({
+        query: request.query,
+        limit: clampLinearProjectMetadataLimit(request.limit),
+        workspaceId: request.workspaceId
+      })
+    } catch (error) {
+      throw this.mapLinearReadFailure(error)
+    }
+  }
+
   async linearIssueListForAgents(params: {
     filter?: LinearIssueListFilter
     teamInput?: string
@@ -36610,94 +36672,73 @@ export class OrcaRuntimeService {
     if (!trimmed) {
       throw linearError('linear_invalid_project', 'Pass a non-empty Linear project id or name.')
     }
-    const byId = isLinearUuid(trimmed)
-      ? await this.readLinearProjectByIdForCreate(trimmed, team.workspaceId)
-      : null
-    if (byId) {
-      await this.assertLinearProjectIncludesTeam(byId, team.id, team.workspaceId, trimmed)
-      return byId
+    // Why: create shares the `project show` lookup grammar; only the target-team check below is extra.
+    let found: LinearProjectTargetCandidates
+    try {
+      found = await findLinearProjectTargetCandidates(trimmed, team.workspaceId)
+    } catch (error) {
+      throw this.mapLinearReadFailure(error)
     }
-    const searchCandidates = await this.readLinearProjectsForCreate(trimmed, team.workspaceId)
-    const normalized = trimmed.toLowerCase()
-    const idMatch = searchCandidates.find((project) => project.id.toLowerCase() === normalized)
-    if (idMatch) {
-      await this.assertLinearProjectIncludesTeam(idMatch, team.id, team.workspaceId, trimmed)
-      return idMatch
+    const candidates: LinearProjectSummary[] = found.candidates
+    if (isLinearUuid(trimmed) || found.slugMatchIds.size > 0) {
+      // Why: an id or slug target is unique by construction, so only a rival exact name can make it ambiguous.
+      if (found.ambiguous || candidates.length > 1) {
+        throw this.linearAmbiguousProjectError(trimmed, candidates)
+      }
+      if (candidates.length === 0) {
+        throw this.linearUnmatchedProjectError(trimmed, [])
+      }
+      await this.assertLinearProjectIncludesTeam(candidates[0], team.id, team.workspaceId, trimmed)
+      return candidates[0]
     }
-    const slugMatch = searchCandidates.find(
-      (project) => project.slugId?.toLowerCase() === normalized
+    if (found.ambiguous) {
+      throw this.linearAmbiguousProjectError(trimmed, candidates)
+    }
+    const compatible = await this.filterLinearProjectsForTeam(candidates, team.id, team.workspaceId)
+    if (compatible.length === 1) {
+      return compatible[0]
+    }
+    if (compatible.length > 1) {
+      throw this.linearAmbiguousProjectError(trimmed, compatible)
+    }
+    if (candidates.length > 0) {
+      await this.assertLinearProjectIncludesTeam(candidates[0], team.id, team.workspaceId, trimmed)
+    }
+    throw this.linearUnmatchedProjectError(trimmed, candidates)
+  }
+
+  private linearAmbiguousProjectError(
+    input: string,
+    projects: LinearProjectSummary[]
+  ): LinearAgentAccessError {
+    return linearError(
+      'linear_invalid_project',
+      `Multiple Linear projects exactly matched "${input}".`,
+      {
+        projects: this.linearProjectCandidates(projects),
+        nextSteps: ['Run `orca linear project list --query <name> --json` and retry by id.']
+      }
     )
-    if (slugMatch) {
-      await this.assertLinearProjectIncludesTeam(slugMatch, team.id, team.workspaceId, trimmed)
-      return slugMatch
-    }
-    const nameMatches = await this.readLinearProjectsByExactNameForCreate(trimmed, team.workspaceId)
-    const compatibleNameMatches = await this.filterLinearProjectsForTeam(
-      nameMatches,
-      team.id,
-      team.workspaceId
-    )
-    if (compatibleNameMatches.length === 1) {
-      return compatibleNameMatches[0]
-    }
-    if (compatibleNameMatches.length > 1) {
-      throw linearError(
-        'linear_invalid_project',
-        `Multiple Linear projects exactly matched "${trimmed}".`,
-        {
-          projects: compatibleNameMatches.map((project) => ({
-            id: project.id,
-            name: project.name,
-            teams: project.teams
-          })),
-          nextSteps: ['Run `orca linear project list --query <name> --json` and retry by id.']
-        }
-      )
-    }
-    if (nameMatches.length > 0) {
-      await this.assertLinearProjectIncludesTeam(nameMatches[0], team.id, team.workspaceId, trimmed)
-    }
-    throw linearError('linear_invalid_project', `No Linear project exactly matched "${trimmed}".`, {
-      projects: searchCandidates.map((project) => ({
-        id: project.id,
-        name: project.name,
-        teams: project.teams
-      })),
+  }
+
+  private linearUnmatchedProjectError(
+    input: string,
+    projects: LinearProjectSummary[]
+  ): LinearAgentAccessError {
+    return linearError('linear_invalid_project', `No Linear project exactly matched "${input}".`, {
+      projects: this.linearProjectCandidates(projects),
       nextSteps: ['Run `orca linear project list --query <name> --json` and retry by id.']
     })
   }
 
-  private async readLinearProjectByIdForCreate(
-    id: string,
-    workspaceId: string
-  ): Promise<LinearProjectSummary | null> {
-    try {
-      return await getLinearProject(id, workspaceId, true)
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  private async readLinearProjectsForCreate(
-    query: string,
-    workspaceId: string
-  ): Promise<LinearProjectSummary[]> {
-    try {
-      return (await listLinearProjects(query, LINEAR_SEARCH_MAX_LIMIT, workspaceId, true)).items
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
-  }
-
-  private async readLinearProjectsByExactNameForCreate(
-    name: string,
-    workspaceId: string
-  ): Promise<LinearProjectSummary[]> {
-    try {
-      return await listLinearProjectsByExactName(name, workspaceId, true)
-    } catch (error) {
-      throw this.mapLinearReadFailure(error)
-    }
+  private linearProjectCandidates(
+    projects: LinearProjectSummary[]
+  ): { id: string; name: string; teams: LinearProjectSummary['teams'] }[] {
+    return projects.map((project) => ({
+      id: project.id,
+      name: project.name,
+      teams: project.teams
+    }))
   }
 
   private async assertLinearProjectIncludesTeam(

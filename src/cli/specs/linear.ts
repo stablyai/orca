@@ -1,9 +1,11 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
 import { LINEAR_MCP_COMMAND_SPECS } from './linear-mcp'
+import { LINEAR_PROJECT_COMMAND_SPECS } from './linear-project'
 
 export const LINEAR_COMMAND_SPECS: CommandSpec[] = [
   ...LINEAR_MCP_COMMAND_SPECS,
+  ...LINEAR_PROJECT_COMMAND_SPECS,
   {
     path: ['linear', 'issue'],
     summary: 'Read Linear issue context for agents',

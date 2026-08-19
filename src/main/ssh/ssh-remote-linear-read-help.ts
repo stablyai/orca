@@ -26,6 +26,21 @@ export function getRemoteLinearReadHelp(commandPath: string[]): string | null {
   if (matchesRemoteCommand(commandPath, 'linear', 'project', 'list')) {
     return LINEAR_PROJECT_LIST_HELP
   }
+  if (matchesRemoteCommand(commandPath, 'linear', 'project', 'show')) {
+    return LINEAR_PROJECT_SHOW_HELP
+  }
+  if (matchesRemoteCommand(commandPath, 'linear', 'project', 'statuses')) {
+    return LINEAR_PROJECT_STATUSES_HELP
+  }
+  if (matchesRemoteCommand(commandPath, 'linear', 'project', 'labels')) {
+    return LINEAR_PROJECT_LABELS_HELP
+  }
+  if (matchesRemoteCommand(commandPath, 'linear', 'project', 'update')) {
+    return LINEAR_PROJECT_UPDATE_GROUP_HELP
+  }
+  if (matchesRemoteCommand(commandPath, 'linear', 'project')) {
+    return LINEAR_PROJECT_GROUP_HELP
+  }
   if (matchesRemoteCommand(commandPath, 'linear', 'list')) {
     return LINEAR_LIST_HELP
   }
@@ -55,6 +70,9 @@ Commands:
   team states        List Linear team workflow states
   team labels        List Linear team labels
   project list       List connected Linear projects
+  project show       Read a Linear project
+  project statuses   List Linear project statuses
+  project labels     List Linear project labels
   list               List Linear issues
   assignee set       Set a Linear issue assignee
   assignee clear     Clear a Linear issue assignee
@@ -155,6 +173,60 @@ const LINEAR_PROJECT_LIST_HELP = `orca linear project list
 Usage: orca linear project list [--query <text>] [--limit <n>] [--workspace <id>|all] [--json]
 
 List connected Linear projects`
+
+const LINEAR_PROJECT_GROUP_HELP = `orca linear project
+
+Usage: orca linear project <command> [options]
+
+Commands:
+  show          Read a Linear project
+  statuses      List Linear project statuses
+  labels        List Linear project labels
+  list          List connected Linear projects
+  update        Linear project update commands
+
+Run \`orca linear project <command> --help\` for command-specific usage.`
+
+const LINEAR_PROJECT_UPDATE_GROUP_HELP = `orca linear project update
+
+Usage: orca linear project update <command> [options]
+
+Commands:
+  add    Post a Linear project update (Linear project write command)
+
+Run \`orca linear project update <command> --help\` for command-specific usage.`
+
+const LINEAR_PROJECT_SHOW_HELP = `orca linear project show
+
+Usage: orca linear project show (<project> | --id <project>) [--updates] [--updates-limit <n>] [--workspace <id>] [--json]
+
+Read a Linear project
+
+Options:
+  --help                 Show this help message
+  --json                 Emit machine-readable JSON
+  --pairing-code
+  --environment
+  --updates              Include the recent Linear project update feed
+  --updates-limit <n>    Number of project updates for --updates (max 25)
+  --workspace <id>      Connected Linear workspace id
+  --id <project>        Project UUID, slug, Linear project URL, or exact name
+
+Examples:
+  $ orca linear project show launch-a1b2c3
+  $ orca linear project show "Launch" --updates --updates-limit 10 --json`
+
+const LINEAR_PROJECT_STATUSES_HELP = `orca linear project statuses
+
+Usage: orca linear project statuses [--query <text>] [--limit <n>] [--workspace <id>|all] [--json]
+
+List Linear project statuses`
+
+const LINEAR_PROJECT_LABELS_HELP = `orca linear project labels
+
+Usage: orca linear project labels [--query <text>] [--limit <n>] [--workspace <id>|all] [--json]
+
+List Linear project labels`
 
 const LINEAR_LIST_HELP = `orca linear list
 
