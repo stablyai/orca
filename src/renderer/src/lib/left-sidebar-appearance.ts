@@ -61,26 +61,12 @@ export const APP_APPEARANCE_STYLE_PROPERTIES = [
   '--bg-titlebar'
 ] as const
 
-function hexToRgba(hex: string, alpha: number): string {
-  const normalized = normalizeLeftSidebarTintColor(hex)
-  let clean = normalized.replace('#', '')
-  if (clean.length === 3) {
-    clean = clean
-      .split('')
-      .map((part) => part + part)
-      .join('')
-  }
-  const r = Number.parseInt(clean.slice(0, 2), 16)
-  const g = Number.parseInt(clean.slice(2, 4), 16)
-  const b = Number.parseInt(clean.slice(4, 6), 16)
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`
-}
-
-function applyAlpha(color: string, alpha: number | undefined): string {
+function compositeWithBaseSurface(color: string, alpha: number | undefined): string {
   if (alpha === undefined || alpha >= 1 || !HEX_COLOR_RE.test(color.trim())) {
     return color
   }
-  return hexToRgba(color, Math.min(1, Math.max(0, alpha)))
+  const percent = Number((Math.min(1, Math.max(0, alpha)) * 100).toFixed(2))
+  return `color-mix(in srgb, ${color} ${percent}%, var(--app-appearance-base-background))`
 }
 
 function buildSurfaceVariables(background: string, foreground: string): LeftSidebarStyleVariables {
@@ -139,7 +125,7 @@ function resolveTerminalSurface(
   const rawBackground =
     settings.terminalColorOverrides?.background ?? appearance.theme?.background ?? '#000000'
   return {
-    background: applyAlpha(rawBackground, settings.terminalBackgroundOpacity),
+    background: compositeWithBaseSurface(rawBackground, settings.terminalBackgroundOpacity),
     foreground:
       settings.terminalColorOverrides?.foreground ?? appearance.theme?.foreground ?? '#fafafa',
     rawBackground
