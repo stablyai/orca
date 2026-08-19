@@ -26,50 +26,50 @@ export async function tearDownRemovedWorktreeRendererState(args: {
 }): Promise<void> {
   const { set, get, worktreeId, hostId, requiredExecutionHostId, terminalPtyIdsBeforeRemoval } =
     args
-// Why: renderer state follows the successful backend result, so blocked dirty deletes keep their terminals intact.
-// Why browsers first: unregister Chromium guests before other teardown can intercept them (avoids a browser-state race).
-await get().shutdownWorktreeBrowsers(worktreeId)
-await get().shutdownWorktreeTerminals(worktreeId, {
-  shutdownReason: 'remove-worktree',
-  // The backend removal above already killed the workspace's PTYs.
-  backendOwnsPtyTeardown: true
-})
-// Why: dispose the SSH relay AFTER terminal teardown so a still-mounted pane can't hit a gone relay and toast "SSH not active".
-const runtimeCleanup = await cleanupEphemeralVmRuntimesForDeleted(
-  requiredExecutionHostId
-    ? {
-        hostScopedWorkspaces: [
-          { workspaceId: worktreeId, executionHostId: requiredExecutionHostId }
-        ]
-      }
-    : { workspaceIds: [worktreeId] }
-)
-// Remove the orphaned project for the destroyed SSH target so it can't surface as a dead project in the composer.
-await purgeOrphanedRuntimeSshProjects(get, runtimeCleanup.destroyedSshTargetIds)
-const tabs = get().tabsByWorktree[worktreeId] ?? []
-const tabIds = new Set(tabs.map((t) => t.id))
+  // Why: renderer state follows the successful backend result, so blocked dirty deletes keep their terminals intact.
+  // Why browsers first: unregister Chromium guests before other teardown can intercept them (avoids a browser-state race).
+  await get().shutdownWorktreeBrowsers(worktreeId)
+  await get().shutdownWorktreeTerminals(worktreeId, {
+    shutdownReason: 'remove-worktree',
+    // The backend removal above already killed the workspace's PTYs.
+    backendOwnsPtyTeardown: true
+  })
+  // Why: dispose the SSH relay AFTER terminal teardown so a still-mounted pane can't hit a gone relay and toast "SSH not active".
+  const runtimeCleanup = await cleanupEphemeralVmRuntimesForDeleted(
+    requiredExecutionHostId
+      ? {
+          hostScopedWorkspaces: [
+            { workspaceId: worktreeId, executionHostId: requiredExecutionHostId }
+          ]
+        }
+      : { workspaceIds: [worktreeId] }
+  )
+  // Remove the orphaned project for the destroyed SSH target so it can't surface as a dead project in the composer.
+  await purgeOrphanedRuntimeSshProjects(get, runtimeCleanup.destroyedSshTargetIds)
+  const tabs = get().tabsByWorktree[worktreeId] ?? []
+  const tabIds = new Set(tabs.map((t) => t.id))
 
-// Why: this path deletes tabsByWorktree wholesale (not via closeTab), so purge the module-level tab maps here too.
-detachedHeadAutoDerivedDisplayNames.delete(worktreeId)
-forgetForegroundTerminalTabs(tabIds)
-forgetAgentStartupDeliveriesForTabs(tabIds)
+  // Why: this path deletes tabsByWorktree wholesale (not via closeTab), so purge the module-level tab maps here too.
+  detachedHeadAutoDerivedDisplayNames.delete(worktreeId)
+  forgetForegroundTerminalTabs(tabIds)
+  forgetAgentStartupDeliveriesForTabs(tabIds)
 
-// Why: snapshot the sidebar top-row anchor in the same tick we remove the row; recording at click time goes stale across the await.
-requestVirtualizedScrollAnchorRecord('[data-worktree-sidebar]')
+  // Why: snapshot the sidebar top-row anchor in the same tick we remove the row; recording at click time goes stale across the await.
+  requestVirtualizedScrollAnchorRecord('[data-worktree-sidebar]')
 
-// Why: dispose parked terminal watchers only on explicit deletion; identity migration/remounts must keep buffered PTY state.
-disposeRemovedWorktreeParkedTerminalWatchers(worktreeId, terminalPtyIdsBeforeRemoval)
-applyRemoveWorktreeSuccessState(set, worktreeId, tabIds)
-get().removeWorkspaceSpaceWorktrees?.(
-  hostId ? [{ id: worktreeId, executionHostId: hostId }] : [worktreeId]
-)
-// Why: PR/commit-message generation records are keyed by worktree; prune to the surviving set so they don't leak.
-const liveWorktreeKeys = new Set(
-  get()
-    .allWorktrees()
-    .map((w) => w.id)
-)
-// Optional-chained: minimal store assemblies (some unit tests) omit the generation slices.
-get().prunePullRequestGenerationRecords?.(liveWorktreeKeys)
-get().pruneCommitMessageGenerationRecords?.(liveWorktreeKeys)
+  // Why: dispose parked terminal watchers only on explicit deletion; identity migration/remounts must keep buffered PTY state.
+  disposeRemovedWorktreeParkedTerminalWatchers(worktreeId, terminalPtyIdsBeforeRemoval)
+  applyRemoveWorktreeSuccessState(set, worktreeId, tabIds)
+  get().removeWorkspaceSpaceWorktrees?.(
+    hostId ? [{ id: worktreeId, executionHostId: hostId }] : [worktreeId]
+  )
+  // Why: PR/commit-message generation records are keyed by worktree; prune to the surviving set so they don't leak.
+  const liveWorktreeKeys = new Set(
+    get()
+      .allWorktrees()
+      .map((w) => w.id)
+  )
+  // Optional-chained: minimal store assemblies (some unit tests) omit the generation slices.
+  get().prunePullRequestGenerationRecords?.(liveWorktreeKeys)
+  get().pruneCommitMessageGenerationRecords?.(liveWorktreeKeys)
 }

@@ -30,7 +30,6 @@ type WorkspaceKanbanStatusLaneProps = {
   columnWidth: number
   isResizingColumn: boolean
   isDragTarget: boolean
-  canCreateWorktree: boolean
   nativeDragEnabled?: boolean
   renderCards: boolean
   selectedWorktreeIds: ReadonlySet<string>
@@ -61,7 +60,6 @@ function WorkspaceKanbanStatusLane({
   columnWidth,
   isResizingColumn,
   isDragTarget,
-  canCreateWorktree,
   nativeDragEnabled = true,
   renderCards,
   selectedWorktreeIds,
@@ -94,9 +92,7 @@ function WorkspaceKanbanStatusLane({
       undefined
     )
   }, [fullWorktreeIds, hasQuery, items])
-  const createTooltip = canCreateWorktree
-    ? `New workspace in ${status.label}`
-    : 'Add a project to create workspaces'
+  const createTooltip = `New workspace in ${status.label}`
   const createButton = (
     <Button
       type="button"
@@ -104,7 +100,6 @@ function WorkspaceKanbanStatusLane({
       size="icon-xs"
       className="size-6 text-muted-foreground"
       aria-label={createTooltip}
-      disabled={!canCreateWorktree}
       onClick={() => onCreateWorktree(status.id)}
     >
       <Plus className="size-3.5" />
@@ -224,7 +219,6 @@ function WorkspaceKanbanStatusLane({
                 'group-hover/lane:opacity-100 group-focus-within/lane:opacity-100'
               )}
               aria-label={createTooltip}
-              disabled={!canCreateWorktree}
               onClick={() => onCreateWorktree(status.id)}
             >
               <Plus className="size-3.5" />

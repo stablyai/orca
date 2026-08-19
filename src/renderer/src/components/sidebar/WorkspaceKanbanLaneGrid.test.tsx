@@ -108,7 +108,6 @@ function makeGrid(activeWorktreeIdentity: string | null = null): React.JSX.Eleme
       columnWidth={308}
       isResizingColumn={false}
       dragOverStatus={null}
-      canCreateWorktree={true}
       renderCards={true}
       selectedWorktreeIds={new Set()}
       selectedWorktrees={[]}

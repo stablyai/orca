@@ -10,9 +10,11 @@ import {
   resolveWorktreeDisplayName
 } from './worktree-default-display-name'
 import { matchWorkspaceTabAgentSnippet } from './workspace-tab-agent-snippet-match'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { MatchRange } from './palette-match/normalized-text'
 import type { PaletteDocumentRank } from './palette-match/palette-document'
 import type { PaletteResultQualityClass } from './palette-match/match-quality'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import type {
   SearchableWorkspaceTab,
   WorkspaceTabContentType
@@ -21,11 +23,14 @@ import type {
 const NO_RANGES: readonly MatchRange[] = []
 
 export type WorkspaceTabPaletteSearchResult = {
+  /** Worktree ids collide across hosts; activation must not resolve by id alone. */
+  executionHostId?: ExecutionHostId
   tabId: string
   entityId: string
   worktreeId: string
   groupId: string
   contentType: WorkspaceTabContentType
+  occupantAgent: TuiAgent | null
   title: string
   secondaryText: string
   repoName: string
@@ -79,11 +84,13 @@ function positionScore(entry: SearchableWorkspaceTab): number {
 
 function baseResult(entry: SearchableWorkspaceTab): WorkspaceTabPaletteSearchResult {
   return {
+    ...(entry.worktree.hostId ? { executionHostId: entry.worktree.hostId } : {}),
     tabId: entry.tab.id,
     entityId: entry.tab.entityId,
     worktreeId: entry.worktree.id,
     groupId: entry.tab.groupId,
     contentType: entry.tab.contentType,
+    occupantAgent: entry.occupantAgent,
     title: entry.title,
     secondaryText: entry.secondaryText,
     repoName: entry.repoName,

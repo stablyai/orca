@@ -4,7 +4,7 @@
 // missing-Orca-env path, so their writer may break there.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
@@ -29,25 +29,6 @@ afterEach(() => {
   }
   rmSync(isolatedUserDataDir, { recursive: true, force: true })
 })
-
-function findGitBash(): string {
-  if (process.env.KIMI_SHELL_PATH) {
-    return process.env.KIMI_SHELL_PATH
-  }
-  const candidates = [
-    process.env.ProgramFiles && join(process.env.ProgramFiles, 'Git', 'bin', 'bash.exe'),
-    process.env['ProgramFiles(x86)'] &&
-      join(process.env['ProgramFiles(x86)'], 'Git', 'bin', 'bash.exe'),
-    process.env.LOCALAPPDATA && join(process.env.LOCALAPPDATA, 'Programs', 'Git', 'bin', 'bash.exe')
-  ]
-  const bash = candidates.find((candidate): candidate is string =>
-    Boolean(candidate && existsSync(candidate))
-  )
-  if (!bash) {
-    throw new Error('Git Bash is required for the Windows Kimi hook lifecycle test')
-  }
-  return bash
-}
 
 const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
@@ -84,6 +65,7 @@ import { wrapPosixHookCommand, wrapWindowsHookCommand } from './installer-utils'
 import { POSIX_HOOK_STDIN_READER } from './hook-stdin-contract'
 import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
 import { createAgentHookMemorySftp } from './agent-hook-memory-sftp.test-fixture'
+import { findGitBash } from './windows-git-bash-path.test-fixture'
 
 const REMOTE_HOME = '/home/dev'
 const LARGE_PAYLOAD = Buffer.alloc(1_000_000, 'x')

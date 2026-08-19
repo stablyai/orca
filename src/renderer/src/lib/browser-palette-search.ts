@@ -13,6 +13,7 @@ import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
 } from './worktree-default-display-name'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { MatchRange } from './palette-match/normalized-text'
 import type { PaletteDocument, PaletteDocumentRank } from './palette-match/palette-document'
 import type { PaletteResultQualityClass } from './palette-match/match-quality'
@@ -32,6 +33,8 @@ export type SearchableBrowserPage = {
 }
 
 export type BrowserPaletteSearchResult = {
+  /** Worktree ids collide across hosts; activation must not resolve by id alone. */
+  executionHostId?: ExecutionHostId
   pageId: string
   workspaceId: string
   worktreeId: string
@@ -138,6 +141,7 @@ function positionScore(entry: SearchableBrowserPage): number {
 function baseResult(entry: SearchableBrowserPage): BrowserPaletteSearchResult {
   const formattedUrl = formatBrowserPaletteUrl(entry.page.url)
   return {
+    ...(entry.worktree.hostId ? { executionHostId: entry.worktree.hostId } : {}),
     pageId: entry.page.id,
     workspaceId: entry.workspace.id,
     worktreeId: entry.worktree.id,

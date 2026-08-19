@@ -152,9 +152,7 @@ describe('PR E2E gate contract', () => {
       expect(existsSync(join(projectDir, spec)), spec).toBe(true)
       // Why: a spec that stops reading the flag would silently run without Docker.
       if (spec !== 'tests/e2e/ssh-startup-exec-readiness.spec.ts') {
-        expect(readFileSync(join(projectDir, spec), 'utf8'), spec).toContain(
-          'ORCA_E2E_SSH_DOCKER'
-        )
+        expect(readFileSync(join(projectDir, spec), 'utf8'), spec).toContain('ORCA_E2E_SSH_DOCKER')
       }
     }
 

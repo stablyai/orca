@@ -12,6 +12,8 @@ import {
   type MigrationUnsupportedPtyEntry,
   type ParsedAgentStatusPayload
 } from '../../../../shared/agent-status-types'
+import type { AgentStatusObservation } from '../../../../shared/agent-status-observation'
+import { rendererAgentStatusObservations } from '../../lib/renderer-agent-status-observations'
 import {
   agentProviderSessionsEqual,
   getAgentResumeArgv,
@@ -112,6 +114,9 @@ export type AgentStatusPayload = ParsedAgentStatusPayload & {
   orchestration?: AgentStatusOrchestrationContext
   promptInteractionKey?: string
   restoredUnconfirmed?: boolean
+  /** Ingress provenance for this write (STA-4293). Read by nothing yet; a caller that omits
+   *  it produces exactly the entry it produces today. See agent-status-observation.ts. */
+  observation?: AgentStatusObservation
 }
 
 export type AgentStatusTiming = { updatedAt?: number; stateStartedAt?: number }
@@ -1481,6 +1486,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       const ownerPaneKey = resolveAgentPaneAuthorityKey(paneKey)
       const retiredPaneKeys = retireAgentPaneAuthorityAliases(paneKey)
       const retiredPaneKeySet = new Set(retiredPaneKeys)
+      for (const key of retiredPaneKeys) {
+        rendererAgentStatusObservations.forget(key)
+      }
       let hadLive = false
       set((s) => {
         const retiredLivePaneKeys = retiredPaneKeys.filter((key) => key in s.agentStatusByPaneKey)
@@ -1596,6 +1604,10 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       }
       const from = transfer.previousOwnerPaneKey
       const to = transfer.ownerPaneKey
+      // Why: the moved row carries the observation stamped for its OLD key; renderer-authored
+      // observations for the new key must sort after it, not race it.
+      rendererAgentStatusObservations.forget(from)
+      rendererAgentStatusObservations.rebind(to)
       const targetTabId = getTabIdFromPaneKey(to) ?? undefined
       const targetLeafId = getLeafIdFromPaneKey(to) ?? undefined
       set((s) => ({
@@ -2194,6 +2206,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           ...(providerSession ? { providerSession } : {}),
           ...(promptInteractionKey ? { promptInteractionKey } : {}),
           ...(payload.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
+          // Why: never inherited from `existing` — an unstamped write is an unstamped
+          // observation, not the previous one repeated.
+          ...(payload.observation ? { observation: payload.observation } : {}),
           // Why: `interrupted` is done-only; parseAgentStatusPayload already clamps it for non-done states, so write it through directly.
           interrupted: payload.interrupted,
           // Why: done→done repaints (OSC 9999, reconnect snapshot replays) re-deliver a

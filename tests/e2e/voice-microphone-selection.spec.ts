@@ -165,11 +165,18 @@ test.describe('Voice microphone selection', () => {
       state.dispatchDeviceChange()
     })
 
-    await prepareVoiceSettings(orcaPage, 'stale-airpods-id', 'AirPods')
-    const refreshedMicrophone = orcaPage.getByRole('combobox', { name: 'Microphone' })
-    await expect(refreshedMicrophone).toHaveText('AirPods')
-    await refreshedMicrophone.press('Space')
-    await expect(orcaPage.getByRole('option', { name: 'AirPods' })).toBeVisible()
+    // Why: devicechange can leave Radix's listbox open and aria-hide the
+    // trigger, so getByRole('combobox') finds nothing. The live option is
+    // the stable handle; open the named trigger only if the list is closed.
+    const airpodsOption = orcaPage.getByRole('option', { name: 'AirPods', exact: true })
+    await expect(async () => {
+      if (!(await airpodsOption.isVisible().catch(() => false))) {
+        const trigger = orcaPage.getByRole('combobox', { name: 'Microphone' })
+        await expect(trigger).toHaveText('AirPods', { timeout: 1_000 })
+        await trigger.press('Space')
+      }
+      await expect(airpodsOption).toBeVisible({ timeout: 1_000 })
+    }).toPass({ timeout: 10_000 })
     await expect(orcaPage.getByRole('option', { name: 'AirPods (unavailable)' })).toHaveCount(0)
     await orcaPage.keyboard.press('Escape')
     await expect(readMicrophoneSettings(orcaPage)).resolves.toEqual({

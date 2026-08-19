@@ -2,14 +2,16 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   loginPreflightExecFileMock,
   spawnMock,
-  openCodeBuildPtyEnvMock,
-  bindAgentSessionPaneMock
+  openCodeBuildPtyEnvMock
 } from './pty-ipc-mock-registry'
 import { posixOnlyIt } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { userInfo } from 'node:os'
 import { resetMacosLoginShellPreflightForTests } from '../providers/macos-tcc-login-shell'
 import { registerPtyHandlers } from './pty'
+import { join } from 'node:path'
+// Why resolved rather than hardcoded: the wrapper tree is content-addressed.
+import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -121,8 +123,8 @@ describe('registerPtyHandlers', () => {
       expect(args).toEqual(['-l'])
       expect(options.env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-config')
       expect(options.env.ORCA_OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-config')
-      expect(options.env.ZDOTDIR).toBe('/tmp/orca-user-data/shell-ready/zsh')
-      expect(options.env.ORCA_SHELL_READY_MARKER).toBe('0')
+      expect(options.env.ZDOTDIR).toBe(join(getShellReadyWrapperRoot(), 'zsh'))
+      expect(options.env.ORCA_SHELL_FEATURES).not.toContain('ready')
     } finally {
       Object.defineProperty(process, 'platform', {
         configurable: true,
@@ -162,8 +164,8 @@ describe('registerPtyHandlers', () => {
       expect(options.env.PI_CODING_AGENT_DIR).toBe('/tmp/user-pi-agent')
       expect(options.env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
       expect(options.env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/tmp/user-pi-agent')
-      expect(options.env.ZDOTDIR).toBe('/tmp/orca-user-data/shell-ready/zsh')
-      expect(options.env.ORCA_SHELL_READY_MARKER).toBe('0')
+      expect(options.env.ZDOTDIR).toBe(join(getShellReadyWrapperRoot(), 'zsh'))
+      expect(options.env.ORCA_SHELL_FEATURES).not.toContain('ready')
     } finally {
       Object.defineProperty(process, 'platform', {
         configurable: true,
@@ -230,60 +232,7 @@ describe('registerPtyHandlers', () => {
         mockProc.emitData('\x1b]133;A\x07% ')
         await Promise.resolve()
         vi.runAllTimers()
-        // Why the pin: a Claude launch carries a minted --session-id so a
-        // daemon-hosted session's hooks can still be traced to this pane (#9236).
-        expect(mockProc.proc.write).toHaveBeenCalledTimes(1)
-        expect(mockProc.proc.write.mock.calls[0][0]).toMatch(
-          /^claude --session-id [0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\n$/
-        )
-      } finally {
-        vi.useRealTimers()
-      }
-    }
-  )
-  posixOnlyIt(
-    'binds the minted session id to the spawning pane, so hooks can be traced back to it',
-    async () => {
-      // Why this asserts the SPAWN side: the hook server's own tests bind by
-      // hand, so without this the wiring that actually records the pane —
-      // the only thing that makes the correction fire in production — is
-      // deletable with every suite still green.
-      vi.useFakeTimers()
-      const mockProc = createMockProc()
-      spawnMock.mockReturnValue(mockProc.proc)
-      const tabId = 'tab-1'
-      const leafId = 'aaaaaaaa-1111-4111-8111-111111111111'
-      const paneKey = `${tabId}:${leafId}`
-
-      try {
-        registerPtyHandlers(mainWindow as never)
-        await handlers.get('pty:spawn')!(null, {
-          cols: 80,
-          rows: 24,
-          cwd: '/tmp',
-          command: 'claude',
-          tabId,
-          leafId,
-          worktreeId: 'wt-real',
-          env: { ORCA_PANE_KEY: paneKey, ORCA_TAB_ID: tabId, ORCA_WORKTREE_ID: 'wt-real' }
-        })
-
-        mockProc.emitData('last login: today\r\n')
-        vi.runOnlyPendingTimers()
-        mockProc.emitData('\x1b]133;A\x07% ')
-        await Promise.resolve()
-        vi.runAllTimers()
-
-        const written = String(mockProc.proc.write.mock.calls[0][0])
-        const mintedId = /--session-id ([0-9a-f-]{36})/.exec(written)?.[1]
-        expect(mintedId).toBeDefined()
-        // The id on the command line and the id recorded against the pane must
-        // be the same one, or the correction can never resolve.
-        expect(bindAgentSessionPaneMock).toHaveBeenCalledWith(
-          'claude',
-          mintedId,
-          expect.objectContaining({ paneKey, worktreeId: 'wt-real' })
-        )
+        expect(mockProc.proc.write).toHaveBeenCalledWith('claude\n')
       } finally {
         vi.useRealTimers()
       }
@@ -306,7 +255,7 @@ describe('registerPtyHandlers', () => {
         })
 
         const [, , options] = spawnMock.mock.calls[0]!
-        expect(options.env.ORCA_SHELL_READY_MARKER).toBe('0')
+        expect(options.env.ORCA_SHELL_FEATURES).not.toContain('ready')
 
         await Promise.resolve()
         vi.advanceTimersByTime(49)
@@ -338,7 +287,7 @@ describe('registerPtyHandlers', () => {
       })
 
       const [, , options] = spawnMock.mock.calls[0]!
-      expect(options.env.ORCA_SHELL_READY_MARKER).toBe('1')
+      expect(options.env.ORCA_SHELL_FEATURES).toContain('ready')
       expect(mockProc.proc.write).not.toHaveBeenCalled()
 
       mockProc.emitData('last login: today\r\n')
@@ -405,7 +354,7 @@ describe('registerPtyHandlers', () => {
       })
 
       const [, , options] = spawnMock.mock.calls[0]!
-      expect(options.env.ORCA_SHELL_READY_MARKER).toBe('1')
+      expect(options.env.ORCA_SHELL_FEATURES).toContain('ready')
       expect(mockProc.proc.write).not.toHaveBeenCalled()
 
       mockProc.emitData('\x1b]777;orca-shell-ready\x07')

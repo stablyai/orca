@@ -13128,7 +13128,10 @@
           "pairThisPc": "Pair this PC.",
           "pairThisComputer": "Pair this computer.",
           "directAddressDisclosure": "Also use a faster local path",
-          "directAddressHint": "Optional. Pick the Wi‑Fi or Tailscale address your phone should use when nearby — usually faster than Relay. Relay still works when you’re away."
+          "directAddressHint": "Optional. Pick the Wi‑Fi or Tailscale address your phone should use when nearby — usually faster than Relay. Relay still works when you’re away.",
+          "androidHelp": {
+            "guide": "Install guide"
+          }
         },
         "MobilePage": {
           "e17393c6a3": "Phone preview",
@@ -15324,13 +15327,17 @@
           "c92c9463c6": "Automation actions"
         },
         "AutomationListFilterMenu": {
+          "926e785e4d": "Search agents...",
+          "491043ee45": "No agents match your search.",
           "removeFilter": "Remove {{value0}} filter",
           "failed": "Failed",
           "succeeded": "Succeeded",
           "neverRan": "Never ran",
           "filters": "Filters",
           "all": "All",
-          "clear": "Clear filters"
+          "clear": "Clear filters",
+          "agent": "Agent",
+          "lastRun": "Last run"
         },
         "AutomationListSortHeader": {
           "sortedAscending": "{{value0}}, sorted ascending",
@@ -15719,8 +15726,6 @@
           "deleteDescription": "“{{name}}” will no longer be available at its public link.",
           "delete": "Delete",
           "deleteFailed": "Could not delete the artifact.",
-          "closeArtifacts": "Close artifacts",
-          "closeTooltip": "Close · Esc",
           "title": "Artifacts",
           "refresh": "Refresh",
           "signInHeading": "Sign in to Orca",
@@ -15737,8 +15742,6 @@
           "publishingOff": "Publishing is turned off",
           "publishingOffCopy": "Nothing on this device can create a public artifact link yet. Allow publishing in Settings → Artifacts, then share from an open HTML or Markdown file or ask your agent.",
           "openArtifactsSettings": "Open Settings → Artifacts",
-          "loadedCountMore": "{{count}} loaded · more available",
-          "loadedCount": "{{count}} shared",
           "retry": "Retry",
           "reconnectHeading": "Sign in to Orca again",
           "reconnectCopy": "Sign in again to view and manage the artifacts shared through your account.",
@@ -15754,16 +15757,16 @@
         "previewUnavailable": "Preview unavailable",
         "previewUnavailableDescription": "Open this artifact in your browser to view it.",
         "actions": "Artifact actions",
+        "ArtifactActions": {
+          "more": "More artifact actions"
+        },
         "ArtifactCollection": {
-          "loadMore": "Load more"
+          "loadMore": "Load more",
+          "noMatches": "No matches"
         },
         "ArtifactDetailHeader": {
-          "publicLink": "Anyone with this link can view it"
-        },
-        "ArtifactListPane": {
-          "search": "Search artifacts",
-          "listLabel": "Shared artifacts",
-          "noMatches": "No matches"
+          "publicLink": "Anyone with this link can view it",
+          "close": "Close"
         },
         "updatedAt": "Updated {{when}}",
         "updatedRecently": "recently",
@@ -15807,7 +15810,29 @@
           "openLink": "Open link",
           "updating": "Updating…",
           "update": "Update shared content"
-        }
+        },
+        "ArtifactDetailDrawer": {
+          "description": "Preview and manage this shared artifact."
+        },
+        "ArtifactListSearchField": {
+          "label": "Search artifacts",
+          "placeholder": "Search...",
+          "clear": "Clear search"
+        },
+        "ArtifactListTableHeader": {
+          "name": "Name",
+          "type": "Type",
+          "size": "Size",
+          "updated": "Updated",
+          "expires": "Expires",
+          "actions": "Actions"
+        },
+        "ArtifactsPageSkeleton": {
+          "loading": "Loading artifacts"
+        },
+        "expiredCompact": "Expired",
+        "typeMarkdown": "Markdown",
+        "typeHtml": "HTML"
       }
     },
     "i18n": {
@@ -16406,5 +16431,8 @@
       "settingsInstruction": "Change the model, dictation mode, or shortcut anytime in",
       "settingsLink": "Settings → Voice"
     }
+  },
+  "quickOpen": {
+    "moreMatchesAvailable": "More matches may be available. Refine your search to narrow the results."
   }
 }

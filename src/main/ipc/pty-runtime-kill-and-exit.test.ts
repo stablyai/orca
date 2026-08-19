@@ -126,6 +126,9 @@ describe('registerPtyHandlers', () => {
     expect(sshAList).toHaveBeenCalledOnce()
     expect(sshBList).not.toHaveBeenCalled()
 
+    // STA-517: the aggregate used to propagate ssh-b's failure, which cost the runtime the
+    // whole liveness inventory — so no PTY was ever proven dead and mobile kept every
+    // retained pane "active". One unreachable relay now drops out of the answer instead.
     await expect(controller.listProcesses()).resolves.toEqual([
       { id: 'local-pty', title: 'Local', cwd: '/local' },
       { id: 'ssh-a-pty' }
@@ -284,7 +287,7 @@ describe('registerPtyHandlers', () => {
     await handlers.get('pty:kill')!(null, { id: 'local-pty' })
 
     expect(runtime.onPtyExit).toHaveBeenCalledTimes(1)
-    expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0, undefined)
+    expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0, undefined, undefined)
     expect(mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')).toEqual(
       [['pty:exit', { id: 'local-pty', code: 0 }]]
     )
@@ -526,7 +529,7 @@ describe('registerPtyHandlers', () => {
         seq: 13,
         rawLength: 'daemon output'.length
       })
-      expect(runtime.onPtyExit).toHaveBeenCalledWith(result.id, 0, undefined)
+      expect(runtime.onPtyExit).toHaveBeenCalledWith(result.id, 0, undefined, undefined)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
         id: result.id,
         code: 0

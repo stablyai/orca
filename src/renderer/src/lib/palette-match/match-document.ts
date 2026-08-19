@@ -202,7 +202,13 @@ function buildSupportingEvidence(
       continue
     }
     for (const range of assignment.ranges) {
-      ranges.push({ start: range.start + offset, end: range.end + offset })
+      // Why clamp: a range is only meaningful against the unit text the row renders, and
+      // an out-of-range end would highlight past the end of that string.
+      const start = Math.min(range.start + offset, unit.text.length)
+      const end = Math.min(range.end + offset, unit.text.length)
+      if (start < end) {
+        ranges.push({ start, end })
+      }
     }
   }
   if (!ranges.length) {

@@ -13952,6 +13952,19 @@
         },
         "AutomationListLocalRows": {
           "c92c9463c6": "자동화 작업"
+        },
+        "AutomationListFilterMenu": {
+          "926e785e4d": "agents 검색...",
+          "491043ee45": "검색어와 일치하는 agents가 없습니다.",
+          "agent": "에이전트",
+          "lastRun": "마지막 실행",
+          "all": "전체",
+          "failed": "실패",
+          "succeeded": "성공",
+          "neverRan": "실행 안 함",
+          "filters": "필터",
+          "clear": "필터 지우기",
+          "removeFilter": "{{value0}} 필터 제거"
         }
       },
       "agent": {
@@ -14295,6 +14308,13 @@
         "pendingChip": "{{value0}} 보류 중",
         "needsActionChip": "{{value0}}개 조치 필요",
         "unresolvedChip": "{{value0}}개 미해결"
+      },
+      "artifacts": {
+        "ArtifactsPage": {
+          "deleteTitle": "아티팩트를 삭제할까요?",
+          "deleteDescription": "“{{name}}”은(는) 공개 링크에서 더 이상 사용할 수 없습니다.",
+          "delete": "삭제"
+        }
       }
     },
     "i18n": {

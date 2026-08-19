@@ -141,7 +141,11 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
           status: observation.status,
           exactWorker: observation.exact,
           // Why: a bare `unverifiable` is not actionable without naming what we lost.
-          ...(observation.reason ? { reason: observation.reason } : {})
+          ...(observation.reason ? { reason: observation.reason } : {}),
+          // Why conditional: a present null must mean "looked, nothing waiting". An
+          // unattached, missing or identity-changed worker was never looked at, and saying
+          // null there is the false negative this field exists to remove.
+          ...(observation.agentWait !== undefined ? { agentWait: observation.agentWait } : {})
         },
         terminalResource: resource ? exposeWorkerTerminalResource(resource) : null
       }

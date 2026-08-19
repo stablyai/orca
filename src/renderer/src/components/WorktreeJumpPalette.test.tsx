@@ -181,7 +181,7 @@ async function renderPalette(overrides: Partial<AppState>): Promise<void> {
 }
 
 function getWorktreeRows(): string[] {
-  return [...testContainer.querySelectorAll<HTMLElement>('[data-command-item^="worktree:"]')].map(
+  return [...testContainer.querySelectorAll<HTMLElement>('[data-command-item*="worktree:"]')].map(
     (node) => node.textContent ?? ''
   )
 }
@@ -361,14 +361,10 @@ describe('WorktreeJumpPalette', () => {
     expect(testContainer.textContent).toContain('Feature workspace')
   })
 
-  // KNOWN GAP (STA-4343): two same-id host rows both render, on the SAME bare command value,
-  // so React logs "Encountered two children with the same key" — a state it documents as
-  // unsupported and free to duplicate or omit children. #15170 rebuilt palette search around
-  // a `documents` map keyed by BARE worktree id, so host-qualifying the item id here alone
-  // would not fix matching; the id needs qualifying upstream with it. What DOES hold, and is
-  // asserted here, is that activating a row routes to THAT row's host — the routing
-  // guarantee this PR is about.
-  it('routes activation to the row host even though a collision renders one row', async () => {
+  // STA-4343 closed: two workspaces sharing `repoId::path` across hosts are two distinct
+  // rows. The documents map and worktreeMap are keyed by host identity, so each row resolves
+  // to its OWN worktree, and render keys keep the two apart for React and cmdk.
+  it('routes activation to each row own host when two same-id rows collide', async () => {
     const local = makeWorktree('shared', 'Local workspace', { hostId: 'local' })
     const ssh = makeWorktree('shared', 'SSH workspace', { hostId: 'ssh:box' })
     const state = {
@@ -378,24 +374,41 @@ describe('WorktreeJumpPalette', () => {
 
     await renderPalette(state)
 
-    // The gap: both rows render, sharing one bare command value (duplicate React key).
+    // Both rows render; the second carries a disambiguated command value so the two never
+    // share a React key.
     const rows = testContainer.querySelectorAll<HTMLButtonElement>(
-      '[data-command-item="worktree:shared"]'
+      '[data-command-item$="worktree:shared"]'
     )
     expect(rows).toHaveLength(2)
-    const row = rows[0]!
+    expect([...rows].map((candidate) => candidate.getAttribute('data-command-item'))).toEqual([
+      'worktree:shared',
+      'palette-dup:1:worktree:shared'
+    ])
 
-    // Activation always NAMES a host — it never falls through to a hostless call, which is
-    // the routing guarantee this PR adds.
-    await act(async () => fireEvent.click(row))
-    // Activation always NAMES a host — it never falls through to a hostless call, which is the
-    // routing guarantee this PR adds.
-    //
-    // DEFECT, pinned deliberately so a fix has to update this test: clicking the FIRST row
-    // activates the SECOND row's host. Duplicate React keys let the click resolve to the wrong
-    // child. Reproduces on main (bare `worktree:${id}` item id + id-keyed worktreeMap), so it
-    // is pre-existing rather than a regression here — but it is a real wrong-host open and
-    // should be fixed with the upstream document/id qualification.
+    // The first row names ITS OWN host — the wrong-host open is gone.
+    await act(async () => fireEvent.click(rows[0]!))
+    expect(activateAndRevealWorktree).toHaveBeenLastCalledWith('shared', {
+      executionHostId: 'local'
+    })
+  })
+
+  // Why a separate render: activating closes the palette, so the sibling row is detached
+  // before a second click in the same test could reach it.
+  it('routes the second same-id row to the other host', async () => {
+    const local = makeWorktree('shared', 'Local workspace', { hostId: 'local' })
+    const ssh = makeWorktree('shared', 'SSH workspace', { hostId: 'ssh:box' })
+
+    await renderPalette({
+      worktreesByRepo: { 'repo-1': [local, ssh] },
+      showSleepingWorkspaces: true
+    })
+
+    const rows = testContainer.querySelectorAll<HTMLButtonElement>(
+      '[data-command-item$="worktree:shared"]'
+    )
+    expect(rows).toHaveLength(2)
+
+    await act(async () => fireEvent.click(rows[1]!))
     expect(activateAndRevealWorktree).toHaveBeenLastCalledWith('shared', {
       executionHostId: 'ssh:box'
     })

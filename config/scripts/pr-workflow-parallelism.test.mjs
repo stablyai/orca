@@ -15,7 +15,9 @@ const shellContractFiles = [
   'src/main/providers/local-pty-shell-ready-zsh-zdotdir-discovery.test.ts',
   'src/main/providers/local-pty-shell-ready-zsh-zdotdir-normalization.test.ts',
   'src/main/providers/__tests__/shell-ready-framework-example.test.ts',
+  'src/main/shell-startup-feature-channel.test.ts',
   'src/main/zsh-scoped-histfile.live-shell.test.ts',
+  'src/main/zsh-wrapper-version-mismatch.live-shell.test.ts',
   'src/shared/posix-command-path-lookup.test.ts'
 ]
 const patchedNodePtyContractFiles = [
@@ -96,6 +98,37 @@ describe('PR workflow parallelism', () => {
     }
   })
 
+  it('refreshes the apt index once while adding the fish PPA', () => {
+    const installStep = workflow.jobs.shell_contracts.steps.find(
+      (step) => step.name === 'Install zsh and fish'
+    )
+    // Comment lines mention both commands by name, so count the executed ones only.
+    const commands = installStep.run
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('#'))
+      .join('\n')
+    const updates = commands.match(/apt-get update/g) ?? []
+    // Anchored to the start of a line so the retry message that names the command in
+    // prose is not mistaken for an invocation of it.
+    const addRepoCalls = commands
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => /^(sudo\s+)?add-apt-repository\b/.test(line))
+
+    // add-apt-repository refreshes every configured repo unless told not to, so an
+    // update on each side of it made this step pay for three full passes.
+    expect(updates).toHaveLength(1)
+    expect(addRepoCalls.length).toBeGreaterThan(0)
+    for (const call of addRepoCalls) {
+      expect(call.split(/\s+/)).toContain('-n')
+    }
+    // The one remaining update has to come after the PPA is on the list, or the fish
+    // index it exists to fetch would not be there yet.
+    expect(commands.lastIndexOf('add-apt-repository')).toBeLessThan(
+      commands.indexOf('apt-get update')
+    )
+  })
+
   it('keeps every real-zsh test in the dedicated shell lane', () => {
     const discoveredFiles = globSync(testFilePatterns)
       .filter((testFile) => realZshUsage.test(readFileSync(testFile, 'utf8')))
@@ -171,7 +204,12 @@ describe('PR workflow parallelism', () => {
         (step) => step.uses === './.github/actions/install-node-dependencies'
       )
 
-    for (const jobName of ['static_analysis', 'typecheck', 'git_compatibility']) {
+    for (const jobName of [
+      'static_analysis',
+      'typecheck',
+      'git_compatibility',
+      'xterm_patch_sync'
+    ]) {
       expect(installFor(jobName).with, jobName).toBeUndefined()
     }
     expect(installFor('shell_contracts').with['native-runtime']).toBe('node')
@@ -272,6 +310,7 @@ describe('PR workflow parallelism', () => {
       'root_directory_guard',
       'typecheck',
       'git_compatibility',
+      'xterm_patch_sync',
       'shell_contracts',
       'test',
       'managed_hook_node18',
