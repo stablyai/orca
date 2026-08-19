@@ -165,7 +165,7 @@ describe('Codex backend session supplement credits', () => {
           planType: 'business',
           individualLimit: { limit: 3, used: 1, remainingPercent: 67, resetsAt: 1_785_542_400 }
         },
-        {}
+        { primary: null, secondary: null }
       )
     ).resolves.toMatchObject({
       monthly: {
@@ -251,6 +251,32 @@ describe('Codex backend session supplement credits', () => {
         {}
       )
     ).resolves.toMatchObject({ monthly: { usedPercent: 100, windowMinutes: 43_200 } })
+  })
+
+  it('keeps direct used-percent precedence and clamps an over-cap percentage', async () => {
+    await expect(
+      fetchWeeklyOnly(
+        undefined,
+        {
+          planType: 'business',
+          individualLimit: { usedPercent: 105, remainingPercent: 20 }
+        },
+        { primary: null, secondary: null }
+      )
+    ).resolves.toMatchObject({ monthly: { usedPercent: 100, windowMinutes: 43_200 } })
+  })
+
+  it('preserves monthly usage when the reset value is malformed', async () => {
+    await expect(
+      fetchWeeklyOnly(
+        undefined,
+        {
+          planType: 'business',
+          individualLimit: { usedPercent: 65, resetsAt: 'not-a-reset' }
+        },
+        { primary: null, secondary: null }
+      )
+    ).resolves.toMatchObject({ monthly: { usedPercent: 65, resetsAt: null } })
   })
 
   it('supplements an empty successful RPC result for an older CLI', async () => {

@@ -558,10 +558,6 @@ function mapIndividualLimit(raw: unknown): RateLimitWindow | null {
   }
   if (limit !== null && limit > 0 && used !== null) {
     percent = (used / limit) * 100
-  } else if (usedPercent !== null && usedPercent >= 0 && usedPercent <= 100) {
-    percent = usedPercent
-  } else if (remainingPercent !== null && remainingPercent >= 0 && remainingPercent <= 100) {
-    percent = 100 - remainingPercent
   } else if (usedPercent !== null) {
     percent = usedPercent
   } else if (remainingPercent !== null) {
