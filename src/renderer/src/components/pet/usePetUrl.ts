@@ -3,7 +3,7 @@ import type { CustomPet } from '../../../../shared/pet-types'
 import { applyCodexSpriteTimingDefaults } from '../../../../shared/codex-pet-sprite-defaults'
 import { useAppStore } from '../../store'
 import { BUNDLED_PET, findBundledPet, isBundledPetId } from './pet-models'
-import type { BundledPetWalk } from './bundled-pet-walk-sprite'
+import type { BundledPetPoses } from './bundled-pet-pose-sprite'
 import {
   detectedSpriteCache,
   loadCustomBlobUrl,
@@ -30,7 +30,7 @@ type ResolvedPetArt =
 /** `heldUrl` is the optional "picked up" pose. Only bundled pets can ship one —
  *  the Codex bundle contract has no held row, so imported pets fall back to the
  *  sway alone. */
-export type ResolvedPet = ResolvedPetArt & { heldUrl?: string; walk?: BundledPetWalk }
+export type ResolvedPet = ResolvedPetArt & { heldUrl?: string; poses?: BundledPetPoses }
 
 /** Resolve the active pet to a URL the overlay can render.
  *
@@ -116,7 +116,7 @@ export function usePetUrl(): ResolvedPet {
       sprite: null,
       detected: null,
       heldUrl: pet.heldUrl,
-      walk: pet.walk
+      poses: pet.poses
     }
   }
   if (customMeta && customUrl) {

@@ -15,7 +15,8 @@ import { petLaneY } from './pet-walk-lane'
 import { DetectedSpriteFrame } from './DetectedSpriteFrame'
 import { usePetWalkLane } from './usePetWalkLane'
 import { usePetFallToLane, PET_LANDING_SQUASH_MS, PET_RISING_MS } from './usePetFallToLane'
-import { walkSpriteFrom } from './bundled-pet-walk-sprite'
+import { poseSpriteFrom } from './bundled-pet-pose-sprite'
+import { arbitratePetPose } from './pet-pose-arbitration'
 import { petBodyMotionStyle, PET_BODY_MOTION_KEYFRAMES_CSS } from './pet-body-motion-css'
 
 type Sprite = NonNullable<CustomPet['sprite']>
@@ -216,7 +217,7 @@ function defaultPosition(size: number = SIZE): Position {
 export function PetOverlay(): React.JSX.Element {
   const documentVisible = useDocumentVisible()
   const reducedMotion = usePrefersReducedMotion()
-  const { url, sprite, detected, heldUrl, walk } = usePetUrl()
+  const { url, sprite, detected, heldUrl, poses } = usePetUrl()
   const size = useAppStore((s) => s.petSize)
   const petWalks = useAppStore((s) => s.petWalks)
   // Why: off, the pet keeps whatever height you left it at — the lane stops
@@ -323,15 +324,23 @@ export function PetOverlay(): React.JSX.Element {
   // Why: a still/vertical grab freezes on frame 0 (Codex grab-and-hold); a
   // horizontal drag keeps animating so the running rows show. Bob always pauses.
   const spriteAnimate = motionAllowed && (!dragging || dragAnimation !== null)
-  const animationName = usePetAnimationName(dragging, dragAnimation, hovering)
-  // Why: the legs stop while the pet is in hand or mid-drop — it isn't walking.
-  const walkAnimate = petWalks && motionAllowed && !dragging && !fall.busy
+  const agentAnimation = usePetAnimationName(dragging, dragAnimation, hovering)
+  // Why: pacing and the agent-state row disagree — walking with a breathing row
+  // reads as gliding, and a waiting pose should park the pet. Arbitrate once, so
+  // the row on screen and whether the lane advances can never contradict.
+  const { animation: animationName, pacing } = arbitratePetPose(
+    agentAnimation,
+    petWalks && !dragging && !fall.busy
+  )
+  // Why: the sheet holds the pose still on its own frames, so it only freezes
+  // for reduced motion or while the pet is in hand.
+  const poseAnimate = motionAllowed && !dragging
   // Why: half the rendered artwork width — see the supine lift in the motion CSS.
-  const supineLiftPx = walk
-    ? (walk.frameWidth * Math.min(size / walk.frameWidth, size / walk.frameHeight)) / 2
+  const supineLiftPx = poses
+    ? (poses.frameWidth * Math.min(size / poses.frameWidth, size / poses.frameHeight)) / 2
     : size / 2
   const walkDirection = usePetWalkLane({
-    active: petWalks && motionAllowed && !dragging && !fall.busy,
+    active: pacing && motionAllowed,
     size,
     readX: () => positionRef.current.x,
     onAdvance: useCallback(
@@ -367,7 +376,7 @@ export function PetOverlay(): React.JSX.Element {
               landing: fall.landing,
               motionAllowed,
               landingDurationMs: PET_LANDING_SQUASH_MS,
-              selfAnimated: walk !== undefined,
+              selfAnimated: poses !== undefined,
               supine: fall.supine,
               rising: fall.rising,
               supineLiftPx,
@@ -399,14 +408,14 @@ export function PetOverlay(): React.JSX.Element {
                 style={{ maxWidth: size, maxHeight: size }}
                 draggable={false}
               />
-            ) : walk ? (
-              // Why: a bundled walk cycle is a one-row strip, so it rides the same
-              // CSS stepping the `.codex-pet` sheets use rather than a second path.
+            ) : poses ? (
+              // Why: the bundled pose sheet is shaped like a `.codex-pet` sheet, so
+              // it rides the same CSS stepping rather than a second render path.
               <SpriteFrame
-                key={walk.url}
-                url={walk.url}
-                sprite={walkSpriteFrom(walk)}
-                animate={walkAnimate}
+                key={poses.url}
+                url={poses.url}
+                sprite={poseSpriteFrom(poses)}
+                animate={poseAnimate}
                 maxSize={size}
                 animationName={animationName}
                 restartKey={dragGeneration}

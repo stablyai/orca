@@ -7,11 +7,12 @@ import claudeHeldUrl from '../../../../../resources/claude-held.webp?url'
 import opencodeHeldUrl from '../../../../../resources/opencode-held.webp?url'
 import gremlinHeldUrl from '../../../../../resources/gremlin-held.webp?url'
 import { translate } from '@/i18n/i18n'
-import type { BundledPetWalk } from './bundled-pet-walk-sprite'
-// Walk cycles: four frames per strip, the pet's own legs swung about the hip.
-import claudeWalkUrl from '../../../../../resources/claude-walk.webp?url'
-import opencodeWalkUrl from '../../../../../resources/opencode-walk.webp?url'
-import gremlinWalkUrl from '../../../../../resources/gremlin-walk.webp?url'
+import type { BundledPetPoses } from './bundled-pet-pose-sprite'
+// Pose sheets: four frames per row over four rows (idle, running, waiting,
+// jumping), every pose derived from the pet's own artwork.
+import claudePosesUrl from '../../../../../resources/claude-poses.webp?url'
+import opencodePosesUrl from '../../../../../resources/opencode-poses.webp?url'
+import gremlinPosesUrl from '../../../../../resources/gremlin-poses.webp?url'
 
 // Why: bundled defaults so the overlay always has something to render when the
 // user hasn't uploaded a custom image. Vite's `?url` import hashes each asset
@@ -28,12 +29,12 @@ export type BundledPet = {
   url: string
   /** Optional "held in hand" artwork shown while the pet is being dragged. */
   heldUrl?: string
-  /** Optional looping walk cycle played while the pet paces the lane. */
-  walk?: BundledPetWalk
+  /** Optional pose sheet driving how the pet reacts to live agent state. */
+  poses?: BundledPetPoses
 }
 
-const WALK_FPS = 8
-const WALK_FRAMES = 4
+const POSE_FPS = 8
+const POSE_FRAMES = 4
 
 export const BUNDLED_PETS: readonly BundledPet[] = [
   {
@@ -43,12 +44,12 @@ export const BUNDLED_PETS: readonly BundledPet[] = [
     },
     url: claudeUrl,
     heldUrl: claudeHeldUrl,
-    walk: {
-      url: claudeWalkUrl,
+    poses: {
+      url: claudePosesUrl,
       frameWidth: 320,
       frameHeight: 180,
-      frames: WALK_FRAMES,
-      fps: WALK_FPS
+      frames: POSE_FRAMES,
+      fps: POSE_FPS
     }
   },
   {
@@ -58,12 +59,12 @@ export const BUNDLED_PETS: readonly BundledPet[] = [
     },
     url: opencodeUrl,
     heldUrl: opencodeHeldUrl,
-    walk: {
-      url: opencodeWalkUrl,
+    poses: {
+      url: opencodePosesUrl,
       frameWidth: 252,
       frameHeight: 320,
-      frames: WALK_FRAMES,
-      fps: WALK_FPS
+      frames: POSE_FRAMES,
+      fps: POSE_FPS
     }
   },
   {
@@ -73,12 +74,12 @@ export const BUNDLED_PETS: readonly BundledPet[] = [
     },
     url: gremlinUrl,
     heldUrl: gremlinHeldUrl,
-    walk: {
-      url: gremlinWalkUrl,
+    poses: {
+      url: gremlinPosesUrl,
       frameWidth: 252,
       frameHeight: 320,
-      frames: WALK_FRAMES,
-      fps: WALK_FPS
+      frames: POSE_FRAMES,
+      fps: POSE_FPS
     }
   }
 ] as const

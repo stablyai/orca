@@ -16,20 +16,25 @@ const petUrlMock = vi.hoisted(() => ({
     sprite: null
     detected: null
     heldUrl?: string
-    walk?: { url: string; frameWidth: number; frameHeight: number; frames: number; fps: number }
+    poses?: { url: string; frameWidth: number; frameHeight: number; frames: number; fps: number }
   }
 }))
 
-vi.mock('../../store', () => {
-  const storeState = {
+const storeMock = vi.hoisted(() => ({
+  state: {
     petSize: 180,
+    petWalks: true,
+    petReturnsToLane: true,
     agentStatusByPaneKey: {},
     agentStatusEpoch: 0,
     retainedAgentsByPaneKey: {}
-  }
+  } as Record<string, unknown>
+}))
+
+vi.mock('../../store', () => {
   const useAppStore = Object.assign(
-    (selector: (state: unknown) => unknown) => selector(storeState),
-    { getState: () => storeState }
+    (selector: (state: unknown) => unknown) => selector(storeMock.state),
+    { getState: () => storeMock.state }
   )
   return { useAppStore }
 })
@@ -54,16 +59,24 @@ function grabHandle(): HTMLElement {
   return container?.querySelector('.pointer-events-auto') as HTMLElement
 }
 
-const WALK = {
-  url: 'data:image/png;base64,walkstrip',
+const POSES = {
+  url: 'data:image/png;base64,posesheet',
   frameWidth: 252,
   frameHeight: 320,
   frames: 4,
   fps: 8
 }
+// 252x320 cells scaled into a 180 box => 0.5625, so each row is 180px of offset.
+const ROW_OFFSET_PX = 180
 
-function walkSprite(): HTMLElement | null {
+function poseSprite(): HTMLElement | null {
   return container?.querySelector('div[style*="background-image"]') as HTMLElement | null
+}
+
+function poseRow(): number {
+  const y = poseSprite()?.style.backgroundPosition?.split(' ')[1] ?? '0px'
+  // `|| 0` folds -0, which Object.is separates from 0.
+  return Math.round(-Number.parseFloat(y) / ROW_OFFSET_PX) || 0
 }
 
 function petImage(): HTMLImageElement {
@@ -79,6 +92,8 @@ function firePointer(target: Element, type: string, clientX: number, clientY: nu
 }
 
 beforeEach(() => {
+  storeMock.state.petWalks = true
+  storeMock.state.petReturnsToLane = true
   window.localStorage.clear()
   Object.defineProperty(window, 'innerWidth', { value: 1200, configurable: true })
   Object.defineProperty(window, 'innerHeight', { value: 768, configurable: true })
@@ -127,50 +142,52 @@ describe('PetOverlay held pose', () => {
     expect(petImage().src).toContain('idle')
   })
 
-  it('plays the walk strip while the pet is pacing', () => {
+  it('renders the pose sheet rather than a flat image', () => {
     petUrlMock.current = {
       url: 'data:image/png;base64,idle',
       ready: true,
       sprite: null,
       detected: null,
-      walk: WALK
+      poses: POSES
     }
 
     renderOverlay()
 
-    expect(walkSprite()?.style.backgroundImage).toContain('walkstrip')
-    // steps(4) across the four-frame strip.
-    expect(walkSprite()?.style.animation).toContain('steps(4)')
+    expect(poseSprite()?.style.backgroundImage).toContain('posesheet')
+    // Per-frame holds mean explicit keyframe stops, not a uniform steps().
+    // The running row is 4 frames x 125ms.
+    expect(poseSprite()?.style.animation).toContain('step-end')
+    expect(poseSprite()?.style.animation).toContain('0.5s')
     expect(container?.querySelector('img')).toBeNull()
   })
 
-  it('drops the walk strip for the held pose once picked up', () => {
+  it('drops the pose sheet for the held artwork once picked up', () => {
     petUrlMock.current = {
       url: 'data:image/png;base64,idle',
       ready: true,
       sprite: null,
       detected: null,
       heldUrl: 'data:image/png;base64,held',
-      walk: WALK
+      poses: POSES
     }
 
     renderOverlay()
-    expect(walkSprite()).not.toBeNull()
+    expect(poseSprite()).not.toBeNull()
 
     firePointer(grabHandle(), 'pointerdown', 350, 600)
 
-    expect(walkSprite()).toBeNull()
+    expect(poseSprite()).toBeNull()
     expect(petImage().src).toContain('held')
   })
 
-  it('drops the CSS bob while the walk strip supplies its own bounce', () => {
+  it('drops the CSS bob while the sheet supplies its own bounce', () => {
     petUrlMock.current = {
       url: 'data:image/png;base64,idle',
       ready: true,
       sprite: null,
       detected: null,
       heldUrl: 'data:image/png;base64,held',
-      walk: WALK
+      poses: POSES
     }
 
     renderOverlay()
@@ -181,5 +198,35 @@ describe('PetOverlay held pose', () => {
     // The sway still applies in hand — that artwork is a still frame.
     firePointer(grabHandle(), 'pointerdown', 350, 600)
     expect(grabHandle().style.animation).toContain('pet-held-sway')
+  })
+
+  it('plays the locomotion row while pacing rather than the breathing idle', () => {
+    petUrlMock.current = {
+      url: 'data:image/png;base64,idle',
+      ready: true,
+      sprite: null,
+      detected: null,
+      poses: POSES
+    }
+
+    renderOverlay()
+
+    // Row 1 is the walk cycle; row 0 would read as gliding in a standing pose.
+    expect(poseRow()).toBe(1)
+  })
+
+  it('rests on the breathing row when the user turned pacing off', () => {
+    storeMock.state.petWalks = false
+    petUrlMock.current = {
+      url: 'data:image/png;base64,idle',
+      ready: true,
+      sprite: null,
+      detected: null,
+      poses: POSES
+    }
+
+    renderOverlay()
+
+    expect(poseRow()).toBe(0)
   })
 })
