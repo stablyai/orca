@@ -20,7 +20,7 @@ import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRunti
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '../../store'
-import { BROWSER_FAMILY_LABELS } from '../../../../shared/constants'
+import { browserSourceLabel } from '../../../../shared/browser-source-label'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
 import { getBrowserUsePaneSearchEntries } from './browser-use-search'
@@ -186,7 +186,7 @@ export function BrowserUseSetup({
   const step3Blocked = !cookiesImported && (!cliEnabled || !skillDetected)
 
   const sourceLabel = defaultProfile?.source
-    ? `${BROWSER_FAMILY_LABELS[defaultProfile.source.browserFamily] ?? defaultProfile.source.browserFamily}${defaultProfile.source.profileName ? ` (${defaultProfile.source.profileName})` : ''}`
+    ? `${browserSourceLabel(defaultProfile.source)}${defaultProfile.source.profileName ? ` (${defaultProfile.source.profileName})` : ''}`
     : null
 
   if (!browserUseEnabled) {

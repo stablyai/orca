@@ -19,7 +19,7 @@ import {
 } from '../ui/dropdown-menu'
 import { BrowserCookieImportDisclosure } from '../BrowserCookieImportDisclosure'
 import { useAppStore } from '../../store'
-import { BROWSER_FAMILY_LABELS } from '../../../../shared/constants'
+import { browserSourceLabel } from '../../../../shared/browser-source-label'
 import { translate } from '@/i18n/i18n'
 
 type DetectedBrowser = {
@@ -110,7 +110,7 @@ export function BrowserProfileRow({
   }
 
   const sourceLabel = profile.source
-    ? `${BROWSER_FAMILY_LABELS[profile.source.browserFamily] ?? profile.source.browserFamily}${profile.source.profileName ? ` (${profile.source.profileName})` : ''}`
+    ? `${browserSourceLabel(profile.source)}${profile.source.profileName ? ` (${profile.source.profileName})` : ''}`
     : translate('auto.components.settings.BrowserProfileRow.796d846483', 'No cookies imported')
   const userAgentLabel =
     profile.userAgentMode === 'native'

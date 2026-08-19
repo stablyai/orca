@@ -123,7 +123,12 @@ export type BrowserSessionProfileSource = {
     | 'safari'
     | 'comet'
     | 'helium'
+    | 'custom'
     | 'manual'
+  // Per-entry display name for auto-discovered/custom browsers, which all share
+  // family 'custom'; preferred over the family label so different custom browsers
+  // stay distinguishable in Settings.
+  sourceLabel?: string
   profileName?: string
   importedAt: number
 }
