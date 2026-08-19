@@ -19,7 +19,11 @@ import { fingerprintAuthenticatedPairingCredential } from './rpc/orchestration-m
 import type { RpcMessageContext, RpcTransport } from './rpc/transport'
 import { UnixSocketTransport } from './rpc/unix-socket-transport'
 import { WebSocketTransport } from './rpc/ws-transport'
-import { readWsFallbackPort, writeWsFallbackPort } from './rpc/ws-fallback-port-store'
+import {
+  clearWsFallbackPort,
+  readWsFallbackPort,
+  writeWsFallbackPort
+} from './rpc/ws-fallback-port-store'
 import type { WebSocket } from 'ws'
 import { DeviceRegistry, type DeviceEntry, type DeviceScope } from './device-registry'
 import { loadOrCreateE2EEKeypair, type E2EEKeypair } from './e2ee-keypair'
@@ -1185,15 +1189,22 @@ export class OrcaRuntimeRpcServer {
         this.pairingInitializationFailure = null
         try {
           const host = this.resolveInitialWebSocketBindHost()
+          const persistedFallbackPort =
+            this.wsPort !== 0 ? readWsFallbackPort(this.userDataPath) : undefined
           const { transport, endpoint } = await this.startWebSocketTransport({
             host,
             port: this.wsPort,
             preferPinnedPort: this.preferPinnedWsPort,
             // Why: stable fallback port across restarts keeps paired devices' endpoints valid (STA-1511); wsPort 0 = random (E2E).
-            ...(this.wsPort !== 0 ? { fallbackPort: readWsFallbackPort(this.userDataPath) } : {})
+            ...(this.wsPort !== 0 ? { fallbackPort: persistedFallbackPort } : {})
           })
-          if (this.wsPort !== 0 && transport.resolvedPort !== this.wsPort) {
-            writeWsFallbackPort(this.userDataPath, transport.resolvedPort)
+          if (this.wsPort !== 0) {
+            if (transport.resolvedPort !== this.wsPort) {
+              writeWsFallbackPort(this.userDataPath, transport.resolvedPort)
+            } else if (persistedFallbackPort !== undefined && !this.preferPinnedWsPort) {
+              // Why: a failed persisted fallback is already unreachable; retaining it would make the endpoint flip back to that stale port on a later launch.
+              clearWsFallbackPort(this.userDataPath)
+            }
           }
           activeTransports.push(transport)
           transportsMeta.push({ kind: 'websocket', endpoint })

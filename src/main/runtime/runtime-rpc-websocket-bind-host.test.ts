@@ -7,6 +7,7 @@ import WebSocket from 'ws'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { WebSocketTransport } from './rpc/ws-transport'
+import { readWsFallbackPort, writeWsFallbackPort } from './rpc/ws-fallback-port-store'
 import { DeviceRegistry } from './device-registry'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 
@@ -49,6 +50,53 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
       expect(new URL(server.getWebSocketEndpoint()!).hostname).toBe('127.0.0.1')
     } finally {
       await server.stop()
+    }
+  })
+
+  it('clears a persisted fallback after it fails and the default port binds', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const preferredHolder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
+    const fallbackHolder = new WebSocketTransport({ host: '127.0.0.1', port: 0 })
+    await preferredHolder.start()
+    await fallbackHolder.start()
+    const preferredPort = preferredHolder.resolvedPort
+    const fallbackPort = fallbackHolder.resolvedPort
+    await preferredHolder.stop()
+    await fallbackHolder.stop()
+    writeWsFallbackPort(userDataPath, fallbackPort)
+
+    const transportPrototype = WebSocketTransport.prototype as unknown as {
+      tryListen(port: number): Promise<void>
+    }
+    const realTryListen = transportPrototype.tryListen
+    const tryListenSpy = vi.spyOn(transportPrototype, 'tryListen').mockImplementation(function (
+      port: number
+    ) {
+      if (port === fallbackPort) {
+        return Promise.reject(
+          Object.assign(new Error('listen EACCES'), {
+            code: 'EACCES',
+            syscall: 'listen',
+            port
+          })
+        )
+      }
+      return realTryListen.call(this, port)
+    })
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: preferredPort
+    })
+
+    try {
+      await server.start()
+      expect(wsTransportOf(server)?.resolvedPort).toBe(preferredPort)
+      expect(readWsFallbackPort(userDataPath)).toBeUndefined()
+    } finally {
+      await server.stop()
+      tryListenSpy.mockRestore()
     }
   })
 

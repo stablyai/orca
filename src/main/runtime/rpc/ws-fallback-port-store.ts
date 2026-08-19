@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 // Why: when the preferred WS port is taken (second Orca instance), the OS
@@ -41,5 +41,13 @@ export function writeWsFallbackPort(userDataPath: string, port: number): void {
   } catch {
     // Why: persistence is best-effort — failing to record the port must not
     // break transport startup; the cost is a re-pair after the next restart.
+  }
+}
+
+export function clearWsFallbackPort(userDataPath: string): void {
+  try {
+    unlinkSync(join(userDataPath, FALLBACK_PORT_FILE))
+  } catch {
+    // Missing or undeletable state must not break transport startup.
   }
 }
