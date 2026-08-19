@@ -28,7 +28,7 @@ vi.mock('@/lib/new-workspace', async (importOriginal) => {
 
 import { useAppStore } from '@/store'
 import { decideInitialAgentTabViewMode } from '@/lib/native-chat-initial-view-mode'
-import { resolveStartupLaunchDraftText } from '@/lib/worktree-activation'
+import { resolveStartupLaunchDraftText } from '@/lib/worktree-startup-payload'
 import {
   getFolderWorkspaceAgentLaunchPlatform,
   submitFolderWorkspaceCreate
@@ -588,7 +588,7 @@ describe('submitFolderWorkspaceCreate', () => {
       'folder-workspace-1',
       expect.objectContaining({
         startup: expect.objectContaining({
-          command: "claude 'Use Bob'\\''s POSIX startup'"
+          command: `claude 'Use Bob'"'"'s POSIX startup'`
         })
       })
     )

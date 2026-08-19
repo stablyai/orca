@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
+  ASYNC_CWD_VALIDATION_DAEMON_PROTOCOL_VERSION,
   CODEX_SHELL_LAUNCH_PREFLIGHT_DAEMON_PROTOCOL_VERSION,
   COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
   GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
@@ -17,7 +18,8 @@ import {
 
 describe('daemon protocol version', () => {
   it('ships bounded history transfer after the 2031-unsubscribe fact', () => {
-    expect(PROTOCOL_VERSION).toBe(34)
+    expect(PROTOCOL_VERSION).toBe(35)
+    expect(ASYNC_CWD_VALIDATION_DAEMON_PROTOCOL_VERSION).toBe(35)
     expect(CODEX_SHELL_LAUNCH_PREFLIGHT_DAEMON_PROTOCOL_VERSION).toBe(34)
     expect(WSL_POSIX_CWD_DAEMON_PROTOCOL_VERSION).toBe(33)
     expect(SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION).toBe(32)
@@ -29,7 +31,7 @@ describe('daemon protocol version', () => {
     expect(AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION).toBe(26)
     expect(AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION).toBe(26)
     expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toEqual(
-      Array.from({ length: 33 }, (_, index) => index + 1)
+      Array.from({ length: 34 }, (_, index) => index + 1)
     )
   })
 

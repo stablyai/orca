@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Cookie } from 'electron'
 import {
-  cdpRestoreParamsFromIdentity,
+  cdpSetCookieParamsFromIdentity,
   cookieClearIdentitiesFromCdp
 } from './browser-cookie-clear-store'
 
@@ -37,7 +37,7 @@ describe('cookie clear CDP identities', () => {
         partitionKey: { topLevelSite: 'https://top.example', hasCrossSiteAncestor: true }
       })
     ])
-    expect(cdpRestoreParamsFromIdentity(identities[0])).toEqual(
+    expect(cdpSetCookieParamsFromIdentity(identities[0])).toEqual(
       expect.objectContaining({
         name: 'chips-auth',
         sameSite: 'None',
@@ -51,6 +51,79 @@ describe('cookie clear CDP identities', () => {
       cookieClearIdentitiesFromCdp(
         [{ cookie: chipsCookie, url: 'https://app.acme-chips.test/' }],
         []
+      )
+    ).toThrow(/Could not snapshot cookie identity/)
+  })
+
+  it('fails closed when a partitioned CDP identity omits its ancestor bit', () => {
+    expect(() =>
+      cookieClearIdentitiesFromCdp(
+        [{ cookie: chipsCookie, url: 'https://app.acme-chips.test/' }],
+        [
+          {
+            name: 'chips-auth',
+            value: 'keep-me',
+            domain: 'app.acme-chips.test',
+            path: '/',
+            partitionKey: { topLevelSite: 'https://top.example' }
+          }
+        ]
+      )
+    ).toThrow(/Could not snapshot cookie identity/)
+  })
+
+  it('fails closed instead of making an opaque CDP partition restorable as unpartitioned', () => {
+    expect(() =>
+      cookieClearIdentitiesFromCdp(
+        [{ cookie: chipsCookie, url: 'https://app.acme-chips.test/' }],
+        [
+          {
+            name: 'chips-auth',
+            value: 'keep-me',
+            domain: 'app.acme-chips.test',
+            path: '/',
+            partitionKeyOpaque: true
+          }
+        ]
+      )
+    ).toThrow(/Could not snapshot cookie identity/)
+  })
+
+  it.each([null, 1, 'true'])('fails closed on a malformed CDP opaque flag (%s)', (opaque) => {
+    expect(() =>
+      cookieClearIdentitiesFromCdp(
+        [{ cookie: chipsCookie, url: 'https://app.acme-chips.test/' }],
+        [
+          {
+            name: 'chips-auth',
+            value: 'keep-me',
+            domain: 'app.acme-chips.test',
+            path: '/',
+            partitionKeyOpaque: opaque as unknown as boolean
+          }
+        ]
+      )
+    ).toThrow(/Could not snapshot cookie identity/)
+  })
+
+  it.each([
+    { hasCrossSiteAncestor: true },
+    { topLevelSite: 'not-a-site', hasCrossSiteAncestor: true },
+    { topLevelSite: 'ftp://top.example', hasCrossSiteAncestor: true },
+    { topLevelSite: 'https://top.example/path', hasCrossSiteAncestor: true }
+  ])('fails closed when a CDP partition key has an invalid site (%o)', (partitionKey) => {
+    expect(() =>
+      cookieClearIdentitiesFromCdp(
+        [{ cookie: chipsCookie, url: 'https://app.acme-chips.test/' }],
+        [
+          {
+            name: 'chips-auth',
+            value: 'keep-me',
+            domain: 'app.acme-chips.test',
+            path: '/',
+            partitionKey
+          }
+        ]
       )
     ).toThrow(/Could not snapshot cookie identity/)
   })
@@ -72,8 +145,8 @@ describe('cookie clear CDP identities', () => {
       expect.objectContaining({ value: 'host', domain: 'example.com', hostOnly: true }),
       expect.objectContaining({ value: 'domain', domain: '.example.com', hostOnly: false })
     ])
-    expect(cdpRestoreParamsFromIdentity(identities[0])).not.toHaveProperty('domain')
-    expect(cdpRestoreParamsFromIdentity(identities[1])).toHaveProperty('domain', '.example.com')
+    expect(cdpSetCookieParamsFromIdentity(identities[0])).not.toHaveProperty('domain')
+    expect(cdpSetCookieParamsFromIdentity(identities[1])).toHaveProperty('domain', '.example.com')
   })
 
   it('indexes CDP cookies once instead of rescanning the jar for every cookie', () => {
@@ -99,7 +172,7 @@ describe('cookie clear CDP identities', () => {
 
   it('does not turn an unspecified SameSite policy into explicit Lax', () => {
     expect(
-      cdpRestoreParamsFromIdentity({
+      cdpSetCookieParamsFromIdentity({
         url: 'https://example.com/',
         name: 'unspecified',
         value: 'value',

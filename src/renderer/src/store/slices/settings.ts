@@ -32,6 +32,7 @@ import {
   hydrateOwnerWorktreeVisibilityDefaults,
   type WorktreeVisibilityDefaultsByHost
 } from './worktree-visibility-owner-settings'
+import * as ownerHydration from './settings-owner-hydration-publication'
 import { persistVisibilityAwareSettings } from './worktree-visibility-settings-write'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
 
@@ -40,7 +41,8 @@ export type SettingsSlice = SettingsSearchState & {
   worktreeVisibilityDefaultsByHost: WorktreeVisibilityDefaultsByHost
   worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId: string | null
   worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId: string | null
-  fetchSettings: () => Promise<void>
+  fetchSettings: (options?: ownerHydration.FetchSettingsOptions) => Promise<void>
+  awaitOwnerWorktreeVisibilityDefaultsHydration: () => Promise<void>
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
   updateSettingsOrThrow: (updates: Partial<GlobalSettings>) => Promise<void>
   setActiveRuntimeEnvironmentPreference: (environmentId: string | null) => Promise<boolean>
@@ -49,9 +51,6 @@ export type SettingsSlice = SettingsSearchState & {
 type LegacyTerminalScrollbackSettingsUpdate = Partial<GlobalSettings> & {
   terminalScrollbackBytes?: unknown
 }
-
-type SettingsStateSetter = Parameters<StateCreator<AppState, [], [], SettingsSlice>>[0]
-let ownerSettingsHydrationGeneration = 0
 
 function normalizeRuntimeEnvironmentId(value: string | null | undefined): string | null {
   const trimmed = value?.trim()
@@ -134,7 +133,7 @@ function normalizeSettingsUpdates(
 }
 
 async function persistSettingsUpdates(
-  set: SettingsStateSetter,
+  set: ownerHydration.SettingsStateSetter,
   updates: Partial<GlobalSettings>,
   currentSettings: GlobalSettings | null,
   supportedRuntimeEnvironmentId: string | null,
@@ -185,30 +184,8 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
   worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId: null,
   ...createSettingsSearchState((state) => set(state)),
 
-  fetchSettings: async () => {
-    const generation = ++ownerSettingsHydrationGeneration
-    try {
-      const hydrated = await hydrateOwnerWorktreeVisibilityDefaults(
-        (await window.api.settings.get()) as GlobalSettings,
-        get().worktreeVisibilityDefaultsByHost
-      )
-      if (generation !== ownerSettingsHydrationGeneration) {
-        return
-      }
-      set((state) => ({
-        settings: hydrated.settings,
-        worktreeVisibilityDefaultsByHost: {
-          ...state.worktreeVisibilityDefaultsByHost,
-          ...hydrated.defaultsByHost
-        },
-        worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId:
-          hydrated.supportedRuntimeEnvironmentId,
-        worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId:
-          hydrated.sourceDefaultsSupportedRuntimeEnvironmentId
-      }))
-    } catch (err) {
-      console.error('Failed to fetch settings:', err)
-    }
+  fetchSettings: async (options) => {
+    await ownerHydration.fetchSettingsWithOwnerHydration({ options, set, get })
     const { runtimeEnvironmentCatalogHydrated, runtimeEnvironments, runtimeStatusByEnvironmentId } =
       get()
     // Why: settings refreshes are frequent, but only incomplete host coverage needs
@@ -223,8 +200,13 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
     }
   },
 
+  awaitOwnerWorktreeVisibilityDefaultsHydration: () =>
+    ownerHydration.awaitOwnerWorktreeVisibilityDefaultsHydration(get),
+
   updateSettings: async (updates) => {
-    const generation = ++ownerSettingsHydrationGeneration
+    const shouldPublish = ownerHydration.createSettingsPublicationFence(
+      'activeRuntimeEnvironmentId' in updates || 'worktreeVisibilityDefaults' in updates
+    )
     const visibilityOwnerHostId = getSettingsFocusedExecutionHostId(get().settings)
     try {
       await persistSettingsUpdates(
@@ -233,7 +215,7 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
         get().settings,
         get().worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId,
         get().worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId,
-        () => generation === ownerSettingsHydrationGeneration
+        shouldPublish
       )
       if ('worktreeVisibilityDefaults' in updates) {
         await get().fetchAllWorktrees({ visibilityOwnerHostId })
@@ -244,7 +226,9 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
   },
 
   updateSettingsOrThrow: async (updates) => {
-    const generation = ++ownerSettingsHydrationGeneration
+    const shouldPublish = ownerHydration.createSettingsPublicationFence(
+      'activeRuntimeEnvironmentId' in updates || 'worktreeVisibilityDefaults' in updates
+    )
     const visibilityOwnerHostId = getSettingsFocusedExecutionHostId(get().settings)
     await persistSettingsUpdates(
       set,
@@ -252,7 +236,7 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       get().settings,
       get().worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId,
       get().worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId,
-      () => generation === ownerSettingsHydrationGeneration
+      shouldPublish
     )
     if ('worktreeVisibilityDefaults' in updates) {
       await get().fetchAllWorktrees({ visibilityOwnerHostId })
@@ -260,16 +244,16 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
   },
 
   setActiveRuntimeEnvironmentPreference: async (environmentId) => {
-    const generation = ++ownerSettingsHydrationGeneration
     const nextId = normalizeRuntimeEnvironmentId(environmentId)
     const previousId = normalizeRuntimeEnvironmentId(get().settings?.activeRuntimeEnvironmentId)
     if (previousId === nextId) {
       return true
     }
+    const shouldPublish = ownerHydration.createSettingsPublicationFence(true)
     try {
       clearRuntimeCompatibilityCache(nextId)
       await verifyRuntimeEnvironmentReachable(nextId)
-      if (generation !== ownerSettingsHydrationGeneration) {
+      if (!shouldPublish()) {
         return true
       }
       const nextSettings = await window.api.settings.setActiveRuntimeEnvironmentPreference({
@@ -285,7 +269,7 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
           focusedSettings,
           get().worktreeVisibilityDefaultsByHost
         )
-        if (generation !== ownerSettingsHydrationGeneration) {
+        if (!shouldPublish()) {
           return true
         }
         set((state) => ({

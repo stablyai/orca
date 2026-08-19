@@ -32,6 +32,7 @@ import {
   type LegacyCompatibilityResult,
   type OrchestrationMessageSummary as MessageSummary
 } from '../../shared/orchestration-check-output'
+import { orchestrationMutationRecoveryError } from '../orchestration-mutation-recovery'
 
 // Why: 15 s is well under Claude Code's ~2 min Bash-tool silence budget while keeping log volume low. See design doc §3.4.
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 15_000
@@ -99,9 +100,23 @@ type LifecycleSendResult =
   | { action: 'settled'; outcome: 'succeeded' | 'failed'; duplicate?: boolean }
   | { action: 'rejected'; code: string; reason: string }
 
+type SendRecipientWarning = {
+  code: string
+  recipient: string
+  message: string
+}
+
 type OrchestrationSendResult =
-  | { message: { id: string; run_id?: string }; lifecycle?: LifecycleSendResult }
-  | { messages: { id: string }[]; recipients: number }
+  | {
+      message: { id: string; run_id?: string }
+      lifecycle?: LifecycleSendResult
+      warnings?: SendRecipientWarning[]
+    }
+  | {
+      messages: { id: string }[]
+      recipients: number
+      warnings?: SendRecipientWarning[]
+    }
   | {
       relay: {
         messageId: string
@@ -111,6 +126,7 @@ type OrchestrationSendResult =
         accepted: true
       }
       lifecycle?: LifecycleSendResult
+      warnings?: SendRecipientWarning[]
     }
 
 function resolveCompatibilityCliCommand(): 'orca' | 'orca-ide' | 'orca-dev' {
@@ -397,14 +413,13 @@ function callMutation<TResult>(
   options?: { timeoutMs?: number; orchestrationCapability?: string }
 ) {
   const requestId = getOptionalStringFlag(flags, 'retry-request')
-  if (!requestId) {
-    return options
+  const result = requestId
+    ? client.call<TResult>(method, params, { ...options, orchestrationRequestId: requestId })
+    : options
       ? client.call<TResult>(method, params, options)
       : client.call<TResult>(method, params)
-  }
-  return client.call<TResult>(method, params, {
-    ...options,
-    orchestrationRequestId: requestId
+  return result.catch((error) => {
+    throw orchestrationMutationRecoveryError(error)
   })
 }
 
@@ -598,16 +613,25 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       throw new RuntimeClientError(result.result.lifecycle.code, result.result.lifecycle.reason)
     }
     printResult(result, json, (r) => {
+      const warnings = 'warnings' in r ? (r.warnings ?? []) : []
+      const withWarnings = (line: string): string =>
+        warnings.length > 0
+          ? [line, ...warnings.map((warning) => `Warning: ${warning.message}`)].join('\n')
+          : line
       if ('message' in r) {
-        return `Sent ${r.message.id}`
+        return withWarnings(`Sent ${r.message.id}`)
       }
       if ('relay' in r) {
         if (r.relay.destination === 'worker') {
-          return `Queued ${r.relay.messageId} for worker Dispatch ${r.relay.dispatchId}`
+          return withWarnings(
+            `Queued ${r.relay.messageId} for worker Dispatch ${r.relay.dispatchId}`
+          )
         }
-        return `Queued ${r.relay.messageId} for Run home (Dispatch ${r.relay.dispatchId})`
+        return withWarnings(
+          `Queued ${r.relay.messageId} for Run home (Dispatch ${r.relay.dispatchId})`
+        )
       }
-      return `Sent ${r.messages.length} messages to ${r.recipients} recipients`
+      return withWarnings(`Sent ${r.messages.length} messages to ${r.recipients} recipients`)
     })
   },
 
@@ -915,15 +939,23 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     const result = await client.call<{
       dispatch: { id: string; task_id: string; status: string }
       worker: { state: string; stage: string; agent_terminal_handle: string | null }
+      observation?: { agentWait?: { source: string; reason?: string } | null }
     }>('orchestration.workerShow', {
       dispatch: getRequiredStringFlag(flags, 'dispatch')
     })
-    printResult(
-      result,
-      json,
-      (value) =>
-        `${value.dispatch.id} task=${value.dispatch.task_id} [${value.worker.state}] stage=${value.worker.stage}`
-    )
+    printResult(result, json, (value) => {
+      const base = `${value.dispatch.id} task=${value.dispatch.task_id} [${value.worker.state}] stage=${value.worker.stage}`
+      // Why a whole line and not a suffix: this is the one state where the lane is healthy
+      // and still needs a person, so it must not read as another status token. An absent
+      // field is unknown, which must not print the same as an evaluated "none".
+      if (value.observation === undefined || !('agentWait' in value.observation)) {
+        return `${base}\nInteractive wait: unknown (not evaluated)`
+      }
+      const wait = value.observation.agentWait
+      return wait
+        ? `${base}\nWaiting on a human: ${wait.reason ?? 'interactive prompt'} (via ${wait.source})`
+        : `${base}\nInteractive wait: none`
+    })
   },
 
   'orchestration worker-read': async ({ flags, client, json }) => {

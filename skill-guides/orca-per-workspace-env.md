@@ -470,8 +470,19 @@ SSH mode is **fundamentally different from §7c/§7f**, not a relabeling of them
 `label`, `host`, `port`, `username` are required; the rest are optional — omit any you don't need.
 
 For an explicitly requested one-VM-per-workspace checkout, the create script must read
-`ORCA_RECIPE_RESULT_SCHEMA_VERSION`, `ORCA_REPO_URL`, `ORCA_REPO_REF`, and `ORCA_REPO_BRANCH`, create
-that exact primary checkout at `projectRoot`, and emit the same SSH result with:
+`ORCA_RECIPE_RESULT_SCHEMA_VERSION`, `ORCA_REPO_URL`, `ORCA_REPO_REF`, `ORCA_REPO_REF_HEAD`, and
+`ORCA_REPO_BRANCH`. Use `ORCA_REPO_REF` to fetch the selected source, but create
+`ORCA_REPO_BRANCH` at the exact `ORCA_REPO_REF_HEAD` commit; resolving the symbolic ref again can race
+with an upstream update. `ORCA_REPO_URL` and `ORCA_REPO_REF` are a matched fetch pair, including when
+the desktop source uses multiple remotes. Return that primary checkout at `projectRoot` and emit the
+same SSH result with:
+
+```bash
+[ -n "${ORCA_REPO_REF_HEAD:-}" ] || { echo "missing pinned source commit" >&2; exit 1; }
+git fetch origin "$ORCA_REPO_REF"
+git cat-file -e "${ORCA_REPO_REF_HEAD}^{commit}"
+git checkout -B "$ORCA_REPO_BRANCH" "$ORCA_REPO_REF_HEAD"
+```
 
 ```json
 {
@@ -645,7 +656,8 @@ worked script in §7g). `pairingCode` is **not** used in SSH mode.
 
 **Optional provisioned root** — only for direct SSH and only when explicitly requested. Add
 `checkoutMode: provisioned-root` to the recipe, require `ORCA_RECIPE_RESULT_SCHEMA_VERSION=2`, create
-the requested branch from `ORCA_REPO_REF` at the returned `projectRoot`, and emit schema version 2 plus
+the requested `ORCA_REPO_BRANCH` at the pinned `ORCA_REPO_REF_HEAD` commit (use `ORCA_REPO_REF` only
+to fetch that commit) at the returned `projectRoot`, and emit schema version 2 with
 `checkoutMode: "provisioned-root"`. All recipes without this field retain the schema-v1 behavior above.
 
 Lifecycle hooks (all run locally):

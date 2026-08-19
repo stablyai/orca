@@ -23,12 +23,14 @@ it('holds one snapshot prune batch across the sequential cleanup removals', asyn
   const events: string[] = []
   const removeCandidates = vi.fn(async (worktreeIds: readonly string[]) => {
     events.push(`remove:${worktreeIds[0]}`)
-    return { removedIds: [...worktreeIds], failures: [] }
+    return { removedIds: [...worktreeIds], removedIdentities: [...worktreeIds], failures: [] }
   })
+  const onResult = vi.fn()
 
   startWorkspaceCleanupBackgroundRemoval({
     candidates: [first, second],
     removeCandidates,
+    onResult,
     onProgress: vi.fn(),
     snapshotPruneBatch: {
       batchId: 'batch-1',
@@ -56,4 +58,11 @@ it('holds one snapshot prune batch across the sequential cleanup removals', asyn
     `remove:${second.worktreeId}`,
     'finish'
   ])
+  await vi.waitFor(() => {
+    expect(onResult).toHaveBeenCalledWith({
+      removedIds: [first.worktreeId, second.worktreeId],
+      removedIdentities: [first.worktreeId, second.worktreeId],
+      failures: []
+    })
+  })
 })

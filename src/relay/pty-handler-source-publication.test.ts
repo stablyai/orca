@@ -769,4 +769,47 @@ describe('PtyHandler negotiated source publication', () => {
     expect(publication.getDebugSnapshot()).toMatchObject({ sendCommitted: 1 })
     expect(pausePty).not.toHaveBeenCalled()
   })
+
+  // The reported defect, in the shape measured against the live relay: the client attaches twice
+  // for the same PTY. The first registers a source delivery under the primary client's id; the
+  // second finds `current.clientId === context.clientId`, answers 'existing', and returns NO
+  // replay. Live, every pane on reconnect logged path=existing-delivery and painted nothing.
+  //
+  // A reattach always lands in a NEW terminal — a reconnect bumps tab.generation, which is the
+  // pane's React key, so TerminalPane remounts and the old xterm is disposed with its buffer.
+  describe('a second attach for the same client', () => {
+    async function attach(id: number, params: Record<string, unknown>) {
+      writes = []
+      dispatcher.feed(requestFrame(id, 'pty.attach', { id: 'pty-1', ...params }))
+      await vi.advanceTimersByTimeAsync(0)
+      return writes.map((buffer) => responseResult(buffer, id)).find(Boolean)
+    }
+
+    beforeEach(async () => {
+      await spawn({})
+      dataCallback!('scrollback-that-must-survive')
+      await vi.advanceTimersByTimeAsync(10)
+      await attach(10, { suppressReplayNotification: true })
+    })
+
+    it('replays the scrollback when the client says it needs it', async () => {
+      const second = await attach(11, {
+        suppressReplayNotification: true,
+        requireReplay: true
+      })
+
+      expect(second, 'second attach returned no response').toBeTruthy()
+      expect(second!.replay).toContain('scrollback-that-must-survive')
+    })
+
+    // The early return is right for a duplicate attach from a client that IS still receiving the
+    // stream; only a client that has thrown its terminal away should ask. Pinned so the fix stays
+    // opt-in and cannot start double-rendering for callers that never asked.
+    it('still sends nothing when the client does not ask', async () => {
+      const second = await attach(12, { suppressReplayNotification: true })
+
+      expect(second, 'second attach returned no response').toBeTruthy()
+      expect(second!.replay).toBeUndefined()
+    })
+  })
 })

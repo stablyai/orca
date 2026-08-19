@@ -27,11 +27,15 @@ const SidebarWorkspaceFilterSection = React.memo(function SidebarWorkspaceFilter
   const hideWorkspacesFromOtherDevices = useAppStore((s) => s.hideWorkspacesFromOtherDevices)
   const setHideWorkspacesFromOtherDevices = useAppStore((s) => s.setHideWorkspacesFromOtherDevices)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
+  const runtimeEnvironmentCatalogHydrated = useAppStore((s) => s.runtimeEnvironmentCatalogHydrated)
   const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
   const setAlwaysShowDefaultBranchWorkspace = useAppStore(
     (s) => s.setAlwaysShowDefaultBranchWorkspace
   )
-  const showOtherClientFilter = runtimeEnvironments.length > 0 || hideWorkspacesFromOtherDevices
+  const showOtherClientFilter =
+    !runtimeEnvironmentCatalogHydrated ||
+    runtimeEnvironments.length > 0 ||
+    hideWorkspacesFromOtherDevices
 
   return (
     <>

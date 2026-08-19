@@ -3,14 +3,17 @@
  *
  * Why read SQLite instead of `orchestration.check`: check is itself a consumer —
  * it marks rows read and backfills `delivered_at` — so using it to observe would
- * destroy the very distinction these specs exist to test. A pointer changes
- * neither marker; only an out-of-band read can prove that before check consumes.
+ * destroy the distinction these specs test. A pointer stamps only `delivered_at`;
+ * an out-of-band read proves notification and consumption independently.
  */
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 import Database from '../../../src/main/sqlite/sync-database'
 
 export type MailRow = {
   id: string
+  run_id: string
+  delivery_contract: string
   type: string
   to_handle: string
   subject: string
@@ -32,7 +35,10 @@ function withMailDb<T>(userDataDir: string, read: (db: Database) => T): T {
 export function readMailRow(userDataDir: string, id: string): MailRow | undefined {
   return withMailDb(userDataDir, (db) =>
     db
-      .prepare('SELECT id, type, to_handle, subject, read, delivered_at FROM messages WHERE id = ?')
+      .prepare(
+        `SELECT id, run_id, delivery_contract, type, to_handle, subject, read, delivered_at
+         FROM messages WHERE id = ?`
+      )
       .get(id)
   ) as MailRow | undefined
 }
@@ -41,10 +47,26 @@ export function readMailbox(userDataDir: string, toHandle: string): MailRow[] {
   return withMailDb(userDataDir, (db) =>
     db
       .prepare(
-        'SELECT id, type, to_handle, subject, read, delivered_at FROM messages WHERE to_handle = ? ORDER BY sequence'
+        `SELECT id, run_id, delivery_contract, type, to_handle, subject, read, delivered_at
+         FROM messages WHERE to_handle = ? ORDER BY sequence`
       )
       .all(toHandle)
   ) as MailRow[]
+}
+
+export function insertDirectRunMail(
+  userDataDir: string,
+  params: { runId: string; toHandle: string; subject: string }
+): string {
+  const id = `msg_e2e_${randomUUID()}`
+  withMailDb(userDataDir, (db) => {
+    db.prepare(
+      `INSERT INTO messages (
+         id, run_id, delivery_contract, from_handle, to_handle, subject, type
+       ) VALUES (?, ?, 'current_delivery', 'e2e-worker', ?, ?, 'status')`
+    ).run(id, params.runId, params.toHandle, params.subject)
+  })
+  return id
 }
 
 /**

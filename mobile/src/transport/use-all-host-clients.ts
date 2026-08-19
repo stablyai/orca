@@ -136,10 +136,21 @@ export function useAllHostClients(hostIds: string[], options?: UseAllHostClients
       client: RpcClient
       state: ConnectionState
       path: MobileConnectionPath
+      pendingPath: MobileConnectionPath | null
+      pairingRejected: boolean
     }>((hostId) => {
       const client = clientsByHostId.get(hostId)
       return client
-        ? [{ hostId, client, state: ctx.getState(hostId), path: ctx.getActivePath(hostId) }]
+        ? [
+            {
+              hostId,
+              client,
+              state: ctx.getState(hostId),
+              path: ctx.getActivePath(hostId),
+              pendingPath: ctx.getPendingPath(hostId),
+              pairingRejected: ctx.isPairingRejected(hostId)
+            }
+          ]
         : []
     })
   }, [ctx, hostIds, tick])

@@ -1,0 +1,131 @@
+# Orca relay zsh overlay wrapper
+typeset -ga _orca_shell_features
+_orca_shell_features=(${(s:,:)${ORCA_SHELL_FEATURES:-}})
+builtin unset ORCA_SHELL_FEATURES
+__orca_has_feature() { (( ${_orca_shell_features[(Ie)$1]} )) }
+__orca_has_feature identity && printf "\033]777;orca-shell-start:%s\007" "$$"
+__orca_resolve_user_config_dir() {
+  typeset -g _orca_resolved_config_dir="${1:-}"
+  while [[ "$_orca_resolved_config_dir" == */ ]]; do _orca_resolved_config_dir="${_orca_resolved_config_dir%/}"; done
+  if [[ -z "$_orca_resolved_config_dir" || -f "$_orca_resolved_config_dir/.orca-shell-wrapper" || "$_orca_resolved_config_dir" == */shell-ready/zsh ]]; then
+    _orca_resolved_config_dir="$HOME"
+  fi
+}
+# Why stricter for an inherited value: Orca can be launched from a terminal that
+# already pointed ZDOTDIR at its own wrapper dir, and a directory holding no zsh
+# startup file at all is not the user's config root whoever wrote it.
+__orca_resolve_inherited_config_dir() {
+  __orca_resolve_user_config_dir "${1:-}"
+  [[ "$_orca_resolved_config_dir" == "$HOME" ]] && return 0
+  local _orca_startup_file
+  for _orca_startup_file in .zshenv .zshrc .zprofile .zlogin; do
+    [[ -r "$_orca_resolved_config_dir/$_orca_startup_file" ]] && return 0
+  done
+  _orca_resolved_config_dir="$HOME"
+}
+__orca_resolve_inherited_config_dir "${ORCA_ORIG_ZDOTDIR:-$HOME}"
+export ORCA_ORIG_ZDOTDIR="$_orca_resolved_config_dir"
+[[ -f "$ORCA_ORIG_ZDOTDIR/.zshenv" ]] && source "$ORCA_ORIG_ZDOTDIR/.zshenv"
+__orca_resolve_user_config_dir "${ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"
+export ORCA_USER_ZDOTDIR="$_orca_resolved_config_dir"
+
+if [[ -f "$ORCA_ORIG_ZDOTDIR/.zshenv" ]] && [[ -o ksharrays || -o shwordsplit || -o shglob ]] 2>/dev/null; then
+  case "$(emulate 2>/dev/null)" in
+    sh|ksh)
+      export ZDOTDIR="$ORCA_USER_ZDOTDIR"
+      # Why unset: an ORCA_HISTFILE no wrapper file will ever consume is
+      # inherited by everything this pane spawns, including a nested Orca.
+      builtin unset ORCA_HISTFILE _orca_shell_features _orca_home _orca_resolved_config_dir _orca_wrapper_zdotdir_self
+      unfunction __orca_shell_epilogue __orca_has_feature __orca_resolve_user_config_dir __orca_resolve_inherited_config_dir 2>/dev/null
+      return 0
+      ;;
+  esac
+fi
+
+export ZDOTDIR='<WRAPPER_ROOT>/zsh'
+
+__orca_shell_epilogue() {
+  # Why first: this body runs after the user's own config, so it would otherwise
+  # inherit whatever options that config left set. Under NO_UNSET an unset
+  # precmd_functions is a fatal error that returns from the whole epilogue
+  # (skipping the ready widget and the ZDOTDIR restore), and KSH_ARRAYS makes
+  # the 1-based feature lookup drop the first selected feature.
+  emulate -L zsh
+  (( $+_orca_epilogue_done )) && return 0
+  typeset -g _orca_epilogue_done=1
+  if __orca_has_feature overlay; then
+    # Why: remote startup files can re-export user defaults after relay spawn.
+    [[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"
+    [[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"
+    [[ -n "${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
+    # Why: OMP does not auto-load Orca's managed status extension; wrap only
+    # interactive launch invocations so subcommands such as `omp config` keep
+    # their normal argv shape.
+    __orca_omp_should_skip_extension() {
+      case "${1:-}" in
+        help|--help|-h|--version|-v) return 0 ;;
+        __complete|acp|agents|auth-broker|auth-gateway|bench|commit|completions|config|dry-balance|gallery|grep|grievances|install|join|models|plugin|read|say|search|setup|shell|ssh|stats|tiny-models|token|ttsr|update|usage|worktree|q|wt) return 0 ;;
+      esac
+      return 1
+    }
+    __orca_omp() {
+      local __orca_use_extension=1
+      __orca_omp_should_skip_extension "${1:-}" && __orca_use_extension=0
+      if [[ $__orca_use_extension -eq 1 && -n "${ORCA_OMP_STATUS_EXTENSION:-}" && -f "${ORCA_OMP_STATUS_EXTENSION}" ]]; then
+        if [[ "${1:-}" == "launch" ]]; then
+          shift
+          command omp launch --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"
+        else
+          command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"
+        fi
+      else
+        command omp "$@"
+      fi
+    }
+    if [[ -n "${ORCA_OMP_STATUS_EXTENSION:-}" ]]; then
+      omp() { __orca_omp "$@"; }
+    fi
+  fi
+  if [[ -n "${ORCA_HISTFILE:-}" ]]; then
+    HISTFILE="$ORCA_HISTFILE"
+    builtin unset ORCA_HISTFILE
+  elif [[ "${HISTFILE:-}" == "$ZDOTDIR/.zsh_history" ]]; then
+    # Why also when Orca injected nothing: /etc/zshrc derived this from Orca's
+    # wrapper ZDOTDIR, so history would accumulate INSIDE the wrapper dir and the
+    # user's real history would be invisible — the plain #11044 bug, with no
+    # per-worktree scoping involved. Matching the exact clobbered value means a
+    # HISTFILE the user set deliberately is never touched.
+    HISTFILE="${ORCA_ORIG_ZDOTDIR:-$HOME}/.zsh_history"
+  fi
+  if __orca_has_feature ready; then
+    # Why: capture the prior zle-line-init so the marker chains to it. On a
+    # re-source we are already the bound widget, so keep the function captured
+    # the first time instead of clobbering it to empty (which would silently
+    # drop the user's widget on every prompt after the second source). Only
+    # user-defined widgets are chainable as plain functions; builtin/completion
+    # forms (rare for zle-line-init) are left unchained.
+    if [[ "${widgets[zle-line-init]:-}" == "user:__orca_prompt_mark" ]]; then
+      :
+    elif (( ${+widgets[zle-line-init]} )) && [[ "${widgets[zle-line-init]}" == user:* ]]; then
+      __orca_prev_line_init_fn="${widgets[zle-line-init]#user:}"
+    else
+      __orca_prev_line_init_fn=""
+    fi
+    __orca_prompt_mark() {
+      printf "\033]777;orca-shell-ready\007"
+      # Why: call the prior hook as a plain function, not an aliased widget, so
+      # $WIDGET stays zle-line-init for add-zle-hook-widget dispatchers.
+      if [[ -n "${__orca_prev_line_init_fn:-}" ]]; then
+        "${__orca_prev_line_init_fn}" "$@"
+      fi
+    }
+    zle -N zle-line-init __orca_prompt_mark
+  fi
+  __orca_resolve_user_config_dir "${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"
+  # Why: after Orca's last wrapper file has loaded, the interactive shell should
+  # expose the same ZDOTDIR a normal zsh startup would expose.
+  export ZDOTDIR="$_orca_resolved_config_dir"
+  unset _orca_home _orca_resolved_config_dir
+  unset _orca_shell_features
+  unfunction __orca_shell_epilogue __orca_has_feature __orca_resolve_user_config_dir __orca_resolve_inherited_config_dir
+}

@@ -96,19 +96,32 @@ export function PaletteFilterFieldOptions({
   // listener has to re-attach to the node that replaces it.
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  // Why the field/query are stored alongside the index instead of reset in an
+  // Why the field/query are stored alongside the cursor instead of reset in an
   // effect: a stale row would stay active for one paint. Why not key off the
   // ranked list identity: a toggle re-ranks, so that would yank the cursor back
   // to the top mid multi-select.
-  const [highlight, setHighlight] = useState(() => ({
+  const [highlight, setHighlight] = useState<{
+    field: PaletteFilterField
+    query: string
+    id: string | null
+  }>(() => ({
     field: group.field,
     query: normalizedQuery,
-    index: 0
+    id: null
   }))
-  const storedIndex =
-    highlight.field === group.field && highlight.query === normalizedQuery ? highlight.index : 0
-  // The stored index can outlive the rows it pointed at when the list shrinks.
-  const activeIndex = Math.min(storedIndex, Math.max(0, ranked.ordered.length - 1))
+  const storedId =
+    highlight.field === group.field && highlight.query === normalizedQuery ? highlight.id : null
+  // Why track the option id rather than its position: toggling re-ranks the list and pins
+  // the toggled option to the front, so a stored index would land on a different option and
+  // the next Enter would check one the user never aimed at. findIndex also covers the option
+  // disappearing from a narrowed list.
+  const activeIndex =
+    storedId === null
+      ? 0
+      : Math.max(
+          0,
+          ranked.ordered.findIndex((option) => option.id === storedId)
+        )
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -146,9 +159,13 @@ export function PaletteFilterFieldOptions({
       }
       const next = Math.max(0, Math.min(ranked.ordered.length - 1, activeIndex + delta))
       virtualizer.scrollToIndex(next, { align: 'auto' })
-      setHighlight({ field: group.field, query: normalizedQuery, index: next })
+      setHighlight({
+        field: group.field,
+        query: normalizedQuery,
+        id: ranked.ordered[next]?.id ?? null
+      })
     },
-    [activeIndex, group.field, normalizedQuery, ranked.ordered.length, virtualizer]
+    [activeIndex, group.field, normalizedQuery, ranked.ordered, virtualizer]
   )
 
   const handleListKeyDown = useCallback(
