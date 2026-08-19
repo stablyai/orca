@@ -559,7 +559,7 @@ describe('completed background-worker retirement resume matrix', () => {
     const restartAfterRetirement = persistAndParseCurrentSession()
     await hydrateSession(restartAfterRetirement)
 
-    // Case 8: first activation preserves explicit retirement and cannot resurrect authority.
+    // Case 8: first activation hands back a bare terminal and cannot resurrect authority.
     const beforeActivation = useAppStore.getState()
     expect(beforeActivation.everActivatedWorktreeIds.has(WORKTREE_ID)).toBe(false)
     expect(beforeActivation.agentStatusByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
@@ -572,10 +572,13 @@ describe('completed background-worker retirement resume matrix', () => {
     expect(activationResult).not.toBe(false)
     const activated = useAppStore.getState()
 
-    expect(activated.tabsByWorktree[WORKTREE_ID]).toEqual([])
+    const replacementTabs = activated.tabsByWorktree[WORKTREE_ID] ?? []
+    expect(replacementTabs).toHaveLength(1)
+    expect(replacementTabs[0]?.id).not.toBe(ORIGINAL_TAB_ID)
     expect(activated.terminalLayoutsByTabId[ORIGINAL_TAB_ID]).toBeUndefined()
     expect(activated.ptyIdsByTabId[ORIGINAL_TAB_ID]).toBeUndefined()
     expectCanaryUnchanged()
+    // Required invariant: explicit completion plus retirement must revoke provider-resume authority.
     expect(Object.keys(activated.pendingStartupByTabId)).toHaveLength(0)
     expect(Object.keys(activated.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
   })
