@@ -11,13 +11,9 @@ import { readHostedPullRequestTemplate } from '../source-control/pull-request-te
 import { getGiteaPullRequestForBranch, invalidateGiteaPullRequestScanForRepo } from './client'
 import { mapGiteaPullRequest, type RawGiteaPullRequest } from './pull-request-mappers'
 import { getGiteaRepoRef, type GiteaRepoRef } from './repository-ref'
+import { readGiteaAuthEnvValue } from './gitea-auth-env'
 
 const CREATE_REQUEST_TIMEOUT_MS = 60_000
-
-function envValue(name: string): string | null {
-  const value = process.env[name]?.trim() ?? ''
-  return value.length > 0 ? value : null
-}
 
 function normalizeApiBaseUrl(value: string): string {
   const trimmed = value.trim().replace(/\/+$/, '')
@@ -25,16 +21,16 @@ function normalizeApiBaseUrl(value: string): string {
 }
 
 function configuredApiBaseUrl(repo: GiteaRepoRef): string {
-  const configured = envValue('ORCA_GITEA_API_BASE_URL')
+  const configured = readGiteaAuthEnvValue('ORCA_GITEA_API_BASE_URL')
   return configured ? normalizeApiBaseUrl(configured) : repo.apiBaseUrl
 }
 
 export function isGiteaReviewCreationAuthenticated(): boolean {
-  return envValue('ORCA_GITEA_TOKEN') !== null
+  return readGiteaAuthEnvValue('ORCA_GITEA_TOKEN') !== null
 }
 
 function authHeaders(): Record<string, string> {
-  const token = envValue('ORCA_GITEA_TOKEN')
+  const token = readGiteaAuthEnvValue('ORCA_GITEA_TOKEN')
   return token ? { Authorization: `token ${token}` } : {}
 }
 
