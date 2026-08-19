@@ -1,5 +1,4 @@
 /* eslint-disable max-lines -- this module owns both transcript tailing and pagination */
-import type { FileHandle } from 'node:fs/promises'
 
 import type {
   AgentType,
@@ -218,44 +217,6 @@ export async function readNativeChatTranscriptTailFile(
       messages.push({ message, offset: lineOffset })
     }
   }
-}
-
-async function findLastCompleteLineEnd(
-  handle: FileHandle,
-  filePath: string,
-  end: number,
-  signal?: AbortSignal
-): Promise<number> {
-  signal?.throwIfAborted()
-  const lastByte = Buffer.allocUnsafe(1)
-  await wslGatedRead(handle, filePath, lastByte, 0, 1, end - 1, 'exact', signal)
-  signal?.throwIfAborted()
-  if (lastByte[0] === 0x0a) {
-    return end
-  }
-  let cursor = end
-  while (cursor > 0) {
-    signal?.throwIfAborted()
-    const start = Math.max(0, cursor - TAIL_CHUNK_BYTES)
-    const buffer = Buffer.allocUnsafe(cursor - start)
-    const { bytesRead } = await wslGatedRead(
-      handle,
-      filePath,
-      buffer,
-      0,
-      buffer.length,
-      start,
-      'exact',
-      signal
-    )
-    signal?.throwIfAborted()
-    const newline = buffer.subarray(0, bytesRead).lastIndexOf(0x0a)
-    if (newline !== -1) {
-      return start + newline + 1
-    }
-    cursor = start
-  }
-  return 0
 }
 
 async function readHermesTranscript(
