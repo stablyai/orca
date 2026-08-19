@@ -15,7 +15,7 @@
  *   ORCA_E2E_NATIVE_IBUS_HANGUL=1 ORCA_E2E_IME_INJECTOR=nested npx playwright test \
  *     tests/e2e/terminal-hangul-terminating-digit-native.spec.ts
  *
- * Five things that decide whether a run is real or a silent false negative, each of which cost a
+ * Eight things that decide whether a run is real or a silent false negative, each of which cost a
  * failed attempt:
  *
  *  - Nested, not headless. A headless mutter never answers RemoteDesktop.CreateSession, so there
@@ -28,6 +28,13 @@
  *    nothing to focus and zero DOM events arrive. The spec forces show()/focus().
  *  - Send Escape before the byte reader starts, or GNOME's overview keeps focus and the Escape
  *    bytes corrupt the first line.
+ *  - Check the session's ibus-daemon is not running --panel=disable before trusting anything that
+ *    depends on seeing a candidate window. No panel means no lookup table is ever drawn, so a
+ *    candidate-selection run measures nothing and reads as "the IME ignored the key".
+ *  - Launch the browser with --password-store=basic --use-mock-keychain. A gnome-keyring unlock
+ *    dialog or a Chrome update bubble grabs the keyboard, xdotool keys never reach the page, and
+ *    the empty event log looks exactly like a broken IME.
+ *  - Click the input to focus it. windowactivate alone does not give web contents real focus.
  *
  * The keys and expected text are environment-tunable, so other IME issues can reuse this
  * unchanged rather than writing another one.
