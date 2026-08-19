@@ -22,10 +22,13 @@ export type RetiredTerminalTabSweepState = AgentStatusTabPrefixDropState &
   Pick<AppState, 'paneForegroundAgentByPaneKey'>
 
 /**
- * Every renderer-side map a retired terminal tab leaves behind that no `set()` on the session
- * model reaches. One unit with two callers on purpose: a second inline copy of this list is how
- * a retirement path ends up sweeping none of it (STA-4593). Must run AFTER the tab is out of
- * `tabsByWorktree` — the completed-orphan sweep keys on "tab this worktree no longer has".
+ * The suppressor-aware store maps plus three module registries a retired terminal tab strands.
+ * One unit with two callers on purpose: a second inline copy of this list is how a retirement
+ * path ends up sweeping none of it (STA-4593). NOT full closeTab parity — closeTab's own set()
+ * additionally clears pane-keyed maps outside this list (sleeping agent sessions, unread
+ * markers, pane timers), which a caller with a narrower set() still strands. Must run AFTER the
+ * tab is out of `tabsByWorktree` — the completed-orphan sweep keys on "tab this worktree no
+ * longer has".
  */
 export function sweepRetiredTerminalTabState(
   actions: RetiredTerminalTabSweepActions,
