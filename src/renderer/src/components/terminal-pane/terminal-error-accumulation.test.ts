@@ -75,6 +75,14 @@ describe('appendTerminalErrorMessage', () => {
     expect(accumulated).not.toContain('14:32:00.')
   })
 
+  it('#15241: bounds a single oversized first message, not just repeated appends', () => {
+    const oversizedFirstMessage = Array.from({ length: 30 }, (_, i) => `line ${i}`).join('\n')
+    const accumulated = appendTerminalErrorMessage(null, oversizedFirstMessage)
+    expect(accumulated.split('\n').length).toBe(20)
+    expect(accumulated).toContain('line 29')
+    expect(accumulated).not.toContain('line 9\n')
+  })
+
   it('#15241: keeps only the most recent lines once the cap is exceeded', () => {
     let accumulated: string | null = null
     for (let i = 0; i < 25; i++) {

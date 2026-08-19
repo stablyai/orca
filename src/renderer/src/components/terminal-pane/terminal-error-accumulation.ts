@@ -34,7 +34,7 @@ function truncateToMostRecentLines(value: string): string {
  */
 export function appendTerminalErrorMessage(accumulated: string | null, message: string): string {
   if (!accumulated) {
-    return message
+    return truncateToMostRecentLines(message)
   }
   if (containsWholeLineRun(accumulated, message)) {
     return accumulated
