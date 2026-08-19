@@ -121,7 +121,7 @@ export function dispatchTerminalNotification(
     return
   }
   const agentNotificationStateStartedAt =
-    freshStoredAgentStatus?.stateStartedAt ?? eventAgentStatusSnapshot?.stateStartedAt
+    eventAgentStatusSnapshot?.stateStartedAt ?? freshStoredAgentStatus?.stateStartedAt
   // Why: main-process hook IPC can update inactive/unmounted worktrees before
   // the renderer's live-PTY map catches up. A fresh accepted hook snapshot is
   // authoritative for agent completion; title/BEL-only paths still need PTY liveness.

@@ -39,7 +39,7 @@ export function parseWorkerTerminalHostScope(value: string | null): WorkerTermin
 export function classifyWorkerTerminalProcessIncarnation(
   processIncarnation: string,
   sessions: readonly PtyProcessInfo[]
-): 'live' | 'dead' | 'unknown' {
+): 'live' | 'exited' | 'unverifiable' {
   const possibleMatches = sessions.filter((session) =>
     processIncarnation.startsWith(`${session.id}:`)
   )
@@ -57,6 +57,6 @@ export function classifyWorkerTerminalProcessIncarnation(
   return possibleMatches.some(
     (session) => !session.incarnationId || session.incarnationId !== session.incarnationId.trim()
   )
-    ? 'unknown'
-    : 'dead'
+    ? 'unverifiable'
+    : 'exited'
 }

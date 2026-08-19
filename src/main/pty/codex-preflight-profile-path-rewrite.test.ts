@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { getBundledLauncherPath } from '../cli/bundled-cli-launcher-path'
-import { getDaemonBashShellReadyRcfileContent } from '../daemon/shell-ready'
+import { getDaemonBashShellReadyRcfileContent } from '../daemon/daemon-bash-shell-ready-rcfile'
 import { resolveCodexShellLaunchPreflightCommand } from './codex-shell-launch-preflight'
 
 // Why (STA-4270): the generated rcfile sources /etc/profile and the user's profile
@@ -72,8 +72,8 @@ function launchCodexThroughRcfile(fixture: Fixture, preflightValue: string): voi
       PATH: ['/usr/bin', '/bin', '/usr/sbin', '/sbin'].join(delimiter),
       TERM: 'dumb',
       SHELL: '/bin/bash',
-      ORCA_SHELL_READY_MARKER: '0',
-      ORCA_SHELL_STARTUP_IDENTITY: '0',
+      // Why no ORCA_SHELL_FEATURES: absent means no features, so the rcfile
+      // emits neither the identity nor the readiness marker into stdout.
       ORCA_CODEX_HOME: join(fixture.root, 'codex-home'),
       ORCA_CODEX_LAUNCH_PREFLIGHT: preflightValue
     }

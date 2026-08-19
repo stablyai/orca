@@ -2,6 +2,9 @@ import { z } from 'zod'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
 import { requiredString } from '../schemas'
+import { describeUnconfirmedAgentStop } from '../../../../shared/pty-liveness-verdict'
+import { ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import type { RuntimeStatus } from '../../../../shared/runtime-types'
 import {
   inspectWorkerTerminal,
   resolvePinnedFederatedServer
@@ -24,11 +27,29 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
           )
         }
         const server = resolvePinnedFederatedServer(runtime, federated)
-        const begun = db.beginWorkerStop(params.dispatch)
+        const begun = db.beginWorkerStop(params.dispatch, runtime.getRuntimeId())
         if (begun.disposition === 'already_settled') {
           return settledReceipt(params.dispatch, begun.worker.state)
         }
         try {
+          const status = (await runtime.callOrchestrationWorkerServer(
+            server.environmentId,
+            'status.get',
+            undefined,
+            30_000
+          )) as RuntimeStatus
+          if (
+            !status.capabilities?.includes(ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY)
+          ) {
+            return unknownReceipt(
+              params.dispatch,
+              db.markWorkerStopUnknown(
+                params.dispatch,
+                `Connected server ${server.name} cannot prove the worker stop outcome.`
+              ),
+              'none'
+            )
+          }
           const remote = (await runtime.callOrchestrationWorkerServer(
             server.environmentId,
             'orchestration.federationStop',
@@ -76,7 +97,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
         }
       }
 
-      const begun = db.beginWorkerStop(params.dispatch)
+      const begun = db.beginWorkerStop(params.dispatch, runtime.getRuntimeId())
       if (begun.disposition === 'already_settled') {
         return settledReceipt(params.dispatch, begun.worker.state)
       }
@@ -101,7 +122,12 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
         )
       }
       const observation = await inspectWorkerTerminal(runtime, db, params.dispatch)
-      if (!observation.exact || observation.status !== 'running') {
+      // Why `unverifiable` still proceeds: losing contact is a reason to report
+      // the outcome honestly, never a reason to stop trying to stop the worker.
+      if (
+        !observation.exact ||
+        (observation.status !== 'live' && observation.status !== 'unverifiable')
+      ) {
         return unknownReceipt(
           params.dispatch,
           db.markWorkerStopUnknown(
@@ -111,8 +137,29 @@ export const ORCHESTRATION_WORKER_STOP_METHODS: RpcMethod[] = [
           'none'
         )
       }
+      const resource = db.getWorkerTerminalResourceByOwner(params.dispatch)
+      if (!resource || resource.ownership_state !== 'owned') {
+        const ownership = resource?.ownership_state ?? 'unproven'
+        return unknownReceipt(
+          params.dispatch,
+          db.markWorkerStopUnknown(
+            params.dispatch,
+            `The worker terminal is ${ownership}; no terminal was closed.`
+          ),
+          'none'
+        )
+      }
       try {
         const close = await runtime.closeTerminal(handle)
+        if (!close.ptyKilled) {
+          // The tab is retired, but the agent process was never confirmed stopped —
+          // settling here is the false success this receipt exists to prevent.
+          return unknownReceipt(
+            params.dispatch,
+            db.markWorkerStopUnknown(params.dispatch, describeUnconfirmedAgentStop(close)),
+            'closed_agent_terminal'
+          )
+        }
         const worker = db.settleWorkerStop(params.dispatch)
         runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
         return {

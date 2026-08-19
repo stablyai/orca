@@ -6,6 +6,7 @@ const OSC_AGENT_STATUS_PREFIX = '\x1b]9999;'
 export type ProcessedAgentStatusChunk = {
   cleanData: string
   payloads: ParsedAgentStatusPayload[]
+  lastPayloadCleanOffset: number | null
 }
 
 function findAgentStatusTerminator(
@@ -40,6 +41,7 @@ export function createAgentStatusOscProcessor(): (data: string) => ProcessedAgen
     pending = ''
 
     const payloads: ParsedAgentStatusPayload[] = []
+    let lastPayloadCleanOffset: number | null = null
     let cleanData = ''
     let cursor = 0
 
@@ -77,10 +79,11 @@ export function createAgentStatusOscProcessor(): (data: string) => ProcessedAgen
       const parsed = parseAgentStatusPayload(combined.slice(payloadStart, terminator.index))
       if (parsed) {
         payloads.push(parsed)
+        lastPayloadCleanOffset = cleanData.length
       }
       cursor = terminator.index + terminator.length
     }
 
-    return { cleanData, payloads }
+    return { cleanData, payloads, lastPayloadCleanOffset }
   }
 }

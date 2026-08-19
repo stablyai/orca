@@ -7,7 +7,7 @@ import {
   resolveSourceControlGroupOrder,
   splitPinnedSourceControlConflicts,
   type SourceControlEntryGroups
-} from './source-control-section-order'
+} from './source-control/listing/section-order'
 
 function entry(partial: Partial<GitStatusEntry> & { path: string }): GitStatusEntry {
   return {

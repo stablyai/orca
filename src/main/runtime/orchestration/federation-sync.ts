@@ -14,6 +14,7 @@ import {
   recordFederationAckCheckpoint
 } from './federation-ack-checkpoints'
 import { parseFederatedWorkerReportPayload } from './federation-worker-report-payload'
+import { bindCoordinatorMutationPayload } from './dispatch-message-binding'
 
 const MESSAGE_TYPE_SET = new Set<MessageType>(MESSAGE_TYPES)
 const FEDERATION_PULL_PAGE_SIZE = 50
@@ -112,7 +113,7 @@ async function syncFederatedDispatchPages(
         type: message.type,
         priority: message.priority,
         threadId: message.threadId ?? undefined,
-        payload: message.payload ?? undefined
+        payload: bindCoordinatorMutationPayload(message.type, message.payload, dispatchId)
       },
       lifecycle: parseFederatedLifecycle(message, item.message_id, dispatchId, dispatch.task_id)
     })
@@ -129,7 +130,9 @@ async function syncFederatedDispatchPages(
       })
     }
     cursor = item.sequence
-    runtime.notifyMessageArrived(stored.message.to_handle, stored.message.type)
+    if (stored.message.read === 0) {
+      runtime.notifyMessageArrived(stored.message.to_handle, stored.message.type)
+    }
     imported += stored.duplicate ? 0 : 1
   }
 

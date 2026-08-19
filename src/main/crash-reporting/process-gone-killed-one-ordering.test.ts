@@ -17,6 +17,9 @@ import {
 import { ProcessGoneDedupe } from './process-gone-dedupe'
 import { recordProcessGoneCrash, type ProcessGoneCrashEvent } from './process-gone-recorder'
 
+const noMinidump = async () => null
+const attachDetails = async () => null
+
 function event(overrides: Partial<ProcessGoneCrashEvent> = {}): ProcessGoneCrashEvent {
   return {
     source: 'renderer',
@@ -82,9 +85,27 @@ describe('recordProcessGoneCrash killed/1 ordering', () => {
 
     recordProcessGoneCrash({ record } as never, gpuKill, dedupe)
     recordProcessGoneCrash({ record } as never, networkServiceKill, dedupe)
-    recordProcessGoneCrash({ record } as never, rendererKill, dedupe)
+    recordProcessGoneCrash({ record, attachDetails } as never, rendererKill, dedupe, noMinidump)
 
     expect(record).toHaveBeenCalledOnce()
+    // Timing proximity is evidence, not authority to discard an ambiguous report.
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        breadcrumbs: expect.arrayContaining([
+          expect.objectContaining({
+            name: 'process_gone_suppressed',
+            data: expect.objectContaining({ source: 'child', processType: 'GPU' })
+          }),
+          expect.objectContaining({
+            name: 'process_gone_suppressed',
+            data: expect.objectContaining({
+              source: 'child',
+              serviceName: 'network.mojom.NetworkService'
+            })
+          })
+        ])
+      })
+    )
   })
 
   it('suppresses the fleet sequence only after independent session-end intent', () => {

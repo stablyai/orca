@@ -39,7 +39,6 @@ export function ContextualTourOverlay(): JSX.Element | null {
   const keybindings = useAppStore((s) => s.keybindings)
   const activeTabId = useAppStore((s) => s.activeTabId)
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
-  const canCreateWorkspace = useAppStore((s) => s.repos.length > 0)
   const markContextualToursSeen = useAppStore((s) => s.markContextualToursSeen)
   const advanceContextualTour = useAppStore((s) => s.advanceContextualTour)
   const regressContextualTour = useAppStore((s) => s.regressContextualTour)
@@ -316,7 +315,6 @@ export function ContextualTourOverlay(): JSX.Element | null {
       setSidebarOpen,
       openTaskPage,
       openModal,
-      canCreateWorkspace,
       openWorkspaceComposer: openWorkspaceCreationComposerWithTourHandoff,
       dispatchTerminalPaneSplit: requestActiveTerminalPaneSplit,
       schedule: (callback) => {

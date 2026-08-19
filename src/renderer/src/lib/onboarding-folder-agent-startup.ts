@@ -5,7 +5,7 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
-import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
+import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
