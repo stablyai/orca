@@ -374,8 +374,10 @@ describePosix('history-only pane in a real zsh', () => {
       // place: a history-only pane leaves no Orca name in the user's hook arrays.
       expect(wrapped.values.PRECMD).toBe(unwrapped.values.PRECMD)
       expect(wrapped.values.PREEXEC).toBe(unwrapped.values.PREEXEC)
+      // Why compared and not pinned to 'none': a host whose global zsh config
+      // installs its own zle-line-init widget has one either way, and what Orca
+      // owes is that it looks the same wrapped as unwrapped.
       expect(wrapped.values.LINEINIT).toBe(unwrapped.values.LINEINIT)
-      expect(wrapped.values.LINEINIT).toBe('none')
       expect(wrapped.values.PRECMD).not.toContain('orca')
       // ZDOTDIR matches too, because the wrapper hands back exactly what it found.
       expect(wrapped.values.ZDOTDIR).toBe(unwrapped.values.ZDOTDIR)
