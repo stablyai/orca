@@ -1,8 +1,6 @@
 import {
   getRepoExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
@@ -12,6 +10,15 @@ import type {
   WorkspaceSpaceWorktreeMeasurement
 } from '../../../../shared/workspace-space-types'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import { getWorkspaceCleanupHostIdentity } from '../../../../shared/workspace-cleanup-host-identity'
+
+export {
+  getWorkspaceCleanupCandidateHostId,
+  getWorkspaceCleanupCandidateIdentity,
+  getWorkspaceCleanupHostIdentity,
+  getWorkspaceCleanupIdentityWorktreeId,
+  resolveWorkspaceCleanupRemovalHostId
+} from '../../../../shared/workspace-cleanup-host-identity'
 
 /** Structural subset of `Worktree` kept in sync with the persisted source. */
 export type WorkspaceCleanupWorktreeFacts = Pick<Worktree, 'id'> &
@@ -34,21 +41,6 @@ export type WorkspaceCleanupWorktreeFacts = Pick<Worktree, 'id'> &
       | 'prunable'
     >
   >
-
-export function getWorkspaceCleanupCandidateHostId(
-  candidate: Pick<WorkspaceCleanupCandidate, 'connectionId' | 'executionHostId'>
-): ExecutionHostId {
-  return (
-    normalizeExecutionHostId(candidate.executionHostId) ??
-    (candidate.connectionId
-      ? toSshExecutionHostId(candidate.connectionId)
-      : LOCAL_EXECUTION_HOST_ID)
-  )
-}
-
-export function getWorkspaceCleanupHostIdentity(hostId: string, id: string): string {
-  return `${hostId}\0${id}`
-}
 
 function countIds<Row extends { worktreeId: string }>(
   rows: readonly Row[],

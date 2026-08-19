@@ -16,7 +16,6 @@ import {
 } from '../../../shared/tui-agent-launch-defaults'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
-import { clearEnvCommand, commandSeparator } from '../../../shared/tui-agent-startup-shell'
 import type { AppState } from '@/store/types'
 import type { AiVaultSessionDragPayload } from '@/lib/ai-vault-session-drag'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
@@ -64,16 +63,16 @@ type AiVaultResumeWorktreeArgs = {
 }
 
 export function buildAiVaultResumeCopyCommandForWorktree(args: AiVaultResumeWorktreeArgs): string {
-  const command = buildAiVaultResumeForWorktree(args, true).command
-  if (args.session.agent !== 'codex' || args.session.codexHome !== null) {
-    return command
-  }
-  const shell = resolveAiVaultResumeShell(args)
-  const separator = commandSeparator(shell)
-  const clearHomes = ['CODEX_HOME', 'ORCA_CODEX_HOME']
-    .map((name) => clearEnvCommand(name, shell))
-    .join(separator)
-  return `${clearHomes}${separator}${command}`
+  // Why an `env -u` prefix on the agent rather than a preceding clear statement:
+  // this text is COPIED, so it runs in a shell Orca never spawned and cannot
+  // seed. A clear statement has to test `$fish_pid`, an unbound expansion that
+  // aborts the line under `set -u` — and because the clear came first, it took
+  // the agent launch down with it (the regression that reverted #14863).
+  const clearEnvNames =
+    args.session.agent === 'codex' && args.session.codexHome === null
+      ? (['CODEX_HOME', 'ORCA_CODEX_HOME'] as const)
+      : undefined
+  return buildAiVaultResumeForWorktree(args, true, clearEnvNames).command
 }
 
 export function buildAiVaultResumeStartupForWorktree(
@@ -121,7 +120,10 @@ export function buildAiVaultDropRepinStartup(args: {
 
 function buildAiVaultResumeForWorktree(
   args: AiVaultResumeWorktreeArgs,
-  embedCwd: boolean
+  embedCwd: boolean,
+  /** Copy-path only: names the pasted line must strip off the agent itself.
+   *  Spawned startups drop them through `envToDelete` instead. */
+  clearEnvNames?: readonly string[]
 ): AiVaultResumeStartup {
   const providerSession = getAiVaultAgentProviderSession(args.session)
   if (
@@ -189,14 +191,16 @@ function buildAiVaultResumeForWorktree(
                 platform,
                 commandOverride: startupPlan.launchConfig.agentCommand,
                 codexHome,
-                shell: liveShell
+                shell: liveShell,
+                clearEnvNames
               })
             : buildAiVaultResumeShellCommand({
                 resumeCommand: startupPlan.launchCommand,
                 cwd,
                 platform,
                 codexHome,
-                shell: liveShell
+                shell: liveShell,
+                clearEnvNames
               }),
         ...(startupPlan.env ? { env: startupPlan.env } : {}),
         ...realHomeCodexResumeEnvDeletion(args.session),
@@ -221,7 +225,8 @@ function buildAiVaultResumeForWorktree(
       codexHome,
       // Why: non-resumable agents queue through this fallback too, so it must
       // quote for the live Windows shell like the startup-plan branch above.
-      shell: liveShell
+      shell: liveShell,
+      clearEnvNames
     }),
     ...startupCwd,
     ...realHomeCodexResumeEnvDeletion(args.session)
@@ -241,30 +246,8 @@ function resolveAiVaultResumeShell(args: AiVaultResumeWorktreeArgs): AgentStartu
     state: args.state,
     worktreeId: args.worktreeId,
     platform,
-    isLocalSession,
-    parsedByClientLoginShell: isLocalSession && runsOnClientLoginShell(args, platform)
+    isLocalSession
   })
-}
-
-/**
- * Whether the resume line is handed to THIS machine's login shell.
- *
- * Why not `isLocalSession`: that only says the session file was scanned locally
- * (no executionHostId), which is still true when the worktree lives on an SSH
- * or runtime host — the command then goes to that host's shell. The WSL case is
- * caught by the platform mismatch (a WSL worktree resolves to 'linux' on win32).
- */
-function runsOnClientLoginShell(
-  args: AiVaultResumeWorktreeArgs,
-  platform: NodeJS.Platform
-): boolean {
-  const executionHost = parseExecutionHostId(
-    getExecutionHostIdForWorktree(args.state, args.worktreeId ?? args.state.activeWorktreeId)
-  )
-  if (executionHost?.kind === 'ssh' || executionHost?.kind === 'runtime') {
-    return false
-  }
-  return platform === CLIENT_PLATFORM
 }
 
 export function getAiVaultAgentProviderSession(

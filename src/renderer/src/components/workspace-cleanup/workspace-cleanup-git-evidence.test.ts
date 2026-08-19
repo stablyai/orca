@@ -1,3 +1,4 @@
+import { getWorkspaceCleanupCandidateIdentity } from '../../../../shared/workspace-cleanup-host-identity'
 import { describe, expect, it } from 'vitest'
 import { createDefaultWorkspaceCleanupFilterState } from '../../../../shared/workspace-cleanup-filter-model'
 import { makeFacetCandidate } from './workspace-cleanup-facet.test.fixture'
@@ -102,9 +103,33 @@ describe('applyWorkspaceCleanupGitEvidence', () => {
       worktreeId: 'a',
       git: { clean: false, upstreamAhead: 2, upstreamBehind: 0, checkedAt: 5 }
     })
-    const [row] = applyWorkspaceCleanupGitEvidence([deferred], new Map([['a', refreshed]]))
+    const [row] = applyWorkspaceCleanupGitEvidence(
+      [deferred],
+      new Map([[getWorkspaceCleanupCandidateIdentity(refreshed), refreshed]])
+    )
     expect(row.git.clean).toBe(false)
     expect(row.git.checkedAt).toBe(5)
+  })
+
+  it("never applies one host's git evidence to another host's same-id row", () => {
+    // STA-4343: a dirty remote row must not mark the local same-id row dirty
+    // (or vice versa) — the evidence index is keyed by host, not by id.
+    const localRow = { ...deferredCandidate('a'), executionHostId: 'local' as const }
+    const remoteEvidence = {
+      ...makeFacetCandidate({
+        worktreeId: 'a',
+        blockers: ['dirty-files'],
+        git: { clean: false, upstreamAhead: 0, upstreamBehind: 0, checkedAt: 5 }
+      }),
+      connectionId: 'ssh-1',
+      executionHostId: 'ssh:ssh-1' as const
+    }
+    const [row] = applyWorkspaceCleanupGitEvidence(
+      [localRow],
+      new Map([[getWorkspaceCleanupCandidateIdentity(remoteEvidence), remoteEvidence]])
+    )
+    expect(row.git).toEqual(localRow.git)
+    expect(row.blockers).not.toContain('dirty-files')
   })
 
   it('returns the input untouched when nothing was re-scanned', () => {
@@ -125,7 +150,10 @@ describe('applyWorkspaceCleanupGitEvidence', () => {
       git: { clean: false, upstreamAhead: 0, upstreamBehind: 0, checkedAt: 5 }
     })
 
-    const [row] = applyWorkspaceCleanupGitEvidence([current], new Map([['a', refreshed]]))
+    const [row] = applyWorkspaceCleanupGitEvidence(
+      [current],
+      new Map([[getWorkspaceCleanupCandidateIdentity(refreshed), refreshed]])
+    )
 
     expect(row.displayName).toBe('current name')
     expect(row.fingerprint).toBe('current-fingerprint')

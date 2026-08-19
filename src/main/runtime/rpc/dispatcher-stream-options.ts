@@ -3,6 +3,7 @@ import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protoc
 import type { PairingRpcContext } from './core'
 
 export type RpcDispatchStreamingOptions = {
+  authenticatedCallerFingerprint?: string
   connectionId?: string
   signal?: AbortSignal
   clientId?: string

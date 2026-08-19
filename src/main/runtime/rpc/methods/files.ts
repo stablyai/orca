@@ -1,71 +1,23 @@
-/* oxlint-disable max-lines -- Why: file RPC routing coverage stays together so the dispatcher contract for read, write, mutation, and watch methods is easy to audit. */
 import { z } from 'zod'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
 import { runFileWatchStream } from './file-watch-stream-lifecycle'
-import { remoteRpcContentBudget } from '../../../../shared/remote-rpc-content-budget'
+import { FILE_MUTATION_METHODS } from './files-mutation-methods'
+import { remoteFileContentBudget } from './files-remote-content-budget'
+import {
+  QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS,
+  QUICK_OPEN_SEARCH_VERSION
+} from '../../../../shared/quick-open-path-search'
+import { limitQuickOpenSearchReplyBySerializedBytes } from '../../../../shared/quick-open-transport-budget'
+import { FileOpen, WorktreeSelector } from './files-target-schemas'
+import { FILE_TERMINAL_ARTIFACT_METHODS } from './files-terminal-artifact-methods'
 
 let filesWatchSubscriptionSeq = 0
-const RUNTIME_FILE_BASE64_PATTERN = /^[A-Za-z0-9+/]*={0,2}$/
-
-function remoteFileContentBudget(
-  clientKind: 'mobile' | 'runtime' | undefined,
-  requestId: string | undefined
-): number | undefined {
-  return clientKind && requestId ? remoteRpcContentBudget(requestId) : undefined
-}
-
-function isValidRuntimeFileBase64(value: unknown): value is string {
-  return (
-    typeof value === 'string' && value.length % 4 !== 1 && RUNTIME_FILE_BASE64_PATTERN.test(value)
-  )
-}
-
-type SshMutationParams = {
-  expectedExecutionHostId?: string
-  expectedSshTargetId?: string
-  expectedSshConnectionGeneration?: number
-}
-
-function sshMutationArguments(
-  params: SshMutationParams
-): [expectedGeneration?: number, expectedTargetId?: string, expectedExecutionHostId?: string] {
-  if (
-    params.expectedExecutionHostId === undefined &&
-    params.expectedSshTargetId === undefined &&
-    params.expectedSshConnectionGeneration === undefined
-  ) {
-    return []
-  }
-  return [
-    params.expectedSshConnectionGeneration,
-    params.expectedSshTargetId,
-    params.expectedExecutionHostId
-  ]
-}
-
-const WorktreeSelector = z.object({
-  worktree: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing worktree selector'))
-})
 
 const FilePathSearch = WorktreeSelector.extend({
-  query: z.string().max(256).default(''),
-  limit: z.number().int().positive().max(32).default(16)
-})
-
-const FileOpen = WorktreeSelector.extend({
-  relativePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing relative path'))
-})
-
-const FileMutationOpen = FileOpen.extend({
-  expectedExecutionHostId: z.string().min(1).optional(),
-  expectedSshTargetId: z.string().min(1).optional(),
-  expectedSshConnectionGeneration: z.number().int().nonnegative().optional()
+  query: z.string().max(QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS).default(''),
+  limit: z.number().int().positive().max(32).default(16),
+  excludePaths: z.array(z.string()).optional(),
+  mode: z.literal('quick-open').optional()
 })
 
 const ResolveTerminalPath = WorktreeSelector.extend({
@@ -95,23 +47,6 @@ const ResolveTerminalPath = WorktreeSelector.extend({
     .optional()
 })
 
-const TerminalArtifactFile = WorktreeSelector.extend({
-  grantId: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing terminal artifact grant')),
-  absolutePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing terminal artifact path'))
-})
-
-const TerminalArtifactFileWrite = TerminalArtifactFile.extend({
-  content: z
-    .unknown()
-    .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' })
-})
-
 const FileOpenDiff = FileOpen.extend({
   staged: z.boolean().optional()
 })
@@ -130,28 +65,6 @@ const ServerDirectoryBrowse = z.object({
     .pipe(z.string())
 })
 
-// Why: write content must be a real string. Coercing a missing/non-string value
-// to '' silently truncated the target file to empty instead of erroring. An
-// explicit '' is still accepted (writing an empty file is legitimate).
-const FileWrite = FileMutationOpen.extend({
-  content: z
-    .unknown()
-    .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' })
-})
-
-const FileWriteBase64 = FileMutationOpen.extend({
-  contentBase64: z
-    .unknown()
-    .refine((v): v is string => typeof v === 'string', { message: 'Missing file content' })
-    // Why: Buffer.from(..., 'base64') accepts malformed input by dropping
-    // invalid bytes, which can silently create empty or corrupt uploaded files.
-    .refine(isValidRuntimeFileBase64, 'File content must be base64')
-})
-
-const FileWriteBase64Chunk = FileWriteBase64.extend({
-  append: z.boolean().optional()
-})
-
 const FileReadChunk = FileOpen.extend({
   offset: z.number().int().nonnegative(),
   length: z
@@ -159,52 +72,6 @@ const FileReadChunk = FileOpen.extend({
     .int()
     .positive()
     .max(512 * 1024)
-})
-
-const FileRename = WorktreeSelector.extend({
-  expectedExecutionHostId: z.string().min(1).optional(),
-  expectedSshTargetId: z.string().min(1).optional(),
-  expectedSshConnectionGeneration: z.number().int().nonnegative().optional(),
-  oldRelativePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing source path')),
-  newRelativePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing destination path'))
-})
-
-const FileCopy = WorktreeSelector.extend({
-  expectedExecutionHostId: z.string().min(1).optional(),
-  expectedSshTargetId: z.string().min(1).optional(),
-  expectedSshConnectionGeneration: z.number().int().nonnegative().optional(),
-  sourceRelativePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing source path')),
-  destinationRelativePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing destination path'))
-})
-
-const FileCommitUpload = WorktreeSelector.extend({
-  expectedExecutionHostId: z.string().min(1).optional(),
-  expectedSshTargetId: z.string().min(1).optional(),
-  expectedSshConnectionGeneration: z.number().int().nonnegative().optional(),
-  tempRelativePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing temporary path')),
-  finalRelativePath: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing final path'))
-})
-
-const FileDelete = FileMutationOpen.extend({
-  recursive: z.boolean().optional()
 })
 
 const FileSearch = WorktreeSelector.extend({
@@ -235,13 +102,33 @@ export const FILE_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'files.list',
     params: WorktreeSelector,
-    handler: async (params, { runtime }) => runtime.listMobileFiles(params.worktree)
+    handler: async (params, { runtime, signal }) =>
+      signal === undefined
+        ? runtime.listMobileFiles(params.worktree)
+        : runtime.listMobileFiles(params.worktree, { signal })
   }),
   defineMethod({
     name: 'files.searchPaths',
     params: FilePathSearch,
-    handler: async (params, { runtime }) =>
-      runtime.searchMobileFilePaths(params.worktree, params.query, params.limit)
+    handler: async (params, { runtime, signal, clientKind, requestId }) => {
+      if (params.mode !== 'quick-open') {
+        return runtime.searchMobileFilePaths(params.worktree, params.query, params.limit)
+      }
+      const result = {
+        ...(await runtime.searchQuickOpenFilePaths(
+          params.worktree,
+          params.query,
+          params.limit,
+          params.excludePaths,
+          signal
+        )),
+        quickOpenSearchVersion: QUICK_OPEN_SEARCH_VERSION
+      }
+      const maxContentBytes = remoteFileContentBudget(clientKind, requestId)
+      return maxContentBytes === undefined
+        ? result
+        : limitQuickOpenSearchReplyBySerializedBytes(result, maxContentBytes)
+    }
   }),
   defineMethod({
     name: 'files.open',
@@ -275,50 +162,7 @@ export const FILE_METHODS: RpcAnyMethod[] = [
         params.nativeChatContext ?? null
       )
   }),
-  defineMethod({
-    name: 'files.readTerminalArtifact',
-    params: TerminalArtifactFile,
-    handler: async (params, { runtime, clientId }) =>
-      runtime.readTerminalArtifactFile(
-        params.worktree,
-        params.grantId,
-        params.absolutePath,
-        clientId
-      )
-  }),
-  defineMethod({
-    name: 'files.readTerminalArtifactPreview',
-    params: TerminalArtifactFile,
-    handler: async (params, { runtime, clientId, clientKind, requestId }) => {
-      const budget = remoteFileContentBudget(clientKind, requestId)
-      return budget === undefined
-        ? runtime.readTerminalArtifactPreview(
-            params.worktree,
-            params.grantId,
-            params.absolutePath,
-            clientId
-          )
-        : runtime.readTerminalArtifactPreview(
-            params.worktree,
-            params.grantId,
-            params.absolutePath,
-            clientId,
-            budget
-          )
-    }
-  }),
-  defineMethod({
-    name: 'files.writeTerminalArtifact',
-    params: TerminalArtifactFileWrite,
-    handler: async (params, { runtime, clientId }) =>
-      runtime.writeTerminalArtifactFile(
-        params.worktree,
-        params.grantId,
-        params.absolutePath,
-        params.content,
-        clientId
-      )
-  }),
+  ...FILE_TERMINAL_ARTIFACT_METHODS,
   defineMethod({
     name: 'files.readPreview',
     params: FileOpen,
@@ -351,114 +195,7 @@ export const FILE_METHODS: RpcAnyMethod[] = [
     params: ServerDirectoryBrowse,
     handler: async (params, { runtime }) => runtime.browseServerDir(params.path)
   }),
-  defineMethod({
-    name: 'files.write',
-    params: FileWrite,
-    handler: async (params, { runtime }) =>
-      runtime.writeFileExplorerFile(
-        params.worktree,
-        params.relativePath,
-        params.content,
-        ...sshMutationArguments(params)
-      )
-  }),
-  defineMethod({
-    name: 'files.writeBase64',
-    params: FileWriteBase64,
-    handler: async (params, { runtime }) =>
-      runtime.writeFileExplorerFileBase64(
-        params.worktree,
-        params.relativePath,
-        params.contentBase64,
-        ...sshMutationArguments(params)
-      )
-  }),
-  defineMethod({
-    name: 'files.writeBase64Chunk',
-    params: FileWriteBase64Chunk,
-    handler: async (params, { runtime }) =>
-      runtime.writeFileExplorerFileBase64Chunk(
-        params.worktree,
-        params.relativePath,
-        params.contentBase64,
-        params.append === true,
-        ...sshMutationArguments(params)
-      )
-  }),
-  defineMethod({
-    name: 'files.createFile',
-    params: FileMutationOpen,
-    handler: async (params, { runtime }) =>
-      runtime.createFileExplorerFile(
-        params.worktree,
-        params.relativePath,
-        ...sshMutationArguments(params)
-      )
-  }),
-  defineMethod({
-    name: 'files.createDir',
-    params: FileMutationOpen,
-    handler: async (params, { runtime }) =>
-      runtime.createFileExplorerDir(
-        params.worktree,
-        params.relativePath,
-        ...sshMutationArguments(params)
-      )
-  }),
-  defineMethod({
-    name: 'files.createDirNoClobber',
-    params: FileMutationOpen,
-    handler: async (params, { runtime }) =>
-      runtime.createFileExplorerDirNoClobber(
-        params.worktree,
-        params.relativePath,
-        ...sshMutationArguments(params)
-      )
-  }),
-  defineMethod({
-    name: 'files.commitUpload',
-    params: FileCommitUpload,
-    handler: async (params, { runtime }) =>
-      runtime.commitFileExplorerUpload(
-        params.worktree,
-        params.tempRelativePath,
-        params.finalRelativePath,
-        ...sshMutationArguments(params)
-      )
-  }),
-  defineMethod({
-    name: 'files.rename',
-    params: FileRename,
-    handler: async (params, { runtime }) =>
-      runtime.renameFileExplorerPath(
-        params.worktree,
-        params.oldRelativePath,
-        params.newRelativePath,
-        ...sshMutationArguments(params)
-      )
-  }),
-  defineMethod({
-    name: 'files.copy',
-    params: FileCopy,
-    handler: async (params, { runtime }) =>
-      runtime.copyFileExplorerPath(
-        params.worktree,
-        params.sourceRelativePath,
-        params.destinationRelativePath,
-        ...sshMutationArguments(params)
-      )
-  }),
-  defineMethod({
-    name: 'files.delete',
-    params: FileDelete,
-    handler: async (params, { runtime }) =>
-      runtime.deleteFileExplorerPath(
-        params.worktree,
-        params.relativePath,
-        params.recursive,
-        ...sshMutationArguments(params)
-      )
-  }),
+  ...FILE_MUTATION_METHODS,
   defineMethod({
     name: 'files.search',
     params: FileSearch,
@@ -476,8 +213,14 @@ export const FILE_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'files.listAll',
     params: FileListAll,
-    handler: async (params, { runtime }) =>
-      runtime.listRuntimeFiles(params.worktree, { excludePaths: params.excludePaths })
+    handler: async (params, { runtime, clientKind, requestId, signal }) => {
+      const maxContentBytes = remoteFileContentBudget(clientKind, requestId)
+      return runtime.listRuntimeFiles(params.worktree, {
+        excludePaths: params.excludePaths,
+        ...(signal === undefined ? {} : { signal }),
+        ...(maxContentBytes === undefined ? {} : { maxContentBytes })
+      })
+    }
   }),
   defineMethod({
     name: 'files.listMarkdownDocuments',

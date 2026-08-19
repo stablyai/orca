@@ -23,7 +23,7 @@ vi.mock('@/lib/simulator-tab-palette-activation', () => ({
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: mocks.focusTerminalTabSurface
 }))
-vi.mock('@/components/browser-pane/browser-focus', () => ({
+vi.mock('@/components/browser-pane/host-guest/browser-focus', () => ({
   requestBrowserFocus: mocks.requestBrowserFocus
 }))
 
@@ -40,7 +40,8 @@ const terminalResult: Extract<OpenTabSearchResult, { source: 'workspace' }> = {
   tabId: 'tab-1',
   entityId: 'term-1',
   groupId: 'group-2',
-  relativePath: null
+  relativePath: null,
+  occupantAgent: null
 }
 
 const editorResult: OpenTabSearchResult = {

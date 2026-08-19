@@ -111,7 +111,8 @@ export function useMobileNativeChatController(args: {
     // a null is indistinguishable from a host retraction, and peeking at the
     // terminal view would permanently decline the prefill.
     chatActive: showNativeChat,
-    transcriptLoading: nativeChatSession.transcriptLoading
+    transcriptLoading: nativeChatSession.transcriptLoading,
+    transcriptSettled: nativeChatSession.status === 'ready'
   })
 
   const nativeChatStatus = activeChatResolution ? activeSessionTab?.agentStatus : null

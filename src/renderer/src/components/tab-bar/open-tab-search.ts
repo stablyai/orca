@@ -2,6 +2,10 @@
 // omnibox. Pure: no store, no React.
 
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
+import {
+  comparePaletteDocumentRank,
+  type PaletteDocumentRank
+} from '@/lib/palette-match/palette-document'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import {
   searchBrowserPages,
@@ -13,6 +17,7 @@ import {
   type SearchableSimulatorTab,
   type SimulatorPaletteSearchResult
 } from '@/lib/simulator-palette-search'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   searchWorkspaceTabs,
   type SearchableWorkspaceTab,
@@ -45,6 +50,7 @@ export type OpenTabSearchResult =
       entityId: string
       groupId: string
       relativePath: string | null
+      occupantAgent: TuiAgent | null
     })
   | (OpenTabSearchResultBase & {
       source: 'browser'
@@ -70,6 +76,7 @@ type RankedResult = {
   result: OpenTabSearchResult
   tier: number
   sourceRank: number
+  matchRank: PaletteDocumentRank | null
   score: number
 }
 
@@ -82,8 +89,8 @@ const SOURCE_RANK: Record<OpenTabSearchSource, number> = {
 const TITLE_PREFIX_TIER = 0
 const TITLE_SUBSTRING_TIER = 1
 // Why one tier for every secondary match: path and agent-snippet matches share
-// `secondaryRange`, so splitting on offset would outrank the engine's own field
-// weights. See the plan's tiering decision.
+// `secondaryRanges`, so splitting on offset would outrank the engine's own match
+// rank, which is compared explicitly below. See the plan's tiering decision.
 const SECONDARY_TIER = 2
 
 function isOpenTabSearchQueryTooLarge(
@@ -102,18 +109,19 @@ type EngineResult =
 // simulator alias branch and the browser workspace-label branch are real matches
 // that carry neither range, and would be dropped by the inverse test.
 function isNameOnlyMatch(result: EngineResult): boolean {
-  return result.worktreeRange !== null || result.repoRange !== null
+  return result.worktreeRanges.length > 0 || result.repoRanges.length > 0
 }
 
 function getTier(result: EngineResult): number {
-  if (!result.titleRange) {
+  const titleRange = result.titleRanges[0]
+  if (!titleRange) {
     return SECONDARY_TIER
   }
-  return result.titleRange.start === 0 ? TITLE_PREFIX_TIER : TITLE_SUBSTRING_TIER
+  return titleRange.start === 0 ? TITLE_PREFIX_TIER : TITLE_SUBSTRING_TIER
 }
 
 function getMatchedText(result: EngineResult): string | null {
-  return result.secondaryRange ? result.secondaryText : null
+  return result.secondaryRanges.length > 0 ? result.secondaryText : null
 }
 
 // Why read the path off the entry: the engine overwrites `secondaryText` with
@@ -152,6 +160,7 @@ function rank<TEngine extends EngineResult>(
     .map((result) => ({
       tier: getTier(result),
       sourceRank: SOURCE_RANK[source],
+      matchRank: result.rank,
       score: result.score,
       result: toResult(result)
     }))
@@ -187,7 +196,8 @@ export function searchOpenTabs({
       tabId: result.tabId,
       entityId: result.entityId,
       groupId: result.groupId,
-      relativePath: getEditorRelativePath(workspaceEntriesByTabId.get(result.tabId))
+      relativePath: getEditorRelativePath(workspaceEntriesByTabId.get(result.tabId)),
+      occupantAgent: result.occupantAgent
     })),
     ...rank('browser', searchBrowserPages([...browserPages], trimmed), (result) => ({
       ...baseResult('browser', result.pageId, result, executionHostId),
@@ -210,6 +220,14 @@ export function searchOpenTabs({
       }
       if (a.sourceRank !== b.sourceRank) {
         return a.sourceRank - b.sourceRank
+      }
+      // Why before position: `score` is position-only now, so without this an
+      // agent-snippet fallback in an earlier tab would outrank a real path match.
+      if (a.matchRank && b.matchRank) {
+        const byMatch = comparePaletteDocumentRank(a.matchRank, b.matchRank)
+        if (byMatch !== 0) {
+          return byMatch
+        }
       }
       return a.score - b.score
     })

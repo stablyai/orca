@@ -5,7 +5,7 @@ import type {
 import {
   getBrowserWebviewMemoryProfile,
   type BrowserWebviewMemoryProfile
-} from '../components/browser-pane/webview-registry'
+} from '../components/browser-pane/host-guest/webview-registry'
 import { recordRendererCrashBreadcrumb } from './crash-breadcrumb-recorder'
 import { collectRendererMemoryProfileCounts } from './renderer-memory-profile'
 

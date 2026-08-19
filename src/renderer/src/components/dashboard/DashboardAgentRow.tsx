@@ -8,6 +8,7 @@ import { DashboardAgentChildDisclosure } from './DashboardAgentChildDisclosure'
 import { DashboardAgentRowMessage } from './DashboardAgentRowMessage'
 import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingControls'
 import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
+import { showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
@@ -144,10 +145,12 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   // Why: prompt is '' when unknown, so fall back to the state label to keep the row labeled.
   const displayLabel = prompt || agentStateLabel(asDotState(agent.state))
   const model = agent.entry.model?.trim() ?? ''
-  // Why: gate tool fields on 'working' — a stale tool line on a done row reads as still-running.
   const isWorking = agent.state === 'working'
-  const toolName = isWorking ? (agent.entry.toolName?.trim() ?? '') : ''
-  const toolInput = isWorking ? (agent.entry.toolInput?.trim() ?? '') : ''
+  // Why: 'working' names the running tool and 'waiting' names what an approval is blocked on;
+  // anywhere else a leftover tool line reads as still-running. See showsAgentToolPreview.
+  const showsTool = showsAgentToolPreview(agent.state)
+  const toolName = showsTool ? (agent.entry.toolName?.trim() ?? '') : ''
+  const toolInput = showsTool ? (agent.entry.toolInput?.trim() ?? '') : ''
   const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
   const isInterrupted = agent.entry.interrupted === true
   const lineage = agent.lineage
@@ -300,7 +303,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       </div>
       <DashboardAgentRowToolStep
         expanded={expanded}
-        isWorking={isWorking}
+        showsTool={showsTool}
+        reservesHeight={isWorking}
         toolName={toolName}
         toolInput={toolInput}
       />

@@ -8,7 +8,9 @@ import {
   dropStaleWslAvailabilityFailure
 } from './wsl-availability'
 
-export { toWindowsWslPath } from '../shared/wsl-paths'
+// Why re-exported rather than defined here: the relay bundle needs the path
+// conversion without this module's distro-probing subprocess graph.
+export { toLinuxPath, toWindowsWslPath } from '../shared/wsl-paths'
 export {
   getCachedWslAvailability,
   hasCachedWslAvailability,
@@ -28,7 +30,7 @@ function getWslDirectoryProbeArgs(info: WslPathInfo): string[] {
   return [
     '-d',
     info.distro,
-    '--',
+    '--exec',
     'sh',
     '-c',
     `if [ -d "$1" ]; then printf ${WSL_DIRECTORY_EXISTS_MARKER}; else printf ${WSL_DIRECTORY_MISSING_MARKER}; fi`,
@@ -115,31 +117,6 @@ export function wslUncDirectoryExistsAsync(uncPath: string): Promise<boolean | n
       resolve(parseWslDirectoryProbeOutput(stdout))
     })
   })
-}
-
-/**
- * Convert a Windows path to a Linux path for commands that will execute inside WSL.
- * Returns the path unchanged if it is already POSIX-style.
- *
- * Why: WSL hook/setup environments may need both the worktree UNC path
- * (\\wsl.localhost\...) and regular Windows install paths (C:\Users\...)
- * translated before passing them to bash. Leaving drive paths untouched
- * breaks scripts that read ORCA_ROOT_PATH or similar env vars inside WSL.
- */
-export function toLinuxPath(windowsPath: string): string {
-  const info = parseWslPath(windowsPath)
-  if (info) {
-    return info.linuxPath
-  }
-
-  const driveMatch = windowsPath.match(/^([A-Za-z]):[/\\](.*)$/)
-  if (!driveMatch) {
-    return windowsPath
-  }
-
-  const driveLetter = driveMatch[1].toLowerCase()
-  const rest = driveMatch[2].replace(/\\/g, '/')
-  return `/mnt/${driveLetter}/${rest}`
 }
 
 // ─── WSL home directory resolution ──────────────────────────────────
@@ -285,7 +262,7 @@ export function getWslHome(distro: string): string | null {
   }
 
   try {
-    const home = execFileSync('wsl.exe', ['-d', distro, '--', 'bash', '-c', 'echo $HOME'], {
+    const home = execFileSync('wsl.exe', ['-d', distro, '--exec', 'bash', '-c', 'echo $HOME'], {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 5000
@@ -303,6 +280,12 @@ export function getWslHome(distro: string): string | null {
   }
 }
 
+/** Pure cache lookup — never probes. Lets callers that memoize a derived value avoid caching one
+ *  built from the unresolved fallback, since only the success path is cached above. */
+export function hasCachedWslHome(distro: string): boolean {
+  return wslHomeCache.has(distro)
+}
+
 export async function getWslHomeAsync(distro: string): Promise<string | null> {
   if (wslHomeCache.has(distro)) {
     return wslHomeCache.get(distro)!
@@ -310,7 +293,7 @@ export async function getWslHomeAsync(distro: string): Promise<string | null> {
 
   try {
     const home = (
-      await execFileUtf8('wsl.exe', ['-d', distro, '--', 'bash', '-c', 'echo $HOME'])
+      await execFileUtf8('wsl.exe', ['-d', distro, '--exec', 'bash', '-c', 'echo $HOME'])
     ).trim()
 
     if (!home || !home.startsWith('/')) {

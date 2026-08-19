@@ -229,6 +229,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       }
     }
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
+    const activate = flags.get('activate') === true || flags.get('run-hooks') === true
     const result = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
       repo: await getCreateRepoSelector(flags, cwdParentWorktree, client),
       name: getRequiredStringFlag(flags, 'name'),
@@ -237,7 +238,10 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       runHooks: flags.get('run-hooks') === true,
-      activate: flags.get('activate') === true || flags.get('run-hooks') === true,
+      activate,
+      // Why: the CLI pairs as a runtime device but is not a viewer, so caller-scoped
+      // delivery would make --activate a no-op against a remote runtime.
+      ...(activate ? { navigation: 'all' as const } : {}),
       ...(setupDecision ? { setupDecision } : {}),
       parentWorktree: explicitParentWorktree,
       ...(explicitParentWorkspace ? { parentWorkspace: explicitParentWorkspace } : {}),
@@ -277,8 +281,20 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatWorktreeShow)
   },
   'worktree rm': async ({ flags, client, cwd, json }) => {
+    const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
+    const resolved = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
+      worktree
+    })
+    const hostId = resolved.result.worktree.hostId
+    if (!hostId) {
+      throw new RuntimeClientError(
+        'worktree_host_unresolved',
+        'Orca cannot tell which host owns this workspace. Refresh projects and try again.'
+      )
+    }
     const result = await client.call<RuntimeWorktreeRemoveResult>('worktree.rm', {
-      worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client),
+      worktree,
+      hostId,
       force: flags.get('force') === true,
       // Why (#11960): --force is explicit here, so it may also waive PTY-stop proof.
       allowUnverifiedPtyStop: flags.get('force') === true,

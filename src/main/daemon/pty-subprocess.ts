@@ -3,21 +3,23 @@ import * as pty from 'node-pty'
 import { statSync } from 'node:fs'
 import { release } from 'node:os'
 import { delimiter, win32 as pathWin32 } from 'node:path'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import { DaemonProtocolError } from './types'
-import {
-  getMarkerlessShellLaunchConfig,
-  getShellReadyLaunchConfig,
-  resolvePtyShellPath
-} from './shell-ready'
+import { getShellLaunchConfig, resolvePtyShellPath } from './shell-ready'
+import { selectShellStartupFeatures } from '../shell-startup-features'
 import { isValidPtySize, normalizePtySize } from './daemon-pty-size'
 import {
   ensureNodePtySpawnHelperExecutable,
   getNodePtySpawnHelperCandidates,
   resolveUnixShellPath,
-  validateWorkingDirectory
+  validateWorkingDirectoryAsync,
+  WorkingDirectoryValidationAbortedError
 } from '../providers/local-pty-utils'
-import { wrapShellSpawnForMacosTccAttribution } from '../providers/macos-tcc-login-shell'
+import {
+  hostReportsChildExitStatus,
+  wrapShellSpawnForMacosTccAttribution
+} from '../providers/macos-tcc-login-shell'
+import { resolveProcessExitCause, type TerminalExitCause } from '../../shared/terminal-exit-cause'
 import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
 import { readPtsName } from '../pty/node-pty-pts-name'
 import {
@@ -36,6 +38,8 @@ import {
 import { isPwshAvailable } from '../pwsh'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
+import { dropInheritedOrcaFishHistory } from '../fish-history-session'
+import { dropInheritedOrcaHistFile } from '../worktree-history-file-path'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
 import { stripLegacyTerminalShimEnv } from '../pty/legacy-terminal-shim-dir'
@@ -68,6 +72,7 @@ import {
   type StartupCommandDelivery
 } from '../../shared/codex-startup-delivery'
 import { isShellProcess } from '../../shared/shell-process-detection'
+import { TerminalAttachCanceledError } from './daemon-errors'
 import { parsePtySessionId } from './pty-session-id'
 import { getAgentForegroundContextPaths } from '../providers/agent-foreground-context-paths'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
@@ -133,6 +138,9 @@ export type PtySubprocessOptions = {
   shellOverride?: string
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
+  isCanceled?: () => boolean
+  /** Aborts in-progress cwd validation; `isCanceled` is only polled between steps. */
+  cancelSignal?: AbortSignal
   onMacosTccSpawnStrategy?: (strategy: 'wrapped' | 'direct') => void
 }
 
@@ -383,10 +391,11 @@ function isNativeWindowsPath(path: string): boolean {
 /**
  * Validates explicit native Windows cwd paths before ConPTY launch.
  */
-function preflightWindowsPtySpawnEnvironment(args: {
+async function preflightWindowsPtySpawnEnvironment(args: {
   validationCwd: string
   cwdWasExplicit: boolean
-}): void {
+  signal?: AbortSignal
+}): Promise<void> {
   if (process.platform !== 'win32' || !args.cwdWasExplicit) {
     return
   }
@@ -395,17 +404,23 @@ function preflightWindowsPtySpawnEnvironment(args: {
     return
   }
 
-  validateWorkingDirectory(args.validationCwd)
+  await validateWorkingDirectoryAsync(
+    args.validationCwd,
+    args.signal ? { signal: args.signal } : {}
+  )
 }
 
 /**
  * Validates POSIX spawn cwd before node-pty can fail with an opaque ENOENT.
  */
-function preflightPosixPtySpawnEnvironment(validationCwd: string): void {
+async function preflightPosixPtySpawnEnvironment(
+  validationCwd: string,
+  signal?: AbortSignal
+): Promise<void> {
   if (process.platform === 'win32') {
     return
   }
-  validateWorkingDirectory(validationCwd)
+  await validateWorkingDirectoryAsync(validationCwd, signal ? { signal } : {})
 }
 
 /**
@@ -567,7 +582,10 @@ function spawnDaemonPtyWithWindowsFallback(args: {
   shellPath: string
   spawnCwd: string
   startupCommandDeliveredInShellArgs?: boolean
+  /** False when a wrapper owns the reported status, so no exit code may be read from it. */
+  reportsChildExitStatus: boolean
 } {
+  let reportsChildExitStatus = true
   const spawnAt = (shellPath: string, shellArgs: string[], cwd: string): pty.IPty => {
     const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
     const proc = pty.spawn(wrapped.file, wrapped.args, {
@@ -579,15 +597,18 @@ function spawnDaemonPtyWithWindowsFallback(args: {
       // Why: legacy system ConPTY can corrupt full-width TUI rows in scrollback; bundled ConPTY has the wrap-marker behavior xterm expects.
       ...(process.platform === 'win32' ? { useConptyDll: true } : {})
     })
+    reportsChildExitStatus = hostReportsChildExitStatus(wrapped.file)
     args.onMacosTccSpawnStrategy?.(wrapped.file === shellPath ? 'direct' : 'wrapped')
     return proc
   }
 
   try {
+    const process_ = spawnAt(args.shellPath, args.shellArgs, args.spawnCwd)
     return {
-      process: spawnAt(args.shellPath, args.shellArgs, args.spawnCwd),
+      process: process_,
       shellPath: args.shellPath,
-      spawnCwd: args.spawnCwd
+      spawnCwd: args.spawnCwd,
+      reportsChildExitStatus
     }
   } catch (primaryErr) {
     if (process.platform !== 'win32') {
@@ -605,7 +626,8 @@ function spawnDaemonPtyWithWindowsFallback(args: {
           process,
           shellPath: attempt.shellPath,
           spawnCwd: attempt.effectiveCwd,
-          startupCommandDeliveredInShellArgs: attempt.startupCommandDeliveredInShellArgs
+          startupCommandDeliveredInShellArgs: attempt.startupCommandDeliveredInShellArgs,
+          reportsChildExitStatus
         }
       } catch {
         // This fallback shell also failed -- try the next link in the chain.
@@ -621,7 +643,7 @@ function spawnDaemonPtyWithWindowsFallback(args: {
  * The returned handle records whether the startup command was already embedded
  * in Windows shell args so the daemon host does not write it a second time.
  */
-export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandle {
+export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<SubprocessHandle> {
   const size = normalizePtySize(opts.cols, opts.rows)
   const env: Record<string, string> = {
     ...mergeGitConfigEnvProtocol(stripInheritedBuildModeEnv(process.env), opts.env),
@@ -642,6 +664,26 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   }
   // Why: the daemon can inherit the pane identity of the terminal that launched `pn dev`; each PTY must opt into its own.
   removeUnspecifiedPaneIdentityEnv(env, opts.env)
+  // Why: the daemon inherits an exported `fish_history` from the fish pane that
+  // launched Orca; only a session this spawn asked for may reach the shell, or
+  // panes write into the launching worktree's history file (STA-4682).
+  if (opts.env?.fish_history === undefined) {
+    dropInheritedOrcaFishHistory(env)
+  }
+  // Why the same for HISTFILE: it is exported too, so a daemon started from an
+  // Orca pane hands that worktree's history file to every pane this spawn did
+  // not scope itself — including panes of other worktrees.
+  if (opts.env?.HISTFILE === undefined) {
+    dropInheritedOrcaHistFile(env)
+  }
+  // Why ORCA_HISTFILE too: the desktop drops an inherited one on both of its
+  // branches, and the daemon inherits one from the pane that launched it just
+  // as readily. Left in place it now both WRAPS a pane the client scoped
+  // nothing for (shell-startup-features selects `history` on its presence) and
+  // makes the wrapper re-export another worktree's history path (#11146).
+  if (opts.env?.ORCA_HISTFILE === undefined) {
+    delete env.ORCA_HISTFILE
+  }
   removeInheritedDevAgentHookEndpoint(env, opts.env)
   removeInheritedElectronRunAsNode(env)
   removeAppImageRuntimeEnv(env)
@@ -805,33 +847,34 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
         `[daemon/pty] Preferred shell "${preferredShellPath}" is unavailable, fell back to "${shellPath}"`
       )
     }
-    // Why: OpenCode/Codex path restoration and OMP's typed-command status wrapper need shell-ready code after user startup files run.
-    let shellLaunch: ReturnType<typeof getShellReadyLaunchConfig> | null = null
-    if (opts.command && isCodexStartupCommand) {
-      const shouldWaitForShellReady = shouldUseShellReadyStartupDelivery({
-        command: opts.command,
-        startupCommandDelivery: opts.startupCommandDelivery
+    // Why: OpenCode/Codex path restoration, OMP's typed-command status wrapper,
+    // and the worktree HISTFILE repair all need shell-ready code that runs after
+    // the user's own startup files.
+    // Why: payload-bearing Codex startup text can be dropped by rc-file noise; plain Codex stays markerless for the startup-speed path.
+    const waitsForShellReady =
+      Boolean(opts.command) &&
+      (!isCodexStartupCommand ||
+        shouldUseShellReadyStartupDelivery({
+          command: opts.command as string,
+          startupCommandDelivery: opts.startupCommandDelivery
+        }))
+    // Why delete: ORCA_SHELL_FEATURES is Orca-owned, and only the launch config
+    // below may name features for this shell.
+    delete env.ORCA_SHELL_FEATURES
+    const shellLaunch = getShellLaunchConfig(
+      shellPath,
+      selectShellStartupFeatures({
+        shellPath,
+        env,
+        hasStartupCommand: Boolean(opts.command),
+        waitsForShellReady,
+        // Why identical: the identity marker exists so the readiness handshake
+        // can bind output to the right shell PID.
+        emitsStartupIdentity: waitsForShellReady
       })
-      // Why: payload-bearing Codex startup text can be dropped by rc-file noise; plain Codex stays markerless for the startup-speed path.
-      shellLaunch = shouldWaitForShellReady
-        ? getShellReadyLaunchConfig(shellPath)
-        : getMarkerlessShellLaunchConfig(shellPath)
-    } else if (opts.command) {
-      shellLaunch = getShellReadyLaunchConfig(shellPath)
-    } else {
-      shellLaunch =
-        env.ORCA_OPENCODE_CONFIG_DIR ||
-        env.ORCA_MIMOCODE_HOME ||
-        env.ORCA_OMP_STATUS_EXTENSION ||
-        env.ORCA_CODEX_HOME ||
-        env.ORCA_AGENT_TEAMS_SHIM_DIR
-          ? getMarkerlessShellLaunchConfig(shellPath)
-          : null
-    }
-    if (shellLaunch) {
-      Object.assign(env, shellLaunch.env)
-    }
-    shellArgs = shellLaunch?.args ?? ['-l']
+    )
+    Object.assign(env, shellLaunch.env)
+    shellArgs = shellLaunch.args ?? ['-l']
   }
   seedPowerlevel10kWizardEnv(env, { envToDelete: opts.envToDelete })
   if (
@@ -855,13 +898,28 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   // Why: asar packaging can strip +x from node-pty's spawn-helper; the daemon is a separate forked process from the main-process fix.
   ensureNodePtySpawnHelperExecutable()
   preflightUnixPtySpawnEnvironment()
-  preflightPosixPtySpawnEnvironment(validationCwd)
-  preflightWindowsPtySpawnEnvironment({
-    validationCwd,
-    cwdWasExplicit: opts.cwd !== undefined
-  })
+  try {
+    await preflightPosixPtySpawnEnvironment(validationCwd, opts.cancelSignal)
+    await preflightWindowsPtySpawnEnvironment({
+      validationCwd,
+      cwdWasExplicit: opts.cwd !== undefined,
+      ...(opts.cancelSignal ? { signal: opts.cancelSignal } : {})
+    })
+  } catch (error) {
+    // Why: the wire must carry one cancellation identity. Clients key recovery
+    // off it, and an unrecognized message takes the rollback branch that closes
+    // a terminal the user still has (#7718).
+    if (error instanceof WorkingDirectoryValidationAbortedError) {
+      throw new TerminalAttachCanceledError(opts.sessionId)
+    }
+    throw error
+  }
+  if (opts.isCanceled?.()) {
+    throw new TerminalAttachCanceledError(opts.sessionId)
+  }
 
   let proc: pty.IPty
+  let reportsChildExitStatus = true
   try {
     const spawned = spawnDaemonPtyWithWindowsFallback({
       shellPath,
@@ -877,6 +935,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     // Why: a Windows fallback (e.g. cmd.exe) carries its own argv-embedded startup command; adopt the winning shell's identity + delivery flag.
     shellPath = spawned.shellPath
     spawnCwd = spawned.spawnCwd
+    reportsChildExitStatus = spawned.reportsChildExitStatus
     if (spawned.startupCommandDeliveredInShellArgs !== undefined) {
       startupCommandDeliveredInShellArgs = spawned.startupCommandDeliveredInShellArgs
     }
@@ -888,10 +947,11 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   }
 
   let onDataCb: ((data: string) => void) | null = null
-  let onExitCb: ((code: number) => void) | null = null
+  let onExitCb: ((code: number, cause?: TerminalExitCause) => void) | null = null
   let pendingPreListenerData: string[] = []
   let pendingPreListenerDataChars = 0
   let pendingPreListenerExitCode: number | null = null
+  let pendingPreListenerExitCause: TerminalExitCause | null = null
 
   const bufferPreListenerData = (data: string): void => {
     // Why: Windows shell-arg startup commands can print before Session wires this subprocess in; preserve that spawn-time race window.
@@ -930,12 +990,21 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       bufferPreListenerData(data)
     }
   })
-  proc.onExit(({ exitCode }) => {
+  proc.onExit(({ exitCode, signal }) => {
+    // Why: node-pty reports a signalled death as {exitCode: 0, signal: N}, and a
+    // wrapper spawn reports the wrapper's status — so build the cause here,
+    // where both facts are still in hand, rather than shipping a bare number.
+    const cause = resolveProcessExitCause({
+      exitCode,
+      signal,
+      hostReportsChildExitStatus: reportsChildExitStatus
+    })
     if (onExitCb) {
       flushPreListenerData()
-      onExitCb(exitCode)
+      onExitCb(exitCode, cause)
     } else {
       pendingPreListenerExitCode = exitCode
+      pendingPreListenerExitCause = cause
     }
   })
 
@@ -1295,9 +1364,11 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       onExitCb = cb
       if (pendingPreListenerExitCode !== null) {
         const code = pendingPreListenerExitCode
+        const cause = pendingPreListenerExitCause ?? resolveProcessExitCause({ exitCode: code })
         pendingPreListenerExitCode = null
+        pendingPreListenerExitCause = null
         flushPreListenerData()
-        cb(code)
+        cb(code, cause)
       }
     },
     dispose: () => {
@@ -1311,6 +1382,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       pendingPreListenerData = []
       pendingPreListenerDataChars = 0
       pendingPreListenerExitCode = null
+      pendingPreListenerExitCause = null
       // Why: UnixTerminal.destroy()'s async socket-close SIGHUP can land on a recycled pid, hitting an unrelated user process; neutralize kill on POSIX.
       // Windows destroy() uses kill() to close the ConPTY agent, so the guard is POSIX-only.
       if (process.platform !== 'win32') {

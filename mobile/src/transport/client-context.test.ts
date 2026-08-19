@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ConnectionState } from './types'
 import type { RpcClient } from './rpc-client'
+import type { MobileConnectionPath } from './stable-logical-rpc-client'
 
 const connectMock = vi.fn()
 const loadHostsMock = vi.fn()
@@ -27,16 +28,22 @@ import {
   useHostClient
 } from './client-context'
 import { useAllHostClients } from './use-all-host-clients'
+import { useRelayRecoveryStatus } from './client-context-connection-metrics'
 import { selectHomeAutoConnectHostIds } from './home-host-auto-connect'
 
 type FakeClient = RpcClient & {
   emitState: (state: ConnectionState) => void
+  emitPendingPath: (path: MobileConnectionPath | null) => void
+  emitPairingRejected: (rejected: boolean) => void
   closeMock: ReturnType<typeof vi.fn>
 }
 
 function makeFakeClient(initialState: ConnectionState): FakeClient {
   let state = initialState
+  let pendingPath: MobileConnectionPath | null = null
+  let pairingRejected = false
   const listeners = new Set<(state: ConnectionState) => void>()
+  const pathListeners = new Set<() => void>()
   const closeMock = vi.fn()
   return {
     sendRequest: vi.fn(),
@@ -45,6 +52,13 @@ function makeFakeClient(initialState: ConnectionState): FakeClient {
     getState: () => state,
     getReconnectAttempt: () => 0,
     getLastConnectedAt: () => null,
+    getActivePath: () => 'tailscale',
+    getPendingPath: () => pendingPath,
+    isPairingRejected: () => pairingRejected,
+    onConnectionPathChange: (listener: () => void) => {
+      pathListeners.add(listener)
+      return () => pathListeners.delete(listener)
+    },
     onStateChange: (listener) => {
       listeners.add(listener)
       return () => listeners.delete(listener)
@@ -56,6 +70,18 @@ function makeFakeClient(initialState: ConnectionState): FakeClient {
       state = next
       for (const listener of listeners) {
         listener(next)
+      }
+    },
+    emitPendingPath: (next) => {
+      pendingPath = next
+      for (const listener of pathListeners) {
+        listener()
+      }
+    },
+    emitPairingRejected: (next) => {
+      pairingRejected = next
+      for (const listener of pathListeners) {
+        listener()
       }
     }
   } as FakeClient
@@ -393,6 +419,59 @@ describe('useHostClient', () => {
 })
 
 describe('useAllHostClients', () => {
+  it('rerenders when Relay becomes pending without a transport-state change', async () => {
+    const client = makeFakeClient('reconnecting')
+    connectMock.mockReturnValue(client)
+    loadHostsMock.mockResolvedValue([HOST])
+    let pendingPath: MobileConnectionPath | null | undefined
+    let renderer!: ReturnType<typeof create>
+
+    function Probe(): null {
+      pendingPath = useAllHostClients([HOST.id])[0]?.pendingPath
+      return null
+    }
+
+    await act(async () => {
+      renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
+      await Promise.resolve()
+    })
+    expect(pendingPath).toBeNull()
+
+    act(() => client.emitPendingPath('relay'))
+    expect(pendingPath).toBe('relay')
+
+    act(() => renderer.unmount())
+  })
+
+  it('publishes a latched pairing rejection to the screens', async () => {
+    const client = makeFakeClient('reconnecting')
+    connectMock.mockReturnValue(client)
+    loadHostsMock.mockResolvedValue([HOST])
+    let status: { pendingPath: MobileConnectionPath | null; pairingRejected: boolean } | undefined
+    let renderer!: ReturnType<typeof create>
+
+    function Probe(): null {
+      // Why: a screen holds the host client and reads the metric hooks beside it.
+      useAllHostClients([HOST.id])
+      status = useRelayRecoveryStatus(HOST.id)
+      return null
+    }
+
+    await act(async () => {
+      renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
+      await Promise.resolve()
+    })
+    act(() => client.emitPendingPath('relay'))
+    expect(status).toEqual({ pendingPath: 'relay', pairingRejected: false })
+
+    // Why: the desktop refusing the credential is a status-only change — no
+    // transport state moves, so only the connection-path signal can carry it.
+    act(() => client.emitPairingRejected(true))
+    expect(status).toEqual({ pendingPath: 'relay', pairingRejected: true })
+
+    act(() => renderer.unmount())
+  })
+
   it('only opens the requested startup subset', async () => {
     const host2 = { ...HOST, id: 'host-2', name: 'Host 2' }
     connectMock.mockReturnValue(makeFakeClient('connected'))

@@ -98,7 +98,11 @@ describe('daemon kill attribution', () => {
       }
     })
     const daemon = server as unknown as DaemonServerPrivate
-    const pendingPreparation = { canceled: false, clientId: 'control-42' }
+    const pendingPreparation = {
+      canceled: false,
+      controller: new AbortController(),
+      clientId: 'control-42'
+    }
     daemon.pendingPtySpawnPreparations.set('agent-session', new Set([pendingPreparation]))
     vi.spyOn(daemon.host, 'kill').mockRejectedValue(new SessionNotFoundError('agent-session'))
 

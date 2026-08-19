@@ -1,7 +1,7 @@
 // Routes an omnibox switch row to the matching palette activation and reports
 // how the destination should take keyboard focus once the menu closes.
 
-import { requestBrowserFocus } from '@/components/browser-pane/browser-focus'
+import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import { translate } from '@/i18n/i18n'
 import { activateBrowserPagePaletteResult } from '@/lib/browser-page-palette-activation'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'

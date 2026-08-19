@@ -54,13 +54,9 @@ async function linkClientPoint(page: Page, probe: LinkProbe): Promise<LinkClient
       throw new Error('terminal link surface unavailable')
     }
     const rect = screen.getBoundingClientRect()
-    const cell = pane.terminal.dimensions?.css.cell
-    if (!cell?.width || !cell.height) {
-      throw new Error('terminal cell dimensions unavailable')
-    }
     return {
-      x: rect.left + (col + 0.5) * cell.width,
-      y: rect.top + (row + 0.5) * cell.height
+      x: rect.left + (col + 0.5) * (rect.width / pane.terminal.cols),
+      y: rect.top + (row + 0.5) * (rect.height / pane.terminal.rows)
     }
   }, probe)
 }
@@ -111,7 +107,11 @@ test('opens a terminal file link and observes an external edit @golden', async (
   }, worktreeId)
   const filePath = path.join(worktreePath, 'package.json')
   const original = readFileSync(filePath, 'utf8')
-  const clickablePath = process.platform === 'win32' ? filePath.replaceAll('\\', '/') : filePath
+  const resolvedDestination =
+    process.platform === 'win32' ? filePath.replaceAll('\\', '/') : filePath
+  // Why: Mac/Windows tmp paths soft-wrap across xterm rows; locateLink only
+  // indexOf's each physical row, so print a cwd-relative path that stays on one.
+  const printedPath = './package.json'
   const changedMarker = `golden-external-edit-${Date.now()}`
 
   try {
@@ -122,23 +122,20 @@ test('opens a terminal file link and observes an external edit @golden', async (
       .first()
     await expect(explorerRow).toBeVisible({ timeout: 15_000 })
 
-    const pathsToPrint = process.platform === 'win32' ? [filePath, clickablePath] : [filePath]
-    for (const printedPath of pathsToPrint) {
-      const command = nodeTerminalCommand(['-e', `console.log(${JSON.stringify(printedPath)})`])
-      await sendToTerminal(orcaPage, ptyId, `${command}\r`)
-    }
+    const command = nodeTerminalCommand(['-e', `console.log(${JSON.stringify(printedPath)})`])
+    await sendToTerminal(orcaPage, ptyId, `${command}\r`)
     await expect
       .poll(() => getTerminalContent(orcaPage, LINK_SCAN_CHAR_LIMIT), { timeout: 15_000 })
-      .toContain(clickablePath)
+      .toContain(printedPath)
 
     let probe: LinkProbe | null = null
     await expect
       .poll(
         async () => {
-          probe = await locateLink(orcaPage, clickablePath)
+          probe = await locateLink(orcaPage, printedPath)
           return probe ? hoverLink(orcaPage, probe) : null
         },
-        { timeout: 10_000, message: 'absolute file path did not become clickable' }
+        { timeout: 10_000, message: 'cwd-relative file path did not become clickable' }
       )
       .toContain('package.json')
     if (!probe) {
@@ -148,10 +145,16 @@ test('opens a terminal file link and observes an external edit @golden', async (
 
     const actionPopover = orcaPage.locator('[data-terminal-link-action-popover]')
     await expect(actionPopover).toBeVisible()
-    // Why: the popover echoes the link text verbatim, which on Windows is the forward-slash form.
-    await expect(actionPopover.locator('[data-terminal-link-destination]')).toContainText(
-      clickablePath
-    )
+    // Why: destination is the resolved absolute path; Windows may use `\`.
+    await expect
+      .poll(
+        async () =>
+          (
+            (await actionPopover.locator('[data-terminal-link-destination]').textContent()) ?? ''
+          ).replaceAll('\\', '/'),
+        { message: 'terminal link destination did not resolve to package.json' }
+      )
+      .toContain(resolvedDestination)
     await actionPopover.getByRole('button', { name: /Open file/i }).click()
 
     const editorHeader = orcaPage.locator('.editor-header-path').first()

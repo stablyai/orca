@@ -196,6 +196,7 @@
         },
         "editor": {
           "dcb521ed29": "このファイルは競合状態にありますが、編集できる作業ツリーファイルがありません。",
+          "conflictPlaceholderGuidance": "Git で競合を解決するか、いずれかの側を復元してから開き直してください。",
           "51f15c37d3": "ディレクトリを開けません: {{value0}}",
           "f2e00db373": "ファイルが見つかりません: {{value0}}",
           "checkRunDetailsUnavailable": "このチェックの詳細はありません。",
@@ -903,7 +904,7 @@
         "e52bed9264": "まだチェックは報告されていません",
         "90020cc1f3": "この PR にはまだチェックが報告されていません。",
         "ecffebc251": "チェックが見つかりませんでした",
-        "5dddefdf58": "GitHub で開く",
+        "checkOpenInBrowser": "ブラウザで開く",
         "744197c84d": "このチェックではインライン出力は使用できません。",
         "08d072664d": "ジョブ",
         "96d8f36798": "注釈",
@@ -1439,7 +1440,6 @@
         "c57873d721": "PR がマージされました",
         "a63b3c159c": "これにより、GitHub 上の PR が更新されます。",
         "eec3706a6a": "{{value0}} PR #{{value1}}?",
-        "b8c6cbb8c4": "{{value0}} PR に失敗しました",
         "710e47aa06": "PR が再オープンされました",
         "7aa3b5f706": "PR がクローズされました",
         "3d77438c92": "これにより、GitHub で PR が再開されます。",
@@ -1538,7 +1538,13 @@
         "dd5d9a4f17": "{{value0}}に更新",
         "71a3c0f9d2": "ワークスペースを開始",
         "filesUnavailable": "変更されたファイルを読み込めませんでした。",
-        "filesRetry": "再試行"
+        "filesRetry": "再試行",
+        "77482513f8": "クローズ",
+        "2f5195c6a0": "再オープン",
+        "4b8ae7303f": "差分の読み込みに失敗しました。",
+        "closePullRequestFailed": "PR のクローズに失敗しました",
+        "reopenPullRequestFailed": "PR の再オープンに失敗しました",
+        "diffLoadTimedOut": "この差分の読み込みがタイムアウトしました。"
       },
       "QuickOpen": {
         "1dbd3f59ff": "移動",
@@ -2640,7 +2646,7 @@
               "346d409ab2": "Agent を選択",
               "0adba8fa0c": "Agent",
               "ec8f081919": "操作",
-              "ed04233b3e": "ターミナルコマンドまたは Agent プロンプトを保存して、すぐにアクセスできるようにします。",
+              "ed04233b3e": "保存した項目はタブバーのメニューに表示され、ワンクリックで実行できます。",
               "ca414324ee": "コマンドテキスト",
               "dc921c17ee": "プロンプト",
               "5b3f634a55": "クイックコマンドを追加",
@@ -3270,7 +3276,9 @@
             "antigravityUsageDetails": "Antigravity の使用状況詳細を開く",
             "grokUsageAria": "Grok の使用状況詳細を開く",
             "grokUsageMenu": "Grok の使用状況",
-            "floatingTerminalNewActivity": "{{label}}、新規アクティビティ"
+            "floatingTerminalNewActivity": "{{label}}、新規アクティビティ",
+            "codexSignInSuccess": "Codex にサインインしました",
+            "codexSignInError": "Codex のサインインに失敗しました。もう一度お試しください。"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "アカウントを接続する",
@@ -5317,6 +5325,7 @@
           "codexSystemDefaultNeedsSignIn": "{{value0}} の Codex サインインが見つかりません。",
           "codexConfigSyncMissingSource": "{{value0}} が見つからないため、Codex は最後に同期した設定を使い続けています。同期を再開するには、そのファイルを復元してください。",
           "codexConfigSyncBlankSource": "{{value0}} が空のため、Codex は最後に同期した設定を使い続けています。同期フォルダーのダウンロードが完了するまでは正常な状態です。",
+          "codexConfigSyncManagedHomeUnavailable": "Orca は現在このアカウントの Codex ファイルを読み取れないため、設定が同期されていない可能性があります。ウイルス対策ソフトやバックアップツールによる一時的なロックが原因で、通常は自動的に解消されます。",
           "codexConfigSyncUnreadableSource": "{{value0}} を読み取れなかったため、Codex は最後に同期した設定を使い続けています。そのファイルの権限を確認してください。"
         },
         "AdvancedPane": {
@@ -8806,6 +8815,9 @@
               "4575341c77": "ローカルデスクトップを選択するか、保存されたリモート Orca サーバーを追加するか、ペアリング URL を生成します。"
             }
           }
+        },
+        "shortcutDefinitionCatalog": {
+          "missionControlConflict": "Mission Control によってブロックされています。ここで再割り当てするか、システム設定で変更してください。"
         },
         "shortcuts": {
           "search": {
@@ -13620,6 +13632,7 @@
           "e46c1aa9ad": "作成",
           "a9d9dccf77": "保存",
           "777548c2d6": "変更を保存",
+          "e8c2a14f70": "保存すると、一時停止するまで自動的に実行されます。",
           "ff5db28639": "既存 "
         },
         "AutomationEditorDialogHeader": {
@@ -13910,6 +13923,19 @@
         },
         "AutomationListLocalRows": {
           "c92c9463c6": "自動化の操作"
+        },
+        "AutomationListFilterMenu": {
+          "926e785e4d": "Agent を検索…",
+          "491043ee45": "検索に一致する Agent はありません。",
+          "agent": "Agent",
+          "lastRun": "前回の実行",
+          "all": "すべて",
+          "failed": "失敗",
+          "succeeded": "成功",
+          "neverRan": "未実行",
+          "filters": "フィルター",
+          "clear": "フィルターをクリア",
+          "removeFilter": "{{value0}} フィルターを解除"
         }
       },
       "agent": {
@@ -14253,6 +14279,13 @@
         "pendingChip": "{{value0}} 件保留中",
         "needsActionChip": "{{value0}} 件の対応が必要",
         "unresolvedChip": "{{value0}} 件未解決"
+      },
+      "artifacts": {
+        "ArtifactsPage": {
+          "deleteTitle": "成果物を削除しますか？",
+          "deleteDescription": "「{{name}}」は公開リンクで利用できなくなります。",
+          "delete": "削除"
+        }
       }
     },
     "i18n": {

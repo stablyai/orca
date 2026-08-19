@@ -1,16 +1,22 @@
 import React from 'react'
 import { ListFilter, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { AgentIcon, getAgentCatalog } from '@/lib/agent-catalog'
+import { searchAgentPickerEntries } from '@/lib/agent-picker-search'
 import { translate } from '@/i18n/i18n'
 import {
   countAutomationListFilters,
@@ -58,7 +64,7 @@ export function AutomationListFilterPills({
 }): React.JSX.Element | null {
   const statusLabel = translate('auto.components.automations.AutomationsPage.tableStatus', 'Status')
   const lastRunLabel = translate(
-    'auto.components.automations.AutomationsPage.tableLastRun',
+    'auto.components.automations.AutomationListFilterMenu.lastRun',
     'Last run'
   )
   const statusValueLabel =
@@ -75,7 +81,12 @@ export function AutomationListFilterPills({
         : filter.lastRun === 'never'
           ? translate('auto.components.automations.AutomationListFilterMenu.neverRan', 'Never ran')
           : null
-  if (!statusValueLabel && !lastRunValueLabel) {
+  const agentValueLabel = filter.agentIds.length
+    ? filter.agentIds
+        .map((agentId) => getAgentCatalog().find((agent) => agent.id === agentId)?.label ?? agentId)
+        .join(', ')
+    : null
+  if (!statusValueLabel && !lastRunValueLabel && !agentValueLabel) {
     return null
   }
   return (
@@ -94,6 +105,13 @@ export function AutomationListFilterPills({
           onClear={() => onChange({ ...filter, lastRun: 'all' })}
         />
       ) : null}
+      {agentValueLabel ? (
+        <FilterPill
+          label={translate('auto.components.automations.AutomationListFilterMenu.agent', 'Agent')}
+          value={agentValueLabel}
+          onClear={() => onChange({ ...filter, agentIds: [] })}
+        />
+      ) : null}
     </>
   )
 }
@@ -108,9 +126,24 @@ export function AutomationListFilterMenu({
   const activeCount = countAutomationListFilters(filter)
   const statusLabel = translate('auto.components.automations.AutomationsPage.tableStatus', 'Status')
   const lastRunLabel = translate(
-    'auto.components.automations.AutomationsPage.tableLastRun',
+    'auto.components.automations.AutomationListFilterMenu.lastRun',
     'Last run'
   )
+  const agentLabel = translate(
+    'auto.components.automations.AutomationListFilterMenu.agent',
+    'Agent'
+  )
+  const agents = getAgentCatalog()
+  const selectedAgentIds = filter.agentIds
+  const [agentQuery, setAgentQuery] = React.useState('')
+  const filteredAgents = searchAgentPickerEntries(agents, agentQuery)
+
+  const toggleAgent = (agentId: (typeof agents)[number]['id']): void => {
+    const nextAgentIds = selectedAgentIds.includes(agentId)
+      ? selectedAgentIds.filter((selectedId) => selectedId !== agentId)
+      : [...selectedAgentIds, agentId]
+    onChange({ ...filter, agentIds: nextAgentIds })
+  }
 
   return (
     <DropdownMenu>
@@ -131,50 +164,113 @@ export function AutomationListFilterMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-48">
-        <DropdownMenuLabel>{statusLabel}</DropdownMenuLabel>
-        <DropdownMenuRadioGroup
-          value={filter.status}
-          onValueChange={(value) =>
-            onChange({ ...filter, status: value as AutomationListStatusFilter })
-          }
-        >
-          <DropdownMenuRadioItem value="all">
-            {translate('auto.components.automations.AutomationListFilterMenu.all', 'All')}
-          </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="enabled">
-            {translate('auto.components.automations.AutomationDetail.eaa02014f8', 'Enabled')}
-          </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="paused">
-            {translate('auto.components.automations.AutomationDetail.b09b2384fd', 'Paused')}
-          </DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>{statusLabel}</DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuRadioGroup
+              value={filter.status}
+              onValueChange={(value) =>
+                onChange({ ...filter, status: value as AutomationListStatusFilter })
+              }
+            >
+              <DropdownMenuRadioItem value="all">
+                {translate('auto.components.automations.AutomationListFilterMenu.all', 'All')}
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="enabled">
+                {translate('auto.components.automations.AutomationDetail.eaa02014f8', 'Enabled')}
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="paused">
+                {translate('auto.components.automations.AutomationDetail.b09b2384fd', 'Paused')}
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel>{lastRunLabel}</DropdownMenuLabel>
-        <DropdownMenuRadioGroup
-          value={filter.lastRun}
-          onValueChange={(value) =>
-            onChange({ ...filter, lastRun: value as AutomationListLastRunFilter })
-          }
-        >
-          <DropdownMenuRadioItem value="all">
-            {translate('auto.components.automations.AutomationListFilterMenu.all', 'All')}
-          </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="failed">
-            {translate('auto.components.automations.AutomationListFilterMenu.failed', 'Failed')}
-          </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="succeeded">
-            {translate(
-              'auto.components.automations.AutomationListFilterMenu.succeeded',
-              'Succeeded'
-            )}
-          </DropdownMenuRadioItem>
-          <DropdownMenuRadioItem value="never">
-            {translate(
-              'auto.components.automations.AutomationListFilterMenu.neverRan',
-              'Never ran'
-            )}
-          </DropdownMenuRadioItem>
-        </DropdownMenuRadioGroup>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>{lastRunLabel}</DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuRadioGroup
+              value={filter.lastRun}
+              onValueChange={(value) =>
+                onChange({ ...filter, lastRun: value as AutomationListLastRunFilter })
+              }
+            >
+              <DropdownMenuRadioItem value="all">
+                {translate('auto.components.automations.AutomationListFilterMenu.all', 'All')}
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="failed">
+                {translate('auto.components.automations.AutomationListFilterMenu.failed', 'Failed')}
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="succeeded">
+                {translate(
+                  'auto.components.automations.AutomationListFilterMenu.succeeded',
+                  'Succeeded'
+                )}
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="never">
+                {translate(
+                  'auto.components.automations.AutomationListFilterMenu.neverRan',
+                  'Never ran'
+                )}
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuSeparator />
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>{agentLabel}</DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="max-h-80 overflow-y-auto scrollbar-sleek">
+            <div className="p-1">
+              <Input
+                value={agentQuery}
+                onChange={(event) => setAgentQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Escape' && event.key !== 'Tab') {
+                    event.stopPropagation()
+                  }
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+                placeholder={translate(
+                  'auto.components.automations.AutomationListFilterMenu.926e785e4d',
+                  'Search agents...'
+                )}
+                aria-label={translate(
+                  'auto.components.automations.AutomationListFilterMenu.926e785e4d',
+                  'Search agents...'
+                )}
+                className="h-7 px-2 text-xs"
+              />
+            </div>
+            <DropdownMenuCheckboxItem
+              checked={selectedAgentIds.length === 0}
+              onCheckedChange={() => onChange({ ...filter, agentIds: [] })}
+              onSelect={(event) => event.preventDefault()}
+            >
+              {translate('auto.components.automations.AutomationListFilterMenu.all', 'All')}
+            </DropdownMenuCheckboxItem>
+            {filteredAgents.map((agent) => (
+              <DropdownMenuCheckboxItem
+                key={agent.id}
+                checked={selectedAgentIds.includes(agent.id)}
+                onCheckedChange={() => toggleAgent(agent.id)}
+                onSelect={(event) => event.preventDefault()}
+              >
+                <span className="inline-flex size-3.5 shrink-0 items-center justify-center [&_img]:size-3.5 [&_svg]:size-3.5!">
+                  <AgentIcon agent={agent.id} size={14} />
+                </span>
+                {agent.label}
+              </DropdownMenuCheckboxItem>
+            ))}
+            {filteredAgents.length === 0 ? (
+              <div className="px-2 py-1.5 text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.automations.AutomationListFilterMenu.491043ee45',
+                  'No agents match your search.'
+                )}
+              </div>
+            ) : null}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
         {activeCount > 0 ? (
           <>
             <DropdownMenuSeparator />
