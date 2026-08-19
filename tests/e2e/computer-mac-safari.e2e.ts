@@ -168,6 +168,54 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (Safari web app)', 
     expect(saved.result.action?.actionName).toBe('AXPress')
     expect(saved.result.snapshot.treeText).toContain(`Draft ready: ${recipient} / ${body}`)
   })
+
+  test('delivers an element-index middle click to the browser receiver', async () => {
+    const targetArgs = await safariFixtureWindowTargetArgs(fixture.title)
+    const before = parseJsonOutput<{ result: ComputerSnapshotResult }>(
+      (
+        await runOrcaCli([
+          'computer',
+          'get-app-state',
+          '--app',
+          'com.apple.Safari',
+          ...targetArgs,
+          '--restore-window',
+          '--no-screenshot',
+          '--json'
+        ])
+      ).stdout
+    )
+    expect(before.result.snapshot.treeText).toContain('Middle click waiting')
+
+    const receiverIndex = findRoleIndex(
+      before.result.snapshot.treeText,
+      'button Middle click receiver'
+    )
+    expect(receiverIndex).toBeGreaterThanOrEqual(0)
+
+    const middle = parseJsonOutput<{ result: ComputerActionResult }>(
+      (
+        await runOrcaCli([
+          'computer',
+          'click',
+          '--app',
+          'com.apple.Safari',
+          ...targetArgs,
+          '--element-index',
+          String(receiverIndex),
+          '--mouse-button',
+          'middle',
+          '--restore-window',
+          '--no-screenshot',
+          '--json'
+        ])
+      ).stdout
+    )
+
+    expect(middle.result.action?.path).toBe('synthetic')
+    expect(middle.result.action?.fallbackReason).toBe('actionUnsupported')
+    expect(middle.result.snapshot.treeText).toContain('Middle click received')
+  })
 })
 
 async function safariFixtureWindowTargetArgs(title: string): Promise<string[]> {

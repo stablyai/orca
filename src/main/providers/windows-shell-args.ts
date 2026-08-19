@@ -2,11 +2,12 @@ import { win32 as pathWin32 } from 'node:path'
 import { isWindowsGitBashShellPath } from '../git-bash'
 import { parseWslPath, toLinuxPath, toWindowsWslPath } from '../wsl'
 import {
+  buildWslExecArgs,
   buildWslInteractiveLoginShellCommand,
-  escapeWslShCommandForWindows,
   quotePosixShell
 } from '../../shared/wsl-login-shell-command'
-import { ensureShellReadyWrappersAt, getMarkerlessShellLaunchConfig } from './local-pty-shell-ready'
+import { getBashWrapperLaunchArgs } from './local-pty-shell-ready'
+import { ensureShellReadyWrappersAt } from './local-pty-shell-ready-wrapper-generation'
 import {
   encodePowerShellCommand,
   getPowerShellOsc133Bootstrap
@@ -33,7 +34,7 @@ function getGitBashLaunchCommand(codexLaunchPreflightCommand?: string): string {
   }
 
   ensureShellReadyWrappersAt()
-  const wrapperArgs = getMarkerlessShellLaunchConfig('bash').args
+  const wrapperArgs = getBashWrapperLaunchArgs()
   if (!wrapperArgs) {
     return GIT_BASH_UTF8_LOGIN_COMMAND
   }
@@ -145,8 +146,7 @@ function buildWslShellArgs(linuxCwd: string, distro?: string): string[] {
   ].join(' && ')
   // Why: WSL users often customize zsh rather than bash; launch the distro's
   // login shell so terminal PATH matches the environment Orca detects.
-  const shellArgs = ['--', 'sh', '-c', escapeWslShCommandForWindows(setupCommand)]
-  return distro ? ['-d', distro, ...shellArgs] : shellArgs
+  return buildWslExecArgs(distro, ['sh', '-c', setupCommand])
 }
 
 /** Converts an MSYS drive spelling to the native cwd used by Windows terminal processes. */

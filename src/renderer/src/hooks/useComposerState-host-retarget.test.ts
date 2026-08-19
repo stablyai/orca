@@ -55,8 +55,23 @@ describe('useComposerState host retarget', () => {
       'const handleProjectHostSetupChange',
       'const handleProjectChange'
     )
-    expect(switchSection).toContain('setSelectedProjectHostSetupOverrideId(option.id)')
+    expect(switchSection).toContain('setSelectedProjectHostSetupOverrideId(target.id)')
     expect(switchSection).toContain('preserveStartFrom: true')
     expect(switchSection).toContain('forceResetStartFrom: true')
+  })
+
+  it('resolves a just-created setup through the option builder, not the raw store record', () => {
+    const switchSection = sourceBetween(
+      HOOK_SOURCE,
+      'const handleProjectHostSetupChange',
+      'const handleProjectChange'
+    )
+    // Reading projectHostSetups directly skips repo eligibility, ephemeral-VM and
+    // runtime-owned host exclusion, and the one-setup-per-host dedupe that decides
+    // which setup creation resolves to — so a set location could retarget the
+    // composer at a different location than the one just chosen (#14868/#14912).
+    expect(switchSection).not.toContain('.projectHostSetups.find(')
+    expect(switchSection).toContain('buildProjectHostSetupOptions({')
+    expect(switchSection).toContain("candidate.kind === 'ready'")
   })
 })

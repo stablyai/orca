@@ -33,7 +33,8 @@ vi.mock('../browser/browser-cookie-import', () => ({
   selectBrowserProfile: vi.fn()
 }))
 
-import { registerBrowserHandlers, setTrustedBrowserRendererWebContentsId } from './browser'
+import { registerBrowserHandlers } from './browser'
+import { setTrustedBrowserRendererWebContentsId } from './browser-renderer-trust'
 
 describe('browser session profile IPC', () => {
   beforeEach(() => {

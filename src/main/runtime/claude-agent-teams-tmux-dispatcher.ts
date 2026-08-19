@@ -4,6 +4,7 @@ import {
   tmuxSendKeysText,
   tmuxValue
 } from '../../shared/claude-agent-teams-tmux-compat'
+import { describeUnconfirmedAgentStop } from '../../shared/pty-liveness-verdict'
 import {
   formatContext,
   paneEnv,
@@ -157,27 +158,31 @@ export class ClaudeAgentTeamsTmuxDispatcher {
     if (!command) {
       return ''
     }
+    if (pane.respawnBlockedReason) {
+      throw new Error(pane.respawnBlockedReason)
+    }
     const origin =
       (pane.splitFromPane ? team.panes.get(pane.splitFromPane) : undefined) ??
       team.panes.get(team.leaderPane)!
-    // Why: create the replacement before destroying the placeholder so a failed
-    // split leaves the fake pane id pointing at a still-live terminal; on cleanup
-    // failure, discard the new split and keep the placeholder registered.
     const previousHandle = pane.handle
-    const split = await api.splitTerminal(origin.handle, {
-      direction: pane.splitDirection ?? 'horizontal',
-      command,
-      env: paneEnv(team, pane.fakePaneId),
-      envToDelete: ['TERM_PROGRAM'],
-      activate: false
-    })
+    const close = await api.closeTerminal(previousHandle)
+    if (!close.ptyKilled) {
+      pane.respawnBlockedReason = describeUnconfirmedAgentStop(close)
+      throw new Error(pane.respawnBlockedReason)
+    }
     try {
-      await api.closeTerminal(previousHandle)
+      const split = await api.splitTerminal(origin.handle, {
+        direction: pane.splitDirection ?? 'horizontal',
+        command,
+        env: paneEnv(team, pane.fakePaneId),
+        envToDelete: ['TERM_PROGRAM'],
+        activate: false
+      })
+      pane.handle = split.handle
     } catch (error) {
-      await api.closeTerminal(split.handle).catch(() => {})
+      this.removePane(team, pane)
       throw error
     }
-    pane.handle = split.handle
     return ''
   }
 
@@ -266,14 +271,21 @@ export class ClaudeAgentTeamsTmuxDispatcher {
     if (pane.fakePaneId === team.leaderPane) {
       throw new Error('refusing to kill leader pane')
     }
-    await api.closeTerminal(pane.handle)
+    const close = await api.closeTerminal(pane.handle)
+    if (!close.ptyKilled) {
+      throw new Error(describeUnconfirmedAgentStop(close))
+    }
+    this.removePane(team, pane)
+    return ''
+  }
+
+  private removePane(team: AgentTeam, pane: TeamPane): void {
     team.panes.delete(pane.fakePaneId)
     team.paneOrder = team.paneOrder.filter((id) => id !== pane.fakePaneId)
     if (team.mainVertical?.lastColumnPane === pane.fakePaneId) {
       team.mainVertical.lastColumnPane =
         [...team.paneOrder].toReversed().find((id) => id !== team.leaderPane) ?? null
     }
-    return ''
   }
 
   private async lastPane(

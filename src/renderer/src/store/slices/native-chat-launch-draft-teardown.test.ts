@@ -100,7 +100,7 @@ describe('nativeChatLaunchDraftByTabId teardown', () => {
     const store = createTestStore()
     seedDrafts(store)
 
-    const result = await store.getState().removeWorktree(WT1)
+    const result = await store.getState().removeWorktree({ id: WT1, executionHostId: null })
 
     expect(result).toEqual({ ok: true })
     const s = store.getState()

@@ -2,42 +2,44 @@ import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import {
   appendPendingSendCache,
-  appendCommandMarkerCache,
-  applyCommandMarkerBoundaries,
-  clearCommandMarkerCacheForTests,
   clearPendingSendCacheForTests,
-  commandMarkersAsMessages,
-  isCommandMarkerId,
   isLaunchPromptMessageId,
   isPendingMessageId,
   launchPromptAsMessage,
   nextNativeChatPendingSendId,
   pendingSendsAsMessages,
   prunePendingSends,
-  readCommandMarkerCache,
   readPendingSendCache,
   shouldPruneLaunchPrompt,
   writePendingSendCache,
   type NativeChatPendingSend
 } from './native-chat-pending'
+import {
+  appendCommandMarkerCache,
+  applyCommandMarkerBoundaries,
+  clearCommandMarkerCacheForTests,
+  commandMarkersAsMessages,
+  isCommandMarkerId,
+  readCommandMarkerCache
+} from './native-chat-command-marker'
 import { stripNoiseMessages } from './native-chat-noise'
 
-function userMessage(id: string, text: string): NativeChatMessage {
+function userMessage(id: string, text: string, timestamp = 1): NativeChatMessage {
   return {
     id,
     role: 'user',
     blocks: [{ type: 'text', text }],
-    timestamp: 1,
+    timestamp,
     source: 'transcript'
   }
 }
 
-function assistantMessage(id: string, text: string): NativeChatMessage {
+function assistantMessage(id: string, text: string, timestamp = 2): NativeChatMessage {
   return {
     id,
     role: 'assistant',
     blocks: [{ type: 'text', text }],
-    timestamp: 2,
+    timestamp,
     source: 'transcript'
   }
 }
@@ -179,16 +181,6 @@ describe('prunePendingSends', () => {
     ).toEqual([pendingOf('p2', 'repeat')])
   })
 
-  it('prunes consecutive optimistic sends that were glued into one transcript user turn', () => {
-    const pending = [pendingOf('p1', 'tell me a joke'), pendingOf('p2', 'continue')]
-    expect(
-      prunePendingSends(pending, [
-        userMessage('u1', 'tell me a jokecontinue'),
-        assistantMessage('a1', 'a joke')
-      ])
-    ).toEqual([])
-  })
-
   it('does not treat an unrelated longer user turn as a glued match', () => {
     const pending = [pendingOf('p1', 'hi')]
     expect(
@@ -197,6 +189,226 @@ describe('prunePendingSends', () => {
         assistantMessage('a1', 'ok')
       ])
     ).toEqual(pending)
+  })
+})
+
+// A glued row is written by the agent AFTER the sends that produced it, so every
+// fixture here puts the transcript row past `sentAt`. Matching an earlier row is
+// the failure mode these tests exist to pin down.
+const GLUE_BOUNDARY = assistantMessage('glue-boundary', 'ready', 1000)
+const GLUE_SENT_AT = 5000
+
+function gluePending(id: string, text: string): NativeChatPendingSend {
+  return {
+    id,
+    text,
+    sentAt: GLUE_SENT_AT,
+    afterMessageId: GLUE_BOUNDARY.id,
+    afterMessageTimestamp: GLUE_BOUNDARY.timestamp
+  }
+}
+
+/** Visible history, the send boundary, then the row the agent glued the queue into. */
+function glueTranscript(row: string): NativeChatMessage[] {
+  return [
+    userMessage('glue-history', 'hello', 900),
+    GLUE_BOUNDARY,
+    userMessage('glue-row', row, 6000)
+  ]
+}
+
+function advancedGlueTranscript(row: string): NativeChatMessage[] {
+  return [...glueTranscript(row), assistantMessage('glue-answer', 'done', 6100)]
+}
+
+describe('glued rapid sends', () => {
+  it('retires both echoes when a lost Enter glued the pair into one row', () => {
+    const pending = [gluePending('p1', 'tell me a joke'), gluePending('p2', 'continue')]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('tell me a jokecontinue'))).toEqual([])
+  })
+
+  it('hides both echoes as soon as the glued row lands, before the reply', () => {
+    const pending = [gluePending('p1', 'tell me a joke'), gluePending('p2', 'continue')]
+
+    expect(pendingSendsAsMessages(pending, glueTranscript('tell me a jokecontinue'))).toEqual([])
+  })
+
+  it('retires a pair the agent glued with a separator of its own', () => {
+    const pending = [gluePending('p1', 'tell me a joke'), gluePending('p2', 'continue')]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('tell me a joke continue'))).toEqual(
+      []
+    )
+  })
+
+  it('retires a pair whose glued row separates with tabs and newlines', () => {
+    const pending = [gluePending('p1', 'tell me a joke'), gluePending('p2', 'continue')]
+
+    expect(
+      prunePendingSends(pending, advancedGlueTranscript('tell me a joke \t\n continue'))
+    ).toEqual([])
+  })
+
+  it('retires three prompts collapsed into one row with mixed boundaries', () => {
+    const pending = [
+      gluePending('p1', 'first'),
+      gluePending('p2', 'second'),
+      gluePending('p3', 'third')
+    ]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('firstsecond third'))).toEqual([])
+  })
+
+  it('retires prompts that themselves contain the separator', () => {
+    const pending = [gluePending('p1', 'fix the bug'), gluePending('p2', 'then run the tests')]
+
+    expect(
+      prunePendingSends(pending, advancedGlueTranscript('fix the bug then run the tests'))
+    ).toEqual([])
+  })
+
+  it('retires an identical prompt sent twice', () => {
+    const pending = [gluePending('p1', 'repeat'), gluePending('p2', 'repeat')]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('repeat repeat'))).toEqual([])
+  })
+
+  it('retires an identical prompt sent three times', () => {
+    const pending = [gluePending('p1', 'ha'), gluePending('p2', 'ha'), gluePending('p3', 'ha')]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('haha ha'))).toEqual([])
+  })
+
+  it('retires a pending send that is a prefix of the next one', () => {
+    const pending = [gluePending('p1', 'hi'), gluePending('p2', 'hi there')]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('hi hi there'))).toEqual([])
+  })
+
+  it('keeps sends when the glue only reaches a prefix of the row', () => {
+    const pending = [gluePending('p1', 'hi'), gluePending('p2', 'story')]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('hi story continued'))).toEqual(
+      pending
+    )
+  })
+
+  it('keeps sends when the row runs out mid-prompt', () => {
+    const pending = [gluePending('p1', 'hi'), gluePending('p2', 'there friend')]
+
+    expect(prunePendingSends(pending, advancedGlueTranscript('hi there'))).toEqual(pending)
+  })
+
+  it('keeps a queued pair when an earlier turn splits across it (#14406 regression)', () => {
+    // The row predates both sends: "run the tests"+"again" only looks glued.
+    const pending = [pendingOf('p1', 'run the tests'), pendingOf('p2', 'again')]
+
+    expect(
+      prunePendingSends(pending, [
+        userMessage('u1', 'run the tests again'),
+        assistantMessage('a1', 'sure')
+      ])
+    ).toEqual(pending)
+  })
+
+  it('keeps a re-sent pair that an older identical turn would match (#14406 regression)', () => {
+    // Rapid-sending "fix the"+"bug" a second time must not bind to the first
+    // "fix the bug" turn — that drops a real queued prompt with no bubble.
+    const history = [userMessage('u1', 'fix the bug', 1000), assistantMessage('a1', 'fixed', 1100)]
+    const pending = [gluePending('p3', 'fix the'), gluePending('p4', 'bug')]
+
+    expect(prunePendingSends(pending, history)).toEqual(pending)
+    expect(pendingSendsAsMessages(pending, history)).toHaveLength(2)
+  })
+
+  it('keeps a re-sent pair even with no recorded message boundary', () => {
+    const history = [userMessage('u1', 'fix the bug', 1000), assistantMessage('a1', 'fixed', 1100)]
+    const pending = [
+      { id: 'p3', text: 'fix the', sentAt: GLUE_SENT_AT },
+      { id: 'p4', text: 'bug', sentAt: GLUE_SENT_AT }
+    ]
+
+    expect(prunePendingSends(pending, history)).toEqual(pending)
+    expect(pendingSendsAsMessages(pending, history)).toHaveLength(2)
+  })
+
+  // A row that already existed when a send was issued can never be that send's
+  // echo — for EVERY queued send, not just the oldest one the glue run starts at.
+  const mixedAgeGlue = (): { messages: NativeChatMessage[]; pending: NativeChatPendingSend[] } => {
+    const gluedRow = userMessage('glue-row', 'fix the bug', 6000)
+    return {
+      messages: [
+        GLUE_BOUNDARY,
+        gluedRow,
+        assistantMessage('glue-answer', 'fixed', 6100),
+        userMessage('later-history', 'anything', 6200)
+      ],
+      // 'fix the' was queued before the row landed; 'bug' only after it.
+      pending: [
+        gluePending('p1', 'fix the'),
+        {
+          id: 'p2',
+          text: 'bug',
+          sentAt: 7000,
+          afterMessageId: 'glue-answer',
+          afterMessageTimestamp: 6100
+        }
+      ]
+    }
+  }
+
+  it('keeps a queued send whose own boundary is newer than the glued row (STA-4477)', () => {
+    const { messages, pending } = mixedAgeGlue()
+
+    expect(prunePendingSends(pending, messages)).toEqual(pending)
+  })
+
+  // Separate from the prune case on purpose: the render path is what makes the
+  // bubble visually vanish, and a shared `it` would mask it behind the first
+  // failing assertion.
+  it('still renders a queued send whose own boundary is newer than the row (STA-4477)', () => {
+    const { messages, pending } = mixedAgeGlue()
+
+    expect(pendingSendsAsMessages(pending, messages)).toHaveLength(2)
+  })
+
+  // Glue is adjacency: a send the row predates ends the run rather than being
+  // skipped, so a row must never bridge across a send it cannot represent.
+  it('never glues across a send the row cannot represent (STA-4477)', () => {
+    const gluedRow = userMessage('glue-row', 'alpha gamma', 6000)
+    const messages = [GLUE_BOUNDARY, gluedRow, assistantMessage('glue-answer', 'ok', 6100)]
+    const pending = [
+      gluePending('p1', 'alpha'),
+      // Queued after the row landed, so the row is not its echo...
+      {
+        id: 'p2',
+        text: 'beta',
+        sentAt: 7000,
+        afterMessageId: 'glue-row',
+        afterMessageTimestamp: 6000
+      },
+      // ...and 'alpha'+'gamma' must not close over the gap it leaves.
+      gluePending('p3', 'gamma')
+    ]
+
+    expect(prunePendingSends(pending, messages)).toEqual(pending)
+    expect(pendingSendsAsMessages(pending, messages)).toHaveLength(3)
+  })
+
+  it('still retires the leading run the glued row did land after (STA-4477)', () => {
+    const gluedRow = userMessage('glue-row', 'first second', 6000)
+    const messages = [GLUE_BOUNDARY, gluedRow, assistantMessage('glue-answer', 'done', 6100)]
+    const third = {
+      id: 'p3',
+      text: 'third',
+      sentAt: 7000,
+      afterMessageId: 'glue-row',
+      afterMessageTimestamp: gluedRow.timestamp
+    }
+    const pending = [gluePending('p1', 'first'), gluePending('p2', 'second'), third]
+
+    expect(prunePendingSends(pending, messages)).toEqual([third])
   })
 })
 
@@ -246,13 +458,6 @@ describe('pendingSendsAsMessages', () => {
 
     expect(pendingSendsAsMessages(pending, [userMessage('u1', 'first prompt')])).toEqual([])
     expect(pendingSendsAsMessages(pending, [])).toHaveLength(1)
-  })
-
-  it('hides consecutive optimistic sends once a glued transcript user turn lands', () => {
-    const pending = [pendingOf('p1', 'tell me a joke'), pendingOf('p2', 'continue')]
-    expect(pendingSendsAsMessages(pending, [userMessage('u1', 'tell me a jokecontinue')])).toEqual(
-      []
-    )
   })
 
   it('keeps a repeated prompt visible when its only match predates the send boundary', () => {

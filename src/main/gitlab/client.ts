@@ -1370,15 +1370,9 @@ export async function updateMR(
 
 /** Re-export so callers don't need to know the gl-utils module split. */
 export { _resetProjectRefCache } from './gl-utils'
-export {
-  addIssueComment,
-  createIssue,
-  getIssue,
-  listAssignableUsers,
-  listIssues,
-  listLabels,
-  updateIssue
-} from './issues'
+export { addIssueComment, createIssue, getIssue, listIssues } from './issues'
+export { updateIssue } from './issue-update'
+export { listAssignableUsers, listLabels } from './project-label-and-member-lookup'
 
 // Re-exported so paste-URL call sites don't import getProjectRefForRemote from gl-utils directly.
 export { getProjectRefForRemote }

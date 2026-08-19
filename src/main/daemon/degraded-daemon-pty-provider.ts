@@ -108,8 +108,15 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
       this.sessionProviders.get(ptyId) ?? this.findProviderForExistingSession(ptyId)
     )?.providesAgentSessionOwnerListings?.(ptyId) === true
 
-  write(id: string, data: string): void {
-    this.providerFor(id).write(id, data)
+  write(id: string, data: string): boolean | void {
+    return this.providerFor(id).write(id, data)
+  }
+
+  async writeWithSettlement(id: string, data: string): Promise<boolean> {
+    const provider = this.providerFor(id)
+    return provider.writeWithSettlement
+      ? await provider.writeWithSettlement(id, data)
+      : provider.write(id, data) !== false
   }
 
   resize(id: string, cols: number, rows: number): void {

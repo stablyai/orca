@@ -332,7 +332,7 @@ describe('launchAgentBackgroundSession', () => {
     expect(mockSpawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: 'C:\\Users\\jinwo\\repo\\feature',
-        command: "claude '--dangerously-skip-permissions' 'don'\\''t use powershell quoting'",
+        command: `claude '--dangerously-skip-permissions' 'don'"'"'t use powershell quoting'`,
         connectionId: null,
         worktreeId: 'wt-1',
         tabId: expect.stringMatching(UUID_RE)
@@ -426,7 +426,9 @@ describe('launchAgentBackgroundSession', () => {
       {
         state: 'working',
         prompt: 'check the status spinner',
-        agentType: 'command-code'
+        agentType: 'command-code',
+        // Why: Orca launched this hidden session, so the seed predates any provider signal (STA-4293).
+        observation: expect.objectContaining({ origin: 'launch', kind: 'transition' })
       },
       undefined,
       undefined,
