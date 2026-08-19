@@ -112,6 +112,12 @@ import {
 } from './chromium-cookie-snapshot'
 import { resolveChromiumCookiesPath } from './chromium-cookie-path'
 import { copyFileWithWindowsRetry } from '../codex-accounts/fs-utils'
+import {
+  discoverInstalledBrowsers,
+  filterChromiumCandidates,
+  type DiscoveredBrowserCandidate
+} from './installed-browser-discovery'
+import { customBrowsersFromCandidates } from './custom-browser-detection'
 
 // ---------------------------------------------------------------------------
 // Browser detection
@@ -130,6 +136,8 @@ export type DetectedBrowser = {
   keychainAccount?: string
   profiles: BrowserProfile[]
   selectedProfile: string
+  // Stable id for auto-discovered/custom browsers (family 'custom'); absent for hardcoded ones.
+  customBrowserId?: string
 }
 
 type ChromiumBrowserDef = {
@@ -414,6 +422,47 @@ export function detectInstalledBrowsers(): DetectedBrowser[] {
   }
 
   return detected
+}
+
+// Hardcoded detection plus macOS auto-discovery of other installed Chromium browsers.
+// The OS URL-handler query is deferred behind an empty stub, so today this equals
+// detectInstalledBrowsers() until the real query is wired in.
+export async function detectAllBrowsers(opts?: {
+  queryHttpsHandlers?: () => Promise<DiscoveredBrowserCandidate[]>
+}): Promise<DetectedBrowser[]> {
+  const hardcoded = detectInstalledBrowsers()
+  if (process.platform !== 'darwin') {
+    return hardcoded
+  }
+  const appSupportRoot = join(process.env.HOME ?? '', 'Library', 'Application Support')
+  const candidates = await discoverInstalledBrowsers({
+    platform: process.platform,
+    queryHttpsHandlers: opts?.queryHttpsHandlers
+  })
+  const chromium = filterChromiumCandidates(candidates, { appSupportRoot })
+  // Hardcoded roots let the resolution ladder drop already-known browsers (dedup).
+  const knownBrowsers = CHROMIUM_BROWSERS.flatMap((def) => {
+    const root = browserRootPath(def)
+    return root
+      ? [
+          {
+            family: def.family,
+            label: def.label,
+            dataDir: root,
+            keychainService: def.keychainService,
+            keychainAccount: def.keychainAccount
+          }
+        ]
+      : []
+  })
+  const customs = customBrowsersFromCandidates(chromium, {
+    knownBrowsers,
+    appSupportRoot,
+    existsSync,
+    cookiesPathFor: (dataDir) =>
+      resolveChromiumCookiesPath(join(dataDir, 'Default')) ?? join(dataDir, 'Default', 'Cookies')
+  })
+  return [...hardcoded, ...customs]
 }
 
 export function selectBrowserProfile(
