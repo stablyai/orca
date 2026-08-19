@@ -243,7 +243,7 @@ describe('native Chromium import excludes the Google cookie family', () => {
     createChromiumCookieTestDatabase(targetCookiesPath, rows).close()
   }
 
-  it('bulk clears while excluding live Google cookies before importing', async () => {
+  it('clears the imported domain coordinate by coordinate and never a Google one', async () => {
     const sourceCookiesPath = seedSource([
       { domain: '.google.com', name: 'SID', value: 'transplanted-sid' },
       { domain: '.example.com', name: 'session', value: 'new' }
@@ -263,10 +263,10 @@ describe('native Chromium import excludes the Google cookie family', () => {
       googleCookiesSkipped: 1,
       domains: ['example.com']
     })
-    expect(clearDataMock.mock.calls).toEqual([
-      [{ dataTypes: ['cookies'], excludeOrigins: ['https://google.com'] }]
-    ])
-    expect(cookiesRemoveMock).not.toHaveBeenCalled()
+    // Why (STA-4797): the bulk clear is gone, so the live Google session survives by never being
+    // named as a removal coordinate rather than by riding an excludeOrigins exemption.
+    expect(clearDataMock).not.toHaveBeenCalled()
+    expect(cookiesRemoveMock.mock.calls).toEqual([['https://example.com/', 'stale']])
     expect(cookiesSetMock.mock.calls.map(([details]) => details.domain)).toEqual(['.example.com'])
   })
 
@@ -352,10 +352,13 @@ describe('native Chromium import excludes the Google cookie family', () => {
       { domain: '.example.com', name: 'session', value: 'new' }
     ])
     seedTarget([{ domain: '.example.com', name: 'stale', value: 'stale' }])
+    // Why (STA-4797): the rejecting cookie has to sit on a domain this import actually replaces.
+    // Parked on an unrelated site it is out of the import scope, never enters the removal plan,
+    // and the rejection the case exists to exercise never happens.
     let jar = [
       existingCookie('.google.com', 'SID'),
       existingCookie('.example.com', 'removed-first'),
-      existingCookie('.other.test', 'stale')
+      existingCookie('.example.com', 'stale')
     ]
     cookiesGetMock.mockImplementation(async () => [...jar])
     cookiesRemoveMock.mockImplementation(async (_url: string, name: string) => {
@@ -369,13 +372,12 @@ describe('native Chromium import excludes the Google cookie family', () => {
         jar.push(existingCookie(details.domain ?? '.example.com', details.name))
       }
     })
-    clearDataMock.mockRejectedValue(new Error('storage busy'))
 
     const result = await importCookiesFromBrowser(chromeBrowser(sourceCookiesPath), 'persist:test')
 
     expect(result).toMatchObject({ ok: false })
     expect(result.ok || result.reason).toContain('Could not clear existing cookies')
-    expect(clearDataMock).toHaveBeenCalledOnce()
+    expect(clearDataMock).not.toHaveBeenCalled()
     expect(cookiesRemoveMock.mock.calls.map(([, name]) => name)).toEqual(['removed-first', 'stale'])
     expect(cookiesSetMock.mock.calls.map(([details]) => details.name)).toEqual(
       expect.arrayContaining(['removed-first'])

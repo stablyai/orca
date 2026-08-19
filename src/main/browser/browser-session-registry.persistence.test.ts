@@ -122,6 +122,30 @@ function installModuleMocks(
     cleanElectronUserAgent: vi.fn((ua: string) => ua.replace(/\s*Electron\/\S+/, '')),
     setupClientHintsOverride: setupClientHintsOverrideMock
   }))
+  // This suite models replay with an in-memory filesystem. The real file-backed SQLite merge has
+  // dedicated coverage; these fixtures are legacy unmarked images and keep the copy path.
+  vi.doMock('./browser-cookie-staged-import', () => ({
+    SCOPED_COOKIE_IMPORT_FORMAT: 'scoped-v1',
+    applyScopedStagedCookieImport: vi.fn(() => false),
+    isScopedStagedCookieImport: vi.fn(() => false),
+    removeCookieImportScopeMarker: vi.fn()
+  }))
+  vi.doMock('../codex-accounts/fs-utils', () => ({
+    renameFileWithWindowsRetry: vi.fn((source: string, target: string) => {
+      const sourceKey = fsKey(source)
+      const targetKey = fsKey(target)
+      if (!fsState.present.has(sourceKey)) {
+        throw new Error('ENOENT')
+      }
+      const value = fsState.files.get(sourceKey)
+      fsState.present.delete(sourceKey)
+      fsState.files.delete(sourceKey)
+      fsState.present.add(targetKey)
+      if (value !== undefined) {
+        fsState.files.set(targetKey, value)
+      }
+    })
+  }))
 
   return {
     sessionFromPartitionMock,
@@ -257,10 +281,13 @@ describe('BrowserSessionRegistry persistence', () => {
     )
 
     const written = JSON.parse(fsState.files.get(META_PATH) ?? '{}')
-    expect(written.pendingCookieDbPath).toBe('/staged/default')
+    expect(written.pendingCookieDbPath).toBeNull()
     expect(written.pendingCookieImports).toEqual({
-      'persist:orca-browser': '/staged/default',
-      'persist:orca-browser-session-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa': '/staged/imported'
+      'persist:orca-browser': { format: 'scoped-v1', path: '/staged/default' },
+      'persist:orca-browser-session-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa': {
+        format: 'scoped-v1',
+        path: '/staged/imported'
+      }
     })
   })
 
