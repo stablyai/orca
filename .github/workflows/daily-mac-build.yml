@@ -75,6 +75,12 @@ jobs:
     outputs:
       head_sha: ${{ steps.freshness.outputs.head_sha }}
       published: ${{ steps.publish_live.outcome == 'success' && 'true' || 'false' }}
+    # Why actions:write on a signing job: the "Dispatch the Windows build" step
+    # below starts a sibling workflow run, which is what keeps the Windows leg
+    # off this run's concurrency group and out of the mac cadence.
+    permissions:
+      contents: read
+      actions: write
     runs-on: blacksmith-6vcpu-macos-15
     # Why 150: it must exceed the worst case the retry budgets below can produce
     # (install 3x10 + publish 2x45 = 120, plus ~25 for checkout/build/verify), or
@@ -274,13 +280,19 @@ jobs:
           # exactly. One source, written once, read twice.
           notes_file="$RUNNER_TEMP/daily-release-notes.md"
           cat >"$notes_file" <<EOF
-          Automated daily macOS dev build from commit \`$short_sha\`.
+          Automated daily macOS and Windows dev build from commit \`$short_sha\`.
 
           Built from [\`stablyai/orca@$short_sha\`](https://github.com/stablyai/orca/commit/$SHA).
 
-          **Unvetted.** No tests ran. Signed and notarized like a release, so it
-          installs through Orca's in-app updater and opens from a manual download
-          without a Gatekeeper prompt — but nothing here has been reviewed.
+          **Unvetted.** No tests ran. The macOS build is signed and notarized like a
+          release, so it installs through Orca's in-app updater and opens from a manual
+          download without a Gatekeeper prompt — but nothing here has been reviewed.
+
+          **Windows builds are unsigned.** They install and update normally once you
+          are on one, but a signed Stable or RC build cannot install one through the
+          in-app updater — download \`orca-windows-setup.exe\` below and run it once
+          (SmartScreen will warn about an unknown publisher). Every later switch,
+          including back to Stable, works in-app from there.
           EOF
           # Why create it up front: electron-builder then uploads into a known tag
           # rather than inferring one from package.json.
@@ -299,6 +311,47 @@ jobs:
             --notes-file "$notes_file"
           echo "tag=$TAG" >>"$GITHUB_OUTPUT"
           echo "notes_file=$notes_file" >>"$GITHUB_OUTPUT"
+
+      # Why here, right after the draft exists and before the long pack+notarize:
+      # dispatching now runs the Windows build alongside this job rather than
+      # after it, so adding Windows costs the channel no wall-clock. It uploads
+      # into the draft this step just created.
+      #
+      # Why a dispatch rather than another job in this workflow: this run is
+      # serialised by its concurrency group, so an in-run Windows job would add
+      # its ~30 minutes to every daily and push the next one into a queue.
+      #
+      # Why --ref main: the Windows workflow definition must come from main, the
+      # same way this file's own reasoning about stale branch copies goes. The
+      # commit being built is passed as an input instead.
+      - name: Dispatch the Windows build
+        # Never fail the daily build over this. Windows is additive, and the
+        # picker hides a tag from any platform it published no artifact for, so
+        # a missed dispatch degrades to "macOS only" rather than to a broken row.
+        continue-on-error: true
+        if: steps.freshness.outputs.should_build == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+          SHA: ${{ steps.freshness.outputs.head_sha }}
+          VERSION: ${{ steps.daily.outputs.version }}
+        run: |
+          set -uo pipefail
+          for attempt in 1 2 3; do
+            if gh workflow run dev-channel-win-build.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              --raw-field channel=daily \
+              --raw-field "tag=$TAG" \
+              --raw-field "ref=$SHA" \
+              --raw-field "version=$VERSION"; then
+              echo "Dispatched Windows build for $TAG."
+              exit 0
+            fi
+            [[ "$attempt" -eq 3 ]] || sleep "$((attempt * 5))"
+          done
+          echo "::warning::Could not dispatch the Windows build for $TAG; this release will ship macOS only."
 
       - name: Publish daily macOS artifacts
         if: steps.freshness.outputs.should_build == 'true'
