@@ -3,6 +3,30 @@ import { describe, expect, it } from 'vitest'
 import { repairTranslatedValue } from './locale-translation-policy.mjs'
 
 describe('locale-translation-policy zh round 5', () => {
+  it('standardizes the accepted product glossary', () => {
+    const cases = [
+      ['Agent', '代理', '智能体'],
+      ['Terminal', '端子', '终端'],
+      ['Repo', '存储库', '仓库'],
+      ['Review', '审查', '评审'],
+      ['Issue', '问题', '议题'],
+      ['Close as duplicate', '标记为重复', '作为重复议题关闭'],
+      ['Worktree', '工作分支', '工作树'],
+      ['Workspace', '工作空间', '工作区']
+    ]
+
+    for (const [enValue, localeValue, expected] of cases) {
+      expect(
+        repairTranslatedValue({
+          key: 'auto.components.glossary.test',
+          enValue,
+          localeValue,
+          locale: 'zh'
+        })
+      ).toBe(expected)
+    }
+  })
+
   it('fixes brand spacing, hosted review, and Orca Mobile regressions', () => {
     expect(
       repairTranslatedValue({
@@ -140,7 +164,7 @@ describe('locale-translation-policy zh round 5', () => {
         localeValue: '代理',
         locale: 'zh'
       })
-    ).toBe('代理')
+    ).toBe('智能体')
     expect(
       repairTranslatedValue({
         key: 'auto.components.GitHubItemDialog.28986b3747',
@@ -148,7 +172,7 @@ describe('locale-translation-policy zh round 5', () => {
         localeValue: '已启动 AI 代理处理失败的检查。',
         locale: 'zh'
       })
-    ).toBe('已启动 AI 代理处理失败的检查。')
+    ).toBe('已启动 AI 智能体处理失败的检查。')
     expect(
       repairTranslatedValue({
         key: 'auto.components.LinearIssueMarkdownDescriptionEditor.d9c47069ef',
@@ -205,6 +229,14 @@ describe('locale-translation-policy zh round 5', () => {
     ).toBe('留空以使用系统代理设置和继承的代理环境变量。')
     expect(
       repairTranslatedValue({
+        key: 'auto.components.settings.BrowserProfileRow.b5c0479e21',
+        enValue: 'Unmodified user agent',
+        localeValue: '未经修改的用户代理',
+        locale: 'zh'
+      })
+    ).toBe('未经修改的用户代理')
+    expect(
+      repairTranslatedValue({
         key: 'auto.components.settings.general.search.91a46caafc',
         enValue: 'no_proxy',
         localeValue: '无Agent',
@@ -213,7 +245,7 @@ describe('locale-translation-policy zh round 5', () => {
     ).toBe('no_proxy')
   })
 
-  it('keeps repo terminology in English', () => {
+  it('standardizes repository terminology', () => {
     expect(
       repairTranslatedValue({
         key: 'auto.components.workspace.cleanup.WorkspaceCleanupDialog.0b1766738a',
@@ -221,7 +253,7 @@ describe('locale-translation-policy zh round 5', () => {
         localeValue: '回购协议',
         locale: 'zh'
       })
-    ).toBe('Repo')
+    ).toBe('仓库')
     expect(
       repairTranslatedValue({
         key: 'auto.components.sidebar.add.repo.local.start.actions.fb4fc5380e',
