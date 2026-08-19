@@ -4,6 +4,14 @@ import { describe, expect, it } from 'vitest'
 const mainCss = readFileSync(new URL('./main.css', import.meta.url), 'utf8')
 const richMarkdownCss = readFileSync(new URL('./rich-markdown-editor.css', import.meta.url), 'utf8')
 const popoutSource = readFileSync(new URL('../popout.tsx', import.meta.url), 'utf8')
+const themePreviewSources = [
+  '../components/settings/Settings.tsx',
+  '../components/onboarding/use-onboarding-flow.ts'
+].map((path) => readFileSync(new URL(path, import.meta.url), 'utf8'))
+const editorPortalSources = [
+  '../components/editor/RichMarkdownToolbar.tsx',
+  '../components/editor/RichMarkdownTableControls.tsx'
+].map((path) => readFileSync(new URL(path, import.meta.url), 'utf8'))
 const findOverlaySources = [
   '../components/TerminalSearch.tsx',
   '../components/browser-pane/assemble-chrome/BrowserFind.tsx',
@@ -35,7 +43,7 @@ describe('custom app appearance styles', () => {
 
   it('isolates hosted editors from an opposite App Appearance scheme', () => {
     expect(mainCss).toMatch(
-      /data-app-appearance[^}]*:is\(\.markdown-preview-shell, \.rich-markdown-editor-layout, \.rich-markdown-link-bubble\)[^{]*\{[^}]*--primary: var\(--orca-editor-base-primary\);[^}]*--popover: var\(--orca-editor-base-popover\);[^}]*--editor-surface: var\(--orca-editor-base-editor-surface\)/s
+      /data-app-appearance[^}]*:is\([^)]*\.markdown-preview-shell[^)]*\.rich-markdown-editor-layout[^)]*\.rich-markdown-link-bubble[^)]*\.rich-markdown-editor-portal[^)]*\)[^{]*\{[^}]*--primary: var\(--orca-editor-base-primary\);[^}]*--popover: var\(--orca-editor-base-popover\);[^}]*--editor-surface: var\(--orca-editor-base-editor-surface\)/s
     )
     expect(richMarkdownCss).not.toContain('.dark .rich-markdown')
     expect(richMarkdownCss).toContain('.orca-editor-dark .rich-markdown')
@@ -76,8 +84,22 @@ describe('custom app appearance styles', () => {
     }
   })
 
+  it('reapplies complete App Appearance snapshots during theme previews', () => {
+    for (const source of themePreviewSources) {
+      expect(source).toContain('applyDocumentAppearance')
+      expect(source).not.toContain('applyDocumentTheme')
+    }
+  })
+
+  it('keeps editor-owned dropdown portals on editor tokens', () => {
+    expect(mainCss).toContain('.rich-markdown-editor-portal')
+    for (const source of editorPortalSources) {
+      expect(source).toContain('rich-markdown-editor-portal')
+    }
+  })
+
   it('applies the shared document helper in the dashboard popout', () => {
-    expect(popoutSource).toContain('applyAppAppearanceToDocument,')
-    expect(popoutSource).toContain('applyAppAppearanceToDocument(')
+    expect(popoutSource).toContain('applyDocumentAppearance')
+    expect(popoutSource).not.toContain('applyDocumentTheme')
   })
 })
