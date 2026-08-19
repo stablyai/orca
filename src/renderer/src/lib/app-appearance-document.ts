@@ -8,6 +8,10 @@ import {
 
 const PLUGIN_BASE_TOKEN_PREFIX = '--orca-plugin-base-'
 const EDITOR_BASE_TOKEN_PREFIX = '--orca-editor-base-'
+const APP_APPEARANCE_BASE_TOKENS = [
+  '--app-appearance-base-background',
+  '--app-appearance-base-foreground'
+] as const
 const EDITOR_BASE_TOKENS = [
   '--background',
   '--foreground',
@@ -50,6 +54,9 @@ export function clearAppAppearanceFromDocument(root: HTMLElement = document.docu
   for (const token of EDITOR_BASE_TOKENS) {
     root.style.removeProperty(editorBaseProperty(token))
   }
+  for (const token of APP_APPEARANCE_BASE_TOKENS) {
+    root.style.removeProperty(token)
+  }
   root.removeAttribute('data-app-appearance')
   root.removeAttribute('data-app-appearance-base-scheme')
 }
@@ -70,12 +77,18 @@ export function applyAppAppearanceToDocument(
   }
 
   const baseStyles = getComputedStyle(root)
+  const baseTokenValues = APP_APPEARANCE_BASE_TOKENS.map((token) =>
+    baseStyles.getPropertyValue(token).trim()
+  )
   for (const token of PANEL_DESIGN_TOKEN_ALLOWLIST) {
     root.style.setProperty(pluginBaseProperty(token), baseStyles.getPropertyValue(token).trim())
   }
   for (const token of EDITOR_BASE_TOKENS) {
     root.style.setProperty(editorBaseProperty(token), baseStyles.getPropertyValue(token).trim())
   }
+  APP_APPEARANCE_BASE_TOKENS.forEach((token, index) => {
+    root.style.setProperty(token, baseTokenValues[index])
+  })
   root.dataset.appAppearanceBaseScheme = root.classList.contains('dark') ? 'dark' : 'light'
 
   for (const [property, value] of Object.entries(variables)) {
