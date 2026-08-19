@@ -140,6 +140,7 @@ export function WorkspaceCleanupConfirmRemove({
         <ScrollArea className="min-h-0 flex-1" viewportRef={setScrollElement}>
           <WorkspaceCleanupCandidateList
             rows={candidates}
+            getRowKey={getWorkspaceCleanupCandidateIdentity}
             scrollElement={scrollElement}
             estimatedRowHeight={CONFIRM_REMOVE_ROW_ESTIMATE_PX}
             renderRow={(candidate, index) => (
