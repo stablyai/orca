@@ -13,7 +13,7 @@ import {
   chmodSync
 } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, win32 } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import {
   buildWindowsAgentHookPostCommand,
@@ -638,7 +638,7 @@ describe('wrapWindowsHookCommand', () => {
     expect(decoded).toContain('exit $p.ExitCode')
     expect(decoded).toContain('/v:on')
     expect(decoded).toContain('/v:off')
-    expect(decoded).toContain(getWindowsSystem32Path('cmd.exe').replaceAll('/', '\\'))
+    expect(decoded).toContain(win32.normalize(getWindowsSystem32Path('cmd.exe')))
     expect(decoded).toContain("EnvironmentVariables['ORCA_WINDOWS_HOOK_CMD']")
     expect(decoded).not.toMatch(/& 'C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook\.cmd'/)
   })

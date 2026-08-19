@@ -1,3 +1,5 @@
+import { win32 } from 'node:path'
+
 // Why: centralizing the launcher keeps window suppression consistent across installers (#14815).
 
 // Why: an absolute forward-slash path avoids PATH hijacking and survives cmd.exe and Git Bash.
@@ -35,9 +37,7 @@ function quotePowerShellSingleQuoted(value: string): string {
 // Why: CreateProcess needs a backslash cmd.exe path; delayed expansion keeps spaces/^/% as data (#6078).
 // Why: `/v:on` is only for that path indirection; a nested `/v:off` cmd runs the hook so literal `!` survives.
 export function buildWindowsNoWindowCmdHookInvocation(quotedScriptPath: string): string {
-  const quotedCmd = quotePowerShellSingleQuoted(
-    getWindowsSystem32Path('cmd.exe').replaceAll('/', '\\')
-  )
+  const quotedCmd = quotePowerShellSingleQuoted(win32.normalize(getWindowsSystem32Path('cmd.exe')))
   return [
     '$psi = [System.Diagnostics.ProcessStartInfo]::new()',
     `$psi.FileName = ${quotedCmd}`,
