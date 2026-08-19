@@ -99,6 +99,24 @@ describe('document theme', () => {
     expect(root.classList.contains(EDITOR_DARK_CLASS)).toBe(false)
   })
 
+  it('preserves App Appearance classes while updating its base scheme', () => {
+    const root = {
+      ...createThemeRoot(),
+      dataset: {
+        appAppearance: 'match-terminal',
+        appAppearanceBaseScheme: 'light'
+      }
+    }
+    root.classList.add('light')
+
+    applyDocumentTheme('dark', { root, disableTransitions: false })
+
+    expect(root.classList.contains('light')).toBe(true)
+    expect(root.classList.contains('dark')).toBe(false)
+    expect(root.classList.contains(EDITOR_DARK_CLASS)).toBe(true)
+    expect(root.dataset.appAppearanceBaseScheme).toBe('dark')
+  })
+
   it('applies system root class from matchMedia', () => {
     const root = createThemeRoot()
 
