@@ -4,6 +4,7 @@ import {
   normalizeLeftSidebarTintColor,
   normalizeLeftSidebarTintOpacity
 } from '../../../shared/left-sidebar-appearance'
+import { normalizeTerminalHexColor } from '../../../shared/terminal-custom-themes'
 import { isTerminalBackgroundLight, resolveEffectiveTerminalAppearance } from './terminal-theme'
 
 type LeftSidebarAppearanceSettings = Pick<
@@ -123,11 +124,15 @@ function resolveTerminalSurface(
 ): { background: string; foreground: string; rawBackground: string } {
   const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
   const rawBackground =
-    settings.terminalColorOverrides?.background ?? appearance.theme?.background ?? '#000000'
+    normalizeTerminalHexColor(settings.terminalColorOverrides?.background) ??
+    appearance.theme?.background ??
+    '#000000'
   return {
     background: compositeWithBaseSurface(rawBackground, settings.terminalBackgroundOpacity),
     foreground:
-      settings.terminalColorOverrides?.foreground ?? appearance.theme?.foreground ?? '#fafafa',
+      normalizeTerminalHexColor(settings.terminalColorOverrides?.foreground) ??
+      appearance.theme?.foreground ??
+      '#fafafa',
     rawBackground
   }
 }

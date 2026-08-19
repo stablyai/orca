@@ -93,6 +93,20 @@ describe('resolveLeftSidebarStyleVariables', () => {
     expect(vars?.['--sidebar-primary-foreground']).toBe(background)
   })
 
+  it('normalizes accepted overrides and falls back from incomplete colors', () => {
+    const normalized = resolveLeftSidebarStyleVariables(
+      settings({
+        leftSidebarAppearanceMode: 'match-terminal',
+        terminalColorOverrides: { background: '112233', foreground: '#' },
+        terminalBackgroundOpacity: 0.5
+      }),
+      true
+    )
+
+    expect(normalized?.['--background']).toContain('#112233 50%')
+    expect(normalized?.['--foreground']).toMatch(/^#[0-9a-f]{6}$/i)
+  })
+
   it('builds tinted app surfaces from stable class-owned base tokens', () => {
     const vars = resolveLeftSidebarStyleVariables(
       settings({
