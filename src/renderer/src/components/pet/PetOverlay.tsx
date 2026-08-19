@@ -351,12 +351,27 @@ export function PetOverlay(): React.JSX.Element {
     },
     [size]
   )
+  const laneTop =
+    typeof window === 'undefined'
+      ? position.y
+      : petLaneY(window.innerHeight, size, PET_LANE_BOTTOM_INSET)
   const positionRef = useRef(position)
   positionRef.current = position
   const { dragging, dragAnimation, hovering, dragGeneration, handlers } = usePetPointerInteraction(
     position,
     (next) => setPosition(clampToViewport(next, size))
   )
+
+  // Why: the lane owns y in state, not just at render — a grab measures its
+  // offset against `position`, so a y left over from a persisted value (or from
+  // a mount where the window still reported zero height) would teleport the pet
+  // the moment you pick it up. Re-runs on release to drop it back in the lane.
+  useEffect(() => {
+    if (dragging) {
+      return
+    }
+    setPosition((current) => (current.y === laneTop ? current : { x: current.x, y: laneTop }))
+  }, [dragging, laneTop, setPosition])
 
   useEffect(() => {
     const onResize = (): void => setPosition((prev) => clampToViewport(prev, size))
@@ -392,15 +407,6 @@ export function PetOverlay(): React.JSX.Element {
       [setPosition]
     )
   })
-  // Why: the lane owns y whenever the pet isn't in hand — a persisted y from
-  // before the walking lane (or from a taller window) must not strand the pet
-  // mid-screen. Read live so the resize listener's re-render re-seats it.
-  const laneTop =
-    typeof window === 'undefined'
-      ? position.y
-      : petLaneY(window.innerHeight, size, PET_LANE_BOTTOM_INSET)
-  const top = dragging ? position.y : laneTop
-
   return (
     // Why: the outer box and middle layer stay pointer-events-none so app chrome
     // stays interactive; only the innermost wrapper opts in and shrink-wraps its
@@ -410,7 +416,7 @@ export function PetOverlay(): React.JSX.Element {
       className="pointer-events-none fixed z-40"
       style={{
         left: position.x,
-        top,
+        top: position.y,
         width: size,
         height: size
       }}

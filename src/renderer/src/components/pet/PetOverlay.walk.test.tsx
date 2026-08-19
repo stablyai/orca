@@ -152,6 +152,25 @@ describe('PetOverlay bottom lane', () => {
     expect(box.style.top).toBe('564px')
   })
 
+  it('picks the pet up from the lane rather than a stale persisted y', () => {
+    // A y saved before the lane existed (or captured while the window still
+    // reported zero height) must not teleport the pet on grab.
+    window.localStorage.setItem('pet-overlay-position', JSON.stringify({ x: 300, y: 0 }))
+
+    const box = renderOverlay()
+    const grab = container?.querySelector('.pointer-events-auto') as HTMLElement
+
+    expect(box.style.top).toBe('564px')
+
+    firePointer(grab, 'pointerdown', 350, 600)
+
+    expect(box.style.top).toBe('564px')
+
+    // And the grab offset is measured from the lane, so a move tracks the pointer.
+    firePointer(grab, 'pointermove', 350, 500)
+    expect(box.style.top).toBe('464px')
+  })
+
   it('swaps the idle bob for a hanging sway while the pet is in hand', () => {
     renderOverlay()
     const grab = container?.querySelector('.pointer-events-auto') as HTMLElement
