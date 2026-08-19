@@ -172,6 +172,26 @@ describe('Run lineage RPC', () => {
     ).rejects.toMatchObject({ code: 'run_not_found', data: { effectsApplied: false } })
   })
 
+  it('refuses a legacy inspect-only parent Run without applying effects', async () => {
+    const { db: store, ctx } = setup()
+    // Why: a task written with no Run is pre-Run work, so the database exposes it under the
+    // inspect-only legacy Run. Naming that Run as a parent must be refused like an unknown one —
+    // it can never coordinate, so a live Run parented to it would have no reachable ancestor.
+    store.createTask({ spec: 'pre-Run work' })
+    const legacyParent = store.listRuns().runs.find((run) => run.legacy === 1)
+    expect(legacyParent).toBeDefined()
+    const runsBefore = store.listRuns().runs.length
+
+    await expect(
+      call(ctx, 'orchestration.runCreate', {
+        objective: 'alpha lane',
+        from: 'term_captain',
+        parent: legacyParent?.id
+      })
+    ).rejects.toMatchObject({ code: 'run_not_found', data: { effectsApplied: false } })
+    expect(store.listRuns().runs).toHaveLength(runsBefore)
+  })
+
   it('walks the wave from either end through run-show and run-list', async () => {
     const { ctx } = setup()
     const general = (await call(ctx, 'orchestration.runCreate', {
