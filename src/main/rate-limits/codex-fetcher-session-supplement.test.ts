@@ -16,7 +16,13 @@ vi.mock('./codex-auth-presence', () => ({
 
 import { fetchCodexRateLimits } from './codex-fetcher'
 
-function makeRpcChild(rateLimitResetCredits?: unknown) {
+function makeRpcChild(
+  rateLimitResetCredits?: unknown,
+  extraResult: Record<string, unknown> = {},
+  rateLimits: Record<string, unknown> = {
+    primary: { usedPercent: 22, windowDurationMins: 10_080 }
+  }
+) {
   const child = new EventEmitter() as EventEmitter & {
     stdout: EventEmitter
     stderr: EventEmitter
@@ -58,9 +64,8 @@ function makeRpcChild(rateLimitResetCredits?: unknown) {
                 jsonrpc: '2.0',
                 id: message.id,
                 result: {
-                  rateLimits: {
-                    primary: { usedPercent: 22, windowDurationMins: 10_080 }
-                  },
+                  rateLimits,
+                  ...extraResult,
                   ...(rateLimitResetCredits !== undefined ? { rateLimitResetCredits } : {})
                 }
               })}\n`
@@ -107,8 +112,14 @@ function dedicatedCreditsResponse(): Response {
   } as Response
 }
 
-async function fetchWeeklyOnly(rateLimitResetCredits?: unknown) {
-  childSpawnMock.mockReturnValue(makeRpcChild(rateLimitResetCredits))
+async function fetchWeeklyOnly(
+  rateLimitResetCredits?: unknown,
+  extraResult: Record<string, unknown> = {},
+  rateLimits: Record<string, unknown> = {
+    primary: { usedPercent: 22, windowDurationMins: 10_080 }
+  }
+) {
+  childSpawnMock.mockReturnValue(makeRpcChild(rateLimitResetCredits, extraResult, rateLimits))
   const resultPromise = fetchCodexRateLimits()
   await vi.advanceTimersByTimeAsync(1)
   await vi.advanceTimersByTimeAsync(1)
@@ -141,6 +152,66 @@ describe('Codex backend session supplement credits', () => {
       rateLimitResetCredits: { availableCount: 0, nextExpiresAt: null }
     })
     expect(fetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('maps a direct RPC individual limit precisely and skips the backend supplement', async () => {
+    await expect(
+      fetchWeeklyOnly(
+        undefined,
+        {
+          planType: 'business',
+          individualLimit: { limit: 3, used: 1, remainingPercent: 67, resetsAt: 1_785_542_400 }
+        },
+        {}
+      )
+    ).resolves.toMatchObject({
+      monthly: {
+        usedPercent: 33.33333333333333,
+        windowMinutes: 43_200,
+        resetsAt: 1_785_542_400_000
+      },
+      planType: 'business'
+    })
+    expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).not.toContain(
+      'https://chatgpt.com/backend-api/wham/usage'
+    )
+  })
+
+  it('keeps the weekly-only session supplement when direct monthly data is also present', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        plan_type: 'pro',
+        rate_limit: {
+          primary_window: { used_percent: 23, limit_window_seconds: 300 },
+          secondary_window: { used_percent: 45, limit_window_seconds: 7 * 24 * 60 * 60 }
+        }
+      })
+    } as Response)
+
+    await expect(
+      fetchWeeklyOnly(undefined, {
+        planType: 'business',
+        individualLimit: { limit: 3, used: 1, remainingPercent: 67, resetsAt: 1_785_542_400 }
+      })
+    ).resolves.toMatchObject({
+      session: { usedPercent: 23, windowMinutes: 5 },
+      weekly: { usedPercent: 45, windowMinutes: 10_080 },
+      monthly: { usedPercent: 33.33333333333333, windowMinutes: 43_200 }
+    })
+    expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).toContain(
+      'https://chatgpt.com/backend-api/wham/usage'
+    )
+  })
+
+  it('does not supplement a known non-Business empty RPC result', async () => {
+    await expect(fetchWeeklyOnly(undefined, { planType: 'plus' }, {})).resolves.toMatchObject({
+      session: null,
+      weekly: null
+    })
+    expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).not.toContain(
+      'https://chatgpt.com/backend-api/wham/usage'
+    )
   })
 
   it.each([

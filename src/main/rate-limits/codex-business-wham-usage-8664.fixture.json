@@ -1,0 +1,16 @@
+{
+  "plan_type": "business",
+  "rate_limit": null,
+  "spend_control": {
+    "individual_limit": {
+      "source": "group_based_spend_controls",
+      "limit": "11450",
+      "used": "4522.358407497406",
+      "remaining": "6927.641592502594",
+      "used_percent": 39,
+      "remaining_percent": 61,
+      "reset_after_seconds": 1539578,
+      "reset_at": 1785542400
+    }
+  }
+}

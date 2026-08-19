@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { cancelTrackingResponse } from '../lib/unread-response-body.test-fixtures'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -16,6 +17,10 @@ vi.mock('./codex-auth-presence', () => ({
 }))
 
 import { consumeCodexRateLimitResetCredit, fetchCodexRateLimits } from './codex-fetcher'
+
+const reporterBusinessPayload = JSON.parse(
+  readFileSync(new URL('./codex-business-wham-usage-8664.fixture.json', import.meta.url), 'utf8')
+) as Record<string, unknown>
 
 describe('Codex backend rate-limit requests', () => {
   beforeEach(() => {
@@ -135,6 +140,95 @@ describe('Codex backend rate-limit requests', () => {
 
     expect(childSpawnMock).not.toHaveBeenCalled()
     expect(ptySpawnMock).not.toHaveBeenCalled()
+  })
+
+  it('maps the reporter group-based individual limit as a precise monthly window', async () => {
+    readFileMock.mockResolvedValue(
+      JSON.stringify({ tokens: { access_token: 'access-token', account_id: 'account-id' } })
+    )
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => reporterBusinessPayload
+    } as Response)
+
+    await expect(
+      fetchCodexRateLimits({ codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex' })
+    ).resolves.toMatchObject({
+      session: null,
+      weekly: null,
+      monthly: {
+        usedPercent: (4522.358407497406 / 11450) * 100,
+        windowMinutes: 43_200,
+        resetsAt: 1_785_542_400_000
+      },
+      planType: 'business'
+    })
+    expect(childSpawnMock).not.toHaveBeenCalled()
+    expect(ptySpawnMock).not.toHaveBeenCalled()
+  })
+
+  it('maps the account-user individual limit without source-specific gating', async () => {
+    readFileMock.mockResolvedValue(
+      JSON.stringify({ tokens: { access_token: 'access-token', account_id: 'account-id' } })
+    )
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        plan_type: 'business',
+        rate_limit: null,
+        spend_control: {
+          individual_limit: {
+            source: 'account_user_spend_controls',
+            used_percent: 65,
+            remaining_percent: 35,
+            reset_at: 1_785_542_400
+          }
+        }
+      })
+    } as Response)
+
+    await expect(
+      fetchCodexRateLimits({ codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex' })
+    ).resolves.toMatchObject({ monthly: { usedPercent: 65, windowMinutes: 43_200 } })
+  })
+
+  it('accepts a standard backend shape without plan_type and rejects an empty shape', async () => {
+    readFileMock.mockResolvedValue(
+      JSON.stringify({ tokens: { access_token: 'access-token', account_id: 'account-id' } })
+    )
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        rate_limit: { primary_window: { used_percent: 12, limit_window_seconds: 300 } }
+      })
+    } as Response)
+
+    await expect(
+      fetchCodexRateLimits({ codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex' })
+    ).resolves.toMatchObject({ session: { usedPercent: 12 } })
+    expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).toEqual([
+      'https://chatgpt.com/backend-api/wham/usage',
+      'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits'
+    ])
+
+    vi.mocked(fetch).mockReset()
+    childSpawnMock.mockImplementationOnce(() => {
+      throw new Error('RPC fallback')
+    })
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ plan_type: 'plus', rate_limit: null })
+    } as Response)
+
+    await expect(
+      fetchCodexRateLimits({
+        codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex',
+        allowPtyFallback: false
+      })
+    ).resolves.toMatchObject({ status: 'error' })
+    expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).toEqual([
+      'https://chatgpt.com/backend-api/wham/usage'
+    ])
   })
 
   it('aborts callers while sharing one stalled backend auth read', async () => {
