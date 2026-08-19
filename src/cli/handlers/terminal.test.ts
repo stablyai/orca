@@ -61,3 +61,77 @@ describe('terminal close CLI', () => {
     expect(help).toContain('durable persistence')
   })
 })
+
+describe('terminal send CLI', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('marks combined text and Enter as an agent prompt candidate', async () => {
+    const call = vi.fn().mockResolvedValue({
+      result: { send: { handle: 'term-1', accepted: true, bytesWritten: 7 } }
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await TERMINAL_HANDLERS['terminal send']({
+      flags: new Map<string, string | true>([
+        ['terminal', 'term-1'],
+        ['text', 'review'],
+        ['enter', true]
+      ]),
+      client: { call } as unknown as RuntimeClient,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+
+    expect(call).toHaveBeenCalledWith('terminal.send', {
+      terminal: 'term-1',
+      text: 'review',
+      enter: true,
+      interrupt: false,
+      agentPrompt: true,
+      client: { id: 'orca-cli', type: 'desktop' }
+    })
+  })
+
+  it('keeps text-only and bare Enter sends as direct terminal input', async () => {
+    const call = vi.fn().mockResolvedValue({
+      result: { send: { handle: 'term-1', accepted: true, bytesWritten: 1 } }
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await TERMINAL_HANDLERS['terminal send']({
+      flags: new Map<string, string | true>([
+        ['terminal', 'term-1'],
+        ['text', 'x']
+      ]),
+      client: { call } as unknown as RuntimeClient,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+    await TERMINAL_HANDLERS['terminal send']({
+      flags: new Map<string, string | true>([
+        ['terminal', 'term-1'],
+        ['enter', true]
+      ]),
+      client: { call } as unknown as RuntimeClient,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+
+    expect(call).toHaveBeenNthCalledWith(1, 'terminal.send', {
+      terminal: 'term-1',
+      text: 'x',
+      enter: false,
+      interrupt: false,
+      client: { id: 'orca-cli', type: 'desktop' }
+    })
+    expect(call).toHaveBeenNthCalledWith(2, 'terminal.send', {
+      terminal: 'term-1',
+      text: undefined,
+      enter: true,
+      interrupt: false,
+      client: { id: 'orca-cli', type: 'desktop' }
+    })
+  })
+})

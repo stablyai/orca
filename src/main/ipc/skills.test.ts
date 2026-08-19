@@ -27,6 +27,10 @@ vi.mock('electron', () => ({
   }
 }))
 
+vi.mock('./skill-ipc-main-window', () => ({
+  handleMainWindowSkillIpc: (channel: string, handler: unknown) => handleMock(channel, handler)
+}))
+
 vi.mock('../skills/discovery', () => ({
   discoverSkills: discoverSkillsMock,
   clearSkillRootScanCache: vi.fn()

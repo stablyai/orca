@@ -305,3 +305,8 @@ export class RemoteWorkspaceTabIntentStore {
     this.targets.set(targetId, state)
   }
 }
+
+// Shared process-wide instance: the relay-sync patch path and the IPC handlers
+// must consult one intent ledger, and the two modules cannot import each other
+// without a cycle.
+export const remoteWorkspaceTabIntents = new RemoteWorkspaceTabIntentStore()

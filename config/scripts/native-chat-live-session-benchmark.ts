@@ -15,8 +15,9 @@ import { surfaceSkillInvocationUserTurns } from '../../src/shared/native-chat-co
 import { prepareNativeChatLiveMessages } from '../../src/renderer/src/components/native-chat/native-chat-live-message-preparation'
 import { mergeNativeChatLiveSession } from '../../src/renderer/src/components/native-chat/native-chat-live-status'
 import {
-  matchingNativeChatUserTexts,
-  selectPendingIndicesRepresentedByUserTexts
+  matchingNativeChatUserRows,
+  selectPendingIndicesRepresentedByUserRows,
+  type NativeChatUserRow
 } from '../../src/renderer/src/components/native-chat/native-chat-pending-occurrence'
 import { pendingSendsAsMessages } from '../../src/renderer/src/components/native-chat/native-chat-pending'
 import { assembleNativeChatSession } from '../../src/renderer/src/components/native-chat/native-chat-session-assembler'
@@ -36,6 +37,7 @@ let sessionSink: NativeChatSession | null = null
 let messageArraySink: NativeChatMessage[] | null = null
 let contentSink = ''
 let pendingMatchSink: Set<number> | null = null
+let userRowSink: readonly NativeChatUserRow[] | null = null
 const benchmarkStartedAt = performance.now()
 
 function proseFixture(count: number, bytes: number, withTurnId: boolean): NativeChatMessage[] {
@@ -94,10 +96,10 @@ function directMessageUpdateSession(messages: NativeChatMessage[]): NativeChatSe
 }
 
 function oldEmptyPending(messages: NativeChatMessage[]): NativeChatMessage[] {
-  pendingMatchSink = selectPendingIndicesRepresentedByUserTexts(
-    [],
-    matchingNativeChatUserTexts(messages)
-  )
+  // An empty queue makes the renderer skip candidate-row construction entirely, so the
+  // row scan is the whole cost here — keep it escaping and let the matcher take its exit.
+  userRowSink = matchingNativeChatUserRows(messages)
+  pendingMatchSink = selectPendingIndicesRepresentedByUserRows([], [])
   return []
 }
 
@@ -328,6 +330,7 @@ strictEqual(sessionSink?.sessionId, 'benchmark', 'session outputs did not escape
 strictEqual(Array.isArray(messageArraySink), true, 'message arrays did not escape')
 strictEqual(contentSink.length > 0, true, 'message content did not escape')
 strictEqual(pendingMatchSink instanceof Set, true, 'pending baseline scan did not escape')
+strictEqual(Array.isArray(userRowSink), true, 'user row scan did not escape')
 console.log(
   `validated=${validatedCases} cases, checksum=${checksum}, capped calibrations=${cappedCalibrations}, runtime=${(
     performance.now() - benchmarkStartedAt

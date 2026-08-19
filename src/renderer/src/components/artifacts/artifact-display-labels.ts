@@ -1,17 +1,9 @@
-import { FileCode2, FileText, type LucideIcon } from 'lucide-react'
 import type { ArtifactListItem } from '../../../../shared/artifacts'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { translate } from '@/i18n/i18n'
 import { formatUiRelativeTime, formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 
 export function artifactName(item: ArtifactListItem): string {
   return item.artifact.title || item.artifact.originalFileName || item.artifact.slug
-}
-
-export function formatArtifactDate(value: string): string {
-  return new Intl.DateTimeFormat(getIntlLocale(), {
-    dateStyle: 'medium',
-    timeStyle: 'short'
-  }).format(new Date(value))
 }
 
 export function formatByteSize(value: number): string {
@@ -26,11 +18,15 @@ export function formatByteSize(value: number): string {
 
 export function formatArtifactUpdatedAt(value: string): string {
   return translate('auto.components.artifacts.updatedAt', 'Updated {{when}}', {
-    when: formatUiRelativeTimeFromDate(
-      value,
-      translate('auto.components.artifacts.updatedRecently', 'recently')
-    )
+    when: formatArtifactUpdatedCompact(value)
   })
+}
+
+export function formatArtifactUpdatedCompact(value: string): string {
+  return formatUiRelativeTimeFromDate(
+    value,
+    translate('auto.components.artifacts.updatedRecently', 'recently')
+  )
 }
 
 /** Phrased from the stored timestamp alone — never a claim about server-side state. */
@@ -47,6 +43,23 @@ export function formatArtifactExpiry(value: string): string {
       })
 }
 
-export function artifactTypeIcon(item: ArtifactListItem): LucideIcon {
-  return item.artifact.sourceContentType === 'text/markdown' ? FileText : FileCode2
+export function formatArtifactExpiryCompact(value: string): string {
+  const expiresAt = new Date(value)
+  if (Number.isNaN(expiresAt.getTime())) {
+    return translate('auto.components.artifacts.expiryUnknown', 'Expiry unknown')
+  }
+  const remainingMs = expiresAt.getTime() - Date.now()
+  return remainingMs <= 0
+    ? translate('auto.components.artifacts.expiredCompact', 'Expired')
+    : formatUiRelativeTime(remainingMs)
+}
+
+export function artifactTypeLabel(item: ArtifactListItem): string {
+  if (item.artifact.sourceContentType === 'text/markdown') {
+    return translate('auto.components.artifacts.typeMarkdown', 'Markdown')
+  }
+  if (item.artifact.sourceContentType === 'text/html') {
+    return translate('auto.components.artifacts.typeHtml', 'HTML')
+  }
+  return item.artifact.sourceContentType
 }

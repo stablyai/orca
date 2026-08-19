@@ -361,7 +361,10 @@ describe('createRemoteWorkspaceTargetSync', () => {
     expect(hydrateTabsSession.mock.calls[0][0].tabsByWorktree['repo-a::/remote/work']).toEqual([])
   })
 
-  it('accepts a newer snapshot that deletes a pre-request live tab', async () => {
+  // The merge treats the host as authoritative only for tabs it has been told
+  // about, so a live pre-request tab the snapshot omits survives alongside the
+  // snapshot's own tabs; the intent ledger handles deliberate closes instead.
+  it('keeps a live pre-request tab that a newer snapshot omits', async () => {
     const hydrateTabsSession = vi.fn()
     const state = appState({
       tabsByWorktree: {
@@ -396,7 +399,7 @@ describe('createRemoteWorkspaceTargetSync', () => {
     const merged = hydrateTabsSession.mock.calls[0][0]
     expect(
       merged.tabsByWorktree['repo-a::/remote/work'].map((tab: { id: string }) => tab.id)
-    ).toEqual(['remote-tab'])
+    ).toEqual(['remote-tab', 'deleted-remotely'])
   })
 
   it('reconciles an unsolicited snapshot with main-process intent before delivery apply', async () => {
