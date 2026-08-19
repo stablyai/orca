@@ -31,7 +31,16 @@ export type PetBodyMotion = {
   landingDurationMs: number
   /** True when the artwork already bounces (a walk strip), so the bob is skipped. */
   selfAnimated: boolean
+  /** Toppled onto its back — airborne after a real drop, or lying on the lane. */
+  supine: boolean
+  /** Getting back on its feet after being down. */
+  rising: boolean
+  /** Half the rendered artwork width; see the lift in `petBodyMotionStyle`. */
+  supineLiftPx: number
+  risingDurationMs: number
 }
+
+const SUPINE_TIP_MS = 320
 
 /** Idle bob, the hanging sway while in hand, or the one-shot landing squash. */
 export function petBodyMotionStyle({
@@ -39,8 +48,25 @@ export function petBodyMotionStyle({
   landing,
   motionAllowed,
   landingDurationMs,
-  selfAnimated
+  selfAnimated,
+  supine,
+  rising,
+  supineLiftPx,
+  risingDurationMs
 }: PetBodyMotion): CSSProperties {
+  if ((supine || rising) && !held) {
+    // Why: pivot on the feet so the pet topples backwards rather than spinning
+    // about its middle. A 90-degree turn about that point leaves half the body
+    // below the lane, so lift by half the artwork's width to lay it on the floor.
+    return {
+      animation: 'none',
+      transformOrigin: '50% 100%',
+      transform: rising ? 'none' : `translateY(-${supineLiftPx}px) rotate(-90deg)`,
+      transition: `transform ${rising ? risingDurationMs : SUPINE_TIP_MS}ms ${
+        rising ? 'cubic-bezier(0.22, 0.9, 0.3, 1)' : 'ease-in'
+      }`
+    }
+  }
   if (landing && !held) {
     return {
       animation: `pet-land-squash ${landingDurationMs}ms ease-out 1`,

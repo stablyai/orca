@@ -14,7 +14,7 @@ import { buildSpriteAnimationCss } from './sprite-animation-css'
 import { petLaneY } from './pet-walk-lane'
 import { DetectedSpriteFrame } from './DetectedSpriteFrame'
 import { usePetWalkLane } from './usePetWalkLane'
-import { usePetFallToLane, PET_LANDING_SQUASH_MS } from './usePetFallToLane'
+import { usePetFallToLane, PET_LANDING_SQUASH_MS, PET_RISING_MS } from './usePetFallToLane'
 import { walkSpriteFrom } from './bundled-pet-walk-sprite'
 import { petBodyMotionStyle, PET_BODY_MOTION_KEYFRAMES_CSS } from './pet-body-motion-css'
 
@@ -321,9 +321,13 @@ export function PetOverlay(): React.JSX.Element {
   const spriteAnimate = motionAllowed && (!dragging || dragAnimation !== null)
   const animationName = usePetAnimationName(dragging, dragAnimation, hovering)
   // Why: the legs stop while the pet is in hand or mid-drop — it isn't walking.
-  const walkAnimate = motionAllowed && !dragging && !fall.falling
+  const walkAnimate = motionAllowed && !dragging && !fall.busy
+  // Why: half the rendered artwork width — see the supine lift in the motion CSS.
+  const supineLiftPx = walk
+    ? (walk.frameWidth * Math.min(size / walk.frameWidth, size / walk.frameHeight)) / 2
+    : size / 2
   const walkDirection = usePetWalkLane({
-    active: motionAllowed && !dragging && !fall.falling,
+    active: motionAllowed && !dragging && !fall.busy,
     size,
     readX: () => positionRef.current.x,
     onAdvance: useCallback(
@@ -359,7 +363,11 @@ export function PetOverlay(): React.JSX.Element {
               landing: fall.landing,
               motionAllowed,
               landingDurationMs: PET_LANDING_SQUASH_MS,
-              selfAnimated: walk !== undefined
+              selfAnimated: walk !== undefined,
+              supine: fall.supine,
+              rising: fall.rising,
+              supineLiftPx,
+              risingDurationMs: PET_RISING_MS
             }),
             touchAction: 'none',
             // Why: floor so the wrapper stays grabbable while w-fit/h-fit would

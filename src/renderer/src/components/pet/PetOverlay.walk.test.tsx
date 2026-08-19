@@ -24,11 +24,12 @@ vi.mock('./usePetUrl', () => ({
 
 import { PetOverlay } from './PetOverlay'
 import { PET_WALK_SPEED_PX_PER_SEC } from './pet-walk-lane'
-import { PET_LANDING_SQUASH_MS } from './usePetFallToLane'
+import { PET_LANDING_SQUASH_MS, PET_DOWNED_MS, PET_RISING_MS } from './usePetFallToLane'
 
 let root: Root | null = null
 let container: HTMLDivElement | null = null
-let frameCallbacks: FrameRequestCallback[] = []
+let frameCallbacks = new Map<number, FrameRequestCallback>()
+let nextFrameId = 1
 
 // Why: happy-dom stamps every synthetic event with the same timeStamp, so the
 // throw-velocity window can't be exercised without setting it explicitly.
@@ -55,8 +56,8 @@ function firePointer(
 
 /** Runs every pending animation frame with `timestamp`, then settles React. */
 function stepFrame(timestamp: number): void {
-  const pending = frameCallbacks
-  frameCallbacks = []
+  const pending = [...frameCallbacks.values()]
+  frameCallbacks.clear()
   act(() => {
     for (const callback of pending) {
       callback(timestamp)
@@ -78,12 +79,16 @@ beforeEach(() => {
   window.localStorage.clear()
   Object.defineProperty(window, 'innerWidth', { value: 1200, configurable: true })
   Object.defineProperty(window, 'innerHeight', { value: 768, configurable: true })
-  frameCallbacks = []
+  frameCallbacks = new Map()
+  nextFrameId = 1
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-    frameCallbacks.push(callback)
-    return frameCallbacks.length
+    const id = nextFrameId++
+    frameCallbacks.set(id, callback)
+    return id
   })
-  vi.stubGlobal('cancelAnimationFrame', () => {})
+  // Why: a no-op here let cancelled frames keep firing, which hid the walk
+  // continuing after it had been switched off.
+  vi.stubGlobal('cancelAnimationFrame', (id: number) => void frameCallbacks.delete(id))
 })
 
 afterEach(() => {
@@ -230,10 +235,10 @@ describe('PetOverlay bottom lane', () => {
     const grab = container?.querySelector('.pointer-events-auto') as HTMLElement
 
     firePointer(grab, 'pointerdown', 350, 600)
-    firePointer(grab, 'pointermove', 350, 200)
-    firePointer(grab, 'pointermove', 350, 200)
-    firePointer(grab, 'pointerup', 350, 200)
-    for (let t = 0; t <= 2000 && box.style.top !== '564px'; t += 100) {
+    firePointer(grab, 'pointermove', 350, 575)
+    firePointer(grab, 'pointermove', 350, 575)
+    firePointer(grab, 'pointerup', 350, 575)
+    for (let t = 0; t <= 2000 && box.style.top !== '564px'; t += 50) {
       stepFrame(t)
     }
 
@@ -347,5 +352,85 @@ describe('PetOverlay bottom lane', () => {
     stepFrame(1000)
 
     expect(box.style.left).toBe('300px')
+  })
+
+  it('topples onto its back during a real drop and lies there on landing', () => {
+    window.localStorage.setItem('pet-overlay-position', JSON.stringify({ x: 300, y: 564 }))
+
+    const box = renderOverlay()
+    const grab = container?.querySelector('.pointer-events-auto') as HTMLElement
+
+    firePointer(grab, 'pointerdown', 350, 600)
+    firePointer(grab, 'pointermove', 350, 120)
+    firePointer(grab, 'pointermove', 350, 120)
+    firePointer(grab, 'pointerup', 350, 120)
+
+    stepFrame(0)
+    stepFrame(60)
+
+    // Airborne and already on its back.
+    expect(grab.style.transform).toContain('rotate(-90deg)')
+
+    for (let t = 120; t <= 2000 && box.style.top !== '564px'; t += 100) {
+      stepFrame(t)
+    }
+
+    expect(box.style.top).toBe('564px')
+    expect(grab.style.transform).toContain('rotate(-90deg)')
+  })
+
+  it('gets back on its feet slowly after lying down', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    window.localStorage.setItem('pet-overlay-position', JSON.stringify({ x: 300, y: 564 }))
+
+    const box = renderOverlay()
+    const grab = container?.querySelector('.pointer-events-auto') as HTMLElement
+
+    firePointer(grab, 'pointerdown', 350, 600)
+    firePointer(grab, 'pointermove', 350, 120)
+    firePointer(grab, 'pointermove', 350, 120)
+    firePointer(grab, 'pointerup', 350, 120)
+    for (let t = 0; t <= 2000 && box.style.top !== '564px'; t += 100) {
+      stepFrame(t)
+    }
+
+    const downAt = Number.parseFloat(box.style.left)
+    act(() => {
+      vi.advanceTimersByTime(PET_DOWNED_MS - 20)
+    })
+    // Still flat on its back, and it has not crawled off while down.
+    expect(grab.style.transform).toContain('rotate(-90deg)')
+    stepFrame(2100)
+    expect(Number.parseFloat(box.style.left)).toBeCloseTo(downAt, 5)
+
+    act(() => {
+      vi.advanceTimersByTime(40)
+    })
+    expect(grab.style.transform).toBe('none')
+    expect(grab.style.transition).toContain(`${PET_RISING_MS}ms`)
+
+    act(() => {
+      vi.advanceTimersByTime(PET_RISING_MS + 20)
+    })
+    expect(grab.style.animation).not.toBe('none')
+    vi.useRealTimers()
+  })
+
+  it('keeps the quick squash for a drop too short to topple', () => {
+    window.localStorage.setItem('pet-overlay-position', JSON.stringify({ x: 300, y: 564 }))
+
+    const box = renderOverlay()
+    const grab = container?.querySelector('.pointer-events-auto') as HTMLElement
+
+    firePointer(grab, 'pointerdown', 350, 600)
+    firePointer(grab, 'pointermove', 350, 570)
+    firePointer(grab, 'pointermove', 350, 570)
+    firePointer(grab, 'pointerup', 350, 570)
+    for (let t = 0; t <= 2000 && box.style.top !== '564px'; t += 50) {
+      stepFrame(t)
+    }
+
+    expect(grab.style.transform).not.toContain('rotate(-90deg)')
+    expect(grab.style.animation).toContain('pet-land-squash')
   })
 })
