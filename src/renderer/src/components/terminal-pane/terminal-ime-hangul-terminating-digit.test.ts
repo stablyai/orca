@@ -4,24 +4,58 @@
  * integrated terminal on Wayland produces `아`).
  *
  * The Linux candidate-digit guards exist for Sogou/fcitx Pinyin, where a bare digit picks a
- * numbered candidate and must never be typed (#7543, #8241). A Hangul engine has no numbered
- * candidate list at all — its preedit is a syllable being assembled, and a digit always ends it
- * and is literal text. Both guards key only off "an IME was recently involved", so once either
- * window is open they eat the digit regardless of which engine opened it.
+ * numbered candidate and must never be typed (#7543, #8241). Only the orphan-keyup guard is at
+ * fault here: it arms off a lone letter keyup, cannot see which engine produced it, and spends
+ * its one suppression on the key that ends a Korean syllable. The composition-window guards stay
+ * as they are — ibus-hangul's Hanja lookup table does index candidates by digit, over a live
+ * preedit those guards already own.
  *
- * Each case below opens one of those windows the way a Hangul engine does, then types the digit.
+ * The composition shape below follows the recorded ibus-hangul trace
+ * (`__fixtures__/ibus-hangul-mixed-ascii-terminal-trace.json`): non-empty preedit updates, then
+ * compositionend, then the commit's own `insertText`. Neither recording leaves an empty
+ * compositionupdate standing before the digit, so the 250ms post-composition window never arms
+ * for this bug and no test may lean on it.
  */
 import { describe, expect, it } from 'vitest'
 import {
   installTerminalImeCompositionTracker,
+  TERMINAL_IME_CANDIDATE_GUARD_STALE_COMPOSITION_EXPIRY_MS,
   type TerminalImeCompositionTracker
 } from './terminal-ime-composition-tracker'
 import { createTerminalImeLinuxCandidateState } from './terminal-ime-linux-candidate-state'
 import {
   shouldPreventDefaultTerminalImeCandidateKey,
-  shouldSuppressTerminalImeKeyboardEvent
+  shouldSuppressTerminalImeKeyboardEvent,
+  type XtermImeKeyboardOptions
 } from './xterm-bypass-policy'
 import { event } from './xterm-bypass-event-fixture'
+
+type ImeHarness = {
+  tracker: TerminalImeCompositionTracker
+  element: HTMLElement
+  candidateState: ReturnType<typeof createTerminalImeLinuxCandidateState>
+  advance: (ms: number) => void
+  dispose: () => void
+}
+
+function installImeHarness(): ImeHarness {
+  let time = 1_000
+  const element = document.createElement('div')
+  document.body.appendChild(element)
+  const tracker = installTerminalImeCompositionTracker(element, { now: () => time })
+  return {
+    tracker,
+    element,
+    candidateState: createTerminalImeLinuxCandidateState(() => time),
+    advance: (ms) => {
+      time += ms
+    },
+    dispose: () => {
+      tracker.dispose()
+      element.remove()
+    }
+  }
+}
 
 function dispatchComposition(element: HTMLElement, type: string, data: string): void {
   const composition = new CompositionEvent(type, { bubbles: true })
@@ -36,103 +70,134 @@ function dispatchInput(element: HTMLElement, inputType: string, data: string | n
   element.dispatchEvent(input)
 }
 
-/** The gate as `use-terminal-pane-lifecycle` assembles it for a Linux pane. */
-function suppressesDigit(
-  tracker: TerminalImeCompositionTracker,
-  orphanDigitGuardActive = false
-): boolean {
-  return shouldSuppressTerminalImeKeyboardEvent(
-    event({ type: 'keydown', key: '1', code: 'Digit1', keyCode: 49 }),
-    {
-      compositionActive: tracker.isActive(),
-      candidateKeyGuardActive: tracker.isCandidateKeyGuardActive(),
-      pendingCandidateKeyReleaseActive: false,
-      linuxOrphanCandidateDigitGuardActive: orphanDigitGuardActive,
-      hangulPreedit: tracker.isHangulPreedit(),
-      isMac: false,
-      isLinux: true
-    }
+/** Drives a Hangul syllable into the tracker the way the recorded ibus trace reports one. */
+function composeHangulSyllable(element: HTMLElement): void {
+  dispatchComposition(element, 'compositionstart', '')
+  dispatchComposition(element, 'compositionupdate', '아')
+  dispatchInput(element, 'insertCompositionText', '아')
+  dispatchComposition(element, 'compositionend', '아')
+  dispatchInput(element, 'insertText', '아')
+}
+
+/**
+ * Arms the #8241 orphan-digit window the way the Wayland input-method grab does: it swallows the
+ * jamo keydown, so only the release reaches the page and reads as a legacy single-letter commit.
+ */
+function armOrphanCandidateDigitWindow(harness: ImeHarness): void {
+  const jamoKeyup = event({ type: 'keyup', key: 'k', code: 'KeyK', keyCode: 75 })
+  harness.candidateState.observeKeyboardEvent(
+    jamoKeyup,
+    harness.candidateState.classifyKeyboardEvent(jamoKeyup)
   )
 }
 
-/** Drives a Hangul syllable into the tracker the way ibus reports one. */
-function composeHangulSyllable(terminalElement: HTMLElement): void {
-  dispatchComposition(terminalElement, 'compositionstart', '')
-  dispatchComposition(terminalElement, 'compositionupdate', '아')
-  dispatchInput(terminalElement, 'insertCompositionText', '아')
-  dispatchComposition(terminalElement, 'compositionupdate', '')
-  dispatchComposition(terminalElement, 'compositionend', '아')
+const digitKeydown = event({ type: 'keydown', key: '1', code: 'Digit1', keyCode: 49 })
+
+/** The gate as `use-terminal-pane-lifecycle` assembles it for a Linux pane. */
+function imeKeyboardOptions(harness: ImeHarness): XtermImeKeyboardOptions {
+  return {
+    compositionActive: harness.tracker.isActive(),
+    candidateKeyGuardActive: harness.tracker.isCandidateKeyGuardActive(),
+    pendingCandidateKeyReleaseActive: false,
+    linuxOrphanCandidateDigitGuardActive:
+      harness.candidateState.classifyKeyboardEvent(digitKeydown).candidateDigitGuardActive,
+    hangulPreedit: harness.tracker.isHangulPreedit(),
+    isMac: false,
+    isLinux: true
+  }
+}
+
+function suppressesDigit(harness: ImeHarness): boolean {
+  return shouldSuppressTerminalImeKeyboardEvent(digitKeydown, imeKeyboardOptions(harness))
 }
 
 describe('a digit that terminates a Hangul composition', () => {
-  it('survives the post-composition candidate window the ibus commit shape opens', () => {
-    const terminalElement = document.createElement('div')
-    document.body.appendChild(terminalElement)
-    const tracker = installTerminalImeCompositionTracker(terminalElement)
-
-    // ibus clears its preedit with an empty compositionupdate before committing, which is what
-    // arms the post-compositionend window. Under X11 a trailing `insertText` disarms it again
-    // (see the recorded ibus fixture); the Wayland ordering delivers the digit first.
-    composeHangulSyllable(terminalElement)
-
-    expect(tracker.isActive()).toBe(false)
-    expect(suppressesDigit(tracker)).toBe(false)
-
-    tracker.dispose()
-    terminalElement.remove()
-  })
-
   it('survives the orphan-keyup window a compositor-grabbed Hangul keypress opens', () => {
-    let time = 1_000
-    const state = createTerminalImeLinuxCandidateState(() => time)
-    const terminalElement = document.createElement('div')
-    document.body.appendChild(terminalElement)
-    const tracker = installTerminalImeCompositionTracker(terminalElement)
-    composeHangulSyllable(terminalElement)
+    const harness = installImeHarness()
+    composeHangulSyllable(harness.element)
 
-    // The Wayland input method grabs the keyboard, so the jamo keydown never reaches the page;
-    // only the release does. That lone keyup is what `terminal-ime-linux-candidate-state` reads
-    // as "a legacy IME committed a single-letter preedit", arming the 1500ms digit window.
-    const jamoKeyup = event({ type: 'keyup', key: 'k', code: 'KeyK', keyCode: 75 })
-    state.observeKeyboardEvent(jamoKeyup, state.classifyKeyboardEvent(jamoKeyup))
+    // The bug is exclusively after the commit, on the orphan path: no composition window is open.
+    expect(harness.tracker.isActive()).toBe(false)
+    expect(harness.tracker.isCandidateKeyGuardActive()).toBe(false)
 
-    time += 120
-    const digitKeydown = event({ type: 'keydown', key: '1', code: 'Digit1', keyCode: 49 })
-    // The orphan window itself still arms — it cannot see the composition. The policy is what
-    // declines to spend it on a digit that a Hangul preedit has already claimed as literal.
-    expect(state.classifyKeyboardEvent(digitKeydown).candidateDigitGuardActive).toBe(true)
-    expect(suppressesDigit(tracker, true)).toBe(false)
+    armOrphanCandidateDigitWindow(harness)
+    harness.advance(120)
+
+    // The orphan window still arms — it cannot see the composition. The policy is what declines
+    // to spend it on a digit that a Hangul preedit has already claimed as literal text.
+    expect(imeKeyboardOptions(harness).linuxOrphanCandidateDigitGuardActive).toBe(true)
+    expect(suppressesDigit(harness)).toBe(false)
     expect(
-      shouldPreventDefaultTerminalImeCandidateKey(digitKeydown, {
-        compositionActive: tracker.isActive(),
-        candidateKeyGuardActive: tracker.isCandidateKeyGuardActive(),
-        pendingCandidateKeyReleaseActive: false,
-        linuxOrphanCandidateDigitGuardActive: true,
-        hangulPreedit: tracker.isHangulPreedit(),
-        isMac: false,
-        isLinux: true
-      })
+      shouldPreventDefaultTerminalImeCandidateKey(digitKeydown, imeKeyboardOptions(harness))
     ).toBe(false)
 
-    tracker.dispose()
-    terminalElement.remove()
+    harness.dispose()
+  })
+
+  it("stays literal across the commit's own insertText", () => {
+    const harness = installImeHarness()
+    composeHangulSyllable(harness.element)
+
+    // Both recordings deliver `insertText` for the committed syllable; on Wayland the digit can
+    // follow it, so the commit must not be read as "ordinary typing resumed".
+    expect(harness.tracker.isHangulPreedit()).toBe(true)
+
+    harness.dispose()
+  })
+
+  it('keeps the digit IME-owned while the Hangul preedit is still live', () => {
+    const harness = installImeHarness()
+    dispatchComposition(harness.element, 'compositionstart', '')
+    dispatchComposition(harness.element, 'compositionupdate', '아')
+    dispatchInput(harness.element, 'insertCompositionText', '아')
+
+    // ibus-hangul's Hanja conversion (Hanja key / F9) puts a numbered lookup table over a live
+    // Hangul preedit and its symbol table behaves the same, so digits are selectors there.
+    expect(harness.tracker.isHangulPreedit()).toBe(true)
+    expect(suppressesDigit(harness)).toBe(true)
+
+    harness.dispose()
+  })
+
+  it('stops claiming digits once the Hangul preedit has gone stale', () => {
+    const harness = installImeHarness()
+    composeHangulSyllable(harness.element)
+
+    // Switching engine (Hangul -> Pinyin) moves no DOM focus, and the #8241 orphan path emits no
+    // composition or input events at all, so only expiry can retire the Hangul classification.
+    harness.advance(TERMINAL_IME_CANDIDATE_GUARD_STALE_COMPOSITION_EXPIRY_MS + 1)
+    armOrphanCandidateDigitWindow(harness)
+
+    expect(harness.tracker.isHangulPreedit()).toBe(false)
+    expect(suppressesDigit(harness)).toBe(true)
+
+    harness.dispose()
+  })
+
+  it('re-reads the preedit script when the next composition starts', () => {
+    const harness = installImeHarness()
+    composeHangulSyllable(harness.element)
+    dispatchComposition(harness.element, 'compositionstart', '')
+
+    // compositionstart carries no data, so the classification cannot survive into a session that
+    // may belong to another engine; the following compositionupdate re-establishes it.
+    expect(harness.tracker.isHangulPreedit()).toBe(false)
+
+    harness.dispose()
   })
 
   it('still lets a Pinyin preedit claim its numbered candidate digit', () => {
-    const terminalElement = document.createElement('div')
-    document.body.appendChild(terminalElement)
-    const tracker = installTerminalImeCompositionTracker(terminalElement)
+    const harness = installImeHarness()
 
     // Sogou/fcitx Pinyin picks candidates by digit over a Latin preedit (#7543/#8241), and
     // delivers the selector as a plain keydown. That must stay IME-owned.
-    dispatchComposition(terminalElement, 'compositionstart', '')
-    dispatchComposition(terminalElement, 'compositionupdate', 'nihao')
-    dispatchInput(terminalElement, 'insertCompositionText', 'nihao')
+    dispatchComposition(harness.element, 'compositionstart', '')
+    dispatchComposition(harness.element, 'compositionupdate', 'nihao')
+    dispatchInput(harness.element, 'insertCompositionText', 'nihao')
 
-    expect(tracker.isHangulPreedit()).toBe(false)
-    expect(suppressesDigit(tracker)).toBe(true)
+    expect(harness.tracker.isHangulPreedit()).toBe(false)
+    expect(suppressesDigit(harness)).toBe(true)
 
-    tracker.dispose()
-    terminalElement.remove()
+    harness.dispose()
   })
 })

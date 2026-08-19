@@ -7,7 +7,8 @@ export type TerminalImeCompositionTracker = IDisposable & {
    *  absorb the committing key's trailing press/release. */
   isCandidateKeyGuardActive: () => boolean
   /** True when the most recent preedit was Hangul, where a bare digit ends the
-   *  syllable as literal text instead of picking a candidate. */
+   *  syllable as literal text instead of picking a candidate. Expires with the
+   *  same staleness window as the other guards. */
   isHangulPreedit: () => boolean
 }
 
@@ -43,6 +44,14 @@ export function installTerminalImeCompositionTracker(
     (lastCompositionEventAt === null ||
       at - lastCompositionEventAt <= TERMINAL_IME_CANDIDATE_GUARD_STALE_COMPOSITION_EXPIRY_MS)
 
+  // Why time-bound: an engine switch (Hangul -> Pinyin) moves no DOM focus and
+  // the orphan-digit path emits no composition or input events, so a latched
+  // flag would disable the Pinyin candidate-digit guard for the whole session.
+  const isHangulPreeditAt = (at: number): boolean =>
+    hangulPreedit &&
+    lastCompositionEventAt !== null &&
+    at - lastCompositionEventAt <= TERMINAL_IME_CANDIDATE_GUARD_STALE_COMPOSITION_EXPIRY_MS
+
   const isCandidateKeyGuardActive = (): boolean => {
     const at = now()
     if (isActiveAt(at)) {
@@ -58,7 +67,7 @@ export function installTerminalImeCompositionTracker(
     return {
       isActive: () => active,
       isCandidateKeyGuardActive,
-      isHangulPreedit: () => hangulPreedit,
+      isHangulPreedit: () => isHangulPreeditAt(now()),
       dispose: () => undefined
     }
   }
@@ -68,6 +77,8 @@ export function installTerminalImeCompositionTracker(
     lastCompositionEventAt = now()
     compositionEndedAt = null
     sawEmptyCompositionUpdate = false
+    // Why safe: the following compositionupdate re-reads the preedit script.
+    hangulPreedit = false
   }
   const updateComposition = (event: Event): void => {
     lastCompositionEventAt = now()
@@ -118,7 +129,7 @@ export function installTerminalImeCompositionTracker(
   return {
     isActive: () => isActiveAt(now()),
     isCandidateKeyGuardActive,
-    isHangulPreedit: () => hangulPreedit,
+    isHangulPreedit: () => isHangulPreeditAt(now()),
     dispose: () => {
       terminalElement.removeEventListener('compositionstart', markActive, true)
       terminalElement.removeEventListener('compositionupdate', updateComposition, true)
