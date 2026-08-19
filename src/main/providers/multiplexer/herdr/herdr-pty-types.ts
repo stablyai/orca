@@ -109,18 +109,7 @@ export type HerdrPaneMoveDestination =
       focus?: boolean
     }
 
-export type HerdrPaneMoveResult = {
-  changed: boolean
-  pane_id: string
-  previous_pane_id: string
-  previous_tab_id: string
-  previous_workspace_id: string
-  focused_pane_id: string
-  created_tab?: { tab_id: string; workspace_id: string; label: string } | null
-  created_workspace?: { workspace_id: string; label: string } | null
-  closed_tab_id?: string | null
-  closed_workspace_id?: string | null
-}
+export type { HerdrPaneMoveResult } from './herdr-runtime-contract-results'
 
 export function findLegacyMigrationBlockers(
   processes: PtyProcessInfo[],

@@ -253,7 +253,7 @@ import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtim
 import { isPtyIncarnationId } from '../../shared/pty-incarnation'
 import type { PtyListedSession } from '../../shared/pty-listed-session'
 
-import type { HerdrPtyProvider } from '../providers/multiplexer/herdr/herdr-pty-provider'
+import { HerdrPtyProvider } from '../providers/multiplexer/herdr/herdr-pty-provider'
 
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations - Herdr is the universal multiplexer for all PTYs.
@@ -274,11 +274,15 @@ export function setHerdrStore(store: Store): void {
 }
 
 export function getHerdrProvider(): HerdrPtyProvider {
+  if (localProvider instanceof HerdrPtyProvider) {
+    herdrProvider = localProvider
+    return localProvider
+  }
   if (!herdrProvider) {
     if (!herdrStore) {
       throw new Error('Herdr store not initialized. Call setHerdrStore() first.')
     }
-    herdrProvider = createLocalHerdrPtyProvider(undefined, herdrStore)
+    herdrProvider = createLocalHerdrPtyProvider(localProvider, herdrStore)
   }
   return herdrProvider
 }

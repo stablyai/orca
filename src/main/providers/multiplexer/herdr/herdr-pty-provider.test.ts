@@ -510,4 +510,64 @@ describe('HerdrPtyProvider', () => {
       })
     ).rejects.toThrow(/Session not found/)
   })
+
+  it('delegates a non-Herdr spawn to the Orca fallback', async () => {
+    const fallback = {
+      spawn: vi.fn(async () => ({ id: 'pty-orca' })),
+      attach: vi.fn(),
+      shutdown: vi.fn(),
+      hasPty: vi.fn(() => false),
+      write: vi.fn(),
+      resize: vi.fn(),
+      listProcesses: vi.fn(async () => [{ id: 'pty-orca', cwd: '/', title: 'sh' }]),
+      onData: vi.fn(() => () => undefined),
+      onExit: vi.fn(() => () => undefined),
+      onReplay: vi.fn(() => () => undefined)
+    }
+    const provider = new HerdrPtyProvider(
+      () => transport().value,
+      async () => null,
+      () => 'test-session',
+      undefined,
+      fallback as never
+    )
+    await expect(
+      provider.spawn({ cols: 80, rows: 24, cwd: '/repo', worktreeId: 'repo-1::/repo' })
+    ).resolves.toEqual({ id: 'pty-orca' })
+    expect(fallback.spawn).toHaveBeenCalled()
+  })
+
+  it('keeps the binding and rejects when Herdr close fails', async () => {
+    const host = transport()
+    const provider = new HerdrPtyProvider(
+      () => host.value,
+      async () => target(),
+      () => 'test-session'
+    )
+    const spawned = await provider.spawn({
+      cols: 80,
+      rows: 24,
+      cwd: '/repo',
+      worktreeId: 'repo-1::/repo',
+      tabId: 'tab-1',
+      paneKey: 'tab-1:leaf-1'
+    })
+    host.requestMock.mockImplementation(async (_session: string, method: string) => {
+      if (method === 'workspace.close' || method === 'pane.close') {
+        return { id: method, error: { code: 'busy', message: 'still attached' } }
+      }
+      if (method === 'pane.get') {
+        return {
+          id: method,
+          result: { pane: { pane_id: 'p1', workspace_id: 'w1' } }
+        }
+      }
+      if (method === 'pane.list') {
+        return { id: method, result: { panes: [{ pane_id: 'p1' }] } }
+      }
+      return { id: method, result: { type: 'ok' } }
+    })
+    await expect(provider.shutdown(spawned.id, {})).rejects.toThrow('still attached')
+    expect(provider.hasPty(spawned.id)).toBe(true)
+  })
 })

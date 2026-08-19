@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { Project } from '../../../../shared/project-types'
 import type { Store } from '../../../persistence'
-import { createLocalHerdrPtyTargetResolver } from './herdr-project-pty-target'
+import {
+  createHerdrPtyTargetResolver,
+  createLocalHerdrPtyTargetResolver
+} from './herdr-project-pty-target'
 
 const leafId = '22222222-2222-4222-8222-222222222222'
 
@@ -386,5 +389,115 @@ describe('Herdr PTY target resolution', () => {
       path: '/notes'
     })
     expect(target?.graph.worktrees[0].repoPath).toBeUndefined()
+  })
+
+  it('claims Herdr when the project prefers it and the global default is Orca', async () => {
+    const updateProject = vi.fn()
+    const store = {
+      getSettings: () => ({ terminalBackendDefault: 'orca' }),
+      getProjects: () => [
+        {
+          id: 'project-1',
+          displayName: 'Project',
+          badgeColor: '#000000',
+          sourceRepoIds: ['repo-1'],
+          terminalBackendPreference: 'herdr',
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
+      getRepo: () => ({ id: 'repo-1', path: '/repo', kind: 'git' }),
+      getWorktreeMeta: () => ({ projectId: 'project-1', hostId: 'local' }),
+      getAllWorktreeMeta: () => ({}),
+      getWorkspaceSession: () => ({ tabsByWorktree: {}, terminalLayoutsByTabId: {} }),
+      updateProject
+    } as unknown as Store
+
+    const target = await createLocalHerdrPtyTargetResolver(store)(
+      {
+        cols: 80,
+        rows: 24,
+        cwd: '/repo',
+        worktreeId: 'repo-1::/repo',
+        tabId: 'tab-1',
+        paneKey: `tab-1:${leafId}`
+      },
+      null
+    )
+
+    expect(target?.identity.hostId).toBe('local')
+    target?.activateHerdr?.()
+    expect(updateProject).toHaveBeenCalledWith('project-1', {
+      terminalBackendByHost: { local: { backend: 'herdr', state: 'ready' } }
+    })
+  })
+
+  it('leaves a project on Orca when it overrides a Herdr global default', async () => {
+    const store = {
+      getSettings: () => ({ terminalBackendDefault: 'herdr' }),
+      getProjects: () => [
+        {
+          id: 'project-1',
+          displayName: 'Project',
+          badgeColor: '#000000',
+          sourceRepoIds: ['repo-1'],
+          terminalBackendPreference: 'orca',
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
+      getRepo: () => ({ id: 'repo-1', path: '/repo', kind: 'git' }),
+      getWorktreeMeta: () => ({ projectId: 'project-1', hostId: 'local' }),
+      getAllWorktreeMeta: () => ({}),
+      getWorkspaceSession: () => ({ tabsByWorktree: {}, terminalLayoutsByTabId: {} })
+    } as unknown as Store
+
+    const target = await createLocalHerdrPtyTargetResolver(store)(
+      {
+        cols: 80,
+        rows: 24,
+        cwd: '/repo',
+        worktreeId: 'repo-1::/repo',
+        tabId: 'tab-1',
+        paneKey: `tab-1:${leafId}`
+      },
+      null
+    )
+
+    expect(target).toBeNull()
+  })
+
+  it('keeps the SSH host id on the encoded identity', async () => {
+    const store = {
+      getSettings: () => ({ terminalBackendDefault: 'herdr' }),
+      getProjects: () => [
+        {
+          id: 'project-1',
+          displayName: 'Project',
+          badgeColor: '#000000',
+          sourceRepoIds: ['repo-1'],
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
+      getRepo: () => ({ id: 'repo-1', path: '/repo', kind: 'git' }),
+      getWorktreeMeta: () => ({ projectId: 'project-1', hostId: 'ssh:box' }),
+      getAllWorktreeMeta: () => ({}),
+      getWorkspaceSession: () => ({ tabsByWorktree: {}, terminalLayoutsByTabId: {} })
+    } as unknown as Store
+
+    const target = await createHerdrPtyTargetResolver(store, 'ssh:box')(
+      {
+        cols: 80,
+        rows: 24,
+        cwd: '/repo',
+        worktreeId: 'repo-1::/repo',
+        tabId: 'tab-1',
+        paneKey: `tab-1:${leafId}`
+      },
+      null
+    )
+
+    expect(target?.identity.hostId).toBe('ssh:box')
   })
 })

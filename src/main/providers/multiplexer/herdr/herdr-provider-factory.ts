@@ -21,14 +21,14 @@ import {
   type HerdrBinarySource
 } from '../../../../shared/terminal-backend'
 import { HerdrSshHostTransport } from './herdr-ssh-session'
-import { HerdrSshRelayTransport } from './herdr-ssh-relay-transport'
 import { HerdrSocketTransport } from './herdr-socket-transport'
 import type { HerdrHostTransport } from './herdr-runtime-contract'
 import { HerdrRuntimeError } from './herdr-runtime-contract'
 import type { HerdrImportedSurface, HerdrOrcaSurfaceAction } from './herdr-orca-surface-import'
+import { herdrRemoteCommandEnv, writeHerdrRemoteSshLaunch } from './herdr-remote-ssh'
 
 export function createLocalHerdrPtyProvider(
-  _fallback: IPtyProvider | undefined,
+  fallback: IPtyProvider | undefined,
   store: Store
 ): HerdrPtyProvider {
   const transports = new Map<string, HerdrHostTransport>()
@@ -97,30 +97,25 @@ export function createLocalHerdrPtyProvider(
       },
       present: presentHerdrImportedSurface,
       presentAction: presentHerdrSurfaceAction
-    }
+    },
+    fallback
   )
 }
 
 export function createSshHerdrPtyProvider(
-  _fallback: IPtyProvider | undefined,
+  fallback: IPtyProvider | undefined,
   store: Store,
   connection: SshConnection,
   targetId: string,
   hostPlatform?: RemoteHostPlatform
 ): HerdrPtyProvider {
-  const source = resolveHerdrBinarySource(store.getSettings(), toSshExecutionHostId(targetId))
-  const executable = async () => resolveHerdrExecutable(source, hostPlatform?.os ?? 'linux')
-
-  // Why: when the herdr backend is active, use the daemon-to-daemon relay
-  // (full protocol-19 over SSH tunnel) instead of CLI exec (one-shot commands).
-  // Fallback to CLI transport for legacy or incompatible SSH servers.
-  const transport = isUnixHost(hostPlatform)
-    ? new HerdrSshRelayTransport(connection, 15_000, executable, hostPlatform)
-    : new HerdrSshHostTransport(connection, 15_000, executable, hostPlatform)
+  const hostId = toSshExecutionHostId(targetId)
+  const source = resolveHerdrBinarySource(store.getSettings(), hostId)
+  const transport = createSshHerdrHostTransport(connection, source, hostPlatform)
 
   return new HerdrPtyProvider(
     () => transport,
-    createHerdrPtyTargetResolver(store, toSshExecutionHostId(targetId)),
+    createHerdrPtyTargetResolver(store, hostId),
     () => store.getSettings().herdrSessionName,
     {
       persist: (surface: HerdrImportedSurface) => {
@@ -132,15 +127,41 @@ export function createSshHerdrPtyProvider(
           ...(surface.cwd ? { startupCwd: surface.cwd } : {})
         })
       }
-    }
+    },
+    fallback
   )
 }
 
-function isUnixHost(platform?: RemoteHostPlatform): boolean {
-  if (!platform) {
-    return true
+function createSshHerdrHostTransport(
+  connection: SshConnection,
+  source: HerdrBinarySource,
+  hostPlatform?: RemoteHostPlatform
+): HerdrHostTransport {
+  const target = connection.getTarget()
+  const resolvedConfig = connection.getSystemSshResolvedConfig?.() ?? null
+  const systemSsh = connection.usesSystemSshTransport?.() === true
+  // Why: ssh2-only connections have no OpenSSH ControlMaster. Exec over the
+  // live SshConnection keeps passphrase and host-key state that a new hop
+  // would not see.
+  if (!systemSsh) {
+    const remoteExecutable = async () => resolveHerdrExecutable(source, hostPlatform?.os ?? 'linux')
+    return new HerdrSshHostTransport(connection, 15_000, remoteExecutable, hostPlatform)
   }
-  return platform.os !== 'win32'
+
+  const launch = writeHerdrRemoteSshLaunch({ target, resolvedConfig })
+  const executable = resolveHerdrExecutable(source)
+  return new HerdrCliHostTransport({
+    commandFor: (args) => ({
+      file: executable,
+      args: ['--remote', launch.dest, ...args],
+      env: herdrRemoteCommandEnv(launch)
+    }),
+    serverCommandFor: (sessionName) => ({
+      file: executable,
+      args: ['--remote', launch.dest, '--handoff', '--session', sessionName, 'server'],
+      env: herdrRemoteCommandEnv(launch, herdrServerEnvironment(undefined))
+    })
+  })
 }
 
 type HerdrSettings = Pick<GlobalSettings, 'herdrBinarySource' | 'hostSettingOverrides'>

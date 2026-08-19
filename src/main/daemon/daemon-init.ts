@@ -936,20 +936,16 @@ export async function initDaemonPtyProvider(
       return
     }
     const activeStore = herdrStore
-    const herdrBackendActive = activeStore?.getSettings().terminalBackendDefault === 'herdr'
-    if (herdrBackendActive) {
-      // Why: the local provider caches transports and the shared session name
-      // at construction, so backend and session-name switches need a fresh
-      // provider to take effect without a restart.
-      if (activeStore) {
-        herdrProvider = createLocalHerdrPtyProvider(adapter ?? undefined, activeStore)
-        setLocalPtyProvider(herdrProvider)
-        rebindLocalProviderListeners()
-      }
-    } else if (adapter) {
-      setLocalPtyProvider(adapter)
-      rebindLocalProviderListeners()
+    if (!activeStore || !adapter) {
+      return
     }
+    // Why: the wrapper caches transports and the shared session name. Recreate
+    // it so a settings change applies without a restart. The Orca adapter stays
+    // the fallback so a project can still choose Herdr when the global default
+    // is Orca.
+    herdrProvider = createLocalHerdrPtyProvider(adapter, activeStore)
+    setLocalPtyProvider(herdrProvider)
+    rebindLocalProviderListeners()
   })
   logDaemonMilestone('daemon-init-start')
   // Why: e2e coverage for the startup PTY gate (#5232) needs a daemon init that deterministically outlasts the first-window timeout.
@@ -1059,10 +1055,10 @@ export async function initDaemonPtyProvider(
   }
   spawner = newSpawner
   adapter = routedAdapter
-  // Why: herdr is opt-in. Install it only when the user selected the herdr
-  // terminal backend; the orca daemon adapter serves terminals otherwise.
-  if (store?.getSettings().terminalBackendDefault === 'herdr') {
-    herdrProvider = createLocalHerdrPtyProvider(undefined, store)
+  // Why: Herdr is per-project/host. Keep the Orca adapter as fallback so a
+  // project can select Herdr while the global default stays Orca.
+  if (store) {
+    herdrProvider = createLocalHerdrPtyProvider(routedAdapter, store)
     setLocalPtyProvider(herdrProvider)
   } else {
     setLocalPtyProvider(routedAdapter)

@@ -5,9 +5,14 @@ import type {
   TerminalTab
 } from '../../../../shared/terminal-tab-types'
 import { basename } from 'node:path'
-import { resolveDesiredTerminalBackend } from '../../../../shared/terminal-backend'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { Store } from '../../../persistence'
+import {
+  commitHerdrHostActivation,
+  projectWantsHerdr,
+  resolveSpawnHostId
+} from './herdr-project-backend'
 import type { HerdrPtyTargetResolver } from './herdr-pty-provider'
 import type { HerdrPtyIdentity, HerdrPtyTarget } from './herdr-pty-types'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
@@ -173,23 +178,14 @@ const FLOATING_PROJECT: Project = {
   updatedAt: 0
 }
 
-function projectHerdrActivation(store: Store, _project: Project): HerdrPtyTargetResolver {
+function projectHerdrActivation(
+  store: Store,
+  requestedHostId: ExecutionHostId
+): HerdrPtyTargetResolver {
   return async (
     opts: PtySpawnOptions,
     persistedIdentity: HerdrPtyIdentity | null
   ): Promise<HerdrPtyTarget | null> => {
-    // Why: herdr is opt-in. It must never claim terminals unless the user
-    // selected it as the terminal backend; the orca backend serves otherwise.
-    const settings = store.getSettings()
-    const backend = resolveDesiredTerminalBackend({
-      globalDefault: settings.terminalBackendDefault,
-      preference: _project.terminalBackendPreference ?? 'inherit',
-      activation: _project.terminalBackendByHost?.['local']
-    })
-    if (backend !== 'herdr') {
-      return null
-    }
-
     const worktreeId = opts.worktreeId ?? persistedIdentity?.worktreeId ?? null
     const tabId = opts.tabId ?? persistedIdentity?.tabId ?? null
     const leafId = opts.paneKey
@@ -236,10 +232,9 @@ function projectHerdrActivation(store: Store, _project: Project): HerdrPtyTarget
     const persistedLayout = session.terminalLayoutsByTabId[tabId]
     const resolvedLayout = resolveLayout(leafId, opts.terminalLayout, persistedLayout)
 
-    // Why: legacy worker adoption and floating spawns pass no paneKey and the
-    // session may not know the tab yet; synthesize it so ensureTabLayout can
-    // materialize the pane. A synthetic title is the tab id itself so each
-    // adopted/floating pane maps to its own daemon tab.
+    // Why: floating and attach-only spawns can arrive before the workspace
+    // session lists the tab. Synthesize that tab so ensureTabLayout can mint
+    // the pane. The title is the tab id so each adopted pane stays distinct.
     const existingTabs = session.tabsByWorktree[worktreeId] ?? []
     const sessionTab = existingTabs.find((tab) => tab.id === tabId)
     const syntheticTab: TerminalTab = sessionTab ?? {
@@ -257,10 +252,16 @@ function projectHerdrActivation(store: Store, _project: Project): HerdrPtyTarget
       [worktreeId]: sessionTab ? existingTabs : [...existingTabs, syntheticTab]
     }
 
-    const hostId = 'local'
+    const hostId = resolveSpawnHostId(requestedHostId, store.getWorktreeMeta?.(worktreeId)?.hostId)
+    if (!projectWantsHerdr(project, store.getSettings().terminalBackendDefault ?? 'orca', hostId)) {
+      return null
+    }
 
     return {
-      activateHerdr: () => {},
+      activateHerdr: () => {
+        commitHerdrHostActivation(store, project.id, hostId)
+      },
+      legacyMigrationWorktreeIds: worktrees.map((entry) => entry.id),
       project,
       graph: {
         project,
@@ -284,12 +285,12 @@ function projectHerdrActivation(store: Store, _project: Project): HerdrPtyTarget
 }
 
 export function createLocalHerdrPtyTargetResolver(store: Store): HerdrPtyTargetResolver {
-  return projectHerdrActivation(store, {} as Project)
+  return projectHerdrActivation(store, LOCAL_EXECUTION_HOST_ID)
 }
 
 export function createHerdrPtyTargetResolver(
   store: Store,
-  _hostId: string
+  hostId: ExecutionHostId
 ): HerdrPtyTargetResolver {
-  return projectHerdrActivation(store, {} as Project)
+  return projectHerdrActivation(store, hostId)
 }

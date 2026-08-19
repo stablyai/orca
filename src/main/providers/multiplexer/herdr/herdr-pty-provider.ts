@@ -7,11 +7,9 @@ import type {
   PtyBackgroundStreamEvent,
   PtyDataEvent
 } from '../../types'
-import { randomUUID } from 'node:crypto'
-import { herdrSessionNameForProject } from '../../../../shared/herdr-session-identity'
-import { SessionNotFoundError } from '../../../daemon/daemon-errors'
-import { HerdrRuntimeError, unwrapHerdrResponse } from './herdr-runtime-contract'
-import { decodeHerdrPtyId, encodeHerdrPtyId } from './herdr-pty-types'
+import { HerdrRuntimeError } from './herdr-runtime-contract'
+import { decodeHerdrPtyId } from './herdr-pty-types'
+import { spawnHerdrPtyPane } from './herdr-pty-spawn'
 import type {
   HerdrPtyBinding,
   HerdrPtyIdentity,
@@ -19,7 +17,6 @@ import type {
   HerdrPaneMoveDestination,
   HerdrPaneSwapOptions
 } from './herdr-pty-types'
-import { assertHerdrMigrationReady } from './herdr-pty-types'
 import {
   clearHerdrBindingBuffer,
   getHerdrBindingBufferSnapshot,
@@ -54,9 +51,9 @@ import {
   killAllHerdrBindings,
   attachHerdrPty
 } from './herdr-pty-provider-runtime'
+import { isOrcaFallbackId, subscribeOrcaFallback } from './herdr-pty-orca-fallback'
 import type { HerdrHostTransport } from './herdr-runtime-contract'
 import type { HerdrRuntimeManager, HerdrSurfaceSync } from './herdr-runtime-manager'
-import { startHerdrAgentIfRequested } from './herdr-pty-provider-runtime'
 export { decodeHerdrPtyId } from './herdr-pty-types'
 export type { HerdrPtyIdentity, HerdrPtyTarget } from './herdr-pty-types'
 
@@ -80,113 +77,46 @@ export class HerdrPtyProvider implements IPtyProvider {
   private readonly exitListeners = new Set<
     (payload: { id: string; code: number; incarnationId?: string }) => void
   >()
+  private fallbackUnsub?: () => void
 
   constructor(
     transportForTarget: (target: HerdrPtyTarget) => HerdrHostTransport,
     resolveTarget: HerdrPtyTargetResolver,
     sharedName?: () => string | undefined,
-    private readonly surfaceSync?: HerdrSurfaceSync
+    private readonly surfaceSync?: HerdrSurfaceSync,
+    private fallback?: IPtyProvider
   ) {
     this.transportForTarget = transportForTarget
     this.resolveTarget = resolveTarget
     this.sharedName = sharedName
+    this.bindFallback(fallback)
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
     const persistedIdentity = opts.sessionId ? decodeHerdrPtyId(opts.sessionId) : null
     const target = await this.resolveTarget(opts, persistedIdentity)
     if (!target) {
-      throw new HerdrRuntimeError('target_not_found', 'Could not resolve herdr target for spawn')
-    }
-    await assertHerdrMigrationReady(target)
-
-    const runtime = this.runtimeFor(target)
-    await runtime.manager.reconcileProjectHost(target.graph)
-    const sessionName = herdrSessionNameForProject(target.project, this.sharedName?.())
-    let paneId = runtime.manager.getPaneId(
-      sessionName,
-      target.identity.projectId,
-      target.identity.leafId
-    )
-    if (!paneId) {
-      const worktree =
-        target.graph.worktrees.find((candidate) => candidate.id === target.identity.worktreeId) ??
-        target.graph.worktrees[0]
-      if (worktree) {
-        paneId = await runtime.manager.materializeLeafPane(
-          target.project,
-          target.identity.leafId,
-          opts.cwd ?? '',
-          worktree
-        )
+      if (!this.fallback) {
+        throw new HerdrRuntimeError('target_not_found', 'Could not resolve herdr target for spawn')
       }
+      return this.fallback.spawn(opts)
     }
-    const controller = await runtime.manager.controlProjectPane(
-      target.project,
-      target.identity.leafId,
-      { cols: opts.cols, rows: opts.rows, takeover: true }
-    )
-    await target.activateHerdr?.()
-    const resolvedPaneId =
-      paneId ??
-      runtime.manager.getPaneId(sessionName, target.identity.projectId, target.identity.leafId)
-    const staleAttach =
-      opts.attachOnly === true &&
-      persistedIdentity !== null &&
-      (resolvedPaneId === null || resolvedPaneId !== persistedIdentity.paneId)
-    if (!resolvedPaneId || staleAttach) {
-      controller.release()
-      if (staleAttach) {
-        throw new SessionNotFoundError(opts.sessionId ?? '')
-      }
-      throw new Error(`Herdr pane is not reconciled: ${target.identity.leafId}`)
-    }
-    const identity: HerdrPtyIdentity = {
-      ...target.identity,
-      version: 2,
-      paneId: resolvedPaneId
-    }
-    const id = encodeHerdrPtyId(identity)
-    const incarnationId = opts.expectedIncarnationId ?? randomUUID()
-    const binding = this.bindController({
-      id,
-      controller,
-      transport: runtime.transport,
-      identity,
-      paneId: resolvedPaneId,
-      sessionName,
-      incarnationId,
-      cwd: opts.cwd ?? '',
-      cols: opts.cols,
-      rows: opts.rows
+    return spawnHerdrPtyPane({
+      opts,
+      target,
+      persistedIdentity,
+      fallback: this.fallback,
+      sharedName: this.sharedName?.(),
+      runtime: this.runtimeFor(target),
+      bind: (input) => this.bindController(input),
+      waitForFirstFrame: (binding) => this.waitForFirstFrame(binding)
     })
-    const firstFrame = await this.waitForFirstFrame(binding)
-    await startHerdrAgentIfRequested({
-      sessionId: opts.sessionId,
-      launchAgent: opts.launchAgent,
-      command: opts.command,
-      sessionName,
-      leafId: target.identity.leafId,
-      paneId: resolvedPaneId,
-      request: async (name, method, params) =>
-        unwrapHerdrResponse(await runtime.transport.request(name, method, params)),
-      writeCommand: (text) => controller.write(text)
-    })
-    return {
-      id,
-      isReattach: !!opts.sessionId,
-      ...(incarnationId ? { incarnationId } : {}),
-      ...(firstFrame
-        ? {
-            snapshot: firstFrame.data,
-            snapshotCols: firstFrame.frame.width,
-            snapshotRows: firstFrame.frame.height
-          }
-        : {})
-    }
   }
 
   async attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence'> | void> {
+    if (isOrcaFallbackId(this.bindings, id, this.fallback)) {
+      return this.fallback.attach(id)
+    }
     return attachHerdrPty({
       id,
       bindings: this.bindings,
@@ -202,6 +132,7 @@ export class HerdrPtyProvider implements IPtyProvider {
   async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
     const binding = this.bindings.get(id)
     if (!binding) {
+      await this.fallback?.shutdown(id, opts)
       return
     }
     if (opts.keepHistory) {
@@ -210,22 +141,33 @@ export class HerdrPtyProvider implements IPtyProvider {
     }
     try {
       await closeHerdrBindingSurface(binding)
-    } catch {}
+    } catch (error) {
+      console.warn(
+        `[herdr] Failed to close pane ${binding.paneId}:`,
+        error instanceof Error ? error.message : error
+      )
+      throw error
+    }
     releaseBinding(binding, this.bindings)
     this.emitExit({ id, code: 0 })
   }
 
   hasPty(id: string): boolean {
-    return this.bindings.has(id)
+    return this.bindings.has(id) || this.fallback?.hasPty?.(id) === true
   }
 
   write(id: string, data: string): void {
+    if (isOrcaFallbackId(this.bindings, id, this.fallback)) {
+      this.fallback.write(id, data)
+      return
+    }
     this.writeLogical(id, terminalLogicalInputFromBytes(data))
   }
 
   writeLogical(id: string, input: TerminalLogicalInput): void {
     const binding = this.bindings.get(id)
     if (!binding) {
+      this.fallback?.writeLogical?.(id, input)
       return
     }
     if (input.kind === 'bytes') {
@@ -246,6 +188,7 @@ export class HerdrPtyProvider implements IPtyProvider {
   resize(id: string, cols: number, rows: number): void {
     const binding = this.bindings.get(id)
     if (!binding) {
+      this.fallback?.resize(id, cols, rows)
       return
     }
     binding.cols = cols
@@ -326,7 +269,8 @@ export class HerdrPtyProvider implements IPtyProvider {
     const herdr = herdrResults.flatMap((result) =>
       result.status === 'fulfilled' ? [result.value] : []
     )
-    return herdr
+    const fallback = this.fallback ? await this.fallback.listProcesses() : []
+    return [...herdr, ...fallback]
   }
 
   async getBufferSnapshot(
@@ -482,6 +426,8 @@ export class HerdrPtyProvider implements IPtyProvider {
   }
 
   dispose(): void {
+    this.fallbackUnsub?.()
+    this.fallbackUnsub = undefined
     disposeAll(this.bindings, this.managers, () => {
       for (const binding of this.bindings.values()) {
         binding.transport.disconnect?.()
@@ -489,5 +435,20 @@ export class HerdrPtyProvider implements IPtyProvider {
     })
   }
 
-  replaceFallback(_fallback: IPtyProvider): void {}
+  replaceFallback(fallback: IPtyProvider): void {
+    this.bindFallback(fallback)
+  }
+
+  private bindFallback(fallback: IPtyProvider | undefined): void {
+    this.fallbackUnsub?.()
+    this.fallback = fallback
+    this.fallbackUnsub = fallback
+      ? subscribeOrcaFallback(
+          fallback,
+          (payload) => this.emitData(payload),
+          (payload) => this.emitExit(payload),
+          (payload) => this.emitReplay(payload)
+        )
+      : undefined
+  }
 }

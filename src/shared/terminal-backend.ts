@@ -8,7 +8,7 @@ export type HerdrBinarySource = { kind: 'system' } | { kind: 'custom'; path: str
  *  per-project override is set. Users can edit or clear it. */
 export const DEFAULT_HERDR_SESSION_NAME = 'orca'
 
-/** Max length for a herdr session name; on macOS the name feeds the daemon
+/** Max length for a herdr session name; on macOS the name feeds the Herdr
  *  unix socket path, so oversized values are rejected to avoid the sun_path
  *  limit. Mirrors the per-project IPC bound. */
 export const HERDR_SESSION_NAME_MAX_LENGTH = 64
