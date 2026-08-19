@@ -4,16 +4,21 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../store', () => {
-  const storeState = {
+const storeMock = vi.hoisted(() => ({
+  state: {
     petSize: 180,
+    petWalks: true,
+    petReturnsToLane: true,
     agentStatusByPaneKey: {},
     agentStatusEpoch: 0,
     retainedAgentsByPaneKey: {}
-  }
+  } as Record<string, unknown>
+}))
+
+vi.mock('../../store', () => {
   const useAppStore = Object.assign(
-    (selector: (state: unknown) => unknown) => selector(storeState),
-    { getState: () => storeState }
+    (selector: (state: unknown) => unknown) => selector(storeMock.state),
+    { getState: () => storeMock.state }
   )
   return { useAppStore }
 })
@@ -79,6 +84,8 @@ beforeEach(() => {
   window.localStorage.clear()
   Object.defineProperty(window, 'innerWidth', { value: 1200, configurable: true })
   Object.defineProperty(window, 'innerHeight', { value: 768, configurable: true })
+  storeMock.state.petWalks = true
+  storeMock.state.petReturnsToLane = true
   frameCallbacks = new Map()
   nextFrameId = 1
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
@@ -432,5 +439,57 @@ describe('PetOverlay bottom lane', () => {
 
     expect(grab.style.transform).not.toContain('rotate(-90deg)')
     expect(grab.style.animation).toContain('pet-land-squash')
+  })
+
+  it('stands still when the user turns walking off', () => {
+    storeMock.state.petWalks = false
+    window.localStorage.setItem('pet-overlay-position', JSON.stringify({ x: 300, y: 564 }))
+
+    const box = renderOverlay()
+    stepFrame(0)
+    stepFrame(1000)
+
+    expect(box.style.left).toBe('300px')
+    expect(box.style.top).toBe('564px')
+  })
+
+  it('leaves the pet where it was dropped when the floor return is off', () => {
+    storeMock.state.petReturnsToLane = false
+    window.localStorage.setItem('pet-overlay-position', JSON.stringify({ x: 300, y: 564 }))
+
+    const box = renderOverlay()
+    const grab = container?.querySelector('.pointer-events-auto') as HTMLElement
+
+    firePointer(grab, 'pointerdown', 350, 600)
+    firePointer(grab, 'pointermove', 350, 200)
+    firePointer(grab, 'pointermove', 350, 200)
+    firePointer(grab, 'pointerup', 350, 200)
+
+    for (let t = 0; t <= 2000; t += 100) {
+      stepFrame(t)
+    }
+
+    // No fall, no topple, no snap back to the lane.
+    expect(box.style.top).toBe('164px')
+    expect(grab.style.transform).not.toContain('rotate(-90deg)')
+  })
+
+  it('keeps pacing at the height it was left at', () => {
+    storeMock.state.petReturnsToLane = false
+    window.localStorage.setItem('pet-overlay-position', JSON.stringify({ x: 300, y: 564 }))
+
+    const box = renderOverlay()
+    const grab = container?.querySelector('.pointer-events-auto') as HTMLElement
+
+    firePointer(grab, 'pointerdown', 350, 600)
+    firePointer(grab, 'pointermove', 350, 200)
+    firePointer(grab, 'pointermove', 350, 200)
+    firePointer(grab, 'pointerup', 350, 200)
+
+    stepFrame(0)
+    stepFrame(1000)
+
+    expect(box.style.top).toBe('164px')
+    expect(Number.parseFloat(box.style.left)).toBeCloseTo(300 + PET_WALK_SPEED_PX_PER_SEC, 5)
   })
 })

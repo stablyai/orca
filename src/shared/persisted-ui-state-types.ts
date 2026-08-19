@@ -185,6 +185,10 @@ export type PersistedUIState = {
   customPets?: CustomPet[]
   /** Pet overlay size in CSS pixels (square); clamped to [PET_SIZE_MIN, PET_SIZE_MAX] on read. */
   petSize?: number
+  /** Whether the pet paces its lane; absent = true. */
+  petWalks?: boolean
+  /** Whether releasing a dragged pet drops it back to the floor; absent = true. */
+  petReturnsToLane?: boolean
   /** Legacy keys from before the sidekick -> pet rename; read only during migration, new writes use pet* above. */
   sidekickVisible?: boolean
   sidekickId?: string

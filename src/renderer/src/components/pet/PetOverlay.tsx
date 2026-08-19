@@ -218,6 +218,10 @@ export function PetOverlay(): React.JSX.Element {
   const reducedMotion = usePrefersReducedMotion()
   const { url, sprite, detected, heldUrl, walk } = usePetUrl()
   const size = useAppStore((s) => s.petSize)
+  const petWalks = useAppStore((s) => s.petWalks)
+  // Why: off, the pet keeps whatever height you left it at — the lane stops
+  // owning y and a release neither falls nor snaps.
+  const petReturnsToLane = useAppStore((s) => s.petReturnsToLane)
 
   const [positionState, setPositionState] = useState<{
     size: number
@@ -272,7 +276,7 @@ export function PetOverlay(): React.JSX.Element {
     // a flick arcs the pet instead of dropping it straight down. Reduced motion
     // skips the physics entirely and lets the lane sync below seat it.
     (velocity) => {
-      if (motionAllowed && positionRef.current.y < laneTop) {
+      if (petReturnsToLane && motionAllowed && positionRef.current.y < laneTop) {
         fall.start(velocity)
       }
     }
@@ -283,11 +287,11 @@ export function PetOverlay(): React.JSX.Element {
   // a mount where the window still reported zero height) would teleport the pet
   // the moment you pick it up. Skipped mid-fall so gravity, not this, seats it.
   useEffect(() => {
-    if (dragging || fall.falling) {
+    if (dragging || fall.busy || !petReturnsToLane) {
       return
     }
     setPosition((current) => (current.y === laneTop ? current : { x: current.x, y: laneTop }))
-  }, [dragging, fall.falling, laneTop, setPosition])
+  }, [dragging, fall.busy, laneTop, petReturnsToLane, setPosition])
 
   // Why: catching the pet mid-air must kill the drop, not fight it.
   useEffect(() => {
@@ -321,13 +325,13 @@ export function PetOverlay(): React.JSX.Element {
   const spriteAnimate = motionAllowed && (!dragging || dragAnimation !== null)
   const animationName = usePetAnimationName(dragging, dragAnimation, hovering)
   // Why: the legs stop while the pet is in hand or mid-drop — it isn't walking.
-  const walkAnimate = motionAllowed && !dragging && !fall.busy
+  const walkAnimate = petWalks && motionAllowed && !dragging && !fall.busy
   // Why: half the rendered artwork width — see the supine lift in the motion CSS.
   const supineLiftPx = walk
     ? (walk.frameWidth * Math.min(size / walk.frameWidth, size / walk.frameHeight)) / 2
     : size / 2
   const walkDirection = usePetWalkLane({
-    active: motionAllowed && !dragging && !fall.busy,
+    active: petWalks && motionAllowed && !dragging && !fall.busy,
     size,
     readX: () => positionRef.current.x,
     onAdvance: useCallback(

@@ -33,6 +33,10 @@ function PetStatusSegmentInner(): React.JSX.Element {
   const removeCustomPet = useAppStore((s) => s.removeCustomPet)
   const petSize = useAppStore((s) => s.petSize)
   const setPetSize = useAppStore((s) => s.setPetSize)
+  const petWalks = useAppStore((s) => s.petWalks)
+  const setPetWalks = useAppStore((s) => s.setPetWalks)
+  const petReturnsToLane = useAppStore((s) => s.petReturnsToLane)
+  const setPetReturnsToLane = useAppStore((s) => s.setPetReturnsToLane)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
 
@@ -143,6 +147,35 @@ function PetStatusSegmentInner(): React.JSX.Element {
             ? translate('auto.components.status.bar.PetStatusSegment.1fbc51cc77', 'Hide pet')
             : translate('auto.components.status.bar.PetStatusSegment.6d0a8cd179', 'Show pet')}
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        {/* Why: checked items rather than a toggling label — both settings are
+            on by default, so the tick shows the current state at a glance. */}
+        <DropdownMenuItem
+          onSelect={(event) => {
+            event.preventDefault()
+            setPetWalks(!petWalks)
+          }}
+        >
+          <span className="flex w-4 items-center justify-center">
+            {petWalks ? <Check className="size-3.5" aria-hidden /> : null}
+          </span>
+          {translate('auto.components.status.bar.PetStatusSegment.petWalks', 'Walk around')}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={(event) => {
+            event.preventDefault()
+            setPetReturnsToLane(!petReturnsToLane)
+          }}
+        >
+          <span className="flex w-4 items-center justify-center">
+            {petReturnsToLane ? <Check className="size-3.5" aria-hidden /> : null}
+          </span>
+          {translate(
+            'auto.components.status.bar.PetStatusSegment.petReturnsToLane',
+            'Drop to the floor when released'
+          )}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         {/* Why: in-menu range so users can resize the overlay without leaving
             the dropdown — pet sprites can import larger than the default 180px
             box and visually overwhelm the viewport. preventDefault on pointer
