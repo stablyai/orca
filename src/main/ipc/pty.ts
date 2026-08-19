@@ -325,7 +325,7 @@ async function listRegisteredPtyProcessesWithHostScope(
           : LOCAL_EXECUTION_HOST_ID
         return {
           // Why: the deadline only applies to relay round-trips; the local provider answers in-process.
-          processes: await (connectionId ? provider.listProcesses(opts) : provider.listProcesses()),
+          processes: await provider.listProcesses(opts),
           hostId
         }
       } catch (error) {
@@ -5925,7 +5925,7 @@ export function registerPtyHandlers(
         // startup; an empty inventory is the truthful state then, not a
         // liveness failure.
         try {
-          return await getLocalPtyProvider().listProcesses()
+          return await getLocalPtyProvider().listProcesses(opts)
         } catch {
           return []
         }

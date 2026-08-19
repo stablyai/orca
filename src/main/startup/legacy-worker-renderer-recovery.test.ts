@@ -36,6 +36,28 @@ describe('legacy worker renderer recovery', () => {
     await vi.waitFor(() => expect(reconcile).toHaveBeenCalledTimes(2))
   })
 
+  it('does not overlap reconcile when the provider is already ready', async () => {
+    let active = 0
+    let maxActive = 0
+    const reconcile = vi.fn(async () => {
+      active += 1
+      maxActive = Math.max(maxActive, active)
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      active -= 1
+    })
+
+    await recoverLegacyWorkerTerminalsForRendererStartup({
+      firstWindowStartupServicesReady: Promise.resolve(),
+      managedWslCliStartupBarrierReady: Promise.resolve(),
+      localPtyProviderStartupReady: Promise.resolve(),
+      reconcile,
+      onDeferredRecoveryError: vi.fn()
+    })
+
+    await vi.waitFor(() => expect(reconcile).toHaveBeenCalledTimes(2))
+    expect(maxActive).toBe(1)
+  })
+
   it('retries after initial recovery when the provider is already ready', async () => {
     const reconcile = vi.fn().mockResolvedValue(undefined)
 

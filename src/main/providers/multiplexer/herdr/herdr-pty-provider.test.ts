@@ -595,6 +595,35 @@ describe('HerdrPtyProvider', () => {
     ).rejects.toThrow(/Session not found/)
   })
 
+  it('lists live Herdr bindings without calling pane.get', async () => {
+    const host = transport()
+    const provider = new HerdrPtyProvider(
+      () => host.value,
+      async () => target(),
+      () => 'test-session'
+    )
+    const spawned = await provider.spawn({
+      cols: 80,
+      rows: 24,
+      cwd: '/repo',
+      worktreeId: 'repo-1::/repo',
+      tabId: 'tab-1',
+      paneKey: 'tab-1:leaf-1'
+    })
+    host.requestMock.mockClear()
+    await expect(provider.listProcesses()).resolves.toEqual([
+      {
+        id: spawned.id,
+        terminalHandle: 'term_p1',
+        incarnationId: expect.any(String),
+        cwd: '/repo',
+        title: 'Herdr',
+        worktreeId: 'repo-1::/repo'
+      }
+    ])
+    expect(host.requestMock).not.toHaveBeenCalled()
+  })
+
   it('delegates a non-Herdr spawn to the Orca fallback', async () => {
     const fallback = {
       spawn: vi.fn(async () => ({ id: 'pty-orca' })),

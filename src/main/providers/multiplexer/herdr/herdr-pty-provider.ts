@@ -23,8 +23,8 @@ import {
   getHerdrBindingBufferSnapshot,
   getHerdrBindingCwd,
   getHerdrBindingForegroundProcess,
-  getHerdrBindingProcessInfo,
   herdrBindingHasChildProcesses,
+  herdrBindingProcessSnapshot,
   maybeNotifyBlocked,
   moveHerdrBinding,
   resizeHerdrBinding,
@@ -264,14 +264,9 @@ export class HerdrPtyProvider implements IPtyProvider {
     return getHerdrBindingForegroundProcess(binding)
   }
 
-  async listProcesses(): Promise<PtyProcessInfo[]> {
-    const herdrResults = await Promise.allSettled(
-      [...this.bindings.values()].map(getHerdrBindingProcessInfo)
-    )
-    const herdr = herdrResults.flatMap((result) =>
-      result.status === 'fulfilled' ? [result.value] : []
-    )
-    const fallback = this.fallback ? await this.fallback.listProcesses() : []
+  async listProcesses(opts?: { deadlineMs?: number }): Promise<PtyProcessInfo[]> {
+    const herdr = [...this.bindings.values()].map(herdrBindingProcessSnapshot)
+    const fallback = this.fallback ? await this.fallback.listProcesses(opts) : []
     return [...herdr, ...fallback]
   }
 

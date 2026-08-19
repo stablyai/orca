@@ -59,17 +59,25 @@ export async function getHerdrBindingForegroundProcess(
   )
 }
 
+export function herdrBindingProcessSnapshot(binding: HerdrPtyBinding): PtyProcessInfo {
+  return {
+    id: binding.id,
+    terminalHandle: `term_${binding.paneId}`,
+    incarnationId: binding.incarnationId,
+    cwd: binding.cwd,
+    title: 'Herdr',
+    worktreeId: binding.identity.worktreeId
+  }
+}
+
 export async function getHerdrBindingProcessInfo(
   binding: HerdrPtyBinding
 ): Promise<PtyProcessInfo> {
   const pane = await getHerdrPane(binding.transport, binding)
   return {
-    id: binding.id,
-    terminalHandle: `term_${binding.paneId}`,
-    incarnationId: binding.incarnationId,
+    ...herdrBindingProcessSnapshot(binding),
     cwd: pane.foreground_cwd ?? pane.cwd ?? binding.cwd,
-    title: pane.title ?? pane.terminal_title ?? pane.label ?? 'Herdr',
-    worktreeId: binding.identity.worktreeId
+    title: pane.title ?? pane.terminal_title ?? pane.label ?? 'Herdr'
   }
 }
 
