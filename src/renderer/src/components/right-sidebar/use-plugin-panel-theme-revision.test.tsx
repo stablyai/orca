@@ -6,7 +6,10 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { PANEL_DESIGN_TOKEN_ALLOWLIST } from '../../../../shared/plugins/plugin-panel-shell'
-import { applyAppAppearanceToDocument } from '@/lib/app-appearance-document'
+import {
+  applyAppAppearanceToDocument,
+  clearAppAppearanceFromDocument
+} from '@/lib/app-appearance-document'
 import { buildPanelDesignTokenCss } from './plugin-panel-design-token-css'
 import { usePluginPanelThemeRevision } from './use-plugin-panel-theme-revision'
 
@@ -38,11 +41,11 @@ afterEach(() => {
   root = null
   container?.remove()
   container = null
+  clearAppAppearanceFromDocument()
   document.documentElement.className = ''
   document.documentElement.removeAttribute('style')
   document.body.className = ''
   document.body.removeAttribute('style')
-  document.body.removeAttribute('data-app-appearance')
 })
 
 describe('usePluginPanelThemeRevision', () => {

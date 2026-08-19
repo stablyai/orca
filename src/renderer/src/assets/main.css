@@ -362,10 +362,15 @@
 }
 
 :root[data-app-appearance]
-  :is(.markdown-preview-shell, .rich-markdown-editor-layout, .rich-markdown-link-bubble) {
+  :is(
+    .markdown-preview-shell,
+    .rich-markdown-editor-layout,
+    .rich-markdown-link-bubble,
+    .rich-markdown-editor-portal
+  ) {
   /* Hosted editors keep the configured Orca scheme when App Appearance follows
      a terminal theme with the opposite luminance. Scope the layout so TOCs and
-     the portaled rich-link bubble retain the same editor-owned token family. */
+     portaled editor controls retain the same editor-owned token family. */
   --background: var(--orca-editor-base-background);
   --foreground: var(--orca-editor-base-foreground);
   --card: var(--orca-editor-base-card);
