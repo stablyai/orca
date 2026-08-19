@@ -1596,6 +1596,7 @@
           "assertions": [
             "keeps a paired client workspace create-with-activate off every other client and the host",
             "still reveals to every client when a paired caller asks for all-surface navigation",
+            "does not replay a missed create activation to a reconnecting observer",
             "keeps create activation caller-scoped on a headless orca serve host",
             "still reveals a host-originated create-with-activate on the host and every client",
             "keeps worktree navigation local to each paired runtime client by default",
@@ -1627,7 +1628,7 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/multi-client-navigation-isolation.integration.test.ts src/main/runtime/rpc/methods/worktree-create-navigation.test.ts",
           "result": "passed",
           "durationSeconds": 6,
-          "summary": "Ten paired-runtime contracts pass, including the headless orca-serve shape, the in-process reveal non-regression, and the CLI-shaped explicit all-surface reveal. With the caller scoping removed the observer's stream carried activateWorktree instead of the fence."
+          "summary": "Eleven paired-runtime contracts pass, including the headless orca-serve shape, the in-process reveal non-regression, and the CLI-shaped explicit all-surface reveal. With the caller scoping removed the observer's stream carried activateWorktree instead of the fence."
         },
         {
           "date": "2026-08-18",
@@ -1666,7 +1667,9 @@
         "Host-originated CLI creates deliberately still reveal on every client; that broader authority question is untouched by this gate.",
         "Mobile creates deliberately keep the all-surface reveal: a phone has no renderer to provision repo setup/default tabs off the activation event.",
         "The Electron journey drives the store create action, so the composer's automatic self-navigation on create is proved by worktree-creation-flow.test.ts and worktree.spec.ts rather than by this journey.",
-        "Headless coverage is a modeled runtime shape; CLI bootstrap and argument parsing for orca serve are not exercised here."
+        "Headless coverage is a modeled runtime shape; CLI bootstrap and argument parsing for orca serve are not exercised here.",
+        "Out of scope, host-only and unreachable from the product UI: a paired caller that explicitly requests terminal.create with presentation 'focused' still navigates the host renderer (the Orca client always sends 'background'); agent-session already downgrades that presentation for paired callers.",
+        "Out of scope: browser.tabCreate/tabSwitch carry no paired-client navigation policy, so they can change the host's active browser tab when the host is already on that worktree. They never cross worktrees, and the paired web client sends activate:true deliberately."
       ],
       "demotionRule": "Demote if a create, activate, or reveal path can move a viewer that did not request it, or if scoping regresses the in-process/CLI reveal that a headless server's only remote viewer depends on."
     },

@@ -136,6 +136,7 @@ describe('paired runtime navigation isolation', () => {
       deviceIdA: offerA.deviceId,
       deviceIdB: offerB.deviceId,
       pairingUrlA: offerA.pairingUrl,
+      pairingUrlB: offerB.pairingUrl,
       readerA,
       readerB
     }
@@ -336,6 +337,48 @@ describe('paired runtime navigation isolation', () => {
     // ...while shared catalog state still reaches both clients.
     expect(observed.a).toContain('worktreesChanged')
     expect(observed.b).toContain('worktreesChanged')
+  })
+
+  it('does not replay a missed create activation to a reconnecting observer', async () => {
+    const harness = await startHarness()
+    await subscribeBothClientEventStreams(harness)
+
+    // The observer is offline while the creator works.
+    harness.readerB.dispose()
+    await new Promise<void>((resolve) => {
+      harness.clientB.ws.once('close', () => resolve())
+      harness.clientB.ws.close()
+    })
+
+    send(harness.clientA, {
+      id: 'create-while-b-offline',
+      method: 'worktree.create',
+      params: { repo: FOLDER_REPO_ID, name: 'offline-observer-workspace', activate: true }
+    })
+    await expect(harness.readerA.next('create-while-b-offline')).resolves.toMatchObject({
+      ok: true
+    })
+
+    const reconnectedB = await authenticate(harness.pairingUrlB)
+    sessions.push(reconnectedB)
+    const reconnectedReaderB = createReader(reconnectedB)
+    readers.push(reconnectedReaderB)
+    send(reconnectedB, { id: 'events-b2', method: 'runtime.clientEvents.subscribe' })
+    await reconnectedReaderB.next('events-b2', (response) => resultType(response) === 'ready')
+
+    // Why: the ready snapshot must not carry navigation intent forward; only live,
+    // addressed activation is legitimate, so a reconnect can never inherit it.
+    harness.runtime.notifyReposChangedForRemoteClients()
+    const observed: string[] = []
+    for (;;) {
+      const type = resultType(await reconnectedReaderB.next('events-b2'))
+      observed.push(type ?? 'unknown')
+      if (type === 'reposChanged' || type === 'activateWorktree') {
+        break
+      }
+    }
+    expect(observed).not.toContain('activateWorktree')
+    expect(observed.at(-1)).toBe('reposChanged')
   })
 
   it('still reveals to every client when a paired caller asks for all-surface navigation', async () => {
