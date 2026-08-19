@@ -4,14 +4,14 @@ import { describe, expect, it } from 'vitest'
 
 function readWorktreeListSource(): string {
   return readFileSync(
-    fileURLToPath(new URL('./worktree-list/worktree-section-header-row.tsx', import.meta.url)),
+    fileURLToPath(new URL('./worktree-list/rows/SectionHeader.tsx', import.meta.url)),
     'utf8'
   )
 }
 
 function readHeaderDragSource(): string {
   return readFileSync(
-    fileURLToPath(new URL('./worktree-list/use-worktree-sidebar-header-drag.ts', import.meta.url)),
+    fileURLToPath(new URL('./worktree-list/drag/use-header-drag.ts', import.meta.url)),
     'utf8'
   )
 }

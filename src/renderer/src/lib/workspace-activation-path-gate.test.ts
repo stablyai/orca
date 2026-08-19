@@ -140,7 +140,7 @@ describe('Cmd/Ctrl+1-9 folder-workspace path gate (#10716)', () => {
       source.indexOf('onJumpToWorktreeIndex('),
       source.indexOf('onJumpToTabIndex(')
     )
-    expect(handler).toContain('activateAndRevealWorkspace(visibleIds[index])')
-    expect(handler).not.toContain('activateAndRevealWorktree(visibleIds[index])')
+    expect(handler).toContain('activateAndRevealWorkspace(target.id')
+    expect(handler).not.toContain('activateAndRevealWorktree(target.id')
   })
 })

@@ -43,6 +43,26 @@ vi.mock('./worktree-symlinks', async () =>
 )
 vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
+vi.mock('../setup-runner-script-text', async (importOriginal) =>
+  (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
+    (await importOriginal()) as Record<string, unknown>
+  )
+)
+vi.mock('../worktree-runner-script', async (importOriginal) =>
+  (await import('./worktrees-test-module-mocks')).worktreeRunnerScriptModuleMock(
+    (await importOriginal()) as Record<string, unknown>
+  )
+)
+vi.mock('../effective-hook-config', async (importOriginal) =>
+  (await import('./worktrees-test-module-mocks')).effectiveHookConfigModuleMock(
+    (await importOriginal()) as Record<string, unknown>
+  )
+)
+vi.mock('../setup-hook-env-vars', async (importOriginal) =>
+  (await import('./worktrees-test-module-mocks')).setupHookEnvVarsModuleMock(
+    (await importOriginal()) as Record<string, unknown>
+  )
+)
 vi.mock('./worktree-logic', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).worktreeLogicModuleMock(
     (await importOriginal()) as Record<string, unknown>
@@ -317,5 +337,43 @@ describe('registerWorktreeHandlers', () => {
 
     finishFirst()
     await expect(first).resolves.toEqual({})
+  })
+
+  // The repos are gone (host removed), so only the single global meta key is left to
+  // key on — and it names one host. It must not merge two hosts' forgets into one.
+  it('does not let stale metadata coalesce an explicit host forget onto another host', async () => {
+    const worktreeId = 'repo-gone::/same/path'
+    store.getRepos.mockReturnValue([])
+    store.getRepo.mockReturnValue(undefined)
+    store.getWorktreeMeta.mockReturnValue({ hostId: 'local' })
+    let finishFirst!: () => void
+    killAllProcessesForWorktreeMock
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finishFirst = () =>
+              resolve({ runtimeStopped: 0, providerStopped: 0, registryStopped: 0 })
+          })
+      )
+      .mockResolvedValueOnce({ runtimeStopped: 0, providerStopped: 0, registryStopped: 0 })
+
+    const first = handlers['worktrees:forgetLocal'](null, {
+      worktreeId,
+      hostId: 'local'
+    }) as Promise<unknown>
+    await vi.waitFor(() => expect(killAllProcessesForWorktreeMock).toHaveBeenCalledTimes(1))
+
+    await expect(
+      handlers['worktrees:forgetLocal'](null, {
+        worktreeId,
+        hostId: 'ssh:conn-1'
+      })
+    ).resolves.toEqual({})
+    expect(killAllProcessesForWorktreeMock).toHaveBeenCalledTimes(2)
+
+    finishFirst()
+    await expect(first).resolves.toEqual({})
+    expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'local')
+    expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'ssh:conn-1')
   })
 })

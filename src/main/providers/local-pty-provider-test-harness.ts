@@ -74,7 +74,8 @@ export function installLocalPtyProviderEnvSandbox(): void {
 
 export function applyLocalPtyProviderMockDefaults(mocks: LocalPtyProviderMocks): void {
   mocks.existsSyncMock.mockReturnValue(true)
-  mocks.statSyncMock.mockReturnValue({ isDirectory: () => true, mode: 0o755 })
+  // size: the wrapper writer verifies each generated file is non-empty.
+  mocks.statSyncMock.mockReturnValue({ isDirectory: () => true, mode: 0o755, size: 1 })
   mocks.accessSyncMock.mockReturnValue(undefined)
   mocks.mkdirSyncMock.mockReset()
   mocks.writeFileSyncMock.mockReset()

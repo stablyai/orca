@@ -18,7 +18,6 @@ describe('performContextualTourStepAction', () => {
       setSidebarOpen: vi.fn(),
       openTaskPage,
       openModal: vi.fn(),
-      canCreateWorkspace: true,
       openWorkspaceComposer: vi.fn(),
       dispatchTerminalPaneSplit: vi.fn(),
       schedule: vi.fn()
@@ -43,7 +42,6 @@ describe('performContextualTourStepAction', () => {
       setSidebarOpen: vi.fn(),
       openTaskPage: vi.fn(),
       openModal: vi.fn(),
-      canCreateWorkspace: true,
       openWorkspaceComposer: vi.fn(),
       dispatchTerminalPaneSplit,
       schedule: vi.fn()
@@ -71,7 +69,6 @@ describe('performContextualTourStepAction', () => {
       setSidebarOpen: vi.fn(),
       openTaskPage: vi.fn(),
       openModal: vi.fn(),
-      canCreateWorkspace: true,
       openWorkspaceComposer,
       dispatchTerminalPaneSplit: vi.fn(),
       schedule: vi.fn()
@@ -85,7 +82,7 @@ describe('performContextualTourStepAction', () => {
     expect(finishTour).not.toHaveBeenCalled()
   })
 
-  it('does not open the workspace composer when workspace creation is unavailable', () => {
+  it('opens the workspace composer with no projects so the first one can be added there', () => {
     const detachContextualTourSource = vi.fn()
     const openWorkspaceComposer = vi.fn()
 
@@ -99,13 +96,12 @@ describe('performContextualTourStepAction', () => {
       setSidebarOpen: vi.fn(),
       openTaskPage: vi.fn(),
       openModal: vi.fn(),
-      canCreateWorkspace: false,
       openWorkspaceComposer,
       dispatchTerminalPaneSplit: vi.fn(),
       schedule: vi.fn()
     })
 
-    expect(detachContextualTourSource).not.toHaveBeenCalled()
-    expect(openWorkspaceComposer).not.toHaveBeenCalled()
+    expect(detachContextualTourSource).toHaveBeenCalledTimes(1)
+    expect(openWorkspaceComposer).toHaveBeenCalledTimes(1)
   })
 })

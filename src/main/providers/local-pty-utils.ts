@@ -1,10 +1,18 @@
 import { basename, isAbsolute, join } from 'node:path'
 import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants } from 'node:fs'
-import { release } from 'node:os'
 import type * as pty from 'node-pty'
-import { isWslUncPath } from '../../shared/wsl-paths'
-import { wslUncDirectoryExists } from '../wsl'
-import { wrapShellSpawnForMacosTccAttribution } from './macos-tcc-login-shell'
+import {
+  hostReportsChildExitStatus,
+  wrapShellSpawnForMacosTccAttribution
+} from './macos-tcc-login-shell'
+import { formatLocalPtyEnvironmentDiag } from './working-directory-validation'
+
+export {
+  formatLocalPtyEnvironmentDiag,
+  validateWorkingDirectory,
+  validateWorkingDirectoryAsync,
+  WorkingDirectoryValidationAbortedError
+} from './working-directory-validation'
 
 let didEnsureSpawnHelperExecutable = false
 
@@ -100,55 +108,6 @@ export function ensureNodePtySpawnHelperExecutable(): void {
   }
 }
 
-function formatLocalPtyEnvironmentDiag(extra: Record<string, string> = {}): string {
-  const systemVersion =
-    (process as NodeJS.Process & { getSystemVersion?: () => string }).getSystemVersion?.() ||
-    release()
-  const parts = {
-    ...extra,
-    arch: process.arch,
-    platform: `${process.platform} ${systemVersion}`,
-    orca: process.env.ORCA_APP_VERSION?.trim() || '0.0.0-dev'
-  }
-  return Object.entries(parts)
-    .map(([key, value]) => `${key}: ${value}`)
-    .join(', ')
-}
-
-function throwMissingWorkingDirectory(cwd: string): never {
-  throw new Error(
-    `Working directory "${cwd}" does not exist. ` +
-      `It may have been deleted or is on an unmounted volume ` +
-      `(${formatLocalPtyEnvironmentDiag({ cwd })}).`
-  )
-}
-
-/**
- * Validate that a working directory exists and is a directory.
- * Throws a descriptive Error if not.
- */
-export function validateWorkingDirectory(cwd: string): void {
-  // Why: Win32 fs.statSync against the WSL 9P share (\\wsl.localhost\...) can
-  // falsely report ENOENT for directories that exist on the Linux side. Ask the
-  // distro itself; only fall back to the fs check when wsl.exe is inconclusive.
-  if (isWslUncPath(cwd)) {
-    const existsInDistro = wslUncDirectoryExists(cwd)
-    if (existsInDistro === false) {
-      throwMissingWorkingDirectory(cwd)
-    }
-    if (existsInDistro === true) {
-      return
-    }
-  }
-
-  if (!existsSync(cwd)) {
-    throwMissingWorkingDirectory(cwd)
-  }
-  if (!statSync(cwd).isDirectory()) {
-    throw new Error(`Working directory "${cwd}" is not a directory.`)
-  }
-}
-
 /** A pre-resolved Windows shell attempt: an absolute executable plus the launch
  *  args + cwd computed for it. Used to walk the PowerShell -> Windows PowerShell
  *  -> cmd.exe fallback chain when ConPTY rejects the primary shell. */
@@ -172,6 +131,10 @@ export type ShellSpawnParams = {
   getShellReadyConfig?: (
     shell: string
   ) => { args: string[] | null; env: Record<string, string> } | null
+  /** Env keys the primary shell's launch config wrote into `env`. Passed in
+   *  rather than re-derived: asking for the config again re-runs wrapper
+   *  generation just to read back its key names. */
+  launchEnvKeys?: readonly string[]
   /** Called before each fallback shell spawn so callers can update env vars
    *  (e.g. HISTFILE) that depend on which shell is about to run. */
   onBeforeFallbackSpawn?: (env: Record<string, string>, fallbackShell: string) => void
@@ -185,6 +148,9 @@ export type ShellSpawnParams = {
 export type ShellSpawnResult = {
   process: pty.IPty
   shellPath: string
+  /** False when a wrapper owns the reported status, so no exit code or signal
+   *  from this process describes the shell (STA-4536). */
+  reportsChildExitStatus?: boolean
   /** True when the winning shell's startup command was already embedded in its
    *  argv, so callers must not re-deliver it through stdin. Only set when a
    *  Windows fallback attempt other than the primary was used. */
@@ -274,7 +240,8 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
           env,
           ...windowsConptyDllOptions()
         }),
-        shellPath
+        shellPath,
+        reportsChildExitStatus: hostReportsChildExitStatus(wrapped.file)
       }
     } catch (err) {
       primaryError = err instanceof Error ? err.message : String(err)
@@ -291,6 +258,12 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
   // Try fallback shells on Unix
   if (process.platform !== 'win32') {
     const fallbackShells = UNIX_SHELL_FALLBACKS.filter((candidate) => candidate !== shellPath)
+    // Why: the previous shell's launch keys (its wrapper ZDOTDIR and the feature
+    // channel) mean nothing to a different shell. An unwrapped fallback writes
+    // none of them back, so they would stay exported to the pane and to every
+    // child — including a nested zsh that would then load Orca's wrapper. Tracked
+    // per attempt, not once: the second fallback must not inherit the first's.
+    let staleLaunchEnvKeys: readonly string[] = params.launchEnvKeys ?? []
     for (const fallback of fallbackShells) {
       if (getShellValidationError(fallback)) {
         continue
@@ -299,7 +272,11 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
         const fallbackReady = getShellReadyConfig?.(fallback)
         env.SHELL = fallback
         onBeforeFallbackSpawn?.(env, fallback)
+        for (const key of staleLaunchEnvKeys) {
+          delete env[key]
+        }
         Object.assign(env, fallbackReady?.env ?? {})
+        staleLaunchEnvKeys = Object.keys(fallbackReady?.env ?? {})
         const wrapped = wrapShellSpawnForMacosTccAttribution(
           fallback,
           fallbackReady?.args ?? ['-l'],
@@ -315,7 +292,11 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
         console.warn(
           `[pty] Primary shell "${shellPath}" failed (${primaryError ?? 'unknown error'}), fell back to "${fallback}"`
         )
-        return { process: proc, shellPath: fallback }
+        return {
+          process: proc,
+          shellPath: fallback,
+          reportsChildExitStatus: hostReportsChildExitStatus(wrapped.file)
+        }
       } catch {
         // Fallback also failed -- try next.
       }

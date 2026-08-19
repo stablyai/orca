@@ -4,10 +4,8 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
 import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
-import {
-  normalizeCreateReviewBaseSearchResults,
-  useCreatePullRequestDialogFields
-} from './useCreatePullRequestDialogFields'
+import { normalizeCreateReviewBaseSearchResults } from './create-pull-request-base-ref-normalization'
+import { useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
 
 describe('normalizeCreateReviewBaseSearchResults', () => {
   it('uses detailed local branch names for base refs from arbitrary remotes', () => {

@@ -17,7 +17,7 @@ import {
   startDaemonStreamBacklogProbe
 } from './daemon-stream-backlog-probe'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import { checkPtySpawnHealth } from './pty-subprocess'
 import { createNoopDaemonFileLog, type DaemonFileLog } from './daemon-file-log'
 import { isTuiAgent } from '../../shared/tui-agent-config'
@@ -86,7 +86,9 @@ export type DaemonServerOptions = {
     env?: Record<string, string>
     command?: string
     shellOverride?: string
-  }) => SubprocessHandle
+    isCanceled?: () => boolean
+    // Async production spawns and sync test stubs share this boundary.
+  }) => SubprocessHandle | Promise<SubprocessHandle>
 }
 
 type ConnectedClient = {
@@ -98,9 +100,19 @@ type ConnectedClient = {
 
 type PendingPtySpawnPreparation = {
   canceled: boolean
+  // Why: `canceled` is only polled between spawn steps; the signal is what
+  // actually interrupts an in-progress cwd probe on a dead share.
+  readonly controller: AbortController
+  cancelTimer?: ReturnType<typeof setTimeout>
   // Why: preparations are keyed by sessionId, but a control-socket close must
   // cancel only the disconnecting client's preps, not another client's (F4).
   clientId: string
+  requestId: string
+}
+
+function cancelPtySpawnPreparation(preparation: PendingPtySpawnPreparation): void {
+  preparation.canceled = true
+  preparation.controller.abort()
 }
 
 type PendingShutdownReply = {
@@ -228,6 +240,9 @@ export class DaemonServer {
     this.onAuthenticatedClientPair = opts.onAuthenticatedClientPair ?? (() => {})
     this.host = new TerminalHost({
       spawnSubprocess: opts.spawnSubprocess,
+      // Why a closure: this.log is assigned after this constructor call, and the
+      // callback only fires once a session is live.
+      reportReadinessEvent: (event, details) => this.log.log(event, details),
       // Why host-level and not the attach callback: a session whose client transport already dropped
       // has no attachment left to fire exit bookkeeping, and the daemon must still notice it can idle.
       onSessionReaped: (sessionId) => {
@@ -900,37 +915,85 @@ export class DaemonServer {
     this.pendingShutdownReplies.set(key, { start })
   }
 
-  private async preparePtySpawnUnlessCanceled(sessionId: string, clientId: string): Promise<void> {
+  /**
+   * Registers a cancellable preparation without doing spawn preflight. Every
+   * createOrAttach registers one, including attach-only: without it the server
+   * cannot match the client's cancel, and an attach-only request queued behind a
+   * hung create is bounded by neither side.
+   */
+  private registerPtySpawnPreparation(
+    sessionId: string,
+    clientId: string,
+    requestId: string,
+    cancelAfterMs: unknown
+  ): PendingPtySpawnPreparation {
     const preparation: PendingPtySpawnPreparation = {
       canceled: false,
-      clientId
+      controller: new AbortController(),
+      clientId,
+      requestId
+    }
+    if (Number.isSafeInteger(cancelAfterMs) && Number(cancelAfterMs) > 0) {
+      preparation.cancelTimer = setTimeout(
+        () => {
+          cancelPtySpawnPreparation(preparation)
+        },
+        Math.min(Number(cancelAfterMs), 300_000)
+      )
+      preparation.cancelTimer.unref()
     }
     const pending = this.pendingPtySpawnPreparations.get(sessionId) ?? new Set()
     pending.add(preparation)
     this.pendingPtySpawnPreparations.set(sessionId, pending)
-    try {
-      // Why: register before the async probe so a concurrent close can cancel this creation before a subprocess exists.
-      await this.preparePtySpawn()
-      if (preparation.canceled) {
-        throw new TerminalAttachCanceledError(sessionId)
-      }
-    } finally {
-      pending.delete(preparation)
-      if (pending.size === 0) {
-        this.pendingPtySpawnPreparations.delete(sessionId)
-      }
+    return preparation
+  }
+
+  private async preparePtySpawnUnlessCanceled(
+    sessionId: string,
+    preparation: PendingPtySpawnPreparation
+  ): Promise<void> {
+    // Why: registered before the async probe so a concurrent close can cancel this creation before a subprocess exists.
+    await this.preparePtySpawn()
+    if (preparation.canceled) {
+      throw new TerminalAttachCanceledError(sessionId)
     }
   }
 
-  private cancelPendingPtySpawnPreparations(sessionId: string): boolean {
+  private finishPtySpawnPreparation(
+    sessionId: string,
+    preparation: PendingPtySpawnPreparation
+  ): void {
+    if (preparation.cancelTimer) {
+      clearTimeout(preparation.cancelTimer)
+    }
+    const pending = this.pendingPtySpawnPreparations.get(sessionId)
+    pending?.delete(preparation)
+    if (pending?.size === 0) {
+      this.pendingPtySpawnPreparations.delete(sessionId)
+    }
+  }
+
+  private cancelPendingPtySpawnPreparations(
+    sessionId: string,
+    request?: { clientId: string; requestId?: string }
+  ): boolean {
     const pending = this.pendingPtySpawnPreparations.get(sessionId)
     if (!pending) {
       return false
     }
+    let canceled = false
     for (const preparation of pending) {
-      preparation.canceled = true
+      if (
+        request &&
+        (preparation.clientId !== request.clientId ||
+          (request.requestId !== undefined && preparation.requestId !== request.requestId))
+      ) {
+        continue
+      }
+      cancelPtySpawnPreparation(preparation)
+      canceled = true
     }
-    return true
+    return canceled
   }
 
   private cancelAllPendingPtySpawnPreparations(): void {
@@ -943,7 +1006,7 @@ export class DaemonServer {
     for (const pending of this.pendingPtySpawnPreparations.values()) {
       for (const preparation of pending) {
         if (preparation.clientId === clientId) {
-          preparation.canceled = true
+          cancelPtySpawnPreparation(preparation)
         }
       }
     }
@@ -1033,6 +1096,7 @@ export class DaemonServer {
         this.createOrAttachInFlight++
         let routedSessionId = p.sessionId
         let result: Awaited<ReturnType<TerminalHost['createOrAttach']>>
+        let spawnPreparation: PendingPtySpawnPreparation | null = null
         try {
           if (
             p.agentSessionEnsure !== undefined &&
@@ -1041,8 +1105,14 @@ export class DaemonServer {
           ) {
             throw new Error('agent_session_identity_required')
           }
+          spawnPreparation = this.registerPtySpawnPreparation(
+            p.sessionId,
+            clientId,
+            request.id,
+            p.cancelAfterMs
+          )
           if (!attachOnly) {
-            await this.preparePtySpawnUnlessCanceled(p.sessionId, clientId)
+            await this.preparePtySpawnUnlessCanceled(p.sessionId, spawnPreparation)
           }
           if (p.historySeed !== undefined && p.historySeedTransferId !== undefined) {
             throw new Error('Multiple terminal history seed sources')
@@ -1075,6 +1145,12 @@ export class DaemonServer {
               ? { shellReadyTimeoutMs: p.shellReadyTimeoutMs }
               : {}),
             ...(p.agentSessionEnsure ? { agentSessionEnsure: p.agentSessionEnsure } : {}),
+            ...(spawnPreparation
+              ? {
+                  isCanceled: () => spawnPreparation?.canceled === true,
+                  cancelSignal: spawnPreparation.controller.signal
+                }
+              : {}),
             onSessionResolved: (sessionId) => {
               routedSessionId = sessionId
             },
@@ -1095,17 +1171,18 @@ export class DaemonServer {
                   seq
                 })
               },
-              onExit: (code, incarnationId) => {
+              onExit: (code, incarnationId, cause) => {
                 // Why: exit tears down renderer handlers, so it must ride the ordered queue behind final output.
                 this.log.log('session-exited', {
                   sessionId: routedSessionId,
-                  code
+                  code,
+                  cause: cause?.kind
                 })
                 this.streamDataBatcher.enqueueControlEvent(clientId, routedSessionId, {
                   type: 'event',
                   event: 'exit',
                   sessionId: routedSessionId,
-                  payload: { code, incarnationId }
+                  payload: { code, incarnationId, ...(cause ? { cause } : {}) }
                 })
                 this.streamDataBatcher.flush(clientId)
                 recordDaemonStreamBacklogEvent('sessionExit', {
@@ -1121,6 +1198,9 @@ export class DaemonServer {
             }
           })
         } finally {
+          if (spawnPreparation) {
+            this.finishPtySpawnPreparation(p.sessionId, spawnPreparation)
+          }
           this.createOrAttachInFlight--
           this.reevaluateIdleShutdown()
         }
@@ -1163,8 +1243,14 @@ export class DaemonServer {
       }
 
       case 'cancelCreateOrAttach':
-        this.cancelPendingPtySpawnPreparations(request.payload.sessionId)
-        return {}
+        return {
+          canceled: this.cancelPendingPtySpawnPreparations(request.payload.sessionId, {
+            clientId,
+            ...(typeof request.payload.requestId === 'string'
+              ? { requestId: request.payload.requestId }
+              : {})
+          })
+        }
 
       case 'closeStartupQueryAuthority':
         return {

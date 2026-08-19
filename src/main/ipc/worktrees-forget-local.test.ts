@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolve } from 'node:path'
-import { registerWorktreeRootsForRepo, resolveRegisteredWorktreePath } from './filesystem-auth'
+import {
+  registerWorktreeRootsForRepo,
+  resolveRegisteredWorktreePath
+} from './registered-worktree-roots-cache'
 import {
   listWorktreesMock,
   removeWorktreeMock,
@@ -50,6 +53,26 @@ vi.mock('./worktree-symlinks', async () =>
 )
 vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
+vi.mock('../setup-runner-script-text', async (importOriginal) =>
+  (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
+    (await importOriginal()) as Record<string, unknown>
+  )
+)
+vi.mock('../worktree-runner-script', async (importOriginal) =>
+  (await import('./worktrees-test-module-mocks')).worktreeRunnerScriptModuleMock(
+    (await importOriginal()) as Record<string, unknown>
+  )
+)
+vi.mock('../effective-hook-config', async (importOriginal) =>
+  (await import('./worktrees-test-module-mocks')).effectiveHookConfigModuleMock(
+    (await importOriginal()) as Record<string, unknown>
+  )
+)
+vi.mock('../setup-hook-env-vars', async (importOriginal) =>
+  (await import('./worktrees-test-module-mocks')).setupHookEnvVarsModuleMock(
+    (await importOriginal()) as Record<string, unknown>
+  )
+)
 vi.mock('./worktree-logic', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).worktreeLogicModuleMock(
     (await importOriginal()) as Record<string, unknown>
@@ -220,6 +243,32 @@ describe('registerWorktreeHandlers', () => {
       expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'ssh:ssh-live')
     })
 
+    it('rejects an unqualified forget when the repo id has owners on two hosts', async () => {
+      const localRepo = {
+        id: 'repo-shared',
+        path: '/workspace/local',
+        displayName: 'local',
+        badgeColor: '#000',
+        addedAt: 0
+      }
+      const sshRepo = {
+        ...localRepo,
+        path: '/workspace/remote',
+        connectionId: 'ssh-live'
+      }
+      const worktreeId = 'repo-shared::/workspace/feature-wt'
+      store.getRepos.mockReturnValue([localRepo, sshRepo])
+      store.getRepo.mockReturnValue(localRepo)
+      store.getWorktreeMeta.mockReturnValue({ hostId: 'local' })
+
+      await expect(handlers['worktrees:forgetLocal'](null, { worktreeId })).rejects.toThrow(
+        'Workspace identity is ambiguous across hosts'
+      )
+
+      expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+      expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+    })
+
     it('scopes the purge to a local folder workspace owner', async () => {
       const repo = {
         id: 'repo-folder-child',
@@ -260,6 +309,28 @@ describe('registerWorktreeHandlers', () => {
 
       expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
       expect(deleteWorktreeHistoryDirMock).not.toHaveBeenCalled()
+    })
+
+    it('does not apply another host folder root guard to an explicit missing owner', async () => {
+      const localRepo = {
+        id: 'repo-folder',
+        path: '/workspace/folder',
+        displayName: 'folder',
+        badgeColor: '#000',
+        addedAt: 0,
+        kind: 'folder' as const
+      }
+      const worktreeId = `${localRepo.id}::${localRepo.path}`
+      store.getRepos.mockReturnValue([localRepo])
+      store.getRepo.mockReturnValue(undefined)
+      store.getWorktreeMeta.mockReturnValue({ hostId: 'ssh:removed' })
+      getLocalPtyProviderMock.mockReturnValue({} as never)
+
+      await expect(
+        handlers['worktrees:forgetLocal'](null, { worktreeId, hostId: 'ssh:removed' })
+      ).resolves.toEqual({})
+
+      expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'ssh:removed')
     })
   })
 })

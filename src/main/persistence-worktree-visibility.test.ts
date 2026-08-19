@@ -3,6 +3,7 @@ import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { GlobalSettings } from '../shared/global-settings-types'
+import type { ExternalWorktreeVisibility } from '../shared/repo-types'
 import { getDefaultPersistedState } from '../shared/constants'
 import { testState, createStore, writeDataFile, makeRepo } from './persistence-test-harness'
 
@@ -232,6 +233,33 @@ describe('Store', () => {
     const reloaded = await createStore()
     expect(reloaded.getRepo('r1')?.externalWorktreeVisibility).toBeUndefined()
     expect(reloaded.getRepo('r1')?.externalWorktreeVisibilityLegacy).toBe(false)
+  })
+
+  it('sanitizes raw custom worktree visibility sources on the read path', async () => {
+    const persisted = getDefaultPersistedState(testState.dir)
+    persisted.repos = [
+      makeRepo({
+        id: 'r1',
+        customWorktreeVisibilitySources: [
+          { id: 'team', rootPath: ' /srv/team-worktrees ' },
+          { id: 'invalid', rootPath: '../relative' }
+        ],
+        worktreeVisibilitySourcePreferences: {
+          builtIn: { claude: 'show', gsd: 'show' },
+          custom: { team: 'show', missing: 'bogus' as unknown as ExternalWorktreeVisibility }
+        }
+      })
+    ]
+    writeDataFile(persisted)
+
+    const store = await createStore()
+    expect(store.getRepo('r1')).toMatchObject({
+      customWorktreeVisibilitySources: [{ id: 'team', rootPath: '/srv/team-worktrees' }],
+      worktreeVisibilitySourcePreferences: {
+        builtIn: { claude: 'show', gsd: 'show' },
+        custom: { team: 'show' }
+      }
+    })
   })
 
   it('updateRepo clears source-control AI overrides independently from other clearable fields', async () => {

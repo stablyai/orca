@@ -30,15 +30,9 @@ vi.mock('./gl-utils', async () => {
   }
 })
 
-import {
-  addIssueComment,
-  createIssue,
-  getIssue,
-  listAssignableUsers,
-  listIssues,
-  listLabels,
-  updateIssue
-} from './issues'
+import { addIssueComment, createIssue, getIssue, listIssues } from './issues'
+import { updateIssue } from './issue-update'
+import { listAssignableUsers, listLabels } from './project-label-and-member-lookup'
 
 describe('gitlab issue operations', () => {
   beforeEach(() => {

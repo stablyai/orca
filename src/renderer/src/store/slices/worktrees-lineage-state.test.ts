@@ -316,16 +316,18 @@ describe('worktree lineage state', () => {
     })
   })
 
-  it('refetches lineage after an update failure', async () => {
+  it('refetches lineage and rethrows after an update failure', async () => {
     const lineage = makeLineage()
     const store = createLocalLineageTestStore(lineage)
     mockApi.worktrees.updateLineage.mockRejectedValueOnce(new Error('stale parent'))
     mockApi.worktrees.listLineage.mockResolvedValue({ [lineage.worktreeId]: lineage })
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
-    await store.getState().updateWorktreeLineage(lineage.worktreeId, {
-      parentWorktreeId: lineage.parentWorktreeId
-    })
+    await expect(
+      store.getState().updateWorktreeLineage(lineage.worktreeId, {
+        parentWorktreeId: lineage.parentWorktreeId
+      })
+    ).rejects.toThrow('stale parent')
 
     expect(mockApi.worktrees.listLineage).toHaveBeenCalled()
     expect(store.getState().worktreeLineageById).toEqual({ [lineage.worktreeId]: lineage })
@@ -700,5 +702,64 @@ describe('worktree lineage state', () => {
     })
     expect(store.getState().worktreeLineageById).toEqual({})
     expect(store.getState().worktreesByRepo.repo1?.[0]).toEqual(updatedChild)
+  })
+
+  // An unresolvable owner route must reach the caller so the sidebar can toast it, rather than
+  // becoming a silent no-op. Both callers catch; see WorktreeContextMenu.handleRemoveParentLink.
+  it('rejects the lineage update when the owner route cannot be resolved', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-shared::/same/path'
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'hub-c' } as never,
+      worktreesByRepo: {
+        'repo-shared': [
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo-shared',
+            hostId: 'ssh:ssh-a',
+            runtimeOwnerEnvironmentId: 'hub-a'
+          }),
+          makeWorktree({
+            id: worktreeId,
+            repoId: 'repo-shared',
+            hostId: 'ssh:ssh-b',
+            runtimeOwnerEnvironmentId: 'hub-b'
+          })
+        ]
+      }
+    } as Partial<AppState>)
+
+    await expect(
+      store.getState().updateWorktreeLineage(worktreeId, { noParent: true })
+    ).rejects.toThrow()
+
+    expect(mockApi.worktrees.updateLineage).not.toHaveBeenCalled()
+  })
+
+  it('rethrows the original update failure when the recovery refresh fails', async () => {
+    const lineage = makeLineage()
+    const store = createLocalLineageTestStore(lineage)
+    mockApi.worktrees.updateLineage.mockRejectedValueOnce(new Error('unnest failed'))
+    mockApi.worktrees.listLineage.mockRejectedValueOnce(new Error('refresh failed'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await expect(
+      store.getState().updateWorktreeLineage(lineage.worktreeId, { noParent: true })
+    ).rejects.toThrow('unnest failed')
+  })
+
+  it('rethrows the original assign failure when the recovery refresh fails', async () => {
+    const lineage = makeLineage()
+    const store = createLocalLineageTestStore(lineage)
+    mockApi.worktrees.updateLineage.mockRejectedValueOnce(new Error('stale parent'))
+    mockApi.worktrees.listLineage.mockRejectedValueOnce(new Error('refresh failed'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    // A failed recovery refresh must not replace the cause the caller toasts.
+    await expect(
+      store.getState().assignWorktreeParent(lineage.worktreeId, {
+        parentWorktreeId: lineage.parentWorktreeId
+      })
+    ).rejects.toThrow('stale parent')
   })
 })

@@ -96,6 +96,7 @@ describe('buildDispatchPreamble', () => {
     expect(result).toMatch(/orchestration ask --from term_worker/)
     expect(result).toContain('--question')
     expect(result).toContain('--timeout-ms 600000')
+    expect(result).not.toContain('--type decision_gate')
     // Why: the exact phrase is asserted so the rule can't be trimmed away by
     // accident. BEHAVIOR RULE #1 is the only place AskUserQuestion appears.
     expect(result).toContain('BEHAVIOR RULE #1')
@@ -112,6 +113,7 @@ describe('buildDispatchPreamble', () => {
 
     expect(result).toMatch(/orchestration ask --from term_worker/)
     expect(result).toMatch(/orchestration send --from term_worker \\\n    --type escalation/)
+    expect(result).toContain('--task-id task_abc123 --dispatch-id ctx_def456')
     expect(result).toContain('orchestration check --terminal term_worker')
   })
 

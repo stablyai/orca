@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { DaemonClient } from './client'
 import { DaemonServer } from './daemon-server'
 import { getDaemonSocketPath } from './daemon-spawner'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-host'
 
 function createMockSubprocess(): SubprocessHandle {

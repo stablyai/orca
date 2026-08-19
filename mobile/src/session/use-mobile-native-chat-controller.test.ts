@@ -97,7 +97,7 @@ const ORIGIN = {
   normalizedText: 'look',
   baselineOccurrences: 0,
   baselineTailMessageId: null,
-  glueBaselineTrusted: true
+  baselineResolved: true
 }
 
 describe('useMobileNativeChatController handleNativeChatSend', () => {

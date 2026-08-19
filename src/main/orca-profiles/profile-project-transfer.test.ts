@@ -276,8 +276,9 @@ describe('profile project transfer', () => {
       executionHostId: 'ssh:ssh-1'
     })
     expect(target.sshTargets).toEqual([sshTarget])
+    // The source key predates endpoint identity; the transfer folds it onto the canonical one.
     expect(target.retiredWorktreeNamesByNamespace).toEqual({
-      'ssh:ssh-1:posix:/srv/orca-orca-retirement-probe': {
+      'ssh:builder.example.com|22|dev:posix:/srv/orca-orca-retirement-probe': {
         exhaustedTiers: 0,
         names: ['seahorse']
       }

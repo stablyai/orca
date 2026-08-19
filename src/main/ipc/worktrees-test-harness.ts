@@ -1,5 +1,5 @@
 import { __resetSshWorktreeCreateFetchCacheForTests } from './worktree-remote'
-import { invalidateAuthorizedRootsCache } from './filesystem-auth'
+import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
 import { __resetDetectedWorktreeScanCacheForTests, registerWorktreeHandlers } from './worktrees'
 import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../git/worktree-shared-directories'
 import { resetRetirementCollisionKeyCacheForTests } from '../worktree-name-retirement'
