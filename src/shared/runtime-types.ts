@@ -646,6 +646,13 @@ export type RuntimeTerminalRead = {
   nextCursor: string | null
   latestCursor?: string
   returnedLineCount?: number
+  // Why: these are two different questions and they disagree whenever a program repaints.
+  // `stream` is the accumulated pty output with escapes stripped, so a redrawn line arrives as
+  // stacked fragments; `screen` is what the terminal actually renders. Naming the source keeps
+  // a caller that asked for one and got the other from reading the answer as the wrong thing.
+  // `screen-unavailable` means a screen was asked for, none could be rendered, and this is the
+  // stream instead — distinct from `stream`, which is the caller getting what they asked for.
+  source?: 'stream' | 'screen' | 'screen-unavailable'
 }
 
 export type RuntimeTerminalRename = {
