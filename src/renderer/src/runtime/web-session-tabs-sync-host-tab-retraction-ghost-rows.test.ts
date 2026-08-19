@@ -94,6 +94,7 @@ function makeHostSnapshot(args: {
   hostTabIds: readonly string[]
   hostNow: number
   hostAgentStatusTabIds?: readonly string[]
+  hostAgentStatusState?: 'working' | 'done'
 }): RuntimeMobileSessionTabsResult {
   const leafByTab: Record<string, string> = {
     [KEEP_TAB]: KEEP_LEAF,
@@ -119,7 +120,7 @@ function makeHostSnapshot(args: {
       ...(args.hostAgentStatusTabIds?.includes(hostTabId)
         ? {
             agentStatus: {
-              state: 'working' as const,
+              state: args.hostAgentStatusState ?? ('working' as const),
               prompt: `work on ${hostTabId}`,
               updatedAt: args.hostNow,
               stateStartedAt: args.hostNow - 60_000,
@@ -604,6 +605,81 @@ describe('a host-retracted paired tab leaves no ghost agent row behind', () => {
       'a returning mirrored tab was left permanently unable to acquire agent status'
     ).toBe('working')
     release2()
+  })
+
+  it('a retract-and-return flap must not strand a suppressor that eats a later real retention', () => {
+    const store = seedPairedClientStore()
+    let previousAgents: RetainedSyncAgents = new Map()
+    applyHostSnapshot(
+      store,
+      makeHostSnapshot({
+        snapshotVersion: 1,
+        hostTabIds: [KEEP_TAB, RETRACTED_TAB],
+        hostNow: T0 - 1_000
+      }),
+      T0
+    )
+    const release = replayClientByteStatus(store, RETRACTED_TAB, RETRACTED_LEAF, 'working', T0)
+    previousAgents = replayRetainedAgentsSync(store, previousAgents, T0 + 500)
+
+    // The flap: a transient retraction and the return land inside ONE retention
+    // interval (React batches same-task store commits into a single effect pass).
+    // The pane stays mounted throughout, so the sweep found the client-owned row
+    // live and planted its one-shot suppressor with no disappearance to consume
+    // it — the pane's next live write is what must lift it (setAgentStatus's
+    // fresh-status suppressor lift), or it eats a later real retention.
+    applyHostSnapshot(
+      store,
+      makeHostSnapshot({ snapshotVersion: 2, hostTabIds: [KEEP_TAB], hostNow: T0 + 1_000 }),
+      T0 + 2_000
+    )
+    applyHostSnapshot(
+      store,
+      makeHostSnapshot({
+        snapshotVersion: 3,
+        hostTabIds: [KEEP_TAB, RETRACTED_TAB],
+        hostNow: T0 + 2_500
+      }),
+      T0 + 3_000
+    )
+    // The still-mounted pane finishes its run cleanly and rewrites its row.
+    vi.setSystemTime(T0 + 3_500)
+    markRendererOwnedAgentStatusWrite(GHOST_PANE_KEY)
+    store
+      .getState()
+      .setAgentStatus(
+        GHOST_PANE_KEY,
+        { state: 'done', prompt: 'review finished', agentType: 'codex' },
+        'codex',
+        undefined,
+        { tabId: mirrorTabId(RETRACTED_TAB), worktreeId: WT }
+      )
+    previousAgents = replayRetainedAgentsSync(store, previousAgents, T0 + 4_000)
+    expect(store.getState().agentStatusByPaneKey[GHOST_PANE_KEY]?.state).toBe('done')
+
+    // Much later the pane unmounts and the host's next snapshot omits its status:
+    // the mirror's delete loop removes the no-longer-client-owned done row with no
+    // suppressor — the exact live→gone transition retention exists to catch.
+    release()
+    applyHostSnapshot(
+      store,
+      makeHostSnapshot({
+        snapshotVersion: 4,
+        hostTabIds: [KEEP_TAB, RETRACTED_TAB],
+        hostNow: T0 + 600_000
+      }),
+      T0 + 601_000
+    )
+    expect(
+      store.getState().agentStatusByPaneKey[GHOST_PANE_KEY],
+      'precondition: the released done row must be removed by the mirror delete loop'
+    ).toBeUndefined()
+    previousAgents = replayRetainedAgentsSync(store, previousAgents, T0 + 601_500)
+
+    expect(
+      store.getState().retainedAgentsByPaneKey[GHOST_PANE_KEY],
+      'a stranded retraction suppressor ate a legitimate done-agent retention'
+    ).toBeDefined()
   })
 
   it('Mechanism A holds through the batch apply path a reconnect load uses', () => {
