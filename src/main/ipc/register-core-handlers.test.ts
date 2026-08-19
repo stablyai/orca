@@ -15,6 +15,7 @@ const {
   registerNotificationHandlersMock,
   registerDeveloperPermissionHandlersMock,
   registerComputerUsePermissionHandlersMock,
+  registerOrcaBackgroundLibraryHandlersMock,
   registerSettingsHandlersMock,
   registerKeybindingHandlersMock,
   registerTelemetryHandlersMock,
@@ -80,6 +81,7 @@ const {
   registerNotificationHandlersMock: vi.fn(),
   registerDeveloperPermissionHandlersMock: vi.fn(),
   registerComputerUsePermissionHandlersMock: vi.fn(),
+  registerOrcaBackgroundLibraryHandlersMock: vi.fn(),
   registerSettingsHandlersMock: vi.fn(),
   registerKeybindingHandlersMock: vi.fn(),
   registerTelemetryHandlersMock: vi.fn(),
@@ -216,6 +218,10 @@ vi.mock('./developer-permissions', () => ({
 
 vi.mock('./computer-use-permissions', () => ({
   registerComputerUsePermissionHandlers: registerComputerUsePermissionHandlersMock
+}))
+
+vi.mock('./orca-background-library', () => ({
+  registerOrcaBackgroundLibraryHandlers: registerOrcaBackgroundLibraryHandlersMock
 }))
 
 vi.mock('./settings', () => ({
@@ -401,6 +407,7 @@ describe('registerCoreHandlers', () => {
     registerNotificationHandlersMock.mockReset()
     registerDeveloperPermissionHandlersMock.mockReset()
     registerComputerUsePermissionHandlersMock.mockReset()
+    registerOrcaBackgroundLibraryHandlersMock.mockReset()
     registerSettingsHandlersMock.mockReset()
     registerKeybindingHandlersMock.mockReset()
     registerTelemetryHandlersMock.mockReset()
@@ -524,6 +531,7 @@ describe('registerCoreHandlers', () => {
     expect(registerNotificationHandlersMock).toHaveBeenCalledWith(store, runtime)
     expect(registerDeveloperPermissionHandlersMock).toHaveBeenCalled()
     expect(registerComputerUsePermissionHandlersMock).toHaveBeenCalled()
+    expect(registerOrcaBackgroundLibraryHandlersMock).toHaveBeenCalled()
     expect(registerDashboardPopoutHandlersMock).toHaveBeenCalledWith(store, undefined)
     expect(registerTerminalPreviewHandlersMock).toHaveBeenCalledWith(runtime)
     expect(registerSettingsHandlersMock).toHaveBeenCalledWith(store, agentAwakeService)

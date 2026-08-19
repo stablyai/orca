@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: terminal pane lifecycle wiring is intentionally co-located so PTY attach, theme sync, and runtime graph publication remain consistent for live terminals. */
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useSyncExternalStore } from 'react'
 import type { IDisposable, Terminal } from '@xterm/xterm'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
@@ -81,6 +81,10 @@ import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { applyExpandedLayoutTo, restoreExpandedLayoutFrom } from './expand-collapse'
 import { applyTerminalAppearance } from './terminal-appearance'
+import {
+  getTerminalAppearanceBackgroundRevision,
+  subscribeToTerminalAppearanceBackground
+} from '@/lib/appearance-background-runtime'
 import { createOsc52OscHandler } from './osc52-clipboard'
 import {
   showOsc52ClipboardBlockedToast,
@@ -740,6 +744,11 @@ export function useTerminalPaneLifecycle({
   configureTerminalOutputBacklogCap(settings?.terminalScrollbackRows)
   const systemPrefersDarkRef = useRef(systemPrefersDark)
   systemPrefersDarkRef.current = systemPrefersDark
+  const appearanceBackgroundRevision = useSyncExternalStore(
+    subscribeToTerminalAppearanceBackground,
+    getTerminalAppearanceBackgroundRevision,
+    getTerminalAppearanceBackgroundRevision
+  )
   const previousVisibleForReconcileRef = useRef<TerminalPaneVisibilitySnapshot | null>(null)
   const mountFollowsTerminalPark = useTerminalParkMountIntent(tabId)
   const linkProviderDisposablesRef = useRef(new Map<number, IDisposable>())
@@ -2078,7 +2087,7 @@ export function useTerminalPaneLifecycle({
     applyAppearance(manager)
     // Why: effectiveMacOptionAsAlt can change mid-session (layout switch or override flip); re-apply macOptionIsMeta live on every pane.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings, systemPrefersDark, effectiveMacOptionAsAlt])
+  }, [settings, systemPrefersDark, effectiveMacOptionAsAlt, appearanceBackgroundRevision])
 
   useEffect(() => {
     managerRef.current?.setTerminalGpuAcceleration(settings?.terminalGpuAcceleration ?? 'auto')

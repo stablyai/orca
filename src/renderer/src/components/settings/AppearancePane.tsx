@@ -1,6 +1,6 @@
 import type React from 'react'
 import { useLayoutEffect, useState } from 'react'
-import { AppWindow, PanelLeft, TerminalSquare } from 'lucide-react'
+import { AppWindow, ImageIcon, PanelLeft, TerminalSquare } from 'lucide-react'
 
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
@@ -27,9 +27,14 @@ import {
 } from './appearance-search'
 import { getTerminalAppearanceSearchEntries } from './terminal-search'
 import { TerminalAppearanceSection } from './TerminalAppearanceSection'
-import type { UseGhosttyImportReturn } from './useGhosttyImport'
-import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
+import { getInitialTerminalThemeTarget, type TerminalThemeTarget } from './TerminalThemeSections'
+import { useGhosttyImport } from './useGhosttyImport'
+import { useWarpThemeImport } from './useWarpThemeImport'
 import { AppIconSelector } from './AppIconSelector'
+import { AppearancePreviewColumn } from './AppearancePreviewColumn'
+import { AppearanceSaveBar } from './AppearanceSaveBar'
+import { AppearanceBackgroundSection } from './AppearanceBackgroundSection'
+import { getAppearanceBackgroundSearchEntry } from './appearance-background-section-model'
 import { normalizeAppIconId } from '../../../../shared/app-icon'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { isWebClientLocation } from '@/lib/web-client-location'
@@ -45,33 +50,38 @@ export { getAppearancePaneSearchEntries }
 type AppearancePaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
-  applyTheme: (theme: 'system' | 'dark' | 'light') => void
+  changeCount: number
+  saving: boolean
+  saveFailed: boolean
+  saveChanges: () => Promise<boolean>
+  discardChanges: () => void
   fontSuggestions: string[]
   terminalFontSuggestions: string[]
   onRequestFontSuggestions?: () => void
   systemPrefersDark: boolean
-  ghostty: UseGhosttyImportReturn
-  warpThemes: UseWarpThemeImportReturn
 }
 
-type AppearanceSectionKey = 'interface' | 'terminal' | 'window'
+type AppearanceSectionKey = 'interface' | 'terminal' | 'window' | 'background'
 
 const ALL_APPEARANCE_SECTIONS = [
   'interface',
   'terminal',
-  'window'
+  'window',
+  'background'
 ] as const satisfies readonly AppearanceSectionKey[]
 
 export function AppearancePane({
   settings,
   updateSettings,
-  applyTheme,
+  changeCount,
+  saving,
+  saveFailed,
+  saveChanges,
+  discardChanges,
   fontSuggestions,
   terminalFontSuggestions,
   onRequestFontSuggestions,
-  systemPrefersDark,
-  ghostty,
-  warpThemes
+  systemPrefersDark
 }: AppearancePaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const appearanceAccordionDeepLink = useAppStore((state) => state.appearanceAccordionDeepLink)
@@ -84,6 +94,12 @@ export function AppearancePane({
   // browser web client has no local tray to control.
   const isDesktopWindows = getRendererAppPlatform() === 'win32' && !isWebClient
   const isDesktopMac = getRendererAppPlatform() === 'darwin' && !isWebClient
+  const ghostty = useGhosttyImport(updateSettings, settings)
+  const warpThemes = useWarpThemeImport(updateSettings, settings)
+  const [terminalPreviewMode, setTerminalPreviewMode] = useState<TerminalThemeTarget>(() =>
+    getInitialTerminalThemeTarget(settings, systemPrefersDark)
+  )
+  const [previewFontFamily, setPreviewFontFamily] = useState<string | null>(null)
 
   // Why: Terminal / Window settings were too easy to miss when only Interface
   // started open; keep sections independently collapsible but expanded by default.
@@ -133,6 +149,11 @@ export function AppearancePane({
     'auto.components.settings.AppearancePane.windowSidebarSummary',
     'Sidebar, status bar, and file explorer'
   )
+  const backgroundEntry = getAppearanceBackgroundSearchEntry()
+  const backgroundSummary = translate(
+    'auto.components.settings.AppearancePane.backgroundSummary',
+    'Images, opacity, blur, and fit'
+  )
 
   // Search-entry buckets per section so a query can force-open the matching one.
   const interfaceSearchEntries = [
@@ -164,6 +185,7 @@ export function AppearancePane({
   const interfaceMatches = matchesSettingsSearch(searchQuery, interfaceSearchEntries)
   const terminalMatches = matchesSettingsSearch(searchQuery, terminalSearchEntries)
   const windowMatches = matchesSettingsSearch(searchQuery, windowSearchEntries)
+  const backgroundMatches = !isWebClient && matchesSettingsSearch(searchQuery, backgroundEntry)
   const interfaceLabelMatches = matchesSettingsSearch(searchQuery, { title: interfaceTitle })
   const terminalLabelMatches = matchesSettingsSearch(searchQuery, { title: terminalTitle })
   const windowLabelMatches = matchesSettingsSearch(searchQuery, {
@@ -177,11 +199,16 @@ export function AppearancePane({
   // independent open/closed state (all expanded by default).
   function isSectionOpen(key: AppearanceSectionKey): boolean {
     if (isSearching) {
-      return key === 'interface'
-        ? interfaceMatches
-        : key === 'terminal'
-          ? terminalMatches
-          : windowMatches
+      if (key === 'interface') {
+        return interfaceMatches
+      }
+      if (key === 'terminal') {
+        return terminalMatches
+      }
+      if (key === 'window') {
+        return windowMatches
+      }
+      return backgroundMatches
     }
     return openSections.has(key)
   }
@@ -205,99 +232,131 @@ export function AppearancePane({
   } · ${settings.terminalFontSize}px`
 
   return (
-    <div className="space-y-2.5">
-      {interfaceMatches ? (
-        <AppearanceSection
-          id="interface"
-          icon={<AppWindow aria-hidden="true" />}
-          title={interfaceTitle}
-          summary={interfaceSummary}
-          open={isSectionOpen('interface')}
-          onToggle={() => toggleSection('interface')}
-          toggleDisabled={isSearching}
-        >
-          <AppearanceInterfaceSection
-            settings={settings}
-            updateSettings={updateSettings}
-            applyTheme={applyTheme}
-            fontSuggestions={fontSuggestions}
-            onRequestFontSuggestions={onRequestFontSuggestions}
-            isDesktopMac={isDesktopMac}
-            isDesktopWindows={isDesktopWindows}
-            forceVisiblePrimary={interfaceLabelMatches}
-          />
-        </AppearanceSection>
-      ) : null}
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start xl:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="min-w-0">
+        <AppearanceSaveBar
+          changeCount={changeCount}
+          saving={saving}
+          saveFailed={saveFailed}
+          onSave={saveChanges}
+          onDiscard={discardChanges}
+        />
+        <div className="space-y-2.5">
+          {interfaceMatches ? (
+            <AppearanceSection
+              id="interface"
+              icon={<AppWindow aria-hidden="true" />}
+              title={interfaceTitle}
+              summary={interfaceSummary}
+              open={isSectionOpen('interface')}
+              onToggle={() => toggleSection('interface')}
+              toggleDisabled={isSearching}
+            >
+              <AppearanceInterfaceSection
+                settings={settings}
+                updateSettings={updateSettings}
+                fontSuggestions={fontSuggestions}
+                onRequestFontSuggestions={onRequestFontSuggestions}
+                isDesktopMac={isDesktopMac}
+                isDesktopWindows={isDesktopWindows}
+                forceVisiblePrimary={interfaceLabelMatches}
+              />
+            </AppearanceSection>
+          ) : null}
 
-      {/* Why: Code & Markdown is intentionally omitted. Orca has no Appearance-level
-          code/markdown settings — the Monaco editor reuses the terminal font and
-          there is no markdown-style or line-number setting — so a fourth row would
-          be empty. We surface only the three sections that hold real controls
-          rather than fabricate settings. */}
+          {/* Code & Markdown is omitted because it has no Appearance-level settings. */}
 
-      {terminalMatches ? (
-        <AppearanceSection
-          id="terminal"
-          icon={<TerminalSquare aria-hidden="true" />}
-          title={terminalTitle}
-          summary={terminalSummary}
-          open={isSectionOpen('terminal')}
-          onToggle={() => toggleSection('terminal')}
-          toggleDisabled={isSearching}
-        >
-          <TerminalAppearanceSection
-            settings={settings}
-            updateSettings={updateSettings}
-            systemPrefersDark={systemPrefersDark}
-            terminalFontSuggestions={terminalFontSuggestions}
-            onRequestFontSuggestions={onRequestFontSuggestions}
-            ghostty={ghostty}
-            warpThemes={warpThemes}
-            forceVisiblePrimary={terminalLabelMatches}
-          />
-        </AppearanceSection>
-      ) : null}
+          {terminalMatches ? (
+            <AppearanceSection
+              id="terminal"
+              icon={<TerminalSquare aria-hidden="true" />}
+              title={terminalTitle}
+              summary={terminalSummary}
+              open={isSectionOpen('terminal')}
+              onToggle={() => toggleSection('terminal')}
+              toggleDisabled={isSearching}
+            >
+              <TerminalAppearanceSection
+                settings={settings}
+                updateSettings={updateSettings}
+                systemPrefersDark={systemPrefersDark}
+                terminalFontSuggestions={terminalFontSuggestions}
+                onRequestFontSuggestions={onRequestFontSuggestions}
+                ghostty={ghostty}
+                warpThemes={warpThemes}
+                showPreview={false}
+                previewThemeTarget={terminalPreviewMode}
+                onPreviewThemeTargetChange={setTerminalPreviewMode}
+                onPreviewFontFamilyChange={setPreviewFontFamily}
+                hasUnsavedChanges={changeCount > 0}
+                forceVisiblePrimary={terminalLabelMatches}
+              />
+            </AppearanceSection>
+          ) : null}
 
-      {windowMatches ? (
-        <AppearanceSection
-          id="window"
-          icon={<PanelLeft aria-hidden="true" />}
-          title={windowSidebarTitle}
-          summary={windowSidebarSummary}
-          open={isSectionOpen('window')}
-          onToggle={() => toggleSection('window')}
-          toggleDisabled={isSearching}
-        >
-          <AppearanceWindowSidebarSection
-            settings={settings}
-            updateSettings={updateSettings}
-            forceVisiblePrimary={windowLabelMatches}
-          />
-        </AppearanceSection>
-      ) : null}
+          {windowMatches ? (
+            <AppearanceSection
+              id="window"
+              icon={<PanelLeft aria-hidden="true" />}
+              title={windowSidebarTitle}
+              summary={windowSidebarSummary}
+              open={isSectionOpen('window')}
+              onToggle={() => toggleSection('window')}
+              toggleDisabled={isSearching}
+            >
+              <AppearanceWindowSidebarSection
+                settings={settings}
+                updateSettings={updateSettings}
+                forceVisiblePrimary={windowLabelMatches}
+              />
+            </AppearanceSection>
+          ) : null}
 
-      {/* App icon stays at the bottom of Appearance as a small easter egg,
+          {backgroundMatches ? (
+            <AppearanceSection
+              id="background"
+              icon={<ImageIcon aria-hidden="true" />}
+              title={backgroundEntry.title}
+              summary={backgroundSummary}
+              open={isSectionOpen('background')}
+              onToggle={() => toggleSection('background')}
+              toggleDisabled={isSearching}
+            >
+              <AppearanceBackgroundSection settings={settings} updateSettings={updateSettings} />
+            </AppearanceSection>
+          ) : null}
+
+          {/* App icon stays at the bottom of Appearance as a small easter egg,
           matching production — not buried inside Interface advanced. */}
-      {appIconMatches ? (
-        <SearchableSetting
-          title={translate('auto.components.settings.AppearancePane.ca1590d42f', 'App Icon')}
-          description={translate(
-            'auto.components.settings.AppearancePane.0cd9b8228f',
-            'Choose the app icon shown in the Dock and window switcher.'
-          )}
-          keywords={getAppIconEntries().flatMap((entry) => [
-            entry.title,
-            entry.description ?? '',
-            ...(entry.keywords ?? [])
-          ])}
-          className="max-w-none px-1 pt-2"
-        >
-          <AppIconSelector
-            value={normalizeAppIconId(settings.appIcon)}
-            onChange={(appIcon) => updateSettings({ appIcon })}
-          />
-        </SearchableSetting>
-      ) : null}
+          {appIconMatches ? (
+            <SearchableSetting
+              title={translate('auto.components.settings.AppearancePane.ca1590d42f', 'App Icon')}
+              description={translate(
+                'auto.components.settings.AppearancePane.0cd9b8228f',
+                'Choose the app icon shown in the Dock and window switcher.'
+              )}
+              keywords={getAppIconEntries().flatMap((entry) => [
+                entry.title,
+                entry.description ?? '',
+                ...(entry.keywords ?? [])
+              ])}
+              className="max-w-none px-1 pt-2"
+            >
+              <AppIconSelector
+                value={normalizeAppIconId(settings.appIcon)}
+                onChange={(appIcon) => updateSettings({ appIcon })}
+              />
+            </SearchableSetting>
+          ) : null}
+        </div>
+      </div>
+      <AppearancePreviewColumn
+        settings={settings}
+        systemPrefersDark={systemPrefersDark}
+        previewFontFamily={previewFontFamily}
+        terminalPreviewMode={terminalPreviewMode}
+        onTerminalPreviewModeChange={setTerminalPreviewMode}
+      />
     </div>
   )
 }

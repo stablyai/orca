@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
@@ -34,6 +34,11 @@ export type UseWarpThemeImportReturn = {
   handleOpenChange: (open: boolean) => void
 }
 
+type PreviewOperation = {
+  result: WarpThemeImportPreview
+  operationId: number
+}
+
 export function useWarpThemeImport(
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>,
   settings: GlobalSettings | null
@@ -46,19 +51,21 @@ export function useWarpThemeImport(
   const [importSignal, setImportSignal] = useState(0)
   const [selectedThemeIds, setSelectedThemeIds] = useState<Set<string>>(() => new Set())
   const mountedRef = useMountedRef()
+  const operationSequenceRef = useRef(0)
 
-  async function previewSource(source: WarpThemeImportSource): Promise<WarpThemeImportPreview> {
+  async function previewSource(source: WarpThemeImportSource): Promise<PreviewOperation> {
+    const operationId = ++operationSequenceRef.current
     setLoading(true)
     setApplyError(null)
     try {
       const result = await window.api.settings.previewWarpThemeImport(source)
       // Why: a dismissed native picker keeps whatever preview was already
       // showing instead of wiping it with an empty result.
-      if (mountedRef.current && !result.canceled) {
+      if (mountedRef.current && operationId === operationSequenceRef.current && !result.canceled) {
         setPreview(result)
         setSelectedThemeIds(new Set(result.themes.map((theme) => theme.id)))
       }
-      return result
+      return { result, operationId }
     } catch (err) {
       const message =
         err instanceof Error
@@ -70,13 +77,13 @@ export function useWarpThemeImport(
         skippedFiles: [],
         error: message
       }
-      if (mountedRef.current) {
+      if (mountedRef.current && operationId === operationSequenceRef.current) {
         setPreview(failure)
         setSelectedThemeIds(new Set())
       }
-      return failure
+      return { result: failure, operationId }
     } finally {
-      if (mountedRef.current) {
+      if (mountedRef.current && operationId === operationSequenceRef.current) {
         setLoading(false)
       }
     }
@@ -96,8 +103,8 @@ export function useWarpThemeImport(
     setMode('yaml')
     // Why: go straight to the native picker and only surface the modal once
     // there is a selection to preview — canceling leaves settings untouched.
-    const result = await previewSource({ kind: 'chooseFile' })
-    if (mountedRef.current && !result.canceled) {
+    const { result, operationId } = await previewSource({ kind: 'chooseFile' })
+    if (mountedRef.current && operationId === operationSequenceRef.current && !result.canceled) {
       setOpen(true)
     }
   }
@@ -123,6 +130,7 @@ export function useWarpThemeImport(
     if (!preview?.found || !settings || selectedThemeIds.size === 0) {
       return
     }
+    const operationId = operationSequenceRef.current
     const selectedThemes = preview.themes.filter((theme) => selectedThemeIds.has(theme.id))
     const byId = new Map<string, TerminalCustomTheme>()
     for (const theme of normalizeTerminalCustomThemes(settings.terminalCustomThemes)) {
@@ -156,18 +164,20 @@ export function useWarpThemeImport(
       await updateSettings({
         terminalCustomThemes: normalizeTerminalCustomThemes([...byId.values()])
       })
+      if (!mountedRef.current || operationId !== operationSequenceRef.current) {
+        return
+      }
       const count = selectedThemes.length
-      // Why: report success via a toast and dismiss the modal rather than
-      // leaving an "imported" state inside the dialog.
+      // Why: the Appearance pane owns persistence, so this success only confirms staging.
       toast.success(
         count === 1
           ? translate(
-              'auto.components.settings.useWarpThemeImport.imported_one',
-              'Imported 1 theme'
+              'auto.components.settings.useWarpThemeImport.staged_one',
+              'Added 1 theme to appearance draft'
             )
           : translate(
-              'auto.components.settings.useWarpThemeImport.imported_other',
-              'Imported {{value0}} themes',
+              'auto.components.settings.useWarpThemeImport.staged_other',
+              'Added {{value0}} themes to appearance draft',
               { value0: count }
             )
       )
@@ -184,7 +194,7 @@ export function useWarpThemeImport(
               'auto.components.settings.useWarpThemeImport.import_failed',
               'Failed to import themes'
             )
-      if (mountedRef.current) {
+      if (mountedRef.current && operationId === operationSequenceRef.current) {
         setApplyError(message)
       }
     }
@@ -193,6 +203,7 @@ export function useWarpThemeImport(
   function handleOpenChange(newOpen: boolean): void {
     setOpen(newOpen)
     if (!newOpen) {
+      operationSequenceRef.current += 1
       setPreview(null)
       setLoading(false)
       setApplyError(null)

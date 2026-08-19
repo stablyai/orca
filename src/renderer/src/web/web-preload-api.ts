@@ -165,6 +165,7 @@ import {
 } from '@/components/native-chat/native-chat-runtime-contract'
 import { createWebFileMutationMethods } from './web-file-mutation-methods'
 import { mergeWorkspaceCleanupUIState } from '../../../shared/workspace-cleanup-ui-state'
+import { normalizeOrcaBackgroundSettings } from '../../../shared/orca-background-settings'
 
 const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
 const UI_STORAGE_KEY = 'orca.web.ui.v1'
@@ -823,6 +824,13 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       uploadBundle: () => Promise.reject(new Error('Sending diagnostics is unavailable on web.')),
       deleteBundle: () => Promise.reject(new Error('Sent diagnostics are unavailable on web.'))
     },
+    // Background files belong to the desktop client's userData directory and never cross RPC.
+    backgrounds: {
+      listLibrary: () => Promise.resolve({ dir: '', images: [] }),
+      addImages: () => Promise.resolve({ dir: '', images: [], added: [], skipped: [] }),
+      openLibrary: () => Promise.resolve({ ok: false, reason: 'open-failed' }),
+      loadImage: () => Promise.resolve({ ok: false, reason: 'not-found' })
+    } satisfies PreloadApi['backgrounds'],
     session: {
       // Mirrors desktop bridge: non-local hosts persist under a host-suffixed key so their sessions stay isolated from local.
       get: (hostId) => Promise.resolve(getStoredWorkspaceSession(hostId)),
@@ -4270,6 +4278,7 @@ function mergeSettings(
   }
   return {
     ...merged,
+    ...normalizeOrcaBackgroundSettings(merged),
     ...normalizeAutoRenameBranchFromWorkDefaultOn(merged, {
       preserveExplicitValue: options.preserveAutoRenameBranchFromWorkUpdate
     })

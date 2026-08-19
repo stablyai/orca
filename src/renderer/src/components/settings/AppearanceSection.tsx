@@ -31,6 +31,7 @@ export function AppearanceSection({
   children
 }: AppearanceSectionProps): React.JSX.Element {
   const contentId = `appearance-section-${id}`
+  const toggleId = `${contentId}-toggle`
   return (
     <div
       className={cn(
@@ -39,6 +40,7 @@ export function AppearanceSection({
       )}
     >
       <button
+        id={toggleId}
         type="button"
         aria-expanded={open}
         aria-controls={contentId}
@@ -73,7 +75,7 @@ export function AppearanceSection({
         inert={!open}
       >
         <div className="min-h-0 overflow-hidden">
-          <div id={contentId} role="region" className="px-4 pt-1 pb-4">
+          <div id={contentId} role="region" aria-labelledby={toggleId} className="px-4 pt-1 pb-4">
             {children}
           </div>
         </div>

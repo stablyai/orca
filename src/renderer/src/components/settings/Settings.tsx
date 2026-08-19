@@ -44,8 +44,13 @@ import { InputPane } from './InputPane'
 import { ShortcutsPane } from './ShortcutsPane'
 import { TerminalPane } from './TerminalPane'
 import { FloatingWorkspacePane } from './FloatingWorkspacePane'
-import { useGhosttyImport } from './useGhosttyImport'
-import { useWarpThemeImport } from './useWarpThemeImport'
+import { AppearanceUnsavedChangesDialog } from './AppearanceUnsavedChangesDialog'
+import {
+  runSettingsPageLeaveTransaction,
+  runSettingsWindowCloseGuard
+} from './settings-page-leave-transaction'
+import { useAppearanceLeaveDialog } from './use-appearance-leave-dialog'
+import { useAppearanceSettingsDraft } from './use-appearance-settings-draft'
 import { RepositoryPane } from './RepositoryPane'
 import { GitPane } from './GitPane'
 import { CommitMessageAiPane } from './CommitMessageAiPane'
@@ -365,9 +370,6 @@ function Settings(): React.JSX.Element {
   // Why: trim platform-only Terminal entries from the shared search index so search never reveals hidden controls.
   const [scrollbackMode, setScrollbackMode] = useState<'preset' | 'custom'>('preset')
   const [prevScrollbackRows, setPrevScrollbackRows] = useState(settings?.terminalScrollbackRows)
-  // Why: keep Ghostty import state at Settings level so the modal survives section remounts.
-  const ghostty = useGhosttyImport(updateSettings, settings)
-  const warpThemes = useWarpThemeImport(updateSettings, settings)
   const [fontSuggestions, setFontSuggestions] = useState<string[]>(
     mergeFontSuggestions([], getFallbackTerminalFonts())
   )
@@ -375,6 +377,32 @@ function Settings(): React.JSX.Element {
     () => fontSuggestions.filter((font) => font !== DEFAULT_APP_FONT_FAMILY),
     [fontSuggestions]
   )
+  const applyTheme = useCallback((theme: GlobalSettings['theme']) => {
+    applyDocumentTheme(theme)
+  }, [])
+  const appearanceDraft = useAppearanceSettingsDraft({
+    settings,
+    persistSettings: updateSettingsOrThrow,
+    applyTheme
+  })
+  const appearanceHasDraftChanges = appearanceDraft.hasChanges
+  const discardAppearanceDraft = appearanceDraft.discard
+  const appearanceLeaveDialog = useAppearanceLeaveDialog({
+    hasChanges: appearanceHasDraftChanges,
+    draftSaving: appearanceDraft.saving,
+    draftSaveFailed: appearanceDraft.saveFailed,
+    saveDraft: appearanceDraft.save,
+    discardDraft: appearanceDraft.discard
+  })
+  const {
+    open: appearanceLeaveDialogOpen,
+    saving: appearanceLeaveDialogSaving,
+    saveFailed: appearanceLeaveDialogSaveFailed,
+    confirmLeave: confirmAppearanceLeave,
+    save: saveAppearanceBeforeLeave,
+    discard: discardAppearanceBeforeLeave,
+    cancel: cancelAppearanceLeave
+  } = appearanceLeaveDialog
   const [activeSectionId, setActiveSectionId] = useState('general')
   const [mountedSectionIds, setMountedSectionIds] = useState<Set<string>>(
     getInitialMountedSectionIds
@@ -399,6 +427,7 @@ function Settings(): React.JSX.Element {
   const settingsMountedRef = useRef(true)
   const pendingNavSectionRef = useRef<string | null>(null)
   const pendingScrollTargetRef = useRef<string | null>(null)
+  const guardedNavSectionRef = useRef<string | null>(null)
   const pendingSubsectionScrollFrameRef = useRef<number | null>(null)
   const repoHooksRequestSeqRef = useRef(0)
   const shortcutsEscapeConfirmUntilRef = useRef(0)
@@ -510,25 +539,59 @@ function Settings(): React.JSX.Element {
     })
   }, [confirm])
 
+  const discardSourceControlAiPromptChanges = useCallback((): void => {
+    setSourceControlAiPromptDiscardSignal((signal) => signal + 1)
+    setHasUnsavedCommitPromptChanges(false)
+    setHasUnsavedBranchPromptChanges(false)
+  }, [])
+
   const confirmDiscardSourceControlAiPromptChanges = useCallback(async (): Promise<boolean> => {
     if (!hasUnsavedSourceControlAiPromptChanges) {
       return true
     }
     const shouldDiscard = await promptDiscardSourceControlAiPromptChanges()
     if (shouldDiscard) {
-      setSourceControlAiPromptDiscardSignal((signal) => signal + 1)
-      setHasUnsavedCommitPromptChanges(false)
-      setHasUnsavedBranchPromptChanges(false)
+      discardSourceControlAiPromptChanges()
     }
     return shouldDiscard
-  }, [promptDiscardSourceControlAiPromptChanges, hasUnsavedSourceControlAiPromptChanges])
+  }, [
+    discardSourceControlAiPromptChanges,
+    promptDiscardSourceControlAiPromptChanges,
+    hasUnsavedSourceControlAiPromptChanges
+  ])
+
+  const confirmSettingsPageLeave = useCallback(async (): Promise<boolean> => {
+    return runSettingsPageLeaveTransaction({
+      appearanceDirty: appearanceHasDraftChanges,
+      sourceControlDirty: hasUnsavedSourceControlAiPromptChanges,
+      confirmAppearanceLeave,
+      confirmSourceControlDiscard: promptDiscardSourceControlAiPromptChanges,
+      discardAppearanceDraft,
+      discardSourceControlDrafts: discardSourceControlAiPromptChanges
+    })
+  }, [
+    appearanceHasDraftChanges,
+    confirmAppearanceLeave,
+    discardAppearanceDraft,
+    discardSourceControlAiPromptChanges,
+    hasUnsavedSourceControlAiPromptChanges,
+    promptDiscardSourceControlAiPromptChanges
+  ])
+
+  const confirmSectionLeave = useCallback(
+    (sectionId: string): Promise<boolean> =>
+      sectionId === 'appearance'
+        ? confirmSettingsPageLeave()
+        : confirmDiscardSourceControlAiPromptChanges(),
+    [confirmDiscardSourceControlAiPromptChanges, confirmSettingsPageLeave]
+  )
 
   const closeSettingsPageWithPromptGuard = useCallback(async (): Promise<void> => {
-    if (!(await confirmDiscardSourceControlAiPromptChanges())) {
+    if (!(await confirmSettingsPageLeave())) {
       return
     }
     closeSettingsPage()
-  }, [closeSettingsPage, confirmDiscardSourceControlAiPromptChanges])
+  }, [closeSettingsPage, confirmSettingsPageLeave])
 
   useEffect(() => {
     fetchSettings()
@@ -616,16 +679,15 @@ function Settings(): React.JSX.Element {
 
   // Why: route window close/quit through the discard dialog; a bare beforeunload veto shows no UI and reads as an unquittable window.
   useEffect(() => {
-    return registerWindowCloseGuard(() => {
-      if (isIntentionalAppRestartInProgress()) {
-        return true
-      }
-      if (!hasUnsavedSourceControlAiPromptChangesRef.current) {
-        return true
-      }
-      return promptDiscardSourceControlAiPromptChanges()
-    })
-  }, [promptDiscardSourceControlAiPromptChanges])
+    return registerWindowCloseGuard(() =>
+      runSettingsWindowCloseGuard({
+        intentionalRestart: isIntentionalAppRestartInProgress(),
+        sourceControlDirty: hasUnsavedSourceControlAiPromptChangesRef.current,
+        confirmAppearanceLeave,
+        confirmSourceControlDiscard: promptDiscardSourceControlAiPromptChanges
+      })
+    )
+  }, [confirmAppearanceLeave, promptDiscardSourceControlAiPromptChanges])
 
   useEffect(() => {
     const handleFindShortcut = (event: KeyboardEvent): void => {
@@ -734,10 +796,6 @@ function Settings(): React.JSX.Element {
       )
     }
   }
-
-  const applyTheme = useCallback((theme: 'system' | 'dark' | 'light') => {
-    applyDocumentTheme(theme)
-  }, [])
 
   const displayedGitUsername = repos[0]?.gitUsername ?? ''
   const baseNavSections = useSettingsNavigationMetadata()
@@ -1059,7 +1117,22 @@ function Settings(): React.JSX.Element {
     if (scrollTargetId && pendingNavSectionId && visibleSectionIds.has(pendingNavSectionId)) {
       // Why: inactive panes don't render; activate the pane first, then find the subsection next render.
       if (activeSectionId !== pendingNavSectionId) {
-        setActiveSectionId(pendingNavSectionId)
+        if (guardedNavSectionRef.current === pendingNavSectionId) {
+          return
+        }
+        guardedNavSectionRef.current = pendingNavSectionId
+        void confirmSectionLeave(activeSectionId).then((canLeave) => {
+          if (!settingsMountedRef.current || pendingNavSectionRef.current !== pendingNavSectionId) {
+            return
+          }
+          guardedNavSectionRef.current = null
+          if (!canLeave) {
+            pendingNavSectionRef.current = null
+            pendingScrollTargetRef.current = null
+            return
+          }
+          setActiveSectionId(pendingNavSectionId)
+        })
         return
       }
       const container = contentScrollRef.current
@@ -1097,10 +1170,15 @@ function Settings(): React.JSX.Element {
     }
 
     if (!visibleSectionIds.has(activeSectionId) && visibleNavSections.length > 0) {
+      if (activeSectionId === 'appearance' && appearanceHasDraftChanges) {
+        return
+      }
       setActiveSectionId(getFallbackVisibleSection(visibleNavSections)?.id ?? activeSectionId)
     }
   }, [
     activeSectionId,
+    appearanceHasDraftChanges,
+    confirmSectionLeave,
     pendingNavRequestTick,
     setSettingsSearchQuery,
     settingsSearchQuery,
@@ -1113,9 +1191,15 @@ function Settings(): React.JSX.Element {
       sectionId: string,
       modifiers?: { metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }
     ): Promise<void> => {
-      if (sectionId !== activeSectionId && !(await confirmDiscardSourceControlAiPromptChanges())) {
-        return
+      if (sectionId !== activeSectionId) {
+        const canLeave = await confirmSectionLeave(activeSectionId)
+        if (!canLeave) {
+          return
+        }
       }
+      guardedNavSectionRef.current = null
+      pendingNavSectionRef.current = null
+      pendingScrollTargetRef.current = null
       // Why: Shift-click the Experimental row unlocks the hidden power-user group (session-only).
       if (sectionId === 'experimental' && modifiers?.shiftKey) {
         setHiddenExperimentalUnlocked((previous) => !previous)
@@ -1130,12 +1214,7 @@ function Settings(): React.JSX.Element {
       }
       setActiveSectionId(sectionId)
     },
-    [
-      activeSectionId,
-      confirmDiscardSourceControlAiPromptChanges,
-      setSettingsSearchQuery,
-      settingsSearchQuery
-    ]
+    [activeSectionId, confirmSectionLeave, setSettingsSearchQuery, settingsSearchQuery]
   )
 
   const openComputerUseFromBrowser = useCallback(async () => {
@@ -1227,7 +1306,9 @@ function Settings(): React.JSX.Element {
             className={cn(
               'mx-auto flex w-full flex-col gap-10 px-8 pt-10',
               isFocusedShortcutsPane ? 'h-full pb-6' : 'pb-24',
-              isFocusedSetupGuidePane ? 'max-w-6xl' : 'max-w-4xl'
+              isFocusedSetupGuidePane || activeSectionId === 'appearance'
+                ? 'max-w-6xl'
+                : 'max-w-4xl'
             )}
           >
             {visibleNavSections.length === 0 ? (
@@ -1638,18 +1719,21 @@ function Settings(): React.JSX.Element {
                     'Theme, zoom, app and terminal appearance, sidebars, and status bar.'
                   )}
                   searchEntries={getSectionSearchEntries('appearance')}
+                  bodyClassName="border-0 bg-transparent p-0 shadow-none"
                 >
                   {isSectionMounted('appearance') ? (
                     <AppearancePane
-                      settings={settings}
-                      updateSettings={updateSettings}
-                      applyTheme={applyTheme}
+                      settings={appearanceDraft.settings ?? settings}
+                      updateSettings={appearanceDraft.stage}
+                      changeCount={appearanceDraft.changedKeys.length}
+                      saving={appearanceDraft.saving}
+                      saveFailed={appearanceDraft.saveFailed}
+                      saveChanges={appearanceDraft.save}
+                      discardChanges={appearanceDraft.discard}
                       fontSuggestions={fontSuggestions}
                       terminalFontSuggestions={terminalFontSuggestions}
                       onRequestFontSuggestions={requestFontSuggestions}
                       systemPrefersDark={systemPrefersDark}
-                      ghostty={ghostty}
-                      warpThemes={warpThemes}
                     />
                   ) : null}
                 </SettingsSection>
@@ -1924,6 +2008,14 @@ function Settings(): React.JSX.Element {
           </div>
         </div>
       </div>
+      <AppearanceUnsavedChangesDialog
+        open={appearanceLeaveDialogOpen}
+        saving={appearanceLeaveDialogSaving}
+        saveFailed={appearanceLeaveDialogSaveFailed}
+        onSave={saveAppearanceBeforeLeave}
+        onDiscard={discardAppearanceBeforeLeave}
+        onCancel={cancelAppearanceLeave}
+      />
     </div>
   )
 }

@@ -13,13 +13,15 @@ import { translate } from '@/i18n/i18n'
 type TerminalWindowSectionProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
+  relaunchDisabled?: boolean
 }
 
 import { COLOR_OVERRIDE_GROUPS } from './terminal-window-color-groups'
 
 export function TerminalWindowSection({
   settings,
-  updateSettings
+  updateSettings,
+  relaunchDisabled = false
 }: TerminalWindowSectionProps): React.JSX.Element {
   const [colorOverridesExpanded, setColorOverridesExpanded] = useState(false)
   // Why: windowBackgroundBlur is only read by createMainWindow() at startup
@@ -33,7 +35,7 @@ export function TerminalWindowSection({
   const mountedRef = useMountedRef()
 
   const handleRelaunch = async (): Promise<void> => {
-    if (relaunchingBlur) {
+    if (relaunchingBlur || relaunchDisabled) {
       return
     }
     setRelaunchingBlur(true)
@@ -140,17 +142,22 @@ export function TerminalWindowSection({
                   )}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {translate(
-                    'auto.components.settings.TerminalWindowSection.53ce336e15',
-                    'Restart Orca to apply the window blur change.'
-                  )}
+                  {relaunchDisabled
+                    ? translate(
+                        'auto.components.settings.TerminalWindowSection.saveBeforeRestart',
+                        'Save the appearance draft before restarting Orca.'
+                      )
+                    : translate(
+                        'auto.components.settings.TerminalWindowSection.53ce336e15',
+                        'Restart Orca to apply the window blur change.'
+                      )}
                 </p>
               </div>
               <Button
                 size="sm"
                 variant="default"
                 className="shrink-0 gap-1.5"
-                disabled={relaunchingBlur}
+                disabled={relaunchingBlur || relaunchDisabled}
                 onClick={() => void handleRelaunch()}
               >
                 <RotateCw className={`size-3 ${relaunchingBlur ? 'animate-spin' : ''}`} />

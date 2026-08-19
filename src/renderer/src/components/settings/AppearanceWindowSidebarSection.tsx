@@ -86,6 +86,10 @@ export function AppearanceWindowSidebarSection({
     'auto.components.settings.AppearancePane.statusBarDescription',
     'Choose which indicators appear in the status bar.'
   )
+  const appliesImmediately = translate(
+    'auto.components.settings.AppearanceWindowSidebarSection.appliesImmediately',
+    'Applies immediately.'
+  )
   const statusBarKeywords = ['status bar', 'indicators']
   const statusBarSectionMatches = matchesSettingsSearch(searchQuery, {
     title: statusBarTitle,
@@ -129,7 +133,15 @@ export function AppearanceWindowSidebarSection({
           keywords={statusBarKeywords}
           forceVisible={forceVisiblePrimary || statusBarSectionMatches || statusBarControlMatches}
         >
-          <SettingsRow label={statusBarTitle} description={statusBarDescription} control={null} />
+          <SettingsRow
+            label={statusBarTitle}
+            description={
+              <>
+                {statusBarDescription} {appliesImmediately}
+              </>
+            }
+            control={null}
+          />
           {showStatusBarControls ? (
             <div className="ml-4 divide-y divide-border/40 border-t border-border/40">
               <SearchableSetting
@@ -212,7 +224,11 @@ export function AppearanceWindowSidebarSection({
                   >
                     <SettingsRow
                       label={workspaceCardLayoutEntry.title}
-                      description={workspaceCardLayoutEntry.description}
+                      description={
+                        <>
+                          {workspaceCardLayoutEntry.description} {appliesImmediately}
+                        </>
+                      }
                       control={
                         <SettingsSegmentedControl
                           value={settings.compactWorktreeCards ? 'compact' : 'detailed'}

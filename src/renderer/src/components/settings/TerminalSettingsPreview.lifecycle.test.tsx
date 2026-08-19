@@ -36,6 +36,16 @@ const mockLigaturesAddon = vi.hoisted(() => ({
   instances: [] as MockLigaturesAddonInstance[]
 }))
 
+const mockPreviewBackground = vi.hoisted(() => ({
+  current: null as null | {
+    fileName: string
+    objectUrl: string
+    opacity: number
+    blurPx: number
+    fit: 'cover'
+  }
+}))
+
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   return {
@@ -123,7 +133,22 @@ vi.mock('@/components/terminal-pane/layout-serialization', () => ({
 }))
 
 vi.mock('@/components/terminal-pane/terminal-appearance', () => ({
-  composeActiveTerminalTheme: () => ({ background: '#111111', foreground: '#eeeeee' })
+  composeActiveTerminalTheme: (
+    _theme: unknown,
+    settings: { terminalBackgroundOpacity?: number },
+    terminalBackgroundImageActive = false
+  ) => ({
+    background:
+      terminalBackgroundImageActive || settings.terminalBackgroundOpacity === 0
+        ? 'rgba(17, 17, 17, 0)'
+        : '#111111',
+    foreground: '#eeeeee'
+  })
+}))
+
+vi.mock('./appearance-preview-background', () => ({
+  getAppearancePreviewBackgroundStyle: () => ({}),
+  useAppearancePreviewBackground: () => mockPreviewBackground.current
 }))
 
 vi.mock('@/lib/terminal-theme', () => ({
@@ -168,13 +193,57 @@ function makeSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
   } as GlobalSettings
 }
 
-function renderPreview(settings = makeSettings()): void {
-  TerminalSettingsPreview({
+function renderPreview(settings = makeSettings()): React.JSX.Element {
+  return TerminalSettingsPreview({
     title: 'Preview',
     description: 'Preview description',
     settings,
     systemPrefersDark: true
   })
+}
+
+type ReactElementLike = {
+  props?: Record<string, unknown>
+}
+
+function findByClassName(node: unknown, className: string): ReactElementLike | null {
+  if (node == null || typeof node === 'string' || typeof node === 'number') {
+    return null
+  }
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = findByClassName(child, className)
+      if (found) {
+        return found
+      }
+    }
+    return null
+  }
+  const element = node as ReactElementLike
+  if (String(element.props?.className ?? '').includes(className)) {
+    return element
+  }
+  return findByClassName(element.props?.children, className)
+}
+
+function findByDataAttribute(node: unknown, attribute: string): ReactElementLike | null {
+  if (node == null || typeof node === 'string' || typeof node === 'number') {
+    return null
+  }
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = findByDataAttribute(child, attribute)
+      if (found) {
+        return found
+      }
+    }
+    return null
+  }
+  const element = node as ReactElementLike
+  if (element.props?.[attribute]) {
+    return element
+  }
+  return findByDataAttribute(element.props?.children, attribute)
 }
 
 function runCleanups(): void {
@@ -193,6 +262,7 @@ describe('TerminalSettingsPreview terminal lifecycle', () => {
     mockXterm.nextOpenError = null
     mockLigaturesAddon.enabled = false
     mockLigaturesAddon.instances.length = 0
+    mockPreviewBackground.current = null
   })
 
   it('initializes once, writes once on mount, and disposes on unmount', () => {
@@ -229,6 +299,42 @@ describe('TerminalSettingsPreview terminal lifecycle', () => {
     renderPreview(makeSettings({ terminalLineHeight: 0.85 }))
 
     expect(mockXterm.instances[0]?.options.lineHeight).toBe(1)
+  })
+
+  it('makes xterm transparent only after the preview background is ready', () => {
+    mockPreviewBackground.current = {
+      fileName: 'ocean.png',
+      objectUrl: 'blob:ocean',
+      opacity: 0.4,
+      blurPx: 8,
+      fit: 'cover'
+    }
+
+    renderPreview()
+
+    expect(mockXterm.instances[0]?.options).toMatchObject({
+      allowTransparency: true,
+      theme: { background: 'rgba(17, 17, 17, 0)' }
+    })
+  })
+
+  it('keeps the surface below the image instead of covering it with the active pane', () => {
+    mockPreviewBackground.current = {
+      fileName: 'ocean.png',
+      objectUrl: 'blob:ocean',
+      opacity: 0.4,
+      blurPx: 8,
+      fit: 'cover'
+    }
+
+    const preview = renderPreview()
+    const frame = findByClassName(preview, 'h-[300px]')
+    const activePane = findByClassName(preview, 'min-w-0 flex-1')
+    const stubPane = findByDataAttribute(preview, 'data-terminal-preview-stub')
+
+    expect(frame?.props?.style).toEqual({ backgroundColor: '#111111' })
+    expect(activePane?.props?.style).toBeUndefined()
+    expect(stubPane?.props?.style).toMatchObject({ backgroundColor: 'transparent' })
   })
 
   it('disposes the ligatures addon before disposing the terminal', () => {

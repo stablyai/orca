@@ -3,6 +3,8 @@ import type { GhosttyImportPreview, GlobalSettings } from '../../../../shared/gl
 
 const mockStateValues: unknown[] = []
 let mockStateIndex = 0
+const mockRefValues: { current: unknown }[] = []
+let mockRefIndex = 0
 
 const baseSettings: GlobalSettings = {
   theme: 'system',
@@ -25,6 +27,15 @@ const baseSettings: GlobalSettings = {
 
 function resetMockState() {
   mockStateIndex = 0
+  mockRefIndex = 0
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((settle) => {
+    resolve = settle
+  })
+  return { promise, resolve }
 }
 
 vi.mock('react', async () => {
@@ -34,7 +45,11 @@ vi.mock('react', async () => {
     useEffect: (effect: () => void | (() => void)) => {
       void effect()
     },
-    useRef: (initial: unknown) => ({ current: initial }),
+    useRef: (initial: unknown) => {
+      const i = mockRefIndex++
+      mockRefValues[i] ??= { current: initial }
+      return mockRefValues[i]
+    },
     useState: (initial: unknown) => {
       const i = mockStateIndex++
       if (mockStateValues[i] === undefined) {
@@ -53,6 +68,7 @@ import { useGhosttyImport } from './useGhosttyImport'
 describe('useGhosttyImport', () => {
   beforeEach(() => {
     mockStateValues.length = 0
+    mockRefValues.length = 0
     resetMockState()
     vi.unstubAllGlobals()
     vi.clearAllMocks()
@@ -234,5 +250,80 @@ describe('useGhosttyImport', () => {
         background: '#1a1a1a'
       }
     })
+  })
+
+  it('keeps the newest preview when responses resolve out of order', async () => {
+    const first = createDeferred<GhosttyImportPreview>()
+    const second = createDeferred<GhosttyImportPreview>()
+    const firstResponse = {
+      found: true,
+      diff: { terminalFontSize: 13 },
+      unsupportedKeys: []
+    } satisfies GhosttyImportPreview
+    const secondResponse = {
+      found: true,
+      diff: { terminalFontSize: 15 },
+      unsupportedKeys: []
+    } satisfies GhosttyImportPreview
+    const previewMock = vi
+      .fn()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+    vi.stubGlobal('window', {
+      api: { settings: { previewGhosttyImport: previewMock } }
+    })
+
+    let ghostty = useGhosttyImport(vi.fn(), baseSettings)
+    const firstRequest = ghostty.handleClick()
+    const secondRequest = ghostty.handleClick()
+
+    second.resolve(secondResponse)
+    await secondRequest
+    first.resolve(firstResponse)
+    await firstRequest
+
+    resetMockState()
+    ghostty = useGhosttyImport(vi.fn(), baseSettings)
+    expect(ghostty.preview).toEqual(secondResponse)
+    expect(ghostty.loading).toBe(false)
+  })
+
+  it('ignores a closed preview after reopening with a new request', async () => {
+    const first = createDeferred<GhosttyImportPreview>()
+    const second = createDeferred<GhosttyImportPreview>()
+    const previewMock = vi
+      .fn()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+    vi.stubGlobal('window', {
+      api: { settings: { previewGhosttyImport: previewMock } }
+    })
+
+    let ghostty = useGhosttyImport(vi.fn(), baseSettings)
+    const firstRequest = ghostty.handleClick()
+    ghostty.handleOpenChange(false)
+    resetMockState()
+    ghostty = useGhosttyImport(vi.fn(), baseSettings)
+    const secondRequest = ghostty.handleClick()
+
+    first.resolve({ found: false, diff: {}, unsupportedKeys: [], error: 'stale' })
+    await firstRequest
+    resetMockState()
+    ghostty = useGhosttyImport(vi.fn(), baseSettings)
+    expect(ghostty.open).toBe(true)
+    expect(ghostty.preview).toBeNull()
+    expect(ghostty.loading).toBe(true)
+
+    const currentResponse = {
+      found: true,
+      diff: { terminalFontSize: 16 },
+      unsupportedKeys: []
+    } satisfies GhosttyImportPreview
+    second.resolve(currentResponse)
+    await secondRequest
+    resetMockState()
+    ghostty = useGhosttyImport(vi.fn(), baseSettings)
+    expect(ghostty.preview).toEqual(currentResponse)
+    expect(ghostty.loading).toBe(false)
   })
 })

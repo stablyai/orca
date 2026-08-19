@@ -107,6 +107,23 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').compactWorktreeCards).toBe(false)
   })
 
+  it('defaults custom backgrounds to the terminal with safe effects', () => {
+    expect(getDefaultSettings('/tmp')).toMatchObject({
+      orcaBackgroundImage: null,
+      orcaBackgroundByArea: {},
+      orcaBackgroundOpacity: 0.35,
+      orcaBackgroundOpacityByArea: {},
+      orcaBackgroundBlur: 0,
+      orcaBackgroundBlurByArea: {},
+      orcaBackgroundFit: 'cover',
+      orcaBackgroundAreas: {
+        terminal: true,
+        leftSidebar: false,
+        rightSidebar: false
+      }
+    })
+  })
+
   it('keeps per-workspace environments disabled by default', () => {
     expect(getDefaultSettings('/tmp').experimentalEphemeralVms).toBe(false)
   })

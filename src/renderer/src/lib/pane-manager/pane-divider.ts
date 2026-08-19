@@ -1,5 +1,6 @@
 import type { PaneStyleOptions, ManagedPaneInternal } from './pane-manager-types'
 import { attachDividerDrag, disposeDividerDrag, type DividerCallbacks } from './pane-divider-drag'
+import { markAppearanceBackgroundArea } from '@/lib/appearance-background-runtime'
 export { createDividerFlexFrameScheduler } from './pane-divider-drag'
 
 // ---------------------------------------------------------------------------
@@ -88,6 +89,7 @@ export function applyPaneOpacity(
 }
 
 export function applyRootBackground(root: HTMLElement, styleOptions: PaneStyleOptions): void {
+  markAppearanceBackgroundArea(root, 'terminal')
   if (styleOptions.splitBackground) {
     root.style.background = styleOptions.splitBackground
   }

@@ -6311,6 +6311,7 @@
           "terminalTitle": "Terminal",
           "windowSidebarTitle": "Window & Sidebar",
           "windowSidebarSummary": "Sidebar, status bar, and file explorer",
+          "backgroundSummary": "Images, opacity, blur, and fit",
           "statusBarCount": "{{value0}} indicators visible.",
           "gitIgnoredGlossary": "Files matched by .gitignore.",
           "statusBarDescription": "Choose which indicators appear in the status bar.",
@@ -6863,7 +6864,10 @@
           "2763b0c045": "Review the settings that will be imported from your Ghostty config.",
           "d2f33670a9": "Import from Ghostty",
           "273e7e81fe": "Configs",
-          "1f744a72f4": "Config"
+          "1f744a72f4": "Config",
+          "draftDescription": "Review the Ghostty settings to add to your appearance draft.",
+          "staged": "Added to appearance draft",
+          "addToDraft": "Add to Draft"
         },
         "WarpThemeImportModal": {
           "title": "Import from Warp",
@@ -6889,7 +6893,12 @@
           "cancel": "Cancel",
           "import_theme_one": "Import 1 Theme",
           "import_theme_other": "Import {{value0}} Themes",
-          "import_themes": "Import Themes"
+          "import_themes": "Import Themes",
+          "yaml_draft_description": "Add theme YAML files (Warp format) to your appearance draft.",
+          "draft_description": "Add Warp themes to your appearance draft.",
+          "add_theme_one": "Add 1 Theme to Draft",
+          "add_theme_other": "Add {{value0}} Themes to Draft",
+          "add_themes": "Add Themes to Draft"
         },
         "useWarpThemeImport": {
           "unknown_error": "Unknown error",
@@ -6897,7 +6906,9 @@
           "imported_other": "Imported {{value0}} themes",
           "import_failed": "Failed to import themes",
           "over_limit_one": "Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect 1 new theme and try again.",
-          "over_limit_other": "Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect {{value1}} new themes and try again."
+          "over_limit_other": "Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect {{value1}} new themes and try again.",
+          "staged_one": "Added 1 theme to appearance draft",
+          "staged_other": "Added {{value0}} themes to appearance draft"
         },
         "YamlThemeImportButton": {
           "label": "Import from YAML"
@@ -8378,7 +8389,8 @@
           "cf37ff69f6": "Base",
           "8abdab9f7c": "Restart now",
           "907131d741": "Restarting…",
-          "605a35d600": "Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved."
+          "605a35d600": "Not applied by the terminal renderer yet — xterm.js has no bold color slot. A saved value is preserved.",
+          "saveBeforeRestart": "Save the appearance draft before restarting Orca."
         },
         "UIZoomControl": {
           "c2c64b24d0": "Reset"
@@ -10573,7 +10585,8 @@
         },
         "AppearanceWindowSidebarSection": {
           "usagePercentageDisplayUsed": "Used",
-          "usagePercentageDisplayRemaining": "Remaining"
+          "usagePercentageDisplayRemaining": "Remaining",
+          "appliesImmediately": "Applies immediately."
         },
         "TerminalInteractionSection": {
           "567633ff50": "Right-click pastes the clipboard into the terminal. Control-click to open the context menu.",
@@ -11293,6 +11306,99 @@
         },
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "Blocked by Mission Control. Remap here or change it in System Settings."
+        },
+        "AppearanceChromeMock": {
+          "ssh": "SSH",
+          "resourceUsage": "Resource usage",
+          "ports": "Ports",
+          "tasks": "Tasks",
+          "automations": "Automations",
+          "mobile": "Mobile",
+          "previewLabel": "Orca interface preview",
+          "projects": "Projects",
+          "workspace": "appearance-preview",
+          "terminalCount": "1 terminal",
+          "statusSummary": "Status bar: {{value0}}",
+          "emptyStatus": "Status bar without optional items",
+          "previewLabelWithStatus": "Orca interface preview. Status bar: {{value0}}",
+          "branchName": "feature/preview",
+          "editorPath": "src/App.tsx",
+          "baseBranch": "main",
+          "explorer": "Explorer"
+        },
+        "AppearanceInterfaceSection": {
+          "zoomAppliesImmediately": "Applies immediately."
+        },
+        "AppearanceBackgroundSection": {
+          "title": "Background Image",
+          "description": "Use your own images behind the terminal and sidebars.",
+          "loadFailed": "Could not load the backgrounds library.",
+          "skipped": "Some images could not be added: {{value0}}",
+          "addFailed": "Could not add the selected images.",
+          "openFailed": "Could not open the backgrounds folder.",
+          "terminal": "Terminal",
+          "leftSidebar": "Left Sidebar",
+          "rightSidebar": "Right Sidebar",
+          "terminalDescription": "Show the background behind terminal panes.",
+          "leftSidebarDescription": "Show the background behind the workspace sidebar.",
+          "rightSidebarDescription": "Show the background behind explorer and source control panels.",
+          "cover": "Cover",
+          "contain": "Contain",
+          "stretch": "Stretch",
+          "tile": "Tile",
+          "addImage": "Add Image",
+          "openFolder": "Open Backgrounds Folder",
+          "clearArea": "Clear Area",
+          "backgroundFor": "Background for",
+          "backgroundForDescription": "Choose an area, then select its image. Each area can use a different image.",
+          "backgroundTarget": "Background target",
+          "empty": "No images yet. Add an image from your computer.",
+          "previousImage": "Previous background image",
+          "nextImage": "Next background image",
+          "imagePreview": "Preview of {{value0}}",
+          "keywordBackground": "background",
+          "keywordImage": "image",
+          "keywordWallpaper": "wallpaper",
+          "keywordTerminal": "terminal",
+          "keywordSidebar": "sidebar",
+          "keywordOpacity": "opacity",
+          "keywordBlur": "blur",
+          "effectsFor": "Effects for",
+          "effectsDescription": "Adjust opacity and blur for the selected area.",
+          "effectsTarget": "Background effects target",
+          "resetEffects": "Reset background effects",
+          "reset": "Reset",
+          "opacity": "Opacity",
+          "opacityDescription": "How strongly the image shows through. Lower keeps text readable.",
+          "blur": "Blur",
+          "blurDescription": "Softens the image so it does not compete with text.",
+          "fit": "Fit",
+          "fitDescription": "How the image is scaled. Applied to every background area."
+        },
+        "AppearancePreviewColumn": {
+          "label": "Appearance preview",
+          "terminalTitle": "Terminal preview",
+          "terminalDescription": "Effective terminal appearance.",
+          "terminalDraftDescription": "Drafted terminal appearance. Compare dark and light themes.",
+          "visibleTitle": "Live preview",
+          "visibleDescription": "Updates as you edit."
+        },
+        "AppearanceSaveBar": {
+          "singleChange": "1 unsaved change",
+          "multipleChanges": "{{value0}} unsaved changes",
+          "saveFailed": "Appearance settings could not be saved. Try again.",
+          "discard": "Discard",
+          "saving": "Saving…",
+          "save": "Save"
+        },
+        "AppearanceUnsavedChangesDialog": {
+          "title": "Unsaved appearance changes",
+          "description": "Save the appearance draft before leaving?",
+          "saveFailed": "Appearance settings could not be saved. The draft is still available.",
+          "cancel": "Cancel",
+          "discard": "Discard",
+          "saving": "Saving…",
+          "save": "Save"
         }
       },
       "right": {

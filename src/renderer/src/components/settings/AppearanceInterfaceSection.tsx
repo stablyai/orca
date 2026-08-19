@@ -37,7 +37,6 @@ import { usePluginLanguagePacks } from '@/store/plugin-language-packs'
 type AppearanceInterfaceSectionProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
-  applyTheme: (theme: 'system' | 'dark' | 'light') => void
   fontSuggestions: string[]
   isDesktopMac: boolean
   isDesktopWindows: boolean
@@ -48,7 +47,6 @@ type AppearanceInterfaceSectionProps = {
 export function AppearanceInterfaceSection({
   settings,
   updateSettings,
-  applyTheme,
   fontSuggestions,
   isDesktopMac,
   isDesktopWindows,
@@ -90,10 +88,7 @@ export function AppearanceInterfaceSection({
             <SettingsSegmentedControl
               ariaLabel={themeLabel}
               value={settings.theme}
-              onChange={(option) => {
-                updateSettings({ theme: option })
-                applyTheme(option)
-              }}
+              onChange={(option) => updateSettings({ theme: option })}
               options={[
                 {
                   value: 'system',
@@ -166,6 +161,10 @@ export function AppearanceInterfaceSection({
               {translate(
                 'auto.components.settings.AppearancePane.ef89200c1f',
                 'when not in a terminal pane.'
+              )}{' '}
+              {translate(
+                'auto.components.settings.AppearanceInterfaceSection.zoomAppliesImmediately',
+                'Applies immediately.'
               )}
             </>
           }

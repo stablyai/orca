@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   matchesSettingsSearch,
@@ -25,7 +25,7 @@ import { SettingsRow, SettingsSubsectionHeader, FontAutocomplete } from './Setti
 import { SearchableSetting } from './SearchableSetting'
 import { TerminalFontSizeSetting } from './TerminalFontSizeSetting'
 import { TerminalAdvancedTypographyControls } from './TerminalAdvancedTypographyControls'
-import { TerminalThemeCatalogSection } from './TerminalThemeSections'
+import { TerminalThemeCatalogSection, type TerminalThemeTarget } from './TerminalThemeSections'
 import { TerminalWindowSection } from './TerminalWindowSection'
 import { TerminalCursorAppearanceSection } from './TerminalCursorAppearanceSection'
 import { TerminalPaneAppearanceSection } from './TerminalPaneAppearanceSection'
@@ -46,10 +46,13 @@ type TerminalAppearanceSectionProps = {
   onRequestFontSuggestions?: () => void
   ghostty: UseGhosttyImportReturn
   warpThemes: UseWarpThemeImportReturn
+  showPreview?: boolean
+  hasUnsavedChanges?: boolean
   forceVisiblePrimary?: boolean
+  previewThemeTarget?: TerminalThemeTarget
+  onPreviewThemeTargetChange?: (target: TerminalThemeTarget) => void
+  onPreviewFontFamilyChange?: (fontFamily: string | null) => void
 }
-
-type TerminalThemeTarget = 'dark' | 'light'
 
 function scoreThemeTargetIntent(searchQuery: string, entries: SettingsSearchEntry[]): number {
   // Why: descriptions mention dark/light incidentally; target intent should come from labels and aliases.
@@ -77,12 +80,21 @@ export function TerminalAppearanceSection({
   onRequestFontSuggestions,
   ghostty,
   warpThemes,
-  forceVisiblePrimary = false
+  showPreview = true,
+  hasUnsavedChanges = false,
+  forceVisiblePrimary = false,
+  previewThemeTarget,
+  onPreviewThemeTargetChange,
+  onPreviewFontFamilyChange
 }: TerminalAppearanceSectionProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
   const [themeSearch, setThemeSearch] = useState('')
   const [previewFontFamily, setPreviewFontFamily] = useState<string | null>(null)
+  const handlePreviewFontFamily = (fontFamily: string | null): void => {
+    setPreviewFontFamily(fontFamily)
+    onPreviewFontFamilyChange?.(fontFamily)
+  }
   const showWarpThemeImport = !isWebClientLocation()
   const darkThemeSearchEntries = getTerminalDarkThemeSearchEntries()
   const lightThemeSearchEntries = getTerminalLightThemeSearchEntries()
@@ -99,6 +111,12 @@ export function TerminalAppearanceSection({
   const darkThemeTargetScore = scoreThemeTargetIntent(searchQuery, darkThemeSearchEntries)
   const lightThemeTargetScore = scoreThemeTargetIntent(searchQuery, lightThemeSearchEntries)
   const preferredThemeTarget = getPreferredThemeTarget(darkThemeTargetScore, lightThemeTargetScore)
+
+  useEffect(() => {
+    if (preferredThemeTarget) {
+      onPreviewThemeTargetChange?.(preferredThemeTarget)
+    }
+  }, [onPreviewThemeTargetChange, preferredThemeTarget])
 
   // Why: low-frequency knobs are force-opened during search; render each group
   // only when its own search matches so an active query never leaves a dangling header.
@@ -146,7 +164,13 @@ export function TerminalAppearanceSection({
     windowMatches
       ? {
           key: 'window',
-          node: <TerminalWindowSection settings={settings} updateSettings={updateSettings} />
+          node: (
+            <TerminalWindowSection
+              settings={settings}
+              updateSettings={updateSettings}
+              relaunchDisabled={hasUnsavedChanges}
+            />
+          )
         }
       : null
   ].filter((group): group is { key: string; node: React.JSX.Element } => group !== null)
@@ -228,7 +252,7 @@ export function TerminalAppearanceSection({
                     suggestions={terminalFontSuggestions}
                     onRequestSuggestions={onRequestFontSuggestions}
                     onChange={(value) => updateSettings({ terminalFontFamily: value })}
-                    onPreviewFontFamily={setPreviewFontFamily}
+                    onPreviewFontFamily={handlePreviewFontFamily}
                   />
                 }
               />
@@ -260,7 +284,10 @@ export function TerminalAppearanceSection({
           importedHighlightSignal={warpThemes.importSignal}
           warpThemes={warpThemes}
           showThemeImport={showWarpThemeImport}
+          showPreview={showPreview}
           preferredTarget={preferredThemeTarget}
+          selectedTarget={previewThemeTarget}
+          onTargetChange={onPreviewThemeTargetChange}
           advancedContent={previewAdvancedContent}
         />
       ) : null}

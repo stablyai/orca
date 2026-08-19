@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { GhosttyImportPreview, GlobalSettings } from '../../../../shared/global-settings-types'
 import { useMountedRef } from '../../hooks/useMountedRef'
 
@@ -27,22 +27,24 @@ export function useGhosttyImport(
   const [applied, setApplied] = useState(false)
   const [applyError, setApplyError] = useState<string | null>(null)
   const mountedRef = useMountedRef()
+  const operationSequenceRef = useRef(0)
 
   async function handleClick(): Promise<void> {
+    const operationId = ++operationSequenceRef.current
     setOpen(true)
     setLoading(true)
     try {
       const result = await window.api.settings.previewGhosttyImport()
-      if (mountedRef.current) {
+      if (mountedRef.current && operationId === operationSequenceRef.current) {
         setPreview(result)
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
-      if (mountedRef.current) {
+      if (mountedRef.current && operationId === operationSequenceRef.current) {
         setPreview({ found: false, diff: {}, unsupportedKeys: [], error: message })
       }
     } finally {
-      if (mountedRef.current) {
+      if (mountedRef.current && operationId === operationSequenceRef.current) {
         setLoading(false)
       }
     }
@@ -52,6 +54,7 @@ export function useGhosttyImport(
     if (applied || !preview?.found || Object.keys(preview.diff).length === 0 || !settings) {
       return
     }
+    const operationId = operationSequenceRef.current
     const merged = {
       ...preview.diff,
       ...(preview.diff.terminalColorOverrides
@@ -69,12 +72,12 @@ export function useGhosttyImport(
       // must keep the modal in its "unapplied" state and surface the error so
       // the user doesn't see a false success.
       await updateSettings(merged)
-      if (mountedRef.current) {
+      if (mountedRef.current && operationId === operationSequenceRef.current) {
         setApplied(true)
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to apply settings'
-      if (mountedRef.current) {
+      if (mountedRef.current && operationId === operationSequenceRef.current) {
         setApplyError(message)
       }
     }
@@ -83,6 +86,7 @@ export function useGhosttyImport(
   function handleOpenChange(newOpen: boolean): void {
     setOpen(newOpen)
     if (!newOpen) {
+      operationSequenceRef.current += 1
       setPreview(null)
       setLoading(false)
       setApplied(false)

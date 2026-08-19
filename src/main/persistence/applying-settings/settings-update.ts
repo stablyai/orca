@@ -37,6 +37,10 @@ import {
   buildWorkspaceDirHistoryForUpdate,
   stripRetiredGlobalSettings
 } from './terminal-settings-migrations'
+import {
+  normalizeOrcaBackgroundSettingsUpdate,
+  ORCA_BACKGROUND_SETTING_KEYS
+} from '../../../shared/orca-background-settings'
 
 export type SettingsMutationOperations = {
   state: StoreOwnedPersistedState
@@ -160,6 +164,12 @@ export function updateSettings(
   }
   if ('uiLanguage' in updates) {
     sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)
+  }
+  if (ORCA_BACKGROUND_SETTING_KEYS.some((key) => Object.hasOwn(updates, key))) {
+    Object.assign(
+      sanitizedUpdates,
+      normalizeOrcaBackgroundSettingsUpdate(updates, operations.state.settings)
+    )
   }
   if ('prBotAuthorOverrides' in updates) {
     // Why: every writer (desktop IPC, web RPC, migrations) hits this boundary, so the persisted list stays bounded and well-formed.

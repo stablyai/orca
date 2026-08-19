@@ -66,6 +66,14 @@ describe('composeActiveTerminalTheme', () => {
     expect(result!.background).toBe('rgba(17, 34, 51, 0)')
   })
 
+  it('only makes the terminal transparent for an explicitly loaded background image', () => {
+    const base = { background: '#112233' }
+    const settings = settingsWith({ terminalBackgroundOpacity: undefined })
+
+    expect(composeActiveTerminalTheme(base, settings)?.background).toBe('#112233')
+    expect(composeActiveTerminalTheme(base, settings, true)?.background).toBe('rgba(17, 34, 51, 0)')
+  })
+
   it('applies cursor opacity only when the cursor is a hex color', () => {
     const base = { cursor: '#ffffff' }
     const result = composeActiveTerminalTheme(base, settingsWith({ terminalCursorOpacity: 0.3 }))

@@ -21,7 +21,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 
-type TerminalThemeTarget = 'dark' | 'light'
+export type TerminalThemeTarget = 'dark' | 'light'
 
 let lastEditedTerminalThemeTarget: TerminalThemeTarget | null = null
 
@@ -38,7 +38,7 @@ function isCustomizedTheme(themeName: string, defaultThemeName: string): boolean
   return trimmed.length > 0 && trimmed !== defaultThemeName
 }
 
-function getInitialTerminalThemeTarget(
+export function getInitialTerminalThemeTarget(
   settings: GlobalSettings,
   systemPrefersDark: boolean,
   preferredTarget?: TerminalThemeTarget
@@ -72,7 +72,10 @@ type TerminalThemeCatalogSectionProps = {
   importedHighlightSignal: number
   warpThemes: UseWarpThemeImportReturn
   showThemeImport: boolean
+  showPreview?: boolean
   preferredTarget?: TerminalThemeTarget
+  selectedTarget?: TerminalThemeTarget
+  onTargetChange?: (target: TerminalThemeTarget) => void
   advancedContent?: ReactNode
 }
 
@@ -86,15 +89,20 @@ export function TerminalThemeCatalogSection({
   importedHighlightSignal,
   warpThemes,
   showThemeImport,
+  showPreview = true,
   preferredTarget,
+  selectedTarget,
+  onTargetChange,
   advancedContent
 }: TerminalThemeCatalogSectionProps): React.JSX.Element {
-  const [target, setTargetState] = useState<TerminalThemeTarget>(() =>
+  const [localTarget, setTargetState] = useState<TerminalThemeTarget>(() =>
     getInitialTerminalThemeTarget(settings, systemPrefersDark, preferredTarget)
   )
+  const target = selectedTarget ?? preferredTarget ?? localTarget
   const setTarget = (nextTarget: TerminalThemeTarget): void => {
     rememberTerminalThemeTarget(nextTarget)
     setTargetState(nextTarget)
+    onTargetChange?.(nextTarget)
   }
   const themeOptions = getAvailableTerminalThemeOptions(settings)
   const isLightTarget = target === 'light'
@@ -290,34 +298,36 @@ export function TerminalThemeCatalogSection({
 
         {advancedContent ? <div className="-mt-4">{advancedContent}</div> : null}
 
-        <TerminalSettingsPreview
-          title={
-            isLightTarget
-              ? translate(
-                  'auto.components.settings.TerminalThemeSections.db210115c5',
-                  'Light Mode Preview'
-                )
-              : translate(
-                  'auto.components.settings.TerminalThemeSections.bc8e8a251a',
-                  'Dark Mode Preview'
-                )
-          }
-          description={
-            isLightTarget
-              ? translate(
-                  'auto.components.settings.TerminalThemeSections.light_preview_description',
-                  'Shows the effective light terminal appearance.'
-                )
-              : translate(
-                  'auto.components.settings.TerminalThemeSections.dark_preview_description',
-                  'Shows the effective dark terminal appearance.'
-                )
-          }
-          settings={settings}
-          systemPrefersDark={systemPrefersDark}
-          previewFontFamily={previewFontFamily}
-          modeOverride={target}
-        />
+        {showPreview ? (
+          <TerminalSettingsPreview
+            title={
+              isLightTarget
+                ? translate(
+                    'auto.components.settings.TerminalThemeSections.db210115c5',
+                    'Light Mode Preview'
+                  )
+                : translate(
+                    'auto.components.settings.TerminalThemeSections.bc8e8a251a',
+                    'Dark Mode Preview'
+                  )
+            }
+            description={
+              isLightTarget
+                ? translate(
+                    'auto.components.settings.TerminalThemeSections.light_preview_description',
+                    'Shows the effective light terminal appearance.'
+                  )
+                : translate(
+                    'auto.components.settings.TerminalThemeSections.dark_preview_description',
+                    'Shows the effective dark terminal appearance.'
+                  )
+            }
+            settings={settings}
+            systemPrefersDark={systemPrefersDark}
+            previewFontFamily={previewFontFamily}
+            modeOverride={target}
+          />
+        ) : null}
       </div>
     </section>
   )

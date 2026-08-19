@@ -3,7 +3,9 @@ import { Terminal } from '@xterm/xterm'
 import { LigaturesAddon } from '@xterm/addon-ligatures'
 import { Moon, Sun } from 'lucide-react'
 import '@xterm/xterm/css/xterm.css'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
 import { buildFontFamily } from '@/components/terminal-pane/layout-serialization'
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
@@ -14,6 +16,10 @@ import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-lig
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
 import { PREVIEW_BUFFER } from './terminal-preview-content'
 import { SettingsSwitch } from './SettingsFormControls'
+import {
+  getAppearancePreviewBackgroundStyle,
+  useAppearancePreviewBackground
+} from './appearance-preview-background'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 
@@ -33,9 +39,10 @@ type TerminalSettingsPreviewProps = {
   systemPrefersDark: boolean
   /** Override for `settings.terminalFontFamily`; set by the font picker on hover to preview a font before committing. */
   previewFontFamily?: string | null
-  /** Force the preview into this mode regardless of app settings; hides the in-header theme toggle when set. */
+  /** Force the preview into this mode regardless of app settings. */
   modeOverride?: PreviewMode
-  /** Render a Moon/Sun header toggle to flip the preview theme without changing the app theme. Ignored when `modeOverride` is set. */
+  onModeOverrideChange?: (mode: PreviewMode) => void
+  /** Render a Moon/Sun toggle; controlled overrides require `onModeOverrideChange`. */
   showThemeToggle?: boolean
 }
 
@@ -56,6 +63,7 @@ export function TerminalSettingsPreview({
   systemPrefersDark,
   previewFontFamily,
   modeOverride,
+  onModeOverrideChange,
   showThemeToggle
 }: TerminalSettingsPreviewProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -67,16 +75,15 @@ export function TerminalSettingsPreview({
   const effectiveFontFamily = previewFontFamily || settings.terminalFontFamily
   const terminalLineHeight = normalizeTerminalLineHeight(settings.terminalLineHeight)
 
-  // Why: lazy-init from the active app theme; after mount the toggle is independent of later app-theme changes.
-  const [togglePreviewMode, setTogglePreviewMode] = useState<PreviewMode>(() =>
-    resolveAppMode(settings, systemPrefersDark)
-  )
+  const [togglePreviewMode, setTogglePreviewMode] = useState<PreviewMode | null>(null)
   const [previewPaneDividerVisible, setPreviewPaneDividerVisible] = useState(false)
 
-  // Why: recomputed each render so plain previews (no override/toggle) track live app-theme changes.
+  const selectedPreviewMode = togglePreviewMode ?? resolveAppMode(settings, systemPrefersDark)
   const effectiveMode: PreviewMode =
     modeOverride ??
-    (showThemeToggle ? togglePreviewMode : resolveAppMode(settings, systemPrefersDark))
+    (showThemeToggle ? selectedPreviewMode : resolveAppMode(settings, systemPrefersDark))
+  const previewBackground = useAppearancePreviewBackground(settings, 'terminal')
+  const hasPreviewBackground = previewBackground !== null
 
   // Why: reuse the live-pane resolver so divider color, theme palette, and dark/light variant rules stay in lockstep.
   // Why: list resolveEffectiveTerminalAppearance's inputs explicitly so unrelated changes (font, cursor) don't re-derive.
@@ -97,20 +104,25 @@ export function TerminalSettingsPreview({
   )
 
   // Why: list composeActiveTerminalTheme inputs explicitly so font/cursor changes don't trigger a buffer rewrite.
-  const composedTheme = useMemo(
-    () => composeActiveTerminalTheme(appearance.theme, settings),
+  const previewThemes = useMemo(
+    () => ({
+      surface: composeActiveTerminalTheme(appearance.theme, settings),
+      xterm: composeActiveTerminalTheme(appearance.theme, settings, hasPreviewBackground)
+    }),
     // oxlint-disable-next-line react-hooks/exhaustive-deps
     [
       appearance,
+      hasPreviewBackground,
       settings.terminalColorOverrides,
       settings.terminalBackgroundOpacity,
       settings.terminalCursorOpacity
     ]
   )
+  const composedTheme = previewThemes.xterm
 
   const dividerThicknessPx = clampNumber(settings.terminalDividerThicknessPx, 1, 32)
   const inactivePaneOpacity = clampNumber(settings.terminalInactivePaneOpacity, 0, 1)
-  const paneBackground = composedTheme?.background ?? '#000'
+  const paneBackground = previewThemes.surface?.background ?? '#000'
 
   useEffect(() => {
     const container = containerRef.current
@@ -139,7 +151,9 @@ export function TerminalSettingsPreview({
       lineHeight: terminalLineHeight,
       theme: composedTheme ?? undefined,
       allowTransparency:
-        settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1,
+        hasPreviewBackground ||
+        (settings.terminalBackgroundOpacity !== undefined &&
+          settings.terminalBackgroundOpacity < 1),
       cols: PREVIEW_COLS,
       rows: PREVIEW_ROWS
     })
@@ -205,12 +219,13 @@ export function TerminalSettingsPreview({
     terminal.options.theme = composedTheme
     // Why: share applyTerminalAppearance's gating helper (#7934) so the preview can't drift from live panes.
     terminal.options.minimumContrastRatio = resolveTerminalMinimumContrastRatio(
-      composedTheme.background,
+      previewThemes.surface?.background,
       effectiveMode
     )
     // Why: xterm renders an alpha-channel background opaque unless allowTransparency is set (matches applyTerminalAppearance).
     terminal.options.allowTransparency =
-      settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1
+      hasPreviewBackground ||
+      (settings.terminalBackgroundOpacity !== undefined && settings.terminalBackgroundOpacity < 1)
     if (skipInitialThemeRewriteRef.current) {
       skipInitialThemeRewriteRef.current = false
       return
@@ -218,7 +233,13 @@ export function TerminalSettingsPreview({
     // Why reset() not clear(): buffer ends mid-line on the prompt, so clear()+write would duplicate the trailing fragment.
     terminal.reset()
     terminal.write(PREVIEW_BUFFER)
-  }, [composedTheme, effectiveMode, settings.terminalBackgroundOpacity])
+  }, [
+    composedTheme,
+    effectiveMode,
+    hasPreviewBackground,
+    previewThemes.surface?.background,
+    settings.terminalBackgroundOpacity
+  ])
 
   useEffect(() => {
     const terminal = terminalRef.current
@@ -245,17 +266,24 @@ export function TerminalSettingsPreview({
     }
   }, [settings.terminalLigatures, effectiveFontFamily])
 
-  const showToggle = showThemeToggle && modeOverride === undefined
+  const showToggle = showThemeToggle && (modeOverride === undefined || onModeOverrideChange)
+  const selectPreviewMode = (mode: PreviewMode): void => {
+    if (modeOverride === undefined) {
+      setTogglePreviewMode(mode)
+    } else {
+      onModeOverrideChange?.(mode)
+    }
+  }
 
   return (
     <Card className="gap-4 overflow-hidden py-0">
       <CardHeader className="gap-0 border-b border-border/50 px-4 py-3 !pb-3">
-        <div className="flex min-h-7 items-center justify-between gap-3">
-          <div className="min-w-0 space-y-1">
+        <div className="flex min-h-7 flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0 flex-1 basis-48 space-y-1">
             <CardTitle className="text-sm">{title}</CardTitle>
             {description ? <CardDescription>{description}</CardDescription> : null}
           </div>
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2">
             <div className="flex items-center gap-2 rounded-md border border-border/50 bg-background/40 px-2 py-1">
               <span className="text-xs font-medium text-muted-foreground">
                 {translate(
@@ -281,31 +309,41 @@ export function TerminalSettingsPreview({
                   'Preview theme'
                 )}
               >
-                {(['dark', 'light'] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setTogglePreviewMode(mode)}
-                    aria-pressed={togglePreviewMode === mode}
-                    aria-label={translate(
-                      'auto.components.settings.TerminalSettingsPreview.a63953a48a',
-                      'Preview {{value0}} theme',
-                      { value0: mode }
-                    )}
-                    title={translate(
-                      'auto.components.settings.TerminalSettingsPreview.a63953a48a',
-                      'Preview {{value0}} theme',
-                      { value0: mode }
-                    )}
-                    className={`rounded-sm p-1 transition-colors ${
-                      togglePreviewMode === mode
-                        ? 'bg-accent text-accent-foreground'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    {mode === 'dark' ? <Moon className="size-3.5" /> : <Sun className="size-3.5" />}
-                  </button>
-                ))}
+                {(['dark', 'light'] as const).map((mode) => {
+                  const label = translate(
+                    'auto.components.settings.TerminalSettingsPreview.a63953a48a',
+                    'Preview {{value0}} theme',
+                    { value0: mode }
+                  )
+                  return (
+                    <Tooltip key={mode}>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => selectPreviewMode(mode)}
+                          aria-pressed={effectiveMode === mode}
+                          aria-label={label}
+                          className={
+                            effectiveMode === mode
+                              ? 'bg-accent text-accent-foreground'
+                              : 'text-muted-foreground hover:text-foreground'
+                          }
+                        >
+                          {mode === 'dark' ? (
+                            <Moon className="size-3.5" aria-hidden="true" />
+                          ) : (
+                            <Sun className="size-3.5" aria-hidden="true" />
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" sideOffset={4}>
+                        {label}
+                      </TooltipContent>
+                    </Tooltip>
+                  )
+                })}
               </div>
             ) : null}
           </div>
@@ -313,14 +351,20 @@ export function TerminalSettingsPreview({
       </CardHeader>
       <CardContent className="px-4 pb-4">
         {/* Why: stub pane on the right keeps inactive-pane opacity visible; divider is opt-in to keep the default preview clean. */}
-        <div className="flex h-[300px] flex-col overflow-hidden rounded-md border border-border/50">
-          <div className="flex min-h-0 flex-1 overflow-hidden" aria-hidden="true">
+        <div
+          className="relative flex h-[300px] flex-col overflow-hidden rounded-md border border-border/50"
+          style={{ backgroundColor: paneBackground }}
+        >
+          {previewBackground ? (
             <div
-              ref={containerRef}
-              className="min-w-0 flex-1 overflow-hidden p-2"
-              style={{ backgroundColor: paneBackground }}
-              tabIndex={-1}
+              className="pointer-events-none absolute inset-0"
+              data-terminal-preview-background={previewBackground.fileName}
+              style={getAppearancePreviewBackgroundStyle(previewBackground)}
+              aria-hidden="true"
             />
+          ) : null}
+          <div className="relative z-10 flex min-h-0 flex-1 overflow-hidden" aria-hidden="true">
+            <div ref={containerRef} className="min-w-0 flex-1 overflow-hidden p-2" tabIndex={-1} />
             {previewPaneDividerVisible ? (
               <div
                 className="shrink-0"
@@ -332,9 +376,10 @@ export function TerminalSettingsPreview({
             ) : null}
             <div
               className="shrink-0"
+              data-terminal-preview-stub="true"
               style={{
                 width: `${STUB_PANE_PX}px`,
-                backgroundColor: paneBackground,
+                backgroundColor: hasPreviewBackground ? 'transparent' : paneBackground,
                 opacity: inactivePaneOpacity
               }}
             />

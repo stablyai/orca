@@ -55,8 +55,8 @@ export function GhosttyImportModal({
           </DialogTitle>
           <DialogDescription className="text-xs">
             {translate(
-              'auto.components.settings.GhosttyImportModal.2763b0c045',
-              'Review the settings that will be imported from your Ghostty config.'
+              'auto.components.settings.GhosttyImportModal.draftDescription',
+              'Review the Ghostty settings to add to your appearance draft.'
             )}
           </DialogDescription>
         </DialogHeader>
@@ -80,10 +80,10 @@ export function GhosttyImportModal({
             )}
             {applied ? (
               <div>
-                <p className="text-xs font-medium text-green-600 mb-1">
+                <p className="mb-1 text-xs font-medium text-status-success">
                   {translate(
-                    'auto.components.settings.GhosttyImportModal.4466f4cdaa',
-                    'Import complete'
+                    'auto.components.settings.GhosttyImportModal.staged',
+                    'Added to appearance draft'
                   )}
                 </p>
                 <ul className="text-xs space-y-1">
@@ -121,7 +121,11 @@ export function GhosttyImportModal({
               </p>
             )}
 
-            {!applied && applyError && <p className="text-xs text-red-500">{applyError}</p>}
+            {!applied && applyError && (
+              <p className="text-xs text-destructive" role="alert">
+                {applyError}
+              </p>
+            )}
 
             {!applied && preview.unsupportedKeys.length > 0 && (
               <div>
@@ -142,7 +146,9 @@ export function GhosttyImportModal({
             )}
           </div>
         ) : preview.error ? (
-          <p className="text-xs text-red-500">{preview.error}</p>
+          <p className="text-xs text-destructive" role="alert">
+            {preview.error}
+          </p>
         ) : (
           <p className="text-xs text-muted-foreground">
             {translate(
@@ -159,14 +165,14 @@ export function GhosttyImportModal({
             </Button>
           ) : (
             <>
-              <Button variant="outline" onClick={() => onOpenChange(false)}>
+              <Button variant="ghost" onClick={() => onOpenChange(false)}>
                 {translate('auto.components.settings.GhosttyImportModal.f96688b6bc', 'Cancel')}
               </Button>
               {hasChanges && (
                 <Button onClick={() => void onApply()}>
                   {translate(
-                    'auto.components.settings.GhosttyImportModal.9d3e56ca36',
-                    'Apply Changes'
+                    'auto.components.settings.GhosttyImportModal.addToDraft',
+                    'Add to Draft'
                   )}
                 </Button>
               )}

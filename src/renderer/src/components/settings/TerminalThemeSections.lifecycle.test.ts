@@ -280,6 +280,36 @@ describe('TerminalThemeCatalogSection', () => {
     expect(preview?.props?.modeOverride).toBe('light')
   })
 
+  it('uses and reports a shared preview target', () => {
+    const onTargetChange = vi.fn()
+    const element = TerminalThemeCatalogSection({
+      settings: makeSettings({ terminalUseSeparateLightTheme: true }),
+      systemPrefersDark: true,
+      themeSearch: '',
+      setThemeSearch: () => {},
+      updateSettings: vi.fn(),
+      previewFontFamily: null,
+      importedHighlightSignal: 0,
+      warpThemes: warpThemesMock,
+      showThemeImport: true,
+      selectedTarget: 'light',
+      onTargetChange
+    })
+    const targetControl = findElementByTypeName(element, 'SettingsSegmentedControl')
+
+    expect(findElementByTypeName(element, 'ThemePicker')?.props?.selectedTheme).toBe(
+      'Builtin Tango Light'
+    )
+
+    const onChange = targetControl?.props?.onChange
+    expect(onChange).toBeTypeOf('function')
+    if (typeof onChange === 'function') {
+      onChange('dark')
+    }
+
+    expect(onTargetChange).toHaveBeenCalledWith('dark')
+  })
+
   it('updates the dark theme from the catalog when the dark target is active', () => {
     const updateSettings = vi.fn()
     const element = renderCatalog(makeSettings(), updateSettings, 'dark')
