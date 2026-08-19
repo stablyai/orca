@@ -12,10 +12,6 @@ import { verifyRemotePairingRuntimeStatus } from '../../../shared/remote-pairing
 import type { AiVaultDeleteSessionArgs } from '../../../shared/ai-vault-session-deletion'
 import type { AiVaultListArgs, AiVaultListResult } from '../../../shared/ai-vault-types'
 import type {
-  AiVaultSessionTitlesArgs,
-  AiVaultSessionTitlesResult
-} from '../../../shared/ai-vault-session-title'
-import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
 } from '../../../shared/ai-vault-resume-preparation'
@@ -24,26 +20,24 @@ import type {
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
 } from '../../../shared/computer-use-permissions-types'
-import type { SearchResult } from '../../../shared/code-search-types'
-import type { DirEntry } from '../../../shared/filesystem-entry-types'
 import type {
+  DetectedWorktreeListResult,
+  DirEntry,
+  ForceDeleteWorktreeBranchResult,
   GlobalSettings,
-  WorktreeVisibilityDefaults
-} from '../../../shared/global-settings-types'
-import type { OnboardingState } from '../../../shared/onboarding-state-types'
-import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
-import type { MemorySnapshot, StatsSummary } from '../../../shared/process-stats-types'
-import type { Repo } from '../../../shared/repo-types'
-import type {
+  MemorySnapshot,
+  OnboardingState,
+  PersistedUIState,
+  Repo,
+  RemoveWorktreeResult,
+  SearchResult,
+  StatsSummary,
+  Worktree,
+  WorktreeLineage,
+  WorkspaceLineage,
   WorkspaceSessionPatch,
   WorkspaceSessionState
-} from '../../../shared/workspace-session-state-types'
-import type {
-  ForceDeleteWorktreeBranchResult,
-  RemoveWorktreeResult
-} from '../../../shared/worktree/create-types'
-import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
-import type { DetectedWorktreeListResult, Worktree } from '../../../shared/worktree/types'
+} from '../../../shared/types'
 import type { SkillDiscoveryResult } from '../../../shared/skills'
 import type { SkillFreshnessInventory } from '../../../shared/skill-freshness'
 import type { SshConnectionState, SshTarget } from '../../../shared/ssh-types'
@@ -65,8 +59,6 @@ import { legacyBaseRefSearchResult } from '../../../shared/base-ref-search-resul
 import { EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS } from '../../../shared/pty-delivery-diagnostics'
 import { createE2EConfig } from '../../../shared/e2e-config'
 import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
-import { readRetiredNameRegistryForRepo } from '../../../shared/worktree/retired-name-cache'
-import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../shared/worktree/retired-name-registry'
 import {
   applyPRBotAuthorOverride,
   normalizePRBotAuthorOverrides
@@ -96,11 +88,6 @@ import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-t
 import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../shared/status-bar-usage-mode'
-import {
-  computerAwakeSettingsForMode,
-  normalizeComputerAwakeMode
-} from '../../../shared/computer-awake-mode'
-import { normalizeWorktreeVisibilityDefaults } from '../../../shared/external-worktree-visibility'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
 import { assertFileMutationOwnershipCapability } from '../../../shared/file-mutation-ownership'
@@ -159,7 +146,6 @@ import {
   parseRuntimeNativeChatTurnLifecycle
 } from '@/components/native-chat/native-chat-runtime-contract'
 import { createWebFileMutationMethods } from './web-file-mutation-methods'
-import { mergeWorkspaceCleanupUIState } from '../../../shared/workspace-cleanup-ui-state'
 
 const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
 const UI_STORAGE_KEY = 'orca.web.ui.v1'
@@ -185,8 +171,6 @@ export const CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS = 256 * 1024
 const CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS = 30_000
 
 let activeEnvironment: StoredWebRuntimeEnvironment | null = readStoredWebRuntimeEnvironment()
-let worktreeVisibilityDefaultsRuntimeEnvironmentId: string | null = null
-let worktreeVisibilityDefaultsRuntimeValue: WorktreeVisibilityDefaults | null = null
 let activeClient: WebRuntimeClient | null = null
 let activeClientEnvironmentId: string | null = null
 const manuallyDisconnectedEnvironmentIds = new Set<string>()
@@ -301,7 +285,6 @@ type WebGitHubRouteKey =
   | 'prCheckDetails'
   | 'rerunPRChecks'
   | 'prComments'
-  | 'setPRCommentReaction'
   | 'resolveReviewThread'
   | 'setPRFileViewed'
   | 'updatePRTitle'
@@ -350,7 +333,6 @@ type WebGitHubRuntimeMethod =
   | 'github.prCheckDetails'
   | 'github.rerunPRChecks'
   | 'github.prComments'
-  | 'github.setPRCommentReaction'
   | 'github.resolveReviewThread'
   | 'github.setPRFileViewed'
   | 'github.updatePRTitle'
@@ -452,7 +434,6 @@ export const GITHUB_WEB_RPC_METHODS = {
   prCheckDetails: 'github.prCheckDetails',
   rerunPRChecks: 'github.rerunPRChecks',
   prComments: 'github.prComments',
-  setPRCommentReaction: 'github.setPRCommentReaction',
   resolveReviewThread: 'github.resolveReviewThread',
   setPRFileViewed: 'github.setPRFileViewed',
   updatePRTitle: 'github.updatePRTitle',
@@ -582,10 +563,6 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       recoverLegacyWorkerTerminalsForRendererStartup: () => Promise.resolve(),
       startupDiagnostic: () => Promise.resolve(),
       getKeyboardInputSourceId: () => Promise.resolve(null),
-      // The web client cannot inspect local Mission Control shortcuts.
-      getMacCapturedDigitRowChords: () => Promise.resolve([]),
-      getKeyboardLayoutSnapshot: () => Promise.resolve(null),
-      onKeyboardLayoutChanged: () => () => undefined,
       setUnreadDockBadgeCount: () => Promise.resolve(),
       getFloatingTerminalCwd: () => Promise.resolve(''),
       getFloatingMarkdownDirectory: () => Promise.resolve(''),
@@ -615,8 +592,6 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       get: () => ({
         platform: getBrowserPlatform(),
         osRelease: '',
-        arch: '',
-        shell: '',
         displayServer: null
       })
     },
@@ -694,65 +669,18 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     settings: {
       get: async () => getRuntimeBackedStoredSettings(),
       // Why: localStorage-backed settings are synchronous, so the pre-hydration kill-switch read works the same as desktop.
-      getSync: () => settingsForActiveVisibilityOwner(getStoredSettings()),
+      getSync: () => getStoredSettings(),
       set: async (updates) => {
         const sanitizedUpdates = { ...updates }
-        const runtimeEnvironment = requireActiveEnvironmentOrNull()
         delete sanitizedUpdates.activeRuntimeEnvironmentId
-        if (
-          'worktreeVisibilityDefaults' in sanitizedUpdates &&
-          runtimeEnvironment &&
-          runtimeEnvironment.id !== worktreeVisibilityDefaultsRuntimeEnvironmentId
-        ) {
-          delete sanitizedUpdates.worktreeVisibilityDefaults
-        }
-        if ('worktreeVisibilityDefaults' in sanitizedUpdates) {
-          sanitizedUpdates.worktreeVisibilityDefaults = {
-            ...settingsForActiveVisibilityOwner(getStoredSettings()).worktreeVisibilityDefaults,
-            ...sanitizedUpdates.worktreeVisibilityDefaults
-          }
-        }
-        if ('computerAwakeMode' in sanitizedUpdates) {
-          Object.assign(
-            sanitizedUpdates,
-            computerAwakeSettingsForMode(
-              normalizeComputerAwakeMode(
-                sanitizedUpdates.computerAwakeMode,
-                sanitizedUpdates.keepComputerAwakeWhileAgentsRun
-              )
-            )
-          )
-        } else if ('keepComputerAwakeWhileAgentsRun' in sanitizedUpdates) {
-          Object.assign(
-            sanitizedUpdates,
-            computerAwakeSettingsForMode(
-              sanitizedUpdates.keepComputerAwakeWhileAgentsRun ? 'auto' : 'off'
-            )
-          )
-        }
         if ('autoRenameBranchFromWorkDefaultedOn' in sanitizedUpdates) {
           sanitizedUpdates.autoRenameBranchFromWorkDefaultedOn = true
         }
-        if ('terminalCursorStyle' in sanitizedUpdates) {
-          Object.assign(
-            sanitizedUpdates,
-            normalizeTerminalCursorStyleDefault(
-              { terminalCursorStyle: sanitizedUpdates.terminalCursorStyle },
-              { preserveExplicitValue: true }
-            )
-          )
-        }
-        const localUpdates = { ...sanitizedUpdates }
-        if (runtimeEnvironment) {
-          delete localUpdates.worktreeVisibilityDefaults
-        }
-        const next = mergeSettings(getStoredSettings(), localUpdates, {
+        const next = mergeSettings(getStoredSettings(), sanitizedUpdates, {
           preserveAutoRenameBranchFromWorkUpdate: 'autoRenameBranchFromWork' in sanitizedUpdates
         })
         writeStoredSettings(next)
-        return settingsForActiveVisibilityOwner(
-          await syncRuntimeBackedSettings(sanitizedUpdates, next)
-        )
+        return syncRuntimeBackedSettings(sanitizedUpdates, next)
       },
       setActiveRuntimeEnvironmentPreference: async ({ environmentId }) => {
         const requestedEnvironmentId = environmentId?.trim() || null
@@ -769,19 +697,6 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       listFonts: () => Promise.resolve([]),
       onChanged: () => noopUnsubscribe
     } satisfies Partial<WebSettingsApi> as unknown as WebSettingsApi,
-    agentAwake: {
-      getStatus: async () => {
-        const settings = getStoredSettings()
-        return {
-          mode: normalizeComputerAwakeMode(
-            settings.computerAwakeMode,
-            settings.keepComputerAwakeWhileAgentsRun
-          ),
-          active: false
-        }
-      },
-      onChanged: () => noopUnsubscribe
-    },
     keybindings: createWebKeybindingsApi(),
     ui: createWebUiApi(),
     crashReports: {
@@ -942,7 +857,6 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       drop: () => {},
       dropByTabPrefix: () => {},
       retirePaneAuthority: () => {},
-      restorePaneAuthority: () => {},
       transferPaneAuthority: () => {}
     },
     mobile: {
@@ -1114,7 +1028,7 @@ function removeConflictingWebOverrides(
     const conflictingOverrides = new Set<KeybindingActionId>()
     for (const conflict of conflicts) {
       for (const actionId of conflict.actionIds) {
-        if (Object.hasOwn(next, actionId)) {
+        if (Object.prototype.hasOwnProperty.call(next, actionId)) {
           conflictingOverrides.add(actionId)
         }
       }
@@ -1527,15 +1441,12 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
         client?.close()
       }
       const usesSshTunnel = parsed.value.endpointKind === 'loopback' && allowLoopback === true
-      const nextEnvironment = {
-        ...createStoredWebRuntimeEnvironment({
-          name,
-          offer: parsed.value.pairing,
-          previousEnvironment: activeEnvironment,
-          ...(usesSshTunnel ? { connectionDependency: 'ssh-tunnel' as const } : {})
-        }),
-        ...(runtimeStatus.pairedDeviceId ? { pairedDeviceId: runtimeStatus.pairedDeviceId } : {})
-      }
+      const nextEnvironment = createStoredWebRuntimeEnvironment({
+        name,
+        offer: parsed.value.pairing,
+        previousEnvironment: activeEnvironment,
+        ...(usesSshTunnel ? { connectionDependency: 'ssh-tunnel' as const } : {})
+      })
       // Why: a browser storage failure must leave the currently active host usable.
       try {
         saveStoredWebRuntimeEnvironment(nextEnvironment)
@@ -1621,19 +1532,6 @@ function createAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault']> {
         scopePaths: args?.scopePaths,
         executionHostId
       })
-    },
-    resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => {
-      const environment = requireActiveEnvironment()
-      const executionHostId = toRuntimeExecutionHostId(environment.id)
-      if (
-        args.executionHostScope &&
-        normalizeExecutionHostScope(args.executionHostScope) !== executionHostId
-      ) {
-        return Promise.resolve({ titles: [] })
-      }
-      return callRuntimeResult<AiVaultSessionTitlesResult>('aiVault.resolveSessionTitles', {
-        requests: args.requests
-      }).catch(() => ({ titles: [] }))
     },
     // Why: the runtime RPC transport has no cancel verb, so the in-flight scan
     // settles on its own timeout. The renderer's refreshId guard already drops
@@ -1805,18 +1703,6 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         withRuntimeWorktreeOwner(worktree, owned.hostId)
       )
     },
-    // Why the catch: a host predating this method answers `method_not_found`, and an empty list
-    // degrades the suggestion to the pre-existing behavior rather than blocking workspace create.
-    listRetiredNames: async ({ repoId }) => {
-      try {
-        return readRetiredNameRegistryForRepo(
-          await callRuntimeResult<unknown>('worktree.listRetiredNames', { repo: repoId }),
-          repoId
-        )
-      } catch {
-        return EMPTY_RETIRED_NAME_REGISTRY
-      }
-    },
     listDetected: async ({ repoId }) => callRuntimeDetectedWorktrees(repoId),
     listAll: () => listAllRuntimeWorktrees(),
     create: async (args) => {
@@ -1824,8 +1710,6 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
       const owned = await callRuntimeResultWithOwner<{ worktree: Worktree }>('worktree.create', {
         repo: args.repoId,
         name: args.name,
-        // Absent means user-typed, which is what the host must assume — so send it only when true.
-        ...(args.nameWasGenerated ? { nameWasGenerated: true } : {}),
         baseBranch: args.baseBranch,
         compareBaseRef: args.compareBaseRef,
         branchNameOverride: args.branchNameOverride,
@@ -1868,11 +1752,6 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         worktree: withRuntimeWorktreeOwner(owned.result.worktree, owned.hostId)
       }
     },
-    // Why: adoption verifies a desktop-owned hidden SSH target and is intentionally not a remote-server operation.
-    adoptProvisionedRoot: () =>
-      Promise.reject(
-        new Error('Provisioned-root recipes require a direct SSH connection from the desktop app.')
-      ),
     // Why: the runtime create path emits no two-phase progress, so the panel falls back to an indeterminate spinner.
     onCreateProgress: () => noopUnsubscribe,
     prefetchCreateBase: async ({ repoId, baseBranch }) => {
@@ -1897,11 +1776,10 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         targetBranch,
         isCrossRepository
       }),
-    remove: async ({ worktreeId, hostId, force, allowUnverifiedPtyStop, skipArchive }) => {
+    remove: async ({ worktreeId, force, allowUnverifiedPtyStop, skipArchive }) => {
       invalidateRuntimeWorktreeCaches()
       return callRuntimeResult<RemoveWorktreeResult>('worktree.rm', {
         worktree: toRuntimeWorktreeSelector(worktreeId),
-        ...(hostId ? { hostId } : {}),
         force,
         // Why (#11960): the web client renders the same Force Delete affordances, so
         // dropping this field here would leave paired clients permanently wedged.
@@ -1913,16 +1791,16 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
     forgetLocal: () => {
       throw new Error('Forgetting a workspace is unavailable in paired web clients.')
     },
-    forceDeletePreservedBranch: ({ worktreeId, branchName, expectedHead, hostId }) =>
+    forceDeletePreservedBranch: ({ worktreeId, branchName, expectedHead }) =>
       callRuntimeResult<ForceDeleteWorktreeBranchResult>('worktree.forceDeleteBranch', {
         worktree: toRuntimeWorktreeSelector(worktreeId),
         branchName,
-        expectedHead,
-        ...(hostId ? { hostId } : {})
+        expectedHead
       }),
     updateMeta: async ({ worktreeId, updates }) => {
       const rpcUpdates =
-        Object.hasOwn(updates, 'pushTarget') && updates.pushTarget === undefined
+        Object.prototype.hasOwnProperty.call(updates, 'pushTarget') &&
+        updates.pushTarget === undefined
           ? { ...updates, pushTarget: null }
           : updates
       const owned = await callRuntimeResultWithOwner<{ worktree: Worktree }>('worktree.set', {
@@ -2204,6 +2082,21 @@ function createGitApi(): NonNullable<Partial<PreloadApi>['git']> {
       return callRuntimeResult('git.upstreamStatus', {
         worktree: toRuntimeWorktreeSelector(worktree.id),
         pushTarget
+      })
+    },
+    /** Lists local branches through the active git runtime. */
+    localBranches: async ({ worktreePath }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.localBranches', {
+        worktree: toRuntimeWorktreeSelector(worktree.id)
+      })
+    },
+    /** Checks out a local branch through the active git runtime. */
+    checkout: async ({ worktreePath, branch }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      await callRuntimeResult('git.checkout', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        branch
       })
     },
     fetch: async ({ worktreePath, pushTarget }) => {
@@ -2490,11 +2383,6 @@ function createGitHubApi(): WebGitHubApi {
       route<WebGitHubResult<'rerunPRChecks'>>(GITHUB_WEB_RPC_METHODS.rerunPRChecks, args),
     prComments: (args) =>
       route<WebGitHubResult<'prComments'>>(GITHUB_WEB_RPC_METHODS.prComments, args),
-    setPRCommentReaction: (args) =>
-      route<WebGitHubResult<'setPRCommentReaction'>>(
-        GITHUB_WEB_RPC_METHODS.setPRCommentReaction,
-        args
-      ),
     resolveReviewThread: (args) =>
       route<WebGitHubResult<'resolveReviewThread'>>(
         GITHUB_WEB_RPC_METHODS.resolveReviewThread,
@@ -2709,7 +2597,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         )
         const local = readLocalWebUIState()
         const next = {
-          ...mergeHostWebUIState(local, result.ui),
+          ...mergeWebUIState(local, result.ui),
           osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, result.ui),
           featureInteractions: mergeFeatureInteractionState(
             local.featureInteractions,
@@ -2731,11 +2619,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
       zoomLevel = next.uiZoomLevel
-      const { hideWorkspacesFromOtherDevices: _clientLocalWorkspaceFilter, ...hostUpdates } =
-        updates
-      void _clientLocalWorkspaceFilter
       try {
-        await callRuntimeResult('ui.set', hostUpdates, 15_000)
+        await callRuntimeResult('ui.set', updates, 15_000)
       } catch {
         // Why: unpaired/offline web clients still need local UI persistence.
       }
@@ -2762,7 +2647,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         )
         const local = readLocalWebUIState()
         const next = {
-          ...mergeHostWebUIState(local, result.ui),
+          ...mergeWebUIState(local, result.ui),
           osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, result.ui),
           featureInteractions: mergeFeatureInteractionState(
             local.featureInteractions,
@@ -2809,12 +2694,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     performNativePaste: () => {
       document.execCommand?.('paste')
     },
-    performNativeSelectionAction: (action) => {
-      document.execCommand?.(action === 'copy' ? 'copy' : 'selectAll')
-    },
     onExportPdfRequested: () => noopUnsubscribe,
     onAppMenuPaste: () => noopUnsubscribe,
-    onAppMenuSelectionAction: () => noopUnsubscribe,
     onEditableContextPaste: () => noopUnsubscribe,
     getZoomLevel: () => zoomLevel,
     setZoomLevel: (level) => {
@@ -2824,8 +2705,6 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onOpenSettings: () => noopUnsubscribe,
     // Why: the web client has no native tray/menu bar, so there's never a queued open-settings intent to consume.
     consumePendingOpenSettings: () => Promise.resolve(false),
-    onOpenSkillShare: () => noopUnsubscribe,
-    consumePendingSkillShare: () => Promise.resolve(null),
     onOpenSetupGuide: () => noopUnsubscribe,
     onOpenFeatureTour: () => noopUnsubscribe,
     onOpenCrashReport: () => noopUnsubscribe,
@@ -2882,8 +2761,6 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onFocusTerminal: () => noopUnsubscribe,
     onFocusEditorTab: () => noopUnsubscribe,
     onCloseSessionTab: () => noopUnsubscribe,
-    onSessionTabCloseRequest: () => noopUnsubscribe,
-    respondSessionTabClose: () => {},
     onMoveSessionTab: () => noopUnsubscribe,
     onOpenFileFromMobile: () => noopUnsubscribe,
     onOpenDiffFromMobile: () => noopUnsubscribe,
@@ -3139,37 +3016,6 @@ function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
     cancelUpdateRun: () => Promise.resolve(),
     acknowledgeUpdateRun: () => Promise.resolve(),
     getUpdateRun: () => Promise.resolve({ state: 'idle' as const }),
-    prepareShare: () => Promise.reject(new Error('Skill publishing requires the desktop app.')),
-    publishShare: () => Promise.reject(new Error('Skill publishing requires the desktop app.')),
-    cancelShare: () => Promise.resolve(),
-    releaseShare: () => Promise.resolve(),
-    resolveShare: () => Promise.reject(new Error('Skill share links require the desktop app.')),
-    installShare: () => Promise.reject(new Error('Skill installation requires the desktop app.')),
-    installBundleShare: () =>
-      Promise.reject(new Error('Skill installation requires the desktop app.')),
-    installPackageVersion: () =>
-      Promise.reject(new Error('Skill installation requires the desktop app.')),
-    installBundlePackageVersion: () =>
-      Promise.reject(new Error('Skill installation requires the desktop app.')),
-    cancelInstall: () => Promise.resolve({ cancelled: false }),
-    previewInstall: () => Promise.reject(new Error('Skill installation requires the desktop app.')),
-    previewBundleInstall: () =>
-      Promise.reject(new Error('Skill installation requires the desktop app.')),
-    removeInstall: () => Promise.reject(new Error('Skill installation requires the desktop app.')),
-    listManagedInstalls: () =>
-      Promise.reject(new Error('Skill installation requires the desktop app.')),
-    getPackage: () => Promise.reject(new Error('Skill installation requires the desktop app.')),
-    listOwnedShares: () =>
-      Promise.reject(new Error('Skill package management requires the desktop app.')),
-    revokeShare: () =>
-      Promise.reject(new Error('Skill package management requires the desktop app.')),
-    deletePackageVersion: () =>
-      Promise.reject(new Error('Skill package management requires the desktop app.')),
-    deletePackage: () =>
-      Promise.reject(new Error('Skill package management requires the desktop app.')),
-    listWslDistros: () => Promise.resolve([]),
-    onInstallProgress: () => () => {},
-    onShareProgress: () => () => {},
     onUpdateRun: () => () => {}
   }
 }
@@ -3797,14 +3643,7 @@ function updateEnvironmentFromResponse(
     return
   }
   const runtimeId = response.ok ? response._meta.runtimeId : (response._meta?.runtimeId ?? null)
-  const pairedDeviceId =
-    response.ok &&
-    typeof response.result === 'object' &&
-    response.result !== null &&
-    typeof (response.result as { pairedDeviceId?: unknown }).pairedDeviceId === 'string'
-      ? (response.result as { pairedDeviceId: string }).pairedDeviceId
-      : undefined
-  activeEnvironment = updateStoredEnvironmentRuntimeId(environment, runtimeId, pairedDeviceId)
+  activeEnvironment = updateStoredEnvironmentRuntimeId(environment, runtimeId)
 }
 
 function getStoredSettings(): GlobalSettings {
@@ -3884,8 +3723,7 @@ function writeStoredSettings(
 
 async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
   const local = getStoredSettings()
-  const requestedEnvironment = requireActiveEnvironmentOrNull()
-  if (!requestedEnvironment) {
+  if (!requireActiveEnvironmentOrNull()) {
     return local
   }
   try {
@@ -3895,16 +3733,6 @@ async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
       15_000
     )
     const runtimeSettings: Partial<GlobalSettings> = {}
-    const currentEnvironment = requireActiveEnvironmentOrNull()
-    if (currentEnvironment?.id === requestedEnvironment.id) {
-      const visibilityDefaults = normalizeWorktreeVisibilityDefaults(
-        result.settings.worktreeVisibilityDefaults
-      )
-      worktreeVisibilityDefaultsRuntimeEnvironmentId = visibilityDefaults
-        ? requestedEnvironment.id
-        : null
-      worktreeVisibilityDefaultsRuntimeValue = visibilityDefaults ?? null
-    }
     if (typeof result.settings.experimentalNewWorktreeCardStyle === 'boolean') {
       runtimeSettings.experimentalNewWorktreeCardStyle =
         result.settings.experimentalNewWorktreeCardStyle
@@ -3923,51 +3751,23 @@ async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
         result.settings.prBotAuthorOverrides
       )
     }
-    // Read-only mirror: the host owns this capability and `syncRuntimeBackedSettings` never
-    // sends it back, so web shows what the host enforces instead of a local value it ignores.
-    if (typeof result.settings.artifactSharingEnabled === 'boolean') {
-      runtimeSettings.artifactSharingEnabled = result.settings.artifactSharingEnabled
-    }
-    if (typeof result.settings.agentSkillSharingEnabled === 'boolean') {
-      runtimeSettings.agentSkillSharingEnabled = result.settings.agentSkillSharingEnabled
-    }
     const next = mergeSettings(local, runtimeSettings)
     writeStoredSettings(next)
-    return settingsForActiveVisibilityOwner(next)
+    return next
   } catch {
     // Why: unpaired/offline web clients keep a local settings fallback.
-    return settingsForActiveVisibilityOwner(local)
+    return local
   }
-}
-
-function settingsForActiveVisibilityOwner(settings: GlobalSettings): GlobalSettings {
-  const environment = requireActiveEnvironmentOrNull()
-  if (!environment) {
-    return settings
-  }
-  if (
-    environment.id === worktreeVisibilityDefaultsRuntimeEnvironmentId &&
-    worktreeVisibilityDefaultsRuntimeValue
-  ) {
-    return { ...settings, worktreeVisibilityDefaults: worktreeVisibilityDefaultsRuntimeValue }
-  }
-  const { worktreeVisibilityDefaults: _unsupported, ...supportedSettings } = settings
-  return supportedSettings as GlobalSettings
 }
 
 async function syncRuntimeBackedSettings(
   updates: Partial<GlobalSettings>,
   localNext: GlobalSettings
 ): Promise<GlobalSettings> {
-  const requestedEnvironment = requireActiveEnvironmentOrNull()
-  if (!requestedEnvironment) {
+  if (!requireActiveEnvironmentOrNull()) {
     return localNext
   }
   const runtimeUpdates: Partial<GlobalSettings> = {}
-  const visibilityDefaults = normalizeWorktreeVisibilityDefaults(updates.worktreeVisibilityDefaults)
-  if (visibilityDefaults) {
-    runtimeUpdates.worktreeVisibilityDefaults = visibilityDefaults
-  }
   if (typeof updates.experimentalNewWorktreeCardStyle === 'boolean') {
     runtimeUpdates.experimentalNewWorktreeCardStyle = updates.experimentalNewWorktreeCardStyle
   }
@@ -3996,24 +3796,10 @@ async function syncRuntimeBackedSettings(
     )
     const runtimeSettings = { ...result.settings }
     delete runtimeSettings.activeRuntimeEnvironmentId
-    const updatedVisibilityDefaults = normalizeWorktreeVisibilityDefaults(
-      runtimeSettings.worktreeVisibilityDefaults
-    )
-    if (
-      requireActiveEnvironmentOrNull()?.id === requestedEnvironment.id &&
-      updatedVisibilityDefaults
-    ) {
-      worktreeVisibilityDefaultsRuntimeEnvironmentId = requestedEnvironment.id
-      worktreeVisibilityDefaultsRuntimeValue = updatedVisibilityDefaults
-    }
-    delete runtimeSettings.worktreeVisibilityDefaults
     const next = mergeSettings(localNext, runtimeSettings)
     writeStoredSettings(next)
     return next
-  } catch (error) {
-    if (visibilityDefaults) {
-      throw error
-    }
+  } catch {
     // Why: unpaired/offline web clients still need local settings persistence.
     return localNext
   }
@@ -4145,10 +3931,6 @@ function mergeWebUIState(
   return {
     ...base,
     ...safeUpdates,
-    workspaceCleanup: mergeWorkspaceCleanupUIState(
-      base.workspaceCleanup,
-      safeUpdates.workspaceCleanup
-    ),
     worktreeCardProperties: normalizeWorktreeCardProperties(
       safeUpdates.worktreeCardProperties ?? base.worktreeCardProperties
     ),
@@ -4163,16 +3945,6 @@ function mergeWebUIState(
     statusBarUsageMode: normalizeStatusBarUsageMode(
       safeUpdates.statusBarUsageMode ?? base.statusBarUsageMode
     )
-  }
-}
-
-function mergeHostWebUIState(
-  local: PersistedUIState,
-  incoming: PersistedUIState
-): PersistedUIState {
-  return {
-    ...mergeWebUIState(local, incoming),
-    hideWorkspacesFromOtherDevices: local.hideWorkspacesFromOtherDevices === true
   }
 }
 

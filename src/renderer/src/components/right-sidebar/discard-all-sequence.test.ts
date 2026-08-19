@@ -7,8 +7,8 @@ import {
   isSubmoduleWorktreeOnlyChange,
   runDiscardAllForArea,
   type DiscardAllArea
-} from './source-control/commit/discard-all-sequence'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+} from './discard-all-sequence'
+import type { GitStatusEntry } from '../../../../shared/types'
 
 function entry(partial: Partial<GitStatusEntry> & { path: string }): GitStatusEntry {
   return {
@@ -59,6 +59,20 @@ describe('getDiscardAllPaths', () => {
     // Why: discarding a locally-resolved file loses the resolution. The user
     // would have to re-resolve from scratch — treat it as too dangerous to
     // include in a bulk action.
+    expect(getDiscardAllPaths(entries, 'unstaged')).toEqual(['clean.ts'])
+  })
+
+  /** Verifies submodule-internal rows are excluded from bulk discard. */
+  it('skips submodule-internal and nested-only submodule rows', () => {
+    const entries: GitStatusEntry[] = [
+      entry({ path: 'clean.ts', area: 'unstaged' }),
+      entry({ path: 'inner.ts', area: 'unstaged', submoduleRoot: 'vendor/lib' }),
+      entry({
+        path: 'nested-repo',
+        area: 'unstaged',
+        submodule: { commitChanged: false, trackedChanges: true, untrackedChanges: true }
+      })
+    ]
     expect(getDiscardAllPaths(entries, 'unstaged')).toEqual(['clean.ts'])
   })
 

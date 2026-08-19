@@ -4,17 +4,16 @@ of reimplementing local-vs-environment branching per operation. */
 import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
-  GitDiffResult
-} from '../../../shared/git-diff-compare-types'
-import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../../shared/git-fork-sync'
-import type {
   GitConflictOperation,
+  GitDiffResult,
+  GitForkSyncExpectedUpstream,
+  GitForkSyncResult,
+  GitPushTarget,
   GitStagingArea,
   GitStatusResult,
-  GitUpstreamStatus
-} from '../../../shared/git-status-types'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { GitPushTarget } from '../../../shared/worktree/types'
+  GitUpstreamStatus,
+  GlobalSettings
+} from '../../../shared/types'
 import type {
   CommitMessageAgentCapability,
   CommitMessageModelCapability
@@ -23,7 +22,8 @@ import type { HostedReviewProvider } from '../../../shared/hosted-review'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
 import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../shared/commit-message-host-key'
 import type { GitHistoryOptions, GitHistoryResult } from '../../../shared/git-history'
-import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
+import type { RuntimeGitLocalBranches } from '../../../shared/runtime-types'
+import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree-id'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
@@ -50,7 +50,12 @@ export type RuntimePullRequestGenerationInput = {
 }
 
 type RuntimeGitSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> &
-  Partial<Pick<GlobalSettings, 'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides'>>
+  Partial<
+    Pick<
+      GlobalSettings,
+      'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides' | 'enableGitHubAttribution'
+    >
+  >
 
 type RuntimeDiscoverCommitMessageModelsResult =
   | {
@@ -92,7 +97,12 @@ export type RuntimeGeneratePullRequestFieldsOverrides = RuntimeGenerateCommitMes
 function getRuntimeCommitMessageSettings(
   settings: RuntimeGitSettings | null | undefined,
   connectionId?: string
-): Partial<Pick<GlobalSettings, 'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides'>> & {
+): Partial<
+  Pick<
+    GlobalSettings,
+    'commitMessageAi' | 'sourceControlAi' | 'agentCmdOverrides' | 'enableGitHubAttribution'
+  >
+> & {
   commitMessageDiscoveryHostKey?: string
 } {
   if (!settings) {
@@ -108,6 +118,9 @@ function getRuntimeCommitMessageSettings(
       : {}),
     ...(settings.agentCmdOverrides !== undefined
       ? { agentCmdOverrides: settings.agentCmdOverrides }
+      : {}),
+    ...(settings.enableGitHubAttribution !== undefined
+      ? { enableGitHubAttribution: settings.enableGitHubAttribution }
       : {}),
     commitMessageDiscoveryHostKey: getCommitMessageModelDiscoveryHostKeyForScope(scope)
   }
@@ -433,6 +446,47 @@ export async function getRuntimeGitUpstreamStatus(
       ...(pushTarget ? { pushTarget } : {})
     },
     { timeoutMs: 15_000 }
+  )
+}
+
+/** Lists local branches on the active native or remote git runtime. */
+export async function listRuntimeGitLocalBranches(
+  context: RuntimeGitContext
+): Promise<RuntimeGitLocalBranches> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    return window.api.git.localBranches({
+      worktreePath: resolveLocalWorktreePath(context),
+      connectionId: context.connectionId
+    })
+  }
+  return callRuntimeRpc<RuntimeGitLocalBranches>(
+    target,
+    'git.localBranches',
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId) },
+    { timeoutMs: 15_000 }
+  )
+}
+
+/** Checks out a local branch on the active native or remote git runtime. */
+export async function checkoutRuntimeGitBranch(
+  context: RuntimeGitContext,
+  branch: string
+): Promise<void> {
+  const target = getActiveRuntimeTarget(context.settings)
+  if (target.kind === 'local' || !context.worktreeId) {
+    await window.api.git.checkout({
+      worktreePath: resolveLocalWorktreePath(context),
+      branch,
+      connectionId: context.connectionId
+    })
+    return
+  }
+  await callRuntimeRpc(
+    target,
+    'git.checkout',
+    { worktree: toRuntimeWorktreeSelector(context.worktreeId), branch },
+    { timeoutMs: 30_000 }
   )
 }
 

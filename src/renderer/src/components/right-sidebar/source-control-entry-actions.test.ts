@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { GitStatusEntry } from '../../../../shared/types'
 import {
   canDiscardStatusEntry,
   canStageStatusEntry,
   canUnstageStatusEntry
-} from './source-control/listing/entry-actions'
+} from './source-control-entry-actions'
 
 function entry(overrides: Partial<GitStatusEntry>): GitStatusEntry {
   return {
@@ -36,6 +36,14 @@ describe('source control entry actions', () => {
     )
     expect(
       canDiscardStatusEntry(entry({ area: 'unstaged', conflictStatus: 'resolved_locally' }))
+    ).toBe(false)
+    expect(
+      canDiscardStatusEntry(
+        entry({
+          area: 'unstaged',
+          submodule: { commitChanged: false, trackedChanges: true, untrackedChanges: true }
+        })
+      )
     ).toBe(false)
   })
 

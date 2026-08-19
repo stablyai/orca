@@ -4,13 +4,11 @@ import type { StateCreator } from 'zustand'
 import type {
   CreateHostedReviewInput,
   CreateHostedReviewResult,
-  CreateStackedHostedReviewInput,
-  CreateStackedHostedReviewResult,
   HostedReviewCreationEligibility,
   HostedReviewCreationEligibilityArgs,
   HostedReviewInfo
 } from '../../../../shared/hosted-review'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/types'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type { AppState } from '../types'
 import {
@@ -40,9 +38,9 @@ type FetchOptions = {
    */
   active?: boolean
 }
-type CreateHostedReviewStoreInput = CreateHostedReviewInput & { repoId?: string | null }
-type CreateStackedHostedReviewStoreInput = CreateStackedHostedReviewInput & {
+type CreateHostedReviewStoreInput = CreateHostedReviewInput & {
   repoId?: string | null
+  connectionId?: string | null
 }
 
 const CACHE_TTL_MS = 60_000
@@ -247,10 +245,6 @@ export type HostedReviewSlice = {
     repoPath: string,
     input: CreateHostedReviewStoreInput
   ) => Promise<CreateHostedReviewResult>
-  createStackedHostedReview: (
-    repoPath: string,
-    input: CreateStackedHostedReviewStoreInput
-  ) => Promise<CreateStackedHostedReviewResult>
   fetchHostedReviewForBranch: (
     repoPath: string,
     branch: string,
@@ -316,7 +310,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
       window.api.hostedReview.getCreationEligibility({
         ...args,
         repoId: repo?.id ?? args.repoId,
-        connectionId: repo?.connectionId ?? null
+        connectionId: repo?.connectionId ?? args.connectionId ?? null
       })
     )
   },
@@ -326,7 +320,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     const repo = findHostedReviewRepoByPath(get().repos, repoPath, input.repoId)
     const ownerSettings = settingsForHostedReviewActionOwner(settings, repo)
     const target = getActiveRuntimeTarget(ownerSettings)
-    const { repoId: inputRepoId, ...hostedReviewInput } = input
+    const { repoId: inputRepoId, connectionId: inputConnectionId, ...hostedReviewInput } = input
     if (target.kind === 'environment') {
       const { worktreePath, ...runtimeInput } = hostedReviewInput
       return callRuntimeRpc<CreateHostedReviewResult>(
@@ -343,34 +337,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     return window.api.hostedReview.create({
       repoPath,
       repoId: repo?.id ?? inputRepoId ?? undefined,
-      connectionId: repo?.connectionId ?? null,
-      ...hostedReviewInput
-    })
-  },
-
-  createStackedHostedReview: async (repoPath, input) => {
-    const settings = get().settings
-    const repo = findHostedReviewRepoByPath(get().repos, repoPath, input.repoId)
-    const ownerSettings = settingsForHostedReviewActionOwner(settings, repo)
-    const target = getActiveRuntimeTarget(ownerSettings)
-    const { repoId: inputRepoId, ...hostedReviewInput } = input
-    if (target.kind === 'environment') {
-      const { worktreePath, ...runtimeInput } = hostedReviewInput
-      return callRuntimeRpc<CreateStackedHostedReviewResult>(
-        target,
-        'hostedReview.createStacked',
-        {
-          repo: repo?.id ?? repoPath,
-          ...(worktreePath ? { worktree: `path:${worktreePath}` } : {}),
-          ...runtimeInput
-        },
-        { timeoutMs: 90_000 }
-      )
-    }
-    return window.api.hostedReview.createStacked({
-      repoPath,
-      repoId: repo?.id ?? inputRepoId ?? undefined,
-      connectionId: repo?.connectionId ?? null,
+      connectionId: repo?.connectionId ?? inputConnectionId ?? null,
       ...hostedReviewInput
     })
   },
