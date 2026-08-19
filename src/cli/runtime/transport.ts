@@ -3,7 +3,12 @@ import { randomUUID } from 'node:crypto'
 import { findTransport, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
 import { isKeepaliveFrame, RuntimeRpcEnvelopeSchema } from './envelope-schema'
-import { RuntimeClientError, type RuntimeRpcResponse } from './types'
+import {
+  isPermissionDeniedSyscallCode,
+  RUNTIME_PERMISSION_DENIED_CODE,
+  RuntimeClientError,
+  type RuntimeRpcResponse
+} from './types'
 import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../shared/timer-delay'
 
 export async function sendRequest<TResult>(
@@ -66,13 +71,20 @@ export async function sendRequest<TResult>(
     }
 
     socket.setEncoding('utf8')
-    socket.once('error', () => {
+    socket.once('error', (err: NodeJS.ErrnoException) => {
+      // Why: 'error' always precedes 'close', so classifying here wins over the
+      // generic close handler below (finish() guards the double-settle).
       finish({
         ok: false,
-        error: new RuntimeClientError(
-          'runtime_unavailable',
-          'Could not connect to the running Orca app. Restart Orca and try again.'
-        )
+        error: isPermissionDeniedSyscallCode(err.code)
+          ? new RuntimeClientError(
+              RUNTIME_PERMISSION_DENIED_CODE,
+              `Permission denied (${err.code}) connecting to the Orca runtime at ${transport.endpoint}. Check the ownership and permissions of that endpoint.`
+            )
+          : new RuntimeClientError(
+              'runtime_unavailable',
+              'Could not connect to the running Orca app. Restart Orca and try again.'
+            )
       })
     })
     // Why: a clean peer close (FIN, no 'error') before a terminal frame never

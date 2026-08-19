@@ -7,6 +7,18 @@ export type {
   RuntimeRpcSuccess
 } from '../../shared/runtime-rpc-envelope'
 
+// Why: the OS denied access to the transport path. 'runtime_unavailable' would
+// tell the user to restart Orca, which recreates it with the same permissions.
+export const RUNTIME_PERMISSION_DENIED_CODE = 'runtime_permission_denied'
+
+const PERMISSION_DENIED_SYSCALL_CODES: ReadonlySet<string> = new Set(['EACCES', 'EPERM'])
+
+// Covers both Unix domain sockets and Windows named pipes, which surface a denied
+// transport path as EACCES/EPERM on connect.
+export function isPermissionDeniedSyscallCode(code: string | undefined): boolean {
+  return code !== undefined && PERMISSION_DENIED_SYSCALL_CODES.has(code)
+}
+
 export class RuntimeClientError extends Error {
   readonly code: string
   // Why: optional structured recovery payload (e.g. did-you-mean suggestions,
@@ -18,6 +30,10 @@ export class RuntimeClientError extends Error {
     this.code = code
     this.data = redactOrchestrationCompatibilitySecrets(data)
   }
+}
+
+export function isRuntimePermissionDeniedError(error: unknown): boolean {
+  return error instanceof RuntimeClientError && error.code === RUNTIME_PERMISSION_DENIED_CODE
 }
 
 export class RuntimeRpcFailureError extends RuntimeClientError {
