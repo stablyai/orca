@@ -8,6 +8,8 @@ import {
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { ProjectGroupingIndex, WorktreeGroupEntry } from './project-grouping'
+import { getFolderWorkspaceHostId } from '../../folder-workspace-host-id'
+import type { RenderableFolderWorkspace } from './folder-workspace-lanes'
 
 function getRepoHostLabel(
   repoId: string,
@@ -108,6 +110,58 @@ export function getHostWorktreeIds(
     const ids = idsByHost.get(hostId) ?? []
     ids.push(worktree.id)
     idsByHost.set(hostId, ids)
+  }
+  return idsByHost
+}
+
+/**
+ * Host counts for a lane that may contain folder workspaces as well as worktrees.
+ *
+ * Why not getHostWorktreeCounts alone: it returns undefined for an empty
+ * worktree list, and a header with undefined counts is treated as global. A lane
+ * whose only members are folder workspaces would therefore render outside its
+ * host section (#15362).
+ */
+export function getLaneHostWorktreeCounts(
+  worktrees: readonly Worktree[],
+  folderWorkspaces: readonly RenderableFolderWorkspace[],
+  repoMap: Map<string, Repo>,
+  defaultHostId: ExecutionHostId
+): Map<ExecutionHostId, number> | undefined {
+  if (worktrees.length === 0 && folderWorkspaces.length === 0) {
+    return undefined
+  }
+  const counts = getHostWorktreeCounts(worktrees, repoMap, defaultHostId) ?? new Map()
+  for (const { folderWorkspace, projectGroup } of folderWorkspaces) {
+    const hostId = getFolderWorkspaceHostId(folderWorkspace, projectGroup, defaultHostId)
+    counts.set(hostId, (counts.get(hostId) ?? 0) + 1)
+  }
+  return counts
+}
+
+/**
+ * Host-scoped worktree ids for a lane that may contain folder workspaces.
+ *
+ * Folder workspaces are not worktrees, so they contribute no ids — but their
+ * host must still get an explicit empty array, or the host-section fallbacks
+ * treat the missing key as "unscoped" and leak the global worktree ids into
+ * that section.
+ */
+export function getLaneHostWorktreeIds(
+  worktrees: readonly Worktree[],
+  folderWorkspaces: readonly RenderableFolderWorkspace[],
+  repoMap: Map<string, Repo>,
+  defaultHostId: ExecutionHostId
+): Map<ExecutionHostId, string[]> | undefined {
+  if (worktrees.length === 0 && folderWorkspaces.length === 0) {
+    return undefined
+  }
+  const idsByHost = getHostWorktreeIds(worktrees, repoMap, defaultHostId) ?? new Map()
+  for (const { folderWorkspace, projectGroup } of folderWorkspaces) {
+    const hostId = getFolderWorkspaceHostId(folderWorkspace, projectGroup, defaultHostId)
+    if (!idsByHost.has(hostId)) {
+      idsByHost.set(hostId, [])
+    }
   }
   return idsByHost
 }
