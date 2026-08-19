@@ -200,6 +200,41 @@ describe('hostFilterMatchesHostId', () => {
   })
 })
 
+describe('ambiguous environment names', () => {
+  it('refuses --host runtime:<name> when two servers share that name', async () => {
+    listEnvironmentsMock.mockReturnValue([
+      environment('env-1', 'awin'),
+      environment('env-2', 'awin')
+    ])
+
+    await expect(
+      resolveHostFlagEnvironmentId(flags({ host: 'runtime:awin' }), NO_SELECTION)
+    ).rejects.toThrow('2 paired servers are named awin')
+  })
+
+  it('refuses --environment <name> when two servers share that name', async () => {
+    listEnvironmentsMock.mockReturnValue([
+      environment('env-1', 'awin'),
+      environment('env-2', 'awin')
+    ])
+
+    await expect(assertEnvironmentSelectorResolvable('awin', listSshTargetsMock)).rejects.toThrow(
+      '2 paired servers are named awin'
+    )
+  })
+
+  it('still routes an exact id past a colliding name', async () => {
+    listEnvironmentsMock.mockReturnValue([
+      environment('env-1', 'awin'),
+      environment('env-2', 'awin')
+    ])
+
+    await expect(
+      resolveHostFlagEnvironmentId(flags({ host: 'runtime:env-2' }), NO_SELECTION)
+    ).resolves.toBe('env-2')
+  })
+})
+
 describe('assertEnvironmentSelectorResolvable', () => {
   it('accepts a paired server by name or id', async () => {
     listEnvironmentsMock.mockReturnValue([environment('env-1', 'awin')])

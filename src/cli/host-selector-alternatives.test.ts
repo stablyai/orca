@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  ambiguousEnvironments,
+  ambiguousSshTargets,
   crossKindNextSteps,
   findEnvironmentByName,
   findSshTargetByName,
@@ -111,5 +113,52 @@ describe('listSshTargets', () => {
     }
 
     await expect(listSshTargets(client as unknown as RuntimeClient)).resolves.toEqual([])
+  })
+})
+
+describe('ambiguous names never resolve silently', () => {
+  const twoOpenclaw = [
+    { id: 'ssh-1-a', label: 'openclaw' },
+    { id: 'ssh-2-b', label: 'openclaw' }
+  ]
+  const twoAwin = [
+    { id: 'env-1', name: 'awin' },
+    { id: 'env-2', name: 'awin' }
+  ]
+
+  // Why: picking the first would choose a machine on the caller's behalf — the exact failure the
+  // whole selector path exists to prevent.
+  it('refuses to guess between two ssh targets sharing a label', () => {
+    expect(findSshTargetByName(twoOpenclaw, 'openclaw')).toBeUndefined()
+    expect(ambiguousSshTargets(twoOpenclaw, 'openclaw')).toHaveLength(2)
+  })
+
+  it('refuses to guess between two servers sharing a name', () => {
+    expect(findEnvironmentByName(twoAwin, 'awin')).toBeUndefined()
+    expect(ambiguousEnvironments(twoAwin, 'awin')).toHaveLength(2)
+  })
+
+  // An exact id is never ambiguous, even when labels collide.
+  it('still resolves an exact id past a colliding label', () => {
+    expect(findSshTargetByName(twoOpenclaw, 'ssh-2-b')?.id).toBe('ssh-2-b')
+    expect(findEnvironmentByName(twoAwin, 'env-2')?.id).toBe('env-2')
+  })
+
+  it('reports no ambiguity for a unique name', () => {
+    expect(ambiguousSshTargets(SSH_TARGETS, 'openclaw')).toEqual([])
+    expect(ambiguousEnvironments(ENVIRONMENTS, 'awin')).toEqual([])
+  })
+
+  it('names both candidates when an ssh label is ambiguous', async () => {
+    await expect(
+      resolveSshHostTargetId(clientReturning(twoOpenclaw), 'openclaw', ENVIRONMENTS)
+    ).rejects.toMatchObject({
+      data: {
+        nextSteps: expect.arrayContaining([
+          expect.stringContaining('ssh-1-a'),
+          expect.stringContaining('ssh-2-b')
+        ])
+      }
+    })
   })
 })

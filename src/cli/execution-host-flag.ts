@@ -6,6 +6,7 @@ import {
   type ParsedExecutionHost
 } from '../shared/execution-host'
 import {
+  ambiguousEnvironments,
   crossKindNextSteps,
   findEnvironmentByName,
   resolveSshHostTargetId,
@@ -74,6 +75,7 @@ export async function resolveHostFlagEnvironmentId(
     // only — unlike --environment, which also accepts a name. Say so, and hand back the ids an
     // agent can retry with instead of making it scrape the sentence.
     const environments = known.map((candidate) => ({ id: candidate.id, name: candidate.name }))
+    assertEnvironmentNameUnambiguous(environments, host.environmentId, `--host ${host.id}`)
     const sshTargets = await selection.listSshTargets()
     throw new RuntimeClientError(
       'invalid_argument',
@@ -145,6 +147,30 @@ export async function resolveHostFlagTarget(
   return parseExecutionHostId(toSshExecutionHostId(targetId)) ?? host
 }
 
+// Why: the store refuses an ambiguous environment name rather than guessing which server was
+// meant. Resolving one here would put the guess back, in the flag whose whole purpose is to stop
+// a command reaching a machine the caller did not choose.
+function assertEnvironmentNameUnambiguous(
+  environments: readonly { id: string; name: string }[],
+  name: string,
+  flag: string
+): void {
+  const ambiguous = ambiguousEnvironments(environments, name)
+  if (ambiguous.length === 0) {
+    return
+  }
+  throw new RuntimeClientError(
+    'invalid_argument',
+    `Ambiguous Orca server in ${flag}: ${ambiguous.length} paired servers are named ${name}. Use the environment id.`,
+    {
+      knownEnvironments: ambiguous,
+      nextSteps: ambiguous.map(
+        (candidate) => `Use --host runtime:${candidate.id} for the server named ${candidate.name}.`
+      )
+    }
+  )
+}
+
 // Why: the inverse of the --host case. `--environment openclaw` failed with a bare "Unknown
 // environment", when openclaw is very often an SSH target — a different axis, not a typo. The
 // store's own error cannot carry the hint (translateStoreError forwards code and message only,
@@ -164,6 +190,7 @@ export async function assertEnvironmentSelectorResolvable(
   if (findEnvironmentByName(environments, selector)) {
     return
   }
+  assertEnvironmentNameUnambiguous(environments, selector, `--environment ${selector}`)
   const sshTargets = await listSshTargetsForSuggestion()
   throw new RuntimeClientError(
     'invalid_argument',

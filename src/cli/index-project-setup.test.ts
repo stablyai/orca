@@ -274,6 +274,60 @@ describe('orca cli worktree awareness', () => {
     expect(logSpy.mock.calls[0]?.[0]).toContain('setup-openclaw')
   })
 
+  // Why: `runtime:<id>` is a persisted token — it lands in ProjectHostSetup.hostId and is
+  // embedded in generated setup ids. Accepting a name is only safe because it is canonicalized
+  // to the id before anything downstream sees it; this pins that.
+  it('never lets an environment name reach a persisted host id', async () => {
+    pairRuntimeEnvironment(listEnvironmentsMock, 'env-uuid-1', 'awin')
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setup_create', {
+        result: {
+          project: {
+            id: 'github:stablyai/orca',
+            displayName: 'Orca',
+            badgeColor: '#7c3aed',
+            sourceRepoIds: [],
+            createdAt: 1,
+            updatedAt: 1
+          },
+          setup: {
+            id: 'setup-awin',
+            projectId: 'github:stablyai/orca',
+            hostId: 'local',
+            repoId: '',
+            path: '',
+            displayName: 'awin',
+            setupState: 'setting-up',
+            setupMethod: 'provisioned',
+            createdAt: 1,
+            updatedAt: 2
+          }
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'project',
+        'setup-create',
+        '--project',
+        'github:stablyai/orca',
+        '--host',
+        'runtime:awin',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(runtimeClientConstructorMock).toHaveBeenCalledWith(null, 'env-uuid-1')
+    expect(callMock).toHaveBeenCalledWith(
+      'projectHostSetup.create',
+      expect.objectContaining({ hostId: 'runtime:env-uuid-1' })
+    )
+  })
+
   it('rejects a malformed --host value before contacting any runtime', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})

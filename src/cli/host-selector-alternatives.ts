@@ -15,22 +15,58 @@ export function findSshTargetByName(
   targets: readonly SshTargetSummary[],
   name: string
 ): SshTargetSummary | undefined {
+  const byId = targets.find((target) => target.id === name)
+  if (byId) {
+    return byId
+  }
+  const byLabel = matchesByLabel(targets, name)
+  // Why: two targets can share a label. Picking the first would silently choose a machine for
+  // the caller — the failure this whole selector path exists to prevent — so an ambiguous name
+  // resolves to nothing and the caller is told to use an id.
+  return byLabel.length === 1 ? byLabel[0] : undefined
+}
+
+function matchesByLabel(targets: readonly SshTargetSummary[], name: string): SshTargetSummary[] {
   const wanted = name.trim().toLowerCase()
-  return (
-    targets.find((target) => target.id === name) ??
-    targets.find((target) => target.label.trim().toLowerCase() === wanted)
-  )
+  return targets.filter((target) => target.label.trim().toLowerCase() === wanted)
+}
+
+export function ambiguousSshTargets(
+  targets: readonly SshTargetSummary[],
+  name: string
+): SshTargetSummary[] {
+  const byLabel = matchesByLabel(targets, name)
+  return byLabel.length > 1 ? byLabel : []
 }
 
 export function findEnvironmentByName(
   environments: readonly EnvironmentSummary[],
   name: string
 ): EnvironmentSummary | undefined {
+  const byId = environments.find((environment) => environment.id === name)
+  if (byId) {
+    return byId
+  }
+  const byName = matchesByEnvironmentName(environments, name)
+  // Why: the environment store itself refuses an ambiguous name rather than guessing; resolving
+  // one here would quietly reintroduce the guess it exists to prevent.
+  return byName.length === 1 ? byName[0] : undefined
+}
+
+function matchesByEnvironmentName(
+  environments: readonly EnvironmentSummary[],
+  name: string
+): EnvironmentSummary[] {
   const wanted = name.trim().toLowerCase()
-  return (
-    environments.find((environment) => environment.id === name) ??
-    environments.find((environment) => environment.name.trim().toLowerCase() === wanted)
-  )
+  return environments.filter((environment) => environment.name.trim().toLowerCase() === wanted)
+}
+
+export function ambiguousEnvironments(
+  environments: readonly EnvironmentSummary[],
+  name: string
+): EnvironmentSummary[] {
+  const byName = matchesByEnvironmentName(environments, name)
+  return byName.length > 1 ? byName : []
 }
 
 // Why: a paired Orca server and an SSH target are different machines reached different ways, but
@@ -84,6 +120,17 @@ export async function resolveSshHostTargetId(
     return matched.id
   }
   const { RuntimeClientError } = await import('./runtime/types.js')
+  const ambiguous = ambiguousSshTargets(targets, targetId)
+  if (ambiguous.length > 0) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `Ambiguous SSH target in --host ssh:${targetId}: ${ambiguous.length} targets share that label. Use the target id.`,
+      {
+        knownSshTargets: ambiguous,
+        nextSteps: ambiguous.map((target) => `Use --host ssh:${target.id} for ${target.label}.`)
+      }
+    )
+  }
   throw new RuntimeClientError(
     'invalid_argument',
     `Unknown SSH target in --host ssh:${targetId}: this Orca host has no SSH target named or with id ${targetId}.`,
