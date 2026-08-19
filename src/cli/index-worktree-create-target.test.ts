@@ -77,6 +77,7 @@ describe('orca cli worktree awareness', () => {
       comment: undefined,
       runHooks: false,
       activate: true,
+      navigation: 'all',
       parentWorktree: undefined,
       cwdParentWorktree: 'id:repo-1::/tmp/repo',
       noParent: false,

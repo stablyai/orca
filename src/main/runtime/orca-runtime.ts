@@ -6543,15 +6543,28 @@ export class OrcaRuntimeService {
     this.emitClientEvent({ type: 'reposChanged' })
   }
 
+  /** Why an object with a required `navigationTarget`: 'caller' means the requester already owns
+   *  the navigation, so a site that forgets to forward it silently reverts to broadcasting at
+   *  every viewer (STA-2802). A required key makes omission a compile error, and naming it makes
+   *  a hardcoded target visible at the call site instead of hiding in a positional tail. */
   private notifyActivateWorktree(
     repoId: string,
     worktreeId: string,
-    setup?: CreateWorktreeResult['setup'],
-    startup?: WorktreeStartupLaunch,
-    defaultTabs?: CreateWorktreeResult['defaultTabs']
+    launch: {
+      setup?: CreateWorktreeResult['setup']
+      startup?: WorktreeStartupLaunch
+      defaultTabs?: CreateWorktreeResult['defaultTabs']
+      navigationTarget: RuntimeNavigationTarget | undefined
+    }
   ): void {
-    this.notifyHostActivateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
-    this.notifyClientsActivateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
+    const { setup, startup, defaultTabs } = launch
+    const navigation = launch.navigationTarget ?? 'all'
+    if (navigationTargetsHost(navigation)) {
+      this.notifyHostActivateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
+    }
+    if (navigationTargetsClients(navigation)) {
+      this.notifyClientsActivateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
+    }
   }
 
   private notifyHostActivateWorktree(
@@ -24012,6 +24025,9 @@ export class OrcaRuntimeService {
     pushTarget?: GitPushTarget
     runHooks?: boolean
     activate?: boolean
+    /** Who the create's activation is addressed to. Defaults to 'all' so host/CLI callers keep
+     *  revealing on every surface; the RPC layer narrows it to 'caller' for paired clients. */
+    navigation?: RuntimeNavigationTarget
     setupDecision?: 'run' | 'skip' | 'inherit'
     awaitTerminalProvisioning?: boolean
     observeSetupCompletion?: boolean
@@ -24175,9 +24191,14 @@ export class OrcaRuntimeService {
       }
       if (shouldActivate) {
         if (effectiveStartup && !didSpawnStartup) {
-          this.notifyActivateWorktree(repo.id, worktree.id, undefined, effectiveStartup)
+          this.notifyActivateWorktree(repo.id, worktree.id, {
+            startup: effectiveStartup,
+            navigationTarget: args.navigation
+          })
         } else {
-          this.notifyActivateWorktree(repo.id, worktree.id)
+          this.notifyActivateWorktree(repo.id, worktree.id, {
+            navigationTarget: args.navigation
+          })
         }
       } else if (this.ptyController?.spawn && !didSpawnStartup) {
         try {
@@ -25003,21 +25024,18 @@ export class OrcaRuntimeService {
           : undefined
       const activationDefaultTabs = runtimeWillProvisionTerminals ? undefined : defaultTabs
       if (effectiveStartup && !didSpawnStartup) {
-        this.notifyActivateWorktree(
-          repo.id,
-          worktree.id,
-          activationSetup,
-          effectiveStartup,
-          activationDefaultTabs
-        )
+        this.notifyActivateWorktree(repo.id, worktree.id, {
+          setup: activationSetup,
+          startup: effectiveStartup,
+          defaultTabs: activationDefaultTabs,
+          navigationTarget: args.navigation
+        })
       } else {
-        this.notifyActivateWorktree(
-          repo.id,
-          worktree.id,
-          activationSetup,
-          undefined,
-          activationDefaultTabs
-        )
+        this.notifyActivateWorktree(repo.id, worktree.id, {
+          setup: activationSetup,
+          defaultTabs: activationDefaultTabs,
+          navigationTarget: args.navigation
+        })
       }
     } else if (this.ptyController?.spawn && (setup || defaultTabs || didSpawnStartup)) {
       // Why: inactive terminal materialization matches normal worktree creation,
@@ -25157,6 +25175,7 @@ export class OrcaRuntimeService {
       pushTarget?: GitPushTarget
       runHooks?: boolean
       activate?: boolean
+      navigation?: RuntimeNavigationTarget
       setupDecision?: 'run' | 'skip' | 'inherit'
       awaitTerminalProvisioning?: boolean
       observeSetupCompletion?: boolean
@@ -25347,21 +25366,18 @@ export class OrcaRuntimeService {
           : undefined
       const activationDefaultTabs = runtimeWillProvisionTerminals ? undefined : result.defaultTabs
       if (args.startup && !didSpawnStartup) {
-        this.notifyActivateWorktree(
-          repo.id,
-          result.worktree.id,
-          activationSetup,
-          args.startup,
-          activationDefaultTabs
-        )
+        this.notifyActivateWorktree(repo.id, result.worktree.id, {
+          setup: activationSetup,
+          startup: args.startup,
+          defaultTabs: activationDefaultTabs,
+          navigationTarget: args.navigation
+        })
       } else {
-        this.notifyActivateWorktree(
-          repo.id,
-          result.worktree.id,
-          activationSetup,
-          undefined,
-          activationDefaultTabs
-        )
+        this.notifyActivateWorktree(repo.id, result.worktree.id, {
+          setup: activationSetup,
+          defaultTabs: activationDefaultTabs,
+          navigationTarget: args.navigation
+        })
       }
     }
 
