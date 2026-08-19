@@ -29,8 +29,9 @@ function openHtmlFileInBrowser(filePath: string, worktreeId: string): void {
   const store = useAppStore.getState()
   if (worktreeId) {
     // Why: following an HTML file link changes which worktree is foregrounded,
-    // so it must record a history visit before opening the browser tab.
-    activateAndRevealWorktree(worktreeId)
+    // so it must record a history visit before opening the browser tab — but the
+    // browser tab is the surface, so an emptied workspace must not gain a shell.
+    activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
   }
   const fileUrl = absolutePathToFileUri(filePath)
   const title = filePath.split(/[/\\]/).pop() ?? filePath
@@ -208,10 +209,9 @@ export function openDetectedFilePath(
 
     const store = useAppStore.getState()
     if (worktreeId) {
-      // Why: terminal file links can jump across worktrees. Reusing the shared
-      // activation path keeps those jumps in the same history stack as sidebar
-      // and palette navigation before the editor opens the destination file.
-      activateAndRevealWorktree(worktreeId)
+      // Why: cross-worktree file links share the activation history stack with sidebar and
+      // palette navigation, but the editor file is the surface — don't seed a shell.
+      activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
     }
 
     const language = detectLanguage(mappedFilePath)
