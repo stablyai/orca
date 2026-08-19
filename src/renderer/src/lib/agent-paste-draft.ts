@@ -1,6 +1,7 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+import { resolveDraftPasteReadyTimeoutMs } from '../../../shared/draft-paste-ready-timeout'
 import { useAppStore } from '@/store'
 import {
   inspectRuntimeTerminalProcess,
@@ -45,8 +46,6 @@ export function sanitizeBracketedPasteContent(content: string): string {
 // composer budget on top would only delay that verdict. Keeping them distinct
 // also stops one slow step from spending the other's budget (STA-3367).
 const PTY_SPAWN_TIMEOUT_MS = 8000
-const READINESS_TIMEOUT_MS = 8000
-const CODEX_COMPOSER_READY_TIMEOUT_MS = 20000
 
 export function getSettingsForAgentTabRuntimeOwner(
   tabId: string
@@ -103,8 +102,7 @@ export async function pasteDraftWhenAgentReady(args: {
 
   const readySignal = agentConfig?.draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
   const settings = getSettingsForAgentTabRuntimeOwner(tabId)
-  const readinessTimeoutMs =
-    timeoutMs ?? (agent === 'codex' ? CODEX_COMPOSER_READY_TIMEOUT_MS : READINESS_TIMEOUT_MS)
+  const readinessTimeoutMs = resolveDraftPasteReadyTimeoutMs(agent, timeoutMs)
   const readiness = await waitForAgentDraftInputReadyOnTab({
     tabId,
     spawnTimeoutMs: PTY_SPAWN_TIMEOUT_MS,
@@ -159,7 +157,7 @@ export async function pasteDraftToAgentPtyWhenReady(args: {
 
   const settings = getSettingsForAgentTabRuntimeOwner(tabId)
   const readySignal = agentConfig?.draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
-  const budget = timeoutMs ?? READINESS_TIMEOUT_MS
+  const budget = resolveDraftPasteReadyTimeoutMs(agent, timeoutMs)
   const ready = await waitForAgentDraftInputReady(ptyId, budget, readySignal, settings)
   if (!ready) {
     const fallbackReady = agentConfig

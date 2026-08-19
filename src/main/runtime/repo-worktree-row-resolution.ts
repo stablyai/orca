@@ -1,5 +1,5 @@
 import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
-import { getRepoExecutionHostId } from '../../shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import { isFolderRepo } from '../../shared/repo-kind'
 import { projectResolvedWorktreeLineage } from '../../shared/resolved-worktree-lineage'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
@@ -11,6 +11,7 @@ import type { ProjectExecutionRuntimeResolution } from '../../shared/project-exe
 import type { Store } from '../persistence'
 import { areWorktreePathsEqual, mergeWorktree } from '../ipc/worktree-logic'
 import { pruneLineageForMissingRepoWorktrees } from '../worktree-lineage-pruning'
+import { getRepoOwnedWorktreeMeta } from '../worktree-metadata-ownership'
 import { resolveLocalProjectRuntimesForRepos } from '../project-runtime-git-options'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 
@@ -43,16 +44,19 @@ export type RepoWorktreeRowDeps = {
     projectRuntimeByRepoId: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
   ) => Promise<RuntimeWorktreeScanResult>
   /** Folder workspaces are stamped from runtime-owned identity helpers, so the caller supplies them. */
-  listFolderWorkspaces: (repo: Repo) => Worktree[]
+  listFolderWorkspaces: (repo: Repo, repoOwnerCount: number) => Worktree[]
 }
 
 /**
  * Persisted rows for a repo whose scan is unreachable or stalled, so a degraded host publishes what
  * it last knew instead of an empty catalog. `worktrees:list` does the same for disconnected SSH.
  */
-export function listStoredWorktreeRowsForRepo(store: Store, repo: Repo): GitWorktreeInfo[] {
+export function listStoredWorktreeRowsForRepo(
+  store: Store,
+  repo: Repo,
+  repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
+): GitWorktreeInfo[] {
   const expectedHostId = getRepoExecutionHostId(repo)
-  const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
   const byWorktreeId = new Map<string, GitWorktreeInfo>()
   for (const [worktreeId, meta] of Object.entries(store.getAllWorktreeMeta())) {
     const parsed = splitWorktreeId(worktreeId)
@@ -84,11 +88,12 @@ export async function resolveRepoWorktreeRows(
   deps: RepoWorktreeRowDeps,
   repo: Repo,
   metaById: Record<string, WorktreeMeta>,
-  projectRuntimeByRepoId: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
+  projectRuntimeByRepoId: ReadonlyMap<string, ProjectExecutionRuntimeResolution>,
+  repoOwnerCount = deps.store.getRepos().filter((candidate) => candidate.id === repo.id).length
 ): Promise<RepoWorktreeRow[]> {
   const { store } = deps
   if (isFolderRepo(repo)) {
-    return deps.listFolderWorkspaces(repo).map((worktree) => ({
+    return deps.listFolderWorkspaces(repo, repoOwnerCount).map((worktree) => ({
       ...worktree,
       hostId: worktree.hostId ?? getRepoExecutionHostId(repo),
       parentWorktreeId: null,
@@ -115,20 +120,25 @@ export async function resolveRepoWorktreeRows(
       .catch(() => ({ ok: false, worktrees: [] }) satisfies RuntimeWorktreeScanResult),
     RESOLVED_WORKTREE_REPO_TIMEOUT_MS,
     null
-  )) ?? { ok: false, worktrees: listStoredWorktreeRowsForRepo(store, repo) }
+  )) ?? { ok: false, worktrees: listStoredWorktreeRowsForRepo(store, repo, repoOwnerCount) }
   const gitWorktrees = scan.worktrees
   if (scan.ok) {
     pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
   }
+  const expectedHostId = getRepoExecutionHostId(repo)
   return gitWorktrees.map((gitWorktree) => {
     const worktreeId = `${repo.id}::${gitWorktree.path}`
     // Why: lineage validation needs a durable instance ID even when the runtime sees a workspace before renderer discovery-stamp.
     const existingMeta = metaById[worktreeId]
-    const meta =
-      existingMeta && existingMeta.instanceId ? existingMeta : store.setWorktreeMeta(worktreeId, {})
+    const ownedExistingMeta = getRepoOwnedWorktreeMeta(repo, worktreeId, metaById, repoOwnerCount)
+    const meta = ownedExistingMeta?.instanceId
+      ? ownedExistingMeta
+      : ownedExistingMeta || (!existingMeta && repoOwnerCount === 1)
+        ? store.setWorktreeMeta(worktreeId, {})
+        : undefined
     const merged = {
       ...mergeWorktree(repo.id, gitWorktree, meta, repo.displayName),
-      hostId: existingMeta?.hostId ?? meta?.hostId ?? getRepoExecutionHostId(repo)
+      hostId: repoOwnerCount === 1 ? (existingMeta?.hostId ?? expectedHostId) : expectedHostId
     }
     return {
       ...merged,
@@ -157,16 +167,23 @@ export async function resolveRepoWorktreeRows(
  */
 export async function resolveScopedWorktreeIdRow(
   deps: RepoWorktreeRowDeps,
-  worktreeId: string
+  worktreeId: string,
+  requiredHostId?: ExecutionHostId
 ): Promise<RepoWorktreeRow | null> {
   const { store } = deps
   const parsed = splitWorktreeIdForFilesystem(worktreeId)
   if (!parsed?.repoId || !parsed.worktreePath) {
     return null
   }
-  const owners = store.getRepos().filter((repo) => repo.id === parsed.repoId)
+  const owners = store
+    .getRepos()
+    .filter(
+      (repo) =>
+        repo.id === parsed.repoId &&
+        (requiredHostId === undefined || getRepoExecutionHostId(repo) === requiredHostId)
+    )
   // Why: one repo id can be registered on several execution hosts, and only the fleet scan decides
-  // between their rows. Hand those back to the unscoped path rather than guessing.
+  // between unqualified rows. A host qualifier narrows the same-id set without scanning other owners.
   if (owners.length !== 1) {
     return null
   }

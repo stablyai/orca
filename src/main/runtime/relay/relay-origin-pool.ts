@@ -7,6 +7,7 @@ import type { RelayDrainMessage } from './relay-control-protocol'
 import { RelayDrainRetrySchedule } from './relay-drain-retry-schedule'
 import { RelayHttpError, requestRelayAssignment, type RelayAssignment } from './relay-http-client'
 import type { RelayBrokerStatus, RelayIdentity } from './relay-session-broker-contract'
+import type { RelayRegion } from './relay-region-preference'
 
 type RelayOriginPoolOptions = {
   directorUrl: string
@@ -17,6 +18,7 @@ type RelayOriginPoolOptions = {
   mobileSocketWiring: MobileSocketWiring
   isCurrent: () => boolean
   onStatus: (status: RelayBrokerStatus) => void
+  resolvePreferredRegion?: () => Promise<RelayRegion | undefined>
   fetch?: typeof globalThis.fetch
   createControlSocket?: (url: string, relayJwt: string) => WebSocket
   createDataSocket?: (url: string) => WebSocket
@@ -158,6 +160,8 @@ export class RelayOriginPool {
       if (!this.relayJwt) {
         throw new Error('relay_authorization_unavailable')
       }
+      const preferredRegion = await this.options.resolvePreferredRegion?.().catch(() => undefined)
+      this.assertCurrent()
       // Why: only the configured director can choose a migration target.
       const assignment = await requestRelayAssignment({
         directorUrl: this.options.directorUrl,
@@ -166,6 +170,7 @@ export class RelayOriginPool {
         // Recovery always follows an established assignment; the director
         // verifies this and admits through its reconnect fast lane.
         reconnect: true,
+        preferredRegion,
         fetch: this.options.fetch
       })
       this.assertCurrent()

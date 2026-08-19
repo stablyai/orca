@@ -270,6 +270,7 @@ describe('folder workspace owner-routed mutations', () => {
         { isUnread: true },
         { executionHostId: 'runtime:env-owner' }
       )
+    await vi.waitFor(() => expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1))
     await store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: null })
     resolveRuntimeUpdate({
       id: 'rpc-update-folder',

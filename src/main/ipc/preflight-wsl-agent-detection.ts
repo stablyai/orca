@@ -2,10 +2,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import path from 'node:path'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
-import {
-  buildWslLoginShellCommand,
-  escapeWslShCommandForWindows
-} from '../../shared/wsl-login-shell-command'
+import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-login-shell-command'
 
 const execFileAsync = promisify(execFile)
 const WSL_AGENT_DETECTION_TIMEOUT_MS = 10000
@@ -58,16 +55,9 @@ async function execWslAgentDetectionCommand(
   target: WslPreflightTarget,
   command: string
 ): Promise<{ stdout: string; stderr: string }> {
-  const distroArgs = target.distro ? ['-d', target.distro] : []
   const commandPromise = execFileAsync(
     'wsl.exe',
-    [
-      ...distroArgs,
-      '--',
-      'sh',
-      '-c',
-      escapeWslShCommandForWindows(buildWslLoginShellCommand(command))
-    ],
+    buildWslExecArgs(target.distro, ['sh', '-c', buildWslLoginShellCommand(command)]),
     {
       encoding: 'utf-8',
       timeout: WSL_AGENT_DETECTION_TIMEOUT_MS

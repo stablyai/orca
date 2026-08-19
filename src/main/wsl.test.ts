@@ -816,7 +816,7 @@ describe('wslUncDirectoryExists', () => {
       [
         '-d',
         'Ubuntu',
-        '--',
+        '--exec',
         'sh',
         '-c',
         expect.stringContaining('__ORCA_DIRECTORY_EXISTS__'),
@@ -876,7 +876,7 @@ describe('wslUncDirectoryExistsAsync', () => {
       [
         '-d',
         'Ubuntu',
-        '--',
+        '--exec',
         'sh',
         '-c',
         expect.stringContaining('__ORCA_DIRECTORY_EXISTS__'),

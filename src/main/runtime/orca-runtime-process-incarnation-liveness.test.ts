@@ -35,12 +35,12 @@ describe('terminal process incarnation liveness', () => {
     ).resolves.toBe('live')
     await expect(
       runtime.inspectTerminalProcessIncarnationLiveness('remote:ssh-1:pty-1:inc-old', SSH_SCOPE)
-    ).resolves.toBe('dead')
+    ).resolves.toBe('exited')
     expect(listProcesses).toHaveBeenNthCalledWith(1, 'ssh-1')
     expect(listProcesses).toHaveBeenNthCalledWith(2, 'ssh-1')
   })
 
-  it('keeps missing or malformed identity and unavailable inventory unknown', async () => {
+  it('keeps missing or malformed identity and unavailable inventory unverifiable', async () => {
     const listProcesses = vi
       .fn()
       .mockResolvedValueOnce([{ id: 'remote:ssh-1:pty-1', cwd: '', title: 'worker' }])
@@ -52,13 +52,13 @@ describe('terminal process incarnation liveness', () => {
 
     await expect(
       runtime.inspectTerminalProcessIncarnationLiveness(PROCESS_INCARNATION, SSH_SCOPE)
-    ).resolves.toBe('unknown')
+    ).resolves.toBe('unverifiable')
     await expect(
       runtime.inspectTerminalProcessIncarnationLiveness(PROCESS_INCARNATION, SSH_SCOPE)
-    ).resolves.toBe('unknown')
+    ).resolves.toBe('unverifiable')
     await expect(
       runtime.inspectTerminalProcessIncarnationLiveness(PROCESS_INCARNATION, SSH_SCOPE)
-    ).resolves.toBe('unknown')
+    ).resolves.toBe('unverifiable')
   })
 
   it('does not inspect an unproven host scope', async () => {
@@ -67,10 +67,10 @@ describe('terminal process incarnation liveness', () => {
 
     await expect(
       runtime.inspectTerminalProcessIncarnationLiveness(PROCESS_INCARNATION, null)
-    ).resolves.toBe('unknown')
+    ).resolves.toBe('unverifiable')
     await expect(
       runtime.inspectTerminalProcessIncarnationLiveness(PROCESS_INCARNATION, '{"kind":"ssh"}')
-    ).resolves.toBe('unknown')
+    ).resolves.toBe('unverifiable')
     expect(listProcesses).not.toHaveBeenCalled()
   })
 
@@ -83,7 +83,7 @@ describe('terminal process incarnation liveness', () => {
 
     await expect(
       runtime.inspectTerminalProcessIncarnationLiveness('local-pty:inc-1', JSON.stringify(scope))
-    ).resolves.toBe('dead')
+    ).resolves.toBe('exited')
     expect(listProcesses).toHaveBeenCalledWith(connectionId)
   })
 })

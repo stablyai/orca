@@ -4,7 +4,6 @@ import React, { useEffect, useCallback, useMemo, useRef, useState, Suspense } fr
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
-import { useShallow } from 'zustand/react/shallow'
 import {
   BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
   TOGGLE_TERMINAL_PANE_EXPAND_EVENT,
@@ -44,18 +43,22 @@ import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { hasFeatureInteraction } from '../../../shared/feature-interactions'
 import BrowserPane from './browser-pane/BrowserPane'
-import { RetainedBrowserPaneOverlayLayer } from './browser-pane/BrowserPaneOverlayLayer'
+import { RetainedBrowserPaneOverlayLayer } from './browser-pane/assemble-chrome/BrowserPaneOverlayLayer'
 import EmulatorPaneOverlayLayer from './emulator-pane/EmulatorPaneOverlayLayer'
 import {
   isBrowserAutomationVisible,
   onBrowserAutomationVisibilityChange,
   useBrowserAutomationVisibilityForAny
-} from './browser-pane/browser-automation-visibility'
+} from './browser-pane/host-guest/browser-automation-visibility'
 import {
   isBrowserPageMobileDriven,
   onBrowserDriverChange,
   useBrowserMobileDriverForAny
 } from '@/lib/pane-manager/browser-mobile-driver-state'
+import {
+  useAnyBrowserGuestNeedsPaint,
+  useWorktreeBrowserPageIds
+} from './browser-pane/host-guest/browser-guest-paint-retention'
 import TerminalPaneOverlayLayer from './terminal-pane/TerminalPaneOverlayLayer'
 import {
   collectBrowserWebviewIds,
@@ -68,12 +71,12 @@ import {
   selectBrowserGuestEvictionWorktreeIds,
   touchBrowserGuestWorktreeRecency,
   worktreeHoldsLiveBrowserGuests
-} from './browser-pane/browser-guest-worktree-retention'
+} from './browser-pane/host-guest/browser-guest-worktree-retention'
 import {
   hasActiveBrowserPageDownload,
   installBrowserPageDownloadActivityTracking
-} from './browser-pane/browser-page-download-activity'
-import { hasLiveBrowserGuest } from './browser-pane/webview-registry'
+} from './browser-pane/navigate/browser-page-download-activity'
+import { hasLiveBrowserGuest } from './browser-pane/host-guest/webview-registry'
 import {
   handleSwitchRecentTab,
   handleSwitchTab,
@@ -115,11 +118,14 @@ import {
 } from './terminal-pane/terminal-hidden-view-parking'
 import {
   TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS,
+  countEvictionExemptTabRoutes,
+  formatEvictionExemptRouteCounts,
   hasPendingRetentionSpawnWork,
   selectForceParkEvictableTabIds,
   selectRetentionForceParkedTerminalWorktrees,
   type TerminalWorktreeRetentionCandidate
 } from './terminal-pane/terminal-hidden-worktree-retention'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { captureForceParkedWorktreeBuffers } from './terminal-pane/force-park-buffer-capture'
 import { warnTerminalLifecycleAnomaly } from './terminal-pane/terminal-lifecycle-diagnostics'
 import {
@@ -426,7 +432,9 @@ function Terminal(): React.JSX.Element | null {
         : [],
     [renderedActiveWorktreeId, tabsByWorktree]
   )
-  useTerminalProviderSnapshotCapability(workspaceSessionReady && hydrationSucceeded)
+  const terminalProviderSnapshotCapabilityRevision = useTerminalProviderSnapshotCapability(
+    workspaceSessionReady && hydrationSucceeded
+  )
 
   // Why: TabBar portals into the titlebar (target created by App.tsx) so tabs share the "Orca" title row.
   const titlebarTabsTarget = document.getElementById('titlebar-tabs')
@@ -454,6 +462,11 @@ function Terminal(): React.JSX.Element | null {
   const effectiveActiveLayout = renderedActiveWorktreeId
     ? getEffectiveLayoutForWorktree(renderedActiveWorktreeId)
     : undefined
+  // Why: both wrappers below sit above every browser <webview>, so a remote controller needs
+  // them to drop `hidden` too — the per-worktree surface hatch cannot override an ancestor.
+  const retainBrowserGuestPaint = useAnyBrowserGuestNeedsPaint(
+    !renderedActiveWorktreeId || !effectiveActiveLayout
+  )
   const activeWorktreeBrowserTabIdsKey = renderedActiveWorktreeId
     ? (browserTabsByWorktree[renderedActiveWorktreeId] ?? []).map((tab) => tab.id).join(',')
     : ''
@@ -1097,10 +1110,18 @@ function Terminal(): React.JSX.Element | null {
         // Why logged: an all-exempt force-park frees no heap at all (daemon
         // fail-open makes every local pty exempt), so the budget only holds
         // while this stays rare — make the degenerate case observable.
+        // Why routed + breadcrumbed: only per-route counts in a field bundle
+        // can say whether fail-open ids or unresolved snapshot capability
+        // dominates the degenerate case.
         if (evictableTabIds.length === 0 && forceParkedTabs.length > 0) {
+          const exemptRouteCounts = countEvictionExemptTabRoutes(forceParkedTabs, worktreeId)
           warnTerminalLifecycleAnomaly('retention force-park freed no panes', {
             worktreeId,
-            reason: `exemptTabs=${forceParkedTabs.length}`
+            reason: `exemptTabs=${forceParkedTabs.length} ${formatEvictionExemptRouteCounts(exemptRouteCounts)}`
+          })
+          recordRendererCrashBreadcrumb('terminal_force_park_freed_no_panes', {
+            exemptTabs: forceParkedTabs.length,
+            ...exemptRouteCounts
           })
         }
         // Why conditional: a tab whose pane was mid-remount registered no
@@ -1169,6 +1190,7 @@ function Terminal(): React.JSX.Element | null {
     tabsByWorktree,
     terminalParkingEnabled,
     terminalParkingRevision,
+    terminalProviderSnapshotCapabilityRevision,
     terminalRetentionBudgetEnabled,
     terminalSshParkingEnabled,
     workspaceSurfaces
@@ -1483,6 +1505,9 @@ function Terminal(): React.JSX.Element | null {
   // Why: on host unmount no reconciliation effect runs again, so dispose every remaining parked watcher.
   useEffect(() => () => disposeAllParkedTerminalWatchers(), [])
   // Auto-create first tab when worktree activates
+  const activeWorktreeHasTerminalState = activeWorktreeId
+    ? Object.hasOwn(tabsByWorktree, activeWorktreeId)
+    : false
   useEffect(() => {
     if (!workspaceSessionReady) {
       return
@@ -1497,7 +1522,7 @@ function Terminal(): React.JSX.Element | null {
 
     // Why: give a newly activated worktree a focusable surface when nothing renders, without recreating one after the user closes the last visible tab.
     const { renderableTabCount } = reconcileWorktreeTabModel(activeWorktreeId)
-    if (!shouldAutoCreateInitialTerminal(renderableTabCount)) {
+    if (!shouldAutoCreateInitialTerminal(renderableTabCount, activeWorktreeHasTerminalState)) {
       return
     }
     // Why: a remote worktree can activate before its snapshot tabs hydrate; a terminal created in that window buries the restored tabs behind a junk tab. All three gate inputs are effect deps, so this retries when the owner resolves or the snapshot lands.
@@ -1517,6 +1542,7 @@ function Terminal(): React.JSX.Element | null {
     workspaceSessionReady,
     activeWorktreeId,
     activeWorktreeConnectionId,
+    activeWorktreeHasTerminalState,
     createTab,
     reconcileWorktreeTabModel,
     remoteWorkspaceHydratedTargetIds,
@@ -2439,7 +2465,15 @@ function Terminal(): React.JSX.Element | null {
 
   return (
     <div
-      className={`flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${renderedActiveWorktreeId ? '' : ' hidden'}`}
+      // Why: already out of flow via the workbench container when hidden, so retention only
+      // has to drop `hidden` — it does not need to leave the flex column a second time.
+      className={`flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
+        renderedActiveWorktreeId
+          ? ''
+          : retainBrowserGuestPaint
+            ? ' opacity-0 pointer-events-none'
+            : ' hidden'
+      }`}
       data-rendered-active-worktree-id={renderedActiveWorktreeId ?? undefined}
     >
       <EditorAutosaveController />
@@ -2506,7 +2540,13 @@ function Terminal(): React.JSX.Element | null {
 
       {anyMountedWorktreeHasLayout ? (
         <div
-          className={`relative flex flex-1 min-w-0 min-h-0 overflow-hidden${effectiveActiveLayout ? '' : ' hidden'}`}
+          className={`relative flex flex-1 min-w-0 min-h-0 overflow-hidden${
+            effectiveActiveLayout
+              ? ''
+              : retainBrowserGuestPaint
+                ? ' opacity-0 pointer-events-none'
+                : ' hidden'
+          }`}
         >
           {/* Why: absolutely position each mounted surface so hidden trees don't reflow the active one; the relative anchor sizes panes to the workspace body. */}
           {workspaceSurfaces
@@ -2817,13 +2857,7 @@ const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   backgroundMountTabIds: ReadonlySet<string> | null
   activationDeferredMountTabIds: ReadonlySet<string> | null
 }): React.JSX.Element {
-  const browserPageIds = useAppStore(
-    useShallow((state) =>
-      (state.browserTabsByWorktree[worktreeId] ?? []).flatMap((tab) =>
-        tab.pageIds && tab.pageIds.length > 0 ? tab.pageIds : [tab.activePageId ?? tab.id]
-      )
-    )
-  )
+  const browserPageIds = useWorktreeBrowserPageIds(worktreeId)
   const hasAutomationVisibleBrowser = useBrowserAutomationVisibilityForAny(browserPageIds)
   const hasMobileDrivenBrowser = useBrowserMobileDriverForAny(browserPageIds)
   const shouldKeepPaintable =

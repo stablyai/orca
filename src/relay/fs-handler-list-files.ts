@@ -28,20 +28,23 @@ import {
   killSpawnedRipgrepProcess,
   RipgrepUnavailableError
 } from '../shared/ripgrep-process-availability'
+import { QuickOpenPathRanker } from '../shared/quick-open-path-search'
 
 export const LIST_FILES_TIMEOUT_MS = 25_000
 
 export function listFilesWithRg(
   rootPath: string,
   excludePathPrefixes: readonly string[] = [],
-  options: { signal?: AbortSignal; maxResults?: number } = {}
+  options: { signal?: AbortSignal; maxResults?: number; searchQuery?: string } = {}
 ): Promise<string[]> {
-  const { signal, maxResults } = options
+  const { signal, maxResults, searchQuery } = options
   if (signal?.aborted) {
     return Promise.reject(fileListingCancellationError(signal))
   }
   return new Promise((resolve, reject) => {
     const files = new Set<string>()
+    const ranker =
+      searchQuery === undefined ? null : new QuickOpenPathRanker(searchQuery, maxResults ?? 16)
     let done = false
     const children: {
       child: ChildProcess
@@ -69,6 +72,10 @@ export function listFilesWithRg(
         return true
       }
       if (shouldExcludeQuickOpenRelPath(relPath, excludePathPrefixes)) {
+        return true
+      }
+      if (ranker) {
+        ranker.consider(relPath)
         return true
       }
       files.add(relPath)
@@ -266,17 +273,20 @@ export function listFilesWithRg(
     }
     signal?.addEventListener('abort', onAbort, { once: true })
 
-    const primaryPass = runPass(primary)
-    const passes =
-      maxResults === undefined
-        ? children[0]?.child.pid === undefined
-          ? primaryPass
-          : Promise.all([primaryPass, runPass(ignoredPass)])
-        : // Why: deterministic primary-first budgeting prevents a large ignored
-          // tree from starving ordinary source paths on a remote host.
-          primaryPass.then(() =>
-            files.size < maxResults ? runPass(ignoredPass) : Promise.resolve()
-          )
+    const passes = ranker
+      ? runPass(ignoredPass)
+      : (() => {
+          const primaryPass = runPass(primary)
+          return maxResults === undefined
+            ? children[0]?.child.pid === undefined
+              ? primaryPass
+              : Promise.all([primaryPass, runPass(ignoredPass)])
+            : // Why: deterministic primary-first budgeting prevents a large ignored
+              // tree from starving ordinary source paths on a remote host.
+              primaryPass.then(() =>
+                files.size < maxResults ? runPass(ignoredPass) : Promise.resolve()
+              )
+        })()
 
     passes
       .then(() => {
@@ -285,7 +295,7 @@ export function listFilesWithRg(
         }
         done = true
         signal?.removeEventListener('abort', onAbort)
-        resolve(Array.from(files))
+        resolve(ranker ? ranker.result().paths : Array.from(files))
       })
       .catch((err) => {
         if (done) {

@@ -165,7 +165,8 @@ function buildPowerShellWslSkillCommand(command: string, runtime: LocalAgentRunt
   const encodedScript = encodeWslLoginShellScript(command)
   const visibleCommand = command.replace(/[\r\n]+/g, ' ')
   const shellScript = `eval "\`printf %s ${encodedScript} | base64 -d\`"`
-  const wslCommand = `wsl.exe${distroArg} -- sh -c ${quotePowerShellNativeArgument(shellScript)}`
+  // Why --exec: `--` makes wsl.exe expand $name in the argv it forwards to the guest.
+  const wslCommand = `wsl.exe${distroArg} --exec sh -c ${quotePowerShellNativeArgument(shellScript)}`
   return `& { $PSNativeCommandArgumentPassing = 'Legacy'; ${wslCommand} } # Runs: ${visibleCommand}`
 }
 
@@ -177,9 +178,9 @@ function decodeWslSetupTerminalCommand(command: string): string | null {
     return null
   }
 
-  const encoded = /-- sh -c 'eval \\"`printf %s ([A-Za-z0-9+/=]+) \| base64 -d`\\"'/.exec(
-    command
-  )?.[1]
+  // Why both separators: commands persisted before the --exec switch must still decode.
+  const encoded =
+    /(?:--|--exec) sh -c 'eval \\"`printf %s ([A-Za-z0-9+/=]+) \| base64 -d`\\"'/.exec(command)?.[1]
   if (!encoded) {
     return null
   }
@@ -229,9 +230,8 @@ function wrapWindowsSkillCommandWithNpxPrerequisite(
 }
 
 function isPosixFamilyWindowsShellConfigured(): boolean {
-  return (
-    resolveWindowsShellStartupFamily(useAppStore.getState().settings?.terminalWindowsShell) ===
-    'posix'
+  return ['posix', 'unix'].includes(
+    resolveWindowsShellStartupFamily(useAppStore.getState().settings?.terminalWindowsShell)
   )
 }
 

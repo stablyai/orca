@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { createServer, type Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY } from '../shared/protocol-version'
-import { RuntimeClient, RuntimeRpcFailureError } from './runtime-client'
+import { RuntimeClient, RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
 import { launchOrcaApp } from './runtime/launch'
 
 vi.mock('./runtime/launch', () => ({
@@ -413,6 +413,36 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
     await expect(client.call('status.get')).rejects.toMatchObject({
       code: 'runtime_timeout'
     })
+  })
+
+  it('preserves a dropped read-only orchestration failure exactly', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const endpoint = join(userDataPath, 'runtime.sock')
+    let request: Record<string, unknown> | undefined
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', (data) => {
+        request = JSON.parse(String(data).trim()) as Record<string, unknown>
+        socket.end()
+      })
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+    writeMetadata(userDataPath, endpoint)
+    const client = new RuntimeClient(userDataPath, 100)
+
+    const failure = await client
+      .call('orchestration.workerShow', { dispatch: 'ctx_1' })
+      .catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(RuntimeClientError)
+    expect((failure as RuntimeClientError).message).toBe(
+      'The Orca runtime closed the connection before responding. Restart Orca and try again.'
+    )
+    expect((failure as RuntimeClientError).data).toBeUndefined()
+    expect(request).toMatchObject({ method: 'orchestration.workerShow' })
+    expect(request).not.toHaveProperty('orchestrationRequestId')
   })
 
   it('allows a per-call timeout override for long runtime requests', async () => {

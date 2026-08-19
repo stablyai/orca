@@ -21,7 +21,7 @@ const MODEL_DISCOVERY_ONLY_SPECS: Partial<Record<TuiAgent, AgentModelProbeSpec>>
     // Why: empty so a failed probe degrades to the catalog seed instead of a
     // second model list here that can drift from it.
     models: [],
-    defaultModelId: 'grok-4.5'
+    defaultModelId: 'grok-4.6'
   }
 }
 

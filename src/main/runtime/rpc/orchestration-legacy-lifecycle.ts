@@ -2,6 +2,7 @@ import type { RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { MessageType } from '../orchestration/db'
 import { OrchestrationError } from '../orchestration/orchestration-error'
+import { bindCoordinatorMutationPayload } from '../orchestration/dispatch-message-binding'
 import type { LegacyCompatibilityAuthority } from './orchestration-legacy-authority'
 import {
   inferLegacyWorkerOutcome,
@@ -41,7 +42,7 @@ export async function handleLegacyLifecycleSend(args: {
     throw new OrchestrationError('invalid_argument', 'Legacy lifecycle mail requires --to.')
   }
   const db = runtime.getOrchestrationDb()
-  if (!db.isLegacyCoordinatorHandle(dispatch.run_id, params.to)) {
+  if (!db.isLegacyCoordinatorDeliveryTarget(dispatch.run_id, params.to)) {
     throw new OrchestrationError(
       'request_mismatch',
       `Terminal ${params.to} is not a retained coordinator for this legacy Dispatch.`
@@ -89,7 +90,11 @@ export async function handleLegacyLifecycleSend(args: {
       body: params.body,
       type: params.type as MessageType,
       priority: params.priority,
-      payload: params.payload
+      payload: bindCoordinatorMutationPayload(
+        params.type as MessageType,
+        params.payload,
+        dispatch.id
+      )
     },
     lifecycle:
       params.type === 'heartbeat'
