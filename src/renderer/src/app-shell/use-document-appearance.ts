@@ -1,10 +1,6 @@
 import { useEffect } from 'react'
 import { buildAppFontFamily } from '@/lib/app-font-family'
-import {
-  applyAppAppearanceToDocument,
-  clearAppAppearanceFromDocument
-} from '@/lib/app-appearance-document'
-import { applyDocumentTheme } from '../lib/document-theme'
+import { applyDocumentAppearance } from '@/lib/app-appearance-document'
 import { scheduleRuntimeGraphSync } from '../runtime/sync-runtime-graph'
 import { useAppStore } from '../store'
 
@@ -14,14 +10,13 @@ export function useDocumentAppearance(): void {
 
   useEffect(() => {
     if (!settings) {
+      applyDocumentAppearance(settings, true)
       return
     }
 
     const media = window.matchMedia('(prefers-color-scheme: dark)')
     const applyAppearance = (): void => {
-      clearAppAppearanceFromDocument()
-      applyDocumentTheme(settings.theme)
-      applyAppAppearanceToDocument(settings, media.matches)
+      applyDocumentAppearance(settings, media.matches)
     }
     applyAppearance()
 

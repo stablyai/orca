@@ -1,5 +1,6 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { PANEL_DESIGN_TOKEN_ALLOWLIST } from '../../../shared/plugins/plugin-panel-shell'
+import { applyDocumentTheme, type DocumentThemePreference } from './document-theme'
 import {
   APP_APPEARANCE_STYLE_PROPERTIES,
   resolveAppAppearanceDarkMode,
@@ -59,6 +60,25 @@ export function clearAppAppearanceFromDocument(root: HTMLElement = document.docu
   }
   root.removeAttribute('data-app-appearance')
   root.removeAttribute('data-app-appearance-base-scheme')
+}
+
+export function applyDocumentAppearance(
+  settings: GlobalSettings | null | undefined,
+  systemPrefersDark: boolean,
+  options: {
+    root?: HTMLElement
+    theme?: DocumentThemePreference
+    disableTransitions?: boolean
+  } = {}
+): void {
+  const root = options.root ?? document.documentElement
+  clearAppAppearanceFromDocument(root)
+  applyDocumentTheme(options.theme ?? settings?.theme ?? 'system', {
+    root,
+    matchMedia: () => ({ matches: systemPrefersDark }),
+    disableTransitions: options.disableTransitions
+  })
+  applyAppAppearanceToDocument(settings, systemPrefersDark, root)
 }
 
 export function applyAppAppearanceToDocument(

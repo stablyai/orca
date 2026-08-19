@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { applyDocumentTheme } from '@/lib/document-theme'
+import { applyDocumentAppearance } from '@/lib/app-appearance-document'
 import { track } from '@/lib/telemetry'
 import { ONBOARDING_FINAL_STEP } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -15,6 +15,7 @@ type OnboardingTelemetryArgs = {
   remappedLastCompletedStep: number
   currentStep: (typeof STEPS)[number]
   persistedThemeRef: { current: GlobalSettings['theme'] }
+  persistedSettingsRef: { current: GlobalSettings | null }
   preflightStatus: AppState['preflightStatus']
   preflightStatusLoading: boolean
   linearStatus: AppState['linearStatus']
@@ -25,6 +26,7 @@ export function useOnboardingFlowTelemetry({
   remappedLastCompletedStep,
   currentStep,
   persistedThemeRef,
+  persistedSettingsRef,
   preflightStatus,
   preflightStatusLoading,
   linearStatus,
@@ -62,10 +64,14 @@ export function useOnboardingFlowTelemetry({
   const setLifecycleRootRef = useCallback(
     (node: HTMLElement | null): void => {
       if (node === null) {
-        applyDocumentTheme(persistedThemeRef.current)
+        applyDocumentAppearance(
+          persistedSettingsRef.current,
+          window.matchMedia('(prefers-color-scheme: dark)').matches,
+          { theme: persistedThemeRef.current }
+        )
       }
     },
-    [persistedThemeRef]
+    [persistedSettingsRef, persistedThemeRef]
   )
 
   const trackTaskSourcesSnapshot = useCallback(
