@@ -1165,7 +1165,10 @@ export class BrowserManager {
       buildViewportUserAgentOverride({
         url: url ?? this.resolveTabNavigationUrl(guest),
         mobile,
-        baseUserAgent: cleanElectronUserAgent(baseUserAgent ?? guest.getUserAgent())
+        // Why: the session UA is the profile's stable base identity. guest.getUserAgent() is not:
+        // applyGoogleAuthUserAgent leaves it pinned to the Firefox auth UA once a guest switches to
+        // the CDP override, so reading it back here would republish that identity on ordinary hosts.
+        baseUserAgent: cleanElectronUserAgent(baseUserAgent ?? guest.session.getUserAgent())
       })
     )
   }

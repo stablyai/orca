@@ -48,6 +48,11 @@ import {
   resetBrowserManagerMocks,
   resetBrowserManagerState
 } from './browser-manager-test-harness'
+import {
+  createViewportGuestFactory,
+  flushViewportOps,
+  GUEST_CLEAN_UA
+} from './browser-manager-viewport-test-fixtures'
 
 const {
   guestOffMock,
@@ -57,6 +62,7 @@ const {
   guestOpenDevToolsMock,
   webContentsFromIdMock
 } = browserMocks
+const makeViewportGuest = createViewportGuestFactory(browserMocks)
 
 describe('browserManager', () => {
   beforeEach(() => {
@@ -489,5 +495,55 @@ describe('browserManager', () => {
       'Emulation.setUserAgentOverride',
       expect.anything()
     )
+  })
+
+  // Why: the direct-navigation branch still writes the Firefox UA through WebContents.setUserAgent,
+  // and nothing ever restores it once the guest switches to the CDP override. A viewport preset that
+  // read getUserAgent() back as its base identity would therefore republish Firefox on every ordinary
+  // host — the wire UA saying Firefox while sec-ch-ua still says Chrome, the exact cross-layer tell
+  // this scope exists to remove.
+  it('keeps a viewport preset on the session identity after an auth-host visit', async () => {
+    const { guest, debuggerSendCommand } = makeViewportGuest(9001)
+    webContentsFromIdMock.mockReturnValue(guest)
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'tab-auth-then-preset',
+      webContentsId: guest.id as number,
+      rendererWebContentsId
+    })
+    await browserManager.setViewportOverride('tab-auth-then-preset', {
+      width: 1280,
+      height: 800,
+      deviceScaleFactor: 1,
+      mobile: false
+    })
+    await flushViewportOps()
+
+    const didStartNavigation = guestOnMock.mock.calls.find(
+      ([event]) => event === 'did-start-navigation'
+    )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+    const willRedirect = guestOnMock.mock.calls.find(
+      ([event]) => event === 'will-redirect'
+    )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+
+    didStartNavigation(null, 'https://accounts.google.com/v3/signin/identifier', false, true)
+    await flushViewportOps()
+    // The direct branch pins the WebContents UA to Firefox and never restores it.
+    expect((guest.getUserAgent as () => string)()).toBe(googleAuthUserAgent())
+
+    willRedirect({ preventDefault: vi.fn() }, 'https://myaccount.google.com/', false, true)
+    await flushViewportOps()
+
+    debuggerSendCommand.mockClear()
+    didStartNavigation(null, 'https://github.com/', false, true)
+    await flushViewportOps()
+
+    const uaWrites = debuggerSendCommand.mock.calls.filter(
+      ([method]) => method === 'Emulation.setUserAgentOverride'
+    )
+    expect(uaWrites.length).toBeGreaterThan(0)
+    for (const [, params] of uaWrites) {
+      expect((params as { userAgent: string }).userAgent).toBe(GUEST_CLEAN_UA)
+    }
   })
 })
