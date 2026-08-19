@@ -15,6 +15,10 @@ type ThemeClassList = {
 
 type ThemeRoot = {
   classList: ThemeClassList
+  dataset?: {
+    appAppearance?: string
+    appAppearanceBaseScheme?: string
+  }
 }
 
 type ThemeMediaMatcher = (query: string) => Pick<MediaQueryList, 'matches'>
@@ -69,11 +73,15 @@ export function applyDocumentTheme(
     root.classList.add(THEME_TRANSITION_DISABLED_CLASS)
   }
 
-  root.classList.toggle('dark', shouldUseDarkTheme)
+  if (root.dataset?.appAppearance) {
+    root.dataset.appAppearanceBaseScheme = shouldUseDarkTheme ? 'dark' : 'light'
+  } else {
+    root.classList.toggle('dark', shouldUseDarkTheme)
+    // Mirror with `light` so consumers can observe the resolved theme
+    // symmetrically (Tailwind keys only on `dark`, so this is style-neutral).
+    root.classList.toggle('light', !shouldUseDarkTheme)
+  }
   root.classList.toggle(EDITOR_DARK_CLASS, shouldUseDarkTheme)
-  // Mirror with `light` so consumers can observe the resolved theme
-  // symmetrically (Tailwind keys only on `dark`, so this is style-neutral).
-  root.classList.toggle('light', !shouldUseDarkTheme)
 
   if (!disableTransitions) {
     return

@@ -76,7 +76,7 @@ describe('resolveLeftSidebarStyleVariables', () => {
     expect(resolveAppAppearanceDarkMode(settings(), true)).toBeUndefined()
   })
 
-  it('honors terminal background opacity for matched terminal surfaces', () => {
+  it('composites terminal opacity into opaque semantic colors', () => {
     const vars = resolveLeftSidebarStyleVariables(
       settings({
         leftSidebarAppearanceMode: 'match-terminal',
@@ -85,9 +85,12 @@ describe('resolveLeftSidebarStyleVariables', () => {
       }),
       true
     )
+    const background = 'color-mix(in srgb, #123456 50%, var(--app-appearance-base-background))'
 
-    expect(vars?.['--background']).toBe('rgba(18, 52, 86, 0.5)')
-    expect(vars?.['--worktree-sidebar']).toBe('rgba(18, 52, 86, 0.5)')
+    expect(vars?.['--background']).toBe(background)
+    expect(vars?.['--primary-foreground']).toBe(background)
+    expect(vars?.['--worktree-sidebar']).toBe(background)
+    expect(vars?.['--sidebar-primary-foreground']).toBe(background)
   })
 
   it('builds tinted app surfaces from stable class-owned base tokens', () => {
