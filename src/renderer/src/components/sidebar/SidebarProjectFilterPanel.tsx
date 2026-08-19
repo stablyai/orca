@@ -173,7 +173,7 @@ export function SidebarProjectFilterPanel({
             value={repo.id}
             keywords={[repo.displayName, repo.path]}
             onSelect={() => handleSelectRepo(repo.id)}
-            className="mx-1 my-0.5 items-center gap-2 rounded-[7px] px-2 py-1 text-[12px] leading-5 font-medium data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground"
+            className="jump-palette-item mx-1 my-0.5 items-center gap-2 rounded-[7px] px-2 py-1 text-[12px] leading-5 font-medium data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground"
           >
             <span className="inline-flex min-w-0 flex-1 items-center gap-1.5">
               <RepoBadgeLabel

@@ -71,6 +71,9 @@ describe('custom app appearance styles', () => {
       expect(source).toContain('bg-accent')
       expect(source).not.toMatch(/(?:selected=true|selectedAgentId)[^'"\n]*(?:bg-black|bg-white)/)
     }
+    for (const source of selectedRowSources.slice(1)) {
+      expect(source).toContain('jump-palette-item')
+    }
   })
 
   it('applies the shared document helper in the dashboard popout', () => {

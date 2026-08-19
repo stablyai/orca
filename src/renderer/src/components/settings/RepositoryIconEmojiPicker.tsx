@@ -5,6 +5,7 @@ import { sanitizeRepoIcon } from '../../../../shared/repo-icon'
 import { useAppStore } from '../../store'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { translate } from '@/i18n/i18n'
+import { resolveAppAppearanceDarkMode } from '@/lib/left-sidebar-appearance'
 
 type RepositoryIconEmojiPickerProps = {
   selectedEmoji: string
@@ -20,11 +21,12 @@ export function RepositoryIconEmojiPicker({
   selectedEmoji,
   onSetIcon
 }: RepositoryIconEmojiPickerProps): React.JSX.Element {
-  // Minimal selector: only the theme string is needed; default to system before settings load.
-  const settingsTheme = useAppStore((state) => state.settings?.theme ?? 'system')
+  const settings = useAppStore((state) => state.settings)
   const systemPrefersDark = useSystemPrefersDark()
-  // Theme.AUTO only follows the OS setting, which can disagree with Orca's manual theme.
-  const isDarkTheme = settingsTheme === 'dark' || (settingsTheme === 'system' && systemPrefersDark)
+  const appAppearanceDark = resolveAppAppearanceDarkMode(settings, systemPrefersDark)
+  const isDarkTheme =
+    appAppearanceDark ??
+    (settings?.theme === 'dark' || (settings?.theme === 'system' && systemPrefersDark))
 
   /** Saves the picked emoji, rejecting anything over sanitizeRepoIcon's 16-char cap. */
   const handleEmojiClick = (emojiData: EmojiClickData): void => {
