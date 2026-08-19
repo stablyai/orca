@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { startParkedTerminalByteWatcher } from './parked-terminal-byte-watcher'
 import { subscribeToPtyExit } from './pty-dispatcher'
-import { discardPreHandlerPtyState } from './pty-pre-handler-buffer'
+import { discardPreHandlerPtyState, hasPreHandlerPtyExit } from './pty-pre-handler-buffer'
 import { detachTerminalLayoutLeaf } from './terminal-layout-leaf-detach'
 import {
   isParkRestorableTerminalPty,
@@ -37,6 +37,11 @@ export function startParkedPtyWatcher(args: {
   if (
     !ptyId ||
     entry.disposersByPtyId.has(ptyId) ||
+    // Why: the pane's primary exit handler is gone from unmount and this
+    // sidecar arrives a passive effect later, so an exit landing in between is
+    // buffered and replayed to nobody. Registering here would pin a dead PTY as
+    // a live parked owner, and the runtime graph would publish its leaf.
+    hasPreHandlerPtyExit(ptyId) ||
     !isTerminalLeafId(pane.leafId) ||
     !isParkRestorableTerminalPty(ptyId, worktreeId, restorePolicy)
   ) {

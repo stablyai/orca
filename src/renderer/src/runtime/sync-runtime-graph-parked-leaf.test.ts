@@ -25,7 +25,10 @@ import {
   bufferPreHandlerPtyExit,
   clearPreHandlerPtyState
 } from '@/components/terminal-pane/pty-pre-handler-buffer'
-import { parkedWatchersByTabId } from '@/components/terminal-pane/terminal-parked-watcher-registry'
+import {
+  capturedPanesByTabId,
+  parkedWatchersByTabId
+} from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import { setRuntimeGraphStoreStateGetter, setRuntimeGraphSyncEnabled } from './sync-runtime-graph'
 
 const LEAF = '22222222-2222-4222-8222-222222222222'
@@ -64,17 +67,30 @@ function parkedTab(): TerminalTab {
   } as TerminalTab
 }
 
-function parkedState(): AppState {
+function parkedState(
+  ptyIdsByLeafId: Record<string, string> = { [LEAF]: PARKED_PTY },
+  activeLeafId: string = LEAF
+): AppState {
+  const leafIds = Object.keys(ptyIdsByLeafId)
+  const root = leafIds.slice(1).reduce<Record<string, unknown>>(
+    (first, leafId) => ({
+      type: 'split',
+      direction: 'horizontal',
+      first,
+      second: { type: 'leaf', leafId }
+    }),
+    { type: 'leaf', leafId: leafIds[0] }
+  )
   return makeState({
     tabsByWorktree: { 'wt-1': [parkedTab()] } as AppState['tabsByWorktree'],
     terminalLayoutsByTabId: {
       [TAB_ID]: {
-        root: { type: 'leaf', leafId: LEAF },
-        activeLeafId: LEAF,
+        root,
+        activeLeafId,
         expandedLeafId: null,
-        ptyIdsByLeafId: { [LEAF]: PARKED_PTY }
+        ptyIdsByLeafId
       }
-    } as AppState['terminalLayoutsByTabId']
+    } as unknown as AppState['terminalLayoutsByTabId']
   })
 }
 
@@ -97,18 +113,25 @@ afterEach(() => {
   setRuntimeGraphSyncEnabled(false)
   setRuntimeGraphStoreStateGetter(null)
   parkedWatchersByTabId.clear()
+  capturedPanesByTabId.clear()
   clearPreHandlerPtyState(PARKED_PTY)
   vi.mocked(getEagerPtyBufferHandle).mockReturnValue(undefined)
   vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
-async function captureGraph(): Promise<RuntimeSyncWindowGraph> {
+async function captureGraph(
+  options: { seedState?: boolean } = {}
+): Promise<RuntimeSyncWindowGraph> {
   vi.useFakeTimers()
   const syncWindowGraph = vi.fn().mockResolvedValue(undefined)
   vi.stubGlobal('window', { api: { runtime: { syncWindowGraph } } })
   vi.stubGlobal('HTMLElement', class HTMLElement {})
-  setRuntimeGraphStoreStateGetter(() => parkedState())
+  // Why opt-out: a case that needs a non-default layout installs its own getter
+  // before calling in, and must not have it overwritten here.
+  if (options.seedState !== false) {
+    setRuntimeGraphStoreStateGetter(() => parkedState())
+  }
   setRuntimeGraphSyncEnabled(true)
   await vi.advanceTimersByTimeAsync(20)
   await flushMicrotasks()
@@ -173,5 +196,57 @@ describe('syncRuntimeGraph cold-parked tabs', () => {
     const graph = await captureGraph()
 
     expect(graph.leaves).not.toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
+  })
+
+  it('excludes a remote-runtime PTY, whose parked watcher never sees an exit', async () => {
+    // startParkedPtyWatcher installs no exit subscription for remote: PTYs and
+    // the parked fact stream carries no exit fact, so a surviving disposer is
+    // not evidence the remote terminal is still alive.
+    const remotePtyId = 'remote:env-1@@term_remote'
+    parkedWatchersByTabId.set(TAB_ID, {
+      worktreeId: 'wt-1',
+      tabPtyId: remotePtyId,
+      paneIdByPtyId: new Map([[remotePtyId, 1]]),
+      disposersByPtyId: new Map([[remotePtyId, () => {}]])
+    })
+    setRuntimeGraphStoreStateGetter(() => parkedState({ [LEAF]: remotePtyId }))
+
+    const graph = await captureGraph({ seedState: false })
+
+    expect(graph.leaves).not.toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
+  })
+
+  it('publishes the pane id the live pane used, not a positional ordinal', async () => {
+    // PaneManager retires a closed pane's id without renumbering, and main
+    // routes split/close and the paneKey fallback through this value.
+    installParkedWatcher(PARKED_PTY)
+    capturedPanesByTabId.set(TAB_ID, {
+      worktreeId: 'wt-1',
+      panes: [{ ptyId: PARKED_PTY, paneId: 7, leafId: LEAF, drivesTabTitle: true }]
+    })
+
+    const graph = await captureGraph()
+
+    expect(graph.leaves).toContainEqual(
+      expect.objectContaining({ tabId: TAB_ID, leafId: LEAF, paneRuntimeId: 7 })
+    )
+  })
+
+  it('does not name an active leaf this publication is not sending', async () => {
+    // Partial coverage is legitimate: one leaf's watcher can be disposed while a
+    // sibling stays parked, and the saved activeLeafId may be the dropped one.
+    const otherLeaf = '33333333-3333-4333-8333-333333333333'
+    const otherPty = 'wt-1::/tmp/wt@@other-parked-pty'
+    installParkedWatcher(PARKED_PTY)
+    setRuntimeGraphStoreStateGetter(() =>
+      parkedState({ [LEAF]: PARKED_PTY, [otherLeaf]: otherPty }, otherLeaf)
+    )
+
+    const graph = await captureGraph({ seedState: false })
+
+    expect(graph.tabs).toContainEqual(
+      expect.objectContaining({ tabId: TAB_ID, activeLeafId: LEAF })
+    )
+    expect(graph.leaves).not.toContainEqual(expect.objectContaining({ leafId: otherLeaf }))
   })
 })

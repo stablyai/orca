@@ -6,7 +6,10 @@ import {
 } from '@/components/terminal-pane/layout-serialization'
 import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/terminal-lifecycle-diagnostics'
 import { getEagerPtyBufferHandle } from '@/components/terminal-pane/pty-dispatcher'
-import { hasParkedTerminalWatcherForPty } from '@/components/terminal-pane/terminal-parked-watcher-registry'
+import {
+  collectParkedTerminalWatcherPtyIds,
+  getParkedTerminalPaneIdsByLeafId
+} from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
@@ -797,6 +800,9 @@ async function syncRuntimeGraph(): Promise<void> {
   // pane is unmounted but a parked watcher still owns the PTY. Dropping their
   // leaf invalidates the terminal handle every paired subscriber is bound to,
   // stalling a remotely-driven terminal the host merely stopped displaying.
+  // Built once for the whole publication; a per-leaf registry scan would be
+  // quadratic across a many-worktree workspace.
+  const parkedWatcherPtyIds = collectParkedTerminalWatcherPtyIds()
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
     for (const tab of tabs) {
       const layout = state.terminalLayoutsByTabId[tab.id]
@@ -812,17 +818,26 @@ async function syncRuntimeGraph(): Promise<void> {
           typeof ptyId === 'string' &&
           ptyId.length > 0 &&
           isTerminalLeafId(leafId) &&
-          (Boolean(getEagerPtyBufferHandle(ptyId)) || hasParkedTerminalWatcherForPty(ptyId))
+          (Boolean(getEagerPtyBufferHandle(ptyId)) || parkedWatcherPtyIds.has(ptyId))
       )
       if (liveLeaves.length === 0) {
         continue
       }
       const title = resolveRuntimeTerminalTitle(tab, generatedTitlesEnabled)
+      // Why: partial coverage is legitimate — one leaf's watcher can be disposed
+      // while its siblings stay parked — so a saved activeLeafId that did not
+      // survive the filter would name a leaf this publication never sends.
+      const publishedLeafIds = new Set(liveLeaves.map(([leafId]) => leafId))
+      const savedActiveLeafId = layout?.activeLeafId
+      const parkedPaneIdsByLeafId = getParkedTerminalPaneIdsByLeafId(tab.id)
       graph.tabs.push({
         tabId: tab.id,
         worktreeId,
         title,
-        activeLeafId: layout?.activeLeafId ?? liveLeaves[0][0],
+        activeLeafId:
+          savedActiveLeafId && publishedLeafIds.has(savedActiveLeafId)
+            ? savedActiveLeafId
+            : liveLeaves[0][0],
         layout: resolveTerminalLayoutRoot({
           authoritativeRoot: layout?.root,
           leafIds: liveLeaves.map(([leafId]) => leafId),
@@ -837,7 +852,11 @@ async function syncRuntimeGraph(): Promise<void> {
           tabId: tab.id,
           worktreeId,
           leafId,
-          paneRuntimeId: index + 1,
+          // Why the capture wins: PaneManager ids are allocated monotonically and
+          // closing a pane retires its id without renumbering, so an ordinal can
+          // name a pane that no longer exists — and main routes split/close and
+          // the paneKey fallback through this value.
+          paneRuntimeId: parkedPaneIdsByLeafId.get(leafId) ?? index + 1,
           ptyId,
           paneTitle: null,
           title
