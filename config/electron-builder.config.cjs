@@ -9,7 +9,8 @@ const {
 const {
   createPackagedRuntimeNodeModuleResources,
   prunePackagedRuntimeNodeModules,
-  verifyPackagedMainRuntimeDeps
+  verifyPackagedMainRuntimeDeps,
+  verifyPackagedZodRuntime
 } = require('./packaged-runtime-node-modules.cjs')
 const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')
 const { writeMacBuildCompatibility } = require('./scripts/mac-build-compatibility.cjs')
@@ -245,6 +246,7 @@ module.exports = {
     }
     prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName, context.arch)
     verifyPackagedMainRuntimeDeps(resourcesDir)
+    verifyPackagedZodRuntime(join(resourcesDir, 'node_modules', 'zod'))
     // Why: boot the packaged daemon-entry under plain Node, but only for the
     // slice matching the packaging host's arch — daemon-entry.js is JS, yet it
     // require()s the native (N-API) node-pty for the TARGET arch, which the host

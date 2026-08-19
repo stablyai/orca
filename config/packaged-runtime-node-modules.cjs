@@ -54,6 +54,16 @@ const ELECTRON_ARCHITECTURE_BY_ENUM = {
 const PACKAGED_NATIVE_ARCHITECTURES = new Set(['ia32', 'x64', 'arm', 'arm64'])
 const TYPE_DECLARATION_ARTIFACT_RE = /\.d\.(?:c|m)?ts(?:\.map)?$/
 const VERSIONED_ONNXRUNTIME_DYLIB_RE = /^libonnxruntime\.\d[\d.]*\.dylib$/
+const PACKAGED_ZOD_RUNTIME_EXPORTS = [
+  '.',
+  './mini',
+  './locales',
+  './v3',
+  './v4',
+  './v4-mini',
+  './v4/core',
+  './v4/mini'
+]
 
 const NODE_BUILTINS = new Set([
   ...builtinModules,
@@ -250,6 +260,25 @@ function verifyPackagedMainRuntimeDeps(resourcesDir, asar = require('@electron/a
         ...missing
       ].join(', ')}`
     )
+  }
+}
+
+function verifyPackagedZodRuntime(zodPackageDir) {
+  const packageJsonPath = join(zodPackageDir, 'package.json')
+  if (!existsSync(packageJsonPath)) {
+    throw new Error(`Packaged zod package is missing ${packageJsonPath}`)
+  }
+
+  const requireFromZod = createRequire(packageJsonPath)
+  for (const exportPath of PACKAGED_ZOD_RUNTIME_EXPORTS) {
+    const specifier = exportPath === '.' ? 'zod' : `zod/${exportPath.slice(2)}`
+    try {
+      requireFromZod(specifier)
+    } catch (error) {
+      throw new Error(
+        `Packaged zod runtime export ${specifier} failed to load: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
   }
 }
 
@@ -476,5 +505,6 @@ module.exports = {
   prunePackagedSherpaOnnx,
   prunePackagedRuntimeTypeDeclarations,
   prunePackagedZodSources,
+  verifyPackagedZodRuntime,
   verifyPackagedMainRuntimeDeps
 }

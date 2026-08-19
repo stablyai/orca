@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs'
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
@@ -19,7 +20,8 @@ const {
   prunePackagedSherpaOnnx,
   prunePackagedRuntimeTypeDeclarations,
   prunePackagedZodSources,
-  verifyPackagedMainRuntimeDeps
+  verifyPackagedMainRuntimeDeps,
+  verifyPackagedZodRuntime
 } = require('../packaged-runtime-node-modules.cjs')
 
 describe('electron-builder config', () => {
@@ -549,6 +551,40 @@ describe('electron-builder config', () => {
     } finally {
       await rm(resourcesDir, { recursive: true, force: true })
     }
+  })
+
+  it('requires representative zod runtime exports after packaging prunes source files', async () => {
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-zod-runtime-'))
+    try {
+      const sourcePackageDir = realpathSync(join(REPO_ROOT, 'node_modules', 'zod'))
+      const validResourcesDir = join(resourcesDir, 'valid')
+      const brokenResourcesDir = join(resourcesDir, 'broken')
+      const validPackageDir = join(validResourcesDir, 'node_modules', 'zod')
+      const brokenPackageDir = join(brokenResourcesDir, 'node_modules', 'zod')
+      await cp(sourcePackageDir, validPackageDir, { recursive: true })
+      await cp(sourcePackageDir, brokenPackageDir, { recursive: true })
+      prunePackagedRuntimeTypeDeclarations(validResourcesDir)
+      prunePackagedZodSources(validResourcesDir)
+      prunePackagedRuntimeTypeDeclarations(brokenResourcesDir)
+      prunePackagedZodSources(brokenResourcesDir)
+
+      await rm(join(brokenPackageDir, 'v4', 'classic', 'external.cjs'))
+      expect(() => verifyPackagedZodRuntime(brokenPackageDir)).toThrow(
+        /Packaged zod runtime export zod failed to load/
+      )
+      expect(() => verifyPackagedZodRuntime(validPackageDir)).not.toThrow()
+    } finally {
+      await rm(resourcesDir, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps the zod runtime closure and gate on every desktop target', () => {
+    for (const platform of ['win32', 'darwin', 'linux']) {
+      expect(createPackagedRuntimeNodeModuleResources(platform)).toEqual(
+        expect.arrayContaining([expect.objectContaining({ to: join('node_modules', 'zod') })])
+      )
+    }
+    expect(electronBuilderConfig.asarUnpack).toContain('node_modules/zod/**')
   })
 
   it('fails when the packaged resources directory is missing', async () => {
