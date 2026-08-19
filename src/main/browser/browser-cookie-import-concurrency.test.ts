@@ -277,7 +277,9 @@ describe('two concurrent imports into one partition', () => {
 describe('two concurrent NATIVE imports into one partition', () => {
   let tmpDir: string
   let events: string[]
+  let cookiesRemoveMock: ReturnType<typeof vi.fn>
   let cookiesSetMock: ReturnType<typeof vi.fn>
+  let clearDataMock: ReturnType<typeof vi.fn>
   let releaseFirstWrite: () => void
   let platformSpy: { mockRestore: () => void }
   let stagingCopyCount: number
@@ -309,7 +311,11 @@ describe('two concurrent NATIVE imports into one partition', () => {
         copyFileSync(source, destination)
       })
     // Why: an EMPTY jar makes removeTransplantableCookies return before it clears, so the clear
-    // would never run and a clearData assertion would pass vacuously. Seed it.
+    // would never run and the clear assertions would pass vacuously. Seed it.
+    // Why (STA-4797): the seed has to sit on the domains these two imports actually bring over.
+    // The clear is scoped to the imported domains now, so a jar holding only an unrelated site is
+    // the empty-jar case wearing a disguise — nothing would be removed and the detector, which
+    // reads "did B clear yet?" off the removals, would measure nothing.
     snapshotClearIdentitiesMock
       .mockReset()
       .mockImplementation(async (items: { cookie: Record<string, unknown>; url: string }[]) =>
@@ -328,22 +334,25 @@ describe('two concurrent NATIVE imports into one partition', () => {
     })
     // Why (STA-4300): same guard as the file path — the native writes go through CDP identities.
     cookiesSetMock = vi.fn()
+    cookiesRemoveMock = vi.fn(async (_url: string, name: string) => {
+      events.push(`remove:${name}`)
+    })
+    clearDataMock = vi.fn(async () => {
+      events.push('clearData')
+    })
     const stableSession = {
       cookies: {
-        get: vi
-          .fn()
-          .mockResolvedValue([
-            { domain: '.stale.example', name: 'stale', value: 'v', path: '/', secure: true }
-          ]),
-        remove: vi.fn().mockResolvedValue(undefined),
+        get: vi.fn().mockResolvedValue([
+          { domain: '.a.example', name: 'old-a', value: 'v', path: '/', secure: true },
+          { domain: '.b.example', name: 'old-b', value: 'v', path: '/', secure: true }
+        ]),
+        remove: cookiesRemoveMock,
         set: cookiesSetMock,
         flushStore: vi.fn(async () => {
           events.push('flushStore')
         })
       },
-      clearData: vi.fn(async () => {
-        events.push('clearData')
-      }),
+      clearData: clearDataMock,
       // Why (STA-4300): the importer asks the Session where its storage lives instead of rebuilding
       // the path from the partition string, so the stub has to answer.
       getStoragePath: () => join(tmpDir, 'userData', 'Partitions', 'native-conc'),
@@ -386,10 +395,13 @@ describe('two concurrent NATIVE imports into one partition', () => {
     // The first import is parked inside its write. The second must not stage a stale image while
     // that transaction is active — this assertion fails if the staging copy sits outside the lock.
     expect(events).not.toContain('copy:second')
-    // Nor may it flush, clear, or write the live jar while that transaction is active.
+    // The first import clears only its imported domain, while the second may not flush, remove,
+    // or write the live jar until that transaction finishes.
+    expect(events).toContain('remove:old-a')
+    expect(events).not.toContain('remove:old-b')
     expect(events.filter((e) => e === 'flushStore')).toHaveLength(1)
-    expect(events.filter((e) => e === 'clearData')).toHaveLength(1)
     expect(events).not.toContain('set:second')
+    expect(clearDataMock).not.toHaveBeenCalled()
 
     releaseFirstWrite()
     const [resultA, resultB] = await Promise.all([first, second])
@@ -401,7 +413,8 @@ describe('two concurrent NATIVE imports into one partition', () => {
     // once per import, not just that the end state looks right.
     expect(writeCookieIdentityMock).toHaveBeenCalledTimes(2)
     expect(cookiesSetMock).not.toHaveBeenCalled()
-    expect(events.indexOf('set:first')).toBeLessThan(events.lastIndexOf('clearData'))
+    expect(cookiesRemoveMock.mock.calls.map(([, name]) => name)).toEqual(['old-a', 'old-b'])
+    expect(events.indexOf('set:first')).toBeLessThan(events.indexOf('remove:old-b'))
     expect(events.indexOf('copy:second')).toBeGreaterThan(events.indexOf('set:first'))
   })
 })
