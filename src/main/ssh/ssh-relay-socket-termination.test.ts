@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { terminateRelaySocketHolderScript } from './ssh-relay-socket-termination'
+import {
+  RELAY_SOCKET_HOLDER_UNKNOWN_MARKER,
+  terminateRelaySocketHolderScript
+} from './ssh-relay-socket-termination'
 
 function script(sockExpr = '"$sock"', pgrepExpr = '"$sock_name"'): string {
   return terminateRelaySocketHolderScript(sockExpr, pgrepExpr).join('\n')
@@ -33,6 +36,15 @@ describe('terminateRelaySocketHolderScript', () => {
     expect(generated).toContain("rm -f '/home/u/.orca-remote/relay-0.1.0+abc/relay-1234.sock'")
     // Why: `pgrep -f` takes an ERE, so the versioned path's `+` would read as a quantifier.
     expect(generated).toContain("pgrep -f 'relay-1234.sock'")
+  })
+
+  it('gates the unlink behind a holder lookup the host can actually run', () => {
+    const generated = script()
+
+    // Why (#8585): with neither lsof nor pgrep the holder is unknown, and unlinking blind
+    // strands the daemon exactly as the pre-fix code did.
+    expect(generated.indexOf('if [ -n "$probed" ]; then')).toBeLessThan(generated.indexOf('rm -f'))
+    expect(generated).toContain(`echo ${RELAY_SOCKET_HOLDER_UNKNOWN_MARKER}`)
   })
 
   it('skips a path that is not a socket', () => {

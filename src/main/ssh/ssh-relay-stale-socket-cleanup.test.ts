@@ -79,6 +79,7 @@ import { execCommand, waitForSentinel } from './ssh-relay-deploy-helpers'
 import { resolveRemoteNodePath } from './ssh-remote-node-resolution'
 import { isRelayAlreadyInstalled } from './ssh-relay-versioned-install'
 import { acquireInstallLock } from './ssh-relay-install-lock'
+import { RELAY_SOCKET_HOLDER_UNKNOWN_MARKER } from './ssh-relay-socket-termination'
 import type { SshConnection } from './ssh-connection'
 
 function makeMockConnection(): SshConnection {
@@ -106,6 +107,28 @@ function makeMockConnection(): SshConnection {
   } as unknown as SshConnection
 }
 
+function routeRemoteCommand(command: string, cleanupOutput = ''): Promise<string> | null {
+  if (command.includes('uname')) {
+    return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+  }
+  if (command.trim() === 'echo $HOME') {
+    return Promise.resolve('/home/user')
+  }
+  if (command.includes('ORCA-NATIVE-DEPS')) {
+    return Promise.resolve('ORCA-NATIVE-DEPS-OK')
+  }
+  if (command.includes('echo ALIVE')) {
+    return Promise.resolve('ALIVE')
+  }
+  if (command.includes('require("net")')) {
+    return Promise.resolve('READY')
+  }
+  if (command.includes('rm -f')) {
+    return Promise.resolve(cleanupOutput)
+  }
+  return null
+}
+
 describe('stale relay socket cleanup', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -124,24 +147,9 @@ describe('stale relay socket cleanup', () => {
     const conn = makeMockConnection()
     // A live socket whose --connect handshake fails: the deploy discards this socket.
     vi.mocked(waitForSentinel).mockRejectedValueOnce(new Error('stale relay reconnect failed'))
-    vi.mocked(execCommand).mockImplementation((_conn, command) => {
-      if (command.includes('uname')) {
-        return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
-      }
-      if (command.trim() === 'echo $HOME') {
-        return Promise.resolve('/home/user')
-      }
-      if (command.includes('ORCA-NATIVE-DEPS')) {
-        return Promise.resolve('ORCA-NATIVE-DEPS-OK')
-      }
-      if (command.includes('echo ALIVE')) {
-        return Promise.resolve('ALIVE')
-      }
-      if (command.includes('require("net")')) {
-        return Promise.resolve('READY')
-      }
-      return Promise.resolve('')
-    })
+    vi.mocked(execCommand).mockImplementation((_conn, command) =>
+      routeRemoteCommand(command) ?? Promise.resolve('')
+    )
 
     await deployAndLaunchRelay(conn)
 
@@ -155,5 +163,22 @@ describe('stale relay socket cleanup', () => {
     // Why (#8585): unlinking first strands the daemon and every PTY it owns — the
     // socket path is the only handle GC and reset have on it.
     expect(cleanup?.indexOf('kill -TERM')).toBeLessThan(cleanup?.indexOf('rm -f') ?? -1)
+  })
+
+  it('reports the kept socket when the host cannot look the holder up', async () => {
+    const conn = makeMockConnection()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.mocked(waitForSentinel).mockRejectedValueOnce(new Error('stale relay reconnect failed'))
+    vi.mocked(execCommand).mockImplementation(
+      (_conn, command) =>
+        routeRemoteCommand(command, RELAY_SOCKET_HOLDER_UNKNOWN_MARKER) ?? Promise.resolve('')
+    )
+
+    await deployAndLaunchRelay(conn)
+
+    // Why (#8585): the socket survives on purpose, so the operator needs to know why a
+    // relaunch here can fail on EADDRINUSE instead of silently orphaning the daemon.
+    expect(warn.mock.calls.flat().join(' ')).toContain('kept the relay socket')
+    warn.mockRestore()
   })
 })
