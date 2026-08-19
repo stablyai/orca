@@ -29,6 +29,8 @@ export type PetBodyMotion = {
   landing: boolean
   motionAllowed: boolean
   landingDurationMs: number
+  /** True when the artwork already bounces (a walk strip), so the bob is skipped. */
+  selfAnimated: boolean
 }
 
 /** Idle bob, the hanging sway while in hand, or the one-shot landing squash. */
@@ -36,7 +38,8 @@ export function petBodyMotionStyle({
   held,
   landing,
   motionAllowed,
-  landingDurationMs
+  landingDurationMs,
+  selfAnimated
 }: PetBodyMotion): CSSProperties {
   if (landing && !held) {
     return {
@@ -46,6 +49,11 @@ export function petBodyMotionStyle({
       transformOrigin: '50% 100%',
       animationPlayState: motionAllowed ? 'running' : 'paused'
     }
+  }
+  // Why: stacking the bob on a walk cycle that already lifts the body gives two
+  // vertical oscillations at different periods — it reads as a wobble, not a walk.
+  if (selfAnimated && !held) {
+    return { animation: 'none' }
   }
   return {
     animation: held

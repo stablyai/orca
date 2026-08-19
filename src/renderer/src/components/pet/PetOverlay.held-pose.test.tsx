@@ -10,7 +10,14 @@ const petUrlMock = vi.hoisted(() => ({
     ready: true,
     sprite: null,
     detected: null
-  } as { url: string; ready: boolean; sprite: null; detected: null; heldUrl?: string }
+  } as {
+    url: string
+    ready: boolean
+    sprite: null
+    detected: null
+    heldUrl?: string
+    walk?: { url: string; frameWidth: number; frameHeight: number; frames: number; fps: number }
+  }
 }))
 
 vi.mock('../../store', () => {
@@ -45,6 +52,18 @@ function renderOverlay(): void {
 
 function grabHandle(): HTMLElement {
   return container?.querySelector('.pointer-events-auto') as HTMLElement
+}
+
+const WALK = {
+  url: 'data:image/png;base64,walkstrip',
+  frameWidth: 252,
+  frameHeight: 320,
+  frames: 4,
+  fps: 8
+}
+
+function walkSprite(): HTMLElement | null {
+  return container?.querySelector('div[style*="background-image"]') as HTMLElement | null
 }
 
 function petImage(): HTMLImageElement {
@@ -106,5 +125,61 @@ describe('PetOverlay held pose', () => {
     firePointer(grabHandle(), 'pointerdown', 350, 600)
 
     expect(petImage().src).toContain('idle')
+  })
+
+  it('plays the walk strip while the pet is pacing', () => {
+    petUrlMock.current = {
+      url: 'data:image/png;base64,idle',
+      ready: true,
+      sprite: null,
+      detected: null,
+      walk: WALK
+    }
+
+    renderOverlay()
+
+    expect(walkSprite()?.style.backgroundImage).toContain('walkstrip')
+    // steps(4) across the four-frame strip.
+    expect(walkSprite()?.style.animation).toContain('steps(4)')
+    expect(container?.querySelector('img')).toBeNull()
+  })
+
+  it('drops the walk strip for the held pose once picked up', () => {
+    petUrlMock.current = {
+      url: 'data:image/png;base64,idle',
+      ready: true,
+      sprite: null,
+      detected: null,
+      heldUrl: 'data:image/png;base64,held',
+      walk: WALK
+    }
+
+    renderOverlay()
+    expect(walkSprite()).not.toBeNull()
+
+    firePointer(grabHandle(), 'pointerdown', 350, 600)
+
+    expect(walkSprite()).toBeNull()
+    expect(petImage().src).toContain('held')
+  })
+
+  it('drops the CSS bob while the walk strip supplies its own bounce', () => {
+    petUrlMock.current = {
+      url: 'data:image/png;base64,idle',
+      ready: true,
+      sprite: null,
+      detected: null,
+      heldUrl: 'data:image/png;base64,held',
+      walk: WALK
+    }
+
+    renderOverlay()
+
+    // Two vertical oscillations at different periods read as a wobble.
+    expect(grabHandle().style.animation).not.toContain('pet-bob')
+
+    // The sway still applies in hand — that artwork is a still frame.
+    firePointer(grabHandle(), 'pointerdown', 350, 600)
+    expect(grabHandle().style.animation).toContain('pet-held-sway')
   })
 })

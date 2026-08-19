@@ -15,6 +15,7 @@ import { petLaneY } from './pet-walk-lane'
 import { DetectedSpriteFrame } from './DetectedSpriteFrame'
 import { usePetWalkLane } from './usePetWalkLane'
 import { usePetFallToLane, PET_LANDING_SQUASH_MS } from './usePetFallToLane'
+import { walkSpriteFrom } from './bundled-pet-walk-sprite'
 import { petBodyMotionStyle, PET_BODY_MOTION_KEYFRAMES_CSS } from './pet-body-motion-css'
 
 type Sprite = NonNullable<CustomPet['sprite']>
@@ -215,7 +216,7 @@ function defaultPosition(size: number = SIZE): Position {
 export function PetOverlay(): React.JSX.Element {
   const documentVisible = useDocumentVisible()
   const reducedMotion = usePrefersReducedMotion()
-  const { url, sprite, detected, heldUrl } = usePetUrl()
+  const { url, sprite, detected, heldUrl, walk } = usePetUrl()
   const size = useAppStore((s) => s.petSize)
 
   const [positionState, setPositionState] = useState<{
@@ -319,6 +320,8 @@ export function PetOverlay(): React.JSX.Element {
   // horizontal drag keeps animating so the running rows show. Bob always pauses.
   const spriteAnimate = motionAllowed && (!dragging || dragAnimation !== null)
   const animationName = usePetAnimationName(dragging, dragAnimation, hovering)
+  // Why: the legs stop while the pet is in hand or mid-drop — it isn't walking.
+  const walkAnimate = motionAllowed && !dragging && !fall.falling
   const walkDirection = usePetWalkLane({
     active: motionAllowed && !dragging && !fall.falling,
     size,
@@ -355,7 +358,8 @@ export function PetOverlay(): React.JSX.Element {
               held: dragging,
               landing: fall.landing,
               motionAllowed,
-              landingDurationMs: PET_LANDING_SQUASH_MS
+              landingDurationMs: PET_LANDING_SQUASH_MS,
+              selfAnimated: walk !== undefined
             }),
             touchAction: 'none',
             // Why: floor so the wrapper stays grabbable while w-fit/h-fit would
@@ -382,6 +386,18 @@ export function PetOverlay(): React.JSX.Element {
                 className="max-h-full max-w-full object-contain"
                 style={{ maxWidth: size, maxHeight: size }}
                 draggable={false}
+              />
+            ) : walk ? (
+              // Why: a bundled walk cycle is a one-row strip, so it rides the same
+              // CSS stepping the `.codex-pet` sheets use rather than a second path.
+              <SpriteFrame
+                key={walk.url}
+                url={walk.url}
+                sprite={walkSpriteFrom(walk)}
+                animate={walkAnimate}
+                maxSize={size}
+                animationName={animationName}
+                restartKey={dragGeneration}
               />
             ) : sprite ? (
               // Why: remount per pet so a switched-to sprite starts a fresh
