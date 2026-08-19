@@ -11,10 +11,8 @@ import type {
   NativeChatTranscriptSubscription,
   SubscribeNativeChatTranscriptArgs
 } from './transcript-watch-contract'
-import {
-  nativeChatLineDecoderForAgent,
-  readNativeChatTranscriptTail
-} from './transcript-tail-reader'
+import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
+import { readHermesStateDbAppends, readHermesStateDbPage } from './hermes-state-db-reader'
 import { WslTranscriptFsError, wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 
 export { readNativeChatTranscriptTail } from './transcript-tail-reader'
@@ -203,7 +201,9 @@ function subscribeHermesStateDb(
   let initialized = false
   let errorEmitted = false
   let timer: ReturnType<typeof setTimeout> | null = null
-  let previousIds = new Set<string>()
+  let dbPath: string | null | undefined = args.filePath
+  let nextOffset = 0
+  const pollLimit = Math.max(1, args.initialLimit ?? 300)
 
   const schedule = (): void => {
     if (closed) {
@@ -216,53 +216,58 @@ function subscribeHermesStateDb(
     timer.unref?.()
   }
 
+  const resolveDbPath = async (): Promise<string | null> => {
+    if (dbPath !== undefined) {
+      return dbPath
+    }
+    const resolved = await resolveSessionFilePath(args.agent, args.sessionId, args, setupSignal)
+    dbPath = resolved
+    return resolved
+  }
+
   const poll = async (): Promise<void> => {
     if (closed) {
       return
     }
     try {
       setupSignal?.throwIfAborted()
-      const result = await readNativeChatTranscriptTail(
-        {
-          agent: args.agent,
-          sessionId: args.sessionId,
-          transcriptPath: args.transcriptPath,
-          filePath: args.filePath,
-          hermesSessionsDir: args.hermesSessionsDir,
-          hermesStateDbPath: args.hermesStateDbPath,
-          limit: args.initialLimit ?? 300
-        },
-        setupSignal
-      )
+      const path = await resolveDbPath()
       setupSignal?.throwIfAborted()
       if (closed) {
         return
       }
-      if ('error' in result) {
-        if (!result.notFound && !errorEmitted) {
-          errorEmitted = true
-          args.onInitialSnapshot?.([], false, 0, result.error)
-        }
+      if (!path) {
+        dbPath = undefined
         schedule()
         return
       }
 
-      const currentIds = new Set(result.messages.map((message) => message.id))
       if (!initialized) {
+        const result = readHermesStateDbPage(path, args.sessionId, pollLimit)
+        if (!result) {
+          dbPath = args.filePath ?? undefined
+          schedule()
+          return
+        }
         initialized = true
-        previousIds = currentIds
+        nextOffset = result.nextOffset
         args.onInitialSnapshot?.(result.messages, result.hasMore, result.beforeOffset)
       } else {
-        const appended = result.messages.filter((message) => !previousIds.has(message.id))
-        if (appended.length > 0) {
-          args.onAppend(appended)
+        const result = readHermesStateDbAppends(path, args.sessionId, nextOffset, pollLimit)
+        if (!result) {
+          dbPath = args.filePath ?? undefined
+        } else {
+          nextOffset = result.nextOffset
+          if (result.messages.length > 0) {
+            args.onAppend(result.messages)
+          }
         }
-        previousIds = currentIds
       }
     } catch (error) {
       if (closed || setupSignal?.aborted) {
         return
       }
+      dbPath = args.filePath ?? undefined
       if (!errorEmitted) {
         errorEmitted = true
         args.onInitialSnapshot?.(

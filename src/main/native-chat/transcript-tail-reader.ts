@@ -241,7 +241,11 @@ async function readHermesTranscript(
   if (!page) {
     return { error: 'Transcript unavailable', notFound: true }
   }
-  return page
+  return {
+    messages: page.messages,
+    hasMore: page.hasMore,
+    beforeOffset: page.beforeOffset
+  }
 }
 
 export async function readNativeChatTranscriptTail(

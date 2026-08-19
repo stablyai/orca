@@ -1,5 +1,5 @@
-import { createRequire } from 'node:module'
 import { existsSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import { decodeHermesDatabaseMessage } from './transcript-line-decoders-hermes'
 
@@ -19,6 +19,8 @@ type HermesDbPage = {
   messages: NativeChatMessage[]
   hasMore: boolean
   beforeOffset: number
+  /** Highest row id visible in this read; used as the live-watch cursor. */
+  nextOffset: number
 }
 
 function getDatabase(path: string): SqliteDatabase | null {
@@ -47,6 +49,49 @@ function optionalColumn(columns: Set<string>, name: string): string {
   return columns.has(name) ? name : 'NULL'
 }
 
+function selectMessageRows(
+  db: SqliteDatabase,
+  columns: Set<string>,
+  id: string,
+  where: string,
+  order: 'ASC' | 'DESC',
+  params: unknown[],
+  limit: number
+): Record<string, unknown>[] {
+  return db
+    .prepare(`
+      SELECT ${id} AS id,
+             role,
+             content,
+             ${optionalColumn(columns, 'tool_call_id')} AS tool_call_id,
+             ${optionalColumn(columns, 'tool_calls')} AS tool_calls,
+             ${optionalColumn(columns, 'tool_name')} AS tool_name,
+             ${optionalColumn(columns, 'timestamp')} AS timestamp,
+             ${optionalColumn(columns, 'reasoning')} AS reasoning,
+             ${optionalColumn(columns, 'reasoning_content')} AS reasoning_content,
+             ${optionalColumn(columns, 'reasoning_details')} AS reasoning_details
+        FROM messages
+       WHERE ${where}
+       ORDER BY ${id} ${order}
+       LIMIT ?
+    `)
+    .all(...params, limit)
+}
+
+function decodeHermesRows(rows: Record<string, unknown>[], sessionId: string): NativeChatMessage[] {
+  return rows.flatMap((row, index) => {
+    const message = decodeHermesDatabaseMessage(row, `${sessionId}:${index}`)
+    return message
+      ? [
+          {
+            ...message,
+            timestamp: typeof row.timestamp === 'number' ? row.timestamp * 1000 : null
+          }
+        ]
+      : []
+  })
+}
+
 export function readHermesStateDbPage(
   dbPath: string,
   sessionId: string,
@@ -60,44 +105,64 @@ export function readHermesStateDbPage(
   try {
     const columns = messageColumns(db)
     if (!columns.has('session_id')) {
-      return { messages: [], hasMore: false, beforeOffset: 0 }
+      return { messages: [], hasMore: false, beforeOffset: 0, nextOffset: 0 }
     }
     const id = columns.has('id') ? 'id' : 'rowid'
     const activityClause = columns.has('active') ? ' AND active = 1' : ''
+    const pageSize = Math.max(0, limit)
     const cursor = beforeOffset === undefined ? null : beforeOffset
-    const rows = db
-      .prepare(`
-        SELECT ${id} AS id, role, content,
-               ${optionalColumn(columns, 'tool_call_id')} AS tool_call_id,
-               ${optionalColumn(columns, 'tool_calls')} AS tool_calls,
-               ${optionalColumn(columns, 'tool_name')} AS tool_name,
-               ${optionalColumn(columns, 'timestamp')} AS timestamp,
-               ${optionalColumn(columns, 'reasoning')} AS reasoning,
-               ${optionalColumn(columns, 'reasoning_content')} AS reasoning_content,
-               ${optionalColumn(columns, 'reasoning_details')} AS reasoning_details
-          FROM messages
-         WHERE session_id = ?${activityClause} AND (? IS NULL OR ${id} < ?)
-         ORDER BY ${id} DESC
-         LIMIT ?
-      `)
-      .all(sessionId, cursor, cursor, Math.max(0, limit) + 1)
-    const hasMore = rows.length > limit
-    const pageRows = rows.slice(0, Math.max(0, limit)).toReversed()
-    const messages = pageRows.flatMap((row, index) => {
-      const message = decodeHermesDatabaseMessage(row, `${sessionId}:${index}`)
-      return message
-        ? [
-            {
-              ...message,
-              timestamp: typeof row.timestamp === 'number' ? row.timestamp * 1000 : null
-            }
-          ]
-        : []
-    })
+    const rows = selectMessageRows(
+      db,
+      columns,
+      id,
+      `session_id = ?${activityClause} AND (? IS NULL OR ${id} < ?)`,
+      'DESC',
+      [sessionId, cursor, cursor],
+      pageSize + 1
+    )
+    const pageRows = rows.slice(0, pageSize).toReversed()
     return {
-      messages,
-      hasMore,
-      beforeOffset: pageRows.length ? Number(pageRows.at(0)?.id) : 0
+      messages: decodeHermesRows(pageRows, sessionId),
+      hasMore: rows.length > pageSize,
+      beforeOffset: pageRows.length ? Number(pageRows[0]?.id) : 0,
+      nextOffset: rows.length ? Number(rows[0]?.id) : 0
+    }
+  } finally {
+    db.close()
+  }
+}
+
+export function readHermesStateDbAppends(
+  dbPath: string,
+  sessionId: string,
+  afterOffset: number,
+  limit: number
+): { messages: NativeChatMessage[]; nextOffset: number } | null {
+  const db = getDatabase(dbPath)
+  if (!db) {
+    return null
+  }
+  try {
+    const columns = messageColumns(db)
+    if (!columns.has('session_id')) {
+      return { messages: [], nextOffset: afterOffset }
+    }
+    const id = columns.has('id') ? 'id' : 'rowid'
+    const activityClause = columns.has('active') ? ' AND active = 1' : ''
+    const pageSize = Math.max(1, limit)
+    const rows = selectMessageRows(
+      db,
+      columns,
+      id,
+      `session_id = ?${activityClause} AND ${id} > ?`,
+      'ASC',
+      [sessionId, afterOffset],
+      pageSize + 1
+    )
+    const pageRows = rows.slice(0, pageSize)
+    return {
+      messages: decodeHermesRows(pageRows, sessionId),
+      nextOffset: pageRows.length ? Number(pageRows.at(-1)?.id) : afterOffset
     }
   } finally {
     db.close()
