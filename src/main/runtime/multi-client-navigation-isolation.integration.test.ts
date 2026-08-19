@@ -338,6 +338,35 @@ describe('paired runtime navigation isolation', () => {
     expect(observed.b).toContain('worktreesChanged')
   })
 
+  it('still reveals to every client when a paired caller asks for all-surface navigation', async () => {
+    // Why: the CLI pairs as a runtime device but has no viewer of its own, so
+    // `orca worktree create --activate` against a remote runtime sends navigation 'all'.
+    const harness = await startHarness()
+    await subscribeBothClientEventStreams(harness)
+
+    send(harness.clientA, {
+      id: 'cli-shaped-create',
+      method: 'worktree.create',
+      params: {
+        repo: FOLDER_REPO_ID,
+        name: 'cli-shaped-workspace',
+        activate: true,
+        navigation: 'all'
+      }
+    })
+    await expect(harness.readerA.next('cli-shaped-create')).resolves.toMatchObject({ ok: true })
+
+    const [eventA, eventB] = await Promise.all([
+      harness.readerA.next('events-a', (response) => resultType(response) === 'activateWorktree'),
+      harness.readerB.next('events-b', (response) => resultType(response) === 'activateWorktree')
+    ])
+    expect([resultType(eventA), resultType(eventB)]).toEqual([
+      'activateWorktree',
+      'activateWorktree'
+    ])
+    expect(harness.activateWorktree).toHaveBeenCalled()
+  })
+
   it('keeps create activation caller-scoped on a headless orca serve host', async () => {
     const harness = await startHarness({ headless: true })
     await subscribeBothClientEventStreams(harness)

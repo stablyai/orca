@@ -72,4 +72,29 @@ describe('worktree.create navigation authority', () => {
       expect.objectContaining({ navigation: 'clients' })
     )
   })
+
+  it('keeps an explicit all-surface reveal from a paired caller', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      dedupeWorktreeCreate: passthroughDedupe,
+      showRepo: vi.fn().mockResolvedValue(repo),
+      createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('worktree.create', {
+        repo: 'repo-1',
+        name: 'feature',
+        activate: true,
+        navigation: 'all'
+      }),
+      () => {},
+      { clientKind: 'runtime', pairedDeviceId: 'device-1', connectionId: 'conn-1' }
+    )
+
+    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ navigation: 'all' })
+    )
+  })
 })

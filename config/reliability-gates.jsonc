@@ -1595,6 +1595,7 @@
           "file": "src/main/runtime/multi-client-navigation-isolation.integration.test.ts",
           "assertions": [
             "keeps a paired client workspace create-with-activate off every other client and the host",
+            "still reveals to every client when a paired caller asks for all-surface navigation",
             "keeps create activation caller-scoped on a headless orca serve host",
             "still reveals a host-originated create-with-activate on the host and every client",
             "keeps worktree navigation local to each paired runtime client by default",
@@ -1606,7 +1607,8 @@
           "assertions": [
             "scopes create activation to the caller for a paired runtime client",
             "scopes create activation to the caller for a paired mobile client",
-            "honors an explicit follow navigation on create"
+            "honors an explicit follow navigation on create",
+            "keeps an explicit all-surface reveal from a paired caller"
           ]
         },
         {
@@ -1625,7 +1627,7 @@
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/multi-client-navigation-isolation.integration.test.ts src/main/runtime/rpc/methods/worktree-create-navigation.test.ts",
           "result": "passed",
           "durationSeconds": 6,
-          "summary": "Nine paired-runtime contracts pass, including the headless orca-serve shape and the in-process reveal non-regression. With the caller scoping removed the observer's stream carried activateWorktree instead of the fence."
+          "summary": "Ten paired-runtime contracts pass, including the headless orca-serve shape, the in-process reveal non-regression, and the CLI-shaped explicit all-surface reveal. With the caller scoping removed the observer's stream carried activateWorktree instead of the fence."
         },
         {
           "date": "2026-08-18",
