@@ -340,6 +340,27 @@ describe('GrokHookService', () => {
     }
   })
 
+  it('does not restore a user-cleared global hook config on the next launch', () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+
+    expect(service.install().state).toBe('installed')
+    writeFileSync(configPath, '{"hooks": {}}\n', 'utf8')
+
+    service.install()
+
+    expect(JSON.parse(readFileSync(configPath, 'utf8'))).toEqual({ hooks: {} })
+  })
+
+  it('removes the empty managed config when hooks are disabled', () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+
+    service.install()
+    expect(service.remove().state).toBe('not_installed')
+    expect(() => readFileSync(configPath, 'utf8')).toThrow()
+  })
+
   it('preserves user-authored hook entries in the Orca Grok config file', () => {
     const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
     mkdirSync(dirname(configPath), { recursive: true })

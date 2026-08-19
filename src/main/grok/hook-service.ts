@@ -1,3 +1,4 @@
+import { unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
@@ -7,6 +8,7 @@ import {
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
   readHooksJson,
+  readHooksJsonWithRaw,
   removeManagedCommands,
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
@@ -251,7 +253,8 @@ export class GrokHookService {
   install(): AgentHookInstallStatus {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
-    const config = readHooksJson(configPath)
+    const snapshot = readHooksJsonWithRaw(configPath)
+    const config = snapshot.config
     if (!config) {
       return {
         agent: 'grok',
@@ -260,6 +263,11 @@ export class GrokHookService {
         managedHooksPresent: false,
         detail: 'Could not parse Grok hook config'
       }
+    }
+
+    // Why: an existing empty file is an explicit user choice, not a missing config.
+    if (snapshot.raw !== null && Object.keys(config.hooks ?? {}).length === 0) {
+      return this.getStatus()
     }
 
     buildInstalledConfig(config, getManagedCommand(scriptPath), getManagedScriptFileName())
@@ -340,6 +348,13 @@ export class GrokHookService {
     }
 
     config.hooks = nextHooks
+    if (Object.keys(nextHooks).length === 0) {
+      delete config.hooks
+    }
+    if (Object.keys(config).length === 0) {
+      unlinkSync(configPath)
+      return this.getStatus()
+    }
     writeHooksJson(configPath, config)
     return this.getStatus()
   }

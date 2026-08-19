@@ -3432,6 +3432,8 @@ app.on('will-quit', (e) => {
   pluginService = null
   setUnreadDockBadgeCount(0)
   agentHookServer.stop()
+  // Why: Grok reads global hooks even when Orca is closed; keep them session-scoped.
+  removeManagedAgentHooks({ agents: ['grok'] })
   // Why: cancels relay restart/reinstall timers and kills wsl.exe children deterministically, not via stdio-pipe teardown.
   wslHookRelayManager.disposeAll()
   const statsFlush = stats?.flushAsync() ?? Promise.resolve()
