@@ -96,7 +96,7 @@ export function readHermesStateDbPage(
     return {
       messages,
       hasMore,
-      beforeOffset: pageRows.length ? Number(pageRows.at(-1)?.id) : 0
+      beforeOffset: pageRows.length ? Number(pageRows.at(0)?.id) : 0
     }
   } finally {
     db.close()
