@@ -1,4 +1,6 @@
-import { join } from 'node:path'
+import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { dirname, join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import { resolveGrokHomeDir } from '../../shared/grok-session-paths'
@@ -101,10 +103,49 @@ function getManagedScriptPath(): string {
   return getSharedManagedScriptPath(getManagedScriptFileName())
 }
 
+const WINDOWS_GROK_HOOK_LAUNCHER_NAME = 'orca-grok-hook.exe'
+
+function isGrokManagedCommand(command: string | undefined): boolean {
+  if (createManagedCommandMatcher(getManagedScriptFileName())(command)) {
+    return true
+  }
+  return Boolean(command?.replaceAll('\\', '/').includes(WINDOWS_GROK_HOOK_LAUNCHER_NAME))
+}
+
+function bundledWindowsGrokHookLauncherPath(): string | null {
+  const candidates = [
+    ...(process.resourcesPath
+      ? [join(process.resourcesPath, 'bin', WINDOWS_GROK_HOOK_LAUNCHER_NAME)]
+      : []),
+    join(process.cwd(), 'native', 'windows-grok-hook-launcher', '.build', WINDOWS_GROK_HOOK_LAUNCHER_NAME)
+  ]
+  return candidates.find((candidate) => existsSync(candidate)) ?? null
+}
+
+function publishWindowsGrokHookLauncher(): string | null {
+  const source = bundledWindowsGrokHookLauncherPath()
+  if (!source) {
+    return null
+  }
+  const destination = join(homedir(), '.orca', 'agent-hooks', WINDOWS_GROK_HOOK_LAUNCHER_NAME)
+  mkdirSync(dirname(destination), { recursive: true })
+  copyFileSync(source, destination)
+  return destination
+}
+
 function getManagedCommand(scriptPath: string): string {
-  return process.platform === 'win32'
-    ? wrapWindowsHookCommand(scriptPath)
-    : wrapPosixHookCommand(scriptPath)
+  if (process.platform !== 'win32') {
+    return wrapPosixHookCommand(scriptPath)
+  }
+  // Why: Grok treats a command string with spaces as a pwsh -Command script
+  // (#14828). A single space-free GUI-subsystem exe is spawned directly, so
+  // no console window appears. Profile paths with spaces still need the
+  // encoded PowerShell launcher (#6078).
+  const launcher = publishWindowsGrokHookLauncher()
+  if (launcher && !/\s/.test(launcher)) {
+    return launcher.replaceAll('\\', '/')
+  }
+  return wrapWindowsHookCommand(scriptPath)
 }
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
@@ -152,7 +193,7 @@ function buildInstalledConfig(
   scriptFileName: string
 ): void {
   const nextHooks = { ...config.hooks }
-  const isManagedCommand = createManagedCommandMatcher(scriptFileName)
+  const isManagedCommand = isGrokManagedCommand
   const managedEvents = new Set<string>(GROK_EVENTS.map((event) => event.eventName))
 
   // Why: Orca owns only grok-hook.* entries. Sweep stale managed commands out
@@ -312,7 +353,7 @@ export class GrokHookService {
     }
 
     const nextHooks = { ...config.hooks }
-    const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
+    const isManagedCommand = isGrokManagedCommand
     for (const [eventName, definitions] of Object.entries(nextHooks)) {
       if (!Array.isArray(definitions)) {
         continue

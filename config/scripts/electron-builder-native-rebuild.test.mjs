@@ -88,6 +88,11 @@ describe('electron-builder native rebuild hook', () => {
       ],
       [
         process.execPath,
+        ['config/scripts/build-windows-grok-hook-launcher.mjs'],
+        expect.objectContaining({ stdio: 'inherit' })
+      ],
+      [
+        process.execPath,
         ['config/scripts/rebuild-native-deps.mjs', '--platform=win32', '--arch=x64', '--force'],
         expect.objectContaining({ stdio: 'inherit' })
       ]

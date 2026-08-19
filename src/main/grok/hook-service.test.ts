@@ -24,6 +24,8 @@ import { POSIX_HOOK_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
 const GROK_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'grok-hook.cmd' : 'grok-hook.sh'
 const WINDOWS_POWERSHELL_LAUNCHER =
   /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand \S+$/
+const WINDOWS_GROK_HOOK_COMMAND =
+  /orca-grok-hook\.exe$|[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand \S+$/
 
 type WindowsGrokHookRun = {
   status: number | null
@@ -254,7 +256,7 @@ describe('GrokHookService', () => {
     const bareStar = ['*', ''].join('')
     expect(() => new RegExp(bareStar)).toThrow()
     expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(
-      process.platform === 'win32' ? WINDOWS_POWERSHELL_LAUNCHER : /grok-hook/
+      process.platform === 'win32' ? WINDOWS_GROK_HOOK_COMMAND : /grok-hook/
     )
     if (process.platform !== 'win32') {
       expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(join(homeDir, '.orca'))
@@ -367,7 +369,7 @@ describe('GrokHookService', () => {
     expect(
       commands.some((command) =>
         process.platform === 'win32'
-          ? WINDOWS_POWERSHELL_LAUNCHER.test(command)
+          ? WINDOWS_GROK_HOOK_COMMAND.test(command)
           : command.includes(GROK_SCRIPT_FILE_NAME)
       )
     ).toBe(true)

@@ -133,6 +133,10 @@ describe('electron-builder config', () => {
         expect.objectContaining({
           from: 'native/windows-cli-launcher/.build/orca.exe',
           to: 'bin/orca.exe'
+        }),
+        expect.objectContaining({
+          from: 'native/windows-grok-hook-launcher/.build/orca-grok-hook.exe',
+          to: 'bin/orca-grok-hook.exe'
         })
       ])
     )

@@ -320,6 +320,10 @@ module.exports = {
         to: 'bin/orca.exe'
       },
       {
+        from: 'native/windows-grok-hook-launcher/.build/orca-grok-hook.exe',
+        to: 'bin/orca-grok-hook.exe'
+      },
+      {
         from: 'node_modules/agent-browser/bin/agent-browser-win32-x64.exe',
         to: 'agent-browser-win32-x64.exe'
       },
