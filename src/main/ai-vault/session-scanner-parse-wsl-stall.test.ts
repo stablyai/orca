@@ -20,10 +20,10 @@ import {
   resetSessionParseCacheForTests
 } from './session-scanner-parse-cache'
 import {
+  resetWslTranscriptFsGateForTests,
   WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS,
   WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS,
-  WslTranscriptFsError,
-  resetWslTranscriptFsGateForTests
+  WslTranscriptFsError
 } from '../native-chat/wsl-transcript-fs-gate'
 
 type ReadResult = { bytesRead: number; buffer: Buffer }
