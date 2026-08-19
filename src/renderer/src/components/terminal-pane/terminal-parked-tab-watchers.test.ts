@@ -247,6 +247,9 @@ describe('terminal-parked-tab-watchers', () => {
 
     expect(startParkedTerminalByteWatcher).not.toHaveBeenCalled()
     expect(collectParkedTerminalWatcherPtyIds().has(PTY_ID)).toBe(false)
+    // No live pane will ever overwrite this slot again, so a stranded
+    // 'working' title would pin worktree status forever.
+    expect(mockStoreState.clearRuntimePaneTitle).toHaveBeenCalledWith(TAB_ID, 1)
   })
 
   it('starts a fact watcher for snapshot-capable paired PTYs', () => {

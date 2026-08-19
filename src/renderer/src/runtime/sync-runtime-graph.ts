@@ -8,7 +8,7 @@ import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/termina
 import { getEagerPtyBufferHandle } from '@/components/terminal-pane/pty-dispatcher'
 import {
   collectParkedTerminalWatcherPtyIds,
-  getParkedTerminalPaneIdsByLeafId
+  getParkedTerminalWatcherPaneIdsByPtyId
 } from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
@@ -829,7 +829,8 @@ async function syncRuntimeGraph(): Promise<void> {
       // survive the filter would name a leaf this publication never sends.
       const publishedLeafIds = new Set(liveLeaves.map(([leafId]) => leafId))
       const savedActiveLeafId = layout?.activeLeafId
-      const parkedPaneIdsByLeafId = getParkedTerminalPaneIdsByLeafId(tab.id)
+      const parkedPaneIdsByPtyId = getParkedTerminalWatcherPaneIdsByPtyId(tab.id)
+      const parkedPaneTitles = state.runtimePaneTitlesByTabId[tab.id] ?? {}
       graph.tabs.push({
         tabId: tab.id,
         worktreeId,
@@ -848,17 +849,22 @@ async function syncRuntimeGraph(): Promise<void> {
         })
       })
       liveLeaves.forEach(([leafId, ptyId], index) => {
+        // Why the watcher's id wins: PaneManager ids are allocated monotonically
+        // and closing a pane retires its id without renumbering, so an ordinal
+        // can name a pane that no longer exists — and main routes split/close and
+        // the paneKey fallback through this value.
+        const parkedPaneId = parkedPaneIdsByPtyId.get(ptyId)
         graph.leaves.push({
           tabId: tab.id,
           worktreeId,
           leafId,
-          // Why the capture wins: PaneManager ids are allocated monotonically and
-          // closing a pane retires its id without renumbering, so an ordinal can
-          // name a pane that no longer exists — and main routes split/close and
-          // the paneKey fallback through this value.
-          paneRuntimeId: parkedPaneIdsByLeafId.get(leafId) ?? index + 1,
+          paneRuntimeId: parkedPaneId ?? index + 1,
           ptyId,
-          paneTitle: null,
+          // Why not null: the parked byte watcher keeps writing this pane's
+          // runtime title, and main prefers leaf.paneTitle over its own older
+          // lastOscTitle. Dropping it would pin a parked agent pane to a stale
+          // title for as long as it stays parked.
+          paneTitle: (parkedPaneId === undefined ? null : parkedPaneTitles[parkedPaneId]) ?? null,
           title
         })
       })

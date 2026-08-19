@@ -34,14 +34,20 @@ export function startParkedPtyWatcher(args: {
   const state = useAppStore.getState()
   const ptyId = pane.ptyId
   // Why: the tab model can change after the park decision, and legacy leaf ids make pane keys throw.
+  // Why: the pane's primary exit handler is gone from unmount and this sidecar
+  // arrives a passive effect later, so an exit landing in between is buffered
+  // and replayed to nobody. Registering would pin a dead PTY as a live parked
+  // owner, and the runtime graph publishes its leaf on exactly that claim.
+  if (ptyId && !entry.disposersByPtyId.has(ptyId) && hasPreHandlerPtyExit(ptyId)) {
+    // Mirror handlePtyExit's first act: no live pane will ever overwrite this
+    // slot, so leaving it would strand a dead pane's last title (a 'working'
+    // agent title pins worktree status) until reveal or close.
+    state.clearRuntimePaneTitle(tab.id, pane.paneId)
+    return
+  }
   if (
     !ptyId ||
     entry.disposersByPtyId.has(ptyId) ||
-    // Why: the pane's primary exit handler is gone from unmount and this
-    // sidecar arrives a passive effect later, so an exit landing in between is
-    // buffered and replayed to nobody. Registering here would pin a dead PTY as
-    // a live parked owner, and the runtime graph would publish its leaf.
-    hasPreHandlerPtyExit(ptyId) ||
     !isTerminalLeafId(pane.leafId) ||
     !isParkRestorableTerminalPty(ptyId, worktreeId, restorePolicy)
   ) {

@@ -146,10 +146,6 @@ async function waitForPaneMarker(
   return false
 }
 
-// Why fixme: this is a KNOWN-RED reproduction for STA-2854, kept as the
-// deterministic live harness for whoever owns the fix. Delete this line to run
-// it. Observed on 1.4.178-rc.2 (5/5 runs): ~16s of `recovering` after the host
-// park, and the line typed at park time is silently lost forever.
 test('a cold-parked host pane keeps serving its paired remote viewer', async ({
   orcaPage
 }, testInfo) => {

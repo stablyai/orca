@@ -105,15 +105,18 @@ export function collectParkedTerminalWatcherPtyIds(): Set<string> {
   return ptyIds
 }
 
-/** Pane ids the live pane used, by leaf, so a parked leaf publishes the
- *  identity main routes split/close/pane-key actions through instead of a
- *  fabricated ordinal. */
-export function getParkedTerminalPaneIdsByLeafId(tabId: string): Map<string, number> {
-  const paneIds = new Map<string, number>()
-  for (const pane of capturedPanesByTabId.get(tabId)?.panes ?? []) {
-    paneIds.set(pane.leafId, pane.paneId)
-  }
-  return paneIds
+/**
+ * Pane ids the parked watchers are actually using, by PTY.
+ *
+ * Read from the watcher entry rather than the unmount capture: a parked tab
+ * whose layout gains a leaf gets a watcher from the layout-derived fallback,
+ * which the capture never learns about. The entry covers both, so a parked leaf
+ * publishes the identity main routes split/close and the paneKey fallback
+ * through, and indexes the runtime-title slot the watcher writes — instead of a
+ * fabricated ordinal that can name a pane PaneManager already retired.
+ */
+export function getParkedTerminalWatcherPaneIdsByPtyId(tabId: string): Map<string, number> {
+  return new Map(parkedWatchersByTabId.get(tabId)?.paneIdByPtyId ?? [])
 }
 
 export function disposeParkedTabWatchers(tabId: string): void {

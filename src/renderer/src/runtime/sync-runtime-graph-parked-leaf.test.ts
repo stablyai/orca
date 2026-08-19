@@ -25,10 +25,7 @@ import {
   bufferPreHandlerPtyExit,
   clearPreHandlerPtyState
 } from '@/components/terminal-pane/pty-pre-handler-buffer'
-import {
-  capturedPanesByTabId,
-  parkedWatchersByTabId
-} from '@/components/terminal-pane/terminal-parked-watcher-registry'
+import { parkedWatchersByTabId } from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import { setRuntimeGraphStoreStateGetter, setRuntimeGraphSyncEnabled } from './sync-runtime-graph'
 
 const LEAF = '22222222-2222-4222-8222-222222222222'
@@ -95,11 +92,11 @@ function parkedState(
 }
 
 /** Installs the exact registry state the park wiring leaves behind on unmount. */
-function installParkedWatcher(ptyId: string): void {
+function installParkedWatcher(ptyId: string, paneId = 1): void {
   parkedWatchersByTabId.set(TAB_ID, {
     worktreeId: 'wt-1',
     tabPtyId: ptyId,
-    paneIdByPtyId: new Map([[ptyId, 1]]),
+    paneIdByPtyId: new Map([[ptyId, paneId]]),
     disposersByPtyId: new Map([[ptyId, () => {}]])
   })
 }
@@ -113,7 +110,6 @@ afterEach(() => {
   setRuntimeGraphSyncEnabled(false)
   setRuntimeGraphStoreStateGetter(null)
   parkedWatchersByTabId.clear()
-  capturedPanesByTabId.clear()
   clearPreHandlerPtyState(PARKED_PTY)
   vi.mocked(getEagerPtyBufferHandle).mockReturnValue(undefined)
   vi.useRealTimers()
@@ -216,19 +212,34 @@ describe('syncRuntimeGraph cold-parked tabs', () => {
     expect(graph.leaves).not.toContainEqual(expect.objectContaining({ tabId: TAB_ID }))
   })
 
-  it('publishes the pane id the live pane used, not a positional ordinal', async () => {
+  it('publishes the pane id the watcher uses, not a positional ordinal', async () => {
     // PaneManager retires a closed pane's id without renumbering, and main
-    // routes split/close and the paneKey fallback through this value.
-    installParkedWatcher(PARKED_PTY)
-    capturedPanesByTabId.set(TAB_ID, {
-      worktreeId: 'wt-1',
-      panes: [{ ptyId: PARKED_PTY, paneId: 7, leafId: LEAF, drivesTabTitle: true }]
-    })
+    // routes split/close and the paneKey fallback through this value. Sourced
+    // from the watcher entry, so a leaf the unmount capture never saw — one the
+    // layout gained while parked — is still named correctly.
+    installParkedWatcher(PARKED_PTY, 7)
 
     const graph = await captureGraph()
 
     expect(graph.leaves).toContainEqual(
       expect.objectContaining({ tabId: TAB_ID, leafId: LEAF, paneRuntimeId: 7 })
+    )
+  })
+
+  it("publishes the parked pane's runtime title instead of discarding it", async () => {
+    // The parked byte watcher keeps writing this slot and main prefers
+    // leaf.paneTitle over its own older lastOscTitle, so publishing null pins a
+    // parked agent pane to a stale title for as long as it stays parked.
+    installParkedWatcher(PARKED_PTY, 7)
+    setRuntimeGraphStoreStateGetter(() => ({
+      ...parkedState(),
+      runtimePaneTitlesByTabId: { [TAB_ID]: { 7: 'codex [working]' } }
+    }))
+
+    const graph = await captureGraph({ seedState: false })
+
+    expect(graph.leaves).toContainEqual(
+      expect.objectContaining({ leafId: LEAF, paneTitle: 'codex [working]' })
     )
   })
 
