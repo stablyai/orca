@@ -88,6 +88,19 @@ describe('getStatusOp', () => {
     expect(git.mock.calls.some(([args]) => args.includes('diff'))).toBe(false)
   })
 
+  it('appends --ignore-submodules=none only when the caller opted in', async () => {
+    const git = vi.fn<GitExec>(async () => ({ stdout: '', stderr: '' }) as never)
+    const streamGit = vi.fn<RelayGitStreamExec>(async () => ({ stoppedEarly: false }))
+
+    await getStatusOp(git, streamGit, { worktreePath: tmpDir })
+
+    expect(streamGit.mock.calls[0]?.[0]).not.toContain('--ignore-submodules=none')
+
+    await getStatusOp(git, streamGit, { worktreePath: tmpDir, showSubmoduleChanges: true })
+
+    expect(streamGit.mock.calls[1]?.[0]).toContain('--ignore-submodules=none')
+  })
+
   it('returns the full list and no limit flag when under the limit', async () => {
     const statusOutput = buildLargeStatusOutput(5)
     const git = vi.fn<GitExec>(async (args) => {

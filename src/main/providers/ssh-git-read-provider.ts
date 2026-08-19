@@ -66,7 +66,8 @@ export class SshGitReadProvider {
       ...(options?.reuseLineStats ? { reuseLineStats: true } : {}),
       ...(options?.branchLineTotalMergeBase === undefined
         ? {}
-        : { branchLineTotalMergeBase: options.branchLineTotalMergeBase })
+        : { branchLineTotalMergeBase: options.branchLineTotalMergeBase }),
+      ...(options?.showSubmoduleChanges ? { showSubmoduleChanges: true } : {})
     }
     const key = stableInFlightKey([
       worktreePath,
@@ -75,6 +76,9 @@ export class SshGitReadProvider {
       options?.includeLineStats !== false,
       options?.bypassEffectiveUpstreamNegativeCache === true,
       options?.reuseLineStats === true,
+      // Why: this adds submodule entries, so a shared lease must not serve a read
+      // taken without it.
+      options?.showSubmoduleChanges === true,
       options?.branchLineTotalMergeBase ?? ''
     ])
     return this.statusReadLeaseOwner.lease(key, options?.signal, async (sharedSignal) => {

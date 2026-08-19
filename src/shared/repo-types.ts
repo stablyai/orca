@@ -72,6 +72,12 @@ export type Repo = {
   forkSyncMode?: ForkSyncMode
   /** Canonical identity for the repo remote Orca should use for provider-level grouping. */
   gitRemoteIdentity?: GitRemoteIdentity | null
+  /** Reads submodule rows into Source Control even when the superproject's
+   *  `.gitmodules` sets `ignore = all`, which otherwise hides every submodule
+   *  from `git status`. Opt-in per repo: repos set `ignore = all` on purpose to
+   *  keep gitlink bumps out of `git commit -a`, so the default must not change
+   *  what `git status` reports. */
+  showSubmoduleChanges?: boolean
   /** Controls whether worktrees Orca did not create appear in the sidebar. */
   externalWorktreeVisibility?: ExternalWorktreeVisibility
   /** True when the repo predates hidden-by-default external worktrees. */

@@ -262,6 +262,35 @@ describe('getStatus', () => {
     expect(result.ignoredPaths).toEqual(['dist/', 'generated/file.js'])
   })
 
+  it('asks git for submodule entries only when the repo opted in', async () => {
+    readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
+    existsSyncMock.mockReturnValue(false)
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
+
+    await getStatus('/repo')
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith([
+      '-c',
+      'core.quotePath=false',
+      'status',
+      '--porcelain=v2',
+      '--branch',
+      '--untracked-files=all'
+    ])
+
+    await getStatus('/repo', { showSubmoduleChanges: true })
+
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith([
+      '-c',
+      'core.quotePath=false',
+      'status',
+      '--porcelain=v2',
+      '--branch',
+      '--untracked-files=all',
+      '--ignore-submodules=none'
+    ])
+  })
+
   it('parses branch identity from porcelain v2 branch headers', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
     gitExecFileAsyncMock.mockResolvedValueOnce({

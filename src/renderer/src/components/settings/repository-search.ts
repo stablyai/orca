@@ -120,6 +120,43 @@ export function getRepositoryPaneSearchEntries(
           }
         ]
       : []),
+    ...(isFolder
+      ? []
+      : [
+          {
+            title: translate(
+              'auto.components.settings.repository.search.showSubmoduleChanges',
+              'Show Submodule Changes'
+            ),
+            description: translate(
+              'auto.components.settings.repository.search.showSubmoduleChangesDescription',
+              'Read submodule changes in Source Control even when this repo hides them.'
+            ),
+            keywords: [
+              repo.displayName,
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.submodule',
+                'submodule'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.submodules',
+                'submodules'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.gitmodules',
+                'gitmodules'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.monorepo',
+                'monorepo'
+              ),
+              ...translateSearchKeyword(
+                'auto.components.settings.repository.search.gitlink',
+                'gitlink'
+              )
+            ]
+          }
+        ]),
     ...(isFolder || !isLocalWindowsProject
       ? []
       : [
