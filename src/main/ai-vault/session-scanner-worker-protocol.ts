@@ -6,7 +6,10 @@ import type {
 import type { AiVaultScanOptions } from './session-scanner-types'
 import type { SessionParseCachePersistenceOptions } from './session-parse-cache-persistence'
 
-export type AiVaultWorkerScanOptions = Omit<AiVaultScanOptions, 'signal'>
+// `signal` and `discoveryStats` are same-process constructs (an AbortSignal
+// and a mutable out-parameter object) that cannot survive postMessage/
+// process.send — each side would get its own inert copy.
+export type AiVaultWorkerScanOptions = Omit<AiVaultScanOptions, 'signal' | 'discoveryStats'>
 
 export type AiVaultWorkerData = {
   sessionParseCache: SessionParseCachePersistenceOptions | null

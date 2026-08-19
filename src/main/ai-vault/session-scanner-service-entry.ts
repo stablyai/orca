@@ -6,6 +6,7 @@ import {
 } from './session-parse-cache-persistence'
 import { scanAiVaultSessions } from './session-scanner'
 import { invalidateSessionParseCacheEntry } from './session-scanner-parse-cache'
+import type { DiscoveryStats } from './session-scanner-types'
 import {
   AI_VAULT_SERVICE_PROTOCOL_VERSION,
   aiVaultServiceLane,
@@ -78,7 +79,12 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
       }
     }
     const startedAt = performance.now()
-    const result = await scanAiVaultSessions({ ...request.options, signal: controller.signal })
+    const discoveryStats: DiscoveryStats = { totalMs: 0, roots: [] }
+    const result = await scanAiVaultSessions({
+      ...request.options,
+      signal: controller.signal,
+      discoveryStats
+    })
     for (const session of result.sessions) {
       if ((session.agent === 'claude' || session.agent === 'codex') && session.title.trim()) {
         cacheServiceTitle(titleIndex, {
@@ -90,7 +96,7 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
     }
     return {
       operation: 'scan',
-      value: { result, durationMs: performance.now() - startedAt }
+      value: { result, durationMs: performance.now() - startedAt, discoveryStats }
     }
   } finally {
     controllers.delete(request.id)

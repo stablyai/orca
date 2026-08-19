@@ -3,7 +3,11 @@ import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { discoverFiles } from './session-scanner-discovery'
 import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
 import { listOpenCodeSqliteSessionsViaWorker } from './session-scanner-opencode-sqlite-worker-spawn'
-import type { FileWithMtime, SessionFileDiscovery } from './session-scanner-types'
+import type {
+  DiscoveryRootStat,
+  FileWithMtime,
+  SessionFileDiscovery
+} from './session-scanner-types'
 
 // Why: keep the SQLite discovery + dedup layer separate from the parser so
 // each file stays under the max-lines lint rule and the discovery layer can
@@ -40,6 +44,8 @@ export async function discoverOpenCodeSessions(args: {
   dbPaths: readonly string[]
   limitPerAgent: number
   issues: AiVaultScanIssue[]
+  signal?: AbortSignal
+  stats?: DiscoveryRootStat[]
 }): Promise<SessionFileDiscovery> {
   const [fileDiscovery, sqliteCandidates] = await Promise.all([
     discoverFiles({
@@ -47,7 +53,9 @@ export async function discoverOpenCodeSessions(args: {
       limit: args.limitPerAgent,
       agent: 'opencode',
       issues: args.issues,
-      extensions: ['.json']
+      extensions: ['.json'],
+      signal: args.signal,
+      stats: args.stats
     }),
     // Why (#8864): the SQLite list leg runs on a worker thread; only this leg
     // moves off the main thread, the filesystem scan stays inline.

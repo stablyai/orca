@@ -235,6 +235,68 @@ export function hasCachedWslDistros(): boolean {
   return wslDistroCache !== null
 }
 
+// Why: `wsl --list --running` only lists, never boots — unlike `wsl -d`,
+// which starts a stopped distro. Callers that would otherwise touch a
+// stopped distro's UNC path (paying its boot latency, or worse, a stall
+// behind the WSL transcript gate) can check first. Short TTL because
+// starting/stopping a distro is a normal part of the user's workflow, and
+// this cache is process-lifetime — it must not go stale for hours.
+const WSL_RUNNING_DISTROS_CACHE_TTL_MS = 10_000
+let runningWslDistrosCache: { distros: Set<string>; expiresAt: number } | null = null
+let runningWslDistrosProbe: Promise<Set<string> | null> | null = null
+
+/**
+ * Distros currently running, or null if the probe itself failed or the
+ * platform is not Windows. Callers must fail OPEN on null — treat it as
+ * "unknown, proceed as before" — rather than silently hiding a distro's
+ * content because wsl.exe was briefly wedged.
+ */
+export function listRunningWslDistrosAsync(): Promise<Set<string> | null> {
+  const now = Date.now()
+  if (runningWslDistrosCache && now < runningWslDistrosCache.expiresAt) {
+    return Promise.resolve(runningWslDistrosCache.distros)
+  }
+  if (process.platform !== 'win32') {
+    return Promise.resolve(new Set())
+  }
+  // Why: dozens of existing tests exercise WSL UNC-shaped fixture paths
+  // (\\wsl.localhost\Ubuntu\...) with no intent to touch the real host's WSL
+  // state. Without this, every one of them would spawn a real wsl.exe and
+  // become dependent on whatever distros happen to be running on the machine
+  // that executes the suite. A test that wants the "distro is stopped" path
+  // seeds the cache explicitly via _setRunningWslDistrosForTests, which is
+  // checked above and short-circuits before this branch is ever reached.
+  if (process.env.NODE_ENV === 'test') {
+    return Promise.resolve(null)
+  }
+  runningWslDistrosProbe ??= (async () => {
+    try {
+      const output = await execFileUtf8('wsl.exe', ['--list', '--running', '--quiet'])
+      const distros = new Set(parseWslDistros(output))
+      runningWslDistrosCache = { distros, expiresAt: Date.now() + WSL_RUNNING_DISTROS_CACHE_TTL_MS }
+      return distros
+    } catch {
+      return null
+    } finally {
+      runningWslDistrosProbe = null
+    }
+  })()
+  return runningWslDistrosProbe
+}
+
+/** Bypasses the NODE_ENV==='test' fail-open above (the cache is checked first). */
+export function _setRunningWslDistrosForTests(distros: string[] | null): void {
+  runningWslDistrosCache =
+    distros === null
+      ? null
+      : { distros: new Set(distros), expiresAt: Date.now() + WSL_RUNNING_DISTROS_CACHE_TTL_MS }
+}
+
+export function _resetRunningWslDistrosCacheForTests(): void {
+  runningWslDistrosCache = null
+  runningWslDistrosProbe = null
+}
+
 // Why: report the last observed answer even once it is stale. An empty list is a real
 // probe result, so it must keep driving the `wsl-distro-missing` repair prompt; going
 // null instead fails open and silently spawns `wsl.exe -d <distro>` for a distro Orca
@@ -316,6 +378,7 @@ export function _resetWslCachesForTests(): void {
   wslDistroProbeSequence = 0
   wslDistroCacheSequence = 0
   _resetWslAvailabilityCacheForTests()
+  _resetRunningWslDistrosCacheForTests()
 }
 
 // Why: seeded state expires like real state — an `available: false` seed is re-probed

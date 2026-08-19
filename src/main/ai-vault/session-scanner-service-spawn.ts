@@ -5,7 +5,7 @@ import type {
   AiVaultSessionTitleRequest,
   AiVaultSessionTitlesResult
 } from '../../shared/ai-vault-session-title'
-import { withSpan } from '../observability/tracer'
+import { withSpan, type ActiveSpan } from '../observability/tracer'
 import type {
   ReadAiVaultFirstUserPromptArgs,
   ReadAiVaultFirstUserPromptResult
@@ -16,7 +16,16 @@ import { AiVaultScannerServiceClient } from './session-scanner-service-client'
 import { getAiVaultServiceEntryPath } from './session-scanner-service-entry-path'
 import { lowerAiVaultServicePriority } from './session-scanner-service-priority'
 import type { AiVaultServiceSubagentRequest } from './session-scanner-service-protocol'
+import type { DiscoveryStats } from './session-scanner-types'
 import type { AiVaultWorkerScanOptions } from './session-scanner-worker-protocol'
+
+// libuv defaults to 4 threads: every local fs.stat/readdir the scanner issues
+// (not just UNC ones — those go through the WSL gate instead) shares that
+// pool, serializing discovery 4-wide no matter how wide the JS-side batching
+// is. Set at the fork site, not in buildAiVaultServiceEnv: the allowlist must
+// keep refusing an ambient UV_THREADPOOL_SIZE, and env: on fork() replaces
+// rather than merges, so this can't leak into the parent process.
+const AI_VAULT_SERVICE_UV_THREADPOOL_SIZE = 16
 
 export function spawnAiVaultServiceProcess(): ChildProcess {
   const entryPath = getAiVaultServiceEntryPath()
@@ -26,7 +35,10 @@ export function spawnAiVaultServiceProcess(): ChildProcess {
   const child = fork(entryPath, [], {
     stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
     execArgv: ['--max-old-space-size=384'],
-    env: buildAiVaultServiceEnv(),
+    env: {
+      ...buildAiVaultServiceEnv(),
+      UV_THREADPOOL_SIZE: String(AI_VAULT_SERVICE_UV_THREADPOOL_SIZE)
+    },
     ...(process.platform === 'win32' ? { windowsHide: true } : {})
   })
   lowerAiVaultServicePriority(child.pid)
@@ -53,11 +65,29 @@ export function scanAiVaultSessionsInService(
     const value = await getSharedClient().request<{
       result: AiVaultListResult
       durationMs: number
+      discoveryStats: DiscoveryStats
     }>({ type: 'request', operation: 'scan', options }, signal)
     span.setAttribute('serviceDurationMs', value.durationMs)
     span.setAttribute('sessions', value.result.sessions.length)
+    stampDiscoverySpanAttributes(span, value.discoveryStats)
     return value.result
   })
+}
+
+// The forked child never installs a tracer sink (it only calls
+// scanAiVaultSessions in-process), so this is the one place a slow-discovery
+// regression becomes visible in main.trace.ndjson without instrumenting the
+// child itself.
+export function stampDiscoverySpanAttributes(span: ActiveSpan, stats: DiscoveryStats): void {
+  const uncRoots = stats.roots.filter((root) => root.isUncPath)
+  span.setAttribute('discoveryMs', Math.round(stats.totalMs))
+  span.setAttribute('discoveryRootCount', stats.roots.length)
+  span.setAttribute('discoveryUncRootCount', uncRoots.length)
+  span.setAttribute(
+    'discoveryUncElapsedMs',
+    Math.round(uncRoots.reduce((sum, root) => sum + root.elapsedMs, 0))
+  )
+  span.setAttribute('discoveryErroredRootCount', stats.roots.filter((root) => root.errored).length)
 }
 
 export function resolveAiVaultSessionTitlesInService(

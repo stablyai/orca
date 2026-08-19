@@ -224,6 +224,47 @@ describe('AiVaultScannerServiceClient', () => {
     client.dispose()
   })
 
+  it('passes discovery stats through a scan result unmodified', async () => {
+    const { child, client } = setup()
+    const scan = client.request({ type: 'request', operation: 'scan', options: {} })
+    readyAiVaultServiceChild(child)
+    await Promise.resolve()
+
+    const discoveryStats = {
+      totalMs: 42,
+      roots: [
+        {
+          agent: 'claude',
+          rootDir: '/home/ada/.claude/projects',
+          isUncPath: false,
+          elapsedMs: 5,
+          fileCount: 3,
+          errored: false
+        },
+        {
+          agent: 'codex',
+          rootDir: '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex\\sessions',
+          isUncPath: true,
+          elapsedMs: 37,
+          fileCount: 0,
+          errored: true
+        }
+      ]
+    }
+    child.emit('message', {
+      type: 'result',
+      id: aiVaultServiceRequestId(child, 'scan'),
+      operation: 'scan',
+      value: {
+        result: { sessions: [], issues: [], scannedAt: '2026-08-10' },
+        durationMs: 1,
+        discoveryStats
+      }
+    })
+    await expect(scan).resolves.toMatchObject({ discoveryStats })
+    client.dispose()
+  })
+
   it('replaces a child that does not acknowledge cache invalidation', async () => {
     vi.useFakeTimers()
     const children: AiVaultServiceTestChild[] = []

@@ -6,6 +6,7 @@ import type {
 } from '../../shared/ai-vault-session-title'
 import type { ReadAiVaultFirstUserPromptArgs } from './session-first-user-prompt-read'
 import type { SessionParseCachePersistenceOptions } from './session-parse-cache-persistence'
+import type { DiscoveryStats } from './session-scanner-types'
 import type { AiVaultWorkerScanOptions } from './session-scanner-worker-protocol'
 
 export const AI_VAULT_SERVICE_PROTOCOL_VERSION = 1
@@ -52,7 +53,13 @@ export type AiVaultServiceParentMessage =
   | { type: 'shutdown' }
 
 export type AiVaultServiceResultValue =
-  | { operation: 'scan'; value: { result: AiVaultListResult; durationMs: number } }
+  | {
+      operation: 'scan'
+      // discoveryStats is process-internal diagnostics — the parent stamps it
+      // onto the aiVault.scan.service span; it never reaches the renderer via
+      // AiVaultListResult.
+      value: { result: AiVaultListResult; durationMs: number; discoveryStats: DiscoveryStats }
+    }
   | { operation: 'titles'; value: AiVaultSessionTitlesResult }
   | { operation: 'subagents'; value: AiVaultSubagentListResult }
   | { operation: 'firstPrompt'; value: { prompt: string | null } }

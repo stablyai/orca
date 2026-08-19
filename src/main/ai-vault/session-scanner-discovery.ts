@@ -1,11 +1,26 @@
 import type { Dirent } from 'node:fs'
 import { extname, join } from 'node:path'
 import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
+import { isWslUncPath } from '../../shared/wsl-paths'
+import { isENOENT } from '../ipc/filesystem-path-containment'
 import { wslGatedReaddir, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
+import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { recordSessionScanIssue } from './session-scan-issues'
-import type { FileWithMtime, SessionFileDiscovery } from './session-scanner-types'
+import type {
+  DiscoveryRootStat,
+  FileWithMtime,
+  SessionFileDiscovery
+} from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
+import { stoppedWslDistroForRoot } from './session-scanner-wsl-distro-liveness'
+
+function recordDiscoveryRootStat(
+  stats: DiscoveryRootStat[] | undefined,
+  stat: DiscoveryRootStat
+): void {
+  stats?.push(stat)
+}
 
 export async function discoverFiles(args: {
   rootDir: string
@@ -15,15 +30,52 @@ export async function discoverFiles(args: {
   extensions: string[]
   filePredicate?: (path: string) => boolean
   directoryPredicate?: (name: string, depth: number) => boolean
+  signal?: AbortSignal
+  // Out-parameter: one entry per discoverFiles call, appended on return. See
+  // AiVaultScanOptions.discoveryStats — a same-process diagnostic, never wired
+  // to cross a worker/child message boundary.
+  stats?: DiscoveryRootStat[]
 }): Promise<SessionFileDiscovery> {
+  const startedAt = performance.now()
+  const isUncPath = isWslUncPath(args.rootDir)
+  if (isUncPath) {
+    const stoppedDistro = await stoppedWslDistroForRoot(args.rootDir)
+    throwIfAiVaultScanCancelled(args.signal)
+    if (stoppedDistro) {
+      // A stopped distro would otherwise pay boot latency inline, or worse,
+      // stall behind the single-slot WSL transcript gate — skip it without
+      // starting it (`wsl --list --running` never boots anything).
+      recordSessionScanIssue(args.issues, {
+        agent: args.agent,
+        path: args.rootDir,
+        kind: 'notice',
+        message: `WSL distro "${stoppedDistro}" is not running; skipped without starting it.`
+      })
+      recordDiscoveryRootStat(args.stats, {
+        agent: args.agent,
+        rootDir: args.rootDir,
+        isUncPath: true,
+        elapsedMs: performance.now() - startedAt,
+        fileCount: 0,
+        errored: false
+      })
+      return { agent: args.agent, rootDir: args.rootDir, files: [] }
+    }
+  }
   let paths: string[]
   try {
     paths = await walkSessionFiles(args.rootDir, args.agent, args.issues, {
       extensions: new Set(args.extensions),
       filePredicate: args.filePredicate,
-      directoryPredicate: args.directoryPredicate
+      directoryPredicate: args.directoryPredicate,
+      signal: args.signal
     })
   } catch (err) {
+    // A caller abort races every other failure mode here. Surface it in the
+    // canonical shape (message-matched — Error.name is dropped crossing IPC)
+    // instead of leaking a raw abort-reason object, or worse, letting it fall
+    // through and get silently recorded as a scan issue below.
+    throwIfAiVaultScanCancelled(args.signal)
     // Why: discoverAiVaultSessionSources fans out with Promise.all, so one
     // stalled distro would otherwise reject the whole vault scan — including
     // every healthy local agent. Contain it to this root.
@@ -35,12 +87,21 @@ export async function discoverFiles(args: {
       path: args.rootDir,
       message: err.message
     })
+    recordDiscoveryRootStat(args.stats, {
+      agent: args.agent,
+      rootDir: args.rootDir,
+      isUncPath,
+      elapsedMs: performance.now() - startedAt,
+      fileCount: 0,
+      errored: true
+    })
     return { agent: args.agent, rootDir: args.rootDir, files: [] }
   }
   const files: FileWithMtime[] = []
   for (const path of paths) {
+    throwIfAiVaultScanCancelled(args.signal)
     try {
-      const fileStat = await wslGatedStat(path, 'scan')
+      const fileStat = await wslGatedStat(path, 'scan', args.signal)
       files.push({
         path,
         mtimeMs: fileStat.mtimeMs,
@@ -58,11 +119,20 @@ export async function discoverFiles(args: {
       })
     }
   }
-  return {
+  const result = {
     agent: args.agent,
     rootDir: args.rootDir,
     files: files.sort((left, right) => right.mtimeMs - left.mtimeMs).slice(0, args.limit)
   }
+  recordDiscoveryRootStat(args.stats, {
+    agent: args.agent,
+    rootDir: args.rootDir,
+    isUncPath,
+    elapsedMs: performance.now() - startedAt,
+    fileCount: result.files.length,
+    errored: false
+  })
+  return result
 }
 
 export async function walkSessionFiles(
@@ -92,6 +162,14 @@ export async function walkSessionFiles(
     // empty — swallowing it would misreport a stalled distro as "no transcript".
     if (error instanceof WslTranscriptFsError) {
       throw error
+    }
+    // A plain OS failure below the WSL gate's own deadline (e.g. a stalled UNC
+    // mount returning ECONNRESET) must not vanish as "no sessions here" — that
+    // was indistinguishable from a genuinely empty tree and hid a real
+    // scan-latency regression. A missing directory is the normal, expected
+    // case for an agent the user never installed, so it stays silent.
+    if (!isENOENT(error)) {
+      recordSessionScanIssue(issues, { agent, path: dirPath, message: errorMessage(error) })
     }
     return []
   }

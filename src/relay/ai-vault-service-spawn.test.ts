@@ -39,4 +39,9 @@ describe('spawnRelayAiVaultService', () => {
     expect(options.env?.AWS_SECRET_ACCESS_KEY).toBeUndefined()
     vi.unstubAllEnvs()
   })
+
+  it('widens the libuv threadpool so local fs.stat/readdir discovery is not 4-wide serialized', () => {
+    spawnRelayAiVaultService()
+    expect(forkOptions().env?.UV_THREADPOOL_SIZE).toBe('16')
+  })
 })

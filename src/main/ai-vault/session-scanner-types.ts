@@ -45,6 +45,26 @@ export type AiVaultScanOptions = {
   // Superseded/cancelled scans stop between parse batches instead of parsing
   // every remaining transcript for a caller that already left.
   signal?: AbortSignal
+  // Same-process out-parameter: the caller pre-allocates it and reads it back
+  // after the scan resolves. Never meant to cross a worker/child message
+  // boundary — mutations made on one side of a postMessage/process.send are
+  // invisible on the other, so this must stay out of AiVaultWorkerScanOptions
+  // exactly like `signal`.
+  discoveryStats?: DiscoveryStats
+}
+
+export type DiscoveryRootStat = {
+  agent: AiVaultAgent
+  rootDir: string
+  isUncPath: boolean
+  elapsedMs: number
+  fileCount: number
+  errored: boolean
+}
+
+export type DiscoveryStats = {
+  totalMs: number
+  roots: DiscoveryRootStat[]
 }
 
 export type FileWithMtime = {

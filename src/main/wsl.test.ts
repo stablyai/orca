@@ -16,7 +16,9 @@ vi.mock('child_process', async (importOriginal) => {
 })
 
 import {
+  _resetRunningWslDistrosCacheForTests,
   _resetWslCachesForTests,
+  _setRunningWslDistrosForTests,
   _setWslCachesForTests,
   getCachedWslAvailability,
   getCachedWslDistros,
@@ -24,6 +26,7 @@ import {
   hasCachedWslDistros,
   isWslAvailable,
   isWslAvailableAsync,
+  listRunningWslDistrosAsync,
   listWslDistros,
   listWslDistrosAsync,
   parseWslPath,
@@ -916,6 +919,53 @@ describe('wslUncDirectoryExistsAsync', () => {
         wslUncDirectoryExistsAsync('\\\\wsl.localhost\\Ubuntu\\home\\jin')
       )
     ).resolves.toBeNull()
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('listRunningWslDistrosAsync', () => {
+  afterEach(() => {
+    execFileMock.mockReset()
+    execFileSyncMock.mockReset()
+    _resetRunningWslDistrosCacheForTests()
+    vi.useRealTimers()
+  })
+
+  it('fails open (null) rather than spawning a real wsl.exe under NODE_ENV=test', async () => {
+    await expect(listRunningWslDistrosAsync()).resolves.toBeNull()
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
+  it('returns a seeded set without touching wsl.exe', async () => {
+    _setRunningWslDistrosForTests(['Ubuntu'])
+    await expect(listRunningWslDistrosAsync()).resolves.toEqual(new Set(['Ubuntu']))
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
+  it('an empty seeded set means every distro is stopped', async () => {
+    _setRunningWslDistrosForTests([])
+    await expect(listRunningWslDistrosAsync()).resolves.toEqual(new Set())
+  })
+
+  it('falls back to fail-open once the seeded entry expires', async () => {
+    vi.useFakeTimers()
+    _setRunningWslDistrosForTests(['Ubuntu'])
+    await expect(listRunningWslDistrosAsync()).resolves.toEqual(new Set(['Ubuntu']))
+
+    await vi.advanceTimersByTimeAsync(10_001)
+    await expect(listRunningWslDistrosAsync()).resolves.toBeNull()
+  })
+
+  it('_resetRunningWslDistrosCacheForTests clears a seeded entry', async () => {
+    _setRunningWslDistrosForTests(['Ubuntu'])
+    _resetRunningWslDistrosCacheForTests()
+    await expect(listRunningWslDistrosAsync()).resolves.toBeNull()
+  })
+
+  it('reports an empty set off Windows without spawning', async () => {
+    await expect(withPlatformAsync('linux', () => listRunningWslDistrosAsync())).resolves.toEqual(
+      new Set()
+    )
     expect(execFileMock).not.toHaveBeenCalled()
   })
 })

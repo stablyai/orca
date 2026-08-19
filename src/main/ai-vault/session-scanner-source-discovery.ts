@@ -55,7 +55,9 @@ function agentDiscoveries(
       issues,
       extensions: [...source.extensions],
       filePredicate: source.filePredicate,
-      directoryPredicate: source.directoryPredicate
+      directoryPredicate: source.directoryPredicate,
+      signal: options.signal,
+      stats: options.discoveryStats?.roots
     })
   return source.mergeRootDiscoveries
     ? [mergedDiscovery(agent, rootDirs, limit, discover)]

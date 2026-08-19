@@ -79,7 +79,14 @@ export async function scanAiVaultSessions(
     // the cold scan gains nothing from the cache file (#9210).
     throwIfAiVaultScanCancelled(options.signal)
     await ensureSessionParseCacheLoaded()
+    const discoveryStartedAt = performance.now()
     const discoveries = await discoverAiVaultSessionSources({ options, limitPerAgent, issues })
+    // Out-parameter, not a span attribute: this span is a no-op in the forked
+    // service process (it never installs a tracer sink) — the parent stamps
+    // the real numbers onto its own aiVault.scan.service span from this value.
+    if (options.discoveryStats) {
+      options.discoveryStats.totalMs = performance.now() - discoveryStartedAt
+    }
     throwIfAiVaultScanCancelled(options.signal)
 
     const candidates = dedupeCodexRolloutFileAliases(
