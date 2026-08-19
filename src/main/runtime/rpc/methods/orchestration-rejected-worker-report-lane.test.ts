@@ -108,6 +108,36 @@ describe('rejected worker_done Dispatch state', () => {
     })
   })
 
+  it('leaves the lane alone when the assignee reports a task the Dispatch does not hold', async () => {
+    // Why: parking is a courtesy to a worker that really finished. A report naming another task
+    // proves nothing about this lane, so a capability-invalid one must not move it off ready.
+    const otherTask = db.createTask({ spec: 'another lane', runId }).id
+
+    const rejected = (await send({
+      payload: { taskId: otherTask, dispatchId, outcome: 'succeeded' }
+    })) as {
+      lifecycle: { code: string }
+    }
+
+    expect(rejected.lifecycle.code).toBe('dispatch_capability_invalid')
+    expect(db.getWorkerDispatch(dispatchId)).toMatchObject({
+      state: 'ready',
+      stage: 'input_accepted'
+    })
+  })
+
+  it('leaves the lane alone when the assignee reports with no taskId at all', async () => {
+    const rejected = (await send({ payload: { dispatchId, outcome: 'succeeded' } })) as {
+      lifecycle: { code: string }
+    }
+
+    expect(rejected.lifecycle.code).toBe('dispatch_capability_invalid')
+    expect(db.getWorkerDispatch(dispatchId)).toMatchObject({
+      state: 'ready',
+      stage: 'input_accepted'
+    })
+  })
+
   it('settles the lane when the report is accepted', async () => {
     const accepted = (await send({ capability })) as { lifecycle?: unknown }
 
@@ -142,7 +172,11 @@ describe('rejected worker_done Dispatch state', () => {
     expect(db.getTask(taskId)?.status).toBe('ready')
   })
 
-  async function send(options: { from?: string; capability?: string }): Promise<unknown> {
+  async function send(options: {
+    from?: string
+    capability?: string
+    payload?: Record<string, unknown>
+  }): Promise<unknown> {
     const method = ORCHESTRATION_METHODS.find(
       (candidate) => candidate.name === 'orchestration.send'
     )
@@ -154,7 +188,7 @@ describe('rejected worker_done Dispatch state', () => {
         from: options.from ?? WORKER,
         subject: 'Done',
         type: 'worker_done',
-        payload: JSON.stringify({ taskId, dispatchId, outcome: 'succeeded' })
+        payload: JSON.stringify(options.payload ?? { taskId, dispatchId, outcome: 'succeeded' })
       }),
       { runtime, orchestrationCapability: options.capability }
     )
