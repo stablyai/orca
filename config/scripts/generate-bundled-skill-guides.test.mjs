@@ -190,6 +190,22 @@ describe('bundled skill guide generator', () => {
       expect(source).toMatch(/double quotes|escaped inner|backslash-escape|\\"/i)
       expect(source).not.toMatch(/^# cmd\.exe:/im)
     }
+
+    const orcaCli = await readFile(path.join(projectDir, 'skill-guides', 'orca-cli.md'), 'utf8')
+    const command = orcaCli.match(
+      /On cmd\.exe,[\s\S]+?```text\n(?<command>ORCA emulator gesture .+)\n```/u
+    )?.groups?.command
+    const expectedCommand = String.raw`ORCA emulator gesture "[{\"type\":\"begin\",\"x\":0.5,\"y\":0.8},{\"type\":\"move\",\"x\":0.5,\"y\":0.4},{\"type\":\"end\",\"x\":0.5,\"y\":0.2}]" --json`
+    expect(command).toBe(expectedCommand)
+
+    const gestureJson = command?.match(/^ORCA emulator gesture "(?<json>.*)" --json$/u)?.groups
+      ?.json
+    expect(JSON.parse(gestureJson.replaceAll('\\"', '"'))).toEqual([
+      { type: 'begin', x: 0.5, y: 0.8 },
+      { type: 'move', x: 0.5, y: 0.4 },
+      { type: 'end', x: 0.5, y: 0.2 }
+    ])
+
     const computerUse = await readFile(
       path.join(projectDir, 'skill-guides', 'computer-use.md'),
       'utf8'
