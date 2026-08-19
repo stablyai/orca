@@ -30,7 +30,9 @@ describe('renderer startup runtime routing', () => {
       const relativeIndex = startupBlock.indexOf(needle)
       return relativeIndex === -1 ? -1 : startupBlockStart + relativeIndex
     }
-    const settingsIndex = indexInStartupBlock('actions.fetchSettings()')
+    const settingsIndex = indexInStartupBlock(
+      'actions.fetchSettings({ deferOwnerWorktreeVisibilityDefaults: true })'
+    )
     const uiGetIndex = indexInStartupBlock("timeRendererStartupStep('ui-get'")
     const hydrateUiIndex = indexInStartupBlock("timeRendererStartupSyncStep('hydrate-persisted-ui'")
     const localReposIndex = indexInStartupBlock(
@@ -96,6 +98,14 @@ describe('renderer startup runtime routing', () => {
     expect(fullWorktreesIndex).toBeGreaterThan(
       source.indexOf("logRendererStartupDiagnostic('startup-hydration-done'")
     )
+    const ownerDefaultsIndex = source.indexOf(
+      'actions.awaitOwnerWorktreeVisibilityDefaultsHydration()'
+    )
+    const remoteCatalogIndex = source.indexOf("timeRendererStartupStep('remote-catalog-refresh'")
+    expect(ownerDefaultsIndex).toBeGreaterThan(
+      source.indexOf("logRendererStartupDiagnostic('startup-hydration-done'")
+    )
+    expect(ownerDefaultsIndex).toBeLessThan(remoteCatalogIndex)
     // Why: the deferred full scan must be followed by a re-prune so deleted-worktree visit
     // timestamps for non-session repos are dropped once every repo is authoritative.
     expect(

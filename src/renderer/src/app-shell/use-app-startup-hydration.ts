@@ -58,6 +58,8 @@ function useStartupActions() {
       fetchWorktreeLineage: s.fetchWorktreeLineage,
       fetchOrcaProfiles: s.fetchOrcaProfiles,
       fetchSettings: s.fetchSettings,
+      awaitOwnerWorktreeVisibilityDefaultsHydration:
+        s.awaitOwnerWorktreeVisibilityDefaultsHydration,
       fetchKeybindings: s.fetchKeybindings,
       initGitHubCache: s.initGitHubCache,
       hydrateWorkspaceSession: s.hydrateWorkspaceSession,
@@ -109,8 +111,10 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
       try {
         // Why: nothing in the hydration chain reads profile state synchronously, so don't let it add a serial IPC round-trip before fetchSettings.
         void actions.fetchOrcaProfiles()
-        // Why: repo/worktree hydration routes through settings.activeRuntimeEnvironmentId; load settings first so a persisted remote runtime doesn't hydrate stale local state.
-        await timeRendererStartupStep('fetch-settings', () => actions.fetchSettings())
+        // Why: publish local settings before persisted UI/catalog work; a saved remote owner's defaults can spend the full connect timeout.
+        await timeRendererStartupStep('fetch-settings', () =>
+          actions.fetchSettings({ deferOwnerWorktreeVisibilityDefaults: true })
+        )
         // Why: hidden-at-launch PTYs can query OSC 10/11 before any pane mounts; publish view attributes as soon as settings exist so main's silent-until-push responder has data.
         publishTerminalViewAttributesAtAppStart(
           useAppStore.getState().settings,
@@ -283,6 +287,10 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           void (async () => {
             try {
               try {
+                // Why: remote rows must not render under a fallback visibility while their owner default is still loading.
+                await timeRendererStartupStep('owner-visibility-defaults', () =>
+                  actions.awaitOwnerWorktreeVisibilityDefaultsHydration()
+                )
                 await timeRendererStartupStep('remote-catalog-refresh', async () => {
                   await actions.fetchReposForAllHosts()
                   await actions.fetchProjectGroupsForAllHosts()

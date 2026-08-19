@@ -9,7 +9,7 @@ import {
   isExpandableSubmoduleEntry,
   type SubmoduleSectionTreeNode,
   type SubmoduleStatusState
-} from './source-control-submodule-expansion'
+} from './source-control/listing/submodule-expansion'
 
 const LOADING = 'Loading submodule changes…'
 const EMPTY = 'No changes in submodule'

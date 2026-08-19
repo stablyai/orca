@@ -27,8 +27,10 @@ import {
 } from './session-scanner-kimi-paths'
 import { readJsonObjectIfExists } from './session-scanner-values'
 import {
+  WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS,
   WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS,
-  WslTranscriptFsError
+  WslTranscriptFsError,
+  resetWslTranscriptFsGateForTests
 } from '../native-chat/wsl-transcript-fs-gate'
 
 // Identity must not change between the refused and the recovered read, or the
@@ -55,13 +57,18 @@ function servingHandle(body: string) {
   }
 }
 
+// A result that lands past the deadline never lifts the route quarantine, so
+// recovery waits out the back-off window the same way production does.
 async function releaseAndSettle(): Promise<void> {
   releaseStall?.()
   releaseStall = undefined
-  await vi.advanceTimersByTimeAsync(0)
+  await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS)
 }
 
 beforeEach(() => {
+  // blockedRoutes is persistent gate state: a prior stall must not quarantine
+  // this test's route.
+  resetWslTranscriptFsGateForTests()
   resetCodexSessionIndexTitleCacheForTests()
   clearKimiSessionIndexCache()
   mocks.stat.mockReset()
@@ -69,7 +76,8 @@ beforeEach(() => {
   mocks.readFile.mockReset()
   mocks.stat.mockResolvedValue(INDEX_STATS)
   releaseStall = undefined
-  vi.useFakeTimers()
+  // performance.now drives the route quarantine clock, so it must be faked too.
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] })
 })
 
 afterEach(async () => {

@@ -424,7 +424,7 @@ function compactAgentSummary(container: HTMLElement): HTMLButtonElement | null {
 }
 
 function childWorktreeCardPresent(container: HTMLElement): boolean {
-  return container.querySelector('[id="worktree-list-option-all%3Achild"]') !== null
+  return container.querySelector('[id="worktree-list-option-all%3A%7Cchild"]') !== null
 }
 
 function parentVirtualRowKey(container: HTMLElement): string | null {
@@ -523,7 +523,7 @@ describe('WorktreeCard agent-list <-> child-worktrees expansion coupling', () =>
 
     // The remount still happens: the parent moved to a standalone 'item' render
     // row with a DIFFERENT React key, and the child card is gone.
-    expect(parentVirtualRowKey(container)).toBe('wt:all:parent')
+    expect(parentVirtualRowKey(container)).toBe('wt:all:|parent')
     expect(childWorktreeCardPresent(container)).toBe(false)
 
     // FIXED: the card remounted, but the durable expansion cache means the

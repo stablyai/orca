@@ -57,11 +57,11 @@ vi.mock('../ssh/ssh-provider-authority', () => ({
 }))
 
 import {
-  _getRemoteWorkspaceSnapshotForTests,
   _resetRemoteWorkspaceCachesForTests,
-  registerRemoteWorkspaceHandlers,
-  remoteWorkspaceSessionMatchesSnapshot
+  registerRemoteWorkspaceHandlers
 } from './remote-workspace'
+import { _getRemoteWorkspaceSnapshotForTests } from './remote-workspace-snapshot-cache'
+import { remoteWorkspaceSessionMatchesSnapshot } from './remote-workspace-snapshot-normalization'
 
 function snapshot(session: RemoteWorkspaceSession, revision = 7): RemoteWorkspaceSnapshot {
   return {

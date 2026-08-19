@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import {
+  GLUE_SLIDE_BUDGET,
   retireLandedMobileNativeChatPending,
   selectGluedPendingIds
 } from './mobile-native-chat-pending-retirement'
@@ -28,9 +29,9 @@ function pendingSend(
   text: string,
   tail: string | null,
   expectedOccurrence = 1,
-  glueBaselineTrusted = true
+  baselineResolved = true
 ): MobileNativeChatPendingMessage {
-  return { id, text, expectedOccurrence, baselineTailMessageId: tail, glueBaselineTrusted }
+  return { id, text, expectedOccurrence, baselineTailMessageId: tail, baselineResolved }
 }
 
 function retiredIds(
@@ -176,13 +177,37 @@ describe('selectGluedPendingIds', () => {
     expect(retiredIds(messages, pending)).toEqual(['p1', 'p2'])
   })
 
-  it('does not trust history loaded after sends captured against a placeholder transcript', () => {
+  // Unresolved baselines are held out of matching until the drafts hook rebases
+  // them onto the first authoritative read — see mobile-native-chat-pending-baseline.
+  it('holds out sends whose baseline has not been rebased onto a real transcript', () => {
     const messages = [userTurn('m1', 'one two', 1000)]
     const pending = [
       pendingSend('p1', 'one', null, 1, false),
       pendingSend('p2', 'two', null, 1, false)
     ]
     expect(retiredIds(messages, pending)).toEqual([])
+  })
+
+  // A head that can never match must not freeze the run behind it: one stuck
+  // bubble would otherwise disable glue retirement for the rest of the session.
+  it('glues a later pair even when the head of the run can never match', () => {
+    const messages = [
+      userTurn('m0', 'unrelated', 1000),
+      userTurn('m1', 'fix the bug', 5000),
+      userTurn('m2', 'ship the fix', 6000)
+    ]
+    const stuckHead = pendingSend('p0', 'bug', 'm0')
+    const pair = [pendingSend('p1', 'ship the', 'm0'), pendingSend('p2', 'fix', 'm0')]
+    expect(retiredIds(messages, [stuckHead, ...pair])).toEqual(['p1', 'p2'])
+  })
+
+  // Nothing bounds how many sends pile onto the agent's input line, so the
+  // slide's budget must never truncate a genuine glue.
+  it('retires a glued run far longer than the slide budget', () => {
+    const words = Array.from({ length: 12 }, (_, index) => `w${index}`)
+    const messages = [assistantTurn('m1', 'ready', 1000), userTurn('m2', words.join(' '), 5000)]
+    const pending = words.map((word, index) => pendingSend(`p${index}`, word, 'm1'))
+    expect(retiredIds(messages, pending)).toHaveLength(words.length)
   })
 
   it('skips a caption-less image echo instead of gluing it', () => {
@@ -212,7 +237,12 @@ describe('selectGluedPendingIds', () => {
     expect(retiredIds(messages, [pendingSend('p1', 'one', 'm1')])).toEqual([])
   })
 
-  it('inspects each pending segment at most once per transcript turn', () => {
+  // The cursor slides past a head that cannot match, so a turn may try several
+  // start positions — but one inspection budget covers the whole slide, keeping
+  // the work linear in the run length rather than quadratic. The attempt already
+  // in flight is allowed to overshoot the remaining budget, deliberately: that is
+  // what guarantees a genuine long glue is never truncated.
+  it('keeps segment inspection linear in the run length per transcript turn', () => {
     const pendingCount = 96
     const turnCount = 12
     const text = `${'a '.repeat(pendingCount)}x`
@@ -231,7 +261,7 @@ describe('selectGluedPendingIds', () => {
     } finally {
       startsWith.mockRestore()
     }
-    expect(segmentChecks).toBeLessThanOrEqual(turnCount * pendingCount)
+    expect(segmentChecks).toBeLessThanOrEqual(turnCount * (2 * pendingCount + GLUE_SLIDE_BUDGET))
   })
 })
 
@@ -248,6 +278,14 @@ describe('retireLandedMobileNativeChatPending', () => {
       pendingSend('p2', 'again', 'm2')
     ]
     expect(retireLandedMobileNativeChatPending(messages, pending, NO_IMAGE_ECHOES)).toEqual([])
+  })
+
+  // The drafts effect early-outs on `next === current`; a fresh array on the
+  // no-op path would re-enter it on every transcript frame.
+  it('returns the input array itself when nothing retires', () => {
+    const messages = [assistantTurn('m1', 'ready', 1000)]
+    const pending = [pendingSend('p1', 'one', 'm1'), pendingSend('p2', 'two', 'm1')]
+    expect(retireLandedMobileNativeChatPending(messages, pending, NO_IMAGE_ECHOES)).toBe(pending)
   })
 
   it('keeps sends whose glue candidate predates them', () => {
