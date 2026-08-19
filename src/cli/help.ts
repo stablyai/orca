@@ -84,7 +84,7 @@ Terminals:
   terminal read             Read bounded terminal output
   terminal send             Send input to a live terminal
   terminal wait             Wait for a terminal condition (exit, tui-idle)
-  terminal stop             Stop terminals for a worktree
+  terminal stop             Stop terminals for a worktree or all local daemon sessions
   terminal create           Create a terminal session in a worktree
   terminal rename           Set or clear the title of a terminal tab
   terminal split            Split an existing terminal pane
@@ -245,6 +245,7 @@ Common Commands:
   orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--json]
   orca terminal wait [--terminal <handle>] --for exit|tui-idle [--timeout-ms <ms>] [--json]
   orca terminal stop --worktree <selector> [--json]
+  orca terminal stop --all [--json]
   orca terminal create [--worktree <selector>] [--title <name>] [--command <text>] [--focus] [--json]
   orca terminal split [--terminal <handle>] [--direction horizontal|vertical] [--json]
   orca terminal switch [--terminal <handle>] [--json]

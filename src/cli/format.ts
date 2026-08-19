@@ -176,7 +176,7 @@ function localCliErrorData(error: unknown, context: CliErrorContext): unknown {
 }
 
 export function formatCliStatus(status: CliStatusResult): string {
-  return [
+  const lines = [
     `appRunning: ${status.app.running}`,
     `pid: ${status.app.pid ?? 'none'}`,
     `desktopWindowStatus: ${status.app.desktopWindowStatus ?? 'unknown'}`,
@@ -184,7 +184,14 @@ export function formatCliStatus(status: CliStatusResult): string {
     `runtimeReachable: ${status.runtime.reachable}`,
     `runtimeId: ${status.runtime.runtimeId ?? 'none'}`,
     `graphState: ${status.graph.state}`
-  ].join('\n')
+  ]
+  if (status.daemon) {
+    lines.push(
+      `daemonReachable: ${status.daemon.reachable}`,
+      `daemonSessionCount: ${status.daemon.sessionCount}`
+    )
+  }
+  return lines.join('\n')
 }
 
 export function formatStatus(status: CliStatusResult): string {

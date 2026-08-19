@@ -31,6 +31,7 @@ import {
   getRequiredStringFlag
 } from '../flags'
 import { RuntimeClientError } from '../runtime-client'
+import { stopAllLocalDaemonSessions } from '../runtime/local-daemon-sessions'
 import {
   getBrowserWorktreeSelector,
   getOptionalWorktreeSelector,
@@ -137,6 +138,35 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     }
   },
   'terminal stop': async ({ flags, client, cwd, json }) => {
+    const stopAll = flags.get('all') === true
+    if (stopAll && flags.has('worktree')) {
+      throw new RuntimeClientError('invalid_argument', 'Use either --all or --worktree, not both')
+    }
+    if (stopAll) {
+      if (client.isRemote) {
+        throw new RuntimeClientError(
+          'invalid_argument',
+          '--all stops local daemon sessions and cannot be used with a remote runtime'
+        )
+      }
+      // Why: after the desktop runtime exits, runtime RPC cannot reach the still-live daemon;
+      // talk to the local daemon socket directly so users can clean up background agents.
+      const stopped = await stopAllLocalDaemonSessions(client.getLocalUserDataPath())
+      printResult(
+        {
+          id: 'local-daemon-stop-all',
+          ok: true,
+          result: stopped,
+          _meta: { runtimeId: 'local-daemon' }
+        },
+        json,
+        (value) =>
+          value.remaining > 0
+            ? `Stopped ${value.stopped} terminals; ${value.remaining} still running.`
+            : `Stopped ${value.stopped} terminals.`
+      )
+      return
+    }
     const result = await client.call<{ stopped: number }>('terminal.stop', {
       worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
     })

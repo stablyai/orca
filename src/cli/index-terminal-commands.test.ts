@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   callMock,
@@ -7,6 +7,7 @@ const {
   getDefaultUserDataPathMock,
   addEnvironmentFromPairingCodeMock,
   listEnvironmentsMock,
+  stopAllLocalDaemonSessionsMock,
   spawnMock
 } = vi.hoisted(() => ({
   callMock: vi.fn(),
@@ -15,6 +16,7 @@ const {
   getDefaultUserDataPathMock: vi.fn(() => '/tmp/orca-user-data'),
   addEnvironmentFromPairingCodeMock: vi.fn(),
   listEnvironmentsMock: vi.fn(),
+  stopAllLocalDaemonSessionsMock: vi.fn(),
   spawnMock: vi.fn()
 }))
 
@@ -35,6 +37,10 @@ vi.mock('./runtime/environments', () => ({
   resolveEnvironment: vi.fn()
 }))
 
+vi.mock('./runtime/local-daemon-sessions', () => ({
+  stopAllLocalDaemonSessions: stopAllLocalDaemonSessionsMock
+}))
+
 vi.mock('child_process', async () => {
   const { createChildProcessModuleMock } = await import('./index-test-harness.js')
   return createChildProcessModuleMock(spawnMock)
@@ -52,6 +58,11 @@ describe('orca cli worktree awareness', () => {
     addEnvironmentFromPairingCodeMock,
     listEnvironmentsMock,
     spawnMock
+  })
+
+  beforeEach(() => {
+    stopAllLocalDaemonSessionsMock.mockReset()
+    stopAllLocalDaemonSessionsMock.mockResolvedValue({ stopped: 0, remaining: 0 })
   })
 
   it('passes explicit focus through terminal.create', async () => {
@@ -659,5 +670,66 @@ describe('orca cli worktree awareness', () => {
       title: 'Codex',
       focus: false
     })
+  })
+
+  it('stops all local daemon sessions without calling the runtime', async () => {
+    stopAllLocalDaemonSessionsMock.mockResolvedValueOnce({ stopped: 3, remaining: 0 })
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['terminal', 'stop', '--all', '--json'], '/tmp/repo')
+
+    expect(stopAllLocalDaemonSessionsMock).toHaveBeenCalledWith('/tmp/orca-user-data')
+    expect(callMock).not.toHaveBeenCalled()
+    expect(logSpy.mock.calls[0][0]).toContain('"stopped": 3')
+  })
+
+  it('stops all local daemon sessions with human-readable output', async () => {
+    stopAllLocalDaemonSessionsMock.mockResolvedValueOnce({ stopped: 3, remaining: 0 })
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['terminal', 'stop', '--all'], '/tmp/repo')
+
+    expect(stopAllLocalDaemonSessionsMock).toHaveBeenCalledWith('/tmp/orca-user-data')
+    expect(callMock).not.toHaveBeenCalled()
+    expect(logSpy.mock.calls[0][0]).toBe('Stopped 3 terminals.')
+  })
+
+  it('reports remaining local daemon sessions when not all could be stopped', async () => {
+    stopAllLocalDaemonSessionsMock.mockResolvedValueOnce({ stopped: 2, remaining: 1 })
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['terminal', 'stop', '--all'], '/tmp/repo')
+
+    expect(stopAllLocalDaemonSessionsMock).toHaveBeenCalledWith('/tmp/orca-user-data')
+    expect(callMock).not.toHaveBeenCalled()
+    expect(logSpy.mock.calls[0][0]).toBe('Stopped 2 terminals; 1 still running.')
+  })
+
+  it('rejects terminal stop with both all and worktree', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['terminal', 'stop', '--all', '--worktree', 'active'], '/tmp/repo')
+
+    expect(stopAllLocalDaemonSessionsMock).not.toHaveBeenCalled()
+    expect(callMock).not.toHaveBeenCalled()
+    expect(errorSpy.mock.calls.flat().join('\n')).toContain('Use either --all or --worktree')
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('rejects remote terminal stop all', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['terminal', 'stop', '--all', '--pairing-code', 'remote-runtime'], '/tmp/repo')
+
+    expect(stopAllLocalDaemonSessionsMock).not.toHaveBeenCalled()
+    expect(callMock).not.toHaveBeenCalled()
+    expect(errorSpy.mock.calls.flat().join('\n')).toContain('--all stops local daemon sessions')
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
   })
 })

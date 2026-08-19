@@ -232,9 +232,12 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['terminal', 'stop'],
-    summary: 'Stop terminals for a worktree',
-    usage: 'orca terminal stop --worktree <selector> [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'worktree']
+    summary: 'Stop terminals for a worktree or all local daemon sessions',
+    usage: 'orca terminal stop --worktree <selector> [--json] | orca terminal stop --all [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'worktree', 'all'],
+    notes: [
+      '--all talks directly to the local terminal daemon, so it works after the Orca app/runtime has exited.'
+    ]
   },
   {
     path: ['terminal', 'create'],
