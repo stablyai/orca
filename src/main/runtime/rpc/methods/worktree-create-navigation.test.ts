@@ -50,6 +50,54 @@ describe('worktree.create navigation authority', () => {
     }
   )
 
+  it('keeps an older CLI reveal working against an updated host', async () => {
+    // Why: an old CLI cannot send `navigation`, but it pairs as a runtime device. Without the
+    // cliProvenanceRequest marker it would resolve to 'caller' and `--activate` would reveal
+    // nothing anywhere — strictly worse than the pre-fix behavior for that version skew.
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      dedupeWorktreeCreate: passthroughDedupe,
+      showRepo: vi.fn().mockResolvedValue(repo),
+      createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('worktree.create', {
+        repo: 'repo-1',
+        name: 'feature',
+        activate: true,
+        cliProvenanceRequest: {}
+      }),
+      () => {},
+      { clientKind: 'runtime', pairedDeviceId: 'device-1', connectionId: 'conn-1' }
+    )
+
+    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ navigation: 'all' })
+    )
+  })
+
+  it('still scopes a desktop create that carries no CLI marker', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      dedupeWorktreeCreate: passthroughDedupe,
+      showRepo: vi.fn().mockResolvedValue(repo),
+      createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('worktree.create', { repo: 'repo-1', name: 'feature', activate: true }),
+      () => {},
+      { clientKind: 'runtime', pairedDeviceId: 'device-1', connectionId: 'conn-1' }
+    )
+
+    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ navigation: 'caller' })
+    )
+  })
+
   it('honors an explicit follow navigation on create', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

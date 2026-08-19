@@ -51,9 +51,16 @@ export function buildManagedWorktreeCreateArgs(
     // Why 'runtime' only: a phone has no terminal-provisioning renderer, so when it
     // creates without a startup command the host renderer is what runs the repo's
     // setup/default tabs off this activation. Scoping mobile would drop that work.
+    // Why the CLI is excluded by payload and not by version: the CLI also pairs as a
+    // 'runtime' device but has no viewer of its own, so scoping it makes --activate
+    // reveal nothing. Current CLIs say so explicitly with `navigation`, but an older
+    // CLI against an updated host cannot; `cliProvenanceRequest` is the marker every
+    // CLI has always sent, and no renderer or phone sends it.
     navigation: resolveRuntimeNavigationTarget({
       ...(params.navigation ? { navigation: params.navigation } : {}),
-      ...(origin.clientKind === 'runtime' ? { clientKind: origin.clientKind } : {})
+      ...(origin.clientKind === 'runtime' && params.cliProvenanceRequest === undefined
+        ? { clientKind: origin.clientKind }
+        : {})
     }),
     setupDecision: params.setupDecision,
     createdWithAgent: params.createdWithAgent ?? params.startupAgent,
