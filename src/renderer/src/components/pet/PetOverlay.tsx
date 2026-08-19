@@ -12,6 +12,9 @@ import {
 } from './pet-agent-state'
 import { usePetPointerInteraction } from './usePetPointerInteraction'
 import { buildSpriteAnimationCss } from './sprite-animation-css'
+import { petLaneY } from './pet-walk-lane'
+import { usePetWalkLane } from './usePetWalkLane'
+import { petBodyMotionStyle, PET_BODY_MOTION_KEYFRAMES_CSS } from './pet-body-motion-css'
 
 type Sprite = NonNullable<CustomPet['sprite']>
 
@@ -231,6 +234,9 @@ function useDocumentVisible(): boolean {
 // Why: keep a default for the cached helpers below; the live size now comes
 // from the store so the user can resize from the status-bar menu.
 const SIZE = 180
+// Why: the status bar is the pet's floor (h-6 = 24px), so the lane rests the
+// box on top of it rather than letting the pet overlap the bar.
+const PET_LANE_BOTTOM_INSET = 24
 const POSITION_STORAGE_KEY = 'pet-overlay-position'
 const LEGACY_POSITION_STORAGE_KEY = 'sidekick-overlay-position'
 
@@ -306,10 +312,6 @@ function defaultPosition(size: number = SIZE): Position {
   )
 }
 
-// Why: the bob float is runtime CSS, not user-visible copy; keep CSS keywords
-// out of i18n so translated locales cannot invalidate the keyframes.
-const PET_BOB_KEYFRAMES_CSS =
-  '@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }'
 export function PetOverlay(): React.JSX.Element {
   const documentVisible = useDocumentVisible()
   const reducedMotion = usePrefersReducedMotion()
@@ -349,6 +351,8 @@ export function PetOverlay(): React.JSX.Element {
     },
     [size]
   )
+  const positionRef = useRef(position)
+  positionRef.current = position
   const { dragging, dragAnimation, hovering, dragGeneration, handlers } = usePetPointerInteraction(
     position,
     (next) => setPosition(clampToViewport(next, size))
@@ -360,23 +364,42 @@ export function PetOverlay(): React.JSX.Element {
     return () => window.removeEventListener('resize', onResize)
   }, [setPosition, size])
 
+  // Why: keyed on `dragging` alone — the walk moves the pet every frame, and
+  // persisting each one would hammer localStorage 60x/s. Where the user last
+  // dropped the pet is the only position worth remembering.
   useEffect(() => {
     if (dragging) {
       return
     }
     try {
-      window.localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify(position))
+      window.localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify(positionRef.current))
     } catch {
       // ignore storage failures
     }
-  }, [dragging, position])
+  }, [dragging])
 
   const motionAllowed = documentVisible && !reducedMotion
   // Why: a still/vertical grab freezes on frame 0 (Codex grab-and-hold); a
   // horizontal drag keeps animating so the running rows show. Bob always pauses.
   const spriteAnimate = motionAllowed && (!dragging || dragAnimation !== null)
-  const bobAnimate = motionAllowed && !dragging
   const animationName = usePetAnimationName(dragging, dragAnimation, hovering)
+  const walkDirection = usePetWalkLane({
+    active: motionAllowed && !dragging,
+    size,
+    readX: () => positionRef.current.x,
+    onAdvance: useCallback(
+      (x: number) => setPosition((current) => ({ x, y: current.y })),
+      [setPosition]
+    )
+  })
+  // Why: the lane owns y whenever the pet isn't in hand — a persisted y from
+  // before the walking lane (or from a taller window) must not strand the pet
+  // mid-screen. Read live so the resize listener's re-render re-seats it.
+  const laneTop =
+    typeof window === 'undefined'
+      ? position.y
+      : petLaneY(window.innerHeight, size, PET_LANE_BOTTOM_INSET)
+  const top = dragging ? position.y : laneTop
 
   return (
     // Why: the outer box and middle layer stay pointer-events-none so app chrome
@@ -387,19 +410,21 @@ export function PetOverlay(): React.JSX.Element {
       className="pointer-events-none fixed z-40"
       style={{
         left: position.x,
-        top: position.y,
+        top,
         width: size,
         height: size
       }}
     >
-      <div className="pointer-events-none flex size-full items-center justify-end">
+      {/* Why: items-end rests the pet's feet on the lane floor (a shorter pet
+          would otherwise hover mid-box), and justify-center keeps the walk
+          symmetric so it reaches both edges by the same margin. */}
+      <div className="pointer-events-none flex size-full items-end justify-center">
         <div
           {...handlers}
           className="pointer-events-auto flex h-fit w-fit select-none"
           style={{
             cursor: dragging ? 'grabbing' : 'grab',
-            animation: 'pet-bob 1.2s ease-in-out infinite',
-            animationPlayState: bobAnimate ? 'running' : 'paused',
+            ...petBodyMotionStyle(dragging, motionAllowed),
             touchAction: 'none',
             // Why: floor so the wrapper stays grabbable while w-fit/h-fit would
             // otherwise collapse to 0×0 during the image-load window.
@@ -407,34 +432,43 @@ export function PetOverlay(): React.JSX.Element {
             minHeight: 24
           }}
         >
-          <style>{PET_BOB_KEYFRAMES_CSS}</style>
-          {sprite ? (
-            // Why: remount per pet so a switched-to sprite starts a fresh
-            // animation instead of inheriting the prior pet's currentTime.
-            <SpriteFrame
-              key={url}
-              url={url}
-              sprite={sprite}
-              animate={spriteAnimate}
-              maxSize={size}
-              animationName={animationName}
-              restartKey={dragGeneration}
-            />
-          ) : detected ? (
-            <DetectedSpriteFrame detected={detected} animate={spriteAnimate} maxSize={size} />
-          ) : (
-            // Why: cap explicitly at the pet size — the w-fit/h-fit wrapper is
-            // fit-content, so max-w/h-full has no fixed box to resolve against
-            // and the image would otherwise render at its intrinsic size and
-            // overflow the persisted size box that clamping still assumes.
-            <img
-              src={url}
-              alt=""
-              className="max-h-full max-w-full object-contain"
-              style={{ maxWidth: size, maxHeight: size }}
-              draggable={false}
-            />
-          )}
+          <style>{PET_BODY_MOTION_KEYFRAMES_CSS}</style>
+          {/* Why: facing lives on its own layer — the bob/sway animations drive
+              `transform`, so a flip declared alongside them would be overridden
+              for the whole animation. */}
+          <div
+            data-pet-facing={walkDirection}
+            className="flex"
+            style={walkDirection === 'left' ? { transform: 'scaleX(-1)' } : undefined}
+          >
+            {sprite ? (
+              // Why: remount per pet so a switched-to sprite starts a fresh
+              // animation instead of inheriting the prior pet's currentTime.
+              <SpriteFrame
+                key={url}
+                url={url}
+                sprite={sprite}
+                animate={spriteAnimate}
+                maxSize={size}
+                animationName={animationName}
+                restartKey={dragGeneration}
+              />
+            ) : detected ? (
+              <DetectedSpriteFrame detected={detected} animate={spriteAnimate} maxSize={size} />
+            ) : (
+              // Why: cap explicitly at the pet size — the w-fit/h-fit wrapper is
+              // fit-content, so max-w/h-full has no fixed box to resolve against
+              // and the image would otherwise render at its intrinsic size and
+              // overflow the persisted size box that clamping still assumes.
+              <img
+                src={url}
+                alt=""
+                className="max-h-full max-w-full object-contain"
+                style={{ maxWidth: size, maxHeight: size }}
+                draggable={false}
+              />
+            )}
+          </div>
         </div>
       </div>
     </div>
