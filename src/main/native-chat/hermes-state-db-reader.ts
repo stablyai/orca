@@ -62,7 +62,6 @@ export function readHermesStateDbPage(
     if (!columns.has('session_id')) {
       return { messages: [], hasMore: false, beforeOffset: 0 }
     }
-    const timestamp = optionalColumn(columns, 'timestamp')
     const id = columns.has('id') ? 'id' : 'rowid'
     const cursor = beforeOffset === undefined ? null : beforeOffset
     const rows = db
@@ -71,13 +70,13 @@ export function readHermesStateDbPage(
                ${optionalColumn(columns, 'tool_call_id')} AS tool_call_id,
                ${optionalColumn(columns, 'tool_calls')} AS tool_calls,
                ${optionalColumn(columns, 'tool_name')} AS tool_name,
-               ${timestamp} AS timestamp,
+               ${optionalColumn(columns, 'timestamp')} AS timestamp,
                ${optionalColumn(columns, 'reasoning')} AS reasoning,
                ${optionalColumn(columns, 'reasoning_content')} AS reasoning_content,
                ${optionalColumn(columns, 'reasoning_details')} AS reasoning_details
           FROM messages
          WHERE session_id = ? AND (? IS NULL OR ${id} < ?)
-         ORDER BY ${timestamp} DESC, ${id} DESC
+         ORDER BY ${id} DESC
          LIMIT ?
       `)
       .all(sessionId, cursor, cursor, Math.max(0, limit) + 1)
@@ -97,7 +96,7 @@ export function readHermesStateDbPage(
     return {
       messages,
       hasMore,
-      beforeOffset: messages[0] ? Number(messages[0].id) : 0
+      beforeOffset: pageRows.length ? Number(pageRows.at(-1)?.id) : 0
     }
   } finally {
     db.close()

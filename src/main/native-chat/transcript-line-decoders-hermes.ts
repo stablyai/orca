@@ -32,6 +32,7 @@ type HermesToolCall = {
   name?: unknown
   arguments?: unknown
   function?: unknown
+  input?: unknown
 }
 
 function asHermesMessageRecord(value: unknown): HermesMessageRecord | null {
