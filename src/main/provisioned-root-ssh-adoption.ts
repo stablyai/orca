@@ -90,6 +90,16 @@ export async function adoptProvisionedRootSshCheckout(args: {
   if (gitWorktree.isSparse || sparseCheckoutEnabled) {
     throw new Error('Provisioned-root recipes cannot adopt a sparse checkout.')
   }
+  const requestedBranch = request.branchNameOverride ?? request.name
+  if (gitWorktree.branch !== `refs/heads/${requestedBranch}`) {
+    throw new Error("The recipe projectRoot is not checked out on Orca's requested branch.")
+  }
+  if (request.baseBranch && !request.expectedRefHead) {
+    throw new Error('The requested provisioned-root ref identity is missing.')
+  }
+  if (request.expectedRefHead && gitWorktree.head !== request.expectedRefHead) {
+    throw new Error("The recipe projectRoot was not created from Orca's requested ref.")
+  }
 
   const worktreeId = `${repo.id}::${gitWorktree.path}`
   attachEphemeralVmRuntimeToWorkspace({

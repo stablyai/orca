@@ -17,6 +17,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { resolveGitHubPRMergeMethods } from '../../../../shared/github/pull-request-merge-methods'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
+import { getDeleteStateForWorktreeHost } from '../sidebar/worktree-delete-state-host-match'
 import { presentGitLabMRMergeState } from './gitlab-mr-merge-state'
 import {
   ClosedReviewActions,
@@ -50,7 +51,7 @@ export default function HostedReviewActions({
   onRefreshReview: () => Promise<void>
 }): React.JSX.Element | null {
   const isDeletingWorktree = useAppStore(
-    (s) => s.deleteStateByWorktreeId[worktree.id]?.isDeleting ?? false
+    (s) => getDeleteStateForWorktreeHost(worktree, s.deleteStateByWorktreeId)?.isDeleting ?? false
   )
   const isGitLab = review.provider === 'gitlab'
   const shortLabel = isGitLab ? 'MR' : 'PR'
@@ -151,8 +152,8 @@ export default function HostedReviewActions({
   const handleDeleteWorktree = useCallback(() => {
     // Why: route every UI delete entry point through the shared funnel so
     // skip-confirm, main-worktree, and child-workspace safeguards cannot drift.
-    runWorktreeDelete(worktree.id)
-  }, [worktree.id])
+    runWorktreeDelete(worktree.id, worktree.hostId ? { expectedHostId: worktree.hostId } : {})
+  }, [worktree.hostId, worktree.id])
 
   if (review.state === 'open') {
     return (

@@ -56,7 +56,7 @@ vi.mock('../repo-detection', () => ({
   detectRepoIconAndUpstream: detectRepoIconAndUpstreamMock
 }))
 
-vi.mock('./filesystem-auth', () => ({
+vi.mock('./registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
 }))
 

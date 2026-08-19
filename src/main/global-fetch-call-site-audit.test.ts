@@ -24,11 +24,12 @@ const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
   ['main/orca-profiles/profile-cloud-org-members-client.ts', 1],
   ['main/rate-limits/codex-fetcher.ts', 3],
   ['main/runtime/relay/relay-http-client.ts', 2],
+  ['main/runtime/relay/relay-region-preference.ts', 3],
   ['main/source-control/hosted-review-api-request.ts', 1],
   ['main/speech/openai-transcription-client.ts', 1],
   // fetch appears only inside injected-page script source strings, not as a
   // call this process makes
-  ['main/amp/hook-service.ts', 1],
+  ['main/amp/agent-status-plugin-source.ts', 1],
   ['main/opencode/hook-service.ts', 1],
   ['main/pi/agent-status-extension-source.ts', 1],
   // local identifiers named `fetch` (git fetch), not HTTP

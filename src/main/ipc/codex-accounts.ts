@@ -38,8 +38,12 @@ export function registerCodexAccountHandlers(
   ipcMain.handle('codexAccounts:add', (_event, args?: CodexAccountAddTarget) =>
     codexAccounts.addAccount(args)
   )
-  ipcMain.handle('codexAccounts:reauthenticate', (_event, args: { accountId: string }) =>
-    codexAccounts.reauthenticateAccount(args.accountId)
+  ipcMain.handle(
+    'codexAccounts:reauthenticate',
+    (_event, args: { accountId: string; activateIfSelectionWasEmpty?: boolean }) =>
+      codexAccounts.reauthenticateAccount(args.accountId, {
+        activateIfSelectionWasEmpty: args.activateIfSelectionWasEmpty === true
+      })
   )
   ipcMain.handle('codexAccounts:remove', (_event, args: { accountId: string }) =>
     codexAccounts.removeAccount(args.accountId)

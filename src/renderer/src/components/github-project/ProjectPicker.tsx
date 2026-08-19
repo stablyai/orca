@@ -18,12 +18,14 @@ import type {
   GitHubProjectOwnerType,
   GitHubProjectSettings,
   GitHubProjectSummary,
+  GitHubProjectViewSummary
+} from '../../../../shared/github/project-types'
+import type {
   GitHubProjectViewError,
-  GitHubProjectViewSummary,
   ListAccessibleProjectsResult,
   ListProjectViewsResult,
   ResolveProjectRefResult
-} from '../../../../shared/github/project-types'
+} from '../../../../shared/github/project-result-types'
 import {
   GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR,
   hasBoundedGitHubProjectRefInputText,

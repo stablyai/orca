@@ -296,7 +296,10 @@ describe('runner execFile timeout handling', () => {
       return child
     })
 
-    await gitExecFileAsync(['worktree', 'list', '--porcelain', '-z'], { cwd: '/home5/Brian' })
+    await gitExecFileAsync(['worktree', 'list', '--porcelain', '-z'], {
+      cwd: '/home5/Brian',
+      env: { ...process.env, GIT_ASKPASS: undefined, SSH_ASKPASS: undefined }
+    })
 
     expect(capturedEnv?.GIT_TERMINAL_PROMPT).toBe('0')
     expect(capturedEnv?.GIT_ASKPASS).toBe('')
@@ -503,13 +506,16 @@ describe('runner execFile timeout handling', () => {
 
       expect(execFileMock).toHaveBeenCalledWith(
         'wsl.exe',
-        ['-d', 'Ubuntu', '--', 'sh', '-lc', expect.any(String)],
+        ['-d', 'Ubuntu', '--exec', 'sh', '-lc', expect.any(String)],
         expect.objectContaining({ cwd: undefined }),
         expect.any(Function)
       )
-      const shellCommand = execFileMock.mock.calls[0]?.[1]?.[5] as string
+      // A read also warms the direct-git environment probe in the background, so
+      // pick the git call rather than assuming it is the first spawn.
+      const gitCall = execFileMock.mock.calls.find((call) => String(call[1]?.[5]).includes("'git'"))
+      const shellCommand = gitCall?.[1]?.[5] as string
       expect(shellCommand).toContain('getent passwd')
-      expect(shellCommand).toContain('exec "\\$_orca_wsl_shell" -ilc')
+      expect(shellCommand).toContain('exec "$_orca_wsl_shell" -ilc')
       expect(shellCommand).toContain('/mnt/c/repo')
       expect(shellCommand).toContain("'git'")
       expect(shellCommand).toContain('status')
@@ -533,7 +539,7 @@ describe('runner execFile timeout handling', () => {
 
       expect(execFileMock).toHaveBeenCalledWith(
         'wsl.exe',
-        ['-d', 'Ubuntu', '--', 'bash', '-c', expect.any(String)],
+        ['-d', 'Ubuntu', '--exec', 'bash', '-c', expect.any(String)],
         expect.objectContaining({ cwd: undefined }),
         expect.any(Function)
       )

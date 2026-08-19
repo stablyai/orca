@@ -114,6 +114,54 @@ describe('workspace cleanup scan progress', () => {
     })
   })
 
+  it('keeps same-id host rows distinct across streamed enrichment frames', async () => {
+    const pending = deferred<WorkspaceCleanupScanResult>()
+    let onProgress: ((progress: WorkspaceCleanupScanProgress) => void) | undefined
+    const localCandidate = makeCandidate({ executionHostId: 'local' })
+    const remoteCandidate = makeCandidate({ executionHostId: 'ssh:ssh-1', connectionId: 'ssh-1' })
+    const scan = vi.fn((_args, progressCallback) => {
+      onProgress = progressCallback
+      return pending.promise
+    })
+    installWorkspaceCleanupApi(scan)
+    const store = createCleanupTestStore()
+
+    const scanPromise = store.getState().scanWorkspaceCleanup()
+    onProgress?.({
+      scanId: 'scan-1',
+      scannedAt: NOW,
+      scannedWorktreeCount: 1,
+      totalWorktreeCount: 2,
+      candidates: [localCandidate],
+      errors: [],
+      candidateMode: 'append'
+    })
+    await vi.waitFor(() => {
+      expect(store.getState().workspaceCleanupProgress?.scannedWorktreeCount).toBe(1)
+    })
+
+    onProgress?.({
+      scanId: 'scan-1',
+      scannedAt: NOW,
+      scannedWorktreeCount: 2,
+      totalWorktreeCount: 2,
+      candidates: [remoteCandidate],
+      errors: [],
+      candidateMode: 'append'
+    })
+    await vi.waitFor(() => {
+      expect(store.getState().workspaceCleanupScan?.candidates).toHaveLength(2)
+    })
+
+    pending.resolve({ scannedAt: NOW, candidates: [localCandidate, remoteCandidate], errors: [] })
+    await scanPromise
+
+    expect(store.getState().workspaceCleanupScan?.candidates).toEqual([
+      expect.objectContaining({ executionHostId: 'local' }),
+      expect.objectContaining({ executionHostId: 'ssh:ssh-1' })
+    ])
+  })
+
   it('does not re-probe previously enriched rows during cumulative progress updates', async () => {
     const pending = deferred<WorkspaceCleanupScanResult>()
     let onProgress: ((progress: WorkspaceCleanupScanProgress) => void) | undefined

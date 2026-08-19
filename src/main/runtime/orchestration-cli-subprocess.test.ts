@@ -200,7 +200,14 @@ describeIfBuilt('orca orchestration reset subprocess', () => {
     runtime.setOrchestrationDb(db)
     const coordinatorPaneKey = 'tab_cli:11111111-1111-4111-8111-111111111111'
     vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
-      handle === 'term_cli' ? coordinatorPaneKey : null
+      handle === 'term_cli'
+        ? coordinatorPaneKey
+        : handle === 'term_target'
+          ? 'tab_target:33333333-3333-4333-8333-333333333333'
+          : null
+    )
+    vi.spyOn(runtime, 'getLiveTerminalPaneKey').mockImplementation((handle) =>
+      runtime.getTerminalPaneKey(handle)
     )
     db.createRun({
       objective: 'CLI reset subprocess fixture',

@@ -5,13 +5,15 @@ name: Daily macOS Dev Build
 # hourly.
 #
 # Schedule is a single UTC cron (GH Actions has no timezone-aware schedules).
-# 14:15 UTC is early morning Pacific year-round (6:15am PST / 7:15am PDT). Minute
+# 18:15 UTC is late morning Pacific year-round (10:15am PST / 11:15am PDT). Minute
 # 15 avoids stacking with hourly-mac-build, which fires at minute 0 every hour.
 #
 # Deliberately narrow scope:
 #   - macOS only. Other platforms keep using RC/stable.
-#   - No tests, no lint, no e2e. This channel trades safety for latency; PR CI
-#     and release-cut remain the gates that matter.
+#   - No tests or lint on the build job. After a live publish we fire-and-forget
+#     the full E2E workflow at the cut SHA (same detached dispatch as
+#     release-cut). A red suite must not fail or delay the daily.
+#   - PR CI and release-cut remain the gates that matter.
 #   - Signed AND notarized, exactly like a release. The notary round trip is the
 #     one slow step kept: macOS anchors a notarized app's TCC grants on identifier
 #     + team rather than on its cdhash, so those grants survive an update. Without
@@ -45,8 +47,8 @@ name: Daily macOS Dev Build
 
 on:
   schedule:
-    # Once a day, early morning Pacific. Single cron — no DST twin, no clock gate.
-    - cron: '15 14 * * *'
+    # Once a day, late morning Pacific. Single cron — no DST twin, no clock gate.
+    - cron: '15 18 * * *'
   workflow_dispatch:
     inputs:
       force:
@@ -70,6 +72,9 @@ env:
 jobs:
   build-daily-mac:
     if: github.repository == 'stablyai/orca'
+    outputs:
+      head_sha: ${{ steps.freshness.outputs.head_sha }}
+      published: ${{ steps.publish_live.outcome == 'success' && 'true' || 'false' }}
     runs-on: blacksmith-6vcpu-macos-15
     # Why 150: it must exceed the worst case the retry budgets below can produce
     # (install 3x10 + publish 2x45 = 120, plus ~25 for checkout/build/verify), or
@@ -469,3 +474,34 @@ jobs:
             gh release delete "$tag" --repo "$DAILY_REPO" --yes --cleanup-tag || \
               echo "::warning::Could not prune $tag"
           done <<<"$stale"
+
+  # Why detached dispatch, not a reusable workflow in this graph: the full suite
+  # is currently red on main. Inlining it here would fail the daily after the
+  # signed build already published. Same pattern as release-cut's post-release-e2e.
+  #
+  # Why --ref main plus the SHA input: daily tags live on orca-daily, not this
+  # repo, so there is no cut tag for `gh workflow run --ref`. The workflow file
+  # comes from main; checkout uses the exact commit this daily built.
+  post-daily-e2e:
+    needs: build-daily-mac
+    if: ${{ needs.build-daily-mac.outputs.published == 'true' && needs.build-daily-mac.outputs.head_sha != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch cut-scoped E2E
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ needs.build-daily-mac.outputs.head_sha }}
+        run: |
+          for attempt in 1 2 3; do
+            if gh workflow run e2e.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              --raw-field "ref=$SHA"; then
+              echo "Dispatched post-daily E2E for $SHA."
+              exit 0
+            fi
+            [[ "$attempt" -eq 3 ]] || sleep "$((attempt * 5))"
+          done
+          echo "::warning::Failed to dispatch post-daily E2E for $SHA after 3 attempts."

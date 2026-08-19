@@ -79,6 +79,9 @@ export async function prepareRequestForCreate(
       : getEphemeralVmPortableBaseSelection(request)),
     ephemeralVmRuntimeId: preparedTarget.runtimeId,
     ephemeralVmCheckoutMode: preparedTarget.checkoutMode,
+    ...(preparedTarget.expectedRefHead
+      ? { ephemeralVmExpectedRefHead: preparedTarget.expectedRefHead }
+      : {}),
     ...(preparedTarget.environmentId
       ? { ephemeralVmRuntimeEnvironmentId: preparedTarget.environmentId }
       : {}),

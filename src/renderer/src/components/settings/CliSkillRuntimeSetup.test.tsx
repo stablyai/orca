@@ -17,15 +17,14 @@ import {
 } from './CliSkillRuntimeSetup'
 
 function decodeWslLoginShellScript(command: string): string {
-  const encoded = /-- sh -c 'eval \\"`printf %s ([A-Za-z0-9+/=]+) \| base64 -d`\\"'/.exec(
-    command
-  )?.[1]
+  const encoded =
+    /(?:--|--exec) sh -c 'eval \\"`printf %s ([A-Za-z0-9+/=]+) \| base64 -d`\\"'/.exec(command)?.[1]
   expect(encoded).toBeDefined()
   return Buffer.from(encoded!, 'base64').toString('utf8')
 }
 
 function getWslOuterShellScript(command: string): string {
-  const script = /-- sh -c '([^']+)' \} # Runs:/.exec(command)?.[1]
+  const script = /(?:--|--exec) sh -c '([^']+)' \} # Runs:/.exec(command)?.[1]
   expect(script).toBeDefined()
   // Simulate PowerShell 5.1's native argv boundary consuming quote escapes.
   return script!.replaceAll('\\"', '"')
@@ -49,7 +48,7 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
 
     expect(command).toBe(skillCommand)
     expect(setupCommand).toBe(
-      `& { $PSNativeCommandArgumentPassing = 'Legacy'; wsl.exe -d 'Ubuntu' -- sh -c 'eval \\"\`printf %s ${encoded} | base64 -d\`\\"' } # Runs: ${skillCommand}`
+      `& { $PSNativeCommandArgumentPassing = 'Legacy'; wsl.exe -d 'Ubuntu' --exec sh -c 'eval \\"\`printf %s ${encoded} | base64 -d\`\\"' } # Runs: ${skillCommand}`
     )
     expect(decodeWslLoginShellScript(setupCommand)).toContain(
       'exec "$_orca_wsl_shell" -ilc \'npx skills add orchestration --global\''
@@ -94,7 +93,7 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
     const setupCommand = buildSkillSetupTerminalCommand(command, 'powershell.exe', runtime, 'win32')
 
     expect(setupCommand).toMatch(
-      /^& \{ \$PSNativeCommandArgumentPassing = 'Legacy'; wsl\.exe -- sh -c 'eval \\"`printf/
+      /^& \{ \$PSNativeCommandArgumentPassing = 'Legacy'; wsl\.exe --exec sh -c 'eval \\"`printf/
     )
     expect(setupCommand).toContain('`\\"\' } # Runs: npx skills update orchestration --global')
   })

@@ -1,0 +1,32 @@
+# Orca relay zsh overlay wrapper
+__orca_resolve_user_config_dir() {
+  typeset -g _orca_resolved_config_dir="${1:-}"
+  while [[ "$_orca_resolved_config_dir" == */ ]]; do _orca_resolved_config_dir="${_orca_resolved_config_dir%/}"; done
+  if [[ -z "$_orca_resolved_config_dir" || -f "$_orca_resolved_config_dir/.orca-shell-wrapper" || "$_orca_resolved_config_dir" == */shell-ready/zsh ]]; then
+    _orca_resolved_config_dir="$HOME"
+  fi
+}
+__orca_resolve_user_config_dir "${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"
+_orca_home="$_orca_resolved_config_dir"
+if [[ -f "$_orca_home/.zprofile" ]]; then
+  _orca_wrapper_zdotdir="$ZDOTDIR"
+  # Why: user startup files resolve plugin/config paths from their own ZDOTDIR;
+  # Orca restores its wrapper dir afterward so zsh still loads wrapper files.
+  export ZDOTDIR="$_orca_home"
+  source "$_orca_home/.zprofile"
+  export ZDOTDIR="$_orca_wrapper_zdotdir"
+  unset _orca_wrapper_zdotdir
+fi
+
+if [[ -f "$_orca_home/.zprofile" ]] && [[ -o ksharrays || -o shwordsplit || -o shglob ]] 2>/dev/null; then
+  case "$(emulate 2>/dev/null)" in
+    sh|ksh)
+      export ZDOTDIR="$_orca_home"
+      # Why unset: an ORCA_HISTFILE no wrapper file will ever consume is
+      # inherited by everything this pane spawns, including a nested Orca.
+      builtin unset ORCA_HISTFILE _orca_shell_features _orca_home _orca_resolved_config_dir _orca_wrapper_zdotdir_self
+      unfunction __orca_shell_epilogue __orca_has_feature __orca_resolve_user_config_dir __orca_resolve_inherited_config_dir 2>/dev/null
+      return 0
+      ;;
+  esac
+fi

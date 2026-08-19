@@ -19,9 +19,16 @@ export async function cleanupFailedEphemeralVmWorkspace(
     request.workspaceRunContext?.projectHostSetupId
   ) {
     try {
-      await actions.deleteProjectHostSetup(request.workspaceRunContext.projectHostSetupId)
+      const deleted = await actions.deleteProjectHostSetup(
+        request.workspaceRunContext.projectHostSetupId
+      )
+      if (deleted == null) {
+        actions.reportSetupError(new Error('Could not confirm project host rollback.'))
+        return
+      }
     } catch (error) {
       actions.reportSetupError(error)
+      return
     }
   }
   try {

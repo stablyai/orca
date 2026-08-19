@@ -20,6 +20,33 @@ export function isWslUncPath(path: string): boolean {
   return parseWslUncPath(path) !== null
 }
 
+/**
+ * Convert a Windows path to a Linux path for commands that will execute inside WSL.
+ * Returns the path unchanged if it is already POSIX-style.
+ *
+ * Why: WSL hook/setup environments may need both the worktree UNC path
+ * (\\wsl.localhost\...) and regular Windows install paths (C:\Users\...)
+ * translated before passing them to bash. Leaving drive paths untouched
+ * breaks scripts that read ORCA_ROOT_PATH or similar env vars inside WSL.
+ */
+export function toLinuxPath(windowsPath: string): string {
+  // Why the platform guard: on a POSIX host a literal `//wsl$/x` path is an
+  // ordinary directory, not a distro mount, so it must survive unchanged.
+  const info = process.platform === 'win32' ? parseWslUncPath(windowsPath) : null
+  if (info) {
+    return info.linuxPath
+  }
+
+  const driveMatch = windowsPath.match(/^([A-Za-z]):[/\\](.*)$/)
+  if (!driveMatch) {
+    return windowsPath
+  }
+
+  const driveLetter = driveMatch[1].toLowerCase()
+  const rest = driveMatch[2].replace(/\\/g, '/')
+  return `/mnt/${driveLetter}/${rest}`
+}
+
 /** Convert an absolute Linux path in a known WSL distro to its Windows form. */
 export function toWindowsWslPath(linuxPath: string, distro: string): string {
   const mntMatch = linuxPath.match(/^\/mnt\/([a-z])(\/.*)?$/)

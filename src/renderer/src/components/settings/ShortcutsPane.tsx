@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import {
   findKeybindingConflictsForDefinitions,
@@ -38,6 +39,7 @@ import { useEditablePluginCommands } from '@/store/plugin-panels'
 import { buildShortcutDefinitionCatalog } from './shortcut-definition-catalog'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import { buildShortcutRowVisibility } from './shortcut-row-visibility'
+import { useMacCapturedDigitChords } from './use-mac-captured-digit-chords'
 
 const isMac = navigator.userAgent.includes('Mac')
 const platform: NodeJS.Platform = isMac
@@ -47,6 +49,7 @@ const platform: NodeJS.Platform = isMac
     : 'linux'
 
 export function ShortcutsPane(): React.JSX.Element {
+  useTranslation()
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const terminalShortcutPolicy = useAppStore(
     (state) => state.settings?.terminalShortcutPolicy ?? 'orca-first'
@@ -81,6 +84,11 @@ export function ShortcutsPane(): React.JSX.Element {
   )
   const [shortcutQuery, setShortcutQuery] = useState('')
   const [shortcutFilter, setShortcutFilter] = useState<ShortcutFilter>('all')
+  const macCapturedDigitChords = useMacCapturedDigitChords({ enabled: isMac })
+  const missionControlConflictMessage = translate(
+    'auto.components.settings.shortcutDefinitionCatalog.missionControlConflict',
+    'Blocked by Mission Control. Remap here or change it in System Settings.'
+  )
 
   // Why: suspend global dispatch so a captured chord reaches the editor.
   useEffect(() => {
@@ -95,9 +103,17 @@ export function ShortcutsPane(): React.JSX.Element {
           disabledTuiAgents,
           pluginCommands,
           keybindings,
-          platform
+          platform,
+          macCapturedDigitChords,
+          missionControlConflictMessage
         }),
-      [disabledTuiAgents, keybindings, pluginCommands]
+      [
+        disabledTuiAgents,
+        keybindings,
+        macCapturedDigitChords,
+        missionControlConflictMessage,
+        pluginCommands
+      ]
     )
   const definitionForAction = (actionId: KeybindingActionId): KeybindingDefinition | null =>
     definitionsByAction.get(actionId) ?? getKeybindingDefinition(actionId)

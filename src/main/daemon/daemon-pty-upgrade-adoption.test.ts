@@ -8,7 +8,7 @@ import { DaemonServer } from './daemon-server'
 import { STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION } from './daemon-protocol-version'
 import { getDaemonSocketPath } from './daemon-spawner'
 import type { DaemonFileLog } from './daemon-file-log'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 
 type FixtureSubprocess = SubprocessHandle & { emitData: (data: string) => void }
 

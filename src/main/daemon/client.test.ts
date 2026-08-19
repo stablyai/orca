@@ -5,7 +5,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { DaemonClient } from './client'
+import type { DaemonPendingRequests } from './daemon-client-pending-requests'
 import { encodeNdjson, NDJSON_MAX_LINE_BYTES, NdjsonLineTooLongError } from './ndjson'
+import { DaemonConnectionLostError } from './types'
 import type { HelloMessage, DaemonRequest, DaemonEvent } from './types'
 import { getDaemonSocketPath } from './daemon-spawner'
 
@@ -368,7 +370,7 @@ describe('DaemonClient', () => {
       await client.ensureConnected()
       const internals = client as unknown as {
         controlSocket: Socket
-        pendingRequests: Map<string, unknown>
+        pendingRequests: DaemonPendingRequests
       }
       const writeSpy = vi.spyOn(internals.controlSocket, 'write')
       const timerSpy = vi.spyOn(globalThis, 'setTimeout')
@@ -406,6 +408,67 @@ describe('DaemonClient', () => {
 
       const result = await client.request('listSessions', undefined)
       expect(result).toEqual({ sessions: [] })
+    })
+
+    it('survives a cancelCreateOrAttach the daemon refuses', async () => {
+      // Why: v1-v10 daemons have no cancel case and answer with an error. Escalating
+      // that to a disconnect would reject every sibling session's in-flight request.
+      const received: string[] = []
+      await startMockDaemon({
+        onControlMessage: (msg) => {
+          const req = msg as { id: string; type: string }
+          received.push(req.type)
+          return req.type === 'cancelCreateOrAttach'
+            ? encodeNdjson({
+                id: req.id,
+                ok: false,
+                error: 'Unknown request type: cancelCreateOrAttach'
+              })
+            : null
+        }
+      })
+      const disconnected = vi.fn()
+
+      client = new DaemonClient({ socketPath, tokenPath })
+      await client.ensureConnected()
+      client.onDisconnected(disconnected)
+
+      const sibling = client.request('listSessions', undefined)
+      const siblingRejected = vi.fn()
+      void sibling.catch(siblingRejected)
+      const abort = new AbortController()
+      const spawn = client.request('createOrAttach', { sessionId: 'aborted' }, 30_000, abort.signal)
+      void spawn.catch(() => {})
+
+      await waitFor(() => received.includes('createOrAttach') && received.includes('listSessions'))
+      abort.abort()
+      await waitFor(() => received.includes('cancelCreateOrAttach'))
+      await new Promise((r) => setTimeout(r, 50))
+
+      expect(client.isConnected()).toBe(true)
+      expect(disconnected).not.toHaveBeenCalled()
+      expect(siblingRejected).not.toHaveBeenCalled()
+    })
+
+    it('rejects in-flight requests as DaemonConnectionLostError when the socket dies', async () => {
+      // Why: the error class is the only signal separating "the wire is gone" from
+      // "the daemon answered with an error"; requestDaemonRpc keys the decision to
+      // tear down the shared connection off it.
+      const serverSockets: Socket[] = []
+      await startMockDaemon({ onControlMessage: () => null })
+      server.on('connection', (socket) => serverSockets.push(socket))
+
+      client = new DaemonClient({ socketPath, tokenPath })
+      await client.ensureConnected()
+      const inFlight = client.request('listSessions', undefined)
+      const rejected = expect(inFlight).rejects.toBeInstanceOf(DaemonConnectionLostError)
+
+      await waitFor(() => serverSockets.length > 0)
+      for (const socket of serverSockets) {
+        socket.destroy()
+      }
+
+      await rejected
     })
 
     it('rejects on error response', async () => {
@@ -632,6 +695,20 @@ describe('DaemonClient', () => {
       expect(writeSpy).not.toHaveBeenCalled()
     })
 
+    it('rejects an oversized settled notification without disconnecting', async () => {
+      await startMockDaemon()
+      client = new DaemonClient({ socketPath, tokenPath })
+      await client.ensureConnected()
+      const internals = client as unknown as { controlSocket: Socket }
+      const writeSpy = vi.spyOn(internals.controlSocket, 'write')
+
+      await expect(
+        client.notifyWithSettlement('write', { data: 'x'.repeat(NDJSON_MAX_LINE_BYTES) })
+      ).resolves.toBe(false)
+      expect(writeSpy).not.toHaveBeenCalled()
+      expect(client.isConnected()).toBe(true)
+    })
+
     it('reports a dropped delivery when the socket write throws', async () => {
       await startMockDaemon()
       client = new DaemonClient({ socketPath, tokenPath })
@@ -643,6 +720,44 @@ describe('DaemonClient', () => {
 
       // Swallowed, not rethrown: a dead socket must not tear down the caller.
       expect(client.notify('write', { sessionId: 'session-1', data: 'hello' })).toBe(false)
+    })
+
+    it('reports an asynchronous socket write failure at settlement', async () => {
+      await startMockDaemon()
+      client = new DaemonClient({ socketPath, tokenPath })
+      await client.ensureConnected()
+      const internals = client as unknown as { controlSocket: Socket }
+      vi.spyOn(internals.controlSocket, 'write').mockImplementation(((
+        _data: string,
+        callback: (error?: Error | null) => void
+      ) => {
+        callback(new Error('EPIPE'))
+        return false
+      }) as Socket['write'])
+
+      await expect(
+        client.notifyWithSettlement('write', { sessionId: 'session-1', data: 'hello' })
+      ).resolves.toBe(false)
+      expect(client.isConnected()).toBe(false)
+    })
+
+    it('disconnects a daemon socket whose write settlement exceeds its deadline', async () => {
+      await startMockDaemon()
+      client = new DaemonClient({ socketPath, tokenPath })
+      await client.ensureConnected()
+      const internals = client as unknown as { controlSocket: Socket }
+      vi.spyOn(internals.controlSocket, 'write').mockImplementation((() => true) as Socket['write'])
+      vi.useFakeTimers()
+
+      const pending = client.notifyWithSettlement(
+        'write',
+        { sessionId: 'session-1', data: 'hello' },
+        5000
+      )
+      await vi.advanceTimersByTimeAsync(5000)
+
+      await expect(pending).resolves.toBe(false)
+      expect(client.isConnected()).toBe(false)
     })
   })
 })
