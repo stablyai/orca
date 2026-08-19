@@ -26,7 +26,12 @@ import {
 } from './execution-host-flag'
 import { parseExecutionHostId } from '../shared/execution-host'
 
-const NO_SELECTION = { pairingCode: null, environmentSelector: null }
+const listSshTargetsMock = vi.fn(async () => [] as { id: string; label: string }[])
+const NO_SELECTION = {
+  listSshTargets: listSshTargetsMock,
+  pairingCode: null,
+  environmentSelector: null
+}
 
 function flags(entries: Record<string, string | boolean>): Map<string, string | boolean> {
   return new Map(Object.entries(entries))
@@ -84,15 +89,17 @@ describe('resolveHostFlagEnvironmentId', () => {
 
     await expect(
       resolveHostFlagEnvironmentId(flags({ host: 'runtime:env-missing' }), NO_SELECTION)
-    ).rejects.toThrow('no paired environment has id env-missing')
+    ).rejects.toThrow('no paired Orca server is named or has id env-missing')
   })
 
-  it('matches by environment id only, never by environment name', async () => {
+  // Why: the name is what a person or agent actually knows; requiring the raw uuid made the
+  // obvious spelling fail against a server that is sitting right there.
+  it('accepts the environment name as well as its id', async () => {
     listEnvironmentsMock.mockReturnValue([environment('env-1', 'gpu')])
 
     await expect(
       resolveHostFlagEnvironmentId(flags({ host: 'runtime:gpu' }), NO_SELECTION)
-    ).rejects.toThrow('no paired environment has id gpu')
+    ).resolves.toBe('env-1')
   })
 
   it('decodes percent-encoded environment ids', async () => {
@@ -108,6 +115,7 @@ describe('resolveHostFlagEnvironmentId', () => {
 
     await expect(
       resolveHostFlagEnvironmentId(flags({ host: 'runtime:env-1' }), {
+        listSshTargets: listSshTargetsMock,
         pairingCode: 'orca://pair?x',
         environmentSelector: null
       })
@@ -120,6 +128,7 @@ describe('resolveHostFlagEnvironmentId', () => {
 
     await expect(
       resolveHostFlagEnvironmentId(flags({ host: 'runtime:env-1' }), {
+        listSshTargets: listSshTargetsMock,
         pairingCode: null,
         environmentSelector: { value: 'other', label: '--environment' }
       })
@@ -132,6 +141,7 @@ describe('resolveHostFlagEnvironmentId', () => {
 
     await expect(
       resolveHostFlagEnvironmentId(flags({ host: 'runtime:env-1' }), {
+        listSshTargets: listSshTargetsMock,
         pairingCode: null,
         environmentSelector: { value: 'staging', label: 'ORCA_ENVIRONMENT' }
       })
@@ -142,7 +152,7 @@ describe('resolveHostFlagEnvironmentId', () => {
     listEnvironmentsMock.mockReturnValue([environment('env-1', 'gpu')])
 
     await expect(
-      resolveHostFlagEnvironmentId(flags({ host: 'runtime:gpu' }), NO_SELECTION)
+      resolveHostFlagEnvironmentId(flags({ host: 'runtime:missing' }), NO_SELECTION)
     ).rejects.toMatchObject({
       code: 'invalid_argument',
       data: { knownEnvironments: [{ id: 'env-1', name: 'gpu' }] }
@@ -155,6 +165,7 @@ describe('resolveHostFlagEnvironmentId', () => {
 
     await expect(
       resolveHostFlagEnvironmentId(flags({ host: 'runtime:env-1' }), {
+        listSshTargets: listSshTargetsMock,
         pairingCode: null,
         environmentSelector: { value: 'gpu', label: '--environment' }
       })

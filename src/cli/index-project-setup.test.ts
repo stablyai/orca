@@ -198,15 +198,80 @@ describe('orca cli worktree awareness', () => {
 
     await main(['project', 'setups', '--host', 'runtime:not-a-real-env', '--json'], '/tmp/repo')
 
-    expect(callMock).not.toHaveBeenCalled()
+    // The command itself never reached a runtime; only the suggestion lookup did.
+    expect(callMock).not.toHaveBeenCalledWith('projectHostSetup.list')
     const printed = [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')
-    expect(printed).toContain('no paired environment has id not-a-real-env')
+    expect(printed).toContain('no paired Orca server is named or has id not-a-real-env')
     // An agent reads the code and the retry candidates, not the prose.
     expect(JSON.parse(printed).error.code).toBe('invalid_argument')
     expect(JSON.parse(printed).error.data.knownEnvironments).toEqual([])
     expect(process.exitCode).toBe(1)
 
     process.exitCode = priorExitCode
+  })
+
+  // Why: ssh: was never validated, so an unknown target answered ok:true with an empty list —
+  // the same silent wrong-machine answer unknown runtime ids used to give.
+  it('rejects an unknown ssh host instead of answering empty', async () => {
+    queueFixtures(callMock, okFixture('req_ssh_targets', { targets: [] }))
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['project', 'setups', '--host', 'ssh:openclaw', '--json'], '/tmp/repo')
+
+    expect(callMock).not.toHaveBeenCalledWith('projectHostSetup.list')
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      'no SSH target named or with id openclaw'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('tells a caller reaching for a paired server by ssh that it is an environment', async () => {
+    pairRuntimeEnvironment(listEnvironmentsMock, 'awin')
+    queueFixtures(callMock, okFixture('req_ssh_targets', { targets: [] }))
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['project', 'setups', '--host', 'ssh:awin', '--json'], '/tmp/repo')
+
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+      '--environment awin'
+    )
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
+  it('resolves an ssh label to its target id before filtering', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_ssh_targets', { targets: [{ id: 'ssh-123-abc', label: 'openclaw' }] }),
+      okFixture('req_project_setups', {
+        setups: [
+          {
+            id: 'setup-openclaw',
+            projectId: 'github:stablyai/orca',
+            hostId: 'ssh:ssh-123-abc',
+            repoId: 'repo-openclaw',
+            path: '/home/me/orca',
+            displayName: 'Orca',
+            setupState: 'ready',
+            setupMethod: 'legacy-repo',
+            createdAt: 1,
+            updatedAt: 1
+          }
+        ]
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['project', 'setups', '--host', 'ssh:openclaw'], '/tmp/repo')
+
+    expect(logSpy.mock.calls[0]?.[0]).toContain('setup-openclaw')
   })
 
   it('rejects a malformed --host value before contacting any runtime', async () => {

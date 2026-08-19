@@ -22,7 +22,11 @@ import {
   formatProjectList,
   printResult
 } from '../format'
-import { hostFilterMatchesHostId, parseHostFlag } from '../execution-host-flag'
+import {
+  hostFilterMatchesHostId,
+  parseHostFlag,
+  resolveHostFlagTarget
+} from '../execution-host-flag'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { resolveRepoPathArgument } from '../repo-path-arguments'
 import { RuntimeClientError } from '../runtime-client'
@@ -53,7 +57,7 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
   },
   'project setups': async ({ flags, client, json }) => {
     const projectFilter = getOptionalStringFlag(flags, 'project')
-    const hostFilter = parseHostFlag(flags)
+    const hostFilter = await resolveHostFlagTarget(flags, client)
     const result = await client.call<{ setups: ProjectHostSetup[] }>('projectHostSetup.list')
     const setups = result.result.setups.filter(
       (setup) =>
