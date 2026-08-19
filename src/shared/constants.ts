@@ -70,6 +70,7 @@ export const BROWSER_FAMILY_LABELS: Record<string, string> = {
   chromium: 'Chromium',
   comet: 'Comet',
   helium: 'Helium',
+  aside: 'Aside',
   arc: 'Arc',
   edge: 'Microsoft Edge',
   brave: 'Brave',
