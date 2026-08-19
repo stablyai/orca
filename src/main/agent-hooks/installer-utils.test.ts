@@ -32,6 +32,10 @@ import {
 } from './installer-utils'
 import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
 import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
+import {
+  buildWindowsNoWindowCmdHookInvocation,
+  getWindowsSystem32Path
+} from './windows-powershell-hook-launcher'
 
 let tmpDir: string
 let configPath: string
@@ -615,17 +619,34 @@ function decodeWindowsHookCommand(command: string): string {
 function expectedDecodedWindowsHookCommand(scriptPath: string): string {
   const quoted = `'${scriptPath.replaceAll("'", "''")}'`
   // Why: PowerShell progress CLIXML corrupts consumers that merge stderr into JSON stdout.
-  return `$ProgressPreference='SilentlyContinue'; if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; exit 0`
+  const invoke = scriptPath.toLowerCase().endsWith('.cmd')
+    ? buildWindowsNoWindowCmdHookInvocation(quoted)
+    : `& ${quoted}; exit $LASTEXITCODE`
+  return `$ProgressPreference='SilentlyContinue'; if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { ${invoke} }; [Console]::In.ReadToEnd() | Out-Null; exit 0`
 }
 
 describe('wrapWindowsHookCommand', () => {
   it('invokes the .cmd through an encoded PowerShell command', () => {
-    const command = wrapWindowsHookCommand('C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd')
+    const scriptPath = 'C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd'
+    const command = wrapWindowsHookCommand(scriptPath)
+    const decoded = decodeWindowsHookCommand(command)
     expect(command).toMatch(qualifiedWindowsPowerShellCommand)
     expect(command).not.toMatch(/^powershell\b/i)
-    expect(decodeWindowsHookCommand(command)).toBe(
-      expectedDecodedWindowsHookCommand('C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook.cmd')
-    )
+    expect(decoded).toBe(expectedDecodedWindowsHookCommand(scriptPath))
+    expect(decoded).toContain('CreateNoWindow = $true')
+    expect(decoded).toContain(getWindowsSystem32Path('cmd.exe').replaceAll('/', '\\'))
+    expect(decoded).toContain("EnvironmentVariables['ORCA_WINDOWS_HOOK_CMD']")
+    expect(decoded).not.toMatch(/& 'C:\\Users\\alice\\.orca\\agent-hooks\\codex-hook\.cmd'/)
+  })
+
+  it('invokes a .ps1 hook in-process without opening cmd.exe', () => {
+    const scriptPath = 'C:\\hooks\\copilot-hook.ps1'
+    const command = wrapWindowsHookCommand(scriptPath)
+    const decoded = decodeWindowsHookCommand(command)
+    expect(command).toMatch(qualifiedWindowsPowerShellCommand)
+    expect(decoded).toBe(expectedDecodedWindowsHookCommand(scriptPath))
+    expect(decoded).toContain("& 'C:\\hooks\\copilot-hook.ps1'")
+    expect(decoded).not.toContain('CreateNoWindow')
   })
 
   it('scopes environment variables inside the encoded launcher', () => {

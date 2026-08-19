@@ -15,7 +15,10 @@ import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { resolveHooksJsonWritePath } from './hook-config-write-path'
 import { writeRollingFileBackup } from '../rolling-file-backup'
-import { wrapWindowsPowerShellEncodedCommand } from './windows-powershell-hook-launcher'
+import {
+  buildWindowsNoWindowCmdHookInvocation,
+  wrapWindowsPowerShellEncodedCommand
+} from './windows-powershell-hook-launcher'
 
 export type HookCommandConfig = {
   type: 'command'
@@ -125,7 +128,10 @@ export function wrapWindowsHookCommand(
   const envPrefix = Object.entries(env)
     .map(([key, value]) => `$env:${key} = ${quotePowerShellString(value)}; `)
     .join('')
-  const command = `${envPrefix}if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; exit 0`
+  const invoke = scriptPath.toLowerCase().endsWith('.cmd')
+    ? buildWindowsNoWindowCmdHookInvocation(quoted)
+    : `& ${quoted}; exit $LASTEXITCODE`
+  const command = `${envPrefix}if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { ${invoke} }; [Console]::In.ReadToEnd() | Out-Null; exit 0`
   return wrapWindowsPowerShellEncodedCommand(command)
 }
 
