@@ -22,7 +22,8 @@ import {
   type GitLabIssueOrMRLink
 } from './worktree-palette-gitlab-url-match'
 import { isWorktreePaletteQueryTooLarge } from './worktree-palette-query-bounds'
-import type { PaletteSearchResult, PaletteSupportingText } from './worktree-palette-search'
+import { buildWorktreePaletteTaskUrlResult } from './worktree-palette-task-url-result'
+import type { PaletteSearchResult } from './worktree-palette-search'
 
 export type CmdJTaskSourceUrl =
   | { provider: 'github'; link: GitHubIssueOrPRLink }
@@ -100,9 +101,9 @@ function remoteIdentityMatchesGitHubSlug(repo: Repo, slug: RepoSlug): boolean | 
   if (verdict !== false) {
     return verdict
   }
-  // Why not false: identity keeps one remote, chosen when the repo was added and never re-probed.
-  // An `upstream` pick means a fork's `origin` existed and is invisible here, so rejecting would
-  // drop URLs from the fork itself. A stale snapshot can still misjudge a renamed repo.
+  // Why not false: identity keeps only one remote, so an `upstream` pick means a fork's `origin`
+  // existed and is invisible here, and rejecting would drop URLs from the fork itself. GitLab makes
+  // the opposite trade (STA-4450); aligning the two is left to a twin ticket.
   return identity?.remoteName === 'upstream' ? 'unknown' : false
 }
 
@@ -194,28 +195,6 @@ export function getCmdJTaskUrlCreatePreview(
   }
 }
 
-function supportingText(
-  labelKind: PaletteSupportingText['labelKind'],
-  text: string
-): PaletteSupportingText {
-  return { labelKind, text, matchRange: { start: 0, end: text.length } }
-}
-
-function result(
-  worktreeId: string,
-  matchedField: PaletteSearchResult['matchedField'],
-  text: PaletteSupportingText
-): PaletteSearchResult {
-  return {
-    worktreeId,
-    matchedField,
-    displayNameRange: null,
-    branchRange: null,
-    repoRange: null,
-    supportingText: text
-  }
-}
-
 function worktreeMatchesGitHubUrl(
   worktree: Worktree,
   link: GitHubIssueOrPRLink,
@@ -303,36 +282,42 @@ export function matchWorktreePaletteTaskUrl(args: {
     if (!worktreeMatchesGitHubUrl(worktree, intent.link, repo, review)) {
       return null
     }
-    return result(
-      worktree.id,
-      intent.link.type === 'pr' ? 'pr' : 'issue',
-      supportingText(
-        intent.link.type === 'pr' ? 'pr' : 'issue',
-        `${intent.link.type === 'pr' ? 'PR' : 'Issue'} #${intent.link.number}`
-      )
-    )
+    return buildWorktreePaletteTaskUrlResult({
+      worktreeId: worktree.id,
+      ...(worktree.hostId ? { worktreeHostId: worktree.hostId } : {}),
+      labelKind: intent.link.type === 'pr' ? 'pr' : 'issue',
+      text: `${intent.link.type === 'pr' ? 'PR' : 'Issue'} #${intent.link.number}`
+    })
   }
   if (intent.provider === 'linear') {
     if (!worktreeMatchesLinearUrl(worktree, intent.intent)) {
       return null
     }
-    return result(worktree.id, 'issue', supportingText('issue', intent.intent.identifier))
+    return buildWorktreePaletteTaskUrlResult({
+      worktreeId: worktree.id,
+      ...(worktree.hostId ? { worktreeHostId: worktree.hostId } : {}),
+      labelKind: 'issue',
+      text: intent.intent.identifier
+    })
   }
   if (intent.provider === 'gitlab') {
     if (!worktreeMatchesGitLabUrl(worktree, intent.link, repo, review)) {
       return null
     }
-    return result(
-      worktree.id,
-      intent.link.type === 'mr' ? 'pr' : 'issue',
-      supportingText(
-        intent.link.type === 'mr' ? 'mr' : 'issue',
-        `${intent.link.type === 'mr' ? 'MR' : 'Issue'} #${intent.link.number}`
-      )
-    )
+    return buildWorktreePaletteTaskUrlResult({
+      worktreeId: worktree.id,
+      ...(worktree.hostId ? { worktreeHostId: worktree.hostId } : {}),
+      labelKind: intent.link.type === 'mr' ? 'mr' : 'issue',
+      text: `${intent.link.type === 'mr' ? 'MR' : 'Issue'} #${intent.link.number}`
+    })
   }
   if (!worktreeMatchesJiraUrl(worktree, intent.parsed)) {
     return null
   }
-  return result(worktree.id, 'issue', supportingText('issue', intent.parsed.issueKey))
+  return buildWorktreePaletteTaskUrlResult({
+    worktreeId: worktree.id,
+    ...(worktree.hostId ? { worktreeHostId: worktree.hostId } : {}),
+    labelKind: 'issue',
+    text: intent.parsed.issueKey
+  })
 }

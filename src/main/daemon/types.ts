@@ -26,6 +26,7 @@ export type { TerminalSnapshot } from './terminal-snapshot'
 export {
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
+  ASYNC_CWD_VALIDATION_DAEMON_PROTOCOL_VERSION,
   CLEAN_DISCONNECT_PROTOCOL_VERSION,
   COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
   GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
@@ -85,6 +86,8 @@ export type CreateOrAttachRequest = {
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
     shellReadySupported?: boolean
     shellReadyTimeoutMs?: number
+    /** Server-side fence that prevents a client timeout from publishing an orphan PTY. */
+    cancelAfterMs?: number
     startupIngress?: PtyStartupIngressIntent
     agentSessionEnsure?: {
       claim: AgentSessionExecutionClaim
@@ -102,7 +105,7 @@ export type CloseStartupQueryAuthorityRequest = {
 export type CancelCreateOrAttachRequest = {
   id: string
   type: 'cancelCreateOrAttach'
-  payload: { sessionId: string }
+  payload: { sessionId: string; requestId?: string }
 }
 
 export type WriteRequest = {
@@ -397,6 +400,9 @@ export const NOTIFY_PREFIX = 'notify_'
 // live in daemon-errors.ts (this file is capped for wire-shape declarations).
 export {
   TerminalAttachCanceledError,
+  DaemonConnectionLostError,
   DaemonProtocolError,
+  DaemonRequestTimeoutError,
+  DAEMON_UNAVAILABLE_RECONNECT_MESSAGE,
   SessionNotFoundError
 } from './daemon-errors'

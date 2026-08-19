@@ -263,7 +263,9 @@ describe('DaemonServer', () => {
           requestType === 'kill'
             ? c.request('kill', { sessionId: 'canceled-preparation', immediate: true })
             : c.request('cancelCreateOrAttach', { sessionId: 'canceled-preparation' })
-        await expect(cancelRequest).resolves.toEqual({})
+        await expect(cancelRequest).resolves.toEqual(
+          requestType === 'kill' ? {} : { canceled: true }
+        )
         finishPreparation()
         await canceledCreates
         expect(spawnSubprocess).not.toHaveBeenCalled()

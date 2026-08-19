@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-14",
+  "updatedAt": "2026-08-18",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -234,21 +234,29 @@
       "protection": "partial",
       "owner": "terminal-session-readiness",
       "layer": "posix-pty-and-shell-startup",
-      "surfaces": ["queued terminal startup commands", "zsh, bash, and Fish startup output"],
+      "surfaces": [
+        "queued terminal startup commands",
+        "zsh, bash, and Fish startup output",
+        "Bash PROMPT_COMMAND lifecycle composition"
+      ],
       "platforms": ["macos", "linux"],
       "providers": ["local", "local-daemon", "ssh-daemon", "ssh-relay", "paired-runtime"],
       "coveredPlatforms": ["macos", "linux"],
       "coveredProviders": ["local", "local-daemon", "ssh-relay", "paired-runtime"],
-      "coverageNotes": "Real macOS node-pty integration covers zsh 5.9 .zshenv/.zprofile and bash 3.2 profile replacement shells, including exec -a names, same-shell and child-process silent reads, a blocking zle-line-init hook, non-shell readline replacements, and a non-shell image renamed zsh. A real Fish PTY proves marker stripping is byte-exact and does not render bracketed-paste control text. An Ubuntu 20.04 container confirms compatible zsh/bash termios. Deterministic owner contracts cover local, daemon, and SSH relay identity/readiness composition plus provider-owned delivery; explicit terminal-paste remains renderer-owned. Live isolated journeys cover a macOS headed desktop owner with paired web client, headless orca serve with paired web client, and a Docker Linux OpenSSH/Bash target with one readiness-time reconnect. Linux desktop, WSL/Windows, live zsh-over-SSH, and physical remote hosts remain gaps.",
+      "coverageNotes": "Real macOS node-pty integration covers zsh 5.9 .zshenv/.zprofile and bash 3.2 profile replacement shells, including exec -a names, same-shell and child-process silent reads, a blocking zle-line-init hook, non-shell readline replacements, and a non-shell image renamed zsh. A real Fish PTY proves marker stripping is byte-exact and does not render bracketed-paste control text. Ubuntu 20.04/Bash 5.0 and Ubuntu 24.04/Bash 5.2 containers cover scalar and array PROMPT_COMMAND composition, including real zoxide on 24.04. Deterministic owner contracts cover local, daemon, and SSH relay identity/readiness composition plus provider-owned delivery; explicit terminal-paste remains renderer-owned. Live isolated journeys cover a macOS headed desktop owner with paired web client, headless orca serve with paired web client, and a Docker Linux OpenSSH/Bash target with one readiness-time reconnect. Linux desktop, WSL/Windows, live zsh-over-SSH, and physical remote hosts remain gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/13767",
         "https://linear.app/stably/issue/STA-4067",
         "https://linear.app/stably/issue/STA-4068",
-        "https://github.com/stablyai/orca/pull/14161"
+        "https://github.com/stablyai/orca/pull/14161",
+        "https://github.com/stablyai/orca/issues/14448",
+        "https://linear.app/stably/issue/STA-4292",
+        "https://github.com/stablyai/orca/pull/14451"
       ],
-      "invariant": "Shell startup scanning preserves every non-Orca output byte in order across arbitrary PTY chunk boundaries. Before user startup files run, the wrapper publishes its shell PID. If a later exec discards the ready marker, proof-based recovery releases queued startup input only after the launched shell's actual executable image with that exact PID owns the PTY foreground, emits its post-hook line-editor enable sequence, and exposes zle/readline termios; startup reads, line-init hooks, child foreground processes, and non-shell readline replacements cannot trigger that proof. The existing bounded compatibility timeout may enqueue input without proof, but must not publish readiness, lose or duplicate that input across reconnect, or execute it before the replacement shell can accept it.",
-      "oracle": "Split Fish output immediately after the ready marker and after the following ESC introducer; local and daemon owners must emit the exact ESC [ ? 2004 h bytes and headless xterm must not render literal control text. Run the real generated wrappers under node-pty with disposable zsh, bash, and Fish startup files. Plain and exec -a replacement shells must receive one queued command at their first completed line editor without waiting for the 15-second timeout. The identical oracle must time out without the startup identity and prompt fallback. Same-shell reads, child-process reads, a blocking zle-line-init hook, sqlite3, and sqlite3 renamed zsh must not trigger prompt fallback. Relay owner coverage must use the same lossless scanner composition and release through the same prompt contract.",
+      "invariant": "Shell startup scanning preserves every non-Orca output byte in order across arbitrary PTY chunk boundaries. Bash scalar and supported array PROMPT_COMMAND values preserve user bytes, hook order, and foreground exit status while emitting exactly one OSC 133 A/C/D lifecycle without syntax errors. Before user startup files run, the wrapper publishes its shell PID. If a later exec discards the ready marker, proof-based recovery releases queued startup input only after the launched shell's actual executable image with that exact PID owns the PTY foreground, emits its post-hook line-editor enable sequence, and exposes zle/readline termios; startup reads, line-init hooks, child foreground processes, and non-shell readline replacements cannot trigger that proof. The existing bounded compatibility timeout may enqueue input without proof, but must not publish readiness, lose or duplicate that input across reconnect, or execute it before the replacement shell can accept it.",
+      "oracle": "Split Fish output immediately after the ready marker and after the following ESC introducer; local and daemon owners must emit the exact ESC [ ? 2004 h bytes and headless xterm must not render literal control text. Run the real generated wrappers under node-pty with disposable zsh, bash, and Fish startup files. Exercise Bash scalar and array PROMPT_COMMAND values with empty, repeated, escaped, whitespace, control-byte, odd-backslash, status-mutating, DEBUG-trap, zoxide, and RHEL-style hooks; require exact A,C,D:0,A,C,D:1,A,C ordering and byte preservation. Plain and exec -a replacement shells must receive one queued command at their first completed line editor without waiting for the 15-second timeout. The identical oracle must time out without the startup identity and prompt fallback. Same-shell reads, child-process reads, a blocking zle-line-init hook, sqlite3, and sqlite3 renamed zsh must not trigger prompt fallback. Relay owner coverage must use the same lossless scanner composition and release through the same prompt contract.",
       "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/daemon/bash-prompt-command-composition.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty-provider-shell-readiness.test.ts src/relay/pty-shell-launch.test.ts src/relay/pty-handler-startup-command-delivery.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty-provider-shell-readiness.test.ts src/relay/pty-shell-launch.test.ts src/relay/pty-handler-startup-command-delivery.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 src/main/daemon/shell-ready.test.ts src/main/shell-startup-output-scanner.test.ts",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-startup-exec-readiness.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
@@ -256,6 +264,7 @@
       ],
       "testFiles": [
         "src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts",
+        "src/main/daemon/bash-prompt-command-composition.test.ts",
         "src/main/line-editor-ready-output-scanner.test.ts",
         "src/main/shell-startup-identity-scanner.test.ts",
         "src/main/shell-startup-output-scanner.test.ts",
@@ -274,6 +283,15 @@
         "tests/e2e/paired-startup-exec-readiness.spec.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/main/daemon/bash-prompt-command-composition.test.ts",
+          "assertions": [
+            "scalar and array PROMPT_COMMAND values accept trailing separators and whitespace",
+            "escaped trailing spaces and semicolons remain byte-exact",
+            "BASH_REMATCH and chained DEBUG-trap command identity remain intact",
+            "OSC 133 A/C/D lifecycle ordering and command exit status remain exact"
+          ]
+        },
         {
           "file": "src/main/shell-startup-output-scanner.test.ts",
           "assertions": [
@@ -347,6 +365,15 @@
           "result": "passed",
           "durationSeconds": 6,
           "summary": "473 tests passed with one local Fish skip, including every-boundary scanner composition, real exec, silent-read, line-init-hook, renamed-image, disabled-bracketed-paste, and relay-owner oracles."
+        },
+        {
+          "date": "2026-08-15",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts src/main/daemon/bash-prompt-command-composition.test.ts src/main/line-editor-ready-output-scanner.test.ts src/main/shell-startup-identity-scanner.test.ts src/main/shell-startup-output-scanner.test.ts src/main/shell-prompt-readiness-probe.test.ts src/shared/pty-slave-line-discipline-echo.test.ts src/shared/shell-process-readiness.test.ts src/main/daemon/session.test.ts src/main/daemon/shell-ready.test.ts src/main/providers/local-pty-shell-ready-marker-scan.test.ts src/main/providers/local-pty-shell-ready-startup-command.test.ts src/main/providers/local-pty-shell-ready-wrapper-generation.test.ts src/main/providers/local-pty-provider-shell-readiness.test.ts src/relay/pty-shell-launch.test.ts src/relay/pty-handler-startup-command-delivery.test.ts",
+          "result": "passed",
+          "durationSeconds": 6,
+          "summary": "233 tests passed with one local Fish skip, including exact Bash PROMPT_COMMAND byte/status/lifecycle composition across daemon, local, and relay owners."
         },
         {
           "date": "2026-08-12",
@@ -638,7 +665,7 @@
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-filesystem-provider-stream.test.ts src/main/system-resume-broadcast.test.ts src/main/system-power-lifecycle.test.ts src/main/startup/desktop-startup-ordering.test.ts --reporter=dot",
           "result": "passed",
-          "durationSeconds": 0.8,
+          "durationSeconds": 1.6,
           "summary": "Four focused files and 33 tests passed, including stalled cancellation, active progress, late metadata replay, failure isolation, committed-quit bridge lifetime, and post-settlement cleanup."
         }
       ],
@@ -916,18 +943,27 @@
       "providers": ["lan", "tailscale", "cloud-relay"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["lan", "tailscale", "cloud-relay"],
-      "coverageNotes": "Deterministic TypeScript tests cover shared close-code policy, foreground retry timers, direct-winner cancellation, and concurrent LAN/Tailscale authentication. Physical iOS/Android radios, GFE, and production relay recovery remain live-test gaps.",
-      "motivatingLinks": ["https://github.com/stablyai/orca-cloud/pull/96"],
-      "invariant": "A foregrounded paired phone must recover from relay HOST_OFFLINE without a foreground or network-change signal, while direct recovery must select the first authenticated configured LAN or Tailscale endpoint without serial timeout delays. Backgrounding, direct success, or stop must cancel pending work, and losing probes must close without affecting the winner.",
-      "oracle": "Inject deterministic relay close codes, random bytes, fake timers, and independently controlled direct clients. Require HOST_OFFLINE to replace any faster transport timer with one 5-15 second retry, require no retry before the selected delay, race all unique non-relay endpoints, select the first authenticated path, close every loser exactly once, and retain no retry after direct connectivity wins.",
+      "coverageNotes": "Deterministic TypeScript tests cover shared close-code policy, foreground retry timers, continuous-outage escalation, persistent pairing-rejection escalation, direct-winner cancellation, credential-gated Relay presentation, and concurrent LAN/Tailscale authentication. Physical iOS/Android radios, GFE, and production relay recovery remain live-test gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca-cloud/pull/96",
+        "https://linear.app/stably/issue/STA-4587",
+        "https://linear.app/stably/issue/STA-4681"
+      ],
+      "invariant": "A foregrounded paired phone must recover from relay HOST_OFFLINE without a foreground or network-change signal, while direct recovery must select the first authenticated configured LAN or Tailscale endpoint without serial timeout delays. Relay recovery presentation starts only for a failed active Relay or a dial backed by an eligible credential, remains pending through a genuine failed-dial cooldown, and exposes the supervisor's consecutive failed-dial count so a continuous outage escalates to unreachable. A relay credential the desktop keeps refusing escalates to re-pair once its transient-rejection budget is spent, and only an authenticated session clears that verdict. Backgrounding, direct success, or stop must cancel pending work, and losing probes must close without affecting the winner.",
+      "oracle": "Inject deterministic relay close codes, missing and expired credentials, delayed credential reads, random bytes, fake timers, and independently controlled direct clients. Require HOST_OFFLINE to replace any faster transport timer with one 5-15 second retry, require no retry before the selected delay, keep Relay presentation absent when no socket can open, clear it across lifecycle races, retain it through real dial cooldowns, establish Relay through the supervisor and require its active close plus 11 failed replacements to publish reconnect attempt 12 and a Relay-unreachable verdict, race all unique non-relay endpoints, select the first authenticated path, close every loser exactly once, and retain no retry after direct connectivity wins. Drive a supervisor-established Relay through four simulated hours of E2EE rejections and require the re-pair verdict, require it to survive a background/foreground cycle, require two rejections followed by acceptance to never latch it, and require a plain transport outage to still read Relay-unreachable.",
       "commands": [
-        "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts",
+        "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts mobile/src/transport/mobile-relay-outage-escalation.test.ts mobile/src/transport/mobile-relay-pairing-rejection-escalation.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/mobile-relay-runtime-failover.test.ts mobile/src/transport/connection-health.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/mobile-relay-close-codes.test.ts --reporter=dot"
       ],
       "testFiles": [
         "mobile/src/transport/mobile-direct-endpoint-probe.test.ts",
         "mobile/src/transport/mobile-relay-reconnect-controller.test.ts",
         "mobile/src/transport/mobile-endpoint-supervisor.test.ts",
+        "mobile/src/transport/mobile-relay-outage-escalation.test.ts",
+        "mobile/src/transport/mobile-relay-pairing-rejection-escalation.test.ts",
+        "mobile/src/transport/stable-logical-rpc-client.test.ts",
+        "mobile/src/transport/mobile-relay-runtime-failover.test.ts",
+        "mobile/src/transport/connection-health.test.ts",
         "src/shared/mobile-relay-close-codes.test.ts"
       ],
       "assertionRefs": [
@@ -948,7 +984,47 @@
         {
           "file": "mobile/src/transport/mobile-endpoint-supervisor.test.ts",
           "assertions": [
-            "a foregrounded supervisor retries HOST_OFFLINE without an external lifecycle signal"
+            "a foregrounded supervisor retries HOST_OFFLINE without an external lifecycle signal",
+            "a missing or expired credential never presents a Relay connection that cannot start",
+            "backgrounding during credential selection cannot publish a stale Relay recovery path",
+            "a genuine failed Relay dial remains pending through its retry cooldown"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/mobile-relay-outage-escalation.test.ts",
+          "assertions": [
+            "a supervisor-established Relay close plus 11 failed replacements publish reconnect attempt 12",
+            "the existing connection classifier escalates the continuous outage to Can't connect via Relay"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/mobile-relay-pairing-rejection-escalation.test.ts",
+          "assertions": [
+            "a persistent E2EE rejection escalates to Pairing invalid — re-pair with your desktop",
+            "the re-pair verdict survives a background/foreground cycle",
+            "rejections inside the transient budget followed by acceptance never latch it",
+            "a plain transport outage still reads Can't connect via Relay"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/connection-health.test.ts",
+          "assertions": [
+            "a rejected pairing outranks a pending Relay recovery",
+            "a rejected pairing never overrides a live connection"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/stable-logical-rpc-client.test.ts",
+          "assertions": [
+            "supervisor Relay attempts overlay but never replace a larger active-session retry count",
+            "count-only changes notify connection-path subscribers and clearing recovery restores the physical count"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/mobile-relay-runtime-failover.test.ts",
+          "assertions": [
+            "a fresh credential starts Relay presentation with the controller's current count",
+            "missing or expired credentials never open a Relay socket"
           ]
         },
         {
@@ -958,21 +1034,21 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-07-25",
+          "date": "2026-08-18",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts",
+          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts mobile/src/transport/mobile-relay-outage-escalation.test.ts mobile/src/transport/mobile-relay-pairing-rejection-escalation.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/mobile-relay-runtime-failover.test.ts mobile/src/transport/connection-health.test.ts",
           "result": "passed",
-          "durationSeconds": 0.89,
-          "summary": "Three focused mobile transport files passed with 39 assertions."
+          "durationSeconds": 1.25,
+          "summary": "Eight focused mobile transport files passed with 109 assertions, including production-lifecycle outage escalation, persistent pairing-rejection escalation, and logical count publication."
         },
         {
-          "date": "2026-07-25",
+          "date": "2026-08-16",
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/mobile-relay-close-codes.test.ts --reporter=dot",
           "result": "passed",
-          "durationSeconds": 0.19,
+          "durationSeconds": 0.17,
           "summary": "The shared close-code contract passed with five assertions."
         }
       ],
@@ -986,11 +1062,11 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The prior external-signal HOST_OFFLINE policy fails the retry oracle, and the prior serial direct probe fails the first-authenticated-endpoint timing oracle. Both pass with the candidate behavior."
+        "evidence": "Banking the pairing rejection after registerFailure's gated early return — the pre-fix placement — leaves the four-hour E2EE oracle on 'Connecting via Relay…' and reds 7 assertions while the 17 others stay green; moving it ahead of the gate turns them green. The pre-fix production-lifecycle oracle establishes Relay through the supervisor, then completes one active close plus 11 replacement failures while the public retry count remains 0; the candidate publishes 12 and reaches the existing Relay-unreachable verdict. The prior external-signal HOST_OFFLINE policy and serial direct probe also fail their respective retry and first-authenticated-endpoint timing oracles."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "All configured direct candidates start in one turn, the first authenticated candidate wins after 100 ms in the deterministic test, and every losing client is closed. A physical-device radio and battery budget is still required before promotion."
+        "evidence": "The production diff only projects existing supervisor state — the failure count and a consecutive-rejection latch — through local setters and subscribers; it adds no call to a Relay dial, timer, socket, probe, or wire API, and the four screens read both recovery inputs from one host subscription instead of two. The deterministic outage asserts exactly one successful establishment plus 11 failed replacements at the escalation boundary. All configured direct candidates start in one turn, the first authenticated candidate wins after 100 ms, and every losing client is closed."
       },
       "promotionCriteria": [
         "Collect 100 consecutive CI passes or 14 days of soak history.",
@@ -1022,14 +1098,14 @@
       "providers": ["lan", "tailscale", "cloud-relay"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["lan", "tailscale", "cloud-relay"],
-      "coverageNotes": "Deterministic React/provider tests cover catalog, missing-host, construction, cancellation, release, forget, refresh, backoff, and stale-generation outcomes. Direct sessions cover idle probing and three fair misses. Relay sessions cover zero idle polling, rate-limited foreground probes, two fair misses, authenticated activity before semantic decoding, delivery ambiguity, scheduler stalls, and write failure. Physical iOS/Android sleep, carrier/Tailscale loss, and production relay paths remain live-test gaps.",
+      "coverageNotes": "Deterministic React/provider tests cover catalog, missing-host, construction, cancellation, release, forget, refresh, backoff, stale-generation outcomes, and path-aware recovery presentation. Direct sessions cover idle probing and three fair misses. Relay sessions cover zero idle polling, rate-limited foreground probes, two fair misses, authenticated activity before semantic decoding, delivery ambiguity, scheduler stalls, and write failure. Physical iOS/Android sleep, carrier/Tailscale loss, and production relay paths remain live-test gaps.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4153/mobile-app-disconnects-frequently"
       ],
-      "invariant": "A provider-wanted host without a logical client retries every current-generation pre-client failure until success or explicit cancellation, while release, disconnect, forget, refresh, and stale async continuations preserve their distinct resurrection policies. Direct sessions probe after authenticated silence and terminate after three fair misses. Relay sessions emit no periodic idle or demand-driven probes, use rate-limited foreground probes, and terminate after two fair misses. Authenticated traffic, scheduler stalls, and replacement identities cannot manufacture death.",
-      "oracle": "Inject rejected and never-settling catalog reads, missing profiles, synchronous construction failure, release, refresh, forget, revival, and stale completion under fake time. Require bounded 1s through 60s retry, exact current-generation publication, and no zero-owner or forgotten-client resurrection. Inject direct and relay authenticated text/binary traffic, silent probe windows, stalled clocks, replacement identities, and failed writes. Require direct three-miss tolerance; Relay zero idle and demand-driven liveness traffic, one foreground probe sequence, two fair 4s misses, a 10s voluntary rate limit, no old-session network-change probe, and delivery-unknown mutations without replay.",
+      "invariant": "A provider-wanted host without a logical client retries every current-generation pre-client failure until success or explicit cancellation, while release, disconnect, forget, refresh, and stale async continuations preserve their distinct resurrection policies. Direct sessions probe after authenticated silence and terminate after three fair misses. Relay sessions emit no periodic idle or demand-driven probes, use rate-limited foreground probes, and terminate after two fair misses. Authenticated traffic, scheduler stalls, and replacement identities cannot manufacture death. Relay recovery must notify presentation independently of transport-state changes, must not inherit a failed direct path's Tailscale hint, and must retain long-outage escalation.",
+      "oracle": "Inject rejected and never-settling catalog reads, missing profiles, synchronous construction failure, release, refresh, forget, revival, and stale completion under fake time. Require bounded 1s through 60s retry, exact current-generation publication, and no zero-owner or forgotten-client resurrection. Inject direct and relay authenticated text/binary traffic, silent probe windows, stalled clocks, replacement identities, and failed writes. Require direct three-miss tolerance; Relay zero idle and demand-driven liveness traffic, one foreground probe sequence, two fair 4s misses, a 10s voluntary rate limit, no old-session network-change probe, and delivery-unknown mutations without replay. Start and clear Relay recovery without changing transport state and require observers to rerender. Project five failed Tailscale attempts into a neutral Relay-specific verdict, then require twelve attempts to produce a Relay-specific unreachable verdict with no Tailscale hint.",
       "commands": [
-        "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/client-context.test.ts mobile/src/transport/host-open-recovery.test.tsx mobile/src/transport/host-open-retry-scheduler.test.ts mobile/src/transport/rpc-session-liveness-watchdog.test.ts mobile/src/transport/rpc-session-liveness-integration.test.ts mobile/src/transport/mobile-relay-rpc-session.test.ts mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts mobile/src/transport/mobile-endpoint-nudge-router.test.ts mobile/src/transport/mobile-relay-e2ee-link.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts"
+        "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/client-context.test.ts mobile/src/transport/host-open-recovery.test.tsx mobile/src/transport/host-open-retry-scheduler.test.ts mobile/src/transport/rpc-session-liveness-watchdog.test.ts mobile/src/transport/rpc-session-liveness-integration.test.ts mobile/src/transport/mobile-relay-rpc-session.test.ts mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts mobile/src/transport/mobile-endpoint-nudge-router.test.ts mobile/src/transport/mobile-relay-e2ee-link.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/connection-health.test.ts"
       ],
       "testFiles": [
         "mobile/src/transport/client-context.test.ts",
@@ -1041,12 +1117,16 @@
         "mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts",
         "mobile/src/transport/mobile-endpoint-nudge-router.test.ts",
         "mobile/src/transport/mobile-relay-e2ee-link.test.ts",
-        "mobile/src/transport/stable-logical-rpc-client.test.ts"
+        "mobile/src/transport/stable-logical-rpc-client.test.ts",
+        "mobile/src/transport/connection-health.test.ts"
       ],
       "assertionRefs": [
         {
           "file": "mobile/src/transport/client-context.test.ts",
-          "assertions": ["a retired close-on-release owner closes an ownerless manual reconnect"]
+          "assertions": [
+            "a retired close-on-release owner closes an ownerless manual reconnect",
+            "a Relay recovery path change rerenders observers without a transport-state change"
+          ]
         },
         {
           "file": "mobile/src/transport/host-open-recovery.test.tsx",
@@ -1097,18 +1177,29 @@
         },
         {
           "file": "mobile/src/transport/stable-logical-rpc-client.test.ts",
-          "assertions": ["a delivery-unknown mutation is not replayed onto a replacement Relay"]
+          "assertions": [
+            "a delivery-unknown mutation is not replayed onto a replacement Relay",
+            "Relay recovery path changes publish and remain pending between failed dials",
+            "a connected path clears recovery state before any later disconnect"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/connection-health.test.ts",
+          "assertions": [
+            "a Relay fallback pending over five failed Tailscale attempts remains neutral and omits the Tailscale hint",
+            "a prolonged Relay recovery escalates without reviving the Tailscale hint"
+          ]
         }
       ],
       "evidenceRuns": [
         {
-          "date": "2026-08-14",
+          "date": "2026-08-16",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/client-context.test.ts mobile/src/transport/host-open-recovery.test.tsx mobile/src/transport/host-open-retry-scheduler.test.ts mobile/src/transport/rpc-session-liveness-watchdog.test.ts mobile/src/transport/rpc-session-liveness-integration.test.ts mobile/src/transport/mobile-relay-rpc-session.test.ts mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts mobile/src/transport/mobile-endpoint-nudge-router.test.ts mobile/src/transport/mobile-relay-e2ee-link.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts",
+          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/client-context.test.ts mobile/src/transport/host-open-recovery.test.tsx mobile/src/transport/host-open-retry-scheduler.test.ts mobile/src/transport/rpc-session-liveness-watchdog.test.ts mobile/src/transport/rpc-session-liveness-integration.test.ts mobile/src/transport/mobile-relay-rpc-session.test.ts mobile/src/transport/mobile-relay-rpc-session-liveness.test.ts mobile/src/transport/mobile-endpoint-nudge-router.test.ts mobile/src/transport/mobile-relay-e2ee-link.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/connection-health.test.ts",
           "result": "passed",
-          "durationSeconds": 0.74,
-          "summary": "Ten focused files passed 66 deterministic provider lifecycle, direct/Relay liveness, traffic, and delivery-ambiguity tests."
+          "durationSeconds": 0.77,
+          "summary": "Eleven focused files passed 85 deterministic provider lifecycle, path presentation, direct/Relay liveness, traffic, and delivery-ambiguity tests."
         }
       ],
       "runtimeBudget": {
@@ -1466,6 +1557,124 @@
         "WSL direct SSH fanout remains an explicit live-test gap rather than inferred coverage."
       ],
       "demotionRule": "Keep experimental or demote if the focused gate flakes without a product or harness bug, if index-only churn can emit worktrees:changed, or if structural add/remove/HEAD/lock changes fail to converge."
+    },
+    {
+      "id": "runtime.multi-client-view-isolation",
+      "title": "A client's workspace create navigates only the caller unless follow is explicit",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime-platform",
+      "layer": "runtime-client-event-authority",
+      "surfaces": [
+        "paired desktop client",
+        "paired web client",
+        "headed Orca desktop server",
+        "headless orca serve",
+        "worktree.create with activate",
+        "runtime.clientEvents stream"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "orca-server"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "orca-server"],
+      "coverageNotes": "A real two-client integration harness pairs two authenticated devices to one OrcaRuntimeService over WebSockets with E2EE and drives worktree.create through the real RPC dispatcher, in both headed-notifier and headless orca-serve shapes. The headless case is a modeled `orca serve` runtime shape — no notifier, no attached window — not a CLI bootstrap, and the in-process reveal non-regression calls createManagedWorktree directly. A headed Electron journey runs the desktop app as the remote server with two independently paired web clients in separate partitions and asserts each client's rendered active worktree. Windows and Linux are covered by the platform-neutral contract only; the reported field topology was a Windows server with mixed-OS clients.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/issues/11027"],
+      "invariant": "View intent belongs to the connection that requested it. With no explicit navigation target, a workspace create arriving over a paired desktop/web client connection activates only that caller; it must not emit an activateWorktree client event to sibling connections or drive the host renderer. An explicit navigation of host/clients/all remains an allowed, tested follow intent. Shared model state — repo/worktree catalogs, terminals, agent output — must keep propagating to every client unchanged. In-process and CLI creates keep notifying the host and all clients so a headless server's only viewer still gets its reveal.",
+      "oracle": "notifyActivateWorktree takes its navigation target as a required parameter, so a create call site that forgets to forward it is a compile error rather than a silent fallback to broadcasting — mutation testing confirmed all six call sites (folder, git, and remote/SSH branches, startup and no-startup each) are killed by typecheck. Behaviorally: two paired clients subscribe to runtime.clientEvents. Client A creates a workspace with activate:true; a reposChanged fence emitted after the create must be the next frame each client sees, proving no activation frame was interleaved, while worktreesChanged still arrives on both streams. The host notifier's activateWorktree is asserted not called and the host's mirrored selection is unchanged. Repeated ordinary worktree.activate calls by A are the negative control. The same file asserts the in-process create still reaches host and clients, headed and headless. The Electron journey asserts the observer's data-rendered-active-worktree-id is unchanged while the created workspace still appears in its sidebar.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/multi-client-navigation-isolation.integration.test.ts src/main/runtime/rpc/methods/worktree-create-navigation.test.ts",
+        "pnpm run test:e2e:multi-client-navigation -- tests/e2e/multi-client-navigation-isolation.spec.ts"
+      ],
+      "testFiles": [
+        "src/main/runtime/multi-client-navigation-isolation.integration.test.ts",
+        "src/main/runtime/rpc/methods/worktree-create-navigation.test.ts",
+        "tests/e2e/multi-client-navigation-isolation.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/multi-client-navigation-isolation.integration.test.ts",
+          "assertions": [
+            "keeps a paired client workspace create-with-activate off every other client and the host",
+            "still reveals to every client when a paired caller asks for all-surface navigation",
+            "does not replay a missed create activation to a reconnecting observer",
+            "keeps create activation caller-scoped on a headless orca serve host",
+            "still reveals a host-originated create-with-activate on the host and every client",
+            "keeps worktree navigation local to each paired runtime client by default",
+            "routes explicit host and paired-client follow intent without changing the default"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/worktree-create-navigation.test.ts",
+          "assertions": [
+            "resolves create activation from the paired runtime client kind",
+            "resolves create activation from the paired mobile client kind",
+            "honors an explicit follow navigation on create",
+            "keeps an explicit all-surface reveal from a paired caller"
+          ]
+        },
+        {
+          "file": "tests/e2e/multi-client-navigation-isolation.spec.ts",
+          "assertions": [
+            "keeps a paired client workspace create-with-agent off the other client and the host",
+            "keeps two paired browser clients and the host on independent worktrees"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-18",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/multi-client-navigation-isolation.integration.test.ts src/main/runtime/rpc/methods/worktree-create-navigation.test.ts",
+          "result": "passed",
+          "durationSeconds": 6,
+          "summary": "Eleven paired-runtime contracts pass, including the headless orca-serve shape, the in-process reveal non-regression, and the CLI-shaped explicit all-surface reveal. With the caller scoping removed the observer's stream carried activateWorktree instead of the fence."
+        },
+        {
+          "date": "2026-08-18",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run test:e2e:multi-client-navigation -- tests/e2e/multi-client-navigation-isolation.spec.ts",
+          "result": "passed",
+          "durationSeconds": 80,
+          "summary": "Headed Orca desktop server with two paired web clients: the observer stayed on its own worktree while the creator's workspace appeared in its sidebar. With the fix disabled the same journey failed with the observer rendering the created workspace."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 120,
+        "scope": "two-client WebSocket integration contracts plus one headed Electron two-web-client journey"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "New contracts. The integration file is fence-ordered rather than timing-based and passed repeatedly locally; the Electron journey passed twice locally on macOS. CI and soak history have not started."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Both layers were observed red on origin/main 4ec6bbf588 before any fix: the observer client received ['worktreesChanged', 'activateWorktree'] instead of the fence, and the Electron observer's data-rendered-active-worktree-id resolved to the workspace the other client had just created. Both went green with the caller scoping and red again when only resolveRuntimeNavigationTarget's clientKind input was removed."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "The change adds one enum resolution per create request and two boolean checks before an existing fan-out. No new listeners, subscriptions, provider calls, or timers; the client-event fan-out itself is unchanged in shape and frequency."
+      },
+      "promotionCriteria": [
+        "Collect CI soak history for the Electron journey on macOS plus at least one Linux run.",
+        "Add a live Windows-server topology run matching the reported field setup.",
+        "Extend the oracle to mobile observers and to a client with two windows open on one connection."
+      ],
+      "knownGaps": [
+        "No live Windows or Linux server run yet; the reported field topology was a Windows 11 server.",
+        "Mobile observers are covered only by the platform-neutral clientKind contract, not by a live phone journey.",
+        "Host-originated CLI creates deliberately still reveal on every client; that broader authority question is untouched by this gate.",
+        "Mobile creates deliberately keep the all-surface reveal: a phone has no renderer to provision repo setup/default tabs off the activation event.",
+        "The Electron journey drives the store create action, so the composer's automatic self-navigation on create is proved by worktree-creation-flow.test.ts and worktree.spec.ts rather than by this journey.",
+        "Headless coverage is a modeled runtime shape; CLI bootstrap and argument parsing for orca serve are not exercised here.",
+        "Host-first rollout: the fix is enforced by the host, so a NEW client paired to an OLD always-on server still sees the original cross-client jump. Shipping clients alone fixes nothing for anyone; the runtime/server must be updated. Nothing breaks under that skew — the old host simply keeps its old behavior — but release notes and support triage must check the host version, not the client version. No skew combination is worse than pre-fix main: an old CLI is recognized by its cliProvenanceRequest marker so its --activate reveal survives an updated host.",
+        "A future contributor could still hardcode a wrong navigation target at a call site: the required object key makes omission a compile error, but not substitution. Only the folder/no-startup branch has a behavioral test that would catch it; adding one for the remote/SSH branch needs new SSH provider scaffolding and was judged not worth the surface.",
+        "Out of scope, host-only and unreachable from the product UI: a paired caller that explicitly requests terminal.create with presentation 'focused' still navigates the host renderer (the Orca client always sends 'background'); agent-session already downgrades that presentation for paired callers.",
+        "The remote/SSH create branch (createManagedRemoteWorktree) has compile-time propagation coverage but no behavioral navigation test; the folder branch is covered by the integration suite and the git branch by the Electron journey.",
+        "Out of scope: browser.tabCreate/tabSwitch carry no paired-client navigation policy, so they can change the host's active browser tab when the host is already on that worktree. They never cross worktrees, and the paired web client sends activate:true deliberately."
+      ],
+      "demotionRule": "Demote if a create, activate, or reveal path can move a viewer that did not request it, or if scoping regresses the in-process/CLI reveal that a headless server's only remote viewer depends on."
     },
     {
       "id": "runtime.headless-desktop-promotion-continuity",
@@ -2595,19 +2804,19 @@
       "invariant": "A current remote browser stream that closes must retry transient failures on one counted, capped backoff chain. Cancellation, pane or runtime supersession, missing pages, and permanent failures stop that chain without stale state mutation. A stream that stays healthy refills the budget; a silent or flapping stream cannot retry forever. Exhaustion and every non-retrying failure leave an actionable Reconnect control, and manual reconnect creates a fresh stream without resurrecting stale subscriptions.",
       "oracle": "With one fake clock and exact pane, operation, stream, page, and runtime identities, drop a confirmed stream and require the counted delay sequence, one active chain, stale-token rejection, exact cancellation, full cleanup, and either a new live subscription or one stopped state with Reconnect after exhaustion. Inject transport error without close, close racing rejection, never-ready subscriptions, ready-then-end flapping, viewport supersession, missing pages, and permanent failures. In a separate paired client against an isolated headless Orca host, paint one remote frame, disconnect the owning runtime, require the bounded-retry notice and Reconnect control, reconnect, click once, and require a different frame object URL from the recovered stream.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/remote-browser-stream-errors.test.ts src/renderer/src/components/browser-pane/remote-browser-stream-lifecycle.test.ts src/renderer/src/components/browser-pane/remote-browser-stream-restart-scheduler.test.ts src/renderer/src/components/browser-pane/remote-browser-stream-status.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-errors.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-lifecycle.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-restart-scheduler.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-status.test.ts",
         "pnpm exec playwright test tests/e2e/paired-remote-browser-stream-reconnect.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
-        "src/renderer/src/components/browser-pane/remote-browser-stream-errors.test.ts",
-        "src/renderer/src/components/browser-pane/remote-browser-stream-lifecycle.test.ts",
-        "src/renderer/src/components/browser-pane/remote-browser-stream-restart-scheduler.test.ts",
-        "src/renderer/src/components/browser-pane/remote-browser-stream-status.test.ts",
+        "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-errors.test.ts",
+        "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-lifecycle.test.ts",
+        "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-restart-scheduler.test.ts",
+        "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-status.test.ts",
         "tests/e2e/paired-remote-browser-stream-reconnect.spec.ts"
       ],
       "assertionRefs": [
         {
-          "file": "src/renderer/src/components/browser-pane/remote-browser-stream-restart-scheduler.test.ts",
+          "file": "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-restart-scheduler.test.ts",
           "assertions": [
             "transient failures retry until recovery on counted delays",
             "budget exhaustion stops exactly once",
@@ -2616,7 +2825,7 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/browser-pane/remote-browser-stream-lifecycle.test.ts",
+          "file": "src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-lifecycle.test.ts",
           "assertions": [
             "dropped, silent, and flapping streams converge on a bounded retry or actionable stop",
             "stale, superseded, missing-page, and permanent-failure work cannot mutate the current pane",
@@ -2638,7 +2847,7 @@
           "date": "2026-08-07",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/remote-browser-stream-errors.test.ts src/renderer/src/components/browser-pane/remote-browser-stream-lifecycle.test.ts src/renderer/src/components/browser-pane/remote-browser-stream-restart-scheduler.test.ts src/renderer/src/components/browser-pane/remote-browser-stream-status.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-errors.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-lifecycle.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-restart-scheduler.test.ts src/renderer/src/components/browser-pane/stream-remote/remote-browser-stream-status.test.ts",
           "result": "passed",
           "durationSeconds": 0.36,
           "summary": "Four focused files passed 61 deterministic error, status, scheduler, lifecycle, in-flight ownership, stale-rejection, liveness, and cleanup tests."
@@ -8299,22 +8508,25 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos", "linux"],
       "coveredProviders": [],
-      "coverageNotes": "Local macOS and containerized Linux evidence, deterministic renderer-unit coverage for the Linux/Sogou candidate-key policy including the legacy orphaned-keyup fallback, Electron/CDP live-PTY Sogou-style repros, and a macOS renderer/main slice for Preview kitty commits: claimed press/release pairing in both keyup orderings, and snapshot flag provenance where a proven 0, a proven non-zero, and an absent field stay three distinct facts from daemon through the sequenced remote SnapshotStart frame. Real Linux/Sogou OS IME automation, Windows ConPTY post-agent reset, and the CJK/Vietnamese/Arabic matrix remain registered gaps.",
+      "coverageNotes": "Local macOS and containerized Linux evidence, deterministic renderer-unit coverage for the Linux/Sogou candidate-key policy including the legacy orphaned-keyup fallback, Electron/CDP live-PTY Sogou-style repros, and macOS renderer/main slices for Preview kitty commits and layout-native Option input. The Option slice covers complete CSI-u flag fields including lock state, repeat/release event types, authoritative committed associated text, native dead-key release suppression, functional-versus-printable numpad codes, press-pinned release identity, live keyup modifiers, pending-layout text fallback, atomic layout refresh, rapid in-focus input-source changes, stable native layout characters, and both native/web preload fallbacks. Snapshot flag provenance keeps a proven 0, a proven non-zero, and an absent field distinct from daemon through the sequenced remote SnapshotStart frame. Real Linux/Sogou OS IME automation, Windows ConPTY post-agent reset, and the CJK/Vietnamese/Arabic matrix remain registered gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6699",
         "https://github.com/stablyai/orca/pull/6682",
         "https://github.com/stablyai/orca/pull/6513",
         "https://github.com/stablyai/orca/pull/6999"
       ],
-      "invariant": "Composition, native text forwarding, synthetic input, paste, and platform keyboard bypass paths must not send preedit/control bytes before commit and must commit text exactly once to the intended PTY. When the snapshot source proves kitty state, macOS Preview commits must use the application's effective flags after the sequenced snapshot and every proven replay/live transition, and a claimed press delivered under report_event_types must produce exactly one matching release regardless of whether keyup arrives before or after insertText and regardless of xterm's defensive internal reset.",
-      "oracle": "Exact outbound bytes from the REAL native-text forwarder behind installPreviewImeBridge after initial snapshot restore, replacement resync, live transitions, and both keydown->insertText->keyup and keydown->keyup->insertText orderings; a wiring-only mock is supporting evidence, not the oracle. The current renderer-unit slice asserts native text commits route to the intended PTY once, composition/preedit bookkeeping does not leak premature text, input-source classification handles synthetic/native paths, paste/runtime forwarding avoids duplicate terminal payloads for covered fixtures, and Linux/Sogou candidate Space/digit selectors do not leak keydown/keypress/keyup while ordinary and long-held letter-to-digit typing remains available. The Electron/CDP live-PTY repro verifies Sogou-style Space and digit selectors submit only the committed Chinese text, while the legacy orphaned-letter-keyup sequence sends no selector byte to the PTY. Real legacy IME commit preservation and the full CJK/Vietnamese/Arabic/JIS-yen matrix run in follow-up platform soak where automation is possible.",
+      "invariant": "Composition, native text forwarding, synthetic input, paste, and platform keyboard bypass paths must not send preedit/control bytes before commit and must commit text exactly once to the intended PTY. Layout-native Option text must preserve negotiated CSI-u alternate/associated fields and lock modifiers, distinguish repeat from press, and resolve releases with the press's primary identity plus the actual keyup modifiers without exposing a partial or stale layout refresh. An in-focus macOS input-source change must invalidate both renderer authorities before the next key can use the old source. When the snapshot source proves kitty state, macOS Preview commits must use the application's effective flags after the sequenced snapshot and every proven replay/live transition, and a claimed press delivered under report_event_types must produce exactly one matching release regardless of whether keyup arrives before or after insertText and regardless of xterm's defensive internal reset.",
+      "oracle": "Exact outbound bytes from the REAL native-text forwarder behind installPreviewImeBridge after initial snapshot restore, replacement resync, live transitions, and both keydown->insertText->keyup and keydown->keyup->insertText orderings; a wiring-only mock is supporting evidence, not the oracle. The current renderer-unit slice asserts native text commits route to the intended PTY once, composition/preedit bookkeeping does not leak premature text, input-source classification handles synthetic/native paths, paste/runtime forwarding avoids duplicate terminal payloads for covered fixtures, and Linux/Sogou candidate Space/digit selectors do not leak keydown/keypress/keyup while ordinary and long-held letter-to-digit typing remains available. A main/preload/renderer notification chain proves every live window invalidates immediately, the old native read settles before a coalesced refresh signal, and older refreshes are generation-fenced. The Electron/CDP live-PTY repro verifies Sogou-style Space and digit selectors submit only the committed Chinese text, while the legacy orphaned-letter-keyup sequence sends no selector byte to the PTY. Real legacy IME commit preservation and the full CJK/Vietnamese/Arabic/JIS-yen matrix run in follow-up platform soak where automation is possible.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-substituted-text-commit.test.ts src/renderer/src/components/terminal-pane/terminal-ime-macos-keybinding-dict-trace.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-linux-candidate-state.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/dashboard-popout/preview-terminal-ime-bridge-kitty-bytes.test.ts src/renderer/src/components/dashboard-popout/preview-terminal-snapshot-replay.test.ts src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx src/shared/terminal-kitty-keyboard-mode-tracker.test.ts src/main/ipc/terminal-preview.test.ts src/main/ipc/terminal-preview-output-stream.test.ts src/renderer/src/runtime/remote-runtime-terminal-snapshot-kitty-flags.test.ts src/main/daemon/daemon-pty-adapter.test.ts",
-        "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/dashboard-popout/preview-terminal-ime-bridge-kitty-bytes.test.ts src/renderer/src/components/dashboard-popout/preview-terminal-snapshot-replay.test.ts src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.option-dead-key.test.tsx src/shared/terminal-kitty-keyboard-mode-tracker.test.ts src/main/ipc/terminal-preview.test.ts src/main/ipc/terminal-preview-output-stream.test.ts src/renderer/src/runtime/remote-runtime-terminal-snapshot-kitty-flags.test.ts src/main/daemon/daemon-pty-adapter.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-kitty-csi-u-encoding.test.ts src/renderer/src/components/terminal-pane/terminal-shortcut-option-compose.test.ts src/renderer/src/components/terminal-pane/terminal-option-kitty-release.test.ts src/renderer/src/lib/keyboard-layout/layout-base-character.test.ts src/renderer/src/lib/keyboard-layout/option-as-alt-probe.test.ts src/main/ipc/macos-keyboard-layout-snapshot.test.ts src/main/ipc/macos-keyboard-layout-change-notifications.test.ts src/preload/app-restart-checkpoint-routing.test.ts src/renderer/src/web/web-preload-api-ui.test.ts",
+        "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts",
+        "pnpm run test:e2e -- tests/e2e/terminal-option-composed-ascii.spec.ts"
       ],
       "testFiles": [
+        "tests/e2e/terminal-option-composed-ascii.spec.ts",
         "src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-ime-substituted-text-commit.test.ts",
         "src/renderer/src/components/terminal-pane/terminal-ime-macos-keybinding-dict-trace.test.ts",
@@ -8324,9 +8536,19 @@
         "src/renderer/src/components/terminal-pane/terminal-ime-linux-candidate-state.test.ts",
         "src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts",
         "src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-kitty-csi-u-encoding.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-shortcut-option-compose.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-option-kitty-release.test.ts",
+        "src/renderer/src/lib/keyboard-layout/layout-base-character.test.ts",
+        "src/renderer/src/lib/keyboard-layout/option-as-alt-probe.test.ts",
+        "src/main/ipc/macos-keyboard-layout-snapshot.test.ts",
+        "src/main/ipc/macos-keyboard-layout-change-notifications.test.ts",
+        "src/preload/app-restart-checkpoint-routing.test.ts",
+        "src/renderer/src/web/web-preload-api-ui.test.ts",
         "src/renderer/src/components/dashboard-popout/preview-terminal-ime-bridge-kitty-bytes.test.ts",
         "src/renderer/src/components/dashboard-popout/preview-terminal-snapshot-replay.test.ts",
         "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx",
+        "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.option-dead-key.test.tsx",
         "src/shared/terminal-kitty-keyboard-mode-tracker.test.ts",
         "src/main/ipc/terminal-preview.test.ts",
         "src/main/ipc/terminal-preview-output-stream.test.ts",
@@ -8339,13 +8561,15 @@
           "file": "src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts",
           "assertions": [
             "native text commits route once to the intended PTY",
-            "composition/preedit bookkeeping does not leak premature text"
+            "composition/preedit bookkeeping does not leak premature text",
+            "multi-codepoint committed text is reported independently from physical key identity"
           ]
         },
         {
           "file": "src/renderer/src/components/terminal-pane/terminal-ime-substituted-text-commit.test.ts",
           "assertions": [
-            "synthetic and native input-source paths are classified for covered fixtures"
+            "synthetic and native input-source paths are classified for covered fixtures",
+            "report-all commits retain the unshifted physical key while associated text carries the committed substitution"
           ]
         },
         {
@@ -8397,6 +8621,89 @@
           ]
         },
         {
+          "file": "tests/e2e/terminal-option-composed-ascii.spec.ts",
+          "assertions": [
+            "a live kitty-negotiated pane receives the Option-composed ASCII character, not the physical alt chord",
+            "an Option layer that also needs Shift still reaches the pty as text",
+            "configured Option-as-Alt still reports the layout-resolved physical chord",
+            "a non-ASCII Option glyph still reaches the application as its alt hotkey"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-kitty-csi-u-encoding.test.ts",
+          "assertions": [
+            "report-all Option events encode exact alternate, repeat, release, and associated-text fields",
+            "report-all native commits preserve unresolved layout characters and distinguish functional from printable numpad identities",
+            "associated text omits forbidden control codepoints",
+            "release events omit associated text and sparse PC-101 alternates retain their parameter position",
+            "CapsLock and NumLock occupy their protocol modifier bits"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-shortcut-option-compose.test.ts",
+          "assertions": [
+            "native Option-composed ASCII remains text outside report-all mode while configured-Alt sides remain chords",
+            "pending shifted-layout data fails safe to composed text while configured-Alt ownership remains authoritative",
+            "dead, Process, Unidentified, composing, and keyCode-229 events stay with composition",
+            "configured Alt-side dead keys retain legacy chords while other IME-owned events stay with composition",
+            "policy-owned configured Alt uses the active layout, preserves engine-owned global legacy and form-only legacy encoding, and omits associated text",
+            "report-all uses layout primary/shifted identities plus committed text for ISO and Space keys"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/terminal-option-kitty-release.test.ts",
+          "assertions": [
+            "owned releases use live Shift and Option state and current alternate-key flags",
+            "owned releases retain the delivered press identity across layout, Shift, and NumLock changes",
+            "a native dead-key keyup is consumed without inventing an unmatched protocol release",
+            "event-type pop consumes without bytes and repeat keydowns cannot replace the original release owner"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/keyboard-layout/layout-base-character.test.ts",
+          "assertions": [
+            "complete native layout characters replace atomically while input continues using the prior complete snapshot",
+            "native and browser layout sources from separate transactions are never combined",
+            "an input-source notification clears stale characters synchronously and fences the older refresh"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/keyboard-layout/option-as-alt-probe.test.ts",
+          "assertions": [
+            "a stale asynchronous input-source probe cannot overwrite the newest classification",
+            "an input-source notification changes the classification to unknown synchronously before refreshing"
+          ]
+        },
+        {
+          "file": "src/main/ipc/macos-keyboard-layout-snapshot.test.ts",
+          "assertions": [
+            "the native snapshot parser preserves input/layout identities and both modifier layers"
+          ]
+        },
+        {
+          "file": "src/main/ipc/macos-keyboard-layout-change-notifications.test.ts",
+          "assertions": [
+            "the distributed input-source notification invalidates every live window before waiting out the old helper read",
+            "rapid input-source changes coalesce to one latest-generation refresh signal",
+            "destroyed windows and teardown races cannot crash the main process, and will-quit unsubscribes exactly once",
+            "non-macOS processes install no native subscription"
+          ]
+        },
+        {
+          "file": "src/preload/app-restart-checkpoint-routing.test.ts",
+          "assertions": [
+            "macOS keyboard reads and the change subscription remain wired after main integration",
+            "the two-phase change payload reaches the renderer unchanged",
+            "the subscription disposer removes the exact IPC listener"
+          ]
+        },
+        {
+          "file": "src/renderer/src/web/web-preload-api-ui.test.ts",
+          "assertions": [
+            "web fallbacks expose no local captured chords, no native layout snapshot, and a no-op layout-change subscription"
+          ]
+        },
+        {
           "file": "src/renderer/src/components/dashboard-popout/preview-terminal-ime-bridge-kitty-bytes.test.ts",
           "assertions": [
             "the real forwarder behind the Preview bridge encodes the commit from the snapshot-proven flags before any live output",
@@ -8421,6 +8728,12 @@
           "file": "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx",
           "assertions": [
             "the Preview hands the forwarder the live kitty mirror seeded from the snapshot's proven flags"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.option-dead-key.test.tsx",
+          "assertions": [
+            "native and configured-side dead-key releases remain owned by the Preview without duplicate bytes"
           ]
         },
         {
@@ -8467,13 +8780,40 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-08-11",
+          "date": "2026-08-16",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/dashboard-popout/preview-terminal-ime-bridge-kitty-bytes.test.ts src/renderer/src/components/dashboard-popout/preview-terminal-snapshot-replay.test.ts src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx src/shared/terminal-kitty-keyboard-mode-tracker.test.ts src/main/ipc/terminal-preview.test.ts src/main/ipc/terminal-preview-output-stream.test.ts src/renderer/src/runtime/remote-runtime-terminal-snapshot-kitty-flags.test.ts src/main/daemon/daemon-pty-adapter.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-kitty-csi-u-encoding.test.ts src/renderer/src/components/terminal-pane/terminal-shortcut-option-compose.test.ts src/renderer/src/components/terminal-pane/terminal-option-kitty-release.test.ts src/renderer/src/lib/keyboard-layout/layout-base-character.test.ts src/renderer/src/lib/keyboard-layout/option-as-alt-probe.test.ts src/main/ipc/macos-keyboard-layout-snapshot.test.ts src/main/ipc/macos-keyboard-layout-change-notifications.test.ts src/preload/app-restart-checkpoint-routing.test.ts src/renderer/src/web/web-preload-api-ui.test.ts",
           "result": "passed",
-          "durationSeconds": 9.84,
-          "summary": "8 test file(s) passed, 288 tests, covering the Preview kitty slice: real forwarder bytes at snapshot-proven flags, press/release pairing across both keyup/insertText orderings, and flag provenance where a proven 0, a proven non-zero, and an absent field stay three distinct facts — asserted on the daemon snapshot and on a host-pushed remote snapshot that carries the flags with their sequence. The emitter-side rule that a remote SnapshotStart withholds flags without a seq has no direct assertion yet; the client-side gate is what these files pin."
+          "durationSeconds": 0.8,
+          "summary": "The deterministic Option/layout slice passed exact protocol bytes for filtered committed associated text, physical and alternate key identities, functional and printable numpad keys, press-pinned releases across layout and lock changes, lock modifiers, layout-aware configured Alt across individual flags and dead keys, terminal-engine-owned global legacy handling, IME-owned DOM events, ISO/Space keys, native dead-key release suppression, pending-layout text fallback, release ownership, the two-phase native-read barrier, synchronous cache invalidation, rapid-change coalescing, generation fencing, every-live-window fanout, cleanup, and native/web platform fallbacks."
+        },
+        {
+          "date": "2026-08-16",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run test:e2e -- tests/e2e/terminal-option-composed-ascii.spec.ts",
+          "result": "passed",
+          "durationSeconds": 66,
+          "summary": "Four live-Electron scenarios passed against a real pty whose kitty flags were armed by the application's own CSI > 1 u: Option-composed `@` and Option+Shift-composed `\\` arrive as text with no alt chord, configured Option-as-Alt still reports the layout-resolved chord, and a non-ASCII Option glyph still reaches the application as its alt hotkey. Discrimination was proven by mutation rather than assumed — restoring the pre-fix policy makes exactly the two composed-text scenarios fail with the character never reaching the pty, while both chord scenarios stay green."
+        },
+        {
+          "date": "2026-08-16",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts",
+          "result": "passed",
+          "durationSeconds": 13.9,
+          "summary": "The Electron live-PTY IME gate passed three scenarios covering Windows IME Shift commit, candidate-selector suppression with committed Chinese text, and composed text/cursor/Backspace stability; the opt-in real-agent scenario remained skipped."
+        },
+        {
+          "date": "2026-08-16",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/dashboard-popout/preview-terminal-ime-bridge-kitty-bytes.test.ts src/renderer/src/components/dashboard-popout/preview-terminal-snapshot-replay.test.ts src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx src/renderer/src/components/dashboard-popout/AgentTerminalPreview.option-dead-key.test.tsx src/shared/terminal-kitty-keyboard-mode-tracker.test.ts src/main/ipc/terminal-preview.test.ts src/main/ipc/terminal-preview-output-stream.test.ts src/renderer/src/runtime/remote-runtime-terminal-snapshot-kitty-flags.test.ts src/main/daemon/daemon-pty-adapter.test.ts",
+          "result": "passed",
+          "durationSeconds": 4.3,
+          "summary": "9 test files and 172 tests passed, covering the Preview kitty slice: real forwarder bytes at snapshot-proven flags, press/release pairing across both keyup/insertText orderings, native and configured-side dead-key release ownership, and flag provenance where a proven 0, a proven non-zero, and an absent field stay three distinct facts — asserted on the daemon snapshot and on a host-pushed remote snapshot that carries the flags with their sequence. The emitter-side rule that a remote SnapshotStart withholds flags without a seq has no direct assertion yet; the client-side gate is what these files pin."
         },
         {
           "date": "2026-08-09",
@@ -8544,7 +8884,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Terminal IME hot-path audit clean on 2026-07-11: candidate guards add O(1) boolean checks plus bounded per-pane Space/digit state and one renderer-scoped currently pressed physical-letter set; ref-counted renderer and pane blur listeners are disposed with pane lifecycle; no per-pane keyboard-event fan-out, polling, IPC, subprocess work, or SSH/remote transport cost added."
+        "evidence": "Terminal input hot-path audit clean on 2026-08-16: candidate guards retain O(1) checks and bounded per-pane state. Layout changes add one process-lifetime native listener, two singleton renderer subscriptions, one O(live windows) broadcast per OS event, and generation-fenced refreshes whose native helper read is deduplicated in flight. The path is event-driven with will-quit/dispose cleanup and adds no polling, timers, per-key IPC, SSH/remote transport work, unbounded queues, or retained terminal data."
       },
       "promotionCriteria": [
         "Cover deterministic byte/cell oracles first.",
@@ -8916,7 +9256,7 @@
       "oracle": "A quarter-circle Claude task title authorizes without a provider lookup only on the exact PTY incarnation carrying verified managed-Claude launch identity; the same title in a bare pane, with an unverified launch hint, or after PTY incarnation replacement is refused while current Claude activity remains a working signal. Fresh explicit state plus ordinary PowerShell plus confirmed recognized agent is sendable on the same PTY. Confirmed shell/non-agent, unavailable confirmation, PTY exit, handle rebind, or a callback PTY mismatch returns a refusal or not-writable result and writes zero bytes.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/quarter-circle-title-send-authorization.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send-explicit-target.test.ts src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send-explicit-target.test.ts src/renderer/src/components/browser-pane/annotate/BrowserAnnotationSendMenuContent.test.tsx"
       ],
       "testFiles": [
         "src/main/runtime/quarter-circle-title-send-authorization.test.ts",
@@ -8929,7 +9269,7 @@
         "src/main/daemon/daemon-foreground-confirmation-protocol.test.ts",
         "src/main/daemon/pty-subprocess.test.ts",
         "src/renderer/src/lib/active-agent-note-send-explicit-target.test.ts",
-        "src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx"
+        "src/renderer/src/components/browser-pane/annotate/BrowserAnnotationSendMenuContent.test.tsx"
       ],
       "assertionRefs": [
         {
@@ -8999,7 +9339,7 @@
           "assertions": ["selected active-agent note sends retain guarded paste and submit routing"]
         },
         {
-          "file": "src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx",
+          "file": "src/renderer/src/components/browser-pane/annotate/BrowserAnnotationSendMenuContent.test.tsx",
           "assertions": [
             "browser annotation send content routes through review-notes send so existing agent sessions remain selectable",
             "both browser annotation send surfaces wire the shared menu content"
@@ -9020,7 +9360,7 @@
           "date": "2026-07-11",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send-explicit-target.test.ts src/renderer/src/components/browser-pane/BrowserAnnotationSendMenuContent.test.tsx",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send-explicit-target.test.ts src/renderer/src/components/browser-pane/annotate/BrowserAnnotationSendMenuContent.test.tsx",
           "result": "passed",
           "durationSeconds": 9.58,
           "summary": "Ten focused test files passed (1183 tests), covering runtime confirmation and PTY revalidation, guarded RPC zero-write behavior, PTY controller routing, local/daemon fresh scans, exact ConPTY membership, and unchanged renderer note routing."

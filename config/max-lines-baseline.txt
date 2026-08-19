@@ -29,7 +29,6 @@ inline src/main/git/repo.ts
 inline src/main/git/runner.ts
 inline src/main/git/status.ts
 inline src/main/git/worktree.ts
-inline src/main/github/client.ts
 inline src/main/github/pr-refresh-coordinator.ts
 inline src/main/github/project-view.ts
 inline src/main/github/project-view/mutations.ts
@@ -50,7 +49,7 @@ inline src/main/linear/issues.ts
 inline src/main/linear/projects.ts
 inline src/main/memory/collector.ts
 inline src/main/opencode/hook-service.ts
-inline src/main/persistence.ts
+inline src/main/persistence/loading-store/store.ts
 inline src/main/ports/advertised-url-watcher.ts
 inline src/main/ports/local-workspace-port-scanner.ts
 inline src/main/project-groups/nested-repo-discovery.ts
@@ -65,7 +64,6 @@ inline src/main/runtime/orca-runtime-files.ts
 inline src/main/runtime/orca-runtime-git.ts
 inline src/main/runtime/orca-runtime.test.ts
 inline src/main/runtime/orca-runtime.ts
-inline src/main/runtime/orchestration/db.ts
 inline src/main/runtime/rpc/methods/orchestration.ts
 inline src/main/runtime/rpc/methods/terminal.ts
 inline src/main/runtime/runtime-rpc.ts
@@ -88,20 +86,17 @@ inline src/relay/git-handler.ts
 inline src/relay/pty-handler.ts
 inline src/relay/relay.ts
 inline src/relay/workspace-space-scan.ts
-inline src/renderer/src/components/GitHubItemDialog.tsx
 inline src/renderer/src/components/GitLabItemDialog.tsx
 inline src/renderer/src/components/JiraIssueWorkspace.tsx
 inline src/renderer/src/components/LinearIssueWorkspace.tsx
 inline src/renderer/src/components/LinearItemDrawer.tsx
 inline src/renderer/src/components/NewWorkspaceComposerCard.tsx
-inline src/renderer/src/components/PullRequestPage.tsx
 inline src/renderer/src/components/TaskPage.tsx
 inline src/renderer/src/components/Terminal.tsx
 inline src/renderer/src/components/UpdateCard.tsx
 inline src/renderer/src/components/WorktreeJumpPalette.tsx
 inline src/renderer/src/components/activity/ActivityPrototypePage.tsx
 inline src/renderer/src/components/automations/AutomationsPage.tsx
-inline src/renderer/src/components/browser-pane/BrowserPane.tsx
 inline src/renderer/src/components/editor/CombinedDiffViewer.tsx
 inline src/renderer/src/components/editor/EditorContent.tsx
 inline src/renderer/src/components/editor/IpynbViewer.tsx
@@ -154,7 +149,6 @@ inline src/renderer/src/runtime/web-session-tabs-sync.ts
 inline src/renderer/src/store/slices/agent-status.ts
 inline src/renderer/src/store/slices/browser.ts
 inline src/renderer/src/store/slices/diffComments.ts
-inline src/renderer/src/store/slices/editor.ts
 inline src/renderer/src/store/slices/github.ts
 inline src/renderer/src/store/slices/hosted-review.ts
 inline src/renderer/src/store/slices/jira.ts

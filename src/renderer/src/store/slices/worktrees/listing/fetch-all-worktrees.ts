@@ -136,7 +136,9 @@ export function createFetchAllWorktrees(
             detected: refresh.result
           }
         } catch (err) {
-          console.error(`Failed to fetch worktrees for repo ${r.id}:`, err)
+          if (!notifyRuntimeScopeForbiddenIfNeeded(err)) {
+            console.error(`Failed to fetch worktrees for repo ${r.id}:`, err)
+          }
           return { repoId: r.id, ok: false as const }
         }
       }

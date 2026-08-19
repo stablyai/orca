@@ -3,7 +3,10 @@ export const LOC_BLOCK_END = '<!-- /orca-pr-loc -->'
 export const LOC_HANDS_OFF_COMMENT =
   '<!-- Programmatic LoC summary. Do not edit by hand; rewritten on every commit. -->'
 
-const TEST_DIR_SEGMENT = /(?:^|\/)(?:__tests__|e2e|tests)(?:\/|$)/i
+// Why the __-wrapped names: they are unambiguous test-data markers, so a dir
+// cannot be one by accident. Bare `fixtures/` is deliberately absent — it reads
+// as a plausible prod module name, and this classifier bills every PR.
+const TEST_DIR_SEGMENT = /(?:^|\/)(?:__tests__|__fixtures__|__snapshots__|e2e|tests)(?:\/|$)/i
 const TEST_FILENAME = /\.(?:test|spec|e2e)\.[^/]+$/i
 
 export function isTestPath(path) {
@@ -33,15 +36,23 @@ export function sumChangedFiles(files) {
   return totals
 }
 
-function signed(count) {
+const COLOR_ADDED = '#1a7f37'
+const COLOR_DELETED = '#cf222e'
+
+function diffCell(count) {
   if (count === 0) {
     return '0'
   }
-  return count > 0 ? `+${count}` : `−${Math.abs(count)}`
+  if (count > 0) {
+    return `$\\color{${COLOR_ADDED}}{\\Huge{\\mathbf{+}}}$\u200b${count}`
+  }
+  return `$\\color{${COLOR_DELETED}}{\\Huge{\\mathbf{−}}}$\u200b${Math.abs(count)}`
 }
 
 function locTableRow(label, bucket) {
-  return `| ${label} | ${bucket.files ?? 0} | ${signed(bucket.added)} | ${signed(-(bucket.deleted ?? 0))} | ${signed((bucket.added ?? 0) - (bucket.deleted ?? 0))} |`
+  const added = bucket.added ?? 0
+  const deleted = bucket.deleted ?? 0
+  return `| ${label} | ${bucket.files ?? 0} | ${diffCell(added)} | ${diffCell(-deleted)} | ${diffCell(added - deleted)} |`
 }
 
 export function formatLocTable({ test, nonTest }) {
