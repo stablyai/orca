@@ -16,11 +16,10 @@ import {
 import { assertWorktreeCleanForRemoval } from './worktree'
 import { getStatus } from './status'
 
-// Why empty files rather than os.devNull: on Windows that constant is `\\.\nul`, and Git
-// rejects it as a config path — `fatal: unable to access '//./nul': Invalid argument` — so every
-// git call in this file failed there and 15 of its 19 tests went red. POSIX resolves the same
-// constant to /dev/null, which Git accepts, so CI never saw it. Empty files are portable, and are
-// how skill-git-tree-identity and skill-windows-workspace already isolate git config.
+// Why empty files rather than os.devNull: that constant is `\\.\nul` on win32, and Git rejects
+// it as a config path — `fatal: unable to access '//./nul': Invalid argument`. POSIX resolves it
+// to /dev/null, which Git accepts, so this only ever failed on Windows. Empty files are portable,
+// and are how skill-git-tree-identity and skill-windows-workspace already isolate git config.
 const gitConfigRoot = mkdtempSync(join(tmpdir(), 'orca-shared-dirs-gitconfig-'))
 const emptyGlobalGitConfig = join(gitConfigRoot, 'global.gitconfig')
 const emptySystemGitConfig = join(gitConfigRoot, 'system.gitconfig')
