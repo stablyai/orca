@@ -146,11 +146,13 @@ describe('Codex backend session supplement credits', () => {
   it('reuses complete zero-credit metadata from a weekly-only usage response', async () => {
     vi.mocked(fetch).mockResolvedValue(usageResponse({ available_count: 0 }))
 
-    await expect(fetchWeeklyOnly()).resolves.toMatchObject({
+    const result = await fetchWeeklyOnly()
+    expect(result).toMatchObject({
       session: null,
       weekly: { usedPercent: 22, windowMinutes: 10_080 },
       rateLimitResetCredits: { availableCount: 0, nextExpiresAt: null }
     })
+    expect(result.planType).toBeUndefined()
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 
@@ -175,6 +177,79 @@ describe('Codex backend session supplement credits', () => {
     expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).not.toContain(
       'https://chatgpt.com/backend-api/wham/usage'
     )
+  })
+
+  it('keeps the monthly usage when the reset timestamp is an ISO string', async () => {
+    await expect(
+      fetchWeeklyOnly(
+        undefined,
+        {
+          planType: 'business',
+          individualLimit: {
+            usedPercent: 65,
+            resetsAt: '2026-04-01T00:00:00Z'
+          }
+        },
+        {}
+      )
+    ).resolves.toMatchObject({
+      monthly: {
+        usedPercent: 65,
+        resetsAt: Date.parse('2026-04-01T00:00:00Z')
+      }
+    })
+  })
+
+  it('clamps finite over-cap usage instead of discarding the monthly window', async () => {
+    await expect(
+      fetchWeeklyOnly(
+        undefined,
+        {
+          planType: 'business',
+          individualLimit: {
+            limit: '3',
+            used: '4',
+            usedPercent: 105,
+            remainingPercent: -5
+          }
+        },
+        {}
+      )
+    ).resolves.toMatchObject({ monthly: { usedPercent: 100, windowMinutes: 43_200 } })
+  })
+
+  it('supplements an empty successful RPC result for an older CLI', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        plan_type: 'business',
+        rate_limit: null,
+        spend_control: {
+          individual_limit: {
+            source: 'account_user_spend_controls',
+            limit: '11450',
+            used: '4522.358407497406',
+            used_percent: 39,
+            remaining_percent: 61,
+            reset_at: 1_785_542_400
+          }
+        }
+      })
+    } as Response)
+
+    await expect(fetchWeeklyOnly(undefined, {}, {})).resolves.toMatchObject({
+      session: null,
+      weekly: null,
+      monthly: {
+        usedPercent: (4522.358407497406 / 11450) * 100,
+        resetsAt: 1_785_542_400_000
+      }
+    })
+    expect(
+      vi
+        .mocked(fetch)
+        .mock.calls.filter(([url]) => url === 'https://chatgpt.com/backend-api/wham/usage')
+    ).toHaveLength(1)
   })
 
   it('keeps the weekly-only session supplement when direct monthly data is also present', async () => {
@@ -212,6 +287,41 @@ describe('Codex backend session supplement credits', () => {
     expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).not.toContain(
       'https://chatgpt.com/backend-api/wham/usage'
     )
+  })
+
+  it('does not supplement an unavailable RPC result', async () => {
+    const child = makeRpcChild()
+    childSpawnMock.mockReturnValue(child)
+    const resultPromise = fetchCodexRateLimits({ allowPtyFallback: false })
+    await vi.advanceTimersByTimeAsync(0)
+    child.emit('error', Object.assign(new Error('Codex CLI not found'), { code: 'ENOENT' }))
+
+    await expect(resultPromise).resolves.toMatchObject({ status: 'unavailable' })
+    expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).not.toContain(
+      'https://chatgpt.com/backend-api/wham/usage'
+    )
+  })
+
+  it('does not retry a failed WSL backend-first request through the supplement', async () => {
+    vi.mocked(fetch).mockRejectedValueOnce(new Error('backend unavailable'))
+    childSpawnMock.mockReturnValue(makeRpcChild({ availableCount: 0 }))
+    const resultPromise = fetchCodexRateLimits({
+      codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex',
+      allowPtyFallback: false
+    })
+    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(1)
+
+    await expect(resultPromise).resolves.toMatchObject({
+      session: null,
+      weekly: { usedPercent: 22, windowMinutes: 10_080 },
+      status: 'ok'
+    })
+    expect(
+      vi
+        .mocked(fetch)
+        .mock.calls.filter(([url]) => url === 'https://chatgpt.com/backend-api/wham/usage')
+    ).toHaveLength(1)
   })
 
   it.each([

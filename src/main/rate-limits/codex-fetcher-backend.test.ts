@@ -229,6 +229,25 @@ describe('Codex backend rate-limit requests', () => {
     expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).toEqual([
       'https://chatgpt.com/backend-api/wham/usage'
     ])
+
+    vi.mocked(fetch).mockReset()
+    childSpawnMock.mockImplementationOnce(() => {
+      throw new Error('RPC fallback')
+    })
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({})
+    } as Response)
+
+    await expect(
+      fetchCodexRateLimits({
+        codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex',
+        allowPtyFallback: false
+      })
+    ).resolves.toMatchObject({ status: 'error' })
+    expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).toEqual([
+      'https://chatgpt.com/backend-api/wham/usage'
+    ])
   })
 
   it('aborts callers while sharing one stalled backend auth read', async () => {

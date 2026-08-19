@@ -541,8 +541,7 @@ function mapIndividualLimit(raw: unknown): RateLimitWindow | null {
     value.limit,
     value.used,
     value.used_percent ?? value.usedPercent,
-    value.remaining_percent ?? value.remainingPercent,
-    value.reset_at ?? value.resetsAt
+    value.remaining_percent ?? value.remainingPercent
   ]
   if (
     numericFields.some(
@@ -551,43 +550,33 @@ function mapIndividualLimit(raw: unknown): RateLimitWindow | null {
   ) {
     return null
   }
-  if (usedPercent !== null && (usedPercent < 0 || usedPercent > 100)) {
-    return null
-  }
-  if (remainingPercent !== null && (remainingPercent < 0 || remainingPercent > 100)) {
-    return null
-  }
-  if (
-    usedPercent !== null &&
-    remainingPercent !== null &&
-    Math.abs(usedPercent + remainingPercent - 100) > 1
-  ) {
-    return null
-  }
-
   if (limit !== null && limit <= 0) {
     return null
   }
   if (limit !== null && limit > 0 && used !== null) {
-    if (used < 0 || used > limit) {
+    if (used < 0) {
       return null
     }
     percent = (used / limit) * 100
-    if (usedPercent !== null && Math.abs(usedPercent - percent) > 1) {
-      return null
-    }
-    if (remainingPercent !== null && Math.abs(100 - remainingPercent - percent) > 1) {
-      return null
-    }
   } else if (usedPercent !== null && usedPercent >= 0 && usedPercent <= 100) {
     percent = usedPercent
   } else if (remainingPercent !== null && remainingPercent >= 0 && remainingPercent <= 100) {
+    percent = 100 - remainingPercent
+  } else if (usedPercent !== null) {
+    percent = usedPercent
+  } else if (remainingPercent !== null) {
     percent = 100 - remainingPercent
   } else {
     return null
   }
 
-  const reset = finiteNumber(value.reset_at ?? value.resetsAt)
+  const rawReset = value.reset_at ?? value.resetsAt
+  const resetMilliseconds =
+    typeof rawReset === 'string' && finiteNumber(rawReset) === null
+      ? parseCreditTimestamp(rawReset)
+      : null
+  const reset =
+    finiteNumber(rawReset) ?? (resetMilliseconds !== null ? resetMilliseconds / 1000 : null)
   return mapRpcWindow({ usedPercent: percent, resetsAt: reset }, 43_200)
 }
 
@@ -691,6 +680,7 @@ async function withBackendSessionWindow(
       return limits
     }
     const rateLimitResetCredits = backend.rateLimitResetCredits ?? limits.rateLimitResetCredits
+    const backendOwnsResult = Boolean(backend.session || backend.monthly || !limits.weekly)
     return {
       ...limits,
       session: limits.session ?? backend.session,
@@ -698,9 +688,11 @@ async function withBackendSessionWindow(
         ? (backend.weekly ?? limits.weekly)
         : (limits.weekly ?? backend.weekly),
       monthly: limits.monthly ?? backend.monthly,
-      planType: limits.planType ?? backend.planType,
+      ...(backendOwnsResult && backend.planType && !limits.planType
+        ? { planType: backend.planType }
+        : {}),
       ...(rateLimitResetCredits !== undefined ? { rateLimitResetCredits } : {}),
-      updatedAt: backend.updatedAt
+      ...(backendOwnsResult ? { updatedAt: backend.updatedAt } : {})
     }
   } catch {
     return limits
