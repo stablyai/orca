@@ -320,6 +320,21 @@ describe('createSetupRunnerScript', () => {
   )
 
   it.skipIf(process.platform === 'win32')(
+    'stays silent when the script turned errexit off and recovered',
+    async () => {
+      // Regression: the ERR trap fires whether or not `set -e` is in force, so a script that
+      // deliberately tolerates a failing probe used to be reported as broken while it ran on
+      // to succeed.
+      const result = await runPosixRunner('set +e\nfalse\necho SETUP_RAN\n')
+
+      expect(result.status).toBe(0)
+      expect(result.stdout).toContain('SETUP_RAN')
+      expect(result.stderr).not.toContain('Orca setup:')
+      expect(countReports(result.stderr)).toBe(0)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
     'stays silent while a runner script succeeds',
     async () => {
       const result = await runPosixRunner('echo SETUP_RAN\n')

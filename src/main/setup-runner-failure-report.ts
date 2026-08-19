@@ -24,6 +24,11 @@ const REPORT_FUNCTION_BODY = [
   `if [ "$status" = 127 ]; then ${REPORT_MISSING_COMMAND}; fi`
 ].join('; ')
 
+// Why the ERR trap tests `$-`: the trap fires whether or not errexit is in force, so a script that
+// turns it off to tolerate a probe (`set +e; command -v foo`) would be reported as failing while it
+// ran on to succeed. Under `set +e` a non-zero command is the script's own business; the EXIT
+// fallback still reports it when the script really ends non-zero.
+//
 // Why: the ERR trap is not inherited by functions, so a script that wraps its work in one would
 // fail silently. `set -E` would inherit it but then reports a command substitution twice, once in
 // the subshell and once in the parent. The EXIT fallback instead reports whatever the ERR trap
@@ -46,7 +51,7 @@ const EXIT_FUNCTION_BODY = [
 export function getPosixRunnerFailureReportPrelude(): string {
   return [
     `${REPORT_FUNCTION_NAME}() { ${REPORT_FUNCTION_BODY}; }`,
-    `trap '${REPORT_FUNCTION_NAME} "$?" "$BASH_COMMAND"' ERR`,
+    `trap 'case $- in *e*) ${REPORT_FUNCTION_NAME} "$?" "$BASH_COMMAND";; esac' ERR`,
     `${EXIT_FUNCTION_NAME}() { ${EXIT_FUNCTION_BODY}; }`,
     `trap ${EXIT_FUNCTION_NAME} EXIT\n`
   ].join('; ')
