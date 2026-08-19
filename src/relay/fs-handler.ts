@@ -81,6 +81,9 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.copy', (p) => copyRelayPath(p))
     this.dispatcher.onRequest('fs.realpath', (p) => realpathRelayPath(p))
     this.dispatcher.onRequest('fs.search', (p) => this.search(p))
+    this.dispatcher.onRequest('fs.getCapabilities', async () => ({
+      quickOpenSearchVersion: 1
+    }))
     this.dispatcher.onRequest('fs.listFiles', (p, c) => this.listFiles(p, c))
     this.dispatcher.onRequest('fs.workspaceSpaceScan', (p, c) => this.workspaceSpaceScan(p, c))
     this.dispatcher.onRequest('fs.watch', (p, context) =>
@@ -189,6 +192,10 @@ export class FsHandler {
       params.maxResults > 0
         ? Math.min(params.maxResults, 20_001)
         : undefined
+    const searchQuery =
+      typeof params.searchQuery === 'string' && params.searchQuery.trim().length > 0
+        ? params.searchQuery
+        : undefined
     // Why: the main-to-relay RPC adds excludePaths so nested linked worktrees
     // don't get double-scanned. The shared helper validates the shape and
     // normalizes into root-relative prefixes; malformed input yields [] so
@@ -199,9 +206,10 @@ export class FsHandler {
     // aborting a stale scan when the workspace changes or the host cancels.
     return this.listFilesScans.run({
       clientId: context?.clientId ?? 0,
-      key: JSON.stringify([rootPath, excludePathPrefixes, maxResults]),
+      key: JSON.stringify([rootPath, excludePathPrefixes, maxResults, searchQuery]),
       signal: context?.signal,
-      start: (signal) => runListFilesScan(rootPath, excludePathPrefixes, signal, maxResults)
+      start: (signal) =>
+        runListFilesScan(rootPath, excludePathPrefixes, signal, maxResults, searchQuery)
     })
   }
 

@@ -68,7 +68,15 @@ function writeGithubOutput(totals) {
   }
 }
 
-async function updatePullRequest({ owner, repo, pullNumber, token, totals, fetchImpl = fetch }) {
+export async function updatePullRequest({
+  owner,
+  repo,
+  pullNumber,
+  token,
+  totals,
+  fetchImpl = fetch,
+  sleepImpl = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
+}) {
   const headers = githubHeaders(token)
   const url = `https://api.github.com/repos/${owner}/${repo}/pulls/${pullNumber}`
   const response = await fetchImpl(url, { headers })
@@ -87,14 +95,22 @@ async function updatePullRequest({ owner, repo, pullNumber, token, totals, fetch
     return 0
   }
 
-  const update = await fetchImpl(url, {
+  const updateRequest = {
     method: 'PATCH',
     headers: {
       ...headers,
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({ body: nextBody })
-  })
+  }
+  let update
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    update = await fetchImpl(url, updateRequest)
+    if (update.ok || ![500, 502, 503, 504].includes(update.status) || attempt === 2) {
+      break
+    }
+    await sleepImpl(1000 * 2 ** attempt)
+  }
   if (update.status === 403) {
     console.log('Skipping PR body update: token cannot write (likely a fork PR).')
     return 0

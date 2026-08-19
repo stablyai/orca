@@ -55,7 +55,7 @@ describe('CodexRuntimeHomeService', () => {
       expect(firstCall).toBeDefined()
       const [command, args] = firstCall as [string, string[]]
       expect(command).toBe('wsl.exe')
-      expect(args.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--', 'bash', '-lc'])
+      expect(args.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--exec', 'bash', '-lc'])
       expect(args).toHaveLength(6)
 
       const shellCommand = args[5]

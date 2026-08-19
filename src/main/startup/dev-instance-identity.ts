@@ -15,6 +15,19 @@ export type DevInstanceIdentity = AppIdentity & {
   appName: string
 }
 
+/**
+ * Whether app.setName must be applied before the `ready` event.
+ *
+ * Why: Electron resolves the macOS safeStorage Keychain service name
+ * ("<app name> Safe Storage") before `ready`, so a post-ready setName cannot move it.
+ * Dev-only on purpose — a packaged build must keep deriving its key from its own
+ * CFBundleName, which downstream forks ship differently ("Orca ALab Edition").
+ * Renaming it pre-ready would orphan their encrypted secrets.
+ */
+export function shouldApplyPreReadyAppName(identity: Pick<AppIdentity, 'isDev'>): boolean {
+  return identity.isDev
+}
+
 function cleanEnvValue(value: string | undefined): string | null {
   const trimmed = value?.replace(/\s+/g, ' ').trim()
   if (!trimmed) {

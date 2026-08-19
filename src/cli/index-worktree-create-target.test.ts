@@ -42,7 +42,7 @@ vi.mock('child_process', async () => {
 
 import { main } from './index'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
-import { useWorktreeAwarenessEnvironment } from './index-test-harness'
+import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 describe('orca cli worktree awareness', () => {
   useWorktreeAwarenessEnvironment({
@@ -77,6 +77,7 @@ describe('orca cli worktree awareness', () => {
       comment: undefined,
       runHooks: false,
       activate: true,
+      navigation: 'all',
       parentWorktree: undefined,
       cwdParentWorktree: 'id:repo-1::/tmp/repo',
       noParent: false,
@@ -86,6 +87,7 @@ describe('orca cli worktree awareness', () => {
   })
 
   it('resolves project and host flags to the matching repo for worktree.create', async () => {
+    pairRuntimeEnvironment(listEnvironmentsMock, 'gpu')
     queueFixtures(
       callMock,
       okFixture('req_project_setups', {
@@ -140,6 +142,7 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
+    expect(runtimeClientConstructorMock).toHaveBeenCalledWith(null, 'gpu')
     expect(callMock).toHaveBeenNthCalledWith(1, 'projectHostSetup.list')
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
       repo: 'id:repo-gpu',
@@ -237,6 +240,7 @@ describe('orca cli worktree awareness', () => {
     queueFixtures(
       callMock,
       okFixture('req_repo_show', { repo: { id: 'repo-1', kind: 'git' } }),
+      okFixture('req_status', { runtimeProtocolVersion: 3 }),
       okFixture('req_create', {
         worktree: buildWorktree('/tmp/repo/yoyo-prefix-test', 'yoyo/prefix-test', 'abc', 'repo-1'),
         lineage: null,
@@ -264,7 +268,7 @@ describe('orca cli worktree awareness', () => {
 
     expect(callMock).toHaveBeenNthCalledWith(1, 'repo.show', { repo: 'id:repo-1' })
     expect(callMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       'worktree.create',
       expect.objectContaining({
         name: 'yoyo-prefix-test',
@@ -309,10 +313,49 @@ describe('orca cli worktree awareness', () => {
     process.exitCode = priorExitCode
   })
 
+  it('rejects branch overrides before a legacy runtime can silently ignore them', async () => {
+    const priorExitCode = process.exitCode
+    process.exitCode = undefined
+    queueFixtures(
+      callMock,
+      okFixture('req_repo_show', { repo: { id: 'repo-1', kind: 'git' } }),
+      okFixture('req_status', { runtimeProtocolVersion: 2 }),
+      okFixture('req_create', {
+        worktree: buildWorktree('/tmp/repo/yoyo-prefix-test', 'yoyo-prefix-test', 'abc', 'repo-1'),
+        lineage: null,
+        warnings: []
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:repo-1',
+        '--name',
+        'yoyo-prefix-test',
+        '--branch',
+        'yoyo/prefix-test',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/repo'
+    )
+
+    expect(callMock.mock.calls.some((call) => call[0] === 'worktree.create')).toBe(false)
+    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain('v1.4.5')
+    expect(process.exitCode).toBe(1)
+    process.exitCode = priorExitCode
+  })
+
   it('uses slash-containing --name as branchNameOverride when --branch is omitted', async () => {
     queueFixtures(
       callMock,
       okFixture('req_repo_show', { repo: { id: 'repo-1', kind: 'git' } }),
+      okFixture('req_status', { appVersion: '1.4.5' }),
       okFixture('req_create', {
         worktree: buildWorktree('/tmp/repo/yoyo-prefix-test', 'yoyo/prefix-test', 'abc', 'repo-1'),
         lineage: null,
@@ -373,6 +416,40 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).toHaveBeenNthCalledWith(1, 'repo.show', { repo: 'id:folder-1' })
+    const createCall = callMock.mock.calls.find((call) => call[0] === 'worktree.create')
+    expect(createCall).toBeDefined()
+    expect(createCall?.[1]).not.toHaveProperty('branchNameOverride')
+  })
+
+  it('treats whitespace-only --branch as absent for folder workspaces', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_repo_show', { repo: { id: 'folder-1', kind: 'folder' } }),
+      okFixture('req_create', {
+        worktree: buildWorktree('/tmp/folder/yoyo-prefix-test', '', 'abc', 'folder-1'),
+        lineage: null,
+        warnings: []
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(
+      [
+        'worktree',
+        'create',
+        '--repo',
+        'id:folder-1',
+        '--name',
+        'yoyo/prefix-test',
+        '--branch',
+        '   ',
+        '--no-parent',
+        '--json'
+      ],
+      '/tmp/folder'
+    )
+
     const createCall = callMock.mock.calls.find((call) => call[0] === 'worktree.create')
     expect(createCall).toBeDefined()
     expect(createCall?.[1]).not.toHaveProperty('branchNameOverride')

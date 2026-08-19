@@ -939,15 +939,23 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     const result = await client.call<{
       dispatch: { id: string; task_id: string; status: string }
       worker: { state: string; stage: string; agent_terminal_handle: string | null }
+      observation?: { agentWait?: { source: string; reason?: string } | null }
     }>('orchestration.workerShow', {
       dispatch: getRequiredStringFlag(flags, 'dispatch')
     })
-    printResult(
-      result,
-      json,
-      (value) =>
-        `${value.dispatch.id} task=${value.dispatch.task_id} [${value.worker.state}] stage=${value.worker.stage}`
-    )
+    printResult(result, json, (value) => {
+      const base = `${value.dispatch.id} task=${value.dispatch.task_id} [${value.worker.state}] stage=${value.worker.stage}`
+      // Why a whole line and not a suffix: this is the one state where the lane is healthy
+      // and still needs a person, so it must not read as another status token. An absent
+      // field is unknown, which must not print the same as an evaluated "none".
+      if (value.observation === undefined || !('agentWait' in value.observation)) {
+        return `${base}\nInteractive wait: unknown (not evaluated)`
+      }
+      const wait = value.observation.agentWait
+      return wait
+        ? `${base}\nWaiting on a human: ${wait.reason ?? 'interactive prompt'} (via ${wait.source})`
+        : `${base}\nInteractive wait: none`
+    })
   },
 
   'orchestration worker-read': async ({ flags, client, json }) => {

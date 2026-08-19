@@ -267,7 +267,7 @@ export async function fetchViaPty(options?: {
       ? [
           '-d',
           wslConfig.distro,
-          '--',
+          '--exec',
           'bash',
           '-lc',
           // Why: Windows-side env does not cross into the distro without WSLENV,

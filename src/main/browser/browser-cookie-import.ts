@@ -84,8 +84,28 @@ import {
   type CookieImportMode,
   type ReplacedImportedDomainCookies
 } from './browser-cookie-import-policy'
-import { removeTransplantableCookies, withCookieClearLock } from './browser-cookie-import-clear'
+import {
+  acquireCookieMutationLock,
+  removeTransplantableCookies,
+  withCookieMutationLock,
+  type CookieClearStore,
+  type CookieImportWriteStore
+} from './browser-cookie-import-clear'
 import { openCookieClearStore } from './browser-cookie-clear-store'
+import {
+  readChromiumRowPartition,
+  readFirefoxRowPartition,
+  readJsonCookiePartition,
+  type SourcePartitionRead
+} from './browser-cookie-source-partition'
+import {
+  emptyImportWritePhase,
+  writeImportedCookies,
+  type ImportedCookieFields,
+  type ImportWritePhase,
+  type SourceCookieToWrite,
+  planImportWrites
+} from './browser-cookie-import-write'
 import {
   createChromiumCookieSnapshot,
   type ChromiumCookieSnapshot
@@ -448,18 +468,15 @@ type RawCookieEntry = {
   httpOnly?: unknown
   sameSite?: unknown
   expirationDate?: unknown
+  partitionKey?: unknown
+  partitionKeyOpaque?: unknown
 }
 
-type ValidatedCookie = {
-  url: string
-  name: string
-  value: string
-  domain: string
-  path: string
-  secure: boolean
-  httpOnly: boolean
+// Why (STA-4300): `partition` is required, not optional, so every source that builds a cookie has to
+// state what it read. An optional field would let a new source silently default to unpartitioned.
+type ValidatedCookie = ImportedCookieFields & {
   sameSite: 'unspecified' | 'no_restriction' | 'lax' | 'strict'
-  expirationDate: number | undefined
+  partition: SourcePartitionRead
 }
 
 // Why: Chromium's CookieSameSiteForStorage enum (0=Unspecified,1=None,2=Lax,3=Strict) differs from Firefox's numbering.
@@ -509,7 +526,7 @@ function normalizeSameSite(raw: unknown): 'unspecified' | 'no_restriction' | 'la
   return 'unspecified'
 }
 
-// Why: cookies.set() needs a url to scope the cookie; derive it from domain + secure flag.
+// Why: a cookie identity needs a url to scope it; derive it from domain + secure flag.
 function deriveUrl(domain: string, secure: boolean): string | null {
   const normalizedDomain = normalizeCookieDomain(domain)
   if (!normalizedDomain) {
@@ -556,16 +573,46 @@ function validateCookieEntry(raw: RawCookieEntry): ValidatedCookie | null {
     secure,
     httpOnly: raw.httpOnly === true || raw.httpOnly === 1,
     sameSite: normalizeSameSite(raw.sameSite),
-    expirationDate
+    expirationDate,
+    partition: readJsonCookiePartition(raw.partitionKey, raw.partitionKeyOpaque)
+  }
+}
+
+// Why (STA-4300): the import writes get a store with no `set` on it and no Session behind it, so
+// the partition-dropping write is not merely unused here — it cannot be reached.
+type CookieImportSessionStore = CookieClearStore & CookieImportWriteStore & { dispose: () => void }
+
+type CookieImportTarget = {
+  partition: string
+  // Why (STA-4601): the live-jar lock is keyed on an object, and this path no longer holds the
+  // Session that STA-4300 moved behind openWriteStore. session.fromPartition returns the SAME
+  // instance for one partition string, so carrying that instance here is what keeps this path's
+  // lock and the native path's lock on ONE key — a fresh object per call would serialise nothing.
+  mutationLockOwner: object
+  openWriteStore: () => CookieImportSessionStore
+}
+
+type CookieImportOptions = {
+  canReportPartitionSkippedCookies?: boolean
+}
+
+function cookieImportTarget(targetPartition: string): CookieImportTarget {
+  const targetSession = session.fromPartition(targetPartition)
+  return {
+    partition: targetPartition,
+    mutationLockOwner: targetSession,
+    openWriteStore: () => openCookieClearStore(targetSession)
   }
 }
 
 async function importValidatedCookies(
   cookies: ValidatedCookie[],
   totalInput: number,
-  targetPartition: string,
-  mode: CookieImportMode
+  target: CookieImportTarget,
+  mode: CookieImportMode,
+  options: CookieImportOptions = {}
 ): Promise<BrowserCookieImportResult> {
+  const targetPartition = target.partition
   const importDomainCache = new Map<string, boolean>()
   const validDomainCookies = cookies.filter((cookie) => {
     let valid = importDomainCache.get(cookie.domain)
@@ -590,128 +637,125 @@ async function importValidatedCookies(
   diag(
     `importValidatedCookies: ${cookies.length} validated, ${invalidDomainSkipped} unsafe-domain skipped, ${integritySkipped} source-bound skipped, ${nonTransplantableSkipped} non-transplantable skipped of ${totalInput} total, partition="${targetPartition}"`
   )
-  const targetSession = session.fromPartition(targetPartition)
-  let importedCount = 0
-  let skipped = totalInput - importableCookies.length
-  const domainSet = new Set<string>()
-  let replaced: ReplacedImportedDomainCookies | null = null
-  // Why (STA-4097): the rollback below has to put back cookies this import already deleted, and
-  // only CDP identities carry partitionKey — rebuilding them with cookies.set drops it silently.
-  const cookieClearStore =
-    mode === 'replace-imported-domains' && importableCookies.length > 0
-      ? openCookieClearStore(targetSession)
-      : null
+  // Why (STA-4300 I1): every cookie's fate is decided here, before the jar is opened. The plan is
+  // the single value the write set AND the removal scope both derive from, so they cannot drift
+  // apart the way they did in bf6dc6fcba.
+  const plan = planImportWrites(importableCookies)
 
-  try {
-    if (cookieClearStore) {
-      try {
-        replaced = await replaceCookiesForImportedDomains(
-          cookieClearStore,
-          importableCookies.map((cookie) => cookie.domain)
-        )
-        diag(`  removed ${replaced.removed.length} existing cookies in imported domain scopes`)
-      } catch (err) {
-        diag(`  existing cookie replacement failed: ${summarizeCookieImportError(err)}`)
+  // Why (§4.3c): a family we cannot name is one we cannot exclude from the removal scope, and
+  // clearing a family we cannot protect is the P0. Refuse before touching anything.
+  if (plan.hasUnrepresentableSkip) {
+    return {
+      ok: false,
+      reason:
+        'Could not import: a cookie with an unreadable site partition has no registrable domain, so its existing session cannot be protected.'
+    }
+  }
+
+  // Why: an older remote client cannot surface this skip, so fail before opening the target jar.
+  if (options.canReportPartitionSkippedCookies === false && plan.skips.length > 0) {
+    return {
+      ok: false,
+      reason:
+        'This Orca client cannot report cookies skipped for an unreadable site partition. Update Orca on this device and try again.'
+    }
+  }
+  // Why: a family-suppressed sibling is a partition skip too, so partitionSkippedCookies is a
+  // BREAKDOWN of skippedCookies and is added into it exactly once — never a separate addend, or
+  // totalCookies === importedCookies + skippedCookies silently stops holding.
+  const partitionSkipped = plan.skips.length
+  let skipped = totalInput - importableCookies.length + partitionSkipped
+  let phase: ImportWritePhase = emptyImportWritePhase()
+  // Why (STA-4097/STA-4300): both the rollback and the import writes need CDP identities — only
+  // they carry partitionKey. cookies.set drops it silently, on the success path as well.
+  const cookieClearStore = plan.writes.length > 0 ? target.openWriteStore() : null
+
+  if (cookieClearStore) {
+    // Why (STA-4601): the replace, the writes, and the rollback are one live-jar transaction.
+    // Releasing after the replace lets a second import interleave, so this run's rollback could
+    // remove cookies the newer import already wrote and reported as imported. Taken AFTER the
+    // store is opened on purpose — openWriteStore only builds the adapter, it attaches no
+    // debugger, so holding it while queued cannot deadlock against the holder.
+    const releaseMutationLock = await acquireCookieMutationLock(target.mutationLockOwner)
+    let replaced: ReplacedImportedDomainCookies | null = null
+    try {
+      if (mode === 'replace-imported-domains') {
+        try {
+          // Why (STA-4300 I2 / §2b): the removal scope is the write set. Filtering per exact
+          // cookie is NOT enough — replaceCookiesForImportedDomains expands each imported domain
+          // into its descendant roots, so a readable apex cookie would drag a skipped subdomain's
+          // live session into the removal scope with nothing written back. plan.writes is already
+          // family-closed, and using the same array for both makes them impossible to diverge.
+          const replacementDomains = plan.writes.map((cookie) => cookie.domain)
+          replaced = await replaceCookiesForImportedDomains(cookieClearStore, replacementDomains)
+          diag(`  removed ${replaced.removed.length} existing cookies in imported domain scopes`)
+        } catch (err) {
+          diag(`  existing cookie replacement failed: ${summarizeCookieImportError(err)}`)
+          return {
+            ok: false,
+            reason: reasonWithDiagLog('Could not replace existing cookies for the imported sites.')
+          }
+        }
+      }
+
+      // Why: Chromium rejects any non-printable-ASCII byte in a cookie value; strip as a safety net.
+      const stripNonPrintable = (s: string): string => s.replace(/[^\x20-\x7E]/g, '')
+      phase = await writeImportedCookies(
+        cookieClearStore,
+        plan.writes.map((cookie) => ({ ...cookie, value: stripNonPrintable(cookie.value) })),
+        { stopOnFailure: replaced !== null, log: diag }
+      )
+      // Why: plan.skips holds every partition-driven skip — the unreadable rows AND the readable
+      // siblings suppressed by family closure. phase.partitionSkipped is 0 now that only planned
+      // writes reach the writer, so the count comes from the plan and is added exactly once.
+      skipped += phase.writeRejected
+
+      if (phase.failure && replaced) {
+        const rollbackFailures: unknown[] = []
+        for (const cookie of phase.attemptedKeys.toReversed()) {
+          try {
+            await cookieClearStore.remove(cookie.url, cookie.name)
+          } catch (err) {
+            rollbackFailures.push(err)
+          }
+        }
+        // Why: restoreClearIdentities attaches the debugger before it iterates, so an empty
+        // restore set would spin up a hidden BrowserWindow to put nothing back.
+        if (replaced.identities.length > 0) {
+          try {
+            await cookieClearStore.restoreClearIdentities(replaced.identities.toReversed())
+          } catch (err) {
+            rollbackFailures.push(err)
+          }
+        }
+        if (rollbackFailures.length > 0) {
+          diag(`  cookie replacement rollback failed: ${rollbackFailures.length} operation(s)`)
+        }
         return {
           ok: false,
-          reason: reasonWithDiagLog('Could not replace existing cookies for the imported sites.')
+          reason: reasonWithDiagLog('Could not safely replace cookies for the imported sites.')
         }
       }
-    }
-
-    // Why: Electron's cookies.set() rejects any non-printable-ASCII byte; strip as a safety net.
-    const stripNonPrintable = (s: string): string => s.replace(/[^\x20-\x7E]/g, '')
-    const importedCookieKeys: { url: string; name: string }[] = []
-    let setFailure: unknown = null
-
-    for (const cookie of importableCookies) {
+    } finally {
       try {
-        // Why: Chromium rejects __Host- cookies unless they omit domain and use path=/.
-        const isHostPrefixed = cookie.name.startsWith('__Host-')
-        const path = isHostPrefixed ? '/' : cookie.path
-        await targetSession.cookies.set({
-          url: cookie.url,
-          name: cookie.name,
-          value: stripNonPrintable(cookie.value),
-          ...(isHostPrefixed ? {} : { domain: cookie.domain }),
-          path,
-          secure: cookie.secure,
-          httpOnly: cookie.httpOnly,
-          sameSite: cookie.sameSite,
-          expirationDate: cookie.expirationDate
-        })
-        const removalUrl = new URL(cookie.url)
-        removalUrl.pathname = path.startsWith('/') ? path : '/'
-        importedCookieKeys.push({ url: removalUrl.toString(), name: cookie.name })
-        importedCount++
-        // Why: surface only the domain (never name/value/path) so the summary doesn't leak secret cookie data.
-        const cleanDomain = cookie.domain.startsWith('.') ? cookie.domain.slice(1) : cookie.domain
-        domainSet.add(cleanDomain)
-      } catch (err) {
-        skipped++
-        setFailure = err
-        if (skipped <= 5) {
-          // Find the exact offending character position and code
-          const val = cookie.value
-          let badInfo = 'none found'
-          for (let i = 0; i < val.length; i++) {
-            const code = val.charCodeAt(i)
-            if (code < 0x20 || code > 0x7e) {
-              badInfo = `pos=${i} char=U+${code.toString(16).padStart(4, '0')}`
-              break
-            }
-          }
-          diag(
-            `  cookie.set FAILED: domain=${cookie.domain} name=${cookie.name} valLen=${val.length} badChar=${badInfo} err=${String(err)}`
-          )
-        }
-        if (replaced) {
-          break
-        }
+        cookieClearStore.dispose()
+      } finally {
+        releaseMutationLock()
       }
     }
-
-    // Why: replaced is only ever set alongside cookieClearStore, which owns the CDP restore.
-    if (setFailure && replaced && cookieClearStore) {
-      const rollbackFailures: unknown[] = []
-      for (const cookie of importedCookieKeys.toReversed()) {
-        try {
-          await targetSession.cookies.remove(cookie.url, cookie.name)
-        } catch (err) {
-          rollbackFailures.push(err)
-        }
-      }
-      // Why: restoreClearIdentities attaches the debugger before it iterates, so an empty
-      // restore set would spin up a hidden BrowserWindow to put nothing back.
-      if (replaced.identities.length > 0) {
-        try {
-          await cookieClearStore.restoreClearIdentities(replaced.identities.toReversed())
-        } catch (err) {
-          rollbackFailures.push(err)
-        }
-      }
-      if (rollbackFailures.length > 0) {
-        diag(`  cookie replacement rollback failed: ${rollbackFailures.length} operation(s)`)
-      }
-      return {
-        ok: false,
-        reason: reasonWithDiagLog('Could not safely replace cookies for the imported sites.')
-      }
-    }
-  } finally {
-    cookieClearStore?.dispose()
   }
 
   diag(
-    `importValidatedCookies result: imported=${importedCount} skipped=${skipped} domains=${domainSet.size}`
+    `importValidatedCookies result: imported=${phase.importedCount} skipped=${skipped} partition-unreadable=${partitionSkipped} domains=${phase.domains.size}`
   )
 
   const summary: BrowserCookieImportSummary = {
     totalCookies: totalInput,
-    importedCookies: importedCount,
+    importedCookies: phase.importedCount,
     skippedCookies: skipped,
     ...(googleCookiesSkipped > 0 ? { googleCookiesSkipped } : {}),
-    domains: [...domainSet].sort()
+    ...(partitionSkipped > 0 ? { partitionSkippedCookies: partitionSkipped } : {}),
+    domains: [...phase.domains].sort()
   }
 
   return { ok: true, profileId: '', summary }
@@ -792,7 +836,7 @@ export async function importCookiesFromFile(
   return importValidatedCookies(
     validated,
     parsed.length,
-    targetPartition,
+    cookieImportTarget(targetPartition),
     'replace-imported-domains'
   )
 }
@@ -1319,7 +1363,10 @@ function decodeSafariCookie(buf: Buffer): ValidatedCookie | null {
     secure,
     httpOnly,
     sameSite: 'unspecified',
-    expirationDate
+    expirationDate,
+    // Why: Cookies.binarycookies has no partition field — Safari's format predates CHIPS, so every
+    // decoded cookie is genuinely unpartitioned rather than missing an identity.
+    partition: { status: 'unpartitioned' }
   }
 }
 
@@ -1343,7 +1390,8 @@ function readCString(buf: Buffer, offset: number, end: number): string | null {
 
 async function importCookiesFromFirefox(
   browser: DetectedBrowser,
-  targetPartition: string
+  targetPartition: string,
+  options: CookieImportOptions
 ): Promise<BrowserCookieImportResult> {
   diag(`importCookiesFromFirefox: partition="${targetPartition}"`)
 
@@ -1372,7 +1420,7 @@ async function importCookiesFromFirefox(
 
   try {
     const db = new DatabaseSync(tmpCookiesPath, { readOnly: true })
-    type FirefoxRow = {
+    type FirefoxRow = Record<string, unknown> & {
       name: string
       value: string
       host: string
@@ -1381,10 +1429,21 @@ async function importCookiesFromFirefox(
       isSecure: number
       isHttpOnly: number
       sameSite: number
+      isPartitionedAttributeSet?: number
     }
+    // Why: selecting a column an older moz_cookies schema lacks fails the whole import. A schema
+    // without the server-declared partition flag predates that cookie identity.
+    const firefoxColumns = new Set(
+      (db.prepare('PRAGMA table_info(moz_cookies)').all() as { name: string }[]).map(
+        (column) => column.name
+      )
+    )
+    const partitionColumn = firefoxColumns.has('isPartitionedAttributeSet')
+      ? ', isPartitionedAttributeSet'
+      : ''
     const rows = db
       .prepare(
-        'SELECT name, value, host, path, expiry, isSecure, isHttpOnly, sameSite FROM moz_cookies'
+        `SELECT name, value, host, path, expiry, isSecure, isHttpOnly, sameSite${partitionColumn} FROM moz_cookies`
       )
       .all() as FirefoxRow[]
     db.close()
@@ -1421,7 +1480,8 @@ async function importCookiesFromFirefox(
         secure,
         httpOnly: row.isHttpOnly === 1,
         sameSite: firefoxSameSite(row.sameSite),
-        expirationDate: row.expiry > 0 ? row.expiry : undefined
+        expirationDate: row.expiry > 0 ? row.expiry : undefined,
+        partition: readFirefoxRowPartition(row, firefoxColumns)
       })
     }
 
@@ -1434,8 +1494,9 @@ async function importCookiesFromFirefox(
     return importValidatedCookies(
       validated,
       rows.length,
-      targetPartition,
-      'replace-imported-domains'
+      cookieImportTarget(targetPartition),
+      'replace-imported-domains',
+      options
     )
   } catch (err) {
     rmSync(tmpDir, { recursive: true, force: true })
@@ -1493,7 +1554,7 @@ async function importCookiesFromSafari(
     return importValidatedCookies(
       valid,
       cookies.length,
-      targetPartition,
+      cookieImportTarget(targetPartition),
       'replace-imported-domains'
     )
   } catch (err) {
@@ -1508,7 +1569,8 @@ async function importCookiesFromSafari(
 
 export async function importCookiesFromBrowser(
   browser: DetectedBrowser,
-  targetPartition: string
+  targetPartition: string,
+  options: CookieImportOptions = {}
 ): Promise<BrowserCookieImportResult> {
   diag(`importCookiesFromBrowser: browser=${browser.family} partition="${targetPartition}"`)
   if (!existsSync(browser.cookiesPath)) {
@@ -1517,7 +1579,7 @@ export async function importCookiesFromBrowser(
   }
 
   if (browser.family === 'firefox') {
-    return importCookiesFromFirefox(browser, targetPartition)
+    return importCookiesFromFirefox(browser, targetPartition, options)
   }
   if (browser.family === 'safari') {
     return importCookiesFromSafari(browser, targetPartition)
@@ -1527,485 +1589,583 @@ export async function importCookiesFromBrowser(
 
   // Why: CookieMonster overwrites the live DB on flush, so stage a populated copy and swap it in at next cold start.
   const targetSession = session.fromPartition(targetPartition)
-  await targetSession.cookies.flushStore()
+  // Why (STA-4601): native imports mutate the live jar and their staged image before the old
+  // clear/write lock was reached. Hold the per-partition lock from the first flush through staging,
+  // live replacement, pending-image bookkeeping, and cleanup so an older image cannot race a newer
+  // import on the same partition.
+  return withCookieMutationLock(targetSession, async () => {
+    await targetSession.cookies.flushStore()
 
-  const partitionName = targetPartition.replace('persist:', '')
-  const partitionDir = join(app.getPath('userData'), 'Partitions', partitionName)
-  let liveCookiesPath = resolveChromiumCookiesPath(partitionDir)
-
-  // Why: Electron creates the Cookies file only after a cookie is stored; a throwaway set/remove forces DB init for unused profiles.
-  if (!liveCookiesPath) {
-    try {
-      await targetSession.cookies.set({ url: 'https://localhost', name: '__init', value: '1' })
-      await targetSession.cookies.remove('https://localhost', '__init')
-      await targetSession.cookies.flushStore()
-    } catch {
-      // ignore — the set/remove may fail but flushStore should still create the file
+    // Why (STA-4300): ask the Session where its own storage lives instead of rebuilding the path from
+    // the caller's partition string. String surgery on a caller-supplied name is what let a value like
+    // "persist:../.." resolve a Cookies DB outside the Partitions directory and stage a replacement
+    // over it; it also drifts whenever Chromium changes how a partition name maps to a directory.
+    const partitionDir = targetSession.getStoragePath()
+    if (!partitionDir) {
+      return { ok: false, reason: 'Target cookie database not found. Open a browser tab first.' }
     }
-    liveCookiesPath = resolveChromiumCookiesPath(partitionDir)
-  }
+    const partitionName = targetPartition.replace('persist:', '')
+    let liveCookiesPath = resolveChromiumCookiesPath(partitionDir)
 
-  if (!liveCookiesPath) {
-    return { ok: false, reason: 'Target cookie database not found. Open a browser tab first.' }
-  }
-
-  const stagingDir = join(app.getPath('userData'), 'cookie-import-staging')
-  const partitionSegment = partitionName.replace(/[^a-zA-Z0-9_-]/g, '_')
-  const stagingCookiesPath = join(
-    stagingDir,
-    `Cookies-${partitionSegment}-${Date.now()}-${randomUUID()}`
-  )
-  // Why: #9355 — staging only backs the cold-restart replay for cookies the in-memory
-  // import rejects, so losing it must degrade that fallback rather than abort the import.
-  let stagingAvailable = false
-  try {
-    mkdirSync(stagingDir, { recursive: true })
-    copyFileWithWindowsRetry(liveCookiesPath, stagingCookiesPath)
-    stagingAvailable = true
-  } catch (err) {
-    const fsErr = err as NodeJS.ErrnoException
-    diag(
-      `  staging copy unavailable: code=${fsErr.code ?? 'unknown'} errno=${fsErr.errno ?? 'unknown'} syscall=${fsErr.syscall ?? 'unknown'} path=${liveCookiesPath} destination=${stagingCookiesPath}`
-    )
-    // Why: copyFile is non-atomic and can leave a partial DB; delete it so failed imports retain no cookie data.
-    try {
-      unlinkSync(stagingCookiesPath)
-    } catch {
-      /* best-effort */
-    }
-  }
-
-  let sourceSnapshot: ChromiumCookieSnapshot
-  try {
-    // Why: an open browser may hold cookies in WAL only; snapshot retries avoid pairing the main DB with a racing WAL.
-    sourceSnapshot = createChromiumCookieSnapshot(browser.cookiesPath)
-  } catch (err) {
-    try {
-      unlinkSync(stagingCookiesPath)
-    } catch {
-      /* best-effort */
-    }
-    diag(`  Chromium snapshot failed: ${String(err)}`)
-    return {
-      ok: false,
-      reason: `Could not copy ${browser.label} cookies database. Try closing ${browser.label} first.`
-    }
-  }
-
-  let sourceDb: InstanceType<typeof DatabaseSync> | null = null
-  let stagingDb: InstanceType<typeof DatabaseSync> | null = null
-  const closeStagingDb = (): void => {
-    try {
-      stagingDb?.close()
-    } catch {
-      /* best-effort */
-    }
-    stagingDb = null
-  }
-  const discardStagingFile = (): void => {
-    try {
-      unlinkSync(stagingCookiesPath)
-    } catch {
-      /* best-effort */
-    }
-  }
-
-  try {
-    // Why: Chromium timestamps (µs since 1601) can exceed Number.MAX_SAFE_INTEGER; readBigInts avoids precision loss.
-    sourceDb = new DatabaseSync(sourceSnapshot.databasePath, {
-      readOnly: true,
-      readBigInts: true
-    })
-    let targetColumnInfo: ChromiumCookieColumnInfo[] | null = null
-    let colList: string | null = null
-    let placeholders: string | null = null
-    if (stagingAvailable) {
-      // Why: the staged file is Orca's own partition DB, also named "Cookies", so the same
-      // transient AV handle can make opening it throw — degrade instead of killing the import.
+    // Why: Electron creates the Cookies file only after a cookie is stored; a throwaway set/remove forces DB init for unused profiles.
+    // Why (STA-4601): this probe MUTATES the live jar, so it runs under the same per-partition lock as
+    // the import itself. An earlier revision left it outside on the argument that no import writes
+    // https://localhost/__init — that was wrong. normalizeCookieImportDomain accepts `localhost`,
+    // cookie names are unrestricted, and deriveUrl produces exactly this URL, so an import CAN write
+    // that coordinate. Unlocked, this probe's remove() would delete a cookie a concurrent import had
+    // just written and reported as imported. The cost is negligible: the probe only runs for a
+    // partition that has never stored a cookie, so it is at most a one-time wait per profile.
+    if (!liveCookiesPath) {
       try {
-        stagingDb = new DatabaseSync(stagingCookiesPath)
-        targetColumnInfo = stagingDb
-          .prepare('PRAGMA table_info(cookies)')
-          .all() as ChromiumCookieColumnInfo[]
-        const targetCols: string[] = targetColumnInfo.map((r) => r.name)
-        colList = targetCols.join(', ')
-        placeholders = targetCols.map(() => '?').join(', ')
-        // Why: the staged DB replaces the whole live DB at cold start, so it is a clear step
-        // like any other — keep the live non-transplantable rows in it rather than replaying
-        // a wipe the in-memory path was not allowed to perform.
-        stagingDb.exec(`DELETE FROM cookies WHERE NOT (${NON_TRANSPLANTABLE_HOST_KEY_SQL})`)
-      } catch (err) {
-        diag(`  staging database unusable, restart fallback disabled: ${String(err)}`)
-        stagingAvailable = false
-        targetColumnInfo = null
-        colList = null
-        placeholders = null
-        closeStagingDb()
-        // Why: the copy holds real partition cookies; discard it now rather than at the exit branches.
-        discardStagingFile()
+        await targetSession.cookies.set({ url: 'https://localhost', name: '__init', value: '1' })
+        await targetSession.cookies.remove('https://localhost', '__init')
+        await targetSession.cookies.flushStore()
+      } catch {
+        // ignore — the set/remove may fail but flushStore should still create the file
+      }
+      liveCookiesPath = resolveChromiumCookiesPath(partitionDir)
+    }
+
+    if (!liveCookiesPath) {
+      return { ok: false, reason: 'Target cookie database not found. Open a browser tab first.' }
+    }
+
+    const stagingDir = join(app.getPath('userData'), 'cookie-import-staging')
+    const partitionSegment = partitionName.replace(/[^a-zA-Z0-9_-]/g, '_')
+    const stagingCookiesPath = join(
+      stagingDir,
+      `Cookies-${partitionSegment}-${Date.now()}-${randomUUID()}`
+    )
+    // Why: #9355 — staging only backs the cold-restart replay for cookies the in-memory
+    // import rejects, so losing it must degrade that fallback rather than abort the import.
+    let stagingAvailable = false
+    try {
+      mkdirSync(stagingDir, { recursive: true })
+      copyFileWithWindowsRetry(liveCookiesPath, stagingCookiesPath)
+      stagingAvailable = true
+    } catch (err) {
+      const fsErr = err as NodeJS.ErrnoException
+      diag(
+        `  staging copy unavailable: code=${fsErr.code ?? 'unknown'} errno=${fsErr.errno ?? 'unknown'} syscall=${fsErr.syscall ?? 'unknown'} path=${liveCookiesPath} destination=${stagingCookiesPath}`
+      )
+      // Why: copyFile is non-atomic and can leave a partial DB; delete it so failed imports retain no cookie data.
+      try {
+        unlinkSync(stagingCookiesPath)
+      } catch {
+        /* best-effort */
       }
     }
 
-    const sourceRows = sourceDb.prepare('SELECT * FROM cookies ORDER BY rowid').all() as Record<
-      string,
-      unknown
-    >[]
-    sourceDb.close()
-    sourceDb = null
-
-    diag(`  source has ${sourceRows.length} cookies`)
-
-    if (sourceRows.length === 0) {
-      closeStagingDb()
-      discardStagingFile()
-      return { ok: false, reason: `No cookies found in ${browser.label}.` }
-    }
-
-    const needsSourceKey = sourceRows.some((sourceRow) => {
-      const encRaw = sourceRow.encrypted_value
-      if (!(encRaw instanceof Uint8Array) || encRaw.length === 0) {
-        return false
+    let sourceSnapshot: ChromiumCookieSnapshot
+    try {
+      // Why: an open browser may hold cookies in WAL only; snapshot retries avoid pairing the main DB with a racing WAL.
+      sourceSnapshot = createChromiumCookieSnapshot(browser.cookiesPath)
+    } catch (err) {
+      try {
+        unlinkSync(stagingCookiesPath)
+      } catch {
+        /* best-effort */
       }
-      const domain = sourceRow.host_key as string
-      const name = sourceRow.name as string
-      return !(isGoogleSourceBoundCookie(name, domain) || isNonTransplantableCookieDomain(domain))
-    })
-    const sourceKey = needsSourceKey
-      ? getEncryptionKey(browser.keychainService!, browser.keychainAccount!, browser)
-      : null
-    if (needsSourceKey && !sourceKey) {
-      closeStagingDb()
-      // Why: key denial happens after staging, so clean up the target DB copy or retries pile up.
-      discardStagingFile()
+      diag(`  Chromium snapshot failed: ${String(err)}`)
       return {
         ok: false,
-        reason: `Could not access ${browser.label} encryption key. The OS may have denied access.`
+        reason: `Could not copy ${browser.label} cookies database. Try closing ${browser.label} first.`
       }
     }
 
-    let imported = 0
-    let skipped = 0
-    let decryptFailed = 0
-    let appBoundFailed = 0
-    let keyringUnavailableFailed = 0
-    let integritySkipped = 0
-    let nonTransplantableSkipped = 0
-    let memoryLoaded = 0
-    let memoryFailed = 0
-    const domainSet = new Set<string>()
-
-    type DecryptedCookie = {
-      decryptedValue: Buffer
-      value: string
-      domain: string
-      name: string
-      path: string
-      secure: boolean
-      httpOnly: boolean
-      sameSite: 'unspecified' | 'no_restriction' | 'lax' | 'strict'
-      expirationDate: number | undefined
-    }
-
-    const decryptedCookies: DecryptedCookie[] = []
-    const sourceDomainValidity = new Map<string, boolean>()
-
-    // Why: staging only backs the cold-restart replay, so any failure writing it disables that
-    // fallback instead of aborting an import whose in-memory half still works.
-    let insertStmt: ReturnType<InstanceType<typeof DatabaseSync>['prepare']> | null = null
-    const disableStaging = (reason: string): void => {
-      diag(`  staging disabled, restart fallback unavailable: ${reason}`)
-      stagingAvailable = false
-      insertStmt = null
-      closeStagingDb()
-      discardStagingFile()
-    }
-
-    if (stagingDb && colList && placeholders) {
+    let sourceDb: InstanceType<typeof DatabaseSync> | null = null
+    let stagingDb: InstanceType<typeof DatabaseSync> | null = null
+    const closeStagingDb = (): void => {
       try {
-        insertStmt = stagingDb.prepare(
-          `INSERT OR REPLACE INTO cookies (${colList}) VALUES (${placeholders})`
-        )
-        stagingDb.exec('BEGIN TRANSACTION')
-      } catch (err) {
-        disableStaging(String(err))
+        stagingDb?.close()
+      } catch {
+        /* best-effort */
       }
-    } else if (stagingAvailable) {
-      disableStaging('staged database exposed no cookies columns')
+      stagingDb = null
+    }
+    const discardStagingFile = (): void => {
+      try {
+        unlinkSync(stagingCookiesPath)
+      } catch {
+        /* best-effort */
+      }
     }
 
-    for (const sourceRow of sourceRows) {
-      const domain = sourceRow.host_key as string
-      const name = sourceRow.name as string
-
-      if (isGoogleSourceBoundCookie(name, domain)) {
-        integritySkipped++
-        continue
-      }
-
-      // Why: transplanting these replaces a working sign-in with a session the site rejects.
-      if (isNonTransplantableCookieDomain(domain)) {
-        nonTransplantableSkipped++
-        continue
-      }
-
-      const encRaw = sourceRow.encrypted_value
-      // Why: node:sqlite returns BLOBs as Uint8Array; treat any other type as missing, not an empty buffer that would silently blank the cookie value.
-      const encBuf = encRaw instanceof Uint8Array ? Buffer.from(encRaw) : null
-      const plainRaw = sourceRow.value
-
-      let decryptedValue: Buffer
-      if (encBuf && encBuf.length > 0) {
-        const version = cookieEncryptionVersion(encBuf)
-        const appBoundIneligible = version === 'v20'
-        const keyringIneligible =
-          version === 'v11' &&
-          sourceKey?.mode === 'aes-128-cbc' &&
-          sourceKey.keyringUnavailable === true
-        const raw =
-          sourceKey && !appBoundIneligible && !keyringIneligible
-            ? decryptCookieValueRaw(encBuf, sourceKey)
-            : null
-        if (!raw) {
-          // Why: once decrypt returns null every failure looks identical, so attribute the cause
-          // here while the version prefix is still in hand. Without this an undecryptable profile
-          // is indistinguishable from an empty one and reports success.
-          decryptFailed++
-          if (appBoundIneligible) {
-            appBoundFailed++
-          } else if (keyringIneligible) {
-            keyringUnavailableFailed++
-          }
-          skipped++
-          continue
-        }
-        decryptedValue = raw
-      } else if (plainRaw instanceof Uint8Array) {
-        decryptedValue = Buffer.from(plainRaw)
-      } else if (typeof plainRaw === 'string') {
-        decryptedValue = Buffer.from(plainRaw, 'latin1')
-      } else {
-        decryptedValue = Buffer.alloc(0)
-      }
-
-      let validDomain = sourceDomainValidity.get(domain)
-      if (validDomain === undefined) {
-        validDomain = normalizeCookieImportDomain(domain) !== null
-        sourceDomainValidity.set(domain, validDomain)
-      }
-      if (!validDomain) {
-        skipped++
-        continue
-      }
-
-      const cleanDomain = domain.startsWith('.') ? domain.slice(1) : domain
-      domainSet.add(cleanDomain)
-
-      const path = sourceRow.path as string
-      const secure = sourceRow.is_secure === 1n
-      const httpOnly = sourceRow.is_httponly === 1n
-      const sameSite = chromiumSameSite(Number(sourceRow.samesite ?? 0))
-      const expiresUtc = chromiumTimestampToUnix(sourceRow.expires_utc as bigint)
-      // Why: cookie values are raw bytes, not UTF-8; latin1 preserves 0x00–0xFF without lossy replacement.
-      const value = decryptedValue.toString('latin1')
-
-      decryptedCookies.push({
-        decryptedValue,
-        value,
-        domain,
-        name,
-        path,
-        secure,
-        httpOnly,
-        sameSite,
-        expirationDate: expiresUtc > 0 ? expiresUtc : undefined
+    try {
+      // Why: Chromium timestamps (µs since 1601) can exceed Number.MAX_SAFE_INTEGER; readBigInts avoids precision loss.
+      sourceDb = new DatabaseSync(sourceSnapshot.databasePath, {
+        readOnly: true,
+        readBigInts: true
       })
-
-      if (insertStmt && targetColumnInfo) {
+      let targetColumnInfo: ChromiumCookieColumnInfo[] | null = null
+      let colList: string | null = null
+      let placeholders: string | null = null
+      if (stagingAvailable) {
+        // Why: the staged file is Orca's own partition DB, also named "Cookies", so the same
+        // transient AV handle can make opening it throw — degrade instead of killing the import.
         try {
-          const params = buildChromiumCookieInsertParams(
-            targetColumnInfo,
-            sourceRow,
-            decryptedValue
+          stagingDb = new DatabaseSync(stagingCookiesPath)
+          targetColumnInfo = stagingDb
+            .prepare('PRAGMA table_info(cookies)')
+            .all() as ChromiumCookieColumnInfo[]
+          const targetCols: string[] = targetColumnInfo.map((r) => r.name)
+          colList = targetCols.join(', ')
+          placeholders = targetCols.map(() => '?').join(', ')
+          // Why: the staged DB replaces the whole live DB at cold start, so it is a clear step
+          // like any other — keep the live non-transplantable rows in it rather than replaying
+          // a wipe the in-memory path was not allowed to perform.
+          stagingDb.exec(`DELETE FROM cookies WHERE NOT (${NON_TRANSPLANTABLE_HOST_KEY_SQL})`)
+        } catch (err) {
+          diag(`  staging database unusable, restart fallback disabled: ${String(err)}`)
+          stagingAvailable = false
+          targetColumnInfo = null
+          colList = null
+          placeholders = null
+          closeStagingDb()
+          // Why: the copy holds real partition cookies; discard it now rather than at the exit branches.
+          discardStagingFile()
+        }
+      }
+
+      // Why (STA-4300): the partition columns drift across Chromium versions, so read the source
+      // schema rather than assuming a row's missing column means "unpartitioned".
+      const sourceColumns = new Set(
+        (sourceDb.prepare('PRAGMA table_info(cookies)').all() as ChromiumCookieColumnInfo[]).map(
+          (column) => column.name
+        )
+      )
+      const sourceRows = sourceDb.prepare('SELECT * FROM cookies ORDER BY rowid').all() as Record<
+        string,
+        unknown
+      >[]
+      sourceDb.close()
+      sourceDb = null
+
+      diag(`  source has ${sourceRows.length} cookies`)
+
+      if (sourceRows.length === 0) {
+        closeStagingDb()
+        discardStagingFile()
+        return { ok: false, reason: `No cookies found in ${browser.label}.` }
+      }
+
+      // Why (STA-4300): partition fidelity is a property of the source row, even when its value
+      // cannot be decrypted. Plan first so decryption failure cannot discard a family's skip.
+      const partitionCandidates = sourceRows.flatMap((sourceRow) => {
+        const domain = sourceRow.host_key as string
+        const name = sourceRow.name as string
+        return isGoogleSourceBoundCookie(name, domain) || isNonTransplantableCookieDomain(domain)
+          ? []
+          : [{ sourceRow, domain, partition: readChromiumRowPartition(sourceRow, sourceColumns) }]
+      })
+      const nativePlan = planImportWrites(partitionCandidates)
+      const plannedSourceRows = new Set(nativePlan.writes.map((candidate) => candidate.sourceRow))
+      const partitionBySourceRow = new Map(
+        partitionCandidates.map((candidate) => [candidate.sourceRow, candidate.partition])
+      )
+
+      // Why (§4.3c): a family we cannot name is one we cannot exclude from the clear, and clearing a
+      // family we cannot protect is the P0. Refuse before the jar is touched.
+      if (nativePlan.hasUnrepresentableSkip) {
+        closeStagingDb()
+        discardStagingFile()
+        return {
+          ok: false,
+          reason:
+            'Could not import: a cookie with an unreadable site partition has no registrable domain, so its existing session cannot be protected.'
+        }
+      }
+
+      const needsSourceKey = sourceRows.some((sourceRow) => {
+        const encRaw = sourceRow.encrypted_value
+        if (!(encRaw instanceof Uint8Array) || encRaw.length === 0) {
+          return false
+        }
+        const domain = sourceRow.host_key as string
+        const name = sourceRow.name as string
+        return !(isGoogleSourceBoundCookie(name, domain) || isNonTransplantableCookieDomain(domain))
+      })
+      const sourceKey = needsSourceKey
+        ? getEncryptionKey(browser.keychainService!, browser.keychainAccount!, browser)
+        : null
+      if (needsSourceKey && !sourceKey) {
+        closeStagingDb()
+        // Why: key denial happens after staging, so clean up the target DB copy or retries pile up.
+        discardStagingFile()
+        return {
+          ok: false,
+          reason: `Could not access ${browser.label} encryption key. The OS may have denied access.`
+        }
+      }
+
+      let imported = 0
+      let skipped = 0
+      let decryptFailed = 0
+      let appBoundFailed = 0
+      let keyringUnavailableFailed = 0
+      let integritySkipped = 0
+      let nonTransplantableSkipped = 0
+      const partitionSkipped = nativePlan.skips.length
+      let memoryLoaded = 0
+      let memoryFailed = 0
+      const domainSet = new Set<string>()
+
+      type DecryptedCookie = Omit<ImportedCookieFields, 'url'> & {
+        decryptedValue: Buffer
+        sameSite: 'unspecified' | 'no_restriction' | 'lax' | 'strict'
+        partition: SourcePartitionRead
+      }
+
+      const decryptedCookies: DecryptedCookie[] = []
+      // Why: the staging insert needs the RAW source row, so each scanned candidate carries it.
+      // A plan record holding only the derived fields compiles fine and then cannot stage.
+      const scanned: { entry: DecryptedCookie; sourceRow: Record<string, unknown> }[] = []
+      const sourceDomainValidity = new Map<string, boolean>()
+
+      // Why: staging only backs the cold-restart replay, so any failure writing it disables that
+      // fallback instead of aborting an import whose in-memory half still works.
+      let insertStmt: ReturnType<InstanceType<typeof DatabaseSync>['prepare']> | null = null
+      const disableStaging = (reason: string): void => {
+        diag(`  staging disabled, restart fallback unavailable: ${reason}`)
+        stagingAvailable = false
+        insertStmt = null
+        closeStagingDb()
+        discardStagingFile()
+      }
+
+      if (stagingDb && colList && placeholders) {
+        try {
+          insertStmt = stagingDb.prepare(
+            `INSERT OR REPLACE INTO cookies (${colList}) VALUES (${placeholders})`
           )
-          insertStmt.run(...params)
+          stagingDb.exec('BEGIN TRANSACTION')
         } catch (err) {
           disableStaging(String(err))
         }
+      } else if (stagingAvailable) {
+        disableStaging('staged database exposed no cookies columns')
       }
-      // Why: counts importable cookies, not staged rows — the summary must stay truthful when
-      // the optional staging DB is unavailable.
-      imported++
-    }
-    diag(
-      `  skipped ${integritySkipped} Google integrity cookies (SIDCC/STRP/AEC) and ${nonTransplantableSkipped} non-transplantable-domain cookies`
-    )
-    const googleCookiesSkipped = integritySkipped + nonTransplantableSkipped
 
-    const undecryptableWarning = buildUndecryptableWarning({
-      decryptFailed,
-      appBoundFailed,
-      keyringUnavailableFailed
-    })
+      // Why (§4.3b): a staged image is a whole-DB replacement on next start, so it cannot represent
+      // "preserve this family". When anything is preserved, this import gets no cold-start fallback.
+      if (nativePlan.skippedFamilies.size > 0) {
+        disableStaging(
+          `${nativePlan.skippedFamilies.size} preserved cookie families cannot be represented in a staged image`
+        )
+      }
 
-    if (decryptedCookies.length === 0) {
-      const zeroPathWarning = undecryptableWarning
-      closeStagingDb()
-      discardStagingFile()
-      return {
-        ok: true,
-        profileId: '',
-        summary: {
-          totalCookies: sourceRows.length,
-          importedCookies: 0,
-          skippedCookies: skipped + integritySkipped + nonTransplantableSkipped,
-          ...(googleCookiesSkipped > 0 ? { googleCookiesSkipped } : {}),
-          domains: [],
-          // Why: a profile whose rows cannot be decrypted returns here, and without this it is
-          // reported as a successful empty import.
-          ...(zeroPathWarning ? { warning: zeroPathWarning } : {})
+      for (const sourceRow of sourceRows) {
+        const domain = sourceRow.host_key as string
+        const name = sourceRow.name as string
+
+        if (isGoogleSourceBoundCookie(name, domain)) {
+          integritySkipped++
+          continue
+        }
+
+        // Why: transplanting these replaces a working sign-in with a session the site rejects.
+        if (isNonTransplantableCookieDomain(domain)) {
+          nonTransplantableSkipped++
+          continue
+        }
+
+        const encRaw = sourceRow.encrypted_value
+        // Why: node:sqlite returns BLOBs as Uint8Array; treat any other type as missing, not an empty buffer that would silently blank the cookie value.
+        const encBuf = encRaw instanceof Uint8Array ? Buffer.from(encRaw) : null
+        const plainRaw = sourceRow.value
+
+        let decryptedValue: Buffer
+        if (encBuf && encBuf.length > 0) {
+          const version = cookieEncryptionVersion(encBuf)
+          const appBoundIneligible = version === 'v20'
+          const keyringIneligible =
+            version === 'v11' &&
+            sourceKey?.mode === 'aes-128-cbc' &&
+            sourceKey.keyringUnavailable === true
+          const raw =
+            sourceKey && !appBoundIneligible && !keyringIneligible
+              ? decryptCookieValueRaw(encBuf, sourceKey)
+              : null
+          if (!raw) {
+            // Why: once decrypt returns null every failure looks identical, so attribute the cause
+            // here while the version prefix is still in hand. Without this an undecryptable profile
+            // is indistinguishable from an empty one and reports success.
+            decryptFailed++
+            if (appBoundIneligible) {
+              appBoundFailed++
+            } else if (keyringIneligible) {
+              keyringUnavailableFailed++
+            }
+            skipped++
+            continue
+          }
+          decryptedValue = raw
+        } else if (plainRaw instanceof Uint8Array) {
+          decryptedValue = Buffer.from(plainRaw)
+        } else if (typeof plainRaw === 'string') {
+          decryptedValue = Buffer.from(plainRaw, 'latin1')
+        } else {
+          decryptedValue = Buffer.alloc(0)
+        }
+
+        let validDomain = sourceDomainValidity.get(domain)
+        if (validDomain === undefined) {
+          validDomain = normalizeCookieImportDomain(domain) !== null
+          sourceDomainValidity.set(domain, validDomain)
+        }
+        if (!validDomain) {
+          skipped++
+          continue
+        }
+
+        // Decryption failures are already counted above. Every other row suppressed by the
+        // pre-decryption family plan is counted once here, keeping partitionSkipped a breakdown.
+        if (!plannedSourceRows.has(sourceRow)) {
+          skipped++
+          continue
+        }
+
+        const path = sourceRow.path as string
+        const secure = sourceRow.is_secure === 1n
+        const httpOnly = sourceRow.is_httponly === 1n
+        const sameSite = chromiumSameSite(Number(sourceRow.samesite ?? 0))
+        const expiresUtc = chromiumTimestampToUnix(sourceRow.expires_utc as bigint)
+        const partition = partitionBySourceRow.get(sourceRow)!
+        // Why: cookie values are raw bytes, not UTF-8; latin1 preserves 0x00–0xFF without lossy replacement.
+        const value = decryptedValue.toString('latin1')
+
+        // Why (STA-4300 I1): SCAN only. Nothing is emitted here — not decryptedCookies, not
+        // domainSet, not a staging row, not the imported count. bf6dc6fcba pushed the cookie and
+        // THEN applied the unreadable guard, so an unreadable row discovered late could not retract
+        // a sibling already emitted, and the jar-wide clear then removed more than was written back.
+        scanned.push({
+          entry: {
+            decryptedValue,
+            value,
+            domain,
+            name,
+            path,
+            secure,
+            httpOnly,
+            sameSite,
+            expirationDate: expiresUtc > 0 ? expiresUtc : undefined,
+            partition
+          },
+          sourceRow
+        })
+      }
+
+      // EMIT: everything downstream derives from the plan, so there is no second place a row can
+      // leak in.
+      for (const { entry, sourceRow } of scanned) {
+        decryptedCookies.push(entry)
+        const cleanDomain = entry.domain.startsWith('.') ? entry.domain.slice(1) : entry.domain
+        domainSet.add(cleanDomain)
+        if (insertStmt && targetColumnInfo) {
+          try {
+            const params = buildChromiumCookieInsertParams(
+              targetColumnInfo,
+              sourceRow,
+              entry.decryptedValue
+            )
+            insertStmt.run(...params)
+          } catch (err) {
+            disableStaging(String(err))
+          }
+        }
+        // Why: counts importable cookies, not staged rows — the summary must stay truthful when
+        // the optional staging DB is unavailable.
+        imported++
+      }
+      diag(
+        `  skipped ${integritySkipped} Google integrity cookies (SIDCC/STRP/AEC) and ${nonTransplantableSkipped} non-transplantable-domain cookies`
+      )
+      const googleCookiesSkipped = integritySkipped + nonTransplantableSkipped
+
+      const undecryptableWarning = buildUndecryptableWarning({
+        decryptFailed,
+        appBoundFailed,
+        keyringUnavailableFailed
+      })
+
+      // Why: an older remote client ignores the new counter and would present this loss as success.
+      // Placed before the early return and before any jar mutation, so a client that cannot render
+      // the skip fails the import outright rather than reporting a partial import as complete.
+      if (partitionSkipped > 0 && options.canReportPartitionSkippedCookies === false) {
+        closeStagingDb()
+        discardStagingFile()
+        return {
+          ok: false,
+          reason:
+            'This Orca client cannot report cookies skipped for an unreadable site partition. Update Orca on this device and try again.'
         }
       }
-    }
 
-    if (stagingDb) {
-      try {
-        stagingDb.exec('COMMIT')
+      if (decryptedCookies.length === 0) {
+        const zeroPathWarning = undecryptableWarning
         closeStagingDb()
-        diag(`  SQLite staging complete: ${imported} cookies, ${domainSet.size} domains`)
-      } catch (err) {
-        disableStaging(String(err))
+        discardStagingFile()
+        return {
+          ok: true,
+          profileId: '',
+          summary: {
+            totalCookies: sourceRows.length,
+            importedCookies: 0,
+            skippedCookies: skipped + integritySkipped + nonTransplantableSkipped,
+            ...(googleCookiesSkipped > 0 ? { googleCookiesSkipped } : {}),
+            // Why: partition skips are a breakdown of skippedCookies, never an addition to it, so
+            // totalCookies === importedCookies + skippedCookies keeps holding on this path too.
+            ...(partitionSkipped > 0 ? { partitionSkippedCookies: partitionSkipped } : {}),
+            domains: [],
+            // Why: a profile whose rows cannot be decrypted returns here, and without this it is
+            // reported as a successful empty import.
+            ...(zeroPathWarning ? { warning: zeroPathWarning } : {})
+          }
+        }
       }
-    } else {
-      diag(`  staging skipped: ${imported} cookies will load in-memory only`)
-    }
 
-    // Why: clear stale cookies first; mixing them with the imported set makes sites reject the
-    // session. Non-transplantable families are exempt — nothing was imported for them, and their
-    // live session is the only one that works.
-    const cookieClearStore = openCookieClearStore(targetSession)
-    try {
-      await withCookieClearLock(targetSession, () =>
-        removeTransplantableCookies({
-          cookies: cookieClearStore,
-          clearData: (options) => targetSession.clearData(options),
-          snapshotClearIdentities: (cookies) => cookieClearStore.snapshotClearIdentities(cookies),
-          restoreClearIdentities: (identities) =>
-            cookieClearStore.restoreClearIdentities(identities)
+      if (stagingDb) {
+        try {
+          stagingDb.exec('COMMIT')
+          closeStagingDb()
+          diag(`  SQLite staging complete: ${imported} cookies, ${domainSet.size} domains`)
+        } catch (err) {
+          disableStaging(String(err))
+        }
+      } else {
+        diag(`  staging skipped: ${imported} cookies will load in-memory only`)
+      }
+
+      // Why: clear stale cookies first; mixing them with the imported set makes sites reject the
+      // session. Non-transplantable families are exempt — nothing was imported for them, and their
+      // live session is the only one that works.
+      // Why (STA-4300): one store spans the clear and the writes, so both halves of the import speak
+      // the same CDP identities — cookies.set() cannot express the partition either one reads.
+      const cookieClearStore = openCookieClearStore(targetSession)
+      try {
+        // Why (STA-4601): the outer lock spans the clear and the writes that repopulate the jar, so a
+        // second import cannot clear between them and write on top of a newer import's jar.
+        await removeTransplantableCookies(
+          {
+            cookies: cookieClearStore,
+            clearData: (options) => targetSession.clearData(options),
+            snapshotClearIdentities: (cookies) => cookieClearStore.snapshotClearIdentities(cookies),
+            restoreClearIdentities: (identities) =>
+              cookieClearStore.restoreClearIdentities(identities)
+          },
+          // Why (STA-4300): the families this import declined to write must not be removed either.
+          // Passing them here keeps their coordinates out of the removal plan AND out of the CDP
+          // snapshot taken from it, so they are never submitted to any mutation.
+          nativePlan.skippedFamilies
+        )
+        diag(
+          `  cleared existing session cookies before loading ${decryptedCookies.length} imported cookies`
+        )
+
+        const writable: SourceCookieToWrite[] = []
+        for (const cookie of decryptedCookies) {
+          const url = deriveUrl(cookie.domain, cookie.secure)
+          if (!url) {
+            memoryFailed++
+            continue
+          }
+          writable.push({ ...cookie, url })
+        }
+        // Why: a rejected cookie here falls back to the staged cold-start replay rather than
+        // unwinding the import, so one failure must not stop the rest from loading.
+        const phase = await writeImportedCookies(cookieClearStore, writable, {
+          stopOnFailure: false,
+          log: diag
         })
-      )
-    } finally {
-      cookieClearStore.dispose()
-    }
-    diag(
-      `  cleared existing session cookies before loading ${decryptedCookies.length} imported cookies`
-    )
+        memoryLoaded = phase.importedCount
+        memoryFailed += phase.writeRejected
+      } finally {
+        cookieClearStore.dispose()
+      }
 
-    // Why: load into memory via cookies.set() so imported cookies work without a restart.
-    for (const cookie of decryptedCookies) {
-      const url = deriveUrl(cookie.domain, cookie.secure)
-      if (!url) {
-        memoryFailed++
-        continue
+      diag(
+        `  memory load: ${memoryLoaded} OK, ${memoryFailed} failed, ${partitionSkipped} partition-unreadable`
+      )
+
+      let warning: BrowserCookieImportSummary['warning']
+      if (memoryFailed > 0 && stagingAvailable) {
+        // Why: keep the staging DB so the failed cookies load from SQLite on next cold start, where CookieMonster skips validation.
+        browserSessionRegistry.setPendingCookieImport(targetPartition, stagingCookiesPath)
+        diag(`  staged at ${stagingCookiesPath} for ${memoryFailed} cookies that need restart`)
+      } else if (memoryFailed > 0) {
+        // Why: never register a path that was never written — cold start would replay a missing
+        // or partial DB over the live partition.
+        browserSessionRegistry.clearPendingCookieImport(targetPartition)
+        discardStagingFile()
+        diag(`  ${memoryFailed} cookies need a restart but staging is unavailable — skipped`)
+        // Why: the jar was already cleared, so silence here would report a lossy import as a clean success.
+        warning = {
+          code: 'restart-fallback-unavailable',
+          loadedCookies: memoryLoaded,
+          failedCookies: memoryFailed
+        }
+      } else {
+        // Why: this import already rewrote the live session, so an older staged DB must not replay over it.
+        browserSessionRegistry.clearPendingCookieImport(targetPartition)
+        discardStagingFile()
+        diag(`  all cookies loaded in-memory — no restart needed`)
+      }
+
+      // Why: the session keeps the UA the registry set at startup (clean or native).
+      // Imports must not impersonate the source browser — the synthesized UA read a
+      // fork's marketing version as a Chromium version (STA-3514), and Google binds
+      // sessions to the re-import, not the UA (#12884), so it bought nothing.
+      // Google-bound integrity cookies are already excluded by
+      // isGoogleSourceBoundCookie, which is what actually prevents CookieMismatch.
+
+      // Why: a partial import still drops every undecryptable row, so silence here would report it
+      // as an unqualified success. The restart-fallback warning describes a lossier outcome and
+      // keeps precedence.
+      if (!warning && undecryptableWarning) {
+        warning = undecryptableWarning
+      }
+
+      const summary: BrowserCookieImportSummary = {
+        totalCookies: sourceRows.length,
+        importedCookies: imported,
+        skippedCookies: skipped + integritySkipped + nonTransplantableSkipped,
+        ...(googleCookiesSkipped > 0 ? { googleCookiesSkipped } : {}),
+        ...(partitionSkipped > 0 ? { partitionSkippedCookies: partitionSkipped } : {}),
+        domains: [...domainSet].sort(),
+        ...(warning ? { warning } : {})
+      }
+
+      return { ok: true, profileId: '', summary }
+    } catch (err) {
+      try {
+        sourceDb?.close()
+      } catch {
+        /* may already be closed */
       }
       try {
-        // Why: Chromium rejects __Host- cookies unless they omit domain and use path=/.
-        const isHostPrefixed = cookie.name.startsWith('__Host-')
-        await targetSession.cookies.set({
-          url,
-          name: cookie.name,
-          value: cookie.value,
-          ...(isHostPrefixed ? {} : { domain: cookie.domain }),
-          path: isHostPrefixed ? '/' : cookie.path,
-          secure: cookie.secure,
-          httpOnly: cookie.httpOnly,
-          sameSite: cookie.sameSite,
-          expirationDate: cookie.expirationDate
-        })
-        memoryLoaded++
+        stagingDb?.close()
       } catch {
-        memoryFailed++
+        /* may already be closed */
+      }
+      // Why: drop the staging DB so a stale staged import isn't applied on the next cold start.
+      try {
+        unlinkSync(stagingCookiesPath)
+      } catch {
+        /* may not exist yet */
+      }
+      diag(`  SQLite import failed: ${String(err)}`)
+      return {
+        ok: false,
+        reason: reasonWithDiagLog(
+          `Could not import cookies from ${browser.label}: ${summarizeCookieImportError(err)}.`
+        )
+      }
+    } finally {
+      try {
+        sourceSnapshot.cleanup()
+      } catch (err) {
+        diag(`  Chromium snapshot cleanup failed: ${String(err)}`)
       }
     }
-
-    diag(`  memory load: ${memoryLoaded} OK, ${memoryFailed} failed`)
-
-    let warning: BrowserCookieImportSummary['warning']
-    if (memoryFailed > 0 && stagingAvailable) {
-      // Why: keep the staging DB so the failed cookies load from SQLite on next cold start, where CookieMonster skips validation.
-      browserSessionRegistry.setPendingCookieImport(targetPartition, stagingCookiesPath)
-      diag(`  staged at ${stagingCookiesPath} for ${memoryFailed} cookies that need restart`)
-    } else if (memoryFailed > 0) {
-      // Why: never register a path that was never written — cold start would replay a missing
-      // or partial DB over the live partition.
-      browserSessionRegistry.clearPendingCookieImport(targetPartition)
-      discardStagingFile()
-      diag(`  ${memoryFailed} cookies need a restart but staging is unavailable — skipped`)
-      // Why: the jar was already cleared, so silence here would report a lossy import as a clean success.
-      warning = {
-        code: 'restart-fallback-unavailable',
-        loadedCookies: memoryLoaded,
-        failedCookies: memoryFailed
-      }
-    } else {
-      // Why: this import already rewrote the live session, so an older staged DB must not replay over it.
-      browserSessionRegistry.clearPendingCookieImport(targetPartition)
-      discardStagingFile()
-      diag(`  all cookies loaded in-memory — no restart needed`)
-    }
-
-    // Why: the session keeps the UA the registry set at startup (clean or native).
-    // Imports must not impersonate the source browser — the synthesized UA read a
-    // fork's marketing version as a Chromium version (STA-3514), and Google binds
-    // sessions to the re-import, not the UA (#12884), so it bought nothing.
-    // Google-bound integrity cookies are already excluded by
-    // isGoogleSourceBoundCookie, which is what actually prevents CookieMismatch.
-
-    // Why: a partial import still drops every undecryptable row, so silence here would report it
-    // as an unqualified success. The restart-fallback warning describes a lossier outcome and
-    // keeps precedence.
-    if (!warning && undecryptableWarning) {
-      warning = undecryptableWarning
-    }
-
-    const summary: BrowserCookieImportSummary = {
-      totalCookies: sourceRows.length,
-      importedCookies: imported,
-      skippedCookies: skipped + integritySkipped + nonTransplantableSkipped,
-      ...(googleCookiesSkipped > 0 ? { googleCookiesSkipped } : {}),
-      domains: [...domainSet].sort(),
-      ...(warning ? { warning } : {})
-    }
-
-    return { ok: true, profileId: '', summary }
-  } catch (err) {
-    try {
-      sourceDb?.close()
-    } catch {
-      /* may already be closed */
-    }
-    try {
-      stagingDb?.close()
-    } catch {
-      /* may already be closed */
-    }
-    // Why: drop the staging DB so a stale staged import isn't applied on the next cold start.
-    try {
-      unlinkSync(stagingCookiesPath)
-    } catch {
-      /* may not exist yet */
-    }
-    diag(`  SQLite import failed: ${String(err)}`)
-    return {
-      ok: false,
-      reason: reasonWithDiagLog(
-        `Could not import cookies from ${browser.label}: ${summarizeCookieImportError(err)}.`
-      )
-    }
-  } finally {
-    try {
-      sourceSnapshot.cleanup()
-    } catch (err) {
-      diag(`  Chromium snapshot cleanup failed: ${String(err)}`)
-    }
-  }
+  })
 }

@@ -1,4 +1,4 @@
-import type { BrowserFocusTarget } from '../components/browser-pane/browser-focus'
+import type { BrowserFocusTarget } from '../components/browser-pane/host-guest/browser-focus'
 
 // The surface that held focus before a modal (QuickOpen, Cmd+J, ...) opened.
 // Captured at open time because Radix steals document focus once the dialog
