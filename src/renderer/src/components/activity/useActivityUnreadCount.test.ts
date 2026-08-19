@@ -22,10 +22,29 @@ function makeSource(entry: AgentStatusEntry, ackAt = 0) {
     acknowledgedAgentsByPaneKey: { [PANE]: ackAt },
     agentStatusByPaneKey: { [PANE]: entry },
     migrationUnsupportedByPtyId: {},
-    retainedAgentsByPaneKey: {},
-    worktreesByRepo: {}
+    retainedAgentsByPaneKey: {}
   }
 }
+
+describe('countActivityUnread sidebar badge vs coarse unread flags (#15445)', () => {
+  it('a worktree with no unread agent thread contributes nothing to the badge', () => {
+    // The badge used to sum worktree.isUnread — a coarse attention flag also
+    // set by terminal BELs and parked-terminal activity — so it disagreed
+    // with the Agents page. Only agent status entries count now.
+    const running = makeEntry({ state: 'running', stateStartedAt: 1_000 })
+    expect(countActivityUnread(makeSource(running), 'sidebar-badge')).toBe(0)
+  })
+
+  it('an unacknowledged completion still counts once', () => {
+    const done = makeEntry({ state: 'done', stateStartedAt: 2_000 })
+    expect(countActivityUnread(makeSource(done), 'sidebar-badge')).toBe(1)
+  })
+
+  it('acknowledging the completion zeroes the badge', () => {
+    const done = makeEntry({ state: 'done', stateStartedAt: 2_000 })
+    expect(countActivityUnread(makeSource(done, 3_000), 'sidebar-badge')).toBe(0)
+  })
+})
 
 describe('countActivityUnread session-boundary rows (STA-3386)', () => {
   it('does not count a session-boundary done as unread in either mode', () => {

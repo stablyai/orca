@@ -1236,6 +1236,25 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           next[key] = now
         }
       }
+      // #15445: acknowledging from the Activity page must also retire the
+      // unread completion marker — leaving it set kept the sidebar badge
+      // counting panes whose threads were already read (the terminal view's
+      // useAutoAckViewedAgent cleared it; this path did not).
+      let nextCompletions: Record<string, unknown> | null = null
+      for (const key of paneKeys) {
+        if (key in s.unreadAgentCompletionPanes) {
+          if (nextCompletions === null) {
+            nextCompletions = { ...s.unreadAgentCompletionPanes }
+          }
+          delete nextCompletions[key]
+        }
+      }
+      if (nextCompletions !== null) {
+        return {
+          ...(next !== null ? { acknowledgedAgentsByPaneKey: next } : {}),
+          unreadAgentCompletionPanes: nextCompletions
+        }
+      }
       return next ? { acknowledgedAgentsByPaneKey: next } : s
     })
     const notificationIds = [...notificationIdsToDismiss]

@@ -8,23 +8,17 @@ import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agen
 
 type ActivityUnreadCountSource = Pick<
   AppState,
-  | 'acknowledgedAgentsByPaneKey'
-  | 'agentStatusByPaneKey'
-  | 'migrationUnsupportedByPtyId'
-  | 'retainedAgentsByPaneKey'
-  | 'worktreesByRepo'
+  'acknowledgedAgentsByPaneKey' | 'agentStatusByPaneKey' | 'migrationUnsupportedByPtyId' | 'retainedAgentsByPaneKey'
 >
 
 type ActivityUnreadCountMode = 'agent-events' | 'sidebar-badge'
 
-const EMPTY_WORKTREES_BY_REPO: AppState['worktreesByRepo'] = {}
 const EMPTY_MIGRATION_UNSUPPORTED: AppState['migrationUnsupportedByPtyId'] = {}
 const EMPTY_RETAINED_AGENTS: AppState['retainedAgentsByPaneKey'] = {}
 const EMPTY_ACKNOWLEDGED_AGENTS: AppState['acknowledgedAgentsByPaneKey'] = {}
 
 const DISABLED_ACTIVITY_UNREAD_INPUTS = {
   sortEpoch: 0,
-  worktreesByRepo: EMPTY_WORKTREES_BY_REPO,
   migrationUnsupportedByPtyId: EMPTY_MIGRATION_UNSUPPORTED,
   retainedAgentsByPaneKey: EMPTY_RETAINED_AGENTS,
   acknowledgedAgentsByPaneKey: EMPTY_ACKNOWLEDGED_AGENTS
@@ -40,15 +34,12 @@ export function countActivityUnread(
 ): number {
   let count = 0
 
-  if (mode === 'sidebar-badge') {
-    for (const worktrees of Object.values(source.worktreesByRepo)) {
-      for (const worktree of worktrees) {
-        if (worktree.createdAt && worktree.isUnread) {
-          count += 1
-        }
-      }
-    }
-  }
+  // #15445: sidebar-badge no longer counts worktree.isUnread. That flag is a
+  // coarse attention signal set by agent completions AND terminal BELs AND
+  // parked-terminal activity, so the Agents badge overcounted worktrees with
+  // no unread agent thread and disagreed with the Agents page. Agent
+  // completions are already represented below by the agent status entries
+  // (live, retained, and the migration-unsupported projection).
 
   const countEntry = (entry: AgentStatusEntry, ackAt: number): void => {
     if (mode === 'agent-events') {
@@ -101,7 +92,6 @@ export function countActivityUnread(
 export function useActivityUnreadCount(enabled: boolean, mode: ActivityUnreadCountMode): number {
   const {
     sortEpoch,
-    worktreesByRepo,
     migrationUnsupportedByPtyId,
     retainedAgentsByPaneKey,
     acknowledgedAgentsByPaneKey
@@ -115,7 +105,6 @@ export function useActivityUnreadCount(enabled: boolean, mode: ActivityUnreadCou
         // cannot change unread count unless a sort-relevant state transition
         // or removal occurred. sortEpoch is the cheap invalidation signal.
         sortEpoch: state.sortEpoch,
-        worktreesByRepo: state.worktreesByRepo,
         migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
         retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
         acknowledgedAgentsByPaneKey: state.acknowledgedAgentsByPaneKey
