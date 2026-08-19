@@ -6546,13 +6546,15 @@ export class OrcaRuntimeService {
   private notifyActivateWorktree(
     repoId: string,
     worktreeId: string,
-    setup?: CreateWorktreeResult['setup'],
-    startup?: WorktreeStartupLaunch,
-    defaultTabs?: CreateWorktreeResult['defaultTabs'],
-    // Why: 'caller' means the requester already owns the navigation (its RPC result carries
-    // setup/startup/defaultTabs), so broadcasting would steer every other viewer (STA-2802).
-    navigation: RuntimeNavigationTarget = 'all'
+    setup: CreateWorktreeResult['setup'] | undefined,
+    startup: WorktreeStartupLaunch | undefined,
+    defaultTabs: CreateWorktreeResult['defaultTabs'] | undefined,
+    // Why required-but-nullable, not defaulted: 'caller' means the requester already owns the
+    // navigation, so a site that forgets to forward it silently reverts to broadcasting at every
+    // viewer (STA-2802). Making the parameter mandatory turns that omission into a compile error.
+    navigationTarget: RuntimeNavigationTarget | undefined
   ): void {
+    const navigation = navigationTarget ?? 'all'
     if (navigationTargetsHost(navigation)) {
       this.notifyHostActivateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
     }
