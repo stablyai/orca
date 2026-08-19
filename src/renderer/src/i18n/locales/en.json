@@ -11384,8 +11384,9 @@
           "visibleDescription": "Updates as you edit."
         },
         "AppearanceSaveBar": {
-          "singleChange": "1 unsaved change",
-          "multipleChanges": "{{value0}} unsaved changes",
+          "unsavedChanges": "{{count}} unsaved changes",
+          "unsavedChanges_one": "{{count}} unsaved change",
+          "unsavedChanges_other": "{{count}} unsaved changes",
           "saveFailed": "Appearance settings could not be saved. Try again.",
           "discard": "Discard",
           "saving": "Saving…",

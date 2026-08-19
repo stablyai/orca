@@ -1,5 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtemp, mkdir, readFile, rm, symlink, truncate, writeFile } from 'node:fs/promises'
+import {
+  link,
+  mkdtemp,
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  symlink,
+  truncate,
+  writeFile
+} from 'node:fs/promises'
+import type * as FsPromises from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
@@ -11,6 +22,21 @@ const { fromWebContentsMock, getPathMock, handleMock, openPathMock, showOpenDial
     openPathMock: vi.fn(),
     showOpenDialogMock: vi.fn()
   }))
+
+const fileOpenRace = vi.hoisted(() => ({
+  beforeOpen: null as ((path: string) => Promise<void>) | null
+}))
+
+vi.mock('node:fs/promises', async () => {
+  const actual = await vi.importActual<typeof FsPromises>('node:fs/promises')
+  const open = (async (...args: Parameters<typeof actual.open>) => {
+    const beforeOpen = fileOpenRace.beforeOpen
+    fileOpenRace.beforeOpen = null
+    await beforeOpen?.(String(args[0]))
+    return actual.open(...args)
+  }) as typeof actual.open
+  return { ...actual, open }
+})
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromWebContents: fromWebContentsMock },
@@ -59,6 +85,7 @@ describe('Orca background library', () => {
     openPathMock.mockReset().mockResolvedValue('')
     showOpenDialogMock.mockReset().mockResolvedValue({ canceled: true, filePaths: [] })
     getPathMock.mockReset()
+    fileOpenRace.beforeOpen = null
   })
 
   afterEach(async () => {
@@ -112,6 +139,43 @@ describe('Orca background library', () => {
       ok: false,
       reason: 'invalid-name'
     })
+  })
+
+  it('rejects a file swapped between lstat and open', async () => {
+    const root = await makeTempRoot()
+    const library = join(root, 'backgrounds')
+    const imagePath = join(library, 'scene.png')
+    const originalPath = join(library, 'original.png')
+    const outsidePath = join(root, 'outside.png')
+    await mkdir(library)
+    await writeFile(imagePath, VALID_PNG)
+    await writeFile(outsidePath, ALTERNATE_VALID_PNG)
+    fileOpenRace.beforeOpen = async (openedPath) => {
+      expect(openedPath).toBe(imagePath)
+      await rename(imagePath, originalPath)
+      await rename(outsidePath, imagePath)
+    }
+
+    const result = await loadOrcaBackgroundImage('scene.png', library)
+    expect(result).toEqual({
+      ok: false,
+      reason: 'read-failed'
+    })
+    expect(result).not.toHaveProperty('data')
+  })
+
+  it('rejects hard links already present in the library', async () => {
+    const root = await makeTempRoot()
+    const library = join(root, 'backgrounds')
+    await mkdir(library)
+    await writeFile(join(root, 'outside.png'), VALID_PNG)
+    await link(join(root, 'outside.png'), join(library, 'linked.png'))
+
+    await expect(loadOrcaBackgroundImage('linked.png', library)).resolves.toEqual({
+      ok: false,
+      reason: 'read-failed'
+    })
+    await expect(listOrcaBackgroundLibrary(library)).resolves.toEqual({ dir: library, images: [] })
   })
 
   it('rejects corrupt and unsafe-dimension image bytes', async () => {

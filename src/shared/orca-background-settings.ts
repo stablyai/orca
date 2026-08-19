@@ -116,20 +116,15 @@ function normalizeNumberMap(
 
 function normalizeEnabledAreas(value: unknown): Record<OrcaBackgroundArea, boolean> {
   const source = isRecord(value) ? value : {}
-  return {
-    terminal:
-      typeof source.terminal === 'boolean'
-        ? source.terminal
-        : DEFAULT_ORCA_BACKGROUND_SETTINGS.orcaBackgroundAreas.terminal,
-    leftSidebar:
-      typeof source.leftSidebar === 'boolean'
-        ? source.leftSidebar
-        : DEFAULT_ORCA_BACKGROUND_SETTINGS.orcaBackgroundAreas.leftSidebar,
-    rightSidebar:
-      typeof source.rightSidebar === 'boolean'
-        ? source.rightSidebar
-        : DEFAULT_ORCA_BACKGROUND_SETTINGS.orcaBackgroundAreas.rightSidebar
+  const result = {} as Record<OrcaBackgroundArea, boolean>
+  for (const area of ORCA_BACKGROUND_AREAS) {
+    const enabled = source[area]
+    result[area] =
+      typeof enabled === 'boolean'
+        ? enabled
+        : DEFAULT_ORCA_BACKGROUND_SETTINGS.orcaBackgroundAreas[area]
   }
+  return result
 }
 
 export function normalizeOrcaBackgroundSettings(value: unknown): OrcaBackgroundSettings {

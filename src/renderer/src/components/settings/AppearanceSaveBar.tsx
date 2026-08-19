@@ -34,14 +34,11 @@ export function AppearanceSaveBar({
     return null
   }
 
-  const changeLabel =
-    changeCount === 1
-      ? translate('auto.components.settings.AppearanceSaveBar.singleChange', '1 unsaved change')
-      : translate(
-          'auto.components.settings.AppearanceSaveBar.multipleChanges',
-          '{{value0}} unsaved changes',
-          { value0: changeCount }
-        )
+  const changeLabel = translate(
+    'auto.components.settings.AppearanceSaveBar.unsavedChanges',
+    '{{count}} unsaved changes',
+    { count: changeCount }
+  )
 
   return (
     <div className="sticky top-4 z-10 mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-xs">

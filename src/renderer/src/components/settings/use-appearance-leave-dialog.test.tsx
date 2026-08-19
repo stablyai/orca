@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { useLayoutEffect } from 'react'
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppearanceLeaveDialog } from './use-appearance-leave-dialog'
@@ -153,6 +154,36 @@ describe('useAppearanceLeaveDialog', () => {
     expect(duplicate).toBe(first)
     act(() => hook.result.current.cancel())
     await expect(Promise.all([first, duplicate])).resolves.toEqual([false, false])
+  })
+
+  it('syncs fresh edits before caller layout effects can request leave', async () => {
+    const onDecision = vi.fn<(decision: Promise<boolean>) => void>()
+    const saveDraft = vi.fn(async () => true)
+    const discardDraft = vi.fn()
+    const hook = renderHook(
+      ({ hasChanges }) => {
+        const dialog = useAppearanceLeaveDialog({ hasChanges, saveDraft, discardDraft })
+        const { confirmLeave } = dialog
+        useLayoutEffect(() => {
+          if (hasChanges) {
+            onDecision(confirmLeave({ discardDraftOnLeave: true }))
+          }
+        }, [confirmLeave, hasChanges])
+        return dialog
+      },
+      { initialProps: { hasChanges: false } }
+    )
+
+    hook.rerender({ hasChanges: true })
+
+    expect(onDecision).toHaveBeenCalledOnce()
+    expect(hook.result.current.open).toBe(true)
+    const decision = onDecision.mock.calls[0]?.[0]
+    if (!decision) {
+      throw new Error('Expected a pending leave decision')
+    }
+    act(() => hook.result.current.cancel())
+    await expect(decision).resolves.toBe(false)
   })
 
   it('cancels a pending leave decision when the dialog owner unmounts', async () => {

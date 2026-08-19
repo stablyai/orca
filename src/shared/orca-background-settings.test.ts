@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  ORCA_BACKGROUND_AREAS,
   getDefaultOrcaBackgroundSettings,
   normalizeOrcaBackgroundSettings,
   normalizeOrcaBackgroundSettingsUpdate
@@ -75,6 +76,19 @@ describe('Orca background settings', () => {
         leftSidebar: true,
         rightSidebar: false
       }
+    })
+  })
+
+  it('normalizes every canonical enabled area', () => {
+    const settings = normalizeOrcaBackgroundSettings({
+      orcaBackgroundAreas: { terminal: false }
+    })
+
+    expect(Object.keys(settings.orcaBackgroundAreas)).toEqual([...ORCA_BACKGROUND_AREAS])
+    expect(settings.orcaBackgroundAreas).toEqual({
+      terminal: false,
+      leftSidebar: false,
+      rightSidebar: false
     })
   })
 

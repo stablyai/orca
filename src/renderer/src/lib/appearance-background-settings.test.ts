@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import type { OrcaBackgroundSettings } from '../../../shared/orca-background-settings'
 import {
+  APPEARANCE_BACKGROUND_BLUR_PX_RANGE,
+  APPEARANCE_BACKGROUND_OPACITY_RANGE,
   getAppearanceBackgroundDomArea,
   resolveAppearanceBackground
 } from './appearance-background-settings'
@@ -13,6 +15,11 @@ function settingsWith(
 }
 
 describe('appearance background settings', () => {
+  it('publishes the effect bounds used by resolution and controls', () => {
+    expect(APPEARANCE_BACKGROUND_OPACITY_RANGE).toEqual({ min: 0, max: 1 })
+    expect(APPEARANCE_BACKGROUND_BLUR_PX_RANGE).toEqual({ min: 0, max: 40 })
+  })
+
   it('resolves independent images and preserves the legacy shared fallback', () => {
     const settings = settingsWith({
       orcaBackgroundImage: 'legacy.png',

@@ -25,6 +25,9 @@ const DOM_AREA_NAMES = {
 
 const BACKGROUND_FITS = new Set<OrcaBackgroundFit>(['cover', 'contain', 'stretch', 'tile'])
 
+export const APPEARANCE_BACKGROUND_OPACITY_RANGE = { min: 0, max: 1 } as const
+export const APPEARANCE_BACKGROUND_BLUR_PX_RANGE = { min: 0, max: 40 } as const
+
 function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
   return typeof value === 'number' && Number.isFinite(value)
     ? Math.min(max, Math.max(min, value))
@@ -98,16 +101,16 @@ export function resolveAppearanceBackground(
       area,
       background.orcaBackgroundOpacity,
       DEFAULT_ORCA_BACKGROUND_SETTINGS.orcaBackgroundOpacity,
-      0,
-      1
+      APPEARANCE_BACKGROUND_OPACITY_RANGE.min,
+      APPEARANCE_BACKGROUND_OPACITY_RANGE.max
     ),
     blurPx: resolveAreaNumber(
       background.orcaBackgroundBlurByArea,
       area,
       background.orcaBackgroundBlur,
       DEFAULT_ORCA_BACKGROUND_SETTINGS.orcaBackgroundBlur,
-      0,
-      40
+      APPEARANCE_BACKGROUND_BLUR_PX_RANGE.min,
+      APPEARANCE_BACKGROUND_BLUR_PX_RANGE.max
     ),
     fit: resolveFit(background.orcaBackgroundFit)
   }

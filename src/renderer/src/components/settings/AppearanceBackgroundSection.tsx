@@ -17,6 +17,10 @@ import {
 import type { AppearanceBackgroundArea } from './appearance-background-section-model'
 import { useAppearanceBackgroundLibrary } from './use-appearance-background-library'
 import { translate } from '@/i18n/i18n'
+import {
+  APPEARANCE_BACKGROUND_BLUR_PX_RANGE,
+  APPEARANCE_BACKGROUND_OPACITY_RANGE
+} from '@/lib/appearance-background-settings'
 import { cn } from '@/lib/utils'
 export function AppearanceBackgroundSection({
   settings,
@@ -38,14 +42,14 @@ export function AppearanceBackgroundSection({
     settings.orcaBackgroundOpacity,
     effectsArea,
     0.35,
-    1
+    APPEARANCE_BACKGROUND_OPACITY_RANGE.max
   )
   const blur = resolveAppearanceBackgroundNumber(
     blurByArea,
     settings.orcaBackgroundBlur,
     effectsArea,
-    0,
-    40
+    APPEARANCE_BACKGROUND_BLUR_PX_RANGE.min,
+    APPEARANCE_BACKGROUND_BLUR_PX_RANGE.max
   )
   const fit = settings.orcaBackgroundFit ?? 'cover'
   const updateAreaImage = (fileName: string | null): void => {
@@ -205,7 +209,10 @@ export function AppearanceBackgroundSection({
               type="button"
               variant="outline"
               size="sm"
-              disabled={opacity === 1 && blur === 0}
+              disabled={
+                opacity === APPEARANCE_BACKGROUND_OPACITY_RANGE.max &&
+                blur === APPEARANCE_BACKGROUND_BLUR_PX_RANGE.min
+              }
               aria-label={translate(
                 'auto.components.settings.AppearanceBackgroundSection.resetEffects',
                 'Reset background effects'
@@ -213,8 +220,14 @@ export function AppearanceBackgroundSection({
               onClick={() =>
                 updateSettings(
                   asBackgroundSettingsUpdate({
-                    orcaBackgroundOpacityByArea: { ...opacityByArea, [effectsArea]: 1 },
-                    orcaBackgroundBlurByArea: { ...blurByArea, [effectsArea]: 0 }
+                    orcaBackgroundOpacityByArea: {
+                      ...opacityByArea,
+                      [effectsArea]: APPEARANCE_BACKGROUND_OPACITY_RANGE.max
+                    },
+                    orcaBackgroundBlurByArea: {
+                      ...blurByArea,
+                      [effectsArea]: APPEARANCE_BACKGROUND_BLUR_PX_RANGE.min
+                    }
                   })
                 )
               }
@@ -232,8 +245,8 @@ export function AppearanceBackgroundSection({
           'How strongly the image shows through. Lower keeps text readable.'
         )}
         value={opacity}
-        min={0}
-        max={1}
+        min={APPEARANCE_BACKGROUND_OPACITY_RANGE.min}
+        max={APPEARANCE_BACKGROUND_OPACITY_RANGE.max}
         step={0.01}
         onChange={(next) =>
           updateSettings(
@@ -250,8 +263,8 @@ export function AppearanceBackgroundSection({
           'Softens the image so it does not compete with text.'
         )}
         value={blur}
-        min={0}
-        max={40}
+        min={APPEARANCE_BACKGROUND_BLUR_PX_RANGE.min}
+        max={APPEARANCE_BACKGROUND_BLUR_PX_RANGE.max}
         step={1}
         suffix="px"
         onChange={(next) =>

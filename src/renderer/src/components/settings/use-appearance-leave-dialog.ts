@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 type AppearanceLeaveRequest = {
   discardDraftOnLeave: boolean
@@ -41,7 +41,7 @@ export function useAppearanceLeaveDialog({
   const pendingPromiseRef = useRef<Promise<boolean> | null>(null)
   const busy = saving || draftSaving
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     hasChangesRef.current = hasChanges
     draftSavingRef.current = draftSaving
     saveDraftRef.current = saveDraft
@@ -75,6 +75,7 @@ export function useAppearanceLeaveDialog({
         setOpen(true)
       })
       pendingPromiseRef.current = pending
+      // Avoid a duplicate save; saveDraft returns the active promise.
       if (draftSavingRef.current) {
         void saveDraftRef
           .current()

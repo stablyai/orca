@@ -49,6 +49,12 @@ import {
   runSettingsPageLeaveTransaction,
   runSettingsWindowCloseGuard
 } from './settings-page-leave-transaction'
+import {
+  pinDirtySettingsNavSections,
+  releaseSettledSettingsNavGuard,
+  runSettingsSectionLeaveConfirmation,
+  settleAppearanceSettingsSectionBeforeLeave
+} from './settings-section-navigation'
 import { useAppearanceLeaveDialog } from './use-appearance-leave-dialog'
 import { useAppearanceSettingsDraft } from './use-appearance-settings-draft'
 import { RepositoryPane } from './RepositoryPane'
@@ -578,12 +584,23 @@ function Settings(): React.JSX.Element {
     promptDiscardSourceControlAiPromptChanges
   ])
 
+  const confirmAppearanceSectionLeave = useCallback(
+    (): Promise<boolean> =>
+      settleAppearanceSettingsSectionBeforeLeave({
+        dirty: appearanceHasDraftChanges,
+        confirmLeave: confirmAppearanceLeave,
+        discardDraft: discardAppearanceDraft
+      }),
+    [appearanceHasDraftChanges, confirmAppearanceLeave, discardAppearanceDraft]
+  )
+
   const confirmSectionLeave = useCallback(
     (sectionId: string): Promise<boolean> =>
-      sectionId === 'appearance'
-        ? confirmSettingsPageLeave()
-        : confirmDiscardSourceControlAiPromptChanges(),
-    [confirmDiscardSourceControlAiPromptChanges, confirmSettingsPageLeave]
+      runSettingsSectionLeaveConfirmation(sectionId, {
+        appearance: confirmAppearanceSectionLeave,
+        sourceControl: confirmDiscardSourceControlAiPromptChanges
+      }),
+    [confirmAppearanceSectionLeave, confirmDiscardSourceControlAiPromptChanges]
   )
 
   const closeSettingsPageWithPromptGuard = useCallback(async (): Promise<void> => {
@@ -893,15 +910,17 @@ function Settings(): React.JSX.Element {
       navSections,
       getSettingsSectionSearchEntries
     ).map(({ item }) => item)
-    if (
-      !hasUnsavedSourceControlAiPromptChanges ||
-      rankedSections.some((section) => section.id === 'git')
-    ) {
-      return rankedSections
-    }
-    const gitSection = navSectionById.get('git')
-    return gitSection ? [...rankedSections, gitSection] : rankedSections
-  }, [hasUnsavedSourceControlAiPromptChanges, navSectionById, navSections, settingsSearchQuery])
+    return pinDirtySettingsNavSections(rankedSections, navSectionById, {
+      appearance: appearanceHasDraftChanges,
+      sourceControl: hasUnsavedSourceControlAiPromptChanges
+    })
+  }, [
+    appearanceHasDraftChanges,
+    hasUnsavedSourceControlAiPromptChanges,
+    navSectionById,
+    navSections,
+    settingsSearchQuery
+  ])
   const visibleSectionIds = useMemo(
     () => new Set(visibleNavSections.map((section) => section.id)),
     [visibleNavSections]
@@ -1122,10 +1141,13 @@ function Settings(): React.JSX.Element {
         }
         guardedNavSectionRef.current = pendingNavSectionId
         void confirmSectionLeave(activeSectionId).then((canLeave) => {
+          guardedNavSectionRef.current = releaseSettledSettingsNavGuard(
+            guardedNavSectionRef.current,
+            pendingNavSectionId
+          )
           if (!settingsMountedRef.current || pendingNavSectionRef.current !== pendingNavSectionId) {
             return
           }
-          guardedNavSectionRef.current = null
           if (!canLeave) {
             pendingNavSectionRef.current = null
             pendingScrollTargetRef.current = null
@@ -1170,14 +1192,10 @@ function Settings(): React.JSX.Element {
     }
 
     if (!visibleSectionIds.has(activeSectionId) && visibleNavSections.length > 0) {
-      if (activeSectionId === 'appearance' && appearanceHasDraftChanges) {
-        return
-      }
       setActiveSectionId(getFallbackVisibleSection(visibleNavSections)?.id ?? activeSectionId)
     }
   }, [
     activeSectionId,
-    appearanceHasDraftChanges,
     confirmSectionLeave,
     pendingNavRequestTick,
     setSettingsSearchQuery,
@@ -1719,6 +1737,7 @@ function Settings(): React.JSX.Element {
                     'Theme, zoom, app and terminal appearance, sidebars, and status bar.'
                   )}
                   searchEntries={getSectionSearchEntries('appearance')}
+                  forceVisible={appearanceHasDraftChanges}
                   bodyClassName="border-0 bg-transparent p-0 shadow-none"
                 >
                   {isSectionMounted('appearance') ? (

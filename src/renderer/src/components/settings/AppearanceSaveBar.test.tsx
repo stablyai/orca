@@ -55,12 +55,19 @@ describe('AppearanceSaveBar', () => {
     expect(container.textContent).toBe('')
   })
 
-  it('shows the change count and invokes Save and Discard', async () => {
+  it.each([
+    [1, '1 unsaved change'],
+    [2, '2 unsaved changes']
+  ])('pluralizes a count of %i', async (changeCount, label) => {
+    const container = await renderSaveBar({ changeCount })
+
+    expect(container.textContent).toContain(label)
+  })
+
+  it('invokes Save and Discard', async () => {
     const onSave = vi.fn().mockResolvedValue(undefined)
     const onDiscard = vi.fn()
     const container = await renderSaveBar({ changeCount: 2, onSave, onDiscard })
-
-    expect(container.textContent).toContain('2 unsaved changes')
 
     await act(async () => {
       findButton(container, 'Save')?.click()

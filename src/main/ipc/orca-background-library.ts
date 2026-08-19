@@ -15,6 +15,7 @@ import type {
 
 const ORCA_BACKGROUND_LIBRARY_DIR_NAME = 'backgrounds'
 const ORCA_BACKGROUND_MAX_BYTES = 12 * 1024 * 1024
+const ORCA_BACKGROUND_MAX_BYTES_BIGINT = BigInt(ORCA_BACKGROUND_MAX_BYTES)
 const ORCA_BACKGROUND_MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
@@ -53,27 +54,42 @@ type ValidatedImageReadResult =
   | { ok: true; data: Uint8Array; mimeType: string; size: number }
   | { ok: false; reason: 'too-large' | 'read-failed' }
 
-async function readValidatedImage(pathValue: string): Promise<ValidatedImageReadResult> {
+async function readValidatedImage(
+  pathValue: string,
+  rejectHardLinks = false
+): Promise<ValidatedImageReadResult> {
   const mimeType = mimeTypeForFileName(pathValue)
   if (!mimeType) {
     return { ok: false, reason: 'read-failed' }
   }
   let handle
   try {
-    const initialStats = await lstat(pathValue)
-    if (!initialStats.isFile() || initialStats.isSymbolicLink() || initialStats.size === 0) {
+    const initialStats = await lstat(pathValue, { bigint: true })
+    if (
+      !initialStats.isFile() ||
+      initialStats.isSymbolicLink() ||
+      initialStats.size === 0n ||
+      (rejectHardLinks && initialStats.nlink !== 1n)
+    ) {
       return { ok: false, reason: 'read-failed' }
     }
-    if (initialStats.size > ORCA_BACKGROUND_MAX_BYTES) {
+    if (initialStats.size > ORCA_BACKGROUND_MAX_BYTES_BIGINT) {
       return { ok: false, reason: 'too-large' }
     }
-    // O_NOFOLLOW closes the lstat/open race on Unix; the lstat check rejects links on Windows.
+    // O_NOFOLLOW rejects Unix links; handle identity closes the Windows lstat/open race.
     handle = await open(pathValue, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
-    const stats = await handle.stat()
-    if (!stats.isFile() || stats.size === 0) {
+    const stats = await handle.stat({ bigint: true })
+    if (
+      stats.dev !== initialStats.dev ||
+      stats.ino !== initialStats.ino ||
+      (process.platform === 'win32' && stats.ino === 0n)
+    ) {
       return { ok: false, reason: 'read-failed' }
     }
-    if (stats.size > ORCA_BACKGROUND_MAX_BYTES) {
+    if (!stats.isFile() || stats.size === 0n || (rejectHardLinks && stats.nlink !== 1n)) {
+      return { ok: false, reason: 'read-failed' }
+    }
+    if (stats.size > ORCA_BACKGROUND_MAX_BYTES_BIGINT) {
       return { ok: false, reason: 'too-large' }
     }
     const data = await handle.readFile()
@@ -115,7 +131,7 @@ export async function listOrcaBackgroundLibrary(
       continue
     }
     const path = join(dir, entry.name)
-    const inspected = await readValidatedImage(path)
+    const inspected = await readValidatedImage(path, true)
     if (inspected.ok) {
       images.push({ fileName: entry.name, path, size: inspected.size })
     }
@@ -210,7 +226,7 @@ export async function loadOrcaBackgroundImage(
   if (stats.size > ORCA_BACKGROUND_MAX_BYTES) {
     return { ok: false, reason: 'too-large' }
   }
-  const image = await readValidatedImage(path)
+  const image = await readValidatedImage(path, true)
   if (!image.ok) {
     return image
   }

@@ -134,6 +134,21 @@ describe('settings window close guard', () => {
     expect(confirmAppearanceLeave).not.toHaveBeenCalled()
   })
 
+  it('keeps the window open when Appearance vetoes the close', async () => {
+    const confirmAppearanceLeave = vi.fn(async () => false)
+
+    await expect(
+      runSettingsWindowCloseGuard({
+        intentionalRestart: false,
+        sourceControlDirty: false,
+        confirmAppearanceLeave,
+        confirmSourceControlDiscard: vi.fn(async () => true)
+      })
+    ).resolves.toBe(false)
+
+    expect(confirmAppearanceLeave).toHaveBeenCalledWith({ discardDraftOnLeave: false })
+  })
+
   it('bypasses draft prompts during an intentional restart', async () => {
     const confirmAppearanceLeave = vi.fn(async () => false)
     const confirmSourceControlDiscard = vi.fn(async () => false)
