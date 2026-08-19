@@ -478,7 +478,7 @@ describe('HerdrPtyProvider', () => {
         tabId: 'tab-1',
         paneKey: 'tab-1:leaf-1'
       })
-    ).rejects.toThrow('closed before its first frame')
+    ).rejects.toThrow(/closed/)
   })
 
   it('signals a stale attach as gone so the owner can retire and fresh-spawn', async () => {

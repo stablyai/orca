@@ -12,6 +12,7 @@ import {
   type HerdrPtyTarget
 } from './herdr-pty-types'
 import { startHerdrAgentIfRequested } from './herdr-pty-provider-runtime'
+import { openSharedHerdrPaneController } from './herdr-pty-attach'
 import type { HerdrRuntimeManager } from './herdr-runtime-manager'
 
 export async function spawnHerdrPtyPane(args: {
@@ -51,11 +52,6 @@ export async function spawnHerdrPtyPane(args: {
       )
     }
   }
-  const controller = await runtime.manager.controlProjectPane(
-    target.project,
-    target.identity.leafId,
-    { cols: opts.cols, rows: opts.rows, takeover: true }
-  )
   await target.activateHerdr?.()
   const resolvedPaneId =
     paneId ??
@@ -65,12 +61,20 @@ export async function spawnHerdrPtyPane(args: {
     persistedIdentity !== null &&
     (resolvedPaneId === null || resolvedPaneId !== persistedIdentity.paneId)
   if (!resolvedPaneId || staleAttach) {
-    controller.release()
     if (staleAttach) {
       throw new SessionNotFoundError(opts.sessionId ?? '')
     }
     throw new Error(`Herdr pane is not reconciled: ${target.identity.leafId}`)
   }
+  const stream = await openSharedHerdrPaneController(
+    runtime.transport,
+    sessionName,
+    resolvedPaneId,
+    {
+      cols: opts.cols,
+      rows: opts.rows
+    }
+  )
   const identity: HerdrPtyIdentity = {
     ...target.identity,
     version: 2,
@@ -80,7 +84,7 @@ export async function spawnHerdrPtyPane(args: {
   const incarnationId = opts.expectedIncarnationId ?? randomUUID()
   const binding = args.bind({
     id,
-    controller,
+    controller: stream.controller,
     transport: runtime.transport,
     identity,
     paneId: resolvedPaneId,
@@ -88,7 +92,8 @@ export async function spawnHerdrPtyPane(args: {
     incarnationId,
     cwd: opts.cwd ?? '',
     cols: opts.cols,
-    rows: opts.rows
+    rows: opts.rows,
+    sharedAttach: stream.sharedAttach
   })
   const firstFrame = await args.waitForFirstFrame(binding)
   await startHerdrAgentIfRequested({
@@ -100,7 +105,7 @@ export async function spawnHerdrPtyPane(args: {
     paneId: resolvedPaneId,
     request: async (name, method, params) =>
       unwrapHerdrResponse(await runtime.transport.request(name, method, params)),
-    writeCommand: (text) => controller.write(text)
+    writeCommand: (text) => stream.controller.write(text)
   })
   return {
     id,

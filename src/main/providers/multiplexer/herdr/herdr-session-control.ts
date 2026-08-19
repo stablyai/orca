@@ -44,14 +44,14 @@ export function herdrSessionControlArgs(
     sessionName,
     'terminal',
     'session',
-    'control',
+    options.observe === true ? 'observe' : 'control',
     target,
     '--cols',
     String(options.cols),
     '--rows',
     String(options.rows)
   ]
-  if (options.takeover) {
+  if (options.observe !== true && options.takeover) {
     args.push('--takeover')
   }
   return args
@@ -93,6 +93,7 @@ type SessionControlState = {
   pendingClosed: HerdrTerminalClosed | null
   stream: HerdrSessionControlStream | null
   stdout: string
+  stderr: string
   released: boolean
   closedEmitted: boolean
 }
@@ -106,6 +107,7 @@ function createSessionControlState(): SessionControlState {
     pendingClosed: null,
     stream: null,
     stdout: '',
+    stderr: '',
     released: false,
     closedEmitted: false
   }
@@ -189,9 +191,10 @@ function attachSessionControlStream(
   })
   stream.onClose((code) => {
     if (!state.released) {
+      const detail = state.stderr.trim()
       emitClosed(state, {
         type: 'terminal.closed',
-        reason: `Herdr terminal controller exited with code ${code ?? 'unknown'}`
+        reason: detail || `Herdr terminal controller exited with code ${code ?? 'unknown'}`
       })
     }
   })
@@ -266,8 +269,10 @@ export function createHerdrSessionControlController(
     ...(command.env ? { env: command.env } : {})
   })
   child.stdout.setEncoding('utf8')
-  child.stderr.on('data', () => undefined)
   const state = createSessionControlState()
+  child.stderr.on('data', (chunk: Buffer | string) => {
+    state.stderr += chunk.toString()
+  })
   attachSessionControlStream(state, {
     get writable() {
       return child.stdin.writable

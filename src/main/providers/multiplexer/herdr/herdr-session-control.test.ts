@@ -47,6 +47,28 @@ describe('herdrSessionControlArgs', () => {
       '24'
     ])
   })
+
+  it('builds an observe attach so a Herdr TUI can keep exclusive control', () => {
+    expect(
+      herdrSessionControlArgs('orca', 'w1:p1', {
+        cols: 80,
+        rows: 24,
+        observe: true,
+        takeover: true
+      })
+    ).toEqual([
+      '--session',
+      'orca',
+      'terminal',
+      'session',
+      'observe',
+      'w1:p1',
+      '--cols',
+      '80',
+      '--rows',
+      '24'
+    ])
+  })
 })
 
 describe('createHerdrSessionControlController', () => {

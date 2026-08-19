@@ -123,7 +123,13 @@ export type HerdrTerminalController = {
   onClosed(listener: (event: HerdrTerminalClosed) => void): () => void
 }
 
-export type HerdrTerminalControlOptions = { cols: number; rows: number; takeover?: boolean }
+export type HerdrTerminalControlOptions = {
+  cols: number
+  rows: number
+  takeover?: boolean
+  /** Read-only frames. Lets a Herdr TUI keep exclusive control. */
+  observe?: boolean
+}
 
 export type HerdrHostTransport = {
   ensureSession(sessionName: string): Promise<void>

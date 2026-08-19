@@ -20,6 +20,7 @@ import {
   type HerdrTerminalFrame
 } from './herdr-runtime-contract'
 import { bytesFromTerminalLogicalKey } from '../../../../shared/terminal-logical-key'
+import { openSharedHerdrPaneController } from './herdr-pty-attach'
 
 function decodeFrame(frame: HerdrTerminalFrame): string {
   return Buffer.from(frame.bytes, 'base64').toString('utf8')
@@ -73,7 +74,7 @@ export async function waitForFirstHerdrFrame(
         binding.sequenceChars += data.length
         callbacks.emitData({ id: binding.id, data, sequenceChars: binding.sequenceChars })
       }),
-      binding.controller.onClosed(() => {
+      binding.controller.onClosed((event) => {
         if (binding.detached) {
           return
         }
@@ -81,7 +82,13 @@ export async function waitForFirstHerdrFrame(
           first = false
           clearTimeout(timeout)
           callbacks.detach()
-          reject(new Error('Herdr terminal controller closed before its first frame'))
+          reject(
+            new Error(
+              event.reason
+                ? `Herdr terminal controller closed before its first frame: ${event.reason}`
+                : 'Herdr terminal controller closed before its first frame'
+            )
+          )
           return
         }
         callbacks.detach()
@@ -402,22 +409,20 @@ export async function attachHerdrPty(args: {
   await assertHerdrMigrationReady(target)
   const runtime = args.runtimeFor(target)
   await runtime.manager.reconcileProjectHost(target.graph)
-  const controller = await runtime.manager.controlProjectPane(target.project, identity.leafId, {
-    cols: 80,
-    rows: 24,
-    takeover: true
-  })
   await target.activateHerdr?.()
   const sessionName = herdrSessionNameForProject(target.project, args.sharedName?.())
   const paneId =
     runtime.manager.getPaneId(sessionName, identity.projectId, identity.leafId) ?? identity.paneId
   if (!paneId) {
-    controller.release()
     throw new Error(`Herdr pane is not reconciled: ${identity.leafId}`)
   }
+  const stream = await openSharedHerdrPaneController(runtime.transport, sessionName, paneId, {
+    cols: 80,
+    rows: 24
+  })
   const binding = args.bind({
     id: args.id,
-    controller,
+    controller: stream.controller,
     transport: runtime.transport,
     identity,
     paneId,
@@ -425,7 +430,8 @@ export async function attachHerdrPty(args: {
     incarnationId: randomUUID(),
     cwd: '',
     cols: 80,
-    rows: 24
+    rows: 24,
+    sharedAttach: stream.sharedAttach
   })
   const firstFrame = await args.waitForFirstFrame(binding)
   if (firstFrame) {
