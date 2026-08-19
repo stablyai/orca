@@ -1,5 +1,6 @@
 import { extname } from 'node:path'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import {
   needsWslHostTranslation,
   toHostReadableTranscriptPath
@@ -10,7 +11,10 @@ import type {
   NativeChatTranscriptSubscription,
   SubscribeNativeChatTranscriptArgs
 } from './transcript-watch-contract'
-import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
+import {
+  nativeChatLineDecoderForAgent,
+  readNativeChatTranscriptTail
+} from './transcript-tail-reader'
 import { WslTranscriptFsError, wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 
 export { readNativeChatTranscriptTail } from './transcript-tail-reader'
@@ -49,6 +53,7 @@ async function attemptInstall(
 const INITIAL_RESOLVE_POLL_MS = 500
 const MAX_RESOLVE_POLL_MS = 5_000
 const FALLBACK_RESOLVE_POLL_MS = 5_000
+const HERMES_DB_POLL_MS = 500
 
 function exactTranscriptPath(args: SubscribeNativeChatTranscriptArgs): string | null {
   const path = args.transcriptPath?.trim()
@@ -190,6 +195,103 @@ function subscribeViaResolvePoll(
   }
 }
 
+function subscribeHermesStateDb(
+  args: SubscribeNativeChatTranscriptArgs,
+  setupSignal?: AbortSignal
+): NativeChatTranscriptSubscription {
+  let closed = false
+  let initialized = false
+  let errorEmitted = false
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let previousIds = new Set<string>()
+
+  const schedule = (): void => {
+    if (closed) {
+      return
+    }
+    timer = setTimeout(() => {
+      timer = null
+      void poll()
+    }, HERMES_DB_POLL_MS)
+    timer.unref?.()
+  }
+
+  const poll = async (): Promise<void> => {
+    if (closed) {
+      return
+    }
+    try {
+      setupSignal?.throwIfAborted()
+      const result = await readNativeChatTranscriptTail(
+        {
+          agent: args.agent,
+          sessionId: args.sessionId,
+          transcriptPath: args.transcriptPath,
+          filePath: args.filePath,
+          hermesSessionsDir: args.hermesSessionsDir,
+          hermesStateDbPath: args.hermesStateDbPath,
+          limit: args.initialLimit ?? 300
+        },
+        setupSignal
+      )
+      setupSignal?.throwIfAborted()
+      if (closed) {
+        return
+      }
+      if ('error' in result) {
+        if (!result.notFound && !errorEmitted) {
+          errorEmitted = true
+          args.onInitialSnapshot?.([], false, 0, result.error)
+        }
+        schedule()
+        return
+      }
+
+      const currentIds = new Set(result.messages.map((message) => message.id))
+      if (!initialized) {
+        initialized = true
+        previousIds = currentIds
+        args.onInitialSnapshot?.(result.messages, result.hasMore, result.beforeOffset)
+      } else {
+        const appended = result.messages.filter((message) => !previousIds.has(message.id))
+        if (appended.length > 0) {
+          args.onAppend(appended)
+        }
+        previousIds = currentIds
+      }
+    } catch (error) {
+      if (closed || setupSignal?.aborted) {
+        return
+      }
+      if (!errorEmitted) {
+        errorEmitted = true
+        args.onInitialSnapshot?.(
+          [],
+          false,
+          0,
+          error instanceof Error ? error.message : String(error)
+        )
+      }
+    }
+    schedule()
+  }
+
+  void poll()
+  return {
+    watching: true,
+    unsubscribe: () => {
+      if (closed) {
+        return
+      }
+      closed = true
+      if (timer) {
+        clearTimeout(timer)
+        timer = null
+      }
+    }
+  }
+}
+
 /**
  * Subscribe to live appends on an agent's transcript file. Returns an
  * unsubscribe fn that tears the watcher down completely.
@@ -218,6 +320,9 @@ export async function subscribeNativeChatTranscript(
   // instead of resolve-polling an unresolvable target forever.
   if (!args.filePath && !args.sessionId.trim()) {
     return { unsubscribe: () => {}, watching: false }
+  }
+  if (resolveNativeChatTranscriptAgent(args.agent) === 'hermes') {
+    return subscribeHermesStateDb(args, setupSignal)
   }
 
   let installed: NativeChatTranscriptSubscription | null
