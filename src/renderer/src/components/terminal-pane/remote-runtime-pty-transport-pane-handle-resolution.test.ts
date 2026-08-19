@@ -498,7 +498,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     // Why: no red xterm error — retire quietly and let the next session-tabs
     // snapshot drive respawn/removal.
-    await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-1'))
+    await vi.waitFor(() => expect(onPtyExit).toHaveBeenCalledWith('remote:env-1@@terminal-1', { sessionLost: true }))
     expect(transport.getPtyId()).toBeNull()
     expect(onError).not.toHaveBeenCalled()
   })

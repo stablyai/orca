@@ -157,6 +157,7 @@ import {
   resolveTabTitleAfterPaneClose,
   shouldClearLaunchAgentForClosedPane
 } from './terminal-pane-close-identity'
+import type { PtyExitOptions } from './pty-connection-types'
 
 export function resetTerminalKeyboardProtocolAfterInterrupt(terminal: Terminal): void {
   // Guarded output path so a throwing xterm can't escape the key handler.
@@ -289,7 +290,7 @@ type UseTerminalPaneLifecycleDeps = {
   replayingPanesRef: ReplayingPanesRef
   isActiveRef: React.RefObject<boolean>
   isVisibleRef: React.RefObject<boolean>
-  onPtyExitRef: React.RefObject<(ptyId: string) => void>
+  onPtyExitRef: React.RefObject<(ptyId: string, opts?: PtyExitOptions) => void>
   onAgentExitedRef: React.RefObject<(leafId: string) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
   onPtyRecoveryStateRef?: React.RefObject<

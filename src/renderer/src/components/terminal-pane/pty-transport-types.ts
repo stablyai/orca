@@ -16,6 +16,9 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyDataMeta } from './pty-dispatcher'
 import type { RemoteRuntimeSnapshotOutcome } from '../../runtime/remote-runtime-terminal-multiplexer'
 
+/** Why: a reconciled session loss may still be recoverable; a real process exit ends the session. */
+export type PtyExitOptions = { sessionLost?: boolean }
+
 export type PtyBufferSnapshot = {
   data: string
   /** Live state that can be restored without an alternate-screen frame. */
@@ -245,7 +248,7 @@ export type IpcPtyTransportOptions = {
   projectRuntime?: ProjectExecutionRuntimeResolution
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
   telemetry?: EventProps<'agent_started'>
-  onPtyExit?: (ptyId: string) => void
+  onPtyExit?: (ptyId: string, opts?: PtyExitOptions) => void
   onTitleChange?: (title: string, rawTitle: string) => void
   onPtySpawn?: (ptyId: string) => void
   /** Rebind an existing pane after its provider replaces the PTY identity. */

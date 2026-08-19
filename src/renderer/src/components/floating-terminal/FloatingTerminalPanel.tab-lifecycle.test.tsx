@@ -319,7 +319,8 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(mocks.shouldDeferParkedPtyExitTabClose).toHaveBeenCalledWith('tab-1', 'pty-1')
     expect(mocks.closeTerminalTab).toHaveBeenCalledWith('tab-1', {
       lifecyclePtyId: 'pty-1',
-      reason: 'pty-exit'
+      reason: 'pty-exit',
+      retireSleepingAgentSessions: true
     })
     expect(mocks.closeTab).not.toHaveBeenCalled()
     expect(onOpenChange).not.toHaveBeenCalled()

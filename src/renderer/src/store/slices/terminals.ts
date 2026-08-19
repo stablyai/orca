@@ -642,6 +642,8 @@ export type TerminalSlice = {
       captureRecentlyClosed?: boolean
       remoteCloseOwnedByHost?: boolean
       localPtyTeardownOwnedExternally?: boolean
+      /** Retire the tab's agent resume records on a 'pty-exit' close, for exits that ended the session for good. */
+      retireSleepingAgentSessions?: boolean
       precomputedRetirementPlan?: TerminalTabRetirementPlan
     }
   ) => void
@@ -1709,9 +1711,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
           delete nextLastTerminalInputAtByPaneKey[paneKey]
         }
       }
-      const nextSleepingAgentSessionsByPaneKey = retiresSession
-        ? removeSleepingAgentSessionsForTab(s.sleepingAgentSessionsByPaneKey, tabId)
-        : s.sleepingAgentSessionsByPaneKey
+      // Why: an unexpected PTY loss keeps its resume authority, but a process that exited on its own
+      // (Ctrl+D, `exit`) ends the session — keeping the record respawns the closed tab on the next
+      // workspace activation, and again on every restart, since the record outlives the tab (#14228).
+      const nextSleepingAgentSessionsByPaneKey =
+        retiresSession || opts?.retireSleepingAgentSessions
+          ? removeSleepingAgentSessionsForTab(s.sleepingAgentSessionsByPaneKey, tabId)
+          : s.sleepingAgentSessionsByPaneKey
       const nextPendingStartupByTabId = { ...s.pendingStartupByTabId }
       delete nextPendingStartupByTabId[tabId]
       const nextAutomaticAgentResumeClaimsByTabId = { ...s.automaticAgentResumeClaimsByTabId }

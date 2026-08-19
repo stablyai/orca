@@ -1378,7 +1378,8 @@ export function createRemoteRuntimePtyTransport(
     setAttachmentUnavailable()
     emitRecoveryState()
     if (stalePtyId) {
-      onPtyExit?.(stalePtyId)
+      // Why: the host dropped this surface; the session may still be resumable, unlike a process that exited.
+      onPtyExit?.(stalePtyId, { sessionLost: true })
     }
   }
 
@@ -2302,7 +2303,7 @@ export function createRemoteRuntimePtyTransport(
       emitRecoveryState()
       storedCallbacks.onDisconnect?.()
       if (id) {
-        onPtyExit?.(id)
+        onPtyExit?.(id, { sessionLost: true })
       }
     },
 
