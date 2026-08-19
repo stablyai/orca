@@ -1,14 +1,15 @@
 name: Dev Channel Windows Build
 
-# Why this is its own workflow rather than another job in the hourly/daily/adhoc
-# files: those run under a concurrency group that serialises the whole run, so a
-# Windows job bolted onto them would add its ~30 minutes to every hourly and push
-# the next cron into a queue. Dispatched as a separate run, Windows builds
-# alongside macOS and the mac cadence is untouched.
+# Why its own file rather than steps inlined into hourly/daily/adhoc: one copy of
+# the Windows leg instead of three, and it stays dispatchable on its own so a
+# Windows artifact can be rebuilt for an existing tag without paying for the mac
+# leg's packaging and notarization again.
 #
-# The mac workflows dispatch this immediately after they create the draft
-# release, passing the tag they just made. Both legs then upload into that one
-# release, so a tag carries every platform it managed to build.
+# Each mac workflow calls this as a `needs:`-gated job once its release is live,
+# passing the tag it created. Both legs land in that one release, so a tag
+# carries every platform it managed to build. Measured cost of the Windows leg is
+# ~7.5 min (install 2m45, build 35s, NSIS package 3m) against a mac run of ~9.5
+# min, so running it after the mac job keeps an hourly well inside its cron.
 #
 # Why unsigned: Windows release installers are signed by SignPath *after*
 # packaging, and release-cut budgets 1h + 4h for those approval waits. That does
@@ -26,13 +27,37 @@ name: Dev Channel Windows Build
 # installer run. Every way out — to another dev build, or back to Stable — works
 # through the in-app updater. The picker offers a download for exactly that jump.
 #
-# Dispatch by hand to rebuild a Windows artifact for an existing tag:
+# Called as a job by each mac workflow once its release is live, and separately
+# dispatchable by hand to rebuild a Windows artifact for an existing tag without
+# re-running the mac leg's twenty minutes of packaging and notarization:
 #
 #   gh workflow run dev-channel-win-build.yml --ref main \
 #     -f channel=adhoc -f tag=v1.4.178-adhoc.20260819010203 \
 #     -f ref=<sha> -f version=1.4.178-adhoc.20260819010203
 
 on:
+  # Why the inputs are duplicated: workflow_call does not accept `type: choice`,
+  # and workflow_dispatch wants it so the Actions UI offers a menu instead of a
+  # free-text box. The channel allowlist below is what actually enforces the set,
+  # since a workflow_call caller can pass any string.
+  workflow_call:
+    inputs:
+      channel:
+        description: Dev channel whose release this build uploads into
+        required: true
+        type: string
+      tag:
+        description: Existing release tag in the channel repo
+        required: true
+        type: string
+      ref:
+        description: Commit SHA to build — must be the exact commit the mac leg built
+        required: true
+        type: string
+      version:
+        description: Version to package, without the leading v
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       channel:
@@ -97,6 +122,15 @@ jobs:
           REPO_URL: https://github.com/${{ github.repository }}
         run: |
           set -euo pipefail
+          # workflow_call takes channel as a free-text string, so the set is
+          # enforced here rather than by the input type.
+          case "$CHANNEL" in
+            hourly|daily|adhoc) ;;
+            *)
+              echo "::error::Unknown dev channel '$CHANNEL'; expected hourly, daily, or adhoc."
+              exit 1
+              ;;
+          esac
           if [[ ! "$REQUESTED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::ref must be a full 40-character commit SHA, got '$REQUESTED_SHA'. The dispatching workflow passes the commit it resolved."
             exit 1

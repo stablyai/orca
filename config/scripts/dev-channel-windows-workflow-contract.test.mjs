@@ -17,56 +17,82 @@ const winWorkflow = () => readWorkflow('.github/workflows/dev-channel-win-build.
 const winSteps = () => winWorkflow().jobs['build-win'].steps
 const stepNamed = (steps, name) => steps.find((step) => step.name === name)
 
-describe('dev-channel Windows build dispatch', () => {
+describe('dev-channel Windows build wiring', () => {
   it.each(MAC_WORKFLOWS)(
-    'dispatches the Windows build from the %s workflow with its own channel',
+    'calls the shared Windows workflow from %s with its own channel',
     (channel, path, jobName) => {
+      const jobs = readWorkflow(path).jobs
+      const winJob = jobs[`build-${channel}-win`]
+
+      expect(winJob).toBeDefined()
+      expect(winJob.uses).toBe('./.github/workflows/dev-channel-win-build.yml')
+      expect(winJob.with.channel).toBe(channel)
+      // Why `./` and not a pinned @main: `uses:` resolves against the ref this
+      // workflow file came from, which for an ordinary dispatch is main. A branch
+      // deliberately selected in the Actions picker already supplies its own copy
+      // of the whole file, so this follows that rule rather than adding a second.
+      expect(winJob.uses.startsWith('./')).toBe(true)
+      expect(winJob.needs).toBe(jobName)
+      expect(winJob.secrets).toBe('inherit')
+    }
+  )
+
+  // Why gated on published: the Windows leg uploads into a release the mac leg
+  // created, and refuses to create one itself. Without this it would run for a
+  // tag that was never published — or, for hourly, for a run that skipped.
+  it.each(MAC_WORKFLOWS)(
+    'only runs the %s Windows leg once the release is live',
+    (channel, path, jobName) => {
+      expect(readWorkflow(path).jobs[`build-${channel}-win`].if).toBe(
+        `needs.${jobName}.outputs.published == 'true'`
+      )
+    }
+  )
+
+  // The Windows job names the release by consuming these; a renamed step id
+  // would silently resolve them to empty strings and upload nowhere.
+  it.each(MAC_WORKFLOWS)(
+    'exposes the %s tag, version and commit as job outputs',
+    (_c, path, jobName) => {
       const job = readWorkflow(path).jobs[jobName]
-      const dispatch = stepNamed(job.steps, 'Dispatch the Windows build')
+      const stepIds = job.steps.map((step) => step.id).filter(Boolean)
 
-      expect(dispatch).toBeDefined()
-      expect(dispatch.run).toContain('gh workflow run dev-channel-win-build.yml')
-      expect(dispatch.run).toContain(`--raw-field channel=${channel}`)
-      // Why --ref main: the Windows workflow definition must come from main, so a
-      // stale copy on the branch an adhoc build targets can never be what runs.
-      expect(dispatch.run).toContain('--ref main')
+      for (const key of ['tag', 'version', 'head_sha', 'published']) {
+        expect(job.outputs[key]).toBeTruthy()
+      }
+      // Every referenced step id must actually exist in the job.
+      for (const expression of Object.values(job.outputs)) {
+        const referenced = [...expression.matchAll(/steps\.([A-Za-z0-9_-]+)\./g)].map((m) => m[1])
+        for (const id of referenced) {
+          expect(stepIds).toContain(id)
+        }
+      }
     }
   )
 
-  // Why before packaging: dispatching after the mac artifacts are built would
-  // serialise the two legs and hand the channel the Windows build's wall-clock.
+  // Why this is asserted: the previous design dispatched a sibling run, which
+  // needed actions:write on a job holding macOS signing credentials. Calling the
+  // workflow directly removes that, and it must not creep back.
   it.each(MAC_WORKFLOWS)(
-    'dispatches %s after the release exists but before the mac build',
-    (channel, path, jobName) => {
-      const names = readWorkflow(path).jobs[jobName].steps.map((step) => step.name)
-      const create = names.indexOf(`Create ${channel} release`)
-      const dispatch = names.indexOf('Dispatch the Windows build')
-      const publish = names.indexOf(`Publish ${channel} macOS artifacts`)
-
-      expect(create).toBeGreaterThanOrEqual(0)
-      expect(dispatch).toBeGreaterThan(create)
-      expect(publish).toBeGreaterThan(dispatch)
+    'does not widen the %s signing job to actions:write',
+    (_c, path, jobName) => {
+      expect(readWorkflow(path).jobs[jobName].permissions?.actions).toBeUndefined()
     }
   )
-
-  // Why: Windows is additive. A dispatch failure must degrade the release to
-  // "macOS only", which the picker already handles by filtering on assets, and
-  // never cost a signed mac build that has already been paid for.
-  it.each(MAC_WORKFLOWS)('never fails the %s mac build on a dispatch error', (_c, path, job) => {
-    const dispatch = stepNamed(readWorkflow(path).jobs[job].steps, 'Dispatch the Windows build')
-
-    expect(dispatch['continue-on-error']).toBe(true)
-  })
-
-  it.each(MAC_WORKFLOWS)('grants the %s job the actions:write the dispatch needs', (_c, p, job) => {
-    expect(readWorkflow(p).jobs[job].permissions).toMatchObject({
-      contents: 'read',
-      actions: 'write'
-    })
-  })
 })
 
 describe('dev-channel Windows build workflow', () => {
+  it('is both callable by the mac workflows and dispatchable on its own', () => {
+    const triggers = winWorkflow().on ?? winWorkflow()[true]
+
+    expect(Object.keys(triggers)).toEqual(
+      expect.arrayContaining(['workflow_call', 'workflow_dispatch'])
+    )
+    // workflow_call cannot express `type: choice`, so the channel set has to be
+    // enforced in the job itself.
+    expect(stepNamed(winSteps(), 'Vet the requested inputs').run).toContain('hourly|daily|adhoc')
+  })
+
   // Why windows-2022: windows-latest moved to the Windows 2025 / VS 2026 image
   // before node-gyp could detect VS 18, breaking native dependency install.
   it('pins the same Windows image release-cut builds on', () => {
@@ -127,8 +153,9 @@ describe('dev-channel Windows build workflow', () => {
     expect(verify.run).toContain('orca-windows-setup.exe')
   })
 
-  // Why: this workflow is dispatchable on its own, so it re-derives the ref
-  // guarantee rather than trusting whoever called it.
+  // Why: this is callable and separately dispatchable, and workflow_call takes
+  // its inputs as free text, so it re-derives the ref guarantee rather than
+  // trusting whoever called it.
   it('vets the requested commit before checking it out', () => {
     const names = winSteps().map((step) => step.name)
     const vet = names.indexOf('Vet the requested inputs')
