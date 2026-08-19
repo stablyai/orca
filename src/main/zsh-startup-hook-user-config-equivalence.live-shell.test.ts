@@ -16,8 +16,7 @@
  */
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { describe, expect } from 'vitest'
-import { it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { getShellLaunchConfig } from './providers/local-pty-shell-ready'
 import { selectShellStartupFeatures } from './shell-startup-features'
 import { hasZsh, makeZshHome, runZshPty, ZSH_PATH } from './zsh-startup-hook-pty-harness'

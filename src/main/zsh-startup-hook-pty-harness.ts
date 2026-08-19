@@ -99,18 +99,36 @@ export async function runZshPty(options: ZshPtyOptions): Promise<ZshPtyRun> {
     cols: 200,
     rows: 40,
     cwd: options.cwd ?? workDir,
-    // Why PROMPT overridden here and not in a config file: the sentinel has to
-    // survive whatever prompt the user's own config installs.
-    env: { ...options.env, ORCA_PTY_SENTINEL: sentinel }
+    env: {
+      ...options.env,
+      // Why the sentinel is env-borne: the prompt is overwritten from the PTY
+      // below, and it has to survive whatever prompt the user's config installs.
+      ORCA_PTY_SENTINEL: sentinel
+    }
   })
 
   let output = ''
+  let answeredCompinit = false
+  let lastDataAt = Date.now()
   let resolveReady: (() => void) | undefined
   const ready = new Promise<void>((resolve) => {
     resolveReady = resolve
   })
   proc.onData((data) => {
     output += data
+    lastDataAt = Date.now()
+    // Why this is answered rather than configured away: a host whose global
+    // zshrc runs `compinit` over directories it considers insecure — CI runners
+    // do — stops startup and ASKS, and a real PTY will sit at that question
+    // until the timeout. A pipe-backed `zsh -i -c` never saw it. ZSH_DISABLE_COMPFIX
+    // does not help: that is an oh-my-zsh convention, and plain `compinit` (which
+    // is what asks) ignores it. Answering keeps the shell on the path a user
+    // pressing `y` would take, and both arms of a comparison get the same
+    // treatment, so it cannot tilt one against the other.
+    if (!answeredCompinit && output.includes('Ignore insecure directories')) {
+      answeredCompinit = true
+      proc.write('y\r')
+    }
     if (resolveReady && output.includes(sentinel)) {
       resolveReady()
       resolveReady = undefined
@@ -132,10 +150,32 @@ export async function runZshPty(options: ZshPtyOptions): Promise<ZshPtyRun> {
     )
   })
 
+  /**
+   * Resolves once the shell has produced nothing for `quietMs`, or exited.
+   *
+   * Why quiescence and not a fixed sleep before typing: startup output has to
+   * finish before the PS1 line is typed, or a shell still asking a question
+   * (compinit, above) eats it as the answer. A fast host waits milliseconds; a
+   * slow prompt framework waits as long as it needs.
+   */
+  async function waitForQuiet(quietMs: number): Promise<void> {
+    while (!hasExited) {
+      const idleFor = Date.now() - lastDataAt
+      if (idleFor >= quietMs) {
+        return
+      }
+      await new Promise((resolve) => setTimeout(resolve, quietMs - idleFor))
+    }
+  }
+
   try {
-    // Why written before waiting: the shell is already at its first prompt by
-    // the time this lands, and the prompt only has to carry the sentinel from
-    // the SECOND prompt on — the first is where the deferred hook does its work.
+    await Promise.race([waitForQuiet(250), exited, timedOut])
+    if (hasExited) {
+      return { output, values: parseValues(resultPath), exitedBeforePrompt: true }
+    }
+    // Why the prompt is replaced rather than parsed: it only has to carry the
+    // sentinel from the SECOND prompt on — the first is where the deferred hook
+    // does its work, and that has already happened by now.
     //
     // Why PS1 and not PROMPT: a config that leaves the shell in sh emulation
     // renders PS1, where PROMPT is just an ordinary variable. In zsh's own mode
