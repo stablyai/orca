@@ -1,8 +1,8 @@
 import { execFileSync } from 'node:child_process'
 import { lstatSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { devNull, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearConfiguredWorktreeSharedDirectoriesCacheForTests,
   getConfiguredWorktreeSharedDirectories,
@@ -16,14 +16,29 @@ import {
 import { assertWorktreeCleanForRemoval } from './worktree'
 import { getStatus } from './status'
 
+// Why empty files rather than os.devNull: on Windows that constant is `\\.\nul`, and Git
+// rejects it as a config path — `fatal: unable to access '//./nul': Invalid argument` — so every
+// git call in this file failed there and 15 of its 19 tests went red. POSIX resolves the same
+// constant to /dev/null, which Git accepts, so CI never saw it. Empty files are portable, and are
+// how skill-git-tree-identity and skill-windows-workspace already isolate git config.
+const gitConfigRoot = mkdtempSync(join(tmpdir(), 'orca-shared-dirs-gitconfig-'))
+const emptyGlobalGitConfig = join(gitConfigRoot, 'global.gitconfig')
+const emptySystemGitConfig = join(gitConfigRoot, 'system.gitconfig')
+writeFileSync(emptyGlobalGitConfig, '')
+writeFileSync(emptySystemGitConfig, '')
+
+afterAll(() => {
+  rmSync(gitConfigRoot, { recursive: true, force: true })
+})
+
 const git = (args: string[], cwd: string): void => {
   execFileSync('git', args, {
     cwd,
     stdio: 'ignore',
     env: {
       ...process.env,
-      GIT_CONFIG_GLOBAL: devNull,
-      GIT_CONFIG_SYSTEM: devNull
+      GIT_CONFIG_GLOBAL: emptyGlobalGitConfig,
+      GIT_CONFIG_SYSTEM: emptySystemGitConfig
     }
   })
 }
