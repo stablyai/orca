@@ -307,11 +307,12 @@ export function PetOverlay(): React.JSX.Element {
     return () => window.removeEventListener('resize', onResize)
   }, [setPosition, size])
 
-  // Why: keyed on `dragging` alone — the walk moves the pet every frame, and
-  // persisting each one would hammer localStorage 60x/s. Where the user last
-  // dropped the pet is the only position worth remembering.
+  // Why: keyed on the two settling flags, not on `position` — the walk moves the
+  // pet every frame and persisting each one would hammer localStorage 60x/s.
+  // Waiting for `busy` to clear stores where the pet came to rest rather than the
+  // mid-air point it was released from.
   useEffect(() => {
-    if (dragging) {
+    if (dragging || fall.busy) {
       return
     }
     try {
@@ -319,7 +320,7 @@ export function PetOverlay(): React.JSX.Element {
     } catch {
       // ignore storage failures
     }
-  }, [dragging])
+  }, [dragging, fall.busy])
 
   // Why: a still/vertical grab freezes on frame 0 (Codex grab-and-hold); a
   // horizontal drag keeps animating so the running rows show. Bob always pauses.
@@ -335,9 +336,14 @@ export function PetOverlay(): React.JSX.Element {
   // Why: the sheet holds the pose still on its own frames, so it only freezes
   // for reduced motion or while the pet is in hand.
   const poseAnimate = motionAllowed && !dragging
-  // Why: half the rendered artwork width — see the supine lift in the motion CSS.
-  const supineLiftPx = poses
-    ? (poses.frameWidth * Math.min(size / poses.frameWidth, size / poses.frameHeight)) / 2
+  // Why: half the RENDERED artwork width — see the supine lift in the motion CSS.
+  // Falling back to size/2 leaves a narrow custom sprite floating above the lane,
+  // so read the real frame whenever one is declared.
+  const supineFrame = poses ?? sprite
+  const supineLiftPx = supineFrame
+    ? (supineFrame.frameWidth *
+        Math.min(size / supineFrame.frameWidth, size / supineFrame.frameHeight)) /
+      2
     : size / 2
   const walkDirection = usePetWalkLane({
     active: pacing && motionAllowed,

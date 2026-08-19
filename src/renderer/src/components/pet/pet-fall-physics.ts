@@ -43,5 +43,11 @@ export function advancePetFall(state: PetFallState, step: PetFallStep): PetFallR
   if (y >= step.laneY) {
     return { x, y: step.laneY, vx: 0, vy: 0, landed: true }
   }
+  // Why: a hard upward flick peaks well above the window, where the pet is
+  // invisible and ungrabbable for the whole round trip. Stop at the ceiling and
+  // drop the upward velocity so gravity brings it straight back.
+  if (y <= 0) {
+    return { x, y: 0, vx: wallVx, vy: 0, landed: false }
+  }
   return { x, y, vx: wallVx, vy, landed: false }
 }

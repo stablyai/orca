@@ -492,4 +492,50 @@ describe('PetOverlay bottom lane', () => {
     expect(box.style.top).toBe('164px')
     expect(Number.parseFloat(box.style.left)).toBeCloseTo(300 + PET_WALK_SPEED_PX_PER_SEC, 5)
   })
+
+  it('keeps falling while the window is being resized', () => {
+    window.localStorage.setItem('pet-overlay-position', JSON.stringify({ x: 300, y: 564 }))
+
+    const box = renderOverlay()
+    const grab = container?.querySelector('.pointer-events-auto') as HTMLElement
+
+    firePointer(grab, 'pointerdown', 350, 600)
+    firePointer(grab, 'pointermove', 350, 150)
+    firePointer(grab, 'pointermove', 350, 150)
+    firePointer(grab, 'pointerup', 350, 150)
+
+    stepFrame(0)
+    const before = Number.parseFloat(box.style.top)
+
+    // A resize gesture fires at roughly frame rate; each one used to restart the
+    // fall's rAF, and the first tick after a restart only records a timestamp.
+    // Dragging a window edge changes innerHeight every frame, which moves the
+    // lane and used to restart the fall's rAF each time.
+    for (let t = 100, h = 768; t <= 600; t += 100, h -= 4) {
+      act(() => {
+        Object.defineProperty(window, 'innerHeight', { value: h, configurable: true })
+        window.dispatchEvent(new Event('resize'))
+      })
+      stepFrame(t)
+    }
+
+    expect(Number.parseFloat(box.style.top)).toBeGreaterThan(before)
+  })
+
+  it('keeps pacing while the window is being resized', () => {
+    window.localStorage.setItem('pet-overlay-position', JSON.stringify({ x: 300, y: 564 }))
+
+    const box = renderOverlay()
+    stepFrame(0)
+
+    for (let t = 100, w = 1200; t <= 600; t += 100, w -= 4) {
+      act(() => {
+        Object.defineProperty(window, 'innerWidth', { value: w, configurable: true })
+        window.dispatchEvent(new Event('resize'))
+      })
+      stepFrame(t)
+    }
+
+    expect(Number.parseFloat(box.style.left)).toBeGreaterThan(300)
+  })
 })

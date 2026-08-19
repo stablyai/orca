@@ -45,8 +45,15 @@ export function usePetFallToLane({
   const onBackRef = useRef(false)
   const readPositionRef = useRef(readPosition)
   const onAdvanceRef = useRef(onAdvance)
+  // Why: the loop reads the lane and size through refs so a resize cannot
+  // restart it. A restart drops the timestamp baseline, and the tick after one
+  // only records — a stream of them would leave the pet hanging in mid-air.
+  const laneYRef = useRef(laneY)
+  const sizeRef = useRef(size)
   readPositionRef.current = readPosition
   onAdvanceRef.current = onAdvance
+  laneYRef.current = laneY
+  sizeRef.current = size
 
   const start = useCallback(
     (velocity: { vx: number; vy: number }) => {
@@ -91,8 +98,8 @@ export function usePetFallToLane({
           // Why: a long frame (backgrounded window) would otherwise integrate one
           // huge step and teleport the pet through the lane.
           deltaMs: Math.min(timestamp - previousTimestamp, 50),
-          laneY,
-          ...petWalkBounds(window.innerWidth, size)
+          laneY: laneYRef.current,
+          ...petWalkBounds(window.innerWidth, sizeRef.current)
         })
         velocityRef.current = { vx: next.vx, vy: next.vy }
         onAdvanceRef.current(next.x, next.y)
@@ -105,7 +112,7 @@ export function usePetFallToLane({
       frame = requestAnimationFrame(tick)
     })
     return () => cancelAnimationFrame(frame)
-  }, [phase, laneY, size])
+  }, [phase])
 
   const supine = (phase === 'falling' && onBackRef.current) || phase === 'downed'
   return {

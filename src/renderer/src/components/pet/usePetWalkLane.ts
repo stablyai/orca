@@ -27,8 +27,12 @@ export function usePetWalkLane({
   const directionRef = useRef<PetWalkDirection>('right')
   const readXRef = useRef(readX)
   const onAdvanceRef = useRef(onAdvance)
+  // Why: size rides a ref for the same reason as the callbacks — resizing the
+  // pet from the menu must not restart the loop and drop its timestamp baseline.
+  const sizeRef = useRef(size)
   readXRef.current = readX
   onAdvanceRef.current = onAdvance
+  sizeRef.current = size
 
   useEffect(() => {
     if (!active) {
@@ -42,7 +46,7 @@ export function usePetWalkLane({
           {
             deltaMs: timestamp - previousTimestamp,
             speedPxPerSec: PET_WALK_SPEED_PX_PER_SEC,
-            ...petWalkBounds(window.innerWidth, size)
+            ...petWalkBounds(window.innerWidth, sizeRef.current)
           }
         )
         if (next.direction !== directionRef.current) {
@@ -55,7 +59,7 @@ export function usePetWalkLane({
       frame = requestAnimationFrame(tick)
     })
     return () => cancelAnimationFrame(frame)
-  }, [active, size])
+  }, [active])
 
   return direction
 }

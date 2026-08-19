@@ -44,4 +44,22 @@ describe('advancePetFall', () => {
     const next = advancePetFall({ x: 990, y: 495, vx: 900, vy: 900 }, { ...opts, deltaMs: 100 })
     expect(next).toMatchObject({ x: 1000, y: 500, vx: 0, vy: 0, landed: true })
   })
+
+  it('stops at the ceiling instead of launching the pet off the top', () => {
+    // A hard upward flick peaks ~1200px above the release point, which puts the
+    // pet off-screen and ungrabbable for the whole ~2s round trip.
+    const next = advancePetFall({ x: 100, y: 20, vx: 0, vy: -2500 }, { ...opts, deltaMs: 100 })
+
+    expect(next.y).toBe(0)
+    expect(next.vy).toBe(0)
+    expect(next.landed).toBe(false)
+  })
+
+  it('falls away from the ceiling on the next frame rather than sticking', () => {
+    let state = advancePetFall({ x: 100, y: 20, vx: 0, vy: -2500 }, { ...opts, deltaMs: 100 })
+    state = advancePetFall(state, { ...opts, deltaMs: 100 })
+
+    expect(state.vy).toBeGreaterThan(0)
+    expect(state.y).toBeGreaterThan(0)
+  })
 })

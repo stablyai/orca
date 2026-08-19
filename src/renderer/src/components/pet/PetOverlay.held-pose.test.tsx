@@ -228,5 +228,9 @@ describe('PetOverlay held pose', () => {
     renderOverlay()
 
     expect(poseRow()).toBe(0)
+    // The toggle stops the pacing, not the pet: it must still breathe.
+    expect(poseSprite()?.style.animationPlayState).toBe('running')
+    // 4 frames x 420ms of breathing, far slower than the 0.5s walk.
+    expect(poseSprite()?.style.animation).toContain('1.68s')
   })
 })
