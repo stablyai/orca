@@ -1088,6 +1088,7 @@ import {
 } from '../../shared/worktree/retired-name-registry'
 import { normalizeSparseDirectories } from '../ipc/sparse-checkout-directories'
 import type { PtyBindingSourceExpectation, Store } from '../persistence'
+import { collectLayoutLeafIdsInOrder } from '../persistence/restoring-sessions/terminal-layout-normalization'
 import type { StatsCollector } from '../stats/collector'
 import {
   computeValidatedBranchName,
@@ -7613,6 +7614,99 @@ export class OrcaRuntimeService {
           pty.runtimeSessionOwned = false
           this.setPairedRendererSessionOwnership(pty.ptyId, false)
         }
+      }
+    }
+  }
+
+  private getMobileTerminalLeafPtyIds(tab: RuntimeMobileSessionTerminalTab): string[] {
+    return [tab.ptyId, tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId]].filter(
+      (ptyId): ptyId is string => typeof ptyId === 'string' && ptyId.length > 0
+    )
+  }
+
+  private clearRuntimeSessionOwnershipForMobileTerminalLeaf(
+    worktreeId: string,
+    tab: RuntimeMobileSessionTerminalTab
+  ): void {
+    for (const ptyId of this.getMobileTerminalLeafPtyIds(tab)) {
+      const pty = this.ptysById.get(ptyId)
+      if (pty?.worktreeId === worktreeId && pty.tabId === tab.parentTabId) {
+        pty.runtimeSessionOwned = false
+        this.setPairedRendererSessionOwnership(pty.ptyId, false)
+      }
+    }
+  }
+
+  // Why: only positive evidence that the persisted parent dropped this leaf may
+  // release it — a parent with no persisted layout is no evidence of a split.
+  private persistedParentStillBindsMobileTerminalLeaf(
+    session: WorkspaceSessionState,
+    persistedParent: TerminalTab,
+    tab: RuntimeMobileSessionTerminalTab
+  ): boolean {
+    const layout = session.terminalLayoutsByTabId?.[tab.parentTabId]
+    if (!layout) {
+      return true
+    }
+    if (
+      typeof layout.ptyIdsByLeafId?.[tab.leafId] === 'string' ||
+      collectLayoutLeafIdsInOrder(layout.root).includes(tab.leafId)
+    ) {
+      return true
+    }
+    // Why: renderer and headless sources can derive different leafIds for one
+    // surface, so a still-bound PTY id outranks a leafId that no longer matches.
+    const leafPtyIds = new Set(this.getMobileTerminalLeafPtyIds(tab))
+    if (leafPtyIds.size === 0) {
+      return true
+    }
+    return [persistedParent.ptyId, ...Object.values(layout.ptyIdsByLeafId ?? {})].some(
+      (ptyId) => typeof ptyId === 'string' && leafPtyIds.has(ptyId)
+    )
+  }
+
+  // Why: omitted from the publication AND from persistence = durably closed, so release
+  // ownership — else a lagging or failed kill preserves the tab back into every merge.
+  // A create still in flight has not been retired, only not published yet.
+  private releaseRuntimeSessionOwnershipForRendererRetiredTabs(
+    incoming: RuntimeMobileSessionTabsSnapshot,
+    existing: RuntimeMobileSessionTabsSnapshot | undefined
+  ): void {
+    if (!existing || this.isHeadlessBuiltMobileSessionPublicationBase(existing.publicationEpoch)) {
+      return
+    }
+    const worktreeId = existing.worktree
+    const session = this.getWorkspaceSessionForWorktree(worktreeId)
+    const persistedTabs = session?.tabsByWorktree?.[worktreeId]
+    if (!session || !persistedTabs) {
+      return
+    }
+    const persistedTabsById = new Map(persistedTabs.map((tab) => [tab.id, tab]))
+    const incomingIdentityKeys = new Set(
+      incoming.tabs.flatMap((tab) => this.getMobileSessionSnapshotTabIdentityKeys(tab))
+    )
+    for (const tab of existing.tabs) {
+      if (tab.type !== 'terminal') {
+        continue
+      }
+      if (
+        this.pendingMobileTerminalCreatesByKey.has(`${worktreeId}::${tab.parentTabId}`) ||
+        this.getMobileSessionSnapshotTabIdentityKeys(tab).some((id) =>
+          incomingIdentityKeys.has(id)
+        ) ||
+        !this.hasLiveRuntimeSessionOwnedPtyBinding(worktreeId, tab)
+      ) {
+        continue
+      }
+      const persistedParent = persistedTabsById.get(tab.parentTabId)
+      if (!persistedParent) {
+        this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, existing, tab.parentTabId)
+        continue
+      }
+      // Why: a split parent outlives its retired leaf, so releasing the parent's
+      // PTYs would retire the surviving sibling with it.
+      if (!this.persistedParentStillBindsMobileTerminalLeaf(session, persistedParent, tab)) {
+        this.clearRuntimeSessionOwnershipForMobileTerminalLeaf(worktreeId, tab)
       }
     }
   }
@@ -32996,6 +33090,7 @@ export class OrcaRuntimeService {
       this.reconcileNativeChatLaunchDraftResolutionTombstones(snapshot)
       const launchDraftFencedSnapshot = this.applyNativeChatLaunchDraftResolutionFence(snapshot)
       const fencedSnapshot = this.applyMobileSessionRetirementFences(launchDraftFencedSnapshot)
+      this.releaseRuntimeSessionOwnershipForRendererRetiredTabs(fencedSnapshot, existing)
       const nextSnapshot = this.mergePreservedHeadlessMobileSessionTabs(fencedSnapshot, existing)
       // Why: clients drop same-epoch frames whose version isn't strictly newer,
       // and main-local touches may already have emitted a higher version than
