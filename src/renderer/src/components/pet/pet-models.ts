@@ -1,6 +1,11 @@
 import claudeUrl from '../../../../../resources/claude.webp?url'
 import opencodeUrl from '../../../../../resources/opencode.webp?url'
 import gremlinUrl from '../../../../../resources/gremlin.webp?url'
+// Held poses: the idle art's own arms, lifted about the shoulder. Static — the
+// overlay's sway supplies the motion while the pet dangles.
+import claudeHeldUrl from '../../../../../resources/claude-held.webp?url'
+import opencodeHeldUrl from '../../../../../resources/opencode-held.webp?url'
+import gremlinHeldUrl from '../../../../../resources/gremlin-held.webp?url'
 import { translate } from '@/i18n/i18n'
 
 // Why: bundled defaults so the overlay always has something to render when the
@@ -26,21 +31,24 @@ export const BUNDLED_PETS: readonly BundledPet[] = [
     get label() {
       return translate('auto.components.pet.pet.models.2528586aa7', 'Claudino')
     },
-    url: claudeUrl
+    url: claudeUrl,
+    heldUrl: claudeHeldUrl
   },
   {
     id: OPENCODE_PET_ID,
     get label() {
       return translate('auto.components.pet.pet.models.a84d5677ff', 'OpenCode')
     },
-    url: opencodeUrl
+    url: opencodeUrl,
+    heldUrl: opencodeHeldUrl
   },
   {
     id: GREMLIN_PET_ID,
     get label() {
       return translate('auto.components.pet.pet.models.7433516faf', 'Gremlin')
     },
-    url: gremlinUrl
+    url: gremlinUrl,
+    heldUrl: gremlinHeldUrl
   }
 ] as const
 
