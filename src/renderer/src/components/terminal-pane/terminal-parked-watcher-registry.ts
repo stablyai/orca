@@ -67,6 +67,22 @@ export function isTerminalTabParked(tabId: string): boolean {
   return (parkedWatchersByTabId.get(tabId)?.disposersByPtyId.size ?? 0) > 0
 }
 
+/**
+ * Whether a live parked watcher is observing this PTY. Watchers start when a
+ * pane parks and are disposed on reveal, tab close, PTY exit, and worktree
+ * teardown — so this is the renderer's proof that an unmounted pane's PTY is
+ * still alive, which the runtime graph needs to keep publishing its leaf
+ * (STA-2854: a dropped leaf orphans every paired subscriber of that terminal).
+ */
+export function hasParkedTerminalWatcherForPty(ptyId: string): boolean {
+  for (const entry of parkedWatchersByTabId.values()) {
+    if (entry.disposersByPtyId.has(ptyId)) {
+      return true
+    }
+  }
+  return false
+}
+
 export function disposeParkedTabWatchers(tabId: string): void {
   const entry = parkedWatchersByTabId.get(tabId)
   if (!entry) {

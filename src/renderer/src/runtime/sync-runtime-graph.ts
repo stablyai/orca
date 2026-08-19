@@ -6,6 +6,7 @@ import {
 } from '@/components/terminal-pane/layout-serialization'
 import { warnTerminalLifecycleAnomaly } from '@/components/terminal-pane/terminal-lifecycle-diagnostics'
 import { getEagerPtyBufferHandle } from '@/components/terminal-pane/pty-dispatcher'
+import { hasParkedTerminalWatcherForPty } from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
@@ -792,6 +793,10 @@ async function syncRuntimeGraph(): Promise<void> {
   }
 
   // Why: inactive automation tabs never mount a TerminalPane; publish their leaf+ptyId from persisted layout (gated on a live buffer) or the live PTY looks orphaned.
+  // Cold-parked tabs are the same shape with a different liveness proof: their
+  // pane is unmounted but a parked watcher still owns the PTY. Dropping their
+  // leaf invalidates the terminal handle every paired subscriber is bound to,
+  // stalling a remotely-driven terminal the host merely stopped displaying.
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
     for (const tab of tabs) {
       const layout = state.terminalLayoutsByTabId[tab.id]
@@ -807,7 +812,7 @@ async function syncRuntimeGraph(): Promise<void> {
           typeof ptyId === 'string' &&
           ptyId.length > 0 &&
           isTerminalLeafId(leafId) &&
-          Boolean(getEagerPtyBufferHandle(ptyId))
+          (Boolean(getEagerPtyBufferHandle(ptyId)) || hasParkedTerminalWatcherForPty(ptyId))
       )
       if (liveLeaves.length === 0) {
         continue
