@@ -111,6 +111,31 @@ describe('project group writes route by owning host', () => {
     expect(store.getState().projectGroups).toEqual([])
   })
 
+  it('keeps the focused host when one group id exists on two hosts', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-delete-group',
+      ok: true,
+      result: { deleted: true },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const collidingRemoteGroup: ProjectGroup = { ...localGroup, executionHostId: 'runtime:env-1' }
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      projectGroups: [localGroup, collidingRemoteGroup]
+    })
+
+    await expect(store.getState().deleteProjectGroup(localGroup.id)).resolves.toBe(true)
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'projectGroup.delete',
+      params: { groupId: localGroup.id },
+      timeoutMs: 15_000
+    })
+    expect(projectGroupsDelete).not.toHaveBeenCalled()
+  })
+
   it('keeps using the focused host for groups with no recorded owner', async () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-delete-group',

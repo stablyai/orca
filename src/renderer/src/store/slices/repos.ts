@@ -1571,10 +1571,14 @@ function settingsForProjectGroupOwner(
   state: Pick<AppState, 'projectGroups' | 'settings'>,
   groupId: string
 ) {
-  const group = state.projectGroups.find((entry) => entry.id === groupId)
-  if (!group) {
+  // Why: the catalog keys groups by [host, id], so one id can sit on several hosts.
+  // Ambiguous ownership keeps the focused host rather than guessing a row.
+  const matches = state.projectGroups.filter((entry) => entry.id === groupId)
+  const hostIds = new Set(matches.map(getProjectGroupHostId))
+  if (hostIds.size !== 1) {
     return state.settings
   }
+  const [group] = matches
   if (!group.executionHostId && !group.connectionId) {
     return state.settings
   }
