@@ -7,7 +7,6 @@ type WorkspaceKanbanSheetProps = {
   boardRef: React.RefObject<HTMLDivElement | null>
   children: React.ReactNode
   dragPreview: boolean
-  leftSidebarStyle?: React.CSSProperties
   onOpenChange: (open: boolean) => void
   open: boolean
   preserveOpenForMenu: boolean
@@ -20,7 +19,6 @@ export default function WorkspaceKanbanSheet({
   boardRef,
   children,
   dragPreview,
-  leftSidebarStyle,
   onOpenChange,
   open,
   preserveOpenForMenu,
@@ -77,7 +75,6 @@ export default function WorkspaceKanbanSheet({
         }}
         style={
           {
-            ...leftSidebarStyle,
             left: drawerLeftCss,
             top: WORKSPACE_TOP_CHROME_HEIGHT,
             bottom: drawerBottom,

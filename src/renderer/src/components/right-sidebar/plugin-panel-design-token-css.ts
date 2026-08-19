@@ -1,4 +1,5 @@
 import { PANEL_DESIGN_TOKEN_ALLOWLIST } from '../../../../shared/plugins/plugin-panel-shell'
+import { getAppAppearancePluginBaseToken } from '@/lib/app-appearance-document'
 
 /**
  * Snapshots the curated design-token subset from the live document so panel
@@ -10,7 +11,7 @@ export function buildPanelDesignTokenCss(): string {
   const styles = getComputedStyle(document.documentElement)
   const declarations: string[] = []
   for (const token of PANEL_DESIGN_TOKEN_ALLOWLIST) {
-    const value = styles.getPropertyValue(token).trim()
+    const value = getAppAppearancePluginBaseToken(token) ?? styles.getPropertyValue(token).trim()
     if (value.length > 0) {
       declarations.push(`${token}:${value.replaceAll(/[{}<>;]/g, '')}`)
     }
@@ -19,5 +20,9 @@ export function buildPanelDesignTokenCss(): string {
 }
 
 export function currentPanelColorScheme(): 'light' | 'dark' {
+  const baseScheme = document.documentElement.dataset.appAppearanceBaseScheme
+  if (baseScheme === 'dark' || baseScheme === 'light') {
+    return baseScheme
+  }
   return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
 }
