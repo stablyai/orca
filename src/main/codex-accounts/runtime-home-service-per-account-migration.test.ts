@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { CodexManagedAccount, GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import type * as NodeOs from 'node:os'
 import { readHookTrustEntries } from '../codex/config-toml-trust'
 
@@ -135,7 +136,10 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     expect(readFileSync(join(account.managedHomePath, 'auth.json'), 'utf-8')).toBe(migrated)
     expect(service.prepareForCodexLaunch()).toBe(account.managedHomePath)
     writeFileSync(sharedAuthPath(), laterShared, 'utf-8')
-    expect(service.prepareForRateLimitFetch()).toBe(account.managedHomePath)
+    expect(service.prepareForRateLimitFetch()).toEqual({
+      kind: 'ready',
+      codexHomePath: account.managedHomePath
+    })
     expect(service.prepareForCodexLaunch()).toBe(account.managedHomePath)
     expect(readFileSync(join(account.managedHomePath, 'auth.json'), 'utf-8')).toBe(migrated)
     expect(readFileSync(systemAuthPath(), 'utf-8')).toBe('system auth sentinel\n')
@@ -156,7 +160,10 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     settings.activeCodexManagedAccountIdsByRuntime = { host: null, wsl: {} }
 
     expect(service.prepareForCodexLaunch()).toBeNull()
-    expect(service.prepareForRateLimitFetch()).toBe(systemHome())
+    expect(service.prepareForRateLimitFetch()).toEqual({
+      kind: 'ready',
+      codexHomePath: systemHome()
+    })
     expect(readFileSync(join(account.managedHomePath, 'auth.json'), 'utf-8')).toBe(fresh)
     expect(readFileSync(sharedAuthPath(), 'utf-8')).toBe(mismatch)
     expect(readFileSync(systemAuthPath(), 'utf-8')).toBe('system auth sentinel\n')
@@ -179,7 +186,10 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     writeFileSync(sharedAuthPath(), laterShared, 'utf-8')
 
     expect(service.prepareForCodexLaunch()).toBe(account.managedHomePath)
-    expect(service.prepareForRateLimitFetch()).toBe(account.managedHomePath)
+    expect(service.prepareForRateLimitFetch()).toEqual({
+      kind: 'ready',
+      codexHomePath: account.managedHomePath
+    })
     expect(existsSync(accountAuthPath)).toBe(false)
     expect(settings.activeCodexManagedAccountId).toBe(account.id)
     expect(readFileSync(sharedAuthPath(), 'utf-8')).toBe(laterShared)

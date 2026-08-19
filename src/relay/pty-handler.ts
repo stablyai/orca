@@ -2,7 +2,7 @@
 import type { IPty } from 'node-pty'
 import type * as NodePty from 'node-pty'
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { resolveWindowsGitBashShellPath } from '../main/git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../shared/windows-terminal-shell'
@@ -16,7 +16,9 @@ import {
   isProcessAlive,
   listShellProfiles
 } from './pty-shell-utils'
-import { getRelayShellLaunchConfig } from './pty-shell-launch'
+import { getRelayShellLaunchConfig, isRelayWslShell } from './pty-shell-launch'
+import { addWslEnvKeys } from '../shared/wsl-env'
+import { SHELL_STARTUP_FEATURE_ENV } from '../main/shell-startup-features'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
 import { buildStartupCommandSubmission } from '../shared/startup-command-submission'
@@ -25,23 +27,31 @@ import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../shared/cross-platform-path'
-import { splitWorktreeId } from '../shared/worktree-id'
+import { splitWorktreeId } from '../shared/worktree/id'
 import { PhysicalExitTracker } from '../shared/physical-exit-tracker'
+import { SHELL_READY_MARKER_PREFIX } from '../main/shell-ready-marker-scanner'
 import {
-  createShellReadyScanState,
-  drainShellReadyHeldBytes,
-  scanForShellReady,
-  type ShellReadyScanState
-} from '../main/shell-ready-marker-scanner'
+  createShellStartupOutputScanState,
+  drainShellStartupOutputScanState,
+  scanShellStartupOutput,
+  type ShellStartupOutputScanState
+} from '../main/shell-startup-output-scanner'
+import {
+  createShellPromptReadinessProbe,
+  type ShellPromptReadinessProbe
+} from '../main/shell-prompt-readiness-probe'
 import { applyTerminalGitCredentialPromptGuard } from '../shared/terminal-git-credential-guard'
 import {
   gitCredentialPromptGuardEnv,
   mergeGitConfigEnvProtocol
 } from '../shared/git-credential-prompt-env'
 import { isTuiAgent } from '../shared/tui-agent-config'
-import type { TuiAgent } from '../shared/types'
+import type { TuiAgent } from '../shared/tui-agent'
 import { forceKillPosixPtyProcessGroups } from '../main/pty/posix-pty-process-groups'
 import { stripInheritedBuildModeEnv } from '../main/pty/build-mode-env'
+import { stripLegacyTerminalShimEnv } from '../main/pty/legacy-terminal-shim-dir'
+import { dropInheritedOrcaFishHistory } from '../main/fish-history-session'
+import { dropInheritedOrcaHistFile } from '../main/worktree-history-file-path'
 import {
   PTY_STARTUP_INGRESS_VERSION,
   PtyStartupIngress,
@@ -73,6 +83,12 @@ import {
   type AgentSessionOwnerBinding
 } from '../shared/agent-session-host-authority'
 import { createPtySlaveEchoProbe, readPtySlavePath } from '../shared/pty-slave-line-discipline-echo'
+import {
+  deleteRelayFishHistory,
+  deleteRelayHistory,
+  injectRelayFishHistoryEnv,
+  injectRelayHistoryEnv
+} from './terminal-history'
 
 // Why: only Linux compiles node-pty (no prebuilt), so the build-tools remedy is a closable setup gap
 // there and wrong advice anywhere node-pty ships one. The relay only sees an unloadable binding, never
@@ -147,8 +163,16 @@ type ManagedPty = {
   worktreeId?: string
   terminalHandle?: string
   explicitTerm?: string
+  shellPath?: string
+  /** The raw client-requested shell override, kept so revive can re-resolve it on this host. */
+  shellOverride?: string
+  /** Requested WSL distro; only meaningful when the override launched wsl.exe. */
+  wslDistro?: string
+  shellCwd?: string
+  shellPathEnv?: string
   envToDelete: string[]
   gitCredentialPromptGuarded: boolean
+  historyIsolationEnabled?: boolean
   startupCommand?: ManagedStartupCommand
   physicalExit?: PhysicalExitTracker
   forceKillSent?: boolean
@@ -178,10 +202,13 @@ type PendingPtyOutput = RelayPtySourceOutput & {
 }
 
 type ManagedStartupCommand = {
-  command: string
+  command: string | null
+  providerDelivery: boolean
   delivered: boolean
   waitForShellReady: boolean
-  scanState: ShellReadyScanState | null
+  outputScanState: ShellStartupOutputScanState | null
+  shellPid: number | null
+  promptProbe: ShellPromptReadinessProbe | null
   timer: ReturnType<typeof setTimeout> | null
 }
 
@@ -245,6 +272,7 @@ const INTERACTIVE_REDRAW_MAX_CHARS = PTY_OUTPUT_FLUSH_CHUNK_CHARS
 const INTERACTIVE_OUTPUT_BUDGET_CHARS = 32 * 1024
 const STARTUP_COMMAND_WRITE_DELAY_MS = 50
 const STARTUP_COMMAND_SHELL_READY_FALLBACK_MS = 1500
+const RENDERER_SHELL_READY_RETENTION_MS = 15_000
 const PTY_FORCE_KILL_RETRY_DELAY_MS = 250
 const PTY_FORCE_KILL_MAX_ATTEMPTS = 2
 const ALLOWED_SIGNALS = new Set([
@@ -289,6 +317,31 @@ function resolvePtyShellOverride(shellOverride: string): string {
   return resolveWindowsGitBashShellPath(shellOverride) ?? shellOverride
 }
 
+/**
+ * Longest WSL distro name revive will carry into `wsl.exe -d <name>`.
+ *
+ * Why bounded here and not at spawn: spawn's value is a live RPC parameter,
+ * while this one is replayed from state the relay hands a client and takes back
+ * unvalidated. It reaches an argv, not a shell, so an over-long name costs a
+ * failed spawn rather than anything worse -- but revive's whole job here is to
+ * re-apply fresh-spawn bounds, and an unbounded value had no business in it.
+ * Real distro names are registry keys, far below this.
+ */
+const MAX_REVIVED_WSL_DISTRO_LENGTH = 256
+
+/**
+ * Same bounds as a fresh spawn, but one unusable entry may not fail the whole
+ * revive batch — an override this host no longer allows degrades that single
+ * pane to the default shell instead of throwing away every other pane's state.
+ */
+function resolveRevivedShellOverride(shellOverride: string): string {
+  try {
+    return resolvePtyShellOverride(shellOverride)
+  } catch {
+    return ''
+  }
+}
+
 type PtyProcessSummary = {
   id: string
   incarnationId: string
@@ -314,6 +367,15 @@ type SerializedPtyEntry = {
   envToDelete?: string[]
   /** Optional for state serialized by relays predating the credential guard. */
   gitCredentialPromptGuarded?: boolean
+  /** Optional for state serialized by relays predating scoped history. */
+  historyIsolationEnabled?: boolean
+  /**
+   * The shell override this pane was spawned with, re-resolved (and re-bounded)
+   * on revive. Optional: state from a relay predating it revives the host
+   * default shell, which is what those relays did anyway.
+   */
+  shellOverride?: string
+  terminalWindowsWslDistro?: string
   agentSessionOwners?: AgentSessionOwnerBinding[]
 }
 
@@ -557,7 +619,7 @@ export class PtyHandler {
   }
 
   /** Register an env augmenter merged into every spawn env *after* process.env and renderer env.
-   *  Used by the relay-hook server to inject ORCA_AGENT_HOOK_* coords. See docs/design/agent-status-over-ssh.md §3. */
+   *  Used by the relay-hook server to inject ORCA_AGENT_HOOK_* coords: evaluated per spawn (not captured once), so a late or restarted hook-server bind still reaches the next PTY. */
   addEnvAugmenter(augmenter: PtyEnvAugmenter): () => void {
     this.envAugmenters.push(augmenter)
     return () => {
@@ -603,6 +665,25 @@ export class PtyHandler {
       }
     }
     const result = mergeGitConfigEnvProtocol(baseEnv, augmented) as Record<string, string>
+    // Why: an older client may not ask a newly upgraded relay to delete inherited shim state.
+    stripLegacyTerminalShimEnv(result, process.platform)
+    // Why unconditionally here, not in injectRelayFishHistoryEnv: that runs only for a
+    // fish pane with isolation on, yet an Orca-minted `fish_history` (fish EXPORTS it,
+    // so the relay inherits one when launched from an Orca fish pane) must never scope
+    // any pane to someone else's worktree. Matches the desktop, which drops it on both
+    // branches (STA-4682).
+    dropInheritedOrcaFishHistory(result)
+    // Why here as well as in injectRelayHistoryEnv: that runs only with isolation
+    // on, yet an inherited Orca HISTFILE must not scope a pane to someone else's
+    // worktree on the disabled and revive paths either.
+    dropInheritedOrcaHistFile(result)
+    // Why unconditionally: ORCA_HISTFILE is Orca-owned and minted below by
+    // injectRelayHistoryEnv, which also runs only with isolation on. An
+    // inherited one (the relay can be launched from an Orca pane) would
+    // otherwise reach the wrapper on the disabled and revive paths, scoping the
+    // pane to another worktree's history file — and wrapping a zsh pane that
+    // nothing asked to wrap, since `history` is selected on its presence.
+    delete result.ORCA_HISTFILE
     // Why: match local/daemon precedence so defaults/augmenters can't resurrect explicitly-removed values.
     for (const key of envToDelete) {
       delete result[key]
@@ -634,10 +715,20 @@ export class PtyHandler {
 
   private releaseStartupCommand(managed: ManagedPty): void {
     this.clearStartupCommandTimer(managed)
+    managed.startupCommand?.promptProbe?.dispose()
     managed.startupCommand = undefined
   }
 
-  private scheduleStartupCommandDelivery(managed: ManagedPty, delayMs: number): void {
+  private drainStartupScanBytes(startup: ManagedStartupCommand): string {
+    if (!startup.outputScanState) {
+      return ''
+    }
+    const heldBytes = drainShellStartupOutputScanState(startup.outputScanState)
+    startup.outputScanState = null
+    return heldBytes
+  }
+
+  private scheduleStartupCommandResolution(managed: ManagedPty, delayMs: number): void {
     const startup = managed.startupCommand
     if (!startup || startup.delivered || managed.disposed) {
       return
@@ -645,22 +736,25 @@ export class PtyHandler {
     this.clearStartupCommandTimer(managed)
     startup.timer = setTimeout(() => {
       startup.timer = null
-      this.deliverStartupCommand(managed)
+      if (startup.providerDelivery) {
+        this.deliverStartupCommand(managed)
+      } else {
+        this.signalRendererShellReady(managed)
+      }
     }, delayMs)
   }
 
   private deliverStartupCommand(managed: ManagedPty): void {
     const startup = managed.startupCommand
-    if (!startup || startup.delivered || managed.disposed) {
+    if (!startup?.providerDelivery || !startup.command || startup.delivered || managed.disposed) {
       return
     }
     startup.delivered = true
     this.clearStartupCommandTimer(managed)
-    if (startup.scanState) {
-      const heldBytes = drainShellReadyHeldBytes(startup.scanState)
-      if (heldBytes) {
-        managed.startupIngress?.accept(heldBytes)
-      }
+    startup.promptProbe?.dispose()
+    const heldBytes = this.drainStartupScanBytes(startup)
+    if (heldBytes) {
+      managed.startupIngress?.accept(heldBytes)
     }
     const submit = process.platform === 'win32' ? '\r' : '\n'
     // Why: only the shell-ready wrapper arms bracketed-paste; other shells use raw submit so ESC[200~ markers aren't echoed.
@@ -670,6 +764,19 @@ export class PtyHandler {
     })
     managed.startupCommand = undefined
     managed.pty.write(payload)
+  }
+
+  private signalRendererShellReady(managed: ManagedPty): void {
+    const startup = managed.startupCommand
+    if (!startup || startup.providerDelivery || startup.delivered || managed.disposed) {
+      return
+    }
+    startup.delivered = true
+    this.clearStartupCommandTimer(managed)
+    startup.promptProbe?.dispose()
+    managed.startupIngress?.accept(this.drainStartupScanBytes(startup))
+    managed.startupIngress?.accept(`${SHELL_READY_MARKER_PREFIX}\x07`)
+    managed.startupCommand = undefined
   }
 
   /** Wire onData/onExit listeners for a managed PTY and store it. */
@@ -697,16 +804,43 @@ export class PtyHandler {
       onEmission: emitIngressData,
       ...(echoProbe ? { echoProbe } : {})
     })
+    const startup = managed.startupCommand
+    if (startup?.waitForShellReady) {
+      startup.promptProbe = createShellPromptReadinessProbe({
+        slavePath: readPtySlavePath(managed.pty),
+        shellPath: managed.shellPath,
+        shellCwd: managed.shellCwd,
+        shellPathEnv: managed.shellPathEnv,
+        getShellPid: () => startup.shellPid,
+        onPromptReady: () => {
+          if (startup.providerDelivery) {
+            this.scheduleStartupCommandResolution(managed, STARTUP_COMMAND_WRITE_DELAY_MS)
+          } else {
+            this.signalRendererShellReady(managed)
+          }
+        }
+      })
+    }
     managed.pty.onData((data: string) => {
       const startup = managed.startupCommand
-      if (startup?.waitForShellReady && startup.scanState && !startup.delivered) {
-        const scanned = scanForShellReady(startup.scanState, data)
+      if (startup?.waitForShellReady && startup.outputScanState && !startup.delivered) {
+        const scanned = scanShellStartupOutput(startup.outputScanState, data)
         data = scanned.output
-        if (scanned.matched) {
-          this.scheduleStartupCommandDelivery(managed, STARTUP_COMMAND_WRITE_DELAY_MS)
+        if (scanned.shellPid) {
+          startup.shellPid = scanned.shellPid
+        }
+        if (scanned.ready) {
+          if (startup.providerDelivery) {
+            this.scheduleStartupCommandResolution(managed, STARTUP_COMMAND_WRITE_DELAY_MS)
+          } else {
+            this.signalRendererShellReady(managed)
+          }
         }
       }
       managed.startupIngress?.accept(data)
+      if (startup && !startup.delivered && data.length > 0) {
+        startup.promptProbe?.notifyOutput(data)
+      }
     })
     managed.pty.onExit(({ exitCode }: { exitCode: number }) => {
       managed.physicalExit?.markExited()
@@ -744,11 +878,11 @@ export class PtyHandler {
 
   private releaseRelayIngress(managed: ManagedPty): void {
     const startupCommand = managed.startupCommand
-    const scanState = startupCommand?.scanState
-    if (scanState) {
-      const held = drainShellReadyHeldBytes(scanState)
-      startupCommand.scanState = null
-      managed.startupIngress?.accept(held)
+    if (startupCommand) {
+      this.clearStartupCommandTimer(managed)
+      startupCommand.promptProbe?.dispose()
+      managed.startupIngress?.accept(this.drainStartupScanBytes(startupCommand))
+      managed.startupCommand = undefined
     }
     managed.startupIngress?.drainAndClose()
   }
@@ -792,15 +926,19 @@ export class PtyHandler {
     this.dispatcher.onRequest('pty.serialize', (p) => this.serialize(p))
     this.dispatcher.onRequest('pty.revive', (p) => this.revive(p))
     this.dispatcher.onRequest('pty.getProfiles', async () => listShellProfiles())
+    this.dispatcher.onRequest('pty.deleteWorktreeHistory', async (p) => {
+      if (typeof p.worktreeId === 'string') {
+        deleteRelayFishHistory(p.worktreeId)
+        deleteRelayHistory(p.worktreeId)
+      }
+      return { ok: true }
+    })
     this.dispatcher.onRequest('pty.closeStartupQueryAuthority', (p) =>
       this.closeStartupQueryAuthority(p)
     )
 
     this.dispatcher.onNotification('pty.data', (p) => this.writeData(p))
     this.dispatcher.onNotification('pty.resize', (p) => this.resize(p))
-    this.dispatcher.onNotification('pty.ackData', (_p) => {
-      /* flow control ack -- not yet enforced */
-    })
   }
 
   private isLikelyInteractiveRedraw(data: string): boolean {
@@ -1319,7 +1457,8 @@ export class PtyHandler {
     context?: RequestContext
   ): Promise<RelayAgentSessionCreateResult> {
     const env = params.env as Record<string, string> | undefined
-    const worktreeId = env?.ORCA_WORKTREE_ID
+    const worktreeId =
+      typeof params.worktreeId === 'string' ? params.worktreeId : env?.ORCA_WORKTREE_ID
     const worktreePath = worktreeId ? splitWorktreeId(worktreeId)?.worktreePath : undefined
     const cwd = typeof params.cwd === 'string' ? params.cwd : resolveDefaultCwd()
     const finishCreation = this.beginPtyCreation([worktreePath, cwd])
@@ -1435,7 +1574,9 @@ export class PtyHandler {
     const shellOverride =
       typeof params.shellOverride === 'string' ? params.shellOverride.trim() : ''
     const resolvedShellOverride = resolvePtyShellOverride(shellOverride)
-    const shell = resolvedShellOverride || resolveDefaultShell()
+    const requestedEnvShell =
+      process.platform !== 'win32' && typeof env?.SHELL === 'string' ? env.SHELL.trim() : ''
+    const shell = resolvedShellOverride || requestedEnvShell || resolveDefaultShell()
     let id: string
     do {
       id = `pty-${this.nextId++}`
@@ -1457,6 +1598,22 @@ export class PtyHandler {
       { id, paneKey, shell, command, launchAgent },
       envToDelete
     )
+    const worktreeId =
+      typeof params.worktreeId === 'string' ? params.worktreeId : env?.ORCA_WORKTREE_ID
+    const historyIsolationEnabled = params.historyIsolationEnabled === true
+    // Deliberately not reached by wsl.exe: a guest fish writes its history file
+    // inside the distro, where relay deletion cannot reach it (STA-4682).
+    if (historyIsolationEnabled && worktreeId && basename(shell).toLowerCase().startsWith('fish')) {
+      injectRelayFishHistoryEnv(spawnEnv, worktreeId)
+    }
+    const wslShell = isRelayWslShell(shell)
+    if (historyIsolationEnabled && worktreeId) {
+      const historyRoot = injectRelayHistoryEnv(spawnEnv, worktreeId, shell, { wsl: wslShell })
+      if (wslShell && historyRoot) {
+        // WSLENV is the only channel that carries a host env var into the guest.
+        addWslEnvKeys(spawnEnv, ['HISTFILE'])
+      }
+    }
     const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(spawnEnv, command)
     // Why: SSH PTYs bypass main's host-env builder, so apply the guard after the relay merges its authoritative env.
     const gitCredentialPromptGuarded = applyTerminalGitCredentialPromptGuard(spawnEnv, {
@@ -1471,11 +1628,15 @@ export class PtyHandler {
         startupCommandDelivery:
           params.startupCommandDelivery === 'shell-ready' ? 'shell-ready' : undefined
       })
+    const managedStartupCommand = shouldProviderDeliverCommand ? command : launchCommandHint
     // Why: both renderer- and provider-delivered startup commands use this marker; the delivering side strips it from output.
     const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv, process.platform, {
       terminalWindowsWslDistro,
-      emitReadyMarker: shouldEmitShellReadyMarker
+      emitReadyMarker: shouldEmitShellReadyMarker,
+      emitStartupIdentity: shouldEmitShellReadyMarker
     })
+    const rendererShellReadySupported =
+      !shouldProviderDeliverCommand && shellLaunch.supportsReadyMarker
 
     if (context?.signal?.aborted || context?.isStale()) {
       // Why: cancellation remains side-effect-free until the exact native spawn seam.
@@ -1495,8 +1656,13 @@ export class PtyHandler {
         cols,
         rows,
         cwd,
-        // Why: relay shells inherit process.env; don't let an ambient Orca marker enable shell-ready unless requested.
-        env: { ...spawnEnv, ORCA_SHELL_READY_MARKER: '0', ...shellLaunch.env }
+        // Why the empty default: relay shells inherit process.env, and the launch
+        // config is the only thing allowed to name features for this shell.
+        env: {
+          ...spawnEnv,
+          [SHELL_STARTUP_FEATURE_ENV]: '',
+          ...shellLaunch.env
+        }
       })
     } catch (error) {
       // Why: Windows loads conpty.node only on first spawn, so handle that late binding failure here.
@@ -1514,7 +1680,6 @@ export class PtyHandler {
       paneKey: typeof params.paneKey === 'string' ? params.paneKey : paneKey,
       tabId: typeof params.tabId === 'string' ? params.tabId : tabId
     }
-    const worktreeId = typeof env?.ORCA_WORKTREE_ID === 'string' ? env.ORCA_WORKTREE_ID : undefined
     const startupIngressIntent =
       params.startupIngressVersion === PTY_STARTUP_INGRESS_VERSION
         ? parsePtyStartupIngressIntent(params.startupIngress)
@@ -1535,6 +1700,14 @@ export class PtyHandler {
       ...(explicitTerm !== undefined ? { explicitTerm } : {}),
       envToDelete,
       gitCredentialPromptGuarded,
+      ...(historyIsolationEnabled ? { historyIsolationEnabled: true } : {}),
+      shellPath: shell,
+      // Why the resolved one gates it: on a POSIX relay an override is rejected
+      // outright, and storing one revive would only reject again is noise.
+      ...(resolvedShellOverride ? { shellOverride } : {}),
+      ...(terminalWindowsWslDistro ? { wslDistro: terminalWindowsWslDistro } : {}),
+      shellCwd: cwd,
+      shellPathEnv: spawnEnv.PATH,
       ownerBackend: resolvePtyOwnerBackend({
         platform: process.platform,
         shellPath: shell,
@@ -1542,16 +1715,18 @@ export class PtyHandler {
       }),
       ...(startupIngressIntent ? { startupIngressIntent } : {}),
       ...(terminalHandle ? { terminalHandle } : {}),
-      ...(shouldProviderDeliverCommand
+      ...(managedStartupCommand && (shouldProviderDeliverCommand || rendererShellReadySupported)
         ? {
             startupCommand: {
-              command,
+              command: shouldProviderDeliverCommand ? managedStartupCommand : null,
+              providerDelivery: shouldProviderDeliverCommand,
               delivered: false,
-              waitForShellReady: shellLaunch.env.ORCA_SHELL_READY_MARKER === '1',
-              scanState:
-                shellLaunch.env.ORCA_SHELL_READY_MARKER === '1'
-                  ? createShellReadyScanState()
-                  : null,
+              waitForShellReady: shellLaunch.supportsReadyMarker,
+              outputScanState: shellLaunch.supportsReadyMarker
+                ? createShellStartupOutputScanState()
+                : null,
+              shellPid: null,
+              promptProbe: null,
               timer: null
             }
           }
@@ -1568,11 +1743,13 @@ export class PtyHandler {
       this.releaseStartupCommand(managed)
       this.requestGracefulKill(managed, 'terminate stale')
     } else if (managed.startupCommand) {
-      this.scheduleStartupCommandDelivery(
+      this.scheduleStartupCommandResolution(
         managed,
-        managed.startupCommand.waitForShellReady
-          ? STARTUP_COMMAND_SHELL_READY_FALLBACK_MS
-          : STARTUP_COMMAND_WRITE_DELAY_MS
+        managed.startupCommand.providerDelivery
+          ? managed.startupCommand.waitForShellReady
+            ? STARTUP_COMMAND_SHELL_READY_FALLBACK_MS
+            : STARTUP_COMMAND_WRITE_DELAY_MS
+          : RENDERER_SHELL_READY_RETENTION_MS
       )
     }
     return {
@@ -1647,7 +1824,23 @@ export class PtyHandler {
         ...(sourceActivation ? { sourceActivation } : {})
       }
     }
-    if (activation === 'existing' && this.sourcePublication?.accepts(id)) {
+    // `existing` means a delivery is already open for this client, so it is already receiving live
+    // output and does not need its screen re-sent. That is true for a duplicate attach — and false
+    // for the case this skipped: an SSH reconnect. The client keeps its id there (the dispatcher
+    // refuses to detach the primary, and setWrite revives that same id), so the delivery outlives
+    // the dead transport, while the renderer has thrown its terminal away — a reconnect bumps
+    // tab.generation, which is the React key, so the pane remounts with a brand-new empty xterm and
+    // nothing captures the old buffer. Answering "you already have it" leaves the pane blank
+    // forever, until new output happens to arrive.
+    //
+    // So the client says which it is. Falling through rather than returning the replay inline is
+    // deliberate: the path below already drops the pending batched bytes that are also in the
+    // buffer, which is what stops the live delivery double-rendering them.
+    if (
+      activation === 'existing' &&
+      this.sourcePublication?.accepts(id) &&
+      params.requireReplay !== true
+    ) {
       return {
         incarnationId: managed.incarnationId,
         ...(sourceActivation ? { sourceActivation } : {})
@@ -1949,6 +2142,11 @@ export class PtyHandler {
         ...(managed.explicitTerm !== undefined ? { explicitTerm: managed.explicitTerm } : {}),
         envToDelete: managed.envToDelete,
         gitCredentialPromptGuarded: managed.gitCredentialPromptGuarded,
+        ...(managed.historyIsolationEnabled ? { historyIsolationEnabled: true } : {}),
+        // Why serialized: revive re-spawns the shell, and without these a WSL
+        // pane came back as the host default shell in another distro's history.
+        ...(managed.shellOverride ? { shellOverride: managed.shellOverride } : {}),
+        ...(managed.wslDistro ? { terminalWindowsWslDistro: managed.wslDistro } : {}),
         ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {})
       })
     }
@@ -2011,26 +2209,74 @@ export class PtyHandler {
     }
     // Why: serialized state may come from an older/untrusted client; reapply fresh-spawn bounds.
     const envToDelete = sanitizeEnvToDelete(entry.envToDelete)
-    const shell = resolveDefaultShell()
+    const shellOverride = typeof entry.shellOverride === 'string' ? entry.shellOverride.trim() : ''
+    const resolvedShellOverride = resolveRevivedShellOverride(shellOverride)
+    const shell = resolvedShellOverride || resolveDefaultShell()
+    const terminalWindowsWslDistro =
+      typeof entry.terminalWindowsWslDistro === 'string' &&
+      entry.terminalWindowsWslDistro.length <= MAX_REVIVED_WSL_DISTRO_LENGTH
+        ? entry.terminalWindowsWslDistro
+        : null
+    const historyIsolationEnabled = entry.historyIsolationEnabled === true
     const spawnEnv = this.buildSpawnEnv(
       revivedEnv,
       { id: entry.id, paneKey: entry.paneKey, shell },
       envToDelete
     )
+    if (
+      historyIsolationEnabled &&
+      entry.worktreeId &&
+      basename(shell).toLowerCase().startsWith('fish')
+    ) {
+      injectRelayFishHistoryEnv(spawnEnv, entry.worktreeId)
+    }
+    // Mirrors spawn: the entry's override is what gets re-launched, so a WSL
+    // pane needs the same guest-visible HISTFILE and the same WSLENV carrier.
+    const wslShell = isRelayWslShell(shell)
+    if (historyIsolationEnabled && entry.worktreeId) {
+      const historyRoot = injectRelayHistoryEnv(spawnEnv, entry.worktreeId, shell, {
+        wsl: wslShell
+      })
+      if (wslShell && historyRoot) {
+        addWslEnvKeys(spawnEnv, ['HISTFILE'])
+      }
+    }
     // Why: revive lacks the original launch command, so reuse the fresh-spawn guard decision (legacy defaults to unguarded).
     const gitCredentialPromptGuarded = entry.gitCredentialPromptGuarded === true
     if (gitCredentialPromptGuarded) {
       Object.assign(spawnEnv, gitCredentialPromptGuardEnv(spawnEnv, process.platform))
     }
-    const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv)
-    const term = ptyMod.spawn(shell, shellLaunch.args, {
-      name: spawnEnv.TERM ?? 'xterm-256color',
-      cols: entry.cols,
-      rows: entry.rows,
-      cwd: entry.cwd,
-      // Why: no provider-delivered command is waiting for a ready marker.
-      env: { ...spawnEnv, ORCA_SHELL_READY_MARKER: '0', ...shellLaunch.env }
+    const shellLaunch = getRelayShellLaunchConfig(shell, spawnEnv, process.platform, {
+      terminalWindowsWslDistro
     })
+    let term: IPty
+    try {
+      term = ptyMod.spawn(shell, shellLaunch.args, {
+        name: spawnEnv.TERM ?? 'xterm-256color',
+        cols: entry.cols,
+        rows: entry.rows,
+        cwd: entry.cwd,
+        // Why: no provider-delivered command is waiting for a ready marker.
+        env: {
+          ...spawnEnv,
+          [SHELL_STARTUP_FEATURE_ENV]: '',
+          ...shellLaunch.env
+        }
+      })
+    } catch (error) {
+      // Why skip rather than retry the host default shell: the stored override
+      // names a shell that existed at serialize time and may not now (an
+      // uninstalled WSL takes wsl.exe with it), and substituting a different
+      // shell is the defect this override exists to fix -- its args and its
+      // history env are built for the shell that is gone. Dropping one pane is
+      // the honest outcome; letting the throw escape the revive loop would cost
+      // every later entry its state too. The worktree-removal fence throws
+      // before this, outside reviveEntry, so it stays a hard failure.
+      if (!resolvedShellOverride) {
+        throw error
+      }
+      return
+    }
     this.wireAndStore({
       id: entry.id,
       incarnationId: randomUUID(),
@@ -2047,9 +2293,16 @@ export class PtyHandler {
       ...(explicitTerm !== undefined ? { explicitTerm } : {}),
       envToDelete,
       gitCredentialPromptGuarded,
+      ...(historyIsolationEnabled ? { historyIsolationEnabled: true } : {}),
+      shellPath: shell,
+      // Why re-stored: a revived pane can be serialized again, and losing the
+      // override on the second round trip is the same bug one restart later.
+      ...(resolvedShellOverride ? { shellOverride } : {}),
+      ...(terminalWindowsWslDistro ? { wslDistro: terminalWindowsWslDistro } : {}),
       ownerBackend: resolvePtyOwnerBackend({
         platform: process.platform,
-        shellPath: shell
+        shellPath: shell,
+        wslDistro: terminalWindowsWslDistro
       }),
       ...(entry.terminalHandle ? { terminalHandle: entry.terminalHandle } : {})
     })
@@ -2206,6 +2459,14 @@ export class PtyHandler {
       }
     }
     return count
+  }
+
+  get retainedStartupCommandBytes(): number {
+    let bytes = 0
+    for (const managed of this.ptys.values()) {
+      bytes += managed.startupCommand?.command?.length ?? 0
+    }
+    return bytes
   }
 
   get graceTimerActive(): boolean {

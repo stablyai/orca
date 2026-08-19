@@ -11,7 +11,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { CodexManagedAccount } from '../../shared/types'
+import type { CodexManagedAccount } from '../../shared/managed-account-types'
 import type * as CodexAccountFs from './fs-utils'
 
 const writeFailure = vi.hoisted(() => ({ failNextAuthWrite: false }))

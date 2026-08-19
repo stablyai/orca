@@ -99,6 +99,8 @@ type SnapshotFrameOptions = {
   source?: 'headless' | 'renderer'
   oscLinks?: TerminalOscLinkRange[]
   pendingEscapeTailAnsi?: string
+  /** Effective kitty flags proven at this frame's own `seq`. */
+  kittyKeyboardFlags?: number
 }
 
 type SerializedSnapshot = {
@@ -113,6 +115,7 @@ type SerializedSnapshot = {
   scrollbackRows: number
   truncatedByByteBudget: boolean
   pendingEscapeTailAnsi?: string
+  kittyKeyboardFlags?: number
 } | null
 
 type TerminalViewportClient = {
@@ -648,6 +651,15 @@ function sendSnapshotFrames(
         source: options.source,
         oscLinks: options.oscLinks,
         pendingEscapeTailAnsi: options.pendingEscapeTailAnsi,
+        // Why conditional and additive: old clients ignore the unknown field,
+        // and a new client must read absence as unknown rather than zero, so
+        // no opcode or capability negotiation is involved (Rule 1 of
+        // docs/reference/remote-wire-compatibility.md).
+        // Why `seq` is required: the flags are only proven at this frame's own
+        // seq, so without a replay boundary the client cannot order them.
+        ...(typeof options.seq === 'number' && options.kittyKeyboardFlags !== undefined
+          ? { kittyKeyboardFlags: options.kittyKeyboardFlags }
+          : {}),
         truncated: options.truncated === true,
         truncatedByByteBudget: options.truncatedByByteBudget === true
       })
@@ -870,7 +882,10 @@ const TerminalRead = TerminalHandle.extend({
         })
     )
     .optional(),
-  limit: OptionalFiniteNumber
+  limit: OptionalFiniteNumber,
+  // Why: optional so an older host that does not understand it simply drops the key and answers
+  // with its usual stream read; the response's `source` is what tells the caller which it got.
+  screen: z.literal(true).optional()
 })
 
 // Why: preserve the legacy contract — `title: string | null` only, `undefined` rejected, so the CLI's "reset" signal stays distinct.
@@ -884,6 +899,8 @@ const TerminalSend = TerminalHandle.extend({
   text: OptionalString,
   enter: z.unknown().optional(),
   interrupt: z.unknown().optional(),
+  // Why: older hosts strip this optional intent and retain their direct-send behavior.
+  agentPrompt: z.literal(true).optional(),
   resolvedLaunchDraft: z
     .object({
       text: z.string(),
@@ -1170,7 +1187,8 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     handler: async (params, { runtime }) => ({
       terminal: await runtime.readTerminal(params.terminal, {
         cursor: params.cursor,
-        limit: params.limit
+        limit: params.limit,
+        screen: params.screen
       })
     })
   }),
@@ -1212,7 +1230,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.send',
     params: TerminalSend,
-    handler: async (params, { runtime, clientId }) => {
+    handler: async (params, { runtime, clientId, signal }) => {
       await assertTerminalSendTextWithinLimit(params.text)
       await assertTerminalSendTextWithinLimit(params.resolvedLaunchDraft?.text)
       const queryReplyClientId = clientId ?? params.client?.id
@@ -1222,6 +1240,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           !isTerminalQueryReply(params.text) ||
           params.enter === true ||
           params.interrupt === true ||
+          params.agentPrompt === true ||
           params.requireAgentStatus !== undefined ||
           params.client?.type !== 'mobile' ||
           !queryReplyClientId ||
@@ -1339,6 +1358,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       const mobileFloorClientId = resolveMobileFloorClientId(driver, params.client)
       const mobileFloorClaim: MobileInputFloorClaimHolder = { current: null }
       const beforeWrite = assertSendPreconditions
+      const useSettledAgentPrompt =
+        params.agentPrompt === true &&
+        hasText &&
+        params.enter === true &&
+        params.interrupt !== true &&
+        params.client?.type === 'desktop' &&
+        (await runtime.isTerminalRunningSettledPromptAgent(params.terminal))
       const reserveWrite =
         params.inputKind !== 'query-reply' && leaf?.ptyId && mobileFloorClientId
           ? (ptyId: string): void => {
@@ -1351,21 +1377,26 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           : undefined
       let result
       try {
-        result = await runtime.sendTerminal(
-          params.terminal,
-          {
-            text: params.text,
-            enter: params.enter === true,
-            interrupt: params.interrupt === true
-          },
-          {
-            beforeWrite,
-            ...(reserveWrite ? { reserveWrite } : {}),
-            ...(params.inputKind !== 'query-reply' && mobileFloorClientId
-              ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }
-              : {})
-          }
-        )
+        result = useSettledAgentPrompt
+          ? await runtime.sendTerminalAgentPrompt(params.terminal, params.text!, {
+              beforeWrite,
+              signal
+            })
+          : await runtime.sendTerminal(
+              params.terminal,
+              {
+                text: params.text,
+                enter: params.enter === true,
+                interrupt: params.interrupt === true
+              },
+              {
+                beforeWrite,
+                ...(reserveWrite ? { reserveWrite } : {}),
+                ...(params.inputKind !== 'query-reply' && mobileFloorClientId
+                  ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }
+                  : {})
+              }
+            )
       } catch (error) {
         mobileFloorClaim.current?.rollback()
         const refusedReason = getTerminalSendGuardRefusedReason(error)
@@ -1840,6 +1871,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               reason: 'ack-pending-overflow',
               seq: serialized.seq,
               source: serialized.source,
+              kittyKeyboardFlags: serialized.kittyKeyboardFlags,
               truncatedByByteBudget: serialized.truncatedByByteBudget,
               data: serialized.data
             }
@@ -2327,6 +2359,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             seq: serialized?.seq,
             cwd: serialized?.cwd,
             source: serialized?.source,
+            kittyKeyboardFlags: serialized?.kittyKeyboardFlags,
             oscLinks: serialized?.oscLinks,
             pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
             truncated: false,
@@ -2669,6 +2702,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
               truncated: initialOutputOverflowed,
               truncatedByByteBudget: serialized?.truncatedByByteBudget,
               source: serialized?.source,
+              kittyKeyboardFlags: serialized?.kittyKeyboardFlags,
               oscLinks: serialized?.oscLinks,
               pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
               data:
@@ -2930,7 +2964,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         })
         const subscriptionId = `${params.terminal}:${clientId}`
         // Why: chat needs the input-floor ack without registering a view subscriber or transporting duplicate PTY output.
-        runtime.registerSubscriptionCleanup(
+        const registration = runtime.registerOwnedSubscriptionCleanup(
           subscriptionId,
           () => {
             closed = true
@@ -2942,23 +2976,28 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         )
         void runtime
           .waitForTerminal(params.terminal, { condition: 'exit', signal })
-          .then(() => runtime.cleanupSubscription(subscriptionId))
-          .catch(() => runtime.cleanupSubscription(subscriptionId))
+          .then(() => registration.releaseIfCurrent())
+          .catch(() => registration.releaseIfCurrent())
         try {
           // Why: a lease-only subscriber has no terminal view, so its cached viewport must never phone-fit the PTY.
           await runtime.handleMobileSubscribe(ptyId, clientId, undefined)
           if (closed || signal?.aborted) {
             // Why: a disconnect can win the awaited subscribe and resurrect mobile presence after cleanup already released it.
+            // Unguarded on purpose: this must still fire when our own cleanup already ran.
+            // Safe only because lease-only passes no viewport and both !viewport paths in
+            // handleMobileSubscribeInternal return with no await, so no rebind can land
+            // first. Adding an await there — or passing a viewport here — makes a
+            // superseded handler delete the replacement's (ptyId, clientId) presence.
             runtime.handleMobileUnsubscribe(ptyId, clientId)
             if (!closed) {
-              runtime.cleanupSubscription(subscriptionId)
+              registration.releaseIfCurrent()
             }
             return
           }
           emit({ type: 'subscribed', streamId: null, lines: [], truncated: false })
           await streamClosed
         } catch (error) {
-          runtime.cleanupSubscription(subscriptionId)
+          registration.releaseIfCurrent()
           throw error
         }
         return
@@ -2978,7 +3017,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           resolveStream = resolve
         })
         // Why: register before viewport/snapshot awaits so a socket close can't orphan the stream listeners or its remote-desktop width floor.
-        runtime.registerSubscriptionCleanup(
+        const registration = runtime.registerOwnedSubscriptionCleanup(
           subscriptionId,
           () => {
             closed = true
@@ -3009,13 +3048,13 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             )
           }
           if (closed || signal?.aborted) {
-            runtime.cleanupSubscription(subscriptionId)
+            registration.releaseIfCurrent()
             return
           }
           const read = await runtime.readTerminal(params.terminal)
           const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, false)
           if (closed || signal?.aborted) {
-            runtime.cleanupSubscription(subscriptionId)
+            registration.releaseIfCurrent()
             return
           }
           const size = runtime.getTerminalSize(ptyId)
@@ -3064,11 +3103,11 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           // Why: bind the exit-waiter to the connection signal so socket close/error removes it instead of leaking until real exit.
           void runtime
             .waitForTerminal(params.terminal, { condition: 'exit', signal })
-            .then(() => runtime.cleanupSubscription(subscriptionId))
-            .catch(() => runtime.cleanupSubscription(subscriptionId))
+            .then(() => registration.releaseIfCurrent())
+            .catch(() => registration.releaseIfCurrent())
           await streamClosed
         } catch (error) {
-          runtime.cleanupSubscription(subscriptionId)
+          registration.releaseIfCurrent()
           throw error
         }
         return
@@ -3104,7 +3143,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
       })
       // Why: register cleanup before any await so a mid-subscribe disconnect still removes mobile presence; client-scoped ids also allow parallel desktop subscribers.
       const subscriptionId = clientId ? `${params.terminal}:${clientId}` : params.terminal
-      runtime.registerSubscriptionCleanup(
+      const registration = runtime.registerOwnedSubscriptionCleanup(
         subscriptionId,
         () => {
           outputBatcher?.flush()
@@ -3126,10 +3165,12 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
         connectionId
       )
       // Why: bind the exit-waiter to the connection signal so socket close/error removes it instead of leaking until real exit.
+      // Why releaseIfCurrent: the signal aborts per socket, so after a reconnect rebinds
+      // this id a keyed teardown here would kill the replacement stream (STA-4510).
       void runtime
         .waitForTerminal(params.terminal, { condition: 'exit', signal })
-        .then(() => runtime.cleanupSubscription(subscriptionId))
-        .catch(() => runtime.cleanupSubscription(subscriptionId))
+        .then(() => registration.releaseIfCurrent())
+        .catch(() => registration.releaseIfCurrent())
       const sendFrame = (
         opcode: TerminalStreamOpcode,
         payload: Uint8Array<ArrayBufferLike> = new Uint8Array(),
@@ -3687,7 +3728,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
             })
           : () => {}
       } catch (error) {
-        runtime.cleanupSubscription(subscriptionId)
+        registration.releaseIfCurrent()
         throw error
       }
 
@@ -3697,13 +3738,25 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'terminal.unsubscribe',
     params: TerminalUnsubscribe,
-    handler: async (params, { runtime }) => {
+    handler: async (params, { runtime, connectionId }) => {
+      // Why: only the connection that owns the subscription may retire it — a stale
+      // unsubscribe from the pre-reconnect socket names an id the replacement now owns.
+      let unsubscribed = runtime.cleanupSubscriptionIfOwnedByConnection(
+        params.subscriptionId,
+        connectionId
+      )
       // Why: older builds send a bare-handle subscriptionId, so also try the reconstructed `${terminal}:${clientId}` composite key.
-      runtime.cleanupSubscription(params.subscriptionId)
+      // Why AND over the calls that ran: a clientless stream registers under the bare id
+      // and a client-scoped one under the composite, so either call can be the real
+      // teardown. Reporting false needs one genuine refusal, not merely a missing id.
       if (params.client && !params.subscriptionId.includes(':')) {
-        runtime.cleanupSubscription(`${params.subscriptionId}:${params.client.id}`)
+        unsubscribed =
+          runtime.cleanupSubscriptionIfOwnedByConnection(
+            `${params.subscriptionId}:${params.client.id}`,
+            connectionId
+          ) && unsubscribed
       }
-      return { unsubscribed: true }
+      return { unsubscribed }
     }
   }),
   defineMethod({

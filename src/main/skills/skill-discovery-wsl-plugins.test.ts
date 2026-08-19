@@ -51,7 +51,7 @@ describe('WSL Claude plugin skill discovery', () => {
     )
     const scanOutput = [
       record('R', String(baseRootCount), '1'),
-      record('S', String(baseRootCount), skillPath, skillPath, '1700000000', '2', markdown)
+      record('S', String(baseRootCount), skillPath, skillPath, '1700000000', markdown)
     ].join('')
     execFileMock.mockImplementationOnce((..._args: unknown[]) => {
       queueMicrotask(() => completeExecFileCall(0, metadataOutput))

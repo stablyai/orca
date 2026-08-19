@@ -1,10 +1,7 @@
 import React from 'react'
 import { cn } from '@/lib/utils'
-import {
-  AUTOMATIONS_TABLE_CONTAINER_CLASS,
-  AUTOMATIONS_TABLE_GRID_CLASS,
-  AUTOMATIONS_TABLE_HEADER_CLASS
-} from './automations-table-layout'
+import { AUTOMATIONS_TABLE_GRID_CLASS } from './automations-table-layout'
+import { LIST_TABLE_CONTAINER_CLASS, LIST_TABLE_HEADER_CLASS } from '@/lib/list-table-layout'
 import { translate } from '@/i18n/i18n'
 
 function SkeletonBar({ className }: { className?: string }): React.JSX.Element {
@@ -16,12 +13,14 @@ function TableRowSkeleton({
   scheduleWidthClass,
   projectWidthClass,
   nextWidthClass,
+  lastRunWidthClass,
   statusWidthClass
 }: {
   nameWidthClass: string
   scheduleWidthClass: string
   projectWidthClass: string
   nextWidthClass: string
+  lastRunWidthClass: string
   statusWidthClass: string
 }): React.JSX.Element {
   return (
@@ -30,6 +29,7 @@ function TableRowSkeleton({
       <SkeletonBar className={cn('h-3.5', scheduleWidthClass)} />
       <SkeletonBar className={cn('h-3.5', projectWidthClass)} />
       <SkeletonBar className={cn('h-3.5', nextWidthClass)} />
+      <SkeletonBar className={cn('h-3.5', lastRunWidthClass)} />
       <SkeletonBar className={cn('h-3.5', statusWidthClass)} />
       <SkeletonBar className="mx-auto size-4 rounded" />
       <SkeletonBar className="size-6 rounded-md" />
@@ -44,6 +44,7 @@ const TABLE_ROW_SKELETONS = [
     scheduleWidthClass: 'w-36',
     projectWidthClass: 'w-28',
     nextWidthClass: 'w-24',
+    lastRunWidthClass: 'w-20',
     statusWidthClass: 'w-16'
   },
   {
@@ -52,6 +53,7 @@ const TABLE_ROW_SKELETONS = [
     scheduleWidthClass: 'w-28',
     projectWidthClass: 'w-32',
     nextWidthClass: 'w-20',
+    lastRunWidthClass: 'w-24',
     statusWidthClass: 'w-14'
   },
   {
@@ -60,6 +62,7 @@ const TABLE_ROW_SKELETONS = [
     scheduleWidthClass: 'w-40',
     projectWidthClass: 'w-24',
     nextWidthClass: 'w-28',
+    lastRunWidthClass: 'w-16',
     statusWidthClass: 'w-16'
   },
   {
@@ -68,6 +71,7 @@ const TABLE_ROW_SKELETONS = [
     scheduleWidthClass: 'w-32',
     projectWidthClass: 'w-36',
     nextWidthClass: 'w-24',
+    lastRunWidthClass: 'w-20',
     statusWidthClass: 'w-14'
   },
   {
@@ -76,6 +80,7 @@ const TABLE_ROW_SKELETONS = [
     scheduleWidthClass: 'w-24',
     projectWidthClass: 'w-28',
     nextWidthClass: 'w-20',
+    lastRunWidthClass: 'w-24',
     statusWidthClass: 'w-16'
   },
   {
@@ -84,6 +89,7 @@ const TABLE_ROW_SKELETONS = [
     scheduleWidthClass: 'w-36',
     projectWidthClass: 'w-20',
     nextWidthClass: 'w-24',
+    lastRunWidthClass: 'w-16',
     statusWidthClass: 'w-14'
   }
 ] as const
@@ -100,19 +106,21 @@ export function AutomationsPageSkeleton(): React.JSX.Element {
     >
       <div className="flex shrink-0 items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
-          <SkeletonBar className="h-8 w-full max-w-xs rounded-md" />
+          <SkeletonBar className="h-8 w-56 shrink-0 rounded-md" />
+          <SkeletonBar className="h-8 w-20 shrink-0 rounded-md" />
           <SkeletonBar className="size-8 shrink-0 rounded-md" />
         </div>
         <SkeletonBar className="h-8 w-32 shrink-0 rounded-md" />
       </div>
       <div
-        className={cn('min-h-0 flex-1 overflow-hidden', AUTOMATIONS_TABLE_CONTAINER_CLASS)}
+        className={cn('min-h-0 flex-1 overflow-hidden', LIST_TABLE_CONTAINER_CLASS)}
         data-contextual-fix-target="automations-list"
       >
-        <div className={cn(AUTOMATIONS_TABLE_GRID_CLASS, AUTOMATIONS_TABLE_HEADER_CLASS)}>
+        <div className={cn(AUTOMATIONS_TABLE_GRID_CLASS, LIST_TABLE_HEADER_CLASS)}>
           <SkeletonBar className="h-2.5 w-12" />
           <SkeletonBar className="h-2.5 w-14" />
           <SkeletonBar className="h-2.5 w-14" />
+          <SkeletonBar className="h-2.5 w-16" />
           <SkeletonBar className="h-2.5 w-16" />
           <SkeletonBar className="h-2.5 w-12" />
           <SkeletonBar className="mx-auto h-2.5 w-10" />

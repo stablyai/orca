@@ -1,7 +1,8 @@
 // Builds one worktree's tabs, browser pages and simulator tabs into the shapes
 // the three Cmd+J engines search.
 
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { buildSearchableBrowserPages } from '@/lib/browser-palette-page-entries'
 import type { SearchableBrowserPage } from '@/lib/browser-palette-search'
 import {
@@ -51,7 +52,11 @@ export type OpenTabSearchEntryState = Pick<
 
 export type OpenTabSearchAgentState = Pick<
   AppState,
-  'agentStatusByPaneKey' | 'retainedAgentsByPaneKey' | 'sleepingAgentSessionsByPaneKey'
+  | 'agentStatusByPaneKey'
+  | 'paneForegroundAgentByPaneKey'
+  | 'retainedAgentsByPaneKey'
+  | 'sleepingAgentSessionsByPaneKey'
+  | 'terminalLayoutsByTabId'
 >
 
 // No group id: every tab of the worktree is offered, including the one the
@@ -106,8 +111,10 @@ export function selectOpenTabSearchEntryState(
 export function selectOpenTabSearchAgentState(state: AppState): OpenTabSearchAgentState {
   return {
     agentStatusByPaneKey: state.agentStatusByPaneKey,
+    paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey,
     retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
-    sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey
+    sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
+    terminalLayoutsByTabId: state.terminalLayoutsByTabId
   }
 }
 
@@ -136,6 +143,8 @@ export function buildOpenTabSearchEntries(
       agentStatusByPaneKey: agentState.agentStatusByPaneKey,
       retainedAgentsByPaneKey: agentState.retainedAgentsByPaneKey,
       sleepingAgentSessionsByPaneKey: agentState.sleepingAgentSessionsByPaneKey,
+      terminalLayoutsByTabId: agentState.terminalLayoutsByTabId,
+      paneForegroundAgentByPaneKey: agentState.paneForegroundAgentByPaneKey,
       activeGroupIdByWorktree: state.activeGroupIdByWorktree,
       groupsByWorktree: state.groupsByWorktree,
       activeWorktreeId: state.activeWorktreeId,

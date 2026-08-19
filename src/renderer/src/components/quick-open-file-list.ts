@@ -1,10 +1,16 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: quick-open file lists are fetched over local or SSH runtime IPC, so loading/error/results track the request lifecycle. */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { cancelRuntimeFileList, listRuntimeFiles } from '@/runtime/runtime-file-client'
+import { isQuickOpenRemoteQueryTooLarge } from '@/components/quick-open-search'
+import {
+  cancelRuntimeFileList,
+  listRuntimeFiles,
+  searchRuntimeFilePaths
+} from '@/runtime/runtime-file-client'
+import { createRuntimeRpcAbortError } from '@/runtime/abortable-runtime-environment-call'
 import { useAppStore } from '@/store'
 import { useWorktreesForRepo } from '@/store/selectors'
 import type { FileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer-types'
@@ -18,12 +24,35 @@ export type RuntimeFileListState = {
   files: string[]
   loading: boolean
   loadError: string | null
+  truncated?: boolean
   operationOwner?: FileExplorerOperationOwner
 }
 
 export function cleanRuntimeFileListError(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error)
   return raw.replace(/^Error invoking remote method '[^']+':\s*Error:\s*/, '')
+}
+
+function debounceRuntimeFilePathSearch(
+  delayMs: number,
+  signal: AbortSignal,
+  search: () => Promise<{ files: string[]; truncated: boolean }>
+): Promise<{ files: string[]; truncated: boolean }> {
+  return new Promise((resolve, reject) => {
+    const onAbort = (): void => {
+      signal.removeEventListener('abort', onAbort)
+      window.clearTimeout(timer)
+      reject(createRuntimeRpcAbortError())
+    }
+    const timer = window.setTimeout(() => {
+      signal.removeEventListener('abort', onAbort)
+      void search().then(resolve, reject)
+    }, delayMs)
+    signal.addEventListener('abort', onAbort, { once: true })
+    if (signal.aborted) {
+      onAbort()
+    }
+  })
 }
 
 export function isNestedWorktreePath(parentPath: string, childPath: string): boolean {
@@ -98,10 +127,12 @@ export function getNestedWorktreeExcludeRequest(
 
 export function useRuntimeFileListForWorktree({
   enabled,
-  worktreeId
+  worktreeId,
+  query
 }: {
   enabled: boolean
   worktreeId: string | null
+  query?: string
 }): RuntimeFileListState {
   const worktree = useAppStore((state) =>
     // Why: folder workspaces live behind getKnownWorktreeById, not worktreesByRepo.
@@ -112,6 +143,7 @@ export function useRuntimeFileListForWorktree({
   const [files, setFiles] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [truncated, setTruncated] = useState(false)
   const [listedOperationOwner, setListedOperationOwner] = useState<FileExplorerOperationOwner>({
     kind: 'unresolved'
   })
@@ -152,15 +184,27 @@ export function useRuntimeFileListForWorktree({
     activeTargetStatus === 'connecting' ||
     activeTargetStatus === 'deploying-relay' ||
     activeTargetStatus === 'reconnecting'
+  const usesRuntimePathSearch =
+    (runtimeEnvironmentId !== null || connectionId !== undefined) && query !== undefined
+  const remoteQuery = usesRuntimePathSearch ? query.trim() : ''
+  const remoteQueryTooLarge = usesRuntimePathSearch && isQuickOpenRemoteQueryTooLarge(remoteQuery)
   const requestKey = useMemo(
     () =>
-      `${worktreePath ?? ''}\n${operationOwnerKey}\n${excludeRequest.key}\n${activeTargetStatus ?? ''}`,
-    [activeTargetStatus, excludeRequest.key, operationOwnerKey, worktreePath]
+      `${worktreePath ?? ''}\n${operationOwnerKey}\n${excludeRequest.key}\n${activeTargetStatus ?? ''}${usesRuntimePathSearch ? `\n${remoteQuery}` : ''}`,
+    [
+      activeTargetStatus,
+      excludeRequest.key,
+      operationOwnerKey,
+      remoteQuery,
+      usesRuntimePathSearch,
+      worktreePath
+    ]
   )
 
   useEffect(() => {
     if (!enabled) {
       setLoading(false)
+      setTruncated(false)
       setListedOperationOwner({ kind: 'unresolved' })
       return
     }
@@ -170,6 +214,7 @@ export function useRuntimeFileListForWorktree({
       setListedOperationOwner({ kind: 'unresolved' })
       setLoadError(operationRouteAvailable ? null : getFileExplorerOwnerUnresolvedMessage())
       setLoading(false)
+      setTruncated(false)
       return
     }
 
@@ -180,10 +225,20 @@ export function useRuntimeFileListForWorktree({
     }
     lastRequestKeyRef.current = requestKey
     setLoadError(null)
+    setTruncated(false)
+
+    if (usesRuntimePathSearch && (remoteQuery.length === 0 || remoteQueryTooLarge)) {
+      setFiles([])
+      setLoading(false)
+      setListedOperationOwner(operationOwnerRef.current)
+      return
+    }
+
     setLoading(true)
 
     const excludePaths = excludeRequest.paths.length > 0 ? excludeRequest.paths : undefined
     const requestToken = createBrowserUuid()
+    const requestAbortController = new AbortController()
     const requestOperationOwner = operationOwnerRef.current
     const requestContext = {
       settings: { activeRuntimeEnvironmentId: runtimeEnvironmentId },
@@ -192,20 +247,35 @@ export function useRuntimeFileListForWorktree({
       connectionId
     }
 
-    void listRuntimeFiles(requestContext, {
-      rootPath: worktreePath,
-      excludePaths,
-      requestToken
-    })
+    const request = usesRuntimePathSearch
+      ? debounceRuntimeFilePathSearch(120, requestAbortController.signal, () =>
+          searchRuntimeFilePaths(requestContext, {
+            query: remoteQuery,
+            limit: 32,
+            excludePaths,
+            ...(connectionId ? { requestToken } : {}),
+            signal: requestAbortController.signal
+          })
+        )
+      : listRuntimeFiles(requestContext, {
+          rootPath: worktreePath,
+          excludePaths,
+          requestToken,
+          signal: requestAbortController.signal
+        }).then((files) => ({ files, truncated: false }))
+
+    void request
       .then((result) => {
         if (!cancelled) {
-          setFiles(result)
+          setFiles(result.files)
+          setTruncated(result.truncated)
           setListedOperationOwner(requestOperationOwner)
         }
       })
       .catch((error) => {
         if (!cancelled) {
           setFiles([])
+          setTruncated(false)
           setLoadError(cleanRuntimeFileListError(error))
         }
       })
@@ -217,6 +287,7 @@ export function useRuntimeFileListForWorktree({
 
     return () => {
       cancelled = true
+      requestAbortController.abort()
       // Why #7721: switching workspaces (or closing the palette) must abort
       // the previous full-tree scan host- and relay-side. Over SSH, abandoned
       // scans otherwise stack up and starve fs.readDir/fs.stat past their
@@ -233,13 +304,17 @@ export function useRuntimeFileListForWorktree({
     runtimeEnvironmentId,
     target.canList,
     worktreeId,
-    worktreePath
+    worktreePath,
+    remoteQuery,
+    remoteQueryTooLarge,
+    usesRuntimePathSearch
   ])
 
   return {
     files,
     loading: loading || connectionPending,
     loadError,
+    truncated,
     operationOwner: listedOperationOwner
   }
 }

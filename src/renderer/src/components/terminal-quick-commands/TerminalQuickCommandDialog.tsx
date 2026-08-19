@@ -1,10 +1,10 @@
 import { useRef, useState } from 'react'
 import type {
-  Repo,
   TerminalQuickCommand,
-  TerminalQuickCommandScope,
-  TuiAgent
-} from '../../../../shared/types'
+  TerminalQuickCommandScope
+} from '../../../../shared/terminal-quick-command-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   getTerminalQuickCommandAction,
   getTerminalQuickCommandScope,
@@ -168,12 +168,13 @@ export function TerminalQuickCommandDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
+      {/* Why: fixed large width so Terminal ↔ Agent content swaps never reflow the shell. */}
       <DialogContent
-        className="max-h-[min(88vh,54rem)] grid-rows-[auto_minmax(0,1fr)_auto] sm:max-w-xl"
+        className="flex max-h-[min(90vh,52rem)] w-full max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl"
         showCloseButton={false}
       >
-        <DialogHeader>
-          <DialogTitle>
+        <DialogHeader className="px-6 pt-6 pb-0">
+          <DialogTitle className="text-sm">
             {mode === 'edit'
               ? translate(
                   'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.f9b184fc16',
@@ -184,19 +185,16 @@ export function TerminalQuickCommandDialog({
                   'Add Quick Command'
                 )}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-xs">
             {translate(
               'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.ed04233b3e',
-              'Save terminal commands or agent prompts for quick access.'
+              'Saved items appear in the tab bar menu for one-click run.'
             )}
           </DialogDescription>
         </DialogHeader>
 
-        {/* Why -mx-3/px-3: overflow clips at the padding box, so the padding has
-            to cover the widest negative margin inside (Advanced's -ml-2) plus a
-            focus ring. The matching negative margin keeps children aligned. */}
         <div
-          className="-mx-3 min-h-0 space-y-4 overflow-y-auto px-3 py-1 scrollbar-sleek"
+          className="scrollbar-sleek flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-5"
           onKeyDown={(event) => {
             if (isScreenSubmitShortcut(event) && canSave) {
               event.preventDefault()
@@ -204,19 +202,20 @@ export function TerminalQuickCommandDialog({
             }
           }}
         >
-          <TerminalQuickCommandLabelField label={draft.label} setDraft={setDraft} />
-
-          <div className="space-y-2">
-            <Label>
-              {translate(
-                'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.ec8f081919',
-                'Action'
-              )}
-            </Label>
-            <TerminalQuickCommandActionToggle
-              selectedAction={selectedAction}
-              onActionChange={setAction}
-            />
+          <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <TerminalQuickCommandLabelField label={draft.label} setDraft={setDraft} />
+            <div className="space-y-2">
+              <Label>
+                {translate(
+                  'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.ec8f081919',
+                  'Action'
+                )}
+              </Label>
+              <TerminalQuickCommandActionToggle
+                selectedAction={selectedAction}
+                onActionChange={setAction}
+              />
+            </div>
           </div>
 
           <TerminalQuickCommandContentSection
@@ -225,19 +224,19 @@ export function TerminalQuickCommandDialog({
             selectedAgent={selectedAgent}
             draftMemoryRef={draftMemoryRef}
             setDraft={setDraft}
+            toggleAppendEnter={toggleAppendEnter}
           />
 
           <TerminalQuickCommandAdvancedSection
-            draft={draft}
             repos={repos}
             advancedOpen={advancedOpen}
             selectedScope={selectedScope}
+            selectedRepo={selectedRepo}
             selectedRepoId={selectedRepoId}
             selectedRepoMissing={selectedRepoMissing}
             lastRepoScopeIdRef={lastRepoScopeIdRef}
             setAdvancedOpen={setAdvancedOpen}
             setDraft={setDraft}
-            toggleAppendEnter={toggleAppendEnter}
           />
         </div>
 

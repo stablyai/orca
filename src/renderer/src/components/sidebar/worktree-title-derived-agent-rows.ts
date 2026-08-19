@@ -14,13 +14,18 @@ import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   TerminalTab
-} from '../../../../shared/types'
+} from '../../../../shared/terminal-tab-types'
 import {
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
 } from '../../../../shared/agent-title-owner'
 import { resolvePaneAgentOwner } from '../../../../shared/pane-agent-owner'
 import { isClaudeIdentityFrameTitle } from '../../../../shared/terminal-title-agent-type'
+
+/** Fixed, not per-process: title rows are a pure projection of the current title, so they are
+ *  comparable across restarts in a way a sequenced authority's rows are not. Ordering against
+ *  any other authority's rows is undefined — see agent-status-observation.ts. */
+export const TITLE_DERIVED_AGENT_ROW_AUTHORITY_ID = 'renderer-title-projection'
 
 const EMPTY_RUNTIME_TITLES: Record<string, Record<number, string>> = {}
 const EMPTY_LIVE_PTY_IDS: Record<string, string[]> = {}
@@ -183,7 +188,22 @@ function buildTitleDerivedAgentRow(args: {
     agentType,
     terminalTitle: title,
     lastAssistantMessage: secondary,
-    ...(orchestration ? { orchestration } : {})
+    ...(orchestration ? { orchestration } : {}),
+    // Why not the renderer sequencer: this row is RE-DERIVED from the pane's title on every
+    // render, not observed once, so a counter would churn a new revision per frame and break
+    // memoization. Deriving revision from `now` keeps the stamp deterministic in the same clock
+    // the row already publishes as updatedAt, and monotonic for the pane.
+    // The origin tag is the point: `entryState` above collapses a title-derived IDLE row to
+    // 'working' while the row itself reports idle. That contradiction is out of scope here —
+    // this tag is what makes it findable instead of indistinguishable from a real hook row.
+    observation: {
+      origin: 'title',
+      authorityId: TITLE_DERIVED_AGENT_ROW_AUTHORITY_ID,
+      incarnation: 0,
+      revision: args.now,
+      observedAt: args.now,
+      kind: 'snapshot'
+    }
   }
   return {
     paneKey,

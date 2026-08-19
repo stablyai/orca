@@ -34,16 +34,14 @@ import {
 } from '@/lib/text-control-paste'
 import { getScreenSubmitModifierLabel } from '@/lib/screen-submit-shortcut'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
-import type {
-  GitHubWorkItem,
-  GitLabWorkItem,
-  JiraIssue,
-  LinearIssue,
-  SetupAgentStartupPolicy,
-  OrcaHooks,
-  SparsePreset,
-  TuiAgent
-} from '../../../shared/types'
+import { resolveProjectCloneUrlPrefill } from '@/lib/project-clone-url-prefill'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { GitLabWorkItem } from '../../../shared/gitlab-types'
+import type { JiraIssue } from '../../../shared/jira-types'
+import type { LinearIssue } from '../../../shared/linear/issue-types'
+import type { OrcaHooks, SetupAgentStartupPolicy } from '../../../shared/orca-yaml-hook-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import type { SparsePreset } from '../../../shared/worktree/create-types'
 import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPresetSelect'
 import SmartWorkspaceNameField, {
   type SmartWorkspaceNameSelection
@@ -51,6 +49,7 @@ import SmartWorkspaceNameField, {
 import type { SmartNameMode } from '@/components/new-workspace/smart-workspace-source-results'
 import ProjectCombobox from '@/components/new-workspace/ProjectCombobox'
 import RunTargetCombobox from '@/components/new-workspace/RunTargetCombobox'
+import { SetProjectLocationDialog } from '@/components/new-workspace/SetProjectLocationDialog'
 import {
   AddRemoteHostDialog,
   type AddRemoteHostMode
@@ -165,6 +164,8 @@ type NewWorkspaceComposerCardProps = {
   sparseControlsEnabled?: boolean
   /** When set, "Add project" opens a host-provided flow instead of swapping the store's active modal. */
   onAddProjectOverride?: () => void
+  /** Fires as the nested Set-project-location dialog opens and closes, so the host can stand down its Escape/submit handling. */
+  onNestedDialogOpenChange?: (open: boolean) => void
 }
 
 const SSH_STATUS_LABELS: Partial<Record<SshConnectionStatus, string>> = {
@@ -374,7 +375,8 @@ export default function NewWorkspaceComposerCard({
   sparseSelectedPresetId,
   onSparseSelectPreset,
   sparseControlsEnabled = true,
-  onAddProjectOverride
+  onAddProjectOverride,
+  onNestedDialogOpenChange
 }: NewWorkspaceComposerCardProps): React.JSX.Element {
   // Why: subscribe (form uses translate() directly) so an open create dialog repaints when the UI language changes.
   useTranslation()
@@ -502,6 +504,32 @@ export default function NewWorkspaceComposerCard({
   const handleAddRemoteServer = React.useCallback((): void => {
     setAddRemoteHostMode('server')
   }, [])
+  const [setLocationOption, setSetLocationOption] =
+    React.useState<NeedsSetupProjectHostOption | null>(null)
+  const handleSetLocation = React.useCallback(
+    (option: NeedsSetupProjectHostOption): void => {
+      setSetLocationOption(option)
+      onNestedDialogOpenChange?.(true)
+    },
+    [onNestedDialogOpenChange]
+  )
+  const handleSetLocationClose = React.useCallback((): void => {
+    setSetLocationOption(null)
+    onNestedDialogOpenChange?.(false)
+  }, [onNestedDialogOpenChange])
+  const handleSetLocationReady = React.useCallback(
+    (setupId: string): void => {
+      handleSetLocationClose()
+      onProjectHostSetupChange?.(setupId)
+    },
+    [handleSetLocationClose, onProjectHostSetupChange]
+  )
+  const projects = useAppStore((state) => state.projects)
+  const repos = useAppStore((state) => state.repos)
+  const defaultCloneUrl = React.useMemo(
+    () => resolveProjectCloneUrlPrefill(projects, repos, selectedProjectId),
+    [projects, repos, selectedProjectId]
+  )
   const handleConnectRunTargetHost = React.useCallback(
     async (option: NeedsSetupProjectHostOption): Promise<void> => {
       const action = option.connectAction
@@ -707,6 +735,7 @@ export default function NewWorkspaceComposerCard({
                 onAddSshHost={handleAddSshHost}
                 onAddRemoteServer={handleAddRemoteServer}
                 onConnectHost={handleConnectRunTargetHost}
+                onSetLocation={handleSetLocation}
               />
               {ephemeralVmRecipeError ? (
                 <p className="whitespace-pre-line text-[11px] text-destructive">
@@ -1234,6 +1263,14 @@ export default function NewWorkspaceComposerCard({
           the in-progress workspace form is preserved; on success the new host flows back into
           the run-target picker via the store. */}
       <AddRemoteHostDialog mode={addRemoteHostMode} onOpenChange={setAddRemoteHostMode} />
+      <SetProjectLocationDialog
+        option={setLocationOption}
+        projectName={selectedProjectName}
+        projectKind={selectedRepoIsGit ? 'git' : 'folder'}
+        defaultCloneUrl={defaultCloneUrl}
+        onClose={handleSetLocationClose}
+        onReady={handleSetLocationReady}
+      />
     </div>
   )
 }

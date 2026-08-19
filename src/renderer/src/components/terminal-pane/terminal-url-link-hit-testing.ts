@@ -72,7 +72,7 @@ export function handleTerminalHttpLink(
 ): boolean {
   if (isTerminalHttpLinkActivation(event)) {
     const forceDestination = event?.shiftKey
-      ? deps.actionDestinations?.alternate
+      ? (deps.actionDestinations?.alternate ?? deps.actionDestinations?.primary)
       : deps.actionDestinations?.primary
     openTerminalHttpLink(url, {
       ...deps,
@@ -273,11 +273,11 @@ function rangeContainsBufferPosition(
 }
 
 export function openTerminalHttpLink(url: string, deps: UrlLinkHitTestDeps): void {
-  // Why: Orca browser tabs are local-only, so a link clicked in a runtime-hosted
-  // pane must be classified by its pane's host, not the global active runtime.
+  // Why: pane ownership beats the global active runtime for both local and remote routes.
   const sourceOwner = deps.sourceOwner ?? { kind: 'local' }
   if (deps.forceDestination) {
     openHttpLink(url, {
+      allowRuntimeInApp: true,
       worktreeId: deps.worktreeId,
       forceInApp: deps.forceDestination === 'orca',
       forceSystemBrowser: deps.forceDestination === 'system',
@@ -288,16 +288,20 @@ export function openTerminalHttpLink(url: string, deps: UrlLinkHitTestDeps): voi
   if (deps.modifierHeld) {
     // Why: the modifier states a destination outright, so it also skips the
     // one-time routing prompt; openHttpLink resolves which destination it means.
-    openHttpLink(url, { worktreeId: deps.worktreeId, modifierHeld: true, sourceOwner })
+    openHttpLink(url, {
+      allowRuntimeInApp: true,
+      worktreeId: deps.worktreeId,
+      modifierHeld: true,
+      sourceOwner
+    })
     return
   }
 
-  // Why: a runtime-hosted link can only reach the system browser, so prompting
-  // would persist an in-app preference this click cannot honor.
+  // Why: remote panes use the persisted routing preference and never prompt the viewing client.
   const preferenceDecision =
     sourceOwner.kind === 'local' ? deps.requestOpenLinksInAppPreference?.(url) : null
   if (preferenceDecision === null || preferenceDecision === undefined) {
-    openHttpLink(url, { worktreeId: deps.worktreeId, sourceOwner })
+    openHttpLink(url, { allowRuntimeInApp: true, worktreeId: deps.worktreeId, sourceOwner })
     return
   }
 
@@ -307,12 +311,18 @@ export function openTerminalHttpLink(url: string, deps: UrlLinkHitTestDeps): voi
   void Promise.resolve(preferenceDecision)
     .then((openInOrca) => {
       openHttpLink(url, {
+        allowRuntimeInApp: true,
         worktreeId: deps.worktreeId,
         forceSystemBrowser: !openInOrca,
         sourceOwner
       })
     })
     .catch(() => {
-      openHttpLink(url, { worktreeId: deps.worktreeId, forceSystemBrowser: true, sourceOwner })
+      openHttpLink(url, {
+        allowRuntimeInApp: true,
+        worktreeId: deps.worktreeId,
+        forceSystemBrowser: true,
+        sourceOwner
+      })
     })
 }

@@ -1,7 +1,8 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { GitHubWorkItemDetails, PRComment } from '../../../../src/shared/types'
+import type { PRComment } from '../../../../src/shared/github/comment-types'
+import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
 import { PRCommentsSection } from './PRCommentsSection'
 
 vi.mock('react-native', () => ({

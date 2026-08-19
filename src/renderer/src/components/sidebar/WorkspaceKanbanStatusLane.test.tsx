@@ -3,19 +3,26 @@
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { serializeWorkspaceLaneFullIds } from './workspace-kanban-filtered-drop-index'
 import WorkspaceKanbanStatusLane from './WorkspaceKanbanStatusLane'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 vi.mock('./WorkspaceKanbanLaneCardList', () => ({
-  default: ({ items }: { items: readonly Worktree[] }) => (
-    <>
+  default: ({
+    items,
+    activeWorktreeIdentity
+  }: {
+    items: readonly Worktree[]
+    activeWorktreeIdentity: string | null
+  }) => (
+    <div data-active-worktree-identity={activeWorktreeIdentity ?? ''}>
       {items.map((item) => (
         <div key={item.id} data-workspace-board-card-id={item.id} />
       ))}
-    </>
+    </div>
   )
 }))
 
@@ -40,6 +47,7 @@ function renderLane(props: {
   totalCount: number
   hasQuery: boolean
   fullWorktreeIds?: string[]
+  activeWorktreeIdentity?: string | null
 }): void {
   act(() => {
     root.render(
@@ -50,11 +58,10 @@ function renderLane(props: {
         hasQuery={props.hasQuery}
         fullWorktreeIds={props.fullWorktreeIds}
         repoMap={repoMap}
-        activeWorktreeId={null}
+        activeWorktreeIdentity={props.activeWorktreeIdentity ?? null}
         columnWidth={308}
         isResizingColumn={false}
         isDragTarget={false}
-        canCreateWorktree={true}
         renderCards={true}
         selectedWorktreeIds={new Set()}
         selectedWorktrees={[]}
@@ -148,5 +155,19 @@ describe('WorkspaceKanbanStatusLane', () => {
     })
 
     expect(lane().dataset.workspaceLaneFullIds).toBeUndefined()
+  })
+
+  it('passes the host-qualified active workspace through to the card list', () => {
+    renderLane({
+      items: [worktree('shared')],
+      totalCount: 1,
+      hasQuery: false,
+      activeWorktreeIdentity: 'ssh:builder|shared'
+    })
+
+    expect(
+      container.querySelector<HTMLElement>('[data-active-worktree-identity]')?.dataset
+        .activeWorktreeIdentity
+    ).toBe('ssh:builder|shared')
   })
 })

@@ -30,12 +30,11 @@ import {
 } from './external-automation-display'
 import { getExternalAutomationScheduleDisplay } from './external-automation-schedule-display'
 import { getExternalAutomationActionDisabledMessage } from './external-automation-source-availability'
-import {
-  AUTOMATIONS_TABLE_GRID_CLASS,
-  AUTOMATIONS_TABLE_ROW_CLASS,
-  AUTOMATIONS_TABLE_ROW_SELECTED_CLASS
-} from './automations-table-layout'
-import { isPortaledRowMenuClick, isRowActivationKey } from './automation-list-row-interaction'
+import { AUTOMATIONS_TABLE_GRID_CLASS } from './automations-table-layout'
+import { LIST_TABLE_ROW_CLASS, LIST_TABLE_ROW_SELECTED_CLASS } from '@/lib/list-table-layout'
+import { isPortaledRowMenuClick, isRowActivationKey } from '@/lib/list-row-interaction'
+import { getExternalAutomationLastRunSnapshot } from './automation-list-last-run'
+import { AutomationListLastRunCell } from './AutomationListLastRunCell'
 import { AutomationListStatusCell } from './AutomationListStatusCell'
 import { translate } from '@/i18n/i18n'
 
@@ -85,6 +84,7 @@ export function AutomationListExternalRows({
         const nextRunLabel = entry.job.enabled
           ? formatExternalDate(entry.job.nextRunAt, relativeNow)
           : translate('auto.components.automations.AutomationsPage.paused', 'Paused')
+        const lastRunSnapshot = getExternalAutomationLastRunSnapshot(entry.job)
 
         return (
           <ContextMenu key={entry.key}>
@@ -110,8 +110,8 @@ export function AutomationListExternalRows({
                 }}
                 className={cn(
                   AUTOMATIONS_TABLE_GRID_CLASS,
-                  AUTOMATIONS_TABLE_ROW_CLASS,
-                  isSelected && AUTOMATIONS_TABLE_ROW_SELECTED_CLASS
+                  LIST_TABLE_ROW_CLASS,
+                  isSelected && LIST_TABLE_ROW_SELECTED_CLASS
                 )}
               >
                 <span className="min-w-0 truncate font-medium">{entry.job.name}</span>
@@ -124,6 +124,7 @@ export function AutomationListExternalRows({
                 <span className="min-w-0 truncate text-muted-foreground" title={nextRunLabel}>
                   {nextRunLabel}
                 </span>
+                <AutomationListLastRunCell snapshot={lastRunSnapshot} now={relativeNow} />
                 <AutomationListStatusCell enabled={entry.job.enabled} />
                 <span className="truncate text-center text-xs text-muted-foreground">
                   {providerLabel}

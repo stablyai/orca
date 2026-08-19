@@ -4,19 +4,20 @@ reviewable as one surface. Splitting by feature area would risk drifting
 validation/gate conventions across handler files. */
 import { ipcMain } from 'electron'
 import { resolve } from 'node:path'
+import type { GitHubReactionContent } from '../../shared/github/comment-types'
 import type {
-  Repo,
-  GitHubCreateIssueFields,
-  GitHubIssueUpdate,
-  GitHubOwnerRepo,
-  GitHubPullRequestStateUpdate,
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEnqueueResult,
   GitHubPRRefreshReason,
-  GitHubReactionContent,
-  PRRefreshOutcome,
-  GitHubPRFile
-} from '../../shared/types'
+  PRRefreshOutcome
+} from '../../shared/github/pull-request-refresh-types'
+import type { GitHubOwnerRepo, GitHubPRFile } from '../../shared/github/pull-request-types'
+import type {
+  GitHubCreateIssueFields,
+  GitHubIssueUpdate,
+  GitHubPullRequestStateUpdate
+} from '../../shared/issue-mutation-types'
+import type { Repo } from '../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import type { TaskSourceContext } from '../../shared/task-source-context'
 import type { Store } from '../persistence'
@@ -107,7 +108,7 @@ import type {
   UpdateIssueTypeBySlugArgs,
   UpdateProjectItemFieldArgs,
   UpdatePullRequestBySlugArgs
-} from '../../shared/github-project-types'
+} from '../../shared/github/project-request-types'
 import { appStarSourceSchema } from '../../shared/gh-star-source'
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'

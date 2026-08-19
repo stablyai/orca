@@ -4,6 +4,7 @@ import type {
   WorkspaceCleanupRemoveResult
 } from '@/store/slices/workspace-cleanup'
 import { translate } from '@/i18n/i18n'
+import { getWorkspaceCleanupCandidateHostId } from '../../../../shared/workspace-cleanup-host-identity'
 
 export type WorkspaceCleanupRemovalSettlement =
   | { status: 'fulfilled'; result: WorkspaceCleanupRemoveResult }
@@ -15,7 +16,7 @@ export type WorkspaceCleanupRemovalWaitResult =
 
 export type WorkspaceCleanupLateSettlementCandidate = Pick<
   WorkspaceCleanupCandidate,
-  'worktreeId' | 'displayName'
+  'worktreeId' | 'displayName' | 'connectionId' | 'executionHostId'
 >
 
 export type WorkspaceCleanupLateSettlementReporter = (
@@ -51,6 +52,7 @@ export function getWorkspaceCleanupTimeoutFailure(
 ): WorkspaceCleanupFailure {
   return {
     worktreeId: candidate.worktreeId,
+    executionHostId: getWorkspaceCleanupCandidateHostId(candidate),
     displayName: candidate.displayName,
     message: translate(
       'auto.components.workspace.cleanup.backgroundRemoval.timedOut',
@@ -67,6 +69,8 @@ export function trackWorkspaceCleanupLateSettlement(
 ): WorkspaceCleanupLateSettlementTracker {
   const candidateIdentity: WorkspaceCleanupLateSettlementCandidate = {
     worktreeId: candidate.worktreeId,
+    connectionId: candidate.connectionId,
+    ...(candidate.executionHostId ? { executionHostId: candidate.executionHostId } : {}),
     displayName: candidate.displayName
   }
   const state: {
@@ -127,9 +131,11 @@ function toWorkspaceCleanupRemoveResult(
   }
   return {
     removedIds: [],
+    removedIdentities: [],
     failures: [
       {
         worktreeId: candidate.worktreeId,
+        executionHostId: getWorkspaceCleanupCandidateHostId(candidate),
         displayName: candidate.displayName,
         message:
           settlement.error instanceof Error ? settlement.error.message : String(settlement.error)

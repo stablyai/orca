@@ -4,12 +4,9 @@ import { randomUUID } from 'node:crypto'
 import { app, ipcMain } from 'electron'
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import type { Store } from '../persistence'
-import type {
-  CreateWorktreeResult,
-  ReleaseBuildListResult,
-  UpdateCheckOptions,
-  WorktreeStartupLaunch
-} from '../../shared/types'
+import type { ReleaseBuildListResult, UpdateCheckOptions } from '../../shared/update-status-types'
+import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
+import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import { RELEASE_CHANNELS, type ReleaseChannel } from '../../shared/release-channel'
 import {
   acknowledgePendingTccPromptNotice,
@@ -59,6 +56,7 @@ import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
 import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
 import { isNativeFileDropPayload, type NativeFileDropPayload } from '../../shared/native-file-drop'
 import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
+import { requestSessionTabCloseFromRenderer } from './session-tab-close-request-relay'
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
@@ -66,7 +64,10 @@ import {
   scheduleWorktreeBaseDirectoryWatcherSync,
   setWorktreeBaseDirectoryWatcherSyncContext
 } from '../ipc/worktree-base-directory-watcher'
+import { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
 import { logStartupMilestone } from '../startup/startup-diagnostics'
+import { createRuntimeRendererNotificationSender } from './runtime-renderer-notification-sender'
+import { registerRendererDocumentNavigation } from './renderer-document-navigation'
 
 const UPDATER_SETUP_FALLBACK_MS = 15_000
 
@@ -116,6 +117,9 @@ export function attachMainWindowServices(
   // Why: repo/settings mutations resync watchers through this attached main-window context.
   setWorktreeBaseDirectoryWatcherSyncContext(store, mainWindow)
   scheduleWorktreeBaseDirectoryWatcherSync(store, mainWindow)
+  // Why: folder projects get no watch target, so an external `git init` needs its own
+  // marker poll to upgrade them without a restart (#11477).
+  startFolderRepoGitUpgradeWatch(store, mainWindow)
   registerWorkspaceCleanupHandlers(store, { runtime, getLocalPtyProvider })
   registerPtyHandlers(
     mainWindow,
@@ -321,11 +325,13 @@ function registerRuntimeWindowLifecycle(
   const notifierToken = ++runtimeNotifierTokenCounter
   activeRuntimeNotifierToken = notifierToken
   runtime.attachWindow(mainWindow.id)
-  const send = (channel: string, ...args: unknown[]): void => {
-    if (!mainWindow.isDestroyed()) {
-      mainWindow.webContents.send(channel, ...args)
-    }
-  }
+  const mainWebContents = mainWindow.webContents
+  const rendererNotifications = createRuntimeRendererNotificationSender({
+    isWindowDestroyed: () => mainWindow.isDestroyed(),
+    webContents: mainWebContents,
+    onFailure: (reason) => runtime.markGraphReloadFailed(mainWindow.id, reason)
+  })
+  const send = rendererNotifications.send
   runtime.setNotifier({
     worktreesChanged: (repoId, renamed) => {
       // Why: clear scan caches before the renderer handles this event, so it can't read stale TTL entries after a mutation.
@@ -404,7 +410,7 @@ function registerRuntimeWindowLifecycle(
           })
         }
         ipcMain.on('terminal:tabCreateReply', handler)
-        send('ui:createTerminal', {
+        const sent = send('ui:createTerminal', {
           requestId,
           worktreeId,
           ptyId: opts.ptyId,
@@ -427,6 +433,11 @@ function registerRuntimeWindowLifecycle(
             : {}),
           ...(opts.focus !== undefined ? { focus: opts.focus } : {})
         })
+        if (!sent) {
+          clearTimeout(timer)
+          ipcMain.removeListener('terminal:tabCreateReply', handler)
+          reject(new Error('runtime_unavailable'))
+        }
       }),
     resolveLegacyWorkerTerminalRecovery: (paneKey, resolution, ptyId) =>
       send('agentStatus:legacyWorkerTerminalRecovery', {
@@ -447,7 +458,8 @@ function registerRuntimeWindowLifecycle(
     focusTerminal: (tabId, worktreeId, leafId) =>
       send('ui:focusTerminal', { tabId, worktreeId, leafId }),
     focusEditorTab: (tabId, worktreeId) => send('ui:focusEditorTab', { tabId, worktreeId }),
-    closeSessionTab: (tabId, worktreeId) => send('ui:closeSessionTab', { tabId, worktreeId }),
+    closeSessionTab: (tabId, worktreeId) =>
+      requestSessionTabCloseFromRenderer(mainWindow, tabId, worktreeId),
     moveSessionTab: (worktreeId: string, move: RuntimeMobileSessionTabMove) =>
       send('ui:moveSessionTab', { worktreeId, ...move }),
     openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId?) =>
@@ -480,7 +492,8 @@ function registerRuntimeWindowLifecycle(
         content
       }) as Promise<RuntimeMarkdownSaveTabResult>,
     closeTerminal: (tabId, paneRuntimeId) => send('ui:closeTerminal', { tabId, paneRuntimeId }),
-    closeTerminalTab: (tabId) => requestTerminalTabCloseFromRenderer(mainWindow, tabId),
+    closeTerminalTab: (tabId, options) =>
+      requestTerminalTabCloseFromRenderer(mainWindow, tabId, options),
     sleepWorktree: (worktreeId) => send('ui:sleepWorktree', { worktreeId }),
     resumeSleepingAgents: (worktreeId) => send('ui:resumeSleepingAgents', { worktreeId }),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) =>
@@ -492,11 +505,23 @@ function registerRuntimeWindowLifecycle(
     browserDriverChanged: (browserPageId, driver) =>
       send('runtime:browserDriverChanged', { browserPageId, driver })
   })
-  // Why: fail closed during renderer reload so CLI calls can't act on stale terminal mappings.
-  mainWindow.webContents.on('did-start-loading', () => {
-    runtime.markRendererReloading(mainWindow.id)
+  registerRendererDocumentNavigation(mainWebContents, () => {
+    rendererNotifications.onMainFrameReloadStarted()
+    const fence = runtime.markRendererReloading(mainWindow.id)
+    return () => {
+      if (fence && runtime.markRendererReloadCancelled(mainWindow.id, fence)) {
+        rendererNotifications.onMainFrameReloadCancelled()
+      }
+    }
+  })
+  mainWebContents.on('did-finish-load', () => {
+    rendererNotifications.onMainFrameLoadFinished()
+  })
+  mainWebContents.on('render-process-gone', () => {
+    rendererNotifications.onRendererProcessGone()
   })
   mainWindow.on('closed', () => {
+    rendererNotifications.close()
     runtime.markGraphUnavailable(mainWindow.id)
     if (activeRuntimeNotifierToken === notifierToken) {
       // Why: the notifier closes over the window; clear it in the no-window gap so the runtime can't retain destroyed graphs.

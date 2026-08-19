@@ -53,7 +53,11 @@ describe('probeGitRemoteIdentity', () => {
     await expect(probeGitRemoteIdentity('/repos/orca', 'builder')).resolves.toEqual({
       status: 'unavailable'
     })
-    expect(exec).toHaveBeenCalledWith(['remote', '-v'], '/repos/orca')
+    expect(exec).toHaveBeenCalledWith(
+      ['remote', '-v'],
+      '/repos/orca',
+      expect.objectContaining({ timeoutMs: expect.any(Number) })
+    )
     expect(gitExecFileAsync).not.toHaveBeenCalled()
   })
 
@@ -65,5 +69,57 @@ describe('probeGitRemoteIdentity', () => {
     await expect(probeGitRemoteIdentity('/repos/orca', 'builder')).resolves.toEqual({
       status: 'no-remote'
     })
+  })
+
+  it('bounds the local probe with a deadline and forwards the caller signal', async () => {
+    vi.mocked(gitExecFileAsync).mockResolvedValue({ stdout: gitlabRemote, stderr: '' })
+    const controller = new AbortController()
+
+    await probeGitRemoteIdentity('/repos/orca', null, { signal: controller.signal })
+
+    expect(gitExecFileAsync).toHaveBeenCalledWith(
+      ['remote', '-v'],
+      expect.objectContaining({
+        cwd: '/repos/orca',
+        timeout: expect.any(Number),
+        signal: controller.signal
+      })
+    )
+    const [, options] = vi.mocked(gitExecFileAsync).mock.calls[0]
+    expect(options.timeout).toBeGreaterThan(0)
+  })
+
+  it('bounds the SSH probe under the relay request timeout and forwards the caller signal', async () => {
+    const exec = vi.fn().mockResolvedValue({ stdout: gitlabRemote, stderr: '' })
+    vi.mocked(getSshGitProvider).mockReturnValue({ exec } as never)
+    const controller = new AbortController()
+
+    await probeGitRemoteIdentity('/repos/orca', 'builder', { signal: controller.signal })
+
+    expect(exec).toHaveBeenCalledWith(
+      ['remote', '-v'],
+      '/repos/orca',
+      expect.objectContaining({ timeoutMs: expect.any(Number), signal: controller.signal })
+    )
+    const relayRequestTimeoutMs = 30_000
+    expect(exec.mock.calls[0][2].timeoutMs).toBeLessThan(relayRequestTimeoutMs)
+  })
+
+  it('maps a timed-out local probe to unavailable, never no-remote', async () => {
+    vi.mocked(gitExecFileAsync).mockRejectedValue(new Error('git timed out.'))
+
+    await expect(probeGitRemoteIdentity('/repos/orca')).resolves.toEqual({ status: 'unavailable' })
+  })
+
+  it('maps an aborted probe to unavailable, never no-remote', async () => {
+    const abortError = new Error('The operation was aborted')
+    abortError.name = 'AbortError'
+    vi.mocked(gitExecFileAsync).mockRejectedValue(abortError)
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      probeGitRemoteIdentity('/repos/orca', null, { signal: controller.signal })
+    ).resolves.toEqual({ status: 'unavailable' })
   })
 })

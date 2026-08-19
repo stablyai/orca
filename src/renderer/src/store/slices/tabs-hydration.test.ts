@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import type { WorkspaceSessionState } from '../../../../shared/types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { buildHydratedTabState } from './tabs-hydration'
 
 vi.stubGlobal('crypto', { randomUUID: () => `uuid-${Math.random().toString(36).slice(2, 8)}` })
@@ -346,5 +346,47 @@ describe('buildHydratedTabState – legacy format', () => {
 
     const result = buildHydratedTabState(session, new Set(['w1', 'w2']))
     expect(Object.keys(result.unifiedTabsByWorktree)).toHaveLength(0)
+  })
+  it('collapses tab records that a corrupt session persisted under one id', () => {
+    // Why: editor owner migration re-stamped a tab id a sibling record already
+    // held. Two rows under one id repeat a React key and strand a ghost row.
+    const duplicateId = 'editor:wt%3A%3Alungfish:env-a:FINAL-REPORT.md'
+    const editorTab = (id: string, sortOrder: number) => ({
+      id,
+      entityId: 'editor:wt%3A%3Alungfish:env-b:FINAL-REPORT.md',
+      groupId: 'g1',
+      worktreeId: 'w1',
+      contentType: 'editor' as const,
+      label: 'FINAL-REPORT.md',
+      customLabel: null,
+      color: null,
+      sortOrder,
+      createdAt: 1
+    })
+    const session: WorkspaceSessionState = {
+      ...makeBaseSession(),
+      unifiedTabs: {
+        w1: [editorTab('t-unique', 0), editorTab(duplicateId, 1), editorTab(duplicateId, 2)]
+      },
+      tabGroups: {
+        w1: [
+          {
+            id: 'g1',
+            worktreeId: 'w1',
+            activeTabId: 't-unique',
+            tabOrder: ['t-unique', duplicateId, duplicateId]
+          }
+        ]
+      }
+    }
+
+    const result = buildHydratedTabState(session, new Set(['w1']))
+    const hydratedIds = result.unifiedTabsByWorktree.w1.map((tab) => tab.id)
+    expect(hydratedIds).toEqual(['t-unique', duplicateId])
+    // Why sortOrder: the two duplicate records differ only there, so an id-only
+    // assertion passes just as well for an implementation that keeps the LAST one.
+    expect(result.unifiedTabsByWorktree.w1.map((tab) => tab.sortOrder)).toEqual([0, 1])
+    expect(new Set(hydratedIds).size).toBe(hydratedIds.length)
+    expect(result.groupsByWorktree.w1[0].tabOrder).toEqual(['t-unique', duplicateId])
   })
 })

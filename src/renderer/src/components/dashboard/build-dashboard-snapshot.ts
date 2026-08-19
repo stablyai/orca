@@ -4,7 +4,6 @@ import {
   dashboardCardDisplayState,
   type DashboardCard,
   type DashboardCardDotState,
-  type DashboardCardSubagent,
   type DashboardSnapshot,
   type DashboardWorkspace
 } from '../../../../shared/dashboard-snapshot'
@@ -40,8 +39,8 @@ import {
   type DashboardCardContextState
 } from './dashboard-card-context'
 import {
-  dashboardCardMapWorkspaceMetadata,
-  collectActiveDashboardWorkspaces
+  collectActiveDashboardWorkspaces,
+  dashboardCardMapWorkspaceMetadata
 } from './dashboard-snapshot-workspaces'
 import {
   boundedLabel,
@@ -56,6 +55,7 @@ import {
 } from './dashboard-worktree-launch-options'
 import { buildDashboardSnapshotFilterOptions } from './dashboard-snapshot-filter-options'
 import { dashboardBucketForDotState } from './dashboard-card-bucket'
+import { groupSubagentsByParentPaneKey } from './dashboard-subagent-cards'
 
 /** The store slices the snapshot builder reads. Kept as a Pick so unit tests
  *  can pass a partial store without constructing the whole AppState. */
@@ -75,7 +75,11 @@ export type DashboardSnapshotState = Pick<
   | 'settings'
 > &
   DashboardCardContextState &
-  Partial<DashboardCardTerminalInputState & DashboardLaunchDetectionState>
+  Partial<
+    DashboardCardTerminalInputState &
+      DashboardLaunchDetectionState &
+      Pick<AppState, 'runtimeEnvironments' | 'sshTargetLabels'>
+  >
 
 /**
  * Derive the serializable dashboard snapshot from the live renderer store.
@@ -137,13 +141,14 @@ export function buildDashboardSnapshot(
           ]
         : liveEntries
     const terminalLayoutsByTabId = selectTerminalLayoutsForWorktree(state, worktreeId)
+    const paneTitlesByTabId = selectRuntimePaneTitlesForWorktree(state, worktreeId)
 
     const rows = applyAgentRowLineage(
       buildWorktreeAgentRows({
         tabs: state.tabsByWorktree[worktreeId] ?? [],
         entries,
         retained: selectRetainedAgentEntriesForWorktree(state, worktreeId),
-        runtimePaneTitlesByTabId: selectRuntimePaneTitlesForWorktree(state, worktreeId),
+        runtimePaneTitlesByTabId: paneTitlesByTabId,
         ptyIdsByTabId: selectLivePtyIdsForWorktree(state, worktreeId),
         terminalLayoutsByTabId,
         runtimeAgentOrchestrationByPaneKey:
@@ -154,44 +159,25 @@ export function buildDashboardSnapshot(
       })
     )
     const subagentsByParentPaneKey = includeCardDetails
-      ? new Map<string, DashboardCardSubagent[]>()
+      ? groupSubagentsByParentPaneKey(rows)
       : undefined
-    if (subagentsByParentPaneKey) {
-      for (const row of rows) {
-        if (row.rowSource !== 'subagent') {
-          continue
-        }
-        const parentPaneKey = row.entry.orchestration?.parentPaneKey
-        if (!parentPaneKey) {
-          continue
-        }
-        const subagent: DashboardCardSubagent = {
-          id: row.paneKey,
-          name:
-            nonEmpty(row.entry.orchestration?.displayName) ??
-            nonEmpty(row.entry.prompt) ??
-            row.agentType,
-          dotState: row.state
-        }
-        const existing = subagentsByParentPaneKey.get(parentPaneKey)
-        if (existing) {
-          existing.push(subagent)
-        } else {
-          subagentsByParentPaneKey.set(parentPaneKey, [subagent])
-        }
-      }
-    }
     const context = includeCardDetails
       ? resolveDashboardCardContext(state, repo, worktree)
       : undefined
     if (workspaces && workspaces.length < DASHBOARD_MAX_MAP_WORKSPACES) {
+      const hostMetadata = dashboardCardMapWorkspaceMetadata(
+        workspace,
+        null,
+        undefined,
+        clientHost.platform
+      )
       workspaces.push({
         repoId: workspace.projectId,
         worktreeId,
         repoName: boundedLabel(workspace.projectName),
         worktreeName: boundedLabel(worktree.displayName),
         ...(parentWorktreeId ? { parentWorktreeId } : {}),
-        ...dashboardCardMapWorkspaceMetadata(workspace, null, undefined, clientHost.platform),
+        ...hostMetadata,
         workspaceStatusId: context?.workspaceStatus.id,
         workspaceStatusLabel: context?.workspaceStatus.label,
         workspaceStatusColor: context?.workspaceStatus.color,
@@ -246,6 +232,14 @@ export function buildDashboardSnapshot(
             })
           : null
       const finishedAt = lastEnteredDoneAt(row)
+      const hostMetadata = includeCardDetails
+        ? dashboardCardMapWorkspaceMetadata(
+            workspace,
+            ptyId,
+            terminalInput ?? undefined,
+            clientHost.platform
+          )
+        : undefined
       // Only repos that actually contribute a card ship their icon.
       repoIconsByRepoId[workspace.projectId] = workspace.repoIcon
 
@@ -266,12 +260,7 @@ export function buildDashboardSnapshot(
           ? {
               parentPaneKey: dashboardCardParentPaneKey(row),
               ...(parentWorktreeId ? { parentWorktreeId } : {}),
-              ...dashboardCardMapWorkspaceMetadata(
-                workspace,
-                ptyId,
-                terminalInput ?? undefined,
-                clientHost.platform
-              )
+              ...hostMetadata
             }
           : {}),
         workspaceStatusId: context?.workspaceStatus.id,
@@ -290,7 +279,14 @@ export function buildDashboardSnapshot(
         // board and the sidebar bold/mute the same agents at the same time.
         unseen,
         askSummary: bucket === 'attention' ? (row.entry.interactivePrompt ?? undefined) : undefined,
-        conversationName: boundedLabelOrUndefined(rowConversationName(row, generatedTitlesEnabled)),
+        conversationName: boundedLabelOrUndefined(
+          rowConversationName(
+            row,
+            generatedTitlesEnabled,
+            terminalLayoutsByTabId[row.tab.id],
+            paneTitlesByTabId[row.tab.id]
+          )
+        ),
         ...(terminalInput ? { terminalInput } : {})
       })
     }

@@ -223,6 +223,9 @@ export const electronViteConfig: UserConfig = {
           'session-scanner-service-entry': resolve(
             'src/main/ai-vault/session-scanner-service-entry.ts'
           ),
+          'wsl-transcript-fs-process-entry': resolve(
+            'src/main/native-chat/wsl-transcript-fs-process-entry.ts'
+          ),
           // Why: libuv spawns processes inline on the calling loop, so the port
           // scan's probe commands run on a worker thread instead of the UI one.
           'port-scan-command-worker-entry': resolve(

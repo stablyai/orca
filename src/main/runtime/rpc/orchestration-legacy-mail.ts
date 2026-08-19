@@ -162,7 +162,7 @@ export async function handleLegacyReply(args: {
     body: params.body
   })
   if (!committed.duplicate) {
-    runtime.notifyMessageArrived(committed.question.asker_handle, 'status')
+    runtime.notifyMessageArrived(committed.message.to_handle, committed.message.type)
   }
   return {
     message: committed.message,

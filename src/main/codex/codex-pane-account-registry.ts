@@ -111,6 +111,7 @@ function isShellStartupHomeOverride(value: unknown): value is CodexShellStartupH
     typeof context.home === 'string' &&
     context.home.length > 0 &&
     (context.shell === undefined || typeof context.shell === 'string') &&
+    (context.configHome === undefined || typeof context.configHome === 'string') &&
     typeof context.codexHome === 'string' &&
     context.codexHome.length > 0
   )
@@ -207,6 +208,7 @@ function shellStartupHomeOverridesEqual(
   return (
     left?.home === right?.home &&
     left?.shell === right?.shell &&
+    left?.configHome === right?.configHome &&
     left?.codexHome === right?.codexHome
   )
 }

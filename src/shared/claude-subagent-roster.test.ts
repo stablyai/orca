@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
 import { readClaudeBackgroundAgentTasks } from './claude-background-task-inventory'
 import {
+  claudeRosterHasRuntimeWorkingSubagent,
   claudeRosterHasWorkingSubagent,
   claudeRosterToSnapshots,
   claudeTeammateIdMatchesName,
   foldClaudeBackgroundTasksIntoRoster,
   idleClaudeTeammateByName,
-  reapRestoredClaudeSubagentsWithoutLiveAgent,
+  reapUnconfirmedRestoredClaudeSubagents,
   stopClaudeSubagent,
   upsertWorkingClaudeSubagent,
   type ClaudeSubagentRoster
@@ -495,28 +496,30 @@ describe('restored-row liveness reap', () => {
 
   it('drops a restored row when no agent process is left behind it', () => {
     const roster = restored('areview-loop-c237a4c577493352')
-    expect(reapRestoredClaudeSubagentsWithoutLiveAgent(roster)).toBe(true)
+    expect(claudeRosterHasRuntimeWorkingSubagent(roster)).toBe(false)
+    expect(reapUnconfirmedRestoredClaudeSubagents(roster)).toBe(true)
     expect(claudeRosterHasWorkingSubagent(roster)).toBe(false)
   })
 
   it('keeps a row a live lifecycle event re-tracked', () => {
     const roster = restored('areview-loop-c237a4c577493352')
     upsertWorkingClaudeSubagent(roster, 'areview-loop-c237a4c577493352', {}, 150)
-    expect(reapRestoredClaudeSubagentsWithoutLiveAgent(roster)).toBe(false)
+    expect(claudeRosterHasRuntimeWorkingSubagent(roster)).toBe(true)
+    expect(reapUnconfirmedRestoredClaudeSubagents(roster)).toBe(false)
     expect(claudeRosterHasWorkingSubagent(roster)).toBe(true)
   })
 
   it('keeps a row a live inventory confirmed as running', () => {
     const roster = restored('a9')
     foldClaudeBackgroundTasksIntoRoster(roster, [task({ id: 'a9' })], 150)
-    expect(reapRestoredClaudeSubagentsWithoutLiveAgent(roster)).toBe(false)
+    expect(reapUnconfirmedRestoredClaudeSubagents(roster)).toBe(false)
     expect(claudeRosterHasWorkingSubagent(roster)).toBe(true)
   })
 
   it('leaves rows this listener tracked from live events alone', () => {
     const roster: ClaudeSubagentRoster = new Map()
     upsertWorkingClaudeSubagent(roster, 'a1', {}, 100)
-    expect(reapRestoredClaudeSubagentsWithoutLiveAgent(roster)).toBe(false)
+    expect(reapUnconfirmedRestoredClaudeSubagents(roster)).toBe(false)
     expect(roster.has('a1')).toBe(true)
   })
 

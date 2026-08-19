@@ -8,9 +8,10 @@ import type {
   ProjectHostSetupExistingFolderArgs,
   ProjectHostSetupResult,
   ProjectHostSetupUpdateArgs,
-  ProjectHostSetupUpdateResult,
-  RepoKind
-} from '../../shared/types'
+  ProjectHostSetupUpdateResult
+} from '../../shared/project-types'
+import type { ExecutionHostId } from '../../shared/execution-host'
+import type { RepoKind } from '../../shared/repo-types'
 import type { CommandHandler } from '../dispatch'
 import {
   formatProjectHostSetupCreateResult,
@@ -21,9 +22,18 @@ import {
   formatProjectList,
   printResult
 } from '../format'
+import { hostFilterMatchesHostId, parseHostFlag } from '../execution-host-flag'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { resolveRepoPathArgument } from '../repo-path-arguments'
 import { RuntimeClientError } from '../runtime-client'
+
+function getRequiredHostId(flags: Map<string, string | boolean>): ExecutionHostId {
+  const host = parseHostFlag(flags)
+  if (!host) {
+    throw new RuntimeClientError('invalid_argument', 'Missing required --host')
+  }
+  return host.id
+}
 
 function getOptionalRepoKind(flags: Map<string, string | boolean>): RepoKind | undefined {
   const kind = getOptionalStringFlag(flags, 'kind')
@@ -43,12 +53,12 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
   },
   'project setups': async ({ flags, client, json }) => {
     const projectFilter = getOptionalStringFlag(flags, 'project')
-    const hostFilter = getOptionalStringFlag(flags, 'host')
+    const hostFilter = parseHostFlag(flags)
     const result = await client.call<{ setups: ProjectHostSetup[] }>('projectHostSetup.list')
     const setups = result.result.setups.filter(
       (setup) =>
         (projectFilter === undefined || setup.projectId === projectFilter) &&
-        (hostFilter === undefined || setup.hostId === hostFilter)
+        (hostFilter === undefined || hostFilterMatchesHostId(hostFilter, setup.hostId))
     )
     printResult({ ...result, result: { setups } }, json, formatProjectHostSetupList)
   },
@@ -56,7 +66,7 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
     const rawPath = getRequiredStringFlag(flags, 'path')
     const args: ProjectHostSetupExistingFolderArgs = {
       projectId: getRequiredStringFlag(flags, 'project'),
-      hostId: getRequiredStringFlag(flags, 'host') as ProjectHostSetupExistingFolderArgs['hostId'],
+      hostId: getRequiredHostId(flags),
       path: resolveRepoPathArgument(rawPath, cwd, client.isRemote, 'Remote project setup'),
       kind: getOptionalRepoKind(flags),
       displayName: getOptionalStringFlag(flags, 'display-name')
@@ -71,7 +81,7 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
     const rawDestination = getRequiredStringFlag(flags, 'destination')
     const args: ProjectHostSetupCloneArgs = {
       projectId: getRequiredStringFlag(flags, 'project'),
-      hostId: getRequiredStringFlag(flags, 'host') as ProjectHostSetupCloneArgs['hostId'],
+      hostId: getRequiredHostId(flags),
       url: getRequiredStringFlag(flags, 'url'),
       destination: resolveRepoPathArgument(
         rawDestination,
@@ -91,7 +101,7 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
     const path = getOptionalStringFlag(flags, 'path')
     const args: ProjectHostSetupCreateArgs = {
       projectId: getRequiredStringFlag(flags, 'project'),
-      hostId: getRequiredStringFlag(flags, 'host') as ProjectHostSetupCreateArgs['hostId'],
+      hostId: getRequiredHostId(flags),
       setupId: getOptionalStringFlag(flags, 'setup-id'),
       path:
         path === undefined

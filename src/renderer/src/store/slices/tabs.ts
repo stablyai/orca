@@ -1,16 +1,17 @@
 /* eslint-disable max-lines -- Why: split-tab group state updates layout, focus, and tab membership atomically in one slice to avoid split-brain. */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
+import { toVisibleTabType } from '../../../../shared/tab-types'
 import type {
   Tab,
   TabContentType,
   TabGroup,
   TabGroupLayoutNode,
-  TerminalTab,
-  TuiAgent,
-  WorkspaceSessionState,
   WorkspaceVisibleTabType
-} from '../../../../shared/types'
+} from '../../../../shared/tab-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { emitNativeChatToggled } from '@/lib/native-chat-telemetry'
 import {
   dedupeTabOrder,
@@ -413,13 +414,6 @@ function collapseGroupLayout(
       [worktreeId]: siblingId ?? fallbackGroupId ?? activeGroupIdByWorktree[worktreeId]
     }
   }
-}
-
-function toVisibleTabType(contentType: TabContentType): WorkspaceVisibleTabType {
-  if (contentType === 'browser' || contentType === 'terminal' || contentType === 'simulator') {
-    return contentType
-  }
-  return 'editor'
 }
 
 function deriveActiveSurfaceForWorktree(

@@ -61,7 +61,7 @@ import { upstreamOnlyCommitsArePatchEquivalent } from '../shared/git-upstream-st
 import { assertGitPushTargetShape } from '../shared/git-push-target-validation'
 import { getPublishTargetStatus, type GitCommandRunner } from '../shared/git-publish-target-status'
 import { resolveGitRemoteRebaseSource } from '../shared/git-rebase-source'
-import type { GitPushTarget } from '../shared/types'
+import type { GitPushTarget } from '../shared/worktree/types'
 import {
   getEffectiveGitUpstreamStatus,
   resolveEffectiveGitUpstream

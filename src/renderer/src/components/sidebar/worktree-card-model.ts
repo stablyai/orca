@@ -1,6 +1,7 @@
 import type React from 'react'
 
-import type { Repo, WorkspaceStatus, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 
 export type WorktreeRenameRequest = {
@@ -36,7 +37,7 @@ export type WorktreeCardProps = {
   isLineageDropTarget?: boolean
   onActivate?: () => void
   onImmediateActivate?: (worktreeId: string, rowKey: string | undefined) => void
-  onSelectionGesture?: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
+  onSelectionGesture?: (event: React.MouseEvent<HTMLElement>, worktree: Worktree) => boolean
   onContextMenuSelect?: (
     event: React.MouseEvent<HTMLElement>,
     worktree: Worktree

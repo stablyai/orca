@@ -1,4 +1,5 @@
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import type { TerminalHttpLinkActionDestinations } from './terminal-url-link-hit-testing'
 
 export function isMacPlatform(): boolean {
   return navigator.userAgent.includes('Mac')
@@ -36,10 +37,22 @@ export type TerminalUrlOpenHintOptions = {
   showActions?: boolean
 }
 
-// Why: openHttpLink only routes to Orca when the source is local, so a remote pane
-// pins every link to the system browser and inverting cannot reach Orca there. The
-// clicked pane's owner decides that, not the global active runtime — a workspace-bound
-// remote pane is remote even when no runtime is globally active.
+export function terminalHttpLinkActionDestinationsFor(
+  settings: { openLinksInApp?: boolean } | null | undefined,
+  sourceOwner: HttpLinkSourceOwner,
+  canOpenRuntimeBrowser: boolean
+): TerminalHttpLinkActionDestinations {
+  const canOpenInOrca =
+    sourceOwner.kind === 'local' || (sourceOwner.kind === 'runtime' && canOpenRuntimeBrowser)
+  if (!canOpenInOrca) {
+    return { primary: 'system' }
+  }
+  return settings?.openLinksInApp === true
+    ? { primary: 'orca', alternate: 'system' }
+    : { primary: 'system', alternate: 'orca' }
+}
+
+// Why: only a capability-verified runtime can advertise the in-app destination.
 export function terminalUrlOpenHintOptionsFor(
   settings:
     | {
@@ -49,14 +62,15 @@ export function terminalUrlOpenHintOptionsFor(
       }
     | null
     | undefined,
-  sourceOwner?: HttpLinkSourceOwner
+  sourceOwner?: HttpLinkSourceOwner,
+  canOpenRuntimeBrowser = false
 ): TerminalUrlOpenHintOptions {
-  const sourceIsLocal = sourceOwner
-    ? sourceOwner.kind === 'local'
+  const sourceCanOpenInOrca = sourceOwner
+    ? sourceOwner.kind === 'local' || (sourceOwner.kind === 'runtime' && canOpenRuntimeBrowser)
     : !settings?.activeRuntimeEnvironmentId?.trim()
   return {
     openLinksInApp: settings?.openLinksInApp === true,
-    modifierInverts: settings?.openLinksInAppModifierInverts === true && sourceIsLocal
+    modifierInverts: settings?.openLinksInAppModifierInverts === true && sourceCanOpenInOrca
   }
 }
 

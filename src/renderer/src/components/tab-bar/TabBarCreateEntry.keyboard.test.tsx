@@ -3,7 +3,9 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Tab, TabGroup, TerminalTab, Worktree } from '../../../../shared/types'
+import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { TabEntryOption } from './tab-create-entry-action'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 // Unmocked on purpose: the empty-query message must stay in step with the
@@ -22,7 +24,12 @@ vi.mock('./tab-create-entry-action', () => ({
   isTabEntryAbsolutePathLike: () => false
 }))
 vi.mock('../quick-open-file-list', () => ({
-  useRuntimeFileListForWorktree: () => ({ files: [], loading: false, loadError: null })
+  useRuntimeFileListForWorktree: () => ({
+    files: [],
+    loading: false,
+    loadError: null,
+    truncated: false
+  })
 }))
 vi.mock('@/lib/agent-catalog', () => ({
   getAgentCatalog: () => [],

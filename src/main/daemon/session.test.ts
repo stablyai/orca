@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { SESSION_FORCE_KILL_RETRY_MS, Session } from './session'
+import { Session } from './session'
+import { SESSION_FORCE_KILL_RETRY_MS } from './session-termination-controller'
+import { HeadlessEmulator } from './headless-emulator'
 import type { SessionState, ShellReadyState } from './types'
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
 vi.mock('../pty-descendant-termination', () => ({
@@ -112,9 +114,11 @@ describe('Session', () => {
     }
     ownerBackend?: 'posix-pty' | 'windows-conpty' | 'windows-wsl'
     wslDistro?: string
+    reportReadinessEvent?: (event: string, details: Record<string, unknown>) => void
   }): Session {
     session = new Session({
       sessionId: 'test-session',
+      ...(opts?.reportReadinessEvent ? { reportReadinessEvent: opts.reportReadinessEvent } : {}),
       cols: opts?.cols ?? 80,
       rows: opts?.rows ?? 24,
       ...(opts?.launchAgent ? { launchAgent: opts.launchAgent } : {}),
@@ -430,6 +434,29 @@ describe('Session', () => {
       expect(session.getSnapshot()?.snapshotAnsi).not.toContain('orca-shell-ready')
     })
 
+    it.each([
+      ['after the ready marker', ['\x1b]777;orca-shell-ready\x07', '\x1b[?2004hfish> ']],
+      ['after the ESC introducer', ['\x1b]777;orca-shell-ready\x07\x1b', '[?2004hfish> ']]
+    ])('preserves Fish bracketed-paste output split %s', (_boundary, chunks) => {
+      createSession({ shellReadySupported: true })
+      const received: string[] = []
+      session.attachClient({
+        onData: (data) => received.push(data),
+        onExit: () => {}
+      })
+
+      for (const chunk of chunks) {
+        subprocess.simulateData(chunk)
+      }
+
+      const output = received.join('')
+      expect(output).toBe('\x1b[?2004hfish> ')
+      const rendered = new HeadlessEmulator({ cols: 80, rows: 24 })
+      expect(rendered.writeSync(output)).toBe(true)
+      expect(rendered.getVisibleLines().join('\n')).not.toContain('[?2004h')
+      rendered.dispose()
+    })
+
     it('publishes an absolute output sequence with live snapshots', () => {
       createSession()
       subprocess.simulateData('first')
@@ -476,6 +503,19 @@ describe('Session', () => {
       ])
     })
 
+    it('exposes drained output beside an includeSnapshot take without changing records', () => {
+      createSession()
+      subprocess.simulateData('kept-for-durable-history\r\n')
+
+      const taken = session.takePendingOutput(true)
+
+      expect(taken?.records).toEqual([])
+      expect(taken?.drainedRecords).toEqual([
+        { kind: 'output', data: 'kept-for-durable-history\r\n' }
+      ])
+      expect(taken?.snapshot).toBeTruthy()
+    })
+
     it('keeps held marker-prefix bytes during live take-with-snapshot', () => {
       createSession({ shellReadySupported: true, shellReadyTimeoutMs: 100 })
       session.write('codex\n')
@@ -486,6 +526,7 @@ describe('Session', () => {
       vi.advanceTimersByTime(30)
 
       expect(taken?.records).toEqual([])
+      expect(taken?.drainedRecords).toEqual([])
       expect(taken?.snapshot).toBeTruthy()
       expect(session.shellState).toBe('ready' satisfies ShellReadyState)
       expect(subprocess.written).toEqual(['codex\n'])
@@ -517,6 +558,45 @@ describe('Session', () => {
 
     it('transitions to timed_out after 15 seconds', () => {
       createSession({ shellReadySupported: true })
+      session.write('waiting input')
+
+      vi.advanceTimersByTime(15_000)
+
+      expect(session.shellState).toBe('timed_out' satisfies ShellReadyState)
+      expect(subprocess.written).toEqual(['waiting input'])
+    })
+
+    // Why this matters: the detached daemon runs with stdio 'ignore', so a
+    // console.warn here reaches nobody. This path costs every startup command
+    // the full timeout, and diagnosing it from a silent log is what made the
+    // original report expensive -- so it has to reach the daemon's file log.
+    it('reports the timeout to the daemon log rather than the void', () => {
+      const events: { event: string; details: Record<string, unknown> }[] = []
+      createSession({
+        shellReadySupported: true,
+        reportReadinessEvent: (event, details) => events.push({ event, details })
+      })
+
+      vi.advanceTimersByTime(15_000)
+
+      expect(events).toHaveLength(1)
+      expect(events[0]?.event).toBe('shell-ready-timeout')
+      expect(events[0]?.details).toMatchObject({ sessionId: 'test-session', timeoutMs: 15_000 })
+      // Why a basename: the shell path can carry a home dir, and the basename is
+      // all a diagnosis needs.
+      expect(String(events[0]?.details.shell)).not.toContain('/')
+    })
+
+    // Why: the report runs before the transition that releases held PTY bytes and
+    // flushes queued stdin, and the ready timer is already cleared by then. A
+    // throwing sink must not leave the barrier stuck in `pending` forever.
+    it('still releases the barrier when the diagnostic sink throws', () => {
+      createSession({
+        shellReadySupported: true,
+        reportReadinessEvent: () => {
+          throw new Error('log sink unavailable')
+        }
+      })
       session.write('waiting input')
 
       vi.advanceTimersByTime(15_000)
@@ -697,7 +777,10 @@ describe('Session', () => {
 
       expect(onData).toHaveBeenCalledWith('late output')
       expect(onExit).toHaveBeenCalledTimes(1)
-      expect(onExit).toHaveBeenCalledWith(23, session.incarnationId)
+      expect(onExit).toHaveBeenCalledWith(23, session.incarnationId, {
+        kind: 'exited',
+        exitCode: 23
+      })
       expect(session.exitCode).toBe(23)
     })
   })

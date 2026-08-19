@@ -1,4 +1,5 @@
-import type { DirEntry, FsChangeEvent, SearchOptions, SearchResult } from '../../shared/types'
+import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
+import type { DirEntry, FsChangeEvent } from '../../shared/filesystem-entry-types'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 
 export type FileStat = {
@@ -18,9 +19,14 @@ export type FileReadResult = {
   mimeType?: string
 }
 
+export type FileReadLimits = {
+  maxBinaryBytes?: number
+  maxTextBytes?: number
+}
+
 export type IFilesystemProvider = {
   readDir(dirPath: string): Promise<DirEntry[]>
-  readFile(filePath: string): Promise<FileReadResult>
+  readFile(filePath: string, limits?: FileReadLimits): Promise<FileReadResult>
   readTerminalArtifact?(
     filePath: string,
     options: TerminalArtifactAccessOptions
@@ -50,8 +56,14 @@ export type IFilesystemProvider = {
   search(opts: SearchOptions): Promise<SearchResult>
   listFiles(
     rootPath: string,
-    options?: { excludePaths?: string[]; signal?: AbortSignal; maxResults?: number }
+    options?: {
+      excludePaths?: string[]
+      signal?: AbortSignal
+      maxResults?: number
+      searchQuery?: string
+    }
   ): Promise<string[]>
+  supportsQuickOpenSearch?(options?: { signal?: AbortSignal }): Promise<boolean>
   scanWorkspaceSpace?(
     rootPath: string,
     options?: { signal?: AbortSignal }

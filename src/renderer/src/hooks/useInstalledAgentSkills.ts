@@ -8,6 +8,7 @@ import type {
 } from '../../../shared/skills'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
 import { markOrchestrationSetupComplete } from '@/lib/orchestration-setup-state'
+import { translate } from '@/i18n/i18n'
 import {
   discoverInstalledAgentSkills,
   getCachedSkillDiscovery,
@@ -91,6 +92,23 @@ export function hasInstalledAgentSkillNamed(
       expected.has(normalizeSkillName(basenameFromPath(skill.directoryPath)))
     )
   })
+}
+
+/**
+ * True when a root this query cares about did not answer, so its skills are
+ * unknown rather than absent. The host serves such a root's last answer, but a
+ * root that has never answered has none to serve, and a bare "Not installed"
+ * there offers Install for a skill that may already be present.
+ */
+export function hasUnreadableAgentSkillSource(
+  sources: readonly SkillDiscoverySource[],
+  sourceKinds?: readonly SkillSourceKind[]
+): boolean {
+  return sources.some(
+    (source) =>
+      source.skippedReason === 'unavailable' &&
+      (!sourceKinds || sourceKinds.includes(source.sourceKind))
+  )
 }
 
 export function notifyInstalledAgentSkillsRefreshed(): void {
@@ -247,21 +265,26 @@ export function useInstalledAgentSkillNames(
     if (!enabled) {
       return
     }
-    const refreshFromExternalChange = (): void => {
+    // Why: skill install commands run outside React state, often in a terminal, so
+    // an install event is authoritative and forces past every cache.
+    const refreshFromInstall = (): void => {
       void refresh(true)
     }
-    const refreshFromCompletedScan = (): void => {
+    // Why: focus fires on every app and window switch, and a forced refresh
+    // bypasses every cache down to the host's disk walk — that is what turned an
+    // alt-tab into a multi-root filesystem scan per window and per client. Focus,
+    // and another surface finishing its own scan, are both only hints that
+    // something may have changed, so they read through the freshness window.
+    const refreshQuietly = (): void => {
       void refresh(false, false)
     }
-    // Why: skill install commands run outside React state, often in a terminal.
-    // Refresh on focus and explicit install events so completion is detected.
-    window.addEventListener('focus', refreshFromExternalChange)
-    window.addEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, refreshFromExternalChange)
-    window.addEventListener(INSTALLED_AGENT_SKILLS_REFRESHED_EVENT, refreshFromCompletedScan)
+    window.addEventListener('focus', refreshQuietly)
+    window.addEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, refreshFromInstall)
+    window.addEventListener(INSTALLED_AGENT_SKILLS_REFRESHED_EVENT, refreshQuietly)
     return () => {
-      window.removeEventListener('focus', refreshFromExternalChange)
-      window.removeEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, refreshFromExternalChange)
-      window.removeEventListener(INSTALLED_AGENT_SKILLS_REFRESHED_EVENT, refreshFromCompletedScan)
+      window.removeEventListener('focus', refreshQuietly)
+      window.removeEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, refreshFromInstall)
+      window.removeEventListener(INSTALLED_AGENT_SKILLS_REFRESHED_EVENT, refreshQuietly)
     }
   }, [enabled, refresh])
 
@@ -280,6 +303,11 @@ export function useInstalledAgentSkillNames(
     [candidateSkillNames, enabled, skills, sourceKinds]
   )
 
+  const incompleteScan = useMemo(
+    () => enabled && !installed && hasUnreadableAgentSkillSource(sources, sourceKinds),
+    [enabled, installed, sources, sourceKinds]
+  )
+
   useEffect(() => {
     if (installed && candidateSkillNames.some(isOrchestrationSkillName)) {
       // Why: older floating-workspace education still keys off this marker; any
@@ -294,7 +322,14 @@ export function useInstalledAgentSkillNames(
     installed,
     loading: loadingForRender,
     settled: enabled && resultForRender !== null,
-    error: errorForRender,
+    error:
+      errorForRender ??
+      (incompleteScan
+        ? translate(
+            'auto.hooks.useInstalledAgentSkills.unreadableSkillSource',
+            'A skill folder did not respond, so this status may be incomplete.'
+          )
+        : null),
     skills,
     sources,
     refresh: forceRefresh

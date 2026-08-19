@@ -1,14 +1,11 @@
-import type {
-  Tab,
-  TabGroup,
-  TabGroupLayoutNode,
-  WorkspaceSessionState
-} from '../../../../shared/types'
+import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { adoptGrouplessTabs, layoutSpanningGroups } from './tab-group-reference-repair'
 import {
   dedupeTabOrder,
+  dedupeTabsById,
   getPersistedEditFileIdsByWorktree,
   isTransientEditorContentType,
   sanitizeRecentTabIds,
@@ -79,7 +76,7 @@ function hydrateUnifiedFormat(
         .filter((tab) => tab.aiVaultTitle)
         .map((tab) => [tab.id, tab.aiVaultTitle!])
     )
-    tabsByWorktree[worktreeId] = [...tabs]
+    const hydratedTabs = [...tabs]
       .map((tab) => ({
         ...tab,
         entityId: tab.entityId ?? tab.id
@@ -115,6 +112,8 @@ function hydrateUnifiedFormat(
         return persistedEditFileIds.has(tab.entityId)
       })
       .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
+    // Why after the sort: the surviving record is the one the strip renders first.
+    tabsByWorktree[worktreeId] = dedupeTabsById(hydratedTabs)
   }
 
   for (const [worktreeId, groups] of Object.entries(session.tabGroups!)) {

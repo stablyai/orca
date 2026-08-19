@@ -52,6 +52,8 @@ export function renderTabBarSurface({
   const {
     resolvedGroupId,
     mobileEmulatorEnabled,
+    managedBrowserCreationEnabled,
+    mobileEmulatorCreationEnabled,
     workspaceHasSimulatorTab,
     showMobileEmulatorIntroCallout,
     windowsTerminalCapabilities,
@@ -93,6 +95,8 @@ export function renderTabBarSurface({
     props,
     terminalOnly,
     mobileEmulatorEnabled,
+    managedBrowserCreationEnabled,
+    mobileEmulatorCreationEnabled,
     workspaceHasSimulatorTab,
     showMobileEmulatorIntroCallout,
     windowsShellEntries,

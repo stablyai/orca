@@ -2,7 +2,8 @@ import {
   buildWorkspaceRunContext,
   type WorkspaceRunContext
 } from '../../../../shared/task-source-context'
-import type { ProjectHostSetup, Repo } from '../../../../shared/types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 
 export function buildAutomationRunContextForRepo(args: {
   repoId: string

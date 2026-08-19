@@ -1,7 +1,7 @@
 import type { EphemeralVmRecipeResult } from './ephemeral-vm-recipes'
 import type { EphemeralVmRecipeContext } from './ephemeral-vm-recipe-runner'
 import { quoteShellToken } from './ephemeral-vm-recipe-process'
-import type { OrcaVmRecipe } from './types'
+import type { OrcaVmRecipe } from './orca-yaml-hook-types'
 
 export type EphemeralVmRecipeLifecycleMode = 'suspend' | 'resume' | 'destroy'
 

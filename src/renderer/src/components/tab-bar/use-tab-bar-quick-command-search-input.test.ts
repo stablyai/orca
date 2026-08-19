@@ -4,7 +4,7 @@ import { renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { useTabBarQuickCommandSearchInput } from './use-tab-bar-quick-command-search-input'
-import type { TerminalQuickCommand } from '../../../../shared/types'
+import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 
 const command = { id: 'cmd-1', label: 'Run tests' } as unknown as TerminalQuickCommand
 

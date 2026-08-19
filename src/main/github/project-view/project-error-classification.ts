@@ -1,8 +1,8 @@
 // Why: turns raw gh stderr/stdout into the typed GitHubProjectViewError the
 // renderer can act on (auth vs scope vs rate limit vs drift), shared by the
 // project-view read and mutation paths.
-import type { GitHubProjectViewError } from '../../../shared/github-project-types'
-import { githubProjectHost } from '../../../shared/github-project-identity'
+import type { GitHubProjectViewError } from '../../../shared/github/project-result-types'
+import { githubProjectHost } from '../../../shared/github/project-identity'
 
 export type GhGraphqlErrorShape = {
   type?: string

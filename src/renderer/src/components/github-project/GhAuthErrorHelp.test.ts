@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { GhAuthDiagnostic } from '../../../../shared/github-auth-types'
+import type { GhAuthDiagnostic } from '../../../../shared/github/auth-types'
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback

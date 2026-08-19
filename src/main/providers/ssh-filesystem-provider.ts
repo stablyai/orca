@@ -16,17 +16,19 @@ import {
 } from './ssh-filesystem-provider-watch'
 import type {
   IFilesystemProvider,
+  FileReadLimits,
   FileStat,
   FileReadResult,
   FileUploadSession,
   TerminalArtifactAccessOptions
 } from './types'
-import type { DirEntry, FsChangeEvent, SearchOptions, SearchResult } from '../../shared/types'
+import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
+import type { DirEntry, FsChangeEvent } from '../../shared/filesystem-entry-types'
 import { routeSshFilesystemWatchNotification } from './ssh-filesystem-watch-notifications'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from '../ssh/ssh-remote-platform'
+import { probeSshQuickOpenSearchCapability } from './ssh-filesystem-provider-capabilities'
 const WORKSPACE_SPACE_SCAN_TIMEOUT_MS = 130_000
-
 export class SshFilesystemProvider implements IFilesystemProvider {
   private connectionId: string
   private mux: SshChannelMultiplexer
@@ -87,14 +89,14 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     return (await this.mux.request('fs.readDir', { dirPath })) as DirEntry[]
   }
 
-  async readFile(filePath: string): Promise<FileReadResult> {
+  async readFile(filePath: string, limits?: FileReadLimits): Promise<FileReadResult> {
     // Why: streaming is the default path so previews above the legacy single-
     // frame budget (~12 MB after base64) don't hit MAX_MESSAGE_SIZE. Old relays
     // that don't implement fs.readFileStream surface as MethodNotFound; we fall
     // back to the legacy single-shot fs.readFile (which retains the old 10 MB
     // cap on those hosts).
     try {
-      return await readFileViaStream(this.mux, filePath)
+      return await readFileViaStream(this.mux, filePath, limits)
     } catch (err) {
       if (isMethodNotFoundError(err)) {
         if (!this.loggedStreamFallback) {
@@ -302,7 +304,7 @@ export class SshFilesystemProvider implements IFilesystemProvider {
 
   async listFiles(
     rootPath: string,
-    options?: { excludePaths?: string[]; signal?: AbortSignal; maxResults?: number }
+    options?: Parameters<IFilesystemProvider['listFiles']>[1]
   ): Promise<string[]> {
     const params: Record<string, unknown> = { rootPath }
     if (options?.excludePaths && options.excludePaths.length > 0) {
@@ -310,6 +312,9 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     }
     if (options?.maxResults !== undefined) {
       params.maxResults = options.maxResults
+    }
+    if (options?.searchQuery !== undefined) {
+      params.searchQuery = options.searchQuery
     }
     // Why #7721: the signal lets a workspace switch send rpc.cancel so the
     // relay aborts the full-tree scan instead of stacking abandoned scans
@@ -319,6 +324,8 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     })) as string[]
   }
 
+  supportsQuickOpenSearch = (options: { signal?: AbortSignal } = {}): Promise<boolean> =>
+    probeSshQuickOpenSearchCapability(this.mux, options.signal)
   async watch(
     rootPath: string,
     callback: (events: FsChangeEvent[]) => void,
