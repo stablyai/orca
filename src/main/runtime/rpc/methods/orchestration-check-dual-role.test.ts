@@ -93,6 +93,55 @@ describe('check on a terminal that is both dispatched and coordinator-bound', ()
     expect(store.getCurrentRunForPane(CAPTAIN_PANE)?.id).toBe(captainRun)
   })
 
+  it('keeps reporting the shadowed Dispatch when an acknowledged wait is interrupted', async () => {
+    const { db: store, ctx } = setup()
+    const { dispatchId, captainRun } = buildDualRoleCaptain(store)
+    store.insertMessage({
+      from: 'term_worker',
+      to: `run:${captainRun}`,
+      subject: 'lane report',
+      runId: captainRun
+    })
+
+    const first = (await call(ctx, { terminal: 'term_captain' })) as { deliveryId: string }
+
+    // Hold the wait open, fence the consumer under it, then let it finish — the interrupted
+    // shape is the one that used to drop the shadow.
+    let releaseWait: (() => void) | undefined
+    let waitStarted: (() => void) | undefined
+    const started = new Promise<void>((resolve) => {
+      waitStarted = resolve
+    })
+    vi.spyOn(ctx.runtime, 'waitForMessage').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseWait = () => resolve('notified')
+          waitStarted?.()
+        })
+    )
+
+    const pending = call(ctx, {
+      terminal: 'term_captain',
+      ack: first.deliveryId,
+      wait: true,
+      timeoutMs: 10_000
+    }) as Promise<{ waitInterrupted?: string; shadowedDispatchId?: string }>
+    await started
+    store.bindRun({
+      runId: captainRun,
+      coordinatorHandle: 'term_captain_reissued',
+      coordinatorPaneKey: CAPTAIN_PANE
+    })
+    releaseWait?.()
+
+    const interrupted = await pending
+    expect(interrupted.waitInterrupted).toBe('consumer_fenced')
+    // Why this matters: the text output hangs its Dispatch-mail guidance on this field, so a
+    // dual-role captain that acknowledged and got fenced would never be told its other mailbox
+    // exists — exactly when it most needs to look at it.
+    expect(interrupted.shadowedDispatchId).toBe(dispatchId)
+  })
+
   it('keeps the Run mailbox as the default for a dual-role terminal', async () => {
     const { db: store, ctx } = setup()
     const { captainRun } = buildDualRoleCaptain(store)

@@ -807,12 +807,18 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           if (!acknowledged) {
             throw error
           }
-          return interruptedAcknowledgedCheck(run.id, acknowledged.delivery.id, 'consumer_fenced')
+          return {
+            ...interruptedAcknowledgedCheck(run.id, acknowledged.delivery.id, 'consumer_fenced'),
+            ...shadowed
+          }
         }
         const latestRun = db.getRun(run.id)
         if (!latestRun || latestRun.consumer_generation !== generation) {
           if (acknowledged) {
-            return interruptedAcknowledgedCheck(run.id, acknowledged.delivery.id, 'consumer_fenced')
+            return {
+              ...interruptedAcknowledgedCheck(run.id, acknowledged.delivery.id, 'consumer_fenced'),
+              ...shadowed
+            }
           }
           throw new OrchestrationError(
             'consumer_fenced',
@@ -821,7 +827,10 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
         if (waitResult === 'waiter_exists') {
           if (acknowledged) {
-            return interruptedAcknowledgedCheck(run.id, acknowledged.delivery.id, 'waiter_exists')
+            return {
+              ...interruptedAcknowledgedCheck(run.id, acknowledged.delivery.id, 'waiter_exists'),
+              ...shadowed
+            }
           }
           throw new OrchestrationError(
             'waiter_exists',
