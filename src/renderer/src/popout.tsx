@@ -15,6 +15,10 @@ import { translate } from './i18n/i18n'
 import { useAppStore } from './store'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { getOrCreateRendererRoot } from './lib/react-renderer-root'
+import {
+  applyAppAppearanceToDocument,
+  clearAppAppearanceFromDocument
+} from './lib/app-appearance-document'
 
 // Why: the pop-out window is a separate BrowserWindow with its own React root,
 // so it must run the same renderer bootstrap as main.tsx (crash diagnostics,
@@ -24,7 +28,9 @@ recordRendererCrashBreadcrumb('popout_bootstrap_started', { dev: import.meta.env
 installRendererCrashDiagnostics('dashboard-popout')
 
 function applyPopoutAppearance(settings: GlobalSettings | null): void {
+  clearAppAppearanceFromDocument()
   applyDocumentTheme(settings?.theme ?? 'system', { disableTransitions: false })
+  applyAppAppearanceToDocument(settings, window.matchMedia('(prefers-color-scheme: dark)').matches)
   document.documentElement.style.setProperty(
     '--app-font-family',
     buildAppFontFamily(settings?.appFontFamily)
@@ -85,7 +91,7 @@ function PopoutSettingsSync(): null {
       return
     }
     const media = window.matchMedia('(prefers-color-scheme: dark)')
-    const handleChange = (): void => applyDocumentTheme('system')
+    const handleChange = (): void => applyPopoutAppearance(settings)
     media.addEventListener('change', handleChange)
     return () => media.removeEventListener('change', handleChange)
   }, [settings])

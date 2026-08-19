@@ -29,11 +29,11 @@ export function LeftSidebarAppearanceSetting({
         alignTop
         label={translate(
           'auto.components.settings.AppearancePane.leftSidebarAppearance.title',
-          'Left Sidebar Appearance'
+          'App Appearance'
         )}
         description={translate(
           'auto.components.settings.AppearancePane.leftSidebarAppearance.rowDescription',
-          'Make the left sidebar match your terminal, stay default, or use a tint.'
+          "Make Orca's interface match your terminal, stay default, or use a tint."
         )}
         control={
           <SettingsSegmentedControl<LeftSidebarAppearanceMode>
@@ -42,7 +42,7 @@ export function LeftSidebarAppearanceSetting({
             onChange={(leftSidebarAppearanceMode) => updateSettings({ leftSidebarAppearanceMode })}
             ariaLabel={translate(
               'auto.components.settings.AppearancePane.leftSidebarAppearance.title',
-              'Left Sidebar Appearance'
+              'App Appearance'
             )}
             options={[
               {
@@ -75,11 +75,11 @@ export function LeftSidebarAppearanceSetting({
           <ColorField
             label={translate(
               'auto.components.settings.AppearancePane.leftSidebarAppearance.tintColor',
-              'Sidebar Tint'
+              'App Tint'
             )}
             description={translate(
               'auto.components.settings.AppearancePane.leftSidebarAppearance.tintColorDescription',
-              'The color mixed into the left sidebar surface.'
+              "The color mixed into Orca's interface."
             )}
             value={settings.leftSidebarTintColor ?? DEFAULT_LEFT_SIDEBAR_TINT_COLOR}
             fallback={DEFAULT_LEFT_SIDEBAR_TINT_COLOR}
@@ -92,14 +92,18 @@ export function LeftSidebarAppearanceSetting({
             )}
             description={translate(
               'auto.components.settings.AppearancePane.leftSidebarAppearance.tintOpacityDescription',
-              'Controls how strongly the tint is mixed into the sidebar.'
+              "Controls how strongly the tint is mixed into Orca's interface."
             )}
             value={settings.leftSidebarTintOpacity ?? DEFAULT_LEFT_SIDEBAR_TINT_OPACITY}
             defaultValue={DEFAULT_LEFT_SIDEBAR_TINT_OPACITY}
             min={0}
             max={MAX_LEFT_SIDEBAR_TINT_OPACITY}
             step={0.01}
-            suffix={`0 to ${MAX_LEFT_SIDEBAR_TINT_OPACITY}`}
+            suffix={translate(
+              'auto.components.settings.AppearancePane.leftSidebarAppearance.tintOpacityRange',
+              '0 to {{value0}}',
+              { value0: MAX_LEFT_SIDEBAR_TINT_OPACITY }
+            )}
             onChange={(leftSidebarTintOpacity) => updateSettings({ leftSidebarTintOpacity })}
           />
         </div>

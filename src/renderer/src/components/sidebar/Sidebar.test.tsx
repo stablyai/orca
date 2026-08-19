@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import type { CSSProperties, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { tmpdir } from 'node:os'
 import { cleanup, render } from '@testing-library/react'
@@ -56,18 +56,8 @@ vi.mock('./SidebarToolbar', () => ({
 }))
 
 vi.mock('./WorkspaceKanbanDrawer', () => ({
-  default: ({
-    leftSidebarStyle,
-    statusBarVisible
-  }: {
-    leftSidebarStyle?: CSSProperties
-    statusBarVisible: boolean
-  }) => (
-    <div
-      data-testid="workspace-kanban-drawer"
-      data-status-bar-visible={String(statusBarVisible)}
-      style={leftSidebarStyle}
-    />
+  default: ({ statusBarVisible }: { statusBarVisible: boolean }) => (
+    <div data-testid="workspace-kanban-drawer" data-status-bar-visible={String(statusBarVisible)} />
   )
 }))
 
@@ -145,22 +135,14 @@ describe('Sidebar', () => {
     expect(prompt.parentElement?.classList.contains('shrink-0')).toBe(true)
   })
 
-  it('applies left sidebar appearance variables to the workspace sidebar surface', () => {
-    setSidebarState({
-      ...getDefaultSettings(tmpdir()),
-      leftSidebarAppearanceMode: 'match-terminal',
-      terminalColorOverrides: {
-        background: '#101820',
-        foreground: '#f0f4f8'
-      }
-    })
+  it('inherits document-owned appearance tokens without local inline overrides', () => {
+    setSidebarState(getDefaultSettings(tmpdir()))
 
     const markup = renderSidebar()
 
-    expect(markup).toContain('--worktree-sidebar:#101820')
-    expect(markup).toContain('--worktree-sidebar-foreground:#f0f4f8')
+    expect(markup).toContain('bg-worktree-sidebar')
+    expect(markup).not.toContain('--worktree-sidebar:')
     expect(markup).toContain('data-testid="workspace-kanban-drawer"')
-    expect(markup.match(/--worktree-sidebar:#101820/g)).toHaveLength(2)
   })
 
   it('passes status bar visibility into the workspace board drawer', () => {

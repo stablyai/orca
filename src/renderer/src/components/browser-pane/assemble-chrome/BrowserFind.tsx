@@ -161,7 +161,7 @@ export default function BrowserFind({
 
   return (
     <div
-      className="absolute top-2 right-2 z-50 flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/95 px-2 py-1 shadow-lg backdrop-blur-sm"
+      className="absolute top-2 right-2 z-50 flex items-center gap-1 rounded-lg border border-border bg-popover/95 text-popover-foreground px-2 py-1 shadow-lg backdrop-blur-sm"
       style={{ width: 300 }}
       onKeyDown={handleKeyDown}
     >
@@ -174,11 +174,11 @@ export default function BrowserFind({
           'auto.components.browser.pane.BrowserFind.636a69cd66',
           'Find in page...'
         )}
-        className="min-w-0 flex-1 border-none bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
+        className="min-w-0 flex-1 border-none bg-transparent text-sm text-popover-foreground outline-none placeholder:text-muted-foreground"
       />
 
       {query ? (
-        <span className="shrink-0 text-xs text-zinc-400">
+        <span className="shrink-0 text-xs text-muted-foreground">
           {totalMatches > 0
             ? translate(
                 'auto.components.browser.pane.BrowserFind.fc63f336aa',
@@ -189,14 +189,14 @@ export default function BrowserFind({
         </span>
       ) : null}
 
-      <div className="mx-0.5 h-4 w-px bg-zinc-700" />
+      <div className="mx-0.5 h-4 w-px bg-border" />
 
       <Button
         type="button"
         variant="ghost"
         size="icon-xs"
         onClick={findPrevious}
-        className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
+        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-popover-foreground"
         title={translate('auto.components.browser.pane.BrowserFind.ca7aebbd7f', 'Previous match')}
       >
         <ChevronUp size={14} />
@@ -207,20 +207,20 @@ export default function BrowserFind({
         variant="ghost"
         size="icon-xs"
         onClick={findNext}
-        className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
+        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-popover-foreground"
         title={translate('auto.components.browser.pane.BrowserFind.5c0c02ae76', 'Next match')}
       >
         <ChevronDown size={14} />
       </Button>
 
-      <div className="mx-0.5 h-4 w-px bg-zinc-700" />
+      <div className="mx-0.5 h-4 w-px bg-border" />
 
       <Button
         type="button"
         variant="ghost"
         size="icon-xs"
         onClick={onClose}
-        className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
+        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-popover-foreground"
         title={translate('auto.components.browser.pane.BrowserFind.c9d5f63fdc', 'Close')}
       >
         <X size={14} />

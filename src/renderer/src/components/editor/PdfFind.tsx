@@ -118,7 +118,7 @@ export default function PdfFind({
 
   return (
     <div
-      className="absolute top-2 right-2 z-50 flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800/95 px-2 py-1 shadow-lg backdrop-blur-sm"
+      className="absolute top-2 right-2 z-50 flex items-center gap-1 rounded-lg border border-border bg-popover/95 text-popover-foreground px-2 py-1 shadow-lg backdrop-blur-sm"
       style={{ width: 300 }}
       onKeyDown={handleKeyDown}
     >
@@ -128,10 +128,10 @@ export default function PdfFind({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder={translate('auto.components.editor.PdfFind.2fc3ba0ea8', 'Find in page...')}
-        className="min-w-0 flex-1 border-none bg-transparent text-sm text-white outline-none placeholder:text-zinc-500"
+        className="min-w-0 flex-1 border-none bg-transparent text-sm text-popover-foreground outline-none placeholder:text-muted-foreground"
       />
       {query ? (
-        <span className="shrink-0 text-xs text-zinc-400">
+        <span className="shrink-0 text-xs text-muted-foreground">
           {totalMatches > 0
             ? translate('auto.components.editor.PdfFind.db56fcd6d2', '{{value0}} of {{value1}}', {
                 value0: activeMatch,
@@ -140,13 +140,13 @@ export default function PdfFind({
             : translate('auto.components.editor.PdfFind.d080ab37d6', 'No matches')}
         </span>
       ) : null}
-      <div className="mx-0.5 h-4 w-px bg-zinc-700" />
+      <div className="mx-0.5 h-4 w-px bg-border" />
       <Button
         type="button"
         variant="ghost"
         size="icon-xs"
         onClick={findPrevious}
-        className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
+        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-popover-foreground"
         title={translate('auto.components.editor.PdfFind.30de726ad0', 'Previous match')}
       >
         <ChevronUp size={14} />
@@ -156,18 +156,18 @@ export default function PdfFind({
         variant="ghost"
         size="icon-xs"
         onClick={findNext}
-        className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
+        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-popover-foreground"
         title={translate('auto.components.editor.PdfFind.eeba2547a1', 'Next match')}
       >
         <ChevronDown size={14} />
       </Button>
-      <div className="mx-0.5 h-4 w-px bg-zinc-700" />
+      <div className="mx-0.5 h-4 w-px bg-border" />
       <Button
         type="button"
         variant="ghost"
         size="icon-xs"
         onClick={onClose}
-        className="flex size-6 shrink-0 items-center justify-center rounded text-zinc-400 hover:text-zinc-200"
+        className="flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-popover-foreground"
         title={translate('auto.components.editor.PdfFind.cd65b1d6b0', 'Close')}
       >
         <X size={14} />

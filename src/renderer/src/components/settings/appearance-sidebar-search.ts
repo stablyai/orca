@@ -7,11 +7,11 @@ export const getLeftSidebarAppearanceEntry = createLocalizedCatalog(
   (): SettingsSearchEntry => ({
     title: translate(
       'auto.components.settings.appearance.search.leftSidebarAppearance.title',
-      'Left Sidebar Appearance'
+      'App Appearance'
     ),
     description: translate(
       'auto.components.settings.appearance.search.leftSidebarAppearance.description',
-      'Make the left sidebar match your terminal, stay default, or use a tint.'
+      "Make Orca's interface match your terminal, stay default, or use a tint."
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.appearance.search.5bff6a2ef0', 'sidebar'),

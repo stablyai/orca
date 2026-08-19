@@ -1,5 +1,9 @@
 import { useEffect } from 'react'
 import { buildAppFontFamily } from '@/lib/app-font-family'
+import {
+  applyAppAppearanceToDocument,
+  clearAppAppearanceFromDocument
+} from '@/lib/app-appearance-document'
 import { applyDocumentTheme } from '../lib/document-theme'
 import { scheduleRuntimeGraphSync } from '../runtime/sync-runtime-graph'
 import { useAppStore } from '../store'
@@ -10,26 +14,28 @@ export function useDocumentAppearance(): void {
 
   useEffect(() => {
     if (!settings) {
+      applyAppAppearanceToDocument(settings, true)
       return
     }
 
-    if (settings.theme === 'dark') {
-      applyDocumentTheme('dark')
-      return undefined
-    } else if (settings.theme === 'light') {
-      applyDocumentTheme('light')
-      return undefined
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const applyAppearance = (): void => {
+      clearAppAppearanceFromDocument()
+      applyDocumentTheme(settings.theme)
+      applyAppAppearanceToDocument(settings, media.matches)
     }
-    // system
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    applyDocumentTheme('system')
+    applyAppearance()
+
+    if (settings.theme !== 'system') {
+      return
+    }
     const handler = (): void => {
-      applyDocumentTheme('system')
+      applyAppearance()
       // System theme changes don't mutate the store, so mobile terminal colors need an explicit graph republish.
       scheduleRuntimeGraphSync()
     }
-    mq.addEventListener('change', handler)
-    return () => mq.removeEventListener('change', handler)
+    media.addEventListener('change', handler)
+    return () => media.removeEventListener('change', handler)
   }, [settings])
 
   useEffect(() => {

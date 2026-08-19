@@ -6294,15 +6294,16 @@
           "932ff1fbff": "Theme",
           "0f28e7b30c": "Choose how Orca looks in the app window.",
           "leftSidebarAppearance": {
-            "title": "Left Sidebar Appearance",
-            "rowDescription": "Make the left sidebar match your terminal, stay default, or use a tint.",
+            "title": "App Appearance",
+            "rowDescription": "Make Orca's interface match your terminal, stay default, or use a tint.",
             "default": "Default",
             "matchTerminal": "Match Terminal",
             "tinted": "Tinted",
-            "tintColor": "Sidebar Tint",
-            "tintColorDescription": "The color mixed into the left sidebar surface.",
+            "tintColor": "App Tint",
+            "tintColorDescription": "The color mixed into Orca's interface.",
             "tintOpacity": "Tint Strength",
-            "tintOpacityDescription": "Controls how strongly the tint is mixed into the sidebar."
+            "tintOpacityDescription": "Controls how strongly the tint is mixed into Orca's interface.",
+            "tintOpacityRange": "0 to {{value0}}"
           },
           "workspaceCardLayoutGuidance": "Managed from the workspace sidebar.",
           "interfaceDefaultFont": "Default font",
@@ -8711,8 +8712,8 @@
               "translation": "translation"
             },
             "leftSidebarAppearance": {
-              "title": "Left Sidebar Appearance",
-              "description": "Make the left sidebar match your terminal, stay default, or use a tint."
+              "title": "App Appearance",
+              "description": "Make Orca's interface match your terminal, stay default, or use a tint."
             },
             "workspaceCardLayout": {
               "title": "Workspace Card Layout",

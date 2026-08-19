@@ -81,7 +81,6 @@ function AgentDashboardDrawerBody({
 }
 
 type AgentDashboardDrawerProps = {
-  leftSidebarStyle?: React.CSSProperties
   statusBarVisible: boolean
 }
 
@@ -91,7 +90,6 @@ type AgentDashboardDrawerProps = {
  * expands from the sidebar edge and keeps the rest of the app interactive.
  */
 export function AgentDashboardDrawer({
-  leftSidebarStyle,
   statusBarVisible
 }: AgentDashboardDrawerProps): React.JSX.Element {
   const open = useAppStore((s) => s.agentDashboardDrawerOpen)
@@ -200,7 +198,6 @@ export function AgentDashboardDrawer({
         }}
         style={
           {
-            ...leftSidebarStyle,
             // Why: the board is a companion to the workspace sidebar, so it
             // expands from the sidebar edge instead of covering the sidebar.
             left: drawerLeftCss,

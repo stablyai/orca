@@ -1201,7 +1201,6 @@ function Settings(): React.JSX.Element {
       className="settings-view-shell flex min-h-0 flex-1 overflow-hidden bg-background"
     >
       <SettingsSidebar
-        settings={settings}
         activeSectionId={activeSectionId}
         generalGroups={generalNavGroups}
         repoSections={repoNavSections}

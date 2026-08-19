@@ -153,6 +153,8 @@
   --orca-security-border: #e5e5e5;
   --orca-security-input: #e5e5e5;
   --orca-security-ring: #a1a1a1;
+  --app-appearance-base-background: #fff;
+  --app-appearance-base-foreground: #0a0a0a;
   --background: #fff;
   --editor-surface: #ffffff;
   --foreground: #0a0a0a;
@@ -267,6 +269,8 @@
   --orca-security-border: rgb(255 255 255 / 0.07);
   --orca-security-input: rgb(255 255 255 / 0.15);
   --orca-security-ring: #737373;
+  --app-appearance-base-background: #0a0a0a;
+  --app-appearance-base-foreground: #fafafa;
   --background: #0a0a0a;
   --editor-surface: #1e1e1e;
   --foreground: #fafafa;
@@ -357,6 +361,29 @@
   --tab-group-split-divider-strong: #a1a1aa;
 }
 
+:root[data-app-appearance]
+  :is(.markdown-preview-shell, .rich-markdown-editor-layout, .rich-markdown-link-bubble) {
+  /* Hosted editors keep the configured Orca scheme when App Appearance follows
+     a terminal theme with the opposite luminance. Scope the layout so TOCs and
+     the portaled rich-link bubble retain the same editor-owned token family. */
+  --background: var(--orca-editor-base-background);
+  --foreground: var(--orca-editor-base-foreground);
+  --card: var(--orca-editor-base-card);
+  --card-foreground: var(--orca-editor-base-card-foreground);
+  --muted: var(--orca-editor-base-muted);
+  --muted-foreground: var(--orca-editor-base-muted-foreground);
+  --accent: var(--orca-editor-base-accent);
+  --accent-foreground: var(--orca-editor-base-accent-foreground);
+  --primary: var(--orca-editor-base-primary);
+  --primary-foreground: var(--orca-editor-base-primary-foreground);
+  --popover: var(--orca-editor-base-popover);
+  --popover-foreground: var(--orca-editor-base-popover-foreground);
+  --border: var(--orca-editor-base-border);
+  --input: var(--orca-editor-base-input);
+  --ring: var(--orca-editor-base-ring);
+  --editor-surface: var(--orca-editor-base-editor-surface);
+}
+
 .plugin-security-chrome {
   /* Why: plugin themes may style the app, but provenance and consent must
      retain host-owned contrast so a pack cannot disguise a trust decision. */
@@ -438,19 +465,7 @@
      background to the same color; keep the X readable on both Orca themes. */
   color: var(--popover-foreground);
   background: var(--popover);
-  border-color: rgb(0 0 0 / 0.14);
-}
-
-[data-sonner-toaster][data-sonner-theme='dark']
-  [data-sonner-toast][data-styled='true']
-  [data-close-button] {
-  color: var(--popover-foreground);
-  background: var(--popover);
-  border-color: rgb(255 255 255 / 0.14);
-}
-
-.dark [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
-  border-color: rgb(255 255 255 / 0.14);
+  border-color: color-mix(in srgb, var(--popover-foreground) 14%, transparent);
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button]:hover {
@@ -1056,7 +1071,7 @@ html.native-shell .app-layout {
   gap: 4px;
   min-height: 36px;
   padding: 6px 14px;
-  background: var(--editor-surface);
+  background: var(--card);
   border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
   flex-shrink: 0;
 }

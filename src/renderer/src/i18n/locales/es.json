@@ -5485,15 +5485,16 @@
           "932ff1fbff": "Tema",
           "0f28e7b30c": "Elige cómo se ve Orca en la ventana de la aplicación.",
           "leftSidebarAppearance": {
-            "title": "Apariencia de la barra lateral izquierda",
-            "rowDescription": "Haz que la barra lateral izquierda coincida con tu terminal, mantén el valor predeterminado o usa un tinte.",
+            "title": "Apariencia de la aplicación",
+            "rowDescription": "Haz que la interfaz de Orca coincida con tu terminal, mantén el valor predeterminado o usa un tinte.",
             "default": "Predeterminado",
             "matchTerminal": "Coincidir con el terminal",
             "tinted": "Con tinte",
-            "tintColor": "Tinte de la barra lateral",
-            "tintColorDescription": "El color que se mezcla en la superficie de la barra lateral izquierda.",
+            "tintColor": "Tinte de la aplicación",
+            "tintColorDescription": "El color que se mezcla en la interfaz de la aplicación.",
             "tintOpacity": "Intensidad del tinte",
-            "tintOpacityDescription": "Controla con qué fuerza se mezcla el tinte en la barra lateral."
+            "tintOpacityDescription": "Controla con qué fuerza se mezcla el tinte en la interfaz de la aplicación.",
+            "tintOpacityRange": "0 a {{value0}}"
           },
           "workspaceCardLayoutGuidance": "Gestionado desde la barra lateral del espacio de trabajo.",
           "872af9556e": "Bandeja del sistema",
@@ -7799,8 +7800,8 @@
               "translation": "traducción"
             },
             "leftSidebarAppearance": {
-              "title": "Apariencia de la barra lateral izquierda",
-              "description": "Haz que la barra lateral izquierda coincida con tu terminal, conserve el valor predeterminado o use un tinte."
+              "title": "Apariencia de la aplicación",
+              "description": "Haz que la interfaz de Orca coincida con tu terminal, mantén el valor predeterminado o usa un tinte."
             },
             "workspaceCardLayout": {
               "title": "Diseño de tarjetas de espacios de trabajo",

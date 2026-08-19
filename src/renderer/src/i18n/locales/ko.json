@@ -5475,15 +5475,16 @@
           "932ff1fbff": "테마",
           "0f28e7b30c": "Orca가 앱 창에 표시되는 방식을 선택합니다.",
           "leftSidebarAppearance": {
-            "title": "왼쪽 사이드바 모양",
-            "rowDescription": "왼쪽 사이드바를 terminal에 맞추거나 기본값을 유지하거나 은은한 색조를 적용합니다.",
+            "title": "앱 모양",
+            "rowDescription": "Orca 인터페이스를 터미널에 맞추거나 기본값을 유지하거나 은은한 색조를 적용합니다.",
             "default": "기본값",
-            "matchTerminal": "Terminal에 맞춤",
+            "matchTerminal": "터미널에 맞춤",
             "tinted": "색조 적용",
-            "tintColor": "사이드바 색조",
-            "tintColorDescription": "왼쪽 사이드바 표면에 섞을 색상입니다.",
+            "tintColor": "앱 색조",
+            "tintColorDescription": "앱 인터페이스에 혼합할 색상입니다.",
             "tintOpacity": "색조 강도",
-            "tintOpacityDescription": "사이드바에 색조를 얼마나 강하게 섞을지 조절합니다."
+            "tintOpacityDescription": "앱 인터페이스에 색조를 얼마나 강하게 섞을지 조절합니다.",
+            "tintOpacityRange": "0~{{value0}}"
           },
           "workspaceCardLayoutGuidance": "워크스페이스 사이드바에서 관리됩니다.",
           "interfaceDefaultFont": "기본 글꼴",
@@ -7786,8 +7787,8 @@
               "translation": "번역"
             },
             "leftSidebarAppearance": {
-              "title": "왼쪽 사이드바 모양",
-              "description": "왼쪽 사이드바를 terminal에 맞추거나 기본값을 유지하거나 은은한 색조를 적용합니다."
+              "title": "앱 모양",
+              "description": "Orca 인터페이스를 터미널에 맞추거나 기본값을 유지하거나 은은한 색조를 적용합니다."
             },
             "9a115966d3": "닫을 때 트레이로 최소화",
             "4d5b9427b5": "활성화하면 창을 닫아도 Orca가 종료되지 않고 시스템 트레이에서 계속 실행됩니다.",

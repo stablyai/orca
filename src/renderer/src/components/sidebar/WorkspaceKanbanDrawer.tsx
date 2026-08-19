@@ -62,7 +62,6 @@ import {
 } from '../../../../shared/worktree/host-qualified-identity'
 
 type WorkspaceKanbanDrawerProps = {
-  leftSidebarStyle?: React.CSSProperties
   open: boolean
   statusBarVisible: boolean
   dragPreview: boolean
@@ -168,7 +167,6 @@ export default function WorkspaceKanbanDrawer(
 }
 
 function WorkspaceKanbanDrawerContent({
-  leftSidebarStyle,
   open,
   statusBarVisible,
   dragPreview,
@@ -814,7 +812,6 @@ function WorkspaceKanbanDrawerContent({
         }}
         style={
           {
-            ...leftSidebarStyle,
             // Why: the board is a companion to the workspace sidebar, so it
             // expands from the sidebar edge instead of covering the sidebar.
             left: drawerLeftCss,

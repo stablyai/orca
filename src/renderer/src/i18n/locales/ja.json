@@ -5470,15 +5470,16 @@
           "932ff1fbff": "テーマ",
           "0f28e7b30c": "アプリウィンドウで Orca がどのように見えるかを選択します。",
           "leftSidebarAppearance": {
-            "title": "左サイドバーの外観",
-            "rowDescription": "左サイドバーをターミナルに合わせるか、既定のままにするか、色合いを加えます。",
+            "title": "アプリの外観",
+            "rowDescription": "Orca のインターフェースをターミナルに合わせるか、既定のままにするか、色合いを加えます。",
             "default": "デフォルト",
             "matchTerminal": "ターミナルに合わせる",
             "tinted": "色合い",
-            "tintColor": "サイドバーの色合い",
-            "tintColorDescription": "左サイドバーの表面に混ぜる色です。",
+            "tintColor": "アプリの色合い",
+            "tintColorDescription": "アプリのインターフェースに混ぜる色です。",
             "tintOpacity": "色合いの強さ",
-            "tintOpacityDescription": "サイドバーに色合いをどの程度強く混ぜるかを調整します。"
+            "tintOpacityDescription": "アプリのインターフェースに色合いをどの程度強く混ぜるかを調整します。",
+            "tintOpacityRange": "0 から {{value0}}"
           },
           "workspaceCardLayoutGuidance": "ワークスペースサイドバーで管理されます。",
           "872af9556e": "システムトレイ",
@@ -7821,8 +7822,8 @@
               "translation": "翻訳"
             },
             "leftSidebarAppearance": {
-              "title": "左サイドバーの外観",
-              "description": "左サイドバーをターミナルに合わせるか、既定のままにするか、色合いを加えます。"
+              "title": "アプリの外観",
+              "description": "Orca のインターフェースをターミナルに合わせるか、既定のままにするか、色合いを加えます。"
             },
             "workspaceCardLayout": {
               "title": "ワークスペースカードのレイアウト",

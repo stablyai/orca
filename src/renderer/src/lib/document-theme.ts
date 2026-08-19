@@ -3,6 +3,7 @@ import type { GlobalSettings } from '../../../shared/global-settings-types'
 export type DocumentThemePreference = GlobalSettings['theme']
 
 export const THEME_TRANSITION_DISABLED_CLASS = 'theme-transition-disabled'
+export const EDITOR_DARK_CLASS = 'orca-editor-dark'
 
 const DARK_MODE_QUERY = '(prefers-color-scheme: dark)'
 
@@ -69,6 +70,7 @@ export function applyDocumentTheme(
   }
 
   root.classList.toggle('dark', shouldUseDarkTheme)
+  root.classList.toggle(EDITOR_DARK_CLASS, shouldUseDarkTheme)
   // Mirror with `light` so consumers can observe the resolved theme
   // symmetrically (Tailwind keys only on `dark`, so this is style-neutral).
   root.classList.toggle('light', !shouldUseDarkTheme)

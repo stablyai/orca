@@ -1263,9 +1263,7 @@ function ThreadRow({
         // Why (WorktreeCard cues): selected = tint+shadow, beats hover; unread = weight + left bar only; stacking all three confused selected vs unread on hover.
         // Why (asymmetric padding): title leading-snug adds ~3px above cap-height; smaller top pad evens the row.
         'group relative flex w-full cursor-pointer flex-col gap-1 border-b border-border px-3 pt-2.5 pb-3 text-left transition-colors',
-        selected
-          ? 'bg-black/[0.08] shadow-[0_1px_2px_rgba(0,0,0,0.04)] dark:bg-white/[0.10] dark:shadow-[0_1px_2px_rgba(0,0,0,0.03)]'
-          : 'hover:bg-accent/40'
+        selected ? 'bg-accent shadow-xs' : 'hover:bg-accent/40'
       )}
     >
       {thread.unread ? (

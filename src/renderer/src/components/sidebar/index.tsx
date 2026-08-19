@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react'
+import React, { useEffect } from 'react'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
@@ -13,8 +13,6 @@ import { cn } from '@/lib/utils'
 import { FolderPlus, Loader2 } from 'lucide-react'
 import { useSidebarProjectDrop } from './useSidebarProjectDrop'
 import { useWorkspaceBoardPanel } from './useWorkspaceBoardPanel'
-import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
-import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 
 const WorktreeMetaDialog = lazyWithRetry(() => import('./WorktreeMetaDialog'))
@@ -51,11 +49,6 @@ function Sidebar({
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
   const activeModal = useAppStore((s) => s.activeModal)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
-  const systemPrefersDark = useSystemPrefersDark()
-  const leftSidebarStyle = useMemo(
-    () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark),
-    [settings, systemPrefersDark]
-  ) as React.CSSProperties | undefined
   const { nativeDropTarget, dropHandlers, affordance } = useSidebarProjectDrop()
   const {
     workspaceBoardOpen,
@@ -108,7 +101,6 @@ function Sidebar({
         ref={containerRef}
         data-native-file-drop-target={sidebarOpen ? nativeDropTarget : undefined}
         className="relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent"
-        style={leftSidebarStyle}
         {...dropHandlers}
       >
         {sidebarOpen && (
@@ -186,7 +178,6 @@ function Sidebar({
       </React.Suspense>
       {sidebarOpen ? (
         <WorkspaceKanbanDrawer
-          leftSidebarStyle={leftSidebarStyle}
           open={workspaceBoardRenderedOpen}
           statusBarVisible={statusBarVisible}
           dragPreview={workspaceBoardDragPreviewOpen}
@@ -201,7 +192,6 @@ function Sidebar({
             sidebarOpen={sidebarOpen}
             workspaceBoardOpen={workspaceBoardOpen}
             closeWorkspaceBoard={closeWorkspaceBoard}
-            leftSidebarStyle={leftSidebarStyle}
             statusBarVisible={statusBarVisible}
           />
         </React.Suspense>

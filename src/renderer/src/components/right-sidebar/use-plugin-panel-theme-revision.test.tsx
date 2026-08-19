@@ -1,8 +1,13 @@
 // @vitest-environment happy-dom
 
+import { tmpdir } from 'node:os'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
+import { getDefaultSettings } from '../../../../shared/constants'
+import { PANEL_DESIGN_TOKEN_ALLOWLIST } from '../../../../shared/plugins/plugin-panel-shell'
+import { applyAppAppearanceToDocument } from '@/lib/app-appearance-document'
+import { buildPanelDesignTokenCss } from './plugin-panel-design-token-css'
 import { usePluginPanelThemeRevision } from './use-plugin-panel-theme-revision'
 
 let root: Root | null = null
@@ -35,6 +40,9 @@ afterEach(() => {
   container = null
   document.documentElement.className = ''
   document.documentElement.removeAttribute('style')
+  document.body.className = ''
+  document.body.removeAttribute('style')
+  document.body.removeAttribute('data-app-appearance')
 })
 
 describe('usePluginPanelThemeRevision', () => {
@@ -56,6 +64,30 @@ describe('usePluginPanelThemeRevision', () => {
     await flushObserver()
 
     expect(revisions.at(-1)).toBeGreaterThan(before!)
+  })
+
+  it('keeps plugin theme snapshots stable when App Appearance changes', async () => {
+    for (const token of PANEL_DESIGN_TOKEN_ALLOWLIST) {
+      document.documentElement.style.setProperty(token, `${token}-base`)
+    }
+    const beforeTokens = buildPanelDesignTokenCss()
+    const { revisions } = renderProbe()
+    const beforeRevision = revisions.at(-1)
+
+    applyAppAppearanceToDocument(
+      {
+        ...getDefaultSettings(tmpdir()),
+        theme: 'light',
+        leftSidebarAppearanceMode: 'match-terminal',
+        terminalColorOverrides: { background: '#101820', foreground: '#f0f4f8' }
+      },
+      false
+    )
+    await flushObserver()
+
+    expect(buildPanelDesignTokenCss()).toBe(beforeTokens)
+    expect(revisions.at(-1)).toBe(beforeRevision)
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
   })
 
   it('ignores mutations outside the document root', async () => {

@@ -3,11 +3,9 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { Bot, GitBranch, Mic, Network, Puzzle } from 'lucide-react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultSettings } from '../../../../shared/constants'
 import { SettingsSidebar } from './SettingsSidebar'
 import { TooltipProvider } from '../ui/tooltip'
 import type { SettingsSetupGuideProgress } from './settings-setup-guide-progress'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 const mocks = vi.hoisted(() => ({
   useSettingsSetupGuideProgress: vi.fn()
@@ -34,15 +32,11 @@ function makeSetupGuideProgress(
   }
 }
 
-function renderSidebar(
-  activeSectionId = 'orchestration',
-  settings: GlobalSettings = getDefaultSettings('/tmp')
-): string {
+function renderSidebar(activeSectionId = 'orchestration'): string {
   return renderToStaticMarkup(
     <TooltipProvider>
       <SettingsSidebar
         activeSectionId={activeSectionId}
-        settings={settings}
         generalGroups={[
           {
             id: 'capabilities',
@@ -130,18 +124,11 @@ describe('SettingsSidebar', () => {
     document.body.innerHTML = ''
   })
 
-  it('applies left sidebar appearance styles to the settings navigation', () => {
-    const markup = renderSidebar('orchestration', {
-      ...getDefaultSettings('/tmp'),
-      leftSidebarAppearanceMode: 'match-terminal',
-      terminalColorOverrides: {
-        background: '#101820',
-        foreground: '#f0f4f8'
-      }
-    })
+  it('inherits document-owned appearance tokens without local inline overrides', () => {
+    const markup = renderSidebar()
 
-    expect(markup).toContain('--worktree-sidebar:#101820')
-    expect(markup).toContain('--worktree-sidebar-foreground:#f0f4f8')
+    expect(markup).toContain('bg-worktree-sidebar')
+    expect(markup).not.toContain('--worktree-sidebar:')
   })
 
   it('reserves install state labels for actionable skill states', () => {

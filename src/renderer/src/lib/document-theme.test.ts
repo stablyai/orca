@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyDocumentTheme,
+  EDITOR_DARK_CLASS,
   resolveDocumentTheme,
   THEME_TRANSITION_DISABLED_CLASS
 } from './document-theme'
@@ -91,9 +92,11 @@ describe('document theme', () => {
 
     applyDocumentTheme('dark', { root, disableTransitions: false })
     expect(root.classList.contains('dark')).toBe(true)
+    expect(root.classList.contains(EDITOR_DARK_CLASS)).toBe(true)
 
     applyDocumentTheme('light', { root, disableTransitions: false })
     expect(root.classList.contains('dark')).toBe(false)
+    expect(root.classList.contains(EDITOR_DARK_CLASS)).toBe(false)
   })
 
   it('applies system root class from matchMedia', () => {

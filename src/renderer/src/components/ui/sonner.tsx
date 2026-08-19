@@ -7,13 +7,23 @@ import {
 } from 'lucide-react'
 import { Toaster as Sonner, type ToasterProps } from 'sonner'
 import { useAppStore } from '@/store'
+import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
+import { resolveAppAppearanceDarkMode } from '@/lib/left-sidebar-appearance'
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const theme = useAppStore((s) => s.settings?.theme) || 'system'
+  const settings = useAppStore((s) => s.settings)
+  const systemPrefersDark = useSystemPrefersDark()
+  const appAppearanceDark = resolveAppAppearanceDarkMode(settings, systemPrefersDark)
+  const theme =
+    appAppearanceDark === undefined
+      ? (settings?.theme ?? 'system')
+      : appAppearanceDark
+        ? 'dark'
+        : 'light'
 
   return (
     <Sonner
-      theme={theme as ToasterProps['theme']}
+      theme={theme}
       position="bottom-right"
       // Why: Orca has persistent bottom chrome, so bottom-right toasts need
       // breathing room above the status bar instead of sitting on its edge.

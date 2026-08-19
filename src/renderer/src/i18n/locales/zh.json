@@ -5482,15 +5482,16 @@
           "932ff1fbff": "主题",
           "0f28e7b30c": "选择 Orca 在应用程序窗口中的外观。",
           "leftSidebarAppearance": {
-            "title": "左侧边栏外观",
-            "rowDescription": "让左侧边栏匹配终端、保持默认，或使用色调。",
+            "title": "应用外观",
+            "rowDescription": "让 Orca 界面匹配终端、保持默认，或使用色调。",
             "default": "默认",
             "matchTerminal": "匹配终端",
             "tinted": "色调",
-            "tintColor": "边栏色调",
-            "tintColorDescription": "混入左侧边栏表面的颜色。",
+            "tintColor": "应用色调",
+            "tintColorDescription": "混合到应用界面中的颜色。",
             "tintOpacity": "色调强度",
-            "tintOpacityDescription": "控制色调混入边栏的强度。"
+            "tintOpacityDescription": "控制色调混入应用界面的强度。",
+            "tintOpacityRange": "0 到 {{value0}}"
           },
           "workspaceCardLayoutGuidance": "从工作区侧边栏管理。",
           "872af9556e": "系统托盘",
@@ -7796,8 +7797,8 @@
               "translation": "翻译"
             },
             "leftSidebarAppearance": {
-              "title": "左侧边栏外观",
-              "description": "让左侧边栏匹配终端、保持默认，或使用色调。"
+              "title": "应用外观",
+              "description": "让 Orca 界面匹配终端、保持默认，或使用色调。"
             },
             "workspaceCardLayout": {
               "title": "工作区卡片布局",
