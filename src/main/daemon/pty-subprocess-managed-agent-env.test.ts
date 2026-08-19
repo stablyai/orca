@@ -112,7 +112,7 @@ describe('createPtySubprocess', () => {
     const lastCall = spawnMock.mock.calls.at(-1)!
     expect(lastCall[1]).toEqual(['-l'])
     expect(lastCall[2].env.ZDOTDIR).toMatch(ZSH_SHELL_READY_DIR)
-    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
+    expect(lastCall[2].env.ORCA_SHELL_FEATURES).not.toContain('ready')
   })
 
   it('uses shell wrapper when OpenCode config must survive shell startup', async () => {
@@ -141,7 +141,7 @@ describe('createPtySubprocess', () => {
     const lastCall = spawnMock.mock.calls.at(-1)!
     expect(lastCall[1]).toEqual(['-l'])
     expect(lastCall[2].env.ZDOTDIR).toMatch(ZSH_SHELL_READY_DIR)
-    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
+    expect(lastCall[2].env.ORCA_SHELL_FEATURES).not.toContain('ready')
   })
 
   it('uses shell wrapper when MiMo home must survive shell startup', async () => {
@@ -170,7 +170,7 @@ describe('createPtySubprocess', () => {
     const lastCall = spawnMock.mock.calls.at(-1)!
     expect(lastCall[1]).toEqual(['-l'])
     expect(lastCall[2].env.ZDOTDIR).toMatch(ZSH_SHELL_READY_DIR)
-    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
+    expect(lastCall[2].env.ORCA_SHELL_FEATURES).not.toContain('ready')
   })
 
   it('uses shell wrapper when typed OMP commands need the status extension', async () => {
@@ -198,7 +198,7 @@ describe('createPtySubprocess', () => {
     const lastCall = spawnMock.mock.calls.at(-1)!
     expect(lastCall[1]).toEqual(['-l'])
     expect(lastCall[2].env.ZDOTDIR).toMatch(ZSH_SHELL_READY_DIR)
-    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
+    expect(lastCall[2].env.ORCA_SHELL_FEATURES).not.toContain('ready')
   })
 
   it('uses shell wrapper when Codex home must survive shell startup', async () => {
@@ -227,7 +227,7 @@ describe('createPtySubprocess', () => {
     const lastCall = spawnMock.mock.calls.at(-1)!
     expect(lastCall[1]).toEqual(['-l'])
     expect(lastCall[2].env.ZDOTDIR).toMatch(ZSH_SHELL_READY_DIR)
-    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
+    expect(lastCall[2].env.ORCA_SHELL_FEATURES).not.toContain('ready')
   })
 
   it('uses shell wrapper when Agent Teams shim path must survive shell startup', async () => {
@@ -257,7 +257,7 @@ describe('createPtySubprocess', () => {
     const lastCall = spawnMock.mock.calls.at(-1)!
     expect(lastCall[1]).toEqual(['-l'])
     expect(lastCall[2].env.ZDOTDIR).toMatch(ZSH_SHELL_READY_DIR)
-    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
+    expect(lastCall[2].env.ORCA_SHELL_FEATURES).not.toContain('ready')
   })
 
   it('keeps plain Codex startup commands on the no-marker wrapper', async () => {
@@ -284,7 +284,7 @@ describe('createPtySubprocess', () => {
     const lastCall = spawnMock.mock.calls.at(-1)!
     expect(lastCall[1]).toEqual(['-l'])
     expect(lastCall[2].env.ZDOTDIR).toMatch(ZSH_SHELL_READY_DIR)
-    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('0')
+    expect(lastCall[2].env.ORCA_SHELL_FEATURES).not.toContain('ready')
   })
 
   it('uses shell-ready wrapper for delivery-hinted Codex startup commands', async () => {
@@ -312,7 +312,7 @@ describe('createPtySubprocess', () => {
     const lastCall = spawnMock.mock.calls.at(-1)!
     expect(lastCall[1]).toEqual(['-l'])
     expect(lastCall[2].env.ZDOTDIR).toMatch(ZSH_SHELL_READY_DIR)
-    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('1')
+    expect(lastCall[2].env.ORCA_SHELL_FEATURES).toContain('ready')
   })
 
   it('uses shell-ready wrapper for Codex native prefill flags', async () => {
@@ -339,7 +339,7 @@ describe('createPtySubprocess', () => {
     const lastCall = spawnMock.mock.calls.at(-1)!
     expect(lastCall[1]).toEqual(['-l'])
     expect(lastCall[2].env.ZDOTDIR).toMatch(ZSH_SHELL_READY_DIR)
-    expect(lastCall[2].env.ORCA_SHELL_READY_MARKER).toBe('1')
+    expect(lastCall[2].env.ORCA_SHELL_FEATURES).toContain('ready')
   })
 
   it('deletes requested env keys after merging daemon process env', async () => {

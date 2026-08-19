@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  cmdJPaletteTokenScore,
   isCmdJPaletteQueryOverTokenLimit,
+  uniqueCmdJPaletteQueryTokens,
   normalizeCmdJPaletteQuery,
   tokenizeCmdJPaletteQuery
 } from './palette-query-tokens'
@@ -28,6 +30,43 @@ describe('Cmd+J palette query normalization', () => {
     for (const token of normalizeCmdJPaletteQuery(query).split(' ')) {
       expect(normalizePaletteText(token).normalized).toBe(token)
     }
+  })
+})
+
+describe('Cmd+J palette token scoring', () => {
+  it('matches a CJK compound query against its keyword parts', () => {
+    // Why: CJK is written without spaces, so the natural query for the terminal settings
+    // pane is one token that CONTAINS the keyword rather than being contained by it.
+    expect(cmdJPaletteTokenScore(['终端设置'], ['终端', '设置'])).toBeGreaterThan(0)
+    expect(cmdJPaletteTokenScore(['终端'], ['终端', '设置'])).toBeGreaterThan(0)
+  })
+
+  it('does not let a one-character keyword match every long token', () => {
+    expect(cmdJPaletteTokenScore(['terminal'], ['a'])).toBe(0)
+  })
+
+  it('does not score a Latin keyword merely contained in the query token', () => {
+    // Why: `database` does not mean the keyword `base`. Reverse containment exists for
+    // scripts that carry no spaces, so it must not fire on space-delimited text.
+    expect(cmdJPaletteTokenScore(['database'], ['base'])).toBe(0)
+    expect(cmdJPaletteTokenScore(['worktree'], ['tree'])).toBe(0)
+  })
+
+  it('scores a repeated query token once', () => {
+    const once = cmdJPaletteTokenScore(uniqueCmdJPaletteQueryTokens('terminal'), ['terminal'])
+    const twice = cmdJPaletteTokenScore(uniqueCmdJPaletteQueryTokens('terminal terminal'), [
+      'terminal'
+    ])
+    expect(twice).toBe(once)
+  })
+
+  it('rejects a query whose punctuation split blows past the ceiling', () => {
+    // Whitespace-split counting saw one token; the scoring tokenizer saw hundreds.
+    const punctuationHeavy = Array.from(
+      { length: PALETTE_QUERY_MAX_TOKENS + 1 },
+      (_, i) => `t${i}`
+    ).join('.')
+    expect(isCmdJPaletteQueryOverTokenLimit(punctuationHeavy)).toBe(true)
   })
 })
 

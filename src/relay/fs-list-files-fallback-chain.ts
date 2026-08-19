@@ -7,24 +7,33 @@ import {
   throwIfFileListingCancelled
 } from '../shared/file-listing-cancellation'
 import { isQuickOpenReaddirBudgetError } from '../shared/quick-open-readdir-walk'
-import { buildInstallRgMessage } from './fs-handler-install-rg'
+import { buildInstallRgMessage, buildRipgrepRequiredMessage } from './fs-handler-install-rg'
 import { buildRelayCommandEnv } from './relay-command-env'
 import { RipgrepUnavailableError } from '../shared/ripgrep-process-availability'
+import { QuickOpenPathRanker } from '../shared/quick-open-path-search'
 
 export async function runListFilesScan(
   rootPath: string,
   excludePathPrefixes: string[],
   signal: AbortSignal,
-  maxResults?: number
+  maxResults?: number,
+  searchQuery?: string
 ): Promise<string[]> {
   throwIfFileListingCancelled(signal)
   try {
-    return await listFilesWithRg(rootPath, excludePathPrefixes, { signal, maxResults })
+    return await listFilesWithRg(rootPath, excludePathPrefixes, {
+      signal,
+      maxResults,
+      searchQuery
+    })
   } catch (error) {
     throwIfFileListingCancelled(signal)
     if (!(error instanceof RipgrepUnavailableError)) {
       throw error
     }
+  }
+  if (searchQuery !== undefined) {
+    throw new Error(await buildRipgrepRequiredMessage())
   }
   // Why: git ls-files only works inside git repos. Use rev-parse to detect
   // git ancestry — unlike checking for a local .git entry, this works from
@@ -45,7 +54,14 @@ export async function runListFilesScan(
     // budget errors into install-rg guidance; genuine git failures keep
     // their own messages.
     try {
-      return await listFilesWithGit(rootPath, excludePathPrefixes, { signal, maxResults })
+      return rankFallbackFiles(
+        await listFilesWithGit(rootPath, excludePathPrefixes, {
+          signal,
+          maxResults: searchQuery === undefined ? maxResults : undefined
+        }),
+        searchQuery,
+        maxResults
+      )
     } catch (err) {
       if (isQuickOpenReaddirBudgetError(err)) {
         throw new Error(await buildInstallRgMessage(err))
@@ -59,7 +75,14 @@ export async function runListFilesScan(
   // problem, so translate the opaque cap error into actionable guidance
   // the user can act on directly from the error toast.
   try {
-    return await listFilesWithReaddir(rootPath, excludePathPrefixes, { signal, maxResults })
+    return rankFallbackFiles(
+      await listFilesWithReaddir(rootPath, excludePathPrefixes, {
+        signal,
+        maxResults: searchQuery === undefined ? maxResults : undefined
+      }),
+      searchQuery,
+      maxResults
+    )
   } catch (err) {
     // Why: a cancelled scan is not an rg-availability problem; wrapping it
     // in install-rg guidance would surface bogus advice on the client.
@@ -68,4 +91,19 @@ export async function runListFilesScan(
     }
     throw new Error(await buildInstallRgMessage(err))
   }
+}
+
+function rankFallbackFiles(
+  files: readonly string[],
+  query: string | undefined,
+  limit: number | undefined
+): string[] {
+  if (query === undefined) {
+    return [...files]
+  }
+  const ranker = new QuickOpenPathRanker(query, limit ?? 16)
+  for (const file of files) {
+    ranker.consider(file)
+  }
+  return ranker.result().paths
 }

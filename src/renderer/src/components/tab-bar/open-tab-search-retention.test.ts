@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { Tab, TabContentType } from '../../../../shared/tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { SearchableBrowserPage } from '@/lib/browser-palette-search'
+import {
+  buildSearchableBrowserPageDocument,
+  type SearchableBrowserPage
+} from '@/lib/browser-palette-search'
+import { buildPaletteTabDocument } from '@/lib/palette-match/tab-document'
 import type { SearchableWorkspaceTab } from '@/lib/workspace-tab-palette-search'
 import { TERMINAL_TYPE_SEARCH_ALIASES } from '@/lib/workspace-tab-palette-search'
 import { searchOpenTabs } from './open-tab-search'
@@ -59,6 +63,8 @@ function makeWorkspaceTab({
   agentSnippets?: string[]
   typeSearchAliases?: readonly string[]
 }): SearchableWorkspaceTab {
+  const aliases =
+    typeSearchAliases ?? (contentType === 'terminal' ? TERMINAL_TYPE_SEARCH_ALIASES : undefined)
   return {
     tab: makeTab(id, contentType) as SearchableWorkspaceTab['tab'],
     worktree,
@@ -70,11 +76,20 @@ function makeWorkspaceTab({
     secondaryText: secondarySearchTexts[0] ?? '',
     titleSearchText: title,
     secondarySearchTexts,
-    typeSearchAliases:
-      typeSearchAliases ?? (contentType === 'terminal' ? TERMINAL_TYPE_SEARCH_ALIASES : undefined),
+    typeSearchAliases: aliases,
+    document: buildPaletteTabDocument({
+      id,
+      title,
+      secondaryTexts: secondarySearchTexts,
+      worktreeName: worktree.displayName ?? '',
+      branch: 'main',
+      repoName: 'octo/rocket',
+      typeAliases: aliases
+    }),
     agentMetadata: agentSnippets.length
       ? [{ paneKey: `${id}-pane`, textParts: [], snippetCandidates: agentSnippets }]
       : [],
+    occupantAgent: null,
     isCurrentTab: false,
     isCurrentWorktree: true
   }
@@ -124,6 +139,12 @@ function makeBrowserPage({
     worktree,
     repoName: 'octo/rocket',
     worktreeSortIndex: 0,
+    document: buildSearchableBrowserPageDocument({
+      page,
+      workspace,
+      worktree,
+      repoName: 'octo/rocket'
+    }),
     isCurrentPage: false,
     isCurrentWorktree: true
   }

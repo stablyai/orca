@@ -233,14 +233,14 @@ describe('createPtySubprocess', () => {
     resolveUnixShellPathMock.mockReturnValue('/bin/sh')
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     const previousShell = process.env.SHELL
-    const previousMarker = process.env.ORCA_SHELL_READY_MARKER
+    const previousFeatures = process.env.ORCA_SHELL_FEATURES
     const previousZdotdir = process.env.ZDOTDIR
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     delete process.env.SHELL
     // Why: the test runner itself can execute inside an Orca-wrapped shell
     // whose exported wrapper vars would leak through the process.env spread.
-    delete process.env.ORCA_SHELL_READY_MARKER
+    delete process.env.ORCA_SHELL_FEATURES
     delete process.env.ZDOTDIR
 
     try {
@@ -257,9 +257,9 @@ describe('createPtySubprocess', () => {
       expect(shellPath).toBe('/bin/sh')
       expect(shellArgs).toEqual(['-l'])
       // A launch config derived from the missing preferred zsh would inject
-      // ZDOTDIR and ORCA_SHELL_READY_MARKER; /bin/sh must spawn without them.
+      // ZDOTDIR and ORCA_SHELL_FEATURES; /bin/sh must spawn without them.
       expect(spawnOptions.env.ZDOTDIR).toBeUndefined()
-      expect(spawnOptions.env.ORCA_SHELL_READY_MARKER).toBeUndefined()
+      expect(spawnOptions.env.ORCA_SHELL_FEATURES).toBeUndefined()
       expect(spawnOptions.env.SHELL).toBe('/bin/sh')
     } finally {
       warn.mockRestore()
@@ -271,10 +271,10 @@ describe('createPtySubprocess', () => {
       } else {
         process.env.SHELL = previousShell
       }
-      if (previousMarker === undefined) {
-        delete process.env.ORCA_SHELL_READY_MARKER
+      if (previousFeatures === undefined) {
+        delete process.env.ORCA_SHELL_FEATURES
       } else {
-        process.env.ORCA_SHELL_READY_MARKER = previousMarker
+        process.env.ORCA_SHELL_FEATURES = previousFeatures
       }
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR

@@ -216,7 +216,9 @@ describe('connectPanePty', () => {
       {
         state: 'working',
         prompt: 'Fix the status',
-        agentType: 'command-code'
+        agentType: 'command-code',
+        // Why: Orca launched this agent, so the seed predates any provider signal (STA-4293).
+        observation: expect.objectContaining({ origin: 'launch', kind: 'transition' })
       },
       undefined,
       undefined,
@@ -258,7 +260,9 @@ describe('connectPanePty', () => {
       {
         state: 'working',
         prompt: 'Fix the spinner',
-        agentType: 'command-code'
+        agentType: 'command-code',
+        // Why: read off the pane's own output, not a provider hook (STA-4293).
+        observation: expect.objectContaining({ origin: 'process', kind: 'transition' })
       },
       undefined,
       undefined,
@@ -465,7 +469,8 @@ describe('connectPanePty', () => {
       {
         state: 'working',
         prompt: 'Fix the green done state',
-        agentType: 'command-code'
+        agentType: 'command-code',
+        observation: expect.objectContaining({ origin: 'process', kind: 'transition' })
       },
       undefined,
       undefined,

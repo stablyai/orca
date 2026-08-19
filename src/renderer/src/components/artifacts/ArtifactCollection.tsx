@@ -1,49 +1,88 @@
+import { useMemo, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import type { ArtifactListItem } from '../../../../shared/artifacts'
-import { ArtifactDetailHeader } from './ArtifactDetailHeader'
-import { ArtifactListPane } from './ArtifactListPane'
-import { ArtifactPreview } from './ArtifactPreview'
+import { Button } from '@/components/ui/button'
+import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
+import { clampArtifactListSearchQuery, filterArtifactsBySearchQuery } from './artifact-list-search'
+import { ArtifactListRows } from './ArtifactListRows'
+import { ArtifactListTableHeader } from './ArtifactListTableHeader'
+import { ArtifactListToolbar } from './ArtifactListToolbar'
+import { LIST_TABLE_CONTAINER_CLASS } from '@/lib/list-table-layout'
 
 export function ArtifactCollection({
   artifacts,
   deletingId,
-  selectedArtifact,
+  selectedSlug,
   selectArtifact,
   deleteArtifact,
   hasMore,
   loadingMore,
-  loadMore
+  loadMore,
+  onRefresh,
+  isRefreshing
 }: {
   artifacts: readonly ArtifactListItem[]
   deletingId: string | null
-  selectedArtifact: ArtifactListItem
+  selectedSlug: string | null
   selectArtifact: (slug: string) => void
   deleteArtifact: (item: ArtifactListItem) => void
   hasMore: boolean
   loadingMore: boolean
   loadMore: () => void
+  onRefresh: () => void
+  isRefreshing: boolean
 }): React.JSX.Element {
+  const [query, setQuery] = useState('')
+  // Why: clamp on the way in so a multi-MB paste never reaches state or filtering.
+  const onQueryChange = (next: string): void => setQuery(clampArtifactListSearchQuery(next))
+  const matches = useMemo(() => filterArtifactsBySearchQuery(artifacts, query), [artifacts, query])
+
   return (
-    // Why: match Automations while stacking the list on narrow layouts.
-    <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden lg:grid-cols-[minmax(240px,300px)_minmax(0,1fr)] lg:grid-rows-1">
-      <ArtifactListPane
-        className="max-h-56 border-b border-border/50 bg-muted/20 lg:max-h-none lg:border-b-0 lg:border-r"
-        artifacts={artifacts}
-        deletingId={deletingId}
-        selectedArtifact={selectedArtifact}
-        selectArtifact={selectArtifact}
-        deleteArtifact={deleteArtifact}
-        hasMore={hasMore}
-        loadingMore={loadingMore}
-        loadMore={loadMore}
-      />
-      <section className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
-        <ArtifactDetailHeader
-          deleting={deletingId === selectedArtifact.artifact.slug}
-          item={selectedArtifact}
-          onDelete={deleteArtifact}
+    <section className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-4 md:px-5">
+      <div className="flex min-h-0 flex-1 flex-col gap-4">
+        <ArtifactListToolbar
+          query={query}
+          onQueryChange={onQueryChange}
+          onRefresh={onRefresh}
+          isRefreshing={isRefreshing}
         />
-        <ArtifactPreview shareUrl={selectedArtifact.shareUrl} />
-      </section>
-    </div>
+        <div
+          className={cn('scrollbar-sleek min-h-0 flex-1 overflow-auto', LIST_TABLE_CONTAINER_CLASS)}
+        >
+          <ArtifactListTableHeader />
+          {matches.length > 0 ? (
+            <div className="divide-y divide-border/50">
+              <ArtifactListRows
+                artifacts={matches}
+                deletingId={deletingId}
+                selectedSlug={selectedSlug}
+                selectArtifact={selectArtifact}
+                deleteArtifact={deleteArtifact}
+              />
+            </div>
+          ) : (
+            <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+              {translate('auto.components.artifacts.ArtifactCollection.noMatches', 'No matches')}
+            </p>
+          )}
+          {hasMore ? (
+            <div className="border-t border-border/50 p-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="w-full"
+                disabled={loadingMore}
+                onClick={loadMore}
+              >
+                {loadingMore ? <Loader2 className="animate-spin" /> : null}
+                {translate('auto.components.artifacts.ArtifactCollection.loadMore', 'Load more')}
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </section>
   )
 }

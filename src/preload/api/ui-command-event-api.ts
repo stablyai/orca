@@ -27,6 +27,10 @@ import type {
   TerminalTabCloseRequest,
   TerminalTabCloseResponse
 } from '../../shared/terminal-tab-close'
+import type {
+  SessionTabCloseRequest,
+  SessionTabCloseResponse
+} from '../../shared/session-tab-close'
 
 export type UiCommandEventApi = {
   get: () => Promise<PersistedUIState>
@@ -176,6 +180,8 @@ export type UiCommandEventApi = {
   ) => () => void
   onFocusEditorTab: (callback: (data: { tabId: string; worktreeId: string }) => void) => () => void
   onCloseSessionTab: (callback: (data: { tabId: string; worktreeId: string }) => void) => () => void
+  onSessionTabCloseRequest: (callback: (request: SessionTabCloseRequest) => void) => () => void
+  respondSessionTabClose: (response: SessionTabCloseResponse) => void
   onMoveSessionTab: (
     callback: (data: { worktreeId: string } & RuntimeMobileSessionTabMove) => void
   ) => () => void

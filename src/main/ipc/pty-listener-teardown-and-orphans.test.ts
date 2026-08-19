@@ -9,6 +9,9 @@ import { posixOnlyIt, makeDisposable } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import * as livePtyGate from '../claude-accounts/live-pty-gate'
 import { registerPtyHandlers, setLocalPtyProvider, getLocalPtyProvider } from './pty'
+import { join } from 'node:path'
+// Why resolved rather than hardcoded: the wrapper tree is content-addressed.
+import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -86,8 +89,8 @@ describe('registerPtyHandlers', () => {
           env: expect.objectContaining({
             SHELL: '/bin/zsh',
             ORCA_OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-config',
-            ORCA_SHELL_READY_MARKER: '0',
-            ZDOTDIR: '/tmp/orca-user-data/shell-ready/zsh'
+            ORCA_SHELL_FEATURES: 'overlay,history,markers',
+            ZDOTDIR: join(getShellReadyWrapperRoot(), 'zsh')
           })
         })
       )
@@ -436,7 +439,9 @@ describe('registerPtyHandlers', () => {
     await Promise.resolve()
 
     expect(killSpy).toHaveBeenCalled()
-    expect(runtime.onPtyExit).toHaveBeenCalledWith(spawnResult.id, -1, spawnResult.incarnationId)
+    expect(runtime.onPtyExit).toHaveBeenCalledWith(spawnResult.id, -1, spawnResult.incarnationId, {
+      cause: { kind: 'unknown', reason: 'stop_unverified' }
+    })
     const listed = await getLocalPtyProvider().listProcesses()
     expect(listed.some((info) => info.id === spawnResult.id)).toBe(false)
   })

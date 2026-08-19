@@ -63,6 +63,7 @@ vi.mock('./MobilePageContent', () => ({
     onRetryRelay: () => void
     selectedAddress: string | undefined
     loadNetworkInterfaces: () => void
+    openAndroidInstallGuide: () => void
     refreshingNetworkInterfaces: boolean
     stage: string | null
     stepIdx: number
@@ -101,6 +102,9 @@ vi.mock('./MobilePageContent', () => ({
       </button>
       <button type="button" onClick={props.loadNetworkInterfaces}>
         Refresh addresses
+      </button>
+      <button type="button" onClick={props.openAndroidInstallGuide}>
+        Open Android install guide
       </button>
       <button
         type="button"
@@ -167,6 +171,15 @@ describe('MobilePage pairing connection mode', () => {
     await user.click(screen.getByRole('button', { name: 'Enter flow' }))
     await user.click(screen.getByRole('button', { name: 'Continue' }))
   }
+
+  it('opens Android troubleshooting in the system browser', async () => {
+    const user = userEvent.setup()
+    render(<MobilePage />)
+
+    await user.click(screen.getByRole('button', { name: 'Open Android install guide' }))
+
+    expect(window.api.shell.openUrl).toHaveBeenCalledWith('https://www.onorca.dev/docs/android-apk')
+  })
 
   it('defaults signed-in pairing to Anywhere and remints when same-network is selected', async () => {
     const user = userEvent.setup()

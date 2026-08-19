@@ -21,6 +21,12 @@ export type PRGroupKey = 'done' | 'in-review' | 'in-progress' | 'closed'
 
 export const PR_GROUP_ORDER: PRGroupKey[] = ['done', 'in-review', 'in-progress', 'closed']
 
+/** Section key for a PR lane. Shared so worktree and folder-workspace bucketing
+ *  cannot drift onto different prefixes. */
+export function getPRLaneKey(prGroup: PRGroupKey): string {
+  return `pr:${prGroup}`
+}
+
 export const PR_GROUP_META: Record<
   PRGroupKey,
   {

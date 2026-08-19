@@ -13652,6 +13652,7 @@
           "e46c1aa9ad": "创建",
           "a9d9dccf77": "保存",
           "777548c2d6": "保存更改",
+          "e8c2a14f70": "保存后，将自动运行，直到暂停。",
           "ff5db28639": "现存的"
         },
         "AutomationEditorDialogHeader": {
@@ -13942,6 +13943,19 @@
         },
         "AutomationListLocalRows": {
           "c92c9463c6": "自动化操作"
+        },
+        "AutomationListFilterMenu": {
+          "926e785e4d": "搜索智能体...",
+          "491043ee45": "没有智能体符合您的搜索。",
+          "agent": "智能体",
+          "lastRun": "上次运行",
+          "all": "全部",
+          "failed": "失败",
+          "succeeded": "成功",
+          "neverRan": "从未运行",
+          "filters": "筛选器",
+          "clear": "清除筛选器",
+          "removeFilter": "移除 {{value0}} 筛选器"
         }
       },
       "agent": {
@@ -14285,6 +14299,13 @@
         "pendingChip": "{{value0}} 待处理",
         "needsActionChip": "{{value0}} 个需要操作",
         "unresolvedChip": "{{value0}} 个未解决"
+      },
+      "artifacts": {
+        "ArtifactsPage": {
+          "deleteTitle": "删除工件？",
+          "deleteDescription": "“{{name}}” 将无法再通过其公共链接访问。",
+          "delete": "删除"
+        }
       }
     },
     "i18n": {

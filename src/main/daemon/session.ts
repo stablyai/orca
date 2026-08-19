@@ -20,6 +20,7 @@ import type {
   TerminalSnapshot
 } from './types'
 import { createPtySlaveEchoProbe } from '../../shared/pty-slave-line-discipline-echo'
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 export class Session {
   readonly sessionId: string
@@ -66,6 +67,7 @@ export class Session {
       subprocess: this.subprocess,
       responderParser: this.output.responderParser,
       shellReadySupported: opts.shellReadySupported,
+      ...(opts.reportReadinessEvent ? { reportReadinessEvent: opts.reportReadinessEvent } : {}),
       shellReadyTimeoutMs: opts.shellReadyTimeoutMs,
       installDeviceAttributesFilter: () => this.output.installDeviceAttributesFilter(),
       releaseDeviceAttributesFilter: () => this.output.releaseDeviceAttributesFilter(),
@@ -82,7 +84,7 @@ export class Session {
     })
     this.shellReady.startPromptReadinessProbe()
     this.subprocess.onData((data) => this.handleSubprocessData(data))
-    this.subprocess.onExit((code) => this.handleSubprocessExit(code))
+    this.subprocess.onExit((code, cause) => this.handleSubprocessExit(code, cause))
   }
 
   get state(): SessionState {
@@ -342,7 +344,7 @@ export class Session {
     this.shellReady.ingestSubprocessData(data)
   }
 
-  private handleSubprocessExit(code: number): void {
+  private handleSubprocessExit(code: number, cause?: TerminalExitCause): void {
     this.termination.markPhysicalExit()
     if (this._disposed) {
       return
@@ -366,7 +368,7 @@ export class Session {
     // Not via #teardownSubprocess: it flips `_disposed`, short-circuiting the later Session.dispose() reaper.
     this.termination.disposeSubprocessHandle()
 
-    this.output.broadcastExit(code, this.incarnationId)
+    this.output.broadcastExit(code, this.incarnationId, cause)
 
     // Why: hand off to the owner's reaper (disposes emulator, drops session from host map); else dead sessions accumulate.
     this.onSessionExit?.(code)

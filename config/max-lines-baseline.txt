@@ -29,7 +29,6 @@ inline src/main/git/repo.ts
 inline src/main/git/runner.ts
 inline src/main/git/status.ts
 inline src/main/git/worktree.ts
-inline src/main/github/client.ts
 inline src/main/github/pr-refresh-coordinator.ts
 inline src/main/github/project-view.ts
 inline src/main/github/project-view/mutations.ts
