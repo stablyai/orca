@@ -16,7 +16,7 @@ import { DetectedSpriteFrame } from './DetectedSpriteFrame'
 import { usePetWalkLane } from './usePetWalkLane'
 import { usePetFallToLane, PET_LANDING_SQUASH_MS, PET_RISING_MS } from './usePetFallToLane'
 import { poseSpriteFrom } from './bundled-pet-pose-sprite'
-import { arbitratePetPose } from './pet-pose-arbitration'
+import { arbitratePetPose, type PetFallPose } from './pet-pose-arbitration'
 import { petBodyMotionStyle, PET_BODY_MOTION_KEYFRAMES_CSS } from './pet-body-motion-css'
 
 type Sprite = NonNullable<CustomPet['sprite']>
@@ -56,13 +56,16 @@ function SpriteFrame({
   animate,
   maxSize,
   animationName,
-  restartKey
+  restartKey,
+  loop = true
 }: {
   url: string
   sprite: Sprite
   animate: boolean
   maxSize: number
   animationName: PetAnimationName
+  // One-shot rows (getting up) settle on their last frame instead of looping.
+  loop?: boolean
   // Why: folded into the keyframes name, so bumping it mints a fresh animation
   // that restarts from frame 0 even when the state row is unchanged.
   restartKey: number
@@ -97,7 +100,8 @@ function SpriteFrame({
     frameWidth: sprite.frameWidth,
     scale,
     rowOffsetY: startY,
-    frameDurationsMs: anim?.frameDurationsMs
+    frameDurationsMs: anim?.frameDurationsMs,
+    loop
   })
   return (
     <>
@@ -329,9 +333,22 @@ export function PetOverlay(): React.JSX.Element {
   // Why: pacing and the agent-state row disagree — walking with a breathing row
   // reads as gliding, and a waiting pose should park the pet. Arbitrate once, so
   // the row on screen and whether the lane advances can never contradict.
+  // Why: only pets whose sheet actually draws the fall rows use them; imported
+  // `.codex-pet` bundles have no such rows, so they keep the CSS topple.
+  const drawsFall = poses !== undefined
+  const fallPose: PetFallPose | null = !drawsFall
+    ? null
+    : fall.rising
+      ? 'rising'
+      : fall.supine
+        ? fall.falling
+          ? 'falling'
+          : 'downed'
+        : null
   const { animation: animationName, pacing } = arbitratePetPose(
     agentAnimation,
-    petWalks && !dragging && !fall.busy
+    petWalks && !dragging && !fall.busy,
+    fallPose
   )
   // Why: the sheet holds the pose still on its own frames, so it only freezes
   // for reduced motion or while the pet is in hand.
@@ -383,8 +400,8 @@ export function PetOverlay(): React.JSX.Element {
               motionAllowed,
               landingDurationMs: PET_LANDING_SQUASH_MS,
               selfAnimated: poses !== undefined,
-              supine: fall.supine,
-              rising: fall.rising,
+              supine: !drawsFall && fall.supine,
+              rising: !drawsFall && fall.rising,
               supineLiftPx,
               risingDurationMs: PET_RISING_MS
             }),
@@ -422,6 +439,7 @@ export function PetOverlay(): React.JSX.Element {
                 url={poses.url}
                 sprite={poseSpriteFrom(poses)}
                 animate={poseAnimate}
+                loop={animationName !== 'rising'}
                 maxSize={size}
                 animationName={animationName}
                 restartKey={dragGeneration}

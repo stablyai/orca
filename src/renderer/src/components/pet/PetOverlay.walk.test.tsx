@@ -23,6 +23,8 @@ vi.mock('../../store', () => {
   return { useAppStore }
 })
 
+// Why: no pose sheet here on purpose — this file covers the fallback path, where
+// a pet without drawn fall rows still topples by CSS rotation.
 vi.mock('./usePetUrl', () => ({
   usePetUrl: () => ({ url: 'data:image/png;base64,', ready: true, sprite: null, detected: null })
 }))

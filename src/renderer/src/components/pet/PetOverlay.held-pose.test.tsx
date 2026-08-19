@@ -42,6 +42,7 @@ vi.mock('../../store', () => {
 vi.mock('./usePetUrl', () => ({ usePetUrl: () => petUrlMock.current }))
 
 import { PetOverlay } from './PetOverlay'
+import { PET_DOWNED_MS, PET_RISING_MS } from './usePetFallToLane'
 
 let root: Root | null = null
 let container: HTMLDivElement | null = null
@@ -232,5 +233,71 @@ describe('PetOverlay held pose', () => {
     expect(poseSprite()?.style.animationPlayState).toBe('running')
     // 4 frames x 420ms of breathing, far slower than the 0.5s walk.
     expect(poseSprite()?.style.animation).toContain('1.68s')
+  })
+
+  it('plays drawn fall rows instead of rotating the standing pose', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const frames = new Map<number, FrameRequestCallback>()
+    let nextId = 1
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      const id = nextId++
+      frames.set(id, cb)
+      return id
+    })
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => void frames.delete(id))
+    const step = (t: number): void => {
+      const pending = [...frames.values()]
+      frames.clear()
+      act(() => {
+        for (const cb of pending) {
+          cb(t)
+        }
+      })
+    }
+
+    petUrlMock.current = {
+      url: 'data:image/png;base64,idle',
+      ready: true,
+      sprite: null,
+      detected: null,
+      poses: POSES
+    }
+
+    renderOverlay()
+    const box = container?.querySelector('.fixed') as HTMLElement
+    const grab = grabHandle()
+
+    firePointer(grab, 'pointerdown', 350, 600)
+    firePointer(grab, 'pointermove', 350, 120)
+    firePointer(grab, 'pointermove', 350, 120)
+    firePointer(grab, 'pointerup', 350, 120)
+
+    step(0)
+    step(60)
+
+    // Row 4 is the drawn fall; the body no longer rotates via CSS.
+    expect(poseRow()).toBe(4)
+    expect(grab.style.transform ?? '').not.toContain('rotate(-90deg)')
+
+    for (let t = 120; t <= 2000 && box.style.top !== '564px'; t += 100) {
+      step(t)
+    }
+    expect(poseRow()).toBe(5)
+
+    act(() => {
+      vi.advanceTimersByTime(PET_DOWNED_MS + 20)
+    })
+    expect(poseRow()).toBe(6)
+    // Getting up must settle on its feet, not loop back onto the floor.
+    expect(poseSprite()?.style.animation).toContain('forwards')
+    expect(poseSprite()?.style.animation).not.toContain('infinite')
+
+    act(() => {
+      vi.advanceTimersByTime(PET_RISING_MS + 20)
+    })
+    expect(poseRow()).toBe(1)
+
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
   })
 })

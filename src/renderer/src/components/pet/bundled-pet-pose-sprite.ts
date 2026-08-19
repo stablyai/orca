@@ -1,5 +1,6 @@
 import type { CustomPet } from '../../../../shared/pet-types'
 import type { PetAnimationName } from './pet-agent-state'
+import { PET_DOWNED_MS, PET_RISING_MS } from './usePetFallToLane'
 
 /** A bundled pet's pose sheet: equal cells, one animation per row. */
 export type BundledPetPoses = {
@@ -12,11 +13,29 @@ export type BundledPetPoses = {
 }
 
 /** Physical rows in the generated sheet. */
-const ROW = { idle: 0, running: 1, waiting: 2, jumping: 3 } as const
+const ROW = {
+  idle: 0,
+  running: 1,
+  waiting: 2,
+  jumping: 3,
+  falling: 4,
+  downed: 5,
+  rising: 6
+} as const
 
 /** Per-row frame hold. Breathing at running speed reads as panic, and the hop
  *  needs to snap, so the sheet fps alone is not enough. */
-const HOLD_MS = { idle: 420, running: 125, waiting: 220, jumping: 110 } as const
+// Why: the fall rows are paced to their phases rather than to taste — the rise
+// spans exactly PET_RISING_MS so its one-shot playback ends as the phase does.
+const HOLD_MS = {
+  idle: 420,
+  running: 125,
+  waiting: 220,
+  jumping: 110,
+  falling: 90,
+  downed: PET_DOWNED_MS / 4,
+  rising: PET_RISING_MS / 4
+} as const
 
 /** Every live state is mapped, so `SpriteFrame` never falls back: an unmapped
  *  name would silently play the default row and look like a stuck animation.
@@ -29,7 +48,10 @@ const POSE: Record<PetAnimationName, keyof typeof ROW> = {
   'running-right': 'running',
   waiting: 'waiting',
   review: 'waiting',
-  jumping: 'jumping'
+  jumping: 'jumping',
+  falling: 'falling',
+  downed: 'downed',
+  rising: 'rising'
 }
 
 export function poseSpriteFrom(poses: BundledPetPoses): NonNullable<CustomPet['sprite']> {

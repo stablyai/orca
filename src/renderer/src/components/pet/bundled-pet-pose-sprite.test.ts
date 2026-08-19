@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { poseSpriteFrom, type BundledPetPoses } from './bundled-pet-pose-sprite'
+import { PET_RISING_MS } from './usePetFallToLane'
 
 const poses: BundledPetPoses = {
   url: 'poses.webp',
@@ -16,9 +17,9 @@ describe('poseSpriteFrom', () => {
     expect(sprite.frameWidth).toBe(252)
     expect(sprite.frameHeight).toBe(320)
     expect(sprite.columns).toBe(4)
-    expect(sprite.rows).toBe(4)
+    expect(sprite.rows).toBe(7)
     expect(sprite.sheetWidth).toBe(1008)
-    expect(sprite.sheetHeight).toBe(1280)
+    expect(sprite.sheetHeight).toBe(2240)
     expect(sprite.defaultAnimation).toBe('idle')
   })
 
@@ -35,7 +36,10 @@ describe('poseSpriteFrom', () => {
       'running-right': 1,
       waiting: 2,
       review: 2,
-      jumping: 3
+      jumping: 3,
+      falling: 4,
+      downed: 5,
+      rising: 6
     })
   })
 
@@ -47,5 +51,13 @@ describe('poseSpriteFrom', () => {
     expect(hold('idle')).toBeGreaterThan(hold('running'))
     expect(hold('waiting')).toBeGreaterThan(hold('running'))
     expect(hold('jumping')).toBeLessThanOrEqual(hold('running'))
+  })
+
+  it('paces getting up over the full rise so it plays exactly once', () => {
+    const sprite = poseSpriteFrom(poses)
+    const rise = sprite.animations?.rising
+    const total = (rise?.frameDurationsMs ?? []).reduce((a, b) => a + b, 0)
+
+    expect(total).toBe(PET_RISING_MS)
   })
 })
