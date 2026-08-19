@@ -47,6 +47,18 @@ describe('computer-use skill guidance', () => {
     expect(skill).not.toContain('`result.elements`')
   })
 
+  it('explains how JSON and pretty output handle screenshots', () => {
+    expect(bundledGuide).toBeDefined()
+
+    for (const skill of [readFileSync(guidePath, 'utf8'), bundledGuide]) {
+      expect(skill).toContain('request screenshots by default unless `--no-screenshot`')
+      expect(skill).toContain('A successful `--json` capture')
+      expect(skill).toContain('`result.screenshot.path`')
+      expect(skill).toContain('inline base64 `result.screenshot.data`')
+      expect(skill).toContain('Pretty output does not save')
+    }
+  })
+
   it('requires atomic modifier-click actions in the source and bundled guide', () => {
     expect(bundledGuide).toBeDefined()
 

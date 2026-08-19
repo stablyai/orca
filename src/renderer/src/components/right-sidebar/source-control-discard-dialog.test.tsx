@@ -80,7 +80,7 @@ describe('SourceControlDiscardDialog', () => {
   })
 
   it('makes the discard button the dialog default action', async () => {
-    const { SourceControlDiscardDialog } = await import('./source-control-discard-dialog')
+    const { SourceControlDiscardDialog } = await import('./source-control/commit/discard-dialog')
 
     renderToStaticMarkup(
       <SourceControlDiscardDialog
@@ -107,7 +107,8 @@ describe('SourceControlDiscardDialog', () => {
 
 describe('focusDiscardDialogConfirmButton', () => {
   it('prevents Radix from focusing the first tabbable button', async () => {
-    const { focusDiscardDialogConfirmButton } = await import('./source-control-discard-dialog')
+    const { focusDiscardDialogConfirmButton } =
+      await import('./source-control/commit/discard-dialog')
     const event = { preventDefault: vi.fn() } as unknown as Event
     const confirmButton = { focus: vi.fn() } as unknown as HTMLButtonElement
 

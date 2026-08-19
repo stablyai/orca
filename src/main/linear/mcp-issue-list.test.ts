@@ -24,10 +24,16 @@ const clientEntry = (
   client: { client: { rawRequest: request } }
 })
 
-vi.mock('./client', () => ({
+vi.mock('./linear-request-concurrency', () => ({
   acquire,
-  release,
-  clearToken,
+  release
+}))
+
+vi.mock('./linear-token-store', () => ({
+  clearToken
+}))
+
+vi.mock('./client', () => ({
   getClients,
   getStatus,
   isAuthError: () => false

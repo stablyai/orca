@@ -58,6 +58,8 @@ export type WorkerTerminalListState =
   | 'release_unknown'
   | 'released'
 
+export type WorkerDispatchListState = WorkerDispatchState | 'unsupervised'
+
 export type WorkerTerminalArchiveRow = {
   dispatch_id: string
   resource_id: string
@@ -77,7 +79,7 @@ export const WORKER_RELEASABLE_STATES: readonly WorkerDispatchState[] = ['succee
 
 // Process accounting for worker-list; deliberately independent of Task/Dispatch outcome.
 export function deriveWorkerTerminalListState(params: {
-  workerState: WorkerDispatchState
+  workerState: WorkerDispatchListState
   agentTerminalHandle: string | null
   resource: WorkerTerminalResourceRow | null
 }): WorkerTerminalListState | null {
@@ -97,8 +99,13 @@ export function deriveWorkerTerminalListState(params: {
   if (resource.ownership_state !== 'owned' || resource.release_state === 'retained') {
     return 'retained'
   }
-  if (WORKER_RELEASABLE_STATES.includes(params.workerState)) {
+  if (
+    params.workerState !== 'unsupervised' &&
+    WORKER_RELEASABLE_STATES.includes(params.workerState)
+  ) {
     return 'reclaimable'
   }
-  return WORKER_SETTLED_STATES.includes(params.workerState) ? 'retained' : 'active'
+  return params.workerState !== 'unsupervised' && WORKER_SETTLED_STATES.includes(params.workerState)
+    ? 'retained'
+    : 'active'
 }

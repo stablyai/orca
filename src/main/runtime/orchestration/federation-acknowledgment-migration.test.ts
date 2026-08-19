@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
 import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
+import { SCHEMA_VERSION } from './db/contract-constants'
 
 describe('federation acknowledgment migration', () => {
   let db: OrchestrationDb | undefined
@@ -27,7 +28,7 @@ describe('federation acknowledgment migration', () => {
     const oldDb = new Database(dbPath)
     oldDb.exec('ALTER TABLE federated_dispatches DROP COLUMN to_home_acknowledged_sequence')
     oldDb.pragma('user_version = 26')
-    expect(resolveOrchestrationMigrationStartVersion(oldDb, 26, 27)).toBe(26)
+    expect(resolveOrchestrationMigrationStartVersion(oldDb, 26, 28)).toBe(26)
     oldDb
       .prepare(
         `INSERT INTO federated_dispatches (
@@ -41,7 +42,7 @@ describe('federation acknowledgment migration', () => {
     db = new OrchestrationDb(dbPath)
     const sqlite = (db as unknown as { db: Database.Database }).db
 
-    expect(sqlite.pragma('user_version', { simple: true })).toBe(27)
+    expect(sqlite.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
     expect(db.getFederatedDispatch('ctx_migrated')).toMatchObject({
       to_home_imported_sequence: 2,
       to_home_acknowledged_sequence: 0

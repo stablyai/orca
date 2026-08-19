@@ -73,6 +73,119 @@ describe('adoptProvisionedRootSshCheckout', () => {
     })
   })
 
+  it('rejects a recipe checkout on a branch Orca did not request', async () => {
+    seedRuntime(userDataPath, projectRoot)
+    registerSshGitProvider(connectionId, {
+      listWorktrees: vi
+        .fn()
+        .mockResolvedValue([gitWorktree(projectRoot, { branch: 'refs/heads/wrong-branch' })]),
+      exec: sparseCheckoutProbe(false)
+    } as never)
+    const { store, setWorktreeMeta } = makeStore()
+
+    await expect(
+      adoptProvisionedRootSshCheckout({
+        userDataPath,
+        request: request(projectRoot),
+        repo: repo(projectRoot),
+        store,
+        isRepoCurrent: () => true
+      })
+    ).rejects.toThrow('requested branch')
+    expect(setWorktreeMeta).not.toHaveBeenCalled()
+  })
+
+  it('rejects a recipe checkout that did not start from the requested ref', async () => {
+    seedRuntime(userDataPath, projectRoot)
+    const exec = sparseCheckoutProbe(false)
+    registerSshGitProvider(connectionId, {
+      listWorktrees: vi.fn().mockResolvedValue([gitWorktree(projectRoot, { head: 'wrong-head' })]),
+      exec
+    } as never)
+    const { store, setWorktreeMeta } = makeStore()
+
+    await expect(
+      adoptProvisionedRootSshCheckout({
+        userDataPath,
+        request: {
+          ...request(projectRoot),
+          baseBranch: 'v1.2.3',
+          expectedRefHead: 'expected-head'
+        },
+        repo: repo(projectRoot),
+        store,
+        isRepoCurrent: () => true
+      })
+    ).rejects.toThrow('requested ref')
+    expect(exec).toHaveBeenCalledOnce()
+    expect(setWorktreeMeta).not.toHaveBeenCalled()
+  })
+
+  it('accepts an attached requested branch created from a tag or commit ref', async () => {
+    seedRuntime(userDataPath, projectRoot)
+    const exec = sparseCheckoutProbe(false)
+    registerSshGitProvider(connectionId, {
+      listWorktrees: vi.fn().mockResolvedValue([gitWorktree(projectRoot)]),
+      exec
+    } as never)
+    const { store } = makeStore()
+
+    await expect(
+      adoptProvisionedRootSshCheckout({
+        userDataPath,
+        request: {
+          ...request(projectRoot),
+          baseBranch: 'v1.2.3',
+          expectedRefHead: 'abc123'
+        },
+        repo: repo(projectRoot),
+        store,
+        isRepoCurrent: () => true
+      })
+    ).resolves.toMatchObject({ worktree: { branch: 'refs/heads/fix-sandbox' } })
+  })
+
+  it('rejects a requested ref without its source-host commit identity', async () => {
+    seedRuntime(userDataPath, projectRoot)
+    registerSshGitProvider(connectionId, {
+      listWorktrees: vi.fn().mockResolvedValue([gitWorktree(projectRoot)]),
+      exec: sparseCheckoutProbe(false)
+    } as never)
+    const { store, setWorktreeMeta } = makeStore()
+
+    await expect(
+      adoptProvisionedRootSshCheckout({
+        userDataPath,
+        request: { ...request(projectRoot), baseBranch: 'missing-ref' },
+        repo: repo(projectRoot),
+        store,
+        isRepoCurrent: () => true
+      })
+    ).rejects.toThrow('ref identity is missing')
+    expect(setWorktreeMeta).not.toHaveBeenCalled()
+  })
+
+  it('uses an explicit branch override as the requested local branch', async () => {
+    seedRuntime(userDataPath, projectRoot)
+    registerSshGitProvider(connectionId, {
+      listWorktrees: vi
+        .fn()
+        .mockResolvedValue([gitWorktree(projectRoot, { branch: 'refs/heads/feature/review' })]),
+      exec: sparseCheckoutProbe(false)
+    } as never)
+    const { store } = makeStore()
+
+    await expect(
+      adoptProvisionedRootSshCheckout({
+        userDataPath,
+        request: { ...request(projectRoot), branchNameOverride: 'feature/review' },
+        repo: repo(projectRoot),
+        store,
+        isRepoCurrent: () => true
+      })
+    ).resolves.toMatchObject({ worktree: { branch: 'refs/heads/feature/review' } })
+  })
+
   it('rejects a linked worktree and sparse checkout', async () => {
     seedRuntime(userDataPath, projectRoot)
     const listWorktrees = vi

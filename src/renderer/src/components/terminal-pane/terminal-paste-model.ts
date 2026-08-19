@@ -29,15 +29,17 @@ export type TerminalPastePayload = {
   lineCount: number
   hasRichText: boolean
   hasControlSequences: boolean
+  lineEndingByteLength: number
 }
 
 export type TerminalPastePlan = {
   target: TerminalPasteTarget
   payload: TerminalPastePayload
-  mode: 'direct' | 'chunked' | 'bracketed-terminal' | 'reject'
+  mode: 'direct' | 'chunked' | 'bracketed-terminal' | 'windows-input-record' | 'reject'
   // Why: 'terminal-cr' marks plans whose paste bytes Orca constructs itself, so
   // every write path applies xterm's native \r?\n -> \r before ConPTY sees LF.
-  newlinePolicy: 'preserve' | 'terminal-cr'
+  newlinePolicy: 'preserve' | 'terminal-cr' | 'windows-input-record'
+  windowsInputRecordNewline?: WindowsInputRecordNewline
   runtimeKey: string
   maxChunkBytes?: number
   bracketed: boolean
@@ -48,8 +50,11 @@ export type TerminalPastePlan = {
 export type TerminalPasteTextOptions = {
   forceBracketedPaste?: boolean
   forceBracketedPasteForMultiline?: boolean
+  windowsInputRecordNewline?: WindowsInputRecordNewline
   recoverImagePasteWebglAtlas?: boolean
 }
+
+export type WindowsInputRecordNewline = 'alt-enter' | 'csi-u'
 
 export type TerminalPasteExecutionReason =
   | 'operation-timeout'

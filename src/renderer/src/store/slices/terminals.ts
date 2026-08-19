@@ -46,7 +46,7 @@ import type { StartupCommandDelivery } from '../../../../shared/codex-startup-de
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
-import type { AgentStartedTelemetry } from '../../lib/worktree-activation'
+import type { AgentStartedTelemetry } from '../../lib/worktree-startup-payload'
 import type { AiVaultSessionTitle } from '../../../../shared/ai-vault-session-title'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { forgetAgentHibernationTabOutput } from '@/lib/agent-hibernation-output-activity'
@@ -3856,7 +3856,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       const tabsByWorktree: Record<string, TerminalTab[]> = Object.fromEntries(
         rowHydrationByWorktree
           .map(([worktreeId, hydration]) => [worktreeId, hydration.rows] as const)
-          .filter(([, tabs]) => tabs.length > 0)
+          .filter(
+            ([worktreeId, tabs]) =>
+              tabs.length > 0 || session.tabsByWorktree[worktreeId]?.length === 0
+          )
       )
       const releasedPtyIdsByTabId = new Map<string, Set<string>>(
         rowHydrationByWorktree.flatMap(([, hydration]) => [...hydration.releasedPtyIdsByTabId])

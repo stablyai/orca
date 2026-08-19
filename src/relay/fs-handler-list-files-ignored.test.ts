@@ -122,6 +122,29 @@ describe('relay quick open ignored file listing', () => {
     expect(callIndex).toBe(1)
   })
 
+  it('searches the complete stream and retains only ranked fuzzy matches', async () => {
+    const ignoredProc = createMockProcess()
+    spawnMock.mockReturnValue(ignoredProc)
+    const promise = listFilesWithRg('/remote/root', [], {
+      maxResults: 2,
+      searchQuery: 'sct'
+    })
+
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+    expect(spawnMock.mock.calls[0][1]).toContain('--no-ignore-vcs')
+    ;(ignoredProc.stdout as unknown as EventEmitter).emit(
+      'data',
+      `${Array.from({ length: 100_100 }, (_, index) => `data/payload-${index}.bin`).join('\n')}\n`
+    )
+    ;(ignoredProc.stdout as unknown as EventEmitter).emit(
+      'data',
+      'src/components/target.ts\nscripts/check-target.ts\n'
+    )
+    ignoredProc.emit('close', 0, null)
+
+    await expect(promise).resolves.toEqual(['scripts/check-target.ts', 'src/components/target.ts'])
+  })
+
   it.each(['error-first', 'close-first'] as const)(
     'tags a %s pre-spawn listing failure without starting the ignored pass',
     async (order) => {

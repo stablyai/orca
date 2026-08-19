@@ -1123,7 +1123,7 @@ export function RuntimeEnvironmentsPane({
 
       <div className={cn('space-y-5 pt-2', visibleWorkflow !== 'cloud-vm' && 'hidden')}>
         <CloudVmSetupGuide />
-        <EphemeralVmRuntimesSection />
+        <EphemeralVmRuntimesSection active={visibleWorkflow === 'cloud-vm'} />
       </div>
 
       <div

@@ -15,7 +15,7 @@ import {
 } from '../source-control/hosted-review-creation'
 import { createStackedHostedReview } from '../source-control/stacked-hosted-review-creation'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
-import { resolveRegisteredWorktreePath } from './filesystem-auth'
+import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 import { listRepoWorktrees } from '../repo-worktrees'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'

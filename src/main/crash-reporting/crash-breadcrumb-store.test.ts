@@ -125,6 +125,63 @@ describe('crash breadcrumb store', () => {
     vi.useRealTimers()
   })
 
+  it('expires the coalescing window after a backward wall-clock step', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-20T12:00:00.000Z'))
+    const hit = (): { suppressedSinceLast: number } | undefined =>
+      recordCoalescedCrashBreadcrumb({
+        name: 'agent_state_changed',
+        coalesceKey: 'agent:claude:working',
+        minIntervalMs: 30_000
+      })
+
+    hit()
+    vi.advanceTimersByTime(10_000)
+    expect(hit()).toBeUndefined()
+    vi.setSystemTime(new Date('2025-05-20T12:00:00.000Z'))
+    vi.advanceTimersByTime(20_000)
+
+    expect(hit()).toEqual({ suppressedSinceLast: 1 })
+    expect(getCrashBreadcrumbSnapshot()).toHaveLength(2)
+  })
+
+  it('does not collapse the coalescing window after a forward wall-clock step', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-20T12:00:00.000Z'))
+    const hit = (): { suppressedSinceLast: number } | undefined =>
+      recordCoalescedCrashBreadcrumb({
+        name: 'agent_state_changed',
+        coalesceKey: 'agent:claude:working',
+        minIntervalMs: 30_000
+      })
+
+    hit()
+    vi.advanceTimersByTime(10_000)
+    vi.setSystemTime(new Date('2027-05-20T12:00:00.000Z'))
+
+    expect(hit()).toBeUndefined()
+    vi.advanceTimersByTime(20_000)
+    expect(hit()).toEqual({ suppressedSinceLast: 1 })
+  })
+
+  it('folds data-less repeats into the emitted breadcrumb', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-05-20T12:00:00.000Z'))
+
+    recordCoalescedCrashBreadcrumb({
+      name: 'terminal_safe_fit_retry_exhausted',
+      coalesceKey: 'terminal_safe_fit_retry_exhausted',
+      minIntervalMs: 30_000
+    })
+    recordCoalescedCrashBreadcrumb({
+      name: 'terminal_safe_fit_retry_exhausted',
+      coalesceKey: 'terminal_safe_fit_retry_exhausted',
+      minIntervalMs: 30_000
+    })
+
+    expect(getCrashBreadcrumbSnapshot()[0]?.data).toEqual({ suppressedSinceLast: 1 })
+  })
+
   // Windows crash F0BKR84AHEH: two `terminal_safe_fit_retry_exhausted` bursts
   // (34 crumbs in 76ms, 34 in 56ms) flushed the pre-crash trail out of a
   // 30-entry ring. Every hidden pane is display:none, so it measures 0x0, fails
@@ -313,6 +370,181 @@ describe('crash breadcrumb store', () => {
       expect(bursts).toHaveLength(2)
       expect(bursts[0].data).toEqual({ livePanes: 1 })
       expect(bursts[1].data).toEqual({ livePanes: 3, suppressedSinceLast: 1 })
+    })
+
+    // A crash report filed mid-window snapshots the ring, which folds the
+    // suppressed repeats into the emitted crumb. Re-claiming those repeats on
+    // the next emit would report one burst twice across two crumbs.
+    it('does not re-claim repeats a snapshot already folded into the crumb', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
+      const hit = (livePanes: number): { suppressedSinceLast: number } | undefined =>
+        recordCoalescedCrashBreadcrumb({
+          name: 'terminal_safe_fit_retry_exhausted',
+          data: { livePanes },
+          coalesceKey: 'terminal_safe_fit_retry_exhausted',
+          minIntervalMs: 30_000
+        })
+
+      hit(1)
+      vi.advanceTimersByTime(10)
+      hit(2)
+      getCrashBreadcrumbSnapshot()
+      vi.advanceTimersByTime(31_000)
+      const resumed = hit(3)
+
+      expect(resumed).toEqual({ suppressedSinceLast: 0 })
+      const bursts = getCrashBreadcrumbSnapshot().filter(
+        (entry) => entry.name === 'terminal_safe_fit_retry_exhausted'
+      )
+      expect(bursts[0].data).toEqual({ livePanes: 2, suppressedSinceLast: 1 })
+      expect(bursts[1].data).toEqual({ livePanes: 3 })
+
+      // The re-emitted crumb was born claiming nothing, so a fold onto it must
+      // claim only the new repeat — not the one the first crumb already owns.
+      vi.advanceTimersByTime(10)
+      hit(4)
+      const resolved = getCrashBreadcrumbSnapshot().filter(
+        (entry) => entry.name === 'terminal_safe_fit_retry_exhausted'
+      )
+      expect(resolved[1].data).toEqual({ livePanes: 4, suppressedSinceLast: 1 })
+    })
+
+    // A re-emitted crumb is born already claiming the previous window's count;
+    // a later fold must add to that claim, not overwrite it away.
+    it('keeps the carried count when a fold resolves onto a re-emitted crumb', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
+      const hit = (livePanes: number): void => {
+        recordCoalescedCrashBreadcrumb({
+          name: 'terminal_safe_fit_retry_exhausted',
+          data: { livePanes },
+          coalesceKey: 'terminal_safe_fit_retry_exhausted',
+          minIntervalMs: 30_000
+        })
+      }
+
+      hit(1)
+      vi.advanceTimersByTime(10)
+      hit(2)
+      vi.advanceTimersByTime(31_000)
+      hit(3)
+      vi.advanceTimersByTime(10)
+      hit(4)
+
+      const bursts = getCrashBreadcrumbSnapshot().filter(
+        (entry) => entry.name === 'terminal_safe_fit_retry_exhausted'
+      )
+      expect(bursts[1].data).toEqual({ livePanes: 4, suppressedSinceLast: 2 })
+    })
+
+    // A crash storm records other breadcrumbs too; if they push the burst crumb
+    // out of the 30-entry ring mid-window, a snapshot's fold lands in evidence
+    // no snapshot can see. Marking those repeats resolved anyway would let the
+    // next emit claim nothing and the burst vanish from the record entirely.
+    it('re-claims repeats on the next emit when the burst crumb was evicted from the ring', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
+      const hit = (livePanes: number): { suppressedSinceLast: number } | undefined =>
+        recordCoalescedCrashBreadcrumb({
+          name: 'terminal_safe_fit_retry_exhausted',
+          data: { livePanes },
+          coalesceKey: 'terminal_safe_fit_retry_exhausted',
+          minIntervalMs: 30_000
+        })
+
+      hit(1)
+      vi.advanceTimersByTime(10)
+      hit(2)
+      hit(3)
+      for (let index = 0; index < 30; index += 1) {
+        recordCrashBreadcrumb(`renderer_error_${index}`, { index })
+      }
+      getCrashBreadcrumbSnapshot()
+      vi.advanceTimersByTime(31_000)
+      const resumed = hit(4)
+
+      expect(resumed).toEqual({ suppressedSinceLast: 2 })
+      const burst = getCrashBreadcrumbSnapshot().find(
+        (entry) => entry.name === 'terminal_safe_fit_retry_exhausted'
+      )
+      expect(burst?.data).toEqual({ livePanes: 4, suppressedSinceLast: 2 })
+    })
+
+    // Retained high-water profiles occupy snapshot slots, so the oldest ring
+    // entries past that budget are invisible to every future snapshot even
+    // though they are still in the array; folding there loses the burst too.
+    it('re-claims repeats when retained profiles push the burst crumb past the snapshot budget', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
+      const hit = (livePanes: number): { suppressedSinceLast: number } | undefined =>
+        recordCoalescedCrashBreadcrumb({
+          name: 'terminal_safe_fit_retry_exhausted',
+          data: { livePanes },
+          coalesceKey: 'terminal_safe_fit_retry_exhausted',
+          minIntervalMs: 30_000
+        })
+
+      hit(1)
+      vi.advanceTimersByTime(10)
+      hit(2)
+      hit(3)
+      for (let index = 0; index < 4; index += 1) {
+        recordCrashBreadcrumb('renderer_memory_highwater', {
+          rendererSurface: `surface-${index}`,
+          thresholdPct: 80
+        })
+      }
+      // Ring stays at 30 (burst crumb still at index 0) but only the newest 26
+      // ring entries fit a snapshot alongside the 4 retained profiles.
+      for (let index = 0; index < 29; index += 1) {
+        recordCrashBreadcrumb(`renderer_error_${index}`, { index })
+      }
+      getCrashBreadcrumbSnapshot()
+      vi.advanceTimersByTime(31_000)
+      const resumed = hit(4)
+
+      expect(resumed).toEqual({ suppressedSinceLast: 2 })
+    })
+
+    // Two crash reports filed inside one window are immutable cumulative views;
+    // the next window must still start from zero unresolved debt.
+    it('keeps immutable snapshots cumulative without re-claiming resolved debt', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
+      const hit = (livePanes: number): { suppressedSinceLast: number } | undefined =>
+        recordCoalescedCrashBreadcrumb({
+          name: 'terminal_safe_fit_retry_exhausted',
+          data: { livePanes },
+          coalesceKey: 'terminal_safe_fit_retry_exhausted',
+          minIntervalMs: 30_000
+        })
+
+      hit(1)
+      vi.advanceTimersByTime(10)
+      hit(2)
+      hit(3)
+      const firstSnapshot = getCrashBreadcrumbSnapshot()
+      vi.advanceTimersByTime(10)
+      hit(4)
+      const secondFold = getCrashBreadcrumbSnapshot().find(
+        (entry) => entry.name === 'terminal_safe_fit_retry_exhausted'
+      )
+      expect(firstSnapshot[0]?.data).toEqual({ livePanes: 3, suppressedSinceLast: 2 })
+      expect(secondFold?.data).toEqual({ livePanes: 4, suppressedSinceLast: 3 })
+
+      vi.advanceTimersByTime(31_000)
+      const resumed = hit(5)
+      expect(resumed).toEqual({ suppressedSinceLast: 0 })
+
+      // A fold onto the fresh crumb must claim only its own window's repeat —
+      // over-resolving in the first window would push this claim negative.
+      vi.advanceTimersByTime(10)
+      hit(6)
+      const resolved = getCrashBreadcrumbSnapshot().filter(
+        (entry) => entry.name === 'terminal_safe_fit_retry_exhausted'
+      )
+      expect(resolved[1].data).toEqual({ livePanes: 6, suppressedSinceLast: 1 })
     })
 
     // A key that ages out loses its only handle on the ring entry it owns, so

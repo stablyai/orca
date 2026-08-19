@@ -93,7 +93,8 @@ describe('orchestration worker release', () => {
     })
     vi.spyOn(runtime, 'closeTerminal').mockResolvedValue({
       handle: 'term_worker',
-      closed: true
+      tabId: 'tab-worker',
+      ptyKilled: true
     } as never)
     vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
     activeRunId = db.createRun({
@@ -242,7 +243,7 @@ describe('orchestration worker release', () => {
   it('reconciles a dead external terminal without closing a process', async () => {
     setup()
     const { dispatchId } = await startSettledWorker('succeeded', { terminal: 'term_worker' })
-    inspectProcessLiveness.mockResolvedValue('dead')
+    inspectProcessLiveness.mockResolvedValue('exited')
 
     await expect(
       call('orchestration.workerRelease', { dispatch: dispatchId })
@@ -268,7 +269,7 @@ describe('orchestration worker release', () => {
     raw
       .prepare('UPDATE worker_terminal_resources SET prior_owner_dispatch_ids = ? WHERE id = ?')
       .run('{invalid', resource?.id)
-    inspectProcessLiveness.mockResolvedValue('dead')
+    inspectProcessLiveness.mockResolvedValue('exited')
 
     await expect(
       call('orchestration.workerRelease', { dispatch: dispatchId })
@@ -297,7 +298,7 @@ describe('orchestration worker release', () => {
     setup()
     const { dispatchId } = await startSettledWorker()
     await call('orchestration.workerTerminalUserInput', { paneKey: workerPaneKey })
-    inspectProcessLiveness.mockResolvedValue('dead')
+    inspectProcessLiveness.mockResolvedValue('exited')
 
     await expect(
       call('orchestration.workerRelease', { dispatch: dispatchId })
@@ -319,12 +320,12 @@ describe('orchestration worker release', () => {
       setup()
       const { dispatchId } = await startWorker()
       if (state === 'stopped') {
-        db.beginWorkerStop(dispatchId)
+        db.beginWorkerStop(dispatchId, runtime.getRuntimeId())
         db.settleWorkerStop(dispatchId)
       } else {
         db.abandonWorkerDispatch(dispatchId)
       }
-      inspectProcessLiveness.mockResolvedValue('dead')
+      inspectProcessLiveness.mockResolvedValue('exited')
 
       await expect(
         call('orchestration.workerRelease', { dispatch: dispatchId })
@@ -706,7 +707,7 @@ describe('orchestration worker release', () => {
     expect(transferred?.terminal_handle).toBe('term_reminted')
     expect(db.getWorkerTerminalResourceByOwner(first.dispatchId)).toBeUndefined()
 
-    inspectProcessLiveness.mockResolvedValueOnce('dead')
+    inspectProcessLiveness.mockResolvedValueOnce('exited')
     const oldRelease = (await call('orchestration.workerRelease', {
       dispatch: first.dispatchId
     })) as { state: string; reason?: string }
@@ -727,7 +728,7 @@ describe('orchestration worker release', () => {
     const first = await startSettledWorker('succeeded')
     const second = await startWorker({ terminal: 'term_reminted' })
     settle(second.taskId, second.dispatchId, 'succeeded')
-    inspectProcessLiveness.mockResolvedValue('dead')
+    inspectProcessLiveness.mockResolvedValue('exited')
 
     await expect(
       call('orchestration.workerRelease', { dispatch: first.dispatchId })

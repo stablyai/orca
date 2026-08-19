@@ -1,7 +1,8 @@
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore, type AppState } from '@/store'
-import { activateAndRevealWorktree, ensureWorktreeHasInitialTerminal } from './worktree-activation'
+import { activateAndRevealWorktree } from './worktree-activation'
+import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
 import { makeCreatedAgentWorktree as makeWorktree } from '@/lib/worktree-activation-created-agent-test-state'
 
 vi.mock('../hooks/remote-workspace-snapshot-apply', () => ({
