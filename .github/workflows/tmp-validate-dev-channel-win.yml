@@ -1,0 +1,142 @@
+name: TEMP Validate Dev Channel Windows Packaging
+
+# TEMPORARY — delete before merge.
+#
+# Why this exists: workflow_dispatch only works once a workflow is on the default
+# branch, so dev-channel-win-build.yml cannot be dispatched from this PR. A push
+# trigger scoped to this exact branch runs from the branch's own tree instead —
+# the same trick win-update-e2e.yml documents.
+#
+# What it proves, which nothing else in CI does:
+#   - `pnpm build:release` and an NSIS package both succeed on Windows with the
+#     dev-channel identity set (pr.yml's Windows job runs `--dir` with default env)
+#   - verify-dev-channel-packaging.mjs passes on a real Windows runner
+#   - the packaged app-update.yml carries NO publisherName
+#
+# That last assertion is the whole change. If publisherName survived into
+# app-update.yml, every dev build would Authenticode-verify the installers it
+# downloads and reject all of them — including its own way back to Stable.
+#
+# Publishes nothing: --publish never, no token minted, no release touched.
+
+on:
+  push:
+    branches:
+      - nwparker/window-outbox-tray-Win-RELEASE-window-outbox-tray
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tmp-validate-dev-channel-win-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    if: github.repository == 'stablyai/orca'
+    runs-on: windows-2022
+    timeout-minutes: 90
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      # A plausible adhoc identity. Nothing is uploaded, so the stamp is arbitrary.
+      ORCA_WIN_ADHOC: '1'
+      ORCA_ADHOC_BUILD_VERSION: 1.4.178-adhoc.20260819010203
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-builder-win-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-builder-win-
+
+      - name: Install dependencies
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: pnpm install --frozen-lockfile
+
+      - name: Verify dev-channel packaging identity
+        shell: bash
+        run: node config/scripts/verify-dev-channel-packaging.mjs --channel=adhoc --platform=win32
+
+      - name: Build app
+        shell: bash
+        run: pnpm build:release
+        env:
+          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+
+      - name: Package the Windows installer
+        shell: pwsh
+        run: |
+          node config/scripts/ensure-native-runtime.mjs --runtime=electron
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
+
+      # The assertion the whole change rests on.
+      - name: Assert the packaged app-update.yml carries no publisherName
+        shell: bash
+        run: |
+          set -euo pipefail
+          config="dist/win-unpacked/resources/app-update.yml"
+          if [[ ! -f "$config" ]]; then
+            echo "::error::$config was not generated; the updater would have no feed at all."
+            exit 1
+          fi
+          echo "--- $config ---"
+          cat "$config"
+          echo "---"
+          if grep -qi 'publisherName' "$config"; then
+            echo "::error::app-update.yml still carries a publisherName. An unsigned build with one rejects every installer it downloads, including its way back to Stable."
+            exit 1
+          fi
+          for expected in 'repo: orca-adhoc' 'owner: stablyai'; do
+            if ! grep -q "$expected" "$config"; then
+              echo "::error::app-update.yml is missing '$expected'; this build would check the wrong feed."
+              exit 1
+            fi
+          done
+          echo "OK: no publisherName, feed points at stablyai/orca-adhoc."
+
+      - name: Assert the installer and update manifest were produced
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -la dist/ || true
+          for required in dist/orca-windows-setup.exe dist/latest.yml; do
+            if [[ ! -f "$required" ]]; then
+              echo "::error::$required was not produced."
+              exit 1
+            fi
+            echo "Found $required"
+          done
+          echo "--- dist/latest.yml ---"
+          cat dist/latest.yml
+          # The version electron-builder stamped must be the dev-channel one, not
+          # package.json's — otherwise artifacts land in the wrong release.
+          if ! grep -q "version: 1.4.178-adhoc.20260819010203" dist/latest.yml; then
+            echo "::error::latest.yml does not carry the dev-channel version."
+            exit 1
+          fi
+          echo "OK: installer and manifest produced with the dev-channel version."
