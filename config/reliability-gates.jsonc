@@ -1560,7 +1560,7 @@
     },
     {
       "id": "runtime.multi-client-view-isolation",
-      "title": "One client's workspace create never navigates another client or the host",
+      "title": "A client's workspace create navigates only the caller unless follow is explicit",
       "maturity": "experimental",
       "protection": "partial",
       "owner": "runtime-platform",
@@ -1577,9 +1577,9 @@
       "providers": ["local", "orca-server"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "orca-server"],
-      "coverageNotes": "A real two-client integration harness pairs two authenticated devices to one OrcaRuntimeService over WebSockets with E2EE and drives worktree.create through the real RPC dispatcher, in both headed-notifier and headless orca-serve shapes. A headed Electron journey runs the desktop app as the remote server with two independently paired web clients in separate partitions and asserts each client's rendered active worktree. Windows and Linux are covered by the platform-neutral contract only; the reported field topology was a Windows server with mixed-OS clients.",
+      "coverageNotes": "A real two-client integration harness pairs two authenticated devices to one OrcaRuntimeService over WebSockets with E2EE and drives worktree.create through the real RPC dispatcher, in both headed-notifier and headless orca-serve shapes. The headless case is a modeled `orca serve` runtime shape — no notifier, no attached window — not a CLI bootstrap, and the in-process reveal non-regression calls createManagedWorktree directly. A headed Electron journey runs the desktop app as the remote server with two independently paired web clients in separate partitions and asserts each client's rendered active worktree. Windows and Linux are covered by the platform-neutral contract only; the reported field topology was a Windows server with mixed-OS clients.",
       "motivatingLinks": ["https://github.com/stablyai/orca/issues/11027"],
-      "invariant": "View intent belongs to the connection that requested it. A workspace create arriving over a paired client connection activates only that caller; it must not emit an activateWorktree client event to sibling connections or drive the host renderer. Shared model state — repo/worktree catalogs, terminals, agent output — must keep propagating to every client unchanged. In-process and CLI creates keep notifying the host and all clients so a headless server's only viewer still gets its reveal.",
+      "invariant": "View intent belongs to the connection that requested it. With no explicit navigation target, a workspace create arriving over a paired desktop/web client connection activates only that caller; it must not emit an activateWorktree client event to sibling connections or drive the host renderer. An explicit navigation of host/clients/all remains an allowed, tested follow intent. Shared model state — repo/worktree catalogs, terminals, agent output — must keep propagating to every client unchanged. In-process and CLI creates keep notifying the host and all clients so a headless server's only viewer still gets its reveal.",
       "oracle": "Two paired clients subscribe to runtime.clientEvents. Client A creates a workspace with activate:true; a reposChanged fence emitted after the create must be the next frame each client sees, proving no activation frame was interleaved, while worktreesChanged still arrives on both streams. The host notifier's activateWorktree is asserted not called and the host's mirrored selection is unchanged. Repeated ordinary worktree.activate calls by A are the negative control. The same file asserts the in-process create still reaches host and clients, headed and headless. The Electron journey asserts the observer's data-rendered-active-worktree-id is unchanged while the created workspace still appears in its sidebar.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/multi-client-navigation-isolation.integration.test.ts src/main/runtime/rpc/methods/worktree-create-navigation.test.ts",
@@ -1605,8 +1605,8 @@
         {
           "file": "src/main/runtime/rpc/methods/worktree-create-navigation.test.ts",
           "assertions": [
-            "scopes create activation to the caller for a paired runtime client",
-            "scopes create activation to the caller for a paired mobile client",
+            "resolves create activation from the paired runtime client kind",
+            "resolves create activation from the paired mobile client kind",
             "honors an explicit follow navigation on create",
             "keeps an explicit all-surface reveal from a paired caller"
           ]
@@ -1663,7 +1663,10 @@
       "knownGaps": [
         "No live Windows or Linux server run yet; the reported field topology was a Windows 11 server.",
         "Mobile observers are covered only by the platform-neutral clientKind contract, not by a live phone journey.",
-        "Host-originated CLI creates deliberately still reveal on every client; that broader authority question is untouched by this gate."
+        "Host-originated CLI creates deliberately still reveal on every client; that broader authority question is untouched by this gate.",
+        "Mobile creates deliberately keep the all-surface reveal: a phone has no renderer to provision repo setup/default tabs off the activation event.",
+        "The Electron journey drives the store create action, so the composer's automatic self-navigation on create is proved by worktree-creation-flow.test.ts and worktree.spec.ts rather than by this journey.",
+        "Headless coverage is a modeled runtime shape; CLI bootstrap and argument parsing for orca serve are not exercised here."
       ],
       "demotionRule": "Demote if a create, activate, or reveal path can move a viewer that did not request it, or if scoping regresses the in-process/CLI reveal that a headless server's only remote viewer depends on."
     },

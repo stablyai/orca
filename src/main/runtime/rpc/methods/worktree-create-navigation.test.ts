@@ -24,9 +24,11 @@ const passthroughDedupe = <T>(_repo: string, _id: string | undefined, run: () =>
 describe('worktree.create navigation authority', () => {
   it.each([
     ['runtime', 'caller'],
-    ['mobile', 'caller']
+    // Why: a phone has no renderer to provision setup/default tabs off the activation,
+    // so mobile creates keep the all-surface reveal until that work moves to the runtime.
+    ['mobile', 'all']
   ] as const)(
-    'scopes create activation to the caller for a paired %s client',
+    'resolves create activation from the paired %s client kind',
     async (clientKind, expected) => {
       const runtime = {
         getRuntimeId: () => 'test-runtime',

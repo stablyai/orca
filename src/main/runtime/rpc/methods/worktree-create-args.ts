@@ -48,9 +48,12 @@ export function buildManagedWorktreeCreateArgs(
     activate: params.activate === true,
     // Why: create-activation is the caller's own view intent; without this a paired
     // client's create dragged every other connected client and the host with it.
+    // Why 'runtime' only: a phone has no terminal-provisioning renderer, so when it
+    // creates without a startup command the host renderer is what runs the repo's
+    // setup/default tabs off this activation. Scoping mobile would drop that work.
     navigation: resolveRuntimeNavigationTarget({
       ...(params.navigation ? { navigation: params.navigation } : {}),
-      ...(origin.clientKind ? { clientKind: origin.clientKind } : {})
+      ...(origin.clientKind === 'runtime' ? { clientKind: origin.clientKind } : {})
     }),
     setupDecision: params.setupDecision,
     createdWithAgent: params.createdWithAgent ?? params.startupAgent,

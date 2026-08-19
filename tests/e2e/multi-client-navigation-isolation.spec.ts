@@ -256,8 +256,17 @@ test('keeps a paired client workspace create-with-agent off the other client and
     await expectActiveWorktree(clientB, ids.clientB)
     await expectActiveWorktree(orcaPage, ids.host)
 
+    // The creator can still reach and open what it made, and doing so still moves nobody
+    // else. This drives the store action directly, so the composer's automatic
+    // self-navigation on create is covered by worktree-creation-flow.test.ts and by the
+    // host-side composer journey in worktree.spec.ts, not here.
+    await selectWorktree(clientA, createdWorktreeId)
+    await expectActiveWorktree(clientB, ids.clientB)
+    await expectActiveWorktree(orcaPage, ids.host)
+
     // The observer keeps its own navigation authority afterwards.
     await selectWorktree(clientB, ids.clientA2)
+    await expectActiveWorktree(clientA, createdWorktreeId)
     await expectActiveWorktree(orcaPage, ids.host)
   } finally {
     await clientB?.close()
