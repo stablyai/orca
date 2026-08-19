@@ -3,7 +3,11 @@ import { FolderOpen, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { ORCA_CLI_SKILL_NAME } from '@/lib/agent-feature-install-commands'
+import {
+  ORCA_CLI_SKILL_INSTALL_COMMAND,
+  ORCA_CLI_SKILL_NAME,
+  ORCA_CLI_SKILL_UPDATE_COMMAND
+} from '@/lib/agent-feature-install-commands'
 import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
   ensureOrcaCliAvailableForAgentSkillTerminal,
@@ -98,7 +102,15 @@ export function CliSection({
     discoveryTarget: cliSkillDiscoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
-  const cliSkillCommands = getCliSkillSetupCommandsForRuntime(agentRuntime)
+  const {
+    installCommand: cliSkillInstallCommand,
+    updateCommand: cliSkillUpdateCommand,
+    terminalCommands: cliSkillTerminalCommands
+  } = getCliSkillSetupCommandsForRuntime(
+    agentRuntime,
+    ORCA_CLI_SKILL_INSTALL_COMMAND,
+    ORCA_CLI_SKILL_UPDATE_COMMAND
+  )
   const cliSkillTerminalShellOverride = getAgentSkillTerminalShellOverride(
     currentPlatform,
     settings,
@@ -362,9 +374,9 @@ export function CliSection({
                 'auto.components.settings.CliSection.e8012c03a1',
                 'Enables agents to use Orca workspace, terminal, and progress commands.'
               )}
-              command={cliSkillCommands.installCommand}
-              installedCommand={cliSkillCommands.updateCommand}
-              terminalCommands={cliSkillCommands.terminalCommands}
+              command={cliSkillInstallCommand}
+              installedCommand={cliSkillUpdateCommand}
+              terminalCommands={cliSkillTerminalCommands}
               terminalTitle="CLI skill setup"
               terminalAriaLabel="CLI skill install terminal"
               terminalWorktreeId={`settings-cli-skill-terminal-${agentRuntime.runtime}`}

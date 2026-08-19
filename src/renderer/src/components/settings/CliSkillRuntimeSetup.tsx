@@ -16,9 +16,7 @@ import {
   buildAgentFeatureSkillInstallCommand,
   buildUnattendedAgentFeatureSkillInstallCommand,
   buildUnattendedAgentFeatureSkillUpdateCommand,
-  ORCA_CLI_SKILL_INSTALL_COMMAND,
-  ORCA_CLI_SKILL_NAME,
-  ORCA_CLI_SKILL_UPDATE_COMMAND
+  ORCA_CLI_SKILL_NAME
 } from '../../../../shared/agent-feature-install-commands'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
@@ -68,14 +66,18 @@ export function getSelectedAgentRuntime(
   return { runtime: 'host', label: getHostRuntimeLabel() }
 }
 
-export function getCliSkillSetupCommandsForRuntime(runtime: LocalAgentRuntime): {
+export function getCliSkillSetupCommandsForRuntime(
+  runtime: LocalAgentRuntime,
+  copyInstallCommand: string,
+  copyUpdateCommand: string
+): {
   installCommand: string
   updateCommand: string
   terminalCommands: { install: string; update: string }
 } {
   return {
-    installCommand: buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND, runtime),
-    updateCommand: buildSkillCommandForRuntime(ORCA_CLI_SKILL_UPDATE_COMMAND, runtime),
+    installCommand: buildSkillCommandForRuntime(copyInstallCommand, runtime),
+    updateCommand: buildSkillCommandForRuntime(copyUpdateCommand, runtime),
     terminalCommands: {
       install: buildSkillCommandForRuntime(
         buildUnattendedAgentFeatureSkillInstallCommand([ORCA_CLI_SKILL_NAME]),
