@@ -5,6 +5,8 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
+  buildUnattendedAgentFeatureSkillInstallCommand,
+  buildUnattendedAgentFeatureSkillUpdateCommand,
   ORCA_CLI_SKILL_INSTALL_COMMAND,
   ORCA_CLI_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
@@ -15,6 +17,7 @@ const capturedPanel = vi.hoisted(() => ({
   props: null as null | {
     command: string
     installedCommand: string
+    terminalCommands?: { install?: string; update?: string }
     terminalRuntime?: { runtime: 'host' | 'wsl'; wslDistro?: string | null; label: string }
     freshnessSkillName?: string
     getPrerequisiteStatus: () => Promise<unknown>
@@ -55,6 +58,7 @@ vi.mock('./AgentSkillSetupPanel', () => ({
   AgentSkillSetupPanel: function AgentSkillSetupPanel(props: {
     command: string
     installedCommand: string
+    terminalCommands?: { install?: string; update?: string }
     freshnessSkillName?: string
     getPrerequisiteStatus: () => Promise<unknown>
     onBeforeOpenTerminal: () => Promise<void>
@@ -77,6 +81,23 @@ vi.mock('./WslCliRegistration', () => ({
 }))
 
 describe('CliSection project runtime defaults', () => {
+  it('keeps copy commands interactive and makes only the inline terminal unattended', () => {
+    renderToStaticMarkup(
+      <CliSection currentPlatform="darwin" settings={getDefaultSettings('/tmp')} />
+    )
+
+    expect(capturedPanel.props?.command).toBe(ORCA_CLI_SKILL_INSTALL_COMMAND)
+    expect(capturedPanel.props?.command).not.toContain('-y')
+    expect(capturedPanel.props?.installedCommand).toBe(ORCA_CLI_SKILL_UPDATE_COMMAND)
+    expect(capturedPanel.props?.installedCommand).not.toContain('-y')
+    expect(capturedPanel.props?.terminalCommands?.install).toBe(
+      buildUnattendedAgentFeatureSkillInstallCommand(['orca-cli'])
+    )
+    expect(capturedPanel.props?.terminalCommands?.update).toBe(
+      buildUnattendedAgentFeatureSkillUpdateCommand('orca-cli')
+    )
+  })
+
   it('exposes freshness only for a resolved local host runtime', () => {
     const settings = getDefaultSettings('/tmp')
     renderToStaticMarkup(<CliSection currentPlatform="darwin" settings={settings} />)

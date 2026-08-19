@@ -45,23 +45,13 @@ describe('agent feature skill commands', () => {
     ])
   })
 
-  it('keeps the raw builder interactive by default', () => {
-    // Why: -y skips the agent picker. The raw builder stays pasteable for a
-    // human who wants detection-driven prompts; Settings/CLI use unattended.
+  it('keeps the copyable Settings commands interactive by default', () => {
+    // Why: -y skips the agent picker. A human pasting from Settings should still
+    // get it; only an unattended spawn opts in.
     expect(buildAgentFeatureSkillInstallCommand(['orca-cli'])).not.toContain('-y')
     expect(buildAgentFeatureSkillUpdateCommand('orca-cli')).not.toContain('-y')
-  })
-
-  it('exports unattended Settings install/update constants that cannot hang on a picker', () => {
-    // Why: the inline setup terminal is a TTY nothing answers (#13542). Pair
-    // -y with at least --agent universal so skills never opens the picker or
-    // the all-agents install branch.
-    expect(ORCA_CLI_SKILL_INSTALL_COMMAND).toContain('-y')
-    expect(ORCA_CLI_SKILL_INSTALL_COMMAND).toContain('--agent universal')
-    expect(ORCA_CLI_SKILL_UPDATE_COMMAND).toContain('-y')
-    expect(ORCA_CLI_SKILL_INSTALL_COMMAND).toBe(
-      'npx skills add https://github.com/stablyai/orca --skill orca-cli --global --agent universal -y'
-    )
+    expect(ORCA_CLI_SKILL_INSTALL_COMMAND).not.toContain('-y')
+    expect(ORCA_CLI_SKILL_UPDATE_COMMAND).not.toContain('-y')
   })
 
   it('refuses to skip prompts without an install target', () => {
@@ -146,18 +136,16 @@ describe('agent feature skill commands', () => {
   })
 
   it('exports single-skill update constants without changing install bundles', () => {
-    expect(ORCA_CLI_SKILL_UPDATE_COMMAND).toBe('npx skills update orca-cli --global -y')
-    expect(COMPUTER_USE_SKILL_UPDATE_COMMAND).toBe('npx skills update computer-use --global -y')
-    expect(ORCHESTRATION_SKILL_UPDATE_COMMAND).toBe('npx skills update orchestration --global -y')
+    expect(ORCA_CLI_SKILL_UPDATE_COMMAND).toBe('npx skills update orca-cli --global')
+    expect(COMPUTER_USE_SKILL_UPDATE_COMMAND).toBe('npx skills update computer-use --global')
+    expect(ORCHESTRATION_SKILL_UPDATE_COMMAND).toBe('npx skills update orchestration --global')
     expect(EPHEMERAL_VMS_SKILL_UPDATE_COMMAND).toBe(
-      'npx skills update orca-per-workspace-env --global -y'
+      'npx skills update orca-per-workspace-env --global'
     )
-    expect(ORCA_LINEAR_SKILL_UPDATE_COMMAND).toBe('npx skills update orca-linear --global -y')
-    expect(LINEAR_TICKETS_SKILL_UPDATE_COMMAND).toBe(
-      'npx skills update linear-tickets --global -y'
-    )
+    expect(ORCA_LINEAR_SKILL_UPDATE_COMMAND).toBe('npx skills update orca-linear --global')
+    expect(LINEAR_TICKETS_SKILL_UPDATE_COMMAND).toBe('npx skills update linear-tickets --global')
     expect(ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND).toBe(
-      buildUnattendedAgentFeatureSkillInstallCommand(['orca-cli', 'orchestration'])
+      buildAgentFeatureSkillInstallCommand(['orca-cli', 'orchestration'])
     )
   })
 })

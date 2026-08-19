@@ -21,9 +21,8 @@ import {
 } from './CliSkillRuntimeSetup'
 
 function decodeWslLoginShellScript(command: string): string {
-  const encoded = /(?:--|--exec) sh -c 'eval \\"`printf %s ([A-Za-z0-9+/=]+) \| base64 -d`\\"'/.exec(
-    command
-  )?.[1]
+  const encoded =
+    /(?:--|--exec) sh -c 'eval \\"`printf %s ([A-Za-z0-9+/=]+) \| base64 -d`\\"'/.exec(command)?.[1]
   expect(encoded).toBeDefined()
   return Buffer.from(encoded!, 'base64').toString('utf8')
 }
@@ -180,7 +179,7 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
   })
 
   it('reinstalls Windows-host skill updates after the npx preflight', () => {
-    const installCommand = buildUnattendedAgentFeatureSkillInstallCommand(['orchestration'])
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orchestration'])
 
     expect(
       buildSkillCommandForRuntime(
@@ -211,7 +210,7 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
   })
 
   it('treats missing runtime as a preflighted Windows host fallback for skill updates', () => {
-    const installCommand = buildUnattendedAgentFeatureSkillInstallCommand(['orca-cli'])
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orca-cli'])
 
     expect(
       buildSkillCommandForRuntime('npx skills update orca-cli --global', undefined, 'win32')
@@ -387,7 +386,7 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
   })
 
   it('keeps the bare reinstall rewrite for POSIX-family Windows skill updates', () => {
-    const installCommand = buildUnattendedAgentFeatureSkillInstallCommand(['orchestration'])
+    const installCommand = buildAgentFeatureSkillInstallCommand(['orchestration'])
     const previous = useAppStore.getState()
     useAppStore.setState({
       settings: { ...getDefaultSettings('/tmp'), terminalWindowsShell: 'git-bash' }

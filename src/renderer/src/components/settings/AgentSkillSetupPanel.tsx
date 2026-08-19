@@ -23,6 +23,7 @@ export function AgentSkillSetupPanel({
   description,
   command,
   installedCommand,
+  terminalCommands: terminal,
   terminalTitle,
   terminalAriaLabel,
   terminalWorktreeId,
@@ -75,15 +76,14 @@ export function AgentSkillSetupPanel({
     [getPrerequisiteStatus]
   )
   const activeCommand = installed ? (installedCommand ?? command) : command
-  // Why: the inline terminal auto-inserts when its command changes, so keep the
-  // already-open terminal pinned to the command and runtime selected at click.
+  const activeTerminalCommand = (installed ? terminal?.update : terminal?.install) ?? activeCommand
   const openTerminalCommand = terminalSnapshot?.copiedCommand ?? activeCommand
 
   const openSetupTerminal = (): void => {
     if (terminalOpening || setupAttemptRunning) {
       return
     }
-    const nextSnapshot = createTerminalSnapshot(activeCommand, shellOverride, runtime)
+    const nextSnapshot = createTerminalSnapshot(activeTerminalCommand, shellOverride, runtime)
     setTerminalOpening(true)
     if (setupCommandFailedCode !== null) {
       setTerminalOpen(false)
@@ -111,7 +111,6 @@ export function AgentSkillSetupPanel({
     })()
   }
 
-  // Why: PTY exit is the shell's status; OSC 133;D reports the install command.
   const handleSetupCommandFinished = useCallback(
     (bestEffortExitCode: number | null): void => {
       // Nested shells can emit duplicate completion markers in one PTY chunk.

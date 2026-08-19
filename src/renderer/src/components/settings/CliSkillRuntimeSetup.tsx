@@ -12,7 +12,14 @@ import { isWslShellName } from '../../../../shared/local-windows-terminal-runtim
 import { resolveWindowsShellStartupFamily } from '../../../../shared/windows-terminal-shell'
 import { getProjectAgentSkillTerminalShellOverride } from '@/lib/project-skill-runtime'
 import { useAppStore } from '@/store'
-import { buildUnattendedAgentFeatureSkillInstallCommand } from '../../../../shared/agent-feature-install-commands'
+import {
+  buildAgentFeatureSkillInstallCommand,
+  buildUnattendedAgentFeatureSkillInstallCommand,
+  buildUnattendedAgentFeatureSkillUpdateCommand,
+  ORCA_CLI_SKILL_INSTALL_COMMAND,
+  ORCA_CLI_SKILL_NAME,
+  ORCA_CLI_SKILL_UPDATE_COMMAND
+} from '../../../../shared/agent-feature-install-commands'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import {
@@ -59,6 +66,27 @@ export function getSelectedAgentRuntime(
     }
   }
   return { runtime: 'host', label: getHostRuntimeLabel() }
+}
+
+export function getCliSkillSetupCommandsForRuntime(runtime: LocalAgentRuntime): {
+  installCommand: string
+  updateCommand: string
+  terminalCommands: { install: string; update: string }
+} {
+  return {
+    installCommand: buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND, runtime),
+    updateCommand: buildSkillCommandForRuntime(ORCA_CLI_SKILL_UPDATE_COMMAND, runtime),
+    terminalCommands: {
+      install: buildSkillCommandForRuntime(
+        buildUnattendedAgentFeatureSkillInstallCommand([ORCA_CLI_SKILL_NAME]),
+        runtime
+      ),
+      update: buildSkillCommandForRuntime(
+        buildUnattendedAgentFeatureSkillUpdateCommand(ORCA_CLI_SKILL_NAME),
+        runtime
+      )
+    }
+  }
 }
 
 function encodeWslLoginShellScript(command: string): string {
@@ -109,7 +137,7 @@ function normalizeWindowsSkillUpdateCommand(
   }
 
   const trimmedCommand = command.trim()
-  const updateMatch = /^npx\s+skills\s+update\s+([A-Za-z0-9_-]+)\s+--global(?:\s+-y)?$/i.exec(
+  const updateMatch = /^npx\s+skills\s+update\s+([A-Za-z0-9_-]+)\s+--global(\s+-y)?$/i.exec(
     trimmedCommand
   )
   if (!updateMatch) {
@@ -119,7 +147,9 @@ function normalizeWindowsSkillUpdateCommand(
   // Why: the `skills update` subcommand is currently unreliable on native
   // Windows, while reinstalling from the same repo source is idempotent and
   // keeps the setup affordance working.
-  return buildUnattendedAgentFeatureSkillInstallCommand([updateMatch[1]])
+  return updateMatch[2]
+    ? buildUnattendedAgentFeatureSkillInstallCommand([updateMatch[1]])
+    : buildAgentFeatureSkillInstallCommand([updateMatch[1]])
 }
 
 /**
@@ -181,9 +211,8 @@ function decodeWslSetupTerminalCommand(command: string): string | null {
   }
 
   // Why both separators: commands persisted before the --exec switch must still decode.
-  const encoded = /(?:--|--exec) sh -c 'eval \\"`printf %s ([A-Za-z0-9+/=]+) \| base64 -d`\\"'/.exec(
-    command
-  )?.[1]
+  const encoded =
+    /(?:--|--exec) sh -c 'eval \\"`printf %s ([A-Za-z0-9+/=]+) \| base64 -d`\\"'/.exec(command)?.[1]
   if (!encoded) {
     return null
   }
