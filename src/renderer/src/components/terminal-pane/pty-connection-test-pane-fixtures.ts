@@ -10,8 +10,7 @@ export function leafIdForPane(paneId: number): string {
 
 export type ConnectCallbacks = {
   onReattachDetermined?: () => void
-  // Why: mock harnesses replay the bound pty id back into onConnect; production ignores it.
-  onConnect?: (ptyId?: string) => void
+  onConnect?: () => void
   onStreamRecovered?: () => void
   onData?: (
     data: string,

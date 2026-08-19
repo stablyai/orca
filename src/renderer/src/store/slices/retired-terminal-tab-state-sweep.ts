@@ -22,16 +22,10 @@ export type RetiredTerminalTabSweepState = AgentStatusTabPrefixDropState &
   Pick<AppState, 'paneForegroundAgentByPaneKey'>
 
 /**
- * Every renderer-side map a retired terminal tab leaves behind that no `set()` on the session model
- * reaches: two suppressor-aware store actions plus three module-level registries.
- *
- * One unit with two callers on purpose. `closeTab` grew this list inline, so the peer-retirement path
- * (remote-workspace-host-tab-retirement) removed a tab through the pure session transform and swept
- * none of it — a background pane's `agentStatusByPaneKey` row outlived its tab and kept rendering a
- * live sidebar agent row that nothing could clear. A second copy of the list is how that recurs.
- *
- * Must run AFTER the tab is out of `tabsByWorktree`: dropAgentStatusByTabPrefix's completed-orphan
- * sweep is defined as "keyed under a tab id this worktree no longer has".
+ * Every renderer-side map a retired terminal tab leaves behind that no `set()` on the session
+ * model reaches. One unit with two callers on purpose: a second inline copy of this list is how
+ * a retirement path ends up sweeping none of it (STA-4593). Must run AFTER the tab is out of
+ * `tabsByWorktree` — the completed-orphan sweep keys on "tab this worktree no longer has".
  */
 export function sweepRetiredTerminalTabState(
   actions: RetiredTerminalTabSweepActions,
@@ -54,11 +48,9 @@ export function sweepRetiredTerminalTabState(
 }
 
 /**
- * The same sweep for a caller that owns its own `set()`. The paired snapshot apply assembles one
- * patch per snapshot from a state the store has not seen yet, so it cannot reach the store actions —
- * it folds this patch in instead. Registry side effects still fire, exactly as in the action form.
- *
- * `state` must already exclude the retired tabs from `tabsByWorktree`, for the same reason.
+ * The same sweep as a patch, for a caller that owns its own `set()` (the paired snapshot apply
+ * builds patches from a state the store has not seen yet). Registry side effects still fire.
+ * `state` must already exclude the retired tabs from `tabsByWorktree`.
  */
 export function buildRetiredTerminalTabStateSweepPatch(
   state: RetiredTerminalTabSweepState,
@@ -68,6 +60,9 @@ export function buildRetiredTerminalTabStateSweepPatch(
   if (tabIds.length === 0) {
     return null
   }
+  // Why: the registry side effects run while the patch is computed (possibly inside a set()
+  // updater) — safe because all are idempotent and the ids are genuinely retired, but a caller
+  // that discards the patch still mutates the registries.
   let swept: RetiredTerminalTabSweepState = state
   for (const tabId of tabIds) {
     retireParkedTerminalTab(tabId)

@@ -41,8 +41,11 @@ const INC_A = '33333333-3333-4333-8333-333333333333'
 const INC_B = '44444444-4444-4444-8444-444444444444'
 
 const TAB_P = 'tab-split-parent'
-const PTY_BY_LEAF: Record<string, string> = { [LEAF_A]: PTY_A, [LEAF_B]: PTY_B }
-const INC_BY_LEAF: Record<string, string> = { [LEAF_A]: INC_A, [LEAF_B]: INC_B }
+// LEAF_C: the persisted session's alternative leafId for PTY_A's surface —
+// renderer and headless sources can derive different leafIds for one surface.
+const LEAF_C = '55555555-5555-4555-8555-555555555555'
+const PTY_BY_LEAF: Record<string, string> = { [LEAF_A]: PTY_A, [LEAF_B]: PTY_B, [LEAF_C]: PTY_A }
+const INC_BY_LEAF: Record<string, string> = { [LEAF_A]: INC_A, [LEAF_B]: INC_B, [LEAF_C]: INC_A }
 
 type TabSpec = { tabId: string; leafId: string; ptyId: string }
 const TAB_SPECS: Record<string, TabSpec> = {
@@ -202,6 +205,21 @@ function createHarness() {
     publishRendererSnapshot,
     retirePersistedTab: (tabId: string) => {
       session = makeSession([TAB_A, TAB_B].filter((id) => id !== tabId))
+    },
+    isRuntimeSessionOwned: (ptyId: string) =>
+      (
+        runtime as unknown as { ptysById: Map<string, { runtimeSessionOwned: boolean }> }
+      ).ptysById.get(ptyId)?.runtimeSessionOwned === true,
+    markCreatePending: (tabId: string) => {
+      ;(
+        runtime as unknown as {
+          pendingMobileTerminalCreatesByKey: Map<string, object>
+        }
+      ).pendingMobileTerminalCreatesByKey.set(`${WORKTREE_ID}::${tabId}`, {
+        activate: true,
+        paired: true,
+        selectIfNoActiveTab: true
+      })
     }
   }
 }
@@ -353,6 +371,9 @@ function createSplitHarness() {
       ).ptysById.get(ptyId)?.runtimeSessionOwned === true,
     retirePersistedLeaf: (leafId: string) => {
       session = makeSplitSession([LEAF_A, LEAF_B].filter((id) => id !== leafId))
+    },
+    relabelPersistedLeftLeaf: () => {
+      session = makeSplitSession([LEAF_C, LEAF_B])
     }
   }
 }
@@ -431,6 +452,25 @@ describe('a committed paired close stays closed while its PTY lingers', () => {
       TAB_B
     ])
   })
+
+  it('control: a create still in flight is not retirement — its tab and ownership survive the omission', async () => {
+    const harness = createHarness()
+
+    // The renderer's stale publication omits TAB_A while its paired create has
+    // not settled: it is missing from persistence AND from the publication, the
+    // exact input pattern durable retirement keys on. The pending-create mark
+    // is the only discriminator, and losing it would strand the create-recovery
+    // rescue: the freshly created remote tab would vanish.
+    harness.markCreatePending(TAB_A)
+    harness.retirePersistedTab(TAB_A)
+    harness.publishRendererSnapshot([TAB_B], 2)
+
+    expect(
+      await listParentTabIds(harness.runtime),
+      'a create-in-flight tab was retired by a stale publication'
+    ).toEqual([TAB_B, TAB_A])
+    expect(harness.isRuntimeSessionOwned(PTY_A)).toBe(true)
+  })
 })
 
 describe('a durably closed split leaf stays closed while its sibling survives', () => {
@@ -453,6 +493,25 @@ describe('a durably closed split leaf stays closed while its sibling survives', 
     ).toEqual([`${TAB_P}::${LEAF_B}`])
     expect(harness.isRuntimeSessionOwned(PTY_A)).toBe(false)
     // The surviving sibling keeps its ownership: the release must be leaf-scoped.
+    expect(harness.isRuntimeSessionOwned(PTY_B)).toBe(true)
+  })
+
+  it('control: a persisted layout that still binds the PTY under a different leafId is not retirement', async () => {
+    const harness = createSplitHarness()
+
+    // The persisted session relabels PTY_A's surface to another leafId (renderer
+    // and headless sources can derive different leafIds for one surface), and a
+    // stale publication omits it. The still-bound PTY id is the only signal that
+    // the leaf lives on; releasing on the leafId mismatch alone would retire a
+    // live pane and let the merge drop it.
+    harness.relabelPersistedLeftLeaf()
+    harness.publishSplitSnapshot([LEAF_B], 2)
+
+    expect(
+      await listTerminalSurfaceIds(harness.runtime),
+      'a live relabeled leaf was retired by a stale publication'
+    ).toEqual([`${TAB_P}::${LEAF_A}`, `${TAB_P}::${LEAF_B}`])
+    expect(harness.isRuntimeSessionOwned(PTY_A)).toBe(true)
     expect(harness.isRuntimeSessionOwned(PTY_B)).toBe(true)
   })
 })

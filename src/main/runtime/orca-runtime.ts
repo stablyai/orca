@@ -7664,11 +7664,9 @@ export class OrcaRuntimeService {
     )
   }
 
-  // Why: a renderer publication that both omits a terminal surface and no longer
-  // persists it is a durable close (host gesture, `orca terminal` lifecycle), so
-  // its PTYs stop being runtime-session owned — otherwise a kill that has not
-  // landed yet, or failed outright, keeps preserving the tab back into every
-  // merge. A create still in flight has not been retired, only not published.
+  // Why: omitted from the publication AND from persistence = durably closed, so release
+  // ownership — else a lagging or failed kill preserves the tab back into every merge.
+  // A create still in flight has not been retired, only not published yet.
   private releaseRuntimeSessionOwnershipForRendererRetiredTabs(
     incoming: RuntimeMobileSessionTabsSnapshot,
     existing: RuntimeMobileSessionTabsSnapshot | undefined

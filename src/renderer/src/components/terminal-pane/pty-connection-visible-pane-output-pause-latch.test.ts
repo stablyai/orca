@@ -206,12 +206,37 @@ describe('remote pane output pause vs visibility', () => {
     // the stall watchdog.
     transport.getPtyId.mockImplementation(() => REMOTE_PTY_ID)
     callbacks().onStreamRecovered?.()
-    callbacks().onConnect?.(REMOTE_PTY_ID)
+    callbacks().onConnect?.()
     await flushAsyncTicks(6)
 
     expect(
       pauseCalls().at(-1),
       `a visible pane was left output-paused after a mid-rebind reveal (setOutputPaused calls: ${JSON.stringify(pauseCalls())})`
+    ).toBe(false)
+    binding.dispose()
+  })
+
+  it('red: a content-bearing recovery fires only onConnect, which must re-derive the pause bit alone', async () => {
+    const { transport, binding, deps, callbacks, pauseCalls } = await connectVisibleRemotePane()
+
+    ;(deps.isVisibleRef as { current: boolean }).current = false
+    binding.syncProcessTracking()
+    expect(pauseCalls().at(-1)).toBe(true)
+
+    transport.getPtyId.mockImplementation(() => null)
+    ;(deps.isVisibleRef as { current: boolean }).current = true
+    binding.syncProcessTracking()
+
+    // When the recovery subscribe's push snapshot carried content — the common
+    // case — the transport fires ONLY onConnect (onStreamRecovered is gated on
+    // an empty snapshot). onConnect must therefore re-derive the bit by itself.
+    transport.getPtyId.mockImplementation(() => REMOTE_PTY_ID)
+    callbacks().onConnect?.()
+    await flushAsyncTicks(6)
+
+    expect(
+      pauseCalls().at(-1),
+      `onConnect alone did not unpause a visible pane (setOutputPaused calls: ${JSON.stringify(pauseCalls())})`
     ).toBe(false)
     binding.dispose()
   })
