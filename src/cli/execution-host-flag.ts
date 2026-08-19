@@ -144,3 +144,37 @@ export async function resolveHostFlagTarget(
   const targetId = await resolveSshHostTargetId(client, host.targetId, environments)
   return parseExecutionHostId(toSshExecutionHostId(targetId)) ?? host
 }
+
+// Why: the inverse of the --host case. `--environment openclaw` failed with a bare "Unknown
+// environment", when openclaw is very often an SSH target — a different axis, not a typo. The
+// store's own error cannot carry the hint (translateStoreError forwards code and message only,
+// dropping data), so resolve the selector here where the payload survives.
+export async function assertEnvironmentSelectorResolvable(
+  selector: string,
+  listSshTargetsForSuggestion: () => Promise<SshTargetSummary[]>
+): Promise<void> {
+  const [{ listEnvironments }, { getDefaultUserDataPath }] = await Promise.all([
+    import('./runtime/environments.js'),
+    import('./runtime-client.js')
+  ])
+  const environments = listEnvironments(getDefaultUserDataPath()).map((candidate) => ({
+    id: candidate.id,
+    name: candidate.name
+  }))
+  if (findEnvironmentByName(environments, selector)) {
+    return
+  }
+  const sshTargets = await listSshTargetsForSuggestion()
+  throw new RuntimeClientError(
+    'invalid_argument',
+    `Unknown Orca server in --environment ${selector}: no paired Orca server is named or has id ${selector}.`,
+    {
+      knownEnvironments: environments,
+      knownSshTargets: sshTargets,
+      nextSteps: [
+        ...crossKindNextSteps(selector, { environments, sshTargets }, 'environment'),
+        'Run `orca host list` to see every machine you can target and the flag for each.'
+      ]
+    }
+  )
+}

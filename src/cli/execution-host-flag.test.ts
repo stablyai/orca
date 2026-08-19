@@ -20,6 +20,7 @@ vi.mock('./runtime-client', () => ({
 }))
 
 import {
+  assertEnvironmentSelectorResolvable,
   hostFilterMatchesHostId,
   parseHostFlag,
   resolveHostFlagEnvironmentId
@@ -196,5 +197,45 @@ describe('hostFilterMatchesHostId', () => {
   it('does not match a different runtime host', () => {
     expect(hostFilterMatchesHostId(runtimeHost, 'runtime:env-2')).toBe(false)
     expect(hostFilterMatchesHostId(runtimeHost, null)).toBe(false)
+  })
+})
+
+describe('assertEnvironmentSelectorResolvable', () => {
+  it('accepts a paired server by name or id', async () => {
+    listEnvironmentsMock.mockReturnValue([environment('env-1', 'awin')])
+    listSshTargetsMock.mockClear()
+
+    await expect(
+      assertEnvironmentSelectorResolvable('awin', listSshTargetsMock)
+    ).resolves.toBeUndefined()
+    await expect(
+      assertEnvironmentSelectorResolvable('env-1', listSshTargetsMock)
+    ).resolves.toBeUndefined()
+    expect(listSshTargetsMock).not.toHaveBeenCalled()
+  })
+
+  // Why: the inverse of the --host case, and the one the report actually hit — a name that is
+  // an SSH target dead-ended with a bare "unknown environment".
+  it('names the SSH target when the selector is one', async () => {
+    listEnvironmentsMock.mockReturnValue([environment('env-1', 'awin')])
+    listSshTargetsMock.mockResolvedValue([{ id: 'ssh-1-a', label: 'openclaw' }])
+
+    await expect(
+      assertEnvironmentSelectorResolvable('openclaw', listSshTargetsMock)
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      data: {
+        nextSteps: expect.arrayContaining([expect.stringContaining('--host ssh:ssh-1-a')])
+      }
+    })
+  })
+
+  it('still points at host list when the name is on neither axis', async () => {
+    listEnvironmentsMock.mockReturnValue([])
+    listSshTargetsMock.mockResolvedValue([])
+
+    await expect(
+      assertEnvironmentSelectorResolvable('nowhere', listSshTargetsMock)
+    ).rejects.toThrow('no paired Orca server is named or has id nowhere')
   })
 })

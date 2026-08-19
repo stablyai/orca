@@ -9,7 +9,10 @@ import {
   validateCommandAndFlags
 } from './args'
 import { dispatch } from './dispatch'
-import { resolveHostFlagEnvironmentId } from './execution-host-flag'
+import {
+  assertEnvironmentSelectorResolvable,
+  resolveHostFlagEnvironmentId
+} from './execution-host-flag'
 import { listSshTargets } from './host-selector-alternatives'
 import { reportCliError } from './format'
 import { printHelp } from './help'
@@ -91,6 +94,15 @@ export async function main(
     const ignoreRemoteSelection = shouldIgnoreRemoteSelection(parsed.commandPath)
     const pairingCode = ignoreRemoteSelection ? null : parsed.flags.get('pairing-code')
     const environmentSelector = ignoreRemoteSelection ? null : parsed.flags.get('environment')
+    // Why: only the explicit flag is asserted eagerly. An ambient ORCA_ENVIRONMENT is background
+    // config, and failing local-only commands because of a stale one would be a regression; the
+    // explicit flag means the caller named that machine, so a bad name should fail immediately
+    // with the cross-kind hint rather than a bare store error at first use.
+    const listSshTargetsForSuggestion = async (): Promise<{ id: string; label: string }[]> =>
+      listSshTargets(new RuntimeClientClass(undefined, undefined, null, null))
+    if (typeof environmentSelector === 'string') {
+      await assertEnvironmentSelectorResolvable(environmentSelector, listSshTargetsForSuggestion)
+    }
     // Why: --host runtime:<id> names a paired server, not a filter over this
     // runtime's rows, so it has to pick the connection before the client exists.
     // An ambient ORCA_ENVIRONMENT is checked for disagreement too — silently
@@ -102,8 +114,7 @@ export async function main(
       : await resolveHostFlagEnvironmentId(parsed.flags, {
           // Why: only consulted when the name missed, and against this machine's own runtime —
           // SSH targets are registered there, not in the paired server we failed to find.
-          listSshTargets: async () =>
-            listSshTargets(new RuntimeClientClass(undefined, undefined, null, null)),
+          listSshTargets: listSshTargetsForSuggestion,
           pairingCode: typeof pairingCode === 'string' ? pairingCode : null,
           environmentSelector:
             typeof environmentSelector === 'string'
