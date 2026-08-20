@@ -22322,6 +22322,12 @@ describe('OrcaRuntimeService', () => {
         wslDistro: null
       }
     ])
+    const serializeProviderBuffer = vi.fn().mockResolvedValue(null)
+    const serializeBuffer = vi.fn().mockResolvedValue({
+      data: ' >_ OpenAI Codex (v0.131.0)\r\n model:       gpt-5.5 high\r\n directory:   /repo\r\n',
+      cols: 80,
+      rows: 24
+    })
     const runtime = new OrcaRuntimeService(
       {
         ...runtimeStore,
@@ -22355,7 +22361,10 @@ describe('OrcaRuntimeService', () => {
       kill: vi.fn(() => true),
       getForegroundProcess: async () => null,
       hasPty: (candidate) => candidate === ptyId,
-      listProcesses
+      listProcesses,
+      serializeBuffer,
+      serializeProviderBuffer,
+      hasRendererSerializer: () => true
     })
     const revealTerminalSession = vi.fn().mockImplementation(() =>
       publishLegacyWorkerReveal(runtime, {
@@ -22427,6 +22436,11 @@ describe('OrcaRuntimeService', () => {
         incarnationId
       }
     })
+    await expect(
+      runtime.waitForTerminal('term_ssh_legacy', { condition: 'tui-idle', timeoutMs: 100 })
+    ).resolves.toMatchObject({ satisfied: true })
+    expect(serializeProviderBuffer).toHaveBeenCalledOnce()
+    expect(serializeBuffer).toHaveBeenCalledOnce()
   })
 
   it('refuses a cross-distro WSL worker and adopts it after exact host ownership matches', async () => {

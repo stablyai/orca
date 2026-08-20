@@ -24,6 +24,8 @@ import {
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 import type { RuntimeTerminalListResult, RuntimeTerminalRead } from '../../src/shared/runtime-types'
 import { listAllOrchestrationRuns } from './orchestration-run-pages'
+import { buildFakeAgentCommandOverride } from './helpers/fake-agent-command-override'
+import { FAKE_AGENT_PASTE_END_SCANNER_SOURCE } from './helpers/fake-agent-paste-end-scanner'
 
 const PROVIDER_SESSION_ID = 'e2e-legacy-orchestration-worker'
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-legacy-worker-'))
@@ -31,7 +33,9 @@ const spawnLedgerPath = path.join(fakeCliDir, 'spawn.jsonl')
 const interruptionLedgerPath = path.join(fakeCliDir, 'interruption.jsonl')
 const authorityLedgerPath = path.join(fakeCliDir, 'authority.jsonl')
 const lifecycleLedgerPath = path.join(fakeCliDir, 'lifecycle.jsonl')
-const fakeCodexCommand = path.join(fakeCliDir, process.platform === 'win32' ? 'codex.cmd' : 'codex')
+const fakeCodexCommand = buildFakeAgentCommandOverride(
+  path.join(fakeCliDir, process.platform === 'win32' ? 'codex.cmd' : 'codex')
+)
 const fakeCodexSource = `
 const { appendFileSync } = require('node:fs')
 const { spawnSync } = require('node:child_process')
@@ -84,10 +88,13 @@ process.stdout.write('\\u001b]0;Codex Ready\\u0007OpenAI Codex\\nmodel: e2e\\ndi
 void emitAuthorityHook()
 let acknowledged = false
 let lifecycleSent = false
+${FAKE_AGENT_PASTE_END_SCANNER_SOURCE}
 let pasteEnded = false
 process.stdin.on('data', (chunk) => {
   const input = chunk.toString()
-  if (input.includes('\\x1b[201~')) {
+  const pasteEndScan = scanFakeAgentPasteEnd(fakeAgentPasteEndTail, input)
+  fakeAgentPasteEndTail = pasteEndScan.tail
+  if (pasteEndScan.ended) {
     pasteEnded = true
     process.stdout.write('\\x1b[?25h')
   }
