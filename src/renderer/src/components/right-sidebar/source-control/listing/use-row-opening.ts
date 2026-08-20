@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useEffectEvent, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
@@ -158,34 +158,39 @@ export function useSourceControlRowOpening({
 
   // Bridge the editor's F7/Shift+F7 diff-change nav across file edges: when the
   // cursor is at the file's last/first change, advance to the adjacent changed
-  // file honoring exactly the order/filtering shown in this panel. useEffectEvent
-  // keeps the registered function stable while reading only committed values.
+  // file honoring exactly the order/filtering shown in this panel. Reads latest
+  // values via refs so the registration stays stable and doesn't churn — not
+  // useEffectEvent, whose contract forbids calling it outside an Effect, and the
+  // store hands this function to a keyboard handler.
   const setChangedFileDiffNavigator = useAppStore((s) => s.setChangedFileDiffNavigator)
-  const navigateToAdjacentChangedFile = useEffectEvent(
-    (direction: 'next' | 'previous'): boolean => {
+  const visibleSelectionEntriesRef = useRef(visibleSelectionEntries)
+  visibleSelectionEntriesRef.current = visibleSelectionEntries
+  const activeOpenRowKeysRef = useRef(activeOpenRowKeys)
+  activeOpenRowKeysRef.current = activeOpenRowKeys
+  const handleOpenDiffRef = useRef(handleOpenDiff)
+  handleOpenDiffRef.current = handleOpenDiff
+  useEffect(() => {
+    const navigate = (direction: 'next' | 'previous'): boolean => {
+      const entries = visibleSelectionEntriesRef.current
+      const activeKeys = activeOpenRowKeysRef.current
       // Why: activeOpenRowKeys may hold both unstaged:: and untracked:: keys for
       // one path, but git makes those row kinds mutually exclusive per path, so
       // first match is the only match.
-      const currentIndex = visibleSelectionEntries.findIndex((entry) =>
-        activeOpenRowKeys.has(entry.key)
-      )
+      const currentIndex = entries.findIndex((entry) => activeKeys.has(entry.key))
       if (currentIndex === -1) {
         return false
       }
-      const adjacent =
-        visibleSelectionEntries[direction === 'next' ? currentIndex + 1 : currentIndex - 1]
+      const adjacent = entries[direction === 'next' ? currentIndex + 1 : currentIndex - 1]
       if (!adjacent) {
         return false
       }
-      handleOpenDiff(adjacent.entry)
+      handleOpenDiffRef.current(adjacent.entry)
       return true
     }
-  )
-  useEffect(() => {
-    setChangedFileDiffNavigator(navigateToAdjacentChangedFile)
+    setChangedFileDiffNavigator(navigate)
     return () => {
       // Identity guard: a late unmount must not wipe a newer panel's registration.
-      if (useAppStore.getState().changedFileDiffNavigator === navigateToAdjacentChangedFile) {
+      if (useAppStore.getState().changedFileDiffNavigator === navigate) {
         setChangedFileDiffNavigator(null)
       }
     }
