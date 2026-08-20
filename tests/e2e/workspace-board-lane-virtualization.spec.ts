@@ -278,7 +278,7 @@ test.describe('Workspace board lane virtualization', () => {
     const sourceCard = board
       .locator('[data-workspace-status="state-20"] [data-workspace-board-card-id]')
       .first()
-    const sourceId = await sourceCard.getAttribute('data-workspace-board-card-id')
+    const sourceId = await sourceCard.getAttribute('data-workspace-board-worktree-id')
     const sourceBox = await sourceCard.boundingBox()
     const targetBox = await finalLane
       .locator('[data-workspace-board-lane-scroll]')
