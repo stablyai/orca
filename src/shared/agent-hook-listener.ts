@@ -4366,8 +4366,16 @@ export function normalizeHookPayload(
   const paneKey = typeof record.paneKey === 'string' ? record.paneKey.trim() : ''
   const parsedPaneKey = parsePaneKey(paneKey)
   const rawPayload = record.payload
-  const hookPayload =
-    typeof rawPayload === 'string'
+  // Why (#15117): some Antigravity events fire with no stdin at all, yet still carry a status
+  // transition in `hook_event_name`. The POSIX script substitutes `{}` before posting; on
+  // Windows curl omits the form field entirely when stdin is empty, so the event arrives with
+  // no `payload` key at all. Accept both shapes rather than dropping the transition.
+  const antigravityPayloadAbsent =
+    source === 'antigravity' &&
+    (rawPayload === undefined || (typeof rawPayload === 'string' && rawPayload.trim() === ''))
+  const hookPayload = antigravityPayloadAbsent
+    ? {}
+    : typeof rawPayload === 'string'
       ? (() => {
           try {
             return parseAgentHookJson(rawPayload)
