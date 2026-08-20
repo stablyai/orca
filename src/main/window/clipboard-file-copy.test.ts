@@ -50,8 +50,12 @@ describe('writeFileToClipboard', () => {
     expect(writeBuffer).toHaveBeenCalledTimes(1)
     const [format, buffer] = writeBuffer.mock.calls[0]
     expect(format).toBe('public.file-url')
-    // spaces are percent-encoded into the file URL
-    expect(buffer.toString('utf8')).toBe('file:///repo/a%20b.png')
+    // spaces are percent-encoded into the file URL. Why the suffix and not the
+    // whole string: pathToFileURL puts the current volume in front of a
+    // drive-less path on Windows, which says nothing about the encoding.
+    const url = buffer.toString('utf8')
+    expect(url.startsWith('file:///')).toBe(true)
+    expect(url.endsWith('/repo/a%20b.png')).toBe(true)
   })
 
   it('reports a failure when the macOS clipboard write throws', async () => {
@@ -73,10 +77,11 @@ describe('writeFileToClipboard', () => {
         writeBuffer
       })
     )
-    expect(writeBuffer).toHaveBeenCalledWith(
-      'public.file-url',
-      Buffer.from('file:///repo/actual.png', 'utf8')
-    )
+    // The point is that the resolved path is what reaches the clipboard, not the
+    // one that was asked for; the volume in front of it is not part of that.
+    const [format, buffer] = writeBuffer.mock.calls[0]
+    expect(format).toBe('public.file-url')
+    expect(buffer.toString('utf8').endsWith('/repo/actual.png')).toBe(true)
   })
 
   it('shells out to Set-Clipboard on Windows, escaping quotes', async () => {
@@ -110,7 +115,10 @@ describe('writeFileToClipboard', () => {
     const [command, args, stdin] = runCommand.mock.calls[0]
     expect(command).toBe('wl-copy')
     expect(args).toContain('text/uri-list')
-    expect(stdin).toBe('file:///repo/a%20b.png\r\n')
+    // The CRLF terminator is the KDE contract; the volume in front of a
+    // drive-less path is only what pathToFileURL adds on Windows.
+    expect(stdin ?? '').toMatch(/^file:\/\/\//)
+    expect(stdin ?? '').toMatch(/\/repo\/a%20b\.png\r\n$/)
   })
 
   it('uses the GNOME copied-files payload on non-KDE desktops', async () => {
@@ -121,7 +129,8 @@ describe('writeFileToClipboard', () => {
     )
     const [, args, stdin] = runCommand.mock.calls[0]
     expect(args).toContain('x-special/gnome-copied-files')
-    expect(stdin).toBe('copy\nfile:///repo/a.png')
+    expect(stdin ?? '').toMatch(/^copy\nfile:\/\/\//)
+    expect(stdin ?? '').toMatch(/\/repo\/a\.png$/)
   })
 
   it('tries each Linux tool and reports unsupported when all fail', async () => {
