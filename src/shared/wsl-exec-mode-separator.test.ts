@@ -85,7 +85,7 @@ describe('wsl.exe mode separator', () => {
   it('sees a `--` separator split across lines by the formatter', () => {
     // Why: the guard once matched line-by-line and was blind to this exact shape,
     // which is how every multi-element argv array in this repo is formatted.
-    const formatted = ["args: [", "  '-d',", "  distro,", "  '--',", "  'bash'", "]"].join('\n')
+    const formatted = ['args: [', "  '-d',", '  distro,', "  '--',", "  'bash'", ']'].join('\n')
 
     expect(ARGV_FORM.test(codeText(formatted))).toBe(true)
   })

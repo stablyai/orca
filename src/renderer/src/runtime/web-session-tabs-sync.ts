@@ -30,6 +30,10 @@ import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-type
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { OpenFile } from '../store/slices/editor'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
+import {
+  buildRetiredTerminalTabStateSweepPatch,
+  type RetiredTerminalTabSweepState
+} from '../store/slices/retired-terminal-tab-state-sweep'
 import { getRemoteRuntimePtyEnvironmentId, toRemoteRuntimePtyId } from './runtime-terminal-stream'
 import { sanitizeTerminalLayoutPaneTitlesForLabels } from '@/lib/terminal-pane-title-sanitization'
 import { terminalLayoutEqual } from '@/lib/terminal-layout-equality'
@@ -232,7 +236,21 @@ export type WebSessionTabsSyncState = Pick<
   | 'unreadTerminalTabs'
   | 'sortEpoch'
 > &
-  Partial<Pick<AppState, 'automaticAgentResumeClaimsByTabId' | 'pendingStartupByTabId'>>
+  Partial<
+    Pick<
+      AppState,
+      | 'acknowledgedAgentsByPaneKey'
+      | 'agentLaunchConfigByPaneKey'
+      | 'automaticAgentResumeClaimsByTabId'
+      | 'migrationUnsupportedByPtyId'
+      | 'paneForegroundAgentByPaneKey'
+      | 'pendingStartupByTabId'
+      | 'recentlyClosedAgentStatusTabIds'
+      | 'recentlyRetiredAgentStatusPaneKeys'
+      | 'retainedAgentsByPaneKey'
+      | 'retentionSuppressedPaneKeys'
+    >
+  >
 
 type WebSessionTabsBatchRecordKey =
   | 'activeBrowserTabIdByWorktree'
@@ -464,6 +482,17 @@ function removeWebSessionTabsEnvironment(environmentId: string, worktreeId: stri
   }
 }
 
+const VISIBILITY_INVENTORY_REMOVAL_EPOCH = 'visibility-inventory-removal'
+
+// Why: a tombstone empties the whole worktree mirror — including tabs a still-live sibling environment publishes — so it is a
+// visibility fact, never evidence that the host closed anything.
+function isWebSessionTabsWorktreeRemovalFrame(snapshot: RuntimeMobileSessionTabsResult): boolean {
+  return (
+    (snapshot as { removed?: unknown }).removed === true ||
+    snapshot.publicationEpoch === VISIBILITY_INVENTORY_REMOVAL_EPOCH
+  )
+}
+
 // Why: omission means removal only because `listAllMobileSessionTabs` publishes every worktree it knows unfiltered; if a host ever
 // scopes that map, this turns live worktrees into tombstones, so the fence below is deliberately short-lived.
 function buildMissingWebSessionTabsRemovals(
@@ -484,7 +513,7 @@ function buildMissingWebSessionTabsRemovals(
       trackedWorktree,
       snapshot: {
         worktree: trackedWorktree.worktree,
-        publicationEpoch: 'visibility-inventory-removal',
+        publicationEpoch: VISIBILITY_INVENTORY_REMOVAL_EPOCH,
         snapshotVersion: 0,
         removed: true,
         activeGroupId: null,
@@ -1180,7 +1209,77 @@ function updateBatchAgentPaneKey(
   }
 }
 
-/** Generates a state patch for mirrored agent statuses, merging host entries with client overrides. */
+// Why: the closed-tab marker has no TTL, and setAgentStatus hard-drops writes for a
+// marked tab id — for a stable mirrored id that returns, that is a permanent silent
+// blackhole unless presence in a snapshot lifts it.
+function buildRemirroredClosedTabMarkerLiftPatch(
+  recentlyClosedAgentStatusTabIds: WebSessionTabsSyncState['recentlyClosedAgentStatusTabIds'],
+  mirroredTerminalIds: ReadonlySet<string>
+): Partial<WebSessionTabsSyncState> | null {
+  let next: WebSessionTabsSyncState['recentlyClosedAgentStatusTabIds'] | null = null
+  for (const tabId of mirroredTerminalIds) {
+    if (tabId in (recentlyClosedAgentStatusTabIds ?? {})) {
+      next ??= { ...recentlyClosedAgentStatusTabIds }
+      delete next[tabId]
+    }
+  }
+  return next ? { recentlyClosedAgentStatusTabIds: next } : null
+}
+
+/**
+ * A host retraction owes the retracted tab closeTab's renderer-state sweep: without it,
+ * client-owned rows (STA-3107-exempt in the mirror's delete loop) and retention promotions
+ * outlive the tab forever (STA-4593).
+ */
+function buildRetractedMirroredTabSweepPatch(
+  state: WebSessionTabsSyncState,
+  worktreeId: string,
+  nextTabsByWorktree: WebSessionTabsSyncState['tabsByWorktree'],
+  agentStatusPatch: Pick<
+    WebSessionTabsSyncState,
+    'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'
+  > | null,
+  removedTerminalResourceIds: readonly string[],
+  batchContext?: WebSessionTabsBatchContext
+): Partial<WebSessionTabsSyncState> | null {
+  // Why: only a mirrored id the host stopped publishing is a retraction — a local or provisional
+  // tab in this list is being renamed into its mirror, and a rename must keep its rows.
+  const retractedTabIds = removedTerminalResourceIds.filter(isMirroredTerminalSurfaceId)
+  if (retractedTabIds.length === 0) {
+    return null
+  }
+  const sweepState: RetiredTerminalTabSweepState = {
+    acknowledgedAgentsByPaneKey: state.acknowledgedAgentsByPaneKey ?? {},
+    agentLaunchConfigByPaneKey: state.agentLaunchConfigByPaneKey ?? {},
+    agentStatusByPaneKey: agentStatusPatch?.agentStatusByPaneKey ?? state.agentStatusByPaneKey,
+    agentStatusEpoch: agentStatusPatch?.agentStatusEpoch ?? state.agentStatusEpoch,
+    migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId ?? {},
+    paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey ?? {},
+    recentlyClosedAgentStatusTabIds: state.recentlyClosedAgentStatusTabIds ?? {},
+    recentlyRetiredAgentStatusPaneKeys: state.recentlyRetiredAgentStatusPaneKeys ?? {},
+    retainedAgentsByPaneKey: state.retainedAgentsByPaneKey ?? {},
+    retentionSuppressedPaneKeys: state.retentionSuppressedPaneKeys ?? {},
+    sortEpoch: agentStatusPatch?.sortEpoch ?? state.sortEpoch,
+    // Why: the drop's completed-orphan rule reads "keyed under a tab this worktree no longer has",
+    // so it must see the post-removal tab list, not the one the snapshot replaced.
+    tabsByWorktree: nextTabsByWorktree
+  }
+  const sweep = buildRetiredTerminalTabStateSweepPatch(sweepState, retractedTabIds, worktreeId)
+  if (!sweep?.agentStatusByPaneKey || !batchContext) {
+    return sweep ?? null
+  }
+  // Why: the batch republishes its own record copy at the end, which would undo the sweep.
+  const mutableState = state as unknown as Record<string, unknown>
+  mutableState.agentStatusByPaneKey = sweep.agentStatusByPaneKey
+  batchContext.changedRecords.add('agentStatusByPaneKey')
+  for (const paneKey of Object.keys(sweepState.agentStatusByPaneKey)) {
+    if (!(paneKey in sweep.agentStatusByPaneKey)) {
+      updateBatchAgentPaneKey(paneKey, false, batchContext)
+    }
+  }
+  return sweep
+}
+
 function buildMirroredAgentStatusPatch(
   state: WebSessionTabsSyncState,
   currentTerminalTabs: readonly TerminalTab[],
@@ -3264,9 +3363,32 @@ function applyWebSessionTabsSnapshotWithContext(
     now,
     batchContext
   )
+  // Why: only a host snapshot that omits a tab is a retraction; a tombstone clears the mirror
+  // for every environment at once, and sweeping there erases rows a live sibling still owns.
+  const retractedTabSweepPatch = isWebSessionTabsWorktreeRemovalFrame(snapshot)
+    ? null
+    : buildRetractedMirroredTabSweepPatch(
+        state,
+        worktreeId,
+        nextTabsByWorktree,
+        agentStatusPatch,
+        removedTerminalResourceIds,
+        batchContext
+      )
+  // Why: mirrored ids are stable, so a published-again id proves the tab is not closed —
+  // a lingering closed-tab marker would blackhole its byte-derived status for the whole
+  // session (host-restart subset frames, cross-host collision replays). The close-intent
+  // filter already holds genuinely closing tabs out of the snapshot.
+  const remirroredClosedTabLiftPatch = buildRemirroredClosedTabMarkerLiftPatch(
+    retractedTabSweepPatch?.recentlyClosedAgentStatusTabIds ??
+      state.recentlyClosedAgentStatusTabIds,
+    mirroredTerminalIds
+  )
 
   const patch: Partial<WebSessionTabsSyncState> = {
     ...agentStatusPatch,
+    ...retractedTabSweepPatch,
+    ...remirroredClosedTabLiftPatch,
     ...(nextOpenFiles !== state.openFiles ? { openFiles: nextOpenFiles } : {}),
     ...(nextTabsByWorktree !== state.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {}),
     ...(nextBrowserTabsByWorktree !== state.browserTabsByWorktree

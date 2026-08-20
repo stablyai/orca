@@ -122,6 +122,30 @@ function installModuleMocks(
     cleanElectronUserAgent: vi.fn((ua: string) => ua.replace(/\s*Electron\/\S+/, '')),
     setupClientHintsOverride: setupClientHintsOverrideMock
   }))
+  // This suite models replay with an in-memory filesystem. The real file-backed SQLite merge has
+  // dedicated coverage; these fixtures are legacy unmarked images and keep the copy path.
+  vi.doMock('./browser-cookie-staged-import', () => ({
+    SCOPED_COOKIE_IMPORT_FORMAT: 'scoped-v1',
+    applyScopedStagedCookieImport: vi.fn(() => false),
+    isScopedStagedCookieImport: vi.fn(() => false),
+    removeCookieImportScopeMarker: vi.fn()
+  }))
+  vi.doMock('../codex-accounts/fs-utils', () => ({
+    renameFileWithWindowsRetry: vi.fn((source: string, target: string) => {
+      const sourceKey = fsKey(source)
+      const targetKey = fsKey(target)
+      if (!fsState.present.has(sourceKey)) {
+        throw new Error('ENOENT')
+      }
+      const value = fsState.files.get(sourceKey)
+      fsState.present.delete(sourceKey)
+      fsState.files.delete(sourceKey)
+      fsState.present.add(targetKey)
+      if (value !== undefined) {
+        fsState.files.set(targetKey, value)
+      }
+    })
+  }))
 
   return {
     sessionFromPartitionMock,
@@ -257,10 +281,13 @@ describe('BrowserSessionRegistry persistence', () => {
     )
 
     const written = JSON.parse(fsState.files.get(META_PATH) ?? '{}')
-    expect(written.pendingCookieDbPath).toBe('/staged/default')
+    expect(written.pendingCookieDbPath).toBeNull()
     expect(written.pendingCookieImports).toEqual({
-      'persist:orca-browser': '/staged/default',
-      'persist:orca-browser-session-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa': '/staged/imported'
+      'persist:orca-browser': { format: 'scoped-v1', path: '/staged/default' },
+      'persist:orca-browser-session-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa': {
+        format: 'scoped-v1',
+        path: '/staged/imported'
+      }
     })
   })
 
@@ -547,6 +574,26 @@ describe('BrowserSessionRegistry persistence', () => {
     expect(checkHandler(null, 'persistent-storage', '')).toBe(true)
     expect(checkHandler(null, 'geolocation', '')).toBe(false)
     expect(checkHandler(null, 'media', '', { mediaType: 'video' })).toBe(true)
+
+    // Why: this session allows unpartitioned third-party cookies, so a cross-site frame already has
+    // the access requestStorageAccess() would grant. Denying it protected nothing and only broke
+    // sites taking the API's failure path. Red before the grant landed.
+    requestHandler(guestWc, 'storage-access', permissionCallback)
+    expect(permissionCallback).toHaveBeenLastCalledWith(true)
+    expect(checkHandler(null, 'storage-access', '')).toBe(true)
+
+    // Why: requestStorageAccessFor() is a different platform decision — Chromium consults Related
+    // Website Sets and has no third-party-cookie auto-grant, and Orca has no such data source. This
+    // pins the deliberate denial so a future blanket widening of the allow-set fails loudly.
+    requestHandler(guestWc, 'top-level-storage-access', permissionCallback)
+    expect(permissionCallback).toHaveBeenLastCalledWith(false)
+    expect(checkHandler(null, 'top-level-storage-access', '')).toBe(false)
+
+    // Why: the reported symptom was a user-visible denial notice, so pin the notified list here —
+    // storage-access must no longer raise one, while the deliberate top-level denial still does.
+    expect(
+      browserManagerNotifyPermissionDeniedMock.mock.calls.map(([args]) => args.permission)
+    ).toEqual(['geolocation', 'top-level-storage-access'])
     expect(defaultSession.setDisplayMediaRequestHandler).toHaveBeenCalled()
     const displayMediaHandler = defaultSession.setDisplayMediaRequestHandler.mock.calls[0][0]
     const displayMediaCallback = vi.fn()

@@ -260,6 +260,11 @@ jobs:
   shell_contracts:
     name: shell contracts
     runs-on: ubuntu-latest
+    # Why: this job's cost is almost entirely package download, and a stalled mirror has
+    # no wall-clock bound of its own. A successful run finishes in ~4.5 minutes, so this
+    # is generous; it exists so a wedge fails the job instead of holding the whole run
+    # open for the 6h GitHub default — which also blocks `gh run rerun --failed`.
+    timeout-minutes: 15
     env:
       # Why: the suites below gate their live fish tests on the binary, which is
       # right on a developer machine and wrong here — this job is a required check
@@ -294,16 +299,39 @@ jobs:
           # an update on each side of it this step refreshed them three times over, and
           # the Azure archive mirror alone costs ~15-30s a pass. The PPA index is the
           # only thing the repo list gains here, and the single update below fetches it.
+          # Why bound acquisition: measured on a *passing* run, this step spent 40s
+          # fetching 11.4 MB of index and then 2m17s fetching 8.9 MB of packages at
+          # 65 kB/s — it is dominated by download throughput, not by work. apt applies
+          # no wall-clock bound to a stalled mirror, so a slow Launchpad or archive
+          # host wedges the step for tens of minutes. This job is a required check, so
+          # a wedge holds the entire run open and blocks `gh run rerun --failed`.
+          # Bounded timeouts plus retries turn an unbounded hang into a fast, legible
+          # failure. Set in apt.conf.d rather than on each command line so the two
+          # invocations below stay exactly as pr-workflow-parallelism.test.mjs parses
+          # them. Retries are 1, not 3: a first attempt at these bounds already multiplied
+          # 30s x 3 retries across every index file into a ~15 minute stall on a dead
+          # mirror, which is worse than failing once and moving on.
+          sudo tee /etc/apt/apt.conf.d/99-orca-shell-contracts >/dev/null <<'APTCONF'
+          Acquire::http::Timeout "15";
+          Acquire::https::Timeout "15";
+          Acquire::Retries "1";
+          APTCONF
           for attempt in 1 2 3; do
             sudo add-apt-repository -y -n ppa:fish-shell/release-4 && break
             echo "add-apt-repository attempt ${attempt} failed; retrying" >&2
             sudo add-apt-repository -y -n -r ppa:fish-shell/release-4 || true
             sleep 5
           done
-          sudo apt-get update || true
+          # Why a wall-clock bound on each command: apt's Acquire timeouts are per-connection,
+          # so a dead mirror costs timeout x retries x every index file. Measured: the archive
+          # mirror stalled with zero bytes and the step burned 14m26s before the job bound
+          # killed it. `timeout` is the only thing that bounds the command as a whole.
+          # The update is already tolerant by design (see above), so bounding it just caps
+          # what a dead mirror can cost before the install runs against whatever index exists.
+          timeout 120 sudo apt-get update || true
           # Why both shells on one line: pr-workflow-parallelism.test.mjs parses only the
           # first install command in this step to prove the lane really installs them.
-          sudo apt-get install -y zsh fish
+          timeout 300 sudo apt-get install -y zsh fish
 
       # Separate from the install so the failure names the contract, not an apt error.
       # ORCA_REQUIRE_FISH re-checks this at test time; this step just fails in seconds

@@ -129,6 +129,29 @@ describe('PR workflow parallelism', () => {
     )
   })
 
+  it('bounds the shell lane so a stalled apt mirror cannot hold the run open', () => {
+    const job = workflow.jobs.shell_contracts
+    // A passing run of this job takes ~4.5 minutes, almost all of it package download.
+    // Without a job bound a stalled mirror runs to GitHub's 6h default, and because this
+    // is a required check it holds the whole run open and blocks `gh run rerun --failed`.
+    expect(job['timeout-minutes']).toBeGreaterThan(0)
+    expect(job['timeout-minutes']).toBeLessThanOrEqual(30)
+
+    const installStep = job.steps.find((step) => step.name === 'Install zsh and fish')
+    // apt applies no wall-clock bound to a stalled mirror on its own. These turn an
+    // unbounded hang into a bounded, retried, legible failure.
+    expect(installStep.run).toMatch(/Acquire::http::Timeout/)
+    expect(installStep.run).toMatch(/Acquire::https::Timeout/)
+    expect(installStep.run).toMatch(/Acquire::Retries/)
+    // Retries multiply: a first attempt at 30s x 3 retries across every index file turned
+    // a dead mirror into a ~15 minute stall. One attempt, then move on.
+    expect(installStep.run).toMatch(/Acquire::Retries "1"/)
+    // Acquire timeouts are per-connection, so they cannot bound the command as a whole.
+    // Only a wall-clock bound can, and both apt invocations need one.
+    expect(installStep.run).toMatch(/timeout \d+ sudo apt-get update/)
+    expect(installStep.run).toMatch(/timeout \d+ sudo apt-get install/)
+  })
+
   it('keeps every real-zsh test in the dedicated shell lane', () => {
     const discoveredFiles = globSync(testFilePatterns)
       .filter((testFile) => realZshUsage.test(readFileSync(testFile, 'utf8')))

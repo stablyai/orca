@@ -1088,6 +1088,7 @@ import {
 } from '../../shared/worktree/retired-name-registry'
 import { normalizeSparseDirectories } from '../ipc/sparse-checkout-directories'
 import type { PtyBindingSourceExpectation, Store } from '../persistence'
+import { collectLayoutLeafIdsInOrder } from '../persistence/restoring-sessions/terminal-layout-normalization'
 import type { StatsCollector } from '../stats/collector'
 import {
   computeValidatedBranchName,
@@ -3125,6 +3126,7 @@ export class OrcaRuntimeService {
   private detachedPreAllocatedLeaves = new Map<string, RuntimeLeafRecord>()
   private graphSyncCallbacks: (() => void)[] = []
   private waitersByHandle = new Map<string, Set<TerminalWaiter>>()
+  private ptyExitListenersByPtyId = new Map<string, Set<() => void>>()
   private ptyController: RuntimePtyController | null = null
   private notifier: RuntimeNotifier | null = null
   private clientEventListeners = new Set<(event: RuntimeClientEvent) => void>()
@@ -7612,6 +7614,99 @@ export class OrcaRuntimeService {
           pty.runtimeSessionOwned = false
           this.setPairedRendererSessionOwnership(pty.ptyId, false)
         }
+      }
+    }
+  }
+
+  private getMobileTerminalLeafPtyIds(tab: RuntimeMobileSessionTerminalTab): string[] {
+    return [tab.ptyId, tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId]].filter(
+      (ptyId): ptyId is string => typeof ptyId === 'string' && ptyId.length > 0
+    )
+  }
+
+  private clearRuntimeSessionOwnershipForMobileTerminalLeaf(
+    worktreeId: string,
+    tab: RuntimeMobileSessionTerminalTab
+  ): void {
+    for (const ptyId of this.getMobileTerminalLeafPtyIds(tab)) {
+      const pty = this.ptysById.get(ptyId)
+      if (pty?.worktreeId === worktreeId && pty.tabId === tab.parentTabId) {
+        pty.runtimeSessionOwned = false
+        this.setPairedRendererSessionOwnership(pty.ptyId, false)
+      }
+    }
+  }
+
+  // Why: only positive evidence that the persisted parent dropped this leaf may
+  // release it — a parent with no persisted layout is no evidence of a split.
+  private persistedParentStillBindsMobileTerminalLeaf(
+    session: WorkspaceSessionState,
+    persistedParent: TerminalTab,
+    tab: RuntimeMobileSessionTerminalTab
+  ): boolean {
+    const layout = session.terminalLayoutsByTabId?.[tab.parentTabId]
+    if (!layout) {
+      return true
+    }
+    if (
+      typeof layout.ptyIdsByLeafId?.[tab.leafId] === 'string' ||
+      collectLayoutLeafIdsInOrder(layout.root).includes(tab.leafId)
+    ) {
+      return true
+    }
+    // Why: renderer and headless sources can derive different leafIds for one
+    // surface, so a still-bound PTY id outranks a leafId that no longer matches.
+    const leafPtyIds = new Set(this.getMobileTerminalLeafPtyIds(tab))
+    if (leafPtyIds.size === 0) {
+      return true
+    }
+    return [persistedParent.ptyId, ...Object.values(layout.ptyIdsByLeafId ?? {})].some(
+      (ptyId) => typeof ptyId === 'string' && leafPtyIds.has(ptyId)
+    )
+  }
+
+  // Why: omitted from the publication AND from persistence = durably closed, so release
+  // ownership — else a lagging or failed kill preserves the tab back into every merge.
+  // A create still in flight has not been retired, only not published yet.
+  private releaseRuntimeSessionOwnershipForRendererRetiredTabs(
+    incoming: RuntimeMobileSessionTabsSnapshot,
+    existing: RuntimeMobileSessionTabsSnapshot | undefined
+  ): void {
+    if (!existing || this.isHeadlessBuiltMobileSessionPublicationBase(existing.publicationEpoch)) {
+      return
+    }
+    const worktreeId = existing.worktree
+    const session = this.getWorkspaceSessionForWorktree(worktreeId)
+    const persistedTabs = session?.tabsByWorktree?.[worktreeId]
+    if (!session || !persistedTabs) {
+      return
+    }
+    const persistedTabsById = new Map(persistedTabs.map((tab) => [tab.id, tab]))
+    const incomingIdentityKeys = new Set(
+      incoming.tabs.flatMap((tab) => this.getMobileSessionSnapshotTabIdentityKeys(tab))
+    )
+    for (const tab of existing.tabs) {
+      if (tab.type !== 'terminal') {
+        continue
+      }
+      if (
+        this.pendingMobileTerminalCreatesByKey.has(`${worktreeId}::${tab.parentTabId}`) ||
+        this.getMobileSessionSnapshotTabIdentityKeys(tab).some((id) =>
+          incomingIdentityKeys.has(id)
+        ) ||
+        !this.hasLiveRuntimeSessionOwnedPtyBinding(worktreeId, tab)
+      ) {
+        continue
+      }
+      const persistedParent = persistedTabsById.get(tab.parentTabId)
+      if (!persistedParent) {
+        this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, existing, tab.parentTabId)
+        continue
+      }
+      // Why: a split parent outlives its retired leaf, so releasing the parent's
+      // PTYs would retire the surviving sibling with it.
+      if (!this.persistedParentStillBindsMobileTerminalLeaf(session, persistedParent, tab)) {
+        this.clearRuntimeSessionOwnershipForMobileTerminalLeaf(worktreeId, tab)
       }
     }
   }
@@ -15085,6 +15180,7 @@ export class OrcaRuntimeService {
       pty?.incarnationId ??
       `runtime:${this.runtimeId}:${this.getPtyLifecycleGeneration(ptyId)}`
     this.advancePtyLifecycleGeneration(ptyId)
+    this.notifyPtyExitListeners(ptyId)
     const exactSurfaceByKey = new Map<
       string,
       Pick<RetiredTerminalSurface, 'worktreeId' | 'parentTabId' | 'leafId'>
@@ -15767,6 +15863,13 @@ export class OrcaRuntimeService {
     const mode = this.getMobileDisplayMode(ptyId)
     if (mode === 'desktop') {
       // Watching at desktop dims — viewport is informational only.
+      return { updated: true, applied: false }
+    }
+    // Why: a desktop take-back is released only by a deliberate mobile gesture
+    // (mobileTookFloor / setDisplayMode / fresh subscribe). A passive viewport report
+    // — iOS resume and every reconnect force one — must not re-phone-fit and re-take
+    // the floor, or the take-back looks like a no-op to the desktop user.
+    if (this.getDriver(ptyId).kind === 'desktop') {
       return { updated: true, applied: false }
     }
     // Drive PTY dims by the most-recent-actor (just updated to this client).
@@ -19687,6 +19790,39 @@ export class OrcaRuntimeService {
         reject(error instanceof Error ? error : new Error(String(error)))
       }
     })
+  }
+
+  subscribeToPtyExit(ptyId: string, listener: () => void): () => void {
+    const lifecycleGeneration = this.getPtyLifecycleGeneration(ptyId)
+    if (this.isPtyKnownExited(ptyId)) {
+      listener()
+      return () => {}
+    }
+    let listeners = this.ptyExitListenersByPtyId.get(ptyId)
+    if (!listeners) {
+      listeners = new Set()
+      this.ptyExitListenersByPtyId.set(ptyId, listeners)
+    }
+    let active = true
+    const unsubscribe = (): void => {
+      if (!active) {
+        return
+      }
+      active = false
+      listeners.delete(listener)
+      if (listeners.size === 0 && this.ptyExitListenersByPtyId.get(ptyId) === listeners) {
+        this.ptyExitListenersByPtyId.delete(ptyId)
+      }
+    }
+    listeners.add(listener)
+    if (
+      this.getPtyLifecycleGeneration(ptyId) !== lifecycleGeneration ||
+      this.isPtyKnownExited(ptyId)
+    ) {
+      unsubscribe()
+      listener()
+    }
+    return unsubscribe
   }
 
   async waitForSetupTerminalCompletion(handle: string): Promise<{ exitCode: number | null }> {
@@ -32961,6 +33097,7 @@ export class OrcaRuntimeService {
       this.reconcileNativeChatLaunchDraftResolutionTombstones(snapshot)
       const launchDraftFencedSnapshot = this.applyNativeChatLaunchDraftResolutionFence(snapshot)
       const fencedSnapshot = this.applyMobileSessionRetirementFences(launchDraftFencedSnapshot)
+      this.releaseRuntimeSessionOwnershipForRendererRetiredTabs(fencedSnapshot, existing)
       const nextSnapshot = this.mergePreservedHeadlessMobileSessionTabs(fencedSnapshot, existing)
       // Why: clients drop same-epoch frames whose version isn't strictly newer,
       // and main-local touches may already have emitted a higher version than
@@ -35186,6 +35323,23 @@ export class OrcaRuntimeService {
         waiter.reject(new Error('terminal_exited'))
       }
     }
+  }
+
+  private isPtyKnownExited(ptyId: string): boolean {
+    const pty = this.ptysById.get(ptyId)
+    if (pty) {
+      return !pty.connected
+    }
+    return this.getLeavesForPty(ptyId).some((leaf) => getTerminalState(leaf) === 'exited')
+  }
+
+  private notifyPtyExitListeners(ptyId: string): void {
+    const listeners = this.ptyExitListenersByPtyId.get(ptyId)
+    if (!listeners) {
+      return
+    }
+    this.ptyExitListenersByPtyId.delete(ptyId)
+    notifyRuntimeListeners(listeners, (listener) => listener(), 'pty-exit')
   }
 
   private resolvePtyTuiIdleWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {

@@ -27,10 +27,10 @@ import {
 } from './session-scanner-kimi-paths'
 import { readJsonObjectIfExists } from './session-scanner-values'
 import {
+  resetWslTranscriptFsGateForTests,
   WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS,
   WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS,
-  WslTranscriptFsError,
-  resetWslTranscriptFsGateForTests
+  WslTranscriptFsError
 } from '../native-chat/wsl-transcript-fs-gate'
 
 // Identity must not change between the refused and the recovered read, or the
