@@ -59,19 +59,24 @@ export async function sweepOrphanedPets(knownIds: Iterable<string>): Promise<voi
   } catch {
     return
   }
-  const entries: PetDirEntry[] = []
-  for (const name of names) {
-    try {
-      entries.push({ name, mtimeMs: (await stat(join(root, name))).mtimeMs })
-    } catch {
-      // Vanished between the listing and the stat; nothing to sweep.
-    }
-  }
-  for (const name of orphanedPetEntries(entries, new Set(knownIds), Date.now())) {
-    try {
-      await rm(join(root, name), { recursive: true, force: true })
-    } catch (error) {
-      console.warn('[pet-overlay] could not sweep orphaned pet', name, error)
-    }
-  }
+  const stats = await Promise.all(
+    names.map(async (name): Promise<PetDirEntry | null> => {
+      try {
+        return { name, mtimeMs: (await stat(join(root, name))).mtimeMs }
+      } catch {
+        // Vanished between the listing and the stat; nothing to sweep.
+        return null
+      }
+    })
+  )
+  const entries = stats.filter((entry): entry is PetDirEntry => entry !== null)
+  await Promise.all(
+    orphanedPetEntries(entries, new Set(knownIds), Date.now()).map(async (name) => {
+      try {
+        await rm(join(root, name), { recursive: true, force: true })
+      } catch (error) {
+        console.warn('[pet-overlay] could not sweep orphaned pet', name, error)
+      }
+    })
+  )
 }

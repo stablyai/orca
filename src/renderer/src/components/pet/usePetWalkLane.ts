@@ -30,9 +30,14 @@ export function usePetWalkLane({
   // Why: size rides a ref for the same reason as the callbacks — resizing the
   // pet from the menu must not restart the loop and drop its timestamp baseline.
   const sizeRef = useRef(size)
-  readXRef.current = readX
-  onAdvanceRef.current = onAdvance
-  sizeRef.current = size
+  // Why: written after commit, not during render. React may replay or discard a
+  // render, and a ref written in one that never commits would feed the loop a
+  // value the user never saw.
+  useEffect(() => {
+    readXRef.current = readX
+    onAdvanceRef.current = onAdvance
+    sizeRef.current = size
+  })
 
   useEffect(() => {
     if (!active) {

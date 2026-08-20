@@ -12841,7 +12841,8 @@
           "modeHeadSwapHint": "Your picture as the head on the pet body. Animates fully.",
           "cropHint": "Drag a box around the character if the picture has more in it.",
           "cropReset": "Use the whole picture",
-          "tolerance": "How much of the background to remove"
+          "tolerance": "How much of the background to remove",
+          "artworkUnavailable": "Could not load the artwork for that style."
         }
       },
       "onboarding": {

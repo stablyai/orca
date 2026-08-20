@@ -123,7 +123,18 @@ export function PetFromImageDialog({
       const pet = BUNDLED_PETS.find((p) => p.id === next.styleId)
       const rig = petRigFor(next.styleId)
       if (pet && rig) {
-        petBody = await decodeImageFile(await (await fetch(pet.url)).blob())
+        // Why: fetch resolves on 404 as readily as on 200, so an unchecked body
+        // reaches the decoder as an error page and fails talking about pixels.
+        const response = await fetch(pet.url)
+        if (!response.ok) {
+          throw new Error(
+            translate(
+              'auto.components.pet.fromImage.artworkUnavailable',
+              'Could not load the artwork for that style.'
+            )
+          )
+        }
+        petBody = await decodeImageFile(await response.blob())
       }
     }
     const build = buildPetFromImage(source, next.styleId, {

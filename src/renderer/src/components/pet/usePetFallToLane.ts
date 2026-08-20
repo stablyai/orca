@@ -50,10 +50,15 @@ export function usePetFallToLane({
   // only records — a stream of them would leave the pet hanging in mid-air.
   const laneYRef = useRef(laneY)
   const sizeRef = useRef(size)
-  readPositionRef.current = readPosition
-  onAdvanceRef.current = onAdvance
-  laneYRef.current = laneY
-  sizeRef.current = size
+  // Why: written after commit, not during render. React may replay or discard a
+  // render, and a ref written in one that never commits would feed the loop a
+  // value the user never saw.
+  useEffect(() => {
+    readPositionRef.current = readPosition
+    onAdvanceRef.current = onAdvance
+    laneYRef.current = laneY
+    sizeRef.current = size
+  })
 
   const start = useCallback(
     (velocity: { vx: number; vy: number }) => {

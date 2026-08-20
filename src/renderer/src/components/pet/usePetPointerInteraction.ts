@@ -1,4 +1,4 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { nextPetDragAnimation, type PetDragAnimation } from './pet-agent-state'
 
 type Point = { x: number; y: number }
@@ -62,7 +62,12 @@ export function usePetPointerInteraction(
   const lastSampleRef = useRef<PointerSample | null>(null)
   const previousSampleRef = useRef<PointerSample | null>(null)
   const onReleaseRef = useRef(onRelease)
-  onReleaseRef.current = onRelease
+  // Why: written after commit, not during render. React may replay or discard a
+  // render, and a ref written in one that never commits would feed the loop a
+  // value the user never saw.
+  useEffect(() => {
+    onReleaseRef.current = onRelease
+  })
   const [dragging, setDragging] = useState(false)
   const [dragAnimation, setDragAnimation] = useState<PetDragAnimation>(null)
   const [hovering, setHovering] = useState(false)

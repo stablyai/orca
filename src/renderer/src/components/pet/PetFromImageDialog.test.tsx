@@ -266,4 +266,23 @@ describe('PetFromImageDialog', () => {
       before
     )
   })
+
+  it('says so when the style artwork cannot be fetched', async () => {
+    // fetch resolves on 404, so an unchecked response used to reach the decoder
+    // as an HTML error page and fail with something about image bytes.
+    const failing = vi.fn().mockResolvedValue({ ok: false, status: 404, blob: async () => null })
+    vi.stubGlobal('fetch', failing)
+    render()
+
+    await pickFile()
+    const headOnly = [...document.querySelectorAll('button')].find((b) =>
+      /head only/i.test(b.textContent ?? '')
+    ) as HTMLButtonElement
+    await act(async () => {
+      headOnly.click()
+    })
+    vi.unstubAllGlobals()
+
+    expect(bodyText().toLowerCase()).toMatch(/artwork|could not load/)
+  })
 })

@@ -266,7 +266,12 @@ export function PetOverlay(): React.JSX.Element {
       ? position.y
       : petLaneY(window.innerHeight, size, PET_LANE_BOTTOM_INSET)
   const positionRef = useRef(position)
-  positionRef.current = position
+  // Why: written after commit, not during render. React may replay or discard a
+  // render, and a ref written in one that never commits would feed the loop a
+  // value the user never saw.
+  useEffect(() => {
+    positionRef.current = position
+  })
   const motionAllowed = documentVisible && !reducedMotion
   const fall = usePetFallToLane({
     size,
