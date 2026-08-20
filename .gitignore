@@ -93,6 +93,7 @@ docs/**
 !docs/assets/**
 !docs/readme/
 !docs/readme/**
+!docs/FORK_MAINTENANCE.md
 !docs/STYLEGUIDE.md
 !docs/agent-skill-sharing-implementation-checklist.md
 !docs/agent-skill-sharing-installation-plan.md
