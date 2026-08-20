@@ -323,6 +323,7 @@ export class SshRelaySession {
   private sourceCancellationPublisherCleanup: (() => void) | null = null
   private teardownMode: SshRelaySessionTeardownMode | null = null
   private teardownCompletion: Promise<void> | null = null
+  private shutdownManagedHookCleanup: Promise<void> | null = null
   // Why: detach's in-memory half is one-shot but its lease write is retryable, so they are tracked
   // apart — a rejected write can be re-issued without re-running provider teardown.
   private detachedInMemory = false
@@ -898,6 +899,54 @@ export class SshRelaySession {
     }
   }
 
+  async removeManagedHooksOnRemote(): Promise<void> {
+    const mux = this.mux
+    if (
+      !mux ||
+      mux.isDisposed() ||
+      (this.hostPlatform !== null && isWindowsRemoteHost(this.hostPlatform))
+    ) {
+      return
+    }
+    try {
+      const result = (await mux.request(
+        AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
+        { agents: [], removeAgents: ['grok'] },
+        { timeoutMs: 2_000 }
+      )) as { errors?: unknown }
+      if (typeof result.errors === 'number' && result.errors > 0) {
+        console.warn(`[ssh-relay-session] Remote managed hook cleanup failed for ${this.targetId}`)
+      }
+    } catch (error) {
+      const code = (error as { code?: unknown })?.code
+      if (
+        code === -32601 ||
+        code === 'CONNECTION_LOST' ||
+        code === 'DISPOSED' ||
+        mux.isDisposed()
+      ) {
+        return
+      }
+      console.warn(
+        `[ssh-relay-session] Remote managed hook cleanup failed for ${this.targetId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      )
+    }
+  }
+
+  beginShutdownManagedHookCleanup(): Promise<void> {
+    if (!this.shutdownManagedHookCleanup) {
+      const mux = this.mux
+      this.shutdownManagedHookCleanup = this.removeManagedHooksOnRemote().finally(() => {
+        if (mux && !mux.isDisposed()) {
+          mux.dispose('connection_lost')
+        }
+      })
+    }
+    return this.shutdownManagedHookCleanup
+  }
+
   // Why a separate transition from detachAndPersist: on the committed quit path every in-memory
   // change has to land before the final store flush snapshots, and that flush — not a per-session
   // durable write — is what persists it. Idempotent, and it schedules no persistence of its own, so
@@ -914,7 +963,11 @@ export class SshRelaySession {
     this.abortController?.abort()
     this.stopPortScanning()
     this.broadcastEmptyLists()
-    this.teardownProviders('connection_lost')
+    this.teardownProviders(
+      'connection_lost',
+      'connection_lost',
+      this.shutdownManagedHookCleanup !== null
+    )
     this.currentConnection = null
     this._state = 'disposed'
     this.detachedInMemory = true
@@ -1577,7 +1630,8 @@ export class SshRelaySession {
 
   private teardownProviders(
     reason: 'shutdown' | 'connection_lost',
-    outputGenerationReason: string = reason
+    outputGenerationReason: string = reason,
+    preserveMux = false
   ): void {
     this.releaseRelayLossWatcher()
     this.muxNotificationCleanup?.()
@@ -1599,7 +1653,7 @@ export class SshRelaySession {
     this.sourceAckPublisherCleanup = null
     this.sourceCancellationPublisherCleanup?.()
     this.sourceCancellationPublisherCleanup = null
-    if (this.mux && !this.mux.isDisposed()) {
+    if (!preserveMux && this.mux && !this.mux.isDisposed()) {
       this.mux.dispose(reason)
     }
     this.mux = null

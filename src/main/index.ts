@@ -89,7 +89,9 @@ import {
 import {
   applyAgentStatusHooksEnabled,
   isAgentStatusHooksEnabled,
-  removeManagedAgentHooks
+  removeManagedAgentHooks,
+  removeManagedAgentHooksAsync,
+  shouldContinueManagedHookStartup
 } from './agent-hooks/managed-agent-hook-controls'
 import { initCohortClassifier } from './telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from './telemetry/onboarding-cohort-classifier'
@@ -2382,7 +2384,7 @@ void app.whenReady().then(async () => {
       if (isAgentStatusHooksEnabled(settings)) {
         wslHookRelayManager.resumeStoppedRelays()
       } else {
-        wslHookRelayManager.disposeAll({ permanent: false })
+        void wslHookRelayManager.disposeAll({ permanent: false })
       }
     }
   })
@@ -3029,7 +3031,7 @@ void app.whenReady().then(async () => {
         onInstallError: recordManagedHookInstallFailure,
         shouldContinue: (agent) => {
           const settings = managedHookStore.getSettings()
-          return isAgentStatusHooksEnabled(settings) && !settings.disabledTuiAgents.includes(agent)
+          return shouldContinueManagedHookStartup(isQuitting, settings, agent)
         }
       }).catch((error) => {
         console.warn('[agent-hooks] failed to reconcile managed hooks on startup:', error)
@@ -3432,10 +3434,10 @@ app.on('will-quit', (e) => {
   pluginService = null
   setUnreadDockBadgeCount(0)
   agentHookServer.stop()
-  // Why: Grok reads global hooks even when Orca is closed; keep them session-scoped.
-  removeManagedAgentHooks({ agents: ['grok'] })
-  // Why: cancels relay restart/reinstall timers and kills wsl.exe children deterministically, not via stdio-pipe teardown.
-  wslHookRelayManager.disposeAll()
+  // Why: Grok reads global hooks after Orca closes; remove them without blocking the main thread.
+  const grokHookCleanup = removeManagedAgentHooksAsync({ agents: ['grok'] })
+  // Why: remove guest Grok hooks before killing the relay so WSL sessions do not leave a global process hook behind.
+  const wslHookCleanup = wslHookRelayManager.disposeAll()
   const statsFlush = stats?.flushAsync() ?? Promise.resolve()
   // Why: agent-browser daemon processes would otherwise linger after quit, holding ports and stale session state on disk.
   runtime?.getAgentBrowserBridge()?.destroyAllSessions()
@@ -3492,6 +3494,8 @@ app.on('will-quit', (e) => {
     { name: 'ssh', promise: sshShutdown },
     { name: 'plugin-hosts', promise: pluginHostShutdown },
     { name: 'skill-uploads', promise: skillUploadShutdown },
+    { name: 'grok-hooks', promise: grokHookCleanup },
+    { name: 'wsl-grok-hooks', promise: wslHookCleanup },
     { name: 'codex-backfill-recovery', promise: codexBackfillRecoveryShutdown },
     { name: 'usage-cache', promise: usageCacheFlush },
     { name: 'stats', promise: statsFlush },

@@ -128,4 +128,28 @@ describe('SshRelaySession managed hooks', () => {
       muxRequestMock.mock.invocationCallOrder[managedIndex]
     )
   })
+
+  it('requests Grok cleanup without reinstalling hooks during shutdown', async () => {
+    muxRequestMock.mockImplementation(async (method: string) => {
+      if (method === 'preflight.detectAgents') {
+        return { agents: ['grok'] }
+      }
+      return { installers: 1, errors: 0 }
+    })
+    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
+    const connection = {
+      sftp: vi.fn(),
+      getHostKeyFingerprint: vi.fn(() => 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
+    } as unknown as SshConnection
+    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+
+    await session.establish(connection)
+    await session.removeManagedHooksOnRemote()
+
+    expect(muxRequestMock).toHaveBeenCalledWith(
+      AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
+      { agents: [], removeAgents: ['grok'] },
+      { timeoutMs: 2_000 }
+    )
+  })
 })

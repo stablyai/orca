@@ -2,7 +2,10 @@ import { execFile } from 'node:child_process'
 import { basename } from 'node:path'
 import { homedir, userInfo } from 'node:os'
 import { promisify } from 'node:util'
-import { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
+import {
+  installRemoteManagedAgentHooks,
+  removeRemoteManagedAgentHooks
+} from './remote-managed-hook-installers'
 import type { AgentHookTarget } from '../../shared/agent-hook-types'
 import { createManagedHookLocalFilesystem } from './managed-hook-local-filesystem'
 import { withManagedHookInstallLock } from './managed-hook-install-lock'
@@ -77,11 +80,13 @@ export async function installManagedHooks(options?: {
   signal?: AbortSignal
   hostKeyFingerprint?: string
   agents?: readonly AgentHookTarget[]
+  removeAgents?: readonly AgentHookTarget[]
 }): Promise<ManagedHookInstallSummary> {
   options?.signal?.throwIfAborted()
   // Why: empty/omitted allowlist fails closed before any home/host probes.
   const agents = options?.agents ?? []
-  if (agents.length === 0) {
+  const removeAgents = options?.removeAgents ?? []
+  if (agents.length === 0 && removeAgents.length === 0) {
     return { installers: 0, errors: 0 }
   }
   const home = homedir()
@@ -95,15 +100,20 @@ export async function installManagedHooks(options?: {
     home,
     options?.signal,
     async () => {
-      const results = await installRemoteManagedAgentHooks(
-        createManagedHookLocalFilesystem(),
-        home,
-        {
-          grokHomeDir,
-          signal: options?.signal,
-          agents
-        }
-      )
+      const filesystem = createManagedHookLocalFilesystem()
+      const sharedOptions = {
+        grokHomeDir,
+        signal: options?.signal
+      }
+      const installed = await installRemoteManagedAgentHooks(filesystem, home, {
+        ...sharedOptions,
+        agents
+      })
+      const removed = await removeRemoteManagedAgentHooks(filesystem, home, {
+        ...sharedOptions,
+        agents: removeAgents
+      })
+      const results = [...installed, ...removed]
       return {
         installers: results.length,
         errors: results.filter((result) => result.state === 'error').length

@@ -343,13 +343,26 @@ describe('GrokHookService', () => {
   it('does not restore a user-cleared global hook config on the next launch', () => {
     const service = new GrokHookService()
     const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+    const userClearedConfig = '{  "hooks" : {}  }\n'
 
     expect(service.install().state).toBe('installed')
-    writeFileSync(configPath, '{"hooks": {}}\n', 'utf8')
+    writeFileSync(configPath, userClearedConfig, 'utf8')
 
     service.install()
 
-    expect(JSON.parse(readFileSync(configPath, 'utf8'))).toEqual({ hooks: {} })
+    expect(readFileSync(configPath, 'utf8')).toBe(userClearedConfig)
+  })
+
+  it('preserves a user-cleared config during session cleanup', () => {
+    const service = new GrokHookService()
+    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+    const userClearedConfig = '{  "hooks" : {}  }\n'
+
+    expect(service.install().state).toBe('installed')
+    writeFileSync(configPath, userClearedConfig, 'utf8')
+
+    expect(service.remove().state).toBe('not_installed')
+    expect(readFileSync(configPath, 'utf8')).toBe(userClearedConfig)
   })
 
   it('removes the empty managed config when hooks are disabled', () => {

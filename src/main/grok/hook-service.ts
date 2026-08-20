@@ -1,62 +1,39 @@
-import { unlinkSync } from 'node:fs'
-import { join } from 'node:path'
+import { mkdirSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import { resolveGrokHomeDir } from '../../shared/grok-session-paths'
 import {
-  buildManagedCommandHook,
-  createManagedCommandMatcher,
   getSharedManagedScriptPath,
   readHooksJson,
   readHooksJsonWithRaw,
-  removeManagedCommands,
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
-  writeHooksJson,
-  writeManagedScript,
-  type HookDefinition
+  writeManagedScript
 } from '../agent-hooks/installer-utils'
-import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import {
-  readHooksJsonRemote,
-  writeHooksJsonRemote,
-  writeManagedScriptRemote
-} from '../agent-hooks/installer-utils-remote'
+  removeFileAtomicallyIfUnchanged,
+  writeFileAtomicallyIfUnchanged
+} from '../codex-accounts/fs-utils'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import { buildPosixHookPayloadCapture } from '../agent-hooks/hook-stdin-contract'
 import {
   buildWindowsGrokHookScript,
   GROK_HOME_ENVELOPE_MAX_LENGTH
 } from './windows-grok-hook-script'
+import { removeManagedGrokHookEntries } from './grok-hook-config-cleanup'
+import { buildInstalledGrokConfig, GROK_EVENTS, GROK_TOOL_EVENT_MATCHER } from './grok-hook-config'
+import { installRemoteGrokHook, removeRemoteGrokHook } from './grok-hook-remote-mutations'
+import {
+  readGrokHookConfigSnapshot,
+  removeGrokHookConfigIfUnchanged,
+  writeGrokHookConfigIfUnchanged
+} from './grok-hook-config-file'
 
 // Why: Grok's tool-event matcher is a real regex (see Grok hooks docs). Bare
 // `*` is not a valid "match all" pattern and can fail to load/match, so tool
 // lifecycle hooks never fire. `.*` matches every tool name (same as Command
 // Code's managed hooks).
-const GROK_TOOL_EVENT_MATCHER = '.*'
-
-const GROK_EVENTS = [
-  { eventName: 'SessionStart', definition: { hooks: [{ type: 'command', command: '' }] } },
-  { eventName: 'UserPromptSubmit', definition: { hooks: [{ type: 'command', command: '' }] } },
-  { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } },
-  // Why: Grok can end a turn on API error without a normal Stop; without this
-  // the sidebar can stick on working (same rationale as Claude StopFailure).
-  { eventName: 'StopFailure', definition: { hooks: [{ type: 'command', command: '' }] } },
-  { eventName: 'SessionEnd', definition: { hooks: [{ type: 'command', command: '' }] } },
-  {
-    eventName: 'PreToolUse',
-    definition: { matcher: GROK_TOOL_EVENT_MATCHER, hooks: [{ type: 'command', command: '' }] }
-  },
-  {
-    eventName: 'PostToolUse',
-    definition: { matcher: GROK_TOOL_EVENT_MATCHER, hooks: [{ type: 'command', command: '' }] }
-  },
-  {
-    eventName: 'PostToolUseFailure',
-    definition: { matcher: GROK_TOOL_EVENT_MATCHER, hooks: [{ type: 'command', command: '' }] }
-  },
-  { eventName: 'Notification', definition: { hooks: [{ type: 'command', command: '' }] } }
-] as const
-
 /** Test seam: the matcher string written for Pre/Post tool lifecycle hooks. */
 export function getGrokToolEventMatcherForTests(): string {
   return GROK_TOOL_EVENT_MATCHER
@@ -68,31 +45,6 @@ function getConfigPath(): string {
   // home Grok and transcript lookup use; keep Orca entries in a dedicated file
   // so user-authored hook files stay untouched.
   return join(resolveGrokHomeDir(), 'hooks', 'orca-status.json')
-}
-
-/** Validated guest Grok home with a login-home fallback. */
-function getRemoteGrokHome(remoteHome: string, remoteGrokHome?: string): string {
-  // Why: SFTP paths are always POSIX — never use host path.join here.
-  const home = remoteHome.replace(/\/+$/, '') || remoteHome
-  const candidate = remoteGrokHome?.trim()
-  if (
-    candidate &&
-    candidate === remoteGrokHome &&
-    candidate.startsWith('/') &&
-    !candidate.includes('\\') &&
-    candidate.length <= GROK_HOME_ENVELOPE_MAX_LENGTH &&
-    !hasControlCharacter(candidate)
-  ) {
-    return candidate.replace(/\/+$/, '') || '/'
-  }
-  return `${home}/.grok`
-}
-
-function hasControlCharacter(value: string): boolean {
-  return Array.from(value).some((character) => {
-    const code = character.charCodeAt(0)
-    return code <= 0x1f || code === 0x7f
-  })
 }
 
 function getManagedScriptFileName(): string {
@@ -162,40 +114,17 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   ].join('\n')
 }
 
-function buildInstalledConfig(
-  config: NonNullable<ReturnType<typeof readHooksJson>>,
-  command: string,
-  scriptFileName: string
-): void {
-  const nextHooks = { ...config.hooks }
-  const isManagedCommand = createManagedCommandMatcher(scriptFileName)
-  const managedEvents = new Set<string>(GROK_EVENTS.map((event) => event.eventName))
-
-  // Why: Orca owns only grok-hook.* entries. Sweep stale managed commands out
-  // of retired events while preserving any user-authored hooks in this file.
-  for (const [eventName, definitions] of Object.entries(nextHooks)) {
-    if (managedEvents.has(eventName) || !Array.isArray(definitions)) {
-      continue
-    }
-    const cleaned = removeManagedCommands(definitions, isManagedCommand)
-    if (cleaned.length === 0) {
-      delete nextHooks[eventName]
-    } else {
-      nextHooks[eventName] = cleaned
-    }
+function notInstalledStatus(
+  configPath: string,
+  detail: string | null = null
+): AgentHookInstallStatus {
+  return {
+    agent: 'grok',
+    state: detail ? 'error' : 'not_installed',
+    configPath,
+    managedHooksPresent: false,
+    detail
   }
-
-  for (const event of GROK_EVENTS) {
-    const current = Array.isArray(nextHooks[event.eventName]) ? nextHooks[event.eventName] : []
-    const cleaned = removeManagedCommands(current, isManagedCommand)
-    const definition: HookDefinition = {
-      ...event.definition,
-      hooks: [buildManagedCommandHook(command)]
-    }
-    nextHooks[event.eventName] = [...cleaned, definition]
-  }
-
-  config.hooks = nextHooks
 }
 
 export class GrokHookService {
@@ -270,9 +199,13 @@ export class GrokHookService {
       return this.getStatus()
     }
 
-    buildInstalledConfig(config, getManagedCommand(scriptPath), getManagedScriptFileName())
+    buildInstalledGrokConfig(config, getManagedCommand(scriptPath), getManagedScriptFileName())
     writeManagedScript(scriptPath, getManagedScript())
-    writeHooksJson(configPath, config)
+    mkdirSync(dirname(configPath), { recursive: true })
+    const serialized = `${JSON.stringify(config, null, 2)}\n`
+    if (!writeFileAtomicallyIfUnchanged(configPath, snapshot.raw, serialized)) {
+      return notInstalledStatus(configPath, 'Grok hook config changed during installation')
+    }
     return this.getStatus()
   }
 
@@ -281,82 +214,68 @@ export class GrokHookService {
     remoteHome: string,
     remoteGrokHome?: string
   ): Promise<AgentHookInstallStatus> {
-    const home = remoteHome.replace(/\/$/, '')
-    // Why: only a guest-resolved path can describe remote Grok; never apply the
-    // host process's GROK_HOME to SFTP paths.
-    const remoteConfigPath = `${getRemoteGrokHome(home, remoteGrokHome)}/hooks/orca-status.json`
-    const remoteScriptPath = `${home}/.orca/agent-hooks/grok-hook.sh`
-    try {
-      const config = await readHooksJsonRemote(sftp, remoteConfigPath)
-      if (!config) {
-        return {
-          agent: 'grok',
-          state: 'error',
-          configPath: remoteConfigPath,
-          managedHooksPresent: false,
-          detail: 'Could not parse remote Grok hook config'
-        }
-      }
+    return await installRemoteGrokHook(sftp, remoteHome, remoteGrokHome, getManagedScript('posix'))
+  }
 
-      buildInstalledConfig(config, wrapPosixHookCommand(remoteScriptPath), 'grok-hook.sh')
-      await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
-      await writeHooksJsonRemote(sftp, remoteConfigPath, config)
-
-      return {
-        agent: 'grok',
-        state: 'installed',
-        configPath: remoteConfigPath,
-        managedHooksPresent: true,
-        detail: null
-      }
-    } catch (err) {
-      return {
-        agent: 'grok',
-        state: 'error',
-        configPath: remoteConfigPath,
-        managedHooksPresent: false,
-        detail: err instanceof Error ? err.message : String(err)
-      }
-    }
+  async removeRemote(
+    sftp: SFTPWrapper,
+    remoteHome: string,
+    remoteGrokHome?: string
+  ): Promise<AgentHookInstallStatus> {
+    return await removeRemoteGrokHook(sftp, remoteHome, remoteGrokHome)
   }
 
   remove(): AgentHookInstallStatus {
     const configPath = getConfigPath()
-    const config = readHooksJson(configPath)
+    const snapshot = readHooksJsonWithRaw(configPath)
+    const config = snapshot.config
     if (!config) {
-      return {
-        agent: 'grok',
-        state: 'error',
-        configPath,
-        managedHooksPresent: false,
-        detail: 'Could not parse Grok hook config'
-      }
+      return notInstalledStatus(configPath, 'Could not parse Grok hook config')
     }
+    if (snapshot.raw === null) {
+      return notInstalledStatus(configPath)
+    }
+    const cleanup = removeManagedGrokHookEntries(config, getManagedScriptFileName())
+    if (!cleanup.removedAny) {
+      return notInstalledStatus(configPath)
+    }
+    const updated =
+      Object.keys(cleanup.config).length === 0
+        ? removeFileAtomicallyIfUnchanged(configPath, snapshot.raw)
+        : writeFileAtomicallyIfUnchanged(
+            configPath,
+            snapshot.raw,
+            `${JSON.stringify(cleanup.config, null, 2)}\n`
+          )
+    return updated
+      ? notInstalledStatus(configPath)
+      : notInstalledStatus(configPath, 'Grok hook config changed during cleanup')
+  }
 
-    const nextHooks = { ...config.hooks }
-    const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
-    for (const [eventName, definitions] of Object.entries(nextHooks)) {
-      if (!Array.isArray(definitions)) {
-        continue
-      }
-      const cleaned = removeManagedCommands(definitions, isManagedCommand)
-      if (cleaned.length === 0) {
-        delete nextHooks[eventName]
-      } else {
-        nextHooks[eventName] = cleaned
-      }
+  async removeAsync(): Promise<AgentHookInstallStatus> {
+    const configPath = getConfigPath()
+    const snapshot = await readGrokHookConfigSnapshot(configPath)
+    if (!snapshot.config) {
+      return notInstalledStatus(configPath, 'Could not parse Grok hook config')
     }
-
-    config.hooks = nextHooks
-    if (Object.keys(nextHooks).length === 0) {
-      delete config.hooks
+    if (snapshot.raw === null) {
+      return notInstalledStatus(configPath)
     }
-    if (Object.keys(config).length === 0) {
-      unlinkSync(configPath)
-      return this.getStatus()
+    const cleanup = removeManagedGrokHookEntries(snapshot.config, getManagedScriptFileName())
+    if (!cleanup.removedAny) {
+      return notInstalledStatus(configPath)
     }
-    writeHooksJson(configPath, config)
-    return this.getStatus()
+    const updated =
+      Object.keys(cleanup.config).length === 0
+        ? await removeGrokHookConfigIfUnchanged(configPath, snapshot.raw)
+        : await writeGrokHookConfigIfUnchanged(
+            configPath,
+            snapshot.raw,
+            `${JSON.stringify(cleanup.config, null, 2)}\n`
+          )
+    return updated
+      ? notInstalledStatus(configPath)
+      : notInstalledStatus(configPath, 'Grok hook config changed during cleanup')
   }
 }
 

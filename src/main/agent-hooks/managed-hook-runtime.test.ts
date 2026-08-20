@@ -157,4 +157,20 @@ describe.runIf(process.platform !== 'win32')('installManagedHooks', () => {
 
     expect((await readdir(home)).sort()).toEqual(['.claude', '.orca', SHELL_NAME, SHELL_RUNS_NAME])
   })
+
+  it('removes remote Grok hooks through the existing skew-safe request', async () => {
+    const home = await createTempHome()
+    await stubLoginShell(home)
+
+    await expect(installManagedHooks({ agents: ['grok'] })).resolves.toEqual({
+      installers: 1,
+      errors: 0
+    })
+    await expect(installManagedHooks({ agents: [], removeAgents: ['grok'] })).resolves.toEqual({
+      installers: 1,
+      errors: 0
+    })
+
+    await expect(readdir(join(home, '.grok', 'hooks'))).resolves.toEqual([])
+  })
 })

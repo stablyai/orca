@@ -7,6 +7,7 @@ import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
 import {
+  MANAGED_AGENT_HOOK_ASYNC_REMOVERS,
   MANAGED_AGENT_HOOK_INSTALLERS,
   MANAGED_AGENT_HOOK_REMOVERS,
   MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS,
@@ -18,7 +19,7 @@ export { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-registry'
 export { prepareManagedCodexHomeBeforeShellLaunch } from '../codex/managed-home-shell-preflight'
 
 type ManagedHookSettings = Partial<
-  Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>
+  Pick<GlobalSettings, 'agentCmdOverrides' | 'agentStatusHooksEnabled' | 'disabledTuiAgents'>
 > | null
 
 type InstallOptions = {
@@ -36,6 +37,18 @@ export function isAgentStatusHooksEnabled(
   settings: Partial<Pick<GlobalSettings, 'agentStatusHooksEnabled'>> | null | undefined
 ): boolean {
   return settings?.agentStatusHooksEnabled !== false
+}
+
+export function shouldContinueManagedHookStartup(
+  isQuitting: boolean,
+  settings: ManagedHookSettings,
+  agent: AgentHookTarget
+): boolean {
+  return (
+    !isQuitting &&
+    isAgentStatusHooksEnabled(settings) &&
+    !normalizeDisabledTuiAgents(settings?.disabledTuiAgents).includes(agent)
+  )
 }
 
 function errorStatus(agent: AgentHookTarget, error: unknown): AgentHookInstallStatus {
@@ -177,6 +190,23 @@ export function removeManagedAgentHooks(options: RemoveOptions = {}): AgentHookI
       return errorStatus(agent, error)
     }
   })
+}
+
+export async function removeManagedAgentHooksAsync(
+  options: RemoveOptions = {}
+): Promise<AgentHookInstallStatus[]> {
+  const allowed = options.agents ? new Set(options.agents) : null
+  return await Promise.all(
+    MANAGED_AGENT_HOOK_ASYNC_REMOVERS.filter(
+      ([agent]) => allowed === null || allowed.has(agent)
+    ).map(async ([agent, remove]) => {
+      try {
+        return await remove()
+      } catch (error) {
+        return errorStatus(agent, error)
+      }
+    })
+  )
 }
 
 export function getManagedAgentHookStatuses(): AgentHookInstallStatus[] {

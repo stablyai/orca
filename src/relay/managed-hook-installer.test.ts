@@ -94,4 +94,20 @@ describe('registerManagedHookInstaller', () => {
       'invalid_managed_hook_agents'
     )
   })
+
+  it('forwards a skew-safe managed hook removal allowlist', async () => {
+    const installManagedHooks = vi.fn().mockResolvedValue({ installers: 1, errors: 0 })
+    const handler = captureHandler(() => ({ installManagedHooks }))
+
+    await handler({ agents: [], removeAgents: ['grok', 'grok'] }, context())
+
+    expect(installManagedHooks).toHaveBeenCalledWith({
+      signal: undefined,
+      agents: [],
+      removeAgents: ['grok']
+    })
+    await expect(handler({ agents: [], removeAgents: ['unknown'] }, context())).rejects.toThrow(
+      'invalid_managed_hook_agents'
+    )
+  })
 })

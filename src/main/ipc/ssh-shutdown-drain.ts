@@ -62,14 +62,36 @@ async function settleTasksWithinMs(
 }
 
 function sshShutdownTasks(targetIds: readonly string[]): SshShutdownTask[] {
-  return [
-    ...targetIds
-      .filter((targetId) => activeSessions.has(targetId))
-      .map((targetId) => ({
+  const sessions = targetIds.flatMap((targetId) => {
+    const session = activeSessions.get(targetId)
+    return session ? [{ targetId, session }] : []
+  })
+  // Why before disconnectAll: the remote hook cleanup rides the same transport, so tearing the
+  // transport down first would strand Orca's hooks in the remote agent config.
+  const managedHookCleanup = Promise.allSettled(
+    sessions.map(({ session }) => session.beginShutdownManagedHookCleanup())
+  ).then(() => {})
+  const sessionTasks = sessions.map(({ targetId, session }) => {
+    try {
+      session.beginShutdownDetach()
+      return {
         targetId,
-        promise: teardownActiveSshSession(targetId, (session) => session.detachAndPersist())
-      })),
-    { targetId: '*transports', promise: connectionManager?.disconnectAll() ?? Promise.resolve() }
+        promise: teardownActiveSshSession(targetId, (activeSession) =>
+          activeSession.detachAndPersist()
+        )
+      }
+    } catch (error) {
+      return { targetId, promise: Promise.reject(error) }
+    }
+  })
+  return [
+    ...sessionTasks,
+    {
+      targetId: '*transports',
+      promise: managedHookCleanup.then(
+        () => connectionManager?.disconnectAll() ?? Promise.resolve()
+      )
+    }
   ]
 }
 
@@ -148,6 +170,7 @@ export function beginSshShutdown(): Promise<SshShutdownResult> {
     // it and skip every later session, the drain assignment, and the store flush that persists all
     // of this. Collect and keep going; the drain reports them.
     try {
+      session.beginShutdownManagedHookCleanup()
       session.beginShutdownDetach()
     } catch (error) {
       detachErrors.push(error)

@@ -123,3 +123,16 @@ export async function installRemoteManagedAgentHooks(
   }
   return results
 }
+
+export async function removeRemoteManagedAgentHooks(
+  sftp: SFTPWrapper,
+  remoteHome: string,
+  options?: Pick<RemoteManagedHookInstallOptions, 'grokHomeDir' | 'signal' | 'agents'>
+): Promise<AgentHookInstallStatus[]> {
+  const agents = new Set(options?.agents ?? [])
+  if (!agents.has('grok')) {
+    return []
+  }
+  options?.signal?.throwIfAborted()
+  return [await grokHookService.removeRemote(sftp, remoteHome, options?.grokHomeDir)]
+}

@@ -18,6 +18,10 @@ import { openClaudeHookService } from '../openclaude/hook-service'
 export type ManagedAgentHookInstaller = readonly [HookInstallAgent, () => AgentHookInstallStatus]
 export type ManagedAgentHookScriptRefresher = readonly [HookInstallAgent, () => Promise<void>]
 export type ManagedAgentHookRemover = readonly [HookInstallAgent, () => AgentHookInstallStatus]
+export type ManagedAgentHookAsyncRemover = readonly [
+  HookInstallAgent,
+  () => Promise<AgentHookInstallStatus>
+]
 export type ManagedAgentHookStatusReader = readonly [HookInstallAgent, () => AgentHookInstallStatus]
 
 export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[] = [
@@ -73,6 +77,10 @@ export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
   ['hermes', () => hermesHookService.remove()],
   ['devin', () => devinHookService.remove()],
   ['kimi', () => kimiHookService.remove()]
+]
+
+export const MANAGED_AGENT_HOOK_ASYNC_REMOVERS: readonly ManagedAgentHookAsyncRemover[] = [
+  ['grok', () => grokHookService.removeAsync()]
 ]
 
 export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusReader[] = [

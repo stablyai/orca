@@ -215,6 +215,8 @@ export type AgentHookInstallManagedHooksParams = {
   hostKeyFingerprint?: string
   /** Positively detected and enabled agents allowed to mutate remote config. */
   agents: readonly AgentHookTarget[]
+  /** Managed hooks to remove. Older relays ignore this and see an empty install list. */
+  removeAgents?: readonly AgentHookTarget[]
 }
 
 /** Feature-flag env var. Read once at process start by Orca and the relay.
