@@ -54,7 +54,8 @@ export const copyTerminalPaneMenuPaneId = async (
 
 export const copyTerminalPaneMenuTerminalId = async (
   pane: ManagedPane | null,
-  tabId: string
+  tabId: string,
+  ptyId?: string | null
 ): Promise<void> => {
   if (!pane) {
     return
@@ -63,6 +64,7 @@ export const copyTerminalPaneMenuTerminalId = async (
     await copyTerminalHandleForPane({
       tabId,
       leafId: pane.leafId,
+      ptyId,
       callRuntime: window.api.runtime.call,
       writeClipboardText: window.api.ui.writeTerminalClipboardText
     })
