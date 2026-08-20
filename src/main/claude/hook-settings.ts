@@ -239,9 +239,6 @@ export function applyManagedHooks(
   // validating Claude Code it can never fire anyway. (OpenClaude lists no
   // unsupported keys, so user config there is untouched.)
   for (const eventName of getUnsupportedEventNames(settings)) {
-    if (!Array.isArray(nextHooks[eventName])) {
-      continue
-    }
     delete nextHooks[eventName]
   }
 

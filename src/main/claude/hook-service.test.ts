@@ -448,7 +448,10 @@ describe('ClaudeHookService.install', () => {
             PermissionRequest: [
               { hooks: [{ type: 'command', command: '/usr/local/bin/user-hook' }] },
               { hooks: [{ type: 'command', command: '/Users/old/.orca/agent-hooks/claude-hook.sh' }] }
-            ]
+            ],
+            // A malformed non-array value under a rejected key is equally
+            // poisonous to the whole file and must go too.
+            PostToolUseFailure: 'not-an-array'
           }
         })
       )
@@ -460,6 +463,8 @@ describe('ClaudeHookService.install', () => {
       // only managed entries disappears entirely so the file loads again.
       expect(healed.hooks.StopFailure).toBeUndefined()
       expect(healed.hooks.TeammateIdle).toBeUndefined()
+      // The non-array PostToolUseFailure value is deleted with its key.
+      expect(healed.hooks.PostToolUseFailure).toBeUndefined()
       // A user-authored entry in a rejected key goes with it: the key makes
       // Claude Code skip the whole settings file, so the entry could never
       // fire there either way.
