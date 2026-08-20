@@ -23,9 +23,6 @@ function rowWithUsers(id: string, logins: string[] | null, position: number): Gi
 const ids = (rows: GitHubProjectRow[]): string[] => rows.map((row) => row.id)
 
 describe('sortRows', () => {
-  // An unset field reaches the comparator two ways: absent from fieldValuesByFieldId,
-  // or present with an empty list once every user drops out of normalization. Both
-  // read as "unassigned", so both must sort the same way.
   it('keeps an empty user list last in both directions', () => {
     const rows = [
       rowWithUsers('assigned', ['alice'], 1),
