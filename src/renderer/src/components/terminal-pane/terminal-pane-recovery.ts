@@ -4,6 +4,7 @@ import {
   _resetTerminalInputQuarantineForTests,
   armTerminalInputQuarantine
 } from './terminal-input-quarantine'
+import { logQuickCommandStartupDiagnostic } from '@/lib/quick-command-startup-diagnostics'
 
 // Why this module exists: a terminal pane can die renderer-side while its PTY
 // stays alive — a wedged xterm WriteBuffer (issue #2836), a disposed xterm
@@ -197,6 +198,10 @@ function cancelPendingRecoveryRetry(tabId: string): void {
  * either way: a remount rebuilds the renderer over the PTY it already had.
  */
 export async function requestTerminalPaneRecovery(request: RecoveryRequest): Promise<boolean> {
+  logQuickCommandStartupDiagnostic('recoveryRequested', {
+    tabId: request.tabId,
+    reason: request.reason
+  })
   if (!isCurrentTerminalRecoveryRequest(request)) {
     return false
   }

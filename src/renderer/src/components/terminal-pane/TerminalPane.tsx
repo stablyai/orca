@@ -14,6 +14,7 @@ import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import type { IDisposable } from '@xterm/xterm'
 import { useAppStore } from '../../store'
+import { logQuickCommandStartupDiagnostic } from '@/lib/quick-command-startup-diagnostics'
 import { useLinkRoutingPreferenceDialog } from '@/components/link-routing-preference-dialog'
 import { DaemonActionDialog, useDaemonActions } from '@/components/shared/useDaemonActions'
 import {
@@ -724,26 +725,26 @@ function TerminalPane(
   const rightClickToPaste = settings?.terminalRightClickToPaste ?? isWindowsUserAgent()
   // Why: Windows ConPTY doesn't forward DECSET 2004 from TUIs, so xterm may not know multi-line paste needs bracketed protection.
   const forceBracketedMultilineTextPaste = isWindowsUserAgent()
-  const [startup] = useState(() => useAppStore.getState().pendingStartupByTabId[tabId])
+  const [startup] = useState(() => {
+    const queued = useAppStore.getState().pendingStartupByTabId[tabId]
+    logQuickCommandStartupDiagnostic('paneMount', {
+      tabId,
+      queuedStartup: queued ? 'found' : 'MISSING'
+    })
+    return queued
+  })
   const [shouldMeasureHiddenStartup, setShouldMeasureHiddenStartup] = useState(
     () => startup !== undefined && !isVisible
   )
   const [sessionRestoredBannerPaneIds, setSessionRestoredBannerPaneIds] = useState<
     Map<number, SessionRestoredBannerReason>
   >(() => new Map())
-  const consumeTabStartupCommand = useAppStore((store) => store.consumeTabStartupCommand)
   const [setupSplit] = useState(() => useAppStore.getState().pendingSetupSplitByTabId[tabId])
   const consumeTabSetupSplit = useAppStore((store) => store.consumeTabSetupSplit)
   const [issueCommandSplit] = useState(
     () => useAppStore.getState().pendingIssueCommandSplitByTabId[tabId]
   )
   const consumeTabIssueCommandSplit = useAppStore((store) => store.consumeTabIssueCommandSplit)
-  useEffect(() => {
-    if (startup) {
-      consumeTabStartupCommand(tabId)
-    }
-  }, [startup, tabId, consumeTabStartupCommand])
-
   useLayoutEffect(() => {
     if (isVisible && shouldMeasureHiddenStartup) {
       // Why: hidden startup measurement is first-launch only; keeping it past first visibility would let inactive tabs refit and SIGWINCH.

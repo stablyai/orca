@@ -1,3 +1,4 @@
+import { logQuickCommandStartupDiagnostic } from '@/lib/quick-command-startup-diagnostics'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
@@ -40,6 +41,11 @@ export function createRemountTerminalTabForRecovery(
           )
         }
         remounted = true
+        logQuickCommandStartupDiagnostic('generationBump', {
+          tabId,
+          source: 'recovery',
+          gen: (tab.generation ?? 0) + 1
+        })
         return {
           tabsByWorktree: {
             ...s.tabsByWorktree,

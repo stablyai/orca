@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { logQuickCommandStartupDiagnostic } from '@/lib/quick-command-startup-diagnostics'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import {
@@ -90,6 +91,7 @@ export function runQuickCommandInNewTab({
   store.queueTabStartupCommand(tab.id, {
     command: flattenTerminalQuickCommand(command).command
   })
+  logQuickCommandStartupDiagnostic('queued', { tabId: tab.id, label: command.label })
 
   // Why: match `+` button's createNewTerminalTab — without this, a worktree
   // currently showing an editor file keeps rendering the editor and the new
