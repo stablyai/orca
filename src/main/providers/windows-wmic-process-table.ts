@@ -143,7 +143,13 @@ function parseWindowsProcessValueRows(stdout: string): WindowsProcessRow[] {
     field = -1
   }
 
-  for (const line of stdout.split(/\r?\n/)) {
+  for (const rawLine of stdout.split(/\r?\n/)) {
+    // wmic's redirected output is historically CR CR LF, so the split above leaves
+    // a trailing CR on every line. Unstripped, the record separator reads as "\r"
+    // instead of "", no record ever terminates, the table parses to nothing, and
+    // the reader retires wmic as unreadable — the fix inert on the machines it is
+    // for. Strips exactly one, so plain CRLF and LF are untouched.
+    const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine
     // Exactly empty, not merely blank: a whitespace-only line is content, and
     // treating it as the separator silently ate its spaces out of the command.
     if (line === '') {

@@ -136,8 +136,15 @@ function generateTable(
   return rows
 }
 
-/** wmic `/format:value`: properties in fixed order, blank line after each record. */
-function renderWmicValue(rows: GeneratedProcess[]): Buffer {
+/**
+ * wmic `/format:value`: properties in fixed order, blank line after each record.
+ *
+ * `eol` because wmic's redirected output is historically CR CR LF rather than CR
+ * LF, and the difference is not cosmetic: a parser that splits on /\r?\n/ is left
+ * holding a trailing CR, so the record separator never reads as empty and the
+ * whole table parses to nothing. Every table here is checked in both.
+ */
+function renderWmicValue(rows: GeneratedProcess[], eol = '\r\n'): Buffer {
   const text = rows
     .map((row) =>
       [
@@ -147,11 +154,13 @@ function renderWmicValue(rows: GeneratedProcess[]): Buffer {
         `ParentProcessId=${row.ParentProcessId}`,
         `ProcessId=${row.ProcessId}`,
         ''
-      ].join('\r\n')
+      ].join(eol)
     )
-    .join('\r\n')
+    .join(eol)
   return Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')])
 }
+
+const WMIC_EOLS = ['\r\n', '\r\r\n'] as const
 
 const isWmic = (command: string): boolean => /wmic/i.test(command)
 
@@ -162,9 +171,9 @@ type ReadRow = { pid: number; ppid: number; name: string; command: string; execu
  * gap. Null means the reader refused the table outright — the duplicate-pid drop —
  * which is a safe outcome, not an answer.
  */
-async function readViaWmic(rows: GeneratedProcess[]): Promise<ReadRow[] | null> {
+async function readViaWmic(rows: GeneratedProcess[], eol = '\r\n'): Promise<ReadRow[] | null> {
   resetWindowsProcessRowsReaderForTests()
-  const stdout = renderWmicValue(rows)
+  const stdout = renderWmicValue(rows, eol)
   execFileMock.mockImplementation((cmd: string, _a: unknown, _o: unknown, cb: unknown) => {
     const callback = cb as ExecFileCallback
     if (isWmic(cmd)) {
@@ -215,12 +224,15 @@ describe('wmic reader vs PowerShell reader, over generated hostile tables', () =
 
   // Single-line command lines are the case the value format can represent without
   // loss, so nothing less than byte equality is acceptable there.
-  it('agrees byte-for-byte with PowerShell on 400 newline-free tables', async () => {
+  it('agrees byte-for-byte with PowerShell on 400 newline-free tables, in both wmic line endings', async () => {
     for (let seed = 1; seed <= 400; seed += 1) {
       const table = generateTable(seed, STRICT_FRAGMENTS, { multiline: false })
-      const viaWmic = await readViaWmic(table)
-      expect(viaWmic, `seed ${seed} was refused outright`).not.toBeNull()
-      expect(byPid(viaWmic!), `seed ${seed}`).toEqual(byPid(await readViaPowerShell(table)))
+      const reference = byPid(await readViaPowerShell(table))
+      for (const eol of WMIC_EOLS) {
+        const viaWmic = await readViaWmic(table, eol)
+        expect(viaWmic, `seed ${seed} eol ${JSON.stringify(eol)} was refused`).not.toBeNull()
+        expect(byPid(viaWmic!), `seed ${seed} eol ${JSON.stringify(eol)}`).toEqual(reference)
+      }
     }
   })
 
@@ -235,11 +247,14 @@ describe('wmic reader vs PowerShell reader, over generated hostile tables', () =
     })
     for (let seed = 1; seed <= 400; seed += 1) {
       const table = generateTable(seed, NON_FORGING_FRAGMENTS)
-      const viaWmic = await readViaWmic(table)
-      expect(viaWmic, `seed ${seed} was refused outright`).not.toBeNull()
-      expect(byPid(viaWmic!).map(normalize), `seed ${seed}`).toEqual(
-        byPid(await readViaPowerShell(table)).map(normalize)
-      )
+      const reference = byPid(await readViaPowerShell(table)).map(normalize)
+      for (const eol of WMIC_EOLS) {
+        const viaWmic = await readViaWmic(table, eol)
+        expect(viaWmic, `seed ${seed} eol ${JSON.stringify(eol)} was refused`).not.toBeNull()
+        expect(byPid(viaWmic!).map(normalize), `seed ${seed} eol ${JSON.stringify(eol)}`).toEqual(
+          reference
+        )
+      }
     }
   })
 
