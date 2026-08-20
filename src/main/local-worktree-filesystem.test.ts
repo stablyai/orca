@@ -167,9 +167,7 @@ describe('local worktree filesystem runtime access', () => {
       )
       const removeArgs = execFileMock.mock.calls[2]?.[1] as string[]
       expect(removeArgs.at(-1)).toContain('rm -rf --')
-      expect(removeArgs.at(-1)).toContain(
-        String.raw`rm -rf -- '/mnt/c/Users/me/repo feature'`
-      )
+      expect(removeArgs.at(-1)).toContain(String.raw`rm -rf -- '/mnt/c/Users/me/repo feature'`)
       expect(rmMock).not.toHaveBeenCalled()
     })
   })

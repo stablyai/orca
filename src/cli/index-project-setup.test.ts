@@ -191,6 +191,28 @@ describe('orca cli worktree awareness', () => {
     expect(logSpy.mock.calls[0]?.[0]).not.toContain('setup-by-client')
   })
 
+  // Why: --host runtime:<id> routes to a paired server, so an older one is reachable without the
+  // caller meaning to. A raw method_not_found reads as an Orca bug rather than a version gap.
+  it('names the version gap when the server predates project host setup', async () => {
+    pairRuntimeEnvironment(listEnvironmentsMock, 'old-server')
+    const { RuntimeClientError } = await import('./runtime/types.js')
+    callMock.mockRejectedValueOnce(
+      new RuntimeClientError('method_not_found', 'Unknown method: projectHostSetup.list')
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const priorExitCode = process.exitCode
+
+    await main(['project', 'setups', '--host', 'runtime:old-server', '--json'], '/tmp/repo')
+
+    const printed = [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')
+    expect(printed).toContain('does not support project host setup yet')
+    expect(printed).not.toContain('Unknown method')
+    expect(process.exitCode).toBe(1)
+
+    process.exitCode = priorExitCode
+  })
+
   it('rejects a runtime host id that no paired server owns instead of answering empty', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -407,6 +429,71 @@ describe('orca cli worktree awareness', () => {
       })
     }
   )
+
+  // Why: STA-4792 defect 2. `--host runtime:<id>` used to leave the client local, so a Windows
+  // destination fell into resolve(cwd, ...) and became a literal directory next to the caller.
+  // Routing makes the client remote, which is what sends the path through untouched.
+  it('sends a windows destination to the routed host instead of joining it to the local cwd', async () => {
+    pairRuntimeEnvironment(listEnvironmentsMock, 'awin')
+    queueFixtures(
+      callMock,
+      okFixture('req_project_setup_clone', {
+        result: {
+          project: {
+            id: 'github:stablyai/orca',
+            displayName: 'Orca',
+            badgeColor: '#7c3aed',
+            sourceRepoIds: [],
+            createdAt: 1,
+            updatedAt: 1
+          },
+          setup: {
+            id: 'setup-awin',
+            projectId: 'github:stablyai/orca',
+            hostId: 'local',
+            repoId: 'repo-awin',
+            path: 'C:\\orca-probe\\orca',
+            displayName: 'Orca',
+            setupState: 'ready',
+            setupMethod: 'cloned',
+            createdAt: 1,
+            updatedAt: 1
+          },
+          repo: {
+            id: 'repo-awin',
+            path: 'C:\\orca-probe\\orca',
+            displayName: 'Orca',
+            badgeColor: '#7c3aed',
+            addedAt: 1
+          }
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      [
+        'project',
+        'setup-clone',
+        '--project',
+        'github:stablyai/orca',
+        '--host',
+        'runtime:awin',
+        '--url',
+        'https://github.com/stablyai/orca.git',
+        '--destination',
+        'C:\\orca-probe',
+        '--json'
+      ],
+      '/Users/nwparker/orca/workspaces/orca/IME-koko'
+    )
+
+    expect(runtimeClientConstructorMock).toHaveBeenCalledWith(null, 'awin')
+    expect(callMock).toHaveBeenCalledWith(
+      'projectHostSetup.clone',
+      expect.objectContaining({ destination: 'C:\\orca-probe' })
+    )
+  })
 
   it('updates project host setup metadata through the project-first runtime API', async () => {
     queueFixtures(
