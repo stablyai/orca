@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { magentaScore } from './pet-magenta-key'
+import { keyMagenta, magentaScore } from './pet-magenta-key'
 
 describe('magentaScore', () => {
   it('fully keys the magenta the exporters actually write', () => {
@@ -29,5 +29,36 @@ describe('magentaScore', () => {
   it('never keys a pixel it does not consider magenta at all', () => {
     // A dull olive: red and blue do not dominate.
     expect(magentaScore(90, 95, 40)).toBe(0)
+  })
+})
+
+describe('keyMagenta', () => {
+  it('erases the key colour outright', () => {
+    const px = new Uint8ClampedArray([255, 0, 255, 255])
+
+    keyMagenta(px)
+
+    expect(px[3]).toBe(0)
+  })
+
+  it('leaves art that is not magenta untouched', () => {
+    const px = new Uint8ClampedArray([40, 120, 200, 255])
+
+    keyMagenta(px)
+
+    expect(Array.from(px)).toEqual([40, 120, 200, 255])
+  })
+
+  it('drains the magenta cast out of a partially keyed halo', () => {
+    // Fading alpha alone leaves the pixel still magenta, so the halo reads as a
+    // pink fringe over the background instead of disappearing into it.
+    const px = new Uint8ClampedArray([255, 128, 255, 255])
+
+    keyMagenta(px)
+
+    expect(px[3]).toBeGreaterThan(0)
+    expect(px[3]).toBeLessThan(255)
+    expect(px[0] - px[1]).toBeLessThan(255 - 128)
+    expect(px[2] - px[1]).toBeLessThan(255 - 128)
   })
 })

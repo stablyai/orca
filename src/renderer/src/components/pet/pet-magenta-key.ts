@@ -39,6 +39,13 @@ export function keyMagenta(px: Uint8ClampedArray): void {
       px[i + 2] = 0
       continue
     }
-    px[i + 3] = Math.round(px[i + 3] * Math.max(0, 1 - score * 2))
+    // Why: fading alpha alone keeps the pixel magenta, so the halo reads as a
+    // pink fringe over whatever is behind it. Pull red and blue down to green
+    // in step with the score, so the edge loses the cast as it loses opacity.
+    const drain = score * 2
+    const g = px[i + 1]
+    px[i] = Math.round(px[i] - (px[i] - g) * drain)
+    px[i + 2] = Math.round(px[i + 2] - (px[i + 2] - g) * drain)
+    px[i + 3] = Math.round(px[i + 3] * Math.max(0, 1 - drain))
   }
 }
