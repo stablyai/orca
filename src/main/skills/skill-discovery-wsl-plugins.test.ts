@@ -66,6 +66,7 @@ describe('WSL Claude plugin skill discovery', () => {
     const scanArgs = execFileMock.mock.calls[1]?.[1] as string[]
     const encoded = /printf %s '([^']+)'/.exec(scanArgs[5] ?? '')?.[1]
     const scanScript = Buffer.from(encoded ?? '', 'base64').toString('utf8')
+    expect(scanScript).toContain('/home/alice/.hermes/skills')
     expect(scanScript).toContain(`${installPath}/skills`)
     expect(result.skills).toEqual([
       expect.objectContaining({

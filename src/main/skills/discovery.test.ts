@@ -367,6 +367,7 @@ describe('skill discovery', () => {
         '/home/test/.config/opencode/skills',
         '/home/test/.pi/agent/skills',
         '/home/test/.omp/agent/skills',
+        '/home/test/.hermes/skills',
         '/home/test/.gemini/skills',
         '/home/test/.gemini/antigravity/skills',
         '/home/test/.cursor/skills',
@@ -393,6 +394,9 @@ describe('skill discovery', () => {
     expect(
       roots.find((root) => root.path.replace(/\\/g, '/') === '/home/test/.omp/agent/skills')?.owner
     ).toBe('omp')
+    expect(
+      roots.find((root) => root.path.replace(/\\/g, '/') === '/home/test/.hermes/skills')?.owner
+    ).toBe('hermes')
   })
 
   it('does not add runtime-owned repository paths to local scan roots', () => {
@@ -469,6 +473,36 @@ describe('skill discovery', () => {
     expect(skill?.sourceKind).toBe('home')
     expect(skill?.directoryPath).toBe(linkedSkill)
     expect(skill?.providers).toEqual(['agent-skills'])
+  })
+
+  it('discovers Skills installed in the Hermes home', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const skillDir = join(home, '.hermes', 'skills', 'social-media', 'research')
+    await mkdir(skillDir, { recursive: true })
+    await writeFile(
+      join(skillDir, 'SKILL.md'),
+      ['---', 'name: social-research', 'description: Research social sources.', '---', ''].join(
+        '\n'
+      )
+    )
+
+    const result = await discoverSkills({
+      homeDir: home,
+      cwd: join(root, 'missing-cwd')
+    })
+
+    expect(result.skills).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'social-research',
+          sourceKind: 'home',
+          sourceLabel: 'Hermes home',
+          directoryPath: skillDir,
+          providers: ['agent-skills']
+        })
+      ])
+    )
   })
 
   it('discovers worktree .agents skill symlinks from the requested cwd', async () => {
