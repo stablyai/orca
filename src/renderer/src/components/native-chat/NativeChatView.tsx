@@ -21,6 +21,7 @@ import {
   appendPendingSendCache,
   launchPromptAsMessage,
   pendingSendsAsMessages,
+  splitPendingMessagesAroundStreaming,
   nextNativeChatPendingSendId,
   prunePendingSends,
   readPendingSendCache,
@@ -238,12 +239,16 @@ function NativeChatResolvedView({
         sentAt,
         afterMessageId: boundary?.id ?? null,
         afterMessageTimestamp: boundary?.timestamp ?? null,
+        // Why (#15608): a send into an idle agent is the newest turn — its reply
+        // must stream BELOW the echo. Only sends queued behind live work sort
+        // below the streaming bubble.
+        ...(liveWorking ? { queuedWhileWorking: true } : {}),
         ...(imagePaths ? { imagePaths } : {})
       }
       setPending(appendPendingSendCache(pendingScope, entry))
       return entry.id
     },
-    [pendingScope, session.messages]
+    [pendingScope, session.messages, liveWorking]
   )
   const onOptimisticSendCanceled = useCallback(
     (pendingId: string) => {
@@ -286,11 +291,17 @@ function NativeChatResolvedView({
     return new Set([id])
   }, [paneLaunchPrompt?.failed, launchPromptMessage?.id, sessionAfterCommandBoundaries.messages])
 
-  // The streaming preview bubble (if any) sits after the transcript but before
-  // the optimistic user echoes — same order mobile uses.
+  // The streaming preview bubble (if any) sits after the transcript. Where it
+  // sits relative to the optimistic echoes depends on WHY an echo is pending
+  // (#15608): a send into an idle agent is the newest turn, so its reply
+  // streams BELOW it; a send queued behind live work stays below the bubble.
   const pendingMessages = useMemo(
     () => pendingSendsAsMessages(pending, sessionAfterCommandBoundaries.messages),
     [pending, sessionAfterCommandBoundaries.messages]
+  )
+  const pendingAroundStreaming = useMemo(
+    () => splitPendingMessagesAroundStreaming(pendingMessages, pending),
+    [pendingMessages, pending]
   )
   const streamingText = useMemo(() => {
     return deriveNativeChatStreamingText({
@@ -311,11 +322,12 @@ function NativeChatResolvedView({
       messages: [
         ...sessionAfterCommandBoundaries.messages,
         ...commandMarkersAsMessages(commandMarkers),
+        ...pendingAroundStreaming.beforeStreaming,
         ...(streamingText ? [nativeChatStreamingMessage(streamingText)] : []),
-        ...pendingMessages
+        ...pendingAroundStreaming.afterStreaming
       ]
     }
-  }, [sessionAfterCommandBoundaries, pending, pendingMessages, commandMarkers, streamingText])
+  }, [sessionAfterCommandBoundaries, pendingAroundStreaming, commandMarkers, streamingText])
   // Derive the view state from the pending-augmented session so a send into an
   // otherwise-empty conversation flips to the list (showing the queued bubble)
   // instead of staying on the empty state.
