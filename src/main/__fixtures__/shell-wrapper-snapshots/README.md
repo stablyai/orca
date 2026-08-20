@@ -5,11 +5,11 @@ Generated test fixtures. **Do not edit by hand.**
 Each `.txt` here is the byte-exact content of one shell startup file Orca writes
 into a pane's wrapper `ZDOTDIR`, captured per transport:
 
-| | |
-| :--- | :--- |
-| `local-*` | local PTY |
+|            |                   |
+| :--------- | :---------------- |
+| `local-*`  | local PTY         |
 | `daemon-*` | daemon / SSH host |
-| `relay-*` | relay overlay |
+| `relay-*`  | relay overlay     |
 
 Owned by [`../../shell-wrapper-generated-file-snapshot.test.ts`](../../shell-wrapper-generated-file-snapshot.test.ts),
 which drives the real wrapper entry points, reads the files back off disk and

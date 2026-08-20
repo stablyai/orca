@@ -22,6 +22,21 @@ const handleWillDownload = (
   browserManager.handleGuestWillDownload({ guestWebContentsId: webContents.id, item })
 }
 
+function resolvePermissionNoticeUrl(
+  webContents: Electron.WebContents,
+  details: Electron.PermissionRequest | undefined
+): string {
+  const requestingUrl = details?.requestingUrl
+  if (!requestingUrl) {
+    return webContents.getURL()
+  }
+  try {
+    return new URL(requestingUrl).origin === 'null' ? '' : requestingUrl
+  } catch {
+    return ''
+  }
+}
+
 export function installBrowserSessionPartitionPolicies(profile: BrowserSessionProfile): void {
   const { partition } = profile
   const sess = session.fromPartition(partition)
@@ -39,6 +54,8 @@ export function installBrowserSessionPartitionPolicies(profile: BrowserSessionPr
   sess.setPermissionRequestHandler((webContents, permission, callback, details) => {
     // Why: defer media to macOS TCC; denying at the session layer throws NotAllowedError even after the user granted Camera/Mic to the OS.
     if (permission === 'media') {
+      // Capture before async handling; opaque frames cannot be attributed to a named site.
+      const rawUrl = resolvePermissionNoticeUrl(webContents, details)
       void requestSystemMediaAccess(
         details as Electron.MediaAccessPermissionRequest | undefined
       ).then(
@@ -47,7 +64,7 @@ export function installBrowserSessionPartitionPolicies(profile: BrowserSessionPr
             browserManager.notifyPermissionDenied({
               guestWebContentsId: webContents.id,
               permission,
-              rawUrl: webContents.getURL()
+              rawUrl
             })
           }
           callback(granted)
@@ -57,7 +74,7 @@ export function installBrowserSessionPartitionPolicies(profile: BrowserSessionPr
           browserManager.notifyPermissionDenied({
             guestWebContentsId: webContents.id,
             permission,
-            rawUrl: webContents.getURL()
+            rawUrl
           })
           callback(false)
         }
@@ -66,10 +83,11 @@ export function installBrowserSessionPartitionPolicies(profile: BrowserSessionPr
     }
     const allowed = isAutoGrantedBrowserSessionPermission(permission)
     if (!allowed) {
+      const rawUrl = resolvePermissionNoticeUrl(webContents, details)
       browserManager.notifyPermissionDenied({
         guestWebContentsId: webContents.id,
         permission,
-        rawUrl: webContents.getURL()
+        rawUrl
       })
     }
     callback(allowed)

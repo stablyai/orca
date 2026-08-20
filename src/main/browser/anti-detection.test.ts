@@ -101,7 +101,7 @@ describe('ANTI_DETECTION_SCRIPT', () => {
   })
 
   it.each(['geolocation', 'idle-detection', 'midi', 'storage-access'])(
-    'preserves the native denied state for %s',
+    'passes non-intercepted permission queries through to the native state for %s',
     async (name) => {
       const context = createContext({
         nativeNotificationPermission: 'denied',

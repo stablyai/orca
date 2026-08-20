@@ -519,7 +519,14 @@ describe('LocalPtyProvider', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'wsl.exe',
-        ['-d', 'Ubuntu', '--exec', 'sh', '-c', expect.stringContaining("cd '/home/jin/repo/subdir'")],
+        [
+          '-d',
+          'Ubuntu',
+          '--exec',
+          'sh',
+          '-c',
+          expect.stringContaining("cd '/home/jin/repo/subdir'")
+        ],
         expect.objectContaining({ cwd: expect.any(String) })
       )
     })

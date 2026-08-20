@@ -381,3 +381,35 @@ describe('typo distance', () => {
     expect(isWithinOnePaletteEdit(a, b)).toBe(expected)
   })
 })
+
+describe('container field matching', () => {
+  it('marks matchedDirectField as 1 and demotes quality class when all tokens land on container fields', () => {
+    const tabDoc: PaletteDocumentInput = {
+      id: 'tab-1',
+      visibleFields: [
+        { id: 'title', profile: 'structured-label', text: 'README.md' },
+        { id: 'worktree', profile: 'structured-label', text: 'STA-4360-feature', isContainer: true }
+      ],
+      evidence: []
+    }
+    const match = run(tabDoc, '4360')
+    expect(match).not.toBeNull()
+    expect(match?.rank.matchedDirectField).toBe(1)
+    expect(match?.qualityClass).toBe('exact-evidence')
+  })
+
+  it('marks matchedDirectField as 0 when at least one token lands on a direct field', () => {
+    const tabDoc: PaletteDocumentInput = {
+      id: 'tab-1',
+      visibleFields: [
+        { id: 'title', profile: 'structured-label', text: 'wsl-transcript-4360.ts' },
+        { id: 'worktree', profile: 'structured-label', text: 'STA-4360-feature', isContainer: true }
+      ],
+      evidence: []
+    }
+    const match = run(tabDoc, '4360')
+    expect(match).not.toBeNull()
+    expect(match?.rank.matchedDirectField).toBe(0)
+    expect(match?.qualityClass).toBe('exact-visible')
+  })
+})

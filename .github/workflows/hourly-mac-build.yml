@@ -62,6 +62,11 @@ env:
 jobs:
   build-hourly-mac:
     if: github.repository == 'stablyai/orca'
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.hourly.outputs.version }}
+      head_sha: ${{ steps.freshness.outputs.head_sha }}
+      published: ${{ steps.publish_live.outcome == 'success' && 'true' || 'false' }}
     runs-on: blacksmith-6vcpu-macos-15
     # Why 150: it must exceed the worst case the retry budgets below can produce
     # (install 3x10 + publish 2x45 = 120, plus ~25 for checkout/build/verify), or
@@ -270,14 +275,21 @@ jobs:
             --repo "$HOURLY_REPO" \
             --title "$NAME" \
             --draft \
-            --notes "Automated hourly macOS dev build from commit \`$short_sha\`.
+            --notes "Automated hourly macOS and Windows dev build from commit \`$short_sha\`.
 
           Built from [\`stablyai/orca@$short_sha\`](https://github.com/stablyai/orca/commit/$SHA).
 
-          **Unvetted.** No tests ran. Signed and notarized like a release, so it
-          installs through Orca's in-app updater and opens from a manual download
-          without a Gatekeeper prompt — but nothing here has been reviewed."
+          **Unvetted.** No tests ran. The macOS build is signed and notarized like a
+          release, so it installs through Orca's in-app updater and opens from a manual
+          download without a Gatekeeper prompt — but nothing here has been reviewed.
+
+          **Windows builds are unsigned.** They install and update normally once you
+          are on one, but a signed Stable or RC build cannot install one through the
+          in-app updater — download \`orca-windows-setup.exe\` below and run it once
+          (SmartScreen will warn about an unknown publisher). Every later switch,
+          including back to Stable, works in-app from there."
           echo "tag=$TAG" >>"$GITHUB_OUTPUT"
+
 
       - name: Publish hourly macOS artifacts
         if: steps.freshness.outputs.should_build == 'true'
@@ -430,3 +442,27 @@ jobs:
             gh release delete "$tag" --repo "$HOURLY_REPO" --yes --cleanup-tag || \
               echo "::warning::Could not prune $tag"
           done <<<"$stale"
+
+  # Why this runs after the mac leg rather than beside it: the tag and version
+  # are computed inside that job, so until it has run nothing else can name the
+  # release to upload into. The cost is small enough not to matter — the Windows
+  # leg measures ~7.5 min (install 2m45, build 35s, NSIS package 3m) against a
+  # ~9.5 min mac run, which keeps a hourly run far inside its interval.
+  #
+  # Why `./` rather than a pinned `@main`: `uses:` resolves against the ref this
+  # file itself came from, which for an ordinary dispatch is main. Someone who
+  # deliberately points the Actions "Use workflow from" picker at a branch
+  # already gets that branch's copy of this entire file, so this follows the same
+  # rule instead of inventing a second one.
+  build-hourly-win:
+    needs: build-hourly-mac
+    # Only once the mac release is actually live: there is no release to upload
+    # into otherwise, and the Windows workflow refuses to create one.
+    if: needs.build-hourly-mac.outputs.published == 'true'
+    uses: ./.github/workflows/dev-channel-win-build.yml
+    secrets: inherit
+    with:
+      channel: hourly
+      tag: ${{ needs.build-hourly-mac.outputs.tag }}
+      ref: ${{ needs.build-hourly-mac.outputs.head_sha }}
+      version: ${{ needs.build-hourly-mac.outputs.version }}

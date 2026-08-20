@@ -50,6 +50,11 @@ export type XtermImeKeyboardOptions = {
   /** True for the narrow Linux path where the IME emits an orphaned letter
    *  keyup but no composition/input events before its candidate digit. */
   linuxOrphanCandidateDigitGuardActive?: boolean
+  /** True when the most recent preedit was Hangul, where a digit ends the
+   *  syllable and is literal text. Only the orphan-keyup guard is barred from
+   *  claiming it (#15299): ibus-hangul's Hanja lookup table does index by digit,
+   *  but only over a live preedit the composition guards already own. */
+  hangulPreedit?: boolean
   // Required so no caller silently falls back to non-mac 229 suppression,
   // which re-swallows the first key after a macOS IME input-source switch.
   isMac: boolean
@@ -89,6 +94,20 @@ function isXtermHandledKeyEvent(type: string): boolean {
   return type === 'keydown' || type === 'keyup'
 }
 
+/** Returns whether the Linux orphan-keyup window may claim this digit. */
+function claimsOrphanCandidateDigit(
+  event: XtermBypassEvent,
+  options: XtermImeKeyboardOptions
+): boolean {
+  return (
+    options.linuxOrphanCandidateDigitGuardActive === true &&
+    isTerminalImeCandidateDigitKeyEvent(event) &&
+    // Why: the orphan window arms off a bare keyup and cannot see which engine
+    // produced it, so a Hangul syllable's terminating digit must opt out.
+    options.hangulPreedit !== true
+  )
+}
+
 /** Returns whether xterm must not process an IME-owned keyboard event. */
 export function shouldSuppressTerminalImeKeyboardEvent(
   event: XtermBypassEvent,
@@ -98,17 +117,14 @@ export function shouldSuppressTerminalImeKeyboardEvent(
     compositionActive,
     candidateKeyGuardActive,
     pendingCandidateKeyReleaseActive,
-    linuxOrphanCandidateDigitGuardActive = false,
     isMac,
     isLinux
   } = options
-  const suppressOrphanCandidateDigit =
-    isLinux && linuxOrphanCandidateDigitGuardActive && isTerminalImeCandidateDigitKeyEvent(event)
   const suppressCandidateKey =
     isLinux &&
     (pendingCandidateKeyReleaseActive ||
       (candidateKeyGuardActive && isTerminalImeCandidateSelectionKeyEvent(event)) ||
-      suppressOrphanCandidateDigit)
+      claimsOrphanCandidateDigit(event, options))
   if (event.type === 'keypress') {
     // Why: a suppressed candidate keydown is not preventDefault-ed by xterm,
     // so its native keypress still fires and _keyPress would forward the
@@ -147,8 +163,7 @@ export function shouldPreventDefaultTerminalImeCandidateKey(
     event.type === 'keydown' &&
     options.isLinux &&
     ((options.candidateKeyGuardActive && isTerminalImeCandidateSelectionKeyEvent(event)) ||
-      (options.linuxOrphanCandidateDigitGuardActive === true &&
-        isTerminalImeCandidateDigitKeyEvent(event)))
+      claimsOrphanCandidateDigit(event, options))
   )
 }
 

@@ -105,8 +105,13 @@ export type CliRuntimeState =
   | 'stale_bootstrap'
 
 export type CliStatusResult = {
+  // Why: every field below describes ONE machine. When the CLI targets a paired server the
+  // whole result is about that server, and callers were reading `app` as if it described their
+  // own laptop. Naming the subject removes the ambiguity; absent means local.
+  target?: { kind: 'local' } | { kind: 'environment'; environment: string }
   app: {
     running: boolean
+    // Null whenever the pid is not knowable, which includes every remote target.
     pid: number | null
     desktopWindowStatus?: RuntimeDesktopWindowStatus
   }
@@ -646,6 +651,13 @@ export type RuntimeTerminalRead = {
   nextCursor: string | null
   latestCursor?: string
   returnedLineCount?: number
+  // Why: these are two different questions and they disagree whenever a program repaints.
+  // `stream` is the accumulated pty output with escapes stripped, so a redrawn line arrives as
+  // stacked fragments; `screen` is what the terminal actually renders. Naming the source keeps
+  // a caller that asked for one and got the other from reading the answer as the wrong thing.
+  // `screen-unavailable` means a screen was asked for, none could be rendered, and this is the
+  // stream instead — distinct from `stream`, which is the caller getting what they asked for.
+  source?: 'stream' | 'screen' | 'screen-unavailable'
 }
 
 export type RuntimeTerminalRename = {

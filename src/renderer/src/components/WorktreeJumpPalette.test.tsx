@@ -435,4 +435,30 @@ describe('WorktreeJumpPalette', () => {
 
     expect(input?.value).toBe('😉')
   })
+
+  it('renders last active timestamp when worktree has lastActivityAt', async () => {
+    const twentyThreeDaysAgo = Date.now() - 23 * 24 * 60 * 60 * 1000
+    const activeWorktree = makeWorktree('active-wt', 'Active workspace', {
+      lastActivityAt: twentyThreeDaysAgo
+    })
+    const noActivityWorktree = makeWorktree('no-activity-wt', 'No activity workspace', {
+      lastActivityAt: 0
+    })
+
+    await renderPalette({
+      worktreesByRepo: { 'repo-1': [activeWorktree, noActivityWorktree] },
+      showSleepingWorkspaces: true
+    })
+
+    const activeRow = testContainer.querySelector('[data-command-item="worktree:active-wt"]')
+    expect(activeRow?.textContent).toContain('23d')
+    const activeSpan = activeRow?.querySelector('span[aria-label="Last active 23d ago"]')
+    expect(activeSpan).not.toBeNull()
+    expect(activeSpan?.textContent).toBe('23d')
+
+    const noActivityRow = testContainer.querySelector(
+      '[data-command-item="worktree:no-activity-wt"]'
+    )
+    expect(noActivityRow?.querySelector('span[aria-label*="Last active"]')).toBeNull()
+  })
 })

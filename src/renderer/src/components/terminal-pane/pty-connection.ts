@@ -5848,10 +5848,15 @@ export function connectPanePty(
           onConnect: (): void => {
             if (isCurrent()) {
               reportRemoteRendererSerializerReady()
+              // Why: a visibility flip during a rebind can't reach the host (no bound
+              // pty id), and the transport replays the stale pause bit onto the new
+              // stream — re-derive it from live visibility once the stream is bound.
+              syncHiddenRendererPtyDelivery()
             }
           },
           onStreamRecovered: (): void => {
             if (isCurrent()) {
+              syncHiddenRendererPtyDelivery()
               markHiddenOutputRestoreNeeded()
             }
           },

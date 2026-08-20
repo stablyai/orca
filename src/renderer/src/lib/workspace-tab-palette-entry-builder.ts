@@ -92,9 +92,12 @@ function isCurrentWorkspaceTab({
   ) {
     return false
   }
+  if (activeUnifiedTabId) {
+    return activeUnifiedTabId === tab.id
+  }
   const visibleType = tab.contentType === 'terminal' ? 'terminal' : 'editor'
   const storedType = activeTabTypeByWorktree[tab.worktreeId] ?? activeTabType
-  if (storedType !== visibleType || activeUnifiedTabId !== tab.id) {
+  if (storedType !== visibleType) {
     return false
   }
   return visibleType === 'terminal'

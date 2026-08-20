@@ -11,18 +11,17 @@ const shellContractFiles = [
   'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/main/daemon/shell-ready.test.ts',
   'src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts',
-  'src/main/providers/local-pty-shell-ready-zsh-startup-file-behavior.test.ts',
-  'src/main/providers/local-pty-shell-ready-zsh-zdotdir-discovery.test.ts',
-  'src/main/providers/local-pty-shell-ready-zsh-zdotdir-normalization.test.ts',
   'src/main/providers/__tests__/shell-ready-framework-example.test.ts',
   'src/main/shell-startup-feature-channel.test.ts',
   'src/main/zsh-scoped-histfile.live-shell.test.ts',
+  'src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts',
   'src/main/zsh-wrapper-version-mismatch.live-shell.test.ts',
   'src/shared/posix-command-path-lookup.test.ts'
 ]
 const patchedNodePtyContractFiles = [
   'src/main/daemon/node-pty-fd-leak.test.ts',
-  'src/main/pty/omp-shell-wrapper.node-pty.test.ts'
+  'src/main/pty/omp-shell-wrapper.node-pty.test.ts',
+  'src/shared/fish-query-reply-child-stdin.node-pty.test.ts'
 ]
 const nativeShellContractFiles = [...shellContractFiles, ...patchedNodePtyContractFiles]
 const testFilePatterns = [
@@ -31,8 +30,12 @@ const testFilePatterns = [
   'tests/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}',
   'tests/tools/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'
 ]
+// Why the harness import counts: the zsh startup hook runs from a `precmd`, so
+// its tests drive a real zsh through a PTY in zsh-startup-hook-pty-harness
+// rather than calling spawnSync('zsh') themselves. Without this branch the rule
+// silently stops noticing the very tests that need the lane's zsh install.
 const realZshUsage =
-  /(?:spawnSync|execFileSync|spawn)\(\s*['"](?:\/(?:usr\/)?bin\/)?zsh['"]|spawnSync\(\s*['"]which['"]\s*,\s*\[\s*['"]zsh['"]|name:\s*['"]zsh['"]\s*,\s*path:\s*executablePath/
+  /(?:spawnSync|execFileSync|spawn)\(\s*['"](?:\/(?:usr\/)?bin\/)?zsh['"]|spawnSync\(\s*['"]which['"]\s*,\s*\[\s*['"]zsh['"]|name:\s*['"]zsh['"]\s*,\s*path:\s*executablePath|from '[^']*zsh-startup-hook-pty-harness'/
 
 describe('PR workflow parallelism', () => {
   it('cancels superseded runs for the same pull request', () => {
@@ -129,8 +132,34 @@ describe('PR workflow parallelism', () => {
     )
   })
 
+  it('bounds the shell lane so a stalled apt mirror cannot hold the run open', () => {
+    const job = workflow.jobs.shell_contracts
+    // A passing run of this job takes ~4.5 minutes, almost all of it package download.
+    // Without a job bound a stalled mirror runs to GitHub's 6h default, and because this
+    // is a required check it holds the whole run open and blocks `gh run rerun --failed`.
+    expect(job['timeout-minutes']).toBeGreaterThan(0)
+    expect(job['timeout-minutes']).toBeLessThanOrEqual(30)
+
+    const installStep = job.steps.find((step) => step.name === 'Install zsh and fish')
+    // apt applies no wall-clock bound to a stalled mirror on its own. These turn an
+    // unbounded hang into a bounded, retried, legible failure.
+    expect(installStep.run).toMatch(/Acquire::http::Timeout/)
+    expect(installStep.run).toMatch(/Acquire::https::Timeout/)
+    expect(installStep.run).toMatch(/Acquire::Retries/)
+    // Retries multiply: a first attempt at 30s x 3 retries across every index file turned
+    // a dead mirror into a ~15 minute stall. One attempt, then move on.
+    expect(installStep.run).toMatch(/Acquire::Retries "1"/)
+    // Acquire timeouts are per-connection, so they cannot bound the command as a whole.
+    // Only a wall-clock bound can, and both apt invocations need one.
+    expect(installStep.run).toMatch(/timeout \d+ sudo apt-get update/)
+    expect(installStep.run).toMatch(/timeout \d+ sudo apt-get install/)
+  })
+
   it('keeps every real-zsh test in the dedicated shell lane', () => {
     const discoveredFiles = globSync(testFilePatterns)
+      // Why this file is excluded: it carries the detector pattern as a literal
+      // and would otherwise match itself.
+      .filter((testFile) => testFile !== 'config/scripts/pr-workflow-parallelism.test.mjs')
       .filter((testFile) => realZshUsage.test(readFileSync(testFile, 'utf8')))
       .sort()
 
@@ -306,6 +335,7 @@ describe('PR workflow parallelism', () => {
 
   it('keeps verify as the aggregate required check', () => {
     expect(workflow.jobs.verify.needs).toEqual([
+      'code_paths',
       'static_analysis',
       'root_directory_guard',
       'typecheck',

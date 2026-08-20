@@ -112,9 +112,21 @@ export function ensureWorktreeHasInitialTerminal(
   }
 
   const hasExplicitLaunchWork = Boolean(sequencedStartup || setup || issueCommand)
+  // Why: only startup hydration honours the closed-last-tab tombstone. Every explicit
+  // activation (sidebar, palette, automation resume, wake) re-seeds a surface instead,
+  // because closing the last terminal normally deactivates the workspace too
+  // (terminal-tab-actions.ts closeTerminalTab, plus leaveWorktreeIfEmpty for split-group
+  // closes) — so reaching here through an activation means the user asked for it back.
+  // The paths that do leave it active stay safe: a runtime-owned close returns before that
+  // deactivation, but while that session is live the host owns terminal creation and this
+  // bails out above; an editor/browser survivor keeps renderableTabCount non-zero, so no
+  // terminal is added; and closeTabPreservingPty (use-terminal-pane-lifecycle.ts) skips both
+  // deactivation hooks for pane moves and retirement, where re-seeding is the wanted outcome.
+  const shouldHonourClosedTerminalTombstone =
+    Object.hasOwn(store.tabsByWorktree, worktreeId) && opts?.reseedEmptiedWorkspace !== true
   const shouldAutoCreate = shouldAutoCreateInitialTerminal(
     renderableTabCount,
-    Object.hasOwn(store.tabsByWorktree, worktreeId)
+    shouldHonourClosedTerminalTombstone
   )
   const shouldCreateForExplicitWork = renderableTabCount === 0 && hasExplicitLaunchWork
   if (!shouldAutoCreate && !shouldCreateForExplicitWork) {

@@ -473,7 +473,7 @@ function getLeafIdFromPaneKey(paneKey: string): string | null {
 }
 
 function findCompletedOrphanPaneKeysForTabClose(
-  state: AppState,
+  state: AgentStatusTabPrefixDropState,
   worktreeId: string | undefined,
   prefix: string
 ): string[] {
@@ -1293,6 +1293,143 @@ function buildAgentStatusBatchPatch(
     }
   }
   return patch as Partial<AppState>
+}
+
+/** The slice of app state the tab-prefix drop reduces over — narrow so callers
+ *  outside the store (the paired snapshot apply) can build the same patch. */
+export type AgentStatusTabPrefixDropState = Pick<
+  AppState,
+  | 'acknowledgedAgentsByPaneKey'
+  | 'agentLaunchConfigByPaneKey'
+  | 'agentStatusByPaneKey'
+  | 'agentStatusEpoch'
+  | 'migrationUnsupportedByPtyId'
+  | 'recentlyClosedAgentStatusTabIds'
+  | 'recentlyRetiredAgentStatusPaneKeys'
+  | 'retainedAgentsByPaneKey'
+  | 'retentionSuppressedPaneKeys'
+  | 'sortEpoch'
+  | 'tabsByWorktree'
+>
+
+/** Pure form of the dropAgentStatusByTabPrefix reducer: the paired snapshot
+ *  apply folds the same sweep into a patch it assembles itself, so the two
+ *  paths cannot drift. `retiredAliasPaneKeys` comes from the caller because
+ *  retiring pane-authority aliases is a registry side effect, not a reduction. */
+export function buildAgentStatusTabPrefixDropPatch(
+  s: AgentStatusTabPrefixDropState,
+  tabIdPrefix: string,
+  retiredAliasPaneKeys: readonly string[],
+  opts?: DropAgentStatusByTabPrefixOptions
+): { patch: Partial<AgentStatusTabPrefixDropState>; hadLive: boolean } {
+  const prefix = `${tabIdPrefix}:`
+  let hadLive = false
+  const buildPatch = (): Partial<AgentStatusTabPrefixDropState> => {
+    const completedOrphanKeys = findCompletedOrphanPaneKeysForTabClose(s, opts?.worktreeId, prefix)
+    const completedOrphanKeySet = new Set(completedOrphanKeys)
+    const liveKeys = [
+      ...Object.keys(s.agentStatusByPaneKey).filter((k) => k.startsWith(prefix)),
+      ...completedOrphanKeys
+    ]
+    const launchConfigKeys = Object.keys(s.agentLaunchConfigByPaneKey).filter(
+      (k) => k.startsWith(prefix) || completedOrphanKeySet.has(k)
+    )
+    const retainedKeys = Object.keys(s.retainedAgentsByPaneKey).filter(
+      (k) => k.startsWith(prefix) || completedOrphanKeySet.has(k)
+    )
+    const migrationUnsupported = pruneMigrationUnsupportedEntries(
+      s.migrationUnsupportedByPtyId,
+      (entry) => entry.paneKey?.startsWith(prefix) ?? false
+    )
+    // See removeAgentStatus for ack-cleanup rationale; ack entries are owned by the pane lifecycle regardless of live/retained state.
+    let nextAck = s.acknowledgedAgentsByPaneKey
+    const ackKeys = Object.keys(nextAck).filter(
+      (k) => k.startsWith(prefix) || completedOrphanKeySet.has(k)
+    )
+    if (ackKeys.length > 0) {
+      nextAck = { ...nextAck }
+      for (const k of ackKeys) {
+        delete nextAck[k]
+      }
+    }
+    const nextClosedTabs = boundRecentlyClosedAgentStatusTabIds(
+      s.recentlyClosedAgentStatusTabIds,
+      tabIdPrefix
+    )
+    const nextRetiredPaneKeys = boundRecentlyRetiredAgentStatusPaneKeys(
+      s.recentlyRetiredAgentStatusPaneKeys,
+      retiredAliasPaneKeys
+    )
+
+    if (
+      liveKeys.length === 0 &&
+      launchConfigKeys.length === 0 &&
+      retainedKeys.length === 0 &&
+      !migrationUnsupported.changed
+    ) {
+      if (nextAck !== s.acknowledgedAgentsByPaneKey) {
+        return {
+          acknowledgedAgentsByPaneKey: nextAck,
+          recentlyClosedAgentStatusTabIds: nextClosedTabs,
+          recentlyRetiredAgentStatusPaneKeys: nextRetiredPaneKeys
+        }
+      }
+      return {
+        recentlyClosedAgentStatusTabIds: nextClosedTabs,
+        recentlyRetiredAgentStatusPaneKeys: nextRetiredPaneKeys
+      }
+    }
+    hadLive = liveKeys.length > 0
+
+    const nextLive = liveKeys.length > 0 ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
+    for (const key of liveKeys) {
+      delete nextLive[key]
+    }
+    const nextLaunchConfigs =
+      launchConfigKeys.length > 0
+        ? { ...s.agentLaunchConfigByPaneKey }
+        : s.agentLaunchConfigByPaneKey
+    for (const key of launchConfigKeys) {
+      delete nextLaunchConfigs[key]
+    }
+
+    const nextRetained =
+      retainedKeys.length > 0 ? { ...s.retainedAgentsByPaneKey } : s.retainedAgentsByPaneKey
+    for (const key of retainedKeys) {
+      delete nextRetained[key]
+    }
+
+    // Why: a suppressor is only consumed on a live→gone transition, so plant one only for live paneKeys and skip already-suppressed and completed-orphan keys — otherwise it leaks (mirrors dropAgentStatus).
+    const suppressorAdds = liveKeys.filter(
+      (k) => !completedOrphanKeySet.has(k) && !(k in s.retentionSuppressedPaneKeys)
+    )
+    let nextRetentionSuppressedPaneKeys = s.retentionSuppressedPaneKeys
+    if (suppressorAdds.length > 0) {
+      nextRetentionSuppressedPaneKeys = { ...s.retentionSuppressedPaneKeys }
+      for (const key of suppressorAdds) {
+        nextRetentionSuppressedPaneKeys[key] = true
+      }
+    }
+
+    return {
+      agentStatusByPaneKey: nextLive,
+      agentLaunchConfigByPaneKey: nextLaunchConfigs,
+      retainedAgentsByPaneKey: nextRetained,
+      migrationUnsupportedByPtyId: migrationUnsupported.next,
+      retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
+      recentlyClosedAgentStatusTabIds: nextClosedTabs,
+      recentlyRetiredAgentStatusPaneKeys: nextRetiredPaneKeys,
+      ...(nextAck !== s.acknowledgedAgentsByPaneKey
+        ? { acknowledgedAgentsByPaneKey: nextAck }
+        : {}),
+      // Why: mirrors removeAgentStatusByTabPrefix — only bump epochs when the live map changed; retained-only sweeps don't affect sort/freshness.
+      agentStatusEpoch:
+        hadLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
+      sortEpoch: hadLive || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
+    }
+  }
+  const patch = buildPatch()
+  return { patch, hadLive }
 }
 
 export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusSlice> = (
@@ -2722,117 +2859,17 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     },
 
     dropAgentStatusByTabPrefix: (tabIdPrefix, opts) => {
-      const prefix = `${tabIdPrefix}:`
       const retiredAliasPaneKeys = retireAgentPaneAuthorityAliasesByOwnerTab(tabIdPrefix)
       let hadLive = false
       set((s) => {
-        const completedOrphanKeys = findCompletedOrphanPaneKeysForTabClose(
+        const dropped = buildAgentStatusTabPrefixDropPatch(
           s,
-          opts?.worktreeId,
-          prefix
+          tabIdPrefix,
+          retiredAliasPaneKeys,
+          opts
         )
-        const completedOrphanKeySet = new Set(completedOrphanKeys)
-        const liveKeys = [
-          ...Object.keys(s.agentStatusByPaneKey).filter((k) => k.startsWith(prefix)),
-          ...completedOrphanKeys
-        ]
-        const launchConfigKeys = Object.keys(s.agentLaunchConfigByPaneKey).filter(
-          (k) => k.startsWith(prefix) || completedOrphanKeySet.has(k)
-        )
-        const retainedKeys = Object.keys(s.retainedAgentsByPaneKey).filter(
-          (k) => k.startsWith(prefix) || completedOrphanKeySet.has(k)
-        )
-        const migrationUnsupported = pruneMigrationUnsupportedEntries(
-          s.migrationUnsupportedByPtyId,
-          (entry) => entry.paneKey?.startsWith(prefix) ?? false
-        )
-        // See removeAgentStatus for ack-cleanup rationale; ack entries are owned by the pane lifecycle regardless of live/retained state.
-        let nextAck = s.acknowledgedAgentsByPaneKey
-        const ackKeys = Object.keys(nextAck).filter(
-          (k) => k.startsWith(prefix) || completedOrphanKeySet.has(k)
-        )
-        if (ackKeys.length > 0) {
-          nextAck = { ...nextAck }
-          for (const k of ackKeys) {
-            delete nextAck[k]
-          }
-        }
-        const nextClosedTabs = boundRecentlyClosedAgentStatusTabIds(
-          s.recentlyClosedAgentStatusTabIds,
-          tabIdPrefix
-        )
-        const nextRetiredPaneKeys = boundRecentlyRetiredAgentStatusPaneKeys(
-          s.recentlyRetiredAgentStatusPaneKeys,
-          retiredAliasPaneKeys
-        )
-
-        if (
-          liveKeys.length === 0 &&
-          launchConfigKeys.length === 0 &&
-          retainedKeys.length === 0 &&
-          !migrationUnsupported.changed
-        ) {
-          if (nextAck !== s.acknowledgedAgentsByPaneKey) {
-            return {
-              acknowledgedAgentsByPaneKey: nextAck,
-              recentlyClosedAgentStatusTabIds: nextClosedTabs,
-              recentlyRetiredAgentStatusPaneKeys: nextRetiredPaneKeys
-            }
-          }
-          return {
-            recentlyClosedAgentStatusTabIds: nextClosedTabs,
-            recentlyRetiredAgentStatusPaneKeys: nextRetiredPaneKeys
-          }
-        }
-        hadLive = liveKeys.length > 0
-
-        const nextLive =
-          liveKeys.length > 0 ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
-        for (const key of liveKeys) {
-          delete nextLive[key]
-        }
-        const nextLaunchConfigs =
-          launchConfigKeys.length > 0
-            ? { ...s.agentLaunchConfigByPaneKey }
-            : s.agentLaunchConfigByPaneKey
-        for (const key of launchConfigKeys) {
-          delete nextLaunchConfigs[key]
-        }
-
-        const nextRetained =
-          retainedKeys.length > 0 ? { ...s.retainedAgentsByPaneKey } : s.retainedAgentsByPaneKey
-        for (const key of retainedKeys) {
-          delete nextRetained[key]
-        }
-
-        // Why: a suppressor is only consumed on a live→gone transition, so plant one only for live paneKeys and skip already-suppressed and completed-orphan keys — otherwise it leaks (mirrors dropAgentStatus).
-        const suppressorAdds = liveKeys.filter(
-          (k) => !completedOrphanKeySet.has(k) && !(k in s.retentionSuppressedPaneKeys)
-        )
-        let nextRetentionSuppressedPaneKeys = s.retentionSuppressedPaneKeys
-        if (suppressorAdds.length > 0) {
-          nextRetentionSuppressedPaneKeys = { ...s.retentionSuppressedPaneKeys }
-          for (const key of suppressorAdds) {
-            nextRetentionSuppressedPaneKeys[key] = true
-          }
-        }
-
-        return {
-          agentStatusByPaneKey: nextLive,
-          agentLaunchConfigByPaneKey: nextLaunchConfigs,
-          retainedAgentsByPaneKey: nextRetained,
-          migrationUnsupportedByPtyId: migrationUnsupported.next,
-          retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,
-          recentlyClosedAgentStatusTabIds: nextClosedTabs,
-          recentlyRetiredAgentStatusPaneKeys: nextRetiredPaneKeys,
-          ...(nextAck !== s.acknowledgedAgentsByPaneKey
-            ? { acknowledgedAgentsByPaneKey: nextAck }
-            : {}),
-          // Why: mirrors removeAgentStatusByTabPrefix — only bump epochs when the live map changed; retained-only sweeps don't affect sort/freshness.
-          agentStatusEpoch:
-            hadLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
-          sortEpoch: hadLive || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
-        }
+        hadLive = dropped.hadLive
+        return dropped.patch
       })
       if (hadLive) {
         queueMicrotask(() => freshness.schedule())
