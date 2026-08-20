@@ -16,8 +16,52 @@ export type OrchestrationWorkerLaunchDefaults = {
   efforts: OrchestrationWorkerEfforts
 }
 
+type PersistedOrchestrationWorkerPreferences = {
+  orchestrationDefaultWorkerAgent?: unknown
+  orchestrationWorkerModels?: unknown
+  orchestrationWorkerEfforts?: unknown
+}
+
 export function normalizeOrchestrationDefaultWorkerAgent(value: unknown): TuiAgent | null {
   return typeof value === 'string' && isTuiAgent(value) ? value : null
+}
+
+function persistedOrchestrationWorkerMapMatches(
+  value: unknown,
+  normalized: Record<string, string>
+): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false
+  }
+  const persisted = value as Record<string, unknown>
+  const persistedEntries = Object.entries(persisted)
+  return (
+    persistedEntries.length === Object.keys(normalized).length &&
+    persistedEntries.every(
+      ([agent, modelOrEffort]) =>
+        Object.hasOwn(normalized, agent) && normalized[agent] === modelOrEffort
+    )
+  )
+}
+
+export function persistedOrchestrationWorkerPreferencesRepaired(
+  persisted: PersistedOrchestrationWorkerPreferences,
+  normalized: OrchestrationWorkerLaunchDefaults
+): boolean {
+  return (
+    (persisted.orchestrationDefaultWorkerAgent !== undefined &&
+      persisted.orchestrationDefaultWorkerAgent !== normalized.agent) ||
+    (persisted.orchestrationWorkerModels !== undefined &&
+      !persistedOrchestrationWorkerMapMatches(
+        persisted.orchestrationWorkerModels,
+        normalized.models
+      )) ||
+    (persisted.orchestrationWorkerEfforts !== undefined &&
+      !persistedOrchestrationWorkerMapMatches(
+        persisted.orchestrationWorkerEfforts,
+        normalized.efforts
+      ))
+  )
 }
 
 export function supportsLaunchModel(agent: TuiAgent): boolean {

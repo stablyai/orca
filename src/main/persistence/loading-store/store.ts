@@ -124,6 +124,7 @@ import { normalizeTerminalQuickCommands } from '../../../shared/terminal-quick-c
 import { normalizeTaskProviderSettings } from '../../../shared/task-providers'
 import {
   normalizeOrchestrationDefaultWorkerAgent,
+  persistedOrchestrationWorkerPreferencesRepaired,
   normalizeOrchestrationWorkerEfforts,
   normalizeOrchestrationWorkerModels
 } from '../../../shared/orchestration-worker-model-settings'
@@ -1188,6 +1189,26 @@ export class Store {
           parsed.settings?.orchestrationWorkerEfforts,
           migratedOrchestrationWorkerModels
         )
+        const migratedOrchestrationDefaultWorkerAgent = normalizeOrchestrationDefaultWorkerAgent(
+          parsed.settings?.orchestrationDefaultWorkerAgent
+        )
+        // Why: persist repaired worker preferences so load-time repairs do not recur every launch.
+        if (
+          persistedOrchestrationWorkerPreferencesRepaired(
+            {
+              orchestrationDefaultWorkerAgent: parsed.settings?.orchestrationDefaultWorkerAgent,
+              orchestrationWorkerModels: parsed.settings?.orchestrationWorkerModels,
+              orchestrationWorkerEfforts: parsed.settings?.orchestrationWorkerEfforts
+            },
+            {
+              agent: migratedOrchestrationDefaultWorkerAgent,
+              models: migratedOrchestrationWorkerModels,
+              efforts: migratedOrchestrationWorkerEfforts
+            }
+          )
+        ) {
+          this.loadNeedsSave = true
+        }
         result = {
           ...defaults,
           ...parsed,
@@ -1281,9 +1302,7 @@ export class Store {
               parsed.settings?.terminalShortcutPolicy
             ),
             disabledTuiAgents: migratedDisabledTuiAgents,
-            orchestrationDefaultWorkerAgent: normalizeOrchestrationDefaultWorkerAgent(
-              parsed.settings?.orchestrationDefaultWorkerAgent
-            ),
+            orchestrationDefaultWorkerAgent: migratedOrchestrationDefaultWorkerAgent,
             orchestrationWorkerModels: migratedOrchestrationWorkerModels,
             orchestrationWorkerEfforts: migratedOrchestrationWorkerEfforts,
             ...migratedAgentYoloDefaults,
