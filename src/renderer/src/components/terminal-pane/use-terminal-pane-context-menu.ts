@@ -73,6 +73,7 @@ type TerminalMenuState = {
   runForPane: <Result>(paneId: number, action: () => Result) => Result
 }
 
+/** Context-menu actions for a terminal tab, including Copy Terminal ID. */
 export function useTerminalPaneContextMenu({
   managerRef,
   paneTransportsRef,

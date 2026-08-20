@@ -13,6 +13,7 @@ type CopyTerminalHandleDeps = {
   writeClipboardText: (text: string) => Promise<void>
 }
 
+/** Copy the CLI terminal handle for a pane. Relay panes are not in the local runtime, so use the encoded remote handle when present. */
 export async function copyTerminalHandleForPane({
   tabId,
   leafId,
@@ -42,6 +43,7 @@ export async function copyTerminalHandleForPane({
   return handle
 }
 
+/** Read `terminal.handle` from a `terminal.resolvePane` result. */
 function readResolvedTerminalHandle(result: unknown): string | null {
   if (!isRecord(result) || !isRecord(result.terminal)) {
     return null
@@ -49,6 +51,7 @@ function readResolvedTerminalHandle(result: unknown): string | null {
   return typeof result.terminal.handle === 'string' ? result.terminal.handle : null
 }
 
+/** Narrow unknown RPC payloads to a plain object. */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
