@@ -346,9 +346,7 @@ export function useOnboardingFlow(
   const persistedThemeRef = useRef<GlobalSettings['theme']>(settings?.theme ?? 'dark')
   persistedThemeRef.current = settings?.theme ?? 'dark'
   const persistedSettingsRef = useRef(settings)
-  useEffect(() => {
-    persistedSettingsRef.current = settings
-  }, [settings])
+  persistedSettingsRef.current = settings
   const themeStepEntryThemeRef = useRef<GlobalSettings['theme'] | null>(null)
   const themeStepEntryCapturedRef = useRef(false)
   useEffect(() => {
@@ -369,7 +367,6 @@ export function useOnboardingFlow(
     [settings]
   )
 
-  // Apply preview when local theme changes.
   useEffect(() => {
     applyThemePreview(theme)
   }, [applyThemePreview, theme])

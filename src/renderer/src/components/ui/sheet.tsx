@@ -45,7 +45,7 @@ function SheetOverlay({
 }
 
 const sheetContentVariants = cva(
-  'fixed z-50 flex flex-col gap-0 bg-popover text-popover-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)] outline-none transition ease-in-out data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:animate-in data-[state=open]:duration-300',
+  'fixed z-50 flex flex-col gap-0 bg-popover text-popover-foreground shadow-floating outline-none transition ease-in-out data-[state=closed]:animate-out data-[state=closed]:duration-200 data-[state=open]:animate-in data-[state=open]:duration-300',
   {
     variants: {
       side: {

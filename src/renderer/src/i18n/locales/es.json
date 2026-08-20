@@ -5494,7 +5494,7 @@
             "tintColorDescription": "El color que se mezcla en la interfaz de la aplicación.",
             "tintOpacity": "Intensidad del tinte",
             "tintOpacityDescription": "Controla con qué fuerza se mezcla el tinte en la interfaz de la aplicación.",
-            "tintOpacityRange": "0 a {{value0}}"
+            "tintOpacityRange": "De 0 a {{value0}}"
           },
           "workspaceCardLayoutGuidance": "Gestionado desde la barra lateral del espacio de trabajo.",
           "872af9556e": "Bandeja del sistema",

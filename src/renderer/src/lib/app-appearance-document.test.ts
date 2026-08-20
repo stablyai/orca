@@ -52,12 +52,23 @@ describe('applyAppAppearanceToDocument', () => {
       }),
       true
     )
+    const style = document.createElement('style')
+    style.textContent = `
+      .appearance-portal-probe {
+        background-color: var(--background);
+        color: var(--popover-foreground);
+      }
+    `
+    document.head.append(style)
     const portal = document.createElement('div')
+    portal.className = 'appearance-portal-probe'
     document.body.append(portal)
 
-    expect(portal.parentElement?.parentElement).toBe(document.documentElement)
-    expect(document.documentElement.style.getPropertyValue('--popover-foreground')).toBe('#abcdef')
+    const computed = getComputedStyle(portal)
+    expect(computed.backgroundColor).toBe('#123456')
+    expect(computed.color).toBe('#abcdef')
     portal.remove()
+    style.remove()
   })
 
   it('uses surface luminance for opposite app and terminal schemes', () => {
