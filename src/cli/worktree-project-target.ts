@@ -1,6 +1,6 @@
 import { normalizeExecutionHostId, type ParsedExecutionHost } from '../shared/execution-host'
 import type { ProjectHostSetup } from '../shared/project-types'
-import { hostFilterMatchesHostId, parseHostFlag } from './execution-host-flag'
+import { hostFilterMatchesHostId, resolveHostFlagTarget } from './execution-host-flag'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime-client'
 
@@ -73,7 +73,7 @@ export async function resolveProjectCreateTarget(
 ): Promise<ProjectCreateTarget | undefined> {
   const projectHostSetupId = getPresentStringFlag(flags, 'project-host-setup')
   const projectId = getPresentStringFlag(flags, 'project')
-  const host = parseHostFlag(flags)
+  const host = await resolveHostFlagTarget(flags, client)
   if (!projectHostSetupId && !projectId && !host) {
     return undefined
   }
