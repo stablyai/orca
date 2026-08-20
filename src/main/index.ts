@@ -2907,7 +2907,8 @@ void app.whenReady().then(async () => {
       worktreeId: enriched.worktreeId ?? null,
       paneKey: enriched.paneKey,
       state: enriched.payload.state,
-      receivedAt: enriched.receivedAt
+      receivedAt: enriched.receivedAt,
+      sessionId: enriched.providerSession?.id ?? null
     })
   })
   runtimeService.onWorktreeLifecycle((event) => {
