@@ -92,6 +92,11 @@ jobs:
     # HOURLY_RELEASE_APP_PRIVATE_KEY into it, then pin its deployment branch
     # policy to main so only main's copy of this file can read them.
     environment: adhoc-mac-build
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.adhoc.outputs.version }}
+      head_sha: ${{ steps.adhoc.outputs.head_sha }}
+      published: ${{ steps.publish_live.outcome == 'success' && 'true' || 'false' }}
     runs-on: blacksmith-6vcpu-macos-15
     # Why 150: it must exceed the worst case the retry budgets below can produce
     # (install 3x10 + publish 2x45 = 120, plus ~25 for checkout/build/verify), or
@@ -290,15 +295,22 @@ jobs:
             --repo "$ADHOC_REPO" \
             --title "$NAME" \
             --draft \
-            --notes "Adhoc macOS dev build of \`$REF\` at commit \`$short_sha\`.
+            --notes "Adhoc macOS and Windows dev build of \`$REF\` at commit \`$short_sha\`.
 
           Built from [\`stablyai/orca@$short_sha\`](https://github.com/stablyai/orca/commit/$SHA), cut by @$ACTOR.
 
           **Unlanded and unvetted.** This is somebody's branch, not main. No tests
-          ran. Signed and notarized like a release, so it installs through Orca's
-          in-app updater and opens without a Gatekeeper prompt — but the branch may
-          never merge, and this build is deleted after $ADHOC_RETAIN_DAYS days."
+          ran. The macOS build is signed and notarized like a release, so it installs
+          through Orca's in-app updater and opens without a Gatekeeper prompt — but the
+          branch may never merge, and this build is deleted after $ADHOC_RETAIN_DAYS days.
+
+          **Windows builds are unsigned.** They install and update normally once you
+          are on one, but a signed Stable or RC build cannot install one through the
+          in-app updater — download \`orca-windows-setup.exe\` below and run it once
+          (SmartScreen will warn about an unknown publisher). Every later switch,
+          including back to Stable, works in-app from there."
           echo "tag=$TAG" >>"$GITHUB_OUTPUT"
+
 
       - name: Publish adhoc macOS artifacts
         uses: nick-fields/retry@v4
@@ -416,3 +428,27 @@ jobs:
             gh release delete "$tag" --repo "$ADHOC_REPO" --yes --cleanup-tag || \
               echo "::warning::Could not prune $tag"
           done <<<"$stale"
+
+  # Why this runs after the mac leg rather than beside it: the tag and version
+  # are computed inside that job, so until it has run nothing else can name the
+  # release to upload into. The cost is small enough not to matter — the Windows
+  # leg measures ~7.5 min (install 2m45, build 35s, NSIS package 3m) against a
+  # ~9.5 min mac run, which keeps a adhoc run far inside its interval.
+  #
+  # Why `./` rather than a pinned `@main`: `uses:` resolves against the ref this
+  # file itself came from, which for an ordinary dispatch is main. Someone who
+  # deliberately points the Actions "Use workflow from" picker at a branch
+  # already gets that branch's copy of this entire file, so this follows the same
+  # rule instead of inventing a second one.
+  build-adhoc-win:
+    needs: build-adhoc-mac
+    # Only once the mac release is actually live: there is no release to upload
+    # into otherwise, and the Windows workflow refuses to create one.
+    if: needs.build-adhoc-mac.outputs.published == 'true'
+    uses: ./.github/workflows/dev-channel-win-build.yml
+    secrets: inherit
+    with:
+      channel: adhoc
+      tag: ${{ needs.build-adhoc-mac.outputs.tag }}
+      ref: ${{ needs.build-adhoc-mac.outputs.head_sha }}
+      version: ${{ needs.build-adhoc-mac.outputs.version }}
