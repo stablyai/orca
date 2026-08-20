@@ -35330,7 +35330,10 @@ export class OrcaRuntimeService {
   private isPtyKnownExited(ptyId: string): boolean {
     const pty = this.ptysById.get(ptyId)
     if (pty) {
-      return !pty.connected
+      // Why: `!connected` is an inference, not proof. The liveness sweep clears it with no
+      // exit code for every PTY of a dropped relay, so reading that as an exit retires the
+      // lease of a process still running on the host — 'unknown' must keep watching.
+      return getPtyTerminalState(pty) === 'exited'
     }
     return this.getLeavesForPty(ptyId).some((leaf) => getTerminalState(leaf) === 'exited')
   }
