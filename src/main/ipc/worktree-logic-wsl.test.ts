@@ -98,6 +98,47 @@ describe('computeWorktreePath WSL layout', () => {
     ).toBe('\\\\wsl.localhost\\Ubuntu\\mnt\\d\\trees\\feature')
   })
 
+  it('collapses dotted Linux repo base paths end to end', () => {
+    parseWslPathMock.mockReturnValue({
+      distro: 'Ubuntu',
+      linuxPath: '/home/jin/src/repo'
+    })
+    getWslHomeMock.mockReturnValue('\\\\wsl.localhost\\Ubuntu\\home\\jin')
+    const repo = {
+      path: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo',
+      worktreeBasePath: '/home/jin/src/../trees'
+    }
+
+    expect(
+      computeWorktreePath(
+        'feature',
+        repo.path,
+        getWorktreePathSettings(repo, { nestWorkspaces: false, workspaceDir: 'C:\\workspaces' })
+      )
+    ).toBe('\\\\wsl.localhost\\Ubuntu\\home\\jin\\trees\\feature')
+  })
+
+  it('still mirrors drive-letter repo base paths into the distro home', () => {
+    parseWslPathMock.mockReturnValue({
+      distro: 'Ubuntu',
+      linuxPath: '/home/jin/src/repo'
+    })
+    getWslHomeMock.mockReturnValue('\\\\wsl.localhost\\Ubuntu\\home\\jin')
+    const repo = {
+      path: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo',
+      worktreeBasePath: 'D:\\trees'
+    }
+
+    // Why: desktop drive roots keep WSL worktrees on the WSL filesystem by design.
+    expect(
+      computeWorktreePath(
+        'feature',
+        repo.path,
+        getWorktreePathSettings(repo, { nestWorkspaces: false, workspaceDir: 'C:\\workspaces' })
+      )
+    ).toBe('\\\\wsl.localhost\\Ubuntu\\home\\jin\\orca\\workspaces\\feature')
+  })
+
   it('resolves the Linux repo base path identically through the async twin', async () => {
     parseWslPathMock.mockReturnValue({
       distro: 'Ubuntu',
