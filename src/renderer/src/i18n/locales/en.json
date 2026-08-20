@@ -12838,7 +12838,10 @@
           "modeRigged": "Walking legs",
           "modeRiggedHint": "Finds legs in the picture so it can walk. Falls back if it cannot.",
           "modeHeadSwap": "Head only",
-          "modeHeadSwapHint": "Your picture as the head on the pet body. Animates fully."
+          "modeHeadSwapHint": "Your picture as the head on the pet body. Animates fully.",
+          "cropHint": "Drag a box around the character if the picture has more in it.",
+          "cropReset": "Use the whole picture",
+          "tolerance": "How much of the background to remove"
         }
       },
       "onboarding": {

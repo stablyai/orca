@@ -1,5 +1,6 @@
 import { assessCutout, type CutoutRejection } from './pet-cutout-quality'
-import { deriveCutout, type RgbaImage } from './pet-image-cutout'
+import { cropImage, type CropRect } from './pet-image-crop'
+import { BACKGROUND_TOLERANCE, deriveCutout, type RgbaImage } from './pet-image-cutout'
 import { petFloorY, resampleSubject } from './pet-image-resample'
 import { petRigFor } from './pet-rigs'
 import {
@@ -41,6 +42,11 @@ export type PetBuildMode = 'whole-body' | 'rigged' | 'head-swap'
 
 export type BuildPetOptions = {
   mode?: PetBuildMode
+  /** The region of the upload to build from. Framing the character is the one
+   *  thing the user knows that no corner flood-fill can work out. */
+  crop?: CropRect
+  /** Per-channel radius the background fill works to. See BACKGROUND_TOLERANCE. */
+  backgroundTolerance?: number
   /** The chosen pet's own artwork, needed only by `head-swap`. */
   petBody?: RgbaImage | null
 }
@@ -74,13 +80,17 @@ export function buildPetFromImage(
     return { ok: false, reason: 'unknown-style' }
   }
 
-  const { mask, source } = deriveCutout(image)
-  const verdict = assessCutout(mask, image.width, image.height, source)
+  const framed = options.crop ? cropImage(image, options.crop) : image
+  const { mask, source } = deriveCutout(
+    framed,
+    options.backgroundTolerance ?? BACKGROUND_TOLERANCE.default
+  )
+  const verdict = assessCutout(mask, framed.width, framed.height, source)
   if (!verdict.ok) {
     return { ok: false, reason: verdict.reason }
   }
 
-  const body = resampleSubject(image, mask, verdict.bounds, {
+  const body = resampleSubject(framed, mask, verdict.bounds, {
     frame: rig.frame,
     floorY: petFloorY(rig)
   })

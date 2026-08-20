@@ -47,7 +47,7 @@ const createGenerated = vi.hoisted(() => vi.fn())
 vi.mock('./pet-image-decode', () => ({
   decodeImageFile: async () => decoded.current,
   encodeSheetToWebp: async () => new ArrayBuffer(8),
-  sheetToDataUrl: async () => 'data:image/webp;base64,PREVIEW'
+  imageToDataUrl: async () => 'data:image/webp;base64,PREVIEW'
 }))
 
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
@@ -76,6 +76,25 @@ async function pickFile(): Promise<void> {
   })
   await act(async () => {
     input.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+}
+
+/** Drags a marquee across the crop surface, in surface-local coordinates. */
+async function dragCrop(
+  from: { x: number; y: number },
+  to: { x: number; y: number }
+): Promise<void> {
+  const surface = document.querySelector('[data-crop-surface]') as HTMLElement
+  surface.getBoundingClientRect = () =>
+    ({ left: 0, top: 0, width: 120, height: 120, right: 120, bottom: 120, x: 0, y: 0 }) as DOMRect
+  const at = (type: string, p: { x: number; y: number }): PointerEvent =>
+    new PointerEvent(type, { clientX: p.x, clientY: p.y, bubbles: true, pointerId: 1 })
+  await act(async () => {
+    surface.dispatchEvent(at('pointerdown', from))
+  })
+  await act(async () => {
+    surface.dispatchEvent(at('pointermove', to))
+    surface.dispatchEvent(at('pointerup', to))
   })
 }
 
@@ -188,5 +207,63 @@ describe('PetFromImageDialog', () => {
     })
 
     expect(bodyText().toLowerCase()).toMatch(/no legs|could not|whole body instead/)
+  })
+
+  it('starts with the whole picture in frame', async () => {
+    render()
+
+    await pickFile()
+
+    expect(document.querySelector('[data-crop]')?.getAttribute('data-crop')).toBe('none')
+  })
+
+  it('offers the framing controls even when the upload is refused', async () => {
+    decoded.current = noisyImage()
+    render()
+
+    await pickFile()
+
+    expect(document.querySelector('[data-crop-surface]')).not.toBeNull()
+    expect(document.querySelector('[data-tolerance]')).not.toBeNull()
+  })
+
+  it('rebuilds from the region the user frames', async () => {
+    render()
+
+    await pickFile()
+    await dragCrop({ x: 10, y: 10 }, { x: 40, y: 60 })
+
+    expect(document.querySelector('[data-crop]')?.getAttribute('data-crop')).not.toBe('none')
+  })
+
+  it('puts the whole picture back when framing is cleared', async () => {
+    render()
+
+    await pickFile()
+    await dragCrop({ x: 10, y: 10 }, { x: 40, y: 60 })
+    const reset = [...document.querySelectorAll('button')].find((b) =>
+      /whole picture/i.test(b.textContent ?? '')
+    ) as HTMLButtonElement
+    await act(async () => {
+      reset.click()
+    })
+
+    expect(document.querySelector('[data-crop]')?.getAttribute('data-crop')).toBe('none')
+  })
+
+  it('rebuilds when the background tolerance is widened', async () => {
+    render()
+
+    await pickFile()
+    const before = document.querySelector('[data-tolerance]')?.getAttribute('data-tolerance')
+    const thumb = document.querySelector('[data-slot="slider-thumb"]') as HTMLElement
+    await act(async () => {
+      thumb.focus()
+      thumb.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    })
+
+    expect(document.querySelector('[data-tolerance]')?.getAttribute('data-tolerance')).not.toBe(
+      before
+    )
   })
 })

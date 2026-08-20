@@ -50,8 +50,10 @@ export async function encodeSheetToWebp(sheet: RgbaImage): Promise<ArrayBuffer> 
   return blob.arrayBuffer()
 }
 
-export async function sheetToDataUrl(sheet: RgbaImage): Promise<string> {
-  const blob = await toCanvas(sheet).convertToBlob({ type: 'image/webp', quality: 1 })
+/** Any pixel buffer as a data URL — the generated sheet, or the upload the
+ *  user is framing. */
+export async function imageToDataUrl(image: RgbaImage): Promise<string> {
+  const blob = await toCanvas(image).convertToBlob({ type: 'image/webp', quality: 1 })
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = () => resolve(String(reader.result))

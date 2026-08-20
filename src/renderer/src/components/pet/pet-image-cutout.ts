@@ -14,16 +14,32 @@ export type Cutout = {
   source: CutoutSource
 }
 
+/** How far from a corner's colour a pixel may sit and still count as
+ *  background, as a per-channel radius. Exposed because no single value suits
+ *  both a flat studio backdrop and a gradient — the user can see which they
+ *  have, and the pipeline cannot. */
+export const BACKGROUND_TOLERANCE = {
+  min: 4,
+  max: 96,
+  default: 24
+} as const
+
 export const CUTOUT_TUNING = {
   /** Alpha below this counts as transparent. */
   alphaThreshold: 128,
   /** An image is treated as pre-cut once this share of it is transparent —
    *  below it, stray soft edges would be mistaken for a deliberate cutout. */
-  minTransparentShareForAlpha: 0.02,
-  /** Squared RGB distance a pixel may sit from a corner's colour and still be
-   *  flooded. Photo backgrounds are never perfectly flat. */
-  floodToleranceSq: 24 * 24 * 3
+  minTransparentShareForAlpha: 0.02
 } as const
+
+/** Turns a per-channel radius into the squared RGB distance the fill compares. */
+function floodToleranceSq(radius: number): number {
+  const clamped = Math.min(
+    BACKGROUND_TOLERANCE.max,
+    Math.max(BACKGROUND_TOLERANCE.min, Math.round(radius))
+  )
+  return clamped * clamped * 3
+}
 
 /** Separates subject from background without a segmentation model.
  *
@@ -32,7 +48,10 @@ export const CUTOUT_TUNING = {
  *  we have to guess do we flood inward from the corners, which works on flat
  *  backgrounds and gives up honestly on busy ones — leaving the quality gate to
  *  refuse the upload rather than producing a mangled pet. */
-export function deriveCutout(image: RgbaImage): Cutout {
+export function deriveCutout(
+  image: RgbaImage,
+  tolerance: number = BACKGROUND_TOLERANCE.default
+): Cutout {
   const { data, width, height } = image
   const pixels = width * height
   const mask = new Uint8Array(pixels)
@@ -50,16 +69,21 @@ export function deriveCutout(image: RgbaImage): Cutout {
   }
 
   mask.fill(255)
-  floodFromCorners(image, mask)
+  floodFromCorners(image, mask, floodToleranceSq(tolerance))
   return { mask, source: 'derived' }
 }
 
-function floodFromCorners(image: RgbaImage, mask: Uint8Array): void {
+function floodFromCorners(image: RgbaImage, mask: Uint8Array, toleranceSq: number): void {
   const { data, width, height } = image
   const corners = [0, width - 1, (height - 1) * width, height * width - 1]
   const seen = new Uint8Array(width * height)
 
   for (const corner of corners) {
+    // Why: a rejection belongs to the corner that made it. Sharing one visited
+    // set let the first corner's refusals stand for all of them, stranding
+    // background the others were well within tolerance of — and walling off
+    // whatever lay beyond it.
+    seen.fill(0)
     // Why: each corner floods against its own colour. A gradient or a busy photo
     // simply stops early instead of eating the subject.
     const target = [data[corner * 4], data[corner * 4 + 1], data[corner * 4 + 2]] as const
@@ -74,7 +98,7 @@ function floodFromCorners(image: RgbaImage, mask: Uint8Array): void {
       const dr = data[i] - target[0]
       const dg = data[i + 1] - target[1]
       const db = data[i + 2] - target[2]
-      if (dr * dr + dg * dg + db * db > CUTOUT_TUNING.floodToleranceSq) {
+      if (dr * dr + dg * dg + db * db > toleranceSq) {
         continue
       }
       mask[at] = 0

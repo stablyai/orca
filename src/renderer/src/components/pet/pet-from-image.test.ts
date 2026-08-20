@@ -4,7 +4,7 @@ import { blankImage } from './pet-raster-transform'
 import { SHEET_COLUMNS, SHEET_ROWS } from './pet-sheet-composer'
 import { BUNDLED_PET_RIGS } from './pet-rigs'
 import { GREMLIN_PET_ID, DEFAULT_PET_ID } from './pet-models'
-import type { RgbaImage } from './pet-image-cutout'
+import { BACKGROUND_TOLERANCE, type RgbaImage } from './pet-image-cutout'
 
 /** A character on transparent background: head over a wider body. */
 function uploadedCharacter(width = 60, height = 90): RgbaImage {
@@ -231,3 +231,167 @@ function countMatching(
   }
   return count
 }
+
+/** A busy left half that no corner fill can clear, and a clean right half with
+ *  a character on it — the exact case a manual crop exists to rescue. */
+function halfBusyPhoto(): RgbaImage {
+  const w = 80
+  const h = 80
+  const img = blankImage(w, h)
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4
+      const busy = x < 40
+      // Deterministic clutter, far outside the flood tolerance of its neighbours.
+      const noise = ((x * 37 + y * 91) % 5) * 60
+      img.data[i] = busy ? noise : 245
+      img.data[i + 1] = busy ? (noise + 80) % 256 : 245
+      img.data[i + 2] = busy ? (noise + 160) % 256 : 245
+      img.data[i + 3] = 255
+    }
+  }
+  for (let y = 12; y < 30; y++) {
+    for (let x = 54; x < 66; x++) {
+      const i = (y * w + x) * 4
+      img.data[i] = 30
+      img.data[i + 1] = 30
+      img.data[i + 2] = 30
+    }
+  }
+  for (let y = 30; y < 70; y++) {
+    for (let x = 48; x < 72; x++) {
+      const i = (y * w + x) * 4
+      img.data[i] = 30
+      img.data[i + 1] = 30
+      img.data[i + 2] = 30
+    }
+  }
+  return img
+}
+
+describe('buildPetFromImage crop', () => {
+  /** Colours in the sheet that are not the character's own flat 30/30/30. */
+  const clutterPixels = (sheet: RgbaImage): number => {
+    let count = 0
+    for (let p = 0; p < sheet.width * sheet.height; p++) {
+      const i = p * 4
+      if (sheet.data[i + 3] < 128) {
+        continue
+      }
+      if (sheet.data[i] !== 30 || sheet.data[i + 1] !== 30 || sheet.data[i + 2] !== 30) {
+        count++
+      }
+    }
+    return count
+  }
+
+  it('builds the pet out of the clutter when it is left in frame', () => {
+    const result = buildPetFromImage(halfBusyPhoto(), DEFAULT_PET_ID)
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(clutterPixels(result.sheet)).toBeGreaterThan(0)
+    }
+  })
+
+  it('builds the pet out of the character alone once the user frames it', () => {
+    const result = buildPetFromImage(halfBusyPhoto(), DEFAULT_PET_ID, {
+      crop: { x: 42, y: 4, width: 36, height: 72 }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(clutterPixels(result.sheet)).toBe(0)
+    }
+  })
+
+  it('ignores a crop that covers the whole image', () => {
+    const plain = uploadedCharacter()
+    const cropped = buildPetFromImage(plain, DEFAULT_PET_ID, {
+      crop: { x: 0, y: 0, width: plain.width, height: plain.height }
+    })
+
+    expect(cropped).toEqual(buildPetFromImage(plain, DEFAULT_PET_ID))
+  })
+})
+
+/** A steep grey gradient behind a flat character: each corner fill stops well
+ *  short of the middle, leaving a band of background stuck to the subject. */
+function gradientBackdrop(): RgbaImage {
+  const w = 80
+  const h = 80
+  const img = blankImage(w, h)
+  for (let y = 0; y < h; y++) {
+    const shade = 100 + Math.round((y * 155) / (h - 1))
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4
+      img.data[i] = shade
+      img.data[i + 1] = shade
+      img.data[i + 2] = shade
+      img.data[i + 3] = 255
+    }
+  }
+  // Far enough from both corner colours to survive a fill wide enough to span
+  // the whole gradient — otherwise no tolerance could ever rescue this image.
+  // A silhouette, not a slab: the quality gate refuses plain rectangles.
+  const paint = (x0: number, x1: number, y0: number, y1: number): void => {
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0; x < x1; x++) {
+        const i = (y * w + x) * 4
+        img.data[i] = 255
+        img.data[i + 1] = 60
+        img.data[i + 2] = 60
+      }
+    }
+  }
+  paint(35, 45, 22, 36)
+  paint(30, 50, 36, 54)
+  paint(33, 38, 54, 66)
+  paint(42, 47, 54, 66)
+  return img
+}
+
+describe('buildPetFromImage background tolerance', () => {
+  /** The backdrop is grey; the character never is. */
+  const greyPixels = (sheet: RgbaImage): number => {
+    let count = 0
+    for (let p = 0; p < sheet.width * sheet.height; p++) {
+      const i = p * 4
+      if (
+        sheet.data[i + 3] >= 128 &&
+        sheet.data[i] === sheet.data[i + 1] &&
+        sheet.data[i + 1] === sheet.data[i + 2]
+      ) {
+        count++
+      }
+    }
+    return count
+  }
+
+  it('refuses a gradient backdrop no corner fill can reach across', () => {
+    const result = buildPetFromImage(gradientBackdrop(), DEFAULT_PET_ID)
+
+    expect(result.ok).toBe(false)
+  })
+
+  it('clears the gradient once the user widens the tolerance', () => {
+    const result = buildPetFromImage(gradientBackdrop(), DEFAULT_PET_ID, {
+      backgroundTolerance: 80
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(greyPixels(result.sheet)).toBe(0)
+    }
+  })
+
+  it('matches the untouched pipeline at the default tolerance', () => {
+    const plain = uploadedCharacter()
+
+    expect(
+      buildPetFromImage(plain, DEFAULT_PET_ID, {
+        backgroundTolerance: BACKGROUND_TOLERANCE.default
+      })
+    ).toEqual(buildPetFromImage(plain, DEFAULT_PET_ID))
+  })
+})

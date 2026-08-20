@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { deriveCutout, type RgbaImage } from './pet-image-cutout'
 import { assessCutout } from './pet-cutout-quality'
+import { blankImage } from './pet-raster-transform'
 
 const W = 20
 const H = 20
@@ -106,5 +107,33 @@ describe('deriveCutout', () => {
       ok: false,
       reason: 'no-character-shape'
     })
+  })
+})
+
+describe('deriveCutout corner independence', () => {
+  /** Three flat bands: the top corners' colour, a middle stripe only the bottom
+   *  corners are close to, and the bottom corners' colour. */
+  function bandedBackground(): RgbaImage {
+    const img = blankImage(8, 8)
+    for (let y = 0; y < 8; y++) {
+      const shade = y < 3 ? 100 : y === 3 ? 200 : 210
+      for (let x = 0; x < 8; x++) {
+        const i = (y * 8 + x) * 4
+        img.data[i] = shade
+        img.data[i + 1] = shade
+        img.data[i + 2] = shade
+        img.data[i + 3] = 255
+      }
+    }
+    return img
+  }
+
+  it('lets a later corner clear a stripe an earlier one rejected', () => {
+    // The top fill rejects the stripe, but the bottom fill sits ten steps away
+    // from it. Sharing one visited set let the rejection stand for good, and
+    // stranded background in the middle of the image reads as a subject.
+    const { mask } = deriveCutout(bandedBackground())
+
+    expect(Array.from(mask.slice(3 * 8, 4 * 8))).toEqual(Array.from({ length: 8 }, () => 0))
   })
 })
