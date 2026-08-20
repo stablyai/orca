@@ -66,6 +66,27 @@ function trimSurroundingSlashes(value) {
   return value[0] === '/' || value.endsWith('/') ? value.replace(/^\/|\/$/g, '') : value
 }
 
+/** Undoes git's C-style quoting on the path halves of a diff header.
+ *
+ *  Git quotes a pathname as soon as it holds a character it must escape, and a
+ *  Windows scratch directory is nothing but backslashes — so on Windows every
+ *  header arrives quoted, with its separators doubled, and the forward-slash
+ *  prefix stripping below never matched it. Only the header, `---` and `+++`
+ *  lines are rewritten, so a quote inside the diff body is left alone.
+ */
+function unquoteDiffPaths(stdout) {
+  return stdout.replace(
+    /^(diff --git |--- |\+\+\+ )(.*)$/gm,
+    (_line, prefix, rest) =>
+      prefix +
+      // Unescape before folding separators: `\\` is one literal backslash, and
+      // only then does it become the `/` the stripping below expects.
+      rest.replace(/"((?:[^"\\]|\\.)*)"/g, (_quoted, inner) =>
+        inner.replace(/\\(.)/g, '$1').replace(/\\/g, '/')
+      )
+  )
+}
+
 /**
  * Reproduces pnpm's post-processing of the raw `git diff` output: strip the two
  * scratch folder prefixes, drop a trailing no-newline marker, and remove
@@ -74,7 +95,7 @@ function trimSurroundingSlashes(value) {
 export function normalizePnpmDiff(stdout, folderA, folderB) {
   const a = folderA.replace(/\\/g, '/')
   const b = folderB.replace(/\\/g, '/')
-  return stdout
+  return unquoteDiffPaths(stdout)
     .replace(new RegExp(`(a|b)(${escapeRegExp(`/${trimSurroundingSlashes(a)}/`)})`, 'g'), '$1/')
     .replace(new RegExp(`(a|b)${escapeRegExp(`/${trimSurroundingSlashes(b)}/`)}`, 'g'), '$1/')
     .replace(new RegExp(escapeRegExp(`${a}/`), 'g'), '')
@@ -216,7 +237,10 @@ export function patchHash(patchText) {
 
 function lockfilePatchHashPattern(packageKey) {
   // Unscoped keys such as `node-pty@1.1.0` are emitted unquoted.
-  return new RegExp(`(^  '?${escapeRegExp(packageKey)}'?:\\n    hash: )([0-9a-f]{64})$`, 'm')
+  // Why `\r?\n`: a Windows checkout with autocrlf leaves CRLF in the lockfile,
+  // and a bare `\n` then matches nothing — the script reported the entry as
+  // missing rather than reading the hash sitting right there.
+  return new RegExp(`(^  '?${escapeRegExp(packageKey)}'?:\\r?\\n    hash: )([0-9a-f]{64})$`, 'm')
 }
 
 export function readLockfilePatchHash(lockfileText, packageKey) {
