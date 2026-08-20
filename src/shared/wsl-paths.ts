@@ -72,7 +72,11 @@ export function toWindowsWslPath(linuxPath: string, distro: string): string {
  *
  * Why not toWindowsWslPath: its /mnt/<drive> branch emits a drive-letter path,
  * which the workspace-mirroring heuristic reads as desktop-local and discards —
- * the very bug this resolves. drvfs bases stay on the distro UNC view instead.
+ * the very bug this resolves. drvfs bases stay on the distro UNC view instead,
+ * deliberately trading Windows-side throughput for a distro-addressable path
+ * that keeps terminals inside WSL. The single-leading-slash guard is also
+ * deliberate: multi-slash (//x) and backslash-rooted spellings are ambiguous
+ * with Windows UNC and drive-relative forms and keep their old behavior.
  * Dot segments collapse here because ownership layouts compare paths without
  * resolving them, so creation and classification must see the same spelling.
  */

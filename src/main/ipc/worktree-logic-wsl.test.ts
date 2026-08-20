@@ -18,6 +18,11 @@ import {
   computeWorktreePathAsync,
   getWorktreePathSettings
 } from './worktree-logic'
+import {
+  buildKnownOrcaWorkspaceLayouts,
+  classifyWorktreeOwnership
+} from '../../shared/worktree/ownership'
+import type { Repo } from '../../shared/repo-types'
 
 describe('computeWorktreePath WSL layout', () => {
   beforeEach(() => {
@@ -137,6 +142,44 @@ describe('computeWorktreePath WSL layout', () => {
         getWorktreePathSettings(repo, { nestWorkspaces: false, workspaceDir: 'C:\\workspaces' })
       )
     ).toBe('\\\\wsl.localhost\\Ubuntu\\home\\jin\\orca\\workspaces\\feature')
+  })
+
+  it('classifies whatever creation produces for Linux bases, dotted or not', () => {
+    parseWslPathMock.mockReturnValue({
+      distro: 'Ubuntu',
+      linuxPath: '/home/jin/src/repo'
+    })
+    getWslHomeMock.mockReturnValue('\\\\wsl.localhost\\Ubuntu\\home\\jin')
+    const settings = { nestWorkspaces: true, workspaceDir: 'C:\\workspaces' }
+    for (const worktreeBasePath of ['/home/jin/trees', '/home/jin/src/../trees', '/mnt/d/trees']) {
+      const repo = {
+        id: 'r1',
+        path: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo',
+        displayName: 'repo',
+        badgeColor: '#000',
+        addedAt: 0,
+        kind: 'git',
+        worktreeBasePath
+      } as Repo
+      // Why: the resolver exists so these two layers agree; assert the
+      // invariant directly instead of two hardcoded strings that happen to match.
+      const createdPath = computeWorktreePath(
+        'feature',
+        repo.path,
+        getWorktreePathSettings(repo, settings)
+      )
+      expect(
+        classifyWorktreeOwnership({
+          repo,
+          settings: { ...settings, workspaceDirHistory: [] },
+          worktree: { path: createdPath, isMainWorktree: false },
+          knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(
+            { ...settings, workspaceDirHistory: [] },
+            repo
+          )
+        })
+      ).toBe('external')
+    }
   })
 
   it('resolves the Linux repo base path identically through the async twin', async () => {
