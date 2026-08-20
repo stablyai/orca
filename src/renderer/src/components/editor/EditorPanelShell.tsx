@@ -134,8 +134,9 @@ export function EditorPanelShell({
           createMarkdownArtifactRequest={createMarkdownArtifactRequest}
         />
       )}
-      <Suspense fallback={<EditorLoadingFallback />}>
-        <EditorContent
+      <div className="editor-content-pane min-h-0 flex-1">
+        <Suspense fallback={<EditorLoadingFallback />}>
+          <EditorContent
           activeFile={activeFile}
           viewStateScopeId={activeViewStateId ?? activeFile.id}
           fileContents={fileContents}
@@ -162,9 +163,10 @@ export function EditorPanelShell({
           showMarkdownTableOfContents={showMarkdownTableOfContents}
           showMarkdownFrontmatter={markdownFrontmatterVisible}
           onCloseMarkdownTableOfContents={onCloseMarkdownTableOfContents}
-          markdownAnnotationsEnabled={markdownAnnotationsEnabled}
-        />
-      </Suspense>
+            markdownAnnotationsEnabled={markdownAnnotationsEnabled}
+          />
+        </Suspense>
+      </div>
       <UntitledFileRenameDialog
         open={renameDialogFile !== null}
         currentName={renameDialogFile?.relativePath ?? ''}
