@@ -24,6 +24,7 @@ const PROVIDER_SESSION_ID = 'e2e-missing-legacy-worker'
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-missing-legacy-worker-'))
 const spawnLedgerPath = path.join(fakeCliDir, 'spawn.jsonl')
 const interruptionLedgerPath = path.join(fakeCliDir, 'interruption.jsonl')
+const fakeCodexCommand = path.join(fakeCliDir, process.platform === 'win32' ? 'codex.cmd' : 'codex')
 const fakeCodexSource = `
 const { appendFileSync } = require('node:fs')
 function appendLedger(envName, event) {
@@ -40,16 +41,23 @@ if (process.argv.slice(2).includes('app-server')) {
 appendLedger('ORCA_E2E_SPAWN_LEDGER', { event: 'spawn' })
 process.stdout.write('\\u001b]0;Codex Ready\\u0007OpenAI Codex\\nmodel: e2e\\ndirectory: e2e\\n')
 let acknowledged = false
+let pasteEnded = false
 process.stdin.on('data', (chunk) => {
   const input = chunk.toString()
+  if (input.includes('\\x1b[201~')) {
+    pasteEnded = true
+    process.stdout.write('\\x1b[?25h')
+  }
   if (input.includes('\\x03')) {
     appendLedger('ORCA_E2E_INTERRUPTION_LEDGER', { event: 'stdin-ctrl-c' })
   }
-  if (!acknowledged && input.includes('\\r')) {
+  if (!acknowledged && pasteEnded && input.includes('\\r')) {
     acknowledged = true
-    process.stdout.write('ACK\\n')
+    process.stdout.write('\\u001b]0;Codex Working\\u0007ACK\\n')
+    setTimeout(() => process.stdout.write('\\u001b]0;Codex Ready\\u0007'), 10)
   }
 })
+process.stdin.setRawMode?.(true)
 for (const signal of ['SIGINT', 'SIGHUP', 'SIGTERM']) {
   process.on(signal, () => {
     appendLedger('ORCA_E2E_INTERRUPTION_LEDGER', { event: 'signal', signal })
@@ -200,6 +208,11 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
     firstApp = first.app
     const worktreeId = await attachRepoAndOpenTerminal(first.page, repoPath)
     await waitForSessionReady(first.page)
+    await first.page.evaluate(async (agentCommand) => {
+      await window.__store?.getState().updateSettings({
+        agentCmdOverrides: { codex: agentCommand }
+      })
+    }, fakeCodexCommand)
     await ensureTerminalVisible(first.page)
     await getActiveTabId(first.page)
     await waitForActivePanePtyId(first.page)

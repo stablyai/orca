@@ -31,6 +31,7 @@ const spawnLedgerPath = path.join(fakeCliDir, 'spawn.jsonl')
 const interruptionLedgerPath = path.join(fakeCliDir, 'interruption.jsonl')
 const authorityLedgerPath = path.join(fakeCliDir, 'authority.jsonl')
 const lifecycleLedgerPath = path.join(fakeCliDir, 'lifecycle.jsonl')
+const fakeCodexCommand = path.join(fakeCliDir, process.platform === 'win32' ? 'codex.cmd' : 'codex')
 const fakeCodexSource = `
 const { appendFileSync } = require('node:fs')
 const { spawnSync } = require('node:child_process')
@@ -83,14 +84,20 @@ process.stdout.write('\\u001b]0;Codex Ready\\u0007OpenAI Codex\\nmodel: e2e\\ndi
 void emitAuthorityHook()
 let acknowledged = false
 let lifecycleSent = false
+let pasteEnded = false
 process.stdin.on('data', (chunk) => {
   const input = chunk.toString()
+  if (input.includes('\\x1b[201~')) {
+    pasteEnded = true
+    process.stdout.write('\\x1b[?25h')
+  }
   if (input.includes('\\x03')) {
     appendLedger('ORCA_E2E_INTERRUPTION_LEDGER', { event: 'stdin-ctrl-c' })
   }
-  if (!acknowledged && input.includes('\\r')) {
+  if (!acknowledged && pasteEnded && input.includes('\\r')) {
     acknowledged = true
-    process.stdout.write('ACK\\n')
+    process.stdout.write('\\u001b]0;Codex Working\\u0007ACK\\n')
+    setTimeout(() => process.stdout.write('\\u001b]0;Codex Ready\\u0007'), 10)
   }
   const legacyCompletion = input.match(/ORCA_E2E_RUN_LEGACY_DONE:([A-Za-z0-9+/=]+)/)
   if (!lifecycleSent && legacyCompletion) {
@@ -132,6 +139,7 @@ process.stdin.on('data', (chunk) => {
     process.stdout.write(String(result.stdout || '') + String(result.stderr || ''))
   }
 })
+process.stdin.setRawMode?.(true)
 for (const signal of ['SIGINT', 'SIGHUP', 'SIGTERM']) {
   process.on(signal, () => {
     appendLedger('ORCA_E2E_INTERRUPTION_LEDGER', { event: 'signal', signal })
@@ -414,6 +422,11 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
       firstApp = first.app
       const worktreeId = await attachRepoAndOpenTerminal(first.page, repoPath)
       await waitForSessionReady(first.page)
+      await first.page.evaluate(async (agentCommand) => {
+        await window.__store?.getState().updateSettings({
+          agentCmdOverrides: { codex: agentCommand }
+        })
+      }, fakeCodexCommand)
       await ensureTerminalVisible(first.page)
       const coordinatorTabId = await getActiveTabId(first.page)
       expect(coordinatorTabId).toBeTruthy()

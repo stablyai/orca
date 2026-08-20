@@ -19,6 +19,10 @@ import type {
 
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-retired-worker-'))
 const lifecycleLedgerPath = path.join(fakeCliDir, 'codex-lifecycle.jsonl')
+export const completedWorkerFakeCodexCommand = path.join(
+  fakeCliDir,
+  process.platform === 'win32' ? 'codex.cmd' : 'codex'
+)
 const fakeCodexSource = `
 const { appendFileSync } = require('node:fs')
 const ledger = process.env.ORCA_E2E_CODEX_LIFECYCLE_LEDGER
@@ -30,15 +34,24 @@ if (args.includes('app-server')) {
 }
 append({ event: 'spawn', args })
 process.stdout.write('\\u001b]0;Codex Ready\\u0007OpenAI Codex\\nmodel: e2e\\ndirectory: e2e\\n')
+let pasteEnded = false
 process.stdin.on('data', (chunk) => {
   const input = chunk.toString()
+  if (input.includes('\\x1b[201~')) {
+    pasteEnded = true
+    process.stdout.write('\\x1b[?25h')
+  }
   append({ event: 'input', input })
   if (input.includes('ORCA_E2E_EXIT_AFTER_DONE')) {
     append({ event: 'normal-exit' })
     process.exit(0)
   }
-  if (input.includes('\\r')) process.stdout.write('ACK\\n')
+  if (pasteEnded && input.includes('\\r')) {
+    process.stdout.write('\\u001b]0;Codex Working\\u0007ACK\\n')
+    setTimeout(() => process.stdout.write('\\u001b]0;Codex Ready\\u0007'), 10)
+  }
 })
+process.stdin.setRawMode?.(true)
 process.stdin.resume()
 setInterval(() => {}, 60_000)
 `
