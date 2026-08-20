@@ -510,6 +510,29 @@ describe('model discovery parsers', () => {
     ])
   })
 
+  it('drops non-string and whitespace-only OMP model fields instead of exposing them', () => {
+    const stdout = JSON.stringify({
+      models: [
+        { selector: 42, name: 'Numeric selector' },
+        { selector: 'openrouter/ok', name: true },
+        { selector: '   ', name: 'Blank selector' },
+        { selector: 'openrouter/blank-name', name: '\t\n' },
+        { selector: ' openrouter/trimmed ', name: ' Trimmed Name ' },
+        { selector: 'openrouter/think', name: 'Thinky', thinking: [1, '  ', 'low'] }
+      ]
+    })
+
+    expect(parseOmpModels(stdout)).toEqual([
+      { id: 'openrouter/trimmed', label: 'Trimmed Name' },
+      {
+        id: 'openrouter/think',
+        label: 'Thinky',
+        thinkingLevels: [{ id: 'low', label: 'Low' }],
+        defaultThinkingLevel: 'low'
+      }
+    ])
+  })
+
   it('returns no OMP models on malformed JSON so the seed stays', () => {
     expect(parseOmpModels('not json')).toEqual([])
     expect(parseOmpModels('{"models":[{"id":"no-selector"}]}')).toEqual([])
@@ -642,6 +665,7 @@ describe('buildArgs (OMP)', () => {
       '--no-tools',
       '--no-extensions',
       '--no-skills',
+      '--no-rules',
       '--mode',
       'text'
     ])

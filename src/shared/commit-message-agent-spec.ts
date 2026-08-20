@@ -212,19 +212,21 @@ export function parseOmpModels(stdout: string): CommitMessageModel[] {
     assertJsonTextStructureWithinLimits(stdout, COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS)
     const parsed = JSON.parse(stdout) as {
       models?: {
-        selector?: string
-        name?: string
+        selector?: unknown
+        name?: unknown
         thinking?: unknown
       }[]
     }
     return uniqueModels(
       (parsed.models ?? [])
-        .filter((model) => model.selector && model.name)
         .map((model) => ({
-          id: model.selector!,
-          label: model.name!,
+          // Why: validate and trim before use — a truthy non-string or
+          // whitespace-only field must not become a selectable model id.
+          id: typeof model.selector === 'string' ? model.selector.trim() : '',
+          label: typeof model.name === 'string' ? model.name.trim() : '',
           ...withOmpThinkingLevels(model.thinking)
         }))
+        .filter((model) => model.id.length > 0 && model.label.length > 0)
     )
   } catch {
     return []
@@ -238,7 +240,8 @@ function withOmpThinkingLevels(
     return {}
   }
   const thinkingLevels = thinking
-    .filter((level): level is string => typeof level === 'string' && level.trim().length > 0)
+    .map((level) => (typeof level === 'string' ? level.trim() : ''))
+    .filter((level) => level.length > 0)
     .map((level) => ({
       id: level,
       label: level === 'xhigh' ? 'Extra High' : labelFromModelId(level)
@@ -577,6 +580,9 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
       '--no-tools',
       '--no-extensions',
       '--no-skills',
+      // Why: rules are workspace files the model would otherwise read and
+      // follow; keep the headless generation spawn free of workspace rules.
+      '--no-rules',
       '--mode',
       'text',
       // Why: omitting --model lets OMP run with its own configured default,
