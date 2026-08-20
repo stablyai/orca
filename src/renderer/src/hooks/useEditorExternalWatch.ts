@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- co-locates target diffing, fs:changed dispatch, tombstone coalescing, and rename correlation so the event-to-store contract stays in one file. */
 import { useEffect, useRef } from 'react'
 import { useAppStore, type AppState } from '@/store'
-import { basename, joinPath } from '@/lib/path'
+import { basename, dirname, joinPath } from '@/lib/path'
 import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison
@@ -173,6 +173,95 @@ export function getWatchedTargetKey(target: WatchedTarget): string {
   return `${target.worktreeId}::${target.worktreePath}::${target.connectionId ?? 'local'}::${target.runtimeEnvironmentId ?? 'client'}::${target.allowLocalWindowsWslAliases === true ? 'wsl-aliases' : 'literal'}`
 }
 
+/** Bound on out-of-root directory watches so a pathological tab set cannot fan out watchers (#15612). */
+const MAX_OUT_OF_ROOT_DIR_TARGETS = 8
+
+function normalizedPathIsInsideOrEqual(root: string, value: string): boolean {
+  const normalizedRoot = normalizeRuntimePathForComparison(root)
+  const normalizedValue = normalizeRuntimePathForComparison(value)
+  const boundedRoot = normalizedRoot.endsWith('/') ? normalizedRoot : `${normalizedRoot}/`
+  return normalizedValue === normalizedRoot || normalizedValue.startsWith(boundedRoot)
+}
+
+function isWatchableOpenFilePath(filePath: string): boolean {
+  return filePath.includes('/') || filePath.includes('\\')
+}
+
+/**
+ * Directory-scoped watch targets for open files that live OUTSIDE every watched
+ * root (#15612) — agent scratchpads by design sit outside the worktree, and
+ * without a watch they never reload and never show the changed-on-disk banner.
+ *
+ * One target per distinct containing directory, per owner. Directories that
+ * CONTAIN the watched root are skipped: the watch is recursive, so a parent
+ * directory would re-watch the whole root's tree plus every sibling — a file
+ * next to the repo would otherwise fan out a drive-wide watcher. Files owned
+ * by a different SSH target (`externalSshTargetId`) are skipped too: their
+ * path lives on a host this worktree's connection cannot watch.
+ */
+function collectOutOfRootWatchTargets(
+  state: Pick<EditorExternalWatchTargetState, 'openFiles'>,
+  scope: {
+    worktreeId: string
+    rootPath: string
+    runtimeEnvironmentId: string | null
+    connectionId: string | null | undefined
+    worktree: AppState['worktreesByRepo'][string][number] | undefined
+    repo: AppState['repos'][number] | undefined
+    folderWorkspace: AppState['folderWorkspaces'][number] | undefined
+    projectGroup: AppState['projectGroups'][number] | undefined
+  }
+): WatchedTarget[] {
+  const seenDirectories = new Set<string>()
+  const targets: WatchedTarget[] = []
+  for (const file of state.openFiles) {
+    if (
+      file.worktreeId !== scope.worktreeId ||
+      openFileRuntimeOwner(file) !== scope.runtimeEnvironmentId ||
+      (file.mode !== 'edit' && file.mode !== 'markdown-preview') ||
+      file.isUntitled ||
+      file.externalSshTargetId ||
+      !isWatchableOpenFilePath(file.filePath)
+    ) {
+      continue
+    }
+    if (normalizedPathIsInsideOrEqual(scope.rootPath, file.filePath)) {
+      continue
+    }
+    const directory = dirname(file.filePath)
+    const directoryKey = normalizeRuntimePathForComparison(directory)
+    if (
+      seenDirectories.has(directoryKey) ||
+      // Why: a containing directory is a superset of the root watch — recursive and potentially drive-wide.
+      normalizedPathIsInsideOrEqual(directory, scope.rootPath)
+    ) {
+      continue
+    }
+    seenDirectories.add(directoryKey)
+    if (seenDirectories.size > MAX_OUT_OF_ROOT_DIR_TARGETS) {
+      break
+    }
+    targets.push({
+      worktreeId: scope.worktreeId,
+      worktreePath: directory,
+      connectionId: scope.connectionId ?? undefined,
+      runtimeEnvironmentId: scope.runtimeEnvironmentId,
+      ...(canWatchLocalWindowsWslAliases({
+        worktreePath: directory,
+        runtimeEnvironmentId: scope.runtimeEnvironmentId,
+        connectionId: scope.connectionId,
+        worktree: scope.worktree,
+        repo: scope.repo,
+        folderWorkspace: scope.folderWorkspace,
+        projectGroup: scope.projectGroup
+      })
+        ? { allowLocalWindowsWslAliases: true as const }
+        : {})
+    })
+  }
+  return targets
+}
+
 function openFileRuntimeOwner(file: Pick<OpenFile, 'runtimeEnvironmentId'>): string | null {
   return file.runtimeEnvironmentId?.trim() || null
 }
@@ -304,6 +393,19 @@ export function getEditorExternalWatchTargets(
       }
       nextTargets.push(target)
       parts.push(getWatchedTargetKey(target))
+      for (const dirTarget of collectOutOfRootWatchTargets(state, {
+        worktreeId: id,
+        rootPath: wt?.path ?? folderWorkspace!.folderPath,
+        runtimeEnvironmentId: owner,
+        connectionId: connectionId ?? undefined,
+        worktree: wt,
+        repo,
+        folderWorkspace,
+        projectGroup
+      })) {
+        nextTargets.push(dirTarget)
+        parts.push(getWatchedTargetKey(dirTarget))
+      }
     }
   }
 
