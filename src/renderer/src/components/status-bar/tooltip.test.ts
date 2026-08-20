@@ -664,6 +664,40 @@ describe('ProviderPanel pace', () => {
     expect(markup).toContain('31% in deficit')
   })
 
+  it.each(PROVIDER_IDS)('paces %s off the same budget, with no per-provider gate', (providerId) => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 6, 4, 15, 0))
+    const p = provider({ provider: providerId, status: 'ok', weekly: weeklyProvider(10, 2).weekly })
+
+    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+
+    expect(markup).toContain('data-usage-pace="reserve"')
+    expect(markup).toContain('19% in reserve')
+  })
+
+  it('paces per-model buckets, not just the named session and weekly windows', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 6, 4, 15, 0))
+    const p = provider({
+      provider: 'gemini',
+      status: 'ok',
+      buckets: [
+        {
+          name: 'Pro',
+          usedPercent: 10,
+          windowMinutes: 60,
+          resetsAt: Date.now() + 45 * 60_000,
+          resetDescription: null
+        }
+      ]
+    })
+
+    const markup = renderToStaticMarkup(ProviderPanel({ p }))
+
+    // A quarter into the hour against 10% spent leaves 15 points of headroom.
+    expect(markup).toContain('15% in reserve')
+  })
+
   it('honors a host-supplied clock so the panel can tick without a re-fetch', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 6, 4, 15, 0))
