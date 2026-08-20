@@ -264,4 +264,34 @@ describe('registerPetHandlers', () => {
     const entries = await readdir(customDir).catch(() => [])
     expect(entries).toEqual([])
   })
+
+  it('imports an image whose bytes match its name', async () => {
+    const src = join(tempDir, 'real.png')
+    await writeFile(src, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]))
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: [src] })
+
+    const result = (await getHandler('pet:import')({ sender: {} })) as CustomPet
+
+    expect(result).toMatchObject({ label: 'real', mimeType: 'image/png', kind: 'image' })
+  })
+
+  it('refuses a file that is only named like an image', async () => {
+    // Extension-only validation let anything through under a .png name.
+    const src = join(tempDir, 'not-really.png')
+    await writeFile(src, Buffer.from('MZ   this is an executable', 'latin1'))
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: [src] })
+
+    await expect(getHandler('pet:import')({ sender: {} })).rejects.toThrow(/image/i)
+  })
+
+  it('leaves nothing on disk when the bytes are refused', async () => {
+    const src = join(tempDir, 'liar.png')
+    await writeFile(src, Buffer.from('not an image at all'))
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: [src] })
+
+    await expect(getHandler('pet:import')({ sender: {} })).rejects.toThrow()
+
+    const entries = await readdir(join(userDataDir, 'sidekicks', 'custom')).catch(() => [])
+    expect(entries).toEqual([])
+  })
 })

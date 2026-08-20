@@ -1,5 +1,5 @@
 import { BrowserWindow, dialog, ipcMain } from 'electron'
-import { copyFile, mkdir, readFile, rm, stat } from 'node:fs/promises'
+import { copyFile, mkdir, open, readFile, rm, stat } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { basename, extname, join, normalize, sep } from 'node:path'
 import { z } from 'zod'
@@ -7,6 +7,7 @@ import type { CustomPet } from '../../shared/pet-types'
 import { importPetBundle } from './pet-bundle-import'
 import { writeGeneratedPet, type GeneratedPetRequest } from './pet-generated-write'
 import { classifyFile } from './pet-image-formats'
+import { signatureMatchesExtension, SIGNATURE_BYTES } from './pet-image-signature'
 import { MAX_BYTES } from './pet-import-size-limits'
 import { getPetsDir, isSafeId, resolvePetFile } from './pet-storage-paths'
 
@@ -56,6 +57,26 @@ export function registerPetHandlers(): void {
       throw new Error(
         `File is too large (${(srcStat.size / (1024 * 1024)).toFixed(1)} MB). Max is ${MAX_BYTES / (1024 * 1024)} MB.`
       )
+    }
+
+    // Why: the extension is a claim, not evidence. Reading the first bytes is
+    // what tells us the file is the image it says it is — a renamed executable
+    // used to be copied into the pets directory unchallenged.
+    let head: Buffer
+    try {
+      const handle = await open(src, 'r')
+      try {
+        head = Buffer.alloc(SIGNATURE_BYTES)
+        const { bytesRead } = await handle.read(head, 0, SIGNATURE_BYTES, 0)
+        head = head.subarray(0, bytesRead)
+      } finally {
+        await handle.close()
+      }
+    } catch {
+      throw new Error('Could not read the selected file.')
+    }
+    if (!signatureMatchesExtension(head, classified.mimeType)) {
+      throw new Error('That file is not the image its name claims to be.')
     }
 
     const dir = getPetsDir()
