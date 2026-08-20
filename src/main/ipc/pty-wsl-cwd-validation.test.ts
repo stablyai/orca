@@ -354,7 +354,10 @@ describe('registerPtyHandlers', () => {
       })
       expect(shell).toBe('/bin/zsh')
       expect(args).toEqual(['-l'])
-      expect(options.env.ZDOTDIR).toBe(join(getShellReadyWrapperRoot(), 'zsh'))
+      // Why a forward slash and not join(): the wrapper scripts carry
+      // `*/shell-ready/zsh` globs as their own self-reference guard, so
+      // production spells this suffix that way on every platform on purpose.
+      expect(options.env.ZDOTDIR).toBe(`${getShellReadyWrapperRoot()}/zsh`)
       // Why absent: this HOME holds no zsh startup file, so there is no user
       // config dir to hand back and Orca must not invent one — the wrapper
       // leaves ZDOTDIR unset, exactly as an unwrapped login zsh would.
