@@ -43,7 +43,7 @@ describe('custom app appearance styles', () => {
 
   it('isolates hosted editors from an opposite App Appearance scheme', () => {
     expect(mainCss).toMatch(
-      /data-app-appearance[^}]*:is\([^)]*\.markdown-preview-shell[^)]*\.rich-markdown-editor-layout[^)]*\.rich-markdown-link-bubble[^)]*\.rich-markdown-editor-portal[^)]*\)[^{]*\{[^}]*--primary: var\(--orca-editor-base-primary\);[^}]*--popover: var\(--orca-editor-base-popover\);[^}]*--editor-surface: var\(--orca-editor-base-editor-surface\)/s
+      /data-app-appearance[^}]*:is\([^)]*\.editor-content-pane[^)]*\.markdown-preview-shell[^)]*\.rich-markdown-editor-layout[^)]*\.rich-markdown-link-bubble[^)]*\.rich-markdown-editor-portal[^)]*\)[^{]*\{[^}]*--primary: var\(--orca-editor-base-primary\);[^}]*--popover: var\(--orca-editor-base-popover\);[^}]*--editor-surface: var\(--orca-editor-base-editor-surface\)/s
     )
     expect(richMarkdownCss).not.toContain('.dark .rich-markdown')
     expect(richMarkdownCss).toContain('.orca-editor-dark .rich-markdown')
