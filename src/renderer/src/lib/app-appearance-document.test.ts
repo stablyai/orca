@@ -113,7 +113,7 @@ describe('applyAppAppearanceToDocument', () => {
     const style = document.createElement('style')
     style.textContent = `
       :root[data-app-appearance]
-        :is(.rich-markdown-editor-layout, .markdown-preview-shell, .rich-markdown-link-bubble) {
+        :is(.editor-content-pane, .rich-markdown-editor-layout, .markdown-preview-shell, .rich-markdown-link-bubble) {
         --background: var(--orca-editor-base-background);
         --foreground: var(--orca-editor-base-foreground);
         --primary: var(--orca-editor-base-primary);
@@ -136,13 +136,15 @@ describe('applyAppAppearanceToDocument', () => {
       true,
       root
     )
+    const sourceEditor = document.createElement('div')
+    sourceEditor.className = 'editor-content-pane'
     const editor = document.createElement('div')
     editor.className = 'rich-markdown-editor-layout'
     const preview = document.createElement('div')
     preview.className = 'markdown-preview-shell'
     const linkBubble = document.createElement('div')
     linkBubble.className = 'rich-markdown-link-bubble'
-    document.body.append(editor, preview, linkBubble)
+    document.body.append(sourceEditor, editor, preview, linkBubble)
 
     expect(root.classList.contains('light')).toBe(true)
     expect(root.classList.contains('orca-editor-dark')).toBe(true)
@@ -154,7 +156,7 @@ describe('applyAppAppearanceToDocument', () => {
     expect(root.style.getPropertyValue('--orca-editor-base-popover')).toBe('#202020')
     expect(root.style.getPropertyValue('--orca-editor-base-popover-foreground')).toBe('#fafafa')
     expect(root.style.getPropertyValue('--orca-editor-base-editor-surface')).toBe('#1e1e1e')
-    for (const surface of [editor, preview, linkBubble]) {
+    for (const surface of [sourceEditor, editor, preview, linkBubble]) {
       const computed = getComputedStyle(surface)
       expect(computed.backgroundColor).toBe('#1e1e1e')
       expect(computed.color).toBe('#fafafa')

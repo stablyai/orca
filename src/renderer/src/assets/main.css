@@ -364,6 +364,7 @@
 
 :root[data-app-appearance]
   :is(
+    .editor-content-pane,
     .markdown-preview-shell,
     .rich-markdown-editor-layout,
     .rich-markdown-link-bubble,
