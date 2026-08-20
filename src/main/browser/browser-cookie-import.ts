@@ -425,6 +425,21 @@ export function detectInstalledBrowsers(): DetectedBrowser[] {
   return detected
 }
 
+// Why: env-gated e2e seam; ignored in packaged builds so a shipped app never
+// honors ORCA_E2E_FAKE_HTTPS_HANDLERS — only unpackaged dev/e2e runs use it.
+function resolveDefaultHttpsHandlersQuery(): () => Promise<DiscoveredBrowserCandidate[]> {
+  const fake = app.isPackaged ? undefined : process.env.ORCA_E2E_FAKE_HTTPS_HANDLERS
+  if (fake) {
+    try {
+      const parsed = JSON.parse(fake) as DiscoveredBrowserCandidate[]
+      return () => Promise.resolve(parsed)
+    } catch {
+      // Bad env → ignore and fall back to the real OS query.
+    }
+  }
+  return () => Promise.resolve(queryHttpsHandlersMacOS())
+}
+
 // Hardcoded detection plus macOS auto-discovery of other installed Chromium browsers.
 // The OS URL-handler query is deferred behind an empty stub, so today this equals
 // detectInstalledBrowsers() until the real query is wired in.
@@ -438,8 +453,7 @@ export async function detectAllBrowsers(opts?: {
   const appSupportRoot = join(process.env.HOME ?? '', 'Library', 'Application Support')
   const candidates = await discoverInstalledBrowsers({
     platform: process.platform,
-    queryHttpsHandlers:
-      opts?.queryHttpsHandlers ?? (() => Promise.resolve(queryHttpsHandlersMacOS()))
+    queryHttpsHandlers: opts?.queryHttpsHandlers ?? resolveDefaultHttpsHandlersQuery()
   })
   const chromium = filterChromiumCandidates(candidates, { appSupportRoot })
   // Hardcoded roots let the resolution ladder drop already-known browsers (dedup).
