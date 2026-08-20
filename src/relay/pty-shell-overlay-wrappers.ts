@@ -1,15 +1,16 @@
-import { chmodSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { readFileSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import { getPosixOmpShellWrapper } from '../main/pty/omp-shell-wrapper'
 import {
+  BASH_FEATURE_CHANNEL_BLOCK,
   BASH_PROMPT_COMMAND_COMPOSITION_BLOCK,
   SHELL_STARTUP_IDENTITY_MARKER_BLOCK,
-  ZSH_HISTFILE_RESTORE_BLOCK
+  BASH_HISTFILE_RESTORE_BLOCK,
+  ZSH_WRAPPER_DIR_MARKER_CONTENT,
+  ZSH_WRAPPER_DIR_MARKER_FILE
 } from '../main/shell-templates'
-import {
-  buildZshStartupWrapperFiles,
-  type ZshStartupWrapperSpec
-} from '../main/zsh-startup-wrapper-builder'
+import { writeShellWrapperFiles } from '../main/shell-wrapper-file-writer'
+import { buildZshStartupHook, type ZshStartupHookSpec } from '../main/zsh-startup-wrapper-builder'
 
 /** Writes the zsh/bash overlay wrapper files a relay-spawned shell sources.
  *  Split from pty-shell-launch.ts so the launch-config decisions stay readable
@@ -17,39 +18,42 @@ import {
 
 const SHELL_READY_MARKER_ESCAPED = '\\033]777;orca-shell-ready\\007'
 
-// Why: the relay .zshenv republishes the inherited ZDOTDIR as ORCA_USER_ZDOTDIR,
-// so later wrapper files prefer it over the spawn-time ORCA_ORIG_ZDOTDIR.
-const RELAY_HOME_EXPRESSION = '"${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"'
-
-function getRelayZshWrapperSpec(zshDir: string): ZshStartupWrapperSpec {
+// Why the relay no longer needs its own ZDOTDIR shape: it used to republish the
+// inherited value as ORCA_USER_ZDOTDIR so the later wrapper files could prefer
+// it over the spawn-time ORCA_ORIG_ZDOTDIR. There are no later wrapper files
+// now, and ZDOTDIR itself carries the answer, so the relay and desktop bodies
+// are one template again.
+function getRelayZshWrapperSpec(): ZshStartupHookSpec {
   return {
     headerLabel: 'Orca relay zsh overlay wrapper',
-    zshDir,
-    zshenvStrategy: 'overlay-user-zdotdir',
-    homeExpression: RELAY_HOME_EXPRESSION,
     readyMarkerEscaped: SHELL_READY_MARKER_ESCAPED,
     osc133CommandMarkers: false,
-    skipUserZshrcWhenHomeIsWrapperDir: false,
-    interactiveRestoreComment:
+    overlayRestoreComment:
       '# Why: remote startup files can re-export user defaults after relay spawn.',
-    loginRestoreComment: '# Why: .zlogin is the final zsh login startup file before the prompt.',
     restores: {
       agentTeamsPath: false,
       remoteCliBinDir: true,
       codexHome: false,
       codexLaunchPreflight: false
-    },
-    readyMarkerOrder: 'after-zdotdir-restore'
+    }
   }
 }
 
-export function ensureOverlayRestoreWrappers(root: string): void {
+/** True when every overlay wrapper file is present and non-empty afterwards. */
+export function ensureOverlayRestoreWrappers(root: string): boolean {
   const zshDir = join(root, 'zsh')
   const bashDir = join(root, 'bash')
 
-  const zsh = buildZshStartupWrapperFiles(getRelayZshWrapperSpec(zshDir))
+  const zshenv = buildZshStartupHook(getRelayZshWrapperSpec())
   const bashRc = `# Orca relay bash overlay wrapper
+${BASH_FEATURE_CHANNEL_BLOCK}
 ${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
+# Why a plain variable: the channel is consumed and destroyed in these first
+# lines, so nothing this shell later spawns can see or inherit the selection.
+__orca_ready_marker=""
+__orca_has_feature ready && __orca_ready_marker=1
+unset _orca_shell_features
+unset -f __orca_has_feature
 [[ -f /etc/profile ]] && source /etc/profile
 if [[ -f "$HOME/.bash_profile" ]]; then
   source "$HOME/.bash_profile"
@@ -68,7 +72,7 @@ fi
 [[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
 [[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
 ${getPosixOmpShellWrapper()}
-${ZSH_HISTFILE_RESTORE_BLOCK}
+${BASH_HISTFILE_RESTORE_BLOCK}
 # Why: SSH bash sessions need the same command lifecycle markers as local
 # bash so agent rows stop showing "working" when the foreground command exits.
 __orca_initializing_wrapper=1
@@ -124,7 +128,7 @@ ${BASH_PROMPT_COMMAND_COMPOSITION_BLOCK}
 __orca_prepend_prompt_command "__orca_osc133_precmd"
 # Why: SSH startup commands are renderer-delivered; emit the same internal
 # readiness marker as local shells only when that delivery mode asks for it.
-if [[ "\${ORCA_SHELL_READY_MARKER:-0}" == "1" ]]; then
+if [[ -n "$__orca_ready_marker" ]]; then
   __orca_prompt_mark() {
     printf "${SHELL_READY_MARKER_ESCAPED}"
   }
@@ -152,28 +156,35 @@ trap '__orca_osc133_preexec' DEBUG
 unset __orca_initializing_wrapper
 `
 
+  // Only .zshenv: see local-pty-shell-ready-wrapper-generation.ts.
   const files = [
-    [join(zshDir, '.zshenv'), zsh.zshenv],
-    [join(zshDir, '.zprofile'), zsh.zprofile],
-    [join(zshDir, '.zshrc'), zsh.zshrc],
-    [join(zshDir, '.zlogin'), zsh.zlogin],
+    [join(zshDir, '.zshenv'), zshenv],
+    [join(zshDir, ZSH_WRAPPER_DIR_MARKER_FILE), ZSH_WRAPPER_DIR_MARKER_CONTENT],
     [join(bashDir, 'rcfile'), bashRc]
   ] as const
 
-  for (const [path, content] of files) {
-    mkdirSync(dirname(path), { recursive: true })
-    let existing: string | null = null
-    try {
-      existing = readFileSync(path, 'utf8')
-    } catch {
-      existing = null
-    }
-    // Why: relay wrapper files persist under ~/.orca-relay across app
-    // upgrades. Existence alone is not enough; stale wrappers would miss
-    // later fixes such as preserving post-.zshenv ZDOTDIR.
-    if (existing !== content) {
-      writeFileSync(path, content, 'utf8')
-    }
-    chmodSync(path, 0o644)
+  // Why: relay wrapper files persist under ~/.orca-relay across app upgrades.
+  // Existence alone is not enough; stale wrappers would miss later fixes such
+  // as preserving post-.zshenv ZDOTDIR.
+  const stale = files.filter(([path, content]) => readFileOrNull(path) !== content)
+  if (stale.length > 0 && !writeShellWrapperFiles(stale, '[relay/shell-overlay]')) {
+    return false
+  }
+  return files.every(([path]) => isNonEmptyFile(path))
+}
+
+function readFileOrNull(path: string): string | null {
+  try {
+    return readFileSync(path, 'utf8')
+  } catch {
+    return null
+  }
+}
+
+function isNonEmptyFile(path: string): boolean {
+  try {
+    return statSync(path).size > 0
+  } catch {
+    return false
   }
 }

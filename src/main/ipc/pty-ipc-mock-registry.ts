@@ -17,6 +17,8 @@ export const mkdirSyncMock: Mock = vi.fn()
 export const readFileSyncMock: Mock = vi.fn()
 export const writeFileSyncMock: Mock = vi.fn()
 export const chmodSyncMock: Mock = vi.fn()
+export const renameSyncMock: Mock = vi.fn()
+export const rmSyncMock: Mock = vi.fn()
 export const getPathMock: Mock = vi.fn()
 export const loginPreflightExecFileMock: Mock = vi.fn()
 export const spawnMock: Mock = vi.fn()
@@ -37,8 +39,6 @@ export const unregisterPtyMock: Mock = vi.fn()
 export const setMigrationUnsupportedPtyMock: Mock = vi.fn()
 export const clearMigrationUnsupportedPtyMock: Mock = vi.fn()
 export const clearMigrationUnsupportedPtysForPaneKeyMock: Mock = vi.fn()
-export const bindAgentSessionPaneMock: Mock = vi.fn()
-export const clearAgentSessionPaneBindingsForPtyMock: Mock = vi.fn()
 export const clearPaneKeyAliasesForPtyMock: Mock = vi.fn()
 export const recordCodexPaneAccountMock: Mock = vi.fn()
 export const forgetCodexPaneAccountMock: Mock = vi.fn()
@@ -85,6 +85,8 @@ export const fsModuleMock = () => ({
   readFileSync: readFileSyncMock,
   writeFileSync: writeFileSyncMock,
   chmodSync: chmodSyncMock,
+  renameSync: renameSyncMock,
+  rmSync: rmSyncMock,
   constants: {
     X_OK: 1,
     R_OK: 4
@@ -119,9 +121,7 @@ export const agentHookServerModuleMock = () => ({
     buildPtyEnv: buildAgentHookEnvMock,
     clearPaneState: clearAgentHookPaneStateMock,
     registerPaneKeyAlias: registerPaneKeyAliasMock,
-    clearPaneKeyAliasesForPty: clearPaneKeyAliasesForPtyMock,
-    bindAgentSessionPane: bindAgentSessionPaneMock,
-    clearAgentSessionPaneBindingsForPty: clearAgentSessionPaneBindingsForPtyMock
+    clearPaneKeyAliasesForPty: clearPaneKeyAliasesForPtyMock
   }
 })
 

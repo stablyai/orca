@@ -113,8 +113,21 @@ export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): s
     `ptyId: ${terminal.ptyId ?? 'none'}`,
     `connected: ${terminal.connected}`,
     `writable: ${terminal.writable}`,
+    // Why listed above the preview: the preview is where a reader would otherwise have to
+    // spot the prompt by eye, which is the work this line exists to remove.
+    `agentWait: ${formatAgentWait(terminal.agentWait)}`,
     `preview: ${terminal.preview || '<empty>'}`
   ].join('\n')
+}
+
+function formatAgentWait(agentWait: RuntimeTerminalShow['agentWait']): string {
+  if (agentWait === undefined) {
+    return 'unknown (not evaluated)'
+  }
+  if (!agentWait) {
+    return 'none'
+  }
+  return `${agentWait.reason ?? 'interactive prompt'} (via ${agentWait.source})`
 }
 
 export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): string {
@@ -127,11 +140,19 @@ export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): s
   const header = [
     `handle: ${terminal.handle}`,
     `status: ${terminal.status}`,
+    ...(terminal.source ? [`source: ${terminal.source}`] : []),
     ...(terminal.nextCursor !== null ? [`cursor: ${terminal.nextCursor}`] : []),
     ...oldestCursor,
     ...latestCursor,
     ...(terminal.truncated ? ['warning: older output is no longer retained'] : []),
-    ...(limitedWarning ? [limitedWarning] : [])
+    ...(limitedWarning ? [limitedWarning] : []),
+    // Why: the caller asked for the rendered screen; say plainly that this is not it rather
+    // than let repaint fragments be read as what the terminal displayed.
+    ...(terminal.source === 'screen-unavailable'
+      ? [
+          'warning: no rendered screen was available, so this is accumulated output; repainted lines may appear as stacked fragments'
+        ]
+      : [])
   ]
   return [...header, '', ...terminal.tail].join('\n')
 }

@@ -74,7 +74,7 @@ const MAX_TRACKED_REPLIES = 64
 const ECHO_PROBE_MAX_STARTS_PER_SECOND = 10
 
 type ExpectedEcho = { projections: readonly string[]; remainingBytes: number }
-type PendingWrite = { reply: string; onFailed: (() => void) | undefined }
+type PendingWrite = { reply: string; onFailed: (() => void) | undefined; contained: boolean }
 type ActiveEchoProbe = { timer: ReturnType<typeof setTimeout> | null }
 
 /** Only a POSIX tty both echoes the reply and still delivers a deferred write. */
@@ -212,7 +212,31 @@ export class PtyStartupReplyDelivery {
     if (this.pendingWrites.length === 0) {
       this.echoPollDeadline = Date.now() + ECHO_POLL_BUDGET_MS
     }
-    this.pendingWrites.push({ reply, onFailed })
+    this.pendingWrites.push({ reply, onFailed, contained: true })
+    this.armWriteTimer()
+    return true
+  }
+
+  /**
+   * Queues a reply that needs no echo containment behind ones that do, so it cannot
+   * overtake them. termenv writes `OSC 11 ;? ST` then `CSI 6n` and stops reading at
+   * the CPR, treating it as proof the terminal answered: a CPR that jumps a still-
+   * deferred color reply strands that reply in the tty for whatever runs next to read
+   * (`gh auth login` -> "unexpected escape sequence from terminal").
+   *
+   * False means nothing is deferred and the caller owns the write, which keeps the
+   * latency-critical replies immediate on every path that is not mid-deferral.
+   */
+  writeBehindDeferredReplies(reply: string): boolean {
+    if (this.closed || this.pendingWrites.length === 0) {
+      return false
+    }
+    if (this.pendingWrites.length >= MAX_TRACKED_REPLIES) {
+      // Flushing keeps order without growing the queue; the caller writes after it.
+      this.flushPendingWrites()
+      return false
+    }
+    this.pendingWrites.push({ reply, onFailed: undefined, contained: false })
     this.armWriteTimer()
     return true
   }
@@ -264,17 +288,32 @@ export class PtyStartupReplyDelivery {
     }
   }
 
-  /** Teardown: the pty is gone, so an unwritten reply has nowhere left to go. */
+  /**
+   * Teardown. A contained reply has nowhere left to go — its reader is gone. An
+   * uncontained one is an ordinary write this queue only borrowed for ordering, and the
+   * caller was already told it was sent, so it is handed to the pty best-effort: the
+   * child can still be alive here (daemon dispose drains before the kill).
+   */
   close(): void {
     this.closed = true
     this.clearWriteTimer()
     this.clearActiveEchoProbe()
-    this.pendingWrites.length = 0
+    for (const pending of this.pendingWrites.splice(0)) {
+      if (!pending.contained) {
+        try {
+          this.writeProvider(pending.reply)
+        } catch {
+          /* pty already torn down */
+        }
+      }
+    }
     this.expectedEchoes.length = 0
   }
 
   private armWriteTimer(delayMs = 0): void {
-    if (this.writeTimer) {
+    // A probe in flight is already the continuation: re-arming forks a second stty and
+    // makes the first one's verdict unusable (the identity bail below discards it).
+    if (this.writeTimer || this.activeEchoProbe) {
       return
     }
     this.writeTimer = setTimeout(() => this.attemptPendingWrites(), delayMs)
@@ -332,7 +371,7 @@ export class PtyStartupReplyDelivery {
     this.clearWriteTimer()
     this.clearActiveEchoProbe()
     for (const pending of this.pendingWrites.splice(0)) {
-      this.writeReply(pending.reply, pending.onFailed, kernelEchoImpossible)
+      this.writeReply(pending.reply, pending.onFailed, kernelEchoImpossible, pending.contained)
     }
   }
 
@@ -371,11 +410,22 @@ export class PtyStartupReplyDelivery {
     return true
   }
 
-  private writeReply(reply: string, onFailed?: () => void, kernelEchoImpossible = false): boolean {
+  private writeReply(
+    reply: string,
+    onFailed?: () => void,
+    kernelEchoImpossible = false,
+    contained = true
+  ): boolean {
     if (this.closed) {
       return false
     }
-    const projections = replyEchoProjections(reply, this.ownerBackend, kernelEchoImpossible)
+    // Not a safety rule: the caret form of a short CSI reply (`^[[6;1R`) is far likelier
+    // to occur verbatim in ordinary output than a long OSC colour string, so arming it
+    // is not worth the false swallow. These replies were unprojected before they rode
+    // this queue, and stay that way.
+    const projections = contained
+      ? replyEchoProjections(reply, this.ownerBackend, kernelEchoImpossible)
+      : []
     // Why: register before write because node-pty can synchronously re-enter onData.
     const expected: ExpectedEcho | null =
       projections.length > 0 ? { projections, remainingBytes: ECHO_SEARCH_BUDGET_BYTES } : null

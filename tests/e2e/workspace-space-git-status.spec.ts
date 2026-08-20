@@ -47,7 +47,7 @@ test.describe('Workspace Space git status checks', () => {
       // cache TTL until every path registers before deriving the space rows.
       await loadWorktreesUntilPathsPresent(orcaPage, repoId, registeredWorktreePaths)
 
-      await orcaPage.evaluate(
+      const rowDisplayNames = await orcaPage.evaluate(
         async ({ testRepoPath, worktreePaths }) => {
           const store = window.__store
           if (!store) {
@@ -129,27 +129,24 @@ test.describe('Workspace Space git status checks', () => {
             }
           })
           store.getState().openSpacePage()
+          return rows.map((row) => row.displayName)
         },
         { testRepoPath, worktreePaths: registeredWorktreePaths }
       )
 
-      await expect
-        .poll(
-          () =>
-            orcaPage.evaluate(() => {
-              const state = window.__store?.getState()
-              if (!state?.workspaceSpaceAnalysis) {
-                return 60
-              }
-              return state.workspaceSpaceAnalysis.worktrees.filter(
-                (row) => state.gitStatusByWorktree[row.worktreeId] === undefined
-              ).length
-            }),
-          { timeout: 30_000 }
+      // Why: `toHaveCount(0)` passes trivially while the list is still empty, so
+      // every row has to be on screen before the absent-status assertion means
+      // anything.
+      const rowCheckboxes = orcaPage.getByRole('checkbox', {
+        name: new RegExp(
+          `^Select (?:${rowDisplayNames
+            .map((displayName) => displayName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+            .join('|')})$`
         )
-        .toBe(0)
+      })
+      await expect(rowCheckboxes).toHaveCount(rowDisplayNames.length, { timeout: 30_000 })
 
-      await expect(orcaPage.getByText('Keep: git not checked')).toHaveCount(0)
+      await expect(orcaPage.getByText('Keep: git not checked')).toHaveCount(0, { timeout: 30_000 })
     } finally {
       for (const worktreePath of worktreePaths) {
         try {

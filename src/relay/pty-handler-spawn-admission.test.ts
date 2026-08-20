@@ -79,7 +79,10 @@ describe('PtyHandler', () => {
     const notifMethods = Array.from(dispatcher._notificationHandlers.keys())
     expect(notifMethods).toContain('pty.data')
     expect(notifMethods).toContain('pty.resize')
-    expect(notifMethods).toContain('pty.ackData')
+    // Why not `toContain('pty.ackData')`: PtyHandler must NOT own that method. It used to
+    // register a no-op here, which survived only because the consumer session adapter was
+    // constructed later and overwrote it (STA-4571).
+    expect(notifMethods).not.toContain('pty.ackData')
   })
 
   it('rejects strict process inspection for a missing relay PTY', async () => {

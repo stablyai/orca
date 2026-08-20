@@ -21,7 +21,12 @@ vi.mock('./tab-create-entry-action', () => ({
   isTabEntryAbsolutePathLike: () => false
 }))
 vi.mock('../quick-open-file-list', () => ({
-  useRuntimeFileListForWorktree: () => ({ files: [], loading: false, loadError: null })
+  useRuntimeFileListForWorktree: () => ({
+    files: [],
+    loading: false,
+    loadError: null,
+    truncated: false
+  })
 }))
 vi.mock('@/lib/agent-catalog', () => ({
   getAgentCatalog: () => [],
@@ -79,6 +84,7 @@ const tabSearchMock = vi.hoisted(() => {
               repoName: 'octo/rocket'
             }),
             agentMetadata: [],
+            occupantAgent: null,
             isCurrentTab: false,
             isCurrentWorktree: true
           }))

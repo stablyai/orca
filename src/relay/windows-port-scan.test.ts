@@ -18,6 +18,23 @@ vi.mock('./relay-command-env', () => ({
 
 const { scanWindowsListeningPorts } = await import('./windows-port-scan')
 
+// The scanner drops any row whose pid is the relay process or its parent, so a fixture pid
+// that happens to match the vitest worker's own pid silently empties the result and the
+// assertion sees []. Shift off the literals only on collision, which keeps the readable
+// 1234/2468 in the normal case while staying hermetic.
+const SELF_PIDS = new Set([process.pid, process.ppid])
+
+function pidUnlikeSelf(seed: number): number {
+  let pid = seed
+  while (SELF_PIDS.has(pid)) {
+    pid += 1
+  }
+  return pid
+}
+
+const POWERSHELL_PID = pidUnlikeSelf(1234)
+const NETSTAT_PID = pidUnlikeSelf(2468)
+
 describe('scanWindowsListeningPorts', () => {
   beforeEach(() => {
     execFileAsyncMock.mockReset()
@@ -26,12 +43,17 @@ describe('scanWindowsListeningPorts', () => {
   it('bounds the PowerShell scan with the caller abort signal and timeout', async () => {
     const controller = new AbortController()
     execFileAsyncMock.mockResolvedValueOnce({
-      stdout: JSON.stringify({ host: '127.0.0.1', port: 5173, pid: 1234, processName: 'node' }),
+      stdout: JSON.stringify({
+        host: '127.0.0.1',
+        port: 5173,
+        pid: POWERSHELL_PID,
+        processName: 'node'
+      }),
       stderr: ''
     })
 
     await expect(scanWindowsListeningPorts(controller.signal)).resolves.toEqual([
-      { host: '127.0.0.1', port: 5173, pid: 1234, processName: 'node' }
+      { host: '127.0.0.1', port: 5173, pid: POWERSHELL_PID, processName: 'node' }
     ])
 
     expect(execFileAsyncMock).toHaveBeenCalledWith(
@@ -53,13 +75,13 @@ describe('scanWindowsListeningPorts', () => {
       .mockResolvedValueOnce({
         stdout: [
           '  Proto  Local Address          Foreign Address        State           PID',
-          '  TCP    0.0.0.0:3000           0.0.0.0:0              LISTENING       2468'
+          `  TCP    0.0.0.0:3000           0.0.0.0:0              LISTENING       ${NETSTAT_PID}`
         ].join('\r\n'),
         stderr: ''
       })
 
     await expect(scanWindowsListeningPorts(controller.signal)).resolves.toEqual([
-      { host: '0.0.0.0', port: 3000, pid: 2468 }
+      { host: '0.0.0.0', port: 3000, pid: NETSTAT_PID }
     ])
 
     expect(execFileAsyncMock).toHaveBeenLastCalledWith(

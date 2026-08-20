@@ -82,6 +82,26 @@ describe('browser-palette-search', () => {
     )
   })
 
+  it('stamps the row execution host so activation never resolves by id alone', () => {
+    // Why: worktree ids repeat across hosts, so a host-blind activation opened the other
+    // host's workspace behind a row labelled with this one's name and branch.
+    const [result] = searchBrowserPages(
+      [
+        makeEntry({
+          page: makePage({ id: 'page-1', title: 'Docs' }),
+          workspace: makeWorkspace({ id: 'ws-1' }),
+          worktree: makeWorktree({ id: 'shared', hostId: 'ssh:box' }),
+          repoName: 'repo/one',
+          worktreeSortIndex: 0,
+          isCurrentPage: false,
+          isCurrentWorktree: false
+        })
+      ],
+      ''
+    )
+    expect(result.executionHostId).toBe('ssh:box')
+  })
+
   it('keeps empty-query ordering deterministic and context-first', () => {
     const results = searchBrowserPages(
       [
@@ -341,6 +361,37 @@ describe('browser-palette-search', () => {
     expect(results).toHaveLength(2)
     expect(results[0].pageId).toBe('page-current')
     expect(results[1].pageId).toBe('page-other')
+  })
+
+  it('breaks a rank tie between equally-matching pages by recency', () => {
+    // Ids are ordered so an id-only tiebreak would flip this expectation.
+    const entries = [
+      makeEntry({
+        page: makePage({ id: 'page-a-older', title: 'React Docs' }),
+        workspace: makeWorkspace({ id: 'ws-1' }),
+        worktree: makeWorktree(),
+        repoName: 'repo',
+        worktreeSortIndex: 0,
+        isCurrentPage: false,
+        isCurrentWorktree: false,
+        lastActiveAt: 1000
+      }),
+      makeEntry({
+        page: makePage({ id: 'page-z-newer', title: 'React Docs' }),
+        workspace: makeWorkspace({ id: 'ws-2' }),
+        worktree: makeWorktree(),
+        repoName: 'repo',
+        worktreeSortIndex: 0,
+        isCurrentPage: false,
+        isCurrentWorktree: false,
+        lastActiveAt: 5000
+      })
+    ]
+
+    const results = searchBrowserPages(entries, 'react')
+
+    expect(results.map((result) => result.pageId)).toEqual(['page-z-newer', 'page-a-older'])
+    expect(results[0].lastActiveAt).toBe(5000)
   })
 
   it('matches the visible workspace label in browser search', () => {

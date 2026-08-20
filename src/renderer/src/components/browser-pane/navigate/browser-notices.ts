@@ -15,12 +15,45 @@ export type LoadFailureMeta = {
 
 type BrowserLoadErrorLike = BrowserLoadError | null
 
+// Unknown Chromium permissions keep their raw name instead of disappearing behind invented copy.
 function humanizePermission(permission: string): string {
   switch (permission) {
     case 'media':
       return 'camera or microphone access'
     case 'pointerLock':
       return 'pointer lock'
+    case 'storage-access':
+      return 'access to its own cookies and storage while embedded on this page'
+    case 'top-level-storage-access':
+      return 'cookie access on behalf of an embedded site'
+    case 'geolocation':
+      return 'your location'
+    case 'idle-detection':
+      return 'permission to detect when you are idle'
+    case 'display-capture':
+      return 'permission to capture your screen'
+    case 'window-management':
+      return 'screen information and multi-screen window placement'
+    case 'keyboardLock':
+      return 'permission to capture keyboard input'
+    case 'openExternal':
+      return 'permission to open a link outside Orca'
+    case 'fileSystem':
+      return 'access to your files or folders'
+    case 'hid':
+      return 'access to a connected human interface device'
+    case 'usb':
+      return 'access to a USB device'
+    case 'serial':
+      return 'access to a serial device'
+    case 'midi':
+      return 'access to your MIDI devices'
+    case 'midiSysex':
+      return 'access to system-exclusive MIDI messages'
+    case 'mediaKeySystem':
+      return 'access to protected media playback'
+    case 'speaker-selection':
+      return 'permission to choose an audio output device'
     default:
       return permission
   }
