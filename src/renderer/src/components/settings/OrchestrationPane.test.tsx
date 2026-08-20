@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getOrchestrationUsageExamples } from '@/lib/orchestration-usage-examples'
 import { OrchestrationPane } from './OrchestrationPane'
+import { getOrchestrationPaneSearchEntries } from './orchestration-search'
 
 const INSTALL_COMMAND =
   'npx skills add https://github.com/stablyai/orca --skill orchestration --global'
@@ -168,6 +169,12 @@ describe('OrchestrationPane', () => {
     }
     expect(markup).toMatch(/<button\b[^>]*>[\s\S]*?Update[\s\S]*?<\/button>/)
     expect(markup).toContain('Re-check')
+  })
+
+  it('includes worker model and effort terms in settings search', () => {
+    expect(getOrchestrationPaneSearchEntries()[0].keywords).toEqual(
+      expect.arrayContaining(['worker model', 'worker effort', 'model', 'effort'])
+    )
   })
 
   it('passes update commands to the main panel without an installed manual-copy path', async () => {

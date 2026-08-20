@@ -9494,6 +9494,10 @@
         },
         "orchestration": {
           "search": {
+            "effort": "effort",
+            "model": "model",
+            "workerEffort": "worker effort",
+            "workerModel": "worker model",
             "f5d39af41e": "child agents",
             "c766a01978": "handoff",
             "08c65b12a2": "examples",
@@ -11088,6 +11092,7 @@
         },
         "OrchestrationWorkerModelSetting": {
           "defaultHint": "Agent default stores no model or effort override. Available effort levels follow the selected model.",
+          "workerLabel": "Worker",
           "defaultWorkerSelectLabel": "Default worker provider",
           "requireAgent": "No default worker",
           "modelSelectLabel": "{{value0}} model",

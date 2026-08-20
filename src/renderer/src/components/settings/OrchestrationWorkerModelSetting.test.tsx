@@ -1,5 +1,9 @@
+// @vitest-environment happy-dom
+
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { cleanup, render, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { i18n } from '@/i18n/i18n'
 import {
   getWorkerModelAgents,
   OrchestrationWorkerModelSetting,
@@ -7,7 +11,43 @@ import {
   updateOrchestrationWorkerModel
 } from './OrchestrationWorkerModelSetting'
 
+const discoverRuntimeCommitMessageModels = vi.hoisted(() => vi.fn())
+
+vi.mock('@/runtime/runtime-git-client', () => ({
+  discoverRuntimeCommitMessageModels
+}))
+
+afterEach(() => {
+  cleanup()
+  discoverRuntimeCommitMessageModels.mockReset()
+})
+
 describe('OrchestrationWorkerModelSetting', () => {
+  it('routes dynamic model discovery through the runtime-aware client', async () => {
+    discoverRuntimeCommitMessageModels.mockResolvedValue({
+      success: true,
+      models: []
+    })
+
+    render(
+      <OrchestrationWorkerModelSetting
+        defaultAgent="codex"
+        disabledAgents={[]}
+        models={{}}
+        efforts={{}}
+        onDefaultAgentChange={() => {}}
+        onChange={() => {}}
+      />
+    )
+
+    await waitFor(() => expect(discoverRuntimeCommitMessageModels).toHaveBeenCalledTimes(3))
+    expect(discoverRuntimeCommitMessageModels.mock.calls.map(([, agentId]) => agentId)).toEqual([
+      'claude',
+      'codex',
+      'cursor'
+    ])
+  })
+
   it('shows model controls only for agents with launch-time model support', () => {
     const agents = getWorkerModelAgents()
     expect(agents.map((agent) => agent.id)).toEqual(['claude', 'codex', 'cursor'])
@@ -101,6 +141,39 @@ describe('OrchestrationWorkerModelSetting', () => {
     expect(markup).toMatch(
       /<button[^>]*aria-label="Worker effort"[^>]*>.*?Pick provider.*?<\/button>/s
     )
+  })
+
+  it('uses the localized worker fallback in control labels', async () => {
+    const previousLanguage = i18n.language
+    i18n.addResourceBundle(
+      'test',
+      'translation',
+      {
+        auto: {
+          components: {
+            settings: { OrchestrationWorkerModelSetting: { workerLabel: 'Agent' } }
+          }
+        }
+      },
+      true,
+      true
+    )
+    await i18n.changeLanguage('test')
+
+    const markup = renderToStaticMarkup(
+      <OrchestrationWorkerModelSetting
+        defaultAgent={null}
+        disabledAgents={[]}
+        models={{}}
+        efforts={{}}
+        onDefaultAgentChange={() => {}}
+        onChange={() => {}}
+      />
+    )
+    expect(markup).toContain('aria-label="Agent model"')
+    expect(markup).toContain('aria-label="Agent effort"')
+
+    await i18n.changeLanguage(previousLanguage)
   })
 
   it('disables model and effort for a provider without launch-time model support', () => {

@@ -104,6 +104,22 @@ describe('orchestration RPC methods', () => {
       )
     })
 
+    it('keeps missing-agent behavior when the RuntimeStore has no defaults', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      const task = db.createTask({ spec: 'worker without configured defaults' })
+
+      expect(runtime.getOrchestrationWorkerLaunchDefaults()).toEqual({
+        agent: null,
+        models: {},
+        efforts: {}
+      })
+      await expect(
+        call('orchestration.workerStart', { task: task.id, from: 'term_coord' })
+      ).rejects.toMatchObject({ code: 'agent_unconfigured' })
+      expect(runtime.createTerminal).not.toHaveBeenCalled()
+    })
+
     it('applies and reports opaque per-invocation model preferences', async () => {
       setup()
       mockCurrentWorkerStart()
@@ -141,6 +157,77 @@ describe('orchestration RPC methods', () => {
       expect(JSON.parse(db.getWorkerDispatch(result.dispatchId)!.start_options)).toMatchObject({
         launch: result.launch
       })
+    })
+
+    it('applies stored worker launch defaults when flags are omitted', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.spyOn(runtime, 'getOrchestrationWorkerLaunchDefaults').mockReturnValue({
+        agent: 'codex',
+        models: { codex: 'gpt-5.6-luna' },
+        efforts: { codex: 'max' }
+      })
+      const task = db.createTask({ spec: 'use worker launch defaults' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord'
+      })) as {
+        dispatchId: string
+        state: string
+        launch: {
+          requested: { agent: string; model: string; effort: string }
+          effective: { agent: string; model: string; effort: string }
+        }
+      }
+
+      expect(result).toMatchObject({
+        state: 'ready',
+        launch: {
+          requested: { agent: 'codex', model: 'gpt-5.6-luna', effort: 'max' },
+          effective: { agent: 'codex', model: 'gpt-5.6-luna', effort: 'max' }
+        }
+      })
+      expect(runtime.createTerminal).toHaveBeenCalledWith(
+        'id:repo::worktree',
+        expect.objectContaining({
+          startupAgent: 'codex',
+          launchPreferences: { model: 'gpt-5.6-luna', effort: 'max' }
+        })
+      )
+      expect(JSON.parse(db.getWorkerDispatch(result.dispatchId)!.start_options)).toMatchObject({
+        launch: result.launch
+      })
+    })
+
+    it('drops an incompatible stored effort when the model is explicit', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.spyOn(runtime, 'getOrchestrationWorkerLaunchDefaults').mockReturnValue({
+        agent: 'codex',
+        models: { codex: 'gpt-5.6-sol' },
+        efforts: { codex: 'max' }
+      })
+      const task = db.createTask({ spec: 'explicit model wins over defaults' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'codex',
+        model: 'gpt-5.5'
+      })) as {
+        state: string
+        launch: { requested: { model: string; effort: string | null } }
+      }
+
+      expect(result).toMatchObject({
+        state: 'ready',
+        launch: { requested: { model: 'gpt-5.5', effort: null } }
+      })
+      expect(runtime.createTerminal).toHaveBeenCalledWith(
+        'id:repo::worktree',
+        expect.objectContaining({ launchPreferences: { model: 'gpt-5.5' } })
+      )
     })
 
     it('rejects launch preferences for an existing terminal before creating a Dispatch', async () => {
@@ -327,6 +414,11 @@ describe('orchestration RPC methods', () => {
       setup()
       mockCurrentWorkerStart()
       const createWorktree = vi.spyOn(runtime, 'createManagedWorktree')
+      vi.spyOn(runtime, 'getOrchestrationWorkerLaunchDefaults').mockReturnValue({
+        agent: 'codex',
+        models: { codex: 'gpt-5.6-sol' },
+        efforts: { codex: 'high' }
+      })
       vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
       const task = db.createTask({ spec: 'reuse exact worker' })
 

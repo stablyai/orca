@@ -123,7 +123,8 @@ function normalizeSettingsUpdates(
   }
   if ('orchestrationWorkerEfforts' in updates) {
     sanitizedUpdates.orchestrationWorkerEfforts = normalizeOrchestrationWorkerEfforts(
-      updates.orchestrationWorkerEfforts
+      updates.orchestrationWorkerEfforts,
+      sanitizedUpdates.orchestrationWorkerModels ?? currentSettings?.orchestrationWorkerModels
     )
   }
   if ('agentDefaultEnv' in updates) {

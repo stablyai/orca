@@ -19,28 +19,43 @@ import {
   persistWorkerSetupWaitOutcome
 } from './orchestration-worker-setup-gate'
 import { failWorkerStartWithReceipt } from './orchestration-worker-start-receipt'
+import { resolveOrchestrationWorkerLaunchDefaults } from './orchestration-worker-launch-preferences'
 import { prepareLocalWorkerStart } from './orchestration-worker-start-validation'
 
 export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.workerStart',
     params: WorkerStartParams,
-    handler: async (params, { runtime, orchestrationMutation }) => {
+    handler: async (input, { runtime, orchestrationMutation }) => {
       const db = runtime.getOrchestrationDb()
-      const coordinatorPane = runtime.getTerminalPaneKey(params.from)
+      const coordinatorPane = runtime.getTerminalPaneKey(input.from)
       const run = coordinatorPane ? db.getCurrentRunForPane(coordinatorPane) : undefined
-      if (!run || (params.run && params.run !== run.id)) {
+      if (!run || (input.run && input.run !== run.id)) {
         throw new OrchestrationError(
           'consumer_fenced',
           'worker-start requires the coordinator terminal currently bound to the Task Run.'
         )
       }
-      const task = db.getTask(params.task)
+      const task = db.getTask(input.task)
       if (!task || task.run_id !== run.id) {
         throw new OrchestrationError(
           'task_not_found',
-          `Task ${params.task} was not found in Run ${run.id}.`
+          `Task ${input.task} was not found in Run ${run.id}.`
         )
+      }
+
+      const resolvedDefaults = resolveOrchestrationWorkerLaunchDefaults({
+        terminal: input.terminal,
+        agent: input.agent,
+        model: input.model,
+        effort: input.effort,
+        defaults: runtime.getOrchestrationWorkerLaunchDefaults()
+      })
+      const params = {
+        ...input,
+        ...(resolvedDefaults.agent !== undefined ? { agent: resolvedDefaults.agent } : {}),
+        ...(resolvedDefaults.model !== undefined ? { model: resolvedDefaults.model } : {}),
+        ...(resolvedDefaults.effort !== undefined ? { effort: resolvedDefaults.effort } : {})
       }
 
       if (params.on) {
@@ -50,7 +65,8 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           db,
           runId: run.id,
           task,
-          orchestrationMutation
+          orchestrationMutation,
+          defaultsApplied: resolvedDefaults.applied
         })
       }
 

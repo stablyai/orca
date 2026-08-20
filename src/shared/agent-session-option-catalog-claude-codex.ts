@@ -193,13 +193,17 @@ const CODEX_EFFORT_CHOICES = [
 // Why: Codex can clamp higher values, so expose only each model's advertised levels.
 function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra', defaultValue = 'medium'): CatalogOption {
   const ceilingIndex = CODEX_EFFORT_CHOICES.findIndex((choice) => choice.value === ceiling)
+  const choices = CODEX_EFFORT_CHOICES.slice(0, ceilingIndex + 1)
+  if (!choices.some((choice) => choice.value === defaultValue)) {
+    throw new Error(`Codex effort default ${defaultValue} exceeds ${ceiling} ceiling`)
+  }
   return {
     id: 'effort',
     label: 'Reasoning effort',
     category: 'thought_level',
     kind: {
       type: 'select',
-      choices: CODEX_EFFORT_CHOICES.slice(0, ceilingIndex + 1),
+      choices,
       defaultValue
     },
     apply: {

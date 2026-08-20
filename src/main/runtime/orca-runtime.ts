@@ -279,6 +279,7 @@ import type {
   MRListState
 } from '../../shared/gitlab-types'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { OrchestrationWorkerLaunchDefaults } from '../../shared/orchestration-worker-model-settings'
 import type {
   GitHubCreateIssueFields,
   GitHubIssueUpdate,
@@ -1332,6 +1333,9 @@ type RuntimeStore = {
     disabledTuiAgents?: GlobalSettings['disabledTuiAgents']
     agentCmdOverrides?: GlobalSettings['agentCmdOverrides']
     agentDefaultArgs?: GlobalSettings['agentDefaultArgs']
+    orchestrationDefaultWorkerAgent?: GlobalSettings['orchestrationDefaultWorkerAgent']
+    orchestrationWorkerModels?: GlobalSettings['orchestrationWorkerModels']
+    orchestrationWorkerEfforts?: GlobalSettings['orchestrationWorkerEfforts']
     agentDefaultEnv?: GlobalSettings['agentDefaultEnv']
     terminalWindowsShell?: GlobalSettings['terminalWindowsShell']
     floatingTerminalEnabled?: GlobalSettings['floatingTerminalEnabled']
@@ -18182,6 +18186,15 @@ export class OrcaRuntimeService {
         'agent_unconfigured',
         `Agent launcher ${agent} is disabled or unavailable.`
       )
+    }
+  }
+
+  getOrchestrationWorkerLaunchDefaults(): OrchestrationWorkerLaunchDefaults {
+    const settings = this.store?.getSettings()
+    return {
+      agent: settings?.orchestrationDefaultWorkerAgent ?? null,
+      models: settings?.orchestrationWorkerModels ?? {},
+      efforts: settings?.orchestrationWorkerEfforts ?? {}
     }
   }
 

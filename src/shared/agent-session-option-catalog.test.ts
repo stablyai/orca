@@ -68,6 +68,20 @@ describe('agent session option catalog', () => {
     }
   })
 
+  it('keeps every Codex effort default inside its choices', () => {
+    const catalog = getAgentSessionOptionCatalog('codex')!
+    const options = [
+      ...catalog.models.flatMap((model) => model.options),
+      ...(catalog.unknownModelOptions ?? [])
+    ]
+    for (const option of options) {
+      if (option.id !== 'effort' || option.kind.type !== 'select') {
+        continue
+      }
+      expect(option.kind.choices.map((choice) => choice.value)).toContain(option.kind.defaultValue)
+    }
+  })
+
   it('offers max reasoning effort for GPT-5.6 Luna', () => {
     const effort = getAgentSessionOptionCatalog('codex')
       ?.models.find((model) => model.id === 'gpt-5.6-luna')

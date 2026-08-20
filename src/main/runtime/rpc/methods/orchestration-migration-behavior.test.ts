@@ -245,4 +245,78 @@ describe('orchestration migration behavior', () => {
     expect(db.getTask(task.id)?.status).toBe('ready')
     expect(db.getDispatchContext(task.id)).toBeUndefined()
   })
+
+  it('drops injected worker preferences for a legacy connected server', async () => {
+    const { db, runtime } = createRuntime()
+    const run = db.createRun({
+      objective: 'legacy worker preferences',
+      coordinatorHandle: 'term_coord',
+      coordinatorPaneKey: 'tab_coord:leaf_coord'
+    })
+    const task = db.createTask({ spec: 'remote work', runId: run.id })
+    vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
+      environmentId: 'environment_windows',
+      name: 'windows',
+      peerFingerprint: 'windows_peer'
+    })
+    const remoteCall = vi
+      .spyOn(runtime, 'callOrchestrationWorkerServer')
+      .mockImplementation(async (_selector, method, params) => {
+        if (method === 'status.get') {
+          return {
+            capabilities: [
+              ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
+              ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
+            ]
+          }
+        }
+        expect((params as { model?: string }).model).toBeUndefined()
+        expect((params as { effort?: string }).effort).toBeUndefined()
+        return {
+          dispatchId: (params as { dispatchId: string }).dispatchId,
+          state: 'ready',
+          runtimeEpoch: runtime.getRuntimeId(),
+          worktreeId: 'repo::remote-worktree',
+          terminalHandle: 'term_remote_worker'
+        }
+      })
+
+    const started = (await startFederatedWorker({
+      params: {
+        task: task.id,
+        from: 'term_coord',
+        on: 'windows',
+        worktree: 'folder:remote-workspace',
+        agent: 'codex',
+        model: 'gpt-5.6-sol',
+        effort: 'high'
+      },
+      runtime,
+      db,
+      runId: run.id,
+      task,
+      defaultsApplied: { agent: false, model: true, effort: true },
+      orchestrationMutation: {
+        callerFingerprint: 'caller',
+        requestId: 'remote_start',
+        method: 'orchestration.workerStart',
+        payloadHash: 'payload'
+      }
+    })) as { state: string; launch: unknown }
+
+    expect(remoteCall).toHaveBeenCalledWith(
+      'environment_windows',
+      'orchestration.federationAttachStart',
+      expect.anything(),
+      expect.anything(),
+      expect.anything()
+    )
+    expect(started).toMatchObject({
+      state: 'ready',
+      launch: {
+        requested: { agent: 'codex', model: null, effort: null },
+        effective: { agent: 'codex', model: null, effort: null }
+      }
+    })
+  })
 })

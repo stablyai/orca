@@ -26,15 +26,25 @@ describe('orchestration worker model settings', () => {
     ).toEqual({ codex: 'gpt-5.6-luna', claude: 'opus' })
   })
 
-  it('keeps only cataloged launch-time efforts', () => {
+  it('keeps only cataloged launch-time efforts for supported launch agents', () => {
     expect(
       normalizeOrchestrationWorkerEfforts({
         codex: ' max ',
         claude: 'future-effort',
         gemini: 'high',
-        aider: 'high'
+        aider: 'high',
+        grok: 'high'
       })
     ).toEqual({ codex: 'max' })
+  })
+
+  it('validates an effort against its stored model when one is available', () => {
+    expect(
+      normalizeOrchestrationWorkerEfforts(
+        { codex: ' max ', claude: ' high ' },
+        { codex: 'gpt-5.5', claude: 'opus' }
+      )
+    ).toEqual({ claude: 'high' })
   })
 
   it('resolves effort against the selected model', () => {

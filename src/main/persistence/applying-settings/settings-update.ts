@@ -98,14 +98,17 @@ export function updateSettings(
       updates.orchestrationDefaultWorkerAgent
     )
   }
+  const orchestrationWorkerModels =
+    'orchestrationWorkerModels' in updates
+      ? normalizeOrchestrationWorkerModels(updates.orchestrationWorkerModels)
+      : operations.state.settings.orchestrationWorkerModels
   if ('orchestrationWorkerModels' in updates) {
-    sanitizedUpdates.orchestrationWorkerModels = normalizeOrchestrationWorkerModels(
-      updates.orchestrationWorkerModels
-    )
+    sanitizedUpdates.orchestrationWorkerModels = orchestrationWorkerModels
   }
   if ('orchestrationWorkerEfforts' in updates) {
     sanitizedUpdates.orchestrationWorkerEfforts = normalizeOrchestrationWorkerEfforts(
-      updates.orchestrationWorkerEfforts
+      updates.orchestrationWorkerEfforts,
+      orchestrationWorkerModels
     )
   }
   if ('agentDefaultEnv' in updates) {

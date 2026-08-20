@@ -18,8 +18,12 @@ import {
   type CatalogModel
 } from '../../../../shared/agent-session-option-catalog'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
+import { getConnectionIdFromState } from '@/lib/connection-context'
+import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { AgentIcon, getAgentCatalog } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
+import { discoverRuntimeCommitMessageModels } from '@/runtime/runtime-git-client'
+import { useAppStore } from '@/store'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 
@@ -34,6 +38,20 @@ type WorkerModelAgent = {
 }
 
 type DiscoveredModels = Partial<Record<TuiAgent, CommitMessageModelCapability[]>>
+
+function getWorkerModelDiscoveryContext() {
+  const state = useAppStore.getState()
+  const worktreeId = state.activeWorktreeId
+  const worktree = worktreeId ? state.getKnownWorktreeById(worktreeId) : undefined
+  const activeRepo = state.repos.find((repo) => repo.id === state.activeRepoId)
+  const connectionId = getConnectionIdFromState(state, worktreeId) ?? activeRepo?.connectionId
+  return {
+    settings: getSettingsForWorktreeRuntimeOwner(state, worktreeId),
+    worktreeId,
+    worktreePath: worktree?.path ?? activeRepo?.path ?? '',
+    ...(connectionId ? { connectionId } : {})
+  }
+}
 
 function toDiscoveredCatalogModel(
   catalog: AgentSessionOptionCatalog,
@@ -140,12 +158,27 @@ export function OrchestrationWorkerModelSetting(props: {
     () => getAgentCatalog().filter((agent) => isTuiAgentEnabled(agent.id, props.disabledAgents)),
     [props.disabledAgents]
   )
+  const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
+  const activeWorktreePath = useAppStore((state) => {
+    const worktreeId = state.activeWorktreeId
+    return worktreeId ? (state.getKnownWorktreeById(worktreeId)?.path ?? '') : ''
+  })
+  const activeRepoPath = useAppStore(
+    (state) => state.repos.find((repo) => repo.id === state.activeRepoId)?.path ?? ''
+  )
+  const activeConnectionId = useAppStore((state) =>
+    getConnectionIdFromState(state, state.activeWorktreeId)
+  )
+  const activeRuntimeEnvironmentId = useAppStore(
+    (state) => state.settings?.activeRuntimeEnvironmentId ?? null
+  )
   const modelAgents = useMemo(() => getWorkerModelAgents(discoveredModels), [discoveredModels])
   const selectedAgent = defaultWorkerAgents.some((agent) => agent.id === props.defaultAgent)
     ? props.defaultAgent
     : null
   const selectedAgentLabel =
-    defaultWorkerAgents.find((agent) => agent.id === selectedAgent)?.label ?? 'Worker'
+    defaultWorkerAgents.find((agent) => agent.id === selectedAgent)?.label ??
+    translate('auto.components.settings.OrchestrationWorkerModelSetting.workerLabel', 'Worker')
 
   // Why: only the selected worker's own catalog is reachable, so model and effort
   // narrow from the agent above them instead of listing every agent at once.
@@ -213,7 +246,10 @@ export function OrchestrationWorkerModelSetting(props: {
     void Promise.all(
       dynamicAgents.map(async (agent) => {
         try {
-          const result = await window.api.git.discoverCommitMessageModels({ agentId: agent.id })
+          const result = await discoverRuntimeCommitMessageModels(
+            getWorkerModelDiscoveryContext(),
+            agent.id
+          )
           return result.success ? ([agent.id, result.models] as const) : null
         } catch {
           return null
@@ -230,7 +266,13 @@ export function OrchestrationWorkerModelSetting(props: {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [
+    activeConnectionId,
+    activeRepoPath,
+    activeRuntimeEnvironmentId,
+    activeWorktreeId,
+    activeWorktreePath
+  ])
 
   return (
     <section className="space-y-2 rounded-md border border-border px-4 py-3">

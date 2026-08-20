@@ -10,6 +10,11 @@ import type { TuiAgent } from './tui-agent'
 
 export type OrchestrationWorkerModels = Partial<Record<TuiAgent, string>>
 export type OrchestrationWorkerEfforts = Partial<Record<TuiAgent, string>>
+export type OrchestrationWorkerLaunchDefaults = {
+  agent: TuiAgent | null
+  models: OrchestrationWorkerModels
+  efforts: OrchestrationWorkerEfforts
+}
 
 export function normalizeOrchestrationDefaultWorkerAgent(value: unknown): TuiAgent | null {
   return typeof value === 'string' && isTuiAgent(value) ? value : null
@@ -58,6 +63,7 @@ export function resolveOrchestrationWorkerEffort(
 function agentSupportsEffort(agent: TuiAgent, effort: string): boolean {
   const catalog = getAgentSessionOptionCatalog(agent)
   return Boolean(
+    supportsLaunchModel(agent) &&
     catalog?.models.some((model) => {
       const option = getOrchestrationWorkerEffortOption(agent, model.id)
       return (
@@ -85,17 +91,24 @@ export function normalizeOrchestrationWorkerModels(value: unknown): Orchestratio
   return normalized
 }
 
-export function normalizeOrchestrationWorkerEfforts(value: unknown): OrchestrationWorkerEfforts {
+export function normalizeOrchestrationWorkerEfforts(
+  value: unknown,
+  models?: OrchestrationWorkerModels | null
+): OrchestrationWorkerEfforts {
   const normalized: OrchestrationWorkerEfforts = {}
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return normalized
   }
   for (const [agent, rawEffort] of Object.entries(value)) {
-    if (!isTuiAgent(agent) || typeof rawEffort !== 'string') {
+    if (!isTuiAgent(agent) || !supportsLaunchModel(agent) || typeof rawEffort !== 'string') {
       continue
     }
     const effort = rawEffort.trim()
-    if (effort && agentSupportsEffort(agent, effort)) {
+    const model = models?.[agent]
+    const isSupported = model
+      ? resolveOrchestrationWorkerEffort(agent, model, effort) !== undefined
+      : agentSupportsEffort(agent, effort)
+    if (effort && isSupported) {
       normalized[agent] = effort
     }
   }

@@ -447,6 +447,13 @@ describe('Store', () => {
     expect(store.getSettings().orchestrationWorkerModels).toEqual({ codex: 'gpt-5.6-luna' })
     expect(store.getSettings().orchestrationWorkerEfforts).toEqual({ codex: 'max' })
 
+    const mismatched = store.updateSettings({
+      orchestrationWorkerModels: { codex: 'gpt-5.5' },
+      orchestrationWorkerEfforts: { codex: 'max' }
+    })
+    expect(mismatched.orchestrationWorkerModels).toEqual({ codex: 'gpt-5.5' })
+    expect(mismatched.orchestrationWorkerEfforts).toEqual({})
+
     const updated = store.updateSettings({
       orchestrationDefaultWorkerAgent: 'unknown' as never,
       orchestrationWorkerModels: { claude: ' opus ', cursor: '' } as never,
@@ -455,6 +462,39 @@ describe('Store', () => {
     expect(updated.orchestrationDefaultWorkerAgent).toBeNull()
     expect(updated.orchestrationWorkerModels).toEqual({ claude: 'opus' })
     expect(updated.orchestrationWorkerEfforts).toEqual({ claude: 'high' })
+  })
+
+  it('drops persisted efforts that exceed their stored model ceiling', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({
+        settings: {
+          orchestrationWorkerModels: { codex: 'gpt-5.5' },
+          orchestrationWorkerEfforts: { codex: 'max' }
+        }
+      })
+    )
+    const store = await createStore()
+
+    expect(store.getSettings().orchestrationWorkerModels).toEqual({ codex: 'gpt-5.5' })
+    expect(store.getSettings().orchestrationWorkerEfforts).toEqual({})
+  })
+
+  it('round-trips normalized orchestration worker preferences through persistence', async () => {
+    const store = await createStore()
+
+    store.updateSettings({
+      orchestrationWorkerModels: { codex: 'gpt-5.5', claude: 'opus' },
+      orchestrationWorkerEfforts: { codex: 'max', claude: 'high' }
+    })
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getSettings().orchestrationWorkerModels).toEqual({
+      codex: 'gpt-5.5',
+      claude: 'opus'
+    })
+    expect(reloaded.getSettings().orchestrationWorkerEfforts).toEqual({ claude: 'high' })
   })
 
   it('enables Claude Agent Teams by default for fresh installs', async () => {

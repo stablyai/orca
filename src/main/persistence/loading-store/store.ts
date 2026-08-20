@@ -1181,6 +1181,13 @@ export class Store {
         ) {
           this.loadNeedsSave = true
         }
+        const migratedOrchestrationWorkerModels = normalizeOrchestrationWorkerModels(
+          parsed.settings?.orchestrationWorkerModels
+        )
+        const migratedOrchestrationWorkerEfforts = normalizeOrchestrationWorkerEfforts(
+          parsed.settings?.orchestrationWorkerEfforts,
+          migratedOrchestrationWorkerModels
+        )
         result = {
           ...defaults,
           ...parsed,
@@ -1277,12 +1284,8 @@ export class Store {
             orchestrationDefaultWorkerAgent: normalizeOrchestrationDefaultWorkerAgent(
               parsed.settings?.orchestrationDefaultWorkerAgent
             ),
-            orchestrationWorkerModels: normalizeOrchestrationWorkerModels(
-              parsed.settings?.orchestrationWorkerModels
-            ),
-            orchestrationWorkerEfforts: normalizeOrchestrationWorkerEfforts(
-              parsed.settings?.orchestrationWorkerEfforts
-            ),
+            orchestrationWorkerModels: migratedOrchestrationWorkerModels,
+            orchestrationWorkerEfforts: migratedOrchestrationWorkerEfforts,
             ...migratedAgentYoloDefaults,
             claudeAgentTeamsDefaultDisabledMigrated: true,
             openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {
