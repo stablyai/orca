@@ -2,13 +2,13 @@ import React, { useMemo } from 'react'
 import { FileText, GitPullRequest, Lock } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { chipStyle, singleSelectChipColors } from './single-select-chip-colors'
-import { EMPTY_GROUP_KEY, sortRows } from '../../../../shared/github-project-group-sort'
+import { EMPTY_GROUP_KEY, sortRows } from '../../../../shared/github/project-group-sort'
 import {
   buildBoardColumns,
   resolveBoardGroupField,
   type ProjectBoardColumn
-} from '../../../../shared/github-project-board-columns'
-import type { GitHubProjectRow, GitHubProjectTable } from '../../../../shared/github-project-types'
+} from '../../../../shared/github/project-board-columns'
+import type { GitHubProjectRow, GitHubProjectTable } from '../../../../shared/github/project-types'
 import { translate } from '@/i18n/i18n'
 
 type Props = {

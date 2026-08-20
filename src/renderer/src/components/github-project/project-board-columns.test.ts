@@ -3,11 +3,11 @@ import type {
   GitHubProjectField,
   GitHubProjectRow,
   GitHubProjectView
-} from '../../../../shared/github-project-types'
+} from '../../../../shared/github/project-types'
 import {
   buildBoardColumns,
   resolveBoardGroupField
-} from '../../../../shared/github-project-board-columns'
+} from '../../../../shared/github/project-board-columns'
 
 const statusField = {
   kind: 'single-select',

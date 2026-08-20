@@ -1,12 +1,8 @@
 // Why: board-column derivation is deterministic shared logic driven by
 // `selectedView`, kept pure (like github-project-group-sort) so desktop and
 // mobile can render Board views identically and it stays unit-testable.
-import { groupRowsByField } from './github-project-group-sort'
-import type {
-  GitHubProjectField,
-  GitHubProjectRow,
-  GitHubProjectView
-} from './github-project-types'
+import { groupRowsByField } from './project-group-sort'
+import type { GitHubProjectField, GitHubProjectRow, GitHubProjectView } from './project-types'
 
 export type ProjectBoardColumn = {
   /** Stable key for React reconciliation: option id, `raw:<value>`, or the
