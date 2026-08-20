@@ -18,6 +18,7 @@ import {
 import type { MatchRange } from './palette-match/normalized-text'
 import type { PaletteDocument, PaletteDocumentRank } from './palette-match/palette-document'
 import type { PaletteResultQualityClass } from './palette-match/match-quality'
+import { createHostQualifiedWorktreeStateReader } from './worktree-palette-state-reader'
 
 const NO_RANGES: readonly MatchRange[] = []
 
@@ -164,18 +165,16 @@ function getActiveUnifiedTabId({
   activeWorktreeId,
   activeWorkspaceExecutionHostId,
   activeTabType,
-  activeGroupIdByWorktree,
-  groupsByWorktree
+  activeGroupId,
+  groups
 }: Pick<
   BuildSearchableSimulatorTabsOptions,
-  | 'activeGroupIdByWorktree'
-  | 'activeTabType'
-  | 'activeWorktreeId'
-  | 'activeWorkspaceExecutionHostId'
-  | 'groupsByWorktree'
+  'activeTabType' | 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'
 > & {
   worktreeId: string
   worktreeHostId?: Worktree['hostId']
+  activeGroupId?: string
+  groups?: readonly TabGroup[]
 }): string | null {
   if (
     !isPaletteCurrentWorktree(
@@ -187,9 +186,8 @@ function getActiveUnifiedTabId({
   ) {
     return null
   }
-  const activeGroupId = activeGroupIdByWorktree[worktreeId]
   const activeGroup = activeGroupId
-    ? (groupsByWorktree[worktreeId] ?? []).find((group) => group.id === activeGroupId)
+    ? groups?.find((group) => group.id === activeGroupId)
     : undefined
   return activeGroup?.activeTabId ?? null
 }
@@ -207,6 +205,12 @@ export function buildSearchableSimulatorTabs({
   activeTabType
 }: BuildSearchableSimulatorTabsOptions): SearchableSimulatorTab[] {
   const entries: SearchableSimulatorTab[] = []
+  const readUnifiedTabs = createHostQualifiedWorktreeStateReader(worktrees, unifiedTabsByWorktree)
+  const readActiveGroupId = createHostQualifiedWorktreeStateReader(
+    worktrees,
+    activeGroupIdByWorktree
+  )
+  const readGroups = createHostQualifiedWorktreeStateReader(worktrees, groupsByWorktree)
   for (const worktree of worktrees) {
     const repoName =
       resolvePaletteRepoForWorktree(worktree, repoMap, repoMapByHostIdentity)?.displayName ?? ''
@@ -220,10 +224,10 @@ export function buildSearchableSimulatorTabs({
       activeWorktreeId,
       activeWorkspaceExecutionHostId,
       activeTabType,
-      activeGroupIdByWorktree,
-      groupsByWorktree
+      activeGroupId: readActiveGroupId(worktree),
+      groups: readGroups(worktree)
     })
-    const tabs = unifiedTabsByWorktree[worktree.id] ?? []
+    const tabs = readUnifiedTabs(worktree) ?? []
     for (const tab of tabs) {
       if (tab.contentType !== 'simulator') {
         continue
