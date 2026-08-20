@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import {
   applyAppAppearanceToDocument,
+  applyDocumentAppearance,
   clearAppAppearanceFromDocument
 } from './app-appearance-document'
 import { APP_APPEARANCE_STYLE_PROPERTIES } from './left-sidebar-appearance'
@@ -199,6 +200,21 @@ describe('applyAppAppearanceToDocument', () => {
     for (const property of APP_APPEARANCE_STYLE_PROPERTIES) {
       expect(root.style.getPropertyValue(property)).toBe('')
     }
+  })
+
+  it('uses theme previews when resolving terminal-derived tokens', () => {
+    const root = document.documentElement
+    const darkSettings = settings({
+      theme: 'dark',
+      leftSidebarAppearanceMode: 'match-terminal',
+      terminalUseSeparateLightTheme: true
+    })
+
+    applyDocumentAppearance(darkSettings, false, { root })
+    const darkBackground = root.style.getPropertyValue('--background')
+    applyDocumentAppearance(darkSettings, false, { root, theme: 'light' })
+
+    expect(root.style.getPropertyValue('--background')).not.toBe(darkBackground)
   })
 
   it('recomputes terminal-derived tokens when the system preference changes', () => {

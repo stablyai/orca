@@ -25,11 +25,6 @@ function HoverCardContent({
         data-slot="hover-card-content"
         align={align}
         sideOffset={sideOffset}
-        // Why: matches the dropdown-menu recipe — translucent surface, solid
-        // 14% border, dual shadow, and 2xl backdrop blur. The previous
-        // border-border/50 + bg-popover made the hover card blend into the
-        // dark canvas (#171717 vs #0a0a0a, ~3% white lift) with a near-
-        // invisible border.
         className={cn(
           'z-50 w-64 origin-(--radix-hover-card-content-transform-origin) rounded-md border border-border bg-popover p-4 text-popover-foreground shadow-[0_10px_24px_rgba(0,0,0,0.18)] outline-hidden data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
           className
