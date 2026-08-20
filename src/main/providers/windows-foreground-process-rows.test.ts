@@ -110,13 +110,19 @@ describe('windows foreground process rows spawn options', () => {
     expect(optionsForCommand('wmic')).toMatchObject({ encoding: 'buffer' })
   })
 
-  // Orca's own panes run multi-line commands, so CR/LF inside CommandLine is
-  // routine — and `Key=Value` framing is exactly what it can impersonate.
-  it('keeps a CommandLine holding CR/LF in one row', async () => {
+  // Orca's own agent panes run multi-line commands, so CR/LF inside CommandLine is
+  // routine — `Key=Value` framing is exactly what it can impersonate, and a blank
+  // line in there is exactly what a record separator looks like. Measured on a real
+  // 920-process table: every command line carrying one belonged to a claude/codex/
+  // node/sh pane, i.e. the rows foreground detection reads to name the agent.
+  it('keeps an agent CommandLine holding CR/LF and a blank line in one row', async () => {
     const multiline =
-      "CommandLine=bash -lc $'echo a\nProcessId=4\necho b'\n" +
-      'ExecutablePath=C:/msys64/usr/bin/bash.exe\n' +
-      'Name=bash.exe\n' +
+      "CommandLine=claude --append-system-prompt $'line one\n" +
+      '\n' +
+      'ProcessId=4\n' +
+      "line two'\n" +
+      'ExecutablePath=C:/Users/dev/AppData/Local/claude/claude.exe\n' +
+      'Name=claude.exe\n' +
       'ParentProcessId=100\n' +
       'ProcessId=300\n\n'
     execFileMock.mockImplementation((cmd: string, _args, _opts, cb: ExecFileCallback) => {
@@ -130,7 +136,7 @@ describe('windows foreground process rows spawn options', () => {
 
     expect(candidates?.map((row) => row.pid).sort()).toEqual([200, 300])
     expect(candidates?.find((row) => row.pid === 300)?.command).toBe(
-      "bash -lc $'echo a\nProcessId=4\necho b'"
+      "claude --append-system-prompt $'line one\n\nProcessId=4\nline two'"
     )
   })
 

@@ -141,9 +141,9 @@ const WMIC_VALUE_FIELDS = [
  * next property in order opens a field; every other line continues the field
  * being read, which is what keeps `$'echo a\nProcessId=4'` one row instead of
  * two malformed ones — the hazard that made the PowerShell reader ask for JSON.
- * A blank line closes the record, so a malformed one costs itself and not the
- * rest of the table. Between records any property may open one, so a process
- * whose CommandLine is NULL still parses.
+ * Between records any property may open one, so a process whose CommandLine is
+ * NULL still parses, and a record missing a middle property merges into the next
+ * rather than desyncing the rest of the table.
  *
  * Residue: a command line embedding the whole `ExecutablePath`..`ProcessId` tail
  * in order forges a row. It cannot suppress its own real row, so a forged pid
@@ -174,8 +174,15 @@ function parseWindowsProcessValueRows(stdout: string): WindowsProcessRow[] {
 
   for (const line of stdout.split(/\r?\n/)) {
     if (line.trim() === '') {
-      if (field >= 0) {
+      // Only past CommandLine does a blank line mean end-of-record; inside one it
+      // is content. Agent CLIs really do embed blank lines — on this machine every
+      // process whose command line held one was a claude/codex/node/sh pane, the
+      // exact rows foreground detection reads. Flushing there dropped the command
+      // and left the row naming only its executable.
+      if (field >= 1) {
         flush()
+      } else if (field === 0) {
+        values[0] += '\n'
       }
       continue
     }
