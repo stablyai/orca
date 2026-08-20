@@ -1,13 +1,7 @@
 import type { MessageRow } from './types'
 
-/**
- * Whether a `worker_done` payload names this Dispatch's own work.
- *
- * Why: parking a lane on a rejected report is a courtesy to a worker that really finished, so it
- * needs the same identity proof reconciliation applies — the right task, the right Dispatch and a
- * real outcome. A report that names another task, or no task, proves nothing about this lane and
- * must leave it as it was.
- */
+// Why: parking a lane on a rejected report needs the same identity proof reconciliation applies,
+// or a report naming another task would move a lane it never worked.
 export function isWorkerReportForDispatch(
   dispatch: { id: string; task_id: string },
   msg: MessageRow
