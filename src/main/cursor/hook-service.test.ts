@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { spawnSync } from 'node:child_process'
 
 const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
@@ -32,6 +33,31 @@ const CURSOR_EVENTS = [
 const CURSOR_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'cursor-hook.cmd' : 'cursor-hook.sh'
 const WINDOWS_POWERSHELL_LAUNCHER =
   /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand \S+$/
+
+const CURSOR_PERMISSION_EVENTS = new Set([
+  'preToolUse',
+  'beforeShellExecution',
+  'beforeMCPExecution'
+])
+
+function runManagedHook(command: string, eventName: string): { stdout: string; stderr: string } {
+  const executable = process.platform === 'win32' ? 'cmd.exe' : '/bin/sh'
+  const args = process.platform === 'win32' ? ['/d', '/s', '/c', command] : ['-c', command]
+  const result = spawnSync(executable, args, {
+    encoding: 'utf8',
+    input: JSON.stringify({ hook_event_name: eventName }),
+    env: {
+      ...process.env,
+      ORCA_AGENT_HOOK_ENDPOINT: '',
+      ORCA_AGENT_HOOK_PORT: '',
+      ORCA_AGENT_HOOK_TOKEN: '',
+      ORCA_PANE_KEY: ''
+    }
+  })
+  expect(result.error).toBeUndefined()
+  expect(result.status).toBe(0)
+  return { stdout: result.stdout, stderr: result.stderr }
+}
 
 describe('CursorHookService', () => {
   let homeDir: string
@@ -84,6 +110,41 @@ describe('CursorHookService', () => {
       expect(script).toContain('printf \'%s\' "$payload" | curl')
       expect(script).toContain('--data-urlencode "payload@-"')
       expect(script).not.toContain('--data-urlencode "payload=${payload}"')
+    }
+  })
+
+  it('returns protocol-valid JSON for every managed Cursor event (#15462)', () => {
+    new CursorHookService().install()
+
+    const config = JSON.parse(readFileSync(join(homeDir, '.cursor', 'hooks.json'), 'utf8')) as {
+      hooks: Record<string, { command?: string }[]>
+    }
+    for (const eventName of CURSOR_EVENTS) {
+      const command = config.hooks[eventName]?.[0]?.command
+      expect(command).toBeDefined()
+      const result = runManagedHook(command!, eventName)
+      expect(result.stderr).toBe('')
+      expect(JSON.parse(result.stdout)).toEqual(
+        CURSOR_PERMISSION_EVENTS.has(eventName) ? { permission: 'allow' } : {}
+      )
+    }
+  })
+
+  it('returns protocol-valid JSON when the managed Cursor script is missing (#15462)', () => {
+    new CursorHookService().install()
+
+    const config = JSON.parse(readFileSync(join(homeDir, '.cursor', 'hooks.json'), 'utf8')) as {
+      hooks: Record<string, { command?: string }[]>
+    }
+    unlinkSync(join(homeDir, '.orca', 'agent-hooks', CURSOR_SCRIPT_FILE_NAME))
+    for (const eventName of CURSOR_EVENTS) {
+      const command = config.hooks[eventName]?.[0]?.command
+      expect(command).toBeDefined()
+      const result = runManagedHook(command!, eventName)
+      expect(result.stderr).toBe('')
+      expect(JSON.parse(result.stdout)).toEqual(
+        CURSOR_PERMISSION_EVENTS.has(eventName) ? { permission: 'allow' } : {}
+      )
     }
   })
 

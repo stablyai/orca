@@ -40,6 +40,18 @@ const CURSOR_EVENTS = [
   'afterAgentResponse'
 ] as const
 
+type CursorEvent = (typeof CURSOR_EVENTS)[number]
+
+const CURSOR_PERMISSION_EVENTS = new Set<CursorEvent>([
+  'preToolUse',
+  'beforeShellExecution',
+  'beforeMCPExecution'
+])
+
+function getCursorHookResponse(eventName: CursorEvent): string {
+  return CURSOR_PERMISSION_EVENTS.has(eventName) ? '{"permission":"allow"}' : '{}'
+}
+
 function getConfigPath(): string {
   return join(homedir(), '.cursor', 'hooks.json')
 }
@@ -52,10 +64,24 @@ function getManagedScriptPath(): string {
   return getSharedManagedScriptPath(getManagedScriptFileName())
 }
 
-function getManagedCommand(scriptPath: string): string {
+function getPosixManagedCommand(scriptPath: string, eventName: CursorEvent): string {
+  const response = getCursorHookResponse(eventName)
+  return wrapPosixHookCommand(
+    scriptPath,
+    { ORCA_CURSOR_HOOK_RESPONSE: response },
+    { fallbackStdout: response }
+  )
+}
+
+function getManagedCommand(scriptPath: string, eventName: CursorEvent): string {
+  const response = getCursorHookResponse(eventName)
   return process.platform === 'win32'
-    ? wrapWindowsHookCommand(scriptPath)
-    : wrapPosixHookCommand(scriptPath)
+    ? wrapWindowsHookCommand(
+        scriptPath,
+        { ORCA_CURSOR_HOOK_RESPONSE: response },
+        { fallbackStdout: response }
+      )
+    : getPosixManagedCommand(scriptPath, eventName)
 }
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
@@ -63,6 +89,8 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     return [
       '@echo off',
       'setlocal',
+      // Why: Cursor permission hooks fail closed when stdout is empty or invalid (#15462).
+      'if defined ORCA_CURSOR_HOOK_RESPONSE (echo %ORCA_CURSOR_HOOK_RESPONSE%) else (echo {})',
       // Why: source current endpoint coordinates for PTYs surviving an Orca restart.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
@@ -75,6 +103,12 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
 
   return [
     '#!/bin/sh',
+    // Why: Cursor permission hooks fail closed when stdout is empty or invalid (#15462).
+    'if [ -n "$ORCA_CURSOR_HOOK_RESPONSE" ]; then',
+    '  printf "%s\\n" "$ORCA_CURSOR_HOOK_RESPONSE"',
+    'else',
+    '  printf "{}\\n"',
+    'fi',
     ...buildPosixHookPayloadCapture(),
     // Why: refresh endpoint coordinates so surviving PTYs keep reporting.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
@@ -120,10 +154,10 @@ export class CursorHookService {
       }
     }
 
-    const command = getManagedCommand(scriptPath)
     const missing: string[] = []
     let presentCount = 0
     for (const eventName of CURSOR_EVENTS) {
+      const command = getManagedCommand(scriptPath, eventName)
       const definitions = Array.isArray(config.hooks?.[eventName]) ? config.hooks![eventName]! : []
       // Why: Cursor puts command directly on the definition (Claude nests under `hooks`); match both shapes.
       const hasCommand = definitions.some(
@@ -167,7 +201,6 @@ export class CursorHookService {
       }
     }
 
-    const command = getManagedCommand(scriptPath)
     // Why: config.hooks is undefined on a fresh file with no prior hook install.
     const nextHooks = { ...config.hooks }
     const managedEvents = new Set<string>(CURSOR_EVENTS)
@@ -196,6 +229,7 @@ export class CursorHookService {
     }
 
     for (const eventName of CURSOR_EVENTS) {
+      const command = getManagedCommand(scriptPath, eventName)
       const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
       // Sweep Claude- and Cursor-shaped variants so installs converge on one entry.
       const cleaned = removeManagedCommands(current, isManagedCommand).filter(
@@ -232,11 +266,11 @@ export class CursorHookService {
         }
       }
 
-      const command = wrapPosixHookCommand(remoteScriptPath)
       const nextHooks = { ...config.hooks }
       const isManagedCommand = createManagedCommandMatcher('cursor-hook.sh')
 
       for (const eventName of CURSOR_EVENTS) {
+        const command = getPosixManagedCommand(remoteScriptPath, eventName)
         const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
         // Why: dual-shape sweep so repeated installs converge on a single managed entry.
         const cleaned = removeManagedCommands(current, isManagedCommand).filter(

@@ -637,6 +637,17 @@ describe('wrapWindowsHookCommand', () => {
     )
   })
 
+  it('emits fallback stdout when the managed script is missing', () => {
+    const command = wrapWindowsHookCommand(
+      'C:\\hooks\\cursor-hook.cmd',
+      {},
+      { fallbackStdout: '{"permission":"allow"}' }
+    )
+    expect(decodeWindowsHookCommand(command)).toContain(
+      'Write-Output \'{"permission":"allow"}\'; exit 0'
+    )
+  })
+
   // Why: a user profile path like `C:\Users\Jane Doe` is the regression from
   // #6078 — the raw path used to be split at the space. The wrapper must keep
   // the whole path inside the encoded command so shells do not split it.
