@@ -322,6 +322,9 @@ export type ComposerCardProps = {
   /** When on, the modal stays open after each create and resets identity fields to allow creating several in a row. */
   createMultiple: boolean
   onCreateMultipleChange: (next: boolean) => void
+  /** When on, the startup prompt is auto-submitted to the agent once the workspace's first terminal is ready. */
+  createAndRun: boolean
+  onCreateAndRunChange: (next: boolean) => void
   agentPrompt: string
   onAgentPromptChange: (value: string) => void
   /** Rendered issueCommand template previewed in the empty prompt when a work item is linked but nothing typed. */
@@ -979,6 +982,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   const [agentPrompt, setAgentPrompt] = useState<string>(
     persistDraft ? (newWorkspaceDraft?.prompt ?? initialPrompt) : initialPrompt
   )
+  // Why: "Create & run" auto-submits the startup prompt to the agent once the
+  // workspace's first terminal is ready, instead of only prefilling it as a draft.
+  const [createAndRun, setCreateAndRun] = useState<boolean>(false)
   const [note, setNote] = useState<string>(persistDraft ? (newWorkspaceDraft?.note ?? '') : '')
   const [attachmentPaths, setAttachmentPaths] = useState<string[]>(
     persistDraft ? (newWorkspaceDraft?.attachments ?? []) : []
@@ -4390,8 +4396,19 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         const trimmedNote = note.trim()
         // Why: agents needing post-ready paste/follow-up stay on the renderer path so prompt delivery isn't skipped.
         const promptLinkedWorkItem = agent === null ? null : submitLinkedWorkItem
-        const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
+        // Why: an explicit "Start with a prompt" wins over the note/linked-item-derived
+        // draft so "Create & run" can auto-submit exactly what the user typed.
+        const trimmedAgentPrompt = agentPrompt.trim()
+        const { prompt: linkedQuickPrompt, draftPrompt: linkedQuickDraftPrompt } =
           resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote)
+        // Why: keep the linked item's context (e.g. a referenced GitHub issue URL)
+        // alongside an explicit "Start with a prompt" instead of discarding it.
+        const linkedContextUrl = promptLinkedWorkItem?.url?.trim() || null
+        const mergedPrompt = trimmedAgentPrompt
+          ? [trimmedAgentPrompt, linkedContextUrl].filter(Boolean).join('\n\n')
+          : trimmedAgentPrompt
+        const quickPrompt = mergedPrompt || linkedQuickPrompt
+        const quickDraftPrompt = mergedPrompt || linkedQuickDraftPrompt
         const quickSessionOptions =
           agent === null
             ? undefined
@@ -4586,6 +4603,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           startupPlan,
           quickPrompt,
           ...(quickDraftPrompt ? { launchDraftPrompt: quickDraftPrompt } : {}),
+          ...(createAndRun ? { createAndRun: true } : {}),
           quickTelemetry,
           ...(createMultiple ? { suppressTerminalFocusOnCompletion: true } : {})
         }
@@ -4617,6 +4635,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     },
     [
       baseBranch,
+      agentPrompt,
       compareBaseRef,
       branchNameOverride,
       branchNameOverridePreservesNameEdits,
@@ -4679,6 +4698,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       ephemeralVmRecipes,
       isProjectGroupTarget,
       submitFolderTarget,
+      createAndRun,
       createMultiple,
       resetForNextCreate
     ]
@@ -4747,6 +4767,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     showCreateMultiple: !isProjectGroupTarget,
     createMultiple,
     onCreateMultipleChange: setCreateMultiple,
+    createAndRun,
+    onCreateAndRunChange: setCreateAndRun,
     agentPrompt,
     onAgentPromptChange: setAgentPrompt,
     linkedOnlyTemplatePreview: shouldApplyLinkedOnlyTemplate ? linkedOnlyTemplatePrompt : null,

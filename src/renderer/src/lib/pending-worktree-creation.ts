@@ -102,6 +102,9 @@ export type WorktreeCreationRequest = {
   /** Launch context delivered only as an unsent TUI-input draft (argv prefill or
    *  startup paste); completion seeds the chat-composer copy from it. */
   launchDraftPrompt?: string
+  /** When true, the startup prompt is auto-submitted to the agent as soon as the
+   *  workspace's first terminal is ready instead of only prefilled as a draft. */
+  createAndRun?: boolean
   quickTelemetry: AgentStartedTelemetry | null
   /** When the composer stays open for sequential creates, completion must not
    *  steal focus from the next workspace name field. */

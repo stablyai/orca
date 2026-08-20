@@ -28,8 +28,12 @@ export function buildWorktreeCreationStartupOpt(
     ...(request.launchDraftPrompt ? { launchDraftText: request.launchDraftPrompt } : {}),
     ...(plan.startupCommandDelivery ? { startupCommandDelivery: plan.startupCommandDelivery } : {}),
     // Why: command-code shows its prompt in the tab status before the first
-    // hook fires, so the prompt is threaded through here.
-    ...(request.agent === 'command-code' && request.quickPrompt.trim().length > 0
+    // hook fires, so the prompt is threaded through here. "Create & run" opts in
+    // to the same auto-submit for any agent: the prompt is delivered once the
+    // first terminal is ready instead of only prefilled as a draft.
+    ...(request.agent &&
+    request.quickPrompt.trim().length > 0 &&
+    (request.createAndRun === true || request.agent === 'command-code')
       ? { initialAgentStatus: { agent: request.agent, prompt: request.quickPrompt.trim() } }
       : {}),
     ...(request.quickTelemetry ? { telemetry: request.quickTelemetry } : {})

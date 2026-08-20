@@ -322,6 +322,7 @@ function QuickTabBody({
         onQuickAgentChange={handleQuickAgentChange}
         {...cardProps}
         primaryActionLabel={primaryActionLabel}
+        showAgentStartPrompt={!isFolderWorkspaceTarget}
         onOpenAgentSettings={() => setAgentSettingsOpen(true)}
         onCreate={() => void handleCreate()}
         onAddProjectOverride={handleOpenAddProject}

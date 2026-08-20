@@ -1523,7 +1523,10 @@
         "addSshHostHint": "Use an existing machine over SSH",
         "addRemoteOrcaServer": "Add Remote Orca Server",
         "addRemoteOrcaServerHint": "Pair another Orca runtime",
-        "hostConnectionFailed": "Connection failed"
+        "hostConnectionFailed": "Connection failed",
+        "agentPromptLabel": "Start with a prompt",
+        "agentPromptPlaceholder": "What should the agent do?",
+        "createAndRun": "Create & run"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Create worktree",

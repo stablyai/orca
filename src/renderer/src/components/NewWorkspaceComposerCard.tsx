@@ -127,6 +127,13 @@ type NewWorkspaceComposerCardProps = {
   showCreateMultiple?: boolean
   createMultiple?: boolean
   onCreateMultipleChange?: (next: boolean) => void
+  /** When on, the startup prompt is auto-submitted to the agent once the
+   *  workspace's first terminal is ready, instead of only prefilled as a draft. */
+  createAndRun?: boolean
+  onCreateAndRunChange?: (next: boolean) => void
+  /** Hides the "Start with a prompt" field and "Create & run" toggle. Off for
+   *  folder-workspace targets, which don't support prompt auto-submit. */
+  showAgentStartPrompt?: boolean
   smartNameGitHubSourceContext?: TaskSourceContext | null
   smartNameJiraSourceContext?: TaskSourceContext | null
   /** Advisory shown under the name field when a fork PR can't accept maintainer pushes. */
@@ -139,6 +146,10 @@ type NewWorkspaceComposerCardProps = {
   projectError: string | null
   creating: boolean
   onCreate: () => void
+  /** Startup prompt for the created workspace's agent. Empty keeps the
+   *  note/linked-item-derived prompt. */
+  agentPrompt?: string
+  onAgentPromptChange?: (value: string) => void
   note: string
   onNoteChange: (value: string) => void
   setupConfig: SetupConfig | null
@@ -341,6 +352,9 @@ export default function NewWorkspaceComposerCard({
   showCreateMultiple = false,
   createMultiple = false,
   onCreateMultipleChange,
+  createAndRun = false,
+  onCreateAndRunChange,
+  showAgentStartPrompt = true,
   smartNameGitHubSourceContext,
   smartNameJiraSourceContext,
   forkPushWarning,
@@ -352,6 +366,8 @@ export default function NewWorkspaceComposerCard({
   projectError,
   creating,
   onCreate,
+  agentPrompt = '',
+  onAgentPromptChange,
   note,
   onNoteChange,
   setupConfig,
@@ -938,6 +954,27 @@ export default function NewWorkspaceComposerCard({
           />
         </div>
 
+        {showAgentStartPrompt ? (
+          <div className="min-w-0 space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">
+              {translate(
+                'auto.components.NewWorkspaceComposerCard.agentPromptLabel',
+                'Start with a prompt'
+              )}
+            </label>
+            <textarea
+              value={agentPrompt}
+              onChange={(event) => onAgentPromptChange?.(event.target.value)}
+              placeholder={translate(
+                'auto.components.NewWorkspaceComposerCard.agentPromptPlaceholder',
+                'What should the agent do?'
+              )}
+              rows={1}
+              className="w-full min-w-0 resize-none overflow-y-auto scrollbar-sleek rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [field-sizing:content] max-h-40"
+            />
+          </div>
+        ) : null}
+
         {/* Why: keep the Advanced disclosure header grouped with the content below while preserving spacing from the Agent field above. */}
         <div className="!mb-2">
           {/* Why: -ml-2 pulls the button so its label aligns flush-left with the field labels above
@@ -1225,26 +1262,40 @@ export default function NewWorkspaceComposerCard({
         </div>
       ) : null}
 
-      <div
-        className={cn(
-          'flex items-center gap-3',
-          showCreateMultiple ? 'justify-between' : 'justify-end'
-        )}
-      >
-        {showCreateMultiple ? (
-          <button
-            type="button"
-            role="switch"
-            aria-checked={createMultiple}
-            onClick={() => onCreateMultipleChange?.(!createMultiple)}
-            className="group flex w-fit cursor-pointer items-center gap-2 rounded-md text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          >
-            <SwitchIndicator checked={createMultiple} />
-            <span className="text-muted-foreground transition-colors group-hover:text-foreground">
-              {translate('auto.components.NewWorkspaceComposerCard.createMultiple', 'Create more')}
-            </span>
-          </button>
-        ) : null}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          {showAgentStartPrompt ? (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={createAndRun}
+              onClick={() => onCreateAndRunChange?.(!createAndRun)}
+              className="group flex w-fit cursor-pointer items-center gap-2 rounded-md text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              <SwitchIndicator checked={createAndRun} />
+              <span className="text-muted-foreground transition-colors group-hover:text-foreground">
+                {translate('auto.components.NewWorkspaceComposerCard.createAndRun', 'Create & run')}
+              </span>
+            </button>
+          ) : null}
+          {showCreateMultiple ? (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={createMultiple}
+              onClick={() => onCreateMultipleChange?.(!createMultiple)}
+              className="group flex w-fit cursor-pointer items-center gap-2 rounded-md text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              <SwitchIndicator checked={createMultiple} />
+              <span className="text-muted-foreground transition-colors group-hover:text-foreground">
+                {translate(
+                  'auto.components.NewWorkspaceComposerCard.createMultiple',
+                  'Create more'
+                )}
+              </span>
+            </button>
+          ) : null}
+        </div>
         <Button
           onClick={() => void onCreate()}
           disabled={createDisabled}
