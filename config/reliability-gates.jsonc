@@ -10354,6 +10354,165 @@
       "demotionRule": "Keep experimental or demote if either Electron journey flakes without a product or harness defect, if local worker-start can return before tab materialization without an explicit reveal warning, if focus moves to the worker, if restart or workspace re-entry spawns/resumes/duplicates/interferes with the worker, if retained output becomes unreadable, or if pane-stable delivery reads the wrong mailbox."
     },
     {
+      "id": "orchestration.dispatch-show-run-isolation",
+      "title": "Dispatch inspection preserves same-host Run isolation",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "orchestration",
+      "layer": "cli-rpc-sqlite-run-authority",
+      "surfaces": [
+        "orchestration dispatch-show",
+        "paired CLI",
+        "headless server",
+        "terminal task-link navigation"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "daemon", "remote-runtime"],
+      "coverageNotes": "A 12-case deterministic SQLite/RPC oracle covers same-Run, foreign, absent, malformed, stale, settled, spoofed-handle, independent-caller, rebound, mixed-version, exact-worker-identity, trusted-presentation, and persisted Run-mismatch behavior. A compiled CLI journey repeats same/foreign/absent reads with two attested terminal identities through the pairing transport against an isolated headless host. Existing worker visibility, restart recovery, and retirement journeys keep identity-free presentation on explicit trusted renderer IPC. Provider-neutral contracts cover the unchanged folder, SSH, WSL, and federation routing seams without claiming live provider evidence.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-4531",
+        "https://github.com/stablyai/orca/issues/14898",
+        "https://github.com/stablyai/orca/pull/14900"
+      ],
+      "invariant": "A terminal-origin Dispatch inspection is authorized only by its launch-token and stable-pane attestation. A coordinator can inspect only its current Run, and a settled worker can inspect only the exact Dispatch whose persisted pane, process incarnation, and launch-token commitment match that attested identity. Caller-supplied handles never grant authority; foreign and absent identifiers are indistinguishable; authorization reads never mutate stored rows; and identity-free navigation is limited to trusted local IPC or paired desktop presentation.",
+      "oracle": "Create two Runs with independent attested pane/process/token identities, Tasks, and Dispatches. Require same-Run reads to return the exact Dispatch; foreign and absent reads to return the same empty result; foreign and absent preambles to fail with the same code and message; a spoofed handle to be ignored; malformed and stale evidence to fail before lookup; an attested caller with neither Run nor Dispatch to receive the absent shape; settled coordinator and exact-worker rows to remain readable; independent callers and deterministic rebinding to keep captured authority; a task/dispatch Run mismatch to return empty from both Runs; mixed-version params to use envelope attestation; trusted desktop presentation to remain explicit; and every targeted Task and Dispatch row to remain byte-identical. Repeat same/foreign/absent reads through the compiled CLI over a real pairing connection to an isolated headless host.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-dispatch-show-run-scope.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration-compatibility-authority.test.ts src/main/runtime/rpc/methods/orchestration-dispatch-show-run-scope.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-dispatch-show-run-scope.test.ts src/cli/handlers/orchestration-dispatch-show-scope.test.ts src/shared/orchestration-rpc-contract.test.ts --reporter=dot",
+        "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/orchestration-dispatch-show-run-isolation.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/orchestration-dispatch-show-run-isolation.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "pnpm exec playwright test tests/e2e/orchestration-worker-terminal-visibility.spec.ts tests/e2e/orchestration-legacy-worker-missing-terminal-recovery.spec.ts tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts tests/e2e/completed-worker-retirement-resume.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/main/runtime/rpc/methods/orchestration-dispatch-show-run-scope.test.ts",
+        "src/main/runtime/orchestration-compatibility-authority.test.ts",
+        "src/cli/handlers/orchestration-dispatch-show-scope.test.ts",
+        "src/shared/orchestration-rpc-contract.test.ts",
+        "tests/e2e/orchestration-dispatch-show-run-isolation.spec.ts",
+        "tests/e2e/orchestration-worker-terminal-visibility.spec.ts",
+        "tests/e2e/orchestration-legacy-worker-missing-terminal-recovery.spec.ts",
+        "tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts",
+        "tests/e2e/completed-worker-retirement-resume.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration-dispatch-show-run-scope.test.ts",
+          "assertions": [
+            "same-Run reads return the exact Dispatch while foreign and absent reads are identical",
+            "foreign and absent preamble failures are indistinguishable",
+            "persisted task/dispatch Run mismatch cannot cross either Run boundary",
+            "unknown, malformed, and stale callers fail closed without inspecting a Task",
+            "caller-supplied handles cannot replace launch-token and pane attestation",
+            "coordinator settlement, independent callers, deterministic rebinding, and old-client envelope attestation preserve Run authority",
+            "a settled worker reads only the Dispatch matching its pane, process incarnation, and token commitment",
+            "identity-free reads require trusted local IPC or paired desktop presentation",
+            "authorization reads leave Task and Dispatch rows unchanged"
+          ]
+        },
+        {
+          "file": "tests/e2e/orchestration-dispatch-show-run-isolation.spec.ts",
+          "assertions": [
+            "two compiled CLI callers retain independent real terminal identities over pairing",
+            "a paired headless host returns each caller's own Dispatch",
+            "foreign and absent paired CLI reads return the same empty result",
+            "a denied read does not change the owning Run's subsequent result"
+          ]
+        },
+        {
+          "file": "tests/e2e/orchestration-worker-terminal-visibility.spec.ts",
+          "assertions": [
+            "trusted renderer presentation reads preserve Dispatch identity across workspace re-entry"
+          ]
+        },
+        {
+          "file": "tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts",
+          "assertions": [
+            "trusted renderer presentation reads preserve exact Dispatch identity across runtime restart"
+          ]
+        },
+        {
+          "file": "tests/e2e/orchestration-legacy-worker-missing-terminal-recovery.spec.ts",
+          "assertions": [
+            "trusted renderer presentation can inspect the Dispatch before missing-worker recovery"
+          ]
+        },
+        {
+          "file": "tests/e2e/completed-worker-retirement-resume.spec.ts",
+          "assertions": [
+            "trusted renderer presentation observes settled Dispatch status without changing lifecycle authority"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-16",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-dispatch-show-run-scope.test.ts",
+          "result": "failed",
+          "durationSeconds": 4,
+          "summary": "The byte-identical 12-case oracle passed 2/12 on latest main 17ef6ccce6 and failed ten authority-boundary cases, including cross-Run disclosure, spoofed handles, malformed evidence, and exact-worker isolation."
+        },
+        {
+          "date": "2026-08-16",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-dispatch-show-run-scope.test.ts",
+          "result": "passed",
+          "durationSeconds": 5,
+          "summary": "The reconciled final candidate 35d4fed983 passed all 12 deterministic cases with oracle blob 098dc85e769309181b9e9d8e3479210bdefba2a0, including targeted unchanged-row snapshots, indistinguishable foreign/absent results, attestation, zero lookup for invalid evidence, spoof rejection, settled exact-worker inspection, independent callers, rebinding, mixed-version evidence, trusted presentation, and persisted Run mismatch."
+        },
+        {
+          "date": "2026-08-16",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-dispatch-show-run-scope.test.ts",
+          "result": "failed",
+          "durationSeconds": 4,
+          "summary": "The same oracle blob passed only 5/12 on hardening-disabled candidate e1ccc424da after reverse-applying attestation hardening while retaining the original Run-boundary design, reproducing handle authority, unknown/stale identity, trusted-presentation mismatch, settled-worker, and compatibility gaps."
+        },
+        {
+          "date": "2026-08-16",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/orchestration-dispatch-show-run-isolation.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 17,
+          "summary": "One isolated headless-host journey passed through the real pairing transport and compiled CLI with two terminal identities and independent Runs."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "deterministic runtime contracts plus one paired headless-host CLI journey"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The deterministic oracle and paired headless-host journey pass locally; CI and soak history are not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Oracle blob 098dc85e769309181b9e9d8e3479210bdefba2a0 is red 10/12 on latest main 17ef6ccce6, green 12/12 on reconciled candidate 35d4fed983, and red 7/12 on hardening-disabled candidate e1ccc424da while retaining the original Run-boundary design."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Coordinator inspection adds one indexed pane-to-Run lookup, one compound primary-key Task/Run lookup, and one task-indexed Dispatch/Run lookup. Settled-worker inspection uses the existing task index and exact in-memory identity comparison. Attestation reuses live terminal authority and token hashing; it adds no polling, provider listing, process inspection, subprocess, renderer fanout, or terminal I/O."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive focused CI passes or 14 days of soak history on macOS, Linux, and Windows.",
+        "Add physical Windows, WSL, and Docker SSH CLI evidence if a provider-specific authority path is introduced."
+      ],
+      "knownGaps": [
+        "The live paired journey ran on macOS; Linux, Windows, WSL, and physical SSH rely on provider-neutral runtime contracts in this change.",
+        "The paired journey uses a headless host; the separate headed CLI/RPC reproduction covers visible desktop terminals but not a second paired desktop window.",
+        "A new authoritative host can enforce current and newest-release client attestation, but an old authoritative host remains vulnerable because authorization executes on that host.",
+        "Identity-free paired desktop presentation trusts the authenticated runtime-scope pairing transport; a terminal-origin request that carries any identity claim must pass full attestation."
+      ],
+      "demotionRule": "Keep experimental or demote if foreign and absent responses diverge, a stale caller resolves a Run, a task/dispatch Run mismatch returns metadata, or the focused oracle flakes without a product or harness defect."
+    },
+    {
       "id": "orchestration.context-only-dispatch-release",
       "title": "Manual Dispatch release fences assignments without stopping unsupervised terminals",
       "maturity": "experimental",

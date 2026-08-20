@@ -345,14 +345,6 @@ describe('orchestration dispatch coordinator handle', () => {
       json: true
     } as never)
 
-  const invokeDispatchShow = (flags: Map<string, string | boolean>) =>
-    ORCHESTRATION_HANDLERS['orchestration dispatch-show']({
-      flags,
-      client: { call: callMock },
-      cwd: '/tmp/repo',
-      json: true
-    } as never)
-
   const invokeRun = (flags: Map<string, string | boolean>) =>
     ORCHESTRATION_HANDLERS['orchestration coordinator-start']({
       flags,
@@ -442,35 +434,6 @@ describe('orchestration dispatch coordinator handle', () => {
     })
     expect(callMock).toHaveBeenCalledTimes(2)
     expect(getTerminalHandleMock).not.toHaveBeenCalled()
-  })
-
-  it('uses a live coordinator handle for dispatch-show preamble previews', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_stale_coord'
-    process.env.ORCA_PANE_KEY = 'tab_coord:leaf_coord'
-    stubStaleHandleRemint('term_live_coord', {
-      result: { dispatch: null, preamble: 'preamble' }
-    })
-    getTerminalHandleMock.mockRejectedValue(new Error('active terminal fallback is unsafe'))
-
-    await invokeDispatchShow(
-      new Map<string, string | boolean>([
-        ['task', 'task_1'],
-        ['preamble', true]
-      ])
-    )
-
-    expect(callMock).toHaveBeenNthCalledWith(1, 'terminal.show', {
-      terminal: 'term_stale_coord'
-    })
-    expect(callMock).toHaveBeenNthCalledWith(2, 'terminal.resolvePane', {
-      paneKey: 'tab_coord:leaf_coord'
-    })
-    expect(callMock).toHaveBeenNthCalledWith(3, 'orchestration.dispatchShow', {
-      task: 'task_1',
-      preamble: true,
-      from: 'term_live_coord',
-      devMode: false
-    })
   })
 
   it('retires the legacy coordinator command without runtime effects', async () => {

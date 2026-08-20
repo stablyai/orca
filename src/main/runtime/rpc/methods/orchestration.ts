@@ -263,7 +263,8 @@ const DispatchShowParams = z.object({
   task: OptionalString,
   preamble: OptionalBoolean,
   from: OptionalString,
-  devMode: OptionalBoolean
+  devMode: OptionalBoolean,
+  callerTerminalHandle: OptionalString
 })
 
 const AskParams = z
@@ -1715,16 +1716,60 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.dispatchShow',
     params: DispatchShowParams,
-    handler: (params, { runtime }) => {
+    handler: (
+      params,
+      { clientKind, orchestrationCompatibilityEvidence, runtime, trustedDesktopIpc }
+    ) => {
       const db = runtime.getOrchestrationDb()
       if (!params.task) {
         throw new Error('Missing --task')
       }
-      const ctx = db.getDispatchContext(params.task)
+      const trustedPresentation =
+        trustedDesktopIpc === true ||
+        (clientKind === 'runtime' &&
+          !params.callerTerminalHandle &&
+          !params.from &&
+          !orchestrationCompatibilityEvidence)
+      const caller = trustedPresentation
+        ? null
+        : runtime.verifyOrchestrationCompatibilityCaller(orchestrationCompatibilityEvidence, {
+            currentRuntimeLaunchSufficient: true,
+            allowTerminalHandleRemint: true
+          })
+      if (!trustedPresentation && !caller) {
+        throw new OrchestrationError(
+          'run_required',
+          'Dispatch inspection requires an attested caller identity. No effects were applied.'
+        )
+      }
+      const callerRun = caller ? db.getCurrentRunForPane(caller.paneKey) : undefined
+      const callerDispatch =
+        caller && !callerRun
+          ? db.getDispatchContextForCallerIdentity(params.task, caller)
+          : undefined
+      const scopedRunId = callerRun?.id ?? callerDispatch?.run_id
+      const task = scopedRunId
+        ? db.getTaskForRun(params.task, scopedRunId)
+        : trustedPresentation
+          ? db.getTask(params.task)
+          : undefined
+      if (!trustedPresentation && !task) {
+        if (params.preamble) {
+          throw new OrchestrationError(
+            'task_not_found',
+            `Task ${params.task} was not found for this caller.`
+          )
+        }
+        return { dispatch: null }
+      }
+      const ctx = task
+        ? scopedRunId
+          ? (callerDispatch ?? db.getDispatchContextForRun(task.id, scopedRunId))
+          : db.getDispatchContextForRun(task.id, task.run_id)
+        : undefined
 
       // Why: the preamble is derived from the current task spec, so it can be regenerated deterministically even after dispatch completes.
       if (params.preamble) {
-        const task = db.getTask(params.task)
         if (!task) {
           throw new Error(`Task not found: ${params.task}`)
         }

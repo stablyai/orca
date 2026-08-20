@@ -179,7 +179,7 @@ describe('manual Dispatch release', () => {
     if (!method) {
       throw new Error(`Method not found: ${name}`)
     }
-    return method.handler(method.params!.parse(params), { runtime })
+    return method.handler(method.params!.parse(params), { runtime, trustedDesktopIpc: true })
   }
 })
 

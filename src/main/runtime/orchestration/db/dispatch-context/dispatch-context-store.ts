@@ -3,7 +3,11 @@ import { OrchestrationError } from '../../orchestration-error'
 import { parsePaneKey } from '../../../../../shared/stable-pane-id'
 import { CURRENT_CONTRACT_VERSION } from '../contract-constants'
 import { generateId } from '../generated-id'
-import { DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL, paneKeyMatchSuffix } from '../pane-key-match'
+import {
+  DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL,
+  isEquivalentPaneKey,
+  paneKeyMatchSuffix
+} from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
 
 export const DISPATCH_CONTEXT_CLAIM_SQL = `INSERT INTO dispatch_contexts (
@@ -125,6 +129,45 @@ export function getDispatchContext(
     .get(taskId) as DispatchContextRow | undefined
 }
 
+export function getDispatchContextForRun(
+  this: OrchestrationDb,
+  taskId: string,
+  runId: string
+): DispatchContextRow | undefined {
+  return this.db
+    .prepare(
+      'SELECT * FROM dispatch_contexts WHERE run_id = ? AND task_id = ? ORDER BY rowid DESC LIMIT 1'
+    )
+    .get(runId, taskId) as DispatchContextRow | undefined
+}
+
+export function getDispatchContextForCallerIdentity(
+  this: OrchestrationDb,
+  taskId: string,
+  caller: {
+    terminalHandle: string
+    paneKey: string
+    processIncarnation: string
+    launchTokenHash: string
+  }
+): DispatchContextRow | undefined {
+  const candidates = this.db
+    .prepare(
+      `SELECT * FROM dispatch_contexts
+       WHERE task_id = ? AND process_incarnation = ? AND launch_token_hash = ?
+       ORDER BY rowid DESC`
+    )
+    .all(taskId, caller.processIncarnation, caller.launchTokenHash) as DispatchContextRow[]
+  return candidates.find(
+    (dispatch) =>
+      dispatch.assignee_handle === caller.terminalHandle ||
+      Boolean(
+        dispatch.assignee_pane_key &&
+        isEquivalentPaneKey(dispatch.assignee_pane_key, caller.paneKey)
+      )
+  )
+}
+
 export function getDispatchContextById(
   this: OrchestrationDb,
   dispatchId: string
@@ -168,6 +211,8 @@ export function commitDispatchLaunchTokenHash(
 export type DispatchContextStoreMethods = {
   createDispatchContext: typeof createDispatchContext
   getDispatchContext: typeof getDispatchContext
+  getDispatchContextForRun: typeof getDispatchContextForRun
+  getDispatchContextForCallerIdentity: typeof getDispatchContextForCallerIdentity
   getDispatchContextById: typeof getDispatchContextById
   commitDispatchLaunchTokenHash: typeof commitDispatchLaunchTokenHash
 }
@@ -176,6 +221,8 @@ export function attachDispatchContextStore(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     createDispatchContext,
     getDispatchContext,
+    getDispatchContextForRun,
+    getDispatchContextForCallerIdentity,
     getDispatchContextById,
     commitDispatchLaunchTokenHash
   })

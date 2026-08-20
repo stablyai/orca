@@ -24,6 +24,7 @@ import {
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 import type { RuntimeTerminalListResult, RuntimeTerminalRead } from '../../src/shared/runtime-types'
 import { listAllOrchestrationRuns } from './orchestration-run-pages'
+import { callDispatchShowFromTrustedRenderer } from './orchestration-dispatch-presentation'
 
 const PROVIDER_SESSION_ID = 'e2e-legacy-orchestration-worker'
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-legacy-worker-'))
@@ -488,15 +489,13 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
         tabId: worker!.tabId,
         leafId: worker!.leafId
       }
-      const initialDispatch = await firstClient.call<{
-        dispatch: {
-          id: string
-          task_id: string
-          assignee_handle: string
-          assignee_pane_key: string
-          process_incarnation: string
-        } | null
-      }>('orchestration.dispatchShow', { task: task.result.task.id })
+      const initialDispatch = await callDispatchShowFromTrustedRenderer<{
+        id: string
+        task_id: string
+        assignee_handle: string
+        assignee_pane_key: string
+        process_incarnation: string
+      }>(first.page, task.result.task.id)
       expect(initialDispatch.result.dispatch).toEqual(
         expect.objectContaining({
           task_id: task.result.task.id,
@@ -640,16 +639,14 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
       expect(tasks.result.tasks).toEqual(
         expect.arrayContaining([expect.objectContaining({ id: task.result.task.id })])
       )
-      const recoveredDispatch = await secondClient.call<{
-        dispatch: {
-          id: string
-          task_id: string
-          assignee_handle: string
-          assignee_pane_key: string
-          process_incarnation: string
-          contract_version: number
-        } | null
-      }>('orchestration.dispatchShow', { task: task.result.task.id })
+      const recoveredDispatch = await callDispatchShowFromTrustedRenderer<{
+        id: string
+        task_id: string
+        assignee_handle: string
+        assignee_pane_key: string
+        process_incarnation: string
+        contract_version: number
+      }>(second.page, task.result.task.id)
       expect(recoveredDispatch.result.dispatch).toEqual(
         expect.objectContaining({
           id: initialDispatch.result.dispatch!.id,
@@ -721,9 +718,10 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
           ])
         await expect
           .poll(async () => {
-            const dispatch = await secondClient.call<{
-              dispatch: { id: string; status: string } | null
-            }>('orchestration.dispatchShow', { task: task.result.task.id })
+            const dispatch = await callDispatchShowFromTrustedRenderer<{
+              id: string
+              status: string
+            }>(second.page, task.result.task.id)
             const listedTasks = await secondClient.call<{
               tasks: { id: string; status: string }[]
             }>('orchestration.taskList', { run: assignmentRunId })

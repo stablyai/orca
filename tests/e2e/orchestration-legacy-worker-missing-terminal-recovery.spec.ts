@@ -19,6 +19,7 @@ import Database from '../../src/main/sqlite/sync-database'
 import { LEGACY_CONTRACT_VERSION } from '../../src/main/runtime/orchestration/db'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 import type { RuntimeTerminalListResult, RuntimeTerminalRead } from '../../src/shared/runtime-types'
+import { callDispatchShowFromTrustedRenderer } from './orchestration-dispatch-presentation'
 
 const PROVIDER_SESSION_ID = 'e2e-missing-legacy-worker'
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-missing-legacy-worker-'))
@@ -256,9 +257,10 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
         return read.result.terminal.tail.join('\n')
       })
       .toContain('ACK')
-    const dispatch = await firstClient.call<{
-      dispatch: { id: string } | null
-    }>('orchestration.dispatchShow', { task: task.result.task.id })
+    const dispatch = await callDispatchShowFromTrustedRenderer<{ id: string }>(
+      first.page,
+      task.result.task.id
+    )
     expect(dispatch.result.dispatch?.id).toBeTruthy()
     await expect.poll(() => readLedger(spawnLedgerPath)).toHaveLength(1)
     const [initialSpawn] = readLedger(spawnLedgerPath)

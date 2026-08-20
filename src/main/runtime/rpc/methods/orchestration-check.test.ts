@@ -352,6 +352,7 @@ describe('orchestration RPC methods', () => {
       expect(listedTask?.status).toBe('completed')
       expect(listedTask).not.toHaveProperty('assignee_handle')
       expect(listedTask).not.toHaveProperty('dispatch_id')
+      ctx = { ...ctx, trustedDesktopIpc: true }
       const shownDispatch = (await call('orchestration.dispatchShow', {
         task: task.id
       })) as { dispatch: { status: string } | null }
