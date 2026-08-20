@@ -153,4 +153,40 @@ describe('PetFromImageDialog', () => {
     ) as HTMLButtonElement | undefined
     expect(save === undefined || save.disabled).toBe(true)
   })
+
+  it('offers the three ways of building a pet', async () => {
+    render()
+    await pickFile()
+
+    const text = bodyText().toLowerCase()
+    expect(text).toContain('whole body')
+    expect(text).toContain('walking legs')
+    expect(text).toContain('head only')
+  })
+
+  it('says so when the walking rig could not be found, rather than pretending', async () => {
+    // A pillar has no legs to rig; the build degrades and must admit it.
+    const pillar = blankImage(60, 90)
+    for (let y = 8; y < 84; y++) {
+      for (let x = 20; x < 40; x++) {
+        const i = (y * 60 + x) * 4
+        pillar.data[i] = 90
+        pillar.data[i + 1] = 90
+        pillar.data[i + 2] = 160
+        pillar.data[i + 3] = 255
+      }
+    }
+    decoded.current = pillar
+    render()
+    await pickFile()
+
+    const rigged = [...document.querySelectorAll('button')].find((b) =>
+      /walking legs/i.test(b.textContent ?? '')
+    ) as HTMLButtonElement
+    await act(async () => {
+      rigged.click()
+    })
+
+    expect(bodyText().toLowerCase()).toMatch(/no legs|could not|whole body instead/)
+  })
 })

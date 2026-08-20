@@ -1,15 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { petBuildFailureMessage } from './pet-from-image-message'
-import type { BuildPetFailure } from './pet-from-image'
+import { BUILD_PET_FAILURES } from './pet-from-image'
 
-const ALL: BuildPetFailure[] = [
-  'background-not-separable',
-  'subject-not-found',
-  'subject-fragmented',
-  'full-bleed',
-  'no-character-shape',
-  'unknown-style'
-]
+// Why: the real list, not a copy — a hand-written one silently stops covering
+// reasons added later, which is exactly how the last gap got in.
+const ALL = BUILD_PET_FAILURES
 
 describe('petBuildFailureMessage', () => {
   it('has a message for every way the build can fail', () => {
@@ -23,7 +18,7 @@ describe('petBuildFailureMessage', () => {
   it('tells the user what to do, not just what broke', () => {
     // Every cutout failure is recoverable by supplying a better image, so each
     // message has to say so — "could not import" leaves the user stuck.
-    const actionable = ALL.filter((r) => r !== 'unknown-style')
+    const actionable = ALL.filter((r) => r !== 'unknown-style' && r !== 'style-artwork-unavailable')
     for (const reason of actionable) {
       expect(petBuildFailureMessage(reason).toLowerCase(), reason).toMatch(
         /transparent|plain background|another image|crop/

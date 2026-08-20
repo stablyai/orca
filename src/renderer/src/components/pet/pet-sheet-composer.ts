@@ -1,13 +1,24 @@
 import type { RgbaImage } from './pet-image-cutout'
 import { petFloorY } from './pet-image-resample'
 import { blankImage, drawTransformed, type RasterTransform } from './pet-raster-transform'
-import type { PetRig } from './pet-rigs'
+import type { PetLegRig, PetRig } from './pet-rigs'
 
 export const SHEET_COLUMNS = 4
 export const SHEET_ROWS = 7
 
 /** Row order must match `bundled-pet-pose-sprite.ts`. */
 const ROW = { idle: 0, running: 1, waiting: 2, jumping: 3, falling: 4, downed: 5, rising: 6 }
+
+/** The walk: legs converge past each other on the contact frames and separate on
+ *  the passing ones, with `front` alternating which is drawn on top so the
+ *  crossing reads as one leg in front of the other. Same cycle the bundled
+ *  sheets were generated with. */
+const CYCLE = [
+  { cross: 1, lift: 0, front: 0, up: 0 },
+  { cross: 0, lift: 1, front: 0, up: 1 },
+  { cross: 1, lift: 0, front: 1, up: 0 },
+  { cross: 0, lift: 1, front: 1, up: 1 }
+] as const
 
 /** Builds the seven-row pose sheet for an uploaded body.
  *
@@ -104,4 +115,102 @@ function subjectHalfWidth(body: RgbaImage): number {
     }
   }
   return maxX < 0 ? body.width / 2 : (maxX - minX + 1) / 2
+}
+
+/** Builds the sheet with the legs swung, using a rig detected in the upload.
+ *
+ *  Same seven rows as whole-body; only the locomotion row differs, because it is
+ *  the one pose that needs limbs. Everything else is still a whole-body
+ *  transform, so a detected rig that is slightly off degrades to a slightly odd
+ *  walk rather than seven broken poses. */
+export function composeRiggedSheet(
+  body: RgbaImage,
+  rig: PetRig,
+  legs: readonly [PetLegRig, PetLegRig]
+): RgbaImage {
+  const sheet = composeWholeBodySheet(body, rig)
+  const { width: fw, height: fh } = rig.frame
+  const walkRow = ROW.running
+
+  // Clear the leaned frames this row already holds, then redraw them walking.
+  for (let col = 0; col < SHEET_COLUMNS; col++) {
+    clearCell(sheet, col * fw, walkRow * fh, fw, fh)
+  }
+
+  const bodyWithoutLegs = withoutLegs(body, legs)
+  const pieces = legs.map((leg, index) => ({
+    leg,
+    canvas: legPiece(body, leg, index === 0 && leg.mirror === true)
+  }))
+
+  CYCLE.forEach((step, col) => {
+    const ox = col * fw
+    const oy = walkRow * fh - step.up * rig.walk.bobPx
+    drawTransformed(sheet, bodyWithoutLegs, { translateX: ox, translateY: oy })
+    const order = step.front === 0 ? [1, 0] : [0, 1]
+    for (const index of order) {
+      const { leg, canvas } = pieces[index]
+      const inward = index === 0 ? 1 : -1
+      drawTransformed(sheet, canvas, {
+        pivotX: leg.pivot[0],
+        pivotY: leg.pivot[1],
+        rotateDeg: inward * step.cross * rig.walk.swingDeg,
+        translateX: ox + inward * (rig.walk.narrowPx + step.cross * rig.walk.crossPx),
+        translateY: oy + (index === step.front ? -step.lift * rig.walk.liftPx : 0)
+      })
+    }
+  })
+  return sheet
+}
+
+/** Builds the sheet from the pet's own body with the upload as its head.
+ *
+ *  The aesthetic is exact here because it IS the pet — only the head is the
+ *  user's. That is the trade: it animates fully, but it is the pet wearing a
+ *  face rather than the upload brought to life. */
+export function composeHeadSwapSheet(head: RgbaImage, petBody: RgbaImage, rig: PetRig): RgbaImage {
+  const [hx0, hy0, hx1, hy1] = rig.head
+  const merged = blankImage(rig.frame.width, rig.frame.height)
+  // The pet's body first, with its own head erased.
+  drawTransformed(merged, petBody, {})
+  clearCell(merged, hx0, hy0, hx1 - hx0, hy1 - hy0)
+  // Then the upload, scaled into the slot it left behind.
+  drawTransformed(merged, head, {})
+  return composeWholeBodySheet(merged, rig)
+}
+
+function clearCell(image: RgbaImage, x0: number, y0: number, w: number, h: number): void {
+  for (let y = y0; y < y0 + h && y < image.height; y++) {
+    for (let x = x0; x < x0 + w && x < image.width; x++) {
+      image.data[(y * image.width + x) * 4 + 3] = 0
+    }
+  }
+}
+
+function withoutLegs(body: RgbaImage, legs: readonly PetLegRig[]): RgbaImage {
+  const out = blankImage(body.width, body.height)
+  out.data.set(body.data)
+  for (const leg of legs) {
+    clearCell(out, leg.box[0], leg.box[1], leg.box[2] - leg.box[0], leg.box[3] - leg.box[1])
+  }
+  return out
+}
+
+function legPiece(body: RgbaImage, leg: PetLegRig, mirror: boolean): RgbaImage {
+  const out = blankImage(body.width, body.height)
+  const [x0, y0, x1, y1] = leg.box
+  for (let y = y0; y < y1 && y < body.height; y++) {
+    for (let x = x0; x < x1 && x < body.width; x++) {
+      // Why: mirroring about the leg's own centre, so it stays where it stands
+      // and only the foot changes which way it points.
+      const sx = mirror ? x0 + (x1 - 1 - x) : x
+      const si = (y * body.width + sx) * 4
+      const di = (y * body.width + x) * 4
+      out.data[di] = body.data[si]
+      out.data[di + 1] = body.data[si + 1]
+      out.data[di + 2] = body.data[si + 2]
+      out.data[di + 3] = body.data[si + 3]
+    }
+  }
+  return out
 }

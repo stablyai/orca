@@ -38,5 +38,10 @@ export function petBuildFailureMessage(reason: BuildPetFailure): string {
         'auto.components.pet.fromImage.unknownStyle',
         'That pet style is not available.'
       )
+    case 'style-artwork-unavailable':
+      return translate(
+        'auto.components.pet.fromImage.styleArtworkUnavailable',
+        'That pet’s artwork could not be loaded, so the head cannot be placed on it. Try another style, or the whole body option.'
+      )
   }
 }

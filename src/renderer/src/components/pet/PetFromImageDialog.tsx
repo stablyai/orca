@@ -12,9 +12,10 @@ import {
 import { translate } from '@/i18n/i18n'
 import type { CustomPet } from '../../../../shared/pet-types'
 import { BUNDLED_PETS } from './pet-models'
-import { buildPetFromImage, type BuildPetResult } from './pet-from-image'
+import { buildPetFromImage, type BuildPetResult, type PetBuildMode } from './pet-from-image'
 import { petBuildFailureMessage } from './pet-from-image-message'
 import { decodeImageFile, encodeSheetToWebp, sheetToDataUrl } from './pet-image-decode'
+import { petRigFor } from './pet-rigs'
 import { PetSheetPreview } from './PetSheetPreview'
 import { SHEET_ROWS } from './pet-sheet-composer'
 
@@ -32,6 +33,24 @@ type Draft = {
 
 const PREVIEW_SIZE = 180
 
+const MODES: { id: PetBuildMode; label: string; hint: string }[] = [
+  {
+    id: 'whole-body',
+    label: 'Whole body',
+    hint: 'Works with any picture. It glides rather than walks.'
+  },
+  {
+    id: 'rigged',
+    label: 'Walking legs',
+    hint: 'Finds legs in the picture so it can walk. Falls back if it cannot.'
+  },
+  {
+    id: 'head-swap',
+    label: 'Head only',
+    hint: 'Your picture as the head on the pet body. Animates fully.'
+  }
+]
+
 /** Turns an uploaded image into a pet, in one of the bundled aesthetics.
  *
  *  Nothing is written until the user confirms: the pipeline is deterministic, so
@@ -43,6 +62,7 @@ export function PetFromImageDialog({
   onCreated
 }: PetFromImageDialogProps): React.JSX.Element {
   const [styleId, setStyleId] = useState<string>(BUNDLED_PETS[0].id)
+  const [mode, setMode] = useState<PetBuildMode>('whole-body')
   const [draft, setDraft] = useState<Draft | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -50,12 +70,26 @@ export function PetFromImageDialog({
   // user to pick the same file again.
   const sourceRef = useRef<Awaited<ReturnType<typeof decodeImageFile>> | null>(null)
 
-  const runPipeline = async (styleForRun: string, fileName: string): Promise<void> => {
+  const runPipeline = async (
+    styleForRun: string,
+    modeForRun: PetBuildMode,
+    fileName: string
+  ): Promise<void> => {
     const source = sourceRef.current
     if (!source) {
       return
     }
-    const build = buildPetFromImage(source, styleForRun)
+    // Why: head-swap composes onto the pet's own artwork, so it has to be
+    // decoded first. The other modes never touch it, so it is not loaded.
+    let petBody: Awaited<ReturnType<typeof decodeImageFile>> | null = null
+    if (modeForRun === 'head-swap') {
+      const pet = BUNDLED_PETS.find((p) => p.id === styleForRun)
+      const rig = petRigFor(styleForRun)
+      if (pet && rig) {
+        petBody = await decodeImageFile(await (await fetch(pet.url)).blob())
+      }
+    }
+    const build = buildPetFromImage(source, styleForRun, { mode: modeForRun, petBody })
     const previewUrl = build.ok ? await sheetToDataUrl(build.sheet) : null
     setDraft({ fileName, build, previewUrl })
   }
@@ -69,7 +103,7 @@ export function PetFromImageDialog({
     setError(null)
     try {
       sourceRef.current = await decodeImageFile(file)
-      await runPipeline(styleId, file.name)
+      await runPipeline(styleId, mode, file.name)
     } catch (cause) {
       setDraft(null)
       setError(cause instanceof Error ? cause.message : String(cause))
@@ -78,14 +112,18 @@ export function PetFromImageDialog({
     }
   }
 
-  const onChooseStyle = async (nextStyle: string): Promise<void> => {
+  const rerun = async (nextStyle: string, nextMode: PetBuildMode): Promise<void> => {
     setStyleId(nextStyle)
+    setMode(nextMode)
     if (!draft) {
       return
     }
     setBusy(true)
+    setError(null)
     try {
-      await runPipeline(nextStyle, draft.fileName)
+      await runPipeline(nextStyle, nextMode, draft.fileName)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause))
     } finally {
       setBusy(false)
     }
@@ -115,6 +153,15 @@ export function PetFromImageDialog({
 
   const rejection = draft && !draft.build.ok ? petBuildFailureMessage(draft.build.reason) : null
   const ready = draft?.build.ok === true
+  // Why: surfaced, never silent. Asking for a walk and quietly getting a glide
+  // leaves the user thinking the feature is broken.
+  const degraded =
+    draft?.build.ok === true && draft.build.mode !== draft.build.requestedMode
+      ? translate(
+          'auto.components.pet.fromImage.rigFellBack',
+          'No legs could be found in this picture, so it uses whole body instead.'
+        )
+      : null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -146,14 +193,33 @@ export function PetFromImageDialog({
                 type="button"
                 size="sm"
                 variant={pet.id === styleId ? 'default' : 'outline'}
-                onClick={() => void onChooseStyle(pet.id)}
+                onClick={() => void rerun(pet.id, mode)}
               >
                 {pet.label}
               </Button>
             ))}
           </div>
 
-          <div className="flex min-h-[190px] items-end justify-center rounded-md border border-border bg-accent/5 p-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {MODES.map((option) => (
+              <Button
+                key={option.id}
+                type="button"
+                size="sm"
+                variant={option.id === mode ? 'secondary' : 'ghost'}
+                title={option.hint}
+                onClick={() => void rerun(styleId, option.id)}
+              >
+                {option.label}
+              </Button>
+            ))}
+          </div>
+
+          <div
+            className="flex min-h-[190px] items-end justify-center rounded-md border border-border bg-accent/5 p-2"
+            data-build-mode={draft?.build.ok === true ? draft.build.mode : 'none'}
+            data-requested-mode={mode}
+          >
             {busy ? (
               <Loader2 className="mb-16 size-5 animate-spin text-muted-foreground" aria-hidden />
             ) : rejection ? (
@@ -172,6 +238,7 @@ export function PetFromImageDialog({
             )}
           </div>
 
+          {degraded ? <p className="text-xs text-muted-foreground">{degraded}</p> : null}
           {error ? <p className="text-xs text-destructive">{error}</p> : null}
         </div>
 
