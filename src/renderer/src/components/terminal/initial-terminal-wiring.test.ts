@@ -10,7 +10,10 @@ import { describe, expect, it } from 'vitest'
 const TERMINAL_PATH = 'src/renderer/src/components/Terminal.tsx'
 
 function readSource(relativePath: string): string {
-  return readFileSync(join(process.cwd(), relativePath), 'utf8')
+  // Why fold the line endings: the assertions below anchor on a newline to pin
+  // adjacency, and a Windows checkout hands back CRLF — which matches nothing
+  // and says only that the string is absent.
+  return readFileSync(join(process.cwd(), relativePath), 'utf8').split('\r\n').join('\n')
 }
 
 describe('Terminal auto-create wiring', () => {
