@@ -39,7 +39,7 @@ Orca targets macOS, Linux, and Windows. Keep all platform-dependent behavior beh
 
 ## SSH Use Case
 
-All changes must consider the SSH use case. Don't assume local-only execution.
+All changes must consider the SSH use case. Don't assume local-only execution. Before changing anything that reports on, stops, or lists remote work, follow [`docs/reference/ssh-execution-boundary.md`](./docs/reference/ssh-execution-boundary.md): the execution host owns everything that touches execution, and loss of contact is never evidence of process death — the verdict vocabulary is `live` / `unverifiable` / `exited`, with no synonyms.
 
 ## Folder Workspace Use Case
 

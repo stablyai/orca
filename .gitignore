@@ -105,6 +105,7 @@ docs/**
 !docs/reference/relay-grace-time-reconfiguration.md
 !docs/reference/remote-wire-compatibility.md
 !docs/reference/renderer-agent-status-performance.md
+!docs/reference/ssh-execution-boundary.md
 !docs/reference/ssh-host-key-verification.md
 !docs/reference/ssh-reconnect-source-recovery.md
 !docs/reference/windows-setup-shell.md
