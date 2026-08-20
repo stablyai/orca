@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeOs from 'node:os'
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { permissionBitsAreEnforced } from '../../shared/file-mode-capability'
 
 type NodeOsModule = typeof NodeOs
 
@@ -30,29 +31,6 @@ import {
 // Why not a bare '/tmp/e2e-home': production joins it with the platform
 // separator, so a POSIX literal only matches the expectation on POSIX. The
 // value is synthetic either way; it just has to look like a home on this host.
-
-/** Whether a 000 mode really stops this process reading its own file.
- *
- *  Windows maps chmod onto the read-only attribute alone, so the owner keeps
- *  read access and a case that depends on a refused read has nothing to test.
- *  Asked here rather than assumed from the platform, so it still runs anywhere
- *  the mode is enforced. `node:fs` is mocked in this file, hence the promises
- *  API and the top-level await. */
-const modeDeniesOwnerRead = await (async (): Promise<boolean> => {
-  const probeDir = await mkdtemp(join(tmpdir(), 'orca-mode-probe-'))
-  const probe = join(probeDir, 'denied')
-  try {
-    await writeFile(probe, 'x', 'utf-8')
-    await chmod(probe, 0o000)
-    await readFile(probe)
-    return false
-  } catch {
-    return true
-  } finally {
-    await chmod(probe, 0o600).catch(() => {})
-    await rm(probeDir, { recursive: true, force: true })
-  }
-})()
 
 const FAKE_HOME = process.platform === 'win32' ? String.raw`C:\tmp\e2e-home` : '/tmp/e2e-home'
 const fakeHomeSshConfig = join(FAKE_HOME, '.ssh', 'config')
@@ -342,7 +320,7 @@ describe('siteConfigMayRestrictHostKeys', () => {
   // read-only attribute on Windows and leaves the owner able to read, so the
   // file this case depends on being unreadable simply is not. Asking directly
   // keeps the case running anywhere the mode is actually enforced.
-  it.skipIf(!modeDeniesOwnerRead)(
+  it.skipIf(!permissionBitsAreEnforced())(
     'treats an unreadable config as doubt rather than permission',
     async () => {
       const file = join(dir, 'ssh_config')

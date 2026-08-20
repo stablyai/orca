@@ -35,6 +35,13 @@ vi.mock('node:fs', async (importOriginal) => {
 
 const worktreeId = 'relay-wsl::/remote/worktree'
 
+// Why compare on one separator: the fixture home is a Windows path and
+// production joins it with the host separator, so the expectation is mixed on
+// POSIX and all-backslash on Windows. What these cases pin is the /mnt/c
+// translation handed to the guest, not which slash the host side uses.
+const sameHostPath = (value: string | null): string | null =>
+  value === null ? null : value.split('\\').join('/')
+
 describe('relay WSL shell history', () => {
   it('hands the guest a drvfs path for the host history file', async () => {
     const { injectRelayHistoryEnv } = await import('./terminal-history')
@@ -44,7 +51,7 @@ describe('relay WSL shell history', () => {
       wsl: true
     })
 
-    expect(root).toBe('C:\\Users\\relay/.orca-remote/terminal-history')
+    expect(sameHostPath(root)).toBe('C:/Users/relay/.orca-remote/terminal-history')
     expect(env.HISTFILE).toBe(
       `/mnt/c/Users/relay/.orca-remote/terminal-history/${hashWorktreeId(worktreeId)}-bash_history`
     )
@@ -57,8 +64,8 @@ describe('relay WSL shell history', () => {
 
     injectRelayHistoryEnv(env, worktreeId, '/bin/bash')
 
-    expect(env.HISTFILE).toBe(
-      `C:\\Users\\relay/.orca-remote/terminal-history/${hashWorktreeId(worktreeId)}-bash_history`
+    expect(sameHostPath(env.HISTFILE)).toBe(
+      `C:/Users/relay/.orca-remote/terminal-history/${hashWorktreeId(worktreeId)}-bash_history`
     )
   })
 

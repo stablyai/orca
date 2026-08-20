@@ -12,10 +12,17 @@ function entry(name: string, kind: 'directory' | 'file' | 'symlink' = 'file'): D
   } as Dirent
 }
 
+// Why key on one separator: discovery composes a child path with the platform's
+// join, so on Windows it asks for `\repo\docs` while the fixture names
+// `/repo/docs`. Nothing matched, nothing descended, and every case read as an
+// empty repository rather than a failure to look.
 function reader(entriesByPath: Record<string, Dirent[]>) {
+  const byPosixPath = new Map(
+    Object.entries(entriesByPath).map(([path, entries]) => [path.split('\\').join('/'), entries])
+  )
   return async (path: string): Promise<AsyncIterable<Dirent>> => ({
     async *[Symbol.asyncIterator]() {
-      yield* entriesByPath[path] ?? []
+      yield* byPosixPath.get(path.split('\\').join('/')) ?? []
     }
   })
 }
