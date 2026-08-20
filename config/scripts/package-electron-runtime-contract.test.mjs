@@ -3,6 +3,7 @@ import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
+import { relayArtifactFilenames } from '../../src/shared/relay-artifacts.ts'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const require = createRequire(import.meta.url)
@@ -201,14 +202,15 @@ describe('Electron runtime package contract', () => {
 
     expect(relayBuild).toContain("'parcel-watcher-process-entry.ts'")
     expect(relayBuild).toContain("outfile: join(outDir, 'relay-watcher.js')")
-    expect(relayBuild).toContain("readFileSync(join(outDir, 'relay-watcher.js'))")
     expect(relayBuild).toContain("outfile: join(outDir, 'relay-ai-vault-service.js')")
-    expect(relayBuild).toContain("readFileSync(join(outDir, 'relay-ai-vault-service.js'))")
     expect(builderConfig).toContain("from: 'out/relay'")
-    expect(remoteCommands).toContain("joinRemotePath(host, remoteRelayDir, 'relay-watcher.js')")
-    expect(remoteCommands).toContain(
-      "joinRemotePath(host, remoteRelayDir, 'relay-ai-vault-service.js')"
-    )
+
+    // Hashing and remote install probing are manifest-driven, so the contract
+    // is that both companions are declared once and that both sites read it.
+    expect(relayArtifactFilenames(true)).toContain('relay-watcher.js')
+    expect(relayArtifactFilenames(true)).toContain('relay-ai-vault-service.js')
+    expect(relayBuild).toContain('relayArtifactFilenames(')
+    expect(remoteCommands).toContain('relayArtifactFilenames(')
 
     const assertRelayGate = (steps, publishStepName) => {
       const names = steps.map((step) => step.name)
