@@ -233,21 +233,16 @@ export function applyManagedHooks(
     nextHooks[event.eventName] = [...cleaned, definition]
   }
 
-  // Heal a config written before #15548: managed entries under event keys this
-  // agent's schema rejects keep the whole settings file from loading, so sweep
-  // them. User-authored entries in those keys survive; the key only goes when
-  // nothing is left.
+  // Heal a config written before #15548: keys this agent's schema rejects make
+  // it skip the whole settings file, so the key has to go entirely — a
+  // user-authored entry under one is equally poisonous, and in a schema-
+  // validating Claude Code it can never fire anyway. (OpenClaude lists no
+  // unsupported keys, so user config there is untouched.)
   for (const eventName of getUnsupportedEventNames(settings)) {
-    const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : undefined
-    if (!current) {
+    if (!Array.isArray(nextHooks[eventName])) {
       continue
     }
-    const cleaned = removeManagedCommands(current, isManagedCommand)
-    if (cleaned.length === 0) {
-      delete nextHooks[eventName]
-    } else {
-      nextHooks[eventName] = cleaned
-    }
+    delete nextHooks[eventName]
   }
 
   return { ...config, hooks: nextHooks }

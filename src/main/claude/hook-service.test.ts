@@ -460,10 +460,10 @@ describe('ClaudeHookService.install', () => {
       // only managed entries disappears entirely so the file loads again.
       expect(healed.hooks.StopFailure).toBeUndefined()
       expect(healed.hooks.TeammateIdle).toBeUndefined()
-      // A user-authored entry in a rejected key survives the sweep.
-      expect(healed.hooks.PermissionRequest).toEqual([
-        { hooks: [{ type: 'command', command: '/usr/local/bin/user-hook' }] }
-      ])
+      // A user-authored entry in a rejected key goes with it: the key makes
+      // Claude Code skip the whole settings file, so the entry could never
+      // fire there either way.
+      expect(healed.hooks.PermissionRequest).toBeUndefined()
       // The rest of the settings file is untouched.
       expect(healed.env.ANTHROPIC_MODEL).toBe('opus')
     } finally {
