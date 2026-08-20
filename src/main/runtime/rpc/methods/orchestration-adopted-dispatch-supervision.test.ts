@@ -190,6 +190,21 @@ describe('dispatch --inject --supervise adopts a running agent as a supervised w
     expect(db.getTask(task.id)?.status).toBe('ready')
   })
 
+  it('rejects --supervise without --inject on a dry run too', async () => {
+    const task = db.createTask({ spec: 'work', runId })
+
+    await expect(
+      call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_worker',
+        from: 'term_coord',
+        run: runId,
+        supervise: true,
+        dryRun: true
+      })
+    ).rejects.toThrow('--supervise requires --inject')
+  })
+
   it('supervises nothing when the worker reports done before the record is written', async () => {
     const task = db.createTask({ spec: 'fast work', runId })
     // The worker can settle between the prompt write and the record write; showTerminal is the

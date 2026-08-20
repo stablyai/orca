@@ -1229,6 +1229,15 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         )
       }
 
+      // Why: supervision records the injected pane as the worker's agent terminal, so it is only
+      // provable on the path that verified an agent is running there.
+      if (params.supervise && !params.inject) {
+        throw new OrchestrationError(
+          'invalid_argument',
+          '--supervise requires --inject; an unadopted terminal has no proven agent to supervise.'
+        )
+      }
+
       // Why: dry-run previews the preamble without mutating state, so it skips the ready-status check and uses a placeholder dispatchId.
       if (params.dryRun) {
         const preamble = buildDispatchPreamble({
@@ -1252,15 +1261,6 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
 
       if (task.status !== 'ready') {
         throw new Error(`Task ${params.task} is ${task.status}; only ready tasks can be dispatched`)
-      }
-
-      // Why: supervision records the injected pane as the worker's agent terminal, so it is only
-      // provable on the path that verified an agent is running there.
-      if (params.supervise && !params.inject) {
-        throw new OrchestrationError(
-          'invalid_argument',
-          '--supervise requires --inject; an unadopted terminal has no proven agent to supervise.'
-        )
       }
 
       // Why: injecting the preamble into a bare shell dumps it as shell commands (gibberish), so require a detected agent first.
