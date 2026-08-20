@@ -2668,6 +2668,11 @@ const api = {
   pet: {
     import: (): Promise<CustomPet | null> => ipcRenderer.invoke('pet:import'),
     importPetBundle: (): Promise<CustomPet | null> => ipcRenderer.invoke('pet:importPetBundle'),
+    createGenerated: (input: {
+      sheet: ArrayBuffer
+      manifest: unknown
+      label?: string
+    }): Promise<CustomPet> => ipcRenderer.invoke('pet:createGenerated', input),
     read: (id: string, fileName: string, kind?: 'image' | 'bundle'): Promise<ArrayBuffer | null> =>
       ipcRenderer.invoke('pet:read', id, fileName, kind),
     delete: (id: string, fileName: string, kind?: 'image' | 'bundle'): Promise<void> =>

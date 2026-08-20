@@ -5,6 +5,7 @@ import { basename, extname, join, normalize, sep } from 'node:path'
 import { z } from 'zod'
 import type { CustomPet } from '../../shared/pet-types'
 import { importPetBundle } from './pet-bundle-import'
+import { writeGeneratedPet, type GeneratedPetRequest } from './pet-generated-write'
 import { classifyFile } from './pet-image-formats'
 import { MAX_BYTES } from './pet-import-size-limits'
 import { getPetsDir, isSafeId, resolvePetFile } from './pet-storage-paths'
@@ -84,6 +85,11 @@ export function registerPetHandlers(): void {
   ipcMain.handle(
     'pet:importPetBundle',
     async (event): Promise<CustomPet | null> => importPetBundle(event)
+  )
+
+  ipcMain.handle(
+    'pet:createGenerated',
+    async (_event, request: GeneratedPetRequest): Promise<CustomPet> => writeGeneratedPet(request)
   )
 
   ipcMain.handle(
