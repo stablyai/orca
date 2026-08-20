@@ -14,6 +14,16 @@ import type { Repo } from '../../../../shared/repo-types'
 import { useAppStore } from '../../store'
 import { RepositoryHostSetupsSection } from './RepositoryHostSetupsSection'
 
+vi.mock('@/components/ui/dialog', () => ({
+  Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) =>
+    open ? <div>{children}</div> : null,
+  DialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogDescription: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogFooter: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogTitle: ({ children }: { children: React.ReactNode }) => <div>{children}</div>
+}))
+
 let container: HTMLDivElement
 let root: Root
 
@@ -395,9 +405,11 @@ describe('RepositoryHostSetupsSection', () => {
     renderSection(localRepo)
 
     expect(container.textContent).toContain('Path pending')
-    const removeButton = Array.from(container.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Remove'
-    )
+    // The bound local row also carries a Remove now (it opens the confirm
+    // dialog), so target the pending row's button by skipping the current row.
+    const removeButton = Array.from(container.querySelectorAll('button'))
+      .filter((button) => button.textContent === 'Remove')
+      .find((button) => !button.closest('[data-current]'))
     expect(removeButton).toBeTruthy()
 
     await act(async () => {
@@ -407,6 +419,111 @@ describe('RepositoryHostSetupsSection', () => {
     expect(deleteProjectHostSetup).toHaveBeenCalledWith({ setupId: 'gpu-setup' })
     expect(openSettingsPage).not.toHaveBeenCalled()
     expect(openSettingsTarget).not.toHaveBeenCalled()
+  })
+
+  it('confirms before removing a host setup that is bound to a path', async () => {
+    const deleteProjectHostSetup = vi.fn().mockResolvedValue({
+      project: makeProject({ id: 'github:stablyai/orca' }),
+      setup: makeSetup({
+        id: 'local-repo',
+        projectId: 'github:stablyai/orca',
+        repoId: 'local-repo',
+        hostId: 'local',
+        path: '/Users/alice/orca'
+      })
+    })
+    const localRepo = makeRepo({
+      id: 'local-repo',
+      displayName: 'Orca',
+      path: '/Users/alice/orca'
+    })
+    useAppStore.setState({
+      repos: [localRepo],
+      projects: [makeProject({ id: 'github:stablyai/orca' })],
+      projectHostSetups: [
+        makeSetup({
+          id: 'local-repo',
+          projectId: 'github:stablyai/orca',
+          repoId: 'local-repo',
+          hostId: 'local',
+          path: '/Users/alice/orca'
+        }),
+        makeSetup({
+          id: 'gpu-setup',
+          projectId: 'github:stablyai/orca',
+          repoId: 'gpu-repo',
+          hostId: 'runtime:gpu',
+          path: '/home/alice/orca'
+        })
+      ],
+      deleteProjectHostSetup
+    })
+
+    renderSection(localRepo)
+
+    const removeButtons = Array.from(container.querySelectorAll('button')).filter(
+      (button) => button.textContent === 'Remove'
+    )
+    expect(removeButtons.length).toBe(2)
+
+    await act(async () => {
+      removeButtons[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(deleteProjectHostSetup).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('Remove this host setup?')
+    expect(container.textContent).toContain('/Users/alice/orca')
+
+    clickButton('Remove setup')
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(deleteProjectHostSetup).toHaveBeenCalledWith({ setupId: 'local-repo' })
+  })
+
+  it('keeps a bound host setup when the removal confirmation is cancelled', async () => {
+    const deleteProjectHostSetup = vi.fn().mockResolvedValue(null)
+    const localRepo = makeRepo({
+      id: 'local-repo',
+      displayName: 'Orca',
+      path: '/Users/alice/orca'
+    })
+    useAppStore.setState({
+      repos: [localRepo],
+      projects: [makeProject({ id: 'github:stablyai/orca' })],
+      projectHostSetups: [
+        makeSetup({
+          id: 'local-repo',
+          projectId: 'github:stablyai/orca',
+          repoId: 'local-repo',
+          hostId: 'local',
+          path: '/Users/alice/orca'
+        }),
+        makeSetup({
+          id: 'gpu-setup',
+          projectId: 'github:stablyai/orca',
+          repoId: 'gpu-repo',
+          hostId: 'runtime:gpu',
+          path: '/home/alice/orca'
+        })
+      ],
+      deleteProjectHostSetup
+    })
+
+    renderSection(localRepo)
+
+    const removeButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Remove'
+    )
+    await act(async () => {
+      removeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(container.textContent).toContain('Remove this host setup?')
+    clickButton('Cancel')
+    expect(deleteProjectHostSetup).not.toHaveBeenCalled()
+    expect(container.textContent).not.toContain('Remove this host setup?')
   })
 
   it('sets up the project on another known host from an existing folder path', async () => {

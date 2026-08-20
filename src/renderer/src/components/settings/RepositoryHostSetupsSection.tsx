@@ -22,6 +22,7 @@ import type { SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
 import { buildSetupHostOptions, getSetupStateLabel } from './repository-host-setup-options'
 import { RepositoryHostSetupActions } from './RepositoryHostSetupActions'
+import { SshDestructiveActionDialog } from './SshDestructiveActionDialog'
 import {
   selectRuntimeAwareSshStatus,
   selectRuntimeAwareSshTargetLabel
@@ -135,6 +136,7 @@ export function RepositoryHostSetupsSection({
   })
   const hostOptionById = new Map(hostOptions.map((option) => [option.id, option]))
   const [deletingSetupId, setDeletingSetupId] = useState<string | null>(null)
+  const [confirmRemoveSetup, setConfirmRemoveSetup] = useState<ProjectHostSetup | null>(null)
   const projectId = selectedProjectHostSetup?.projectId
   // Why: the single project pane switches host in place — set the ephemeral
   // per-project selection instead of navigating to a separate repo section.
@@ -305,7 +307,20 @@ export function RepositoryHostSetupsSection({
               : (hostOptionById.get(setup.hostId)?.label ?? getExecutionHostLabel(setup.hostId))
           const isCurrentSetup = setup.id === selectedProjectHostSetup?.id
           const canOpenSetup = setup.repoId.trim().length > 0
-          const canRemoveSetup = !canOpenSetup && deletingSetupId !== setup.id
+          const canRemoveSetup = deletingSetupId !== setup.id
+          // Why (#15281): a repo-backed path cannot be edited in place (the store
+          // rejects path updates on bound setups and expects re-import), so Remove
+          // is the only recovery for a setup pointed at the wrong folder — and it
+          // must be reachable on the bound row, not just the path-pending one.
+          const removeSetup = async (): Promise<void> => {
+            if (!canOpenSetup) {
+              setDeletingSetupId(setup.id)
+              await deleteProjectHostSetup({ setupId: setup.id })
+              setDeletingSetupId(null)
+              return
+            }
+            setConfirmRemoveSetup(setup)
+          }
           return (
             <div
               key={setup.id}
@@ -363,10 +378,8 @@ export function RepositoryHostSetupsSection({
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={async () => {
-                    setDeletingSetupId(setup.id)
-                    await deleteProjectHostSetup({ setupId: setup.id })
-                    setDeletingSetupId(null)
+                  onClick={() => {
+                    void removeSetup()
                   }}
                 >
                   {translate('auto.components.settings.RepositoryPane.removeSetup', 'Remove')}
@@ -387,6 +400,48 @@ export function RepositoryHostSetupsSection({
           onSetupReady={selectHost}
         />
       ) : null}
+      <SshDestructiveActionDialog
+        open={confirmRemoveSetup !== null}
+        title={translate(
+          'auto.components.settings.RepositoryPane.removeHostSetupTitle',
+          'Remove this host setup?'
+        )}
+        description={translate(
+          'auto.components.settings.RepositoryPane.removeHostSetupDescription',
+          'Orca forgets this project on that host, including its workspace registrations. Nothing is deleted from the host itself. You can add the project back with "Add to another host".'
+        )}
+        targetLabel={
+          confirmRemoveSetup
+            ? `${
+                hostOptionById.get(confirmRemoveSetup.hostId)?.label ??
+                getExecutionHostLabel(confirmRemoveSetup.hostId)
+              }${confirmRemoveSetup.path ? ` — ${confirmRemoveSetup.path}` : ''}`
+            : undefined
+        }
+        actionLabel={translate(
+          'auto.components.settings.RepositoryPane.removeHostSetupConfirm',
+          'Remove setup'
+        )}
+        isBusy={confirmRemoveSetup !== null && deletingSetupId === confirmRemoveSetup.id}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) {
+            setConfirmRemoveSetup(null)
+          }
+        }}
+        onConfirm={async () => {
+          if (!confirmRemoveSetup) {
+            return
+          }
+          const setup = confirmRemoveSetup
+          setDeletingSetupId(setup.id)
+          try {
+            await deleteProjectHostSetup({ setupId: setup.id })
+          } finally {
+            setDeletingSetupId(null)
+            setConfirmRemoveSetup(null)
+          }
+        }}
+      />
     </SearchableSetting>
   )
 }
