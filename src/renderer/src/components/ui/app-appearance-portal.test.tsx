@@ -5,13 +5,27 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Dialog, DialogContent, DialogTitle } from './dialog'
 
+const APPEARANCE_PROPERTIES = ['--popover', '--popover-foreground', '--border'] as const
+
 let host: HTMLDivElement
 let root: Root
+let style: HTMLStyleElement
+let previousActEnvironment: boolean | undefined
+let previousAppearance: string | null
+let previousProperties: { property: string; value: string; priority: string }[]
 
 describe('App Appearance portaled primitives', () => {
   beforeEach(() => {
-    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-    const style = document.createElement('style')
+    const actEnvironment = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    previousActEnvironment = actEnvironment.IS_REACT_ACT_ENVIRONMENT
+    actEnvironment.IS_REACT_ACT_ENVIRONMENT = true
+    previousAppearance = document.documentElement.getAttribute('data-app-appearance')
+    previousProperties = APPEARANCE_PROPERTIES.map((property) => ({
+      property,
+      value: document.documentElement.style.getPropertyValue(property),
+      priority: document.documentElement.style.getPropertyPriority(property)
+    }))
+    style = document.createElement('style')
     style.textContent = `
       .bg-popover { background-color: var(--popover); }
       .text-popover-foreground { color: var(--popover-foreground); }
@@ -29,10 +43,26 @@ describe('App Appearance portaled primitives', () => {
 
   afterEach(async () => {
     await act(async () => root.unmount())
-    document.body.replaceChildren()
-    document.head.querySelector('style')?.remove()
-    document.documentElement.removeAttribute('data-app-appearance')
-    document.documentElement.removeAttribute('style')
+    host.remove()
+    style.remove()
+    const actEnvironment = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+    if (previousActEnvironment === undefined) {
+      delete actEnvironment.IS_REACT_ACT_ENVIRONMENT
+    } else {
+      actEnvironment.IS_REACT_ACT_ENVIRONMENT = previousActEnvironment
+    }
+    if (previousAppearance === null) {
+      document.documentElement.removeAttribute('data-app-appearance')
+    } else {
+      document.documentElement.dataset.appAppearance = previousAppearance
+    }
+    for (const { property, value, priority } of previousProperties) {
+      if (value) {
+        document.documentElement.style.setProperty(property, value, priority)
+      } else {
+        document.documentElement.style.removeProperty(property)
+      }
+    }
   })
 
   it('renders dialog content in the body portal with inherited semantic colors', async () => {
