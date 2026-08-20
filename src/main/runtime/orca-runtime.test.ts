@@ -20635,6 +20635,8 @@ describe('OrcaRuntimeService', () => {
       runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle', timeoutMs: 50 })
     ).rejects.toThrow('timeout')
     expect(serializeProviderBuffer).toHaveBeenCalledTimes(4)
+    await expect(runtime.readTerminal(terminal.handle)).resolves.toMatchObject({ tail: [] })
+    expect(serializeProviderBuffer).toHaveBeenCalledTimes(4)
     expect(
       runtime.verifyOrchestrationCompatibilityCaller({
         terminalHandle: 'term_legacy',

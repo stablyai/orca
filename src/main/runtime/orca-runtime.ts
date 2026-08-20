@@ -13323,7 +13323,8 @@ export class OrcaRuntimeService {
   private async withVisibleSnapshotFallback(
     ptyId: string,
     read: RuntimeTerminalRead,
-    opts: { cursor?: number; limit?: number } = {}
+    opts: { cursor?: number; limit?: number } = {},
+    providerWait: { timeoutMs?: number; retireOnTimeout?: boolean } = {}
   ): Promise<RuntimeTerminalRead> {
     if (typeof opts.cursor === 'number') {
       return read
@@ -13338,7 +13339,11 @@ export class OrcaRuntimeService {
       !recoveredWorkerFallback &&
       this.isKnownUnattachedLocalDaemonPty(ptyId)
     if (recoveredWorkerFallback || neverAttachedProviderFallback) {
-      const providerLines = await this.readProviderTerminalTailLines(ptyId, opts.limit)
+      const providerLines = await this.readProviderTerminalTailLines(
+        ptyId,
+        opts.limit,
+        providerWait
+      )
       if (providerLines.length > 0) {
         return buildVisibleSnapshotReadFallback(read, providerLines, opts.limit)
       }
@@ -13376,12 +13381,15 @@ export class OrcaRuntimeService {
 
   private async readProviderTerminalTailLines(
     ptyId: string,
-    limit: number | undefined
+    limit: number | undefined,
+    wait: { timeoutMs?: number; retireOnTimeout?: boolean } = {}
   ): Promise<string[]> {
     const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
-    const snapshot = await this.serializeProviderTerminalBuffer(ptyId, {
-      scrollbackRows: lineLimit
-    })
+    const snapshot = await this.serializeProviderTerminalBuffer(
+      ptyId,
+      { scrollbackRows: lineLimit },
+      wait
+    )
     const data = snapshot ? `${snapshot.scrollbackAnsi ?? ''}${snapshot.data}` : ''
     if (!snapshot || data.length === 0) {
       return []
@@ -18442,14 +18450,15 @@ export class OrcaRuntimeService {
 
   async readTerminal(
     handle: string,
-    opts: { cursor?: number; limit?: number; screen?: boolean } = {}
+    opts: { cursor?: number; limit?: number; screen?: boolean } = {},
+    providerWait: { timeoutMs?: number; retireOnTimeout?: boolean } = {}
   ): Promise<RuntimeTerminalRead> {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       const read = this.readPtyTerminal(handle, pty.pty, opts)
       const visibleRead = opts.screen
         ? await this.readRenderedScreen(pty.pty.ptyId, read, opts)
-        : await this.withVisibleSnapshotFallback(pty.pty.ptyId, read, opts)
+        : await this.withVisibleSnapshotFallback(pty.pty.ptyId, read, opts, providerWait)
       this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
       return labelTerminalReadSource(visibleRead)
     }
@@ -18471,7 +18480,7 @@ export class OrcaRuntimeService {
     }
     const visibleRead = opts.screen
       ? await this.readRenderedScreen(leaf.ptyId, read, opts)
-      : await this.withVisibleSnapshotFallback(leaf.ptyId, read, opts)
+      : await this.withVisibleSnapshotFallback(leaf.ptyId, read, opts, providerWait)
     this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId)
     return labelTerminalReadSource(visibleRead)
   }
@@ -19680,7 +19689,7 @@ export class OrcaRuntimeService {
           ) {
             this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
           } else {
-            this.startPtyTuiIdleFallbackPoll(waiter, live.pty)
+            this.startPtyTuiIdleFallbackPoll(waiter, live.pty, effectiveTimeoutMs)
           }
         }
       })
@@ -19791,7 +19800,7 @@ export class OrcaRuntimeService {
             ) {
               this.resolveWaiter(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
             } else {
-              this.startTuiIdleFallbackPoll(waiter, live.leaf)
+              this.startTuiIdleFallbackPoll(waiter, live.leaf, effectiveTimeoutMs)
             }
           }
         }
@@ -35372,7 +35381,11 @@ export class OrcaRuntimeService {
   }
 
   // Why: the primary OSC-title signal can't fire for daemon-hosted terminals (no PTY data through the runtime), so this fallback polls the renderer-synced tab title + foreground-process quiescence; self-cancels when the OSC path fires.
-  private startTuiIdleFallbackPoll(waiter: TerminalWaiter, leaf: RuntimeLeafRecord): void {
+  private startTuiIdleFallbackPoll(
+    waiter: TerminalWaiter,
+    leaf: RuntimeLeafRecord,
+    waiterTimeoutMs: number
+  ): void {
     let foregroundPollInFlight = false
     waiter.pollInterval = setInterval(async () => {
       if (!waiter.pollInterval) {
@@ -35461,11 +35474,15 @@ export class OrcaRuntimeService {
       leaf.preview
     )
     if (leaf.lastAgentStatus === null && retainedWaitText.length === 0) {
-      this.startTuiIdleVisibleReadProbe(waiter)
+      this.startTuiIdleVisibleReadProbe(waiter, waiterTimeoutMs)
     }
   }
 
-  private startPtyTuiIdleFallbackPoll(waiter: TerminalWaiter, pty: RuntimePtyWorktreeRecord): void {
+  private startPtyTuiIdleFallbackPoll(
+    waiter: TerminalWaiter,
+    pty: RuntimePtyWorktreeRecord,
+    waiterTimeoutMs: number
+  ): void {
     let foregroundPollInFlight = false
     waiter.pollInterval = setInterval(async () => {
       if (!waiter.pollInterval) {
@@ -35531,12 +35548,27 @@ export class OrcaRuntimeService {
     }, TUI_IDLE_POLL_INTERVAL_MS)
     const retainedWaitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
     if (pty.lastAgentStatus === null && retainedWaitText.length === 0) {
-      this.startTuiIdleVisibleReadProbe(waiter)
+      this.startTuiIdleVisibleReadProbe(waiter, waiterTimeoutMs)
     }
   }
 
-  private startTuiIdleVisibleReadProbe(waiter: TerminalWaiter): void {
-    void withTimeout(this.readTerminal(waiter.handle), VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS, null)
+  private startTuiIdleVisibleReadProbe(waiter: TerminalWaiter, waiterTimeoutMs: number): void {
+    const snapshotTimeoutMs = Math.min(
+      VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
+      Math.max(0, waiterTimeoutMs - 1)
+    )
+    void withTimeout(
+      this.readTerminal(
+        waiter.handle,
+        {},
+        {
+          timeoutMs: snapshotTimeoutMs,
+          retireOnTimeout: true
+        }
+      ),
+      snapshotTimeoutMs,
+      null
+    )
       .then((read) => {
         if (
           !read ||
