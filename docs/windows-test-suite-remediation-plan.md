@@ -865,3 +865,26 @@ sessions. Needs its own look before anything is changed.
 `pnpm install` cannot rebuild `windows-native-registry` on this machine
 (node-gyp fails), which is why `windows-user-path-registry.test.ts` fails. That
 predates this work and is a toolchain gap, not a code defect.
+
+### `src/main/native-chat/transcript-watch-error.test.ts` (2 fails)
+
+The fixture puts a directory at the transcript path so every tail read throws
+EISDIR — a real, persistent read error rather than a missing file, chosen
+deliberately to avoid the #8401 deferral. On Windows `readFileSync` does throw
+EISDIR, but `openSync` on a directory **succeeds**, so the reader's open-and-read
+path sees an empty transcript instead of an error and reports a clean empty
+snapshot.
+
+The behaviour under test — surface an error snapshot once, without spamming the
+rotation retry — is platform-independent. Only the provocation is POSIX-shaped.
+It needs a portable way to force a persistent read error before it can run here;
+a capability gate would be honest but would lose the coverage on Windows, which
+is where an unreadable transcript is at least as likely.
+
+### `src/main/rate-limits/codex-fetcher.test.ts` — resolved, noted for the pattern
+
+Worth recording because the shape recurs: a test asserting `child.kill()` is
+asserting the POSIX half of a two-step termination. Windows has no SIGTERM, and
+`terminateCodexProbeChild` knows it — stdin EOF is the graceful stop everywhere,
+the signal is the backstop where signals are real. Assert that the child is gone,
+not which mechanism got it there.
