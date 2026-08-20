@@ -18,7 +18,7 @@
   "src/main/cli/windows-user-path-registry.test.ts": 1,
   "src/main/codex-accounts/runtime-home-mirrored-status-home.test.ts": 1,
   "src/main/codex-accounts/runtime-home-service-per-account-migration.test.ts": 1,
-  "src/main/codex/codex-session-resume-home.test.ts": 9,
+  "src/main/codex/codex-legacy-session-resume.test.ts": 2,
   "src/main/codex/codex-session-resume-preparation.test.ts": 2,
   "src/main/daemon/daemon-preflight-client-replacement.test.ts": 2,
   "src/main/daemon/daemon-pty-adapter-daemon-recovery.test.ts": 1,
