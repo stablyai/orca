@@ -150,12 +150,17 @@ const WMIC_VALUE_FIELDS = [
  * NULL still parses, and a record missing a middle property merges into the next
  * rather than desyncing the rest of the table.
  *
- * Residue: a command line embedding the whole `ExecutablePath`..`ProcessId` tail
- * in order forges a row. It cannot suppress its own real row, so a forged pid
- * that names a live process duplicates it, and queryWindowsProcessesWithWmic
- * drops the snapshot on duplicate pids.
+ * Returns null when the framing is provably compromised, which drops the whole
+ * snapshot to PowerShell. Only CommandLine can hold a newline, so a continuation
+ * line arriving while a later property is open means some earlier line was
+ * absorbed that should not have been. A command line carrying
+ * `ExecutablePath=`/`Name=`/`ParentProcessId=` in order otherwise walks the parser
+ * to ParentProcessId and lets the record's own real `ProcessId=` close it —
+ * re-parenting a live pid under a forged parent, with no duplicate pid to catch
+ * it. Ancestry read off that feeds `taskkill /T /F`, so an ambiguous table is
+ * refused rather than guessed at.
  */
-function parseWindowsProcessValueRows(stdout: string): WindowsProcessRow[] {
+function parseWindowsProcessValueRows(stdout: string): WindowsProcessRow[] | null {
   const rows: WindowsProcessRow[] = []
   const values: string[] = ['', '', '', '', '']
   let field = -1
@@ -178,8 +183,10 @@ function parseWindowsProcessValueRows(stdout: string): WindowsProcessRow[] {
   }
 
   for (const line of stdout.split(/\r?\n/)) {
-    if (line.trim() === '') {
-      // Only past CommandLine does a blank line mean end-of-record; inside one it
+    // Exactly empty, not merely blank: a whitespace-only line is content, and
+    // treating it as the separator silently ate its spaces out of the command.
+    if (line === '') {
+      // Only past CommandLine does an empty line mean end-of-record; inside one it
       // is content. Agent CLIs really do embed blank lines: on a measured
       // 920-process host all 11 that did were claude/codex/node/sh panes — the
       // exact rows foreground detection reads. Flushing there dropped the command
@@ -200,8 +207,10 @@ function parseWindowsProcessValueRows(stdout: string): WindowsProcessRow[] {
       if (next === WMIC_VALUE_FIELDS.length - 1) {
         flush()
       }
-    } else if (field >= 0) {
-      values[field] += `\n${line}`
+    } else if (field > 0) {
+      return null
+    } else if (field === 0) {
+      values[0] += `\n${line}`
     }
   }
   flush()
@@ -376,6 +385,11 @@ async function queryWindowsProcessesWithWmic(): Promise<WmicScan> {
     return { status: 'failed' }
   }
   const rows = parseWindowsProcessValueRows(stdout)
+  if (rows === null) {
+    // Framing compromised by command-line content, not a format we cannot read:
+    // transient, because it lasts only as long as the process that wrote it.
+    return { status: 'failed' }
+  }
   if (rows.length === 0) {
     // Output arrived and parsed to nothing: this build's wmic does not speak the
     // format we read, and no later scan will change that.
