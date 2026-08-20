@@ -6,16 +6,22 @@ import {
   withClaudeSkillProviderRoot
 } from './skill-provider-runtime-roots'
 
+
+// Why a volume: production resolve()s its input, so a drive-less `/srv` came
+// back as `C:srv` on Windows while the expectation kept the bare form. The
+// roots are synthetic; they only have to be absolute the way this host is.
+const VOLUME = process.platform === 'win32' ? 'C:\\' : '/'
+
 describe('skill provider runtime roots', () => {
   it('maps Claude and Grok config homes to their global skill roots', () => {
     expect(
       resolveEnvironmentSkillProviderRoots({
-        CLAUDE_CONFIG_DIR: join('/srv', 'claude'),
-        GROK_HOME: join('/srv', 'grok')
+        CLAUDE_CONFIG_DIR: join(VOLUME, 'srv', 'claude'),
+        GROK_HOME: join(VOLUME, 'srv', 'grok')
       })
     ).toEqual({
-      claude: join('/srv', 'claude', 'skills'),
-      grok: join('/srv', 'grok', 'skills')
+      claude: join(VOLUME, 'srv', 'claude', 'skills'),
+      grok: join(VOLUME, 'srv', 'grok', 'skills')
     })
   })
 
@@ -25,8 +31,8 @@ describe('skill provider runtime roots', () => {
       GROK_HOME: '../grok'
     })
     expect(roots).toEqual({})
-    expect(withClaudeSkillProviderRoot(roots, join('/managed', 'claude'))).toEqual({
-      claude: join('/managed', 'claude', 'skills')
+    expect(withClaudeSkillProviderRoot(roots, join(VOLUME, 'managed', 'claude'))).toEqual({
+      claude: join(VOLUME, 'managed', 'claude', 'skills')
     })
   })
 

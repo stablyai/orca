@@ -22,6 +22,13 @@ function git(cwd: string, args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] })
 }
 
+
+// Why fold the separator: Orca stores repo roots with forward slashes on
+// purpose (normalizeRuntimePathSeparators), and git reports its own paths that
+// way too — while path.join here yields backslashes on Windows. These cases
+// are about which repository was found, not how a path is spelled.
+const asRepoPath = (value: string): string => value.split('\\').join('/')
+
 describe('isGitRepo', () => {
   let tmpDir: string
 
@@ -80,7 +87,7 @@ describe('isGitRepo', () => {
     git(realRepo, ['init', '--quiet'])
 
     withGitUnavailable(() => {
-      expect(getGitRepoRoot(nestedDir)).toBe(realRepo)
+      expect(asRepoPath(getGitRepoRoot(nestedDir))).toBe(asRepoPath(realRepo))
     })
   })
 
@@ -330,7 +337,7 @@ describe('isGitRepo', () => {
     const bareRepo = path.join(tmpDir, 'bare.git')
     git(tmpDir, ['init', '--bare', '--quiet', bareRepo])
 
-    expect(getGitRepoRoot(bareRepo)).toBe(bareRepo)
+    expect(asRepoPath(getGitRepoRoot(bareRepo))).toBe(asRepoPath(bareRepo))
   })
 })
 
