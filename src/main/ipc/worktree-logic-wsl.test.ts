@@ -22,6 +22,7 @@ import {
   buildKnownOrcaWorkspaceLayouts,
   classifyWorktreeOwnership
 } from '../../shared/worktree/ownership'
+import { relativePathInsideRoot } from '../../shared/cross-platform-path'
 import type { Repo } from '../../shared/repo-types'
 
 describe('computeWorktreePath WSL layout', () => {
@@ -168,15 +169,17 @@ describe('computeWorktreePath WSL layout', () => {
         repo.path,
         getWorktreePathSettings(repo, settings)
       )
+      const layouts = buildKnownOrcaWorkspaceLayouts({ ...settings, workspaceDirHistory: [] }, repo)
+      // Why containment, not just ownership: a regressed resolver lands in the
+      // ~/orca/workspaces mirror layout, which also classifies 'external'.
+      // layouts[0] is the repo-base layout — it is always pushed first.
+      expect(relativePathInsideRoot(layouts[0].path, createdPath)).not.toBeNull()
       expect(
         classifyWorktreeOwnership({
           repo,
           settings: { ...settings, workspaceDirHistory: [] },
           worktree: { path: createdPath, isMainWorktree: false },
-          knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(
-            { ...settings, workspaceDirHistory: [] },
-            repo
-          )
+          knownOrcaLayouts: layouts
         })
       ).toBe('external')
     }
