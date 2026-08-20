@@ -1,0 +1,160 @@
+name: Perf Budgets
+
+# Cold start, idle CPU, and daemon cold start are the three things a desktop user
+# feels first. All three had benchmarks and none of them gated anything — the
+# instruments existed but were wired to no alarm. This runs them on PRs that touch
+# the boot or idle path and fails on a step-change regression.
+#
+# Budgets live in config/scripts/check-*-budget.mjs and are deliberately generous:
+# a shared GitHub runner varies too much for drift detection, so they are sized to
+# catch a change in the SHAPE of startup (a new blocking sync call, an eager
+# require, a spinning timer, a leaked process), not a few percent.
+#
+# To recalibrate after a runner or fixture change, dispatch this workflow with
+# print_only=true — it prints measured-vs-budget for all three without failing.
+
+on:
+  pull_request:
+    paths:
+      # The main process owns boot: app-ready, services, persistence, daemon.
+      - 'src/main/**'
+      - 'src/preload/**'
+      - 'src/shared/**'
+      # Renderer hydration and store publication drive time-to-workspace-ready
+      # and the idle re-render load.
+      - 'src/renderer/src/store/**'
+      - 'src/renderer/src/runtime/**'
+      - 'src/renderer/src/hooks/useIpcEvents.ts'
+      - 'src/renderer/src/main.tsx'
+      - 'src/renderer/src/App.tsx'
+      # Bundle graph and dependency changes move startup cost around.
+      - 'electron.vite.config.ts'
+      - 'config/build-plugins/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      # The harness and its budgets.
+      - '.github/workflows/perf-budgets.yml'
+      - 'config/scripts/perf-budget-gate.mjs'
+      - 'config/scripts/check-startup-budget.mjs'
+      - 'config/scripts/check-idle-cpu-budget.mjs'
+      - 'config/scripts/check-daemon-coldstart-budget.mjs'
+      - 'config/scripts/run-idle-cpu-benchmark.mjs'
+      - 'config/scripts/idle-cpu-process-sampling.mjs'
+      - 'tests/tools/benchmarks/startup-time-bench.mjs'
+      - 'tests/tools/benchmarks/daemon-coldstart-bench.mjs'
+  workflow_dispatch:
+    inputs:
+      print_only:
+        description: Report measured-vs-budget without failing (budget calibration)
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    # Why: the paths filter above skips docs/mobile/test-only PRs, so a nightly
+    # full run still covers regressions that arrive through an unfiltered path.
+    - cron: '15 7 * * *'
+
+concurrency:
+  group: perf-budgets-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  perf-budgets:
+    name: startup / idle CPU / daemon budgets
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      REPORT_DIR: test-results/perf-budgets
+      # Empty unless dispatched with print_only, so PR and scheduled runs gate.
+      PRINT_ONLY: ${{ inputs.print_only && '--print-only' || '' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install native build tools and xvfb
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3 xvfb
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      # Why: mirrors PR and E2E CI, which need pnpm to bypass its bundled gyp_main.py.
+      - name: Use external node-gyp to avoid pnpm's bundled copy
+        run: |
+          npm install -g node-gyp@11.5.0
+          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Electron app
+        run: npx electron-vite build --mode e2e
+
+      - name: Prepare report directory
+        run: mkdir -p "$REPORT_DIR"
+
+      # Why --files 4000 rather than the 28000 default: the large fixture exists to
+      # reproduce the win32 icacls walk, which does not apply on Linux, and building
+      # it on every run costs more than it measures here.
+      # Why --wait-for-event renderer-startup-hydration-done: time-to-workspace-ready
+      # is what a user actually waits for, not did-finish-load.
+      - name: Startup benchmark
+        run: |
+          xvfb-run --auto-servernum node tests/tools/benchmarks/startup-time-bench.mjs \
+            --label ci \
+            --iterations 3 \
+            --files 4000 \
+            --wait-for-event renderer-startup-hydration-done \
+            --output "$REPORT_DIR/startup.json"
+
+      # Why !cancelled() on the later benches and the gate: one bench crashing
+      # should not hide the other two. Every report that exists still gets judged,
+      # and a missing one fails the gate with "benchmark likely failed".
+      - name: Idle CPU benchmark
+        if: ${{ !cancelled() }}
+        run: |
+          xvfb-run --auto-servernum node config/scripts/run-idle-cpu-benchmark.mjs \
+            --skip-build \
+            --output "$REPORT_DIR/idle-cpu.json"
+
+      - name: Daemon cold-start benchmark
+        if: ${{ !cancelled() }}
+        run: |
+          xvfb-run --auto-servernum node tests/tools/benchmarks/daemon-coldstart-bench.mjs \
+            --label ci \
+            --iterations 2 \
+            --output "$REPORT_DIR/daemon-coldstart.json"
+
+      # One step so a PR sees every budget violation at once rather than fixing
+      # startup, pushing, and only then learning idle CPU regressed too.
+      - name: Check perf budgets
+        if: ${{ !cancelled() }}
+        run: |
+          status=0
+          node config/scripts/check-startup-budget.mjs \
+            "$REPORT_DIR/startup.json" $PRINT_ONLY || status=1
+          node config/scripts/check-idle-cpu-budget.mjs \
+            "$REPORT_DIR/idle-cpu.json" $PRINT_ONLY || status=1
+          node config/scripts/check-daemon-coldstart-budget.mjs \
+            "$REPORT_DIR/daemon-coldstart.json" $PRINT_ONLY || status=1
+          exit $status
+
+      - name: Upload perf reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: perf-budget-reports
+          path: ${{ env.REPORT_DIR }}
+          retention-days: 14
+          if-no-files-found: warn

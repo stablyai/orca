@@ -12,7 +12,7 @@
  *
  * Usage:
  *   node tests/tools/benchmarks/daemon-coldstart-bench.mjs --label baseline
- *     [--iterations 3] [--linger-ms 15000] [--timeout-ms 240000]
+ *     [--iterations 3] [--linger-ms 15000] [--timeout-ms 240000] [--output <path>]
  *     [--exe <path-to-packaged-Orca.exe>]
  *
  * Prereq (when not using --exe): `pnpm build:electron-vite` so out/ exists.
@@ -22,6 +22,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import { join, resolve } from 'node:path'
+import { resolveBenchmarkReportPath } from './benchmark-report-path.mjs'
 
 const scriptDir = import.meta.dirname
 const repoRoot = resolve(scriptDir, '..', '..')
@@ -43,6 +44,7 @@ function parseArgs(argv) {
     label: 'run',
     iterations: 3,
     exe: null,
+    output: null,
     timeoutMs: 240000,
     // Daemon init runs concurrently with window load and can finish after
     // did-finish-load; linger long enough to capture daemon-init-done and the
@@ -60,6 +62,9 @@ function parseArgs(argv) {
         break
       case '--exe':
         args.exe = next()
+        break
+      case '--output':
+        args.output = next()
         break
       case '--timeout-ms':
         args.timeoutMs = numericArg('--timeout-ms', next())
@@ -347,10 +352,12 @@ async function main() {
     summary[name] = median(iterations.map((iteration) => iteration.phases[name]))
   }
 
-  const resultsDir = join(scriptDir, 'results')
-  mkdirSync(resultsDir, { recursive: true })
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-')
-  const outPath = join(resultsDir, `daemon-coldstart-${args.label}-${stamp}.json`)
+  const outPath = resolveBenchmarkReportPath({
+    output: args.output,
+    scriptDir,
+    prefix: 'daemon-coldstart',
+    label: args.label
+  })
   const serialized = JSON.stringify(
     {
       label: args.label,
