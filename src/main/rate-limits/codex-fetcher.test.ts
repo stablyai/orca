@@ -287,7 +287,11 @@ describe('fetchCodexRateLimits', () => {
       status: 'error',
       error: 'Rate-limit fetch aborted'
     })
-    expect(rpcChild.kill).toHaveBeenCalledTimes(1)
+    // Why the exit and not the kill: stdin EOF is the graceful stop, and the
+    // SIGTERM behind it only exists where signals are real — on Windows the
+    // fake dies on EOF and kill() is never needed. What both owe is a child
+    // that is actually gone before the fetch settles.
+    expect(rpcChild.exitCode).toBe(0)
     expect(ptySpawnMock).not.toHaveBeenCalled()
   })
 
@@ -388,7 +392,11 @@ describe('fetchCodexRateLimits', () => {
       status: 'error',
       error: 'RPC timeout'
     })
-    expect(rpcChild.kill).toHaveBeenCalledTimes(1)
+    // Why the exit and not the kill: stdin EOF is the graceful stop, and the
+    // SIGTERM behind it only exists where signals are real — on Windows the
+    // fake dies on EOF and kill() is never needed. What both owe is a child
+    // that is actually gone before the fetch settles.
+    expect(rpcChild.exitCode).toBe(0)
     expect(rpcChild.stdout.listenerCount('data')).toBe(0)
     expect(rpcChild.stderr.listenerCount('data')).toBe(0)
     expect(rpcChild.listenerCount('error')).toBe(0)
