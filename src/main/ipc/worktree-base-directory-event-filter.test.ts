@@ -6,7 +6,15 @@ import {
   type WorktreeBaseWatchTarget
 } from './worktree-base-directory-event-filter'
 
-const COMMON_DIR = join('/repos', 'project', '.git')
+// Why the drive letter on Windows, as the win32 cases below already do:
+// `join('/repos', ...)` yields `\repos\project\.git`, which has no volume. The
+// classifier splits paths into segments, and a drive-less root is not recognised
+// as a Windows path — so the whole thing reads as one POSIX segment and no
+// `worktrees/` or `HEAD` is ever found inside it.
+const COMMON_DIR =
+  process.platform === 'win32'
+    ? win32.join('C:\\', 'repos', 'project', '.git')
+    : join('/repos', 'project', '.git')
 
 function makeGitCommonTarget(): WorktreeBaseWatchTarget {
   return {
