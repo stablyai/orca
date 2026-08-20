@@ -30,6 +30,9 @@ Skills:
   skills install            Install bundled Orca skills globally via the community skills CLI
   skills update             Update already-installed Orca skills via the community skills CLI
 
+Hosts:
+  host list                 List targetable machines and how to name each one
+
 Environments:
   environment add           Save a remote Orca runtime from a pairing code
   environment list          List saved remote Orca runtimes
@@ -225,6 +228,7 @@ Common Commands:
   orca agent-context [--json]
   orca account add [--agent claude|codex] [--json]
   orca account list [--json]
+  orca host list [--json]
   orca environment add --name <name> --pairing-code <code> [--json]
   orca environment list [--json]
   orca environment show --environment <selector> [--json]

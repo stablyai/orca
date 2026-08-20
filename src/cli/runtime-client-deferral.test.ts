@@ -11,6 +11,16 @@ const { constructorArgsMock, callMock, getCliStatusMock } = vi.hoisted(() => ({
 // Why: `main` reaches RuntimeClient through `await import('./runtime-client.js')`
 // now. Mocking the same specifier the eager import used proves the dynamic
 // import still resolves to the module the 10 existing vi.mock suites target.
+// Why: --environment is now resolved against the paired-environment store before the client is
+// constructed, so a forwarding assertion needs an environment that actually resolves.
+vi.mock('./runtime/environments', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
+    listEnvironments: () => [{ id: 'env-1', name: 'env-1' }]
+  }
+})
+
 vi.mock('./runtime-client', () => {
   class RuntimeClient {
     call = callMock
@@ -21,7 +31,7 @@ vi.mock('./runtime-client', () => {
       constructorArgsMock(...args)
     }
   }
-  return { RuntimeClient }
+  return { RuntimeClient, getDefaultUserDataPath: () => '/tmp/orca-user-data' }
 })
 
 import { main } from './index'
