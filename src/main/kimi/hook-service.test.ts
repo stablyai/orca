@@ -8,16 +8,19 @@ import { KIMI_HOOK_EVENTS } from './kimi-hook-config-toml'
 // Why: getSharedManagedScriptPath() writes the managed script under
 // homedir()/.orca, and getKimiHome() honors KIMI_CODE_HOME. Point both at a
 // temp dir so the local install/remove cycle never touches the real ~/.orca or
-// ~/.kimi-code. os.homedir() resolves $HOME on POSIX (verified at write time).
+// ~/.kimi-code. os.homedir() reads $HOME on POSIX and %USERPROFILE% on Windows.
 let home: string
 let originalHome: string | undefined
+let originalUserProfile: string | undefined
 let originalKimiHome: string | undefined
 
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'orca-kimi-hook-'))
   originalHome = process.env.HOME
+  originalUserProfile = process.env.USERPROFILE
   originalKimiHome = process.env.KIMI_CODE_HOME
   process.env.HOME = home
+  process.env.USERPROFILE = home
   process.env.KIMI_CODE_HOME = join(home, '.kimi-code')
 })
 
@@ -27,12 +30,17 @@ afterEach(() => {
   } else {
     process.env.HOME = originalHome
   }
+  if (originalUserProfile === undefined) {
+    delete process.env.USERPROFILE
+  } else {
+    process.env.USERPROFILE = originalUserProfile
+  }
   if (originalKimiHome === undefined) {
     delete process.env.KIMI_CODE_HOME
   } else {
     process.env.KIMI_CODE_HOME = originalKimiHome
   }
-  rmSync(home, { recursive: true, force: true })
+  rmSync(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
 })
 
 const configPath = (): string => join(home, '.kimi-code', 'config.toml')

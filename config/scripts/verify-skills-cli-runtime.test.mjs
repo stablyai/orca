@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { realpathSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join, relative } from 'node:path'
+import { join, relative, sep } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
@@ -60,7 +60,8 @@ describe('skills CLI runtime closure', () => {
 
       expect(
         collectRuntimeClosure(root)
-          .map((file) => relative(realpathSync(root), file))
+          // Closure entries are native paths; compare on one separator.
+          .map((file) => relative(realpathSync(root), file).split(sep).join('/'))
           .sort()
       ).toEqual(['cli/handlers/skills.js', 'cli/index.js', 'shared/first.js', 'shared/second.js'])
     } finally {

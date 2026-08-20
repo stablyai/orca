@@ -7,6 +7,7 @@ import type * as UpdaterModule from './updater'
 import type * as RecoveryModule from './linux-package-update-recovery'
 import type { UpdateStatus } from '../shared/update-status-types'
 import { PRE_COMMIT_INSTALL_FAILURE } from './updater-test-harness'
+import { redactLinuxPackageInstallText } from './linux-package-install-diagnostic'
 
 const {
   browserWindowMock,
@@ -372,9 +373,13 @@ describe('updater', () => {
       updater.quitAndInstall()
       await settleQuitAndInstall()
 
+      // Why the sanitizer and not the raw text: the cause is masked before it is
+      // shown, and on Windows the staged cache lives under the home directory, so
+      // the path comes back as `<home>\...`. Masking itself is covered by
+      // linux-package-install-diagnostic.test.ts; this case is about which copy is kept.
       expect(send).toHaveBeenCalledWith('updater:status', {
         state: 'error',
-        message: `${PRE_COMMIT_FAILURE_MESSAGE} (${EXIT_127})`
+        message: `${PRE_COMMIT_FAILURE_MESSAGE} (${redactLinuxPackageInstallText(EXIT_127, null)})`
       })
       expect(recordUpdaterLifecycleMock).not.toHaveBeenCalledWith(
         'linux_package_install_failed',

@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_PROMPT_BRACKETED_PASTE_END } from '../../shared/agent-prompt-injection'
+import {
+  AGENT_PROMPT_BRACKETED_PASTE_END,
+  AGENT_PROMPT_SUBMIT_DELAY_MS
+} from '../../shared/agent-prompt-injection'
 import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 
@@ -673,7 +676,9 @@ describe('agent prompt submission runtime', () => {
     })
     const rejected = expect(submission).rejects.toThrow('request_aborted')
 
-    await vi.advanceTimersByTimeAsync(500)
+    // Not a literal: ConPTY gets a longer pre-Enter settle, and this case only
+    // means anything once that Enter has already gone out.
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_SUBMIT_DELAY_MS)
     controller.abort()
     await vi.runAllTimersAsync()
 

@@ -1,6 +1,6 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, posix } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultListResult } from '../shared/ai-vault-types'
 import {
@@ -72,15 +72,11 @@ describe('AiVaultHandler', () => {
 
   it('discovers and parses sessions entirely on the relay host', async () => {
     const remoteHome = await makeTemporaryHome()
-    const transcriptPath = join(
-      remoteHome,
-      '.codex',
-      'sessions',
-      '2026',
-      '07',
-      '26',
-      'rollout-test.jsonl'
-    )
+    const transcriptSegments = ['.codex', 'sessions', '2026', '07', '26', 'rollout-test.jsonl']
+    const transcriptPath = join(remoteHome, ...transcriptSegments)
+    // Why a second shape: the handler is told the host is Linux, so it composes what it
+    // discovers with POSIX separators regardless of the runner writing the fixture.
+    const discoveredPath = posix.join(remoteHome, ...transcriptSegments)
     await mkdir(dirname(transcriptPath), { recursive: true })
     await writeFile(
       transcriptPath,
@@ -119,7 +115,7 @@ describe('AiVaultHandler', () => {
       executionHostPlatform: 'linux',
       sessionId: 'ssh-session',
       title: 'Scan on the SSH target',
-      filePath: transcriptPath
+      filePath: discoveredPath
     })
   })
 

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { delimiter, isAbsolute, join } from 'node:path'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
+import { permissionBitsAreEnforced } from '../../shared/file-mode-capability'
 import {
   getFishCodexShellLaunchPreflight,
   getPosixCodexShellLaunchPreflight,
@@ -267,7 +268,11 @@ describe('Codex shell launch preflight command', () => {
 
   it.each([
     { label: 'the launcher file is missing', create: null },
-    { label: 'the launcher is not executable', create: 0o644 },
+    // Why capability-gated: Windows has no exec bit, so chmod 0644 leaves the
+    // launcher just as runnable and there is no "not executable" state to assert.
+    ...(permissionBitsAreEnforced()
+      ? [{ label: 'the launcher is not executable', create: 0o644 }]
+      : []),
     { label: 'the launcher path is a directory', create: 'directory' as const }
   ])('skips the preflight when $label', (config) => {
     const { userDataPath, resourcesPath } = makeCliRoot()

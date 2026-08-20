@@ -8,7 +8,6 @@ import {
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { _setWslCachesForTests } from '../wsl'
 import { registerPtyHandlers } from './pty'
-import { join } from 'node:path'
 // Why resolved rather than hardcoded: the wrapper tree is content-addressed.
 import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
 

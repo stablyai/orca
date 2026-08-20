@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { permissionBitsAreEnforced } from '../../shared/file-mode-capability'
 
 vi.mock('electron', () => ({
   app: { isPackaged: true }
@@ -45,8 +46,12 @@ describe('installLinuxBareOrcaDispatcher', () => {
     // Single-quoted so a resources path with shell metacharacters can't break out.
     expect(content).toContain(`exec '${expectedTarget}' "$@"`)
 
-    const mode = (await stat(result.dispatcherPath)).mode & 0o777
-    expect(mode & 0o111).not.toBe(0)
+    // Why the capability and not the platform: there is no exec bit to assert
+    // where a mode is not kept. The rest of the case still runs everywhere.
+    if (permissionBitsAreEnforced()) {
+      const mode = (await stat(result.dispatcherPath)).mode & 0o777
+      expect(mode & 0o111).not.toBe(0)
+    }
   })
 
   it('is idempotent — a second install rewrites its own dispatcher without throwing', async () => {

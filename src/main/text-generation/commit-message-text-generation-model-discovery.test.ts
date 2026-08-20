@@ -1,6 +1,8 @@
 import { spawn } from 'node:child_process'
 import type * as ChildProcess from 'node:child_process'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SSH_MUX_REQUEST_TIMEOUT_CODE } from '../ssh/ssh-channel-multiplexer'
 import {
   discoverCommitMessageModelsLocal,
@@ -32,10 +34,29 @@ const spawnMock = vi.mocked(spawn)
 
 const expectChildTerminated = createChildTerminationExpectation(terminateWindowsProcessTreeMock)
 
+/**
+ * Windows resolves a plan's bare binary against PATH and the version-manager directories
+ * under the home, so a host with the agent CLI installed spawns its absolute path. Empty
+ * both lookups for cases that assert the bare command. Cases that assert the resolved
+ * shape (the `npx` override) must not call this.
+ */
+function stubBareCommandResolution(): void {
+  const homeWithoutCli = join(tmpdir(), 'orca-model-discovery-no-cli-home')
+  // Only PATH: process.env is case-insensitive on Windows, and stubbing `Path` too
+  // makes vi.unstubAllEnvs restore the emptied value over the real one.
+  vi.stubEnv('PATH', '')
+  vi.stubEnv('HOME', homeWithoutCli)
+  vi.stubEnv('USERPROFILE', homeWithoutCli)
+}
+
 beforeEach(() => {
   terminateWindowsProcessTreeMock.mockClear()
   terminateWindowsProcessTreeMock.mockResolvedValue(undefined)
   spawnMock.mockClear()
+})
+
+afterEach(() => {
+  vi.unstubAllEnvs()
 })
 
 describe('discoverCommitMessageModelsLocal', () => {
@@ -93,6 +114,7 @@ describe('discoverCommitMessageModelsLocal', () => {
       on: vi.fn((event, callback) => listeners.set(event, callback))
     }
     spawnMock.mockReturnValue(child as never)
+    stubBareCommandResolution()
 
     const pending = discoverCommitMessageModelsLocal('claude', undefined)
 

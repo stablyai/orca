@@ -1,5 +1,5 @@
 // WSL routing: distro selection, cwd translation and env import marking.
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -77,6 +77,7 @@ vi.mock('../providers/windows-conpty-process-membership', () => ({
 }))
 
 import { createPtySubprocess } from './pty-subprocess'
+import { _resetWslCachesForTests, _setWslCachesForTests } from '../wsl'
 import {
   mockPtyProcess,
   POWERLEVEL10K_WIZARD_DISABLE_ENV,
@@ -90,6 +91,19 @@ describe('createPtySubprocess', () => {
     resolveUnixShellPathMock,
     resolveAgentForegroundProcessMock,
     validateWorkingDirectoryMock
+  })
+
+  // Why seeded: unseeded, `getDefaultWslDistro()` shells out to the developer's own
+  // wsl.exe, so which distro the daemon picks — and whether it passes -d at all —
+  // becomes a property of the machine running the suite. Every case below states its
+  // distro through cwd, terminalWindowsWslDistro or CODEX_HOME, so the host default
+  // must be the "no distro registered" answer these expectations are written against.
+  beforeEach(() => {
+    _setWslCachesForTests({ available: true, distros: [] })
+  })
+
+  afterEach(() => {
+    _resetWslCachesForTests()
   })
 
   it('validates the requested Windows cwd before launching WSL on Windows', async () => {

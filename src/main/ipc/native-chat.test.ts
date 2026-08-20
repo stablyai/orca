@@ -40,6 +40,26 @@ afterEach(async () => {
   tempRoots = []
 })
 
+// Why both names: os.homedir() reads USERPROFILE on Windows and HOME elsewhere,
+// so a fixture that sets only HOME leaves the resolver on the machine's real home.
+const HOME_ENV_NAMES = ['HOME', 'USERPROFILE'] as const
+
+function useFixtureHome(root: string): () => void {
+  const previous = HOME_ENV_NAMES.map((name) => [name, process.env[name]] as const)
+  for (const name of HOME_ENV_NAMES) {
+    process.env[name] = root
+  }
+  return () => {
+    for (const [name, value] of previous) {
+      if (value === undefined) {
+        delete process.env[name]
+      } else {
+        process.env[name] = value
+      }
+    }
+  }
+}
+
 function jsonLines(records: unknown[]): string {
   return records.map((record) => JSON.stringify(record)).join('\n')
 }
@@ -104,10 +124,9 @@ describe('nativeChat:readSession handler', () => {
       ])
     )
 
-    // Point homedir-derived Claude root at our fixture via HOME so the resolver
+    // Point the homedir-derived Claude root at our fixture so the resolver
     // (which reads homedir() internally) finds the transcript.
-    const previousHome = process.env.HOME
-    process.env.HOME = root
+    const restoreHome = useFixtureHome(root)
     try {
       const result = (await invokeReadSession({ agent: 'claude', sessionId: 'sess-ipc' })) as {
         messages?: unknown[]
@@ -116,11 +135,7 @@ describe('nativeChat:readSession handler', () => {
       expect(result.error).toBeUndefined()
       expect(result.messages).toHaveLength(2)
     } finally {
-      if (previousHome === undefined) {
-        delete process.env.HOME
-      } else {
-        process.env.HOME = previousHome
-      }
+      restoreHome()
     }
   })
 
@@ -139,8 +154,7 @@ describe('nativeChat:readSession handler', () => {
     }))
     await writeFile(join(projectDir, 'sess-limit.jsonl'), jsonLines(records))
 
-    const previousHome = process.env.HOME
-    process.env.HOME = root
+    const restoreHome = useFixtureHome(root)
     try {
       const windowed = (await invokeReadSession({
         agent: 'claude',
@@ -156,11 +170,7 @@ describe('nativeChat:readSession handler', () => {
       })) as { messages: { id: string }[] }
       expect(wider.messages.map((m) => m.id)).toEqual(['u-2', 'u-3', 'u-4', 'u-5'])
     } finally {
-      if (previousHome === undefined) {
-        delete process.env.HOME
-      } else {
-        process.env.HOME = previousHome
-      }
+      restoreHome()
     }
   })
 
@@ -200,8 +210,7 @@ describe('nativeChat:readSession handler', () => {
       send: (channel: string, payload: unknown) => sent.push({ channel, payload })
     }
 
-    const previousHome = process.env.HOME
-    process.env.HOME = root
+    const restoreHome = useFixtureHome(root)
     try {
       subscribe!(
         { sender },
@@ -244,11 +253,7 @@ describe('nativeChat:readSession handler', () => {
       expect(destroyedCb).toBeDefined()
       destroyedCb!()
     } finally {
-      if (previousHome === undefined) {
-        delete process.env.HOME
-      } else {
-        process.env.HOME = previousHome
-      }
+      restoreHome()
     }
   })
 
@@ -286,8 +291,7 @@ describe('nativeChat:readSession handler', () => {
       send: vi.fn()
     }
 
-    const previousHome = process.env.HOME
-    process.env.HOME = root
+    const restoreHome = useFixtureHome(root)
     try {
       subscribe!(
         { sender },
@@ -305,30 +309,21 @@ describe('nativeChat:readSession handler', () => {
       await waitFor(() => _getNativeChatSenderCleanupCountForTest() === 0)
       expect(sender.send).not.toHaveBeenCalled()
     } finally {
-      if (previousHome === undefined) {
-        delete process.env.HOME
-      } else {
-        process.env.HOME = previousHome
-      }
+      restoreHome()
     }
   })
 
   it('returns an error for an unknown session without throwing', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-ipc-missing-'))
     tempRoots.push(root)
-    const previousHome = process.env.HOME
-    process.env.HOME = root
+    const restoreHome = useFixtureHome(root)
     try {
       const result = (await invokeReadSession({ agent: 'claude', sessionId: 'nope' })) as {
         error?: string
       }
       expect(result.error).toBeTruthy()
     } finally {
-      if (previousHome === undefined) {
-        delete process.env.HOME
-      } else {
-        process.env.HOME = previousHome
-      }
+      restoreHome()
     }
   })
 })

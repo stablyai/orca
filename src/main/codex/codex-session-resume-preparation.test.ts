@@ -2,7 +2,18 @@ import { describe, expect, it, vi } from 'vitest'
 import { prepareCodexSessionResume } from './codex-session-resume-preparation'
 
 const SESSION_ID = '019f81b9-19a9-7651-a8d1-352d9420bd11'
-const ORIGIN_HOME = '/managed/origin/home'
+
+/** A synthetic absolute path, spelled the way this host spells one.
+ *
+ *  Production joins a Codex home with its `sessions` child using the platform
+ *  separator, so a drive-less POSIX literal stops matching its own transcript on
+ *  Windows and provenance always answers `fresh`. Mirrors the same helper in
+ *  codex-session-resume-home.test.ts. */
+const hostPath = (posix: string): string =>
+  process.platform === 'win32' ? `C:${posix.split('/').join('\\')}` : posix
+
+const ORIGIN_HOME = hostPath('/managed/origin/home')
+const MIGRATED_HOME = hostPath('/managed/migrated/home')
 const ORIGIN_ROLLOUT = `${ORIGIN_HOME}/sessions/2026/07/20/rollout-2026-07-20T12-00-00-${SESSION_ID}.jsonl`
 
 // Why: these cases assert the resume/fresh outcome, never the legacy rescan's home ranking
@@ -30,7 +41,7 @@ function prepare(args: {
 
 describe('prepareCodexSessionResume', () => {
   it('pins the verified origin home the caller resolved', async () => {
-    const resolveVerifiedResumeHome = vi.fn(async () => '/managed/migrated/home')
+    const resolveVerifiedResumeHome = vi.fn(async () => MIGRATED_HOME)
 
     await expect(
       prepare({
@@ -38,7 +49,7 @@ describe('prepareCodexSessionResume', () => {
         trustedCodexHomes: [ORIGIN_HOME],
         resolveVerifiedResumeHome
       })
-    ).resolves.toEqual({ outcome: 'resume', codexHomePath: '/managed/migrated/home' })
+    ).resolves.toEqual({ outcome: 'resume', codexHomePath: MIGRATED_HOME })
     expect(resolveVerifiedResumeHome).toHaveBeenCalledWith({
       homePath: ORIGIN_HOME,
       transcriptPath: ORIGIN_ROLLOUT
@@ -53,7 +64,7 @@ describe('prepareCodexSessionResume', () => {
     await expect(
       prepare({
         transcriptPath: ORIGIN_ROLLOUT,
-        trustedCodexHomes: ['/managed/other/home'],
+        trustedCodexHomes: [hostPath('/managed/other/home')],
         resolveVerifiedResumeHome
       })
     ).resolves.toEqual({ outcome: 'fresh', claimedCodexProvenance: true })

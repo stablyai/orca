@@ -349,12 +349,14 @@ describe('Windows managed hook stdin structure', () => {
           const result = await runHookProcess(executable, args, hookEnvironment())
           expect(result.exitCode, `${fileName} exit code`).toBe(0)
           // Why (#11549 class): every Windows-local hook exits before owning stdin when the
-          // Orca env is missing, so the writer may break — EPIPE, or ECONNRESET when Windows
-          // tears the pipe down first. hookEnvironment() strips every ORCA_* var, so this
-          // relaxation only ever covers the missing-env path — a happy-path case added to
-          // this loop must not reuse it.
+          // Orca env is missing, so the writer may break — EPIPE, ECONNRESET when Windows
+          // tears the pipe down first, or EOF, which is how libuv reports a Windows pipe
+          // whose reader is gone (ERROR_BROKEN_PIPE maps to UV_EOF, not UV_EPIPE). All three
+          // say the same thing: the reader left. hookEnvironment() strips every ORCA_* var,
+          // so this relaxation only ever covers the missing-env path — a happy-path case
+          // added to this loop must not reuse it.
           for (const error of result.stdinErrors) {
-            expect(['EPIPE', 'ECONNRESET'], `${fileName} stdin error`).toContain(error.code)
+            expect(['EPIPE', 'ECONNRESET', 'EOF'], `${fileName} stdin error`).toContain(error.code)
           }
         }
 

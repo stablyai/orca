@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect, type Socket } from 'node:net'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { DaemonClient } from './client'
@@ -12,6 +12,14 @@ import type { SubprocessHandle } from './session-subprocess-handle'
 type DaemonServerPrivate = {
   pendingPtySpawnPreparations: Map<string, Set<unknown>>
   clients: Map<string, { streamSocket: Socket | null }>
+}
+
+// Windows has no filesystem sockets: a daemon endpoint is a named pipe, and
+// listening on a path under the temp dir fails with EACCES.
+function daemonTestSocketPath(dir: string): string {
+  return process.platform === 'win32'
+    ? `\\\\.\\pipe\\${basename(dir)}-daemon.sock`
+    : join(dir, 'daemon.sock')
 }
 
 function createMockSubprocess(): SubprocessHandle {
@@ -71,7 +79,7 @@ describe('daemon preflight client replacement', () => {
     })
     const preparePtySpawn = vi.fn(() => preparation)
     const spawnSubprocess = vi.fn(() => createMockSubprocess())
-    const socketPath = join(dir, 'daemon.sock')
+    const socketPath = daemonTestSocketPath(dir)
     const tokenPath = join(dir, 'daemon.token')
     server = new DaemonServer({ socketPath, tokenPath, preparePtySpawn, spawnSubprocess })
     await server.start()
@@ -110,7 +118,7 @@ describe('daemon preflight client replacement', () => {
     })
     const preparePtySpawn = vi.fn(() => preparation)
     const spawnSubprocess = vi.fn(() => createMockSubprocess())
-    const socketPath = join(dir, 'daemon.sock')
+    const socketPath = daemonTestSocketPath(dir)
     const tokenPath = join(dir, 'daemon.token')
     server = new DaemonServer({ socketPath, tokenPath, preparePtySpawn, spawnSubprocess })
     await server.start()

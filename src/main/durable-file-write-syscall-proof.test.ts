@@ -16,8 +16,12 @@ vi.mock('node:fs', async () => {
   return {
     ...actual,
     fsyncSync: (fd: number) => {
-      syscalls.push(actual.fstatSync(fd).isDirectory() ? 'fsync:directory' : 'fsync:file')
-      return actual.fsyncSync(fd)
+      // Record the sync only once it lands: Windows opens a directory fine but rejects
+      // the fsync, so an attempt logged up front would count a syscall that never ran.
+      const kind = actual.fstatSync(fd).isDirectory() ? 'fsync:directory' : 'fsync:file'
+      const result = actual.fsyncSync(fd)
+      syscalls.push(kind)
+      return result
     },
     renameSync: (from: NodeFs.PathLike, to: NodeFs.PathLike) => {
       syscalls.push('rename')
