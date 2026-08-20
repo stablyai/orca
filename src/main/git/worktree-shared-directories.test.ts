@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { lstatSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { devNull, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -17,15 +17,25 @@ import { assertWorktreeCleanForRemoval } from './worktree'
 import { getStatus } from './status'
 
 const git = (args: string[], cwd: string): void => {
-  execFileSync('git', args, {
-    cwd,
-    stdio: 'ignore',
-    env: {
-      ...process.env,
-      GIT_CONFIG_GLOBAL: devNull,
-      GIT_CONFIG_SYSTEM: devNull
-    }
-  })
+  try {
+    execFileSync('git', args, {
+      cwd,
+      stdio: ['ignore', 'ignore', 'pipe'],
+      env: {
+        ...process.env,
+        // Why a path that does not exist rather than `os.devNull`: on Windows
+        // that is `\\.\nul`, and Git rejects it outright — `unable to access
+        // '//./nul'`. An absent file reads as an empty config everywhere.
+        GIT_CONFIG_GLOBAL: join(cwd, 'no-global-gitconfig'),
+        GIT_CONFIG_SYSTEM: join(cwd, 'no-system-gitconfig')
+      }
+    })
+  } catch (error) {
+    // Why: `stdio: 'ignore'` used to swallow git's reason, leaving a bare
+    // "Command failed: git init -q" to diagnose from.
+    const stderr = (error as { stderr?: Buffer }).stderr?.toString().trim()
+    throw new Error(`git ${args.join(' ')} failed${stderr ? `: ${stderr}` : ''}`)
+  }
 }
 
 describe('resolveWorktreeSharedDirectories', () => {
