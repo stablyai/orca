@@ -91,6 +91,7 @@ import {
   applyBackgroundMountTabRestriction,
   canDeferColdActivationTabsForHost,
   canMountTerminalWorkspaceForStartup,
+  deferTerminalTabsUntilHostSnapshot,
   planColdActivationTabDeferral,
   pruneClosedBackgroundMountTabs,
   revealActivationDeferredTabs,
@@ -156,6 +157,7 @@ import {
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
+import { hasAcceptedWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync'
 import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
@@ -1282,6 +1284,19 @@ function Terminal(): React.JSX.Element | null {
   ) {
     // Why: mounting every saved tab at once (scrollback replay + WebGL + sync-IPC snapshot per pane) freezes the renderer, so hidden tabs defer and mount on first reveal.
     const worktreeTabs = tabsByWorktree[renderedActiveWorktreeId] ?? []
+    const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(renderedActiveWorktreeId)
+    const runtimeStatus = runtimeEnvironmentId
+      ? runtimeStatusByEnvironmentId.get(runtimeEnvironmentId)
+      : undefined
+    const awaitingHostSnapshot =
+      runtimeEnvironmentId !== null &&
+      isWebRuntimeSessionActive(runtimeEnvironmentId) &&
+      !hasAcceptedWebSessionTabsSnapshot(
+        runtimeEnvironmentId,
+        renderedActiveWorktreeId,
+        runtimeStatus?.status?.runtimeId ?? null,
+        runtimeStatus?.connectionGeneration ?? 0
+      )
     const coldActivationDeferralEnabled =
       terminalParkingEnabled && terminalTitleSnapshotAuthorityEnabled
     const immediateTabIds = new Set<string>()
@@ -1330,7 +1345,15 @@ function Terminal(): React.JSX.Element | null {
             pairedRuntimeParkingEnvironmentIds
           })
         : terminalProviderHasAuthoritativeSnapshot(ptyId)
-    if (lastActivationWorktreeIdRef.current !== renderedActiveWorktreeId) {
+    if (awaitingHostSnapshot) {
+      lastActivationWorktreeIdRef.current = null
+      deferTerminalTabsUntilHostSnapshot({
+        restrictions: backgroundMountTabIdsByWorktreeRef.current,
+        deferredMountTabIdsByWorktree: activationDeferredMountTabIdsByWorktreeRef.current,
+        worktreeId: renderedActiveWorktreeId,
+        allTabIds: worktreeTabs.map((tab) => tab.id)
+      })
+    } else if (lastActivationWorktreeIdRef.current !== renderedActiveWorktreeId) {
       lastActivationWorktreeIdRef.current = renderedActiveWorktreeId
       const tabById = new Map(worktreeTabs.map((tab) => [tab.id, tab]))
       planColdActivationTabDeferral({

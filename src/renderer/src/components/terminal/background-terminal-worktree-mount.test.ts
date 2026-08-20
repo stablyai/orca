@@ -13,6 +13,7 @@ import {
   canDeferColdActivationTabsForHost,
   canMountTerminalWorkspaceForStartup,
   collectDeferredMountTabIds,
+  deferTerminalTabsUntilHostSnapshot,
   hasRequestedBackgroundTerminalWorktreeMount,
   planColdActivationTabDeferral,
   pruneClosedBackgroundMountTabs,
@@ -222,6 +223,22 @@ describe('cold activation tab deferral', () => {
       })
     ).toBe(false)
     expect(canDeferColdActivationTabsForHost({ executionHostId: null })).toBe(false)
+  })
+
+  it('withholds every restored tab until the host snapshot arrives', () => {
+    const restrictions = new Map<string, ReadonlySet<string>>()
+    const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
+    const allTabIds = tabIds(8)
+
+    deferTerminalTabsUntilHostSnapshot({
+      restrictions,
+      deferredMountTabIdsByWorktree,
+      worktreeId: 'wt-1',
+      allTabIds
+    })
+
+    expect(restrictions.get('wt-1')).toEqual(new Set())
+    expect(deferredMountTabIdsByWorktree.get('wt-1')).toEqual(new Set(allTabIds))
   })
 
   it('mounts everything at once when few tabs would defer', () => {

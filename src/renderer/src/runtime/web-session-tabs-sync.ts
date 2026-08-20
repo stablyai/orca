@@ -155,6 +155,10 @@ type VisibilityResumeOmission = {
 const latestSessionTabsSnapshotByWorktree = new Map<string, SnapshotFreshness>()
 const replayableSessionTabsSnapshotByWorktree = new Map<string, SnapshotFreshness>()
 const latestReceivedSessionTabsSnapshotByWorktree = new Map<string, ReceivedSessionTabsSnapshot>()
+const acceptedSessionTabsConnectionByWorktree = new Map<
+  string,
+  { runtimeId: string; connectionGeneration: number }
+>()
 const latestSessionTabsRemovalFenceByWorktree = new Map<string, SessionTabsRemovalFence>()
 const sessionTabsRecoveryStateByWorktree = new Map<string, SessionTabsRecoveryState>()
 const trackedSessionTabsWorktreeIdsByEnvironment = new Map<string, Set<string>>()
@@ -552,6 +556,21 @@ export function getLatestWebSessionTabsPublicationEpoch(
   )
 }
 
+export function hasAcceptedWebSessionTabsSnapshot(
+  environmentId: string,
+  worktreeId: string,
+  runtimeId: string | null,
+  connectionGeneration: number
+): boolean {
+  if (!runtimeId) {
+    return false
+  }
+  const accepted = acceptedSessionTabsConnectionByWorktree.get(
+    sessionTabsFreshnessKey(environmentId, worktreeId)
+  )
+  return accepted?.runtimeId === runtimeId && accepted.connectionGeneration === connectionGeneration
+}
+
 // Why: a replay may repeat the current epoch/version; permit only that exact
 // identity once so an older concurrent frame cannot bypass monotonic ordering.
 export function acceptReplayedWebSessionTabsSnapshot(
@@ -567,7 +586,8 @@ export function acceptReplayedWebSessionTabsSnapshot(
 
 export function shouldApplyWebSessionTabsSnapshot(
   snapshot: RuntimeMobileSessionTabsResult,
-  environmentId: string
+  environmentId: string,
+  connection?: { runtimeId: string; connectionGeneration: number }
 ): boolean {
   const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
   if ((snapshot as { removed?: unknown }).removed === true) {
@@ -605,6 +625,9 @@ export function shouldApplyWebSessionTabsSnapshot(
     publicationEpoch: snapshot.publicationEpoch,
     snapshotVersion: snapshot.snapshotVersion
   })
+  if (connection) {
+    acceptedSessionTabsConnectionByWorktree.set(key, connection)
+  }
   trackWebSessionTabsWorktree(environmentId, snapshot.worktree)
   recordAcceptedWebSessionTabsEnvironment(environmentId, snapshot)
   // Why: a mounted mirror that exhausted bounded polling needs fresh host evidence without subscribing to every store write.
@@ -677,6 +700,7 @@ export function shouldSyncAllRuntimeSessionTabs(args: {
 
 export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   latestSessionTabsSnapshotByWorktree.clear()
+  acceptedSessionTabsConnectionByWorktree.clear()
   replayableSessionTabsSnapshotByWorktree.clear()
   latestReceivedSessionTabsSnapshotByWorktree.clear()
   latestSessionTabsRemovalFenceByWorktree.clear()
@@ -721,6 +745,7 @@ export function _getWebSessionTabsRecoveryTrackingCountsForTest(): {
 function clearWebSessionTabsTrackingForWorktree(environmentId: string, worktreeId: string): void {
   const key = sessionTabsFreshnessKey(environmentId, worktreeId)
   latestSessionTabsSnapshotByWorktree.delete(key)
+  acceptedSessionTabsConnectionByWorktree.delete(key)
   replayableSessionTabsSnapshotByWorktree.delete(key)
   latestReceivedSessionTabsSnapshotByWorktree.delete(key)
   untrackWebSessionTabsWorktree(environmentId, worktreeId)
@@ -743,6 +768,11 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
   for (const key of latestSessionTabsSnapshotByWorktree.keys()) {
     if (key.startsWith(keyPrefix)) {
       latestSessionTabsSnapshotByWorktree.delete(key)
+    }
+  }
+  for (const key of acceptedSessionTabsConnectionByWorktree.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      acceptedSessionTabsConnectionByWorktree.delete(key)
     }
   }
   for (const key of replayableSessionTabsSnapshotByWorktree.keys()) {
@@ -4566,7 +4596,16 @@ export function useWebSessionTabsSync(): void {
         acceptReplayedWebSessionTabsSnapshot(environmentId, recovered.worktree)
       }
       const recoveredEvent: SessionTabsStreamEvent = { ...recovered, type: event.type }
-      const fresh = shouldApplyWebSessionTabsSnapshot(recovered, environmentId)
+      const fresh = shouldApplyWebSessionTabsSnapshot(
+        recovered,
+        environmentId,
+        activeWorktreeRuntimeId
+          ? {
+              runtimeId: activeWorktreeRuntimeId,
+              connectionGeneration: activeWorktreeRuntimeConnectionGeneration
+            }
+          : undefined
+      )
       const syncState = useAppStore.getState()
       const localWorktreeTabs = syncState.tabsByWorktree[activeWorktreeId] ?? []
       const localTerminalCount = localWorktreeTabs.length
