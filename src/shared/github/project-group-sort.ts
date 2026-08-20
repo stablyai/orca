@@ -184,10 +184,7 @@ function compareSort(a: GitHubProjectRow, b: GitHubProjectRow, sort: GitHubProje
   } else if (aValue.kind === 'users' && bValue.kind === 'users') {
     const aLogin = aValue.users[0]?.login ?? ''
     const bLogin = bValue.users[0]?.login ?? ''
-    // Why: return before the DESC flip below so an empty list sorts last in both
-    // directions, matching the missing-value case above. A field can hold an empty
-    // list once every user drops out of normalization, and the two ways of being
-    // unset must not land at opposite ends of the same sort.
+    // Return before the DESC flip so an empty list sorts last in both directions.
     if (!aLogin && !bLogin) {
       return 0
     }
