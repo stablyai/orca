@@ -4,8 +4,11 @@
 //
 // `/format:value` has no escaping and CommandLine is whatever a process was
 // launched with, so everything here is built around the fact that this table is
-// partly attacker-controlled: the parser refuses ambiguous framing rather than
-// guessing, and callers that gate `taskkill /T /F` read the JSON path instead.
+// partly attacker-controlled. Two rules follow. Bad framing costs one record, never
+// the table — voiding a snapshot over content would let any process spend a
+// PowerShell host and turn the flood back on. And because a command line can still
+// emit a whole well-formed record that no parser can detect, callers gating
+// `taskkill /T /F` read the JSON path instead of this one.
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { WindowsProcessRow } from './windows-foreground-process-rows'
@@ -93,21 +96,22 @@ const WMIC_VALUE_FIELDS = [
  * when NULL — and a record missing a middle property merges into the next rather
  * than desyncing the rest of the table.
  *
- * Returns null when the framing is provably compromised, which drops the whole
- * snapshot to PowerShell. Only CommandLine can hold a newline, so a continuation
- * line arriving while a later property is open means some earlier line was
- * absorbed that should not have been. A command line carrying
- * `ExecutablePath=`/`Name=`/`ParentProcessId=` in order otherwise walks the parser
- * to ParentProcessId and lets the record's own real `ProcessId=` close it —
- * re-parenting a live pid under a forged parent, with no duplicate pid to catch
- * it. Ancestry read off that feeds `taskkill /T /F`, so an ambiguous table is
- * refused rather than guessed at.
+ * A record opens only on CommandLine, and a record whose framing does not hold up
+ * is dropped on its own rather than voiding the table. Both matter because a
+ * command line carrying `ExecutablePath=`/`Name=`/`ParentProcessId=` in order
+ * otherwise walks the parser to ParentProcessId and lets the record's own real
+ * `ProcessId=` close it, re-parenting a live pid under a forged parent.
+ *
+ * What this cannot do is stop a command line from emitting a whole well-formed
+ * record — forged properties, blank-line separator, and a `CommandLine=` to
+ * resynchronise. Nothing in the byte stream tells that apart from a record wmic
+ * wrote. That is why callers gating `taskkill /T /F` read the JSON path instead,
+ * and why an invented row here can only misname a pane.
  */
-function parseWindowsProcessValueRows(stdout: string): WindowsProcessRow[] | null {
+function parseWindowsProcessValueRows(stdout: string): WindowsProcessRow[] {
   const rows: WindowsProcessRow[] = []
   const values: string[] = ['', '', '', '', '']
   let field = -1
-  let expectRecordBreak = false
 
   const flush = (): void => {
     const ppid = Number.parseInt(values[3]!, 10)
@@ -130,7 +134,6 @@ function parseWindowsProcessValueRows(stdout: string): WindowsProcessRow[] | nul
     // Exactly empty, not merely blank: a whitespace-only line is content, and
     // treating it as the separator silently ate its spaces out of the command.
     if (line === '') {
-      expectRecordBreak = false
       // Only past CommandLine does an empty line mean end-of-record; inside one it
       // is content. Agent CLIs really do embed blank lines: on a measured
       // 920-process host all 11 that did were claude/codex/node/sh panes — the
@@ -143,29 +146,18 @@ function parseWindowsProcessValueRows(stdout: string): WindowsProcessRow[] | nul
       }
       continue
     }
-    // wmic closes every record with an empty line. Content resuming without one
-    // means the record just flushed was supplied by a command line rather than by
-    // wmic: the forger's own real properties follow immediately. Such a row can be
-    // pure invention — and an invented pid is not inert, because it can bridge a
-    // real orphan to our own pid and make an unrelated tree look like ours.
-    if (expectRecordBreak) {
-      return null
-    }
     const eq = line.indexOf('=')
     const next =
       eq === -1 ? -1 : (WMIC_VALUE_FIELDS as readonly string[]).indexOf(line.slice(0, eq))
     if (field === -1) {
+      // Between records only CommandLine opens one. Anything else is the tail of a
+      // record that a command line supplied for itself, a property wmic omitted, or
+      // its deprecation notice — drop the line and wait for the next record rather
+      // than reading a row out of it.
       if (next === 0) {
         field = 0
         values[0] = line.slice(eq + 1)
-      } else if (next > 0) {
-        // wmic emits every requested property, empty when NULL, so a record always
-        // opens on CommandLine. One opening later means the properties before it
-        // were eaten by the previous record — which is what a command line that
-        // supplied its own record leaves behind, blank-line separator included.
-        return null
       }
-      // Anything else here is preamble, e.g. wmic's deprecation notice.
       continue
     }
     if (next === field + 1) {
@@ -173,13 +165,20 @@ function parseWindowsProcessValueRows(stdout: string): WindowsProcessRow[] | nul
       values[next] = line.slice(eq + 1)
       if (next === WMIC_VALUE_FIELDS.length - 1) {
         flush()
-        expectRecordBreak = true
       }
-    } else if (field > 0) {
-      return null
-    } else {
-      values[0] += `\n${line}`
+      continue
     }
+    if (field > 0) {
+      // A later property is open and this is not the one that follows it, so an
+      // earlier line was absorbed that should not have been. Drop this record and
+      // resync — never the whole table. That framing is content any process on the
+      // box can arrange, and refusing the snapshot would spend a PowerShell host on
+      // it, which is the flood this file exists to stop.
+      values.fill('')
+      field = -1
+      continue
+    }
+    values[0] += `\n${line}`
   }
   flush()
   return rows
@@ -209,6 +208,21 @@ function decodeWmicStdout(stdout: string | Buffer): string {
   }
   // A BOM-less UTF-16LE table still pads every ASCII byte with a NUL.
   return stdout.subarray(0, 64).includes(0) ? stdout.toString('utf16le') : stdout.toString('utf8')
+}
+
+/**
+ * pids are unique in a live table, so a repeat means one of the two rows was
+ * supplied by a command line claiming another process's pid. Which one is which is
+ * not knowable from the bytes, so neither is kept: a pid that vanishes degrades to
+ * the node-pty name, where a pid kept under the wrong parent would put an agent on
+ * the wrong pane.
+ */
+function dropAmbiguousPids(rows: WindowsProcessRow[]): WindowsProcessRow[] {
+  const seen = new Map<number, number>()
+  for (const row of rows) {
+    seen.set(row.pid, (seen.get(row.pid) ?? 0) + 1)
+  }
+  return seen.size === rows.length ? rows : rows.filter((row) => seen.get(row.pid) === 1)
 }
 
 /** Whole-process-table scan via wmic — the preferred reader, see #15209. */
@@ -242,21 +256,11 @@ async function queryWindowsProcessesWithWmic(): Promise<WmicScan> {
   if (stdout.trim() === '') {
     return { status: 'failed' }
   }
-  const rows = parseWindowsProcessValueRows(stdout)
-  if (rows === null) {
-    // Framing compromised by command-line content, not a format we cannot read:
-    // transient, because it lasts only as long as the process that wrote it.
-    return { status: 'failed' }
-  }
+  const rows = dropAmbiguousPids(parseWindowsProcessValueRows(stdout))
   if (rows.length === 0) {
     // Output arrived and parsed to nothing: this build's wmic does not speak the
     // format we read, and no later scan will change that.
     return { status: 'unsupported' }
-  }
-  // pids are unique in a live table, so a repeat means the record framing
-  // desynced. Ancestry off a desynced table can misdirect `taskkill /T /F`.
-  if (new Set(rows.map((row) => row.pid)).size !== rows.length) {
-    return { status: 'failed' }
   }
   return { status: 'ok', rows }
 }

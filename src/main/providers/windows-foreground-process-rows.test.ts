@@ -153,13 +153,13 @@ describe('windows foreground process rows spawn options', () => {
     )
   })
 
-  // A command line can supply a whole record. The invented row is not inert: with
-  // ppid set to Orca's own pid it bridges a real orphan (a process whose parent
-  // already exited) into our subtree, and classifyWindowsTreeKillTarget then reads
-  // that unrelated tree as `own` and lets `taskkill /T /F` have it. wmic closes
-  // every record with an empty line, so properties resuming without one prove the
-  // record came from content — and the whole snapshot is refused.
-  it('refuses a table where a command line supplied a whole record (#15565 review)', async () => {
+  // A command line can supply a whole well-formed record, and no parser can tell
+  // that from one wmic wrote — so an invented row reaches this table. What must
+  // hold is that it stays a naming problem: the forged pid is not a descendant of
+  // the pane, the real rows are untouched, and the row never reaches the kill
+  // decision (see the taskkill-gate test below, which proves that reader is
+  // PowerShell-only). The forger's own real record is the cost, dropped on resync.
+  it('confines an invented record to naming, leaving real rows intact (#15565 review)', async () => {
     const forged =
       'CommandLine=evil.exe\n' +
       'ExecutablePath=C:/fake.exe\n' +
@@ -183,49 +183,47 @@ describe('windows foreground process rows spawn options', () => {
     expect(candidates?.some((row) => row.pid === 5000)).toBe(false)
   })
 
-  // A framing failure is content any local process can arrange. Retiring wmic over
-  // it would hand that process a switch for turning the transcript flood back on.
-  it('backs off after repeated framing failures, then retries wmic (#15565 review)', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(0)
-    try {
-      let wmicSpawns = 0
-      let hostile = true
-      execFileMock.mockImplementation((cmd: string, _args, _opts, cb: ExecFileCallback) => {
-        if (isCommand(cmd, 'wmic')) {
-          wmicSpawns += 1
-          // A command line that walks the framing: properties resume with no break.
-          cb(null, {
-            stdout: hostile
-              ? 'CommandLine=x\nExecutablePath=a\nName=b\nParentProcessId=1\nProcessId=2\nExecutablePath=c\n'
-              : WMIC_ROWS_VALUE,
-            stderr: ''
-          })
-          return
-        }
-        cb(null, { stdout: POWERSHELL_ROWS_JSON, stderr: '' })
-      })
-
-      for (let scan = 0; scan < 3; scan += 1) {
-        await queryWindowsProcessDescendants(100, { fresh: true })
+  // Grok review: a command line can walk the record framing, and any process on
+  // the box can arrange one — an Orca pane running `bash -lc $'...ExecutablePath=...'`
+  // is enough. If that voided the snapshot, every such scan would fall through to a
+  // PowerShell host and put the transcript flood back at full rate for as long as
+  // the process lived. Bad framing must therefore cost its own record and nothing
+  // else: no PowerShell spawn, no backoff, wmic still leading on the next scan.
+  it('spends no PowerShell host on a table poisoned by a command line (#15565 review)', async () => {
+    const poisoned = [
+      "CommandLine=bash -lc $'echo",
+      'ExecutablePath=C:/x',
+      "foo'",
+      'ExecutablePath=C:/msys64/usr/bin/bash.exe',
+      'Name=bash.exe',
+      'ParentProcessId=100',
+      'ProcessId=300',
+      ''
+    ].join('\n')
+    let wmicSpawns = 0
+    execFileMock.mockImplementation((cmd: string, _args, _opts, cb: ExecFileCallback) => {
+      if (isCommand(cmd, 'wmic')) {
+        wmicSpawns += 1
+        cb(null, {
+          stdout: `${WMIC_ROWS_VALUE}
+${poisoned}`,
+          stderr: ''
+        })
+        return
       }
-      expect(wmicSpawns).toBe(3)
+      cb(new Error('a poisoned table must not buy a PowerShell host'), { stdout: '', stderr: '' })
+    })
 
-      // Inside the backoff window wmic is not spawned at all — one process per
-      // scan, never the two that a retry-every-scan policy would cost.
-      await queryWindowsProcessDescendants(100, { fresh: true })
-      expect(wmicSpawns).toBe(3)
+    const first = await queryWindowsProcessDescendants(100, { fresh: true })
+    const second = await queryWindowsProcessDescendants(100, { fresh: true })
 
-      // ...and the fix comes back on its own once the window passes.
-      hostile = false
-      vi.setSystemTime(60_001)
-      const candidates = await queryWindowsProcessDescendants(100, { fresh: true })
-
-      expect(wmicSpawns).toBe(4)
-      expect(candidates?.map((row) => row.pid)).toEqual([200])
-    } finally {
-      vi.useRealTimers()
-    }
+    // The poisoner's own record is the only casualty; the rest of the table stands.
+    expect(first?.map((row) => row.pid)).toEqual([200])
+    expect(second?.map((row) => row.pid)).toEqual([200])
+    expect(wmicSpawns).toBe(2)
+    expect(
+      execFileMock.mock.calls.some((args) => isCommand((args as ExecFileCall)[0], 'powershell'))
+    ).toBe(false)
   })
 
   // A repeated pid means the record framing desynced, and ancestry read off a
