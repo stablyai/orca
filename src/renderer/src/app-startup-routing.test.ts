@@ -3,7 +3,10 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 function readSource(relativePath: string): string {
-  return readFileSync(join(process.cwd(), relativePath), 'utf8')
+  // Why fold the line endings: these assertions anchor on a newline to pin two
+  // statements as adjacent, and a Windows checkout hands back CRLF — which
+  // matches nothing and reports only that the string is absent.
+  return readFileSync(join(process.cwd(), relativePath), 'utf8').replace(/\r\n/g, '\n')
 }
 
 const APP_PATH = 'src/renderer/src/App.tsx'
