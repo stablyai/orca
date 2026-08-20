@@ -31,18 +31,17 @@ const STARTUP_COMMAND_FEATURES = selectShellStartupFeatures({
   emitsStartupIdentity: true
 })
 
+// Why one zsh file: the wrapper hands ZDOTDIR back on its first lines, so zsh
+// reads .zprofile, .zshrc and .zlogin from the user's own directory.
 const WRAPPER_FILES = [
   ['zsh-zshenv', join('zsh', '.zshenv')],
-  ['zsh-zprofile', join('zsh', '.zprofile')],
-  ['zsh-zshrc', join('zsh', '.zshrc')],
-  ['zsh-zlogin', join('zsh', '.zlogin')],
   ['bash-rcfile', join('bash', 'rcfile')]
 ] as const
 
 const SNAPSHOT_DIR = join(__dirname, '__fixtures__', 'shell-wrapper-snapshots')
 
-// Why: the wrapper root is a temp dir per run, and the baked ZDOTDIR literal is
-// the only path-dependent byte in the output; pin it to a stable placeholder.
+// Why still normalized: the zsh hook no longer bakes a wrapper path at all, but
+// the bash rcfile can still carry one, and a temp root differs per run.
 function withStableRoot(content: string, root: string): string {
   return content.split(root).join('<WRAPPER_ROOT>')
 }

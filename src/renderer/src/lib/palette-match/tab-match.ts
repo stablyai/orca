@@ -12,7 +12,11 @@ import {
 } from './tab-document'
 import type { MatchRange } from './normalized-text'
 import type { PaletteResultQualityClass } from './match-quality'
-import type { PaletteDocument, PaletteDocumentRank } from './palette-document'
+import {
+  comparePaletteDocumentRank,
+  type PaletteDocument,
+  type PaletteDocumentRank
+} from './palette-document'
 
 const NO_RANGES: readonly MatchRange[] = []
 
@@ -93,22 +97,21 @@ export type PaletteTabRankInputs = {
   /** Existing positional score: current tab, current worktree, then list order. */
   positionScore: number
   id: string
+  /** Timestamp of most recent activity (focus or agent interaction). */
+  lastActiveAt?: number
 }
 
-const RANK_KEYS: readonly (keyof PaletteDocumentRank)[] = [
-  'exactIntent',
-  'wholeQuery',
-  'worstQuality',
-  'usesSupportingEvidence',
-  'fuzzyTokenCount',
-  'fieldHopCount'
-]
-
-/** Lexicographic match rank first, then the section's existing recency order. */
+/** Lexicographic match rank first, then recent activity, then positional order. */
 export function comparePaletteTabResults(a: PaletteTabRankInputs, b: PaletteTabRankInputs): number {
-  for (const key of RANK_KEYS) {
-    if (a.rank[key] !== b.rank[key]) {
-      return a.rank[key] - b.rank[key]
+  const byRank = comparePaletteDocumentRank(a.rank, b.rank)
+  if (byRank !== 0) {
+    return byRank
+  }
+  if (a.lastActiveAt !== b.lastActiveAt) {
+    const aTime = a.lastActiveAt ?? 0
+    const bTime = b.lastActiveAt ?? 0
+    if (aTime !== bTime) {
+      return bTime - aTime
     }
   }
   if (a.positionScore !== b.positionScore) {

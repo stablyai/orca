@@ -6,7 +6,15 @@ export type TerminalImeCompositionTracker = IDisposable & {
    *  IME-owned: during a live composition, and briefly after compositionend to
    *  absorb the committing key's trailing press/release. */
   isCandidateKeyGuardActive: () => boolean
+  /** True when the most recent preedit was Hangul, where a bare digit ends the
+   *  syllable as literal text instead of picking a candidate. Expires with the
+   *  same staleness window as the other guards. */
+  isHangulPreedit: () => boolean
 }
+
+// Jamo, compatibility jamo, extended jamo, and precomposed syllables — every
+// form a Hangul preedit can take while a syllable is being assembled.
+const HANGUL_PREEDIT_PATTERN = /[ᄀ-ᇿ㄰-㆏ꥠ-꥿가-힣]/
 
 // Why: suppressed candidate keys are preventDefault-ed and fire no input
 // event, so a stale tracker (missed compositionend) has no natural unstick
@@ -26,11 +34,23 @@ export function installTerminalImeCompositionTracker(
   let lastCompositionEventAt: number | null = null
   let compositionEndedAt: number | null = null
   let sawEmptyCompositionUpdate = false
+  // Why the preedit and not compositionend data: a Pinyin IME's preedit is the
+  // Latin spelling it is picking candidates for, while its compositionend data
+  // is the committed Han text. Reading the commit would misclassify Pinyin.
+  let hangulPreedit = false
 
   const isActiveAt = (at: number): boolean =>
     active &&
     (lastCompositionEventAt === null ||
       at - lastCompositionEventAt <= TERMINAL_IME_CANDIDATE_GUARD_STALE_COMPOSITION_EXPIRY_MS)
+
+  // Why time-bound: an engine switch (Hangul -> Pinyin) moves no DOM focus and
+  // the orphan-digit path emits no composition or input events, so a latched
+  // flag would disable the Pinyin candidate-digit guard for the whole session.
+  const isHangulPreeditAt = (at: number): boolean =>
+    hangulPreedit &&
+    lastCompositionEventAt !== null &&
+    at - lastCompositionEventAt <= TERMINAL_IME_CANDIDATE_GUARD_STALE_COMPOSITION_EXPIRY_MS
 
   const isCandidateKeyGuardActive = (): boolean => {
     const at = now()
@@ -47,6 +67,7 @@ export function installTerminalImeCompositionTracker(
     return {
       isActive: () => active,
       isCandidateKeyGuardActive,
+      isHangulPreedit: () => isHangulPreeditAt(now()),
       dispose: () => undefined
     }
   }
@@ -56,6 +77,8 @@ export function installTerminalImeCompositionTracker(
     lastCompositionEventAt = now()
     compositionEndedAt = null
     sawEmptyCompositionUpdate = false
+    // Why safe: the following compositionupdate re-reads the preedit script.
+    hangulPreedit = false
   }
   const updateComposition = (event: Event): void => {
     lastCompositionEventAt = now()
@@ -69,6 +92,7 @@ export function installTerminalImeCompositionTracker(
       sawEmptyCompositionUpdate = true
       return
     }
+    hangulPreedit = HANGUL_PREEDIT_PATTERN.test(event.data)
     active = true
   }
   const handleCompositionEnd = (): void => {
@@ -93,6 +117,7 @@ export function installTerminalImeCompositionTracker(
     lastCompositionEventAt = null
     compositionEndedAt = null
     sawEmptyCompositionUpdate = false
+    hangulPreedit = false
   }
 
   terminalElement.addEventListener('compositionstart', markActive, true)
@@ -104,6 +129,7 @@ export function installTerminalImeCompositionTracker(
   return {
     isActive: () => isActiveAt(now()),
     isCandidateKeyGuardActive,
+    isHangulPreedit: () => isHangulPreeditAt(now()),
     dispose: () => {
       terminalElement.removeEventListener('compositionstart', markActive, true)
       terminalElement.removeEventListener('compositionupdate', updateComposition, true)

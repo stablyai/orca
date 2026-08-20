@@ -39,6 +39,7 @@ function renderRows(rows: readonly WorkspaceCleanupFacets[]): void {
     root?.render(
       <WorkspaceCleanupCandidateList
         rows={rows}
+        getRowKey={(row) => row.worktreeId}
         scrollElement={null}
         renderRow={(row, index) => (
           <CandidateRow

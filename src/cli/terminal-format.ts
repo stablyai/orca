@@ -140,11 +140,19 @@ export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): s
   const header = [
     `handle: ${terminal.handle}`,
     `status: ${terminal.status}`,
+    ...(terminal.source ? [`source: ${terminal.source}`] : []),
     ...(terminal.nextCursor !== null ? [`cursor: ${terminal.nextCursor}`] : []),
     ...oldestCursor,
     ...latestCursor,
     ...(terminal.truncated ? ['warning: older output is no longer retained'] : []),
-    ...(limitedWarning ? [limitedWarning] : [])
+    ...(limitedWarning ? [limitedWarning] : []),
+    // Why: the caller asked for the rendered screen; say plainly that this is not it rather
+    // than let repaint fragments be read as what the terminal displayed.
+    ...(terminal.source === 'screen-unavailable'
+      ? [
+          'warning: no rendered screen was available, so this is accumulated output; repainted lines may appear as stacked fragments'
+        ]
+      : [])
   ]
   return [...header, '', ...terminal.tail].join('\n')
 }

@@ -20,13 +20,19 @@ vi.mock('./runtime-client', () => ({
 }))
 
 import {
+  assertEnvironmentSelectorResolvable,
   hostFilterMatchesHostId,
   parseHostFlag,
   resolveHostFlagEnvironmentId
 } from './execution-host-flag'
 import { parseExecutionHostId } from '../shared/execution-host'
 
-const NO_SELECTION = { pairingCode: null, environmentSelector: null }
+const listSshTargetsMock = vi.fn(async () => [] as { id: string; label: string }[])
+const NO_SELECTION = {
+  listSshTargets: listSshTargetsMock,
+  pairingCode: null,
+  environmentSelector: null
+}
 
 function flags(entries: Record<string, string | boolean>): Map<string, string | boolean> {
   return new Map(Object.entries(entries))
@@ -84,15 +90,17 @@ describe('resolveHostFlagEnvironmentId', () => {
 
     await expect(
       resolveHostFlagEnvironmentId(flags({ host: 'runtime:env-missing' }), NO_SELECTION)
-    ).rejects.toThrow('no paired environment has id env-missing')
+    ).rejects.toThrow('no paired Orca server is named or has id env-missing')
   })
 
-  it('matches by environment id only, never by environment name', async () => {
+  // Why: the name is what a person or agent actually knows; requiring the raw uuid made the
+  // obvious spelling fail against a server that is sitting right there.
+  it('accepts the environment name as well as its id', async () => {
     listEnvironmentsMock.mockReturnValue([environment('env-1', 'gpu')])
 
     await expect(
       resolveHostFlagEnvironmentId(flags({ host: 'runtime:gpu' }), NO_SELECTION)
-    ).rejects.toThrow('no paired environment has id gpu')
+    ).resolves.toBe('env-1')
   })
 
   it('decodes percent-encoded environment ids', async () => {
@@ -108,6 +116,7 @@ describe('resolveHostFlagEnvironmentId', () => {
 
     await expect(
       resolveHostFlagEnvironmentId(flags({ host: 'runtime:env-1' }), {
+        listSshTargets: listSshTargetsMock,
         pairingCode: 'orca://pair?x',
         environmentSelector: null
       })
@@ -120,6 +129,7 @@ describe('resolveHostFlagEnvironmentId', () => {
 
     await expect(
       resolveHostFlagEnvironmentId(flags({ host: 'runtime:env-1' }), {
+        listSshTargets: listSshTargetsMock,
         pairingCode: null,
         environmentSelector: { value: 'other', label: '--environment' }
       })
@@ -132,6 +142,7 @@ describe('resolveHostFlagEnvironmentId', () => {
 
     await expect(
       resolveHostFlagEnvironmentId(flags({ host: 'runtime:env-1' }), {
+        listSshTargets: listSshTargetsMock,
         pairingCode: null,
         environmentSelector: { value: 'staging', label: 'ORCA_ENVIRONMENT' }
       })
@@ -142,7 +153,7 @@ describe('resolveHostFlagEnvironmentId', () => {
     listEnvironmentsMock.mockReturnValue([environment('env-1', 'gpu')])
 
     await expect(
-      resolveHostFlagEnvironmentId(flags({ host: 'runtime:gpu' }), NO_SELECTION)
+      resolveHostFlagEnvironmentId(flags({ host: 'runtime:missing' }), NO_SELECTION)
     ).rejects.toMatchObject({
       code: 'invalid_argument',
       data: { knownEnvironments: [{ id: 'env-1', name: 'gpu' }] }
@@ -155,6 +166,7 @@ describe('resolveHostFlagEnvironmentId', () => {
 
     await expect(
       resolveHostFlagEnvironmentId(flags({ host: 'runtime:env-1' }), {
+        listSshTargets: listSshTargetsMock,
         pairingCode: null,
         environmentSelector: { value: 'gpu', label: '--environment' }
       })
@@ -185,5 +197,80 @@ describe('hostFilterMatchesHostId', () => {
   it('does not match a different runtime host', () => {
     expect(hostFilterMatchesHostId(runtimeHost, 'runtime:env-2')).toBe(false)
     expect(hostFilterMatchesHostId(runtimeHost, null)).toBe(false)
+  })
+})
+
+describe('ambiguous environment names', () => {
+  it('refuses --host runtime:<name> when two servers share that name', async () => {
+    listEnvironmentsMock.mockReturnValue([
+      environment('env-1', 'awin'),
+      environment('env-2', 'awin')
+    ])
+
+    await expect(
+      resolveHostFlagEnvironmentId(flags({ host: 'runtime:awin' }), NO_SELECTION)
+    ).rejects.toThrow('2 paired servers are named awin')
+  })
+
+  it('refuses --environment <name> when two servers share that name', async () => {
+    listEnvironmentsMock.mockReturnValue([
+      environment('env-1', 'awin'),
+      environment('env-2', 'awin')
+    ])
+
+    await expect(assertEnvironmentSelectorResolvable('awin', listSshTargetsMock)).rejects.toThrow(
+      '2 paired servers are named awin'
+    )
+  })
+
+  it('still routes an exact id past a colliding name', async () => {
+    listEnvironmentsMock.mockReturnValue([
+      environment('env-1', 'awin'),
+      environment('env-2', 'awin')
+    ])
+
+    await expect(
+      resolveHostFlagEnvironmentId(flags({ host: 'runtime:env-2' }), NO_SELECTION)
+    ).resolves.toBe('env-2')
+  })
+})
+
+describe('assertEnvironmentSelectorResolvable', () => {
+  it('accepts a paired server by name or id', async () => {
+    listEnvironmentsMock.mockReturnValue([environment('env-1', 'awin')])
+    listSshTargetsMock.mockClear()
+
+    await expect(
+      assertEnvironmentSelectorResolvable('awin', listSshTargetsMock)
+    ).resolves.toBeUndefined()
+    await expect(
+      assertEnvironmentSelectorResolvable('env-1', listSshTargetsMock)
+    ).resolves.toBeUndefined()
+    expect(listSshTargetsMock).not.toHaveBeenCalled()
+  })
+
+  // Why: the inverse of the --host case, and the one the report actually hit — a name that is
+  // an SSH target dead-ended with a bare "unknown environment".
+  it('names the SSH target when the selector is one', async () => {
+    listEnvironmentsMock.mockReturnValue([environment('env-1', 'awin')])
+    listSshTargetsMock.mockResolvedValue([{ id: 'ssh-1-a', label: 'openclaw' }])
+
+    await expect(
+      assertEnvironmentSelectorResolvable('openclaw', listSshTargetsMock)
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      data: {
+        nextSteps: expect.arrayContaining([expect.stringContaining('--host ssh:ssh-1-a')])
+      }
+    })
+  })
+
+  it('still points at host list when the name is on neither axis', async () => {
+    listEnvironmentsMock.mockReturnValue([])
+    listSshTargetsMock.mockResolvedValue([])
+
+    await expect(
+      assertEnvironmentSelectorResolvable('nowhere', listSshTargetsMock)
+    ).rejects.toThrow('no paired Orca server is named or has id nowhere')
   })
 })

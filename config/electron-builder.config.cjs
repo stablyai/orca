@@ -22,14 +22,27 @@ const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.
 const isMacHourly = process.env.ORCA_MAC_HOURLY === '1'
 const isMacDaily = process.env.ORCA_MAC_DAILY === '1'
 const isMacAdhoc = process.env.ORCA_MAC_ADHOC === '1'
+// Why a second set of variables rather than making the mac ones platform-neutral:
+// the mac ones gate `isMacRelease` below, which turns on hardened runtime,
+// notarization, and root-level `forceCodeSigning`. A Windows dev build that
+// reused them would fail packaging outright for want of a cert it is
+// deliberately not using.
+const isWinHourly = process.env.ORCA_WIN_HOURLY === '1'
+const isWinDaily = process.env.ORCA_WIN_DAILY === '1'
+const isWinAdhoc = process.env.ORCA_WIN_ADHOC === '1'
+const isWinDevChannel = isWinHourly || isWinDaily || isWinAdhoc
 const isMacRelease = process.env.ORCA_MAC_RELEASE === '1' || isMacHourly || isMacDaily || isMacAdhoc
 const isLinuxArm64Release = process.env.ORCA_LINUX_ARM64_RELEASE === '1'
-const localBuildVersion = isMacRelease ? undefined : process.env.ORCA_LOCAL_BUILD_VERSION
-const devChannelBuildVersion = isMacHourly
+const localBuildVersion =
+  isMacRelease || isWinDevChannel ? undefined : process.env.ORCA_LOCAL_BUILD_VERSION
+const isHourlyChannel = isMacHourly || isWinHourly
+const isDailyChannel = isMacDaily || isWinDaily
+const isAdhocChannel = isMacAdhoc || isWinAdhoc
+const devChannelBuildVersion = isHourlyChannel
   ? process.env.ORCA_HOURLY_BUILD_VERSION
-  : isMacDaily
+  : isDailyChannel
     ? process.env.ORCA_DAILY_BUILD_VERSION
-    : isMacAdhoc
+    : isAdhocChannel
       ? process.env.ORCA_ADHOC_BUILD_VERSION
       : undefined
 // Why each dev channel gets its own repo rather than tagging into the main one:
@@ -38,11 +51,11 @@ const devChannelBuildVersion = isMacHourly
 // to install. Keeping adhoc/daily separate from hourly too means a branch build
 // or a once-a-day cut cannot be picked up by someone who only meant to ride
 // main's hourlies.
-const devChannelRepo = isMacHourly
+const devChannelRepo = isHourlyChannel
   ? 'orca-hourly'
-  : isMacDaily
+  : isDailyChannel
     ? 'orca-daily'
-    : isMacAdhoc
+    : isAdhocChannel
       ? 'orca-adhoc'
       : null
 const appId = 'com.stablyai.orca'
@@ -304,9 +317,18 @@ module.exports = {
     executableName: 'Orca',
     // Why: Windows installers are signed after electron-builder packaging by
     // SignPath, so the packager cannot infer the updater publisherName.
-    signtoolOptions: {
-      publisherName: 'SignPath Foundation'
-    },
+    //
+    // Why dev channels drop it instead: they ship unsigned, because SignPath's
+    // approval waits are budgeted in hours and cannot fit an hourly cadence.
+    // electron-updater Authenticode-verifies every installer it downloads
+    // against the publisherName baked into the *installed* app's app-update.yml
+    // (NsisUpdater.verifySignature), and skips verification entirely when that
+    // name is absent. An unsigned build that still claimed 'SignPath Foundation'
+    // would therefore reject its own channel's next build — and its way back to
+    // stable with it. Dropping it is what makes dev→dev and dev→stable work.
+    ...(isWinDevChannel
+      ? { verifyUpdateCodeSignature: false }
+      : { signtoolOptions: { publisherName: 'SignPath Foundation' } }),
     extraResources: [
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('win32'),

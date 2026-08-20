@@ -12,6 +12,7 @@ import type { PaletteDocumentRank } from './palette-match/palette-document'
 function rank(overrides: Partial<PaletteDocumentRank> = {}): PaletteDocumentRank {
   return {
     exactIntent: 1,
+    matchedDirectField: 0,
     wholeQuery: 3,
     worstQuality: 5,
     usesSupportingEvidence: 0,
@@ -114,9 +115,15 @@ describe('ranked item comparison', () => {
     expect(comparePaletteRankedItems(strong, weak)).toBeLessThan(0)
   })
 
-  it('falls back to the section order when match rank ties', () => {
-    const first = { rank: rank(), order: 1, id: 'z' }
-    const second = { rank: rank(), order: 2, id: 'a' }
+  it('prefers recently active item when match rank ties', () => {
+    const recent = { rank: rank(), order: 10, id: 'z', lastActiveAt: 2000 }
+    const older = { rank: rank(), order: 0, id: 'a', lastActiveAt: 1000 }
+    expect(comparePaletteRankedItems(recent, older)).toBeLessThan(0)
+  })
+
+  it('falls back to the section order when match rank and recency tie', () => {
+    const first = { rank: rank(), order: 1, id: 'z', lastActiveAt: 1000 }
+    const second = { rank: rank(), order: 2, id: 'a', lastActiveAt: 1000 }
     expect(comparePaletteRankedItems(first, second)).toBeLessThan(0)
   })
 

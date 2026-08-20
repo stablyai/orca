@@ -5061,6 +5061,12 @@
           "5e1b8d3f62": "외부 워크트리를 영구적으로 숨기기",
           "c3e8a1f4b2": "다시 표시하지 않기"
         },
+        "NoticeHostGlyph": {
+          "hostDisconnected": "{{hostName}} 연결 끊김",
+          "sshHostProject": "SSH 호스트 {{hostName}}의 프로젝트",
+          "localHostProject": "이 호스트의 프로젝트",
+          "runtimeHostProject": "{{hostName}}의 프로젝트"
+        },
         "newExternalWorktreesInboxActions": {
           "a11c2f6d89": "외부 워크트리를 숨김 상태로 유지할 수 없습니다. 다시 시도하세요.",
           "b7e4d1a062": "외부 워크트리를 가져올 수 없습니다. 다시 시도하세요.",

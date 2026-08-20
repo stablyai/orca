@@ -30,6 +30,8 @@ export type PaletteFieldSource = {
   /** null marks a visible identity field; identity fields combine freely. */
   evidenceId?: string | null
   identifier?: PaletteIdentifierOptions
+  /** Container-level fields (e.g. worktree/branch for tabs) demote when matched alone. */
+  isContainer?: boolean
 }
 
 export type PaletteIndexedField = {
@@ -40,6 +42,7 @@ export type PaletteIndexedField = {
   words: readonly PaletteWord[]
   evidenceId: string | null
   identifier: PaletteIdentifierOptions | null
+  isContainer: boolean
 }
 
 const IDENTIFIER_PREFIX_KINDS: ReadonlySet<PaletteIdentifierKind> = new Set<PaletteIdentifierKind>([
@@ -125,7 +128,8 @@ export function indexPaletteField(source: PaletteFieldSource): PaletteIndexedFie
     atoms: segments.atoms,
     words: segments.words,
     evidenceId: source.evidenceId ?? null,
-    identifier: source.identifier ?? null
+    identifier: source.identifier ?? null,
+    isContainer: Boolean(source.isContainer)
   }
 }
 

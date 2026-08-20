@@ -53,11 +53,17 @@ describe('PR E2E gate contract', () => {
     // job without adding it to the strict loop fails here instead of silently
     // leaving that job unenforced. This is what caught GIT_COMPATIBILITY and
     // SHELL_CONTRACTS being absent from an earlier hardcoded list.
-    const strictLoop = verifyStep.run.slice(0, verifyStep.run.indexOf('done'))
+    // Why lastIndexOf: the docs-only branch has its own loop that allows skipped.
+    const successMarker = '# Require success when the PR has code-relevant changes'
+    const successLoop = verifyStep.run.slice(
+      verifyStep.run.indexOf(successMarker),
+      verifyStep.run.lastIndexOf('done')
+    )
+    expect(successLoop.length).toBeGreaterThan(0)
     for (const job of prWorkflow.jobs.verify.needs) {
       const envVar = job.toUpperCase()
       expect(verifyStep.env[envVar]).toBe(`\${{ needs.${job}.result }}`)
-      expect(strictLoop).toContain(`"$${envVar}"`)
+      expect(successLoop).toContain(`"$${envVar}"`)
     }
   })
 

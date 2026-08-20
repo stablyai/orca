@@ -25,9 +25,11 @@
   outline: none;
 }
 
-.pane-manager-root .xterm {
+.xterm-container .xterm {
+  box-sizing: border-box;
   height: 100%;
   width: 100%;
+  padding: var(--pane-padding-y, 4px) var(--pane-padding-x, 4px);
 }
 
 .pane-manager-root .xterm-viewport {
@@ -177,7 +179,7 @@
 .pane[data-terminal-attention] .xterm-container::after {
   content: '';
   position: absolute;
-  inset: 0 4px 4px 0;
+  inset: 0;
   z-index: 5;
   pointer-events: none;
   border-radius: 2px;
@@ -498,16 +500,13 @@
   border-color: var(--ring);
 }
 
-/* Baseline xterm-container layout — padding is driven by CSS custom properties
-   so Ghostty-imported window-padding-x/y can be applied without inline styles.
-   The fallback 4px preserves the legacy default. */
+/* The container fills the pane; xterm owns the four-edge grid inset so its fit
+   calculation subtracts the configured padding before choosing cols/rows. */
 .xterm-container {
   box-sizing: border-box;
   position: relative;
-  width: calc(100% - var(--pane-padding-x, 4px));
-  height: calc(100% - var(--pane-padding-y, 4px));
-  margin-top: var(--pane-padding-y, 4px);
-  margin-left: var(--pane-padding-x, 4px);
+  width: 100%;
+  height: 100%;
 }
 
 /* When a pane has a title, shift the terminal content down to make room.

@@ -2,6 +2,7 @@ import { WebglAddon } from '@xterm/addon-webgl'
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal-webgl-diagnostics'
 import { getLivePaneCensus } from './pane-manager-registry'
+import { isManagedPaneDisplayNone } from './pane-display-visibility'
 import { forceRepaintThroughRenderPause } from './terminal-render-pause-release'
 import {
   getTerminalWebglAutoDecision,
@@ -151,7 +152,17 @@ export function resetWebglTextureAtlas(pane: ManagedPaneInternal): void {
     // paused-render gate and the cleared model never repaints (stale bottom rows
     // until a drag-select forces a redraw). Force the paused render through
     // first; only fall back to refresh() when the terminal was not gated.
-    if (!forceRepaintThroughRenderPause(pane.terminal)) {
+    //
+    // Why the display check: that release is only right for a pane that is
+    // DOM-visible. A pane with no box at all (collapsed sibling of an expanded
+    // pane, a restore that stays display:none for its whole reattach) is
+    // legitimately paused, and releasing it paints the just-cleared model into
+    // nothing and then leaves the service unpaused for good — the observer only
+    // fires on a change, so it never re-pauses. Clearing _needsFullRefresh with
+    // it also drops the full repaint the observer owes the pane on reveal, and
+    // the deferred _pausedResizeTask that flushes alongside it. Latching is what
+    // xterm's own gate does, and the reveal repaints from the latch.
+    if (isManagedPaneDisplayNone(pane) || !forceRepaintThroughRenderPause(pane.terminal)) {
       // Why: refresh even without a WebGL addon so recovery never silently
       // no-ops — a DOM-rendered pane can hold stale pixels after reveal too.
       pane.terminal.refresh(0, pane.terminal.rows - 1)
