@@ -112,20 +112,33 @@ function parseWindowsProcessValueRows(stdout: string): WindowsProcessRow[] {
   const rows: WindowsProcessRow[] = []
   const values: string[] = ['', '', '', '', '']
   let field = -1
+  // A record is held, not emitted, until its terminator arrives. wmic ends every
+  // record with an empty line, so content arriving instead proves the record was
+  // supplied by a command line — its own real properties are what follow. Emitting
+  // on ProcessId alone let such a record stand as the only row for a live pid,
+  // which is that pid restated under a parent it does not have.
+  let pending: WindowsProcessRow | null = null
 
-  const flush = (): void => {
+  const closeRecord = (): void => {
     const ppid = Number.parseInt(values[3]!, 10)
     const pid = Number.parseInt(values[4]!, 10)
-    if (Number.isFinite(pid) && Number.isFinite(ppid)) {
-      const name = values[2]!.trim()
-      rows.push({
-        pid,
-        ppid,
-        name,
-        command: values[0]!.trim() || name,
-        executablePath: values[1]!.trim()
-      })
-    }
+    const name = values[2]!.trim()
+    pending =
+      Number.isFinite(pid) && Number.isFinite(ppid)
+        ? {
+            pid,
+            ppid,
+            name,
+            command: values[0]!.trim() || name,
+            executablePath: values[1]!.trim()
+          }
+        : null
+    values.fill('')
+    field = -1
+  }
+
+  const discardRecord = (): void => {
+    pending = null
     values.fill('')
     field = -1
   }
@@ -134,17 +147,22 @@ function parseWindowsProcessValueRows(stdout: string): WindowsProcessRow[] {
     // Exactly empty, not merely blank: a whitespace-only line is content, and
     // treating it as the separator silently ate its spaces out of the command.
     if (line === '') {
-      // Only past CommandLine does an empty line mean end-of-record; inside one it
-      // is content. Agent CLIs really do embed blank lines: on a measured
-      // 920-process host all 11 that did were claude/codex/node/sh panes — the
-      // exact rows foreground detection reads. Flushing there dropped the command
-      // and left the row naming only its executable.
-      if (field >= 1) {
-        flush()
+      if (pending) {
+        rows.push(pending)
+        pending = null
+      } else if (field >= 1) {
+        // A record that ended without its ProcessId; drop it and resync.
+        discardRecord()
       } else if (field === 0) {
+        // Only inside CommandLine is an empty line content. Agent CLIs really do
+        // embed them: on a measured 920-process host all 11 command lines that did
+        // belonged to claude/codex/node/sh panes, the exact rows naming reads.
         values[0] += '\n'
       }
       continue
+    }
+    if (pending) {
+      discardRecord()
     }
     const eq = line.indexOf('=')
     const next =
@@ -164,7 +182,7 @@ function parseWindowsProcessValueRows(stdout: string): WindowsProcessRow[] {
       field = next
       values[next] = line.slice(eq + 1)
       if (next === WMIC_VALUE_FIELDS.length - 1) {
-        flush()
+        closeRecord()
       }
       continue
     }
@@ -174,13 +192,15 @@ function parseWindowsProcessValueRows(stdout: string): WindowsProcessRow[] {
       // resync — never the whole table. That framing is content any process on the
       // box can arrange, and refusing the snapshot would spend a PowerShell host on
       // it, which is the flood this file exists to stop.
-      values.fill('')
-      field = -1
+      discardRecord()
       continue
     }
     values[0] += `\n${line}`
   }
-  flush()
+  if (pending) {
+    // End of output terminates the last record just as an empty line would.
+    rows.push(pending)
+  }
   return rows
 }
 
@@ -256,11 +276,16 @@ async function queryWindowsProcessesWithWmic(): Promise<WmicScan> {
   if (stdout.trim() === '') {
     return { status: 'failed' }
   }
-  const rows = dropAmbiguousPids(parseWindowsProcessValueRows(stdout))
-  if (rows.length === 0) {
+  const parsed = parseWindowsProcessValueRows(stdout)
+  if (parsed.length === 0) {
     // Output arrived and parsed to nothing: this build's wmic does not speak the
     // format we read, and no later scan will change that.
     return { status: 'unsupported' }
   }
-  return { status: 'ok', rows }
+  // Whereas a table that parses but survives dedup empty is a property of this
+  // snapshot, not of the host — one command line claiming every pid is enough.
+  // Answering with no rows degrades naming to the node-pty name for this scan;
+  // calling it `unsupported` would retire wmic for the daemon's life and put the
+  // transcript flood back permanently, which is a switch content must not have.
+  return { status: 'ok', rows: dropAmbiguousPids(parsed) }
 }

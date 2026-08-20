@@ -77,6 +77,35 @@ const FORGING_FRAGMENTS = [
   'ExecutablePath=C:/evil.exe\nName=lsass.exe\nParentProcessId=0\nProcessId=4'
 ]
 
+/**
+ * The attack worth testing is not a forged row about nobody — it is a forged row
+ * about a process that exists, parented where the observer will look. So poison one
+ * command line with a tail claiming a real victim pid under the observed root. A
+ * forged row that lands outside the walked tree is invisible to a descendants-based
+ * check, which is how an earlier version of this suite missed exactly this.
+ */
+function poisonWithVictimForgery(rows: GeneratedProcess[], seed: number): GeneratedProcess[] {
+  if (rows.length < 3) {
+    return rows
+  }
+  const random = makeRandom(seed * 7919)
+  const root = rows[0]!.ProcessId
+  const victim = rows[1 + Math.floor(random() * (rows.length - 1))]!
+  const poisoner = rows[1 + Math.floor(random() * (rows.length - 1))]!
+  if (poisoner.ProcessId === victim.ProcessId) {
+    return rows
+  }
+  const tail = [
+    'ExecutablePath=C:/forged.exe',
+    'Name=forged.exe',
+    `ParentProcessId=${root}`,
+    `ProcessId=${victim.ProcessId}`
+  ].join('\n')
+  return rows.map((row) =>
+    row === poisoner ? { ...row, CommandLine: `${row.CommandLine}\n${tail}` } : row
+  )
+}
+
 function generateTable(
   seed: number,
   fragments: string[],
@@ -224,7 +253,7 @@ describe('wmic reader vs PowerShell reader, over generated hostile tables', () =
   it('never mis-parents a real pid on 400 tables that can forge the framing', async () => {
     let refused = 0
     for (let seed = 1; seed <= 400; seed += 1) {
-      const table = generateTable(seed, FORGING_FRAGMENTS)
+      const table = poisonWithVictimForgery(generateTable(seed, FORGING_FRAGMENTS), seed)
       const truth = new Map(table.map((row) => [row.ProcessId, row.ParentProcessId]))
       const viaWmic = await readViaWmic(table)
       if (viaWmic === null) {

@@ -226,22 +226,39 @@ ${poisoned}`,
     ).toBe(false)
   })
 
-  // A repeated pid means the record framing desynced, and ancestry read off a
-  // desynced table can misdirect `taskkill /T /F`.
-  it('discards a wmic table with duplicate pids and lets PowerShell answer', async () => {
+  // A repeated pid means one of the two rows was supplied by a command line
+  // claiming another process's pid, and the bytes do not say which — so both go.
+  // A table where that leaves nothing is still a fact about this snapshot, not the
+  // host: treating it as "wmic is unreadable here" would retire the reader for the
+  // daemon's life and hand any process a permanent switch for the flood (#15565
+  // review). It must degrade for the scan and come straight back.
+  it('degrades on an all-duplicate table without retiring wmic (#15565 review)', async () => {
+    let allDuplicate = true
+    let wmicSpawns = 0
     execFileMock.mockImplementation((cmd: string, _args, _opts, cb: ExecFileCallback) => {
-      cb(null, {
-        stdout: isCommand(cmd, 'wmic')
-          ? `${WMIC_ROWS_VALUE}\n${WMIC_ROWS_VALUE}`
-          : POWERSHELL_ROWS_JSON,
-        stderr: ''
-      })
+      if (isCommand(cmd, 'wmic')) {
+        wmicSpawns += 1
+        cb(null, {
+          stdout: allDuplicate ? `${WMIC_ROWS_VALUE}\n${WMIC_ROWS_VALUE}` : WMIC_ROWS_VALUE,
+          stderr: ''
+        })
+        return
+      }
+      cb(new Error('content must not buy a PowerShell host'), { stdout: '', stderr: '' })
     })
 
-    const candidates = await queryWindowsProcessDescendants(100)
+    // Every pid ambiguous: no rows survive, so the pane falls back to its node-pty
+    // name for this scan rather than trusting a row that might be forged.
+    expect(await queryWindowsProcessDescendants(100, { fresh: true })).toBeNull()
 
-    expect(candidates?.map((row) => row.pid)).toEqual([200])
-    expect(optionsForCommand('powershell.exe')).toMatchObject({ windowsHide: true })
+    allDuplicate = false
+    const recovered = await queryWindowsProcessDescendants(100, { fresh: true })
+
+    expect(recovered?.map((row) => row.pid)).toEqual([200])
+    expect(wmicSpawns).toBe(2)
+    expect(
+      execFileMock.mock.calls.some((args) => isCommand((args as ExecFileCall)[0], 'powershell'))
+    ).toBe(false)
   })
 
   it('stops spawning wmic once the host has none — 24H2+ (windowsHide stays on)', async () => {
