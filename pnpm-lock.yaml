@@ -20,6 +20,9 @@ patchedDependencies:
   '@xterm/xterm@6.1.0-beta.287':
     hash: 46796c152f3b73e28238f44499eaf5a867a863809bc7b470b159526a41e354f7
     path: config/patches/@xterm__xterm@6.1.0-beta.287.patch
+  lint-staged@16.4.0:
+    hash: 7333b3837f80a7fbd045964db6d76ba4fc118e49134bdbabb00585b6b7b60673
+    path: config/patches/lint-staged@16.4.0.patch
   node-pty@1.1.0:
     hash: 8fc49f17011b6611a5b8c00e83a6f12e14e75aada2b0ef26dc5393f8376d20e8
     path: config/patches/node-pty@1.1.0.patch
@@ -274,7 +277,7 @@ importers:
         version: 0.16.45
       lint-staged:
         specifier: ^16.4.0
-        version: 16.4.0
+        version: 16.4.0(patch_hash=7333b3837f80a7fbd045964db6d76ba4fc118e49134bdbabb00585b6b7b60673)
       lowlight:
         specifier: ^3.3.0
         version: 3.3.0
@@ -11374,7 +11377,7 @@ snapshots:
 
   linkifyjs@4.3.2: {}
 
-  lint-staged@16.4.0:
+  lint-staged@16.4.0(patch_hash=7333b3837f80a7fbd045964db6d76ba4fc118e49134bdbabb00585b6b7b60673):
     dependencies:
       commander: 14.0.3
       listr2: 9.0.5
