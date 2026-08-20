@@ -19,6 +19,11 @@ export type NativeChatViewProps = {
   onSwitchToTerminal?: () => void
   /** Current xterm screen reader used to recover agent-reported session state. */
   readTerminalScreen?: () => string | null
+  /** Arms a short-TTL hold, keyed to `ptyId`, so a subsequent confirmed agent-exit on that
+   *  exact pty does not kick the tab back to terminal view — used when Orca itself
+   *  authorized a Codex update and the agent's coming exit is expected and temporary. See
+   *  native-chat-leaf-routing.ts's `holdChatForAgentRestart`. */
+  onHoldChatForAgentRestart?: (ptyId: string, holdMs: number) => void
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }
 
@@ -32,5 +37,6 @@ export type NativeChatResolvedViewProps = {
   terminalTabId: string
   onSwitchToTerminal?: () => void
   readTerminalScreen?: () => string | null
+  onHoldChatForAgentRestart?: (ptyId: string, holdMs: number) => void
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }

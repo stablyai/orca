@@ -34,6 +34,7 @@ function renderField(draft: string): HTMLTextAreaElement {
       disabled={false}
       hasPty
       canSend
+      lockedReason={null}
       autocomplete={{ mode: 'none' }}
       activeSuggestion={0}
       notice={null}

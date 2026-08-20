@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
 import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
 import { useNativeChatRetainedSession } from './use-native-chat-retained-session'
-import { selectNativeChatViewState } from './native-chat-view-state'
+import { useNativeChatSessionAugmentation } from './use-native-chat-session-augmentation'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
 import { useNativeChatFontScale } from './use-native-chat-font-scale'
 import { useNativeChatCanSend } from './use-native-chat-can-send'
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
+import { useNativeChatStartupRestart } from './use-native-chat-startup-restart'
+import { NativeChatStartupNoticeCard } from './NativeChatStartupNoticeCard'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { NativeChatSessionGate } from './NativeChatSessionGate'
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
@@ -17,28 +19,6 @@ import {
   shouldClearNativeChatWorkingSuppression,
   shouldShowNativeChatWorking
 } from './native-chat-working-suppression'
-import {
-  appendPendingSendCache,
-  launchPromptAsMessage,
-  pendingSendsAsMessages,
-  nextNativeChatPendingSendId,
-  prunePendingSends,
-  readPendingSendCache,
-  shouldPruneLaunchPrompt,
-  writePendingSendCache,
-  type NativeChatPendingSend
-} from './native-chat-pending'
-import {
-  appendCommandMarkerCache,
-  applyCommandMarkerBoundaries,
-  commandMarkersAsMessages,
-  readCommandMarkerCache,
-  type NativeChatCommandMarker
-} from './native-chat-command-marker'
-import {
-  deriveNativeChatStreamingText,
-  nativeChatStreamingMessage
-} from '../../../../shared/native-chat-streaming'
 import {
   shouldFocusNativeChatComposerFromEditingKey,
   shouldFocusNativeChatPaneFromPointerTarget,
@@ -66,6 +46,7 @@ export default function NativeChatView({
   resolvedAgent,
   onSwitchToTerminal,
   readTerminalScreen,
+  onHoldChatForAgentRestart,
   contextMenuActions
 }: NativeChatViewProps): React.JSX.Element {
   // Select only this tab's status entry (shallow-compared) so an unrelated
@@ -100,6 +81,7 @@ export default function NativeChatView({
           terminalTabId={terminalTabId}
           onSwitchToTerminal={onSwitchToTerminal}
           readTerminalScreen={readTerminalScreen}
+          onHoldChatForAgentRestart={onHoldChatForAgentRestart}
           contextMenuActions={contextMenuActions}
         />
       )}
@@ -117,6 +99,7 @@ function NativeChatResolvedView({
   terminalTabId,
   onSwitchToTerminal,
   readTerminalScreen,
+  onHoldChatForAgentRestart,
   contextMenuActions
 }: NativeChatResolvedViewProps): React.JSX.Element {
   // Primitive owner selection (no useShallow): routes the pane's read/subscribe to
@@ -155,14 +138,34 @@ function NativeChatResolvedView({
   const hookWorkingEpoch = useAppStore(
     (s) => s.agentStatusByPaneKey[paneKey]?.stateStartedAt ?? null
   )
-  const canSend = useNativeChatCanSend(targetPtyId)
+  const { canSend, lockedReason } = useNativeChatCanSend(targetPtyId, paneKey)
   // Reuse the verified composer send path for interactive cards and composer
   // stop (Stop sends ESC, the agent-TUI interrupt key).
   const interactiveSend = useNativeChatInteractiveSend(terminalTabId, paneKey, targetPtyId, agent)
+  // Startup takeover (Codex update prompt/log, trust/hooks-review dialogs, an
+  // update-in-progress log, restart handling, …) the chat view otherwise has no way to see —
+  // see use-native-chat-startup-restart.ts. `session.messages` (not the pending/
+  // command-marker-augmented list below) so a real transcript arrival stops the watch.
+  const {
+    notice: startupNotice,
+    onChoose: onChooseStartupOption,
+    onRestart: onRestartCodex
+  } = useNativeChatStartupRestart({
+    paneKey,
+    targetPtyId,
+    readTerminalScreen,
+    isVisible,
+    messageCount: session.messages.length,
+    onHoldChatForAgentRestart,
+    sendRaw: interactiveSend.sendRaw
+  })
   const [workingInterrupted, setWorkingInterrupted] = useState(false)
   const previousWorkingEpochRef = useRef<number | null>(null)
   // True while a question card owns the input region, so the composer is hidden.
   const [questionActive, setQuestionActive] = useState(false)
+  // A startup dialog/update-in-progress/dead-agent notice also owns the input region: you
+  // cannot chat with a Codex that is blocked on a dialog, updating, or not running.
+  const inputRegionOwned = questionActive || startupNotice !== null
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle>(null)
   // The question card's free-text row; keeps Paste working while the card
@@ -185,141 +188,30 @@ function NativeChatResolvedView({
     }
   })
 
-  // Optimistic "queued" sends (mobile parity): a composer send is echoed
-  // immediately and pruned once its real user turn lands in the transcript, so
-  // the message never vanishes between send and transcript catch-up.
-  const commandMarkerScope = useMemo(
-    () => ({ paneKey, agent, sessionId }),
-    [paneKey, agent, sessionId]
-  )
-  const pendingScope = useMemo(() => ({ paneKey, agent }), [paneKey, agent])
-  const [pending, setPending] = useState<NativeChatPendingSend[]>(() =>
-    readPendingSendCache(pendingScope)
-  )
-  // Slash commands aren't chat turns, so they get a small local "Ran /clear"
-  // system line instead of a user bubble. Capped + cached per conversation.
-  const [commandMarkers, setCommandMarkers] = useState<NativeChatCommandMarker[]>(() =>
-    readCommandMarkerCache(commandMarkerScope)
-  )
-  // Reset the optimistic queue only when the pane/agent changes. A fresh launch
-  // often learns its provider session id after the first send; clearing pending
-  // on that transition briefly flashes the empty state before the transcript
-  // user turn lands.
-  useEffect(() => {
-    setPending(readPendingSendCache(pendingScope))
-    setWorkingInterrupted(false)
-  }, [pendingScope])
-  // Command markers are session-scoped because slash commands like /clear are
-  // local feedback for a specific transcript boundary.
-  useEffect(() => {
-    setCommandMarkers(readCommandMarkerCache(commandMarkerScope))
-    setWorkingInterrupted(false)
-  }, [commandMarkerScope])
-  // Prune echoes whose real user turn is now in the transcript.
-  useEffect(() => {
-    setPending((prev) =>
-      writePendingSendCache(pendingScope, prunePendingSends(prev, session.messages))
-    )
-  }, [session.messages, pendingScope])
-  useEffect(() => {
-    if (!paneLaunchPrompt || !shouldPruneLaunchPrompt(paneLaunchPrompt, session.messages)) {
-      return
-    }
-    clearNativeChatLaunchPrompt(terminalTabId)
-  }, [clearNativeChatLaunchPrompt, paneLaunchPrompt, session.messages, terminalTabId])
-  const onOptimisticSend = useCallback(
-    (text: string, imagePaths?: string[]) => {
-      setWorkingInterrupted(false)
-      const sentAt = Date.now()
-      const boundary = session.messages.at(-1)
-      const entry: NativeChatPendingSend = {
-        id: nextNativeChatPendingSendId(sentAt),
-        text,
-        sentAt,
-        afterMessageId: boundary?.id ?? null,
-        afterMessageTimestamp: boundary?.timestamp ?? null,
-        ...(imagePaths ? { imagePaths } : {})
-      }
-      setPending(appendPendingSendCache(pendingScope, entry))
-      return entry.id
-    },
-    [pendingScope, session.messages]
-  )
-  const onOptimisticSendCanceled = useCallback(
-    (pendingId: string) => {
-      // Why: detach/interrupt cancels the delayed Enter, so its optimistic echo
-      // must not come back from the pane cache as a prompt that was delivered.
-      const next = readPendingSendCache(pendingScope).filter((entry) => entry.id !== pendingId)
-      setPending(writePendingSendCache(pendingScope, next))
-    },
-    [pendingScope]
-  )
-  const onSlashCommand = useCallback(
-    (command: string) => {
-      setCommandMarkers(appendCommandMarkerCache(commandMarkerScope, command))
-    },
-    [commandMarkerScope]
-  )
-
-  const launchPromptMessage = useMemo(
-    () => launchPromptAsMessage(paneLaunchPrompt, session.messages),
-    [paneLaunchPrompt, session.messages]
-  )
-  const sessionWithLaunchPrompt = useMemo<typeof session>(() => {
-    if (!launchPromptMessage) {
-      return session
-    }
-    return { ...session, messages: [...session.messages, launchPromptMessage] }
-  }, [launchPromptMessage, session])
-
-  const sessionAfterCommandBoundaries = useMemo<typeof session>(() => {
-    const messages = applyCommandMarkerBoundaries(sessionWithLaunchPrompt.messages, commandMarkers)
-    return messages === sessionWithLaunchPrompt.messages
-      ? sessionWithLaunchPrompt
-      : { ...sessionWithLaunchPrompt, messages }
-  }, [sessionWithLaunchPrompt, commandMarkers])
-  const failedLaunchPromptMessageIds = useMemo(() => {
-    const id = paneLaunchPrompt?.failed ? launchPromptMessage?.id : null
-    if (!id || !sessionAfterCommandBoundaries.messages.some((message) => message.id === id)) {
-      return undefined
-    }
-    return new Set([id])
-  }, [paneLaunchPrompt?.failed, launchPromptMessage?.id, sessionAfterCommandBoundaries.messages])
-
-  // The streaming preview bubble (if any) sits after the transcript but before
-  // the optimistic user echoes — same order mobile uses.
-  const pendingMessages = useMemo(
-    () => pendingSendsAsMessages(pending, sessionAfterCommandBoundaries.messages),
-    [pending, sessionAfterCommandBoundaries.messages]
-  )
-  const streamingText = useMemo(() => {
-    return deriveNativeChatStreamingText({
-      messages:
-        pendingMessages.length > 0
-          ? [...sessionAfterCommandBoundaries.messages, ...pendingMessages]
-          : sessionAfterCommandBoundaries.messages,
-      previewText: hookPreview,
-      working: liveWorking
-    })
-  }, [sessionAfterCommandBoundaries.messages, pendingMessages, hookPreview, liveWorking])
-  const sessionWithPending = useMemo<typeof session>(() => {
-    if (pending.length === 0 && commandMarkers.length === 0 && !streamingText) {
-      return sessionAfterCommandBoundaries
-    }
-    return {
-      ...sessionAfterCommandBoundaries,
-      messages: [
-        ...sessionAfterCommandBoundaries.messages,
-        ...commandMarkersAsMessages(commandMarkers),
-        ...(streamingText ? [nativeChatStreamingMessage(streamingText)] : []),
-        ...pendingMessages
-      ]
-    }
-  }, [sessionAfterCommandBoundaries, pending, pendingMessages, commandMarkers, streamingText])
-  // Derive the view state from the pending-augmented session so a send into an
-  // otherwise-empty conversation flips to the list (showing the queued bubble)
-  // instead of staying on the empty state.
-  const viewState = selectNativeChatViewState(sessionWithPending)
+  // Local-only content layered on top of the transcript: optimistic "queued" send echoes,
+  // "Ran /clear" markers, the launch-context draft, and the streaming preview bubble — see
+  // use-native-chat-session-augmentation.ts.
+  const {
+    sessionWithPending,
+    sessionAfterCommandBoundariesMessages,
+    viewState,
+    failedLaunchPromptMessageIds,
+    onOptimisticSend,
+    onOptimisticSendCanceled,
+    onSlashCommand,
+    clearPendingSends
+  } = useNativeChatSessionAugmentation({
+    paneKey,
+    agent,
+    sessionId,
+    session,
+    terminalTabId,
+    paneLaunchPrompt,
+    clearNativeChatLaunchPrompt,
+    hookPreview,
+    liveWorking,
+    setWorkingInterrupted
+  })
 
   const isConversation = viewState.kind === 'ready'
   useEffect(() => {
@@ -351,9 +243,9 @@ function NativeChatResolvedView({
     // Why: Stop after a submitted turn drops the delayed-write handle once it
     // settles, so cancelPendingSends no longer sees the optimistic id. Clear
     // the echo cache here so a cancelled prompt cannot stick as a ghost bubble.
-    setPending(writePendingSendCache(pendingScope, []))
+    clearPendingSends()
     interactiveSend.cancel()
-  }, [interactiveSend, pendingScope])
+  }, [interactiveSend, clearPendingSends])
   const nativeChatFileLinkClick = useNativeChatFileLinkClick(fileLinkContext)
 
   // Chat-only font zoom via Cmd/Ctrl +/-/0, gated to the live conversation so
@@ -403,7 +295,7 @@ function NativeChatResolvedView({
         ) : viewState.kind === 'error' ? (
           <NativeChatEmptyState kind="error" message={viewState.message} />
         ) : viewState.kind === 'empty' ? (
-          <NativeChatEmptyState kind="empty" agent={agent} />
+          <NativeChatEmptyState kind={startupNotice ? 'starting-agent' : 'empty'} agent={agent} />
         ) : (
           <NativeChatMessageList
             session={sessionWithPending}
@@ -416,6 +308,19 @@ function NativeChatResolvedView({
           />
         )}
       </div>
+      {/* Startup takeover (Codex update prompt/log, trust/hooks-review dialogs, an
+          update-in-progress log, a required/failed restart, or a dead agent) — see
+          use-native-chat-startup-notice.ts + use-native-chat-startup-restart.ts. Rendered
+          above the interactive card since it reflects an earlier point in the agent's
+          lifecycle (no conversation exists yet). */}
+      {startupNotice ? (
+        <NativeChatStartupNoticeCard
+          notice={startupNotice}
+          onChoose={onChooseStartupOption}
+          onRestart={onRestartCodex}
+          onOpenTerminal={onSwitchToTerminal}
+        />
+      ) : null}
       {/* Live interactive prompt (question / approval) is the bottom input region
           (mobile parity). A question card supplies its own answer input, so it
           fully replaces the composer while active — no stray "Send a message". */}
@@ -423,15 +328,17 @@ function NativeChatResolvedView({
         paneKey={paneKey}
         send={interactiveSend}
         canSend={canSend}
-        messages={sessionAfterCommandBoundaries.messages}
+        messages={sessionAfterCommandBoundariesMessages}
         transcriptSettled={session.readPhase === 'ready'}
         onShowingQuestionChange={setQuestionActive}
         answerInputRef={questionAnswerInputRef}
       />
-      {/* canSend reflects the mobile presence-lock: when a mobile client holds
-          the pty, the composer shows its guarded state instead of racing the
-          mobile driver (R8). */}
-      {questionActive ? null : (
+      {/* canSend reflects the mobile presence-lock or the agent's foreground evidence
+          being gone (see use-native-chat-can-send.ts): either way the composer shows its
+          guarded state instead of racing the mobile driver (R8) or typing into a dead
+          agent's shell. inputRegionOwned additionally hides the composer while a question
+          card OR a startup notice owns the input region. */}
+      {inputRegionOwned ? null : (
         <NativeChatComposer
           ref={composerRef}
           terminalTabId={terminalTabId}
@@ -439,6 +346,7 @@ function NativeChatResolvedView({
           targetPtyId={targetPtyId}
           agent={agent}
           canSend={canSend}
+          lockedReason={lockedReason}
           isWorking={isWorking}
           onStop={stopAgent}
           onOptimisticSend={onOptimisticSend}

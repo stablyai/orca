@@ -15903,6 +15903,7 @@
         "send": "Send",
         "noPty": "No live terminal — toggle back to reconnect.",
         "locked": "Input is held by another device.",
+        "agentGone": "The agent isn't running — toggle back to the terminal.",
         "placeholder": "Send a message…",
         "mentionHint": "Referencing file:",
         "attach": "Attach file",
@@ -15988,6 +15989,10 @@
         "empty": {
           "title": "Start a chat with {{value0}}",
           "subtitle": "Ask {{value0}} to inspect code, explain output, or make a change."
+        },
+        "startingAgent": {
+          "title": "Starting {{value0}}…",
+          "subtitle": "{{value0}} needs your attention before the conversation can start."
         }
       },
       "stop": "Stop the agent",
@@ -16012,6 +16017,23 @@
         "title": "Allow {{value0}}?",
         "allow": "Allow",
         "deny": "Deny"
+      },
+      "startupNotice": {
+        "restart": "Restart Codex",
+        "openTerminal": "Open terminal",
+        "title": {
+          "codexUpdatePrompt": "Codex has an update",
+          "codexTrustWorkspace": "Codex wants to trust this workspace",
+          "codexCwdPrompt": "Codex is asking about the working directory",
+          "codexModelMigrationPrompt": "Codex has a new default model",
+          "codexHooksReviewPrompt": "Codex hooks need review",
+          "codexInteractivePrompt": "Codex needs your input",
+          "agentApprovalPrompt": "Codex wants to run a command",
+          "running": "Updating Codex…",
+          "restartRequired": "Update complete — restart required",
+          "updateFailed": "Codex update did not finish",
+          "restarting": "Restarting Codex…"
+        }
       },
       "launchPromptNotDelivered": "Not delivered — check the terminal"
     },

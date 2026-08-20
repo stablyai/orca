@@ -12,40 +12,11 @@ import type {
   NativeChatSession
 } from '../../../../shared/native-chat-types'
 import { assembleNativeChatSession } from './native-chat-session-assembler'
+// Moved to src/shared so non-renderer (and shared) consumers — the startup-notice reader —
+// can use it too; re-exported here so this file's existing importers are unaffected.
+import { stripScrollbackAnsi } from '../../../../shared/terminal-ansi-strip'
 
-// Why: replicate (not import) the minimal ANSI/control-sequence strip used by
-// agent-session-fork-context.ts so we don't modify that file. Same three
-// patterns: CSI sequences, OSC sequences, and stray single-char escapes.
-const ESC = String.fromCharCode(27)
-const ANSI_ESCAPE_PATTERN = new RegExp(`${ESC}\\[[0-?]*[ -/]*[@-~]`, 'g')
-const OSC_SEQUENCE_PATTERN = new RegExp(`${ESC}\\][^\\u0007]*(?:\\u0007|${ESC}\\\\)`, 'g')
-const SINGLE_ESCAPE_PATTERN = new RegExp(`${ESC}(?:[@-Z\\\\-_]|[()*+\\-./][0-~]|c)`, 'g')
-
-function stripUnsupportedControlCharacters(value: string): string {
-  let result = ''
-  for (const char of value) {
-    const code = char.charCodeAt(0)
-    // Drop C0 control chars except tab (9) and newline (10); keep DEL (127) out.
-    if (code <= 8 || code === 11 || code === 12 || (code >= 14 && code <= 31) || code === 127) {
-      continue
-    }
-    result += char
-  }
-  return result
-}
-
-/** Strip ANSI/OSC escapes and normalize newlines so the raw scrollback reads as
- *  plain text. Pure; safe to reuse in tests. */
-export function stripScrollbackAnsi(value: string): string {
-  return stripUnsupportedControlCharacters(
-    value
-      .replace(OSC_SEQUENCE_PATTERN, '')
-      .replace(ANSI_ESCAPE_PATTERN, '')
-      .replace(SINGLE_ESCAPE_PATTERN, '')
-  )
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-}
+export { stripScrollbackAnsi } from '../../../../shared/terminal-ansi-strip'
 
 // Why: a user prompt in a terminal almost always begins with a recognizable
 // shell/agent prompt marker. We treat a segment whose first line starts with one

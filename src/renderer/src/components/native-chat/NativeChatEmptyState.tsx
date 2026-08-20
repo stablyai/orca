@@ -9,7 +9,7 @@ export function NativeChatEmptyState({
   message,
   agent
 }: {
-  kind: 'loading' | 'empty' | 'error' | 'not-agent'
+  kind: 'loading' | 'empty' | 'error' | 'not-agent' | 'starting-agent'
   message?: string
   agent?: NativeChatSession['agent']
 }): React.JSX.Element {
@@ -38,7 +38,7 @@ export function NativeChatEmptyState({
 }
 
 function emptyStateCopy(
-  kind: 'loading' | 'empty' | 'error' | 'not-agent',
+  kind: 'loading' | 'empty' | 'error' | 'not-agent' | 'starting-agent',
   message?: string,
   agent?: NativeChatSession['agent']
 ): { title: string; subtitle: string | null } {
@@ -89,6 +89,21 @@ function emptyStateCopy(
         subtitle: translate(
           'components.native-chat.state.empty.subtitle',
           NATIVE_CHAT_EMPTY_STATE_COPY.empty.subtitle,
+          { value0: agentName }
+        )
+      }
+    }
+    case 'starting-agent': {
+      const agentName = agent ? formatAgentTypeLabel(agent) : 'the agent'
+      return {
+        title: translate(
+          'components.native-chat.state.startingAgent.title',
+          NATIVE_CHAT_EMPTY_STATE_COPY.startingAgent.title,
+          { value0: agentName }
+        ),
+        subtitle: translate(
+          'components.native-chat.state.startingAgent.subtitle',
+          NATIVE_CHAT_EMPTY_STATE_COPY.startingAgent.subtitle,
           { value0: agentName }
         )
       }

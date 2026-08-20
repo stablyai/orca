@@ -73,11 +73,19 @@ export function resolveNativeChatLeafRoute(args: {
   chatLeafStillMounted: boolean
   activeLeafIsEligible: boolean
   chatLeafHasConfirmedAgentExit?: boolean
+  /** Suppresses `chatLeafHasConfirmedAgentExit`'s effect while an Orca-authorized Codex
+   *  restart is in flight — that exit is expected and temporary (the update flow itself
+   *  exits Codex to the shell before it can be relaunched), so it must not kick the tab
+   *  back to terminal view mid-restart. Every OTHER reason to exit chat — the leaf closing,
+   *  the active leaf becoming ineligible — is untouched: this only changes what
+   *  `chatLeafHasConfirmedAgentExit: true` means, not any of the other branches below. */
+  holdChatForAgentRestart?: boolean
 }): NativeChatLeafRoute {
   if (!args.isChatViewMode) {
     return { chatLeafId: null, exitChat: false }
   }
-  if (args.chatLeafId && args.chatLeafStillMounted && !args.chatLeafHasConfirmedAgentExit) {
+  const confirmedAgentExit = args.chatLeafHasConfirmedAgentExit && !args.holdChatForAgentRestart
+  if (args.chatLeafId && args.chatLeafStillMounted && !confirmedAgentExit) {
     // Why: agent/title evidence can disappear while local, SSH, or runtime
     // transports reconnect. A mounted owning pane is not a terminal lifecycle
     // event, so keep its chat surface until the pane itself is removed.
@@ -85,13 +93,10 @@ export function resolveNativeChatLeafRoute(args: {
   }
   // Manager hydration can briefly have no active pane; preserve the requested
   // mode until a concrete leaf exists instead of toggling it off during mount.
-  if (!args.activeLeafId && !args.chatLeafHasConfirmedAgentExit) {
+  if (!args.activeLeafId && !confirmedAgentExit) {
     return { chatLeafId: args.chatLeafId, exitChat: false }
   }
-  if (
-    args.activeLeafIsEligible &&
-    (!args.chatLeafHasConfirmedAgentExit || args.activeLeafId !== args.chatLeafId)
-  ) {
+  if (args.activeLeafIsEligible && (!confirmedAgentExit || args.activeLeafId !== args.chatLeafId)) {
     return { chatLeafId: args.activeLeafId, exitChat: false }
   }
   // Why: removing the owning leaf or confirming its agent exited must not leave

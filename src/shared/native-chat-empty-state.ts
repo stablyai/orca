@@ -22,6 +22,14 @@ export const NATIVE_CHAT_EMPTY_STATE_COPY = {
   notAgent: {
     title: 'No conversation here',
     subtitle: 'This terminal is not running a recognized coding agent.'
+  },
+  // Why a distinct kind from 'empty': a just-launched agent blocked on its own startup
+  // dialog (update prompt, trust dialog, …) has no conversation yet either, but "Start a
+  // chat" reads as an invitation to type — which the startup notice card intercepts, since
+  // the composer is hidden until the dialog clears. See NativeChatStartupNoticeCard.
+  startingAgent: {
+    title: 'Starting {{value0}}…',
+    subtitle: '{{value0}} needs your attention before the conversation can start.'
   }
 } as const satisfies Record<string, NativeChatEmptyStateCopy>
 
