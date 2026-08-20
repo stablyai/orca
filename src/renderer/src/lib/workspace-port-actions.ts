@@ -178,8 +178,13 @@ export async function refreshWorkspacePortScanAfterStop(args: {
     args.setWorkspacePortScanForKey?.(scanKey, scan)
     const currentScans = args.getWorkspacePortScansByKey?.() ?? {}
     const merged = mergeWorkspacePortScans({ ...currentScans, [scanKey]: scan })
+    // Why: currentScans already contains the entry just written above for
+    // scanKey, so ">0" was true for a single tracked host too — every Stop
+    // click routed the projection through the synthetic 'all-hosts:all' key,
+    // which then concatenated with the next publish's scan instead of being
+    // replaced, producing ghost duplicate rows. Multiple real hosts means >1.
     args.setWorkspacePortScan({
-      key: merged && Object.keys(currentScans).length > 0 ? 'all-hosts:all' : scanKey,
+      key: merged && Object.keys(currentScans).length > 1 ? 'all-hosts:all' : scanKey,
       result: merged ?? scan
     })
   }
