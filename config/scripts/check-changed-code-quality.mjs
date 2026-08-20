@@ -168,6 +168,9 @@ function printDiagnostic(diagnostic, root) {
 function runOxlintScan(root, scan, files) {
   const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
   const result = spawnSync(pnpm, ['exec', 'oxlint', ...scan.args, '--format', 'json', ...files], {
+    // Why: Node refuses to spawn a .cmd without a shell, so on Windows this
+    // gate threw EINVAL before oxlint ever ran. See ensure-native-runtime.
+    shell: process.platform === 'win32',
     cwd: root,
     encoding: 'utf8',
     maxBuffer: 128 * 1024 * 1024
