@@ -5071,6 +5071,12 @@
           "5e1b8d3f62": "永久隐藏外部工作树",
           "c3e8a1f4b2": "不再显示"
         },
+        "NoticeHostGlyph": {
+          "hostDisconnected": "{{hostName}} 已断开连接",
+          "sshHostProject": "SSH 主机 {{hostName}} 上的项目",
+          "localHostProject": "此主机上的项目",
+          "runtimeHostProject": "{{hostName}} 上的项目"
+        },
         "newExternalWorktreesInboxActions": {
           "a11c2f6d89": "无法保持外部工作树隐藏。请重试。",
           "b7e4d1a062": "无法导入外部工作树。请重试。",
