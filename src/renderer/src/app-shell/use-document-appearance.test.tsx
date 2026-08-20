@@ -79,6 +79,17 @@ describe('useDocumentAppearance', () => {
     }
   })
 
+  it('preserves the bootstrap theme until settings hydrate', async () => {
+    mocks.settings = null
+    document.documentElement.classList.add('light')
+
+    await act(async () => root.render(<AppearanceProbe />))
+
+    expect(document.documentElement.classList.contains('light')).toBe(true)
+    expect(document.documentElement.classList.contains('dark')).toBe(false)
+    expect(mocks.applyDocumentTheme).not.toHaveBeenCalled()
+  })
+
   it('reapplies terminal-derived document tokens on system theme changes', async () => {
     await act(async () => root.render(<AppearanceProbe />))
     const darkBackground = document.documentElement.style.getPropertyValue('--background')
