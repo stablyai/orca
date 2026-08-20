@@ -72,14 +72,10 @@ import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 import { PtyStartupIngress, type PtyIngressEmission } from '../../shared/pty-startup-ingress'
-import { takeLiveQueryReply } from '../../shared/terminal-query-reply'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
 import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
 import { readPtsName } from '../pty/node-pty-pts-name'
-import {
-  createPtySlaveEchoProbe,
-  readPtySlavePath
-} from '../../shared/pty-slave-line-discipline-echo'
+import { readPtySlavePath } from '../../shared/pty-slave-line-discipline-echo'
 import {
   createShellStartupOutputScanState,
   drainShellStartupOutputScanState,
@@ -1001,7 +997,6 @@ export class LocalPtyProvider implements IPtyProvider {
         )
       }
     }
-    const startupEchoProbe = createPtySlaveEchoProbe(readPtySlavePath(proc))
     const startupIngress = new PtyStartupIngress({
       ...(args.startupIngress ? { intent: args.startupIngress } : {}),
       ownerBackend: resolvePtyOwnerBackend({
@@ -1010,8 +1005,7 @@ export class LocalPtyProvider implements IPtyProvider {
         wslDistro: spawnedWslDistro
       }),
       write: (data) => proc.write(data),
-      onEmission: emitIngressData,
-      ...(startupEchoProbe ? { echoProbe: startupEchoProbe } : {})
+      onEmission: emitIngressData
     })
     startupIngressByPty.set(id, startupIngress)
 
@@ -1193,8 +1187,8 @@ export class LocalPtyProvider implements IPtyProvider {
   }
   write(id: string, data: string): boolean {
     // Cooked PTYs echo private DSR/OSC replies; CPR/DA stay immediate unless one of
-    // those is still deferred, which they must not overtake (#13137, #7329).
-    if (takeLiveQueryReply(startupIngressByPty.get(id), data)) {
+    // those is still held, which they must not overtake (#13137, #7329, #15559).
+    if (startupIngressByPty.get(id)?.answerLiveQueryReply(data)) {
       return true
     }
     const proc = ptyProcesses.get(id)

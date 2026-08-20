@@ -267,8 +267,8 @@ describe('Session', () => {
       subprocess.simulateData(query)
 
       expect(legacyReplyProducers).toEqual(['remote-visible-renderer'])
-      expect(subprocess.written).toEqual([])
-      await vi.advanceTimersByTimeAsync(0)
+      // Written in the calling turn — the echo is contained on the output side below,
+      // not by withholding the write.
       expect(subprocess.written).toEqual([reply])
       subprocess.simulateData(projectedEcho)
       expect(legacyOnData.mock.calls).toEqual([
