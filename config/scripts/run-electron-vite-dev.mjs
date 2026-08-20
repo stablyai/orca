@@ -23,6 +23,11 @@ import {
   getDevBundlePlistPatches,
   getDevHelperPlistPatches
 } from './dev-electron-bundle-identity.mjs'
+import {
+  getDevProfileBaseDir,
+  isPrimaryWorktreePath,
+  resolveAndClaimDevUserDataProfile
+} from './dev-user-data-profile.mjs'
 
 // Why: Electron-based hosts (e.g. Claude Code, VS Code) set
 // ELECTRON_RUN_AS_NODE=1 in their terminal environment. If this leaks into
@@ -436,23 +441,25 @@ function restoreElectronFrameworkSymlinks(appPath) {
   }
 }
 
+// Why every instance exports the resolved path: the Electron main, the generated CLI shim, and any
+// terminal the app spawns must agree on one profile. Leaving it implicit is what let a second
+// worktree's instance take over the first's runtime record.
 function getDevUserDataPath() {
   if (process.env.ORCA_DEV_USER_DATA_PATH) {
     return process.env.ORCA_DEV_USER_DATA_PATH
   }
-  if (process.platform === 'darwin') {
-    return path.join(process.env.HOME ?? '', 'Library', 'Application Support', 'orca-dev')
-  }
-  if (process.platform === 'win32') {
-    return path.join(
-      process.env.APPDATA ?? path.join(process.env.USERPROFILE ?? '', 'AppData', 'Roaming'),
-      'orca-dev'
-    )
-  }
-  return path.join(
-    process.env.XDG_CONFIG_HOME ?? path.join(process.env.HOME ?? '', '.config'),
-    'orca-dev'
-  )
+  const resolved = resolveAndClaimDevUserDataProfile({
+    repoRoot,
+    baseDir: getDevProfileBaseDir(),
+    isPrimaryWorktree: isPrimaryWorktreePath(
+      readGitValue(['rev-parse', '--git-dir']),
+      readGitValue(['rev-parse', '--git-common-dir']),
+      repoRoot
+    ),
+    worktreeName: path.basename(repoRoot)
+  })
+  process.env.ORCA_DEV_USER_DATA_PATH = resolved.path
+  return resolved.path
 }
 
 function prepareDevCliWrapper() {
@@ -465,6 +472,8 @@ function prepareDevCliWrapper() {
 
   process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH ?? ''}`
   console.log(`[orca-dev] Prepared wrapper in ${binDir}`)
+  // Why: the profile is how every CLI command addresses this instance, so print the one it got.
+  console.log(`[orca-dev] Profile: ${userDataPath}`)
 }
 
 function getElectronExecutable() {
