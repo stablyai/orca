@@ -186,22 +186,6 @@ function replaceActivationDeferredMountTabs(
   deferredMountTabIdsByWorktree.set(worktreeId, next)
 }
 
-export function deferTerminalTabsUntilHostSnapshot(opts: {
-  restrictions: Map<string, ReadonlySet<string>>
-  deferredMountTabIdsByWorktree: Map<string, ReadonlySet<string>>
-  worktreeId: string
-  allTabIds: readonly string[]
-}): void {
-  const restrictedTabIds = new Set<string>()
-  opts.restrictions.set(opts.worktreeId, restrictedTabIds)
-  replaceActivationDeferredMountTabs(
-    opts.deferredMountTabIdsByWorktree,
-    opts.worktreeId,
-    restrictedTabIds,
-    opts.allTabIds
-  )
-}
-
 /**
  * Decides whether activating `worktreeId` should defer mounting its hidden
  * terminal tabs until each is first revealed. Installs the restriction (tabs

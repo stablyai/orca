@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- web session-tab sync reconciles terminal, unified-tab, group, and PTY maps atomically to avoid split-brain tab state */
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from 'react'
 import type { AppState } from '../store'
 import { useAppStore } from '../store'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
@@ -159,6 +159,8 @@ const acceptedSessionTabsConnectionByWorktree = new Map<
   string,
   { runtimeId: string; connectionGeneration: number }
 >()
+const acceptedSessionTabsSnapshotListeners = new Set<() => void>()
+let acceptedSessionTabsSnapshotRevision = 0
 const latestSessionTabsRemovalFenceByWorktree = new Map<string, SessionTabsRemovalFence>()
 const sessionTabsRecoveryStateByWorktree = new Map<string, SessionTabsRecoveryState>()
 const trackedSessionTabsWorktreeIdsByEnvironment = new Map<string, Set<string>>()
@@ -169,6 +171,22 @@ const hostSessionTabMappingKeysByEnvironmentAndWorktree = new Map<
   string,
   Map<string, Set<string>>
 >()
+
+function publishAcceptedSessionTabsSnapshotChange(): void {
+  acceptedSessionTabsSnapshotRevision += 1
+  for (const listener of acceptedSessionTabsSnapshotListeners) {
+    listener()
+  }
+}
+
+function subscribeAcceptedSessionTabsSnapshot(listener: () => void): () => void {
+  acceptedSessionTabsSnapshotListeners.add(listener)
+  return () => acceptedSessionTabsSnapshotListeners.delete(listener)
+}
+
+function getAcceptedSessionTabsSnapshotRevision(): number {
+  return acceptedSessionTabsSnapshotRevision
+}
 // Why: a delayed host stamp belongs to the client boundary seen with its preceding ordered frame.
 const hostWorkingClientBoundaryByPaneKey = new Map<
   string,
@@ -571,6 +589,14 @@ export function hasAcceptedWebSessionTabsSnapshot(
   return accepted?.runtimeId === runtimeId && accepted.connectionGeneration === connectionGeneration
 }
 
+export function useAcceptedWebSessionTabsSnapshotRevision(): number {
+  return useSyncExternalStore(
+    subscribeAcceptedSessionTabsSnapshot,
+    getAcceptedSessionTabsSnapshotRevision,
+    getAcceptedSessionTabsSnapshotRevision
+  )
+}
+
 // Why: a replay may repeat the current epoch/version; permit only that exact
 // identity once so an older concurrent frame cannot bypass monotonic ordering.
 export function acceptReplayedWebSessionTabsSnapshot(
@@ -626,7 +652,14 @@ export function shouldApplyWebSessionTabsSnapshot(
     snapshotVersion: snapshot.snapshotVersion
   })
   if (connection) {
-    acceptedSessionTabsConnectionByWorktree.set(key, connection)
+    const accepted = acceptedSessionTabsConnectionByWorktree.get(key)
+    if (
+      accepted?.runtimeId !== connection.runtimeId ||
+      accepted.connectionGeneration !== connection.connectionGeneration
+    ) {
+      acceptedSessionTabsConnectionByWorktree.set(key, connection)
+      publishAcceptedSessionTabsSnapshotChange()
+    }
   }
   trackWebSessionTabsWorktree(environmentId, snapshot.worktree)
   recordAcceptedWebSessionTabsEnvironment(environmentId, snapshot)
@@ -701,6 +734,7 @@ export function shouldSyncAllRuntimeSessionTabs(args: {
 export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   latestSessionTabsSnapshotByWorktree.clear()
   acceptedSessionTabsConnectionByWorktree.clear()
+  acceptedSessionTabsSnapshotRevision = 0
   replayableSessionTabsSnapshotByWorktree.clear()
   latestReceivedSessionTabsSnapshotByWorktree.clear()
   latestSessionTabsRemovalFenceByWorktree.clear()
@@ -745,7 +779,9 @@ export function _getWebSessionTabsRecoveryTrackingCountsForTest(): {
 function clearWebSessionTabsTrackingForWorktree(environmentId: string, worktreeId: string): void {
   const key = sessionTabsFreshnessKey(environmentId, worktreeId)
   latestSessionTabsSnapshotByWorktree.delete(key)
-  acceptedSessionTabsConnectionByWorktree.delete(key)
+  if (acceptedSessionTabsConnectionByWorktree.delete(key)) {
+    publishAcceptedSessionTabsSnapshotChange()
+  }
   replayableSessionTabsSnapshotByWorktree.delete(key)
   latestReceivedSessionTabsSnapshotByWorktree.delete(key)
   untrackWebSessionTabsWorktree(environmentId, worktreeId)
@@ -770,10 +806,15 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
       latestSessionTabsSnapshotByWorktree.delete(key)
     }
   }
+  let acceptedConnectionChanged = false
   for (const key of acceptedSessionTabsConnectionByWorktree.keys()) {
     if (key.startsWith(keyPrefix)) {
-      acceptedSessionTabsConnectionByWorktree.delete(key)
+      acceptedConnectionChanged =
+        acceptedSessionTabsConnectionByWorktree.delete(key) || acceptedConnectionChanged
     }
+  }
+  if (acceptedConnectionChanged) {
+    publishAcceptedSessionTabsSnapshotChange()
   }
   for (const key of replayableSessionTabsSnapshotByWorktree.keys()) {
     if (key.startsWith(keyPrefix)) {
@@ -911,7 +952,10 @@ function editorSourceFileId(tab: ReadyEditorSurface): string | undefined {
   return tab.type === 'markdown' && tab.mode === 'markdown-preview' ? tab.sourceFilePath : undefined
 }
 
-function isRuntimeTerminalTabForEnvironment(tab: TerminalTab, environmentId: string): boolean {
+export function isRuntimeTerminalTabForEnvironment(
+  tab: TerminalTab,
+  environmentId: string
+): boolean {
   if (!tab.ptyId) {
     return false
   }
