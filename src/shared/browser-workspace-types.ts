@@ -142,6 +142,9 @@ export type BrowserCookieImportSummary = {
   importedCookies: number
   skippedCookies: number
   googleCookiesSkipped?: number
+  // Why (STA-4300): cookies whose source partition identity could not be read faithfully are
+  // skipped rather than written unpartitioned, and a skip is only honest if it is reported.
+  partitionSkippedCookies?: number
   domains: string[]
   warning?:
     | {

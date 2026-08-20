@@ -8,6 +8,8 @@ import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 import { RELAY_STABLE_CONNECTION_MS, RelayRetryDelays } from './mobile-relay-retry-delays'
 import { RelayCredentialEligibility } from './relay-credential-eligibility'
+import { RelayPairingRejectionLatch } from './relay-pairing-rejection-latch'
+import { RelayRecoveryFailureCount } from './relay-recovery-failure-count'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionState, ForegroundNudgeReason } from './types'
 
@@ -23,7 +25,8 @@ export type RelayReconnectDependencies = {
 type RecoveryGate = 'external-signal' | 'fresh-credential'
 
 export class RelayReconnectController {
-  private consecutiveFailures = 0
+  private readonly failureCount = new RelayRecoveryFailureCount(RELAY_STABLE_CONNECTION_MS)
+  private readonly pairingRejection = new RelayPairingRejectionLatch()
   private activeRelayConnectedAt: number | null = null
   private nextAttemptAt = 0
   private timer: ReturnType<typeof setTimeout> | null = null
@@ -40,6 +43,15 @@ export class RelayReconnectController {
   ) {
     this.delays = new RelayRetryDelays(dependencies.randomBytes)
     this.credentials = new RelayCredentialEligibility(dependencies.now)
+  }
+
+  getFailureCount(): number {
+    return this.failureCount.current()
+  }
+
+  reportRecoveryTo(logical: StableLogicalRpcClient): void {
+    this.failureCount.reportTo(logical.setRecoveryAttempt)
+    this.pairingRejection.reportTo(logical.setPairingRejected)
   }
 
   handleForeground(logical: StableLogicalRpcClient, wasForeground: boolean): void {
@@ -101,6 +113,9 @@ export class RelayReconnectController {
   }
 
   setActiveSession(session: MobileRelayRpcSession): void {
+    // Why: an authenticated relay is the desktop accepting this device — the only
+    // evidence that outranks a rejection streak.
+    this.pairingRejection.clear()
     this.activeSession = session
     this.activeRelayConnectedAt = this.dependencies.now()
     this.nextAttemptAt = 0
@@ -112,11 +127,14 @@ export class RelayReconnectController {
       this.recoveryGate === 'fresh-credential' || this.credentials.hasRejected()
     this.activeSession = null
     this.activeRelayConnectedAt = null
+    // Why: direct auth resolves the same desktop device registry, so a live direct
+    // session disproves revocation even though relay is still gated.
+    this.pairingRejection.clear()
     if (needsCredentialRefresh) {
       // Why: the rejected credential stays unusable until its replacement is
       // durable. No reprobe timer here — direct is live, rotation over it
       // clears the gate, and any later state failure re-arms via shouldDefer.
-      this.consecutiveFailures = 0
+      this.failureCount.reset()
       this.nextAttemptAt = 0
       this.recoveryGate = 'fresh-credential'
       this.gateReprobePending = false
@@ -130,6 +148,7 @@ export class RelayReconnectController {
 
   completeCredentialRefresh(): void {
     if (this.recoveryGate === 'fresh-credential') {
+      this.pairingRejection.clear()
       this.credentials.clearRejected()
       this.reset()
     }
@@ -146,9 +165,7 @@ export class RelayReconnectController {
   ): T[] {
     const eligible = this.credentials.eligible(...credentials)
     if (eligible.length === 0 && this.credentials.hasRejected()) {
-      this.recoveryGate = 'fresh-credential'
-      this.clearTimer()
-      this.scheduleGateReprobe()
+      this.holdGate(true, 'fresh-credential')
     }
     return eligible
   }
@@ -157,16 +174,13 @@ export class RelayReconnectController {
   // alive so a later durable write can recover.
   armCredentialReprobe(): void {
     if (this.credentials.hasRejected()) {
-      this.recoveryGate = 'fresh-credential'
-      this.clearTimer()
-      this.scheduleGateReprobe()
+      this.holdGate(true, 'fresh-credential')
       return
     }
     if (this.recoveryGate) {
       // Why: under a held gate the tick must mint its pass token — a plain
       // cooldown tick bounces off shouldDefer and doubles the effective cadence.
-      this.clearTimer()
-      this.scheduleGateReprobe()
+      this.holdGate(true)
       return
     }
     // Why: a merely missing or expired bundle must not enter the credential
@@ -221,6 +235,12 @@ export class RelayReconnectController {
   }
 
   registerFailure(error: Error | null, scheduleRetry = true): void {
+    // Why: the gated early return below skips every later failure, so a revoked
+    // pairing must bank its evidence first or the UI waits forever (STA-4681). A live
+    // authenticated relay is the desktop accepting this device right now, so a failed
+    // replacement dial is not revocation — banking it would fire a false re-pair alarm
+    // the moment that healthy session drops for an unrelated transport error.
+    this.pairingRejection.record(this.activeSession ? null : error)
     const code = error instanceof RelayOuterError ? error.code : null
     const recovery =
       code != null && isMobileRelayCloseCode(code)
@@ -232,47 +252,29 @@ export class RelayReconnectController {
     ) {
       // Why: a failed reprobe stays gated, but the slow cadence must keep going
       // — unless the supervisor is backgrounded/stopped; resume re-arms it.
-      this.clearTimer()
-      if (scheduleRetry) {
-        this.scheduleGateReprobe()
-      }
+      this.holdGate(scheduleRetry)
       return
     }
     const now = this.dependencies.now()
-    if (
-      this.activeRelayConnectedAt != null &&
-      now - this.activeRelayConnectedAt >= RELAY_STABLE_CONNECTION_MS
-    ) {
-      this.consecutiveFailures = 0
-    }
-    // Why: elapsed time inside a slow failed dial is not evidence of recovery;
-    // only an authenticated relay that survived the stability window resets the streak.
+    const failureCount = this.failureCount.recordAfterConnection(this.activeRelayConnectedAt, now)
+    // Why: only a stable authenticated Relay resets the failure streak.
     this.activeRelayConnectedAt = null
-    this.consecutiveFailures += 1
     const delay =
       recovery?.kind === 'retry-after-host-offline'
         ? this.delays.hostOfflineDelayMs()
-        : this.delays.transportDelayMs(this.consecutiveFailures)
+        : this.delays.transportDelayMs(failureCount)
     this.nextAttemptAt = now + delay
     if (error instanceof MobileE2EEAuthenticationError) {
       // Why: an E2EE rejection is usually pairing revocation, but it also fires
       // transiently right after pairing while the desktop commits credentials —
       // reprobe slowly instead of waiting forever for a UI nudge.
-      this.recoveryGate = 'external-signal'
-      this.clearTimer()
-      if (scheduleRetry) {
-        this.scheduleGateReprobe()
-      }
+      this.holdGate(scheduleRetry, 'external-signal')
       return
     }
     if (recovery?.kind === 'disable-relay-credential') {
       // Why: never redial a rejected credential fast, but keep a slow reprobe
       // alive — the caller re-reads durable state before each gated attempt.
-      this.recoveryGate = 'fresh-credential'
-      this.clearTimer()
-      if (scheduleRetry) {
-        this.scheduleGateReprobe()
-      }
+      this.holdGate(scheduleRetry, 'fresh-credential')
       return
     }
     if (recovery?.kind === 'retry-after-host-offline') {
@@ -304,7 +306,7 @@ export class RelayReconnectController {
   }
 
   reset(): void {
-    this.consecutiveFailures = 0
+    this.failureCount.reset()
     this.activeRelayConnectedAt = null
     this.nextAttemptAt = 0
     this.liftGate()
@@ -355,6 +357,16 @@ export class RelayReconnectController {
       }
       this.onRetry()
     }, delay)
+  }
+
+  // Holds (or enters) a gate: only the slow reprobe cadence survives, and a
+  // backgrounded or stopped supervisor gets no timer at all until it resumes.
+  private holdGate(scheduleRetry: boolean, gate = this.recoveryGate): void {
+    this.recoveryGate = gate
+    this.clearTimer()
+    if (scheduleRetry) {
+      this.scheduleGateReprobe()
+    }
   }
 
   // Why: clearing a gate must also drop its timer, pending tick, and cadence —

@@ -289,7 +289,7 @@ describe('registerPtyHandlers', () => {
         await Promise.resolve()
 
         expect(runtime.onPtyExit).toHaveBeenCalledTimes(1)
-        expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0, undefined)
+        expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0, undefined, undefined)
         expect(
           mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')
         ).toEqual([['pty:exit', { id: 'local-pty', code: 0 }]])
@@ -342,7 +342,7 @@ describe('registerPtyHandlers', () => {
         await expect(stopPromise).resolves.toBe(true)
 
         expect(runtime.onPtyExit).toHaveBeenCalledTimes(1)
-        expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0, undefined)
+        expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0, undefined, undefined)
         expect(
           mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')
         ).toEqual([['pty:exit', { id: 'local-pty', code: 0 }]])
@@ -459,7 +459,7 @@ describe('registerPtyHandlers', () => {
           'remote-pty',
           'terminated'
         )
-        expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1, undefined)
+        expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', 0, undefined)
       })
       it('splits the teardown budget so the liveness RPC gets only what shutdown left', async () => {
         // Why: sequential RPCs must share one absolute deadline; otherwise both get

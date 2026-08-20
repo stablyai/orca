@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RuntimeTerminalDataMeta } from '../orca-runtime'
 import { TERMINAL_METHODS } from './methods/terminal'
+import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 import {
   TerminalStreamOpcode,
@@ -65,7 +66,7 @@ describe('terminal multiplex RPC', () => {
       ).toBe(true)
     )
 
-    harness.cleanups.get('terminal-multiplex:conn-desktop-first-paint')?.()
+    harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
   })
 
@@ -74,7 +75,7 @@ describe('terminal multiplex RPC', () => {
     try {
       const messages: string[] = []
       const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-      const cleanups = new Map<string, () => void>()
+      const registry = createSubscriptionRegistryDouble()
       const dataListenerRef: {
         current?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
       } = {}
@@ -98,14 +99,9 @@ describe('terminal multiplex RPC', () => {
         subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
         getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
-        registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-          cleanups.set(id, cleanup)
-        }),
-        cleanupSubscription: vi.fn((id: string) => {
-          const cleanup = cleanups.get(id)
-          cleanups.delete(id)
-          cleanup?.()
-        }),
+        registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+        registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+        cleanupSubscription: vi.fn(registry.cleanupSubscription),
         waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
         sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
         updateDesktopViewport: vi.fn().mockResolvedValue(true)
@@ -161,7 +157,7 @@ describe('terminal multiplex RPC', () => {
     try {
       const messages: string[] = []
       const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-      const cleanups = new Map<string, () => void>()
+      const registry = createSubscriptionRegistryDouble()
       const dataListenerRef: {
         current?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
       } = {}
@@ -195,14 +191,9 @@ describe('terminal multiplex RPC', () => {
         subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
         getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
-        registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-          cleanups.set(id, cleanup)
-        }),
-        cleanupSubscription: vi.fn((id: string) => {
-          const cleanup = cleanups.get(id)
-          cleanups.delete(id)
-          cleanup?.()
-        }),
+        registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+        registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+        cleanupSubscription: vi.fn(registry.cleanupSubscription),
         waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
         sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
         updateDesktopViewport: vi.fn().mockResolvedValue(true)
@@ -268,7 +259,7 @@ describe('terminal multiplex RPC', () => {
     try {
       const messages: string[] = []
       const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
-      const cleanups = new Map<string, () => void>()
+      const registry = createSubscriptionRegistryDouble()
       const dataListenerRef: {
         current?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
       } = {}
@@ -302,14 +293,9 @@ describe('terminal multiplex RPC', () => {
         subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
         getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
-        registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-          cleanups.set(id, cleanup)
-        }),
-        cleanupSubscription: vi.fn((id: string) => {
-          const cleanup = cleanups.get(id)
-          cleanups.delete(id)
-          cleanup?.()
-        }),
+        registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+        registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+        cleanupSubscription: vi.fn(registry.cleanupSubscription),
         waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
         sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
         updateDesktopViewport: vi.fn().mockResolvedValue(true)

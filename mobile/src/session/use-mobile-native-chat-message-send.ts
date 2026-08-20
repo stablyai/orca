@@ -85,12 +85,17 @@ export function useMobileNativeChatMessageSend(args: {
 
   const sendMessage = useCallback(
     async (
-      text: string,
+      draftText: string,
       images: string[] | undefined,
       syncComposer: boolean,
       recordControlSend: boolean,
       sharedDeadline?: number
     ): Promise<MobileNativeChatSendOutcome> => {
+      // The host writes trailing whitespace verbatim onto the agent's input line,
+      // where it can glue the next rapid send onto this one (#14262). Only the
+      // bytes that go out are trimmed: `draftText` is what the user typed, and a
+      // rejected send has to put back exactly that (#14819).
+      const text = draftText.trimEnd()
       const handle = handleRef.current
       const origin = captureSendOrigin(text)
       const agent = agentRef.current
@@ -124,7 +129,7 @@ export function useMobileNativeChatMessageSend(args: {
       // round trip is visible, and a lost ack must not strand the sent prompt
       // in the box. Only a definite rejection puts the text back.
       if (syncComposer) {
-        clearDraftForSend(origin, text)
+        clearDraftForSend(origin, draftText)
       }
       // Why: a parked launch draft is routinely multi-line, and one Ctrl+U clears
       // only one logical line. Size the clear to the text Orca injected, with
@@ -150,7 +155,7 @@ export function useMobileNativeChatMessageSend(args: {
         })
         if (!cleared) {
           if (syncComposer) {
-            restoreRejectedDraft(origin, text)
+            restoreRejectedDraft(origin, draftText)
           }
           onSendError('Message not sent')
           return 'rejected'
@@ -204,7 +209,7 @@ export function useMobileNativeChatMessageSend(args: {
       }
       if (outcome === 'rejected') {
         if (syncComposer) {
-          restoreRejectedDraft(origin, text)
+          restoreRejectedDraft(origin, draftText)
         }
         onSendError('Message not sent')
         return 'rejected'

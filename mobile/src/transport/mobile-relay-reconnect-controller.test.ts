@@ -49,6 +49,87 @@ describe('relay reconnect controller', () => {
     expect(onRetry).not.toHaveBeenCalled()
   })
 
+  it('publishes consecutive failures and the direct-connection reset', () => {
+    const published: number[] = []
+    const reconnect = createController(vi.fn(), (count) => published.push(count))
+
+    reconnect.registerFailure(new RelayOuterError(4408), false)
+    reconnect.registerFailure(new RelayOuterError(4408), false)
+    reconnect.resetForDirectConnection()
+
+    expect(published).toEqual([0, 1, 2, 0])
+  })
+
+  it('latches pairing-rejected only after the transient-rejection budget is spent', () => {
+    const rejected: boolean[] = []
+    const reconnect = createController(vi.fn(), undefined, (value) => rejected.push(value))
+
+    reconnect.registerFailure(new MobileE2EEAuthenticationError(), false)
+    reconnect.registerFailure(new MobileE2EEAuthenticationError(), false)
+    expect(rejected).toEqual([false])
+
+    // Why: the gate is held by now, so this rejection takes registerFailure's early
+    // return — pre-fix it was invisible and the latch never fired (STA-4681).
+    reconnect.registerFailure(new MobileE2EEAuthenticationError(), false)
+    expect(rejected).toEqual([false, true])
+  })
+
+  it('keeps the pairing-rejected latch across a gate lift and app resume', () => {
+    const logical = { getState: () => 'disconnected' } as never
+    const rejected: boolean[] = []
+    const reconnect = createController(vi.fn(), undefined, (value) => rejected.push(value))
+    for (let attempt = 0; attempt < 3; attempt++) {
+      reconnect.registerFailure(new MobileE2EEAuthenticationError(), false)
+    }
+
+    // Why: a resume re-arms the retry cadence but is not the desktop changing its
+    // mind — only an authenticated session is.
+    reconnect.handleForeground(logical, false)
+
+    expect(rejected).toEqual([false, true])
+  })
+
+  it('never latches pairing-rejected while an authenticated relay is still live', () => {
+    // Why: a live authenticated session is the desktop currently accepting this
+    // device. A replacement dial that trips E2EE (relay identity mismatch, or the
+    // transient window while the desktop commits a rotation) is not revocation, and
+    // banking it would fire a false re-pair alarm the moment that session drops.
+    const rejected: boolean[] = []
+    const reconnect = createController(vi.fn(), undefined, (value) => rejected.push(value))
+    reconnect.setActiveSession({ getFailure: () => null } as unknown as MobileRelayRpcSession)
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      reconnect.registerFailure(new MobileE2EEAuthenticationError(), false)
+    }
+
+    expect(rejected).toEqual([false])
+  })
+
+  it('clears the pairing-rejected latch once the desktop authenticates the device', () => {
+    const rejected: boolean[] = []
+    const reconnect = createController(vi.fn(), undefined, (value) => rejected.push(value))
+    for (let attempt = 0; attempt < 3; attempt++) {
+      reconnect.registerFailure(new MobileE2EEAuthenticationError(), false)
+    }
+
+    reconnect.setActiveSession({ getFailure: () => null } as unknown as MobileRelayRpcSession)
+
+    expect(rejected).toEqual([false, true, false])
+  })
+
+  it('clears the pairing-rejected latch when direct connectivity proves the pairing', () => {
+    const rejected: boolean[] = []
+    const reconnect = createController(vi.fn(), undefined, (value) => rejected.push(value))
+    for (let attempt = 0; attempt < 3; attempt++) {
+      reconnect.registerFailure(new MobileE2EEAuthenticationError(), false)
+    }
+
+    // Why: direct auth resolves the same desktop device registry.
+    reconnect.resetForDirectConnection()
+
+    expect(rejected).toEqual([false, true, false])
+  })
+
   it('reprobes slowly after rejected E2EE authentication instead of parking forever', () => {
     // Why: on a relay-only phone a permanent gate is a permanent outage — the
     // desktop can commit pairing credentials moments after the first rejection.
@@ -267,8 +348,12 @@ describe('relay reconnect controller', () => {
   })
 })
 
-function createController(onRetry: () => void): RelayReconnectController {
-  return new RelayReconnectController(
+function createController(
+  onRetry: () => void,
+  reportFailureCount: (count: number) => void = () => {},
+  reportPairingRejected: (rejected: boolean) => void = () => {}
+): RelayReconnectController {
+  const controller = new RelayReconnectController(
     {
       now: Date.now,
       randomBytes: () => new Uint8Array([128, 0]),
@@ -277,4 +362,9 @@ function createController(onRetry: () => void): RelayReconnectController {
     },
     onRetry
   )
+  controller.reportRecoveryTo({
+    setRecoveryAttempt: reportFailureCount,
+    setPairingRejected: reportPairingRejected
+  } as unknown as StableLogicalRpcClient)
+  return controller
 }

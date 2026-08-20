@@ -58,6 +58,7 @@ export class MobileEndpointSupervisor {
     })
     this.logRelay = createRelayRecoveryLog(dependencies.now, dependencies.onLog)
     this.relayReconnect = new RelayReconnectController(dependencies, this.recoverRelay.bind(this))
+    this.relayReconnect.reportRecoveryTo(logical)
     this.nudgeRouter = new MobileEndpointNudgeRouter({
       logical,
       controller: this.relayReconnect,
@@ -179,11 +180,7 @@ export class MobileEndpointSupervisor {
     } else {
       // Why: background phones must not hold billed relay data splices.
       this.relayReconnect.suspendActiveRelay(this.logical)
-      this.directProbe.clear()
-      this.relayReconnect.clear()
-      this.leaseRotation.clear()
-      this.directGrace.clear()
-      this.logical.setRecoveryPath(null)
+      this.clearScheduledRecovery()
     }
   }
 
@@ -193,6 +190,10 @@ export class MobileEndpointSupervisor {
     this.stopped = true
     this.unsubscribeState?.()
     this.unsubscribeState = null
+    this.clearScheduledRecovery()
+  }
+
+  private clearScheduledRecovery(): void {
     this.directProbe.clear()
     this.relayReconnect.clear()
     this.leaseRotation.clear()
@@ -268,7 +269,7 @@ export class MobileEndpointSupervisor {
       if (this.stopped || !this.foreground || !recoveryNeeded) {
         return
       }
-      this.logical.setRecoveryPath('relay')
+      this.logical.setRecoveryPath('relay', this.relayReconnect.getFailureCount())
       const dialed = await this.sessionEstablisher.dialEligible(selection.credentials)
       if (dialed.outcome === 'established') {
         // Why: a fresh socket satisfies any replacement intent queued mid-dial.

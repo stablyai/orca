@@ -105,8 +105,12 @@ docs/**
 !docs/reference/relay-grace-time-reconfiguration.md
 !docs/reference/remote-wire-compatibility.md
 !docs/reference/renderer-agent-status-performance.md
+!docs/reference/ssh-host-key-verification.md
+!docs/reference/ssh-reconnect-source-recovery.md
 !docs/reference/windows-setup-shell.md
 !docs/reference/worktree-scan-fingerprint.md
+!docs/reference/wsl-command-execution.md
+!docs/reference/xterm-patch-regeneration.md
 
 # Stably CLI (only docs/ are tracked)
 .stably/*
@@ -148,3 +152,8 @@ tests/tools/benchmarks/results/terminal-pipeline-*.json
 
 # Old release trees the cross-version wire harness extracts on demand
 tests/e2e/.cross-version-checkouts/
+
+# Bundler's install path for the mobile release toolchain (mobile/Gemfile.lock
+# IS committed). Also keeps oxfmt/oxlint, which honor this file, from walking
+# vendored gems.
+/mobile/vendor/

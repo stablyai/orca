@@ -24,6 +24,7 @@ import {
   GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
+  DAEMON_UNAVAILABLE_RECONNECT_MESSAGE,
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
   supportsMode2031UnsubscribeFact,
@@ -66,6 +67,9 @@ import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
+import { resolveUnixShellPath } from '../providers/local-pty-utils'
+import { injectHistoryEnv, injectWslFishHistoryEnv, logHistoryInjection } from '../terminal-history'
+import { addWslEnvKeys } from '../wsl-env'
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 import { ColdRestorePayloadCache, type ColdRestorePayload } from './cold-restore-payload-cache'
 import { CheckpointSessionQueue } from './daemon-checkpoint-session-queue'
@@ -90,6 +94,7 @@ import {
 import type { DaemonEvidenceSource, ExactDaemonIncarnation } from './daemon-incarnation-evidence'
 import { createDaemonAuditEligibilityTracker } from './daemon-audit-eligibility-event'
 import { normalizeDesktopTerminalSnapshotRows } from '../../shared/terminal-scrollback-policy'
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 type PendingDaemonSpawnOperation = {
   exitsBySessionId: Map<string, { incarnationId?: string }[]>
@@ -257,6 +262,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     id: string
     code: number
     incarnationId?: PtyIncarnationId
+    cause?: TerminalExitCause
   }) => void)[] = []
   private backgroundStreamListeners: ((payload: PtyBackgroundStreamEvent) => void)[] = []
   // Why: lets main fan a dead-endpoint signal to every affected pane, not just the written one (STA-2373 sibling-freeze).
@@ -425,7 +431,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
-    const sessionId = opts.sessionId ?? mintPtySessionId(opts.worktreeId)
+    const spawnOpts = this.withHistoryIsolation(opts)
+    const sessionId = spawnOpts.sessionId ?? mintPtySessionId(spawnOpts.worktreeId)
     const operation = {
       exitsBySessionId: new Map<string, { incarnationId?: string }[]>(),
       ignoredExitIncarnationIds: new Set<string>(),
@@ -444,7 +451,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
     try {
       return await this.withHistorySpawnLock(sessionId, () =>
-        this.withDaemonRetry(() => this.doSpawn({ ...opts, sessionId }, operation, historyRecovery))
+        this.withDaemonRetry(() =>
+          this.doSpawn({ ...spawnOpts, sessionId }, operation, historyRecovery)
+        )
       )
     } finally {
       if (historyRecovery.freeze) {
@@ -456,6 +465,44 @@ export class DaemonPtyAdapter implements IPtyProvider {
         this.pendingSpawnOperationsBySessionId.delete(sessionId)
       }
     }
+  }
+
+  private withHistoryIsolation(opts: PtySpawnOptions): PtySpawnOptions {
+    const wslContext = resolveWslSessionContext({
+      cwd: opts.cwd,
+      sessionId: opts.sessionId,
+      shellOverride: opts.shellOverride,
+      terminalWindowsWslDistro: opts.terminalWindowsWslDistro
+    })
+    if (
+      opts.attachOnly === true ||
+      (opts.sessionId !== undefined && opts.isNewSession !== true) ||
+      !opts.worktreeId ||
+      opts.historyIsolationEnabled !== true ||
+      (process.platform === 'win32' && !wslContext)
+    ) {
+      return opts
+    }
+    const env = { ...opts.env }
+    const preferredShell = wslContext
+      ? 'bash'
+      : opts.shellOverride || env.SHELL || process.env.SHELL || '/bin/zsh'
+    const shellPath = resolveUnixShellPath(preferredShell)
+    const historyArgs = [
+      env,
+      opts.worktreeId,
+      shellPath,
+      opts.cwd ?? resolveSafePtyDefaultCwd()
+    ] as const
+    const result = wslContext
+      ? injectHistoryEnv(...historyArgs, { wslDistro: wslContext.distro })
+      : injectHistoryEnv(...historyArgs)
+    if (wslContext) {
+      injectWslFishHistoryEnv(env, opts.worktreeId, wslContext.distro)
+      addWslEnvKeys(env, ['HISTFILE', 'fish_history'])
+    }
+    logHistoryInjection(opts.worktreeId, result)
+    return { ...opts, env }
   }
 
   private async doSpawn(
@@ -2954,7 +3001,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
           listener({
             id: event.sessionId,
             code: event.payload.code,
-            ...(event.payload.incarnationId ? { incarnationId: event.payload.incarnationId } : {})
+            ...(event.payload.incarnationId ? { incarnationId: event.payload.incarnationId } : {}),
+            ...(event.payload.cause ? { cause: event.payload.cause } : {})
           })
         }
       }
@@ -3057,7 +3105,8 @@ export function isDaemonGoneError(err: unknown): boolean {
     msg === 'Connection lost' ||
     msg === 'Not connected' ||
     msg === 'Hello response timed out' ||
-    msg === 'Daemon temporarily unavailable; reconnect' ||
+    // Both the daemon's own drain refusal and the client's wedged-daemon signal.
+    msg === DAEMON_UNAVAILABLE_RECONNECT_MESSAGE ||
     // Why retry: the daemon refused because the endpoint now resolves elsewhere. Reconnecting
     // reaches whoever owns it; surfacing this to the user would strand the request instead.
     msg === DAEMON_ENDPOINT_LOST_MESSAGE

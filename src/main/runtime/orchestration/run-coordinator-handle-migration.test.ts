@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
+import { SCHEMA_VERSION } from './db/contract-constants'
 
 describe('Run coordinator handle history migration', () => {
   let db: OrchestrationDb | undefined
@@ -37,7 +38,7 @@ describe('Run coordinator handle history migration', () => {
 
     db = new OrchestrationDb(dbPath)
     const sqlite = (db as unknown as { db: Database.Database }).db
-    expect(sqlite.pragma('user_version', { simple: true })).toBe(28)
+    expect(sqlite.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
     expect(
       sqlite
         .prepare('SELECT run_id, terminal_handle FROM run_coordinator_handles WHERE run_id = ?')
@@ -79,12 +80,12 @@ describe('Run coordinator handle history migration', () => {
 
     const v28Db = new Database(dbPath)
     v28Db.exec('DROP TABLE run_coordinator_handles')
-    expect(v28Db.pragma('user_version', { simple: true })).toBe(28)
+    expect(v28Db.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
     v28Db.close()
 
     db = new OrchestrationDb(dbPath)
     const sqlite = (db as unknown as { db: Database.Database }).db
-    expect(sqlite.pragma('user_version', { simple: true })).toBe(28)
+    expect(sqlite.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
     expect(
       sqlite
         .prepare('SELECT run_id, terminal_handle FROM run_coordinator_handles WHERE run_id = ?')
@@ -111,7 +112,7 @@ describe('Run coordinator handle history migration', () => {
     oldRuntimeDb
       .prepare('UPDATE runs SET coordinator_handle = ? WHERE id = ?')
       .run('term_v27_second', run.id)
-    expect(oldRuntimeDb.pragma('user_version', { simple: true })).toBe(28)
+    expect(oldRuntimeDb.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
     oldRuntimeDb.close()
 
     db = new OrchestrationDb(dbPath)
