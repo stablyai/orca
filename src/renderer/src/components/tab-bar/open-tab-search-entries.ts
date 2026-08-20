@@ -160,6 +160,7 @@ export function buildOpenTabSearchEntries(
       ...scope,
       browserTabsByWorktree: state.browserTabsByWorktree,
       browserPagesByWorkspace: state.browserPagesByWorkspace,
+      unifiedTabsByWorktree: state.unifiedTabsByWorktree,
       activeBrowserTabId: state.activeBrowserTabId,
       activeWorktreeId: state.activeWorktreeId,
       activeTabType: state.activeTabType

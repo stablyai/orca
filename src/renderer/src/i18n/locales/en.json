@@ -2198,7 +2198,8 @@
         "27f10cca63": "Search chats, terminals, worktrees, settings, and actions...",
         "2770f02910": "Search chats, terminals, worktrees, settings, and actions",
         "paletteOpenTabBranch": "Branch name",
-        "paletteOpenTabWorkspace": "Workspace name"
+        "paletteOpenTabWorkspace": "Workspace name",
+        "lastActiveTime": "Last active {{value0}} ago"
       },
       "github": {
         "pr": {
@@ -16245,6 +16246,14 @@
         "workspaceSpace": {
           "otherTopLevelItems": "Other top-level items ({{value0}})"
         }
+      }
+    },
+    "cmd-j": {
+      "paletteSessionAge": {
+        "minutes": "{{value0}}m",
+        "hours": "{{value0}}h",
+        "days": "{{value0}}d",
+        "underOneMinute": "<1m"
       }
     }
   },

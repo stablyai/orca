@@ -154,14 +154,17 @@ function buildAssignments(
 }
 
 function rankAssignments(args: {
+  document: PaletteDocument
   assignments: readonly PaletteTokenAssignment[]
   usesEvidence: boolean
   wholeQuery: number
   exactIntent: boolean
-}): { rank: PaletteDocumentRank; worstQuality: PaletteMatchQuality } {
+}): { rank: PaletteDocumentRank; worstQuality: PaletteMatchQuality; isContainerOnly: boolean } {
   let worstQuality: PaletteMatchQuality = 'field-exact'
   let fuzzyTokenCount = 0
   const fields = new Set<string>()
+  // Derive from field metadata only: an evidence field can itself be a container.
+  let hasDirectHit = false
 
   for (const assignment of args.assignments) {
     if (paletteMatchQualityRank(assignment.quality) > paletteMatchQualityRank(worstQuality)) {
@@ -171,12 +174,20 @@ function rankAssignments(args: {
       fuzzyTokenCount += 1
     }
     fields.add(assignment.fieldId)
+    const field = args.document.fieldById.get(assignment.fieldId)
+    if (field && !field.isContainer) {
+      hasDirectHit = true
+    }
   }
+
+  const isContainerOnly = !hasDirectHit
 
   return {
     worstQuality,
+    isContainerOnly,
     rank: {
       exactIntent: args.exactIntent ? 0 : 1,
+      matchedDirectField: isContainerOnly ? 1 : 0,
       wholeQuery: args.wholeQuery,
       worstQuality: paletteMatchQualityRank(worstQuality),
       usesSupportingEvidence: args.usesEvidence ? 1 : 0,
@@ -274,7 +285,8 @@ export function matchPaletteDocument(args: {
       continue
     }
     const usedEvidenceId = built.usesEvidence ? evidenceId : null
-    const { rank, worstQuality } = rankAssignments({
+    const { rank, worstQuality, isContainerOnly } = rankAssignments({
+      document,
       assignments: built.assignments,
       usesEvidence: built.usesEvidence,
       wholeQuery,
@@ -288,7 +300,8 @@ export function matchPaletteDocument(args: {
         ? 'exact-intent'
         : resolvePaletteResultQualityClass({
             worstQuality,
-            usesSupportingEvidence: built.usesEvidence
+            usesSupportingEvidence: built.usesEvidence,
+            isContainerOnly
           }),
       rank,
       assignments: built.assignments,

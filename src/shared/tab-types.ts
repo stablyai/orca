@@ -58,6 +58,8 @@ export type Tab = {
    *  underneath; `'terminal'` (the default for legacy/missing) shows the raw
    *  xterm. Optional so sessions persisted before this field hydrate cleanly. */
   viewMode?: 'terminal' | 'chat'
+  /** Timestamp when the tab was last focused / activated by the user. */
+  lastFocusedAt?: number
 }
 
 export type TabGroup = {
