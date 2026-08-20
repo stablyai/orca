@@ -4,6 +4,7 @@ import type {
   KeyboardEventHandler,
   RefObject
 } from 'react'
+import { useRef } from 'react'
 import { Image as ImageIcon, ImageOff, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
@@ -97,6 +98,8 @@ export function NativeChatComposerField({
   sessionOptionsSurface,
   sessionOptionsSnapshot
 }: NativeChatComposerFieldProps): React.JSX.Element {
+  const isComposingRef = useRef(false)
+
   return (
     <div className="shrink-0 bg-background">
       {/* Extra bottom padding keeps the input box off the window rim. */}
@@ -167,12 +170,26 @@ export function NativeChatComposerField({
               value={draft}
               disabled={disabled}
               rows={2}
-              onChange={(e) => onDraftChange(e.target.value, e.currentTarget)}
+              onChange={(e) => {
+                if (!isComposingRef.current) {
+                  onDraftChange(e.target.value, e.currentTarget)
+                }
+              }}
               onKeyDown={onKeyDown}
-              onCompositionStart={onCompositionStart}
-              onCompositionEnd={onCompositionEnd}
+              onCompositionStart={(e) => {
+                isComposingRef.current = true
+                onCompositionStart(e)
+              }}
+              onCompositionEnd={(e) => {
+                isComposingRef.current = false
+                onCompositionEnd(e)
+              }}
               onPaste={onPaste}
-              onSelect={(e) => onTextareaSelect(e.currentTarget)}
+              onSelect={(e) => {
+                if (!isComposingRef.current) {
+                  onTextareaSelect(e.currentTarget)
+                }
+              }}
               aria-expanded={autocomplete.mode === 'slash' || autocomplete.mode === 'skill'}
               aria-controls={
                 autocomplete.mode === 'slash' || autocomplete.mode === 'skill'
