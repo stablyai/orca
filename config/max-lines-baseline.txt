@@ -1,192 +1,199 @@
 # Files/globs currently allowed to exceed the oxlint `max-lines` budget.
 # This is a RATCHET: the list may only SHRINK. Do NOT add entries to get CI green —
 # split the oversized file instead (AGENTS.md → "Do Not Disable Max Lines").
-# Regenerate/prune: pnpm check:max-lines-ratchet --prune   (removes stale entries only)
-inline src/cli/handlers/automations.ts
-inline src/cli/handlers/orchestration.ts
-inline src/cli/help.ts
-inline src/main/agent-hooks/server.ts
-inline src/main/automations/external-manager.ts
-inline src/main/automations/hermes-cron-output.ts
-inline src/main/browser/agent-browser-bridge.ts
-inline src/main/browser/browser-cookie-import.ts
-inline src/main/browser/browser-manager.ts
-inline src/main/browser/cdp-bridge.ts
-inline src/main/browser/grab-guest-script.ts
-inline src/main/claude-accounts/runtime-auth-service.ts
-inline src/main/claude-accounts/service.ts
-inline src/main/cli/cli-installer.ts
-inline src/main/cli/wsl-cli-installer.ts
-inline src/main/codex-accounts/runtime-home-service.ts
-inline src/main/codex-accounts/service.ts
-inline src/main/codex/config-toml-trust.ts
-inline src/main/codex/hook-service.ts
-inline src/main/daemon/daemon-init.ts
-inline src/main/daemon/daemon-pty-adapter.ts
-inline src/main/daemon/daemon-server.ts
-inline src/main/daemon/pty-subprocess.ts
-inline src/main/git/repo.ts
-inline src/main/git/runner.ts
-inline src/main/git/status.ts
-inline src/main/git/worktree.ts
-inline src/main/github/pr-refresh-coordinator.ts
-inline src/main/github/project-view.ts
-inline src/main/github/project-view/mutations.ts
-inline src/main/github/work-item-details.ts
-inline src/main/gitlab/client.ts
-inline src/main/index.ts
-inline src/main/ipc/filesystem-watcher.ts
-inline src/main/ipc/filesystem.ts
-inline src/main/ipc/github.ts
-inline src/main/ipc/pty.ts
-inline src/main/ipc/repos.ts
-inline src/main/ipc/ssh.ts
-inline src/main/ipc/worktree-remote.ts
-inline src/main/ipc/worktrees.ts
-inline src/main/jira/issues.ts
-inline src/main/keybindings/keybinding-file.ts
-inline src/main/linear/issues.ts
-inline src/main/linear/projects.ts
-inline src/main/memory/collector.ts
-inline src/main/opencode/hook-service.ts
-inline src/main/persistence/loading-store/store.ts
-inline src/main/ports/advertised-url-watcher.ts
-inline src/main/ports/local-workspace-port-scanner.ts
-inline src/main/project-groups/nested-repo-discovery.ts
-inline src/main/providers/local-pty-provider.ts
-inline src/main/providers/ssh-git-provider.ts
-inline src/main/rate-limits/claude-fetcher.ts
-inline src/main/rate-limits/claude-pty.ts
-inline src/main/rate-limits/codex-fetcher.ts
-inline src/main/rate-limits/service.ts
-inline src/main/runtime/orca-runtime-browser.ts
-inline src/main/runtime/orca-runtime-files.ts
-inline src/main/runtime/orca-runtime-git.ts
-inline src/main/runtime/orca-runtime.test.ts
-inline src/main/runtime/orca-runtime.ts
-inline src/main/runtime/rpc/methods/orchestration.ts
-inline src/main/runtime/rpc/methods/terminal.ts
-inline src/main/runtime/runtime-rpc.ts
-inline src/main/source-control/hosted-review-creation.ts
-inline src/main/speech/model-manager.ts
-inline src/main/speech/stt-service.ts
-inline src/main/ssh/ssh-channel-multiplexer.ts
-inline src/main/ssh/ssh-connection.ts
-inline src/main/ssh/ssh-relay-deploy.ts
-inline src/main/ssh/ssh-relay-session.ts
-inline src/main/text-generation/commit-message-text-generation.ts
-inline src/main/updater.ts
-inline src/main/window/attach-main-window-services.ts
-inline src/main/window/createMainWindow.ts
-inline src/main/workspace-space-analysis.ts
-inline src/preload/index.ts
-inline src/relay/dispatcher.ts
-inline src/relay/external-automations-handler.ts
-inline src/relay/git-handler.ts
-inline src/relay/pty-handler.ts
-inline src/relay/relay.ts
-inline src/relay/workspace-space-scan.ts
-inline src/renderer/src/components/GitLabItemDialog.tsx
-inline src/renderer/src/components/JiraIssueWorkspace.tsx
-inline src/renderer/src/components/LinearIssueWorkspace.tsx
-inline src/renderer/src/components/LinearItemDrawer.tsx
-inline src/renderer/src/components/NewWorkspaceComposerCard.tsx
-inline src/renderer/src/components/TaskPage.tsx
-inline src/renderer/src/components/Terminal.tsx
-inline src/renderer/src/components/UpdateCard.tsx
-inline src/renderer/src/components/WorktreeJumpPalette.tsx
-inline src/renderer/src/components/activity/ActivityPrototypePage.tsx
-inline src/renderer/src/components/automations/AutomationsPage.tsx
-inline src/renderer/src/components/editor/CombinedDiffViewer.tsx
-inline src/renderer/src/components/editor/EditorContent.tsx
-inline src/renderer/src/components/editor/IpynbViewer.tsx
-inline src/renderer/src/components/editor/MarkdownPreview.tsx
-inline src/renderer/src/components/feature-wall/BrowserAnimatedVisual.tsx
-inline src/renderer/src/components/feature-wall/EditorAnimatedVisual.tsx
-inline src/renderer/src/components/feature-wall/WorkbenchAnimatedVisual.tsx
-inline src/renderer/src/components/floating-terminal/FloatingTerminalPanel.tsx
-inline src/renderer/src/components/github-project/ProjectCell.tsx
-inline src/renderer/src/components/github-project/ProjectPicker.tsx
-inline src/renderer/src/components/github-project/ProjectViewWrapper.tsx
-inline src/renderer/src/components/linear-project-view-surfaces.tsx
-inline src/renderer/src/components/new-workspace/SmartWorkspaceNameField.tsx
-inline src/renderer/src/components/onboarding/use-onboarding-flow.ts
-inline src/renderer/src/components/right-sidebar/ChecksPanel.tsx
-inline src/renderer/src/components/right-sidebar/PortsPanel.tsx
-inline src/renderer/src/components/right-sidebar/checks-panel-content.tsx
-inline src/renderer/src/components/settings/AccountsPane.tsx
-inline src/renderer/src/components/settings/AgentsPane.tsx
-inline src/renderer/src/components/settings/RepositoryHooksSection.tsx
-inline src/renderer/src/components/settings/RuntimeEnvironmentsPane.tsx
-inline src/renderer/src/components/settings/Settings.tsx
-inline src/renderer/src/components/sidebar/WorkspaceKanbanDrawer.tsx
-inline src/renderer/src/components/sidebar/WorktreeContextMenu.tsx
-inline src/renderer/src/components/sidebar/use-workspace-kanban-area-selection.ts
-inline src/renderer/src/components/status-bar/ResourceUsageStatusSegment.tsx
-inline src/renderer/src/components/status-bar/StatusBar.tsx
-inline src/renderer/src/components/status-bar/WorkspaceSpaceManagerPanel.tsx
-inline src/renderer/src/components/terminal-pane/TerminalPane.tsx
-inline src/renderer/src/components/terminal-pane/agent-completion-coordinator.ts
-inline src/renderer/src/components/terminal-pane/keyboard-handlers.ts
-inline src/renderer/src/components/terminal-pane/pty-connection.ts
-inline src/renderer/src/components/terminal-pane/pty-transport.ts
-inline src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.ts
-inline src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts
-inline src/renderer/src/hooks/useAutomationDispatchEvents.ts
-inline src/renderer/src/hooks/useComposerState.ts
-inline src/renderer/src/hooks/useEditorExternalWatch.ts
-inline src/renderer/src/hooks/useIpcEvents.ts
-inline src/renderer/src/hooks/useSettingsNavigationMetadata.ts
-inline src/renderer/src/lib/pane-manager/pane-terminal-output-scheduler.ts
-inline src/renderer/src/lib/pane-manager/pane-tree-ops.ts
-inline src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts
-inline src/renderer/src/runtime/runtime-file-client.ts
-inline src/renderer/src/runtime/runtime-git-client.ts
-inline src/renderer/src/runtime/runtime-linear-client.ts
-inline src/renderer/src/runtime/sync-runtime-graph.ts
-inline src/renderer/src/runtime/web-runtime-session.ts
-inline src/renderer/src/runtime/web-session-tabs-sync.ts
-inline src/renderer/src/store/slices/agent-status.ts
-inline src/renderer/src/store/slices/browser.ts
-inline src/renderer/src/store/slices/diffComments.ts
-inline src/renderer/src/store/slices/github.ts
-inline src/renderer/src/store/slices/hosted-review.ts
-inline src/renderer/src/store/slices/jira.ts
-inline src/renderer/src/store/slices/linear.ts
-inline src/renderer/src/store/slices/repos.ts
-inline src/renderer/src/store/slices/tabs.ts
-inline src/renderer/src/store/slices/terminals.ts
-inline src/renderer/src/store/slices/ui.ts
-inline src/renderer/src/store/slices/workspace-cleanup.ts
-inline src/renderer/src/web/web-preload-api.ts
-inline src/renderer/src/web/web-runtime-client.ts
-inline src/shared/agent-hook-listener.ts
-inline src/shared/automation-schedules.ts
-inline src/shared/commit-message-agent-spec.ts
-inline src/shared/constants.ts
-inline src/shared/keybindings.ts
-inline src/shared/marine-creatures.ts
-inline src/shared/remote-runtime-client.ts
-inline src/shared/runtime-types.ts
-inline src/shared/source-control-ai.ts
-inline src/shared/telemetry-events.ts
-inline src/shared/text-search.ts
-inline tests/e2e/helpers/terminal.ts
-mobile-config app/h/*/files/*.tsx
-mobile-config app/h/*/index.tsx
-mobile-config app/h/*/session/*.tsx
-mobile-config app/h/*/source-control/*.tsx
-mobile-config app/h/*/tasks.tsx
-mobile-config app/index.tsx
-mobile-config app/pair-scan.tsx
-mobile-config app/troubleshoot.tsx
-mobile-config scripts/mock-server.ts
-mobile-config scripts/repro-terminal-colors.ts
-mobile-config scripts/repro-worktree-startup-stream.ts
-mobile-config src/browser/MobileBrowserPane.tsx
-mobile-config src/components/CustomKeyModal.tsx
-mobile-config src/components/NewWorktreeModal.tsx
-mobile-config src/components/mobile-rich-markdown-editor-html.ts
-mobile-config src/terminal/terminal-accessory-keys.ts
-mobile-config src/terminal/terminal-webview-html.ts
-mobile-config src/transport/rpc-client.ts
+#
+# `max=<n>` freezes the entry at its current size: counted lines (non-blank,
+# non-comment) for an inline suppression, the declared cap for a mobile-config
+# bump. Being on this list exempts a file from the rule at the size it already
+# had — it may not grow past it. Budgets may only go DOWN.
+#
+# Regenerate/prune: pnpm check:max-lines-ratchet --prune   (drops stale entries,
+# re-freezes budgets that shrank; never adds an entry or raises a budget)
+inline src/cli/handlers/automations.ts max=486
+inline src/cli/handlers/orchestration.ts max=1229
+inline src/cli/help.ts max=611
+inline src/main/agent-hooks/server.ts max=2925
+inline src/main/automations/external-manager.ts max=512
+inline src/main/automations/hermes-cron-output.ts max=783
+inline src/main/browser/agent-browser-bridge.ts max=2446
+inline src/main/browser/browser-cookie-import.ts max=1793
+inline src/main/browser/browser-manager.ts max=2091
+inline src/main/browser/cdp-bridge.ts max=1496
+inline src/main/browser/grab-guest-script.ts max=869
+inline src/main/claude-accounts/runtime-auth-service.ts max=1677
+inline src/main/claude-accounts/service.ts max=1167
+inline src/main/cli/cli-installer.ts max=1061
+inline src/main/cli/wsl-cli-installer.ts max=450
+inline src/main/codex-accounts/runtime-home-service.ts max=2096
+inline src/main/codex-accounts/service.ts max=1711
+inline src/main/codex/config-toml-trust.ts max=875
+inline src/main/codex/hook-service.ts max=1403
+inline src/main/daemon/daemon-init.ts max=1185
+inline src/main/daemon/daemon-pty-adapter.ts max=2683
+inline src/main/daemon/daemon-server.ts max=1287
+inline src/main/daemon/pty-subprocess.ts max=1166
+inline src/main/git/repo.ts max=878
+inline src/main/git/runner.ts max=1689
+inline src/main/git/status.ts max=2042
+inline src/main/git/worktree.ts max=1413
+inline src/main/github/pr-refresh-coordinator.ts max=900
+inline src/main/github/project-view.ts max=1642
+inline src/main/github/project-view/mutations.ts max=858
+inline src/main/github/work-item-details.ts max=1228
+inline src/main/gitlab/client.ts max=1267
+inline src/main/index.ts max=3032
+inline src/main/ipc/filesystem-watcher.ts max=1686
+inline src/main/ipc/filesystem.ts max=2218
+inline src/main/ipc/github.ts max=1201
+inline src/main/ipc/pty.ts max=7600
+inline src/main/ipc/repos.ts max=2590
+inline src/main/ipc/ssh.ts max=1522
+inline src/main/ipc/worktree-remote.ts max=2434
+inline src/main/ipc/worktrees.ts max=3411
+inline src/main/jira/issues.ts max=1135
+inline src/main/keybindings/keybinding-file.ts max=410
+inline src/main/linear/issues.ts max=1400
+inline src/main/linear/projects.ts max=1193
+inline src/main/memory/collector.ts max=335
+inline src/main/opencode/hook-service.ts max=1179
+inline src/main/persistence/loading-store/store.ts max=3468
+inline src/main/ports/advertised-url-watcher.ts max=585
+inline src/main/ports/local-workspace-port-scanner.ts max=646
+inline src/main/project-groups/nested-repo-discovery.ts max=318
+inline src/main/providers/local-pty-provider.ts max=1377
+inline src/main/providers/ssh-git-provider.ts max=857
+inline src/main/rate-limits/claude-fetcher.ts max=1120
+inline src/main/rate-limits/claude-pty.ts max=425
+inline src/main/rate-limits/codex-fetcher.ts max=1148
+inline src/main/rate-limits/service.ts max=1928
+inline src/main/runtime/orca-runtime-browser.ts max=1602
+inline src/main/runtime/orca-runtime-files.ts max=2607
+inline src/main/runtime/orca-runtime-git.ts max=959
+inline src/main/runtime/orca-runtime.test.ts max=46535
+inline src/main/runtime/orca-runtime.ts max=36115
+inline src/main/runtime/rpc/methods/orchestration.ts max=1951
+inline src/main/runtime/rpc/methods/terminal.ts max=3604
+inline src/main/runtime/runtime-rpc.ts max=1575
+inline src/main/source-control/hosted-review-creation.ts max=598
+inline src/main/speech/model-manager.ts max=791
+inline src/main/speech/stt-service.ts max=503
+inline src/main/ssh/ssh-channel-multiplexer.ts max=540
+inline src/main/ssh/ssh-connection.ts max=1476
+inline src/main/ssh/ssh-relay-deploy.ts max=1767
+inline src/main/ssh/ssh-relay-session.ts max=2785
+inline src/main/text-generation/commit-message-text-generation.ts max=1219
+inline src/main/updater.ts max=2011
+inline src/main/window/attach-main-window-services.ts max=570
+inline src/main/window/createMainWindow.ts max=1006
+inline src/main/workspace-space-analysis.ts max=823
+inline src/preload/index.ts max=4668
+inline src/relay/dispatcher.ts max=1351
+inline src/relay/external-automations-handler.ts max=905
+inline src/relay/git-handler.ts max=1343
+inline src/relay/pty-handler.ts max=2165
+inline src/relay/relay.ts max=1212
+inline src/relay/workspace-space-scan.ts max=226
+inline src/renderer/src/components/activity/ActivityPrototypePage.tsx max=1898
+inline src/renderer/src/components/automations/AutomationsPage.tsx max=1992
+inline src/renderer/src/components/editor/CombinedDiffViewer.tsx max=2093
+inline src/renderer/src/components/editor/EditorContent.tsx max=929
+inline src/renderer/src/components/editor/IpynbViewer.tsx max=946
+inline src/renderer/src/components/editor/MarkdownPreview.tsx max=1970
+inline src/renderer/src/components/feature-wall/BrowserAnimatedVisual.tsx max=952
+inline src/renderer/src/components/feature-wall/EditorAnimatedVisual.tsx max=775
+inline src/renderer/src/components/feature-wall/WorkbenchAnimatedVisual.tsx max=859
+inline src/renderer/src/components/floating-terminal/FloatingTerminalPanel.tsx max=2027
+inline src/renderer/src/components/github-project/ProjectCell.tsx max=1084
+inline src/renderer/src/components/github-project/ProjectPicker.tsx max=841
+inline src/renderer/src/components/github-project/ProjectViewWrapper.tsx max=1262
+inline src/renderer/src/components/GitLabItemDialog.tsx max=1655
+inline src/renderer/src/components/JiraIssueWorkspace.tsx max=790
+inline src/renderer/src/components/linear-project-view-surfaces.tsx max=859
+inline src/renderer/src/components/LinearIssueWorkspace.tsx max=1077
+inline src/renderer/src/components/LinearItemDrawer.tsx max=1556
+inline src/renderer/src/components/new-workspace/SmartWorkspaceNameField.tsx max=2360
+inline src/renderer/src/components/NewWorkspaceComposerCard.tsx max=1192
+inline src/renderer/src/components/onboarding/use-onboarding-flow.ts max=637
+inline src/renderer/src/components/right-sidebar/checks-panel-content.tsx max=2770
+inline src/renderer/src/components/right-sidebar/ChecksPanel.tsx max=4495
+inline src/renderer/src/components/right-sidebar/PortsPanel.tsx max=1415
+inline src/renderer/src/components/settings/AccountsPane.tsx max=1954
+inline src/renderer/src/components/settings/AgentsPane.tsx max=991
+inline src/renderer/src/components/settings/RepositoryHooksSection.tsx max=1309
+inline src/renderer/src/components/settings/RuntimeEnvironmentsPane.tsx max=1502
+inline src/renderer/src/components/settings/Settings.tsx max=1795
+inline src/renderer/src/components/sidebar/use-workspace-kanban-area-selection.ts max=334
+inline src/renderer/src/components/sidebar/WorkspaceKanbanDrawer.tsx max=893
+inline src/renderer/src/components/sidebar/WorktreeContextMenu.tsx max=1032
+inline src/renderer/src/components/status-bar/ResourceUsageStatusSegment.tsx max=1472
+inline src/renderer/src/components/status-bar/StatusBar.tsx max=2391
+inline src/renderer/src/components/status-bar/WorkspaceSpaceManagerPanel.tsx max=2182
+inline src/renderer/src/components/TaskPage.tsx max=12895
+inline src/renderer/src/components/terminal-pane/agent-completion-coordinator.ts max=1130
+inline src/renderer/src/components/terminal-pane/keyboard-handlers.ts max=909
+inline src/renderer/src/components/terminal-pane/pty-connection.ts max=8097
+inline src/renderer/src/components/terminal-pane/pty-transport.ts max=1016
+inline src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.ts max=2386
+inline src/renderer/src/components/terminal-pane/TerminalPane.tsx max=3050
+inline src/renderer/src/components/terminal-pane/use-terminal-pane-lifecycle.ts max=1869
+inline src/renderer/src/components/Terminal.tsx max=2595
+inline src/renderer/src/components/UpdateCard.tsx max=825
+inline src/renderer/src/components/WorktreeJumpPalette.tsx max=3363
+inline src/renderer/src/hooks/useAutomationDispatchEvents.ts max=634
+inline src/renderer/src/hooks/useComposerState.ts max=4568
+inline src/renderer/src/hooks/useEditorExternalWatch.ts max=881
+inline src/renderer/src/hooks/useIpcEvents.ts max=3942
+inline src/renderer/src/hooks/useSettingsNavigationMetadata.ts max=741
+inline src/renderer/src/lib/pane-manager/pane-terminal-output-scheduler.ts max=1337
+inline src/renderer/src/lib/pane-manager/pane-tree-ops.ts max=270
+inline src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts max=1449
+inline src/renderer/src/runtime/runtime-file-client.ts max=1411
+inline src/renderer/src/runtime/runtime-git-client.ts max=899
+inline src/renderer/src/runtime/runtime-linear-client.ts max=554
+inline src/renderer/src/runtime/sync-runtime-graph.ts max=1956
+inline src/renderer/src/runtime/web-runtime-session.ts max=1384
+inline src/renderer/src/runtime/web-session-tabs-sync.ts max=4388
+inline src/renderer/src/store/slices/agent-status.ts max=3046
+inline src/renderer/src/store/slices/browser.ts max=2219
+inline src/renderer/src/store/slices/diffComments.ts max=500
+inline src/renderer/src/store/slices/github.ts max=4516
+inline src/renderer/src/store/slices/hosted-review.ts max=500
+inline src/renderer/src/store/slices/jira.ts max=792
+inline src/renderer/src/store/slices/linear.ts max=2123
+inline src/renderer/src/store/slices/repos.ts max=3771
+inline src/renderer/src/store/slices/tabs.ts max=1960
+inline src/renderer/src/store/slices/terminals.ts max=3951
+inline src/renderer/src/store/slices/ui.ts max=2586
+inline src/renderer/src/store/slices/workspace-cleanup.ts max=1115
+inline src/renderer/src/web/web-preload-api.ts max=4361
+inline src/renderer/src/web/web-runtime-client.ts max=842
+inline src/shared/agent-hook-listener.ts max=4273
+inline src/shared/automation-schedules.ts max=594
+inline src/shared/commit-message-agent-spec.ts max=720
+inline src/shared/constants.ts max=490
+inline src/shared/keybindings.ts max=2243
+inline src/shared/marine-creatures.ts max=554
+inline src/shared/remote-runtime-client.ts max=796
+inline src/shared/runtime-types.ts max=1021
+inline src/shared/source-control-ai.ts max=1241
+inline src/shared/telemetry-events.ts max=1454
+inline src/shared/text-search.ts max=380
+inline tests/e2e/helpers/terminal.ts max=509
+mobile-config app/h/*/files/*.tsx max=402
+mobile-config app/h/*/index.tsx max=1603
+mobile-config app/h/*/session/*.tsx max=5015
+mobile-config app/h/*/source-control/*.tsx max=2152
+mobile-config app/h/*/tasks.tsx max=14682
+mobile-config app/index.tsx max=1422
+mobile-config app/pair-scan.tsx max=531
+mobile-config app/troubleshoot.tsx max=436
+mobile-config scripts/mock-server.ts max=407
+mobile-config scripts/repro-terminal-colors.ts max=319
+mobile-config scripts/repro-worktree-startup-stream.ts max=326
+mobile-config src/browser/MobileBrowserPane.tsx max=1594
+mobile-config src/components/CustomKeyModal.tsx max=645
+mobile-config src/components/mobile-rich-markdown-editor-html.ts max=648
+mobile-config src/components/NewWorktreeModal.tsx max=1263
+mobile-config src/terminal/terminal-accessory-keys.ts max=388
+mobile-config src/terminal/terminal-webview-html.ts max=1784
+mobile-config src/transport/rpc-client.ts max=1074
