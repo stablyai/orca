@@ -464,6 +464,70 @@ jobs:
             --exclude=tests/e2e/cross-version-wire/** \
             --shard=${{ matrix.shard }}/${{ matrix.shard_total }}
 
+  # Why this job exists: until it did, the full suite ran only on ubuntu-latest.
+  # The single windows-2022 job packages the app and runs seven hand-picked
+  # files, so no Windows regression in the other six thousand was ever visible
+  # here — every one of them was merged green.
+  #
+  # Why continue-on-error: the suite does not pass on Windows yet. Blocking now
+  # would stop every PR on failures none of them caused. The value today is that
+  # the list is on screen; when it reaches zero this flag comes off and the job
+  # becomes a real gate.
+  #
+  # Why no baseline comparison: config/windows-suite-baseline.json is measured
+  # on a developer machine, and a runner differs in ways that move the numbers —
+  # it is elevated, so symlink cases that skip locally run here. That baseline is
+  # for local iteration; this job reports what the runner itself sees.
+  test_windows:
+    name: tests windows ${{ matrix.shard }}/${{ matrix.shard_total }}
+    needs: [code_paths]
+    if: needs.code_paths.outputs.should_run == 'true'
+    runs-on: windows-2022
+    continue-on-error: true
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        shard_total: [8]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+
+      - name: Install Electron package binary for tests
+        run: node config/scripts/install-electron-package-binary.mjs
+
+      # Why the same exclusions as the Linux shards: they are live-shell and
+      # node-pty cases that need a real terminal, not anything Windows-specific.
+      - name: Test shard
+        shell: bash
+        run: |
+          pnpm exec vitest run --config config/vitest.config.ts \
+            --exclude=src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts \
+            --exclude=src/main/daemon/shell-ready.test.ts \
+            --exclude=src/main/daemon/node-pty-fd-leak.test.ts \
+            --exclude=src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts \
+            --exclude=src/main/providers/__tests__/shell-ready-framework-example.test.ts \
+            --exclude=src/main/pty/omp-shell-wrapper.node-pty.test.ts \
+            --exclude=src/main/shell-startup-feature-channel.test.ts \
+            --exclude=src/main/terminal-history-fish-session.node-pty.test.ts \
+            --exclude=src/main/zsh-scoped-histfile.live-shell.test.ts \
+            --exclude=src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
+            --exclude=src/main/zsh-wrapper-version-mismatch.live-shell.test.ts \
+            --exclude=src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
+            --exclude=src/shared/fish-query-reply-child-stdin.node-pty.test.ts \
+            --exclude=src/shared/startup-shell-portability.live-shell.test.ts \
+            --exclude=src/shared/posix-command-path-lookup.test.ts \
+            --exclude=tests/e2e/cross-version-wire/** \
+            --shard=${{ matrix.shard }}/${{ matrix.shard_total }}
+
   cross-version-wire:
     name: cross-version wire compatibility
     needs: [code_paths]
