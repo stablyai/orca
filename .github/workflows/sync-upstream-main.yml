@@ -1,0 +1,42 @@
+name: Sync Upstream Main
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream-main
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == 'rudironsoni/orca'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout personal main
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Fast-forward upstream mirror
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch --no-tags origin upstream-main
+          mirror_tip="$(git rev-parse FETCH_HEAD)"
+
+          git remote add upstream https://github.com/stablyai/orca.git
+          git fetch --no-tags upstream main
+          upstream_tip="$(git rev-parse FETCH_HEAD)"
+
+          if ! git merge-base --is-ancestor "$mirror_tip" "$upstream_tip"; then
+            echo "::error title=Upstream mirror diverged::upstream-main ($mirror_tip) cannot fast-forward to upstream main ($upstream_tip). Refusing to rewrite history."
+            exit 1
+          fi
+
+          git push origin "$upstream_tip:refs/heads/upstream-main"
