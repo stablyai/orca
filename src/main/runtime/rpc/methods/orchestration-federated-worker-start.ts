@@ -273,13 +273,9 @@ type RemoteStartReceipt = {
 }
 
 function isKnownRemoteStartFailure(code: string): boolean {
-  return [
-    'invalid_argument',
-    'agent_unconfigured',
-    'worktree_not_found_on_server',
-    'terminal_worktree_mismatch',
-    'capability_unsupported'
-  ].includes(code)
+  return /^(?:invalid_argument|agent_unconfigured|worktree_not_found_on_server|terminal_worktree_mismatch|capability_unsupported)$/.test(
+    code
+  )
 }
 
 function federatedUnknownReceipt(
