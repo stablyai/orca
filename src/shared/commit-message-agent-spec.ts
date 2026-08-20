@@ -207,6 +207,53 @@ export function parseCodexModels(stdout: string): CommitMessageModel[] {
   }
 }
 
+export function parseOmpModels(stdout: string): CommitMessageModel[] {
+  try {
+    assertJsonTextStructureWithinLimits(stdout, COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS)
+    const parsed = JSON.parse(stdout) as {
+      models?: {
+        selector?: string
+        name?: string
+        thinking?: unknown
+      }[]
+    }
+    return uniqueModels(
+      (parsed.models ?? [])
+        .filter((model) => model.selector && model.name)
+        .map((model) => ({
+          id: model.selector!,
+          label: model.name!,
+          ...withOmpThinkingLevels(model.thinking)
+        }))
+    )
+  } catch {
+    return []
+  }
+}
+
+function withOmpThinkingLevels(
+  thinking: unknown
+): Pick<CommitMessageModel, 'thinkingLevels' | 'defaultThinkingLevel'> {
+  if (!Array.isArray(thinking)) {
+    return {}
+  }
+  const thinkingLevels = thinking
+    .filter((level): level is string => typeof level === 'string' && level.trim().length > 0)
+    .map((level) => ({
+      id: level,
+      label: level === 'xhigh' ? 'Extra High' : labelFromModelId(level)
+    }))
+  if (thinkingLevels.length === 0) {
+    return {}
+  }
+  return {
+    thinkingLevels,
+    defaultThinkingLevel: thinkingLevels.some((level) => level.id === 'low')
+      ? 'low'
+      : thinkingLevels[0].id
+  }
+}
+
 export function parseLineModels(stdout: string): CommitMessageModel[] {
   const models: CommitMessageModel[] = []
   for (const rawLine of iterateModelOutputLines(stdout)) {
@@ -516,6 +563,33 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
       }
     ],
     defaultModelId: 'github-copilot/gpt-5.4-mini'
+  },
+  omp: {
+    id: 'omp',
+    label: 'OMP',
+    binary: 'omp',
+    // Why: OMP is a Pi-family CLI; `omp -p` with no positional prompt reads
+    // stdin, so large diffs stay off argv.
+    promptDelivery: 'stdin',
+    buildArgs: ({ model, thinkingLevel }) => [
+      '-p',
+      '--no-session',
+      '--no-tools',
+      '--no-extensions',
+      '--no-skills',
+      '--mode',
+      'text',
+      // Why: omitting --model lets OMP run with its own configured default,
+      // so a fresh install works before any model is picked (Kimi precedent).
+      ...(model && model !== 'default' ? ['--model', model] : []),
+      ...(thinkingLevel ? ['--thinking', thinkingLevel] : [])
+    ],
+    modelSource: 'dynamic',
+    // Why: `omp models --json` emits provider-qualified selectors that OMP's
+    // fuzzy `--model` matcher accepts directly (`omp` has no --list-models).
+    modelDiscovery: { binary: 'omp', args: ['models', '--json'], parse: parseOmpModels },
+    models: [{ id: 'default', label: 'Config default' }],
+    defaultModelId: 'default'
   },
   amp: {
     id: 'amp',
