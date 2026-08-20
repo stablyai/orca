@@ -30,15 +30,9 @@ export function isNearBottom(
   return distanceFromBottom(geometry) <= threshold
 }
 
-/** What to do with a captured load-earlier anchor once layout settles.
- *  `restore` — the older page grew the content, so shift scrollTop to keep the
- *  message the user was reading in place.
- *  `wait` — the read is still in flight; the content may still grow.
- *  `discard` — the read settled without adding history (a full-window read
- *  reports `hasMore` optimistically, and a read can also be discarded as stale
- *  or fail). The anchor must be dropped: held on, it later restores a
- *  minutes-old scroll position instead of letting a new message pin to the
- *  bottom. */
+/** Held anchors must be discarded, not kept: a read that adds no history (a
+ *  full-window read reports `hasMore` optimistically) would otherwise restore a
+ *  stale scroll position instead of letting a new message pin to the bottom. */
 export function resolvePrependAnchor(args: {
   /** Container scrollHeight captured when the load-earlier was requested. */
   anchorScrollHeight: number

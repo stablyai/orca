@@ -57,9 +57,7 @@ describe('resolvePrependAnchor', () => {
     ).toBe('wait')
   })
 
-  // A read that fills its window reports hasMore optimistically, so the next
-  // load-earlier can settle with no new history. Holding the anchor then let it
-  // hijack a later send's stick-to-bottom and restore a stale scroll position.
+  // A held anchor hijacked a later send's stick-to-bottom.
   it('discards the anchor once a load settles without adding history', () => {
     expect(
       resolvePrependAnchor({ anchorScrollHeight: 1000, scrollHeight: 1000, loadingEarlier: false })

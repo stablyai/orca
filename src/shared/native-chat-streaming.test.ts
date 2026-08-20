@@ -47,27 +47,40 @@ describe('deriveNativeChatStreamingText', () => {
     ).toBe('Working on it')
   })
 
-  it('treats an open optimistic echo as the active streaming-turn boundary', () => {
+  it('treats an open idle-send echo as the active streaming-turn boundary', () => {
     expect(
       deriveNativeChatStreamingText({
         messages: [assistant('A much longer answer from the completed prior turn')],
         previewText: 'New reply',
         working: true,
-        hasOpenOptimisticSend: true
+        hasOpenIdleSend: true
       })
     ).toBe('New reply')
+  })
+
+  // A short reply that repeats earlier wording ("Done.") would otherwise be read as
+  // already-landed and suppressed, leaving the turn with no visible bubble at all.
+  it('keeps an idle-send preview that repeats text from the previous turn', () => {
+    expect(
+      deriveNativeChatStreamingText({
+        messages: [user('first prompt'), assistant('Done.')],
+        previewText: 'Done',
+        working: true,
+        hasOpenIdleSend: true
+      })
+    ).toBe('Done')
   })
 
   // The echo used to be threaded in as a tail message, which hid the landed reply
   // behind a user bubble — so a preview of an already-flushed turn kept rendering
   // as a duplicate assistant bubble for as long as the echo stayed open.
-  it('drops a preview the transcript already contains even with an echo open', () => {
+  it('drops a preview the transcript already contains when the echo is queued', () => {
     expect(
       deriveNativeChatStreamingText({
         messages: [user('do the thing'), assistant('Working on it, here is the full answer.')],
         previewText: 'Working on it',
         working: true,
-        hasOpenOptimisticSend: true
+        hasOpenIdleSend: false
       })
     ).toBeNull()
   })

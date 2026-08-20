@@ -53,6 +53,7 @@ import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owne
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
 import type { NativeChatResolvedViewProps, NativeChatViewProps } from './native-chat-view-types'
+import { isQueuedPendingMessageId } from './native-chat-synthetic-message-ids'
 
 export type { NativeChatViewProps } from './native-chat-view-types'
 
@@ -300,7 +301,7 @@ function NativeChatResolvedView({
       messages: sessionAfterCommandBoundaries.messages,
       previewText: hookPreview,
       working: liveWorking,
-      hasOpenOptimisticSend: pendingMessages.length > 0
+      hasOpenIdleSend: pendingMessages.some((message) => !isQueuedPendingMessageId(message.id))
     })
   }, [sessionAfterCommandBoundaries.messages, pendingMessages, hookPreview, liveWorking])
   const sessionWithPending = useMemo<typeof session>(() => {

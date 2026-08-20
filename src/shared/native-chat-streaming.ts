@@ -49,19 +49,21 @@ function landedAssistantText(messages: readonly NativeChatMessage[]): string {
  * `working` gates it: a stale preview from a finished turn never shows.
  *
  * Pass only authoritative turns in `messages` — optimistic echoes are described
- * by `hasOpenOptimisticSend` instead. Threading them in as tail messages hid the
- * landed reply behind a user bubble, which kept a stale preview alive as a
- * duplicate of the turn it came from.
+ * by `hasOpenIdleSend` instead. Threading them in as tail messages hid the landed
+ * reply behind a user bubble, which kept a stale preview alive as a duplicate of
+ * the turn it came from.
  */
 export function deriveNativeChatStreamingText(args: {
   messages: readonly NativeChatMessage[]
   previewText: string | null | undefined
   working: boolean
-  /** True while an optimistic echo is still open — its prompt has not reached the
-   *  transcript, so any landed reply belongs to an earlier turn. */
-  hasOpenOptimisticSend?: boolean
+  /** True while an echo sent to an *idle* agent is still open: the reply now
+   *  streaming answers that un-transcribed prompt, so `landed` is an earlier turn.
+   *  A queued echo does not count — there the streaming reply belongs to a prompt
+   *  already in the transcript, so `landed` can be that same turn. */
+  hasOpenIdleSend?: boolean
 }): string | null {
-  const { messages, previewText, working, hasOpenOptimisticSend = false } = args
+  const { messages, previewText, working, hasOpenIdleSend = false } = args
   if (!working) {
     return null
   }
@@ -69,15 +71,18 @@ export function deriveNativeChatStreamingText(args: {
   if (!text) {
     return null
   }
+  // `landed` is an earlier turn, so neither check below can speak for this one —
+  // a short reply repeating earlier text would suppress a valid preview.
+  if (hasOpenIdleSend) {
+    return text
+  }
   const landed = landedAssistantText(messages)
-  // Already in the transcript: suppress whatever the turn boundaries look like,
-  // so a preview can never duplicate the turn that produced it.
+  // Already in the transcript, so the preview would duplicate its own turn.
   if (landed.includes(text)) {
     return null
   }
-  // Length is only a "preview still leads" heuristic within one turn. An open
-  // echo means `landed` is a previous turn's reply and must not gate this one.
-  if (!hasOpenOptimisticSend && text.length <= landed.length) {
+  // Within one turn, only a preview that leads the landed text has more to show.
+  if (text.length <= landed.length) {
     return null
   }
   return text

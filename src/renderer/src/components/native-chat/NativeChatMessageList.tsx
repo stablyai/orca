@@ -342,8 +342,7 @@ export function NativeChatMessageList({
         loadingEarlier
       })
       if (outcome === 'restore') {
-        // Preserve the viewport: shift scrollTop by however much taller the content
-        // got, so the message the user was reading stays put.
+        // Shift by the height the prepend added, so the read message stays put.
         el.scrollTop = anchor.scrollTop + (el.scrollHeight - anchor.scrollHeight)
         prependAnchorRef.current = null
         return
