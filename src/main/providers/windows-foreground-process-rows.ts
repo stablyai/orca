@@ -30,9 +30,33 @@ export type WindowsProcessCandidate = WindowsProcessRow & { depth: number }
 // for POSIX. Reuse the same TTL + single-in-flight reader, caching parsed rows so
 // a burst of panes collapses to ~2 scans/sec; every caller runs its own descendant
 // walk over the shared snapshot.
+// Why #15209: every PowerShell-host spawn writes a transcript file under the
+// enterprise Windows PowerShell transcription GPO, and this scan re-forks ~2x/s
+// while agent panes are open — 1.4M transcript files in weeks on one reported
+// machine. wmic enumerates the same table without any PowerShell host, so it is
+// preferred wherever it exists and the answer is cached for the process
+// lifetime; PowerShell stays the fallback and the only option on Windows builds
+// that ship without wmic (24H2+ removed it).
+let wmicCapabilityProbe: Promise<boolean> | null = null
+
+function wmicAvailable(): Promise<boolean> {
+  wmicCapabilityProbe ??= execFileAsync('wmic', ['/?'], {
+    timeout: WINDOWS_PROCESS_QUERY_TIMEOUT_MS,
+    windowsHide: true
+  }).then(
+    () => true,
+    () => false
+  )
+  return wmicCapabilityProbe
+}
+
 async function runWindowsProcessRows(): Promise<WindowsProcessRow[]> {
+  // wmic first where it exists (no PowerShell host per scan, #15209); a failed
+  // wmic scan still falls through to PowerShell, so a WMI hiccup costs one
+  // PowerShell spawn rather than a failed pane poll.
   const rows =
-    (await queryWindowsProcessesWithPowerShell()) ?? (await queryWindowsProcessesWithWmic())
+    ((await wmicAvailable()) ? await queryWindowsProcessesWithWmic() : null) ??
+    (await queryWindowsProcessesWithPowerShell())
   if (!rows) {
     // Reject so the reader does not cache the miss; callers fall through to
     // node-pty's process name (the prior null-return contract is preserved by
@@ -84,6 +108,11 @@ export async function queryWindowsProcessDescendants(
  */
 export function resetWindowsProcessRowsSnapshotForTests(): void {
   windowsProcessRowsReader.reset()
+}
+
+/** Test-only: forget the cached wmic capability so a suite can pick a side. */
+export function resetWindowsProcessProbePreferenceForTests(): void {
+  wmicCapabilityProbe = null
 }
 
 function parseWindowsProcessValueRows(stdout: string): WindowsProcessRow[] {

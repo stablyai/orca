@@ -12,6 +12,7 @@ vi.mock('child_process', () => ({ execFile: execFileMock }))
 import {
   queryWindowsProcessDescendants,
   queryWindowsProcessRowsFresh,
+  resetWindowsProcessProbePreferenceForTests,
   resetWindowsProcessRowsSnapshotForTests
 } from './windows-foreground-process-rows'
 
@@ -61,6 +62,7 @@ describe('windows foreground process rows spawn options', () => {
   beforeEach(() => {
     execFileMock.mockReset()
     resetWindowsProcessRowsSnapshotForTests()
+    resetWindowsProcessProbePreferenceForTests()
     platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
   })
@@ -71,8 +73,31 @@ describe('windows foreground process rows spawn options', () => {
     }
   })
 
-  it('hides the console window for the powershell process-table scan', async () => {
-    execFileMock.mockImplementation((_cmd: string, _args, _opts, cb: ExecFileCallback) => {
+  it('prefers wmic and spawns no PowerShell host when wmic exists (#15209)', async () => {
+    execFileMock.mockImplementation((cmd: string, _args, _opts, cb: ExecFileCallback) => {
+      if (cmd === 'wmic') {
+        cb(null, { stdout: WMIC_ROWS_VALUE, stderr: '' })
+        return
+      }
+      cb(new Error('powershell must not spawn when wmic answered'), { stdout: '', stderr: '' })
+    })
+
+    const candidates = await queryWindowsProcessDescendants(100)
+
+    expect(candidates?.[0]?.pid).toBe(200)
+    expect(optionsForCommand('wmic')).toMatchObject({ windowsHide: true })
+    expect(optionsForCommand('wmic')).toBeTruthy()
+    expect(execFileMock.mock.calls.some((args) => (args as ExecFileCall)[0] === 'powershell.exe')).toBe(
+      false
+    )
+  })
+
+  it('falls back to PowerShell — windowsHide on — when wmic is missing', async () => {
+    execFileMock.mockImplementation((cmd: string, _args, _opts, cb: ExecFileCallback) => {
+      if (cmd === 'wmic') {
+        cb(new Error('wmic not found'), { stdout: '', stderr: '' })
+        return
+      }
       cb(null, { stdout: POWERSHELL_ROWS_JSON, stderr: '' })
     })
 
@@ -82,20 +107,26 @@ describe('windows foreground process rows spawn options', () => {
     expect(optionsForCommand('powershell.exe')).toMatchObject({ windowsHide: true })
   })
 
-  it('hides the console window for the wmic fallback scan', async () => {
-    execFileMock.mockImplementation((cmd: string, _args, _opts, cb: ExecFileCallback) => {
-      // Force the powershell probe to miss so the wmic fallback runs.
-      if (cmd === 'powershell.exe') {
-        cb(new Error('powershell unavailable'), { stdout: '', stderr: '' })
+  it('falls back to PowerShell when a capable wmic scan fails, without re-probing', async () => {
+    let wmicScans = 0
+    execFileMock.mockImplementation((cmd: string, args: string[], _opts, cb: ExecFileCallback) => {
+      if (cmd === 'wmic' && args[0] === '/?') {
+        cb(null, { stdout: 'usage', stderr: '' })
         return
       }
-      cb(null, { stdout: WMIC_ROWS_VALUE, stderr: '' })
+      if (cmd === 'wmic') {
+        wmicScans += 1
+        cb(new Error('wmi service hiccup'), { stdout: '', stderr: '' })
+        return
+      }
+      cb(null, { stdout: POWERSHELL_ROWS_JSON, stderr: '' })
     })
 
     const candidates = await queryWindowsProcessDescendants(100)
 
     expect(candidates?.[0]?.pid).toBe(200)
-    expect(optionsForCommand('wmic')).toMatchObject({ windowsHide: true })
+    expect(wmicScans).toBe(1)
+    expect(optionsForCommand('powershell.exe')).toMatchObject({ windowsHide: true })
   })
 })
 
@@ -108,9 +139,15 @@ describe('queryWindowsProcessRowsFresh', () => {
   beforeEach(() => {
     execFileMock.mockReset()
     resetWindowsProcessRowsSnapshotForTests()
+    resetWindowsProcessProbePreferenceForTests()
     platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    execFileMock.mockImplementation((_cmd: string, _args, _opts, cb: ExecFileCallback) => {
+    // The capability probe answers for any wmic call; scans then use PowerShell.
+    execFileMock.mockImplementation((cmd: string, _args, _opts, cb: ExecFileCallback) => {
+      if (cmd === 'wmic') {
+        cb(new Error('wmic not found'), { stdout: '', stderr: '' })
+        return
+      }
       cb(null, { stdout: POWERSHELL_ROWS_JSON, stderr: '' })
     })
   })
