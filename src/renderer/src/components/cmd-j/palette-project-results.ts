@@ -2,6 +2,7 @@ import { isCmdJPaletteQueryTooLarge } from './palette-results'
 import {
   cmdJPaletteTokenScore,
   isCmdJPaletteQueryOverTokenLimit,
+  uniqueCmdJPaletteQueryTokens,
   normalizeCmdJPaletteQuery,
   uniqueNormalizedCmdJPaletteKeywords
 } from './palette-query-tokens'
@@ -150,6 +151,7 @@ export function hasCmdJProjectSearchCandidates({
 
 function projectRankingForCandidate(
   query: string,
+  queryTokens: readonly string[],
   candidate: CmdJProjectSearchResult
 ): RankedProjectResult | null {
   const title = normalizeCmdJPaletteQuery(candidate.title)
@@ -166,7 +168,7 @@ function projectRankingForCandidate(
   if (candidate.keywords.some((keyword) => keyword.startsWith(query))) {
     return { result: candidate, rule: 4, score: 0 }
   }
-  const score = cmdJPaletteTokenScore(query, [candidate.title, ...candidate.keywords])
+  const score = cmdJPaletteTokenScore(queryTokens, [candidate.title, ...candidate.keywords])
   return score > 0 ? { result: candidate, rule: 5, score } : null
 }
 
@@ -209,6 +211,7 @@ export function searchCmdJProjectResults({
   if (normalizedQuery.length < 2 || isCmdJPaletteQueryOverTokenLimit(normalizedQuery)) {
     return []
   }
+  const queryTokens = uniqueCmdJPaletteQueryTokens(normalizedQuery)
   return buildCmdJProjectSearchCandidates({
     projectGroups,
     repos,
@@ -216,7 +219,7 @@ export function searchCmdJProjectResults({
     projectHostSetups,
     renderableRepoIds
   })
-    .map((candidate) => projectRankingForCandidate(normalizedQuery, candidate))
+    .map((candidate) => projectRankingForCandidate(normalizedQuery, queryTokens, candidate))
     .filter((entry): entry is RankedProjectResult => entry !== null)
     .sort(compareProjectRanked)
     .map((entry) => ({ ...entry.result, qualityClass: projectRuleQualityClass(entry.rule) }))

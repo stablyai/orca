@@ -38,6 +38,8 @@ vi.mock('fs', () => ({
   mkdirSync: mkdirSyncMock,
   writeFileSync: writeFileSyncMock,
   chmodSync: vi.fn(),
+  renameSync: vi.fn(),
+  rmSync: vi.fn(),
   constants: { X_OK: 1 }
 }))
 

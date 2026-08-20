@@ -1,4 +1,4 @@
-import { AlertTriangle, ChevronRight } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { cn } from '@/lib/utils'
@@ -72,22 +72,15 @@ function ChecklistRow({
           >
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium">{item.name}</span>
-              <span className="block line-clamp-1 max-h-5 overflow-hidden text-xs leading-5 text-muted-foreground transition-[max-height] duration-200 ease-out group-data-[state=open]/row:line-clamp-none group-data-[state=open]/row:max-h-40 motion-reduce:transition-none">
+              {/* Why: unclamped text must contribute its full height to avoid painting over the file list. */}
+              <span className="block line-clamp-1 max-h-5 overflow-hidden text-xs leading-5 break-words text-muted-foreground group-data-[state=open]/row:line-clamp-none group-data-[state=open]/row:max-h-none">
                 {description}
               </span>
             </span>
             {note ? (
               <span className="shrink-0 text-[11px] text-muted-foreground">{note}</span>
             ) : null}
-            <span
-              className={cn(
-                'inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground',
-                summary.risky && 'text-foreground'
-              )}
-            >
-              {summary.risky ? <AlertTriangle className="size-3" /> : null}
-              {summary.label}
-            </span>
+            <span className="shrink-0 text-[11px] text-muted-foreground">{summary.label}</span>
             <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-[state=open]/row:rotate-90" />
           </CollapsibleTrigger>
         </div>

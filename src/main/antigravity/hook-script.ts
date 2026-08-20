@@ -4,6 +4,7 @@ import {
   buildWindowsHookStdinDrainEpilogue,
   WINDOWS_HOOK_STDIN_DRAIN_COMMAND
 } from '../agent-hooks/hook-stdin-contract'
+import { ANTIGRAVITY_PRE_TOOL_USE_DECISION } from './hook-events'
 
 export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   if (target === 'local' && process.platform === 'win32') {
@@ -12,6 +13,8 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       'setlocal',
       'if /I "%ORCA_ANTIGRAVITY_EVENT%"=="Stop" (',
       '  echo {"decision":""}',
+      ') else if /I "%ORCA_ANTIGRAVITY_EVENT%"=="PreToolUse" (',
+      `  echo ${ANTIGRAVITY_PRE_TOOL_USE_DECISION}`,
       ') else (',
       '  echo {}',
       ')',
@@ -30,10 +33,12 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  Stop)',
     '    printf \'{"decision":""}\\n\'',
     '    ;;',
+    '  PreToolUse)',
+    `    printf '${ANTIGRAVITY_PRE_TOOL_USE_DECISION}\\n'`,
+    '    ;;',
     '  *)',
     // Why: Antigravity accepts an empty JSON object for passive status hooks;
-    // returning allow/ask/deny from PreToolUse would change the user's tool
-    // permission policy.
+    // only the PreToolUse gate rejects it, and that branch answers above.
     '    printf "{}\\n"',
     '    ;;',
     'esac',
@@ -79,6 +84,8 @@ export function getWindowsWrapperScript(eventName: string): string {
     ')',
     'if /I "%ORCA_ANTIGRAVITY_EVENT%"=="Stop" (',
     '  echo {"decision":""}',
+    ') else if /I "%ORCA_ANTIGRAVITY_EVENT%"=="PreToolUse" (',
+    `  echo ${ANTIGRAVITY_PRE_TOOL_USE_DECISION}`,
     ') else (',
     '  echo {}',
     ')',

@@ -2,7 +2,12 @@ import type { Socket } from 'node:net'
 import { readFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { encodeNdjson } from './ndjson'
-import { PROTOCOL_VERSION, NOTIFY_PREFIX, DaemonProtocolError } from './types'
+import {
+  PROTOCOL_VERSION,
+  NOTIFY_PREFIX,
+  DaemonConnectionLostError,
+  DaemonProtocolError
+} from './types'
 import type { DaemonEndpointIdentity } from './types'
 import {
   armDaemonSocketCloseHandlers,
@@ -202,7 +207,9 @@ export class DaemonClient {
     signal?: AbortSignal
   ): Promise<T> {
     if (!this.connected || !this.controlSocket) {
-      throw new DaemonProtocolError('Not connected')
+      // Why: there is no socket to talk on, so this is a transport failure, not a
+      // refusal by the daemon — see settleCreateCancellation's caller.
+      throw new DaemonConnectionLostError('Not connected')
     }
     const generation = this.connectionGeneration
 

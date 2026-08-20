@@ -128,6 +128,7 @@ import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { OrchestrationDb } from './orchestration/db'
+import type { DispatchStatus } from './orchestration/types'
 import { reconcileRequestedWorkerTerminalReleases } from './orchestration/worker-terminal-release-reconciliation'
 import {
   classifyWorkerTerminalProcessIncarnation,
@@ -389,6 +390,13 @@ import {
 import type { SshConnectionState } from '../../shared/ssh-types'
 import { getPublicSshState } from './public-ssh-state'
 import { closeTerminalTabInWorkspaceSession } from '../../shared/workspace-session-terminal-tab-close'
+import {
+  describeTerminalExitCause,
+  isDeliberateTerminalExit,
+  OPERATOR_CLOSE_EXIT_CAUSE,
+  resolveUnreportedExitCause,
+  type TerminalExitCause
+} from '../../shared/terminal-exit-cause'
 import type {
   LinearCurrentIssueContextHints,
   LinearAttachResult,
@@ -445,6 +453,7 @@ import {
   type RuntimeWorktreeStatus,
   type RuntimeSpeechModelSummary,
   type RuntimeSpeechSetupState,
+  type RuntimeTerminalInteractiveWait,
   type RuntimeTerminalShow,
   type RuntimeTerminalSummary,
   type RuntimeTerminalVisualGroupNode,
@@ -458,7 +467,6 @@ import {
   type RuntimeMarkdownSaveTabResult,
   type RuntimeMobileSessionCreateTerminalResult,
   type RuntimeMobileSessionClientTab,
-  type RuntimeMobileSessionTabCloseResult,
   type RuntimeMobileSessionMarkdownTab,
   type RuntimeMobileSessionTabMove,
   type RuntimeMobileSessionTabMoveResult,
@@ -686,6 +694,12 @@ import {
   deriveClientSessionTabSelection,
   projectClientSessionTabSelection
 } from './client-session-tab-selection'
+import {
+  committedMobileSessionTabClose,
+  delegatedMobileSessionTabClose,
+  refusedMobileSessionTabClose,
+  type MobileSessionTabCloseOutcome
+} from './mobile-session-tab-close-outcome'
 import type {
   PtyProviderBufferSnapshot,
   IFilesystemProvider,
@@ -1075,7 +1089,6 @@ import {
 import { normalizeSparseDirectories } from '../ipc/sparse-checkout-directories'
 import type { PtyBindingSourceExpectation, Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
-import { AgentDetector } from '../stats/agent-detector'
 import {
   computeValidatedBranchName,
   computeWorktreePath,
@@ -1419,6 +1432,7 @@ type RuntimeLeafRecord = RuntimeSyncedLeaf & {
   writable: boolean
   lastOutputAt: number | null
   lastExitCode: number | null
+  lastExitCause: TerminalExitCause | null
   tailBuffer: string[]
   tailTranscriptBuffer: string[]
   tailTranscriptChars: number
@@ -1471,6 +1485,7 @@ type RuntimePtyWorktreeRecord = {
   connected: boolean
   disconnectedAt: number | null
   lastExitCode: number | null
+  lastExitCause: TerminalExitCause | null
   lastAgentStatus: AgentStatus | null
   /** False until a live OSC frame sets the status; restore seeds never set it. */
   lastAgentStatusObservedLive: boolean
@@ -1911,8 +1926,13 @@ type RuntimePtyController = {
   resize?(ptyId: string, cols: number, rows: number): boolean
   // Why: exact-id mobile polls should not enumerate every local and SSH PTY.
   hasPty?(ptyId: string): boolean | null
-  listProcesses?(connectionId?: string | null): Promise<PtyProcessInfo[]>
-  listProcessesWithHostScope?(): Promise<{
+  // Why: the caller's budget has to reach the relay. Without it an SSH list runs to
+  // the mux's own 30s default and blows every inventory refresh (STA-517).
+  listProcesses?(
+    connectionId?: string | null,
+    opts?: { deadlineMs?: number }
+  ): Promise<PtyProcessInfo[]>
+  listProcessesWithHostScope?(opts?: { deadlineMs?: number }): Promise<{
     processes: PtyProcessInfo[]
     hostIds: ExecutionHostId[]
   }>
@@ -2180,7 +2200,7 @@ type RuntimeNotifier = {
   renameTerminal(tabId: string, title: string | null): void
   focusTerminal(tabId: string, worktreeId: string, leafId?: string | null): void
   focusEditorTab?(tabId: string, worktreeId: string): void
-  closeSessionTab?(tabId: string, worktreeId: string): void
+  closeSessionTab?(tabId: string, worktreeId: string): void | Promise<void>
   moveSessionTab?(worktreeId: string, move: RuntimeMobileSessionTabMove): void
   openFile?(
     worktreeId: string,
@@ -3134,10 +3154,13 @@ export class OrcaRuntimeService {
   /** Repos whose Git-admin probe has not settled yet; caps abandoned fs work at one per repo. */
   private worktreeAdminFingerprintProbes = new Set<string>()
   private cloneInFlightByPath = new Map<string, Promise<void>>()
-  private agentDetector: AgentDetector | null = null
   private ptyForegroundAgentRefreshes = new Map<string, PtyForegroundAgentRefresh>()
   private ptyForegroundProcessReads = new Map<string, PtyForegroundProcessReadEntry>()
   private ptyDelayedForegroundSnapshotTitleObservations = new Map<string, number>()
+  // Why a set and not a timer: the intent is retired by the exit it explains, or
+  // by the next lifecycle generation on that id (advancePtyLifecycleGeneration),
+  // so a stop that never produced an exit cannot outlive its process.
+  private readonly stopRequestedPtyIds = new Set<string>()
   private _orchestrationDb: OrchestrationDb | null = null
   private messageWaitersByHandle = new Map<string, Set<MessageWaiter>>()
   private readonly orchestrationMailboxOwner = new OrchestrationMailboxOwner({
@@ -3707,7 +3730,6 @@ export class OrcaRuntimeService {
     )
     if (stats) {
       this.stats = stats
-      this.agentDetector = new AgentDetector(stats)
     }
     this.getAgentStatusSnapshotFn = deps?.getAgentStatusSnapshot ?? null
     this.getAgentProviderSessionSnapshotFn =
@@ -6521,15 +6543,28 @@ export class OrcaRuntimeService {
     this.emitClientEvent({ type: 'reposChanged' })
   }
 
+  /** Why an object with a required `navigationTarget`: 'caller' means the requester already owns
+   *  the navigation, so a site that forgets to forward it silently reverts to broadcasting at
+   *  every viewer (STA-2802). A required key makes omission a compile error, and naming it makes
+   *  a hardcoded target visible at the call site instead of hiding in a positional tail. */
   private notifyActivateWorktree(
     repoId: string,
     worktreeId: string,
-    setup?: CreateWorktreeResult['setup'],
-    startup?: WorktreeStartupLaunch,
-    defaultTabs?: CreateWorktreeResult['defaultTabs']
+    launch: {
+      setup?: CreateWorktreeResult['setup']
+      startup?: WorktreeStartupLaunch
+      defaultTabs?: CreateWorktreeResult['defaultTabs']
+      navigationTarget: RuntimeNavigationTarget | undefined
+    }
   ): void {
-    this.notifyHostActivateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
-    this.notifyClientsActivateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
+    const { setup, startup, defaultTabs } = launch
+    const navigation = launch.navigationTarget ?? 'all'
+    if (navigationTargetsHost(navigation)) {
+      this.notifyHostActivateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
+    }
+    if (navigationTargetsClients(navigation)) {
+      this.notifyClientsActivateWorktree(repoId, worktreeId, setup, startup, defaultTabs)
+    }
   }
 
   private notifyHostActivateWorktree(
@@ -6747,6 +6782,7 @@ export class OrcaRuntimeService {
         writable: this.graphStatus === 'ready' && ptyId !== null,
         lastOutputAt: tailSource?.lastOutputAt ?? null,
         lastExitCode: tailSource?.lastExitCode ?? null,
+        lastExitCause: tailSource?.lastExitCause ?? null,
         tailBuffer: tailSource?.tailBuffer ?? [],
         tailTranscriptBuffer: tailSource?.tailTranscriptBuffer ?? [],
         tailTranscriptChars: tailSource?.tailTranscriptChars ?? 0,
@@ -8667,12 +8703,12 @@ export class OrcaRuntimeService {
         snapshot?.tabs.find(
           (candidate) => candidate.type === 'browser' && candidate.browserWorkspaceId === tabId
         ))
-    if (!tab) {
+    if (!snapshot || !tab) {
       throw new Error('tab_not_found')
     }
 
     if (tab.type === 'terminal') {
-      const publicTab = this.toMobileSessionTabsResult(snapshot!).tabs.find(
+      const publicTab = this.toMobileSessionTabsResult(snapshot).tabs.find(
         (candidate) => candidate.type === 'terminal' && candidate.id === tab.id
       )
       // Why: serve-created tabs can be visible before any renderer has adopted
@@ -8688,7 +8724,7 @@ export class OrcaRuntimeService {
           !this.isDeliberatelyParkedPane(worktreeId, tab)) &&
         (!targetsHost ||
           !this.notifier?.focusTerminal ||
-          this.shouldMaterializeHeadlessMobileSessionTab(snapshot!, tab))
+          this.shouldMaterializeHeadlessMobileSessionTab(snapshot, tab))
       if (shouldMaterializePendingTerminal) {
         const sessionId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? undefined
         const targetGroupId = snapshot?.tabGroups?.find((group) =>
@@ -8760,9 +8796,9 @@ export class OrcaRuntimeService {
       if (targetsHost && !this.notifier?.focusTerminal) {
         if (
           !targetTab.isActive &&
-          this.shouldPersistHeadlessMobileSessionActivation(snapshot!, targetTab)
+          this.shouldPersistHeadlessMobileSessionActivation(snapshot, targetTab)
         ) {
-          this.activateHeadlessMobileSessionTerminalTab(worktreeId, snapshot!, targetTab)
+          this.activateHeadlessMobileSessionTerminalTab(worktreeId, snapshot, targetTab)
         }
       } else if (targetsHost) {
         this.notifier?.focusTerminal?.(targetTab.parentTabId, worktreeId, targetTab.leafId)
@@ -8977,7 +9013,7 @@ export class OrcaRuntimeService {
   async refuseUnattributedMobileSessionTabClose(
     worktreeSelector: string,
     tabId: string
-  ): Promise<RuntimeMobileSessionTabCloseResult> {
+  ): Promise<MobileSessionTabCloseOutcome> {
     const snapshot = await this.listMobileSessionTabs(worktreeSelector)
     const tabExists = snapshot.tabs.some(
       (candidate) =>
@@ -8991,12 +9027,9 @@ export class OrcaRuntimeService {
     // Why: a legacy client may already have hidden its mirror; a new snapshot
     // restores it without granting an unattributed request destructive authority.
     this.republishMobileSessionTabsSnapshot(snapshot.worktree)
-    return {
-      closed: true,
-      refused: true,
-      refusalReason: 'missing-intent',
+    return refusedMobileSessionTabClose('missing-intent', {
       snapshotRepublished: true
-    }
+    })
   }
 
   async closeMobileSessionTab(
@@ -9009,7 +9042,7 @@ export class OrcaRuntimeService {
       clientNavigationId?: string
       localPtyTeardownOwnedExternally?: boolean
     } = {}
-  ): Promise<RuntimeMobileSessionTabCloseResult> {
+  ): Promise<MobileSessionTabCloseOutcome> {
     const graphEpoch = options.clientNavigationId ? this.captureReadyGraphEpoch() : null
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
     const worktreeId =
@@ -9024,24 +9057,18 @@ export class OrcaRuntimeService {
     if (options.reason !== undefined && options.reason !== 'user' && observedPtyIds === null) {
       // Why: keep-on-unknown must also restore the mirror the caller already pruned.
       this.republishMobileSessionTabsSnapshot(worktreeId)
-      return {
-        closed: true,
-        refused: true,
-        refusalReason: 'unknown-liveness',
-        ...(snapshot ? { snapshotRepublished: true as const } : {})
-      }
+      return refusedMobileSessionTabClose('unknown-liveness', {
+        snapshotRepublished: Boolean(snapshot)
+      })
     }
     if (
       options.expectedPublicationEpoch !== undefined &&
       snapshot?.publicationEpoch !== options.expectedPublicationEpoch
     ) {
       this.republishMobileSessionTabsSnapshot(worktreeId)
-      return {
-        closed: true,
-        refused: true,
-        refusalReason: 'stale-publication',
-        ...(snapshot ? { snapshotRepublished: true as const } : {})
-      }
+      return refusedMobileSessionTabClose('stale-publication', {
+        snapshotRepublished: Boolean(snapshot)
+      })
     }
     const tab =
       snapshot?.tabs.find((candidate) => candidate.id === tabId) ??
@@ -9051,13 +9078,13 @@ export class OrcaRuntimeService {
       snapshot?.tabs.find(
         (candidate) => candidate.type === 'browser' && candidate.browserWorkspaceId === tabId
       )
-    if (!tab) {
+    if (!snapshot || !tab) {
       throw new Error('tab_not_found')
     }
     if (options.expectedTerminalHandle !== undefined) {
       const terminalIncarnationMatches =
         tab.type === 'terminal' &&
-        snapshot!.tabs.some(
+        snapshot.tabs.some(
           (candidate) =>
             candidate.type === 'terminal' &&
             candidate.parentTabId === tab.parentTabId &&
@@ -9066,19 +9093,30 @@ export class OrcaRuntimeService {
         )
       if (!terminalIncarnationMatches) {
         this.republishMobileSessionTabsSnapshot(worktreeId)
-        return {
-          closed: true,
-          refused: true,
-          refusalReason: 'stale-terminal',
+        return refusedMobileSessionTabClose('stale-terminal', {
           snapshotRepublished: true
-        }
+        })
       }
     }
+    let closedSelectionTabIds = [tab.id]
+    const finishCommittedClose = (): MobileSessionTabCloseOutcome =>
+      committedMobileSessionTabClose(
+        this.clientSessionTabSelections,
+        worktreeId,
+        closedSelectionTabIds
+      )
     if (tab.type === 'terminal') {
-      const parentLeafCount = snapshot!.tabs.filter(
+      const parentLeafCount = snapshot.tabs.filter(
         (candidate) => candidate.type === 'terminal' && candidate.parentTabId === tab.parentTabId
       ).length
       const closingWholeParent = tab.id !== tabId || parentLeafCount <= 1
+      if (closingWholeParent) {
+        closedSelectionTabIds = snapshot.tabs.flatMap((candidate) =>
+          candidate.type === 'terminal' && candidate.parentTabId === tab.parentTabId
+            ? [candidate.id, candidate.parentTabId]
+            : []
+        )
+      }
       // Why: a non-'user' reason is a client-lifecycle echo ("terminal gone"),
       // not authorization to kill. Every destructive branch below can take the
       // whole parent down, so any live PTY under the parent means the echo is a
@@ -9086,7 +9124,7 @@ export class OrcaRuntimeService {
       // echoing client re-syncs and re-attaches. A reasonless close keeps
       // legacy behavior — old clients send user closes without the field.
       if (options.reason !== undefined && options.reason !== 'user') {
-        const parentLeaves = snapshot!.tabs.filter(
+        const parentLeaves = snapshot.tabs.filter(
           (candidate): candidate is RuntimeMobileSessionTerminalTab =>
             candidate.type === 'terminal' && candidate.parentTabId === tab.parentTabId
         )
@@ -9118,21 +9156,14 @@ export class OrcaRuntimeService {
           }
           // Why: both markers are skew-safe; clients must restore a mirror only
           // when the host actually republished it, not for a dead leaf.
-          return {
-            closed: true,
-            refused: true,
-            refusalReason: 'live-host-pty',
-            ...(!addressedDeadLeaf ? { snapshotRepublished: true as const } : {})
-          }
+          return refusedMobileSessionTabClose('live-host-pty', {
+            snapshotRepublished: !addressedDeadLeaf
+          })
         }
         if (!closingWholeParent || this.tabs.has(tab.parentTabId)) {
           // Why: only the renderer may retire its own tab or split leaf; a
           // remote lifecycle echo must never cross that boundary into a kill.
-          return {
-            closed: true,
-            refused: true,
-            refusalReason: 'retirement-owner'
-          }
+          return refusedMobileSessionTabClose('retirement-owner')
         }
       }
       // Why: a runtime-owned headless tab is absent from renderer state, so the
@@ -9141,12 +9172,12 @@ export class OrcaRuntimeService {
       // the relay when no renderer owns the parent: an adopted tab needs the
       // renderer's live pin guard and durable close transaction.
       if (closingWholeParent && !this.tabs.has(tab.parentTabId)) {
-        this.closeHeadlessMobileTerminalTab(worktreeId, snapshot!, tab, {
+        this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
           killPtys: options.reason === undefined || options.reason === 'user'
         })
         this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
         this.store?.flushOrThrow?.()
-        return { closed: true }
+        return finishCommittedClose()
       }
       if (closingWholeParent && this.notifier?.closeTerminalTab) {
         // Why: whole-tab close is a lifecycle transaction. The renderer reply
@@ -9186,45 +9217,51 @@ export class OrcaRuntimeService {
           this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
           this.store?.flushOrThrow?.()
         }
-        this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot!, tab.parentTabId)
-        return { closed: true }
+        this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, tab.parentTabId)
+        return finishCommittedClose()
       }
       // Why: notifier implementations without the acknowledged relay may expose
       // only raw pane close. Runtime-owned parents still need de-persist + kill.
       if (closingWholeParent && this.isRuntimeOwnedHeadlessMobileTab(worktreeId, tab)) {
-        this.closeHeadlessMobileTerminalTab(worktreeId, snapshot!, tab)
+        this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab)
         this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
         this.store?.flushOrThrow?.()
-        return { closed: true }
+        return finishCommittedClose()
       }
       if (!this.notifier?.closeTerminal) {
-        this.closeHeadlessMobileTerminalTab(worktreeId, snapshot!, tab)
+        this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab)
         this.store?.flushOrThrow?.()
-        return { closed: true }
+        return finishCommittedClose()
       }
       if (tab.id === tabId) {
         const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
         if (pty) {
-          this.ptyController?.kill(pty.ptyId)
-        } else {
-          this.notifier?.closeTerminal(tab.parentTabId)
+          if (this.ptyController?.kill(pty.ptyId) !== true) {
+            throw new Error('terminal_close_failed')
+          }
+          return finishCommittedClose()
         }
-      } else {
-        // Why: paired web tab bars represent a split terminal with one local
-        // parent tab id. Closing that parent should close the desktop tab, not
-        // just whichever leaf happened to be first in the session snapshot.
-        this.notifier?.closeTerminal(tab.parentTabId)
-        this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot!, tab.parentTabId)
+        this.notifier.closeTerminal(tab.parentTabId)
+        return delegatedMobileSessionTabClose()
       }
+      // Why: paired web tab bars represent a split terminal with one local
+      // parent tab id. Closing that parent should close the desktop tab, not
+      // just whichever leaf happened to be first in the session snapshot.
+      this.notifier.closeTerminal(tab.parentTabId)
+      this.clearRuntimeSessionOwnershipForMobileTab(worktreeId, snapshot, tab.parentTabId)
+      return delegatedMobileSessionTabClose()
     } else if (tab.type === 'browser' && this.offscreenBrowserBackend) {
       // Why: headless browser tabs are offscreen WebContents with no renderer to
       // route closeSessionTab to. Close the page directly and drop it from the
       // snapshot so paired clients stop showing it.
-      await this.closeHeadlessMobileBrowserTab(worktreeId, snapshot!, tab)
+      await this.closeHeadlessMobileBrowserTab(worktreeId, snapshot, tab)
     } else {
-      this.notifier?.closeSessionTab?.(tab.id, worktreeId)
+      if (!this.notifier?.closeSessionTab) {
+        throw new Error('runtime_unavailable')
+      }
+      await this.notifier.closeSessionTab(tab.id, worktreeId)
     }
-    return { closed: true }
+    return finishCommittedClose()
   }
 
   // Why: a refused echoed close means the echoing client already pruned its
@@ -10040,6 +10077,8 @@ export class OrcaRuntimeService {
   )
   searchMobileFilePaths: RuntimeFileCommands['searchMobileFilePaths'] =
     this.fileCommands.searchMobileFilePaths.bind(this.fileCommands)
+  searchQuickOpenFilePaths: RuntimeFileCommands['searchQuickOpenFilePaths'] =
+    this.fileCommands.searchQuickOpenFilePaths.bind(this.fileCommands)
   openMobileFile: RuntimeFileCommands['openMobileFile'] = this.fileCommands.openMobileFile.bind(
     this.fileCommands
   )
@@ -10880,9 +10919,6 @@ export class OrcaRuntimeService {
     const cwdChanged = osc7Metadata.cwdChanged
     const agentStatusChunk = this.processAgentStatusOscForPty(ptyId, data)
     this.recordRecentPtyOutputForPathProvenance(ptyId, data)
-    // Agent detection runs on raw data before leaf processing, since the
-    // tail buffer logic normalizes away the OSC sequences we need.
-    this.agentDetector?.onData(ptyId, data, at)
     // Why: watch terminal output for advertised dev-server URLs (e.g. Vite's
     // `Network: https://local.example.com:3001/`) so the workspace ports
     // panel can surface them in place of the kernel bind address.
@@ -12086,6 +12122,10 @@ export class OrcaRuntimeService {
 
   private advancePtyLifecycleGeneration(ptyId: string): void {
     this.ptyLifecycleGenerationById.set(ptyId, this.nextPtyLifecycleGeneration++)
+    // Why: a stop whose exit never arrived would otherwise stay armed across a
+    // same-id respawn and label the NEXT process's crash an operator close —
+    // the exact lie this cause model exists to remove.
+    this.stopRequestedPtyIds.delete(ptyId)
     this.agentPromptLifecycleByPtyId.delete(ptyId)
     this.agentPromptPermissionSequenceByPtyId.delete(ptyId)
     this.agentPromptExplicitStatusFloorByPtyId.set(ptyId, Date.now())
@@ -15006,12 +15046,27 @@ export class OrcaRuntimeService {
     ptyId: string,
     exitCode: number,
     exitIncarnationId?: PtyIncarnationId,
-    options?: { hostExitConfirmed?: boolean }
+    options?: { hostExitConfirmed?: boolean; cause?: TerminalExitCause }
   ): void {
     const pty = this.ptysById.get(ptyId)
     if (exitIncarnationId && pty?.incarnationId && exitIncarnationId !== pty.incarnationId) {
       return
     }
+    // Why intent first: a requested stop can still be delivered by the provider's
+    // own exit event, whose status looks exactly like a natural finish.
+    //
+    // Why it yields to stop_unverified: a stop nobody confirmed is not a
+    // completed close. The process may still be running against a revoked
+    // dispatch — an incident a coordinator must hear about, not a routine
+    // teardown to be filed away and left unescalated.
+    const observedCause = options?.cause ?? resolveUnreportedExitCause(exitCode)
+    const stopNeverConfirmed =
+      observedCause.kind === 'unknown' && observedCause.reason === 'stop_unverified'
+    const exitCause: TerminalExitCause =
+      this.stopRequestedPtyIds.has(ptyId) && !stopNeverConfirmed
+        ? OPERATOR_CLOSE_EXIT_CAUSE
+        : observedCause
+    this.stopRequestedPtyIds.delete(ptyId)
     const preservesAbnormalSshSurface =
       this.isSshOwnedPtyId(ptyId) &&
       pty?.connectionId != null &&
@@ -15147,13 +15202,13 @@ export class OrcaRuntimeService {
     this.remoteDesktopHostReclaimTargets.delete(ptyId)
     this.remoteDesktopViewerRevisions.delete(ptyId)
     this.disposeHeadlessTerminal(ptyId)
-    this.agentDetector?.onExit(ptyId)
     if (pty) {
       pty.connected = false
       pty.runtimeSessionOwned = false
       this.setPairedRendererSessionOwnership(pty.ptyId, false)
       pty.disconnectedAt = Date.now()
       pty.lastExitCode = exitCode
+      pty.lastExitCause = exitCause
       if (exitCode >= 0 || options?.hostExitConfirmed === true) {
         // A real wait status from the owning host is the death certificate; the
         // synthetic -1 we emit on a failed/unroutable stop is not.
@@ -15176,15 +15231,31 @@ export class OrcaRuntimeService {
       this.retireMobileSessionSurfacesForPty(ptyId, incarnationId, exactSurfaces)
     }
 
+    const exitedSurfaces: { handle: string; paneKey: string | null }[] = []
     for (const leaf of this.getLeavesForPty(ptyId)) {
       this.detachedPreAllocatedLeaves.delete(ptyId)
       leaf.connected = false
       leaf.writable = false
       leaf.lastExitCode = exitCode
+      leaf.lastExitCause = exitCause
       leaf.lastAgentStatusObservedLive = false
       this.resolveExitWaiters(leaf)
-      if (!preservesAbnormalSshSurface) {
-        this.failActiveDispatchOnExit(leaf, exitCode)
+      const leafHandle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
+      if (leafHandle) {
+        exitedSurfaces.push({ handle: leafHandle, paneKey: `${leaf.tabId}:${leaf.leafId}` })
+      }
+    }
+    // Why: an explicit whole-tab close drops the leaf from the graph *before*
+    // this exit lands, so a leaf-only walk found nothing and left the dispatch
+    // reading 'dispatched' forever against a dead process. The PTY's own handle
+    // and pane key survive that teardown, so settle from them too (STA-4603).
+    const ptyHandle = this.handleByPtyId.get(ptyId)
+    if (ptyHandle && !exitedSurfaces.some((surface) => surface.handle === ptyHandle)) {
+      exitedSurfaces.push({ handle: ptyHandle, paneKey: pty?.paneKey ?? null })
+    }
+    if (!preservesAbnormalSshSurface) {
+      for (const surface of exitedSurfaces) {
+        this.failActiveDispatchOnExit(surface.handle, surface.paneKey, exitCode, exitCause)
       }
     }
     this.pruneDisconnectedPtyRecords()
@@ -16796,42 +16867,130 @@ export class OrcaRuntimeService {
   // dispatch contexts immediately, rather than waiting for the coordinator's
   // next poll cycle. This catches agent crashes and unexpected exits within
   // milliseconds. The task is set back to 'pending' so it can be re-dispatched.
-  private failActiveDispatchOnExit(leaf: RuntimeLeafRecord, exitCode: number): void {
+  private failActiveDispatchOnExit(
+    handle: string,
+    paneKey: string | null,
+    exitCode: number,
+    cause: TerminalExitCause
+  ): void {
     if (!this._orchestrationDb) {
       return
     }
 
-    const handle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
-    if (!handle) {
-      return
-    }
-
-    const dispatch = this._orchestrationDb.getActiveDispatchForTerminal(handle)
+    // Why the pane key too: a reminted handle no longer matches the row, but the
+    // pane identity behind it outlives the remint.
+    const dispatch = this._orchestrationDb.getActiveDispatchForTerminal(
+      handle,
+      paneKey ?? undefined
+    )
     if (!dispatch) {
       return
     }
 
-    const errorContext = `Agent exited with code ${exitCode}`
-    this._orchestrationDb.failDispatch(dispatch.id, errorContext, { workerProcessExited: true })
+    const errorContext = describeTerminalExitCause(cause)
+    const settled = this._orchestrationDb.failDispatch(dispatch.id, errorContext, {
+      workerProcessExited: true,
+      terminationReason: cause.kind
+    })
 
-    // Why: create an escalation message so the coordinator is notified about
-    // the unexpected exit on its next check cycle, even if the circuit breaker
-    // hasn't tripped yet.
-    const run = this._orchestrationDb.getActiveCoordinatorRun()
-    if (run) {
-      this._orchestrationDb.insertMessage({
+    // Why: a deliberate close is not an incident. Escalating it trains
+    // coordinators to ignore the channel that should wake them for a real one.
+    if (isDeliberateTerminalExit(cause)) {
+      return
+    }
+
+    // Why: failDispatch above is the authoritative state transition and has already
+    // committed. Everything below is best-effort mail on top of it — resolving the
+    // recipient reads the database too — and onPtyExit runs this synchronously per leaf,
+    // so letting any of it escape would abandon the remaining leaves and the pty record
+    // pruning that close out this exit.
+    try {
+      // Why: create an escalation message so the coordinator is notified about
+      // the unexpected exit, even if the circuit breaker hasn't tripped yet.
+      const recipient = this.resolveExitEscalationRecipient(dispatch.run_id)
+      if (!recipient) {
+        return
+      }
+      const escalation = this._orchestrationDb.insertMessage({
         from: handle,
-        to: run.coordinator_handle,
-        subject: `Agent exited unexpectedly (code ${exitCode})`,
+        to: recipient.to,
+        subject: `Agent exited unexpectedly (${errorContext})`,
+        body: this.describeWorkerExit(dispatch, cause, handle, settled?.status),
         type: 'escalation',
         priority: 'high',
+        // Why: applyEscalationToDispatch rejects an escalation without an exact Dispatch
+        // binding, and a coordinator reading this needs to know which Dispatch died.
         payload: JSON.stringify({
           taskId: dispatch.task_id,
+          dispatchId: dispatch.id,
+          // Why both: `exitCode` stays for readers that already parse it, but it
+          // is the raw number the host handed over, not a verdict — `exitCause`
+          // is what says whether the agent was killed, finished, or was closed.
           exitCode,
+          exitCause: cause,
           handle
-        })
+        }),
+        ...(recipient.runId ? { runId: recipient.runId } : {})
+      })
+      // Why: worker death is the one escalation nobody will poll for — the dead pane
+      // can't nudge the coordinator, so wake its check --wait the way every other
+      // message producer does.
+      this.notifyMessageArrived(escalation.to_handle, escalation.type)
+    } catch (error) {
+      // Why: log the Run rather than the recipient — resolution itself can be what failed.
+      console.warn('[orchestration] failed to escalate worker exit', {
+        dispatchId: dispatch.id,
+        runId: dispatch.run_id,
+        error
       })
     }
+  }
+
+  // Why: the banner shows the subject and a raw payload, so without prose the coordinator
+  // has to resolve ids by hand to learn what died and whether the task is still retryable.
+  private describeWorkerExit(
+    dispatch: { id: string; task_id: string; run_id: string },
+    cause: TerminalExitCause,
+    handle: string,
+    settledStatus: DispatchStatus | undefined
+  ): string {
+    const task = this._orchestrationDb?.getTask?.(dispatch.task_id, dispatch.run_id)
+    const title =
+      typeof task?.spec === 'string'
+        ? buildOrchestrationTaskDisplayMetadata({
+            spec: task.spec,
+            taskTitle: task.task_title,
+            displayName: task.display_name
+          }).taskTitle
+        : ''
+    const named = title ? `"${title}" (${dispatch.task_id})` : dispatch.task_id
+    const outcome =
+      settledStatus === 'circuit_broken'
+        ? ' This task has now failed too many times, so it will not be retried automatically.'
+        : settledStatus === 'failed'
+          ? ' The task is ready to be dispatched again.'
+          : ''
+    // Why the cause and not a code: `code 0` reads as success even when the
+    // worker was killed, which is what sent operators chasing phantom OOMs.
+    return `Worker ${handle} stopped while running task ${named}. ${describeTerminalExitCause(
+      cause
+    )}.${outcome}`
+  }
+
+  // Why: a lightweight Run keeps its coordinator in runs/run_coordinator_handles and
+  // never writes the legacy coordinator_runs table, so gating solely on that table
+  // dropped every worker-death escalation (STA-4604). Address the Run mailbox the
+  // coordinator's `orchestration check` actually reads, and leave legacy Runs on the
+  // legacy gate.
+  private resolveExitEscalationRecipient(
+    runId: string
+  ): { to: string; runId?: string } | undefined {
+    const owningRun = this._orchestrationDb?.getRun?.(runId)
+    if (owningRun && owningRun.legacy !== 1) {
+      return { to: `run:${owningRun.id}`, runId: owningRun.id }
+    }
+    const legacyRun = this._orchestrationDb?.getActiveCoordinatorRun?.()
+    return legacyRun ? { to: legacyRun.coordinator_handle } : undefined
   }
 
   async listTerminals(
@@ -17929,6 +18088,23 @@ export class OrcaRuntimeService {
     this.rememberPtyLivenessVerdict(ptyId, { status: 'live', ptyIds: [ptyId] })
   }
 
+  /**
+   * Records that Orca asked this PTY to stop — a close, a stop, a teardown.
+   *
+   * Why before the kill and not at the exit: a requested stop can still be
+   * delivered by the provider's own exit event, which carries a process status
+   * indistinguishable from a natural finish. The intent is the only thing that
+   * separates "the operator closed it" from "the agent died", so it is recorded
+   * where it is known rather than reconstructed afterwards (STA-4603).
+   */
+  markPtyStopRequested(ptyId: string): void {
+    this.stopRequestedPtyIds.add(ptyId)
+  }
+
+  isPtyStopRequested(ptyId: string): boolean {
+    return this.stopRequestedPtyIds.has(ptyId)
+  }
+
   /** Null when nothing has been observed either way, so callers keep their own default. */
   getPtyLivenessVerdict(ptyId: string): PtyLivenessVerdict | null {
     return this.ptyLivenessVerdictByPtyId.get(ptyId)?.verdict ?? null
@@ -18128,7 +18304,8 @@ export class OrcaRuntimeService {
         leafId: parsePaneKey(pty.pty.paneKey ?? '')?.leafId ?? pty.record.leafId,
         paneRuntimeId: -1,
         ptyId: pty.pty.ptyId,
-        rendererGraphEpoch: this.rendererGraphEpoch
+        rendererGraphEpoch: this.rendererGraphEpoch,
+        ...expandTerminalInteractiveWait(await this.getTerminalInteractiveWait(handle))
       }
     }
     const graphEpoch = this.captureReadyGraphEpoch()
@@ -18148,20 +18325,23 @@ export class OrcaRuntimeService {
       preview,
       paneRuntimeId: leaf.paneRuntimeId,
       ptyId: leaf.ptyId,
-      rendererGraphEpoch: this.rendererGraphEpoch
+      rendererGraphEpoch: this.rendererGraphEpoch,
+      ...expandTerminalInteractiveWait(await this.getTerminalInteractiveWait(handle))
     }
   }
 
   async readTerminal(
     handle: string,
-    opts: { cursor?: number; limit?: number } = {}
+    opts: { cursor?: number; limit?: number; screen?: boolean } = {}
   ): Promise<RuntimeTerminalRead> {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       const read = this.readPtyTerminal(handle, pty.pty, opts)
-      const visibleRead = await this.withVisibleSnapshotFallback(pty.pty.ptyId, read, opts)
+      const visibleRead = opts.screen
+        ? await this.readRenderedScreen(pty.pty.ptyId, read, opts)
+        : await this.withVisibleSnapshotFallback(pty.pty.ptyId, read, opts)
       this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
-      return visibleRead
+      return labelTerminalReadSource(visibleRead)
     }
 
     const { leaf } = this.getLiveLeafForHandle(handle)
@@ -18177,11 +18357,33 @@ export class OrcaRuntimeService {
       limit: opts.limit
     })
     if (!leaf.ptyId) {
-      return read
+      return { ...read, source: opts.screen ? 'screen-unavailable' : 'stream' }
     }
-    const visibleRead = await this.withVisibleSnapshotFallback(leaf.ptyId, read, opts)
+    const visibleRead = opts.screen
+      ? await this.readRenderedScreen(leaf.ptyId, read, opts)
+      : await this.withVisibleSnapshotFallback(leaf.ptyId, read, opts)
     this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId)
-    return visibleRead
+    return labelTerminalReadSource(visibleRead)
+  }
+
+  // Why: the default read is the accumulated pty stream, which stacks every repaint of a line
+  // ("cclclecleaclear" for one `clear`) and drops spaces a prompt draws with cursor-forward.
+  // That is the right answer for "what happened over time" and the wrong one for "what is on
+  // screen", so an explicit screen read goes to the emulator state instead. When no rendered
+  // state exists the stream is still returned, but labelled `stream` rather than passed off as
+  // a screen — silently answering the other question is the defect this exists to stop.
+  private async readRenderedScreen(
+    ptyId: string,
+    read: RuntimeTerminalRead,
+    opts: { limit?: number } = {}
+  ): Promise<RuntimeTerminalRead> {
+    const visibleState = await this.readVisibleTerminalState(ptyId)
+    const lines =
+      visibleState?.lines ?? (await this.readProviderTerminalTailLines(ptyId, opts.limit))
+    if (lines.length === 0) {
+      return { ...read, source: 'screen-unavailable' }
+    }
+    return buildVisibleSnapshotReadFallback(read, lines, opts.limit)
   }
 
   // Why a cache: leaf-branch sends may arrive per keystroke; one proven-absent
@@ -18496,17 +18698,37 @@ export class OrcaRuntimeService {
     explicitStatus: { status: AgentStatus; updatedAt: number } | null,
     lifecycle: { status: AgentStatus | null; updatedAt: number } | null | undefined
   ): boolean {
+    return (
+      this.resolveAuthoritativeTerminalWaitPermission(terminal, explicitStatus, lifecycle) !== null
+    )
+  }
+
+  /** The matched prompt when the tail authoritatively proves a human wait, else null. */
+  private resolveAuthoritativeTerminalWaitPermission(
+    terminal: TerminalAgentStatusSnapshot,
+    explicitStatus: { status: AgentStatus; updatedAt: number } | null,
+    lifecycle: { status: AgentStatus | null; updatedAt: number } | null | undefined
+  ): RuntimeTerminalWaitBlockedReason | null {
     const blockedByWaitText = detectTerminalWaitBlockedReason(terminal.waitText)
     if (!blockedByWaitText) {
-      return false
+      return null
     }
     const liveTitleClearsBlockedText =
       terminal.titleStatusIsLive &&
       terminal.titleStatus !== null &&
       terminal.titleStatus !== 'permission' &&
-      !isOpenCodeNativeTitle(terminal.title)
+      !isOpenCodeNativeTitle(terminal.title) &&
+      // Why exempt: cursor-agent keeps spinning in its title while an approval waits, so a
+      // "working" title there is not evidence of progress.
+      blockedByWaitText !== 'agent-approval-prompt'
     if (liveTitleClearsBlockedText && lifecycle?.status !== terminal.titleStatus) {
-      return false
+      return null
+    }
+    // Why no timestamp: the menu is only matched while it still owns the bottom of the screen,
+    // which is the dating. Requiring one would lose a dialog restored from history, across the
+    // app restart an unattended run has to survive.
+    if (blockedByWaitText === 'agent-approval-prompt') {
+      return blockedByWaitText
     }
     const newestPermissionAt = Math.max(
       explicitStatus?.status === 'permission' ? explicitStatus.updatedAt : -1,
@@ -18518,7 +18740,86 @@ export class OrcaRuntimeService {
       lifecycle?.status && lifecycle.status !== 'permission' ? lifecycle.updatedAt : -1
     )
     // Equal wall-clock observations fail closed because their raw intra-chunk order is unknown.
-    return newestPermissionAt >= 0 && newestPermissionAt >= newestClearAt
+    return newestPermissionAt >= 0 && newestPermissionAt >= newestClearAt ? blockedByWaitText : null
+  }
+
+  /** Why: "blocked on a human" is the one worker state a coordinator cannot infer — silence
+   *  covers it, a long tool call, and a wedged process alike. `null` means this pane was
+   *  evaluated and nothing proves a wait; `undefined` means it could not be evaluated, which
+   *  is never the same as "not waiting". */
+  async getTerminalInteractiveWait(
+    handle: string
+  ): Promise<RuntimeTerminalInteractiveWait | null | undefined> {
+    let ptyId: string
+    let terminal: TerminalAgentStatusSnapshot
+    try {
+      ptyId = this.getTerminalAgentStatusPtyId(handle)
+      terminal = this.getTerminalAgentStatusSnapshot(handle, ptyId)
+    } catch {
+      return undefined
+    }
+    const explicitStatus = this.getFreshExplicitAgentStatusForHandle(handle)
+    const promptReason = this.resolveAuthoritativeTerminalWaitPermission(
+      terminal,
+      explicitStatus,
+      this.agentPromptLifecycleByPtyId.get(ptyId)
+    )
+    if (promptReason) {
+      // A matched prompt is self-proving: it is on this pane's screen now.
+      return {
+        source: 'prompt-text',
+        reason: promptReason,
+        ...(terminal.waitBlockedAt !== null ? { since: terminal.waitBlockedAt } : {})
+      }
+    }
+    if (terminal.titleStatus === 'permission' && terminal.titleStatusIsLive) {
+      return { source: 'title' }
+    }
+    if (explicitStatus?.status !== 'permission') {
+      return null
+    }
+    // Why the extra round trip for hook evidence only: a hook row outlives its agent by up to
+    // AGENT_STATUS_STALE_AFTER_MS, and only the shared verdict proves an agent still owns this
+    // PTY — a shell that took the pane back rarely leaves a title we can recognize as one.
+    // Bounded because it reaches a PTY controller that can be a remote host: a wedged probe
+    // must leave the wait unevaluated, never stall every caller of showTerminal.
+    const status = await withTimeout(
+      this.probeAgentStatusOncePerPty(handle, ptyId),
+      TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS,
+      undefined
+    )
+    if (!status) {
+      return undefined
+    }
+    return status.isRunningAgent && status.status === 'permission'
+      ? { source: 'hook', since: explicitStatus.updatedAt }
+      : null
+  }
+
+  // Why single-flight: the timeout above abandons the wait, not the request. A wedged remote
+  // host would otherwise accrue one live probe per poll for as long as a coordinator watches.
+  private readonly interactiveWaitProbesByPtyId = new Map<
+    string,
+    Promise<RuntimeTerminalAgentStatus | undefined>
+  >()
+
+  private probeAgentStatusOncePerPty(
+    handle: string,
+    ptyId: string
+  ): Promise<RuntimeTerminalAgentStatus | undefined> {
+    const inFlight = this.interactiveWaitProbesByPtyId.get(ptyId)
+    if (inFlight) {
+      return inFlight
+    }
+    const probe = this.getTerminalAgentStatus(handle)
+      .catch(() => undefined)
+      .finally(() => {
+        if (this.interactiveWaitProbesByPtyId.get(ptyId) === probe) {
+          this.interactiveWaitProbesByPtyId.delete(ptyId)
+        }
+      })
+    this.interactiveWaitProbesByPtyId.set(ptyId, probe)
+    return probe
   }
 
   private async terminalHasShellForegroundProcess(handle: string, ptyId: string): Promise<boolean> {
@@ -20029,15 +20330,19 @@ export class OrcaRuntimeService {
     return this.store?.getRepos() ?? []
   }
 
+  // Why a stable field and not a per-call closure: enrichment dedupes coalesced callers by callback
+  // identity, so a fresh closure per call would stack up for the length of a slow sweep.
+  private readonly onRepoGitRemoteIdentitiesChanged = (): void => {
+    this.invalidateResolvedWorktreeCache()
+    this.notifyReposChanged()
+  }
+
   enrichMissingRepoGitRemoteIdentities(): void {
     if (!this.store) {
       return
     }
     enrichMissingRepoGitRemoteIdentities(this.store, {
-      onChanged: () => {
-        this.invalidateResolvedWorktreeCache()
-        this.notifyReposChanged()
-      }
+      onChanged: this.onRepoGitRemoteIdentitiesChanged
     })
   }
 
@@ -23744,6 +24049,9 @@ export class OrcaRuntimeService {
     pushTarget?: GitPushTarget
     runHooks?: boolean
     activate?: boolean
+    /** Who the create's activation is addressed to. Defaults to 'all' so host/CLI callers keep
+     *  revealing on every surface; the RPC layer narrows it to 'caller' for paired clients. */
+    navigation?: RuntimeNavigationTarget
     setupDecision?: 'run' | 'skip' | 'inherit'
     awaitTerminalProvisioning?: boolean
     observeSetupCompletion?: boolean
@@ -23907,9 +24215,14 @@ export class OrcaRuntimeService {
       }
       if (shouldActivate) {
         if (effectiveStartup && !didSpawnStartup) {
-          this.notifyActivateWorktree(repo.id, worktree.id, undefined, effectiveStartup)
+          this.notifyActivateWorktree(repo.id, worktree.id, {
+            startup: effectiveStartup,
+            navigationTarget: args.navigation
+          })
         } else {
-          this.notifyActivateWorktree(repo.id, worktree.id)
+          this.notifyActivateWorktree(repo.id, worktree.id, {
+            navigationTarget: args.navigation
+          })
         }
       } else if (this.ptyController?.spawn && !didSpawnStartup) {
         try {
@@ -24735,21 +25048,18 @@ export class OrcaRuntimeService {
           : undefined
       const activationDefaultTabs = runtimeWillProvisionTerminals ? undefined : defaultTabs
       if (effectiveStartup && !didSpawnStartup) {
-        this.notifyActivateWorktree(
-          repo.id,
-          worktree.id,
-          activationSetup,
-          effectiveStartup,
-          activationDefaultTabs
-        )
+        this.notifyActivateWorktree(repo.id, worktree.id, {
+          setup: activationSetup,
+          startup: effectiveStartup,
+          defaultTabs: activationDefaultTabs,
+          navigationTarget: args.navigation
+        })
       } else {
-        this.notifyActivateWorktree(
-          repo.id,
-          worktree.id,
-          activationSetup,
-          undefined,
-          activationDefaultTabs
-        )
+        this.notifyActivateWorktree(repo.id, worktree.id, {
+          setup: activationSetup,
+          defaultTabs: activationDefaultTabs,
+          navigationTarget: args.navigation
+        })
       }
     } else if (this.ptyController?.spawn && (setup || defaultTabs || didSpawnStartup)) {
       // Why: inactive terminal materialization matches normal worktree creation,
@@ -24889,6 +25199,7 @@ export class OrcaRuntimeService {
       pushTarget?: GitPushTarget
       runHooks?: boolean
       activate?: boolean
+      navigation?: RuntimeNavigationTarget
       setupDecision?: 'run' | 'skip' | 'inherit'
       awaitTerminalProvisioning?: boolean
       observeSetupCompletion?: boolean
@@ -25079,21 +25390,18 @@ export class OrcaRuntimeService {
           : undefined
       const activationDefaultTabs = runtimeWillProvisionTerminals ? undefined : result.defaultTabs
       if (args.startup && !didSpawnStartup) {
-        this.notifyActivateWorktree(
-          repo.id,
-          result.worktree.id,
-          activationSetup,
-          args.startup,
-          activationDefaultTabs
-        )
+        this.notifyActivateWorktree(repo.id, result.worktree.id, {
+          setup: activationSetup,
+          startup: args.startup,
+          defaultTabs: activationDefaultTabs,
+          navigationTarget: args.navigation
+        })
       } else {
-        this.notifyActivateWorktree(
-          repo.id,
-          result.worktree.id,
-          activationSetup,
-          undefined,
-          activationDefaultTabs
-        )
+        this.notifyActivateWorktree(repo.id, result.worktree.id, {
+          setup: activationSetup,
+          defaultTabs: activationDefaultTabs,
+          navigationTarget: args.navigation
+        })
       }
     }
 
@@ -29118,6 +29426,10 @@ export class OrcaRuntimeService {
     let addressedPtyStopped = false
     const deadlineMs = Date.now() + EXPLICIT_TERMINAL_CLOSE_STOP_TIMEOUT_MS
     for (const ptyId of ptyIds) {
+      // Why here: this is the single funnel for an explicit close, and the
+      // intent must be on record before the stop, since the provider may report
+      // the exit itself with a status that reads like a natural finish.
+      this.markPtyStopRequested(ptyId)
       let stopped = false
       if (this.ptyController?.stopAndWait) {
         try {
@@ -31858,6 +32170,7 @@ export class OrcaRuntimeService {
         connected: state.connected ?? true,
         disconnectedAt: state.connected === false ? Date.now() : null,
         lastExitCode: null,
+        lastExitCause: null,
         lastAgentStatus: null,
         lastAgentStatusObservedLive: false,
         lastAgentStatusStartedAtEpochMs: null,
@@ -32016,10 +32329,20 @@ export class OrcaRuntimeService {
     } else {
       this.ptyControllerInventoryGenerationByProvider.set(providerKey, inventoryGeneration)
     }
+    const listBudgetMs =
+      deadline === undefined
+        ? PTY_CONTROLLER_LIST_TIMEOUT_MS
+        : Math.max(1, Math.min(PTY_CONTROLLER_LIST_TIMEOUT_MS, deadline - Date.now()))
+    // Why: give each provider a deadline strictly inside our own, so a relay that
+    // never answers still leaves the aggregate time to return the providers that did
+    // — expiring at the same instant would discard the whole inventory instead.
+    const providerListOpts = {
+      deadlineMs: Date.now() + Math.max(1, listBudgetMs - PTY_CONTROLLER_LIST_PROVIDER_MARGIN_MS)
+    }
     const processInventory =
       connectionId === undefined && this.ptyController.listProcessesWithHostScope
-        ? this.ptyController.listProcessesWithHostScope()
-        : this.ptyController.listProcesses(connectionId).then((processes) => {
+        ? this.ptyController.listProcessesWithHostScope(providerListOpts)
+        : this.ptyController.listProcesses(connectionId, providerListOpts).then((processes) => {
             const hostIds = new Set<ExecutionHostId>()
             if (connectionId === undefined || connectionId === null) {
               hostIds.add(LOCAL_EXECUTION_HOST_ID)
@@ -32040,12 +32363,7 @@ export class OrcaRuntimeService {
             }
             return { processes, hostIds: [...hostIds] }
           })
-    const sessionsResult = await withTimeoutResult(
-      processInventory,
-      deadline === undefined
-        ? PTY_CONTROLLER_LIST_TIMEOUT_MS
-        : Math.max(1, Math.min(PTY_CONTROLLER_LIST_TIMEOUT_MS, deadline - Date.now()))
-    )
+    const sessionsResult = await withTimeoutResult(processInventory, listBudgetMs)
     if (!sessionsResult.ok) {
       // Why: a transient controller failure is not evidence that retained PTYs exited.
       return null
@@ -32207,17 +32525,6 @@ export class OrcaRuntimeService {
       // Why: fire-and-forget so this listing hot path doesn't serialize a relay round-trip per session and a throw can't abort the sweep below.
       this.refreshPtyForegroundAgent(session.id)
     }
-    for (const [ptyId, receipt] of this.restoredOrchestrationAuthorityByPtyId) {
-      const inScope =
-        connectionId === undefined ||
-        (connectionId === null && receipt.hostScope.kind !== 'ssh') ||
-        (typeof connectionId === 'string' &&
-          receipt.hostScope.kind === 'ssh' &&
-          receipt.hostScope.targetId === connectionId)
-      if (inScope && !allLivePtyIds.has(ptyId)) {
-        this.restoredOrchestrationAuthorityByPtyId.delete(ptyId)
-      }
-    }
     for (const pty of this.ptysById.values()) {
       if (connectionId !== undefined && pty.connectionId !== connectionId) {
         continue
@@ -32258,6 +32565,20 @@ export class OrcaRuntimeService {
         } else if (observed === null) {
           this.markPtyLivenessUnverifiable(pty.ptyId, NO_OBSERVING_PROVIDER_REASON)
         }
+      }
+    }
+    // Why: runs after the hasPty rescue so a still-addressable pane keeps its receipt.
+    // A provider that failed to list is absent from `sessions`, and dropping authority on
+    // that silence would retire an orchestration handle the relay can still reach.
+    for (const [ptyId, receipt] of this.restoredOrchestrationAuthorityByPtyId) {
+      const inScope =
+        connectionId === undefined ||
+        (connectionId === null && receipt.hostScope.kind !== 'ssh') ||
+        (typeof connectionId === 'string' &&
+          receipt.hostScope.kind === 'ssh' &&
+          receipt.hostScope.targetId === connectionId)
+      if (inScope && !allLivePtyIds.has(ptyId)) {
+        this.restoredOrchestrationAuthorityByPtyId.delete(ptyId)
       }
     }
     this.pruneDisconnectedPtyRecords()
@@ -32516,6 +32837,7 @@ export class OrcaRuntimeService {
       writable: provenAbsent ? false : leaf.writable,
       lastOutputAt: leaf.lastOutputAt,
       preview: leaf.preview,
+      ...(leaf.lastExitCause ? { exitCause: leaf.lastExitCause } : {}),
       ...this.terminalExecutionHostField(leaf.ptyId, leaf.worktreeId)
     }
   }
@@ -33377,6 +33699,25 @@ export class OrcaRuntimeService {
     options: { preserveQuestionUnderShellTitle?: boolean } = {}
   ): AgentStatusEntry | null {
     if (!status || !pty) {
+      return status
+    }
+    // Why: pending a human answer is hook-only evidence an idle title cannot renew. A title
+    // reads `permission` only from a vendor glyph or a synthesized `<Agent> - action required`
+    // label, and SYNTHETIC_AGENT_TITLE_PROFILES has no Claude entry (OpenCode opts out), so
+    // `titleConfirmsState` below is unreachable for them. Timestamps can't arbitrate either:
+    // lastAgentStatusRichInvalidatedAtEpochMs moves only on a status-CLASS change while
+    // lastOscTitleEpochMs moves on EVERY write, so Claude's one same-class repaint ~123ms
+    // after PermissionRequest pushed title evidence past a still-current hook and published
+    // `done` — retiring the card while the user was still being asked.
+    // Only under an `idle` title: idle is the ABSENCE of activity evidence, but a `working`
+    // title (agent resumed) or a null/shell/identity-only one (agent released the pane)
+    // contradicts the hook and must still retire the row and its stale question (#11761).
+    // Both names: Claude's PermissionRequest normalizes to `waiting`, not `blocked`.
+    if (
+      (status.state === 'waiting' || status.state === 'blocked') &&
+      pty.lastAgentStatus === 'idle' &&
+      Date.now() - status.updatedAt <= AGENT_STATUS_STALE_AFTER_MS
+    ) {
       return status
     }
     if (
@@ -34474,6 +34815,7 @@ export class OrcaRuntimeService {
       writable: pty.connected,
       lastOutputAt: pty.lastOutputAt,
       preview: pty.preview,
+      ...(pty.lastExitCause ? { exitCause: pty.lastExitCause } : {}),
       ...this.terminalExecutionHostField(pty.ptyId, pty.worktreeId)
     }
   }
@@ -38037,6 +38379,9 @@ export function resolveWorktreeScanCacheTtlMs(repo: Pick<Repo, 'path' | 'connect
     : WORKTREE_SCAN_CACHE_TTL_MS
 }
 const PTY_CONTROLLER_LIST_TIMEOUT_MS = 3000
+// Why: the slice of the list budget reserved for the aggregate to collect the providers
+// that answered after a stalled one gives up.
+const PTY_CONTROLLER_LIST_PROVIDER_MARGIN_MS = 500
 // Why: the renderer waits 15s; leave room for the verified failure response and release the spawn fence before its caller times out.
 const WORKTREE_TERMINAL_SLEEP_TIMEOUT_MS = 12_000
 
@@ -39239,6 +39584,15 @@ function visibleNonBlankTerminalLines(lines: string[]): string[] {
   return lines.map((line) => line.trimEnd()).filter((line) => line.trim().length > 0)
 }
 
+// Why: every read carries its source, so a caller that asked for a screen and got a response
+// with no source at all knows it reached a host that predates screen reads — rather than
+// mistaking the stream for the screen. Rendered lines only ever enter a read through
+// buildVisibleSnapshotReadFallback, which stamps `screen` itself, so anything still unlabelled
+// here is the accumulated stream.
+function labelTerminalReadSource(resolved: RuntimeTerminalRead): RuntimeTerminalRead {
+  return resolved.source ? resolved : { ...resolved, source: 'stream' }
+}
+
 function buildVisibleSnapshotReadFallback(
   read: RuntimeTerminalRead,
   visibleLines: string[],
@@ -39255,7 +39609,8 @@ function buildVisibleSnapshotReadFallback(
     tail: charBoundedTail.tail,
     limited:
       read.limited || lineBoundedTail.length < visibleLines.length || charBoundedTail.limited,
-    returnedLineCount: charBoundedTail.tail.length
+    returnedLineCount: charBoundedTail.tail.length,
+    source: 'screen'
   }
 }
 
@@ -39456,7 +39811,91 @@ function isTerminalWaitWhitespace(value: string, index: number): boolean {
 }
 
 const TERMINAL_WAIT_BLOCKED_SENTINEL_RE =
-  /update available|choose working directory to|codex just got an upgrade|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission required|requires permission|allow once|allow always/i
+  /update available|choose working directory to|codex just got an upgrade|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission required|requires permission|allow once|allow always|run this command\?/i
+
+// Why text at all: cursor-agent's hook set has no approval event and beforeShellExecution
+// fires for auto-allowed commands too, so the menu is the only authority. Match the key-bound
+// choices rather than the prose above them.
+const CURSOR_APPROVAL_CHOICE_MARKERS = [
+  'run (once)',
+  'to allowlist?',
+  'run everything',
+  'skip & tell the agent'
+]
+// Why bounded to the last lines: an answered menu stays in scrollback, and a stale hit fails
+// tui-idle and refuses prompt injection. Only a dialog that still owns the bottom of the
+// screen is live, and confining the whole match to that window also keeps prose above or
+// below — an agent narrating "I'll pick Run Everything" — from anchoring it.
+const CURSOR_APPROVAL_TAIL_LINES = 8
+
+function findCursorApprovalPromptIndex(normalized: string): number | null {
+  const windowStart = startOfLastLines(normalized, CURSOR_APPROVAL_TAIL_LINES)
+  const tail = normalized.slice(windowStart)
+  if (!tail.includes('run this command?')) {
+    return null
+  }
+  const lines = tail.split('\n')
+  while (lines.length > 0 && lines.at(-1)?.trim() === '') {
+    lines.pop()
+  }
+  let matchedLines = 0
+  let lastChoiceLine = -1
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!isCursorApprovalChoiceLine(lines[index])) {
+      continue
+    }
+    matchedLines += 1
+    lastChoiceLine = index
+  }
+  if (matchedLines < 2) {
+    return null
+  }
+  // Why no slack: every capture of a live dialog ends on its last choice, and one line of
+  // tolerance is enough for the agent's own narration of a choice to revive an answered menu.
+  // A redraw caught mid-flight reads as no wait until the next poll, which is the safe way
+  // to be wrong.
+  return lastChoiceLine === lines.length - 1
+    ? windowStart + tail.lastIndexOf('run this command?')
+    : null
+}
+
+// Why the trailing key and not the wording alone: an agent narrating "next time I'll suggest
+// Run Everything" writes the same words as the menu. A selectable row ends in the key that
+// picks it, and prose does not. Spelled as key names rather than a character class, because
+// any lowercase run would readmit "…suggest Run Everything (as before)".
+const CURSOR_APPROVAL_CHOICE_KEY_RE =
+  /\((?:shift\+tab|ctrl\+[a-z]|esc(?: or [a-z])*|tab|enter|return|space|[a-z]|[\u21b5\u21e7\u21b9\u238b\u23ce]{1,3})\)\s*$/
+
+function isCursorApprovalChoiceLine(line: string): boolean {
+  return (
+    CURSOR_APPROVAL_CHOICE_KEY_RE.test(line) &&
+    CURSOR_APPROVAL_CHOICE_MARKERS.some((marker) => line.includes(marker))
+  )
+}
+
+/** Offset of the first character of the last `count` newline-separated lines. */
+function startOfLastLines(value: string, count: number): number {
+  let cursor = value.length
+  for (let seen = 0; seen < count; seen += 1) {
+    const previous = value.lastIndexOf('\n', cursor - 1)
+    if (previous === -1) {
+      return 0
+    }
+    cursor = previous
+  }
+  return cursor + 1
+}
+
+/** Why a spread and not `agentWait: value`: an absent key is the only way to say the pane was
+ *  never evaluated, which a reader must not confuse with an evaluated "no wait". */
+function expandTerminalInteractiveWait(
+  agentWait: RuntimeTerminalInteractiveWait | null | undefined
+): { agentWait?: RuntimeTerminalInteractiveWait | null } {
+  return agentWait === undefined ? {} : { agentWait }
+}
+
+/** A wedged PTY controller must not stall every reader of this pane. */
+const TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS = 2_000
 
 function findTerminalWaitBlockedSignal(
   normalized: string
@@ -39526,6 +39965,10 @@ function findTerminalWaitBlockedSignal(
       candidates.push({ reason: 'codex-interactive-prompt', index: interactivePromptIndex })
     }
   }
+  const cursorApprovalIndex = findCursorApprovalPromptIndex(normalized)
+  if (cursorApprovalIndex !== null) {
+    candidates.push({ reason: 'agent-approval-prompt', index: cursorApprovalIndex })
+  }
   const permissionPromptIndex = Math.max(
     normalized.lastIndexOf('permission required'),
     normalized.lastIndexOf('requires permission')
@@ -39552,7 +39995,14 @@ function buildTerminalWaitResult(
   condition: RuntimeTerminalWaitCondition,
   leaf: RuntimeLeafRecord
 ): RuntimeTerminalWait {
-  return buildTerminalWait(handle, condition, getTerminalState(leaf), leaf.lastExitCode)
+  return buildTerminalWait(
+    handle,
+    condition,
+    getTerminalState(leaf),
+    leaf.lastExitCode,
+    undefined,
+    leaf.lastExitCause
+  )
 }
 
 function buildTerminalWaitBlockedResult(
@@ -39566,7 +40016,8 @@ function buildTerminalWaitBlockedResult(
     condition,
     getTerminalState(leaf),
     leaf.lastExitCode,
-    blockedReason
+    blockedReason,
+    leaf.lastExitCause
   )
 }
 
@@ -39575,7 +40026,14 @@ function buildPtyTerminalWaitResult(
   condition: RuntimeTerminalWaitCondition,
   pty: RuntimePtyWorktreeRecord
 ): RuntimeTerminalWait {
-  return buildTerminalWait(handle, condition, getPtyTerminalState(pty), pty.lastExitCode)
+  return buildTerminalWait(
+    handle,
+    condition,
+    getPtyTerminalState(pty),
+    pty.lastExitCode,
+    undefined,
+    pty.lastExitCause
+  )
 }
 
 function buildPtyTerminalWaitBlockedResult(
@@ -39589,7 +40047,8 @@ function buildPtyTerminalWaitBlockedResult(
     condition,
     getPtyTerminalState(pty),
     pty.lastExitCode,
-    blockedReason
+    blockedReason,
+    pty.lastExitCause
   )
 }
 
@@ -39598,7 +40057,8 @@ function buildTerminalWait(
   condition: RuntimeTerminalWaitCondition,
   status: RuntimeTerminalState,
   exitCode: number | null,
-  blockedReason?: RuntimeTerminalWaitBlockedReason
+  blockedReason?: RuntimeTerminalWaitBlockedReason,
+  exitCause?: TerminalExitCause | null
 ): RuntimeTerminalWait {
   return {
     handle,
@@ -39606,6 +40066,7 @@ function buildTerminalWait(
     satisfied: blockedReason === undefined,
     status,
     exitCode,
+    ...(exitCause ? { exitCause } : {}),
     ...(blockedReason ? { blockedReason } : {})
   }
 }

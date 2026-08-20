@@ -57,7 +57,6 @@ export type WorktreeDeleteState = {
 
 export type WorktreeDeleteStateTarget = Pick<Worktree, 'id' | 'hostId'>
 
-
 import type { RendererRemoveWorktreeResult } from './renderer-remove-worktree-result'
 
 export type WorktreeFetchOptions = {

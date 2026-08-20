@@ -33,10 +33,25 @@ describe('classifySubprocessCommand', () => {
     expect(classifySubprocessCommand('gh', ['api', 'rate_limit'])).toBe('gh api')
   })
 
-  it('unwraps wsl.exe-routed commands', () => {
+  it.each([
+    // Orca's own spawns use --exec; `--`/`-e` still arrive from foreign wsl.exe processes.
+    ['--exec', '--exec'],
+    ['-e', '-e'],
+    ['--', '--']
+  ])('unwraps wsl.exe-routed commands past %s', (_label, separator) => {
     expect(
-      classifySubprocessCommand('wsl.exe', ['-d', 'Ubuntu', '--', 'git', 'status', '--porcelain'])
+      classifySubprocessCommand('wsl.exe', [
+        '-d',
+        'Ubuntu',
+        separator,
+        'git',
+        'status',
+        '--porcelain'
+      ])
     ).toBe('git status')
+  })
+
+  it('reports bare wsl.exe with no guest command as wsl', () => {
     expect(classifySubprocessCommand('wsl.exe', ['-d', 'Ubuntu'])).toBe('wsl')
   })
 

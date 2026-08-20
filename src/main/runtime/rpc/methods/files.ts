@@ -3,14 +3,21 @@ import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
 import { runFileWatchStream } from './file-watch-stream-lifecycle'
 import { FILE_MUTATION_METHODS } from './files-mutation-methods'
 import { remoteFileContentBudget } from './files-remote-content-budget'
+import {
+  QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS,
+  QUICK_OPEN_SEARCH_VERSION
+} from '../../../../shared/quick-open-path-search'
+import { limitQuickOpenSearchReplyBySerializedBytes } from '../../../../shared/quick-open-transport-budget'
 import { FileOpen, WorktreeSelector } from './files-target-schemas'
 import { FILE_TERMINAL_ARTIFACT_METHODS } from './files-terminal-artifact-methods'
 
 let filesWatchSubscriptionSeq = 0
 
 const FilePathSearch = WorktreeSelector.extend({
-  query: z.string().max(256).default(''),
-  limit: z.number().int().positive().max(32).default(16)
+  query: z.string().max(QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS).default(''),
+  limit: z.number().int().positive().max(32).default(16),
+  excludePaths: z.array(z.string()).optional(),
+  mode: z.literal('quick-open').optional()
 })
 
 const ResolveTerminalPath = WorktreeSelector.extend({
@@ -95,13 +102,33 @@ export const FILE_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'files.list',
     params: WorktreeSelector,
-    handler: async (params, { runtime }) => runtime.listMobileFiles(params.worktree)
+    handler: async (params, { runtime, signal }) =>
+      signal === undefined
+        ? runtime.listMobileFiles(params.worktree)
+        : runtime.listMobileFiles(params.worktree, { signal })
   }),
   defineMethod({
     name: 'files.searchPaths',
     params: FilePathSearch,
-    handler: async (params, { runtime }) =>
-      runtime.searchMobileFilePaths(params.worktree, params.query, params.limit)
+    handler: async (params, { runtime, signal, clientKind, requestId }) => {
+      if (params.mode !== 'quick-open') {
+        return runtime.searchMobileFilePaths(params.worktree, params.query, params.limit)
+      }
+      const result = {
+        ...(await runtime.searchQuickOpenFilePaths(
+          params.worktree,
+          params.query,
+          params.limit,
+          params.excludePaths,
+          signal
+        )),
+        quickOpenSearchVersion: QUICK_OPEN_SEARCH_VERSION
+      }
+      const maxContentBytes = remoteFileContentBudget(clientKind, requestId)
+      return maxContentBytes === undefined
+        ? result
+        : limitQuickOpenSearchReplyBySerializedBytes(result, maxContentBytes)
+    }
   }),
   defineMethod({
     name: 'files.open',
@@ -186,8 +213,14 @@ export const FILE_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'files.listAll',
     params: FileListAll,
-    handler: async (params, { runtime }) =>
-      runtime.listRuntimeFiles(params.worktree, { excludePaths: params.excludePaths })
+    handler: async (params, { runtime, clientKind, requestId, signal }) => {
+      const maxContentBytes = remoteFileContentBudget(clientKind, requestId)
+      return runtime.listRuntimeFiles(params.worktree, {
+        excludePaths: params.excludePaths,
+        ...(signal === undefined ? {} : { signal }),
+        ...(maxContentBytes === undefined ? {} : { maxContentBytes })
+      })
+    }
   }),
   defineMethod({
     name: 'files.listMarkdownDocuments',

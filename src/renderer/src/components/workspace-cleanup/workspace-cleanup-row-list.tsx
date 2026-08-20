@@ -65,6 +65,7 @@ export function WorkspaceCleanupRowList(props: WorkspaceCleanupRowListState): Re
       ) : null}
       <WorkspaceCleanupCandidateList
         rows={rows}
+        getRowKey={(row) => row.identity}
         scrollElement={props.scrollElement}
         renderRow={(row, index) => (
           <CandidateRow

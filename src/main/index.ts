@@ -19,6 +19,7 @@ import { applyAppIcon } from './app-icon'
 import { relaunchApp } from './app-relaunch'
 import { StatsCollector, initStatsPath } from './stats/collector'
 import { initSshHostKeyStoreFile } from './ssh/ssh-host-key-store'
+import { AgentSessionTransitionRecorder } from './stats/agent-session-transition-recorder'
 import { ClaudeUsageStore, initClaudeUsagePath } from './claude-usage/store'
 import { CodexUsageStore, initCodexUsagePath } from './codex-usage/store'
 import { OpenCodeUsageStore, initOpenCodeUsagePath } from './opencode-usage/store'
@@ -165,7 +166,7 @@ import { maybeRedirectPackagedCliEntryLaunch } from './startup/packaged-cli-entr
 import { startFirstWindowStartupServices } from './startup/first-window-startup-services'
 import { recoverLegacyWorkerTerminalsForRendererStartup } from './startup/legacy-worker-renderer-recovery'
 import { createWslCliReconciliationStartupBarrier } from './startup/wsl-cli-reconciliation-startup-barrier'
-import { getDevInstanceIdentity } from './startup/dev-instance-identity'
+import { getDevInstanceIdentity, shouldApplyPreReadyAppName } from './startup/dev-instance-identity'
 import { hydrateShellPath, mergePathSegments } from './startup/hydrate-shell-path'
 import { createWindowsShellPathHydration } from './startup/windows-shell-path-hydration'
 import {
@@ -191,6 +192,7 @@ import {
   logStartupMilestone
 } from './startup/startup-diagnostics'
 import { ensureWindowsUserDataAclGrant } from './startup/windows-user-data-acl'
+import { probeWindowsInstallDirAcl } from './startup/windows-install-dir-acl-probe'
 import { neutralizeLegacyTerminalShimDir } from './pty/legacy-terminal-shim-dir'
 import { shouldQuitWhenAllWindowsClosed } from './startup/window-all-closed-quit-policy'
 import {
@@ -866,6 +868,15 @@ if (hasSingleInstanceLock) {
   initClaudeUsagePath()
   initCodexUsagePath()
   initOpenCodeUsagePath()
+  // Why: Electron resolves the macOS safeStorage Keychain service name
+  // ("<app name> Safe Storage") before `ready`, so the setName in whenReady is
+  // too late to move it — dev otherwise lands on the package.json name. Dev-only
+  // so a packaged build keeps deriving the key from its own CFBundleName.
+  // Safe here: dev always pins userData via app.setPath (configure-process.ts),
+  // so setName cannot shift the paths captured just above.
+  if (shouldApplyPreReadyAppName(devInstanceIdentity)) {
+    app.setName(devInstanceIdentity.appName)
+  }
   // Why: must precede app.whenReady() so Crashpad is installed before the
   // first renderer spawns; a CHECK before this point is still exit-code-only.
   startCrashpadCapture()
@@ -1375,6 +1386,9 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
         }
       }
     })
+    // Why here: read-only, and the install DACL is the one thing a 0x80000003
+    // child death cannot tell us about itself. See electron/electron#51761.
+    probeWindowsInstallDirAcl({ isServeMode })
   }
 
   const window = createMainWindow(store, {
@@ -1583,6 +1597,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
       providerSessionOnly,
       promptInteractionKey,
       restoredUnconfirmed,
+      observation,
       isReplay
     }) => {
       if (mainWindow?.isDestroyed()) {
@@ -1600,6 +1615,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
           receivedAt,
           stateStartedAt,
           ...(providerSession ? { providerSession } : {}),
+          ...(observation ? { observation } : {}),
           providerSessionOnly: true
         })
         return
@@ -1631,6 +1647,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
         ...(providerSession ? { providerSession } : {}),
         ...(promptInteractionKey ? { promptInteractionKey } : {}),
         ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
+        ...(observation ? { observation } : {}),
         ...(orchestration ? { orchestration } : {})
       }
       mainWindow?.webContents.send('agentStatus:set', statusEvent)
@@ -2192,7 +2209,9 @@ void app.whenReady().then(async () => {
     }
   )
   electronApp.setAppUserModelId(devInstanceIdentity.appUserModelId)
-  // Why: setName drives the macOS safeStorage Keychain item name; use the stable appName (not per-branch `name`) so dev branches share one key and don't re-prompt.
+  // Why: names the app menu/About panel. Dev already applied this pre-ready (see the
+  // safeStorage note above); this call stays unconditional so packaged builds keep their
+  // existing post-ready rename, which lands after the Keychain name is already resolved.
   app.setName(devInstanceIdentity.appName)
   updateGpuAccelerationAboutPanel()
 
@@ -2442,6 +2461,16 @@ void app.whenReady().then(async () => {
   initCohortClassifier(store)
   initOnboardingCohortClassifier(store)
   stats = new StatsCollector()
+  // Agent-session stats come from hook status transitions, the same truth the
+  // sidebar and dashboard read — never from OSC terminal titles, which miss
+  // hook-only agents and count any spinner TUI as an agent (#10201).
+  const agentSessionRecorder = new AgentSessionTransitionRecorder(stats)
+  agentHookServer.subscribeEnrichedStatus((enriched) => {
+    agentSessionRecorder.onStatus(enriched)
+  })
+  agentHookServer.subscribePaneStatusClear((clear) => {
+    agentSessionRecorder.onCleared(clear)
+  })
   claudeUsage = new ClaudeUsageStore(store)
   codexUsage = new CodexUsageStore(store)
   openCodeUsage = new OpenCodeUsageStore(store)
@@ -3309,7 +3338,7 @@ app.on('will-quit', (e) => {
   }
   // Why: before-quit can still be aborted by renderer beforeunload; only remove the Windows tray icon on the committed quit path.
   destroySystemTray()
-  // Why: stats.flushAsync() must precede killAllPty() so still-running agents emit synthetic agent_stop events (killAllPty skips runtime.onPtyExit()). It closes them out synchronously and only defers the write.
+  // Why: an agent still working at quit gets no terminating hook, so stats.flushAsync() closes those sessions out synchronously (only the write is deferred) — otherwise their duration is lost.
   starNag?.stop()
   automations?.stop()
   // Why: plugin hosts are forked children; dispose sends shutdown and

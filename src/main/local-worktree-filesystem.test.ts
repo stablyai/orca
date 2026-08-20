@@ -168,9 +168,25 @@ describe('local worktree filesystem runtime access', () => {
       const removeArgs = execFileMock.mock.calls[2]?.[1] as string[]
       expect(removeArgs.at(-1)).toContain('rm -rf --')
       expect(removeArgs.at(-1)).toContain(
-        String.raw`rm -rf -- '\''/mnt/c/Users/me/repo feature'\''`
+        String.raw`rm -rf -- '/mnt/c/Users/me/repo feature'`
       )
       expect(rmMock).not.toHaveBeenCalled()
+    })
+  })
+
+  it('never starts a login or interactive shell for filesystem reads', async () => {
+    await withPlatform('win32', async () => {
+      completeExecFile('file')
+      await getLocalWorktreePathAccess({ wslDistro: 'Ubuntu' }).statPath('/home/me/repo/.git')
+
+      // Why: a login/interactive shell is what puts the distro's rc banner on the
+      // stdout these callers parse. cat/stat/rm need nothing from the user's PATH,
+      // so the shell mode is the fix rather than filtering what it prints.
+      const args = execFileMock.mock.calls[0]?.[1] as string[]
+      expect(args).toContain('-c')
+      expect(args).not.toContain('-lc')
+      expect(args).not.toContain('-ilc')
+      expect(args.at(-1)).not.toContain('getent passwd')
     })
   })
 

@@ -32,7 +32,7 @@ import { useWorktreeResync } from '../../../src/transport/use-worktree-resync'
 import { startHostWorktreeRefresh } from '../../../src/worktree/host-worktree-refresh'
 import {
   useLastConnectedAt,
-  usePendingConnectionPath,
+  useRelayRecoveryStatus,
   useReconnectAttempt
 } from '../../../src/transport/client-context-connection-metrics'
 import {
@@ -139,7 +139,7 @@ export function HostScreen({
   const { client, state: connState } = useHostClient(hostId)
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
-  const pendingConnectionPath = usePendingConnectionPath(hostId)
+  const relayRecovery = useRelayRecoveryStatus(hostId)
   const clientRef = useRef<RpcClient | null>(null)
   const fetchWorktreesInFlightRef = useRef(false)
   // Why: useRef, not useMemo — React may discard memoized values, which would silently
@@ -820,7 +820,7 @@ export function HostScreen({
               state: connState,
               reconnectAttempts,
               lastConnectedAt,
-              pendingPath: pendingConnectionPath
+              ...relayRecovery
             })
             return (
               <>
@@ -1099,8 +1099,8 @@ export function HostScreen({
         )}
       </View>
 
-      {/* Auth failed banner */}
-      {connState === 'auth-failed' && (
+      {/* Auth failed: a latched relay rejection must reach the same re-pair affordance. */}
+      {(connState === 'auth-failed' || relayRecovery.pairingRejected) && (
         <AuthFailedBanner
           canRetry={!!hostId}
           onRetry={() => hostId && void forceReconnectHost(hostId)}

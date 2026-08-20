@@ -13703,6 +13703,7 @@
           "e46c1aa9ad": "생성",
           "a9d9dccf77": "저장",
           "777548c2d6": "변경 사항 저장",
+          "e8c2a14f70": "저장하면 일시 중지될 때까지 자동으로 실행됩니다.",
           "ff5db28639": "기존의"
         },
         "AutomationEditorDialogHeader": {
@@ -13993,6 +13994,19 @@
         },
         "AutomationListLocalRows": {
           "c92c9463c6": "자동화 작업"
+        },
+        "AutomationListFilterMenu": {
+          "926e785e4d": "agents 검색...",
+          "491043ee45": "검색어와 일치하는 agents가 없습니다.",
+          "agent": "에이전트",
+          "lastRun": "마지막 실행",
+          "all": "전체",
+          "failed": "실패",
+          "succeeded": "성공",
+          "neverRan": "실행 안 함",
+          "filters": "필터",
+          "clear": "필터 지우기",
+          "removeFilter": "{{value0}} 필터 제거"
         }
       },
       "agent": {
@@ -14341,12 +14355,10 @@
         "ArtifactsPage": {
           "signInAgain": "아티팩트를 불러오려면 Orca에 다시 로그인하세요.",
           "loadFailed": "아티팩트를 불러올 수 없습니다.",
-          "deleteTitle": "아티팩트를 삭제하시겠습니까?",
-          "deleteDescription": "“{{name}}”은(는) 더 이상 공개 링크에서 사용할 수 없게 됩니다.",
+          "deleteTitle": "아티팩트를 삭제할까요?",
+          "deleteDescription": "“{{name}}”은(는) 공개 링크에서 더 이상 사용할 수 없습니다.",
           "delete": "삭제",
           "deleteFailed": "아티팩트를 삭제할 수 없습니다.",
-          "closeArtifacts": "아티팩트 닫기",
-          "closeTooltip": "닫기 · Esc",
           "title": "아티팩트",
           "refresh": "새로고침",
           "signInHeading": "Orca에 로그인",
@@ -14363,8 +14375,6 @@
           "publishingOff": "게시가 꺼져 있습니다",
           "publishingOffCopy": "이 기기에서는 아직 공개 아티팩트 링크를 만들 수 없습니다. 설정 → 아티팩트에서 게시를 허용한 후 열려 있는 HTML 또는 Markdown 파일에서 공유하거나 에이전트에게 요청하세요.",
           "openArtifactsSettings": "설정 → 아티팩트 열기",
-          "loadedCountMore": "{{count}}개 로드됨 · 더 있음",
-          "loadedCount": "{{count}}개 공유됨",
           "retry": "다시 시도",
           "reconnectHeading": "Orca에 다시 로그인",
           "reconnectCopy": "계정을 통해 공유된 아티팩트를 보고 관리하려면 다시 로그인하세요.",
@@ -14380,16 +14390,16 @@
         "previewUnavailable": "미리보기를 사용할 수 없습니다",
         "previewUnavailableDescription": "이 아티팩트를 보려면 브라우저에서 여세요.",
         "actions": "아티팩트 작업",
+        "ArtifactActions": {
+          "more": "추가 아티팩트 작업"
+        },
         "ArtifactCollection": {
-          "loadMore": "더 보기"
+          "loadMore": "더 보기",
+          "noMatches": "일치하는 항목이 없습니다"
         },
         "ArtifactDetailHeader": {
-          "publicLink": "이 링크가 있으면 누구나 볼 수 있습니다"
-        },
-        "ArtifactListPane": {
-          "search": "아티팩트 검색",
-          "listLabel": "공유된 아티팩트",
-          "noMatches": "일치하는 항목이 없습니다"
+          "publicLink": "이 링크가 있으면 누구나 볼 수 있습니다",
+          "close": "닫기"
         },
         "updatedAt": "{{when}}에 업데이트됨",
         "updatedRecently": "방금 전",
@@ -14433,7 +14443,29 @@
           "openLink": "링크 열기",
           "updating": "업데이트 중…",
           "update": "공유된 콘텐츠 업데이트"
-        }
+        },
+        "ArtifactDetailDrawer": {
+          "description": "이 공유된 아티팩트를 미리 보고 관리합니다."
+        },
+        "ArtifactListSearchField": {
+          "label": "아티팩트 검색",
+          "placeholder": "검색...",
+          "clear": "검색 지우기"
+        },
+        "ArtifactListTableHeader": {
+          "name": "이름",
+          "type": "유형",
+          "size": "크기",
+          "updated": "업데이트",
+          "expires": "만료",
+          "actions": "작업"
+        },
+        "ArtifactsPageSkeleton": {
+          "loading": "아티팩트를 불러오는 중"
+        },
+        "expiredCompact": "만료됨",
+        "typeMarkdown": "Markdown",
+        "typeHtml": "HTML"
       }
     },
     "i18n": {

@@ -29,6 +29,18 @@ export function isSafeFishHistorySession(session: unknown): session is string {
   return typeof session === 'string' && SAFE_SESSION_NAME.test(session)
 }
 
+/** Drop a `fish_history` this process inherited from an outer Orca.
+ *  fish EXPORTS the variable, so an Orca launched from a fish pane hands the
+ *  LAUNCHING worktree's session name to every pane of the nested app, which then
+ *  writes into that worktree's history file (STA-4682). Only Orca-minted names
+ *  match, so a user's own `fish_history` survives; desktop and relay drop each
+ *  other's names deliberately, since neither owns the other's worktree ids. */
+export function dropInheritedOrcaFishHistory(env: Record<string, string | undefined>): void {
+  if (isSafeFishHistorySession(env.fish_history)) {
+    delete env.fish_history
+  }
+}
+
 export function fishHistorySessionName(worktreeHash: string): string {
   return `${SESSION_PREFIX}${worktreeHash}`
 }

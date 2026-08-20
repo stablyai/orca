@@ -10,8 +10,20 @@ export function useLastConnectedAt(hostId: string | undefined): number | null {
   return useHostMetric(hostId, (context, id) => context.getLastConnectedAt(id), null)
 }
 
-export function usePendingConnectionPath(hostId: string | undefined): MobileConnectionPath | null {
-  return useHostMetric(hostId, (context, id) => context.getPendingPath(id), null)
+// Both inputs classifyConnection needs about a relay recovery, read from one
+// subscription so a screen cannot render half of the escalation.
+export function useRelayRecoveryStatus(hostId: string | undefined): {
+  pendingPath: MobileConnectionPath | null
+  pairingRejected: boolean
+} {
+  return useHostMetric(
+    hostId,
+    (context, id) => ({
+      pendingPath: context.getPendingPath(id),
+      pairingRejected: context.isPairingRejected(id)
+    }),
+    { pendingPath: null, pairingRejected: false }
+  )
 }
 
 function useHostMetric<T>(

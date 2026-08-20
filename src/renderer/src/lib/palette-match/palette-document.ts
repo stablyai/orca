@@ -64,6 +64,12 @@ export function buildPaletteDocument(input: PaletteDocumentInput): PaletteDocume
     if (!fields.length) {
       continue
     }
+    // Why first-wins, matching indexPaletteFields: it keeps the first entry's fields, so
+    // overwriting the unit here would pair one record's rendered text with another's
+    // match offsets — highlights landing outside the string the row actually shows.
+    if (evidenceUnits.has(entry.unit.id)) {
+      continue
+    }
     evidenceUnits.set(entry.unit.id, entry.unit)
     for (const field of fields) {
       evidenceSources.push(field)

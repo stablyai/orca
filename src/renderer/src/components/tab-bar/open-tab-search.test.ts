@@ -68,6 +68,7 @@ function makeWorkspaceTab({
   secondaryText = '',
   secondarySearchTexts,
   agentSnippets = [],
+  occupantAgent = null,
   tabSortIndex = 0,
   groupSortIndex = 0,
   isCurrentTab = false
@@ -78,6 +79,7 @@ function makeWorkspaceTab({
   secondaryText?: string
   secondarySearchTexts?: string[]
   agentSnippets?: string[]
+  occupantAgent?: SearchableWorkspaceTab['occupantAgent']
   tabSortIndex?: number
   groupSortIndex?: number
   isCurrentTab?: boolean
@@ -105,6 +107,7 @@ function makeWorkspaceTab({
     agentMetadata: agentSnippets.length
       ? [{ paneKey: `${id}-pane`, textParts: [], snippetCandidates: agentSnippets }]
       : [],
+    occupantAgent,
     isCurrentTab,
     isCurrentWorktree: true
   }
@@ -421,6 +424,19 @@ describe('searchOpenTabs result fields', () => {
     })
   })
 
+  it('copies a confident occupant agent onto workspace results', () => {
+    const results = search({
+      query: 'grok',
+      workspaceTabs: [makeWorkspaceTab({ id: 'tab-1', title: 'grok', occupantAgent: 'grok' })]
+    })
+
+    expect(results[0]).toMatchObject({
+      source: 'workspace',
+      contentType: 'terminal',
+      occupantAgent: 'grok'
+    })
+  })
+
   it('carries the activation identifiers each source needs', () => {
     const results = search({
       query: 'zebra',
@@ -436,7 +452,8 @@ describe('searchOpenTabs result fields', () => {
         tabId: 'tab-1',
         entityId: 'tab-1-entity',
         groupId: 'group-1',
-        worktreeId: 'wt-1'
+        worktreeId: 'wt-1',
+        occupantAgent: null
       },
       {
         source: 'browser',

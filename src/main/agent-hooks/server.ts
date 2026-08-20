@@ -18,6 +18,7 @@ import {
   hasCodexTranscriptSubagents,
   hasPendingAgentResultText,
   HOOK_REQUEST_SLOWLORIS_MS,
+  isNewTurnEvent,
   markClaudeLeadTurnInterrupted,
   markCodexLeadTurnInterrupted,
   MAX_PANE_KEY_LEN,
@@ -32,7 +33,6 @@ import {
   resolveCachedClaudeCompactOwnership,
   resolveHookSource,
   preparePendingGrokResultDiscovery,
-  readHookBodyProviderSessionId,
   seedClaudeLeadTurnFromPersistedStatus,
   seedClaudeSubagentRosterFromSnapshots,
   seedCodexStateFromSnapshot,
@@ -73,6 +73,12 @@ import {
   normalizeAgentStatusPayload
 } from '../../shared/agent-status-types'
 import {
+  AgentStatusObservationSequencer,
+  createAgentStatusAuthorityId,
+  type AgentStatusObservation,
+  type AgentStatusObservationOrigin
+} from '../../shared/agent-status-observation'
+import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
 } from '../../shared/agent-status-identity'
@@ -92,10 +98,6 @@ import {
   type AgentProviderSessionMetadata
 } from '../../shared/agent-session-resume'
 import { isCommandCodeNewTurnWhileWorking } from '../../shared/command-code-turn-boundary'
-import {
-  AgentSessionPaneBindings,
-  type AgentSessionPaneBinding
-} from './agent-session-pane-bindings'
 
 export type { AgentHookSource }
 
@@ -103,6 +105,8 @@ export type { AgentHookSource }
 type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   receivedAt: number
   stateStartedAt: number
+  /** Provenance/ordering stamped by this server as the pane authority (STA-4293). Read by nothing yet. */
+  observation?: AgentStatusObservation
   /** Stamped at hydrate for nonterminal states; never persisted (hydrate re-stamps) and cleared by any accepted live event replacing the entry. */
   restoredUnconfirmed?: true
   /** User-hidden resume identity retained solely for destructive liveness checks. */
@@ -118,7 +122,13 @@ type NormalizedLocalHook = {
 
 type PersistedAgentHookEventPayload = Omit<
   EnrichedAgentHookEventPayload,
-  'claudeRunningNonAgentTask' | 'launchToken' | 'promptInteractionKey' | 'restoredUnconfirmed'
+  | 'claudeRunningNonAgentTask'
+  | 'launchToken'
+  | 'promptInteractionKey'
+  | 'restoredUnconfirmed'
+  // Why: revision counters are in-memory and the authority id is regenerated per process, so
+  // a stored observation could only rehydrate as a stale ordering claim from a dead authority.
+  | 'observation'
 > & {
   launchTokenHash?: string
 }
@@ -433,6 +443,7 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
     ...(entry.providerSessionOnly ? { providerSessionOnly: true } : {}),
     ...(entry.promptInteractionKey ? { promptInteractionKey: entry.promptInteractionKey } : {}),
     ...(entry.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
+    ...(entry.observation ? { observation: entry.observation } : {}),
     ...entry.payload
   }
 }
@@ -708,9 +719,6 @@ export class AgentHookServer {
   })
   // Why: hydrated rows give UI continuity but aren't evidence of live agent work in this runtime.
   private runtimeObservedStatusPaneKeys = new Set<string>()
-  // Why: a daemon-hosted session's hooks post the daemon's inherited pane key.
-  // Spawn-time session pins are the only evidence of the true pane.
-  private agentSessionPaneBindings = new AgentSessionPaneBindings()
   private hydratedAuthorityCommitments: readonly AgentHookAuthorityEvidence[] = Object.freeze([])
   private hydratedLaunchTokenHashByPaneKey = new Map<string, string>()
   private persistedAuthorityCommitmentsByPaneKey = new Map<string, AgentHookAuthorityEvidence>()
@@ -736,6 +744,11 @@ export class AgentHookServer {
   private connectionTimestampWatermarkById = new Map<string, number>()
   // Why: skip disk writes when the JSON exactly matches the last write; guards against re-firing trailing timers when nothing changed.
   private lastWrittenJson: string | null = null
+  // Why: main is the pane authority for local/WSL/SSH panes — hook HTTP, relay, and its own
+  // OSC parse all converge on applyNormalizedStatus, so one sequencer covers every ingress here.
+  private readonly observations = new AgentStatusObservationSequencer(
+    createAgentStatusAuthorityId('main-agent-hooks')
+  )
 
   /**
    * Notified once per process when repeated hook POSTs are cut off mid-body (#11217).
@@ -1275,9 +1288,35 @@ export class AgentHookServer {
     }
   }
 
+  /** Stamp who observed this event, in what order, on main's clock. Nothing reads it yet
+   *  (STA-4293) — it is stamped here because every main-side ingress funnels through
+   *  applyNormalizedStatus, so no origin can silently arrive untagged. */
+  private stampObservation(
+    payload: AgentHookEventPayload,
+    origin: AgentStatusObservationOrigin,
+    observedAt: number
+  ): AgentStatusObservation {
+    return this.observations.observe(payload.paneKey, {
+      origin,
+      observedAt,
+      // Why: reuse the listener's own per-provider classifier; a second list of raw event-name
+      // literals here would strand the providers whose boundary event is named anything else.
+      boundary:
+        payload.source !== undefined && isNewTurnEvent(payload.source, payload.hookEventName),
+      kind: payload.providerSessionOnly
+        ? 'identity-only'
+        : // Why: a replay restates a turn that already happened, and OSC 9999 repaints the
+          // current state rather than announcing a change — neither is a fresh transition.
+          payload.isReplay === true || origin === 'osc'
+          ? 'snapshot'
+          : 'transition'
+    })
+  }
+
   private applyNormalizedStatus(
     payload: AgentHookEventPayload,
-    onAccepted?: () => void
+    onAccepted?: () => void,
+    origin: AgentStatusObservationOrigin = 'hook'
   ): EnrichedAgentHookEventPayload {
     if (payload.hookEventName === 'UserPromptSubmit') {
       // Why: the prompt boundary is authoritative even when text is unchanged; its next OSC working row must not inherit the prior cron/background turn stamp.
@@ -1302,7 +1341,10 @@ export class AgentHookServer {
     if (payload.providerSessionOnly) {
       // Why: identity-only rows survive replay but must not emit prompt telemetry or a fabricated status.
       onAccepted?.()
-      const enriched = this.attachStatusTiming(payload, now)
+      const enriched = {
+        ...this.attachStatusTiming(payload, now),
+        observation: this.stampObservation(payload, origin, now)
+      }
       this.clearAssistantMessageRetry(enriched.paneKey)
       this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
       this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
@@ -1433,7 +1475,10 @@ export class AgentHookServer {
       this.maybeTrackAgentPromptSent(effectivePayload, previous)
     }
     const cachedPayload = resolveCachedClaudeCompactOwnership(previous, boundaryAwarePayload)
-    const enriched = this.attachStatusTiming(cachedPayload, now)
+    const enriched = {
+      ...this.attachStatusTiming(cachedPayload, now),
+      observation: this.stampObservation(cachedPayload, origin, now)
+    }
     if (
       typeof enriched.payload.turnCompletedAt === 'number' &&
       Number.isFinite(enriched.payload.turnCompletedAt)
@@ -1824,6 +1869,7 @@ export class AgentHookServer {
       this.runtimeObservedStatusPaneKeys.delete(key)
       this.currentAuthorityObservations.delete(key)
       this.promptSentDedupeByPaneKey.delete(key)
+      this.observations.forget(key)
     }
     if (aliasChanged) {
       this.notifyPaneKeyAliasPersistenceListener()
@@ -1967,66 +2013,6 @@ export class AgentHookServer {
     return changed
   }
 
-  /** Records the pane a freshly spawned agent session belongs to. Called from
-   * the spawn path, which is the last place both halves are known: the session
-   * id Orca minted into the launch command, and the pane it launched into. */
-  bindAgentSessionPane(
-    source: AgentHookSource,
-    sessionId: string,
-    binding: AgentSessionPaneBinding
-  ): void {
-    if (!isValidPaneKey(binding.paneKey)) {
-      return
-    }
-    this.agentSessionPaneBindings.bind(source, sessionId, binding)
-  }
-
-  clearAgentSessionPaneBindingsForPty(ptyId: string): void {
-    this.agentSessionPaneBindings.clearForPty(ptyId)
-  }
-
-  /** The pane a session was spawned into, when it differs from the key the
-   * event posted. Null means "no correction" — an unpinned session (a
-   * hand-typed `claude`, an agent Orca never launched) keeps today's behavior,
-   * so this can only ever move status ONTO a pane Orca itself started. */
-  private resolveBoundPaneOverride(
-    source: AgentHookSource,
-    sessionId: string | null,
-    postedPaneKey: unknown
-  ): AgentSessionPaneBinding | null {
-    const bound = this.agentSessionPaneBindings.resolve(source, sessionId)
-    if (!bound || bound.paneKey === postedPaneKey) {
-      return null
-    }
-    return bound
-  }
-
-  private normalizeHookBodyAgentSessionPane(source: AgentHookSource, body: unknown): unknown {
-    if (typeof body !== 'object' || body === null) {
-      return body
-    }
-    const record = body as Record<string, unknown>
-    const bound = this.resolveBoundPaneOverride(
-      source,
-      readHookBodyProviderSessionId(source, body),
-      typeof record.paneKey === 'string' ? record.paneKey.trim() : ''
-    )
-    if (!bound) {
-      return body
-    }
-    // Why: the posted key came from the worker's inherited env; the spawn-time
-    // binding names the pane that actually owns this session. Rewrite tabId
-    // with it too, or normalizeHookPayload's tabId/paneKey agreement check
-    // rejects the event outright — and the worktree, since the same inherited
-    // env named the daemon's workspace.
-    return {
-      ...record,
-      paneKey: bound.paneKey,
-      tabId: parsePaneKey(bound.paneKey)?.tabId,
-      ...(bound.worktreeId ? { worktreeId: bound.worktreeId } : {})
-    }
-  }
-
   private normalizeHookBodyPaneKeyAlias(body: unknown): unknown {
     if (typeof body !== 'object' || body === null) {
       return body
@@ -2163,14 +2149,18 @@ export class AgentHookServer {
         ? previous.providerSession
         : undefined
     // Why: OSC status is a runtime observation, not a prompt boundary; keep prompt-sent telemetry tied to native hooks.
-    this.applyNormalizedStatus({
-      paneKey,
-      tabId,
-      worktreeId,
-      connectionId,
-      ...(preservedProviderSession ? { providerSession: preservedProviderSession } : {}),
-      payload: event.payload
-    })
+    this.applyNormalizedStatus(
+      {
+        paneKey,
+        tabId,
+        worktreeId,
+        connectionId,
+        ...(preservedProviderSession ? { providerSession: preservedProviderSession } : {}),
+        payload: event.payload
+      },
+      undefined,
+      'osc'
+    )
   }
 
   /** Ingest a payload from the relay JSON-RPC channel (not the local HTTP server); connectionId is stamped here. Main is still the SSH trust boundary, so re-run the canonical normalizer before caching. */
@@ -2215,18 +2205,7 @@ export class AgentHookServer {
     }
     // Why: trim paneKey to match the HTTP path, else remote-vs-local events for one pane diverge.
     const physicalPaneKey = envelope.paneKey.trim()
-    const source = isAgentHookSource(envelope.source) ? envelope.source : undefined
-    // Why: a remote host's shared agent daemon inherits a stale ORCA_PANE_KEY
-    // exactly like a local one, so SSH/WSL panes need the same spawn-time
-    // session binding, resolved before pane-migration aliasing applies on top.
-    const boundPane = source
-      ? this.resolveBoundPaneOverride(
-          source,
-          normalizeAgentProviderSession(envelope.providerSession)?.id ?? null,
-          physicalPaneKey
-        )
-      : null
-    const paneKey = this.resolvePaneKeyAlias(boundPane?.paneKey ?? physicalPaneKey)
+    const paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
     const parsedPaneKey = parsePaneKey(paneKey)
     if (paneKey.length === 0) {
       track('agent_hook_unattributed', { reason: 'empty_pane_key' })
@@ -2261,6 +2240,7 @@ export class AgentHookServer {
       typeof envelope.hookEventName === 'string' && envelope.hookEventName.trim().length > 0
         ? envelope.hookEventName.trim()
         : undefined
+    const source = isAgentHookSource(envelope.source) ? envelope.source : undefined
     const providerPromptId =
       source === 'claude' ? normalizeClaudePromptId(envelope.providerPromptId) : undefined
     const compactTrigger =
@@ -2275,13 +2255,16 @@ export class AgentHookServer {
     if (statusDisposition === 'suppress') {
       return
     }
-    // Why: a corrected pane brings its own workspace — the envelope's came from
-    // the same inherited env that named the wrong pane.
+    if (statusDisposition === 'restart') {
+      // Why: same rebind as the HTTP path — a retired pane taking a new turn is a new session.
+      // Why paneKey, not envelope.paneKey: alias resolution already mapped it to the
+      // stable pane, so the rebind cannot land on a legacy key.
+      this.observations.rebind(paneKey)
+    }
     const worktreeId =
-      boundPane?.worktreeId ??
-      (envelope.worktreeId !== undefined && envelope.worktreeId.trim().length > 0
+      envelope.worktreeId !== undefined && envelope.worktreeId.trim().length > 0
         ? envelope.worktreeId.trim()
-        : undefined)
+        : undefined
     const promptInteractionKey =
       typeof envelope.promptInteractionKey === 'string' &&
       envelope.promptInteractionKey.trim().length > 0
@@ -2480,10 +2463,7 @@ export class AgentHookServer {
         }
 
         trackEmptyPaneKeyHook(body)
-        // Why: session attribution runs first — it corrects an inherited key to
-        // the real pane, and pane-migration aliasing then applies on top of it.
-        const attributedBody = this.normalizeHookBodyAgentSessionPane(source, body)
-        const aliasedBody = this.normalizeHookBodyPaneKeyAlias(attributedBody)
+        const aliasedBody = this.normalizeHookBodyPaneKeyAlias(body)
         const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
         const statusDisposition = normalized.event
           ? this.getAgentStatusDisposition(normalized.event.paneKey, {
@@ -2496,6 +2476,11 @@ export class AgentHookServer {
             statusDisposition === 'restart'
               ? { ...normalized.event, launchToken: undefined }
               : normalized.event
+          if (statusDisposition === 'restart') {
+            // Why: a retired pane accepting a new turn is a different agent session behind the
+            // same key — later observations must not be ordered against the retired one.
+            this.observations.rebind(event.paneKey)
+          }
           this.recordCurrentAuthorityObservation(event)
           const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
           this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
@@ -3137,6 +3122,8 @@ export class AgentHookServer {
         promptInteractionKey: _promptInteractionKey,
         // Why: never persisted — hydrate re-stamps it, so a stored copy could only drift.
         restoredUnconfirmed: _restoredUnconfirmed,
+        // Why: same — the sequencer that issued it dies with the process (see PersistedAgentHookEventPayload).
+        observation: _observation,
         launchToken,
         ...persistedPayload
       } = enrichedPayload
