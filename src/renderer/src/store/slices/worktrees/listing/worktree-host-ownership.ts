@@ -4,6 +4,7 @@ import type { DetectedWorktreeListResult, Worktree } from '../../../../../../sha
 import { findRepoForHost } from '../../repo-host-identity'
 import { reuseEqualCatalogRows } from '../../worktree-catalog-reconciliation'
 import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
+import { worktreeIdComparisonKey } from '../../../../../../shared/worktree/id'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -272,7 +273,22 @@ export function getRemovedWorktreeIdsAfterAuthoritativeScan(
     return []
   }
   const detectedIds = new Set(detected.worktrees.map((worktree) => worktree.id))
-  return getKnownWorktreeIdsForPurge(state, repoId, hostId).filter((id) => !detectedIds.has(id))
+  // Why (#15598): the same Windows checkout can be keyed with backslashes by
+  // the app and forward slashes by git; a purge decided by exact id alone
+  // force-kills live terminals of the other spelling. A known id survives
+  // when either its exact id or its path-normalized key is still detected.
+  const detectedComparisonKeys = new Set(
+    detected.worktrees
+      .map((worktree) => worktreeIdComparisonKey(worktree.id))
+      .filter((key): key is string => key !== null)
+  )
+  return getKnownWorktreeIdsForPurge(state, repoId, hostId).filter((id) => {
+    if (detectedIds.has(id)) {
+      return false
+    }
+    const comparisonKey = worktreeIdComparisonKey(id)
+    return comparisonKey === null || !detectedComparisonKeys.has(comparisonKey)
+  })
 }
 
 export function toLegacyDetectedWorktreeResult(

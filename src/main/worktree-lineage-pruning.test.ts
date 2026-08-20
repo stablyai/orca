@@ -78,6 +78,44 @@ describe('pruneLineageForMissingRepoWorktrees', () => {
     expect(workspaceLineageByChildKey[worktreeWorkspaceKey(childId)]).toBe(workspaceEdge)
   })
 
+  it('keeps lineage whose worktree id only differs by path separator spelling (#15598)', () => {
+    const repoOnWindows: Repo = { ...repo, path: 'D:/Agentic/game2' }
+    const parentId = 'repo-1::D:' + String.fromCharCode(92) + 'Agentic' + String.fromCharCode(92) + 'game2'
+    const childId = 'repo-1::D:/Agentic/game2/battle-core'
+    const edge = lineage(childId, parentId)
+    const worktreeLineageById = { [childId]: edge }
+    const workspaceLineageByChildKey = {
+      [worktreeWorkspaceKey(childId)]: workspaceLineage(childId, parentId)
+    }
+    const metaById = {
+      [parentId]: { instanceId: edge.parentWorktreeInstanceId } as WorktreeMeta
+    }
+    const store = createStore(worktreeLineageById, workspaceLineageByChildKey, metaById)
+
+    // Git reports Windows paths with forward slashes; the stored parent id
+    // carries backslashes from a pre-restart registration.
+    pruneLineageForMissingRepoWorktrees(store as never, repoOnWindows, [
+      {
+        path: 'D:/Agentic/game2',
+        head: 'a',
+        branch: 'main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: 'D:/Agentic/game2/battle-core',
+        head: 'b',
+        branch: 'battle-core',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
+    expect(store.removeWorkspaceLineage).not.toHaveBeenCalled()
+    expect(store.setWorktreeMeta).not.toHaveBeenCalled()
+  })
+
   it('prunes missing children and rotates missing parents after a trusted non-empty scan', () => {
     const liveParentId = 'repo-1::/repo/live-parent'
     const missingChildId = 'repo-1::/repo/missing-child'

@@ -4,7 +4,8 @@ import {
   getRepoIdFromWorktreeId,
   getWorktreePathBasenameFromId,
   splitWorktreeId,
-  splitWorktreeIdForFilesystem
+  splitWorktreeIdForFilesystem,
+  worktreeIdComparisonKey
 } from './id'
 
 describe('WORKTREE_ID_SEPARATOR', () => {
@@ -117,5 +118,28 @@ describe('getWorktreePathBasenameFromId', () => {
   it('returns null when no worktree path is available', () => {
     expect(getWorktreePathBasenameFromId('repo-123')).toBeNull()
     expect(getWorktreePathBasenameFromId('repo-123::')).toBeNull()
+  })
+})
+
+describe('worktreeIdComparisonKey', () => {
+  const BACKSLASH = 'repo-1::D:' + String.fromCharCode(92) + 'Agentic' + String.fromCharCode(92) + 'game2'
+  const FORWARD = 'repo-1::D:/Agentic/game2'
+
+  it('folds Windows separator and drive-letter spelling of one checkout (#15598)', () => {
+    expect(worktreeIdComparisonKey(BACKSLASH)).toBe(worktreeIdComparisonKey(FORWARD))
+  })
+
+  it('keeps distinct repos, paths, and folder-workspace instances distinct', () => {
+    const key = worktreeIdComparisonKey(FORWARD)
+    expect(worktreeIdComparisonKey('repo-2::D:/Agentic/game2')).not.toBe(key)
+    expect(worktreeIdComparisonKey('repo-1::D:/Agentic/game2/battle-core')).not.toBe(key)
+    expect(
+      worktreeIdComparisonKey('repo-1::D:/Agentic/game2::workspace:123e4567-e89b-12d3-a456-426614174000')
+    ).not.toBe(key)
+  })
+
+  it('returns null for malformed ids', () => {
+    expect(worktreeIdComparisonKey('repo-1')).toBeNull()
+    expect(worktreeIdComparisonKey('repo-1::')).toBeNull()
   })
 })

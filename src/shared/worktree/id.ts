@@ -1,4 +1,5 @@
 import { WORKTREE_ID_SEPARATOR } from '../pty-session-id-format'
+import { normalizeRuntimePathForComparison } from '../cross-platform-path'
 
 export { WORKTREE_ID_SEPARATOR } from '../pty-session-id-format'
 
@@ -15,6 +16,31 @@ const FOLDER_WORKSPACE_INSTANCE_SUFFIX = new RegExp(
 export function getRepoIdFromWorktreeId(worktreeId: string): string {
   const separatorIdx = worktreeId.indexOf(WORKTREE_ID_SEPARATOR)
   return separatorIdx === -1 ? worktreeId : worktreeId.slice(0, separatorIdx)
+}
+
+/**
+ * Canonical comparison form of a worktree id: one repo, one filesystem
+ * location, one folder-workspace instance — regardless of separator or
+ * drive-letter spelling.
+ *
+ * Why (#15598): git reports Windows paths with forward slashes while
+ * app-written ids can carry backslashes, so the same checkout can sit in
+ * `worktreeMeta` under two spellings. Exact-string set membership then
+ * declares the other spelling "removed" on an authoritative scan, which purges
+ * its terminals (force-kill) and lineage for a checkout that never went
+ * anywhere. Comparison only — never persist or return this key.
+ *
+ * Returns null for malformed ids so callers can keep their exact-match
+ * behavior for them.
+ */
+export function worktreeIdComparisonKey(worktreeId: string): string | null {
+  const parsed = splitWorktreeId(worktreeId)
+  if (!parsed || !parsed.repoId || !parsed.worktreePath) {
+    return null
+  }
+  return `${parsed.repoId}${WORKTREE_ID_SEPARATOR}${normalizeRuntimePathForComparison(
+    parsed.worktreePath
+  )}`
 }
 
 export function splitWorktreeId(worktreeId: string): ParsedWorktreeId | null {
