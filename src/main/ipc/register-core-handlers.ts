@@ -47,6 +47,7 @@ import { registerKeybindingHandlers } from './keybindings'
 import { registerTelemetryHandlers } from './telemetry'
 import { registerShellHandlers } from './shell'
 import { registerPetHandlers } from './pet'
+import { sweepOrphanedPets } from './pet-orphan-sweep'
 import { registerPluginHandlers } from './plugins'
 import { registerUIHandlers, setTrustedUIRendererWebContentsId } from './ui'
 import { registerEmulatorFrameStreamHandlers } from './emulator-frame-stream'
@@ -196,6 +197,10 @@ export function registerCoreHandlers(
   registerBrowserHandlers()
   registerShellHandlers(store)
   registerPetHandlers()
+  // Why: removing a pet deletes its bytes, but a crash between writing a bundle
+  // and persisting the list leaves them behind with nothing pointing at them.
+  // Off the startup path, and best effort — it is housekeeping, not a boot step.
+  void sweepOrphanedPets((store.getUI().customPets ?? []).map((pet) => pet.id))
   registerSessionHandlers(store)
   registerUIHandlers(store, { isDashboardPopoutRenderer })
   registerEmulatorFrameStreamHandlers()

@@ -22,6 +22,7 @@ const {
   registerTerminalRenderDesyncEvidenceHandlerMock,
   registerShellHandlersMock,
   registerPetHandlersMock,
+  sweepOrphanedPetsMock,
   registerSessionHandlersMock,
   registerUIHandlersMock,
   setTrustedUIRendererWebContentsIdMock,
@@ -87,6 +88,7 @@ const {
   registerTerminalRenderDesyncEvidenceHandlerMock: vi.fn(),
   registerShellHandlersMock: vi.fn(),
   registerPetHandlersMock: vi.fn(),
+  sweepOrphanedPetsMock: vi.fn(),
   registerSessionHandlersMock: vi.fn(),
   registerUIHandlersMock: vi.fn(),
   setTrustedUIRendererWebContentsIdMock: vi.fn(),
@@ -258,6 +260,10 @@ vi.mock('./pet', () => ({
   registerPetHandlers: registerPetHandlersMock
 }))
 
+vi.mock('./pet-orphan-sweep', () => ({
+  sweepOrphanedPets: sweepOrphanedPetsMock
+}))
+
 vi.mock('./session', () => ({
   registerSessionHandlers: registerSessionHandlersMock
 }))
@@ -408,6 +414,7 @@ describe('registerCoreHandlers', () => {
     registerTerminalRenderDesyncEvidenceHandlerMock.mockReset()
     registerShellHandlersMock.mockReset()
     registerPetHandlersMock.mockReset()
+    sweepOrphanedPetsMock.mockReset()
     registerSessionHandlersMock.mockReset()
     registerUIHandlersMock.mockReset()
     setTrustedUIRendererWebContentsIdMock.mockReset()
@@ -450,7 +457,7 @@ describe('registerCoreHandlers', () => {
   })
 
   it('passes the store through to handler registrars that need it', async () => {
-    const store = { marker: 'store' }
+    const store = { marker: 'store', getUI: () => ({ customPets: [{ id: 'kept-pet' }] }) }
     const runtime = { marker: 'runtime', getAgentBrowserBridge: () => null }
     const stats = { marker: 'stats' }
     const claudeUsage = { marker: 'claudeUsage' }
@@ -507,6 +514,7 @@ describe('registerCoreHandlers', () => {
       codexAccounts.runtimeHomeService
     )
     expect(registerPetHandlersMock).toHaveBeenCalled()
+    expect(sweepOrphanedPetsMock).toHaveBeenCalledWith(['kept-pet'])
     expect(registerClaudeAccountHandlersMock).toHaveBeenCalledWith(claudeAccounts)
     expect(registerMiniMaxCredentialsHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerGrokAccountHandlersMock).toHaveBeenCalled()
@@ -623,7 +631,7 @@ describe('registerCoreHandlers', () => {
   it('only registers IPC handlers once but always updates web contents id', () => {
     // The first test already called registerCoreHandlers, so the module-level
     // guard is now set. beforeEach reset all mocks, so call counts are 0.
-    const store2 = { marker: 'store2' }
+    const store2 = { marker: 'store2', getUI: () => ({ customPets: [] }) }
     const runtime2 = { marker: 'runtime2', getAgentBrowserBridge: () => null }
     const stats2 = { marker: 'stats2' }
     const claudeUsage2 = { marker: 'claudeUsage2' }
