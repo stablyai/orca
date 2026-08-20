@@ -35455,6 +35455,14 @@ export class OrcaRuntimeService {
         }
       }
     }, TUI_IDLE_POLL_INTERVAL_MS)
+    const retainedWaitText = buildTerminalWaitText(
+      leaf.tailBuffer,
+      leaf.tailPartialLine,
+      leaf.preview
+    )
+    if (leaf.lastAgentStatus === null && retainedWaitText.length === 0) {
+      this.startTuiIdleVisibleReadProbe(waiter)
+    }
   }
 
   private startPtyTuiIdleFallbackPoll(waiter: TerminalWaiter, pty: RuntimePtyWorktreeRecord): void {
@@ -35521,6 +35529,50 @@ export class OrcaRuntimeService {
         }
       }
     }, TUI_IDLE_POLL_INTERVAL_MS)
+    const retainedWaitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+    if (pty.lastAgentStatus === null && retainedWaitText.length === 0) {
+      this.startTuiIdleVisibleReadProbe(waiter)
+    }
+  }
+
+  private startTuiIdleVisibleReadProbe(waiter: TerminalWaiter): void {
+    void withTimeout(this.readTerminal(waiter.handle), VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS, null)
+      .then((read) => {
+        if (
+          !read ||
+          read.source !== 'screen' ||
+          !this.waitersByHandle.get(waiter.handle)?.has(waiter)
+        ) {
+          return
+        }
+        const snapshotText = read.tail.join('\n')
+        const blockedReason = detectTerminalWaitBlockedReason(snapshotText)
+        if (!blockedReason && !isKnownReadyPromptPreview(snapshotText)) {
+          return
+        }
+        if (waiter.pollInterval) {
+          clearInterval(waiter.pollInterval)
+          waiter.pollInterval = null
+        }
+        const pty = this.getLivePtyForHandle(waiter.handle)
+        if (pty) {
+          this.resolveWaiter(
+            waiter,
+            blockedReason
+              ? buildPtyTerminalWaitBlockedResult(waiter.handle, 'tui-idle', pty.pty, blockedReason)
+              : buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty.pty)
+          )
+          return
+        }
+        const { leaf } = this.getLiveLeafForHandle(waiter.handle)
+        this.resolveWaiter(
+          waiter,
+          blockedReason
+            ? buildTerminalWaitBlockedResult(waiter.handle, 'tui-idle', leaf, blockedReason)
+            : buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf)
+        )
+      })
+      .catch(() => {})
   }
 
   private getAdoptedPtyExplicitIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null {
