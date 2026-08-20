@@ -173,7 +173,7 @@ const CheckParams = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message:
-          '--count returns only a mailbox count; it cannot be combined with --ack, --wait, --all, --unread, or --format.'
+          '--count returns only a mailbox count; it cannot be combined with --ack, --wait, --all, --unread, --format, or --inject.'
       })
     }
   })

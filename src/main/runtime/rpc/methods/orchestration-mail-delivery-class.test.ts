@@ -149,4 +149,12 @@ describe('orchestration mail delivery class and presence count', () => {
       method.params?.parse({ terminal: 'term_coord', count: true, peek: true, unread: false })
     ).not.toThrow()
   })
+
+  it('names --inject in the refusal, because the guard already rejects it', () => {
+    const method = findMethod('orchestration.check')
+
+    expect(() =>
+      method.params?.parse({ terminal: 'term_coord', count: true, inject: true })
+    ).toThrow(/--inject/)
+  })
 })
