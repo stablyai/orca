@@ -77,7 +77,20 @@ export async function resolveProjectCreateTarget(
   if (!projectHostSetupId && !projectId && !host) {
     return undefined
   }
-  const result = await client.call<{ setups: ProjectHostSetup[] }>('projectHostSetup.list')
+  let result: Awaited<ReturnType<typeof client.call<{ setups: ProjectHostSetup[] }>>>
+  try {
+    result = await client.call<{ setups: ProjectHostSetup[] }>('projectHostSetup.list')
+  } catch (error) {
+    // Why: --host runtime:<id> routes here, so an older server is reachable without the caller
+    // meaning to; name the version gap rather than surfacing a raw method_not_found.
+    if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        'This Orca server does not support project host setup yet. Update Orca on the server and try again.'
+      )
+    }
+    throw error
+  }
   const ready = result.result.setups.filter((candidate) => candidate.setupState === 'ready')
   const setup = projectHostSetupId
     ? ready.find((candidate) => candidate.id === projectHostSetupId)

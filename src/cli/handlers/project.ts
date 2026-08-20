@@ -12,7 +12,7 @@ import type {
 } from '../../shared/project-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { RepoKind } from '../../shared/repo-types'
-import type { CommandHandler } from '../dispatch'
+import type { CommandHandler, HandlerContext } from '../dispatch'
 import {
   formatProjectHostSetupCreateResult,
   formatProjectHostSetupDeleteResult,
@@ -25,7 +25,33 @@ import {
 import { hostFilterMatchesHostId, parseHostFlag } from '../execution-host-flag'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { resolveRepoPathArgument } from '../repo-path-arguments'
-import { RuntimeClientError } from '../runtime-client'
+import { RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'
+
+// Why: an Orca server that predates project host setup answers `method_not_found`, which reads
+// as an Orca bug rather than a version gap — and since --host runtime:<id> now routes these
+// commands to that server, a client can reach an older host without meaning to. The desktop
+// already names this case; match it instead of surfacing the raw dispatcher error.
+async function callProjectHostSetup<TResult>(
+  client: HandlerContext['client'],
+  method: string,
+  params?: unknown
+): Promise<RuntimeRpcSuccess<TResult>> {
+  try {
+    // Why: forward the exact arity the caller used; passing an explicit undefined would change
+    // the request shape for the no-params methods.
+    return params === undefined
+      ? await client.call<TResult>(method)
+      : await client.call<TResult>(method, params)
+  } catch (error) {
+    if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        'This Orca server does not support project host setup yet. Update Orca on the server and try again.'
+      )
+    }
+    throw error
+  }
+}
 
 function getRequiredHostId(flags: Map<string, string | boolean>): ExecutionHostId {
   const host = parseHostFlag(flags)
@@ -54,7 +80,10 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
   'project setups': async ({ flags, client, json }) => {
     const projectFilter = getOptionalStringFlag(flags, 'project')
     const hostFilter = parseHostFlag(flags)
-    const result = await client.call<{ setups: ProjectHostSetup[] }>('projectHostSetup.list')
+    const result = await callProjectHostSetup<{ setups: ProjectHostSetup[] }>(
+      client,
+      'projectHostSetup.list'
+    )
     const setups = result.result.setups.filter(
       (setup) =>
         (projectFilter === undefined || setup.projectId === projectFilter) &&
@@ -71,7 +100,8 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
       kind: getOptionalRepoKind(flags),
       displayName: getOptionalStringFlag(flags, 'display-name')
     }
-    const result = await client.call<{ result: ProjectHostSetupResult }>(
+    const result = await callProjectHostSetup<{ result: ProjectHostSetupResult }>(
+      client,
       'projectHostSetup.setupExistingFolder',
       args
     )
@@ -91,7 +121,8 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
       ),
       displayName: getOptionalStringFlag(flags, 'display-name')
     }
-    const result = await client.call<{ result: ProjectHostSetupResult }>(
+    const result = await callProjectHostSetup<{ result: ProjectHostSetupResult }>(
+      client,
       'projectHostSetup.clone',
       args
     )
@@ -114,7 +145,8 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
       setupState: getOptionalSetupState(flags),
       setupMethod: getOptionalIndependentSetupMethod(flags)
     }
-    const result = await client.call<{ result: ProjectHostSetupCreateResult }>(
+    const result = await callProjectHostSetup<{ result: ProjectHostSetupCreateResult }>(
+      client,
       'projectHostSetup.create',
       args
     )
@@ -137,14 +169,16 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
         setupMethod: getOptionalSetupMethod(flags)
       }
     }
-    const result = await client.call<{ result: ProjectHostSetupUpdateResult }>(
+    const result = await callProjectHostSetup<{ result: ProjectHostSetupUpdateResult }>(
+      client,
       'projectHostSetup.update',
       args
     )
     printResult(result, json, formatProjectHostSetupUpdateResult)
   },
   'project setup-delete': async ({ flags, client, json }) => {
-    const result = await client.call<{ result: ProjectHostSetupDeleteResult }>(
+    const result = await callProjectHostSetup<{ result: ProjectHostSetupDeleteResult }>(
+      client,
       'projectHostSetup.delete',
       {
         setupId: getRequiredStringFlag(flags, 'setup')
