@@ -25,7 +25,7 @@ import type { PtyTransport } from './pty-transport'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { HEX_COLOR_RE } from '../../../../shared/color-validation'
 import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
-import { publishTerminalViewAttributes } from './terminal-view-attributes-publisher'
+import { parseCssColor, publishTerminalViewAttributes } from './terminal-view-attributes-publisher'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
 import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
 import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
@@ -61,6 +61,15 @@ function resolveTerminalBackgroundOpacity(
   return terminalBackgroundImageActive ? 0 : settings.terminalBackgroundOpacity
 }
 
+function makeTerminalBackgroundTransparent(background: string): string {
+  const parsed = parseCssColor(background)
+  if (!parsed) {
+    return 'transparent'
+  }
+  // Why preserve RGB: xterm still uses it for cursor and selection blending at zero alpha.
+  return `rgba(${parsed.rgb[0]}, ${parsed.rgb[1]}, ${parsed.rgb[2]}, 0)`
+}
+
 // Why extracted: lets the settings preview compose the same theme without depending on PaneManager. Keep pure.
 export function composeActiveTerminalTheme(
   baseTheme: ITheme | null,
@@ -83,15 +92,20 @@ export function composeActiveTerminalTheme(
   if (settings.terminalColorOverrides) {
     theme = { ...theme, ...settings.terminalColorOverrides }
   }
-  // Why: convert the hex background to rgba so xterm honors the opacity when allowTransparency is set.
-  const backgroundOpacity = resolveTerminalBackgroundOpacity(
-    settings,
-    terminalBackgroundImageActive
-  )
-  if (backgroundOpacity !== undefined && theme.background) {
+  // Why explicit transparent: manual overrides may be valid CSS colors that hexToRgba cannot parse.
+  if (terminalBackgroundImageActive && theme.background) {
     theme = {
       ...theme,
-      background: hexToRgba(theme.background, backgroundOpacity)
+      background: makeTerminalBackgroundTransparent(theme.background)
+    }
+  } else if (
+    settings.terminalBackgroundOpacity !== undefined &&
+    theme.background &&
+    isHexColor(theme.background)
+  ) {
+    theme = {
+      ...theme,
+      background: hexToRgba(theme.background, settings.terminalBackgroundOpacity)
     }
   }
   // Why hex-only: hexToRgba expects a hex input, so named CSS cursor colors are left untouched.
