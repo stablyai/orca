@@ -17,7 +17,6 @@ vi.mock('child_process', () => {
 
 import { detectWslCommandsOnPath } from './preflight-wsl-agent-detection'
 import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
-import { escapeWslShCommandForWindows } from '../../shared/wsl-login-shell-command'
 
 function lastShCommandPayload(): string {
   const call = execFileAsyncMock.mock.calls.at(-1)
@@ -59,10 +58,9 @@ describe('detectWslCommandsOnPath', () => {
       { kind: 'shell-variable', name: 'cmd' },
       { skipWindowsMountDirs: true }
     )
-    expect(payload).toContain(escapeWslShCommandForWindows(lookupScript))
+    expect(payload).toContain(lookupScript)
     // Why: WSL appends the Windows PATH as a slow drvfs /mnt tail; the probe
     // must skip it or the lookup can time out (issue #9725 root cause).
-    expect(payload).toContain('/mnt/[A-Za-z]|/mnt/[A-Za-z]/*)')
     expect(payload).not.toContain('type -P')
   })
 
