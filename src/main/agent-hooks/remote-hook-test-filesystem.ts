@@ -5,6 +5,8 @@ export type RemoteHookTestFilesystem = {
   dirs: Set<string>
   modes: Map<string, number>
   failRenameTo: Set<string>
+  beforeExclusiveWrite?: (path: string) => void
+  beforeUnlink?: (path: string) => void
 }
 
 export function createRemoteHookTestFilesystem(initialFiles: Record<string, string> = {}): {
@@ -34,9 +36,16 @@ export function createRemoteHookTestFilesystem(initialFiles: Record<string, stri
     writeFile: (
       path: string,
       content: string,
-      options: string | { mode?: number },
+      options: string | { mode?: number; flag?: string },
       cb: (err: unknown) => void
     ): void => {
+      if (typeof options !== 'string' && options.flag === 'wx') {
+        fs.beforeExclusiveWrite?.(path)
+        if (fs.files.has(path)) {
+          cb({ code: 4, message: `file exists ${path}` })
+          return
+        }
+      }
       fs.files.set(path, content)
       if (typeof options !== 'string' && options.mode !== undefined) {
         fs.modes.set(path, options.mode)
@@ -63,6 +72,7 @@ export function createRemoteHookTestFilesystem(initialFiles: Record<string, stri
       cb(null)
     },
     unlink: (path: string, cb: (err: unknown) => void): void => {
+      fs.beforeUnlink?.(path)
       fs.files.delete(path)
       fs.modes.delete(path)
       cb(null)

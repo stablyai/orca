@@ -3,6 +3,7 @@ import type { SFTPWrapper } from 'ssh2'
 
 import {
   readHooksJsonRemote,
+  unlinkRemote,
   writeHooksJsonRemote,
   writeManagedScriptRemote,
   writeTextFileRemoteAtomic
@@ -189,6 +190,27 @@ describe('installer-utils-remote', () => {
 
       expect(rejection).toBeInstanceOf(Error)
       await expect(pending).rejects.toThrow('Timed out waiting for SFTP readFile')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('times out remote unlinks that never call back', async () => {
+    vi.useFakeTimers()
+    try {
+      const sftp = {
+        unlink: vi.fn()
+      } as unknown as SFTPWrapper
+      const pending = unlinkRemote(sftp, '/home/u/.grok/hooks/orca-status.json')
+      let rejection: unknown = null
+      pending.catch((error) => {
+        rejection = error
+      })
+
+      await vi.advanceTimersByTimeAsync(30_000)
+
+      expect(rejection).toBeInstanceOf(Error)
+      await expect(pending).rejects.toThrow('Timed out waiting for SFTP unlink')
     } finally {
       vi.useRealTimers()
     }

@@ -28,6 +28,7 @@ import {
   removeRemoteManagedAgentHooks,
   REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
 } from './remote-managed-hook-installers'
+import { writeHooksJsonRemoteIfUnchanged } from './remote-hook-config-generation'
 import { createRemoteHookTestFilesystem as createFakeSftp } from './remote-hook-test-filesystem'
 
 describe('remote hook service installers', () => {
@@ -380,20 +381,18 @@ describe('remote hook service installers', () => {
 
   it('removes only Orca entries from a remote Grok config', async () => {
     const userCommand = 'echo user-authored'
-    const { sftp, fs } = createFakeSftp({
-      '/home/dev/.grok/hooks/orca-status.json': `${JSON.stringify({
-        hooks: {
-          SessionStart: [
-            {
-              hooks: [
-                { type: 'command', command: '/home/dev/.orca/agent-hooks/grok-hook.sh' },
-                { type: 'command', command: userCommand }
-              ]
-            }
-          ]
-        }
-      })}\n`
-    })
+    const { sftp, fs } = createFakeSftp()
+    const configPath = '/home/dev/.grok/hooks/orca-status.json'
+
+    await expect(
+      installRemoteManagedAgentHooks(sftp, '/home/dev', { agents: ['grok'] })
+    ).resolves.toMatchObject([{ agent: 'grok', state: 'installed' }])
+
+    const installedConfig = JSON.parse(fs.files.get(configPath)!) as {
+      hooks: Record<string, { hooks: { type: string; command: string }[] }[]>
+    }
+    installedConfig.hooks.SessionStart[0].hooks.push({ type: 'command', command: userCommand })
+    fs.files.set(configPath, `${JSON.stringify(installedConfig)}\n`)
 
     const results = await removeRemoteManagedAgentHooks(sftp, '/home/dev', {
       agents: ['grok']
@@ -404,6 +403,43 @@ describe('remote hook service installers', () => {
       hooks: Record<string, { hooks: { command: string }[] }[]>
     }
     expect(config.hooks.SessionStart[0].hooks).toEqual([{ type: 'command', command: userCommand }])
+  })
+
+  it('preserves a remote edit made after cleanup claims the config', async () => {
+    const { sftp, fs } = createFakeSftp()
+    const configPath = '/home/dev/.grok/hooks/orca-status.json'
+    const userConfig = '{"hooks":{"Notification":[]}}\n'
+
+    await installRemoteManagedAgentHooks(sftp, '/home/dev', { agents: ['grok'] })
+    fs.beforeUnlink = (path) => {
+      if (path.endsWith('.orca-guarded')) {
+        fs.files.set(configPath, userConfig)
+      }
+    }
+
+    await expect(
+      removeRemoteManagedAgentHooks(sftp, '/home/dev', { agents: ['grok'] })
+    ).resolves.toMatchObject([{ agent: 'grok', state: 'not_installed' }])
+    expect(fs.files.get(configPath)).toBe(userConfig)
+  })
+
+  it('treats an OpenSSH exclusive-create failure as a remote edit', async () => {
+    const { sftp, fs } = createFakeSftp()
+    const configPath = '/home/dev/.grok/hooks/orca-status.json'
+    const userConfig = '{"hooks":{"Notification":[]}}\n'
+
+    await installRemoteManagedAgentHooks(sftp, '/home/dev', { agents: ['grok'] })
+    const expectedRaw = fs.files.get(configPath)!
+    fs.beforeExclusiveWrite = (path) => {
+      if (path === configPath) {
+        fs.files.set(configPath, userConfig)
+      }
+    }
+
+    await expect(
+      writeHooksJsonRemoteIfUnchanged(sftp, configPath, expectedRaw, JSON.parse(expectedRaw))
+    ).resolves.toBe(false)
+    expect(fs.files.get(configPath)).toBe(userConfig)
   })
 
   it.each(['relative/grok', '/bad\\grok', `/${'x'.repeat(4096)}`])(

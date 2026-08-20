@@ -165,6 +165,15 @@ export async function writeTextFileRemoteAtomic(
   }
 }
 
+export async function writeTextFileRemoteExclusive(
+  sftp: SFTPWrapper,
+  remotePath: string,
+  content: string,
+  mode = DEFAULT_REMOTE_CONFIG_MODE
+): Promise<void> {
+  await writeFile(sftp, remotePath, content, mode, 'wx')
+}
+
 // ─── Private SFTP primitives ────────────────────────────────────────
 
 function sftpOperation<T>(
@@ -218,10 +227,13 @@ async function writeFile(
   sftp: SFTPWrapper,
   remotePath: string,
   content: string,
-  mode?: number
+  mode?: number,
+  flag?: string
 ): Promise<void> {
   const options =
-    mode === undefined ? { encoding: 'utf8' as const } : { encoding: 'utf8' as const, mode }
+    mode === undefined
+      ? { encoding: 'utf8' as const, ...(flag ? { flag } : {}) }
+      : { encoding: 'utf8' as const, mode, ...(flag ? { flag } : {}) }
   await sftpOperation<void>(`writeFile ${remotePath}`, (callback) => {
     sftp.writeFile(remotePath, content, options, callback)
   })
@@ -237,7 +249,7 @@ async function statMode(sftp: SFTPWrapper, remotePath: string): Promise<number> 
 async function getRemoteFileModeOrDefault(
   sftp: SFTPWrapper,
   remotePath: string,
-  defaultMode: number
+  defaultMode = DEFAULT_REMOTE_CONFIG_MODE
 ): Promise<number> {
   try {
     return await statMode(sftp, remotePath)
@@ -365,4 +377,11 @@ function isUnsupportedExtensionError(err: unknown): boolean {
   const code = (err as { code?: unknown }).code
   const message = (err as { message?: unknown }).message
   return code === 8 || (typeof message === 'string' && /unsupported/i.test(message))
+}
+
+export {
+  mkdirpRemote as ensureRemoteDirectory,
+  getRemoteFileModeOrDefault as getRemoteFileModeOrDefaultForGuard,
+  rename as renameRemoteFile,
+  unlink as unlinkRemote
 }
