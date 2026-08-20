@@ -2273,6 +2273,15 @@ type PtyIncarnationHandleRecord = {
   leafKey: string
 }
 
+type TerminalProvenanceIdentity = {
+  handle: string | null
+  ptyId: string | null
+  incarnationId: PtyIncarnationId | null
+  worktreeId: string | null
+  lifecycleGeneration: number | null
+  provenanceGeneration: number | null
+}
+
 export type OrchestrationCompatibilityTerminalAuthority = {
   runtimeId: string
   terminalHandle: string
@@ -3302,7 +3311,16 @@ export class OrcaRuntimeService {
   private providerVisibleRetryAtByPtyId = new Map<string, number>()
   private providerSnapshotsWithLiveModeTransition = new WeakSet<PtyProviderBufferSnapshot>()
   private ptyLifecycleGenerationById = new Map<string, number>()
+  private ptyProvenanceGenerationById = new Map<string, number>()
+  // Unlike spawnPublishedPtys, this evidence survives exit/generation cleanup
+  // so a later same-id legacy spawn cannot masquerade as the first lifecycle.
+  private ptyIdsWithPublishedLifecycle = new Set<string>()
+  private ptyLifecycleAdmissions = new Map<
+    string,
+    'prepared' | 'prepared-replacement' | 'spawned'
+  >()
   private nextPtyLifecycleGeneration = 1
+  private nextPtyProvenanceGeneration = 1
   private recentPtyPathCandidatesById = new Map<string, string[]>()
   // Why: candidates only feed mobile file-tap provenance; desktop-only
   // sessions skip the 3-regex extraction on every PTY chunk until a
@@ -6771,12 +6789,21 @@ export class OrcaRuntimeService {
         preserveLivePtysDuringReload && leaf.ptyId === null && existing?.ptyId
           ? existing.ptyId
           : leaf.ptyId
+      const existingPty = ptyId ? this.ptysById.get(ptyId) : undefined
+      const worktreeProvenanceChanged =
+        (existing?.ptyId === ptyId &&
+          !runtimeWorktreeIdsEqual(existing.worktreeId, leaf.worktreeId)) ||
+        (existingPty !== undefined &&
+          !runtimeWorktreeIdsEqual(existingPty.worktreeId, leaf.worktreeId))
       const ptyGeneration =
-        existing && existing.ptyId !== ptyId
+        existing && (existing.ptyId !== ptyId || worktreeProvenanceChanged)
           ? existing.ptyGeneration + 1
           : (existing?.ptyGeneration ?? 0)
-      const existingPty = ptyId ? this.ptysById.get(ptyId) : undefined
-      const tailSource = existing?.ptyId === ptyId ? existing : existingPty
+      const tailSource = worktreeProvenanceChanged
+        ? undefined
+        : existing?.ptyId === ptyId
+          ? existing
+          : existingPty
 
       nextLeaves.set(leafKey, {
         ...leaf,
@@ -6810,8 +6837,12 @@ export class OrcaRuntimeService {
       if (leaf.ptyId) {
         this.recordPtyWorktree(leaf.ptyId, leaf.worktreeId, {
           connected: true,
-          lastOutputAt: existing?.ptyId === leaf.ptyId ? existing.lastOutputAt : null,
-          preview: existing?.ptyId === leaf.ptyId ? existing.preview : '',
+          lastOutputAt:
+            !worktreeProvenanceChanged && existing?.ptyId === leaf.ptyId
+              ? existing.lastOutputAt
+              : null,
+          preview:
+            !worktreeProvenanceChanged && existing?.ptyId === leaf.ptyId ? existing.preview : '',
           tabId: leaf.tabId,
           paneKey: this.makeRuntimePaneKey(leaf)
         })
@@ -10753,19 +10784,74 @@ export class OrcaRuntimeService {
     options: { awaitsRegistration?: boolean } = {}
   ): void {
     this.forgetPtyLivenessVerdict(ptyId)
+    const admission = this.ptyLifecycleAdmissions.get(ptyId)
+    const preparedAdmission = admission === 'prepared' || admission === 'prepared-replacement'
+    const preparedReplacement = admission === 'prepared-replacement'
+    const hadPublishedLifecycle = this.ptyIdsWithPublishedLifecycle.has(ptyId)
+    const observedGeneration = this.ptyLifecycleGenerationById.get(ptyId)
     if (options.awaitsRegistration !== false) {
       // Why: surface absence cannot distinguish an in-flight admission from a completed headless lifecycle.
       this.pendingPtyRegistrationIncarnations.set(ptyId, incarnationId ?? null)
     }
-    this.spawnPublishedPtys.add(ptyId)
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
     if (pty) {
-      if (incarnationId) {
+      // A recoverable SSH relay reconnect may republish the same known process
+      // without a complete lease. Its incarnation is the process identity, so
+      // keep the surface while still advancing the async lifecycle fence below.
+      const exactKnownRepublish =
+        !preparedAdmission &&
+        incarnationId !== undefined &&
+        pty.incarnationId !== null &&
+        pty.incarnationId === incarnationId
+      const replacementBoundary =
+        (hadPublishedLifecycle || preparedReplacement) && !exactKnownRepublish
+      // Why: an already-published spawn is an actual process boundary. A lazy
+      // generation read is only an async fence and must not retire the handle
+      // preallocated for the first process.
+      //
+      // A prepared replacement resets again here: the prior process can emit
+      // a late queued frame after preparation but before this spawn callback.
+      if (replacementBoundary) {
+        this.resetPtyReadStateForProvenanceChange(ptyId, pty)
+        this.invalidatePtyHandlesForProvenanceChange(ptyId)
+      }
+      // Provider data may arrive before this callback. Once any prior
+      // lifecycle has been reset above, the retained bytes belong to this
+      // admitted spawn and must not revoke its preallocated handle.
+      if (incarnationId === undefined) {
+        if (!replacementBoundary && !preparedAdmission && pty.incarnationId !== null) {
+          this.setPtyIncarnation(ptyId, pty, null)
+        } else {
+          pty.incarnationId = null
+        }
+      } else if (replacementBoundary || preparedAdmission) {
         pty.incarnationId = incarnationId
+      } else {
+        // Without spawn-history or a fresh preparation, retained unattested
+        // bytes cannot be promoted to a newly known process identity.
+        this.setPtyIncarnation(ptyId, pty, incarnationId)
       }
       pty.connected = true
       pty.disconnectedAt = null
+    } else if (hadPublishedLifecycle || preparedReplacement) {
+      this.resetRecordlessPtyLifecycle(ptyId)
     }
+    // A controller-only operation may have captured a generation before the
+    // first real spawn. Fence that operation without revoking this process's
+    // preallocated handle.
+    if (
+      observedGeneration !== undefined &&
+      this.ptyLifecycleGenerationById.get(ptyId) === observedGeneration
+    ) {
+      this.advancePtyLifecycleGeneration(ptyId)
+    }
+    if (options.awaitsRegistration === false) {
+      this.ptyLifecycleAdmissions.delete(ptyId)
+    } else {
+      this.ptyLifecycleAdmissions.set(ptyId, 'spawned')
+    }
+    this.spawnPublishedPtys.add(ptyId)
+    this.ptyIdsWithPublishedLifecycle.add(ptyId)
     for (const leaf of this.getLeavesForPty(ptyId)) {
       leaf.connected = true
       leaf.writable = this.graphStatus === 'ready'
@@ -10785,9 +10871,36 @@ export class OrcaRuntimeService {
     },
     isWsl?: boolean
   ): void {
-    this.assertPtyDidNotExitBeforeRegistration(ptyId, binding?.incarnationId)
+    const lifecycleAdmission = this.ptyLifecycleAdmissions.get(ptyId)
+    const lifecycleAlreadyFenced = lifecycleAdmission !== undefined
+    const hasPendingIncarnation = this.pendingPtyRegistrationIncarnations.has(ptyId)
+    const pendingIncarnation = this.pendingPtyRegistrationIncarnations.get(ptyId)
+    const admissionIncarnationId = binding?.incarnationId ?? pendingIncarnation ?? undefined
+    this.assertPtyDidNotExitBeforeRegistration(ptyId, admissionIncarnationId)
     this.forgetPtyLivenessVerdict(ptyId)
-    this.spawnPublishedPtys.add(ptyId)
+    const existingPty = this.ptysById.get(ptyId)
+    if (
+      existingPty &&
+      admissionIncarnationId === undefined &&
+      !lifecycleAlreadyFenced &&
+      (!existingPty.connected || hasPendingIncarnation)
+    ) {
+      // Why: a registration after exit, or an explicit pending unknown
+      // admission, can be the first observable boundary for legacy providers.
+      // Unknown proof must revoke prior authority before connected=true.
+      this.revokePtyIncarnationForUnattestedLifecycle(ptyId, existingPty, hasPendingIncarnation)
+    }
+    if (
+      existingPty &&
+      lifecycleAdmission === 'spawned' &&
+      existingPty.incarnationId === null &&
+      admissionIncarnationId !== undefined
+    ) {
+      // onPtySpawned is the provider's process boundary. It already cleared a
+      // replacement's pre-callback bytes, so a later registration may attest
+      // the admitted null identity without discarding this process's output.
+      existingPty.incarnationId = admissionIncarnationId
+    }
     // Why: record the renderer pane identity at spawn time so a stalled graph
     // sync can't hide that a live PTY already backs a pending mobile create.
     const paneKey =
@@ -10802,8 +10915,10 @@ export class OrcaRuntimeService {
         : {}),
       ...(isWsl !== undefined ? { isWsl } : {}),
       ...(binding && paneKey ? { tabId: binding.tabId, paneKey } : {}),
-      ...(binding?.incarnationId ? { incarnationId: binding.incarnationId } : {})
+      ...(admissionIncarnationId ? { incarnationId: admissionIncarnationId } : {})
     })
+    this.spawnPublishedPtys.add(ptyId)
+    this.ptyIdsWithPublishedLifecycle.add(ptyId)
     const agentLaunchAuthority = binding?.agentLaunchAuthority
     if (
       agentLaunchAuthority &&
@@ -10820,15 +10935,14 @@ export class OrcaRuntimeService {
       pty.launchIncarnationId = binding.incarnationId
       pty.launchAgent = agentLaunchAuthority.launchAgent
     }
-    const pendingIncarnation = this.pendingPtyRegistrationIncarnations.get(ptyId)
     if (
       pendingIncarnation === null ||
       pendingIncarnation === undefined ||
-      binding?.incarnationId === undefined ||
-      pendingIncarnation === binding.incarnationId
+      pendingIncarnation === admissionIncarnationId
     ) {
       this.pendingPtyRegistrationIncarnations.delete(ptyId)
     }
+    this.ptyLifecycleAdmissions.delete(ptyId)
     // Why: the renderer's own PTY spawn is the reliable signal that the pending
     // mobile create's tab is live; publish its surface main-side (#7587).
     if (binding && paneKey) {
@@ -10857,6 +10971,7 @@ export class OrcaRuntimeService {
       // Why: the rejected spawn call was the fence's sole late publisher; retaining it leaks fresh PTY ids.
       this.earlyExitedPtyIncarnations.delete(ptyId)
       this.pendingPtyRegistrationIncarnations.delete(ptyId)
+      this.ptyLifecycleAdmissions.delete(ptyId)
     }
   }
 
@@ -10868,7 +10983,7 @@ export class OrcaRuntimeService {
     const pty = this.ptysById.get(ptyId)
     if (pty) {
       // Why: a reconnect attach reply can prove the exit generation after stale local proof was cleared.
-      pty.incarnationId = incarnationId
+      this.setPtyIncarnation(ptyId, pty, incarnationId)
     }
   }
 
@@ -10881,6 +10996,7 @@ export class OrcaRuntimeService {
       return
     }
     this.pendingPtyRegistrationIncarnations.delete(ptyId)
+    this.ptyLifecycleAdmissions.delete(ptyId)
     const exited = this.earlyExitedPtyIncarnations.get(ptyId)
     if (
       exited === null ||
@@ -10916,7 +11032,13 @@ export class OrcaRuntimeService {
     options: { resetIncarnation?: boolean; preserveExisting?: boolean } = {}
   ): boolean {
     const pty = this.ptysById.get(ptyId)
-    const hadExistingContext = this.wslDistroByPtyId.has(ptyId) || pty !== undefined
+    const hadPublishedLifecycle = this.ptyIdsWithPublishedLifecycle.has(ptyId)
+    const observedGeneration = this.ptyLifecycleGenerationById.get(ptyId)
+    const hadExistingContext =
+      this.wslDistroByPtyId.has(ptyId) ||
+      pty !== undefined ||
+      this.ptyLifecycleAdmissions.has(ptyId)
+    const preparesReplacement = hadExistingContext || hadPublishedLifecycle
     if (options.preserveExisting && hadExistingContext) {
       // Why: attach-time settings are only a fallback; a live PTY's recorded
       // execution namespace remains authoritative until its provider replies.
@@ -10926,6 +11048,24 @@ export class OrcaRuntimeService {
     if (options.resetIncarnation) {
       // Why: an explicit new lifecycle supersedes an unidentifiable exit from the reused PTY id.
       this.earlyExitedPtyIncarnations.delete(ptyId)
+      if (pty) {
+        this.resetPtyReadStateForProvenanceChange(ptyId, pty)
+        this.invalidatePtyHandlesForProvenanceChange(ptyId)
+        pty.incarnationId = null
+      } else if (hadExistingContext || hadPublishedLifecycle) {
+        // Why: execution context can precede the PTY record. A repeated reset
+        // still retires any handle preallocation from the previous lifecycle.
+        this.resetRecordlessPtyLifecycle(ptyId)
+      } else if (observedGeneration !== undefined) {
+        // A preview/read may have installed a generation before the first
+        // process. Fence that async operation but preserve the first process's
+        // preallocated handle.
+        this.advancePtyLifecycleGeneration(ptyId)
+      }
+      this.ptyLifecycleAdmissions.set(
+        ptyId,
+        preparesReplacement ? 'prepared-replacement' : 'prepared'
+      )
       this.disposeHeadlessTerminal(ptyId)
       this.osc7ScanTailByPtyId.delete(ptyId)
       this.terminalCwdByPtyId.delete(ptyId)
@@ -12217,25 +12357,176 @@ export class OrcaRuntimeService {
     return generation
   }
 
-  private advancePtyLifecycleGeneration(ptyId: string): void {
+  private getPtyProvenanceGeneration(ptyId: string): number {
+    const existing = this.ptyProvenanceGenerationById.get(ptyId)
+    if (existing !== undefined) {
+      return existing
+    }
+    const generation = this.nextPtyProvenanceGeneration++
+    this.ptyProvenanceGenerationById.set(ptyId, generation)
+    return generation
+  }
+
+  private advancePtyLifecycleGeneration(ptyId: string, provenanceChanged = true): void {
     this.ptyLifecycleGenerationById.set(ptyId, this.nextPtyLifecycleGeneration++)
-    // Why: a stop whose exit never arrived would otherwise stay armed across a
-    // same-id respawn and label the NEXT process's crash an operator close —
-    // the exact lie this cause model exists to remove.
-    this.stopRequestedPtyIds.delete(ptyId)
-    this.agentPromptLifecycleByPtyId.delete(ptyId)
-    this.agentPromptPermissionSequenceByPtyId.delete(ptyId)
-    this.agentPromptExplicitStatusFloorByPtyId.set(ptyId, Date.now())
-    this.legacyWorkerRecoveredPtys.delete(ptyId)
-    // Why: a respawn under the same session id needs its own subscriber-driven attach.
-    this.subscriberDrivenProviderAttachesByPtyId.delete(ptyId)
-    this.subscriberDrivenProviderAttachInventoryWaiters.delete(ptyId)
-    this.spawnPublishedPtys.delete(ptyId)
+    if (provenanceChanged) {
+      this.ptyProvenanceGenerationById.set(ptyId, this.nextPtyProvenanceGeneration++)
+      // Admission belongs to exactly one process lifecycle. Retaining it after
+      // exit would let a legacy same-id registration skip unknown-provenance
+      // revocation in the replacement lifecycle.
+      this.ptyLifecycleAdmissions.delete(ptyId)
+      // Why: a stop whose exit never arrived would otherwise stay armed across
+      // a same-id respawn and label the next process's crash an operator close.
+      this.stopRequestedPtyIds.delete(ptyId)
+      this.agentPromptLifecycleByPtyId.delete(ptyId)
+      this.agentPromptPermissionSequenceByPtyId.delete(ptyId)
+      this.agentPromptExplicitStatusFloorByPtyId.set(ptyId, Date.now())
+      this.legacyWorkerRecoveredPtys.delete(ptyId)
+      // Why: a respawn under the same session id needs its own subscriber-driven attach.
+      this.subscriberDrivenProviderAttachesByPtyId.delete(ptyId)
+      this.subscriberDrivenProviderAttachInventoryWaiters.delete(ptyId)
+      this.spawnPublishedPtys.delete(ptyId)
+    }
     // Why: a provider response belongs to the process generation that issued
-    // it; a respawn must neither reuse its frame nor join its in-flight call.
+    // it; both a frame-domain reset and a respawn must retire in-flight calls.
     this.providerBufferAcquisitionsByPtyId.delete(ptyId)
     this.providerVisibleStateByPtyId.delete(ptyId)
     this.providerVisibleRetryAtByPtyId.delete(ptyId)
+  }
+
+  private resetRecordlessPtyLifecycle(ptyId: string): void {
+    // Why: a published or repeatedly prepared recordless PTY is an actual
+    // prior lifecycle. Lazy generation observation alone is handled by the
+    // caller and never revokes a first-process preallocation.
+    this.resetPtyReadStateForProvenanceChange(ptyId)
+    this.invalidatePtyHandlesForProvenanceChange(ptyId)
+  }
+
+  private clearRetainedTerminalReadState(
+    record: RuntimePtyWorktreeRecord | RuntimeLeafRecord
+  ): void {
+    record.lastOutputAt = null
+    record.lastExitCode = null
+    record.lastExitCause = null
+    record.tailBuffer = []
+    record.tailTranscriptBuffer = []
+    record.tailTranscriptChars = 0
+    record.tailPartialLine = ''
+    record.tailPendingAnsi = ''
+    record.tailRedrawCursor = null
+    record.tailTruncated = false
+    record.tailLinesTotal = 0
+    record.preview = ''
+    record.waitBlockedAt = null
+    record.tailWaitState = undefined
+  }
+
+  private hasRetainedTerminalReadState(
+    record: RuntimePtyWorktreeRecord | RuntimeLeafRecord
+  ): boolean {
+    return (
+      record.lastOutputAt !== null ||
+      record.lastExitCode !== null ||
+      record.lastExitCause !== null ||
+      record.tailBuffer.length > 0 ||
+      record.tailTranscriptBuffer.length > 0 ||
+      record.tailTranscriptChars > 0 ||
+      record.tailPartialLine.length > 0 ||
+      record.tailPendingAnsi.length > 0 ||
+      record.tailRedrawCursor !== null ||
+      record.tailTruncated ||
+      record.tailLinesTotal > 0 ||
+      record.preview.length > 0 ||
+      record.waitBlockedAt !== null ||
+      record.tailWaitState !== undefined
+    )
+  }
+
+  private hasUnattestedPtyReadState(ptyId: string, pty: RuntimePtyWorktreeRecord): boolean {
+    return (
+      this.hasRetainedTerminalReadState(pty) ||
+      this.getLeavesForPty(ptyId).some((leaf) => this.hasRetainedTerminalReadState(leaf)) ||
+      this.headlessTerminals.has(ptyId) ||
+      this.headlessHydrationState.has(ptyId) ||
+      this.legacyWorkerRecoveredPtys.has(ptyId) ||
+      this.recentPtyOutputById.has(ptyId) ||
+      this.recentPtyPathCandidatesById.has(ptyId) ||
+      this.ptyOutputSequenceById.has(ptyId) ||
+      this.providerSequenceInitializedPtys.has(ptyId) ||
+      this.providerSequenceOffsetByPtyId.has(ptyId) ||
+      this.providerSnapshotPreferredPtys.has(ptyId) ||
+      this.providerModeTrackersByPtyId.has(ptyId) ||
+      this.providerModeSnapshotScansByPtyId.has(ptyId) ||
+      this.providerBufferAcquisitionsByPtyId.has(ptyId) ||
+      this.providerVisibleStateByPtyId.has(ptyId) ||
+      this.providerVisibleRetryAtByPtyId.has(ptyId)
+    )
+  }
+
+  private resetPtyReadStateForProvenanceChange(
+    ptyId: string,
+    pty?: RuntimePtyWorktreeRecord
+  ): void {
+    // Why: a provider may reuse a PTY id for a different process or execution
+    // owner. Every byte, cursor, emulator, and in-flight snapshot retained
+    // under that id belongs to the prior or still-unattested provenance and
+    // must become unreachable before publishing its replacement identity.
+    this.advancePtyLifecycleGeneration(ptyId)
+    this.disposeHeadlessTerminal(ptyId)
+    this.recentPtyOutputById.delete(ptyId)
+    this.recentPtyPathCandidatesById.delete(ptyId)
+    this.clearWaitBlockedCheckState(ptyId)
+    this.ptyOutputSequenceById.delete(ptyId)
+    this.providerSequenceInitializedPtys.delete(ptyId)
+    this.providerSequenceOffsetByPtyId.delete(ptyId)
+    this.providerSnapshotPreferredPtys.delete(ptyId)
+    this.providerModeTrackersByPtyId.delete(ptyId)
+    this.providerModeSnapshotScansByPtyId.delete(ptyId)
+    this.terminalCwdByPtyId.delete(ptyId)
+    this.terminalFileUriHostnameByPtyId.delete(ptyId)
+    if (pty) {
+      this.clearRetainedTerminalReadState(pty)
+    }
+    for (const leaf of this.getLeavesForPty(ptyId)) {
+      this.clearRetainedTerminalReadState(leaf)
+    }
+    this.resetTrackedTerminalStateForProviderGeneration(ptyId)
+  }
+
+  private invalidatePtyHandlesForProvenanceChange(ptyId: string): void {
+    this.invalidateAllHandlesForPty(ptyId)
+    this.detachedPreAllocatedLeaves.delete(ptyId)
+  }
+
+  private setPtyIncarnation(
+    ptyId: string,
+    pty: RuntimePtyWorktreeRecord,
+    incarnationId: PtyIncarnationId | null
+  ): void {
+    const incarnationChanged = pty.incarnationId !== incarnationId
+    const requiresProvenanceReset =
+      incarnationChanged &&
+      (pty.incarnationId !== null || this.hasUnattestedPtyReadState(ptyId, pty))
+    if (requiresProvenanceReset) {
+      this.resetPtyReadStateForProvenanceChange(ptyId, pty)
+      this.invalidatePtyHandlesForProvenanceChange(ptyId)
+    }
+    pty.incarnationId = incarnationId
+  }
+
+  private revokePtyIncarnationForUnattestedLifecycle(
+    ptyId: string,
+    pty: RuntimePtyWorktreeRecord,
+    forceReset = false
+  ): void {
+    if (pty.incarnationId !== null) {
+      this.setPtyIncarnation(ptyId, pty, null)
+      return
+    }
+    if (forceReset || this.hasUnattestedPtyReadState(ptyId, pty)) {
+      this.resetPtyReadStateForProvenanceChange(ptyId, pty)
+      this.invalidatePtyHandlesForProvenanceChange(ptyId)
+    }
   }
 
   synchronizePtyOutputSequenceFromProvider(
@@ -12264,7 +12555,9 @@ export class OrcaRuntimeService {
     const providerBaseline = providerOffset + baseline
 
     if (providerSequence.generation === 'reset') {
-      this.advancePtyLifecycleGeneration(ptyId)
+      // A provider frame reset invalidates guarded async snapshots, but it is
+      // not by itself proof that the terminal process or owner changed.
+      this.advancePtyLifecycleGeneration(ptyId, false)
       // Why: daemon respawn/cold restore starts a new absolute domain. Old
       // emulator state cannot remain authoritative over the replacement.
       if (replacesExistingRuntimeGeneration) {
@@ -12621,8 +12914,10 @@ export class OrcaRuntimeService {
       return false
     }
     try {
+      const identity = this.capturePtyProvenanceIdentity(ptyId)
       await assertTerminalInputWithinLimitWithYield(data)
-      await this.writeTerminalInputChunks(ptyId, data, {
+      this.assertTerminalProvenanceIdentity(identity)
+      await this.writeTerminalInputChunks(ptyId, data, identity, {
         // Why: a phone can claim the floor while a paste yields between chunks.
         beforeWrite: () => {
           if (this.getDriver(ptyId).kind === 'mobile') {
@@ -15189,6 +15484,9 @@ export class OrcaRuntimeService {
       exitIncarnationId ??
       pty?.incarnationId ??
       `runtime:${this.runtimeId}:${this.getPtyLifecycleGeneration(ptyId)}`
+    // Exit is authoritative evidence that this id already named a process,
+    // even when its spawn/register publication predates this runtime instance.
+    this.ptyIdsWithPublishedLifecycle.add(ptyId)
     this.advancePtyLifecycleGeneration(ptyId)
     this.notifyPtyExitListeners(ptyId)
     const exactSurfaceByKey = new Map<
@@ -18450,20 +18748,53 @@ export class OrcaRuntimeService {
 
   async readTerminal(
     handle: string,
-    opts: { cursor?: number; limit?: number; screen?: boolean } = {},
+    opts: {
+      expectedIncarnationId?: PtyIncarnationId
+      cursor?: number
+      limit?: number
+      screen?: boolean
+    } = {},
     providerWait: { timeoutMs?: number; retireOnTimeout?: boolean } = {}
   ): Promise<RuntimeTerminalRead> {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
+      if (!runtimeWorktreeIdsEqual(pty.record.worktreeId, pty.pty.worktreeId)) {
+        throw new Error('terminal_handle_stale')
+      }
+      const identity: TerminalProvenanceIdentity = {
+        handle,
+        ptyId: pty.pty.ptyId,
+        incarnationId: pty.pty.incarnationId,
+        worktreeId: pty.pty.worktreeId,
+        lifecycleGeneration: this.getPtyLifecycleGeneration(pty.pty.ptyId),
+        provenanceGeneration: this.getPtyProvenanceGeneration(pty.pty.ptyId)
+      }
+      this.assertExpectedTerminalReadIncarnation(identity, opts.expectedIncarnationId)
       const read = this.readPtyTerminal(handle, pty.pty, opts)
       const visibleRead = opts.screen
         ? await this.readRenderedScreen(pty.pty.ptyId, read, opts)
         : await this.withVisibleSnapshotFallback(pty.pty.ptyId, read, opts, providerWait)
-      this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
-      return labelTerminalReadSource(visibleRead)
+      this.assertTerminalProvenanceIdentity(identity, opts.expectedIncarnationId !== undefined)
+      return attestTerminalRead(labelTerminalReadSource(visibleRead), identity)
     }
 
-    const { leaf } = this.getLiveLeafForHandle(handle)
+    const { record, leaf } = this.getLiveLeafForHandle(handle)
+    if (!runtimeWorktreeIdsEqual(record.worktreeId, leaf.worktreeId)) {
+      throw new Error('terminal_handle_stale')
+    }
+    const leafPty = leaf.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
+    if (leafPty && !runtimeWorktreeIdsEqual(leafPty.worktreeId, leaf.worktreeId)) {
+      throw new Error('terminal_handle_stale')
+    }
+    const identity: TerminalProvenanceIdentity = {
+      handle,
+      ptyId: leaf.ptyId,
+      incarnationId: leafPty?.incarnationId ?? null,
+      worktreeId: leaf.worktreeId,
+      lifecycleGeneration: leaf.ptyId ? this.getPtyLifecycleGeneration(leaf.ptyId) : null,
+      provenanceGeneration: leaf.ptyId ? this.getPtyProvenanceGeneration(leaf.ptyId) : null
+    }
+    this.assertExpectedTerminalReadIncarnation(identity, opts.expectedIncarnationId)
     const read = readTerminalTail({
       handle,
       status: getTerminalState(leaf),
@@ -18476,13 +18807,16 @@ export class OrcaRuntimeService {
       limit: opts.limit
     })
     if (!leaf.ptyId) {
-      return { ...read, source: opts.screen ? 'screen-unavailable' : 'stream' }
+      return attestTerminalRead(
+        { ...read, source: opts.screen ? 'screen-unavailable' : 'stream' },
+        identity
+      )
     }
     const visibleRead = opts.screen
       ? await this.readRenderedScreen(leaf.ptyId, read, opts)
       : await this.withVisibleSnapshotFallback(leaf.ptyId, read, opts, providerWait)
-    this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId)
-    return labelTerminalReadSource(visibleRead)
+    this.assertTerminalProvenanceIdentity(identity, opts.expectedIncarnationId !== undefined)
+    return attestTerminalRead(labelTerminalReadSource(visibleRead), identity)
   }
 
   // Why: the default read is the accumulated pty stream, which stacks every repaint of a line
@@ -18588,8 +18922,11 @@ export class OrcaRuntimeService {
       if (payload === null) {
         throw new Error('invalid_terminal_send')
       }
+      const identity = this.captureTerminalProvenanceIdentity(handle)
       await assertTerminalInputWithinLimitWithYield(action.text)
-      await this.writeTerminalAction(pty.pty.ptyId, action, payload, options)
+      this.assertTerminalProvenanceIdentity(identity)
+      await this.writeTerminalAction(pty.pty.ptyId, action, payload, identity, options)
+      this.assertTerminalProvenanceIdentity(identity)
       return {
         handle,
         accepted: true,
@@ -18605,16 +18942,21 @@ export class OrcaRuntimeService {
     if (payload === null) {
       throw new Error('invalid_terminal_send')
     }
+    const identity = this.captureTerminalProvenanceIdentity(handle)
     await assertTerminalInputWithinLimitWithYield(action.text)
+    this.assertTerminalProvenanceIdentity(identity)
     // Why: leaf.writable mirrors the renderer graph, which can still answer for
     // a prior process's ptyId — and provider writes to unknown ids are accepted
     // no-ops. Only controller-proven absence rejects; unknown proceeds (a
     // restored daemon session takes writes before its pane remounts).
-    if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
+    const ptyProvenAbsent = await this.isLeafPtyProvenAbsent(leaf.ptyId)
+    this.assertTerminalProvenanceIdentity(identity)
+    if (ptyProvenAbsent) {
       throw new Error('terminal_not_writable')
     }
 
-    await this.writeTerminalAction(leaf.ptyId, action, payload, options)
+    await this.writeTerminalAction(leaf.ptyId, action, payload, identity, options)
+    this.assertTerminalProvenanceIdentity(identity)
 
     return {
       handle,
@@ -19268,6 +19610,7 @@ export class OrcaRuntimeService {
     ptyId: string,
     action: { text?: string; enter?: boolean; interrupt?: boolean },
     payload: string,
+    identity: TerminalProvenanceIdentity,
     options: {
       beforeWrite?: (ptyId: string) => void | Promise<void>
       reserveWrite?: (ptyId: string) => void
@@ -19280,17 +19623,27 @@ export class OrcaRuntimeService {
     const hasText = typeof action.text === 'string' && action.text.length > 0
     const hasSuffix = action.enter || action.interrupt
     if (hasText) {
-      await this.writeTerminalInputChunks(ptyId, action.text!, options)
+      await this.writeTerminalInputChunks(ptyId, action.text!, identity, options)
     }
     if (hasSuffix) {
       const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
       if (hasText) {
         await new Promise((resolve) => setTimeout(resolve, 500))
+        this.assertTerminalProvenanceIdentity(identity)
       }
       try {
-        await options.beforeWrite?.(ptyId)
-        options.reserveWrite?.(ptyId)
+        await this.runTerminalWriteHookWithProvenance(options.beforeWrite, ptyId, identity)
       } catch (error) {
+        this.assertTerminalProvenanceIdentity(identity)
+        if (options.suffixFailureError) {
+          throw new Error(options.suffixFailureError)
+        }
+        throw error
+      }
+      try {
+        this.runTerminalWriteReservationWithProvenance(options.reserveWrite, ptyId, identity)
+      } catch (error) {
+        this.assertTerminalProvenanceIdentity(identity)
         if (options.suffixFailureError) {
           throw new Error(options.suffixFailureError)
         }
@@ -19300,25 +19653,26 @@ export class OrcaRuntimeService {
       if (!suffixWrote) {
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
-      await options.afterWrite?.(ptyId)
+      await this.runTerminalWriteHookWithProvenance(options.afterWrite, ptyId, identity)
       return
     }
     if (hasText) {
       return
     }
 
-    await options.beforeWrite?.(ptyId)
-    options.reserveWrite?.(ptyId)
+    await this.runTerminalWriteHookWithProvenance(options.beforeWrite, ptyId, identity)
+    this.runTerminalWriteReservationWithProvenance(options.reserveWrite, ptyId, identity)
     const wrote = this.ptyController?.write(ptyId, payload) ?? false
     if (!wrote) {
       throw new Error('terminal_not_writable')
     }
-    await options.afterWrite?.(ptyId)
+    await this.runTerminalWriteHookWithProvenance(options.afterWrite, ptyId, identity)
   }
 
   private async writeTerminalInputChunks(
     ptyId: string,
     text: string,
+    identity: TerminalProvenanceIdentity,
     options: {
       beforeWrite?: (ptyId: string) => void | Promise<void>
       reserveWrite?: (ptyId: string) => void
@@ -19328,18 +19682,48 @@ export class OrcaRuntimeService {
     const chunks = iterateTerminalInputChunks(text)
     let chunk = chunks.next()
     while (!chunk.done) {
-      await options.beforeWrite?.(ptyId)
-      options.reserveWrite?.(ptyId)
+      await this.runTerminalWriteHookWithProvenance(options.beforeWrite, ptyId, identity)
+      this.runTerminalWriteReservationWithProvenance(options.reserveWrite, ptyId, identity)
       const wrote = this.ptyController?.write(ptyId, chunk.value) ?? false
       if (!wrote) {
         throw new Error('terminal_not_writable')
       }
-      await options.afterWrite?.(ptyId)
+      await this.runTerminalWriteHookWithProvenance(options.afterWrite, ptyId, identity)
       chunk = chunks.next()
       if (!chunk.done) {
         await new Promise((resolve) => setTimeout(resolve, 0))
+        this.assertTerminalProvenanceIdentity(identity)
       }
     }
+  }
+
+  private runTerminalWriteReservationWithProvenance(
+    reserveWrite: ((ptyId: string) => void) | undefined,
+    ptyId: string,
+    identity: TerminalProvenanceIdentity
+  ): void {
+    this.assertTerminalProvenanceIdentity(identity)
+    try {
+      reserveWrite?.(ptyId)
+    } catch (error) {
+      this.assertTerminalProvenanceIdentity(identity)
+      throw error
+    }
+    this.assertTerminalProvenanceIdentity(identity)
+  }
+
+  private async runTerminalWriteHookWithProvenance(
+    hook: ((ptyId: string) => void | Promise<void>) | undefined,
+    ptyId: string,
+    identity: TerminalProvenanceIdentity
+  ): Promise<void> {
+    try {
+      await hook?.(ptyId)
+    } catch (error) {
+      this.assertTerminalProvenanceIdentity(identity)
+      throw error
+    }
+    this.assertTerminalProvenanceIdentity(identity)
   }
 
   private async writeTerminalAgentPrompt(
@@ -32365,12 +32749,16 @@ export class OrcaRuntimeService {
       return pty
     }
 
+    const worktreeChanged = !runtimeWorktreeIdsEqual(pty.worktreeId, worktreeId)
+    if (worktreeChanged) {
+      this.resetPtyReadStateForProvenanceChange(ptyId, pty)
+      this.invalidatePtyHandlesForProvenanceChange(ptyId)
+    }
     pty.worktreeId = worktreeId
-    if (state.incarnationId !== undefined) {
-      if (pty.incarnationId && state.incarnationId && pty.incarnationId !== state.incarnationId) {
-        this.invalidatePtyIncarnationHandle(ptyId)
-      }
-      pty.incarnationId = state.incarnationId
+    if (worktreeChanged) {
+      pty.incarnationId = state.incarnationId ?? null
+    } else if (state.incarnationId !== undefined) {
+      this.setPtyIncarnation(ptyId, pty, state.incarnationId)
     }
     if (state.connectionId !== undefined) {
       pty.connectionId = state.connectionId
@@ -35037,6 +35425,139 @@ export class OrcaRuntimeService {
     }
     const { leaf } = this.getLiveLeafForHandle(handle)
     if (leaf.ptyId !== expectedPtyId) {
+      throw new Error('terminal_handle_stale')
+    }
+  }
+
+  private assertExpectedTerminalReadIncarnation(
+    identity: TerminalProvenanceIdentity,
+    expectedIncarnationId: PtyIncarnationId | undefined
+  ): void {
+    if (expectedIncarnationId !== undefined && identity.incarnationId !== expectedIncarnationId) {
+      throw new Error('terminal_handle_stale')
+    }
+  }
+
+  private captureTerminalProvenanceIdentity(handle: string): TerminalProvenanceIdentity {
+    const currentPty = this.getLivePtyForHandle(handle)
+    if (currentPty) {
+      if (!runtimeWorktreeIdsEqual(currentPty.record.worktreeId, currentPty.pty.worktreeId)) {
+        throw new Error('terminal_handle_stale')
+      }
+      return {
+        handle,
+        ptyId: currentPty.pty.ptyId,
+        incarnationId: currentPty.pty.incarnationId,
+        worktreeId: currentPty.pty.worktreeId,
+        lifecycleGeneration: this.getPtyLifecycleGeneration(currentPty.pty.ptyId),
+        provenanceGeneration: this.getPtyProvenanceGeneration(currentPty.pty.ptyId)
+      }
+    }
+
+    const current = this.getLiveLeafForHandle(handle)
+    if (!runtimeWorktreeIdsEqual(current.record.worktreeId, current.leaf.worktreeId)) {
+      throw new Error('terminal_handle_stale')
+    }
+    const currentLeafPty = current.leaf.ptyId ? this.ptysById.get(current.leaf.ptyId) : undefined
+    if (
+      currentLeafPty &&
+      !runtimeWorktreeIdsEqual(currentLeafPty.worktreeId, current.leaf.worktreeId)
+    ) {
+      throw new Error('terminal_handle_stale')
+    }
+    return {
+      handle,
+      ptyId: current.leaf.ptyId,
+      incarnationId: currentLeafPty?.incarnationId ?? null,
+      worktreeId: current.leaf.worktreeId,
+      lifecycleGeneration: current.leaf.ptyId
+        ? this.getPtyLifecycleGeneration(current.leaf.ptyId)
+        : null,
+      provenanceGeneration: current.leaf.ptyId
+        ? this.getPtyProvenanceGeneration(current.leaf.ptyId)
+        : null
+    }
+  }
+
+  private capturePtyProvenanceIdentity(ptyId: string): TerminalProvenanceIdentity {
+    const pty = this.ptysById.get(ptyId)
+    return {
+      handle: null,
+      ptyId,
+      incarnationId: pty?.incarnationId ?? null,
+      worktreeId: pty?.worktreeId ?? null,
+      lifecycleGeneration: this.getPtyLifecycleGeneration(ptyId),
+      provenanceGeneration: this.getPtyProvenanceGeneration(ptyId)
+    }
+  }
+
+  private assertTerminalProvenanceIdentity(
+    expected: TerminalProvenanceIdentity,
+    requireLifecycleGeneration = true
+  ): void {
+    if (expected.ptyId && expected.provenanceGeneration !== null) {
+      if (this.getPtyProvenanceGeneration(expected.ptyId) !== expected.provenanceGeneration) {
+        throw new Error('terminal_handle_stale')
+      }
+    }
+    if (requireLifecycleGeneration && expected.ptyId && expected.lifecycleGeneration !== null) {
+      if (this.getPtyLifecycleGeneration(expected.ptyId) !== expected.lifecycleGeneration) {
+        throw new Error('terminal_handle_stale')
+      }
+    }
+    if (expected.handle === null) {
+      const currentPty = expected.ptyId ? this.ptysById.get(expected.ptyId) : undefined
+      if (expected.worktreeId === null) {
+        if (currentPty) {
+          throw new Error('terminal_handle_stale')
+        }
+        return
+      }
+      if (
+        !currentPty ||
+        currentPty.incarnationId !== expected.incarnationId ||
+        !runtimeWorktreeIdsEqual(currentPty.worktreeId, expected.worktreeId)
+      ) {
+        throw new Error('terminal_handle_stale')
+      }
+      return
+    }
+    if (expected.worktreeId === null) {
+      throw new Error('terminal_handle_stale')
+    }
+    if (
+      !this.handles.has(expected.handle) &&
+      (expected.ptyId === null || this.handleByPtyId.get(expected.ptyId) !== expected.handle)
+    ) {
+      throw new Error('terminal_handle_stale')
+    }
+    const currentPty = this.getLivePtyForHandle(expected.handle)
+    if (currentPty) {
+      if (
+        currentPty.record.handle !== expected.handle ||
+        currentPty.record.ptyId !== expected.ptyId ||
+        !runtimeWorktreeIdsEqual(currentPty.record.worktreeId, expected.worktreeId) ||
+        currentPty.pty.ptyId !== expected.ptyId ||
+        currentPty.pty.incarnationId !== expected.incarnationId ||
+        !runtimeWorktreeIdsEqual(currentPty.pty.worktreeId, expected.worktreeId)
+      ) {
+        throw new Error('terminal_handle_stale')
+      }
+      return
+    }
+
+    const current = this.getLiveLeafForHandle(expected.handle)
+    const currentLeafPty = current.leaf.ptyId ? this.ptysById.get(current.leaf.ptyId) : undefined
+    if (
+      current.record.handle !== expected.handle ||
+      current.record.ptyId !== expected.ptyId ||
+      !runtimeWorktreeIdsEqual(current.record.worktreeId, expected.worktreeId) ||
+      current.leaf.ptyId !== expected.ptyId ||
+      !runtimeWorktreeIdsEqual(current.leaf.worktreeId, expected.worktreeId) ||
+      (currentLeafPty?.incarnationId ?? null) !== expected.incarnationId ||
+      (currentLeafPty !== undefined &&
+        !runtimeWorktreeIdsEqual(currentLeafPty.worktreeId, expected.worktreeId))
+    ) {
       throw new Error('terminal_handle_stale')
     }
   }
@@ -39862,6 +40383,17 @@ function buildVisibleSnapshotReadFallback(
       read.limited || lineBoundedTail.length < visibleLines.length || charBoundedTail.limited,
     returnedLineCount: charBoundedTail.tail.length,
     source: 'screen'
+  }
+}
+
+function attestTerminalRead(
+  read: RuntimeTerminalRead,
+  identity: TerminalProvenanceIdentity
+): RuntimeTerminalRead {
+  return {
+    ...read,
+    ...(identity.incarnationId ? { incarnationId: identity.incarnationId } : {}),
+    ...(identity.worktreeId ? { worktreeId: identity.worktreeId } : {})
   }
 }
 

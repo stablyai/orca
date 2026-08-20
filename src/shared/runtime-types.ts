@@ -643,6 +643,8 @@ export type RuntimeTerminalState = 'running' | 'exited' | 'unknown'
 
 export type RuntimeTerminalRead = {
   handle: string
+  incarnationId?: string
+  worktreeId?: string
   status: RuntimeTerminalState
   tail: string[]
   truncated: boolean
