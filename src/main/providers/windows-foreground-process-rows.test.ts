@@ -153,6 +153,81 @@ describe('windows foreground process rows spawn options', () => {
     )
   })
 
+  // A command line can supply a whole record. The invented row is not inert: with
+  // ppid set to Orca's own pid it bridges a real orphan (a process whose parent
+  // already exited) into our subtree, and classifyWindowsTreeKillTarget then reads
+  // that unrelated tree as `own` and lets `taskkill /T /F` have it. wmic closes
+  // every record with an empty line, so properties resuming without one prove the
+  // record came from content — and the whole snapshot is refused.
+  it('refuses a table where a command line supplied a whole record (#15565 review)', async () => {
+    const forged =
+      'CommandLine=evil.exe\n' +
+      'ExecutablePath=C:/fake.exe\n' +
+      'Name=fake.exe\n' +
+      'ParentProcessId=1000\n' +
+      'ProcessId=5000\n' +
+      'ExecutablePath=C:/real/evil.exe\n' +
+      'Name=evil.exe\n' +
+      'ParentProcessId=100\n' +
+      'ProcessId=400\n\n'
+    execFileMock.mockImplementation((cmd: string, _args, _opts, cb: ExecFileCallback) => {
+      cb(null, {
+        stdout: isCommand(cmd, 'wmic') ? `${WMIC_ROWS_VALUE}\n${forged}` : POWERSHELL_ROWS_JSON,
+        stderr: ''
+      })
+    })
+
+    const candidates = await queryWindowsProcessDescendants(100, { fresh: true })
+
+    expect(candidates?.map((row) => row.pid)).toEqual([200])
+    expect(candidates?.some((row) => row.pid === 5000)).toBe(false)
+  })
+
+  // A framing failure is content any local process can arrange. Retiring wmic over
+  // it would hand that process a switch for turning the transcript flood back on.
+  it('backs off after repeated framing failures, then retries wmic (#15565 review)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(0)
+    try {
+      let wmicSpawns = 0
+      let hostile = true
+      execFileMock.mockImplementation((cmd: string, _args, _opts, cb: ExecFileCallback) => {
+        if (isCommand(cmd, 'wmic')) {
+          wmicSpawns += 1
+          // A command line that walks the framing: properties resume with no break.
+          cb(null, {
+            stdout: hostile
+              ? 'CommandLine=x\nExecutablePath=a\nName=b\nParentProcessId=1\nProcessId=2\nExecutablePath=c\n'
+              : WMIC_ROWS_VALUE,
+            stderr: ''
+          })
+          return
+        }
+        cb(null, { stdout: POWERSHELL_ROWS_JSON, stderr: '' })
+      })
+
+      for (let scan = 0; scan < 3; scan += 1) {
+        await queryWindowsProcessDescendants(100, { fresh: true })
+      }
+      expect(wmicSpawns).toBe(3)
+
+      // Inside the backoff window wmic is not spawned at all — one process per
+      // scan, never the two that a retry-every-scan policy would cost.
+      await queryWindowsProcessDescendants(100, { fresh: true })
+      expect(wmicSpawns).toBe(3)
+
+      // ...and the fix comes back on its own once the window passes.
+      hostile = false
+      vi.setSystemTime(60_001)
+      const candidates = await queryWindowsProcessDescendants(100, { fresh: true })
+
+      expect(wmicSpawns).toBe(4)
+      expect(candidates?.map((row) => row.pid)).toEqual([200])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   // A repeated pid means the record framing desynced, and ancestry read off a
   // desynced table can misdirect `taskkill /T /F`.
   it('discards a wmic table with duplicate pids and lets PowerShell answer', async () => {
@@ -185,15 +260,15 @@ describe('windows foreground process rows spawn options', () => {
       cb(null, { stdout: POWERSHELL_ROWS_JSON, stderr: '' })
     })
 
-    await queryWindowsProcessRowsFresh()
-    await queryWindowsProcessRowsFresh()
+    await queryWindowsProcessDescendants(100, { fresh: true })
+    await queryWindowsProcessDescendants(100, { fresh: true })
 
     expect(wmicSpawns).toBe(1)
     expect(optionsForCommand('powershell.exe')).toMatchObject({ windowsHide: true })
   })
 
   // A WMI hiccup must not cost the fix for the rest of the process lifetime.
-  it('retries wmic after a transient scan failure, and demotes it once it persists', async () => {
+  it('retries wmic after a transient scan failure, and stops once they persist', async () => {
     let wmicSpawns = 0
     let failing = true
     execFileMock.mockImplementation((cmd: string, _args, _opts, cb: ExecFileCallback) => {
@@ -209,22 +284,22 @@ describe('windows foreground process rows spawn options', () => {
       cb(null, { stdout: POWERSHELL_ROWS_JSON, stderr: '' })
     })
 
-    await queryWindowsProcessRowsFresh()
+    await queryWindowsProcessDescendants(100, { fresh: true })
     failing = false
-    const rows = await queryWindowsProcessRowsFresh()
+    const candidates = await queryWindowsProcessDescendants(100, { fresh: true })
 
     expect(wmicSpawns).toBe(2)
-    expect(rows.map((row) => row.pid)).toEqual([100, 200])
+    expect(candidates?.map((row) => row.pid)).toEqual([200])
 
     failing = true
-    await queryWindowsProcessRowsFresh()
-    await queryWindowsProcessRowsFresh()
-    await queryWindowsProcessRowsFresh()
-    const spawnsAfterDemotion = wmicSpawns
+    await queryWindowsProcessDescendants(100, { fresh: true })
+    await queryWindowsProcessDescendants(100, { fresh: true })
+    await queryWindowsProcessDescendants(100, { fresh: true })
+    const spawnsAfterBackoff = wmicSpawns
 
-    await queryWindowsProcessRowsFresh()
+    await queryWindowsProcessDescendants(100, { fresh: true })
 
-    expect(wmicSpawns).toBe(spawnsAfterDemotion)
+    expect(wmicSpawns).toBe(spawnsAfterBackoff)
   })
 })
 
@@ -257,6 +332,29 @@ describe('queryWindowsProcessRowsFresh', () => {
 
   const powershellScanCount = (): number =>
     execFileMock.mock.calls.filter((call) => call[0] === 'powershell.exe').length
+
+  // wmic's value format has no escaping and CommandLine is chosen by whoever
+  // launched the process, so a command line can emit a whole well-formed record —
+  // separator and resync line included — that no parser can tell from a real one.
+  // An invented `{pid, ppid}` bridges a real orphan to our pid and hands an
+  // unrelated tree to `taskkill /T /F`, so this reader must never touch wmic, even
+  // where wmic is present and answering.
+  it('never reads wmic, because its rows gate taskkill /T /F (#15565 review)', async () => {
+    execFileMock.mockReset()
+    execFileMock.mockImplementation((cmd: string, _args, _opts, cb: ExecFileCallback) => {
+      cb(null, {
+        stdout: isCommand(cmd, 'wmic') ? WMIC_ROWS_VALUE : POWERSHELL_ROWS_JSON,
+        stderr: ''
+      })
+    })
+
+    const rows = await queryWindowsProcessRowsFresh()
+
+    expect(rows.map((row) => row.pid)).toEqual([100, 200])
+    expect(
+      execFileMock.mock.calls.some((args) => isCommand((args as ExecFileCall)[0], 'wmic'))
+    ).toBe(false)
+  })
 
   it('collapses a burst of concurrent identity probes into one scan', async () => {
     const rows = await Promise.all(Array.from({ length: 32 }, () => queryWindowsProcessRowsFresh()))

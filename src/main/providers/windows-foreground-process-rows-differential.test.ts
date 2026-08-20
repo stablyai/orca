@@ -9,10 +9,15 @@
 //
 //   Fidelity — with content that cannot forge the framing, the wmic rows must
 //   equal the PowerShell rows exactly, command text included.
-//   Safety   — with content that CAN forge it, no row may claim a pid that
-//   exists in the real table under the wrong parent. That is the property
-//   `taskkill /T /F` targeting rests on; a phantom pid is inert, a mis-parented
-//   real one is not.
+//   Safety   — with content that CAN forge it, no process that genuinely exists
+//   may be restated under a parent it does not have.
+//
+// Safety stops there because it has to: a command line can emit a whole
+// well-formed record — blank-line separator and a following `CommandLine=` to
+// resynchronise — and nothing in the byte stream distinguishes it from a real
+// one. That is a property of `/format:value`, not of this parser. It is
+// survivable only because the reader gating `taskkill /T /F` is PowerShell-only,
+// so an invented row can misname a pane and nothing worse.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn() }))
@@ -20,7 +25,7 @@ const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn() }))
 vi.mock('child_process', () => ({ execFile: execFileMock }))
 
 import {
-  queryWindowsProcessRowsFresh,
+  queryWindowsProcessDescendants,
   resetWindowsProcessRowsReaderForTests
 } from './windows-foreground-process-rows'
 
@@ -140,7 +145,8 @@ async function readViaWmic(rows: GeneratedProcess[]): Promise<ReadRow[] | null> 
     callback(new Error('powershell unavailable'), { stdout: '', stderr: '' })
   })
   try {
-    return (await queryWindowsProcessRowsFresh()).map(toReadRow)
+    const candidates = await queryWindowsProcessDescendants(rows[0]!.ProcessId, { fresh: true })
+    return candidates === null ? null : candidates.map(toReadRow)
   } catch {
     return null
   }
@@ -166,7 +172,8 @@ async function readViaPowerShell(rows: GeneratedProcess[]): Promise<ReadRow[]> {
     }
     callback(null, { stdout, stderr: '' })
   })
-  return (await queryWindowsProcessRowsFresh()).map(toReadRow)
+  const candidates = await queryWindowsProcessDescendants(rows[0]!.ProcessId, { fresh: true })
+  return (candidates ?? []).map(toReadRow)
 }
 
 const byPid = <T extends { pid: number }>(rows: T[]): T[] => [...rows].sort((a, b) => a.pid - b.pid)
@@ -207,9 +214,13 @@ describe('wmic reader vs PowerShell reader, over generated hostile tables', () =
     }
   })
 
-  // The property `taskkill /T /F` targeting rests on. A forged row may invent a pid
-  // that does not exist — inert, killing a dead pid no-ops — but must never restate
-  // a live pid under a parent it does not have.
+  // A command line can emit a whole well-formed record, separator and resync line
+  // included, so this reader CAN be made to invent a row and no parser can prevent
+  // it. That is survivable only because the reader gating `taskkill /T /F` is
+  // PowerShell-only (see the test in windows-foreground-process-rows.test.ts) —
+  // here an invented row can misname a pane and nothing worse. What must still
+  // hold is that a process which genuinely exists is never restated under a parent
+  // it does not have, so a real agent's lineage cannot be rewritten.
   it('never mis-parents a real pid on 400 tables that can forge the framing', async () => {
     let refused = 0
     for (let seed = 1; seed <= 400; seed += 1) {
@@ -237,7 +248,7 @@ describe('wmic reader vs PowerShell reader, over generated hostile tables', () =
       const viaWmic = await readViaWmic(table)
       expect(viaWmic, `seed ${seed} was refused outright`).not.toBeNull()
       const seen = new Set(viaWmic!.map((row) => row.pid))
-      for (const row of table) {
+      for (const row of table.slice(1)) {
         expect(seen.has(row.ProcessId), `seed ${seed} lost pid ${row.ProcessId}`).toBe(true)
       }
     }

@@ -1,6 +1,10 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { createProcessTableSnapshotReader } from '../../shared/process-table-snapshot'
+import {
+  readWindowsProcessRowsWithWmic,
+  resetWmicProcessTableReaderForTests
+} from './windows-wmic-process-table'
 
 const execFileAsync = promisify(execFile)
 const WINDOWS_PROCESS_QUERY_TIMEOUT_MS = 3_000
@@ -32,42 +36,9 @@ export type WindowsProcessCandidate = WindowsProcessRow & { depth: number }
 // walk over the shared snapshot.
 // Why #15209: every PowerShell-host spawn writes a transcript file under the
 // enterprise Windows PowerShell transcription GPO, and this scan re-forks ~2x/s
-// while panes are open — 1.4M files / 289GB in three weeks on one reported
-// machine. wmic reads the same table with no PowerShell host, so it leads;
-// PowerShell stays the fallback and is the only option where wmic is absent
-// (24H2+ removed it), which leaves those builds on today's behaviour.
-const WMIC_SCAN_FAILURE_LIMIT = 3
-// Why the absolute path and not `wmic`: a bare name resolves through PATH, and on
-// 24H2+ no legitimate wmic exists — so any `wmic.exe` a PATH entry offers there is
-// by definition not the system one. The daemon runs this ~2x/s and targets
-// `taskkill /T /F` off its output, so it reads only the one canonical location.
-const WMIC_PATH = `${process.env.SystemRoot ?? 'C:\\Windows'}\\System32\\wbem\\wmic.exe`
-let wmicDemoted = false
-let wmicScanFailures = 0
-
-/**
- * wmic rows, or null to let PowerShell answer this scan.
- *
- * Why demote instead of probing `wmic /?`: a probe proves the binary exists, not
- * that we can read its table, and the answer to both is the same — stop spending
- * a wmic spawn per scan on top of the PowerShell one. An unreadable table demotes
- * at once; a transient WMI failure gets `WMIC_SCAN_FAILURE_LIMIT` scans of grace
- * so one hiccup does not cost the fix for the rest of the process lifetime.
- */
-async function readWindowsProcessRowsWithWmic(): Promise<WindowsProcessRow[] | null> {
-  if (wmicDemoted) {
-    return null
-  }
-  const scan = await queryWindowsProcessesWithWmic()
-  if (scan.status === 'ok') {
-    wmicScanFailures = 0
-    return scan.rows
-  }
-  wmicScanFailures += 1
-  wmicDemoted = scan.status === 'unsupported' || wmicScanFailures >= WMIC_SCAN_FAILURE_LIMIT
-  return null
-}
-
+// while panes are open. wmic reads the same table with no PowerShell host, so it
+// leads here; see ./windows-wmic-process-table for what that costs and why the
+// teardown reader below deliberately does not use it.
 async function runWindowsProcessRows(): Promise<WindowsProcessRow[]> {
   const rows =
     (await readWindowsProcessRowsWithWmic()) ?? (await queryWindowsProcessesWithPowerShell())
@@ -85,14 +56,37 @@ const windowsProcessRowsReader = createProcessTableSnapshotReader<WindowsProcess
   now: () => Date.now()
 })
 
+// Why this one never reads wmic: `/format:value` has no escaping and CommandLine
+// is whatever some process chose to be launched with, so a command line can emit
+// a fully well-formed record — blank-line separator and a following `CommandLine=`
+// to resynchronise — that no parser can tell from a real one. An invented
+// `{pid, ppid}` row is not inert: it bridges a real orphan to our own pid, and
+// classifyWindowsTreeKillTarget then reads an unrelated tree as `own` and lets
+// `taskkill /T /F` have it. Ancestry that gates a force-kill therefore comes only
+// from the JSON reader, where a field cannot masquerade as a record.
+//
+// The cost is bounded: this fires on teardown, not on the ~2x/s cadence #15209 is
+// about, so it is one transcript file per teardown against the 172,800 a day the
+// foreground scan was writing.
+const windowsProcessLinksReader = createProcessTableSnapshotReader<WindowsProcessRow[]>({
+  runPs: async () => {
+    const rows = await queryWindowsProcessesWithPowerShell()
+    if (!rows) {
+      throw new Error('windows process enumeration unavailable')
+    }
+    return rows
+  },
+  now: () => Date.now()
+})
+
 /**
  * Rows from a scan that starts after this call. PID-identity checks in teardown
  * must not reuse a cached row — it can predate the very recycle it detects — but
  * they must still dedupe: a worktree delete tears down PTYs 32-wide, so a bypass
- * would fork that many powershell cold-starts. Rejects when both readers fail.
+ * would fork that many powershell cold-starts. Rejects when the scan fails.
  */
 export function queryWindowsProcessRowsFresh(): Promise<WindowsProcessRow[]> {
-  return windowsProcessRowsReader.getFreshSnapshot()
+  return windowsProcessLinksReader.getFreshSnapshot()
 }
 
 export async function queryWindowsProcessDescendants(
@@ -123,98 +117,9 @@ export async function queryWindowsProcessDescendants(
  * process-lifetime state, so leaving either set leaks one case into the next.
  */
 export function resetWindowsProcessRowsReaderForTests(): void {
+  resetWmicProcessTableReaderForTests()
   windowsProcessRowsReader.reset()
-  wmicDemoted = false
-  wmicScanFailures = 0
-}
-
-// wmic /format:value emits one `Key=Value` line per property in this fixed order,
-// records separated by a blank line.
-const WMIC_VALUE_FIELDS = [
-  'CommandLine',
-  'ExecutablePath',
-  'Name',
-  'ParentProcessId',
-  'ProcessId'
-] as const
-
-/**
- * Parse wmic's `Key=Value` records.
- *
- * CommandLine is the one property that carries raw CR/LF, and Orca's own panes
- * put it there constantly (`bash -lc $'...\n...'`). So inside a record only the
- * next property in order opens a field; every other line continues the field
- * being read, which is what keeps `$'echo a\nProcessId=4'` one row instead of
- * two malformed ones — the hazard that made the PowerShell reader ask for JSON.
- * Between records any property may open one, so a process whose CommandLine is
- * NULL still parses, and a record missing a middle property merges into the next
- * rather than desyncing the rest of the table.
- *
- * Returns null when the framing is provably compromised, which drops the whole
- * snapshot to PowerShell. Only CommandLine can hold a newline, so a continuation
- * line arriving while a later property is open means some earlier line was
- * absorbed that should not have been. A command line carrying
- * `ExecutablePath=`/`Name=`/`ParentProcessId=` in order otherwise walks the parser
- * to ParentProcessId and lets the record's own real `ProcessId=` close it —
- * re-parenting a live pid under a forged parent, with no duplicate pid to catch
- * it. Ancestry read off that feeds `taskkill /T /F`, so an ambiguous table is
- * refused rather than guessed at.
- */
-function parseWindowsProcessValueRows(stdout: string): WindowsProcessRow[] | null {
-  const rows: WindowsProcessRow[] = []
-  const values: string[] = ['', '', '', '', '']
-  let field = -1
-
-  const flush = (): void => {
-    const ppid = Number.parseInt(values[3]!, 10)
-    const pid = Number.parseInt(values[4]!, 10)
-    if (Number.isFinite(pid) && Number.isFinite(ppid)) {
-      const name = values[2]!.trim()
-      rows.push({
-        pid,
-        ppid,
-        name,
-        command: values[0]!.trim() || name,
-        executablePath: values[1]!.trim()
-      })
-    }
-    values.fill('')
-    field = -1
-  }
-
-  for (const line of stdout.split(/\r?\n/)) {
-    // Exactly empty, not merely blank: a whitespace-only line is content, and
-    // treating it as the separator silently ate its spaces out of the command.
-    if (line === '') {
-      // Only past CommandLine does an empty line mean end-of-record; inside one it
-      // is content. Agent CLIs really do embed blank lines: on a measured
-      // 920-process host all 11 that did were claude/codex/node/sh panes — the
-      // exact rows foreground detection reads. Flushing there dropped the command
-      // and left the row naming only its executable.
-      if (field >= 1) {
-        flush()
-      } else if (field === 0) {
-        values[0] += '\n'
-      }
-      continue
-    }
-    const eq = line.indexOf('=')
-    const next =
-      eq === -1 ? -1 : (WMIC_VALUE_FIELDS as readonly string[]).indexOf(line.slice(0, eq))
-    if (next >= 0 && (field === -1 || next === field + 1)) {
-      field = next
-      values[next] = line.slice(eq + 1)
-      if (next === WMIC_VALUE_FIELDS.length - 1) {
-        flush()
-      }
-    } else if (field > 0) {
-      return null
-    } else if (field === 0) {
-      values[0] += `\n${line}`
-    }
-  }
-  flush()
-  return rows
+  windowsProcessLinksReader.reset()
 }
 
 type WindowsProcessJsonRow = {
@@ -292,9 +197,18 @@ function collectDescendants<Row extends { pid: number; ppid: number }>(
   }
 
   const descendants: (Row & { depth: number })[] = []
+  // Why visited: ppid is historical, so a recycled pid can point a live process at
+  // a descendant of itself and close a loop — and every Windows table ships one
+  // outright, System Idle Process being its own parent at pid 0. Unguarded, this
+  // walk never terminates, and it runs on the daemon's ~2x/s cadence.
+  const visited = new Set<number>([rootPid])
   const stack = (childrenByParent.get(rootPid) ?? []).map((row) => ({ row, depth: 1 }))
   while (stack.length > 0) {
     const { row, depth } = stack.pop()!
+    if (visited.has(row.pid)) {
+      continue
+    }
+    visited.add(row.pid)
     descendants.push({ ...row, depth })
     for (const child of childrenByParent.get(row.pid) ?? []) {
       stack.push({ row: child, depth: depth + 1 })
@@ -325,80 +239,4 @@ async function queryWindowsProcessesWithPowerShell(): Promise<WindowsProcessRow[
   } catch {
     return null
   }
-}
-
-type WmicScan =
-  /** wmic is missing, or its output is not the key=value table we can read. */
-  | { status: 'unsupported' }
-  /** wmic ran but this scan did not answer: a WMI hiccup, a timeout, a torn table. */
-  | { status: 'failed' }
-  | { status: 'ok'; rows: WindowsProcessRow[] }
-
-/**
- * wmic writes UTF-16LE through a redirected stdout, so read bytes and pick the
- * encoding from the BOM — decoding as utf8 would yield NUL-padded keys that match
- * nothing and silently strand every machine on the PowerShell path this fixes.
- */
-function decodeWmicStdout(stdout: string | Buffer): string {
-  if (typeof stdout === 'string') {
-    return stdout
-  }
-  if (stdout[0] === 0xff && stdout[1] === 0xfe) {
-    return stdout.toString('utf16le', 2)
-  }
-  if (stdout[0] === 0xef && stdout[1] === 0xbb && stdout[2] === 0xbf) {
-    return stdout.toString('utf8', 3)
-  }
-  // A BOM-less UTF-16LE table still pads every ASCII byte with a NUL.
-  return stdout.subarray(0, 64).includes(0) ? stdout.toString('utf16le') : stdout.toString('utf8')
-}
-
-/** Whole-process-table scan via wmic — the preferred reader, see #15209. */
-async function queryWindowsProcessesWithWmic(): Promise<WmicScan> {
-  let stdout: string
-  try {
-    const result = await execFileAsync(
-      WMIC_PATH,
-      [
-        'process',
-        'get',
-        'CommandLine,ExecutablePath,Name,ParentProcessId,ProcessId',
-        '/format:value'
-      ],
-      {
-        encoding: 'buffer',
-        timeout: WINDOWS_PROCESS_QUERY_TIMEOUT_MS,
-        // 16MB: the cap counts raw bytes here, and UTF-16 doubles the table.
-        maxBuffer: 16 * 1024 * 1024,
-        // Why: same focus-stealing hazard as the powershell scan — without this,
-        // each fork pops a conhost window that steals keyboard focus.
-        windowsHide: true
-      }
-    )
-    stdout = decodeWmicStdout(result.stdout)
-  } catch (error) {
-    // ENOENT is 24H2+, where wmic is gone for good; anything else may recover.
-    const missing = (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
-    return { status: missing ? 'unsupported' : 'failed' }
-  }
-  if (stdout.trim() === '') {
-    return { status: 'failed' }
-  }
-  const rows = parseWindowsProcessValueRows(stdout)
-  if (rows === null) {
-    // Framing compromised by command-line content, not a format we cannot read:
-    // transient, because it lasts only as long as the process that wrote it.
-    return { status: 'failed' }
-  }
-  if (rows.length === 0) {
-    // Output arrived and parsed to nothing: this build's wmic does not speak the
-    // format we read, and no later scan will change that.
-    return { status: 'unsupported' }
-  }
-  // pids are unique in a live table, so a repeat means the record framing
-  // desynced. Ancestry off a desynced table can misdirect `taskkill /T /F`.
-  if (new Set(rows.map((row) => row.pid)).size !== rows.length) {
-    return { status: 'failed' }
-  }
-  return { status: 'ok', rows }
 }
