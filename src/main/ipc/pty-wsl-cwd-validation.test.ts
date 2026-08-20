@@ -355,7 +355,10 @@ describe('registerPtyHandlers', () => {
       expect(shell).toBe('/bin/zsh')
       expect(args).toEqual(['-l'])
       expect(options.env.ZDOTDIR).toBe(join(getShellReadyWrapperRoot(), 'zsh'))
-      expect(options.env.ORCA_ORIG_ZDOTDIR).toBe(process.env.HOME)
+      // Why absent: this HOME holds no zsh startup file, so there is no user
+      // config dir to hand back and Orca must not invent one — the wrapper
+      // leaves ZDOTDIR unset, exactly as an unwrapped login zsh would.
+      expect(options.env.ORCA_ORIG_ZDOTDIR).toBeUndefined()
     } finally {
       Object.defineProperty(process, 'platform', {
         configurable: true,

@@ -359,14 +359,12 @@ jobs:
             src/main/daemon/shell-ready.test.ts \
             src/main/daemon/node-pty-fd-leak.test.ts \
             src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts \
-            src/main/providers/local-pty-shell-ready-zsh-startup-file-behavior.test.ts \
-            src/main/providers/local-pty-shell-ready-zsh-zdotdir-discovery.test.ts \
-            src/main/providers/local-pty-shell-ready-zsh-zdotdir-normalization.test.ts \
             src/main/providers/__tests__/shell-ready-framework-example.test.ts \
             src/main/pty/omp-shell-wrapper.node-pty.test.ts \
             src/main/shell-startup-feature-channel.test.ts \
             src/main/terminal-history-fish-session.node-pty.test.ts \
             src/main/zsh-scoped-histfile.live-shell.test.ts \
+            src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
             src/main/zsh-wrapper-version-mismatch.live-shell.test.ts \
             src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
             src/shared/startup-shell-portability.live-shell.test.ts \
@@ -403,14 +401,12 @@ jobs:
             --exclude=src/main/daemon/shell-ready.test.ts \
             --exclude=src/main/daemon/node-pty-fd-leak.test.ts \
             --exclude=src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts \
-            --exclude=src/main/providers/local-pty-shell-ready-zsh-startup-file-behavior.test.ts \
-            --exclude=src/main/providers/local-pty-shell-ready-zsh-zdotdir-discovery.test.ts \
-            --exclude=src/main/providers/local-pty-shell-ready-zsh-zdotdir-normalization.test.ts \
             --exclude=src/main/providers/__tests__/shell-ready-framework-example.test.ts \
             --exclude=src/main/pty/omp-shell-wrapper.node-pty.test.ts \
             --exclude=src/main/shell-startup-feature-channel.test.ts \
             --exclude=src/main/terminal-history-fish-session.node-pty.test.ts \
             --exclude=src/main/zsh-scoped-histfile.live-shell.test.ts \
+            --exclude=src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
             --exclude=src/main/zsh-wrapper-version-mismatch.live-shell.test.ts \
             --exclude=src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
             --exclude=src/shared/startup-shell-portability.live-shell.test.ts \
