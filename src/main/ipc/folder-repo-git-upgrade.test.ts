@@ -67,6 +67,7 @@ import {
   stopFolderRepoGitUpgradeWatch
 } from './folder-repo-git-upgrade'
 import { wakeFolderRepoGitUpgradeWatch } from './folder-repo-git-upgrade-wake'
+import { directoryLinkType } from '../../shared/symlink-capability'
 
 type TestWindow = {
   destroyed: boolean
@@ -142,7 +143,7 @@ describe('folder repo git upgrade watch', () => {
     vi.clearAllMocks()
     root = realpathSync(await mkdtemp(join(tmpdir(), 'folder-repo-upgrade-')))
     symlinkedRoot = `${root}-link`
-    await symlink(root, symlinkedRoot, 'dir')
+    await symlink(root, symlinkedRoot, directoryLinkType())
     statCalls.length = 0
     gitProbes.length = 0
   })

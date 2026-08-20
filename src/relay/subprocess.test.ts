@@ -16,6 +16,7 @@ import { build } from 'esbuild'
 import { spawnRelay, type RelayProcess } from './subprocess-test-utils'
 import { getEndpointFileName } from '../shared/agent-hook-listener'
 import { relayTestSocketPath } from './relay-test-socket-path'
+import { directoryLinkType } from '../shared/symlink-capability'
 
 const RELAY_TS_ENTRY = path.resolve(__dirname, 'relay.ts')
 const WATCHER_TS_ENTRY = path.resolve(__dirname, '../main/ipc/parcel-watcher-process-entry.ts')
@@ -820,7 +821,7 @@ describe('Subprocess: Relay entry point', () => {
     const outsideDir = mkdtempSync(path.join(tmpdir(), 'relay-outside-'))
     writeFileSync(path.join(outsideDir, 'data.txt'), 'symlinked-target')
     const { symlinkSync } = require('node:fs')
-    symlinkSync(outsideDir, path.join(tmpDir, 'link'))
+    symlinkSync(outsideDir, path.join(tmpDir, 'link'), directoryLinkType())
 
     relay = spawn()
     await relay.sentinelReceived

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getStatus } from './status'
+import { canCreateFileSymlink, directoryLinkType } from '../../shared/symlink-capability'
 
 // Why: `node_modules/` is a directory-only ignore rule. It matches the primary
 // checkout's real directory but never the worktree's symlink, so Git reports the
@@ -12,7 +13,11 @@ import { getStatus } from './status'
 const git = (args: string[], cwd: string): string =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
 
-describe('getStatus shared symlink exclusion', () => {
+// Why skipIf on the capability and not on the platform: the fixture commits a
+// symlink to a file, which Windows refuses without Developer Mode or elevation.
+// A CI runner is elevated, so gating on the platform would keep this skipped in
+// the one place it would have run.
+describe.skipIf(!canCreateFileSymlink())('getStatus shared symlink exclusion', () => {
   let root: string
   let primary: string
   let worktree: string
@@ -33,7 +38,7 @@ describe('getStatus shared symlink exclusion', () => {
     git(['commit', '-qm', 'init'], primary)
     mkdirSync(join(primary, 'node_modules'))
     git(['worktree', 'add', '-q', worktree, '-b', 'feature'], primary)
-    symlinkSync(join(primary, 'node_modules'), join(worktree, 'node_modules'), 'dir')
+    symlinkSync(join(primary, 'node_modules'), join(worktree, 'node_modules'), directoryLinkType())
   })
 
   afterEach(() => {
@@ -129,7 +134,7 @@ describe('getStatus shared symlink exclusion', () => {
   it('drops shared symlinks whose names have a space or non-ASCII characters', async () => {
     const names = ['my shared dir', 'ライブラリ']
     for (const name of names) {
-      symlinkSync(join(primary, 'node_modules'), join(worktree, name), 'dir')
+      symlinkSync(join(primary, 'node_modules'), join(worktree, name), directoryLinkType())
     }
 
     const status = await getStatus(worktree, { sharedLinkPaths: ['node_modules', ...names] })
@@ -138,7 +143,7 @@ describe('getStatus shared symlink exclusion', () => {
   })
 
   it('keeps a symlink at a path that was never declared shared', async () => {
-    symlinkSync(join(primary, 'node_modules'), join(worktree, 'vendor'), 'dir')
+    symlinkSync(join(primary, 'node_modules'), join(worktree, 'vendor'), directoryLinkType())
 
     const status = await getStatus(worktree, { sharedLinkPaths: ['node_modules'] })
 

@@ -13,6 +13,7 @@ import {
   resolveTerminalArtifactPath,
   useTerminalArtifactTempFiles
 } from './orca-runtime-files-terminal-artifact-fixtures'
+import { canCreateFileSymlink } from '../../shared/symlink-capability'
 
 vi.mock('fs', async () => (await import('./orca-runtime-files-mock-registry')).fsModuleMock())
 vi.mock('fs/promises', async () =>
@@ -149,42 +150,45 @@ describe('RuntimeFileCommands', () => {
       await expect(readFile(artifactPath, 'utf8')).resolves.toBe('<h1>Result</h1>')
     })
 
-    it('binds a cited symlink alias to its canonical read-only target', async () => {
-      const artifactPath = await tempFile('chat-target.html', '<h1>Result</h1>')
-      const citedPath = join(artifactPath, '..', 'chat-citation.html')
-      await symlink(artifactPath, citedPath)
-      const hasRecentNativeChatOutputPath = vi.fn(() => true)
-      const { commands } = createRuntimeFileCommands({
-        path: '/repo',
-        hasRecentNativeChatOutputPath
-      })
+    it.skipIf(!canCreateFileSymlink())(
+      'binds a cited symlink alias to its canonical read-only target',
+      async () => {
+        const artifactPath = await tempFile('chat-target.html', '<h1>Result</h1>')
+        const citedPath = join(artifactPath, '..', 'chat-citation.html')
+        await symlink(artifactPath, citedPath)
+        const hasRecentNativeChatOutputPath = vi.fn(() => true)
+        const { commands } = createRuntimeFileCommands({
+          path: '/repo',
+          hasRecentNativeChatOutputPath
+        })
 
-      const result = await commands.resolveTerminalPath(
-        'id:wt-1',
-        citedPath,
-        null,
-        'client-a',
-        null,
-        true,
-        { tabId: 'tab-1', sessionId: 'session-1' }
-      )
+        const result = await commands.resolveTerminalPath(
+          'id:wt-1',
+          citedPath,
+          null,
+          'client-a',
+          null,
+          true,
+          { tabId: 'tab-1', sessionId: 'session-1' }
+        )
 
-      expect(hasRecentNativeChatOutputPath).toHaveBeenCalledWith(
-        'wt-1',
-        { tabId: 'tab-1', sessionId: 'session-1' },
-        citedPath,
-        citedPath
-      )
-      expect(result).toMatchObject({
-        absolutePath: await realpath(artifactPath),
-        exists: true,
-        openTarget: {
-          kind: 'absolute-file',
+        expect(hasRecentNativeChatOutputPath).toHaveBeenCalledWith(
+          'wt-1',
+          { tabId: 'tab-1', sessionId: 'session-1' },
+          citedPath,
+          citedPath
+        )
+        expect(result).toMatchObject({
           absolutePath: await realpath(artifactPath),
-          readOnly: true
-        }
-      })
-    })
+          exists: true,
+          openTarget: {
+            kind: 'absolute-file',
+            absolutePath: await realpath(artifactPath),
+            readOnly: true
+          }
+        })
+      }
+    )
 
     it('refuses an out-of-worktree chat path without transcript provenance', async () => {
       const artifactPath = await tempFile('uncited-result.html', '<h1>Secret</h1>')
@@ -321,33 +325,42 @@ describe('RuntimeFileCommands', () => {
       expect(result.openTarget).toBeUndefined()
     })
 
-    it('uses the canonical local temp artifact path for the exact grant', async () => {
-      const dir = await mkdtemp(join(tmpdir(), 'orca-terminal-artifact-'))
-      tempDirs.push(dir)
-      const artifactPath = join(dir, 'result.json')
-      const linkPath = join(dir, 'link-result.json')
-      await writeFile(artifactPath, '{}')
-      await symlink(artifactPath, linkPath)
-      const { commands } = createRuntimeFileCommands({ path: '/repo' })
-      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
-      statMock.mockResolvedValue({ isDirectory: () => false, size: 2, dev: 1, ino: 2, mtimeMs: 3 })
-      const canonicalPath = await realpath(artifactPath)
+    it.skipIf(!canCreateFileSymlink())(
+      'uses the canonical local temp artifact path for the exact grant',
+      async () => {
+        const dir = await mkdtemp(join(tmpdir(), 'orca-terminal-artifact-'))
+        tempDirs.push(dir)
+        const artifactPath = join(dir, 'result.json')
+        const linkPath = join(dir, 'link-result.json')
+        await writeFile(artifactPath, '{}')
+        await symlink(artifactPath, linkPath)
+        const { commands } = createRuntimeFileCommands({ path: '/repo' })
+        resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+        statMock.mockResolvedValue({
+          isDirectory: () => false,
+          size: 2,
+          dev: 1,
+          ino: 2,
+          mtimeMs: 3
+        })
+        const canonicalPath = await realpath(artifactPath)
 
-      const result = await resolveTerminalArtifactPath(commands, linkPath)
+        const result = await resolveTerminalArtifactPath(commands, linkPath)
 
-      expect(result).toMatchObject({
-        relativePath: null,
-        absolutePath: canonicalPath,
-        exists: true,
-        openTarget: {
-          kind: 'absolute-file',
-          provider: 'local',
-          absolutePath: canonicalPath
-        }
-      })
-      expect(resolveAuthorizedPathMock).not.toHaveBeenCalledWith(canonicalPath, expect.anything())
-      expect(resolveAuthorizedPathMock).not.toHaveBeenCalledWith(linkPath, expect.anything())
-    })
+        expect(result).toMatchObject({
+          relativePath: null,
+          absolutePath: canonicalPath,
+          exists: true,
+          openTarget: {
+            kind: 'absolute-file',
+            provider: 'local',
+            absolutePath: canonicalPath
+          }
+        })
+        expect(resolveAuthorizedPathMock).not.toHaveBeenCalledWith(canonicalPath, expect.anything())
+        expect(resolveAuthorizedPathMock).not.toHaveBeenCalledWith(linkPath, expect.anything())
+      }
+    )
 
     it('does not grant hard-linked local temp artifacts', async () => {
       const dir = await mkdtemp(join(tmpdir(), 'orca-terminal-artifact-'))

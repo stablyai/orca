@@ -352,14 +352,6 @@ export async function createWorktreeSharedPaths(
  *  Each entry is interpreted relative to `primaryPath` and placed at the same
  *  relative location inside `worktreePath`. Nested paths (e.g.
  *  `apps/web/.env`) are supported — parent directories are created lazily. */
-export async function createWorktreeSymlinks(
-  primaryPath: string,
-  worktreePath: string,
-  paths: readonly string[]
-): Promise<void> {
-  await createWorktreeLinkedPaths(primaryPath, worktreePath, paths, { platform: 'linux' })
-}
-
 export async function removeWorktreeLinkedPaths(
   worktreePath: string,
   paths: readonly string[]
