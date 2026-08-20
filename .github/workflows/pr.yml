@@ -16,8 +16,46 @@ permissions:
   contents: read
 
 jobs:
+  # Why: a README/docs-only PR used to start the full matrix (32 test shards,
+  # two package jobs, typecheck, git compat, xterm, shell contracts). Path
+  # filters on `on.pull_request` would drop the `verify` check entirely; this
+  # detector keeps verify as the required aggregate and skips the expensive jobs.
+  code_paths:
+    name: detect code-relevant changes
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.filter.outputs.should_run }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # Why blob:none: full history is needed for the merge-base diff, but historical
+          # file contents are not. Blobs are ~89% of this repo's pack, and Git fetches the
+          # few this job actually reads on demand.
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Classify changed paths
+        id: filter
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          # Why --no-renames: name-only rename detection can report only the destination.
+          # A code file moved under docs/ must still expose its code-side deletion.
+          CHANGED="$(git diff --name-only --no-renames --diff-filter=ACDMR --merge-base "$BASE_SHA" "$HEAD_SHA")"
+          echo "Changed paths:"
+          printf '%s\n' "$CHANGED"
+          SHOULD_RUN="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-code-change-scope.mjs)"
+          echo "should_run=$SHOULD_RUN" >> "$GITHUB_OUTPUT"
+          echo "should_run=$SHOULD_RUN"
+
   static_analysis:
     name: static analysis
+    needs: [code_paths]
+    if: needs.code_paths.outputs.should_run == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -140,6 +178,8 @@ jobs:
         run: node .github/scripts/check-root-directory-entries.mjs "$BASE_SHA" "$HEAD_SHA"
 
   typecheck:
+    needs: [code_paths]
+    if: needs.code_paths.outputs.should_run == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -166,6 +206,8 @@ jobs:
 
   git_compatibility:
     name: Git compatibility
+    needs: [code_paths]
+    if: needs.code_paths.outputs.should_run == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -231,6 +273,8 @@ jobs:
 
   xterm_patch_sync:
     name: xterm patch sync
+    needs: [code_paths]
+    if: needs.code_paths.outputs.should_run == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -259,6 +303,8 @@ jobs:
 
   shell_contracts:
     name: shell contracts
+    needs: [code_paths]
+    if: needs.code_paths.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     # Why: this job's cost is almost entirely package download, and a stalled mirror has
     # no wall-clock bound of its own. A successful run finishes in ~4.5 minutes, so this
@@ -372,6 +418,8 @@ jobs:
 
   test:
     name: tests node ${{ matrix.node }} ${{ matrix.shard }}/${{ matrix.shard_total }}
+    needs: [code_paths]
+    if: needs.code_paths.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -416,6 +464,8 @@ jobs:
 
   cross-version-wire:
     name: cross-version wire compatibility
+    needs: [code_paths]
+    if: needs.code_paths.outputs.should_run == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -443,6 +493,8 @@ jobs:
 
   managed_hook_node18:
     name: managed hooks on Node 18
+    needs: [code_paths]
+    if: needs.code_paths.outputs.should_run == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -466,6 +518,8 @@ jobs:
 
   package:
     name: package
+    needs: [code_paths]
+    if: needs.code_paths.outputs.should_run == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -527,6 +581,8 @@ jobs:
 
   package_windows:
     name: package (windows)
+    needs: [code_paths]
+    if: needs.code_paths.outputs.should_run == 'true'
     runs-on: windows-2022
     timeout-minutes: 30
 
@@ -592,8 +648,9 @@ jobs:
   # release runs retain full-suite coverage.
   e2e-paths:
     name: detect changed e2e specs
+    needs: [code_paths]
     runs-on: ubuntu-latest
-    if: github.event.pull_request.draft != true
+    if: github.event.pull_request.draft != true && needs.code_paths.outputs.should_run == 'true'
     # Why: detector only needs to read the checkout; do not inherit repo defaults.
     permissions:
       contents: read
@@ -673,6 +730,7 @@ jobs:
   verify:
     if: always()
     needs:
+      - code_paths
       - static_analysis
       - root_directory_guard
       - typecheck
@@ -696,6 +754,8 @@ jobs:
       # checked outside the loop or it would excuse the jobs above.
       - name: Require successful checks
         env:
+          CODE_PATHS: ${{ needs.code_paths.result }}
+          SHOULD_RUN: ${{ needs.code_paths.outputs.should_run }}
           STATIC_ANALYSIS: ${{ needs.static_analysis.result }}
           ROOT_DIRECTORY_GUARD: ${{ needs.root_directory_guard.result }}
           TYPECHECK: ${{ needs.typecheck.result }}
@@ -707,7 +767,33 @@ jobs:
           PACKAGE: ${{ needs.package.result }}
           PACKAGE_WINDOWS: ${{ needs.package_windows.result }}
         run: |
+          if [ "$CODE_PATHS" != "success" ]; then
+            exit 1
+          fi
+          if [ "$SHOULD_RUN" != "true" ]; then
+            echo "Docs-only change; expensive PR checks skipped."
+            if [ "$ROOT_DIRECTORY_GUARD" != "success" ]; then
+              exit 1
+            fi
+            for result in \
+              "$STATIC_ANALYSIS" \
+              "$TYPECHECK" \
+              "$GIT_COMPATIBILITY" \
+              "$XTERM_PATCH_SYNC" \
+              "$SHELL_CONTRACTS" \
+              "$TEST" \
+              "$MANAGED_HOOK_NODE18" \
+              "$PACKAGE" \
+              "$PACKAGE_WINDOWS"; do
+              if [ "$result" != "skipped" ]; then
+                exit 1
+              fi
+            done
+            exit 0
+          fi
+          # Require success when the PR has code-relevant changes
           for result in \
+            "$CODE_PATHS" \
             "$STATIC_ANALYSIS" \
             "$ROOT_DIRECTORY_GUARD" \
             "$TYPECHECK" \
