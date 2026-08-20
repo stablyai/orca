@@ -1,7 +1,4 @@
 {
-  "config/scripts/regenerate-xterm-patches.test.mjs": 1,
-  "config/scripts/resolve-7za-path.test.mjs": 1,
-  "config/scripts/trim-windows-icon-source.test.mjs": 1,
   "tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts": 1,
   "config/scripts/generate-bundled-skill-guides.test.mjs": 1,
   "config/scripts/mobile-pairing-qrcode-import-plugin.test.mjs": 2,
