@@ -211,9 +211,10 @@ describe('ClaudeHookService.install', () => {
           hook.command.includes('/Users/old/.orca/agent-hooks/claude-hook.sh')
         )
       ).toBe(false)
-      expect(hasManagedCommand(legacy.hooks.StopFailure[0].hooks[0], isClaudeManagedCommand)).toBe(
-        true
-      )
+      // Why #15548: Claude Code rejects the whole settings.json over unknown
+      // hook keys, so OpenClaude-only events must never land in .claude.
+      expect(legacy.hooks.StopFailure).toBeUndefined()
+      expect(legacy.hooks.TeammateIdle).toBeUndefined()
       const managedScript = readFileSync(
         join(tmpHome, '.orca', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME),
         'utf-8'
@@ -381,7 +382,7 @@ describe('ClaudeHookService.install', () => {
 
         const scriptPath = join(tmpHome, '.orca', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME)
 
-        for (const eventName of ['UserPromptSubmit', 'Stop', 'StopFailure']) {
+        for (const eventName of ['UserPromptSubmit', 'Stop']) {
           const hook = settings.hooks[eventName]?.[0]?.hooks?.[0]
           expect(hook?.args).toBeUndefined()
           expect(hook?.command).toMatch(
@@ -425,6 +426,51 @@ describe('ClaudeHookService.install', () => {
       }
     }
   )
+
+  it('sweeps managed OpenClaude-only hook keys that predate #15548 without touching user entries', () => {
+    const tmpHome = mkdtempSync(join(tmpdir(), 'orca-claude-heal-'))
+    vi.stubEnv('HOME', tmpHome)
+    vi.stubEnv('USERPROFILE', tmpHome)
+    try {
+      const settingsPath = join(tmpHome, '.claude', 'settings.json')
+      mkdirSync(join(tmpHome, '.claude'), { recursive: true })
+      writeFileSync(
+        settingsPath,
+        JSON.stringify({
+          env: { ANTHROPIC_MODEL: 'opus' },
+          hooks: {
+            StopFailure: [
+              { hooks: [{ type: 'command', command: '/Users/old/.orca/agent-hooks/claude-hook.sh' }] }
+            ],
+            TeammateIdle: [
+              { hooks: [{ type: 'command', command: '/Users/old/.orca/agent-hooks/claude-hook.sh' }] }
+            ],
+            PermissionRequest: [
+              { hooks: [{ type: 'command', command: '/usr/local/bin/user-hook' }] },
+              { hooks: [{ type: 'command', command: '/Users/old/.orca/agent-hooks/claude-hook.sh' }] }
+            ]
+          }
+        })
+      )
+
+      expect(new ClaudeHookService().install().state).toBe('installed')
+
+      const healed = JSON.parse(readFileSync(settingsPath, 'utf-8'))
+      // Keys the Claude schema rejects lose the managed entry; a key holding
+      // only managed entries disappears entirely so the file loads again.
+      expect(healed.hooks.StopFailure).toBeUndefined()
+      expect(healed.hooks.TeammateIdle).toBeUndefined()
+      // A user-authored entry in a rejected key survives the sweep.
+      expect(healed.hooks.PermissionRequest).toEqual([
+        { hooks: [{ type: 'command', command: '/usr/local/bin/user-hook' }] }
+      ])
+      // The rest of the settings file is untouched.
+      expect(healed.env.ANTHROPIC_MODEL).toBe('opus')
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(tmpHome, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('backgrounded-session pane guard (#9236)', () => {
@@ -521,19 +567,20 @@ describe('ClaudeHookService.installRemote', () => {
       'SessionStart',
       'UserPromptSubmit',
       'Stop',
-      'StopFailure',
       'SubagentStart',
       'SubagentStop',
-      'TeammateIdle',
       'PreToolUse',
-      'PostToolUse',
-      'PostToolUseFailure',
-      'PermissionRequest'
+      'PostToolUse'
     ]) {
       expect(parsed.hooks[event]).toBeTruthy()
       const cmd = parsed.hooks[event][0].hooks[0].command as string
       expect(cmd).toContain('"${HOME-}/.orca/agent-hooks/claude-hook.sh"')
       expect(cmd).not.toContain('/home/dev/.orca/agent-hooks/claude-hook.sh')
+    }
+    // Why #15548: unknown hook keys make Claude Code skip the entire remote
+    // settings.json, so the OpenClaude-only events must not be written here.
+    for (const rejected of ['StopFailure', 'TeammateIdle', 'PostToolUseFailure', 'PermissionRequest']) {
+      expect(parsed.hooks[rejected]).toBeUndefined()
     }
     // Managed script body
     const script = fs.files.get('/home/dev/.orca/agent-hooks/claude-hook.sh')
