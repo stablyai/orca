@@ -17,6 +17,7 @@ import net from 'node:net'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
+import { isDevBundleInUse, selectStaleDevBundleDirs } from './dev-electron-bundle-cache.mjs'
 import {
   DEV_BUNDLE_ID,
   getDevBundlePlistPatches,
@@ -115,6 +116,60 @@ function sanitizeMacAppBundleName(value) {
   )
 }
 
+function getDevBundleProcessTable() {
+  // Not pgrep: macOS pgrep has no -a (a Linux procps extension) and silently prints bare PIDs,
+  // which reads as "nothing is running" and deletes a live bundle. -ww keeps the command column
+  // from being truncated. The raw text is searched directly; see dev-electron-bundle-cache.mjs
+  // for why it is deliberately not parsed into paths.
+  try {
+    return execFileSync('/bin/ps', ['-Awwo', 'command='], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 5000
+    })
+  } catch {
+    // Treating a failure as "nothing live" would risk deleting a running bundle, so skip pruning.
+    return null
+  }
+}
+
+function pruneStaleDevBundles(distDir) {
+  const root = path.dirname(distDir)
+  let bundles
+  try {
+    bundles = readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => {
+        const dir = path.join(root, entry.name)
+        return {
+          dir,
+          hasMarker: existsSync(path.join(dir, 'orca-dev-electron-app.json')),
+          mtimeMs: getMtimeMs(dir)
+        }
+      })
+  } catch {
+    return
+  }
+  if (bundles.length <= 1) {
+    return
+  }
+  const processTable = getDevBundleProcessTable()
+  if (processTable === null) {
+    return
+  }
+  const stale = selectStaleDevBundleDirs({
+    bundles,
+    currentDir: distDir,
+    processTable,
+    nowMs: Date.now()
+  })
+  for (const dir of stale) {
+    try {
+      rmSync(dir, { recursive: true, force: true })
+    } catch {}
+  }
+}
+
 function prepareMacDevElectronApp() {
   if (process.platform !== 'darwin') {
     return
@@ -177,15 +232,19 @@ function prepareMacDevElectronApp() {
     2
   )
   const executablePath = path.join(appPath, 'Contents', 'MacOS', 'Electron')
+  // Split by consequence: without this Chromium blank-crashes, so it gates whether the bundle can
+  // run at all. The keyboard-layout helper below is optional -- swiftc builds it non-fatally, so on
+  // a Mac without full Xcode it is simply absent and only a keyboard feature degrades.
+  const chromiumResourcePath = path.join(
+    appPath,
+    'Contents',
+    'Frameworks',
+    'Electron Framework.framework',
+    'Resources',
+    'icudtl.dat'
+  )
   const requiredResourcePaths = [
-    path.join(
-      appPath,
-      'Contents',
-      'Frameworks',
-      'Electron Framework.framework',
-      'Resources',
-      'icudtl.dat'
-    ),
+    chromiumResourcePath,
     path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout')
   ]
 
@@ -209,6 +268,30 @@ function prepareMacDevElectronApp() {
   }
 
   if (copiedAppIsUsable()) {
+    pruneStaleDevBundles(distDir)
+    process.env.ELECTRON_EXEC_PATH = executablePath
+    return
+  }
+
+  // Why this guard: a rebuild replaces this exact directory, and making the marker conditional on a
+  // successful sign means an unsigned bundle is a permanent cache miss -- so every later run would
+  // reach this rmSync while another instance is still running from it, deleting its app mid-session.
+  // Reusing what is there matches what the runner did before the marker became conditional.
+  const rebuildProcessTable = getDevBundleProcessTable()
+  if (
+    rebuildProcessTable !== null &&
+    isDevBundleInUse(distDir, rebuildProcessTable) &&
+    // Why a runnability check: a bundle missing Chromium's resources blank-crashes, and its
+    // orphaned crashpad helper still matches the process table -- so without this the runner would
+    // reuse a broken bundle forever and never rebuild itself out. Deliberately narrower than
+    // copiedAppIsUsable, which also demands the optional keyboard-layout helper: gating on that
+    // would strand every Mac without swiftc back on the rmSync path this guard exists to avoid.
+    existsSync(executablePath) &&
+    existsSync(chromiumResourcePath)
+  ) {
+    console.warn(
+      `[orca-dev] Another dev instance is running from this bundle; reusing it instead of rebuilding. Quit the other instance (or delete ${distDir}) to force a rebuild.`
+    )
     process.env.ELECTRON_EXEC_PATH = executablePath
     return
   }
@@ -290,14 +373,24 @@ function prepareMacDevElectronApp() {
   // An ad-hoc re-sign restores delivery, the permission prompt, and the
   // notification-settings deep link for dev builds. Non-fatal: a signing
   // failure should not block `pnpm dev`.
+  let signed = true
   try {
     execFileSync('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', appPath])
   } catch (error) {
+    signed = false
     console.warn(
       `[orca-dev] ad-hoc codesign failed (dev notifications will not deliver): ${error?.message ?? error}`
     )
   }
-  writeFileSync(markerPath, expectedMarker, 'utf8')
+  // Why only when signed: the marker is what marks this bundle reusable. Writing it after a failed
+  // sign cached an unsigned bundle permanently -- the warning above scrolled past once and every
+  // later launch silently reused it, losing notification delivery and the stable cdhash that keeps
+  // safeStorage from re-prompting. Leaving it unwritten costs a re-copy per launch until signing
+  // works, and still does not block `pnpm dev`.
+  if (signed) {
+    writeFileSync(markerPath, expectedMarker, 'utf8')
+  }
+  pruneStaleDevBundles(distDir)
   process.env.ELECTRON_EXEC_PATH = executablePath
 }
 

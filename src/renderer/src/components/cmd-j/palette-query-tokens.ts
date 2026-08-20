@@ -45,7 +45,18 @@ export function isCmdJPaletteQueryOverTokenLimit(normalizedQuery: string): boole
       return true
     }
   }
-  return false
+  // Why also bound the scoring split: whitespace-split counting lets 2KB of punctuation
+  // through as a single token, and the scorer's tokenizer then expands it into hundreds —
+  // paid once per candidate, per keystroke, on the render thread.
+  return uniqueCmdJPaletteQueryTokens(normalizedQuery).length > PALETTE_QUERY_MAX_TOKENS
+}
+
+/**
+ * Why dedupe: a repeated query token would otherwise contribute its score twice, so
+ * `terminal terminal ssh` outranks an otherwise-tied candidate on the strength of the repeat.
+ */
+export function uniqueCmdJPaletteQueryTokens(query: string): string[] {
+  return [...new Set(tokenizeCmdJPaletteQuery(query))]
 }
 
 export function uniqueNormalizedCmdJPaletteKeywords(values: readonly string[]): string[] {
@@ -58,6 +69,16 @@ export function tokenizeCmdJPaletteQuery(value: string): string[] {
   return normalizeCmdJPaletteQuery(value)
     .split(/[^\p{L}\p{N}]+/u)
     .filter(Boolean)
+}
+
+// Why gate the reverse-containment tier on script: a space-delimited language already
+// tokenizes its own compounds, so a contained Latin keyword is a coincidence (`database`
+// vs `base`), while Han/Kana/Hangul text arrives as one run that must be matched inside.
+const UNSEGMENTED_SCRIPT_TOKEN_RE =
+  /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u
+
+function isUnsegmentedScriptToken(token: string): boolean {
+  return UNSEGMENTED_SCRIPT_TOKEN_RE.test(token)
 }
 
 // Why: navigation filler carries no intent ("open ssh settings" means "ssh settings"), so an
@@ -89,7 +110,12 @@ const CMD_J_QUERY_FILLER_TOKENS = new Set([
   'with'
 ])
 
-export function cmdJPaletteTokenScore(query: string, values: readonly string[]): number {
+// Why the caller passes tokens: this runs once per candidate, and re-folding plus
+// re-splitting the same query for each one dominated the ranking pass.
+export function cmdJPaletteTokenScore(
+  queryTokens: readonly string[],
+  values: readonly string[]
+): number {
   const candidateTokens = values.flatMap(tokenizeCmdJPaletteQuery)
   if (candidateTokens.length === 0) {
     return 0
@@ -98,7 +124,7 @@ export function cmdJPaletteTokenScore(query: string, values: readonly string[]):
   let score = 0
   let meaningful = 0
   let covered = 0
-  for (const queryToken of tokenizeCmdJPaletteQuery(query)) {
+  for (const queryToken of queryTokens) {
     let best = 0
     for (const candidateToken of candidateTokens) {
       if (candidateToken === queryToken) {
@@ -106,6 +132,16 @@ export function cmdJPaletteTokenScore(query: string, values: readonly string[]):
       } else if (candidateToken.startsWith(queryToken)) {
         best = Math.max(best, 2)
       } else if (candidateToken.includes(queryToken)) {
+        best = Math.max(best, 1)
+      } else if (
+        candidateToken.length >= 2 &&
+        queryToken.includes(candidateToken) &&
+        isUnsegmentedScriptToken(candidateToken)
+      ) {
+        // Why the reverse direction: CJK is written without spaces, so the natural query for
+        // the terminal settings pane is the single token `终端设置` — one token that CONTAINS
+        // the keyword rather than being contained by it. Weakest tier, gated on the script
+        // that needs it: in Latin text the query `database` does not mean the keyword `base`.
         best = Math.max(best, 1)
       }
     }

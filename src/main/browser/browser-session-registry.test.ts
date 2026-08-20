@@ -249,6 +249,23 @@ describe('BrowserSessionRegistry', () => {
     expect(checkHandler(null, 'pointerLock', '', {})).toBe(true)
   })
 
+  it('auto-grants storage-access for isolated partitions', () => {
+    // Why: mirrors the pointerLock precedent directly above — the default-partition suite does not
+    // reach this install path.
+    browserSessionRegistry.createProfile('isolated', 'Storage Access Test')
+    const mockSession = sessionFromPartitionMock.mock.results[0]?.value
+    const requestHandler = mockSession.setPermissionRequestHandler.mock.calls[0][0]
+    const checkHandler = mockSession.setPermissionCheckHandler.mock.calls[0][0]
+    const callback = vi.fn()
+    const guestWc = { id: 7, getURL: vi.fn(() => 'https://example.com/') }
+
+    requestHandler(guestWc, 'storage-access', callback, {})
+
+    expect(callback).toHaveBeenCalledWith(true)
+    expect(checkHandler(null, 'storage-access', '', {})).toBe(true)
+    expect(checkHandler(null, 'top-level-storage-access', '', {})).toBe(false)
+  })
+
   it('routes media permission requests through macOS TCC for isolated partitions', async () => {
     // Why: verify the parallel fix to the default partition — isolated/imported
     // profiles must also defer media permission checks to macOS instead of

@@ -11,6 +11,7 @@ export function leafIdForPane(paneId: number): string {
 export type ConnectCallbacks = {
   onReattachDetermined?: () => void
   onConnect?: () => void
+  onStreamRecovered?: () => void
   onData?: (
     data: string,
     meta?: { seq?: number; rawLength?: number; background?: boolean; droppedOutput?: boolean }

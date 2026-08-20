@@ -35,6 +35,7 @@ import { useConfirmedWorktreeDeleteTargets } from './use-confirmed-worktree-dele
 import { runLineageDeleteAll } from './delete-worktree-lineage-delete-all'
 import { runDialogForceDelete } from './delete-worktree-dialog-force-delete'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
+import { useSidebarHostScopeOptions } from './use-sidebar-host-scope-options'
 
 const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const activeModal = useAppStore((s) => s.activeModal)
@@ -49,7 +50,11 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
-
+  const { hostOptions } = useSidebarHostScopeOptions()
+  const hostLabelById = useMemo(
+    () => new Map(hostOptions.map((host) => [host.id, host.label])),
+    [hostOptions]
+  )
   const isOpen = activeModal === 'delete-worktree'
   const worktreeId = typeof modalData.worktreeId === 'string' ? modalData.worktreeId : ''
   const worktreeIds = useMemo(
@@ -373,6 +378,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
           isBatchDelete={isBatchDelete}
           worktree={worktree}
           worktrees={worktrees}
+          collisionWorktrees={allWorktrees}
+          hostLabelById={hostLabelById}
           deleteStateByWorktreeId={deleteStateByWorktreeId}
           dirtyChangeCountsByWorktreeId={dirtyChangeCountsByWorktreeId}
         />

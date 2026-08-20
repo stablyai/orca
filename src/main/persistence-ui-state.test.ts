@@ -95,6 +95,31 @@ describe('Store', () => {
     ])
   })
 
+  // The RPC now strips manualRepoOrder, so every paired-client ui.set reaches the store without
+  // the key. Absent has to mean preserve: if it read as clear, the strip would erase the desktop's
+  // order on the first unrelated setting a phone or web client changes.
+  // Absent-means-preserve is what makes the pairing-local strip safe: a client's ui.set arrives
+  // without these fields, so the desktop's own values must survive the update.
+  it('updateUI preserves the manual repo and host-section order when an update omits them', async () => {
+    const store = await createStore()
+    store.updateUI({
+      manualRepoOrder: [
+        { hostId: 'local', repoId: 'alpha' },
+        { hostId: 'ssh:box', repoId: 'bravo' }
+      ] as never,
+      workspaceHostOrder: ['ssh:box', 'local'] as never
+    })
+
+    store.updateUI({ sidebarWidth: 400 })
+
+    expect(store.getUI().manualRepoOrder).toEqual([
+      { hostId: 'local', repoId: 'alpha' },
+      { hostId: 'ssh:box', repoId: 'bravo' }
+    ])
+    expect(store.getUI().workspaceHostOrder).toEqual(['ssh:box', 'local'])
+    expect(store.getUI().sidebarWidth).toBe(400)
+  })
+
   it('updateUI persists sanitized per-worktree dotfile visibility', async () => {
     const store = await createStore()
     store.updateUI({

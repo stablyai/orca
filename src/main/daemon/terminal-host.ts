@@ -51,6 +51,7 @@ export class TerminalHost {
   private killedTombstones: TerminalHostTombstones
   private spawnSubprocess: TerminalHostOptions['spawnSubprocess']
   private onSessionReaped: TerminalHostOptions['onSessionReaped']
+  private reportReadinessEvent: TerminalHostOptions['reportReadinessEvent']
   private onFinalCheckpoint: TerminalHostOptions['onFinalCheckpoint']
   private maxTombstones: number
   private creationFenced = false
@@ -61,6 +62,7 @@ export class TerminalHost {
   constructor(opts: TerminalHostOptions) {
     this.spawnSubprocess = opts.spawnSubprocess
     this.onSessionReaped = opts.onSessionReaped
+    this.reportReadinessEvent = opts.reportReadinessEvent
     this.onFinalCheckpoint = opts.onFinalCheckpoint
     this.maxTombstones = opts.maxTombstones ?? DEFAULT_MAX_TOMBSTONES
     this.killedTombstones = new TerminalHostTombstones(this.maxTombstones)
@@ -110,6 +112,9 @@ export class TerminalHost {
             onDeadSessionRemoved: (sessionId) => this.agentSessionGenerations.forget(sessionId),
             onSessionCreated: (sessionId, generation, isAlive) =>
               this.agentSessionGenerations.remember(sessionId, generation, isAlive),
+            ...(this.reportReadinessEvent
+              ? { reportReadinessEvent: this.reportReadinessEvent }
+              : {}),
             onSessionExit: (sessionId, generation) => {
               this.agentSessionOwners.release(sessionId, generation)
               this.agentSessionGenerations.forget(sessionId, generation)

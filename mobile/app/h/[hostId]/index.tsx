@@ -31,6 +31,13 @@ import {
 import { useWorktreeResync } from '../../../src/transport/use-worktree-resync'
 import { startHostWorktreeRefresh } from '../../../src/worktree/host-worktree-refresh'
 import {
+  applyWorktreeRowDisplayState,
+  clearConfirmedActiveWorktreeIdentity,
+  getWorktreeRowIdentity,
+  removeWorktreeRow,
+  retainLiveSleptWorktreeIdentities
+} from '../../../src/worktree/worktree-host-row-identity'
+import {
   useLastConnectedAt,
   useRelayRecoveryStatus,
   useReconnectAttempt
@@ -158,7 +165,9 @@ export function HostScreen({
   // path renders as a failure instead of an empty host. Cleared on the next success.
   const [catalogError, setCatalogError] = useState<string | null>(null)
   // Why: track the locally-opened worktree so the active-row highlight moves instantly instead of waiting for the next poll.
-  const [optimisticActiveWorktreeId, setOptimisticActiveWorktreeId] = useState<string | null>(null)
+  const [optimisticActiveWorktreeIdentity, setOptimisticActiveWorktreeIdentity] = useState<
+    string | null
+  >(null)
   // One tick drives every visible agent row's relative timestamp.
   const now = useNow(30_000)
   const [repoColorsByName, setRepoColorsByName] = useState<Map<string, string>>(new Map())
@@ -472,26 +481,12 @@ export function HostScreen({
             setCachedWorktrees(hostId, confirmed, { proven: true })
           }
           // Drop the optimistic active override once the host reports it active, so later desktop changes win.
-          setOptimisticActiveWorktreeId((pending) =>
-            pending && confirmed.some((w) => w.worktreeId === pending && w.isActive)
-              ? null
-              : pending
+          setOptimisticActiveWorktreeIdentity((pending) =>
+            clearConfirmedActiveWorktreeIdentity(pending, confirmed)
           )
 
           // Clear optimistic sleep overrides once the server confirms inactive (liveTerminalCount === 0).
-          setSleptIds((prev) => {
-            if (prev.size === 0) {
-              return prev
-            }
-            const still = new Set<string>()
-            for (const id of prev) {
-              const wt = confirmed.find((w) => w.worktreeId === id)
-              if (wt && wt.liveTerminalCount > 0) {
-                still.add(id)
-              }
-            }
-            return still.size === prev.size ? prev : still
-          })
+          setSleptIds((prev) => retainLiveSleptWorktreeIdentities(prev, confirmed))
 
           // Sync pin state from server so desktop-initiated pins reflect without relying on stale AsyncStorage.
           const serverPinned = new Set(confirmed.filter((w) => w.isPinned).map((w) => w.worktreeId))
@@ -610,8 +605,7 @@ export function HostScreen({
         return
       }
 
-      const removeFromList = (list: Worktree[]) =>
-        list.filter((w) => w.worktreeId !== item.worktreeId)
+      const removeFromList = (list: Worktree[]) => removeWorktreeRow(list, item)
       setWorktrees(removeFromList)
       setLastKnownWorktrees(removeFromList)
 
@@ -667,7 +661,7 @@ export function HostScreen({
 
   const openWorktreeSession = useCallback(
     (item: Worktree) => {
-      setOptimisticActiveWorktreeId(item.worktreeId)
+      setOptimisticActiveWorktreeIdentity(getWorktreeRowIdentity(item))
       if (client && connState === 'connected') {
         void client
           .sendRequest('worktree.activate', {
@@ -746,21 +740,8 @@ export function HostScreen({
     // Why: live `worktrees` is authoritative only while connected; under the amber
     // mount default, connecting/handshaking must keep the pre-reconnect list too.
     const base = connState === 'connected' ? worktrees : lastKnownWorktrees
-    if (sleptIds.size === 0 && optimisticActiveWorktreeId === null) {
-      return base
-    }
-    return base.map((w) => {
-      const slept = sleptIds.has(w.worktreeId)
-        ? { liveTerminalCount: 0, hasAttachedPty: false, status: 'inactive' as const }
-        : null
-      // Force the just-opened worktree active until the next poll confirms it, so the highlight doesn't lag.
-      const active =
-        optimisticActiveWorktreeId !== null
-          ? { isActive: w.worktreeId === optimisticActiveWorktreeId }
-          : null
-      return slept || active ? { ...w, ...slept, ...active } : w
-    })
-  }, [connState, worktrees, lastKnownWorktrees, sleptIds, optimisticActiveWorktreeId])
+    return applyWorktreeRowDisplayState(base, sleptIds, optimisticActiveWorktreeIdentity)
+  }, [connState, worktrees, lastKnownWorktrees, sleptIds, optimisticActiveWorktreeIdentity])
 
   const toggleCollapsed = useCallback(
     (key: string) => {
@@ -773,7 +754,7 @@ export function HostScreen({
     [persistViewSettings]
   )
   const toggleWorktreeLineage = useCallback(
-    (item: Worktree) => toggleCollapsed(getMobileWorkspaceLineageGroupKey(item.worktreeId)),
+    (item: Worktree) => toggleCollapsed(getMobileWorkspaceLineageGroupKey(item)),
     [toggleCollapsed]
   )
   const { sections, rawSections, uniqueRepos, uniqueRepoColors } = useWorkspaceSections({
@@ -1146,7 +1127,7 @@ export function HostScreen({
         <SectionList
           ref={sectionListRef}
           sections={sections}
-          keyExtractor={(w) => w.sectionListKey ?? w.worktreeId}
+          keyExtractor={(w) => w.sectionListKey ?? getWorktreeRowIdentity(w)}
           stickySectionHeadersEnabled={false}
           // Why: keep the search IME up while tapping clear / scrolling results.
           keyboardShouldPersistTaps="handled"
@@ -1355,7 +1336,9 @@ export function HostScreen({
                       icon: Moon,
                       onPress: () => {
                         if (client) {
-                          setSleptIds((prev) => new Set(prev).add(actionTarget.worktreeId))
+                          setSleptIds((prev) =>
+                            new Set(prev).add(getWorktreeRowIdentity(actionTarget))
+                          )
                           void client
                             .sendRequest('worktree.sleep', {
                               worktree: `id:${actionTarget.worktreeId}`

@@ -8,11 +8,10 @@ import { defineMethod, type RpcMethod } from '../core'
 import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
+import { WorktreeCreate, WorktreePrefetchCreateBase } from './worktree-create-schemas'
 import {
-  WorktreeCreate,
   WorktreeActivate,
   WorktreeForceDeleteBranch,
-  WorktreePrefetchCreateBase,
   WorktreeRemove,
   WorktreeResolveMrBase,
   WorktreeResolvePrBase,
@@ -91,14 +90,18 @@ export const WORKTREE_METHODS: RpcMethod[] = [
         // but failed create attempts must release the reservation for a safe retry.
         try {
           const result = await runtime.createManagedWorktree(
-            buildManagedWorktreeCreateArgs(params, {
-              automationProvenance,
-              cliProvenance: buildCliWorkspaceProvenance(params.cliProvenanceRequest, {
-                startupAgent: params.startupAgent ?? params.createdWithAgent,
-                createdAt: Date.now()
-              }),
-              creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context)
-            })
+            buildManagedWorktreeCreateArgs(
+              params,
+              {
+                automationProvenance,
+                cliProvenance: buildCliWorkspaceProvenance(params.cliProvenanceRequest, {
+                  startupAgent: params.startupAgent ?? params.createdWithAgent,
+                  createdAt: Date.now()
+                }),
+                creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context)
+              },
+              context.clientKind ? { clientKind: context.clientKind } : {}
+            )
           )
           finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
           // Why: agent callers need a stable dispatch target without traversing

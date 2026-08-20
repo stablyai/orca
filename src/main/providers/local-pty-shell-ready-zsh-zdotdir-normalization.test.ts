@@ -3,6 +3,8 @@ import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
+// Why resolved rather than hardcoded: the wrapper tree is content-addressed.
+import { getShellReadyWrapperRoot } from './local-pty-shell-ready-wrapper-root'
 import {
   describeIfZsh,
   describePosix,
@@ -243,7 +245,7 @@ describePosix('live zsh subprocess tests', () => {
       const { getShellReadyLaunchConfig } = await importFreshLocalPtyShellReady()
       getShellReadyLaunchConfig('/bin/zsh')
 
-      const zshenv = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshenv'), 'utf8')
+      const zshenv = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
 
       // Verify wrapper checks the resolved source root is non-empty before sourcing
       expect(zshenv).toContain('if [[ -n "${_orca_zshenv_source_dir:-}"')

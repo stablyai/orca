@@ -350,7 +350,10 @@ describe('PortsPanel runtime routing', () => {
     ).resolves.toEqual({ ok: true })
 
     expect(activateAndRevealWorktreeMock).toHaveBeenCalledTimes(2)
-    expect(activateAndRevealWorktreeMock).toHaveBeenCalledWith('repo::/workspace/app')
+    // Why: the browser tab is the surface — port opens must not re-seed a shell.
+    expect(activateAndRevealWorktreeMock).toHaveBeenCalledWith('repo::/workspace/app', {
+      providesInitialSurface: true
+    })
     expect(runtimeEnvironmentCall.mock.calls.map((call) => call[0].method)).toEqual([
       'status.get',
       'browser.tabCreate',

@@ -2474,7 +2474,9 @@ function isGrokIdleNotification(message: string | undefined): boolean {
   )
 }
 
-function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
+/** The per-provider answer to "is this event a user-initiated new turn?". Exported so the
+ *  observation stamp reuses it instead of minting a second list of event-name literals. */
+export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boolean {
   // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of falling through to false.
   switch (source) {
     case 'claude':
@@ -4349,44 +4351,6 @@ function readStringField(record: Record<string, unknown>, key: string): string |
   return trimmed.length > 0 ? trimmed : undefined
 }
 
-/**
- * The provider session id a raw hook body reports, read exactly as
- * `normalizeHookPayload` reads it (same JSON guard, same per-source extractor,
- * same Codex child carve-out).
- *
- * Why it is exposed: pane attribution has to run BEFORE normalization.
- * `normalizeHookPayload` keys its prompt/compaction state machine on the posted
- * pane key, so correcting the key afterwards would leave that state on the
- * wrong pane. Callers that re-derive the session id themselves drift from this
- * parser the moment a source changes shape.
- */
-export function readHookBodyProviderSessionId(
-  source: AgentHookSource,
-  body: unknown
-): string | null {
-  if (typeof body !== 'object' || body === null) {
-    return null
-  }
-  const rawPayload = (body as Record<string, unknown>).payload
-  let hookPayload: unknown = rawPayload
-  if (typeof rawPayload === 'string') {
-    try {
-      hookPayload = parseAgentHookJson(rawPayload)
-    } catch {
-      return null
-    }
-  }
-  if (typeof hookPayload !== 'object' || hookPayload === null) {
-    return null
-  }
-  const record = hookPayload as Record<string, unknown>
-  // Why: Codex child hooks expose the child's session_id on the parent's pane.
-  if (source === 'codex' && readString(record, 'agent_id')) {
-    return null
-  }
-  return extractAgentProviderSession(source, record)?.id ?? null
-}
-
 export function normalizeHookPayload(
   state: HookListenerState,
   source: AgentHookSource,
@@ -4402,8 +4366,16 @@ export function normalizeHookPayload(
   const paneKey = typeof record.paneKey === 'string' ? record.paneKey.trim() : ''
   const parsedPaneKey = parsePaneKey(paneKey)
   const rawPayload = record.payload
-  const hookPayload =
-    typeof rawPayload === 'string'
+  // Why (#15117): some Antigravity events fire with no stdin at all, yet still carry a status
+  // transition in `hook_event_name`. The POSIX script substitutes `{}` before posting; on
+  // Windows curl omits the form field entirely when stdin is empty, so the event arrives with
+  // no `payload` key at all. Accept both shapes rather than dropping the transition.
+  const antigravityPayloadAbsent =
+    source === 'antigravity' &&
+    (rawPayload === undefined || (typeof rawPayload === 'string' && rawPayload.trim() === ''))
+  const hookPayload = antigravityPayloadAbsent
+    ? {}
+    : typeof rawPayload === 'string'
       ? (() => {
           try {
             return parseAgentHookJson(rawPayload)

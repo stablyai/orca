@@ -1,5 +1,12 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import {
+  encodeShellStartupFeatures,
+  selectShellStartupFeatures,
+  SHELL_STARTUP_FEATURE_ENV,
+  type ShellStartupFeature
+} from '../main/shell-startup-features'
+import { resolveInheritedZdotdir } from '../main/zsh-wrapper-dir-ownership'
 import { ensureOverlayRestoreWrappers } from './pty-shell-overlay-wrappers'
 const RELAY_SHELL_READY_DIR = '.orca-relay/shell-ready'
 const POSIX_LOGIN_ARGS = ['-l']
@@ -7,6 +14,7 @@ const POSIX_LOGIN_ARGS = ['-l']
 export type RelayShellLaunchConfig = {
   args: string[]
   env: Record<string, string>
+  supportsReadyMarker: boolean
 }
 
 function shellBasename(shellPath: string): string {
@@ -46,38 +54,8 @@ function windowsShellArgs(
   return null
 }
 
-function hasOverlayRestoreEnv(env: Record<string, string>): boolean {
-  return Boolean(
-    env.ORCA_OPENCODE_CONFIG_DIR ||
-    env.ORCA_MIMOCODE_HOME ||
-    env.ORCA_REMOTE_CLI_BIN_DIR ||
-    env.ORCA_OMP_STATUS_EXTENSION
-  )
-}
-
 function getWrapperRoot(env: Record<string, string>): string {
   return join(env.HOME || process.env.HOME || homedir(), RELAY_SHELL_READY_DIR)
-}
-
-function normalizeOriginalZdotdirCandidate(value: string | undefined): string | null {
-  if (!value) {
-    return null
-  }
-  const normalized = value.replace(/\/+$/, '')
-  if (!normalized || normalized.endsWith('/shell-ready/zsh')) {
-    return null
-  }
-  return value
-}
-
-function resolveOriginalZdotdir(env: Record<string, string>): string {
-  return (
-    normalizeOriginalZdotdirCandidate(env.ZDOTDIR) ||
-    normalizeOriginalZdotdirCandidate(env.ORCA_ORIG_ZDOTDIR) ||
-    env.HOME ||
-    process.env.HOME ||
-    ''
-  )
 }
 
 export function getRelayShellLaunchConfig(
@@ -91,8 +69,11 @@ export function getRelayShellLaunchConfig(
   } = {}
 ): RelayShellLaunchConfig {
   const shellName = shellBasename(shellPath)
-  const emitReadyMarker = options.emitReadyMarker === true
-  const emitStartupIdentity = options.emitStartupIdentity === true
+  const unwrapped: RelayShellLaunchConfig = {
+    args: POSIX_LOGIN_ARGS,
+    env: {},
+    supportsReadyMarker: false
+  }
   if (platform === 'win32') {
     // Why: pwsh also exists on POSIX remotes; Windows-specific shell args must
     // only apply when the relay itself is running on native Windows.
@@ -101,39 +82,71 @@ export function getRelayShellLaunchConfig(
         windowsShellArgs(shellName, {
           terminalWindowsWslDistro: options.terminalWindowsWslDistro
         }) ?? [],
-      env: {}
+      env: {},
+      supportsReadyMarker: false
     }
   }
 
   if (shellName !== 'zsh' && shellName !== 'bash') {
-    return { args: POSIX_LOGIN_ARGS, env: {} }
+    return unwrapped
   }
-  // Why: preserve plain zsh startup fast path unless markers or overlay restoration are requested.
-  const requiresZshWrapper = hasOverlayRestoreEnv(env) || emitReadyMarker || emitStartupIdentity
-  if (shellName === 'zsh' && !requiresZshWrapper) {
-    return { args: POSIX_LOGIN_ARGS, env: {} }
+
+  // Why both map to the same flag: the relay only wraps for a startup command
+  // when that command's delivery asked for the readiness handshake.
+  const startupCommandRequested =
+    options.emitReadyMarker === true || options.emitStartupIdentity === true
+  const features = selectShellStartupFeatures({
+    shellPath: shellName,
+    env,
+    hasStartupCommand: startupCommandRequested,
+    waitsForShellReady: options.emitReadyMarker === true,
+    emitsStartupIdentity: options.emitStartupIdentity === true
+  })
+  // Why bash is always wrapped: its rcfile carries the OSC 133 command-lifecycle
+  // hooks unconditionally today, and dropping them would strand agent rows on
+  // "working". zsh keeps the plain startup fast path when nothing needs it —
+  // the same `features.length` rule the local and daemon transports use.
+  if (shellName !== 'bash' && features.length === 0) {
+    return unwrapped
   }
 
   const root = getWrapperRoot(env)
-  ensureOverlayRestoreWrappers(root)
+  let wrappersReady = false
+  try {
+    wrappersReady = ensureOverlayRestoreWrappers(root)
+  } catch {
+    // Why swallow: a remote HOME can be read-only or root-owned (EACCES), and
+    // that must not stop the pane from opening at all.
+    wrappersReady = false
+  }
+  if (!wrappersReady) {
+    // Why plain login shell: ZDOTDIR pointed at an incomplete wrapper dir makes
+    // zsh skip the user's whole config. Losing Orca's features is recoverable.
+    return unwrapped
+  }
+
+  const featureEnv = {
+    [SHELL_STARTUP_FEATURE_ENV]: encodeShellStartupFeatures(features)
+  }
+  const supportsReadyMarker = features.includes('ready')
 
   if (shellName === 'zsh') {
     return {
       args: POSIX_LOGIN_ARGS,
       env: {
-        ORCA_ORIG_ZDOTDIR: resolveOriginalZdotdir(env),
+        ORCA_ORIG_ZDOTDIR: resolveInheritedZdotdir(env, process.env.HOME ?? ''),
         ZDOTDIR: join(root, 'zsh'),
-        ...(emitReadyMarker ? { ORCA_SHELL_READY_MARKER: '1' } : {}),
-        ...(emitStartupIdentity ? { ORCA_SHELL_STARTUP_IDENTITY: '1' } : {})
-      }
+        ...featureEnv
+      },
+      supportsReadyMarker
     }
   }
 
   return {
     args: ['--rcfile', join(root, 'bash', 'rcfile')],
-    env: {
-      ...(emitReadyMarker ? { ORCA_SHELL_READY_MARKER: '1' } : {}),
-      ...(emitStartupIdentity ? { ORCA_SHELL_STARTUP_IDENTITY: '1' } : {})
-    }
+    env: featureEnv,
+    supportsReadyMarker
   }
 }
+
+export type { ShellStartupFeature }

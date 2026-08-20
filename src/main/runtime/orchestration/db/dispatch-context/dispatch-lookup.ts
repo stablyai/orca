@@ -9,9 +9,12 @@ import type { OrchestrationDb } from '../orchestration-db'
 
 export function getActiveDispatchForTerminal(
   this: OrchestrationDb,
-  handle: string
+  handle: string,
+  // Why optional: a handle reminted between dispatch and exit no longer matches
+  // the row, but the pane identity behind it survives the remint.
+  assigneePaneKey?: string
 ): DispatchContextRow | undefined {
-  return this.findActiveDispatchForAssignee(handle)
+  return this.findActiveDispatchForAssignee(handle, assigneePaneKey)
 }
 
 /**

@@ -68,10 +68,20 @@ async function run() {
     partitionKey: { topLevelSite: 'https://example.com', hasCrossSiteAncestor: true }
   })
   mark('partitioned cookie set')
+  // Why (STA-4797): a stale cookie on a domain the import DOES bring over. Narrowing the clear
+  // must not stop it removing this one, or imported sites inherit a session the site rejects.
+  await targetSession.cookies.set({
+    url: 'https://example.com/',
+    name: 'superseded',
+    value: 'remove-me',
+    secure: true
+  })
+  // Why (STA-4797): a live session for a site the import never mentions. It must still be here
+  // afterwards — a real Electron jar proving the import no longer signs the user out of it.
   await targetSession.cookies.set({
     url: 'https://stale.example/',
     name: 'stale',
-    value: 'remove-me',
+    value: 'keep-me',
     secure: true
   })
   // Why: the excluded origin is HTTPS, so prove registrable-domain matching also keeps HTTP.
@@ -207,7 +217,8 @@ describe('native Chromium excluded partition cookie under Electron', () => {
       'domain-google',
       'http-google',
       'imported',
-      'partitioned-google'
+      'partitioned-google',
+      'stale'
     ])
   }, 90_000)
 })

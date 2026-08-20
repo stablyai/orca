@@ -109,4 +109,15 @@ describe('relay direct ripgrep admission', () => {
     expect(execFileMock).not.toHaveBeenCalled()
     expect(listFilesWithGitMock).not.toHaveBeenCalled()
   })
+
+  it('requires ripgrep for bounded query ranking instead of retaining a full Git inventory', async () => {
+    const controller = new AbortController()
+    listFilesWithRgMock.mockRejectedValueOnce(new RipgrepUnavailableError())
+
+    await expect(runListFilesScan('/repo', [], controller.signal, 33, 'target')).rejects.toThrow(
+      'Quick Open search requires ripgrep'
+    )
+    expect(execFileMock).not.toHaveBeenCalled()
+    expect(listFilesWithGitMock).not.toHaveBeenCalled()
+  })
 })

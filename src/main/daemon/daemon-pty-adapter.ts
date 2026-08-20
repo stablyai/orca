@@ -94,6 +94,7 @@ import {
 import type { DaemonEvidenceSource, ExactDaemonIncarnation } from './daemon-incarnation-evidence'
 import { createDaemonAuditEligibilityTracker } from './daemon-audit-eligibility-event'
 import { normalizeDesktopTerminalSnapshotRows } from '../../shared/terminal-scrollback-policy'
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 type PendingDaemonSpawnOperation = {
   exitsBySessionId: Map<string, { incarnationId?: string }[]>
@@ -261,6 +262,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     id: string
     code: number
     incarnationId?: PtyIncarnationId
+    cause?: TerminalExitCause
   }) => void)[] = []
   private backgroundStreamListeners: ((payload: PtyBackgroundStreamEvent) => void)[] = []
   // Why: lets main fan a dead-endpoint signal to every affected pane, not just the written one (STA-2373 sibling-freeze).
@@ -2999,7 +3001,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
           listener({
             id: event.sessionId,
             code: event.payload.code,
-            ...(event.payload.incarnationId ? { incarnationId: event.payload.incarnationId } : {})
+            ...(event.payload.incarnationId ? { incarnationId: event.payload.incarnationId } : {}),
+            ...(event.payload.cause ? { cause: event.payload.cause } : {})
           })
         }
       }

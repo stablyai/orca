@@ -6,6 +6,7 @@ import {
   isSafeFishHistorySession,
   resolveFishHistoryDir
 } from './fish-history-session'
+import { dropInheritedOrcaHistFile } from './worktree-history-file-path'
 import { parseWslPath, toLinuxPath } from './wsl'
 import { getHistoryRoot, getHistoryRootWsl } from './terminal-history-paths'
 import { hashWorktreeId } from './terminal-history-id'
@@ -193,6 +194,11 @@ export function injectHistoryEnv(
   // process the LAUNCHING worktree's session name — and the check-before-set
   // below would honour it, writing every pane's history into that worktree.
   dropInheritedOrcaFishHistory(spawnEnv)
+  // Why HISTFILE too: it stays EXPORTED after the wrapper restores it, so the
+  // same nesting hands this process worktree A's path — and the check-before-set
+  // below would honour it for every pane, in every worktree. Only a path Orca
+  // minted is dropped; a user's own HISTFILE still wins.
+  dropInheritedOrcaHistFile(spawnEnv)
 
   const shell = resolveShellKind(shellPath)
   const result: HistoryInjectionResult = {

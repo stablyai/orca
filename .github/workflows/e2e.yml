@@ -73,18 +73,23 @@ jobs:
 
       # Why: building here avoids parallel builds inside Playwright globalSetup;
       # paired-browser specs also need the standalone web bundle.
-      - name: Build Electron app for E2E
+      - name: Build E2E outputs
         env:
           VITE_EXPOSE_STORE: 'true'
         run: |
           npx electron-vite build --mode e2e
           pnpm run build:web-from-renderer
+          pnpm run build:relay
 
       - name: Upload E2E build output
         uses: actions/upload-artifact@v7
         with:
           name: e2e-build-out
           path: out/
+          # Why: build-relay.mjs writes each relay's marker as `out/relay/<platform>/.version`,
+          # and upload-artifact drops dotfiles by default — consumers then fail SSH specs with
+          # "local relay build is missing its version marker".
+          include-hidden-files: true
           retention-days: 1
           if-no-files-found: error
 
@@ -129,7 +134,7 @@ jobs:
       # scripts still need the Linux toolchain even though this shard reuses
       # the prebuilt Electron output.
       - name: Install native build tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential python3 zsh
+        run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk python3 zsh
 
       # Why: Electron on Linux needs an X display even when the app
       # suppresses mainWindow.show() via ORCA_E2E_HEADLESS. xvfb provides a
@@ -180,7 +185,7 @@ jobs:
       # ORCA_E2E_FORWARD_APP_LOGS keeps startup failures visible when Electron
       # launches but never creates a BrowserWindow.
       - name: Run E2E tests (${{ matrix.shard_name }})
-        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 pnpm run test:e2e --shard=${{ matrix.shard }}
+        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay" pnpm run test:e2e --shard=${{ matrix.shard }}
 
       # Why: Playwright retains traces/screenshots only on failure. Uploading
       # them as an artifact makes post-mortem debugging on CI possible without
@@ -210,9 +215,11 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
 
       - name: Install native build and headless UI tools
+        # Why ripgrep: Quick Open's bounded host-side search requires rg instead of an
+        # unbounded inventory fallback; the paired fixture exercises that real boundary.
         # Why openssh-client: the Docker-SSH fixture shells out to ssh/ssh-keygen, and this
         # lane now receives those specs from pr.yml's SSH source mapping.
-        run: sudo apt-get update && sudo apt-get install -y build-essential openssh-client python3 xvfb zsh
+        run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk openssh-client python3 ripgrep xvfb zsh
 
       # Why pnpm first: setup-node needs pnpm on PATH to locate the store it caches.
       # Without that cache every E2E job re-downloaded the whole dependency set.
@@ -220,7 +227,6 @@ jobs:
         uses: pnpm/action-setup@v6
         with:
           run_install: false
-
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -253,7 +259,7 @@ jobs:
             echo "Changed startup-readiness specs are owned by the dedicated live lane."
             exit 0
           fi
-          E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1)
+          E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay")
           # Second clause: a spec that reads ORCA_E2E_SSH_DOCKER test.skip()s itself without it, so
           # naming only one trigger silently skipped every other Docker-SSH spec in this lane.
           # The first clause stays because that spec needs Docker without referencing the variable.
@@ -296,7 +302,7 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
 
       - name: Install native build and headless UI tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential openssh-client python3 xvfb zsh
+        run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk openssh-client python3 xvfb zsh
 
       # Why pnpm first: setup-node needs pnpm on PATH to locate the store it caches.
       # Without that cache every E2E job re-downloaded the whole dependency set.
