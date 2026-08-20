@@ -180,7 +180,11 @@ Dispatch rules:
 
 Use `worker-start` for the normal supervised path. It composes the existing worktree, terminal, readiness, and dispatch primitives while returning exact created/reused effects. Agents still choose placement and concurrency; Orca does not schedule workers or infer conflicts.
 
+Unless the user or task requests a specific agent, model, or effort, omit `--agent`, `--model`, and `--effort` from `worker-start`. Omitted fields use the user's Settings > Orchestration Worker defaults; inspect `launch.requested` and `launch.effective` in the receipt to confirm the applied values. Specify `--agent` when intentionally mixing agents (for example, parallel Codex + Claude review) or when the user names an agent.
+
 Create the Run and every independent Task first, then start all independent workers before waiting:
+
+For intentionally mixed-agent parallel work, specify each agent:
 
 ```bash
 orca orchestration run-create --objective "<objective>" --json
@@ -190,7 +194,7 @@ orca orchestration worker-start --task <task_a> --worktree current --agent codex
 orca orchestration worker-start --task <task_b> --worktree current --agent claude --json
 ```
 
-`current` and exact existing worktrees create a fresh agent terminal and do not rerun setup. Reuse an existing agent only with `--terminal <handle>`.
+`current` and exact existing worktrees create a fresh agent terminal and do not rerun setup. Reuse an existing agent only with `--terminal <handle>`; reusing a terminal does not inject the configured worker defaults.
 
 For a per-invocation Claude, Codex, or Cursor launch, pass an opaque provider model id with `--model`; add `--effort` only when that agent/model supports the level. These options apply only to fresh agent terminals, override general agent default arguments, and are reported under `launch.requested` and `launch.effective` in the receipt:
 
@@ -203,9 +207,9 @@ orca orchestration worker-start --task <task_id> --worktree current --agent clau
 For a new worktree, setup runs by default and agent-first creation reuses the returned startup agent terminal:
 
 ```bash
-orca orchestration worker-start --task <task_id> --worktree new-child --name <name> --agent codex --setup run --json
+orca orchestration worker-start --task <task_id> --worktree new-child --name <name> --setup run --json
 # Independent/top-level:
-orca orchestration worker-start --task <task_id> --worktree new-top-level --name <name> --agent codex --setup run --json
+orca orchestration worker-start --task <task_id> --worktree new-top-level --name <name> --setup run --json
 ```
 
 Setup normally starts alongside the agent. Only a repository explicitly configured with `wait-for-setup` delays agent launch until setup succeeds. Use `--setup skip` or `--setup inherit` only for a concrete reason.

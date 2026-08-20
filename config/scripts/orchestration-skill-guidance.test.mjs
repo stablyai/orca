@@ -289,6 +289,28 @@ describe('orchestration skill guidance', () => {
     expect(workerLoop).toContain('`launch.requested` and `launch.effective`')
   })
 
+  it('prefers configured worker defaults for ordinary supervised launches', () => {
+    const workerLoop = getSection(readSkill(), 'Preferred Supervised Worker Loop')
+
+    expect(workerLoop).toContain(
+      'Unless the user or task requests a specific agent, model, or effort, omit `--agent`, ' +
+        '`--model`, and `--effort` from `worker-start`.'
+    )
+    expect(workerLoop).toContain(
+      "Omitted fields use the user's Settings > Orchestration Worker defaults"
+    )
+    expect(workerLoop).toContain('inspect `launch.requested` and `launch.effective` in the receipt')
+    expect(workerLoop).toContain(
+      'Specify `--agent` when intentionally mixing agents (for example, parallel Codex + Claude review)'
+    )
+    expect(workerLoop).toContain(
+      'reusing a terminal does not inject the configured worker defaults.'
+    )
+    expect(workerLoop).toContain(
+      'orca orchestration worker-start --task <task_id> --worktree new-child --name <name> --setup run --json'
+    )
+  })
+
   it('never authorizes release from idle, timeout, or worker-side triggers', () => {
     const skill = readSkill()
     const workerLoop = getSection(skill, 'Preferred Supervised Worker Loop')
