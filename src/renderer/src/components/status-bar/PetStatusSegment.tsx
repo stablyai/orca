@@ -324,8 +324,11 @@ function PetStatusSegmentInner(): React.JSX.Element {
           </DropdownMenuSub>
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            onSelect={(event) => {
-              event.preventDefault()
+            onSelect={() => {
+              // Why: no preventDefault here, unlike the toggles above. Holding
+              // the menu open behind the dialog leaves it open once the dialog
+              // closes, so the next click on the trigger toggles it shut and the
+              // menu reads as broken.
               setFromImageOpen(true)
             }}
           >
