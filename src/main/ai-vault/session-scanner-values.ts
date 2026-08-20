@@ -139,6 +139,21 @@ export function findOpenCodeStorageRoot(filePath: string): string | null {
 
 // Pi and OMP (a Pi fork) both store transcripts under
 // <home>/<agentHomeDirName>/agent/sessions; accept any prefix of that path.
+/** Appends to a path using the separator that path already uses.
+ *
+ *  Why not `join`: the remote scanner hands these helpers a POSIX path and then
+ *  splits the answer on '/', so a platform-native join would give it a single
+ *  unusable segment when Orca runs on Windows. The separator has to come from
+ *  the value, not from the host running the scan. */
+function appendUsingOwnSeparator(base: string, ...segments: string[]): string {
+  // A tilde expansion leaves a mixed path — a native home in front of whatever
+  // the user wrote — so one backslash anywhere settles it, and the base is
+  // folded to match rather than left half and half.
+  const separator = base.includes('\\') ? '\\' : '/'
+  const foldedBase = separator === '\\' ? base.replaceAll('/', '\\') : base
+  return [foldedBase, ...segments].join(separator)
+}
+
 export function normalizeAgentSessionsDir(
   rawValue: string,
   agentHomeDirName: '.pi' | '.omp'
@@ -153,10 +168,10 @@ export function normalizeAgentSessionsDir(
     return normalized
   }
   if (leaf === 'agent') {
-    return join(normalized, 'sessions')
+    return appendUsingOwnSeparator(normalized, 'sessions')
   }
   if (leaf === agentHomeDirName) {
-    return join(normalized, 'agent', 'sessions')
+    return appendUsingOwnSeparator(normalized, 'agent', 'sessions')
   }
   return normalized
 }
@@ -171,7 +186,11 @@ function defaultPrimeAgentSessionsDir(): string {
 // ('', '.', '..', 'sessions') would resolve against the main-process cwd.
 function absoluteConfiguredDir(rawValue: string): string | null {
   const expanded = rawValue === '~' ? homedir() : rawValue.replace(/^~(?=[\\/])/, homedir())
-  const normalized = expanded.replace(/[\\/]+$/, '')
+  // Why fold here: substituting a Windows home into a value the user wrote with
+  // forward slashes leaves a path that is half one separator and half the other.
+  // This is where the mix is created, so this is where it is settled.
+  const folded = expanded.includes('\\') ? expanded.replaceAll('/', '\\') : expanded
+  const normalized = folded.replace(/[\\/]+$/, '')
   return normalized && isAbsolute(normalized) ? normalized : null
 }
 
@@ -180,7 +199,7 @@ function absoluteConfiguredDir(rawValue: string): string | null {
 // unconditionally, so a root that is itself named `sessions` still nests one deeper.
 export function normalizePrimeAgentSessionsDir(rawAgentDir: string): string {
   const agentDir = absoluteConfiguredDir(rawAgentDir.trim())
-  return agentDir ? join(agentDir, 'sessions') : defaultPrimeAgentSessionsDir()
+  return agentDir ? appendUsingOwnSeparator(agentDir, 'sessions') : defaultPrimeAgentSessionsDir()
 }
 
 // PRIME_AGENT_SESSION_DIR (and its legacy PRIME_AGENT_CODING_AGENT_SESSION_DIR alias)
