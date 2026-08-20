@@ -6,7 +6,7 @@ vi.mock('child_process', () => ({ execFile: execFileMock }))
 
 import { resetProcessTableSnapshotForTests } from '../../shared/process-table-snapshot'
 import { resolveAgentForegroundProcessWithAvailability } from './agent-foreground-process'
-import { resetWindowsProcessRowsSnapshotForTests } from './windows-foreground-process-rows'
+import { resetWindowsProcessRowsReaderForTests } from './windows-foreground-process-rows'
 
 describe('Pi Windows foreground recognition', () => {
   let platform: PropertyDescriptor | undefined
@@ -14,7 +14,7 @@ describe('Pi Windows foreground recognition', () => {
   beforeEach(() => {
     execFileMock.mockReset()
     resetProcessTableSnapshotForTests()
-    resetWindowsProcessRowsSnapshotForTests()
+    resetWindowsProcessRowsReaderForTests()
     platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'win32' })
   })

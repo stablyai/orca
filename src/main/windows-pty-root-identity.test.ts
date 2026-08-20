@@ -7,7 +7,7 @@ const { execFileMock, powershellScanCount } = vi.hoisted(() => ({
 
 vi.mock('child_process', () => ({ execFile: execFileMock }))
 
-import { resetWindowsProcessRowsSnapshotForTests } from './providers/windows-foreground-process-rows'
+import { resetWindowsProcessRowsReaderForTests } from './providers/windows-foreground-process-rows'
 import {
   classifyWindowsTreeKillTarget,
   verifyWindowsTreeKillTarget,
@@ -169,7 +169,7 @@ describe('verifyWindowsTreeKillTarget scan volume', () => {
   beforeEach(() => {
     execFileMock.mockReset()
     powershellScanCount.value = 0
-    resetWindowsProcessRowsSnapshotForTests()
+    resetWindowsProcessRowsReaderForTests()
     execFileMock.mockImplementation((cmd: string, ..._rest: unknown[]) => {
       const cb = _rest.at(-1) as (e: unknown, r: { stdout: string; stderr: string }) => void
       if (cmd === 'powershell.exe') {
@@ -180,7 +180,7 @@ describe('verifyWindowsTreeKillTarget scan volume', () => {
   })
 
   afterEach(() => {
-    resetWindowsProcessRowsSnapshotForTests()
+    resetWindowsProcessRowsReaderForTests()
   })
 
   it('collapses a 32-wide teardown burst into a single process-table scan', async () => {

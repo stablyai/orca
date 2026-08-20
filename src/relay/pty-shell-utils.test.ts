@@ -10,7 +10,7 @@ vi.mock('child_process', () => ({
   execFileSync: execFileSyncMock
 }))
 
-import { resetWindowsProcessRowsSnapshotForTests } from '../main/providers/windows-foreground-process-rows'
+import { resetWindowsProcessRowsReaderForTests } from '../main/providers/windows-foreground-process-rows'
 import { resetProcessTableSnapshotForTests } from '../shared/process-table-snapshot'
 import {
   getForegroundProcessName,
@@ -55,7 +55,7 @@ beforeEach(() => {
   execFileMock.mockReset()
   execFileSyncMock.mockReset()
   resetProcessTableSnapshotForTests()
-  resetWindowsProcessRowsSnapshotForTests()
+  resetWindowsProcessRowsReaderForTests()
 })
 
 describe('isProcessAlive', () => {

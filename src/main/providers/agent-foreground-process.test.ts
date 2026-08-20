@@ -13,7 +13,7 @@ import {
   resolveAgentForegroundProcess,
   resolveAgentForegroundProcessWithAvailability
 } from './agent-foreground-process'
-import { resetWindowsProcessRowsSnapshotForTests } from './windows-foreground-process-rows'
+import { resetWindowsProcessRowsReaderForTests } from './windows-foreground-process-rows'
 
 // Why: the module wraps execFile with promisify, so the mock must honor the
 // Node callback contract — invoke the last arg with (err, { stdout, stderr }).
@@ -79,7 +79,7 @@ describe('resolveAgentForegroundProcess', () => {
     resetProcessTableSnapshotForTests()
     // Why: the Windows rows reader caches across calls (500ms TTL), so each
     // case's execFile mock must not be answered by the previous case's rows.
-    resetWindowsProcessRowsSnapshotForTests()
+    resetWindowsProcessRowsReaderForTests()
     platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'darwin' })
   })
