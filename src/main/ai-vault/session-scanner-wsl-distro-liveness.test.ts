@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { AI_VAULT_SCAN_CANCELLED_MESSAGE } from '../../shared/ai-vault-types'
 import { _resetRunningWslDistrosCacheForTests, _setRunningWslDistrosForTests } from '../wsl'
 import { stoppedWslDistroForRoot } from './session-scanner-wsl-distro-liveness'
 
@@ -44,5 +45,17 @@ describe('stoppedWslDistroForRoot', () => {
     await expect(
       stoppedWslDistroForRoot('\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex\\sessions')
     ).resolves.toBe('Ubuntu')
+  })
+
+  it('rejects with the canonical cancelled-scan error when already aborted', async () => {
+    _setRunningWslDistrosForTests(['docker-desktop'])
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      stoppedWslDistroForRoot(
+        '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex\\sessions',
+        controller.signal
+      )
+    ).rejects.toMatchObject({ name: 'AbortError', message: AI_VAULT_SCAN_CANCELLED_MESSAGE })
   })
 })

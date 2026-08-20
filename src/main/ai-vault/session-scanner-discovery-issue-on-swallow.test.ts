@@ -3,12 +3,8 @@ import { describe, expect, it } from 'vitest'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { discoverFiles, walkSessionFiles } from './session-scanner-discovery'
 
-// Why: an OS-level failure below the WSL gate's own deadline (e.g. a stalled
-// UNC mount returning ECONNRESET) used to vanish as "this directory has no
-// sessions" — indistinguishable from a genuinely empty tree, and it hid a
-// real scan-latency regression (issues=0 on a 240s scan). A missing directory
-// (ENOENT) is the normal, expected case for an agent the user never
-// installed, so that one case must stay silent.
+// A non-ENOENT directory failure must be reported, not swallowed as an empty
+// tree; ENOENT (agent not installed) is the one case that stays silent.
 describe('walkSessionFiles records an issue for a swallowed non-ENOENT error', () => {
   it('stays silent for ENOENT (agent not installed)', async () => {
     const issues: AiVaultScanIssue[] = []
@@ -50,6 +46,7 @@ describe('walkSessionFiles records an issue for a swallowed non-ENOENT error', (
       {
         agent: 'codex',
         path: '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex\\sessions',
+        kind: 'notice',
         message: 'connection reset by peer'
       }
     ])
@@ -75,7 +72,35 @@ describe('walkSessionFiles records an issue for a swallowed non-ENOENT error', (
         }
       })
     ).resolves.toEqual([])
-    expect(issues).toEqual([{ agent: 'codex', path: failingDir, message: 'permission denied' }])
+    expect(issues).toEqual([
+      { agent: 'codex', path: failingDir, kind: 'notice', message: 'permission denied' }
+    ])
+  })
+
+  it('flags erroredRef so discoverFiles can mark the root stat as errored', async () => {
+    const issues: AiVaultScanIssue[] = []
+    const erroredRef = { current: false }
+    await walkSessionFiles('root', 'codex', issues, {
+      extensions: new Set(['.jsonl']),
+      readDirectory: async () => {
+        throw Object.assign(new Error('permission denied'), { code: 'EACCES' })
+      },
+      erroredRef
+    })
+    expect(erroredRef.current).toBe(true)
+  })
+
+  it('does not flag erroredRef for a silent ENOENT', async () => {
+    const issues: AiVaultScanIssue[] = []
+    const erroredRef = { current: false }
+    await walkSessionFiles('missing', 'codex', issues, {
+      extensions: new Set(['.jsonl']),
+      readDirectory: async () => {
+        throw Object.assign(new Error('no such directory'), { code: 'ENOENT' })
+      },
+      erroredRef
+    })
+    expect(erroredRef.current).toBe(false)
   })
 
   it('discoverFiles stays silent for a real, local, nonexistent root (agent not installed)', async () => {

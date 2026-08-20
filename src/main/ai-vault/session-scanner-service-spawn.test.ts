@@ -52,9 +52,7 @@ describe('spawnAiVaultServiceProcess', () => {
   })
 })
 
-// Why: the forked child never installs a tracer sink (it only calls
-// scanAiVaultSessions in-process), so this span is the one place a
-// slow-discovery regression becomes visible in main.trace.ndjson.
+// The forked child has no tracer sink; this is the one place discovery cost becomes visible.
 describe('stampDiscoverySpanAttributes', () => {
   function fakeSpan(): {
     attrs: Map<string, unknown>

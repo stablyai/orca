@@ -11,6 +11,7 @@ import {
   writeOmpScannerFixture,
   writePrimeAgentScannerFixture
 } from './session-scanner-test-fixtures'
+import type { DiscoveryStats } from './session-scanner-types'
 
 let tempRoots: string[] = []
 
@@ -827,5 +828,20 @@ describe('scanAiVaultSessions', () => {
         pattern.source.includes('[\\s\\S]')
     )
     expect(usedGrokWrapperMatch).toBe(false)
+  })
+
+  it('resets a reused discoveryStats object between scans instead of appending', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-'))
+    tempRoots.push(root)
+    const roots = isolatedScanRoots(root)
+    const discoveryStats: DiscoveryStats = { totalMs: 0, roots: [] }
+
+    await scanAiVaultSessions({ ...roots, discoveryStats })
+    const firstScanRootCount = discoveryStats.roots.length
+    expect(firstScanRootCount).toBeGreaterThan(0)
+
+    await scanAiVaultSessions({ ...roots, discoveryStats })
+
+    expect(discoveryStats.roots.length).toBe(firstScanRootCount)
   })
 })

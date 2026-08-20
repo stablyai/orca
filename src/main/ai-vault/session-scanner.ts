@@ -58,9 +58,8 @@ const SESSION_PARSE_CANDIDATE_MULTIPLIER = 2
 export async function scanAiVaultSessions(
   options: AiVaultScanOptions = {}
 ): Promise<AiVaultListResult> {
-  // The span makes scan cost visible in the local trace file: STA-1278-style
-  // "one core pegged" reports need to show whether transcript scanning is the
-  // subsystem burning CPU, and how much of each scan the cache absorbed.
+  // Makes scan cost visible in main.trace.ndjson (STA-1278: distinguish
+  // "one core pegged" transcript scanning from what the cache absorbed).
   return withSpan('aiVault.scan', async (span) => {
     const limit = options.unlimited
       ? Number.POSITIVE_INFINITY
@@ -79,11 +78,13 @@ export async function scanAiVaultSessions(
     // the cold scan gains nothing from the cache file (#9210).
     throwIfAiVaultScanCancelled(options.signal)
     await ensureSessionParseCacheLoaded()
+    // Out-parameter, not a span attribute: this span is no-op in the forked child.
+    // totalMs is unconditionally overwritten below; only roots needs clearing.
+    if (options.discoveryStats) {
+      options.discoveryStats.roots.length = 0
+    }
     const discoveryStartedAt = performance.now()
     const discoveries = await discoverAiVaultSessionSources({ options, limitPerAgent, issues })
-    // Out-parameter, not a span attribute: this span is a no-op in the forked
-    // service process (it never installs a tracer sink) — the parent stamps
-    // the real numbers onto its own aiVault.scan.service span from this value.
     if (options.discoveryStats) {
       options.discoveryStats.totalMs = performance.now() - discoveryStartedAt
     }
@@ -166,9 +167,8 @@ export async function scanAiVaultSessions(
   })
 }
 
-// In-scope sessions are guaranteed regardless of the recency cap, so the global
-// (already capped) result and the scope result are unioned and de-duplicated by
-// session id, then re-sorted DESC.
+// In-scope sessions are guaranteed regardless of the recency cap, so the
+// global (capped) and scope results are unioned, deduped by id, and re-sorted.
 function mergeSessions(
   cappedSessions: AiVaultSession[],
   scopeSessions: AiVaultSession[]

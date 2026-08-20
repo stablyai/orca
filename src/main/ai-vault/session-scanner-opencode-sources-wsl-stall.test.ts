@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Dirent } from 'node:fs'
+import { join } from 'node:path'
 import type * as NodeFsPromisesModule from 'node:fs/promises'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 
 const WSL_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada'
-const WSL_DATA_DIR = `${WSL_HOME}/.local/share/opencode`
+// Must match the real join() the production code uses to build this path —
+// a hand-written forward-slash literal silently never matches on Windows.
+const WSL_DATA_DIR = join(WSL_HOME, '.local', 'share', 'opencode')
 
 const mocks = vi.hoisted(() => ({ readdir: vi.fn(), stat: vi.fn() }))
 
@@ -21,6 +24,7 @@ vi.mock('./session-scanner-opencode-sqlite-worker-spawn', () => ({
 
 import { opencodeDiscoveries } from './session-scanner-opencode-sources'
 import { WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS } from '../native-chat/wsl-transcript-fs-gate'
+import { _resetRunningWslDistrosCacheForTests, _setRunningWslDistrosForTests } from '../wsl'
 
 let releaseStall: (() => void) | undefined
 
@@ -50,6 +54,7 @@ afterEach(async () => {
   releaseStall = undefined
   await vi.advanceTimersByTimeAsync(0)
   vi.useRealTimers()
+  _resetRunningWslDistrosCacheForTests()
 })
 
 describe('OpenCode source discovery with a stalled WSL data directory', () => {
@@ -100,5 +105,30 @@ describe('OpenCode source discovery with a stalled WSL data directory', () => {
       restoreEnv('XDG_DATA_HOME', previousXdg)
       restoreEnv('OPENCODE_DB', previousDb)
     }
+  })
+
+  it('skips a confirmed-stopped WSL data directory instead of reading it', async () => {
+    _setRunningWslDistrosForTests([])
+    mocks.readdir.mockResolvedValue([] as Dirent[])
+    const issues: AiVaultScanIssue[] = []
+    const discoveries = await Promise.all(
+      opencodeDiscoveries(
+        { opencodeStorageDir: '/home/ada/.local/share/opencode/storage' },
+        [WSL_HOME],
+        10,
+        issues
+      )
+    )
+
+    expect(discoveries).toHaveLength(2)
+    expect(mocks.readdir).not.toHaveBeenCalledWith(WSL_DATA_DIR)
+    expect(
+      issues.some(
+        (issue) =>
+          issue.path === WSL_DATA_DIR &&
+          issue.kind === 'notice' &&
+          issue.message.includes('is not running')
+      )
+    ).toBe(true)
   })
 })

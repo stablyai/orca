@@ -39,7 +39,8 @@ export async function discoverFiles(args: {
   const startedAt = performance.now()
   const isUncPath = isWslUncPath(args.rootDir)
   if (isUncPath) {
-    const stoppedDistro = await stoppedWslDistroForRoot(args.rootDir)
+    throwIfAiVaultScanCancelled(args.signal)
+    const stoppedDistro = await stoppedWslDistroForRoot(args.rootDir, args.signal)
     throwIfAiVaultScanCancelled(args.signal)
     if (stoppedDistro) {
       // A stopped distro would otherwise pay boot latency inline, or worse,
@@ -63,12 +64,14 @@ export async function discoverFiles(args: {
     }
   }
   let paths: string[]
+  const erroredRef = { current: false }
   try {
     paths = await walkSessionFiles(args.rootDir, args.agent, args.issues, {
       extensions: new Set(args.extensions),
       filePredicate: args.filePredicate,
       directoryPredicate: args.directoryPredicate,
-      signal: args.signal
+      signal: args.signal,
+      erroredRef
     })
   } catch (err) {
     // A caller abort races every other failure mode here. Surface it in the
@@ -130,7 +133,7 @@ export async function discoverFiles(args: {
     isUncPath,
     elapsedMs: performance.now() - startedAt,
     fileCount: result.files.length,
-    errored: false
+    errored: erroredRef.current
   })
   return result
 }
@@ -147,6 +150,9 @@ export async function walkSessionFiles(
     directoryPredicate?: (name: string, depth: number) => boolean
     readDirectory?: (dirPath: string) => Promise<Dirent[]>
     signal?: AbortSignal
+    // Same object reference threaded through every recursive call, so a nested
+    // directory's swallowed failure is visible to the root discoverFiles call.
+    erroredRef?: { current: boolean }
   },
   depth = 0
 ): Promise<string[]> {
@@ -169,7 +175,15 @@ export async function walkSessionFiles(
     // scan-latency regression. A missing directory is the normal, expected
     // case for an agent the user never installed, so it stays silent.
     if (!isENOENT(error)) {
-      recordSessionScanIssue(issues, { agent, path: dirPath, message: errorMessage(error) })
+      if (options.erroredRef) {
+        options.erroredRef.current = true
+      }
+      recordSessionScanIssue(issues, {
+        agent,
+        path: dirPath,
+        kind: 'notice',
+        message: errorMessage(error)
+      })
     }
     return []
   }

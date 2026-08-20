@@ -1,25 +1,24 @@
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { listRunningWslDistrosAsync } from '../wsl'
+import { abandonRemoteSessionScanOnCancel } from './ai-vault-scan-cancellation'
 
 /**
  * The name of the stopped distro a UNC root belongs to, or null when the
- * root should be scanned normally — either it is not a WSL UNC path, the
- * distro is running, or the running-distros probe itself failed (fail open:
- * an unknown state must not hide a distro's content).
- *
- * Why: touching `\\wsl.localhost\<distro>\...` on a stopped distro either
- * pays its cold-boot latency inline, or (observed on this codebase's own
- * corpus) stalls behind the single-slot WSL transcript gate for tens of
- * seconds per root — the dominant cost in a pathologically slow scan. This
- * check costs one cached `wsl --list --running` call (never boots anything)
- * instead.
+ * root should be scanned normally (not a WSL UNC path, the distro is
+ * running, or the probe itself failed — fail open, never boots anything).
  */
-export async function stoppedWslDistroForRoot(rootDir: string): Promise<string | null> {
+export async function stoppedWslDistroForRoot(
+  rootDir: string,
+  signal?: AbortSignal
+): Promise<string | null> {
   const info = parseWslUncPath(rootDir)
   if (!info) {
     return null
   }
-  const running = await listRunningWslDistrosAsync()
+  // Why: the running-distros probe is deduped across concurrent callers, so
+  // this must not abort the shared subprocess — only stop this caller from
+  // waiting on it.
+  const running = await abandonRemoteSessionScanOnCancel(listRunningWslDistrosAsync(), signal)
   if (running === null) {
     return null
   }

@@ -17,6 +17,7 @@ import {
   WslTranscriptFsError
 } from '../native-chat/wsl-transcript-fs-gate'
 import { discoverFiles, walkSessionFiles } from './session-scanner-discovery'
+import type { DiscoveryRootStat } from './session-scanner-types'
 
 const SLOW_MESSAGE =
   'WSL transcript files are temporarily unavailable because filesystem access is taking too long. Try again shortly or restart Orca if the issue continues.'
@@ -146,5 +147,28 @@ describe('discoverFiles containment for a stalled WSL root', () => {
       expect(issues).toHaveLength(names.length)
       expect(issues.every((issue) => issue.path.startsWith(UNC_ROOT))).toBe(true)
     }
+  })
+
+  it('marks the discovery root stat as errored when a nested directory read fails', async () => {
+    const subdir = { name: 'sub', isDirectory: () => true, isFile: () => false } as Dirent
+    fsMocks.readdir.mockImplementation((dir: string) =>
+      dir === 'local-root'
+        ? Promise.resolve([subdir])
+        : Promise.reject(Object.assign(new Error('permission denied'), { code: 'EACCES' }))
+    )
+    const issues: AiVaultScanIssue[] = []
+    const stats: DiscoveryRootStat[] = []
+
+    await discoverFiles({
+      rootDir: 'local-root',
+      limit: 10,
+      agent: 'codex',
+      issues,
+      extensions: ['.jsonl'],
+      stats
+    })
+
+    expect(stats).toHaveLength(1)
+    expect(stats[0]).toMatchObject({ rootDir: 'local-root', errored: true })
   })
 })

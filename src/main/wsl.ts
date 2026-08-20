@@ -235,12 +235,7 @@ export function hasCachedWslDistros(): boolean {
   return wslDistroCache !== null
 }
 
-// Why: `wsl --list --running` only lists, never boots — unlike `wsl -d`,
-// which starts a stopped distro. Callers that would otherwise touch a
-// stopped distro's UNC path (paying its boot latency, or worse, a stall
-// behind the WSL transcript gate) can check first. Short TTL because
-// starting/stopping a distro is a normal part of the user's workflow, and
-// this cache is process-lifetime — it must not go stale for hours.
+// Short TTL: distros start/stop during normal use; this cache is process-lifetime.
 const WSL_RUNNING_DISTROS_CACHE_TTL_MS = 10_000
 let runningWslDistrosCache: { distros: Set<string>; expiresAt: number } | null = null
 let runningWslDistrosProbe: Promise<Set<string> | null> | null = null
@@ -259,13 +254,7 @@ export function listRunningWslDistrosAsync(): Promise<Set<string> | null> {
   if (process.platform !== 'win32') {
     return Promise.resolve(new Set())
   }
-  // Why: dozens of existing tests exercise WSL UNC-shaped fixture paths
-  // (\\wsl.localhost\Ubuntu\...) with no intent to touch the real host's WSL
-  // state. Without this, every one of them would spawn a real wsl.exe and
-  // become dependent on whatever distros happen to be running on the machine
-  // that executes the suite. A test that wants the "distro is stopped" path
-  // seeds the cache explicitly via _setRunningWslDistrosForTests, which is
-  // checked above and short-circuits before this branch is ever reached.
+  // Fail open in tests unless a test explicitly seeds the cache — never spawn a real wsl.exe.
   if (process.env.NODE_ENV === 'test') {
     return Promise.resolve(null)
   }

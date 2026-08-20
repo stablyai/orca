@@ -14,13 +14,8 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
 
 const { discoverFiles } = await import('./session-scanner-discovery')
 
-// Why: discoverFiles never threaded `signal` at all before this change — a
-// preempted scan could not be cancelled during discovery, so the caller (the
-// 130s service watchdog) had no way to stop it short of killing the child and
-// losing the in-memory parse cache. These lock in that discoverFiles now
-// (1) stops issuing new work once aborted, and (2) always surfaces the
-// canonical cancelled-scan error shape, since IPC drops Error.name and the
-// renderer recognises cancellation by message only.
+// discoverFiles must stop issuing new work once aborted, and always surface
+// the canonical cancelled-scan error shape (IPC drops Error.name).
 describe('discoverFiles cancellation', () => {
   function dirent(name: string): Dirent {
     return {
