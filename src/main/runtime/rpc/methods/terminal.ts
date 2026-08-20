@@ -925,6 +925,12 @@ const TerminalRead = TerminalHandle.extend({
   // Why: optional so an older host that does not understand it simply drops the key and answers
   // with its usual stream read; the response's `source` is what tells the caller which it got.
   screen: z.literal(true).optional()
+}).refine((params) => !(params.screen === true && params.cursor !== undefined), {
+  // Why: a cursor pages through accumulated output; a screen is the current frame with nothing
+  // behind it. Honoring both would answer with rendered lines carrying the stream's pagination
+  // metadata — two frames of reference in one payload, which is the confusion `source` exists to
+  // remove. The CLI already refuses the pair, but the RPC is reachable without it.
+  message: 'Cursor cannot be combined with a screen read'
 })
 
 // Why: preserve the legacy contract — `title: string | null` only, `undefined` rejected, so the CLI's "reset" signal stays distinct.

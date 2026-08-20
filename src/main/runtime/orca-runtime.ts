@@ -18480,8 +18480,11 @@ export class OrcaRuntimeService {
   // ("cclclecleaclear" for one `clear`) and drops spaces a prompt draws with cursor-forward.
   // That is the right answer for "what happened over time" and the wrong one for "what is on
   // screen", so an explicit screen read goes to the emulator state instead. When no rendered
-  // state exists the stream is still returned, but labelled `stream` rather than passed off as
-  // a screen — silently answering the other question is the defect this exists to stop.
+  // state exists the stream is still returned, but labelled `screen-unavailable` rather than
+  // passed off as a screen — silently answering the other question is the defect this exists to
+  // stop, and that label is what separates it from a stream the caller actually asked for.
+  // A cursor cannot reach here: pairing one with a screen read is refused at the RPC boundary,
+  // because rendered lines carrying the stream's pagination metadata would mix both frames.
   private async readRenderedScreen(
     ptyId: string,
     read: RuntimeTerminalRead,
