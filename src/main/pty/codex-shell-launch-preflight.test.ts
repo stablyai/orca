@@ -92,6 +92,59 @@ describe.skipIf(process.platform === 'win32')('Codex shell launch preflight', ()
     expect(runAliasLaunch(root, getPosixCodexShellLaunchPreflight(), '/bin/zsh')).toBe('normal')
   })
 
+  it.each([
+    ['/bin/zsh', 'setopt aliases ALIAS_FUNC_DEF'],
+    ['/bin/bash', 'shopt -s expand_aliases']
+  ])(
+    'parses in %s when the user already aliased the name codex',
+    (shell, enableAliases) => {
+      if (!existsSync(shell)) {
+        return
+      }
+      const root = mkdtempSync(join(tmpdir(), 'orca-codex-named-alias-'))
+      roots.push(root)
+      const bin = join(root, 'bin')
+      mkdirSync(bin)
+      writeExecutable(join(bin, 'codex'), '#!/bin/sh\nprintf launched\\n')
+      writeExecutable(
+        join(bin, 'orca-test'),
+        '#!/bin/sh\n[ "$1 $2 $3" = "agent hooks prepare-codex" ] || exit 2\n'
+      )
+      // Why a sourced file nested in `if true`: zsh parses a compound command
+      // before running it, so `codex()` inside Orca's non-login zshrc gate
+      // expands a user alias even if `unalias` appears earlier in that `if`.
+      const startup = join(root, 'startup.sh')
+      writeFileSync(
+        startup,
+        [
+          enableAliases,
+          "alias codex='GIT_AUTHOR_NAME=Codex GIT_AUTHOR_EMAIL=codex@openai.com GIT_COMMITTER_NAME=Codex GIT_COMMITTER_EMAIL=codex@openai.com codex --dangerously-bypass-approvals-and-sandbox'",
+          'if true; then',
+          getPosixCodexShellLaunchPreflight(),
+          'fi',
+          'printf parsed\\n',
+          'codex'
+        ].join('\n')
+      )
+
+      const result = spawnSync(
+        shell,
+        shell.endsWith('/zsh') ? ['-f', startup] : ['--noprofile', '--norc', startup],
+        {
+          encoding: 'utf-8',
+          env: {
+            ...process.env,
+            PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
+            ORCA_CODEX_LAUNCH_PREFLIGHT: join(bin, 'orca-test')
+          }
+        }
+      )
+
+      expect(result.status, result.stderr).toBe(0)
+      expect(result.stdout).toBe('parsed\nlaunched\n')
+    }
+  )
+
   it('still launches Codex when the best-effort preflight fails', () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-codex-preflight-failure-'))
     roots.push(root)

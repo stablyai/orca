@@ -60,12 +60,17 @@ function isExecutableFileOnDisk(path: string, platform: NodeJS.Platform): boolea
 
 export function getPosixCodexShellLaunchPreflight(): string {
   return `# Why: a typed alias expands inside the shell, after pane launch prep.
+# Why: unalias, then eval the function definition, so a user alias named
+# codex cannot expand into the function header at parse time (interactive
+# zsh ALIAS_FUNC_DEF, bash expand_aliases), even when this block sits
+# inside another compound command such as zshrc's non-login gate.
+unalias codex 2>/dev/null || true
 __orca_codex_binary="$(command -v codex 2>/dev/null || :)"
 if [[ -n "\${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
-  codex() {
+  eval 'codex() {
     "\${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
     command codex "$@"
-  }
+  }'
 fi
 unset __orca_codex_binary
 `
