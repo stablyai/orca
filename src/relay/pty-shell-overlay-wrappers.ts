@@ -5,15 +5,12 @@ import {
   BASH_FEATURE_CHANNEL_BLOCK,
   BASH_PROMPT_COMMAND_COMPOSITION_BLOCK,
   SHELL_STARTUP_IDENTITY_MARKER_BLOCK,
-  ZSH_HISTFILE_RESTORE_BLOCK,
+  BASH_HISTFILE_RESTORE_BLOCK,
   ZSH_WRAPPER_DIR_MARKER_CONTENT,
   ZSH_WRAPPER_DIR_MARKER_FILE
 } from '../main/shell-templates'
 import { writeShellWrapperFiles } from '../main/shell-wrapper-file-writer'
-import {
-  buildZshStartupWrapperFiles,
-  type ZshStartupWrapperSpec
-} from '../main/zsh-startup-wrapper-builder'
+import { buildZshStartupHook, type ZshStartupHookSpec } from '../main/zsh-startup-wrapper-builder'
 
 /** Writes the zsh/bash overlay wrapper files a relay-spawned shell sources.
  *  Split from pty-shell-launch.ts so the launch-config decisions stay readable
@@ -21,19 +18,16 @@ import {
 
 const SHELL_READY_MARKER_ESCAPED = '\\033]777;orca-shell-ready\\007'
 
-// Why: the relay .zshenv republishes the inherited ZDOTDIR as ORCA_USER_ZDOTDIR,
-// so later wrapper files prefer it over the spawn-time ORCA_ORIG_ZDOTDIR.
-const RELAY_HOME_EXPRESSION = '"${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"'
-
-function getRelayZshWrapperSpec(zshDir: string): ZshStartupWrapperSpec {
+// Why the relay no longer needs its own ZDOTDIR shape: it used to republish the
+// inherited value as ORCA_USER_ZDOTDIR so the later wrapper files could prefer
+// it over the spawn-time ORCA_ORIG_ZDOTDIR. There are no later wrapper files
+// now, and ZDOTDIR itself carries the answer, so the relay and desktop bodies
+// are one template again.
+function getRelayZshWrapperSpec(): ZshStartupHookSpec {
   return {
     headerLabel: 'Orca relay zsh overlay wrapper',
-    zshDir,
-    zshenvStrategy: 'overlay-user-zdotdir',
-    homeExpression: RELAY_HOME_EXPRESSION,
     readyMarkerEscaped: SHELL_READY_MARKER_ESCAPED,
     osc133CommandMarkers: false,
-    skipUserZshrcWhenHomeIsWrapperDir: false,
     overlayRestoreComment:
       '# Why: remote startup files can re-export user defaults after relay spawn.',
     restores: {
@@ -50,7 +44,7 @@ export function ensureOverlayRestoreWrappers(root: string): boolean {
   const zshDir = join(root, 'zsh')
   const bashDir = join(root, 'bash')
 
-  const zsh = buildZshStartupWrapperFiles(getRelayZshWrapperSpec(zshDir))
+  const zshenv = buildZshStartupHook(getRelayZshWrapperSpec())
   const bashRc = `# Orca relay bash overlay wrapper
 ${BASH_FEATURE_CHANNEL_BLOCK}
 ${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
@@ -78,7 +72,7 @@ fi
 [[ -n "\${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="\${ORCA_MIMOCODE_HOME}"
 [[ -n "\${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"\${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="\${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
 ${getPosixOmpShellWrapper()}
-${ZSH_HISTFILE_RESTORE_BLOCK}
+${BASH_HISTFILE_RESTORE_BLOCK}
 # Why: SSH bash sessions need the same command lifecycle markers as local
 # bash so agent rows stop showing "working" when the foreground command exits.
 __orca_initializing_wrapper=1
@@ -162,11 +156,9 @@ trap '__orca_osc133_preexec' DEBUG
 unset __orca_initializing_wrapper
 `
 
+  // Only .zshenv: see local-pty-shell-ready-wrapper-generation.ts.
   const files = [
-    [join(zshDir, '.zshenv'), zsh.zshenv],
-    [join(zshDir, '.zprofile'), zsh.zprofile],
-    [join(zshDir, '.zshrc'), zsh.zshrc],
-    [join(zshDir, '.zlogin'), zsh.zlogin],
+    [join(zshDir, '.zshenv'), zshenv],
     [join(zshDir, ZSH_WRAPPER_DIR_MARKER_FILE), ZSH_WRAPPER_DIR_MARKER_CONTENT],
     [join(bashDir, 'rcfile'), bashRc]
   ] as const

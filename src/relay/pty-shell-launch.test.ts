@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -59,17 +59,6 @@ function expectBashOsc133Lifecycle(output: string): void {
   ])
 }
 
-function expectZdotdirSourceContext(content: string, fileName: '.zprofile' | '.zshrc' | '.zlogin') {
-  expect(content).toContain('export ZDOTDIR="$_orca_home"')
-  expect(content).toContain(`source "$_orca_home/${fileName}"`)
-  expect(content).toContain('export ZDOTDIR="$_orca_wrapper_zdotdir"')
-}
-
-function expectFinalZdotdirRestoreContext(content: string) {
-  expect(content).toContain("after Orca's last wrapper file has loaded")
-  expect(content).toContain('export ZDOTDIR="$_orca_resolved_config_dir"')
-}
-
 describe('isRelayWslShell', () => {
   it.each(['wsl.exe', 'WSL.EXE', 'C:\\Windows\\System32\\wsl.exe', 'wsl'])(
     'recognizes %s on a Windows relay',
@@ -111,20 +100,17 @@ describe('getRelayShellLaunchConfig', () => {
       expect(config.args).toEqual(['-l'])
       expect(config.env.ZDOTDIR).toBe(zshRoot)
       const zshenv = readFileSync(join(zshRoot, '.zshenv'), 'utf8')
-      const userZdotdirResolution =
-        '__orca_resolve_user_config_dir "${ORCA_USER_ZDOTDIR:-${ORCA_ORIG_ZDOTDIR:-$HOME}}"'
-      expect(zshenv).toContain('export ORCA_USER_ZDOTDIR="$_orca_resolved_config_dir"')
-      const zprofile = readFileSync(join(zshRoot, '.zprofile'), 'utf8')
-      const zshrc = readFileSync(join(zshRoot, '.zshrc'), 'utf8')
-      const zlogin = readFileSync(join(zshRoot, '.zlogin'), 'utf8')
-      expect(zprofile).toContain(userZdotdirResolution)
-      expect(zshrc).toContain(userZdotdirResolution)
-      expect(zlogin).toContain(userZdotdirResolution)
-      expectZdotdirSourceContext(zprofile, '.zprofile')
-      expectZdotdirSourceContext(zshrc, '.zshrc')
-      expectZdotdirSourceContext(zlogin, '.zlogin')
+      // Why no ORCA_USER_ZDOTDIR: the relay used to republish the inherited
+      // ZDOTDIR under that name so its three later wrapper files could prefer it
+      // over the spawn-time value. There are no later wrapper files, and a
+      // ZDOTDIR the user's own .zshenv exports simply stands.
+      expect(zshenv).not.toContain('ORCA_USER_ZDOTDIR')
+      expect(zshenv).toContain('builtin export ZDOTDIR="$ORCA_ORIG_ZDOTDIR"')
+      expect(zshenv).toContain('builtin source -- "$_orca_user_zshenv"')
+      for (const name of ['.zprofile', '.zshrc', '.zlogin']) {
+        expect(existsSync(join(zshRoot, name))).toBe(false)
+      }
       // Why .zshenv: the final restore is the last step of the one epilogue.
-      expectFinalZdotdirRestoreContext(zshenv)
     }
   )
 
@@ -222,7 +208,7 @@ describe('getRelayShellLaunchConfig', () => {
     })
 
     expect(readFileSync(join(zshRoot, '.zshenv'), 'utf8')).toContain(
-      'export ORCA_USER_ZDOTDIR="$_orca_resolved_config_dir"'
+      'builtin export ZDOTDIR="$ORCA_ORIG_ZDOTDIR"'
     )
   })
 

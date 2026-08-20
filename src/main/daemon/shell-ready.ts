@@ -16,10 +16,7 @@ import {
 import { resolveShellWrapperRoot } from '../shell-wrapper-content-address'
 import { writeShellWrapperFiles } from '../shell-wrapper-file-writer'
 import { buildDaemonShellReadyWrapperFiles } from './daemon-shell-ready-wrapper-fileset'
-import {
-  resolveInheritedZdotdir,
-  resolveInheritedZshenvSourceDir
-} from '../zsh-wrapper-dir-ownership'
+import { inheritedZdotdirEnv, resolveInheritedZdotdir } from '../zsh-wrapper-dir-ownership'
 import { SHELL_READY_MARKER } from './daemon-shell-ready-marker'
 
 const ORCA_USER_DATA_PATH_ENV = 'ORCA_USER_DATA_PATH'
@@ -149,8 +146,7 @@ export function getShellLaunchConfig(
     return {
       args: ['-l'],
       env: {
-        ORCA_ORIG_ZDOTDIR: resolveInheritedZdotdir(process.env),
-        ORCA_ZSHENV_SOURCE_DIR: resolveInheritedZshenvSourceDir(process.env),
+        ...inheritedZdotdirEnv(resolveInheritedZdotdir(process.env)),
         ZDOTDIR: join(getShellReadyWrapperRoot(), 'zsh'),
         [SHELL_STARTUP_FEATURE_ENV]: encodeShellStartupFeatures(features)
       },

@@ -11,12 +11,10 @@ const shellContractFiles = [
   'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/main/daemon/shell-ready.test.ts',
   'src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts',
-  'src/main/providers/local-pty-shell-ready-zsh-startup-file-behavior.test.ts',
-  'src/main/providers/local-pty-shell-ready-zsh-zdotdir-discovery.test.ts',
-  'src/main/providers/local-pty-shell-ready-zsh-zdotdir-normalization.test.ts',
   'src/main/providers/__tests__/shell-ready-framework-example.test.ts',
   'src/main/shell-startup-feature-channel.test.ts',
   'src/main/zsh-scoped-histfile.live-shell.test.ts',
+  'src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts',
   'src/main/zsh-wrapper-version-mismatch.live-shell.test.ts',
   'src/shared/posix-command-path-lookup.test.ts'
 ]
@@ -31,8 +29,12 @@ const testFilePatterns = [
   'tests/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}',
   'tests/tools/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'
 ]
+// Why the harness import counts: the zsh startup hook runs from a `precmd`, so
+// its tests drive a real zsh through a PTY in zsh-startup-hook-pty-harness
+// rather than calling spawnSync('zsh') themselves. Without this branch the rule
+// silently stops noticing the very tests that need the lane's zsh install.
 const realZshUsage =
-  /(?:spawnSync|execFileSync|spawn)\(\s*['"](?:\/(?:usr\/)?bin\/)?zsh['"]|spawnSync\(\s*['"]which['"]\s*,\s*\[\s*['"]zsh['"]|name:\s*['"]zsh['"]\s*,\s*path:\s*executablePath/
+  /(?:spawnSync|execFileSync|spawn)\(\s*['"](?:\/(?:usr\/)?bin\/)?zsh['"]|spawnSync\(\s*['"]which['"]\s*,\s*\[\s*['"]zsh['"]|name:\s*['"]zsh['"]\s*,\s*path:\s*executablePath|from '[^']*zsh-startup-hook-pty-harness'/
 
 describe('PR workflow parallelism', () => {
   it('cancels superseded runs for the same pull request', () => {
@@ -154,6 +156,9 @@ describe('PR workflow parallelism', () => {
 
   it('keeps every real-zsh test in the dedicated shell lane', () => {
     const discoveredFiles = globSync(testFilePatterns)
+      // Why this file is excluded: it carries the detector pattern as a literal
+      // and would otherwise match itself.
+      .filter((testFile) => testFile !== 'config/scripts/pr-workflow-parallelism.test.mjs')
       .filter((testFile) => realZshUsage.test(readFileSync(testFile, 'utf8')))
       .sort()
 

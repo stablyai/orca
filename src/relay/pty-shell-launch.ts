@@ -6,7 +6,7 @@ import {
   SHELL_STARTUP_FEATURE_ENV,
   type ShellStartupFeature
 } from '../main/shell-startup-features'
-import { resolveInheritedZdotdir } from '../main/zsh-wrapper-dir-ownership'
+import { inheritedZdotdirEnv, resolveInheritedZdotdir } from '../main/zsh-wrapper-dir-ownership'
 import { ensureOverlayRestoreWrappers } from './pty-shell-overlay-wrappers'
 const RELAY_SHELL_READY_DIR = '.orca-relay/shell-ready'
 const POSIX_LOGIN_ARGS = ['-l']
@@ -134,7 +134,7 @@ export function getRelayShellLaunchConfig(
     return {
       args: POSIX_LOGIN_ARGS,
       env: {
-        ORCA_ORIG_ZDOTDIR: resolveInheritedZdotdir(env, process.env.HOME ?? ''),
+        ...inheritedZdotdirEnv(resolveInheritedZdotdir(env)),
         ZDOTDIR: join(root, 'zsh'),
         ...featureEnv
       },
