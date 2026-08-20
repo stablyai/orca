@@ -32,6 +32,11 @@ import type {
 } from '../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
+import {
+  omitPairingLocalUiFields,
+  type PairedUiState,
+  type PairingLocalUiField
+} from '../../../shared/pairing-local-ui-fields'
 import type { MemorySnapshot, StatsSummary } from '../../../shared/process-stats-types'
 import type { Repo } from '../../../shared/repo-types'
 import type {
@@ -2702,11 +2707,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
   return {
     get: async () => {
       try {
-        const result = await callRuntimeResult<{ ui: PersistedUIState }>(
-          'ui.get',
-          undefined,
-          15_000
-        )
+        const result = await callRuntimeResult<{ ui: PairedUiState }>('ui.get', undefined, 15_000)
         const local = readLocalWebUIState()
         const next = {
           ...mergeHostWebUIState(local, result.ui),
@@ -2731,9 +2732,9 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
       zoomLevel = next.uiZoomLevel
-      const { hideWorkspacesFromOtherDevices: _clientLocalWorkspaceFilter, ...hostUpdates } =
-        updates
-      void _clientLocalWorkspaceFilter
+      // Why strip here too when the host also strips: an old host predating that strip would
+      // otherwise persist this browser's runtime:web-* keys over the desktop profile's order.
+      const hostUpdates = omitPairingLocalUiFields(updates)
       try {
         await callRuntimeResult('ui.set', hostUpdates, 15_000)
       } catch {
@@ -2755,7 +2756,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       })
       writeJson(UI_STORAGE_KEY, optimistic)
       try {
-        const result = await callRuntimeResult<{ ui: PersistedUIState }>(
+        const result = await callRuntimeResult<{ ui: PairedUiState }>(
           'ui.recordFeatureInteraction',
           id,
           15_000
@@ -4166,14 +4167,18 @@ function mergeWebUIState(
   }
 }
 
-function mergeHostWebUIState(
-  local: PersistedUIState,
-  incoming: PersistedUIState
-): PersistedUIState {
-  return {
-    ...mergeWebUIState(local, incoming),
-    hideWorkspacesFromOtherDevices: local.hideWorkspacesFromOtherDevices === true
-  }
+// Why pin instead of trusting the host's strip: an old host still returns these fields, and for a
+// profile a pre-fix drag poisoned they echo back the same runtime:web-* keys this browser minted,
+// which then match its own repos and beat every newer drag.
+function mergeHostWebUIState(local: PersistedUIState, incoming: PairedUiState): PersistedUIState {
+  // Why `satisfies Record<...>` rather than a `Pick<...>` annotation: every member is optional in
+  // PersistedUIState, so Pick would accept a literal that silently skipped a newly added member.
+  const pinned = {
+    hideWorkspacesFromOtherDevices: local.hideWorkspacesFromOtherDevices === true,
+    manualRepoOrder: local.manualRepoOrder,
+    workspaceHostOrder: local.workspaceHostOrder
+  } satisfies Record<PairingLocalUiField, unknown> & Partial<PersistedUIState>
+  return { ...mergeWebUIState(local, incoming), ...pinned }
 }
 
 function mergeFeatureInteractionState(
