@@ -19,6 +19,61 @@ describe('browser notice formatting', () => {
         origin: 'https://example.com'
       })
     ).toBe('https://example.com asked for camera or microphone access, and Orca denied it.')
+    expect(
+      formatPermissionNotice({
+        browserPageId: 'browser-1',
+        permission: 'geolocation',
+        origin: 'unknown'
+      })
+    ).toBe('this page asked for your location, and Orca denied it.')
+  })
+
+  it('names the storage permission in words rather than its raw token', () => {
+    const notice = formatPermissionNotice({
+      browserPageId: 'browser-1',
+      permission: 'top-level-storage-access',
+      origin: 'https://example.com'
+    })
+    expect(notice).not.toContain('top-level-storage-access')
+    expect(notice).toBe(
+      'https://example.com asked for cookie access on behalf of an embedded site, and Orca denied it.'
+    )
+  })
+
+  it.each([
+    ['storage-access', 'access to its own cookies and storage while embedded on this page'],
+    ['idle-detection', 'permission to detect when you are idle'],
+    ['display-capture', 'permission to capture your screen'],
+    ['window-management', 'screen information and multi-screen window placement'],
+    ['keyboardLock', 'permission to capture keyboard input'],
+    ['openExternal', 'permission to open a link outside Orca'],
+    ['fileSystem', 'access to your files or folders'],
+    ['hid', 'access to a connected human interface device'],
+    ['usb', 'access to a USB device'],
+    ['serial', 'access to a serial device'],
+    ['midi', 'access to your MIDI devices'],
+    ['midiSysex', 'access to system-exclusive MIDI messages'],
+    ['mediaKeySystem', 'access to protected media playback'],
+    ['speaker-selection', 'permission to choose an audio output device']
+  ])('formats the %s permission as readable copy', (permission, description) => {
+    expect(
+      formatPermissionNotice({
+        browserPageId: 'browser-1',
+        permission,
+        origin: 'https://example.com'
+      })
+    ).toBe(`https://example.com asked for ${description}, and Orca denied it.`)
+  })
+
+  // Pin the raw-token fallback for permissions Chromium adds later.
+  it('falls back to the raw permission name for anything unmapped', () => {
+    expect(
+      formatPermissionNotice({
+        browserPageId: 'browser-1',
+        permission: 'some-future-permission',
+        origin: 'https://example.com'
+      })
+    ).toBe('https://example.com asked for some-future-permission, and Orca denied it.')
   })
 
   it('formats popup outcomes', () => {
