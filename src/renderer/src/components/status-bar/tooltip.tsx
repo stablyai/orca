@@ -17,6 +17,9 @@ import {
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
+import { getUsagePace } from '../../../../shared/usage-pace'
+import { formatUsagePaceLine } from './usage-pace-copy'
+import { UsagePaceMarker } from './UsagePaceMarker'
 
 // Re-exported from its shared home so status-bar callers keep a single import.
 export { clampUsedPercent }
@@ -203,7 +206,8 @@ function ProviderRateLimitWindowSection({
   textClass,
   mutedClass,
   emptyBarClass,
-  usagePercentageDisplay
+  usagePercentageDisplay,
+  now
 }: {
   window: RateLimitWindow | null
   label: string
@@ -211,28 +215,43 @@ function ProviderRateLimitWindowSection({
   mutedClass: string
   emptyBarClass: string
   usagePercentageDisplay: UsagePercentageDisplay
+  now: number
 }): React.JSX.Element | null {
   if (!window) {
     return null
   }
   const usedPct = clampUsedPercent(window.usedPercent)
   const displayedPct = getDisplayedUsagePercentage(usedPct, usagePercentageDisplay)
-  const resetLabel = window.resetsAt ? formatResetCountdown(window.resetsAt - Date.now()) : null
+  const resetLabel = window.resetsAt ? formatResetCountdown(window.resetsAt - now) : null
+  const pace = getUsagePace(window, now)
+  // Why: the marker tracks the fill, so in "remaining" mode it has to flip with it —
+  // otherwise the tick and the bar tell opposite stories about the same window.
+  const pacePct = pace
+    ? getDisplayedUsagePercentage(pace.expectedUsedPercent, usagePercentageDisplay)
+    : 0
 
   return (
     <div className="space-y-1">
       <div className={`font-medium ${textClass}`}>{label}</div>
-      <div className={`h-[6px] w-full overflow-hidden rounded-full ${emptyBarClass}`}>
-        {/* Why: fill follows the selected percentage; color still signals consumption urgency. */}
-        <div
-          className={`h-full rounded-full ${barColor(usedPct)} transition-all duration-300`}
-          style={{ width: `${displayedPct}%` }}
-        />
+      <div className="relative">
+        <div className={`h-[6px] w-full overflow-hidden rounded-full ${emptyBarClass}`}>
+          {/* Why: fill follows the selected percentage; color still signals consumption urgency. */}
+          <div
+            className={`h-full rounded-full ${barColor(usedPct)} transition-all duration-300`}
+            style={{ width: `${displayedPct}%` }}
+          />
+        </div>
+        {pace ? <UsagePaceMarker percent={pacePct} stage={pace.stage} /> : null}
       </div>
       <div className={`flex justify-between ${mutedClass}`}>
         <span>{formatUsagePercentageLabel(usedPct, usagePercentageDisplay)}</span>
         {resetLabel && <span>{resetLabel}</span>}
       </div>
+      {pace ? (
+        <div data-usage-pace={pace.stage} className={mutedClass}>
+          {formatUsagePaceLine(pace)}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -242,13 +261,16 @@ export function ProviderPanel({
   inverted = false,
   className,
   showResetCredits = true,
-  usagePercentageDisplay = 'used'
+  usagePercentageDisplay = 'used',
+  now = Date.now()
 }: {
   p: ProviderRateLimits | null
   inverted?: boolean
   className?: string
   showResetCredits?: boolean
   usagePercentageDisplay?: UsagePercentageDisplay
+  /** Countdown and pace both drift with the clock; hosts pass a ticking value. */
+  now?: number
 }): React.JSX.Element {
   const textClass = inverted ? 'text-background' : 'text-foreground'
   const mutedClass = inverted ? 'text-background/60' : 'text-muted-foreground'
@@ -344,6 +366,7 @@ export function ProviderPanel({
           mutedClass={mutedClass}
           emptyBarClass={emptyBarClass}
           usagePercentageDisplay={usagePercentageDisplay}
+          now={now}
         />
       ))}
 

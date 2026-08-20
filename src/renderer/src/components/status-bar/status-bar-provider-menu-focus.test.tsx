@@ -29,6 +29,12 @@ vi.mock('../../store', () => ({
     })
 }))
 
+// The suite invokes ProviderDetailsMenu as a plain function, so its hooks have
+// to be stubbed out rather than dispatched through a React renderer.
+vi.mock('@/hooks/useResetCountdownClock', () => ({
+  useResetCountdownClock: () => 0
+}))
+
 vi.mock('./tooltip', () => ({
   ProviderIcon: function ProviderIcon(props: Record<string, unknown>) {
     return { type: 'ProviderIcon', props }
@@ -37,7 +43,8 @@ vi.mock('./tooltip', () => ({
     return { type: 'ProviderPanel', props }
   },
   barColor: () => 'bg-green-500',
-  clampUsedPercent: (n: number) => Math.max(0, Math.min(100, Math.round(n)))
+  clampUsedPercent: (n: number) => Math.max(0, Math.min(100, Math.round(n))),
+  getWindowSections: () => []
 }))
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
