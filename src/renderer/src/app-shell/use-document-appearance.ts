@@ -10,7 +10,6 @@ export function useDocumentAppearance(): void {
 
   useEffect(() => {
     if (!settings) {
-      applyDocumentAppearance(settings, true)
       return
     }
 

@@ -72,13 +72,15 @@ export function applyDocumentAppearance(
   } = {}
 ): void {
   const root = options.root ?? document.documentElement
+  const theme = options.theme ?? settings?.theme ?? 'system'
+  const effectiveSettings = settings && options.theme ? { ...settings, theme } : settings
   clearAppAppearanceFromDocument(root)
-  applyDocumentTheme(options.theme ?? settings?.theme ?? 'system', {
+  applyDocumentTheme(theme, {
     root,
     matchMedia: () => ({ matches: systemPrefersDark }),
     disableTransitions: options.disableTransitions
   })
-  applyAppAppearanceToDocument(settings, systemPrefersDark, root)
+  applyAppAppearanceToDocument(effectiveSettings, systemPrefersDark, root)
 }
 
 export function applyAppAppearanceToDocument(

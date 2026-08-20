@@ -39,6 +39,19 @@ describe('useDocumentAppearance', () => {
 
   afterEach(() => {
     useAppStore.setState(initialState, true)
+    document.documentElement.className = ''
+  })
+
+  it('preserves the bootstrap theme until settings hydrate', () => {
+    useAppStore.setState({ settings: null })
+    document.documentElement.classList.add('light')
+
+    const { unmount } = renderHook(() => useDocumentAppearance())
+
+    expect(document.documentElement.classList.contains('light')).toBe(true)
+    expect(document.documentElement.classList.contains('dark')).toBe(false)
+    expect(mocks.applyDocumentTheme).not.toHaveBeenCalled()
+    unmount()
   })
 
   it('ignores unrelated settings object replacements', () => {
