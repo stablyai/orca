@@ -10,6 +10,9 @@ import { useNativeChatFontScale } from './use-native-chat-font-scale'
 import { useNativeChatCanSend } from './use-native-chat-can-send'
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
+import { NativeChatWaitBlockedBanner } from './NativeChatWaitBlockedBanner'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { useTerminalWaitBlockedReason } from '@/runtime/terminal-wait-blocked-store'
 import { NativeChatSessionGate } from './NativeChatSessionGate'
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
 import { findTabAgentEntry } from './native-chat-tab-agent-entry'
@@ -133,6 +136,13 @@ function NativeChatResolvedView({
     enabled: isVisible
   })
   const launchPrompt = useAppStore((s) => s.nativeChatLaunchPromptByTabId[terminalTabId] ?? null)
+  // Why (#15597): the transcript has nothing before the first turn, so a blocking
+  // startup dialog (update/trust prompt) is invisible in chat without this.
+  const paneIdentity = parsePaneKey(paneKey)
+  const waitBlockedReason = useTerminalWaitBlockedReason(
+    paneIdentity?.tabId ?? terminalTabId,
+    paneIdentity?.leafId
+  )
   const clearNativeChatLaunchPrompt = useAppStore((s) => s.clearNativeChatLaunchPrompt)
   const paneLaunchPrompt = launchPrompt?.agent === agent ? launchPrompt : null
   // Launch context prefilled into the TUI input as an unsent draft; the
@@ -397,6 +407,12 @@ function NativeChatResolvedView({
       onContextMenuCapture={contextMenu.onContextMenuCapture}
       className="flex h-full min-h-0 w-full flex-col bg-background focus:outline-none"
     >
+      {waitBlockedReason ? (
+        <NativeChatWaitBlockedBanner
+          reason={waitBlockedReason}
+          onSwitchToTerminal={onSwitchToTerminal}
+        />
+      ) : null}
       <div className="flex min-h-0 flex-1 flex-col">
         {viewState.kind === 'loading' ? (
           <NativeChatEmptyState kind="loading" />
