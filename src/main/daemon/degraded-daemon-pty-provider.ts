@@ -77,6 +77,8 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
   recoverFreshSpawnRouting = (): Promise<boolean> => this.freshSpawns.recover()
 
+  supportsIncarnationAddressedShutdown = (id: string, opts?: { deadlineMs?: number }) =>
+    this.providerFor(id).supportsIncarnationAddressedShutdown?.(id, opts) ?? false
   supportsGitCredentialGuardHost = (id?: string): boolean =>
     this.freshSpawns.supportsGitGuardHost(id)
 
@@ -108,9 +110,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
       this.sessionProviders.get(ptyId) ?? this.findProviderForExistingSession(ptyId)
     )?.providesAgentSessionOwnerListings?.(ptyId) === true
 
-  write(id: string, data: string): boolean | void {
-    return this.providerFor(id).write(id, data)
-  }
+  write = (id: string, data: string): boolean | void => this.providerFor(id).write(id, data)
 
   async writeWithSettlement(id: string, data: string): Promise<boolean> {
     const provider = this.providerFor(id)
@@ -137,7 +137,12 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
   async shutdown(
     id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+    opts: {
+      immediate?: boolean
+      keepHistory?: boolean
+      deadlineMs?: number
+      expectedIncarnationId?: string
+    }
   ): Promise<void> {
     await this.providerFor(id).shutdown(id, opts)
     if (!opts.keepHistory) {

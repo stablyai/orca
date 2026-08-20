@@ -27,16 +27,29 @@ describe('requestTerminalTabCloseFromRenderer', () => {
     const otherWebContents = {}
     const mainWindow = { isDestroyed: () => false, webContents }
     const pending = requestTerminalTabCloseFromRenderer(mainWindow as never, 'tab-1', {
-      localPtyTeardownOwnedExternally: true
+      localPtyTeardownOwnedExternally: true,
+      expectedTerminal: {
+        terminalHandle: 'term-a',
+        ptyId: 'pty-a',
+        leafId: 'leaf-a',
+        incarnationId: 'inc-a'
+      }
     })
     const request = webContents.send.mock.calls[0]?.[1] as {
       requestId: string
       tabId: string
       localPtyTeardownOwnedExternally?: boolean
+      expectedTerminal?: { terminalHandle: string; incarnationId?: string }
     }
 
     expect(request.tabId).toBe('tab-1')
     expect(request.localPtyTeardownOwnedExternally).toBe(true)
+    expect(request.expectedTerminal).toEqual({
+      terminalHandle: 'term-a',
+      ptyId: 'pty-a',
+      leafId: 'leaf-a',
+      incarnationId: 'inc-a'
+    })
     ipcEmitter.emit(
       'ui:terminalTabCloseResponse',
       { sender: otherWebContents },

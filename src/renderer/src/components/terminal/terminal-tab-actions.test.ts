@@ -205,6 +205,32 @@ describe('closeTerminalTab', () => {
     expect(onClosed).toHaveBeenCalledOnce()
   })
 
+  it('does not mutate the tab until close authorization commits', () => {
+    const closeTab = vi.fn()
+    let commit!: () => void
+    const authorizeClose = vi.fn((authorized: () => void) => {
+      commit = authorized
+    })
+    getStateMock.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: null },
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
+      unifiedTabsByWorktree: {},
+      activeWorktreeId: null,
+      openFiles: [],
+      browserTabsByWorktree: {},
+      closeTab
+    })
+
+    closeTerminalTab('tab-1', { authorizeClose })
+
+    expect(authorizeClose).toHaveBeenCalledOnce()
+    expect(closeTab).not.toHaveBeenCalled()
+
+    commit()
+
+    expect(closeTab).toHaveBeenCalledWith('tab-1')
+  })
+
   it('retires exact resume authority when a user close arrives after the tab disappeared', () => {
     const closeTab = vi.fn()
     getStateMock.mockReturnValue({

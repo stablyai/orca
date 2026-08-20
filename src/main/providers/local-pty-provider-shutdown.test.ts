@@ -162,6 +162,22 @@ describe('LocalPtyProvider', () => {
   })
 
   describe('shutdown', () => {
+    it('refuses a shutdown authorized for another incarnation', async () => {
+      const killSpy = mockProc.kill
+      const { id, incarnationId } = await provider.spawn({ cols: 80, rows: 24 })
+
+      await expect(
+        provider.shutdown(id, {
+          immediate: true,
+          expectedIncarnationId: `${incarnationId}-replacement`
+        })
+      ).rejects.toThrow('terminal_incarnation_mismatch')
+      expect(killSpy).not.toHaveBeenCalled()
+
+      await provider.shutdown(id, { immediate: true, expectedIncarnationId: incarnationId })
+      expect(killSpy).toHaveBeenCalled()
+    })
+
     it('kills the PTY process', async () => {
       // Why: capture the spy reference before shutdown triggers onExit →
       // POSIX kill neutralization. After neutralization, mockProc.kill is

@@ -247,8 +247,8 @@ describe('STA-4603/STA-4536 exit provenance', () => {
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null,
-      stopAndWait: async (ptyId: string) => {
-        runtime.onPtyExit(ptyId, 0)
+      stopAndWait: async (ptyId: string, opts) => {
+        runtime.onPtyExit(ptyId, 0, opts?.expectedIncarnationId)
         return true
       }
     })

@@ -20,6 +20,10 @@ export class TerminalSessionTeardown {
     return this.operations.get(sessionId)?.promise
   }
 
+  ownsIncarnation(sessionId: string, incarnationId: string): boolean {
+    return this.operations.get(sessionId)?.session.incarnationId === incarnationId
+  }
+
   requestImmediate(sessionId: string): Promise<void> | undefined {
     const pending = this.operations.get(sessionId)
     if (pending) {

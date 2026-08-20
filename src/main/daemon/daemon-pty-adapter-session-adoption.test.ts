@@ -650,6 +650,41 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   describe('killed-session tombstones', () => {
+    it('fails closed before contacting a legacy daemon', async () => {
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 35 })
+      try {
+        expect(legacy.supportsIncarnationAddressedShutdown()).toBe(false)
+        expect(adapter.supportsIncarnationAddressedShutdown()).toBe(true)
+        await expect(
+          legacy.shutdown('legacy-session', {
+            immediate: true,
+            expectedIncarnationId: 'incarnation-a'
+          })
+        ).rejects.toThrow('terminal_incarnation_fence_unavailable')
+      } finally {
+        legacy.dispose()
+      }
+    })
+
+    it('refuses to kill a different session incarnation', async () => {
+      const sessionId = 'incarnation-fenced-shutdown'
+      const spawned = await adapter.spawn({ cols: 80, rows: 24, sessionId })
+
+      await expect(
+        adapter.shutdown(sessionId, {
+          immediate: true,
+          expectedIncarnationId: `${spawned.incarnationId}-replacement`
+        })
+      ).rejects.toThrow('terminal_incarnation_mismatch')
+      expect((await adapter.listProcesses()).map((session) => session.id)).toContain(sessionId)
+
+      await adapter.shutdown(sessionId, {
+        immediate: true,
+        expectedIncarnationId: spawned.incarnationId
+      })
+      expect((await adapter.listProcesses()).map((session) => session.id)).not.toContain(sessionId)
+    })
+
     it('prevents spawn after shutdown for same sessionId', async () => {
       const sessionId = 'tombstone-test'
       await adapter.spawn({ cols: 80, rows: 24, sessionId })

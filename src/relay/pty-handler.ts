@@ -58,6 +58,7 @@ import {
   parsePtyStartupIngressIntent,
   type PtyIngressEmission
 } from '../shared/pty-startup-ingress'
+import { PTY_INCARNATION_ADDRESSED_SHUTDOWN_VERSION } from '../shared/pty-incarnation'
 import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../shared/pty-owner-backend'
 import { RecentPtyOutputBuffer } from '../main/runtime/recent-pty-output-buffer'
 import { expandWindowsPathEnvironmentVariables } from '../shared/windows-environment-expansion'
@@ -905,6 +906,7 @@ export class PtyHandler {
     this.dispatcher.onRequest('pty.spawn', (p, context) => this.spawn(p, context))
     this.dispatcher.onRequest('pty.attach', (p, context) => this.attach(p, context))
     this.dispatcher.onRequest('pty.shutdown', (p) => this.shutdown(p))
+    this.dispatcher.onRequest('pty.shutdownIncarnation', (p) => this.shutdown(p, true))
     this.dispatcher.onRequest('pty.sendSignal', (p) => this.sendSignal(p))
     this.dispatcher.onRequest('pty.getCwd', (p) => this.getCwd(p))
     this.dispatcher.onRequest('pty.getInitialCwd', (p) => this.getInitialCwd(p))
@@ -916,7 +918,8 @@ export class PtyHandler {
     this.dispatcher.onRequest('pty.getCapabilities', async () => ({
       startupIngressVersion: PTY_STARTUP_INGRESS_VERSION,
       agentSessionClaimVersion: AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION,
-      agentSessionCreateOperationVersion: AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION
+      agentSessionCreateOperationVersion: AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION,
+      incarnationAddressedShutdownVersion: PTY_INCARNATION_ADDRESSED_SHUTDOWN_VERSION
     }))
     this.dispatcher.onRequest('pty.listProcesses', () => this.listProcesses())
     this.dispatcher.onRequest('pty.getDefaultShell', async () => resolveDefaultShell())
@@ -1906,12 +1909,22 @@ export class PtyHandler {
     return { cols: managed.pty.cols, rows: managed.pty.rows }
   }
 
-  private async shutdown(params: Record<string, unknown>): Promise<void> {
+  private async shutdown(
+    params: Record<string, unknown>,
+    requireExpectedIncarnation = false
+  ): Promise<void> {
     const id = params.id as string
     const immediate = params.immediate as boolean
     const managed = this.ptys.get(id)
     if (!managed) {
       return
+    }
+    const expectedIncarnationId = params.expectedIncarnationId
+    if (
+      (requireExpectedIncarnation && typeof expectedIncarnationId !== 'string') ||
+      (typeof expectedIncarnationId === 'string' && managed.incarnationId !== expectedIncarnationId)
+    ) {
+      throw new Error('terminal_incarnation_mismatch')
     }
 
     if (immediate) {

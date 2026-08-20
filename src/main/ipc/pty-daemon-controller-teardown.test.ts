@@ -205,6 +205,99 @@ describe('registerPtyHandlers', () => {
 
         expect(runtime.onPtyExit).toHaveBeenCalledWith('local-incarnated', 0, 'incarnation-live')
       })
+
+      it('preserves a replacement that appears while provider shutdown is waiting', async () => {
+        let releaseShutdown!: () => void
+        let markShutdownEntered!: () => void
+        const shutdownBarrier = new Promise<void>((resolve) => {
+          releaseShutdown = resolve
+        })
+        const shutdownEntered = new Promise<void>((resolve) => {
+          markShutdownEntered = resolve
+        })
+        let liveIncarnation: string | null = null
+        const spawn = vi
+          .fn()
+          .mockImplementationOnce(async () => {
+            liveIncarnation = 'incarnation-a'
+            return { id: 'reused-pty', incarnationId: liveIncarnation }
+          })
+          .mockImplementationOnce(async () => {
+            liveIncarnation = 'incarnation-b'
+            return { id: 'reused-pty', incarnationId: liveIncarnation }
+          })
+        const shutdown = vi.fn(async (_id: string, opts: { expectedIncarnationId?: string }) => {
+          markShutdownEntered()
+          await shutdownBarrier
+          if (opts.expectedIncarnationId !== liveIncarnation) {
+            throw new Error('terminal_incarnation_mismatch')
+          }
+          liveIncarnation = null
+        })
+        setLocalPtyProvider({
+          spawn,
+          write: vi.fn(),
+          resize: vi.fn(),
+          shutdown,
+          sendSignal: vi.fn(),
+          getCwd: vi.fn(),
+          getInitialCwd: vi.fn(),
+          clearBuffer: vi.fn(),
+          acknowledgeDataEvent: vi.fn(),
+          hasChildProcesses: vi.fn(),
+          getForegroundProcess: vi.fn(),
+          serialize: vi.fn(),
+          revive: vi.fn(),
+          onData: vi.fn(() => () => {}),
+          onReplay: vi.fn(() => () => {}),
+          onExit: vi.fn(() => () => {}),
+          listProcesses: vi.fn(async () =>
+            liveIncarnation
+              ? [{ id: 'reused-pty', incarnationId: liveIncarnation, cwd: '/tmp', title: 'shell' }]
+              : []
+          ),
+          attach: vi.fn(),
+          getDefaultShell: vi.fn(),
+          getProfiles: vi.fn()
+        } as never)
+        const runtime = {
+          setPtyController: vi.fn(),
+          onPtyExit: vi.fn(),
+          registerPty: vi.fn(),
+          onPtySpawned: vi.fn(),
+          markPtyStopRequested: vi.fn(),
+          markPtyLivenessUnverifiable: vi.fn()
+        }
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+          spawn: (args: { cols: number; rows: number }) => Promise<{ id: string }>
+          retireRejectedPty: (
+            ptyId: string,
+            stopConfirmed: boolean,
+            expectedIncarnationId: string
+          ) => void
+          stopAndWait: (ptyId: string, opts: { expectedIncarnationId: string }) => Promise<boolean>
+        }
+
+        await controller.spawn({ cols: 80, rows: 24 })
+        const stopping = controller.stopAndWait('reused-pty', {
+          expectedIncarnationId: 'incarnation-a'
+        })
+        await shutdownEntered
+        await controller.spawn({ cols: 80, rows: 24 })
+        releaseShutdown()
+
+        await expect(stopping).resolves.toBe(false)
+        controller.retireRejectedPty('reused-pty', false, 'incarnation-a')
+        expect(liveIncarnation).toBe('incarnation-b')
+        expect(runtime.markPtyLivenessUnverifiable).not.toHaveBeenCalled()
+        expect(runtime.onPtyExit).not.toHaveBeenCalledWith(
+          'reused-pty',
+          expect.anything(),
+          'incarnation-b'
+        )
+      })
       it('runtime controller kill routes app-scoped SSH ids through the parsed provider when ownership is absent', async () => {
         const localShutdown = vi.fn()
         setLocalPtyProvider({
@@ -358,7 +451,7 @@ describe('registerPtyHandlers', () => {
         )
         expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1, undefined)
       })
-      it('keeps a rejected SSH PTY unverifiable after kill shutdown fails transiently', async () => {
+      it('does not overwrite a failed kill verdict with unproven rejected retirement', async () => {
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
         const store = {
           markSshRemotePtyLease: vi.fn()
@@ -426,7 +519,7 @@ describe('registerPtyHandlers', () => {
         )
         expect(runtime.markPtyLivenessUnverifiable).toHaveBeenCalledWith(
           'remote-pty',
-          'a follow-up stop was issued but its outcome could not be verified'
+          'Multiplexer disposed'
         )
         expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1, undefined)
         expect(runtime.onPtyExit).not.toHaveBeenCalledWith('remote-pty', 0, undefined)

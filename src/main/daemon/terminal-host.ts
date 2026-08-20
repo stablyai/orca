@@ -163,14 +163,29 @@ export class TerminalHost {
     this.sessions.get(sessionId)?.resumeProducer()
   }
 
-  kill(sessionId: string, opts: { immediate?: boolean } = {}): Promise<void> {
+  kill(
+    sessionId: string,
+    opts: { immediate?: boolean; expectedIncarnationId?: string } = {}
+  ): Promise<void> {
     const pending = this.sessionTeardown.get(sessionId)
     if (pending) {
+      if (
+        opts.expectedIncarnationId !== undefined &&
+        !this.sessionTeardown.ownsIncarnation(sessionId, opts.expectedIncarnationId)
+      ) {
+        throw new Error('terminal_incarnation_mismatch')
+      }
       return Promise.resolve(
         opts.immediate ? this.sessionTeardown.requestImmediate(sessionId) : pending
       )
     }
     const session = this.getAliveSession(sessionId)
+    if (
+      opts.expectedIncarnationId !== undefined &&
+      session.incarnationId !== opts.expectedIncarnationId
+    ) {
+      throw new Error('terminal_incarnation_mismatch')
+    }
     const killed = this.sessionTeardown.killSession(sessionId, session, opts.immediate === true)
     this.killedTombstones.record(sessionId)
     return Promise.resolve(killed)

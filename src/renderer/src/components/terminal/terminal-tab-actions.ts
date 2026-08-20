@@ -53,11 +53,25 @@ export function closeTerminalTab(
     localPtyTeardownOwnedExternally?: boolean
     precomputedRetirementPlan?: TerminalTabRetirementPlan
     precomputedCloseState?: PrecomputedTerminalCloseState
+    authorizeClose?: (commit: () => void) => void
     onClosed?: () => void
     onCancel?: () => void
   }
 ): void {
   const state = useAppStore.getState()
+  const requestAuthorization = (): boolean => {
+    if (!options?.authorizeClose) {
+      return false
+    }
+    const { authorizeClose, ...committedOptions } = options
+    authorizeClose(() =>
+      closeTerminalTab(tabId, {
+        ...committedOptions,
+        skipRunningProcessConfirm: true
+      })
+    )
+    return true
+  }
   const precomputedCloseState = validatePrecomputedTerminalCloseState(
     tabId,
     options?.precomputedRetirementPlan,
@@ -65,6 +79,9 @@ export function closeTerminalTab(
   )
   const target = resolveTerminalCloseTarget(state, tabId, precomputedCloseState)
   if (!target) {
+    if (requestAuthorization()) {
+      return
+    }
     const closeReason = options?.reason ?? options?.hostCloseReason ?? 'user'
     if (closeReason !== 'pty-exit') {
       // Why: late explicit cleanup must still revoke tab-scoped resume authority after PTY exit removed the row.
@@ -127,6 +144,10 @@ export function closeTerminalTab(
       onClose: () => closeTerminalTab(tabId, { ...options, skipRunningProcessConfirm: true }),
       ...(options?.onCancel ? { onCancel: options.onCancel } : {})
     })
+    return
+  }
+
+  if (requestAuthorization()) {
     return
   }
 

@@ -564,7 +564,7 @@ describe('TerminalHost', () => {
     it('coalesces duplicate immediate kill while descendant capture is pending', async () => {
       const sweep = new Promise<void>(() => {})
       killWithDescendantSweepMock.mockReturnValue(sweep)
-      await host.createOrAttach({
+      const created = await host.createOrAttach({
         sessionId: 'agent-duplicate-kill',
         cols: 80,
         rows: 24,
@@ -572,11 +572,24 @@ describe('TerminalHost', () => {
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
 
-      const first = host.kill('agent-duplicate-kill', { immediate: true })
+      const first = host.kill('agent-duplicate-kill', {
+        immediate: true,
+        expectedIncarnationId: created.incarnationId
+      })
       // The root can exit while the descendant scan is pending. Duplicate RPCs
       // still own the original completion even after the session was reaped.
       lastSubprocess._onExitCb?.(0)
-      const second = host.kill('agent-duplicate-kill', { immediate: true })
+      const second = host.kill('agent-duplicate-kill', {
+        immediate: true,
+        expectedIncarnationId: created.incarnationId
+      })
+
+      expect(() =>
+        host.kill('agent-duplicate-kill', {
+          immediate: true,
+          expectedIncarnationId: `${created.incarnationId}-replacement`
+        })
+      ).toThrow('terminal_incarnation_mismatch')
 
       expect(killWithDescendantSweepMock).toHaveBeenCalledOnce()
       expect(second).toBe(first)

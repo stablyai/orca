@@ -117,6 +117,7 @@ import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
 import { verifyTerminalRevealIdentity } from '@/lib/terminal-reveal-identity'
+import { assertTerminalTabCloseExpectation } from '@/components/terminal/terminal-tab-close-expectation'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-shutdown-exit-deferral'
@@ -2131,7 +2132,7 @@ export function useIpcEvents(): void {
     if (window.api.ui.onTerminalTabCloseRequest) {
       unsubs.push(
         window.api.ui.onTerminalTabCloseRequest(
-          ({ requestId, tabId, localPtyTeardownOwnedExternally }) => {
+          ({ requestId, tabId, localPtyTeardownOwnedExternally, expectedTerminal }) => {
             let responded = false
             const respond = (error?: string): void => {
               if (responded) {
@@ -2143,6 +2144,19 @@ export function useIpcEvents(): void {
             closeTerminalTab(tabId, {
               rejectPinned: true,
               ...(localPtyTeardownOwnedExternally ? { localPtyTeardownOwnedExternally: true } : {}),
+              ...(expectedTerminal
+                ? {
+                    authorizeClose: (commit: () => void) => {
+                      void assertTerminalTabCloseExpectation(
+                        useAppStore.getState,
+                        tabId,
+                        expectedTerminal
+                      ).then(commit, (error: unknown) => {
+                        respond(error instanceof Error ? error.message : 'terminal_handle_stale')
+                      })
+                    }
+                  }
+                : {}),
               onCancel: () => respond('terminal_tab_pinned'),
               onClosed: () => {
                 void (async () => {

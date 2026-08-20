@@ -12,6 +12,9 @@ const TAB_ID = 'tab-remote'
 const SOURCE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const SOURCE_PTY_ID = 'pty-source'
 const SPLIT_PTY_ID = 'pty-split'
+const SOURCE_INCARNATION_ID = '11111111-1111-4111-8111-111111111112'
+const SPLIT_INCARNATION_ID = '22222222-2222-4222-8222-222222222222'
+const REPLACEMENT_SPLIT_INCARNATION_ID = '33333333-3333-4333-8333-333333333333'
 
 function sourceLayout(): TerminalLayoutSnapshot {
   return {
@@ -76,14 +79,19 @@ function createHarness(
     connectionId?: string | null
     deferReveal?: boolean
     deferSpawn?: boolean
+    deferStop?: boolean
+    exactStopSupported?: boolean
     includePairedSnapshot?: boolean
     rendererMounted?: boolean
-    sourceIncarnationId?: string
+    spawnIncarnationId?: string | null
+    sourceIncarnationId?: string | null
     stopAndWaitResult?: boolean
   } = {}
 ) {
   let session = persistedSession(includeSource)
   const connectionId = options.connectionId ?? null
+  const sourceIncarnationId =
+    options.sourceIncarnationId === undefined ? SOURCE_INCARNATION_ID : options.sourceIncarnationId
   const ownerHostId = connectionId ? `ssh:${connectionId}` : 'local'
   const requestedSessionHostIds: (string | undefined)[] = []
   const repo = {
@@ -106,18 +114,32 @@ function createHarness(
     },
     persistPtyBinding: () => true
   }
-  let resolveSpawn: ((result: { id: string }) => void) | undefined
+  const spawnIncarnationId =
+    options.spawnIncarnationId === undefined ? SPLIT_INCARNATION_ID : options.spawnIncarnationId
+  let resolveSpawn: ((result: { id: string; incarnationId?: string }) => void) | undefined
   const spawn = options.deferSpawn
     ? vi.fn(
         () =>
-          new Promise<{ id: string }>((resolve) => {
+          new Promise<{ id: string; incarnationId?: string }>((resolve) => {
             resolveSpawn = resolve
           })
       )
-    : vi.fn(async () => ({ id: SPLIT_PTY_ID }))
+    : vi.fn(async () => ({
+        id: SPLIT_PTY_ID,
+        ...(spawnIncarnationId ? { incarnationId: spawnIncarnationId } : {})
+      }))
   const kill = vi.fn(() => true)
   const retireRejectedPty = vi.fn()
-  const stopAndWait = vi.fn(async () => options.stopAndWaitResult ?? true)
+  let resolveStop: ((stopped: boolean) => void) | undefined
+  const stopAndWait = options.deferStop
+    ? vi.fn(
+        () =>
+          new Promise<boolean>((resolve) => {
+            resolveStop = resolve
+          })
+      )
+    : vi.fn(async () => options.stopAndWaitResult ?? true)
+  const supportsIncarnationAddressedStop = vi.fn(async () => options.exactStopSupported ?? true)
   let resolveReveal: ((result: { tabId: string }) => void) | undefined
   const revealTerminalSession = options.deferReveal
     ? vi.fn(
@@ -142,7 +164,8 @@ function createHarness(
     write: () => true,
     kill,
     retireRejectedPty,
-    ...(options.stopAndWaitResult !== undefined ? { stopAndWait } : {}),
+    supportsIncarnationAddressedStop,
+    ...(options.stopAndWaitResult !== undefined || options.deferStop ? { stopAndWait } : {}),
     getForegroundProcess: async () => null
   })
   runtime.setNotifier({ revealTerminalSession } as never)
@@ -176,12 +199,12 @@ function createHarness(
   runtime.registerPty(SOURCE_PTY_ID, WORKTREE_ID, connectionId, {
     tabId: TAB_ID,
     leafId: SOURCE_LEAF_ID,
-    ...(options.sourceIncarnationId ? { incarnationId: options.sourceIncarnationId } : {})
+    ...(sourceIncarnationId ? { incarnationId: sourceIncarnationId } : {})
   })
   const internals = runtime as unknown as {
     issuePtyHandle: (pty: unknown) => string
     mobileSessionTabsByWorktree: Map<string, RuntimeMobileSessionTabsSnapshot>
-    ptysById: Map<string, unknown>
+    ptysById: Map<string, { incarnationId?: string }>
   }
   const handle = internals.issuePtyHandle(internals.ptysById.get(SOURCE_PTY_ID))
   return {
@@ -191,6 +214,7 @@ function createHarness(
     kill,
     retireRejectedPty,
     stopAndWait,
+    supportsIncarnationAddressedStop,
     revealTerminalSession,
     getSession: () => session,
     getSnapshot: () => internals.mobileSessionTabsByWorktree.get(WORKTREE_ID),
@@ -211,7 +235,17 @@ function createHarness(
       }
     },
     resolveReveal: () => resolveReveal?.({ tabId: TAB_ID }),
-    resolveSpawn: () => resolveSpawn?.({ id: SPLIT_PTY_ID })
+    replaceSplitIncarnation: () =>
+      runtime.onPtySpawned(SPLIT_PTY_ID, REPLACEMENT_SPLIT_INCARNATION_ID, {
+        awaitsRegistration: false
+      }),
+    getSplitIncarnation: () => internals.ptysById.get(SPLIT_PTY_ID)?.incarnationId,
+    resolveStop: (stopped: boolean) => resolveStop?.(stopped),
+    resolveSpawn: () =>
+      resolveSpawn?.({
+        id: SPLIT_PTY_ID,
+        ...(spawnIncarnationId ? { incarnationId: spawnIncarnationId } : {})
+      })
   }
 }
 
@@ -263,6 +297,59 @@ describe('remote runtime terminal split authority', () => {
     expect.soft(harness.revealTerminalSession).not.toHaveBeenCalled()
   })
 
+  it('refuses a legacy SSH split owner before spawning an unaddressable PTY', async () => {
+    const harness = createHarness(true, {
+      connectionId: 'ssh-legacy',
+      exactStopSupported: false,
+      sourceIncarnationId: 'source-incarnation'
+    })
+
+    await expect(
+      harness.runtime.splitTerminal(harness.handle, { direction: 'vertical' })
+    ).rejects.toThrow('terminal_incarnation_fence_unavailable')
+
+    expect(harness.supportsIncarnationAddressedStop).toHaveBeenCalledWith(SOURCE_PTY_ID, {
+      deadlineMs: expect.any(Number),
+      expectedIncarnationId: 'source-incarnation'
+    })
+    expect(harness.spawn).not.toHaveBeenCalled()
+    expect(harness.stopAndWait).not.toHaveBeenCalled()
+    expect(harness.kill).not.toHaveBeenCalled()
+  })
+
+  it('refuses a split source without incarnation proof before capability probing', async () => {
+    const harness = createHarness(true, { sourceIncarnationId: null })
+
+    await expect(
+      harness.runtime.splitTerminal(harness.handle, { direction: 'vertical' })
+    ).rejects.toThrow('terminal_incarnation_fence_unavailable')
+
+    expect(harness.supportsIncarnationAddressedStop).not.toHaveBeenCalled()
+    expect(harness.spawn).not.toHaveBeenCalled()
+    expect(harness.stopAndWait).not.toHaveBeenCalled()
+    expect(harness.kill).not.toHaveBeenCalled()
+  })
+
+  it('never stops a rejected split by ID when spawn omits its incarnation', async () => {
+    const harness = createHarness(false, {
+      deferReveal: true,
+      includePairedSnapshot: true,
+      sourceIncarnationId: 'projected-before',
+      spawnIncarnationId: null,
+      stopAndWaitResult: true
+    })
+
+    const split = harness.runtime.splitTerminal(harness.handle, { direction: 'horizontal' })
+    await vi.waitFor(() => expect(harness.revealTerminalSession).toHaveBeenCalledOnce())
+    harness.replaceSourceIncarnation('projected-after')
+    harness.resolveReveal()
+
+    await expect(split).rejects.toThrow('terminal_split_source_not_found')
+    expect(harness.stopAndWait).not.toHaveBeenCalled()
+    expect(harness.retireRejectedPty).toHaveBeenCalledWith(SPLIT_PTY_ID, false, undefined)
+    expect(harness.kill).not.toHaveBeenCalled()
+  })
+
   it.each([
     { label: 'local', connectionId: null, expectedHostId: 'local' },
     { label: 'SSH', connectionId: 'ssh-1', expectedHostId: 'ssh:ssh-1' }
@@ -300,7 +387,7 @@ describe('remote runtime terminal split authority', () => {
       harness.resolveSpawn()
 
       await expect(split).rejects.toThrow('terminal_split_source_not_found')
-      expect(harness.kill).toHaveBeenCalledWith(SPLIT_PTY_ID)
+      expect(harness.kill).not.toHaveBeenCalled()
       expect(harness.requestedSessionHostIds).toContain(expectedHostId)
     }
   )
@@ -325,7 +412,7 @@ describe('remote runtime terminal split authority', () => {
     harness.resolveSpawn()
 
     await expect(split).rejects.toThrow('terminal_split_source_not_found')
-    expect(harness.kill).toHaveBeenCalledWith(SPLIT_PTY_ID)
+    expect(harness.kill).not.toHaveBeenCalled()
     expect(harness.revealTerminalSession).not.toHaveBeenCalled()
   })
 
@@ -333,6 +420,7 @@ describe('remote runtime terminal split authority', () => {
     const harness = createHarness(true, {
       deferSpawn: true,
       includePairedSnapshot: false,
+      sourceIncarnationId: null,
       stopAndWaitResult: true
     })
     harness.replacePersistedSourceIncarnation('persisted-before')
@@ -345,10 +433,13 @@ describe('remote runtime terminal split authority', () => {
     await expect(split).rejects.toThrow('terminal_split_source_not_found')
     expect(harness.stopAndWait).toHaveBeenCalledWith(
       SPLIT_PTY_ID,
-      expect.objectContaining({ deadlineMs: expect.any(Number) })
+      expect.objectContaining({
+        deadlineMs: expect.any(Number),
+        expectedIncarnationId: SPLIT_INCARNATION_ID
+      })
     )
     expect(harness.kill).not.toHaveBeenCalled()
-    expect(harness.retireRejectedPty).toHaveBeenCalledWith(SPLIT_PTY_ID, true)
+    expect(harness.retireRejectedPty).toHaveBeenCalledWith(SPLIT_PTY_ID, true, SPLIT_INCARNATION_ID)
   })
 
   it('revalidates a projected paired-runtime source after renderer adoption', async () => {
@@ -371,21 +462,56 @@ describe('remote runtime terminal split authority', () => {
     await expect(split).rejects.toThrow('terminal_split_source_not_found')
     expect(harness.stopAndWait).toHaveBeenCalledWith(
       SPLIT_PTY_ID,
-      expect.objectContaining({ deadlineMs: expect.any(Number) })
+      expect.objectContaining({
+        deadlineMs: expect.any(Number),
+        expectedIncarnationId: SPLIT_INCARNATION_ID
+      })
     )
-    expect(harness.kill).toHaveBeenCalledWith(SPLIT_PTY_ID)
-    expect(harness.retireRejectedPty).toHaveBeenCalledWith(SPLIT_PTY_ID, false)
+    expect(harness.kill).not.toHaveBeenCalled()
+    expect(harness.retireRejectedPty).toHaveBeenCalledWith(
+      SPLIT_PTY_ID,
+      false,
+      SPLIT_INCARNATION_ID
+    )
   })
 
-  it('preserves the split error when kill and retirement throw', async () => {
+  it('addresses rejected split cleanup to the spawned incarnation after same-ID reuse', async () => {
+    const harness = createHarness(false, {
+      deferReveal: true,
+      deferStop: true,
+      includePairedSnapshot: true,
+      sourceIncarnationId: 'projected-before'
+    })
+
+    const split = harness.runtime.splitTerminal(harness.handle, { direction: 'horizontal' })
+    await vi.waitFor(() => expect(harness.revealTerminalSession).toHaveBeenCalledOnce())
+    harness.replaceSourceIncarnation('projected-after')
+    harness.resolveReveal()
+    await vi.waitFor(() => expect(harness.stopAndWait).toHaveBeenCalledOnce())
+
+    harness.replaceSplitIncarnation()
+    harness.resolveStop(false)
+
+    await expect(split).rejects.toThrow('terminal_split_source_not_found')
+    expect(harness.stopAndWait).toHaveBeenCalledWith(SPLIT_PTY_ID, {
+      deadlineMs: expect.any(Number),
+      expectedIncarnationId: SPLIT_INCARNATION_ID
+    })
+    expect(harness.retireRejectedPty).toHaveBeenCalledWith(
+      SPLIT_PTY_ID,
+      false,
+      SPLIT_INCARNATION_ID
+    )
+    expect(harness.getSplitIncarnation()).toBe(REPLACEMENT_SPLIT_INCARNATION_ID)
+    expect(harness.kill).not.toHaveBeenCalled()
+  })
+
+  it('preserves the split error when exact retirement throws', async () => {
     const harness = createHarness(false, {
       deferReveal: true,
       includePairedSnapshot: true,
       sourceIncarnationId: 'projected-before',
       stopAndWaitResult: false
-    })
-    harness.kill.mockImplementation(() => {
-      throw new Error('kill failed')
     })
     harness.retireRejectedPty.mockImplementation(() => {
       throw new Error('retire failed')
@@ -397,7 +523,11 @@ describe('remote runtime terminal split authority', () => {
     harness.resolveReveal()
 
     await expect(split).rejects.toThrow('terminal_split_source_not_found')
-    expect(harness.kill).toHaveBeenCalledWith(SPLIT_PTY_ID)
-    expect(harness.retireRejectedPty).toHaveBeenCalledWith(SPLIT_PTY_ID, false)
+    expect(harness.kill).not.toHaveBeenCalled()
+    expect(harness.retireRejectedPty).toHaveBeenCalledWith(
+      SPLIT_PTY_ID,
+      false,
+      SPLIT_INCARNATION_ID
+    )
   })
 })

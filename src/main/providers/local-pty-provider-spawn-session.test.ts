@@ -178,6 +178,60 @@ describe('LocalPtyProvider', () => {
       expect(spawnMock).not.toHaveBeenCalled()
     })
 
+    it('admits a same-id replacement only after the prior physical exit', async () => {
+      let exitA: ((info: { exitCode: number }) => void) | undefined
+      let exitB: ((info: { exitCode: number }) => void) | undefined
+      const procA = createLocalPtyMockProcess({
+        get: () => exitA,
+        set: (callback) => {
+          exitA = callback
+        }
+      })
+      const procB = createLocalPtyMockProcess({
+        get: () => exitB,
+        set: (callback) => {
+          exitB = callback
+        }
+      })
+      spawnMock.mockReset().mockReturnValueOnce(procA).mockReturnValueOnce(procB)
+
+      const first = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'physical-exit-fenced-session'
+      })
+      const shutdown = provider.shutdown(first.id, {
+        immediate: true,
+        expectedIncarnationId: first.incarnationId
+      })
+      const replacement = provider.spawn({ cols: 120, rows: 40, sessionId: first.id })
+      let replacementSettled = false
+      void replacement.then(() => {
+        replacementSettled = true
+      })
+
+      await Promise.resolve()
+      expect(replacementSettled).toBe(false)
+      expect(spawnMock).toHaveBeenCalledOnce()
+
+      exitA?.({ exitCode: 137 })
+      await shutdown
+      const second = await replacement
+
+      expect(second.incarnationId).not.toBe(first.incarnationId)
+      expect(provider.getPtyProcess(first.id)).toBe(procB)
+      expect(await provider.listProcesses()).toEqual([
+        expect.objectContaining({ id: first.id, incarnationId: second.incarnationId })
+      ])
+
+      const replacementShutdown = provider.shutdown(second.id, {
+        immediate: true,
+        expectedIncarnationId: second.incarnationId
+      })
+      exitB?.({ exitCode: 137 })
+      await replacementShutdown
+    })
+
     it('attaches only to an existing stable session', async () => {
       await provider.spawn({ cols: 80, rows: 24, sessionId: 'stable-pane-session' })
       spawnMock.mockClear()

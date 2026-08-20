@@ -68,10 +68,12 @@ export class DaemonPtyRouter implements IPtyProvider {
     return adapter?.providesAgentSessionOwnerListings(ptyId) === true
   }
 
-  supportsAgentSessionCreateOperations(): boolean {
-    // Fresh sessions always route to the current daemon; legacy adapters only retain old IDs.
-    return this.current.supportsAgentSessionCreateOperations()
-  }
+  // Fresh sessions always route to the current daemon; legacy adapters only retain old IDs.
+  supportsAgentSessionCreateOperations = (): boolean =>
+    this.current.supportsAgentSessionCreateOperations()
+
+  supportsIncarnationAddressedShutdown = (id: string): boolean =>
+    this.adapterFor(id).supportsIncarnationAddressedShutdown()
 
   async attach(id: string): ReturnType<IPtyProvider['attach']> {
     return await this.adapterFor(id).attach(id)
@@ -115,7 +117,12 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   async shutdown(
     id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+    opts: {
+      immediate?: boolean
+      keepHistory?: boolean
+      deadlineMs?: number
+      expectedIncarnationId?: string
+    }
   ): Promise<void> {
     const adapter = this.adapterFor(id)
     const migrateHistory = shouldHandoffDaemonHistory(opts.keepHistory, adapter, this.current)

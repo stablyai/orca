@@ -191,12 +191,22 @@ export type IPtyProvider = {
    */
   getAppliedSize?: (id: string) => Promise<{ cols: number; rows: number } | null>
 
+  supportsIncarnationAddressedShutdown?: (
+    id: string,
+    opts?: { deadlineMs?: number }
+  ) => boolean | Promise<boolean>
+
   // Why: deadlineMs (absolute epoch ms) bounds the underlying RPCs so destructive
   // teardown fails fast inside its sweep budget instead of tripping the outer sweep
   // deadline; each RPC leaf converts to a relative timeout when it actually issues.
   shutdown(
     id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+    opts: {
+      immediate?: boolean
+      keepHistory?: boolean
+      deadlineMs?: number
+      expectedIncarnationId?: PtyIncarnationId
+    }
   ): Promise<void>
   sendSignal(id: string, signal: string): Promise<void>
   getCwd(id: string): Promise<string>

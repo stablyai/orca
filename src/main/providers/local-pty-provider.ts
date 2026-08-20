@@ -542,6 +542,10 @@ export type LocalPtyProviderOptions = {
 }
 
 export class LocalPtyProvider implements IPtyProvider {
+  supportsIncarnationAddressedShutdown(): boolean {
+    return true
+  }
+
   private opts: LocalPtyProviderOptions
 
   constructor(opts: LocalPtyProviderOptions = {}) {
@@ -1228,7 +1232,16 @@ export class LocalPtyProvider implements IPtyProvider {
     return { cols: proc.cols, rows: proc.rows }
   }
 
-  async shutdown(id: string, opts: { immediate?: boolean; keepHistory?: boolean }): Promise<void> {
+  async shutdown(
+    id: string,
+    opts: { immediate?: boolean; keepHistory?: boolean; expectedIncarnationId?: string }
+  ): Promise<void> {
+    if (
+      opts.expectedIncarnationId !== undefined &&
+      ptyIncarnations.get(id) !== opts.expectedIncarnationId
+    ) {
+      throw new Error('terminal_incarnation_mismatch')
+    }
     cancelPendingLocalPtySpawns(id)
     const pending = ptyShutdownOperations.get(id)
     if (pending) {

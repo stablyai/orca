@@ -1,5 +1,6 @@
 import type * as ReactModule from 'react'
 import { vi } from 'vitest'
+import type { TerminalTabCloseExpectation } from '../../../shared/terminal-tab-close'
 
 export type RequestTabCloseListener = (data: {
   requestId: string
@@ -21,6 +22,7 @@ export type TerminalTabCloseRequestListener = (data: {
   requestId: string
   tabId: string
   localPtyTeardownOwnedExternally?: boolean
+  expectedTerminal?: TerminalTabCloseExpectation
 }) => void
 
 export async function useIpcEventsForCloseRouting({
@@ -36,6 +38,7 @@ export async function useIpcEventsForCloseRouting({
   replyTabClose = vi.fn(),
   terminalTabCloseRequestListenerRef,
   respondTerminalTabClose = vi.fn(),
+  assertTerminalTabCloseExpectation = vi.fn().mockResolvedValue(undefined),
   persistWorkspaceSession = vi.fn().mockResolvedValue(undefined)
 }: {
   closeActiveTabListenerRef?: { current: CloseActiveTabListener | null }
@@ -50,6 +53,7 @@ export async function useIpcEventsForCloseRouting({
   replyTabClose?: ReturnType<typeof vi.fn>
   terminalTabCloseRequestListenerRef?: { current: TerminalTabCloseRequestListener | null }
   respondTerminalTabClose?: ReturnType<typeof vi.fn>
+  assertTerminalTabCloseExpectation?: ReturnType<typeof vi.fn>
   persistWorkspaceSession?: ReturnType<typeof vi.fn>
 }): Promise<void> {
   vi.doMock('react', async () => {
@@ -136,6 +140,9 @@ export async function useIpcEventsForCloseRouting({
   }))
   vi.doMock('@/lib/workspace-session', () => ({
     buildWorkspaceSessionPayload: vi.fn(() => ({}))
+  }))
+  vi.doMock('@/components/terminal/terminal-tab-close-expectation', () => ({
+    assertTerminalTabCloseExpectation
   }))
 
   vi.stubGlobal('window', {

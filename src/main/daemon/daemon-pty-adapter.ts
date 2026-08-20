@@ -40,6 +40,7 @@ import {
 import {
   GET_SIZE_PROTOCOL_VERSION,
   HISTORY_SEED_TRANSFER_PROTOCOL_VERSION,
+  INCARNATION_ADDRESSED_SHUTDOWN_DAEMON_PROTOCOL_VERSION,
   SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION,
   STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
 } from './daemon-protocol-version'
@@ -419,6 +420,10 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
   supportsAgentSessionClaims(): boolean {
     return this.protocolVersion >= AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION
+  }
+
+  supportsIncarnationAddressedShutdown(): boolean {
+    return this.protocolVersion >= INCARNATION_ADDRESSED_SHUTDOWN_DAEMON_PROTOCOL_VERSION
   }
 
   providesAgentSessionOwnerListings(_ptyId: string): boolean {
@@ -1209,8 +1214,19 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
   async shutdown(
     id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+    opts: {
+      immediate?: boolean
+      keepHistory?: boolean
+      deadlineMs?: number
+      expectedIncarnationId?: string
+    }
   ): Promise<void> {
+    if (
+      opts.expectedIncarnationId !== undefined &&
+      this.protocolVersion < INCARNATION_ADDRESSED_SHUTDOWN_DAEMON_PROTOCOL_VERSION
+    ) {
+      throw new Error('terminal_incarnation_fence_unavailable')
+    }
     if (opts.keepHistory && this.disconnectOnlyPromise) {
       throw new Error('Cannot keep history after daemon disconnect has started')
     }
@@ -1229,7 +1245,12 @@ export class DaemonPtyAdapter implements IPtyProvider {
 
   private async shutdownWithHistoryLock(
     id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+    opts: {
+      immediate?: boolean
+      keepHistory?: boolean
+      deadlineMs?: number
+      expectedIncarnationId?: string
+    }
   ): Promise<void> {
     // Why: shutdown can be the first lazy-client operation after restart; connect
     // before killing so a healthy daemon session is not orphaned (#7742). Connect,
@@ -1284,7 +1305,11 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
     await this.client.request(
       'kill',
-      { sessionId: id, immediate: opts.immediate ?? false },
+      {
+        sessionId: id,
+        immediate: opts.immediate ?? false,
+        ...(opts.expectedIncarnationId ? { expectedIncarnationId: opts.expectedIncarnationId } : {})
+      },
       remainingRequestTimeoutMs(opts.deadlineMs)
     )
     this.activeSessionIds.delete(id)

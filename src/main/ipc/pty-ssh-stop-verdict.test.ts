@@ -63,7 +63,11 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
     controller: {
       kill: (ptyId: string) => boolean
       listProcesses: (connectionId?: string | null) => Promise<{ id: string }[]>
-      retireRejectedPty: (ptyId: string, stopConfirmed: boolean) => void
+      retireRejectedPty: (
+        ptyId: string,
+        stopConfirmed: boolean,
+        expectedIncarnationId?: string
+      ) => void
       stopAndWait: (ptyId: string, opts?: { deadlineMs?: number }) => Promise<boolean>
     }
     runtime: {
@@ -131,19 +135,15 @@ describe('stopping a PTY whose SSH provider is unregistered', () => {
     }
   })
 
-  it('retires a rejected split without asserting an unconfirmed exit', () => {
+  it('refuses rejected split retirement without incarnation proof', () => {
     const ptyId = 'ssh-rejected-split'
     setPtyOwnership(ptyId, 'ssh-dropped')
     const { controller, runtime } = installController()
     try {
       controller.retireRejectedPty(ptyId, false)
 
-      expect(runtime.markPtyLivenessUnverifiable).toHaveBeenCalledWith(
-        ptyId,
-        'a follow-up stop was issued but its outcome could not be verified'
-      )
-      expect(runtime.onPtyExit).toHaveBeenCalledWith(ptyId, -1, undefined)
-      expect(runtime.onPtyExit).not.toHaveBeenCalledWith(ptyId, 0, expect.anything())
+      expect(runtime.markPtyLivenessUnverifiable).not.toHaveBeenCalled()
+      expect(runtime.onPtyExit).not.toHaveBeenCalled()
     } finally {
       deletePtyOwnership(ptyId)
     }

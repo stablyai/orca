@@ -1349,7 +1349,8 @@ export class DaemonServer {
         }
         try {
           await this.host.kill(request.payload.sessionId, {
-            immediate: request.payload.immediate
+            immediate: request.payload.immediate,
+            expectedIncarnationId: request.payload.expectedIncarnationId
           })
         } catch (error) {
           // Why: a kill that wins before session registration already canceled the pending spawn, so its intent is done.

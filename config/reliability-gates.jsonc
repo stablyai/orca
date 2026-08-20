@@ -3380,24 +3380,46 @@
       "providers": ["local", "daemon", "ssh", "runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "daemon", "ssh", "runtime"],
-      "coverageNotes": "Live macOS Electron tests prove exact local PTY disappearance after parked-tab close and detached-pgid descendant death after agent close. Deterministic tests cover final-pane CLI close durability, persisted-empty restart suppression, same-incarnation handle continuity, replacement and hard graph-loss stale fencing, preallocated-handle supersession, daemon and SSH routing, local/daemon pending-snapshot ownership across natural exit, stale-root descendant-signal suppression, graceful-to-immediate kill upgrades, duplicate-kill completion sharing, locale-stable bounded/fresh/coalesced process-table reads, deadline-safe successor scans, cycle-safe linear descendant traversal, target-only escalation indexing, 32-wide bulk teardown, source-scan timestamp identity, same-second PID ambiguity, ordinary runtime close ownership, unified-only hydration, split ownership, pane detach transfer, restart alias hydration, and late-hook suppression; live Linux, Windows, WSL, SSH, and remote-runtime process evidence remains pending.",
+      "coverageNotes": "Live macOS Electron tests prove exact local PTY disappearance after parked-tab close and detached-pgid descendant death after agent close. A headed paired desktop/client journey proves a replacement handle remains writable and uniquely owned before terminal.closeTab, while an isolated CDP-attached desktop proves terminal.close acknowledges exact PTY teardown, removes the rendered tab, and leaves fresh host inventory empty. Deterministic tests cover final-pane CLI close durability, persisted-empty restart suppression, same-incarnation handle continuity, replacement and hard graph-loss stale fencing, preallocated-handle supersession, runtime-owned headless closeTab teardown, rejected-split exact cleanup, failed split-leaf stop retention, exact local/daemon/SSH/relay process-owner shutdown, pre-commit refusal for missing incarnation proof and old daemon/relay owners, same-id local replacement admission after physical exit, local/daemon pending-snapshot ownership across natural exit, stale-root descendant-signal suppression, graceful-to-immediate kill upgrades, duplicate-kill completion sharing, locale-stable bounded/fresh/coalesced process-table reads, deadline-safe successor scans, cycle-safe linear descendant traversal, target-only escalation indexing, 32-wide bulk teardown, source-scan timestamp identity, same-second PID ambiguity, ordinary runtime close ownership, unified-only hydration, split ownership, pane detach transfer, restart alias hydration, and late-hook suppression. The isolated headless orca serve fixture did not publish runtime/worktree state before terminal creation on 2026-08-20, so live headless close parity remains pending alongside Linux, Windows, WSL, and SSH process evidence.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/8628",
         "https://github.com/stablyai/orca/pull/8706",
-        "https://github.com/stablyai/orca/issues/14524"
+        "https://github.com/stablyai/orca/issues/14524",
+        "https://linear.app/stably/issue/STA-4489",
+        "https://github.com/stablyai/orca/pull/14590"
       ],
-      "invariant": "Close permanently removes the owned provider session, agent descendants, persisted tab/layout authority, and resume authority even when no TerminalPane is mounted; final-pane CLI close does not acknowledge before durable tab retirement, and a persisted explicit-empty state prevents initial-tab fallback from repopulating the workspace after reload or restart. A handle remains valid while the same provider-attested PTY incarnation survives renderer reload or re-key, and becomes stale without adopting a replacement incarnation. A terminating id remains reserved through natural exit, duplicate callers await the same completion, and immediate teardown upgrades any graceful request without signalling a recycled PID or a descendant tree after root ownership is lost; process-table work is locale-stable, bounded, fresh for each post-start request, same-turn coalesced, and begins within the requesting caller's deadline, including bulk worktree cleanup; detach and park preserve ownership; aliases prevent a detached agent's immutable physical pane key from being retired with its former tab.",
-      "oracle": "Capture exact tab, pane, PTY, handle, incarnation, and persisted layout identities. Final-pane terminal.close must kill the exact PTY once, invoke one durability-acknowledged tab retirement, stay pending until the persisted row is removed, and never fall back to the fire-and-forget pane event; reload/restart must keep the explicitly emptied worktree at zero terminal tabs and provider sessions. Reloading the renderer with the same tab/pane/PTY/incarnation must keep the handle readable; changing only the incarnation behind the same PTY id, losing the authoritative graph, or superseding the renderer handle with a preallocated handle must reject the old handle with terminal_handle_stale. Parked-close tests prove the exact PTY disappears; descendant/process tests keep natural exits reserved, upgrade teardown safely, bound/coalesce process-table work, and protect recycled identities.",
+      "invariant": "Close permanently removes the owned provider session, agent descendants, persisted tab/layout authority, and resume authority even when no TerminalPane is mounted; a close authorized for terminal incarnation A never closes, kills, retires, or tombstones replacement incarnation B, while unchanged A still closes. Final-pane CLI close does not acknowledge before durable tab retirement, and a persisted explicit-empty state prevents initial-tab fallback from repopulating the workspace after reload or restart. A handle remains valid while the same provider-attested PTY incarnation survives renderer reload or re-key, and becomes stale without adopting a replacement incarnation. A terminating id remains reserved through natural exit, duplicate callers await the same completion, and immediate teardown upgrades any graceful request without signalling a recycled PID or a descendant tree after root ownership is lost; process-table work is locale-stable, bounded, fresh for each post-start request, same-turn coalesced, and begins within the requesting caller's deadline, including bulk worktree cleanup; detach and park preserve ownership; aliases prevent a detached agent's immutable physical pane key from being retired with its former tab.",
+      "oracle": "Capture exact tab, pane, PTY, handle, incarnation, and persisted layout identities. Pause final-pane terminal.close and terminal.closeTab first at the acknowledged renderer commit and then inside provider stop after that commit; replace or republish the PTY under the same tab/leaf before releasing each barrier. Replacement B must remain in the persisted session and live inventory, retain its exact process identity and readable handle, and never appear in renderer retirement, provider stop, cleanup, or stop-intent attribution; unchanged A must retire and stop exactly once. Cover runtime-published, runtime-owned headless, and renderer-graph tabs plus git and folder workspaces, including a reused PTY id with a new incarnation. A headless terminal.closeTab whose caller owns exact teardown must commit the session surface without launching an ID-only kill, then let the incarnation-addressed stop reject same-id B. Rejected split cleanup must address the spawned incarnation and preserve a same-id replacement; an unconfirmed exact split-leaf stop must retain the whole tab without invoking renderer teardown. Final-pane terminal.close must kill the exact PTY once, invoke one durability-acknowledged tab retirement, stay pending until the persisted row is removed, and never fall back to the fire-and-forget pane event; reload/restart must keep the explicitly emptied worktree at zero terminal tabs and provider sessions. Exact shutdown must reach local, daemon, and SSH/relay process owners, refuse missing incarnation proof or old-owner capability before tab retirement, fence final cleanup, and preserve duplicate same-incarnation teardown coalescing. Reloading the renderer with the same tab/pane/PTY/incarnation must keep the handle readable; changing only the incarnation behind the same PTY id, losing the authoritative graph, or superseding the renderer handle with a preallocated handle must reject the old handle with terminal_handle_stale. Parked-close tests prove the exact PTY disappears; descendant/process tests keep natural exits reserved, upgrade teardown safely, bound/coalesce process-table work, and protect recycled identities.",
       "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-terminal-close-incarnation-race.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-terminal-close-incarnation-race.test.ts src/main/runtime/rpc/terminal-tab-close-expectation.test.ts src/main/window/terminal-tab-close-request-relay.test.ts src/renderer/src/components/terminal/terminal-tab-close-expectation.test.ts src/renderer/src/hooks/useIpcEvents-close-routing-session-tabs.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-terminal-close-incarnation-race.test.ts src/main/runtime/orca-runtime-terminal-close-continuity.test.ts src/main/runtime/orca-runtime-terminal-split-authority.test.ts src/main/ipc/pty-daemon-controller-teardown.test.ts src/main/ipc/pty-ssh-stop-verdict.test.ts src/main/providers/local-pty-provider-spawn-session.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/daemon/daemon-pty-adapter-session-adoption.test.ts src/main/daemon/daemon-pty-router-incarnation-shutdown.test.ts src/main/daemon/daemon-protocol-version.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/relay/pty-handler-shutdown-signals.test.ts src/main/daemon/terminal-host.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty-daemon-controller-teardown.test.ts src/main/providers/local-pty-provider-spawn-session.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/daemon/daemon-pty-adapter-session-adoption.test.ts src/main/daemon/daemon-protocol-version.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/terminal-host.test.ts src/relay/pty-handler-shutdown-signals.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-terminal-close-continuity.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal/initial-terminal.test.ts src/renderer/src/lib/worktree-activation-default-tabs.test.ts src/renderer/src/store/slices/terminals-explicit-empty-hydration.test.ts",
         "pnpm dlx node@24 ./node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-pane-authority.test.ts src/main/ipc/agent-hooks.test.ts src/main/ipc/agent-pane-authority-ownership.test.ts src/main/ipc/pty-management.test.ts src/main/persistence-initial-load.test.ts src/main/persistence-pane-identity-migration.test.ts src/main/persistence-pty-binding-reconciliation.test.ts src/renderer/src/store/slices/agent-pane-authority.test.ts src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts src/renderer/src/store/slices/terminal-tab-retirement.test.ts src/renderer/src/store/slices/terminal-tab-retirement-store.test.ts tests/e2e/completed-worker-retirement-resume.unit.test.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/pty-descendant-termination.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/runtime/worktree-teardown.test.ts",
         "pnpm run test:e2e -- tests/e2e/terminal-tab-close-restart-persistence.spec.ts --workers=1",
+        "pnpm run test:e2e -- tests/e2e/paired-remote-terminal-materialization-reconnect.spec.ts --workers=1",
         "pnpm run test:e2e -- tests/e2e/terminal-parked-close-retirement.spec.ts --workers=1",
         "pnpm run test:e2e -- tests/e2e/agent-descendant-process-kill.spec.ts --workers=1"
       ],
       "testFiles": [
+        "src/main/runtime/orca-runtime-terminal-close-incarnation-race.test.ts",
+        "src/main/runtime/orca-runtime-terminal-split-authority.test.ts",
+        "src/main/ipc/pty-daemon-controller-teardown.test.ts",
+        "src/main/ipc/pty-ssh-stop-verdict.test.ts",
+        "src/main/providers/local-pty-provider-spawn-session.test.ts",
+        "src/main/providers/ssh-pty-provider.test.ts",
+        "src/main/daemon/daemon-pty-adapter-session-adoption.test.ts",
+        "src/main/daemon/daemon-pty-router-incarnation-shutdown.test.ts",
+        "src/main/daemon/daemon-protocol-version.test.ts",
+        "src/main/daemon/daemon-foreground-confirmation-protocol.test.ts",
+        "src/relay/pty-handler-shutdown-signals.test.ts",
+        "src/main/runtime/rpc/terminal-tab-close-expectation.test.ts",
+        "src/main/window/terminal-tab-close-request-relay.test.ts",
+        "src/renderer/src/components/terminal/terminal-tab-close-expectation.test.ts",
+        "src/renderer/src/hooks/useIpcEvents-close-routing-session-tabs.test.ts",
         "src/main/runtime/orca-runtime-terminal-close-continuity.test.ts",
         "src/renderer/src/components/terminal/initial-terminal.test.ts",
         "src/renderer/src/lib/worktree-activation-default-tabs.test.ts",
@@ -3421,14 +3443,75 @@
         "tests/e2e/completed-worker-retirement-resume.unit.test.ts",
         "src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
         "tests/e2e/terminal-tab-close-restart-persistence.spec.ts",
+        "tests/e2e/paired-remote-terminal-materialization-reconnect.spec.ts",
         "tests/e2e/terminal-parked-close-retirement.spec.ts",
         "tests/e2e/agent-descendant-process-kill.spec.ts"
       ],
       "assertionRefs": [
         {
+          "file": "src/main/runtime/orca-runtime-terminal-close-incarnation-race.test.ts",
+          "assertions": [
+            "terminal.close and terminal.closeTab reject replacement B at the controlled renderer commit barrier without retiring, stopping, or tombstoning it",
+            "a replacement installed after renderer commit but before provider-stop completion survives exact process, incarnation, inventory, handle, and session checks",
+            "runtime-owned headless terminal.closeTab commits its session surface without an ID-only kill when exact teardown is owned by the handle caller",
+            "unchanged A still retires and stops across runtime publications, renderer graphs, git worktrees, and folder workspaces",
+            "same-PTY-id replacement is distinguished by provider incarnation while new-PTY replacement is distinguished by the exact binding"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime-terminal-split-authority.test.ts",
+          "assertions": [
+            "rejected split cleanup passes the spawned incarnation through exact stop and final retirement",
+            "a same-id replacement installed behind the stop barrier remains current and never reaches an ID-only kill",
+            "missing source proof and a legacy SSH owner are refused before split spawn, while missing spawn proof never reaches ID-only cleanup"
+          ]
+        },
+        {
+          "file": "src/main/ipc/pty-daemon-controller-teardown.test.ts",
+          "assertions": [
+            "controller teardown checks the expected incarnation before provider shutdown, after provider shutdown, and before final cleanup",
+            "a provider-side same-id replacement remains live and its current incarnation is never cleared"
+          ]
+        },
+        {
+          "file": "src/main/providers/local-pty-provider-spawn-session.test.ts",
+          "assertions": [
+            "same-id replacement admission waits for A's physical-exit callback before installing B with a new process, incarnation, listener, and exit tracker"
+          ]
+        },
+        {
+          "file": "src/main/daemon/terminal-host.test.ts",
+          "assertions": [
+            "duplicate exact teardown joins A after physical exit while a mismatched replacement incarnation is rejected"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-pty-adapter-session-adoption.test.ts",
+          "assertions": [
+            "daemon protocol 36 carries exact incarnation proof to the owning host and protocol 35 fails closed"
+          ]
+        },
+        {
+          "file": "src/main/providers/ssh-pty-provider.test.ts",
+          "assertions": [
+            "SSH exact close proves the relay capability before commit, uses pty.shutdownIncarnation, and never falls back to unsafe id-only shutdown"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-pty-router-incarnation-shutdown.test.ts",
+          "assertions": [
+            "exact-stop capability follows the daemon adapter that owns the session instead of the current daemon"
+          ]
+        },
+        {
+          "file": "src/relay/pty-handler-shutdown-signals.test.ts",
+          "assertions": ["the relay rejects a stale incarnation before signalling the managed PTY"]
+        },
+        {
           "file": "src/main/runtime/orca-runtime-terminal-close-continuity.test.ts",
           "assertions": [
             "final-pane terminal.close remains pending until one renderer durability acknowledgement retires the persisted tab and layout",
+            "missing incarnation proof and old-owner exact-stop capability retain the tab before renderer acknowledgement",
             "post-ack workspace-session loss falls back to renderer cleanup and verified PTY teardown while every pre-ack retirement error remains non-destructive",
             "renderer reload with the same provider-attested PTY incarnation preserves the exact handle",
             "same-id replacement incarnation publishes a new handle and makes the old handle deterministically stale",
@@ -3578,6 +3661,60 @@
           "result": "passed",
           "durationSeconds": 18.8,
           "summary": "A fresh isolated Electron profile closed a split terminal tab through the runtime CLI and kept both renderer and runtime terminal inventories empty after restart."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-terminal-close-incarnation-race.test.ts src/main/runtime/rpc/terminal-tab-close-expectation.test.ts src/main/window/terminal-tab-close-request-relay.test.ts src/renderer/src/components/terminal/terminal-tab-close-expectation.test.ts src/renderer/src/hooks/useIpcEvents-close-routing-session-tabs.test.ts",
+          "result": "passed",
+          "durationSeconds": 9.06,
+          "summary": "Thirty-one checks passed on rebased candidate 7546cdcf91, including twelve controlled-barrier replacement and unchanged-incarnation cases across both close entry points, runtime and renderer graph surfaces, and git and folder workspaces."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-terminal-close-incarnation-race.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 4.42,
+          "summary": "The final 18-case oracle passed on candidate cc5ecb1078 after rebase onto origin/main c92f394cde. It covers renderer-commit and provider-stop barriers for terminal.close and terminal.closeTab across runtime publication, renderer graph, git, and folder surfaces."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-terminal-close-incarnation-race.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 4.01,
+          "summary": "The expanded 19-case oracle passed on candidate d02f2f22da. Its added runtime-owned headless case queues the legacy ID-only kill, republishes same-id incarnation B while exact stop waits, and requires B's process marker, session row, and handle to survive."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-terminal-close-incarnation-race.test.ts src/main/runtime/orca-runtime-terminal-close-continuity.test.ts src/main/runtime/orca-runtime-terminal-split-authority.test.ts src/main/ipc/pty-daemon-controller-teardown.test.ts src/main/ipc/pty-ssh-stop-verdict.test.ts src/main/providers/local-pty-provider-spawn-session.test.ts src/main/providers/local-pty-provider-shutdown.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/daemon/daemon-pty-adapter-session-adoption.test.ts src/main/daemon/daemon-pty-router-incarnation-shutdown.test.ts src/main/daemon/daemon-protocol-version.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/relay/pty-handler-shutdown-signals.test.ts src/main/daemon/terminal-host.test.ts",
+          "result": "passed",
+          "durationSeconds": 4.72,
+          "summary": "Fourteen files and 233 tests passed on the final candidate, including controlled headless and rejected-split same-ID barriers, missing-source and legacy-owner pre-spawn refusal, missing-proof cleanup refusal, failed split-leaf retention, the runtime close transaction, local same-id admission, controller cleanup fencing, daemon protocol skew and owner routing, host duplicate teardown, SSH method skew, and relay process-owner rejection."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run test:e2e -- tests/e2e/terminal-tab-close-restart-persistence.spec.ts --workers=1",
+          "result": "passed",
+          "durationSeconds": 26.2,
+          "summary": "A fresh isolated Electron build acknowledged terminal.close, removed the exact split tab and provider sessions, and preserved the explicit-empty state across restart."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run test:e2e -- tests/e2e/paired-remote-terminal-materialization-reconnect.spec.ts --workers=1",
+          "result": "passed",
+          "durationSeconds": 20.7,
+          "summary": "A headed paired desktop/client rebound to a replacement handle and PTY, observed one owning host session plus the marker in host reads and rendered output, then closed that exact handle through terminal.closeTab; the separate headless case remains pre-existing fixme."
         }
       ],
       "runtimeBudget": {
@@ -3590,11 +3727,11 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "STA-4327 used two byte-identical oracles. Runtime oracle cd248b67cc10ef64f2def315b86c3b0236b102639d03c65a0c5d9519e538d3af failed the same three durability/continuity checks on reported v1.4.180 (0b62333cf1), latest main (9bb8836bb6), and disabled fix; runtime candidate 3cf8a37447 passed 5/5, and final code candidate 121e112d77 separately passed its expanded 6/6 oracle. Renderer oracle 3b0949eef8b792cf5b09cfa55341f4216c08714f158e4b132e988e8114636cea failed both explicit-empty hydration/fallback checks on v1.4.180, latest main, and disabled fix, while renderer candidate 121e112d77 passed 2/2."
+        "evidence": "STA-4327 used two byte-identical oracles. Runtime oracle cd248b67cc10ef64f2def315b86c3b0236b102639d03c65a0c5d9519e538d3af failed the same three durability/continuity checks on reported v1.4.180 (0b62333cf1), latest main (9bb8836bb6), and disabled fix; runtime candidate 3cf8a37447 passed 5/5, and final code candidate 121e112d77 separately passed its expanded 6/6 oracle. Renderer oracle 3b0949eef8b792cf5b09cfa55341f4216c08714f158e4b132e988e8114636cea failed both explicit-empty hydration/fallback checks on v1.4.180, latest main, and disabled fix, while renderer candidate 121e112d77 passed 2/2. Final STA-4489 oracle 085442bee12ef9354fccfed3784c64a8f165a2e4ad8863abdaea3f6cdac87c37 failed thirteen replacement cases while passing all six unchanged-incarnation controls on origin/main c92f394cde and on candidate d02f2f22da with only the claimed production changes removed. The byte-identical oracle passed 19/19 on candidate d02f2f22da. The thirteen red cases split into six replacement publications before renderer acknowledgement, six same-id provider replacements after renderer commit but before destructive stop completion, and one runtime-owned headless closeTab whose asynchronous ID-only kill deleted republished B."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "The close path is user-triggered and bounded by canonical live-owner indexing. Production ps has a 1s kill timeout; 20 same-turn requests execute one fresh process-table read, while requests arriving after a scan starts immediately share one successor so their deadline is not consumed waiting and no unusable ps starts after timeout. Completed tables are never reused. Bulk worktree shutdown runs in 32-wide batches so each batch can coalesce its initial scan without unbounded provider fanout. Descendant traversal uses a visited set and index cursor; a Node 24 local 100,000-wide synthetic tree fell from 861ms to 16.7ms, and escalation indexes only the requested descendant PIDs instead of duplicating the full process table. Escalation uses the same bounded coordinator, and kill-all store scale remains covered by terminal-session.kill-all-surface-cleanup."
+        "evidence": "The close path is user-triggered and adds constant-time incarnation comparisons at the existing renderer acknowledgement, controller cleanup, and process-owner boundaries. Whole-tab target capture retains the existing single in-memory scan of runtime PTYs and graph leaves; sibling proof adds no provider inventory call. The change adds no polling, subprocess, retry, listener, or remote fanout. Production ps has a 1s kill timeout; 20 same-turn requests execute one fresh process-table read, while requests arriving after a scan starts immediately share one successor so their deadline is not consumed waiting and no unusable ps starts after timeout. Completed tables are never reused. Bulk worktree shutdown runs in 32-wide batches so each batch can coalesce its initial scan without unbounded provider fanout. Descendant traversal uses a visited set and index cursor; a Node 24 local 100,000-wide synthetic tree fell from 861ms to 16.7ms, and escalation indexes only the requested descendant PIDs instead of duplicating the full process table. Escalation uses the same bounded coordinator, and kill-all store scale remains covered by terminal-session.kill-all-surface-cleanup."
       },
       "promotionCriteria": [
         "Accumulate 100 clean runs or 14 days on required CI platforms.",

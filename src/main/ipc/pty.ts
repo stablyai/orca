@@ -1162,6 +1162,18 @@ function finishPtyShutdown(
   return incarnationId
 }
 
+function finishExpectedPtyShutdown(
+  id: string,
+  connectionId: string | null | undefined,
+  store: Store | undefined,
+  expectedIncarnationId: string | undefined
+): { finished: boolean; incarnationId?: string } {
+  if (expectedIncarnationId !== undefined && ptyIncarnationById.get(id) !== expectedIncarnationId) {
+    return { finished: false }
+  }
+  return { finished: true, incarnationId: finishPtyShutdown(id, connectionId, store) }
+}
+
 // ─── Host PTY env assembly ──────────────────────────────────────────
 // Why: centralize host-local env injections so both spawn paths (local + daemon) get them; implemented twice they drifted, silently breaking daemon PTYs.
 
@@ -4033,10 +4045,15 @@ export function registerPtyHandlers(
   async function shutdownProviderAndDetectExit(
     provider: IPtyProvider,
     id: string,
-    opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
+    opts: {
+      immediate?: boolean
+      keepHistory?: boolean
+      deadlineMs?: number
+      expectedIncarnationId?: string
+    }
   ): Promise<boolean> {
     let providerExitObserved = false
-    const expectedIncarnationId = ptyIncarnationById.get(id)
+    const expectedIncarnationId = opts.expectedIncarnationId ?? ptyIncarnationById.get(id)
     const unsubscribe = provider.onExit((payload) => {
       if (
         payload.id === id &&
@@ -5686,21 +5703,18 @@ export function registerPtyHandlers(
       }
       return killWithCurrentProvider()
     },
-    retireRejectedPty: (ptyId, stopConfirmed) => {
-      rememberRetiredRejectedPty(ptyId)
+    retireRejectedPty: (ptyId, stopConfirmed, expectedIncarnationId) => {
+      if (!expectedIncarnationId || ptyIncarnationById.get(ptyId) !== expectedIncarnationId) {
+        return
+      }
       if (!stopConfirmed) {
         runtime?.markPtyLivenessUnverifiable?.(
           ptyId,
           'a follow-up stop was issued but its outcome could not be verified'
         )
-        if (!ptyOwnership.has(ptyId)) {
-          return
-        }
-        runtime?.onPtyExit(ptyId, -1, ptyIncarnationById.get(ptyId))
-        rememberSyntheticKillExit(ptyId)
-        sendPtyExitToRenderer({ id: ptyId, code: -1 })
         return
       }
+      rememberRetiredRejectedPty(ptyId)
       // Why: a completed stop already cleared provider state, tombstoned the lease and told the
       // renderer; repeating that double-fires the exit IPC.
       if (!ptyOwnership.has(ptyId)) {
@@ -5710,7 +5724,11 @@ export function registerPtyHandlers(
       let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
       const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
       connectionId ??= parsedSshId?.connectionId
-      const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
+      const finished = finishExpectedPtyShutdown(ptyId, connectionId, store, expectedIncarnationId)
+      if (!finished.finished) {
+        return
+      }
+      const { incarnationId } = finished
       runtime?.onPtyExit(ptyId, 0, incarnationId)
       rememberSyntheticKillExit(ptyId)
       sendPtyExitToRenderer({ id: ptyId, code: 0 })
@@ -5736,7 +5754,13 @@ export function registerPtyHandlers(
       }
     },
     stopAndWait: async (ptyId, opts) => {
-      runtime?.markPtyStopRequested?.(ptyId)
+      if (
+        opts?.expectedIncarnationId !== undefined &&
+        ptyIncarnationById.get(ptyId) !== opts.expectedIncarnationId
+      ) {
+        return false
+      }
+      runtime?.markPtyStopRequested?.(ptyId, opts?.expectedIncarnationId)
       let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
       const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
       connectionId ??= parsedSshId?.connectionId
@@ -5788,7 +5812,10 @@ export function registerPtyHandlers(
         providerExitObserved = await shutdownProviderAndDetectExit(provider, ptyId, {
           immediate: true,
           keepHistory: opts?.keepHistory ?? false,
-          deadlineMs
+          deadlineMs,
+          ...(opts?.expectedIncarnationId
+            ? { expectedIncarnationId: opts.expectedIncarnationId }
+            : {})
         })
       } catch (err) {
         if (!isPtyAlreadyGoneError(err)) {
@@ -5805,6 +5832,12 @@ export function registerPtyHandlers(
         }
       }
       try {
+        if (
+          opts?.expectedIncarnationId !== undefined &&
+          ptyIncarnationById.get(ptyId) !== opts.expectedIncarnationId
+        ) {
+          return false
+        }
         if (!(await verifyPtyStopped(provider, ptyId, opts))) {
           runtime?.markPtyLivenessLive?.(ptyId)
           return false
@@ -5823,7 +5856,16 @@ export function registerPtyHandlers(
         )
         return false
       }
-      const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
+      const finished = finishExpectedPtyShutdown(
+        ptyId,
+        connectionId,
+        store,
+        opts?.expectedIncarnationId
+      )
+      if (!finished.finished) {
+        return false
+      }
+      const { incarnationId } = finished
       if (!providerExitObserved) {
         // The owning provider's fresh inventory observed absence, so this is a
         // death certificate even when its exit event was missed.
@@ -5832,6 +5874,39 @@ export function registerPtyHandlers(
         sendPtyExitToRenderer({ id: ptyId, code: 0 })
       }
       return true
+    },
+    supportsIncarnationAddressedStop: async (ptyId, opts) => {
+      const connectionId = ptyOwnership.get(ptyId) ?? parseAppSshPtyId(ptyId)?.connectionId ?? null
+      const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
+      if (startupPromise) {
+        const deadlineMs = opts?.deadlineMs
+        if (deadlineMs !== undefined) {
+          const ready = await Promise.race([
+            startupPromise.then(
+              () => true,
+              () => false
+            ),
+            delay(Math.max(1, deadlineMs - Date.now())).then(() => false)
+          ])
+          if (!ready) {
+            return false
+          }
+        } else {
+          try {
+            await startupPromise
+          } catch {
+            return false
+          }
+        }
+      }
+      const provider = connectionId ? sshProviders.get(connectionId) : tryGetProviderForPty(ptyId)
+      const supported =
+        (await provider?.supportsIncarnationAddressedShutdown?.(ptyId, opts)) === true
+      return (
+        supported &&
+        opts?.expectedIncarnationId !== undefined &&
+        ptyIncarnationById.get(ptyId) === opts.expectedIncarnationId
+      )
     },
     getForegroundProcess: async (ptyId) => {
       try {

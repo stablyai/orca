@@ -868,6 +868,13 @@ const TerminalHandle = z.object({
   terminal: requiredString('Missing terminal handle')
 })
 
+const TerminalTabCloseExpectation = z.object({
+  terminalHandle: requiredString('Missing terminal handle').pipe(z.string().max(256)),
+  ptyId: requiredString('Missing PTY id').pipe(z.string().max(512)),
+  leafId: requiredString('Missing terminal leaf id').pipe(z.string().max(128)),
+  incarnationId: z.string().min(1).max(128).optional()
+})
+
 const TerminalFocus = TerminalHandle.extend({
   navigation: z.enum(['caller', 'host']).optional()
 })
@@ -1225,6 +1232,14 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     handler: async (params, { runtime }) => ({
       terminal: await runtime.showTerminal(params.terminal)
     })
+  }),
+  defineMethod({
+    name: 'terminal.verifyTabCloseExpectation',
+    params: TerminalTabCloseExpectation,
+    handler: async (params, { runtime }) => {
+      runtime.verifyTerminalTabCloseExpectation(params)
+      return { verified: true as const }
+    }
   }),
   defineMethod({
     name: 'terminal.read',

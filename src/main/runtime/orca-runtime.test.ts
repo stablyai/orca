@@ -6451,8 +6451,14 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(shouldRunSetupForCreate).mockReturnValue(true)
     const spawn = vi
       .fn()
-      .mockResolvedValueOnce({ id: 'pty-remote-initial' })
-      .mockResolvedValueOnce({ id: 'pty-remote-setup-split' })
+      .mockResolvedValueOnce({
+        id: 'pty-remote-initial',
+        incarnationId: 'pty-remote-initial-incarnation'
+      })
+      .mockResolvedValueOnce({
+        id: 'pty-remote-setup-split',
+        incarnationId: 'pty-remote-setup-split-incarnation'
+      })
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-remote-split' })
     registerSshGitProvider('ssh-1', provider as never)
     registerSshFilesystemProvider('ssh-1', fsProvider as never)
@@ -15288,8 +15294,8 @@ describe('OrcaRuntimeService', () => {
   it('splits visible pty-backed terminal sessions through the parent renderer tab', async () => {
     const spawn = vi
       .fn()
-      .mockResolvedValueOnce({ id: 'pty-source' })
-      .mockResolvedValueOnce({ id: 'pty-split' })
+      .mockResolvedValueOnce({ id: 'pty-source', incarnationId: 'pty-source-incarnation' })
+      .mockResolvedValueOnce({ id: 'pty-split', incarnationId: 'pty-split-incarnation' })
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-bg' })
     const splitTerminal = vi.fn()
     const runtime = new OrcaRuntimeService(store)
@@ -15476,25 +15482,30 @@ describe('OrcaRuntimeService', () => {
         }
       })
     )
-    let resolveSpawn!: (result: { id: string }) => void
+    let resolveSpawn!: (result: { id: string; incarnationId: string }) => void
     const spawn = vi.fn(
       (_args: unknown) =>
-        new Promise<{ id: string }>((resolve) => {
+        new Promise<{ id: string; incarnationId: string }>((resolve) => {
           resolveSpawn = resolve
         })
     )
     const kill = vi.fn(() => false)
+    const stopAndWait = vi.fn(async () => true)
+    const retireRejectedPty = vi.fn()
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.setPtyController({
       spawn,
       write: () => true,
       kill,
+      stopAndWait,
+      retireRejectedPty,
       getForegroundProcess: async () => null
     })
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     runtime.registerPty(ptyId, TEST_WORKTREE_ID, null, {
       tabId,
-      leafId: HEADLESS_LEAF_ID
+      leafId: HEADLESS_LEAF_ID,
+      incarnationId: 'closing-persisted-incarnation'
     })
     const internals = runtime as unknown as {
       issuePtyHandle: (pty: unknown) => string
@@ -15506,7 +15517,7 @@ describe('OrcaRuntimeService', () => {
 
     setSession(getDefaultWorkspaceSession())
     runtimeStore.persistPtyBinding.mockReturnValue(false)
-    resolveSpawn({ id: 'rejected-split-pty' })
+    resolveSpawn({ id: 'rejected-split-pty', incarnationId: 'rejected-split-incarnation' })
 
     await expect(split).rejects.toThrow('terminal_split_source_not_found')
     expect(spawn.mock.calls[0]?.[0]).toMatchObject({
@@ -15518,28 +15529,44 @@ describe('OrcaRuntimeService', () => {
         ptyId
       }
     })
-    expect(kill).toHaveBeenCalledWith('rejected-split-pty')
+    expect(stopAndWait).toHaveBeenCalledWith('rejected-split-pty', {
+      deadlineMs: expect.any(Number),
+      expectedIncarnationId: 'rejected-split-incarnation'
+    })
+    expect(retireRejectedPty).toHaveBeenCalledWith(
+      'rejected-split-pty',
+      true,
+      'rejected-split-incarnation'
+    )
+    expect(kill).not.toHaveBeenCalled()
     expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toBeUndefined()
     expect(getSession().terminalLayoutsByTabId[tabId]).toBeUndefined()
   })
 
   it('rejects a projected split retired during spawn before publishing the new pane', async () => {
-    let resolveSplitSpawn!: (result: { id: string }) => void
+    let resolveSplitSpawn!: (result: { id: string; incarnationId: string }) => void
     const spawn = vi
       .fn()
-      .mockResolvedValueOnce({ id: 'projected-source-pty' })
+      .mockResolvedValueOnce({
+        id: 'projected-source-pty',
+        incarnationId: 'projected-source-incarnation'
+      })
       .mockImplementationOnce(
         () =>
-          new Promise<{ id: string }>((resolve) => {
+          new Promise<{ id: string; incarnationId: string }>((resolve) => {
             resolveSplitSpawn = resolve
           })
       )
     const kill = vi.fn(() => true)
+    const stopAndWait = vi.fn(async () => true)
+    const retireRejectedPty = vi.fn()
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn,
       write: () => true,
       kill,
+      stopAndWait,
+      retireRejectedPty,
       getForegroundProcess: async () => null
     })
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
@@ -15549,10 +15576,22 @@ describe('OrcaRuntimeService', () => {
     await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))
 
     runtime['mobileSessionTabsByWorktree'].delete(TEST_WORKTREE_ID)
-    resolveSplitSpawn({ id: 'retired-projected-split-pty' })
+    resolveSplitSpawn({
+      id: 'retired-projected-split-pty',
+      incarnationId: 'retired-projected-split-incarnation'
+    })
 
     await expect(split).rejects.toThrow('terminal_split_source_not_found')
-    expect(kill).toHaveBeenCalledWith('retired-projected-split-pty')
+    expect(stopAndWait).toHaveBeenCalledWith('retired-projected-split-pty', {
+      deadlineMs: expect.any(Number),
+      expectedIncarnationId: 'retired-projected-split-incarnation'
+    })
+    expect(retireRejectedPty).toHaveBeenCalledWith(
+      'retired-projected-split-pty',
+      true,
+      'retired-projected-split-incarnation'
+    )
+    expect(kill).not.toHaveBeenCalled()
     expect(runtime['mobileSessionTabsByWorktree'].has(TEST_WORKTREE_ID)).toBe(false)
   })
 
@@ -15560,8 +15599,14 @@ describe('OrcaRuntimeService', () => {
     const folderPath = await mkdtemp(join(tmpdir(), 'orca-runtime-folder-split-'))
     const spawn = vi
       .fn()
-      .mockResolvedValueOnce({ id: 'pty-folder-source' })
-      .mockResolvedValueOnce({ id: 'pty-folder-split' })
+      .mockResolvedValueOnce({
+        id: 'pty-folder-source',
+        incarnationId: 'pty-folder-source-incarnation'
+      })
+      .mockResolvedValueOnce({
+        id: 'pty-folder-split',
+        incarnationId: 'pty-folder-split-incarnation'
+      })
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-folder' })
     const folderWorkspace = makeFolderWorkspace({ folderPath })
     const projectGroup = makeFolderProjectGroup({ parentPath: folderPath })
@@ -15661,7 +15706,10 @@ describe('OrcaRuntimeService', () => {
       }),
       'ssh:ssh-1'
     )
-    const spawn = vi.fn().mockResolvedValue({ id: splitPtyId })
+    const spawn = vi.fn().mockResolvedValue({
+      id: splitPtyId,
+      incarnationId: 'ssh-split-incarnation'
+    })
     const runtime = new OrcaRuntimeService({
       ...runtimeStore,
       getRepos: () => [remoteRepo],
@@ -15676,7 +15724,8 @@ describe('OrcaRuntimeService', () => {
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     runtime.registerPty(sourcePtyId, TEST_WORKTREE_ID, 'ssh-1', {
       tabId,
-      leafId: HEADLESS_LEAF_ID
+      leafId: HEADLESS_LEAF_ID,
+      incarnationId: 'ssh-source-incarnation'
     })
     const internals = runtime as unknown as {
       issuePtyHandle: (pty: unknown) => string
@@ -28690,7 +28739,13 @@ describe('OrcaRuntimeService', () => {
     })
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValueOnce({ id: ptyId }).mockResolvedValueOnce({ id: splitPtyId }),
+      spawn: vi
+        .fn()
+        .mockResolvedValueOnce({ id: ptyId, incarnationId: 'runtime-owned-incarnation' })
+        .mockResolvedValueOnce({
+          id: splitPtyId,
+          incarnationId: 'runtime-owned-split-incarnation'
+        }),
       write: () => true,
       kill,
       getForegroundProcess: async () => null,
@@ -28910,8 +28965,14 @@ describe('OrcaRuntimeService', () => {
   it('publishes laptop-created remote runtime split terminals to phone session tabs', async () => {
     const spawn = vi
       .fn()
-      .mockResolvedValueOnce({ id: 'laptop-created-pty' })
-      .mockResolvedValueOnce({ id: 'laptop-split-pty' })
+      .mockResolvedValueOnce({
+        id: 'laptop-created-pty',
+        incarnationId: 'laptop-created-incarnation'
+      })
+      .mockResolvedValueOnce({
+        id: 'laptop-split-pty',
+        incarnationId: 'laptop-split-incarnation'
+      })
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn,
@@ -29206,15 +29267,17 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('operates PTY-backed mobile session terminals without a renderer graph', async () => {
-    const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
-    const kill = vi.fn(() => true)
+    const incarnationId = 'laptop-created-incarnation'
+    const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty', incarnationId })
+    const stopAndWait = vi.fn(async () => true)
     const closeTerminal = vi.fn()
     const runtime = new OrcaRuntimeService(store)
     runtime.setNotifier({ closeTerminal } as never)
     runtime.setPtyController({
       spawn,
       write: () => true,
-      kill,
+      kill: () => true,
+      stopAndWait,
       getForegroundProcess: async () => null
     })
 
@@ -29239,7 +29302,10 @@ describe('OrcaRuntimeService', () => {
       tabId: 'laptop-tab',
       ptyKilled: true
     })
-    expect(kill).toHaveBeenCalledWith('laptop-created-pty')
+    expect(stopAndWait).toHaveBeenCalledWith(
+      'laptop-created-pty',
+      expect.objectContaining({ expectedIncarnationId: incarnationId })
+    )
     expect(closeTerminal).toHaveBeenCalledWith('laptop-tab')
   })
 
@@ -29249,11 +29315,13 @@ describe('OrcaRuntimeService', () => {
     )
     const acknowledged = makeDeferred()
     const closeTerminalTab = vi.fn(() => acknowledged.promise)
+    const stopAndWait = vi.fn(async () => true)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.setNotifier({ closeTerminal: vi.fn(), closeTerminalTab } as never)
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
+      stopAndWait,
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
@@ -29277,6 +29345,11 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+    runtime.registerPty('persisted-pty', TEST_WORKTREE_ID, null, {
+      tabId: 'host-tab',
+      leafId: HEADLESS_LEAF_ID,
+      incarnationId: 'persisted-incarnation'
+    })
     const [terminal] = (await runtime.listTerminals()).terminals
     const pending = runtime.closeTerminalTab(terminal.handle)
     let settled = false
@@ -29284,7 +29357,12 @@ describe('OrcaRuntimeService', () => {
       settled = true
     })
 
-    await vi.waitFor(() => expect(closeTerminalTab).toHaveBeenCalledWith('host-tab'))
+    await vi.waitFor(() =>
+      expect(closeTerminalTab).toHaveBeenCalledWith(
+        'host-tab',
+        expect.objectContaining({ localPtyTeardownOwnedExternally: true })
+      )
+    )
     expect(settled).toBe(false)
 
     acknowledged.resolve()
@@ -29292,7 +29370,7 @@ describe('OrcaRuntimeService', () => {
       handle: terminal.handle,
       tabId: 'host-tab',
       closeMode: 'tab',
-      ptyKilled: false
+      ptyKilled: true
     })
   })
 
@@ -29463,17 +29541,19 @@ describe('OrcaRuntimeService', () => {
   })
 
   it('reuses pane close for live PTYs that do not own a renderer tab', async () => {
-    const kill = vi.fn(() => true)
+    const stopAndWait = vi.fn(async () => true)
     const closeTerminalTab = vi.fn(async () => {})
     const runtime = new OrcaRuntimeService(store)
     runtime.setNotifier({ closeTerminal: vi.fn(), closeTerminalTab } as never)
     runtime.setPtyController({
       write: () => true,
-      kill,
+      kill: () => true,
+      stopAndWait,
       getForegroundProcess: async () => null,
       listProcesses: async () => [
         {
           id: 'floating-created-pty',
+          incarnationId: 'floating-incarnation',
           cwd: TEST_WORKTREE_PATH,
           title: 'Claude'
         }
@@ -29487,7 +29567,10 @@ describe('OrcaRuntimeService', () => {
       tabId: terminal.tabId,
       ptyKilled: true
     })
-    expect(kill).toHaveBeenCalledWith('floating-created-pty')
+    expect(stopAndWait).toHaveBeenCalledWith(
+      'floating-created-pty',
+      expect.objectContaining({ expectedIncarnationId: 'floating-incarnation' })
+    )
     expect(closeTerminalTab).not.toHaveBeenCalled()
   })
 
@@ -29516,14 +29599,16 @@ describe('OrcaRuntimeService', () => {
     const flushOrThrow = vi.fn()
     const spawn = vi
       .fn()
-      .mockResolvedValueOnce({ id: 'headless-left' })
-      .mockResolvedValueOnce({ id: 'headless-right' })
+      .mockResolvedValueOnce({ id: 'headless-left', incarnationId: 'headless-left-incarnation' })
+      .mockResolvedValueOnce({ id: 'headless-right', incarnationId: 'headless-right-incarnation' })
     const kill = vi.fn(() => true)
+    const stopAndWait = vi.fn(async () => true)
     const runtime = new OrcaRuntimeService({ ...runtimeStore, flushOrThrow } as never)
     runtime.setPtyController({
       spawn,
       write: () => true,
       kill,
+      stopAndWait,
       getForegroundProcess: async () => null
     })
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
@@ -29535,8 +29620,15 @@ describe('OrcaRuntimeService', () => {
 
     await runtime.closeTerminalTab(terminal.handle)
 
-    expect(kill).toHaveBeenCalledWith('headless-left')
-    expect(kill).toHaveBeenCalledWith('headless-right')
+    expect(stopAndWait).toHaveBeenCalledWith(
+      'headless-left',
+      expect.objectContaining({ expectedIncarnationId: 'headless-left-incarnation' })
+    )
+    expect(stopAndWait).toHaveBeenCalledWith(
+      'headless-right',
+      expect.objectContaining({ expectedIncarnationId: 'headless-right-incarnation' })
+    )
+    expect(kill).not.toHaveBeenCalled()
     expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
     expect(getSession().terminalLayoutsByTabId['durable-tab']).toBeUndefined()
     expect(flushOrThrow).toHaveBeenCalledTimes(1)
@@ -31311,6 +31403,7 @@ describe('OrcaRuntimeService', () => {
 
   it('retires an SSH-owned surface when a stale renderer acknowledges close after relay recovery', async () => {
     const ptyId = 'ssh:ssh-1@@relay-recovered-pty'
+    const incarnationId = 'relay-recovered-incarnation'
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         tabsByWorktree: {
@@ -31335,21 +31428,23 @@ describe('OrcaRuntimeService', () => {
     const closeTerminal = vi.fn()
     const closeTerminalTab = vi.fn(async () => {})
     let runtime!: OrcaRuntimeService
-    const kill = vi.fn((closedPtyId: string) => {
-      runtime.onPtyExit(closedPtyId, 0)
+    const stopAndWait = vi.fn(async (closedPtyId: string) => {
+      runtime.onPtyExit(closedPtyId, 0, incarnationId)
       return true
     })
     runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.setNotifier({ closeTerminal, closeTerminalTab } as never)
     runtime.setPtyController({
       write: () => true,
-      kill,
+      kill: () => true,
+      stopAndWait,
       getForegroundProcess: async () => null,
       listProcesses: async () => []
     })
     runtime.registerPty(ptyId, TEST_WORKTREE_ID, 'ssh-1', {
       tabId: 'host-tab',
-      leafId: HEADLESS_LEAF_ID
+      leafId: HEADLESS_LEAF_ID,
+      incarnationId
     })
     runtime.syncWindowGraph(1, {
       tabs: [
@@ -31390,9 +31485,10 @@ describe('OrcaRuntimeService', () => {
       ptyKilled: true
     })
 
-    expect(closeTerminalTab).toHaveBeenCalledWith('host-tab', {
-      localPtyTeardownOwnedExternally: true
-    })
+    expect(closeTerminalTab).toHaveBeenCalledWith(
+      'host-tab',
+      expect.objectContaining({ localPtyTeardownOwnedExternally: true })
+    )
     expect(closeTerminal).toHaveBeenCalledWith('host-tab')
     expect(getSession().tabsByWorktree[TEST_WORKTREE_ID]).toEqual([])
     expect(getSession().terminalLayoutsByTabId['host-tab']).toBeUndefined()
@@ -44633,8 +44729,14 @@ describe('OrcaRuntimeService', () => {
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-cli-setup-split' })
     const spawn = vi
       .fn()
-      .mockResolvedValueOnce({ id: 'pty-cli-setup-main' })
-      .mockResolvedValueOnce({ id: 'pty-cli-setup-setup' })
+      .mockResolvedValueOnce({
+        id: 'pty-cli-setup-main',
+        incarnationId: 'pty-cli-setup-main-incarnation'
+      })
+      .mockResolvedValueOnce({
+        id: 'pty-cli-setup-setup',
+        incarnationId: 'pty-cli-setup-child-incarnation'
+      })
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -44721,8 +44823,14 @@ describe('OrcaRuntimeService', () => {
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-bg-setup-split' })
     const spawn = vi
       .fn()
-      .mockResolvedValueOnce({ id: 'pty-bg-split-main' })
-      .mockResolvedValueOnce({ id: 'pty-bg-split-setup' })
+      .mockResolvedValueOnce({
+        id: 'pty-bg-split-main',
+        incarnationId: 'pty-bg-split-main-incarnation'
+      })
+      .mockResolvedValueOnce({
+        id: 'pty-bg-split-setup',
+        incarnationId: 'pty-bg-split-child-incarnation'
+      })
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -44803,8 +44911,14 @@ describe('OrcaRuntimeService', () => {
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-active-setup-split' })
     const spawn = vi
       .fn()
-      .mockResolvedValueOnce({ id: 'pty-active-split-main' })
-      .mockResolvedValueOnce({ id: 'pty-active-split-setup' })
+      .mockResolvedValueOnce({
+        id: 'pty-active-split-main',
+        incarnationId: 'pty-active-split-main-incarnation'
+      })
+      .mockResolvedValueOnce({
+        id: 'pty-active-split-setup',
+        incarnationId: 'pty-active-split-child-incarnation'
+      })
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -45510,8 +45624,14 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const spawn = vi
       .fn()
-      .mockResolvedValueOnce({ id: 'pty-startup-split-main' })
-      .mockResolvedValueOnce({ id: 'pty-startup-split-setup' })
+      .mockResolvedValueOnce({
+        id: 'pty-startup-split-main',
+        incarnationId: 'pty-startup-split-main-incarnation'
+      })
+      .mockResolvedValueOnce({
+        id: 'pty-startup-split-setup',
+        incarnationId: 'pty-startup-split-child-incarnation'
+      })
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-startup-split' })
     runtime.setPtyController({
       spawn,

@@ -141,6 +141,63 @@ describe('useIpcEvents browser tab close routing', () => {
     )
   })
 
+  it('authorizes the exact terminal incarnation before closing or persisting', async () => {
+    const listenerRef: { current: TerminalTabCloseRequestListener | null } = { current: null }
+    let finishAuthorization!: () => void
+    const assertTerminalTabCloseExpectation = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishAuthorization = resolve
+        })
+    )
+    const persistWorkspaceSession = vi.fn().mockResolvedValue(undefined)
+    const respondTerminalTabClose = vi.fn()
+    closeTerminalTabMock.mockImplementation(
+      (
+        _tabId: string,
+        options: { authorizeClose?: (commit: () => void) => void; onClosed?: () => void }
+      ) => {
+        if (options.authorizeClose) {
+          options.authorizeClose(() => options.onClosed?.())
+        }
+      }
+    )
+    await useIpcEventsForCloseRouting({
+      getState: () => ({}),
+      terminalTabCloseRequestListenerRef: listenerRef,
+      respondTerminalTabClose,
+      assertTerminalTabCloseExpectation,
+      persistWorkspaceSession
+    })
+    const expectedTerminal = {
+      terminalHandle: 'term-a',
+      ptyId: 'pty-a',
+      leafId: 'leaf-a',
+      incarnationId: 'inc-a'
+    }
+
+    listenerRef.current?.({
+      requestId: 'close-incarnation-a',
+      tabId: 'terminal-1',
+      expectedTerminal
+    })
+    await Promise.resolve()
+
+    expect(assertTerminalTabCloseExpectation).toHaveBeenCalledWith(
+      expect.any(Function),
+      'terminal-1',
+      expectedTerminal
+    )
+    expect(persistWorkspaceSession).not.toHaveBeenCalled()
+    expect(respondTerminalTabClose).not.toHaveBeenCalled()
+
+    finishAuthorization()
+    await vi.waitFor(() => expect(persistWorkspaceSession).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() =>
+      expect(respondTerminalTabClose).toHaveBeenCalledWith({ requestId: 'close-incarnation-a' })
+    )
+  })
+
   it('rejects a pinned whole-tab close without persisting or reporting success', async () => {
     const listenerRef: { current: TerminalTabCloseRequestListener | null } = { current: null }
     const persistWorkspaceSession = vi.fn().mockResolvedValue(undefined)
