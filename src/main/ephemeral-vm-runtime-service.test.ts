@@ -19,6 +19,7 @@ import {
   stopEphemeralVmRuntimeCleanup
 } from './ephemeral-vm-runtime-service'
 import type { OrcaVmRecipe } from '../shared/orca-yaml-hook-types'
+import { hasPosixShellAtCanonicalPath } from '../shared/posix-shell'
 
 const tempDirs: string[] = []
 
@@ -47,7 +48,13 @@ function nodeCommand(scriptPath: string): string {
   return `"${process.execPath}" "${scriptPath}"`
 }
 
-describe('ephemeral VM runtime service', () => {
+// Why the capability and not the platform: these suites deliberately fake
+// `process.platform = 'linux'` so the lifecycle logic is exercised without the
+// Windows ACL paths that have their own coverage. That faking sends production
+// down code that spawns `/bin/sh` by name and fsyncs a directory — neither of
+// which a Windows host can do, however elevated. The gate asks for the one
+// thing that makes the pretence workable.
+describe.skipIf(!hasPosixShellAtCanonicalPath())('ephemeral VM runtime service', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
 
   beforeEach(() => {

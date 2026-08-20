@@ -1,4 +1,5 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
+import { findPosixShell } from '../../shared/posix-shell'
 import {
   existsSync,
   mkdirSync,
@@ -58,9 +59,17 @@ function decodePowerShellCommand(command: string): string {
   return match ? Buffer.from(match[1], 'base64').toString('utf16le') : ''
 }
 
+function requirePosixShell(): string {
+  const shell = findPosixShell()
+  if (!shell) {
+    throw new Error('No POSIX shell is available')
+  }
+  return shell
+}
+
 function runShellCommand(command: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const child = spawn('/bin/sh', ['-c', command], {
+    const child = spawn(requirePosixShell(), ['-c', command], {
       stdio: ['ignore', 'pipe', 'pipe']
     })
     let stdout = ''
@@ -453,7 +462,7 @@ describe('ssh remote command builders', () => {
         }
 
         const command = tryStealInstallLockCommand(posix, lockDir, 20 * 60)
-        const output = execFileSync('/bin/sh', ['-c', command], { encoding: 'utf8' })
+        const output = execFileSync(requirePosixShell(), ['-c', command], { encoding: 'utf8' })
 
         expect(output.trim()).toBe('OK')
         expect(existsSync(lockDir)).toBe(true)

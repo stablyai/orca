@@ -24,6 +24,8 @@ import {
   reserveRelayUploadStageCommand,
   RELAY_UPLOAD_STAGE_SLOT_COUNT
 } from './ssh-relay-upload-stage-commands'
+import { canCreateFileSymlink } from '../../shared/symlink-capability'
+import { findPosixShell } from '../../shared/posix-shell'
 
 const posix = getRemoteHostPlatform('linux-x64')
 const windows = getRemoteHostPlatform('win32-x64')
@@ -70,7 +72,11 @@ function runCommand(host: RemoteHostPlatform, command: string, prefix = '') {
       { encoding: 'utf8' }
     )
   }
-  return spawnSync('/bin/sh', ['-c', `${prefix}\n${command}`], { encoding: 'utf8' })
+  const shell = findPosixShell()
+  if (!shell) {
+    throw new Error('No POSIX shell is available')
+  }
+  return spawnSync(shell, ['-c', `${prefix}\n${command}`], { encoding: 'utf8' })
 }
 
 function createStage(
@@ -170,8 +176,10 @@ describe.each([
       expect(existsSync(join(pool, 'delete-0'))).toBe(false)
     })
 
-    // Why: symlink creation in the fixture needs privileges Windows CI doesn't grant.
-    it.skipIf(process.platform === 'win32')(
+    // Why the capability and not the platform: the fixture needs a real symlink,
+    // which Windows grants under Developer Mode or elevation — and a CI runner is
+    // elevated, so a platform skip hid this exactly where it would have run.
+    it.skipIf(!canCreateFileSymlink())(
       'rejects a payload reparse point without copying or deleting it',
       () => {
         const pool = createPool()
@@ -267,40 +275,46 @@ describe('POSIX ownership race fencing', () => {
     expect(existsSync(join(destination, 'relay.js'))).toBe(false)
   })
 
-  it('restores a replacement symlink without touching its target', () => {
-    const pool = createPool()
-    const destination = join(pool, 'destination')
-    const foreign = join(pool, 'foreign')
-    mkdirSync(destination)
-    mkdirSync(foreign)
-    writeFileSync(join(foreign, 'sentinel'), 'alive')
-    createStage(posix, pool, 0)
-    const stage = parseReservedRelayUploadStage(
-      posix,
-      pool,
-      owner,
-      `__ORCA_UPLOAD_STAGE_SLOT__${owner}:slot-0`
-    )
-    const prefix = [
-      'raced=0',
-      'mv() {',
-      'if [ "$raced" -eq 0 ]; then raced=1; command mv "$1" "$1.original"; ln -s ' +
-        `'${foreign}' "$1"; fi;`,
-      'command mv "$@";',
-      '}'
-    ].join('\n')
+  // Why the capability gate: the fixture makes the link with `ln -s` inside the
+  // discovered shell. Without the privilege, MSYS silently writes a copy instead
+  // of a link — the assertion fails with nothing in stderr to explain it.
+  it.skipIf(!canCreateFileSymlink())(
+    'restores a replacement symlink without touching its target',
+    () => {
+      const pool = createPool()
+      const destination = join(pool, 'destination')
+      const foreign = join(pool, 'foreign')
+      mkdirSync(destination)
+      mkdirSync(foreign)
+      writeFileSync(join(foreign, 'sentinel'), 'alive')
+      createStage(posix, pool, 0)
+      const stage = parseReservedRelayUploadStage(
+        posix,
+        pool,
+        owner,
+        `__ORCA_UPLOAD_STAGE_SLOT__${owner}:slot-0`
+      )
+      const prefix = [
+        'raced=0',
+        'mv() {',
+        'if [ "$raced" -eq 0 ]; then raced=1; command mv "$1" "$1.original"; ln -s ' +
+          `'${foreign}' "$1"; fi;`,
+        'command mv "$@";',
+        '}'
+      ].join('\n')
 
-    const result = runCommand(
-      posix,
-      cleanupOwnedRelayUploadStageCommand(posix, stage, owner),
-      prefix
-    )
+      const result = runCommand(
+        posix,
+        cleanupOwnedRelayUploadStageCommand(posix, stage, owner),
+        prefix
+      )
 
-    expect(result.status, result.stderr).toBe(0)
-    expect(lstatSync(join(pool, 'slot-0')).isSymbolicLink()).toBe(true)
-    expect(readFileSync(join(foreign, 'sentinel'), 'utf8')).toBe('alive')
-    expect(existsSync(join(pool, 'slot-0.original', '.orca-upload-owner'))).toBe(true)
-  })
+      expect(result.status, result.stderr).toBe(0)
+      expect(lstatSync(join(pool, 'slot-0')).isSymbolicLink()).toBe(true)
+      expect(readFileSync(join(foreign, 'sentinel'), 'utf8')).toBe('alive')
+      expect(existsSync(join(pool, 'slot-0.original', '.orca-upload-owner'))).toBe(true)
+    }
+  )
 })
 
 describe.runIf(powerShellExecutable)(

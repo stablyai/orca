@@ -46,6 +46,7 @@ vi.mock('./runtime-environments', () => ({
 }))
 
 import { registerEphemeralVmHandlers } from './ephemeral-vm'
+import { hasPosixShellAtCanonicalPath } from '../../shared/posix-shell'
 
 const tempDirs: string[] = []
 
@@ -102,7 +103,13 @@ function pluginServiceWithRecipes(
   }
 }
 
-describe('registerEphemeralVmHandlers', () => {
+// Why the capability and not the platform: these suites deliberately fake
+// `process.platform = 'linux'` so the lifecycle logic is exercised without the
+// Windows ACL paths that have their own coverage. That faking sends production
+// down code that spawns `/bin/sh` by name and fsyncs a directory — neither of
+// which a Windows host can do, however elevated. The gate asks for the one
+// thing that makes the pretence workable.
+describe.skipIf(!hasPosixShellAtCanonicalPath())('registerEphemeralVmHandlers', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
 
   beforeEach(() => {
