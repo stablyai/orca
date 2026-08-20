@@ -3343,7 +3343,8 @@
             "6d0a8cd179": "Show pet",
             "1fbc51cc77": "Hide pet",
             "petWalks": "Walk around",
-            "petReturnsToLane": "Drop to the floor when released"
+            "petReturnsToLane": "Drop to the floor when released",
+            "createFromImage": "Create pet from image…"
           },
           "PortsStatusSegment": {
             "4ebf90c12e": "No external ports detected",
@@ -12816,6 +12817,20 @@
             "a84d5677ff": "OpenCode",
             "2528586aa7": "Claudino"
           }
+        },
+        "fromImage": {
+          "backgroundNotSeparable": "The background is too busy to separate from the character. Try a PNG with a transparent background, or a photo on a plain background.",
+          "subjectNotFound": "No character was left after removing the background. Try another image, or crop it closer to the character.",
+          "subjectFragmented": "The character came out in scattered pieces rather than one shape. Try an image with a plain background, or one with transparency.",
+          "fullBleed": "The picture fills every edge, so there is no character to cut out. Crop it around the character and try again.",
+          "noCharacterShape": "The character could not be made out against the background. Try a PNG with a transparent background, or crop closer.",
+          "unknownStyle": "That pet style is not available.",
+          "title": "Create a pet from an image",
+          "description": "Pick a picture and a style. A PNG with a transparent background works best.",
+          "pick": "Choose an image",
+          "empty": "No image chosen yet.",
+          "cancel": "Cancel",
+          "confirm": "Create pet"
         }
       },
       "onboarding": {
