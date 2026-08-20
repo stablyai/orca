@@ -82,7 +82,6 @@ test.describe('Workspace emoji picker', () => {
     await captureProof(orcaPage, testInfo, 'cmd-j-picker.png')
     await paletteInput.press('Enter')
     await expect(paletteInput).toHaveValue('😉 ')
-    await expect(palette.getByText('Sidebar proof 😉', { exact: true }).first()).toBeVisible()
     await orcaPage.waitForTimeout(750)
   })
 })

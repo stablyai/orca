@@ -24,6 +24,7 @@ const PROVIDER_SESSION_ID = 'e2e-missing-legacy-worker'
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-missing-legacy-worker-'))
 const spawnLedgerPath = path.join(fakeCliDir, 'spawn.jsonl')
 const interruptionLedgerPath = path.join(fakeCliDir, 'interruption.jsonl')
+const fakeCodexCommand = path.join(fakeCliDir, process.platform === 'win32' ? 'codex.cmd' : 'codex')
 const fakeCodexSource = `
 const { appendFileSync } = require('node:fs')
 function appendLedger(envName, event) {
@@ -47,7 +48,7 @@ process.stdin.on('data', (chunk) => {
   }
   if (!acknowledged && input.includes('\\r')) {
     acknowledged = true
-    process.stdout.write('ACK\\n')
+    process.stdout.write('\\x1b[?25hACK\\n')
   }
 })
 for (const signal of ['SIGINT', 'SIGHUP', 'SIGTERM']) {
@@ -200,6 +201,11 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
     firstApp = first.app
     const worktreeId = await attachRepoAndOpenTerminal(first.page, repoPath)
     await waitForSessionReady(first.page)
+    await first.page.evaluate(async (agentCommand) => {
+      await window.__store?.getState().updateSettings({
+        agentCmdOverrides: { codex: agentCommand }
+      })
+    }, fakeCodexCommand)
     await ensureTerminalVisible(first.page)
     await getActiveTabId(first.page)
     await waitForActivePanePtyId(first.page)
@@ -265,7 +271,7 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
 
     const transcriptPath = session.seedCodexResumeRollout(PROVIDER_SESSION_ID, repoPath)
     await first.page.evaluate(
-      ({ paneKey, tabId, workerWorktreeId, terminalHandle, transcript }) => {
+      ({ paneKey, tabId, workerWorktreeId, terminalHandle, transcript, agentCommand }) => {
         window.__store?.getState().setAgentStatus(
           paneKey,
           { state: 'working', prompt: 'Respond ACK and remain idle', agentType: 'codex' },
@@ -279,7 +285,7 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
               transcriptPath: transcript
             },
             launchConfig: {
-              agentCommand: 'codex',
+              agentCommand,
               agentArgs: '--dangerously-bypass-approvals-and-sandbox',
               agentEnv: {}
             }
@@ -292,7 +298,8 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
         tabId: worker!.tabId,
         workerWorktreeId: worker!.worktreeId,
         terminalHandle: worker!.handle,
-        transcript: transcriptPath
+        transcript: transcriptPath,
+        agentCommand: fakeCodexCommand
       }
     )
     await expect.poll(() => hasPersistedResumeRecord(session.userDataDir, workerPaneKey)).toBe(true)

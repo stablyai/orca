@@ -40,7 +40,7 @@ process.stdin.on('data', (chunk) => {
   }
   if (!acknowledged && input.includes('\\r')) {
     acknowledged = true
-    process.stdout.write('ACK\\n')
+    process.stdout.write('\\x1b[?25hACK\\n')
   }
 })
 for (const signal of ['SIGINT', 'SIGHUP', 'SIGTERM']) {

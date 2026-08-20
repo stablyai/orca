@@ -37,7 +37,8 @@ process.stdin.on('data', (chunk) => {
     append({ event: 'normal-exit' })
     process.exit(0)
   }
-  if (input.includes('\\r')) process.stdout.write('ACK\\n')
+  // Mirror Codex's post-paste cursor marker so settled prompt delivery can finish.
+  if (input.includes('\\r')) process.stdout.write('\\x1b[?25hACK\\n')
 })
 process.stdin.resume()
 setInterval(() => {}, 60_000)

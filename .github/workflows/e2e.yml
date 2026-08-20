@@ -77,6 +77,9 @@ jobs:
         env:
           VITE_EXPOSE_STORE: 'true'
         run: |
+          # SSH E2E fixtures connect to Linux Docker targets and need the
+          # platform relay bundle in the packaged app's extra resources.
+          pnpm run build:relay
           npx electron-vite build --mode e2e
           pnpm run build:web-from-renderer
           pnpm run build:relay

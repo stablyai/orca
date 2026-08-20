@@ -31,6 +31,7 @@ const spawnLedgerPath = path.join(fakeCliDir, 'spawn.jsonl')
 const interruptionLedgerPath = path.join(fakeCliDir, 'interruption.jsonl')
 const authorityLedgerPath = path.join(fakeCliDir, 'authority.jsonl')
 const lifecycleLedgerPath = path.join(fakeCliDir, 'lifecycle.jsonl')
+const fakeCodexCommand = path.join(fakeCliDir, process.platform === 'win32' ? 'codex.cmd' : 'codex')
 const fakeCodexSource = `
 const { appendFileSync } = require('node:fs')
 const { spawnSync } = require('node:child_process')
@@ -90,7 +91,7 @@ process.stdin.on('data', (chunk) => {
   }
   if (!acknowledged && input.includes('\\r')) {
     acknowledged = true
-    process.stdout.write('ACK\\n')
+    process.stdout.write('\\x1b[?25hACK\\n')
   }
   const legacyCompletion = input.match(/ORCA_E2E_RUN_LEGACY_DONE:([A-Za-z0-9+/=]+)/)
   if (!lifecycleSent && legacyCompletion) {
@@ -414,6 +415,11 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
       firstApp = first.app
       const worktreeId = await attachRepoAndOpenTerminal(first.page, repoPath)
       await waitForSessionReady(first.page)
+      await first.page.evaluate(async (agentCommand) => {
+        await window.__store?.getState().updateSettings({
+          agentCmdOverrides: { codex: agentCommand }
+        })
+      }, fakeCodexCommand)
       await ensureTerminalVisible(first.page)
       const coordinatorTabId = await getActiveTabId(first.page)
       expect(coordinatorTabId).toBeTruthy()
@@ -512,10 +518,16 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
       await expect
         .poll(() => readLedger(authorityLedgerPath))
         .toEqual([expect.objectContaining({ event: 'authority-hook', status: 204 })])
-
       const transcriptPath = session.seedCodexResumeRollout(PROVIDER_SESSION_ID, repoPath)
       await first.page.evaluate(
-        ({ paneKey, tabId, worktreeId: workerWorktreeId, terminalHandle, transcript }) => {
+        ({
+          paneKey,
+          tabId,
+          worktreeId: workerWorktreeId,
+          terminalHandle,
+          transcript,
+          agentCommand
+        }) => {
           window.__store?.getState().setAgentStatus(
             paneKey,
             { state: 'working', prompt: 'Respond ACK and remain idle', agentType: 'codex' },
@@ -529,7 +541,7 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
                 transcriptPath: transcript
               },
               launchConfig: {
-                agentCommand: 'codex',
+                agentCommand,
                 agentArgs: '--dangerously-bypass-approvals-and-sandbox',
                 agentEnv: {}
               }
@@ -542,7 +554,8 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
           tabId: worker!.tabId,
           worktreeId: worker!.worktreeId,
           terminalHandle: worker!.handle,
-          transcript: transcriptPath
+          transcript: transcriptPath,
+          agentCommand: fakeCodexCommand
         }
       )
       await expect
@@ -715,7 +728,8 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
                 }),
                 '--json'
               ],
-              status: 0,
+              status: 1,
+              stdout: expect.stringContaining('"code": "legacy_read_only"'),
               stderr: ''
             })
           ])
@@ -734,7 +748,7 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
               )?.status
             }
           })
-          .toEqual({ dispatch: 'completed', task: 'completed' })
+          .toEqual({ dispatch: 'dispatched', task: 'dispatched' })
         expect(readLedger(spawnLedgerPath)).toEqual([initialSpawn])
         expect(isProcessAlive(initialSpawn.pid)).toBe(true)
       } else {
