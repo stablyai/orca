@@ -20,7 +20,18 @@ const STRING_FORM = new RegExp(String.raw`wsl(?:\.exe)?\b[^\n]*?[^-]--\s+${GUEST
 
 const SCANNED_ROOTS = ['src', 'config', 'tests']
 const SCANNED_EXTENSIONS = ['.ts', '.tsx', '.mjs', '.js']
-const IGNORED_DIRECTORIES = new Set(['node_modules', 'dist', 'out', 'build', '.git'])
+// Why `.cross-version-checkouts`: the cross-version harness extracts a released
+// Orca into the tree under it. That release predates this rule, so scanning it
+// reports violations in code nobody here can change — and the directory is
+// gitignored precisely because it is build output rather than source.
+const IGNORED_DIRECTORIES = new Set([
+  'node_modules',
+  'dist',
+  'out',
+  'build',
+  '.git',
+  '.cross-version-checkouts'
+])
 
 function collectSourceFiles(root: string): string[] {
   let found: string[] = []
