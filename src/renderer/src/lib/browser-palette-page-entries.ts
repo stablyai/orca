@@ -1,5 +1,6 @@
 import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
+import type { Tab } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { isPaletteCurrentWorktree, resolvePaletteRepoForWorktree } from './palette-repo-resolution'
@@ -17,6 +18,8 @@ export type BuildSearchableBrowserPagesOptions = {
   worktreeOrder: ReadonlyMap<string, number>
   browserTabsByWorktree: Record<string, readonly BrowserWorkspace[] | undefined>
   browserPagesByWorkspace: Record<string, readonly BrowserPage[] | undefined>
+  /** Source of browser recency: focus lives on the workspace's unified tab, not the page. */
+  unifiedTabsByWorktree?: Record<string, readonly Tab[] | undefined>
   activeBrowserTabId: string | null
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId?: ExecutionHostId | null
@@ -30,6 +33,7 @@ export function buildSearchableBrowserPages({
   worktreeOrder,
   browserTabsByWorktree,
   browserPagesByWorkspace,
+  unifiedTabsByWorktree,
   activeBrowserTabId,
   activeWorktreeId,
   activeWorkspaceExecutionHostId,
@@ -43,7 +47,14 @@ export function buildSearchableBrowserPages({
       worktreeOrder.get(getWorktreeHostIdentity(worktree)) ??
       worktreeOrder.get(worktree.id) ??
       Number.MAX_SAFE_INTEGER
+    const focusedAtByWorkspaceId = new Map<string, number>()
+    for (const tab of unifiedTabsByWorktree?.[worktree.id] ?? []) {
+      if (tab.contentType === 'browser' && tab.lastFocusedAt) {
+        focusedAtByWorkspaceId.set(tab.entityId, tab.lastFocusedAt)
+      }
+    }
     for (const workspace of browserTabsByWorktree[worktree.id] ?? []) {
+      const workspaceFocusedAt = focusedAtByWorkspaceId.get(workspace.id)
       for (const page of browserPagesByWorkspace[workspace.id] ?? []) {
         entries.push({
           page,
@@ -61,6 +72,8 @@ export function buildSearchableBrowserPages({
             activeWorktreeId,
             activeWorkspaceExecutionHostId
           ),
+          // Never older than the page itself: it was opened while the workspace was focused.
+          lastActiveAt: workspaceFocusedAt ? Math.max(workspaceFocusedAt, page.createdAt) : null,
           document: buildSearchableBrowserPageDocument({ page, workspace, worktree, repoName })
         })
       }
