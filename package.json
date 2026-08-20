@@ -54,7 +54,7 @@
     "dev": "pnpm run ensure:electron-runtime && node config/scripts/run-electron-vite-dev.mjs",
     "dev-stable-name": "pnpm run ensure:electron-runtime && node config/scripts/run-electron-vite-dev.mjs --stable-name",
     "dev:web": "vite --config vite.web.config.ts --host 127.0.0.1",
-    "build:relay": "node config/scripts/build-relay.mjs",
+    "build:relay": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/build-relay.mjs",
     "build:computer-macos": "node config/scripts/build-computer-macos.mjs",
     "build:keyboard-layout-macos": "node config/scripts/build-keyboard-layout-macos.mjs",
     "build:notification-status-macos": "node config/scripts/build-notification-status-macos.mjs",

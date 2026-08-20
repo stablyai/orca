@@ -4,6 +4,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  writeFileSync,
   rmSync,
   statSync,
   utimesSync
@@ -30,6 +31,10 @@ import {
   relayLivenessProbeCommand
 } from './ssh-remote-commands'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
+import {
+  RELAY_INSTALL_COMPLETE_FILENAME,
+  relayArtifactFilenames
+} from '../../shared/relay-artifacts'
 
 const posix = getRemoteHostPlatform('linux-x64')
 const windows = getRemoteHostPlatform('win32-x64')
@@ -119,6 +124,67 @@ describe('ssh remote command builders', () => {
     expect(probe).toContain('managed-hook-runtime.js')
     expect(probe).toContain('relay-ai-vault-service.js')
   })
+
+  it('requires every declared relay artifact before calling an install complete', () => {
+    const posixProbe = probeRelayInstalledCommand(posix, '/home/me/relay')
+    for (const filename of relayArtifactFilenames(false)) {
+      expect(posixProbe, `POSIX probe ignores ${filename}`).toContain(filename)
+    }
+    expect(posixProbe).toContain(RELAY_INSTALL_COMPLETE_FILENAME)
+    // A POSIX relay must not be asked for the Windows-only node-pty patch.
+    expect(posixProbe).not.toContain('node-pty-1.1.0-console-list-agent-patch.cjs')
+
+    const windowsProbe = decodePowerShellCommand(
+      probeRelayInstalledCommand(windows, 'C:/Users/me/relay')
+    )
+    for (const filename of relayArtifactFilenames(true)) {
+      expect(windowsProbe, `Windows probe ignores ${filename}`).toContain(filename)
+    }
+    expect(windowsProbe).toContain(RELAY_INSTALL_COMPLETE_FILENAME)
+  })
+
+  // Stage a complete install, then remove one companion: the probe must flip.
+  function stageRelayInstall(isWindows: boolean): string {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-relay-probe-'))
+    for (const filename of relayArtifactFilenames(isWindows)) {
+      writeFileSync(join(dir, filename), '')
+    }
+    writeFileSync(join(dir, RELAY_INSTALL_COMPLETE_FILENAME), '')
+    return dir
+  }
+
+  it.skipIf(!powerShellExecutable)(
+    'rejects a Windows install missing only the WSL transcript helper',
+    async () => {
+      const dir = stageRelayInstall(true)
+      const probe = (): string => decodePowerShellCommand(probeRelayInstalledCommand(windows, dir))
+      try {
+        expect((await runPowerShellCommand(powerShellExecutable!, probe())).trim()).toBe('OK')
+
+        // The exact shape a pre-STA-4831 relay left behind: everything but this.
+        rmSync(join(dir, 'wsl-transcript-fs-process-entry.js'))
+        expect((await runPowerShellCommand(powerShellExecutable!, probe())).trim()).toBe('MISSING')
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'rejects a POSIX install missing only the WSL transcript helper',
+    async () => {
+      const dir = stageRelayInstall(false)
+      const probe = (): string => probeRelayInstalledCommand(posix, dir)
+      try {
+        expect((await runShellCommand(probe())).trim()).toBe('OK')
+
+        rmSync(join(dir, 'wsl-transcript-fs-process-entry.js'))
+        expect((await runShellCommand(probe())).trim()).toBe('MISSING')
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  )
 
   it('uses encoded PowerShell for Windows deploy commands', () => {
     expect(readRemoteHomeCommand(windows)).toContain('powershell.exe')
