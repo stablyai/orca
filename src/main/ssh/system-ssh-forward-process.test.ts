@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import { win32 } from 'node:path'
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 
 const { existsSyncMock, spawnMock, connectMock, createServerMock } = vi.hoisted(() => ({
@@ -37,8 +38,19 @@ import {
 } from './system-ssh-forward-process'
 import type { SshTarget } from '../../shared/ssh-types'
 
+// Why built from SystemRoot rather than written out: a machine reporting
+// `C:\WINDOWS` never matched the literal `C:\Windows`, so the mocked existsSync
+// reported absent, the resolver fell through to the real PATH, and the case
+// measured whichever ssh the host ships instead of the one it names.
 const SYSTEM_SSH_PATH =
-  process.platform === 'win32' ? 'C:\\Windows\\System32\\OpenSSH\\ssh.exe' : '/usr/bin/ssh'
+  process.platform === 'win32'
+    ? win32.join(
+        process.env.SystemRoot || process.env.WINDIR || 'C:\\Windows',
+        'System32',
+        'OpenSSH',
+        'ssh.exe'
+      )
+    : '/usr/bin/ssh'
 
 type FakeChildProcess = EventEmitter & {
   stderr: EventEmitter
