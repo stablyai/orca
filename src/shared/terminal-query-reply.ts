@@ -23,10 +23,12 @@ const ESC = String.fromCharCode(0x1b)
 /* oxlint-disable no-control-regex -- grammars match terminal ESC/BEL sequences by definition */
 // Known accepted collision: xterm.js encodes MODIFIED F3 (Shift/Ctrl/Alt+F3) as
 // `CSI 1 ; <mod> R`, which is indistinguishable from a CPR report (a classic
-// VT ambiguity). Such a keystroke is sent immediately instead of debounced —
-// byte order is still preserved (the immediate path flushes pending input
-// first), it just skips input-intent/activity bookkeeping. Harmless, so we
-// keep the reply grammar complete rather than special-casing it.
+// VT ambiguity). Such a keystroke skips input-intent/activity bookkeeping, and
+// takeLiveQueryReply will hold it behind a deferred reply like any CPR — so
+// within that window (bounded by the host's echo budget) a keystroke typed
+// after it can reach the pty first. Accepted: it needs the chord and a
+// following keypress inside a live colour-query deferral, and we keep the reply
+// grammar complete rather than special-casing an unresolvable ambiguity.
 const CPR_OR_DSR_RE = new RegExp('^\\u001b\\[\\??[0-9;]*[Rn]$')
 const DEVICE_ATTRIBUTES_RE = new RegExp('^\\u001b\\[[?>=]?[0-9;]*c$')
 // 4/6 = pixel-size reports, 8 = text-area size in characters (answer to CSI 18t).
@@ -143,4 +145,29 @@ export function answerEachCookedEchoSafeQueryReply(
     }
   }
   return accepted
+}
+
+/** Host-side ingress surface for replies the PTY owner may take ownership of. */
+export type LiveQueryReplyIngress = {
+  answerLiveQueryReply: (reply: string) => boolean
+  writeQueryReplyInOrder: (reply: string) => boolean
+}
+
+/**
+ * True when `ingress` owns this write. A reply a cooked prompt would paint is deferred
+ * behind an ECHO probe (#13137); a latency-critical reply (CPR/DA) is taken only while
+ * one of those is still deferred, because termenv stops reading at the CPR it sends
+ * after its color query — an early CPR strands the color reply in the tty for whatever
+ * runs next (`gh auth login` -> "unexpected escape sequence from terminal").
+ */
+export function takeLiveQueryReply(
+  ingress: LiveQueryReplyIngress | undefined,
+  data: string
+): boolean {
+  if (!ingress) {
+    return false
+  }
+  return extractOnlyCookedEchoSafeQueryReplies(data)
+    ? ingress.answerLiveQueryReply(data)
+    : isTerminalQueryReply(data) && ingress.writeQueryReplyInOrder(data)
 }

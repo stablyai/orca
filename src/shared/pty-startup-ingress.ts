@@ -100,6 +100,11 @@ export class PtyStartupIngress {
       : false
   }
 
+  /** Order-only: holds an uncontained reply behind a deferred one, else leaves it. */
+  writeQueryReplyInOrder(reply: string): boolean {
+    return !this.closed && this.delivery.writeBehindDeferredReplies(reply)
+  }
+
   drainAndClose(): number {
     this.enqueue({ kind: 'teardown' })
     return this.rawHighWater
@@ -322,12 +327,11 @@ export class PtyStartupIngress {
   }
 
   private releaseQueryPending(): void {
-    if (!this.queryPending) {
-      return
-    }
     const pending = this.queryPending
     this.queryPending = null
-    this.emit(pending, false)
+    if (pending) {
+      this.emit(pending, false)
+    }
   }
 
   /**
@@ -377,10 +381,7 @@ export class PtyStartupIngress {
   }
 
   private clearDeadline(): void {
-    if (!this.deadlineTimer) {
-      return
-    }
-    clearTimeout(this.deadlineTimer)
+    clearTimeout(this.deadlineTimer ?? undefined)
     this.deadlineTimer = null
   }
 }

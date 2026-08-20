@@ -12,7 +12,7 @@ import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID } from 'node:crypto'
 import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
-import { extractOnlyCookedEchoSafeQueryReplies } from '../../shared/terminal-query-reply'
+import { takeLiveQueryReply } from '../../shared/terminal-query-reply'
 import type {
   SessionState,
   ShellReadyState,
@@ -132,10 +132,7 @@ export class Session {
     }
 
     // Daemon POSIX PTYs need the local provider's cooked-echo containment (#13137).
-    if (
-      extractOnlyCookedEchoSafeQueryReplies(data) &&
-      this.startupIngress.answerLiveQueryReply(data)
-    ) {
+    if (takeLiveQueryReply(this.startupIngress, data)) {
       return
     }
 

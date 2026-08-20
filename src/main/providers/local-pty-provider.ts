@@ -72,7 +72,7 @@ import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 import { PtyStartupIngress, type PtyIngressEmission } from '../../shared/pty-startup-ingress'
-import { extractOnlyCookedEchoSafeQueryReplies } from '../../shared/terminal-query-reply'
+import { takeLiveQueryReply } from '../../shared/terminal-query-reply'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
 import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
 import { readPtsName } from '../pty/node-pty-pts-name'
@@ -1192,12 +1192,10 @@ export class LocalPtyProvider implements IPtyProvider {
     return ptyProcesses.has(id)
   }
   write(id: string, data: string): boolean {
-    // Cooked PTYs echo private DSR/OSC replies; CPR/DA remain immediate (#13137, #7329).
-    if (extractOnlyCookedEchoSafeQueryReplies(data)) {
-      const ingress = startupIngressByPty.get(id)
-      if (ingress?.answerLiveQueryReply(data)) {
-        return true
-      }
+    // Cooked PTYs echo private DSR/OSC replies; CPR/DA stay immediate unless one of
+    // those is still deferred, which they must not overtake (#13137, #7329).
+    if (takeLiveQueryReply(startupIngressByPty.get(id), data)) {
+      return true
     }
     const proc = ptyProcesses.get(id)
     if (!proc) {
