@@ -157,7 +157,12 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
       promptDelivery,
       pastePromptAfterReady: pasteDraftAfterLaunch,
       submitPastedPrompt,
-      agentArgs,
+      // Why: the raw param is undefined on ordinary UI launches, and omitting it
+      // lets a headless host apply its own defaults — so a client configured for
+      // Manual gets the host's YOLO default (#15373). Send the client-resolved
+      // value, empty string included: the host treats present-but-empty as an
+      // explicit no-args override.
+      agentArgs: effectiveAgentArgs,
       // Why: omission means terminal locally, but would let a paired host apply
       // its own default; send the client's resolved terminal choice explicitly.
       viewMode: initialViewModeProps.viewMode ?? 'terminal',
