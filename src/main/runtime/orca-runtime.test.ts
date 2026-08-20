@@ -16208,11 +16208,18 @@ describe('OrcaRuntimeService', () => {
     vi.useFakeTimers()
     try {
       const runtime = new OrcaRuntimeService(store)
+      const serializeProviderBuffer = vi.fn().mockResolvedValue({
+        data: 'OpenAI Codex\r\nmodel: gpt-5.5\r\ndirectory: /repo\r\n',
+        cols: 80,
+        rows: 24,
+        seq: 1
+      })
       runtime.setPtyController({
         spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
         write: () => true,
         kill: () => true,
-        getForegroundProcess: async () => null
+        getForegroundProcess: async () => null,
+        serializeProviderBuffer
       })
       const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
 
@@ -16248,6 +16255,7 @@ describe('OrcaRuntimeService', () => {
       await vi.advanceTimersByTimeAsync(2_000)
 
       await timeoutAssertion
+      expect(serializeProviderBuffer).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
     }
@@ -20516,7 +20524,8 @@ describe('OrcaRuntimeService', () => {
     const kill = vi.fn(() => true)
     const serializeProviderBuffer = vi.fn().mockResolvedValue({
       data: '',
-      scrollbackAnsi: 'OpenAI Codex\r\nACK\r\n',
+      scrollbackAnsi:
+        ' >_ OpenAI Codex (v0.131.0)\r\n model:       gpt-5.5 high\r\n directory:   /repo\r\n',
       cols: 80,
       rows: 24,
       seq: 100,
@@ -20598,11 +20607,36 @@ describe('OrcaRuntimeService', () => {
     expect(kill).not.toHaveBeenCalled()
     const [terminal] = (await runtime.listTerminals()).terminals
     await expect(runtime.readTerminal(terminal.handle)).resolves.toMatchObject({
-      tail: ['OpenAI Codex', 'ACK']
+      tail: [' >_ OpenAI Codex (v0.131.0)', ' model:       gpt-5.5 high', ' directory:   /repo']
     })
     expect(serializeProviderBuffer).toHaveBeenCalledWith('pty-legacy', {
       scrollbackRows: 120
     })
+    await expect(
+      runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle', timeoutMs: 100 })
+    ).resolves.toMatchObject({ satisfied: true })
+    serializeProviderBuffer.mockResolvedValueOnce({
+      data: '',
+      scrollbackAnsi: 'Do you trust this workspace directory?\r\n1. Yes\r\n2. No\r\n',
+      cols: 80,
+      rows: 24,
+      seq: 101,
+      source: 'headless' as const,
+      alternateScreen: false
+    })
+    await expect(
+      runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle', timeoutMs: 100 })
+    ).resolves.toMatchObject({
+      satisfied: false,
+      blockedReason: 'codex-trust-workspace'
+    })
+    serializeProviderBuffer.mockImplementationOnce(() => new Promise(() => {}))
+    await expect(
+      runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle', timeoutMs: 50 })
+    ).rejects.toThrow('timeout')
+    expect(serializeProviderBuffer).toHaveBeenCalledTimes(4)
+    await expect(runtime.readTerminal(terminal.handle)).resolves.toMatchObject({ tail: [] })
+    expect(serializeProviderBuffer).toHaveBeenCalledTimes(4)
     expect(
       runtime.verifyOrchestrationCompatibilityCaller({
         terminalHandle: 'term_legacy',
@@ -22288,6 +22322,12 @@ describe('OrcaRuntimeService', () => {
         wslDistro: null
       }
     ])
+    const serializeProviderBuffer = vi.fn().mockResolvedValue(null)
+    const serializeBuffer = vi.fn().mockResolvedValue({
+      data: ' >_ OpenAI Codex (v0.131.0)\r\n model:       gpt-5.5 high\r\n directory:   /repo\r\n',
+      cols: 80,
+      rows: 24
+    })
     const runtime = new OrcaRuntimeService(
       {
         ...runtimeStore,
@@ -22321,7 +22361,10 @@ describe('OrcaRuntimeService', () => {
       kill: vi.fn(() => true),
       getForegroundProcess: async () => null,
       hasPty: (candidate) => candidate === ptyId,
-      listProcesses
+      listProcesses,
+      serializeBuffer,
+      serializeProviderBuffer,
+      hasRendererSerializer: () => true
     })
     const revealTerminalSession = vi.fn().mockImplementation(() =>
       publishLegacyWorkerReveal(runtime, {
@@ -22393,6 +22436,11 @@ describe('OrcaRuntimeService', () => {
         incarnationId
       }
     })
+    await expect(
+      runtime.waitForTerminal('term_ssh_legacy', { condition: 'tui-idle', timeoutMs: 100 })
+    ).resolves.toMatchObject({ satisfied: true })
+    expect(serializeProviderBuffer).toHaveBeenCalledOnce()
+    expect(serializeBuffer).toHaveBeenCalledOnce()
   })
 
   it('refuses a cross-distro WSL worker and adopts it after exact host ownership matches', async () => {

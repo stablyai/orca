@@ -8,22 +8,40 @@ import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } fro
 import { RuntimeClient } from '../../src/cli/runtime-client'
 import Database from '../../src/main/sqlite/sync-database'
 import type { RuntimeTerminalListResult, RuntimeTerminalRead } from '../../src/shared/runtime-types'
+import { buildFakeAgentCommandOverride } from './helpers/fake-agent-command-override'
+import { FAKE_AGENT_PASTE_END_SCANNER_SOURCE } from './helpers/fake-agent-paste-end-scanner'
 
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-settlement-release-'))
 const cliLedgerPath = path.join(fakeCliDir, 'cli.jsonl')
 const cliEntry = path.join(process.cwd(), 'out', 'cli', 'index.js')
+const fakeCodexCommand = buildFakeAgentCommandOverride(
+  path.join(fakeCliDir, process.platform === 'win32' ? 'codex.cmd' : 'codex')
+)
 const fakeCodexSource = `
 const { appendFileSync } = require('node:fs')
 const { spawnSync } = require('node:child_process')
+if (process.argv.slice(2).includes('app-server')) {
+  process.stderr.write("error: unrecognized subcommand 'app-server'\\n")
+  process.exit(2)
+}
 let capability = null
 let acknowledged = false
+${FAKE_AGENT_PASTE_END_SCANNER_SOURCE}
+let pasteEnded = false
 process.stdout.write('\\u001b]0;Codex Ready\\u0007OpenAI Codex\\nmodel: e2e\\ndirectory: e2e\\n')
 process.stdin.on('data', (chunk) => {
   const input = chunk.toString()
+  const pasteEndScan = scanFakeAgentPasteEnd(fakeAgentPasteEndTail, input)
+  fakeAgentPasteEndTail = pasteEndScan.tail
+  if (pasteEndScan.ended) {
+    pasteEnded = true
+    process.stdout.write('\\x1b[?25h')
+  }
   capability ||= input.match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1] || null
-  if (!acknowledged && input.includes('\\r')) {
+  if (!acknowledged && pasteEnded && input.includes('\\r')) {
     acknowledged = true
-    process.stdout.write('ACK\\n')
+    process.stdout.write('\\u001b]0;Codex Working\\u0007ACK\\n')
+    setTimeout(() => process.stdout.write('\\u001b]0;Codex Ready\\u0007'), 10)
   }
   const encoded = input.match(/ORCA_E2E_WORKER_DONE:([A-Za-z0-9+/=]+)/)?.[1]
   if (!encoded || !capability) return
@@ -50,6 +68,7 @@ process.stdin.on('data', (chunk) => {
     JSON.stringify({ mismatch: request.mismatch, args, status: result.status, stdout: result.stdout, stderr: result.stderr }) + '\\n'
   )
 })
+process.stdin.setRawMode?.(true)
 process.stdin.resume()
 setInterval(() => {}, 60_000)
 `
@@ -121,6 +140,11 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
   test.setTimeout(180_000)
   rmSync(cliLedgerPath, { force: true })
   await waitForSessionReady(orcaPage)
+  await orcaPage.evaluate(async (agentCommand) => {
+    await window.__store?.getState().updateSettings({
+      agentCmdOverrides: { codex: agentCommand }
+    })
+  }, fakeCodexCommand)
   const worktreeId = await waitForActiveWorktree(orcaPage)
   await ensureTerminalVisible(orcaPage)
   await waitForActivePanePtyId(orcaPage)
