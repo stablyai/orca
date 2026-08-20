@@ -25,45 +25,11 @@
   outline: none;
 }
 
-.pane-manager-root .xterm {
-  height: 100%;
-  width: 100%;
-}
-
 .xterm-container .xterm {
   box-sizing: border-box;
   height: 100%;
   width: 100%;
-  /* Why on .xterm, not the container: FitAddon subtracts this element's
-     padding when proposing cols/rows, and the themed background (including
-     opacity) fills the inset. Container margins only framed the start edges
-     and stacked a darker gutter at fractional opacity. */
-  padding-top: var(--pane-padding-y, 4px);
-  padding-right: var(--pane-padding-x, 4px);
-  padding-bottom: var(--pane-padding-y, 4px);
-  padding-left: var(--pane-padding-x, 4px);
-}
-
-/* xterm paints the live viewport background again under the grid. Mirror that
-   layer in the padding bands, including runtime OSC 11 color changes. */
-.xterm-container .xterm::before,
-.xterm-container[data-terminal-renderer='webgl'] .xterm::after {
-  box-sizing: border-box;
-  position: absolute;
-  inset: 0;
-  content: '';
-  pointer-events: none;
-  border-style: solid;
-  border-width: var(--pane-padding-y, 4px) var(--pane-padding-x, 4px);
-}
-
-.xterm-container .xterm::before {
-  border-color: var(--orca-terminal-live-background, transparent);
-}
-
-/* WebGL adds one source-over background layer beyond the DOM renderer. */
-.xterm-container[data-terminal-renderer='webgl'] .xterm::after {
-  border-color: var(--orca-terminal-live-background, transparent);
+  padding: var(--pane-padding-y, 4px) var(--pane-padding-x, 4px);
 }
 
 .pane-manager-root .xterm-viewport {
@@ -534,9 +500,8 @@
   border-color: var(--ring);
 }
 
-/* Container fills the pane so the .xterm background (and its padding) is the
-   terminal surface. Title offset stays here because the title overlay is a
-   sibling of the container, not of .xterm. */
+/* The container fills the pane; xterm owns the four-edge grid inset so its fit
+   calculation subtracts the configured padding before choosing cols/rows. */
 .xterm-container {
   box-sizing: border-box;
   position: relative;

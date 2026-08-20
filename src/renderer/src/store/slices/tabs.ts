@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: split-tab group state updates layout, focus, and tab membership atomically in one slice to avoid split-brain. */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
+import { toVisibleTabType } from '../../../../shared/tab-types'
 import type {
   Tab,
   TabContentType,
@@ -413,13 +414,6 @@ function collapseGroupLayout(
       [worktreeId]: siblingId ?? fallbackGroupId ?? activeGroupIdByWorktree[worktreeId]
     }
   }
-}
-
-function toVisibleTabType(contentType: TabContentType): WorkspaceVisibleTabType {
-  if (contentType === 'browser' || contentType === 'terminal' || contentType === 'simulator') {
-    return contentType
-  }
-  return 'editor'
 }
 
 function deriveActiveSurfaceForWorktree(
@@ -860,6 +854,8 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         }
       }
 
+      const shouldActivate = init?.activate ?? true
+      const createdAt = Date.now()
       created = {
         id,
         entityId: init?.entityId ?? id,
@@ -875,13 +871,14 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         customLabel: init?.customLabel ?? null,
         color: init?.color ?? null,
         sortOrder: nextOrder.length,
-        createdAt: Date.now(),
+        createdAt,
+        // Why: creating an active tab is a focus event; Cmd+J recency reads lastFocusedAt.
+        ...(shouldActivate ? { lastFocusedAt: createdAt } : {}),
         isPreview: init?.isPreview,
         isPinned: init?.isPinned
       }
 
       nextOrder = dedupeTabOrder([...nextOrder, created.id])
-      const shouldActivate = init?.activate ?? true
       const nextActiveTabId = shouldActivate ? created.id : (group.activeTabId ?? created.id)
       const sanitizedRecent = sanitizeRecentTabIds(group.recentTabIds, nextOrder)
       // Why: automation-created browser tabs must paint without stealing the visible group selection from the user's current tab.
@@ -931,6 +928,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
       const currentLayout =
         state.layoutByWorktree[worktreeId] ??
         ({ type: 'leaf', groupId: target.sourceGroupId } as const)
+      const createdAt = Date.now()
       const createdTab: Tab = {
         id,
         entityId: init?.entityId ?? id,
@@ -946,7 +944,9 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         customLabel: init?.customLabel ?? null,
         color: init?.color ?? null,
         sortOrder: 0,
-        createdAt: Date.now(),
+        createdAt,
+        // Why: creating an active tab is a focus event; Cmd+J recency reads lastFocusedAt.
+        ...(shouldActivate ? { lastFocusedAt: createdAt } : {}),
         isPreview: init?.isPreview,
         isPinned: init?.isPinned
       }
@@ -1065,14 +1065,18 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
             })()
           : state.unreadTerminalTabs
       return {
-        unifiedTabsByWorktree: opts?.preservePreview
-          ? state.unifiedTabsByWorktree
-          : {
-              ...state.unifiedTabsByWorktree,
-              [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((item) =>
-                item.id === tabId ? { ...item, isPreview: false } : item
-              )
-            },
+        unifiedTabsByWorktree: {
+          ...state.unifiedTabsByWorktree,
+          [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((item) =>
+            item.id === tabId
+              ? {
+                  ...item,
+                  isPreview: opts?.preservePreview ? item.isPreview : false,
+                  lastFocusedAt: Date.now()
+                }
+              : item
+          )
+        },
         groupsByWorktree: {
           ...state.groupsByWorktree,
           [worktreeId]: (state.groupsByWorktree[worktreeId] ?? []).map((group) =>

@@ -8,6 +8,12 @@ type ChromiumCookieTestRow = {
   name: string
   value: string
   encryptedValue?: Buffer
+  // Why: default '' matches a real unpartitioned row; CHIPS fixtures set a top-level site.
+  topFrameSiteKey?: string
+  hasCrossSiteAncestor?: 0 | 1
+  isSecure?: 0 | 1
+  isHttpOnly?: 0 | 1
+  sameSite?: 0 | 1 | 2 | 3
 }
 
 export function createChromiumCookieTestDatabase(
@@ -57,16 +63,21 @@ export function createChromiumCookieTestDatabase(
       source_port,
       last_update_utc,
       has_cross_site_ancestor
-    ) VALUES (?, ?, '', ?, ?, ?, '/', 0, 0, 0, 0, 0, -1, ?, 0)
+    ) VALUES (?, ?, ?, ?, ?, ?, '/', 0, ?, ?, ?, 0, -1, ?, ?)
   `)
   rows.forEach((row, index) => {
     insert.run(
       133_000_000_000_000 + index,
       row.domain ?? '.example.com',
+      row.topFrameSiteKey ?? '',
       row.name,
       row.value,
       row.encryptedValue ?? Buffer.alloc(0),
-      0
+      row.isSecure ?? 0,
+      row.isHttpOnly ?? 0,
+      row.sameSite ?? 0,
+      0,
+      row.hasCrossSiteAncestor ?? 0
     )
   })
   return database

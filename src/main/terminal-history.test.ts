@@ -88,11 +88,12 @@ import {
   resolveShellKind,
   ensureHistoryDir,
   injectHistoryEnv,
+  injectWslFishHistoryEnv,
   MAX_HISTORY_META_BYTES,
   updateHistoryEnvForFallback,
   type HistoryInjectionResult
 } from './terminal-history'
-import { fishHistorySessionName } from './fish-history-session'
+import { fishHistorySessionName, relayFishHistorySessionName } from './fish-history-session'
 import { hashWorktreeId } from './terminal-history-paths'
 import {
   cancelPendingHistoryTreeRemovalRetries,
@@ -101,6 +102,8 @@ import {
 } from './terminal-history-deletion'
 
 import { runHistoryGc, scheduleHistoryGc } from './terminal-history-gc'
+
+const OTHER_WORKTREE_HASH = hashWorktreeId('repo-1::/path/other-wt')
 
 describe('terminal-history', () => {
   afterEach(() => {
@@ -370,12 +373,85 @@ describe('terminal-history', () => {
       expect(env.ORCA_HISTFILE).toBeUndefined()
     })
 
+    it.each([
+      [
+        'desktop',
+        ['', 'fake', 'userData', 'terminal-history', OTHER_WORKTREE_HASH, 'zsh_history'].join(sep)
+      ],
+      [
+        'relay',
+        [
+          '',
+          'home',
+          'me',
+          '.orca-remote',
+          'terminal-history',
+          `${OTHER_WORKTREE_HASH}-zsh_history`
+        ].join(sep)
+      ]
+    ])('drops a %s HISTFILE inherited from a parent Orca pane', (_kind, inherited) => {
+      // HISTFILE stays EXPORTED once the wrapper restores it, so an Orca launched
+      // from a pane in another worktree would otherwise hit the check-before-set
+      // early return in EVERY pane and append into that one worktree's file.
+      const env: Record<string, string> = { HISTFILE: inherited }
+
+      const result = injectHistoryEnv(env, 'repo-1::/path/wt', '/bin/zsh', '/path/wt')
+
+      expect(result.histFile).toBe(env.HISTFILE)
+      expect(env.HISTFILE).toContain(hashWorktreeId('repo-1::/path/wt'))
+      expect(env.HISTFILE).not.toContain(OTHER_WORKTREE_HASH)
+    })
+
+    it.each([
+      ['an ordinary path', ['', 'home', 'me', '.zsh_history'].join(sep)],
+      // Orca only ever mints absolute paths, so the same shape relative to the
+      // user's cwd is theirs.
+      [
+        'a relative path of Orca’s shape',
+        ['terminal-history', OTHER_WORKTREE_HASH, 'zsh_history'].join(sep)
+      ]
+    ])('preserves %s the user set as HISTFILE', (_kind, histFile) => {
+      // Only a path Orca minted is droppable; everything else is the user's.
+      const env: Record<string, string> = { HISTFILE: histFile }
+
+      const result = injectHistoryEnv(env, 'repo-1::/path/wt', '/bin/zsh', '/path/wt')
+
+      expect(env.HISTFILE).toBe(histFile)
+      expect(result.histFile).toBeNull()
+    })
+
     it('preserves a caller-supplied fish_history', () => {
       const env: Record<string, string> = { fish_history: 'mine' }
       const result = injectHistoryEnv(env, 'repo-1::/path/wt', '/usr/bin/fish', '/path/wt')
 
       expect(env.fish_history).toBe('mine')
       expect(result.fishSession).toBeNull()
+    })
+
+    it.each([
+      ['desktop', fishHistorySessionName(hashWorktreeId('repo-1::/path/other-wt'))],
+      ['relay', relayFishHistorySessionName(hashWorktreeId('repo-1::/path/other-wt'))]
+    ])('replaces a %s fish_history inherited from a parent Orca', (_kind, inherited) => {
+      // fish EXPORTS fish_history, so an Orca launched from a fish pane hands the
+      // LAUNCHING worktree's session to every pane here — panes in every other
+      // worktree included, which would all then write one worktree's history file.
+      const env: Record<string, string> = { fish_history: inherited }
+
+      const result = injectHistoryEnv(env, 'repo-1::/path/wt', '/usr/bin/fish', '/path/wt')
+
+      expect(result.fishSession).toBe(fishHistorySessionName(hashWorktreeId('repo-1::/path/wt')))
+      expect(env.fish_history).toBe(result.fishSession)
+    })
+
+    it('drops an inherited fish_history even when the shell is not fish', () => {
+      // A fish started by hand inside this zsh pane must not adopt the parent's session.
+      const env: Record<string, string> = {
+        fish_history: fishHistorySessionName(hashWorktreeId('repo-1::/path/other-wt'))
+      }
+
+      injectHistoryEnv(env, 'repo-1::/path/wt', '/bin/zsh', '/path/wt')
+
+      expect(env.fish_history).toBeUndefined()
     })
 
     it('degrades gracefully when directory creation fails', () => {
@@ -388,6 +464,31 @@ describe('terminal-history', () => {
 
       expect(env.HISTFILE).toBeUndefined()
       expect(result.histFile).toBeNull()
+    })
+  })
+
+  describe('injectWslFishHistoryEnv', () => {
+    // clearAllMocks keeps implementations: drop the throwing mkdir left by the degrade test.
+    beforeEach(() => {
+      mkdirSyncMock.mockReset()
+    })
+
+    it('replaces an inherited Orca fish_history with this worktree session', () => {
+      const env: Record<string, string> = {
+        fish_history: fishHistorySessionName(hashWorktreeId('repo-1::/path/other-wt'))
+      }
+
+      const session = injectWslFishHistoryEnv(env, 'repo-1::/path/wt', 'Ubuntu')
+
+      expect(session).toBe(fishHistorySessionName(hashWorktreeId('repo-1::/path/wt')))
+      expect(env.fish_history).toBe(session)
+    })
+
+    it('preserves a caller-supplied fish_history', () => {
+      const env: Record<string, string> = { fish_history: 'mine' }
+
+      expect(injectWslFishHistoryEnv(env, 'repo-1::/path/wt', 'Ubuntu')).toBeNull()
+      expect(env.fish_history).toBe('mine')
     })
   })
 

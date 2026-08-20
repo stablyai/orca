@@ -348,6 +348,45 @@ describe('DashboardAgentRow', () => {
     expect(activeToolMarkup).toContain('ListDir')
   })
 
+  it('names what a blocked approval is waiting on', () => {
+    const markup = renderRow(
+      makeAgent(
+        { state: 'waiting' },
+        { state: 'waiting', toolName: 'bash', toolInput: 'rm -rf build/' }
+      )
+    )
+
+    // Why: a permission request parks the row on 'waiting'; without the tool line the row
+    // is a bare amber dot that cannot say what the user is being asked to approve.
+    expect(markup).toContain('lucide-wrench')
+    expect(markup).toContain('bash')
+    expect(markup).toContain('rm -rf build/')
+  })
+
+  it('leaves a wait without tool metadata unchanged', () => {
+    const markup = renderRow(makeAgent({ state: 'waiting' }, { state: 'waiting' }))
+
+    // Why: the height placeholder exists because a working row's tool line is imminent.
+    // A question-style wait has nothing coming, so reserving the row would just add a gap.
+    expect(markup).not.toContain('data-agent-row-tool-slot=""')
+    expect(markup).not.toContain('lucide-wrench')
+  })
+
+  it('keeps a resolved tool off a finished row', () => {
+    for (const state of ['done', 'blocked', 'idle'] as const) {
+      const markup = renderRow(
+        makeAgent(
+          { state },
+          // Why: 'idle' is a row-only state; the entry it is derived from still reports 'done'.
+          { state: state === 'idle' ? 'done' : state, toolName: 'bash', toolInput: 'rm -rf build/' }
+        )
+      )
+
+      expect(markup).not.toContain('lucide-wrench')
+      expect(markup).not.toContain('rm -rf build/')
+    }
+  })
+
   it('renders orchestration child rows with a connector and tree level', () => {
     const markup = renderRow(
       makeAgent({

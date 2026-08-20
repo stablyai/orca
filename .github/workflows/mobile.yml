@@ -12,10 +12,20 @@ on:
       # Why: the mobile terminal link parsers are conformance-tested against
       # these shared fixtures; desktop-side fixture edits must re-run this suite.
       - 'src/shared/terminal-file-link-conformance.ts'
+      # Why: this job holds the only checks that load the Fastfile, so edits to
+      # it or to the release workflow it guards must re-run them.
+      - '.github/workflows/mobile.yml'
+      - '.github/workflows/mobile-ios-release.yml'
 
 jobs:
   verify:
     runs-on: ubuntu-latest
+
+    env:
+      # Why: an unfrozen bundler silently re-resolves when Gemfile.lock drifts
+      # from the Gemfile, which is how the release jobs could land on different
+      # fastlane versions in the first place. Fail here instead.
+      BUNDLE_FROZEN: 'true'
 
     defaults:
       run:
@@ -30,10 +40,15 @@ jobs:
         with:
           node-version-file: package.json
 
-      - name: Setup Ruby
+      # bundler-cache installs mobile/Gemfile.lock, so this job is also what
+      # proves the pinned fastlane the release workflow depends on still
+      # resolves — before a release run finds out.
+      - name: Setup Ruby and fastlane
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: mobile
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -63,6 +78,20 @@ jobs:
 
       - name: Test iOS release version resolution
         run: ruby fastlane/ios_release_version_test.rb
+
+      - name: Test TestFlight lane arguments
+        run: ruby fastlane/fastfile_testflight_arguments_test.rb
+
+      # Why: nothing else in CI loads the Fastfile, so a syntax error, a broken
+      # require, or an undefined constant only surfaces mid-release — the
+      # ios-distribute job failed every run for six days that way. `lanes` just
+      # loads and lists, so it needs no App Store Connect credentials and makes
+      # no network calls to Apple.
+      - name: Smoke-check the Fastfile
+        env:
+          FASTLANE_SKIP_UPDATE_CHECK: '1'
+          FASTLANE_OPT_OUT_USAGE: '1'
+        run: bundle exec fastlane lanes
 
       - name: Lint
         run: pnpm lint

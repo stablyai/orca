@@ -14,29 +14,11 @@ describe('terminal container geometry', () => {
     )
   })
 
-  it('insets the xterm grid on both axes from pane padding', () => {
+  it('insets the xterm grid on all four edges', () => {
     expect(terminalCss).toMatch(
-      /\.xterm-container \.xterm\s*{[^}]*padding-top:\s*var\(--pane-padding-y, 4px\);/s
-    )
-    expect(terminalCss).toMatch(
-      /\.xterm-container \.xterm\s*{[^}]*padding-right:\s*var\(--pane-padding-x, 4px\);/s
-    )
-    expect(terminalCss).toMatch(
-      /\.xterm-container \.xterm\s*{[^}]*padding-bottom:\s*var\(--pane-padding-y, 4px\);/s
-    )
-    expect(terminalCss).toMatch(
-      /\.xterm-container \.xterm\s*{[^}]*padding-left:\s*var\(--pane-padding-x, 4px\);/s
+      /\.xterm-container \.xterm\s*{[^}]*padding:\s*var\(--pane-padding-y, 4px\) var\(--pane-padding-x, 4px\);/s
     )
     expect(terminalCss).toMatch(/\.xterm-container\s*{[^}]*width:\s*100%;/s)
     expect(terminalCss).not.toMatch(/\.xterm-container\s*{[^}]*margin-left:/s)
-  })
-
-  it('matches live DOM and WebGL background layers across translucent padding bands', () => {
-    expect(terminalCss).toMatch(
-      /\.xterm-container \.xterm::before\s*{[^}]*border-color:\s*var\(--orca-terminal-live-background, transparent\);/s
-    )
-    expect(terminalCss).toMatch(
-      /\.xterm-container\[data-terminal-renderer='webgl'\] \.xterm::after\s*{[^}]*border-color:\s*var\(--orca-terminal-live-background, transparent\);/s
-    )
   })
 })

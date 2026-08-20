@@ -3,6 +3,7 @@ import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
   applyTerminalAppearance,
+  composeRendererTerminalTheme,
   hexToRgba,
   publishTerminalViewAttributesAtAppStart
 } from './terminal-appearance'
@@ -150,7 +151,6 @@ describe('applyTerminalAppearance theme assignment', () => {
         getBoundingClientRect: () => ({ width: measurable ? 800 : 0, height: measurable ? 600 : 0 })
       },
       fitAddon: {
-        fit: vi.fn(),
         proposeDimensions: () => (measurable ? { cols: 80, rows: 24 } : undefined)
       }
     } as unknown as ManagedPane
@@ -215,6 +215,54 @@ describe('applyTerminalAppearance theme assignment', () => {
 
     expect(pane.terminal.options.theme).not.toBe(firstTheme)
     expect(pane.terminal.options.theme?.background).toBe('#102030')
+  })
+
+  it('lets the pane paint a fractional background exactly once', () => {
+    const pane = makePane(1)
+    const settings = getDefaultSettings('/tmp')
+    const manager = makeManager([pane])
+
+    applyTerminalAppearance(
+      manager,
+      { ...settings, terminalBackgroundOpacity: 0.5 },
+      true,
+      new Map(),
+      new Map(),
+      'false',
+      new Map(),
+      new Map()
+    )
+
+    expect(pane.terminal.options.theme?.background).toMatch(/^rgba\(.+, 0\)$/)
+    expect(pane.terminal.options.allowTransparency).toBe(true)
+    expect(manager.setPaneStyleOptions).toHaveBeenCalledWith(
+      expect.objectContaining({ paneBackground: expect.stringMatching(/^rgba\(.+, 0\.5\)$/) })
+    )
+  })
+
+  it('stamps four-edge padding before fitting', () => {
+    const pane = makePane(1)
+    pane.fitAddon.proposeDimensions = vi.fn(() => ({ cols: 79, rows: 23 }))
+    const manager = makeManager([pane])
+    const settings = getDefaultSettings('/tmp')
+
+    applyTerminalAppearance(
+      manager,
+      { ...settings, terminalPaddingX: 11, terminalPaddingY: 7 },
+      true,
+      new Map(),
+      new Map(),
+      'false',
+      new Map(),
+      new Map()
+    )
+
+    expect(manager.setPaneStyleOptions).toHaveBeenCalledWith(
+      expect.objectContaining({ paddingX: 11, paddingY: 7 })
+    )
+    expect(vi.mocked(manager.setPaneStyleOptions).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(pane.fitAddon.proposeDimensions).mock.invocationCallOrder[0]!
+    )
   })
 
   // #7934: contrast correction rescues invisible white text on light backgrounds but over-corrects on dark;
@@ -361,73 +409,22 @@ describe('applyTerminalAppearance theme assignment', () => {
     // Latest wins, exactly one write: intermediate hidden values never touch xterm.
     expect(writes).toEqual([21])
   })
+})
 
-  it('stamps settings-UI padding defaults when padding is unset', () => {
-    const pane = makePane(1)
-    const manager = makeManager([pane])
-    applyTerminalAppearance(
-      manager,
-      getDefaultSettings('/tmp'),
-      true,
-      new Map(),
-      new Map(),
-      'false',
-      new Map(),
-      new Map()
-    )
-    expect(manager.setPaneStyleOptions).toHaveBeenCalledWith(
-      expect.objectContaining({ paddingX: 4, paddingY: 4 })
-    )
+describe('composeRendererTerminalTheme', () => {
+  it('preserves background RGB while removing fractional renderer alpha', () => {
+    const theme = { background: 'rgba(16, 32, 48, 0.5)', foreground: '#ffffff' }
+
+    expect(composeRendererTerminalTheme(theme, 0.5)).toEqual({
+      ...theme,
+      background: 'rgba(16, 32, 48, 0)'
+    })
   })
 
-  it('rounds imported half-pixel padding before fitting', () => {
-    const pane = makePane(1)
-    const manager = makeManager([pane])
-    const settings = {
-      ...getDefaultSettings('/tmp'),
-      terminalPaddingX: 1.5,
-      terminalPaddingY: 2.5
-    }
+  it('keeps the opaque fast path unchanged', () => {
+    const theme = { background: '#102030' }
 
-    applyTerminalAppearance(
-      manager,
-      settings,
-      true,
-      new Map(),
-      new Map(),
-      'false',
-      new Map(),
-      new Map()
-    )
-
-    expect(manager.setPaneStyleOptions).toHaveBeenCalledWith(
-      expect.objectContaining({ paddingX: 2, paddingY: 3 })
-    )
-  })
-
-  it('stamps padding before fitting the pane', () => {
-    const pane = makePane(1)
-    pane.fitAddon.proposeDimensions = () => ({ cols: 79, rows: 23 })
-    const manager = makeManager([pane])
-
-    applyTerminalAppearance(
-      manager,
-      getDefaultSettings('/tmp'),
-      true,
-      new Map(),
-      new Map(),
-      'false',
-      new Map(),
-      new Map()
-    )
-
-    const setPaneStyleOptions = vi.mocked(manager.setPaneStyleOptions)
-    const fit = vi.mocked(pane.fitAddon.fit)
-    expect(setPaneStyleOptions).toHaveBeenCalledOnce()
-    expect(fit).toHaveBeenCalledOnce()
-    expect(setPaneStyleOptions.mock.invocationCallOrder[0]!).toBeLessThan(
-      fit.mock.invocationCallOrder[0]!
-    )
+    expect(composeRendererTerminalTheme(theme, 1)).toBe(theme)
   })
 })
 

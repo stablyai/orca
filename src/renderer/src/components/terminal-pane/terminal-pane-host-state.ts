@@ -3,6 +3,7 @@ import { getConnectionIdFromState } from '@/lib/connection-context'
 import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import {
+  selectRuntimeAwareSshError,
   selectRuntimeAwareSshStatus,
   selectRuntimeAwareSshTargetLabel,
   selectRuntimeAwareSshTargetRemoved
@@ -12,6 +13,8 @@ import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 export type TerminalPaneHostState = {
   nativeChatTranscriptIsLocalReadable: boolean
   sshReconnectEnvironmentId: string | null
+  /** The failure detail behind the status; the overlay shows only a canned sentence without it. */
+  sshReconnectError: string | null
   sshReconnectStatus: ReturnType<typeof selectRuntimeAwareSshStatus>
   sshReconnectTargetId: string | null
   sshReconnectTargetLabel: string
@@ -31,6 +34,7 @@ export function selectTerminalPaneHostState(
     return {
       nativeChatTranscriptIsLocalReadable: nativeChatTranscriptIsLocalReadableResult,
       sshReconnectEnvironmentId: null,
+      sshReconnectError: null,
       sshReconnectStatus: null,
       sshReconnectTargetId: null,
       sshReconnectTargetLabel: '',
@@ -41,6 +45,11 @@ export function selectTerminalPaneHostState(
   return {
     nativeChatTranscriptIsLocalReadable: nativeChatTranscriptIsLocalReadableResult,
     sshReconnectEnvironmentId,
+    sshReconnectError: selectRuntimeAwareSshError(
+      state,
+      sshReconnectEnvironmentId,
+      sshReconnectTargetId
+    ),
     sshReconnectStatus: selectRuntimeAwareSshStatus(
       state,
       sshReconnectEnvironmentId,

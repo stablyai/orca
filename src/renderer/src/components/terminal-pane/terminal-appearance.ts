@@ -3,7 +3,6 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { resolveTerminalLigaturesEnabled } from '../../../../shared/terminal-ligatures'
-import { normalizeTerminalPadding } from '../../../../shared/terminal-padding-settings'
 import {
   getBuiltinTheme,
   resolvePaneStyleOptions,
@@ -30,6 +29,7 @@ import { publishTerminalViewAttributes } from './terminal-view-attributes-publis
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
 import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
 import { resolveTerminalMinimumContrastRatio } from '@/lib/terminal-contrast-correction'
+import { normalizeTerminalPadding } from '../../../../shared/terminal-padding-settings'
 
 export function hexToRgba(hex: string, alpha: number): string {
   let clean = hex.replace('#', '')
@@ -133,6 +133,22 @@ function composedTerminalThemesEqual(a: ITheme | undefined, b: ITheme): boolean 
   return extA.length === extB.length && extA.every((value, i) => value === extB[i])
 }
 
+export function composeRendererTerminalTheme(
+  theme: ITheme | null,
+  backgroundOpacity: number | undefined
+): ITheme | null {
+  if (!theme?.background || backgroundOpacity === undefined || backgroundOpacity >= 1) {
+    return theme
+  }
+  const transparentBackground = theme.background.replace(
+    /^rgba\(([^,]+),\s*([^,]+),\s*([^,]+),\s*[^)]+\)$/,
+    'rgba($1, $2, $3, 0)'
+  )
+  return transparentBackground === theme.background
+    ? theme
+    : { ...theme, background: transparentBackground }
+}
+
 export function applyTerminalAppearance(
   manager: PaneManager,
   settings: GlobalSettings,
@@ -150,6 +166,7 @@ export function applyTerminalAppearance(
   // Publish composed appearance to main's hidden-PTY query responder — the only point it exists; deduped in the publisher.
   publishTerminalViewAttributes(theme, appearance.mode, settings)
   const paneBackground = theme?.background ?? '#000000'
+  const rendererTheme = composeRendererTerminalTheme(theme, settings.terminalBackgroundOpacity)
 
   const terminalFontWeights = resolveTerminalFontWeights(
     settings.terminalFontWeight,
@@ -159,12 +176,8 @@ export function applyTerminalAppearance(
     settings.terminalLigatures,
     settings.terminalFontFamily
   )
-  // FitAddon parses each CSS padding as an integer, so normalize imported half-pixels before styling and fitting.
-  const paddingX = normalizeTerminalPadding(settings.terminalPaddingX ?? 4)
-  const paddingY = normalizeTerminalPadding(settings.terminalPaddingY ?? 4)
 
-  // Why before the pane loop: FitAddon subtracts live .xterm padding, so the
-  // CSS vars must be stamped before safeFit or a padding shrink leaves a stale grid.
+  // Why before fit: FitAddon reads live .xterm padding when proposing cols/rows.
   manager.setPaneStyleOptions({
     splitBackground: paneBackground,
     paneBackground,
@@ -173,14 +186,14 @@ export function applyTerminalAppearance(
     opacityTransitionMs: paneStyles.opacityTransitionMs,
     dividerThicknessPx: paneStyles.dividerThicknessPx,
     focusFollowsMouse: paneStyles.focusFollowsMouse,
-    paddingX,
-    paddingY
+    paddingX: normalizeTerminalPadding(settings.terminalPaddingX ?? 4),
+    paddingY: normalizeTerminalPadding(settings.terminalPaddingY ?? 4)
   })
 
   for (const pane of manager.getPanes()) {
     // Why value-gated: writing options.theme rebuilds the palette, discarding TUI OSC 4/10/11/12 mutations; skip on no-op change.
-    if (theme && !composedTerminalThemesEqual(pane.terminal.options.theme, theme)) {
-      pane.terminal.options.theme = theme
+    if (rendererTheme && !composedTerminalThemesEqual(pane.terminal.options.theme, rendererTheme)) {
+      pane.terminal.options.theme = rendererTheme
     }
     // Gate off the configured theme background; the live OSC-11 background is deliberately preserved by the
     // theme write above, so a TUI that repaints its background at runtime won't re-gate (known limitation).

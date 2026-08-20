@@ -245,7 +245,7 @@ export async function createWslWatcher(
     throw new WatcherChildCapacityError()
   }
   try {
-    child = spawn('wsl.exe', ['-d', distro, '--', 'sh', '-s', '--', linuxPath], {
+    child = spawn('wsl.exe', ['-d', distro, '--exec', 'sh', '-s', '--', linuxPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
       windowsHide: true
     })

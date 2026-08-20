@@ -90,7 +90,7 @@ describe('mapGhosttyToOrca — window-padding', () => {
     expect(result.unsupportedKeys).toEqual([])
   })
 
-  it('rounds odd-sum dual-value padding to the nearest fitted pixel', () => {
+  it('rounds odd-sum dual-value padding to the integer used for fitting', () => {
     const result = mapGhosttyToOrca({ 'window-padding-x': '1,2' })
     expect(result.diff).toEqual({ terminalPaddingX: 2 })
     expect(result.unsupportedKeys).toEqual([])

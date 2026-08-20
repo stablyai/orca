@@ -24,7 +24,7 @@ export function isRuntimeFolderWorkspaceIdForRepo(repo: Repo, worktreeId: string
 export function mergeRuntimeFolderWorkspace(
   repo: Repo,
   worktreeId: string,
-  meta: WorktreeMeta
+  meta: Partial<WorktreeMeta>
 ): Worktree {
   const creatorProvenance = normalizeWorkspaceCreatorProvenance(meta.creatorProvenance)
   return {

@@ -1,10 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 import { WebglAddon } from '@xterm/addon-webgl'
 import type { ManagedPaneInternal } from './pane-manager-types'
 import {
   attachWebgl,
   clearTerminalWebglAttachBackoff,
-  disposeWebgl,
   resetTerminalWebglSuggestion,
   resetWebglTextureAtlas
 } from './pane-webgl-renderer'
@@ -12,7 +11,7 @@ import { notifyPaneFitSucceeded } from './pane-fit-webgl-attach-signal'
 import { safeFit } from './pane-fit'
 import { disposePane } from './pane-lifecycle'
 
-function createPane(options: { loadAddon?: (addon: unknown) => void } = {}): ManagedPaneInternal {
+function createPane(options: { loadAddon?: () => void } = {}): ManagedPaneInternal {
   const leafId = '22222222-2222-4222-8222-222222222222' as never
   return {
     id: 1,
@@ -25,7 +24,7 @@ function createPane(options: { loadAddon?: (addon: unknown) => void } = {}): Man
       loadAddon: vi.fn(options.loadAddon)
     } as never,
     container: {} as never,
-    xtermContainer: { dataset: {} } as never,
+    xtermContainer: {} as never,
     linkTooltip: {} as never,
     terminalGpuAcceleration: 'on',
     gpuRenderingEnabled: true,
@@ -64,6 +63,42 @@ function createFittablePane(): ManagedPaneInternal {
   return pane
 }
 
+type FakeRenderService = {
+  _isPaused: boolean
+  _needsFullRefresh: boolean
+  refreshRows: Mock<(start: number, end: number, sync?: boolean) => void>
+}
+
+/** A pane whose xterm render service is paused, as it is whenever the pane has
+ *  no layout box: `display` decides whether the element is one xterm's
+ *  IntersectionObserver would report as intersecting. */
+function createPausedPane(display: 'block' | 'none'): {
+  pane: ManagedPaneInternal
+  renderService: FakeRenderService
+} {
+  const pane = createPane()
+  const renderService: FakeRenderService = {
+    _isPaused: true,
+    _needsFullRefresh: false,
+    // Mirrors xterm: a refresh while paused only latches the pending full repaint.
+    refreshRows: vi.fn<(start: number, end: number, sync?: boolean) => void>(() => {
+      if (renderService._isPaused) {
+        renderService._needsFullRefresh = true
+      }
+    })
+  }
+  const view = { getComputedStyle: () => ({ display }) }
+  const element = { ownerDocument: { defaultView: view }, parentElement: null }
+  pane.container = element as never
+  pane.xtermContainer = element as never
+  pane.terminal = {
+    ...pane.terminal,
+    refresh: vi.fn(() => renderService.refreshRows(0, pane.terminal.rows - 1)),
+    _core: { _renderService: renderService }
+  } as never
+  return { pane, renderService }
+}
+
 describe('terminal WebGL addon lifecycle', () => {
   beforeEach(() => {
     resetTerminalWebglSuggestion()
@@ -94,69 +129,6 @@ describe('terminal WebGL addon lifecycle', () => {
 
     expect(disposeSpy).toHaveBeenCalledTimes(1)
     expect(pane.webglAddon).toBeNull()
-  })
-
-  it('tracks the active renderer for WebGL padding compositing', () => {
-    const pane = createPane()
-
-    attachWebgl(pane)
-    expect(pane.xtermContainer.dataset.terminalRenderer).toBe('webgl')
-
-    disposeWebgl(pane)
-    expect(pane.xtermContainer.dataset.terminalRenderer).toBe('dom')
-  })
-
-  it('uses source-over alpha blending for colored translucent backgrounds', () => {
-    const blendFuncSeparate = vi.fn()
-    const gl = {
-      SRC_ALPHA: 1,
-      ONE_MINUS_SRC_ALPHA: 2,
-      ONE: 3,
-      blendFuncSeparate
-    }
-    const pane = createPane({
-      loadAddon: (addon) => {
-        ;(addon as { _renderer: { _gl: typeof gl } })._renderer = { _gl: gl }
-      }
-    })
-
-    attachWebgl(pane)
-
-    expect(blendFuncSeparate).toHaveBeenCalledWith(1, 2, 3, 2)
-  })
-
-  it('restores source-over alpha blending after WebGL context restoration', () => {
-    const blendFuncSeparate = vi.fn()
-    const canvas = new EventTarget()
-    const gl = {
-      SRC_ALPHA: 1,
-      ONE_MINUS_SRC_ALPHA: 2,
-      ONE: 3,
-      blendFuncSeparate
-    }
-    const pane = createPane({
-      loadAddon: (addon) => {
-        canvas.addEventListener('webglcontextrestored', () => blendFuncSeparate(4, 5, 6, 7))
-        ;(addon as { _renderer: { _canvas: EventTarget; _gl: typeof gl } })._renderer = {
-          _canvas: canvas,
-          _gl: gl
-        }
-      }
-    })
-
-    attachWebgl(pane)
-    blendFuncSeparate.mockClear()
-    canvas.dispatchEvent(new Event('webglcontextrestored'))
-
-    expect(blendFuncSeparate).toHaveBeenCalledTimes(2)
-    expect(blendFuncSeparate).toHaveBeenNthCalledWith(1, 4, 5, 6, 7)
-    expect(blendFuncSeparate).toHaveBeenLastCalledWith(1, 2, 3, 2)
-
-    disposeWebgl(pane)
-    blendFuncSeparate.mockClear()
-    canvas.dispatchEvent(new Event('webglcontextrestored'))
-    expect(blendFuncSeparate).toHaveBeenCalledOnce()
-    expect(blendFuncSeparate).toHaveBeenCalledWith(4, 5, 6, 7)
   })
 
   it('disposes the previous addon before attaching a replacement', () => {
@@ -194,6 +166,36 @@ describe('terminal WebGL addon lifecycle', () => {
     resetWebglTextureAtlas(pane)
 
     expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
+  })
+
+  it('keeps the render pause latched when resetting a pane that has no layout box', () => {
+    // Regression: the atlas reset released xterm's pause for every pane of a
+    // visible manager, including a collapsed sibling of an expanded pane. That
+    // painted the freshly cleared model into an element with no box, and left
+    // the service unpaused for good — the IntersectionObserver only fires on a
+    // change, so it never re-pauses. Clearing _needsFullRefresh with it drops
+    // the repaint the observer owes the pane on reveal, and the deferred
+    // _pausedResizeTask that rides along with it.
+    const { pane, renderService } = createPausedPane('none')
+
+    resetWebglTextureAtlas(pane)
+
+    expect(renderService._isPaused).toBe(true)
+    expect(renderService._needsFullRefresh).toBe(true)
+    expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
+  })
+
+  it('still forces the paused render through for a pane that has a layout box', () => {
+    // The reveal case the release exists for: DOM-visible, but xterm's observer
+    // has not caught up, so a plain refresh() would be swallowed.
+    const { pane, renderService } = createPausedPane('block')
+
+    resetWebglTextureAtlas(pane)
+
+    expect(renderService._isPaused).toBe(false)
+    expect(renderService._needsFullRefresh).toBe(false)
+    expect(renderService.refreshRows).toHaveBeenCalledWith(0, 23, true)
+    expect(pane.terminal.refresh).not.toHaveBeenCalled()
   })
 
   it('skips the reset while WebGL is latched off after a context loss', () => {

@@ -64,7 +64,12 @@ export const createPaneForegroundAgentSlice: StateCreator<
     })
   },
   clearPaneForegroundAgentByTabPrefix: (tabIdPrefix) => {
-    set((s) => clearEntriesByTabPrefixes(s.paneForegroundAgentByPaneKey, [`${tabIdPrefix}:`]) ?? s)
+    set(
+      (s) =>
+        buildPaneForegroundAgentTabPrefixClearPatch(s.paneForegroundAgentByPaneKey, [
+          `${tabIdPrefix}:`
+        ]) ?? s
+    )
   },
   clearPaneForegroundAgentByWorktree: (worktreeId) => {
     // Why: entries carry no worktreeId, so this must run while the worktree's
@@ -72,14 +77,16 @@ export const createPaneForegroundAgentSlice: StateCreator<
     // awaiting terminal teardown).
     set((s) => {
       const prefixes = (s.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
-      return clearEntriesByTabPrefixes(s.paneForegroundAgentByPaneKey, prefixes) ?? s
+      return (
+        buildPaneForegroundAgentTabPrefixClearPatch(s.paneForegroundAgentByPaneKey, prefixes) ?? s
+      )
     })
   }
 })
 
-function clearEntriesByTabPrefixes(
+export function buildPaneForegroundAgentTabPrefixClearPatch(
   entries: Record<string, PaneForegroundAgentEntry>,
-  tabPrefixes: string[]
+  tabPrefixes: readonly string[]
 ): Pick<PaneForegroundAgentSlice, 'paneForegroundAgentByPaneKey'> | null {
   if (tabPrefixes.length === 0) {
     return null

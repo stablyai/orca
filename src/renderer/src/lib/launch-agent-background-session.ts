@@ -249,9 +249,10 @@ export async function launchAgentBackgroundSession(
       // hidden prompt launches so sidebar/activity surfaces do not stay idle.
       const routing = agentStatusConsumer.resolveRouting()
       if (routing) {
+        const observation = agentStatusConsumer.observeLaunchIngress()
         store.setAgentStatus(
           paneKey,
-          { state: 'working', prompt: trimmedPrompt, agentType: agent },
+          { state: 'working', prompt: trimmedPrompt, agentType: agent, observation },
           undefined,
           undefined,
           routing,

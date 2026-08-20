@@ -19,6 +19,7 @@ const holders = vi.hoisted(() => ({
     subscribe: (listener: (state: unknown, previous: unknown) => void) => () => void
   },
   infoToasts: [] as string[],
+  activateAndRevealWorktree: vi.fn(),
   rig: null as null | {
     resolvers: ((result: WorkspaceCleanupScanResult) => void)[]
   }
@@ -42,7 +43,9 @@ vi.mock('sonner', () => ({
   })
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree: vi.fn() }))
+vi.mock('@/lib/worktree-activation', () => ({
+  activateAndRevealWorktree: holders.activateAndRevealWorktree
+}))
 
 vi.mock('@/components/ui/dialog', () => ({
   Dialog: ({ open, children }: { open: boolean; children: ReactNode }) =>
@@ -161,7 +164,7 @@ function rowNames(): string[] {
 }
 
 function rowCheckbox(name: string): HTMLElement | null {
-  return container?.querySelector<HTMLElement>(`[aria-label="Select ${name}"]`) ?? null
+  return container?.querySelector<HTMLElement>(`[aria-label^="Select ${name} on "]`) ?? null
 }
 
 function cachedFleet(): WorkspaceCleanupScanResult {
@@ -200,6 +203,7 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     seedStore(store, {})
     holders.store = store as unknown as typeof holders.store
     holders.infoToasts = []
+    holders.activateAndRevealWorktree.mockReset()
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
@@ -233,6 +237,30 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     expect(rig.scan).toHaveBeenCalledTimes(1)
     expect(container?.textContent).toContain('Updated 2h ago')
     expect(container?.textContent).toContain('Refreshing')
+  })
+
+  it('opens a cleanup row on the host that produced it', async () => {
+    installApi({
+      scannedAt: CACHED_AT,
+      candidates: [
+        makeCandidate({
+          worktreeId: 'repo1::/tmp/remote',
+          displayName: 'remote',
+          executionHostId: 'ssh:box'
+        })
+      ],
+      errors: []
+    })
+    await renderDialog()
+    await openDialog()
+
+    await act(async () => {
+      container?.querySelector<HTMLElement>('[aria-label^="Open remote"]')?.click()
+    })
+
+    expect(holders.activateAndRevealWorktree).toHaveBeenCalledWith('repo1::/tmp/remote', {
+      executionHostId: 'ssh:box'
+    })
   })
 
   it('reconciles streamed rows into the cached list without clearing it', async () => {

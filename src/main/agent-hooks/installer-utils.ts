@@ -13,7 +13,6 @@ import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
-import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
 import { resolveHooksJsonWritePath } from './hook-config-write-path'
 import { writeRollingFileBackup } from '../rolling-file-backup'
 import { wrapWindowsPowerShellEncodedCommand } from './windows-powershell-hook-launcher'
@@ -106,20 +105,7 @@ export function getSharedManagedScriptPath(scriptFileName: string): string {
   return join(homedir(), '.orca', 'agent-hooks', scriptFileName)
 }
 
-function quotePosixShellString(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`
-}
-
-// Why: guard for a readable executable so a stale entry at a missing script becomes a silent no-op, not an exit-127 failure on every tool call.
-export function wrapPosixHookCommand(scriptPath: string, env: Record<string, string> = {}): string {
-  // Why: single-quote escape so $, `, ", \ in scriptPath stay literal — avoids shell injection from an arbitrary path.
-  const quoted = quotePosixShellString(scriptPath)
-  const envPrefix = Object.entries(env)
-    .map(([key, value]) => `${key}='${value.replaceAll("'", "'\\''")}'`)
-    .join(' ')
-  const invocation = envPrefix ? `${envPrefix} /bin/sh ${quoted}` : `/bin/sh ${quoted}`
-  return `if [ -f ${quoted} ] && [ -r ${quoted} ] && [ -x ${quoted} ]; then ${invocation}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
-}
+export { wrapPosixHookCommand } from './posix-hook-command'
 
 export function quotePowerShellString(value: string): string {
   return `'${value.replaceAll("'", "''")}'`

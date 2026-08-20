@@ -266,8 +266,15 @@ function registeredPtyProviders(): RegisteredPtyProvider[] {
   ]
 }
 
+// Why: settling each provider separately only bounds a relay that *rejects*. An
+// unanswered relay list runs to the mux's own 30s default — far past the caller's
+// budget — so the aggregate still expired and the runtime lost the inventory it
+// needs to retire exited PTYs, freezing every retained pane as "active" (STA-517).
+// Forward the caller's deadline so a silent relay fails fast and lands in the
+// unavailable branch below: unknown, not empty.
 async function listRegisteredPtyProcessesWithHostScope(
-  onSshInventoryUnavailable?: (connectionId: string, error: unknown) => void
+  onSshInventoryUnavailable?: (connectionId: string, error: unknown) => void,
+  opts?: { deadlineMs?: number }
 ): Promise<{
   processes: PtyProcessInfo[]
   hostIds: ExecutionHostId[]
@@ -280,7 +287,8 @@ async function listRegisteredPtyProcessesWithHostScope(
           ? toSshExecutionHostId(connectionId)
           : LOCAL_EXECUTION_HOST_ID
         return {
-          processes: await provider.listProcesses(),
+          // Why: the deadline only applies to relay round-trips; the local provider answers in-process.
+          processes: await (connectionId ? provider.listProcesses(opts) : provider.listProcesses()),
           hostId
         }
       } catch (error) {
@@ -2561,14 +2569,14 @@ export function registerPtyHandlers(
         return env
       },
       onSpawned: (id, incarnationId) => runtime?.onPtySpawned(id, incarnationId),
-      onExit: (id, code, incarnationId) => {
+      onExit: (id, code, incarnationId, cause) => {
         if (!isCurrentPtyExit({ id, incarnationId })) {
           return
         }
         clearProviderPtyState(id)
         ptyOwnership.delete(id)
         markClaudePtyExited(id)
-        runtime?.onPtyExit(id, code, incarnationId)
+        runtime?.onPtyExit(id, code, incarnationId, cause ? { cause } : undefined)
       },
       onData: (id, data, timestamp, sequenceChars, transformed) =>
         runtime?.onPtyData(id, data, timestamp, sequenceChars ?? data.length, transformed)
@@ -4113,9 +4121,20 @@ export function registerPtyHandlers(
         clearProviderPtyState(payload.id)
         ptyOwnership.delete(payload.id)
         markClaudePtyExited(payload.id)
-        runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId)
+        runtime?.onPtyExit(
+          payload.id,
+          payload.code,
+          payload.incarnationId,
+          payload.cause ? { cause: payload.cause } : undefined
+        )
       }
-      sendPtyExitToRenderer(payload)
+      // Why not the whole payload: the exit cause is a main-process fact for the
+      // runtime's records; the renderer's pty:exit contract stays as it was.
+      sendPtyExitToRenderer({
+        id: payload.id,
+        code: payload.code,
+        ...(payload.incarnationId ? { incarnationId: payload.incarnationId } : {})
+      })
     })
   }
 
@@ -5583,6 +5602,7 @@ export function registerPtyHandlers(
       }
     },
     kill: (ptyId) => {
+      runtime?.markPtyStopRequested?.(ptyId)
       let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
       const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
       connectionId ??= parsedSshId?.connectionId
@@ -5716,6 +5736,7 @@ export function registerPtyHandlers(
       }
     },
     stopAndWait: async (ptyId, opts) => {
+      runtime?.markPtyStopRequested?.(ptyId)
       let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
       const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
       connectionId ??= parsedSshId?.connectionId
@@ -5860,22 +5881,23 @@ export function registerPtyHandlers(
         return null
       }
     },
-    listProcesses: async (connectionId) => {
+    listProcesses: async (connectionId, opts) => {
       if (connectionId === null) {
         return localProvider.listProcesses()
       }
       if (connectionId !== undefined) {
         try {
-          return await getProvider(connectionId).listProcesses()
+          return await getProvider(connectionId).listProcesses(opts)
         } catch (error) {
           markSshInventoryUnverifiable(connectionId, error)
           throw error
         }
       }
-      return (await listRegisteredPtyProcessesWithHostScope(markSshInventoryUnverifiable)).processes
+      return (await listRegisteredPtyProcessesWithHostScope(markSshInventoryUnverifiable, opts))
+        .processes
     },
-    listProcessesWithHostScope: () =>
-      listRegisteredPtyProcessesWithHostScope(markSshInventoryUnverifiable),
+    listProcessesWithHostScope: (opts) =>
+      listRegisteredPtyProcessesWithHostScope(markSshInventoryUnverifiable, opts),
     serializeBuffer: (ptyId, opts) => {
       // Why: mobile xterm must start from the desktop's exact screen state/dimensions before live TUI chunks render correctly.
       return requestSerializedBuffer(ptyId, opts)
@@ -7699,6 +7721,7 @@ export function registerPtyHandlers(
       // Why: runtime terminal handles belong to terminal.close; unowned PTY routing could target the local provider.
       throw new Error('Invalid PTY provider id')
     }
+    runtime?.markPtyStopRequested?.(args.id)
     const ownedConnectionId = ptyOwnership.get(args.id)
     const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
     const connectionId = ownedConnectionId ?? parsedSshId?.connectionId

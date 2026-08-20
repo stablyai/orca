@@ -18,21 +18,23 @@ import {
   shouldShowNativeChatWorking
 } from './native-chat-working-suppression'
 import {
-  applyCommandMarkerBoundaries,
   appendPendingSendCache,
-  commandMarkersAsMessages,
-  appendCommandMarkerCache,
   launchPromptAsMessage,
   pendingSendsAsMessages,
   nextNativeChatPendingSendId,
   prunePendingSends,
-  readCommandMarkerCache,
   readPendingSendCache,
   shouldPruneLaunchPrompt,
   writePendingSendCache,
-  type NativeChatCommandMarker,
   type NativeChatPendingSend
 } from './native-chat-pending'
+import {
+  appendCommandMarkerCache,
+  applyCommandMarkerBoundaries,
+  commandMarkersAsMessages,
+  readCommandMarkerCache,
+  type NativeChatCommandMarker
+} from './native-chat-command-marker'
 import {
   deriveNativeChatStreamingText,
   nativeChatStreamingMessage

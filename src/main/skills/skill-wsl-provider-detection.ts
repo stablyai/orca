@@ -10,7 +10,7 @@ export function detectSkillProvidersInWsl(distro: string): Promise<string[]> {
   return new Promise((resolve, reject) => {
     execFile(
       'wsl.exe',
-      ['-d', distro, '--', 'sh', '-c', DETECTION_SCRIPT],
+      ['-d', distro, '--exec', 'sh', '-c', DETECTION_SCRIPT],
       { encoding: 'utf8', timeout: 10_000, windowsHide: true },
       (error, stdout) => {
         if (error) {

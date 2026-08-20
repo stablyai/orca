@@ -2646,7 +2646,7 @@
               "346d409ab2": "Elige agente",
               "0adba8fa0c": "Agente",
               "ec8f081919": "Acción",
-              "ed04233b3e": "Guarda comandos de terminal o prompts de agente para acceso rápido.",
+              "ed04233b3e": "Los elementos guardados aparecen en el menú de la barra de pestañas para ejecutarlos con un clic.",
               "ca414324ee": "Texto de comando",
               "dc921c17ee": "Prompt",
               "5b3f634a55": "Agregar comando rápido",
@@ -5058,6 +5058,12 @@
           "9f2d4c8b17": "Ocultar worktrees externos permanentemente para {{value0}}",
           "5e1b8d3f62": "Ocultar worktrees externos permanentemente",
           "c3e8a1f4b2": "No volver a mostrar"
+        },
+        "NoticeHostGlyph": {
+          "hostDisconnected": "{{hostName}} está desconectado",
+          "sshHostProject": "Proyecto en el host SSH {{hostName}}",
+          "localHostProject": "Proyecto en este host",
+          "runtimeHostProject": "Proyecto en {{hostName}}"
         },
         "newExternalWorktreesInboxActions": {
           "a11c2f6d89": "No se pudieron mantener ocultos los worktrees externos. Inténtalo de nuevo.",
@@ -13632,6 +13638,7 @@
           "e46c1aa9ad": "Crear",
           "a9d9dccf77": "Guardar",
           "777548c2d6": "Guardar cambios",
+          "e8c2a14f70": "Una vez guardado, se ejecutará automáticamente hasta que se ponga en pausa.",
           "ff5db28639": "existente"
         },
         "AutomationEditorDialogHeader": {
@@ -13922,6 +13929,19 @@
         },
         "AutomationListLocalRows": {
           "c92c9463c6": "Acciones de automatización"
+        },
+        "AutomationListFilterMenu": {
+          "926e785e4d": "Agentes de búsqueda...",
+          "491043ee45": "Ningún agente coincide con su búsqueda.",
+          "agent": "Agente",
+          "lastRun": "Última ejecución",
+          "all": "Todas",
+          "failed": "Fallida",
+          "succeeded": "Correcta",
+          "neverRan": "Nunca se ejecutó",
+          "filters": "Filtros",
+          "clear": "Limpiar filtros",
+          "removeFilter": "Eliminar filtro de {{value0}}"
         }
       },
       "agent": {
@@ -14265,6 +14285,13 @@
         "pendingChip": "{{value0}} pendiente",
         "needsActionChip": "{{value0}} requiere acción",
         "unresolvedChip": "{{value0}} sin resolver"
+      },
+      "artifacts": {
+        "ArtifactsPage": {
+          "deleteTitle": "¿Eliminar el artefacto?",
+          "deleteDescription": "“{{name}}” ya no estará disponible en su enlace público.",
+          "delete": "Eliminar"
+        }
       }
     },
     "i18n": {

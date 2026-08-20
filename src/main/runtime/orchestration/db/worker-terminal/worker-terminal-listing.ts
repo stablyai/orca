@@ -1,6 +1,7 @@
-import type { DispatchStatus, WorkerDispatchState } from '../../types'
+import type { DispatchStatus } from '../../types'
 import { deriveWorkerTerminalListState } from '../../worker-terminal-ownership'
 import type {
+  WorkerDispatchListState,
   WorkerTerminalResourceRow,
   WorkerTerminalListState
 } from '../../worker-terminal-ownership'
@@ -16,7 +17,11 @@ export function markWorkerTerminalUserOwned(this: OrchestrationDb, paneKey: stri
       .prepare(
         `SELECT id, owner_dispatch_id, pane_key FROM worker_terminal_resources
           WHERE pane_key = ? AND ownership_state = 'owned'
-            AND release_state IN ('not_requested', 'retained', 'requested')`
+            AND release_state IN ('not_requested', 'retained', 'requested')
+            AND NOT EXISTS (
+              SELECT 1 FROM worker_dispatches w
+               WHERE w.dispatch_id = owner_dispatch_id AND w.state = 'stopping'
+            )`
       )
       .all(paneKey) as { id: string; owner_dispatch_id: string; pane_key: string }[]
     const candidates =
@@ -28,6 +33,10 @@ export function markWorkerTerminalUserOwned(this: OrchestrationDb, paneKey: stri
                 `SELECT id, owner_dispatch_id, pane_key FROM worker_terminal_resources
                 WHERE ownership_state = 'owned'
                   AND release_state IN ('not_requested', 'retained', 'requested')
+                  AND NOT EXISTS (
+                    SELECT 1 FROM worker_dispatches w
+                     WHERE w.dispatch_id = owner_dispatch_id AND w.state = 'stopping'
+                  )
                   AND pane_key IS NOT NULL`
               )
               .all() as { id: string; owner_dispatch_id: string; pane_key: string }[]
@@ -37,7 +46,11 @@ export function markWorkerTerminalUserOwned(this: OrchestrationDb, paneKey: stri
        SET ownership_state = 'user_owned', release_state = 'retained',
            retained_reason = 'user_takeover', updated_at = datetime('now')
        WHERE id = ? AND ownership_state = 'owned'
-         AND release_state IN ('not_requested', 'retained', 'requested')`
+         AND release_state IN ('not_requested', 'retained', 'requested')
+         AND NOT EXISTS (
+           SELECT 1 FROM worker_dispatches w
+            WHERE w.dispatch_id = owner_dispatch_id AND w.state = 'stopping'
+         )`
     )
     let changed = 0
     for (const candidate of candidates) {
@@ -76,7 +89,7 @@ export function listWorkerTerminalResources(
   dispatchId: string
   taskId: string
   runId: string
-  workerState: WorkerDispatchState
+  workerState: WorkerDispatchListState
   dispatchStatus: DispatchStatus
   agentTerminalHandle: string | null
   terminalState: WorkerTerminalListState | null
@@ -84,16 +97,18 @@ export function listWorkerTerminalResources(
 }[] {
   const rows = this.db
     .prepare(
-      `SELECT w.dispatch_id, w.state AS worker_state, w.agent_terminal_handle,
+      `SELECT d.id AS dispatch_id,
+              COALESCE(w.state, 'unsupervised') AS worker_state,
+              COALESCE(w.agent_terminal_handle, d.assignee_handle) AS agent_terminal_handle,
               d.task_id, d.run_id, d.status AS dispatch_status
-         FROM worker_dispatches w
-         JOIN dispatch_contexts d ON d.id = w.dispatch_id
+         FROM dispatch_contexts d
+         LEFT JOIN worker_dispatches w ON w.dispatch_id = d.id
         ${params.runId ? 'WHERE d.run_id = ?' : ''}
-        ORDER BY w.created_at ASC`
+        ORDER BY COALESCE(w.created_at, d.created_at) ASC`
     )
     .all(...(params.runId ? [params.runId] : [])) as {
     dispatch_id: string
-    worker_state: WorkerDispatchState
+    worker_state: WorkerDispatchListState
     agent_terminal_handle: string | null
     task_id: string
     run_id: string

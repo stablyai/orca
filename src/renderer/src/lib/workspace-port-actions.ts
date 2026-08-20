@@ -124,7 +124,9 @@ export async function openWorkspacePortInBrowser(args: {
   if (!worktreeId) {
     return { ok: false, reason: 'No workspace selected for the browser.' }
   }
-  activateAndRevealWorktree(worktreeId)
+  // Why: the browser tab opened below is this jump's surface; seeding a shell would add a
+  // PTY the user never asked for in a workspace whose last terminal they closed.
+  activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
   if (args.runtimeTarget.kind === 'environment') {
     try {
       await assertRuntimeEnvironmentCapability(

@@ -10,6 +10,7 @@ import type {
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
 import type { PtyProcessInfo } from './pty-process-info'
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 export type {
   PtyBackgroundStreamEvent,
@@ -217,6 +218,12 @@ export type IPtyProvider = {
   onData(callback: (payload: PtyDataEvent) => void): () => void
   onReplay(callback: (payload: { id: string; data: string }) => void): () => void
   onExit(
-    callback: (payload: { id: string; code: number; incarnationId?: PtyIncarnationId }) => void
+    callback: (payload: {
+      id: string
+      code: number
+      incarnationId?: PtyIncarnationId
+      /** Absent when the provider predates exit causes; readers must not infer one from `code`. */
+      cause?: TerminalExitCause
+    }) => void
   ): () => void
 }

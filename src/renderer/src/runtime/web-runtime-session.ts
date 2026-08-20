@@ -527,11 +527,15 @@ export async function createWebRuntimeSessionBrowserTab(args: {
         if (
           state.activeBrowserTabIdByWorktree === previousState.activeBrowserTabIdByWorktree &&
           state.activeFileIdByWorktree === previousState.activeFileIdByWorktree &&
+          // Why: resolveWebSessionVisibleTabId now reads group state, so a group-only focus move
+          // must re-evaluate it.
+          state.activeGroupIdByWorktree === previousState.activeGroupIdByWorktree &&
           state.activeTabIdByWorktree === previousState.activeTabIdByWorktree &&
           state.activeTabType === previousState.activeTabType &&
           state.activeTabTypeByWorktree === previousState.activeTabTypeByWorktree &&
           state.activeWorktreeId === previousState.activeWorktreeId &&
           state.activeWorkspaceExecutionHostId === previousState.activeWorkspaceExecutionHostId &&
+          state.groupsByWorktree === previousState.groupsByWorktree &&
           state.unifiedTabsByWorktree === previousState.unifiedTabsByWorktree
         ) {
           return
