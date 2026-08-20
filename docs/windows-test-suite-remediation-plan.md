@@ -888,3 +888,17 @@ asserting the POSIX half of a two-step termination. Windows has no SIGTERM, and
 `terminateCodexProbeChild` knows it — stdin EOF is the graceful stop everywhere,
 the signal is the backstop where signals are real. Assert that the child is gone,
 not which mechanism got it there.
+
+### `src/main/ipc/pty-daemon-spawn-wsl-runtime.test.ts` (1 fail) — candidate **P**
+
+"drops a legacy shim PATH entry inherited from the host process on the daemon
+path". The classifier is sound: `isLegacyTerminalShimPathEntry` folds both slash
+styles before matching the suffix, so a backslashed entry is recognised. Feeding
+the case a platform-shaped entry instead of the POSIX one it injects does **not**
+make it pass, which points at the scrub rather than the spelling.
+
+The case's own comment names the mechanism: the daemon path passes a sparse env,
+so the PATH prepends re-read from `process.env` and the scrub has to outlive that
+fallback. If it does not on Windows, a stale attribution shim survives into
+terminals there — worth confirming against the real daemon path before deciding
+whether the test or the scrub is wrong.
