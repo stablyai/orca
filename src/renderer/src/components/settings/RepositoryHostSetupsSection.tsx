@@ -315,8 +315,11 @@ export function RepositoryHostSetupsSection({
           const removeSetup = async (): Promise<void> => {
             if (!canOpenSetup) {
               setDeletingSetupId(setup.id)
-              await deleteProjectHostSetup({ setupId: setup.id })
-              setDeletingSetupId(null)
+              try {
+                await deleteProjectHostSetup({ setupId: setup.id })
+              } finally {
+                setDeletingSetupId(null)
+              }
               return
             }
             setConfirmRemoveSetup(setup)
