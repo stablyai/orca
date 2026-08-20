@@ -14370,7 +14370,7 @@
           "openArtifact": "아티팩트 열기",
           "deleteArtifact": "아티팩트 삭제",
           "moreAvailable": "더 많은 아티팩트를 사용할 수 있습니다",
-          "moreAvailableCopy": "다음 페이지를 불러오려면 계속하세요.",
+          "moreAvailableCopy": "계속하려면 다음 페이지를 불러오세요.",
           "loadMoreFailed": "아티팩트를 더 불러올 수 없습니다.",
           "publishingOff": "게시가 꺼져 있습니다",
           "publishingOffCopy": "이 기기에서는 아직 공개 아티팩트 링크를 만들 수 없습니다. 설정 → 아티팩트에서 게시를 허용한 후 열려 있는 HTML 또는 Markdown 파일에서 공유하거나 에이전트에게 요청하세요.",
