@@ -33,21 +33,44 @@ type Draft = {
 
 const PREVIEW_SIZE = 180
 
+// Why: getters, matching pet-models — a module-level `translate()` call would
+// run before i18n is ready and would not follow a language change afterwards.
 const MODES: { id: PetBuildMode; label: string; hint: string }[] = [
   {
     id: 'whole-body',
-    label: 'Whole body',
-    hint: 'Works with any picture. It glides rather than walks.'
+    get label() {
+      return translate('auto.components.pet.fromImage.modeWholeBody', 'Whole body')
+    },
+    get hint() {
+      return translate(
+        'auto.components.pet.fromImage.modeWholeBodyHint',
+        'Works with any picture. It glides rather than walks.'
+      )
+    }
   },
   {
     id: 'rigged',
-    label: 'Walking legs',
-    hint: 'Finds legs in the picture so it can walk. Falls back if it cannot.'
+    get label() {
+      return translate('auto.components.pet.fromImage.modeRigged', 'Walking legs')
+    },
+    get hint() {
+      return translate(
+        'auto.components.pet.fromImage.modeRiggedHint',
+        'Finds legs in the picture so it can walk. Falls back if it cannot.'
+      )
+    }
   },
   {
     id: 'head-swap',
-    label: 'Head only',
-    hint: 'Your picture as the head on the pet body. Animates fully.'
+    get label() {
+      return translate('auto.components.pet.fromImage.modeHeadSwap', 'Head only')
+    },
+    get hint() {
+      return translate(
+        'auto.components.pet.fromImage.modeHeadSwapHint',
+        'Your picture as the head on the pet body. Animates fully.'
+      )
+    }
   }
 ]
 
