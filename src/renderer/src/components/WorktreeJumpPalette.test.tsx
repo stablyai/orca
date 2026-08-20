@@ -456,8 +456,9 @@ describe('WorktreeJumpPalette', () => {
     expect(activeSpan).not.toBeNull()
     expect(activeSpan?.textContent).toBe('23d')
 
-    const noActivityRow = testContainer.querySelector('[data-command-item="worktree:no-activity-wt"]')
+    const noActivityRow = testContainer.querySelector(
+      '[data-command-item="worktree:no-activity-wt"]'
+    )
     expect(noActivityRow?.querySelector('span[aria-label*="Last active"]')).toBeNull()
   })
 })
-

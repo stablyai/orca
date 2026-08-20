@@ -17,9 +17,8 @@ import {
 } from './CliSkillRuntimeSetup'
 
 function decodeWslLoginShellScript(command: string): string {
-  const encoded = /(?:--|--exec) sh -c 'eval \\"`printf %s ([A-Za-z0-9+/=]+) \| base64 -d`\\"'/.exec(
-    command
-  )?.[1]
+  const encoded =
+    /(?:--|--exec) sh -c 'eval \\"`printf %s ([A-Za-z0-9+/=]+) \| base64 -d`\\"'/.exec(command)?.[1]
   expect(encoded).toBeDefined()
   return Buffer.from(encoded!, 'base64').toString('utf8')
 }
