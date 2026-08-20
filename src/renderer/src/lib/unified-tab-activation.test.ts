@@ -75,6 +75,12 @@ describe('activateUnifiedTab browser branch', () => {
     activateUnifiedTab(store as any, browserTab())
 
     expect(activateWebRuntimeSessionTabMock).toHaveBeenCalledTimes(1)
+    // The browser branch sends the tab id, not the entity id the terminal branch sends.
+    expect(activateWebRuntimeSessionTabMock).toHaveBeenCalledWith({
+      worktreeId: 'wt-1',
+      tabId: 'unified-browser',
+      environmentId: 'env-1'
+    })
     expect(store.setActiveBrowserTab).toHaveBeenCalledWith('browser-1')
   })
 
