@@ -56,6 +56,44 @@ describe('check on a terminal that is both dispatched and coordinator-bound', ()
     return { dispatchId: dispatch.id, captainRun: captainRun.id }
   }
 
+  // The same two roles, but the Dispatch is a remote attachment: the captain runs on this machine
+  // as a federated worker while it coordinates a Run of its own here.
+  function buildDualRoleRemoteCaptain(store: OrchestrationDb): {
+    dispatchId: string
+    captainRun: string
+  } {
+    const dispatchId = 'ctx_remote_captain'
+    store.createRemoteDispatchAttachment({
+      dispatchId,
+      taskId: 'task_remote_captain',
+      homePeerFingerprint: 'home-peer',
+      protocolVersion: 2,
+      runtimeEpoch: 'epoch_test',
+      mutationReceipt: {
+        callerFingerprint: 'home-peer',
+        requestId: 'attach-captain',
+        method: 'orchestration.federationAttachStart',
+        payloadHash: 'attach-captain-payload'
+      }
+    })
+    store.prepareRemoteAttachmentAuthority({
+      dispatchId,
+      paneKey: CAPTAIN_PANE,
+      processIncarnation: 'runtime_test:term_captain:1',
+      worktreeId: 'repo::captain',
+      terminalHandle: 'term_captain',
+      setupState: 'not_applicable',
+      effects: []
+    })
+    store.markRemoteAttachmentReady(dispatchId)
+    const captainRun = store.createRun({
+      objective: 'alpha lane',
+      coordinatorHandle: 'term_captain',
+      coordinatorPaneKey: CAPTAIN_PANE
+    })
+    return { dispatchId, captainRun: captainRun.id }
+  }
+
   it('reports the Dispatch its Run binding shadowed', async () => {
     const { db: store, ctx } = setup()
     const { dispatchId } = buildDualRoleCaptain(store)
@@ -68,6 +106,35 @@ describe('check on a terminal that is both dispatched and coordinator-bound', ()
 
     expect(checked.shadowedDispatchId).toBe(dispatchId)
     expect(checked.dispatchId).toBeUndefined()
+  })
+
+  it('reports a remote Dispatch attachment its Run binding shadowed', async () => {
+    const { db: store, ctx } = setup()
+    const { dispatchId } = buildDualRoleRemoteCaptain(store)
+
+    const checked = (await call(ctx, { terminal: 'term_captain' })) as {
+      runId: string
+      dispatchId?: string
+      shadowedDispatchId?: string
+    }
+
+    expect(checked.shadowedDispatchId).toBe(dispatchId)
+    expect(checked.dispatchId).toBeUndefined()
+  })
+
+  it('does not advertise a remote attachment whose worker process is gone', async () => {
+    const { db: store, ctx } = setup()
+    buildDualRoleRemoteCaptain(store)
+    // A restarted pane is a new process; the attachment names the dead one.
+    vi.spyOn(ctx.runtime, 'getTerminalProcessIncarnation').mockReturnValue(
+      'runtime_test:restarted:2'
+    )
+
+    const checked = (await call(ctx, { terminal: 'term_captain' })) as {
+      shadowedDispatchId?: string
+    }
+
+    expect(checked.shadowedDispatchId).toBeUndefined()
   })
 
   it('reads the Dispatch shelf with --as dispatch while the Run stays bound', async () => {

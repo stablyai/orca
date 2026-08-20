@@ -703,13 +703,27 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       // Why: a live runtime handle is authoritative; pane metadata is only the restart fallback.
       const paneKey = runtime.getTerminalPaneKey(handle) ?? params.terminalPaneKey
       const boundRun = paneKey ? db.getCurrentRunForPane(paneKey) : undefined
+      const activeDispatch = db.getActiveDispatchForIdentity(handle, paneKey ?? undefined)
+      const remoteAttachment =
+        !activeDispatch && paneKey ? db.findActiveRemoteAttachmentForPane(paneKey) : undefined
+      // Why: an attachment that names a dead worker process is not a mailbox anyone can read, so it
+      // must not be advertised as a shadow either.
+      const remoteAttachmentIsCurrent =
+        remoteAttachment !== undefined &&
+        db.isRemoteAttachmentProcessCurrent({
+          dispatchId: remoteAttachment.dispatch_id,
+          paneKey: paneKey ?? null,
+          processIncarnation: runtime.getTerminalProcessIncarnation(handle)
+        })
       // Why: a dispatched sub-coordinator holds both roles; its Dispatch shelf used to be unreachable
-      // because the Run binding always won. Report it, and let --as pick the other mailbox.
-      const shadowedDispatch =
+      // because the Run binding always won. Report it, and let --as pick the other mailbox. A
+      // federated captain's shelf is a remote attachment, which reads as the same mailbox below.
+      const shadowedDispatchId =
         boundRun && params.as !== 'dispatch'
-          ? db.getActiveDispatchForIdentity(handle, paneKey ?? undefined)
+          ? (activeDispatch?.id ??
+            (remoteAttachmentIsCurrent ? remoteAttachment?.dispatch_id : undefined))
           : undefined
-      const shadowed = shadowedDispatch ? { shadowedDispatchId: shadowedDispatch.id } : {}
+      const shadowed = shadowedDispatchId ? { shadowedDispatchId } : {}
       if (params.as !== 'dispatch' && (params.run || boundRun)) {
         const run = resolveRunScope(runtime, {
           runId: params.run,
@@ -882,17 +896,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
       }
 
-      const activeDispatch = db.getActiveDispatchForIdentity(handle, paneKey ?? undefined)
-      const remoteAttachment =
-        !activeDispatch && paneKey ? db.findActiveRemoteAttachmentForPane(paneKey) : undefined
-      if (
-        remoteAttachment &&
-        !db.isRemoteAttachmentProcessCurrent({
-          dispatchId: remoteAttachment.dispatch_id,
-          paneKey: paneKey ?? null,
-          processIncarnation: runtime.getTerminalProcessIncarnation(handle)
-        })
-      ) {
+      if (remoteAttachment && !remoteAttachmentIsCurrent) {
         throw new OrchestrationError(
           'dispatch_inactive',
           `Dispatch ${remoteAttachment.dispatch_id} is no longer attached to this worker process.`
