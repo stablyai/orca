@@ -69,7 +69,7 @@ const PROCESS_TABLE_VALUE = PROCESS_ROWS.map((row) =>
 function installCountingScanMock(): void {
   execFileMock.mockImplementation((cmd: string, _args: unknown, _opts: unknown, cb: unknown) => {
     const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
-    if (cmd === 'wmic') {
+    if (/wmic/i.test(cmd)) {
       scanCounts.wmic += 1
       callback(null, { stdout: PROCESS_TABLE_VALUE, stderr: '' })
       return

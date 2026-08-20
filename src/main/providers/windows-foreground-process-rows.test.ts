@@ -51,11 +51,19 @@ const WMIC_ROWS_VALUE =
 const wmicUtf16 = (value: string): Buffer =>
   Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(value, 'utf16le')])
 
+/** wmic is spawned by absolute path, so match on the basename. */
+const basename = (command: string): string =>
+  command
+    .toLowerCase()
+    .replace(/^.*[\\/]/, '')
+    .replace(/\.exe$/, '')
+const isCommand = (spawned: string, name: string): boolean => basename(spawned) === basename(name)
+
 /** Returns the options object passed to the mocked execFile for a given command. */
 function optionsForCommand(command: string): Record<string, unknown> | undefined {
-  const call = execFileMock.mock.calls.find((args) => (args as ExecFileCall)[0] === command) as
-    | ExecFileCall
-    | undefined
+  const call = execFileMock.mock.calls.find((args) =>
+    isCommand((args as ExecFileCall)[0], command)
+  ) as ExecFileCall | undefined
   return call?.[2]
 }
 
@@ -77,7 +85,7 @@ describe('windows foreground process rows spawn options', () => {
 
   it('prefers wmic and spawns no PowerShell host when wmic exists (#15209)', async () => {
     execFileMock.mockImplementation((cmd: string, _args, _opts, cb: ExecFileCallback) => {
-      if (cmd === 'wmic') {
+      if (isCommand(cmd, 'wmic')) {
         cb(null, { stdout: WMIC_ROWS_VALUE, stderr: '' })
         return
       }
@@ -89,7 +97,7 @@ describe('windows foreground process rows spawn options', () => {
     expect(candidates?.[0]?.pid).toBe(200)
     expect(optionsForCommand('wmic')).toMatchObject({ windowsHide: true })
     expect(
-      execFileMock.mock.calls.some((args) => (args as ExecFileCall)[0] === 'powershell.exe')
+      execFileMock.mock.calls.some((args) => isCommand((args as ExecFileCall)[0], 'powershell'))
     ).toBe(false)
   })
 
@@ -98,10 +106,15 @@ describe('windows foreground process rows spawn options', () => {
   // PowerShell path this fix exists to leave.
   it('reads the UTF-16LE table wmic writes through a redirected stdout', async () => {
     execFileMock.mockImplementation((cmd: string, _args, _opts, cb: ExecFileCallback) => {
-      cb(cmd === 'wmic' ? null : new Error('powershell must not answer a readable wmic table'), {
-        stdout: wmicUtf16(WMIC_ROWS_VALUE),
-        stderr: ''
-      })
+      cb(
+        isCommand(cmd, 'wmic')
+          ? null
+          : new Error('powershell must not answer a readable wmic table'),
+        {
+          stdout: wmicUtf16(WMIC_ROWS_VALUE),
+          stderr: ''
+        }
+      )
     })
 
     const candidates = await queryWindowsProcessDescendants(100)
@@ -126,7 +139,7 @@ describe('windows foreground process rows spawn options', () => {
       'ParentProcessId=100\n' +
       'ProcessId=300\n\n'
     execFileMock.mockImplementation((cmd: string, _args, _opts, cb: ExecFileCallback) => {
-      cb(cmd === 'wmic' ? null : new Error('powershell must not answer'), {
+      cb(isCommand(cmd, 'wmic') ? null : new Error('powershell must not answer'), {
         stdout: `${WMIC_ROWS_VALUE}\n${multiline}`,
         stderr: ''
       })
@@ -145,7 +158,9 @@ describe('windows foreground process rows spawn options', () => {
   it('discards a wmic table with duplicate pids and lets PowerShell answer', async () => {
     execFileMock.mockImplementation((cmd: string, _args, _opts, cb: ExecFileCallback) => {
       cb(null, {
-        stdout: cmd === 'wmic' ? `${WMIC_ROWS_VALUE}\n${WMIC_ROWS_VALUE}` : POWERSHELL_ROWS_JSON,
+        stdout: isCommand(cmd, 'wmic')
+          ? `${WMIC_ROWS_VALUE}\n${WMIC_ROWS_VALUE}`
+          : POWERSHELL_ROWS_JSON,
         stderr: ''
       })
     })
@@ -159,7 +174,7 @@ describe('windows foreground process rows spawn options', () => {
   it('stops spawning wmic once the host has none — 24H2+ (windowsHide stays on)', async () => {
     let wmicSpawns = 0
     execFileMock.mockImplementation((cmd: string, _args, _opts, cb: ExecFileCallback) => {
-      if (cmd === 'wmic') {
+      if (isCommand(cmd, 'wmic')) {
         wmicSpawns += 1
         cb(Object.assign(new Error('spawn wmic ENOENT'), { code: 'ENOENT' }), {
           stdout: '',
@@ -182,7 +197,7 @@ describe('windows foreground process rows spawn options', () => {
     let wmicSpawns = 0
     let failing = true
     execFileMock.mockImplementation((cmd: string, _args, _opts, cb: ExecFileCallback) => {
-      if (cmd === 'wmic') {
+      if (isCommand(cmd, 'wmic')) {
         wmicSpawns += 1
         if (failing) {
           cb(new Error('wmi service hiccup'), { stdout: '', stderr: '' })
@@ -226,7 +241,7 @@ describe('queryWindowsProcessRowsFresh', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     // The capability probe answers for any wmic call; scans then use PowerShell.
     execFileMock.mockImplementation((cmd: string, _args, _opts, cb: ExecFileCallback) => {
-      if (cmd === 'wmic') {
+      if (isCommand(cmd, 'wmic')) {
         cb(new Error('wmic not found'), { stdout: '', stderr: '' })
         return
       }

@@ -37,6 +37,11 @@ export type WindowsProcessCandidate = WindowsProcessRow & { depth: number }
 // PowerShell stays the fallback and is the only option where wmic is absent
 // (24H2+ removed it), which leaves those builds on today's behaviour.
 const WMIC_SCAN_FAILURE_LIMIT = 3
+// Why the absolute path and not `wmic`: a bare name resolves through PATH, and on
+// 24H2+ no legitimate wmic exists — so any `wmic.exe` a PATH entry offers there is
+// by definition not the system one. The daemon runs this ~2x/s and targets
+// `taskkill /T /F` off its output, so it reads only the one canonical location.
+const WMIC_PATH = `${process.env.SystemRoot ?? 'C:\\Windows'}\\System32\\wbem\\wmic.exe`
 let wmicDemoted = false
 let wmicScanFailures = 0
 
@@ -344,7 +349,7 @@ async function queryWindowsProcessesWithWmic(): Promise<WmicScan> {
   let stdout: string
   try {
     const result = await execFileAsync(
-      'wmic',
+      WMIC_PATH,
       [
         'process',
         'get',

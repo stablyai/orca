@@ -412,7 +412,7 @@ describe('resolveAgentForegroundProcess', () => {
 
     await expect(resolveAgentForegroundProcess(100, 'node.exe')).resolves.toBe('codex')
     expect(execFileMock).toHaveBeenCalledWith(
-      'wmic',
+      expect.stringMatching(/wmic/),
       expect.any(Array),
       expect.objectContaining({ timeout: 3000 }),
       expect.any(Function)
@@ -432,7 +432,7 @@ describe('resolveAgentForegroundProcess', () => {
 
     await expect(resolveAgentForegroundProcess(100, 'node.exe')).resolves.toBe('codex')
     expect(execFileMock).toHaveBeenCalledWith(
-      'wmic',
+      expect.stringMatching(/wmic/),
       expect.any(Array),
       expect.objectContaining({ timeout: 3000 }),
       expect.any(Function)
