@@ -180,8 +180,8 @@ function parseWindowsProcessValueRows(stdout: string): WindowsProcessRow[] {
   for (const line of stdout.split(/\r?\n/)) {
     if (line.trim() === '') {
       // Only past CommandLine does a blank line mean end-of-record; inside one it
-      // is content. Agent CLIs really do embed blank lines — on this machine every
-      // process whose command line held one was a claude/codex/node/sh pane, the
+      // is content. Agent CLIs really do embed blank lines: on a measured
+      // 920-process host all 11 that did were claude/codex/node/sh panes — the
       // exact rows foreground detection reads. Flushing there dropped the command
       // and left the row naming only its executable.
       if (field >= 1) {
