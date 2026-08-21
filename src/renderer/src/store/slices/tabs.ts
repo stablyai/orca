@@ -74,6 +74,7 @@ export type TabsSlice = {
         Tab,
         | 'id'
         | 'entityId'
+        | 'executionHostId'
         | 'label'
         | 'generatedLabel'
         | 'quickCommandLabel'
@@ -100,6 +101,7 @@ export type TabsSlice = {
         Tab,
         | 'id'
         | 'entityId'
+        | 'executionHostId'
         | 'label'
         | 'generatedLabel'
         | 'quickCommandLabel'
@@ -861,6 +863,11 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         entityId: init?.entityId ?? id,
         groupId: group.id,
         worktreeId,
+        ...(init?.executionHostId
+          ? { executionHostId: init.executionHostId }
+          : state.activeWorktreeId === worktreeId && state.activeWorkspaceExecutionHostId
+            ? { executionHostId: state.activeWorkspaceExecutionHostId }
+            : {}),
         contentType,
         label:
           init?.label ?? (contentType === 'terminal' ? `Terminal ${existingTabs.length + 1}` : id),
@@ -934,6 +941,11 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         entityId: init?.entityId ?? id,
         groupId: newGroupId,
         worktreeId,
+        ...(init?.executionHostId
+          ? { executionHostId: init.executionHostId }
+          : state.activeWorktreeId === worktreeId && state.activeWorkspaceExecutionHostId
+            ? { executionHostId: state.activeWorkspaceExecutionHostId }
+            : {}),
         contentType,
         label:
           init?.label ?? (contentType === 'terminal' ? `Terminal ${existingTabs.length + 1}` : id),
@@ -1961,6 +1973,7 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
     const { tab, worktreeId } = foundTab
     return get().createUnifiedTab(worktreeId, tab.contentType, {
       entityId: init?.entityId ?? tab.entityId,
+      executionHostId: tab.executionHostId,
       label: init?.label ?? tab.label,
       generatedLabel: init?.generatedLabel ?? tab.generatedLabel,
       quickCommandLabel: init?.quickCommandLabel ?? tab.quickCommandLabel,

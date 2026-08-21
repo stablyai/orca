@@ -134,6 +134,7 @@ describe('TabsSlice', () => {
     it('copies a unified tab into another group', () => {
       const tab = store.getState().createUnifiedTab(WT, 'editor', {
         id: 'file-a.ts',
+        executionHostId: 'runtime:host-b',
         label: 'file-a.ts'
       })
       const sourceGroupId = store.getState().groupsByWorktree[WT][0].id
@@ -152,6 +153,7 @@ describe('TabsSlice', () => {
         state.groupsByWorktree[WT].find((group) => group.id === targetGroupId)?.tabOrder
       ).toEqual([copied!.id])
       expect(copied?.entityId).toBe(tab.entityId)
+      expect(copied?.executionHostId).toBe('runtime:host-b')
     })
 
     it('merges a group into its sibling', () => {

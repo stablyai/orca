@@ -3,6 +3,7 @@ import { findReusableRightSplitGroupId } from './emulator-right-split-target'
 import { cancelPendingSimulatorPaneShutdown } from './simulator-pane-shutdown-scheduler'
 import { shouldShutdownSimulatorForPaneUnmountFromTabs } from './simulator-tab-shutdown'
 import { translate } from '@/i18n/i18n'
+import { findAmbiguousWorktreeIds, isUnifiedTabOwnedByWorktree } from './unified-tab-host-ownership'
 
 type EnsureSimulatorTabOptions = {
   targetGroupId?: string
@@ -18,9 +19,25 @@ type ExistingSimulatorTab = {
 }
 
 export function getSimulatorTabForWorktree(worktreeId: string): ExistingSimulatorTab | null {
+  const state = useAppStore.getState()
+  const worktrees = state.allWorktrees?.().filter((worktree) => worktree.id === worktreeId) ?? []
+  const activeWorktree = worktrees.find(
+    (worktree) => worktree.hostId === state.activeWorkspaceExecutionHostId
+  )
+  const target = activeWorktree ?? worktrees[0]
+  if (!target) {
+    return (
+      (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
+        (tab) => tab.contentType === 'simulator'
+      ) ?? null
+    )
+  }
+  const ambiguousWorktreeIds = findAmbiguousWorktreeIds(worktrees)
   return (
-    (useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []).find(
-      (tab) => tab.contentType === 'simulator'
+    (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
+      (tab) =>
+        tab.contentType === 'simulator' &&
+        isUnifiedTabOwnedByWorktree(tab, target, ambiguousWorktreeIds)
     ) ?? null
   )
 }

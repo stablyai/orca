@@ -18,7 +18,7 @@ import {
 import type { MatchRange } from './palette-match/normalized-text'
 import type { PaletteDocument, PaletteDocumentRank } from './palette-match/palette-document'
 import type { PaletteResultQualityClass } from './palette-match/match-quality'
-import { createHostQualifiedWorktreeStateReader } from './worktree-palette-state-reader'
+import { findAmbiguousWorktreeIds, isUnifiedTabOwnedByWorktree } from './unified-tab-host-ownership'
 
 const NO_RANGES: readonly MatchRange[] = []
 
@@ -205,12 +205,7 @@ export function buildSearchableSimulatorTabs({
   activeTabType
 }: BuildSearchableSimulatorTabsOptions): SearchableSimulatorTab[] {
   const entries: SearchableSimulatorTab[] = []
-  const readUnifiedTabs = createHostQualifiedWorktreeStateReader(worktrees, unifiedTabsByWorktree)
-  const readActiveGroupId = createHostQualifiedWorktreeStateReader(
-    worktrees,
-    activeGroupIdByWorktree
-  )
-  const readGroups = createHostQualifiedWorktreeStateReader(worktrees, groupsByWorktree)
+  const ambiguousWorktreeIds = findAmbiguousWorktreeIds(worktrees)
   for (const worktree of worktrees) {
     const repoName =
       resolvePaletteRepoForWorktree(worktree, repoMap, repoMapByHostIdentity)?.displayName ?? ''
@@ -224,12 +219,15 @@ export function buildSearchableSimulatorTabs({
       activeWorktreeId,
       activeWorkspaceExecutionHostId,
       activeTabType,
-      activeGroupId: readActiveGroupId(worktree),
-      groups: readGroups(worktree)
+      activeGroupId: activeGroupIdByWorktree[worktree.id],
+      groups: groupsByWorktree[worktree.id]
     })
-    const tabs = readUnifiedTabs(worktree) ?? []
+    const tabs = unifiedTabsByWorktree[worktree.id] ?? []
     for (const tab of tabs) {
-      if (tab.contentType !== 'simulator') {
+      if (
+        tab.contentType !== 'simulator' ||
+        !isUnifiedTabOwnedByWorktree(tab, worktree, ambiguousWorktreeIds)
+      ) {
         continue
       }
       entries.push({

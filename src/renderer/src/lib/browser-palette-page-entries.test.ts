@@ -130,6 +130,17 @@ function buildFixture(
 }
 
 describe('buildSearchableBrowserPages', () => {
+  it('treats an unstamped legacy worktree as local when its tab is stamped', () => {
+    expect(
+      buildFixture({
+        worktrees: [worktreeA],
+        unifiedTabsByWorktree: {
+          'wt-1': [browserUnifiedTab('tab-local', 'ws-1', 'wt-1', 'local')]
+        }
+      }).map((entry) => entry.workspace.id)
+    ).toEqual(['ws-1', 'ws-1', 'ws-2'])
+  })
+
   it('keeps same-id browser tabs isolated by execution host', () => {
     const sharedId = 'repo-shared::/workspace'
     const local = makeWorktree({ id: sharedId, hostId: 'local', displayName: 'Local workspace' })
@@ -156,8 +167,7 @@ describe('buildSearchableBrowserPages', () => {
         [getWorktreeHostIdentity(remote), 1]
       ]),
       browserTabsByWorktree: {
-        [getWorktreeHostIdentity(local)]: [localWorkspace],
-        [getWorktreeHostIdentity(remote)]: [remoteWorkspace]
+        [sharedId]: [localWorkspace, remoteWorkspace]
       },
       browserPagesByWorkspace: {
         'ws-local': [
@@ -178,8 +188,10 @@ describe('buildSearchableBrowserPages', () => {
         ]
       },
       unifiedTabsByWorktree: {
-        [getWorktreeHostIdentity(local)]: [browserUnifiedTab('tab-local', 'ws-local', sharedId)],
-        [getWorktreeHostIdentity(remote)]: [browserUnifiedTab('tab-remote', 'ws-remote', sharedId)]
+        [sharedId]: [
+          browserUnifiedTab('tab-local', 'ws-local', sharedId, 'local'),
+          browserUnifiedTab('tab-remote', 'ws-remote', sharedId, 'runtime:host-b')
+        ]
       },
       activeBrowserTabId: null,
       activeWorktreeId: null,
@@ -339,12 +351,18 @@ describe('buildSearchableBrowserPages', () => {
   })
 })
 
-function browserUnifiedTab(id: string, entityId: string, worktreeId: string): Tab {
+function browserUnifiedTab(
+  id: string,
+  entityId: string,
+  worktreeId: string,
+  executionHostId?: Tab['executionHostId']
+): Tab {
   return {
     id,
     entityId,
     groupId: `group-${id}`,
     worktreeId,
+    ...(executionHostId ? { executionHostId } : {}),
     contentType: 'browser',
     label: entityId,
     customLabel: null,

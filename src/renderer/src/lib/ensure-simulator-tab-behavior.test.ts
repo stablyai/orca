@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockStoreState = vi.hoisted(() => ({
   activeGroupIdByWorktree: {} as Record<string, string>,
+  activeWorkspaceExecutionHostId: null as string | null,
   activeWorktreeId: 'wt-1',
+  allWorktrees: vi.fn(() => [] as { id: string; hostId?: string }[]),
   activateTab: vi.fn(),
   createEmptySplitGroup: vi.fn(),
   createUnifiedTab: vi.fn(),
@@ -16,7 +18,14 @@ const mockStoreState = vi.hoisted(() => ({
   setActiveTabType: vi.fn(),
   unifiedTabsByWorktree: {} as Record<
     string,
-    { id: string; groupId: string; contentType: string; label?: string }[]
+    {
+      id: string
+      groupId: string
+      worktreeId?: string
+      executionHostId?: string
+      contentType: string
+      label?: string
+    }[]
   >
 }))
 
@@ -33,7 +42,9 @@ describe('ensureSimulatorTab', () => {
       value: { userAgent: 'Macintosh' }
     })
     mockStoreState.activeGroupIdByWorktree = { 'wt-1': 'group-1' }
+    mockStoreState.activeWorkspaceExecutionHostId = null
     mockStoreState.activeWorktreeId = 'wt-1'
+    mockStoreState.allWorktrees.mockReset().mockReturnValue([])
     mockStoreState.groupsByWorktree = { 'wt-1': [{ id: 'group-1' }] }
     mockStoreState.layoutByWorktree = { 'wt-1': { type: 'leaf', groupId: 'group-1' } }
     mockStoreState.settings = { mobileEmulatorEnabled: true }
@@ -60,6 +71,34 @@ describe('ensureSimulatorTab', () => {
     expect(mockStoreState.setActiveTab).not.toHaveBeenCalled()
     expect(mockStoreState.focusGroup).toHaveBeenCalledWith('wt-1', 'group-1')
     expect(mockStoreState.setActiveTabType).toHaveBeenCalledWith('simulator')
+  })
+
+  it('does not reuse a simulator owned by a same-id sibling host', async () => {
+    mockStoreState.activeWorkspaceExecutionHostId = 'runtime:host-b'
+    mockStoreState.allWorktrees.mockReturnValue([
+      { id: 'wt-1', hostId: 'local' },
+      { id: 'wt-1', hostId: 'runtime:host-b' }
+    ])
+    mockStoreState.unifiedTabsByWorktree = {
+      'wt-1': [
+        {
+          id: 'sim-local',
+          groupId: 'group-1',
+          worktreeId: 'wt-1',
+          executionHostId: 'local',
+          contentType: 'simulator'
+        }
+      ]
+    }
+    mockStoreState.createUnifiedTab.mockReturnValue({
+      id: 'sim-remote',
+      groupId: 'group-1',
+      contentType: 'simulator'
+    })
+    const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
+
+    expect(ensureSimulatorTab('wt-1')).toBe('sim-remote')
+    expect(mockStoreState.createUnifiedTab).toHaveBeenCalled()
   })
 
   it('cancels pending managed shutdown when surfacing a simulator tab', async () => {

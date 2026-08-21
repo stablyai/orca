@@ -8,7 +8,7 @@ import {
   buildSearchableBrowserPageDocument,
   type SearchableBrowserPage
 } from './browser-palette-search'
-import { createHostQualifiedWorktreeStateReader } from './worktree-palette-state-reader'
+import { findAmbiguousWorktreeIds, isUnifiedTabOwnedByWorktree } from './unified-tab-host-ownership'
 
 type BrowserPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'
 
@@ -41,11 +41,7 @@ export function buildSearchableBrowserPages({
   activeTabType
 }: BuildSearchableBrowserPagesOptions): SearchableBrowserPage[] {
   const entries: SearchableBrowserPage[] = []
-  const readBrowserTabs = createHostQualifiedWorktreeStateReader(worktrees, browserTabsByWorktree)
-  const readUnifiedTabs = createHostQualifiedWorktreeStateReader(
-    worktrees,
-    unifiedTabsByWorktree ?? {}
-  )
+  const ambiguousWorktreeIds = findAmbiguousWorktreeIds(worktrees)
   for (const worktree of worktrees) {
     const repoName =
       resolvePaletteRepoForWorktree(worktree, repoMap, repoMapByHostIdentity)?.displayName ?? ''
@@ -54,12 +50,26 @@ export function buildSearchableBrowserPages({
       worktreeOrder.get(worktree.id) ??
       Number.MAX_SAFE_INTEGER
     const focusedAtByWorkspaceId = new Map<string, number>()
-    for (const tab of readUnifiedTabs(worktree) ?? []) {
-      if (tab.contentType === 'browser' && tab.lastFocusedAt) {
+    const unifiedTabs = unifiedTabsByWorktree?.[worktree.id] ?? []
+    for (const tab of unifiedTabs) {
+      if (
+        tab.contentType === 'browser' &&
+        isUnifiedTabOwnedByWorktree(tab, worktree, ambiguousWorktreeIds) &&
+        tab.lastFocusedAt
+      ) {
         focusedAtByWorkspaceId.set(tab.entityId, tab.lastFocusedAt)
       }
     }
-    for (const workspace of readBrowserTabs(worktree) ?? []) {
+    for (const workspace of browserTabsByWorktree[worktree.id] ?? []) {
+      const unifiedTab = unifiedTabs.find(
+        (tab) =>
+          tab.contentType === 'browser' &&
+          tab.entityId === workspace.id &&
+          isUnifiedTabOwnedByWorktree(tab, worktree, ambiguousWorktreeIds)
+      )
+      if (!unifiedTab && ambiguousWorktreeIds.has(worktree.id)) {
+        continue
+      }
       const workspaceFocusedAt = focusedAtByWorkspaceId.get(workspace.id)
       for (const page of browserPagesByWorkspace[workspace.id] ?? []) {
         entries.push({

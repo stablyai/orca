@@ -136,11 +136,19 @@ describe('simulator-palette-search', () => {
         [getWorktreeHostIdentity(remote), 1]
       ]),
       unifiedTabsByWorktree: {
-        [getWorktreeHostIdentity(local)]: [
-          makeTab({ id: 'sim-local', worktreeId: sharedId, label: 'Local emulator' })
-        ],
-        [getWorktreeHostIdentity(remote)]: [
-          makeTab({ id: 'sim-remote', worktreeId: sharedId, label: 'Remote emulator' })
+        [sharedId]: [
+          makeTab({
+            id: 'sim-local',
+            worktreeId: sharedId,
+            executionHostId: 'local',
+            label: 'Local emulator'
+          }),
+          makeTab({
+            id: 'sim-remote',
+            worktreeId: sharedId,
+            executionHostId: 'runtime:host-b',
+            label: 'Remote emulator'
+          })
         ]
       },
       activeGroupIdByWorktree: {},
