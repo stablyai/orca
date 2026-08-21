@@ -54,6 +54,13 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.cxx': 'cpp',
   '.hpp': 'cpp',
   '.cs': 'csharp',
+  // Why: Monaco's built-in registry already declares the 'apex' language for
+  // '.cls', but detectLanguage resolves before Monaco's own extension lookup,
+  // so Salesforce sources fell through to plaintext. '.trigger' and '.apex'
+  // share the same grammar and have no built-in extension mapping at all.
+  '.cls': 'apex',
+  '.trigger': 'apex',
+  '.apex': 'apex',
   '.rb': 'ruby',
   '.php': 'php',
   '.swift': 'swift',

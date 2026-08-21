@@ -70,6 +70,13 @@ describe('detectLanguage', () => {
     expect(detectLanguage('C:\\app\\WebContent\\WEB-INF\\jsp\\LIST.JSP')).toBe('html')
   })
 
+  it('maps Salesforce Apex sources to the apex language id (case-insensitive)', () => {
+    expect(detectLanguage('force-app/main/default/classes/AccountService.cls')).toBe('apex')
+    expect(detectLanguage('force-app/main/default/triggers/AccountTrigger.trigger')).toBe('apex')
+    expect(detectLanguage('scripts/apex/seed.apex')).toBe('apex')
+    expect(detectLanguage('C:\\repo\\force-app\\classes\\ACCOUNTSERVICE.CLS')).toBe('apex')
+  })
+
   it('keeps .json/.jsonc on the built-in json language and unknown on plaintext', () => {
     expect(detectLanguage('config/settings.json')).toBe('json')
     expect(detectLanguage('config/tsconfig.jsonc')).toBe('json')
