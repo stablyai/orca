@@ -68,7 +68,11 @@ export function createPtySizeReassertion(options: PtySizeReassertionOptions): Pt
       // applied-size read is in flight without queuing a request; forwarding the
       // captured target would resize the PTY back to the pre-reveal grid, so
       // re-run against the fresh grid instead.
-      if (!dimensionsMatch(options.getTerminalDimensions(), target)) {
+      const latestTarget = options.getTerminalDimensions()
+      if (!dimensionsAreUsable(latestTarget)) {
+        return
+      }
+      if (!dimensionsMatch(target, latestTarget)) {
         pending = true
         return
       }

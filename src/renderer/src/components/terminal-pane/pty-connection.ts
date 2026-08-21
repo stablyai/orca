@@ -9455,6 +9455,16 @@ export function connectPanePty(
     noteVisibilityResume() {
       armVisibleRemoteViewportClaim()
       claimPendingVisibleRemoteViewport()
+      const ptyId = transport.getPtyId()
+      if (ptyId && isRemoteRuntimePtyId(ptyId)) {
+        const { cols, rows } = pane.terminal
+        if (cols > 0 && rows > 0) {
+          // Why: remote-runtime viewports have no pty:getSize readback, so a
+          // guarded re-send still repairs a dropped hidden resize when claim
+          // is unavailable (unfocused / no document).
+          forwardPtyResize(cols, rows)
+        }
+      }
       ptySizeReassertion.request({ fit: false })
       consumeHibernatedAgentWake()
       requestKnownWindowsShiftEnterReconfirmation()

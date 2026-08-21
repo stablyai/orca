@@ -633,7 +633,7 @@ describe('connectPanePty', () => {
       }
     })
 
-    it('skips remote-runtime PTYs (their size lives outside the local ptySizes map)', async () => {
+    it('re-asserts remote-runtime PTYs without querying the local ptySizes map', async () => {
       const getSize = vi.mocked(window.api.pty.getSize)
       getSize.mockClear()
       const { connectPanePty } = await import('./pty-connection')
@@ -654,9 +654,9 @@ describe('connectPanePty', () => {
       binding.noteVisibilityResume()
       await flushAsyncTicks()
 
-      // Never even queries size for a remote pane, and never re-asserts.
       expect(getSize).not.toHaveBeenCalled()
-      expect(transport.resize).not.toHaveBeenCalled()
+      expect(transport.resize).toHaveBeenCalledTimes(1)
+      expect(transport.resize).toHaveBeenCalledWith(120, 40, { claim: true })
     })
 
     it('claims a focused visible remote mirror once when its passive fit hold arrives', async () => {
