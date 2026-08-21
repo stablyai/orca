@@ -13265,13 +13265,13 @@
           }
         },
         "DocxViewer": {
-          "k1a3b5c7d9": "正在加载 {fileName}…",
+          "k1a3b5c7d9": "正在加载 {{fileName}}…",
           "m4e7f2a1c8": "文档为空",
           "p6b9d3e5f1": "无法解析此 .docx 文件, 可能已损坏或加密。"
         },
         "XlsxViewer": {
           "e1a5c7d9f3": "空白工作表",
-          "l2c4d6f8a0": "正在加载 {fileName}…",
+          "l2c4d6f8a0": "正在加载 {{fileName}}…",
           "q7c1e3f5b9": "无法解析此 .xlsx 文件, 可能已损坏或加密。"
         }
       },

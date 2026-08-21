@@ -13245,13 +13245,13 @@
           }
         },
         "DocxViewer": {
-          "k1a3b5c7d9": "Cargando {fileName}…",
+          "k1a3b5c7d9": "Cargando {{fileName}}…",
           "m4e7f2a1c8": "Documento vacío",
           "p6b9d3e5f1": "No se puede analizar este archivo .docx — puede estar dañado o cifrado."
         },
         "XlsxViewer": {
           "e1a5c7d9f3": "Hoja vacía",
-          "l2c4d6f8a0": "Cargando {fileName}…",
+          "l2c4d6f8a0": "Cargando {{fileName}}…",
           "q7c1e3f5b9": "No se puede analizar este archivo .xlsx — puede estar dañado o cifrado."
         }
       },

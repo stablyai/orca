@@ -126,7 +126,7 @@ export function XlsxViewer({ filePath, fileName, content }: XlsxViewerProps): Re
   if (status.kind === 'loading') {
     return (
       <div className={styles.officePreview}>
-        {translate('auto.components.editor.XlsxViewer.l2c4d6f8a0', 'Loading {fileName}…', {
+        {translate('auto.components.editor.XlsxViewer.l2c4d6f8a0', 'Loading {{fileName}}…', {
           fileName
         })}
       </div>

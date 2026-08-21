@@ -131,7 +131,7 @@ export function DocxViewer({ filePath, fileName, content }: DocxViewerProps): Re
   if (status.kind === 'loading') {
     return (
       <div className={styles.officePreview}>
-        {translate('auto.components.editor.DocxViewer.k1a3b5c7d9', 'Loading {fileName}…', {
+        {translate('auto.components.editor.DocxViewer.k1a3b5c7d9', 'Loading {{fileName}}…', {
           fileName
         })}
       </div>
