@@ -142,7 +142,7 @@ export function TerminalWindowSection({
                 <p className="text-xs text-muted-foreground">
                   {translate(
                     'auto.components.settings.TerminalWindowSection.53ce336e15',
-                    'Restart Orca to apply the window blur change.'
+                    'Restart MCode to apply the window blur change.'
                   )}
                 </p>
               </div>

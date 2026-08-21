@@ -28,7 +28,7 @@ import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion
 import { translate } from '@/i18n/i18n'
 
 export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
-  'orca-suppress-worktree-list-scroll-adjustment'
+  'mcode-suppress-worktree-list-scroll-adjustment'
 
 const dispatchSuppressScrollAdjustment = () => {
   window.dispatchEvent(new CustomEvent(SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT))

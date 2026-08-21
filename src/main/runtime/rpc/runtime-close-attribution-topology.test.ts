@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { _resetTracerForTests, setActiveSink, type TracerSink } from '../../observability/tracer'
-import type { OrcaRuntimeService } from '../orca-runtime'
+import type { MCodeRuntimeService } from '../mcode-runtime'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { SESSION_TAB_METHODS } from './methods/session-tabs'
@@ -41,7 +41,7 @@ describe('runtime close attribution topology', () => {
       getRuntimeId: () => 'runtime-owner-1',
       closeMobileSessionTab,
       refuseUnattributedMobileSessionTabClose: vi.fn().mockResolvedValue({ closed: true })
-    } as unknown as OrcaRuntimeService
+    } as unknown as MCodeRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     await dispatcher.dispatchStreaming(
@@ -111,7 +111,7 @@ describe('runtime close attribution topology', () => {
     const runtime = {
       getRuntimeId: () => 'runtime-owner-2',
       closeMobileSessionTab
-    } as unknown as OrcaRuntimeService
+    } as unknown as MCodeRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     await Promise.all(
@@ -166,7 +166,7 @@ describe('runtime close attribution topology', () => {
       getRuntimeId: () => 'runtime-owner-3',
       closeTerminal,
       listSessions
-    } as unknown as OrcaRuntimeService
+    } as unknown as MCodeRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
     const context = {
       clientKind: 'runtime' as const,

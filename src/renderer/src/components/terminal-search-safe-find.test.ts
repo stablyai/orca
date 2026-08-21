@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { safeFind } from './terminal-search-safe-find'
 
 /**
- * Regression for crash report 0b9ab636-1333-4aac-a7bb-ddb338feb151 (Orca 1.4.104, macOS).
+ * Regression for crash report 0b9ab636-1333-4aac-a7bb-ddb338feb151 (MCode 1.4.104, macOS).
  *
  * boundary_id: terminal.workbench  surface: terminal-workbench
  * error: "This API only accepts positive integers"

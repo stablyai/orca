@@ -22,7 +22,7 @@ afterEach(async () => {
 })
 
 async function createCodexHome(index: number): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-codex-title-index-'))
+  const root = await mkdtemp(join(tmpdir(), 'mcode-codex-title-index-'))
   tempRoots.push(root)
   const codexHome = join(root, `codex-home-${index}`)
   await mkdir(join(codexHome, 'sessions'), { recursive: true })

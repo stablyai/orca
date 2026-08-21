@@ -4,10 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import {
-  ensureOrcaRuntimeLaunched,
+  ensureMCodeRuntimeLaunched,
   parseJsonOutput,
-  runOrcaCli,
-  stopOrcaRuntime,
+  runMCodeCli,
+  stopMCodeRuntime,
   type CliResult
 } from './computer-cli-driver'
 
@@ -21,11 +21,11 @@ let geditProcess: ChildProcess | null = null
 let notepadProcess: ChildProcess | null = null
 let notepadAppSelector: string | null = null
 
-export { ensureOrcaRuntimeLaunched, parseJsonOutput, runOrcaCli, stopOrcaRuntime, type CliResult }
+export { ensureMCodeRuntimeLaunched, parseJsonOutput, runMCodeCli, stopMCodeRuntime, type CliResult }
 
 export async function ensureTextEditLaunched(): Promise<void> {
   await killTextEdit()
-  textEditTempDir = await mkdtemp(join(tmpdir(), 'orca-computer-e2e-'))
+  textEditTempDir = await mkdtemp(join(tmpdir(), 'mcode-computer-e2e-'))
   const filePath = join(textEditTempDir, 'textedit-target.txt')
   await writeFile(filePath, 'seed', 'utf8')
   await execFileAsync('open', ['-F', '-a', 'TextEdit', '-n', filePath])
@@ -52,8 +52,8 @@ export type SafariDraftFixture = {
 
 export async function ensureSafariDraftFixtureLaunched(): Promise<SafariDraftFixture> {
   await closeSafariDraftFixture()
-  safariDraftTempDir = await mkdtemp(join(tmpdir(), 'orca-computer-safari-e2e-'))
-  safariDraftTitle = `Orca Computer Use Draft Fixture ${Date.now()}`
+  safariDraftTempDir = await mkdtemp(join(tmpdir(), 'mcode-computer-safari-e2e-'))
+  safariDraftTitle = `MCode Computer Use Draft Fixture ${Date.now()}`
   const filePath = join(safariDraftTempDir, 'index.html')
   await writeFile(filePath, safariDraftFixtureHtml(safariDraftTitle), 'utf8')
   await execFileAsync('open', ['-F', '-a', 'Safari', filePath])
@@ -71,7 +71,7 @@ export async function closeSafariDraftFixture(): Promise<void> {
           windows: { id?: number | null; index: number; title: string }[]
         }
       }>(
-        (await runOrcaCli(['computer', 'list-windows', '--app', 'com.apple.Safari', '--json']))
+        (await runMCodeCli(['computer', 'list-windows', '--app', 'com.apple.Safari', '--json']))
           .stdout
       )
       const target = envelope.result.windows.find((window) => window.title.includes(title))
@@ -80,7 +80,7 @@ export async function closeSafariDraftFixture(): Promise<void> {
           target.id !== undefined && target.id !== null
             ? ['--window-id', String(target.id)]
             : ['--window-index', String(target.index)]
-        await runOrcaCli([
+        await runMCodeCli([
           'computer',
           'hotkey',
           '--app',
@@ -138,7 +138,7 @@ async function waitForComputerWindowTitle(
     try {
       const envelope = parseJsonOutput<{
         result: { windows: { title: string }[] }
-      }>((await runOrcaCli(['computer', 'list-windows', '--app', app, '--json'])).stdout)
+      }>((await runMCodeCli(['computer', 'list-windows', '--app', app, '--json'])).stdout)
       if (envelope.result.windows.some((window) => window.title.includes(title))) {
         return
       }
@@ -152,7 +152,7 @@ async function waitForComputerWindowTitle(
 
 export async function ensureGeditLaunched(): Promise<void> {
   await killGedit()
-  linuxTempDir = await mkdtemp(join(tmpdir(), 'orca-computer-linux-e2e-'))
+  linuxTempDir = await mkdtemp(join(tmpdir(), 'mcode-computer-linux-e2e-'))
   const fileName = 'gedit-target.txt'
   const filePath = join(linuxTempDir, fileName)
   await writeFile(filePath, 'seed', 'utf8')
@@ -178,8 +178,8 @@ export async function killGedit(): Promise<void> {
 
 export async function ensureNotepadLaunched(): Promise<void> {
   await killNotepad()
-  windowsTempDir = await mkdtemp(join(tmpdir(), 'orca-computer-windows-e2e-'))
-  const filePath = join(windowsTempDir, `orca-notepad-${Date.now()}.txt`)
+  windowsTempDir = await mkdtemp(join(tmpdir(), 'mcode-computer-windows-e2e-'))
+  const filePath = join(windowsTempDir, `mcode-notepad-${Date.now()}.txt`)
   await writeFile(filePath, 'seed', 'utf8')
   await execFileAsync('powershell.exe', [
     '-NoProfile',

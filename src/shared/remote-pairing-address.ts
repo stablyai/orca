@@ -92,14 +92,14 @@ export function parseHostAccessLink(input: string): ParseHostAccessLinkResult {
     return {
       ok: false,
       kind: 'invalid-input',
-      message: 'Enter an Orca access link or bare pairing code.'
+      message: 'Enter an MCode access link or bare pairing code.'
     }
   }
   if (pairing.scope === 'mobile') {
     return {
       ok: false,
       kind: 'mobile-only',
-      message: 'This link grants mobile-only access. Generate a link for another Orca client.'
+      message: 'This link grants mobile-only access. Generate a link for another MCode client.'
     }
   }
   let endpoint: URL

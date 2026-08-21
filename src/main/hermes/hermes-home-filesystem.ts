@@ -97,7 +97,7 @@ export function getPluginFilesState(pluginDir = getPluginDir()): {
     return {
       present: true,
       managed,
-      detail: managed ? null : 'Hermes orca-status plugin exists but is not Orca-managed'
+      detail: managed ? null : 'Hermes mcode-status plugin exists but is not MCode-managed'
     }
   } catch (error) {
     return {

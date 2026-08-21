@@ -92,9 +92,9 @@ const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
 const PRUNABLE_EXISTENCE_PROBE_CONCURRENCY = 8
 
 // Why: bound `git worktree add` so a OneDrive cloud-placeholder stall fails fast (STA-1292); ample for an ordinary large checkout, but not one behind a slow content filter (#12696).
-// Doubles as the floor for ORCA_WORKTREE_ADD_TIMEOUT_MS — lowering it to fail faster also lowers the minimum any override can request.
+// Doubles as the floor for MCODE_WORKTREE_ADD_TIMEOUT_MS — lowering it to fail faster also lowers the minimum any override can request.
 export const WORKTREE_ADD_TIMEOUT_MS = 180_000
-// Why: ceiling for ORCA_WORKTREE_ADD_TIMEOUT_MS (#12696) — ~8x the slowest reported checkout (3.5 min). The cost is that a genuine stall now blocks a create for up to 30 min instead of 3.
+// Why: ceiling for MCODE_WORKTREE_ADD_TIMEOUT_MS (#12696) — ~8x the slowest reported checkout (3.5 min). The cost is that a genuine stall now blocks a create for up to 30 min instead of 3.
 export const WORKTREE_ADD_TIMEOUT_MAX_MS = 30 * 60_000
 export const WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS = 30_000
 export const WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS = 30_000
@@ -102,13 +102,13 @@ export const WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS = 30_000
 export const WORKTREE_LIST_TIMEOUT_MS = 30_000
 
 /**
- * `ORCA_WORKTREE_ADD_TIMEOUT_MS` clamped into [{@link WORKTREE_ADD_TIMEOUT_MS},
+ * `MCODE_WORKTREE_ADD_TIMEOUT_MS` clamped into [{@link WORKTREE_ADD_TIMEOUT_MS},
  * {@link WORKTREE_ADD_TIMEOUT_MAX_MS}]; unset, blank, or unparseable yields the default.
  * Warns when a non-blank value is rejected or clamped; trimming and fractional truncation are silent.
  * `env` is injectable for tests.
  */
 export function resolveWorktreeAddTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
-  const raw = env.ORCA_WORKTREE_ADD_TIMEOUT_MS?.trim()
+  const raw = env.MCODE_WORKTREE_ADD_TIMEOUT_MS?.trim()
   const requested = Math.floor(Number(raw))
   // Why: `=300` reads as seconds to most operators, so clamp rather than obey.
   const resolved = Number.isNaN(requested)
@@ -121,7 +121,7 @@ export function resolveWorktreeAddTimeoutMs(env: NodeJS.ProcessEnv = process.env
         'is not a number'
       : `is outside [${WORKTREE_ADD_TIMEOUT_MS}, ${WORKTREE_ADD_TIMEOUT_MAX_MS}]ms`
     console.warn(
-      `[git/worktree] ORCA_WORKTREE_ADD_TIMEOUT_MS="${raw}" ${problem}; using ${resolved}ms`
+      `[git/worktree] MCODE_WORKTREE_ADD_TIMEOUT_MS="${raw}" ${problem}; using ${resolved}ms`
     )
   }
   return resolved
@@ -1125,7 +1125,7 @@ export async function addSparseWorktree(
 /**
  * Move a worktree with `git worktree move` (not `fs.rename`, which corrupts the
  * `.git` file and the `.git/worktrees/<name>/gitdir` back-pointer). Local-only,
- * so there is no relay parity handler. Caller owns migrating Orca's
+ * so there is no relay parity handler. Caller owns migrating MCode's
  * path-derived worktree identity and pre-checks that the destination is free.
  */
 export async function moveWorktree(

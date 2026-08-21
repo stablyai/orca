@@ -93,6 +93,6 @@ writeOutput('android_version_code', String(currentVersionCode))
 writeOutput('tag', tag)
 writeOutput('publish_release', publishRelease ? 'true' : 'false')
 
-console.log(`Prepared Orca Mobile Android ${currentVersion} (${currentVersionCode})`)
+console.log(`Prepared MCode Mobile Android ${currentVersion} (${currentVersionCode})`)
 console.log(`Release tag: ${tag}`)
 console.log(`Publish GitHub Release: ${publishRelease ? 'yes' : 'no'}`)

@@ -31,7 +31,7 @@ export function prefersKittyKeyboardDespiteWindowsConpty(
  * Whether the Kitty enhanced keyboard protocol (CSI-u) must be withheld from a
  * pane's xterm advertisement.
  *
- * Why: Orca's default options advertise `vtExtensions.kittyKeyboard` so probing
+ * Why: MCode's default options advertise `vtExtensions.kittyKeyboard` so probing
  * CLIs enable enhanced key reporting. But local native Windows shells are backed
  * by ConPTY, and several local Windows CLIs (e.g. the Antigravity `agy` CLI) read
  * the advertisement yet do not decode CSI-u, so once it is on they ignore

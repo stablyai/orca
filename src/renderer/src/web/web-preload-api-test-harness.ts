@@ -69,7 +69,7 @@ export async function installApi(userAgent?: string): Promise<{
 
 export function writeStoredRuntimeEnvironment(storage: Storage, environmentId = 'web-env-1'): void {
   storage.setItem(
-    'orca.web.runtimeEnvironment.v1',
+    'mcode.web.runtimeEnvironment.v1',
     JSON.stringify({
       id: environmentId,
       name: 'Test runtime',

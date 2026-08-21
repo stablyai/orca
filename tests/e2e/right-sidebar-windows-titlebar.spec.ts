@@ -1,4 +1,4 @@
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 type RightSidebarHeaderGeometry = {
@@ -12,9 +12,9 @@ type RightSidebarHeaderGeometry = {
 
 test.describe('Right sidebar Windows titlebar spacing', () => {
   test('top activity buttons render inside the sidebar instead of the titlebar', async ({
-    orcaPage
+    mcodePage
   }) => {
-    await orcaPage.addInitScript(() => {
+    await mcodePage.addInitScript(() => {
       const userAgent =
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/146 Safari/537.36'
       Object.defineProperty(navigator, 'userAgent', {
@@ -22,16 +22,16 @@ test.describe('Right sidebar Windows titlebar spacing', () => {
         configurable: true
       })
     })
-    await orcaPage.reload({ waitUntil: 'domcontentloaded' })
-    await orcaPage.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
+    await mcodePage.reload({ waitUntil: 'domcontentloaded' })
+    await mcodePage.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
+    await ensureTerminalVisible(mcodePage)
 
     await expect
       .poll(
         async () =>
-          orcaPage.evaluate(() => ({
+          mcodePage.evaluate(() => ({
             hasWindowsUserAgent: navigator.userAgent.includes('Windows'),
             hasWindowsTitlebarChrome: Boolean(document.querySelector('.window-controls'))
           })),
@@ -42,7 +42,7 @@ test.describe('Right sidebar Windows titlebar spacing', () => {
       )
       .toEqual({ hasWindowsUserAgent: true, hasWindowsTitlebarChrome: true })
 
-    await orcaPage.evaluate(() => {
+    await mcodePage.evaluate(() => {
       const store = window.__store
       if (!store) {
         throw new Error('window.__store is not available - is the app in dev mode?')
@@ -56,7 +56,7 @@ test.describe('Right sidebar Windows titlebar spacing', () => {
     })
 
     const measureHeader = async (): Promise<RightSidebarHeaderGeometry | null> =>
-      orcaPage.evaluate(() => {
+      mcodePage.evaluate(() => {
         const header = document.querySelector<HTMLElement>('.right-sidebar-header-inset')
         const strip = document.querySelector<HTMLElement>('.right-sidebar-activity-strip')
         const closeButton = header?.querySelector<HTMLButtonElement>(

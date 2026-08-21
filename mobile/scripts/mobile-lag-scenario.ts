@@ -12,8 +12,8 @@ export type MockRepo = {
 }
 
 const REPO_COLORS = ['#f97316', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f59e0b', '#6366f1']
-const REPO_NAMES = ['orca', 'dashboard', 'mobile', 'runtime', 'docs', 'api', 'desktop', 'site']
-const WORKTREE_NAMES = ['manta', 'narwhal', 'otter', 'squid', 'turtle', 'beluga', 'marlin', 'orca']
+const REPO_NAMES = ['mcode', 'dashboard', 'mobile', 'runtime', 'docs', 'api', 'desktop', 'site']
+const WORKTREE_NAMES = ['manta', 'narwhal', 'otter', 'squid', 'turtle', 'beluga', 'marlin', 'mcode']
 
 export function readScenarioNumber(name: string, fallback: number): number {
   const raw = process.env[name]
@@ -32,7 +32,7 @@ export function createMockRepos(count: number): MockRepo[] {
     return {
       id: `repo-${index + 1}`,
       displayName,
-      path: `/tmp/orca-mobile-repro/${displayName}`,
+      path: `/tmp/mcode-mobile-repro/${displayName}`,
       badgeColor: REPO_COLORS[index % REPO_COLORS.length]!,
       connectionId: null
     }

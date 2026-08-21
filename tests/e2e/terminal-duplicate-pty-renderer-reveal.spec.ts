@@ -3,9 +3,9 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import type { TerminalLayoutSnapshot } from '../../src/shared/terminal-tab-types'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
-import { test, expect } from './helpers/orca-app'
-import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { DEFAULT_LOCAL_MCODE_PROFILE_ID } from '../../src/shared/mcode-profiles'
+import { test, expect } from './helpers/mcode-app'
+import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/mcode-restart'
 import { stageNodeScriptForTerminal } from './helpers/run-node-script-in-terminal'
 import {
   execInTerminal,
@@ -54,7 +54,7 @@ setInterval(() => {
 }
 
 function persistedDataPath(userDataDir: string): string {
-  return path.join(userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID, 'orca-data.json')
+  return path.join(userDataDir, 'profiles', DEFAULT_LOCAL_MCODE_PROFILE_ID, 'mcode-data.json')
 }
 
 function seedDuplicatePtyOwnership(userDataDir: string): void {

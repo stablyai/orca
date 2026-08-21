@@ -20,7 +20,7 @@ export function buildAgentTuiClearInput(lineCount: number): string {
 }
 
 /**
- * Headroom over the line count Orca knows about. The text Orca injected is a
+ * Headroom over the line count MCode knows about. The text MCode injected is a
  * LOWER BOUND on what the buffer holds — the user can also type straight into
  * the TUI line — so the count is deliberately biased upward. Overshoot is free:
  * 41 Ctrl+U against a 1-line buffer measured perfectly clean on both agents,

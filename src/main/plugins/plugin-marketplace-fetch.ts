@@ -18,11 +18,11 @@ export type PluginMarketplaceFetchResult = {
 }
 
 /** Fetches a marketplace through system Git so private repositories use the
- * same SSH agent and credential helpers as every other Orca Git operation. */
+ * same SSH agent and credential helpers as every other MCode Git operation. */
 export async function fetchPluginMarketplace(
   source: PluginMarketplaceRegisteredSource
 ): Promise<PluginMarketplaceFetchResult> {
-  const stagingDirectory = await mkdtemp(join(tmpdir(), 'orca-plugin-marketplace-'))
+  const stagingDirectory = await mkdtemp(join(tmpdir(), 'mcode-plugin-marketplace-'))
   try {
     const marketplaceCommit = await checkoutPluginGitSource({
       url: source.source.url,

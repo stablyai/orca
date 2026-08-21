@@ -5,7 +5,7 @@ import {
   requestMicrophonePermissionsAsync,
   tearDown,
   toggleRecording
-} from '@orca/expo-two-way-audio'
+} from '@mcode/expo-two-way-audio'
 import { MobileDictationPendingAudioBudget } from './mobile-dictation-pending-audio-budget'
 import { enqueueMobileDictationAudioChunk } from './mobile-dictation-audio-chunk'
 import { createMobileDictationKeepAwakeOwner } from './mobile-dictation-keep-awake'

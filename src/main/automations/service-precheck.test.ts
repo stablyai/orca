@@ -41,7 +41,7 @@ const makeRepo = (overrides: Partial<Repo> = {}): Repo => ({
 
 describe('AutomationService prechecks', () => {
   beforeEach(() => {
-    testState.dir = mkdtempSync(join(tmpdir(), 'orca-automations-test-'))
+    testState.dir = mkdtempSync(join(tmpdir(), 'mcode-automations-test-'))
     runAutomationPrecheckMock.mockReset()
     vi.useFakeTimers()
   })

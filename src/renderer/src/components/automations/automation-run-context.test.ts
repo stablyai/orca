@@ -16,11 +16,11 @@ function repo(id: string, path = `/repos/${id}`): Repo {
 function setup(overrides: Partial<ProjectHostSetup> = {}): ProjectHostSetup {
   return {
     id: 'setup-builder',
-    projectId: 'github:stablyai/orca',
+    projectId: 'github:mcode-ide/mcode',
     hostId: 'ssh:builder',
     repoId: 'repo-builder',
-    path: '/remote/orca',
-    displayName: 'orca',
+    path: '/remote/mcode',
+    displayName: 'mcode',
     setupState: 'ready',
     setupMethod: 'cloned',
     createdAt: 1,
@@ -34,24 +34,24 @@ describe('buildAutomationRunContextForRepo', () => {
     expect(
       buildAutomationRunContextForRepo({
         repoId: 'repo-builder',
-        repos: [repo('repo-local', '/local/orca'), repo('repo-builder', '/remote/orca')],
+        repos: [repo('repo-local', '/local/mcode'), repo('repo-builder', '/remote/mcode')],
         projectHostSetups: [
           setup({
             id: 'setup-local',
             hostId: 'local',
             repoId: 'repo-local',
-            path: '/local/orca'
+            path: '/local/mcode'
           }),
           setup()
         ]
       })
     ).toEqual({
       kind: 'workspace-run',
-      projectId: 'github:stablyai/orca',
+      projectId: 'github:mcode-ide/mcode',
       hostId: 'ssh:builder',
       projectHostSetupId: 'setup-builder',
       repoId: 'repo-builder',
-      path: '/remote/orca'
+      path: '/remote/mcode'
     })
   })
 

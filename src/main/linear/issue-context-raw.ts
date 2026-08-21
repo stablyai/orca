@@ -129,7 +129,7 @@ export const ISSUE_FIELDS = `
 `
 
 export const ISSUE_QUERY = `
-  query OrcaAgentLinearIssue($id: String!) {
+  query MCodeAgentLinearIssue($id: String!) {
     issue(id: $id) {
       ${ISSUE_FIELDS}
     }
@@ -137,7 +137,7 @@ export const ISSUE_QUERY = `
 `
 
 export const SEARCH_QUERY = `
-  query OrcaAgentLinearSearch($term: String!, $first: Int) {
+  query MCodeAgentLinearSearch($term: String!, $first: Int) {
     searchIssues(term: $term, first: $first) {
       nodes {
         ${ISSUE_FIELDS}
@@ -147,7 +147,7 @@ export const SEARCH_QUERY = `
 `
 
 export const COMMENTS_QUERY = `
-  query OrcaAgentLinearIssueComments($id: String!, $first: Int, $after: String) {
+  query MCodeAgentLinearIssueComments($id: String!, $first: Int, $after: String) {
     issue(id: $id) {
       comments(first: $first, after: $after) {
         nodes {
@@ -165,7 +165,7 @@ export const COMMENTS_QUERY = `
 `
 
 export const CHILDREN_QUERY = `
-  query OrcaAgentLinearIssueChildren($id: String!, $first: Int, $after: String) {
+  query MCodeAgentLinearIssueChildren($id: String!, $first: Int, $after: String) {
     issue(id: $id) {
       children(first: $first, after: $after) {
         nodes {
@@ -178,7 +178,7 @@ export const CHILDREN_QUERY = `
 `
 
 export const ATTACHMENTS_QUERY = `
-  query OrcaAgentLinearIssueAttachments($id: String!, $first: Int, $after: String) {
+  query MCodeAgentLinearIssueAttachments($id: String!, $first: Int, $after: String) {
     issue(id: $id) {
       attachments(first: $first, after: $after) {
         nodes { id title url source subtitle createdAt }
@@ -189,7 +189,7 @@ export const ATTACHMENTS_QUERY = `
 `
 
 export const RELATIONS_QUERY = `
-  query OrcaAgentLinearIssueRelations($id: String!, $first: Int, $after: String) {
+  query MCodeAgentLinearIssueRelations($id: String!, $first: Int, $after: String) {
     issue(id: $id) {
       relations(first: $first, after: $after) {
         nodes {
@@ -204,7 +204,7 @@ export const RELATIONS_QUERY = `
 `
 
 export const INVERSE_RELATIONS_QUERY = `
-  query OrcaAgentLinearIssueInverseRelations($id: String!, $first: Int, $after: String) {
+  query MCodeAgentLinearIssueInverseRelations($id: String!, $first: Int, $after: String) {
     issue(id: $id) {
       inverseRelations(first: $first, after: $after) {
         nodes {

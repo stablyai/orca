@@ -7,7 +7,7 @@ import {
 } from '../../shared/plugins/plugin-kill-list'
 import { PluginKillListStore } from './plugin-kill-list-store'
 
-export const PLUGIN_KILL_LIST_URL = 'https://onorca.dev/plugins/kill-list.json'
+export const PLUGIN_KILL_LIST_URL = 'https://mcode.dev/plugins/kill-list.json'
 const PLUGIN_KILL_LIST_DOWNLOAD_LIMIT = 4 * 1024 * 1024
 
 type PluginKillListFetcher = () => Promise<PluginKillList>
@@ -40,7 +40,7 @@ export class PluginKillListService {
         this.currentList = killList
       })
       .catch((error) => {
-        // Why: an unusable cache must not prevent Orca from starting; a valid
+        // Why: an unusable cache must not prevent MCode from starting; a valid
         // network refresh can still restore runtime revocations this session.
         console.warn('[plugins] ignoring invalid cached plugin safety list:', error)
         this.currentList = null

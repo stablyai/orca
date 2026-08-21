@@ -35,7 +35,7 @@ vi.mock('../wsl-unc-delete', () => ({
 
 import { deleteAiVaultSessionFile } from './session-delete'
 
-const HOME = join('/tmp', 'orca-ai-vault-delete-exec-fixture-home')
+const HOME = join('/tmp', 'mcode-ai-vault-delete-exec-fixture-home')
 const GEMINI_ROOT = join(HOME, '.gemini', 'tmp')
 const CLAUDE_ROOT = join(HOME, '.claude', 'projects')
 const ROVO_ROOT = join(HOME, '.rovodev', 'sessions')

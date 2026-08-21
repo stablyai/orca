@@ -18,10 +18,10 @@ afterEach(async () => {
 
 describe('scanAiVaultSessions codex dual-root dedup', () => {
   it('lists a backfilled both-roots session once, attributed to the real home', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-dedup-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-codex-dedup-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
-    // Sandbox "real ~/.codex" and Orca managed runtime home, hardlinked the
+    // Sandbox "real ~/.codex" and MCode managed runtime home, hardlinked the
     // same way the session backfill links managed rollouts into the real home.
     const realHome = join(root, 'real-codex-home')
     const realSessionsDir = join(realHome, 'sessions')
@@ -115,7 +115,7 @@ describe('scanAiVaultSessions codex dual-root dedup', () => {
   })
 
   it('keeps different same-name rollouts from separate roots', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-collision-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-codex-collision-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
     const realHome = join(root, 'real-codex-home')
@@ -182,7 +182,7 @@ describe('scanAiVaultSessions codex dual-root dedup', () => {
   })
 
   it('fills the listing past cross-volume-style copy aliases', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-copy-cap-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-codex-copy-cap-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
     const realHome = join(root, 'real-codex-home')

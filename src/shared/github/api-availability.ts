@@ -1,7 +1,7 @@
 // Why: a GitHub outage, a dropped network, or a rate-limit all surface as
 // unstructured gh/Octokit error text. Detecting them from one shared place lets
 // both the main process (PR-refresh classification) and the renderer (Tasks
-// work-item fan-out) attribute the failure to GitHub — not to Orca — using the
+// work-item fan-out) attribute the failure to GitHub — not to MCode — using the
 // exact same rules, so the two surfaces never disagree about whether GitHub is
 // reachable. Returns null for anything that is NOT a reachability problem
 // (auth, permission, 404): those are user-actionable, not "GitHub is down".

@@ -1,5 +1,5 @@
 import { normalizeBrowserNavigationUrl } from '../../../../../shared/browser-url'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import { MCODE_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import { parkBrowserPageViewport } from './browser-page-viewport'
 import { subscribeBrowserSystemResume } from './browser-system-resume'
 import {
@@ -166,8 +166,8 @@ export function bindBrowserPageWebviewListeners({
   if (needsInitialNavigation) {
     // Why: set src only after listeners attach so a fast localhost failure isn't missed; only non-blank tabs show the loading indicator.
     const initialUrl =
-      normalizeBrowserNavigationUrl(initialBrowserUrlRef.current) ?? ORCA_BROWSER_BLANK_URL
-    trackNextLoadingEventRef.current = initialUrl !== ORCA_BROWSER_BLANK_URL
+      normalizeBrowserNavigationUrl(initialBrowserUrlRef.current) ?? MCODE_BROWSER_BLANK_URL
+    trackNextLoadingEventRef.current = initialUrl !== MCODE_BROWSER_BLANK_URL
     lastKnownWebviewUrlRef.current = initialUrl
     webview.src = initialUrl
   } else if (isPaintableRef.current) {

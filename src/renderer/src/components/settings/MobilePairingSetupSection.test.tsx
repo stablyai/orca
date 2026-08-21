@@ -78,7 +78,7 @@ describe('MobilePairingSetupSection', () => {
     expect(screen.getByText(/must be able to reach this address/i)).toBeVisible()
   })
 
-  it('demotes this computer’s address to a disclosure when Orca Relay is selected', async () => {
+  it('demotes this computer’s address to a disclosure when MCode Relay is selected', async () => {
     const { user } = renderSection({
       connectionMode: 'automatic',
       selectedAddress: undefined

@@ -10,7 +10,7 @@ import { isNativeChatSupportedAgent } from './native-chat-availability'
 export type NativeChatPaneResolutionInput = {
   /** Composite `${tabId}:${leafId}` key of the active leaf. */
   paneKey: string
-  /** The coding-agent Orca launched in this terminal, if any (from TerminalTab).
+  /** The coding-agent MCode launched in this terminal, if any (from TerminalTab).
    *  Drives the agent label when no live status entry has reported one yet. */
   launchAgent?: TuiAgent | null
   /** Live agent-status entry for this pane, when one exists. Carries the

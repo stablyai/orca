@@ -138,7 +138,7 @@ describe('registerWorktreeHandlers', () => {
     expect(store.setWorktreeMeta).not.toHaveBeenCalled()
   })
 
-  it('strips Orca provenance fields from renderer metadata updates', () => {
+  it('strips MCode provenance fields from renderer metadata updates', () => {
     store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
 
     const result = handlers['worktrees:updateMeta'](null, {
@@ -146,9 +146,9 @@ describe('registerWorktreeHandlers', () => {
       updates: {
         comment: 'keep me',
         isPinned: true,
-        orcaCreatedAt: 123,
-        orcaCreationSource: 'desktop',
-        orcaCreationWorkspaceLayout: { path: '/workspace', nestWorkspaces: false }
+        mcodeCreatedAt: 123,
+        mcodeCreationSource: 'desktop',
+        mcodeCreationWorkspaceLayout: { path: '/workspace', nestWorkspaces: false }
       }
     })
 
@@ -329,21 +329,21 @@ describe('registerWorktreeHandlers', () => {
       repoId: 'repo-1',
       name: 'improve-dashboard',
       pushTarget: {
-        remoteName: 'pr-prateek-orca',
+        remoteName: 'pr-prateek-mcode',
         branchName: 'prateek/fix-sidebar-agents-toggle',
-        remoteUrl: 'git@github.com:prateek/orca.git'
+        remoteUrl: 'git@github.com:prateek/mcode.git'
       }
     })
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['remote', 'add', 'pr-prateek-orca', 'git@github.com:prateek/orca.git'],
+      ['remote', 'add', 'pr-prateek-mcode', 'git@github.com:prateek/mcode.git'],
       { cwd: '/workspace/repo' }
     )
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       [
         'fetch',
-        'pr-prateek-orca',
-        '+refs/heads/prateek/fix-sidebar-agents-toggle:refs/remotes/pr-prateek-orca/prateek/fix-sidebar-agents-toggle'
+        'pr-prateek-mcode',
+        '+refs/heads/prateek/fix-sidebar-agents-toggle:refs/remotes/pr-prateek-mcode/prateek/fix-sidebar-agents-toggle'
       ],
       { cwd: '/workspace/repo' }
     )
@@ -351,7 +351,7 @@ describe('registerWorktreeHandlers', () => {
       [
         'branch',
         '--set-upstream-to',
-        'pr-prateek-orca/prateek/fix-sidebar-agents-toggle',
+        'pr-prateek-mcode/prateek/fix-sidebar-agents-toggle',
         'improve-dashboard'
       ],
       { cwd: '/workspace/improve-dashboard' }
@@ -360,16 +360,16 @@ describe('registerWorktreeHandlers', () => {
       'repo-1::/workspace/improve-dashboard',
       expect.objectContaining({
         pushTarget: expect.objectContaining({
-          remoteName: 'pr-prateek-orca',
+          remoteName: 'pr-prateek-mcode',
           branchName: 'prateek/fix-sidebar-agents-toggle',
-          remoteUrl: 'git@github.com:prateek/orca.git',
+          remoteUrl: 'git@github.com:prateek/mcode.git',
           remoteCreated: true
         })
       })
     )
   })
 
-  it('keeps the Orca-created marker when a new worktree reuses an Orca-created fork remote', async () => {
+  it('keeps the MCode-created marker when a new worktree reuses an MCode-created fork remote', async () => {
     listWorktreesMock.mockResolvedValue([
       {
         path: '/workspace/improve-dashboard',
@@ -380,9 +380,9 @@ describe('registerWorktreeHandlers', () => {
       }
     ])
     const existingPushTarget = {
-      remoteName: 'pr-contributor-orca',
+      remoteName: 'pr-contributor-mcode',
       branchName: 'contributor/previous-fix',
-      remoteUrl: 'https://github.com/contributor/orca.git',
+      remoteUrl: 'https://github.com/contributor/mcode.git',
       remoteCreated: true
     }
     store.getAllWorktreeMeta.mockReturnValue({
@@ -391,10 +391,10 @@ describe('registerWorktreeHandlers', () => {
     store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'remote' && args.length === 1) {
-        return { stdout: 'pr-contributor-orca\n', stderr: '' }
+        return { stdout: 'pr-contributor-mcode\n', stderr: '' }
       }
       if (args[0] === 'remote' && args[1] === 'get-url') {
-        return { stdout: 'https://github.com/contributor/orca.git\n', stderr: '' }
+        return { stdout: 'https://github.com/contributor/mcode.git\n', stderr: '' }
       }
       return { stdout: '', stderr: '' }
     })
@@ -403,9 +403,9 @@ describe('registerWorktreeHandlers', () => {
       repoId: 'repo-1',
       name: 'improve-dashboard',
       pushTarget: {
-        remoteName: 'pr-contributor-orca',
+        remoteName: 'pr-contributor-mcode',
         branchName: 'contributor/new-fix',
-        remoteUrl: 'https://github.com/contributor/orca.git'
+        remoteUrl: 'https://github.com/contributor/mcode.git'
       }
     })
 
@@ -417,9 +417,9 @@ describe('registerWorktreeHandlers', () => {
       'repo-1::/workspace/improve-dashboard',
       expect.objectContaining({
         pushTarget: expect.objectContaining({
-          remoteName: 'pr-contributor-orca',
+          remoteName: 'pr-contributor-mcode',
           branchName: 'contributor/new-fix',
-          remoteUrl: 'https://github.com/contributor/orca.git',
+          remoteUrl: 'https://github.com/contributor/mcode.git',
           remoteCreated: true
         })
       })
@@ -438,9 +438,9 @@ describe('registerWorktreeHandlers', () => {
     })
     getPullRequestPushTargetMock.mockResolvedValue({
       pushTarget: {
-        remoteName: 'pr-prateek-orca',
+        remoteName: 'pr-prateek-mcode',
         branchName: 'prateek/fix-sidebar-agents-toggle',
-        remoteUrl: 'git@github.com:prateek/orca.git'
+        remoteUrl: 'git@github.com:prateek/mcode.git'
       }
     })
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
@@ -470,7 +470,7 @@ describe('registerWorktreeHandlers', () => {
         'fetch',
         '--no-tags',
         'origin',
-        `+refs/pull/1738/head:refs/orca/pull/${ORIGIN_HEAD_COMPONENT}/1738`
+        `+refs/pull/1738/head:refs/mcode/pull/${ORIGIN_HEAD_COMPONENT}/1738`
       ],
       { cwd: '/workspace/repo', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
     )
@@ -490,9 +490,9 @@ describe('registerWorktreeHandlers', () => {
       headSha: 'abc123',
       branchNameOverride: 'prateek/fix-sidebar-agents-toggle',
       pushTarget: {
-        remoteName: 'pr-prateek-orca',
+        remoteName: 'pr-prateek-mcode',
         branchName: 'prateek/fix-sidebar-agents-toggle',
-        remoteUrl: 'git@github.com:prateek/orca.git'
+        remoteUrl: 'git@github.com:prateek/mcode.git'
       }
     })
   })

@@ -686,7 +686,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
 })
 
 describe('useAiVaultSessionRefresh in-app agent session behavior', () => {
-  it('force re-scans when an agent session starts inside Orca', async () => {
+  it('force re-scans when an agent session starts inside MCode', async () => {
     await renderHook()
     await flushMicrotasks()
     expect(listSessionsMock).toHaveBeenCalledTimes(1)
@@ -764,7 +764,7 @@ describe('useAiVaultSessionRefresh in-app agent session behavior', () => {
   // workspace worked. The file explorer already recovers off this same signal.
   it('retries after a not-ready failure once the SSH connection lands', async () => {
     listSessionsMock.mockRejectedValueOnce(new Error('SSH relay is not ready'))
-    await renderHook(['/home/neil/projects/orca'])
+    await renderHook(['/home/neil/projects/mcode'])
     await flushMicrotasks()
 
     expect(latest?.error).toBe('SSH relay is not ready')
@@ -787,7 +787,7 @@ describe('useAiVaultSessionRefresh in-app agent session behavior', () => {
     // Gated on a prior error so a local workspace, or one that already listed fine, does not rescan
     // every time some unrelated host connects.
     listSessionsMock.mockResolvedValue(EMPTY_RESULT)
-    await renderHook(['/home/neil/projects/orca'])
+    await renderHook(['/home/neil/projects/mcode'])
     await flushMicrotasks()
 
     expect(latest?.error).toBeNull()

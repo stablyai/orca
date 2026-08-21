@@ -13,7 +13,7 @@ const itWithBash = hasBash ? it : it.skip
 const tempDirs: string[] = []
 
 function makeTempDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'orca-omp-node-pty-'))
+  const dir = mkdtempSync(join(tmpdir(), 'mcode-omp-node-pty-'))
   tempDirs.push(dir)
   return dir
 }
@@ -23,7 +23,7 @@ function writeFakeOmp(binDir: string): void {
   writeFileSync(
     ompPath,
     `#!/bin/sh
-agent_dir="\${PI_CODING_AGENT_DIR:-\${ORCA_FAKE_OMP_DEFAULT_DIR:-}}"
+agent_dir="\${PI_CODING_AGENT_DIR:-\${MCODE_FAKE_OMP_DEFAULT_DIR:-}}"
 if [ "\${1:-}" = "config" ] && [ -n "$agent_dir" ]; then
   mkdir -p "$agent_dir"
   printf 'updated-by-omp-config\\n' > "$agent_dir/config.yml"
@@ -36,7 +36,7 @@ fi
     i=$((i + 1))
     printf 'ARG%s=%s\\n' "$i" "$arg"
   done
-} > "$ORCA_CAPTURE_FILE"
+} > "$MCODE_CAPTURE_FILE"
 `,
     { mode: 0o755 }
   )
@@ -110,7 +110,7 @@ describePosix('OMP shell wrapper node-pty reproduction', () => {
     mkdirSync(binDir)
     mkdirSync(piDir)
     mkdirSync(extensionDir, { recursive: true })
-    const statusExtension = join(extensionDir, 'orca-agent-status.ts')
+    const statusExtension = join(extensionDir, 'mcode-agent-status.ts')
     writeFileSync(statusExtension, 'export default {}')
     writeFakeOmp(binDir)
 
@@ -119,12 +119,12 @@ describePosix('OMP shell wrapper node-pty reproduction', () => {
       HOME: tempDir,
       PATH: `${binDir}:${process.env.PATH ?? ''}`,
       PI_CODING_AGENT_DIR: '',
-      ORCA_PI_CODING_AGENT_DIR: '',
-      ORCA_OMP_CODING_AGENT_DIR: '',
-      ORCA_OMP_STATUS_EXTENSION: statusExtension,
-      ORCA_FAKE_OMP_DEFAULT_DIR: ompDir,
-      ORCA_CAPTURE_FILE: captureFile,
-      ORCA_AFTER_PI_FILE: afterPiFile,
+      MCODE_PI_CODING_AGENT_DIR: '',
+      MCODE_OMP_CODING_AGENT_DIR: '',
+      MCODE_OMP_STATUS_EXTENSION: statusExtension,
+      MCODE_FAKE_OMP_DEFAULT_DIR: ompDir,
+      MCODE_CAPTURE_FILE: captureFile,
+      MCODE_AFTER_PI_FILE: afterPiFile,
       TERM: process.env.TERM || 'xterm-256color'
     })
 
@@ -135,7 +135,7 @@ describePosix('OMP shell wrapper node-pty reproduction', () => {
       rcfileContent: '',
       env: makeEnv(unwrappedCapture, unwrappedAfterPi),
       input: `omp ask
-printf '%s' "$PI_CODING_AGENT_DIR" > "$ORCA_AFTER_PI_FILE"
+printf '%s' "$PI_CODING_AGENT_DIR" > "$MCODE_AFTER_PI_FILE"
 exit 0
 `
     })
@@ -154,7 +154,7 @@ exit 0
       env: makeEnv(wrappedCapture, wrappedAfterPi),
       input: `type omp
 omp ask
-printf '%s' "$PI_CODING_AGENT_DIR" > "$ORCA_AFTER_PI_FILE"
+printf '%s' "$PI_CODING_AGENT_DIR" > "$MCODE_AFTER_PI_FILE"
 exit 0
 `
     })
@@ -177,7 +177,7 @@ exit 0
     mkdirSync(binDir)
     mkdirSync(sourceDir, { recursive: true })
     mkdirSync(extensionDir, { recursive: true })
-    const statusExtension = join(extensionDir, 'orca-agent-status.ts')
+    const statusExtension = join(extensionDir, 'mcode-agent-status.ts')
     writeFileSync(statusExtension, 'export default {}')
     writeFakeOmp(binDir)
 
@@ -190,12 +190,12 @@ exit 0
         HOME: tempDir,
         PATH: `${binDir}:${process.env.PATH ?? ''}`,
         PI_CODING_AGENT_DIR: '',
-        ORCA_PI_CODING_AGENT_DIR: '',
-        ORCA_OMP_CODING_AGENT_DIR: '',
-        ORCA_OMP_SOURCE_AGENT_DIR: sourceDir,
-        ORCA_OMP_STATUS_EXTENSION: statusExtension,
-        ORCA_FAKE_OMP_DEFAULT_DIR: sourceDir,
-        ORCA_CAPTURE_FILE: captureFile,
+        MCODE_PI_CODING_AGENT_DIR: '',
+        MCODE_OMP_CODING_AGENT_DIR: '',
+        MCODE_OMP_SOURCE_AGENT_DIR: sourceDir,
+        MCODE_OMP_STATUS_EXTENSION: statusExtension,
+        MCODE_FAKE_OMP_DEFAULT_DIR: sourceDir,
+        MCODE_CAPTURE_FILE: captureFile,
         TERM: process.env.TERM || 'xterm-256color'
       },
       input: `omp config
@@ -232,7 +232,7 @@ exit 0
     mkdirSync(binDir)
     mkdirSync(sourceDir, { recursive: true })
     mkdirSync(extensionDir, { recursive: true })
-    const statusExtension = join(extensionDir, 'orca-agent-status.ts')
+    const statusExtension = join(extensionDir, 'mcode-agent-status.ts')
     writeFileSync(statusExtension, 'export default {}')
     writeFakeOmp(binDir)
 
@@ -245,12 +245,12 @@ exit 0
         HOME: tempDir,
         PATH: `${binDir}:${process.env.PATH ?? ''}`,
         PI_CODING_AGENT_DIR: '',
-        ORCA_PI_CODING_AGENT_DIR: '',
-        ORCA_OMP_CODING_AGENT_DIR: '',
-        ORCA_OMP_SOURCE_AGENT_DIR: sourceDir,
-        ORCA_OMP_STATUS_EXTENSION: statusExtension,
-        ORCA_FAKE_OMP_DEFAULT_DIR: sourceDir,
-        ORCA_CAPTURE_FILE: captureFile,
+        MCODE_PI_CODING_AGENT_DIR: '',
+        MCODE_OMP_CODING_AGENT_DIR: '',
+        MCODE_OMP_SOURCE_AGENT_DIR: sourceDir,
+        MCODE_OMP_STATUS_EXTENSION: statusExtension,
+        MCODE_FAKE_OMP_DEFAULT_DIR: sourceDir,
+        MCODE_CAPTURE_FILE: captureFile,
         TERM: process.env.TERM || 'xterm-256color'
       },
       input: `omp ${subcommand}
@@ -275,7 +275,7 @@ exit 0
       mkdirSync(binDir)
       mkdirSync(defaultOmpDir, { recursive: true })
       mkdirSync(extensionDir, { recursive: true })
-      const statusExtension = join(extensionDir, 'orca-agent-status.ts')
+      const statusExtension = join(extensionDir, 'mcode-agent-status.ts')
       writeFileSync(statusExtension, 'export default {}')
       writeFakeOmp(binDir)
 
@@ -288,11 +288,11 @@ exit 0
           HOME: tempDir,
           PATH: `${binDir}:${process.env.PATH ?? ''}`,
           PI_CODING_AGENT_DIR: '',
-          ORCA_PI_CODING_AGENT_DIR: '',
-          ORCA_OMP_CODING_AGENT_DIR: '',
-          ORCA_OMP_STATUS_EXTENSION: statusExtension,
-          ORCA_FAKE_OMP_DEFAULT_DIR: defaultOmpDir,
-          ORCA_CAPTURE_FILE: captureFile,
+          MCODE_PI_CODING_AGENT_DIR: '',
+          MCODE_OMP_CODING_AGENT_DIR: '',
+          MCODE_OMP_STATUS_EXTENSION: statusExtension,
+          MCODE_FAKE_OMP_DEFAULT_DIR: defaultOmpDir,
+          MCODE_CAPTURE_FILE: captureFile,
           TERM: process.env.TERM || 'xterm-256color'
         },
         input: `omp config

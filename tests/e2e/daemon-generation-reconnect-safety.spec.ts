@@ -37,7 +37,7 @@ const ALL_GENERATION_PROTOCOLS = [
   ])
 ]
 const configuredReconnectBursts = Number.parseInt(
-  process.env.ORCA_DAEMON_GENERATION_RECONNECT_BURSTS ?? '3',
+  process.env.MCODE_DAEMON_GENERATION_RECONNECT_BURSTS ?? '3',
   10
 )
 const RECONNECT_BURSTS =
@@ -139,7 +139,7 @@ function launchReconnectClient(options: {
       ...process.env,
       ELECTRON_RUN_AS_NODE: '1',
       NODE_PATH: path.join(process.cwd(), 'node_modules'),
-      ORCA_USER_DATA_PATH: runtime.userDataDir
+      MCODE_USER_DATA_PATH: runtime.userDataDir
     },
     stdio: ['ignore', 'ignore', 'pipe', 'ipc']
   })
@@ -307,7 +307,7 @@ test('native Windows reconnect cannot turn stale mirror exits into cross-generat
         (generation) =>
           generation.socketPath.startsWith('\\\\') &&
           generation.socketPath.includes(
-            `\\pipe\\orca-terminal-host-v${generation.protocolVersion}-`
+            `\\pipe\\mcode-terminal-host-v${generation.protocolVersion}-`
           )
       )
     ).toBe(true)

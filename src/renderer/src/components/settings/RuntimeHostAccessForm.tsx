@@ -77,7 +77,7 @@ export function RuntimeHostAccessForm({
           <li>
             {translate(
               'auto.components.settings.RuntimeHostAccessForm.stepOpenShare',
-              'Open Settings → Remote Orca Servers → Share this host.'
+              'Open Settings → Remote MCode Servers → Share this host.'
             )}
           </li>
           <li>
@@ -89,7 +89,7 @@ export function RuntimeHostAccessForm({
           <li>
             {translate(
               'auto.components.settings.RuntimeHostAccessForm.stepCopyLink',
-              'Generate the link, then copy the “Pair another Orca client” link.'
+              'Generate the link, then copy the “Pair another MCode client” link.'
             )}
           </li>
         </ol>
@@ -98,7 +98,7 @@ export function RuntimeHostAccessForm({
       <div className="grid gap-3 sm:grid-cols-[minmax(0,180px)_minmax(0,1fr)]">
         <div className="space-y-2">
           <Label htmlFor="runtime-server-name">
-            {translate('auto.components.settings.RuntimeHostAccessForm.name', 'Name in Orca')}
+            {translate('auto.components.settings.RuntimeHostAccessForm.name', 'Name in MCode')}
           </Label>
           <Input
             id="runtime-server-name"
@@ -114,7 +114,7 @@ export function RuntimeHostAccessForm({
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.RuntimeHostAccessForm.nameHelp',
-              'This only changes how the computer appears in Orca.'
+              'This only changes how the computer appears in MCode.'
             )}
           </p>
         </div>
@@ -134,14 +134,14 @@ export function RuntimeHostAccessForm({
             }}
             placeholder={translate(
               'auto.components.settings.RuntimeHostAccessForm.accessLinkPlaceholder',
-              'orca://pair?code=...'
+              'mcode://pair?code=...'
             )}
             className="min-w-0 font-mono"
           />
           <p id="runtime-server-access-link-help" className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.RuntimeHostAccessForm.accessLinkHelp',
-              'Orca shows the destination before connecting. Credentials stay hidden.'
+              'MCode shows the destination before connecting. Credentials stay hidden.'
             )}
           </p>
           {inputError ? (
@@ -247,7 +247,7 @@ export function RuntimeHostAccessForm({
             {failure.kind === 'host-identity-mismatch'
               ? translate(
                   'auto.components.settings.RuntimeHostAccessForm.identityMismatch',
-                  'The reached Orca host does not match this access link'
+                  'The reached MCode host does not match this access link'
                 )
               : failure.kind === 'access-link-invalid'
                 ? translate(
@@ -257,7 +257,7 @@ export function RuntimeHostAccessForm({
                 : failure.kind === 'protocol-incompatible'
                   ? translate(
                       'auto.components.settings.RuntimeHostAccessForm.incompatible',
-                      'Orca versions are not compatible'
+                      'MCode versions are not compatible'
                     )
                   : failure.kind === 'connection-interrupted'
                     ? translate(
@@ -316,7 +316,7 @@ export function RuntimeHostAccessForm({
           <p className="mt-2 text-muted-foreground">
             {translate(
               'auto.components.settings.RuntimeHostAccessForm.headlessHelp',
-              'Using headless orca serve? Run orca serve --pairing-address <reachable-host> on the other computer.'
+              'Using headless mcode serve? Run mcode serve --pairing-address <reachable-host> on the other computer.'
             )}
           </p>
         )}

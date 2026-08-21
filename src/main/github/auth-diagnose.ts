@@ -14,7 +14,7 @@
 import { ghExecFileAsync } from '../git/runner'
 import type { GhAuthDiagnostic, GhAuthAccount } from '../../shared/github/auth-types'
 
-// Required scopes for ProjectV2 GraphQL access in Orca. `project` is the
+// Required scopes for ProjectV2 GraphQL access in MCode. `project` is the
 // scope that gates ProjectV2 reads/writes; the others are needed for the
 // surrounding repo/org queries we already run.
 const REQUIRED_SCOPES = ['project', 'read:org', 'repo'] as const

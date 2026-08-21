@@ -92,7 +92,7 @@ describe('createSetupRunnerScript', () => {
 
   it('writes POSIX setup runners for shebang-declared scripts on native Windows paths', async () => {
     gitExecFileSyncMock.mockReset()
-    gitExecFileSyncMock.mockReturnValue('C:\\repo\\.git\\orca\\setup-runner.sh\n')
+    gitExecFileSyncMock.mockReturnValue('C:\\repo\\.git\\mcode\\setup-runner.sh\n')
     const fs = await import('node:fs')
     const writeFileSyncMock = vi.mocked(fs.writeFileSync)
     const chmodSyncMock = vi.mocked(fs.chmodSync)
@@ -112,17 +112,17 @@ describe('createSetupRunnerScript', () => {
       )
 
       expect(gitExecFileSyncMock).toHaveBeenCalledWith(
-        ['rev-parse', '--git-path', 'orca/setup-runner.sh'],
+        ['rev-parse', '--git-path', 'mcode/setup-runner.sh'],
         { cwd: 'C:\\repo-worktree' }
       )
       expect(writeFileSyncMock).toHaveBeenCalledWith(
-        'C:\\repo\\.git\\orca\\setup-runner.sh',
+        'C:\\repo\\.git\\mcode\\setup-runner.sh',
         '#!/usr/bin/env bash\nset -e\npnpm install\nnpm run build\n',
         'utf-8'
       )
       expect(chmodSyncMock).not.toHaveBeenCalled()
       expect(result).toMatchObject({
-        runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.sh',
+        runnerScriptPath: 'C:\\repo\\.git\\mcode\\setup-runner.sh',
         shell: { family: 'posix' }
       })
     } finally {
@@ -134,7 +134,7 @@ describe('createSetupRunnerScript', () => {
     // Regression (#6967): a Git Bash terminal preference used to hand pre-existing
     // batch setup scripts to bash, where `copy`/`xcopy`/`if errorlevel` do not exist.
     gitExecFileSyncMock.mockReset()
-    gitExecFileSyncMock.mockReturnValue('C:\\repo\\.git\\orca\\setup-runner.cmd\n')
+    gitExecFileSyncMock.mockReturnValue('C:\\repo\\.git\\mcode\\setup-runner.cmd\n')
     const fs = await import('node:fs')
     const writeFileSyncMock = vi.mocked(fs.writeFileSync)
     writeFileSyncMock.mockClear()
@@ -152,16 +152,16 @@ describe('createSetupRunnerScript', () => {
       )
 
       expect(gitExecFileSyncMock).toHaveBeenCalledWith(
-        ['rev-parse', '--git-path', 'orca/setup-runner.cmd'],
+        ['rev-parse', '--git-path', 'mcode/setup-runner.cmd'],
         { cwd: 'C:\\repo-worktree' }
       )
       expect(writeFileSyncMock).toHaveBeenCalledWith(
-        'C:\\repo\\.git\\orca\\setup-runner.cmd',
+        'C:\\repo\\.git\\mcode\\setup-runner.cmd',
         expect.stringContaining('call copy .env.example .env\r\n'),
         'utf-8'
       )
       expect(result).toMatchObject({
-        runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.cmd',
+        runnerScriptPath: 'C:\\repo\\.git\\mcode\\setup-runner.cmd',
         // Why: `shell` is the pane that types the launch command — still Git Bash here. The
         // runner's own .cmd extension is what says the file is batch.
         shell: { family: 'posix' }
@@ -175,7 +175,7 @@ describe('createSetupRunnerScript', () => {
     // Regression (#6896): `cmd.exe /c "C:\...\setup-runner.cmd"` typed into Git Bash has its
     // `/c` switch rewritten into a drive path, so cmd opens interactively and setup never runs.
     gitExecFileSyncMock.mockReset()
-    gitExecFileSyncMock.mockReturnValue('C:\\repo\\.git\\orca\\setup-runner.cmd\n')
+    gitExecFileSyncMock.mockReturnValue('C:\\repo\\.git\\mcode\\setup-runner.cmd\n')
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
 
@@ -205,7 +205,7 @@ describe('createSetupRunnerScript', () => {
     // Regression: the runner is launched as `bash <path>`, so `-euo pipefail` on the script's
     // own `#!` line never reaches the interpreter unless the runner re-applies it.
     gitExecFileSyncMock.mockReset()
-    gitExecFileSyncMock.mockReturnValue('C:\\repo\\.git\\orca\\setup-runner.sh\n')
+    gitExecFileSyncMock.mockReturnValue('C:\\repo\\.git\\mcode\\setup-runner.sh\n')
     const fs = await import('node:fs')
     const writeFileSyncMock = vi.mocked(fs.writeFileSync)
     writeFileSyncMock.mockClear()
@@ -223,7 +223,7 @@ describe('createSetupRunnerScript', () => {
       )
 
       expect(writeFileSyncMock).toHaveBeenCalledWith(
-        'C:\\repo\\.git\\orca\\setup-runner.sh',
+        'C:\\repo\\.git\\mcode\\setup-runner.sh',
         '#!/usr/bin/env bash\nset -e\nset -euo pipefail\nmake build | tee build.log\n',
         'utf-8'
       )
@@ -234,7 +234,7 @@ describe('createSetupRunnerScript', () => {
 
   it('preserves cmd.exe setup runner semantics for configured cmd users', async () => {
     gitExecFileSyncMock.mockReset()
-    gitExecFileSyncMock.mockReturnValue('C:\\repo\\.git\\orca\\setup-runner.cmd\n')
+    gitExecFileSyncMock.mockReturnValue('C:\\repo\\.git\\mcode\\setup-runner.cmd\n')
     const fs = await import('node:fs')
     const writeFileSyncMock = vi.mocked(fs.writeFileSync)
     writeFileSyncMock.mockClear()
@@ -252,16 +252,16 @@ describe('createSetupRunnerScript', () => {
       )
 
       expect(gitExecFileSyncMock).toHaveBeenCalledWith(
-        ['rev-parse', '--git-path', 'orca/setup-runner.cmd'],
+        ['rev-parse', '--git-path', 'mcode/setup-runner.cmd'],
         { cwd: 'C:\\repo-worktree' }
       )
       expect(writeFileSyncMock).toHaveBeenCalledWith(
-        'C:\\repo\\.git\\orca\\setup-runner.cmd',
+        'C:\\repo\\.git\\mcode\\setup-runner.cmd',
         expect.stringContaining('call pnpm install\r\nif errorlevel 1 exit /b %errorlevel%'),
         'utf-8'
       )
       expect(writeFileSyncMock).toHaveBeenCalledWith(
-        'C:\\repo\\.git\\orca\\setup-runner.cmd',
+        'C:\\repo\\.git\\mcode\\setup-runner.cmd',
         expect.stringContaining('call npm run build\r\nif errorlevel 1 exit /b %errorlevel%'),
         'utf-8'
       )
@@ -273,7 +273,7 @@ describe('createSetupRunnerScript', () => {
 
   it('keeps POSIX runner behavior on POSIX platforms', async () => {
     gitExecFileSyncMock.mockReset()
-    gitExecFileSyncMock.mockReturnValue('/test/repo/.git/orca/setup-runner.sh\n')
+    gitExecFileSyncMock.mockReturnValue('/test/repo/.git/mcode/setup-runner.sh\n')
     const fs = await import('node:fs')
     const writeFileSyncMock = vi.mocked(fs.writeFileSync)
     const chmodSyncMock = vi.mocked(fs.chmodSync)
@@ -287,15 +287,15 @@ describe('createSetupRunnerScript', () => {
       const result = createSetupRunnerScript(makeRepo(), '/test/worktree', 'pnpm install')
 
       expect(gitExecFileSyncMock).toHaveBeenCalledWith(
-        ['rev-parse', '--git-path', 'orca/setup-runner.sh'],
+        ['rev-parse', '--git-path', 'mcode/setup-runner.sh'],
         { cwd: '/test/worktree' }
       )
       expect(writeFileSyncMock).toHaveBeenCalledWith(
-        '/test/repo/.git/orca/setup-runner.sh',
+        '/test/repo/.git/mcode/setup-runner.sh',
         '#!/usr/bin/env bash\nset -e\npnpm install\n',
         'utf-8'
       )
-      expect(chmodSyncMock).toHaveBeenCalledWith('/test/repo/.git/orca/setup-runner.sh', 0o755)
+      expect(chmodSyncMock).toHaveBeenCalledWith('/test/repo/.git/mcode/setup-runner.sh', 0o755)
       expect(result.shell).toBeUndefined()
     } finally {
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
@@ -304,7 +304,7 @@ describe('createSetupRunnerScript', () => {
 
   it('omits waitForAgentStartup unless the repo explicitly waits for setup', async () => {
     gitExecFileSyncMock.mockReset()
-    gitExecFileSyncMock.mockReturnValue('/test/repo/.git/orca/setup-runner.sh\n')
+    gitExecFileSyncMock.mockReturnValue('/test/repo/.git/mcode/setup-runner.sh\n')
     const { createSetupRunnerScript } = await import('./worktree-runner-script')
 
     expect(
@@ -322,15 +322,15 @@ describe('createSetupRunnerScript', () => {
 
   it('marks setup-runner terminals for the always-on credential guard', async () => {
     gitExecFileSyncMock.mockReset()
-    gitExecFileSyncMock.mockReturnValue('/test/repo/.git/orca/setup-runner.sh\n')
+    gitExecFileSyncMock.mockReturnValue('/test/repo/.git/mcode/setup-runner.sh\n')
     const { createSetupRunnerScript } = await import('./worktree-runner-script')
 
     const setup = createSetupRunnerScript(makeRepo(), '/test/worktree', 'git fetch')
 
     expect(setup.envVars).toMatchObject({
-      ORCA_ROOT_PATH: '/test/repo',
-      ORCA_WORKTREE_PATH: '/test/worktree',
-      ORCA_INTERNAL_TERMINAL_GIT_CREDENTIAL_GUARD_POLICY: 'guard'
+      MCODE_ROOT_PATH: '/test/repo',
+      MCODE_WORKTREE_PATH: '/test/worktree',
+      MCODE_INTERNAL_TERMINAL_GIT_CREDENTIAL_GUARD_POLICY: 'guard'
     })
   })
 })

@@ -140,7 +140,7 @@ export async function withInteractiveLoginCleanup<T>(
     }
     if (session.registering) {
       console.warn(
-        '[account] Interrupted after sign-in completed; the account may still have been registered. Run `orca account list` to check.'
+        '[account] Interrupted after sign-in completed; the account may still have been registered. Run `mcode account list` to check.'
       )
     }
     void cleanupOnce()

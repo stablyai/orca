@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
-import { OrcaRuntimeService } from '../../orca-runtime'
+import { MCodeRuntimeService } from '../../mcode-runtime'
 import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultScanOptions } from '../../../ai-vault/session-scanner-types'
 import {
@@ -75,7 +75,7 @@ function makeDispatcher(): RpcDispatcher {
       listAiVaultSessions(args),
     resolveAiVaultSessionTitles: (requests: unknown[], signal?: AbortSignal) =>
       resolveAiVaultSessionTitlesInWorker(requests, signal)
-  } as unknown as OrcaRuntimeService
+  } as unknown as MCodeRuntimeService
   return new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
 }
 
@@ -188,7 +188,7 @@ describe('aiVault.prepareSessionResume', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       prepareAiVaultSessionResume
-    } as unknown as OrcaRuntimeService
+    } as unknown as MCodeRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -366,11 +366,11 @@ describe('aiVault.listSessions handler + shared cache', () => {
     expect(options.wslHomeDirs).toEqual([])
   })
 
-  it('forwards codex-home through the real OrcaRuntimeService construction path', async () => {
+  it('forwards codex-home through the real MCodeRuntimeService construction path', async () => {
     // Why: the dispatcher test above seeds the cache module directly, so it would
-    // still pass if OrcaRuntimeService stopped forwarding the codex-home source.
+    // still pass if MCodeRuntimeService stopped forwarding the codex-home source.
     // Construct the real runtime to lock that cross-layer wiring in place.
-    const runtime = new OrcaRuntimeService(null, undefined, {
+    const runtime = new MCodeRuntimeService(null, undefined, {
       getAdditionalAiVaultCodexHomePaths: () => ['/ctor/codex/home']
     })
     await runtime.listAiVaultSessions({})

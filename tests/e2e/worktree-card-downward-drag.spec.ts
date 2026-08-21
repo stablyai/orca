@@ -1,6 +1,6 @@
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { waitForSessionReady } from './helpers/store'
 
 const SYNTHETIC_COUNT = 60
@@ -149,12 +149,12 @@ async function sampleMountedPreviewOffsets(
   }, sourceId)
 }
 
-test('dragging a virtualized worktree downward keeps rows stable', async ({ orcaPage }) => {
-  await waitForSessionReady(orcaPage)
-  await orcaPage.setViewportSize({ width: 1_000, height: 620 })
-  const { sourceId, nextId, idPrefix } = await seedVirtualizedManualWorktrees(orcaPage)
-  const scroller = orcaPage.locator('[data-worktree-sidebar]')
-  const source = orcaPage.locator(
+test('dragging a virtualized worktree downward keeps rows stable', async ({ mcodePage }) => {
+  await waitForSessionReady(mcodePage)
+  await mcodePage.setViewportSize({ width: 1_000, height: 620 })
+  const { sourceId, nextId, idPrefix } = await seedVirtualizedManualWorktrees(mcodePage)
+  const scroller = mcodePage.locator('[data-worktree-sidebar]')
+  const source = mcodePage.locator(
     `[data-worktree-sidebar] [data-worktree-id=${JSON.stringify(sourceId)}]`
   )
   await scroller.evaluate((element) => {
@@ -167,7 +167,7 @@ test('dragging a virtualized worktree downward keeps rows stable', async ({ orca
     const rect = element.getBoundingClientRect()
     return { x: rect.left, y: rect.top, width: rect.width, height: rect.height }
   })
-  const nextSource = orcaPage.locator(
+  const nextSource = mcodePage.locator(
     `[data-worktree-sidebar] [data-worktree-id=${JSON.stringify(nextId)}]`
   )
   const sourceStride = await nextSource.evaluate(
@@ -181,18 +181,18 @@ test('dragging a virtualized worktree downward keeps rows stable', async ({ orca
     return { x: rect.left, y: rect.top, width: rect.width, height: rect.height }
   })
 
-  await orcaPage.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
-  await orcaPage.mouse.down()
+  await mcodePage.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
+  await mcodePage.mouse.down()
   try {
     const edgeX = scrollerBox.x + 2
     const edgeY = scrollerBox.y + scrollerBox.height - 8
     // Keep the pointer in the edge zone while the renderer advances autoscroll.
     for (let step = 0; step < 12; step++) {
-      await orcaPage.mouse.move(edgeX, edgeY, { steps: 2 })
+      await mcodePage.mouse.move(edgeX, edgeY, { steps: 2 })
       if ((await source.count()) === 0) {
         break
       }
-      await orcaPage.waitForTimeout(100)
+      await mcodePage.waitForTimeout(100)
     }
     if ((await source.count()) > 0) {
       for (let step = 0; step < 8 && (await source.count()) > 0; step++) {
@@ -203,7 +203,7 @@ test('dragging a virtualized worktree downward keeps rows stable', async ({ orca
           )
           element.dispatchEvent(new Event('scroll', { bubbles: true }))
         })
-        await orcaPage.waitForTimeout(100)
+        await mcodePage.waitForTimeout(100)
       }
     }
     await expect
@@ -213,7 +213,7 @@ test('dragging a virtualized worktree downward keeps rows stable', async ({ orca
       })
       .toBe(0)
 
-    const samples = await sampleMountedPreviewOffsets(orcaPage, sourceId)
+    const samples = await sampleMountedPreviewOffsets(mcodePage, sourceId)
     expect(samples.length).toBeGreaterThan(0)
     const observationsById = new Map<string, PreviewOffsetSample[]>()
     for (const sample of samples.flat()) {
@@ -249,11 +249,11 @@ test('dragging a virtualized worktree downward keeps rows stable', async ({ orca
       expect(renderedReversal).toBeLessThanOrEqual(sourceStride)
     }
   } finally {
-    await orcaPage.mouse.up()
+    await mcodePage.mouse.up()
   }
 
-  await expect(orcaPage.locator('[data-worktree-sidebar-drag-preview="true"]')).toHaveCount(0)
-  await expect(orcaPage.locator('html')).not.toHaveAttribute(
+  await expect(mcodePage.locator('[data-worktree-sidebar-drag-preview="true"]')).toHaveCount(0)
+  await expect(mcodePage.locator('html')).not.toHaveAttribute(
     'data-worktree-sidebar-pointer-dragging'
   )
   await scroller.evaluate((element) => {

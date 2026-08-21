@@ -93,7 +93,7 @@ describe('filesystem-watcher real @parcel/watcher integration', () => {
     async () => {
       // Why: macOS reports temp watcher events under /private/var while
       // tmpdir() returns /var, so compare canonical paths instead of aliases.
-      tempDir = await realpath(await mkdtemp(join(tmpdir(), 'orca-fswatch-real-')))
+      tempDir = await realpath(await mkdtemp(join(tmpdir(), 'mcode-fswatch-real-')))
       const sendMock = vi.fn()
       const sender = {
         isDestroyed: () => false,
@@ -134,7 +134,7 @@ describe('filesystem-watcher real @parcel/watcher integration', () => {
   // renderer with events outside the root it subscribed with. One assertion
   // covers both: the emitted paths must stay under the subscribed spelling.
   it('reports events under an aliased worktree root, not its resolved path', async () => {
-    const root = await createAliasedWatcherRoot('orca-fswatch-alias-')
+    const root = await createAliasedWatcherRoot('mcode-fswatch-alias-')
     aliasedRoot = root
     await mkdir(join(root.realRoot, 'src'), { recursive: true })
 

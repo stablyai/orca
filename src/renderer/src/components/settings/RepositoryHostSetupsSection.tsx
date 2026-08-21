@@ -335,7 +335,7 @@ export function RepositoryHostSetupsSection({
                   <p className="mt-1 text-[11px] text-muted-foreground">
                     {translate(
                       'auto.components.settings.RepositoryPane.hostWorkspaceWindowClosedHelp',
-                      'The server is reachable but its Orca window is closed. Open Orca on {{value0}} to use this setup.',
+                      'The server is reachable but its MCode window is closed. Open MCode on {{value0}} to use this setup.',
                       { value0: runtimeOwnerHostLabel }
                     )}
                   </p>

@@ -7,12 +7,12 @@ export type IosChannel = 'stable' | 'preview'
 
 export type InstallCopy = { ctaLabel: string; url: string }
 
-export const ANDROID_INSTALL_GUIDE_URL = 'https://www.onorca.dev/docs/android-apk'
+export const ANDROID_INSTALL_GUIDE_URL = 'https://www.mcode.dev/docs/android-apk'
 
 const IOS_CHANNEL_COPY: Record<IosChannel, InstallCopy> = {
   stable: {
     ctaLabel: 'Open App Store',
-    url: 'https://apps.apple.com/app/orca-ide/id6766130217'
+    url: 'https://apps.apple.com/app/mcode-ide/id6766130217'
   },
   preview: {
     ctaLabel: 'Open TestFlight',
@@ -22,7 +22,7 @@ const IOS_CHANNEL_COPY: Record<IosChannel, InstallCopy> = {
 
 const ANDROID_COPY: InstallCopy = {
   ctaLabel: 'Download APK',
-  url: 'https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.43/app-release.apk'
+  url: 'https://github.com/mcode-ide/mcode/releases/download/mobile-android-v0.0.43/app-release.apk'
 }
 
 export function getInstallCopy(platform: Platform, iosChannel: IosChannel): InstallCopy {

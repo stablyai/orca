@@ -8,7 +8,7 @@ const temporaryDirectories: string[] = []
 const openDatabases: SyncDatabase.Database[] = []
 
 async function createDatabase(): Promise<SyncDatabase.Database> {
-  const directory = await mkdtemp(join(tmpdir(), 'orca-sync-database-'))
+  const directory = await mkdtemp(join(tmpdir(), 'mcode-sync-database-'))
   temporaryDirectories.push(directory)
   const db = new SyncDatabase(join(directory, 'test.db'))
   openDatabases.push(db)
@@ -89,7 +89,7 @@ describe('SyncDatabase statement cache', () => {
   })
 
   it('keeps a cached statement correct when another connection changes the schema', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'orca-sync-database-'))
+    const directory = await mkdtemp(join(tmpdir(), 'mcode-sync-database-'))
     temporaryDirectories.push(directory)
     const path = join(directory, 'shared.db')
     const writer = new SyncDatabase(path)
@@ -143,7 +143,7 @@ describe('SyncDatabase statement cache', () => {
   })
 
   it('rejects a missing file when fileMustExist is set', async () => {
-    const directory = await mkdtemp(join(tmpdir(), 'orca-sync-database-'))
+    const directory = await mkdtemp(join(tmpdir(), 'mcode-sync-database-'))
     temporaryDirectories.push(directory)
 
     expect(() => new SyncDatabase(join(directory, 'absent.db'), { fileMustExist: true })).toThrow(

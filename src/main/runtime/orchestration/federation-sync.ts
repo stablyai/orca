@@ -4,7 +4,7 @@ import {
   type MessageType,
   type WorkerReportOutcome
 } from './types'
-import type { OrcaRuntimeService } from '../orca-runtime'
+import type { MCodeRuntimeService } from '../mcode-runtime'
 import type { FederatedLifecycleSettlement } from './federation-lifecycle-settlement'
 import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../shared/protocol-version'
 import { OrchestrationError } from './orchestration-error'
@@ -44,14 +44,14 @@ type RelayedMessage = {
 }
 
 export async function syncFederatedDispatch(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   dispatchId: string
 ): Promise<{ imported: number; acknowledgedThrough: number }> {
   return syncFederatedDispatchPages(runtime, dispatchId, MAX_FEDERATION_PULL_PAGES_PER_SYNC)
 }
 
 async function syncFederatedDispatchPages(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   dispatchId: string,
   remainingPages: number
 ): Promise<{ imported: number; acknowledgedThrough: number }> {
@@ -68,7 +68,7 @@ async function syncFederatedDispatchPages(
   if (currentServer.peerFingerprint !== federated.peer_fingerprint) {
     throw new OrchestrationError(
       'peer_changed',
-      `Saved environment ${federated.environment_name} now identifies a different Orca server.`
+      `Saved environment ${federated.environment_name} now identifies a different MCode server.`
     )
   }
   const ackLease = acquireFederationAckLease(runtime, dispatchId)

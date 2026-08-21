@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# Creates stablyai/orca-daily and grants the existing release App write access to
+# Creates mcode-ide/mcode-daily and grants the existing release App write access to
 # it, so daily-mac-build.yml can publish there.
 #
-# Why a separate repo rather than reusing orca-hourly: the daily channel is a
+# Why a separate repo rather than reusing mcode-hourly: the daily channel is a
 # once-a-day cut that people ride deliberately. Sharing hourly's list would mix a
 # sparse daily series into the 72-entry hourly retention window and make both
 # pickers harder to read.
@@ -18,9 +18,9 @@
 set -euo pipefail
 
 ORG="stablyai"
-DAILY_REPO="$ORG/orca-daily"
-MAIN_REPO="$ORG/orca"
-APP_SLUG="orca-hourly-release"
+DAILY_REPO="$ORG/mcode-daily"
+MAIN_REPO="$ORG/mcode"
+APP_SLUG="mcode-hourly-release"
 
 fail() {
   echo "error: $*" >&2
@@ -35,7 +35,7 @@ if gh api "repos/$DAILY_REPO" --jq '.full_name' >/dev/null 2>&1; then
 else
   echo "Creating $DAILY_REPO..."
   # Why public: the in-app updater fetches release assets unauthenticated, exactly
-  # as it does for orca-hourly. A private repo would 404 for every client.
+  # as it does for mcode-hourly. A private repo would 404 for every client.
   #
   # Why the features are off: this repo holds releases and nothing else. Leaving
   # issues open invites bug reports against an unvetted daily in a repo nobody
@@ -45,7 +45,7 @@ else
   # and a tag needs a commit. Empty repo = "Repository is empty" 25 minutes in.
   gh repo create "$DAILY_REPO" \
     --public \
-    --description "Daily macOS dev builds of Orca, cut from main each morning. Not a source repo." \
+    --description "Daily macOS dev builds of MCode, cut from main each morning. Not a source repo." \
     --add-readme \
     --disable-issues \
     --disable-wiki ||
@@ -87,7 +87,7 @@ Could not do it from here${INSTALL_ID:+ (needs an Organization Owner)}. Do it in
   1. Open:  https://github.com/organizations/$ORG/settings/installations
   2. Configure  ->  $APP_SLUG
   3. Repository access  ->  Only select repositories  ->  add $DAILY_REPO
-     (keep orca-hourly and orca-adhoc selected; all dev channels use this one App)
+     (keep mcode-hourly and mcode-adhoc selected; all dev channels use this one App)
   4. Save.
 EOF
 fi

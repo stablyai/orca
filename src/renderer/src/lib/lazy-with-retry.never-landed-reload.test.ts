@@ -8,14 +8,14 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ORCA_RENDERER_UNLOAD_PREVENTED_EVENT } from '../../../shared/renderer-shutdown-events'
+import { MCODE_RENDERER_UNLOAD_PREVENTED_EVENT } from '../../../shared/renderer-shutdown-events'
 import {
   isLazyChunkLoadError,
   loadLazyWithRetry,
   resetLazyChunkReloadRequestsForTest
 } from './lazy-with-retry'
 
-const RELOAD_GUARD_KEY = 'orca:lazy-chunk-reload-attempted'
+const RELOAD_GUARD_KEY = 'mcode:lazy-chunk-reload-attempted'
 const RELOAD_SETTLE_GRACE_MS = 10_000
 
 // The dominant crash-time message across the shipped bundles (7/9 reports).
@@ -103,7 +103,7 @@ describe('loadLazyWithRetry when the recovery reload never lands', () => {
   it('contains an unload-vetoed reload and records it as a distinct outcome', async () => {
     const breadcrumbs = installBreadcrumbSink()
     vi.spyOn(window.location, 'reload').mockImplementation(() => {
-      window.dispatchEvent(new Event(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT))
+      window.dispatchEvent(new Event(MCODE_RENDERER_UNLOAD_PREVENTED_EVENT))
     })
 
     const settled = loadLazyWithRetry(() => Promise.reject(CORRUPT_CHUNK_ERROR()), {

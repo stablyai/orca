@@ -40,7 +40,7 @@ describe('writeTerminalRenderDesyncEvidence', () => {
   })
 
   it('writes private PNG and metadata files under app-owned user data', async () => {
-    const userData = await mkdtemp(path.join(os.tmpdir(), 'orca-render-desync-'))
+    const userData = await mkdtemp(path.join(os.tmpdir(), 'mcode-render-desync-'))
     tempDirectories.push(userData)
     const result = await writeTerminalRenderDesyncEvidence(userData, {
       captureId: 'capture-1',
@@ -60,7 +60,7 @@ describe('writeTerminalRenderDesyncEvidence', () => {
   })
 
   it('rejects path traversal and non-PNG payloads', async () => {
-    const userData = await mkdtemp(path.join(os.tmpdir(), 'orca-render-desync-'))
+    const userData = await mkdtemp(path.join(os.tmpdir(), 'mcode-render-desync-'))
     tempDirectories.push(userData)
     await expect(
       writeTerminalRenderDesyncEvidence(userData, {
@@ -79,7 +79,7 @@ describe('writeTerminalRenderDesyncEvidence', () => {
   })
 
   it('rejects a phase outside the IPC filename allowlist', async () => {
-    const userData = await mkdtemp(path.join(os.tmpdir(), 'orca-render-desync-'))
+    const userData = await mkdtemp(path.join(os.tmpdir(), 'mcode-render-desync-'))
     tempDirectories.push(userData)
 
     await expect(
@@ -92,7 +92,7 @@ describe('writeTerminalRenderDesyncEvidence', () => {
   })
 
   it('retains only the newest four capture directories', async () => {
-    const userData = await mkdtemp(path.join(os.tmpdir(), 'orca-render-desync-'))
+    const userData = await mkdtemp(path.join(os.tmpdir(), 'mcode-render-desync-'))
     tempDirectories.push(userData)
     for (let capture = 1; capture <= 6; capture++) {
       await writeTerminalRenderDesyncEvidence(userData, {
@@ -107,7 +107,7 @@ describe('writeTerminalRenderDesyncEvidence', () => {
   })
 
   it('rejects metadata that exceeds its storage budget', async () => {
-    const userData = await mkdtemp(path.join(os.tmpdir(), 'orca-render-desync-'))
+    const userData = await mkdtemp(path.join(os.tmpdir(), 'mcode-render-desync-'))
     tempDirectories.push(userData)
     await expect(
       writeTerminalRenderDesyncEvidence(userData, {

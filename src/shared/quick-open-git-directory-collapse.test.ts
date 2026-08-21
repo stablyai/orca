@@ -21,7 +21,7 @@ afterEach(async () => {
 
 describe('Quick Open git directory collapse', () => {
   it('collapses unignored and ignored trees while preserving individual ignored files', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-quick-open-git-collapse-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-quick-open-git-collapse-'))
     tempDirs.push(root)
     await execFileAsync('git', ['init', '--quiet'], { cwd: root })
     await writeFile(

@@ -114,7 +114,7 @@ describe('GitHub issue open-by-number origin preference', () => {
   })
 
   it('pins typed issue metadata to explicit origin preference', async () => {
-    const source = { owner: 'fork', repo: 'orca', host: 'github.com' }
+    const source = { owner: 'fork', repo: 'mcode', host: 'github.com' }
     resolveIssueSourceMock.mockResolvedValueOnce({ source, fellBack: false })
     ghExecFileAsyncMock.mockResolvedValueOnce({
       stdout: JSON.stringify({
@@ -122,7 +122,7 @@ describe('GitHub issue open-by-number origin preference', () => {
         title: 'Origin issue',
         state: 'open',
         labels: [],
-        url: 'https://github.com/fork/orca/issues/7',
+        url: 'https://github.com/fork/mcode/issues/7',
         updatedAt: '2026-04-02T00:00:00Z',
         author: { login: 'octocat' }
       })
@@ -133,7 +133,7 @@ describe('GitHub issue open-by-number origin preference', () => {
     expect(resolveIssueSourceMock).toHaveBeenCalledWith('/repo-root', 'origin', null, {})
     expect(getIssueOwnerRepoMock).not.toHaveBeenCalled()
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      ['api', 'repos/fork/orca/issues/7'],
+      ['api', 'repos/fork/mcode/issues/7'],
       expect.objectContaining({ cwd: '/repo-root', host: 'github.com' })
     )
     expect(item).toMatchObject({ number: 7, title: 'Origin issue', type: 'issue' })
@@ -150,7 +150,7 @@ describe('GitHub issue open-by-number origin preference', () => {
   })
 
   it('skips the issue probe on untyped open when origin identity is unresolved', async () => {
-    const origin = { owner: 'fork', repo: 'orca', host: 'github.com' }
+    const origin = { owner: 'fork', repo: 'mcode', host: 'github.com' }
     resolveIssueSourceMock.mockResolvedValueOnce({ source: null, fellBack: false })
     getOwnerRepoMock.mockResolvedValue(origin)
     resolvePRRepositoryCandidatesMock.mockResolvedValue({ candidates: [origin], headRepo: origin })
@@ -161,7 +161,7 @@ describe('GitHub issue open-by-number origin preference', () => {
         state: 'open',
         labels: [],
         isDraft: false,
-        url: 'https://github.com/fork/orca/pull/7',
+        url: 'https://github.com/fork/mcode/pull/7',
         baseRefName: 'main',
         headRefName: 'origin/fix',
         updatedAt: '2026-04-02T00:00:00Z',
@@ -174,7 +174,7 @@ describe('GitHub issue open-by-number origin preference', () => {
     expect(resolveIssueSourceMock).toHaveBeenCalledWith('/repo-root', 'origin', null, {})
     expect(getIssueOwnerRepoMock).not.toHaveBeenCalled()
     expect(ghExecFileAsyncMock.mock.calls[0]?.[0]).toEqual(
-      expect.arrayContaining(['pr', 'view', '--repo', 'fork/orca'])
+      expect.arrayContaining(['pr', 'view', '--repo', 'fork/mcode'])
     )
     expect(item).toMatchObject({ number: 7, type: 'pr' })
   })

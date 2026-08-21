@@ -46,8 +46,8 @@ function renderHeader({
         title: isGitLab ? 'Fix GitLab MR creation' : 'fix: pr-bug-scan validated finding',
         state: 'open',
         url: isGitLab
-          ? 'https://gitlab.com/acme/orca/-/merge_requests/31'
-          : 'https://github.com/stablyai/orca/pull/2964',
+          ? 'https://gitlab.com/acme/mcode/-/merge_requests/31'
+          : 'https://github.com/mcode-ide/mcode/pull/2964',
         status: 'pending',
         updatedAt: '2026-05-31T22:58:01Z',
         mergeable: 'UNKNOWN'
@@ -88,14 +88,14 @@ describe('ChecksPanelReviewHeader', () => {
     expect(markup).not.toContain('⇧⌘+click')
   })
 
-  // Why: with inverting on and Link Routing off the modifier reaches Orca here, so the
-  // hint must name Orca rather than the destination a plain click already uses.
-  it('names Orca when the modifier inverts toward the built-in browser', () => {
-    expect(renderHeader({ modifierHintDestination: 'orca' })).toContain('⇧⌘+click to open in Orca')
+  // Why: with inverting on and Link Routing off the modifier reaches MCode here, so the
+  // hint must name MCode rather than the destination a plain click already uses.
+  it('names MCode when the modifier inverts toward the built-in browser', () => {
+    expect(renderHeader({ modifierHintDestination: 'mcode' })).toContain('⇧⌘+click to open in MCode')
 
     vi.stubGlobal('navigator', { userAgent: 'Windows' })
-    expect(renderHeader({ modifierHintDestination: 'orca' })).toContain(
-      'Shift+Ctrl+click to open in Orca'
+    expect(renderHeader({ modifierHintDestination: 'mcode' })).toContain(
+      'Shift+Ctrl+click to open in MCode'
     )
   })
 

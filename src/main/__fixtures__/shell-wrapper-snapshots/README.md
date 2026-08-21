@@ -2,7 +2,7 @@
 
 Generated test fixtures. **Do not edit by hand.**
 
-Each `.txt` here is the byte-exact content of one shell startup file Orca writes
+Each `.txt` here is the byte-exact content of one shell startup file MCode writes
 into a pane's wrapper `ZDOTDIR`, captured per transport:
 
 |            |                   |

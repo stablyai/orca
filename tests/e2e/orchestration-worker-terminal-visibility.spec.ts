@@ -1,7 +1,7 @@
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { test as base, expect } from './helpers/orca-app'
+import { test as base, expect } from './helpers/mcode-app'
 import {
   ensureTerminalVisible,
   getActiveTabId,
@@ -14,7 +14,7 @@ import { waitForActivePaneHookDescriptor, waitForActivePanePtyId } from './helpe
 import { RuntimeClient } from '../../src/cli/runtime-client'
 import type { RuntimeTerminalListResult, RuntimeTerminalRead } from '../../src/shared/runtime-types'
 
-const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-orchestration-worker-'))
+const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'mcode-e2e-orchestration-worker-'))
 const spawnLedgerPath = path.join(fakeCliDir, 'spawn.jsonl')
 const interruptionLedgerPath = path.join(fakeCliDir, 'interruption.jsonl')
 const fakeCodexSource = `
@@ -30,13 +30,13 @@ if (process.argv.slice(2).includes('app-server')) {
   process.stderr.write("error: unrecognized subcommand 'app-server'\\n")
   process.exit(2)
 }
-appendLedger('ORCA_E2E_SPAWN_LEDGER', { event: 'spawn', startedAt: Date.now() })
+appendLedger('MCODE_E2E_SPAWN_LEDGER', { event: 'spawn', startedAt: Date.now() })
 process.stdout.write('\\u001b]0;Codex Ready\\u0007OpenAI Codex\\nmodel: e2e\\ndirectory: e2e\\n')
 let acknowledged = false
 process.stdin.on('data', (chunk) => {
   const input = chunk.toString()
   if (input.includes('\\x03')) {
-    appendLedger('ORCA_E2E_INTERRUPTION_LEDGER', { event: 'stdin-ctrl-c' })
+    appendLedger('MCODE_E2E_INTERRUPTION_LEDGER', { event: 'stdin-ctrl-c' })
   }
   if (!acknowledged && input.includes('\\r')) {
     acknowledged = true
@@ -45,7 +45,7 @@ process.stdin.on('data', (chunk) => {
 })
 for (const signal of ['SIGINT', 'SIGHUP', 'SIGTERM']) {
   process.on(signal, () => {
-    appendLedger('ORCA_E2E_INTERRUPTION_LEDGER', { event: 'signal', signal })
+    appendLedger('MCODE_E2E_INTERRUPTION_LEDGER', { event: 'signal', signal })
     process.exit(0)
   })
 }
@@ -69,8 +69,8 @@ const test = base.extend({
   launchEnv: [
     {
       PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`,
-      ORCA_E2E_SPAWN_LEDGER: spawnLedgerPath,
-      ORCA_E2E_INTERRUPTION_LEDGER: interruptionLedgerPath
+      MCODE_E2E_SPAWN_LEDGER: spawnLedgerPath,
+      MCODE_E2E_INTERRUPTION_LEDGER: interruptionLedgerPath
     },
     { option: true }
   ]
@@ -107,16 +107,16 @@ function isProcessAlive(pid: number): boolean {
 }
 
 test('worker-start preserves one live inactive worker across workspace re-entry', async ({
-  orcaPage,
+  mcodePage,
   electronApp
 }) => {
-  await waitForSessionReady(orcaPage)
-  const worktreeId = await waitForActiveWorktree(orcaPage)
-  await ensureTerminalVisible(orcaPage)
-  const coordinatorTabId = await getActiveTabId(orcaPage)
+  await waitForSessionReady(mcodePage)
+  const worktreeId = await waitForActiveWorktree(mcodePage)
+  await ensureTerminalVisible(mcodePage)
+  const coordinatorTabId = await getActiveTabId(mcodePage)
   expect(coordinatorTabId).toBeTruthy()
-  await waitForActivePanePtyId(orcaPage)
-  const coordinatorPane = await waitForActivePaneHookDescriptor(orcaPage)
+  await waitForActivePanePtyId(mcodePage)
+  const coordinatorPane = await waitForActivePaneHookDescriptor(mcodePage)
   const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
   const client = new RuntimeClient(userDataDir, 30_000, null, null)
   const coordinator = await client.call<{ terminal: { handle: string } }>('terminal.resolvePane', {
@@ -200,13 +200,13 @@ test('worker-start preserves one live inactive worker across workspace re-entry'
   )
   expect(isProcessAlive(spawn.pid)).toBe(true)
   expect(readLedger(interruptionLedgerPath)).toEqual([])
-  const workerTab = orcaPage.locator(
+  const workerTab = mcodePage.locator(
     `[data-testid="sortable-tab"][data-tab-id="${workerTerminal!.tabId}"]`
   )
   await expect(workerTab).toBeVisible()
   await expect(workerTab).toHaveAttribute('data-active', 'false')
   await expect(
-    orcaPage.locator(`[data-testid="sortable-tab"][data-tab-id="${coordinatorTabId}"]`)
+    mcodePage.locator(`[data-testid="sortable-tab"][data-tab-id="${coordinatorTabId}"]`)
   ).toHaveAttribute('data-active', 'true')
 
   await client.call('orchestration.send', {
@@ -220,17 +220,17 @@ test('worker-start preserves one live inactive worker across workspace re-entry'
   })
   expect(checked.result.messages).toEqual([expect.objectContaining({ subject: 'ACK' })])
 
-  const otherWorktreeId = await switchToOtherWorktree(orcaPage, worktreeId)
+  const otherWorktreeId = await switchToOtherWorktree(mcodePage, worktreeId)
   expect(otherWorktreeId).toBeTruthy()
   await expect(workerTab).not.toBeVisible()
-  await switchToWorktree(orcaPage, worktreeId)
+  await switchToWorktree(mcodePage, worktreeId)
 
   await expect(workerTab).toBeVisible()
   await expect(
-    orcaPage.locator(`[data-testid="sortable-tab"][data-tab-id="${workerTerminal!.tabId}"]`)
+    mcodePage.locator(`[data-testid="sortable-tab"][data-tab-id="${workerTerminal!.tabId}"]`)
   ).toHaveCount(1)
   await expect(
-    orcaPage.locator(`[data-testid="sortable-tab"][data-tab-title="${workerTabTitle}"]`)
+    mcodePage.locator(`[data-testid="sortable-tab"][data-tab-title="${workerTabTitle}"]`)
   ).toHaveCount(1)
   const terminalsAfterReturn = await client.call<RuntimeTerminalListResult>('terminal.list')
   const workerAfterReturn = terminalsAfterReturn.result.terminals.find(
@@ -254,5 +254,5 @@ test('worker-start preserves one live inactive worker across workspace re-entry'
   expect(workerOutputAfterReturn.result.terminal.tail.join('\n')).not.toContain(
     'Conversation interrupted'
   )
-  await expect(orcaPage.locator('body')).not.toContainText('Conversation interrupted')
+  await expect(mcodePage.locator('body')).not.toContainText('Conversation interrupted')
 })

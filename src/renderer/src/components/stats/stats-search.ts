@@ -6,7 +6,7 @@ export const getStatsPaneSearchEntries = createLocalizedCatalog(() => [
     title: translate('auto.components.stats.stats.search.cb2430ae6a', 'Stats & Usage'),
     description: translate(
       'auto.components.stats.stats.search.26bb901fcd',
-      'Orca stats plus Claude, Codex, OpenCode token analytics and Grok subscription usage.'
+      'MCode stats plus Claude, Codex, OpenCode token analytics and Grok subscription usage.'
     ),
     keywords: [
       translate('auto.components.stats.stats.search.372debfac0', 'stats'),

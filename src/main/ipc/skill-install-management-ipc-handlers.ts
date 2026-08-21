@@ -13,7 +13,7 @@ import {
   SkillInstallResultSchema,
   SkillPackageIdentitySchema
 } from '../../shared/skill-install-contract'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { MCodeRuntimeService } from '../runtime/mcode-runtime'
 import {
   supportsSkillRuntimeBundleInstall,
   supportsSkillRuntimeManagement
@@ -47,7 +47,7 @@ type BundlePreviewInput = z.infer<typeof SkillBundleInstallPreviewRequestSchema>
 
 const REMOTE_BUNDLE_PREVIEW_CONCURRENCY = 8
 
-async function previewBundleInstall(runtime: OrcaRuntimeService, input: BundlePreviewInput) {
+async function previewBundleInstall(runtime: MCodeRuntimeService, input: BundlePreviewInput) {
   if (!input.environmentId) {
     return runtime.previewSharedSkillBundleInstallRequest(input)
   }
@@ -100,7 +100,7 @@ async function previewBundleInstall(runtime: OrcaRuntimeService, input: BundlePr
   })
 }
 
-export function registerSkillInstallManagementIpcHandlers(runtime: OrcaRuntimeService): void {
+export function registerSkillInstallManagementIpcHandlers(runtime: MCodeRuntimeService): void {
   handleMainWindowSkillIpc('skills:listWslDistros', async (_event, environmentIdValue: unknown) => {
     const environmentId = environmentIdSchema.optional().parse(environmentIdValue)
     if (!environmentId) {

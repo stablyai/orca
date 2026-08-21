@@ -44,7 +44,7 @@ describe('repo slice skipped-onboarding folder startup', () => {
     const store = createTestStore()
     store.setState({
       settings: {
-        ...getDefaultSettings('/tmp/orca-workspaces'),
+        ...getDefaultSettings('/tmp/mcode-workspaces'),
         defaultTuiAgent: 'codex'
       }
     })

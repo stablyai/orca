@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-// Asserts that the telemetry compile-time constants — `ORCA_BUILD_IDENTITY`
-// and `ORCA_POSTHOG_WRITE_KEY` — were substituted into the shipped binary.
+// Asserts that the telemetry compile-time constants — `MCODE_BUILD_IDENTITY`
+// and `MCODE_POSTHOG_WRITE_KEY` — were substituted into the shipped binary.
 // Closes the gap PR #1385 flagged: a release built without those env vars
 // produces an `IS_OFFICIAL_BUILD === false` binary that ships silently and
 // transmits nothing. This script runs after `electron-builder` has packed
@@ -51,8 +51,8 @@ function findAsar(rootDir) {
   // Why: electron-builder produces one `app.asar` per platform-arch combo.
   // Linux/Windows targets ship one (`dist/linux-unpacked/resources/app.asar`,
   // `dist/win-unpacked/resources/app.asar`); macOS dual-arch ships two
-  // (`dist/mac/Orca.app/Contents/Resources/app.asar` for x64,
-  // `dist/mac-arm64/Orca.app/Contents/Resources/app.asar` for arm64) because
+  // (`dist/mac/MCode.app/Contents/Resources/app.asar` for x64,
+  // `dist/mac-arm64/MCode.app/Contents/Resources/app.asar` for arm64) because
   // `electron-builder.config.cjs` declares `arch: ['x64', 'arm64']`. Both
   // arches share the same JS bundle through electron-vite's single `main`
   // build, so the constants are identical across them — but verifying every
@@ -117,7 +117,7 @@ for (const m of asarMatches) {
 }
 
 // Why these regexes: electron-vite's `define` block substitutes the bare
-// identifiers `ORCA_BUILD_IDENTITY` and `ORCA_POSTHOG_WRITE_KEY` with their
+// identifiers `MCODE_BUILD_IDENTITY` and `MCODE_POSTHOG_WRITE_KEY` with their
 // JSON-stringified values at build time. `src/main/telemetry/client.ts`
 // then assigns those into module-local declarations named `BUILD_IDENTITY`
 // and `WRITE_KEY`. Rollup may preserve `const` or lower it to `var`.

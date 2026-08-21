@@ -3,16 +3,16 @@ import { performance } from 'node:perf_hooks'
 import process from 'node:process'
 import { createStore } from 'zustand/vanilla'
 
-const SUBSCRIBERS = Number.parseInt(process.env.ORCA_ZUSTAND_BENCH_SUBSCRIBERS ?? '2500', 10)
-const WRITES = Number.parseInt(process.env.ORCA_ZUSTAND_BENCH_WRITES ?? '2000', 10)
+const SUBSCRIBERS = Number.parseInt(process.env.MCODE_ZUSTAND_BENCH_SUBSCRIBERS ?? '2500', 10)
+const WRITES = Number.parseInt(process.env.MCODE_ZUSTAND_BENCH_WRITES ?? '2000', 10)
 const MAX_MILLISECONDS_PER_WRITE = Number.parseFloat(
-  process.env.ORCA_ZUSTAND_BENCH_MAX_MS_PER_WRITE ?? '5'
+  process.env.MCODE_ZUSTAND_BENCH_MAX_MS_PER_WRITE ?? '5'
 )
 
 for (const [name, value] of [
-  ['ORCA_ZUSTAND_BENCH_SUBSCRIBERS', SUBSCRIBERS],
-  ['ORCA_ZUSTAND_BENCH_WRITES', WRITES],
-  ['ORCA_ZUSTAND_BENCH_MAX_MS_PER_WRITE', MAX_MILLISECONDS_PER_WRITE]
+  ['MCODE_ZUSTAND_BENCH_SUBSCRIBERS', SUBSCRIBERS],
+  ['MCODE_ZUSTAND_BENCH_WRITES', WRITES],
+  ['MCODE_ZUSTAND_BENCH_MAX_MS_PER_WRITE', MAX_MILLISECONDS_PER_WRITE]
 ]) {
   if (!Number.isFinite(value) || value <= 0) {
     throw new Error(`${name} must be positive, received ${value}`)

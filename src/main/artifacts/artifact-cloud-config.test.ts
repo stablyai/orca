@@ -6,25 +6,25 @@ import {
 
 describe('resolveArtifactCloudApiUrl', () => {
   it('uses the first-party production origin by default', () => {
-    expect(resolveArtifactCloudApiUrl(undefined, {}, true)).toBe('https://share.onorca.dev')
+    expect(resolveArtifactCloudApiUrl(undefined, {}, true)).toBe('https://share.mcode.dev')
   })
 
   it('allows loopback HTTP only in development', () => {
     expect(
       resolveArtifactCloudApiUrl(
         undefined,
-        { ORCA_ARTIFACTS_API_URL: 'http://127.0.0.1:45961' },
+        { MCODE_ARTIFACTS_API_URL: 'http://127.0.0.1:45961' },
         false
       )
     ).toBe('http://127.0.0.1:45961')
     expect(() => resolveArtifactCloudApiUrl('http://127.0.0.1:45961', {}, true)).toThrow(/HTTPS/)
   })
 
-  it('rejects origins that could receive an Orca access token', () => {
+  it('rejects origins that could receive an MCode access token', () => {
     expect(() => resolveArtifactCloudApiUrl('https://example.com', {}, false)).toThrow(
-      /onorca\.dev/
+      /mcode\.dev/
     )
-    expect(() => resolveArtifactCloudApiUrl('https://share.onorca.dev/path', {}, false)).toThrow(
+    expect(() => resolveArtifactCloudApiUrl('https://share.mcode.dev/path', {}, false)).toThrow(
       /origin/
     )
   })

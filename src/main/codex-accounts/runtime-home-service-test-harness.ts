@@ -93,7 +93,7 @@ export function createStore(settings: GlobalSettings) {
 export function createManagedAuth(rootDir: string, accountId: string, auth: string): string {
   const managedHomePath = join(rootDir, 'codex-accounts', accountId, 'home')
   mkdirSync(managedHomePath, { recursive: true })
-  writeFileSync(join(managedHomePath, '.orca-managed-home'), `${accountId}\n`, 'utf-8')
+  writeFileSync(join(managedHomePath, '.mcode-managed-home'), `${accountId}\n`, 'utf-8')
   writeFileSync(join(managedHomePath, 'auth.json'), auth, 'utf-8')
   return managedHomePath
 }
@@ -163,10 +163,10 @@ export function setupRuntimeHomeTest(): void {
     ...(await vi.importActual<typeof ShellStartupEnv>('../pty/shell-startup-env')),
     isShellStartupEnvProbeSupported: () => testState.shellStartupEnvProbeSupported
   }))
-  testState.userDataDir = mkdtempSync(join(tmpdir(), 'orca-runtime-home-'))
-  testState.fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-codex-home-'))
-  testState.previousUserDataPath = process.env.ORCA_USER_DATA_PATH
-  process.env.ORCA_USER_DATA_PATH = testState.userDataDir
+  testState.userDataDir = mkdtempSync(join(tmpdir(), 'mcode-runtime-home-'))
+  testState.fakeHomeDir = mkdtempSync(join(tmpdir(), 'mcode-codex-home-'))
+  testState.previousUserDataPath = process.env.MCODE_USER_DATA_PATH
+  process.env.MCODE_USER_DATA_PATH = testState.userDataDir
   mkdirSync(getSystemCodexHomePath(), { recursive: true })
   mkdirSync(getRuntimeCodexHomePath(), { recursive: true })
   writePaneRegistry({
@@ -182,8 +182,8 @@ export function teardownRuntimeHomeTest(): void {
   rmSync(testState.userDataDir, { recursive: true, force: true })
   rmSync(testState.fakeHomeDir, { recursive: true, force: true })
   if (testState.previousUserDataPath === undefined) {
-    delete process.env.ORCA_USER_DATA_PATH
+    delete process.env.MCODE_USER_DATA_PATH
   } else {
-    process.env.ORCA_USER_DATA_PATH = testState.previousUserDataPath
+    process.env.MCODE_USER_DATA_PATH = testState.previousUserDataPath
   }
 }

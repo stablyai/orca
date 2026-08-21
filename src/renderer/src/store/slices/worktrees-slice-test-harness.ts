@@ -132,7 +132,7 @@ export function createTestStore() {
       ({
         // Why: this test isolates the worktree slice, so it provides only the state surface createWorktreeSlice touches.
         ...createWorktreeSlice(...a),
-        trustedOrcaHooks: {},
+        trustedMCodeHooks: {},
         sshConnectionStates: new Map([
           [
             TEST_SSH_AUTHORITY.targetId,

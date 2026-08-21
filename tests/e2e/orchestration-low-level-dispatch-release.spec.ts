@@ -1,4 +1,4 @@
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { RuntimeClient } from '../../src/cli/runtime-client'
 import type { RuntimeTerminalListResult } from '../../src/shared/runtime-types'
 import { waitForSessionReady, ensureTerminalVisible } from './helpers/store'
@@ -9,17 +9,17 @@ import {
 } from './helpers/terminal'
 
 test('low-level Dispatches can be abandoned and stopped without closing their pane', async ({
-  orcaPage,
+  mcodePage,
   electronApp
 }) => {
-  await waitForSessionReady(orcaPage)
-  await ensureTerminalVisible(orcaPage)
-  await waitForActiveTerminalManager(orcaPage)
-  await waitForActivePanePtyId(orcaPage)
+  await waitForSessionReady(mcodePage)
+  await ensureTerminalVisible(mcodePage)
+  await waitForActiveTerminalManager(mcodePage)
+  await waitForActivePanePtyId(mcodePage)
 
   const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
   const client = new RuntimeClient(userDataDir, 30_000, null, null)
-  const pane = await waitForActivePaneHookDescriptor(orcaPage)
+  const pane = await waitForActivePaneHookDescriptor(mcodePage)
   const resolved = await client.call<{ terminal: { handle: string } }>('terminal.resolvePane', {
     paneKey: pane.paneKey
   })

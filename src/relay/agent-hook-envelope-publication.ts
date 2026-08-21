@@ -12,7 +12,7 @@ import type { RelayDispatcher } from './dispatcher'
 // the pane sits on `waiting` with no way to answer from web or mobile). The roster is shed earlier
 // only because it is cheaper to rebuild, NOT because it is cosmetic: a missing roster blanks live
 // subagent rows and unblocks pane hibernation, which is why shed fields are named on the wire —
-// `restoreShedStatusFields` re-attaches the restorable ones from Orca's cached payload.
+// `restoreShedStatusFields` re-attaches the restorable ones from MCode's cached payload.
 const SHED_ORDER = ['lastAssistantMessage', 'subagents', 'interactivePrompt'] as const
 
 // Why: these envelopes are fire-and-forget state snapshots — no ack, no producer-side retry — and

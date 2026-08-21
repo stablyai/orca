@@ -34,7 +34,7 @@ async function renderLine(overrides: RenderOverrides = {}): Promise<HTMLDivEleme
   await act(async () => {
     root.render(
       <NewExternalWorktreesInboxLine
-        repoDisplayName="orca"
+        repoDisplayName="mcode"
         hostContextLabel={overrides.hostContextLabel}
         inboxCount={overrides.inboxCount ?? 24}
         pending={overrides.pending ?? false}
@@ -81,7 +81,7 @@ describe('NewExternalWorktreesInboxLine', () => {
 
     const review = getReviewButton(container)
     expect(review).not.toBeNull()
-    expect(review?.getAttribute('aria-label')).toBe('Review 24 hidden worktrees in orca')
+    expect(review?.getAttribute('aria-label')).toBe('Review 24 hidden worktrees in mcode')
 
     await act(async () => {
       review?.click()
@@ -95,7 +95,7 @@ describe('NewExternalWorktreesInboxLine', () => {
     expect(container.textContent).toContain('hidden worktree')
     expect(container.textContent).not.toContain('hidden worktrees')
     expect(getReviewButton(container)?.getAttribute('aria-label')).toBe(
-      'Review 1 hidden worktree in orca'
+      'Review 1 hidden worktree in mcode'
     )
   })
 
@@ -106,10 +106,10 @@ describe('NewExternalWorktreesInboxLine', () => {
 
     expect(local.textContent).toContain('Local Mac')
     expect(getReviewButton(local)?.getAttribute('aria-label')).toBe(
-      'Review 61 hidden worktrees in orca on Local Mac'
+      'Review 61 hidden worktrees in mcode on Local Mac'
     )
     expect(getReviewButton(remote)?.getAttribute('aria-label')).toBe(
-      'Review 134 hidden worktrees in orca on openclaw'
+      'Review 134 hidden worktrees in mcode on openclaw'
     )
   })
 
@@ -118,7 +118,7 @@ describe('NewExternalWorktreesInboxLine', () => {
 
     expect(
       container.querySelector(
-        'button[aria-label="Hide external worktrees permanently for orca on openclaw"]'
+        'button[aria-label="Hide external worktrees permanently for mcode on openclaw"]'
       )
     ).not.toBeNull()
   })
@@ -127,7 +127,7 @@ describe('NewExternalWorktreesInboxLine', () => {
     const container = await renderLine()
 
     expect(getReviewButton(container)?.getAttribute('aria-label')).toBe(
-      'Review 24 hidden worktrees in orca'
+      'Review 24 hidden worktrees in mcode'
     )
   })
 
@@ -137,7 +137,7 @@ describe('NewExternalWorktreesInboxLine', () => {
     const container = await renderLine({ onReview, onSuppress })
 
     const suppressButton = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Hide external worktrees permanently for orca"]'
+      'button[aria-label="Hide external worktrees permanently for mcode"]'
     )
     expect(suppressButton).not.toBeNull()
     expect(suppressButton?.className).toContain('can-hover:group-hover:opacity-100')
@@ -158,7 +158,7 @@ describe('NewExternalWorktreesInboxLine', () => {
     expect(getReviewButton(container)?.disabled).toBe(true)
     expect(
       container.querySelector<HTMLButtonElement>(
-        'button[aria-label="Hide external worktrees permanently for orca"]'
+        'button[aria-label="Hide external worktrees permanently for mcode"]'
       )?.disabled
     ).toBe(true)
     expect(container.querySelector('section')?.getAttribute('aria-busy')).toBe('true')

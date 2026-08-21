@@ -365,7 +365,7 @@ describe('SkillInstallManagementDialog', () => {
     )
   })
 
-  it('requires confirmation before removing an Orca-managed install', async () => {
+  it('requires confirmation before removing an MCode-managed install', async () => {
     const skills = skillsApi(install('ver_2'), [version('ver_2', '2026-08-12T00:00:00.000Z')])
     Object.defineProperty(window, 'api', { configurable: true, value: { skills } })
     render(<SkillInstallManagementDialog open onOpenChange={() => undefined} />)
@@ -468,7 +468,7 @@ describe('SkillInstallManagementDialog', () => {
         shares: [
           {
             id: 'share_bundle',
-            url: 'https://app.orca.dev/skills/share/share_bundle',
+            url: 'https://app.mcode.dev/skills/share/share_bundle',
             createdAt: '2026-08-12T00:00:00.000Z'
           }
         ]

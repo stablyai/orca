@@ -1,4 +1,4 @@
-export const REMOTE_ARTIFACT_INPUT_ENV = 'ORCA_REMOTE_ARTIFACT_INPUT'
+export const REMOTE_ARTIFACT_INPUT_ENV = 'MCODE_REMOTE_ARTIFACT_INPUT'
 
 export function sshArtifactSourceKey(targetId: string, sourceKey: string): string {
   return JSON.stringify(['ssh', targetId, sourceKey])

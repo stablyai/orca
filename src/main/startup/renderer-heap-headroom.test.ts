@@ -36,7 +36,7 @@ describe('computeRendererHeapCeilingMb', () => {
     expect(computeRendererHeapCeilingMb(128 * GIB)).toBe(4096) // cage cap, never higher
   })
 
-  it('honors a positive ORCA_RENDERER_HEAP_MB override regardless of RAM', () => {
+  it('honors a positive MCODE_RENDERER_HEAP_MB override regardless of RAM', () => {
     expect(computeRendererHeapCeilingMb(4 * GIB, '5000')).toBe(5000)
     expect(computeRendererHeapCeilingMb(128 * GIB, '4096')).toBe(4096)
   })

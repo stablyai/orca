@@ -39,7 +39,7 @@ export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
     if (index === undefined && !page) {
       throw new RuntimeClientError('invalid_argument', 'Missing required --index or --page')
     }
-    // Why: a stable browser page id is globally unique across Orca, so page-
+    // Why: a stable browser page id is globally unique across MCode, so page-
     // targeted tab switches should match the rest of the --page command model:
     // global by default, with --worktree only acting as explicit validation.
     const target = await getBrowserCommandTarget(flags, cwd, client)

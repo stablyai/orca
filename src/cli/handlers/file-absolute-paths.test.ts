@@ -7,7 +7,7 @@ vi.mock('../runtime-client', () => {
     readonly isRemote = false
     call = callMock
     getCliStatus = vi.fn()
-    openOrca = vi.fn()
+    openMCode = vi.fn()
   }
 
   class RuntimeClientError extends Error {
@@ -51,14 +51,14 @@ describe('absolute file CLI paths', () => {
   })
 
   it('reproduces the issue positional command without invalid_relative_path', async () => {
-    const issuePath = '/root/orca/workspaces/xxx/xxx/xxx.ts'
+    const issuePath = '/root/mcode/workspaces/xxx/xxx/xxx.ts'
     callMock.mockImplementation(async (method: string, params: { relativePath?: string }) => {
       if (method === 'worktree.list') {
-        return worktreeListFixture([buildWorktree('/root/orca/workspaces/xxx', 'feature')])
+        return worktreeListFixture([buildWorktree('/root/mcode/workspaces/xxx', 'feature')])
       }
       if (method === 'worktree.show') {
         return okFixture('req_show', {
-          worktree: buildWorktree('/root/orca/workspaces/xxx', 'feature')
+          worktree: buildWorktree('/root/mcode/workspaces/xxx', 'feature')
         })
       }
       if (method === 'files.open' && params.relativePath?.startsWith('/')) {
@@ -72,21 +72,21 @@ describe('absolute file CLI paths', () => {
       })
     })
 
-    await main(['file', 'open', issuePath], '/root/orca/workspaces/xxx')
+    await main(['file', 'open', issuePath], '/root/mcode/workspaces/xxx')
 
     expect(process.exitCode).toBeUndefined()
     expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
     expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.show', {
-      worktree: 'id:repo::/root/orca/workspaces/xxx'
+      worktree: 'id:repo::/root/mcode/workspaces/xxx'
     })
     expect(callMock).toHaveBeenNthCalledWith(3, 'files.open', {
-      worktree: 'id:repo::/root/orca/workspaces/xxx',
+      worktree: 'id:repo::/root/mcode/workspaces/xxx',
       relativePath: 'xxx/xxx.ts'
     })
   })
 
   describe('WSL UNC worktree roots', () => {
-    const uncRoot = '//wsl.localhost/Ubuntu/root/orca/workspaces/xxx'
+    const uncRoot = '//wsl.localhost/Ubuntu/root/mcode/workspaces/xxx'
 
     function mockWorktreeShow(rootPath: string): void {
       queueFixtures(
@@ -117,16 +117,16 @@ describe('absolute file CLI paths', () => {
       vi.stubEnv('WSL_DISTRO_NAME', 'Ubuntu')
       mockWorktreeShow(uncRoot)
 
-      await openPath('/root/orca/workspaces/xxx/xxx/xxx.ts')
+      await openPath('/root/mcode/workspaces/xxx/xxx/xxx.ts')
 
       expectOpenedWith('xxx/xxx.ts')
     })
 
     it('relativizes against a legacy backslash wsl$ root', async () => {
       vi.stubEnv('WSL_DISTRO_NAME', 'Ubuntu')
-      mockWorktreeShow('\\\\wsl$\\Ubuntu\\root\\orca\\workspaces\\xxx')
+      mockWorktreeShow('\\\\wsl$\\Ubuntu\\root\\mcode\\workspaces\\xxx')
 
-      await openPath('/root/orca/workspaces/xxx/xxx/xxx.ts')
+      await openPath('/root/mcode/workspaces/xxx/xxx/xxx.ts')
 
       expectOpenedWith('xxx/xxx.ts')
     })
@@ -146,27 +146,27 @@ describe('absolute file CLI paths', () => {
       vi.stubEnv('WSL_DISTRO_NAME', 'Ubuntu')
       mockWorktreeShow(uncRoot)
 
-      await openPath('/root/orca/workspaces/xxx/a\\b.ts')
+      await openPath('/root/mcode/workspaces/xxx/a\\b.ts')
 
-      expectOpenedWith('/root/orca/workspaces/xxx/a\\b.ts')
+      expectOpenedWith('/root/mcode/workspaces/xxx/a\\b.ts')
     })
 
     it('leaves a Linux path from another distro for the runtime guard', async () => {
       vi.stubEnv('WSL_DISTRO_NAME', 'Debian')
       mockWorktreeShow(uncRoot)
 
-      await openPath('/root/orca/workspaces/xxx/xxx/xxx.ts')
+      await openPath('/root/mcode/workspaces/xxx/xxx/xxx.ts')
 
-      expectOpenedWith('/root/orca/workspaces/xxx/xxx/xxx.ts')
+      expectOpenedWith('/root/mcode/workspaces/xxx/xxx/xxx.ts')
     })
 
     // Why: WSL_DISTRO_NAME is also set for a plain Linux CLI inside the distro, where
     // roots are POSIX; prefixing there would strand every absolute path (#11393 regression).
     it('keeps relativizing POSIX roots while WSL_DISTRO_NAME is set', async () => {
       vi.stubEnv('WSL_DISTRO_NAME', 'Ubuntu')
-      mockWorktreeShow('/root/orca/workspaces/xxx')
+      mockWorktreeShow('/root/mcode/workspaces/xxx')
 
-      await openPath('/root/orca/workspaces/xxx/xxx/xxx.ts')
+      await openPath('/root/mcode/workspaces/xxx/xxx/xxx.ts')
 
       expectOpenedWith('xxx/xxx.ts')
     })
@@ -175,9 +175,9 @@ describe('absolute file CLI paths', () => {
       vi.stubEnv('WSL_DISTRO_NAME', 'Ubuntu')
       mockWorktreeShow(uncRoot)
 
-      await openPath('/root/orca/workspaces/xxx-2/xxx.ts')
+      await openPath('/root/mcode/workspaces/xxx-2/xxx.ts')
 
-      expectOpenedWith('/root/orca/workspaces/xxx-2/xxx.ts')
+      expectOpenedWith('/root/mcode/workspaces/xxx-2/xxx.ts')
     })
 
     // Why: Windows folds the distro segment, so only its case may differ from the root.
@@ -185,7 +185,7 @@ describe('absolute file CLI paths', () => {
       vi.stubEnv('WSL_DISTRO_NAME', 'ubuntu')
       mockWorktreeShow(uncRoot)
 
-      await openPath('/root/orca/workspaces/xxx/xxx/xxx.ts')
+      await openPath('/root/mcode/workspaces/xxx/xxx/xxx.ts')
 
       expectOpenedWith('xxx/xxx.ts')
     })
@@ -194,9 +194,9 @@ describe('absolute file CLI paths', () => {
       vi.stubEnv('WSL_DISTRO_NAME', 'Ubuntu')
       mockWorktreeShow(uncRoot)
 
-      await openPath('/root/orca/Workspaces/xxx/xxx.ts')
+      await openPath('/root/mcode/Workspaces/xxx/xxx.ts')
 
-      expectOpenedWith('/root/orca/Workspaces/xxx/xxx.ts')
+      expectOpenedWith('/root/mcode/Workspaces/xxx/xxx.ts')
     })
 
     it('leaves a Windows drive-letter workspace alone while WSL_DISTRO_NAME is set', async () => {
@@ -209,13 +209,13 @@ describe('absolute file CLI paths', () => {
     })
 
     // Why: WSL_DISTRO_NAME only arrives if interop forwards it, but the launcher
-    // always sets ORCA_CLI_CWD, which reaches the handler as the invocation cwd.
+    // always sets MCODE_CLI_CWD, which reaches the handler as the invocation cwd.
     it('falls back to the distro named by a UNC cwd', async () => {
       mockWorktreeShow(uncRoot)
 
       await openPath(
-        '/root/orca/workspaces/xxx/xxx/xxx.ts',
-        '\\\\wsl.localhost\\Ubuntu\\root\\orca\\workspaces\\xxx\\xxx'
+        '/root/mcode/workspaces/xxx/xxx/xxx.ts',
+        '\\\\wsl.localhost\\Ubuntu\\root\\mcode\\workspaces\\xxx\\xxx'
       )
 
       expectOpenedWith('xxx/xxx.ts')
@@ -224,9 +224,9 @@ describe('absolute file CLI paths', () => {
     it('does not rewrite when the CLI is not running under WSL', async () => {
       mockWorktreeShow(uncRoot)
 
-      await openPath('/root/orca/workspaces/xxx/xxx/xxx.ts')
+      await openPath('/root/mcode/workspaces/xxx/xxx/xxx.ts')
 
-      expectOpenedWith('/root/orca/workspaces/xxx/xxx/xxx.ts')
+      expectOpenedWith('/root/mcode/workspaces/xxx/xxx/xxx.ts')
     })
 
     it('rejects the UNC worktree root itself typed as a Linux path', async () => {
@@ -236,7 +236,7 @@ describe('absolute file CLI paths', () => {
         okFixture('req_show', { worktree: buildWorktree(uncRoot, 'feature') })
       )
 
-      await openPath('/root/orca/workspaces/xxx')
+      await openPath('/root/mcode/workspaces/xxx')
 
       expect(process.exitCode).toBe(1)
       expect(console.error).toHaveBeenCalledWith(

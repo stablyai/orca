@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Globe, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import { MCODE_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import type {
   BrowserCertificateFailure,
   BrowserCertificateProceedResult,
@@ -79,7 +79,7 @@ export function RemoteBrowserPageViewport({
   const showRemoteFailureOverlay =
     Boolean(browserTab.loadError) &&
     remoteFailureUrl !== 'about:blank' &&
-    remoteFailureUrl !== ORCA_BROWSER_BLANK_URL
+    remoteFailureUrl !== MCODE_BROWSER_BLANK_URL
 
   return (
     <div

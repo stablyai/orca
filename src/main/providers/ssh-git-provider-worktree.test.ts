@@ -192,7 +192,7 @@ describe('SshGitProvider', () => {
     await expect(
       provider.forceDeletePreservedBranch('/home/user/repo', 'you/fix-auth', 'abc123')
     ).rejects.toThrow(
-      'This SSH host is running an older Orca relay that cannot delete preserved branches. Reconnect to deploy the latest relay, then try again.'
+      'This SSH host is running an older MCode relay that cannot delete preserved branches. Reconnect to deploy the latest relay, then try again.'
     )
   })
 

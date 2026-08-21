@@ -90,8 +90,8 @@ function runInstaller(
 }
 
 // Why (#11549 aftermath): a CLI that falls off PATH keeps its user-wide config invoking
-// Orca's script, but the presence gate below then skips install() forever, freezing the
-// script at whatever Orca generated last. Existing scripts are Orca-owned, so bring them
+// MCode's script, but the presence gate below then skips install() forever, freezing the
+// script at whatever MCode generated last. Existing scripts are MCode-owned, so bring them
 // current before any gating; creating new ones remains install()'s presence-gated job.
 async function refreshExistingManagedScripts(options: InstallOptions): Promise<void> {
   const allowed = options.agents ? new Set(options.agents) : null

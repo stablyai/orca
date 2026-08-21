@@ -14,7 +14,7 @@ function git(cwd, args) {
 }
 
 function makeFixture() {
-  const root = mkdtempSync(join(tmpdir(), 'orca-root-directory-guard-'))
+  const root = mkdtempSync(join(tmpdir(), 'mcode-root-directory-guard-'))
   tempDirs.push(root)
   git(root, ['init', '--quiet'])
   git(root, ['config', 'user.email', 'root-directory-guard-test@example.com'])

@@ -6,8 +6,8 @@ import {
 } from '../../../shared/native-file-drop'
 import { measureClipboardTextByteLength } from '../../../shared/clipboard-text'
 
-export const WORKSPACE_FILE_PATH_MIME = 'text/x-orca-file-path'
-export const WORKSPACE_FILE_PATHS_MIME = 'text/x-orca-file-paths'
+export const WORKSPACE_FILE_PATH_MIME = 'text/x-mcode-file-path'
+export const WORKSPACE_FILE_PATHS_MIME = 'text/x-mcode-file-paths'
 
 export type WorkspaceFileDragRejectionReason = 'paths-too-large' | 'too-many-paths'
 

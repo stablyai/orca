@@ -38,7 +38,7 @@ const PATH_ACCESS_DENIED_MESSAGE =
 
 const REMOTE_REPO_ROOT = '/home/user/project'
 const REMOTE_FILE_PATH = '/home/user/project/src/index.ts'
-const FLOATING_FILE_PATH = '/tmp/orca/floating-workspace/notes.md'
+const FLOATING_FILE_PATH = '/tmp/mcode/floating-workspace/notes.md'
 const SSH_TARGET_ID = 'ssh-target-1'
 const SSH_REPO_ID = 'repo-ssh'
 const REMOTE_WORKTREE_ID = `${SSH_REPO_ID}::${REMOTE_REPO_ROOT}`

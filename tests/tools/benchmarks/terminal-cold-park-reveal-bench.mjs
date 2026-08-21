@@ -5,7 +5,7 @@
 // was still in the hot-retain working set. The stock terminal-perf-bench
 // workspace-switch scenario cycles 3 worktrees fast enough that parking never
 // fires, so it only ever measures warm reveals. This bench drives the
-// ORCA_E2E_TERMINAL_PARKING_DELAY_MS override to shrink the 30s hysteresis and
+// MCODE_E2E_TERMINAL_PARKING_DELAY_MS override to shrink the 30s hysteresis and
 // window.__terminalParkingDebug.parkedTabIds() to *confirm* a tab parked before
 // timing its reveal — so the cold vs warm delta is the real cost of parking.
 //
@@ -105,8 +105,8 @@ function createLocalRepoFixture() {
   const repoPath = path.join(baseDir, 'repo')
   mkdirSync(repoPath, { recursive: true })
   git(repoPath, 'init', '--initial-branch=main')
-  git(repoPath, 'config', 'user.email', 'bench@orca.local')
-  git(repoPath, 'config', 'user.name', 'Orca Bench')
+  git(repoPath, 'config', 'user.email', 'bench@mcode.local')
+  git(repoPath, 'config', 'user.name', 'MCode Bench')
   writeFileSync(path.join(repoPath, 'README.md'), '# cold-park fixture\n')
   git(repoPath, 'add', '.')
   git(repoPath, 'commit', '-m', 'init', '--no-gpg-sign')
@@ -121,7 +121,7 @@ function createLocalRepoFixture() {
 
 async function setupWorkspaces(page, fixture) {
   return await runWithTimeout(
-    'fixture registration in Orca',
+    'fixture registration in MCode',
     () =>
       page.evaluate(
         async ({ repoPath, importedWorktreePaths }) => {
@@ -469,7 +469,7 @@ async function main() {
     userDataDir = createShortUserDataDirectory()
     // Shrink the 30s cold-park hysteresis + 5-min hot-retain so parking is
     // observable in a benchmark run. Inherited by launchDevApp into the app.
-    process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS = String(PARK_DELAY_MS)
+    process.env.MCODE_E2E_TERMINAL_PARKING_DELAY_MS = String(PARK_DELAY_MS)
     console.log(
       `[cold-park] fixture=${fixture.baseDir} userData=${userDataDir} cdp=${cdpPort} parkDelay=${PARK_DELAY_MS}ms`
     )

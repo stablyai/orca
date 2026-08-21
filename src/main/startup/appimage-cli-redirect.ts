@@ -108,14 +108,14 @@ export function maybeRedirectAppImageCliLaunch(options: RedirectOptions = {}): R
 
   const cliEntryPath = join(resourcesPath, 'app.asar.unpacked', 'out', 'cli', 'index.js')
   if (!existsSync(cliEntryPath)) {
-    process.stderr.write(`Unable to locate the Orca CLI entrypoint at ${cliEntryPath}\n`)
+    process.stderr.write(`Unable to locate the MCode CLI entrypoint at ${cliEntryPath}\n`)
     return { redirected: true, status: 1 }
   }
 
   const childEnv = buildElectronRunAsNodeEnv(env)
   if (argv.slice(1).includes('--no-sandbox')) {
     // Why: the operator explicitly disabled Chromium's sandbox; preserve that choice when `serve` launches the Electron child.
-    childEnv.ORCA_APPIMAGE_NO_SANDBOX = '1'
+    childEnv.MCODE_APPIMAGE_NO_SANDBOX = '1'
   }
   const result = spawn(execPath, [cliEntryPath, ...cliArgs], {
     env: childEnv,
@@ -176,8 +176,8 @@ function findFirstCommandCandidate(args: string[]): string | null {
 
 function buildElectronRunAsNodeEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const childEnv = { ...env }
-  childEnv.ORCA_NODE_OPTIONS = env.NODE_OPTIONS ?? ''
-  childEnv.ORCA_NODE_REPL_EXTERNAL_MODULE = env.NODE_REPL_EXTERNAL_MODULE ?? ''
+  childEnv.MCODE_NODE_OPTIONS = env.NODE_OPTIONS ?? ''
+  childEnv.MCODE_NODE_REPL_EXTERNAL_MODULE = env.NODE_REPL_EXTERNAL_MODULE ?? ''
   childEnv.ELECTRON_RUN_AS_NODE = '1'
   delete childEnv.NODE_OPTIONS
   delete childEnv.NODE_REPL_EXTERNAL_MODULE

@@ -42,14 +42,14 @@ async function writePluginSource(
 ): Promise<void> {
   const panelEntry = options.panelEntry ?? 'panel.html'
   await writeFile(
-    join(root, 'orca-plugin.json'),
+    join(root, 'mcode-plugin.json'),
     JSON.stringify({
       manifestVersion: 1,
       id: options.id ?? 'demo',
-      publisher: 'orca-samples',
+      publisher: 'mcode-samples',
       name: 'Demo',
       version: '1.0.0',
-      engines: { orca: '>=1.0.0' },
+      engines: { mcode: '>=1.0.0' },
       pluginApi: 1,
       contributes: {
         panels: [{ id: 'panel', title: 'Panel', entry: panelEntry }],
@@ -71,7 +71,7 @@ afterEach(async () => {
 
 describe('installPluginFromLocalPath', () => {
   it('refuses to allocate an oversized install lockfile', async () => {
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
+    const pluginsDir = await tempRoot('mcode-plugin-installs-')
     const lockPath = join(pluginsDir, 'plugins.lock.json')
     await writeFile(lockPath, '')
     await truncate(lockPath, PLUGIN_LOCKFILE_MAX_BYTES + 1)
@@ -80,8 +80,8 @@ describe('installPluginFromLocalPath', () => {
   })
 
   it('verifies copied content and writes a rollback-compatible consent field', async () => {
-    const sourcePath = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
+    const sourcePath = await tempRoot('mcode-plugin-source-')
+    const pluginsDir = await tempRoot('mcode-plugin-installs-')
     await writePluginSource(sourcePath)
 
     const result = await installPluginFromLocalPath({
@@ -107,16 +107,16 @@ describe('installPluginFromLocalPath', () => {
   })
 
   it('publishes metadata from the copied immutable manifest', async () => {
-    const sourcePath = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
+    const sourcePath = await tempRoot('mcode-plugin-source-')
+    const pluginsDir = await tempRoot('mcode-plugin-installs-')
     await writePluginSource(sourcePath)
-    const firstManifest = await readFile(join(sourcePath, 'orca-plugin.json'), 'utf8')
+    const firstManifest = await readFile(join(sourcePath, 'mcode-plugin.json'), 'utf8')
     const changedManifest = {
       ...(JSON.parse(firstManifest) as Record<string, unknown>),
       name: 'Changed During Staging',
       version: '2.0.0'
     }
-    await writeFile(join(sourcePath, 'orca-plugin.json'), JSON.stringify(changedManifest))
+    await writeFile(join(sourcePath, 'mcode-plugin.json'), JSON.stringify(changedManifest))
     const manifestRead = vi
       .spyOn(manifestFile, 'readPluginManifestText')
       .mockResolvedValueOnce(firstManifest)
@@ -138,8 +138,8 @@ describe('installPluginFromLocalPath', () => {
   })
 
   it('skips root Git metadata before copying while still enforcing plugin limits', async () => {
-    const sourcePath = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
+    const sourcePath = await tempRoot('mcode-plugin-source-')
+    const pluginsDir = await tempRoot('mcode-plugin-installs-')
     await writePluginSource(sourcePath)
     const gitDir = join(sourcePath, '.git')
     await mkdir(gitDir)
@@ -161,8 +161,8 @@ describe('installPluginFromLocalPath', () => {
   })
 
   it('restores the previous current pointer when lockfile publication fails', async () => {
-    const sourcePath = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
+    const sourcePath = await tempRoot('mcode-plugin-source-')
+    const pluginsDir = await tempRoot('mcode-plugin-installs-')
     await writePluginSource(sourcePath)
     const first = await installPluginFromLocalPath({ pluginsDir, sourcePath, hostVersion: '1.4.0' })
     expect(first.ok).toBe(true)
@@ -186,9 +186,9 @@ describe('installPluginFromLocalPath', () => {
   })
 
   it('does not replace provenance when a same-content reinstall fails to publish', async () => {
-    const firstSource = await tempRoot('orca-plugin-source-')
-    const secondSource = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
+    const firstSource = await tempRoot('mcode-plugin-source-')
+    const secondSource = await tempRoot('mcode-plugin-source-')
+    const pluginsDir = await tempRoot('mcode-plugin-installs-')
     await writePluginSource(firstSource)
     await writePluginSource(secondSource)
     const first = await installPluginFromLocalPath({
@@ -221,9 +221,9 @@ describe('installPluginFromLocalPath', () => {
   })
 
   it('preserves legacy lock provenance during a same-content reinstall', async () => {
-    const firstSource = await tempRoot('orca-plugin-source-')
-    const secondSource = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
+    const firstSource = await tempRoot('mcode-plugin-source-')
+    const secondSource = await tempRoot('mcode-plugin-source-')
+    const pluginsDir = await tempRoot('mcode-plugin-installs-')
     await writePluginSource(firstSource)
     await writePluginSource(secondSource)
     const first = await installPluginFromLocalPath({
@@ -254,8 +254,8 @@ describe('installPluginFromLocalPath', () => {
   })
 
   it('retains only the current and immediately previous content versions', async () => {
-    const sourcePath = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
+    const sourcePath = await tempRoot('mcode-plugin-source-')
+    const pluginsDir = await tempRoot('mcode-plugin-installs-')
     await writePluginSource(sourcePath)
     const hashes: string[] = []
     for (const content of ['one', 'two', 'three']) {
@@ -272,7 +272,7 @@ describe('installPluginFromLocalPath', () => {
     }
 
     const versionDirs = (
-      await readdir(join(pluginsDir, 'orca-samples.demo'), {
+      await readdir(join(pluginsDir, 'mcode-samples.demo'), {
         withFileTypes: true
       })
     )
@@ -283,8 +283,8 @@ describe('installPluginFromLocalPath', () => {
   })
 
   it('keeps the rollback version when current content is reinstalled', async () => {
-    const sourcePath = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
+    const sourcePath = await tempRoot('mcode-plugin-source-')
+    const pluginsDir = await tempRoot('mcode-plugin-installs-')
     await writePluginSource(sourcePath)
     const hashes: string[] = []
     for (const content of ['one', 'two', 'two']) {
@@ -301,7 +301,7 @@ describe('installPluginFromLocalPath', () => {
     }
 
     const versionDirs = (
-      await readdir(join(pluginsDir, 'orca-samples.demo'), { withFileTypes: true })
+      await readdir(join(pluginsDir, 'mcode-samples.demo'), { withFileTypes: true })
     )
       .filter((entry) => entry.isDirectory() && /^[0-9a-f]{64}$/.test(entry.name))
       .map((entry) => entry.name)
@@ -310,8 +310,8 @@ describe('installPluginFromLocalPath', () => {
   })
 
   it('repairs a pointer-new lock-old interrupted publication from provenance', async () => {
-    const sourcePath = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
+    const sourcePath = await tempRoot('mcode-plugin-source-')
+    const pluginsDir = await tempRoot('mcode-plugin-installs-')
     await writePluginSource(sourcePath)
     const first = await installPluginFromLocalPath({ pluginsDir, sourcePath, hostVersion: '1.4.0' })
     expect(first.ok).toBe(true)
@@ -338,8 +338,8 @@ describe('installPluginFromLocalPath', () => {
   })
 
   it('rejects a manifest whose declared panel artifact is missing', async () => {
-    const sourcePath = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
+    const sourcePath = await tempRoot('mcode-plugin-source-')
+    const pluginsDir = await tempRoot('mcode-plugin-installs-')
     await writePluginSource(sourcePath, { includePanel: false })
 
     const result = await installPluginFromLocalPath({
@@ -352,9 +352,9 @@ describe('installPluginFromLocalPath', () => {
   })
 
   it('rejects an oversized manifest without reading an unbounded JSON payload', async () => {
-    const sourcePath = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
-    const manifestPath = join(sourcePath, 'orca-plugin.json')
+    const sourcePath = await tempRoot('mcode-plugin-source-')
+    const pluginsDir = await tempRoot('mcode-plugin-installs-')
+    const manifestPath = join(sourcePath, 'mcode-plugin.json')
     await writeFile(manifestPath, '')
     await truncate(manifestPath, PLUGIN_MANIFEST_MAX_BYTES + 1)
 
@@ -368,9 +368,9 @@ describe('installPluginFromLocalPath', () => {
   })
 
   it('serializes concurrent installs so lockfile entries are not lost', async () => {
-    const firstSource = await tempRoot('orca-plugin-source-')
-    const secondSource = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
+    const firstSource = await tempRoot('mcode-plugin-source-')
+    const secondSource = await tempRoot('mcode-plugin-source-')
+    const pluginsDir = await tempRoot('mcode-plugin-installs-')
     await writePluginSource(firstSource, { id: 'first' })
     await writePluginSource(secondSource, { id: 'second' })
 
@@ -382,11 +382,11 @@ describe('installPluginFromLocalPath', () => {
     const lock = JSON.parse(await readFile(join(pluginsDir, 'plugins.lock.json'), 'utf8')) as {
       plugins: Record<string, unknown>
     }
-    expect(Object.keys(lock.plugins).sort()).toEqual(['orca-samples.first', 'orca-samples.second'])
+    expect(Object.keys(lock.plugins).sort()).toEqual(['mcode-samples.first', 'mcode-samples.second'])
   })
 
   it('serializes concurrent lockfile publications without temporary-file collisions', async () => {
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
+    const pluginsDir = await tempRoot('mcode-plugin-installs-')
     const lock = { version: 1 as const, plugins: {} }
 
     await expect(
@@ -400,8 +400,8 @@ describe('installPluginFromLocalPath', () => {
   })
 
   it('refuses to repoint at a tampered existing content directory', async () => {
-    const sourcePath = await tempRoot('orca-plugin-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
+    const sourcePath = await tempRoot('mcode-plugin-source-')
+    const pluginsDir = await tempRoot('mcode-plugin-installs-')
     await writePluginSource(sourcePath)
     const first = await installPluginFromLocalPath({
       pluginsDir,
@@ -432,8 +432,8 @@ describe('installPluginFromLocalPath', () => {
 
 describe('installPluginFromGit', () => {
   it('uses system Git, resolves the requested ref, and installs its exact bytes', async () => {
-    const sourcePath = await tempRoot('orca-plugin-git-source-')
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
+    const sourcePath = await tempRoot('mcode-plugin-git-source-')
+    const pluginsDir = await tempRoot('mcode-plugin-installs-')
     await writePluginSource(sourcePath)
     await execFileAsync('git', ['init', '--quiet'], { cwd: sourcePath })
     await execFileAsync('git', ['config', 'user.email', 'plugins@example.invalid'], {
@@ -481,9 +481,9 @@ describe('installPluginFromGit', () => {
 
 describe('removeInstalledPlugin', () => {
   it('rejects an unqualified or traversing key before removing anything', async () => {
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
-    const pluginsDataDir = await tempRoot('orca-plugin-data-')
-    const outside = join(await tempRoot('orca-plugin-outside-'), 'keep.txt')
+    const pluginsDir = await tempRoot('mcode-plugin-installs-')
+    const pluginsDataDir = await tempRoot('mcode-plugin-data-')
+    const outside = join(await tempRoot('mcode-plugin-outside-'), 'keep.txt')
     await writeFile(outside, 'keep')
 
     await expect(
@@ -493,14 +493,14 @@ describe('removeInstalledPlugin', () => {
   })
 
   it('rejects a resolved uninstall target outside its root', async () => {
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
-    const pluginsDataDir = await tempRoot('orca-plugin-data-')
-    const outside = await tempRoot('orca-plugin-outside-')
+    const pluginsDir = await tempRoot('mcode-plugin-installs-')
+    const pluginsDataDir = await tempRoot('mcode-plugin-data-')
+    const outside = await tempRoot('mcode-plugin-outside-')
     const marker = join(outside, 'keep.txt')
     await writeFile(marker, 'keep')
     await symlink(
       outside,
-      join(pluginsDir, 'orca-samples.demo'),
+      join(pluginsDir, 'mcode-samples.demo'),
       process.platform === 'win32' ? 'junction' : 'dir'
     )
 
@@ -508,16 +508,16 @@ describe('removeInstalledPlugin', () => {
       removeInstalledPlugin({
         pluginsDir,
         pluginsDataDir,
-        pluginKey: 'orca-samples.demo'
+        pluginKey: 'mcode-samples.demo'
       })
     ).rejects.toThrow('outside')
     await expect(readFile(marker, 'utf8')).resolves.toBe('keep')
   })
 
   it('removes qualified install and data directories', async () => {
-    const pluginsDir = await tempRoot('orca-plugin-installs-')
-    const pluginsDataDir = await tempRoot('orca-plugin-data-')
-    const key = 'orca-samples.demo'
+    const pluginsDir = await tempRoot('mcode-plugin-installs-')
+    const pluginsDataDir = await tempRoot('mcode-plugin-data-')
+    const key = 'mcode-samples.demo'
     await mkdir(join(pluginsDir, key))
     await mkdir(join(pluginsDataDir, key))
     await writeFile(join(pluginsDir, key, 'content'), 'installed')

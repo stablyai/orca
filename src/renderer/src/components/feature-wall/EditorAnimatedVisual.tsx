@@ -45,7 +45,7 @@ function CursorIcon(): JSX.Element {
 }
 
 // Toolbar icons mirror RichMarkdownToolbar.tsx — same families so the
-// surface reads as Orca's actual editor, not a generic editor.
+// surface reads as MCode's actual editor, not a generic editor.
 const TB_ICON: Record<string, JSX.Element> = {
   pilcrow: (
     <svg

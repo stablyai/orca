@@ -24,7 +24,7 @@ describe('Windows SSH relay node-pty console-list patch', () => {
     patchNodePtyConsoleListAgent(fixture.root)
     const once = readFileSync(fixture.agentPath, 'utf8')
     expect(once).toContain('consoleProcessList = [shellPid];')
-    expect(existsSync(`${fixture.agentPath}.orca-patch-${process.pid}`)).toBe(false)
+    expect(existsSync(`${fixture.agentPath}.mcode-patch-${process.pid}`)).toBe(false)
     expect(() => assertPatchedNodePtyConsoleListAgent(fixture.root)).not.toThrow()
 
     patchNodePtyConsoleListAgent(fixture.root)

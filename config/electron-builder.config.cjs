@@ -18,32 +18,32 @@ const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.
 
 // Why: dev-channel builds must carry the *release* identity — same bundle id,
 // Developer ID signature, and notarization ticket — or Squirrel.Mac refuses to
-// swap them over an installed Orca and macOS treats each build as a new app.
-const isMacHourly = process.env.ORCA_MAC_HOURLY === '1'
-const isMacDaily = process.env.ORCA_MAC_DAILY === '1'
-const isMacAdhoc = process.env.ORCA_MAC_ADHOC === '1'
+// swap them over an installed MCode and macOS treats each build as a new app.
+const isMacHourly = process.env.MCODE_MAC_HOURLY === '1'
+const isMacDaily = process.env.MCODE_MAC_DAILY === '1'
+const isMacAdhoc = process.env.MCODE_MAC_ADHOC === '1'
 // Why a second set of variables rather than making the mac ones platform-neutral:
 // the mac ones gate `isMacRelease` below, which turns on hardened runtime,
 // notarization, and root-level `forceCodeSigning`. A Windows dev build that
 // reused them would fail packaging outright for want of a cert it is
 // deliberately not using.
-const isWinHourly = process.env.ORCA_WIN_HOURLY === '1'
-const isWinDaily = process.env.ORCA_WIN_DAILY === '1'
-const isWinAdhoc = process.env.ORCA_WIN_ADHOC === '1'
+const isWinHourly = process.env.MCODE_WIN_HOURLY === '1'
+const isWinDaily = process.env.MCODE_WIN_DAILY === '1'
+const isWinAdhoc = process.env.MCODE_WIN_ADHOC === '1'
 const isWinDevChannel = isWinHourly || isWinDaily || isWinAdhoc
-const isMacRelease = process.env.ORCA_MAC_RELEASE === '1' || isMacHourly || isMacDaily || isMacAdhoc
-const isLinuxArm64Release = process.env.ORCA_LINUX_ARM64_RELEASE === '1'
+const isMacRelease = process.env.MCODE_MAC_RELEASE === '1' || isMacHourly || isMacDaily || isMacAdhoc
+const isLinuxArm64Release = process.env.MCODE_LINUX_ARM64_RELEASE === '1'
 const localBuildVersion =
-  isMacRelease || isWinDevChannel ? undefined : process.env.ORCA_LOCAL_BUILD_VERSION
+  isMacRelease || isWinDevChannel ? undefined : process.env.MCODE_LOCAL_BUILD_VERSION
 const isHourlyChannel = isMacHourly || isWinHourly
 const isDailyChannel = isMacDaily || isWinDaily
 const isAdhocChannel = isMacAdhoc || isWinAdhoc
 const devChannelBuildVersion = isHourlyChannel
-  ? process.env.ORCA_HOURLY_BUILD_VERSION
+  ? process.env.MCODE_HOURLY_BUILD_VERSION
   : isDailyChannel
-    ? process.env.ORCA_DAILY_BUILD_VERSION
+    ? process.env.MCODE_DAILY_BUILD_VERSION
     : isAdhocChannel
-      ? process.env.ORCA_ADHOC_BUILD_VERSION
+      ? process.env.MCODE_ADHOC_BUILD_VERSION
       : undefined
 // Why each dev channel gets its own repo rather than tagging into the main one:
 // the releases atom feed exposes only the 10 newest entries, so 24 hourly tags a
@@ -52,13 +52,13 @@ const devChannelBuildVersion = isHourlyChannel
 // or a once-a-day cut cannot be picked up by someone who only meant to ride
 // main's hourlies.
 const devChannelRepo = isHourlyChannel
-  ? 'orca-hourly'
+  ? 'mcode-hourly'
   : isDailyChannel
-    ? 'orca-daily'
+    ? 'mcode-daily'
     : isAdhocChannel
-      ? 'orca-adhoc'
+      ? 'mcode-adhoc'
       : null
-const appId = 'com.stablyai.orca'
+const appId = 'com.mcode.desktop'
 const featureWallResources = {
   from: 'resources/onboarding/feature-wall',
   to: 'onboarding/feature-wall'
@@ -103,8 +103,8 @@ const winSpeechNativeResource = {
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
   appId,
-  productName: 'Orca',
-  protocols: [{ name: 'Orca', schemes: ['orca'] }],
+  productName: 'MCode',
+  protocols: [{ name: 'MCode', schemes: ['mcode'] }],
   ...(devChannelBuildVersion
     ? { extraMetadata: { version: devChannelBuildVersion } }
     : localBuildVersion
@@ -133,7 +133,7 @@ module.exports = {
     // carries hostile-panel, the adversarial fixture the containment tests point at,
     // which must never reach a user's install.
     '!examples{,/**/*}',
-    // Why: pr-evidence/ is a local e2e screenshot output (ORCA_CAPTURE_EVIDENCE);
+    // Why: pr-evidence/ is a local e2e screenshot output (MCODE_CAPTURE_EVIDENCE);
     // it is gitignored, but exclude it defensively so a stray local capture at
     // package time never bloats app.asar.
     '!pr-evidence{,/**/*}',
@@ -156,10 +156,10 @@ module.exports = {
     // Why: bundled plugins ship via extraResources to resources/plugins/launch;
     // packing the source tree into app.asar would duplicate those exact bytes.
     '!resources/plugins/launch/**',
-    // Why: the Windows CLI shim ships via extraResources to resources/bin/orca.cmd
-    // (beside the native resources/bin/orca.exe). Packing the source tree into
+    // Why: the Windows CLI shim ships via extraResources to resources/bin/mcode.cmd
+    // (beside the native resources/bin/mcode.exe). Packing the source tree into
     // app.asar too lets asarUnpack:['resources/**'] extract a second copy at
-    // app.asar.unpacked/resources/win32/bin/orca.cmd with no adjacent orca.exe,
+    // app.asar.unpacked/resources/win32/bin/mcode.cmd with no adjacent mcode.exe,
     // which fails to launch the CLI (#7351).
     '!resources/win32{,/**/*}'
   ],
@@ -244,7 +244,7 @@ module.exports = {
         throw new Error(`Unsupported local-build compatibility architecture: ${context.arch}`)
       }
       const version = context.packager.appInfo.version
-      let commit = process.env.ORCA_BUILD_COMMIT || process.env.GITHUB_SHA || 'unknown'
+      let commit = process.env.MCODE_BUILD_COMMIT || process.env.GITHUB_SHA || 'unknown'
       if (commit === 'unknown') {
         try {
           commit = execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], {
@@ -300,21 +300,21 @@ module.exports = {
       chmodSync(join(resourcesDir, filename), 0o755)
     }
     if (context.electronPlatformName === 'darwin') {
-      await signMacComputerUseHelper(join(resourcesDir, 'Orca Computer Use.app'), context.packager)
+      await signMacComputerUseHelper(join(resourcesDir, 'MCode Computer Use.app'), context.packager)
       await signMacStandaloneHelper(
-        join(resourcesDir, '..', 'MacOS', 'orca-notification-status'),
-        'orca-notification-status',
+        join(resourcesDir, '..', 'MacOS', 'mcode-notification-status'),
+        'mcode-notification-status',
         context.packager
       )
       await signMacStandaloneHelper(
-        join(resourcesDir, '..', 'MacOS', 'orca-keyboard-layout'),
-        'orca-keyboard-layout',
+        join(resourcesDir, '..', 'MacOS', 'mcode-keyboard-layout'),
+        'mcode-keyboard-layout',
         context.packager
       )
     }
   },
   win: {
-    executableName: 'Orca',
+    executableName: 'MCode',
     // Why: Windows installers are signed after electron-builder packaging by
     // SignPath, so the packager cannot infer the updater publisherName.
     //
@@ -334,12 +334,12 @@ module.exports = {
       ...createPackagedRuntimeNodeModuleResources('win32'),
       winSpeechNativeResource,
       {
-        from: 'resources/win32/bin/orca.cmd',
-        to: 'bin/orca.cmd'
+        from: 'resources/win32/bin/mcode.cmd',
+        to: 'bin/mcode.cmd'
       },
       {
-        from: 'native/windows-cli-launcher/.build/orca.exe',
-        to: 'bin/orca.exe'
+        from: 'native/windows-cli-launcher/.build/mcode.exe',
+        to: 'bin/mcode.exe'
       },
       {
         from: 'node_modules/agent-browser/bin/agent-browser-win32-x64.exe',
@@ -353,7 +353,7 @@ module.exports = {
     ]
   },
   nsis: {
-    artifactName: 'orca-windows-setup.${ext}',
+    artifactName: 'mcode-windows-setup.${ext}',
     shortcutName: '${productName}',
     uninstallDisplayName: '${productName}',
     createDesktopShortcut: 'always',
@@ -368,19 +368,19 @@ module.exports = {
     entitlementsInherit: 'resources/build/entitlements.mac.plist',
     extendInfo: {
       NSAppleEventsUsageDescription:
-        'Orca allows terminal-launched developer tools to automate local apps when you request it.',
+        'MCode allows terminal-launched developer tools to automate local apps when you request it.',
       NSBluetoothAlwaysUsageDescription:
-        'Orca allows terminal-launched developer tools to access Bluetooth devices when you request it.',
+        'MCode allows terminal-launched developer tools to access Bluetooth devices when you request it.',
       NSBluetoothPeripheralUsageDescription:
-        'Orca allows terminal-launched developer tools to access Bluetooth devices when you request it.',
+        'MCode allows terminal-launched developer tools to access Bluetooth devices when you request it.',
       NSCameraUsageDescription: "Application requests access to the device's camera.",
       NSLocationUsageDescription:
-        'Orca allows terminal-launched developer tools to access location when you request it.',
+        'MCode allows terminal-launched developer tools to access location when you request it.',
       NSLocalNetworkUsageDescription:
-        'Orca allows terminal-launched developer tools to discover and connect to local development servers when you request it.',
+        'MCode allows terminal-launched developer tools to discover and connect to local development servers when you request it.',
       NSMicrophoneUsageDescription: "Application requests access to the device's microphone.",
       NSAudioCaptureUsageDescription:
-        'Orca allows terminal-launched developer tools to capture desktop audio when you request it.',
+        'MCode allows terminal-launched developer tools to capture desktop audio when you request it.',
       NSBonjourServices: ['_http._tcp', '_https._tcp'],
       NSDocumentsFolderUsageDescription:
         "Application requests access to the user's Documents folder.",
@@ -405,8 +405,8 @@ module.exports = {
       ...createPackagedRuntimeNodeModuleResources('darwin'),
       macSpeechNativeResource,
       {
-        from: 'resources/darwin/bin/orca',
-        to: 'bin/orca'
+        from: 'resources/darwin/bin/mcode',
+        to: 'bin/mcode'
       },
       {
         from: 'node_modules/agent-browser/bin/agent-browser-darwin-${arch}',
@@ -419,8 +419,8 @@ module.exports = {
         to: 'serve-sim'
       },
       {
-        from: 'native/computer-use-macos/.build/release/Orca Computer Use.app',
-        to: 'Orca Computer Use.app'
+        from: 'native/computer-use-macos/.build/release/MCode Computer Use.app',
+        to: 'MCode Computer Use.app'
       },
       featureWallResources
     ],
@@ -429,12 +429,12 @@ module.exports = {
     // is nil) for executables launched out of Contents/Resources (#7929).
     extraFiles: [
       {
-        from: 'native/notification-status-macos/.build/release/orca-notification-status',
-        to: 'MacOS/orca-notification-status'
+        from: 'native/notification-status-macos/.build/release/mcode-notification-status',
+        to: 'MacOS/mcode-notification-status'
       },
       {
-        from: 'native/keyboard-layout-macos/.build/release/orca-keyboard-layout',
-        to: 'MacOS/orca-keyboard-layout'
+        from: 'native/keyboard-layout-macos/.build/release/mcode-keyboard-layout',
+        to: 'MacOS/mcode-keyboard-layout'
       }
     ],
     target: [
@@ -452,20 +452,20 @@ module.exports = {
   // silently downgrading to ad-hoc artifacts that look shippable in CI logs.
   forceCodeSigning: isMacRelease,
   dmg: {
-    artifactName: 'orca-macos-${arch}.${ext}'
+    artifactName: 'mcode-macos-${arch}.${ext}'
   },
   linux: {
-    // Why: Ubuntu desktop ships GNOME Orca as the `orca` package and /usr/bin/orca.
+    // Why: Ubuntu desktop ships GNOME MCode as the `mcode` package and /usr/bin/mcode.
     // The Linux installer should not claim those system package/file names.
-    executableName: 'orca-ide',
+    executableName: 'mcode-ide',
     // Why: the icns source lets electron-builder emit standard hicolor PNG
     // sizes; a single 1024px PNG is ignored by some Linux docks/launchers.
     icon: 'resources/build/icon.icns',
     desktop: {
       entry: {
-        // Why: Electron reports WM_CLASS=orca for the visible Linux window;
-        // GNOME docks need an exact match to group it with orca-ide.desktop.
-        StartupWMClass: 'orca'
+        // Why: Electron reports WM_CLASS=mcode for the visible Linux window;
+        // GNOME docks need an exact match to group it with mcode-ide.desktop.
+        StartupWMClass: 'mcode'
       }
     },
     extraResources: [
@@ -473,8 +473,8 @@ module.exports = {
       ...createPackagedRuntimeNodeModuleResources('linux'),
       linuxSpeechNativeResource,
       {
-        from: 'resources/linux/bin/orca-ide',
-        to: 'bin/orca-ide'
+        from: 'resources/linux/bin/mcode-ide',
+        to: 'bin/mcode-ide'
       },
       {
         from: 'node_modules/agent-browser/bin/agent-browser-linux-${arch}',
@@ -491,12 +491,12 @@ module.exports = {
     category: 'Utility'
   },
   appImage: {
-    artifactName: isLinuxArm64Release ? 'orca-linux-arm64.${ext}' : 'orca-linux.${ext}'
+    artifactName: isLinuxArm64Release ? 'mcode-linux-arm64.${ext}' : 'mcode-linux.${ext}'
   },
   deb: {
-    packageName: 'orca-ide',
-    artifactName: 'orca-ide_${version}_${arch}.${ext}',
-    // Why: xvfb lets the bundled `orca serve` CLI run browser panes on a headless
+    packageName: 'mcode-ide',
+    artifactName: 'mcode-ide_${version}_${arch}.${ext}',
+    // Why: xvfb lets the bundled `mcode serve` CLI run browser panes on a headless
     // Linux host — Chromium needs a display server even for offscreen rendering,
     // and serve starts Xvfb itself when present (see ensure-virtual-display.ts).
     depends: [
@@ -508,7 +508,7 @@ module.exports = {
       'xclip',
       'xvfb'
     ],
-    // Why: symlink the bundled CLI onto PATH at install time so `orca-ide serve`
+    // Why: symlink the bundled CLI onto PATH at install time so `mcode-ide serve`
     // works on a headless host. The in-app CLI registration (CliInstaller) is
     // GUI-triggered and can never run on a server, so without this the CLI is
     // unreachable from the shell on exactly the hosts that need it.
@@ -516,8 +516,8 @@ module.exports = {
     afterRemove: 'resources/linux/packaging/after-remove.sh'
   },
   rpm: {
-    packageName: 'orca-ide',
-    artifactName: 'orca-ide-${version}.${arch}.${ext}',
+    packageName: 'mcode-ide',
+    artifactName: 'mcode-ide-${version}.${arch}.${ext}',
     // Why: see deb depends. RPM distros ship Xvfb as xorg-x11-server-Xvfb (there
     // is no `xvfb` package), so the name differs from the deb here.
     depends: [
@@ -537,13 +537,13 @@ module.exports = {
   // (node-pty) for each target architecture when producing dual-arch macOS
   // builds (x64 + arm64). With npmRebuild disabled, CI on an arm64 runner
   // packages arm64 binaries into the x64 DMG, causing "posix_spawnp failed"
-  // on Intel Macs. The beforeBuild hook performs Orca's targeted rebuild and
+  // on Intel Macs. The beforeBuild hook performs MCode's targeted rebuild and
   // returns false so electron-builder does not rebuild optional cpu-features.
   npmRebuild: true,
   publish: {
     provider: 'github',
     owner: 'stablyai',
-    repo: devChannelRepo ?? 'orca',
+    repo: devChannelRepo ?? 'mcode',
     releaseType: devChannelRepo ? 'prerelease' : 'release'
   }
 }
@@ -552,7 +552,7 @@ function chmodUnixCliLaunchers(resourcesDir, electronPlatformName) {
   if (electronPlatformName === 'win32') {
     return
   }
-  for (const launcherName of ['orca', 'orca-ide']) {
+  for (const launcherName of ['mcode', 'mcode-ide']) {
     const launcherPath = join(resourcesDir, 'bin', launcherName)
     if (!existsSync(launcherPath)) {
       continue
@@ -583,7 +583,7 @@ function chmodMacServeSimHelpers(resourcesDir, electronPlatformName) {
 async function signMacComputerUseHelper(helperAppPath, packager) {
   if (!existsSync(helperAppPath)) {
     if (isMacRelease) {
-      throw new Error(`Missing Orca Computer Use helper app at ${helperAppPath}`)
+      throw new Error(`Missing MCode Computer Use helper app at ${helperAppPath}`)
     }
     return
   }
@@ -592,15 +592,15 @@ async function signMacComputerUseHelper(helperAppPath, packager) {
       ? await packager.codeSigningInfo.value
       : null
   const identity =
-    process.env.ORCA_COMPUTER_MACOS_SIGN_IDENTITY ??
+    process.env.MCODE_COMPUTER_MACOS_SIGN_IDENTITY ??
     process.env.CSC_NAME ??
     findInstalledMacSigningIdentity(codeSigningInfo?.keychainFile) ??
     (isMacRelease ? null : '-')
   if (!identity) {
-    throw new Error('Missing signing identity for Orca Computer Use helper app')
+    throw new Error('Missing signing identity for MCode Computer Use helper app')
   }
   // Why: TCC grants attach to this nested app's code identity. Sign it before
-  // the outer Orca.app is sealed so production builds preserve that identity.
+  // the outer MCode.app is sealed so production builds preserve that identity.
   execFileSync('codesign', codesignArgs(identity, helperAppPath), { stdio: 'inherit' })
   execFileSync('codesign', ['--verify', '--deep', '--strict', helperAppPath], {
     stdio: 'inherit'

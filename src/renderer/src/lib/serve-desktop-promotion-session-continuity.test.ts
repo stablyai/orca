@@ -3,7 +3,7 @@
  * surviving daemon sessions + headless `serve` holding the single-instance lock
  * + a GUI activation attempt.
  *
- * The incident chain was: Cmd+Q leaves a packaged `orca serve` owning the
+ * The incident chain was: Cmd+Q leaves a packaged `mcode serve` owning the
  * profile lock, a forced relaunch reaches that headless process, it mounts a
  * desktop renderer, and hydration cold-restores panes whose daemon PTYs are
  * still alive — launching duplicate `codex resume <session>` agents and
@@ -38,10 +38,10 @@ const AGENT_PANES = [
   { tabId: 'tab-codex-2', leafId: '22222222-2222-4222-8222-222222222222', ptyId: 'daemon-pty-2' },
   { tabId: 'tab-codex-3', leafId: '33333333-3333-4333-8333-333333333333', ptyId: 'daemon-pty-3' }
 ] as const
-/** Argv macOS delivers for `open -n -a Orca` / Finder / Dock relaunch. */
-const DESKTOP_RELAUNCH_ARGV = ['/Applications/Orca.app/Contents/MacOS/Orca'] as const
+/** Argv macOS delivers for `open -n -a MCode` / Finder / Dock relaunch. */
+const DESKTOP_RELAUNCH_ARGV = ['/Applications/MCode.app/Contents/MacOS/MCode'] as const
 const DUPLICATE_SERVE_ARGV = [
-  '/Applications/Orca.app/Contents/MacOS/Orca',
+  '/Applications/MCode.app/Contents/MacOS/MCode',
   '--serve',
   '--serve-json',
   '--serve-port',
@@ -223,7 +223,7 @@ describe('#8457 headless serve promotion preserves surviving agent sessions', ()
         platform: 'darwin',
         isDev: false,
         isServeMode: true,
-        env: { ORCA_BYPASS_SINGLE_INSTANCE_LOCK: '1' }
+        env: { MCODE_BYPASS_SINGLE_INSTANCE_LOCK: '1' }
       })
     ).toBe(false)
   })
@@ -246,7 +246,7 @@ describe('#8457 headless serve promotion preserves surviving agent sessions', ()
     expect(serve.blockedReasons).toEqual([])
   })
 
-  it('ignores a duplicate `orca serve` launch instead of promoting the headless owner', () => {
+  it('ignores a duplicate `mcode serve` launch instead of promoting the headless owner', () => {
     const serve = bootHeadlessServeOwner()
 
     serve.secondInstance(DUPLICATE_SERVE_ARGV)

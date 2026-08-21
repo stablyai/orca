@@ -216,7 +216,7 @@ function getHostSetupAvailability(host: ExecutionHostRegistryEntry): {
   if (host.health === 'blocked') {
     return {
       isAvailable: false,
-      detail: 'Orca server version is incompatible'
+      detail: 'MCode server version is incompatible'
     }
   }
   // Why: disconnected hosts cannot confirm project setup or runtime capabilities,
@@ -241,7 +241,7 @@ function getHostSetupAvailability(host: ExecutionHostRegistryEntry): {
     ) {
       return {
         isAvailable: false,
-        detail: 'Update Orca on this host to set up projects'
+        detail: 'Update MCode on this host to set up projects'
       }
     }
   }

@@ -86,7 +86,7 @@ export type EditorFilesSlice = {
   setPendingDiskBaselineVerification: (fileId: string, value: boolean) => void
   setPendingLiveDiskVerification: (fileId: string, value: boolean) => void
   clearSelfMoveEcho: (fileId: string) => void
-  /** Atomically retargets open editor sessions across an Orca-owned move — one commit-only update migrating every path-derived id + all id-keyed state, no close/reopen. Returns collision/stale without mutating. */
+  /** Atomically retargets open editor sessions across an MCode-owned move — one commit-only update migrating every path-derived id + all id-keyed state, no close/reopen. Returns collision/stale without mutating. */
   rekeyOpenFilesForPathChange: (args: {
     rekeys: readonly OpenFilePathRekey[]
     /** When set, dirty autosave-capable destinations get move-echo provenance + a synchronous autosave gate so the watcher can content-verify the echo. */

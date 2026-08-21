@@ -282,96 +282,96 @@
       "samples": [
         {
           "index": 0,
-          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/repo",
-          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/repo@@f226ee15",
+          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/repo",
+          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/repo@@f226ee15",
           "activationMs": 202,
           "ptyBindMs": 204,
           "paintSettleMs": 211
         },
         {
           "index": 1,
-          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-one",
-          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-one@@d00bc639",
+          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/wt-one",
+          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/wt-one@@d00bc639",
           "activationMs": 406,
           "ptyBindMs": 550,
           "paintSettleMs": 563
         },
         {
           "index": 2,
-          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-two",
-          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-two@@e12f992a",
+          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/wt-two",
+          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/wt-two@@e12f992a",
           "activationMs": 373,
           "ptyBindMs": 476,
           "paintSettleMs": 488
         },
         {
           "index": 3,
-          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/repo",
-          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/repo@@f226ee15",
+          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/repo",
+          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/repo@@f226ee15",
           "activationMs": 205,
           "ptyBindMs": 251,
           "paintSettleMs": 258
         },
         {
           "index": 4,
-          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-one",
-          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-one@@d00bc639",
+          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/wt-one",
+          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/wt-one@@d00bc639",
           "activationMs": 345,
           "ptyBindMs": 369,
           "paintSettleMs": 379
         },
         {
           "index": 5,
-          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-two",
-          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-two@@e12f992a",
+          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/wt-two",
+          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/wt-two@@e12f992a",
           "activationMs": 149,
           "ptyBindMs": 177,
           "paintSettleMs": 184
         },
         {
           "index": 6,
-          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/repo",
-          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/repo@@f226ee15",
+          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/repo",
+          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/repo@@f226ee15",
           "activationMs": 147,
           "ptyBindMs": 162,
           "paintSettleMs": 170
         },
         {
           "index": 7,
-          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-one",
-          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-one@@d00bc639",
+          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/wt-one",
+          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/wt-one@@d00bc639",
           "activationMs": 178,
           "ptyBindMs": 202,
           "paintSettleMs": 208
         },
         {
           "index": 8,
-          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-two",
-          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-two@@e12f992a",
+          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/wt-two",
+          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/wt-two@@e12f992a",
           "activationMs": 336,
           "ptyBindMs": 366,
           "paintSettleMs": 375
         },
         {
           "index": 9,
-          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/repo",
-          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/repo@@f226ee15",
+          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/repo",
+          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/repo@@f226ee15",
           "activationMs": 157,
           "ptyBindMs": 192,
           "paintSettleMs": 200
         },
         {
           "index": 10,
-          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-one",
-          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-one@@d00bc639",
+          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/wt-one",
+          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/wt-one@@d00bc639",
           "activationMs": 140,
           "ptyBindMs": 164,
           "paintSettleMs": 173
         },
         {
           "index": 11,
-          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-two",
-          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-two@@e12f992a",
+          "worktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/wt-two",
+          "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/wt-two@@e12f992a",
           "activationMs": 159,
           "ptyBindMs": 188,
           "paintSettleMs": 199
@@ -474,7 +474,7 @@
     "hydrationSucceeded": true,
     "activeView": "terminal",
     "activeRepoId": "f93c43c3-57ef-4811-8edc-73d924918ed8",
-    "activeWorktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-two",
+    "activeWorktreeId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/wt-two",
     "activeTabType": "terminal",
     "activeTabId": "2a067075-6acf-4aca-a0a6-bc88c1e6abc7",
     "terminalGpuAcceleration": "auto",
@@ -483,13 +483,13 @@
       "f93c43c3-57ef-4811-8edc-73d924918ed8": 3
     },
     "ptyIdsByTabId": [
-      "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-two@@e12f992a"
+      "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/wt-two@@e12f992a"
     ],
     "paneManagerCount": 3,
     "activePane": {
       "id": 1,
       "leafId": "6a3ca793-864f-4182-bec5-5b044a884b9b",
-      "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-two@@e12f992a",
+      "ptyId": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/wt-two@@e12f992a",
       "cols": 175,
       "rows": 73,
       "buffer": {
@@ -600,17 +600,17 @@
     "ptySessions": {
       "value": [
         {
-          "id": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/repo@@f226ee15",
+          "id": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/repo@@f226ee15",
           "cwd": "",
           "title": "shell"
         },
         {
-          "id": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-one@@d00bc639",
+          "id": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/wt-one@@d00bc639",
           "cwd": "",
           "title": "shell"
         },
         {
-          "id": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-uLA6Xx/wt-two@@e12f992a",
+          "id": "f93c43c3-57ef-4811-8edc-73d924918ed8::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-uLA6Xx/wt-two@@e12f992a",
           "cwd": "",
           "title": "shell"
         }
@@ -669,7 +669,7 @@
     },
     {
       "source": "stderr",
-      "line": "https://react-grab.com background: #330039; color: #ffffff; border: 1px solid #d75fcb; padding: 4px 4px 4px 24px; border-radius: 4px; background-image: url(\"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyOTQgMjk0Ij48cGF0aCBmaWxsPSIjZmY0MGUwIiBkPSJNMTQ1IDQ3YzI1LTIwIDUwLTI3IDY3LTE3IDE2IDkgMjMgMzAgMjAgNjAgMCAyLTEgNS0xIDdsLTIgMTNoLTFsLTEyLTRjLTgtMy0xNy01LTI1LTZsLTE3LTNjLTEwLTEtMjAtMS0yOS0xLTEwIDAtMjAgMC0yOSAxLTYgOC0xMSAxNi0xNiAyNC01IDktOSAxNy0xMyAyNiA0IDkgOCAxOCAxMyAyNnMxMCAxNiAxNiAyNGwxMSAxNGM1IDcgMTEgMTMgMTggMTlsMTAgOHMtMSAwIDAgMGwtMTEgOWMtMTcgMTQtMzUgMjItNDkgMjItNiAwLTEzLTItMTgtNS0xNi05LTIzLTMwLTIwLTU5IDEtMyAxLTUgMS04LTMwLTEyLTQ4LTI5LTQ4LTUwIDAtMTggMTQtMzUgNDEtNDcgMi0xIDUtMiA3LTMgMC0yIDAtNS0xLTctMy0zMCA0LTUxIDIwLTYwIDE4LTEwIDQyLTMgNjggMTdNNzEgMjAxYy0xIDItMSA0LTEgNS0yIDI0IDMgNDEgMTMgNDdoMWMxMSA3IDMwIDEgNTEtMTUtMTAtOS0xOC0xOC0yNi0yOS0xMy0xLTI2LTQtMzgtOG05LTM4Yy0zIDktNSAxNy03IDI2IDggMiAxNyA0IDI1IDYtMy01LTYtMTAtOS0xNi0zLTUtNi0xMC05LTE2bS0xOS01M2MtMiAxLTMgMS01IDItMjEgMTAtMzQgMjMtMzQgMzUgMCAxMyAxNCAyNyAzOSAzNyAzLTEyIDctMjUgMTItMzctNS0xMi05LTI0LTEyLTM3bTM3LTEwYy04IDEtMTcgMy0yNSA2IDIgOCA0IDE2IDcgMjUgMy01IDYtMTEgOS0xNnptLTMtNjFjLTQtMS04IDAtMTIgMi0xMCA3LTE1IDI0LTEzIDQ3IDAgMiAwIDMgMSA1IDEyLTQgMjUtNiAzOC04IDgtMTAgMTYtMjAgMjYtMjktMTUtMTEtMjktMTctNDAtMTdtMTExIDJjLTQtMi04LTMtMTItMi0xMSAwLTI1IDUtNDAgMTcgMTAgOSAxOSAxOSAyNiAyOSAxMyAyIDI2IDQgMzkgOHYtNWMzLTIzLTItNDAtMTMtNDdtLTYxIDIzYy03IDYtMTMgMTMtMTkgMTloMzdjLTYtNi0xMi0xMy0xOC0xOSIvPjxtYXNrIGlkPSJhIj48cGF0aCBmaWxsPSIjZmZmIiBkPSJtMjM1IDg1LTEzMyAyNyAyOCAxMzMgMTMzLTI3WiIvPjwvbWFzaz48cGF0aCBmaWxsPSIjZmY0MGUwIiBkPSJtMTM3IDEzMCA3NiAxMWM4IDEgOSAxMSAzIDE1bC0yOCAxNi00IDMyYy0xIDgtMTAgMTAtMTQgNGwtNDEtNjZjLTMtNiAxLTEzIDgtMTIiIG1hc2s9InVybCgjYSkiLz48L3N2Zz4=\"); background-size: 16px 16px; background-repeat: no-repeat; background-position: 4px center; display: inline-block; margin-bottom: 4px; \", source: http://localhost:5173/@fs/C:/Users/jinwo/orca/workspaces/orca/windows-performance-improvement/node_modules/.vite/deps/react-grab.js?v=e74fde05 (1078)",
+      "line": "https://react-grab.com background: #330039; color: #ffffff; border: 1px solid #d75fcb; padding: 4px 4px 4px 24px; border-radius: 4px; background-image: url(\"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIGZpbGw9Im5vbmUiIHZpZXdCb3g9IjAgMCAyOTQgMjk0Ij48cGF0aCBmaWxsPSIjZmY0MGUwIiBkPSJNMTQ1IDQ3YzI1LTIwIDUwLTI3IDY3LTE3IDE2IDkgMjMgMzAgMjAgNjAgMCAyLTEgNS0xIDdsLTIgMTNoLTFsLTEyLTRjLTgtMy0xNy01LTI1LTZsLTE3LTNjLTEwLTEtMjAtMS0yOS0xLTEwIDAtMjAgMC0yOSAxLTYgOC0xMSAxNi0xNiAyNC01IDktOSAxNy0xMyAyNiA0IDkgOCAxOCAxMyAyNnMxMCAxNiAxNiAyNGwxMSAxNGM1IDcgMTEgMTMgMTggMTlsMTAgOHMtMSAwIDAgMGwtMTEgOWMtMTcgMTQtMzUgMjItNDkgMjItNiAwLTEzLTItMTgtNS0xNi05LTIzLTMwLTIwLTU5IDEtMyAxLTUgMS04LTMwLTEyLTQ4LTI5LTQ4LTUwIDAtMTggMTQtMzUgNDEtNDcgMi0xIDUtMiA3LTMgMC0yIDAtNS0xLTctMy0zMCA0LTUxIDIwLTYwIDE4LTEwIDQyLTMgNjggMTdNNzEgMjAxYy0xIDItMSA0LTEgNS0yIDI0IDMgNDEgMTMgNDdoMWMxMSA3IDMwIDEgNTEtMTUtMTAtOS0xOC0xOC0yNi0yOS0xMy0xLTI2LTQtMzgtOG05LTM4Yy0zIDktNSAxNy03IDI2IDggMiAxNyA0IDI1IDYtMy01LTYtMTAtOS0xNi0zLTUtNi0xMC05LTE2bS0xOS01M2MtMiAxLTMgMS01IDItMjEgMTAtMzQgMjMtMzQgMzUgMCAxMyAxNCAyNyAzOSAzNyAzLTEyIDctMjUgMTItMzctNS0xMi05LTI0LTEyLTM3bTM3LTEwYy04IDEtMTcgMy0yNSA2IDIgOCA0IDE2IDcgMjUgMy01IDYtMTEgOS0xNnptLTMtNjFjLTQtMS04IDAtMTIgMi0xMCA3LTE1IDI0LTEzIDQ3IDAgMiAwIDMgMSA1IDEyLTQgMjUtNiAzOC04IDgtMTAgMTYtMjAgMjYtMjktMTUtMTEtMjktMTctNDAtMTdtMTExIDJjLTQtMi04LTMtMTItMi0xMSAwLTI1IDUtNDAgMTcgMTAgOSAxOSAxOSAyNiAyOSAxMyAyIDI2IDQgMzkgOHYtNWMzLTIzLTItNDAtMTMtNDdtLTYxIDIzYy03IDYtMTMgMTMtMTkgMTloMzdjLTYtNi0xMi0xMy0xOC0xOSIvPjxtYXNrIGlkPSJhIj48cGF0aCBmaWxsPSIjZmZmIiBkPSJtMjM1IDg1LTEzMyAyNyAyOCAxMzMgMTMzLTI3WiIvPjwvbWFzaz48cGF0aCBmaWxsPSIjZmY0MGUwIiBkPSJtMTM3IDEzMCA3NiAxMWM4IDEgOSAxMSAzIDE1bC0yOCAxNi00IDMyYy0xIDgtMTAgMTAtMTQgNGwtNDEtNjZjLTMtNiAxLTEzIDgtMTIiIG1hc2s9InVybCgjYSkiLz48L3N2Zz4=\"); background-size: 16px 16px; background-repeat: no-repeat; background-position: 4px center; display: inline-block; margin-bottom: 4px; \", source: http://localhost:5173/@fs/C:/Users/jinwo/mcode/workspaces/mcode/windows-performance-improvement/node_modules/.vite/deps/react-grab.js?v=e74fde05 (1078)",
       "at": 1782977072013
     },
     {
@@ -699,7 +699,7 @@
     },
     {
       "source": "stderr",
-      "line": "[50192:0702/032432.274:INFO:CONSOLE:1080] \"[React Grab] v0.1.34 is outdated (latest: v0.1.47). Run `npx grab@latest upgrade` to upgrade.\", source: http://localhost:5173/@fs/C:/Users/jinwo/orca/workspaces/orca/windows-performance-improvement/node_modules/.vite/deps/react-grab.js?v=e74fde05 (1080)",
+      "line": "[50192:0702/032432.274:INFO:CONSOLE:1080] \"[React Grab] v0.1.34 is outdated (latest: v0.1.47). Run `npx grab@latest upgrade` to upgrade.\", source: http://localhost:5173/@fs/C:/Users/jinwo/mcode/workspaces/mcode/windows-performance-improvement/node_modules/.vite/deps/react-grab.js?v=e74fde05 (1080)",
       "at": 1782977072274
     },
     {
@@ -754,7 +754,7 @@
     },
     {
       "source": "stderr",
-      "line": "[50192:0702/032432.892:INFO:CONSOLE:397] \"Tooltip is changing from uncontrolled to controlled. Components should not switch from controlled to uncontrolled (or vice versa). Decide between using a controlled or uncontrolled value for the lifetime of the component.\", source: http://localhost:5173/@fs/C:/Users/jinwo/orca/workspaces/orca/windows-performance-improvement/node_modules/.vite/deps/chunk-22L5D3A7.js?v=33341407 (397)",
+      "line": "[50192:0702/032432.892:INFO:CONSOLE:397] \"Tooltip is changing from uncontrolled to controlled. Components should not switch from controlled to uncontrolled (or vice versa). Decide between using a controlled or uncontrolled value for the lifetime of the component.\", source: http://localhost:5173/@fs/C:/Users/jinwo/mcode/workspaces/mcode/windows-performance-improvement/node_modules/.vite/deps/chunk-22L5D3A7.js?v=33341407 (397)",
       "at": 1782977072892
     },
     {
@@ -909,7 +909,7 @@
     },
     {
       "source": "stderr",
-      "line": "[50192:0702/032444.635:INFO:CONSOLE:397] \"Tooltip is changing from controlled to uncontrolled. Components should not switch from controlled to uncontrolled (or vice versa). Decide between using a controlled or uncontrolled value for the lifetime of the component.\", source: http://localhost:5173/@fs/C:/Users/jinwo/orca/workspaces/orca/windows-performance-improvement/node_modules/.vite/deps/chunk-22L5D3A7.js?v=33341407 (397)",
+      "line": "[50192:0702/032444.635:INFO:CONSOLE:397] \"Tooltip is changing from controlled to uncontrolled. Components should not switch from controlled to uncontrolled (or vice versa). Decide between using a controlled or uncontrolled value for the lifetime of the component.\", source: http://localhost:5173/@fs/C:/Users/jinwo/mcode/workspaces/mcode/windows-performance-improvement/node_modules/.vite/deps/chunk-22L5D3A7.js?v=33341407 (397)",
       "at": 1782977084635
     },
     {

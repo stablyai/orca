@@ -18,8 +18,8 @@ const repoMap: ReadonlyMap<string, Repo> = new Map([
     'repo-1',
     {
       id: 'repo-1',
-      path: '/repos/orca',
-      displayName: 'acme/orca',
+      path: '/repos/mcode',
+      displayName: 'acme/mcode',
       badgeColor: '#22c55e',
       addedAt: 0
     }
@@ -73,7 +73,7 @@ const ports = new Map(
 )
 const issueCache = Object.fromEntries(
   worktrees.map((worktree, index) => [
-    `/repos/orca::${worktree.id}`,
+    `/repos/mcode::${worktree.id}`,
     { data: { number: 1000 + index, title: `Cached issue title ${index}` } }
   ])
 )

@@ -1,5 +1,5 @@
 // Why: browser pages can be backed two ways. A desktop renderer mounts an
-// Electron <webview> (renderer backend). A headless orca serve has no renderer
+// Electron <webview> (renderer backend). A headless mcode serve has no renderer
 // window, so it backs pages with main-process offscreen WebContents (offscreen
 // backend). Both register the page's WebContents into BrowserManager, so every
 // downstream command (agent-browser automation, screencast, input) resolves a

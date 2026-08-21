@@ -53,7 +53,7 @@ export async function seedActiveTerminalScrollback(
   ].join(';')
   // Why: delivered via a temp file — `node -e` quoting is not PowerShell-safe (#8521).
   const staged = await runNodeScriptInTerminal(page, ptyId, script, {
-    prefix: 'orca-opencode-scroll-seed'
+    prefix: 'mcode-opencode-scroll-seed'
   })
   try {
     await waitForTerminalOutput(page, marker, 10_000)

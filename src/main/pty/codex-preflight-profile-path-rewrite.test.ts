@@ -31,7 +31,7 @@ function writeStub(path: string, markerPath: string): void {
 }
 
 function buildFixture(): Fixture {
-  const root = mkdtempSync(join(tmpdir(), 'orca-codex-profile-path-'))
+  const root = mkdtempSync(join(tmpdir(), 'mcode-codex-profile-path-'))
   roots.push(root)
   const resourcesPath = join(root, 'resources')
   const hijackDir = join(root, 'hijack')
@@ -44,10 +44,10 @@ function buildFixture(): Fixture {
   mkdirSync(codexDir, { recursive: true })
   mkdirSync(homePath, { recursive: true })
 
-  // The CLI Orca ships, at the absolute path Orca controls.
+  // The CLI MCode ships, at the absolute path MCode controls.
   writeStub(getBundledLauncherPath(process.platform, resourcesPath) as string, intendedMarker)
-  // The impostor a user's own bin directory could hold under every CLI name Orca uses.
-  for (const name of ['orca', 'orca-ide', 'orca-dev']) {
+  // The impostor a user's own bin directory could hold under every CLI name MCode uses.
+  for (const name of ['mcode', 'mcode-ide', 'mcode-dev']) {
     writeStub(join(hijackDir, name), hijackMarker)
   }
   writeStub(join(codexDir, 'codex'), codexMarker)
@@ -72,10 +72,10 @@ function launchCodexThroughRcfile(fixture: Fixture, preflightValue: string): voi
       PATH: ['/usr/bin', '/bin', '/usr/sbin', '/sbin'].join(delimiter),
       TERM: 'dumb',
       SHELL: '/bin/bash',
-      // Why no ORCA_SHELL_FEATURES: absent means no features, so the rcfile
+      // Why no MCODE_SHELL_FEATURES: absent means no features, so the rcfile
       // emits neither the identity nor the readiness marker into stdout.
-      ORCA_CODEX_HOME: join(fixture.root, 'codex-home'),
-      ORCA_CODEX_LAUNCH_PREFLIGHT: preflightValue
+      MCODE_CODEX_HOME: join(fixture.root, 'codex-home'),
+      MCODE_CODEX_LAUNCH_PREFLIGHT: preflightValue
     }
   })
 }
@@ -91,7 +91,7 @@ describe.skipIf(!bashAvailable)('Codex preflight under a profile-rewritten PATH'
     const rcfile = getDaemonBashShellReadyRcfileContent()
 
     expect(rcfile.indexOf('source "$HOME/.bash_profile"')).toBeLessThan(
-      rcfile.indexOf('ORCA_CODEX_LAUNCH_PREFLIGHT')
+      rcfile.indexOf('MCODE_CODEX_LAUNCH_PREFLIGHT')
     )
   })
 
@@ -118,7 +118,7 @@ describe.skipIf(!bashAvailable)('Codex preflight under a profile-rewritten PATH'
   it('would run the impostor if the preflight carried an unqualified command name', () => {
     const fixture = buildFixture()
 
-    launchCodexThroughRcfile(fixture, 'orca')
+    launchCodexThroughRcfile(fixture, 'mcode')
 
     expect(existsSync(fixture.hijackMarker)).toBe(true)
     expect(existsSync(fixture.intendedMarker)).toBe(false)

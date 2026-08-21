@@ -28,7 +28,7 @@ import type { OpenFile } from '@/store/slices/editor'
 import { readRuntimeFileContent, subscribeRuntimeFileChanges } from '@/runtime/runtime-file-client'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
-  ORCA_WORKTREE_FILE_CHANGE_EVENT,
+  MCODE_WORKTREE_FILE_CHANGE_EVENT,
   type WorktreeFileChangeEventDetail
 } from './worktree-file-change-event'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -500,7 +500,7 @@ export function createExternalWatchEventHandler(
     // Why: this app-level hook owns watcher subscriptions; other consumers listen here so they don't fight over watch/unwatch ownership.
     if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
       window.dispatchEvent(
-        new CustomEvent<WorktreeFileChangeEventDetail>(ORCA_WORKTREE_FILE_CHANGE_EVENT, {
+        new CustomEvent<WorktreeFileChangeEventDetail>(MCODE_WORKTREE_FILE_CHANGE_EVENT, {
           detail: { payload, runtimeEnvironmentId: target.runtimeEnvironmentId }
         })
       )
@@ -738,7 +738,7 @@ function scheduleChangedOnDiskMark(
   }
   const absolutePath = joinPath(notification.worktreePath, notification.relativePath)
   const recentSelfWrite = getRecentSelfWrite(absolutePath, target.runtimeEnvironmentId)
-  // Why: the fs event may be the echo of Orca's own save — verify disk really differs from our last write before showing a "changed on disk" banner.
+  // Why: the fs event may be the echo of MCode's own save — verify disk really differs from our last write before showing a "changed on disk" banner.
   if (!recentSelfWrite || recentSelfWrite.content === null) {
     markTabsChangedOnDisk(fileIds, target.connectionId)
     return
@@ -897,7 +897,7 @@ function scheduleSelfWriteAwareExternalReload(
   }
 
   const runtimeEnvironmentId = file.runtimeEnvironmentId ?? target.runtimeEnvironmentId
-  // Why: a self-write stamp only proves recent change; compare disk content so we suppress only Orca's own echo, not a newer agent write in the same TTL.
+  // Why: a self-write stamp only proves recent change; compare disk content so we suppress only MCode's own echo, not a newer agent write in the same TTL.
   void readFileForEchoVerification({
     runtimeEnvironmentId,
     filePath: file.filePath,

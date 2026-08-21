@@ -12,7 +12,7 @@ describe('prepareCodexAiVaultSessionResume', () => {
   let peerRolloutPath: string
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'orca-codex-ai-vault-resume-'))
+    root = mkdtempSync(join(tmpdir(), 'mcode-codex-ai-vault-resume-'))
     peerHome = join(root, 'codex-accounts', 'account-a', 'home')
     selectedHome = join(root, 'codex-accounts', 'account-b', 'home')
     const relativeRolloutPath = join(

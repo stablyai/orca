@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import { openFileExplorer } from './helpers/file-explorer'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
@@ -89,16 +89,16 @@ async function clickLink(page: Page, probe: LinkProbe): Promise<void> {
   await page.mouse.click(target.x, target.y)
 }
 
-test('opens a terminal file link and observes an external edit @golden', async ({ orcaPage }) => {
+test('opens a terminal file link and observes an external edit @golden', async ({ mcodePage }) => {
   test.setTimeout(180_000)
-  await waitForSessionReady(orcaPage)
-  const worktreeId = await waitForActiveWorktree(orcaPage)
-  await ensureTerminalVisible(orcaPage)
-  await waitForActiveTerminalManager(orcaPage, 30_000)
-  const ptyId = await waitForActivePanePtyId(orcaPage)
-  await waitForPtyShellEcho(orcaPage, ptyId, 15_000)
+  await waitForSessionReady(mcodePage)
+  const worktreeId = await waitForActiveWorktree(mcodePage)
+  await ensureTerminalVisible(mcodePage)
+  await waitForActiveTerminalManager(mcodePage, 30_000)
+  const ptyId = await waitForActivePanePtyId(mcodePage)
+  await waitForPtyShellEcho(mcodePage, ptyId, 15_000)
 
-  const worktreePath = await orcaPage.evaluate((id) => {
+  const worktreePath = await mcodePage.evaluate((id) => {
     return (
       Object.values(window.__store?.getState().worktreesByRepo ?? {})
         .flat()
@@ -115,25 +115,25 @@ test('opens a terminal file link and observes an external edit @golden', async (
   const changedMarker = `golden-external-edit-${Date.now()}`
 
   try {
-    await openFileExplorer(orcaPage)
-    const explorerRow = orcaPage
+    await openFileExplorer(mcodePage)
+    const explorerRow = mcodePage
       .locator('[data-file-explorer-row]')
       .filter({ hasText: 'package.json' })
       .first()
     await expect(explorerRow).toBeVisible({ timeout: 15_000 })
 
     const command = nodeTerminalCommand(['-e', `console.log(${JSON.stringify(printedPath)})`])
-    await sendToTerminal(orcaPage, ptyId, `${command}\r`)
+    await sendToTerminal(mcodePage, ptyId, `${command}\r`)
     await expect
-      .poll(() => getTerminalContent(orcaPage, LINK_SCAN_CHAR_LIMIT), { timeout: 15_000 })
+      .poll(() => getTerminalContent(mcodePage, LINK_SCAN_CHAR_LIMIT), { timeout: 15_000 })
       .toContain(printedPath)
 
     let probe: LinkProbe | null = null
     await expect
       .poll(
         async () => {
-          probe = await locateLink(orcaPage, printedPath)
-          return probe ? hoverLink(orcaPage, probe) : null
+          probe = await locateLink(mcodePage, printedPath)
+          return probe ? hoverLink(mcodePage, probe) : null
         },
         { timeout: 10_000, message: 'cwd-relative file path did not become clickable' }
       )
@@ -141,9 +141,9 @@ test('opens a terminal file link and observes an external edit @golden', async (
     if (!probe) {
       throw new Error('terminal file link disappeared before activation')
     }
-    await clickLink(orcaPage, probe)
+    await clickLink(mcodePage, probe)
 
-    const actionPopover = orcaPage.locator('[data-terminal-link-action-popover]')
+    const actionPopover = mcodePage.locator('[data-terminal-link-action-popover]')
     await expect(actionPopover).toBeVisible()
     // Why: destination is the resolved absolute path; Windows may use `\`.
     await expect
@@ -157,13 +157,13 @@ test('opens a terminal file link and observes an external edit @golden', async (
       .toContain(resolvedDestination)
     await actionPopover.getByRole('button', { name: /Open file/i }).click()
 
-    const editorHeader = orcaPage.locator('.editor-header-path').first()
+    const editorHeader = mcodePage.locator('.editor-header-path').first()
     await expect(editorHeader).toContainText('package.json', { timeout: 20_000 })
     await expect(explorerRow).toHaveAttribute('data-selected', 'true', { timeout: 10_000 })
     await expect
       .poll(
         () =>
-          orcaPage.evaluate(
+          mcodePage.evaluate(
             (expectedPath) => window.__monacoEditorE2E?.filePath === expectedPath,
             filePath
           ),
@@ -175,8 +175,8 @@ test('opens a terminal file link and observes an external edit @golden', async (
     await expect
       .poll(
         async () => {
-          const snapshot = await orcaPage.evaluate(() => window.__monacoEditorE2E?.snapshot())
-          const reloadVisible = await orcaPage
+          const snapshot = await mcodePage.evaluate(() => window.__monacoEditorE2E?.snapshot())
+          const reloadVisible = await mcodePage
             .getByRole('button', { name: 'Reload from Disk' })
             .isVisible()
             .catch(() => false)

@@ -4,7 +4,7 @@
 
 Users can open **Fill from ~/.ssh/config…** on the add-SSH-host dialog, pick a
 Host alias, and get the form prefilled from `ssh -G` resolution. Bulk sync is a
-secondary **Add all N to Orca** action (no re-adopt). Settings → SSH → **Import**
+secondary **Add all N to MCode** action (no re-adopt). Settings → SSH → **Import**
 remains the deliberate re-adopt path.
 
 Commits under test (vs main):
@@ -19,7 +19,7 @@ Commits under test (vs main):
 | Area | Where |
 |------|--------|
 | `listConfigHosts` / `resolveConfigHost` IPC registration | `src/main/ipc/ssh.test.ts` |
-| Search, result limit, suppressed aliases, alreadyInOrca | `ssh-config-host-picker.test.ts` |
+| Search, result limit, suppressed aliases, alreadyInMCode | `ssh-config-host-picker.test.ts` |
 | Generation guard, freeze-while-resolving, late resolve | `AddRemoteHostDialog.config-picker.test.tsx` |
 | Bulk `importConfig()` without `reAdopt` | `add-remote-host-ssh-actions.test.ts` |
 | Alias folding / duplicate save check | `ssh-target-duplicate.test.ts` |
@@ -37,7 +37,7 @@ real `ssh -G` resolve, and user-visible DOM outcomes.
    mkdirSync(path.join(home, '.ssh'), { recursive: true, mode: 0o700 })
    writeFileSync(path.join(home, '.ssh/config'), configBody, { mode: 0o600 })
    ```
-2. **Unique aliases** — prefix Host entries and Orca labels with
+2. **Unique aliases** — prefix Host entries and MCode labels with
    `e2e-ssh-cfg-${Date.now().toString(36)}-…` so workers never collide; clean up
    via `window.api.ssh.removeTarget` in `afterEach` by label/configHost prefix.
 3. **Open the picker dialog** (not Settings `SshTargetForm` — that form has no
@@ -70,7 +70,7 @@ Optional second file if the Settings Import case grows:
 |--|--|
 | **Setup** | Do not create `~/.ssh/config` (or write empty file). |
 | **Steps** | Open Add SSH host → Fill from ~/.ssh/config… |
-| **Expect** | Dialog title **Choose from ~/.ssh/config**; body **No hosts in ~/.ssh/config**; **Add all to Orca** disabled; **Back** returns to form. |
+| **Expect** | Dialog title **Choose from ~/.ssh/config**; body **No hosts in ~/.ssh/config**; **Add all to MCode** disabled; **Back** returns to form. |
 
 ### P2 — Seeded hosts listed with summary lines
 
@@ -78,7 +78,7 @@ Optional second file if the Settings Import case grows:
 |--|--|
 | **Setup** | Write config with ≥2 concrete Hosts, e.g. `e2e-alpha` / `e2e-bravo` with HostName, User, Port. |
 | **Steps** | Open picker. |
-| **Expect** | Host list `SSH config hosts` shows both aliases; subtitle `user@hostname:port`; button **Add all 2 to Orca** enabled. |
+| **Expect** | Host list `SSH config hosts` shows both aliases; subtitle `user@hostname:port`; button **Add all 2 to MCode** enabled. |
 
 ### P3 — Select host prefills form (and Save persists)
 
@@ -96,21 +96,21 @@ Optional second file if the Settings Import case grows:
 | **Steps** | Open picker; filter `bravo`. |
 | **Expect** | Only bravo row; alpha gone; **No matching hosts** if filter is nonsense. |
 
-### P5 — Already-in-Orca badge + disabled row
+### P5 — Already-in-MCode badge + disabled row
 
 | | |
 |--|--|
-| **Setup** | Config hosts alpha + bravo. Seed Orca target with `configHost`/`label` matching alpha (via `ssh.addTarget`). |
+| **Setup** | Config hosts alpha + bravo. Seed MCode target with `configHost`/`label` matching alpha (via `ssh.addTarget`). |
 | **Steps** | Open picker. |
-| **Expect** | Alpha shows **In Orca** badge and is not clickable; bravo still selectable; **Add all 1 to Orca** (not 2). |
+| **Expect** | Alpha shows **In MCode** badge and is not clickable; bravo still selectable; **Add all 1 to MCode** (not 2). |
 
-### P6 — Add all N to Orca imports new hosts only
+### P6 — Add all N to MCode imports new hosts only
 
 | | |
 |--|--|
-| **Setup** | Config with 2 new hosts; no Orca targets for them. |
-| **Steps** | **Add all 2 to Orca** → wait for success toast / return to form or list refresh. |
-| **Expect** | Both targets exist (DOM in Settings SSH and/or listTargets); re-open picker shows **All hosts already in Orca** / both **In Orca**. |
+| **Setup** | Config with 2 new hosts; no MCode targets for them. |
+| **Steps** | **Add all 2 to MCode** → wait for success toast / return to form or list refresh. |
+| **Expect** | Both targets exist (DOM in Settings SSH and/or listTargets); re-open picker shows **All hosts already in MCode** / both **In MCode**. |
 
 ### P7 — Add all does **not** re-adopt deleted hosts
 
@@ -134,14 +134,14 @@ Optional second file if the Settings Import case grows:
 |--|--|
 | **Setup** | Same as P7 after delete. |
 | **Steps** | Settings → SSH → **Import** (explicit reAdopt path). |
-| **Expect** | Deleted config host reappears as an Orca target; toast sync count ≥ 1. |
+| **Expect** | Deleted config host reappears as an MCode target; toast sync count ≥ 1. |
 
 ---
 
 ## Nice-to-have (only if cheap after P1–P9)
 
 - **N1** ProxyCommand / JumpHost: pick host with ProxyJump → Advanced opens and jump field filled (proves advanced prefill + `preferAdvancedOpen`).
-- **N2** Case-insensitive alias: config `Prod`, existing label `prod` → **In Orca**.
+- **N2** Case-insensitive alias: config `Prod`, existing label `prod` → **In MCode**.
 - **N3** Empty Identity file hint visible after config fill.
 
 Skip: 100-host truncation, resolve races, GSSAPI system-default, composer host-availability fail-closed (unit-covered).
@@ -161,7 +161,7 @@ Skip: 100-host truncation, resolve races, GSSAPI system-default, composer host-a
 | P2 list + Add all enabled | `ssh-config-host-picker.spec.ts` |
 | P3 select + Save (+ N3 identity hint) | `ssh-config-host-picker.spec.ts` |
 | P4 filter | `ssh-config-host-picker.spec.ts` |
-| P5 In Orca badge / count | `ssh-config-host-import.spec.ts` |
+| P5 In MCode badge / count | `ssh-config-host-import.spec.ts` |
 | P6 Add all imports | `ssh-config-host-import.spec.ts` |
 | P7 no re-adopt after delete | `ssh-config-host-import.spec.ts` |
 | P8 Back without select | `ssh-config-host-picker.spec.ts` |

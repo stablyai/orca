@@ -40,7 +40,7 @@ export function AutomationSessionField({
             <TooltipContent side="top" sideOffset={6} className="max-w-72">
               {translate(
                 'auto.components.automations.AutomationSessionField.b675112193',
-                'Reuse sends future runs to the previous live automation session. If that session is gone, Orca starts a fresh one.'
+                'Reuse sends future runs to the previous live automation session. If that session is gone, MCode starts a fresh one.'
               )}
             </TooltipContent>
           </Tooltip>

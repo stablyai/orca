@@ -20,7 +20,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
   default: asyncStorageMock
 }))
 
-const PENDING_STORAGE_KEY = 'orca:pending-host-credential-cleanups'
+const PENDING_STORAGE_KEY = 'mcode:pending-host-credential-cleanups'
 let storedPendingIds: string[]
 let readShouldFail = false
 

@@ -39,7 +39,7 @@ if (!existsSync(path.join(opencodePackagePath, 'package.json'))) {
   )
 }
 
-const harnessPath = path.join(opencodePackagePath, 'orca-opencode-tui-repro.tsx')
+const harnessPath = path.join(opencodePackagePath, 'mcode-opencode-tui-repro.tsx')
 
 const harnessSource = String.raw`import { BoxRenderable, createCliRenderer, RGBA, TextRenderable } from "@opentui/core"
 import { SpinnerRenderable } from "opentui-spinner"
@@ -122,7 +122,7 @@ writeFileSync(harnessPath, harnessSource)
 
 const out = createWriteStream(outputPath)
 const command = process.platform === 'win32' ? 'bun.exe' : 'bun'
-const child = pty.spawn(command, ['run', './orca-opencode-tui-repro.tsx'], {
+const child = pty.spawn(command, ['run', './mcode-opencode-tui-repro.tsx'], {
   cwd: opencodePackagePath,
   cols: 120,
   rows: 40,

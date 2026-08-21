@@ -1,4 +1,4 @@
-// Per-step copy for the agents-orchestration tile in the Explore Orca modal.
+// Per-step copy for the agents-orchestration tile in the Explore MCode modal.
 
 export type AgentsStepId = 'statuses' | 'usage' | 'orchestration'
 
@@ -27,7 +27,7 @@ export const AGENTS_STEPS: readonly AgentsStep[] = [
     id: 'orchestration',
     name: 'Orchestration',
     subtitle: 'Orchestration',
-    description: 'Enable agents to manage and coordinate Orca workspaces to execute larger tasks.'
+    description: 'Enable agents to manage and coordinate MCode workspaces to execute larger tasks.'
   },
   {
     id: 'usage',

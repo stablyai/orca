@@ -36,7 +36,7 @@ export type TerminalPastePlan = {
   target: TerminalPasteTarget
   payload: TerminalPastePayload
   mode: 'direct' | 'chunked' | 'bracketed-terminal' | 'windows-input-record' | 'reject'
-  // Why: 'terminal-cr' marks plans whose paste bytes Orca constructs itself, so
+  // Why: 'terminal-cr' marks plans whose paste bytes MCode constructs itself, so
   // every write path applies xterm's native \r?\n -> \r before ConPTY sees LF.
   newlinePolicy: 'preserve' | 'terminal-cr' | 'windows-input-record'
   windowsInputRecordNewline?: WindowsInputRecordNewline

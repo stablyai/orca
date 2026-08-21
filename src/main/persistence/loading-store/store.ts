@@ -66,7 +66,7 @@ import { sanitizeWorkspaceSessionTerminalRetirements } from '../../runtime/mobil
 import {
   removeRepoFromHostWorkspaceSessions,
   removeRepoFromWorkspaceSession
-} from '../../orca-profiles/profile-project-session-state'
+} from '../../mcode-profiles/profile-project-session-state'
 import type {
   RemovedSshTargetTombstone,
   SshPtyConsumerRecovery,
@@ -805,7 +805,7 @@ export class Store {
   }
 
   private load(allowBackupRecovery = true): PersistedState {
-    // Capture "has run Orca before?" for telemetry cohort; the telemetry field is new, so field inference misclassifies old users as fresh.
+    // Capture "has run MCode before?" for telemetry cohort; the telemetry field is new, so field inference misclassifies old users as fresh.
     const dataFile = this.dataFile
     const fileExistedOnLoad = existsSync(dataFile)
     logPersistenceStartupMilestone('persistence-load-start', {
@@ -1795,7 +1795,7 @@ export class Store {
       if (blob === plaintext && hashValue === plaintext) {
         return blob
       }
-      const sentinel = `orca-secret-slot-${randomUUID()}`
+      const sentinel = `mcode-secret-slot-${randomUUID()}`
       secretSubs.push({ sentinel, blob, hashValue })
       return sentinel
     }

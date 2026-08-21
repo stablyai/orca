@@ -14,7 +14,7 @@ harness measures scale, listener census, and raw publication fanout only.
 
 ## Context
 
-Orca can display a large expanded worktree lineage inside one virtualized list
+MCode can display a large expanded worktree lineage inside one virtualized list
 row. Virtualizing the root row does not virtualize its descendants, so a
 100-worktree lineage can mount 100 `WorktreeCard` instances at once.
 

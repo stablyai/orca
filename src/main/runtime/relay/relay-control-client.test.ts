@@ -7,8 +7,8 @@ import type { E2EEKeypair } from '../e2ee-keypair'
 import { RelayControlClient } from './relay-control-client'
 
 const encoder = new TextEncoder()
-const HOST_PROOF_DOMAIN = 'orca-relay-host-proof/v1'
-const CHALLENGE_DOMAIN = 'orca-relay-host-challenge/v1'
+const HOST_PROOF_DOMAIN = 'mcode-relay-host-proof/v1'
+const CHALLENGE_DOMAIN = 'mcode-relay-host-challenge/v1'
 
 function concat(parts: readonly Uint8Array[]): Uint8Array {
   const output = new Uint8Array(parts.reduce((total, part) => total + part.byteLength, 0))

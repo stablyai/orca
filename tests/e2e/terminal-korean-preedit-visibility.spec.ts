@@ -13,7 +13,7 @@
  */
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import { closeTerminalImePaneArena, openTerminalImePaneArena } from './terminal-ime-pane-arena'
 import {
   commitImeText,
@@ -70,30 +70,30 @@ const RECORDED_TRACE = JSON.parse(
 
 test.describe('Terminal 2-Set Korean preedit visibility', () => {
   test('shows every assembling jamo at non-zero size and commits the syllable ahead of the newline', async ({
-    orcaPage,
+    mcodePage,
     testRepoPath
   }, testInfo) => {
-    const arena = await openTerminalImePaneArena(orcaPage)
+    const arena = await openTerminalImePaneArena(mcodePage)
     const reader = createTerminalImeByteReader(testRepoPath, 1)
     let completed = false
     try {
-      await startTerminalImeByteReader(orcaPage, arena.ptyId, reader)
-      await expectPreeditHidden(orcaPage, 'before composing')
+      await startTerminalImeByteReader(mcodePage, arena.ptyId, reader)
+      await expectPreeditHidden(mcodePage, 'before composing')
 
       for (const frame of HAN_FRAMES) {
-        await composeHangulSyllable(arena.session, orcaPage, [frame])
-        await expectPreeditRendered(orcaPage, frame.preedit, `composing ${frame.preedit}`)
+        await composeHangulSyllable(arena.session, mcodePage, [frame])
+        await expectPreeditRendered(mcodePage, frame.preedit, `composing ${frame.preedit}`)
       }
 
       await commitImeText(arena.session, '한')
-      await expectPreeditHidden(orcaPage, 'after committing 한')
+      await expectPreeditHidden(mcodePage, 'after committing 한')
 
       await dispatchPlainEnter(arena.session)
 
-      const received = await waitForTerminalImeBytes(orcaPage, reader)
+      const received = await waitForTerminalImeBytes(mcodePage, reader)
       expect(received).toEqual([Buffer.from('한\n').toString('hex')])
 
-      const trace = await readTerminalImeBoundaryTrace(orcaPage)
+      const trace = await readTerminalImeBoundaryTrace(mcodePage)
       // The ordering the user reported as broken: the syllable must precede the newline.
       expect(trace.onData.join('')).toBe('한\r')
       completed = true
@@ -104,21 +104,21 @@ test.describe('Terminal 2-Set Korean preedit visibility', () => {
   })
 
   test('keeps a preedit the IME resumes without a compositionstart visible', async ({
-    orcaPage
+    mcodePage
   }, testInfo) => {
     // Red on `main`, by design. xterm adds `.active` to the overlay only in its `compositionstart`
     // handler, so a preedit resumed by a bare `compositionupdate` is written into a hidden element
     // and the user composes blind while the committed bytes still land correctly — which is why no
     // byte-level assertion ever saw it. Pre-existing and broken in every shipped build; closed by
     // the visibility fix in xterm's own composition helper one layer below this one.
-    const arena = await openTerminalImePaneArena(orcaPage)
+    const arena = await openTerminalImePaneArena(mcodePage)
     let completed = false
     try {
       // Synthesised, not replayed — see dispatchResumedCompositionUpdate for why the recorded
       // corpus cannot supply this ordering and why it is still reachable in production.
-      await dispatchResumedCompositionUpdate(orcaPage, '한')
+      await dispatchResumedCompositionUpdate(mcodePage, '한')
 
-      const sample = await samplePreeditOverlay(orcaPage)
+      const sample = await samplePreeditOverlay(mcodePage)
       expect(sample.found, 'no composition overlay exists').toBe(true)
       expect(sample.text, 'the resumed preedit text never reached the overlay').toBe('한')
       expect(
@@ -133,16 +133,16 @@ test.describe('Terminal 2-Set Korean preedit visibility', () => {
   })
 
   test('renders the preedit at every update of a recorded Windows/WSL Hangul session', async ({
-    orcaPage
+    mcodePage
   }, testInfo) => {
     // Pinned to the Windows policy because the trace is a Windows recording. Without the pin it
     // ran under whatever the runner reported — macOS locally, Linux on the CI shards — so the one
     // platform it was named for was the one platform it never exercised.
-    await applyImePlatformPolicy(orcaPage, 'windows')
-    const arena = await openTerminalImePaneArena(orcaPage)
+    await applyImePlatformPolicy(mcodePage, 'windows')
+    const arena = await openTerminalImePaneArena(mcodePage)
     let completed = false
     try {
-      const replay = await replayRecordedImeDomTrace(orcaPage, RECORDED_TRACE)
+      const replay = await replayRecordedImeDomTrace(mcodePage, RECORDED_TRACE)
       const updates = replay.samples.filter(
         (sample) => sample.type === 'compositionupdate' && sample.data.length > 0
       )
@@ -175,28 +175,28 @@ test.describe('Terminal 2-Set Korean preedit visibility', () => {
   })
 
   test('loses and duplicates nothing when back-to-back syllables commit at full speed', async ({
-    orcaPage,
+    mcodePage,
     testRepoPath
   }, testInfo) => {
-    const arena = await openTerminalImePaneArena(orcaPage)
+    const arena = await openTerminalImePaneArena(mcodePage)
     const reader = createTerminalImeByteReader(testRepoPath, 1)
     let completed = false
     try {
-      await startTerminalImeByteReader(orcaPage, arena.ptyId, reader)
+      await startTerminalImeByteReader(mcodePage, arena.ptyId, reader)
       // No settle time between frames or between syllables: the cadence a fast typist produces,
       // and the one that used to drop or double a syllable at the boundary.
       for (let repetition = 0; repetition < 4; repetition += 1) {
-        await composeHangulSyllable(arena.session, orcaPage, HAN_FRAMES, 0)
+        await composeHangulSyllable(arena.session, mcodePage, HAN_FRAMES, 0)
         await commitImeText(arena.session, '한')
-        await composeHangulSyllable(arena.session, orcaPage, GEUL_FRAMES, 0)
+        await composeHangulSyllable(arena.session, mcodePage, GEUL_FRAMES, 0)
         await commitImeText(arena.session, '글')
       }
       await dispatchPlainEnter(arena.session)
 
-      const received = await waitForTerminalImeBytes(orcaPage, reader)
+      const received = await waitForTerminalImeBytes(mcodePage, reader)
       expect(received).toEqual([Buffer.from(`${'한글'.repeat(4)}\n`).toString('hex')])
 
-      const trace = await readTerminalImeBoundaryTrace(orcaPage)
+      const trace = await readTerminalImeBoundaryTrace(mcodePage)
       expect(trace.onData.join('')).toBe(`${'한글'.repeat(4)}\r`)
       completed = true
     } finally {

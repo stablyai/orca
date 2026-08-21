@@ -3,7 +3,7 @@ import type {
   ArtifactPublishResult,
   ArtifactWriteRequest
 } from '../../shared/artifacts'
-import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
+import { MCodeCloudRequestError } from '../mcode-profiles/profile-cloud-client'
 import {
   artifactRequest,
   type ArtifactWriteBody,
@@ -42,7 +42,7 @@ function artifactWriteBodiesMatch(left: ArtifactWriteBody, right: ArtifactWriteB
 
 function discardsCreateIntent(error: unknown): boolean {
   return (
-    error instanceof OrcaCloudRequestError &&
+    error instanceof MCodeCloudRequestError &&
     error.statusCode >= 400 &&
     error.statusCode < 500 &&
     ![408, 409, 425, 429].includes(error.statusCode)
@@ -144,7 +144,7 @@ export class ArtifactPublisher {
           const item = await this.updateExisting(request, token, apiUrl, auth, record)
           return { change: 'updated', item }
         } catch (error) {
-          if (!(error instanceof OrcaCloudRequestError) || error.statusCode !== 404) {
+          if (!(error instanceof MCodeCloudRequestError) || error.statusCode !== 404) {
             throw error
           }
           auth.assertCurrent()

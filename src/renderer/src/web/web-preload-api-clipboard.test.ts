@@ -290,7 +290,7 @@ describe('web UI preload API', () => {
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
-            result: 'C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-image.png',
+            result: 'C:\\Users\\alice\\AppData\\Local\\Temp\\mcode-paste-image.png',
             _meta: { runtimeId: 'runtime-1' }
           })
         }
@@ -309,7 +309,7 @@ describe('web UI preload API', () => {
 
     await expect(
       globals.window.api.ui.saveClipboardImageAsTempFile({ connectionId: 'ssh-1' })
-    ).resolves.toBe('C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-image.png')
+    ).resolves.toBe('C:\\Users\\alice\\AppData\\Local\\Temp\\mcode-paste-image.png')
     expect(runtimeCalls).toEqual([
       {
         method: 'clipboard.startImageUpload',
@@ -358,7 +358,7 @@ describe('web UI preload API', () => {
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
-            result: '/tmp/orca-paste-image.png',
+            result: '/tmp/mcode-paste-image.png',
             _meta: { runtimeId: 'runtime-1' }
           })
         }
@@ -375,7 +375,7 @@ describe('web UI preload API', () => {
 
     await expect(
       globals.window.api.ui.saveClipboardImageAsTempFile({ connectionId: null })
-    ).resolves.toBe('/tmp/orca-paste-image.png')
+    ).resolves.toBe('/tmp/mcode-paste-image.png')
     expect(runtimeCalls).toEqual([
       {
         method: 'clipboard.startImageUpload',

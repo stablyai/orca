@@ -17,10 +17,10 @@ export function ArtifactsSettingsPane({
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
 }): React.JSX.Element {
   const openArtifactsPage = useAppStore((state) => state.openArtifactsPage)
-  const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
-  const connecting = useAppStore((state) => state.orcaProfileConnecting)
-  const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
-  const fetchAuthStatus = useAppStore((state) => state.fetchOrcaProfileAuthStatus)
+  const authStatus = useAppStore((state) => state.mcodeProfileAuthStatus)
+  const connecting = useAppStore((state) => state.mcodeProfileConnecting)
+  const connect = useAppStore((state) => state.connectCurrentMCodeProfile)
+  const fetchAuthStatus = useAppStore((state) => state.fetchMCodeProfileAuthStatus)
   const signedIn = authStatus?.state === 'connected'
   // Why: the capability lives in the desktop host's store and is deliberately absent from the
   // settings.update allowlist, so a web client can only mirror it — never grant it.
@@ -46,7 +46,7 @@ export function ArtifactsSettingsPane({
             description: isWebClient
               ? translate(
                   'auto.components.settings.artifacts.enableStepWebDescription',
-                  'Open Settings → Artifacts in the Orca desktop app on the host device and enable publishing.'
+                  'Open Settings → Artifacts in the MCode desktop app on the host device and enable publishing.'
                 )
               : translate(
                   'auto.components.settings.artifacts.enableStepDescription',
@@ -75,7 +75,7 @@ export function ArtifactsSettingsPane({
     },
     {
       key: 'manage',
-      title: translate('auto.components.settings.artifacts.manageStepTitle', 'Manage it in Orca'),
+      title: translate('auto.components.settings.artifacts.manageStepTitle', 'Manage it in MCode'),
       description: translate(
         'auto.components.settings.artifacts.manageStepDescription',
         'Open Artifacts from the sidebar to preview or remove links.'
@@ -126,7 +126,7 @@ export function ArtifactsSettingsPane({
             <p className="text-xs leading-relaxed text-muted-foreground">
               {translate(
                 'auto.components.settings.artifacts.signInDescription',
-                'Use your Orca account to upload artifacts and manage their public links.'
+                'Use your MCode account to upload artifacts and manage their public links.'
               )}
             </p>
           </div>
@@ -140,7 +140,7 @@ export function ArtifactsSettingsPane({
               ? translate('auto.components.settings.artifacts.signingIn', 'Signing in…')
               : authStatus?.state === 'reconnect-required'
                 ? translate('auto.components.settings.artifacts.signInAgain', 'Sign in again')
-                : translate('auto.components.settings.artifacts.signIn', 'Sign in to Orca')}
+                : translate('auto.components.settings.artifacts.signIn', 'Sign in to MCode')}
           </Button>
         </section>
       ) : null}

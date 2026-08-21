@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-// Why: when the preferred WS port is taken (second Orca instance), the OS
+// Why: when the preferred WS port is taken (second MCode instance), the OS
 // assigns a random port. Paired mobile devices store ws://ip:port endpoints,
 // so a port that changes on every restart permanently orphans those pairings
 // (STA-1511). Persist the assigned fallback so the same instance re-binds the

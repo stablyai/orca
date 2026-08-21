@@ -14,7 +14,7 @@ const RESOLVER_HEALTH_CHECK_TIMEOUT_MS = 3_000
 // Why: e2e forces the failed-health preserve path without SIGSTOP races —
 // a stopped daemon also blocks listSessions, so the unhealthy guard cannot
 // verify live sessions until SIGCONT, which is flaky under CI load.
-export const E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV = 'ORCA_E2E_FORCE_DAEMON_HEALTH_UNREACHABLE'
+export const E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV = 'MCODE_E2E_FORCE_DAEMON_HEALTH_UNREACHABLE'
 
 // 'rejected' means the daemon answered and refused the handshake (bad token,
 // foreign protocol) — it can never be adopted, unlike 'unreachable', which

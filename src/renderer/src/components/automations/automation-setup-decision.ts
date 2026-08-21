@@ -1,5 +1,5 @@
 import type { AutomationWorkspaceMode } from '../../../../shared/automations-types'
-import type { OrcaHooks, SetupRunPolicy } from '../../../../shared/orca-yaml-hook-types'
+import type { MCodeHooks, SetupRunPolicy } from '../../../../shared/mcode-yaml-hook-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
@@ -14,7 +14,7 @@ function getAutomationSetupSource(
   repoId: string,
   repos: readonly Repo[],
   projectHostSetups: readonly ProjectHostSetup[],
-  yamlHooks: OrcaHooks | null | undefined
+  yamlHooks: MCodeHooks | null | undefined
 ): AutomationSetupSource | null {
   const setup = projectHostSetups.find(
     (candidate) => candidate.repoId === repoId && candidate.setupState === 'ready'
@@ -44,14 +44,14 @@ export function getAutomationSetupDefaultDecision(
 }
 
 export function getVisibleAutomationSetupDecision(args: {
-  createTarget: 'orca' | 'hermes'
+  createTarget: 'mcode' | 'hermes'
   workspaceMode: AutomationWorkspaceMode
   repoId: string
   repos: readonly Repo[]
   projectHostSetups: readonly ProjectHostSetup[]
-  yamlHooks?: OrcaHooks | null
+  yamlHooks?: MCodeHooks | null
 }): Extract<SetupDecision, 'run' | 'skip'> | undefined {
-  if (args.createTarget !== 'orca' || args.workspaceMode !== 'new_per_run') {
+  if (args.createTarget !== 'mcode' || args.workspaceMode !== 'new_per_run') {
     return undefined
   }
   return getAutomationSetupDefaultDecision(
@@ -60,15 +60,15 @@ export function getVisibleAutomationSetupDecision(args: {
 }
 
 export function resolveAutomationSetupDecisionForSave(args: {
-  createTarget: 'orca' | 'hermes'
+  createTarget: 'mcode' | 'hermes'
   workspaceMode: AutomationWorkspaceMode
   repoId: string
   repos: readonly Repo[]
   projectHostSetups: readonly ProjectHostSetup[]
-  yamlHooks?: OrcaHooks | null
+  yamlHooks?: MCodeHooks | null
   draftSetupDecision: Extract<SetupDecision, 'run' | 'skip'> | undefined
 }): Extract<SetupDecision, 'run' | 'skip'> | undefined {
-  if (args.createTarget !== 'orca' || args.workspaceMode !== 'new_per_run') {
+  if (args.createTarget !== 'mcode' || args.workspaceMode !== 'new_per_run') {
     return undefined
   }
 
@@ -78,7 +78,7 @@ export function resolveAutomationSetupDecisionForSave(args: {
   }
 
   if (args.yamlHooks === undefined) {
-    // Why: automations cannot pause later for an orca.yaml trust prompt; when
+    // Why: automations cannot pause later for an mcode.yaml trust prompt; when
     // hook inspection is unavailable, fail closed instead of inheriting setup.
     return 'skip'
   }

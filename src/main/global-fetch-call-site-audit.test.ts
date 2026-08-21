@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 // Global fetch (bare or via globalThis/global — unlike Electron's net.fetch)
 // goes through Node's bundled undici, which can crash the whole process when
 // an unread response body pauses the HTTP/1 parser and the peer closes the
-// socket (nodejs/undici#5360, orca#8695). This applies to every Node process
+// socket (nodejs/undici#5360, mcode#8695). This applies to every Node process
 // we ship: Electron main, the CLI, and the SSH relay.
 //
 // Each entry below maps an audited file to its expected number of matching
@@ -20,8 +20,8 @@ const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
   ['main/bitbucket/client.ts', 1],
   ['main/bitbucket/user-request.ts', 1],
   ['main/gitea/client.ts', 1],
-  ['main/orca-profiles/profile-cloud-client.ts', 1],
-  ['main/orca-profiles/profile-cloud-org-members-client.ts', 1],
+  ['main/mcode-profiles/profile-cloud-client.ts', 1],
+  ['main/mcode-profiles/profile-cloud-org-members-client.ts', 1],
   ['main/rate-limits/codex-fetcher.ts', 3],
   ['main/runtime/relay/relay-http-client.ts', 2],
   ['main/runtime/relay/relay-region-preference.ts', 3],
@@ -88,7 +88,7 @@ describe('global fetch call-site audit (main, cli, relay)', () => {
     expect(
       drifted,
       'Global fetch (bare, globalThis.fetch, or global.fetch) uses undici, ' +
-        'where an unread response body can crash the whole process (orca#8695). ' +
+        'where an unread response body can crash the whole process (mcode#8695). ' +
         'New or moved call sites must either use Electron net.fetch or consume/' +
         'cancel the response body on ALL paths (cancelUnreadResponseBody in ' +
         'main/lib/unread-response-body.ts), then update AUDITED_GLOBAL_FETCH_LINES.'

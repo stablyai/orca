@@ -30,7 +30,7 @@ The `--` inside `sh -s -- <path>` is a *shell* argument separator and is unrelat
 
 ## 2. Machine-read output must be fenced
 
-Orca runs guest commands through the distro user's **interactive** login shell (`-ilc` for
+MCode runs guest commands through the distro user's **interactive** login shell (`-ilc` for
 bash/zsh) because that is the only shell that reads `~/.bashrc`, where `nvm`, `mise` and `asdf`
 install their PATH entries. Dropping `-i` would break tool detection for those users.
 

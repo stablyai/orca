@@ -1,4 +1,4 @@
-// Why: Project mode rows carry a GitHub `owner/repo` slug, but Orca's
+// Why: Project mode rows carry a GitHub `owner/repo` slug, but MCode's
 // `state.repos` stores only absolute paths. Before any repo-context action
 // (opening the item dialog in repo-backed mode, launching a worktree) can
 // dispatch correctly, we need a renderer-side index mapping slug → Repo[].
@@ -111,7 +111,7 @@ async function resolveRepoSlug(
       const slug = githubRepoIdentityKey(result)
       return commit(slug)
     } catch {
-      // Why: GHES classification depends on auth that may change outside Orca;
+      // Why: GHES classification depends on auth that may change outside MCode;
       // retry negative results after a bounded quiet period instead of forever.
       return commit(null)
     }

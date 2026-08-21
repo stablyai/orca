@@ -16,7 +16,7 @@ function optionValue(tokens: readonly string[], index: number): string | null {
 }
 
 // Why: `--print`/`-p` prints one response and exits, and `--output-format json|stream-json`
-// is only meaningful there — either means a headless run, not the interactive TUI Orca hosts.
+// is only meaningful there — either means a headless run, not the interactive TUI MCode hosts.
 export function isPrintModeHeadlessOneShotCommand(tokens: readonly string[]): boolean {
   for (let index = 1; index < tokens.length; index += 1) {
     // Why: `--` ends option parsing, so a prompt that reads like `--print` is still a prompt.

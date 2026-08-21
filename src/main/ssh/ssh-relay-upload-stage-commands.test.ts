@@ -29,7 +29,7 @@ const posix = getRemoteHostPlatform('linux-x64')
 const windows = getRemoteHostPlatform('win32-x64')
 const owner = '.sftp-namespace-123e4567e89b12d3a456426614174000'
 const roots: string[] = []
-const configuredPowerShell = process.env.ORCA_POWERSHELL_EXECUTABLE
+const configuredPowerShell = process.env.MCODE_POWERSHELL_EXECUTABLE
 const powerShellExecutable = [
   configuredPowerShell,
   ...(process.platform === 'win32' ? ['pwsh.exe', 'powershell.exe'] : ['pwsh'])
@@ -47,7 +47,7 @@ function decodePowerShellCommand(command: string): string {
 }
 
 function createPool(): string {
-  const root = mkdtempSync(join(tmpdir(), 'orca-upload-stage-pool-'))
+  const root = mkdtempSync(join(tmpdir(), 'mcode-upload-stage-pool-'))
   roots.push(root)
   const pool = join(root, 'pool')
   mkdirSync(pool)
@@ -90,7 +90,7 @@ function createStage(
     expect(existsSync(stage)).toBe(false)
     renameSync(slot, stage)
   }
-  const marker = join(stage, '.orca-upload-owner')
+  const marker = join(stage, '.mcode-upload-owner')
   if (stageOwner !== reservedOwner) {
     writeFileSync(marker, stageOwner)
   }
@@ -154,7 +154,7 @@ describe.each([
         host,
         pool,
         owner,
-        `noise\n__ORCA_UPLOAD_STAGE_SLOT__${owner}:slot-0\n`
+        `noise\n__MCODE_UPLOAD_STAGE_SLOT__${owner}:slot-0\n`
       )
 
       const result = runCommand(
@@ -186,7 +186,7 @@ describe.each([
           host,
           pool,
           owner,
-          `__ORCA_UPLOAD_STAGE_SLOT__${owner}:slot-0`
+          `__MCODE_UPLOAD_STAGE_SLOT__${owner}:slot-0`
         )
 
         const result = runCommand(
@@ -242,13 +242,13 @@ describe('POSIX ownership race fencing', () => {
       posix,
       pool,
       owner,
-      `__ORCA_UPLOAD_STAGE_SLOT__${owner}:slot-0`
+      `__MCODE_UPLOAD_STAGE_SLOT__${owner}:slot-0`
     )
     const prefix = [
       'raced=0',
       'mv() {',
       'if [ "$raced" -eq 0 ]; then',
-      'raced=1; command mv "$1" "$1.original"; mkdir "$1"; mkdir "$1/payload"; cp "$1.original/.orca-upload-owner" "$1/.orca-upload-owner"; cp "$1.original/.orca-upload-identity" "$1/.orca-upload-identity"; touch -t 202001010000 "$1/.orca-upload-owner"; printf foreign > "$1/foreign";',
+      'raced=1; command mv "$1" "$1.original"; mkdir "$1"; mkdir "$1/payload"; cp "$1.original/.mcode-upload-owner" "$1/.mcode-upload-owner"; cp "$1.original/.mcode-upload-identity" "$1/.mcode-upload-identity"; touch -t 202001010000 "$1/.mcode-upload-owner"; printf foreign > "$1/foreign";',
       'fi;',
       'command mv "$@";',
       '}'
@@ -263,7 +263,7 @@ describe('POSIX ownership race fencing', () => {
     expect(result.status, result.stderr).toBe(0)
     expect(relayUploadStagePromotionConfirmed(owner, result.stdout)).toBe(false)
     expect(existsSync(join(pool, 'slot-0', 'foreign'))).toBe(true)
-    expect(existsSync(join(pool, 'slot-0.original', '.orca-upload-owner'))).toBe(true)
+    expect(existsSync(join(pool, 'slot-0.original', '.mcode-upload-owner'))).toBe(true)
     expect(existsSync(join(destination, 'relay.js'))).toBe(false)
   })
 
@@ -279,7 +279,7 @@ describe('POSIX ownership race fencing', () => {
       posix,
       pool,
       owner,
-      `__ORCA_UPLOAD_STAGE_SLOT__${owner}:slot-0`
+      `__MCODE_UPLOAD_STAGE_SLOT__${owner}:slot-0`
     )
     const prefix = [
       'raced=0',
@@ -299,7 +299,7 @@ describe('POSIX ownership race fencing', () => {
     expect(result.status, result.stderr).toBe(0)
     expect(lstatSync(join(pool, 'slot-0')).isSymbolicLink()).toBe(true)
     expect(readFileSync(join(foreign, 'sentinel'), 'utf8')).toBe('alive')
-    expect(existsSync(join(pool, 'slot-0.original', '.orca-upload-owner'))).toBe(true)
+    expect(existsSync(join(pool, 'slot-0.original', '.mcode-upload-owner'))).toBe(true)
   })
 })
 
@@ -316,7 +316,7 @@ describe.runIf(powerShellExecutable)(
         windows,
         pool,
         owner,
-        `__ORCA_UPLOAD_STAGE_SLOT__${owner}:slot-0`
+        `__MCODE_UPLOAD_STAGE_SLOT__${owner}:slot-0`
       )
       const prefix = [
         '$script:raced = $false',
@@ -329,9 +329,9 @@ describe.runIf(powerShellExecutable)(
         '$null = New-Item -ItemType Directory -Path (Join-Path $LiteralPath "payload")',
         '$newPath = (Get-Item -LiteralPath $LiteralPath).FullName',
         '$originalPath = (Get-Item -LiteralPath ($LiteralPath + ".original")).FullName',
-        '[System.IO.File]::WriteAllText((Join-Path $newPath ".orca-upload-owner"), [System.IO.File]::ReadAllText((Join-Path $originalPath ".orca-upload-owner")))',
-        '[System.IO.File]::WriteAllText((Join-Path $newPath ".orca-upload-identity"), [System.IO.File]::ReadAllText((Join-Path $originalPath ".orca-upload-identity")))',
-        '(Get-Item -LiteralPath (Join-Path $newPath ".orca-upload-owner") -Force).LastWriteTimeUtc = [DateTime]::UtcNow.AddHours(-2)',
+        '[System.IO.File]::WriteAllText((Join-Path $newPath ".mcode-upload-owner"), [System.IO.File]::ReadAllText((Join-Path $originalPath ".mcode-upload-owner")))',
+        '[System.IO.File]::WriteAllText((Join-Path $newPath ".mcode-upload-identity"), [System.IO.File]::ReadAllText((Join-Path $originalPath ".mcode-upload-identity")))',
+        '(Get-Item -LiteralPath (Join-Path $newPath ".mcode-upload-owner") -Force).LastWriteTimeUtc = [DateTime]::UtcNow.AddHours(-2)',
         '[System.IO.File]::WriteAllText((Join-Path $newPath "foreign"), "foreign")',
         '}',
         'Microsoft.PowerShell.Management\\Move-Item -LiteralPath $LiteralPath -Destination $Destination -ErrorAction $ErrorAction',
@@ -347,7 +347,7 @@ describe.runIf(powerShellExecutable)(
       expect(result.status, result.stderr).toBe(0)
       expect(relayUploadStagePromotionConfirmed(owner, result.stdout)).toBe(false)
       expect(existsSync(join(pool, 'slot-0', 'foreign'))).toBe(true)
-      expect(existsSync(join(pool, 'slot-0.original', '.orca-upload-owner'))).toBe(true)
+      expect(existsSync(join(pool, 'slot-0.original', '.mcode-upload-owner'))).toBe(true)
       expect(existsSync(join(destination, 'relay.js'))).toBe(false)
     })
   }

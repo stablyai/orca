@@ -4,7 +4,7 @@ import { generateKeyPair, publicKeyToBase64 } from './e2ee-crypto'
 import { openRemoteRuntimeWebSocket } from './remote-runtime-request-websocket'
 
 describe('openRemoteRuntimeWebSocket', () => {
-  it('detaches Orca callback listeners when cleaned up', () => {
+  it('detaches MCode callback listeners when cleaned up', () => {
     const keyPair = generateKeyPair()
     const opened = openRemoteRuntimeWebSocket(
       {

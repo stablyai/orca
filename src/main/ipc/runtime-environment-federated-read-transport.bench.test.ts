@@ -6,7 +6,7 @@ import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
 import { RemoteRuntimeSharedControlConnection } from '../../shared/remote-runtime-shared-control-connection'
 import { RuntimeEnvironmentStoreSchema } from '../../shared/runtime-environments'
 
-const runLiveBenchmark = isFederatedReadBenchmarkEnabled(process.env.ORCA_FEDERATED_READ_BENCH)
+const runLiveBenchmark = isFederatedReadBenchmarkEnabled(process.env.MCODE_FEDERATED_READ_BENCH)
 
 it('interpolates even-sized benchmark samples', () => expect(percentile([1, 3], 0.5)).toBe(2))
 
@@ -53,13 +53,13 @@ it('closes the retained connection after successful measurements', async () => {
 
 describe.runIf(runLiveBenchmark)('federated read RPC transport benchmark', () => {
   it('compares one-shot and shared-control latency on one saved runtime', async () => {
-    const userDataPath = process.env.ORCA_RUNTIME_USER_DATA_PATH
-    const environmentName = process.env.ORCA_RUNTIME_ENVIRONMENT
+    const userDataPath = process.env.MCODE_RUNTIME_USER_DATA_PATH
+    const environmentName = process.env.MCODE_RUNTIME_ENVIRONMENT
     if (!userDataPath || !environmentName) {
-      throw new Error('Set ORCA_RUNTIME_USER_DATA_PATH and ORCA_RUNTIME_ENVIRONMENT.')
+      throw new Error('Set MCODE_RUNTIME_USER_DATA_PATH and MCODE_RUNTIME_ENVIRONMENT.')
     }
     const store = RuntimeEnvironmentStoreSchema.parse(
-      JSON.parse(readFileSync(join(userDataPath, 'orca-environments.json'), 'utf8'))
+      JSON.parse(readFileSync(join(userDataPath, 'mcode-environments.json'), 'utf8'))
     )
     const environment = store.environments.find((entry) => entry.name === environmentName)
     if (!environment) {

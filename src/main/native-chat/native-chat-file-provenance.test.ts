@@ -44,15 +44,15 @@ function message(role: NativeChatMessage['role'], text: string): NativeChatMessa
 describe('nativeChatTranscriptIncludesPath', () => {
   it('accepts a path in recent assistant output from the host-bound session', async () => {
     const readTranscript = vi.fn(async () => ({
-      messages: [message('assistant', 'Open ~/orca-plans/result.html to review it.')]
+      messages: [message('assistant', 'Open ~/mcode-plans/result.html to review it.')]
     }))
 
     await expect(
       nativeChatTranscriptIncludesPath({
         tabs: [terminalTab()],
         context: { tabId: 'tab-1', sessionId: 'session-1' },
-        pathText: '~/orca-plans/result.html',
-        absolutePath: '/Users/ada/orca-plans/result.html',
+        pathText: '~/mcode-plans/result.html',
+        absolutePath: '/Users/ada/mcode-plans/result.html',
         readTranscript
       })
     ).resolves.toBe(true)
@@ -81,15 +81,15 @@ describe('nativeChatTranscriptIncludesPath', () => {
 
   it('accepts a path followed by a sentence-final period', async () => {
     const readTranscript = vi.fn(async () => ({
-      messages: [message('assistant', 'Open /tmp/orca-pr14166-external.txt.')]
+      messages: [message('assistant', 'Open /tmp/mcode-pr14166-external.txt.')]
     }))
 
     await expect(
       nativeChatTranscriptIncludesPath({
         tabs: [terminalTab()],
         context: { tabId: 'tab-1', sessionId: 'session-1' },
-        pathText: '/tmp/orca-pr14166-external.txt',
-        absolutePath: '/tmp/orca-pr14166-external.txt',
+        pathText: '/tmp/mcode-pr14166-external.txt',
+        absolutePath: '/tmp/mcode-pr14166-external.txt',
         readTranscript
       })
     ).resolves.toBe(true)
@@ -97,15 +97,15 @@ describe('nativeChatTranscriptIncludesPath', () => {
 
   it('does not accept a longer filename sharing the requested path prefix', async () => {
     const readTranscript = vi.fn(async () => ({
-      messages: [message('assistant', 'Open /tmp/orca-pr14166-external.txt.backup')]
+      messages: [message('assistant', 'Open /tmp/mcode-pr14166-external.txt.backup')]
     }))
 
     await expect(
       nativeChatTranscriptIncludesPath({
         tabs: [terminalTab()],
         context: { tabId: 'tab-1', sessionId: 'session-1' },
-        pathText: '/tmp/orca-pr14166-external.txt',
-        absolutePath: '/tmp/orca-pr14166-external.txt',
+        pathText: '/tmp/mcode-pr14166-external.txt',
+        absolutePath: '/tmp/mcode-pr14166-external.txt',
         readTranscript
       })
     ).resolves.toBe(false)

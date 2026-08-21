@@ -9,7 +9,7 @@
  * - Maturity: experimental pending CI soak history.
  */
 
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   cleanupMarkdownFixture,
@@ -33,12 +33,12 @@ type OverlapHitTest = {
 }
 
 test.describe('Rich markdown link bubble stacking', () => {
-  test('link actions stay above the right Explorer', async ({ orcaPage }, testInfo) => {
-    await orcaPage.setViewportSize({ width: 1920, height: 1080 })
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
+  test('link actions stay above the right Explorer', async ({ mcodePage }, testInfo) => {
+    await mcodePage.setViewportSize({ width: 1920, height: 1080 })
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
 
-    const context = await getActiveWorktreeContext(orcaPage)
+    const context = await getActiveWorktreeContext(mcodePage)
     let filePath: string | null = null
 
     try {
@@ -48,10 +48,10 @@ test.describe('Rich markdown link bubble stacking', () => {
         testInfo.workerIndex,
         MARKDOWN
       )
-      await openMarkdownFixture(orcaPage, context, filePath)
-      await waitForRichMarkdownEditor(orcaPage)
+      await openMarkdownFixture(mcodePage, context, filePath)
+      await waitForRichMarkdownEditor(mcodePage)
 
-      await orcaPage.evaluate(() => {
+      await mcodePage.evaluate(() => {
         const store = window.__store
         if (!store) {
           throw new Error('window.__store is not available — is the app in dev mode?')
@@ -63,20 +63,20 @@ test.describe('Rich markdown link bubble stacking', () => {
         })
       })
 
-      const explorer = orcaPage.locator('[data-orca-explorer-shell]')
-      const link = orcaPage.locator(`.rich-markdown-editor a[href="${LINK_HREF}"]`)
+      const explorer = mcodePage.locator('[data-mcode-explorer-shell]')
+      const link = mcodePage.locator(`.rich-markdown-editor a[href="${LINK_HREF}"]`)
       await expect(explorer).toBeVisible()
       await expect(link).toBeVisible()
 
       await link.click()
 
-      const bubble = orcaPage.locator('.rich-markdown-link-bubble')
+      const bubble = mcodePage.locator('.rich-markdown-link-bubble')
       await expect(bubble).toBeVisible()
       await expect(bubble.locator('.rich-markdown-link-url')).toContainText('https://example.com')
 
-      const overlap = await orcaPage.evaluate((): OverlapHitTest => {
+      const overlap = await mcodePage.evaluate((): OverlapHitTest => {
         const bubble = document.querySelector<HTMLElement>('.rich-markdown-link-bubble')
-        const explorer = document.querySelector<HTMLElement>('[data-orca-explorer-shell]')
+        const explorer = document.querySelector<HTMLElement>('[data-mcode-explorer-shell]')
         if (!bubble || !explorer) {
           throw new Error('Link bubble or Explorer was not rendered')
         }
@@ -118,16 +118,16 @@ test.describe('Rich markdown link bubble stacking', () => {
       expect(await input.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0)
       await expect(input).toBeFocused()
       await expect(bubble).toBeVisible()
-      await orcaPage.keyboard.press('Escape')
+      await mcodePage.keyboard.press('Escape')
       await expect(bubble.locator('.rich-markdown-link-url')).toBeVisible()
 
       await explorer.getByPlaceholder('Find files').click()
       await expect(bubble).toHaveCount(0)
 
-      await orcaPage.getByRole('heading', { name: 'Rich markdown link overlay repro' }).click()
+      await mcodePage.getByRole('heading', { name: 'Rich markdown link overlay repro' }).click()
       await link.click()
       await expect(bubble).toBeVisible()
-      const originalEditorZoom = await orcaPage.evaluate(() => {
+      const originalEditorZoom = await mcodePage.evaluate(() => {
         const store = window.__store
         if (!store) {
           throw new Error('window.__store is not available — is the app in dev mode?')
@@ -137,14 +137,14 @@ test.describe('Rich markdown link bubble stacking', () => {
         return zoom
       })
       await expect(bubble).toHaveCount(0)
-      await orcaPage.evaluate((zoom) => {
+      await mcodePage.evaluate((zoom) => {
         window.__store?.getState().setEditorFontZoomLevel(zoom)
       }, originalEditorZoom)
 
-      await orcaPage.getByRole('heading', { name: 'Rich markdown link overlay repro' }).click()
+      await mcodePage.getByRole('heading', { name: 'Rich markdown link overlay repro' }).click()
       await link.click()
       await expect(bubble).toBeVisible()
-      await orcaPage.evaluate(() => {
+      await mcodePage.evaluate(() => {
         const store = window.__store
         if (!store) {
           throw new Error('window.__store is not available — is the app in dev mode?')

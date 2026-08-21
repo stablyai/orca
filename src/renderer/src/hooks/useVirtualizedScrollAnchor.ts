@@ -24,7 +24,7 @@ export type VirtualizedScrollAnchor = {
   // recorded. Optional: anchors persisted before this field existed lack it.
   scrollTop?: number
 } | null
-export const VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT = 'orca-record-virtualized-scroll-anchor'
+export const VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT = 'mcode-record-virtualized-scroll-anchor'
 const RECORD_ANCHOR_SCROLL_IDLE_DELAY_MS = 150
 
 type UseVirtualizedScrollAnchorOptions<

@@ -149,7 +149,7 @@ describe('CodexAccountService config sync', () => {
       '{"account":"host"}\n'
     )
     const wslManagedHomePath =
-      '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\codex-accounts\\wsl-account\\home'
+      '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\mcode\\codex-accounts\\wsl-account\\home'
     const settings = createSettings({
       codexManagedAccounts: [
         {
@@ -172,7 +172,7 @@ describe('CodexAccountService config sync', () => {
           managedHomePath: wslManagedHomePath,
           managedHomeRuntime: 'wsl',
           wslDistro: 'Ubuntu',
-          wslLinuxHomePath: '/home/alice/.local/share/orca/codex-accounts/wsl-account/home',
+          wslLinuxHomePath: '/home/alice/.local/share/mcode/codex-accounts/wsl-account/home',
           providerAccountId: null,
           workspaceLabel: null,
           workspaceAccountId: null,

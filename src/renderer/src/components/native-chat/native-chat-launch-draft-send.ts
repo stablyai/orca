@@ -1,5 +1,5 @@
 // Choosing how a chat send lands when the agent's TUI input line still holds a
-// launch-context draft that Orca itself injected.
+// launch-context draft that MCode itself injected.
 
 import { buildAgentTuiClearInputForText } from '../../../../shared/agent-tui-input-clear'
 import { stripScrollbackAnsi } from './native-chat-scrape-fallback'
@@ -54,7 +54,7 @@ export function agentInputLineCleared(screen: string | null | undefined): boolea
  * wrapping loses logical-line boundaries. Always replace from the composer copy.
  */
 export function planNativeChatLaunchDraftSend(args: {
-  /** Text Orca injected into the TUI line, or null when nothing is parked there. */
+  /** Text MCode injected into the TUI line, or null when nothing is parked there. */
   seededText: string | null | undefined
 }): NativeChatLaunchDraftSendPlan {
   const seededText = args.seededText

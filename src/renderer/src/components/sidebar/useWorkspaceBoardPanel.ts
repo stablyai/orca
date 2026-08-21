@@ -26,7 +26,7 @@ const WORKSPACE_BOARD_ESCAPE_BLOCKING_OVERLAY_SELECTOR = [
   '[role="listbox"][data-state="open"]'
 ].join(', ')
 
-export const TOGGLE_WORKSPACE_BOARD_EVENT = 'orca:toggle-workspace-board'
+export const TOGGLE_WORKSPACE_BOARD_EVENT = 'mcode:toggle-workspace-board'
 
 export type WorkspaceBoardPanelState = {
   workspaceBoardOpen: boolean

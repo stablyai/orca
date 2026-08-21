@@ -8,13 +8,13 @@
  * mount — so a never-activated tab produced blank paired panes and empty CLI
  * tails while the PTY was alive.
  *
- * Harness: real OrcaRuntimeService + real TERMINAL_METHODS multiplex handler,
+ * Harness: real MCodeRuntimeService + real TERMINAL_METHODS multiplex handler,
  * with an injected pty controller modeling a daemon provider whose data events
  * are deliverable ONLY after attach(id). No window is ever attached — every
- * assertion also holds for headless `orca serve`.
+ * assertion also holds for headless `mcode serve`.
  */
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from './orca-runtime'
+import { MCodeRuntimeService } from './mcode-runtime'
 import { RpcDispatcher } from './rpc/dispatcher'
 import type { RpcRequest } from './rpc/core'
 import { TERMINAL_METHODS } from './rpc/methods/terminal'
@@ -45,7 +45,7 @@ type RuntimeInternals = {
   ) => Promise<unknown>
 }
 
-function internals(runtime: OrcaRuntimeService): RuntimeInternals {
+function internals(runtime: MCodeRuntimeService): RuntimeInternals {
   return runtime as unknown as RuntimeInternals
 }
 
@@ -63,7 +63,7 @@ function createDaemonProviderModel(opts: { snapshotCapable: boolean }) {
   const attachCalls: string[] = []
   const resizeCalls: [string, number, number][] = []
   let nextAttachBarrier: { promise: Promise<void>; result: boolean } | null = null
-  let runtime: OrcaRuntimeService | null = null
+  let runtime: MCodeRuntimeService | null = null
   const controller = {
     write: () => true,
     kill: () => true,
@@ -132,7 +132,7 @@ function createDaemonProviderModel(opts: { snapshotCapable: boolean }) {
       nextAttachBarrier = { promise, result }
       return release
     },
-    bind(target: OrcaRuntimeService) {
+    bind(target: MCodeRuntimeService) {
       runtime = target
     },
     /** Daemon stream event → main ingestion, exactly like ipc/pty.ts wiring —
@@ -149,12 +149,12 @@ function createDaemonProviderModel(opts: { snapshotCapable: boolean }) {
 }
 
 function setupNeverAttachedDaemonSession(opts: { snapshotCapable: boolean; screen?: string }): {
-  runtime: OrcaRuntimeService
+  runtime: MCodeRuntimeService
   model: ReturnType<typeof createDaemonProviderModel>
   handle: string
   mountSpy: ReturnType<typeof vi.spyOn>
 } {
-  const runtime = new OrcaRuntimeService()
+  const runtime = new MCodeRuntimeService()
   const model = createDaemonProviderModel(opts)
   model.bind(runtime)
   runtime.setPtyController(model.controller as never)
@@ -172,7 +172,7 @@ function setupNeverAttachedDaemonSession(opts: { snapshotCapable: boolean; scree
   return { runtime, model, handle, mountSpy }
 }
 
-function startMultiplex(runtime: OrcaRuntimeService, connectionId = 'conn-desktop') {
+function startMultiplex(runtime: MCodeRuntimeService, connectionId = 'conn-desktop') {
   const messages: { result?: { type?: string; streamId?: number | null } }[] = []
   const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
   const handlers = new Map<

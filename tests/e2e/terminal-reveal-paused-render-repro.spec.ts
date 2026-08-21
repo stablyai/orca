@@ -1,5 +1,5 @@
 import type { Page } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { getActiveTabId, waitForSessionReady } from './helpers/store'
 import {
   execInTerminal,
@@ -183,10 +183,10 @@ async function forceWebglOn(page: Page, tabId: string): Promise<void> {
 }
 
 test.describe('terminal reveal paused-render recovery', () => {
-  test("reveal repaint forces a render through xterm's paused gate", async ({ orcaPage }) => {
-    // Why: __store / __paneManagers live on the main Orca renderer window
-    // (orcaPage), not Playwright's default first page.
-    const page = orcaPage
+  test("reveal repaint forces a render through xterm's paused gate", async ({ mcodePage }) => {
+    // Why: __store / __paneManagers live on the main MCode renderer window
+    // (mcodePage), not Playwright's default first page.
+    const page = mcodePage
     await waitForSessionReady(page)
     await waitForActiveTerminalManager(page)
     const tabId = (await getActiveTabId(page))!

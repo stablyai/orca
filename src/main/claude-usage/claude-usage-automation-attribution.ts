@@ -138,7 +138,7 @@ export async function resolveAutomationRunUsage(
     estimatedCostUsd,
     estimatedCostSource: estimatedCostUsd === null ? null : 'api_equivalent',
     providerSessionId: session.sessionId,
-    // Why: Orca terminal tab ids and Claude usage session ids are different
+    // Why: MCode terminal tab ids and Claude usage session ids are different
     // systems today, so attribution is intentionally limited to one local
     // provider session in the run's worktree/time window.
     attribution: 'provider_session_time_window',

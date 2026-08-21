@@ -2,7 +2,7 @@ import { execFile, type ExecFileException } from 'node:child_process'
 
 // Reads the slave's line-discipline state for shell-prompt readiness detection.
 //
-// Orca deliberately does NOT read the ECHO bit to decide when to write a terminal reply.
+// MCode deliberately does NOT read the ECHO bit to decide when to write a terminal reply.
 // It used to, and withholding the write until the bit was clear is what made the write
 // asynchronous and let replies overtake each other (#15559). Reply echoes are handled
 // on the output side instead — see pty-startup-reply-echo-shapes.ts.

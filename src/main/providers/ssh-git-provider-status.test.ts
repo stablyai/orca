@@ -133,7 +133,7 @@ describe('SshGitProvider', () => {
     mux.request.mockRejectedValueOnce(methodNotFound)
 
     await expect(provider.getSubmoduleStatus('/home/user/repo', 'vendor/lib')).rejects.toThrow(
-      'SSH submodule diff support is unavailable on this relay. Reconnect the SSH target to update Orca on the host, then try again.'
+      'SSH submodule diff support is unavailable on this relay. Reconnect the SSH target to update MCode on the host, then try again.'
     )
   })
 

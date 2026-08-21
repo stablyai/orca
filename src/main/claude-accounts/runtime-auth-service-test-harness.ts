@@ -152,8 +152,8 @@ export function resetRuntimeAuthTestState(): void {
   testState.throwScopedKeychainWrite = false
   testState.runtimeWriteConfigDir = null
   testState.managedKeychainCredentials.clear()
-  testState.userDataDir = mkdtempSync(join(tmpdir(), 'orca-claude-runtime-'))
-  testState.fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-claude-home-'))
+  testState.userDataDir = mkdtempSync(join(tmpdir(), 'mcode-claude-runtime-'))
+  testState.fakeHomeDir = mkdtempSync(join(tmpdir(), 'mcode-claude-home-'))
   mkdirSync(join(testState.fakeHomeDir, '.claude'), { recursive: true })
 }
 
@@ -198,7 +198,7 @@ export function createManagedClaudeAuth(
 ): string {
   const managedAuthPath = join(rootDir, 'claude-accounts', accountId, 'auth')
   mkdirSync(managedAuthPath, { recursive: true })
-  writeFileSync(join(managedAuthPath, '.orca-managed-claude-auth'), `${accountId}\n`, 'utf-8')
+  writeFileSync(join(managedAuthPath, '.mcode-managed-claude-auth'), `${accountId}\n`, 'utf-8')
   writeFileSync(join(managedAuthPath, '.credentials.json'), credentialsJson, 'utf-8')
   writeFileSync(join(managedAuthPath, 'oauth-account.json'), oauthAccountJson, 'utf-8')
   testState.managedKeychainCredentials.set(accountId, credentialsJson)

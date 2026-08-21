@@ -270,8 +270,8 @@ const JA_AUDIT_OVERRIDES = {
   'Split Terminal Right': 'ターミナルを右に分割',
   'Split Up': '上に分割',
   'Split Down': '下に分割',
-  "Install the Browser Use skill so agents can operate Orca's browser.":
-    'Browser Use スキルをインストールすると、 Agent が Orca のブラウザを操作できるようになります。',
+  "Install the Browser Use skill so agents can operate MCode's browser.":
+    'Browser Use スキルをインストールすると、 Agent が MCode のブラウザを操作できるようになります。',
   'bold ·': '太字 ·',
   'Duplicate of another issue in this repository': 'このリポジトリ内の別の Issue と重複',
   'Choose a different issue.': '別の Issue を選択してください。',
@@ -293,14 +293,14 @@ const JA_AUDIT_OVERRIDES = {
   'Open worktree': 'ワークツリーを開く',
   'Update this server': 'このサーバーを更新',
   'Git repository': 'Git リポジトリ',
-  '{{host}} is no longer a saved SSH host, so this workspace is no longer connected to a live host. It can only be removed from Orca — files and branches on the remote are left untouched.':
-    '{{host}} は保存済みの SSH ホストではなくなったため、このワークスペースは稼働中のホストに接続されていません。Orca から削除することのみ可能です。リモート上のファイルとブランチはそのまま残ります。',
-  'The app shell could not finish rendering. Retry to remount it, or relaunch Orca if the error persists.':
-    'アプリシェルのレンダリングを完了できませんでした。再マウントを試すか、エラーが解決しない場合は Orca を再起動してください。',
-  'Workspaces are unavailable on a mobile-scope pairing. Reconnect using the browser access link from Settings → Runtime Environments → Share this Orca server.':
-    'モバイル向けペアリングではワークスペースを使用できません。[設定] → [リモート Orca サーバー] → [この Orca サーバーを共有する] から、ブラウザ用リンクで再接続してください。',
+  '{{host}} is no longer a saved SSH host, so this workspace is no longer connected to a live host. It can only be removed from MCode — files and branches on the remote are left untouched.':
+    '{{host}} は保存済みの SSH ホストではなくなったため、このワークスペースは稼働中のホストに接続されていません。MCode から削除することのみ可能です。リモート上のファイルとブランチはそのまま残ります。',
+  'The app shell could not finish rendering. Retry to remount it, or relaunch MCode if the error persists.':
+    'アプリシェルのレンダリングを完了できませんでした。再マウントを試すか、エラーが解決しない場合は MCode を再起動してください。',
+  'Workspaces are unavailable on a mobile-scope pairing. Reconnect using the browser access link from Settings → Runtime Environments → Share this MCode server.':
+    'モバイル向けペアリングではワークスペースを使用できません。[設定] → [リモート MCode サーバー] → [この MCode サーバーを共有する] から、ブラウザ用リンクで再接続してください。',
   'Change this later in Settings → Browser.': '後で [設定] → [ブラウザ] から変更できます。',
-  'Orca Cloud sign-in is not configured': 'Orca Cloud へのサインインが設定されていません',
+  'MCode Cloud sign-in is not configured': 'MCode Cloud へのサインインが設定されていません',
   '{{provider}} could not authenticate the credentials available in this environment. Check the {{provider}} login or environment token, then retry.':
     '{{provider}} はこの環境で利用できる認証情報で認証できませんでした。{{provider}} のログインまたは環境トークンを確認して、再試行してください。',
   'e.g. ollama run llama3.1 {prompt}': '例: ollama run llama3.1 {prompt}',
@@ -319,10 +319,10 @@ const JA_AUDIT_OVERRIDES = {
   'Public repositories are detected from their git remote. Set':
     'パブリックリポジトリは git リモートから検出されます。設定:',
   'for private repositories, and set': '（プライベートリポジトリ用）。また、',
-  'only when Orca cannot derive the API base URL from the git remote.':
-    'は、Orca が git リモートから API のベース URL を取得できない場合のみ設定します。',
-  'only when Orca cannot derive the API URL from the remote.':
-    'は、Orca がリモートから API URL を取得できない場合のみ設定します。',
+  'only when MCode cannot derive the API base URL from the git remote.':
+    'は、MCode が git リモートから API のベース URL を取得できない場合のみ設定します。',
+  'only when MCode cannot derive the API URL from the remote.':
+    'は、MCode がリモートから API URL を取得できない場合のみ設定します。',
   Set: '設定:',
   '. Set': '。設定:',
   ', or set': '、または',
@@ -332,11 +332,11 @@ const JA_AUDIT_OVERRIDES = {
   ' in {{value0}}': '（{{value0}}）',
   ' • Last scan error: {{value0}}': ' • 最終スキャンエラー: {{value0}}',
   ' vs {{value0}}': ' vs {{value0}}',
-  'When you create a workspace, Orca refreshes the remote base and safely fast-forwards your matching local branch, such as':
-    'ワークスペースを作成すると、Orca はリモートベースを更新し、一致するローカルブランチを安全に fast-forward します。対象は',
+  'When you create a workspace, MCode refreshes the remote base and safely fast-forwards your matching local branch, such as':
+    'ワークスペースを作成すると、MCode はリモートベースを更新し、一致するローカルブランチを安全に fast-forward します。対象は',
   '. This keeps commands like': '。これにより、',
-  'from comparing against stale history. Orca skips the update if that branch has uncommitted changes or local-only commits.':
-    'などのコマンドが古い履歴と比較されるのを防ぎます。対象のブランチにコミットしていない変更やローカルのみのコミットがある場合、Orca は更新をスキップします。',
+  'from comparing against stale history. MCode skips the update if that branch has uncommitted changes or local-only commits.':
+    'などのコマンドが古い履歴と比較されるのを防ぎます。対象のブランチにコミットしていない変更やローカルのみのコミットがある場合、MCode は更新をスキップします。',
   'Supports skills, file paths, and built-in commands like':
     'スキル、ファイルパス、および次のような組み込みコマンドに対応しています:',
   ' · {{value0}} external': ' · 外部 {{value0}} 件',
@@ -353,12 +353,12 @@ const JA_AUDIT_OVERRIDES = {
   'Copied cleanup payload.': 'クリーンアップ用ペイロードをコピーしました。',
   'Jump to...': '移動先…',
   'Start work': '作業を開始',
-  'Remove {{value0}} contained {{value1}} from Orca':
-    '含まれている {{value1}} {{value0}} 件を Orca から削除',
-  'People in {{orgName}} who can collaborate on Orca.':
-    '{{orgName}} で Orca を共同利用できるメンバーです。',
-  'People in your organization who can collaborate on Orca.':
-    '組織内で Orca を共同利用できるメンバーです。',
+  'Remove {{value0}} contained {{value1}} from MCode':
+    '含まれている {{value1}} {{value0}} 件を MCode から削除',
+  'People in {{orgName}} who can collaborate on MCode.':
+    '{{orgName}} で MCode を共同利用できるメンバーです。',
+  'People in your organization who can collaborate on MCode.':
+    '組織内で MCode を共同利用できるメンバーです。',
   'Adds action recipes for Source Control commit, pull request, branch-name, and fix actions.':
     'ソース管理のコミット、PR、ブランチ名、修正操作に使うアクションレシピを追加します。',
   'Repo fallback for text actions that select Custom command.':
@@ -368,12 +368,12 @@ const JA_AUDIT_OVERRIDES = {
   'Failed to register the recipe-created project root on the runtime.':
     'レシピによって作成されたプロジェクトルートをランタイムに登録できませんでした。',
   'Update all {{value0}} servers': '{{value0}} 台のサーバーをすべて更新',
-  'This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this Orca server → New Link.':
-    'この QR コードでは、モバイル向けの制限付きアクセスのみ利用できます。完全版の Web アプリを使用するには、[設定] → [リモート Orca サーバー] → [この Orca サーバーを共有する] → [新規リンク] から、ブラウザ用アクセスリンクを開いてください。',
+  'This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this MCode server → New Link.':
+    'この QR コードでは、モバイル向けの制限付きアクセスのみ利用できます。完全版の Web アプリを使用するには、[設定] → [リモート MCode サーバー] → [この MCode サーバーを共有する] → [新規リンク] から、ブラウザ用アクセスリンクを開いてください。',
   'Loading skills...': 'スキルを読み込み中…',
-  'Start agents on your tasks without leaving Orca': 'Orca から離れずに、タスクから Agent を開始',
-  'Workspace created from {{value0}}, but Orca could not fast-forward local {{value1}} because {{value2}}':
-    'ワークスペースは {{value0}} から作成されましたが、{{value2}} のため Orca はローカル {{value1}} を fast-forward できませんでした',
+  'Start agents on your tasks without leaving MCode': 'MCode から離れずに、タスクから Agent を開始',
+  'Workspace created from {{value0}}, but MCode could not fast-forward local {{value1}} because {{value2}}':
+    'ワークスペースは {{value0}} から作成されましたが、{{value2}} のため MCode はローカル {{value1}} を fast-forward できませんでした',
   'Terminal, browser, or editor rendering failed in this workspace. Retry to remount it.':
     'このワークスペースでは、ターミナル、ブラウザ、またはエディターのレンダリングに失敗しました。再マウントを試してください。',
   'The dashboard could not finish rendering. Retry to remount it, or reopen it.':
@@ -385,13 +385,13 @@ const JA_AUDIT_OVERRIDES = {
     '[プロジェクトの追加] から、選択したホスト上のパスを入力します。',
   'Use repo-relative paths like packages/web or apps/api.':
     'packages/web や apps/api などのリポジトリ相対パスを使用します。',
-  'orca.yaml first, then your local commands.': 'まず orca.yaml、次にローカルのコマンドの順です。',
-  'Rename Orca-created branches from the initial agent task.':
-    'Orca が作成したブランチの名前を、最初の Agent タスクに基づいて変更します。',
+  'mcode.yaml first, then your local commands.': 'まず mcode.yaml、次にローカルのコマンドの順です。',
+  'Rename MCode-created branches from the initial agent task.':
+    'MCode が作成したブランチの名前を、最初の Agent タスクに基づいて変更します。',
   'Dim files matched by .gitignore in the file explorer.':
     'ファイルエクスプローラーで、.gitignore に一致するファイルを薄く表示します。',
-  'Command line Orca runs when a text recipe uses Custom command.':
-    'テキストレシピで「カスタムコマンド」を使用したときに Orca が実行するコマンドライン。',
+  'Command line MCode runs when a text recipe uses Custom command.':
+    'テキストレシピで「カスタムコマンド」を使用したときに MCode が実行するコマンドライン。',
   'Let programs in the terminal copy to the system clipboard through OSC 52, including over SSH.':
     'ターミナル内のプログラムが、OSC 52 を使ってシステムのクリップボードにコピーできるようにします（SSH 経由を含む）。',
   'Choose which optional saved Codex account powers live quota reads.':
@@ -409,7 +409,7 @@ const JA_AUDIT_OVERRIDES = {
   'Local terminal reveal is unavailable while a remote runtime is active':
     'リモートランタイムがアクティブな間は、ローカルターミナルの表示は利用できません',
   'No quick commands saved.': '保存されているクイックコマンドはありません。',
-  'Repository not in Orca': 'このリポジトリは Orca に登録されていません',
+  'Repository not in MCode': 'このリポジトリは MCode に登録されていません',
   'host folder not selected': 'ホストフォルダーが選択されていません',
   'Add a Git repository or folder that already exists on the selected host.':
     '選択したホストに既に存在する Git リポジトリまたはフォルダーを追加します。',
@@ -423,8 +423,8 @@ const JA_AUDIT_OVERRIDES = {
     'このホスト上のプロジェクトとして開きます · {{value0}}',
   'No project path is available on this host for attachments.':
     'このホスト上に、添付に使用できるプロジェクトパスがありません。',
-  'Clears them from Orca only. Remote files, worktrees, and branches are left untouched.':
-    'Orca からのみ削除します。リモートのファイル、ワークツリー、ブランチはそのまま残ります。',
+  'Clears them from MCode only. Remote files, worktrees, and branches are left untouched.':
+    'MCode からのみ削除します。リモートのファイル、ワークツリー、ブランチはそのまま残ります。',
   'Agent location': 'Agent の実行場所',
   upstream: 'upstream',
   Upstream: 'upstream',
@@ -440,17 +440,17 @@ const JA_AUDIT_OVERRIDES = {
     '添付する前に確認してください。取得したページのコンテキストには、表示中のサイトの内容が含まれる場合があります。',
   'Agent took too long to start. The workspace is ready — paste the {{value0}} when the agent is idle.':
     'Agent の起動に時間がかかりすぎました。ワークスペースの準備はできています。 Agent がアイドル状態になったら {{value0}} を貼り付けてください。',
-  'Install the Orca CLI before running agent skill setup.':
-    'Agent スキルのセットアップを実行する前に、Orca CLI をインストールしてください。',
-  'Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.':
-    'Orca を実行しているコンピュータのターミナルで grok を実行し、起動するまで待ってください。サインインを求められた場合は完了してから、使用状況を再取得してください。チャットメッセージを送る必要はありません。',
+  'Install the MCode CLI before running agent skill setup.':
+    'Agent スキルのセットアップを実行する前に、MCode CLI をインストールしてください。',
+  'Run grok in a terminal on the computer running MCode and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.':
+    'MCode を実行しているコンピュータのターミナルで grok を実行し、起動するまで待ってください。サインインを求められた場合は完了してから、使用状況を再取得してください。チャットメッセージを送る必要はありません。',
   'Choose an enabled agent before saving.': '保存する前に、有効な Agent を選択してください。',
   'Selected agent is disabled. Choose an enabled agent before creating.':
     '選択した Agent は無効です。作成する前に、有効な Agent を選択してください。',
   'Choose an agent before starting.': '開始する前に、 Agent を選択してください。',
   'Change this later from the project menu.': '後でプロジェクトメニューから変更できます。',
-  "Orca works with every CLI agent. Choose the one you'll reach for most. Switch any time.":
-    'Orca はすべての CLI Agent で動作します。最もよく使うものを選択してください。いつでも切り替えられます。',
+  "MCode works with every CLI agent. Choose the one you'll reach for most. Switch any time.":
+    'MCode はすべての CLI Agent で動作します。最もよく使うものを選択してください。いつでも切り替えられます。',
   'Downloading paused': 'ダウンロード一時停止中',
   Canceled: 'キャンセル済み',
   'Thinking...': '思考中…',
@@ -474,10 +474,10 @@ const JA_AUDIT_OVERRIDES = {
     'ダークモードでのペイン間の分割線を制御します。',
   'Countdown timer showing time until prompt cache expires (Claude agents).':
     'プロンプトキャッシュが期限切れになるまでの時間を示すカウントダウンタイマー（Claude Agent ）。',
-  'Install and manage experimental Orca plugins.':
-    '実験的機能の Orca プラグインをインストール・管理します。',
-  "Resident memory held by Orca plus the processes under each worktree's terminals.":
-    'Orca が保持する常駐メモリと、各ワークツリーのターミナル配下で実行中のプロセス。',
+  'Install and manage experimental MCode plugins.':
+    '実験的機能の MCode プラグインをインストール・管理します。',
+  "Resident memory held by MCode plus the processes under each worktree's terminals.":
+    'MCode が保持する常駐メモリと、各ワークツリーのターミナル配下で実行中のプロセス。',
   'No local Claude, Codex, or OpenCode usage found yet. The overview will populate after the next agent session writes token logs.':
     'ローカルの Claude、Codex、OpenCode の使用状況はまだ見つかりません。次の Agent セッションがトークンログを書き込むと、概要に反映されます。',
   'Choose or add a project before creating a workspace.':
@@ -491,12 +491,12 @@ const JA_AUDIT_OVERRIDES = {
     'プロジェクトが WSL を継承できるようにするには、先に WSL ディストリビューションを選択してください。',
   'Choose a different base branch before creating a {{value0}}.':
     '{{value0}} を作成する前に、別のベースブランチを選択してください。',
-  'Optional. Orca can use your normal Codex login; add accounts only if you want quick switching in Orca.':
-    '任意。Orca は通常の Codex ログインを使用できます。Orca 上ですばやく切り替えたい場合にのみ、アカウントを追加してください。',
-  'Optional. Orca can use your normal Claude login; add accounts only if you want quick switching without moving chat sessions.':
-    '任意。Orca は通常の Claude ログインを使用できます。チャットセッションを移さずにすばやく切り替えたい場合にのみ、アカウントを追加してください。',
-  'Optional. Orca works with your existing provider logins; add accounts only if you want Orca to help switch between them.':
-    '任意。Orca は既存のプロバイダーのログインと連携します。Orca に切り替えを任せたい場合にのみ、アカウントを追加してください。',
+  'Optional. MCode can use your normal Codex login; add accounts only if you want quick switching in MCode.':
+    '任意。MCode は通常の Codex ログインを使用できます。MCode 上ですばやく切り替えたい場合にのみ、アカウントを追加してください。',
+  'Optional. MCode can use your normal Claude login; add accounts only if you want quick switching without moving chat sessions.':
+    '任意。MCode は通常の Claude ログインを使用できます。チャットセッションを移さずにすばやく切り替えたい場合にのみ、アカウントを追加してください。',
+  'Optional. MCode works with your existing provider logins; add accounts only if you want MCode to help switch between them.':
+    '任意。MCode は既存のプロバイダーのログインと連携します。MCode に切り替えを任せたい場合にのみ、アカウントを追加してください。',
   'Use this computer by default. Choose a saved server only when you want supported projects, files, terminals, provider checks, and browser/mobile handoff to run through that server.':
     '既定ではこのコンピュータを使用します。対応するプロジェクト、ファイル、ターミナル、プロバイダーチェック、ブラウザ/モバイルの引き継ぎをそのサーバー経由で実行したい場合にのみ、保存済みサーバーを選択してください。',
   'Window Blur': 'ウィンドウのぼかし',

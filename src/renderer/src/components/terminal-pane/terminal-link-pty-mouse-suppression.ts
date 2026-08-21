@@ -91,7 +91,7 @@ export function installTerminalLinkPtyMouseSuppression(
     }
     restore()
     previousMouseEventsRequireAlt = Boolean(terminal.options.mouseEventsRequireAlt)
-    // Why: an Orca-owned link gesture must not also reach a mouse-aware child TUI.
+    // Why: an MCode-owned link gesture must not also reach a mouse-aware child TUI.
     terminal.options.mouseEventsRequireAlt = true
     ownerDocument?.addEventListener('mouseup', queueRestore)
     ownerWindow?.addEventListener('blur', restore)

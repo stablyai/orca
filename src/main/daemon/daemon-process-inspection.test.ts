@@ -8,7 +8,7 @@ import {
 
 // btime 1699000000 with 1000 start ticks: 10s after boot at 100Hz, 1s at 1000Hz.
 const readProcStat = async (path: string): Promise<string> =>
-  path === '/proc/stat' ? 'btime 1699000000\n' : `42 (orca-daemon) S${' 0'.repeat(18)} 1000 0 0\n`
+  path === '/proc/stat' ? 'btime 1699000000\n' : `42 (mcode-daemon) S${' 0'.repeat(18)} 1000 0 0\n`
 
 describe('daemon process inspection', () => {
   it('falls back to ps when Linux procfs returns an empty command line', async () => {

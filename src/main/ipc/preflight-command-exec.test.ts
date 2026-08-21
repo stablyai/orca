@@ -12,7 +12,7 @@ vi.mock('./preflight-wsl-command', () => ({
 import { isCommandOnPath } from './preflight-command-exec'
 
 describe('isCommandOnPath', () => {
-  const sentinel = '__ORCA_PREFLIGHT_COMMAND_PATH__'
+  const sentinel = '__MCODE_PREFLIGHT_COMMAND_PATH__'
 
   beforeEach(() => {
     runPreflightCommandInWslMock.mockReset()

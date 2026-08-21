@@ -32,7 +32,7 @@ export function shouldShowRemoteDownloadAction(
     : Boolean(connectionId || runtimeDownloadContext)
   return (
     hasDownloadCapability &&
-    (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ !== true
+    (globalThis as { __MCODE_WEB_CLIENT__?: boolean }).__MCODE_WEB_CLIENT__ !== true
   )
 }
 
@@ -46,6 +46,6 @@ export function shouldShowCopyFileAction(
   return (
     (!connectionId || !node.isDirectory) &&
     selectionSize === 1 &&
-    (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ !== true
+    (globalThis as { __MCODE_WEB_CLIENT__?: boolean }).__MCODE_WEB_CLIENT__ !== true
   )
 }

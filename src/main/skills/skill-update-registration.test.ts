@@ -7,7 +7,7 @@ import { readGloballyUpdatableSkillNames } from './skill-update-registration'
 const temporaryDirectories: string[] = []
 
 async function temporaryRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-skill-registration-'))
+  const root = await mkdtemp(join(tmpdir(), 'mcode-skill-registration-'))
   temporaryDirectories.push(root)
   return root
 }
@@ -28,18 +28,18 @@ describe('global skill update registration', () => {
           orchestration: {
             skillFolderHash: 'hash',
             skillPath: 'skills/orchestration/SKILL.md',
-            source: 'stablyai/orca'
+            source: 'mcode-ide/mcode'
           },
           copied: {},
           emptyHash: {
             skillFolderHash: '',
             skillPath: 'skills/empty-hash/SKILL.md',
-            source: 'stablyai/orca'
+            source: 'mcode-ide/mcode'
           },
           emptyPath: {
             skillFolderHash: 'hash',
             skillPath: '',
-            source: 'stablyai/orca'
+            source: 'mcode-ide/mcode'
           }
         }
       })
@@ -59,17 +59,17 @@ describe('global skill update registration', () => {
       JSON.stringify({
         version: 3,
         skills: {
-          'orca-cli': {
+          'mcode-cli': {
             skillFolderHash: 'hash',
-            skillPath: 'skills/orca-cli/SKILL.md',
-            source: 'stablyai/orca'
+            skillPath: 'skills/mcode-cli/SKILL.md',
+            source: 'mcode-ide/mcode'
           }
         }
       })
     )
 
     await expect(readGloballyUpdatableSkillNames({ homeDir: root, stateHome })).resolves.toEqual(
-      new Set(['orca-cli'])
+      new Set(['mcode-cli'])
     )
   })
 })

@@ -37,7 +37,7 @@ const itWithZsh = hasZsh ? it : it.skip
 const FISH = resolveFishBinary()
 const itWithFish = FISH.available ? it : it.skip
 
-const SHELL_READY_MARKER_OUTPUT = '\x1b]777;orca-shell-ready\x07'
+const SHELL_READY_MARKER_OUTPUT = '\x1b]777;mcode-shell-ready\x07'
 
 /** Minimal xterm.js-shaped answers to the capability queries fish emits at startup
  *  and again around every prompt. */
@@ -71,9 +71,9 @@ async function runInteractiveZshLogin(args: {
       HOME: args.tempHome,
       TERM: 'xterm-256color',
       ZDOTDIR: args.wrapperZdotdir,
-      ORCA_ORIG_ZDOTDIR: args.tempHome,
-      ORCA_ZSHENV_SOURCE_DIR: args.tempHome,
-      ORCA_SHELL_FEATURES: 'ready'
+      MCODE_ORIG_ZDOTDIR: args.tempHome,
+      MCODE_ZSHENV_SOURCE_DIR: args.tempHome,
+      MCODE_SHELL_FEATURES: 'ready'
     }
   })
   let output = ''
@@ -111,7 +111,7 @@ async function runInteractiveZshRc(args: {
       HOME: args.zdotdir,
       TERM: 'xterm-256color',
       ZDOTDIR: args.zdotdir,
-      ORCA_SHELL_FEATURES: 'ready'
+      MCODE_SHELL_FEATURES: 'ready'
     }
   })
   let output = ''
@@ -139,27 +139,27 @@ describePosix('daemon shell-ready launch config', () => {
   })
 
   let previousUserDataPath: string | undefined
-  let previousOrcaOrigZdotdir: string | undefined
+  let previousMCodeOrigZdotdir: string | undefined
   let userDataPath: string
 
   beforeEach(() => {
-    previousUserDataPath = process.env.ORCA_USER_DATA_PATH
-    previousOrcaOrigZdotdir = process.env.ORCA_ORIG_ZDOTDIR
-    delete process.env.ORCA_ORIG_ZDOTDIR
+    previousUserDataPath = process.env.MCODE_USER_DATA_PATH
+    previousMCodeOrigZdotdir = process.env.MCODE_ORIG_ZDOTDIR
+    delete process.env.MCODE_ORIG_ZDOTDIR
     userDataPath = mkdtempSync(join(tmpdir(), 'daemon-shell-ready-test-'))
-    process.env.ORCA_USER_DATA_PATH = userDataPath
+    process.env.MCODE_USER_DATA_PATH = userDataPath
   })
 
   afterEach(() => {
     if (previousUserDataPath === undefined) {
-      delete process.env.ORCA_USER_DATA_PATH
+      delete process.env.MCODE_USER_DATA_PATH
     } else {
-      process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+      process.env.MCODE_USER_DATA_PATH = previousUserDataPath
     }
-    if (previousOrcaOrigZdotdir === undefined) {
-      delete process.env.ORCA_ORIG_ZDOTDIR
+    if (previousMCodeOrigZdotdir === undefined) {
+      delete process.env.MCODE_ORIG_ZDOTDIR
     } else {
-      process.env.ORCA_ORIG_ZDOTDIR = previousOrcaOrigZdotdir
+      process.env.MCODE_ORIG_ZDOTDIR = previousMCodeOrigZdotdir
     }
     rmSync(userDataPath, { recursive: true, force: true })
     vi.restoreAllMocks()
@@ -221,9 +221,9 @@ describePosix('daemon shell-ready launch config', () => {
     expect(init).toContain('--on-event fish_prompt')
     // Why `builtin`: a user-defined printf function would swallow the marker and
     // stall every launch on the ready timeout.
-    expect(init).toContain('builtin printf "\\033]777;orca-shell-ready\\007"')
+    expect(init).toContain('builtin printf "\\033]777;mcode-shell-ready\\007"')
     // Why: the marker must fire once; a repeating marker would corrupt later output scans.
-    expect(init).toContain('functions -e __orca_shell_ready_marker')
+    expect(init).toContain('functions -e __mcode_shell_ready_marker')
   })
 
   it('keeps markerless fish spawns unwrapped', async () => {
@@ -281,7 +281,7 @@ describePosix('daemon shell-ready launch config', () => {
           if (commandWritten && !erasureProbeWritten && existsSync(sentinel)) {
             erasureProbeWritten = true
             proc.write(
-              `functions -q __orca_shell_ready_marker; and touch ${stillRegistered}; or touch ${erased}\n`
+              `functions -q __mcode_shell_ready_marker; and touch ${stillRegistered}; or touch ${erased}\n`
             )
             return
           }
@@ -342,16 +342,16 @@ describePosix('daemon shell-ready launch config', () => {
     15_000
   )
 
-  it('sets no ORCA_ORIG_ZDOTDIR when the inherited ZDOTDIR points at a wrapper dir', async () => {
-    // Why: an Orca-PTY parent has ZDOTDIR=.../shell-ready/zsh; propagating it makes the wrapper source itself (recursion loop).
+  it('sets no MCODE_ORIG_ZDOTDIR when the inherited ZDOTDIR points at a wrapper dir', async () => {
+    // Why: an MCode-PTY parent has ZDOTDIR=.../shell-ready/zsh; propagating it makes the wrapper source itself (recursion loop).
     const previousZdotdir = process.env.ZDOTDIR
     const previousHome = process.env.HOME
-    process.env.ZDOTDIR = '/some/other/orca/shell-ready/zsh'
+    process.env.ZDOTDIR = '/some/other/mcode/shell-ready/zsh'
     process.env.HOME = '/Users/alice'
     try {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
-      expect(config.env.ORCA_ORIG_ZDOTDIR).toBeUndefined()
+      expect(config.env.MCODE_ORIG_ZDOTDIR).toBeUndefined()
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -366,18 +366,18 @@ describePosix('daemon shell-ready launch config', () => {
     }
   })
 
-  it('uses inherited ORCA_ORIG_ZDOTDIR when ZDOTDIR is an Orca wrapper dir', async () => {
+  it('uses inherited MCODE_ORIG_ZDOTDIR when ZDOTDIR is an MCode wrapper dir', async () => {
     const previousZdotdir = process.env.ZDOTDIR
-    const previousOrigZdotdir = process.env.ORCA_ORIG_ZDOTDIR
+    const previousOrigZdotdir = process.env.MCODE_ORIG_ZDOTDIR
     const previousHome = process.env.HOME
     const userZdotdir = makeUserZdotdir(userDataPath, '.config', 'zsh')
-    process.env.ZDOTDIR = '/some/other/orca/shell-ready/zsh'
-    process.env.ORCA_ORIG_ZDOTDIR = userZdotdir
+    process.env.ZDOTDIR = '/some/other/mcode/shell-ready/zsh'
+    process.env.MCODE_ORIG_ZDOTDIR = userZdotdir
     process.env.HOME = userDataPath
     try {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
-      expect(config.env.ORCA_ORIG_ZDOTDIR).toBe(userZdotdir)
+      expect(config.env.MCODE_ORIG_ZDOTDIR).toBe(userZdotdir)
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -385,9 +385,9 @@ describePosix('daemon shell-ready launch config', () => {
         process.env.ZDOTDIR = previousZdotdir
       }
       if (previousOrigZdotdir === undefined) {
-        delete process.env.ORCA_ORIG_ZDOTDIR
+        delete process.env.MCODE_ORIG_ZDOTDIR
       } else {
-        process.env.ORCA_ORIG_ZDOTDIR = previousOrigZdotdir
+        process.env.MCODE_ORIG_ZDOTDIR = previousOrigZdotdir
       }
       if (previousHome === undefined) {
         delete process.env.HOME
@@ -397,17 +397,17 @@ describePosix('daemon shell-ready launch config', () => {
     }
   })
 
-  it('sets no ORCA_ORIG_ZDOTDIR when the inherited one points at a wrapper dir', async () => {
+  it('sets no MCODE_ORIG_ZDOTDIR when the inherited one points at a wrapper dir', async () => {
     const previousZdotdir = process.env.ZDOTDIR
-    const previousOrigZdotdir = process.env.ORCA_ORIG_ZDOTDIR
+    const previousOrigZdotdir = process.env.MCODE_ORIG_ZDOTDIR
     const previousHome = process.env.HOME
     delete process.env.ZDOTDIR
-    process.env.ORCA_ORIG_ZDOTDIR = '/some/other/orca/shell-ready/zsh'
+    process.env.MCODE_ORIG_ZDOTDIR = '/some/other/mcode/shell-ready/zsh'
     process.env.HOME = '/Users/alice'
     try {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
-      expect(config.env.ORCA_ORIG_ZDOTDIR).toBeUndefined()
+      expect(config.env.MCODE_ORIG_ZDOTDIR).toBeUndefined()
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -415,9 +415,9 @@ describePosix('daemon shell-ready launch config', () => {
         process.env.ZDOTDIR = previousZdotdir
       }
       if (previousOrigZdotdir === undefined) {
-        delete process.env.ORCA_ORIG_ZDOTDIR
+        delete process.env.MCODE_ORIG_ZDOTDIR
       } else {
-        process.env.ORCA_ORIG_ZDOTDIR = previousOrigZdotdir
+        process.env.MCODE_ORIG_ZDOTDIR = previousOrigZdotdir
       }
       if (previousHome === undefined) {
         delete process.env.HOME
@@ -433,11 +433,11 @@ describePosix('daemon shell-ready launch config', () => {
     getShellReadyLaunchConfig('/bin/zsh')
 
     const zshenv = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
-    expect(zshenv).toContain('builtin export ZDOTDIR="$ORCA_ORIG_ZDOTDIR"')
-    expect(zshenv).toContain('builtin unset ORCA_ORIG_ZDOTDIR ORCA_ZSHENV_SOURCE_DIR')
-    expect(zshenv).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
+    expect(zshenv).toContain('builtin export ZDOTDIR="$MCODE_ORIG_ZDOTDIR"')
+    expect(zshenv).toContain('builtin unset MCODE_ORIG_ZDOTDIR MCODE_ZSHENV_SOURCE_DIR')
+    expect(zshenv).toContain('printf "\\033]777;mcode-shell-start:%s\\007" "$$"')
     expect(zshenv.indexOf('builtin export ZDOTDIR=')).toBeLessThan(
-      zshenv.indexOf('builtin source -- "$_orca_user_zshenv"')
+      zshenv.indexOf('builtin source -- "$_mcode_user_zshenv"')
     )
     // Why nothing else: zsh reads .zprofile, .zshrc and .zlogin through ZDOTDIR,
     // which is the user's own again by the time it looks for them.
@@ -454,13 +454,13 @@ describePosix('daemon shell-ready launch config', () => {
     // Why .zshenv: the widget registration lives in the deferred hook, which the
     // first prompt's precmd sweep calls exactly once.
     const zshenv = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
-    expect(zshenv).toContain('zle -N zle-line-init __orca_prompt_mark')
-    expect(zshenv).toContain('__orca_prev_line_init_fn="${widgets[zle-line-init]#user:}"')
-    expect(zshenv).toContain('printf "\\033]777;orca-shell-ready\\007"')
+    expect(zshenv).toContain('zle -N zle-line-init __mcode_prompt_mark')
+    expect(zshenv).toContain('__mcode_prev_line_init_fn="${widgets[zle-line-init]#user:}"')
+    expect(zshenv).toContain('printf "\\033]777;mcode-shell-ready\\007"')
     // Why: add-zle-hook-widget aborts its chain when an earlier hook exits non-zero, so don't register the marker through it.
     expect(zshenv).not.toContain('add-zle-hook-widget line-init')
     // Why: re-source guard — skip re-capturing when already the bound widget so the prior chain survives a second source.
-    expect(zshenv).toContain('== "user:__orca_prompt_mark"')
+    expect(zshenv).toContain('== "user:__mcode_prompt_mark"')
   })
 
   // Why: oh-my-zsh vi-mode's zle-line-init returns non-zero; add-zle-hook-widget then aborts the chain and the marker never fires.
@@ -469,7 +469,7 @@ describePosix('daemon shell-ready launch config', () => {
     async () => {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
-      const tempHome = mkdtempSync(join(tmpdir(), 'orca-zsh-vi-mode-'))
+      const tempHome = mkdtempSync(join(tmpdir(), 'mcode-zsh-vi-mode-'))
       writeFileSync(
         join(tempHome, '.zshrc'),
         [
@@ -499,15 +499,15 @@ describePosix('daemon shell-ready launch config', () => {
     async () => {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
-      const tempHome = mkdtempSync(join(tmpdir(), 'orca-zsh-azhw-'))
-      const userHookOutput = 'ORCA-TEST-USER-HOOK'
+      const tempHome = mkdtempSync(join(tmpdir(), 'mcode-zsh-azhw-'))
+      const userHookOutput = 'MCODE-TEST-USER-HOOK'
       writeFileSync(
         join(tempHome, '.zshrc'),
         [
-          `__orca_test_line_init_hook() { printf "${userHookOutput}" }`,
+          `__mcode_test_line_init_hook() { printf "${userHookOutput}" }`,
           'autoload -Uz add-zle-hook-widget',
-          'zle -N __orca_test_line_init_hook',
-          'add-zle-hook-widget line-init __orca_test_line_init_hook',
+          'zle -N __mcode_test_line_init_hook',
+          'add-zle-hook-widget line-init __mcode_test_line_init_hook',
           ''
         ].join('\n')
       )
@@ -531,19 +531,19 @@ describePosix('daemon shell-ready launch config', () => {
     15_000
   )
 
-  // Why: a re-source (nested Orca, manual) must stay idempotent — keep chaining the user's original zle-line-init.
+  // Why: a re-source (nested MCode, manual) must stay idempotent — keep chaining the user's original zle-line-init.
   itWithZsh(
     'keeps chaining the prior zle-line-init widget when the marker block is sourced twice',
     async () => {
-      const zdotdir = mkdtempSync(join(tmpdir(), 'orca-zsh-resource-'))
-      const userHookOutput = 'ORCA-TEST-PRIOR-WIDGET'
-      const block = getZshShellReadyMarkerRegistrationBlock('\\033]777;orca-shell-ready\\007')
+      const zdotdir = mkdtempSync(join(tmpdir(), 'mcode-zsh-resource-'))
+      const userHookOutput = 'MCODE-TEST-PRIOR-WIDGET'
+      const block = getZshShellReadyMarkerRegistrationBlock('\\033]777;mcode-shell-ready\\007')
       writeFileSync(
         join(zdotdir, '.zshrc'),
         [
           // A user widget that mimics oh-my-zsh vi-mode owning zle-line-init.
-          `__orca_test_prior_widget() { printf "${userHookOutput}" }`,
-          'zle -N zle-line-init __orca_test_prior_widget',
+          `__mcode_test_prior_widget() { printf "${userHookOutput}" }`,
+          'zle -N zle-line-init __mcode_test_prior_widget',
           block,
           // Second source of the exact same block — must not drop the chain.
           block,
@@ -582,43 +582,43 @@ describePosix('daemon shell-ready launch config', () => {
     const zlogin = zshrc
     const bashRc = readFileSync(join(getShellReadyWrapperRoot(), 'bash', 'rcfile'), 'utf8')
     const restoreLine =
-      '[[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"'
+      '[[ -n "${MCODE_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${MCODE_OPENCODE_CONFIG_DIR}"'
     const mimoRestoreLine =
-      '[[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"'
+      '[[ -n "${MCODE_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${MCODE_MIMOCODE_HOME}"'
     const codexRestoreLine =
-      '[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"'
-    const agentTeamsPathRestoreLine = '[[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0'
-    const ompWrapperLine = 'command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"'
+      '[[ -n "${MCODE_CODEX_HOME:-}" ]] && export CODEX_HOME="${MCODE_CODEX_HOME}"'
+    const agentTeamsPathRestoreLine = '[[ -n "${MCODE_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0'
+    const ompWrapperLine = 'command omp --extension "${MCODE_OMP_STATUS_EXTENSION}" "$@"'
     expect(zshrc).toContain(restoreLine)
     expect(zlogin).toContain(restoreLine)
     expect(bashRc).toContain(restoreLine)
     expect(zshrc).toContain(mimoRestoreLine)
     expect(zlogin).toContain(mimoRestoreLine)
     expect(bashRc).toContain(mimoRestoreLine)
-    expect(zshrc).not.toContain('ORCA_PI_CODING_AGENT_DIR')
-    expect(zlogin).not.toContain('ORCA_PI_CODING_AGENT_DIR')
-    expect(bashRc).not.toContain('ORCA_PI_CODING_AGENT_DIR')
+    expect(zshrc).not.toContain('MCODE_PI_CODING_AGENT_DIR')
+    expect(zlogin).not.toContain('MCODE_PI_CODING_AGENT_DIR')
+    expect(bashRc).not.toContain('MCODE_PI_CODING_AGENT_DIR')
     expect(zshrc).toContain(codexRestoreLine)
     expect(zlogin).toContain(codexRestoreLine)
     expect(zshrc).toContain(agentTeamsPathRestoreLine)
     expect(zlogin).toContain(agentTeamsPathRestoreLine)
     expect(bashRc).toContain(agentTeamsPathRestoreLine)
     expect(bashRc).toContain(codexRestoreLine)
-    expect(zshrc).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
-    expect(zlogin).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
-    expect(bashRc).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
+    expect(zshrc).not.toContain('MCODE_OMP_CODING_AGENT_DIR')
+    expect(zlogin).not.toContain('MCODE_OMP_CODING_AGENT_DIR')
+    expect(bashRc).not.toContain('MCODE_OMP_CODING_AGENT_DIR')
     expect(zshrc).toContain(ompWrapperLine)
     expect(zlogin).toContain(ompWrapperLine)
     expect(bashRc).toContain(ompWrapperLine)
     for (const wrapperFile of [zshrc, zlogin, bashRc]) {
       expect(wrapperFile).not.toContain('prime-agent()')
-      expect(wrapperFile).not.toContain('__orca_prime_agent')
-      expect(wrapperFile).not.toContain('ORCA_PRIME_AGENT_STATUS_EXTENSION')
+      expect(wrapperFile).not.toContain('__mcode_prime_agent')
+      expect(wrapperFile).not.toContain('MCODE_PRIME_AGENT_STATUS_EXTENSION')
       expect(wrapperFile).not.toContain('command prime-agent --extension')
     }
   })
 
-  it('preserves a real inherited ZDOTDIR as ORCA_ORIG_ZDOTDIR', async () => {
+  it('preserves a real inherited ZDOTDIR as MCODE_ORIG_ZDOTDIR', async () => {
     // Why: only the wrapper self-loop should be rejected; a real user ZDOTDIR must round-trip so their configs load.
     const previousZdotdir = process.env.ZDOTDIR
     const userZdotdir = makeUserZdotdir(userDataPath, '.config', 'zsh')
@@ -626,7 +626,7 @@ describePosix('daemon shell-ready launch config', () => {
     try {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
-      expect(config.env.ORCA_ORIG_ZDOTDIR).toBe(userZdotdir)
+      expect(config.env.MCODE_ORIG_ZDOTDIR).toBe(userZdotdir)
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -640,12 +640,12 @@ describePosix('daemon shell-ready launch config', () => {
     // Why: a trailing slash bypasses `endsWith('/shell-ready/zsh')`, reintroducing the recursion loop if unguarded.
     const previousZdotdir = process.env.ZDOTDIR
     const previousHome = process.env.HOME
-    process.env.ZDOTDIR = '/some/other/orca/shell-ready/zsh/'
+    process.env.ZDOTDIR = '/some/other/mcode/shell-ready/zsh/'
     process.env.HOME = '/Users/alice'
     try {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
-      expect(config.env.ORCA_ORIG_ZDOTDIR).toBeUndefined()
+      expect(config.env.MCODE_ORIG_ZDOTDIR).toBeUndefined()
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -669,7 +669,7 @@ describePosix('daemon shell-ready launch config', () => {
     try {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
-      expect(config.env.ORCA_ORIG_ZDOTDIR).toBeUndefined()
+      expect(config.env.MCODE_ORIG_ZDOTDIR).toBeUndefined()
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -692,7 +692,7 @@ describePosix('daemon shell-ready launch config', () => {
     try {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
-      expect(config.env.ORCA_ORIG_ZDOTDIR).toBe(userZdotdir)
+      expect(config.env.MCODE_ORIG_ZDOTDIR).toBe(userZdotdir)
     } finally {
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -711,11 +711,11 @@ describePosix('daemon shell-ready launch config', () => {
 
     const zshenv = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
 
-    expect(zshenv).toContain('builtin source -- "$_orca_user_zshenv"')
+    expect(zshenv).toContain('builtin source -- "$_mcode_user_zshenv"')
     // Every function the hook needs is defined above the source, so a user
     // `emulate sh` cannot leave the rest of this file unparseable.
-    expect(zshenv.indexOf('__orca_deferred_init() {')).toBeLessThan(
-      zshenv.indexOf('builtin source -- "$_orca_user_zshenv"')
+    expect(zshenv.indexOf('__mcode_deferred_init() {')).toBeLessThan(
+      zshenv.indexOf('builtin source -- "$_mcode_user_zshenv"')
     )
   })
 })

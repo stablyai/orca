@@ -8,7 +8,7 @@ export type UsageProviderSettings = Pick<
   | 'opencodeSessionCookie'
   | 'geminiCliOAuthEnabled'
 > & {
-  // Why: Antigravity has no separate persisted usage credential in Orca. The
+  // Why: Antigravity has no separate persisted usage credential in MCode. The
   // checked status-bar item is the durable user signal; StatusBar only sets
   // this after PATH detection says the agent is available. Durability further
   // requires geminiCliOAuthEnabled — the snapshot mirrors the Gemini fetch,

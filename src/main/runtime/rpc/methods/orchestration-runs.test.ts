@@ -3,13 +3,13 @@ import { buildRegistry, type RpcContext } from '../core'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { createOrchestrationRpcHarness } from './orchestration-rpc-test-harness'
 import type { OrchestrationDb } from '../../orchestration/db'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()
   const { coordinatorPaneKey } = h
   let db: OrchestrationDb
-  let runtime: OrcaRuntimeService
+  let runtime: MCodeRuntimeService
   let ctx: RpcContext
 
   function setup(withBoundRun = true): void {

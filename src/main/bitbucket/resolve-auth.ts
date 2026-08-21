@@ -26,9 +26,9 @@ export function storedAuthConfig(
   const email = secret.authMode ? (secret.email ?? null) : (metadata?.email ?? null)
   const baseUrl = secret.authMode ? (secret.baseUrl ?? null) : (metadata?.baseUrl ?? null)
   return {
-    // Why: an explicit ORCA_BITBUCKET_API_BASE_URL still wins even when the
+    // Why: an explicit MCODE_BITBUCKET_API_BASE_URL still wins even when the
     // credential itself is stored — env precedence is per-setting, not all-or-nothing.
-    baseUrl: envValue('ORCA_BITBUCKET_API_BASE_URL') ?? baseUrl ?? DEFAULT_API_BASE_URL,
+    baseUrl: envValue('MCODE_BITBUCKET_API_BASE_URL') ?? baseUrl ?? DEFAULT_API_BASE_URL,
     accessToken: authMode === 'token' ? secret.accessToken : null,
     email: authMode === 'basic' ? email : null,
     apiToken: authMode === 'basic' ? secret.apiToken : null

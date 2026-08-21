@@ -125,7 +125,7 @@ describe('getChecksPanelReviewState — precedence', () => {
     expect(state.workflowAction).toBe('publish_branch')
     // Hard error concurrent with the blocker: detail appended, create suppressed.
     expect(state.detail).toBe(
-      'Orca also could not confirm whether this branch already has a pull request.'
+      'MCode also could not confirm whether this branch already has a pull request.'
     )
   })
 

@@ -38,7 +38,7 @@ function linuxPathToWslUnc(distro, linuxPath) {
 export function createWslFixture(distro) {
   const script = String.raw`
 set -euo pipefail
-base="$(mktemp -d /tmp/orca-apphang-repro.XXXXXX)"
+base="$(mktemp -d /tmp/mcode-apphang-repro.XXXXXX)"
 repo="$base/repo"
 mkdir -p "$repo"
 cd "$repo"
@@ -46,7 +46,7 @@ git init -q
 git config user.email apphang-repro@test.local
 git config user.name "AppHang Repro"
 mkdir -p src docs
-printf '# Orca Windows AppHang repro\n' > README.md
+printf '# MCode Windows AppHang repro\n' > README.md
 for n in $(seq 1 25); do
   printf 'line %03d %s\n' "$n" "abcdefghijklmnopqrstuvwxyz0123456789" >> src/payload.txt
 done
@@ -60,7 +60,7 @@ for n in 1 2 3 4; do
 done
 plain="$base/plain-folder"
 mkdir -p "$plain/subdir"
-printf 'plain folder for Orca AppHang repro\n' > "$plain/README.txt"
+printf 'plain folder for MCode AppHang repro\n' > "$plain/README.txt"
 printf '%s\n' "$base" "$repo" "$base/wt-1" "$base/wt-2" "$base/wt-3" "$base/wt-4" "$plain"
 `
   const lines = runWsl(distro, script, { timeoutMs: 120_000 }).trim().split(/\r?\n/).filter(Boolean)
@@ -123,7 +123,7 @@ export function createCompletedOnboardingProfile(userDataDir) {
       projectOrderManualDefaultNoticeDismissed: true
     }
   }
-  writeFileSync(path.join(userDataDir, 'orca-data.json'), `${JSON.stringify(profile, null, 2)}\n`)
+  writeFileSync(path.join(userDataDir, 'mcode-data.json'), `${JSON.stringify(profile, null, 2)}\n`)
 }
 
 export function safeRemoveLocalDirectory(dir, cleanupErrors) {

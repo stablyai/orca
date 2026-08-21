@@ -322,12 +322,12 @@ describe('parseMinidumpCrashSignature', () => {
         {
           base: 0x7ff7_0000_0000n,
           size: 0x1000,
-          name: 'C:\\Program Files\\Orca\\Orca.exe'
+          name: 'C:\\Program Files\\MCode\\MCode.exe'
         },
         {
           base: 0x7ff8_0000_0000n,
           size: 0x10_0000,
-          name: 'C:\\Program Files\\Orca\\chrome_elf.dll'
+          name: 'C:\\Program Files\\MCode\\chrome_elf.dll'
         }
       ]
     })
@@ -343,7 +343,7 @@ describe('parseMinidumpCrashSignature', () => {
   it('omits the faulting module when no image range covers the address', () => {
     const { dump } = buildDump({
       exception: { code: 11, address: 0x10n },
-      modules: [{ base: 0x7ff7_0000_0000n, size: 0x1000, name: '/opt/orca/orca' }]
+      modules: [{ base: 0x7ff7_0000_0000n, size: 0x1000, name: '/opt/mcode/mcode' }]
     })
 
     const signature = parseMinidumpCrashSignature(dump)

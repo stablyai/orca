@@ -9,13 +9,13 @@ import {
 } from './monaco-large-text-paste'
 
 // Why: Monaco's built-in context-menu Paste action (editor.action.clipboardPasteAction)
-// reads the clipboard with navigator.clipboard.readText(). Orca runs the renderer with
+// reads the clipboard with navigator.clipboard.readText(). MCode runs the renderer with
 // `sandbox: true`, where that read is blocked/empty — so right-click Paste silently does
 // nothing even though Cmd+V (a real OS paste ClipboardEvent) and right-click Copy
-// (execCommand('copy') from a user gesture) both work. We route the read through Orca's
+// (execCommand('copy') from a user gesture) both work. We route the read through MCode's
 // trusted clipboard IPC bridge instead, matching how the terminal already reads it.
-export const ORCA_CONTEXT_MENU_PASTE_PRIORITY = 10001
-export const ORCA_CONTEXT_MENU_PASTE_NAME = 'orca-ipc-paste'
+export const MCODE_CONTEXT_MENU_PASTE_PRIORITY = 10001
+export const MCODE_CONTEXT_MENU_PASTE_NAME = 'mcode-ipc-paste'
 
 // Why: this path may either dispatch a native paste (needs getOption/trigger)
 // or hand off to the chunked inserter (needs the MonacoPasteEditor surface), so
@@ -31,7 +31,7 @@ type ClipboardPasteMetadata = {
   mode?: string | null
 } | null
 
-export type OrcaContextMenuPasteDeps = {
+export type MCodeContextMenuPasteDeps = {
   getFocusedEditor: () => PasteCapableEditor | null
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
   getClipboardMetadata: (text: string) => ClipboardPasteMetadata
@@ -41,7 +41,7 @@ export type OrcaContextMenuPasteDeps = {
   onReadError?: (error: unknown) => void
 }
 
-export type OrcaContextMenuPasteOutcome =
+export type MCodeContextMenuPasteOutcome =
   | { status: 'pasted'; mode: 'native' | 'chunked' }
   | { status: 'noop'; reason: 'empty' | 'read-failed' | 'too-large' | 'target-lost' }
 
@@ -69,12 +69,12 @@ function resolvePasteMetadata(
  * Replacement implementation for Monaco's clipboard paste command. Returns
  * `false` when it declines to handle the paste so Monaco's default
  * implementation runs unchanged (read-only editor, no focus, no clipboard
- * bridge); otherwise performs the paste through Orca's IPC clipboard read and
+ * bridge); otherwise performs the paste through MCode's IPC clipboard read and
  * returns a Promise (truthy) so Monaco's blocked default never runs.
  */
-export function runOrcaContextMenuPaste(
-  deps: OrcaContextMenuPasteDeps
-): false | Promise<OrcaContextMenuPasteOutcome> {
+export function runMCodeContextMenuPaste(
+  deps: MCodeContextMenuPasteDeps
+): false | Promise<MCodeContextMenuPasteOutcome> {
   const editorInstance = deps.getFocusedEditor()
   // Why: only claim the paste when an editor truly has text focus and a model —
   // otherwise fall through so Monaco's default (and any other surface) behaves
@@ -89,13 +89,13 @@ export function runOrcaContextMenuPaste(
     return false
   }
 
-  return performOrcaContextMenuPaste(editorInstance, deps)
+  return performMCodeContextMenuPaste(editorInstance, deps)
 }
 
-async function performOrcaContextMenuPaste(
+async function performMCodeContextMenuPaste(
   editorInstance: PasteCapableEditor,
-  deps: OrcaContextMenuPasteDeps
-): Promise<OrcaContextMenuPasteOutcome> {
+  deps: MCodeContextMenuPasteDeps
+): Promise<MCodeContextMenuPasteOutcome> {
   let text: string
   try {
     text = await deps.readClipboardText({ maxBytes: MONACO_PASTE_MAX_BYTES })

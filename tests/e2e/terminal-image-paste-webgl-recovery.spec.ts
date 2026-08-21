@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   sendToTerminal,
@@ -108,25 +108,25 @@ async function readAtlasResetCount(page: Page): Promise<number> {
 
 test.describe('terminal image paste WebGL recovery @headful', () => {
   test('clears the WebGL atlas after a real image clipboard paste', async ({
-    orcaPage,
+    mcodePage,
     testRepoPath
   }) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
+    await ensureTerminalVisible(mcodePage)
+    await waitForActiveTerminalManager(mcodePage, 30_000)
 
-    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const ptyId = await waitForActivePanePtyId(mcodePage)
     const marker = randomUUID()
-    const scriptPath = path.join(testRepoPath, `.orca-image-paste-redraw-${marker}.mjs`)
+    const scriptPath = path.join(testRepoPath, `.mcode-image-paste-redraw-${marker}.mjs`)
     writeFileSync(scriptPath, imagePasteRedrawScript(marker))
 
     try {
-      await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
-      await waitForTerminalOutput(orcaPage, `READY_${marker}`, 10_000)
+      await sendToTerminal(mcodePage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
+      await waitForTerminalOutput(mcodePage, `READY_${marker}`, 10_000)
 
-      await forceWebgl(orcaPage)
-      const webglActive = await orcaPage
+      await forceWebgl(mcodePage)
+      const webglActive = await mcodePage
         .waitForFunction(
           () => {
             const state = window.__store?.getState()
@@ -147,19 +147,19 @@ test.describe('terminal image paste WebGL recovery @headful', () => {
         .then(() => true)
         .catch(() => false)
       test.skip(!webglActive, 'WebGL was not active in this headful environment')
-      expect(await patchAtlasCounter(orcaPage)).toBe(true)
+      expect(await patchAtlasCounter(mcodePage)).toBe(true)
 
-      await orcaPage.locator('.xterm-helper-textarea').first().focus()
-      await orcaPage.evaluate(
+      await mcodePage.locator('.xterm-helper-textarea').first().focus()
+      await mcodePage.evaluate(
         (dataUrl) => window.api.ui.writeClipboardImage(dataUrl),
         CLIPBOARD_IMAGE_DATA_URL
       )
-      await orcaPage.keyboard.press(process.platform === 'darwin' ? 'Meta+V' : 'Control+V')
-      await waitForTerminalOutput(orcaPage, `DONE_${marker}`, 10_000)
+      await mcodePage.keyboard.press(process.platform === 'darwin' ? 'Meta+V' : 'Control+V')
+      await waitForTerminalOutput(mcodePage, `DONE_${marker}`, 10_000)
 
-      await expect.poll(() => readAtlasResetCount(orcaPage), { timeout: 2_000 }).toBeGreaterThan(0)
+      await expect.poll(() => readAtlasResetCount(mcodePage), { timeout: 2_000 }).toBeGreaterThan(0)
     } finally {
-      await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
+      await sendToTerminal(mcodePage, ptyId, '\x03').catch(() => undefined)
       rmSync(scriptPath, { force: true })
     }
   })

@@ -53,7 +53,7 @@ export function enablePlugin(config: HermesConfig): HermesConfig {
   plugins.enabled = Array.from(new Set([...enabled, HERMES_PLUGIN_NAME])).sort()
   if (disabled === null) {
     // Why: Hermes treats a malformed disabled list as empty. Normalize it here
-    // so Orca's install status matches what the real Hermes loader will do.
+    // so MCode's install status matches what the real Hermes loader will do.
     plugins.disabled = []
   } else if (disabled.includes(HERMES_PLUGIN_NAME)) {
     const filtered = disabled.filter((name) => name !== HERMES_PLUGIN_NAME)

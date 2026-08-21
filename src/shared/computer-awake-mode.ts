@@ -30,7 +30,7 @@ export function computerAwakeSettingsForMode(mode: ComputerAwakeMode): {
 } {
   return {
     computerAwakeMode: mode,
-    // Older Orca versions approximate On with their supported Auto behavior.
+    // Older MCode versions approximate On with their supported Auto behavior.
     keepComputerAwakeWhileAgentsRun: mode !== 'off'
   }
 }

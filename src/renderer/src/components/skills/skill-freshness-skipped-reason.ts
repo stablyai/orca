@@ -47,42 +47,42 @@ export function skippedReason(locations: readonly SkillLocationRow[], skillName?
     case 'newer':
       return translate(
         'auto.components.skills.SkillFreshnessRow.skippedReasonNewer',
-        'This copy is a later version than the one this build of Orca ships, so Orca left it alone rather than roll it back. Updating Orca will bring the two back in line.'
+        'This copy is a later version than the one this build of MCode ships, so MCode left it alone rather than roll it back. Updating MCode will bring the two back in line.'
       )
     case 'unrecognized':
       return translate(
         'auto.components.skills.SkillFreshnessRow.skippedReasonUnrecognized',
-        'The copy here doesn’t match the official version — it may be modified, or a different skill with the same name. Orca left it out of the update so it won’t overwrite it. Remove it if you want Orca to update this skill.'
+        'The copy here doesn’t match the official version — it may be modified, or a different skill with the same name. MCode left it out of the update so it won’t overwrite it. Remove it if you want MCode to update this skill.'
       )
     case 'read-only':
       return translate(
         'auto.components.skills.SkillFreshnessRow.skippedReasonReadOnly',
-        'This copy is in a read-only location, so Orca left it out of the update. Change its permissions to let Orca update it.'
+        'This copy is in a read-only location, so MCode left it out of the update. Change its permissions to let MCode update it.'
       )
     case 'inaccessible':
       return translate(
         'auto.components.skills.SkillFreshnessRow.skippedReasonInaccessible',
-        'Orca couldn’t read this copy, so it left the skill out of the update.'
+        'MCode couldn’t read this copy, so it left the skill out of the update.'
       )
     case 'in-a-repo':
       return translate(
         'auto.components.skills.SkillFreshnessRow.skippedReasonInRepo',
-        'This is a project skill, not a global one — Orca only updates your global skills, so it left this out of the update.'
+        'This is a project skill, not a global one — MCode only updates your global skills, so it left this out of the update.'
       )
     case 'plugin-cache':
       return translate(
         'auto.components.skills.SkillFreshnessRow.skippedReasonPluginCache',
-        'A plugin manages this skill, so Orca left it out of the update — update the plugin instead.'
+        'A plugin manages this skill, so MCode left it out of the update — update the plugin instead.'
       )
     case 'external-link':
       return translate(
         'auto.components.skills.SkillFreshnessRow.skippedReasonExternalLink',
-        'This copy is a shortcut pointing outside Orca’s skill folders, so Orca left it out of the update.'
+        'This copy is a shortcut pointing outside MCode’s skill folders, so MCode left it out of the update.'
       )
     case 'broken-link':
       return translate(
         'auto.components.skills.SkillFreshnessRow.skippedReasonBrokenLink',
-        'This copy is a shortcut to something that no longer exists, so Orca left it out — you can safely delete it.'
+        'This copy is a shortcut to something that no longer exists, so MCode left it out — you can safely delete it.'
       )
     case 'duplicate':
       return translate(
@@ -106,7 +106,7 @@ export function skippedReason(locations: readonly SkillLocationRow[], skillName?
           )
         : translate(
             'auto.components.skills.SkillFreshnessRow.cantUpdateReason',
-            'Orca left this skill out of the update command.'
+            'MCode left this skill out of the update command.'
           )
   }
 }

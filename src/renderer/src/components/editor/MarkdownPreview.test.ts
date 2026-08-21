@@ -82,49 +82,49 @@ describe('MarkdownPreview source link routing', () => {
   })
 
   it('derives a source root from floating file relative path', () => {
-    expect(deriveMarkdownPreviewSourceRoot('/tmp/orca/docs/note.md', 'docs/note.md')).toBe(
-      '/tmp/orca'
+    expect(deriveMarkdownPreviewSourceRoot('/tmp/mcode/docs/note.md', 'docs/note.md')).toBe(
+      '/tmp/mcode'
     )
   })
 
   it('falls back to the source file directory when no relative path is available', () => {
-    expect(deriveMarkdownPreviewSourceRoot('/tmp/orca/docs/note.md', null)).toBe('/tmp/orca/docs')
+    expect(deriveMarkdownPreviewSourceRoot('/tmp/mcode/docs/note.md', null)).toBe('/tmp/mcode/docs')
   })
 
   it('derives Windows source roots without dropping the drive separator', () => {
-    expect(deriveMarkdownPreviewSourceRoot('C:\\orca\\docs\\note.md', 'docs\\note.md')).toBe(
-      'C:/orca'
+    expect(deriveMarkdownPreviewSourceRoot('C:\\mcode\\docs\\note.md', 'docs\\note.md')).toBe(
+      'C:/mcode'
     )
   })
 
   it('falls back to the matching preview tab for preview-only source metadata', () => {
     const otherOwnerEdit = {
-      id: '/tmp/orca/docs/note.md',
-      filePath: '/tmp/orca/docs/note.md',
+      id: '/tmp/mcode/docs/note.md',
+      filePath: '/tmp/mcode/docs/note.md',
       relativePath: 'docs/note.md',
       worktreeId: 'wt-1',
       mode: 'edit'
     }
     const preview = {
-      id: 'markdown-preview::/tmp/orca/docs/note.md',
-      filePath: '/tmp/orca/docs/note.md',
+      id: 'markdown-preview::/tmp/mcode/docs/note.md',
+      filePath: '/tmp/mcode/docs/note.md',
       relativePath: 'docs/note.md',
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
       runtimeEnvironmentId: null,
       mode: 'markdown-preview',
-      markdownPreviewSourceFileId: '/tmp/orca/docs/note.md'
+      markdownPreviewSourceFileId: '/tmp/mcode/docs/note.md'
     }
 
     expect(
       findMarkdownPreviewSourceOpenFile([otherOwnerEdit, preview], {
-        sourceFileId: '/tmp/orca/docs/note.md',
-        filePath: '/tmp/orca/docs/note.md',
+        sourceFileId: '/tmp/mcode/docs/note.md',
+        filePath: '/tmp/mcode/docs/note.md',
         sourceWorktreeId: FLOATING_TERMINAL_WORKTREE_ID,
         sourceRuntimeEnvironmentId: null
       })
     ).toBe(preview)
     expect(deriveMarkdownPreviewSourceRoot(preview.filePath, preview.relativePath)).toBe(
-      '/tmp/orca'
+      '/tmp/mcode'
     )
   })
 

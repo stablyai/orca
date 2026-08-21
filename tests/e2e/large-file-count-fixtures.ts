@@ -90,7 +90,7 @@ export function createLargeFileCountRepo(
   const modifiedFiles = Math.min(options.modifiedFiles ?? 0, trackedFiles)
   const filesPerDirectory = options.filesPerDirectory ?? 100
 
-  const repoPath = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-large-file-count-')))
+  const repoPath = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'mcode-large-file-count-')))
   runGit(repoPath, ['init'])
   runGit(repoPath, ['config', 'user.email', 'e2e@test.local'])
   runGit(repoPath, ['config', 'user.name', 'E2E Test'])

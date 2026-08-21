@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { getOrcaUserDataPath } from './codex-home-paths'
+import { getMCodeUserDataPath } from './codex-home-paths'
 import type {
   CodexEnvironmentHomeOverride,
   CodexShellStartupHomeOverride
@@ -12,7 +12,7 @@ import type {
  * Why: `CODEX_HOME` is baked into a PTY's environment at spawn and can never be
  * changed afterwards, so a shell keeps launching Codex against the account that
  * was selected when the terminal opened. The daemon keeps those shells alive
- * across app restarts, so without an on-disk record Orca forgets a pane is on
+ * across app restarts, so without an on-disk record MCode forgets a pane is on
  * the old account and the user is stuck there with no prompt to escape it.
  */
 
@@ -41,14 +41,14 @@ type RegistryFile = {
   panes: Record<string, CodexPaneAccountRecord>
 }
 
-// Why: bounds a file that only shrinks when Orca observes a PTY exit; a crash
+// Why: bounds a file that only shrinks when MCode observes a PTY exit; a crash
 // mid-session would otherwise leak an entry per terminal, forever.
 const MAX_TRACKED_PANES = 2000
 
 let cachedRegistry: RegistryFile | null = null
 
 function getRegistryPath(): string {
-  return join(getOrcaUserDataPath(), 'codex-pane-accounts.json')
+  return join(getMCodeUserDataPath(), 'codex-pane-accounts.json')
 }
 
 function readRegistry(): RegistryFile {

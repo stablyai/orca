@@ -34,11 +34,11 @@ describe('decodeGrokTranscriptLine', () => {
   })
 
   it.each([
-    'C:\\Users\\me\\AppData\\Local\\Temp\\orca-paste-1783675302563-2207c073-535f-4b83-a181-61127c8bbd68.png',
-    '/tmp/orca-paste-1783675302563-2207c073-535f-4b83-a181-61127c8bbd68.png',
-    'C:\\orca-paste-1783675302563-2207c073-535f-4b83-a181-61127c8bbd68.png',
-    '/orca-paste-1783675302563-2207c073-535f-4b83-a181-61127c8bbd68.png',
-    '\\\\server\\temp\\orca-paste-1783675302563-2207c073-535f-4b83-a181-61127c8bbd68.png'
+    'C:\\Users\\me\\AppData\\Local\\Temp\\mcode-paste-1783675302563-2207c073-535f-4b83-a181-61127c8bbd68.png',
+    '/tmp/mcode-paste-1783675302563-2207c073-535f-4b83-a181-61127c8bbd68.png',
+    'C:\\mcode-paste-1783675302563-2207c073-535f-4b83-a181-61127c8bbd68.png',
+    '/mcode-paste-1783675302563-2207c073-535f-4b83-a181-61127c8bbd68.png',
+    '\\\\server\\temp\\mcode-paste-1783675302563-2207c073-535f-4b83-a181-61127c8bbd68.png'
   ])('restores a pasted image and prompt from Grok transcript text for %s', (imagePath) => {
     const line = JSON.stringify({
       type: 'user',
@@ -60,7 +60,7 @@ describe('decodeGrokTranscriptLine', () => {
   })
 
   it('restores an attachment-only pasted image from Grok transcript text', () => {
-    const imagePath = '/tmp/orca-paste-1783675302563-2207c073-535f-4b83-a181-61127c8bbd68.png'
+    const imagePath = '/tmp/mcode-paste-1783675302563-2207c073-535f-4b83-a181-61127c8bbd68.png'
     const line = JSON.stringify({
       type: 'user',
       content: [{ type: 'text', text: `<user_query>${imagePath}</user_query>` }]
@@ -73,7 +73,7 @@ describe('decodeGrokTranscriptLine', () => {
   })
 
   it('preserves ordinary prompts that mention pasted-image filenames', () => {
-    const text = 'Explain what an orca-paste-123-example.png file is'
+    const text = 'Explain what an mcode-paste-123-example.png file is'
     const line = JSON.stringify({
       type: 'user',
       content: [{ type: 'text', text: `<user_query>${text}</user_query>` }]

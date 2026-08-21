@@ -1,4 +1,4 @@
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { waitForSessionReady } from './helpers/store'
 
 type FakeMicrophoneDevice = {
@@ -52,8 +52,8 @@ async function installFakeMicrophoneDevices(
       value: mediaDevices
     })
     ;(
-      window as Window & { __orcaE2EFakeMicrophone?: FakeMicrophoneState }
-    ).__orcaE2EFakeMicrophone = state
+      window as Window & { __mcodeE2EFakeMicrophone?: FakeMicrophoneState }
+    ).__mcodeE2EFakeMicrophone = state
   }, devices)
 }
 
@@ -104,57 +104,57 @@ async function readMicrophoneSettings(
 }
 
 test.describe('Voice microphone selection', () => {
-  test('lists devices, persists a selected microphone, and restores it', async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
-    await installFakeMicrophoneDevices(orcaPage, [
+  test('lists devices, persists a selected microphone, and restores it', async ({ mcodePage }) => {
+    await waitForSessionReady(mcodePage)
+    await installFakeMicrophoneDevices(mcodePage, [
       { deviceId: 'built-in', label: 'Built-in Microphone' },
       { deviceId: 'usb-mic', label: 'USB Microphone' }
     ])
-    await orcaPage.reload({ waitUntil: 'domcontentloaded' })
-    await waitForSessionReady(orcaPage)
-    await prepareVoiceSettings(orcaPage, null, null)
+    await mcodePage.reload({ waitUntil: 'domcontentloaded' })
+    await waitForSessionReady(mcodePage)
+    await prepareVoiceSettings(mcodePage, null, null)
 
-    const microphone = orcaPage.getByRole('combobox', { name: 'Microphone' })
+    const microphone = mcodePage.getByRole('combobox', { name: 'Microphone' })
     await expect(microphone).toHaveText('System default')
     // Settings can still be animating; keyboard activation does not depend on its position.
     await microphone.press('Space')
-    await expect(orcaPage.getByRole('option', { name: 'USB Microphone' })).toBeVisible()
+    await expect(mcodePage.getByRole('option', { name: 'USB Microphone' })).toBeVisible()
     // Keyboard selection bypasses the transient pointer stability gate in CI.
-    await orcaPage.getByRole('option', { name: 'USB Microphone' }).press('Enter')
+    await mcodePage.getByRole('option', { name: 'USB Microphone' }).press('Enter')
 
     await expect
-      .poll(() => readMicrophoneSettings(orcaPage), {
+      .poll(() => readMicrophoneSettings(mcodePage), {
         message: 'selected microphone did not persist'
       })
       .toEqual({ deviceId: 'usb-mic', label: 'USB Microphone' })
 
-    await orcaPage.reload({ waitUntil: 'domcontentloaded' })
-    await waitForSessionReady(orcaPage)
-    await prepareVoiceSettings(orcaPage, 'usb-mic', 'USB Microphone')
-    await expect(orcaPage.getByRole('combobox', { name: 'Microphone' })).toHaveText(
+    await mcodePage.reload({ waitUntil: 'domcontentloaded' })
+    await waitForSessionReady(mcodePage)
+    await prepareVoiceSettings(mcodePage, 'usb-mic', 'USB Microphone')
+    await expect(mcodePage.getByRole('combobox', { name: 'Microphone' })).toHaveText(
       'USB Microphone'
     )
   })
 
   test('marks an unplugged device unavailable and follows a relabeled device', async ({
-    orcaPage
+    mcodePage
   }) => {
-    await waitForSessionReady(orcaPage)
-    await installFakeMicrophoneDevices(orcaPage, [
+    await waitForSessionReady(mcodePage)
+    await installFakeMicrophoneDevices(mcodePage, [
       { deviceId: 'built-in', label: 'Built-in Microphone' }
     ])
-    await orcaPage.reload({ waitUntil: 'domcontentloaded' })
-    await waitForSessionReady(orcaPage)
-    await prepareVoiceSettings(orcaPage, 'stale-airpods-id', 'AirPods')
+    await mcodePage.reload({ waitUntil: 'domcontentloaded' })
+    await waitForSessionReady(mcodePage)
+    await prepareVoiceSettings(mcodePage, 'stale-airpods-id', 'AirPods')
 
-    const microphone = orcaPage.getByRole('combobox', { name: 'Microphone' })
+    const microphone = mcodePage.getByRole('combobox', { name: 'Microphone' })
     await microphone.press('Space')
-    await expect(orcaPage.getByRole('option', { name: 'AirPods (unavailable)' })).toBeVisible()
-    await orcaPage.keyboard.press('Escape')
+    await expect(mcodePage.getByRole('option', { name: 'AirPods (unavailable)' })).toBeVisible()
+    await mcodePage.keyboard.press('Escape')
 
-    await orcaPage.evaluate(() => {
-      const state = (window as Window & { __orcaE2EFakeMicrophone?: FakeMicrophoneState })
-        .__orcaE2EFakeMicrophone
+    await mcodePage.evaluate(() => {
+      const state = (window as Window & { __mcodeE2EFakeMicrophone?: FakeMicrophoneState })
+        .__mcodeE2EFakeMicrophone
       if (!state) {
         throw new Error('Fake microphone state is not available')
       }
@@ -168,18 +168,18 @@ test.describe('Voice microphone selection', () => {
     // Why: devicechange can leave Radix's listbox open and aria-hide the
     // trigger, so getByRole('combobox') finds nothing. The live option is
     // the stable handle; open the named trigger only if the list is closed.
-    const airpodsOption = orcaPage.getByRole('option', { name: 'AirPods', exact: true })
+    const airpodsOption = mcodePage.getByRole('option', { name: 'AirPods', exact: true })
     await expect(async () => {
       if (!(await airpodsOption.isVisible().catch(() => false))) {
-        const trigger = orcaPage.getByRole('combobox', { name: 'Microphone' })
+        const trigger = mcodePage.getByRole('combobox', { name: 'Microphone' })
         await expect(trigger).toHaveText('AirPods', { timeout: 1_000 })
         await trigger.press('Space')
       }
       await expect(airpodsOption).toBeVisible({ timeout: 1_000 })
     }).toPass({ timeout: 10_000 })
-    await expect(orcaPage.getByRole('option', { name: 'AirPods (unavailable)' })).toHaveCount(0)
-    await orcaPage.keyboard.press('Escape')
-    await expect(readMicrophoneSettings(orcaPage)).resolves.toEqual({
+    await expect(mcodePage.getByRole('option', { name: 'AirPods (unavailable)' })).toHaveCount(0)
+    await mcodePage.keyboard.press('Escape')
+    await expect(readMicrophoneSettings(mcodePage)).resolves.toEqual({
       deviceId: 'stale-airpods-id',
       label: 'AirPods'
     })

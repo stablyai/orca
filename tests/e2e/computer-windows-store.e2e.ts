@@ -1,23 +1,23 @@
 import { describe, expect, test } from 'vitest'
 import type { ComputerListAppsResult, ComputerSnapshotResult } from '../../src/shared/runtime-types'
 import {
-  ensureOrcaRuntimeLaunched,
+  ensureMCodeRuntimeLaunched,
   findRoleIndex,
   parseJsonOutput,
-  runOrcaCli,
-  stopOrcaRuntime
+  runMCodeCli,
+  stopMCodeRuntime
 } from './helpers/computer-driver'
 
 const isWindows = process.platform === 'win32'
-const e2eOptIn = process.env.ORCA_COMPUTER_E2E === '1'
+const e2eOptIn = process.env.MCODE_COMPUTER_E2E === '1'
 
 describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Store apps)', () => {
   test('Store app windows are discoverable by title and clickable', async () => {
-    await ensureOrcaRuntimeLaunched()
+    await ensureMCodeRuntimeLaunched()
     await launchCalculator()
     try {
       const apps = parseJsonOutput<{ result: ComputerListAppsResult }>(
-        (await runOrcaCli(['computer', 'list-apps', '--json'])).stdout
+        (await runMCodeCli(['computer', 'list-apps', '--json'])).stdout
       )
       expect(apps.result.apps).toEqual(
         expect.arrayContaining([
@@ -27,7 +27,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Store apps)'
 
       let state = parseJsonOutput<{ result: ComputerSnapshotResult }>(
         (
-          await runOrcaCli([
+          await runMCodeCli([
             'computer',
             'get-app-state',
             '--app',
@@ -42,7 +42,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Store apps)'
         expect(index).toBeGreaterThanOrEqual(0)
         state = parseJsonOutput<{ result: ComputerSnapshotResult }>(
           (
-            await runOrcaCli([
+            await runMCodeCli([
               'computer',
               'click',
               '--app',
@@ -58,7 +58,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Store apps)'
       expect(state.result.snapshot.treeText).toMatch(/Display is 3\b/)
     } finally {
       await killCalculator()
-      await stopOrcaRuntime()
+      await stopMCodeRuntime()
     }
   })
 })

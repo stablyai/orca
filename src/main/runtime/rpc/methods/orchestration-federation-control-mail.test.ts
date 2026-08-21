@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/protocol-version'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import { OrcaRuntimeService } from '../../orca-runtime'
+import { MCodeRuntimeService } from '../../mcode-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import type { OrchestrationEnvironmentTransport } from '../../orchestration/environment-transport'
 import type { RpcRequest } from '../core'
@@ -19,8 +19,8 @@ describe('orchestration federation control mail', () => {
   const processIncarnation = 'worker-runtime:pty:1'
   let homeDb: OrchestrationDb
   let workerDb: OrchestrationDb
-  let homeRuntime: OrcaRuntimeService
-  let workerRuntime: OrcaRuntimeService
+  let homeRuntime: MCodeRuntimeService
+  let workerRuntime: MCodeRuntimeService
   let homeDispatcher: RpcDispatcher
   let workerDispatcher: RpcDispatcher
   let dispatchId: string
@@ -28,7 +28,7 @@ describe('orchestration federation control mail', () => {
 
   beforeEach(() => {
     workerDb = new OrchestrationDb(':memory:')
-    workerRuntime = new OrcaRuntimeService()
+    workerRuntime = new MCodeRuntimeService()
     workerRuntime.setOrchestrationDb(workerDb)
     vi.spyOn(workerRuntime, 'getTerminalPaneKey').mockImplementation((handle) =>
       handle === 'term_worker' ? workerPaneKey : null
@@ -71,7 +71,7 @@ describe('orchestration federation control mail', () => {
       }
     }
     homeDb = new OrchestrationDb(':memory:')
-    homeRuntime = new OrcaRuntimeService(null, undefined, {
+    homeRuntime = new MCodeRuntimeService(null, undefined, {
       orchestrationEnvironmentTransport: transport
     })
     homeRuntime.setOrchestrationDb(homeDb)

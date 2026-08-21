@@ -51,7 +51,7 @@ afterEach(async () => {
 
 describe('skill placement transaction recovery', () => {
   it('does not persist empty global root overrides for a workspace transaction', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-placement-workspace-root-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-placement-workspace-root-'))
     roots.push(root)
     const workspace = join(root, 'workspace')
     const canonical = await skill(join(workspace, '.agents', 'skills', 'alpha'), '# Skill')
@@ -72,7 +72,7 @@ describe('skill placement transaction recovery', () => {
   })
 
   it('rebuilds a partial staged copy and publishes its placement receipt', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-placement-partial-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-placement-partial-'))
     roots.push(root)
     const canonical = await skill(join(root, 'home', '.agents', 'skills', 'alpha'), '# New')
     const stateDirectory = join(root, 'state')
@@ -117,7 +117,7 @@ describe('skill placement transaction recovery', () => {
   })
 
   it('rolls a copy replacement forward after the old placement moved to backup', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-placement-replace-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-placement-replace-'))
     roots.push(root)
     const home = join(root, 'home')
     const canonical = await skill(join(home, '.agents', 'skills', 'alpha'), '# Old')
@@ -168,7 +168,7 @@ describe('skill placement transaction recovery', () => {
   })
 
   it('restores the previous copy when placement and rollback renames both fail', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-placement-rollback-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-placement-rollback-'))
     roots.push(root)
     const home = join(root, 'home')
     const canonical = await skill(join(home, '.agents', 'skills', 'alpha'), '# Old')
@@ -192,10 +192,10 @@ describe('skill placement transaction recovery', () => {
         throw new Error('aliases-disabled')
       },
       rename: async (source: string, target: string): Promise<void> => {
-        if (failRenames && source.includes('.orca-placement-staging-')) {
+        if (failRenames && source.includes('.mcode-placement-staging-')) {
           throw new Error('injected-placement-rename-failure')
         }
-        if (failRenames && source.includes('.orca-placement-backup-')) {
+        if (failRenames && source.includes('.mcode-placement-backup-')) {
           throw new Error('injected-rollback-rename-failure')
         }
         await nativeSkillInstallFilesystem.rename(source, target)
@@ -221,7 +221,7 @@ describe('skill placement transaction recovery', () => {
   })
 
   it('moves an owned placement when Claude changes to a custom config root', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-placement-custom-root-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-placement-custom-root-'))
     roots.push(root)
     const home = join(root, 'home')
     const canonical = await skill(join(home, '.agents', 'skills', 'alpha'), '# Skill')
@@ -261,7 +261,7 @@ describe('skill placement transaction recovery', () => {
   })
 
   it('rejects a historical root claimed by another selected provider before journaling', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-placement-cross-provider-root-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-placement-cross-provider-root-'))
     roots.push(root)
     const home = join(root, 'home')
     const canonical = await skill(join(home, '.agents', 'skills', 'alpha'), '# Skill')
@@ -297,7 +297,7 @@ describe('skill placement transaction recovery', () => {
   })
 
   it('does not treat a skipped historical placement as ownership', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-placement-skipped-owner-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-placement-skipped-owner-'))
     roots.push(root)
     const home = join(root, 'home')
     const canonical = await skill(join(home, '.agents', 'skills', 'alpha'), '# Skill')

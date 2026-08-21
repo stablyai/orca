@@ -306,7 +306,7 @@ describe('runtime file client', () => {
         { query: 'target', limit: 32 }
       )
     ).rejects.toThrow(
-      'Quick Open search requires a newer paired Orca host. Update the remote host and reconnect.'
+      'Quick Open search requires a newer paired MCode host. Update the remote host and reconnect.'
     )
   })
 

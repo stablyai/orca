@@ -19,7 +19,7 @@ export function parseBuiltSessionOptionCommand(
   build: (value: SessionOptionValue) => string,
   command: string
 ): string | null {
-  const marker = '__orca_session_option_value__'
+  const marker = '__mcode_session_option_value__'
   const template = build(marker)
   const markerIndex = template.indexOf(marker)
   if (markerIndex === -1) {

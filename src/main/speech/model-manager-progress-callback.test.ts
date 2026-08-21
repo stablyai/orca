@@ -6,7 +6,7 @@ import { ModelManager } from './model-manager'
 
 vi.mock('electron', () => ({
   app: {
-    getPath: () => '/tmp/orca-speech-models-test'
+    getPath: () => '/tmp/mcode-speech-models-test'
   }
 }))
 
@@ -21,7 +21,7 @@ type ModelManagerInternals = {
 
 describe('ModelManager progress callbacks', () => {
   it('unsubscribes progress callbacks without replacing other listeners', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+    const dir = mkdtempSync(join(tmpdir(), 'mcode-model-manager-'))
     try {
       const manager = new ModelManager(dir)
       const internals = manager as unknown as ModelManagerInternals
@@ -47,7 +47,7 @@ describe('ModelManager progress callbacks', () => {
   })
 
   it('coalesces per-chunk download progress to whole percent', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+    const dir = mkdtempSync(join(tmpdir(), 'mcode-model-manager-'))
     try {
       const manager = new ModelManager(dir)
       const internals = manager as unknown as ModelManagerInternals

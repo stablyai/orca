@@ -65,7 +65,7 @@ jobs:
     # Actions enabled, the scheduled cut would run against the fork's main and
     # diverge it (version line) every slot, conflicting every PR back upstream.
     # Gate to the canonical repo so the workflow no-ops on forks.
-    if: github.repository == 'stablyai/orca'
+    if: github.repository == 'mcode-ide/mcode'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -879,39 +879,39 @@ jobs:
       - name: Run terminal rendering golden on Linux
         if: runner.os == 'Linux'
         run: |
-          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:workspace-session-golden
-          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
-          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:posix-profile-index-golden
+          xvfb-run --auto-servernum env SKIP_BUILD=1 MCODE_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:workspace-session-golden
+          xvfb-run --auto-servernum env SKIP_BUILD=1 MCODE_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
+          xvfb-run --auto-servernum env SKIP_BUILD=1 MCODE_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:posix-profile-index-golden
 
       - name: Run source-control golden on Linux
         if: runner.os == 'Linux'
-        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:source-control-golden
+        run: xvfb-run --auto-servernum env SKIP_BUILD=1 MCODE_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:source-control-golden
 
       - name: Run terminal rendering golden on macOS
         if: runner.os == 'macOS'
         run: |
-          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:workspace-session-golden
-          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
-          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:posix-profile-index-golden
+          env SKIP_BUILD=1 MCODE_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:workspace-session-golden
+          env SKIP_BUILD=1 MCODE_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden
+          env SKIP_BUILD=1 MCODE_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:posix-profile-index-golden
 
       - name: Run agent TUI golden on Linux
         if: runner.os == 'Linux'
-        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:agent-tui-golden
+        run: xvfb-run --auto-servernum env SKIP_BUILD=1 MCODE_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:agent-tui-golden
 
       - name: Run agent TUI golden on macOS
         if: runner.os == 'macOS'
-        run: env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:agent-tui-golden
+        run: env SKIP_BUILD=1 MCODE_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:agent-tui-golden
 
       - name: Run source-control golden on macOS
         if: runner.os == 'macOS'
-        run: env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:source-control-golden
+        run: env SKIP_BUILD=1 MCODE_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:source-control-golden
 
       - name: Run fresh-startup golden on Windows
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $env:SKIP_BUILD = '1'
-          $env:ORCA_E2E_FORWARD_APP_LOGS = '1'
+          $env:MCODE_E2E_FORWARD_APP_LOGS = '1'
           pnpm run --if-present test:e2e:workspace-session-golden
           pnpm run --if-present test:e2e:windows-fresh-startup-golden
           pnpm run --if-present test:e2e:source-control-golden
@@ -955,8 +955,8 @@ jobs:
 
       - name: Run skill package, transaction, and compatibility suites
         env:
-          ORCA_REAL_PROCESS_SKILL_TEST: '1'
-          ORCA_REAL_WINDOWS_SKILL_TEST: ${{ runner.os == 'Windows' && '1' || '0' }}
+          MCODE_REAL_PROCESS_SKILL_TEST: '1'
+          MCODE_REAL_WINDOWS_SKILL_TEST: ${{ runner.os == 'Windows' && '1' || '0' }}
         run: pnpm test:skill-sharing:release --reporter=json --outputFile=skill-sharing-release-results.json
 
       - name: Archive bounded skill-sharing results
@@ -994,7 +994,7 @@ jobs:
 
       - name: Run skill package, transaction, and compatibility suites
         env:
-          ORCA_REAL_PROCESS_SKILL_TEST: '1'
+          MCODE_REAL_PROCESS_SKILL_TEST: '1'
         run: pnpm test:skill-sharing:release --reporter=json --outputFile=skill-sharing-release-results.json
 
       - name: Archive bounded skill-sharing results
@@ -1066,18 +1066,18 @@ jobs:
 
       - name: Run terminal rendering evidence on Linux
         if: runner.os == 'Linux'
-        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-release-evidence
+        run: xvfb-run --auto-servernum env SKIP_BUILD=1 MCODE_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-release-evidence
 
       - name: Run terminal rendering evidence on macOS
         if: runner.os == 'macOS'
-        run: env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-release-evidence
+        run: env SKIP_BUILD=1 MCODE_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-release-evidence
 
       - name: Run terminal rendering evidence on Windows
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $env:SKIP_BUILD = '1'
-          $env:ORCA_E2E_FORWARD_APP_LOGS = '1'
+          $env:MCODE_E2E_FORWARD_APP_LOGS = '1'
           pnpm run test:e2e:terminal-rendering-release-evidence
 
       - name: Upload Playwright traces
@@ -1115,7 +1115,7 @@ jobs:
               ~/.cache/electron-builder
           - os: ubuntu-24.04-arm
             platform: linux-arm64
-            release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_LINUX_ARM64_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --arm64 --publish always
+            release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && MCODE_LINUX_ARM64_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --arm64 --publish always
             unpacked_dir: dist/linux-arm64-unpacked
             eb_cache_path: |
               ~/.cache/electron
@@ -1246,18 +1246,18 @@ jobs:
           echo "identity=$identity" >>"$GITHUB_OUTPUT"
           echo "Classified $TAG as $identity"
 
-      # Why ORCA_POSTHOG_WRITE_KEY here: this is the only build that
+      # Why MCODE_POSTHOG_WRITE_KEY here: this is the only build that
       # produces a published binary, so this is the only place the secret
       # needs to be in scope. The key is a PostHog *project* API key, not
       # a server secret — it ships in every official binary's app.asar
       # and is therefore extractable from any release. We still keep it
       # in GitHub Actions secrets so the literal stays out of the repo
       # (and out of fork CI runs / log scrapers / casual greps).
-      # Why ORCA_BUILD_IDENTITY here (not in env at the job level): the
+      # Why MCODE_BUILD_IDENTITY here (not in env at the job level): the
       # value comes from the per-tag classification above and electron-vite
       # reads it from `process.env` during `pnpm build:release` only.
-      # Why ORCA_DIAGNOSTICS_TOKEN_URL here: official builds pin crash
-      # diagnostic uploads to Orca's endpoint at compile time, matching the
+      # Why MCODE_DIAGNOSTICS_TOKEN_URL here: official builds pin crash
+      # diagnostic uploads to MCode's endpoint at compile time, matching the
       # telemetry gate's "official binary only" behavior.
       - name: Build app
         run: pnpm build:release
@@ -1265,9 +1265,9 @@ jobs:
           # Why: Vite's web build crossed Node's default old-space ceiling on
           # the macOS release runner, leaving v1.4.2-rc.8 as an incomplete draft.
           NODE_OPTIONS: --max-old-space-size=4096
-          ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
-          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
-          ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
+          MCODE_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
+          MCODE_DIAGNOSTICS_TOKEN_URL: https://www.mcode.dev/diagnostics/token
+          MCODE_POSTHOG_WRITE_KEY: ${{ secrets.MCODE_POSTHOG_WRITE_KEY }}
 
       - name: Gate runtime file-watcher process isolation
         if: runner.os == 'Linux'
@@ -1341,7 +1341,7 @@ jobs:
 
       # ── Windows inner-binary signing (issue #7785) ─────────────────────
       # Why: SignPath cannot deep-sign inside NSIS installers, so inner PE
-      # files (Orca.exe, node-pty *.node, DLLs) are signed via a separate zip
+      # files (MCode.exe, node-pty *.node, DLLs) are signed via a separate zip
       # request, then the installer is rebuilt from the signed tree before the
       # existing installer signing request below. Every step in this chain is
       # fail-open (continue-on-error + outcome gating): any failure ships the
@@ -1377,8 +1377,8 @@ jobs:
               $list.Add($relative)
             }
 
-          if (-not ($list -contains 'Orca.exe')) {
-            throw 'Orca.exe was not staged for signing; unpacked layout changed?'
+          if (-not ($list -contains 'MCode.exe')) {
+            throw 'MCode.exe was not staged for signing; unpacked layout changed?'
           }
           if (-not ($list | Where-Object { $_ -like '*conpty_console_list.node' })) {
             throw 'node-pty conpty_console_list.node was not staged; this is the file from issue #7785.'
@@ -1396,7 +1396,7 @@ jobs:
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
-          name: orca-windows-inner-unsigned-${{ needs.cut.outputs.tag }}
+          name: mcode-windows-inner-unsigned-${{ needs.cut.outputs.tag }}
           path: signing-stage/**
           if-no-files-found: error
 
@@ -1408,7 +1408,7 @@ jobs:
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: c37aa192-a27a-4377-9c90-5d6c95912dc0
-          project-slug: orca
+          project-slug: mcode
           signing-policy-slug: release-signing
           artifact-configuration-slug: windows-inner-binaries-zip
           github-artifact-id: ${{ steps.upload-unsigned-inner.outputs.artifact-id }}
@@ -1461,7 +1461,7 @@ jobs:
           } else {
             'unknown'
           }
-          $message = "Orca Windows release ``$($env:TAG)`` inner-binaries signing request (1 of 2) is ready for SignPath approval.`nSource: ``$sourceRef`` @ $commitLink · cut by $cutBy`n<$requestUrl|Open SignPath signing request>`n<$($env:GITHUB_RUN_URL)|Open GitHub Actions run>"
+          $message = "MCode Windows release ``$($env:TAG)`` inner-binaries signing request (1 of 2) is ready for SignPath approval.`nSource: ``$sourceRef`` @ $commitLink · cut by $cutBy`n<$requestUrl|Open SignPath signing request>`n<$($env:GITHUB_RUN_URL)|Open GitHub Actions run>"
           $payload = @{
             text = $message
             blocks = @(
@@ -1582,21 +1582,21 @@ jobs:
           # Why: keep the pre-rebuild artifacts so a failed rebuild can fall
           # back to shipping them unchanged (fail-open).
           New-Item -ItemType Directory -Path prepack-backup -Force | Out-Null
-          Copy-Item 'dist/orca-windows-setup.exe' 'prepack-backup/orca-windows-setup.exe' -Force
+          Copy-Item 'dist/mcode-windows-setup.exe' 'prepack-backup/mcode-windows-setup.exe' -Force
           Copy-Item 'dist/latest.yml' 'prepack-backup/latest.yml' -Force
 
           pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never --prepackaged "$env:GITHUB_WORKSPACE\dist\win-unpacked"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          if (-not (Test-Path 'dist/orca-windows-setup.exe')) {
-            throw 'electron-builder --prepackaged did not produce dist/orca-windows-setup.exe'
+          if (-not (Test-Path 'dist/mcode-windows-setup.exe')) {
+            throw 'electron-builder --prepackaged did not produce dist/mcode-windows-setup.exe'
           }
 
       - name: Roll back to original installer after failed rebuild
         if: matrix.platform == 'win' && steps.rebuild-nsis-signed.outcome == 'failure'
         shell: pwsh
         run: |
-          if (Test-Path 'prepack-backup/orca-windows-setup.exe') {
-            Copy-Item 'prepack-backup/orca-windows-setup.exe' 'dist/orca-windows-setup.exe' -Force
+          if (Test-Path 'prepack-backup/mcode-windows-setup.exe') {
+            Copy-Item 'prepack-backup/mcode-windows-setup.exe' 'dist/mcode-windows-setup.exe' -Force
             Copy-Item 'prepack-backup/latest.yml' 'dist/latest.yml' -Force
             Write-Warning 'Restored pre-rebuild installer; this release ships with unsigned inner binaries.'
           }
@@ -1606,8 +1606,8 @@ jobs:
         id: upload-unsigned-windows-installer
         uses: actions/upload-artifact@v7
         with:
-          name: orca-windows-unsigned-${{ needs.cut.outputs.tag }}
-          path: dist/orca-windows-setup.exe
+          name: mcode-windows-unsigned-${{ needs.cut.outputs.tag }}
+          path: dist/mcode-windows-setup.exe
           if-no-files-found: error
 
       # Why: SignPath Foundation production certificates require manual review,
@@ -1619,7 +1619,7 @@ jobs:
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: c37aa192-a27a-4377-9c90-5d6c95912dc0
-          project-slug: orca
+          project-slug: mcode
           signing-policy-slug: release-signing
           artifact-configuration-slug: github-actions-windows-installer
           github-artifact-id: ${{ steps.upload-unsigned-windows-installer.outputs.artifact-id }}
@@ -1673,7 +1673,7 @@ jobs:
           } else {
             'unknown'
           }
-          $message = "Orca Windows release ``$($env:TAG)`` $stage is ready for SignPath approval.`nSource: ``$sourceRef`` @ $commitLink · cut by $cutBy`n<$requestUrl|Open SignPath signing request>`n<$($env:GITHUB_RUN_URL)|Open GitHub Actions run>"
+          $message = "MCode Windows release ``$($env:TAG)`` $stage is ready for SignPath approval.`nSource: ``$sourceRef`` @ $commitLink · cut by $cutBy`n<$requestUrl|Open SignPath signing request>`n<$($env:GITHUB_RUN_URL)|Open GitHub Actions run>"
           $payload = @{
             text = $message
             blocks = @(
@@ -1711,17 +1711,17 @@ jobs:
         if: matrix.platform == 'win'
         shell: pwsh
         run: |
-          $signedInstaller = Get-ChildItem -Path signed-windows -Recurse -File -Filter 'orca-windows-setup.exe' | Select-Object -First 1
+          $signedInstaller = Get-ChildItem -Path signed-windows -Recurse -File -Filter 'mcode-windows-setup.exe' | Select-Object -First 1
           if ($null -eq $signedInstaller) {
             throw 'Signed Windows installer was not returned by SignPath.'
           }
 
-          Copy-Item -Path $signedInstaller.FullName -Destination 'dist/orca-windows-setup.exe' -Force
-          node config/scripts/generate-windows-blockmap.mjs 'dist/orca-windows-setup.exe' 'dist/orca-windows-setup.exe.blockmap'
+          Copy-Item -Path $signedInstaller.FullName -Destination 'dist/mcode-windows-setup.exe' -Force
+          node config/scripts/generate-windows-blockmap.mjs 'dist/mcode-windows-setup.exe' 'dist/mcode-windows-setup.exe.blockmap'
           if ($LASTEXITCODE -ne 0) { throw "blockmap generation failed with exit code $LASTEXITCODE" }
 
-          $installer = Get-Item 'dist/orca-windows-setup.exe'
-          $blockmap = Get-Item 'dist/orca-windows-setup.exe.blockmap'
+          $installer = Get-Item 'dist/mcode-windows-setup.exe'
+          $blockmap = Get-Item 'dist/mcode-windows-setup.exe.blockmap'
           $stream = [System.IO.File]::OpenRead($installer.FullName)
           try {
             $sha512 = [System.Security.Cryptography.SHA512]::Create()
@@ -1742,13 +1742,13 @@ jobs:
           $latestYml = $latestYml -replace '(?m)^    blockMapSize: \d+$', "    blockMapSize: $($blockmap.Length)"
           Set-Content -Path 'dist/latest.yml' -Value $latestYml -NoNewline
 
-          Get-Item 'dist/orca-windows-setup.exe', 'dist/orca-windows-setup.exe.blockmap', 'dist/latest.yml'
+          Get-Item 'dist/mcode-windows-setup.exe', 'dist/mcode-windows-setup.exe.blockmap', 'dist/latest.yml'
 
       - name: Verify signed Windows installer
         if: matrix.platform == 'win'
         shell: pwsh
         run: |
-          $signature = Get-AuthenticodeSignature -FilePath 'dist/orca-windows-setup.exe'
+          $signature = Get-AuthenticodeSignature -FilePath 'dist/mcode-windows-setup.exe'
           if ($signature.Status -ne 'Valid') {
             throw ($signature | Format-List * | Out-String)
           }
@@ -1758,18 +1758,18 @@ jobs:
           $signature.SignerCertificate | Format-List Subject,Issuer,NotBefore,NotAfter,Thumbprint
 
       # Why: evidence gate for inner-binary signing (issue #7785, supersedes
-      # PR #7170's Orca.exe-only gate — this covers every staged .exe/.dll/.node
+      # PR #7170's MCode.exe-only gate — this covers every staged .exe/.dll/.node
       # by extracting the shipped installer). Warn-only until the flow has been
-      # proven on a real release, then flip ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED
+      # proven on a real release, then flip MCODE_WINDOWS_INNER_SIGNATURE_REQUIRED
       # to 'true' so unsigned inner binaries block the release.
       - name: Verify Windows inner binary signatures
         if: matrix.platform == 'win'
         shell: pwsh
         env:
-          ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED: 'false'
+          MCODE_WINDOWS_INNER_SIGNATURE_REQUIRED: 'false'
           INNER_SIGNING_COMPLETED: ${{ steps.rebuild-nsis-signed.outcome == 'success' }}
         run: |
-          $required = $env:ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED -eq 'true'
+          $required = $env:MCODE_WINDOWS_INNER_SIGNATURE_REQUIRED -eq 'true'
 
           # Why: a fail-open gate that writes nothing is indistinguishable from a
           # gate that passed. Always leave a verdict in the evidence artifact and
@@ -1836,7 +1836,7 @@ jobs:
               throw "The 7za resolver returned an invalid path for the inner-binary evidence gate: $7za"
             }
             New-Item -ItemType Directory -Path inner-evidence-extract -Force | Out-Null
-            & $7za x 'dist/orca-windows-setup.exe' '-oinner-evidence-extract' -y | Out-Null
+            & $7za x 'dist/mcode-windows-setup.exe' '-oinner-evidence-extract' -y | Out-Null
 
             $root = Resolve-Path 'inner-evidence-extract'
             # Why elevate.exe is always appended: staging skips already-signed
@@ -1875,7 +1875,7 @@ jobs:
               if ($required) {
                 $policyFailure = $message
               } else {
-                Write-Host "::warning::$message Fail-open until ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED is 'true'."
+                Write-Host "::warning::$message Fail-open until MCODE_WINDOWS_INNER_SIGNATURE_REQUIRED is 'true'."
               }
               Add-GateEvidence "VERDICT: FAILED — $message"
               Add-GateSummary "FAILED — $message"
@@ -1898,7 +1898,7 @@ jobs:
         if: always() && matrix.platform == 'win'
         uses: actions/upload-artifact@v7
         with:
-          name: orca-windows-inner-signing-evidence-${{ needs.cut.outputs.tag }}
+          name: mcode-windows-inner-signing-evidence-${{ needs.cut.outputs.tag }}
           path: |
             inner-signing-evidence.txt
             inner-signing-list.txt
@@ -1912,7 +1912,7 @@ jobs:
           timeout_minutes: 10
           max_attempts: 3
           retry_wait_seconds: 30
-          command: gh release upload "${{ needs.cut.outputs.tag }}" "dist/orca-windows-setup.exe" "dist/orca-windows-setup.exe.blockmap" "dist/latest.yml" --clobber --repo "${{ github.repository }}"
+          command: gh release upload "${{ needs.cut.outputs.tag }}" "dist/mcode-windows-setup.exe" "dist/mcode-windows-setup.exe.blockmap" "dist/latest.yml" --clobber --repo "${{ github.repository }}"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -1949,7 +1949,7 @@ jobs:
       # deletes the draft and re-cuts.
       #
       # Why this guards against: a misconfigured CI run where
-      # `ORCA_POSTHOG_WRITE_KEY` is unset or the tag fails to classify
+      # `MCODE_POSTHOG_WRITE_KEY` is unset or the tag fails to classify
       # would otherwise produce a binary with `BUILD_IDENTITY = null` and
       # `WRITE_KEY = null`, which silently disables transport
       # (`IS_OFFICIAL_BUILD === false`) — the exact failure mode flagged

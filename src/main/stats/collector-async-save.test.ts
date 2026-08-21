@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // two points it can park: before its temp write, and after, on the rename itself.
 
 let userDataDir: string
-const statsPath = (): string => join(userDataDir, 'orca-stats.json')
+const statsPath = (): string => join(userDataDir, 'mcode-stats.json')
 
 vi.mock('electron', () => ({
   app: { getPath: () => userDataDir }
@@ -63,7 +63,7 @@ async function importCollector() {
 
 describe('StatsCollector async debounced save', () => {
   beforeEach(() => {
-    userDataDir = mkdtempSync(join(tmpdir(), 'orca-stats-test-'))
+    userDataDir = mkdtempSync(join(tmpdir(), 'mcode-stats-test-'))
     gate.blocked = false
     gate.blockRename = false
     gate.waiters = []
@@ -90,7 +90,7 @@ describe('StatsCollector async debounced save', () => {
 
     await vi.advanceTimersByTimeAsync(5_000)
     await vi.waitFor(() => {
-      expect(readdirSync(userDataDir)).toContain('orca-stats.json')
+      expect(readdirSync(userDataDir)).toContain('mcode-stats.json')
     })
 
     // Proves the debounced path went through async fs/promises writeFile (a

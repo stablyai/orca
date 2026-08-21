@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { defaultLinearIssueViewResumeState } from '../../../shared/linear/issue-view-resume-state'
 import { loadLinearIssueView, saveLinearIssueView } from './linear-issue-view-storage'
 
-const STORAGE_KEY = 'orca.linear.issue-view.v1'
+const STORAGE_KEY = 'mcode.linear.issue-view.v1'
 
 describe('Linear issue view local storage', () => {
   beforeEach(() => {

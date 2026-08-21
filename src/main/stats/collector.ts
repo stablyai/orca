@@ -7,7 +7,7 @@ import { StatsSnapshotWriter } from './stats-snapshot-writer'
 
 const MAX_EVENTS = 10_000
 // Why: countedPRs is a deduplication registry that grows with every PR created
-// through Orca. Without a cap, a heavily-used instance accumulates thousands of
+// through MCode. Without a cap, a heavily-used instance accumulates thousands of
 // URL strings across months. 2000 entries is about 6-12 months of active use
 // for a power user, and at ~50 chars per URL the overhead is ~100KB max.
 const MAX_COUNTED_PRS = 2_000
@@ -16,18 +16,18 @@ const MAX_COUNTED_PRS = 2_000
 const DEBOUNCE_MS = 5_000
 
 // Why: same timing constraint as persistence.ts — the path must be captured
-// after configureDevUserDataPath() but before app.setName('Orca'). See the
+// after configureDevUserDataPath() but before app.setName('MCode'). See the
 // comment block in persistence.ts:20-28 for the full explanation.
 let _statsFile: string | null = null
 
 export function initStatsPath(): void {
-  _statsFile = join(app.getPath('userData'), 'orca-stats.json')
+  _statsFile = join(app.getPath('userData'), 'mcode-stats.json')
 }
 
 function getStatsFile(): string {
   if (!_statsFile) {
     // Safety fallback — should not be hit in normal startup.
-    _statsFile = join(app.getPath('userData'), 'orca-stats.json')
+    _statsFile = join(app.getPath('userData'), 'mcode-stats.json')
   }
   return _statsFile
 }

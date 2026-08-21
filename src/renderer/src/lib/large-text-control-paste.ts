@@ -89,7 +89,7 @@ export function handleLargeTextControlPasteEvent(
     return { status: 'rejected', reason: 'too-large' }
   }
   // Why: browser-native insertion is one synchronous value mutation; large
-  // text controls need Orca-owned chunking so the renderer can keep yielding.
+  // text controls need MCode-owned chunking so the renderer can keep yielding.
   void pasteTextIntoTextControl(target, text, {
     source: 'clipboard',
     chunkMaxBytes: options.chunkMaxBytes,

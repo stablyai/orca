@@ -15,7 +15,7 @@ export const FIXTURE_COMMENTS: PRComment[] = [
     authorAvatarUrl: '',
     body: 'Please update this handler before merge.',
     createdAt: '2026-05-14T10:00:00.000Z',
-    url: 'https://github.com/acme/orca/pull/73#discussion_r101',
+    url: 'https://github.com/acme/mcode/pull/73#discussion_r101',
     reactionSubjectId: 'PRRC_101',
     threadId: 'thread-open',
     path: 'src/handler.ts',
@@ -28,7 +28,7 @@ export const FIXTURE_COMMENTS: PRComment[] = [
     authorAvatarUrl: '',
     body: 'LGTM on the overall approach.',
     createdAt: '2026-05-14T11:00:00.000Z',
-    url: 'https://github.com/acme/orca/pull/73#issuecomment-102',
+    url: 'https://github.com/acme/mcode/pull/73#issuecomment-102',
     reactionSubjectId: 'IC_102'
   },
   {
@@ -37,7 +37,7 @@ export const FIXTURE_COMMENTS: PRComment[] = [
     authorAvatarUrl: '',
     body: 'Already fixed upstream.',
     createdAt: '2026-05-13T09:00:00.000Z',
-    url: 'https://github.com/acme/orca/pull/73#discussion_r103',
+    url: 'https://github.com/acme/mcode/pull/73#discussion_r103',
     threadId: 'thread-resolved',
     path: 'src/legacy.ts',
     isResolved: true
@@ -73,11 +73,11 @@ export async function seedPRCommentsSidebarFixture(page: Page): Promise<PRCommen
       number: prNumber,
       title: 'E2E PR comments sidebar',
       state: 'open',
-      url: `https://github.com/acme/orca/pull/${prNumber}`,
+      url: `https://github.com/acme/mcode/pull/${prNumber}`,
       checksStatus: 'pending',
       updatedAt: '2026-05-15T00:00:00.000Z',
       mergeable: 'MERGEABLE',
-      prRepo: { owner: 'acme', repo: 'orca' }
+      prRepo: { owner: 'acme', repo: 'mcode' }
     }
     const prCacheEntries = {
       [`${repo.id}::${branch}`]: {
@@ -141,7 +141,7 @@ export async function seedPRCommentsSidebarFixture(page: Page): Promise<PRCommen
       setUpstreamStatus: () => undefined
     }))
 
-    window.localStorage.setItem('orca:pr-comment-presentation', 'cards')
+    window.localStorage.setItem('mcode:pr-comment-presentation', 'cards')
 
     return { worktreeId: worktree.id, branch, prNumber }
   }, FIXTURE_COMMENTS)

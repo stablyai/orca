@@ -73,7 +73,7 @@ export function locationChip(installation: SkillFreshnessInstallation): SkillLoc
 /**
  * Groups installations by skill for the review modal and derives each skill's
  * update disposition. A skill appears when a copy is out of date, or when a copy is
- * wrong in a way the update cannot fix — an edited copy, one Orca could not read.
+ * wrong in a way the update cannot fix — an edited copy, one MCode could not read.
  *
  * That second half is what the badge already reports: it turns amber and offers
  * Details, and Details opens this modal. Returning only out-of-date skills left that
@@ -104,7 +104,7 @@ export function groupSkillFreshness(
   for (const [name, entries] of byName) {
     // Why: the inclusion test only consults placements the global update can reach, so a
     // skill whose only finding is a project-owned copy raises no row at all — a "Skipped"
-    // row would assert Orca considered an update it never could. Locations below are still
+    // row would assert MCode considered an update it never could. Locations below are still
     // listed in full, so a project copy stays visible whenever some other placement earns
     // the group.
     if (

@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto'
 import { readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { RuntimeMetadata, RuntimeTransportMetadata } from '../../shared/runtime-bootstrap'
-import type { OrcaRuntimeService } from './orca-runtime'
+import type { MCodeRuntimeService } from './mcode-runtime'
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from './network-exposure-guidance'
 import { writeRuntimeMetadata } from './runtime-metadata'
 import {
@@ -57,21 +57,21 @@ import {
 const DEFAULT_WS_PORT = 6768
 
 // Why: STA-2370 — the WS listener defaults to loopback so a desktop with no paired device is not
-// reachable from the LAN; it widens to all interfaces only on explicit pairing (or `orca serve`).
+// reachable from the LAN; it widens to all interfaces only on explicit pairing (or `mcode serve`).
 const WS_BIND_HOST_LOOPBACK = '127.0.0.1'
 const WS_BIND_HOST_ALL_INTERFACES = '0.0.0.0'
 
-type OrcaRuntimeRpcServerOptions = {
-  runtime: OrcaRuntimeService
+type MCodeRuntimeRpcServerOptions = {
+  runtime: MCodeRuntimeService
   userDataPath: string
   pid?: number
   platform?: NodeJS.Platform
   enableWebSocket?: boolean
   wsPort?: number
-  // Why: true when the caller pinned a port (`orca serve --port`) so bind order prefers it over a stale STA-1511 fallback (#8535).
+  // Why: true when the caller pinned a port (`mcode serve --port`) so bind order prefers it over a stale STA-1511 fallback (#8535).
   preferPinnedWsPort?: boolean
   // Why: STA-2370 — bind the WS listener to all interfaces at startup instead of loopback-until-paired.
-  // Only `orca serve` (explicit remote opt-in) and E2E set this; the desktop app widens lazily on pairing.
+  // Only `mcode serve` (explicit remote opt-in) and E2E set this; the desktop app widens lazily on pairing.
   exposeNetworkByDefault?: boolean
   webClientRoot?: string
   // Why: test-only overrides for the two constants below; production must not pass these (defaults set by §3.1).
@@ -121,9 +121,9 @@ function pairingUnavailable(
 }
 
 const DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE =
-  'The pairing registry is unavailable. Verify that the Orca data directory is writable.'
+  'The pairing registry is unavailable. Verify that the MCode data directory is writable.'
 const E2EE_KEY_UNAVAILABLE_GUIDANCE =
-  'The E2EE identity is unavailable. Verify that the Orca data directory is writable.'
+  'The E2EE identity is unavailable. Verify that the MCode data directory is writable.'
 
 type MobileRelayPairingProvider = {
   createPairingRelay(
@@ -478,8 +478,8 @@ function injectDeviceScope(response: string, scope: DeviceScope): string {
   }
 }
 
-export class OrcaRuntimeRpcServer {
-  private readonly runtime: OrcaRuntimeService
+export class MCodeRuntimeRpcServer {
+  private readonly runtime: MCodeRuntimeService
   private readonly dispatcher: RpcDispatcher
   private readonly userDataPath: string
   private readonly pid: number
@@ -550,7 +550,7 @@ export class OrcaRuntimeRpcServer {
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
     longPollCap = LONG_POLL_CAP,
     metadataOwnershipPollMs = RUNTIME_METADATA_OWNERSHIP_POLL_MS
-  }: OrcaRuntimeRpcServerOptions) {
+  }: MCodeRuntimeRpcServerOptions) {
     this.runtime = runtime
     this.dispatcher = new RpcDispatcher({ runtime })
     this.userDataPath = userDataPath
@@ -857,7 +857,7 @@ export class OrcaRuntimeRpcServer {
         available: false,
         reason: 'relay_mint_failed',
         guidance:
-          'Orca Relay could not create a pairing invite. Use LAN (Tailscale or same Wi‑Fi) or retry Relay.',
+          'MCode Relay could not create a pairing invite. Use LAN (Tailscale or same Wi‑Fi) or retry Relay.',
         relayFailure
       }
     }
@@ -866,7 +866,7 @@ export class OrcaRuntimeRpcServer {
       return refuseAutomaticWithoutRelay({
         code: 'relay_provider_unavailable',
         stage: 'provider_missing',
-        message: 'Orca Relay is not available on this desktop'
+        message: 'MCode Relay is not available on this desktop'
       })
     }
     const device = this.deviceRegistry?.getDevice(direct.deviceId)
@@ -1233,14 +1233,14 @@ export class OrcaRuntimeRpcServer {
       },
       onReclaim: (previous) => {
         console.warn(
-          `[runtime] Reclaimed orca-runtime.json from a dead runtime (pid ${previous?.pid ?? 'none'}); republished pid ${this.pid}.`
+          `[runtime] Reclaimed mcode-runtime.json from a dead runtime (pid ${previous?.pid ?? 'none'}); republished pid ${this.pid}.`
         )
       }
     })
   }
 
   // Why: STA-2370 — a desktop with no previously-connected device stays on loopback until the user
-  // explicitly pairs; `orca serve`/E2E (exposeNetworkByDefault) and a reconnecting paired device bind wide.
+  // explicitly pairs; `mcode serve`/E2E (exposeNetworkByDefault) and a reconnecting paired device bind wide.
   // A grant minted for "This computer only" is excluded: its client is a browser on this machine, so
   // counting it would republish the runtime on every interface one restart after the user declined that.
   private resolveInitialWebSocketBindHost(): string {
@@ -1799,7 +1799,7 @@ export function createRuntimeTransportMetadata(
     return {
       kind: 'named-pipe',
       // Why: named pipes lack the chmod hardening of Unix sockets; a per-runtime suffix avoids a stable, guessable endpoint name.
-      endpoint: `\\\\.\\pipe\\orca-${pid}-${endpointSuffix}`
+      endpoint: `\\\\.\\pipe\\mcode-${pid}-${endpointSuffix}`
     }
   }
   return {

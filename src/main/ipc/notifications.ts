@@ -7,7 +7,7 @@ import type {
   NotificationDispatchResult,
   NotificationPermissionStatusResult
 } from '../../shared/notification-settings-types'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { MCodeRuntimeService } from '../runtime/mcode-runtime'
 import { buildNotificationOptions } from './notification-options'
 import { readNotificationAuthorizationStatus } from './notification-authorization-status'
 import { setTrayAttention } from '../tray/system-tray'
@@ -25,7 +25,7 @@ import {
   resetNotificationPermissionEvidence
 } from './notification-permission-probe'
 
-export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntimeService): void {
+export function registerNotificationHandlers(store: Store, runtime?: MCodeRuntimeService): void {
   const recentDesktopNotifications = new Map<string, number>()
   const recentMobileNotifications = new Map<string, number>()
   resetNotificationPermissionEvidence()

@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import { BrowserWindow } from 'electron'
-import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
-import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
+import { MCODE_BROWSER_PARTITION } from '../../shared/constants'
+import { MCODE_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
 import type { BrowserBackend, BrowserBackendCreateTab } from './browser-backend'
 import type { BrowserManager } from './browser-manager'
 import { browserSessionRegistry } from './browser-session-registry'
 
-// Why: headless orca serve has no renderer window to host a <webview>, so each
+// Why: headless mcode serve has no renderer window to host a <webview>, so each
 // browser page is backed by a main-process offscreen BrowserWindow. The window
 // is never shown — it exists only so its WebContents can be driven over CDP and
 // streamed via the existing screencast path. Verified on macOS and on headless
@@ -32,7 +32,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     const profile = params.profileId
       ? browserSessionRegistry.getProfile(params.profileId)
       : browserSessionRegistry.getDefaultProfile()
-    const partition = profile?.partition ?? ORCA_BROWSER_PARTITION
+    const partition = profile?.partition ?? MCODE_BROWSER_PARTITION
 
     const win = new BrowserWindow({
       show: false,
@@ -41,7 +41,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
       webPreferences: {
         // Why: offscreen pages are the SSH/headless browser backend; keep their
         // HTML fullscreen behavior aligned with desktop <webview> guests.
-        ...ORCA_BROWSER_GUEST_WEB_PREFERENCES,
+        ...MCODE_BROWSER_GUEST_WEB_PREFERENCES,
         partition,
         sandbox: true,
         contextIsolation: true,

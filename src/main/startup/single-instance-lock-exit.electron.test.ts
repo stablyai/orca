@@ -7,7 +7,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from './single-instance-lock'
 
 // Why #11935: the lock-loss gate runs before Electron `ready`, where `app.quit()` is deferred, so a
-// duplicate headless `orca serve` kept executing the rest of startup, reached Linux Ozone/X11 init
+// duplicate headless `mcode serve` kept executing the rest of startup, reached Linux Ozone/X11 init
 // with no display, died with SIGSEGV, and systemd restarted it until the leaked AppImage FUSE mounts
 // hit the kernel's 1000-mount ceiling. This runs the gate's own termination statement, lifted out of
 // `src/main/index.ts`, under the real Electron binary.
@@ -22,7 +22,7 @@ const electronBinary = createRequire(import.meta.url)('electron') as string
 const LOCK_LOST = 'LOCK_LOST'
 const CONTINUED_INTO_STARTUP = 'CONTINUED_INTO_STARTUP'
 const REACHED_TAIL = 'REACHED_TAIL'
-const MARKER_ENV = 'ORCA_LOCK_FIXTURE_MARKER'
+const MARKER_ENV = 'MCODE_LOCK_FIXTURE_MARKER'
 
 const fixtureRoots: string[] = []
 
@@ -68,14 +68,14 @@ function buildFixtureMain(termination: string): string {
 type FixtureRun = { status: number | null; markers: string[] }
 
 function runLockLossGate(termination: string): FixtureRun {
-  const root = mkdtempSync(join(tmpdir(), 'orca-lock-loss-'))
+  const root = mkdtempSync(join(tmpdir(), 'mcode-lock-loss-'))
   fixtureRoots.push(root)
   const dir = join(root, 'fixture')
   const marker = join(root, 'markers.log')
   mkdirSync(dir, { recursive: true })
   writeFileSync(
     join(dir, 'package.json'),
-    '{ "name": "orca-lock-loss-fixture", "main": "main.js" }'
+    '{ "name": "mcode-lock-loss-fixture", "main": "main.js" }'
   )
   writeFileSync(join(dir, 'main.js'), buildFixtureMain(termination))
   writeFileSync(marker, '')

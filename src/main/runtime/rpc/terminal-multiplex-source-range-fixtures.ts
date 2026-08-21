@@ -1,5 +1,5 @@
 import { expect, vi } from 'vitest'
-import type { RuntimeTerminalDataMeta } from '../orca-runtime'
+import type { RuntimeTerminalDataMeta } from '../mcode-runtime'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,

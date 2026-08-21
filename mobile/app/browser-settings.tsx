@@ -13,8 +13,8 @@ import { colors, radii, spacing, typography } from '../src/theme/mobile-theme'
 
 const LINK_MODE_OPTIONS: PickerOption<MobileTerminalLinkOpenMode>[] = [
   {
-    value: 'orca-browser',
-    label: 'Orca browser on desktop',
+    value: 'mcode-browser',
+    label: 'MCode browser on desktop',
     subtitle: 'Open in the streamed browser from your paired desktop.'
   },
   {
@@ -33,7 +33,7 @@ function linkModeLabel(mode: MobileTerminalLinkOpenMode): string {
 export default function BrowserSettingsScreen(): React.JSX.Element {
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const [linkMode, setLinkMode] = useState<MobileTerminalLinkOpenMode>('orca-browser')
+  const [linkMode, setLinkMode] = useState<MobileTerminalLinkOpenMode>('mcode-browser')
   const [pickerOpen, setPickerOpen] = useState(false)
 
   useEffect(() => {

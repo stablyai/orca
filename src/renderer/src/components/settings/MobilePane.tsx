@@ -42,7 +42,7 @@ export function MobilePane(): React.JSX.Element {
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
   const [deviceCountAtQr, setDeviceCountAtQr] = useState<number | null>(null)
-  const signedIn = useAppStore((state) => state.orcaProfileAuthStatus?.state === 'connected')
+  const signedIn = useAppStore((state) => state.mcodeProfileAuthStatus?.state === 'connected')
   const settingsSearchQuery = useAppStore((state) => state.settingsSearchQuery)
   const [connectionMode, setConnectionMode] = useMobilePairingConnectionMode()
   const [rotateNextQr, setRotateNextQr] = useState(false)

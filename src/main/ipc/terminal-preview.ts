@@ -3,7 +3,7 @@ import type {
   TerminalPreviewConnectResult,
   TerminalPreviewSnapshot
 } from '../../shared/terminal-preview'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { MCodeRuntimeService } from '../runtime/mcode-runtime'
 import { isDashboardPopoutRenderer } from '../window/dashboard-popout-window'
 import { isTrustedUIRenderer } from './ui'
 import {
@@ -24,7 +24,7 @@ function isTerminalPreviewRenderer(sender: WebContents): boolean {
   return isDashboardPopoutRenderer(sender) || isTrustedUIRenderer(sender)
 }
 /** Pop-out terminal transport with an atomic snapshot/live boundary. */
-export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): void {
+export function registerTerminalPreviewHandlers(runtime: MCodeRuntimeService): void {
   ipcMain.removeHandler('terminalPreview:connect')
   ipcMain.removeHandler('terminalPreview:unsubscribe')
   ipcMain.removeHandler('terminalPreview:input')

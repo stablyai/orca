@@ -20,7 +20,7 @@ import {
   type WorkspaceSnapshotPruneTombstone
 } from './workspace-snapshot-prune-index'
 
-const SNAPSHOT_FILE_NAME = 'orca-workspace-cleanup-scan.json'
+const SNAPSHOT_FILE_NAME = 'mcode-workspace-cleanup-scan.json'
 const SNAPSHOT_VERSION = 2
 
 export type WorkspaceCleanupScanSnapshotPruneTarget = WorkspaceSnapshotPruneTarget

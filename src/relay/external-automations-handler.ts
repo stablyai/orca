@@ -576,7 +576,7 @@ export class ExternalAutomationsHandler {
     if (cached) {
       this.hermesRunCountCache.delete(jobId)
     }
-    // Why: remote Hermes jobs can churn independently of Orca; relay
+    // Why: remote Hermes jobs can churn independently of MCode; relay
     // processes are long-lived, so stale job ids need both TTL and a hard cap.
     this.pruneHermesRunCountCache(now)
     const entry: HermesRunCountCacheEntry = {

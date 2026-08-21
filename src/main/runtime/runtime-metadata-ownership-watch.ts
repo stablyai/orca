@@ -2,7 +2,7 @@ import { getRuntimeMetadataPath, type RuntimeMetadata } from '../../shared/runti
 import { readRuntimeMetadata } from './runtime-metadata'
 
 /**
- * Why: `orca-runtime.json` is the CLI's only pointer at a live runtime, and it
+ * Why: `mcode-runtime.json` is the CLI's only pointer at a live runtime, and it
  * can stop describing this process while this process is still serving RPC —
  * a second instance that slipped past the single-instance lock publishes its
  * own pid and then exits, leaving the CLI on a dead pid (`stale_bootstrap`)

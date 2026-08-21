@@ -52,13 +52,13 @@ describe('WebSocketTransport static web client', () => {
     await transport.start()
 
     const indexResponse = await fetch(
-      `http://127.0.0.1:${transport.resolvedPort}/orca/web-index.html`
+      `http://127.0.0.1:${transport.resolvedPort}/mcode/web-index.html`
     )
     expect(indexResponse.status).toBe(200)
     await expect(indexResponse.text()).resolves.toBe('<script src="./assets/app.js"></script>')
 
     const assetResponse = await fetch(
-      `http://127.0.0.1:${transport.resolvedPort}/orca/assets/app.js`
+      `http://127.0.0.1:${transport.resolvedPort}/mcode/assets/app.js`
     )
     expect(assetResponse.status).toBe(200)
     await expect(assetResponse.text()).resolves.toBe('console.log("prefixed")')

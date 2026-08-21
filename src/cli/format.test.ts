@@ -22,7 +22,7 @@ let testScreenshotDir: string | null = null
 
 afterEach(() => {
   vi.restoreAllMocks()
-  delete process.env.ORCA_COMPUTER_SCREENSHOT_TMPDIR
+  delete process.env.MCODE_COMPUTER_SCREENSHOT_TMPDIR
   if (testScreenshotDir) {
     rmSync(testScreenshotDir, { recursive: true, force: true })
     testScreenshotDir = null
@@ -72,10 +72,10 @@ describe('formatCliError', () => {
         message: 'app not found: Gmail',
         data: {
           nextSteps: [
-            'Run `orca computer list-apps --json` and retry with the exact app name or bundle ID.',
-            'If the target is a website or web app such as Gmail, choose the desktop browser app/window that contains it; `orca computer` app selectors refer to desktop apps, not website names.',
-            'Do not retry the same `orca computer ... --app <web app>` command unchanged.',
-            'If the desired browser is not listed, open or focus that browser first, then retry `orca computer list-apps --json` and `orca computer list-windows --app <browser> --json`.'
+            'Run `mcode computer list-apps --json` and retry with the exact app name or bundle ID.',
+            'If the target is a website or web app such as Gmail, choose the desktop browser app/window that contains it; `mcode computer` app selectors refer to desktop apps, not website names.',
+            'Do not retry the same `mcode computer ... --app <web app>` command unchanged.',
+            'If the desired browser is not listed, open or focus that browser first, then retry `mcode computer list-apps --json` and `mcode computer list-windows --app <browser> --json`.'
           ]
         }
       },
@@ -85,10 +85,10 @@ describe('formatCliError', () => {
     const output = formatCliError(error)
 
     expect(output).toContain('app not found: Gmail')
-    expect(output).toContain('Next step: Run `orca computer list-apps --json`')
+    expect(output).toContain('Next step: Run `mcode computer list-apps --json`')
     expect(output).toContain('desktop browser app/window')
     expect(output).toContain('--app <web app>')
-    expect(output).not.toContain('orca goto')
+    expect(output).not.toContain('mcode goto')
   })
 
   it('prints runtime next steps for structured lineage errors', () => {
@@ -128,14 +128,14 @@ describe('formatCliError', () => {
         data: {
           effectsApplied: false,
           nextCommandArgs: ['skills', 'get', 'orchestration', '--full'],
-          nextSteps: ['Using this same Orca CLI executable, run: skills get orchestration --full']
+          nextSteps: ['Using this same MCode CLI executable, run: skills get orchestration --full']
         }
       },
       _meta: { runtimeId: 'runtime-1' }
     })
 
     expect(formatCliError(error)).toContain(
-      'Next step: Using this same Orca CLI executable, run: skills get orchestration --full'
+      'Next step: Using this same MCode CLI executable, run: skills get orchestration --full'
     )
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
     reportCliError(error, true)
@@ -210,20 +210,20 @@ describe('formatAutomationShow', () => {
       automation: automation({
         runContext: {
           kind: 'workspace-run',
-          projectId: 'github:stablyai/orca',
+          projectId: 'github:mcode-ide/mcode',
           hostId: 'runtime:gpu',
           projectHostSetupId: 'setup-gpu',
           repoId: 'repo-gpu',
-          path: '/srv/orca'
+          path: '/srv/mcode'
         }
       })
     })
 
-    expect(output).toContain('runProjectId: github:stablyai/orca')
+    expect(output).toContain('runProjectId: github:mcode-ide/mcode')
     expect(output).toContain('runHostId: runtime:gpu')
     expect(output).toContain('projectHostSetupId: setup-gpu')
     expect(output).toContain('runRepoId: repo-gpu')
-    expect(output).toContain('runPath: /srv/orca')
+    expect(output).toContain('runPath: /srv/mcode')
     expect(output).toContain('legacyRepoId: repo-legacy')
     expect(output).not.toContain('projectId: repo-legacy')
   })
@@ -469,7 +469,7 @@ describe('formatComputerAction', () => {
     })
 
     expect(output).toContain(
-      `Use \`orca computer get-app-state --app ${quoteCliCommandArgument('Text Editor')} --worktree id:repo::/tmp/repo --window-id 99\``
+      `Use \`mcode computer get-app-state --app ${quoteCliCommandArgument('Text Editor')} --worktree id:repo::/tmp/repo --window-id 99\``
     )
     expect(output).toContain('5 visible elements in current window')
     expect(output).toContain(
@@ -498,7 +498,7 @@ describe('formatComputerAction', () => {
     })
 
     expect(output).toContain(
-      'Use `orca computer get-app-state --app com.apple.finder --session manual --window-index 1`'
+      'Use `mcode computer get-app-state --app com.apple.finder --session manual --window-index 1`'
     )
   })
 
@@ -532,7 +532,7 @@ describe('formatComputerAction', () => {
     expect(output).toContain('Screenshot failed (screenshot_failed)')
     expect(output).toContain('payload cap')
     expect(output).toContain(
-      'Use `orca computer get-app-state --app com.apple.finder --window-id 42`'
+      'Use `mcode computer get-app-state --app com.apple.finder --window-id 42`'
     )
     expect(output).not.toContain('Click completed')
   })
@@ -623,7 +623,7 @@ describe('formatComputerAction', () => {
     })
 
     expect(output).toContain(
-      'Use `orca computer get-app-state --app com.apple.finder --session manual --window-id 42`'
+      'Use `mcode computer get-app-state --app com.apple.finder --session manual --window-id 42`'
     )
     expect(output).toContain('Click attempted via synthetic, unverified (window changed)')
     expect(output).toContain(
@@ -655,7 +655,7 @@ describe('formatComputerAction', () => {
     const output = formatComputerAction('click', result)
 
     expect(output).toContain(
-      `Use \`orca computer get-app-state --app ${quoteCliCommandArgument('Linux Browser')} --window-index 2\``
+      `Use \`mcode computer get-app-state --app ${quoteCliCommandArgument('Linux Browser')} --window-index 2\``
     )
     expect(output).not.toContain('--window-id')
   })
@@ -683,7 +683,7 @@ describe('formatComputerAction', () => {
     const output = formatComputerAction('click', result)
 
     expect(output).toContain(
-      `Use \`orca computer get-app-state --app ${quoteCliCommandArgument('Linux Browser')} --window-index 2\``
+      `Use \`mcode computer get-app-state --app ${quoteCliCommandArgument('Linux Browser')} --window-index 2\``
     )
     expect(output).not.toContain('--window-index 4')
     expect(output).not.toContain('--window-id')
@@ -722,8 +722,8 @@ describe('printResult computer screenshots', () => {
   })
 
   it('removes expired screenshot temp files when cleanup is due', () => {
-    testScreenshotDir = mkdtempSync(join(tmpdir(), 'orca-format-test-'))
-    process.env.ORCA_COMPUTER_SCREENSHOT_TMPDIR = testScreenshotDir
+    testScreenshotDir = mkdtempSync(join(tmpdir(), 'mcode-format-test-'))
+    process.env.MCODE_COMPUTER_SCREENSHOT_TMPDIR = testScreenshotDir
     const expiredPath = join(testScreenshotDir, 'old-screenshot.png')
     writeFileSync(expiredPath, 'old')
     const expired = new Date(Date.now() - 48 * 60 * 60 * 1000)
@@ -756,13 +756,13 @@ describe('printResult computer screenshots', () => {
   })
 
   it('skips screenshot temp cleanup when the cleanup marker is fresh', () => {
-    testScreenshotDir = mkdtempSync(join(tmpdir(), 'orca-format-test-'))
+    testScreenshotDir = mkdtempSync(join(tmpdir(), 'mcode-format-test-'))
     const expiredPath = join(testScreenshotDir, 'old-screenshot.png')
     writeFileSync(expiredPath, 'old')
     const expired = new Date(Date.now() - 48 * 60 * 60 * 1000)
     utimesSync(expiredPath, expired, expired)
     writeFileSync(join(testScreenshotDir, '.last-cleanup'), 'recent\n')
-    process.env.ORCA_COMPUTER_SCREENSHOT_TMPDIR = testScreenshotDir
+    process.env.MCODE_COMPUTER_SCREENSHOT_TMPDIR = testScreenshotDir
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined)
 
     printResult(
@@ -794,9 +794,9 @@ describe('printResult computer screenshots', () => {
   })
 
   it('keeps inline screenshot data when temp export fails', () => {
-    testScreenshotDir = join(tmpdir(), `orca-format-blocked-${Date.now()}`)
+    testScreenshotDir = join(tmpdir(), `mcode-format-blocked-${Date.now()}`)
     writeFileSync(testScreenshotDir, 'not-a-directory')
-    process.env.ORCA_COMPUTER_SCREENSHOT_TMPDIR = testScreenshotDir
+    process.env.MCODE_COMPUTER_SCREENSHOT_TMPDIR = testScreenshotDir
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined)
     const screenshotData = Buffer.from('png-data').toString('base64')
 

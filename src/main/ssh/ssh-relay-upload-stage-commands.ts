@@ -136,7 +136,7 @@ function reservePosixStageCommand(poolDir: string, owner: string): string {
     'fi;',
     'fi;',
     'done;',
-    `printf '%s\\n' 'Orca relay upload staging quota is full; reconnect after 40 minutes or inspect .orca-remote/${RELAY_UPLOAD_STAGE_POOL_NAME}' >&2;`,
+    `printf '%s\\n' 'MCode relay upload staging quota is full; reconnect after 40 minutes or inspect .mcode-remote/${RELAY_UPLOAD_STAGE_POOL_NAME}' >&2;`,
     'exit 75'
   ].join(' ')
 }

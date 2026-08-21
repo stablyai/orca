@@ -98,7 +98,7 @@ function stashWebBuild(): () => void {
 
   // Why: Windows temp can be on a different drive from the workspace, and
   // renameSync cannot move directories across devices.
-  const tempDir = mkdtempSync(join(dirname(outWebPath), '.orca-dev-web-stash-'))
+  const tempDir = mkdtempSync(join(dirname(outWebPath), '.mcode-dev-web-stash-'))
   const stashedPath = join(tempDir, 'web')
   renameSync(outWebPath, stashedPath)
   return () => {
@@ -139,7 +139,7 @@ describe('run-electron-vite-dev web client prepare', () => {
 
   it('skips the initial web client build when no bundle exists', async () => {
     const restoreWebBuild = stashWebBuild()
-    const tempDir = mkdtempSync(join(tmpdir(), 'orca-dev-wrapper-'))
+    const tempDir = mkdtempSync(join(tmpdir(), 'mcode-dev-wrapper-'))
     const pidFile = join(tempDir, 'grandchild.pid')
     const envFile = join(tempDir, 'env.json')
     const viteFile = join(tempDir, 'vite.txt')
@@ -153,13 +153,13 @@ describe('run-electron-vite-dev web client prepare', () => {
         cwd: resolve('.'),
         env: {
           ...process.env,
-          ORCA_ELECTRON_VITE_CLI: fakeCliPath,
-          ORCA_VITE_CLI: fakeVitePath,
-          ORCA_SKIP_DEV_CLI_PREPARE: '1',
-          ORCA_SKIP_DEV_ELECTRON_APP_PREPARE: '1',
-          ORCA_DEV_WRAPPER_TEST_PID_FILE: pidFile,
-          ORCA_DEV_WRAPPER_TEST_ENV_FILE: envFile,
-          ORCA_DEV_WRAPPER_TEST_VITE_FILE: viteFile
+          MCODE_ELECTRON_VITE_CLI: fakeCliPath,
+          MCODE_VITE_CLI: fakeVitePath,
+          MCODE_SKIP_DEV_CLI_PREPARE: '1',
+          MCODE_SKIP_DEV_ELECTRON_APP_PREPARE: '1',
+          MCODE_DEV_WRAPPER_TEST_PID_FILE: pidFile,
+          MCODE_DEV_WRAPPER_TEST_ENV_FILE: envFile,
+          MCODE_DEV_WRAPPER_TEST_VITE_FILE: viteFile
         },
         stdio: ['ignore', 'ignore', 'pipe']
       })
@@ -191,7 +191,7 @@ describe('run-electron-vite-dev web client prepare', () => {
 
   it('builds the missing web client bundle when explicitly requested', async () => {
     const restoreWebBuild = stashWebBuild()
-    const tempDir = mkdtempSync(join(tmpdir(), 'orca-dev-wrapper-'))
+    const tempDir = mkdtempSync(join(tmpdir(), 'mcode-dev-wrapper-'))
     const pidFile = join(tempDir, 'grandchild.pid')
     const envFile = join(tempDir, 'env.json')
     const viteFile = join(tempDir, 'vite.txt')
@@ -204,14 +204,14 @@ describe('run-electron-vite-dev web client prepare', () => {
         cwd: resolve('.'),
         env: {
           ...process.env,
-          ORCA_ELECTRON_VITE_CLI: fakeCliPath,
-          ORCA_VITE_CLI: fakeVitePath,
-          ORCA_SKIP_DEV_CLI_PREPARE: '1',
-          ORCA_SKIP_DEV_ELECTRON_APP_PREPARE: '1',
-          ORCA_DEV_WEB_PREPARE: '1',
-          ORCA_DEV_WRAPPER_TEST_PID_FILE: pidFile,
-          ORCA_DEV_WRAPPER_TEST_ENV_FILE: envFile,
-          ORCA_DEV_WRAPPER_TEST_VITE_FILE: viteFile
+          MCODE_ELECTRON_VITE_CLI: fakeCliPath,
+          MCODE_VITE_CLI: fakeVitePath,
+          MCODE_SKIP_DEV_CLI_PREPARE: '1',
+          MCODE_SKIP_DEV_ELECTRON_APP_PREPARE: '1',
+          MCODE_DEV_WEB_PREPARE: '1',
+          MCODE_DEV_WRAPPER_TEST_PID_FILE: pidFile,
+          MCODE_DEV_WRAPPER_TEST_ENV_FILE: envFile,
+          MCODE_DEV_WRAPPER_TEST_VITE_FILE: viteFile
         },
         stdio: 'ignore'
       })

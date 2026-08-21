@@ -40,7 +40,7 @@ function metadataOnlyTranscript(sessionId: string): unknown[] {
 
 describe('recoverable-but-empty Claude sessions', () => {
   it('surfaces a zero-turn session with queued messages and subagent transcripts', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-recoverable-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-recoverable-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
     const sessionId = '9176163a-2f89-431f-b202-32f04d61f124'
@@ -79,7 +79,7 @@ describe('recoverable-but-empty Claude sessions', () => {
   })
 
   it('reports no recoverable signal for a plain metadata-only session', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-plain-empty-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-plain-empty-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
     const sessionId = 'plain-empty-session'
@@ -100,7 +100,7 @@ describe('recoverable-but-empty Claude sessions', () => {
   })
 
   it('counts subagent transcripts for a session that has real turns without flagging it recoverable', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-nonempty-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-nonempty-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
     const sessionId = 'conversation-session'
@@ -167,7 +167,7 @@ describe('recoverable-but-empty Claude sessions', () => {
   })
 
   it('picks up subagent transcripts written after the parent transcript last changed', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-late-sub-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-late-sub-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
     const sessionId = 'late-subagent-session'
@@ -199,7 +199,7 @@ describe('recoverable-but-empty Claude sessions', () => {
   })
 
   it('never counts local subagent transcripts for a remote-host transcript', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-remote-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-remote-'))
     tempRoots.push(root)
     const sessionId = 'remote-session'
     const transcriptPath = join(root, `${sessionId}.jsonl`)
@@ -228,13 +228,13 @@ describe('recoverable-but-empty Claude sessions', () => {
 
 describe('countSubagentTranscripts', () => {
   it('returns 0 when the sibling subagents directory is absent', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-nosub-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-nosub-'))
     tempRoots.push(root)
     expect(await countSubagentTranscripts(join(root, 'session.jsonl'))).toBe(0)
   })
 
   it('counts only .jsonl transcripts, excluding meta sidecars', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-sub-count-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-sub-count-'))
     tempRoots.push(root)
     const transcriptPath = join(root, 'session.jsonl')
     const subagentsDir = join(root, 'session', 'subagents')
@@ -246,7 +246,7 @@ describe('countSubagentTranscripts', () => {
   })
 
   it('excludes non-agent .jsonl files and directories named like transcripts', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-sub-predicate-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-sub-predicate-'))
     tempRoots.push(root)
     const transcriptPath = join(root, 'session.jsonl')
     const subagentsDir = join(root, 'session', 'subagents')

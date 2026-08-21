@@ -8,7 +8,7 @@ import {
 } from '../../../src/main/skills/skill-package-creation'
 import { SKILL_PACKAGE_CONTENT_TYPE } from '../../../src/shared/skill-package-manifest'
 
-export const REMOTE_SKILL_CLOUD_PORT = Number(process.env.ORCA_E2E_SKILL_CLOUD_PORT ?? '43961')
+export const REMOTE_SKILL_CLOUD_PORT = Number(process.env.MCODE_E2E_SKILL_CLOUD_PORT ?? '43961')
 export const REMOTE_SKILL_CLOUD_ORIGIN = `http://127.0.0.1:${REMOTE_SKILL_CLOUD_PORT}`
 export const REMOTE_SKILL_PACKAGE_ID = 'package_remote_e2e'
 export const REMOTE_SKILL_VERSION_ID = 'version_remote_e2e'
@@ -23,7 +23,7 @@ export type RemoteSkillCloudFixture = {
 }
 
 export async function startRemoteSkillCloudFixture(): Promise<RemoteSkillCloudFixture> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-remote-skill-cloud-'))
+  const root = await mkdtemp(join(tmpdir(), 'mcode-remote-skill-cloud-'))
   const source = join(root, 'source')
   await mkdir(source)
   await writeFile(

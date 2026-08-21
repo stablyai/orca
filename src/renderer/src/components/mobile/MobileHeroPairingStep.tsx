@@ -191,7 +191,7 @@ export function MobileHeroPairingStep({
         </div>
         <h2 className="mp-h2">{pairDeviceHeading()}</h2>
         <p className="mp-lead-sm">
-          {translate('auto.components.mobile.MobileHero.d1495e5e64', 'Open Orca Mobile, tap')}{' '}
+          {translate('auto.components.mobile.MobileHero.d1495e5e64', 'Open MCode Mobile, tap')}{' '}
           <strong>
             {translate('auto.components.mobile.MobileHero.3aa7bb2d8b', 'Pair Desktop')}
           </strong>
@@ -267,7 +267,7 @@ export function MobileHeroPairingStep({
             <span className="min-w-0">
               {translate(
                 'auto.components.mobile.MobileHero.pairingQrError',
-                'This pairing code couldn’t be rendered as a QR code. Copy it into Orca Mobile instead.'
+                'This pairing code couldn’t be rendered as a QR code. Copy it into MCode Mobile instead.'
               )}
             </span>
           </p>

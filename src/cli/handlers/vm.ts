@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { CommandHandler } from '../dispatch'
 import { RuntimeClientError } from '../runtime-client'
-import { parseOrcaYaml } from '../../shared/orca-yaml'
+import { parseMCodeYaml } from '../../shared/mcode-yaml'
 import {
   getEphemeralVmRecipeResultProjectRoot,
   type EphemeralVmRecipeDoctorCheck,
@@ -19,7 +19,7 @@ import {
   runEphemeralVmRecipeCleanup,
   runEphemeralVmRecipeStart
 } from '../../shared/ephemeral-vm-recipe-runner'
-import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
+import type { MCodeVmRecipe } from '../../shared/mcode-yaml-hook-types'
 
 export const VM_HANDLERS: Record<string, CommandHandler> = {
   'vm recipe doctor': async ({ flags, cwd, json }) => {
@@ -44,7 +44,7 @@ export const VM_HANDLERS: Record<string, CommandHandler> = {
 }
 
 function doctorRecipe(repoPath: string, recipeId: string): DoctorResult {
-  const yamlPath = join(repoPath, 'orca.yaml')
+  const yamlPath = join(repoPath, 'mcode.yaml')
   if (!existsSync(yamlPath)) {
     return {
       recipeId,
@@ -52,21 +52,21 @@ function doctorRecipe(repoPath: string, recipeId: string): DoctorResult {
       ok: false,
       checks: [
         {
-          id: 'orca_yaml.exists',
+          id: 'mcode_yaml.exists',
           status: 'fail',
-          message: `No orca.yaml found at ${yamlPath}`,
-          remediation: 'Add environmentRecipes to the repo orca.yaml.'
+          message: `No mcode.yaml found at ${yamlPath}`,
+          remediation: 'Add environmentRecipes to the repo mcode.yaml.'
         }
       ]
     }
   }
 
-  const hooks = parseOrcaYaml(readTextFile(yamlPath))
+  const hooks = parseMCodeYaml(readTextFile(yamlPath))
   const parseCheck: EphemeralVmRecipeDoctorCheck = {
-    id: 'orca_yaml.parse',
+    id: 'mcode_yaml.parse',
     status: hooks ? 'pass' : 'fail',
-    message: hooks ? 'orca.yaml parsed successfully.' : 'orca.yaml has no supported Orca config.',
-    ...(hooks ? {} : { remediation: 'Add an environmentRecipes entry to orca.yaml.' })
+    message: hooks ? 'mcode.yaml parsed successfully.' : 'mcode.yaml has no supported MCode config.',
+    ...(hooks ? {} : { remediation: 'Add an environmentRecipes entry to mcode.yaml.' })
   }
   const result = doctorEphemeralVmRecipe({
     repoPath,
@@ -260,8 +260,8 @@ function buildProvisionFailureRemediation(stderr: string, stdout: string): strin
     : 'Check recipe stderr and ensure stdout contains the VM recipe result JSON.'
 }
 
-function loadRecipe(repoPath: string, recipeId: string): OrcaVmRecipe | null {
-  const hooks = parseOrcaYaml(readTextFile(join(repoPath, 'orca.yaml')))
+function loadRecipe(repoPath: string, recipeId: string): MCodeVmRecipe | null {
+  const hooks = parseMCodeYaml(readTextFile(join(repoPath, 'mcode.yaml')))
   return hooks?.environmentRecipes?.find((entry) => entry.id === recipeId) ?? null
 }
 

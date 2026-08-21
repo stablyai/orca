@@ -3,7 +3,7 @@ import type { PrintToPDFOptions } from 'electron'
 
 const PDF_DEFAULT_MARGIN_INCHES = 1 / 2.54
 const PDF_STREAM_CHUNK_BYTES = 1024 * 1024
-const PDF_STREAM_HANDLE_PREFIX = 'orca-pdf-'
+const PDF_STREAM_HANDLE_PREFIX = 'mcode-pdf-'
 const PDF_STREAM_TTL_MS = 5 * 60 * 1000
 
 function finiteNumber(value: unknown): number | null {

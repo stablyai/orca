@@ -33,7 +33,7 @@ describe('WorktreeVisibilitySourceList', () => {
     const repo: Repo = {
       id: 'repo-1',
       path: '/repo',
-      displayName: 'orca',
+      displayName: 'mcode',
       badgeColor: '#000000',
       addedAt: 0,
       worktreeBasePath: '.claude/worktrees'
@@ -71,7 +71,7 @@ describe('WorktreeVisibilitySourceList', () => {
     const repo: Repo = {
       id: 'repo-1',
       path: '/repo',
-      displayName: 'orca',
+      displayName: 'mcode',
       badgeColor: '#000000',
       addedAt: 0,
       worktreeVisibilitySourcePreferences: { builtIn: { claude: 'show' } }

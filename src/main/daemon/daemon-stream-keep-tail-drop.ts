@@ -45,7 +45,7 @@ export type PendingStreamDataBatch = {
 // The keep-tail must comfortably cover a full TUI repaint (~cols×rows×SGR ≈
 // 100KB) so the delivered tail always re-renders a coherent screen.
 // Hysteresis (cap = 2× keep) bounds drop churn.
-// Kill switch: ORCA_DAEMON_BACKGROUND_STREAM_DROP=0 disables thinning.
+// Kill switch: MCODE_DAEMON_BACKGROUND_STREAM_DROP=0 disables thinning.
 const BACKGROUND_SESSION_KEEP_TAIL_CHARS = 512 * 1024
 const BACKGROUND_SESSION_MIN_KEEP_TAIL_CHARS = 64 * 1024
 // Why a GLOBAL budget too: the per-session cap bounds each flood, but N

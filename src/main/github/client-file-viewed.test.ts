@@ -67,7 +67,7 @@ describe('setPRFileViewed', () => {
   beforeEach(() => {
     ghExecFileAsyncMock.mockReset()
     getOwnerRepoMock.mockReset()
-    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'orca' })
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'mcode' })
     getEnterpriseGitHubRepoSlugMock.mockReset()
     getEnterpriseGitHubRepoSlugMock.mockResolvedValue(null)
     acquireMock.mockReset()
@@ -141,7 +141,7 @@ describe('setPRFileViewed', () => {
     getOwnerRepoMock.mockResolvedValueOnce(null)
     getEnterpriseGitHubRepoSlugMock.mockResolvedValueOnce({
       owner: 'team',
-      repo: 'orca',
+      repo: 'mcode',
       host: 'github.acme-corp.com'
     })
     ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '{}' })
@@ -173,7 +173,7 @@ describe('setPRFileViewed', () => {
     await expect(
       setPRFileViewed({
         repoPath: '/repo-root',
-        prRepo: { owner: 'team', repo: 'orca' },
+        prRepo: { owner: 'team', repo: 'mcode' },
         pullRequestId: 'PR_unresolved',
         path: 'src/app.ts',
         viewed: true

@@ -106,7 +106,7 @@ export type KnownHostsEvidence = {
    * Files that EXIST but could not be read — a permissions problem, a directory, an I/O error.
    *
    * Deliberately not "files that produced no entries": a file that is simply absent is the normal
-   * state (ssh creates known_hosts on its own first connect, and most Orca profiles start without
+   * state (ssh creates known_hosts on its own first connect, and most MCode profiles start without
    * one), and it is real evidence that no host is known. A file that exists and refuses to open is
    * the opposite — evidence withheld, so an entry that would have said "this key changed" may be
    * sitting in it. The caller must not record trust while any source is silent that way.
@@ -135,7 +135,7 @@ export async function loadKnownHostsEvidence(
 
 /**
  * The name the lookup keys on: `HostKeyAlias` when set, else the resolved hostname, else the host
- * ssh2 dials. Never the Orca label — bastions tunnelled through `localhost:port` depend on the
+ * ssh2 dials. Never the MCode label — bastions tunnelled through `localhost:port` depend on the
  * alias, and a label keys on nothing `ssh` ever wrote.
  */
 export function resolveKnownHostsLookupHost(
@@ -143,7 +143,7 @@ export function resolveKnownHostsLookupHost(
   dialedHost: string
 ): { host: string; isHostKeyAlias: boolean } {
   // Deliberately NOT `resolved.hostname`: `ssh -G` echoes its own argument back as `hostname` when
-  // no Host block matches, which for a manual target is the Orca label. Keying on that consults a
+  // no Host block matches, which for a manual target is the MCode label. Keying on that consults a
   // name `ssh` never wrote, so the real host's entries are missed entirely and an impersonated
   // host reads as first contact. `dialedHost` is what ssh2 actually connects to, with HostName
   // resolution already applied by buildConnectConfig.

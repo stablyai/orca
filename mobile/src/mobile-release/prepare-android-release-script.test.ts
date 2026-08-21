@@ -21,7 +21,7 @@ const appConfig = {
 let tempDirs: string[] = []
 
 function createAppConfig() {
-  const dir = mkdtempSync(join(tmpdir(), 'orca-android-release-'))
+  const dir = mkdtempSync(join(tmpdir(), 'mcode-android-release-'))
   tempDirs.push(dir)
   const configPath = join(dir, 'app.json')
   const contents = `${JSON.stringify(appConfig, null, 2)}\n`
@@ -49,7 +49,7 @@ describe('prepare Android release script', () => {
       }
     })
 
-    expect(output).toContain('Prepared Orca Mobile Android 0.0.22 (4)')
+    expect(output).toContain('Prepared MCode Mobile Android 0.0.22 (4)')
     expect(output).toContain('Release tag: mobile-android-v0.0.22')
     expect(readFileSync(configPath, 'utf8')).toBe(contents)
   })

@@ -14,7 +14,7 @@ function buildTarget(target) {
         stdio: 'inherit',
         env: {
           ...process.env,
-          ORCA_ELECTRON_VITE_TARGET: target
+          MCODE_ELECTRON_VITE_TARGET: target
         }
       }
     )

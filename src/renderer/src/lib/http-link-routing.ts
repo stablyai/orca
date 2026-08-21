@@ -14,7 +14,7 @@ export type OpenHttpLinkOptions = {
   allowRuntimeInApp?: boolean
   /** Unconditional: always use the system browser regardless of settings. */
   forceSystemBrowser?: boolean
-  /** Unconditional for local sources: open inside Orca regardless of settings. */
+  /** Unconditional for local sources: open inside MCode regardless of settings. */
   forceInApp?: boolean
   /** The Shift escape-hatch modifier was held; resolveModifierRouting decides what it means. */
   modifierHeld?: boolean
@@ -102,14 +102,14 @@ export function resolveModifierRouting(
   modifierHeld: boolean,
   openLinksInApp: boolean,
   modifierInverts: boolean
-): { wantsOrca: boolean; wantsSystemBrowser: boolean } {
+): { wantsMCode: boolean; wantsSystemBrowser: boolean } {
   if (!modifierHeld) {
-    return { wantsOrca: false, wantsSystemBrowser: false }
+    return { wantsMCode: false, wantsSystemBrowser: false }
   }
   if (!modifierInverts) {
-    return { wantsOrca: false, wantsSystemBrowser: true }
+    return { wantsMCode: false, wantsSystemBrowser: true }
   }
-  return { wantsOrca: !openLinksInApp, wantsSystemBrowser: openLinksInApp }
+  return { wantsMCode: !openLinksInApp, wantsSystemBrowser: openLinksInApp }
 }
 
 export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void {
@@ -133,13 +133,13 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
     openLinksInApp,
     state?.settings?.openLinksInAppModifierInverts === true
   )
-  const wantsOrca =
+  const wantsMCode =
     !forceSystemBrowser &&
     !modifier.wantsSystemBrowser &&
     Boolean(worktreeId) &&
-    (forceInApp || openLinksInApp || modifier.wantsOrca)
+    (forceInApp || openLinksInApp || modifier.wantsMCode)
 
-  if (wantsOrca && allowRuntimeInApp && worktreeId && sourceOwner?.kind === 'runtime') {
+  if (wantsMCode && allowRuntimeInApp && worktreeId && sourceOwner?.kind === 'runtime') {
     if (runtimeHttpLinkBrowserOpener) {
       void runtimeHttpLinkBrowserOpener({
         workspaceId: worktreeId,
@@ -157,7 +157,7 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
     return
   }
 
-  if (wantsOrca && sourceIsLocal && worktreeId && state) {
+  if (wantsMCode && sourceIsLocal && worktreeId && state) {
     // Why: http clicks from inside a worktree should not push a worktree-switch
     // history entry — the user isn't changing worktrees, they're opening a tab
     // in the one they're already in. activateAndRevealWorktree is reserved for

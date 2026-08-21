@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import { RpcDispatcher } from '../dispatcher'
 import { WORKTREE_METHODS } from './worktree'
 import { WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
@@ -12,7 +12,7 @@ function makeRuntime() {
       totalCount: 0,
       truncated: false
     })
-  } as unknown as OrcaRuntimeService
+  } as unknown as MCodeRuntimeService
 }
 
 describe('worktree.ps catalog snapshots', () => {

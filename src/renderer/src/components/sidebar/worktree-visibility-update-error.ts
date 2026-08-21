@@ -9,7 +9,7 @@ export function worktreeVisibilityUpdateError(
   if (updateSucceeded && returnedPreferences === undefined && requestedPreferences !== undefined) {
     return translate(
       'auto.components.sidebar.WorktreeVisibilityDialog.unsupportedHost',
-      "This host doesn't support source-specific worktree visibility. Update Orca on the host to change this setting."
+      "This host doesn't support source-specific worktree visibility. Update MCode on the host to change this setting."
     )
   }
   return translate(

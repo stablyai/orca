@@ -10,11 +10,11 @@ const REPO_ROOT = path.resolve(SCRIPT_DIR, '..', '..')
 const CANONICAL_GUIDE_NAMES = [
   'computer-use',
   'linear-tickets',
-  'orca-cli',
-  'orca-emulator',
-  'orca-emulator-android',
-  'orca-linear',
-  'orca-per-workspace-env',
+  'mcode-cli',
+  'mcode-emulator',
+  'mcode-emulator-android',
+  'mcode-linear',
+  'mcode-per-workspace-env',
   'orchestration'
 ]
 
@@ -23,27 +23,27 @@ const CANONICAL_GUIDE_NAMES = [
 const GUIDE_ALIASES = {
   'computer-use': [],
   'linear-tickets': [],
-  'orca-cli': [],
-  'orca-emulator': [],
-  'orca-emulator-android': [],
-  'orca-linear': [],
-  'orca-per-workspace-env': [],
+  'mcode-cli': [],
+  'mcode-emulator': [],
+  'mcode-emulator-android': [],
+  'mcode-linear': [],
+  'mcode-per-workspace-env': [],
   orchestration: []
 }
 
 // Why: a stubbed topic ships a hybrid discovery stub as its installable projection while
-// `orca skills get <topic>` still serves the full version-matched guide from the binary.
+// `mcode skills get <topic>` still serves the full version-matched guide from the binary.
 // Migrating a topic here is effectively one-way — earlier fat installs rely on the stub
 // landing to converge — so entries are added as skills convert, never removed. The stub
 // body lives in skill-stubs/<topic>.md; the projection reuses the guide's own frontmatter.
 const STUB_TOPICS = [
   'computer-use',
   'linear-tickets',
-  'orca-cli',
-  'orca-emulator',
-  'orca-emulator-android',
-  'orca-linear',
-  'orca-per-workspace-env',
+  'mcode-cli',
+  'mcode-emulator',
+  'mcode-emulator-android',
+  'mcode-linear',
+  'mcode-per-workspace-env',
   'orchestration'
 ]
 

@@ -21,7 +21,7 @@ const T = 1_700_000_000_000
 const PANE = 'tab-1:pane-1'
 
 beforeEach(() => {
-  userDataDir = mkdtempSync(join(tmpdir(), 'orca-stats-recorder-'))
+  userDataDir = mkdtempSync(join(tmpdir(), 'mcode-stats-recorder-'))
   vi.useFakeTimers({ now: T })
 })
 

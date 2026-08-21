@@ -8,8 +8,8 @@ import { tmpdir } from 'node:os'
 import { DEVICE_REGISTRY_FILENAME, E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'
 
 // Mutable userData the electron mock resolves. We flip it mid-test to simulate
-// app.setName('Orca') changing how app.getPath('userData') resolves (e.g. from
-// lowercase 'orca' to uppercase 'Orca' on a case-sensitive filesystem) — the
+// app.setName('MCode') changing how app.getPath('userData') resolves (e.g. from
+// lowercase 'mcode' to uppercase 'MCode' on a case-sensitive filesystem) — the
 // divergence that drops paired devices. We use two genuinely distinct directory
 // names rather than case variants so the assertion is deterministic regardless
 // of whether the test host's filesystem is case-sensitive.
@@ -33,7 +33,7 @@ describe('mobile pairing userData path stability', () => {
   let lateDir: string
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'orca-pairing-path-'))
+    root = mkdtempSync(join(tmpdir(), 'mcode-pairing-path-'))
     canonicalDir = join(root, 'userdata-early')
     lateDir = join(root, 'userdata-late')
     mkdirSync(canonicalDir, { recursive: true })
@@ -51,7 +51,7 @@ describe('mobile pairing userData path stability', () => {
     const { initDataPath, getCanonicalUserDataPath } = await import('../persistence')
     initDataPath()
 
-    // app.setName('Orca') happens later in startup, changing late resolution.
+    // app.setName('MCode') happens later in startup, changing late resolution.
     appState.userData = lateDir
 
     expect(getCanonicalUserDataPath()).toBe(canonicalDir)
@@ -64,17 +64,17 @@ describe('mobile pairing userData path stability', () => {
     const { initDataPath, getCanonicalUserDataPath } = await import('../persistence')
     initDataPath()
 
-    appState.userData = lateDir // app.setName('Orca') has run by the time the runtime starts
+    appState.userData = lateDir // app.setName('MCode') has run by the time the runtime starts
 
     const { DeviceRegistry } = await import('./device-registry')
     const { loadOrCreateE2EEKeypair } = await import('./e2ee-keypair')
 
-    // Mirrors OrcaRuntimeRpcServer.start(): both read from the same userDataPath.
+    // Mirrors MCodeRuntimeRpcServer.start(): both read from the same userDataPath.
     const registry = new DeviceRegistry(getCanonicalUserDataPath())
     registry.addDevice('iPhone')
     loadOrCreateE2EEKeypair(getCanonicalUserDataPath())
 
-    // Pairing credentials land beside orca-data.json so they survive restarts/updates.
+    // Pairing credentials land beside mcode-data.json so they survive restarts/updates.
     expect(existsSync(join(canonicalDir, DEVICE_REGISTRY_FILENAME))).toBe(true)
     expect(existsSync(join(canonicalDir, E2EE_KEYPAIR_FILENAME))).toBe(true)
     // The bug being guarded: the late path would have captured these instead.

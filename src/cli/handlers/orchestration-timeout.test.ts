@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
 const getTerminalHandleMock = vi.hoisted(() => vi.fn())
-const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
-const originalPaneKey = process.env.ORCA_PANE_KEY
+const originalTerminalHandle = process.env.MCODE_TERMINAL_HANDLE
+const originalPaneKey = process.env.MCODE_PANE_KEY
 
 vi.mock('../format', () => ({ printResult: vi.fn() }))
 vi.mock('../selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
@@ -42,20 +42,20 @@ beforeEach(() => {
   callMock.mockReset()
   getTerminalHandleMock.mockReset()
   vi.mocked(printResult).mockReset()
-  delete process.env.ORCA_TERMINAL_HANDLE
-  delete process.env.ORCA_PANE_KEY
+  delete process.env.MCODE_TERMINAL_HANDLE
+  delete process.env.MCODE_PANE_KEY
 })
 
 afterEach(() => {
   if (originalTerminalHandle === undefined) {
-    delete process.env.ORCA_TERMINAL_HANDLE
+    delete process.env.MCODE_TERMINAL_HANDLE
   } else {
-    process.env.ORCA_TERMINAL_HANDLE = originalTerminalHandle
+    process.env.MCODE_TERMINAL_HANDLE = originalTerminalHandle
   }
   if (originalPaneKey === undefined) {
-    delete process.env.ORCA_PANE_KEY
+    delete process.env.MCODE_PANE_KEY
   } else {
-    process.env.ORCA_PANE_KEY = originalPaneKey
+    process.env.MCODE_PANE_KEY = originalPaneKey
   }
   vi.restoreAllMocks()
 })
@@ -73,7 +73,7 @@ describe('orchestration timeout flag validation', () => {
   })
 
   it('passes a parsed check timeout and peek mode into the RPC payload', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_worker'
     callMock.mockResolvedValue({ result: { messages: [], count: 0 } })
 
     await invokeCheck(
@@ -92,7 +92,7 @@ describe('orchestration timeout flag validation', () => {
       all: undefined,
       types: undefined,
       format: undefined,
-      compatibilityCliCommand: expect.stringMatching(/^orca(?:-ide)?$/),
+      compatibilityCliCommand: expect.stringMatching(/^mcode(?:-ide)?$/),
       run: undefined,
       ack: undefined,
       wait: true,
@@ -101,7 +101,7 @@ describe('orchestration timeout flag validation', () => {
   })
 
   it('filters already-read rows from a peek response for pre-peek runtimes', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_worker'
     callMock.mockResolvedValue({
       result: {
         messages: [
@@ -124,7 +124,7 @@ describe('orchestration timeout flag validation', () => {
   })
 
   it('rejects combined read modes before calling the runtime', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_worker'
 
     await expect(
       invokeCheck(
@@ -141,7 +141,7 @@ describe('orchestration timeout flag validation', () => {
   })
 
   it('warns when a pre-peek runtime returned a full 100-row page', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_worker'
     const rows = Array.from({ length: 100 }, (_, index) => ({
       id: `msg_${index}`,
       from_handle: 'a',
@@ -157,7 +157,7 @@ describe('orchestration timeout flag validation', () => {
   })
 
   it('fails --peek --wait against a runtime that returned only read rows', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_worker'
     callMock.mockResolvedValue({
       result: {
         messages: [{ id: 'msg_old', from_handle: 'a', subject: 'seen', read: 1 }],
@@ -190,7 +190,7 @@ describe('orchestration timeout flag validation', () => {
   it.each([String(2_147_483_647), String(Number.MAX_SAFE_INTEGER)])(
     'clamps a safe ask timeout %s before adding transport headroom',
     async (rawTimeout) => {
-      process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+      process.env.MCODE_TERMINAL_HANDLE = 'term_worker'
       callMock.mockResolvedValue({
         result: { answer: 'yes', messageId: 'msg_1', threadId: 'thread_1', timedOut: false }
       })
@@ -215,7 +215,7 @@ describe('orchestration timeout flag validation', () => {
   it.each(['+1000', '1000.0', '1e3', '0x3e8'])(
     'preserves CLI-compatible exact integer timeout syntax %s',
     async (rawTimeout) => {
-      process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+      process.env.MCODE_TERMINAL_HANDLE = 'term_worker'
       callMock.mockResolvedValue({
         result: { answer: 'yes', messageId: 'msg_1', threadId: 'thread_1', timedOut: false }
       })
@@ -238,7 +238,7 @@ describe('orchestration timeout flag validation', () => {
   )
 
   it('keeps an omitted ask timeout out of the payload while using default headroom', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_worker'
     callMock.mockResolvedValue({
       result: { answer: 'yes', messageId: 'msg_1', threadId: 'thread_1', timedOut: false }
     })
@@ -259,7 +259,7 @@ describe('orchestration timeout flag validation', () => {
   })
 
   it('uses the parsed ask timeout for both runtime wait and client timeout', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_worker'
     callMock.mockResolvedValue({
       result: { answer: 'yes', messageId: 'msg_1', threadId: 'thread_1', timedOut: false }
     })
@@ -283,7 +283,7 @@ describe('orchestration timeout flag validation', () => {
         options: undefined,
         timeoutMs: 123,
         from: 'term_worker',
-        compatibilityCliCommand: expect.stringMatching(/^orca(?:-ide)?$/),
+        compatibilityCliCommand: expect.stringMatching(/^mcode(?:-ide)?$/),
         compatibilityWindowsCommand: undefined
       },
       { timeoutMs: 5_123, orchestrationCapability: undefined }

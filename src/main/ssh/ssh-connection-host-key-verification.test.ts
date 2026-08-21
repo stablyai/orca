@@ -50,7 +50,7 @@ describe('SshConnection host key verification', () => {
   // party we just refused.
   it('never asks for a credential after refusing a host key', async () => {
     vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
-    const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-key-'))
+    const tempDir = mkdtempSync(join(tmpdir(), 'mcode-ssh-key-'))
     const keyPath = join(tempDir, 'id_ed25519')
     writeFileSync(keyPath, 'test-key')
     ssh2Mock.presentedHostKey = UNIDENTIFIABLE_HOST_KEY
@@ -85,7 +85,7 @@ describe('SshConnection host key verification', () => {
   // refuse every connection a new profile ever makes, which is how a fail-closed rule turns into a
   // product that does not work.
   it('connects on first contact when no known_hosts file exists yet', async () => {
-    const emptyHome = mkdtempSync(join(tmpdir(), 'orca-ssh-home-'))
+    const emptyHome = mkdtempSync(join(tmpdir(), 'mcode-ssh-home-'))
     vi.stubEnv('HOME', emptyHome)
 
     try {
@@ -107,7 +107,7 @@ describe('SshConnection host key verification', () => {
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
     'still connects when a known_hosts file exists but cannot be read',
     async () => {
-      const home = mkdtempSync(join(tmpdir(), 'orca-ssh-home-'))
+      const home = mkdtempSync(join(tmpdir(), 'mcode-ssh-home-'))
       mkdirSync(join(home, '.ssh'))
       const knownHosts = join(home, '.ssh', 'known_hosts')
       writeFileSync(knownHosts, '')

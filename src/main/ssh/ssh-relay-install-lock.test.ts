@@ -40,7 +40,7 @@ describe('acquireInstallLock', () => {
     await expect(
       acquireInstallLock(
         {} as SshConnection,
-        '/home/u/.orca-remote/relay-0.1.0',
+        '/home/u/.mcode-remote/relay-0.1.0',
         getRemoteHostPlatform('linux-x64'),
         { signal: controller.signal }
       )

@@ -11,7 +11,7 @@ describe('packaged local build compatibility contract', () => {
   it('stays aligned with runtime state and daemon constants', () => {
     expect(LOCAL_BUILD_COMPATIBILITY_CONTRACT).toEqual(compatibilityContract)
     expect(compatibilityContract).toMatchObject({
-      appId: 'com.stablyai.orca',
+      appId: 'com.mcode.desktop',
       stateSchemaVersion: SCHEMA_VERSION,
       readableStateSchemaVersions: [SCHEMA_VERSION],
       daemonProtocolVersion: PROTOCOL_VERSION,

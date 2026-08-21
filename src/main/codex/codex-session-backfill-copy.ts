@@ -2,13 +2,13 @@ import { randomUUID } from 'node:crypto'
 import { copyFile, link, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
-const ATOMIC_NO_REPLACE_UNSUPPORTED_CODE = 'ORCA_ATOMIC_NO_REPLACE_UNSUPPORTED'
+const ATOMIC_NO_REPLACE_UNSUPPORTED_CODE = 'MCODE_ATOMIC_NO_REPLACE_UNSUPPORTED'
 
 export async function copySessionFileWithoutOverwrite(
   sourcePath: string,
   targetPath: string
 ): Promise<void> {
-  const temporaryPath = join(dirname(targetPath), `.orca-backfill-${randomUUID()}.tmp`)
+  const temporaryPath = join(dirname(targetPath), `.mcode-backfill-${randomUUID()}.tmp`)
   // Why: stage cross-volume copies away from the rollout filename so a failed
   // copy cannot strand a truncated session that a later retry would skip.
   await writeFile(temporaryPath, '', { encoding: 'utf-8', flag: 'wx', mode: 0o600 })

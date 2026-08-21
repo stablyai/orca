@@ -498,7 +498,7 @@ describe('TabBar context menu wiring', () => {
   })
 
   it('omits impossible paired-web actions while keeping terminal and markdown', async () => {
-    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    vi.stubGlobal('__MCODE_WEB_CLIENT__', true)
     const element = await renderTabBar({
       tabs: [TERMINAL_TAB],
       onNewFileTab: () => {},

@@ -1,20 +1,20 @@
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { waitForSessionReady, waitForActiveWorktree } from './helpers/store'
 
 test.describe('Diff note edit', () => {
-  test.beforeEach(async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
+  test.beforeEach(async ({ mcodePage }) => {
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
   })
 
-  test('editing a saved inline note updates the open diff card', async ({ orcaPage }) => {
-    const worktreeId = await waitForActiveWorktree(orcaPage)
+  test('editing a saved inline note updates the open diff card', async ({ mcodePage }) => {
+    const worktreeId = await waitForActiveWorktree(mcodePage)
     const seededBody = 'edit-me note'
     const editedBody = 'edited note from the inline card'
 
     // Why: create a real modified-file diff so Monaco mounts the saved-note
     // view zone on the same local surface that wires updateDiffComment.
-    const { relativePath } = await orcaPage.evaluate(async (wId) => {
+    const { relativePath } = await mcodePage.evaluate(async (wId) => {
       const store = window.__store
       if (!store) {
         throw new Error('window.__store is not available - is the app in dev mode?')
@@ -36,7 +36,7 @@ test.describe('Diff note edit', () => {
       return { relativePath: rel }
     }, worktreeId)
 
-    const addResult = await orcaPage.evaluate(
+    const addResult = await mcodePage.evaluate(
       async ({ wId, rel, body }) => {
         const store = window.__store
         if (!store) {
@@ -56,7 +56,7 @@ test.describe('Diff note edit', () => {
     expect(addResult, 'addDiffComment returned null').not.toBeNull()
     const commentId = addResult!.id
 
-    await orcaPage.evaluate(
+    await mcodePage.evaluate(
       ({ wId, rel }) => {
         const store = window.__store
         if (!store) {
@@ -75,18 +75,18 @@ test.describe('Diff note edit', () => {
       { wId: worktreeId, rel: relativePath }
     )
 
-    const card = orcaPage.locator('.orca-diff-comment-card').first()
+    const card = mcodePage.locator('.mcode-diff-comment-card').first()
     await expect(card, 'seeded inline note did not render').toBeVisible({ timeout: 15_000 })
-    await expect(card.locator('.orca-diff-comment-body')).toHaveText(seededBody)
+    await expect(card.locator('.mcode-diff-comment-body')).toHaveText(seededBody)
 
     await card.getByTitle('Edit note').click()
 
-    const textarea = card.locator('.orca-diff-comment-popover-textarea')
+    const textarea = card.locator('.mcode-diff-comment-popover-textarea')
     await expect(textarea).toBeVisible()
     await expect(textarea).toHaveValue(seededBody)
 
     const saveButton = card
-      .locator('.orca-diff-comment-popover-footer button')
+      .locator('.mcode-diff-comment-popover-footer button')
       .filter({ hasText: 'Save' })
     await expect(saveButton, 'Save should be disabled before the body changes').toBeDisabled()
 
@@ -101,7 +101,7 @@ test.describe('Diff note edit', () => {
     await expect
       .poll(
         async () =>
-          orcaPage.evaluate((id: string) => {
+          mcodePage.evaluate((id: string) => {
             const store = window.__store
             if (!store) {
               return null
@@ -119,13 +119,13 @@ test.describe('Diff note edit', () => {
       )
       .toBe(editedBody)
 
-    const updatedCard = orcaPage
-      .locator('.orca-diff-comment-card')
-      .filter({ has: orcaPage.locator('.orca-diff-comment-body', { hasText: editedBody }) })
+    const updatedCard = mcodePage
+      .locator('.mcode-diff-comment-card')
+      .filter({ has: mcodePage.locator('.mcode-diff-comment-body', { hasText: editedBody }) })
       .first()
     await expect(updatedCard, 'inline card did not update in the open diff').toBeVisible()
-    await expect(updatedCard.locator('.orca-diff-comment-body')).toHaveText(editedBody)
-    await expect(updatedCard.locator('.orca-diff-comment-body')).not.toHaveText(seededBody)
+    await expect(updatedCard.locator('.mcode-diff-comment-body')).toHaveText(editedBody)
+    await expect(updatedCard.locator('.mcode-diff-comment-body')).not.toHaveText(seededBody)
     await expect(updatedCard.getByTitle('Edit note')).toBeVisible()
   })
 })

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# Creates stablyai/orca-adhoc and grants the existing release App write access to
+# Creates mcode-ide/mcode-adhoc and grants the existing release App write access to
 # it, so adhoc-mac-build.yml can publish there.
 #
-# Why a separate repo rather than reusing orca-hourly: an adhoc build is somebody's
+# Why a separate repo rather than reusing mcode-hourly: an adhoc build is somebody's
 # unlanded branch. Sharing hourly's repo would put branch builds in the list a
 # developer riding main sees, and the two are different levels of unvetted.
 #
@@ -17,9 +17,9 @@
 set -euo pipefail
 
 ORG="stablyai"
-ADHOC_REPO="$ORG/orca-adhoc"
-MAIN_REPO="$ORG/orca"
-APP_SLUG="orca-hourly-release"
+ADHOC_REPO="$ORG/mcode-adhoc"
+MAIN_REPO="$ORG/mcode"
+APP_SLUG="mcode-hourly-release"
 
 fail() {
   echo "error: $*" >&2
@@ -34,7 +34,7 @@ if gh api "repos/$ADHOC_REPO" --jq '.full_name' >/dev/null 2>&1; then
 else
   echo "Creating $ADHOC_REPO..."
   # Why public: the in-app updater fetches release assets unauthenticated, exactly
-  # as it does for orca-hourly. A private repo would 404 for every client.
+  # as it does for mcode-hourly. A private repo would 404 for every client.
   #
   # Why the features are off: this repo holds releases and nothing else. Leaving
   # issues open invites bug reports against a branch build in a repo nobody
@@ -44,7 +44,7 @@ else
   # and a tag needs a commit. Empty repo = "Repository is empty" 25 minutes in.
   gh repo create "$ADHOC_REPO" \
     --public \
-    --description "Adhoc macOS dev builds of Orca, cut from unlanded branches. Not a source repo." \
+    --description "Adhoc macOS dev builds of MCode, cut from unlanded branches. Not a source repo." \
     --add-readme \
     --disable-issues \
     --disable-wiki ||
@@ -86,7 +86,7 @@ Could not do it from here${INSTALL_ID:+ (needs an Organization Owner)}. Do it in
   1. Open:  https://github.com/organizations/$ORG/settings/installations
   2. Configure  ->  $APP_SLUG
   3. Repository access  ->  Only select repositories  ->  add $ADHOC_REPO
-     (keep orca-hourly/orca-daily selected; all dev channels use this one App)
+     (keep mcode-hourly/mcode-daily selected; all dev channels use this one App)
   4. Save.
 EOF
 fi

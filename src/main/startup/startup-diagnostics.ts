@@ -1,6 +1,6 @@
 import { writeSync } from 'node:fs'
 
-export const STARTUP_DIAGNOSTICS_ENV = 'ORCA_STARTUP_DIAGNOSTICS'
+export const STARTUP_DIAGNOSTICS_ENV = 'MCODE_STARTUP_DIAGNOSTICS'
 
 export type StartupDiagnosticSink = (fd: number, text: string) => unknown
 

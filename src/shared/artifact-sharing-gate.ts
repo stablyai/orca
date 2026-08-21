@@ -4,13 +4,13 @@ import type { GlobalSettings } from './global-settings-types'
 
 export const ARTIFACT_SHARING_DISABLED_CODE = 'artifact_sharing_disabled'
 
-// Why device-wide wording: the gate has no caller identity, so `orca artifacts share` typed by a
+// Why device-wide wording: the gate has no caller identity, so `mcode artifacts share` typed by a
 // human is denied exactly like an agent's. Copy that blames agents alone would misdescribe it.
 export const ARTIFACT_SHARING_DISABLED_MESSAGE =
-  'Publishing artifacts is off for this device. Nothing running here — agents or the orca CLI — can mint public artifact links until you allow it.'
+  'Publishing artifacts is off for this device. Nothing running here — agents or the mcode CLI — can mint public artifact links until you allow it.'
 
 export const ARTIFACT_SHARING_DISABLED_NEXT_STEPS: readonly string[] = [
-  'Open Settings → Artifacts in the Orca desktop app on this device.',
+  'Open Settings → Artifacts in the MCode desktop app on this device.',
   'Turn on "Allow publishing public artifact links".',
   'Run the share command again.'
 ]

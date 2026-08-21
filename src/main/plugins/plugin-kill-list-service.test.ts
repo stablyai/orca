@@ -9,7 +9,7 @@ import type { PluginKillListStore } from './plugin-kill-list-store'
 const roots: string[] = []
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-plugin-kill-list-'))
+  const root = await mkdtemp(join(tmpdir(), 'mcode-plugin-kill-list-'))
   roots.push(root)
   return root
 }

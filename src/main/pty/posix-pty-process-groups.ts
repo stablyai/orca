@@ -62,7 +62,7 @@ export function getPosixPtyProcessGroups(
     return null
   }
   // Why: a development daemon can inherit its launch TTY. Never group-signal
-  // when Orca itself shares the PTY; fall back to the already-scoped root kill.
+  // when MCode itself shares the PTY; fall back to the already-scoped root kill.
   if (rows.some((row) => row.pid === currentPid && row.tty === root.tty)) {
     return null
   }

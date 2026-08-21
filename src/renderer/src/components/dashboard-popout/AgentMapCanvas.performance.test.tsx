@@ -27,7 +27,7 @@ const CARD: DashboardCard = {
   worktreeId: 'worktree-1',
   tabId: 'tab-1',
   leafId: 'leaf-1',
-  repoName: 'Orca',
+  repoName: 'MCode',
   worktreeName: 'Performance',
   startedAt: NOW - 1_000,
   finishedAt: null,

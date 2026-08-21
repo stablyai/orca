@@ -8,7 +8,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { DetectedWorktreeListResult } from '../../../../shared/worktree/types'
 import {
   getHiddenImportableExternalWorktrees,
-  getVisibleNonOrcaWorktrees
+  getVisibleNMCodeWorktrees
 } from '../../../../shared/external-worktree-inbox'
 import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
 
@@ -41,7 +41,7 @@ export default function HiddenWorktreeRecoveryList({
           worktree.path.toLocaleLowerCase().includes(normalizedQuery)
       )
     : hidden
-  const discoveredCount = hidden.length + getVisibleNonOrcaWorktrees(detected).length
+  const discoveredCount = hidden.length + getVisibleNMCodeWorktrees(detected).length
   const virtualizer = useVirtualizer({
     count: filtered.length,
     getScrollElement: () => listRef.current,
@@ -174,7 +174,7 @@ export default function HiddenWorktreeRecoveryList({
                     )
                   : translate(
                       'auto.components.sidebar.WorktreeVisibilityDialog.noneFound',
-                      'No non-Orca worktrees found'
+                      'No non-MCode worktrees found'
                     )}
             </div>
             <div className="text-xs text-muted-foreground">
@@ -190,7 +190,7 @@ export default function HiddenWorktreeRecoveryList({
                     )
                   : translate(
                       'auto.components.sidebar.WorktreeVisibilityDialog.appearWhenDetected',
-                      'New worktrees will appear here when Orca detects them.'
+                      'New worktrees will appear here when MCode detects them.'
                     )}
             </div>
           </div>

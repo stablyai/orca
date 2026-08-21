@@ -365,7 +365,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     vi.stubGlobal('window', { api: { fs: { readFile } } })
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
 
-    recordSelfWrite('/repo/notes.md', 'orca save')
+    recordSelfWrite('/repo/notes.md', 'mcode save')
     handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
     await vi.advanceTimersByTimeAsync(100)
 
@@ -378,17 +378,17 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     dispose()
   })
 
-  it('still suppresses the watcher echo from Orca self-writes', async () => {
+  it('still suppresses the watcher echo from MCode self-writes', async () => {
     vi.mocked(useAppStore.getState).mockReturnValue({
       openFiles: [fileNotes],
       setExternalMutation
     } as never)
     vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([fileNotes] as never)
-    const readFile = vi.fn().mockResolvedValue({ content: 'orca save', isBinary: false })
+    const readFile = vi.fn().mockResolvedValue({ content: 'mcode save', isBinary: false })
     vi.stubGlobal('window', { api: { fs: { readFile } } })
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
 
-    recordSelfWrite('/repo/notes.md', 'orca save')
+    recordSelfWrite('/repo/notes.md', 'mcode save')
     handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
     await vi.advanceTimersByTimeAsync(100)
 
@@ -580,7 +580,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     dispose()
   })
 
-  it('does not mark a dirty tab for the echo of Orca’s own save', async () => {
+  it('does not mark a dirty tab for the echo of MCode’s own save', async () => {
     const dirtyFile = {
       ...fileNotes,
       isDirty: true
@@ -590,11 +590,11 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
       setExternalMutation
     } as never)
     vi.mocked(getOpenFilesForExternalFileChange).mockReturnValue([dirtyFile] as never)
-    const readFile = vi.fn().mockResolvedValue({ content: 'orca save', isBinary: false })
+    const readFile = vi.fn().mockResolvedValue({ content: 'mcode save', isBinary: false })
     vi.stubGlobal('window', { api: { fs: { readFile } } })
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
 
-    recordSelfWrite('/repo/notes.md', 'orca save')
+    recordSelfWrite('/repo/notes.md', 'mcode save')
     handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
     await vi.advanceTimersByTimeAsync(100)
 
@@ -616,7 +616,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     vi.stubGlobal('window', { api: { fs: { readFile } } })
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
 
-    recordSelfWrite('/repo/notes.md', 'orca save')
+    recordSelfWrite('/repo/notes.md', 'mcode save')
     handleFsChanged(payload([{ kind: 'update', absolutePath: '/repo/notes.md' }]))
     await vi.advanceTimersByTimeAsync(100)
 
@@ -638,7 +638,7 @@ describe('createExternalWatchEventHandler tombstone coalescing', () => {
     vi.stubGlobal('window', { api: { fs: { readFile } } })
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(findTarget)
 
-    recordSelfWrite('/repo/notes.md', 'orca save')
+    recordSelfWrite('/repo/notes.md', 'mcode save')
     // Why: SSH poll + event streams can deliver several payloads for one
     // write; each verification is a full-file read, so a burst must share
     // the in-flight read instead of stacking network round-trips.

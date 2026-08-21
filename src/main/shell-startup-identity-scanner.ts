@@ -1,4 +1,4 @@
-export const SHELL_STARTUP_IDENTITY_PREFIX = '\x1b]777;orca-shell-start:'
+export const SHELL_STARTUP_IDENTITY_PREFIX = '\x1b]777;mcode-shell-start:'
 const POSSIBLE_PID_SUFFIX = /^\d{0,20}$/
 
 export type ShellStartupIdentityScanState = {

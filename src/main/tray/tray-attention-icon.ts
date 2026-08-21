@@ -1,6 +1,6 @@
 import { nativeImage, type NativeImage } from 'electron'
 
-// Why: amber-500 (#f59e0b) is Orca's "needs attention / unread" color, matching
+// Why: amber-500 (#f59e0b) is MCode's "needs attention / unread" color, matching
 // the renderer launcher dot and the tab-unread bell. Kept in sync with the
 // bg-amber-500 used in FloatingTerminalToggleButton.
 const DOT_RGB = { r: 0xf5, g: 0x9e, b: 0x0b }

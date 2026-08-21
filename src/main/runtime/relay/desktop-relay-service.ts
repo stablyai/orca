@@ -1,5 +1,5 @@
-import type { OrcaCloudAuthConfig } from '../../orca-profiles/profile-cloud-auth-config'
-import type { MobilePairingConnectionContext, OrcaRuntimeRpcServer } from '../runtime-rpc'
+import type { MCodeCloudAuthConfig } from '../../mcode-profiles/profile-cloud-auth-config'
+import type { MobilePairingConnectionContext, MCodeRuntimeRpcServer } from '../runtime-rpc'
 import type {
   DeviceCredentialInstalled,
   PairingGetEndpointsParams,
@@ -21,10 +21,10 @@ import { RelayDemandLedger } from './relay-demand-ledger'
 import { createRelayRegionPreferenceReader } from './relay-region-preference'
 
 type DesktopRelayServiceOptions = {
-  authConfig: OrcaCloudAuthConfig
+  authConfig: MCodeCloudAuthConfig
   userDataPath: string
   appVersion: string
-  runtimeRpc: OrcaRuntimeRpcServer
+  runtimeRpc: MCodeRuntimeRpcServer
   onStatus: (status: RelayBrokerStatus) => void
 }
 
@@ -51,7 +51,7 @@ const RELAY_LIVENESS_INTERVAL_MS = 5 * 60_000
 export class DesktopRelayService {
   private readonly coordinator: RelayAuthCoordinator
   private readonly revokeOutbox: RelayRevokeOutbox
-  private readonly runtimeRpc: OrcaRuntimeRpcServer
+  private readonly runtimeRpc: MCodeRuntimeRpcServer
   private readonly demandLedger: RelayDemandLedger
   private demandExpiryTimer: ReturnType<typeof setTimeout> | null = null
   private livenessTimer: ReturnType<typeof setInterval> | null = null

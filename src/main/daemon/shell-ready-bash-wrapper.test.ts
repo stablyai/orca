@@ -42,16 +42,16 @@ describePosix('daemon shell-ready bash wrapper', () => {
   let previousUserDataPath: string | undefined
 
   beforeEach(() => {
-    previousUserDataPath = process.env.ORCA_USER_DATA_PATH
+    previousUserDataPath = process.env.MCODE_USER_DATA_PATH
     userDataPath = mkdtempSync(join(tmpdir(), 'daemon-shell-ready-bash-test-'))
-    process.env.ORCA_USER_DATA_PATH = userDataPath
+    process.env.MCODE_USER_DATA_PATH = userDataPath
   })
 
   afterEach(() => {
     if (previousUserDataPath === undefined) {
-      delete process.env.ORCA_USER_DATA_PATH
+      delete process.env.MCODE_USER_DATA_PATH
     } else {
-      process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+      process.env.MCODE_USER_DATA_PATH = previousUserDataPath
     }
     rmSync(userDataPath, { recursive: true, force: true })
     vi.restoreAllMocks()
@@ -69,13 +69,13 @@ describePosix('daemon shell-ready bash wrapper', () => {
     const bashRc = readFileSync(join(getShellReadyWrapperRoot(), 'bash', 'rcfile'), 'utf8')
 
     expect(bashRc).toContain('printf "\\033]133;D;%s\\007"')
-    expect(bashRc).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
+    expect(bashRc).toContain('printf "\\033]777;mcode-shell-start:%s\\007" "$$"')
     expect(bashRc).toContain('printf "\\033]133;C\\007"')
-    expect(bashRc).toContain('__orca_prepend_prompt_command "__orca_osc133_precmd"')
-    expect(bashRc).toContain('__orca_append_prompt_command "__orca_osc133_epilogue"')
+    expect(bashRc).toContain('__mcode_prepend_prompt_command "__mcode_osc133_precmd"')
+    expect(bashRc).toContain('__mcode_append_prompt_command "__mcode_osc133_epilogue"')
     // DEBUG is armed after PROMPT_COMMAND setup so rcfile commands aren't seen as foreground; lastIndexOf skips the epilogue's re-arm.
-    expect(bashRc.lastIndexOf("trap '__orca_osc133_preexec' DEBUG")).toBeGreaterThan(
-      bashRc.indexOf('__orca_append_prompt_command "__orca_osc133_epilogue"')
+    expect(bashRc.lastIndexOf("trap '__mcode_osc133_preexec' DEBUG")).toBeGreaterThan(
+      bashRc.indexOf('__mcode_append_prompt_command "__mcode_osc133_epilogue"')
     )
     expect(zshrc).toContain('printf "\\033]133;D;%s\\007"')
     expect(zshrc).toContain('printf "\\033]133;C\\007"')
@@ -116,7 +116,7 @@ describePosix('daemon shell-ready bash wrapper', () => {
     'still emits 133;C when bash-preexec re-arms the DEBUG trap at first prompt',
     async () => {
       const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
-      // Minimal bash-preexec imitation: re-arms its own DEBUG trap from PROMPT_COMMAND at first prompt, silencing Orca's trap.
+      // Minimal bash-preexec imitation: re-arms its own DEBUG trap from PROMPT_COMMAND at first prompt, silencing MCode's trap.
       writeFileSync(
         join(userDataPath, '.bash_profile'),
         [
@@ -139,7 +139,7 @@ describePosix('daemon shell-ready bash wrapper', () => {
   )
 
   itWithBash(
-    'dispatches a non-empty preexec_functions against the real command, not Orca hooks',
+    'dispatches a non-empty preexec_functions against the real command, not MCode hooks',
     async () => {
       const { getDaemonBashShellReadyRcfileContent } = await importFreshDaemonBashRcfile()
       // Why: the epilogue chains bash-preexec's re-armed DEBUG trap, so a real preexec callback must fire against the user's command.
@@ -175,7 +175,7 @@ describePosix('daemon shell-ready bash wrapper', () => {
       expectBashOsc133Lifecycle(output)
       expect(output).toContain('USER_PREEXEC:true')
       expect(output).toContain('USER_PREEXEC:false')
-      expect(output).not.toContain('USER_PREEXEC:__orca_osc133')
+      expect(output).not.toContain('USER_PREEXEC:__mcode_osc133')
       expect(output).not.toContain('USER_PREEXEC:__bp_')
     }
   )

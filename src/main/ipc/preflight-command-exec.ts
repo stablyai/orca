@@ -9,7 +9,7 @@ import type { WslPreflightTarget } from './preflight-wsl-agent-detection'
 
 const execFileAsync = promisify(execFile)
 export const PREFLIGHT_COMMAND_TIMEOUT_MS = 5000
-const WSL_COMMAND_PATH_SENTINEL = '__ORCA_PREFLIGHT_COMMAND_PATH__'
+const WSL_COMMAND_PATH_SENTINEL = '__MCODE_PREFLIGHT_COMMAND_PATH__'
 
 export type PreflightCommandResult = { stdout: string; stderr: string }
 

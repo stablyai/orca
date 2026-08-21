@@ -26,13 +26,13 @@ describe('command token scanner', () => {
   })
 
   it('preserves quoted command paths with spaces', () => {
-    expect(getFirstCommandToken('"C:\\Program Files\\Orca\\codex.cmd" --resume')).toBe(
-      'C:\\Program Files\\Orca\\codex.cmd'
+    expect(getFirstCommandToken('"C:\\Program Files\\MCode\\codex.cmd" --resume')).toBe(
+      'C:\\Program Files\\MCode\\codex.cmd'
     )
   })
 
   it('extracts path basenames without allocating path segment arrays', () => {
-    expect(getCommandTokenPathBasename('C:\\Program Files\\Orca\\codex.cmd')).toBe('codex.cmd')
+    expect(getCommandTokenPathBasename('C:\\Program Files\\MCode\\codex.cmd')).toBe('codex.cmd')
     expect(getCommandTokenPathBasename('/usr/local/bin/omp')).toBe('omp')
   })
 

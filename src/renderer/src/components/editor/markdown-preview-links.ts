@@ -114,7 +114,7 @@ export function isMarkdownPreviewSystemBrowserModifier(
 }
 
 // Why: Cmd/Ctrl+Shift-click is the escape hatch; every click routes through
-// openHttpLink so the "open links in Orca" setting (and remote-runtime state)
+// openHttpLink so the "open links in MCode" setting (and remote-runtime state)
 // decides the destination, with modifierHeld telling it the escape hatch fired.
 // Mac uses metaKey, Linux/Windows use ctrlKey per AGENTS.md.
 export function resolveMarkdownPreviewHttpOpenOptions(

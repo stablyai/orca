@@ -35,7 +35,7 @@ class LaunchChild extends EventEmitter {
 
 describe('launchWatcherChild', () => {
   beforeEach(() => {
-    vi.stubEnv('ORCA_WATCHER_CHILD_PID_FILE', '/tmp/orca-watcher.pid')
+    vi.stubEnv('MCODE_WATCHER_CHILD_PID_FILE', '/tmp/mcode-watcher.pid')
     forkMock.mockReturnValue(new LaunchChild())
     releaseReservationMock.mockReset()
     signalPhysicalExitMock.mockReset()
@@ -54,7 +54,7 @@ describe('launchWatcherChild', () => {
 
   it('creates the fault-harness pid file without clobbering an existing path', () => {
     expect(launchWatcherChild('/watcher.js', null, vi.fn(), vi.fn())).not.toBeNull()
-    expect(writeFileSyncMock).toHaveBeenCalledWith('/tmp/orca-watcher.pid', '1234', {
+    expect(writeFileSyncMock).toHaveBeenCalledWith('/tmp/mcode-watcher.pid', '1234', {
       flag: 'wx'
     })
   })

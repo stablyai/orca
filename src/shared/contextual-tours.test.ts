@@ -111,7 +111,7 @@ describe('contextual tour definitions', () => {
       preferredPlacement: 'bottom'
     })
     expect(tour?.steps[2]).toMatchObject({
-      body: 'Bring your existing logins into Orca to stay signed in immediately.',
+      body: 'Bring your existing logins into MCode to stay signed in immediately.',
       // Prefers the always-visible Import button, falling back to the overflow
       // menu's Import Cookies row once the hint button is dismissed.
       targetSelector:

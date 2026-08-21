@@ -13,7 +13,7 @@ afterEach(async () => {
 
 describe('parseDevinSessionFile', () => {
   it('parses minimal ATIF transcript fixture', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'orca-devin-parser-'))
+    const dir = await mkdtemp(join(tmpdir(), 'mcode-devin-parser-'))
     tempDirs.push(dir)
     const path = join(dir, 'abc.json')
     const mtimeMs = Date.now()
@@ -50,7 +50,7 @@ describe('parseDevinSessionFile', () => {
   })
 
   it('parses current ATIF token and model fields', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'orca-devin-parser-'))
+    const dir = await mkdtemp(join(tmpdir(), 'mcode-devin-parser-'))
     tempDirs.push(dir)
     const path = join(dir, 'current.json')
     const mtimeMs = Date.now()

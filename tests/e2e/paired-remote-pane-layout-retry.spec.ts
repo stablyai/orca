@@ -6,7 +6,7 @@ import {
   launchHeadlessPairedRuntimeHost,
   type HeadlessPairedRuntimeHost
 } from './helpers/headless-paired-runtime-host'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import {
   launchPairedElectronClient,
   type PairedElectronClient

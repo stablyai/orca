@@ -7,8 +7,8 @@ import {
 } from './pairing-keychain'
 
 // Why: SecureStore keys must match [A-Za-z0-9._-] (colons rejected), so use dots as the separator.
-const TOKEN_KEY_PREFIX = 'orca.host-token.'
-const WEB_TOKEN_KEY_PREFIX = 'orca:web-host-token:'
+const TOKEN_KEY_PREFIX = 'mcode.host-token.'
+const WEB_TOKEN_KEY_PREFIX = 'mcode:web-host-token:'
 
 function tokenKey(hostId: string): string {
   return `${TOKEN_KEY_PREFIX}${hostId}`

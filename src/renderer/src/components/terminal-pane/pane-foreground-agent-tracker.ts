@@ -290,7 +290,7 @@ export function createPaneForegroundAgentTracker(deps: PaneForegroundAgentTracke
       // command under a full-screen agent (or a fast real shell command), so on a
       // no-identity pane confirm it rather than trusting the D as a prompt return.
       // ANY in-flight read counts: a command-start read, a prior confirming read
-      // (user shell integrations double up Orca's OSC 133), or the reattach/visible
+      // (user shell integrations double up MCode's OSC 133), or the reattach/visible
       // recovery probe. All three are attempts to establish this pane's identity, so
       // a D that cancels one must re-confirm — never fast-path to shell, which the
       // sampleVisiblePaneForegroundAgent gate would then latch, permanently hiding

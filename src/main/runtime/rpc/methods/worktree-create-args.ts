@@ -1,10 +1,10 @@
 import type { z } from 'zod'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import type { WorktreeCreate } from './worktree-create-schemas'
 
 type WorktreeCreateParams = z.infer<typeof WorktreeCreate>
-type ManagedWorktreeCreateArgs = Parameters<OrcaRuntimeService['createManagedWorktree']>[0]
+type ManagedWorktreeCreateArgs = Parameters<MCodeRuntimeService['createManagedWorktree']>[0]
 type CreateProvenance = Pick<
   ManagedWorktreeCreateArgs,
   'automationProvenance' | 'cliProvenance' | 'creatorProvenance'

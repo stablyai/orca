@@ -26,7 +26,7 @@ afterEach(() => {
 })
 
 async function makeTree(): Promise<string> {
-  return mkdtemp(join(tmpdir(), 'orca-skill-walk-'))
+  return mkdtemp(join(tmpdir(), 'mcode-skill-walk-'))
 }
 
 async function writeFileAt(path: string, content = 'x'): Promise<void> {

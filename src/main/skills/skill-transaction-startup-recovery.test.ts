@@ -61,7 +61,7 @@ afterEach(async () => {
 
 describe('skill transaction startup recovery', () => {
   it('cleans extraction bytes and a dead lock left before the first install journal', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skill-startup-extraction-test-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skill-startup-extraction-test-'))
     roots.push(root)
     const stateDirectory = join(root, 'state')
     const destinationRoot = join(root, 'skills')
@@ -86,7 +86,7 @@ describe('skill transaction startup recovery', () => {
   })
 
   it('preserves bytes referenced by an extraction journal outside its destination root', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skill-startup-extraction-boundary-test-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skill-startup-extraction-boundary-test-'))
     roots.push(root)
     const stateDirectory = join(root, 'state')
     const extraction = await beginSkillExtractionRecovery(stateDirectory, join(root, 'skills'))
@@ -110,7 +110,7 @@ describe('skill transaction startup recovery', () => {
   })
 
   it('publishes a committed install after restart and reclaims its dead lock', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skill-startup-recovery-test-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skill-startup-recovery-test-'))
     roots.push(root)
     const stateDirectory = join(root, 'state')
     const first = await install(root, 'alpha', 'version_1', '# First')
@@ -119,9 +119,9 @@ describe('skill transaction startup recovery', () => {
     if (!previous) {
       throw new Error('missing receipt')
     }
-    const extractionPath = join(root, 'skills', '.orca-skill-extract-restart')
-    const stagingPath = join(root, 'skills', '.alpha.orca-staging-restart')
-    const backupPath = join(root, 'skills', '.alpha.orca-backup-restart')
+    const extractionPath = join(root, 'skills', '.mcode-skill-extract-restart')
+    const stagingPath = join(root, 'skills', '.alpha.mcode-staging-restart')
+    const backupPath = join(root, 'skills', '.alpha.mcode-backup-restart')
     await extractSkillPackageArchive({
       archivePath: second.archivePath,
       destinationDirectory: extractionPath,
@@ -169,7 +169,7 @@ describe('skill transaction startup recovery', () => {
   })
 
   it('restores an interrupted removal before exposing managed installs', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skill-startup-removal-test-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skill-startup-removal-test-'))
     roots.push(root)
     const stateDirectory = join(root, 'state')
     const installed = await install(root, 'beta', 'version_1', '# Keep')
@@ -177,7 +177,7 @@ describe('skill transaction startup recovery', () => {
     if (!receipt) {
       throw new Error('missing receipt')
     }
-    const backupPath = join(root, 'skills', '.beta.orca-remove-backup-restart')
+    const backupPath = join(root, 'skills', '.beta.mcode-remove-backup-restart')
     await rename(installed.canonicalPath, backupPath)
     const journal: SkillRemovalJournalV1 = {
       schemaVersion: 1,
@@ -215,7 +215,7 @@ describe('skill transaction startup recovery', () => {
   })
 
   it('bounds corrupt journal scanning and leaves unknown files untouched', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skill-startup-bounds-test-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skill-startup-bounds-test-'))
     roots.push(root)
     const stateDirectory = join(root, 'state')
     const journalDirectory = join(stateDirectory, 'journals')

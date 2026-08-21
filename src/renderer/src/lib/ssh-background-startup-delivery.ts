@@ -100,7 +100,7 @@ export function createSshBackgroundStartupDelivery(
       // Why: the SSH relay treats spawn.command as metadata for interactive
       // PTYs; hidden automation tabs still submit the command themselves.
       // Why bracketed paste: multiline prompts are pasted literally only when we
-      // synchronized on the Orca shell-ready marker (waitForShellReady) — that
+      // synchronized on the MCode shell-ready marker (waitForShellReady) — that
       // is the bash/zsh overlay with bracketed-paste mode armed. Submit with CR
       // since the relay drives a remote shell.
       options.write(

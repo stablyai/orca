@@ -8,7 +8,7 @@ import {
 } from '../main/shell-startup-features'
 import { inheritedZdotdirEnv, resolveInheritedZdotdir } from '../main/zsh-wrapper-dir-ownership'
 import { ensureOverlayRestoreWrappers } from './pty-shell-overlay-wrappers'
-const RELAY_SHELL_READY_DIR = '.orca-relay/shell-ready'
+const RELAY_SHELL_READY_DIR = '.mcode-relay/shell-ready'
 const POSIX_LOGIN_ARGS = ['-l']
 
 export type RelayShellLaunchConfig = {
@@ -121,7 +121,7 @@ export function getRelayShellLaunchConfig(
   }
   if (!wrappersReady) {
     // Why plain login shell: ZDOTDIR pointed at an incomplete wrapper dir makes
-    // zsh skip the user's whole config. Losing Orca's features is recoverable.
+    // zsh skip the user's whole config. Losing MCode's features is recoverable.
     return unwrapped
   }
 

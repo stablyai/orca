@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 
 // Why: Linear priority glyphs are provider-brand signals, so their fills match
-// Linear's lower-contrast icon colors instead of Orca's generic state tokens.
+// Linear's lower-contrast icon colors instead of MCode's generic state tokens.
 const LINEAR_PRIORITY_URGENT_FILL = 'lch(66 80 48)'
 const LINEAR_PRIORITY_BAR_FILL = 'lch(39.576 1.25 282)'
 

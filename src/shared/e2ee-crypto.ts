@@ -1,4 +1,4 @@
-// Why: Orca's remote runtime transports share one NaCl box format across
+// Why: MCode's remote runtime transports share one NaCl box format across
 // desktop, CLI, and mobile pairing. Keeping the Node-compatible primitives in
 // shared code prevents the CLI from importing main-process modules.
 import nacl from 'tweetnacl'

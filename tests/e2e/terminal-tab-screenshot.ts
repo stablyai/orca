@@ -1,5 +1,5 @@
 import type { Page } from '@stablyai/playwright-test'
-import { expect } from './helpers/orca-app'
+import { expect } from './helpers/mcode-app'
 
 function tabScreenLocator(page: Page, tabId: string): ReturnType<Page['locator']> {
   return page.locator(`[data-terminal-tab-id="${tabId}"] .xterm-screen`).first()

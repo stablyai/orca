@@ -157,9 +157,9 @@ describe('fetchWorktrees', () => {
   it('fetches SSH repo worktrees through local IPC even when a runtime is focused', async () => {
     const store = createTestStore()
     const sshWorktree = makeWorktree({
-      id: 'repo-ssh::/home/orca/wt1',
+      id: 'repo-ssh::/home/mcode/wt1',
       repoId: 'repo-ssh',
-      path: '/home/orca/wt1',
+      path: '/home/mcode/wt1',
       branch: 'refs/heads/ssh'
     })
     store.setState({
@@ -167,7 +167,7 @@ describe('fetchWorktrees', () => {
       repos: [
         {
           id: 'repo-ssh',
-          path: '/home/orca/repo',
+          path: '/home/mcode/repo',
           displayName: 'SSH Repo',
           badgeColor: '#000',
           addedAt: 0,
@@ -488,9 +488,9 @@ describe('fetchWorktrees', () => {
   it('stamps runtime worktrees with the owning project host setup', async () => {
     const store = createTestStore()
     const remote = makeWorktree({
-      id: 'repo-remote::/vercel/sandbox/orca',
+      id: 'repo-remote::/vercel/sandbox/mcode',
       repoId: 'repo-remote',
-      path: '/vercel/sandbox/orca',
+      path: '/vercel/sandbox/mcode',
       branch: 'refs/heads/Jinwoo-H/vm-improve-2',
       hostId: 'local'
     })
@@ -498,8 +498,8 @@ describe('fetchWorktrees', () => {
       repos: [
         {
           id: 'repo-remote',
-          path: '/vercel/sandbox/orca',
-          displayName: 'orca',
+          path: '/vercel/sandbox/mcode',
+          displayName: 'mcode',
           badgeColor: '#000',
           addedAt: 0,
           executionHostId: 'runtime:env-1'
@@ -508,11 +508,11 @@ describe('fetchWorktrees', () => {
       projectHostSetups: [
         {
           id: 'repo-remote',
-          projectId: 'github:stablyai/orca',
+          projectId: 'github:mcode-ide/mcode',
           hostId: 'runtime:env-1',
           repoId: 'repo-remote',
-          path: '/vercel/sandbox/orca',
-          displayName: 'orca',
+          path: '/vercel/sandbox/mcode',
+          displayName: 'mcode',
           setupState: 'ready',
           setupMethod: 'imported-existing-folder',
           createdAt: 1,
@@ -534,7 +534,7 @@ describe('fetchWorktrees', () => {
         ...remote,
         hostId: 'runtime:env-1',
         runtimeOwnerEnvironmentId: 'env-1',
-        projectId: 'github:stablyai/orca',
+        projectId: 'github:mcode-ide/mcode',
         projectHostSetupId: 'repo-remote'
       }
     ])
@@ -543,7 +543,7 @@ describe('fetchWorktrees', () => {
         id: remote.id,
         hostId: 'runtime:env-1',
         runtimeOwnerEnvironmentId: 'env-1',
-        projectId: 'github:stablyai/orca',
+        projectId: 'github:mcode-ide/mcode',
         projectHostSetupId: 'repo-remote'
       })
     ])
@@ -586,7 +586,7 @@ describe('fetchWorktrees', () => {
       repoId: 'repo1',
       authoritative: true,
       source: 'session-fallback',
-      worktrees: [{ id: remote.id, ownership: 'orca-managed', visible: true }]
+      worktrees: [{ id: remote.id, ownership: 'mcode-managed', visible: true }]
     })
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',

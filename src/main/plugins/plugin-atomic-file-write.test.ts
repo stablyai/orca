@@ -39,7 +39,7 @@ describe('writePluginFileAtomically', () => {
   let dir: string
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'orca-plugin-atomic-'))
+    dir = await mkdtemp(join(tmpdir(), 'mcode-plugin-atomic-'))
   })
 
   afterEach(async () => {
@@ -104,7 +104,7 @@ describe('writePluginFileAtomically', () => {
 
 describe('renamePluginFileWithWindowsRetry', () => {
   it('renames when the source exists', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'orca-plugin-rename-'))
+    const dir = await mkdtemp(join(tmpdir(), 'mcode-plugin-rename-'))
     try {
       await writePluginFileAtomically(join(dir, 'from'), 'payload')
       await renamePluginFileWithWindowsRetry(join(dir, 'from'), join(dir, 'to'))
@@ -115,7 +115,7 @@ describe('renamePluginFileWithWindowsRetry', () => {
   })
 
   it('rethrows a non-retryable error', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'orca-plugin-rename-'))
+    const dir = await mkdtemp(join(tmpdir(), 'mcode-plugin-rename-'))
     try {
       await expect(
         renamePluginFileWithWindowsRetry(join(dir, 'absent'), join(dir, 'to'))
@@ -130,7 +130,7 @@ describe('renamePluginFileWithWindowsRetry', () => {
     let restorePlatform: () => void
 
     beforeEach(async () => {
-      dir = await mkdtemp(join(tmpdir(), 'orca-plugin-rename-win-'))
+      dir = await mkdtemp(join(tmpdir(), 'mcode-plugin-rename-win-'))
       restorePlatform = withPlatform('win32')
     })
 
@@ -169,7 +169,7 @@ describe('renamePluginFileWithWindowsRetry', () => {
   })
 
   it('does not retry off Windows', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'orca-plugin-rename-posix-'))
+    const dir = await mkdtemp(join(tmpdir(), 'mcode-plugin-rename-posix-'))
     const restorePlatform = withPlatform('linux')
     try {
       await writePluginFileAtomically(join(dir, 'from'), 'payload')

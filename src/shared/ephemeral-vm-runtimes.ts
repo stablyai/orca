@@ -29,14 +29,14 @@ export const EphemeralVmCleanupStatusSchema = z.enum([
 
 export type EphemeralVmCleanupStatus = z.infer<typeof EphemeralVmCleanupStatusSchema>
 
-export const EphemeralVmRuntimeConnectionModeSchema = z.enum(['orca-server', 'ssh'])
+export const EphemeralVmRuntimeConnectionModeSchema = z.enum(['mcode-server', 'ssh'])
 
 const EphemeralVmRuntimeRecipeSchema = z
   .object({
     id: z.string().min(1),
     name: z.string().min(1),
     create: z.string().min(1),
-    checkoutMode: z.enum(['orca-worktree', 'provisioned-root']).optional(),
+    checkoutMode: z.enum(['mcode-worktree', 'provisioned-root']).optional(),
     description: z.string().min(1).optional(),
     suspend: z.string().min(1).optional(),
     resume: z.string().min(1).optional(),

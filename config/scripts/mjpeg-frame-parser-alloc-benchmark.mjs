@@ -24,14 +24,14 @@ function trackedCopy(buf) {
   return Buffer.from(buf)
 }
 
-const FPS = Number.parseInt(process.env.ORCA_MJPEG_BENCH_FPS ?? '30', 10)
-const SECONDS = Number.parseInt(process.env.ORCA_MJPEG_BENCH_SECONDS ?? '30', 10)
-const FRAME_BYTES = Number.parseInt(process.env.ORCA_MJPEG_BENCH_FRAME_BYTES ?? '184320', 10) // ~180 KiB
+const FPS = Number.parseInt(process.env.MCODE_MJPEG_BENCH_FPS ?? '30', 10)
+const SECONDS = Number.parseInt(process.env.MCODE_MJPEG_BENCH_SECONDS ?? '30', 10)
+const FRAME_BYTES = Number.parseInt(process.env.MCODE_MJPEG_BENCH_FRAME_BYTES ?? '184320', 10) // ~180 KiB
 
 for (const [name, value] of [
-  ['ORCA_MJPEG_BENCH_FPS', FPS],
-  ['ORCA_MJPEG_BENCH_SECONDS', SECONDS],
-  ['ORCA_MJPEG_BENCH_FRAME_BYTES', FRAME_BYTES]
+  ['MCODE_MJPEG_BENCH_FPS', FPS],
+  ['MCODE_MJPEG_BENCH_SECONDS', SECONDS],
+  ['MCODE_MJPEG_BENCH_FRAME_BYTES', FRAME_BYTES]
 ]) {
   if (!Number.isInteger(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer, received ${value}`)

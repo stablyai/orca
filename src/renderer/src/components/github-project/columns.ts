@@ -27,7 +27,7 @@ export function getAvailableColumns(view: GitHubProjectView): GitHubProjectField
   return [...fields.slice(0, titleIdx + 1), TYPE_FIELD, ...fields.slice(titleIdx + 1)]
 }
 
-const STORAGE_KEY = 'orca.githubProject.hiddenColumns'
+const STORAGE_KEY = 'mcode.githubProject.hiddenColumns'
 
 type HiddenMap = Record<string, string[]>
 

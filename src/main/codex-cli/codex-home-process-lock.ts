@@ -3,9 +3,9 @@ import { join } from 'node:path'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 
 // Why: Codex OAuth uses rotating refresh tokens stored in each home's auth.json.
-// Two Orca-spawned codex processes refreshing the same home concurrently can
+// Two MCode-spawned codex processes refreshing the same home concurrently can
 // consume one rotation twice and permanently invalidate the stored credential,
-// so Orca's own spawns (quota probes, commit-message runs) serialize per home.
+// so MCode's own spawns (quota probes, commit-message runs) serialize per home.
 // User terminal panes are intentionally not serialized here.
 
 const lockTails = new Map<string, Promise<unknown>>()
@@ -28,7 +28,7 @@ export function resolveCodexHomeProcessLockKeyForSpawnEnv(
     // Without an explicit home the distro default is unknowable from the host;
     // a sentinel still serializes same-distro default spawns with each other.
     return normalizeRuntimePathForComparison(
-      `//wsl$/${wslDistro}${codexHome ?? '/.orca-default-codex-home'}`
+      `//wsl$/${wslDistro}${codexHome ?? '/.mcode-default-codex-home'}`
     )
   }
   // An explicit env is the child's complete environment. If CODEX_HOME was

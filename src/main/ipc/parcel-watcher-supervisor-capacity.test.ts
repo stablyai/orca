@@ -15,7 +15,7 @@ import type { WatcherProcessSupervisor } from './parcel-watcher-process-supervis
 const { existsSyncMock, forkMock, mkdtempSyncMock, rmSyncMock } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
   forkMock: vi.fn(),
-  mkdtempSyncMock: vi.fn(() => '/tmp/orca-watcher-capacity-supervisor-test'),
+  mkdtempSyncMock: vi.fn(() => '/tmp/mcode-watcher-capacity-supervisor-test'),
   rmSyncMock: vi.fn()
 }))
 

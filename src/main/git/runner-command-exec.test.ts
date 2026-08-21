@@ -222,7 +222,7 @@ describe('runner execFile timeout handling', () => {
     const child = createMockChildProcess(1234)
     execFileMock.mockReturnValue(child)
 
-    const promise = ghExecFileAsync(['api', 'repos/stablyai/orca/issues/5388'], {
+    const promise = ghExecFileAsync(['api', 'repos/mcode-ide/mcode/issues/5388'], {
       cwd: '/repo'
     })
     const rejection = expect(promise).rejects.toThrow('gh timed out.')
@@ -236,7 +236,7 @@ describe('runner execFile timeout handling', () => {
     const child = createMockChildProcess(1234)
     execFileMock.mockReturnValue(child)
     const controller = new AbortController()
-    const promise = ghExecFileAsync(['api', 'repos/stablyai/orca/issues/5388'], {
+    const promise = ghExecFileAsync(['api', 'repos/mcode-ide/mcode/issues/5388'], {
       cwd: '/repo',
       signal: controller.signal
     })
@@ -252,7 +252,7 @@ describe('runner execFile timeout handling', () => {
     const child = createMockChildProcess(1234)
     execFileMock.mockReturnValue(child)
 
-    const promise = ghExecFileAsync(['api', 'repos/stablyai/orca/issues/5388'], {
+    const promise = ghExecFileAsync(['api', 'repos/mcode-ide/mcode/issues/5388'], {
       cwd: '/repo',
       timeout: 1234
     })
@@ -276,12 +276,12 @@ describe('runner execFile timeout handling', () => {
 
     await ghExecFileAsync(['api', 'user'], {
       cwd: '/repo',
-      env: { ...process.env, GH_PROMPT_DISABLED: '0', ORCA_TEST_ENV: 'kept' },
+      env: { ...process.env, GH_PROMPT_DISABLED: '0', MCODE_TEST_ENV: 'kept' },
       timeout: 1234
     })
 
     expect(capturedEnv?.GH_PROMPT_DISABLED).toBe('0')
-    expect(capturedEnv?.ORCA_TEST_ENV).toBe('kept')
+    expect(capturedEnv?.MCODE_TEST_ENV).toBe('kept')
   })
 
   // Issue #5308: git read-path calls must be forced non-interactive so a
@@ -515,7 +515,7 @@ describe('runner execFile timeout handling', () => {
       const gitCall = execFileMock.mock.calls.find((call) => String(call[1]?.[5]).includes("'git'"))
       const shellCommand = gitCall?.[1]?.[5] as string
       expect(shellCommand).toContain('getent passwd')
-      expect(shellCommand).toContain('exec "$_orca_wsl_shell" -ilc')
+      expect(shellCommand).toContain('exec "$_mcode_wsl_shell" -ilc')
       expect(shellCommand).toContain('/mnt/c/repo')
       expect(shellCommand).toContain("'git'")
       expect(shellCommand).toContain('status')

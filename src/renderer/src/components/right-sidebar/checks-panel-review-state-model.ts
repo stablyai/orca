@@ -34,7 +34,7 @@ export type ChecksPanelReviewState = {
   workflowAction: ChecksPanelWorkflowAction
   recovery: ChecksPanelRecoveryAction[]
   openReviewUrl?: string | null
-  /** Drives "Orca will retry at {time}"; only when a future auto-retry exists. */
+  /** Drives "MCode will retry at {time}"; only when a future auto-retry exists. */
   autoRetryAt?: number
   /** Retry button stays disabled while now < retryDisabledUntil. */
   retryDisabledUntil?: number

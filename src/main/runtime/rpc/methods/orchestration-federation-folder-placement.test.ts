@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../../orca-runtime'
+import { MCodeRuntimeService } from '../../mcode-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import { ORCHESTRATION_METHODS } from './orchestration'
 
@@ -10,7 +10,7 @@ describe('orchestration federated folder placement', () => {
 
   it('rejects a new folder workspace before accepting the remote attachment', async () => {
     db = new OrchestrationDb(':memory:')
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
     vi.spyOn(runtime, 'showRepo').mockResolvedValue({

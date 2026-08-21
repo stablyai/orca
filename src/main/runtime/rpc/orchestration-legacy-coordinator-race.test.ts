@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
 import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
 import Database from '../../sqlite/sync-database'
-import { OrcaRuntimeService } from '../orca-runtime'
+import { MCodeRuntimeService } from '../mcode-runtime'
 import { OrchestrationDb } from '../orchestration/db'
 import type { RpcRequest, RpcResponse } from './core'
 import { RpcDispatcher } from './dispatcher'
@@ -22,7 +22,7 @@ type Transport = 'dispatch' | 'websocket'
 type Harness = {
   db: OrchestrationDb
   dispatcher: RpcDispatcher
-  runtime: OrcaRuntimeService
+  runtime: MCodeRuntimeService
   adoptedRunId: string
   taskId: string
   dispatchId: string
@@ -37,7 +37,7 @@ afterEach(() => {
 })
 
 function createHarness(): Harness {
-  const dir = mkdtempSync(join(tmpdir(), 'orca-legacy-coordinator-race-'))
+  const dir = mkdtempSync(join(tmpdir(), 'mcode-legacy-coordinator-race-'))
   tempDirs.push(dir)
   const dbPath = join(dir, 'orchestration.db')
   const before = new OrchestrationDb(dbPath)
@@ -63,7 +63,7 @@ function createHarness(): Harness {
   const db = new OrchestrationDb(dbPath)
   databases.push(db)
   const adoptedRunId = db.getLegacyAdoption()?.adopted_run_id as string
-  const runtime = new OrcaRuntimeService()
+  const runtime = new MCodeRuntimeService()
   runtime.setOrchestrationDb(db)
   vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
     handle === COORDINATOR_HANDLE ? COORDINATOR_PANE : handle === WORKER_HANDLE ? WORKER_PANE : null

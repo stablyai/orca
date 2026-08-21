@@ -2,7 +2,7 @@ import { safeStorage } from 'electron'
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import {
   LEGACY_WORKSPACE_ID,
-  ensureOrcaDir,
+  ensureMCodeDir,
   ensureWorkspaceTokenDir,
   getWorkspaceTokenPath
 } from './linear-credential-paths'
@@ -44,7 +44,7 @@ function writeEncryptedToken(path: string, apiKey: string): void {
 }
 
 export function saveWorkspaceToken(workspaceId: string, apiKey: string): void {
-  ensureOrcaDir()
+  ensureMCodeDir()
   if (workspaceId !== LEGACY_WORKSPACE_ID) {
     ensureWorkspaceTokenDir()
   }

@@ -2,7 +2,7 @@ import type { RuntimeMobileSessionTabGroup } from '../../shared/runtime-types'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
 
 /**
- * Headless ("Orca server") tab-GROUP split operations (distinct from terminal
+ * Headless ("MCode server") tab-GROUP split operations (distinct from terminal
  * PANE splits inside one tab). The headless host historically coalesced every
  * tab into a single group, so a client drag-to-split-group was lost on the next
  * snapshot. These pure helpers let the host model + persist a real multi-group

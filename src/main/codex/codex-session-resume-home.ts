@@ -124,7 +124,7 @@ export function claimsCodexRolloutLayout(transcriptPath: string | undefined): bo
 
 /**
  * Verified provenance, or an explicit fall-back to a fresh session. Never rejects:
- * the caller drops the resume argv on `fresh`, so a rollout Orca cannot place under a
+ * the caller drops the resume argv on `fresh`, so a rollout MCode cannot place under a
  * trusted home resumes nowhere instead of resuming under the selected account (#10793).
  *
  * The rescan ranking inputs are required here for the same reason they are required on

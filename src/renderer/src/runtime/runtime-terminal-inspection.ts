@@ -17,7 +17,7 @@ export type RuntimeTerminalProcessInspection = {
 }
 
 const REMOTE_PTY_ID_PREFIX = 'remote:'
-const DESKTOP_RUNTIME_CLIENT = { id: 'orca-desktop', type: 'desktop' } as const
+const DESKTOP_RUNTIME_CLIENT = { id: 'mcode-desktop', type: 'desktop' } as const
 
 function isRuntimePtyInputTooLarge(data: string): boolean | Promise<boolean> {
   return isTerminalInputTooLargeWithDeferredMeasurement(data)

@@ -9,7 +9,7 @@
  *     (Quick Open + file-explorer filter share one scan),
  *   - a request for a different root supersedes it — the old scan is aborted
  *     and its request fails fast instead of running to completion (this also
- *     protects against older Orca clients that never send rpc.cancel),
+ *     protects against older MCode clients that never send rpc.cancel),
  *   - when every joined requester cancels (rpc.cancel / client detach), the
  *     scan is aborted so abandoned work stops immediately.
  */

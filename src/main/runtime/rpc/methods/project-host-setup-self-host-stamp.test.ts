@@ -15,17 +15,17 @@ function parseParams(methodName: string, params: unknown): { hostId: string } {
 const CREATING_METHODS = [
   {
     name: 'projectHostSetup.setupExistingFolder',
-    base: { projectId: 'github:stablyai/orca', path: '/srv/orca' }
+    base: { projectId: 'github:mcode-ide/mcode', path: '/srv/mcode' }
   },
   {
     name: 'projectHostSetup.clone',
     base: {
-      projectId: 'github:stablyai/orca',
-      url: 'https://github.com/stablyai/orca.git',
+      projectId: 'github:mcode-ide/mcode',
+      url: 'https://github.com/mcode-ide/mcode.git',
       destination: '/srv'
     }
   },
-  { name: 'projectHostSetup.create', base: { projectId: 'github:stablyai/orca' } }
+  { name: 'projectHostSetup.create', base: { projectId: 'github:mcode-ide/mcode' } }
 ] as const
 
 describe('project host setup self-host stamp', () => {
@@ -53,11 +53,11 @@ describe('project host setup self-host stamp', () => {
   // Two clients paired with the same server now converge on one row instead of one each.
   it('collapses two different clients onto the same host id', () => {
     const fromClientA = parseParams('projectHostSetup.create', {
-      projectId: 'github:stablyai/orca',
+      projectId: 'github:mcode-ide/mcode',
       hostId: 'runtime:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     })
     const fromClientB = parseParams('projectHostSetup.create', {
-      projectId: 'github:stablyai/orca',
+      projectId: 'github:mcode-ide/mcode',
       hostId: 'runtime:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
     })
 

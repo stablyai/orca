@@ -2,7 +2,7 @@ import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import {
   focusActiveTerminalInput,
   sendToTerminal,
@@ -27,7 +27,7 @@ import {
   type RendererJank
 } from './ai-vault-typing-bench-renderer-probe'
 
-const BENCH_ENABLED = process.env.ORCA_AI_VAULT_TYPING_BENCH === '1'
+const BENCH_ENABLED = process.env.MCODE_AI_VAULT_TYPING_BENCH === '1'
 const RESULTS_DIR = path.resolve(__dirname, '..', 'tools', 'benchmarks', 'results')
 
 function readPositiveInt(name: string, fallback: number): number {
@@ -35,12 +35,12 @@ function readPositiveInt(name: string, fallback: number): number {
   return Number.isInteger(value) && value > 0 ? value : fallback
 }
 
-const ITERATIONS = readPositiveInt('ORCA_AI_VAULT_BENCH_ITERATIONS', 3)
-const SESSION_COUNT = readPositiveInt('ORCA_AI_VAULT_BENCH_SESSIONS', 300)
-const PAYLOAD_KIB = readPositiveInt('ORCA_AI_VAULT_BENCH_PAYLOAD_KIB', 128)
-const KEY_COUNT = readPositiveInt('ORCA_AI_VAULT_BENCH_KEYS', 100)
-const KEY_CADENCE_MS = readPositiveInt('ORCA_AI_VAULT_BENCH_CADENCE_MS', 30)
-const BENCH_LABEL = process.env.ORCA_AI_VAULT_BENCH_LABEL ?? 'dev'
+const ITERATIONS = readPositiveInt('MCODE_AI_VAULT_BENCH_ITERATIONS', 3)
+const SESSION_COUNT = readPositiveInt('MCODE_AI_VAULT_BENCH_SESSIONS', 300)
+const PAYLOAD_KIB = readPositiveInt('MCODE_AI_VAULT_BENCH_PAYLOAD_KIB', 128)
+const KEY_COUNT = readPositiveInt('MCODE_AI_VAULT_BENCH_KEYS', 100)
+const KEY_CADENCE_MS = readPositiveInt('MCODE_AI_VAULT_BENCH_CADENCE_MS', 30)
+const BENCH_LABEL = process.env.MCODE_AI_VAULT_BENCH_LABEL ?? 'dev'
 const TYPING_ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
 
 type ArmResult = {
@@ -182,18 +182,18 @@ test.describe('Terminal typing during AI Vault refresh bench', () => {
 
   test('alternates control typing and forced Vault refresh typing', async ({
     electronApp,
-    orcaPage,
+    mcodePage,
     testRepoPath
   }, testInfo) => {
     test.skip(!BENCH_ENABLED, 'Bench-only: run via pnpm bench:ai-vault-typing')
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
-    await openAiVaultSidebar(orcaPage)
-    const ptyId = await waitForActivePanePtyId(orcaPage)
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
+    await ensureTerminalVisible(mcodePage)
+    await waitForActiveTerminalManager(mcodePage, 30_000)
+    await openAiVaultSidebar(mcodePage)
+    const ptyId = await waitForActivePanePtyId(mcodePage)
     const homePath = await electronApp.evaluate(({ app }) => app.getPath('home'))
-    const scriptPath = path.join(testRepoPath, `.orca-vault-typing-${randomUUID()}.mjs`)
+    const scriptPath = path.join(testRepoPath, `.mcode-vault-typing-${randomUUID()}.mjs`)
     const arms: ArmResult[] = []
     let seededBytes = 0
 
@@ -210,10 +210,10 @@ test.describe('Terminal typing during AI Vault refresh bench', () => {
         const scenarios: ArmResult['scenario'][] =
           iteration % 2 === 0 ? ['control', 'vault-refresh'] : ['vault-refresh', 'control']
         for (const [order, scenario] of scenarios.entries()) {
-          arms.push(await runArm({ page: orcaPage, ptyId, scriptPath, iteration, scenario, order }))
+          arms.push(await runArm({ page: mcodePage, ptyId, scriptPath, iteration, scenario, order }))
           if (scenario === 'vault-refresh') {
             await expect(
-              orcaPage.getByText(batch.newestTitle, { exact: true }).first()
+              mcodePage.getByText(batch.newestTitle, { exact: true }).first()
             ).toBeVisible({
               timeout: 30_000
             })
@@ -223,7 +223,7 @@ test.describe('Terminal typing during AI Vault refresh bench', () => {
       writeReport(testInfo, arms, seededBytes)
       expect(arms.every((arm) => arm.missingEchoCount === 0)).toBe(true)
     } finally {
-      await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
+      await sendToTerminal(mcodePage, ptyId, '\x03').catch(() => undefined)
       rmSync(scriptPath, { force: true })
     }
   })

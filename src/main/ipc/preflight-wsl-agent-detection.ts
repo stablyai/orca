@@ -6,7 +6,7 @@ import { buildWslExecArgs, buildWslLoginShellCommand } from '../../shared/wsl-lo
 
 const execFileAsync = promisify(execFile)
 const WSL_AGENT_DETECTION_TIMEOUT_MS = 10000
-const WSL_AGENT_DETECTION_PREFIX = '__ORCA_AGENT_PATH__'
+const WSL_AGENT_DETECTION_PREFIX = '__MCODE_AGENT_PATH__'
 
 export type WslPreflightTarget = {
   distro?: string

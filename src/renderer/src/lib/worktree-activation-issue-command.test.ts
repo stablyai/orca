@@ -13,10 +13,10 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     const store = createMockStore()
 
     ensureWorktreeHasInitialTerminal(store, 'wt-1', undefined, undefined, {
-      runnerScriptPath: '/tmp/repo/.git/orca/issue-command-runner.sh',
+      runnerScriptPath: '/tmp/repo/.git/mcode/issue-command-runner.sh',
       envVars: {
-        ORCA_ROOT_PATH: '/tmp/repo',
-        ORCA_WORKTREE_PATH: '/tmp/worktrees/wt-1'
+        MCODE_ROOT_PATH: '/tmp/repo',
+        MCODE_WORKTREE_PATH: '/tmp/worktrees/wt-1'
       }
     })
 
@@ -26,10 +26,10 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.setActiveTab).toHaveBeenCalledWith('tab-1')
     expect(store.queueTabSetupSplit).not.toHaveBeenCalled()
     expect(store.queueTabIssueCommandSplit).toHaveBeenCalledWith('tab-1', {
-      command: 'bash /tmp/repo/.git/orca/issue-command-runner.sh',
+      command: 'bash /tmp/repo/.git/mcode/issue-command-runner.sh',
       env: {
-        ORCA_ROOT_PATH: '/tmp/repo',
-        ORCA_WORKTREE_PATH: '/tmp/worktrees/wt-1'
+        MCODE_ROOT_PATH: '/tmp/repo',
+        MCODE_WORKTREE_PATH: '/tmp/worktrees/wt-1'
       }
     })
   })
@@ -38,14 +38,14 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     const store = createMockStore()
 
     ensureWorktreeHasInitialTerminal(store, 'wt-1', undefined, undefined, {
-      runnerScriptPath: 'C:\\repo\\.git\\orca\\issue-command-runner.sh',
+      runnerScriptPath: 'C:\\repo\\.git\\mcode\\issue-command-runner.sh',
       shell: { family: 'posix', executable: 'wsl.exe' },
-      envVars: { ORCA_ROOT_PATH: 'C:\\repo' }
+      envVars: { MCODE_ROOT_PATH: 'C:\\repo' }
     })
 
     expect(store.queueTabIssueCommandSplit).toHaveBeenCalledWith('tab-1', {
-      command: 'bash /mnt/c/repo/.git/orca/issue-command-runner.sh',
-      env: { ORCA_ROOT_PATH: 'C:\\repo' }
+      command: 'bash /mnt/c/repo/.git/mcode/issue-command-runner.sh',
+      env: { MCODE_ROOT_PATH: 'C:\\repo' }
     })
   })
 
@@ -58,24 +58,24 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       'wt-1',
       undefined,
       {
-        runnerScriptPath: '/tmp/repo/.git/orca/setup-runner.sh',
-        envVars: { ORCA_ROOT_PATH: '/tmp/repo' }
+        runnerScriptPath: '/tmp/repo/.git/mcode/setup-runner.sh',
+        envVars: { MCODE_ROOT_PATH: '/tmp/repo' }
       },
       {
-        runnerScriptPath: '/tmp/repo/.git/orca/issue-command-runner.sh',
-        envVars: { ORCA_ROOT_PATH: '/tmp/repo' }
+        runnerScriptPath: '/tmp/repo/.git/mcode/issue-command-runner.sh',
+        envVars: { MCODE_ROOT_PATH: '/tmp/repo' }
       }
     )
 
     expect(store.queueTabStartupCommand).not.toHaveBeenCalled()
     expect(store.queueTabSetupSplit).toHaveBeenCalledWith('tab-1', {
-      command: 'bash /tmp/repo/.git/orca/setup-runner.sh',
-      env: { ORCA_ROOT_PATH: '/tmp/repo' },
+      command: 'bash /tmp/repo/.git/mcode/setup-runner.sh',
+      env: { MCODE_ROOT_PATH: '/tmp/repo' },
       direction: 'vertical'
     })
     expect(store.queueTabIssueCommandSplit).toHaveBeenCalledWith('tab-1', {
-      command: 'bash /tmp/repo/.git/orca/issue-command-runner.sh',
-      env: { ORCA_ROOT_PATH: '/tmp/repo' }
+      command: 'bash /tmp/repo/.git/mcode/issue-command-runner.sh',
+      env: { MCODE_ROOT_PATH: '/tmp/repo' }
     })
   })
 

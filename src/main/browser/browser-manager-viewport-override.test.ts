@@ -905,7 +905,7 @@ describe('browserManager', () => {
         expect.any(Number),
         [
           expect.objectContaining({
-            code: expect.stringContaining('__orcaBrowserAnnotationViewportBridge')
+            code: expect.stringContaining('__mcodeBrowserAnnotationViewportBridge')
           })
         ],
         false

@@ -5,7 +5,7 @@ import type { ChildProcess } from 'node:child_process'
 import type { ClientChannel, ConnectConfig, SFTPWrapper } from 'ssh2'
 import type { SshTarget, SshConnectionState, SshConnectionStatus } from '../../shared/ssh-types'
 import {
-  getOrcaControlSocketPath,
+  getMCodeControlSocketPath,
   spawnSystemSsh,
   spawnSystemSshCommand,
   downloadFileViaSystemSsh,
@@ -143,7 +143,7 @@ function isGitHubRestrictedShellProbeSuccess(
 
   // GitHub appends git:// advisory lines after the invalid-command line (issue #6988), so match the first line only.
   const firstLine = stderr.split('\n', 1)[0]?.trim()
-  if (firstLine !== 'Invalid command: echo ORCA-SYSTEM-SSH-OK') {
+  if (firstLine !== 'Invalid command: echo MCODE-SYSTEM-SSH-OK') {
     return false
   }
 
@@ -218,7 +218,7 @@ export class SshConnection {
       return true
     }
     return (
-      getOrcaControlSocketPath(this.target, {
+      getMCodeControlSocketPath(this.target, {
         ...this.getSystemSshBuildArgsOptions()
       }) !== null
     )
@@ -819,7 +819,7 @@ export class SshConnection {
         this.proxyProcess?.kill()
         this.proxyProcess = null
         try {
-          // Why: on macOS, per-app network policy can block Orca's direct TCP socket while the system OpenSSH binary is still allowed.
+          // Why: on macOS, per-app network policy can block MCode's direct TCP socket while the system OpenSSH binary is still allowed.
           await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved)
           return
         } catch {
@@ -979,7 +979,7 @@ export class SshConnection {
     this.proxyProcess = null
 
     // Why: this probe runs before remote platform detection; a raw echo works under POSIX shells, cmd.exe, and PowerShell, but `/bin/sh` wrapping does not.
-    const channel = this.spawnTrackedSystemSshCommand('echo ORCA-SYSTEM-SSH-OK', {
+    const channel = this.spawnTrackedSystemSshCommand('echo MCODE-SYSTEM-SSH-OK', {
       wrapCommand: false
     })
     try {
@@ -1019,7 +1019,7 @@ export class SshConnection {
               return
             }
             if (
-              (code === 0 && stdout.includes('ORCA-SYSTEM-SSH-OK')) ||
+              (code === 0 && stdout.includes('MCODE-SYSTEM-SSH-OK')) ||
               isGitHubRestrictedShellProbeSuccess(
                 this.target,
                 this.systemSshResolvedConfig,
@@ -1065,7 +1065,7 @@ export class SshConnection {
     this.systemSshResolvedConfig = cloneResolvedConfig(resolved)
     this.systemSshControlMasterDisabledForSession = false
     this.systemSshGssapiOnlyForSession = gssapiOnly
-    const controlPath = getOrcaControlSocketPath(this.target, {
+    const controlPath = getMCodeControlSocketPath(this.target, {
       resolvedConfig: this.systemSshResolvedConfig,
       gssapiOnly: this.systemSshGssapiOnlyForSession
     })
@@ -1621,7 +1621,7 @@ export class SshConnection {
         throw this.createCancelledConnectAttemptError()
       }
       this.systemSshResolvedConfig = cloneResolvedConfig(resolved)
-      const controlPath = getOrcaControlSocketPath(this.target, {
+      const controlPath = getMCodeControlSocketPath(this.target, {
         resolvedConfig: this.systemSshResolvedConfig
       })
       const proc = await this.spawnSystemSshWithControlMasterRetry(controlPath, connectGeneration)

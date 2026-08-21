@@ -59,7 +59,7 @@ jobs:
       - name: Run deterministic terminal IME boundary tests
         run: >-
           xvfb-run --auto-servernum
-          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1
+          env SKIP_BUILD=1 MCODE_E2E_FORWARD_APP_LOGS=1
           pnpm run test:e2e --
           tests/e2e/terminal-ime-exact-byte.spec.ts
           --workers=1

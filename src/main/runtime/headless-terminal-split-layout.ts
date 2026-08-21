@@ -19,7 +19,7 @@ export function terminalLayoutContainsLeaf(
 /**
  * Insert a newly split-off leaf into a terminal tab's persisted layout tree.
  *
- * Why: a headless ("Orca server") split only updated the live session snapshot,
+ * Why: a headless ("MCode server") split only updated the live session snapshot,
  * never the persisted workspace-session layout, so a later snapshot rebuild
  * re-derived from the stale single-leaf layout and collapsed the split. This
  * builds the durable post-split layout so the split survives rebuilds.

@@ -4,7 +4,7 @@ import {
   withRemoteRuntimeTailscaleHint
 } from './remote-runtime-tailscale-hint'
 
-const UNREACHABLE = 'Could not connect to the remote Orca runtime.'
+const UNREACHABLE = 'Could not connect to the remote MCode runtime.'
 
 describe('isTailscaleEndpoint', () => {
   it('matches MagicDNS hostnames', () => {
@@ -27,7 +27,7 @@ describe('isTailscaleEndpoint', () => {
 
   it('rejects non-Tailscale hosts and the surrounding 100.x space', () => {
     expect(isTailscaleEndpoint('ws://192.168.1.10:6768')).toBe(false)
-    expect(isTailscaleEndpoint('wss://orca.example.com')).toBe(false)
+    expect(isTailscaleEndpoint('wss://mcode.example.com')).toBe(false)
     expect(isTailscaleEndpoint('ws://100.63.0.1:6768')).toBe(false)
     expect(isTailscaleEndpoint('ws://100.128.0.1:6768')).toBe(false)
     expect(isTailscaleEndpoint('ws://notts.net.evil.com')).toBe(false)
@@ -63,20 +63,20 @@ describe('withRemoteRuntimeTailscaleHint', () => {
   it('covers the close and timeout failure variants', () => {
     expect(
       withRemoteRuntimeTailscaleHint(
-        'Remote Orca runtime closed the connection.',
+        'Remote MCode runtime closed the connection.',
         'ws://192.168.1.10:6768'
       )
     ).toContain('connect both devices to Tailscale')
     expect(
       withRemoteRuntimeTailscaleHint(
-        'Timed out while connecting to the remote Orca runtime.',
+        'Timed out while connecting to the remote MCode runtime.',
         'wss://host.ts.net'
       )
     ).toContain('Funnel reverted to tailnet-only')
   })
 
   it('leaves non-connectivity errors untouched', () => {
-    const auth = 'Remote Orca runtime rejected the pairing token.'
+    const auth = 'Remote MCode runtime rejected the pairing token.'
     expect(withRemoteRuntimeTailscaleHint(auth, 'ws://192.168.1.10:6768')).toBe(auth)
   })
 

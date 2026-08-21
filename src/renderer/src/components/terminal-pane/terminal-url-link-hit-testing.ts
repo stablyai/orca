@@ -46,7 +46,7 @@ export type HttpLinkClickFallbackBinding = IDisposable & {
   ptyMouseSuppression: TerminalLinkPtyMouseSuppression
 }
 
-export type TerminalHttpLinkDestination = 'orca' | 'system'
+export type TerminalHttpLinkDestination = 'mcode' | 'system'
 
 export type TerminalHttpLinkActionDestinations = {
   primary: TerminalHttpLinkDestination
@@ -85,10 +85,10 @@ export function handleTerminalHttpLink(
   const actionDestinations = deps.actionDestinations
   const primaryDestination = actionDestinations?.primary
   const labelForDestination = (destination: TerminalHttpLinkDestination): string =>
-    destination === 'orca'
+    destination === 'mcode'
       ? translate(
-          'auto.components.terminal.pane.TerminalLinkActionPopover.orcaBrowser',
-          'Orca Browser'
+          'auto.components.terminal.pane.TerminalLinkActionPopover.mcodeBrowser',
+          'MCode Browser'
         )
       : translate(
           'auto.components.terminal.pane.TerminalLinkActionPopover.systemBrowser',
@@ -279,7 +279,7 @@ export function openTerminalHttpLink(url: string, deps: UrlLinkHitTestDeps): voi
     openHttpLink(url, {
       allowRuntimeInApp: true,
       worktreeId: deps.worktreeId,
-      forceInApp: deps.forceDestination === 'orca',
+      forceInApp: deps.forceDestination === 'mcode',
       forceSystemBrowser: deps.forceDestination === 'system',
       sourceOwner
     })
@@ -309,11 +309,11 @@ export function openTerminalHttpLink(url: string, deps: UrlLinkHitTestDeps): voi
   // Suppress the browser's default link handling first, then route after the
   // persisted choice is available.
   void Promise.resolve(preferenceDecision)
-    .then((openInOrca) => {
+    .then((openInMCode) => {
       openHttpLink(url, {
         allowRuntimeInApp: true,
         worktreeId: deps.worktreeId,
-        forceSystemBrowser: !openInOrca,
+        forceSystemBrowser: !openInMCode,
         sourceOwner
       })
     })

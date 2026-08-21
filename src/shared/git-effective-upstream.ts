@@ -138,7 +138,7 @@ async function resolveEffectiveGitUpstreamForBranch(
       return configured
     }
 
-    // Why: older Orca worktrees inherited origin/main as their upstream even
+    // Why: older MCode worktrees inherited origin/main as their upstream even
     // though pushes target origin/<current-branch>. If that same-name remote
     // exists, source-control pull/sync must follow the publish branch rather
     // than the base branch.

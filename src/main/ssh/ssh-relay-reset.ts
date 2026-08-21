@@ -11,7 +11,7 @@ export async function forceStopRelayForTarget(
   const escapedSockName = shellEscape(sockName)
   const script = [
     `sock_name=${escapedSockName}`,
-    'base="${HOME}/.orca-remote"',
+    'base="${HOME}/.mcode-remote"',
     'if [ -d "$base" ]; then',
     '  for sock in "$base"/relay-*/"$sock_name" "$base"/"$sock_name"; do',
     '    [ -S "$sock" ] || continue',

@@ -18,7 +18,7 @@
  * defect is in what the overlay draws over the buffer, not in anything reaching the pty.
  */
 import type { Page } from '@stablyai/playwright-test'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import { closeTerminalImePaneArena, openTerminalImePaneArena } from './terminal-ime-pane-arena'
 import { setImeComposition } from './terminal-ime-cdp-composition'
 import {
@@ -66,17 +66,17 @@ function rendersEverythingItCovers(sample: MidlinePreeditOcclusionSample): boole
 
 test.describe('Terminal mid-line Korean preedit occlusion', () => {
   test('renders the row tail it covers, so the character after the cursor stays readable', async ({
-    orcaPage
+    mcodePage
   }, testInfo) => {
-    const arena = await openTerminalImePaneArena(orcaPage)
+    const arena = await openTerminalImePaneArena(mcodePage)
     let completed = false
     try {
       // The issue's repro: 안녕하세요, then CUB 6. Each Hangul syllable is two cells, so the
       // cursor lands on 하.
-      await writeToActiveTerminal(orcaPage, '\x1b[2J\x1b[H안녕하세요\x1b[6D')
+      await writeToActiveTerminal(mcodePage, '\x1b[2J\x1b[H안녕하세요\x1b[6D')
       await setImeComposition(arena.session, '가')
 
-      const sample = await sampleOpenComposition(orcaPage)
+      const sample = await sampleOpenComposition(mcodePage)
       expect(sample.cursorColumn, 'the cursor is not sitting on 하').toBe(4)
       expect(sample.rowTailFromCursor, 'the row under the overlay is not the repro').toBe('하세요')
       expect(sample.coveredColumns, 'the overlay covers no grid columns to assert about').not.toBe(
@@ -106,17 +106,17 @@ test.describe('Terminal mid-line Korean preedit occlusion', () => {
   })
 
   test('leaves the end-of-row composition untouched, with nothing covered to render', async ({
-    orcaPage
+    mcodePage
   }, testInfo) => {
     // Passes before and after the fix by design: the guard is against over-correcting into
     // rendering a tail where the row has none.
-    const arena = await openTerminalImePaneArena(orcaPage)
+    const arena = await openTerminalImePaneArena(mcodePage)
     let completed = false
     try {
-      await writeToActiveTerminal(orcaPage, '\x1b[2J\x1b[H안녕하세요')
+      await writeToActiveTerminal(mcodePage, '\x1b[2J\x1b[H안녕하세요')
       await setImeComposition(arena.session, '가')
 
-      const sample = await sampleOpenComposition(orcaPage)
+      const sample = await sampleOpenComposition(mcodePage)
       expect(sample.rowTailFromCursor, 'text still sits after the cursor').toBe('')
       expect(
         describeOcclusion(sample),

@@ -107,7 +107,7 @@ describe('handleOscLink', () => {
     )
   })
 
-  it('opens SSH file links through Orca without local authorization', async () => {
+  it('opens SSH file links through MCode without local authorization', async () => {
     setPlatform('Macintosh')
     vi.mocked(getConnectionId).mockReturnValue('ssh-1')
 

@@ -2,7 +2,7 @@ import { getSetupConfig } from '@/lib/new-workspace'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { OrcaHooks, RepoHookSettings } from '../../../shared/orca-yaml-hook-types'
+import type { MCodeHooks, RepoHookSettings } from '../../../shared/mcode-yaml-hook-types'
 import type { SetupDecision } from '../../../shared/worktree/create-types'
 import type { GitHubPrStartPoint } from '../../../shared/worktree/types'
 
@@ -36,12 +36,12 @@ export async function resolveDirectSetupDecision(
   repo: { hookSettings?: RepoHookSettings },
   settings: PreflightSettings
 ): Promise<{ kind: 'decided'; decision: SetupDecision } | { kind: 'needs-modal' }> {
-  let yamlHooks: OrcaHooks | null = null
+  let yamlHooks: MCodeHooks | null = null
   try {
     // Why: route the hooks probe by the repo's owner host (passed in) so preflight
     // and the subsequent owner-routed createWorktree hit the same host.
     const result = await checkRuntimeHooks(settings, repoId)
-    yamlHooks = (result.hooks as OrcaHooks | null) ?? null
+    yamlHooks = (result.hooks as MCodeHooks | null) ?? null
   } catch {
     yamlHooks = null
   }

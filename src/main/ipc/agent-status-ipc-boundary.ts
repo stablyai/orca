@@ -1,9 +1,9 @@
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { MCodeRuntimeService } from '../runtime/mcode-runtime'
 
 export type AgentStatusRuntimeEnrichment = Pick<
-  OrcaRuntimeService,
+  MCodeRuntimeService,
   'getAgentStatusTerminalHandleForPaneKey' | 'getAgentStatusOrchestrationContextForPaneKey'
 >
 

@@ -8,6 +8,6 @@ export function seedPowerlevel10kWizardEnv(
     return
   }
   // Why: p10k's first-run wizard blocks shell startup and queued commands.
-  // Users can still run `p10k configure` manually inside an Orca terminal.
+  // Users can still run `p10k configure` manually inside an MCode terminal.
   env[POWERLEVEL10K_WIZARD_DISABLE_ENV] ??= 'true'
 }

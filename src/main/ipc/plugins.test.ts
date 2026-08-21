@@ -23,19 +23,19 @@ beforeEach(() => {
 describe('plugin consent IPC schema', () => {
   it('requires the fingerprint reviewed by the caller', () => {
     expect(() =>
-      parsePluginConsentArgs({ pluginKey: 'orca-samples.demo', decision: 'approve' })
+      parsePluginConsentArgs({ pluginKey: 'mcode-samples.demo', decision: 'approve' })
     ).toThrow()
   })
 
   it('accepts an explicit reviewed fingerprint', () => {
     expect(
       parsePluginConsentArgs({
-        pluginKey: 'orca-samples.demo',
+        pluginKey: 'mcode-samples.demo',
         reviewedFingerprint: 'sha256-reviewed',
         decision: 'approve'
       })
     ).toEqual({
-      pluginKey: 'orca-samples.demo',
+      pluginKey: 'mcode-samples.demo',
       reviewedFingerprint: 'sha256-reviewed',
       decision: 'approve'
     })
@@ -101,27 +101,27 @@ describe('plugin removal authority', () => {
   it('allows installed rows but refuses dev overrides and unknown keys', () => {
     const service = {
       getDiscovered: () => [
-        { pluginKey: 'orca-samples.installed', isDev: false },
-        { pluginKey: 'orca-samples.dev', isDev: true }
+        { pluginKey: 'mcode-samples.installed', isDev: false },
+        { pluginKey: 'mcode-samples.dev', isDev: true }
       ]
     } as unknown as PluginService
 
-    expect(canRemoveInstalledPlugin(service, 'orca-samples.installed')).toBe(true)
-    expect(canRemoveInstalledPlugin(service, 'orca-samples.dev')).toBe(false)
-    expect(canRemoveInstalledPlugin(service, 'orca-samples.unknown')).toBe(false)
+    expect(canRemoveInstalledPlugin(service, 'mcode-samples.installed')).toBe(true)
+    expect(canRemoveInstalledPlugin(service, 'mcode-samples.dev')).toBe(false)
+    expect(canRemoveInstalledPlugin(service, 'mcode-samples.unknown')).toBe(false)
   })
 
   it('refuses bundled installs because startup would restore them', () => {
     const service = {
-      getDiscovered: () => [{ pluginKey: 'stablyai.orca-theme', isDev: false }]
+      getDiscovered: () => [{ pluginKey: 'mcode.plugin-theme', isDev: false }]
     } as unknown as PluginService
     const lock = {
       version: 1,
       plugins: {
-        'stablyai.orca-theme': {
-          pluginKey: 'stablyai.orca-theme',
+        'mcode.plugin-theme': {
+          pluginKey: 'mcode.plugin-theme',
           version: '1.0.0',
-          source: { kind: 'bundled', bundleId: 'stablyai.orca-theme' },
+          source: { kind: 'bundled', bundleId: 'mcode.plugin-theme' },
           resolvedCommit: null,
           contentHash: 'a'.repeat(64),
           consentFingerprint: 'reviewed',
@@ -130,7 +130,7 @@ describe('plugin removal authority', () => {
       }
     } satisfies PluginLockfile
 
-    expect(canRemoveInstalledPlugin(service, 'stablyai.orca-theme', lock)).toBe(false)
+    expect(canRemoveInstalledPlugin(service, 'mcode.plugin-theme', lock)).toBe(false)
   })
 })
 

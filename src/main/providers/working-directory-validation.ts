@@ -87,7 +87,7 @@ export function formatLocalPtyEnvironmentDiag(extra: Record<string, string> = {}
     ...extra,
     arch: process.arch,
     platform: `${process.platform} ${systemVersion}`,
-    orca: process.env.ORCA_APP_VERSION?.trim() || '0.0.0-dev'
+    mcode: process.env.MCODE_APP_VERSION?.trim() || '0.0.0-dev'
   }
   return Object.entries(parts)
     .map(([key, value]) => `${key}: ${value}`)

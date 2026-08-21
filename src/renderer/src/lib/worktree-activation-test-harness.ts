@@ -25,7 +25,7 @@ export function setSetupScriptLaunchMode(mode: SetupScriptLaunchMode | null): vo
 /** Restores the module-level store slices these activation suites mutate. */
 export function registerWorktreeActivationReset(): void {
   afterEach(() => {
-    delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
+    delete (globalThis as { __MCODE_WEB_CLIENT__?: boolean }).__MCODE_WEB_CLIENT__
     useAppStore.setState((state) => ({
       settings: state.settings
         ? { ...state.settings, activeRuntimeEnvironmentId: null }

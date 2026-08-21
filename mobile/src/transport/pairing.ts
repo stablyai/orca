@@ -22,7 +22,7 @@ export function decodePairingUrl(url: string): PairingOffer | null {
 // accept the same URL shapes.
 export function extractPairingCodeFromUrl(url: string): string | null {
   const trimmed = url.trim()
-  const match = /^orca:\/\/([^/?#]*)([^?#]*)?/i.exec(trimmed)
+  const match = /^mcode:\/\/([^/?#]*)([^?#]*)?/i.exec(trimmed)
   if (!match) {
     return null
   }
@@ -49,7 +49,7 @@ export function extractPairingCodeFromUrl(url: string): string | null {
   return null
 }
 
-// Why: accept either an `orca://pair?...` URL or the bare base64
+// Why: accept either an `mcode://pair?...` URL or the bare base64
 // string so the paste-pair flow can take whichever the user actually
 // copied from desktop.
 export function parsePairingCode(input: string): PairingOffer | null {
@@ -58,7 +58,7 @@ export function parsePairingCode(input: string): PairingOffer | null {
     return null
   }
   try {
-    if (/^orca:\/\//i.test(trimmed)) {
+    if (/^mcode:\/\//i.test(trimmed)) {
       return decodePairingUrl(trimmed)
     }
     return decodePairingBase64(trimmed)

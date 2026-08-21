@@ -74,10 +74,10 @@ describe('matchFilePathAtColumn', () => {
   })
 
   it('matches a spaced path with line and column suffixes', () => {
-    const line = 'wrote /tmp/orca report/result.json:12:3 for you'
+    const line = 'wrote /tmp/mcode report/result.json:12:3 for you'
     const result = matchFilePathAtColumn(line, colOf(line, 'result'))
     expect(result).toEqual({
-      pathText: '/tmp/orca report/result.json',
+      pathText: '/tmp/mcode report/result.json',
       line: 12,
       column: 3
     })

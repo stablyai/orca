@@ -80,7 +80,7 @@ export type FocusedPaneCensus = {
   cols: number | null
   rows: number | null
   bufferLines: number | null
-  /** Agent identity from the pane's foreground process table, when Orca resolved one. */
+  /** Agent identity from the pane's foreground process table, when MCode resolved one. */
   foregroundAgent: string | null
   /** Agent identity from the hook-reported status row for the same pane. */
   statusAgentType: string | null

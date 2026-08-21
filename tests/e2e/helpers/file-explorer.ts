@@ -34,7 +34,7 @@ export async function openFileExplorer(page: Page): Promise<void> {
  *
  * Why: the tests assert file-open behavior, not DOM tree rendering. Opening a
  * stable seeded file through the same editor store action avoids hidden-window
- * explorer DOM flakiness while still exercising Orca's editor tab model.
+ * explorer DOM flakiness while still exercising MCode's editor tab model.
  */
 export async function clickFileInExplorer(
   page: Page,

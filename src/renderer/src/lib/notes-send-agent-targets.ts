@@ -55,7 +55,7 @@ function detectTitleHintPaneEvidence(
  * sees panes with a live status entry, so a freshly launched (still idle) agent
  * stays invisible until its first hook event — i.e. until the user talks to it.
  * We augment it with recognized agent-title tabs whose pane still has a live
- * PTY. TerminalTab.launchAgent records the harness Orca started; manually typed
+ * PTY. TerminalTab.launchAgent records the harness MCode started; manually typed
  * CLIs do not have that owner bit, so their runtime title is the only pre-hook
  * signal available.
  *

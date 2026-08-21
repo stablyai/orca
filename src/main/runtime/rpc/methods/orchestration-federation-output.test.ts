@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/protocol-version'
-import { OrcaRuntimeService } from '../../orca-runtime'
+import { MCodeRuntimeService } from '../../mcode-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import type { OrchestrationEnvironmentTransport } from '../../orchestration/environment-transport'
 import type { RpcRequest } from '../core'
@@ -15,8 +15,8 @@ describe('orchestration federated worker output', () => {
   const databases: OrchestrationDb[] = []
   let homeDb: OrchestrationDb
   let workerDb: OrchestrationDb
-  let homeRuntime: OrcaRuntimeService
-  let workerRuntime: OrcaRuntimeService
+  let homeRuntime: MCodeRuntimeService
+  let workerRuntime: MCodeRuntimeService
   let homeDispatcher: RpcDispatcher
   let workerDispatcher: RpcDispatcher
   let workerSupportsStructuredRead: boolean
@@ -25,7 +25,7 @@ describe('orchestration federated worker output', () => {
     homeDb = new OrchestrationDb(':memory:')
     workerDb = new OrchestrationDb(':memory:')
     databases.push(homeDb, workerDb)
-    workerRuntime = new OrcaRuntimeService()
+    workerRuntime = new MCodeRuntimeService()
     workerRuntime.setOrchestrationDb(workerDb)
     workerDispatcher = new RpcDispatcher({
       runtime: workerRuntime,
@@ -65,7 +65,7 @@ describe('orchestration federated worker output', () => {
         })) as RuntimeRpcResponse<unknown>
       }
     }
-    homeRuntime = new OrcaRuntimeService(null, undefined, {
+    homeRuntime = new MCodeRuntimeService(null, undefined, {
       orchestrationEnvironmentTransport: transport
     })
     homeRuntime.setOrchestrationDb(homeDb)
@@ -114,7 +114,7 @@ describe('orchestration federated worker output', () => {
     }
   }
 
-  function configureWorkerRuntime(runtime: OrcaRuntimeService): void {
+  function configureWorkerRuntime(runtime: MCodeRuntimeService): void {
     vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
     vi.spyOn(runtime, 'showRepo').mockResolvedValue({
       id: 'windows-repo',
@@ -146,7 +146,7 @@ describe('orchestration federated worker output', () => {
       'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
     )
     vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockReturnValue('windows_runtime:pty:1')
-    vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+    vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('mcode')
     vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
       handle: 'term_windows_worker',
       accepted: true,
@@ -259,7 +259,7 @@ describe('orchestration federated worker output', () => {
 
   it('reads the exact transcript on the worker server without leaking its path home', async () => {
     const dispatchId = await startRemoteWorker()
-    const directory = await mkdtemp(join(tmpdir(), 'orca-federated-worker-output-'))
+    const directory = await mkdtemp(join(tmpdir(), 'mcode-federated-worker-output-'))
     const transcriptPath = join(directory, 'windows-session.jsonl')
     await writeFile(
       transcriptPath,

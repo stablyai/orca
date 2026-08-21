@@ -24,9 +24,9 @@ import { SidebarFeedbackImageAttachments } from './SidebarFeedbackImageAttachmen
 import { useSidebarFeedbackEnvironmentPrefill } from './use-sidebar-feedback-environment-prefill'
 import { useSidebarFeedbackImages } from './use-sidebar-feedback-images'
 
-const GITHUB_ISSUES_URL = 'https://github.com/stablyai/orca/issues/'
+const GITHUB_ISSUES_URL = 'https://github.com/mcode-ide/mcode/issues/'
 const DISCORD_URL = 'https://discord.gg/fzjDKHxv8Q'
-const X_URL = 'https://x.com/orca_build'
+const X_URL = 'https://x.com/mcode_build'
 
 type SubmitIdentity = {
   githubLogin: string | null
@@ -233,7 +233,7 @@ export function SidebarFeedbackDialog({
           <DialogDescription className="text-xs">
             {translate(
               'auto.components.sidebar.SidebarFeedbackDialog.a828fa4aee',
-              "Share what's working, what's broken, or what Orca should do next."
+              "Share what's working, what's broken, or what MCode should do next."
             )}
           </DialogDescription>
         </DialogHeader>

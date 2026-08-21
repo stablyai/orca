@@ -6,7 +6,7 @@ export const RUNTIME_CATALOG_STALE_MS = 60_000
 let lastCatalogListedAt = 0
 
 /** Why: status coverage cannot observe catalog edits made by another client or the
- * orca CLI, so an old-enough listing must be re-read even when coverage looks complete. */
+ * mcode CLI, so an old-enough listing must be re-read even when coverage looks complete. */
 export function isRuntimeCatalogListingStale(): boolean {
   return Date.now() - lastCatalogListedAt > RUNTIME_CATALOG_STALE_MS
 }

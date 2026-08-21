@@ -7,10 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // 2.0 MB/s end-to-end while bare xterm parses the same bytes at ~103 MB/s;
 // this pins how much of that ceiling the drain loop itself imposes.
 // Run with:
-//   ORCA_TERMINAL_PERF_BENCH=1 pnpm vitest run \
+//   MCODE_TERMINAL_PERF_BENCH=1 pnpm vitest run \
 //     src/renderer/src/lib/pane-manager/pane-terminal-output-scheduler-throughput.bench.test.ts \
 //     --config config/vitest.config.ts
-const benchEnabled = process.env.ORCA_TERMINAL_PERF_BENCH === '1'
+const benchEnabled = process.env.MCODE_TERMINAL_PERF_BENCH === '1'
 
 vi.mock('@/lib/e2e-config', () => ({
   e2eConfig: { exposeStore: false }

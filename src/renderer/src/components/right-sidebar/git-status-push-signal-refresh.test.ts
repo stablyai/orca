@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as React from 'react'
-import { ORCA_TERMINAL_COMMAND_FINISHED_EVENT } from '@/hooks/terminal-command-finished-event'
+import { MCODE_TERMINAL_COMMAND_FINISHED_EVENT } from '@/hooks/terminal-command-finished-event'
 
 type WorktreesChangedCallback = (data: { repoId: string }) => void
 type GitStatusMetadataChangedCallback = (data: { repoId: string }) => void
@@ -87,7 +87,7 @@ async function renderHookOnce(params: HookParams): Promise<{
     emitGitStatusMetadataChanged: (repoId: string) =>
       gitStatusMetadataChangedCallback?.({ repoId }),
     emitCommandFinished: (worktreeId: string) => {
-      const listener = windowListeners.get(ORCA_TERMINAL_COMMAND_FINISHED_EVENT)
+      const listener = windowListeners.get(MCODE_TERMINAL_COMMAND_FINISHED_EVENT)
       listener?.({ detail: { worktreeId } } as unknown as Event)
     },
     onChangedSubscribe,

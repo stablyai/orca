@@ -21,7 +21,7 @@ vi.mock('node:os', async (importOriginal) => {
   const actual = await importOriginal<{ homedir: () => string }>()
   return {
     ...actual,
-    homedir: () => process.env.ORCA_TEST_SSH_HOME || actual.homedir()
+    homedir: () => process.env.MCODE_TEST_SSH_HOME || actual.homedir()
   }
 })
 
@@ -46,7 +46,7 @@ beforeEach(() => {
 })
 
 async function writeKey(contents: Buffer, filename = 'security key'): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), 'orca-security-key-'))
+  const directory = await mkdtemp(join(tmpdir(), 'mcode-security-key-'))
   tempDirs.push(directory)
   const keyPath = join(directory, filename)
   await writeFile(keyPath, contents)
@@ -54,7 +54,7 @@ async function writeKey(contents: Buffer, filename = 'security key'): Promise<st
 }
 
 async function createDefaultKeyHome(files: Record<string, Buffer>): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), 'orca-default-key-home-'))
+  const directory = await mkdtemp(join(tmpdir(), 'mcode-default-key-home-'))
   tempDirs.push(directory)
   await mkdir(join(directory, '.ssh'))
   for (const [name, contents] of Object.entries(files)) {
@@ -181,7 +181,7 @@ describe('requiresSystemSshForSecurityKey', () => {
     const directory = await createDefaultKeyHome({
       id_ed25519_sk: createOpenSshPrivateKeyFixture([ED25519_SECURITY_KEY])
     })
-    vi.stubEnv('ORCA_TEST_SSH_HOME', directory)
+    vi.stubEnv('MCODE_TEST_SSH_HOME', directory)
 
     await expect(requiresSystemSshForSecurityKey(createTarget(), null)).resolves.toBe(true)
     await expect(
@@ -194,7 +194,7 @@ describe('requiresSystemSshForSecurityKey', () => {
       id_rsa: createOpenSshPrivateKeyFixture(['ssh-rsa']),
       id_ed25519_sk: createOpenSshPrivateKeyFixture([ED25519_SECURITY_KEY])
     })
-    vi.stubEnv('ORCA_TEST_SSH_HOME', directory)
+    vi.stubEnv('MCODE_TEST_SSH_HOME', directory)
 
     await expect(requiresSystemSshForSecurityKey(createTarget(), null)).resolves.toBe(true)
 
@@ -206,7 +206,7 @@ describe('requiresSystemSshForSecurityKey', () => {
     const directory = await createDefaultKeyHome({
       id_rsa: createOpenSshPrivateKeyFixture(['ssh-rsa'])
     })
-    vi.stubEnv('ORCA_TEST_SSH_HOME', directory)
+    vi.stubEnv('MCODE_TEST_SSH_HOME', directory)
 
     await expect(requiresSystemSshForSecurityKey(createTarget(), null)).resolves.toBe(false)
   })
@@ -241,7 +241,7 @@ describe('requiresSystemSshForSecurityKey', () => {
     const directory = await createDefaultKeyHome({
       id_ed25519_sk: createOpenSshPrivateKeyFixture([ED25519_SECURITY_KEY])
     })
-    vi.stubEnv('ORCA_TEST_SSH_HOME', directory)
+    vi.stubEnv('MCODE_TEST_SSH_HOME', directory)
     findSystemSshMock.mockReturnValue(null)
 
     await expect(requiresSystemSshForSecurityKey(createTarget(), null)).resolves.toBe(false)
@@ -252,7 +252,7 @@ describe('requiresSystemSshForSecurityKey', () => {
       'id_ed25519.pub': createOpenSshPublicKeyFixture('ssh-ed25519'),
       id_ed25519_sk: createOpenSshPrivateKeyFixture([ED25519_SECURITY_KEY])
     })
-    vi.stubEnv('ORCA_TEST_SSH_HOME', directory)
+    vi.stubEnv('MCODE_TEST_SSH_HOME', directory)
 
     await expect(requiresSystemSshForSecurityKey(createTarget(), null)).resolves.toBe(true)
   })
@@ -284,7 +284,7 @@ describe('requiresSystemSshForSecurityKey', () => {
   it.each([ED25519_SECURITY_KEY, ECDSA_SECURITY_KEY])(
     'detects an agent-backed %s identity from its public sidecar',
     async (keyType) => {
-      const directory = await mkdtemp(join(tmpdir(), 'orca-security-key-agent-'))
+      const directory = await mkdtemp(join(tmpdir(), 'mcode-security-key-agent-'))
       tempDirs.push(directory)
       const identityPath = join(directory, 'agent-key')
       await writeFile(`${identityPath}.pub`, createOpenSshPublicKeyFixture(keyType))

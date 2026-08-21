@@ -231,7 +231,7 @@ function sanitizeAgentFailureDetail(detail: string | null): string | null {
 }
 
 function userFacingUnsafeWindowsBatchArgs(label: string): string {
-  return `${label} cannot be run as a Windows batch command with the prompt in argv. Remove {prompt} so Orca sends the prompt on stdin.`
+  return `${label} cannot be run as a Windows batch command with the prompt in argv. Remove {prompt} so MCode sends the prompt on stdin.`
 }
 
 function toModelDiscoveryCapability(
@@ -878,7 +878,7 @@ function runLocalPlanForAgent(
 }
 
 // Why: codex rewrites rotating OAuth tokens in its home's auth.json; the
-// per-home lock keeps this run from racing Orca's own quota probes there.
+// per-home lock keeps this run from racing MCode's own quota probes there.
 function runCodexLocalPlanUnderHomeLock(
   start: () => LocalProcessExecution<InternalTextGenerationResult>,
   target: LocalGenerationTarget,

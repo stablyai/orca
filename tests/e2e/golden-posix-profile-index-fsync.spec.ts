@@ -1,16 +1,16 @@
 import { readFileSync, rmSync, statSync } from 'node:fs'
 import path from 'node:path'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 
 test.use({ seedTestRepo: false })
 test.skip(process.platform === 'win32', 'Restrictive-umask fsync regression is POSIX-only')
 
 test('recreates a fresh profile index on disk with a restrictive umask @posix-profile-index-golden', async ({
   electronApp,
-  orcaPage
+  mcodePage
 }) => {
   const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
-  const indexPath = path.join(userDataDir, 'orca-profile-index.json')
+  const indexPath = path.join(userDataDir, 'mcode-profile-index.json')
   // Why: the index tmp file is written with 0o666 & ~umask, so a umask that clears
   // owner-write is what made the pre-fix fsync open(path, 'r+') fail with EACCES.
   const originalUmask = await electronApp.evaluate(() => process.umask(0o200))
@@ -18,10 +18,10 @@ test('recreates a fresh profile index on disk with a restrictive umask @posix-pr
   try {
     rmSync(indexPath, { force: true })
     rmSync(`${indexPath}.bak`, { force: true })
-    // Why: orcaProfiles:list reads the index from disk on every call and rebuilds
+    // Why: mcodeProfiles:list reads the index from disk on every call and rebuilds
     // it when missing, so this drives the real create + fsync + rename path.
-    const listed = await orcaPage.evaluate(async () => {
-      const result = await window.api.orcaProfiles.list()
+    const listed = await mcodePage.evaluate(async () => {
+      const result = await window.api.mcodeProfiles.list()
       window.__store!.getState().openSettingsPage()
       return result
     })
@@ -41,5 +41,5 @@ test('recreates a fresh profile index on disk with a restrictive umask @posix-pr
     await electronApp.evaluate((_electron, umask) => process.umask(umask), originalUmask)
   }
 
-  await expect(orcaPage.getByPlaceholder('Search settings')).toBeVisible()
+  await expect(mcodePage.getByPlaceholder('Search settings')).toBeVisible()
 })

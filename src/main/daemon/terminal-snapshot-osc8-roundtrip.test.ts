@@ -40,7 +40,7 @@ function oscLinkAt(terminal: Terminal, row: number, col: number): OscLinkData | 
 
 describe('OSC 8 hyperlink snapshot round-trip', () => {
   it('retains a closed link URI without linking surrounding text', async () => {
-    const url = 'https://github.com/stablyai/orca/issues/12345'
+    const url = 'https://github.com/mcode-ide/mcode/issues/12345'
     const { terminal, addon } = createTerminal()
     await write(terminal, `before \x1b]8;;${url}\x1b\\#12345\x1b]8;;\x1b\\ after`)
 

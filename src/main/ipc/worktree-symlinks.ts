@@ -31,7 +31,7 @@ type WorktreeLinkedPathOptions = {
 // 'link': symlink when APFS clone is unavailable (user-configured shared paths).
 // 'copy': real copy when APFS clone is unavailable (.worktreeinclude paths, which
 // are per-worktree copies by cross-tool convention — edits must not leak back).
-// 'share': always symlink (orca.yaml sharedDirectories). An APFS clone would give
+// 'share': always symlink (mcode.yaml sharedDirectories). An APFS clone would give
 // each worktree an independent node_modules, defeating one-install-serves-all.
 type WorktreeMaterializeMode = 'link' | 'copy' | 'share'
 
@@ -332,7 +332,7 @@ export async function createWorktreeCopiedPaths(
   return await materializeWorktreePaths(primaryPath, worktreePath, paths, 'copy', options)
 }
 
-/** Symlink `orca.yaml` `worktree.sharedDirectories` into a freshly-created
+/** Symlink `mcode.yaml` `worktree.sharedDirectories` into a freshly-created
  *  worktree. Unlike createWorktreeLinkedPaths this never APFS clone-copies: a
  *  clone would give each worktree its own node_modules, and the point of a
  *  shared directory is that one install serves every worktree. */

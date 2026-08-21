@@ -20,7 +20,7 @@ function quoteWindowsArg(value) {
   return `"${value.replace(/"/g, '""')}"`
 }
 
-// Why: under a Git Bash setup runner, Orca exports ORCA_WORKTREE_PATH in MSYS form (/c/...), which
+// Why: under a Git Bash setup runner, MCode exports MCODE_WORKTREE_PATH in MSYS form (/c/...), which
 // cmd.exe cannot resolve. This is the migration pattern for any setup script feeding a native exe.
 function posixShellPathToNativeWindowsPath(value) {
   const driveMatch = value.match(/^\/([A-Za-z])\/(.*)$/)
@@ -62,14 +62,14 @@ export function runInternalDevSetup({
   access = accessSync,
   spawn = spawnSync
 } = {}) {
-  const setupPath = env.ORCA_INTERNAL_DEV_SETUP?.trim()
+  const setupPath = env.MCODE_INTERNAL_DEV_SETUP?.trim()
   if (!setupPath || !exists(setupPath) || !isExecutable(setupPath, platform, access)) {
     return 0
   }
 
   // Why: this hook is an optional local accelerator; failures should not block
   // creating a worktree or running the normal dependency install.
-  spawnOptionalSetup(spawn, setupPath, env.ORCA_WORKTREE_PATH || cwd, platform, env)
+  spawnOptionalSetup(spawn, setupPath, env.MCODE_WORKTREE_PATH || cwd, platform, env)
 
   return 0
 }

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const resolveHelperAppPathMock = vi.hoisted(() => vi.fn())
 const resolveHelperExecutablePathMock = vi.hoisted(() => vi.fn())
-const permissionStatusTempDir = '/tmp/orca-computer-use-permissions-test'
+const permissionStatusTempDir = '/tmp/mcode-computer-use-permissions-test'
 const permissionStatusPath = join(permissionStatusTempDir, 'status.json')
 
 vi.mock('child_process', () => ({
@@ -53,9 +53,9 @@ describe('getComputerUsePermissionStatus', () => {
     vi.mocked(stat).mockReset()
     resolveHelperAppPathMock.mockReset()
     resolveHelperExecutablePathMock.mockReset()
-    resolveHelperAppPathMock.mockReturnValue('/Applications/Orca Computer Use.app')
+    resolveHelperAppPathMock.mockReturnValue('/Applications/MCode Computer Use.app')
     resolveHelperExecutablePathMock.mockReturnValue(
-      '/Applications/Orca Computer Use.app/Contents/MacOS/orca-computer-use-macos'
+      '/Applications/MCode Computer Use.app/Contents/MacOS/mcode-computer-use-macos'
     )
     vi.mocked(mkdtemp).mockResolvedValue(permissionStatusTempDir)
     vi.mocked(stat).mockResolvedValue({} as Awaited<ReturnType<typeof stat>>)
@@ -168,7 +168,7 @@ describe('getComputerUsePermissionStatus', () => {
 
     await expect(getComputerUsePermissionStatus()).resolves.toEqual({
       platform: 'darwin',
-      helperAppPath: '/Applications/Orca Computer Use.app',
+      helperAppPath: '/Applications/MCode Computer Use.app',
       helperUnavailableReason: null,
       permissions: [
         { id: 'accessibility', status: 'granted' },
@@ -179,7 +179,7 @@ describe('getComputerUsePermissionStatus', () => {
       '/usr/bin/open',
       [
         '-n',
-        '/Applications/Orca Computer Use.app',
+        '/Applications/MCode Computer Use.app',
         '--args',
         '--permission-status-file',
         permissionStatusPath
@@ -201,7 +201,7 @@ describe('getComputerUsePermissionStatus', () => {
     await expect(getComputerUsePermissionStatus()).resolves.toEqual({
       platform: 'darwin',
       helperAppPath: null,
-      helperUnavailableReason: 'Orca Computer Use.app was not found',
+      helperUnavailableReason: 'MCode Computer Use.app was not found',
       permissions: [
         { id: 'accessibility', status: 'not-granted' },
         { id: 'screenshots', status: 'not-granted' }

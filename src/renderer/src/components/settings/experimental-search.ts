@@ -199,7 +199,7 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
       ),
       description: translate(
         'auto.components.settings.experimental.search.agentHibernation.description',
-        'Stops idle background agent terminals after the configured idle window and resumes supported sessions when opened again. Agent sleep preserves launch options for agents started by Orca; manually started agents may resume with current Orca defaults.'
+        'Stops idle background agent terminals after the configured idle window and resumes supported sessions when opened again. Agent sleep preserves launch options for agents started by MCode; manually started agents may resume with current MCode defaults.'
       ),
       keywords: [
         ...translateSearchKeyword(

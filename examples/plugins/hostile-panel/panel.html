@@ -133,7 +133,7 @@
       // Probe 7: an oversized valid-looking call must receive a real refusal.
       window.addEventListener('message', function (event) {
         var data = event.data
-        if (event.source !== window.parent || !data || data.type !== 'orca-panel-action-result') {
+        if (event.source !== window.parent || !data || data.type !== 'mcode-panel-action-result') {
           return
         }
         if (data.requestId === 'oversized-probe') {
@@ -155,7 +155,7 @@
       document.getElementById('bridge').addEventListener('click', function () {
         window.parent.postMessage(
           {
-            type: 'orca-panel-action',
+            type: 'mcode-panel-action',
             requestId: 'oversized-probe',
             action: 'workspace.readContext',
             params: { padding: 'x'.repeat(128 * 1024) }
@@ -172,7 +172,7 @@
           for (var i = 0; i < 40; i++) {
             var payload =
               i % 3 === 0
-                ? { type: 'orca-panel-pong', pingId: i }
+                ? { type: 'mcode-panel-pong', pingId: i }
                 : i % 3 === 1
                   ? { type: 'invalid-hostile-message', sequence: i }
                   : new Uint8Array(2048)
@@ -180,7 +180,7 @@
           }
           window.parent.postMessage(
             {
-              type: 'orca-panel-action',
+              type: 'mcode-panel-action',
               requestId: 'flood-result',
               action: 'workspace.readContext',
               params: {}
@@ -206,7 +206,7 @@
         if (
           event.source === window.parent &&
           event.data &&
-          event.data.type === 'orca-hostile-busy-probe'
+          event.data.type === 'mcode-hostile-busy-probe'
         ) {
           enterBusyLoop()
         }

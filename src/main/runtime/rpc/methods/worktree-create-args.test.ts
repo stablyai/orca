@@ -14,7 +14,7 @@ const build = (params: Record<string, unknown>) =>
 describe('buildManagedWorktreeCreateArgs', () => {
   it('omits name provenance when the client did not claim a generated name', () => {
     // Why: absent must mean user-typed. A truthy default would let the host permanently retire
-    // names people chose on purpose — the pool contains ordinary words like "orca" and "molly".
+    // names people chose on purpose — the pool contains ordinary words like "mcode" and "molly".
     expect(build({ repo: 'id:repo-1', name: 'nautilus' })).not.toHaveProperty('nameWasGenerated')
     expect(
       build({ repo: 'id:repo-1', name: 'nautilus', nameWasGenerated: false })

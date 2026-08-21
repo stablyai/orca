@@ -25,8 +25,8 @@ describe('dedupeWorktreesByPath', () => {
         { id: 'windows-duplicate', path: 'c:/workspaces/feature' },
         { id: 'unc-first', path: '\\\\Server\\Share\\Feature' },
         { id: 'unc-duplicate', path: '//server/share/feature' },
-        { id: 'temp-private', path: '/private/tmp/orca/feature' },
-        { id: 'temp-short', path: '/tmp/orca/feature' },
+        { id: 'temp-private', path: '/private/tmp/mcode/feature' },
+        { id: 'temp-short', path: '/tmp/mcode/feature' },
         { id: 'relative-first', path: 'workspaces/feature' },
         { id: 'relative-duplicate', path: 'workspaces/./feature' }
       ]

@@ -376,7 +376,7 @@ describe('AiVaultHandler', () => {
 })
 
 async function makeTemporaryHome(): Promise<string> {
-  const path = await mkdtemp(join(tmpdir(), 'orca-relay-ai-vault-'))
+  const path = await mkdtemp(join(tmpdir(), 'mcode-relay-ai-vault-'))
   temporaryHomes.push(path)
   return path
 }

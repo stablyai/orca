@@ -16,7 +16,7 @@ afterEach(() => {
 })
 
 function makeRepo(): string {
-  const root = mkdtempSync(join(tmpdir(), 'orca-vm-recipe-process-'))
+  const root = mkdtempSync(join(tmpdir(), 'mcode-vm-recipe-process-'))
   tmpRoots.push(root)
   return root
 }

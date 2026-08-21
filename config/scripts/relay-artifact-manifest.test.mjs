@@ -19,13 +19,13 @@ import {
 const projectDir = resolve(import.meta.dirname, '../..')
 // Its own tree: building into out/relay would clobber a developer's build and
 // race the suites that read it.
-const relayOutDir = mkdtempSync(join(tmpdir(), 'orca-relay-contract-'))
+const relayOutDir = mkdtempSync(join(tmpdir(), 'mcode-relay-contract-'))
 
 beforeAll(() => {
   execFileSync('node', [join(projectDir, 'config', 'scripts', 'build-relay.mjs')], {
     cwd: projectDir,
     stdio: 'pipe',
-    env: { ...process.env, ORCA_RELAY_OUT_ROOT: relayOutDir }
+    env: { ...process.env, MCODE_RELAY_OUT_ROOT: relayOutDir }
   })
 }, 120_000)
 

@@ -6,7 +6,7 @@ import * as SplashScreen from 'expo-splash-screen'
 import * as Notifications from 'expo-notifications'
 import * as Linking from 'expo-linking'
 import { colors } from '../src/theme/mobile-theme'
-import { OrcaLogo } from '../src/components/OrcaLogo'
+import { MCodeLogo } from '../src/components/MCodeLogo'
 import { RpcClientProvider } from '../src/transport/client-context'
 import { getNotificationNavigationTarget } from '../src/notifications/notification-routing'
 import { useOpenNotificationRoute } from '../src/notifications/use-open-notification-route'
@@ -44,7 +44,7 @@ export default function RootLayout() {
     void recoverMobileRelayPairing()
   }, [])
 
-  // Why: route `orca://pair?...` deep links to the confirm screen so
+  // Why: route `mcode://pair?...` deep links to the confirm screen so
   // the same pairing flow runs whether the link arrived via QR scan,
   // paste, AirDrop, Messages, or `xcrun simctl openurl`. getInitialURL
   // covers cold-start (link tapped while app was closed); the listener
@@ -54,7 +54,7 @@ export default function RootLayout() {
       const code = extractPairingCodeFromUrl(url)
       if (code) {
         // Why: Android camera launches can leave Expo Router's unmatched
-        // `orca://pair` route underneath this screen; replacing keeps cancel
+        // `mcode://pair` route underneath this screen; replacing keeps cancel
         // and edge-back from revealing the router error page.
         router.replace({ pathname: '/pair-confirm', params: { code } })
       }
@@ -179,7 +179,7 @@ export default function RootLayout() {
             name="index"
             options={{
               headerShown: false,
-              headerTitle: () => <OrcaLogo size={22} />
+              headerTitle: () => <MCodeLogo size={22} />
             }}
           />
           <Stack.Screen name="pair-scan" options={{ headerShown: false }} />

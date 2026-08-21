@@ -3,7 +3,7 @@
 Date: 2026-07-29 (revised 2026-07-30)
 
 Status: accepted architecture decision; PR A
-([#8512](https://github.com/stablyai/orca/pull/8512)) merged; PR B not yet
+([#8512](https://github.com/mcode-ide/mcode/pull/8512)) merged; PR B not yet
 implemented
 
 Revision note: the original decision selected a constrained XLIFF 2.0 profile
@@ -15,7 +15,7 @@ under "Alternatives considered".
 
 ## Goal
 
-Reduce the recurring engineering and human work required to localize Orca
+Reduce the recurring engineering and human work required to localize MCode
 without presenting missing, copied-English, or stale values as completed
 translations.
 
@@ -31,10 +31,10 @@ The format is not the goal. The intended steady-state workflow is:
 
 ## Decision
 
-Use gettext PO as Orca's canonical bilingual translation source, under a
+Use gettext PO as MCode's canonical bilingual translation source, under a
 constrained profile:
 
-- `msgctxt` — the stable Orca message ID;
+- `msgctxt` — the stable MCode message ID;
 - `msgid` — the English source, current as of the entry's last
   reconciliation;
 - `msgstr` — the target translation;
@@ -80,7 +80,7 @@ provenance is recorded separately in a documented comment or flag; it must not
 be conflated with runtime eligibility.
 
 PO is an authoring and translation-workflow boundary, not a runtime
-dependency. Orca must not require network access or a translation service to
+dependency. MCode must not require network access or a translation service to
 display localized UI.
 
 ## Why this solves the work problem
@@ -127,12 +127,12 @@ file timestamps, copied-English ratios, or a second hand-maintained database.
 
 ## Constrained PO profile
 
-Orca will support only the subset needed for its message model. PR B must
+MCode will support only the subset needed for its message model. PR B must
 define and validate that subset rather than accepting arbitrary PO documents.
 
 Each supported entry must carry:
 
-- one stable Orca message ID (`msgctxt`), unique within the file;
+- one stable MCode message ID (`msgctxt`), unique within the file;
 - the English source (`msgid`), current as of the entry's last
   reconciliation;
 - an optional target value (`msgstr`) in a target-locale file;
@@ -141,7 +141,7 @@ Each supported entry must carry:
   documented separate comment or flag; and
 - the information needed to validate interpolation placeholders.
 
-Plurals use Orca's existing per-key convention: each i18next plural-suffixed
+Plurals use MCode's existing per-key convention: each i18next plural-suffixed
 key (`…_one`, `…_other`) is its own PO entry. The profile must not use
 `msgid_plural`/`msgstr[n]`, which would collide with i18next's own CLDR plural
 selection and gettext's `nplurals` model.
@@ -416,10 +416,10 @@ reversed when the stated uncertainties resolved against it:
   compiler design chose 1.2; and
 - XML is the format most likely to let a hand-edited community PR fail on a
   malformed entity, and there is no cross-tool XML formatting convention, so
-  external editors produce whole-file diffs; Orca's translation contributions
+  external editors produce whole-file diffs; MCode's translation contributions
   arrive overwhelmingly as direct catalog PRs.
 
-If a translation provider requires XLIFF, Orca should add a deterministic
+If a translation provider requires XLIFF, MCode should add a deterministic
 import/export adapter at the boundary rather than change the canonical
 representation.
 
@@ -432,7 +432,7 @@ costs. Adapter-only, as above.
 ### Direct JSON or TypeScript catalogs
 
 These are simple runtime inputs, but they do not standardize source snapshots,
-translator context, or review state. Meeting Orca's requirements would require
+translator context, or review state. Meeting MCode's requirements would require
 custom sidecars or object schemas and synchronization rules. That recreates
 much of a bilingual standard while retaining the parity and stale-state risks
 the migration is intended to remove.
@@ -450,13 +450,13 @@ PR B PO proof fails, adopt this — not XLIFF — before PR C.
 ### Platform-native catalogs
 
 Platform-native string catalogs provide strong translation state on their
-own platform but are not a suitable authority for Orca's macOS, Linux,
+own platform but are not a suitable authority for MCode's macOS, Linux,
 Windows, web, WSL, and SSH surfaces.
 
 ### Proprietary translation platform
 
 A translation platform may later operate on the PO boundary, but it should
-not become Orca's sole source of truth or a runtime dependency. Selecting one
+not become MCode's sole source of truth or a runtime dependency. Selecting one
 before the repository contract exists would create premature vendor coupling.
 
 ### Peer practice
@@ -479,7 +479,7 @@ format:
   plan must run in CI from the PR that introduces it.
 
 Closed-source applications do not publish enough of their authoring pipelines
-to establish a format decision. Orca therefore chooses based on its own
+to establish a format decision. MCode therefore chooses based on its own
 requirements rather than presumed competitor internals.
 
 ## Confidence and decision gate

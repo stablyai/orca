@@ -8,7 +8,7 @@ import {
   setPlatform
 } from './claude-account-service-test-harness'
 
-const CLAUDE_SERVICE_TEST_ROOT = join(tmpdir(), 'orca-claude-service-selection-test')
+const CLAUDE_SERVICE_TEST_ROOT = join(tmpdir(), 'mcode-claude-service-selection-test')
 
 vi.mock('electron', () => ({
   app: {
@@ -56,7 +56,7 @@ describe('ClaudeAccountService credential capture', () => {
     rmSync(tempDir, { recursive: true, force: true })
     const managedAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
     mkdirSync(managedAuthPath, { recursive: true })
-    writeFileSync(join(managedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
+    writeFileSync(join(managedAuthPath, '.mcode-managed-claude-auth'), 'account-1\n', 'utf-8')
     writeFileSync(join(managedAuthPath, '.credentials.json'), '{"old":true}\n', 'utf-8')
     let settings = {
       claudeManagedAccounts: [
@@ -296,7 +296,7 @@ describe('ClaudeAccountService credential capture', () => {
           managedAuthPath: wslAuthPath,
           managedAuthRuntime: 'wsl',
           wslDistro: 'Ubuntu',
-          wslLinuxAuthPath: '/home/jin/.local/share/orca/claude-accounts/wsl-account/auth',
+          wslLinuxAuthPath: '/home/jin/.local/share/mcode/claude-accounts/wsl-account/auth',
           authMethod: 'subscription-oauth',
           organizationUuid: null,
           organizationName: null,
@@ -367,7 +367,7 @@ describe('ClaudeAccountService credential capture', () => {
           managedAuthPath: wslAuthPath,
           managedAuthRuntime: 'wsl',
           wslDistro: 'Ubuntu',
-          wslLinuxAuthPath: '/home/jin/.local/share/orca/claude-accounts/wsl-account/auth',
+          wslLinuxAuthPath: '/home/jin/.local/share/mcode/claude-accounts/wsl-account/auth',
           authMethod: 'subscription-oauth',
           organizationUuid: null,
           organizationName: null,
@@ -412,7 +412,7 @@ describe('ClaudeAccountService credential capture', () => {
     const wslAuthPath = join(tempDir, 'claude-accounts', 'wsl-account', 'auth')
     mkdirSync(hostAuthPath, { recursive: true })
     mkdirSync(wslAuthPath, { recursive: true })
-    writeFileSync(join(wslAuthPath, '.orca-managed-claude-auth'), 'wsl-account\n', 'utf-8')
+    writeFileSync(join(wslAuthPath, '.mcode-managed-claude-auth'), 'wsl-account\n', 'utf-8')
     let settings = {
       claudeManagedAccounts: [
         {
@@ -435,7 +435,7 @@ describe('ClaudeAccountService credential capture', () => {
           managedAuthPath: wslAuthPath,
           managedAuthRuntime: 'wsl',
           wslDistro: 'Ubuntu',
-          wslLinuxAuthPath: '/home/jin/.local/share/orca/claude-accounts/wsl-account/auth',
+          wslLinuxAuthPath: '/home/jin/.local/share/mcode/claude-accounts/wsl-account/auth',
           authMethod: 'subscription-oauth',
           organizationUuid: null,
           organizationName: null,

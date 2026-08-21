@@ -1,16 +1,16 @@
 import { getEphemeralVmRecipeResultCheckoutMode } from './ephemeral-vm-recipes'
 import type { EphemeralVmRecipeResult } from './ephemeral-vm-recipes'
-import type { OrcaVmRecipe } from './orca-yaml-hook-types'
+import type { MCodeVmRecipe } from './mcode-yaml-hook-types'
 
-export function getEphemeralVmRecipeResultSchemaVersion(recipe: OrcaVmRecipe): 1 | 2 {
+export function getEphemeralVmRecipeResultSchemaVersion(recipe: MCodeVmRecipe): 1 | 2 {
   return recipe.checkoutMode === 'provisioned-root' ? 2 : 1
 }
 
 export function getEphemeralVmRecipeCheckoutModeError(
-  recipe: OrcaVmRecipe,
+  recipe: MCodeVmRecipe,
   result: EphemeralVmRecipeResult
 ): string | null {
-  const configuredMode = recipe.checkoutMode ?? 'orca-worktree'
+  const configuredMode = recipe.checkoutMode ?? 'mcode-worktree'
   const resultMode = getEphemeralVmRecipeResultCheckoutMode(result)
   if (configuredMode === resultMode) {
     return null

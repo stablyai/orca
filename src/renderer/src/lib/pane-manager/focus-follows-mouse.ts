@@ -33,7 +33,7 @@ export function shouldFollowMouseFocus(input: FocusFollowsMouseInput): boolean {
   if (input.mouseButtons !== 0) {
     return false
   }
-  // Why document.hasFocus: if Orca isn't the OS-focused window, the mouse
+  // Why document.hasFocus: if MCode isn't the OS-focused window, the mouse
   // event is from the user passing through on their way to another app.
   // Also returns false when DevTools is focused (DevTools runs in a
   // separate WebContents) — accepted. Users close DevTools or click to

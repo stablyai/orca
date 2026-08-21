@@ -97,7 +97,7 @@ function getBaseVersionManagerDirectories(platform: NodeJS.Platform, homePath: s
 
   if (platform === 'win32') {
     // Why: Anthropic's native Windows installer places claude.exe here, and
-    // GUI-launched Orca may not inherit the user's PATH entry for it.
+    // GUI-launched MCode may not inherit the user's PATH entry for it.
     directories.push(join(homePath, '.local', 'bin'))
     directories.push(join(homePath, 'AppData', 'Roaming', 'npm'))
     directories.push(join(homePath, 'AppData', 'Local', 'pnpm'))

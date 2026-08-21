@@ -115,7 +115,7 @@ export function CopilotIcon({ size = 14 }: { size?: number }): React.JSX.Element
 export function OpenCodeIcon({ size = 14 }: { size?: number }): React.JSX.Element {
   // SVG geometry sourced from opencode.ai/favicon.svg's official 512 canvas.
   // Why: the branded fills are adapted to currentColor so the mark is visible
-  // in both Orca themes, and keeping the square viewBox matches sibling glyphs.
+  // in both MCode themes, and keeping the square viewBox matches sibling glyphs.
   return (
     <svg
       width={size}

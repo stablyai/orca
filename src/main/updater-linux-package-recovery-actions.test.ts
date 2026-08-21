@@ -91,7 +91,7 @@ vi.mock('./linux-package-update-recovery', () => ({
 const ARTIFACT = {
   packageType: 'deb' as const,
   version: '1.0.61',
-  path: '/home/tester/.cache/orca-updater/pending/orca-ide_1.0.61_amd64.deb',
+  path: '/home/tester/.cache/mcode-updater/pending/mcode-ide_1.0.61_amd64.deb',
   sha512: 'LHlL7dKoqg98gS2nfQv878dK+UoktbAkm4M20/hoJ2Qr0Kqsa3MSL4VmWy/Lll/MYjQFkpvOxduQ/vswentozA=='
 }
 

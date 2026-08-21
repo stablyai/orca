@@ -148,10 +148,10 @@ export async function prepareGitHubStackedPullRequest(
       )
     }
     if (parentPullRequests.length !== 1) {
-      return creationError(`Orca found multiple open pull requests for the parent branch ${base}.`)
+      return creationError(`MCode found multiple open pull requests for the parent branch ${base}.`)
     }
     if (currentPullRequests.length > 1) {
-      return creationError(`Orca found multiple open pull requests for the current branch ${head}.`)
+      return creationError(`MCode found multiple open pull requests for the current branch ${head}.`)
     }
     const parentReview = parentPullRequests[0]
     const currentReview = currentPullRequests[0] ?? null
@@ -186,7 +186,7 @@ export async function prepareGitHubStackedPullRequest(
       code: isStacksUnavailableError(error) ? 'validation' : 'unknown',
       error: isStacksUnavailableError(error)
         ? 'GitHub stacked pull requests are not available for this repository.'
-        : 'Orca could not verify the parent pull request. Retry in a moment.'
+        : 'MCode could not verify the parent pull request. Retry in a moment.'
     }
   } finally {
     release()

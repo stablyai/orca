@@ -1,10 +1,10 @@
 /**
  * Mid-storm host health samples for forever-freeze detection.
- * Polls `orca status --json` on an interval while a load storm runs.
+ * Polls `mcode status --json` on an interval while a load storm runs.
  */
 import { spawn } from 'node:child_process'
 import { BoundedLiveFreezeHistory } from './live-freeze-bounded-history.mjs'
-import { resolveOrcaCliInvocation } from './live-remote-freeze-rpc.mjs'
+import { resolveMCodeCliInvocation } from './live-remote-freeze-rpc.mjs'
 
 /**
  * @param {{ intervalMs?: number, timeoutMs?: number, cliCommand?: string, sampleHistoryLimit?: number, statusSlowMs?: number }} opts
@@ -14,7 +14,7 @@ export function startStatusWatchdog(opts = {}) {
   const timeoutMs = opts.timeoutMs ?? 30_000
   const cliInvocation = opts.cliCommand
     ? { command: opts.cliCommand, prefixArgs: [] }
-    : resolveOrcaCliInvocation()
+    : resolveMCodeCliInvocation()
   const samples = new BoundedLiveFreezeHistory(opts.sampleHistoryLimit ?? 240)
   const statusSlowMs = opts.statusSlowMs ?? 15_000
   let stopped = false

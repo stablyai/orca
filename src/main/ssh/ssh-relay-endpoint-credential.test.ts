@@ -15,8 +15,8 @@ describe('relay endpoint credential writes', () => {
   it('publishes a POSIX credential only from a restrictive temporary file', () => {
     const command = relayEndpointCredentialWriteCommand(
       getRemoteHostPlatform('linux-x64'),
-      '/opt/orca node/bin/node',
-      '/home/me user/.orca-remote/relay.sock.credential'
+      '/opt/mcode node/bin/node',
+      '/home/me user/.mcode-remote/relay.sock.credential'
     )
 
     expect(command).toContain('{flag:"wx",mode:0o600}')
@@ -25,7 +25,7 @@ describe('relay endpoint credential writes', () => {
     expect(command.indexOf('fs.writeFileSync(t,')).toBeLessThan(
       command.indexOf('fs.renameSync(t,p)')
     )
-    expect(command).toContain("'/home/me user/.orca-remote/relay.sock.credential'")
+    expect(command).toContain("'/home/me user/.mcode-remote/relay.sock.credential'")
   })
 
   it('creates a Windows credential with its owner-only ACL before publication', () => {
@@ -33,11 +33,11 @@ describe('relay endpoint credential writes', () => {
       relayEndpointCredentialWriteCommand(
         getRemoteHostPlatform('win32-x64'),
         'C:/Program Files/nodejs/node.exe',
-        'C:/Users/me user/.orca-remote/relay.sock.credential'
+        'C:/Users/me user/.mcode-remote/relay.sock.credential'
       )
     )
 
-    expect(script).toContain("$path = 'C:/Users/me user/.orca-remote/relay.sock.credential'")
+    expect(script).toContain("$path = 'C:/Users/me user/.mcode-remote/relay.sock.credential'")
     expect(script).toContain('$security.SetAccessRuleProtection($true,$false)')
     expect(script).toContain('[System.IO.FileStream]::new($tempPath')
     expect(script).toContain('[System.IO.FileOptions]::WriteThrough,$security)')

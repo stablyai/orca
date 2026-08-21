@@ -38,7 +38,7 @@ function objectRecord(value: unknown): Record<string, unknown> | undefined {
 
 function stripUnsafeRetryAdvice(message: string, requestId: string): string {
   return message
-    .replace(' Restart Orca and try again.', '')
+    .replace(' Restart MCode and try again.', '')
     .replace(' Retry the command.', '')
     .replace(` Orchestration mutation request ID: ${requestId}.`, '')
 }

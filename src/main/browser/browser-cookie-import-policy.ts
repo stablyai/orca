@@ -92,7 +92,7 @@ export function normalizeCookieImportDomain(domain: string): string | null {
 
 // Why (STA-3811): registrable families whose sessions are device-bound server-side, so a
 // transplanted cookie is rejected (or flagged and expired within ~1h) no matter how faithfully
-// it is copied. Signing in directly inside Orca is the only path that produces a working
+// it is copied. Signing in directly inside MCode is the only path that produces a working
 // session, so an import must never write these cookies and never remove them either — the
 // live session is always more valuable than anything an import could put in its place.
 // Entries must be canonical lowercase ASCII (punycode) registrable domains, never subdomains or

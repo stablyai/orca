@@ -50,7 +50,7 @@ type Props<T extends WorktreeListRowItem> = {
   repoColor: string
   repoIcon?: RepoIcon | null
   // When the list is already grouped under this repo's section header, the row
-  // omits its own repo icon+name to avoid the redundant "📁 orca" on every row.
+  // omits its own repo icon+name to avoid the redundant "📁 mcode" on every row.
   hideRepo?: boolean
   status: WorktreeRollupStatus
   onPress: (item: T) => void

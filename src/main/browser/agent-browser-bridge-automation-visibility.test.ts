@@ -303,7 +303,7 @@ describe('AgentBrowserBridge', () => {
           if (args.includes('screenshot')) {
             const sessionName = args[args.indexOf('--session') + 1]
             lifecycleEvents.push(`command-${sessionName}`)
-            if (sessionName === 'orca-tab-tab-1' && !releaseFirstScreenshot) {
+            if (sessionName === 'mcode-tab-tab-1' && !releaseFirstScreenshot) {
               releaseFirstScreenshot = () => {
                 cb(null, JSON.stringify({ success: true, data: { path: '/tmp/tab-1.png' } }), '')
               }
@@ -328,7 +328,7 @@ describe('AgentBrowserBridge', () => {
       await vi.advanceTimersByTimeAsync(300)
 
       expect(lifecycleEvents).toContain('acquire-1')
-      expect(lifecycleEvents).toContain('command-orca-tab-tab-1')
+      expect(lifecycleEvents).toContain('command-mcode-tab-tab-1')
       expect(lifecycleEvents).not.toContain('acquire-2')
 
       expect(releaseFirstScreenshot).not.toBeNull()

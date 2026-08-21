@@ -56,7 +56,7 @@ const SHELL_NAME = 'login-shell'
 const SHELL_RUNS_NAME = 'login-shell-runs'
 
 async function createTempHome(): Promise<string> {
-  const home = await mkdtemp(join(tempRoot, 'orca-managed-hook-runtime-'))
+  const home = await mkdtemp(join(tempRoot, 'mcode-managed-hook-runtime-'))
   tempHomes.push(home)
   return home
 }
@@ -84,7 +84,7 @@ describe.runIf(process.platform !== 'win32')('resolveRelayGrokHome', () => {
     vi.stubEnv('SHELL', '/bin/sh')
     stubProbeOutput('/srv/grok///\n')
 
-    await expect(resolveRelayGrokHome('/home/orca')).resolves.toBe('/srv/grok')
+    await expect(resolveRelayGrokHome('/home/mcode')).resolves.toBe('/srv/grok')
 
     const [shell, args] = execFileMock.mock.calls[0] ?? []
     expect(shell).toBe('/bin/sh')
@@ -96,7 +96,7 @@ describe.runIf(process.platform !== 'win32')('resolveRelayGrokHome', () => {
     vi.stubEnv('SHELL', '/bin/zsh')
     stubProbeOutput('/srv/grok\n')
 
-    await expect(resolveRelayGrokHome('/home/orca')).resolves.toBe('/srv/grok')
+    await expect(resolveRelayGrokHome('/home/mcode')).resolves.toBe('/srv/grok')
 
     const [shell, args] = execFileMock.mock.calls[0] ?? []
     expect(shell).toBe('/bin/zsh')
@@ -107,7 +107,7 @@ describe.runIf(process.platform !== 'win32')('resolveRelayGrokHome', () => {
     vi.stubEnv('SHELL', '/bin/sh')
     stubProbeOutput('../relative\n')
 
-    await expect(resolveRelayGrokHome('/home/orca')).resolves.toBe('/home/orca/.grok')
+    await expect(resolveRelayGrokHome('/home/mcode')).resolves.toBe('/home/mcode/.grok')
   })
 
   // Why: this is the branch that made the old test flaky — pin it so a probe failure is
@@ -116,7 +116,7 @@ describe.runIf(process.platform !== 'win32')('resolveRelayGrokHome', () => {
     vi.stubEnv('SHELL', '/bin/sh')
     stubProbeFailure(Object.assign(new Error('spawn timed out'), { killed: true }))
 
-    await expect(resolveRelayGrokHome('/home/orca')).resolves.toBe('/home/orca/.grok')
+    await expect(resolveRelayGrokHome('/home/mcode')).resolves.toBe('/home/mcode/.grok')
   })
 })
 
@@ -132,7 +132,7 @@ describe.runIf(process.platform !== 'win32')('installManagedHooks', () => {
 
       await expect(installManagedHooks(options)).resolves.toEqual({ installers: 0, errors: 0 })
 
-      // Why: no agent config home, no ~/.orca install lock, and no GROK_HOME login-shell probe.
+      // Why: no agent config home, no ~/.mcode install lock, and no GROK_HOME login-shell probe.
       expect(await readdir(home)).toEqual([SHELL_NAME])
     }
   )
@@ -155,6 +155,6 @@ describe.runIf(process.platform !== 'win32')('installManagedHooks', () => {
       errors: 0
     })
 
-    expect((await readdir(home)).sort()).toEqual(['.claude', '.orca', SHELL_NAME, SHELL_RUNS_NAME])
+    expect((await readdir(home)).sort()).toEqual(['.claude', '.mcode', SHELL_NAME, SHELL_RUNS_NAME])
   })
 })

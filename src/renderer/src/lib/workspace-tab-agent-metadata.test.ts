@@ -9,7 +9,7 @@ import {
 function makeEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
   return {
     state: 'working',
-    prompt: 'You are working inside Orca, a multi-agent IDE.',
+    prompt: 'You are working inside MCode, a multi-agent IDE.',
     updatedAt: 1000,
     stateStartedAt: 900,
     paneKey: 'tab-1:leaf-1',

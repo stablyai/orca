@@ -5,7 +5,7 @@ const SKILL_DISCOVERY_TIMEOUT_MS = 15_000
 
 /**
  * Discover skills on the runtime that actually runs them: the local desktop host
- * (or its WSL/project runtime) by default, or a connected remote Orca runtime
+ * (or its WSL/project runtime) by default, or a connected remote MCode runtime
  * when one is active. This keeps install badges in sync with where the skill
  * files land instead of always reading the client's disk (#6789).
  *

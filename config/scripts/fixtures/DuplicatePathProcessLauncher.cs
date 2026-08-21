@@ -74,7 +74,7 @@ internal static class DuplicatePathProcessLauncher
         }
         entries.Add("PATH=C:\\live");
         entries.Add("Path=C:\\shadowed");
-        entries.Add("ORCA_TEST_OUTPUT=" + args[1]);
+        entries.Add("MCODE_TEST_OUTPUT=" + args[1]);
 
         IntPtr environment = Marshal.StringToHGlobalUni(String.Join("\0", entries.ToArray()) + "\0\0");
         StartupInfo startupInfo = new StartupInfo();

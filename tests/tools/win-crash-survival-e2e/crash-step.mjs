@@ -1,10 +1,10 @@
 // The abrupt main-process crash + its Windows event-log forensics.
 //
-// GitHub #7742: when Orca's main/renderer process died on Windows, the terminal
+// GitHub #7742: when MCode's main/renderer process died on Windows, the terminal
 // daemon (which hosts the ConPTYs) died with it, severing the console pipe, and
 // PowerShell hard-crashed with a 0xE9 "No process is on the other end of the
 // pipe" FailFast. The fix relocates the daemon into a standalone, detached
-// orca-terminal-daemon.exe that SURVIVES main death (src/main/daemon/
+// mcode-terminal-daemon.exe that SURVIVES main death (src/main/daemon/
 // daemon-host-relocation.ts). This module reproduces the crash and scans for the
 // pwsh FailFast that must no longer occur.
 
@@ -18,7 +18,7 @@ import { runCommandSync } from '../win-update-e2e/powershell-runner.mjs'
  * daemon alive for the wrong reason and make the survival assertion pass
  * vacuously. Kills exactly `pid` (the real Electron main of the instance the
  * harness launched, resolved via app.evaluate -> process.pid), never a scanned
- * or image-named process, so a live user Orca on the same box is never touched.
+ * or image-named process, so a live user MCode on the same box is never touched.
  */
 export function crashMainProcess(pid) {
   if (!Number.isInteger(pid) || pid <= 0) {

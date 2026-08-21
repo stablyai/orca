@@ -1,6 +1,6 @@
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { ensureTerminalVisible, getActiveWorktreeId } from './helpers/store'
 
 async function closeServer(server: Server): Promise<void> {
@@ -62,14 +62,14 @@ async function startFedCmFallbackServer(): Promise<{
 
 test('embedded browser omits unusable FedCM and reaches the popup fallback', async ({
   electronApp,
-  orcaPage
+  mcodePage
 }) => {
   const server = await startFedCmFallbackServer()
   try {
-    await ensureTerminalVisible(orcaPage)
-    const worktreeId = await getActiveWorktreeId(orcaPage)
+    await ensureTerminalVisible(mcodePage)
+    const worktreeId = await getActiveWorktreeId(mcodePage)
     expect(worktreeId).not.toBeNull()
-    const browserTabId = await orcaPage.evaluate(
+    const browserTabId = await mcodePage.evaluate(
       ({ targetWorktreeId, url }) => {
         const tab = window.__store!.getState().createBrowserTab(targetWorktreeId!, url, {
           title: 'FedCM fallback oracle',
@@ -80,7 +80,7 @@ test('embedded browser omits unusable FedCM and reaches the popup fallback', asy
       { targetWorktreeId: worktreeId, url: server.url }
     )
     const readGuest = async <T>(expression: string): Promise<T> =>
-      orcaPage.evaluate(
+      mcodePage.evaluate(
         async ({ targetBrowserTabId, script }) => {
           const slot = document.querySelector(
             `[data-browser-overlay-tab-id="${targetBrowserTabId}"]`

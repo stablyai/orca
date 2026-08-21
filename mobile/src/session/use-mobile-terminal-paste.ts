@@ -19,7 +19,7 @@ const CLIPBOARD_IMAGE_DATA_URL_PREFIX_RE = /^data:image\/[a-z0-9.+-]+;base64,/i
 // The iOS ImageManipulator loader cannot decode large base64 data URIs, so use a file.
 const resizeMobileClipboardImage: MobileClipboardImageResizer = async (source, target) => {
   const base64 = source.replace(CLIPBOARD_IMAGE_DATA_URL_PREFIX_RE, '')
-  const file = new FsFile(Paths.cache, `orca-clip-resize-${Date.now()}.png`)
+  const file = new FsFile(Paths.cache, `mcode-clip-resize-${Date.now()}.png`)
   let context: ReturnType<typeof ImageManipulator.manipulate> | null = null
   let rendered: Awaited<
     ReturnType<ReturnType<typeof ImageManipulator.manipulate>['renderAsync']>

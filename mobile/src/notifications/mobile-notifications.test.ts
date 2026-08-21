@@ -510,7 +510,7 @@ describe('subscribeToDesktopNotifications — reconnect catch-up', () => {
     } as never)
     vi.mocked(Notifications.scheduleNotificationAsync).mockResolvedValue('scheduled-1')
     vi.mocked(AsyncStorage.getItem).mockImplementation(async (key: string) =>
-      key.startsWith('orca:mobileNotificationsWatermark:')
+      key.startsWith('mcode:mobileNotificationsWatermark:')
         ? JSON.stringify({ seq: 57, epoch: 'epoch-before-restart' })
         : null
     )
@@ -558,7 +558,7 @@ describe('subscribeToDesktopNotifications — reconnect catch-up', () => {
     })
     vi.mocked(AsyncStorage.getItem).mockImplementation(async (key: string) => {
       await storageGate
-      return key.startsWith('orca:mobileNotificationsWatermark:')
+      return key.startsWith('mcode:mobileNotificationsWatermark:')
         ? JSON.stringify({ seq: 57, epoch: 'epoch-before-restart' })
         : null
     })
@@ -592,7 +592,7 @@ describe('subscribeToDesktopNotifications — reconnect catch-up', () => {
     } as never)
     vi.mocked(Notifications.scheduleNotificationAsync).mockResolvedValue('scheduled-1')
     vi.mocked(AsyncStorage.getItem).mockImplementation(async (key: string) =>
-      key.startsWith('orca:mobileNotificationsWatermark:')
+      key.startsWith('mcode:mobileNotificationsWatermark:')
         ? JSON.stringify({ seq: 57, epoch: 'epoch-stable' })
         : null
     )
@@ -700,7 +700,7 @@ describe('subscribeToDesktopNotifications — reconnect catch-up', () => {
     await flushAsync()
 
     expect(AsyncStorageMock.setItem).toHaveBeenCalledWith(
-      'orca:mobileNotificationsWatermark:host-1',
+      'mcode:mobileNotificationsWatermark:host-1',
       JSON.stringify({ seq: 5, epoch: null })
     )
   })
@@ -750,7 +750,7 @@ describe('subscribeToDesktopNotifications — reconnect catch-up', () => {
 
     // Watermark advanced to the replayed seq and was persisted.
     expect(AsyncStorageMock.setItem).toHaveBeenCalledWith(
-      'orca:mobileNotificationsWatermark:host-1',
+      'mcode:mobileNotificationsWatermark:host-1',
       JSON.stringify({ seq: 8, epoch: null })
     )
 
@@ -822,7 +822,7 @@ describe('subscribeToDesktopNotifications — reconnect catch-up', () => {
     vi.mocked(Notifications.scheduleNotificationAsync).mockResolvedValue('s')
     // Only the LEGACY key exists — exactly what an upgrading install has on disk.
     vi.mocked(AsyncStorage.getItem).mockImplementation(async (key: string) =>
-      key.startsWith('orca:mobileNotificationsLastSeq:') ? '57' : null
+      key.startsWith('mcode:mobileNotificationsLastSeq:') ? '57' : null
     )
 
     const sub = makeClient()
@@ -860,7 +860,7 @@ describe('subscribeToDesktopNotifications — reconnect catch-up', () => {
     } as never)
     vi.mocked(Notifications.scheduleNotificationAsync).mockResolvedValue('s')
     vi.mocked(AsyncStorage.getItem).mockImplementation(async (key: string) =>
-      key.startsWith('orca:mobileNotificationsWatermark:')
+      key.startsWith('mcode:mobileNotificationsWatermark:')
         ? JSON.stringify({ seq: 57, epoch: 'epoch-live' })
         : null
     )
@@ -953,11 +953,11 @@ describe('subscribeToDesktopNotifications — reconnect catch-up', () => {
 
     // Every watermark write is a single key carrying both halves together.
     const watermarkWrites = AsyncStorageMock.setItem.mock.calls.filter((c: unknown[]) =>
-      String(c[0]).startsWith('orca:mobileNotifications')
+      String(c[0]).startsWith('mcode:mobileNotifications')
     )
     expect(watermarkWrites.length).toBeGreaterThan(0)
     for (const [key, value] of watermarkWrites) {
-      expect(key).toBe('orca:mobileNotificationsWatermark:host-1')
+      expect(key).toBe('mcode:mobileNotificationsWatermark:host-1')
       expect(JSON.parse(String(value))).toHaveProperty('epoch')
       expect(JSON.parse(String(value))).toHaveProperty('seq')
     }

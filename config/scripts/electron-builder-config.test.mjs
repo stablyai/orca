@@ -65,9 +65,9 @@ describe('electron-builder config', () => {
 
     for (const authoringOnly of [
       'examples/plugins/hostile-panel/panel.html',
-      'examples/plugins/hostile-panel/orca-plugin.json',
-      'examples/plugins/hello-orca/main.mjs',
-      'examples/plugins/hello-orca/orca-plugin.json'
+      'examples/plugins/hostile-panel/mcode-plugin.json',
+      'examples/plugins/hello-mcode/main.mjs',
+      'examples/plugins/hello-mcode/mcode-plugin.json'
     ]) {
       expect(packs(authoringOnly)).toBe(false)
     }
@@ -84,8 +84,8 @@ describe('electron-builder config', () => {
     const packs = (repoPath) => isPacked(join('/app', repoPath), { isDirectory: () => false })
 
     for (const devBundlePath of [
-      'out/electron-dev/1a2b3c4d5e6f/Orca: dev.app/Contents/MacOS/Electron',
-      'out/electron-dev/1a2b3c4d5e6f/orca-dev-electron-app.json'
+      'out/electron-dev/1a2b3c4d5e6f/MCode: dev.app/Contents/MacOS/Electron',
+      'out/electron-dev/1a2b3c4d5e6f/mcode-dev-electron-app.json'
     ]) {
       expect(packs(devBundlePath)).toBe(false)
     }
@@ -111,8 +111,8 @@ describe('electron-builder config', () => {
     expect(electronBuilderConfig.mac.extraResources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          from: 'native/computer-use-macos/.build/release/Orca Computer Use.app',
-          to: 'Orca Computer Use.app'
+          from: 'native/computer-use-macos/.build/release/MCode Computer Use.app',
+          to: 'MCode Computer Use.app'
         })
       ])
     )
@@ -131,18 +131,18 @@ describe('electron-builder config', () => {
           to: 'computer-use-windows/runtime.ps1'
         }),
         expect.objectContaining({
-          from: 'native/windows-cli-launcher/.build/orca.exe',
-          to: 'bin/orca.exe'
+          from: 'native/windows-cli-launcher/.build/mcode.exe',
+          to: 'bin/mcode.exe'
         })
       ])
     )
   })
 
   // Why: the Windows CLI shim is delivered only via extraResources to
-  // resources/bin/orca.cmd (beside the native resources/bin/orca.exe). If the
+  // resources/bin/mcode.cmd (beside the native resources/bin/mcode.exe). If the
   // source tree is also packed into app.asar it gets extracted by
-  // asarUnpack:['resources/**'] to app.asar.unpacked/resources/win32/bin/orca.cmd,
-  // a duplicate with no adjacent orca.exe that fails to launch (#7351).
+  // asarUnpack:['resources/**'] to app.asar.unpacked/resources/win32/bin/mcode.cmd,
+  // a duplicate with no adjacent mcode.exe that fails to launch (#7351).
   it('keeps the Windows CLI shim source tree out of app.asar', () => {
     expect(electronBuilderConfig.files).toEqual(
       expect.arrayContaining(['!resources/win32{,/**/*}'])
@@ -151,8 +151,8 @@ describe('electron-builder config', () => {
     expect(electronBuilderConfig.win.extraResources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          from: 'resources/win32/bin/orca.cmd',
-          to: 'bin/orca.cmd'
+          from: 'resources/win32/bin/mcode.cmd',
+          to: 'bin/mcode.cmd'
         })
       ])
     )
@@ -164,13 +164,13 @@ describe('electron-builder config', () => {
     expect(electronBuilderConfig.mac.extraFiles).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          from: 'native/notification-status-macos/.build/release/orca-notification-status',
-          to: 'MacOS/orca-notification-status'
+          from: 'native/notification-status-macos/.build/release/mcode-notification-status',
+          to: 'MacOS/mcode-notification-status'
         })
       ])
     )
     expect(electronBuilderConfig.mac.extraResources).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ to: 'orca-notification-status' })])
+      expect.arrayContaining([expect.objectContaining({ to: 'mcode-notification-status' })])
     )
   })
 
@@ -178,13 +178,13 @@ describe('electron-builder config', () => {
     expect(electronBuilderConfig.mac.extraFiles).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          from: 'native/keyboard-layout-macos/.build/release/orca-keyboard-layout',
-          to: 'MacOS/orca-keyboard-layout'
+          from: 'native/keyboard-layout-macos/.build/release/mcode-keyboard-layout',
+          to: 'MacOS/mcode-keyboard-layout'
         })
       ])
     )
     expect(electronBuilderConfig.mac.extraResources).not.toEqual(
-      expect.arrayContaining([expect.objectContaining({ to: 'orca-keyboard-layout' })])
+      expect.arrayContaining([expect.objectContaining({ to: 'mcode-keyboard-layout' })])
     )
   })
 
@@ -249,33 +249,33 @@ describe('electron-builder config', () => {
   })
 
   it('matches the Linux desktop entry to Electron window class', () => {
-    expect(electronBuilderConfig.linux.desktop.entry.StartupWMClass).toBe('orca')
+    expect(electronBuilderConfig.linux.desktop.entry.StartupWMClass).toBe('mcode')
   })
 
   it('uses AppImage and deb as local Linux targets without changing existing artifact names', () => {
     expect(electronBuilderConfig.linux.target).toEqual(['AppImage', 'deb'])
-    expect(electronBuilderConfig.appImage.artifactName).toBe('orca-linux.${ext}')
-    expect(electronBuilderConfig.deb.artifactName).toBe('orca-ide_${version}_${arch}.${ext}')
+    expect(electronBuilderConfig.appImage.artifactName).toBe('mcode-linux.${ext}')
+    expect(electronBuilderConfig.deb.artifactName).toBe('mcode-ide_${version}_${arch}.${ext}')
     expect(electronBuilderConfig.rpm).toMatchObject({
-      packageName: 'orca-ide',
-      artifactName: 'orca-ide-${version}.${arch}.${ext}'
+      packageName: 'mcode-ide',
+      artifactName: 'mcode-ide-${version}.${arch}.${ext}'
     })
   })
 
   it('uses a distinct AppImage name for Linux arm64 release uploads', () => {
     const configPath = require.resolve('../electron-builder.config.cjs')
-    const original = process.env.ORCA_LINUX_ARM64_RELEASE
+    const original = process.env.MCODE_LINUX_ARM64_RELEASE
     try {
       delete require.cache[configPath]
-      process.env.ORCA_LINUX_ARM64_RELEASE = '1'
+      process.env.MCODE_LINUX_ARM64_RELEASE = '1'
       expect(require('../electron-builder.config.cjs').appImage.artifactName).toBe(
-        'orca-linux-arm64.${ext}'
+        'mcode-linux-arm64.${ext}'
       )
     } finally {
       if (original === undefined) {
-        delete process.env.ORCA_LINUX_ARM64_RELEASE
+        delete process.env.MCODE_LINUX_ARM64_RELEASE
       } else {
-        process.env.ORCA_LINUX_ARM64_RELEASE = original
+        process.env.MCODE_LINUX_ARM64_RELEASE = original
       }
       delete require.cache[configPath]
       require('../electron-builder.config.cjs')
@@ -284,25 +284,25 @@ describe('electron-builder config', () => {
 
   it('overrides packaged semver only for local macOS builds', () => {
     const configPath = require.resolve('../electron-builder.config.cjs')
-    const original = process.env.ORCA_LOCAL_BUILD_VERSION
-    const originalMacRelease = process.env.ORCA_MAC_RELEASE
+    const original = process.env.MCODE_LOCAL_BUILD_VERSION
+    const originalMacRelease = process.env.MCODE_MAC_RELEASE
     try {
       delete require.cache[configPath]
-      delete process.env.ORCA_MAC_RELEASE
-      process.env.ORCA_LOCAL_BUILD_VERSION = '1.4.159-rc.0.local.123.abc'
+      delete process.env.MCODE_MAC_RELEASE
+      process.env.MCODE_LOCAL_BUILD_VERSION = '1.4.159-rc.0.local.123.abc'
       expect(require('../electron-builder.config.cjs').extraMetadata).toEqual({
         version: '1.4.159-rc.0.local.123.abc'
       })
     } finally {
       if (originalMacRelease === undefined) {
-        delete process.env.ORCA_MAC_RELEASE
+        delete process.env.MCODE_MAC_RELEASE
       } else {
-        process.env.ORCA_MAC_RELEASE = originalMacRelease
+        process.env.MCODE_MAC_RELEASE = originalMacRelease
       }
       if (original === undefined) {
-        delete process.env.ORCA_LOCAL_BUILD_VERSION
+        delete process.env.MCODE_LOCAL_BUILD_VERSION
       } else {
-        process.env.ORCA_LOCAL_BUILD_VERSION = original
+        process.env.MCODE_LOCAL_BUILD_VERSION = original
       }
       delete require.cache[configPath]
       require('../electron-builder.config.cjs')
@@ -311,36 +311,36 @@ describe('electron-builder config', () => {
 
   it('never applies local semver to release packaging', () => {
     const configPath = require.resolve('../electron-builder.config.cjs')
-    const originalLocalVersion = process.env.ORCA_LOCAL_BUILD_VERSION
-    const originalMacRelease = process.env.ORCA_MAC_RELEASE
+    const originalLocalVersion = process.env.MCODE_LOCAL_BUILD_VERSION
+    const originalMacRelease = process.env.MCODE_MAC_RELEASE
     try {
       delete require.cache[configPath]
-      process.env.ORCA_LOCAL_BUILD_VERSION = '1.4.159-local.123.abc'
-      process.env.ORCA_MAC_RELEASE = '1'
+      process.env.MCODE_LOCAL_BUILD_VERSION = '1.4.159-local.123.abc'
+      process.env.MCODE_MAC_RELEASE = '1'
       expect(require('../electron-builder.config.cjs').extraMetadata).toBeUndefined()
     } finally {
       if (originalLocalVersion === undefined) {
-        delete process.env.ORCA_LOCAL_BUILD_VERSION
+        delete process.env.MCODE_LOCAL_BUILD_VERSION
       } else {
-        process.env.ORCA_LOCAL_BUILD_VERSION = originalLocalVersion
+        process.env.MCODE_LOCAL_BUILD_VERSION = originalLocalVersion
       }
       if (originalMacRelease === undefined) {
-        delete process.env.ORCA_MAC_RELEASE
+        delete process.env.MCODE_MAC_RELEASE
       } else {
-        process.env.ORCA_MAC_RELEASE = originalMacRelease
+        process.env.MCODE_MAC_RELEASE = originalMacRelease
       }
       delete require.cache[configPath]
       require('../electron-builder.config.cjs')
     }
   })
 
-  it('uses Orca native rebuild hook instead of electron-builder default rebuild', () => {
+  it('uses MCode native rebuild hook instead of electron-builder default rebuild', () => {
     expect(electronBuilderConfig.beforeBuild).toBe(electronBuilderNativeRebuild)
     expect(electronBuilderConfig.npmRebuild).toBe(true)
   })
 
   it('verifies packaged main runtime deps from Windows-style asar entries', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-runtime-deps-'))
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'mcode-runtime-deps-'))
     try {
       await writeFile(join(resourcesDir, 'app.asar'), '', 'utf8')
       await mkdir(join(resourcesDir, 'node_modules', 'yaml'), { recursive: true })
@@ -369,7 +369,7 @@ describe('electron-builder config', () => {
   })
 
   it('prunes non-target node-pty architecture outputs from packaged runtime resources', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-node-pty-prune-'))
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'mcode-node-pty-prune-'))
     try {
       const nodePtyDir = join(resourcesDir, 'node_modules', 'node-pty')
       const prebuildsDir = join(nodePtyDir, 'prebuilds')
@@ -404,7 +404,7 @@ describe('electron-builder config', () => {
       ['x64', 1],
       ['arm64', 3]
     ]) {
-      const resourcesDir = await mkdtemp(join(tmpdir(), `orca-node-pty-conpty-${arch}-`))
+      const resourcesDir = await mkdtemp(join(tmpdir(), `mcode-node-pty-conpty-${arch}-`))
       try {
         const nodePtyDir = join(resourcesDir, 'node_modules', 'node-pty')
         const releaseDir = join(nodePtyDir, 'build', 'Release')
@@ -451,7 +451,7 @@ describe('electron-builder config', () => {
   })
 
   it('prunes non-target @parcel/watcher architecture subpackages', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-parcel-watcher-prune-'))
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'mcode-parcel-watcher-prune-'))
     try {
       const parcelDir = join(resourcesDir, 'node_modules', '@parcel')
       await mkdir(join(parcelDir, 'watcher'), { recursive: true })
@@ -476,7 +476,7 @@ describe('electron-builder config', () => {
   })
 
   it('leaves unrelated @parcel/* runtime deps untouched when pruning the watcher', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-parcel-watcher-prune-unrelated-'))
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'mcode-parcel-watcher-prune-unrelated-'))
     try {
       const parcelDir = join(resourcesDir, 'node_modules', '@parcel')
       await mkdir(join(parcelDir, 'watcher'), { recursive: true })
@@ -498,7 +498,7 @@ describe('electron-builder config', () => {
   })
 
   it('prunes type declaration artifacts from packaged runtime node_modules', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-runtime-type-prune-'))
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'mcode-runtime-type-prune-'))
     try {
       const packageDir = join(resourcesDir, 'node_modules', 'example-package')
       await mkdir(join(packageDir, 'dist'), { recursive: true })
@@ -516,7 +516,7 @@ describe('electron-builder config', () => {
   })
 
   it('prunes duplicate darwin sherpa-onnx runtime dylib aliases', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-sherpa-prune-'))
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'mcode-sherpa-prune-'))
     try {
       const packageDir = join(resourcesDir, 'node_modules', 'sherpa-onnx-darwin-arm64')
       await mkdir(packageDir, { recursive: true })
@@ -536,7 +536,7 @@ describe('electron-builder config', () => {
   })
 
   it('prunes zod TypeScript sources from packaged runtime resources', async () => {
-    const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-zod-prune-'))
+    const resourcesDir = await mkdtemp(join(tmpdir(), 'mcode-zod-prune-'))
     try {
       const packageDir = join(resourcesDir, 'node_modules', 'zod')
       await mkdir(join(packageDir, 'src'), { recursive: true })
@@ -552,7 +552,7 @@ describe('electron-builder config', () => {
   })
 
   it('fails when the packaged resources directory is missing', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-electron-builder-config-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-electron-builder-config-'))
     try {
       await expect(
         electronBuilderConfig.afterPack({
@@ -568,10 +568,10 @@ describe('electron-builder config', () => {
   it.skipIf(process.platform === 'win32')(
     'marks packaged Unix CLI launchers executable',
     async () => {
-      const root = await mkdtemp(join(tmpdir(), 'orca-electron-builder-config-'))
+      const root = await mkdtemp(join(tmpdir(), 'mcode-electron-builder-config-'))
       try {
         const resourcesDir = join(root, 'linux-unpacked', 'resources')
-        const launcherPath = join(resourcesDir, 'bin', 'orca-ide')
+        const launcherPath = join(resourcesDir, 'bin', 'mcode-ide')
         await mkdir(join(resourcesDir, 'bin'), { recursive: true })
         await cp(
           join(process.cwd(), 'resources', 'plugins', 'launch'),
@@ -595,7 +595,7 @@ describe('electron-builder config', () => {
           join(unpackedCliDir, 'index.js'),
           [
             'const args = process.argv.slice(2)',
-            "if (args[1] === 'list') console.log(JSON.stringify({ topics: [{ name: 'orca-cli' }, { name: 'computer-use' }] }))",
+            "if (args[1] === 'list') console.log(JSON.stringify({ topics: [{ name: 'mcode-cli' }, { name: 'computer-use' }] }))",
             "else if (args[1] === 'get') console.log(`---\\nname: ${args[2]}\\n---`)",
             'else console.log(JSON.stringify({ executed: false }))'
           ].join('\n'),

@@ -1,7 +1,7 @@
 export const WSL_TRANSCRIPT_FS_SLOW_MESSAGE =
-  'WSL transcript files are temporarily unavailable because filesystem access is taking too long. Try again shortly or restart Orca if the issue continues.'
+  'WSL transcript files are temporarily unavailable because filesystem access is taking too long. Try again shortly or restart MCode if the issue continues.'
 export const WSL_TRANSCRIPT_FS_CAPACITY_MESSAGE =
-  'WSL transcript discovery is temporarily unavailable because too many filesystem requests are already waiting. Try again shortly or restart Orca if the issue continues.'
+  'WSL transcript discovery is temporarily unavailable because too many filesystem requests are already waiting. Try again shortly or restart MCode if the issue continues.'
 const WSL_TRANSCRIPT_FS_PROCESS_FAILURE_PREFIX =
   'WSL transcript files are temporarily unavailable because the filesystem helper process failed'
 
@@ -34,7 +34,7 @@ export function wslTranscriptFsProcessFailureError(detail: unknown): WslTranscri
   const text = detail instanceof Error ? detail.message : String(detail)
   return new WslTranscriptFsError(
     'unavailable',
-    `${WSL_TRANSCRIPT_FS_PROCESS_FAILURE_PREFIX} (${text}). Try again shortly or restart Orca if the issue continues.`
+    `${WSL_TRANSCRIPT_FS_PROCESS_FAILURE_PREFIX} (${text}). Try again shortly or restart MCode if the issue continues.`
   )
 }
 

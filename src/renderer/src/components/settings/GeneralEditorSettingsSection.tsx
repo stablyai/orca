@@ -92,7 +92,7 @@ export function GeneralEditorSettingsSection({
         )}
         description={translate(
           'auto.components.settings.GeneralEditorSettingsSection.d21136d9ef',
-          'Configure how Orca persists file edits.'
+          'Configure how MCode persists file edits.'
         )}
       />
 
@@ -128,7 +128,7 @@ export function GeneralEditorSettingsSection({
         )}
         description={translate(
           'auto.components.settings.GeneralEditorSettingsSection.1bec6d8318',
-          'How long Orca waits after your last edit before saving automatically.'
+          'How long MCode waits after your last edit before saving automatically.'
         )}
         keywords={['autosave', 'delay', 'milliseconds']}
         className="flex items-center justify-between gap-4 py-2"
@@ -143,7 +143,7 @@ export function GeneralEditorSettingsSection({
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.GeneralEditorSettingsSection.8112cd6dcf',
-              'How long Orca waits after your last edit before saving automatically. First launch defaults to'
+              'How long MCode waits after your last edit before saving automatically. First launch defaults to'
             )}{' '}
             {DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS}{' '}
             {translate('auto.components.settings.GeneralEditorSettingsSection.fc5c5306ff', 'ms.')}

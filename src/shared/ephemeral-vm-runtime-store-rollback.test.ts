@@ -103,7 +103,7 @@ describe('ephemeral VM runtime store rollback projection', () => {
   })
 
   function makeUserDataPath(): string {
-    const path = mkdtempSync(join(tmpdir(), 'orca-vm-rollback-store-'))
+    const path = mkdtempSync(join(tmpdir(), 'mcode-vm-rollback-store-'))
     tempDirs.push(path)
     return path
   }
@@ -136,7 +136,7 @@ describe('ephemeral VM runtime store rollback projection', () => {
   it('projects an explicit ordinary checkout mode without changing its current meaning', () => {
     const userDataPath = makeUserDataPath()
     const runtime = runtimeRecord({
-      recipe: { ...runtimeRecord().recipe!, checkoutMode: 'orca-worktree' }
+      recipe: { ...runtimeRecord().recipe!, checkoutMode: 'mcode-worktree' }
     })
 
     upsertEphemeralVmRuntime(userDataPath, runtime)

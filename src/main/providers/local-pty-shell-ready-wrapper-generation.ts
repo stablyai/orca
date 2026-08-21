@@ -1,5 +1,5 @@
 /**
- * Generates the zsh ZDOTDIR tree and bash rcfile Orca launches shells with.
+ * Generates the zsh ZDOTDIR tree and bash rcfile MCode launches shells with.
  *
  * Why: the wrappers emit an OSC 777 marker after startup files finish, which the
  * readiness scanner watches for before a startup command is written.

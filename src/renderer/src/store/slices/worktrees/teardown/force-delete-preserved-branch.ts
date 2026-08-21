@@ -45,7 +45,7 @@ export function createForceDeletePreservedBranch(
       }
       // Ambiguous route: deleting against the active runtime could hit the wrong host's branch.
       // Localized because it surfaces in the toast below; the throw above mirrors a main-process
-      // message verbatim (orca-runtime.ts, ipc/worktrees.ts) and must stay in sync with it.
+      // message verbatim (mcode-runtime.ts, ipc/worktrees.ts) and must stay in sync with it.
       if (!retainedTarget && matchingRetainedTargets.length > 1) {
         throw new Error(
           translate(

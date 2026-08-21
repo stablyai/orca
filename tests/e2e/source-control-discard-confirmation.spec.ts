@@ -1,4 +1,4 @@
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import type { Locator, Page } from '@playwright/test'
 
@@ -33,7 +33,7 @@ async function seedUntrackedFile(page: Page): Promise<SeededUntrackedFile> {
     }
 
     const separator = worktree.path.includes('\\') ? '\\' : '/'
-    const fileName = `orca-discard-confirm-${Date.now()}.txt`
+    const fileName = `mcode-discard-confirm-${Date.now()}.txt`
     const relativePath = fileName
     await window.api.fs.writeFile({
       filePath: `${worktree.path}${separator}${relativePath}`,
@@ -91,31 +91,31 @@ async function confirmPendingDelete(page: Page): Promise<void> {
 }
 
 test.describe('Source Control discard confirmation', () => {
-  test.beforeEach(async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
+  test.beforeEach(async ({ mcodePage }) => {
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
   })
 
-  test('deletes an untracked file without confirmation', async ({ orcaPage }) => {
-    const seededFile = await seedUntrackedFile(orcaPage)
-    await openSourceControl(orcaPage)
+  test('deletes an untracked file without confirmation', async ({ mcodePage }) => {
+    const seededFile = await seedUntrackedFile(mcodePage)
+    await openSourceControl(mcodePage)
 
-    const row = orcaPage
+    const row = mcodePage
       .locator('[data-testid="source-control-entry"]')
       .filter({ hasText: seededFile.fileName })
     await expect(row).toBeVisible()
 
     await deleteUntrackedFileFromRow(row)
-    await confirmPendingDelete(orcaPage)
+    await confirmPendingDelete(mcodePage)
 
     await expect(
-      orcaPage.getByRole('dialog', { name: `Delete "${seededFile.fileName}"?` })
+      mcodePage.getByRole('dialog', { name: `Delete "${seededFile.fileName}"?` })
     ).toHaveCount(0)
     await expect(row).toHaveCount(0, { timeout: 10_000 })
 
-    await refreshGitStatus(orcaPage)
+    await refreshGitStatus(mcodePage)
     await expect(
-      orcaPage.locator('[data-testid="source-control-entry"]').filter({
+      mcodePage.locator('[data-testid="source-control-entry"]').filter({
         hasText: seededFile.fileName
       })
     ).toHaveCount(0)

@@ -11,7 +11,7 @@ describe('packaged node-pty Linux floor smoke', () => {
 
     expect(args).toContain('type=bind,src=/repo,dst=/workspace,readonly')
     expect(args).toContain('ubuntu:20.04')
-    expect(args.at(-1)).toContain('/workspace/dist/linux-arm64-unpacked/orca-ide')
+    expect(args.at(-1)).toContain('/workspace/dist/linux-arm64-unpacked/mcode-ide')
     expect(args.at(-1)).toContain('ELECTRON_RUN_AS_NODE=1')
   })
 

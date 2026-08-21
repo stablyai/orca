@@ -79,11 +79,11 @@ describe('CodexRuntimeHomeService', () => {
   })
 
   it('uses the canonical Electron userData for legacy active host migration', async () => {
-    const staleUserDataDir = mkdtempSync(join(tmpdir(), 'orca-stale-runtime-home-'))
+    const staleUserDataDir = mkdtempSync(join(tmpdir(), 'mcode-stale-runtime-home-'))
     const staleRuntimeHomePath = join(staleUserDataDir, 'codex-runtime-home', 'home')
     try {
       mkdirSync(staleRuntimeHomePath, { recursive: true })
-      process.env.ORCA_USER_DATA_PATH = staleUserDataDir
+      process.env.MCODE_USER_DATA_PATH = staleUserDataDir
       const legacyLaunchHomePath = join(
         testState.userDataDir,
         'codex-runtime-home',
@@ -103,12 +103,12 @@ describe('CodexRuntimeHomeService', () => {
       writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
       const store = createStore(createSettings())
 
-      const { configureOrcaUserDataPathEnv } = await import('../startup/configure-process')
-      configureOrcaUserDataPathEnv()
+      const { configureMCodeUserDataPathEnv } = await import('../startup/configure-process')
+      configureMCodeUserDataPathEnv()
       const { CodexRuntimeHomeService } = await import('./runtime-home-service')
       new CodexRuntimeHomeService(store as never)
 
-      expect(process.env.ORCA_USER_DATA_PATH).toBe(testState.userDataDir)
+      expect(process.env.MCODE_USER_DATA_PATH).toBe(testState.userDataDir)
       expect(normalizeLinkTarget(readlinkSync(legacyActiveHomePath))).toBe(
         normalizeLinkTarget(getRuntimeCodexHomePath())
       )
@@ -208,11 +208,11 @@ describe('CodexRuntimeHomeService', () => {
 
     expect(readFileSync(join(runtimeSessionsDir, 'session.json'), 'utf-8')).toBe('{"turns":[1]}')
     expect(
-      readFileSync(join(runtimeSessionsDir, 'session.orca-legacy-account-1.json'), 'utf-8')
+      readFileSync(join(runtimeSessionsDir, 'session.mcode-legacy-account-1.json'), 'utf-8')
     ).toBe('{"turns":[1,2]}')
     expect(
       readFileSync(
-        join(runtimeSessionsDir, 'nested', 'session.orca-legacy-account-1.json'),
+        join(runtimeSessionsDir, 'nested', 'session.mcode-legacy-account-1.json'),
         'utf-8'
       )
     ).toBe('{"turns":[2,3]}')

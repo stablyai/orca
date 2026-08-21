@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { getBundledLauncherPath } from '../cli/bundled-cli-launcher-path'
 
 const DEV_LAUNCHER_DIR = ['cli', 'bin']
-const DEV_COMMAND_NAME = 'orca-dev'
+const DEV_COMMAND_NAME = 'mcode-dev'
 
 export type CodexShellLaunchPreflightCommandOptions = {
   hooksEnabled: boolean
@@ -18,13 +18,13 @@ export type CodexShellLaunchPreflightCommandOptions = {
   platform?: NodeJS.Platform
 }
 
-/** Absolute path of the Orca CLI the preflight must execute, or null to skip it.
+/** Absolute path of the MCode CLI the preflight must execute, or null to skip it.
  *
- *  Why absolute: the value rides in ORCA_CODEX_LAUNCH_PREFLIGHT and is invoked
+ *  Why absolute: the value rides in MCODE_CODEX_LAUNCH_PREFLIGHT and is invoked
  *  from the codex() wrapper, which shell-ready emits *after* the user's profile
  *  scripts run. Those scripts routinely rewrite PATH, so an unqualified name
- *  would be resolved against a PATH Orca neither controls nor can predict —
- *  handing Orca's managed Codex environment to an unidentified program. When no
+ *  would be resolved against a PATH MCode neither controls nor can predict —
+ *  handing MCode's managed Codex environment to an unidentified program. When no
  *  path verifies, skipping the preflight is the predictable degradation. */
 export function resolveCodexShellLaunchPreflightCommand(
   options: CodexShellLaunchPreflightCommandOptions
@@ -60,44 +60,44 @@ function isExecutableFileOnDisk(path: string, platform: NodeJS.Platform): boolea
 
 export function getPosixCodexShellLaunchPreflight(): string {
   return `# Why: a typed alias expands inside the shell, after pane launch prep.
-__orca_codex_binary="$(command -v codex 2>/dev/null || :)"
-if [[ -n "\${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
+__mcode_codex_binary="$(command -v codex 2>/dev/null || :)"
+if [[ -n "\${MCODE_CODEX_LAUNCH_PREFLIGHT:-}" && -n "\${__mcode_codex_binary:-}" && -x "\${__mcode_codex_binary}" ]]; then
   codex() {
-    "\${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
+    "\${MCODE_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
     command codex "$@"
   }
 fi
-unset __orca_codex_binary
+unset __mcode_codex_binary
 `
 }
 
 export function getFishCodexShellLaunchPreflight(): string {
-  return `if test -n "$ORCA_CODEX_LAUNCH_PREFLIGHT"; and test (type -t codex 2>/dev/null) = file
+  return `if test -n "$MCODE_CODEX_LAUNCH_PREFLIGHT"; and test (type -t codex 2>/dev/null) = file
   function codex
-    command "$ORCA_CODEX_LAUNCH_PREFLIGHT" agent hooks prepare-codex >/dev/null 2>&1; or true
+    command "$MCODE_CODEX_LAUNCH_PREFLIGHT" agent hooks prepare-codex >/dev/null 2>&1; or true
     command codex $argv
   end
 end`
 }
 
 export function getPowerShellCodexShellLaunchPreflight(): string {
-  return `$orcaCodexCommand = Get-Command codex -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($env:ORCA_CODEX_LAUNCH_PREFLIGHT -and $orcaCodexCommand -and
-    $orcaCodexCommand.CommandType -in @("Application", "ExternalScript")) {
+  return `$mcodeCodexCommand = Get-Command codex -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($env:MCODE_CODEX_LAUNCH_PREFLIGHT -and $mcodeCodexCommand -and
+    $mcodeCodexCommand.CommandType -in @("Application", "ExternalScript")) {
     function Global:codex {
         try {
-            & $env:ORCA_CODEX_LAUNCH_PREFLIGHT agent hooks prepare-codex *> $null
+            & $env:MCODE_CODEX_LAUNCH_PREFLIGHT agent hooks prepare-codex *> $null
         } catch {
         }
-        $orcaCodexExecutable = Get-Command codex -CommandType Application,ExternalScript -ErrorAction SilentlyContinue | Select-Object -First 1
-        if (-not $orcaCodexExecutable) {
+        $mcodeCodexExecutable = Get-Command codex -CommandType Application,ExternalScript -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $mcodeCodexExecutable) {
             Write-Error "codex executable not found"
             $global:LASTEXITCODE = 127
             return
         }
-        & $orcaCodexExecutable.Source @args
+        & $mcodeCodexExecutable.Source @args
         $global:LASTEXITCODE = $LASTEXITCODE
     }
 }
-Remove-Variable orcaCodexCommand -ErrorAction SilentlyContinue`
+Remove-Variable mcodeCodexCommand -ErrorAction SilentlyContinue`
 }

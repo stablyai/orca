@@ -18,7 +18,7 @@
  * a deliberate prod constant) — so recovery lands at ~11-13s and the polls
  * below allow 30s.
  */
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { waitForSessionReady, waitForActiveWorktree, ensureTerminalVisible } from './helpers/store'
 import {
   waitForActiveTerminalManager,
@@ -45,31 +45,31 @@ type DeliveryWatchdogWindow = Window & {
 }
 
 test.describe('terminal push-delivery loss recovery', () => {
-  test.afterEach(async ({ orcaPage }) => {
-    await orcaPage.evaluate(() => {
+  test.afterEach(async ({ mcodePage }) => {
+    await mcodePage.evaluate(() => {
       ;(window as DeliveryWatchdogWindow).__terminalDeliveryWatchdog?.blackhole(false)
     })
   })
 
   test('watchdog repaints wedged terminals from the main buffer without push delivery or reload', async ({
-    orcaPage
+    mcodePage
   }) => {
     test.setTimeout(120_000)
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage)
-    const ptyId = await waitForActivePanePtyId(orcaPage)
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
+    await ensureTerminalVisible(mcodePage)
+    await waitForActiveTerminalManager(mcodePage)
+    const ptyId = await waitForActivePanePtyId(mcodePage)
 
     // Live baseline: push delivery works. The $((…)) arithmetic keeps the
     // asserted string out of the typed command's local echo.
-    await execInTerminal(orcaPage, ptyId, 'echo live-before-$((41+1))')
+    await execInTerminal(mcodePage, ptyId, 'echo live-before-$((41+1))')
     await expect
-      .poll(async () => getTerminalContent(orcaPage), { timeout: 15_000 })
+      .poll(async () => getTerminalContent(mcodePage), { timeout: 15_000 })
       .toContain('live-before-42')
 
     // Engage the field wedge and speed the watchdog up for CI.
-    await orcaPage.evaluate(() => {
+    await mcodePage.evaluate(() => {
       const watchdog = (window as DeliveryWatchdogWindow).__terminalDeliveryWatchdog
       if (!watchdog) {
         throw new Error('delivery watchdog e2e hook missing — exposeStore build?')
@@ -78,11 +78,11 @@ test.describe('terminal push-delivery loss recovery', () => {
       watchdog.blackhole(true)
     })
 
-    await execInTerminal(orcaPage, ptyId, 'echo wedged-$((100+23))')
+    await execInTerminal(mcodePage, ptyId, 'echo wedged-$((100+23))')
 
     // The wedge repro itself: output is swallowed, pane stays stale.
-    await orcaPage.waitForTimeout(1_500)
-    expect(await getTerminalContent(orcaPage)).not.toContain('wedged-123')
+    await mcodePage.waitForTimeout(1_500)
+    expect(await getTerminalContent(mcodePage)).not.toContain('wedged-123')
 
     // Recovery proof: the watchdog confirms the wedge over invoke and heals
     // (write-off + snapshot-restore request) without push or reload. We assert
@@ -93,7 +93,7 @@ test.describe('terminal push-delivery loss recovery', () => {
     await expect
       .poll(
         async () =>
-          orcaPage.evaluate(
+          mcodePage.evaluate(
             () =>
               (window as DeliveryWatchdogWindow).__terminalDeliveryWatchdog?.snapshot()
                 ?.healCount ?? 0
@@ -103,12 +103,12 @@ test.describe('terminal push-delivery loss recovery', () => {
       .toBeGreaterThan(0)
 
     // Channel restored: live output flows again with no reload in between.
-    await orcaPage.evaluate(() => {
+    await mcodePage.evaluate(() => {
       ;(window as DeliveryWatchdogWindow).__terminalDeliveryWatchdog?.blackhole(false)
     })
-    await execInTerminal(orcaPage, ptyId, 'echo live-after-$((200+56))')
+    await execInTerminal(mcodePage, ptyId, 'echo live-after-$((200+56))')
     await expect
-      .poll(async () => getTerminalContent(orcaPage), { timeout: 15_000 })
+      .poll(async () => getTerminalContent(mcodePage), { timeout: 15_000 })
       .toContain('live-after-256')
   })
 })

@@ -37,7 +37,7 @@ describe('downloadFolderViaSftp', () => {
   })
 
   async function createDestination(): Promise<string> {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ssh-folder-download-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ssh-folder-download-'))
     roots.push(root)
     return join(root, 'src')
   }

@@ -29,7 +29,7 @@ function PreservedBranchBatchToastBody({
       <p className="min-w-0 break-words text-sm leading-5 text-popover-foreground/80">
         {translate(
           'auto.components.sidebar.preserved.branch.batch.toast.a3cdd9d9e6',
-          'Git kept {{count}} local branches because they may contain unmerged commits. Kept branches do not retain workspace folders; their commits remain in the repository. Orca may continue freeing workspace disk space in the background.',
+          'Git kept {{count}} local branches because they may contain unmerged commits. Kept branches do not retain workspace folders; their commits remain in the repository. MCode may continue freeing workspace disk space in the background.',
           { count: branches.length }
         )}
       </p>

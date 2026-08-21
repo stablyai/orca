@@ -42,7 +42,7 @@ export async function getPRConflictSummary(
   // detail without spending additional gh API calls on every refresh. We use
   // GitHub's head OID directly because the registered repo path may not have
   // a matching local branch name for the PR head. For the base side, prefer a
-  // freshly-fetched remote-tracking ref so Orca matches GitHub's portal,
+  // freshly-fetched remote-tracking ref so MCode matches GitHub's portal,
   // which compares against the latest base branch tip rather than the PR's
   // older pinned baseRefOid snapshot.
   const latestBaseOid = await resolveLatestBaseOidThrottled(

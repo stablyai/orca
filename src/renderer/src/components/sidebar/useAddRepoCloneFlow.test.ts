@@ -80,8 +80,8 @@ vi.mock('sonner', () => ({
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
   return {
     id: 'repo-cloned',
-    path: '/srv/orca',
-    displayName: 'orca',
+    path: '/srv/mcode',
+    displayName: 'mcode',
     badgeColor: '#999999',
     addedAt: 1,
     kind: 'git',
@@ -96,7 +96,7 @@ describe('useAddRepoCloneFlow', () => {
     mocks.stateSetters = []
     mocks.refIndex = 0
     mocks.refValues = []
-    mocks.stateValues = ['https://github.com/stablyai/orca.git', '/srv', false, null, null]
+    mocks.stateValues = ['https://github.com/mcode-ide/mcode.git', '/srv', false, null, null]
     mocks.storeState.repos = []
     mocks.storeState.projects = []
     mocks.storeState.projectHostSetups = []
@@ -131,7 +131,7 @@ describe('useAddRepoCloneFlow', () => {
 
     expect(mocks.cloneRemote).toHaveBeenCalledWith({
       connectionId: 'ssh-1',
-      url: 'https://github.com/stablyai/orca.git',
+      url: 'https://github.com/mcode-ide/mcode.git',
       destination: '/srv'
     })
     expect(mocks.cloneLocal).not.toHaveBeenCalled()
@@ -153,25 +153,25 @@ describe('useAddRepoCloneFlow', () => {
   })
 
   it('does not prefill SSH clone destinations from the local workspace directory', async () => {
-    mocks.stateValues = ['https://github.com/stablyai/orca.git', '', false, null, null]
+    mocks.stateValues = ['https://github.com/mcode-ide/mcode.git', '', false, null, null]
     const { useAddRepoCloneFlow } = await import('./useAddRepoCloneFlow')
 
     const result = useAddRepoCloneFlow({
       step: 'clone',
       activeRuntimeEnvironmentId: null,
       sshTargetId: 'ssh-1',
-      workspaceDir: '/private/tmp/orca-setup-e2e.hOWO1f',
+      workspaceDir: '/private/tmp/mcode-setup-e2e.hOWO1f',
       fetchWorktrees: mocks.fetchWorktrees,
       onGitRepoReady: mocks.onGitRepoReady
     })
 
     expect(result.cloneDestination).toBe('')
-    expect(mocks.stateSetters[1]).not.toHaveBeenCalledWith('/private/tmp/orca-setup-e2e.hOWO1f')
+    expect(mocks.stateSetters[1]).not.toHaveBeenCalledWith('/private/tmp/mcode-setup-e2e.hOWO1f')
   })
 
   it('strips Electron IPC wrappers from clone errors', async () => {
     const cloneError =
-      'Clone failed: Destination already exists and is not empty: /srv/orca. Choose a different parent folder, delete the existing folder, or add the existing repository instead.'
+      'Clone failed: Destination already exists and is not empty: /srv/mcode. Choose a different parent folder, delete the existing folder, or add the existing repository instead.'
     mocks.cloneRemote.mockRejectedValue(
       new Error(`Error invoking remote method 'repos:cloneRemote': Error: ${cloneError}`)
     )
@@ -216,7 +216,7 @@ describe('useAddRepoCloneFlow', () => {
       { kind: 'environment', environmentId: 'env-1' },
       'repo.clone',
       {
-        url: 'https://github.com/stablyai/orca.git',
+        url: 'https://github.com/mcode-ide/mcode.git',
         destination: '/srv'
       },
       { timeoutMs: 10 * 60_000 }

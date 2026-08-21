@@ -39,7 +39,7 @@ vi.mock('../telemetry/client', () =>
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
-vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
+vi.mock('../cli/linux-terminal-mcode-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../memory/pty-registry', () =>
@@ -228,8 +228,8 @@ describe('registerPtyHandlers', () => {
         persistHostSessionBinding?: boolean
       }): Promise<{ id: string }>
     }
-    const savedRemoteHooks = process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
-    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '0'
+    const savedRemoteHooks = process.env.MCODE_FEATURE_REMOTE_AGENT_HOOKS
+    process.env.MCODE_FEATURE_REMOTE_AGENT_HOOKS = '0'
     const remoteSpawn = vi.fn(
       async (_opts: { env?: Record<string, string>; envToDelete?: string[] }) => ({
         id: 'ssh:ssh-runtime-env@@relay-pty'
@@ -294,9 +294,9 @@ describe('registerPtyHandlers', () => {
         rows: 24,
         env: {
           FOO: 'bar',
-          ORCA_PANE_KEY: makePaneKey('tab-remote', leafId),
-          ORCA_TAB_ID: 'tab-remote',
-          ORCA_WORKTREE_ID: 'wt-remote'
+          MCODE_PANE_KEY: makePaneKey('tab-remote', leafId),
+          MCODE_TAB_ID: 'tab-remote',
+          MCODE_WORKTREE_ID: 'wt-remote'
         },
         connectionId: 'ssh-runtime-env',
         worktreeId: 'wt-remote',
@@ -308,11 +308,11 @@ describe('registerPtyHandlers', () => {
       const spawnOptions = remoteSpawn.mock.calls[0]?.[0]
       const env = spawnOptions.env
       expect(env).toMatchObject({ FOO: 'bar' })
-      expect(env?.ORCA_PANE_KEY).toBeUndefined()
-      expect(env?.ORCA_TAB_ID).toBeUndefined()
-      expect(env?.ORCA_WORKTREE_ID).toBeUndefined()
+      expect(env?.MCODE_PANE_KEY).toBeUndefined()
+      expect(env?.MCODE_TAB_ID).toBeUndefined()
+      expect(env?.MCODE_WORKTREE_ID).toBeUndefined()
       expect(spawnOptions.envToDelete ?? []).not.toContain('CODEX_HOME')
-      expect(spawnOptions.envToDelete ?? []).not.toContain('ORCA_CODEX_HOME')
+      expect(spawnOptions.envToDelete ?? []).not.toContain('MCODE_CODEX_HOME')
       expect(store.upsertSshRemotePtyLease).toHaveBeenCalledWith(
         expect.objectContaining({
           targetId: 'ssh-runtime-env',
@@ -323,9 +323,9 @@ describe('registerPtyHandlers', () => {
       )
     } finally {
       if (savedRemoteHooks === undefined) {
-        delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+        delete process.env.MCODE_FEATURE_REMOTE_AGENT_HOOKS
       } else {
-        process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = savedRemoteHooks
+        process.env.MCODE_FEATURE_REMOTE_AGENT_HOOKS = savedRemoteHooks
       }
       unregisterSshPtyProvider('ssh-runtime-env')
     }
@@ -411,7 +411,7 @@ describe('registerPtyHandlers', () => {
         sessionId: 'ssh:ssh-reattach-fail@@relay-pty',
         persistHostSessionBinding: true
       })
-    ).rejects.toThrow(/ORCA_TERMINAL_SESSION_STATE_SAVE_FAILED/)
+    ).rejects.toThrow(/MCODE_TERMINAL_SESSION_STATE_SAVE_FAILED/)
 
     expect(store.upsertSshRemotePtyLease).not.toHaveBeenCalled()
     expect(store.removeSshRemotePtyLease).not.toHaveBeenCalled()

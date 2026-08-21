@@ -2,7 +2,7 @@ import { dropAgentResumeArgvFromCommand } from '../../shared/agent-resume-argv-d
 import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
 
 export const UNVERIFIED_CODEX_RESUME_ERROR =
-  'Orca could not verify the originating Codex session file, so automatic resume was stopped to avoid using a different account.'
+  'MCode could not verify the originating Codex session file, so automatic resume was stopped to avoid using a different account.'
 
 /**
  * Launch command for a Codex resume whose originating account could not be verified:

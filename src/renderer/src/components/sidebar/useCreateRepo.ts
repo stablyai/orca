@@ -1,4 +1,4 @@
-// Create-project flow hook for AddRepoDialog (orca#763), split from
+// Create-project flow hook for AddRepoDialog (mcode#763), split from
 // AddRepoCreateStep so the create-state machine stays scoped and testable.
 import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'

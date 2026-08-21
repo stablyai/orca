@@ -3,7 +3,7 @@
 // lets those overlays follow split-group layout changes without reparenting
 // heavyweight pane DOM.
 
-const ANCHOR_PREFIX = '--orca-tab-group-body-'
+const ANCHOR_PREFIX = '--mcode-tab-group-body-'
 
 /**
  * Returns the CSS anchor name for a given tab-group id. Anchor names must be

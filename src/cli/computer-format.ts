@@ -103,7 +103,7 @@ const COMPUTER_SCREENSHOT_CLEANUP_MARKER = '.last-cleanup'
 
 function computerScreenshotTempDir(): string {
   const outputDir =
-    process.env.ORCA_COMPUTER_SCREENSHOT_TMPDIR || join(tmpdir(), 'orca-computer-use')
+    process.env.MCODE_COMPUTER_SCREENSHOT_TMPDIR || join(tmpdir(), 'mcode-computer-use')
   mkdirSync(outputDir, { recursive: true, mode: 0o700 })
   const stat = lstatSync(outputDir)
   if (!stat.isDirectory() || stat.isSymbolicLink()) {
@@ -221,7 +221,7 @@ function formatComputerFollowUpCommand(
   target: ComputerActionFollowUpTarget
 ): string {
   const args = [
-    'orca',
+    'mcode',
     'computer',
     'get-app-state',
     '--app',

@@ -10,13 +10,13 @@ import {
 } from '@stablyai/playwright-test'
 
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
-import { getOrcaElectronLaunchArgs } from './electron-launch-args'
+import { getMCodeElectronLaunchArgs } from './electron-launch-args'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
 import {
   assertElectronResolvedIsolatedHome,
   createElectronHomeIsolation
 } from './electron-home-isolation'
-import { forwardElectronProcessLogs } from './orca-app'
+import { forwardElectronProcessLogs } from './mcode-app'
 import {
   replaceRuntimePairingInPlace,
   type SameIdPairingReplacement
@@ -46,7 +46,7 @@ export type PairedWebClient = {
   dispose: () => Promise<void>
 }
 
-const DIRECT_SSH_PROBE_CANARY_TARGET_ID = '__orca_e2e_direct_ssh_probe_canary__'
+const DIRECT_SSH_PROBE_CANARY_TARGET_ID = '__mcode_e2e_direct_ssh_probe_canary__'
 
 function readDirectSshAttemptTargetIds(probePath: string): string[] {
   try {
@@ -144,10 +144,10 @@ export async function launchPairedElectronClient(
   name: string,
   options: { extraEnv?: Record<string, string> } = {}
 ): Promise<PairedElectronClient> {
-  const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-paired-desktop-'))
+  const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'mcode-e2e-paired-desktop-'))
   const directSshProbePath = path.join(userDataDir, 'forbidden-local-ssh-connects.jsonl')
   writeFileSync(
-    path.join(userDataDir, 'orca-data.json'),
+    path.join(userDataDir, 'mcode-data.json'),
     `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
   )
   const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
@@ -160,12 +160,12 @@ export async function launchPairedElectronClient(
   })
   const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
   const app = await electron.launch({
-    args: getOrcaElectronLaunchArgs(mainPath, false),
+    args: getMCodeElectronLaunchArgs(mainPath, false),
     env: {
       ...homeIsolation.env,
       NODE_ENV: 'development',
-      ORCA_E2E_HEADLESS: '1',
-      ORCA_E2E_FORBID_LOCAL_SSH_CONNECT_PROBE: directSshProbePath
+      MCODE_E2E_HEADLESS: '1',
+      MCODE_E2E_FORBID_LOCAL_SSH_CONNECT_PROBE: directSshProbePath
     }
   })
 

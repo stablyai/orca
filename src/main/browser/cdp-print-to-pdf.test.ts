@@ -86,9 +86,9 @@ describe('CdpPdfStreamStore', () => {
     const handle = store.create(Buffer.from('pdf'))
 
     expect(store.ownsHandle({ handle })).toBe(true)
-    expect(handle).toMatch(/^orca-pdf-[\da-f-]{36}-\d+$/)
+    expect(handle).toMatch(/^mcode-pdf-[\da-f-]{36}-\d+$/)
     expect(store.ownsHandle({ handle: 'trace-stream' })).toBe(false)
-    expect(store.ownsHandle({ handle: 'orca-pdf-forged-1' })).toBe(false)
+    expect(store.ownsHandle({ handle: 'mcode-pdf-forged-1' })).toBe(false)
     expect(store.ownsHandle({})).toBe(false)
   })
 

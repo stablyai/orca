@@ -1,4 +1,4 @@
-// Orca mobile design tokens — matches desktop graphite/dark palette.
+// MCode mobile design tokens — matches desktop graphite/dark palette.
 // All screen files should import from here instead of using inline hex values.
 
 export const colors = {

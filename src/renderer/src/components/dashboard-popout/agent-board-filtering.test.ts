@@ -18,7 +18,7 @@ function card(overrides: Partial<DashboardCard>): DashboardCard {
     worktreeId: 'worktree-1',
     tabId: 'tab-1',
     leafId: null,
-    repoName: 'Orca',
+    repoName: 'MCode',
     worktreeName: 'dashboard',
     startedAt: 0,
     finishedAt: null,
@@ -56,20 +56,20 @@ describe('agent board filtering', () => {
     const cards = [
       card({
         paneKey: 'match',
-        repoId: 'orca',
+        repoId: 'mcode',
         workspaceStatusId: 'in-review',
         review: { number: 1, state: 'open' }
       }),
       card({
         paneKey: 'wrong-status',
-        repoId: 'orca',
+        repoId: 'mcode',
         workspaceStatusId: 'todo',
         review: { number: 2, state: 'open' }
       })
     ]
 
     const result = filterDashboardCards(cards, '', {
-      projects: ['orca', 'relay'],
+      projects: ['mcode', 'relay'],
       workspaceStatuses: ['in-review'],
       reviewStates: ['open']
     })

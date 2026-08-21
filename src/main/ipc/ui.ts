@@ -79,7 +79,7 @@ export function registerUIHandlers(
     if (!isTrustedUIRenderer(event.sender)) {
       return
     }
-    // Why: coordinated renderer paste falls back here only after no Orca owner
+    // Why: coordinated renderer paste falls back here only after no MCode owner
     // claims the app-menu action; paste back into the requesting window only.
     const webContents = BrowserWindow.fromWebContents(event.sender)?.webContents
     if (options?.mode === 'paste-and-match-style') {

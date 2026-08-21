@@ -31,7 +31,7 @@ export function spawnSystemSshPortForward(
     )
   }
 
-  const args = buildSshArgs(target, { ...options, suppressOrcaControlMaster: true })
+  const args = buildSshArgs(target, { ...options, suppressMCodeControlMaster: true })
   const destinationIndex = args.lastIndexOf('--')
   const forwardArgs = [
     '-N',
@@ -48,7 +48,7 @@ export function spawnSystemSshPortForward(
     args.splice(destinationIndex, 0, ...forwardArgs)
   }
 
-  // Why: port-forward ssh processes are not wired to Orca credential prompts;
+  // Why: port-forward ssh processes are not wired to MCode credential prompts;
   // system SSH forwards must authenticate via OpenSSH config, agent, or control socket.
   return spawn(sshPath, args, {
     stdio: ['ignore', 'ignore', 'pipe'],

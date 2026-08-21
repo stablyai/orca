@@ -132,7 +132,7 @@ describe('rpc wrappers', () => {
     ])
 
     await expect(fetchDictationSetup(client)).rejects.toThrow(
-      'Update the paired desktop Orca app to use mobile voice settings.'
+      'Update the paired desktop MCode app to use mobile voice settings.'
     )
   })
 
@@ -145,7 +145,7 @@ describe('rpc wrappers', () => {
     ])
 
     await expect(fetchDictationSetup(client)).rejects.toThrow(
-      'Update the paired desktop Orca app to use mobile voice settings.'
+      'Update the paired desktop MCode app to use mobile voice settings.'
     )
   })
 

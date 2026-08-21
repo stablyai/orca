@@ -3,7 +3,7 @@ import {
   MOBILE_DICTATION_PCM_SAMPLE_RATE
 } from './mobile-dictation-pending-audio-budget'
 import { bytesToBase64 } from './mobile-dictation-session-state'
-import type { MicrophoneDataEvent } from '@orca/expo-two-way-audio'
+import type { MicrophoneDataEvent } from '@mcode/expo-two-way-audio'
 import type { MobileDictationPendingAudioBudget } from './mobile-dictation-pending-audio-budget'
 import type { RpcClient } from '../transport/rpc-client'
 

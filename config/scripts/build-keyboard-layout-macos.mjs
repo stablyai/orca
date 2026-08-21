@@ -12,7 +12,7 @@ const defaultOutputPath = path.join(
   'keyboard-layout-macos',
   '.build',
   'release',
-  'orca-keyboard-layout'
+  'mcode-keyboard-layout'
 )
 
 if (process.platform !== 'darwin') {
@@ -22,14 +22,14 @@ if (process.platform !== 'darwin') {
 const args = process.argv.slice(2)
 const outputPath = readArg('--output') ?? defaultOutputPath
 const singleArch = args.includes('--single-arch')
-const workDir = mkdtempSync(path.join(tmpdir(), 'orca-keyboard-layout-'))
+const workDir = mkdtempSync(path.join(tmpdir(), 'mcode-keyboard-layout-'))
 
 try {
   const triples = singleArch
     ? [process.arch === 'arm64' ? 'arm64-apple-macosx' : 'x86_64-apple-macosx']
     : ['arm64-apple-macosx', 'x86_64-apple-macosx']
   const builtBinaries = triples.map((triple) => {
-    const output = path.join(workDir, `orca-keyboard-layout-${triple}`)
+    const output = path.join(workDir, `mcode-keyboard-layout-${triple}`)
     execFileSync(
       'swiftc',
       [

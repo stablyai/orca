@@ -10,7 +10,7 @@ export const getArtifactsSettingsSearchEntries = createLocalizedCatalog(() => [
     ),
     description: translate(
       'auto.components.settings.artifacts.allowPublishingSearchDescription',
-      'Allow Orca to publish HTML and Markdown files as public links.'
+      'Allow MCode to publish HTML and Markdown files as public links.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.artifacts.keywordArtifacts', 'artifacts'),

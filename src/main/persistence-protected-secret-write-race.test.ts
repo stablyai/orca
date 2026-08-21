@@ -65,9 +65,9 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
 
 describe('protected-secret async write retention', () => {
   beforeEach(() => {
-    testState.dir = mkdtempSync(join(tmpdir(), 'orca-protected-secret-write-race-'))
+    testState.dir = mkdtempSync(join(tmpdir(), 'mcode-protected-secret-write-race-'))
     cipherState.available = true
-    renameGate.sourcePrefix = join(testState.dir, 'orca-data.json')
+    renameGate.sourcePrefix = join(testState.dir, 'mcode-data.json')
     renameGate.release = null
     renameGate.started = null
     vi.useFakeTimers()

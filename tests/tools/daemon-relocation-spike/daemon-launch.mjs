@@ -1,6 +1,6 @@
-// Launches the copied Orca.exe as the daemon host (ELECTRON_RUN_AS_NODE=1) and
+// Launches the copied MCode.exe as the daemon host (ELECTRON_RUN_AS_NODE=1) and
 // waits for its {type:'ready'} IPC signal. Mirrors the real fork() options in
-// src/main/daemon/daemon-init.ts (detached, ipc channel, ORCA_USER_DATA_PATH).
+// src/main/daemon/daemon-init.ts (detached, ipc channel, MCODE_USER_DATA_PATH).
 
 import { spawn } from 'node:child_process'
 import { createWriteStream } from 'node:fs'
@@ -29,13 +29,13 @@ export function launchDaemonHost(options) {
   const env = {
     ...process.env,
     ELECTRON_RUN_AS_NODE: '1',
-    ORCA_USER_DATA_PATH: workDir
+    MCODE_USER_DATA_PATH: workDir
   }
   // The current branch's node-pty patch resolves natives relative to its own
   // dir, so this env var is inert there; set it anyway so the spike still works
-  // if run against a build that carries the ORCA_NODE_PTY_NATIVE_DIR patch.
+  // if run against a build that carries the MCODE_NODE_PTY_NATIVE_DIR patch.
   if (nodePtyNativeDir) {
-    env.ORCA_NODE_PTY_NATIVE_DIR = nodePtyNativeDir
+    env.MCODE_NODE_PTY_NATIVE_DIR = nodePtyNativeDir
   }
 
   // Why: --log-file makes the daemon write its session lifecycle events

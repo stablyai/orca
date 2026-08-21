@@ -3,7 +3,7 @@ export type PanePtyResizeHoldFlushDetail = {
   rows: number
 }
 
-export const PANE_PTY_RESIZE_HOLD_FLUSH_EVENT = 'orca-pane-pty-resize-hold-flush'
+export const PANE_PTY_RESIZE_HOLD_FLUSH_EVENT = 'mcode-pane-pty-resize-hold-flush'
 
 type ResizeHoldState = {
   depth: number

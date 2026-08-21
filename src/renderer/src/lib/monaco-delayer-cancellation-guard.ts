@@ -8,7 +8,7 @@ type MonacoDelayerInstance = {
 }
 
 type GuardedDelayerPrototype = MonacoDelayerInstance & {
-  __orcaDelayerCancellationGuardInstalled?: true
+  __mcodeDelayerCancellationGuardInstalled?: true
 }
 
 function isMonacoCancellationError(error: unknown): boolean {
@@ -21,7 +21,7 @@ function isMonacoCancellationError(error: unknown): boolean {
 
 export function installMonacoDelayerCancellationGuard(): void {
   const delayerPrototype = Delayer.prototype as GuardedDelayerPrototype
-  if (delayerPrototype.__orcaDelayerCancellationGuardInstalled) {
+  if (delayerPrototype.__mcodeDelayerCancellationGuardInstalled) {
     return
   }
 
@@ -39,5 +39,5 @@ export function installMonacoDelayerCancellationGuard(): void {
     }
     originalCancel.call(this)
   }
-  delayerPrototype.__orcaDelayerCancellationGuardInstalled = true
+  delayerPrototype.__mcodeDelayerCancellationGuardInstalled = true
 }

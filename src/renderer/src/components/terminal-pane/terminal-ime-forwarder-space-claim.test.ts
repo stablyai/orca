@@ -3,7 +3,7 @@
  * Pins the two properties that keep #11504 from firing, because neither is a decision anyone
  * made and both are one refactor away from being undone.
  *
- * macOS rewrites a double space into ". " and hands the period to the pty. Orca is not immune to
+ * macOS rewrites a double space into ". " and hands the period to the pty. MCode is not immune to
  * that - a plain Chromium textarea in the Electron version this repo pins does substitute, and
  * `spellcheck="false"` does not prevent it. What prevents it is that the forwarder claims a plain
  * space keydown and then empties the helper textarea, so the text system never sees the preceding

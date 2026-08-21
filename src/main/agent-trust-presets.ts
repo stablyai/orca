@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
-import { getOrcaManagedCodexHomePath } from './codex/codex-home-paths'
+import { getMCodeManagedCodexHomePath } from './codex/codex-home-paths'
 import { upsertProjectTrustLevel } from './codex/config-toml-trust'
 
 export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex'
@@ -12,7 +12,7 @@ export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex'
  * Codex so the agent's "Do you trust this folder?" menu does not fire on
  * first launch.
  *
- * Why: Orca's "drop URL into agent input as a draft" flow injects the URL
+ * Why: MCode's "drop URL into agent input as a draft" flow injects the URL
  * via bracketed-paste once the TUI is up. If the trust menu intercepts the
  * keystrokes (each menu reads a single character or numbered option), the
  * paste either selects an arbitrary option or quits the session. Pre-writing
@@ -112,9 +112,9 @@ export function markCodexProjectTrusted(workspacePath: string): void {
   const absPath = resolveCodexProjectTrustRoot(workspacePath)
   const configPath = join(homedir(), '.codex', 'config.toml')
   upsertProjectTrustLevel(configPath, absPath, 'trusted')
-  // Why: Orca-launched Codex runs with an Orca-owned CODEX_HOME, so the trust
+  // Why: MCode-launched Codex runs with an MCode-owned CODEX_HOME, so the trust
   // preset must also update the runtime config Codex will actually read.
-  upsertProjectTrustLevel(join(getOrcaManagedCodexHomePath(), 'config.toml'), absPath, 'trusted')
+  upsertProjectTrustLevel(join(getMCodeManagedCodexHomePath(), 'config.toml'), absPath, 'trusted')
 }
 
 function resolveCodexProjectTrustRoot(workspacePath: string): string {
@@ -157,7 +157,7 @@ function canonicalize(p: string): string {
   // Why: macOS reports `/tmp/x` and `/private/tmp/x` as the same inode, but
   // both Cursor and Copilot's trust comparators run realpath() before the
   // string compare. Mirror that so a worktree under a symlinked parent
-  // (orca caches realpath()'d worktree paths) matches the agent's lookup.
+  // (mcode caches realpath()'d worktree paths) matches the agent's lookup.
   try {
     if (existsSync(p)) {
       return realpathSync.native(p)

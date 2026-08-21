@@ -9,7 +9,7 @@ import type { Row } from '../grouping/row-types'
 const repo: Repo = {
   id: 'repo-1',
   path: '/repo',
-  displayName: 'orca',
+  displayName: 'mcode',
   badgeColor: '#000',
   addedAt: 1
 }
@@ -93,7 +93,7 @@ describe('getStickyHeaderIndexes', () => {
       projectGroupId: projectGroup.id,
       projectGroupOrder: 0
     }
-    const ungroupedRepo: Repo = { ...repo, id: 'repo-orca', displayName: 'orca' }
+    const ungroupedRepo: Repo = { ...repo, id: 'repo-mcode', displayName: 'mcode' }
     const groupedWorktree: Worktree = {
       ...makeWorktree('main'),
       id: 'wt-autogenie-main',
@@ -102,7 +102,7 @@ describe('getStickyHeaderIndexes', () => {
     }
     const ungroupedWorktree: Worktree = {
       ...makeWorktree('main'),
-      id: 'wt-orca-main',
+      id: 'wt-mcode-main',
       repoId: ungroupedRepo.id,
       isMainWorktree: true
     }
@@ -131,7 +131,7 @@ describe('getStickyHeaderIndexes', () => {
     expect(rows.filter((row) => row.type === 'header').map((row) => row.key)).toEqual([
       'project-group:group-personal',
       'repo:repo-autogenie',
-      'repo:repo-orca'
+      'repo:repo-mcode'
     ])
     expect(getStickyHeaderIndexes(rows)).toEqual([0, 3])
   })

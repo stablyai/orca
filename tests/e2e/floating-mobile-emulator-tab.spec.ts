@@ -1,12 +1,12 @@
 import type { Page, TestInfo } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 
 // Why: mirrors FLOATING_TERMINAL_WORKTREE_ID in src/shared/constants.ts.
 // E2E specs avoid importing renderer/shared modules into the Playwright runner.
 const FLOATING_WORKTREE_ID = 'global-floating-terminal'
 const PANEL_SELECTOR = '[data-floating-terminal-panel]'
 const OPEN_PANEL_SELECTOR = `${PANEL_SELECTOR}[aria-hidden="false"]`
-const TOGGLE_EVENT = 'orca-toggle-floating-terminal'
+const TOGGLE_EVENT = 'mcode-toggle-floating-terminal'
 
 type SeededSimulatorTab = {
   id: string
@@ -91,16 +91,16 @@ async function attachPanelScreenshot(page: Page, testInfo: TestInfo): Promise<vo
 }
 
 test('floating Mobile Emulator tab renders content and closes from the tab strip', async ({
-  orcaPage
+  mcodePage
 }, testInfo) => {
-  const tab = await seedFloatingSimulatorTab(orcaPage)
-  await openFloatingPanelIfNeeded(orcaPage)
+  const tab = await seedFloatingSimulatorTab(mcodePage)
+  await openFloatingPanelIfNeeded(mcodePage)
 
-  const openPanel = orcaPage.locator(OPEN_PANEL_SELECTOR).first()
+  const openPanel = mcodePage.locator(OPEN_PANEL_SELECTOR).first()
   const tabLocator = openPanel.locator(`[data-tab-id="${tab.id}"]`)
   await expect(tabLocator).toBeVisible()
   await expect(openPanel.locator('[data-emulator-pane]')).toBeVisible()
-  await attachPanelScreenshot(orcaPage, testInfo)
+  await attachPanelScreenshot(mcodePage, testInfo)
 
   await tabLocator.hover()
   await tabLocator.locator('[data-tab-close-button="true"]').click()
@@ -108,7 +108,7 @@ test('floating Mobile Emulator tab renders content and closes from the tab strip
   await expect
     .poll(
       async () =>
-        orcaPage.evaluate(
+        mcodePage.evaluate(
           ({ worktreeId, tabId }) => {
             const tabs =
               (window as E2EWindow).__store?.getState().unifiedTabsByWorktree[worktreeId] ?? []

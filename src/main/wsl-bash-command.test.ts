@@ -5,7 +5,7 @@ describe('buildEncodedWslBashCommand', () => {
   it('wraps Bash scripts without exposing local shell variables to wsl.exe', () => {
     const command = [
       'set -euo pipefail',
-      "candidate='/home/alice/.local/share/orca/codex-accounts/a/home'",
+      "candidate='/home/alice/.local/share/mcode/codex-accounts/a/home'",
       'candidate_real=$(readlink -f -- "$candidate")',
       'printf "%s\\n" "$candidate_real"'
     ].join('\n')

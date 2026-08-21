@@ -38,7 +38,7 @@ export function reserveWindowsRelayUploadStageCommand(poolDir: string, owner: st
       'exit 0',
       '} catch { continue }',
       '}',
-      `throw ${powerShellLiteral(`Orca relay upload staging quota is full; reconnect after 40 minutes or inspect .orca-remote/${RELAY_UPLOAD_STAGE_POOL_NAME}`)}`
+      `throw ${powerShellLiteral(`MCode relay upload staging quota is full; reconnect after 40 minutes or inspect .mcode-remote/${RELAY_UPLOAD_STAGE_POOL_NAME}`)}`
     ].join('\n')
   )
 }
@@ -46,13 +46,13 @@ export function reserveWindowsRelayUploadStageCommand(poolDir: string, owner: st
 function windowsFileIdentityScript(): string[] {
   return [
     "if ($env:OS -eq 'Windows_NT') {",
-    "if ($null -eq ('OrcaRelayUploadFileIdentity' -as [type])) {",
+    "if ($null -eq ('MCodeRelayUploadFileIdentity' -as [type])) {",
     "Add-Type -TypeDefinition @'",
     'using System;',
     'using System.ComponentModel;',
     'using System.Runtime.InteropServices;',
     'using Microsoft.Win32.SafeHandles;',
-    'public static class OrcaRelayUploadFileIdentity {',
+    'public static class MCodeRelayUploadFileIdentity {',
     '[StructLayout(LayoutKind.Sequential)] struct Info { public uint Attr; public System.Runtime.InteropServices.ComTypes.FILETIME C; public System.Runtime.InteropServices.ComTypes.FILETIME A; public System.Runtime.InteropServices.ComTypes.FILETIME W; public uint Vol; public uint SizeH; public uint SizeL; public uint Links; public uint IndexH; public uint IndexL; }',
     '[DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] static extern SafeFileHandle CreateFileW(string path, uint access, uint share, IntPtr sec, uint creation, uint flags, IntPtr template);',
     '[DllImport("kernel32.dll", SetLastError=true)] static extern bool GetFileInformationByHandle(SafeFileHandle handle, out Info info);',
@@ -66,7 +66,7 @@ function windowsFileIdentityScript(): string[] {
     '}',
     "'@",
     '}',
-    '$getFileIdentity = { param($path) [OrcaRelayUploadFileIdentity]::Read($path) }',
+    '$getFileIdentity = { param($path) [MCodeRelayUploadFileIdentity]::Read($path) }',
     '} else {',
     '$getFileIdentity = { param($path) $resolved = (Get-Item -LiteralPath $path -Force -ErrorAction Stop).FullName; $value = & /usr/bin/stat -f "%i" -- $resolved 2>$null; if ($LASTEXITCODE -ne 0) { $value = & /usr/bin/stat -c "%i" -- $resolved }; ([string]$value).Trim() }',
     '}'

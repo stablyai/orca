@@ -75,7 +75,7 @@ const { registerSshPtyProvider } = await import('../ipc/pty')
 describe('SshRelaySession managed hooks', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
+    process.env.MCODE_FEATURE_REMOTE_AGENT_HOOKS = '1'
     openConsumerSessionMock.mockImplementation(async (_mux, options) => ({
       mode: 'legacy-fallback',
       clientInstanceId: options.clientInstanceId,

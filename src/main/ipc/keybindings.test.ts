@@ -41,7 +41,7 @@ vi.mock('../menu/register-app-menu', () => ({
 import { registerKeybindingHandlers } from './keybindings'
 
 const snapshot: KeybindingFileSnapshot = {
-  path: '/Users/example/.orca/keybindings.json',
+  path: '/Users/example/.mcode/keybindings.json',
   platform: 'darwin',
   exists: true,
   overrides: {},
@@ -84,7 +84,7 @@ describe('registerKeybindingHandlers', () => {
       getHandler('keybindings:setAction')(
         {},
         {
-          actionId: 'plugin:orca-samples.tasks/open',
+          actionId: 'plugin:mcode-samples.tasks/open',
           bindings: ['Mod+Shift+T']
         }
       )
@@ -92,7 +92,7 @@ describe('registerKeybindingHandlers', () => {
     expect(onChanged).toHaveBeenCalledOnce()
   })
 
-  it('authorizes the keybindings file before opening it outside Orca', async () => {
+  it('authorizes the keybindings file before opening it outside MCode', async () => {
     openPathMock.mockResolvedValue('')
     registerKeybindingHandlers({ ensureFile: vi.fn(() => snapshot) } as never)
 

@@ -1,9 +1,9 @@
 import type { Page } from '@stablyai/playwright-test'
-import { expect } from './orca-app'
+import { expect } from './mcode-app'
 import type { CommitMessageAiSettings } from '../../../src/shared/commit-message-ai-types'
 
 // Why: these specs create worktrees via raw `git worktree add`, which bypasses
-// Orca's own add/remove path — the one thing that invalidates the main-process
+// MCode's own add/remove path — the one thing that invalidates the main-process
 // worktrees.list scan cache (DETECTED_WORKTREE_SCAN_CACHE_TTL_MS = 5_000). So a
 // read inside the TTL window can serve a stale miss. No renderer-reachable
 // cache-invalidation seam exists without adding product surface, so poll past
@@ -15,7 +15,7 @@ const WORKTREE_CACHE_TTL_POLL_MS = 10_000
 /**
  * Loads the repo's worktrees into the renderer store and resolves the id of the
  * worktree at `targetWorktreePath`, polling past the 5s scan-cache TTL so a
- * raw `git worktree add` that Orca never observed still becomes visible.
+ * raw `git worktree add` that MCode never observed still becomes visible.
  */
 async function resolveE2eWorktreeId(
   page: Page,

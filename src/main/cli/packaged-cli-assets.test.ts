@@ -18,23 +18,23 @@ const builderConfig = require('../../../config/electron-builder.config.cjs') as 
   linux?: { extraResources?: { from?: string; to?: string }[] }
   win?: { extraResources?: { from?: string; to?: string }[] }
 }
-const linuxLauncherAsset = new URL('../../../resources/linux/bin/orca-ide', import.meta.url)
-const darwinLauncherAsset = new URL('../../../resources/darwin/bin/orca', import.meta.url)
+const linuxLauncherAsset = new URL('../../../resources/linux/bin/mcode-ide', import.meta.url)
+const darwinLauncherAsset = new URL('../../../resources/darwin/bin/mcode', import.meta.url)
 const unixLauncherFixtures = [
   {
     name: 'Linux',
     asset: linuxLauncherAsset,
-    appDir: ['Orca'],
-    launcher: ['resources', 'bin', 'orca-ide'],
-    executable: ['orca-ide'],
+    appDir: ['MCode'],
+    launcher: ['resources', 'bin', 'mcode-ide'],
+    executable: ['mcode-ide'],
     cli: ['resources', 'app.asar.unpacked', 'out', 'cli', 'index.js']
   },
   {
     name: 'macOS',
     asset: darwinLauncherAsset,
-    appDir: ['Orca.app'],
-    launcher: ['Contents', 'Resources', 'bin', 'orca'],
-    executable: ['Contents', 'MacOS', 'Orca'],
+    appDir: ['MCode.app'],
+    launcher: ['Contents', 'Resources', 'bin', 'mcode'],
+    executable: ['Contents', 'MacOS', 'MCode'],
     cli: ['Contents', 'Resources', 'app.asar.unpacked', 'out', 'cli', 'index.js']
   }
 ] as const
@@ -88,7 +88,7 @@ describe('packaged CLI assets', () => {
   })
 
   it('retries an incomplete listener-state write', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-listener-state-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-listener-state-'))
     const statePath = join(root, 'listener-state.json')
     const expectedState = { pid: 1234, port: 5678 }
     await writeFile(statePath, '{"pid":', 'utf8')
@@ -112,7 +112,7 @@ describe('packaged CLI assets', () => {
     { state: { pid: 1234, port: '5678' }, reason: 'non-numeric port' },
     { state: { pid: 1234, port: 65_536 }, reason: 'out-of-range port' }
   ])('rejects $reason in listener state', async ({ state }) => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-listener-state-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-listener-state-'))
     const statePath = join(root, 'listener-state.json')
     try {
       await writeFile(statePath, JSON.stringify(state), 'utf8')
@@ -128,7 +128,7 @@ describe('packaged CLI assets', () => {
     'delivers Unix termination signals to the $name executable and releases its listener',
     async (launcherFixture) => {
       for (const signal of unixTerminationSignals) {
-        const root = await mkdtemp(join(tmpdir(), 'orca-unix-cli-signal-'))
+        const root = await mkdtemp(join(tmpdir(), 'mcode-unix-cli-signal-'))
         const appDir = join(root, ...launcherFixture.appDir)
         const launcherPath = join(appDir, ...launcherFixture.launcher)
         const electronPath = join(appDir, ...launcherFixture.executable)
@@ -152,7 +152,7 @@ const shutdown = () => server.close(() => process.exit(0))
 process.on('SIGINT', shutdown)
 process.on('SIGTERM', shutdown)
 server.listen(0, '127.0.0.1', () => {
-  fs.writeFileSync(process.env.ORCA_TEST_LISTENER_STATE, JSON.stringify({
+  fs.writeFileSync(process.env.MCODE_TEST_LISTENER_STATE, JSON.stringify({
     pid: process.pid,
     port: server.address().port
   }))
@@ -162,7 +162,7 @@ server.listen(0, '127.0.0.1', () => {
           )
 
           launcher = spawn(launcherPath, [], {
-            env: { ...process.env, ORCA_TEST_LISTENER_STATE: statePath },
+            env: { ...process.env, MCODE_TEST_LISTENER_STATE: statePath },
             stdio: 'ignore'
           })
           const state = await waitForListenerState(statePath)
@@ -195,14 +195,14 @@ server.listen(0, '127.0.0.1', () => {
   itRunsUnixShell(
     'runs the Linux launcher from its packaged path and installed symlink',
     async () => {
-      const root = await mkdtemp(join(tmpdir(), 'orca-linux-cli-'))
+      const root = await mkdtemp(join(tmpdir(), 'mcode-linux-cli-'))
       try {
-        const appDir = join(root, 'Orca')
+        const appDir = join(root, 'MCode')
         const resourcesDir = join(appDir, 'resources')
         const launcherDir = join(resourcesDir, 'bin')
         const cliDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'cli')
-        const launcherPath = join(launcherDir, 'orca-ide')
-        const electronPath = join(appDir, 'orca-ide')
+        const launcherPath = join(launcherDir, 'mcode-ide')
+        const electronPath = join(appDir, 'mcode-ide')
         const cliPath = join(cliDir, 'index.js')
 
         await mkdir(launcherDir, { recursive: true })
@@ -228,9 +228,9 @@ printf 'arg=%s\\n' "$@"
 
         const homeDir = join(root, 'home')
         const commandDir = join(homeDir, '.local', 'bin')
-        const commandPath = join(commandDir, 'orca-ide')
+        const commandPath = join(commandDir, 'mcode-ide')
         await mkdir(commandDir, { recursive: true })
-        await mkdir(join(homeDir, 'orca'), { recursive: true })
+        await mkdir(join(homeDir, 'mcode'), { recursive: true })
         await symlink(launcherPath, commandPath)
 
         const symlinked = await execFileAsync(commandPath, ['--help'], {
@@ -247,13 +247,13 @@ printf 'arg=%s\\n' "$@"
   )
 
   itRunsUnixShell('runs the AppImage CLI wrapper through APPDIR at runtime', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-appimage-cli-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-appimage-cli-'))
     try {
-      const appDir = join(root, 'Orca.AppDir')
+      const appDir = join(root, 'MCode.AppDir')
       const cliDir = join(appDir, 'resources', 'app.asar.unpacked', 'out', 'cli')
       const cliPath = join(cliDir, 'index.js')
-      const appImagePath = join(root, "Orca's AppImage.AppImage")
-      const commandPath = join(root, 'orca-ide')
+      const appImagePath = join(root, "MCode's AppImage.AppImage")
+      const commandPath = join(root, 'mcode-ide')
       await mkdir(cliDir, { recursive: true })
       await writeFile(
         cliPath,
@@ -263,9 +263,9 @@ printf 'arg=%s\\n' "$@"
     appDir: process.env.APPDIR,
     runAsNode: process.env.ELECTRON_RUN_AS_NODE,
     nodeOptions: process.env.NODE_OPTIONS ?? null,
-    orcaNodeOptions: process.env.ORCA_NODE_OPTIONS ?? null,
+    mcodeNodeOptions: process.env.MCODE_NODE_OPTIONS ?? null,
     nodeReplExternalModule: process.env.NODE_REPL_EXTERNAL_MODULE ?? null,
-    orcaNodeReplExternalModule: process.env.ORCA_NODE_REPL_EXTERNAL_MODULE ?? null
+    mcodeNodeReplExternalModule: process.env.MCODE_NODE_REPL_EXTERNAL_MODULE ?? null
   }))
 }
 `,
@@ -297,18 +297,18 @@ exec node "$@"
         appDir: string
         runAsNode: string
         nodeOptions: string | null
-        orcaNodeOptions: string | null
+        mcodeNodeOptions: string | null
         nodeReplExternalModule: string | null
-        orcaNodeReplExternalModule: string | null
+        mcodeNodeReplExternalModule: string | null
       }
 
       expect(payload.argv).toEqual(['--help', 'two words'])
       expect(payload.appDir).toBe(appDir)
       expect(payload.runAsNode).toBe('1')
       expect(payload.nodeOptions).toBeNull()
-      expect(payload.orcaNodeOptions).toBe('--trace-warnings')
+      expect(payload.mcodeNodeOptions).toBe('--trace-warnings')
       expect(payload.nodeReplExternalModule).toBeNull()
-      expect(payload.orcaNodeReplExternalModule).toBe('external-loader')
+      expect(payload.mcodeNodeReplExternalModule).toBe('external-loader')
     } finally {
       await rm(root, { recursive: true, force: true })
     }

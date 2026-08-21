@@ -11,7 +11,7 @@ import {
 const { existsSyncMock, forkMock, mkdtempSyncMock, rmSyncMock } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
   forkMock: vi.fn(),
-  mkdtempSyncMock: vi.fn(() => '/tmp/orca-watcher-unsubscribe-timeout-test'),
+  mkdtempSyncMock: vi.fn(() => '/tmp/mcode-watcher-unsubscribe-timeout-test'),
   rmSyncMock: vi.fn()
 }))
 

@@ -90,7 +90,7 @@ export function SkillInstallManagementDialog({
         return
       }
       console.warn('[skills] managed install listing failed:', cause)
-      setError('Orca could not inspect managed installs on this machine.')
+      setError('MCode could not inspect managed installs on this machine.')
     } finally {
       if (generation === loadGeneration.current) {
         setBusy(false)
@@ -120,7 +120,7 @@ export function SkillInstallManagementDialog({
       if (operation.status !== 'ok') {
         setError(
           operation.status === 'reconnect-required'
-            ? 'Reconnect your Orca account to load version history.'
+            ? 'Reconnect your MCode account to load version history.'
             : operation.message
         )
         return
@@ -193,7 +193,7 @@ export function SkillInstallManagementDialog({
         if (operation.status !== 'ok') {
           setError(
             operation.status === 'reconnect-required'
-              ? 'Reconnect your Orca account before changing versions.'
+              ? 'Reconnect your MCode account before changing versions.'
               : operation.message
           )
           return
@@ -219,7 +219,7 @@ export function SkillInstallManagementDialog({
       if (operation.status !== 'ok') {
         setError(
           operation.status === 'reconnect-required'
-            ? 'Reconnect your Orca account before changing versions.'
+            ? 'Reconnect your MCode account before changing versions.'
             : operation.message
         )
         return
@@ -233,7 +233,7 @@ export function SkillInstallManagementDialog({
       }
     } catch (cause) {
       console.warn('[skills] version installation failed:', cause)
-      setError('Orca could not verify the requested version.')
+      setError('MCode could not verify the requested version.')
     } finally {
       installProgress.finish()
       setBusy(false)
@@ -294,7 +294,7 @@ export function SkillInstallManagementDialog({
       }
     } catch (cause) {
       console.warn('[skills] managed removal failed:', cause)
-      setError('Orca could not safely remove this skill.')
+      setError('MCode could not safely remove this skill.')
     } finally {
       setBusy(false)
     }

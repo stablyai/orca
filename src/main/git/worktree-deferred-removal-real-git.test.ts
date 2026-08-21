@@ -1,5 +1,5 @@
 // Real-binary coverage for deferred worktree deletion: the mocked-runner suite cannot prove that Git
-// accepts `worktree remove --force` on a path Orca just renamed away.
+// accepts `worktree remove --force` on a path MCode just renamed away.
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readdir, realpath, rm, writeFile } from 'node:fs/promises'
@@ -29,9 +29,9 @@ async function git(args: string[], cwd: string): Promise<string> {
 }
 
 beforeEach(async () => {
-  // realpath: macOS hands out /var/... temp paths while Git reports /private/var/..., and Orca
+  // realpath: macOS hands out /var/... temp paths while Git reports /private/var/..., and MCode
   // matches the worktree it is removing against Git's own list.
-  scratchDir = await realpath(await mkdtemp(join(tmpdir(), 'orca-deferred-worktree-removal-')))
+  scratchDir = await realpath(await mkdtemp(join(tmpdir(), 'mcode-deferred-worktree-removal-')))
   repoPath = join(scratchDir, 'repo')
   workspaceRoot = join(scratchDir, 'workspaces')
   worktreePath = join(workspaceRoot, 'repo', 'feature')

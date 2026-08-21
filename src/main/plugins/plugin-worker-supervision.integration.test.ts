@@ -53,7 +53,7 @@ function createStateNotifications(): {
 }
 
 beforeAll(async () => {
-  bundleRoot = await mkdtemp(join(tmpdir(), 'orca-plugin-host-bundle-'))
+  bundleRoot = await mkdtemp(join(tmpdir(), 'mcode-plugin-host-bundle-'))
   hostEntryPath = join(bundleRoot, 'plugin-host-entry.cjs')
   await build({
     entryPoints: [join(process.cwd(), 'src', 'main', 'plugins', 'plugin-host-entry.ts')],
@@ -79,13 +79,13 @@ afterAll(async () => {
 })
 
 async function createPluginSpec(
-  source = `export default function activate(orca) { orca.commands.register('run', async () => ({ ok: true })); }`
+  source = `export default function activate(mcode) { mcode.commands.register('run', async () => ({ ok: true })); }`
 ): Promise<PluginWorkerSpawnSpec> {
-  const rootDir = await mkdtemp(join(tmpdir(), 'orca-plugin-supervision-'))
+  const rootDir = await mkdtemp(join(tmpdir(), 'mcode-plugin-supervision-'))
   pluginRoots.push(rootDir)
   await writeFile(join(rootDir, 'main.mjs'), source)
   return {
-    pluginKey: 'orca-samples.supervision',
+    pluginKey: 'mcode-samples.supervision',
     rootDir,
     mainEntry: 'main.mjs',
     grantedCapabilities: []
@@ -95,8 +95,8 @@ async function createPluginSpec(
 describe('real plugin worker supervision', () => {
   it('terminates and supervises a live worker that disconnects IPC', async () => {
     const spec = await createPluginSpec(`
-      export default function activate(orca) {
-        orca.commands.register('disconnect', async () => {
+      export default function activate(mcode) {
+        mcode.commands.register('disconnect', async () => {
           process.disconnect?.()
           setInterval(() => {}, 1_000)
           await new Promise(() => {})

@@ -32,7 +32,7 @@ def load_runtime():
     sys.modules["gi.repository"] = repository
 
     path = Path(__file__).with_name("runtime.py")
-    spec = importlib.util.spec_from_file_location("orca_linux_runtime_test", path)
+    spec = importlib.util.spec_from_file_location("mcode_linux_runtime_test", path)
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)

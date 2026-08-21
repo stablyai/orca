@@ -4,7 +4,7 @@ import {
   type MobileRelayHostOverlay
 } from './mobile-relay-host-overlay'
 
-const OVERLAY_STORAGE_KEY = 'orca:mobile-relay:host-overlays:v2'
+const OVERLAY_STORAGE_KEY = 'mcode:mobile-relay:host-overlays:v2'
 let overlayMutation: Promise<void> = Promise.resolve()
 
 function parseOverlays(raw: string | null): MobileRelayHostOverlay[] | null {

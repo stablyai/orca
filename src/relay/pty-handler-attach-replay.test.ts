@@ -76,7 +76,7 @@ describe('PtyHandler', () => {
     const exits: { id: string; paneKey?: string }[] = []
     handler.setExitListener((evt) => exits.push(evt))
 
-    await dispatcher.callRequest('pty.spawn', { env: { ORCA_PANE_KEY: 'tab-dead:0' } })
+    await dispatcher.callRequest('pty.spawn', { env: { MCODE_PANE_KEY: 'tab-dead:0' } })
     expect(handler.activePtyCount).toBe(1)
     expect(onExitCb).toBeDefined()
 
@@ -276,10 +276,10 @@ describe('PtyHandler', () => {
   })
 
   it('uses attach identity metadata without exporting it to the shell env', async () => {
-    const oldPaneKey = process.env.ORCA_PANE_KEY
-    const oldTabId = process.env.ORCA_TAB_ID
-    delete process.env.ORCA_PANE_KEY
-    delete process.env.ORCA_TAB_ID
+    const oldPaneKey = process.env.MCODE_PANE_KEY
+    const oldTabId = process.env.MCODE_TAB_ID
+    delete process.env.MCODE_PANE_KEY
+    delete process.env.MCODE_TAB_ID
     let spawn!: { id: string; incarnationId: string }
     try {
       spawn = await spawnPty({
@@ -289,20 +289,20 @@ describe('PtyHandler', () => {
       })
     } finally {
       if (oldPaneKey === undefined) {
-        delete process.env.ORCA_PANE_KEY
+        delete process.env.MCODE_PANE_KEY
       } else {
-        process.env.ORCA_PANE_KEY = oldPaneKey
+        process.env.MCODE_PANE_KEY = oldPaneKey
       }
       if (oldTabId === undefined) {
-        delete process.env.ORCA_TAB_ID
+        delete process.env.MCODE_TAB_ID
       } else {
-        process.env.ORCA_TAB_ID = oldTabId
+        process.env.MCODE_TAB_ID = oldTabId
       }
     }
 
     const spawnOptions = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
-    expect(spawnOptions.env.ORCA_PANE_KEY).toBeUndefined()
-    expect(spawnOptions.env.ORCA_TAB_ID).toBeUndefined()
+    expect(spawnOptions.env.MCODE_PANE_KEY).toBeUndefined()
+    expect(spawnOptions.env.MCODE_TAB_ID).toBeUndefined()
 
     await expect(
       attachPty({

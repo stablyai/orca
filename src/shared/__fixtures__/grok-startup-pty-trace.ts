@@ -3,7 +3,7 @@
  * readiness scanner would deliver a launch draft.
  *
  * Recorded from: grok 1.0.0 (3cd0d0cbcebe) [stable] on macOS (darwin 25.3.0),
- * xterm-256color 120x30 via node-pty, cwd = an Orca git worktree, 10s of output
+ * xterm-256color 120x30 via node-pty, cwd = an MCode git worktree, 10s of output
  * from spawn.
  *
  * Entries without `data` are grok logo-shimmer render frames, verified to hold

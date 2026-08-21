@@ -23,7 +23,7 @@ describe('ephemeral setup terminal worktree id', () => {
         brandEphemeralSetupTerminalWorktreeId('feature-tip-cli-skills-terminal')
       )
     ).toBe(true)
-    expect(isEphemeralSetupTerminalWorktreeId('repo-1::/work/orca/wt')).toBe(false)
+    expect(isEphemeralSetupTerminalWorktreeId('repo-1::/work/mcode/wt')).toBe(false)
     expect(isEphemeralSetupTerminalWorktreeId('global-floating-terminal')).toBe(false)
   })
 

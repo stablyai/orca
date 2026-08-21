@@ -65,7 +65,7 @@ describe('rich markdown image paste', () => {
     vi.stubGlobal('window', {
       api: {
         ui: {
-          saveClipboardImageAsTempFile: vi.fn().mockResolvedValue('/tmp/orca-paste-image.png')
+          saveClipboardImageAsTempFile: vi.fn().mockResolvedValue('/tmp/mcode-paste-image.png')
         }
       }
     })
@@ -104,7 +104,7 @@ describe('rich markdown image paste', () => {
     expect(insertRichMarkdownImageFromPath).toHaveBeenCalledWith({
       editor,
       filePath: '/repo/note.md',
-      sourcePath: '/tmp/orca-paste-image.png',
+      sourcePath: '/tmp/mcode-paste-image.png',
       worktreeId: 'wt-1',
       runtimeEnvironmentId: undefined,
       insertPos: 7,
@@ -135,7 +135,7 @@ describe('rich markdown image paste', () => {
     const editor = editorAt(5, destroyedRef)
     vi.mocked(window.api.ui.saveClipboardImageAsTempFile).mockImplementation(async () => {
       destroyedRef.current = true
-      return '/tmp/orca-paste-image.png'
+      return '/tmp/mcode-paste-image.png'
     })
 
     expect(

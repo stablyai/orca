@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import type { AgentSessionOwnerBinding } from '../../shared/agent-session-host-authority'
-import { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { MCodeRuntimeService } from '../runtime/mcode-runtime'
 import {
   registerPtyHandlers,
   clearProviderPtyState,
@@ -38,7 +38,7 @@ vi.mock('../telemetry/client', () =>
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
-vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
+vi.mock('../cli/linux-terminal-mcode-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../memory/pty-registry', () =>
@@ -67,7 +67,7 @@ describe('registerPtyHandlers', () => {
   it('rejects renderer persistence when a local PTY exits before spawn settles', async () => {
     const ptyId = 'pty-renderer-early-exit'
     const incarnationId = 'incarnation-renderer-early-exit'
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     const registerRuntimePty = vi.spyOn(runtime, 'registerPty')
     const provider = createAgentClaimProvider({
       spawn: vi.fn(async () => {
@@ -277,7 +277,7 @@ describe('registerPtyHandlers', () => {
       ptyId: 'pty-adopted-exit',
       surface: recoveredAgentSurface
     }
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     const provider = createAgentClaimProvider({
       sessions: [
         {

@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
-const PENDING_STORAGE_KEY = 'orca:pending-host-credential-cleanups'
+const PENDING_STORAGE_KEY = 'mcode:pending-host-credential-cleanups'
 const CLEANUP_CONFIRM_TIMEOUT_MS = 3_000
 
 type DeleteHostCredential = (hostId: string) => Promise<void>

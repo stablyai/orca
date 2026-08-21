@@ -13,7 +13,7 @@ import { drainTerminalMultiplexRoundRobin } from './terminal-multiplex-round-rob
 const MIB = 1024 * 1024
 const PAYLOAD_BYTES_PER_STREAM = 64 * MIB
 const PARSER_PAYLOAD_BYTES_PER_VIEWER = 4 * MIB
-const benchEnabled = process.env.ORCA_TERMINAL_PERF_BENCH === '1'
+const benchEnabled = process.env.MCODE_TERMINAL_PERF_BENCH === '1'
 
 type SimulationResult = {
   throughputMiBPerSecond: number

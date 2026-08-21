@@ -145,7 +145,7 @@ describe('telemetry IPC handlers', () => {
   it('drops main-owned events from renderer telemetry IPC', () => {
     registerWith({ installId: 'x', existedBeforeTelemetryRelease: false, optedIn: true })
     const handler = handlers.get('telemetry:track')!
-    handler({}, 'app_starred_orca', { source: 'settings' })
+    handler({}, 'app_starred_mcode', { source: 'settings' })
     handler({}, 'star_nag_outcome', {
       outcome: 'shown',
       source: 'threshold',

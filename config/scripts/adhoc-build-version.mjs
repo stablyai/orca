@@ -105,7 +105,7 @@ export function getAdhocBuildIdentity(now = new Date(), label = '', publishedVer
 if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename)) {
   const identity = getAdhocBuildIdentity(
     new Date(),
-    process.env.ORCA_ADHOC_LABEL ?? '',
+    process.env.MCODE_ADHOC_LABEL ?? '',
     readPublishedVersionsFromEnv()
   )
   // Consumed by the workflow via $GITHUB_OUTPUT.

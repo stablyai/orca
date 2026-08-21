@@ -39,11 +39,11 @@ describe('7za path resolution for the Windows signing gates (#6487)', () => {
     const path7za = await resolve7zaPath(projectRoot)
     expect(existsSync(path7za)).toBe(true)
 
-    const scratch = mkdtempSync(join(tmpdir(), 'orca 7za resolve '))
+    const scratch = mkdtempSync(join(tmpdir(), 'mcode 7za resolve '))
     try {
       const payloadDir = join(scratch, 'payload')
       mkdirSync(payloadDir, { recursive: true })
-      writeFileSync(join(payloadDir, 'Orca.exe'), 'not-a-real-pe')
+      writeFileSync(join(payloadDir, 'MCode.exe'), 'not-a-real-pe')
 
       const archive = join(scratch, 'bundle.7z')
       const created = spawnSync(path7za, ['a', archive, payloadDir], { encoding: 'utf8' })
@@ -54,14 +54,14 @@ describe('7za path resolution for the Windows signing gates (#6487)', () => {
         encoding: 'utf8'
       })
       expect(extracted.status).toBe(0)
-      expect(existsSync(join(outDir, 'payload', 'Orca.exe'))).toBe(true)
+      expect(existsSync(join(outDir, 'payload', 'MCode.exe'))).toBe(true)
     } finally {
       rmSync(scratch, { recursive: true, force: true })
     }
   }, 120_000)
 
   it('prefers an explicit ELECTRON_BUILDER_7ZIP_PATH override', async () => {
-    const scratch = mkdtempSync(join(tmpdir(), 'orca 7za override '))
+    const scratch = mkdtempSync(join(tmpdir(), 'mcode 7za override '))
     const previous = process.env.ELECTRON_BUILDER_7ZIP_PATH
     try {
       const fake = join(scratch, 'my7za')
@@ -82,7 +82,7 @@ describe('7za path resolution for the Windows signing gates (#6487)', () => {
   // for directories, so a folder-valued override would clear both the resolver's
   // check and the gate's, then fail as an opaque exec error mid-extraction.
   it('ignores an override that points at a directory', async () => {
-    const scratch = mkdtempSync(join(tmpdir(), 'orca 7za dir override '))
+    const scratch = mkdtempSync(join(tmpdir(), 'mcode 7za dir override '))
     const previous = process.env.ELECTRON_BUILDER_7ZIP_PATH
     try {
       process.env.ELECTRON_BUILDER_7ZIP_PATH = scratch
@@ -116,7 +116,7 @@ describe('7za path resolution for the Windows signing gates (#6487)', () => {
   // assertion passes on the cached value even when a dangling override would abort a
   // cold release runner.
   it('ignores an override that points at a missing file, in a cold process', () => {
-    const dangling = join(tmpdir(), 'orca-7za-does-not-exist')
+    const dangling = join(tmpdir(), 'mcode-7za-does-not-exist')
     const result = spawnSync(process.execPath, ['config/scripts/resolve-7za-path.mjs'], {
       cwd: projectRoot,
       encoding: 'utf8',
@@ -149,7 +149,7 @@ describe('7za path resolution for the Windows signing gates (#6487)', () => {
   // ...).Trim()` would otherwise receive two lines and the gate would break on
   // any runner whose toolset cache was evicted or repaired.
   it('keeps stdout to one path even when the toolset cache is cold', () => {
-    const cache = mkdtempSync(join(tmpdir(), 'orca 7za cold cache '))
+    const cache = mkdtempSync(join(tmpdir(), 'mcode 7za cold cache '))
     try {
       const { VITEST: _vitest, ...envWithoutVitest } = process.env
       const result = spawnSync(process.execPath, ['config/scripts/resolve-7za-path.mjs'], {

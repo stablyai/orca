@@ -14,7 +14,7 @@ import { isOrchestrationMutation } from '../../../shared/orchestration-rpc-contr
 import { errorResponse, successResponse } from './errors'
 import { ALL_RPC_METHODS } from './methods'
 import { emulatorProbe, emulatorProbeError } from '../../emulator/emulator-probe'
-import type { OrcaRuntimeService } from '../orca-runtime'
+import type { MCodeRuntimeService } from '../mcode-runtime'
 import {
   getOrchestrationMutationExecutor,
   type OrchestrationMutationExecutor,
@@ -26,10 +26,10 @@ import { OrchestrationLegacyCompatibility } from './orchestration-legacy-compati
 import type { RpcDispatchStreamingOptions } from './dispatcher-stream-options'
 import { invalidArgumentResponse, mapDispatcherError } from './dispatcher-error-response'
 
-export type DispatcherOptions = { runtime: OrcaRuntimeService; methods?: readonly RpcAnyMethod[] }
+export type DispatcherOptions = { runtime: MCodeRuntimeService; methods?: readonly RpcAnyMethod[] }
 
 export class RpcDispatcher {
-  private readonly runtime: OrcaRuntimeService
+  private readonly runtime: MCodeRuntimeService
   private readonly registry: RpcRegistry
   private readonly orchestrationMutations: OrchestrationMutationExecutor
   private readonly legacyOrchestration: OrchestrationLegacyCompatibility

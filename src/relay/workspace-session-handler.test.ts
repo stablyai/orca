@@ -37,7 +37,7 @@ describe('WorkspaceSessionHandler', () => {
   let written: Buffer[]
 
   beforeEach(() => {
-    baseDir = mkdtempSync(join(tmpdir(), 'orca-workspace-session-'))
+    baseDir = mkdtempSync(join(tmpdir(), 'mcode-workspace-session-'))
     written = []
     dispatcher = new RelayDispatcher((data) => {
       written.push(Buffer.from(data))

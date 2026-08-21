@@ -154,7 +154,7 @@ describe('MobileHostCard', () => {
 
     const navigationButton = renderer.root.findAllByType('Pressable')[0]
     expect(navigationButton.props.accessibilityLabel).toBe(
-      'Open Desk, Connected, Orca Relay, Worktree list unavailable'
+      'Open Desk, Connected, MCode Relay, Worktree list unavailable'
     )
     expect(
       renderer.root
@@ -193,7 +193,7 @@ describe('MobileHostCard', () => {
 
     const navigationButton = renderer.root.findAllByType('Pressable')[0]
     expect(navigationButton.props.accessibilityLabel).toBe(
-      "Open Desk, Can't reach desktop, Update desktop Orca and sign in to connect from anywhere"
+      "Open Desk, Can't reach desktop, Update desktop MCode and sign in to connect from anywhere"
     )
   })
 })

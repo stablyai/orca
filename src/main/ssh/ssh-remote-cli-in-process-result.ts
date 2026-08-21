@@ -1,6 +1,6 @@
 import type { RpcResponse } from '../runtime/rpc/core'
 import type { ParsedRemoteCli } from './ssh-remote-cli-argument-error'
-import type { RemoteOrcaCliResult } from './ssh-remote-cli-host-passthrough'
+import type { RemoteMCodeCliResult } from './ssh-remote-cli-host-passthrough'
 import { formatRemoteCli } from './ssh-remote-cli-format'
 import {
   formatRemoteOrchestrationAsk,
@@ -15,7 +15,7 @@ export function formatInProcessRemoteCliResult(
   env: Record<string, string>,
   response: RpcResponse,
   json: boolean
-): RemoteOrcaCliResult {
+): RemoteMCodeCliResult {
   const command = parsed.commandPath.join(' ')
   const formatted =
     command === 'orchestration check'

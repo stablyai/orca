@@ -1,14 +1,14 @@
 import { execFileSync } from 'node:child_process'
 import type { DockerSshRelayTarget } from './helpers/docker-ssh-relay-target'
 
-const REMOTE_TUI_PATH = '/tmp/orca-codex-display-artifacts-repro.mjs'
-export const REMOTE_TUI_DONE = 'ORCA_REMOTE_CODEX_ARTIFACT_TUI_DONE'
+const REMOTE_TUI_PATH = '/tmp/mcode-codex-display-artifacts-repro.mjs'
+export const REMOTE_TUI_DONE = 'MCODE_REMOTE_CODEX_ARTIFACT_TUI_DONE'
 export const REMOTE_CODEX_FIXTURE_CLEAN_FINAL_TEXT =
   'Any gray slab visible now is stale renderer state.'
 const REMOTE_TUI_FRAMES = 900
-const REMOTE_CODEX_FIXTURE_FRAMES = parseEnvNumber(process.env.ORCA_E2E_CODEX_FIXTURE_FRAMES, 34)
+const REMOTE_CODEX_FIXTURE_FRAMES = parseEnvNumber(process.env.MCODE_E2E_CODEX_FIXTURE_FRAMES, 34)
 const REMOTE_CODEX_FIXTURE_FRAME_DELAY_MS = parseEnvNumber(
-  process.env.ORCA_E2E_CODEX_FIXTURE_FRAME_DELAY_MS,
+  process.env.MCODE_E2E_CODEX_FIXTURE_FRAME_DELAY_MS,
   45
 )
 
@@ -76,7 +76,7 @@ await write('\\x1b[?2026h\\x1b[2J\\x1b[H')
 await write('\\x1b[38;2;142;196;255mgpt-5.5 high\\x1b[0m ')
 await write('\\x1b[38;2;106;176;76m~/remote/repro/pr-5969\\x1b[0m clean final frame\\r\\n\\r\\n')
 await write('Final screen intentionally has no gray background bands.\\r\\n')
-await write('If Orca leaves wide gray rectangles here, they are stale remote-PTY render artifacts.\\r\\n')
+await write('If MCode leaves wide gray rectangles here, they are stale remote-PTY render artifacts.\\r\\n')
 await write('${REMOTE_TUI_DONE}\\r\\n')
 await write('\\x1b[?25h\\x1b[?2026l')
 setTimeout(() => process.exit(0), 50)
@@ -95,7 +95,7 @@ const write = (chunk) => new Promise((resolve) => process.stdout.write(chunk, re
 const cols = Number(process.env.COLUMNS || 120)
 const rows = Number(process.env.LINES || 48)
 const width = Math.max(42, cols - 4)
-const marker = process.argv.join(' ').match(/ORCA_REMOTE_CODEX_ARTIFACT_TUI_DONE|ORCA_REAL_REMOTE_CODEX_DONE_[0-9]+/)?.[0] || '${REMOTE_TUI_DONE}'
+const marker = process.argv.join(' ').match(/MCODE_REMOTE_CODEX_ARTIFACT_TUI_DONE|MCODE_REAL_REMOTE_CODEX_DONE_[0-9]+/)?.[0] || '${REMOTE_TUI_DONE}'
 const scrollTop = 1
 const viewportTop = Math.max(14, rows - 17)
 const viewportBottom = Math.max(viewportTop + 8, rows - 3)
@@ -167,7 +167,7 @@ await write('>_ OpenAI Codex (fixture)\\r\\n')
 await write('model:     gpt-5.5  /model to change\\r\\n')
 await write('directory: ' + process.cwd() + '\\r\\n')
 await write('permissions: YOLO mode\\r\\n\\r\\n')
-await write('Tip: deterministic fixture for Orca SSH Codex display artifacts.\\r\\n\\r\\n')
+await write('Tip: deterministic fixture for MCode SSH Codex display artifacts.\\r\\n\\r\\n')
 
 for (let frame = 0; frame < ${REMOTE_CODEX_FIXTURE_FRAMES}; frame += 1) {
   await codexViewportFrame(frame)

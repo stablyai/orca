@@ -7,7 +7,7 @@ const { statMock, subscribeMock, writeFileSyncMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('node:fs', () => ({
-  mkdtempSync: vi.fn(() => '/tmp/orca-watcher-canary-test'),
+  mkdtempSync: vi.fn(() => '/tmp/mcode-watcher-canary-test'),
   rmSync: vi.fn(),
   writeFileSync: writeFileSyncMock
 }))

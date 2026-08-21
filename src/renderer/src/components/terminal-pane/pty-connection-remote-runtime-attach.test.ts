@@ -377,11 +377,11 @@ describe('connectPanePty', () => {
         },
         launchToken: expect.stringMatching(new RegExp(`^${UUID_RE}$`)),
         env: expect.objectContaining({
-          ORCA_PANE_KEY: paneKey,
-          ORCA_TAB_ID: 'tab-1',
-          ORCA_WORKTREE_ID: 'wt-1',
-          ORCA_WORKSPACE_ID: 'wt-1',
-          ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
+          MCODE_PANE_KEY: paneKey,
+          MCODE_TAB_ID: 'tab-1',
+          MCODE_WORKTREE_ID: 'wt-1',
+          MCODE_WORKSPACE_ID: 'wt-1',
+          MCODE_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
         })
       })
     )
@@ -568,7 +568,7 @@ describe('connectPanePty', () => {
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     const setupWorktreeId =
-      'ephemeral-setup-terminal:settings-mobile-emulator-orca-cli-skill-terminal'
+      'ephemeral-setup-terminal:settings-mobile-emulator-mcode-cli-skill-terminal'
     mockStoreState = {
       ...mockStoreState,
       tabsByWorktree: { [setupWorktreeId]: [{ id: 'tab-1', ptyId: null }] },
@@ -594,7 +594,7 @@ describe('connectPanePty', () => {
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     const setupWorktreeId =
-      'ephemeral-setup-terminal:settings-mobile-emulator-orca-cli-skill-terminal'
+      'ephemeral-setup-terminal:settings-mobile-emulator-mcode-cli-skill-terminal'
     mockStoreState = {
       ...mockStoreState,
       tabsByWorktree: { [setupWorktreeId]: [{ id: 'tab-1', ptyId: null }] },
@@ -655,14 +655,14 @@ describe('connectPanePty', () => {
       // Why: the worktree row exists (so the owner is not "ambiguous") but its repo has
       // not landed yet — exactly the window that used to fail open to local.
       worktreesByRepo: {
-        repo1: [{ id: 'wt-remote', repoId: 'repo1', path: '/tmp/orca-docker-relay-perf-repo' }]
+        repo1: [{ id: 'wt-remote', repoId: 'repo1', path: '/tmp/mcode-docker-relay-perf-repo' }]
       },
       repos: []
     } as StoreState
 
     const deps = createDeps({
       worktreeId: 'wt-remote',
-      cwd: '/tmp/orca-docker-relay-perf-repo'
+      cwd: '/tmp/mcode-docker-relay-perf-repo'
     })
     connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
 

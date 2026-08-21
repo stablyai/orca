@@ -176,7 +176,7 @@ describe('removeWorktree state cleanup', () => {
     const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
     const orphanedSetup = {
       id: 'setup-runtime-ssh',
-      hostId: 'ssh:runtime-ssh-orca-1'
+      hostId: 'ssh:runtime-ssh-mcode-1'
     } as unknown as AppState['projectHostSetups'][number]
     const userSshSetup = {
       id: 'setup-user-ssh',
@@ -193,7 +193,7 @@ describe('removeWorktree state cleanup', () => {
         id: 'runtime-1',
         workspaceId: 'repo1::/path/wt1',
         cleanupStatus: 'not_started',
-        sshTargetId: 'runtime-ssh-orca-1'
+        sshTargetId: 'runtime-ssh-mcode-1'
       }
     ])
 
@@ -386,7 +386,7 @@ describe('removeWorktree state cleanup', () => {
 
     const sidebar = new EventTarget()
     let worktreePresentWhenRecorded: boolean | null = null
-    sidebar.addEventListener('orca-record-virtualized-scroll-anchor', () => {
+    sidebar.addEventListener('mcode-record-virtualized-scroll-anchor', () => {
       worktreePresentWhenRecorded =
         store.getState().worktreesByRepo.repo1?.some((w) => w.id === wt.id) ?? false
     })

@@ -5,7 +5,7 @@ import { translate } from '@/i18n/i18n'
 import { getProjectAgentSkillTerminalShellOverride } from '@/lib/project-skill-runtime'
 import type { LocalAgentRuntime } from '../settings/CliSkillRuntimeSetup'
 
-const LOCAL_DISMISS_STORAGE_KEY_PREFIX = 'orca.linearTicketsSkill.setupDismissed'
+const LOCAL_DISMISS_STORAGE_KEY_PREFIX = 'mcode.linearTicketsSkill.setupDismissed'
 
 export type LinearAgentSkillPromptSettings = Pick<
   GlobalSettings,

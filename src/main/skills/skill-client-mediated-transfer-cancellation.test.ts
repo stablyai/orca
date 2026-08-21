@@ -21,7 +21,7 @@ describe('transferSkillPackageToRuntime cancellation', () => {
   let root = ''
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'orca-skill-transfer-cancel-test-'))
+    root = await mkdtemp(join(tmpdir(), 'mcode-skill-transfer-cancel-test-'))
     mocks.callRuntimeEnvironment.mockReset()
     mocks.downloadSkillPackageGrant.mockReset()
   })

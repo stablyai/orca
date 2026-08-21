@@ -4,7 +4,7 @@ export type DesktopWindowChromeInput = {
 }
 
 export function isPairedWebClientWindow(): boolean {
-  return (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ === true
+  return (globalThis as { __MCODE_WEB_CLIENT__?: boolean }).__MCODE_WEB_CLIENT__ === true
 }
 
 export function isLocalWindowsDesktopClient(): boolean {

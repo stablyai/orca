@@ -49,7 +49,7 @@ function directoryFsyncSupported(directory: string): boolean {
 
 it('fsyncs the file before rename, and the directory after where supported', async () => {
   const { writeFileDurableSync } = await import('./durable-file-write')
-  const dir = mkdtempSync(join(tmpdir(), 'orca-fsync-'))
+  const dir = mkdtempSync(join(tmpdir(), 'mcode-fsync-'))
   try {
     const supported = directoryFsyncSupported(dir)
     syscalls.length = 0 // Discard the probe's own fsync.

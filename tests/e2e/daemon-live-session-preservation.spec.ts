@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
 import {
   discoverActivePtyId,
@@ -12,7 +12,7 @@ import {
   waitForTerminalOutput
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/mcode-restart'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 import { PTY_SESSION_ID_SEPARATOR } from '../../src/shared/pty-session-id-format'
 
@@ -32,7 +32,7 @@ function readDaemonPid(userDataDir: string): number {
 function spoofDaemonEntryPath(userDataDir: string): void {
   const pidPath = daemonPidPath(userDataDir)
   const parsed = JSON.parse(readFileSync(pidPath, 'utf8')) as Record<string, unknown>
-  parsed.entryPath = '/tmp/orca-e2e-old-app/out/main/daemon-entry.js'
+  parsed.entryPath = '/tmp/mcode-e2e-old-app/out/main/daemon-entry.js'
   writeFileSync(pidPath, `${JSON.stringify(parsed)}\n`)
 }
 

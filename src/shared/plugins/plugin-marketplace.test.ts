@@ -125,9 +125,9 @@ describe('pluginMarketplaceSchema', () => {
 
 describe('marketplace provenance contracts', () => {
   it.each([
-    ['stablyai.orca-skills', true, true],
+    ['mcode.plugin-skills', true, true],
     ['stablyai.skills', true, false],
-    ['community.orca-skills', true, false],
+    ['community.mcode-skills', true, false],
     ['community.skills', false, false],
     ['invalid', false, false]
   ])('classifies %s', (pluginKey, reserved, official) => {
@@ -136,18 +136,18 @@ describe('marketplace provenance contracts', () => {
   })
 
   it.each([
-    'https://github.com/stablyai/orca-skills.git',
-    'ssh://git@github.com/stablyai/orca-skills.git',
-    'git@github.com:stablyai/orca-skills.git'
+    'https://github.com/mcode-ide/mcode-skills.git',
+    'ssh://git@github.com/mcode-ide/mcode-skills.git',
+    'git@github.com:mcode-ide/mcode-skills.git'
   ])('accepts official organization source %s', (source) => {
     expect(isOfficialOrganizationGitSource(source)).toBe(true)
   })
 
   it('does not trust lookalike organizations or hosts', () => {
-    expect(isOfficialOrganizationGitSource('https://github.com/stablyai-fakes/orca-skills')).toBe(
+    expect(isOfficialOrganizationGitSource('https://github.com/stablyai-fakes/mcode-skills')).toBe(
       false
     )
-    expect(isOfficialOrganizationGitSource('https://gitlab.com/stablyai/orca-skills')).toBe(false)
+    expect(isOfficialOrganizationGitSource('https://gitlab.com/mcode-ide/mcode-skills')).toBe(false)
   })
 
   it('recognizes only the canonical official marketplace repository', () => {

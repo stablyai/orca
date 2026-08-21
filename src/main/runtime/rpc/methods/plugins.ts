@@ -17,7 +17,7 @@ import { isQualifiedPluginKey } from '../../../../shared/plugins/plugin-manifest
  * decision can never differ between a local window and a paired client.
  */
 
-// Why: RpcContext only carries the OrcaRuntimeService, and plugins are a
+// Why: RpcContext only carries the MCodeRuntimeService, and plugins are a
 // separate composition-root service — inject via module setter the way the
 // desktop entry wires it, instead of widening the shared RPC context type.
 let pluginServiceForRpc: PluginService | null = null

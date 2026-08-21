@@ -31,7 +31,7 @@ afterEach(async () => {
 // metadata; Windows uses named pipes and cannot run this fixture directly.
 describe.skipIf(process.platform === 'win32')('CLI runtime status', () => {
   it('uses the legacy singular runtime transport when reporting status', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-status-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-status-'))
     const endpoint = join(userDataPath, 'runtime.sock')
     const server = createServer((socket) => {
       sockets.add(socket)
@@ -118,7 +118,7 @@ describe('projectRemoteAppStatus', () => {
     })
   })
 
-  // Why: the SSH host-passthrough answers for the Orca host the caller reached, and used to
+  // Why: the SSH host-passthrough answers for the MCode host the caller reached, and used to
   // claim running:true unconditionally. Both transports now share this projection.
   it('does not claim a desktop app for a headless serve on any transport', () => {
     expect(projectRemoteAppStatus(remoteStatus({ desktopWindowStatus: 'openable' }))).toEqual({

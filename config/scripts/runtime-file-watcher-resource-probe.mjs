@@ -31,12 +31,12 @@ async function main() {
   let pool
   let result
   try {
-    bundleDir = await mkdtemp(join(tmpdir(), 'orca-runtime-watcher-resource-'))
+    bundleDir = await mkdtemp(join(tmpdir(), 'mcode-runtime-watcher-resource-'))
     const { RuntimeWatcherProcessPool, WatcherProcessFailure, reserveWatcherChild } =
       await loadProbe(bundleDir)
     const roots = []
     for (let index = 0; index < 5; index++) {
-      const createdRoot = await mkdtemp(join(tmpdir(), `orca-watcher-resource-${index}-`))
+      const createdRoot = await mkdtemp(join(tmpdir(), `mcode-watcher-resource-${index}-`))
       createdRoots.push(createdRoot)
       roots.push(await realpath(createdRoot))
     }

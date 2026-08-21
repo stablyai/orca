@@ -1,8 +1,8 @@
 // Preflight safety checks and the baseline window snapshot.
 //
 // The harness installs, updates, and uninstalls a real app and kills processes
-// it created. To avoid ever touching a user's live Orca, it REFUSES to run when
-// a pre-existing Orca app process (not a daemon) is already running that it did
+// it created. To avoid ever touching a user's live MCode, it REFUSES to run when
+// a pre-existing MCode app process (not a daemon) is already running that it did
 // not start. Existing installs and detached daemons are warned about, not
 // treated as fatal (the update path is what exercises them).
 
@@ -14,28 +14,28 @@ import { locateInstalledExe } from './installer-steps.mjs'
 import { findDaemonProcesses } from './daemon-processes.mjs'
 
 /**
- * Find running Orca APP processes (main window process), excluding daemons.
- * The daemon runs as Orca.exe too but always carries the daemon-entry.js marker
+ * Find running MCode APP processes (main window process), excluding daemons.
+ * The daemon runs as MCode.exe too but always carries the daemon-entry.js marker
  * on its command line, so excluding that marker isolates the actual app. The
  * ExecutablePath lets isolated mode decide whether a running app is under the
- * test dir (fatal) or is the developer's real Orca elsewhere (informational).
+ * test dir (fatal) or is the developer's real MCode elsewhere (informational).
  */
 export function findAppProcesses() {
   const command = [
-    `$procs = @(Get-CimInstance Win32_Process -Filter "Name = 'Orca.exe'" -ErrorAction SilentlyContinue |`,
+    `$procs = @(Get-CimInstance Win32_Process -Filter "Name = 'MCode.exe'" -ErrorAction SilentlyContinue |`,
     `  Where-Object { -not ($_.CommandLine -match 'daemon-entry\\.js') })`,
     `$out = @($procs | ForEach-Object {`,
     `  [pscustomobject]@{ pid = $_.ProcessId; path = $_.ExecutablePath; commandLine = $_.CommandLine } })`,
     `ConvertTo-Json -InputObject @{ processes = $out } -Depth 4 -Compress`
   ].join('\n')
   // Fail closed: this guard protects the user's real processes, so a failed
-  // query must abort the run rather than look like "no Orca is running".
+  // query must abort the run rather than look like "no MCode is running".
   const { stdout, stderr, code, error } = runCommandSync(command)
   if (error) {
-    throw new Error(`Failed to query Orca app processes: ${error.message}`)
+    throw new Error(`Failed to query MCode app processes: ${error.message}`)
   }
   if (code !== 0) {
-    throw new Error(`Failed to query Orca app processes (exit ${code}): ${stderr || stdout}`)
+    throw new Error(`Failed to query MCode app processes (exit ${code}): ${stderr || stdout}`)
   }
   const trimmed = stdout.trim()
   if (!trimmed) {
@@ -47,7 +47,7 @@ export function findAppProcesses() {
     return Array.isArray(arr) ? arr : arr ? [arr] : []
   } catch (parseError) {
     throw new Error(
-      `Orca app process query returned invalid JSON: ${parseError.message}\n` +
+      `MCode app process query returned invalid JSON: ${parseError.message}\n` +
         `stdout:\n${trimmed}\nstderr:\n${stderr}`
     )
   }
@@ -68,14 +68,14 @@ function isPathUnder(childPath, parentDir) {
 
 /**
  * Run preflight. Returns { baseline, warnings, existingInstall }. Throws if a
- * pre-existing Orca app is running (never kill a user's process) or if an Orca
+ * pre-existing MCode app is running (never kill a user's process) or if an MCode
  * install already exists and allowExistingInstall was not passed (the run would
  * overwrite a developer's real build). baselinePath receives the snapshot of
  * currently-visible top-level windows.
  *
  * In isolated mode (`installDir` set) both refusals become target-scoped: only a
  * running app whose exe is UNDER installDir is fatal, and only an install already
- * in installDir triggers the existing-install refusal. A real Orca running or
+ * in installDir triggers the existing-install refusal. A real MCode running or
  * installed elsewhere is untouched by isolated mode and is merely noted.
  */
 export function preflight({ baselinePath, allowExistingInstall = false, installDir = null }) {
@@ -96,7 +96,7 @@ export function preflight({ baselinePath, allowExistingInstall = false, installD
     if (inTarget.length > 0) {
       const listing = inTarget.map((p) => `  pid ${p.pid}: ${p.path}`).join('\n')
       throw new Error(
-        `Refusing to run: ${inTarget.length} Orca app process(es) are running from the ` +
+        `Refusing to run: ${inTarget.length} MCode app process(es) are running from the ` +
           `isolated target dir ${installDir} that this harness did not start. Close them ` +
           `first (this harness never kills pre-existing user processes):\n${listing}`
       )
@@ -104,7 +104,7 @@ export function preflight({ baselinePath, allowExistingInstall = false, installD
     const elsewhere = appProcesses.filter((p) => !(p.path && isPathUnder(p.path, installDir)))
     if (elsewhere.length > 0) {
       warnings.push(
-        `${elsewhere.length} Orca app process(es) are running from outside the isolated ` +
+        `${elsewhere.length} MCode app process(es) are running from outside the isolated ` +
           `target dir (pids: ${elsewhere.map((p) => p.pid).join(', ')}). Isolated mode never ` +
           `touches them; proceeding.`
       )
@@ -112,7 +112,7 @@ export function preflight({ baselinePath, allowExistingInstall = false, installD
   } else if (appProcesses.length > 0) {
     const listing = appProcesses.map((p) => `  pid ${p.pid}: ${p.commandLine}`).join('\n')
     throw new Error(
-      `Refusing to run: ${appProcesses.length} Orca app process(es) are already ` +
+      `Refusing to run: ${appProcesses.length} MCode app process(es) are already ` +
         `running that this harness did not start. Close them first (this harness ` +
         `never kills pre-existing user processes):\n${listing}`
     )
@@ -127,11 +127,11 @@ export function preflight({ baselinePath, allowExistingInstall = false, installD
         ? `Refusing to run: an install already exists in the isolated target dir ` +
             `${existingInstall}. Pass --allow-existing-install to overwrite it (isolated mode ` +
             `never touches the real install elsewhere), or point --install-dir at an empty dir.`
-        : `Refusing to run: an Orca install already exists at ${existingInstall}. ` +
+        : `Refusing to run: an MCode install already exists at ${existingInstall}. ` +
             `This run would silently OVERWRITE it with the --from/--to versions and ` +
-            `leave the --to version installed — destroying a real Orca install on a ` +
+            `leave the --to version installed — destroying a real MCode install on a ` +
             `developer machine. Pass --allow-existing-install to proceed anyway ` +
-            `(your prior build will NOT be restored), or uninstall Orca first. Clean ` +
+            `(your prior build will NOT be restored), or uninstall MCode first. Clean ` +
             `machines (CI/VM) never hit this.`
     )
   }

@@ -17,8 +17,8 @@ import { listRelayBaseDirsCommand } from './ssh-remote-commands'
 import { gcOldRelayVersions } from './ssh-relay-versioned-install'
 import type { SshTarget } from '../../shared/ssh-types'
 
-const RUN_REVIEW_ORACLE = process.env.ORCA_REVIEW_SSH_UPLOAD_CANCEL === '1'
-const REMOTE_REPO = '/tmp/orca-pr-10207-real-repo'
+const RUN_REVIEW_ORACLE = process.env.MCODE_REVIEW_SSH_UPLOAD_CANCEL === '1'
+const REMOTE_REPO = '/tmp/mcode-pr-10207-real-repo'
 
 type TargetFixture = {
   containerName: string
@@ -50,15 +50,15 @@ function dockerExec(fixture: TargetFixture, command: string): string {
 }
 
 function startTarget(): TargetFixture {
-  const image = process.env.ORCA_REVIEW_SSH_IMAGE
+  const image = process.env.MCODE_REVIEW_SSH_IMAGE
   if (!image) {
-    throw new Error('ORCA_REVIEW_SSH_IMAGE is required')
+    throw new Error('MCODE_REVIEW_SSH_IMAGE is required')
   }
-  const tempDir = mkdtempSync(join(tmpdir(), 'orca-pr10207-ssh-'))
+  const tempDir = mkdtempSync(join(tmpdir(), 'mcode-pr10207-ssh-'))
   const identityFile = join(tempDir, 'id_ed25519')
   run('ssh-keygen', ['-t', 'ed25519', '-N', '', '-f', identityFile, '-q'])
   const publicKey = readFileSync(`${identityFile}.pub`, 'utf8').trim()
-  const containerName = `orca-pr10207-${randomUUID().slice(0, 12)}`
+  const containerName = `mcode-pr10207-${randomUUID().slice(0, 12)}`
   run(
     'docker',
     [
@@ -105,7 +105,7 @@ function stopTarget(fixture: TargetFixture | null): void {
 }
 
 function createConnection(fixture: TargetFixture): SshConnection {
-  const host = process.env.ORCA_REVIEW_SSH_TARGET_HOST ?? ''
+  const host = process.env.MCODE_REVIEW_SSH_TARGET_HOST ?? ''
   if (!host || host === 'localhost' || host === '::1' || host.startsWith('127.')) {
     throw new Error(`Review SSH target must be non-loopback, received ${JSON.stringify(host)}`)
   }
@@ -123,7 +123,7 @@ function createConnection(fixture: TargetFixture): SshConnection {
 }
 
 function readInventory(fixture: TargetFixture, remoteRelayDir: string): RemoteInventory {
-  const stagePool = '/root/.orca-remote/.upload-stages'
+  const stagePool = '/root/.mcode-remote/.upload-stages'
   const raw = dockerExec(
     fixture,
     [
@@ -157,7 +157,7 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
     const localRelayDir = join(process.cwd(), 'out', 'relay', 'linux-arm64')
     const relayVersion = readFileSync(join(localRelayDir, '.version'), 'utf8').trim()
     const relayJsSize = statSync(join(localRelayDir, 'relay.js')).size
-    const remoteRelayDir = `/root/.orca-remote/relay-${relayVersion}`
+    const remoteRelayDir = `/root/.mcode-remote/relay-${relayVersion}`
     const connection = createConnection(activeFixture)
     await connection.connect()
     const sentinelPid = dockerExec(activeFixture, 'sleep 300 </dev/null >/dev/null 2>&1 & echo $!')
@@ -217,7 +217,7 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
     const partialRemoteBytes = Number(
       dockerExec(
         activeFixture,
-        "find /root/.orca-remote/.upload-stages -type f -path '*/slot-*/payload/relay.js' -printf '%s\\n'"
+        "find /root/.mcode-remote/.upload-stages -type f -path '*/slot-*/payload/relay.js' -printf '%s\\n'"
       )
     )
     const operationController = (
@@ -249,7 +249,7 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
       join(process.cwd(), 'out', 'relay', 'linux-arm64', '.version'),
       'utf8'
     ).trim()
-    const remoteRelayDir = `/root/.orca-remote/relay-${relayVersion}`
+    const remoteRelayDir = `/root/.mcode-remote/relay-${relayVersion}`
     const firstConnection = createConnection(activeFixture)
     const progress: string[] = []
     await firstConnection.connect()
@@ -263,7 +263,7 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
     ).rejects.toBe(unconfirmedCancellation)
     await firstConnection.disconnect()
     const firstInventory = readInventory(activeFixture, remoteRelayDir)
-    const expected = process.env.ORCA_REVIEW_EXPECT_RECOVERY === '1' ? 'recovered' : 'blocked'
+    const expected = process.env.MCODE_REVIEW_EXPECT_RECOVERY === '1' ? 'recovered' : 'blocked'
     if (expected === 'recovered') {
       const secondAbandonedConnection = createConnection(activeFixture)
       await secondAbandonedConnection.connect()
@@ -309,11 +309,11 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
     if (expected === 'recovered') {
       const replacedStage = firstInventory.uploadStages[0]!
       const originalStage = `${replacedStage}.original`
-      const foreignTarget = '/root/orca-pr10207-foreign-stage-target'
-      const stagePool = '/root/.orca-remote/.upload-stages'
+      const foreignTarget = '/root/mcode-pr10207-foreign-stage-target'
+      const stagePool = '/root/.mcode-remote/.upload-stages'
       const symlinkStage = `${stagePool}/slot-2`
-      const ownerMarker = '.orca-upload-owner'
-      const identityMarker = '.orca-upload-identity'
+      const ownerMarker = '.mcode-upload-owner'
+      const identityMarker = '.mcode-upload-identity'
       dockerExec(
         activeFixture,
         [
@@ -325,7 +325,7 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
           `printf foreign > ${shellQuote(`${replacedStage}/payload/foreign`)}`,
           `printf alive > ${shellQuote(`${foreignTarget}/sentinel`)}`,
           `ln -s ${shellQuote(foreignTarget)} ${shellQuote(symlinkStage)}`,
-          `i=0; while [ "$i" -lt 15197 ]; do mkdir ${shellQuote(`/root/.orca-remote/relay-${relayVersion}.upload-scale-`)}"$i"; i=$((i + 1)); done`
+          `i=0; while [ "$i" -lt 15197 ]; do mkdir ${shellQuote(`/root/.mcode-remote/relay-${relayVersion}.upload-scale-`)}"$i"; i=$((i + 1)); done`
         ].join(' && ')
       )
       const adversarialInventory = readInventory(activeFixture, remoteRelayDir)
@@ -359,7 +359,7 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
 
       const listing = await execCommand(
         cleanupConnection,
-        listRelayBaseDirsCommand(getRemoteHostPlatform('linux-arm64'), '/root/.orca-remote')
+        listRelayBaseDirsCommand(getRemoteHostPlatform('linux-arm64'), '/root/.mcode-remote')
       )
       const gcStartedAt = Date.now()
       await gcOldRelayVersions(
@@ -391,7 +391,7 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
       const scaleEntries = Number(
         dockerExec(
           activeFixture,
-          `find /root/.orca-remote -mindepth 1 -maxdepth 1 -type d -name ${shellQuote(`relay-${relayVersion}.upload-scale-*`)} | wc -l`
+          `find /root/.mcode-remote -mindepth 1 -maxdepth 1 -type d -name ${shellQuote(`relay-${relayVersion}.upload-scale-*`)} | wc -l`
         )
       )
       expect(scaleEntries).toBe(15_197)
@@ -410,9 +410,9 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
       expect(firstInventory.uploadStages.length).toBeGreaterThan(0)
       expect(finalInventory?.installLock).toBe(false)
       expect(finalInventory!.uploadStages).toEqual([
-        '/root/.orca-remote/.upload-stages/slot-0',
-        '/root/.orca-remote/.upload-stages/slot-0.original',
-        '/root/.orca-remote/.upload-stages/slot-2'
+        '/root/.mcode-remote/.upload-stages/slot-0',
+        '/root/.mcode-remote/.upload-stages/slot-0.original',
+        '/root/.mcode-remote/.upload-stages/slot-2'
       ])
     } else {
       expect(firstInventory.installLock).toBe(true)

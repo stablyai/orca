@@ -6,12 +6,12 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const ORCA_SHELL_WRAPPER_ENV = [
-  'ORCA_OPENCODE_CONFIG_DIR',
-  'ORCA_MIMOCODE_HOME',
-  'ORCA_PI_CODING_AGENT_DIR',
-  'ORCA_OMP_CODING_AGENT_DIR',
-  'ORCA_CODEX_HOME'
+const MCODE_SHELL_WRAPPER_ENV = [
+  'MCODE_OPENCODE_CONFIG_DIR',
+  'MCODE_MIMOCODE_HOME',
+  'MCODE_PI_CODING_AGENT_DIR',
+  'MCODE_OMP_CODING_AGENT_DIR',
+  'MCODE_CODEX_HOME'
 ] as const
 export const POWERLEVEL10K_WIZARD_DISABLE_ENV = 'POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD'
 
@@ -29,7 +29,7 @@ export function stubMissingDaemonCwd(): {
   chdirSpy: Mock<(directory: string) => void>
   restoreCwdStubs: () => void
 } {
-  const missingDaemonCwd = join(tmpdir(), 'orca-daemon-cwd-that-does-not-exist')
+  const missingDaemonCwd = join(tmpdir(), 'mcode-daemon-cwd-that-does-not-exist')
   const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue(missingDaemonCwd)
   const chdirSpy = vi.spyOn(process, 'chdir').mockImplementation(() => {})
   return {
@@ -88,7 +88,7 @@ export type PtySubprocessSpawnMocks = {
 export function useDaemonPtySubprocessEnv(mocks: PtySubprocessSpawnMocks): {
   userDataPath: string
 } {
-  const savedWrapperEnv: Partial<Record<(typeof ORCA_SHELL_WRAPPER_ENV)[number], string>> = {}
+  const savedWrapperEnv: Partial<Record<(typeof MCODE_SHELL_WRAPPER_ENV)[number], string>> = {}
   const state = { userDataPath: '' }
   let previousUserDataPath: string | undefined
   let previousPowerlevelWizardDisable: string | undefined
@@ -104,12 +104,12 @@ export function useDaemonPtySubprocessEnv(mocks: PtySubprocessSpawnMocks): {
     mocks.resolveUnixShellPathMock.mockReset()
     mocks.resolveUnixShellPathMock.mockImplementation((shellPath: string) => shellPath)
     mocks.isPwshAvailableMock.mockReturnValue(false)
-    previousUserDataPath = process.env.ORCA_USER_DATA_PATH
+    previousUserDataPath = process.env.MCODE_USER_DATA_PATH
     previousPowerlevelWizardDisable = process.env[POWERLEVEL10K_WIZARD_DISABLE_ENV]
     state.userDataPath = mkdtempSync(join(tmpdir(), 'daemon-pty-subprocess-test-'))
-    process.env.ORCA_USER_DATA_PATH = state.userDataPath
+    process.env.MCODE_USER_DATA_PATH = state.userDataPath
     delete process.env[POWERLEVEL10K_WIZARD_DISABLE_ENV]
-    for (const key of ORCA_SHELL_WRAPPER_ENV) {
+    for (const key of MCODE_SHELL_WRAPPER_ENV) {
       savedWrapperEnv[key] = process.env[key]
       delete process.env[key]
     }
@@ -117,9 +117,9 @@ export function useDaemonPtySubprocessEnv(mocks: PtySubprocessSpawnMocks): {
 
   afterEach(() => {
     if (previousUserDataPath === undefined) {
-      delete process.env.ORCA_USER_DATA_PATH
+      delete process.env.MCODE_USER_DATA_PATH
     } else {
-      process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+      process.env.MCODE_USER_DATA_PATH = previousUserDataPath
     }
     if (previousPowerlevelWizardDisable === undefined) {
       delete process.env[POWERLEVEL10K_WIZARD_DISABLE_ENV]
@@ -127,7 +127,7 @@ export function useDaemonPtySubprocessEnv(mocks: PtySubprocessSpawnMocks): {
       process.env[POWERLEVEL10K_WIZARD_DISABLE_ENV] = previousPowerlevelWizardDisable
     }
     rmSync(state.userDataPath, { recursive: true, force: true })
-    for (const key of ORCA_SHELL_WRAPPER_ENV) {
+    for (const key of MCODE_SHELL_WRAPPER_ENV) {
       if (savedWrapperEnv[key] === undefined) {
         delete process.env[key]
       } else {

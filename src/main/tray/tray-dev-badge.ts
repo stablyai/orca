@@ -1,12 +1,12 @@
 import { nativeImage, type NativeImage } from 'electron'
 
 // Why: a 5px-tall pixel-caps "DEV" is the smallest text that stays legible in
-// the 14pt menu-bar template; it fills the empty area left of the orca glyph
+// the 14pt menu-bar template; it fills the empty area left of the mcode glyph
 // so the status item keeps the exact production footprint.
 const DEV_BADGE_ROWS = ['##..###.#.#', '#.#.#...#.#', '#.#.##..#.#', '#.#.#...#.#', '##..###..#.']
 const BADGE_OFFSET_X = 0
 const BADGE_OFFSET_Y = 3
-// Why: the orca tail's antialiased pixels touch the V's right stroke and make
+// Why: the mcode tail's antialiased pixels touch the V's right stroke and make
 // "DEV" read as "DEU"; clearing a margin around the badge keeps it legible.
 const BADGE_CLEAR_MARGIN = 1
 

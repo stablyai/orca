@@ -9,20 +9,20 @@ describe('automation source display', () => {
       kind: 'task-source',
       provider: 'github',
       hostId: 'ssh:devbox',
-      projectId: 'github:stablyai/orca',
+      projectId: 'github:mcode-ide/mcode',
       projectHostSetupId: 'setup-devbox',
       repoId: 'repo-devbox',
       accountLabel: 'dev@example.com',
       providerIdentity: {
         provider: 'github',
         owner: 'stablyai',
-        repo: 'orca'
+        repo: 'mcode'
       }
     }
 
     expect(getAutomationSourceDisplay(sourceContext)).toEqual({
-      label: 'GitHub · devbox · stablyai/orca',
-      title: 'GitHub source · Host: devbox · Account: dev@example.com · Source: stablyai/orca'
+      label: 'GitHub · devbox · mcode-ide/mcode',
+      title: 'GitHub source · Host: devbox · Account: dev@example.com · Source: mcode-ide/mcode'
     })
   })
 
@@ -55,13 +55,13 @@ describe('automation source display', () => {
       kind: 'task-source',
       provider: 'github',
       hostId: 'runtime:03ef704c-b180-4b10-998d-e28fbd5de9a3',
-      projectId: 'github:stablyai/orca',
+      projectId: 'github:mcode-ide/mcode',
       projectHostSetupId: 'setup-runtime',
       repoId: 'repo-runtime',
       providerIdentity: {
         provider: 'github',
         owner: 'stablyai',
-        repo: 'orca'
+        repo: 'mcode'
       }
     }
 
@@ -71,8 +71,8 @@ describe('automation source display', () => {
         new Map([['runtime:03ef704c-b180-4b10-998d-e28fbd5de9a3', 'dev box']])
       )
     ).toEqual({
-      label: 'GitHub · dev box · stablyai/orca',
-      title: 'GitHub source · Host: dev box · Source: stablyai/orca'
+      label: 'GitHub · dev box · mcode-ide/mcode',
+      title: 'GitHub source · Host: dev box · Source: mcode-ide/mcode'
     })
   })
 

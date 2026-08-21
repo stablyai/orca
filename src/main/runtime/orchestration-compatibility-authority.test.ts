@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../agent-hooks/server'
-import { OrcaRuntimeService } from './orca-runtime'
+import { MCodeRuntimeService } from './mcode-runtime'
 
 const PANE_KEY = '11111111-1111-4111-8111-111111111111:22222222-2222-4222-8222-222222222222'
 const TOKEN = 'launch-secret'
@@ -19,7 +19,7 @@ function createRuntime(
     | { kind: 'ssh'; targetId: string },
   launchTokenHash: string | null = TOKEN_HASH
 ) {
-  const runtime = new OrcaRuntimeService(null, undefined, {
+  const runtime = new MCodeRuntimeService(null, undefined, {
     attestAgentHookCompatibilityAuthority: ({ paneKey, launchTokenHash, connectionId }) =>
       paneKey === PANE_KEY &&
       launchTokenHash === TOKEN_HASH &&
@@ -136,7 +136,7 @@ describe('orchestration compatibility runtime authority', () => {
 
   it('uses the hydrated hook commitment for a restored exact PTY', () => {
     const restored = createRuntime({ kind: 'local', hostId: 'local' }, null)
-    const uncommitted = new OrcaRuntimeService()
+    const uncommitted = new MCodeRuntimeService()
     ;(uncommitted as unknown as TerminalAuthorityResolver).getOrchestrationDispatchAuthority =
       () => ({
         runtimeId: 'runtime-1',
@@ -259,8 +259,8 @@ describe('orchestration compatibility runtime authority', () => {
       },
       'saved-target'
     )
-    const createIntegratedRuntime = (launchTokenHash: string | null): OrcaRuntimeService => {
-      const runtime = new OrcaRuntimeService(null, undefined, {
+    const createIntegratedRuntime = (launchTokenHash: string | null): MCodeRuntimeService => {
+      const runtime = new MCodeRuntimeService(null, undefined, {
         attestAgentHookCompatibilityAuthority: (candidate) =>
           server.attestCompatibilityAuthority(candidate)
       })
@@ -290,7 +290,7 @@ describe('orchestration compatibility runtime authority', () => {
       }
       return runtime
     }
-    const evidenceFor = (runtime: OrcaRuntimeService, launchToken = TOKEN) => ({
+    const evidenceFor = (runtime: MCodeRuntimeService, launchToken = TOKEN) => ({
       terminalHandle: 'term-1',
       paneKey: PANE_KEY,
       launchToken,

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createSshBackgroundStartupDelivery } from './ssh-background-startup-delivery'
 
-const SHELL_READY = '\x1b]777;orca-shell-ready\x07'
+const SHELL_READY = '\x1b]777;mcode-shell-ready\x07'
 
 function createDelivery(): {
   delivery: ReturnType<typeof createSshBackgroundStartupDelivery>

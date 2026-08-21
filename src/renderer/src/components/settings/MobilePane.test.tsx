@@ -22,7 +22,7 @@ type PairedDevicesProps = {
 }
 
 type StoreState = {
-  orcaProfileAuthStatus: { state: 'connected' | 'local' }
+  mcodeProfileAuthStatus: { state: 'connected' | 'local' }
   settingsSearchQuery: string
   settings: {
     mobileAutoRestoreFitMs: number | null
@@ -175,7 +175,7 @@ describe('MobilePane pairing connection mode', () => {
     getPairingQR.mockReset().mockResolvedValue({
       available: true,
       qrDataUrl: 'data:image/png;base64,qr',
-      pairingUrl: 'orca://pair',
+      pairingUrl: 'mcode://pair',
       endpoint: 'ws://host',
       connectionMode: 'automatic'
     })
@@ -184,7 +184,7 @@ describe('MobilePane pairing connection mode', () => {
     mocks.revokeDevice.mockReset().mockResolvedValue({ revoked: true })
     updateSettings.mockReset().mockResolvedValue(undefined)
     mocks.holder.state = {
-      orcaProfileAuthStatus: { state: 'connected' },
+      mcodeProfileAuthStatus: { state: 'connected' },
       settingsSearchQuery: '',
       settings: { mobileAutoRestoreFitMs: null },
       updateSettings,
@@ -221,7 +221,7 @@ describe('MobilePane pairing connection mode', () => {
   })
 
   it('keeps Anywhere selected but blocks generation when signed out', async () => {
-    mocks.holder.state.orcaProfileAuthStatus = { state: 'local' }
+    mocks.holder.state.mcodeProfileAuthStatus = { state: 'local' }
     const user = userEvent.setup()
     render(<MobilePane />)
     expect(screen.getByTestId('mode')).toHaveTextContent('automatic')
@@ -260,7 +260,7 @@ describe('MobilePane pairing connection mode', () => {
     getPairingQR.mockResolvedValue({
       available: true,
       qrDataUrl: 'data:image/png;base64,local',
-      pairingUrl: 'orca://pair#local',
+      pairingUrl: 'mcode://pair#local',
       endpoint: 'ws://host',
       connectionMode: 'local-only'
     })
@@ -285,7 +285,7 @@ describe('MobilePane pairing connection mode', () => {
       available: true,
       qrDataUrl: null,
       qrError: 'encoding_failed',
-      pairingUrl: 'orca://pair?code=copy-fallback',
+      pairingUrl: 'mcode://pair?code=copy-fallback',
       endpoint: 'wss://host.example/large',
       connectionMode: 'automatic'
     })
@@ -340,7 +340,7 @@ describe('MobilePane pairing connection mode', () => {
     resolveRetry?.({
       available: true,
       qrDataUrl: 'data:image/png;base64,relay',
-      pairingUrl: 'orca://relay',
+      pairingUrl: 'mcode://relay',
       endpoint: 'ws://relay',
       connectionMode: 'automatic'
     })
@@ -377,7 +377,7 @@ describe('MobilePane pairing connection mode', () => {
     getPairingQR.mockResolvedValueOnce({
       available: true,
       qrDataUrl: 'data:image/png;base64,local',
-      pairingUrl: 'orca://local',
+      pairingUrl: 'mcode://local',
       endpoint: 'ws://10.0.0.2',
       connectionMode: 'local-only'
     })
@@ -395,7 +395,7 @@ describe('MobilePane pairing connection mode', () => {
       resolveRetry?.({
         available: true,
         qrDataUrl: 'data:image/png;base64,stale-relay',
-        pairingUrl: 'orca://stale-relay',
+        pairingUrl: 'mcode://stale-relay',
         endpoint: 'ws://relay',
         connectionMode: 'automatic'
       })
@@ -627,7 +627,7 @@ describe('MobilePane pairing connection mode', () => {
     await waitFor(() => expect(getPairingQR).toHaveBeenCalledWith({ connectionMode: 'automatic' }))
 
     // Sign out while the Relay mint is still in flight.
-    mocks.holder.state.orcaProfileAuthStatus = { state: 'local' }
+    mocks.holder.state.mcodeProfileAuthStatus = { state: 'local' }
     rerender(<MobilePane />)
 
     // The superseded response arrives; it must not paint a QR on a desktop that
@@ -635,7 +635,7 @@ describe('MobilePane pairing connection mode', () => {
     resolveQr?.({
       available: true,
       qrDataUrl: 'data:image/png;base64,relay',
-      pairingUrl: 'orca://relay',
+      pairingUrl: 'mcode://relay',
       endpoint: 'ws://relay'
     })
     await new Promise((resolve) => setTimeout(resolve, 10))
@@ -659,7 +659,7 @@ describe('MobilePane pairing connection mode', () => {
 
     // Sign out while the Relay mint is still in flight; the superseded request
     // must drop loading so Generate isn't wedged disabled forever.
-    mocks.holder.state.orcaProfileAuthStatus = { state: 'local' }
+    mocks.holder.state.mcodeProfileAuthStatus = { state: 'local' }
     rerender(<MobilePane />)
     await waitFor(() => expect(screen.getByTestId('loading')).toHaveTextContent('false'))
 
@@ -667,7 +667,7 @@ describe('MobilePane pairing connection mode', () => {
     resolveQr?.({
       available: true,
       qrDataUrl: 'data:image/png;base64,relay',
-      pairingUrl: 'orca://relay',
+      pairingUrl: 'mcode://relay',
       endpoint: 'ws://relay'
     })
     await new Promise((resolve) => setTimeout(resolve, 10))
@@ -728,7 +728,7 @@ describe('MobilePane pairing connection mode', () => {
     getPairingQR.mockResolvedValue({
       available: true,
       qrDataUrl: 'data:image/png;base64,local',
-      pairingUrl: 'orca://pair#local',
+      pairingUrl: 'mcode://pair#local',
       endpoint: 'ws://host',
       connectionMode: 'local-only'
     })
@@ -737,13 +737,13 @@ describe('MobilePane pairing connection mode', () => {
     resolveQr?.({
       available: true,
       qrDataUrl: 'data:image/png;base64,relay',
-      pairingUrl: 'orca://relay',
+      pairingUrl: 'mcode://relay',
       endpoint: 'ws://relay',
       connectionMode: 'automatic'
     })
     await waitFor(() => expect(screen.getByTestId('mode')).toHaveTextContent('local-only'))
     await waitFor(() =>
-      expect(screen.getByTestId('pairing-url')).not.toHaveTextContent('orca://relay')
+      expect(screen.getByTestId('pairing-url')).not.toHaveTextContent('mcode://relay')
     )
   })
 })
@@ -785,7 +785,7 @@ describe('MobilePane', () => {
     mocks.getPairingQR.mockReset().mockResolvedValue({
       available: true,
       qrDataUrl: 'data:image/png;base64,qr',
-      pairingUrl: 'orca://pair',
+      pairingUrl: 'mcode://pair',
       endpoint: 'ws://host'
     })
     mocks.listDevices.mockReset()
@@ -793,7 +793,7 @@ describe('MobilePane', () => {
     mocks.revokeDevice.mockReset()
     mocks.updateSettings.mockReset().mockResolvedValue(undefined)
     mocks.holder.state = {
-      orcaProfileAuthStatus: { state: 'connected' },
+      mcodeProfileAuthStatus: { state: 'connected' },
       settingsSearchQuery: '',
       settings: { mobileAutoRestoreFitMs: null },
       updateSettings: mocks.updateSettings,

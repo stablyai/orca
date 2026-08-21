@@ -31,7 +31,7 @@ describe('install-electron-package-binary', () => {
 
       expect(result.status, result.stderr).toBe(0)
       expect(readFileSync(join(projectDir, 'electron-get.log'), 'utf8')).toMatch(
-        /cacheRoot=.*orca-electron-.*cache/
+        /cacheRoot=.*mcode-electron-.*cache/
       )
       expect(readFileSync(join(projectDir, 'node_modules', 'electron', 'path.txt'), 'utf8')).toBe(
         'electron'
@@ -105,7 +105,7 @@ describe('install-electron-package-binary', () => {
       writeFakeExtractor(projectDir, { createExecutable: true })
 
       const result = runInstallScript(projectDir, {
-        ORCA_ELECTRON_PACKAGE_RETRY_DELAYS_MS: '0,0'
+        MCODE_ELECTRON_PACKAGE_RETRY_DELAYS_MS: '0,0'
       })
 
       expect(result.status, result.stderr).toBe(0)
@@ -130,7 +130,7 @@ describe('install-electron-package-binary', () => {
       writeFakeExtractor(projectDir, { createExecutable: true })
 
       const result = runInstallScript(projectDir, {
-        ORCA_ELECTRON_PACKAGE_RETRY_DELAYS_MS: '0,0'
+        MCODE_ELECTRON_PACKAGE_RETRY_DELAYS_MS: '0,0'
       })
 
       expect(result.status, result.stderr).toBe(0)
@@ -157,7 +157,7 @@ describe('install-electron-package-binary', () => {
       writeFakeExtractor(projectDir, { createExecutable: true })
 
       const result = runInstallScript(projectDir, {
-        ORCA_ELECTRON_PACKAGE_RETRY_DELAYS_MS: '0,0'
+        MCODE_ELECTRON_PACKAGE_RETRY_DELAYS_MS: '0,0'
       })
 
       expect(result.status, result.stderr).toBe(0)
@@ -182,7 +182,7 @@ describe('install-electron-package-binary', () => {
       writeFakeExtractor(projectDir, { createExecutable: true })
 
       const result = runInstallScript(projectDir, {
-        ORCA_ELECTRON_PACKAGE_RETRY_DELAYS_MS: '0,0'
+        MCODE_ELECTRON_PACKAGE_RETRY_DELAYS_MS: '0,0'
       })
 
       expect(result.status).toBe(1)
@@ -203,12 +203,12 @@ describe('install-electron-package-binary', () => {
       writeFakeExtractor(projectDir, { createExecutable: true })
 
       const result = runInstallScript(projectDir, {
-        ORCA_ELECTRON_PACKAGE_RETRY_DELAYS_MS: '0,nope'
+        MCODE_ELECTRON_PACKAGE_RETRY_DELAYS_MS: '0,nope'
       })
 
       expect(result.status).toBe(1)
       expect(result.stderr).toContain(
-        'ORCA_ELECTRON_PACKAGE_RETRY_DELAYS_MS must contain non-negative integers'
+        'MCODE_ELECTRON_PACKAGE_RETRY_DELAYS_MS must contain non-negative integers'
       )
       expect(existsSync(join(projectDir, 'electron-get.log'))).toBe(false)
     } finally {
@@ -228,7 +228,7 @@ describe('install-electron-package-binary', () => {
       writeFakeExtractor(projectDir, { createExecutable: true })
 
       const result = runInstallScript(projectDir, {
-        ORCA_ELECTRON_PACKAGE_RETRY_DELAYS_MS: '0,0'
+        MCODE_ELECTRON_PACKAGE_RETRY_DELAYS_MS: '0,0'
       })
 
       expect(result.status).toBe(1)
@@ -283,7 +283,7 @@ describe('install-electron-package-binary', () => {
 })
 
 function mkTempProject() {
-  const projectDir = mkdtempSync(join(tmpdir(), 'orca-install-electron-'))
+  const projectDir = mkdtempSync(join(tmpdir(), 'mcode-install-electron-'))
   mkdirSync(join(projectDir, 'config', 'scripts'), { recursive: true })
   copyFileSync(
     sourceScriptPath,
@@ -300,7 +300,7 @@ function runInstallScript(projectDir, extraEnv = {}) {
       ...process.env,
       npm_config_platform: 'linux',
       npm_config_arch: 'x64',
-      ORCA_ELECTRON_PACKAGE_EXTRACTOR: join(projectDir, 'fake-extractor.cjs'),
+      MCODE_ELECTRON_PACKAGE_EXTRACTOR: join(projectDir, 'fake-extractor.cjs'),
       ...extraEnv
     }
   })

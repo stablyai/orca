@@ -14,13 +14,13 @@
 // Run with:  node config/scripts/hydrate-worktree-lookup-benchmark.mjs
 import { performance } from 'node:perf_hooks'
 
-const ITERATIONS = Number(process.env.ORCA_HYDRATE_BENCH_ITERATIONS ?? '60')
-const WARMUP = Number(process.env.ORCA_HYDRATE_BENCH_WARMUP ?? '10')
+const ITERATIONS = Number(process.env.MCODE_HYDRATE_BENCH_ITERATIONS ?? '60')
+const WARMUP = Number(process.env.MCODE_HYDRATE_BENCH_WARMUP ?? '10')
 const ROUNDS = 6
 
 for (const [name, value] of [
-  ['ORCA_HYDRATE_BENCH_ITERATIONS', ITERATIONS],
-  ['ORCA_HYDRATE_BENCH_WARMUP', WARMUP]
+  ['MCODE_HYDRATE_BENCH_ITERATIONS', ITERATIONS],
+  ['MCODE_HYDRATE_BENCH_WARMUP', WARMUP]
 ]) {
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer, received ${value}`)
@@ -141,7 +141,7 @@ console.log(
   `${pad('repos', 6)} ${pad('worktrees', 10)} ${pad('ids', 5)} ${pad('flatten', 11)} ${pad('indexed', 11)} ${pad('speedup', 9)}`
 )
 
-// Row shapes are synthetic, sized against a real orca-data.json on a heavy machine
+// Row shapes are synthetic, sized against a real mcode-data.json on a heavy machine
 // (10 repos / 423 worktrees / 188 pending reconnect). They are not that dataset: the
 // generator spreads worktrees evenly and injects one duplicate id, so treat the counts
 // as "about this scale", not a replay.

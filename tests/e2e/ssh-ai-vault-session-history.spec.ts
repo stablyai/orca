@@ -1,5 +1,5 @@
 import type { Page, TestInfo } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import {
   cleanupDockerSshRelayTarget,
   DOCKER_SSH_RELAY_REMOTE_REPO_PATH,
@@ -10,14 +10,14 @@ import { connectDockerRemote } from './ssh-codex-reconnect-replay-driver'
 import { dockerExec, dockerWriteFile } from './ssh-codex-repro-remote-fixtures'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
-const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
+const RUN_DOCKER_SSH = process.env.MCODE_E2E_SSH_DOCKER === '1'
 
 test.describe('SSH Agent Session History', () => {
-  test.skip(!RUN_DOCKER_SSH, 'Set ORCA_E2E_SSH_DOCKER=1 to run Docker-backed SSH tests.')
+  test.skip(!RUN_DOCKER_SSH, 'Set MCODE_E2E_SSH_DOCKER=1 to run Docker-backed SSH tests.')
   test.skip(process.platform === 'win32', 'Docker SSH tests use POSIX ssh tooling.')
 
   test('shows remote session history only for the SSH host and resumes Codex on that worktree', async ({
-    orcaPage
+    mcodePage
   }, testInfo: TestInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
@@ -40,12 +40,12 @@ test.describe('SSH Agent Session History', () => {
         claudeTitle
       })
 
-      await waitForSessionReady(orcaPage)
-      await waitForActiveWorktree(orcaPage)
-      const remote = await connectDockerRemote(orcaPage, target)
+      await waitForSessionReady(mcodePage)
+      await waitForActiveWorktree(mcodePage)
+      const remote = await connectDockerRemote(mcodePage, target)
       const sshScope = `ssh:${encodeURIComponent(remote.targetId)}`
 
-      const scan = await orcaPage.evaluate(
+      const scan = await mcodePage.evaluate(
         async ({ sshScope, defaultTitle, runtimeTitle, claudeTitle }) => {
           const local = await window.api.aiVault.listSessions({
             executionHostScope: 'local',
@@ -85,39 +85,39 @@ test.describe('SSH Agent Session History', () => {
       expect(new Set(scan.remoteHostIds)).toEqual(new Set([sshScope]))
       expect(scan.remoteCommands.join('\n')).toContain("CODEX_HOME='/root/.codex'")
       expect(scan.remoteCommands.join('\n')).toContain(
-        "CODEX_HOME='/root/.local/share/orca/codex-runtime-home/home'"
+        "CODEX_HOME='/root/.local/share/mcode/codex-runtime-home/home'"
       )
 
-      const defaultSessionTitle = orcaPage.getByText(defaultTitle, { exact: true })
-      const runtimeSessionTitle = orcaPage.getByText(runtimeTitle, { exact: true })
+      const defaultSessionTitle = mcodePage.getByText(defaultTitle, { exact: true })
+      const runtimeSessionTitle = mcodePage.getByText(runtimeTitle, { exact: true })
 
-      await openAiVaultSidebar(orcaPage)
+      await openAiVaultSidebar(mcodePage)
       await expect(defaultSessionTitle.first()).toBeVisible({ timeout: 30_000 })
 
-      const hostButton = orcaPage.getByRole('button', { name: /Session History host:/ })
+      const hostButton = mcodePage.getByRole('button', { name: /Session History host:/ })
       await hostButton.click()
-      await orcaPage.getByRole('menuitemradio', { name: /Local/ }).click()
+      await mcodePage.getByRole('menuitemradio', { name: /Local/ }).click()
       await expect(defaultSessionTitle).toHaveCount(0, { timeout: 30_000 })
 
       await hostButton.click()
-      await orcaPage.getByRole('menuitemradio', { name: 'All hosts' }).click()
+      await mcodePage.getByRole('menuitemradio', { name: 'All hosts' }).click()
       await expect(runtimeSessionTitle.first()).toBeVisible({ timeout: 30_000 })
 
       await hostButton.click()
-      await orcaPage
+      await mcodePage
         .getByRole('menuitemradio')
         .filter({ hasNotText: /Local|All hosts/ })
         .click()
       await expect(defaultSessionTitle.first()).toBeVisible({ timeout: 30_000 })
 
-      await installStartupQueueProbe(orcaPage)
+      await installStartupQueueProbe(mcodePage)
       await defaultSessionTitle.first().click()
-      await orcaPage.getByText('Resume in Worktree', { exact: true }).click()
+      await mcodePage.getByText('Resume in Worktree', { exact: true }).click()
 
       await expect
-        .poll(() => readLastQueuedStartupCommand(orcaPage), { timeout: 30_000 })
+        .poll(() => readLastQueuedStartupCommand(mcodePage), { timeout: 30_000 })
         .toContain(`CODEX_HOME='/root/.codex' codex resume '${defaultSessionId}'`)
-      const queuedWorktreeId = await readLastQueuedStartupWorktreeId(orcaPage)
+      const queuedWorktreeId = await readLastQueuedStartupWorktreeId(mcodePage)
       expect(queuedWorktreeId).toBe(remote.worktreeId)
     } finally {
       cleanupDockerSshRelayTarget(target)
@@ -140,8 +140,8 @@ function seedRemoteAiVaultHistory(
     target,
     [
       'mkdir -p /root/.codex/sessions/2026/07/04',
-      'mkdir -p /root/.local/share/orca/codex-runtime-home/home/sessions/2026/07/04',
-      'mkdir -p /root/.claude/projects/orca'
+      'mkdir -p /root/.local/share/mcode/codex-runtime-home/home/sessions/2026/07/04',
+      'mkdir -p /root/.claude/projects/mcode'
     ].join(' && ')
   )
   dockerWriteFile(
@@ -163,7 +163,7 @@ function seedRemoteAiVaultHistory(
   )
   dockerWriteFile(
     target,
-    `/root/.local/share/orca/codex-runtime-home/home/sessions/2026/07/04/${args.runtimeSessionId}.jsonl`,
+    `/root/.local/share/mcode/codex-runtime-home/home/sessions/2026/07/04/${args.runtimeSessionId}.jsonl`,
     codexTranscript({
       sessionId: args.runtimeSessionId,
       title: args.runtimeTitle,
@@ -174,7 +174,7 @@ function seedRemoteAiVaultHistory(
   )
   dockerWriteFile(
     target,
-    `/root/.claude/projects/orca/${args.claudeSessionId}.jsonl`,
+    `/root/.claude/projects/mcode/${args.claudeSessionId}.jsonl`,
     claudeTranscript({
       sessionId: args.claudeSessionId,
       title: args.claudeTitle,

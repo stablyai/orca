@@ -20,7 +20,7 @@ function repo(overrides: Partial<Repo> = {}): Repo {
   return {
     id: 'repo-1',
     path: '/repo',
-    displayName: 'orca',
+    displayName: 'mcode',
     badgeColor: '#000000',
     addedAt: 0,
     externalWorktreeVisibility: undefined,

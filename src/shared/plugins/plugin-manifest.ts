@@ -20,11 +20,11 @@ import {
 import { validatePluginManifestContributions } from './plugin-manifest-contribution-validation'
 
 /**
- * Plugin manifest v1 (`orca-plugin.json` at the plugin root). The
+ * Plugin manifest v1 (`mcode-plugin.json` at the plugin root). The
  * `contributes` key names deliberately mirror common Electron-ecosystem
  * manifest conventions so future adapters stay cheap.
  *
- * Lives in `shared` so the desktop app, the headless `orca serve` runtime,
+ * Lives in `shared` so the desktop app, the headless `mcode serve` runtime,
  * the relay, and the CLI validate manifests identically (SSH/remote parity).
  *
  * Everything here is EXPERIMENTAL: no compatibility promises until pluginApi
@@ -38,7 +38,7 @@ export const PLUGIN_COMMAND_LIMIT = 256
 
 // Why: v0 supports only the ">=x.y.z" form. A closed grammar keeps the gate
 // predictable; richer ranges can be added without breaking old manifests.
-const orcaEngineRangeSchema = z
+const mcodeEngineRangeSchema = z
   .string()
   .max(64)
   .regex(/^>=\d+\.\d+\.\d+$/, 'must be a ">=x.y.z" version range')
@@ -91,7 +91,7 @@ export const pluginManifestSchema = z
     repository: z.string().max(2048).optional(),
     icon: pluginRelativePathSchema.optional(),
     /** Minimum host version gate; the host refuses to load below it. */
-    engines: z.object({ orca: orcaEngineRangeSchema }),
+    engines: z.object({ mcode: mcodeEngineRangeSchema }),
     /** Host-API major version this plugin targets. */
     pluginApi: z.literal(1),
     /** Node entry executed inside the out-of-process plugin worker. */
@@ -143,7 +143,7 @@ export {
   pluginCommandIdSchema
 } from './plugin-manifest-fields'
 
-export const PLUGIN_MANIFEST_FILENAME = 'orca-plugin.json'
+export const PLUGIN_MANIFEST_FILENAME = 'mcode-plugin.json'
 
 /** Canonical install identity: `<publisher>.<id>` (also the install dir name). */
 export function qualifiedPluginKey(manifest: Pick<PluginManifest, 'publisher' | 'id'>): string {
@@ -174,7 +174,7 @@ export function parsePluginManifest(raw: unknown): PluginManifestParseResult {
 
 /** v0 engines gate: supports the ">=x.y.z" grammar the schema enforces.
  *  Prerelease/build suffixes on the host version are ignored for ordering. */
-export function satisfiesOrcaEngineRange(hostVersion: string, range: string): boolean {
+export function satisfiesMCodeEngineRange(hostVersion: string, range: string): boolean {
   const minimum = range.slice(2)
   const parse = (value: string): number[] =>
     value

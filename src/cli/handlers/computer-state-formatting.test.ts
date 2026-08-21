@@ -6,7 +6,7 @@ vi.mock('../runtime-client', () => {
   class RuntimeClient {
     call = callMock
     getCliStatus = vi.fn()
-    openOrca = vi.fn()
+    openMCode = vi.fn()
   }
 
   class RuntimeClientError extends Error {
@@ -37,7 +37,7 @@ vi.mock('../runtime-client', () => {
 import { main } from '../index'
 import { okFixture, queueFixtures } from '../test-fixtures'
 
-describe('orca computer get-app-state formatting', () => {
+describe('mcode computer get-app-state formatting', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     callMock.mockReset()
@@ -74,7 +74,7 @@ describe('orca computer get-app-state formatting', () => {
       expiresAt: expect.any(String)
     })
     expect(String(parsed.result.screenshot.path).replaceAll('\\', '/')).toContain(
-      'orca-computer-use/req_state-screenshot.png'
+      'mcode-computer-use/req_state-screenshot.png'
     )
   })
 

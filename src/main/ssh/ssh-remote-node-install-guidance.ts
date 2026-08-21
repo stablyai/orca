@@ -56,7 +56,7 @@ function formatNodeInstallHints(detectedBin: string | null): string {
     ? NODE_PACKAGE_MANAGER_HINTS.find((hint) => hint.bin === detectedBin)
     : null
   const lines = [
-    'Node.js not found on remote host. Orca relay requires Node.js 18+ and npm.',
+    'Node.js not found on remote host. MCode relay requires Node.js 18+ and npm.',
     '',
     'Install Node.js 18+ with npm on the remote host, then reconnect:'
   ]

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Provisions the credentials hourly-mac-build.yml uses to publish into
-# stablyai/orca-hourly. GITHUB_TOKEN cannot be used: it is scoped to the repo
+# mcode-ide/mcode-hourly. GITHUB_TOKEN cannot be used: it is scoped to the repo
 # running the workflow, and hourly artifacts are published to a different one.
 #
 # A GitHub App is used rather than a PAT because its private key does not expire
@@ -10,7 +10,7 @@
 #
 # The same App also serves adhoc-mac-build.yml and daily-mac-build.yml, which
 # read these same two secrets: one credential, one rotation, all dev channels.
-# Widening it to cover stablyai/orca-adhoc / orca-daily is
+# Widening it to cover mcode-ide/mcode-adhoc / mcode-daily is
 # setup-adhoc-release-repo.sh / setup-daily-release-repo.sh's job.
 #
 # The key is read from a file and piped straight into `gh secret set`. It is never
@@ -29,8 +29,8 @@ if [[ -o xtrace ]]; then
 fi
 set +x
 
-MAIN_REPO="stablyai/orca"
-HOURLY_REPO="stablyai/orca-hourly"
+MAIN_REPO="mcode-ide/mcode"
+HOURLY_REPO="mcode-ide/mcode-hourly"
 APP_ID_SECRET="HOURLY_RELEASE_APP_ID"
 APP_KEY_SECRET="HOURLY_RELEASE_APP_PRIVATE_KEY"
 
@@ -54,7 +54,7 @@ cat <<EOF
 Create a GitHub App (one time — the key never expires)
 ──────────────────────────────────────────────────────
   1. Open:  https://github.com/organizations/stablyai/settings/apps/new
-  2. Name ..................  orca-hourly-release
+  2. Name ..................  mcode-hourly-release
      Homepage URL ..........  https://github.com/$HOURLY_REPO
      Webhook ...............  UNCHECK "Active"
   3. Repository permissions  ->  Contents: Read and write

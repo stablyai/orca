@@ -63,7 +63,7 @@ function bootDaemon(tag, dir, socketPath) {
     ],
     {
       stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
-      env: { ...process.env, ORCA_USER_DATA_PATH: dir }
+      env: { ...process.env, MCODE_USER_DATA_PATH: dir }
     }
   )
   let stderr = ''
@@ -174,7 +174,7 @@ async function main() {
     throw new Error(`missing ${entryPath} — run \`pnpm build\` first`)
   }
 
-  const dir = mkdtempSync(join(tmpdir(), 'orca-endpoint-handover-'))
+  const dir = mkdtempSync(join(tmpdir(), 'mcode-endpoint-handover-'))
   const socketPath = join(dir, 'daemon.sock')
   const protocolVersion = readProtocolVersion()
   const daemons = []

@@ -1,7 +1,7 @@
 /**
  * Boot-time hydration of `pty-registry` from the live daemon.
  *
- * Why: on warm reattach (fresh Orca process, still-running daemon) the renderer
+ * Why: on warm reattach (fresh MCode process, still-running daemon) the renderer
  * hasn't re-mounted every pane, so `pty:spawn` never fired for those sessions
  * and they surfaced as "REMOTE" despite being local. Fill the gap once at boot,
  * registering only sessions whose repo has no `connectionId` — mirroring the

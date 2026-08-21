@@ -83,7 +83,7 @@ describe('SkillUpdateStatusSegment', () => {
     await render()
     await emitRun({
       state: 'running',
-      names: ['orca-cli', 'orchestration'],
+      names: ['mcode-cli', 'orchestration'],
       startedAt: 1,
       output: ''
     })
@@ -95,7 +95,7 @@ describe('SkillUpdateStatusSegment', () => {
 
   it('shows a green check on success, then retires itself', async () => {
     await render()
-    await emitRun({ state: 'success', names: ['orca-cli'], finishedAt: 2, output: '' })
+    await emitRun({ state: 'success', names: ['mcode-cli'], finishedAt: 2, output: '' })
 
     expect(container?.textContent).toContain('Skills updated')
     expect(container?.querySelector('.text-emerald-500')).not.toBeNull()
@@ -114,8 +114,8 @@ describe('SkillUpdateStatusSegment', () => {
     await render()
     await emitRun({
       state: 'error',
-      names: ['orca-cli'],
-      failedNames: ['orca-cli'],
+      names: ['mcode-cli'],
+      failedNames: ['mcode-cli'],
       finishedAt: 3,
       output: '',
       message: 'exited with code 1'
@@ -130,7 +130,7 @@ describe('SkillUpdateStatusSegment', () => {
 
   it('reopens the update dialog when clicked', async () => {
     await render()
-    await emitRun({ state: 'running', names: ['orca-cli'], startedAt: 1, output: '' })
+    await emitRun({ state: 'running', names: ['mcode-cli'], startedAt: 1, output: '' })
     await act(async () => {
       container?.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })

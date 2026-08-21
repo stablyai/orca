@@ -1,5 +1,5 @@
 const SHARE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
-const PRODUCTION_HOSTS = new Set(['app.orca.dev', 'share.onorca.dev'])
+const PRODUCTION_HOSTS = new Set(['app.mcode.dev', 'share.mcode.dev'])
 
 export function parseSkillShareId(value: string): string | null {
   const trimmed = value.trim()
@@ -12,7 +12,7 @@ export function parseSkillShareId(value: string): string | null {
   } catch {
     return null
   }
-  if (url.protocol === 'orca:') {
+  if (url.protocol === 'mcode:') {
     const match = `${url.host}${url.pathname}`.match(/^skills\/share\/([A-Za-z0-9_-]{1,128})\/?$/)
     return match?.[1] ?? null
   }
@@ -30,7 +30,7 @@ export function parseSkillShareId(value: string): string | null {
 export function skillShareIdFromArguments(argv: readonly string[]): string | null {
   for (const value of argv) {
     const id = parseSkillShareId(value)
-    if (id && (value.includes('/skills/share/') || value.startsWith('orca:'))) {
+    if (id && (value.includes('/skills/share/') || value.startsWith('mcode:'))) {
       return id
     }
   }

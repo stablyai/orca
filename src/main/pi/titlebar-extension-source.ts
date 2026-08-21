@@ -1,4 +1,4 @@
-export const ORCA_PI_EXTENSION_FILE = 'orca-titlebar-spinner.ts'
+export const MCODE_PI_EXTENSION_FILE = 'mcode-titlebar-spinner.ts'
 
 export function getPiTitlebarExtensionSource(): string {
   return [
@@ -22,7 +22,7 @@ export function getPiTitlebarExtensionSource(): string {
     '}',
     '',
     'export default function (pi) {',
-    '  if (!process.env.ORCA_PANE_KEY) return',
+    '  if (!process.env.MCODE_PANE_KEY) return',
     '  let timer = null',
     '  let frameIndex = 0',
     '',

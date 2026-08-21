@@ -61,7 +61,7 @@ export type GitHubWorkItem = {
 }
 
 export type GitHubWorkItemDetails = {
-  // Why: main-process doesn't know Orca's Repo.id, so this inner item omits
+  // Why: main-process doesn't know MCode's Repo.id, so this inner item omits
   // repoId. The renderer stamps it when routing the details through the store.
   item: Omit<GitHubWorkItem, 'repoId'>
   body: string

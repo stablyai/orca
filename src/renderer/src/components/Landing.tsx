@@ -24,7 +24,7 @@ type ShortcutItem = {
 }
 
 // Do not deep-link to /stargazers: GitHub 404s that page for users without repo write access.
-const ORCA_GITHUB_URL = 'https://github.com/stablyai/orca'
+const MCODE_GITHUB_URL = 'https://github.com/mcode-ide/mcode'
 
 type StarState = 'loading' | 'starred' | 'not-starred' | 'web-fallback' | 'hidden'
 
@@ -36,7 +36,7 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
 
   useEffect(() => {
     let cancelled = false
-    void window.api.gh.checkOrcaStarred().then((result) => {
+    void window.api.gh.checkMCodeStarred().then((result) => {
       if (cancelled) {
         return
       }
@@ -70,14 +70,14 @@ function GitHubStarButton({ hasRepos }: { hasRepos: boolean }): React.JSX.Elemen
       return
     }
     if (state === 'web-fallback') {
-      await window.api.shell.openUrl(ORCA_GITHUB_URL)
+      await window.api.shell.openUrl(MCODE_GITHUB_URL)
       return
     }
     if (state !== 'not-starred') {
       return
     }
     setState('starred') // optimistic
-    const ok = await window.api.gh.starOrca('landing')
+    const ok = await window.api.gh.starMCode('landing')
     if (!ok) {
       if (mountedRef.current) {
         setState('web-fallback')
@@ -263,12 +263,12 @@ export default function Landing(): React.JSX.Element {
           >
             <img
               src={logo}
-              alt={translate('auto.components.Landing.520304a067', 'Orca logo')}
+              alt={translate('auto.components.Landing.520304a067', 'MCode logo')}
               className="size-12"
             />
           </div>
           <h1 className="text-4xl font-bold text-foreground tracking-tight">
-            {translate('auto.components.Landing.6ca6ff404e', 'ORCA')}
+            {translate('auto.components.Landing.6ca6ff404e', 'MCODE')}
           </h1>
 
           {preflightIssues.length > 0 && <PreflightBanner issues={preflightIssues} repos={repos} />}

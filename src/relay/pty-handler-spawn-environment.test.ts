@@ -67,7 +67,7 @@ describe('PtyHandler', () => {
     await endPtyHandlerTest(handler, originalPlatform)
   })
 
-  it("does not forward Orca's own NODE_ENV into the spawned shell", async () => {
+  it("does not forward MCode's own NODE_ENV into the spawned shell", async () => {
     // Why: NODE_ENV in the relay host process is a build-mode flag, not the
     // user's; leaking it breaks `next build` and Vitest in the terminal.
     const previous = process.env.NODE_ENV
@@ -90,11 +90,11 @@ describe('PtyHandler', () => {
   })
 
   it('does not inherit legacy attribution state from the relay process', async () => {
-    const keys = ['ORCA_ENABLE_GIT_ATTRIBUTION', 'ORCA_ATTRIBUTION_SHIM_DIR', 'PATH'] as const
+    const keys = ['MCODE_ENABLE_GIT_ATTRIBUTION', 'MCODE_ATTRIBUTION_SHIM_DIR', 'PATH'] as const
     const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
-    process.env.ORCA_ENABLE_GIT_ATTRIBUTION = '1'
-    process.env.ORCA_ATTRIBUTION_SHIM_DIR = '/tmp/orca-terminal-attribution/posix'
-    process.env.PATH = '/tmp/orca-terminal-attribution/posix:/usr/bin'
+    process.env.MCODE_ENABLE_GIT_ATTRIBUTION = '1'
+    process.env.MCODE_ATTRIBUTION_SHIM_DIR = '/tmp/mcode-terminal-attribution/posix'
+    process.env.PATH = '/tmp/mcode-terminal-attribution/posix:/usr/bin'
 
     try {
       await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
@@ -102,8 +102,8 @@ describe('PtyHandler', () => {
         env: Record<string, string>
       }
       expect(spawnedEnv.env.PATH).toBe('/usr/bin')
-      expect(spawnedEnv.env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
-      expect(spawnedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+      expect(spawnedEnv.env.MCODE_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
+      expect(spawnedEnv.env.MCODE_ATTRIBUTION_SHIM_DIR).toBeUndefined()
 
       const state = (await dispatcher.callRequest('pty.serialize', {
         ids: ['pty-1']
@@ -123,8 +123,8 @@ describe('PtyHandler', () => {
         env: Record<string, string>
       }
       expect(revivedEnv.env.PATH).toBe('/usr/bin')
-      expect(revivedEnv.env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
-      expect(revivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+      expect(revivedEnv.env.MCODE_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
+      expect(revivedEnv.env.MCODE_ATTRIBUTION_SHIM_DIR).toBeUndefined()
     } finally {
       for (const [key, value] of Object.entries(saved)) {
         if (value === undefined) {
@@ -160,7 +160,7 @@ describe('PtyHandler', () => {
 
   describe('history isolation off', () => {
     // Why isolation OFF: injectRelayFishHistoryEnv runs only for a fish pane with
-    // isolation on, but fish EXPORTS fish_history, so a relay launched from an Orca
+    // isolation on, but fish EXPORTS fish_history, so a relay launched from an MCode
     // fish pane inherits one on EVERY path — and it names someone else's worktree
     // (a desktop-minted name names a directory that does not exist here at all).
     it.each([
@@ -191,7 +191,7 @@ describe('PtyHandler', () => {
     it.each([
       [
         'a relay-minted path',
-        `${process.env.HOME ?? ''}/.orca-remote/terminal-history/aabbccddeeff0011-zsh_history`,
+        `${process.env.HOME ?? ''}/.mcode-remote/terminal-history/aabbccddeeff0011-zsh_history`,
         undefined
       ],
       [
@@ -221,47 +221,47 @@ describe('PtyHandler', () => {
     )
 
     // Why unconditionally, not only with isolation on: injectRelayHistoryEnv is
-    // what normally mints (and first clears) ORCA_HISTFILE, and it runs only
+    // what normally mints (and first clears) MCODE_HISTFILE, and it runs only
     // with isolation on. An inherited one — the relay can be launched from an
-    // Orca pane — would otherwise reach the remote wrapper on the disabled and
+    // MCode pane — would otherwise reach the remote wrapper on the disabled and
     // revive paths, re-exporting another worktree's history path (#11146) and
     // wrapping a zsh pane nothing asked to wrap.
     it.each([
       [
         'a relay-minted path',
-        `${process.env.HOME ?? ''}/.orca-remote/terminal-history/aabbccddeeff0011-zsh_history`
+        `${process.env.HOME ?? ''}/.mcode-remote/terminal-history/aabbccddeeff0011-zsh_history`
       ],
       ['a desktop-minted path', '/fake/userData/terminal-history/aabbccddeeff0011/zsh_history'],
       ['a user value', '/home/me/.zsh_history']
     ])(
-      'drops %s inherited as ORCA_HISTFILE from the relay process env',
+      'drops %s inherited as MCODE_HISTFILE from the relay process env',
       async (_kind, inherited) => {
-        const previous = process.env.ORCA_HISTFILE
-        process.env.ORCA_HISTFILE = inherited
+        const previous = process.env.MCODE_HISTFILE
+        process.env.MCODE_HISTFILE = inherited
         try {
           await dispatcher.callRequest('pty.spawn', { cols: 80, rows: 24 })
         } finally {
           if (previous === undefined) {
-            delete process.env.ORCA_HISTFILE
+            delete process.env.MCODE_HISTFILE
           } else {
-            process.env.ORCA_HISTFILE = previous
+            process.env.MCODE_HISTFILE = previous
           }
         }
 
         const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
-        expect(spawnEnv.ORCA_HISTFILE).toBeUndefined()
+        expect(spawnEnv.MCODE_HISTFILE).toBeUndefined()
       }
     )
 
-    it('drops an ORCA_HISTFILE handed over in the client env', async () => {
+    it('drops an MCODE_HISTFILE handed over in the client env', async () => {
       await dispatcher.callRequest('pty.spawn', {
         cols: 80,
         rows: 24,
-        env: { ORCA_HISTFILE: '/fake/userData/terminal-history/aabbccddeeff0011/zsh_history' }
+        env: { MCODE_HISTFILE: '/fake/userData/terminal-history/aabbccddeeff0011/zsh_history' }
       })
 
       const spawnEnv = mockPtySpawn.mock.calls.at(-1)?.[2]?.env as Record<string, string>
-      expect(spawnEnv.ORCA_HISTFILE).toBeUndefined()
+      expect(spawnEnv.MCODE_HISTFILE).toBeUndefined()
     })
 
     it('drops a desktop-minted session handed over in the client env', async () => {
@@ -280,7 +280,7 @@ describe('PtyHandler', () => {
     const wslWorktreeId = 'r::/remote/wsl-worktree'
     const wslHistoryFile = join(
       homedir(),
-      '.orca-remote',
+      '.mcode-remote',
       'terminal-history',
       `${hashWorktreeId(wslWorktreeId)}-bash_history`
     )
@@ -432,28 +432,28 @@ describe('PtyHandler', () => {
 
   it('applies env augmenters after process.env and renderer-supplied env (augmenter wins on key conflict)', async () => {
     handler.addEnvAugmenter(() => ({
-      ORCA_AGENT_HOOK_PORT: '12345',
-      ORCA_AGENT_HOOK_TOKEN: 'abc-uuid',
+      MCODE_AGENT_HOOK_PORT: '12345',
+      MCODE_AGENT_HOOK_TOKEN: 'abc-uuid',
       // Why: also override a key the renderer supplied below so the test pins
       // the documented "augmenter wins on key conflict" invariant — see the
       // doc-comment on addEnvAugmenter in pty-handler.ts.
-      ORCA_PANE_KEY: 'augmenter-wins'
+      MCODE_PANE_KEY: 'augmenter-wins'
     }))
 
     await dispatcher.callRequest('pty.spawn', {
       cols: 80,
       rows: 24,
-      env: { ORCA_PANE_KEY: 'tab-1:0', ORCA_TAB_ID: 'tab-1' }
+      env: { MCODE_PANE_KEY: 'tab-1:0', MCODE_TAB_ID: 'tab-1' }
     })
 
     expect(mockPtySpawn).toHaveBeenCalled()
     const callArgs = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
-    expect(callArgs.env.ORCA_AGENT_HOOK_PORT).toBe('12345')
-    expect(callArgs.env.ORCA_AGENT_HOOK_TOKEN).toBe('abc-uuid')
+    expect(callArgs.env.MCODE_AGENT_HOOK_PORT).toBe('12345')
+    expect(callArgs.env.MCODE_AGENT_HOOK_TOKEN).toBe('abc-uuid')
     // Augmenter override beats the renderer-supplied value:
-    expect(callArgs.env.ORCA_PANE_KEY).toBe('augmenter-wins')
+    expect(callArgs.env.MCODE_PANE_KEY).toBe('augmenter-wins')
     // Renderer-supplied keys not in augmenter map flow through:
-    expect(callArgs.env.ORCA_TAB_ID).toBe('tab-1')
+    expect(callArgs.env.MCODE_TAB_ID).toBe('tab-1')
   })
 
   it('passes PTY and explicit launch identity to env augmenters', async () => {
@@ -471,7 +471,7 @@ describe('PtyHandler', () => {
     })
 
     await dispatcher.callRequest('pty.spawn', {
-      env: { ORCA_PANE_KEY: 'tab-context:0' },
+      env: { MCODE_PANE_KEY: 'tab-context:0' },
       launchAgent: 'pi'
     })
     await dispatcher.callRequest('pty.spawn', {})
@@ -482,7 +482,7 @@ describe('PtyHandler', () => {
       id: 'pty-1',
       paneKey: 'tab-context:0',
       launchAgent: 'pi',
-      env: { ORCA_PANE_KEY: 'tab-context:0' }
+      env: { MCODE_PANE_KEY: 'tab-context:0' }
     })
     expect(seenContexts[1]).toMatchObject({ id: 'pty-2', paneKey: undefined })
     expect(firstEnv.env.OVERLAY_ID).toBe('tab-context:0')
@@ -525,16 +525,16 @@ describe('PtyHandler', () => {
     handler.addEnvAugmenter(() => ({
       TERM: 'augmenter-term',
       TERM_PROGRAM: 'augmenter-terminal',
-      ORCA_STALE_TEST_ENV: '/tmp/augmenter-stale'
+      MCODE_STALE_TEST_ENV: '/tmp/augmenter-stale'
     }))
 
     await dispatcher.callRequest('pty.spawn', {
       env: {
         TERM: 'screen-256color',
         TERM_PROGRAM: 'renderer-terminal',
-        ORCA_STALE_TEST_ENV: '/tmp/renderer-stale'
+        MCODE_STALE_TEST_ENV: '/tmp/renderer-stale'
       },
-      envToDelete: ['TERM_PROGRAM', 'ORCA_STALE_TEST_ENV']
+      envToDelete: ['TERM_PROGRAM', 'MCODE_STALE_TEST_ENV']
     })
 
     const spawnEnv = mockPtySpawn.mock.calls[0][2] as {
@@ -546,7 +546,7 @@ describe('PtyHandler', () => {
     expect(spawnEnv.env.COLORTERM).toBe('truecolor')
     expect(spawnEnv.env.FORCE_HYPERLINK).toBe('1')
     expect(spawnEnv.env.TERM_PROGRAM).toBeUndefined()
-    expect(spawnEnv.env.ORCA_STALE_TEST_ENV).toBeUndefined()
+    expect(spawnEnv.env.MCODE_STALE_TEST_ENV).toBeUndefined()
   })
 
   it('replaces an ambient TERM=dumb when no explicit TERM is supplied', async () => {
@@ -568,7 +568,7 @@ describe('PtyHandler', () => {
     }
     expect(spawnEnv.name).toBe('xterm-256color')
     expect(spawnEnv.env.TERM).toBe('xterm-256color')
-    expect(spawnEnv.env.TERM_PROGRAM).toBe('Orca')
+    expect(spawnEnv.env.TERM_PROGRAM).toBe('MCode')
   })
 
   it('expands variables in PATH before spawning a Windows relay shell', async () => {
@@ -578,8 +578,8 @@ describe('PtyHandler', () => {
     try {
       await dispatcher.callRequest('pty.spawn', {
         env: {
-          ORCA_PATH_ROOT: 'C:\\Users\\orca\\AppData\\Local',
-          PATH: '%orca_path_root%\\agy\\bin;C:\\Windows'
+          MCODE_PATH_ROOT: 'C:\\Users\\mcode\\AppData\\Local',
+          PATH: '%mcode_path_root%\\agy\\bin;C:\\Windows'
         }
       })
     } finally {
@@ -589,7 +589,7 @@ describe('PtyHandler', () => {
     }
 
     const spawnEnv = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
-    expect(spawnEnv.env.PATH).toBe('C:\\Users\\orca\\AppData\\Local\\agy\\bin;C:\\Windows')
+    expect(spawnEnv.env.PATH).toBe('C:\\Users\\mcode\\AppData\\Local\\agy\\bin;C:\\Windows')
   })
 
   it('uses the safe terminal default when TERM is deleted without a custom value', async () => {
@@ -624,12 +624,12 @@ describe('PtyHandler', () => {
     async () => {
       const oldShell = process.env.SHELL
       const oldHome = process.env.HOME
-      const oldOrcaPi = process.env.ORCA_PI_CODING_AGENT_DIR
+      const oldMCodePi = process.env.MCODE_PI_CODING_AGENT_DIR
       const homeDir = mkdtempSync(join(tmpdir(), 'relay-pty-shell-launch-'))
 
       process.env.SHELL = '/bin/bash'
       process.env.HOME = homeDir
-      delete process.env.ORCA_PI_CODING_AGENT_DIR
+      delete process.env.MCODE_PI_CODING_AGENT_DIR
       try {
         if (!existsSync('/bin/bash')) {
           return
@@ -637,8 +637,8 @@ describe('PtyHandler', () => {
 
         handler.addEnvAugmenter(() => ({
           OPENCODE_CONFIG_DIR: '/remote/overlay/opencode',
-          ORCA_OPENCODE_CONFIG_DIR: '/remote/overlay/opencode',
-          ORCA_OMP_STATUS_EXTENSION: '/remote/.omp/agent/extensions/orca-agent-status.ts'
+          MCODE_OPENCODE_CONFIG_DIR: '/remote/overlay/opencode',
+          MCODE_OMP_STATUS_EXTENSION: '/remote/.omp/agent/extensions/mcode-agent-status.ts'
         }))
 
         await dispatcher.callRequest('pty.spawn', { env: { HOME: homeDir } })
@@ -653,24 +653,24 @@ describe('PtyHandler', () => {
         } else {
           process.env.HOME = oldHome
         }
-        if (oldOrcaPi === undefined) {
-          delete process.env.ORCA_PI_CODING_AGENT_DIR
+        if (oldMCodePi === undefined) {
+          delete process.env.MCODE_PI_CODING_AGENT_DIR
         } else {
-          process.env.ORCA_PI_CODING_AGENT_DIR = oldOrcaPi
+          process.env.MCODE_PI_CODING_AGENT_DIR = oldMCodePi
         }
       }
 
       const shellArgs = mockPtySpawn.mock.calls[0][1]
       const spawnOptions = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
-      const rcfile = join(homeDir, '.orca-relay', 'shell-ready', 'bash', 'rcfile')
+      const rcfile = join(homeDir, '.mcode-relay', 'shell-ready', 'bash', 'rcfile')
 
       expect(shellArgs).toEqual(['--rcfile', rcfile])
-      expect(spawnOptions.env.ORCA_OPENCODE_CONFIG_DIR).toBe('/remote/overlay/opencode')
-      expect(spawnOptions.env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
+      expect(spawnOptions.env.MCODE_OPENCODE_CONFIG_DIR).toBe('/remote/overlay/opencode')
+      expect(spawnOptions.env.MCODE_PI_CODING_AGENT_DIR).toBeUndefined()
       expect(readFileSync(rcfile, 'utf8')).toContain(
-        'export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"'
+        'export OPENCODE_CONFIG_DIR="${MCODE_OPENCODE_CONFIG_DIR}"'
       )
-      expect(readFileSync(rcfile, 'utf8')).not.toContain('ORCA_PI_CODING_AGENT_DIR')
+      expect(readFileSync(rcfile, 'utf8')).not.toContain('MCODE_PI_CODING_AGENT_DIR')
       expect(readFileSync(rcfile, 'utf8')).toContain('command omp --extension')
 
       rmSync(homeDir, { recursive: true, force: true })

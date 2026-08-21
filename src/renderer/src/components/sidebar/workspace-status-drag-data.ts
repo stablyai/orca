@@ -1,7 +1,7 @@
 import { measureClipboardTextByteLength } from '../../../../shared/clipboard-text'
 
-export const WORKSPACE_STATUS_DRAG_TYPE = 'application/x-orca-worktree-id'
-export const WORKSPACE_STATUS_DRAG_IDS_TYPE = 'application/x-orca-worktree-ids'
+export const WORKSPACE_STATUS_DRAG_TYPE = 'application/x-mcode-worktree-id'
+export const WORKSPACE_STATUS_DRAG_IDS_TYPE = 'application/x-mcode-worktree-ids'
 export const WORKSPACE_STATUS_DRAG_PAYLOAD_MAX_BYTES = 16 * 1024
 export const WORKSPACE_STATUS_DRAG_ID_MAX_COUNT = 512
 

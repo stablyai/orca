@@ -14,8 +14,8 @@ const FORWARDED_ARGS = [
   'tui-idle',
   '--wsl',
   'forwarded-wsl-value',
-  '--orca',
-  'forwarded-orca-value',
+  '--mcode',
+  'forwarded-mcode-value',
   '--debug',
   'forwarded-debug-value',
   '--deps',
@@ -32,10 +32,10 @@ const FORWARDED_ARGS = [
 
 describe('WSL CLI PowerShell boundary', () => {
   it('keeps forwarded argv outside PowerShell parsing', () => {
-    const launcher = buildWslLauncher('C:\\Program Files\\Orca\\orca.exe')
+    const launcher = buildWslLauncher('C:\\Program Files\\MCode\\mcode.exe')
     const bridge = buildWslBridgeScript()
 
-    expect(launcher).toContain('"$ORCA_WIN_LAUNCHER" -WslCwd "$ORCA_WSL_CWD_WIN" "$@"')
+    expect(launcher).toContain('"$MCODE_WIN_LAUNCHER" -WslCwd "$MCODE_WSL_CWD_WIN" "$@"')
     expect(bridge).not.toContain('[CmdletBinding')
     expect(bridge).not.toMatch(/^param\(/m)
     expect(bridge).toContain('$ForwardArgs = @($args[$ForwardArgStart..($args.Count - 1)])')
@@ -46,9 +46,9 @@ describe('WSL CLI PowerShell boundary', () => {
   it.skipIf(process.platform !== 'win32')(
     'preserves native argv and exit status through Windows PowerShell 5.1',
     async () => {
-      const root = await mkdtemp(join(tmpdir(), 'orca-wsl-powershell-boundary-'))
+      const root = await mkdtemp(join(tmpdir(), 'mcode-wsl-powershell-boundary-'))
       const fixtureDir = join(root, 'fixture with spaces')
-      const bridgePath = join(fixtureDir, 'orca-wsl-bridge.ps1')
+      const bridgePath = join(fixtureDir, 'mcode-wsl-bridge.ps1')
       const targetPath = join(fixtureDir, 'argv-target.cjs')
       const wslCwd = join(root, 'WSL cwd with spaces')
 
@@ -57,7 +57,7 @@ describe('WSL CLI PowerShell boundary', () => {
         await writeFile(bridgePath, buildWslBridgeScript(), 'utf8')
         await writeFile(
           targetPath,
-          'process.stdout.write(JSON.stringify({ argv: process.argv.slice(2), cwd: process.env.ORCA_CLI_CWD ?? null }))\n',
+          'process.stdout.write(JSON.stringify({ argv: process.argv.slice(2), cwd: process.env.MCODE_CLI_CWD ?? null }))\n',
           'utf8'
         )
         const invocations = [
@@ -86,7 +86,7 @@ describe('WSL CLI PowerShell boundary', () => {
               bridgePath,
               ...bridgeArgs
             ],
-            { encoding: 'utf8', env: { ...process.env, ORCA_CLI_CWD: 'stale' } }
+            { encoding: 'utf8', env: { ...process.env, MCODE_CLI_CWD: 'stale' } }
           )
 
           expect(result.error).toBeUndefined()

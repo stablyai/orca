@@ -105,7 +105,7 @@ function makeResult(
     occupantAgent: null,
     title: 'Terminal',
     secondaryText: '',
-    repoName: 'repo/orca',
+    repoName: 'repo/mcode',
     worktreeName: 'Palette Worktree',
     branchName: 'main',
     titleRanges: [],

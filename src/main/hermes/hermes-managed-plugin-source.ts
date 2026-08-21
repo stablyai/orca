@@ -1,5 +1,5 @@
-export const HERMES_PLUGIN_NAME = 'orca-status'
-export const HERMES_PLUGIN_MARKER = 'Managed by Orca. Do not edit; changes may be overwritten.'
+export const HERMES_PLUGIN_NAME = 'mcode-status'
+export const HERMES_PLUGIN_MARKER = 'Managed by MCode. Do not edit; changes may be overwritten.'
 
 export const HERMES_EVENTS = [
   'on_session_start',
@@ -19,8 +19,8 @@ export function getPluginManifest(): string {
     `# ${HERMES_PLUGIN_MARKER}`,
     `name: ${HERMES_PLUGIN_NAME}`,
     'version: 1.0.0',
-    'description: "Reports Hermes Agent lifecycle events to Orca."',
-    'author: "Orca"',
+    'description: "Reports Hermes Agent lifecycle events to MCode."',
+    'author: "MCode"',
     'kind: standalone',
     'provides_hooks:',
     ...HERMES_EVENTS.map((event) => `  - ${event}`),
@@ -99,7 +99,7 @@ def _jsonable(value: Any, depth: int = 0, budget: Optional[list[int]] = None) ->
 
 def _endpoint_env() -> dict[str, str]:
     env = dict(os.environ)
-    endpoint = env.get("ORCA_AGENT_HOOK_ENDPOINT", "")
+    endpoint = env.get("MCODE_AGENT_HOOK_ENDPOINT", "")
     if endpoint and os.path.isfile(endpoint):
         try:
             with open(endpoint, "r", encoding="utf-8") as f:
@@ -117,20 +117,20 @@ def _endpoint_env() -> dict[str, str]:
     return env
 
 
-def _post_to_orca(payload: dict[str, Any]) -> None:
+def _post_to_mcode(payload: dict[str, Any]) -> None:
     env = _endpoint_env()
-    port = env.get("ORCA_AGENT_HOOK_PORT", "")
-    token = env.get("ORCA_AGENT_HOOK_TOKEN", "")
-    pane_key = env.get("ORCA_PANE_KEY", "")
+    port = env.get("MCODE_AGENT_HOOK_PORT", "")
+    token = env.get("MCODE_AGENT_HOOK_TOKEN", "")
+    pane_key = env.get("MCODE_PANE_KEY", "")
     if not port or not token or not pane_key:
         return
     body = {
         "paneKey": pane_key,
-        "launchToken": env.get("ORCA_AGENT_LAUNCH_TOKEN", ""),
-        "tabId": env.get("ORCA_TAB_ID", ""),
-        "worktreeId": env.get("ORCA_WORKTREE_ID", ""),
-        "env": env.get("ORCA_AGENT_HOOK_ENV", ""),
-        "version": env.get("ORCA_AGENT_HOOK_VERSION", ""),
+        "launchToken": env.get("MCODE_AGENT_LAUNCH_TOKEN", ""),
+        "tabId": env.get("MCODE_TAB_ID", ""),
+        "worktreeId": env.get("MCODE_WORKTREE_ID", ""),
+        "env": env.get("MCODE_AGENT_HOOK_ENV", ""),
+        "version": env.get("MCODE_AGENT_HOOK_VERSION", ""),
         "payload": payload,
     }
     data = json.dumps(body, separators=(",", ":")).encode("utf-8")
@@ -140,7 +140,7 @@ def _post_to_orca(payload: dict[str, Any]) -> None:
         method="POST",
         headers={
             "Content-Type": "application/json",
-            "X-Orca-Agent-Hook-Token": token,
+            "X-MCode-Agent-Hook-Token": token,
         },
     )
     try:
@@ -172,7 +172,7 @@ def _payload_for_event(event_name: str, kwargs: dict[str, Any]) -> dict[str, Any
 
 def _make_hook(event_name: str) -> Callable[..., None]:
     def _hook(**kwargs: Any) -> None:
-        _post_to_orca(_payload_for_event(event_name, kwargs))
+        _post_to_mcode(_payload_for_event(event_name, kwargs))
 
     return _hook
 

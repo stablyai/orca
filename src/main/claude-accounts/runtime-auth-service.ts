@@ -97,7 +97,7 @@ export class ClaudeRuntimeAuthService {
   private readonly pathResolver = new ClaudeRuntimePathResolver()
   private mutationQueue: Promise<unknown> = Promise.resolve()
   private lastSyncedAccountId: string | null = null
-  // Why: creds Orca last wrote to the shared file; a mismatch on managed→default transition means an external login overwrote it, so adopt it as the new default.
+  // Why: creds MCode last wrote to the shared file; a mismatch on managed→default transition means an external login overwrote it, so adopt it as the new default.
   private lastWrittenCredentialsJson: string | null = null
   private hasMaterializedRuntimeAuth = false
   private hasLastWrittenOauthAccount = false
@@ -258,7 +258,7 @@ export class ClaudeRuntimeAuthService {
     if (activeAccount.managedAuthRuntime === 'wsl') {
       if (!this.getOwnedManagedAuthPath(activeAccount)) {
         console.warn(
-          '[claude-runtime-auth] Active WSL managed account is not owned by Orca, restoring system default'
+          '[claude-runtime-auth] Active WSL managed account is not owned by MCode, restoring system default'
         )
         const nextSelection = setSelectedClaudeAccountIdForTarget(
           normalizeClaudeRuntimeSelection(settings),
@@ -296,7 +296,7 @@ export class ClaudeRuntimeAuthService {
 
     if (!this.getOwnedManagedAuthPath(activeAccount)) {
       console.warn(
-        '[claude-runtime-auth] Active managed account is not owned by Orca, restoring system default'
+        '[claude-runtime-auth] Active managed account is not owned by MCode, restoring system default'
       )
       if (this.lastSyncedAccountId !== null) {
         if (
@@ -1024,7 +1024,7 @@ export class ClaudeRuntimeAuthService {
   ): Promise<void> {
     const managedAuthPath = this.getOwnedManagedAuthPath(account)
     if (!managedAuthPath) {
-      throw new Error('Managed Claude auth storage is not owned by Orca.')
+      throw new Error('Managed Claude auth storage is not owned by MCode.')
     }
     if (process.platform === 'darwin') {
       await writeManagedClaudeKeychainCredentials(account.id, credentialsJson)
@@ -1078,7 +1078,7 @@ export class ClaudeRuntimeAuthService {
     const wslInfo = parseWslUncPath(account.managedAuthPath)
     if (wslInfo) {
       if (
-        !wslInfo.linuxPath.includes('/.local/share/orca/claude-accounts/') ||
+        !wslInfo.linuxPath.includes('/.local/share/mcode/claude-accounts/') ||
         !wslInfo.linuxPath.endsWith('/auth')
       ) {
         return null
@@ -1097,11 +1097,11 @@ export class ClaudeRuntimeAuthService {
                 [
                   'set -euo pipefail',
                   `candidate=${shellQuote(wslInfo.linuxPath)}`,
-                  'managed_root="${HOME%/}/.local/share/orca/claude-accounts"',
+                  'managed_root="${HOME%/}/.local/share/mcode/claude-accounts"',
                   'candidate_real=$(readlink -f -- "$candidate")',
                   'managed_root_real=$(readlink -f -- "$managed_root")',
-                  'test -f "$candidate_real/.orca-managed-claude-auth"',
-                  `test "$(cat "$candidate_real/.orca-managed-claude-auth")" = ${shellQuote(account.id)}`,
+                  'test -f "$candidate_real/.mcode-managed-claude-auth"',
+                  `test "$(cat "$candidate_real/.mcode-managed-claude-auth")" = ${shellQuote(account.id)}`,
                   'case "$candidate_real" in "$managed_root_real"/*/auth) printf "%s\\n" "$candidate_real" ;; *) exit 35 ;; esac'
                 ].join('\n')
               )
@@ -1281,7 +1281,7 @@ export class ClaudeRuntimeAuthService {
     if (this.hasLastWrittenOauthAccount) {
       return this.lastWrittenOauthAccount
     }
-    // Why: managed metadata hints identity but isn't proof Orca wrote .claude.json; use only after a credential surface proves ownership.
+    // Why: managed metadata hints identity but isn't proof MCode wrote .claude.json; use only after a credential surface proves ownership.
     if (hasCredentialSurfaceOwnership && ownedOauthAccount !== undefined) {
       return ownedOauthAccount
     }

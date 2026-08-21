@@ -12,18 +12,18 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { verifyPackageCliBin } from './verify-cli-bin.mjs'
 
-/** Builds a temporary Orca-style project fixture with a compiled CLI entrypoint. */
+/** Builds a temporary MCode-style project fixture with a compiled CLI entrypoint. */
 function makeProjectWithCli(
   content,
   { mode = 0o755, rootPackageType, writeOutPackageJson = true } = {}
 ) {
-  const projectDir = mkdtempSync(path.join(tmpdir(), 'orca-cli-bin-'))
+  const projectDir = mkdtempSync(path.join(tmpdir(), 'mcode-cli-bin-'))
   const cliPath = path.join(projectDir, 'out', 'cli', 'index.js')
   const outPackageJsonPath = path.join(projectDir, 'out', 'package.json')
   mkdirSync(path.dirname(cliPath), { recursive: true })
   writeFileSync(
     path.join(projectDir, 'package.json'),
-    JSON.stringify({ bin: { orca: './out/cli/index.js' }, type: rootPackageType }),
+    JSON.stringify({ bin: { mcode: './out/cli/index.js' }, type: rootPackageType }),
     'utf8'
   )
   if (writeOutPackageJson) {
@@ -50,11 +50,11 @@ describe('verifyPackageCliBin', () => {
   it('rejects an empty package bin target', () => {
     const { projectDir } = makeProjectWithCli('')
 
-    expect(() => verifyPackageCliBin({ projectDir })).toThrow('bin.orca target is empty')
+    expect(() => verifyPackageCliBin({ projectDir })).toThrow('bin.mcode target is empty')
   })
 
   it('rejects package bin targets without a Node shebang', () => {
-    const { projectDir } = makeProjectWithCli('console.log("orca")\n')
+    const { projectDir } = makeProjectWithCli('console.log("mcode")\n')
 
     expect(() => verifyPackageCliBin({ projectDir })).toThrow('Node shebang')
   })
@@ -71,7 +71,7 @@ describe('verifyPackageCliBin', () => {
     verifyPackageCliBin({ projectDir, fixPackageJson: true, runHelp: true })
 
     expect(JSON.parse(readFileSync(outPackageJsonPath, 'utf8'))).toEqual({
-      name: 'orca-compiled-output',
+      name: 'mcode-compiled-output',
       type: 'commonjs',
       private: true
     })
@@ -79,7 +79,7 @@ describe('verifyPackageCliBin', () => {
 
   it('rejects a CLI package boundary that is not CommonJS', () => {
     const { projectDir, outPackageJsonPath } = makeProjectWithCli(
-      '#!/usr/bin/env node\nconsole.log("orca")\n'
+      '#!/usr/bin/env node\nconsole.log("mcode")\n'
     )
     writeFileSync(outPackageJsonPath, JSON.stringify({ type: 'module' }), 'utf8')
 
@@ -88,7 +88,7 @@ describe('verifyPackageCliBin', () => {
 
   it.skipIf(process.platform === 'win32')('can repair the POSIX executable bit', () => {
     const { projectDir, cliPath } = makeProjectWithCli(
-      '#!/usr/bin/env node\nconsole.log("orca")\n',
+      '#!/usr/bin/env node\nconsole.log("mcode")\n',
       { mode: 0o644 }
     )
 
@@ -100,7 +100,7 @@ describe('verifyPackageCliBin', () => {
 
   it('repairs both the package boundary and POSIX executable bit together', () => {
     const { projectDir, cliPath, outPackageJsonPath } = makeProjectWithCli(
-      '#!/usr/bin/env node\nconsole.log("orca")\n',
+      '#!/usr/bin/env node\nconsole.log("mcode")\n',
       { mode: 0o644, writeOutPackageJson: false }
     )
 

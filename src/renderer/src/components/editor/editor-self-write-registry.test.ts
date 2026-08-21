@@ -81,7 +81,7 @@ describe('editor self-write registry', () => {
 
   it('keeps remote-TTL stamps alive past the local window', () => {
     // Why: SSH/runtime watcher echoes can land seconds after the write; the
-    // longer TTL keeps them recognized as Orca's own save.
+    // longer TTL keeps them recognized as MCode's own save.
     recordSelfWrite('/repo/remote.md', 'content', 'env-1', SELF_WRITE_REMOTE_TTL_MS)
 
     vi.advanceTimersByTime(751)

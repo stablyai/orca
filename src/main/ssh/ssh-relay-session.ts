@@ -78,7 +78,7 @@ import {
 } from '../../shared/ssh-types'
 import { normalizeRemoteArtifactInput } from '../../shared/artifact-cli-bridge'
 import type { Store } from '../persistence'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { MCodeRuntimeService } from '../runtime/mcode-runtime'
 import { DEFAULT_PTY_SOURCE_WINDOW_SU } from '../../shared/pty-source-credit-contract'
 import { PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR } from '../../shared/pty-consumer-session'
 import {
@@ -89,10 +89,10 @@ import {
   isSshOwnerAdmissionBlockedError,
   SshOwnerAdmissionBlockedError
 } from './ssh-owner-admission-blocked-error'
-import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
+import { runRemoteMCodeCli } from './ssh-remote-mcode-cli'
 import {
-  acknowledgeRemoteOrcaCliPostOutput,
-  parseRemoteOrcaCliPostOutput
+  acknowledgeRemoteMCodeCliPostOutput,
+  parseRemoteMCodeCliPostOutput
 } from './ssh-remote-orchestration-post-output'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
 import {
@@ -362,7 +362,7 @@ export class SshRelaySession {
     private getMainWindow: () => BrowserWindow | null,
     private store: Store,
     private portForwardManager: SshPortForwardManager,
-    private runtime?: OrcaRuntimeService,
+    private runtime?: MCodeRuntimeService,
     private onDetectedPortsChanged?: (
       targetId: string,
       ports: DetectedPort[],
@@ -376,7 +376,7 @@ export class SshRelaySession {
     getMainWindow: () => BrowserWindow | null,
     store: Store,
     portForwardManager: SshPortForwardManager,
-    runtime?: OrcaRuntimeService,
+    runtime?: MCodeRuntimeService,
     onDetectedPortsChanged?: (targetId: string, ports: DetectedPort[], platform: string) => void
   ): void {
     this.getMainWindow = getMainWindow
@@ -527,7 +527,7 @@ export class SshRelaySession {
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
           ? {
               remoteHome,
-              binDir: joinRemotePath(hostPlatform, remoteHome, '.orca-relay', 'bin'),
+              binDir: joinRemotePath(hostPlatform, remoteHome, '.mcode-relay', 'bin'),
               relayDir: remoteRelayDir,
               nodePath,
               sockPath,
@@ -673,7 +673,7 @@ export class SshRelaySession {
         remoteHome && remoteRelayDir && nodePath && sockPath && hostPlatform
           ? {
               remoteHome,
-              binDir: joinRemotePath(hostPlatform, remoteHome, '.orca-relay', 'bin'),
+              binDir: joinRemotePath(hostPlatform, remoteHome, '.mcode-relay', 'bin'),
               relayDir: remoteRelayDir,
               nodePath,
               sockPath,
@@ -993,11 +993,11 @@ export class SshRelaySession {
     }
 
     try {
-      await this.installRemoteOrcaCliLauncher()
+      await this.installRemoteMCodeCliLauncher()
     } catch (error) {
       // Why: on MaxSessions=1 remotes the relay holds the only slot, so this raw-connection install can fail — don't fail the whole connection.
       console.warn(
-        `[ssh-relay-session] remote orca CLI launcher install failed for ${this.targetId}: ${
+        `[ssh-relay-session] remote mcode CLI launcher install failed for ${this.targetId}: ${
           error instanceof Error ? error.message : String(error)
         }`
       )
@@ -1006,7 +1006,7 @@ export class SshRelaySession {
       return false
     }
 
-    this.wireUpRemoteOrcaCli(mux, connectionIncarnation)
+    this.wireUpRemoteMCodeCli(mux, connectionIncarnation)
 
     const providerGeneration = allocateSshPtyProviderGeneration()
     const ptyProvider = new SshPtyProvider(
@@ -1328,7 +1328,7 @@ export class SshRelaySession {
     }
   }
 
-  private async installRemoteOrcaCliLauncher(): Promise<void> {
+  private async installRemoteMCodeCliLauncher(): Promise<void> {
     if (!this.remoteCliBridgeEnv) {
       return
     }
@@ -1363,10 +1363,10 @@ export class SshRelaySession {
     }
   }
 
-  private wireUpRemoteOrcaCli(mux: SshChannelMultiplexer, connectionIncarnation: string): void {
-    mux.onRequest('orca.cli', async (params) => {
+  private wireUpRemoteMCodeCli(mux: SshChannelMultiplexer, connectionIncarnation: string): void {
+    mux.onRequest('mcode.cli', async (params) => {
       if (!this.runtime) {
-        throw new Error('Orca runtime is unavailable')
+        throw new Error('MCode runtime is unavailable')
       }
       const argv = Array.isArray(params.argv)
         ? params.argv.filter((item): item is string => typeof item === 'string')
@@ -1390,7 +1390,7 @@ export class SshRelaySession {
       )
       this.activeCompatibilityAttachmentIds.add(runtimeAuthority.attachmentId)
       try {
-        return await runRemoteOrcaCli(this.runtime, {
+        return await runRemoteMCodeCli(this.runtime, {
           argv,
           cwd,
           env,
@@ -1403,9 +1403,9 @@ export class SshRelaySession {
         this.runtime.releaseOrchestrationCompatibilitySshAttachment(runtimeAuthority.attachmentId)
       }
     })
-    mux.onRequest('orca.cli.postOutput', async (params) => {
+    mux.onRequest('mcode.cli.postOutput', async (params) => {
       if (!this.runtime) {
-        throw new Error('Orca runtime is unavailable')
+        throw new Error('MCode runtime is unavailable')
       }
       const rawEnv = params.env
       const env =
@@ -1423,8 +1423,8 @@ export class SshRelaySession {
       )
       this.activeCompatibilityAttachmentIds.add(runtimeAuthority.attachmentId)
       try {
-        await acknowledgeRemoteOrcaCliPostOutput(this.runtime, {
-          postOutput: parseRemoteOrcaCliPostOutput(params.postOutput),
+        await acknowledgeRemoteMCodeCliPostOutput(this.runtime, {
+          postOutput: parseRemoteMCodeCliPostOutput(params.postOutput),
           env,
           runtimeAuthority
         })
@@ -1436,7 +1436,7 @@ export class SshRelaySession {
     })
   }
 
-  // Why: ship plugin/extension source from Orca so agent-event changes don't force a relay redeploy — the relay is versioned independently. Best-effort: failure only costs agent status on this host.
+  // Why: ship plugin/extension source from MCode so agent-event changes don't force a relay redeploy — the relay is versioned independently. Best-effort: failure only costs agent status on this host.
   private async installPluginsOnRelay(mux: SshChannelMultiplexer): Promise<void> {
     if (!isRemoteAgentHooksEnabled() || !this.areAgentStatusHooksEnabled()) {
       return

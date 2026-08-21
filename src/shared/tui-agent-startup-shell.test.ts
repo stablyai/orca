@@ -68,7 +68,7 @@ describe('tokenizeStartupCommand spans (windows shells)', () => {
 describe('one Unix startup dialect', () => {
   it('clears variables with a self-contained branch, not a per-shell builtin', () => {
     // Why not `unset`/`set -e` alone, and why not a wrapper-defined helper:
-    // Orca only wraps zsh/bash/fish, so an `sh`/`dash`/`ksh` login shell — and
+    // MCode only wraps zsh/bash/fish, so an `sh`/`dash`/`ksh` login shell — and
     // any shell the user pastes copied text into — would not have the helper.
     // startup-shell-portability.live-shell.test.ts proves this form works in
     // real sh/bash/zsh/dash/ksh/fish.
@@ -143,8 +143,8 @@ describe('one Unix startup dialect', () => {
     })
 
     expect(plan?.launchCommand).toBe(
-      `pi; command test -n "$fish_pid" && set --erase -g ORCA_PI_PREFILL; command test -z "$fish_pid" && unset ORCA_PI_PREFILL; true`
+      `pi; command test -n "$fish_pid" && set --erase -g MCODE_PI_PREFILL; command test -z "$fish_pid" && unset MCODE_PI_PREFILL; true`
     )
-    expect(plan?.env?.ORCA_PI_PREFILL).toBe('hello')
+    expect(plan?.env?.MCODE_PI_PREFILL).toBe('hello')
   })
 })

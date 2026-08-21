@@ -11,7 +11,7 @@ describe('prepareAiVaultSessionForResume', () => {
     const prepareSessionResume = vi.fn().mockResolvedValue({ useRealCodexHome: true })
     stubPreparation(prepareSessionResume)
     const legacy = session({
-      codexHome: '/Users/ada/Library/Application Support/orca/codex-runtime-home/home'
+      codexHome: '/Users/ada/Library/Application Support/mcode/codex-runtime-home/home'
     })
 
     const prepared = await prepareAiVaultSessionForResume(legacy)
@@ -29,7 +29,7 @@ describe('prepareAiVaultSessionForResume', () => {
     stubPreparation(vi.fn().mockRejectedValue(new Error('Retry resume.')))
 
     await expect(
-      prepareAiVaultSessionForResume(session({ codexHome: '/tmp/orca/codex-runtime-home/home' }))
+      prepareAiVaultSessionForResume(session({ codexHome: '/tmp/mcode/codex-runtime-home/home' }))
     ).rejects.toThrow('Retry resume.')
   })
 
@@ -45,14 +45,14 @@ describe('prepareAiVaultSessionForResume', () => {
   it('repins a per-account session to the home the host substitutes', async () => {
     const prepareSessionResume = vi.fn().mockResolvedValue({
       useRealCodexHome: false,
-      substituteCodexHome: '/tmp/orca/codex-accounts/account-2/home'
+      substituteCodexHome: '/tmp/mcode/codex-accounts/account-2/home'
     })
     stubPreparation(prepareSessionResume)
-    const current = session({ codexHome: '/tmp/orca/codex-accounts/account-1/home' })
+    const current = session({ codexHome: '/tmp/mcode/codex-accounts/account-1/home' })
 
     const prepared = await prepareAiVaultSessionForResume(current)
 
-    expect(prepared.codexHome).toBe('/tmp/orca/codex-accounts/account-2/home')
+    expect(prepared.codexHome).toBe('/tmp/mcode/codex-accounts/account-2/home')
     expect(prepareSessionResume).toHaveBeenCalledWith({
       agent: 'codex',
       filePath: current.filePath,
@@ -63,7 +63,7 @@ describe('prepareAiVaultSessionForResume', () => {
 
   it('keeps a per-account session unchanged when the host declines to repin', async () => {
     stubPreparation(vi.fn().mockResolvedValue({ useRealCodexHome: false }))
-    const current = session({ codexHome: '/tmp/orca/codex-accounts/account-1/home' })
+    const current = session({ codexHome: '/tmp/mcode/codex-accounts/account-1/home' })
 
     await expect(prepareAiVaultSessionForResume(current)).resolves.toBe(current)
   })
@@ -72,7 +72,7 @@ describe('prepareAiVaultSessionForResume', () => {
     const prepareSessionResume = vi.fn()
     stubPreparation(prepareSessionResume)
     const current = session({
-      codexHome: '/home/user/.orca/codex-accounts/account-1/home',
+      codexHome: '/home/user/.mcode/codex-accounts/account-1/home',
       executionHostId: 'ssh:server-1' as AiVaultSession['executionHostId']
     })
 

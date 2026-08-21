@@ -30,7 +30,7 @@ type WorkspaceIssuePage = {
 }
 
 const LIST_ISSUES_QUERY = `
-  query OrcaLinearListIssues(
+  query MCodeLinearListIssues(
     $first: Int!
     $after: String
     $filter: IssueFilter
@@ -67,7 +67,7 @@ export async function listMcpIssues(
       throw entryFailures[0].error
     }
     throw linearError('linear_not_connected', 'Linear is not connected.', {
-      nextSteps: ['Connect Linear from Orca settings, then retry the issue list.']
+      nextSteps: ['Connect Linear from MCode settings, then retry the issue list.']
     })
   }
   const { pages, failures } = await readIssueListWorkspaces(

@@ -13,33 +13,33 @@ function status(state: 'installed' | 'not_installed' | 'error'): AgentHookInstal
 }
 
 describe('retained Codex hook state', () => {
-  it('repairs Orca hooks before a retained shell can launch Codex', () => {
+  it('repairs MCode hooks before a retained shell can launch Codex', () => {
     const install = vi.fn(() => status('installed'))
     const refreshRuntimeUserHooks = vi.fn(() => status('not_installed'))
 
     reconcileRetainedCodexHookHomes({
       hookService: { install, refreshRuntimeUserHooks },
       hooksEnabled: true,
-      runtimeHomePaths: ['/orca/shared-home', '/orca/account-home']
+      runtimeHomePaths: ['/mcode/shared-home', '/mcode/account-home']
     })
 
     expect(install).toHaveBeenCalledTimes(2)
-    expect(install).toHaveBeenNthCalledWith(1, '/orca/shared-home')
-    expect(install).toHaveBeenNthCalledWith(2, '/orca/account-home')
+    expect(install).toHaveBeenNthCalledWith(1, '/mcode/shared-home')
+    expect(install).toHaveBeenNthCalledWith(2, '/mcode/account-home')
     expect(refreshRuntimeUserHooks).not.toHaveBeenCalled()
   })
 
-  it('removes only Orca hooks from retained homes when hooks are disabled', () => {
+  it('removes only MCode hooks from retained homes when hooks are disabled', () => {
     const install = vi.fn(() => status('installed'))
     const refreshRuntimeUserHooks = vi.fn(() => status('not_installed'))
 
     reconcileRetainedCodexHookHomes({
       hookService: { install, refreshRuntimeUserHooks },
       hooksEnabled: false,
-      runtimeHomePaths: ['/orca/shared-home']
+      runtimeHomePaths: ['/mcode/shared-home']
     })
 
-    expect(refreshRuntimeUserHooks).toHaveBeenCalledWith('/orca/shared-home')
+    expect(refreshRuntimeUserHooks).toHaveBeenCalledWith('/mcode/shared-home')
     expect(install).not.toHaveBeenCalled()
   })
 })

@@ -10,7 +10,7 @@ export const getMobileEmulatorSearchEntries = createLocalizedCatalog(() => [
     ),
     description: translate(
       'auto.components.settings.mobile.emulator.search.9595354cff',
-      'Configure mobile emulator support for Orca and coding agents.'
+      'Configure mobile emulator support for MCode and coding agents.'
     ),
     keywords: [
       ...translateSearchKeyword(
@@ -47,11 +47,11 @@ export const getMobileEmulatorSearchEntries = createLocalizedCatalog(() => [
       ),
       ...translateSearchKeyword(
         'auto.components.settings.mobile.emulator.search.d4b7833894',
-        'orca cli'
+        'mcode cli'
       ),
       ...translateSearchKeyword(
         'auto.components.settings.mobile.emulator.search.9353854ff3',
-        'orca emulator'
+        'mcode emulator'
       ),
       ...translateSearchKeyword(
         'auto.components.settings.mobile.emulator.search.ac0a985873',
@@ -74,7 +74,7 @@ export const getMobileEmulatorSearchEntries = createLocalizedCatalog(() => [
     ),
     description: translate(
       'auto.components.settings.mobile.emulator.search.2348045036',
-      'Choose which emulator device Orca opens by default.'
+      'Choose which emulator device MCode opens by default.'
     ),
     keywords: [
       ...translateSearchKeyword(
@@ -138,7 +138,7 @@ export const getMobileEmulatorSearchEntries = createLocalizedCatalog(() => [
     ),
     description: translate(
       'auto.components.settings.mobile.emulator.search.2e0b45b2ba',
-      'Use Orca CLI commands to list, attach, tap, and type into a mobile emulator.'
+      'Use MCode CLI commands to list, attach, tap, and type into a mobile emulator.'
     ),
     keywords: [
       ...translateSearchKeyword(

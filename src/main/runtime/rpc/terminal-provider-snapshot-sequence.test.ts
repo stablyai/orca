@@ -3,7 +3,7 @@ import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
 import { TERMINAL_METHODS } from './methods/terminal'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
-import type { OrcaRuntimeService } from '../orca-runtime'
+import type { MCodeRuntimeService } from '../mcode-runtime'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 import {
   TerminalStreamOpcode,
@@ -60,7 +60,7 @@ it('replays post-capture output in the provider snapshot sequence domain', async
     cleanupSubscription: vi.fn(registry.cleanupSubscription),
     cleanupSubscriptionIfOwnedByConnection: vi.fn(registry.cleanupSubscriptionIfOwnedByConnection),
     waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
-  } as unknown as OrcaRuntimeService
+  } as unknown as MCodeRuntimeService
   const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
   const dispatchPromise = dispatcher.dispatchStreaming(request, vi.fn(), {
@@ -133,7 +133,7 @@ it('keeps provider-backed alternate-screen resizes geometry-only', async () => {
     waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
     sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
     updateMobileViewport: vi.fn().mockResolvedValue({ updated: true, applied: true })
-  } as unknown as OrcaRuntimeService
+  } as unknown as MCodeRuntimeService
   const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
   const dispatchPromise = dispatcher.dispatchStreaming(
     {

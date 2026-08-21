@@ -14,7 +14,7 @@ afterEach(async () => {
 
 describe('readAiVaultFirstUserPrompt', () => {
   it('returns the full first user prompt without preview truncation', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-first-prompt-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-first-prompt-'))
     tempRoots.push(root)
     const projectDir = join(root, 'project')
     await mkdir(projectDir, { recursive: true })
@@ -51,7 +51,7 @@ describe('readAiVaultFirstUserPrompt', () => {
   })
 
   it('extracts full Codex input_text content blocks (not preview-capped)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-first-prompt-codex-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-first-prompt-codex-'))
     tempRoots.push(root)
     const sessionPath = join(root, 'sessions', '2026', '07', '21', 'rollout-full.jsonl')
     await mkdir(join(root, 'sessions', '2026', '07', '21'), { recursive: true })
@@ -87,7 +87,7 @@ describe('readAiVaultFirstUserPrompt', () => {
   })
 
   it('skips meta/harness user turns and returns the first real ask', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-first-prompt-meta-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-first-prompt-meta-'))
     tempRoots.push(root)
     const projectDir = join(root, 'project')
     await mkdir(projectDir, { recursive: true })
@@ -122,7 +122,7 @@ describe('readAiVaultFirstUserPrompt', () => {
   })
 
   it('resolves null instead of rejecting when the transcript is corrupt', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-first-prompt-corrupt-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-first-prompt-corrupt-'))
     tempRoots.push(root)
     const sessionDir = join(root, 'session-1')
     await mkdir(sessionDir, { recursive: true })
@@ -138,7 +138,7 @@ describe('readAiVaultFirstUserPrompt', () => {
   // The web preload fallback and the renderer's canLoadFullFirstPrompt guard both
   // rely on remote hosts never reading a local transcript body.
   it('returns null for a non-local execution host', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-first-prompt-remote-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-first-prompt-remote-'))
     tempRoots.push(root)
     const filePath = join(root, 'session.jsonl')
     await writeFile(

@@ -9,7 +9,7 @@ import {
 describe('buildOnboardingFolderAgentStartup', () => {
   it('queues the persisted default agent with onboarding telemetry', () => {
     const startup = buildOnboardingFolderAgentStartup({
-      ...getDefaultSettings('/tmp/orca-workspaces'),
+      ...getDefaultSettings('/tmp/mcode-workspaces'),
       defaultTuiAgent: 'codex'
     })
 
@@ -33,7 +33,7 @@ describe('buildOnboardingFolderAgentStartup', () => {
 
   it('respects the blank terminal preference', () => {
     const startup = buildOnboardingFolderAgentStartup({
-      ...getDefaultSettings('/tmp/orca-workspaces'),
+      ...getDefaultSettings('/tmp/mcode-workspaces'),
       defaultTuiAgent: 'blank'
     })
 
@@ -42,7 +42,7 @@ describe('buildOnboardingFolderAgentStartup', () => {
 
   it('omits native-chat preferences from terminal-default folder launches', () => {
     const startup = buildOnboardingFolderAgentStartup({
-      ...getDefaultSettings('/tmp/orca-workspaces'),
+      ...getDefaultSettings('/tmp/mcode-workspaces'),
       defaultTuiAgent: 'codex',
       experimentalNativeChat: true,
       openAgentTabsInChatByDefault: false,
@@ -60,7 +60,7 @@ describe('buildOnboardingFolderAgentStartup', () => {
 
   it('applies native-chat preferences to chat-default folder launches', () => {
     const startup = buildOnboardingFolderAgentStartup({
-      ...getDefaultSettings('/tmp/orca-workspaces'),
+      ...getDefaultSettings('/tmp/mcode-workspaces'),
       defaultTuiAgent: 'codex',
       experimentalNativeChat: true,
       openAgentTabsInChatByDefault: true,
@@ -81,7 +81,7 @@ describe('buildOnboardingFolderAgentStartup', () => {
 
   it('does not infer an agent from auto mode', () => {
     const startup = buildOnboardingFolderAgentStartup({
-      ...getDefaultSettings('/tmp/orca-workspaces'),
+      ...getDefaultSettings('/tmp/mcode-workspaces'),
       defaultTuiAgent: null
     })
 
@@ -129,7 +129,7 @@ describe('buildOnboardingFolderAgentStartup', () => {
     expect(
       buildDismissedOnboardingFolderAgentStartup(
         {
-          ...getDefaultSettings('/tmp/orca-workspaces'),
+          ...getDefaultSettings('/tmp/mcode-workspaces'),
           defaultTuiAgent: 'codex',
           agentCmdOverrides: { codex: 'echo onboarding-folder-agent' }
         },

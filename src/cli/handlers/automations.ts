@@ -179,7 +179,7 @@ function getScheduleFlag(
   if (raw === 'manual') {
     throw new RuntimeClientError(
       'invalid_argument',
-      'Manual-only automations are not supported yet. Create a scheduled automation with --disabled and run it with `orca automations run <id>` when needed.'
+      'Manual-only automations are not supported yet. Create a scheduled automation with --disabled and run it with `mcode automations run <id>` when needed.'
     )
   }
   validateScheduleModifierApplicability(flags, raw)

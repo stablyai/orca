@@ -3,8 +3,8 @@ import { shellEscape } from './ssh-connection-utils'
 import { powerShellLiteral } from './ssh-remote-powershell'
 
 const MIN_NODE_MAJOR = 18
-const NODE_VERSION_MARKER = '__ORCA_NODE_VERSION__'
-const NPM_VERSION_MARKER = '__ORCA_NPM_VERSION__'
+const NODE_VERSION_MARKER = '__MCODE_NODE_VERSION__'
+const NPM_VERSION_MARKER = '__MCODE_NPM_VERSION__'
 
 export function buildPosixNodeToolchainProbe(nodePath: string): string {
   const nodeBinDir = posixPath.dirname(nodePath)
@@ -54,7 +54,7 @@ function markedVersionMajor(output: string, marker: string): number | null {
     return null
   }
   for (const line of lines.slice(markerIndex + 1)) {
-    if (line.startsWith('__ORCA_')) {
+    if (line.startsWith('__MCODE_')) {
       return null
     }
     const match = line.trim().match(/^v?(\d+)(?:\.\d+){1,2}(?:[-+].*)?$/)

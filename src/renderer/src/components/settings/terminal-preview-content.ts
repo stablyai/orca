@@ -14,7 +14,7 @@ const FG_BLACK = '\x1b[30m'
 function prompt(): string {
   // Why: short two-segment prompt — cwd + branch — so the preview reads as a
   // real shell line without using too many columns.
-  return `${BLUE}~/orca${RESET} ${MAGENTA}main${RESET} ${YELLOW}*${RESET} $ `
+  return `${BLUE}~/mcode${RESET} ${MAGENTA}main${RESET} ${YELLOW}*${RESET} $ `
 }
 
 // Why: every line must fit in PREVIEW_COLS (see TerminalSettingsPreview) so

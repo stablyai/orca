@@ -116,7 +116,7 @@ export function useSourceControlHostedReviewCreated({
         toast.warning(
           translate(
             'auto.components.right.sidebar.SourceControl.0453ca3a9a',
-            '{{value0}} created, but Orca could not refresh it yet.',
+            '{{value0}} created, but MCode could not refresh it yet.',
             { value0: copy.titleLabel }
           ),
           {

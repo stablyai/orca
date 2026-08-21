@@ -16,8 +16,8 @@ const mocks = vi.hoisted(() => ({
   browserWindowMock: {
     getAllWindows: vi.fn<() => TestWindow[]>(() => [])
   },
-  checkOrcaStarredMock: vi.fn(),
-  starOrcaMock: vi.fn(),
+  checkMCodeStarredMock: vi.fn(),
+  starMCodeMock: vi.fn(),
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn(() => ({ nth_repo_added: 3 })),
   ipcMainHandleMock: vi.fn()
@@ -32,8 +32,8 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../github/client', () => ({
-  checkOrcaStarred: mocks.checkOrcaStarredMock,
-  starOrca: mocks.starOrcaMock
+  checkMCodeStarred: mocks.checkMCodeStarredMock,
+  starMCode: mocks.starMCodeMock
 }))
 
 vi.mock('../telemetry/client', () => ({
@@ -44,7 +44,7 @@ vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: mocks.getCohortAtEmitMock
 }))
 
-const { browserWindowMock, checkOrcaStarredMock, trackMock } = mocks
+const { browserWindowMock, checkMCodeStarredMock, trackMock } = mocks
 const getIpcHandler = createIpcHandlerLookup(mocks.ipcMainHandleMock)
 
 describe('StarNagService', () => {
@@ -84,10 +84,10 @@ describe('StarNagService', () => {
     })
   })
 
-  it('shows the browser fallback when checkOrcaStarred cannot determine star state', async () => {
+  it('shows the browser fallback when checkMCodeStarred cannot determine star state', async () => {
     const window = createWindow()
     browserWindowMock.getAllWindows.mockReturnValue([window])
-    checkOrcaStarredMock.mockResolvedValue(null)
+    checkMCodeStarredMock.mockResolvedValue(null)
     const { service, emitAgentStarted } = createHarness()
 
     service.start()
@@ -116,10 +116,10 @@ describe('StarNagService', () => {
     })
   })
 
-  it('does not log a threshold exposure when checkOrcaStarred returns true', async () => {
+  it('does not log a threshold exposure when checkMCodeStarred returns true', async () => {
     const window = createWindow()
     browserWindowMock.getAllWindows.mockReturnValue([window])
-    checkOrcaStarredMock.mockResolvedValue(true)
+    checkMCodeStarredMock.mockResolvedValue(true)
     const { service, emitAgentStarted } = createHarness()
 
     service.start()

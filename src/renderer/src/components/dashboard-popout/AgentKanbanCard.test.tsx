@@ -34,7 +34,7 @@ function card(overrides: Partial<DashboardCard> = {}): DashboardCard {
     worktreeId: 'worktree-1',
     tabId: 'tab',
     leafId: 'leaf',
-    repoName: 'Orca',
+    repoName: 'MCode',
     worktreeName: 'dashboard-review',
     startedAt: 1_000,
     finishedAt: null,
@@ -233,7 +233,7 @@ describe('AgentKanbanCard', () => {
       repoIcon: { type: 'emoji', emoji: '🐳' }
     })
 
-    expect(screen.getByLabelText('Orca')).toBeInTheDocument()
+    expect(screen.getByLabelText('MCode')).toBeInTheDocument()
     expect(screen.getByText('🐳')).toBeInTheDocument()
   })
 

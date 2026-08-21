@@ -105,7 +105,7 @@ function launchLegacyCloseClient(options: {
       ...process.env,
       ELECTRON_RUN_AS_NODE: '1',
       NODE_PATH: path.join(process.cwd(), 'node_modules'),
-      ORCA_USER_DATA_PATH: runtime.userDataDir
+      MCODE_USER_DATA_PATH: runtime.userDataDir
     },
     stdio: ['ignore', 'ignore', 'pipe', 'ipc']
   })

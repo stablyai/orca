@@ -8,17 +8,17 @@ import { resolveWindowsShellLaunchArgs } from './providers/windows-shell-args'
 
 const WINDOWS_POWERSHELLS = ['powershell.exe', 'pwsh.exe'] as const
 const PROFILE_CODEX_HOME = 'C:\\Profile Custom\\codex'
-const MANAGED_CODEX_HOME = 'C:\\Orca Managed\\codex-runtime-home'
+const MANAGED_CODEX_HOME = 'C:\\MCode Managed\\codex-runtime-home'
 
 for (const shell of WINDOWS_POWERSHELLS) {
   describe.runIf(isAvailable(shell))(`${shell} managed home bootstrap`, () => {
     it.each(['FullLanguage', 'ConstrainedLanguage'] as const)(
       'restores CODEX_HOME and continues startup in %s mode',
       (languageMode) => {
-        const cwd = mkdtempSync(join(tmpdir(), 'orca-powershell-clm-'))
+        const cwd = mkdtempSync(join(tmpdir(), 'mcode-powershell-clm-'))
         try {
           expect(runBootstrap(shell, languageMode, cwd)).toContain(
-            `mode=${languageMode};codexHome=${MANAGED_CODEX_HOME};orcaHome=${MANAGED_CODEX_HOME};startupCount=2;cwd=${cwd}`
+            `mode=${languageMode};codexHome=${MANAGED_CODEX_HOME};mcodeHome=${MANAGED_CODEX_HOME};startupCount=2;cwd=${cwd}`
           )
         } finally {
           rmSync(cwd, { recursive: true, force: true })
@@ -38,7 +38,7 @@ function runBootstrap(
     cwd,
     process.env.USERPROFILE ?? cwd,
     undefined,
-    '$env:ORCA_TEST_STARTUP_COUNT = 1 + [int]$env:ORCA_TEST_STARTUP_COUNT'
+    '$env:MCODE_TEST_STARTUP_COUNT = 1 + [int]$env:MCODE_TEST_STARTUP_COUNT'
   )
   expect(launch.startupCommandDeliveredInShellArgs).toBe(true)
   const encodedCommandIndex = launch.shellArgs.indexOf('-EncodedCommand')
@@ -54,9 +54,9 @@ function runBootstrap(
       env: {
         ...process.env,
         CODEX_HOME: PROFILE_CODEX_HOME,
-        ORCA_CODEX_HOME: MANAGED_CODEX_HOME,
-        ORCA_TEST_BOOTSTRAP: encodedCommand,
-        ORCA_TEST_LANGUAGE_MODE: languageMode
+        MCODE_CODEX_HOME: MANAGED_CODEX_HOME,
+        MCODE_TEST_BOOTSTRAP: encodedCommand,
+        MCODE_TEST_LANGUAGE_MODE: languageMode
       },
       windowsHide: true
     }
@@ -80,20 +80,20 @@ function isAvailable(shell: (typeof WINDOWS_POWERSHELLS)[number]): boolean {
 
 const harness = encodePowerShellCommand(`
 $initialState = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault()
-$initialState.LanguageMode = $env:ORCA_TEST_LANGUAGE_MODE
+$initialState.LanguageMode = $env:MCODE_TEST_LANGUAGE_MODE
 $runspace = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspace($initialState)
 $runspace.Open()
 $runner = [System.Management.Automation.PowerShell]::Create()
 $runner.Runspace = $runspace
 $bootstrap = [Text.Encoding]::Unicode.GetString(
-  [Convert]::FromBase64String($env:ORCA_TEST_BOOTSTRAP)
+  [Convert]::FromBase64String($env:MCODE_TEST_BOOTSTRAP)
 )
 $null = $runner.AddScript($bootstrap).Invoke()
 $runner.Commands.Clear()
 $null = $runner.AddScript($bootstrap).Invoke()
 $runner.Commands.Clear()
 $runner.AddScript(
-  '"mode=$($ExecutionContext.SessionState.LanguageMode);codexHome=$env:CODEX_HOME;orcaHome=$env:ORCA_CODEX_HOME;startupCount=$env:ORCA_TEST_STARTUP_COUNT;cwd=$($PWD.Path)"'
+  '"mode=$($ExecutionContext.SessionState.LanguageMode);codexHome=$env:CODEX_HOME;mcodeHome=$env:MCODE_CODEX_HOME;startupCount=$env:MCODE_TEST_STARTUP_COUNT;cwd=$($PWD.Path)"'
 ).Invoke()
 $runner.Dispose()
 $runspace.Dispose()

@@ -47,7 +47,7 @@ function toDefaultWslLinuxPath(windowsPath: string): string {
 }
 
 const WSL_CANONICALIZE_TIMEOUT_MS = 5000
-const WSL_PATH_MISSING_OUTPUT = '__ORCA_WSL_PATH_MISSING__'
+const WSL_PATH_MISSING_OUTPUT = '__MCODE_WSL_PATH_MISSING__'
 
 // Why: `readlink -f` over wsl.exe stalls up to the timeout on a cold or wedged
 // distro. Running it synchronously on the Electron main process froze the UI on
@@ -187,8 +187,8 @@ export function createCodexWslRuntimeHookInstallPlan(
   return {
     configPath: pathWin32.join(runtimeHomePath, 'hooks.json'),
     tomlPath: pathWin32.join(runtimeHomePath, 'config.toml'),
-    scriptPath: pathWin32.join(runtimeHomePath, '.orca', 'agent-hooks', 'codex-hook.sh'),
-    commandScriptPath: pathPosix.join(linuxRuntimeHome, '.orca', 'agent-hooks', 'codex-hook.sh'),
+    scriptPath: pathWin32.join(runtimeHomePath, '.mcode', 'agent-hooks', 'codex-hook.sh'),
+    commandScriptPath: pathPosix.join(linuxRuntimeHome, '.mcode', 'agent-hooks', 'codex-hook.sh'),
     trustConfigPath: pathPosix.join(linuxRuntimeHome, 'hooks.json'),
     wslDistro: distro,
     linuxRuntimeHome

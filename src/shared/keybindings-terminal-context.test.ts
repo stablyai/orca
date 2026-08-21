@@ -1,4 +1,4 @@
-// Terminal focus context and the orca-first / terminal-first policy gate.
+// Terminal focus context and the mcode-first / terminal-first policy gate.
 import { describe, expect, it } from 'vitest'
 import {
   getEffectiveKeybindingsForAction,
@@ -7,7 +7,7 @@ import {
 } from './keybindings'
 
 describe('keybindings', () => {
-  it('keeps Orca-first terminal context backward compatible', () => {
+  it('keeps MCode-first terminal context backward compatible', () => {
     const ctrlP = {
       key: 'p',
       code: 'KeyP',
@@ -21,7 +21,7 @@ describe('keybindings', () => {
     expect(
       keybindingMatchesAction('worktree.quickOpen', ctrlP, 'linux', undefined, {
         context: 'terminal',
-        terminalShortcutPolicy: 'orca-first'
+        terminalShortcutPolicy: 'mcode-first'
       })
     ).toBe(true)
     expect(

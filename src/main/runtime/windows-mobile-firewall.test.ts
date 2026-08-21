@@ -13,7 +13,7 @@ function environment(
   return {
     platform: 'win32',
     isPackaged: true,
-    executablePath: "C:\\Users\\O'Brien\\Orca\\Orca.exe",
+    executablePath: "C:\\Users\\O'Brien\\MCode\\MCode.exe",
     systemRoot: 'C:\\Windows',
     runPowerShell,
     ...overrides
@@ -49,12 +49,12 @@ describe('windows mobile firewall', () => {
     // Why: without ActiveStore, GPO-applied Block rules are invisible and the
     // post-repair re-inspection could report a false success on managed hosts.
     expect(script).toContain(
-      "Get-NetFirewallApplicationFilter -PolicyStore ActiveStore -Program 'C:\\Users\\O''Brien\\Orca\\Orca.exe'"
+      "Get-NetFirewallApplicationFilter -PolicyStore ActiveStore -Program 'C:\\Users\\O''Brien\\MCode\\MCode.exe'"
     )
     expect(script).toContain('Get-NetFirewallProfile -PolicyStore ActiveStore -Name Private')
     expect(script).toContain("LocalPort | Where-Object { [string]$_ -eq 'Any'")
     expect(script).toContain("[string]$_ -eq '6768'")
-    expect(script).toContain("C:\\Users\\O''Brien\\Orca\\Orca.exe")
+    expect(script).toContain("C:\\Users\\O''Brien\\MCode\\MCode.exe")
     expect(script).toContain("$profile -match 'Private'")
     expect(script).toContain("Get-NetIPAddress -IPAddress '192.168.0.108'")
     expect(script).toContain('Get-NetFirewallAddressFilter')
@@ -157,7 +157,7 @@ describe('windows mobile firewall', () => {
     }
   })
 
-  it('repairs only Orca mobile pairing on private networks after elevation', async () => {
+  it('repairs only MCode mobile pairing on private networks after elevation', async () => {
     const runPowerShell = vi.fn().mockResolvedValue('{"launched":true,"exitCode":0}')
     await expect(repairWindowsMobileFirewall(6769, environment(runPowerShell))).resolves.toEqual({
       ok: true
@@ -167,7 +167,7 @@ describe('windows mobile firewall', () => {
     const encoded = outerScript.match(/'-EncodedCommand', '([^']+)'/)?.[1]
     expect(encoded).toBeTruthy()
     const repairScript = Buffer.from(encoded!, 'base64').toString('utf16le')
-    expect(repairScript).toContain("-Name 'Orca.MobilePairing'")
+    expect(repairScript).toContain("-Name 'MCode.MobilePairing'")
     expect(repairScript).toContain(
       "Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' -and $_.Action -eq 'Block' }"
     )
@@ -175,7 +175,7 @@ describe('windows mobile firewall', () => {
     expect(repairScript).toContain('-Profile Private')
     expect(repairScript).toContain('-Protocol TCP')
     expect(repairScript).toContain('-LocalPort 6769')
-    expect(repairScript).toContain("-Program 'C:\\Users\\O''Brien\\Orca\\Orca.exe'")
+    expect(repairScript).toContain("-Program 'C:\\Users\\O''Brien\\MCode\\MCode.exe'")
     expect(repairScript).toContain('-EdgeTraversalPolicy Block')
   })
 

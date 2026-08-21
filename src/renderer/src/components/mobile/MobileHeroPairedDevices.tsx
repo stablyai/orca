@@ -21,7 +21,7 @@ export function HeroPaired({
     <div>
       <div className="mp-eyebrow-row">
         <span className="mp-eyebrow">
-          {translate('auto.components.mobile.MobileHero.5410d55d79', 'Orca Mobile')}
+          {translate('auto.components.mobile.MobileHero.5410d55d79', 'MCode Mobile')}
         </span>
       </div>
       <h1 className="mp-h1">
@@ -32,7 +32,7 @@ export function HeroPaired({
       <p className="mp-lead-sm">
         {translate(
           'auto.components.mobile.MobileHero.266c18c105',
-          'Open Orca Mobile to pick up where you left off, or pair another device.'
+          'Open MCode Mobile to pick up where you left off, or pair another device.'
         )}
       </p>
       <ul className="mp-paired-list">

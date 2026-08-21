@@ -102,7 +102,7 @@ describe('discoverCommitMessageModelsLocal', () => {
           type: 'control_response',
           response: {
             subtype: 'success',
-            request_id: 'orca-model-discovery',
+            request_id: 'mcode-model-discovery',
             response: {
               models: [
                 { value: 'default', displayName: 'Default (recommended)' },
@@ -157,7 +157,7 @@ describe('discoverCommitMessageModelsLocal', () => {
     // Captured from claude 2.1.100: the unsupported subtype still exits 0.
     listeners.get('stdout:data')?.(
       Buffer.from(
-        '{"type":"control_response","response":{"subtype":"error","request_id":"orca-model-discovery","error":"Unsupported control request subtype: list_models"}}\n'
+        '{"type":"control_response","response":{"subtype":"error","request_id":"mcode-model-discovery","error":"Unsupported control request subtype: list_models"}}\n'
       )
     )
     listeners.get('close')?.(0)

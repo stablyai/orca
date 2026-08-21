@@ -26,7 +26,7 @@ vi.mock('@/components/sidebar/RemoteFileBrowser', () => ({
     onCancel: () => void
   }) => (
     <div data-testid="remote-file-browser" data-target={targetId ?? ''}>
-      <button type="button" onClick={() => onSelect('/remote/orca')}>
+      <button type="button" onClick={() => onSelect('/remote/mcode')}>
         Select remote folder
       </button>
       <button type="button" onClick={onCancel}>
@@ -41,7 +41,7 @@ import { SetProjectLocationDialog } from './SetProjectLocationDialog'
 const option: NeedsSetupProjectHostOption = {
   kind: 'needs-setup',
   id: 'needs-setup:ssh:openclaw',
-  projectId: 'project-orca',
+  projectId: 'project-mcode',
   hostId: 'ssh:openclaw',
   label: 'openclaw',
   detail: 'Project location not set',
@@ -57,9 +57,9 @@ function renderDialog(
   render(
     <SetProjectLocationDialog
       option={option}
-      projectName="orca"
+      projectName="mcode"
       projectKind="git"
-      defaultCloneUrl="git@github.com:stablyai/orca.git"
+      defaultCloneUrl="git@github.com:mcode-ide/mcode.git"
       onClose={vi.fn()}
       onReady={vi.fn()}
       {...overrides}
@@ -91,7 +91,7 @@ describe('SetProjectLocationDialog', () => {
 
     expect(screen.getByTestId('set-project-location-dialog')).toBeTruthy()
     expect(screen.getByText('Set project location')).toBeTruthy()
-    expect(screen.getByText('Choose where orca lives on openclaw.')).toBeTruthy()
+    expect(screen.getByText('Choose where mcode lives on openclaw.')).toBeTruthy()
 
     await user.click(screen.getByRole('button', { name: /Browse folder/ }))
     await user.click(screen.getByRole('button', { name: 'Browse host filesystem' }))
@@ -99,11 +99,11 @@ describe('SetProjectLocationDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Set location' }))
 
     expect(storeMocks.setupProjectExistingFolder).toHaveBeenCalledWith({
-      projectId: 'project-orca',
+      projectId: 'project-mcode',
       hostId: 'ssh:openclaw',
-      path: '/remote/orca',
+      path: '/remote/mcode',
       kind: 'git',
-      displayName: 'orca'
+      displayName: 'mcode'
     })
     expect(onReady).toHaveBeenCalledWith('setup-openclaw')
     expect(onClose).not.toHaveBeenCalled()
@@ -119,11 +119,11 @@ describe('SetProjectLocationDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Clone' }))
 
     expect(storeMocks.setupProjectClone).toHaveBeenCalledWith({
-      projectId: 'project-orca',
+      projectId: 'project-mcode',
       hostId: 'ssh:openclaw',
-      url: 'git@github.com:stablyai/orca.git',
-      destination: '/remote/orca',
-      displayName: 'orca'
+      url: 'git@github.com:mcode-ide/mcode.git',
+      destination: '/remote/mcode',
+      displayName: 'mcode'
     })
     expect(onReady).toHaveBeenCalledWith('setup-openclaw-clone')
   })
@@ -137,7 +137,7 @@ describe('SetProjectLocationDialog', () => {
     render(
       <SetProjectLocationDialog
         option={null}
-        projectName="orca"
+        projectName="mcode"
         projectKind="git"
         defaultCloneUrl=""
         onClose={vi.fn()}
@@ -179,9 +179,9 @@ describe('SetProjectLocationDialog', () => {
     const { rerender } = render(
       <SetProjectLocationDialog
         option={option}
-        projectName="orca"
+        projectName="mcode"
         projectKind="git"
-        defaultCloneUrl="https://github.com/stablyai/orca.git"
+        defaultCloneUrl="https://github.com/mcode-ide/mcode.git"
         onClose={onClose}
         onReady={onReady}
       />
@@ -189,16 +189,16 @@ describe('SetProjectLocationDialog', () => {
     const user = userEvent.setup()
 
     await user.click(screen.getByRole('button', { name: /Clone from URL/ }))
-    await user.type(screen.getByPlaceholderText('/destination/on/host'), '/remote/orca')
+    await user.type(screen.getByPlaceholderText('/destination/on/host'), '/remote/mcode')
     await user.click(screen.getByRole('button', { name: 'Clone' }))
 
     // The user backs out and points the composer somewhere else.
     rerender(
       <SetProjectLocationDialog
         option={null}
-        projectName="orca"
+        projectName="mcode"
         projectKind="git"
-        defaultCloneUrl="https://github.com/stablyai/orca.git"
+        defaultCloneUrl="https://github.com/mcode-ide/mcode.git"
         onClose={onClose}
         onReady={onReady}
       />
@@ -216,9 +216,9 @@ describe('SetProjectLocationDialog', () => {
       <StrictMode>
         <SetProjectLocationDialog
           option={option}
-          projectName="orca"
+          projectName="mcode"
           projectKind="git"
-          defaultCloneUrl="git@github.com:stablyai/orca.git"
+          defaultCloneUrl="git@github.com:mcode-ide/mcode.git"
           onClose={vi.fn()}
           onReady={onReady}
         />
@@ -227,7 +227,7 @@ describe('SetProjectLocationDialog', () => {
     const user = userEvent.setup()
 
     await user.click(screen.getByRole('button', { name: /Browse folder/ }))
-    await user.type(screen.getByPlaceholderText('/path/to/project/on/host'), '/remote/orca')
+    await user.type(screen.getByPlaceholderText('/path/to/project/on/host'), '/remote/mcode')
     await user.click(screen.getByRole('button', { name: 'Set location' }))
 
     expect(onReady).toHaveBeenCalledWith('setup-openclaw')

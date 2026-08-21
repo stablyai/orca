@@ -18,7 +18,7 @@ export function tryCreateInstallLockCommand(host: RemoteHostPlatform, lockDir: s
   if (!isWindowsRemoteHost(host)) {
     return `mkdir ${shellEscape(lockDir)} 2>&1 && echo OK || echo BUSY`
   }
-  // Why: old Orca clients recognize only a directory at `.install-lock`, while
+  // Why: old MCode clients recognize only a directory at `.install-lock`, while
   // concurrent New-Item calls can both report success in PowerShell 5.1. Keep
   // that directory marker and arbitrate ownership with an atomic child file.
   return powerShellCommand(

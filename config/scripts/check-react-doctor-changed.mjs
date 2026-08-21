@@ -4,7 +4,7 @@ import { resolvePullRequestDiffBase } from './git-pull-request-diff-base.mjs'
 
 const requestedBase =
   process.argv.slice(2).find((argument) => argument !== '--') ??
-  process.env.ORCA_CODE_QUALITY_BASE ??
+  process.env.MCODE_CODE_QUALITY_BASE ??
   'origin/main'
 const base = resolvePullRequestDiffBase(process.cwd(), requestedBase)
 const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'

@@ -44,7 +44,7 @@ export default function WorktreeVisibilityHelpPopover(): React.JSX.Element {
             <li>
               {translate(
                 'auto.components.sidebar.WorktreeVisibilityHelpPopover.8db4e19a26',
-                'This setting never hides worktrees created through Orca.'
+                'This setting never hides worktrees created through MCode.'
               )}
             </li>
             <li>

@@ -43,7 +43,7 @@ describe('zh technical literal / sense fixes (#9574)', () => {
     expect(findByKey(zh, '5af8251002')).toBe('SCSS')
     expect(findByKey(zh, '97e96cc027')).toBe('/goal')
     expect(findByKey(zh, 'f62ce91ade')).toBe('origin')
-    expect(findByKey(zh, '79afc6772b')).toBe('orca.yaml')
+    expect(findByKey(zh, '79afc6772b')).toBe('mcode.yaml')
   })
 
   it('uses the correct sense for short UI verbs/nouns', () => {

@@ -18,8 +18,8 @@ export function createMobileRelayPairingFixtures(now: number): PairingFixture[] 
   }
   const relay = {
     v: 1 as const,
-    directorUrl: 'https://relay.onorca.dev',
-    cellUrl: 'https://relay-c1.onorca.dev',
+    directorUrl: 'https://relay.mcode.dev',
+    cellUrl: 'https://relay-c1.mcode.dev',
     assignmentEpoch: 7,
     relayHostId: 'AbCdEf0123_-xyZ9',
     inviteToken: INVITE_TOKEN,
@@ -65,12 +65,12 @@ export function createMobileRelayPairingFixtures(now: number): PairingFixture[] 
     },
     {
       name: 'non-canonical director origin is invalid',
-      payload: { ...directOffer, relay: { ...relay, directorUrl: 'https://relay.onorca.dev/' } },
+      payload: { ...directOffer, relay: { ...relay, directorUrl: 'https://relay.mcode.dev/' } },
       expected: null
     },
     {
       name: 'non-HTTPS cell origin is invalid',
-      payload: { ...directOffer, relay: { ...relay, cellUrl: 'http://relay-c1.onorca.dev' } },
+      payload: { ...directOffer, relay: { ...relay, cellUrl: 'http://relay-c1.mcode.dev' } },
       expected: null
     },
     {
@@ -136,5 +136,5 @@ export function createMobileRelayPairingFixtures(now: number): PairingFixture[] 
 export function encodePairingFixturePayload(payload: unknown): string {
   const json = JSON.stringify(payload)
   const code = Buffer.from(json, 'utf8').toString('base64url')
-  return `orca://pair?code=${code}`
+  return `mcode://pair?code=${code}`
 }

@@ -8,8 +8,8 @@ import {
 import { assertGitDiffWithinTransportBudget } from '../../../../shared/git-diff-transport-budget'
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { OrcaRuntimeService } from '../../orca-runtime'
-import { RuntimeGitCommands, type ResolvedRuntimeGitWorktree } from '../../orca-runtime-git'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
+import { RuntimeGitCommands, type ResolvedRuntimeGitWorktree } from '../../mcode-runtime-git'
 import type { RpcRequest, RpcResponse } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { GIT_METHODS } from './git'
@@ -55,8 +55,8 @@ const CASES: readonly { method: string; runtimeMethod: string; params: Record<st
     }
   ]
 
-/** Stands in for orca-runtime-git.ts, which enforces the budget it is handed as its last argument. */
-function stubRuntime(runtimeMethod: string): OrcaRuntimeService {
+/** Stands in for mcode-runtime-git.ts, which enforces the budget it is handed as its last argument. */
+function stubRuntime(runtimeMethod: string): MCodeRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
     [runtimeMethod]: vi.fn(async (...args: unknown[]) => {
@@ -66,10 +66,10 @@ function stubRuntime(runtimeMethod: string): OrcaRuntimeService {
         typeof maxContentBytes === 'number' ? maxContentBytes : undefined
       )
     })
-  } as unknown as OrcaRuntimeService
+  } as unknown as MCodeRuntimeService
 }
 
-function budgetArgument(runtime: OrcaRuntimeService, runtimeMethod: string): unknown {
+function budgetArgument(runtime: MCodeRuntimeService, runtimeMethod: string): unknown {
   const spy = (runtime as unknown as Record<string, ReturnType<typeof vi.fn>>)[runtimeMethod]!
   return spy.mock.calls[0]!.at(-1)
 }
@@ -79,7 +79,7 @@ function makeRequest(method: string, params: Record<string, unknown>): RpcReques
 }
 
 async function dispatchRemote(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   method: string,
   params: Record<string, unknown>,
   clientKind: 'mobile' | 'runtime'
@@ -167,7 +167,7 @@ describe('remote git diff transport budget', () => {
     })
     const runtime = Object.assign(commands, {
       getRuntimeId: () => 'test-runtime'
-    }) as unknown as OrcaRuntimeService
+    }) as unknown as MCodeRuntimeService
 
     const response = await dispatchRemote(runtime, 'git.diff', CASES[0]!.params, 'mobile')
 

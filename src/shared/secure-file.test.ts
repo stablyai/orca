@@ -72,7 +72,7 @@ describe('hardenSecurePath', () => {
   })
 
   it('rewrites Windows ACLs through the system PowerShell path', () => {
-    hardenSecurePath('C:\\Users\\me\\.orca\\secret.json', {
+    hardenSecurePath('C:\\Users\\me\\.mcode\\secret.json', {
       isDirectory: false,
       platform: 'win32'
     })
@@ -93,7 +93,7 @@ describe('hardenSecurePath', () => {
         '-NonInteractive',
         '-ExecutionPolicy',
         'Bypass',
-        'C:\\Users\\me\\.orca\\secret.json',
+        'C:\\Users\\me\\.mcode\\secret.json',
         'S-1-5-21-1000',
         '0'
       ])
@@ -106,7 +106,7 @@ describe('hardenSecurePath', () => {
   })
 
   it('adds inheritable rules when hardening a Windows directory', () => {
-    hardenSecurePath('C:\\Users\\me\\.orca', { isDirectory: true, platform: 'win32' })
+    hardenSecurePath('C:\\Users\\me\\.mcode', { isDirectory: true, platform: 'win32' })
 
     const powershellArgs = vi.mocked(execFile).mock.calls[0]![1] as string[]
     expect(powershellArgs.at(-1)).toBe('1')
@@ -124,7 +124,7 @@ describe('hardenSecurePath', () => {
     })
 
     expect(() =>
-      hardenSecurePath('C:\\Users\\me\\.orca\\secret.json', {
+      hardenSecurePath('C:\\Users\\me\\.mcode\\secret.json', {
         isDirectory: false,
         platform: 'win32'
       })
@@ -133,7 +133,7 @@ describe('hardenSecurePath', () => {
 
   it('caches successful existing-file hardening within a process', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-secure-file-'))
     tempDirs.push(userDataPath)
     const targetPath = join(userDataPath, 'secret.json')
     writeFileSync(targetPath, '{}')
@@ -153,7 +153,7 @@ describe('hardenSecurePath', () => {
       maxKeyBytes: 4096,
       maxTotalKeyBytes: 8192
     })
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-secure-file-'))
     tempDirs.push(userDataPath)
     const paths = ['first.json', 'second.json', 'third.json'].map((name) =>
       join(userDataPath, name)
@@ -181,7 +181,7 @@ describe('hardenSecurePath', () => {
       maxKeyBytes: 4096,
       maxTotalKeyBytes: 8192
     })
-    const root = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
+    const root = mkdtempSync(join(tmpdir(), 'mcode-secure-file-'))
     tempDirs.push(root)
     const directories = ['first', 'second', 'third'].map((name) => join(root, name))
     const files = directories.map((dir) => {
@@ -207,7 +207,7 @@ describe('hardenSecurePath', () => {
 
   it('re-hardens an existing file when its metadata changes after caching', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-secure-file-'))
     tempDirs.push(userDataPath)
     const targetPath = join(userDataPath, 'secret.json')
     writeFileSync(targetPath, '{}')
@@ -228,7 +228,7 @@ describe('hardenSecurePath', () => {
 
   it('keeps post-rename target hardening on every write while caching the directory', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-secure-file-'))
     tempDirs.push(userDataPath)
     const targetPath = join(userDataPath, 'secret.json')
 
@@ -253,13 +253,13 @@ describe('hardenSecurePath', () => {
   // never matched. Directories must be path-cached for the process lifetime.
   it('does not re-harden the parent directory when its mtime changes between reads', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-secure-file-'))
     tempDirs.push(userDataPath)
     const targetPath = join(userDataPath, 'secret.json')
     writeFileSync(targetPath, '{}')
 
     // Simulate the env-store read loop: hardenExistingSecureFile called many times while
-    // another part of Orca writes to the same directory (changing its mtime).
+    // another part of MCode writes to the same directory (changing its mtime).
     hardenExistingSecureFile(targetPath)
     await waitForFileTimestampTick()
     // Simulate a write to another file in the same dir (changes dir mtime)
@@ -276,7 +276,7 @@ describe('hardenSecurePath', () => {
 
   it('does not re-harden an unchanged file on repeated reads', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-secure-file-'))
     tempDirs.push(userDataPath)
     const targetPath = join(userDataPath, 'secret.json')
     writeFileSync(targetPath, '{}')
@@ -292,7 +292,7 @@ describe('hardenSecurePath', () => {
   })
 
   it('applies the read-path ACL asynchronously without blocking (async execFile)', () => {
-    hardenSecurePath('C:\\Users\\me\\.orca\\secret.json', {
+    hardenSecurePath('C:\\Users\\me\\.mcode\\secret.json', {
       isDirectory: false,
       platform: 'win32'
     })
@@ -308,7 +308,7 @@ describe('hardenSecurePath', () => {
   // parent's inherited (broader) ACL for the ~1-1.5s PowerShell cold-start window.
   it('hardens the credential file synchronously while keeping the directory async', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-secure-file-'))
     tempDirs.push(userDataPath)
     const targetPath = join(userDataPath, 'secret.json')
 
@@ -329,7 +329,7 @@ describe('hardenSecurePath', () => {
   // trusted.
   it('retries the credential-file ACL on the next write when the sync apply fails', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-secure-file-'))
     tempDirs.push(userDataPath)
     const targetPath = join(userDataPath, 'secret.json')
 
@@ -366,7 +366,7 @@ describe('hardenSecurePath', () => {
   // exercised through the write path rather than the read path).
   it('hardens the directory exactly once across many writes despite mtime churn', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-secure-file-'))
     tempDirs.push(userDataPath)
 
     for (let i = 0; i < 5; i++) {
@@ -384,7 +384,7 @@ describe('hardenSecurePath', () => {
   // POSIX hardening uses chmodSync only.
   it('never spawns PowerShell on non-win32 platforms', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-secure-file-'))
     tempDirs.push(userDataPath)
     const targetPath = join(userDataPath, 'secret.json')
 
@@ -397,7 +397,7 @@ describe('hardenSecurePath', () => {
 
   posixModeIt('re-hardens a POSIX directory when its metadata changes after caching', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-secure-file-'))
     tempDirs.push(userDataPath)
     const targetPath = join(userDataPath, 'secret.json')
     writeFileSync(targetPath, '{}')
@@ -418,7 +418,7 @@ describe('hardenSecurePath', () => {
       maxKeyBytes: 4096,
       maxTotalKeyBytes: 8192
     })
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-secure-file-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-secure-file-'))
     tempDirs.push(userDataPath)
     const firstPath = join(userDataPath, 'first.json')
     const secondPath = join(userDataPath, 'second.json')

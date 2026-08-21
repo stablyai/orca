@@ -44,12 +44,12 @@ function readMirroredConstants(source) {
 
 const { maxCarryLength: MAX_CARRY_LENGTH, httpSchemePrefixes: HTTP_SCHEME_PREFIXES } =
   readMirroredConstants(DETECTOR_SOURCE)
-const ITERATIONS = Number.parseInt(process.env.ORCA_PR_CARRY_BENCH_ITERATIONS ?? '2000', 10)
-const WARMUP = Number.parseInt(process.env.ORCA_PR_CARRY_BENCH_WARMUP ?? '200', 10)
+const ITERATIONS = Number.parseInt(process.env.MCODE_PR_CARRY_BENCH_ITERATIONS ?? '2000', 10)
+const WARMUP = Number.parseInt(process.env.MCODE_PR_CARRY_BENCH_WARMUP ?? '200', 10)
 
 for (const [name, value] of [
-  ['ORCA_PR_CARRY_BENCH_ITERATIONS', ITERATIONS],
-  ['ORCA_PR_CARRY_BENCH_WARMUP', WARMUP]
+  ['MCODE_PR_CARRY_BENCH_ITERATIONS', ITERATIONS],
+  ['MCODE_PR_CARRY_BENCH_WARMUP', WARMUP]
 ]) {
   if (!Number.isInteger(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer, received ${value}`)
@@ -162,15 +162,15 @@ function measure(fn, chunk) {
 // Why non-empty fixtures: a chunk of ordinary text yields '' from both versions,
 // so an equality check over it would pass even for a carry that always returns ''.
 const EQUIVALENCE_FIXTURES = [
-  `noise ${'x'.repeat(400)}https://github.com/acme/orca/pull/7`,
-  `https://github.com/acme/orca/pull/1${'x'.repeat(600)}`,
-  `https://github.com/acme/orca/pull/1${'x'.repeat(600)}https`,
+  `noise ${'x'.repeat(400)}https://github.com/acme/mcode/pull/7`,
+  `https://github.com/acme/mcode/pull/1${'x'.repeat(600)}`,
+  `https://github.com/acme/mcode/pull/1${'x'.repeat(600)}https`,
   `${'x'.repeat(1000)}https`,
   `${'x'.repeat(1000)}http`,
-  'https://github.com/acme/orca/pull/7 trailing words',
+  'https://github.com/acme/mcode/pull/7 trailing words',
   `${'y'.repeat(600)}`,
   '',
-  'https://github.com/acme/orca/pull/7'
+  'https://github.com/acme/mcode/pull/7'
 ]
 for (const fixture of EQUIVALENCE_FIXTURES) {
   if (carryBefore(fixture) !== carryAfter(fixture)) {

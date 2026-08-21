@@ -9,7 +9,7 @@ import {
   readPairedRetentionSample,
   startRendererLagProbe
 } from '../paired-runtime-retention-metrics'
-import { expect } from './orca-app'
+import { expect } from './mcode-app'
 import { verifyHiddenPairedTerminalOutputSuppression } from './paired-terminal-hidden-output-oracle'
 import { createPairedTerminalParkingFixture } from './paired-terminal-parking-fixture'
 import { verifyPairedTerminalTitleFanout } from './paired-terminal-title-fanout-oracle'

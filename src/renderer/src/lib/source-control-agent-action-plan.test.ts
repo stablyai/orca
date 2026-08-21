@@ -62,7 +62,7 @@ describe('planSourceControlAgentActionLaunch', () => {
     },
     {
       terminalWindowsShell: 'git-bash',
-      expectedCommand: 'ORCA_HERMES_STARTUP_QUERY'
+      expectedCommand: 'MCODE_HERMES_STARTUP_QUERY'
     }
   ])(
     'uses $terminalWindowsShell quoting for Hermes source-control prompts',
@@ -77,7 +77,7 @@ describe('planSourceControlAgentActionLaunch', () => {
       })
 
       expect(result.ok && result.plan.launchCommand).toContain(expectedCommand)
-      expect(result.ok && result.plan.env?.ORCA_HERMES_STARTUP_QUERY).toBe('Review the change')
+      expect(result.ok && result.plan.env?.MCODE_HERMES_STARTUP_QUERY).toBe('Review the change')
     }
   )
 

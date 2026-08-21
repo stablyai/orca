@@ -212,7 +212,7 @@ class ComputerSidecarProcess {
       env: {
         ...process.env,
         ELECTRON_RUN_AS_NODE: '1',
-        ORCA_COMPUTER_SIDECAR: '1'
+        MCODE_COMPUTER_SIDECAR: '1'
       },
       ...(process.platform === 'win32' ? { windowsHide: true } : {})
     })

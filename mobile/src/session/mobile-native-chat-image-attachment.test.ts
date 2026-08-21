@@ -41,7 +41,7 @@ describe('uploadMobileNativeChatImages', () => {
   it('uploads the picked image and returns its host path + local preview uri, without any terminal.send', async () => {
     const client = clientWithResponses([
       methodNotFound('start'),
-      ok('save', '/tmp/orca-attach.png')
+      ok('save', '/tmp/mcode-attach.png')
     ])
 
     const result = await uploadMobileNativeChatImages('library', {
@@ -50,7 +50,7 @@ describe('uploadMobileNativeChatImages', () => {
       pickImages: vi.fn().mockResolvedValue([{ base64: 'AAAA', uri: 'file:///photo.jpg' }])
     })
 
-    expect(result).toEqual([{ path: '/tmp/orca-attach.png', previewUri: 'file:///photo.jpg' }])
+    expect(result).toEqual([{ path: '/tmp/mcode-attach.png', previewUri: 'file:///photo.jpg' }])
     // Native chat defers the paste to submit — nothing is sent to the terminal here.
     expect(client.calls.some((call) => call.method === 'terminal.send')).toBe(false)
     const saveCall = client.calls.find((c) => c.method === 'clipboard.saveImageAsTempFile')

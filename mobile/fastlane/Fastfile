@@ -1,4 +1,4 @@
-# Orca Mobile iOS release lane.
+# MCode Mobile iOS release lane.
 #
 # Builds the prebuilt iOS workspace, signs it with the distribution identity
 # imported into the CI keychain plus an explicit App Store provisioning profile
@@ -25,12 +25,12 @@ MOBILE_ROOT = File.expand_path("..", __dir__)
 # Why: fastlane executes lanes from mobile/fastlane even when GitHub Actions
 # starts in mobile/, so release file paths must be rooted at the mobile app.
 APP_CONFIG_PATH = File.join(MOBILE_ROOT, "app.json")
-WORKSPACE = File.join(MOBILE_ROOT, "ios", "Orca.xcworkspace")
+WORKSPACE = File.join(MOBILE_ROOT, "ios", "MCode.xcworkspace")
 BUILD_OUTPUT_DIRECTORY = File.join(MOBILE_ROOT, "build")
-SCHEME = "Orca"
-BUNDLE_ID = "com.stably.orca.mobile"
+SCHEME = "MCode"
+BUNDLE_ID = "com.mcode.mobile.mobile"
 TESTFLIGHT_GROUPS = ["peeps"].freeze
-DEFAULT_TESTFLIGHT_CHANGELOG = "Latest Orca Mobile updates and fixes.".freeze
+DEFAULT_TESTFLIGHT_CHANGELOG = "Latest MCode Mobile updates and fixes.".freeze
 TESTFLIGHT_PROCESSING_TIMEOUT_SECONDS = 20 * 60
 
 # App Store version states in which the version "train" is terminally closed to
@@ -177,10 +177,10 @@ platform :ios do
     config.fetch("expo").fetch("ios")["buildNumber"] = build_number.to_s
     write_mobile_app_config(config)
 
-    UI.message("Prepared Orca Mobile iOS #{version} (#{build_number})")
+    UI.message("Prepared MCode Mobile iOS #{version} (#{build_number})")
   end
 
-  desc "Build, sign, and upload Orca Mobile to App Store Connect / TestFlight"
+  desc "Build, sign, and upload MCode Mobile to App Store Connect / TestFlight"
   lane :build_and_upload do
     api_key = app_store_connect_api_key_from_env
 
@@ -199,7 +199,7 @@ platform :ios do
 
     # Manual signing: the archive needs the team, profile, and signing style set
     # explicitly (no -allowProvisioningUpdates). Without DEVELOPMENT_TEAM the
-    # archive fails: "Signing for Orca requires a development team".
+    # archive fails: "Signing for MCode requires a development team".
     build_app(
       workspace: WORKSPACE,
       scheme: SCHEME,
@@ -217,7 +217,7 @@ platform :ios do
         },
       },
       output_directory: BUILD_OUTPUT_DIRECTORY,
-      output_name: "Orca.ipa",
+      output_name: "MCode.ipa",
       clean: true,
     )
 
@@ -274,7 +274,7 @@ platform :ios do
     )
   end
 
-  desc "Build, upload, and distribute Orca Mobile to external TestFlight testers"
+  desc "Build, upload, and distribute MCode Mobile to external TestFlight testers"
   lane :release do
     build_and_upload
 

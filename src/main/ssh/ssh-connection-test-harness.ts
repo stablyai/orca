@@ -27,7 +27,7 @@ export type Ssh2ModuleMock = {
 export type SystemSshBinaryModuleMock = { findSystemSsh: typeof findSystemSshMock }
 
 export type SystemFallbackModuleMock = {
-  getOrcaControlSocketPath: typeof getOrcaControlSocketPathMock
+  getMCodeControlSocketPath: typeof getMCodeControlSocketPathMock
   spawnSystemSsh: typeof spawnSystemSshMock
   spawnSystemSshCommand: typeof spawnSystemSshCommandMock
   downloadFileViaSystemSsh: typeof downloadFileViaSystemSshMock
@@ -72,7 +72,7 @@ export const ssh2Mock = {
 }
 
 export const findSystemSshMock = vi.fn<() => string | null>()
-export const getOrcaControlSocketPathMock =
+export const getMCodeControlSocketPathMock =
   vi.fn<(target: SshTarget, options?: SystemSshBuildArgsOptions) => string | null>()
 export const removeControlSocketPathMock = vi.fn<(socketPath: string) => void>()
 export const spawnSystemSshMock =
@@ -234,7 +234,7 @@ export function createSystemSshBinaryModule(): SystemSshBinaryModuleMock {
 
 export function createSystemFallbackModule(): SystemFallbackModuleMock {
   return {
-    getOrcaControlSocketPath: getOrcaControlSocketPathMock,
+    getMCodeControlSocketPath: getMCodeControlSocketPathMock,
     spawnSystemSsh: spawnSystemSshMock,
     spawnSystemSshCommand: spawnSystemSshCommandMock,
     downloadFileViaSystemSsh: downloadFileViaSystemSshMock,
@@ -273,8 +273,8 @@ export function resetSshConnectionMocks(): void {
   ssh2Mock.notifyClientCreated = undefined
   ssh2Mock.presentedHostKey = undefined
   ssh2Mock.lastHostKeyAccepted = undefined
-  getOrcaControlSocketPathMock.mockReset()
-  getOrcaControlSocketPathMock.mockReturnValue(null)
+  getMCodeControlSocketPathMock.mockReset()
+  getMCodeControlSocketPathMock.mockReturnValue(null)
   removeControlSocketPathMock.mockReset()
   spawnSystemSshMock.mockReset()
   spawnSystemSshMock.mockImplementation(() => createSystemSshProcess())

@@ -90,7 +90,7 @@ export async function startPluginWorker(
     // plain Node. The env is a scrubbed allowlist — never ...process.env,
     // which can carry shell-exported secrets into third-party code.
     env: buildPluginWorkerEnv(),
-    // Why: inspector/loader flags from Orca's own launch must never execute
+    // Why: inspector/loader flags from MCode's own launch must never execute
     // inside third-party plugin workers.
     execArgv: [],
     // Why: the protocol permits structured-clone values. Node's default JSON

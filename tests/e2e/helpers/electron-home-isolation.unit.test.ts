@@ -17,7 +17,7 @@ afterEach(() => {
 })
 
 function createUserDataDir(): string {
-  const tempDir = mkdtempSync(path.join(os.tmpdir(), 'orca-home-isolation-test-'))
+  const tempDir = mkdtempSync(path.join(os.tmpdir(), 'mcode-home-isolation-test-'))
   tempDirs.push(tempDir)
   return tempDir
 }
@@ -30,7 +30,7 @@ describe('createElectronHomeIsolation', () => {
         HOME: '/real/home',
         USERPROFILE: '/real/home',
         CODEX_HOME: '/real/codex',
-        ORCA_CODEX_HOME: '/real/orca-codex',
+        MCODE_CODEX_HOME: '/real/mcode-codex',
         ZDOTDIR: '/real/zdotdir',
         PATH: '/bin'
       },
@@ -50,10 +50,10 @@ describe('createElectronHomeIsolation', () => {
       EXTRA_TEST_FLAG: '1',
       HOME: canonicalHome,
       USERPROFILE: canonicalHome,
-      ORCA_E2E_USER_DATA_DIR: userDataDir
+      MCODE_E2E_USER_DATA_DIR: userDataDir
     })
     expect(isolation.env.CODEX_HOME).toBeUndefined()
-    expect(isolation.env.ORCA_CODEX_HOME).toBeUndefined()
+    expect(isolation.env.MCODE_CODEX_HOME).toBeUndefined()
     expect(isolation.env.ZDOTDIR).toBeUndefined()
     // Codex always routes to the resolved home, so the post-launch guard must
     // accept the boundary this env produces.
@@ -77,11 +77,11 @@ describe('createElectronHomeIsolation', () => {
       createElectronHomeIsolation({
         inheritedEnv: {},
         launchEnv: {},
-        extraEnv: { ORCA_E2E_USER_DATA_DIR: '/unsafe' },
+        extraEnv: { MCODE_E2E_USER_DATA_DIR: '/unsafe' },
         userDataDir: createUserDataDir(),
         realHome: '/real/home'
       })
-    ).toThrow(/orcaAppExtraEnv\.ORCA_E2E_USER_DATA_DIR/)
+    ).toThrow(/mcodeAppExtraEnv\.MCODE_E2E_USER_DATA_DIR/)
   })
 
   it('compares Windows home paths case-insensitively', () => {

@@ -154,7 +154,7 @@ function measure(db, iterations, mutation) {
 }
 
 const options = parseArgs(process.argv)
-const fixtureDir = mkdtempSync(join(tmpdir(), 'orca-mutation-receipt-bench-'))
+const fixtureDir = mkdtempSync(join(tmpdir(), 'mcode-mutation-receipt-bench-'))
 try {
   const legacyPath = join(fixtureDir, 'legacy.db')
   const optimizedPath = join(fixtureDir, 'optimized.db')

@@ -802,7 +802,7 @@ export default function SessionScreen() {
   // Why: terminal command-bar autocomplete opt-in, reloaded on focus so a Settings → Terminal toggle takes effect on return.
   const [autocompleteEnabled, setAutocompleteEnabled] = useState(false)
   const [terminalLinkOpenMode, setTerminalLinkOpenMode] =
-    useState<MobileTerminalLinkOpenMode>('orca-browser')
+    useState<MobileTerminalLinkOpenMode>('mcode-browser')
   const [liveInputCapture, setLiveInputCapture] = useState('')
   const {
     clearTerminalLiveInputDefault,
@@ -2658,7 +2658,7 @@ export default function SessionScreen() {
     void (async () => {
       const reportActivationOutcome = (response: RpcSuccess | null): void => {
         if (!disposed && response && headlessActivationNeedsHostRenderer(response.result)) {
-          showToast('Open Orca on the host to wake sleeping agents.', 3000)
+          showToast('Open MCode on the host to wake sleeping agents.', 3000)
         }
       }
       if (client && created !== '1' && !isFloatingWorkspaceRoute) {

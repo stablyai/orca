@@ -66,14 +66,14 @@ describe('analyzeWorkspaceSpace capacity', () => {
   })
 
   it('fails a worktree closed when the portable scan exceeds its entry budget', async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'orca-space-capacity-'))
+    tempDir = await mkdtemp(join(tmpdir(), 'mcode-space-capacity-'))
     const repoPath = join(tempDir, 'repo')
     await mkdir(repoPath, { recursive: true })
     await Promise.all(['one', 'two', 'three'].map((name) => writeFile(join(repoPath, name), name)))
     const repo: Repo = {
       id: 'repo-1',
       path: repoPath,
-      displayName: 'orca',
+      displayName: 'mcode',
       badgeColor: '#000',
       addedAt: 0
     }

@@ -106,11 +106,11 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
     }
 
     const lines = [
-      `My ${rangeLabel} ${providerName} usage via @orca_build`,
+      `My ${rangeLabel} ${providerName} usage via @mcode_build`,
       '',
       `${fmtTokens(totalTokens)} tokens · ${costStr} est. cost`,
       '',
-      'github.com/stablyai/orca'
+      'github.com/mcode-ide/mcode'
     ]
     const url = `https://x.com/intent/post?text=${encodeURIComponent(lines.join('\n'))}`
     await window.api.shell.openUrl(url)

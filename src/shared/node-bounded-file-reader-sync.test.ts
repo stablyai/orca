@@ -7,7 +7,7 @@ import { NodeFileReadTooLargeError, readNodeFileSyncWithinLimit } from './node-b
 const tempDirectories: string[] = []
 
 function createTempFile(content: string): string {
-  const directory = mkdtempSync(join(tmpdir(), 'orca-bounded-sync-read-'))
+  const directory = mkdtempSync(join(tmpdir(), 'mcode-bounded-sync-read-'))
   tempDirectories.push(directory)
   const path = join(directory, 'input')
   writeFileSync(path, content)

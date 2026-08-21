@@ -31,7 +31,7 @@ describe('writeFileAtomically', () => {
   let dir: string
 
   function setup(): string {
-    dir = mkdtempSync(join(tmpdir(), 'orca-fs-utils-'))
+    dir = mkdtempSync(join(tmpdir(), 'mcode-fs-utils-'))
     return dir
   }
 
@@ -160,7 +160,7 @@ describe('writeFileAtomically', () => {
     setup()
     try {
       const target = join(dir, 'guarded.toml')
-      const held = `${target}.orca-guarded`
+      const held = `${target}.mcode-guarded`
       writeFileSync(held, 'baseline')
 
       expect(writeFileAtomicallyIfUnchanged(target, 'baseline', 'next')).toBe(true)
@@ -184,7 +184,7 @@ describe('writeFileAtomically', () => {
         'unsupported'
       )
       expect(readFileSync(target, 'utf-8')).toBe('baseline')
-      expect(existsSync(`${target}.orca-guarded`)).toBe(false)
+      expect(existsSync(`${target}.mcode-guarded`)).toBe(false)
     } finally {
       cleanup()
     }
@@ -216,7 +216,7 @@ describe('writeFileAtomically', () => {
       })
 
       expect(removeFileAtomicallyIfUnchanged(target, 'baseline')).toBe(false)
-      expect(existsSync(`${target}.orca-guarded`)).toBe(false)
+      expect(existsSync(`${target}.mcode-guarded`)).toBe(false)
     } finally {
       cleanup()
     }
@@ -245,7 +245,7 @@ describe('retrying file operations', () => {
   let dir: string
 
   function setup(): string {
-    dir = mkdtempSync(join(tmpdir(), 'orca-fs-utils-'))
+    dir = mkdtempSync(join(tmpdir(), 'mcode-fs-utils-'))
     return dir
   }
 

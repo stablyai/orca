@@ -19,7 +19,7 @@ describe('WSL transcript filesystem process operations', () => {
   it.skipIf(process.platform === 'win32')(
     'keeps positional reads on the opened inode after atomic path replacement',
     async () => {
-      const directory = await mkdtemp(join(tmpdir(), 'orca-wsl-transcript-'))
+      const directory = await mkdtemp(join(tmpdir(), 'mcode-wsl-transcript-'))
       temporaryDirectories.push(directory)
       const transcriptPath = join(directory, 'session.jsonl')
       const replacementPath = join(directory, 'replacement.jsonl')

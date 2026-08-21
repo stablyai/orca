@@ -64,13 +64,13 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   // the capture owns stdin. POSIX callers close stdin (#8110), so posix keeps capture-first.
   const windowsLocal = target === 'local' && process.platform === 'win32'
   const endpointRefreshAndGuard = [
-    // Why: refresh PORT/TOKEN/ENV/VERSION from the current Orca install so a PTY
-    // that survived an Orca restart still reaches the live listener. See
+    // Why: refresh PORT/TOKEN/ENV/VERSION from the current MCode install so a PTY
+    // that survived an MCode restart still reaches the live listener. See
     // claude/hook-service.ts for the full rationale.
-    'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
-    '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
+    'if [ -n "$MCODE_AGENT_HOOK_ENDPOINT" ] && [ -r "$MCODE_AGENT_HOOK_ENDPOINT" ]; then',
+    '  . "$MCODE_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
-    'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
+    'if [ -z "$MCODE_AGENT_HOOK_PORT" ] || [ -z "$MCODE_AGENT_HOOK_TOKEN" ] || [ -z "$MCODE_PANE_KEY" ]; then',
     '  exit 0',
     'fi'
   ]
@@ -85,16 +85,16 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     // Why: pipe payload to curl's stdin (`payload@-`) instead of an inline
     // `payload=$VALUE` arg, so tens-of-KB tool output stays off the curl
     // command line (EDR command-line false positives). Wire body is identical.
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/kimi" \\',
+    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${MCODE_AGENT_HOOK_PORT}/hook/kimi" \\',
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
-    '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
-    '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
-    '  --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
-    '  --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
-    '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
-    '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
-    '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
+    '  -H "X-MCode-Agent-Hook-Token: ${MCODE_AGENT_HOOK_TOKEN}" \\',
+    '  --data-urlencode "paneKey=${MCODE_PANE_KEY}" \\',
+    '  --data-urlencode "tabId=${MCODE_TAB_ID}" \\',
+    '  --data-urlencode "launchToken=${MCODE_AGENT_LAUNCH_TOKEN}" \\',
+    '  --data-urlencode "worktreeId=${MCODE_WORKTREE_ID}" \\',
+    '  --data-urlencode "env=${MCODE_AGENT_HOOK_ENV}" \\',
+    '  --data-urlencode "version=${MCODE_AGENT_HOOK_VERSION}" \\',
     '  --data-urlencode "payload@-" >/dev/null 2>&1 || true',
     'exit 0',
     ''
@@ -204,14 +204,14 @@ export class KimiHookService {
     return this.getStatus()
   }
 
-  // Why: install Orca's managed Kimi hooks on a remote box over SFTP, mirroring
+  // Why: install MCode's managed Kimi hooks on a remote box over SFTP, mirroring
   // the local install. POSIX-only by design (Kimi's shell is sh/Git Bash); the
   // managed script body is already platform-independent.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = pathPosix.join(remoteHome, '.kimi-code', 'config.toml')
     const remoteScriptPath = pathPosix.join(
       remoteHome,
-      '.orca',
+      '.mcode',
       'agent-hooks',
       MANAGED_SCRIPT_FILE_NAME
     )

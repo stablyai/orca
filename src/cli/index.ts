@@ -45,12 +45,12 @@ async function loadRuntimeClientClass(): Promise<typeof RuntimeClient> {
   return (await import('./runtime-client.js')).RuntimeClient
 }
 
-// Why: the SSH relay bridge executes this CLI on the Orca host while the
+// Why: the SSH relay bridge executes this CLI on the MCode host while the
 // caller's shell cwd lives on the remote machine (which cannot be chdir'd
-// into). ORCA_CLI_CWD carries that remote cwd so cwd-based selectors like
+// into). MCODE_CLI_CWD carries that remote cwd so cwd-based selectors like
 // `--worktree active` resolve against the caller's directory.
 function resolveInvocationCwd(): string {
-  const override = process.env.ORCA_CLI_CWD
+  const override = process.env.MCODE_CLI_CWD
   return typeof override === 'string' && override.length > 0 ? override : process.cwd()
 }
 
@@ -87,14 +87,14 @@ export async function main(
 
   try {
     // Why: CLI syntax and flag errors should be reported before any runtime
-    // lookup so users do not get misleading "Orca is not running" failures for
+    // lookup so users do not get misleading "MCode is not running" failures for
     // simple command typos or unsupported flags.
     validateCommandAndFlags(COMMAND_SPECS, parsed)
     const RuntimeClientClass = await loadRuntimeClientClass()
     const ignoreRemoteSelection = shouldIgnoreRemoteSelection(parsed.commandPath)
     const pairingCode = ignoreRemoteSelection ? null : parsed.flags.get('pairing-code')
     const environmentSelector = ignoreRemoteSelection ? null : parsed.flags.get('environment')
-    // Why: only the explicit flag is asserted eagerly. An ambient ORCA_ENVIRONMENT is background
+    // Why: only the explicit flag is asserted eagerly. An ambient MCODE_ENVIRONMENT is background
     // config, and failing local-only commands because of a stale one would be a regression; the
     // explicit flag means the caller named that machine, so a bad name should fail immediately
     // with the cross-kind hint rather than a bare store error at first use.
@@ -105,7 +105,7 @@ export async function main(
     }
     // Why: --host runtime:<id> names a paired server, not a filter over this
     // runtime's rows, so it has to pick the connection before the client exists.
-    // An ambient ORCA_ENVIRONMENT is checked for disagreement too — silently
+    // An ambient MCODE_ENVIRONMENT is checked for disagreement too — silently
     // retargeting a mutation to another server is the bug this flag already had.
     // An ambient pairing code cannot be resolved to an id to compare, so the
     // explicit flag simply wins there.
@@ -119,8 +119,8 @@ export async function main(
           environmentSelector:
             typeof environmentSelector === 'string'
               ? { value: environmentSelector, label: '--environment' }
-              : process.env.ORCA_ENVIRONMENT
-                ? { value: process.env.ORCA_ENVIRONMENT, label: 'ORCA_ENVIRONMENT' }
+              : process.env.MCODE_ENVIRONMENT
+                ? { value: process.env.MCODE_ENVIRONMENT, label: 'MCODE_ENVIRONMENT' }
                 : null
         })
     // Why: --host runtime:<name> is canonicalized to the environment's id so downstream host-id
@@ -131,7 +131,7 @@ export async function main(
     }
     // Why: pass `null` (not `undefined`) when remote selection is suppressed
     // so the RuntimeClient default parameter does not re-activate the
-    // ORCA_PAIRING_CODE / ORCA_ENVIRONMENT env-var fallback for commands
+    // MCODE_PAIRING_CODE / MCODE_ENVIRONMENT env-var fallback for commands
     // that must run locally (environment / serve).
     const suppressed = ignoreRemoteSelection ? null : undefined
     // An explicit --host runtime:<id> outranks an ambient pairing code or environment.
@@ -164,8 +164,8 @@ export async function main(
 
 async function runClaudeTeams(argv: string[], cwd: string): Promise<void> {
   try {
-    // Why: everything after `orca claude-teams` belongs to Claude Code, not
-    // Orca's own flag parser, so new Claude flags work without Orca changes.
+    // Why: everything after `mcode claude-teams` belongs to Claude Code, not
+    // MCode's own flag parser, so new Claude flags work without MCode changes.
     const client = new (await loadRuntimeClientClass())(undefined, undefined, null, null)
     await dispatch(['claude-teams'], {
       flags: new Map(),
@@ -188,8 +188,8 @@ async function runAgentTeamsTmuxShim(argv: string[]): Promise<void> {
     }>(
       'agentTeams.tmuxCompat',
       {
-        teamId: process.env.ORCA_AGENT_TEAMS_TEAM_ID,
-        token: process.env.ORCA_AGENT_TEAMS_TOKEN,
+        teamId: process.env.MCODE_AGENT_TEAMS_TEAM_ID,
+        token: process.env.MCODE_AGENT_TEAMS_TOKEN,
         envPane: process.env.TMUX_PANE,
         cwd: process.cwd(),
         argv

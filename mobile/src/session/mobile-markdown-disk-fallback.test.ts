@@ -57,7 +57,7 @@ describe('buildMarkdownDiskFallbackDoc', () => {
       isDirty: false,
       editable: false,
       stale: false,
-      readOnlyReason: 'Editing needs Orca desktop running.'
+      readOnlyReason: 'Editing needs MCode desktop running.'
     })
   })
 

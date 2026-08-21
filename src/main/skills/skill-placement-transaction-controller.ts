@@ -119,8 +119,8 @@ export function createSkillPlacementTransaction(input: {
           destinationPath: join(destination.rootPath, name),
           rootPath: destination.rootPath,
           desired: destinations.includes(destination),
-          stagingPath: join(destination.rootPath, `.${name}.orca-placement-staging-${id}`),
-          backupPath: join(destination.rootPath, `.${name}.orca-placement-backup-${id}`)
+          stagingPath: join(destination.rootPath, `.${name}.mcode-placement-staging-${id}`),
+          backupPath: join(destination.rootPath, `.${name}.mcode-placement-backup-${id}`)
         })),
         ...(providerRootOverrides ? { providerRootOverrides } : {}),
         ...(input.wslDistro ? { wslDistro: input.wslDistro } : {})

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { computeTrustedHash, type CodexTrustEntry } from './config-toml-trust'
 
 // Why: captured from a real Codex 0.129 `/hooks` approval; fails loudly if Codex's serialization drifts.
-const REAL_APPROVED_COMMAND = '/bin/sh "/tmp/orca-case-b-mCmCe6/agent-hooks/codex-hook.sh"'
+const REAL_APPROVED_COMMAND = '/bin/sh "/tmp/mcode-case-b-mCmCe6/agent-hooks/codex-hook.sh"'
 const REAL_APPROVED_HASH = 'sha256:bc013489dba495431d3790fda62ee5a7d907a7c491e29ad26238c3a5d6d2b163'
 
 describe('computeTrustedHash', () => {

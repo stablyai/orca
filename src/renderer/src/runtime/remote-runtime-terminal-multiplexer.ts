@@ -582,7 +582,7 @@ class RemoteRuntimeTerminalMultiplexer {
                 this.failConnection(Object.assign(new Error(error.message), { code: error.code }))
               }
             },
-            onClose: () => this.handleClose('Remote Orca runtime closed the connection.')
+            onClose: () => this.handleClose('Remote MCode runtime closed the connection.')
           }
         )
         .then((subscription) => {

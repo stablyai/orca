@@ -33,7 +33,7 @@ export function getDefaultCreateProjectParent(homeDir: string): string {
   if (!trimmedHomeDir) {
     return ''
   }
-  return joinCreateProjectPath(joinCreateProjectPath(trimmedHomeDir, 'orca'), 'projects')
+  return joinCreateProjectPath(joinCreateProjectPath(trimmedHomeDir, 'mcode'), 'projects')
 }
 
 export function getCreateProjectDefaultParentAutoFill({
@@ -82,7 +82,7 @@ export function formatCreateProjectParentSummary({
     return runtimeEnvironmentId || isRemoteHost ? missingServerLocationLabel : missingLocationLabel
   }
   if (defaultParent && trimmedParent === defaultParent && !runtimeEnvironmentId && !isRemoteHost) {
-    return '~/orca/projects'
+    return '~/mcode/projects'
   }
   return trimmedParent
 }

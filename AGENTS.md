@@ -4,7 +4,7 @@ All UI work — layout, color, typography, spacing, component selection, UX beha
 
 ## Electron UI Validation
 
-Use the `$electron` skill and Playwright CDP for rendered Orca UI checks. Do not use computer-use for Orca UI validation.
+Use the `$electron` skill and Playwright CDP for rendered MCode UI checks. Do not use computer-use for MCode UI validation.
 
 # Style
 ## Concise/Brief Non-obviosu comments ONLY
@@ -28,7 +28,7 @@ Always use the primary working directory (the worktree) for all file reads and e
 
 ## Cross-Platform Support
 
-Orca targets macOS, Linux, and Windows. Keep all platform-dependent behavior behind runtime checks:
+MCode targets macOS, Linux, and Windows. Keep all platform-dependent behavior behind runtime checks:
 
 - **Keyboard shortcuts**: Never hardcode `e.metaKey`. Use a platform check (`navigator.userAgent.includes('Mac')`) to pick `metaKey` on Mac and `ctrlKey` on Linux/Windows. Electron menu accelerators should use `CmdOrCtrl`.
 - **Shortcut labels in UI**: Display `⌘` / `⇧` on Mac and `Ctrl+` / `Shift+` on other platforms.
@@ -47,11 +47,11 @@ All changes must consider folder workspaces as well as git worktrees. Don't assu
 
 ## Remote Wire Compatibility
 
-Clients and remote Orca servers update independently, so mixed versions are the normal state. Before changing anything a paired client and host exchange — RPC params, stream frames, or the content either side publishes over them — follow [`docs/reference/remote-wire-compatibility.md`](./docs/reference/remote-wire-compatibility.md). A new optional field is safe; a new stream opcode must be capability-negotiated because decoders drop unknown opcodes silently; and changing what the host publishes reaches old clients even with no wire change.
+Clients and remote MCode servers update independently, so mixed versions are the normal state. Before changing anything a paired client and host exchange — RPC params, stream frames, or the content either side publishes over them — follow [`docs/reference/remote-wire-compatibility.md`](./docs/reference/remote-wire-compatibility.md). A new optional field is safe; a new stream opcode must be capability-negotiated because decoders drop unknown opcodes silently; and changing what the host publishes reaches old clients even with no wire change.
 
 ## Git Binary Compatibility
 
-Orca runs the user's Git binary on native, WSL, and SSH hosts, which may all have different versions. Treat Git 2.25 as the core-workflow baseline and follow [`docs/reference/git-compatibility.md`](./docs/reference/git-compatibility.md).
+MCode runs the user's Git binary on native, WSL, and SSH hosts, which may all have different versions. Treat Git 2.25 as the core-workflow baseline and follow [`docs/reference/git-compatibility.md`](./docs/reference/git-compatibility.md).
 
 When adding or changing a Git command:
 

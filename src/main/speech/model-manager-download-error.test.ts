@@ -11,7 +11,7 @@ const { netRequestMock } = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   app: {
-    getPath: () => '/tmp/orca-speech-models-test'
+    getPath: () => '/tmp/mcode-speech-models-test'
   },
   net: {
     request: netRequestMock
@@ -24,7 +24,7 @@ describe('ModelManager download failures', () => {
   })
 
   it('rejects failed model downloads so the caller can surface the error', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+    const dir = mkdtempSync(join(tmpdir(), 'mcode-model-manager-'))
     try {
       const manifest = SPEECH_MODEL_CATALOG[0]
       const errorHandlers: ((err: Error) => void)[] = []

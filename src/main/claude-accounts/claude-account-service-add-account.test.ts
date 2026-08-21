@@ -8,7 +8,7 @@ import {
   setPlatform
 } from './claude-account-service-test-harness'
 
-const CLAUDE_SERVICE_TEST_ROOT = join(tmpdir(), 'orca-claude-service-add-test')
+const CLAUDE_SERVICE_TEST_ROOT = join(tmpdir(), 'mcode-claude-service-add-test')
 
 vi.mock('electron', () => ({
   app: {
@@ -224,7 +224,7 @@ describe('ClaudeAccountService credential capture', () => {
     rmSync(tempDir, { recursive: true, force: true })
     const existingAuthPath = join(tempDir, 'claude-accounts', 'existing-account', 'auth')
     mkdirSync(existingAuthPath, { recursive: true })
-    const existingMarkerPath = join(existingAuthPath, '.orca-managed-claude-auth')
+    const existingMarkerPath = join(existingAuthPath, '.mcode-managed-claude-auth')
     writeFileSync(existingMarkerPath, 'existing-account\n', 'utf-8')
     let settings = {
       claudeManagedAccounts: [
@@ -304,7 +304,7 @@ describe('ClaudeAccountService credential capture', () => {
     const existingAuthPath = join(tempDir, 'claude-accounts', 'existing-account', 'auth')
     mkdirSync(existingAuthPath, { recursive: true })
     writeFileSync(
-      join(existingAuthPath, '.orca-managed-claude-auth'),
+      join(existingAuthPath, '.mcode-managed-claude-auth'),
       'existing-account\n',
       'utf-8'
     )

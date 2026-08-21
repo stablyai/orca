@@ -9,7 +9,7 @@ const AFFECTED_MAIN_COMMIT = '25abb9368d98ad84a174f530e02f4228d2269062'
 const root = process.cwd()
 const driver = process.argv[2] ?? 'config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts'
 const config = 'config/vitest.config.ts'
-const tempRoot = mkdtempSync(join(tmpdir(), 'orca-sta-4274-repro-'))
+const tempRoot = mkdtempSync(join(tmpdir(), 'mcode-sta-4274-repro-'))
 
 try {
   const baselineRoot = extractSource(BASELINE_COMMIT, 'baseline')

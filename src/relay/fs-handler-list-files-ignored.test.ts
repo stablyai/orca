@@ -46,7 +46,7 @@ function createMockProcess(): ChildProcess {
 }
 
 async function makeTempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-relay-git-list-files-'))
+  const root = await mkdtemp(join(tmpdir(), 'mcode-relay-git-list-files-'))
   tempDirs.push(root)
   return root
 }

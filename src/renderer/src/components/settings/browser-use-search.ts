@@ -4,10 +4,10 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export const getBrowserUsePaneSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.settings.browser.use.search.50f0860e18', 'Enable Orca CLI'),
+    title: translate('auto.components.settings.browser.use.search.50f0860e18', 'Enable MCode CLI'),
     description: translate(
       'auto.components.settings.browser.use.search.890ddf943d',
-      'Register the Orca CLI so agents can drive the browser.'
+      'Register the MCode CLI so agents can drive the browser.'
     ),
     keywords: [
       ...translateSearchKeyword(
@@ -15,7 +15,7 @@ export const getBrowserUsePaneSearchEntries = createLocalizedCatalog(() => [
         'browser use'
       ),
       ...translateSearchKeyword('auto.components.settings.browser.use.search.85fab5e12c', 'cli'),
-      ...translateSearchKeyword('auto.components.settings.browser.use.search.ff05cbc344', 'orca'),
+      ...translateSearchKeyword('auto.components.settings.browser.use.search.ff05cbc344', 'mcode'),
       ...translateSearchKeyword('auto.components.settings.browser.use.search.30c74aaa1f', 'path'),
       ...translateSearchKeyword(
         'auto.components.settings.browser.use.search.3ffafc9b95',
@@ -33,7 +33,7 @@ export const getBrowserUsePaneSearchEntries = createLocalizedCatalog(() => [
     ),
     description: translate(
       'auto.components.settings.browser.use.search.a7e82445fa',
-      "Install the Browser Use skill so agents can operate Orca's browser."
+      "Install the Browser Use skill so agents can operate MCode's browser."
     ),
     keywords: [
       ...translateSearchKeyword(
@@ -48,7 +48,7 @@ export const getBrowserUsePaneSearchEntries = createLocalizedCatalog(() => [
       ),
       ...translateSearchKeyword(
         'auto.components.settings.browser.use.search.f5b8fdddf5',
-        'orca-cli'
+        'mcode-cli'
       ),
       ...translateSearchKeyword('auto.components.settings.browser.use.search.6ea88e5206', 'npx'),
       ...translateSearchKeyword(

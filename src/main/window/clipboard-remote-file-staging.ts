@@ -2,8 +2,8 @@ import type { Dir, Stats } from 'node:fs'
 import { access, lstat, mkdir, opendir, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 
-const REMOTE_CLIPBOARD_STAGING_ROOT_NAME = 'orca-clipboard-files'
-const REMOTE_CLIPBOARD_LEGACY_PREFIX = 'orca-clipboard-file-'
+const REMOTE_CLIPBOARD_STAGING_ROOT_NAME = 'mcode-clipboard-files'
+const REMOTE_CLIPBOARD_LEGACY_PREFIX = 'mcode-clipboard-file-'
 const REMOTE_CLIPBOARD_MIGRATION_MARKER = '.legacy-cleanup-complete'
 const REMOTE_CLIPBOARD_FILE_TTL_MS = 60 * 60 * 1000
 const REMOTE_CLIPBOARD_CLEANUP_CONCURRENCY = 8

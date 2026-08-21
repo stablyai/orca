@@ -4,24 +4,24 @@ import { join } from 'node:path'
 
 export const LEGACY_WORKSPACE_ID = 'legacy'
 
-function getOrcaDir(): string {
-  return join(homedir(), '.orca')
+function getMCodeDir(): string {
+  return join(homedir(), '.mcode')
 }
 
 function getLegacyTokenPath(): string {
-  return join(getOrcaDir(), 'linear-token.enc')
+  return join(getMCodeDir(), 'linear-token.enc')
 }
 
 export function getLegacyViewerPath(): string {
-  return join(getOrcaDir(), 'linear-viewer.json')
+  return join(getMCodeDir(), 'linear-viewer.json')
 }
 
 export function getWorkspaceFilePath(): string {
-  return join(getOrcaDir(), 'linear-workspaces.json')
+  return join(getMCodeDir(), 'linear-workspaces.json')
 }
 
 function getWorkspaceTokenDir(): string {
-  return join(getOrcaDir(), 'linear-tokens')
+  return join(getMCodeDir(), 'linear-tokens')
 }
 
 export function getWorkspaceTokenPath(workspaceId: string): string {
@@ -31,8 +31,8 @@ export function getWorkspaceTokenPath(workspaceId: string): string {
   return join(getWorkspaceTokenDir(), `${Buffer.from(workspaceId).toString('base64url')}.enc`)
 }
 
-export function ensureOrcaDir(): void {
-  const dir = getOrcaDir()
+export function ensureMCodeDir(): void {
+  const dir = getMCodeDir()
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true })
   }

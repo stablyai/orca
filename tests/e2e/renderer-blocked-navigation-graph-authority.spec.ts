@@ -1,4 +1,4 @@
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { RuntimeClient } from '../../src/cli/runtime-client'
 import type { RuntimeStatus } from '../../src/shared/runtime-types'
 import { waitForSessionReady } from './helpers/store'
@@ -15,9 +15,9 @@ declare global {
 
 test('blocked navigation preserves the renderer document and graph authority', async ({
   electronApp,
-  orcaPage
+  mcodePage
 }) => {
-  await waitForSessionReady(orcaPage)
+  await waitForSessionReady(mcodePage)
   const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
   const client = new RuntimeClient(userDataDir, 30_000, null, null)
   const before = (await client.call<RuntimeStatus>('status.get')).result
@@ -31,7 +31,7 @@ test('blocked navigation preserves the renderer document and graph authority', a
     contents.on('did-finish-load', () => probe.finishedLoading++)
     contents.on('did-stop-loading', () => probe.stoppedLoading++)
   })
-  await orcaPage.evaluate(() => {
+  await mcodePage.evaluate(() => {
     ;(window as unknown as { __blockedNavigationCanary: string }).__blockedNavigationCanary =
       'alive'
     const anchor = document.createElement('a')
@@ -44,7 +44,7 @@ test('blocked navigation preserves the renderer document and graph authority', a
     .poll(() => electronApp.evaluate(() => globalThis.__blockedNavigationProbe))
     .toMatchObject({ startedLoading: 1, finishedLoading: 0, stoppedLoading: 1 })
   expect(
-    await orcaPage.evaluate(
+    await mcodePage.evaluate(
       () => (window as unknown as { __blockedNavigationCanary?: string }).__blockedNavigationCanary
     )
   ).toBe('alive')
@@ -66,13 +66,13 @@ test('blocked navigation preserves the renderer document and graph authority', a
 
 test('cancelled renderer reload restores the surviving graph authority', async ({
   electronApp,
-  orcaPage
+  mcodePage
 }) => {
-  await waitForSessionReady(orcaPage)
+  await waitForSessionReady(mcodePage)
   const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
   const client = new RuntimeClient(userDataDir, 30_000, null, null)
   const before = (await client.call<RuntimeStatus>('status.get')).result
-  await orcaPage.evaluate(() => {
+  await mcodePage.evaluate(() => {
     ;(window as unknown as { __cancelledReloadCanary: string }).__cancelledReloadCanary = 'alive'
   })
 
@@ -99,7 +99,7 @@ test('cancelled renderer reload restores the surviving graph authority', async (
       authoritativeWindowId: before.authoritativeWindowId
     })
   expect(
-    await orcaPage.evaluate(
+    await mcodePage.evaluate(
       () => (window as unknown as { __cancelledReloadCanary?: string }).__cancelledReloadCanary
     )
   ).toBe('alive')

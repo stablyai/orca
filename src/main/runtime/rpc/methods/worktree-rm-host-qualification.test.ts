@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import type { RpcRequest } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { WORKTREE_METHODS } from './worktree'
 
-function makeRuntime(): OrcaRuntimeService {
+function makeRuntime(): MCodeRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
     showManagedWorktree: vi.fn().mockResolvedValue({ id: 'wt-1', hostId: 'local' }),
     removeManagedWorktree: vi.fn().mockResolvedValue({})
-  } as unknown as OrcaRuntimeService
+  } as unknown as MCodeRuntimeService
 }
 
 function makeRequest(params: unknown): RpcRequest {

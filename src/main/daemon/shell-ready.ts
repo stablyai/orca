@@ -19,24 +19,24 @@ import { buildDaemonShellReadyWrapperFiles } from './daemon-shell-ready-wrapper-
 import { inheritedZdotdirEnv, resolveInheritedZdotdir } from '../zsh-wrapper-dir-ownership'
 import { SHELL_READY_MARKER } from './daemon-shell-ready-marker'
 
-const ORCA_USER_DATA_PATH_ENV = 'ORCA_USER_DATA_PATH'
+const MCODE_USER_DATA_PATH_ENV = 'MCODE_USER_DATA_PATH'
 
 function getShellReadyWrapperBaseDir(): string {
-  const userDataPath = process.env[ORCA_USER_DATA_PATH_ENV]
+  const userDataPath = process.env[MCODE_USER_DATA_PATH_ENV]
   // Why a base dir of its own rather than the legacy `shell-ready/`: daemons of
   // older builds still write that path unconditionally, so leaving it to them
   // keeps this build's content-addressed trees out of their reach.
   // Why the tmpdir fallback: older/test launchers may not seed
-  // ORCA_USER_DATA_PATH, and daemon startup must not fail before the parent can
+  // MCODE_USER_DATA_PATH, and daemon startup must not fail before the parent can
   // be fixed. It is dev/test-only -- daemon-init always passes the real path --
   // which matters because the presence check is size-only, so a complete tree
   // pre-planted under a shared /tmp would be trusted rather than overwritten.
-  return join(userDataPath || tmpdir(), userDataPath ? 'shell-wrappers' : 'orca-shell-wrappers')
+  return join(userDataPath || tmpdir(), userDataPath ? 'shell-wrappers' : 'mcode-shell-wrappers')
 }
 
 // Why memoized and keyed on the base dir: the digest is stable for a given base
 // dir, every shell launch asks for it, and the key self-invalidates if
-// ORCA_USER_DATA_PATH is ever re-pointed mid-process.
+// MCODE_USER_DATA_PATH is ever re-pointed mid-process.
 let cachedShellReadyWrapperRoot: { baseDir: string; root: string } | null = null
 
 export function getShellReadyWrapperRoot(): string {
@@ -93,7 +93,7 @@ function ensureShellReadyWrappers(): boolean {
 
 export function resolvePtyShellPath(env: Record<string, string>): string {
   if (process.platform === 'win32') {
-    return env.ORCA_TERMINAL_WINDOWS_SHELL || 'powershell.exe'
+    return env.MCODE_TERMINAL_WINDOWS_SHELL || 'powershell.exe'
   }
   return env.SHELL || process.env.SHELL || '/bin/zsh'
 }
@@ -140,7 +140,7 @@ export function getShellLaunchConfig(
     }
     if (!ensureShellReadyWrappers()) {
       // Why plain login zsh: ZDOTDIR pointed at an incomplete wrapper dir makes
-      // zsh skip the user's whole config. Losing Orca's features is recoverable.
+      // zsh skip the user's whole config. Losing MCode's features is recoverable.
       return { args: ['-l'], env: {}, supportsReadyMarker: false }
     }
     return {

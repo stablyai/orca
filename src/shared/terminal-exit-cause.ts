@@ -1,7 +1,7 @@
 /**
  * Why a terminal's process is gone.
  *
- * Orca used to record one number and let every reader guess. That number is not
+ * MCode used to record one number and let every reader guess. That number is not
  * evidence: the stop paths synthesize it, node-pty reports 0 for a signalled
  * death, and macOS's TCC `login(1)` wrapper returns its own status instead of
  * the shell's. A clean finish, an OOM kill and an operator close all arrived as
@@ -11,7 +11,7 @@
  * absence of evidence is spelled `unknown` rather than guessed.
  */
 export type TerminalExitCause =
-  /** Teardown was requested through Orca — a close, a stop, a worktree removal. Not a failure. */
+  /** Teardown was requested through MCode — a close, a stop, a worktree removal. Not a failure. */
   | { kind: 'operator_close' }
   /** The host reported a signal. The agent did not choose to stop. */
   | { kind: 'signaled'; signal: number }

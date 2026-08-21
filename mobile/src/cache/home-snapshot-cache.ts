@@ -9,7 +9,7 @@ import type { AccountsSnapshot } from '../components/AccountUsage'
 // needs it to know whether a rehydrated count is minutes or days old.
 import type { HostWorktreeInfo } from '../worktree/home-worktree-info'
 
-const STORAGE_KEY = 'orca:home-snapshot:v1'
+const STORAGE_KEY = 'mcode:home-snapshot:v1'
 
 export type HomeSnapshot = {
   worktreeInfo: Record<string, HostWorktreeInfo>

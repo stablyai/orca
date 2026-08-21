@@ -1,44 +1,44 @@
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { getStoreState, waitForSessionReady } from './helpers/store'
 
 test.describe('usage overview', () => {
-  test.beforeEach(async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
+  test.beforeEach(async ({ mcodePage }) => {
+    await waitForSessionReady(mcodePage)
   })
 
   test('Stats & Usage opens on the combined overview with provider controls', async ({
-    orcaPage
+    mcodePage
   }) => {
-    await orcaPage.evaluate(() => {
+    await mcodePage.evaluate(() => {
       const state = window.__store!.getState()
       state.openSettingsPage()
     })
 
     await expect
-      .poll(async () => getStoreState<string>(orcaPage, 'activeView'), { timeout: 5_000 })
+      .poll(async () => getStoreState<string>(mcodePage, 'activeView'), { timeout: 5_000 })
       .toBe('settings')
-    await orcaPage.getByRole('button', { name: 'Stats & Usage' }).click()
-    await expect(orcaPage.getByRole('heading', { name: 'Usage Analytics' })).toBeVisible()
-    const providerDropdown = orcaPage.getByTestId('usage-provider-select')
+    await mcodePage.getByRole('button', { name: 'Stats & Usage' }).click()
+    await expect(mcodePage.getByRole('heading', { name: 'Usage Analytics' })).toBeVisible()
+    const providerDropdown = mcodePage.getByTestId('usage-provider-select')
     await expect(providerDropdown).toHaveAttribute(
       'aria-label',
       'Usage analytics provider: Overview'
     )
-    await expect(orcaPage.getByTestId('usage-overview-pane')).toBeVisible()
-    await expect(orcaPage.getByRole('heading', { name: 'Usage Overview' })).toBeVisible()
-    await expect(orcaPage.getByRole('heading', { name: 'Providers' })).toBeVisible()
-    await expect(orcaPage.getByRole('button', { name: 'Enable Claude' })).toBeVisible()
-    await expect(orcaPage.getByRole('button', { name: 'Enable Codex' })).toBeVisible()
-    await expect(orcaPage.getByRole('button', { name: 'Enable OpenCode' })).toBeVisible()
+    await expect(mcodePage.getByTestId('usage-overview-pane')).toBeVisible()
+    await expect(mcodePage.getByRole('heading', { name: 'Usage Overview' })).toBeVisible()
+    await expect(mcodePage.getByRole('heading', { name: 'Providers' })).toBeVisible()
+    await expect(mcodePage.getByRole('button', { name: 'Enable Claude' })).toBeVisible()
+    await expect(mcodePage.getByRole('button', { name: 'Enable Codex' })).toBeVisible()
+    await expect(mcodePage.getByRole('button', { name: 'Enable OpenCode' })).toBeVisible()
 
     await providerDropdown.click()
-    await orcaPage.getByRole('menuitem', { name: 'Codex', exact: true }).click()
-    await expect(orcaPage.getByRole('heading', { name: 'Codex Usage Tracking' })).toBeVisible()
+    await mcodePage.getByRole('menuitem', { name: 'Codex', exact: true }).click()
+    await expect(mcodePage.getByRole('heading', { name: 'Codex Usage Tracking' })).toBeVisible()
     await expect(providerDropdown).toHaveAttribute('aria-label', 'Usage analytics provider: Codex')
 
     await providerDropdown.click()
-    await orcaPage.getByRole('menuitem', { name: 'OpenCode', exact: true }).click()
-    await expect(orcaPage.getByRole('heading', { name: 'OpenCode Usage Tracking' })).toBeVisible()
+    await mcodePage.getByRole('menuitem', { name: 'OpenCode', exact: true }).click()
+    await expect(mcodePage.getByRole('heading', { name: 'OpenCode Usage Tracking' })).toBeVisible()
     await expect(providerDropdown).toHaveAttribute(
       'aria-label',
       'Usage analytics provider: OpenCode'

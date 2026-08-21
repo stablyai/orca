@@ -18,7 +18,7 @@ describe('assertOwnedHostCodexManagedHomePath', () => {
   let systemHomePath: string
 
   beforeEach(() => {
-    rootDir = mkdtempSync(join(tmpdir(), 'orca-managed-home-ownership-'))
+    rootDir = mkdtempSync(join(tmpdir(), 'mcode-managed-home-ownership-'))
     userDataDir = join(rootDir, 'user-data')
     systemHomePath = join(rootDir, 'home', '.codex')
     mkdirSync(join(userDataDir, 'codex-accounts'), { recursive: true })
@@ -32,7 +32,7 @@ describe('assertOwnedHostCodexManagedHomePath', () => {
   it('accepts the expected marked account home', () => {
     const accountHome = join(userDataDir, 'codex-accounts', 'account-1', 'home')
     mkdirSync(accountHome, { recursive: true })
-    writeFileSync(join(accountHome, '.orca-managed-home'), 'account-1\n', 'utf-8')
+    writeFileSync(join(accountHome, '.mcode-managed-home'), 'account-1\n', 'utf-8')
 
     expect(
       assertOwnedHostCodexManagedHomePath({
@@ -47,7 +47,7 @@ describe('assertOwnedHostCodexManagedHomePath', () => {
   it('rejects an account path redirected into the sandboxed system Codex home', () => {
     const systemAccountHome = join(systemHomePath, 'account-1', 'home')
     mkdirSync(systemAccountHome, { recursive: true })
-    writeFileSync(join(systemAccountHome, '.orca-managed-home'), 'account-1\n', 'utf-8')
+    writeFileSync(join(systemAccountHome, '.mcode-managed-home'), 'account-1\n', 'utf-8')
     const sentinelPath = join(systemHomePath, 'auth.json')
     writeFileSync(sentinelPath, 'system-auth\n', 'utf-8')
 
@@ -72,7 +72,7 @@ describe('assertOwnedHostCodexManagedHomePath', () => {
   it('rejects a persisted home or marker belonging to another account', () => {
     const accountHome = join(userDataDir, 'codex-accounts', 'account-2', 'home')
     mkdirSync(accountHome, { recursive: true })
-    writeFileSync(join(accountHome, '.orca-managed-home'), 'account-2\n', 'utf-8')
+    writeFileSync(join(accountHome, '.mcode-managed-home'), 'account-2\n', 'utf-8')
 
     expect(() =>
       assertOwnedHostCodexManagedHomePath({

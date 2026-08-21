@@ -6,7 +6,7 @@ import {
   launchHeadlessPairedRuntimeHost,
   type HeadlessPairedRuntimeHost
 } from './helpers/headless-paired-runtime-host'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import {
   launchPairedElectronClient,
   type PairedElectronClient
@@ -167,9 +167,9 @@ async function openLinkFromRemotePaneContextMenu(page: Page): Promise<void> {
   await expect(page.getByTestId('remote-browser-context-menu')).toBeVisible({ timeout: 30_000 })
   // The item only renders once the remote hit-test resolves an anchor, so this wait is the
   // wait for the link lookup itself.
-  const openInOrca = page.getByRole('menuitem', { name: 'Open Link In Orca Browser' })
-  await expect(openInOrca).toBeVisible({ timeout: 30_000 })
-  await openInOrca.click()
+  const openInMCode = page.getByRole('menuitem', { name: 'Open Link In MCode Browser' })
+  await expect(openInMCode).toBeVisible({ timeout: 30_000 })
+  await openInMCode.click()
 }
 
 test('opens a remote pane link on the pane runtime and refuses to fall back to the client', async ({

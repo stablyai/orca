@@ -4,21 +4,21 @@ import { CodexRuntimeHomeService } from './runtime-home-service'
 
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
 const originalCodexHome = process.env.CODEX_HOME
-const originalOrcaCodexHome = process.env.ORCA_CODEX_HOME
+const originalMCodeCodexHome = process.env.MCODE_CODEX_HOME
 
 afterEach(() => {
   if (originalPlatform) {
     Object.defineProperty(process, 'platform', originalPlatform)
   }
   restoreEnv('CODEX_HOME', originalCodexHome)
-  restoreEnv('ORCA_CODEX_HOME', originalOrcaCodexHome)
+  restoreEnv('MCODE_CODEX_HOME', originalMCodeCodexHome)
 })
 
 describe('Windows System Default Codex home ownership', () => {
   it('stays managed when PowerShell profile state cannot be inspected', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     delete process.env.CODEX_HOME
-    delete process.env.ORCA_CODEX_HOME
+    delete process.env.MCODE_CODEX_HOME
 
     const service = Object.create(CodexRuntimeHomeService.prototype) as CodexRuntimeHomeService
     Object.defineProperty(service, 'store', { value: createStore() })

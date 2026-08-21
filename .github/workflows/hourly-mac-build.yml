@@ -13,12 +13,12 @@ name: Hourly macOS Dev Build
 #     a ticket every hourly reads as a new client and silently loses file access
 #     under Documents/Desktop/Downloads — 24 times a day.
 #
-# Artifacts publish to stablyai/orca-hourly, never to stablyai/orca: the main
+# Artifacts publish to mcode-ide/mcode-hourly, never to mcode-ide/mcode: the main
 # repo's releases atom feed exposes only its 10 newest entries, so 24 hourly
 # tags a day would evict every stable/RC entry and break updates for real users.
 #
 # GITHUB_TOKEN is scoped to this repo and cannot publish there, so writes use a
-# GitHub App installed on orca-hourly with Contents: Read and write. Its private
+# GitHub App installed on mcode-hourly with Contents: Read and write. Its private
 # key does not expire, unlike a PAT — nothing here needs yearly rotation, and the
 # credential belongs to the org rather than to whoever created it.
 #
@@ -55,13 +55,13 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  HOURLY_REPO: stablyai/orca-hourly
+  HOURLY_REPO: mcode-ide/mcode-hourly
   # Keep ~3 days of history so a regression can be bisected across a weekend.
   HOURLY_RETAIN_COUNT: 72
 
 jobs:
   build-hourly-mac:
-    if: github.repository == 'stablyai/orca'
+    if: github.repository == 'mcode-ide/mcode'
     outputs:
       tag: ${{ steps.release.outputs.tag }}
       version: ${{ steps.hourly.outputs.version }}
@@ -81,7 +81,7 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-          # Why: this job only reads stablyai/orca and never pushes; every write
+          # Why: this job only reads mcode-ide/mcode and never pushes; every write
           # goes to the hourly repo through a minted App token passed by env.
           # Not persisting the checkout credential shrinks the blast radius if a
           # build step is compromised (zizmor: artipacked).
@@ -94,7 +94,7 @@ jobs:
           app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
           private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
           owner: stablyai
-          repositories: orca-hourly
+          repositories: mcode-hourly
 
       # Why: main is often idle overnight. Rebuilding an unchanged commit burns a
       # runner hour and adds a redundant tag to the retention window.
@@ -166,7 +166,7 @@ jobs:
           retry_wait_seconds: 30
           command: pnpm install --frozen-lockfile
 
-      # Why: signing is what makes an hourly installable over an existing Orca, so
+      # Why: signing is what makes an hourly installable over an existing MCode, so
       # a missing cert must fail here rather than after a 20-minute build.
       - name: Verify macOS signing environment
         if: steps.freshness.outputs.should_build == 'true'
@@ -207,7 +207,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY" --limit 100 --exclude-drafts \
             --json tagName --jq '.[].tagName' || true)"
           echo "Highest published tag seen: $(head -1 <<<"$published")"
-          ORCA_PUBLISHED_VERSIONS="$published" ORCA_HOURLY_RELEASE_NAMES="$names" \
+          MCODE_PUBLISHED_VERSIONS="$published" MCODE_HOURLY_RELEASE_NAMES="$names" \
             node config/scripts/hourly-build-version.mjs \
             >"$RUNNER_TEMP/hourly-identity.txt"
           grep -E '^(version|build_number)=' "$RUNNER_TEMP/hourly-identity.txt"
@@ -230,7 +230,7 @@ jobs:
           # Why: hourly builds are not an official channel — telemetry's transport
           # gate accepts only 'stable' or 'rc', so leaving this unset keeps them
           # silent, which is correct for unvetted dev artifacts.
-          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+          MCODE_DIAGNOSTICS_TOKEN_URL: https://www.mcode.dev/diagnostics/token
 
       # Why a second mint: everything from here on writes to the hourly repo, and
       # the notary round trip inside the publish step can be tens of minutes. The
@@ -245,7 +245,7 @@ jobs:
           app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
           private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
           owner: stablyai
-          repositories: orca-hourly
+          repositories: mcode-hourly
 
       - name: Create hourly release
         id: release
@@ -277,15 +277,15 @@ jobs:
             --draft \
             --notes "Automated hourly macOS and Windows dev build from commit \`$short_sha\`.
 
-          Built from [\`stablyai/orca@$short_sha\`](https://github.com/stablyai/orca/commit/$SHA).
+          Built from [\`mcode-ide/mcode@$short_sha\`](https://github.com/mcode-ide/mcode/commit/$SHA).
 
           **Unvetted.** No tests ran. The macOS build is signed and notarized like a
-          release, so it installs through Orca's in-app updater and opens from a manual
+          release, so it installs through MCode's in-app updater and opens from a manual
           download without a Gatekeeper prompt — but nothing here has been reviewed.
 
           **Windows builds are unsigned.** They install and update normally once you
           are on one, but a signed Stable or RC build cannot install one through the
-          in-app updater — download \`orca-windows-setup.exe\` below and run it once
+          in-app updater — download \`mcode-windows-setup.exe\` below and run it once
           (SmartScreen will warn about an unknown publisher). Every later switch,
           including back to Stable, works in-app from there."
           echo "tag=$TAG" >>"$GITHUB_OUTPUT"
@@ -302,13 +302,13 @@ jobs:
           timeout_minutes: 45
           max_attempts: 2
           retry_wait_seconds: 30
-          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_HOURLY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
+          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && MCODE_MAC_HOURLY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
         env:
           # Why: electron-builder's github publisher targets the repo named in the
-          # config; the token must therefore carry write access to orca-hourly.
+          # config; the token must therefore carry write access to mcode-hourly.
           GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
-          ORCA_HOURLY_BUILD_VERSION: ${{ steps.hourly.outputs.version }}
-          ORCA_BUILD_COMMIT: ${{ steps.hourly.outputs.commit }}
+          MCODE_HOURLY_BUILD_VERSION: ${{ steps.hourly.outputs.version }}
+          MCODE_BUILD_COMMIT: ${{ steps.hourly.outputs.commit }}
           CSC_LINK: ${{ secrets.MAC_CERTS }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
           # Why all three: electron-builder's notarize step authenticates to the

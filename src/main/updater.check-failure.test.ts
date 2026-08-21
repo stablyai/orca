@@ -120,11 +120,11 @@ function respondWithNotReadyRelease({
   const atom = `<feed>${publishingIncident.atomTags
     .map(
       (tag) =>
-        `<entry><link rel="alternate" type="text/html" href="https://github.com/stablyai/orca/releases/tag/${tag}"/><title>${tag}</title></entry>`
+        `<entry><link rel="alternate" type="text/html" href="https://github.com/mcode-ide/mcode/releases/tag/${tag}"/><title>${tag}</title></entry>`
     )
     .join('')}</feed>`
   netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
-    if (url === 'https://github.com/stablyai/orca/releases.atom') {
+    if (url === 'https://github.com/mcode-ide/mcode/releases.atom') {
       return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(atom) })
     }
     if (init?.method === 'HEAD' && assetStatus !== undefined) {
@@ -248,7 +248,7 @@ describe('updater check failure handling', () => {
     {
       assetStatus: publishingIncident.missingWindowsAssetStatus,
       caseName: 'asset 404',
-      manifestText: 'version: 1.4.142\nfiles:\n  - url: orca-windows-setup.exe'
+      manifestText: 'version: 1.4.142\nfiles:\n  - url: mcode-windows-setup.exe'
     }
   ])(
     'maps $caseName into neutral artifact-readiness status and diagnostics',

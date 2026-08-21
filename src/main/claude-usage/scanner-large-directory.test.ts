@@ -26,7 +26,7 @@ vi.mock('fs/promises', async () => {
 })
 
 const FILE_COUNT = 125_000
-const FAKE_HOME = join('/', 'tmp', 'orca-large-claude-home')
+const FAKE_HOME = join('/', 'tmp', 'mcode-large-claude-home')
 const PROJECTS_ROOT = join(FAKE_HOME, '.claude', 'projects')
 const TRANSCRIPTS_ROOT = join(FAKE_HOME, '.claude', 'transcripts')
 const PROJECT_DIR = join(PROJECTS_ROOT, 'large-project')

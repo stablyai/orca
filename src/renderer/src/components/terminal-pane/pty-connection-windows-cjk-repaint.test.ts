@@ -180,7 +180,7 @@ describe('connectPanePty', () => {
       connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
       await flushAsyncTicks(6)
 
-      capturedDataCallback.current?.('\r\x1b[Korca % npm test')
+      capturedDataCallback.current?.('\r\x1b[Kmcode % npm test')
 
       parseCallback?.()
       expect(refresh).toHaveBeenCalledWith(0, 39, true)
@@ -450,7 +450,7 @@ describe('connectPanePty', () => {
       // Why: missing-glyph workaround is renderer-scoped, not PTY-scoped — SSH moves byte origin but Windows still paints locally.
       mockStoreState = {
         ...mockStoreState,
-        repos: [{ id: 'repo1', connectionId: 'conn-1', displayName: 'orca' }]
+        repos: [{ id: 'repo1', connectionId: 'conn-1', displayName: 'mcode' }]
       }
 
       const pane = createPane(1)

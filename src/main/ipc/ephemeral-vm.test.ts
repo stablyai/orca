@@ -116,9 +116,9 @@ describe('registerEphemeralVmHandlers', () => {
     removeRuntimeOwnedSshTargetMock.mockReset()
     invalidateRuntimeEnvironmentTransportMock.mockReset()
     connectRuntimeOwnedSshTargetMock.mockResolvedValue({
-      targetId: 'runtime-ssh-orca-instance-1',
+      targetId: 'runtime-ssh-mcode-instance-1',
       target: {
-        id: 'runtime-ssh-orca-instance-1',
+        id: 'runtime-ssh-mcode-instance-1',
         label: 'Sandbox',
         host: 'sandbox.example.com',
         port: 22,
@@ -138,10 +138,10 @@ describe('registerEphemeralVmHandlers', () => {
     }
   })
 
-  it('lists recipes from local repo orca.yaml', async () => {
-    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
+  it('lists recipes from local repo mcode.yaml', async () => {
+    const repoPath = makeDir('mcode-ephemeral-vm-ipc-repo-')
     writeFileSync(
-      join(repoPath, 'orca.yaml'),
+      join(repoPath, 'mcode.yaml'),
       [
         'environmentRecipes:',
         '  - id: cloud-sandbox',
@@ -174,9 +174,9 @@ describe('registerEphemeralVmHandlers', () => {
   })
 
   it('lists the recipe catalog across local git repos', async () => {
-    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
+    const repoPath = makeDir('mcode-ephemeral-vm-ipc-repo-')
     writeFileSync(
-      join(repoPath, 'orca.yaml'),
+      join(repoPath, 'mcode.yaml'),
       [
         'environmentRecipes:',
         '  - id: cloud-sandbox',
@@ -209,9 +209,9 @@ describe('registerEphemeralVmHandlers', () => {
   })
 
   it('merges approved plugin recipes while repository recipes shadow matching ids', async () => {
-    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
+    const repoPath = makeDir('mcode-ephemeral-vm-ipc-repo-')
     writeFileSync(
-      join(repoPath, 'orca.yaml'),
+      join(repoPath, 'mcode.yaml'),
       [
         'environmentRecipes:',
         '  - id: shared',
@@ -221,11 +221,11 @@ describe('registerEphemeralVmHandlers', () => {
     )
     const pluginService = pluginServiceWithRecipes([
       {
-        pluginKey: 'orca-samples.recipes',
+        pluginKey: 'mcode-samples.recipes',
         recipe: { id: 'shared', name: 'Plugin Shared', create: 'plugin-shared' }
       },
       {
-        pluginKey: 'orca-samples.recipes',
+        pluginKey: 'mcode-samples.recipes',
         recipe: { id: 'global', name: 'Plugin Global', create: 'plugin-global' }
       }
     ])
@@ -243,8 +243,8 @@ describe('registerEphemeralVmHandlers', () => {
   })
 
   it('uses an immutable plugin recipe snapshot after the plugin is removed', async () => {
-    const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
-    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
+    const userDataPath = makeDir('mcode-ephemeral-vm-ipc-user-data-')
+    const repoPath = makeDir('mcode-ephemeral-vm-ipc-repo-')
     getPathMock.mockReturnValue(userDataPath)
     const startPath = join(repoPath, 'start.js')
     const destroyPath = join(repoPath, 'destroy.js')
@@ -261,7 +261,7 @@ describe('registerEphemeralVmHandlers', () => {
     writeFileSync(destroyPath, "require('fs').writeFileSync('plugin-cleaned.txt', 'yes')")
     const registrations = [
       {
-        pluginKey: 'orca-samples.recipes',
+        pluginKey: 'mcode-samples.recipes',
         recipe: {
           id: 'plugin-cloud',
           name: 'Plugin Cloud',
@@ -288,8 +288,8 @@ describe('registerEphemeralVmHandlers', () => {
   })
 
   it('never substitutes a later same-id plugin recipe for a legacy runtime', async () => {
-    const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
-    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
+    const userDataPath = makeDir('mcode-ephemeral-vm-ipc-user-data-')
+    const repoPath = makeDir('mcode-ephemeral-vm-ipc-repo-')
     getPathMock.mockReturnValue(userDataPath)
     const pluginDestroyPath = join(repoPath, 'plugin-destroy.js')
     writeFileSync(
@@ -312,7 +312,7 @@ describe('registerEphemeralVmHandlers', () => {
     })
     const pluginService = pluginServiceWithRecipes([
       {
-        pluginKey: 'orca-samples.recipes',
+        pluginKey: 'mcode-samples.recipes',
         recipe: {
           id: 'shared-id',
           name: 'Later Plugin Recipe',
@@ -335,8 +335,8 @@ describe('registerEphemeralVmHandlers', () => {
   })
 
   it('provisions a recipe and persists the ephemeral runtime', async () => {
-    const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
-    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
+    const userDataPath = makeDir('mcode-ephemeral-vm-ipc-user-data-')
+    const repoPath = makeDir('mcode-ephemeral-vm-ipc-repo-')
     getPathMock.mockReturnValue(userDataPath)
     mkdirSync(join(repoPath, 'scripts'), { recursive: true })
     const startPath = join(repoPath, 'scripts', 'start.js')
@@ -347,12 +347,12 @@ describe('registerEphemeralVmHandlers', () => {
         '  schemaVersion: 1,',
         `  pairingCode: ${JSON.stringify(makePairingCode())},`,
         "  projectRoot: '/workspace/repo',",
-        '  userData: { providerResourceId: process.env.ORCA_VM_INSTANCE_ID }',
+        '  userData: { providerResourceId: process.env.MCODE_VM_INSTANCE_ID }',
         '}))'
       ].join('\n')
     )
     writeFileSync(
-      join(repoPath, 'orca.yaml'),
+      join(repoPath, 'mcode.yaml'),
       [
         'environmentRecipes:',
         '  - id: cloud-sandbox',
@@ -416,8 +416,8 @@ describe('registerEphemeralVmHandlers', () => {
   })
 
   it('provisions an ssh recipe without creating a runtime environment', async () => {
-    const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
-    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
+    const userDataPath = makeDir('mcode-ephemeral-vm-ipc-user-data-')
+    const repoPath = makeDir('mcode-ephemeral-vm-ipc-repo-')
     getPathMock.mockReturnValue(userDataPath)
     mkdirSync(join(repoPath, 'scripts'), { recursive: true })
     const startPath = join(repoPath, 'scripts', 'start-ssh.js')
@@ -441,7 +441,7 @@ describe('registerEphemeralVmHandlers', () => {
       ].join('\n')
     )
     writeFileSync(
-      join(repoPath, 'orca.yaml'),
+      join(repoPath, 'mcode.yaml'),
       [
         'environmentRecipes:',
         '  - id: cloud-sandbox',
@@ -473,12 +473,12 @@ describe('registerEphemeralVmHandlers', () => {
     expect(result).toMatchObject({
       ok: true,
       connectionType: 'ssh',
-      sshTargetId: 'runtime-ssh-orca-instance-1',
+      sshTargetId: 'runtime-ssh-mcode-instance-1',
       runtime: {
         repoId: 'repo-1',
         status: 'running',
         connectionMode: 'ssh',
-        sshTargetId: 'runtime-ssh-orca-instance-1'
+        sshTargetId: 'runtime-ssh-mcode-instance-1'
       }
     })
     expect(result.environment).toBeUndefined()
@@ -499,8 +499,8 @@ describe('registerEphemeralVmHandlers', () => {
   })
 
   it('retains the runtime-owned SSH target when destroy fails', async () => {
-    const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
-    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
+    const userDataPath = makeDir('mcode-ephemeral-vm-ipc-user-data-')
+    const repoPath = makeDir('mcode-ephemeral-vm-ipc-repo-')
     getPathMock.mockReturnValue(userDataPath)
     mkdirSync(join(repoPath, 'scripts'), { recursive: true })
     const startPath = join(repoPath, 'scripts', 'start-ssh.js')
@@ -525,7 +525,7 @@ describe('registerEphemeralVmHandlers', () => {
     )
     writeFileSync(destroyPath, 'process.exit(1)')
     writeFileSync(
-      join(repoPath, 'orca.yaml'),
+      join(repoPath, 'mcode.yaml'),
       [
         'environmentRecipes:',
         '  - id: cloud-sandbox',
@@ -554,12 +554,12 @@ describe('registerEphemeralVmHandlers', () => {
     expect(cleaned.cleanupLastError).toBeTruthy()
     expect(removeRuntimeOwnedSshTargetMock).not.toHaveBeenCalled()
     expect(cleaned.connectionMode).toBe('ssh')
-    expect(cleaned.sshTargetId).toBe('runtime-ssh-orca-instance-1')
+    expect(cleaned.sshTargetId).toBe('runtime-ssh-mcode-instance-1')
   })
 
   it('retries hidden SSH teardown without rerunning completed provider cleanup', async () => {
-    const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
-    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
+    const userDataPath = makeDir('mcode-ephemeral-vm-ipc-user-data-')
+    const repoPath = makeDir('mcode-ephemeral-vm-ipc-repo-')
     getPathMock.mockReturnValue(userDataPath)
     upsertEphemeralVmRuntime(userDataPath, {
       id: 'runtime-cleanup-retry',
@@ -576,7 +576,7 @@ describe('registerEphemeralVmHandlers', () => {
         connection: {
           type: 'ssh',
           projectRoot: '/workspace/repo',
-          target: { label: 'VM', host: 'host', port: 22, username: 'orca' }
+          target: { label: 'VM', host: 'host', port: 22, username: 'mcode' }
         }
       }
     })
@@ -605,8 +605,8 @@ describe('registerEphemeralVmHandlers', () => {
   })
 
   it('runs suspend and resume for an attached ephemeral VM workspace', async () => {
-    const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
-    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
+    const userDataPath = makeDir('mcode-ephemeral-vm-ipc-user-data-')
+    const repoPath = makeDir('mcode-ephemeral-vm-ipc-repo-')
     getPathMock.mockReturnValue(userDataPath)
     mkdirSync(join(repoPath, 'scripts'), { recursive: true })
     const startPath = join(repoPath, 'scripts', 'start.js')
@@ -651,7 +651,7 @@ describe('registerEphemeralVmHandlers', () => {
       ].join('\n')
     )
     writeFileSync(
-      join(repoPath, 'orca.yaml'),
+      join(repoPath, 'mcode.yaml'),
       [
         'environmentRecipes:',
         '  - id: cloud-sandbox',
@@ -709,8 +709,8 @@ describe('registerEphemeralVmHandlers', () => {
   })
 
   it('returns a copyable cleanup command for a persisted runtime', async () => {
-    const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
-    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
+    const userDataPath = makeDir('mcode-ephemeral-vm-ipc-user-data-')
+    const repoPath = makeDir('mcode-ephemeral-vm-ipc-repo-')
     getPathMock.mockReturnValue(userDataPath)
     mkdirSync(join(repoPath, 'scripts'), { recursive: true })
     const startPath = join(repoPath, 'scripts', 'start.js')
@@ -727,7 +727,7 @@ describe('registerEphemeralVmHandlers', () => {
     )
     writeFileSync(cleanupPath, 'process.stdin.resume()\n')
     writeFileSync(
-      join(repoPath, 'orca.yaml'),
+      join(repoPath, 'mcode.yaml'),
       [
         'environmentRecipes:',
         '  - id: cloud-sandbox',
@@ -756,8 +756,8 @@ describe('registerEphemeralVmHandlers', () => {
   })
 
   it('streams provision logs and cancels an active provision', async () => {
-    const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
-    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
+    const userDataPath = makeDir('mcode-ephemeral-vm-ipc-user-data-')
+    const repoPath = makeDir('mcode-ephemeral-vm-ipc-repo-')
     getPathMock.mockReturnValue(userDataPath)
     mkdirSync(join(repoPath, 'scripts'), { recursive: true })
     const startPath = join(repoPath, 'scripts', 'start.js')
@@ -775,7 +775,7 @@ describe('registerEphemeralVmHandlers', () => {
       ].join('\n')
     )
     writeFileSync(
-      join(repoPath, 'orca.yaml'),
+      join(repoPath, 'mcode.yaml'),
       [
         'environmentRecipes:',
         '  - id: cloud-sandbox',
@@ -811,8 +811,8 @@ describe('registerEphemeralVmHandlers', () => {
   })
 
   it('redacts recipe stdout when provisioning fails', async () => {
-    const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
-    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
+    const userDataPath = makeDir('mcode-ephemeral-vm-ipc-user-data-')
+    const repoPath = makeDir('mcode-ephemeral-vm-ipc-repo-')
     getPathMock.mockReturnValue(userDataPath)
     mkdirSync(join(repoPath, 'scripts'), { recursive: true })
     const startPath = join(repoPath, 'scripts', 'start.js')
@@ -826,7 +826,7 @@ describe('registerEphemeralVmHandlers', () => {
       ].join('\n')
     )
     writeFileSync(
-      join(repoPath, 'orca.yaml'),
+      join(repoPath, 'mcode.yaml'),
       [
         'environmentRecipes:',
         '  - id: cloud-sandbox',

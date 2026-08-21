@@ -46,7 +46,7 @@ function duplicateIdRepos(): Repo[] {
 async function createStoreFromState(state: Record<string, unknown>) {
   mkdirSync(testState.dir, { recursive: true })
   writeFileSync(
-    join(testState.dir, 'orca-data.json'),
+    join(testState.dir, 'mcode-data.json'),
     JSON.stringify({ ...getDefaultPersistedState(testState.dir), ...state }),
     'utf-8'
   )
@@ -91,7 +91,7 @@ function staleLocalSetupState() {
 }
 
 beforeEach(() => {
-  testState.dir = mkdtempSync(join(tmpdir(), 'orca-dup-repo-id-'))
+  testState.dir = mkdtempSync(join(tmpdir(), 'mcode-dup-repo-id-'))
 })
 
 afterEach(() => {

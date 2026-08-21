@@ -280,7 +280,7 @@ describe('PR workflow parallelism', () => {
     )
 
     expect(buildStep.run).not.toContain('ensure:electron-runtime')
-    expect(packageStep.env.ORCA_REUSE_PREPARED_NATIVE_RUNTIME).toBe('1')
+    expect(packageStep.env.MCODE_REUSE_PREPARED_NATIVE_RUNTIME).toBe('1')
   })
 
   it('restores compiled native modules after the install that strips them', () => {

@@ -125,7 +125,7 @@ describe('TerminalLinkActionPopover', () => {
     expect(onClose).toHaveBeenCalledWith(request)
   })
 
-  it('uses distinct icons for system and Orca browser actions', () => {
+  it('uses distinct icons for system and MCode browser actions', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     const request: TerminalLinkActionRequest = {
       paneId: 1,
@@ -133,7 +133,7 @@ describe('TerminalLinkActionPopover', () => {
       anchorY: 200,
       destination: 'https://example.com',
       kind: 'url',
-      primary: { external: false, label: 'Orca Browser', run: vi.fn() },
+      primary: { external: false, label: 'MCode Browser', run: vi.fn() },
       alternate: { external: true, label: 'System Browser', run: vi.fn() },
       focusTerminal: vi.fn()
     }
@@ -141,7 +141,7 @@ describe('TerminalLinkActionPopover', () => {
     render(<TerminalLinkActionPopover request={request} onClose={vi.fn()} />)
 
     expect(
-      screen.getByText('Orca Browser').closest('button')?.querySelector('.lucide-globe')
+      screen.getByText('MCode Browser').closest('button')?.querySelector('.lucide-globe')
     ).toBeTruthy()
     expect(
       screen.getByText('System Browser').closest('button')?.querySelector('.lucide-external-link')

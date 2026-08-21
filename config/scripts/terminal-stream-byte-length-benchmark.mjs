@@ -33,12 +33,12 @@ nodeModule.registerHooks({
 })
 
 const ROOT = path.resolve(import.meta.dirname, '../..')
-const ITERATIONS = Number(process.env.ORCA_BYTE_LENGTH_BENCH_ITERATIONS ?? '61')
+const ITERATIONS = Number(process.env.MCODE_BYTE_LENGTH_BENCH_ITERATIONS ?? '61')
 let resultChecksum = 0
 let validatedPairs = 0
 
 if (!Number.isSafeInteger(ITERATIONS) || ITERATIONS <= 0) {
-  throw new Error(`ORCA_BYTE_LENGTH_BENCH_ITERATIONS must be a positive integer, got ${ITERATIONS}`)
+  throw new Error(`MCODE_BYTE_LENGTH_BENCH_ITERATIONS must be a positive integer, got ${ITERATIONS}`)
 }
 
 function readSource(relative) {

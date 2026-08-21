@@ -8,7 +8,7 @@ import {
   normalizeCookieImportDomain
 } from './browser-cookie-import-policy'
 
-const IMPORT_SCOPE_TABLE = 'orca_cookie_import_scope'
+const IMPORT_SCOPE_TABLE = 'mcode_cookie_import_scope'
 const IMPORT_SCOPE_FORMAT_VERSION = 1
 export const SCOPED_COOKIE_IMPORT_FORMAT = `scoped-v${IMPORT_SCOPE_FORMAT_VERSION}`
 

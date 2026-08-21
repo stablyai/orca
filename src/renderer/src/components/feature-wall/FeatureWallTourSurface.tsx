@@ -14,7 +14,7 @@ import type { FeatureWallOpenSourceTelemetry } from '../../../../shared/telemetr
 import type { FeatureWallTourDepthSummary } from '../../../../shared/feature-wall-tour-depth'
 import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
-import { ORCA_CLI_SKILL_NAME, ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
+import { MCODE_CLI_SKILL_NAME, ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-install-commands'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
@@ -54,7 +54,7 @@ export function FeatureWallTourSurface({
   className,
   panelClassName,
   doneLabel = 'Done',
-  footerText = 'Reopen any time from Help > Explore Orca.',
+  footerText = 'Reopen any time from Help > Explore MCode.',
   enableKeyboardShortcut = true,
   compactRail = false,
   detachedFooter = false,
@@ -114,7 +114,7 @@ export function FeatureWallTourSurface({
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
-  const browserUseSkill = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
+  const browserUseSkill = useInstalledAgentSkill(MCODE_CLI_SKILL_NAME, {
     enabled: isOpen,
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS

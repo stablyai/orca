@@ -1,4 +1,4 @@
-/* Why: ported from mobile/orca-mobile-sidebar-mock-v3.html. The mock is the
+/* Why: ported from mobile/mcode-mobile-sidebar-mock-v3.html. The mock is the
    1:1 design spec for the in-app Mobile page; styles are scoped under
    .mobile-page-root so they don't leak into the rest of the app shell. */
 
@@ -1189,7 +1189,7 @@
   gap: 8px;
 }
 
-.mobile-page-root .mp-app-brand .mp-orca-logo {
+.mobile-page-root .mp-app-brand .mp-mcode-logo {
   width: 28px;
   height: 18px;
   color: var(--m-text-primary);

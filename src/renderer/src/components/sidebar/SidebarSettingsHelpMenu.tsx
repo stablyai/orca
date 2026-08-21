@@ -35,11 +35,11 @@ import { SidebarFeedbackDialog } from './SidebarFeedbackDialog'
 import { translate } from '@/i18n/i18n'
 import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
 
-const DOCS_URL = 'https://www.onorca.dev/docs'
-const CHANGELOG_URL = 'https://onorca.dev/changelog'
-const GITHUB_URL = 'https://github.com/stablyai/orca'
+const DOCS_URL = 'https://www.mcode.dev/docs'
+const CHANGELOG_URL = 'https://mcode.dev/changelog'
+const GITHUB_URL = 'https://github.com/mcode-ide/mcode'
 const DISCORD_URL = 'https://discord.gg/fzjDKHxv8Q'
-const X_URL = 'https://x.com/orca_build'
+const X_URL = 'https://x.com/mcode_build'
 const NO_UPDATE_CHECK_MODIFIERS = {
   altKey: false,
   ctrlKey: false,
@@ -95,7 +95,7 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
   const settingsShortcut = useShortcutKeyDetails('app.settings')
   const [menuOpen, setMenuOpen] = useState(false)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
-  const [isRestartingOrca, setIsRestartingOrca] = useState(false)
+  const [isRestartingMCode, setIsRestartingMCode] = useState(false)
   const lastShowOnboardingAtRef = React.useRef(0)
   const updateCheckModifiersRef = React.useRef(NO_UPDATE_CHECK_MODIFIERS)
   const mountedRef = useMountedRef()
@@ -118,21 +118,21 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
     void showOnboardingFromRenderer()
   }
 
-  const handleRestartOrca = (): void => {
-    if (isRestartingOrca) {
+  const handleRestartMCode = (): void => {
+    if (isRestartingMCode) {
       return
     }
-    setIsRestartingOrca(true)
+    setIsRestartingMCode(true)
     toast.info(
-      translate('auto.components.sidebar.SidebarSettingsHelpMenu.5161eef55d', 'Restarting Orca…')
+      translate('auto.components.sidebar.SidebarSettingsHelpMenu.5161eef55d', 'Restarting MCode…')
     )
     void window.api.app.restart().catch((error) => {
       if (mountedRef.current) {
-        setIsRestartingOrca(false)
+        setIsRestartingMCode(false)
         toast.error(
           translate(
             'auto.components.sidebar.SidebarSettingsHelpMenu.4e8f5710d3',
-            "Couldn't restart Orca."
+            "Couldn't restart MCode."
           ),
           {
             description: error instanceof Error ? error.message : undefined
@@ -320,11 +320,11 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
               )}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={handleRestartOrca} disabled={isRestartingOrca}>
+            <DropdownMenuItem onSelect={handleRestartMCode} disabled={isRestartingMCode}>
               <RotateCw className="size-3.5" />
               {translate(
                 'auto.components.sidebar.SidebarSettingsHelpMenu.ad3d3ed7f1',
-                'Restart Orca'
+                'Restart MCode'
               )}
             </DropdownMenuItem>
           </DropdownMenuContent>

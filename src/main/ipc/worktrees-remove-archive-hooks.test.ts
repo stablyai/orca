@@ -299,7 +299,7 @@ describe('registerWorktreeHandlers', () => {
       worktreeId: 'repo-ssh::/remote/feature-wt'
     })
 
-    expect(fsProvider.readFile).toHaveBeenCalledWith('/remote/repo/orca.yaml')
+    expect(fsProvider.readFile).toHaveBeenCalledWith('/remote/repo/mcode.yaml')
     expect(provider.execNonInteractive).toHaveBeenCalledWith(
       '/bin/bash',
       ['-lc', 'echo archived'],
@@ -307,8 +307,8 @@ describe('registerWorktreeHandlers', () => {
       120_000,
       undefined,
       expect.objectContaining({
-        ORCA_ROOT_PATH: '/remote/repo',
-        ORCA_WORKTREE_PATH: '/remote/feature-wt'
+        MCODE_ROOT_PATH: '/remote/repo',
+        MCODE_WORKTREE_PATH: '/remote/feature-wt'
       })
     )
     expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined)
@@ -613,7 +613,7 @@ describe('registerWorktreeHandlers', () => {
       worktreeId: 'repo-ssh::C:\\remote\\feature-wt'
     })
 
-    expect(fsProvider.readFile).toHaveBeenCalledWith('C:\\remote\\repo\\orca.yaml')
+    expect(fsProvider.readFile).toHaveBeenCalledWith('C:\\remote\\repo\\mcode.yaml')
     expect(provider.execNonInteractive).toHaveBeenCalledWith(
       'cmd.exe',
       ['/d', '/s', '/c', 'echo archived'],
@@ -621,8 +621,8 @@ describe('registerWorktreeHandlers', () => {
       120_000,
       undefined,
       expect.objectContaining({
-        ORCA_ROOT_PATH: 'C:\\remote\\repo',
-        ORCA_WORKTREE_PATH: 'C:\\remote\\feature-wt'
+        MCODE_ROOT_PATH: 'C:\\remote\\repo',
+        MCODE_WORKTREE_PATH: 'C:\\remote\\feature-wt'
       })
     )
   })

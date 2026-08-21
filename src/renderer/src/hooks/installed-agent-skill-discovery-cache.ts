@@ -7,7 +7,7 @@ export const INSTALLED_AGENT_SKILL_DISCOVERY_CACHE_MAX = 256
 
 // Why: focus-triggered refreshes read through this cache instead of forcing a
 // disk walk, so it needs a lifetime — without one a non-forced read would never
-// see a skill installed outside Orca. Matches the focus-rescan cooldown the
+// see a skill installed outside MCode. Matches the focus-rescan cooldown the
 // freshness inventory already applies to its own scan (`useSkillFreshness`), so
 // the two disk-reading surfaces answer a burst of alt-tabs the same way.
 export const INSTALLED_AGENT_SKILL_DISCOVERY_FRESH_MS = 15_000

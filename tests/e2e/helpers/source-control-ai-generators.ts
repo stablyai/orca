@@ -43,7 +43,7 @@ export function writeLinkedIssueEchoGenerator(scriptPath: string, emitPayload: s
       "  const prompt = Buffer.concat(chunks).toString('utf8')",
       // Why: capture the whole line, not `\d*` — a `\d*` capture matches zero digits before
       // an unexpanded `{linkedIssue}` and reports it as `empty`, hiding a literal token.
-      '  const match = prompt.match(/ORCA_E2E_ISSUE=([^\\r\\n]*)/)',
+      '  const match = prompt.match(/MCODE_E2E_ISSUE=([^\\r\\n]*)/)',
       "  const issue = match ? match[1] || 'empty' : 'missing'",
       ...emitPayload,
       '})'

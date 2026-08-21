@@ -87,7 +87,7 @@ export function parseWindowsProcessIdentityJson(stdout: string): WindowsProcessI
 // Async because the sync version measurably froze the Electron main thread at
 // startup for the whole spawn (benchmark: ~0.5s warm, 3s timeout cap cold).
 // CreationDate rides along in the same spawn so start-time verification adds
-// zero extra process launches. Timed under ORCA_STARTUP_DIAGNOSTICS so the
+// zero extra process launches. Timed under MCODE_STARTUP_DIAGNOSTICS so the
 // cold-start benchmark can attribute startup cost to these checks.
 export async function queryWindowsProcessIdentity(
   pid: number

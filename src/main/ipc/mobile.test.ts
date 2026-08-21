@@ -36,8 +36,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { registerMobileHandlers } from './mobile'
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../runtime/network-exposure-guidance'
-import { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { OrcaRuntimeRpcServer } from '../runtime/runtime-rpc'
+import { MCodeRuntimeService } from '../runtime/mcode-runtime'
+import { MCodeRuntimeRpcServer } from '../runtime/runtime-rpc'
 import { WebSocketTransport } from '../runtime/rpc/ws-transport'
 
 describe('registerMobileHandlers', () => {
@@ -92,7 +92,7 @@ describe('registerMobileHandlers', () => {
     })
     const createMobilePairingOffer = vi.fn().mockResolvedValue({
       available: true,
-      pairingUrl: 'orca://pair#lan',
+      pairingUrl: 'mcode://pair#lan',
       endpoint: 'ws://192.168.50.238:6768',
       deviceId: 'mobile-lan',
       connectionMode: 'automatic'
@@ -179,7 +179,7 @@ describe('registerMobileHandlers', () => {
     )
     const createMobilePairingOffer = vi.fn().mockResolvedValue({
       available: true,
-      pairingUrl: 'orca://pair#external-switch',
+      pairingUrl: 'mcode://pair#external-switch',
       endpoint: 'ws://192.168.50.24:6768',
       deviceId: 'mobile-external-switch',
       connectionMode: 'automatic'
@@ -240,7 +240,7 @@ describe('registerMobileHandlers', () => {
     })
     const createMobilePairingOffer = vi.fn().mockResolvedValue({
       available: true,
-      pairingUrl: 'orca://pair#relay',
+      pairingUrl: 'mcode://pair#relay',
       endpoint: 'ws://127.0.0.1:6768',
       deviceId: 'mobile-bridge-only',
       connectionMode: 'automatic'
@@ -295,7 +295,7 @@ describe('registerMobileHandlers', () => {
     })
     const createMobilePairingOffer = vi.fn().mockResolvedValue({
       available: true,
-      pairingUrl: 'orca://pair#bridge',
+      pairingUrl: 'mcode://pair#bridge',
       endpoint: 'ws://172.17.0.1:6768',
       deviceId: 'mobile-bridge-pick',
       connectionMode: 'local-only'
@@ -334,7 +334,7 @@ describe('registerMobileHandlers', () => {
     })
     const createMobilePairingOffer = vi.fn().mockResolvedValue({
       available: true,
-      pairingUrl: 'orca://pair#mobile',
+      pairingUrl: 'mcode://pair#mobile',
       endpoint: 'ws://100.102.47.57:6768',
       deviceId: 'mobile-1',
       connectionMode: 'automatic'
@@ -346,7 +346,7 @@ describe('registerMobileHandlers', () => {
     await expect(handlers.get('mobile:getPairingQR')?.(null, {})).resolves.toMatchObject({
       available: true,
       qrSize: 58,
-      pairingUrl: 'orca://pair#mobile',
+      pairingUrl: 'mcode://pair#mobile',
       endpoint: 'ws://100.102.47.57:6768',
       deviceId: 'mobile-1',
       connectionMode: 'automatic'
@@ -392,7 +392,7 @@ describe('registerMobileHandlers', () => {
     })
     const createMobilePairingOffer = vi.fn().mockResolvedValue({
       available: true,
-      pairingUrl: 'orca://pair#local',
+      pairingUrl: 'mcode://pair#local',
       endpoint: 'ws://192.168.1.24:6768',
       deviceId: 'mobile-local',
       connectionMode: 'local-only'
@@ -409,7 +409,7 @@ describe('registerMobileHandlers', () => {
   it('preserves a copyable pairing URL when QR encoding fails', async () => {
     const createMobilePairingOffer = vi.fn().mockResolvedValue({
       available: true,
-      pairingUrl: 'orca://pair?code=copy-me',
+      pairingUrl: 'mcode://pair?code=copy-me',
       endpoint: 'wss://pair.example/oversized',
       deviceId: 'mobile-large',
       connectionMode: 'local-only'
@@ -426,7 +426,7 @@ describe('registerMobileHandlers', () => {
       qrDataUrl: null,
       qrSize: null,
       qrError: 'encoding_failed',
-      pairingUrl: 'orca://pair?code=copy-me',
+      pairingUrl: 'mcode://pair?code=copy-me',
       endpoint: 'wss://pair.example/oversized',
       deviceId: 'mobile-large',
       connectionMode: 'local-only'
@@ -479,7 +479,7 @@ describe('registerMobileHandlers', () => {
   it('generates runtime-scoped pairing urls for web and desktop clients', async () => {
     const createPairingOffer = vi.fn().mockReturnValue({
       available: true,
-      pairingUrl: 'orca://pair#runtime',
+      pairingUrl: 'mcode://pair#runtime',
       webClientUrl: 'http://100.64.1.20:6768/web-index.html?pairing=runtime',
       endpoint: 'ws://100.64.1.20:6768',
       deviceId: 'runtime-1'
@@ -496,7 +496,7 @@ describe('registerMobileHandlers', () => {
       })
     ).resolves.toEqual({
       available: true,
-      pairingUrl: 'orca://pair#runtime',
+      pairingUrl: 'mcode://pair#runtime',
       webClientUrl: 'http://100.64.1.20:6768/web-index.html?pairing=runtime',
       endpoint: 'ws://100.64.1.20:6768',
       deviceId: 'runtime-1'
@@ -523,7 +523,7 @@ describe('registerMobileHandlers', () => {
   ): { createPairingOffer: Mock; ensureNetworkExposure: Mock } => ({
     createPairingOffer: vi.fn().mockReturnValue({
       available: true,
-      pairingUrl: 'orca://pair#runtime',
+      pairingUrl: 'mcode://pair#runtime',
       webClientUrl: `http://${address}/web-index.html?pairing=runtime`,
       endpoint: `ws://${address}`,
       deviceId: 'runtime-local'
@@ -782,7 +782,7 @@ describe('registerMobileHandlers', () => {
       firewallEnvironment: {
         platform: 'win32',
         isPackaged: true,
-        executablePath: 'C:\\Program Files\\Orca\\Orca.exe',
+        executablePath: 'C:\\Program Files\\MCode\\MCode.exe',
         runPowerShell
       }
     })
@@ -804,7 +804,7 @@ describe('registerMobileHandlers', () => {
       firewallEnvironment: {
         platform: 'win32',
         isPackaged: true,
-        executablePath: 'C:\\Program Files\\Orca\\Orca.exe',
+        executablePath: 'C:\\Program Files\\MCode\\MCode.exe',
         runPowerShell
       }
     })
@@ -821,7 +821,7 @@ describe('registerMobileHandlers', () => {
 describe('runtime pairing bind host', () => {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
 
-  const wsTransportOf = (server: OrcaRuntimeRpcServer): WebSocketTransport | undefined =>
+  const wsTransportOf = (server: MCodeRuntimeRpcServer): WebSocketTransport | undefined =>
     (server['activeTransports'] as unknown[]).find(
       (transport): transport is WebSocketTransport => transport instanceof WebSocketTransport
     )
@@ -836,9 +836,9 @@ describe('runtime pairing bind host', () => {
     })
   })
 
-  const startServer = async (userDataPath: string): Promise<OrcaRuntimeRpcServer> => {
-    const server = new OrcaRuntimeRpcServer({
-      runtime: new OrcaRuntimeService(),
+  const startServer = async (userDataPath: string): Promise<MCodeRuntimeRpcServer> => {
+    const server = new MCodeRuntimeRpcServer({
+      runtime: new MCodeRuntimeService(),
       userDataPath,
       enableWebSocket: true,
       wsPort: 0
@@ -848,7 +848,7 @@ describe('runtime pairing bind host', () => {
   }
 
   it('keeps a real listener on loopback for a local link and widens it only for an off-host one', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-mobile-ipc-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-mobile-ipc-'))
     const server = await startServer(userDataPath)
 
     try {
@@ -883,7 +883,7 @@ describe('runtime pairing bind host', () => {
   // Why: the whole guarantee is worthless if it lasts one process — the local web client authenticating
   // marks its grant lastSeenAt > 0, which used to make the NEXT launch bind every interface.
   it('still binds loopback on the next launch after the local link has been used', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-mobile-ipc-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-mobile-ipc-'))
     const server = await startServer(userDataPath)
     let deviceId: string
     try {
@@ -916,7 +916,7 @@ describe('runtime pairing bind host', () => {
   })
 
   it('binds all interfaces on the next launch after a network link has been used', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-mobile-ipc-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-mobile-ipc-'))
     const server = await startServer(userDataPath)
     try {
       registerMobileHandlers(server)

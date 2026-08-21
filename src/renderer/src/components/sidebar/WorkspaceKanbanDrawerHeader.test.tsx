@@ -95,7 +95,7 @@ describe('WorkspaceKanbanDrawerHeader', () => {
 
   it('renders the search field as a sibling of the sheet title, not inside it', () => {
     const header = renderHeader(vi.fn(), {
-      query: 'orca',
+      query: 'mcode',
       isFiltering: true,
       matchCount: 2,
       totalCount: 15
@@ -107,7 +107,7 @@ describe('WorkspaceKanbanDrawerHeader', () => {
 
     const field = findByType(header, WorkspaceKanbanSearchField)
     expect(field?.props).toMatchObject({
-      query: 'orca',
+      query: 'mcode',
       isFiltering: true,
       matchCount: 2,
       totalCount: 15
@@ -116,7 +116,7 @@ describe('WorkspaceKanbanDrawerHeader', () => {
 
   it('keeps the filter, settings, and close cluster reachable alongside the field', () => {
     const header = renderHeader(vi.fn(), {
-      query: 'orca',
+      query: 'mcode',
       isFiltering: true,
       matchCount: 2,
       totalCount: 15
@@ -128,7 +128,7 @@ describe('WorkspaceKanbanDrawerHeader', () => {
   })
 
   it('keeps the selected-count badge and the field clear of the control cluster', () => {
-    const header = renderHeader(vi.fn(), { selectedCount: 3, query: 'orca' })
+    const header = renderHeader(vi.fn(), { selectedCount: 3, query: 'mcode' })
 
     // The title (with its badge) never shrinks the field into the absolute cluster,
     // which the header reserves space for with pr-32.

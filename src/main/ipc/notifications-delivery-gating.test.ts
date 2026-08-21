@@ -58,9 +58,9 @@ describe('registerNotificationHandlers', () => {
 
   it('opens the current macOS app notification settings entry', async () => {
     const originalPlatform = process.platform
-    const originalBundleId = process.env.ORCA_DEV_MACOS_BUNDLE_ID
+    const originalBundleId = process.env.MCODE_DEV_MACOS_BUNDLE_ID
     Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
-    process.env.ORCA_DEV_MACOS_BUNDLE_ID = 'com.stablyai.orca.dev.fb5a47066f08'
+    process.env.MCODE_DEV_MACOS_BUNDLE_ID = 'com.mcode.desktop.dev.fb5a47066f08'
     try {
       registerNotificationHandlers({
         getSettings: () => ({
@@ -77,14 +77,14 @@ describe('registerNotificationHandlers', () => {
       handler({})
 
       expect(shellOpenExternalMock).toHaveBeenCalledWith(
-        'x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=com.stablyai.orca.dev.fb5a47066f08'
+        'x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=com.mcode.desktop.dev.fb5a47066f08'
       )
     } finally {
       Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
       if (originalBundleId === undefined) {
-        delete process.env.ORCA_DEV_MACOS_BUNDLE_ID
+        delete process.env.MCODE_DEV_MACOS_BUNDLE_ID
       } else {
-        process.env.ORCA_DEV_MACOS_BUNDLE_ID = originalBundleId
+        process.env.MCODE_DEV_MACOS_BUNDLE_ID = originalBundleId
       }
     }
   })
@@ -133,7 +133,7 @@ describe('registerNotificationHandlers', () => {
     expect(notificationCtorMock).not.toHaveBeenCalled()
   })
 
-  it('suppresses active-worktree notifications while Orca is focused', async () => {
+  it('suppresses active-worktree notifications while MCode is focused', async () => {
     getAllWindowsMock.mockReturnValue([
       {
         isDestroyed: () => false,

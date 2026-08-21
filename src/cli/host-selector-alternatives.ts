@@ -69,7 +69,7 @@ export function ambiguousEnvironments(
   return byName.length > 1 ? byName : []
 }
 
-// Why: a paired Orca server and an SSH target are different machines reached different ways, but
+// Why: a paired MCode server and an SSH target are different machines reached different ways, but
 // a caller only knows "the machine called X". When X misses on one axis, the useful answer is
 // almost always that it exists on the other — so say which, and give the exact flag.
 export function crossKindNextSteps(
@@ -82,12 +82,12 @@ export function crossKindNextSteps(
   const environment = findEnvironmentByName(alternatives.environments, name)
   if (requested !== 'ssh' && ssh) {
     steps.push(
-      `"${name}" is an SSH target on this Orca host, not a paired server. Use --host ssh:${ssh.id}.`
+      `"${name}" is an SSH target on this MCode host, not a paired server. Use --host ssh:${ssh.id}.`
     )
   }
   if (requested !== 'environment' && environment) {
     steps.push(
-      `"${name}" is a paired Orca server, not an SSH target. Use --environment ${environment.name}.`
+      `"${name}" is a paired MCode server, not an SSH target. Use --environment ${environment.name}.`
     )
   }
   return steps
@@ -144,7 +144,7 @@ export async function resolveSshHostTargetId(
   }
   throw new RuntimeClientError(
     'invalid_argument',
-    `Unknown SSH target in --host ssh:${targetId}: this Orca host has no SSH target named or with id ${targetId}.`,
+    `Unknown SSH target in --host ssh:${targetId}: this MCode host has no SSH target named or with id ${targetId}.`,
     {
       knownSshTargets: targets,
       knownEnvironments: environments,
@@ -152,7 +152,7 @@ export async function resolveSshHostTargetId(
         ...crossKindNextSteps(targetId, { sshTargets: targets, environments }, 'ssh'),
         ...(targets.length > 0
           ? [`Known SSH targets: ${targets.map((target) => target.label).join(', ')}.`]
-          : ['This Orca host has no SSH targets registered.'])
+          : ['This MCode host has no SSH targets registered.'])
       ]
     }
   )

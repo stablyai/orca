@@ -14,7 +14,7 @@ export type LinearSdkModule = {
 }
 
 // Why: @linear/sdk is a ~2.6MB CJS bundle (~33ms to parse). The Linear client
-// module is imported on the main-process startup path (orca-runtime + ipc), but
+// module is imported on the main-process startup path (mcode-runtime + ipc), but
 // the SDK itself is only needed once the user actually acts on Linear. Load it
 // lazily via createRequire so launch never parses it for the majority who never
 // connect Linear, and cache it so repeat calls are free. The accessor stays

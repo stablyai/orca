@@ -20,7 +20,7 @@ function runGit(repoPath: string, args: string[]): void {
 }
 
 export function createIsolatedLargeDiffRepo(): IsolatedLargeDiffRepo {
-  const repoPath = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-large-diff-repro-')))
+  const repoPath = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'mcode-large-diff-repro-')))
   runGit(repoPath, ['init'])
   runGit(repoPath, ['config', 'user.email', 'e2e@test.local'])
   runGit(repoPath, ['config', 'user.name', 'E2E Test'])
@@ -80,7 +80,7 @@ export function createIsolatedManyFileStagedDiffRepo(
   fileCount = 120,
   lineCount = 600
 ): IsolatedStagedLocaleDiffRepo {
-  const repoPath = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-many-file-repro-')))
+  const repoPath = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'mcode-many-file-repro-')))
   runGit(repoPath, ['init'])
   runGit(repoPath, ['config', 'user.email', 'e2e@test.local'])
   runGit(repoPath, ['config', 'user.name', 'E2E Test'])
@@ -110,7 +110,7 @@ export function createIsolatedManyFileStagedDiffRepo(
 }
 
 export function createIsolatedStagedLocaleDiffRepo(): IsolatedStagedLocaleDiffRepo {
-  const repoPath = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-staged-locale-repro-')))
+  const repoPath = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'mcode-staged-locale-repro-')))
   runGit(repoPath, ['init'])
   runGit(repoPath, ['config', 'user.email', 'e2e@test.local'])
   runGit(repoPath, ['config', 'user.name', 'E2E Test'])

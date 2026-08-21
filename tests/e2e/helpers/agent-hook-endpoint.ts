@@ -74,7 +74,7 @@ export async function emitCodexHookStatus(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Orca-Agent-Hook-Token': endpoint.token
+      'X-MCode-Agent-Hook-Token': endpoint.token
     },
     body: JSON.stringify({
       paneKey: status.paneKey,
@@ -103,7 +103,7 @@ export async function emitGrokHookPayload(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Orca-Agent-Hook-Token': endpoint.token
+      'X-MCode-Agent-Hook-Token': endpoint.token
     },
     body: JSON.stringify({
       paneKey: event.paneKey,

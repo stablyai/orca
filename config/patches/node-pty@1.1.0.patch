@@ -17,7 +17,7 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
                  '-lutil'
                ]
 +            }],
-+            # Orca: pair with the .symver pins in pty.cc. Force the real
++            # MCode: pair with the .symver pins in pty.cc. Force the real
 +            # libutil.so.1/libpthread.so.0 into DT_NEEDED (gcc's default
 +            # --as-needed drops them because the pinned symbols resolve from
 +            # libc's compat aliases at build time) so openpty/forkpty/
@@ -147,7 +147,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
  #include <termios.h>
  #endif
 
-+/* Orca: glibc 2.32-2.34 relocated pthread_sigmask/openpty/forkpty into libc
++/* MCode: glibc 2.32-2.34 relocated pthread_sigmask/openpty/forkpty into libc
 + * under new symbol versions, so building on a newer glibc produces references
 + * (GLIBC_2.32/2.34) absent on Ubuntu 20.04 (glibc 2.31) and the app fails to
 + * launch. Pin these to the pre-merge version glibc still ships as a compat
@@ -155,14 +155,14 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
 + * those aliases are actually loaded on the target. */
 +#if defined(__linux__)
 +#  if defined(__x86_64__)
-+#    define ORCA_GLIBC_COMPAT_VERSION "GLIBC_2.2.5"
++#    define MCODE_GLIBC_COMPAT_VERSION "GLIBC_2.2.5"
 +#  elif defined(__aarch64__)
-+#    define ORCA_GLIBC_COMPAT_VERSION "GLIBC_2.17"
++#    define MCODE_GLIBC_COMPAT_VERSION "GLIBC_2.17"
 +#  endif
-+#  ifdef ORCA_GLIBC_COMPAT_VERSION
-+__asm__(".symver openpty,openpty@" ORCA_GLIBC_COMPAT_VERSION);
-+__asm__(".symver forkpty,forkpty@" ORCA_GLIBC_COMPAT_VERSION);
-+__asm__(".symver pthread_sigmask,pthread_sigmask@" ORCA_GLIBC_COMPAT_VERSION);
++#  ifdef MCODE_GLIBC_COMPAT_VERSION
++__asm__(".symver openpty,openpty@" MCODE_GLIBC_COMPAT_VERSION);
++__asm__(".symver forkpty,forkpty@" MCODE_GLIBC_COMPAT_VERSION);
++__asm__(".symver pthread_sigmask,pthread_sigmask@" MCODE_GLIBC_COMPAT_VERSION);
 +#  endif
 +#endif
 +

@@ -29,7 +29,7 @@ function seedQueuedRestart(
   useAppStore.setState({
     settings: { activeRuntimeEnvironmentId: null } as never,
     worktreesByRepo: {
-      repo1: [{ id: 'wt1', path: '/Users/dev/code/orca' }]
+      repo1: [{ id: 'wt1', path: '/Users/dev/code/mcode' }]
     } as never,
     tabsByWorktree: {
       wt1: [
@@ -106,7 +106,7 @@ describe('codex detached pane restart executor', () => {
       expect.objectContaining({
         cols: 80,
         rows: 24,
-        cwd: '/Users/dev/code/orca',
+        cwd: '/Users/dev/code/mcode',
         command: 'codex',
         startupCommandDelivery: 'shell-ready',
         launchAgent: 'codex',
@@ -119,10 +119,10 @@ describe('codex detached pane restart executor', () => {
     expect(window.api.pty.getSize).not.toHaveBeenCalled()
     expect(vi.mocked(window.api.pty.spawn).mock.calls[0]?.[0]?.env).toEqual(
       expect.objectContaining({
-        ORCA_PANE_KEY: `tab-1:${LEAF_ID}`,
-        ORCA_TAB_ID: 'tab-1',
-        ORCA_WORKTREE_ID: 'wt1',
-        ORCA_WORKSPACE_ID: 'wt1'
+        MCODE_PANE_KEY: `tab-1:${LEAF_ID}`,
+        MCODE_TAB_ID: 'tab-1',
+        MCODE_WORKTREE_ID: 'wt1',
+        MCODE_WORKSPACE_ID: 'wt1'
       })
     )
     expect(window.api.pty.kill).toHaveBeenCalledExactlyOnceWith(OLD_PTY)

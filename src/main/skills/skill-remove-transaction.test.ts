@@ -25,7 +25,7 @@ async function installedFixture(): Promise<{
   stateDirectory: string
   receipt: SkillInstallReceiptV1
 }> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-skill-remove-recovery-test-'))
+  const root = await mkdtemp(join(tmpdir(), 'mcode-skill-remove-recovery-test-'))
   roots.push(root)
   const source = join(root, 'source')
   await mkdir(source)
@@ -69,7 +69,7 @@ describe('skill removal recovery', () => {
     await mkdir(outside)
     await writeFile(join(outside, 'keep.txt'), 'keep')
     const sourcePath = outside
-    const backupPath = join(dirname(sourcePath), `.${basename(sourcePath)}.orca-remove-backup-x`)
+    const backupPath = join(dirname(sourcePath), `.${basename(sourcePath)}.mcode-remove-backup-x`)
     const journal: SkillRemovalJournalV1 = {
       schemaVersion: 1,
       operation: 'remove',
@@ -118,7 +118,7 @@ describe('skill removal recovery', () => {
     const fixture = await installedFixture()
     const backupPath = join(
       dirname(fixture.canonicalPath),
-      `.${basename(fixture.canonicalPath)}.orca-remove-backup-x`
+      `.${basename(fixture.canonicalPath)}.mcode-remove-backup-x`
     )
     await rename(fixture.canonicalPath, backupPath)
     await writeFile(join(backupPath, 'local.md'), 'changed')

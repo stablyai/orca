@@ -221,10 +221,10 @@ async function hasUncommittedChanges(
   return await anyRecordIsUserDirt(repoPath, records, options.sharedLinkPaths ?? [])
 }
 
-/** True when any record is real user work rather than a shared symlink Orca put
+/** True when any record is real user work rather than a shared symlink MCode put
  *  in the worktree.
  *
- *  Fails closed on purpose: anything not positively identified as an Orca-owned
+ *  Fails closed on purpose: anything not positively identified as an MCode-owned
  *  untracked symlink counts as dirty. A false "clean" would let a review be
  *  created off a branch missing the user's work. */
 async function anyRecordIsUserDirt(
@@ -283,7 +283,7 @@ function reviewCopy(provider: HostedReviewProvider): {
       shortLabel: 'PR',
       reviewLabel: 'pull request',
       providerName: 'Azure DevOps',
-      authInstruction: 'Set ORCA_AZURE_DEVOPS_TOKEN'
+      authInstruction: 'Set MCODE_AZURE_DEVOPS_TOKEN'
     }
   }
   if (provider === 'gitea') {
@@ -291,7 +291,7 @@ function reviewCopy(provider: HostedReviewProvider): {
       shortLabel: 'PR',
       reviewLabel: 'pull request',
       providerName: 'Gitea',
-      authInstruction: 'Set ORCA_GITEA_TOKEN'
+      authInstruction: 'Set MCODE_GITEA_TOKEN'
     }
   }
   if (provider === 'bitbucket') {
@@ -469,7 +469,7 @@ async function validateCurrentBranchCanCreateReview(
       return {
         ok: false,
         code: 'validation',
-        error: `Create ${copy.shortLabel} failed: Orca could not confirm whether this branch already has a ${copy.reviewLabel}. Retry once the ${copy.providerName} lookup succeeds.`
+        error: `Create ${copy.shortLabel} failed: MCode could not confirm whether this branch already has a ${copy.reviewLabel}. Retry once the ${copy.providerName} lookup succeeds.`
       }
     }
     // Why: renderer eligibility can be stale by submit time; main process is the last gate before an out-of-date create.
@@ -521,7 +521,7 @@ export async function getHostedReviewCreationEligibility(
       linkedGiteaPR: args.linkedGiteaPR ?? null,
       connectionId: args.connectionId ?? null,
       // Why: eligibility is only ever asked for the worktree the user is acting
-      // on, so it earns the fast tier. Without it a review opened outside Orca
+      // on, so it earns the fast tier. Without it a review opened outside MCode
       // in the last no-review interval would leave Create enabled (#11532).
       active: true,
       ...hostedReviewExecutionContext(args)
@@ -658,7 +658,7 @@ export async function createHostedReview(
       : await provider.createReview(repoPath, input, connectionId)
   if (result.ok) {
     // Why (#11532): the branch cache holds a "no review" answer for far longer
-    // than a poll interval, so Orca's own creation must retire it at once.
+    // than a poll interval, so MCode's own creation must retire it at once.
     invalidateHostedReviewBranchCache(repoPath, connectionId)
   }
   return result

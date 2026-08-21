@@ -95,7 +95,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
         )}
         description={translate(
           'auto.components.settings.GeneralUpdateSettingsSection.ceb579abaf',
-          'Check for app updates and install a newer Orca version.'
+          'Check for app updates and install a newer MCode version.'
         )}
         keywords={['update', 'version', 'release notes', 'download']}
         className="space-y-3"

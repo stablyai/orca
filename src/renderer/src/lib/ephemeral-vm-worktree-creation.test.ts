@@ -71,7 +71,7 @@ it('carries the captured provisioned-root ref identity into adoption', async () 
     ephemeralVmRecipe: {
       sourceRepoId: 'repo-1',
       recipeId: 'cloud-sandbox',
-      projectId: 'github:stablyai/orca',
+      projectId: 'github:mcode-ide/mcode',
       checkoutMode: 'provisioned-root'
     }
   })

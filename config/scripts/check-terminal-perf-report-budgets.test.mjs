@@ -8,7 +8,7 @@ const scriptPath = 'config/scripts/check-terminal-perf-report-budgets.mjs'
 const tempDirs = []
 
 function writeReport(annotationDescription, annotationType = 'opencode-test') {
-  const dir = mkdtempSync(join(tmpdir(), 'orca-terminal-perf-report-'))
+  const dir = mkdtempSync(join(tmpdir(), 'mcode-terminal-perf-report-'))
   tempDirs.push(dir)
   const reportPath = join(dir, 'report.json')
   writeFileSync(

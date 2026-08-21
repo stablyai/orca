@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from './orca-runtime'
+import { MCodeRuntimeService } from './mcode-runtime'
 import { assertTerminalAgentSendable } from './rpc/terminal-agent-send-guard'
 
 vi.mock('electron', () => ({
@@ -18,7 +18,7 @@ const TAB_ID = 'tab-1'
 const WORKTREE_ID = 'wt-1'
 const PTY_ID = 'pty-1'
 
-// Captured verbatim from cursor-agent 2026.08.11-e8db854 driven through Orca.
+// Captured verbatim from cursor-agent 2026.08.11-e8db854 driven through MCode.
 function fixture(name: string): string {
   return readFileSync(join(__dirname, '__fixtures__', `${name}.txt`), 'utf8')
 }
@@ -48,8 +48,8 @@ async function createPane(options: {
   /** Simulates a PTY controller whose foreground probe never settles. */
   foregroundProbeHangs?: boolean
   onForegroundProbe?: () => void
-}): Promise<{ runtime: OrcaRuntimeService; handle: string }> {
-  const runtime = new OrcaRuntimeService(null)
+}): Promise<{ runtime: MCodeRuntimeService; handle: string }> {
+  const runtime = new MCodeRuntimeService(null)
   const internals = runtime as unknown as {
     resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
   }
@@ -106,7 +106,7 @@ async function createPane(options: {
   return { runtime, handle: terminal.handle }
 }
 
-// cursor-agent renders a braille spinner in its OSC title while it works, and Orca reads
+// cursor-agent renders a braille spinner in its OSC title while it works, and MCode reads
 // that as `working`; the title is identical whether it is running a command or waiting.
 const CURSOR_TITLE = '⠇ Cursor Agent'
 
@@ -291,7 +291,7 @@ describe('terminal interactive-wait visibility (STA-4513, STA-3714)', () => {
 
   describe('prompts the runtime already matched but never surfaced', () => {
     it('surfaces a startup trust screen on the pane, not only on terminal wait', async () => {
-      // A pane on its trust screen still wears Orca's tab title; the agent has set none.
+      // A pane on its trust screen still wears MCode's tab title; the agent has set none.
       const { runtime, handle } = await createPane({
         paneTitle: 'sta4513-claude',
         foregroundProcess: 'claude',
@@ -369,7 +369,7 @@ describe('terminal interactive-wait visibility (STA-4513, STA-3714)', () => {
   })
 
   it('still reports a live dialog restored from terminal history', async () => {
-    // Why this case exists: a lane parked on a prompt emits no bytes, so an Orca restart is
+    // Why this case exists: a lane parked on a prompt emits no bytes, so an MCode restart is
     // exactly when it would go quiet forever. A restored tail carries no waitBlockedAt, and
     // the approval menu does not need one — being at the bottom of the restored screen is
     // itself the proof that this is where the pane stopped.

@@ -2,7 +2,7 @@ import { expect } from 'vitest'
 import WebSocket from 'ws'
 import { parsePairingCode } from '../../shared/pairing'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
-import type { OrcaRuntimeService } from './orca-runtime'
+import type { MCodeRuntimeService } from './mcode-runtime'
 import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from './rpc/e2ee-crypto'
 
 export const REPO_ID = 'repo-1'
@@ -191,7 +191,7 @@ export function snapshotVersion(response: Record<string, unknown>): number {
   return (response.result as RuntimeMobileSessionTabsResult | undefined)?.snapshotVersion ?? -1
 }
 
-export function seedSessionTabs(runtime: OrcaRuntimeService): void {
+export function seedSessionTabs(runtime: MCodeRuntimeService): void {
   const tabs = ['host-tab', 'client-a-tab', 'client-a2-tab', 'client-b-tab'].map((id, index) => ({
     type: 'terminal' as const,
     id,

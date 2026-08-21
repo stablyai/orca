@@ -100,9 +100,9 @@ function decodePowerShellEncodedCommand(command: string): string | null {
   }
 }
 
-// Why: prod/dev/parallel Orca instances must write the same managed entry, not race between per-userData script paths.
+// Why: prod/dev/parallel MCode instances must write the same managed entry, not race between per-userData script paths.
 export function getSharedManagedScriptPath(scriptFileName: string): string {
-  return join(homedir(), '.orca', 'agent-hooks', scriptFileName)
+  return join(homedir(), '.mcode', 'agent-hooks', scriptFileName)
 }
 
 export { wrapPosixHookCommand } from './posix-hook-command'
@@ -147,16 +147,16 @@ export function buildWindowsAgentHookPostCommand(
   // Why: PowerShell startup makes inline per-turn Codex hooks visibly slow, so mirror the POSIX curl path.
   // Why: fully-qualify curl so a repo-local curl.exe can't hijack hook payloads.
   return [
-    `"%SystemRoot%\\System32\\curl.exe" -sS -X POST "http://127.0.0.1:%ORCA_AGENT_HOOK_PORT%/hook/${source}" ^`,
+    `"%SystemRoot%\\System32\\curl.exe" -sS -X POST "http://127.0.0.1:%MCODE_AGENT_HOOK_PORT%/hook/${source}" ^`,
     '  --connect-timeout 0.5 --max-time 1.5 ^',
     '  -H "Content-Type: application/x-www-form-urlencoded" ^',
-    '  -H "X-Orca-Agent-Hook-Token: %ORCA_AGENT_HOOK_TOKEN%" ^',
-    '  --data-urlencode "paneKey=%ORCA_PANE_KEY%" ^',
-    '  --data-urlencode "tabId=%ORCA_TAB_ID%" ^',
-    '  --data-urlencode "launchToken=%ORCA_AGENT_LAUNCH_TOKEN%" ^',
-    '  --data-urlencode "worktreeId=%ORCA_WORKTREE_ID%" ^',
-    '  --data-urlencode "env=%ORCA_AGENT_HOOK_ENV%" ^',
-    '  --data-urlencode "version=%ORCA_AGENT_HOOK_VERSION%" ^',
+    '  -H "X-MCode-Agent-Hook-Token: %MCODE_AGENT_HOOK_TOKEN%" ^',
+    '  --data-urlencode "paneKey=%MCODE_PANE_KEY%" ^',
+    '  --data-urlencode "tabId=%MCODE_TAB_ID%" ^',
+    '  --data-urlencode "launchToken=%MCODE_AGENT_LAUNCH_TOKEN%" ^',
+    '  --data-urlencode "worktreeId=%MCODE_WORKTREE_ID%" ^',
+    '  --data-urlencode "env=%MCODE_AGENT_HOOK_ENV%" ^',
+    '  --data-urlencode "version=%MCODE_AGENT_HOOK_VERSION%" ^',
     ...extraFormLines,
     '  --data-urlencode "payload@-" >nul 2>nul'
   ].join('\r\n')
@@ -166,16 +166,16 @@ export function buildWindowsAgentHookPostCommand(
 export function buildWindowsAgentHookCurlPostCommand(source: AgentHookSource): string {
   return [
     '"%SystemRoot%\\System32\\curl.exe" -sS -X POST',
-    `"http://127.0.0.1:%ORCA_AGENT_HOOK_PORT%/hook/${source}"`,
+    `"http://127.0.0.1:%MCODE_AGENT_HOOK_PORT%/hook/${source}"`,
     '--connect-timeout 0.5 --max-time 1.5',
     '-H "Content-Type: application/x-www-form-urlencoded"',
-    '-H "X-Orca-Agent-Hook-Token: %ORCA_AGENT_HOOK_TOKEN%"',
-    '--data-urlencode "paneKey=%ORCA_PANE_KEY%"',
-    '--data-urlencode "tabId=%ORCA_TAB_ID%"',
-    '--data-urlencode "launchToken=%ORCA_AGENT_LAUNCH_TOKEN%"',
-    '--data-urlencode "worktreeId=%ORCA_WORKTREE_ID%"',
-    '--data-urlencode "env=%ORCA_AGENT_HOOK_ENV%"',
-    '--data-urlencode "version=%ORCA_AGENT_HOOK_VERSION%"',
+    '-H "X-MCode-Agent-Hook-Token: %MCODE_AGENT_HOOK_TOKEN%"',
+    '--data-urlencode "paneKey=%MCODE_PANE_KEY%"',
+    '--data-urlencode "tabId=%MCODE_TAB_ID%"',
+    '--data-urlencode "launchToken=%MCODE_AGENT_LAUNCH_TOKEN%"',
+    '--data-urlencode "worktreeId=%MCODE_WORKTREE_ID%"',
+    '--data-urlencode "env=%MCODE_AGENT_HOOK_ENV%"',
+    '--data-urlencode "version=%MCODE_AGENT_HOOK_VERSION%"',
     '--data-urlencode "payload@-"',
     '>nul 2>&1'
   ].join(' ')

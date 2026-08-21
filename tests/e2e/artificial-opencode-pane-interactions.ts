@@ -1,5 +1,5 @@
 import type { Page } from '@stablyai/playwright-test'
-import { expect } from './helpers/orca-app'
+import { expect } from './helpers/mcode-app'
 import { ensureTerminalVisible, getActiveWorktreeId, switchToWorktree } from './helpers/store'
 import {
   getTerminalContent,

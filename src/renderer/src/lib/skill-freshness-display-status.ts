@@ -26,8 +26,8 @@ export function getSkillFreshnessDisplayStatus(
     }
     // Why: a project-owned copy is outside the global updater's reach, so it can neither
     // stand in as evidence this skill is installed globally nor make the badge amber over
-    // drift Orca has no way to fix. Skipped before `hasPlacement` so a repo-only skill
-    // reports presence, not a freshness claim about a copy Orca does not manage.
+    // drift MCode has no way to fix. Skipped before `hasPlacement` so a repo-only skill
+    // reports presence, not a freshness claim about a copy MCode does not manage.
     if (!skillPlacementParticipatesInGlobalFreshness(installation)) {
       continue
     }
@@ -49,7 +49,7 @@ export function getSkillFreshnessDisplayStatus(
     return 'installed'
   }
   // Why: an unreadable plugin path could hide a copy of any known skill, so it stays
-  // fail-closed — but only for skills Orca actually found somewhere. Flagging a skill
+  // fail-closed — but only for skills MCode actually found somewhere. Flagging a skill
   // that isn't installed at all blames it for a fault in someone else's plugin.
   if (inventory?.scanIssues.some(isSkillScanIssueNeedingAttention)) {
     return 'needs-attention'

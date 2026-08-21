@@ -64,7 +64,7 @@ export function setScheduledNotificationsMaxForTests(max?: number): void {
 
 export function configureNotificationChannel(): void {
   if (Platform.OS === 'android') {
-    void Notifications.setNotificationChannelAsync('orca-desktop', {
+    void Notifications.setNotificationChannelAsync('mcode-desktop', {
       name: 'Desktop Notifications',
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250],
@@ -97,7 +97,7 @@ export async function showLocalNotification(
         title: event.title,
         body: event.body,
         data: buildLocalNotificationData(event, hostId),
-        ...(Platform.OS === 'android' ? { channelId: 'orca-desktop' } : {})
+        ...(Platform.OS === 'android' ? { channelId: 'mcode-desktop' } : {})
       },
       trigger: null
     })
@@ -135,7 +135,7 @@ export async function showLocalNotification(
         title: event.title,
         body: event.body,
         data: buildLocalNotificationData(event, hostId),
-        ...(Platform.OS === 'android' ? { channelId: 'orca-desktop' } : {})
+        ...(Platform.OS === 'android' ? { channelId: 'mcode-desktop' } : {})
       },
       trigger: null
     })

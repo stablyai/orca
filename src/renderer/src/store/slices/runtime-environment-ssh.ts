@@ -8,7 +8,7 @@ import type {
 import { sshConnectionStatesEqual, sshTargetLabelsEqual } from './ssh-target-cleanup'
 
 /**
- * SSH state of one remote Orca server's own SSH targets, mirrored on this
+ * SSH state of one remote MCode server's own SSH targets, mirrored on this
  * client. Kept strictly separate from the local `SshSlice` maps so a remote
  * machine's targets can never pollute local SSH settings, pickers, or the
  * execution-host registry — and vice versa (STA-1468, desktop topology).
@@ -262,7 +262,7 @@ function isEnvironmentReachable(state: RuntimeAwareSshReadState, environmentId: 
 
 /**
  * Reconnect-overlay status for an SSH target owned by `environmentId` (a
- * remote Orca server) or by this machine (`environmentId === null`).
+ * remote MCode server) or by this machine (`environmentId === null`).
  *
  * Returns null when the state is unknown — environment unreachable or its
  * bucket not hydrated — so callers show nothing rather than another machine's

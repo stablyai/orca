@@ -78,7 +78,7 @@ describe('PluginInstallDialog', () => {
     })
 
     expect(document.body.textContent).toContain(
-      'orca-plugin.json is invalid. Ask the plugin author to fix the manifest.'
+      'mcode-plugin.json is invalid. Ask the plugin author to fix the manifest.'
     )
     act(() => root.unmount())
   })

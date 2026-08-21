@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
-import { ORCA_CLI_SKILL_NAME } from '@/lib/agent-feature-install-commands'
+import { MCODE_CLI_SKILL_NAME } from '@/lib/agent-feature-install-commands'
 import {
-  ensureOrcaCliAvailableForAgentSkillTerminal,
-  isOrcaCliAvailableOnPath
+  ensureMCodeCliAvailableForAgentSkillTerminal,
+  isMCodeCliAvailableOnPath
 } from '@/lib/agent-skill-cli-prerequisite'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
@@ -21,7 +21,7 @@ function getCliActionLabel(status: CliInstallStatus | null, busy: boolean): stri
       'Registering...'
     )
   }
-  if (isOrcaCliAvailableOnPath(status)) {
+  if (isMCodeCliAvailableOnPath(status)) {
     return translate(
       'auto.components.emulator.pane.use.mobile.emulator.agent.setup.state.69fb2c2289',
       'Enabled'
@@ -69,7 +69,7 @@ export function useMobileEmulatorAgentSetupState(enabled = true): {
     loading: cliSkillLoading,
     error: cliSkillError,
     refresh: refreshCliSkill
-  } = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
+  } = useInstalledAgentSkill(MCODE_CLI_SKILL_NAME, {
     enabled,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
@@ -121,7 +121,7 @@ export function useMobileEmulatorAgentSetupState(enabled = true): {
     return () => window.removeEventListener('focus', handleFocus)
   }, [enabled, refreshCliSkill, refreshCliStatus])
 
-  const cliEnabled = isOrcaCliAvailableOnPath(cliInstallStatus)
+  const cliEnabled = isMCodeCliAvailableOnPath(cliInstallStatus)
   const cliPathNeedsAttention = getMobileEmulatorCliPathNeedsAttention(cliInstallStatus)
   const cliSupported = cliInstallStatus?.supported ?? false
   const completedCount = [cliEnabled, cliSkillInstalled].filter(Boolean).length
@@ -142,7 +142,7 @@ export function useMobileEmulatorAgentSetupState(enabled = true): {
       if (mountedRef.current) {
         setCliInstallStatus(cliStatus)
       }
-      const cliReady = isOrcaCliAvailableOnPath(cliStatus)
+      const cliReady = isMCodeCliAvailableOnPath(cliStatus)
       if (!mountedRef.current) {
         return
       }
@@ -159,7 +159,7 @@ export function useMobileEmulatorAgentSetupState(enabled = true): {
         toast.message(
           translate(
             'auto.components.emulator.pane.use.mobile.emulator.agent.setup.state.9dff3a6338',
-            'Skill is installed. Enable the Orca CLI to finish setup.'
+            'Skill is installed. Enable the MCode CLI to finish setup.'
           )
         )
         return
@@ -168,7 +168,7 @@ export function useMobileEmulatorAgentSetupState(enabled = true): {
         toast.message(
           translate(
             'auto.components.emulator.pane.use.mobile.emulator.agent.setup.state.15986a1080',
-            'Orca CLI is ready. Install the skill to finish setup.'
+            'MCode CLI is ready. Install the skill to finish setup.'
           )
         )
         return
@@ -200,14 +200,14 @@ export function useMobileEmulatorAgentSetupState(enabled = true): {
   const handleEnableCli = useCallback(async (): Promise<void> => {
     setCliBusy(true)
     try {
-      const next = await ensureOrcaCliAvailableForAgentSkillTerminal({
+      const next = await ensureMCodeCliAvailableForAgentSkillTerminal({
         onStatusChange: setCliInstallStatus
       })
-      if (mountedRef.current && isOrcaCliAvailableOnPath(next)) {
+      if (mountedRef.current && isMCodeCliAvailableOnPath(next)) {
         toast.success(
           translate(
             'auto.components.emulator.pane.use.mobile.emulator.agent.setup.state.2b519eed94',
-            'Registered the Orca CLI in PATH.'
+            'Registered the MCode CLI in PATH.'
           )
         )
       }

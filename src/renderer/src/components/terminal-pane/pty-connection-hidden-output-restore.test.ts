@@ -484,7 +484,7 @@ describe('connectPanePty', () => {
     })
     transportFactoryQueue.push(transport)
     mockStoreState.repos = [
-      { id: 'repo1', connectionId: null, displayName: 'orca', executionHostId: 'runtime:env-1' }
+      { id: 'repo1', connectionId: null, displayName: 'mcode', executionHostId: 'runtime:env-1' }
     ]
     mockStoreState.worktreesByRepo.repo1[0].runtimeOwnerEnvironmentId = 'env-1'
 
@@ -626,7 +626,7 @@ describe('connectPanePty', () => {
       {
         id: 'repo1',
         connectionId: null,
-        displayName: 'orca',
+        displayName: 'mcode',
         executionHostId: 'runtime:legacy-env'
       }
     ]

@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
-const markerFile = process.env.ORCA_DEV_WRAPPER_TEST_VITE_FILE
+const markerFile = process.env.MCODE_DEV_WRAPPER_TEST_VITE_FILE
 
 if (markerFile) {
   mkdirSync(path.dirname(markerFile), { recursive: true })

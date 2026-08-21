@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   enforce:
-    if: github.repository == 'stablyai/orca'
+    if: github.repository == 'mcode-ide/mcode'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

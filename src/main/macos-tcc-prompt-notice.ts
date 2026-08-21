@@ -7,7 +7,7 @@ import { MacosTccPromptWatch } from './macos-tcc-prompt-watch'
 
 /**
  * Surfaces Full Disk Access guidance only to users macOS is actually prompting
- * (#9756), instead of nudging every Mac user. Counts Orca-attributed TCC
+ * (#9756), instead of nudging every Mac user. Counts MCode-attributed TCC
  * dialogs across launches and tells the renderer when the first one lands.
  */
 

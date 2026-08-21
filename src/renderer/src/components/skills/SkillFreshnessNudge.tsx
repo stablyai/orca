@@ -66,7 +66,7 @@ export function SkillFreshnessNudge(): null {
     const candidates = inventory.installations.flatMap((installation) =>
       // Why: a project copy the global update never touches must not enter the dismissal
       // fingerprint, or re-checking out that repo re-raises a nudge the user already
-      // dismissed — and spends the bounded dismissal budget on copies Orca cannot update.
+      // dismissed — and spends the bounded dismissal budget on copies MCode cannot update.
       skillPlacementParticipatesInGlobalFreshness(installation) &&
       installation.status === 'outdated' &&
       eligibleNames.has(installation.name) &&
@@ -142,17 +142,17 @@ export function SkillFreshnessNudge(): null {
       names.size === 1
         ? translate(
             'auto.components.skills.SkillFreshnessNudge.titleOne',
-            'An installed Orca skill is out of date'
+            'An installed MCode skill is out of date'
           )
         : translate(
             'auto.components.skills.SkillFreshnessNudge.titleMany',
-            '{{value0}} installed Orca skills are out of date',
+            '{{value0}} installed MCode skills are out of date',
             { value0: names.size }
           ),
       {
         description: translate(
           'auto.components.skills.SkillFreshnessNudge.description',
-          'Update {{value0}} so agents follow the current instructions for this version of Orca.',
+          'Update {{value0}} so agents follow the current instructions for this version of MCode.',
           { value0: outdatedNames }
         ),
         // Why: the nudge lingers until the user acts. Ignoring it (app quit)

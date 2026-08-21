@@ -4,7 +4,7 @@ import { getActiveTabId } from './store'
 import { waitForActiveTerminalManager, waitForPaneIdentitySnapshot } from './terminal'
 
 function resolveParkWaitTimeoutMs(parkDelayMs?: number): number {
-  const delay = parkDelayMs ?? (Number(process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS) || 500)
+  const delay = parkDelayMs ?? (Number(process.env.MCODE_E2E_TERMINAL_PARKING_DELAY_MS) || 500)
   return Math.max(20_000, delay * 10)
 }
 

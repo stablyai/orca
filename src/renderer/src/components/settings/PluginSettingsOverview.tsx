@@ -72,7 +72,7 @@ export function PluginSettingsOverview({
         labelId="plugin-system-label"
         description={translate(
           'auto.components.settings.PluginsSettingsSection.systemDescription',
-          'Discovers installed plugins and lets you enable them individually. Nothing runs until you review and enable it. Workers always run on this computer; SSH workspace actions route through Orca.'
+          'Discovers installed plugins and lets you enable them individually. Nothing runs until you review and enable it. Workers always run on this computer; SSH workspace actions route through MCode.'
         )}
         alignTop
         control={

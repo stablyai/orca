@@ -14,7 +14,7 @@ afterEach(async () => {
 })
 
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), 'orca-skill-request-test-'))
+  const root = await mkdtemp(join(tmpdir(), 'mcode-skill-request-test-'))
   roots.push(root)
   const home = join(root, 'home')
   const source = join(root, 'source')
@@ -101,7 +101,7 @@ describe('executeSkillInstallRequest', () => {
     ).toHaveLength(1)
     expect(
       (await readdir(join(root, 'home', '.agents', 'skills'))).filter((name) =>
-        name.includes('.orca-')
+        name.includes('.mcode-')
       )
     ).toEqual([])
   })

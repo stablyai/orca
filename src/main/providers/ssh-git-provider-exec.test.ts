@@ -65,7 +65,7 @@ describe('SshGitProvider', () => {
     await expect(
       provider.clone(['clone', '--progress', '--', 'url', 'repo'], '/home/user')
     ).rejects.toThrow(
-      'SSH clone support is unavailable on this relay. Reconnect the SSH target to update Orca on the host, then try again.'
+      'SSH clone support is unavailable on this relay. Reconnect the SSH target to update MCode on the host, then try again.'
     )
   })
 
@@ -105,13 +105,13 @@ describe('SshGitProvider', () => {
 
     await provider.execNonInteractive(
       '/bin/bash',
-      ['-lc', 'echo "$ORCA_WORKTREE_PATH"'],
+      ['-lc', 'echo "$MCODE_WORKTREE_PATH"'],
       '/home/user/repo',
       120_000,
       undefined,
       {
-        ORCA_ROOT_PATH: '/home/user/repo',
-        ORCA_WORKTREE_PATH: '/home/user/repo-feature'
+        MCODE_ROOT_PATH: '/home/user/repo',
+        MCODE_WORKTREE_PATH: '/home/user/repo-feature'
       }
     )
 
@@ -119,13 +119,13 @@ describe('SshGitProvider', () => {
       'agent.execNonInteractive',
       {
         binary: '/bin/bash',
-        args: ['-lc', 'echo "$ORCA_WORKTREE_PATH"'],
+        args: ['-lc', 'echo "$MCODE_WORKTREE_PATH"'],
         cwd: '/home/user/repo',
         stdin: null,
         timeoutMs: 120_000,
         env: {
-          ORCA_ROOT_PATH: '/home/user/repo',
-          ORCA_WORKTREE_PATH: '/home/user/repo-feature'
+          MCODE_ROOT_PATH: '/home/user/repo',
+          MCODE_WORKTREE_PATH: '/home/user/repo-feature'
         }
       },
       { timeoutMs: 125_000 }

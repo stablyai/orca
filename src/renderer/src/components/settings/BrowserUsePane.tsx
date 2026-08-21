@@ -2,14 +2,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import {
-  ORCA_CLI_SKILL_INSTALL_COMMAND,
-  ORCA_CLI_SKILL_NAME,
-  ORCA_CLI_SKILL_UPDATE_COMMAND
+  MCODE_CLI_SKILL_INSTALL_COMMAND,
+  MCODE_CLI_SKILL_NAME,
+  MCODE_CLI_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
 import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  ensureOrcaCliAvailableForAgentSkillTerminal,
-  isOrcaCliAvailableOnPath
+  ensureMCodeCliAvailableForAgentSkillTerminal,
+  isMCodeCliAvailableOnPath
 } from '@/lib/agent-skill-cli-prerequisite'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
 import {
@@ -57,11 +57,11 @@ export function BrowserUseSetup({
   const mountedRef = useMountedRef()
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const browserUseInstallCommand = !activeSkillRuntime.installDisabledReason
-    ? buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND, activeSkillRuntime.agentRuntime)
-    : ORCA_CLI_SKILL_INSTALL_COMMAND
+    ? buildSkillCommandForRuntime(MCODE_CLI_SKILL_INSTALL_COMMAND, activeSkillRuntime.agentRuntime)
+    : MCODE_CLI_SKILL_INSTALL_COMMAND
   const browserUseUpdateCommand = !activeSkillRuntime.installDisabledReason
-    ? buildSkillCommandForRuntime(ORCA_CLI_SKILL_UPDATE_COMMAND, activeSkillRuntime.agentRuntime)
-    : ORCA_CLI_SKILL_UPDATE_COMMAND
+    ? buildSkillCommandForRuntime(MCODE_CLI_SKILL_UPDATE_COMMAND, activeSkillRuntime.agentRuntime)
+    : MCODE_CLI_SKILL_UPDATE_COMMAND
 
   const handleCliStatusChange = useCallback(
     (nextStatus: CliInstallStatus | null): void => {
@@ -127,7 +127,7 @@ export function BrowserUseSetup({
   const defaultProfile = browserSessionProfiles.find((p) => p.id === 'default')
   const cookiesImported = !!defaultProfile?.source
 
-  const cliEnabled = isOrcaCliAvailableOnPath(cliStatus)
+  const cliEnabled = isMCodeCliAvailableOnPath(cliStatus)
   const cliPathNeedsAttention =
     cliStatus?.state === 'installed' && cliStatus.pathConfigured === false
   const cliSupported = cliStatus?.supported ?? false
@@ -137,7 +137,7 @@ export function BrowserUseSetup({
     loading: skillLoading,
     error: skillError,
     refresh: refreshSkill
-  } = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
+  } = useInstalledAgentSkill(MCODE_CLI_SKILL_NAME, {
     enabled: browserUseEnabled,
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
@@ -152,17 +152,17 @@ export function BrowserUseSetup({
       const next =
         activeSkillRuntime.agentRuntime?.runtime === 'wsl'
           ? await ensureWslCliAvailableForAgentSkillTerminal(activeSkillRuntime.agentRuntime)
-          : await ensureOrcaCliAvailableForAgentSkillTerminal({
+          : await ensureMCodeCliAvailableForAgentSkillTerminal({
               onStatusChange: handleCliStatusChange
             })
       if (activeSkillRuntime.agentRuntime?.runtime === 'wsl') {
         handleCliStatusChange(next)
       }
-      if (mountedRef.current && isOrcaCliAvailableOnPath(next)) {
+      if (mountedRef.current && isMCodeCliAvailableOnPath(next)) {
         toast.success(
           translate(
             'auto.components.settings.BrowserUsePane.721aee31b4',
-            'Registered the Orca CLI in PATH.'
+            'Registered the MCode CLI in PATH.'
           )
         )
       }
@@ -266,7 +266,7 @@ export function BrowserUseSetup({
           )}
           description={translate(
             'auto.components.settings.BrowserUsePane.68ea76eb71',
-            "Install the Browser Use skill so agents can operate Orca's browser."
+            "Install the Browser Use skill so agents can operate MCode's browser."
           )}
           keywords={getBrowserUsePaneSearchEntries()[1].keywords}
           className={cn(
@@ -295,7 +295,7 @@ export function BrowserUseSetup({
               useAppStore.getState().recordFeatureInteraction('agent-browser-setup')
               await (activeSkillRuntime.agentRuntime?.runtime === 'wsl'
                 ? ensureWslCliAvailableForAgentSkillTerminal(activeSkillRuntime.agentRuntime)
-                : ensureOrcaCliAvailableForAgentSkillTerminal({
+                : ensureMCodeCliAvailableForAgentSkillTerminal({
                     onStatusChange: handleCliStatusChange
                   }))
             }}

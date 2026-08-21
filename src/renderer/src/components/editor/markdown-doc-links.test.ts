@@ -161,7 +161,7 @@ describe('resolveMarkdownDocLink', () => {
 describe('doc link hrefs', () => {
   it('round-trips encoded targets', () => {
     const href = createMarkdownDocLinkHref('docs/setup guide')
-    expect(href).toBe('#orca-doc-link=docs%2Fsetup%20guide')
+    expect(href).toBe('#mcode-doc-link=docs%2Fsetup%20guide')
     expect(parseMarkdownDocLinkHref(href)).toBe('docs/setup guide')
   })
 
@@ -189,7 +189,7 @@ describe('remarkMarkdownDocLinks', () => {
       )
     )
 
-    expect(html).toContain('<a href="#orca-doc-link=other.md">other.md</a>')
+    expect(html).toContain('<a href="#mcode-doc-link=other.md">other.md</a>')
     expect(html).not.toContain('[[other.md]]')
   })
 
@@ -202,7 +202,7 @@ describe('remarkMarkdownDocLinks', () => {
       )
     )
 
-    expect(html).toContain('<a href="#orca-doc-link=other.md">Other note</a>')
+    expect(html).toContain('<a href="#mcode-doc-link=other.md">Other note</a>')
     expect(html).not.toContain('[[other.md|Other note]]')
   })
 
@@ -225,7 +225,7 @@ describe('remarkMarkdownDocLinks', () => {
     })
     expect(tree.children?.[1]).toMatchObject({
       type: 'link',
-      url: '#orca-doc-link=setup-guide'
+      url: '#mcode-doc-link=setup-guide'
     })
     expect(tree.children?.[2]).toEqual({ type: 'inlineCode', value: '[[code]]' })
     expect(tree.children?.[3]).toEqual({

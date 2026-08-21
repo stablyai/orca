@@ -45,7 +45,7 @@ vi.mock('fs', () => ({
 
 vi.mock('electron', () => ({
   app: {
-    getPath: vi.fn(() => '/tmp/orca-user-data')
+    getPath: vi.fn(() => '/tmp/mcode-user-data')
   }
 }))
 
@@ -195,7 +195,7 @@ describe('LocalPtyProvider', () => {
         expect(mockProc.write).not.toHaveBeenCalled()
 
         const dataCallback = mockProc.onData.mock.calls[0]?.[0] as (data: string) => void
-        dataCallback('\x1b]777;orca-shell-ready\x07user@host % ')
+        dataCallback('\x1b]777;mcode-shell-ready\x07user@host % ')
         await Promise.resolve()
         vi.advanceTimersByTime(29)
         await Promise.resolve()
@@ -210,8 +210,8 @@ describe('LocalPtyProvider', () => {
     })
 
     it.each([
-      ['after the ready marker', ['\x1b]777;orca-shell-ready\x07', '\x1b[?2004hfish> ']],
-      ['after the ESC introducer', ['\x1b]777;orca-shell-ready\x07\x1b', '[?2004hfish> ']]
+      ['after the ready marker', ['\x1b]777;mcode-shell-ready\x07', '\x1b[?2004hfish> ']],
+      ['after the ESC introducer', ['\x1b]777;mcode-shell-ready\x07\x1b', '[?2004hfish> ']]
     ])('preserves Fish bracketed-paste output split %s', async (_boundary, chunks) => {
       process.env.SHELL = '/usr/bin/fish'
       const received: string[] = []
@@ -234,7 +234,7 @@ describe('LocalPtyProvider', () => {
         await provider.spawn({ cols: 80, rows: 24, command: 'printf ready' })
         const dataCallback = mockProc.onData.mock.calls[0]?.[0] as (data: string) => void
 
-        dataCallback('\x1b]777;orca-shell-ready')
+        dataCallback('\x1b]777;mcode-shell-ready')
         expect(onData).not.toHaveBeenCalled()
 
         vi.advanceTimersByTime(1500)
@@ -242,7 +242,7 @@ describe('LocalPtyProvider', () => {
 
         expect(onData).toHaveBeenCalledWith(
           expect.any(String),
-          '\x1b]777;orca-shell-ready',
+          '\x1b]777;mcode-shell-ready',
           expect.any(Number)
         )
         expect(mockProc.write).not.toHaveBeenCalled()
@@ -262,14 +262,14 @@ describe('LocalPtyProvider', () => {
       await provider.spawn({ cols: 80, rows: 24, command: 'printf ready' })
       const dataCallback = mockProc.onData.mock.calls[0]?.[0] as (data: string) => void
 
-      dataCallback('\x1b]777;orca-shell-ready')
+      dataCallback('\x1b]777;mcode-shell-ready')
       expect(onData).not.toHaveBeenCalled()
 
       exitCb?.({ exitCode: 0 })
 
       expect(onData).toHaveBeenCalledWith(
         expect.any(String),
-        '\x1b]777;orca-shell-ready',
+        '\x1b]777;mcode-shell-ready',
         expect.any(Number)
       )
     })

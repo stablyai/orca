@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import type { RpcRequest } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { TERMINAL_METHODS } from './terminal'
@@ -22,7 +22,7 @@ describe('terminal focus navigation authority', () => {
         tabId: 'tab-1',
         worktreeId: 'wt-1'
       })
-    } as unknown as OrcaRuntimeService
+    } as unknown as MCodeRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     await dispatcher.dispatchStreaming(request({ terminal: 'term-1' }), () => {}, {
@@ -58,7 +58,7 @@ describe('terminal focus navigation authority', () => {
     const runtime = {
       getRuntimeId: () => 'runtime-1',
       focusTerminal: vi.fn()
-    } as unknown as OrcaRuntimeService
+    } as unknown as MCodeRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(

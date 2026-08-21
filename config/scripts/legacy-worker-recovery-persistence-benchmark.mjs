@@ -8,7 +8,7 @@ import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
-const runtimePath = join(repoRoot, 'src/main/runtime/orca-runtime.ts')
+const runtimePath = join(repoRoot, 'src/main/runtime/mcode-runtime.ts')
 const args = new Map(
   process.argv.slice(2).map((value, index, values) => [value, values[index + 1]])
 )
@@ -38,7 +38,7 @@ if (
   throw new Error('recovery persistence implementation changed; update this benchmark')
 }
 
-const root = await mkdtemp(join(tmpdir(), 'orca-legacy-recovery-benchmark-'))
+const root = await mkdtemp(join(tmpdir(), 'mcode-legacy-recovery-benchmark-'))
 const filler = 'x'.repeat(fixtureMiB * 1024 * 1024)
 
 function payload(state) {

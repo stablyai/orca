@@ -23,7 +23,7 @@ export function getAgentAwakeDescription(
 
   return translate(
     AGENT_AWAKE_DESCRIPTION_DEFAULT_KEY,
-    'Choose On, Agent, or Off. Agent mode stays awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.'
+    'Choose On, Agent, or Off. Agent mode stays awake while agents are working. MCode also asks this device to stay awake when the lid is closed, subject to its power policy.'
   )
 }
 

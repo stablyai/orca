@@ -30,7 +30,7 @@ export type PrepareEphemeralVmWorkspaceTargetResult =
       ok: true
       setup: ProjectHostSetupResult
       runtimeId: string
-      checkoutMode: 'orca-worktree' | 'provisioned-root'
+      checkoutMode: 'mcode-worktree' | 'provisioned-root'
       environmentId?: string
       expectedRefHead?: string
       stderr: string
@@ -76,12 +76,12 @@ export async function prepareEphemeralVmWorkspaceTarget(
       ? toSshExecutionHostId(provisioned.sshTargetId)
       : toRuntimeExecutionHostId(provisioned.environment.id)
 
-  if (provisioned.connectionType === 'orca-server') {
+  if (provisioned.connectionType === 'mcode-server') {
     try {
       await assertRuntimeEnvironmentCapability(
         provisioned.environment.id,
         PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
-        'The recipe-created Orca server does not support project setup.'
+        'The recipe-created MCode server does not support project setup.'
       )
     } catch (error) {
       await cleanupProvisionedRuntime(provisioned.runtime.id)
@@ -144,7 +144,7 @@ export async function prepareEphemeralVmWorkspaceTarget(
     warnings: provisioned.warnings
   } satisfies PrepareEphemeralVmWorkspaceTargetResult
 
-  return provisioned.connectionType === 'orca-server'
+  return provisioned.connectionType === 'mcode-server'
     ? { ...success, environmentId: provisioned.environment.id }
     : success
 }

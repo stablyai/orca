@@ -1,4 +1,4 @@
-// Why: every recursive host delete Orca performs (worktrees, terminal history, quarantined recovery
+// Why: every recursive host delete MCode performs (worktrees, terminal history, quarantined recovery
 // generations) hits the same Windows stickiness — AV/indexers/late handle releases surface transient
 // EBUSY/ENOTEMPTY/EPERM on a tree Node just emptied. One helper so no call site forgets the retries.
 
@@ -12,7 +12,7 @@ const WINDOWS_RM_MAX_RETRIES = 8
 const WINDOWS_RM_RETRY_DELAY_MS = 150
 
 export function toHostRemovalPath(targetPath: string): string {
-  // Why: Git for Windows can fail long recursive deletes even after Orca has
+  // Why: Git for Windows can fail long recursive deletes even after MCode has
   // proven the worktree target; Node's host deletion should use Win32 long paths.
   return process.platform === 'win32' ? win32.toNamespacedPath(targetPath) : targetPath
 }

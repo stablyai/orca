@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { HeadlessEmulator } from './headless-emulator'
-import { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal-unicode-provider'
+import { activateMCodeTerminalUnicodeProvider } from '../../shared/terminal-unicode-provider'
 
 const KO =
   '안녕하세요 오르카 테스트입니다. 결론부터 말씀드리면 시각적 피로도 절제된 럭셔리 다크 테마 가독성 행간(1.75) 적용 roadmap/complete-overhaul-backlog-history.md'
@@ -30,7 +30,7 @@ function replay(
 ): string {
   const t = new Terminal({ cols, rows, scrollback: 5000, allowProposedApi: true })
   t.loadAddon(new Unicode11Addon())
-  activateOrcaTerminalUnicodeProvider(t as never)
+  activateMCodeTerminalUnicodeProvider(t as never)
   const core = (t as unknown as { _core: { writeSync(d: string): void } })._core
   core.writeSync(`${snapshot.scrollbackAnsi ?? ''}${snapshot.snapshotAnsi}`)
   return textOf(t)

@@ -340,7 +340,7 @@ function isTabClosedTransportError(message: string): boolean {
 }
 
 function pageUnavailableMessageForSession(sessionName: string): string {
-  const prefix = 'orca-tab-'
+  const prefix = 'mcode-tab-'
   const browserPageId = sessionName.startsWith(prefix) ? sessionName.slice(prefix.length) : null
   return browserPageId
     ? `Browser page ${browserPageId} is no longer available`
@@ -671,7 +671,7 @@ export class AgentBrowserBridge {
       this.activeWebContentsId = nextWorktreeActiveWebContentsId
     }
     if (browserPageId) {
-      const sessionName = `orca-tab-${browserPageId}`
+      const sessionName = `mcode-tab-${browserPageId}`
       await this.destroySession(sessionName)
       this.pendingInterceptRestore.delete(sessionName)
     }
@@ -684,7 +684,7 @@ export class AgentBrowserBridge {
     previousWebContentsId?: number
   ): Promise<void> {
     // Why: an Electron process swap keeps browserPageId but gives a new webContentsId — destroy the session so the next command recreates it.
-    const sessionName = `orca-tab-${browserPageId}`
+    const sessionName = `mcode-tab-${browserPageId}`
     const session = this.sessions.get(sessionName)
     const oldWebContentsId = previousWebContentsId ?? session?.webContentsId
     const owningWorktreeId = this.browserManager.getWorktreeIdForTab(browserPageId)
@@ -878,7 +878,7 @@ export class AgentBrowserBridge {
             navigationTimeout = null
           }
           if (!this.getWebContents(target.webContentsId)) {
-            throw this.createPageUnavailableError(`orca-tab-${target.browserPageId}`)
+            throw this.createPageUnavailableError(`mcode-tab-${target.browserPageId}`)
           }
           // Why: ERR_ABORTED also covers a page vetoing unload; that navigation did not succeed.
           if (
@@ -1599,7 +1599,7 @@ export class AgentBrowserBridge {
             throw error
           }
           if (!this.getWebContents(target.webContentsId)) {
-            throw this.createPageUnavailableError(`orca-tab-${target.browserPageId}`)
+            throw this.createPageUnavailableError(`mcode-tab-${target.browserPageId}`)
           }
           throw new BrowserError(
             'browser_error',
@@ -1871,7 +1871,7 @@ export class AgentBrowserBridge {
         throw new BrowserError('browser_error', 'Debugger not attached')
       }
 
-      // Why: agent-browser's `set viewport` has no `mobile` flag, so apply the emulation directly via CDP to honor Orca's --mobile.
+      // Why: agent-browser's `set viewport` has no `mobile` flag, so apply the emulation directly via CDP to honor MCode's --mobile.
       await dbg.sendCommand('Emulation.setDeviceMetricsOverride', {
         width,
         height,
@@ -2029,7 +2029,7 @@ export class AgentBrowserBridge {
 
   async exec(command: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      // Why: strip target/session flags from passthrough so a caller can't override Orca's selected page or CDP proxy.
+      // Why: strip target/session flags from passthrough so a caller can't override MCode's selected page or CDP proxy.
       const args = stripAgentBrowserTargetArgs(parseShellArgs(command.trim()))
       return await this.execAgentBrowser(sessionName, args)
     })
@@ -2067,7 +2067,7 @@ export class AgentBrowserBridge {
     options: EnqueueTargetedCommandOptions = {}
   ): Promise<T> {
     const target = this.resolveCommandTarget(worktreeId, browserPageId, options.requireScopedTarget)
-    const sessionName = `orca-tab-${target.browserPageId}`
+    const sessionName = `mcode-tab-${target.browserPageId}`
 
     if (options.ensureSession !== false) {
       await this.ensureSession(sessionName, target.browserPageId, target.webContentsId)
@@ -2489,7 +2489,7 @@ export class AgentBrowserBridge {
       commandArgs[0] === 'network' && (commandArgs[1] === 'route' || commandArgs[1] === 'unroute')
 
     const needsInit = !session.initialized
-    // Why: a restarted named daemon auto-launches Chrome unless every invocation reasserts Orca's CDP owner.
+    // Why: a restarted named daemon auto-launches Chrome unless every invocation reasserts MCode's CDP owner.
     args.push('--cdp', String(session.proxy.getPort()))
 
     // Why: exec passthrough can produce a large argv; spreading into push risks V8 argument limits.
@@ -2754,7 +2754,7 @@ export class AgentBrowserBridge {
   private requireTargetWebContents(target: ResolvedBrowserCommandTarget): WebContents {
     const wc = this.getWebContents(target.webContentsId)
     if (!wc || wc.isDestroyed()) {
-      throw this.createPageUnavailableError(`orca-tab-${target.browserPageId}`)
+      throw this.createPageUnavailableError(`mcode-tab-${target.browserPageId}`)
     }
     return wc
   }

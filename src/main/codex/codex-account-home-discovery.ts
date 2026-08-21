@@ -1,6 +1,6 @@
 import { lstatSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { getOrcaUserDataPath, getSystemCodexHomePath } from './codex-home-paths'
+import { getMCodeUserDataPath, getSystemCodexHomePath } from './codex-home-paths'
 import { assertOwnedHostCodexManagedHomePath } from '../codex-accounts/host-codex-managed-home-ownership'
 
 /** Session roots of per-account self-contained host Codex homes present on disk.
@@ -8,7 +8,7 @@ import { assertOwnedHostCodexManagedHomePath } from '../codex-accounts/host-code
  *  change must still be counted, and CLI callers have no settings store. WSL
  *  account homes live inside their distro and are scanned by their own lane. */
 export function getCodexAccountHomeSessionDirectories(): string[] {
-  const accountsRoot = join(getOrcaUserDataPath(), 'codex-accounts')
+  const accountsRoot = join(getMCodeUserDataPath(), 'codex-accounts')
   try {
     return readdirSync(accountsRoot, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())

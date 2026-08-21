@@ -1,6 +1,6 @@
 #!/usr/bin/env npx tsx
 // Why: standalone mock WebSocket server for developing the mobile app without
-// a running Orca desktop instance. Responds to the same RPC methods the real
+// a running MCode desktop instance. Responds to the same RPC methods the real
 // runtime exposes, with realistic fake data. Supports E2EE handshake.
 import { WebSocketServer, type WebSocket } from 'ws'
 import { deriveSharedKey, e2eeDecrypt, e2eeEncrypt, type E2EEState } from './mock-server-encryption'
@@ -129,7 +129,7 @@ wss.on('connection', (ws) => {
   })
 })
 
-console.log(`[mock] Orca mock server listening on ws://localhost:${PORT}`)
+console.log(`[mock] MCode mock server listening on ws://localhost:${PORT}`)
 console.log(`[mock] Auth token: ${AUTH_TOKEN}`)
 console.log(`[mock] Server public key (base64): ${serverPublicKeyB64}`)
 console.log(

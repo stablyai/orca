@@ -34,9 +34,9 @@ describe('skill-sharing release workflow', () => {
     const linuxTest = stepNamed(linux, 'Run skill package, transaction, and compatibility suites')
     const command = packageJson.scripts['test:skill-sharing:release']
 
-    expect(platformTest.env.ORCA_REAL_WINDOWS_SKILL_TEST).toContain("runner.os == 'Windows'")
-    expect(platformTest.env.ORCA_REAL_PROCESS_SKILL_TEST).toBe('1')
-    expect(linuxTest.env.ORCA_REAL_PROCESS_SKILL_TEST).toBe('1')
+    expect(platformTest.env.MCODE_REAL_WINDOWS_SKILL_TEST).toContain("runner.os == 'Windows'")
+    expect(platformTest.env.MCODE_REAL_PROCESS_SKILL_TEST).toBe('1')
+    expect(linuxTest.env.MCODE_REAL_PROCESS_SKILL_TEST).toBe('1')
     expect(platformTest.run).toContain('pnpm test:skill-sharing:release')
     expect(linuxTest.run).toContain('pnpm test:skill-sharing:release')
     expect(command).toContain('src/main/skills')

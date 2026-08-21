@@ -35,7 +35,7 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('useAppMenuSelectionActions', () => {
-  it('falls back to native selection when no Orca surface claims the action', () => {
+  it('falls back to native selection when no MCode surface claims the action', () => {
     render(<Harness />)
 
     act(() => listener?.('select-all'))

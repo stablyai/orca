@@ -1,15 +1,15 @@
 import { execFileSync } from 'node:child_process'
 import { rmSync } from 'node:fs'
 import type { Page } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { waitForSessionReady } from './helpers/store'
 import {
   createIsolatedManyFileStagedDiffRepo,
   createIsolatedStagedLocaleDiffRepo
 } from './large-diff-repro-fixtures'
 
-async function addAndActivateRepo(orcaPage: Page, repoPath: string): Promise<string> {
-  const repoId = await orcaPage.evaluate(async (pathToRepo: string) => {
+async function addAndActivateRepo(mcodePage: Page, repoPath: string): Promise<string> {
+  const repoId = await mcodePage.evaluate(async (pathToRepo: string) => {
     const store = window.__store
     if (!store) {
       throw new Error('window.__store is not available')
@@ -24,7 +24,7 @@ async function addAndActivateRepo(orcaPage: Page, repoPath: string): Promise<str
   await expect
     .poll(
       () =>
-        orcaPage.evaluate(async (targetRepoId: string) => {
+        mcodePage.evaluate(async (targetRepoId: string) => {
           const store = window.__store
           if (!store) {
             return 0
@@ -36,7 +36,7 @@ async function addAndActivateRepo(orcaPage: Page, repoPath: string): Promise<str
     )
     .toBeGreaterThan(0)
 
-  return orcaPage.evaluate(
+  return mcodePage.evaluate(
     ({ targetRepoId, pathToRepo }) => {
       const store = window.__store
       if (!store) {
@@ -61,15 +61,15 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
   test.use({ seedTestRepo: false })
 
   test('committing under an open Staged Changes diff keeps the renderer responsive', async ({
-    orcaPage
+    mcodePage
   }) => {
-    await waitForSessionReady(orcaPage)
+    await waitForSessionReady(mcodePage)
     const fixture = createIsolatedStagedLocaleDiffRepo()
 
     try {
-      const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
+      const worktreeId = await addAndActivateRepo(mcodePage, fixture.repoPath)
 
-      const opened = await orcaPage.evaluate(
+      const opened = await mcodePage.evaluate(
         async ({ wId, repoPath }) => {
           const store = window.__store
           if (!store) {
@@ -109,7 +109,7 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
         stdio: 'pipe'
       })
 
-      const measurement = await orcaPage.evaluate(
+      const measurement = await mcodePage.evaluate(
         async ({ wId, repoPath }) => {
           const store = window.__store
           if (!store) {
@@ -170,18 +170,18 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
   })
 
   test('a rebase-style burst of external file changes keeps the diff responsive and loaded', async ({
-    orcaPage
+    mcodePage
   }) => {
     test.setTimeout(240_000)
-    await waitForSessionReady(orcaPage)
+    await waitForSessionReady(mcodePage)
     // Why: few but very large sections — the reported freeze is a *large* diff view,
     // where every remount re-runs Monaco's diff over thousands of changed lines.
     const fixture = createIsolatedManyFileStagedDiffRepo(8, 15_000)
 
     try {
-      const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
+      const worktreeId = await addAndActivateRepo(mcodePage, fixture.repoPath)
 
-      const opened = await orcaPage.evaluate(
+      const opened = await mcodePage.evaluate(
         async ({ wId, repoPath }) => {
           const store = window.__store
           if (!store) {
@@ -210,7 +210,7 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
       console.log(`staged diff opened for burst ${JSON.stringify(opened)}`)
       expect(opened.editorCount).toBeGreaterThan(0)
 
-      const measurement = await orcaPage.evaluate(
+      const measurement = await mcodePage.evaluate(
         async ({ wId, repoPath, relativePaths, burstDurationMs }) => {
           const intervalMs = 50
           type LagWindow = { maxLagMs: number; p95LagMs: number; sampleCount: number }
@@ -264,7 +264,7 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
             for (const relativePath of relativePaths) {
               window.setTimeout(() => {
                 window.dispatchEvent(
-                  new CustomEvent('orca:editor-external-file-change', {
+                  new CustomEvent('mcode:editor-external-file-change', {
                     detail: { worktreeId: wId, worktreePath: repoPath, relativePath }
                   })
                 )

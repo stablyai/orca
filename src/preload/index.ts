@@ -296,9 +296,9 @@ import type {
 import type { AiVaultSessionTitlesArgs } from '../shared/ai-vault-session-title'
 import type { AiVaultPrepareSessionResumeArgs } from '../shared/ai-vault-resume-preparation'
 import type { AgentType } from '../shared/native-chat-types'
-import { ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT } from '../shared/updater-renderer-events'
+import { MCODE_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT } from '../shared/updater-renderer-events'
 import {
-  ORCA_INTERNAL_FILE_DRAG_TYPE,
+  MCODE_INTERNAL_FILE_DRAG_TYPE,
   createNativeFileDropPayload,
   createRejectedNativeFileDropPayload,
   hasNativeFileDragTypes,
@@ -356,7 +356,7 @@ const nativeFileDropCallbacks: NativeFileDropCallback[] = []
 let nativeFileDropListenerRegistered = false
 const updaterQuitAbortRelay = createUpdaterQuitAbortRelay(
   window,
-  ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
+  MCODE_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
 )
 
 registerRendererRestartIpcRelays(ipcRenderer, window, updaterQuitAbortRelay)
@@ -468,7 +468,7 @@ document.addEventListener(
   'drop',
   (e) => {
     // Let in-app drags (e.g. file explorer → terminal) through to React handlers
-    if (e.dataTransfer?.types.includes(ORCA_INTERNAL_FILE_DRAG_TYPE)) {
+    if (e.dataTransfer?.types.includes(MCODE_INTERNAL_FILE_DRAG_TYPE)) {
       return
     }
 
@@ -522,7 +522,7 @@ document.addEventListener(
   true
 )
 
-const startupDiagnosticsEnabled = process.env.ORCA_STARTUP_DIAGNOSTICS === '1'
+const startupDiagnosticsEnabled = process.env.MCODE_STARTUP_DIAGNOSTICS === '1'
 const browserFindSubscriptions = createBrowserFindSubscriptions()
 
 ipcRenderer.on('ui:findInBrowserPage', (_event, source: unknown) => {
@@ -599,24 +599,24 @@ const api = {
       ipcRenderer.invoke('terminal:writeRenderDesyncEvidence', args)
   },
 
-  orcaProfiles: {
-    list: () => ipcRenderer.invoke('orcaProfiles:list'),
-    authStatus: () => ipcRenderer.invoke('orcaProfiles:authStatus'),
-    createLocal: (args) => ipcRenderer.invoke('orcaProfiles:createLocal', args),
-    createCloudLinked: (args) => ipcRenderer.invoke('orcaProfiles:createCloudLinked', args),
-    switchProfile: (args) => ipcRenderer.invoke('orcaProfiles:switch', args),
-    transferProject: (args) => ipcRenderer.invoke('orcaProfiles:transferProject', args),
-    findProjectProfiles: (args) => ipcRenderer.invoke('orcaProfiles:findProjectProfiles', args),
-    connectCurrent: () => ipcRenderer.invoke('orcaProfiles:connectCurrent'),
-    refreshAuth: () => ipcRenderer.invoke('orcaProfiles:refreshAuth'),
-    signOutCurrent: () => ipcRenderer.invoke('orcaProfiles:signOutCurrent'),
-    selectOrg: (args) => ipcRenderer.invoke('orcaProfiles:selectOrg', args),
-    orgMembersList: (args) => ipcRenderer.invoke('orcaProfiles:orgMembersList', args),
-    orgMemberInvite: (args) => ipcRenderer.invoke('orcaProfiles:orgMemberInvite', args),
-    orgInviteRevoke: (args) => ipcRenderer.invoke('orcaProfiles:orgInviteRevoke', args),
-    orgMemberChangeRole: (args) => ipcRenderer.invoke('orcaProfiles:orgMemberChangeRole', args),
-    orgMemberRemove: (args) => ipcRenderer.invoke('orcaProfiles:orgMemberRemove', args)
-  } satisfies PreloadApi['orcaProfiles'],
+  mcodeProfiles: {
+    list: () => ipcRenderer.invoke('mcodeProfiles:list'),
+    authStatus: () => ipcRenderer.invoke('mcodeProfiles:authStatus'),
+    createLocal: (args) => ipcRenderer.invoke('mcodeProfiles:createLocal', args),
+    createCloudLinked: (args) => ipcRenderer.invoke('mcodeProfiles:createCloudLinked', args),
+    switchProfile: (args) => ipcRenderer.invoke('mcodeProfiles:switch', args),
+    transferProject: (args) => ipcRenderer.invoke('mcodeProfiles:transferProject', args),
+    findProjectProfiles: (args) => ipcRenderer.invoke('mcodeProfiles:findProjectProfiles', args),
+    connectCurrent: () => ipcRenderer.invoke('mcodeProfiles:connectCurrent'),
+    refreshAuth: () => ipcRenderer.invoke('mcodeProfiles:refreshAuth'),
+    signOutCurrent: () => ipcRenderer.invoke('mcodeProfiles:signOutCurrent'),
+    selectOrg: (args) => ipcRenderer.invoke('mcodeProfiles:selectOrg', args),
+    orgMembersList: (args) => ipcRenderer.invoke('mcodeProfiles:orgMembersList', args),
+    orgMemberInvite: (args) => ipcRenderer.invoke('mcodeProfiles:orgMemberInvite', args),
+    orgInviteRevoke: (args) => ipcRenderer.invoke('mcodeProfiles:orgInviteRevoke', args),
+    orgMemberChangeRole: (args) => ipcRenderer.invoke('mcodeProfiles:orgMemberChangeRole', args),
+    orgMemberRemove: (args) => ipcRenderer.invoke('mcodeProfiles:orgMemberRemove', args)
+  } satisfies PreloadApi['mcodeProfiles'],
 
   platform: {
     get: () => ({
@@ -1715,9 +1715,9 @@ const api = {
       return () => ipcRenderer.removeListener('gh:workItemMutated', listener)
     },
 
-    checkOrcaStarred: (): Promise<boolean | null> => ipcRenderer.invoke('gh:checkOrcaStarred'),
-    starOrca: (source: AppStarSource): Promise<boolean> =>
-      ipcRenderer.invoke('gh:starOrca', source),
+    checkMCodeStarred: (): Promise<boolean | null> => ipcRenderer.invoke('gh:checkMCodeStarred'),
+    starMCode: (source: AppStarSource): Promise<boolean> =>
+      ipcRenderer.invoke('gh:starMCode', source),
 
     // Why: rate_limit is exempt from rate-limit accounting; `force` still busts the 30s in-process cache after an expensive op.
     rateLimit: (args?: { force?: boolean }): Promise<GetRateLimitResult> =>
@@ -2076,7 +2076,7 @@ const api = {
     complete: (): Promise<void> => ipcRenderer.invoke('star-nag:complete'),
     disable: (): Promise<void> => ipcRenderer.invoke('star-nag:disable'),
     openWeb: (): Promise<void> => ipcRenderer.invoke('star-nag:openWeb'),
-    starOrca: (): Promise<boolean> => ipcRenderer.invoke('star-nag:starOrca'),
+    starMCode: (): Promise<boolean> => ipcRenderer.invoke('star-nag:starMCode'),
     forceShow: (): Promise<void> => ipcRenderer.invoke('star-nag:forceShow'),
     agentValueMoment: (): Promise<
       { status: 'ready'; mode: 'gh' | 'web' } | { status: 'skipped' }
@@ -2774,7 +2774,7 @@ const api = {
       callback: (event: {
         browserPageId: string
         origin: string
-        action: 'opened-in-orca' | 'opened-external' | 'blocked'
+        action: 'opened-in-mcode' | 'opened-external' | 'blocked'
       }) => void
     ): (() => void) => {
       const listener = (
@@ -2782,7 +2782,7 @@ const api = {
         data: {
           browserPageId: string
           origin: string
-          action: 'opened-in-orca' | 'opened-external' | 'blocked'
+          action: 'opened-in-mcode' | 'opened-external' | 'blocked'
         }
       ) => callback(data)
       ipcRenderer.on('browser:popup', listener)
@@ -2939,15 +2939,15 @@ const api = {
       return () => ipcRenderer.removeListener('browser:pane-focus', listener)
     },
 
-    onOpenLinkInOrcaTab: (
+    onOpenLinkInMCodeTab: (
       callback: (event: { browserPageId: string; url: string }) => void
     ): (() => void) => {
       const listener = (
         _event: Electron.IpcRendererEvent,
         data: { browserPageId: string; url: string }
       ) => callback(data)
-      ipcRenderer.on('browser:open-link-in-orca-tab', listener)
-      return () => ipcRenderer.removeListener('browser:open-link-in-orca-tab', listener)
+      ipcRenderer.on('browser:open-link-in-mcode-tab', listener)
+      return () => ipcRenderer.removeListener('browser:open-link-in-mcode-tab', listener)
     },
 
     cancelDownload: (args: { downloadId: string }): Promise<boolean> =>

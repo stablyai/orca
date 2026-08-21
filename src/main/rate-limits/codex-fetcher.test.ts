@@ -701,7 +701,7 @@ describe('fetchCodexRateLimits', () => {
 
     try {
       const resultPromise = fetchCodexRateLimits({
-        codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\account\\home'
+        codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\mcode\\account\\home'
       })
       await vi.advanceTimersByTimeAsync(1)
       await vi.advanceTimersByTimeAsync(1)
@@ -711,22 +711,22 @@ describe('fetchCodexRateLimits', () => {
       expect(spawnFile).toBe('wsl.exe')
       expect(spawnArgs.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--exec', 'sh', '-c'])
       const shellCommand = spawnArgs.at(-1) as string
-      expect(shellCommand).toContain('_orca_wsl_shell=$(getent passwd')
-      expect(shellCommand).toContain('bash|zsh|ksh|mksh|ash) exec "$_orca_wsl_shell" -ilc')
+      expect(shellCommand).toContain('_mcode_wsl_shell=$(getent passwd')
+      expect(shellCommand).toContain('bash|zsh|ksh|mksh|ash) exec "$_mcode_wsl_shell" -ilc')
       expect(shellCommand).toContain(
-        'exec 3<&0\nexec 4>&1\nexec </dev/null\nexec >/dev/null\n_orca_wsl_shell='
+        'exec 3<&0\nexec 4>&1\nexec </dev/null\nexec >/dev/null\n_mcode_wsl_shell='
       )
-      expect(shellCommand).toContain('mkdir -p "$orca_rate_limit_cwd"')
-      expect(shellCommand).toContain('cd "$orca_rate_limit_cwd"')
+      expect(shellCommand).toContain('mkdir -p "$mcode_rate_limit_cwd"')
+      expect(shellCommand).toContain('cd "$mcode_rate_limit_cwd"')
       expect(shellCommand).toContain(
-        "export CODEX_HOME='\\''/home/alice/.local/share/orca/account/home'\\''"
+        "export CODEX_HOME='\\''/home/alice/.local/share/mcode/account/home'\\''"
       )
       expect(shellCommand).toContain(
         "exec codex '\\''-s'\\'' '\\''read-only'\\'' '\\''-a'\\'' '\\''untrusted'\\'' '\\''app-server'\\'' <&3 >&4 3<&- 4>&-"
       )
       expect(shellCommand.match(/<&3 >&4 3<&- 4>&-/g)).toHaveLength(3)
       expect(shellCommand.match(/exec codex [^\n]+<&3 >&4 3<&- 4>&-/g)).toHaveLength(3)
-      expect(shellCommand).not.toContain('_orca_codex')
+      expect(shellCommand).not.toContain('_mcode_codex')
       expect(shellCommand).not.toContain('wsl-codex-path')
       expect(spawnOptions).toEqual(
         expect.objectContaining({
@@ -822,7 +822,7 @@ describe('fetchCodexRateLimits', () => {
 
     try {
       const resultPromise = fetchCodexRateLimits({
-        codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\account\\home'
+        codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\mcode\\account\\home'
       })
       await vi.advanceTimersByTimeAsync(0)
       rpcChild.emit('close')
@@ -832,19 +832,19 @@ describe('fetchCodexRateLimits', () => {
       expect(spawnFile).toBe('wsl.exe')
       expect(spawnArgs.slice(0, 5)).toEqual(['-d', 'Ubuntu', '--exec', 'sh', '-c'])
       const shellCommand = spawnArgs.at(-1) as string
-      expect(shellCommand).toContain('_orca_wsl_shell=$(getent passwd')
-      expect(shellCommand).toContain('bash|zsh|ksh|mksh|ash) exec "$_orca_wsl_shell" -ilc')
+      expect(shellCommand).toContain('_mcode_wsl_shell=$(getent passwd')
+      expect(shellCommand).toContain('bash|zsh|ksh|mksh|ash) exec "$_mcode_wsl_shell" -ilc')
       expect(shellCommand).not.toContain('exec 3<&0')
       expect(shellCommand).not.toContain('exec </dev/null')
       expect(shellCommand).not.toContain('exec >/dev/null')
       expect(shellCommand).not.toContain('<&3 >&4 3<&- 4>&-')
-      expect(shellCommand).toContain('mkdir -p "$orca_rate_limit_cwd"')
-      expect(shellCommand).toContain('cd "$orca_rate_limit_cwd"')
+      expect(shellCommand).toContain('mkdir -p "$mcode_rate_limit_cwd"')
+      expect(shellCommand).toContain('cd "$mcode_rate_limit_cwd"')
       expect(shellCommand).toContain(
-        "export CODEX_HOME='\\''/home/alice/.local/share/orca/account/home'\\''"
+        "export CODEX_HOME='\\''/home/alice/.local/share/mcode/account/home'\\''"
       )
       expect(shellCommand).toContain('exec codex ')
-      expect(shellCommand).not.toContain('_orca_codex')
+      expect(shellCommand).not.toContain('_mcode_codex')
       expect(shellCommand).not.toContain('wsl-codex-path')
       expect(spawnOptions).toEqual(
         expect.objectContaining({

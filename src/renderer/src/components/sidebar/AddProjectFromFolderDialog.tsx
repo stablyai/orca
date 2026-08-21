@@ -86,7 +86,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
         })
         repo = upserted.repo
         if (upserted.alreadyPresent) {
-          useAppStore.getState().clearOrcaHookTrustForRepo(repo.id)
+          useAppStore.getState().clearMCodeHookTrustForRepo(repo.id)
         }
         if (!mountedRef.current || gen !== addGenRef.current) {
           return
@@ -183,7 +183,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
           <DialogDescription>
             {translate(
               'auto.components.sidebar.AddProjectFromFolderDialog.046751dbfb',
-              'Add this folder as a separate Orca project.'
+              'Add this folder as a separate MCode project.'
             )}
           </DialogDescription>
         </DialogHeader>

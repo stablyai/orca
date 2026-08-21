@@ -10,7 +10,7 @@ const GPU_FALLBACK_CRASH_REASONS = new Set(['abnormal-exit', 'crashed', 'launch-
 // Why: on old/flaky GPU drivers the GPU child process crashes (STATUS_BREAKPOINT
 // / ANGLE-D3D init failure) repeatedly - Windows clusters F0BDNADU79Q and
 // F0BDNRZ5MDG. GPU child deaths are intentionally suppressed as recoverable
-// churn, so Orca never reacted. A tight burst is the signal that hardware
+// churn, so MCode never reacted. A tight burst is the signal that hardware
 // acceleration is unusable on this machine.
 export const DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS = 30_000
 export const DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD = 3

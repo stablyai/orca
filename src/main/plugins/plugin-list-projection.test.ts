@@ -10,10 +10,10 @@ import type { PluginService } from './plugin-service'
 const manifest = pluginManifestSchema.parse({
   manifestVersion: 1,
   id: 'demo',
-  publisher: 'orca-samples',
+  publisher: 'mcode-samples',
   name: 'Demo',
   version: '1.0.0',
-  engines: { orca: '>=1.0.0' },
+  engines: { mcode: '>=1.0.0' },
   pluginApi: 1,
   contributes: { panels: [], commands: [], events: [] },
   capabilities: [{ kind: 'workspace:read' }]
@@ -47,7 +47,7 @@ function serviceWith(
 describe('buildPluginList consent identity', () => {
   it('projects the exact current fingerprint for an optimistic consent write', async () => {
     const plugin: ValidDiscoveredPlugin = {
-      pluginKey: 'orca-samples.demo',
+      pluginKey: 'mcode-samples.demo',
       rootDir: join(tmpdir(), 'plugins', 'demo'),
       manifest,
       consentFingerprint: 'sha256-current',
@@ -64,7 +64,7 @@ describe('buildPluginList consent identity', () => {
 
   it('projects supervised backoff as restarting instead of running', async () => {
     const plugin: ValidDiscoveredPlugin = {
-      pluginKey: 'orca-samples.demo',
+      pluginKey: 'mcode-samples.demo',
       rootDir: join(tmpdir(), 'plugins', 'demo'),
       manifest,
       consentFingerprint: 'sha256-current',
@@ -87,7 +87,7 @@ describe('buildPluginList consent identity', () => {
 
   it('does not attribute a shadowing dev plugin to the installed source', async () => {
     const plugin: ValidDiscoveredPlugin = {
-      pluginKey: 'orca-samples.demo',
+      pluginKey: 'mcode-samples.demo',
       rootDir: join(tmpdir(), 'development', 'demo'),
       manifest,
       consentFingerprint: 'sha256-current',
@@ -115,7 +115,7 @@ describe('buildPluginList consent identity', () => {
   it('does not expose an invalid development plugin absolute path as identity', async () => {
     const invalid: InvalidDiscoveredPlugin = {
       rootDir: join(tmpdir(), 'private', 'secret-plugin-path'),
-      error: 'missing orca-plugin.json',
+      error: 'missing mcode-plugin.json',
       isDev: true
     }
     const service = {
@@ -135,7 +135,7 @@ describe('buildPluginList consent identity', () => {
       contributes: { vmRecipes: [{ path: 'recipes/cloud.json' }] }
     })
     const plugin: ValidDiscoveredPlugin = {
-      pluginKey: 'orca-samples.demo',
+      pluginKey: 'mcode-samples.demo',
       rootDir: join(tmpdir(), 'plugins', 'demo'),
       manifest: recipeManifest,
       consentFingerprint: 'sha256-current',
@@ -184,7 +184,7 @@ describe('buildPluginList consent identity', () => {
       }
     })
     const plugin: ValidDiscoveredPlugin = {
-      pluginKey: 'orca-samples.demo',
+      pluginKey: 'mcode-samples.demo',
       rootDir: join(tmpdir(), 'plugins', 'demo'),
       manifest: commandManifest,
       consentFingerprint: 'sha256-current',

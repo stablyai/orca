@@ -10,7 +10,7 @@ const ownerIdentityKey = 'user-1\0profile-1\0org-1'
 const relayHostId = 'relay-host-1'
 
 function fixture(now: number) {
-  const userDataPath = mkdtempSync(join(tmpdir(), 'orca-relay-demand-'))
+  const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-relay-demand-'))
   const deviceRegistry = new DeviceRegistry(userDataPath)
   const revokeOutbox = new RelayRevokeOutbox(userDataPath)
   const ledger = new RelayDemandLedger({

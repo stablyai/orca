@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { OrcaRuntimeService } from '../orca-runtime'
+import type { MCodeRuntimeService } from '../mcode-runtime'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
@@ -61,7 +61,7 @@ function createRuntime(exitListeners: ExitListener[]) {
       exitListeners.push(listener)
       return vi.fn()
     })
-  } as unknown as OrcaRuntimeService
+  } as unknown as MCodeRuntimeService
   return { registry, runtime }
 }
 

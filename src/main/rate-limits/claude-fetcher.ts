@@ -147,7 +147,7 @@ async function readFromKeychain(configDir?: string): Promise<OAuthCredentialRead
       return scopedCredentials
     }
     const legacyCredentials = await readCredentialsFromStrictKeychain(undefined, 'legacy-keychain')
-    // Why: a real access token beats refresh-only creds (Orca can't refresh), so a stale scoped item can't shadow a working legacy token.
+    // Why: a real access token beats refresh-only creds (MCode can't refresh), so a stale scoped item can't shadow a working legacy token.
     if (legacyCredentials.token) {
       return legacyCredentials
     }
@@ -1032,13 +1032,13 @@ function resolveOwnedWslClaudeManagedAuthPath(account: InactiveClaudeAccountInfo
   }
   const linuxPath = account.wslLinuxAuthPath ?? wslInfo.linuxPath
   if (
-    !linuxPath.includes('/.local/share/orca/claude-accounts/') ||
+    !linuxPath.includes('/.local/share/mcode/claude-accounts/') ||
     !linuxPath.endsWith(`/${account.id}/auth`)
   ) {
     return null
   }
   try {
-    const markerPath = path.join(account.managedAuthPath, '.orca-managed-claude-auth')
+    const markerPath = path.join(account.managedAuthPath, '.mcode-managed-claude-auth')
     if (
       !existsSync(markerPath) ||
       lstatSync(markerPath).isSymbolicLink() ||

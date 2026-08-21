@@ -8,10 +8,10 @@ export async function chooseLocalBuild(
   window: BrowserWindow | null
 ): Promise<LocalBuildCandidate | null> {
   const openDialogOptions: Electron.OpenDialogOptions = {
-    title: 'Choose a Local Orca Build',
+    title: 'Choose a Local MCode Build',
     buttonLabel: 'Choose Build',
     properties: ['openFile'],
-    filters: [{ name: 'Orca update manifest', extensions: ['yml'] }]
+    filters: [{ name: 'MCode update manifest', extensions: ['yml'] }]
   }
   const selection = await (window
     ? dialog.showOpenDialog(window, openDialogOptions)
@@ -36,9 +36,9 @@ export async function chooseLocalBuild(
           } will reconnect after restart.`
     const messageBoxOptions: Electron.MessageBoxOptions = {
       type: 'question',
-      title: 'Use Local Orca Build?',
+      title: 'Use Local MCode Build?',
       message: `${app.getVersion()} → ${candidate.version}`,
-      detail: `${terminalSummary}\nWorkspace cards and settings are compatible with state schema ${SCHEMA_VERSION}.\n\nThe build must have the same valid code signature as Orca or installation will stop.`,
+      detail: `${terminalSummary}\nWorkspace cards and settings are compatible with state schema ${SCHEMA_VERSION}.\n\nThe build must have the same valid code signature as MCode or installation will stop.`,
       buttons: ['Use Local Build', 'Cancel'],
       defaultId: 0,
       cancelId: 1,

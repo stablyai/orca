@@ -43,7 +43,7 @@ function validBackup(move: RemovalMove): boolean {
     typeof move.placement.path === 'string' &&
     typeof move.placement.topology === 'string' &&
     dirname(move.sourcePath) === dirname(move.backupPath) &&
-    basename(move.backupPath).startsWith(`.${basename(move.sourcePath)}.orca-remove-backup-`)
+    basename(move.backupPath).startsWith(`.${basename(move.sourcePath)}.mcode-remove-backup-`)
   )
 }
 

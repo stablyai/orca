@@ -1,11 +1,11 @@
 // win-crash-survival-e2e — packaged crash-survival proof harness.
 //
-// GitHub #7742: on Windows, when Orca's main/renderer process crashed, open
+// GitHub #7742: on Windows, when MCode's main/renderer process crashed, open
 // terminal PTYs were orphaned and PowerShell hard-crashed with a 0xE9 "No
 // process is on the other end of the pipe" FailFast, because the terminal daemon
 // (hosting the ConPTYs) died together with the main process and severed the
 // console pipe. The fix relocates the daemon into a standalone, detached
-// orca-terminal-daemon.exe that survives main death (src/main/daemon/
+// mcode-terminal-daemon.exe that survives main death (src/main/daemon/
 // daemon-host-relocation.ts). win-update-e2e proves the daemon survives a
 // Windows UPDATE; this harness proves it survives a CRASH of the main process.
 //
@@ -54,7 +54,7 @@ import { reattachSentinelMatches, selectCreatedTabId } from './reattach-proof.mj
 const SORTABLE_TAB = '[data-testid="sortable-tab"]'
 // The per-shell env var stamped into the interactive shell; reading it back after
 // relaunch proves keystrokes reach the SAME survivor shell (a fresh re-spawn lacks it).
-const SENTINEL_ENV = 'ORCA_CRASH_SENTINEL'
+const SENTINEL_ENV = 'MCODE_CRASH_SENTINEL'
 
 function log(step, msg) {
   console.log(`[win-crash-survival-e2e] ${step}: ${msg}`)
@@ -67,7 +67,7 @@ async function main() {
     return 0
   }
   // Assert win32 BEFORE surfacing arg errors so an off-win32 invocation gets the
-  // clear platform message, not a confusing "no Orca.exe found" default-resolution
+  // clear platform message, not a confusing "no MCode.exe found" default-resolution
   // failure.
   assertWin32('win-crash-survival-e2e')
   if (opts.errors?.length) {
@@ -76,8 +76,8 @@ async function main() {
   }
 
   const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-  const canary = `ORCA-CRASH-SENTINEL-${runId}`
-  const runDir = mkdtempSync(path.join(tmpdir(), `orca-win-crash-e2e-${runId}-`))
+  const canary = `MCODE-CRASH-SENTINEL-${runId}`
+  const runDir = mkdtempSync(path.join(tmpdir(), `mcode-win-crash-e2e-${runId}-`))
   const userDataDir = path.join(runDir, 'userData')
   const shellPidFile = path.join(runDir, 'shell.pid')
   const reattachFile = path.join(runDir, 'reattach.txt')
@@ -85,7 +85,7 @@ async function main() {
   log('setup', `runId=${runId} runDir=${runDir} profile=${opts.expect} exe=${opts.exePath}`)
 
   const ctx = { session: null }
-  const diagDir = process.env.ORCA_E2E_DIAG_DIR || path.join(runDir, 'diag')
+  const diagDir = process.env.MCODE_E2E_DIAG_DIR || path.join(runDir, 'diag')
   let passed = false
   try {
     passed = await runProof(ctx, { opts, canary, runDir, userDataDir, shellPidFile, reattachFile })
@@ -302,7 +302,7 @@ async function waitForSentinel(file, expectedCanary, expectedShellPid, timeoutMs
 
 /**
  * Resolve THIS run's daemon, scoped to its isolated userData dir so unrelated
- * daemons on the machine (including the developer's live Orca) are ignored.
+ * daemons on the machine (including the developer's live MCode) are ignored.
  * The scoped live process scan is authoritative; PID files only contribute
  * metadata after their PID matches that process.
  */
@@ -343,7 +343,7 @@ function clearSingletonLocks(userDataDir) {
  * kill any pid captured earlier in the run — a captured pid can be recycled by the
  * OS onto an innocent process, so only pids re-verified as this run's daemon (by
  * scoped command-line match) are ever killed. Never installs/uninstalls and never
- * touches any other Orca on the box (a live user instance uses a different
+ * touches any other MCode on the box (a live user instance uses a different
  * userData and is out of scope by construction).
  */
 async function teardown({ app, userDataDir, keepProfile, runDir }) {

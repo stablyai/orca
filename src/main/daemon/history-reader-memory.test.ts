@@ -25,7 +25,7 @@ const RETIRED_CHECKPOINT_READ_CAP_BYTES = 16 * 1024 * 1024
 const directories: string[] = []
 
 function createSession(sessionId: string): { basePath: string; sessionPath: string } {
-  const basePath = mkdtempSync(join(tmpdir(), 'orca-history-memory-'))
+  const basePath = mkdtempSync(join(tmpdir(), 'mcode-history-memory-'))
   directories.push(basePath)
   const sessionPath = join(basePath, getHistorySessionDirName(sessionId))
   mkdirSync(sessionPath, { recursive: true })

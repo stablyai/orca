@@ -31,7 +31,7 @@ describe('useIpcEvents silent terminal adoption (surfaceOwner: false)', () => {
     const harness = await loadIpcEventsHarness(storeState)
     harness.useIpcEvents()
 
-    // Control: `orca terminal create` (no surfaceOwner) keeps its reveal so the
+    // Control: `mcode terminal create` (no surfaceOwner) keeps its reveal so the
     // user can find the terminal they just asked for.
     harness.createTerminal({
       worktreeId: 'wt-2',

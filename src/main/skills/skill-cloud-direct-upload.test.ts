@@ -14,7 +14,7 @@ afterEach(async () => {
 describe('uploadSkillPackageToSignedPolicy', () => {
   it('allows a slow progressing upload to continue beyond one minute', async () => {
     vi.useFakeTimers()
-    const root = await mkdtemp(join(tmpdir(), 'orca-skill-cloud-upload-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skill-cloud-upload-'))
     roots.push(root)
     const archivePath = join(root, 'package.tar.gz')
     const archive = Buffer.alloc(3 * 64 * 1024, 0x61)
@@ -81,7 +81,7 @@ describe('uploadSkillPackageToSignedPolicy', () => {
   })
 
   it('streams exact bytes with policy fields and bounded progress', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skill-cloud-upload-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skill-cloud-upload-'))
     roots.push(root)
     const archivePath = join(root, 'package.tar.gz')
     const archive = Buffer.from('private-package-bytes')
@@ -118,7 +118,7 @@ describe('uploadSkillPackageToSignedPolicy', () => {
   })
 
   it('rejects insecure destinations and source drift before upload', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skill-cloud-upload-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skill-cloud-upload-'))
     roots.push(root)
     const archivePath = join(root, 'package.tar.gz')
     await writeFile(archivePath, 'bytes')
@@ -150,7 +150,7 @@ describe('uploadSkillPackageToSignedPolicy', () => {
   })
 
   it('bounds a stalled signed upload even without a caller-owned signal', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skill-cloud-upload-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skill-cloud-upload-'))
     roots.push(root)
     const archivePath = join(root, 'package.tar.gz')
     await writeFile(archivePath, 'bytes')

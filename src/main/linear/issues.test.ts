@@ -122,7 +122,7 @@ describe('Linear issue queries', () => {
     })
 
     expect(rawRequest).toHaveBeenCalledTimes(1)
-    expect(rawRequest.mock.calls[0][0]).toContain('query OrcaLinearIssues')
+    expect(rawRequest.mock.calls[0][0]).toContain('query MCodeLinearIssues')
     expect(rawRequest.mock.calls[0][0]).toContain('pageInfo')
     expect(rawRequest.mock.calls[0][0]).toContain('estimate')
   })
@@ -187,7 +187,7 @@ describe('Linear issue queries', () => {
 
     // The point of the fix: one request regardless of comment count.
     expect(rawRequest).toHaveBeenCalledTimes(1)
-    expect(rawRequest.mock.calls[0][0]).toContain('query OrcaLinearIssueComments')
+    expect(rawRequest.mock.calls[0][0]).toContain('query MCodeLinearIssueComments')
     expect(rawRequest.mock.calls[0][0]).toContain('user {')
     expect(rawRequest.mock.calls[0][1]).toEqual({ id: 'issue-uuid' })
   })
@@ -283,7 +283,7 @@ describe('Linear issue queries', () => {
     ])
 
     expect(rawRequest).toHaveBeenCalledTimes(1)
-    expect(rawRequest.mock.calls[0][0]).toContain('query OrcaLinearIssueSearch')
+    expect(rawRequest.mock.calls[0][0]).toContain('query MCodeLinearIssueSearch')
     expect(rawRequest.mock.calls[0][0]).toContain('searchIssues(term: $term')
     expect(rawRequest.mock.calls[0][1]).toEqual({ term: 'bug', first: 36 })
   })
@@ -570,7 +570,7 @@ describe('Linear issue queries', () => {
     ).resolves.toMatchObject({ state: { id: 'state-review' } })
 
     expect(updateIssue).toHaveBeenCalledWith('issue-1', { stateId: 'state-review' })
-    expect(rawRequest.mock.calls[0][0]).toContain('query OrcaLinearIssueByUuid')
+    expect(rawRequest.mock.calls[0][0]).toContain('query MCodeLinearIssueByUuid')
   })
 
   it('reads back agent task field updates before confirming success', async () => {
@@ -865,7 +865,7 @@ describe('Linear issue queries', () => {
       parentId: 'root-1'
     })
 
-    expect(rawRequest.mock.calls[0][0]).toContain('query OrcaLinearCommentByUuid')
+    expect(rawRequest.mock.calls[0][0]).toContain('query MCodeLinearCommentByUuid')
     expect(rawRequest.mock.calls[0][0]).toContain('body')
   })
 })

@@ -5,7 +5,7 @@ import { waitForRestoredTerminalInputReady } from './helpers/restored-terminal-i
 type TestPane = {
   container: {
     dataset: { ptyId: string }
-    __orcaE2eTerminalInputReadinessInstanceId?: string
+    __mcodeE2eTerminalInputReadinessInstanceId?: string
   }
   serializeAddon: { serialize: () => string }
   terminal: { input: (data: string, wasUserInput: boolean) => void }

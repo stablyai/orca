@@ -11,7 +11,7 @@ const baseOptions = {
   pollSeconds: 1,
   ref: 'main',
   releaseRunId: '777',
-  repo: 'stablyai/orca',
+  repo: 'mcode-ide/mcode',
   tag: 'v1.2.3-rc.4',
   timeoutMinutes: 2,
   token: 'token',
@@ -22,12 +22,12 @@ describe('release mac build workflow dispatch', () => {
   it('dispatches the mac workflow and waits for the returned run id', async () => {
     const { fetch, requests } = createGitHubFetch([
       jsonResponse(200, {
-        html_url: 'https://github.test/stablyai/orca/actions/runs/123',
+        html_url: 'https://github.test/mcode-ide/mcode/actions/runs/123',
         workflow_run_id: 123
       }),
       jsonResponse(200, {
         conclusion: 'success',
-        html_url: 'https://github.test/stablyai/orca/actions/runs/123',
+        html_url: 'https://github.test/mcode-ide/mcode/actions/runs/123',
         id: 123,
         status: 'completed'
       })
@@ -42,7 +42,7 @@ describe('release mac build workflow dispatch', () => {
     expect(completedRun.conclusion).toBe('success')
     expect(requests[0].method).toBe('POST')
     expect(requests[0].path).toBe(
-      '/repos/stablyai/orca/actions/workflows/release-mac-build.yml/dispatches'
+      '/repos/mcode-ide/mcode/actions/workflows/release-mac-build.yml/dispatches'
     )
     expect(requests[0].body).toEqual({
       inputs: {
@@ -51,7 +51,7 @@ describe('release mac build workflow dispatch', () => {
       },
       ref: 'main'
     })
-    expect(requests[1].path).toBe('/repos/stablyai/orca/actions/runs/123')
+    expect(requests[1].path).toBe('/repos/mcode-ide/mcode/actions/runs/123')
   })
 
   it('finds the dispatched run by release tag and parent run id when GitHub returns no body', async () => {
@@ -68,14 +68,14 @@ describe('release mac build workflow dispatch', () => {
           {
             created_at: '2026-06-30T12:00:01Z',
             display_title: runTitle,
-            html_url: 'https://github.test/stablyai/orca/actions/runs/124',
+            html_url: 'https://github.test/mcode-ide/mcode/actions/runs/124',
             id: 124
           }
         ]
       }),
       jsonResponse(200, {
         conclusion: 'success',
-        html_url: 'https://github.test/stablyai/orca/actions/runs/124',
+        html_url: 'https://github.test/mcode-ide/mcode/actions/runs/124',
         id: 124,
         status: 'completed'
       })
@@ -89,7 +89,7 @@ describe('release mac build workflow dispatch', () => {
 
     expect(completedRun.id).toBe(124)
     expect(requests[1].path).toBe(
-      '/repos/stablyai/orca/actions/workflows/release-mac-build.yml/runs'
+      '/repos/mcode-ide/mcode/actions/workflows/release-mac-build.yml/runs'
     )
     expect(requests[1].query.get('event')).toBe('workflow_dispatch')
   })
@@ -97,12 +97,12 @@ describe('release mac build workflow dispatch', () => {
   it('fails when the isolated mac workflow does not succeed', async () => {
     const { fetch } = createGitHubFetch([
       jsonResponse(200, {
-        html_url: 'https://github.test/stablyai/orca/actions/runs/125',
+        html_url: 'https://github.test/mcode-ide/mcode/actions/runs/125',
         workflow_run_id: 125
       }),
       jsonResponse(200, {
         conclusion: 'failure',
-        html_url: 'https://github.test/stablyai/orca/actions/runs/125',
+        html_url: 'https://github.test/mcode-ide/mcode/actions/runs/125',
         id: 125,
         status: 'completed'
       })
@@ -119,7 +119,7 @@ describe('release mac build workflow dispatch', () => {
 
   it('reads required workflow settings from the GitHub Actions environment', () => {
     const options = readReleaseMacBuildWorkflowOptions({
-      GITHUB_REPOSITORY: 'stablyai/orca',
+      GITHUB_REPOSITORY: 'mcode-ide/mcode',
       GITHUB_RUN_ID: '987',
       GITHUB_TOKEN: 'token',
       RELEASE_MAC_BUILD_REF: 'main',

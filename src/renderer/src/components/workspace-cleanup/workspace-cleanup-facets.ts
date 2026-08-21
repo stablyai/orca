@@ -55,7 +55,7 @@ export type WorkspaceCleanupFacets = {
   /** Background signal: ambient PTY/agent churn bumps this without a human. */
   lastActivityAt: number
   createdAt: number | null
-  /** Honest "user opened it" signal; null when Orca never recorded a visit. */
+  /** Honest "user opened it" signal; null when MCode never recorded a visit. */
   lastVisitedAt: number | null
   sizeBytes: number | null
   workspaceStatus: string | null

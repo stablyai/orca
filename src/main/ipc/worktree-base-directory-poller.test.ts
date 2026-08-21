@@ -90,7 +90,7 @@ describe('worktree base directory poller', () => {
   })
 
   async function makeRoot(): Promise<string> {
-    const root = await mkdtemp(join(tmpdir(), 'orca-base-poller-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-base-poller-'))
     cleanups.push(() => rm(root, { recursive: true, force: true }))
     // Why: macOS tmpdir lives behind the /var -> /private/var symlink and
     // native watcher events report resolved paths; production targets are
@@ -367,7 +367,7 @@ describe('worktree base directory poller', () => {
   })
 
   it('keeps polling a live window that has never been shown (E2E headless)', () => {
-    // ORCA_E2E_HEADLESS keeps a live BrowserWindow that is never shown; no show/restore
+    // MCODE_E2E_HEADLESS keeps a live BrowserWindow that is never shown; no show/restore
     // signal is coming to resume a parked poller, so a never-shown window must keep polling.
     const visibility = createWorktreePollerWindowVisibility(() => ({
       isDestroyed: () => false,

@@ -2,8 +2,8 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from './orca-runtime'
-import { OrcaRuntimeRpcServer } from './runtime-rpc'
+import { MCodeRuntimeService } from './mcode-runtime'
+import { MCodeRuntimeRpcServer } from './runtime-rpc'
 import { parsePairingCode } from '../../shared/pairing'
 import { generateKeyPair } from './rpc/e2ee-crypto'
 import { waitFor } from './runtime-rpc-test-harness'
@@ -30,11 +30,11 @@ vi.mock('../git/worktree', () => {
   }
 })
 
-describe('OrcaRuntimeRpcServer', () => {
+describe('MCodeRuntimeRpcServer', () => {
   it('cleans up pre-auth E2EE WebSocket state when the socket closes', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = new OrcaRuntimeService()
-    const server = new OrcaRuntimeRpcServer({
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-rpc-'))
+    const runtime = new MCodeRuntimeService()
+    const server = new MCodeRuntimeRpcServer({
       runtime,
       userDataPath,
       enableWebSocket: true,
@@ -79,9 +79,9 @@ describe('OrcaRuntimeRpcServer', () => {
   })
 
   it('terminates active WebSockets for a revoked mobile device', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = new OrcaRuntimeService()
-    const server = new OrcaRuntimeRpcServer({
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-rpc-'))
+    const runtime = new MCodeRuntimeService()
+    const server = new MCodeRuntimeRpcServer({
       runtime,
       userDataPath,
       enableWebSocket: true,
@@ -120,9 +120,9 @@ describe('OrcaRuntimeRpcServer', () => {
   }, 15_000)
 
   it('does not revoke runtime-scoped devices through mobile revocation', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = new OrcaRuntimeService()
-    const server = new OrcaRuntimeRpcServer({
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-rpc-'))
+    const runtime = new MCodeRuntimeService()
+    const server = new MCodeRuntimeRpcServer({
       runtime,
       userDataPath,
       enableWebSocket: true,
@@ -150,9 +150,9 @@ describe('OrcaRuntimeRpcServer', () => {
   })
 
   it('terminates active WebSockets for a revoked runtime access grant', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = new OrcaRuntimeService()
-    const server = new OrcaRuntimeRpcServer({
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-rpc-'))
+    const runtime = new MCodeRuntimeService()
+    const server = new MCodeRuntimeRpcServer({
       runtime,
       userDataPath,
       enableWebSocket: true,
@@ -189,9 +189,9 @@ describe('OrcaRuntimeRpcServer', () => {
   }, 15_000)
 
   it('rotates unused runtime pairing links without revoking already-used grants', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = new OrcaRuntimeService()
-    const server = new OrcaRuntimeRpcServer({
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-rpc-'))
+    const runtime = new MCodeRuntimeService()
+    const server = new MCodeRuntimeRpcServer({
       runtime,
       userDataPath,
       enableWebSocket: true,

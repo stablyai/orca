@@ -1,12 +1,12 @@
 import type { JSX } from 'react'
 import {
-  ORCA_CLI_SKILL_INSTALL_COMMAND,
-  ORCA_CLI_SKILL_NAME,
-  ORCA_CLI_SKILL_UPDATE_COMMAND
+  MCODE_CLI_SKILL_INSTALL_COMMAND,
+  MCODE_CLI_SKILL_NAME,
+  MCODE_CLI_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
 import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  ensureOrcaCliAvailableForAgentSkillTerminal
+  ensureMCodeCliAvailableForAgentSkillTerminal
 } from '@/lib/agent-skill-cli-prerequisite'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
 import type { InstalledAgentSkillState } from '@/hooks/useInstalledAgentSkills'
@@ -28,17 +28,17 @@ export function BrowserUseSkillSetupCard(props: {
   const { compact, terminalHeightPx, skill } = props
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const installCommand = !activeSkillRuntime.installDisabledReason
-    ? buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND, activeSkillRuntime.agentRuntime)
-    : ORCA_CLI_SKILL_INSTALL_COMMAND
+    ? buildSkillCommandForRuntime(MCODE_CLI_SKILL_INSTALL_COMMAND, activeSkillRuntime.agentRuntime)
+    : MCODE_CLI_SKILL_INSTALL_COMMAND
   const updateCommand = !activeSkillRuntime.installDisabledReason
-    ? buildSkillCommandForRuntime(ORCA_CLI_SKILL_UPDATE_COMMAND, activeSkillRuntime.agentRuntime)
-    : ORCA_CLI_SKILL_UPDATE_COMMAND
+    ? buildSkillCommandForRuntime(MCODE_CLI_SKILL_UPDATE_COMMAND, activeSkillRuntime.agentRuntime)
+    : MCODE_CLI_SKILL_UPDATE_COMMAND
 
   const handleBeforeOpenTerminal = async (): Promise<void> => {
     useAppStore.getState().recordFeatureInteraction('agent-browser-setup')
     await (activeSkillRuntime.agentRuntime?.runtime === 'wsl'
       ? ensureWslCliAvailableForAgentSkillTerminal(activeSkillRuntime.agentRuntime)
-      : ensureOrcaCliAvailableForAgentSkillTerminal())
+      : ensureMCodeCliAvailableForAgentSkillTerminal())
     localStorage.setItem(BROWSER_USE_ENABLED_STORAGE_KEY, '1')
   }
 
@@ -51,7 +51,7 @@ export function BrowserUseSkillSetupCard(props: {
       )}
       description={translate(
         'auto.components.feature.wall.BrowserUseSkillSetupCard.cbc45022d4',
-        "Enables agents to navigate and verify pages in Orca's browser."
+        "Enables agents to navigate and verify pages in MCode's browser."
       )}
       command={installCommand}
       installedCommand={updateCommand}
@@ -77,7 +77,7 @@ export function BrowserUseSkillSetupCard(props: {
       showRecheckWhenInstalled={false}
       onRecheck={skill.refresh}
       freshnessSkillName={
-        activeSkillRuntime.canUseLocalSkillFreshness ? ORCA_CLI_SKILL_NAME : undefined
+        activeSkillRuntime.canUseLocalSkillFreshness ? MCODE_CLI_SKILL_NAME : undefined
       }
     />
   )

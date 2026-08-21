@@ -110,7 +110,7 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
       later(typeNext, TYPE_INTERVAL_MS)
     }
 
-    // Why: this tip may remain open while Orca is idle. Play the demo once,
+    // Why: this tip may remain open while MCode is idle. Play the demo once,
     // then settle on the final useful state instead of looping timers forever.
     later(() => setPhase('pressed'), KEYPRESS_AT_MS)
     later(() => setPhase('open'), PALETTE_OPEN_AT_MS)
@@ -174,7 +174,7 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
             <span className="block truncate">
               {renderQuery}
               {!reducedMotion && (phase === 'open' || phase === 'typing') ? (
-                // Why: this tip can sit open while Orca is idle; keep the
+                // Why: this tip can sit open while MCode is idle; keep the
                 // caret static so the preview does not wake the compositor.
                 <span className="ml-px inline-block h-[14px] w-px -translate-y-px align-middle bg-foreground/75" />
               ) : null}
@@ -193,7 +193,7 @@ export function CmdJPaletteFeatureTipVisual(): JSX.Element {
                   {result.status === 'done' ? (
                     <span className="size-2.5 rounded-full bg-emerald-500" aria-hidden="true" />
                   ) : (
-                    // Why: this tip can stay mounted while Orca is idle; mirror
+                    // Why: this tip can stay mounted while MCode is idle; mirror
                     // the sidebar's static working ring instead of spinning.
                     <span className="block size-2.5 rounded-full border-[1.5px] border-yellow-500 bg-yellow-500/15" />
                   )}

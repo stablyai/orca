@@ -6,11 +6,11 @@ Last updated: 2026-08-09.
 
 ## Decision summary
 
-AI Vault will remain part of the integrated Orca renderer, but its host-side work will move behind a persistent service-process boundary.
+AI Vault will remain part of the integrated MCode renderer, but its host-side work will move behind a persistent service-process boundary.
 
 The target has three rules:
 
-1. The desktop and Orca runtime route local Vault scans and title resolution to one lazy, supervised Vault service process per host process.
+1. The desktop and MCode runtime route local Vault scans and title resolution to one lazy, supervised Vault service process per host process.
 2. The SSH relay routes Vault work to a relay-side Vault service process. The relay event loop that handles PTYs must not scan or parse Vault data.
 3. The renderer publishes completed Vault results at low priority after terminal input is quiet. xterm and the Vault panel remain in the same renderer.
 
@@ -30,7 +30,7 @@ The public Electron IPC, runtime RPC, and SSH relay method names and result mean
 
 ## Non-goals
 
-- Treating the service process as a security sandbox. It runs trusted Orca code with the same user identity.
+- Treating the service process as a security sandbox. It runs trusted MCode code with the same user identity.
 - Rewriting the scanner or changing session discovery semantics during the process migration.
 - Moving xterm into another renderer.
 - Adding a process per window, worktree, repository, or SSH request.
@@ -42,7 +42,7 @@ The public Electron IPC, runtime RPC, and SSH relay method names and result mean
 | Path                                    | Current execution                                                            | Remaining coupling                                                                                                           |
 | --------------------------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | Desktop local scan and title resolution | Persistent `worker_threads.Worker` from `session-scanner-worker-spawn.ts`    | Separate V8 isolate, but the same OS process, priority class, failure domain, and overall memory accounting as Electron main |
-| Orca runtime scan and title resolution  | The same worker client used by runtime RPC methods                           | Same-process CPU, memory, and lifecycle coupling with the runtime host                                                       |
+| MCode runtime scan and title resolution  | The same worker client used by runtime RPC methods                           | Same-process CPU, memory, and lifecycle coupling with the runtime host                                                       |
 | SSH relay scan and title resolution     | `AiVaultHandler` calls the remote scanner and title reader inside `relay.ts` | Vault discovery, reads, parsing, cache work, and PTY routing share one event loop and process                                |
 | Old SSH relay fallback                  | Desktop main crawls the host through the SSH filesystem provider             | Compatibility path can consume desktop and SSH multiplexer work; complete remote isolation is impossible without a new relay |
 | Renderer result publication             | `setScanResult(result)` and `setSessions(result.sessions)` immediately       | Deserialization, projection, filtering, grouping, and React rendering share the renderer thread with xterm                   |
@@ -61,7 +61,7 @@ The migration changes execution ownership only. Unless a separate product change
 | Session result        | Preserve every `AiVaultSession` field, including host/platform identity, paths, Codex home, timestamps, previews, token/message counts, queued/recoverable state, subagent count, resume command, and subagent metadata | Service result builder; router validates/restamps only where it does today  |
 | Scope and depth       | Preserve workspace/project/all scoping, guaranteed older in-scope sessions, 250/500/1000/unlimited depth, sorting, deduplication, and issue rows                                                                        | Service per-host scan; router multi-host merge; renderer view projection    |
 | Host routing          | Preserve local, all-host, individual SSH, and individual runtime selection with the same per-host time budgets and partial-failure issue behavior                                                                       | Router                                                                      |
-| Dynamic roots         | Preserve environment overrides, managed/per-account Codex homes, runtime Codex homes, WSL default and Orca-owned homes, and every platform-specific agent root                                                          | Router resolves dynamic homes per request; service discovers within them    |
+| Dynamic roots         | Preserve environment overrides, managed/per-account Codex homes, runtime Codex homes, WSL default and MCode-owned homes, and every platform-specific agent root                                                          | Router resolves dynamic homes per request; service discovers within them    |
 | Refresh semantics     | Preserve TTL reuse, force refresh, request-token cancellation, force preemption, coalescing, window-focus refresh, and new-agent-session refresh throttling                                                             | Router coordinator plus service cancellation                                |
 | Title synchronization | Preserve local, SSH, and runtime Claude/Codex title resolution and the existing input-quiet tab-title gate                                                                                                              | Service title operation plus existing host routing                          |
 | Subagent expansion    | Preserve local-only Claude and OMP child listing, path containment, status, issue rows, and retry behavior. Runtime/SSH/web remain empty until a separately negotiated feature exists                                   | Service interactive operation; router retains current host gate             |
@@ -98,7 +98,7 @@ The two relay branches share only the relay's bounded request/response routing. 
 ## Process ownership
 
 - Desktop: one Vault service per Electron main process, shared by every window and workspace.
-- Orca runtime: one Vault service per runtime host process, shared by all connected clients.
+- MCode runtime: one Vault service per runtime host process, shared by all connected clients.
 - SSH relay: one Vault service per live relay daemon, shared across relay reconnects and requests.
 - WSL: preserve current source ownership initially. The Windows local service invokes the existing WSL-aware adapters; do not add a process per distro in this migration.
 - Old relay: retain the bounded desktop fallback only when the relay method is unavailable. A new relay whose sidecar fails must return an issue instead of scanning inline on the relay loop.
@@ -448,8 +448,8 @@ The exaggerated workload causes measurable but bounded whole-system contention. 
 Run the same build with the rollout switch off and on, alternating launch order:
 
 ```bash
-ORCA_AI_VAULT_SERVICE_PROCESS=0 pnpm bench:ai-vault-typing -- --label worker-control
-ORCA_AI_VAULT_SERVICE_PROCESS=1 pnpm bench:ai-vault-typing -- --label process-treatment
+MCODE_AI_VAULT_SERVICE_PROCESS=0 pnpm bench:ai-vault-typing -- --label worker-control
+MCODE_AI_VAULT_SERVICE_PROCESS=1 pnpm bench:ai-vault-typing -- --label process-treatment
 ```
 
 Run at least five representative and five stress passes on:
@@ -465,7 +465,7 @@ Add a Docker SSH variant that runs the same terminal probe while the remote side
 
 The implementation now matches the target topology:
 
-- Desktop and runtime list scans, title resolution, subagent reads, and first-prompt reads use a lazy supervised child process by default outside unit tests. `ORCA_AI_VAULT_SERVICE_PROCESS=0` retains the worker fallback.
+- Desktop and runtime list scans, title resolution, subagent reads, and first-prompt reads use a lazy supervised child process by default outside unit tests. `MCODE_AI_VAULT_SERVICE_PROCESS=0` retains the worker fallback.
 - Successful local deletion remains in the trusted main process and acknowledges child parse-cache invalidation. In-flight parses cannot restore an invalidated entry.
 - The SSH relay handler no longer imports the remote scanner, transcript title reader, or filesystem provider. It forwards existing public methods to `relay-ai-vault-service.js`; sidecar failure returns a normal host issue.
 - All six relay platform bundles include the sidecar, hash its bytes into `.version`, and require it in remote-install completeness probes.
@@ -533,7 +533,7 @@ Exit: reproducible JSON report, visible Vault completion assertion, zero missing
 
 - Add the private service protocol, entry-path resolver, process entry, client, priority policy, and supervisor.
 - Reuse current scanner/cache implementations.
-- Route desktop IPC and runtime RPC through the service when `ORCA_AI_VAULT_SERVICE_PROCESS` is enabled.
+- Route desktop IPC and runtime RPC through the service when `MCODE_AI_VAULT_SERVICE_PROCESS` is enabled.
 - Keep the worker path as the disabled-switch fallback.
 - Add unit tests for ready timeout, queue priority, coalescing, cancellation, operation timeout, crash, restart backoff, circuit breaker, idle exit, malformed messages, and packaged path resolution.
 - Add E2E fault injection that kills the service during active terminal typing.
@@ -545,7 +545,7 @@ Exit: desktop/runtime correctness parity, packaging smoke test, representative/s
 - Enable the process by default in development, E2E, and canary builds.
 - Collect process RSS, restart, timeout, and latency telemetry without content.
 - Validate Windows, Linux, WSL, and constrained-runner results.
-- Keep `ORCA_AI_VAULT_SERVICE_PROCESS=0` as a release kill switch for one stable cycle.
+- Keep `MCODE_AI_VAULT_SERVICE_PROCESS=0` as a release kill switch for one stable cycle.
 
 Exit: no unexplained crash or timeout increase and all acceptance gates green.
 
@@ -579,7 +579,7 @@ Exit: kill switch and dead worker code removed only after evidence supports it.
 
 ## Rollback
 
-- Desktop/runtime: set `ORCA_AI_VAULT_SERVICE_PROCESS=0` to restore the current worker path without changing public APIs or stored data.
+- Desktop/runtime: set `MCODE_AI_VAULT_SERVICE_PROCESS=0` to restore the current worker path without changing public APIs or stored data.
 - Renderer: disable quiet publication and apply the validated complete result directly.
 - Relay: deploy the prior immutable relay version. A new relay must never fall back to inline scanning when its sidecar fails.
 - Parse-cache format remains unchanged during migration, so rollback does not require cache conversion.

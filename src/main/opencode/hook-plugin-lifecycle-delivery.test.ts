@@ -1,6 +1,6 @@
 /**
  * Executes the generated OpenCode plugin source because this delivery state
- * lives inside OpenCode's process, not in Orca's TypeScript runtime.
+ * lives inside OpenCode's process, not in MCode's TypeScript runtime.
  */
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -28,10 +28,10 @@ type RecordedPost = {
 }
 
 const ENV_KEYS = [
-  'ORCA_PANE_KEY',
-  'ORCA_AGENT_HOOK_PORT',
-  'ORCA_AGENT_HOOK_TOKEN',
-  'ORCA_AGENT_HOOK_ENDPOINT'
+  'MCODE_PANE_KEY',
+  'MCODE_AGENT_HOOK_PORT',
+  'MCODE_AGENT_HOOK_TOKEN',
+  'MCODE_AGENT_HOOK_ENDPOINT'
 ] as const
 
 describe('OpenCode plugin lifecycle delivery', () => {
@@ -41,16 +41,16 @@ describe('OpenCode plugin lifecycle delivery', () => {
   let savedFetch: typeof globalThis.fetch
 
   beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'orca-opencode-lifecycle-plugin-'))
+    tempDir = mkdtempSync(join(tmpdir(), 'mcode-opencode-lifecycle-plugin-'))
     posts = []
     savedEnv = {}
     for (const key of ENV_KEYS) {
       savedEnv[key] = process.env[key]
     }
-    process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
-    process.env.ORCA_AGENT_HOOK_PORT = '45678'
-    process.env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
-    delete process.env.ORCA_AGENT_HOOK_ENDPOINT
+    process.env.MCODE_PANE_KEY = 'tab-1:leaf-1'
+    process.env.MCODE_AGENT_HOOK_PORT = '45678'
+    process.env.MCODE_AGENT_HOOK_TOKEN = 'test-token'
+    delete process.env.MCODE_AGENT_HOOK_ENDPOINT
     savedFetch = globalThis.fetch
     globalThis.fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       posts.push(readPayload(init))
@@ -84,12 +84,12 @@ describe('OpenCode plugin lifecycle delivery', () => {
   }
 
   async function loadHooksWithSession(session: object): Promise<PluginHooks> {
-    const pluginPath = join(tempDir, 'orca-opencode-status.mjs')
+    const pluginPath = join(tempDir, 'mcode-opencode-status.mjs')
     writeFileSync(pluginPath, _internals.getOpenCodePluginSource())
     const module = (await import(pathToFileURL(pluginPath).href)) as {
-      OrcaOpenCodeStatusPlugin: (ctx: unknown) => Promise<PluginHooks>
+      MCodeOpenCodeStatusPlugin: (ctx: unknown) => Promise<PluginHooks>
     }
-    return module.OrcaOpenCodeStatusPlugin({ client: { session } })
+    return module.MCodeOpenCodeStatusPlugin({ client: { session } })
   }
 
   async function loadHandler(
@@ -731,15 +731,15 @@ describe('OpenCode plugin lifecycle delivery', () => {
       posts.push(readPayload(init))
       deliveries.push({
         url: String(url),
-        token: new Headers(init?.headers).get('X-Orca-Agent-Hook-Token')
+        token: new Headers(init?.headers).get('X-MCode-Agent-Hook-Token')
       })
       return new Response(null, { status: 204 })
     }) as typeof globalThis.fetch
     const handler = await loadHandler()
 
     await handler({ event: status('busy') })
-    process.env.ORCA_AGENT_HOOK_PORT = '56789'
-    process.env.ORCA_AGENT_HOOK_TOKEN = 'refreshed-token'
+    process.env.MCODE_AGENT_HOOK_PORT = '56789'
+    process.env.MCODE_AGENT_HOOK_TOKEN = 'refreshed-token'
     await handler({ event: delta('still working') })
 
     expect(names()).toEqual(['SessionBusy', 'SessionBusy'])

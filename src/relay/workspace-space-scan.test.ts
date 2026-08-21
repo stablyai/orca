@@ -40,7 +40,7 @@ describe('relay workspace space scan', () => {
   })
 
   it('fails closed when the portable scan exceeds its entry budget', async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'orca-relay-space-capacity-'))
+    tempDir = await mkdtemp(join(tmpdir(), 'mcode-relay-space-capacity-'))
     const rootPath = join(tempDir, 'repo')
     await mkdir(rootPath, { recursive: true })
     await Promise.all(['one', 'two', 'three'].map((name) => writeFile(join(rootPath, name), name)))

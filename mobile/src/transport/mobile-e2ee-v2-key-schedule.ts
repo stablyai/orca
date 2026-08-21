@@ -1,8 +1,8 @@
 import { hkdf } from '@noble/hashes/hkdf'
 import { sha256 } from '@noble/hashes/sha256'
 
-const SALT_LABEL = new TextEncoder().encode('orca-mobile-e2ee/v2/salt\0')
-const INFO_LABEL = new TextEncoder().encode('orca-mobile-e2ee/v2/session\0')
+const SALT_LABEL = new TextEncoder().encode('mcode-mobile-e2ee/v2/salt\0')
+const INFO_LABEL = new TextEncoder().encode('mcode-mobile-e2ee/v2/session\0')
 
 export function deriveMobileE2EEV2KeySchedule(args: {
   sharedSecret: Uint8Array

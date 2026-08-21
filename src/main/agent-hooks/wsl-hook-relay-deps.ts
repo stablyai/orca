@@ -62,7 +62,7 @@ export type WslHookRelayManagerDeps = {
   ingest: (envelope: Record<string, unknown>, connectionId: string) => void
   installHooks: typeof installRemoteManagedAgentHooks
   managedHookSettings: () => ManagedHookDetectionSettings
-  /** Plugin source strings shipped to the guest relay so an Orca update needn't redeploy the relay bundle. */
+  /** Plugin source strings shipped to the guest relay so an MCode update needn't redeploy the relay bundle. */
   pluginSources: () => PluginSources
   warn: (message: string) => void
   transientRetryDelayMs: number

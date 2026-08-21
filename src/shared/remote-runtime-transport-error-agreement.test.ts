@@ -68,7 +68,7 @@ const REQUEST_TRANSPORT_ERRORS: TransportErrorPair[] = [
   {
     producer: 'remote-runtime-client.ts:192',
     code: 'runtime_timeout',
-    message: 'Timed out waiting for the remote Orca runtime to respond.'
+    message: 'Timed out waiting for the remote MCode runtime to respond.'
   },
   {
     producer: 'remote-runtime-client.ts:238 / :639',
@@ -78,47 +78,47 @@ const REQUEST_TRANSPORT_ERRORS: TransportErrorPair[] = [
   {
     producer: 'remote-runtime-client.ts:258 / :654',
     code: 'remote_runtime_unavailable',
-    message: 'Could not connect to the remote Orca runtime.'
+    message: 'Could not connect to the remote MCode runtime.'
   },
   {
     producer: 'remote-runtime-client.ts:270 / :667 (formatRemoteRuntimeCloseMessage, 1006)',
     code: 'remote_runtime_unavailable',
-    message: 'Remote Orca runtime closed the connection.'
+    message: 'Remote MCode runtime closed the connection.'
   },
   {
     producer: 'remote-runtime-client.ts:270 / :667 (formatRemoteRuntimeCloseMessage, 1011)',
     code: 'remote_runtime_unavailable',
-    message: `Remote Orca runtime closed the connection (1011: ${CLOSE_REASON.toString()}).`
+    message: `Remote MCode runtime closed the connection (1011: ${CLOSE_REASON.toString()}).`
   },
   {
     producer: 'remote-runtime-client.ts:289',
     code: 'invalid_runtime_response',
-    message: 'Remote Orca runtime returned an unexpected binary frame.'
+    message: 'Remote MCode runtime returned an unexpected binary frame.'
   },
   {
     producer: 'remote-runtime-client.ts:310 / :693',
     code: 'invalid_runtime_response',
-    message: 'Remote Orca runtime returned an undecryptable frame.'
+    message: 'Remote MCode runtime returned an undecryptable frame.'
   },
   {
     producer: 'remote-runtime-client.ts:393 / :801 (rejected token)',
     code: 'unauthorized',
-    message: 'Remote Orca runtime rejected the pairing token.'
+    message: 'Remote MCode runtime rejected the pairing token.'
   },
   {
     producer: 'remote-runtime-client.ts:393 / :801 (unparseable auth failure)',
     code: 'invalid_runtime_response',
-    message: 'Remote Orca runtime rejected the pairing token.'
+    message: 'Remote MCode runtime rejected the pairing token.'
   },
   {
     producer: 'remote-runtime-client.ts:415',
     code: 'remote_runtime_unavailable',
-    message: 'Remote Orca runtime request was released before it could be sent.'
+    message: 'Remote MCode runtime request was released before it could be sent.'
   },
   {
     producer: 'remote-runtime-client.ts:459 / :829',
     code: 'invalid_runtime_response',
-    message: 'Remote Orca runtime returned a mismatched response id.'
+    message: 'Remote MCode runtime returned a mismatched response id.'
   },
   {
     producer: 'remote-runtime-client.ts:476 (non-Error status validation failure)',
@@ -128,27 +128,27 @@ const REQUEST_TRANSPORT_ERRORS: TransportErrorPair[] = [
   {
     producer: 'remote-runtime-client.ts:556',
     code: 'runtime_timeout',
-    message: 'Timed out waiting for the remote Orca runtime subscription to start.'
+    message: 'Timed out waiting for the remote MCode runtime subscription to start.'
   },
   {
     producer: 'remote-runtime-client.ts:587',
     code: 'remote_runtime_unavailable',
-    message: 'Remote Orca runtime send buffer overflow; reconnecting.'
+    message: 'Remote MCode runtime send buffer overflow; reconnecting.'
   },
   {
     producer: 'remote-runtime-client.ts:735',
     code: 'remote_runtime_unavailable',
-    message: 'Remote Orca runtime stopped responding; the stream connection was reset.'
+    message: 'Remote MCode runtime stopped responding; the stream connection was reset.'
   },
   {
     producer: 'remote-runtime-client.ts:842',
     code: 'invalid_runtime_response',
-    message: 'Remote Orca runtime returned binary data before authentication.'
+    message: 'Remote MCode runtime returned binary data before authentication.'
   },
   {
     producer: 'remote-runtime-client.ts:852',
     code: 'invalid_runtime_response',
-    message: 'Remote Orca runtime returned an undecryptable binary frame.'
+    message: 'Remote MCode runtime returned an undecryptable binary frame.'
   },
   {
     producer: 'remote-runtime-request-websocket.ts:115',
@@ -198,7 +198,7 @@ const REQUEST_TRANSPORT_ERRORS: TransportErrorPair[] = [
   frameError('remote-runtime-request-frames.ts:103', JSON.stringify({ not: 'an envelope' })),
   producedPair(
     'remote-runtime-request-frames.ts:37 (invalid handshake frame)',
-    invalidRemoteRuntimeResponseError('Remote Orca runtime returned an invalid E2EE auth frame.')
+    invalidRemoteRuntimeResponseError('Remote MCode runtime returned an invalid E2EE auth frame.')
   ),
   producedPair(
     'runtime-rpc-call-queue.ts:70 / :74 / :81',
@@ -222,7 +222,7 @@ const SHARED_CONTROL_TRANSPORT_ERRORS: TransportErrorPair[] = [
   producedPair(
     'remote-runtime-shared-control-open.ts:86',
     remoteRuntimeUnavailableError(
-      'Remote Orca runtime stopped responding; resetting the control connection.'
+      'Remote MCode runtime stopped responding; resetting the control connection.'
     )
   ),
   producedPair(
@@ -298,17 +298,17 @@ const HOST_FORWARDED_TRANSPORT_ERRORS: TransportErrorPair[] = [
   {
     producer: 'main/runtime/rpc/errors.ts:145 (STRUCTURED_RUNTIME_PASSTHROUGH_CODES)',
     code: 'remote_runtime_unavailable',
-    message: 'Remote Orca runtime closed the connection.'
+    message: 'Remote MCode runtime closed the connection.'
   },
   {
     producer: 'main/runtime/rpc/errors.ts:145 (STRUCTURED_RUNTIME_PASSTHROUGH_CODES)',
     code: 'runtime_timeout',
-    message: 'Timed out waiting for the remote Orca runtime to respond.'
+    message: 'Timed out waiting for the remote MCode runtime to respond.'
   },
   {
     producer: 'main/runtime/rpc/errors.ts:145 (STRUCTURED_RUNTIME_PASSTHROUGH_CODES)',
     code: 'invalid_runtime_response',
-    message: 'Remote Orca runtime returned an invalid response frame.'
+    message: 'Remote MCode runtime returned an invalid response frame.'
   },
   {
     producer: 'main/runtime/rpc/errors.ts:145 (STRUCTURED_RUNTIME_PASSTHROUGH_CODES)',
@@ -329,7 +329,7 @@ const TAILSCALE_HINTED_TRANSPORT_ERRORS: TransportErrorPair[] = [
     producer: 'main/ipc/runtime-environment-transport-routing.ts:153',
     code: 'remote_runtime_unavailable',
     message: withRemoteRuntimeTailscaleHint(
-      'Could not connect to the remote Orca runtime.',
+      'Could not connect to the remote MCode runtime.',
       'https://desk.example.com'
     )
   },
@@ -337,7 +337,7 @@ const TAILSCALE_HINTED_TRANSPORT_ERRORS: TransportErrorPair[] = [
     producer: 'main/ipc/runtime-environment-transport-routing.ts:200',
     code: 'remote_runtime_unavailable',
     message: withRemoteRuntimeTailscaleHint(
-      'Remote Orca runtime closed the connection.',
+      'Remote MCode runtime closed the connection.',
       'https://desk.tail1234.ts.net'
     )
   }
@@ -355,18 +355,18 @@ const CODED_TRANSPORT_ERRORS: TransportErrorPair[] = [
 const CODELESS_TRANSPORT_ERRORS: (TransportErrorPair & { recoverable: boolean })[] = [
   {
     producer: 'web-runtime-client.ts:117 / :328',
-    message: 'Remote Orca runtime is not connected.',
+    message: 'Remote MCode runtime is not connected.',
     recoverable: true
   },
   {
     producer: 'web-runtime-client.ts:359 / :360 / :591',
-    message: 'Remote Orca runtime connection closed.',
+    message: 'Remote MCode runtime connection closed.',
     recoverable: true
   },
   {
     producer: 'web-runtime-client.ts:437 / :601',
     message: withRemoteRuntimeTailscaleHint(
-      'Could not connect to the remote Orca runtime.',
+      'Could not connect to the remote MCode runtime.',
       'https://desk.example.com'
     ),
     recoverable: true
@@ -378,7 +378,7 @@ const CODELESS_TRANSPORT_ERRORS: (TransportErrorPair & { recoverable: boolean })
   },
   {
     producer: 'remote-runtime-terminal-multiplexer.ts:511',
-    message: 'Remote Orca runtime closed the connection.',
+    message: 'Remote MCode runtime closed the connection.',
     recoverable: true
   },
   {

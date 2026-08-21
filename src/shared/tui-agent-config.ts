@@ -1,5 +1,5 @@
 import type { TuiAgent } from './tui-agent'
-import { getOrcaCliCommandNameForPlatform } from './orca-cli-command-name'
+import { getMCodeCliCommandNameForPlatform } from './mcode-cli-command-name'
 
 export type AgentPromptInjectionMode =
   | 'argv'
@@ -56,21 +56,21 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     launchCmd: 'claude',
     expectedProcess: 'claude',
     promptInjectionMode: 'argv',
-    // Why: `claude --prefill <text>` seeds the input without submitting, avoiding the paste-after-ready race (PR https://github.com/stablyai/orca/pull/926).
+    // Why: `claude --prefill <text>` seeds the input without submitting, avoiding the paste-after-ready race (PR https://github.com/mcode-ide/mcode/pull/926).
     draftPromptFlag: '--prefill'
   },
   'claude-agent-teams': {
-    // Why: an Orca-provided launch mode, not a separate binary; detection follows the Orca CLI.
-    detectCmd: 'orca',
-    detectCmdAliases: ['orca-dev', 'orca-ide'],
-    // Why: require Claude too so fresh installs (Orca shim always present) don't report Agent Teams without an agent CLI.
+    // Why: an MCode-provided launch mode, not a separate binary; detection follows the MCode CLI.
+    detectCmd: 'mcode',
+    detectCmdAliases: ['mcode-dev', 'mcode-ide'],
+    // Why: require Claude too so fresh installs (MCode shim always present) don't report Agent Teams without an agent CLI.
     detectRequiredCommands: ['claude'],
-    // Why: Windows/WSL use Claude's in-process Agent Teams fallback, not this Orca native-pane/tmux-shim wrapper.
+    // Why: Windows/WSL use Claude's in-process Agent Teams fallback, not this MCode native-pane/tmux-shim wrapper.
     detectUnsupportedRuntimes: ['win32', 'wsl'],
-    launchCmd: 'orca claude-teams',
+    launchCmd: 'mcode claude-teams',
     launchCmdByPlatform: {
-      linux: `${getOrcaCliCommandNameForPlatform('linux')} claude-teams`,
-      win32: `${getOrcaCliCommandNameForPlatform('win32')} claude-teams`
+      linux: `${getMCodeCliCommandNameForPlatform('linux')} claude-teams`,
+      win32: `${getMCodeCliCommandNameForPlatform('win32')} claude-teams`
     },
     expectedProcess: 'claude',
     promptInjectionMode: 'stdin-after-start'
@@ -138,8 +138,8 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     launchCmd: 'pi',
     expectedProcess: 'pi',
     promptInjectionMode: 'argv',
-    // Why: pi has no `--prefill` and paste-after-ready races its long startup; the orca-prefill extension seeds this env var instead.
-    draftPromptEnvVar: 'ORCA_PI_PREFILL',
+    // Why: pi has no `--prefill` and paste-after-ready races its long startup; the mcode-prefill extension seeds this env var instead.
+    draftPromptEnvVar: 'MCODE_PI_PREFILL',
     // Why: Pi decodes CSI-u; Esc+CR submits after tool subprocesses reset live KKP state (#9703).
     windowsShiftEnterEncoding: 'csi-u'
   },
@@ -148,7 +148,7 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     launchCmd: 'omp',
     expectedProcess: 'omp',
     promptInjectionMode: 'argv',
-    draftPromptEnvVar: 'ORCA_OMP_PREFILL'
+    draftPromptEnvVar: 'MCODE_OMP_PREFILL'
   },
   'prime-agent': {
     detectCmd: 'prime-agent',
@@ -292,7 +292,7 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
   },
   hermes: {
     detectCmd: 'hermes',
-    // Why: bare `hermes` opens the classic REPL; `--tui` starts the full-screen agent UI Orca hosts.
+    // Why: bare `hermes` opens the classic REPL; `--tui` starts the full-screen agent UI MCode hosts.
     launchCmd: 'hermes --tui',
     expectedProcess: 'hermes',
     // Why: Hermes delivers the prompt via its startup-query contract, submitting only after the composer is ready.
@@ -349,7 +349,7 @@ export function getTuiAgentLaunchCommand(
   platform: NodeJS.Platform,
   opts?: { isRemote?: boolean }
 ): string {
-  // Why: local-only orca-ide rename (avoids GNOME Orca clash) must not leak to Linux remotes, whose relay shim is always `orca`.
+  // Why: local-only mcode-ide rename (avoids GNOME MCode clash) must not leak to Linux remotes, whose relay shim is always `mcode`.
   if (opts?.isRemote && platform === 'linux') {
     return config.launchCmd
   }

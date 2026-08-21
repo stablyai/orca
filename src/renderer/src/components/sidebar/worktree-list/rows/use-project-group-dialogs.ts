@@ -41,7 +41,7 @@ function reportProjectGroupDeleteFailures(result: {
     toast.error(
       translate(
         'auto.components.sidebar.WorktreeList.b667b59632',
-        'Some projects could not be removed from Orca'
+        'Some projects could not be removed from MCode'
       ),
       {
         description: translate(

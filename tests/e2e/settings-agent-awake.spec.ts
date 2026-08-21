@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { waitForSessionReady } from './helpers/store'
 import type { GlobalSettings } from '../../src/shared/global-settings-types'
 import { readHookEndpoint } from './helpers/agent-hook-endpoint'
@@ -48,22 +48,22 @@ async function dismissTransientAnnouncement(page: Page): Promise<void> {
 async function installPowerSaveBlockerProbe(electronApp: ElectronApplication): Promise<void> {
   await electronApp.evaluate(({ powerSaveBlocker }) => {
     const root = globalThis as typeof globalThis & {
-      __orcaAwakePowerProbe?: {
+      __mcodeAwakePowerProbe?: {
         starts: { type: string; id: number }[]
         stops: { id: number }[]
         originalStart: typeof powerSaveBlocker.start
         originalStop: typeof powerSaveBlocker.stop
       }
     }
-    if (root.__orcaAwakePowerProbe) {
-      root.__orcaAwakePowerProbe.starts = []
-      root.__orcaAwakePowerProbe.stops = []
+    if (root.__mcodeAwakePowerProbe) {
+      root.__mcodeAwakePowerProbe.starts = []
+      root.__mcodeAwakePowerProbe.stops = []
       return
     }
 
     const originalStart = powerSaveBlocker.start.bind(powerSaveBlocker)
     const originalStop = powerSaveBlocker.stop.bind(powerSaveBlocker)
-    root.__orcaAwakePowerProbe = {
+    root.__mcodeAwakePowerProbe = {
       starts: [],
       stops: [],
       originalStart,
@@ -72,12 +72,12 @@ async function installPowerSaveBlockerProbe(electronApp: ElectronApplication): P
 
     powerSaveBlocker.start = ((type) => {
       const id = originalStart(type)
-      root.__orcaAwakePowerProbe?.starts.push({ type, id })
+      root.__mcodeAwakePowerProbe?.starts.push({ type, id })
       return id
     }) as typeof powerSaveBlocker.start
 
     powerSaveBlocker.stop = ((id) => {
-      root.__orcaAwakePowerProbe?.stops.push({ id })
+      root.__mcodeAwakePowerProbe?.stops.push({ id })
       originalStop(id)
     }) as typeof powerSaveBlocker.stop
   })
@@ -89,12 +89,12 @@ async function readPowerSaveBlockerProbe(
   return electronApp.evaluate(({ powerSaveBlocker }) => {
     const probe = (
       globalThis as typeof globalThis & {
-        __orcaAwakePowerProbe?: {
+        __mcodeAwakePowerProbe?: {
           starts: { type: string; id: number }[]
           stops: { id: number }[]
         }
       }
-    ).__orcaAwakePowerProbe
+    ).__mcodeAwakePowerProbe
     const starts = probe?.starts ?? []
     return {
       starts: starts.map((start) => ({ ...start })),
@@ -117,7 +117,7 @@ async function postCodexHookEvent(
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Orca-Agent-Hook-Token': endpoint.token
+      'X-MCode-Agent-Hook-Token': endpoint.token
     },
     body: JSON.stringify({
       paneKey: options.paneKey,
@@ -135,18 +135,18 @@ async function postCodexHookEvent(
 }
 
 test.describe('Agent awake setting', () => {
-  test.beforeEach(async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
+  test.beforeEach(async ({ mcodePage }) => {
+    await waitForSessionReady(mcodePage)
   })
 
-  test('can be changed from Agents settings and persists through IPC', async ({ orcaPage }) => {
-    await openSettings(orcaPage)
-    await dismissTransientAnnouncement(orcaPage)
-    await orcaPage.getByPlaceholder('Search settings').fill('awake')
+  test('can be changed from Agents settings and persists through IPC', async ({ mcodePage }) => {
+    await openSettings(mcodePage)
+    await dismissTransientAnnouncement(mcodePage)
+    await mcodePage.getByPlaceholder('Search settings').fill('awake')
 
-    await expect(orcaPage.getByText('Keep computer awake').first()).toBeVisible()
+    await expect(mcodePage.getByText('Keep computer awake').first()).toBeVisible()
 
-    const keepAwakeModes = orcaPage.getByRole('radiogroup', {
+    const keepAwakeModes = mcodePage.getByRole('radiogroup', {
       name: 'Keep computer awake'
     })
     const offMode = keepAwakeModes.getByRole('radio', { name: 'Off' })
@@ -156,7 +156,7 @@ test.describe('Agent awake setting', () => {
     await agentMode.click()
     await expect(agentMode).toHaveAttribute('aria-checked', 'true')
     await expect
-      .poll(async () => (await getSettings(orcaPage)).computerAwakeMode, {
+      .poll(async () => (await getSettings(mcodePage)).computerAwakeMode, {
         timeout: 5_000,
         message: 'keep-awake mode did not persist after selecting Agent'
       })
@@ -165,7 +165,7 @@ test.describe('Agent awake setting', () => {
     await offMode.click()
     await expect(offMode).toHaveAttribute('aria-checked', 'true')
     await expect
-      .poll(async () => (await getSettings(orcaPage)).computerAwakeMode, {
+      .poll(async () => (await getSettings(mcodePage)).computerAwakeMode, {
         timeout: 5_000,
         message: 'keep-awake mode did not persist after selecting Off'
       })
@@ -174,10 +174,10 @@ test.describe('Agent awake setting', () => {
 
   test('keeps the OS awake only while a hook-reported agent is working', async ({
     electronApp,
-    orcaPage
+    mcodePage
   }) => {
     await installPowerSaveBlockerProbe(electronApp)
-    await setKeepAwake(orcaPage, true)
+    await setKeepAwake(mcodePage, true)
 
     const tabId = 'e2e-awake-tab'
     const paneKey = `${tabId}:${randomUUID()}`

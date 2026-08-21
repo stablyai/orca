@@ -10,7 +10,7 @@ describe('commonPropsSchema', () => {
       os_release: '25.3.0',
       install_id: '00000000-0000-4000-8000-000000000000',
       session_id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
-      orca_channel: 'stable'
+      mcode_channel: 'stable'
     })
     expect(parsed.success).toBe(true)
   })
@@ -23,7 +23,7 @@ describe('commonPropsSchema', () => {
       os_release: '25.3.0',
       install_id: '00000000-0000-4000-8000-000000000000',
       session_id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
-      orca_channel: 'stable'
+      mcode_channel: 'stable'
     })
     expect(parsed.success).toBe(false)
   })
@@ -36,7 +36,7 @@ describe('commonPropsSchema', () => {
       platform: 'darwin',
       arch: 'arm64',
       os_release: '25.3.0',
-      orca_channel: 'stable'
+      mcode_channel: 'stable'
     }
 
     expect(

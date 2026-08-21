@@ -12,7 +12,7 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import { TERMINAL_METHODS } from '../../src/main/runtime/rpc/methods/terminal'
-import type { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
+import type { MCodeRuntimeService } from '../../src/main/runtime/mcode-runtime'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame
@@ -101,7 +101,7 @@ function startHost(): {
     registerSubscriptionCleanup: vi.fn(),
     cleanupSubscription: vi.fn(),
     waitForTerminal: vi.fn(() => new Promise<never>(() => {}))
-  } as unknown as OrcaRuntimeService
+  } as unknown as MCodeRuntimeService
   const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
   const bridge = {
@@ -298,7 +298,7 @@ describe('host-rejected paired-runtime input reaches a pane remount', () => {
         repo1: [{ id: 'wt-1', repoId: 'repo1', path: '/tmp/wt-1', hostId: 'local' }]
       },
       runtimeStatusByEnvironmentId: new Map(),
-      repos: [{ id: 'repo1', connectionId: null, displayName: 'orca' }],
+      repos: [{ id: 'repo1', connectionId: null, displayName: 'mcode' }],
       projects: [],
       sshConnectionStates: new Map(),
       transientClearedAgentStatusConnectionIds: {},

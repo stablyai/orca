@@ -11,12 +11,12 @@
 import { performance } from 'node:perf_hooks'
 import v8 from 'node:v8'
 
-const CYCLES = Number.parseInt(process.env.ORCA_EPOCH_BENCH_CYCLES ?? '20000', 10)
-const PANES_PER_TAB = Number.parseInt(process.env.ORCA_EPOCH_BENCH_PANES ?? '2', 10)
+const CYCLES = Number.parseInt(process.env.MCODE_EPOCH_BENCH_CYCLES ?? '20000', 10)
+const PANES_PER_TAB = Number.parseInt(process.env.MCODE_EPOCH_BENCH_PANES ?? '2', 10)
 
 for (const [name, value] of [
-  ['ORCA_EPOCH_BENCH_CYCLES', CYCLES],
-  ['ORCA_EPOCH_BENCH_PANES', PANES_PER_TAB]
+  ['MCODE_EPOCH_BENCH_CYCLES', CYCLES],
+  ['MCODE_EPOCH_BENCH_PANES', PANES_PER_TAB]
 ]) {
   if (!Number.isInteger(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer, received ${value}`)

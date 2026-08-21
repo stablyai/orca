@@ -29,7 +29,7 @@ export const NATIVE_CHAT_SUBMIT = SUBMIT
  * trailing `\r` in the SAME pty write as part of the paste body rather than an
  * Enter, so the text lands in the input box but never sends. Callers write this
  * body first, then write `NATIVE_CHAT_SUBMIT` as a separate, slightly-delayed
- * write (mirrors orca-runtime's writeTerminalAction Enter handling).
+ * write (mirrors mcode-runtime's writeTerminalAction Enter handling).
  */
 export function buildNativeChatPasteBytes(text: string): string {
   if (isMultilineDraft(text)) {

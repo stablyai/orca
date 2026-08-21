@@ -55,7 +55,7 @@ export function parseDetailsAttributes(rawAttributes: string): Record<string, un
   // Why: validation accepts normal HTML whitespace around `=`, so parsing
   // must accept it too or an editable toggle loses its heading variant.
   const variantMatch = rawAttributes.match(
-    /\sdata-orca-toggle\s*=\s*(?:"(heading-[1-5])"|'(heading-[1-5])'|(heading-[1-5]))(?:\s|$)/i
+    /\sdata-mcode-toggle\s*=\s*(?:"(heading-[1-5])"|'(heading-[1-5])'|(heading-[1-5]))(?:\s|$)/i
   )
   return {
     open: /\sopen(?:\s|=|$)/i.test(rawAttributes),
@@ -74,11 +74,11 @@ export function detailsBodyHtmlToMarkdown(body: string): string {
 }
 
 export function renderDetailsAttributes(attrs: Record<string, unknown> | undefined): string {
-  const attributes = ['class="orca-details"']
+  const attributes = ['class="mcode-details"']
 
   const variant = parseToggleHeadingVariant(attrs?.variant)
   if (variant) {
-    attributes.push(`data-orca-toggle="${variant}"`)
+    attributes.push(`data-mcode-toggle="${variant}"`)
   }
 
   if (attrs?.open === true) {
@@ -184,9 +184,9 @@ function hasOnlySupportedDetailsAttributes(rawAttributes: string): boolean {
   return (
     rawAttributes
       .replace(/\s+open(?:\s*=\s*(?:""|"open"|''|'open'|open))?(?=\s|$)/giu, '')
-      .replace(/\s+class\s*=\s*(?:"orca-details"|'orca-details'|orca-details)(?=\s|$)/giu, '')
+      .replace(/\s+class\s*=\s*(?:"mcode-details"|'mcode-details'|mcode-details)(?=\s|$)/giu, '')
       .replace(
-        /\s+data-orca-toggle\s*=\s*(?:"heading-[1-5]"|'heading-[1-5]'|heading-[1-5])(?=\s|$)/giu,
+        /\s+data-mcode-toggle\s*=\s*(?:"heading-[1-5]"|'heading-[1-5]'|heading-[1-5])(?=\s|$)/giu,
         ''
       )
       .trim() === ''

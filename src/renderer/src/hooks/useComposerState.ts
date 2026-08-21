@@ -46,11 +46,11 @@ import type { GitLabWorkItem } from '../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../shared/jira-types'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type {
-  OrcaHooks,
+  MCodeHooks,
   RepoHookSettings,
   SetupAgentStartupPolicy,
   SetupRunPolicy
-} from '../../../shared/orca-yaml-hook-types'
+} from '../../../shared/mcode-yaml-hook-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
@@ -282,7 +282,7 @@ export type ComposerCardProps = {
   projectHostSetupOptions: ProjectHostSetupOption[]
   selectedProjectHostSetupId: string | null
   onProjectHostSetupChange: (setupId: string) => void
-  ephemeralVmRecipes: NonNullable<OrcaHooks['environmentRecipes']>
+  ephemeralVmRecipes: NonNullable<MCodeHooks['environmentRecipes']>
   selectedEphemeralVmRecipeId: string | null
   onEphemeralVmRecipeChange: (recipeId: string | null) => void
   ephemeralVmRecipeError: string | null
@@ -587,7 +587,7 @@ export function getInitialAutoManagedWorkspaceName({
   initialName: string
   initialLinkedWorkItem?: LinkedWorkItemSummary | null
 }): string {
-  // Why: a prefilled name counts as user input unless it exactly matches the linked-item seed Orca generated.
+  // Why: a prefilled name counts as user input unless it exactly matches the linked-item seed MCode generated.
   const candidateName = draftName ?? initialName
   const seedName = getLinkedWorkItemSeedName(draftLinkedWorkItem ?? initialLinkedWorkItem)
   return candidateName && seedName && candidateName === seedName ? candidateName : ''
@@ -885,7 +885,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         )
     return getAgentLaunchPlatformForRepo(selectedRepo, projectRuntime)
   }, [activeRepoId, projects, repos, selectedRepo, settings, worktreesByRepo])
-  // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only `orca-ide` rename must not apply to remote launch commands.
+  // Why: SSH remotes deploy the CLI shim as plain `mcode`, so the Linux-only `mcode-ide` rename must not apply to remote launch commands.
   const selectedRepoIsRemote = selectedRepo ? repoIsRemote(selectedRepo) : false
   const selectedRepoStartupShell = resolveLocalWindowsAgentStartupShell({
     platform: selectedRepoAgentLaunchPlatform,
@@ -1214,7 +1214,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [detectedAgentList]
   )
 
-  const [yamlHooks, setYamlHooks] = useState<OrcaHooks | null>(null)
+  const [yamlHooks, setYamlHooks] = useState<MCodeHooks | null>(null)
   const [checkedHooksContextKey, setCheckedHooksContextKey] = useState<string | null>(null)
   const [loadedIssueCommand, setLoadedIssueCommand] = useState<{
     contextKey: string
@@ -1457,7 +1457,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     [selectedRepoExecutionHostId]
   )
   const commitHookCheckIfCurrent = useCallback(
-    (targetContextKey: string, hooks: OrcaHooks | null): boolean => {
+    (targetContextKey: string, hooks: MCodeHooks | null): boolean => {
       if (selectedRepoHookContextKey !== targetContextKey) {
         return false
       }
@@ -2542,7 +2542,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         }
         return { filePaths: [], folderPaths: [] }
       }
-      const destinationDir = joinPath(targetRepoPath, '.orca/drops')
+      const destinationDir = joinPath(targetRepoPath, '.mcode/drops')
       const sshExpectation = targetConnectionId
         ? captureDirectSshMutationExpectation(
             useAppStore.getState(),
@@ -3666,8 +3666,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       if (!workspaceName) {
         return
       }
-      // Why: only a name Orca generated may be retired — the creature pool contains ordinary words
-      // ("orca", "runner", "molly") a user can type deliberately and expect to reuse.
+      // Why: only a name MCode generated may be retired — the creature pool contains ordinary words
+      // ("mcode", "runner", "molly") a user can type deliberately and expect to reuse.
       // The identity check is what a linked PR/issue seed makes necessary here; mobile's blank-create
       // path (NewWorktreeModal, `nameWasGenerated: !trimmedName`) has no other seed, so it can't
       // share this expression. Same rule, two submit paths — change both together.
@@ -4208,7 +4208,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         if (!workspaceName) {
           return
         }
-        // Why: only a name Orca generated may be retired — see the full-composer submit path.
+        // Why: only a name MCode generated may be retired — see the full-composer submit path.
         const nameWasGenerated = !name.trim() && workspaceName === fallbackCreatureName
         const smartSubmitBaseBranch =
           smartGitHubResolution.kind === 'pr-start-point'

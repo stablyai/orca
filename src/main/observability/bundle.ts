@@ -1,5 +1,5 @@
 // Diagnostic bundle collection + upload (Mode 3, telemetry-error-tracking.md): the one
-// user-initiated network path from the error-tracking lane to Orca infra. The per-bundle
+// user-initiated network path from the error-tracking lane to MCode infra. The per-bundle
 // submission ID NEVER carries install_id (security-review Issue 8), and main retains the
 // uploadable payload so a compromised renderer can't substitute bytes after preview.
 // Server endpoint contract lives in telemetry-error-tracking.md §Endpoint contract; we
@@ -25,7 +25,7 @@ export type CollectBundleOptions = {
   readonly platform: string
   readonly arch: string
   readonly osRelease: string
-  readonly orcaChannel: 'stable' | 'rc' | 'dev'
+  readonly mcodeChannel: 'stable' | 'rc' | 'dev'
 }
 
 export type CollectedBundle = {
@@ -45,7 +45,7 @@ type BundleHeader = {
   readonly platform: string
   readonly arch: string
   readonly os_release: string
-  readonly orca_channel: 'stable' | 'rc' | 'dev'
+  readonly mcode_channel: 'stable' | 'rc' | 'dev'
   readonly collected_at: string
   readonly schema_version: 1
 }
@@ -81,7 +81,7 @@ export function collectBundle(opts: CollectBundleOptions): CollectedBundle {
     platform: opts.platform,
     arch: opts.arch,
     os_release: opts.osRelease,
-    orca_channel: opts.orcaChannel,
+    mcode_channel: opts.mcodeChannel,
     collected_at: new Date().toISOString(),
     schema_version: 1
   }

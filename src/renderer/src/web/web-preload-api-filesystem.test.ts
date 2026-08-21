@@ -33,7 +33,7 @@ describe('web file preload API', () => {
     await expect(
       api.repos.cloneRemote({
         connectionId: 'ssh-1',
-        url: 'https://github.com/stablyai/orca.git',
+        url: 'https://github.com/mcode-ide/mcode.git',
         destination: '/workspace'
       })
     ).rejects.toThrow('SSH clone is unavailable in paired web clients.')

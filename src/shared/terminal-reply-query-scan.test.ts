@@ -81,7 +81,7 @@ describe('replayed DECSET 2031 state matches the TUI final state (#9993)', () =>
     // fish arms 2031 while painting the prompt and withdraws it before exec'ing the command.
     const replay = replayDataFor([
       '\x1b[?2004h\x1b[?2031h',
-      '~/orca ❯ ',
+      '~/mcode ❯ ',
       '\x1b[?2004l\x1b[?2031l',
       'npx running now'
     ])

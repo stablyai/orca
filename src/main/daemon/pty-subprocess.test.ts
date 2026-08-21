@@ -233,14 +233,14 @@ describe('createPtySubprocess', () => {
     resolveUnixShellPathMock.mockReturnValue('/bin/sh')
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     const previousShell = process.env.SHELL
-    const previousFeatures = process.env.ORCA_SHELL_FEATURES
+    const previousFeatures = process.env.MCODE_SHELL_FEATURES
     const previousZdotdir = process.env.ZDOTDIR
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     delete process.env.SHELL
-    // Why: the test runner itself can execute inside an Orca-wrapped shell
+    // Why: the test runner itself can execute inside an MCode-wrapped shell
     // whose exported wrapper vars would leak through the process.env spread.
-    delete process.env.ORCA_SHELL_FEATURES
+    delete process.env.MCODE_SHELL_FEATURES
     delete process.env.ZDOTDIR
 
     try {
@@ -257,9 +257,9 @@ describe('createPtySubprocess', () => {
       expect(shellPath).toBe('/bin/sh')
       expect(shellArgs).toEqual(['-l'])
       // A launch config derived from the missing preferred zsh would inject
-      // ZDOTDIR and ORCA_SHELL_FEATURES; /bin/sh must spawn without them.
+      // ZDOTDIR and MCODE_SHELL_FEATURES; /bin/sh must spawn without them.
       expect(spawnOptions.env.ZDOTDIR).toBeUndefined()
-      expect(spawnOptions.env.ORCA_SHELL_FEATURES).toBeUndefined()
+      expect(spawnOptions.env.MCODE_SHELL_FEATURES).toBeUndefined()
       expect(spawnOptions.env.SHELL).toBe('/bin/sh')
     } finally {
       warn.mockRestore()
@@ -272,9 +272,9 @@ describe('createPtySubprocess', () => {
         process.env.SHELL = previousShell
       }
       if (previousFeatures === undefined) {
-        delete process.env.ORCA_SHELL_FEATURES
+        delete process.env.MCODE_SHELL_FEATURES
       } else {
-        process.env.ORCA_SHELL_FEATURES = previousFeatures
+        process.env.MCODE_SHELL_FEATURES = previousFeatures
       }
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
@@ -525,9 +525,9 @@ describe('createPtySubprocess', () => {
           sessionId: 'test',
           cols: 80,
           rows: 24,
-          cwd: '/definitely-missing-orca-cwd'
+          cwd: '/definitely-missing-mcode-cwd'
         })
-      ).rejects.toThrow(/definitely-missing-orca-cwd/)
+      ).rejects.toThrow(/definitely-missing-mcode-cwd/)
     } finally {
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
@@ -548,7 +548,7 @@ describe('createPtySubprocess', () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
     delete process.env.USERPROFILE
     process.env.HOMEDRIVE = 'D:'
-    process.env.HOMEPATH = '\\Users\\orca'
+    process.env.HOMEPATH = '\\Users\\mcode'
 
     try {
       await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
@@ -576,7 +576,7 @@ describe('createPtySubprocess', () => {
     expect(spawnMock).toHaveBeenCalledWith(
       expect.any(String),
       expect.any(Array),
-      expect.objectContaining({ cwd: 'D:\\Users\\orca' })
+      expect.objectContaining({ cwd: 'D:\\Users\\mcode' })
     )
   })
 })
@@ -587,16 +587,16 @@ describe('checkPtySpawnHealth (retry on transient failure)', () => {
 
   beforeEach(() => {
     spawnMock.mockReset()
-    previousUserDataPath = process.env.ORCA_USER_DATA_PATH
+    previousUserDataPath = process.env.MCODE_USER_DATA_PATH
     userDataPath = mkdtempSync(join(tmpdir(), 'daemon-pty-health-test-'))
-    process.env.ORCA_USER_DATA_PATH = userDataPath
+    process.env.MCODE_USER_DATA_PATH = userDataPath
   })
 
   afterEach(() => {
     if (previousUserDataPath === undefined) {
-      delete process.env.ORCA_USER_DATA_PATH
+      delete process.env.MCODE_USER_DATA_PATH
     } else {
-      process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+      process.env.MCODE_USER_DATA_PATH = previousUserDataPath
     }
     rmSync(userDataPath, { recursive: true, force: true })
   })

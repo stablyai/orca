@@ -16,11 +16,11 @@ export function getTerminalFileOpenHint(showActions = true): string {
     : `${prefix}Ctrl+click to open, or Shift+Ctrl+click for default app`
 }
 
-export function getTerminalOrcaFileOpenHint(showActions = true): string {
+export function getTerminalMCodeFileOpenHint(showActions = true): string {
   const prefix = showActions ? 'Click for actions or ' : ''
   return isMacPlatform()
-    ? `${prefix}⌘+click to open in Orca`
-    : `${prefix}Ctrl+click to open in Orca`
+    ? `${prefix}⌘+click to open in MCode`
+    : `${prefix}Ctrl+click to open in MCode`
 }
 
 // Why: local HTML paths keep Shift+modifier as the system-browser shortcut.
@@ -42,14 +42,14 @@ export function terminalHttpLinkActionDestinationsFor(
   sourceOwner: HttpLinkSourceOwner,
   canOpenRuntimeBrowser: boolean
 ): TerminalHttpLinkActionDestinations {
-  const canOpenInOrca =
+  const canOpenInMCode =
     sourceOwner.kind === 'local' || (sourceOwner.kind === 'runtime' && canOpenRuntimeBrowser)
-  if (!canOpenInOrca) {
+  if (!canOpenInMCode) {
     return { primary: 'system' }
   }
   return settings?.openLinksInApp === true
-    ? { primary: 'orca', alternate: 'system' }
-    : { primary: 'system', alternate: 'orca' }
+    ? { primary: 'mcode', alternate: 'system' }
+    : { primary: 'system', alternate: 'mcode' }
 }
 
 // Why: only a capability-verified runtime can advertise the in-app destination.
@@ -65,24 +65,24 @@ export function terminalUrlOpenHintOptionsFor(
   sourceOwner?: HttpLinkSourceOwner,
   canOpenRuntimeBrowser = false
 ): TerminalUrlOpenHintOptions {
-  const sourceCanOpenInOrca = sourceOwner
+  const sourceCanOpenInMCode = sourceOwner
     ? sourceOwner.kind === 'local' || (sourceOwner.kind === 'runtime' && canOpenRuntimeBrowser)
     : !settings?.activeRuntimeEnvironmentId?.trim()
   return {
     openLinksInApp: settings?.openLinksInApp === true,
-    modifierInverts: settings?.openLinksInAppModifierInverts === true && sourceCanOpenInOrca
+    modifierInverts: settings?.openLinksInAppModifierInverts === true && sourceCanOpenInMCode
   }
 }
 
 // Why: with modifierInverts on, Shift no longer always means "system browser" —
 // it means "the other one" — so the hint has to name the actual destination.
 export function getTerminalUrlOpenHint(options: TerminalUrlOpenHintOptions = {}): string {
-  const invertsToOrca = options.modifierInverts === true && options.openLinksInApp !== true
+  const invertsToMCode = options.modifierInverts === true && options.openLinksInApp !== true
   const prefix = terminalLinkActionHintPrefix(options.showActions !== false)
-  if (invertsToOrca) {
+  if (invertsToMCode) {
     return isMacPlatform()
-      ? `${prefix}⌘+click to open, or ⇧⌘+click to open in Orca`
-      : `${prefix}Ctrl+click to open, or Shift+Ctrl+click to open in Orca`
+      ? `${prefix}⌘+click to open, or ⇧⌘+click to open in MCode`
+      : `${prefix}Ctrl+click to open, or Shift+Ctrl+click to open in MCode`
   }
   return isMacPlatform()
     ? `${prefix}⌘+click to open, or ⇧⌘+click for system browser`
@@ -95,8 +95,8 @@ export function getTerminalUrlSystemBrowserHint(): string {
 
 // Why: the mirror of the system-browser hint for surfaces where inverting sends the
 // modifier the other way; a plain click there already opens the system browser.
-export function getTerminalUrlOrcaBrowserHint(): string {
-  return isMacPlatform() ? '⇧⌘+click to open in Orca' : 'Shift+Ctrl+click to open in Orca'
+export function getTerminalUrlMCodeBrowserHint(): string {
+  return isMacPlatform() ? '⇧⌘+click to open in MCode' : 'Shift+Ctrl+click to open in MCode'
 }
 
 export function getTerminalWorktreePathOpenHint(

@@ -44,7 +44,7 @@ type CodexPaneLaneState = Pick<
  *
  * Why they need keys at all: a managed Codex account is scoped to one machine
  * AND one runtime (`host` or `wsl:<distro>`). A relay environment keeps its own
- * account roster, and an SSH connection has no Orca-managed selection whatsoever
+ * account roster, and an SSH connection has no MCode-managed selection whatsoever
  * — the remote Codex reads that machine's own credentials. Neither can be
  * stranded by a local selection change, so they must not share the local keys.
  */

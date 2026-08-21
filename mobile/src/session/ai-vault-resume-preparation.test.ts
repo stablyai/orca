@@ -9,8 +9,8 @@ import {
   RESUME_RPC_TIMEOUT_MS
 } from './ai-vault-resume-preparation'
 
-const LEGACY_CODEX_HOME = '/Users/ada/Library/Application Support/orca/codex-runtime-home/home'
-const PER_ACCOUNT_HOME = '/Users/ada/Library/Application Support/orca/codex-accounts/a/home'
+const LEGACY_CODEX_HOME = '/Users/ada/Library/Application Support/mcode/codex-runtime-home/home'
+const PER_ACCOUNT_HOME = '/Users/ada/Library/Application Support/mcode/codex-accounts/a/home'
 
 function legacySession(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
   return {
@@ -101,7 +101,7 @@ describe('prepareMobileAiVaultSessionResume', () => {
     expect(launch.command).toBe(
       "cd '/Users/ada/repo' && codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'legacy-1'"
     )
-    expect(launch.envToDelete).toEqual(['CODEX_HOME', 'ORCA_CODEX_HOME'])
+    expect(launch.envToDelete).toEqual(['CODEX_HOME', 'MCODE_CODEX_HOME'])
   })
 
   it('preserves the legacy resume path when a supported desktop declines real-home use', async () => {
@@ -137,7 +137,7 @@ describe('prepareMobileAiVaultSessionResume', () => {
   })
 
   it('repins a per-account session to the home the host substitutes', async () => {
-    const substituteHome = '/Users/ada/Library/Application Support/orca/codex-accounts/b/home'
+    const substituteHome = '/Users/ada/Library/Application Support/mcode/codex-accounts/b/home'
     const current = legacySession({ codexHome: PER_ACCOUNT_HOME })
     const sendRequest = vi.fn().mockResolvedValue({
       ok: true,

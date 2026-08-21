@@ -50,7 +50,7 @@ function withScanDeadline(scan: Promise<unknown>): Promise<void> {
  *  A complete success is kept for the process lifetime — a name never un-spends, so rescanning
  *  could only lose entries. A failure is not: the original cache held the scan Promise forever and
  *  its `readdir` had no deadline, so one stalled listing wedged this create and every later
- *  generated-name create for the namespace until Orca restarted.
+ *  generated-name create for the namespace until MCode restarted.
  *
  *  The deadline abandons a listing, it cannot cancel one — an unabortable `readdir` keeps its libuv
  *  threadpool thread until the OS releases it, and that pool defaults to four. So a retry is only

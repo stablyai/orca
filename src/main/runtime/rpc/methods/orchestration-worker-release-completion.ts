@@ -9,7 +9,7 @@ import {
   captureWorkerOutputArchive,
   type WorkerTerminalTailArchive
 } from '../../orchestration/worker-output-archive'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import { describeUnconfirmedAgentStop } from '../../../../shared/pty-liveness-verdict'
 import { inspectWorkerTerminal } from './orchestration-worker-observation'
 import { orchestrationTimestampToMs } from './orchestration-worker-output'
@@ -25,7 +25,7 @@ export type WorkerReleaseReceipt = {
 }
 
 type WorkerTerminalReleaseArgs = {
-  runtime: OrcaRuntimeService
+  runtime: MCodeRuntimeService
   db: OrchestrationDb
   dispatchId: string
   resource: WorkerTerminalResourceRow
@@ -33,7 +33,7 @@ type WorkerTerminalReleaseArgs = {
 }
 
 const activeReleaseByRuntime = new WeakMap<
-  OrcaRuntimeService,
+  MCodeRuntimeService,
   Map<string, Promise<WorkerReleaseReceipt>>
 >()
 
@@ -162,7 +162,7 @@ async function completeWorkerTerminalReleaseOnce(
       processAction: 'none',
       archive: archiveSummary(unknown),
       lastError: unknown.release_error ?? undefined,
-      recovery: `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json — then repeat worker-release with the same --retry-request. Never substitute a broad terminal close.`
+      recovery: `Inspect with: mcode orchestration worker-show --dispatch ${dispatchId} --json — then repeat worker-release with the same --retry-request. Never substitute a broad terminal close.`
     }
   }
 
@@ -223,7 +223,7 @@ async function completeWorkerTerminalReleaseOnce(
         processAction: 'closed_agent_terminal',
         archive: { source: archiveSource, status: archiveStatus },
         lastError: unknown.release_error ?? reason,
-        recovery: `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json — then repeat worker-release with the same --retry-request. Never substitute a broad terminal close.`
+        recovery: `Inspect with: mcode orchestration worker-show --dispatch ${dispatchId} --json — then repeat worker-release with the same --retry-request. Never substitute a broad terminal close.`
       }
     }
   } catch (error) {
@@ -247,7 +247,7 @@ async function completeWorkerTerminalReleaseOnce(
       processAction: 'none',
       archive: { source: archiveSource, status: archiveStatus },
       lastError: unknown.release_error ?? reason,
-      recovery: `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json — then repeat worker-release with the same --retry-request. Never substitute a broad terminal close.`
+      recovery: `Inspect with: mcode orchestration worker-show --dispatch ${dispatchId} --json — then repeat worker-release with the same --retry-request. Never substitute a broad terminal close.`
     }
   }
   const released = db.settleWorkerTerminalRelease(resource.id)
@@ -262,7 +262,7 @@ async function completeWorkerTerminalReleaseOnce(
 }
 
 function workerTerminalLeaseIsCurrent(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   db: OrchestrationDb,
   dispatchId: string,
   resource: WorkerTerminalResourceRow

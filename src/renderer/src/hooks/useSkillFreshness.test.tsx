@@ -89,14 +89,14 @@ describe('useSkillFreshness', () => {
     window.api = { skills: { freshnessInventory } } as never
 
     await act(async () => root?.render(<Probe enabled={false} />))
-    await act(async () => window.dispatchEvent(new Event('orca:installed-agent-skills-changed')))
+    await act(async () => window.dispatchEvent(new Event('mcode:installed-agent-skills-changed')))
     await act(async () => state?.refresh())
 
     expect(freshnessInventory).not.toHaveBeenCalled()
     expect(state).toMatchObject({ inventory: null, loading: false, error: null })
     expect(
       addEventListener.mock.calls.filter(
-        ([name]) => name === 'focus' || name === 'orca:installed-agent-skills-changed'
+        ([name]) => name === 'focus' || name === 'mcode:installed-agent-skills-changed'
       )
     ).toHaveLength(0)
   })
@@ -105,7 +105,7 @@ describe('useSkillFreshness', () => {
     const second = deferred<SkillFreshnessInventory>()
     const freshnessInventory = vi
       .fn()
-      .mockResolvedValueOnce(inventory(1, ['orca-cli']))
+      .mockResolvedValueOnce(inventory(1, ['mcode-cli']))
       .mockReturnValueOnce(second.promise)
     window.api = { skills: { freshnessInventory } } as never
     const renderProbes = (enabled: boolean): void => {
@@ -119,13 +119,13 @@ describe('useSkillFreshness', () => {
 
     await act(async () => renderProbes(true))
     expect(freshnessInventory).toHaveBeenCalledTimes(1)
-    expect(state?.inventory?.eligibleUpdateNames).toEqual(['orca-cli'])
+    expect(state?.inventory?.eligibleUpdateNames).toEqual(['mcode-cli'])
 
     await act(async () => renderProbes(true))
     expect(freshnessInventory).toHaveBeenCalledTimes(1)
 
     await act(async () => renderProbes(false))
-    await act(async () => window.dispatchEvent(new Event('orca:installed-agent-skills-changed')))
+    await act(async () => window.dispatchEvent(new Event('mcode:installed-agent-skills-changed')))
     expect(freshnessInventory).toHaveBeenCalledTimes(1)
     expect(state).toMatchObject({ inventory: null, loading: false })
 
@@ -158,7 +158,7 @@ describe('useSkillFreshness', () => {
     await act(async () => window.dispatchEvent(new Event('focus')))
     expect(freshnessInventory).toHaveBeenCalledTimes(1)
 
-    await act(async () => window.dispatchEvent(new Event('orca:installed-agent-skills-changed')))
+    await act(async () => window.dispatchEvent(new Event('mcode:installed-agent-skills-changed')))
     await act(async () => second.resolve(inventory(2)))
     expect(freshnessInventory).toHaveBeenCalledTimes(2)
     expect(state?.inventory?.scannedAt).toBe(2)
@@ -170,12 +170,12 @@ describe('useSkillFreshness', () => {
     const second = deferred<SkillFreshnessInventory>()
     const freshnessInventory = vi
       .fn()
-      .mockResolvedValueOnce(inventory(1, ['orca-cli']))
+      .mockResolvedValueOnce(inventory(1, ['mcode-cli']))
       .mockReturnValueOnce(second.promise)
     window.api = { skills: { freshnessInventory } } as never
 
     await act(async () => root?.render(<Probe />))
-    expect(state?.inventory?.eligibleUpdateNames).toEqual(['orca-cli'])
+    expect(state?.inventory?.eligibleUpdateNames).toEqual(['mcode-cli'])
 
     await act(async () => window.dispatchEvent(new Event('focus')))
     expect(freshnessInventory).toHaveBeenCalledTimes(1)
@@ -208,7 +208,7 @@ describe('useSkillFreshness', () => {
     await act(async () => first.resolve(inventory(1)))
     expect(freshnessInventory).toHaveBeenCalledTimes(1)
 
-    await act(async () => window.dispatchEvent(new Event('orca:installed-agent-skills-changed')))
+    await act(async () => window.dispatchEvent(new Event('mcode:installed-agent-skills-changed')))
     await act(async () => second.resolve(inventory(2)))
     expect(freshnessInventory).toHaveBeenCalledTimes(2)
   })
@@ -258,7 +258,7 @@ describe('useSkillFreshness', () => {
     await act(async () => root?.render(<Probe />))
     expect(state?.inventory?.scannedAt).toBe(1)
 
-    await act(async () => window.dispatchEvent(new Event('orca:installed-agent-skills-changed')))
+    await act(async () => window.dispatchEvent(new Event('mcode:installed-agent-skills-changed')))
     expect(state?.inventory).toBeNull()
     expect(state?.loading).toBe(true)
 
@@ -286,7 +286,7 @@ describe('useSkillFreshness', () => {
 
     expect(addEventListener.mock.calls.filter(([name]) => name === 'focus')).toHaveLength(1)
     expect(
-      addEventListener.mock.calls.filter(([name]) => name === 'orca:installed-agent-skills-changed')
+      addEventListener.mock.calls.filter(([name]) => name === 'mcode:installed-agent-skills-changed')
     ).toHaveLength(1)
 
     await act(async () => root?.unmount())
@@ -294,7 +294,7 @@ describe('useSkillFreshness', () => {
     expect(removeEventListener.mock.calls.filter(([name]) => name === 'focus')).toHaveLength(1)
     expect(
       removeEventListener.mock.calls.filter(
-        ([name]) => name === 'orca:installed-agent-skills-changed'
+        ([name]) => name === 'mcode:installed-agent-skills-changed'
       )
     ).toHaveLength(1)
   })

@@ -437,7 +437,7 @@ describe('CodexHookService', () => {
     expect(stopCommands).not.toContain('user-hook-old')
   })
 
-  it('refreshes runtime user hooks without installing Orca-managed hooks', () => {
+  it('refreshes runtime user hooks without installing MCode-managed hooks', () => {
     const systemCodexHome = join(homes.tmpHome, '.codex')
     const systemHooksPath = join(systemCodexHome, 'hooks.json')
     mkdirSync(systemCodexHome, { recursive: true })

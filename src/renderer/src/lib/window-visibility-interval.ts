@@ -39,7 +39,7 @@ export function installWindowVisibilityInterval(args: {
     }
     ;(args.runOnVisible ?? args.run)()
     // Why: many callers shell out or cross IPC. Keep their interval alive only
-    // while Orca can present the refreshed data, but still refresh a visible
+    // while MCode can present the refreshed data, but still refresh a visible
     // unfocused window so status UI does not go stale on a second display.
     intervalId = setIntervalFn(args.run, args.intervalMs)
   }

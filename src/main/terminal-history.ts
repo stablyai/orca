@@ -1,12 +1,12 @@
 import { join, basename } from 'node:path'
 import { mkdirSync, existsSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import {
-  dropInheritedOrcaFishHistory,
+  dropInheritedMCodeFishHistory,
   fishHistorySessionName,
   isSafeFishHistorySession,
   resolveFishHistoryDir
 } from './fish-history-session'
-import { dropInheritedOrcaHistFile } from './worktree-history-file-path'
+import { dropInheritedMCodeHistFile } from './worktree-history-file-path'
 import { parseWslPath, toLinuxPath } from './wsl'
 import { getHistoryRoot, getHistoryRootWsl } from './terminal-history-paths'
 import { hashWorktreeId } from './terminal-history-id'
@@ -183,22 +183,22 @@ export function injectHistoryEnv(
   cwd: string,
   options: { wslDistro?: string | null } = {}
 ): HistoryInjectionResult {
-  // Why unconditionally first: ORCA_HISTFILE is Orca-owned, and an Orca PTY
-  // launched from inside another Orca PTY inherits the parent's. Left in place,
+  // Why unconditionally first: MCODE_HISTFILE is MCode-owned, and an MCode PTY
+  // launched from inside another MCode PTY inherits the parent's. Left in place,
   // the zsh wrapper would re-export a PREVIOUS worktree's history path into this
   // shell — the cross-worktree leak this feature exists to prevent — and it would
   // also override a caller-supplied HISTFILE on the early return below.
   // Credit: caught by @innocarpe in #11146.
-  delete spawnEnv.ORCA_HISTFILE
+  delete spawnEnv.MCODE_HISTFILE
   // Why here too: fish EXPORTS `fish_history`, so the same nesting hands this
   // process the LAUNCHING worktree's session name — and the check-before-set
   // below would honour it, writing every pane's history into that worktree.
-  dropInheritedOrcaFishHistory(spawnEnv)
+  dropInheritedMCodeFishHistory(spawnEnv)
   // Why HISTFILE too: it stays EXPORTED after the wrapper restores it, so the
   // same nesting hands this process worktree A's path — and the check-before-set
-  // below would honour it for every pane, in every worktree. Only a path Orca
+  // below would honour it for every pane, in every worktree. Only a path MCode
   // minted is dropped; a user's own HISTFILE still wins.
-  dropInheritedOrcaHistFile(spawnEnv)
+  dropInheritedMCodeHistFile(spawnEnv)
 
   const shell = resolveShellKind(shellPath)
   const result: HistoryInjectionResult = {
@@ -253,10 +253,10 @@ export function injectHistoryEnv(
   // For WSL, convert the Windows path to a Linux-visible path.
   spawnEnv.HISTFILE = wslDistro ? toLinuxPath(histFilePath) : histFilePath
   // Why a second variable: macOS `/etc/zshrc` assigns HISTFILE unconditionally
-  // (`HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history`) and runs before Orca's wrapper
+  // (`HISTFILE=${ZDOTDIR:-$HOME}/.zsh_history`) and runs before MCode's wrapper
   // .zshrc, so by then the injected value is gone from HISTFILE itself. The
   // wrapper restores it from here once the user's own config has loaded (#11044).
-  spawnEnv.ORCA_HISTFILE = spawnEnv.HISTFILE
+  spawnEnv.MCODE_HISTFILE = spawnEnv.HISTFILE
 
   result.histFile = spawnEnv.HISTFILE
   result.historyDir = spawnEnv.HISTFILE.replace(/[/\\][^/\\]+$/, '')
@@ -273,7 +273,7 @@ export function injectWslFishHistoryEnv(
   // a genuine user value. Redundant with today's two callers, which both run
   // `injectHistoryEnv` on this same env first — kept so the contract holds per call,
   // since nothing but ordering enforces it.
-  dropInheritedOrcaFishHistory(spawnEnv)
+  dropInheritedMCodeFishHistory(spawnEnv)
   if (spawnEnv.fish_history) {
     return null
   }
@@ -312,11 +312,11 @@ export function updateHistoryEnvForFallback(
   if (!newFilename) {
     // Fallback to an unknown shell — drop the override so it uses its own default.
     delete spawnEnv.HISTFILE
-    delete spawnEnv.ORCA_HISTFILE
+    delete spawnEnv.MCODE_HISTFILE
     return
   }
   spawnEnv.HISTFILE = `${injected.historyDir}/${newFilename}`
-  spawnEnv.ORCA_HISTFILE = spawnEnv.HISTFILE
+  spawnEnv.MCODE_HISTFILE = spawnEnv.HISTFILE
 }
 
 /** Log the history injection result for diagnostics. */

@@ -10,11 +10,11 @@ import {
 export type { PtyStartupReplyEchoMatch } from './pty-startup-reply-echo-shapes'
 
 // Why this module exists: a reply is written to the PTY master, so whatever line
-// discipline sits between Orca and the querying program can echo it straight back out as
+// discipline sits between MCode and the querying program can echo it straight back out as
 // ordinary output (#12112). ConPTY echoes it with the ESC bytes stripped; a POSIX tty
 // echoes it while the querying program is still cooked.
 //
-// The reply is written IMMEDIATELY, in the caller's turn. Orca used to withhold it until
+// The reply is written IMMEDIATELY, in the caller's turn. MCode used to withhold it until
 // an ECHO probe proved the line discipline was quiet, and that withholding was the
 // mistake: it made the write asynchronous, so a reply written later could overtake a held
 // one and land in the next program's stdin (#15559). Delay never removed the echo either

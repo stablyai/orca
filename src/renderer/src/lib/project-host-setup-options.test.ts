@@ -128,8 +128,8 @@ describe('buildProjectHostSetupOptions', () => {
       projectHostSetups: [
         setup('local', 'project-1', 'local', 'local-repo'),
         setup('vm', 'project-1', ephemeralHostId, 'vm-repo', {
-          path: '/vercel/sandbox/orca',
-          displayName: 'orca'
+          path: '/vercel/sandbox/mcode',
+          displayName: 'mcode'
         })
       ]
     })
@@ -142,7 +142,7 @@ describe('buildProjectHostSetupOptions', () => {
   it('omits runtime-owned SSH (per-workspace-env) setups even when their host is filtered out', () => {
     // The execution-host registry filters runtime-owned targets, so the setup's host is absent
     // here — guard on the hostId so the hidden target never becomes a selectable run-target.
-    const runtimeSshHostId = 'ssh:runtime-ssh-orca-e37aa3a9' as ExecutionHostId
+    const runtimeSshHostId = 'ssh:runtime-ssh-mcode-e37aa3a9' as ExecutionHostId
     const options = buildProjectHostSetupOptions({
       projectId: 'project-1',
       eligibleRepos: [repo('local-repo'), repo('vm-repo')],
@@ -150,8 +150,8 @@ describe('buildProjectHostSetupOptions', () => {
       projectHostSetups: [
         setup('local', 'project-1', 'local', 'local-repo'),
         setup('vm', 'project-1', runtimeSshHostId, 'vm-repo', {
-          path: '/workspace/orca',
-          displayName: 'orca'
+          path: '/workspace/mcode',
+          displayName: 'mcode'
         })
       ]
     })
@@ -163,7 +163,7 @@ describe('buildProjectHostSetupOptions', () => {
   })
 
   it('omits hidden host categories from setup-needed choices', () => {
-    const runtimeSshHostId = 'ssh:runtime-ssh-orca-e37aa3a9' as ExecutionHostId
+    const runtimeSshHostId = 'ssh:runtime-ssh-mcode-e37aa3a9' as ExecutionHostId
     const ephemeralHostId = 'runtime:90d880b2-de1b-44be-b7b8-8e15274e184e' as ExecutionHostId
 
     const options = buildProjectHostSetupOptions({
@@ -227,7 +227,7 @@ describe('buildProjectHostSetupOptions', () => {
       eligibleRepos: [repo('main-checkout'), repo('worktree-a'), repo('worktree-b')],
       hosts: [host('local')],
       projectHostSetups: [
-        setup('main', 'project-1', 'local', 'main-checkout', { path: '/Users/dev/projects/orca' }),
+        setup('main', 'project-1', 'local', 'main-checkout', { path: '/Users/dev/projects/mcode' }),
         setup('dup-a', 'project-1', 'local', 'worktree-a', {
           path: '/Users/dev/worktrees/pr-1908'
         }),
@@ -527,7 +527,7 @@ describe('buildProjectHostSetupOptions', () => {
         id: 'needs-setup:runtime:gpu',
         kind: 'needs-setup',
         label: 'GPU VM',
-        detail: 'Orca server version is incompatible',
+        detail: 'MCode server version is incompatible',
         isAvailable: false
       })
     ])
@@ -544,7 +544,7 @@ describe('buildProjectHostSetupOptions', () => {
     expect(options.at(-1)).toMatchObject({
       id: 'needs-setup:runtime:gpu',
       kind: 'needs-setup',
-      detail: 'Update Orca on this host to set up projects',
+      detail: 'Update MCode on this host to set up projects',
       isAvailable: false
     })
   })
@@ -566,7 +566,7 @@ describe('buildProjectHostSetupOptions', () => {
     expect(options.at(-1)).toMatchObject({
       id: 'needs-setup:runtime:gpu',
       kind: 'needs-setup',
-      detail: 'Update Orca on this host to set up projects',
+      detail: 'Update MCode on this host to set up projects',
       isAvailable: false
     })
   })

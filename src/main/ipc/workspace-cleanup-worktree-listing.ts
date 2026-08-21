@@ -31,7 +31,7 @@ export async function listCleanupGitWorktrees(
   if (repo.connectionId) {
     const provider = getSshGitProvider(repo.connectionId) ?? null
     if (!provider) {
-      // Why: cleanup should reflect only workspaces Orca can currently inspect.
+      // Why: cleanup should reflect only workspaces MCode can currently inspect.
       return { provider: null, gitWorktrees: [] }
     }
     return {
@@ -66,7 +66,7 @@ export function handleRepoWorktreeListError(args: {
   const { repo, targeted, scannedAt, error, onErrors } = args
   console.error('Workspace cleanup repo scan failed', error)
   if (repo.connectionId && !targeted) {
-    // Why: broad cleanup only shows remote workspaces Orca can inspect now.
+    // Why: broad cleanup only shows remote workspaces MCode can inspect now.
     // A connected SSH repo that fails mid-scan is omitted, not bannered.
     return { scannedAt, candidates: [], errors: [] }
   }

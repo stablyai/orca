@@ -85,6 +85,6 @@ describe('Cmd+J palette query token ceiling', () => {
   it('counts punctuation-bearing tokens as one top-level token', () => {
     // Why: this file's scoring tokenizer splits `1.4.182` into three, but the ceiling is a
     // whitespace-split query rule shared with the entity sections.
-    expect(isCmdJPaletteQueryOverTokenLimit('08-13 1.4.182 orca/main #123')).toBe(false)
+    expect(isCmdJPaletteQueryOverTokenLimit('08-13 1.4.182 mcode/main #123')).toBe(false)
   })
 })

@@ -62,7 +62,7 @@ describe('SshFilesystemProvider downloadFolder', () => {
   })
 
   it('downloads a recursive tree through one SFTP session', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ssh-folder-download-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ssh-folder-download-'))
     localDownloadRoots.push(root)
     const sftp = {
       stat: vi.fn(
@@ -100,7 +100,7 @@ describe('SshFilesystemProvider downloadFolder', () => {
   })
 
   it('rejects directory symlinks without following them', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ssh-folder-download-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ssh-folder-download-'))
     localDownloadRoots.push(root)
     const sftp = {
       stat: vi.fn(
@@ -124,7 +124,7 @@ describe('SshFilesystemProvider downloadFolder', () => {
   })
 
   it('rejects remote names that sanitize to the same local filename', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ssh-folder-download-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ssh-folder-download-'))
     localDownloadRoots.push(root)
     const sftp = {
       stat: vi.fn((_path: string, callback: (err: Error | undefined, value: unknown) => void) =>
@@ -147,7 +147,7 @@ describe('SshFilesystemProvider downloadFolder', () => {
   })
 
   it('cancels a pending SFTP session open', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ssh-folder-download-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ssh-folder-download-'))
     localDownloadRoots.push(root)
     const createSftp = vi.fn(
       async (options?: { signal?: AbortSignal }) =>

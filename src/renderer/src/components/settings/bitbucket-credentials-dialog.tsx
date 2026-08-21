@@ -175,7 +175,7 @@ export function BitbucketCredentialsDialog({
           <DialogDescription>
             {translate(
               'auto.components.settings.bitbucket.credentials.dialog.description',
-              'Use a Bitbucket Cloud credential to browse pull requests and build statuses. Orca verifies it before saving.'
+              'Use a Bitbucket Cloud credential to browse pull requests and build statuses. MCode verifies it before saving.'
             )}
           </DialogDescription>
         </DialogHeader>
@@ -183,7 +183,7 @@ export function BitbucketCredentialsDialog({
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.bitbucket.credentials.dialog.environmentManaged',
-              'Bitbucket is already configured through ORCA_BITBUCKET_* environment variables, which take precedence. Unset them to save a credential in Orca.'
+              'Bitbucket is already configured through MCODE_BITBUCKET_* environment variables, which take precedence. Unset them to save a credential in MCode.'
             )}
           </p>
         ) : (
@@ -354,11 +354,11 @@ export function BitbucketCredentialsDialog({
               {remoteRuntime
                 ? translate(
                     'auto.components.settings.bitbucket.credentials.dialog.remoteRuntime',
-                    'Stored on this machine, not on the active remote runtime — set ORCA_BITBUCKET_* there instead. Environment variables always take precedence over what you save here.'
+                    'Stored on this machine, not on the active remote runtime — set MCODE_BITBUCKET_* there instead. Environment variables always take precedence over what you save here.'
                   )
                 : translate(
                     'auto.components.settings.bitbucket.credentials.dialog.storageNote',
-                    'Stored on this machine with encrypted storage when the OS keychain is available. ORCA_BITBUCKET_* environment variables always take precedence over what you save here.'
+                    'Stored on this machine with encrypted storage when the OS keychain is available. MCODE_BITBUCKET_* environment variables always take precedence over what you save here.'
                   )}
             </p>
           </div>

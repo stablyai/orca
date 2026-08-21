@@ -62,7 +62,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
       userDataPath: '/user-data',
       appVersion: '1.4.138',
       listDistros: async () => ['Ubuntu'],
-      getHostLauncherTarget: async () => 'C:\\Orca\\resources\\bin\\orca.exe',
+      getHostLauncherTarget: async () => 'C:\\MCode\\resources\\bin\\mcode.exe',
       registry,
       createInstaller: () => ({
         repairManagedRegistration: async () => ({
@@ -74,7 +74,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
     })
 
     expect(registry.getCandidates).toHaveBeenCalledWith(['Ubuntu'], {
-      currentTarget: 'C:\\Orca\\resources\\bin\\orca.exe',
+      currentTarget: 'C:\\MCode\\resources\\bin\\mcode.exe',
       appVersion: '1.4.138'
     })
     expect(registry.recordObservations).toHaveBeenCalledWith([
@@ -82,7 +82,7 @@ describe('reconcileManagedWslCliRegistrations', () => {
         distro: 'Ubuntu',
         inspected: true,
         managed: true,
-        reconciled: { target: 'C:\\Orca\\resources\\bin\\orca.exe', appVersion: '1.4.138' }
+        reconciled: { target: 'C:\\MCode\\resources\\bin\\mcode.exe', appVersion: '1.4.138' }
       }
     ])
   })

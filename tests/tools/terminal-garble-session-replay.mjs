@@ -12,7 +12,7 @@ if (!Number.isFinite(tickMs) || tickMs <= 0) {
 }
 const url = (
   process.argv.find((arg) => arg.startsWith('--url=')) ??
-  '--url=https://example.com/orca-terminal-garble-repro'
+  '--url=https://example.com/mcode-terminal-garble-repro'
 ).slice('--url='.length)
 const glyphChurnSeed = Number(
   (process.argv.find((arg) => arg.startsWith('--glyph-churn=')) ?? '--glyph-churn=-1').split('=')[1]

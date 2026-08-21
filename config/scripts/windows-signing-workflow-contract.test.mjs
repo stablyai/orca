@@ -172,7 +172,7 @@ describe('Windows signing workflow contract', () => {
     // Why fail-open: unsigned inner binaries must warn, not block, until the
     // flow is proven on a real release (issue #7785). Flip this to 'true'
     // together with the workflow env to make the gate required.
-    expect(steps[innerVerifyIndex].env.ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED).toBe('false')
+    expect(steps[innerVerifyIndex].env.MCODE_WINDOWS_INNER_SIGNATURE_REQUIRED).toBe('false')
 
     // Why: every step in the inner-signing chain must be unable to fail the
     // release — a SignPath outage or timeout falls through to today's

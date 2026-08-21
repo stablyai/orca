@@ -89,7 +89,7 @@ function makeJiraIssue(overrides: Partial<JiraIssue> = {}): JiraIssue {
     url: 'https://example.atlassian.net/browse/ORC-1',
     siteId: 'site-1',
     siteName: 'Example Jira',
-    project: { id: '10000', key: 'ORC', name: 'Orca', siteId: 'site-1' },
+    project: { id: '10000', key: 'ORC', name: 'MCode', siteId: 'site-1' },
     issueType: { id: '10001', name: 'Bug' },
     status: { id: '1', name: 'Todo', categoryKey: 'new', categoryName: 'To Do' },
     labels: [],

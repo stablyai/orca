@@ -116,8 +116,8 @@ describe('addWorktree', () => {
     expect(WORKTREE_ADD_TIMEOUT_MS).toBeGreaterThan(0)
   })
 
-  it('raises the worktree add timeout from ORCA_WORKTREE_ADD_TIMEOUT_MS (#12696)', async () => {
-    vi.stubEnv('ORCA_WORKTREE_ADD_TIMEOUT_MS', '600000')
+  it('raises the worktree add timeout from MCODE_WORKTREE_ADD_TIMEOUT_MS (#12696)', async () => {
+    vi.stubEnv('MCODE_WORKTREE_ADD_TIMEOUT_MS', '600000')
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
 
     await addWorktree('/repo', '/repo-feature', 'feature/test', 'feature/test', false, false, {

@@ -261,7 +261,7 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
     // Why: the previous shell's launch keys (its wrapper ZDOTDIR and the feature
     // channel) mean nothing to a different shell. An unwrapped fallback writes
     // none of them back, so they would stay exported to the pane and to every
-    // child — including a nested zsh that would then load Orca's wrapper. Tracked
+    // child — including a nested zsh that would then load MCode's wrapper. Tracked
     // per attempt, not once: the second fallback must not inherit the first's.
     let staleLaunchEnvKeys: readonly string[] = params.launchEnvKeys ?? []
     for (const fallback of fallbackShells) {

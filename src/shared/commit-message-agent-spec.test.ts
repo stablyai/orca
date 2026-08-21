@@ -240,7 +240,7 @@ describe('model discovery parsers', () => {
       type: 'control_response',
       response: {
         subtype: 'success',
-        request_id: 'orca-model-discovery',
+        request_id: 'mcode-model-discovery',
         response: {
           models: [
             {
@@ -284,7 +284,7 @@ describe('model discovery parsers', () => {
   it('returns no Claude models when the CLI lacks list_models so the seed stays', () => {
     expect(
       parseClaudeModels(
-        '{"type":"control_response","response":{"subtype":"error","request_id":"orca-model-discovery","error":"Unsupported control request subtype: list_models"}}\n'
+        '{"type":"control_response","response":{"subtype":"error","request_id":"mcode-model-discovery","error":"Unsupported control request subtype: list_models"}}\n'
       )
     ).toEqual([])
   })

@@ -1034,7 +1034,7 @@ export class CdpBridge {
     if (tabs.length === 0) {
       throw new BrowserError(
         'browser_no_tab',
-        'No browser tab is open. Use the Orca UI to open a browser tab first.'
+        'No browser tab is open. Use the MCode UI to open a browser tab first.'
       )
     }
     if (tabs.length === 1) {
@@ -1042,7 +1042,7 @@ export class CdpBridge {
     } else {
       throw new BrowserError(
         'browser_no_tab',
-        "Multiple browser tabs are open. Run 'orca tab list' and 'orca tab switch --index <n>' to select one."
+        "Multiple browser tabs are open. Run 'mcode tab list' and 'mcode tab switch --index <n>' to select one."
       )
     }
 
@@ -1051,7 +1051,7 @@ export class CdpBridge {
       this.activeWebContentsId = null
       throw new BrowserError(
         'browser_debugger_detached',
-        "The active browser tab was closed. Run 'orca tab list' to find remaining tabs."
+        "The active browser tab was closed. Run 'mcode tab list' to find remaining tabs."
       )
     }
     return guest
@@ -1351,7 +1351,7 @@ export class CdpBridge {
     if (!state.snapshotResult) {
       throw new BrowserError(
         'browser_stale_ref',
-        "No snapshot exists for this tab. Run 'orca snapshot' first."
+        "No snapshot exists for this tab. Run 'mcode snapshot' first."
       )
     }
 
@@ -1359,7 +1359,7 @@ export class CdpBridge {
     if (!entry) {
       throw new BrowserError(
         'browser_ref_not_found',
-        `Element ref ${ref} was not found. Run 'orca snapshot' to see available refs.`
+        `Element ref ${ref} was not found. Run 'mcode snapshot' to see available refs.`
       )
     }
 
@@ -1371,7 +1371,7 @@ export class CdpBridge {
         state.navigationId = null
         throw new BrowserError(
           'browser_stale_ref',
-          "The page has navigated since the last snapshot. Run 'orca snapshot' to get fresh refs."
+          "The page has navigated since the last snapshot. Run 'mcode snapshot' to get fresh refs."
         )
       }
     }
@@ -1390,7 +1390,7 @@ export class CdpBridge {
       state.snapshotResult = null
       throw new BrowserError(
         'browser_stale_ref',
-        `Element ${ref} no longer exists in the DOM. Run 'orca snapshot' to get fresh refs.`
+        `Element ${ref} no longer exists in the DOM. Run 'mcode snapshot' to get fresh refs.`
       )
     }
   }

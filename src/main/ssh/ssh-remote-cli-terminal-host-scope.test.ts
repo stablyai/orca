@@ -10,9 +10,9 @@ vi.mock('../persistence', () => ({
   getCanonicalUserDataPath: () => '/host/user-data'
 }))
 
-import { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { MCodeRuntimeService } from '../runtime/mcode-runtime'
 import type { HostCliPassthroughOptions } from './ssh-remote-cli-host-passthrough'
-import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
+import { runRemoteMCodeCli } from './ssh-remote-mcode-cli'
 
 // Why: a missing CLI entry forces the legacy in-process bridge, the transport
 // an SSH-hosted agent actually reaches `terminal list` through.
@@ -25,7 +25,7 @@ const LEGACY_FALLBACK_OPTIONS: HostCliPassthroughOptions = {
 
 describe('remote CLI bridge terminal list', () => {
   it('relays the execution host and scope to an SSH-hosted caller', async () => {
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
       terminals: [
         {
@@ -49,7 +49,7 @@ describe('remote CLI bridge terminal list', () => {
       hostScope: { hostIds: ['ssh:box-1'], omittedHostIds: ['local'] }
     })
 
-    const result = await runRemoteOrcaCli(
+    const result = await runRemoteMCodeCli(
       runtime,
       { argv: ['terminal', 'list', '--json'], cwd: '/home/alice/repo', env: {} },
       LEGACY_FALLBACK_OPTIONS

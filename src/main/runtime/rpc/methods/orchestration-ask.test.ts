@@ -2,14 +2,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../core'
 import { createOrchestrationRpcHarness } from './orchestration-rpc-test-harness'
 import type { OrchestrationDb } from '../../orchestration/db'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import { ORCHESTRATION_ASK_MAX_TIMEOUT_MS } from '../../../../shared/orchestration-ask-timeout'
 
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()
   const { coordinatorPaneKey, findMethod } = h
   let db: OrchestrationDb
-  let runtime: OrcaRuntimeService
+  let runtime: MCodeRuntimeService
   let ctx: RpcContext
   let activeRunId: string | undefined
 

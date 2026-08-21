@@ -16,7 +16,7 @@ afterEach(async () => {
 
 describe('scanAiVaultSessions harness-injected title seeding', () => {
   it('keeps harness-injected Claude turns without isMeta out of session titles', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-claude-injected-title-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-claude-injected-title-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
     await mkdir(join(roots.claudeProjectsDir, 'project'), { recursive: true })
@@ -56,7 +56,7 @@ describe('scanAiVaultSessions harness-injected title seeding', () => {
   })
 
   it('titles a session from a real first turn that pastes a custom element', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-claude-custom-element-title-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-claude-custom-element-title-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
     await mkdir(join(roots.claudeProjectsDir, 'project'), { recursive: true })
@@ -94,7 +94,7 @@ describe('scanAiVaultSessions harness-injected title seeding', () => {
   })
 
   it('uses Claude last-prompt metadata instead of injected and tool-result user records', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-claude-last-prompt-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-claude-last-prompt-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
     await mkdir(join(roots.claudeProjectsDir, 'project'), { recursive: true })

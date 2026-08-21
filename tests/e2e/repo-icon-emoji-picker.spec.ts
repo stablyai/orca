@@ -5,13 +5,13 @@
  * contract, and captures the new picker for the PR screenshot record.
  */
 import type { Page, TestInfo } from '@stablyai/playwright-test'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import { getStoreState, waitForSessionReady } from './helpers/store'
 import type { Repo } from '../../src/shared/repo-types'
 
 /** Opens the repo settings panel and pins the UI language to English. */
 async function openRepoSettings(page: Page, repoId: string): Promise<void> {
-  // Why: the host OS locale (e.g. ko-KR) drives Orca's default UI language.
+  // Why: the host OS locale (e.g. ko-KR) drives MCode's default UI language.
   // Pin English so this spec's locators are stable across dev machines and CI.
   await page.evaluate(() => window.__store!.getState().updateSettings({ uiLanguage: 'en' }))
   await page.evaluate((repoId) => {
@@ -35,17 +35,17 @@ async function attachScreenshot(page: Page, testInfo: TestInfo, name: string): P
 
 test.describe('Repository icon emoji picker', () => {
   test('search selects a native emoji and persists it as the repo icon', async ({
-    orcaPage
+    mcodePage
   }, testInfo) => {
-    await waitForSessionReady(orcaPage)
+    await waitForSessionReady(mcodePage)
 
-    const repos = await getStoreState<Repo[]>(orcaPage, 'repos')
+    const repos = await getStoreState<Repo[]>(mcodePage, 'repos')
     expect(repos.length).toBeGreaterThan(0)
     const repo = repos[0]
 
-    await openRepoSettings(orcaPage, repo.id)
+    await openRepoSettings(mcodePage, repo.id)
 
-    const repoSection = orcaPage.locator(`[data-settings-section="repo-${repo.id}"]`)
+    const repoSection = mcodePage.locator(`[data-settings-section="repo-${repo.id}"]`)
     await repoSection.getByRole('tab', { name: 'Emoji' }).click()
 
     const picker = repoSection.locator('.repo-icon-emoji-picker')
@@ -56,7 +56,7 @@ test.describe('Repository icon emoji picker', () => {
     await expect(searchInput).toBeVisible()
     await searchInput.fill('rocket')
 
-    await attachScreenshot(orcaPage, testInfo, 'repo-icon-emoji-picker-search')
+    await attachScreenshot(mcodePage, testInfo, 'repo-icon-emoji-picker-search')
 
     const rocketResult = picker.getByRole('button', { name: /rocket/i }).first()
     await expect(rocketResult).toBeVisible({ timeout: 10_000 })
@@ -65,7 +65,7 @@ test.describe('Repository icon emoji picker', () => {
     await expect
       .poll(
         async () => {
-          const current = await getStoreState<Repo[]>(orcaPage, 'repos')
+          const current = await getStoreState<Repo[]>(mcodePage, 'repos')
           return current.find((entry) => entry.id === repo.id)?.repoIcon
         },
         { timeout: 5_000, message: 'repo icon did not persist the picked emoji' }
@@ -75,6 +75,6 @@ test.describe('Repository icon emoji picker', () => {
     // The store round-trip alone would pass even if the panel rendered nothing.
     await expect(repoSection.getByText('Current: 🚀')).toBeVisible()
 
-    await attachScreenshot(orcaPage, testInfo, 'repo-icon-emoji-picker-selected')
+    await attachScreenshot(mcodePage, testInfo, 'repo-icon-emoji-picker-selected')
   })
 })

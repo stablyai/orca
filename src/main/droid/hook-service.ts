@@ -82,7 +82,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     return [
       '@echo off',
       'setlocal',
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
+      'if defined MCODE_AGENT_HOOK_ENDPOINT if exist "%MCODE_AGENT_HOOK_ENDPOINT%" call "%MCODE_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAgentHookPostCommand('droid'),
       'exit /b 0',
@@ -94,26 +94,26 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   return [
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
-    'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
-    '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
+    'if [ -n "$MCODE_AGENT_HOOK_ENDPOINT" ] && [ -r "$MCODE_AGENT_HOOK_ENDPOINT" ]; then',
+    '  . "$MCODE_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
-    'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
+    'if [ -z "$MCODE_AGENT_HOOK_PORT" ] || [ -z "$MCODE_AGENT_HOOK_TOKEN" ] || [ -z "$MCODE_PANE_KEY" ]; then',
     '  exit 0',
     'fi',
     // Timeout caps best-effort hook posts if the local listener stalls.
     // Why: pipe payload to curl's stdin (`payload@-`) instead of an inline
     // `payload=$VALUE` arg, so tens-of-KB tool output stays off the curl
     // command line (EDR command-line false positives). Wire body is identical.
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/droid" \\',
+    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${MCODE_AGENT_HOOK_PORT}/hook/droid" \\',
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
-    '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
-    '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
-    '  --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
-    '  --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
-    '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
-    '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
-    '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
+    '  -H "X-MCode-Agent-Hook-Token: ${MCODE_AGENT_HOOK_TOKEN}" \\',
+    '  --data-urlencode "paneKey=${MCODE_PANE_KEY}" \\',
+    '  --data-urlencode "tabId=${MCODE_TAB_ID}" \\',
+    '  --data-urlencode "launchToken=${MCODE_AGENT_LAUNCH_TOKEN}" \\',
+    '  --data-urlencode "worktreeId=${MCODE_WORKTREE_ID}" \\',
+    '  --data-urlencode "env=${MCODE_AGENT_HOOK_ENV}" \\',
+    '  --data-urlencode "version=${MCODE_AGENT_HOOK_VERSION}" \\',
     '  --data-urlencode "payload@-" >/dev/null 2>&1 || true',
     'exit 0',
     ''
@@ -248,14 +248,14 @@ export class DroidHookService {
   }
 
   // Why: SSH remotes run the Droid CLI on the remote host, so its hook config
-  // and managed script must be written into the remote ~/.factory + ~/.orca via
+  // and managed script must be written into the remote ~/.factory + ~/.mcode via
   // SFTP. Without this, Droid never fires the managed hook over SSH and its
   // status row is absent from the task tree (issue #7253). Mirrors the local
   // install() but always emits POSIX script/paths — even from a Windows host.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const home = remoteHome.replace(/\/$/, '')
     const remoteConfigPath = `${home}/.factory/settings.json`
-    const remoteScriptPath = `${home}/.orca/agent-hooks/droid-hook.sh`
+    const remoteScriptPath = `${home}/.mcode/agent-hooks/droid-hook.sh`
     try {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)
       if (!config) {

@@ -5,7 +5,7 @@ import { getCommandTokenPathBasename, getFirstCommandToken } from './command-tok
  * Pi-compatible agent kinds. Both Pi and OMP (omp.sh) consume the same
  * `PI_CODING_AGENT_DIR` env contract and the same extension API, but each
  * defaults its on-disk config dir to a different `~/.<kind>/agent` path.
- * Orca's managed extension installer needs to know which agent is being
+ * MCode's managed extension installer needs to know which agent is being
  * launched so it targets the user's actual source dir for THAT agent, with no
  * cross-agent fallback
  * (otherwise switching agents in the same workspace silently shadows the
@@ -20,9 +20,9 @@ export const PRIMARY_AGENT_DIR_ENV_BY_KIND: Readonly<Record<PiAgentKind, string>
 }
 
 export const SOURCE_AGENT_DIR_ENV_BY_KIND: Readonly<Record<PiAgentKind, string>> = {
-  pi: 'ORCA_PI_SOURCE_AGENT_DIR',
-  omp: 'ORCA_OMP_SOURCE_AGENT_DIR',
-  'prime-agent': 'ORCA_PRIME_AGENT_SOURCE_AGENT_DIR'
+  pi: 'MCODE_PI_SOURCE_AGENT_DIR',
+  omp: 'MCODE_OMP_SOURCE_AGENT_DIR',
+  'prime-agent': 'MCODE_PRIME_AGENT_SOURCE_AGENT_DIR'
 }
 
 /**
@@ -64,7 +64,7 @@ export function detectExplicitPiAgentKindFromCommand(
  *
  * Returns 'omp' when the command launches OMP (`omp` / `omp.sh`), otherwise
  * defaults to 'pi'. Defaulting to 'pi' preserves prior behavior for the
- * non-launch case (e.g. bare shells that may later invoke `pi`) where Orca
+ * non-launch case (e.g. bare shells that may later invoke `pi`) where MCode
  * prepared Pi integration by default.
  *
  * NEVER cross-fall-back: a missing source dir for the resolved kind means

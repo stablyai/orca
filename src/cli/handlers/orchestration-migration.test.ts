@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 
-const originalPaneKey = process.env.ORCA_PANE_KEY
+const originalPaneKey = process.env.MCODE_PANE_KEY
 
 afterEach(() => {
   if (originalPaneKey === undefined) {
-    delete process.env.ORCA_PANE_KEY
+    delete process.env.MCODE_PANE_KEY
   } else {
-    process.env.ORCA_PANE_KEY = originalPaneKey
+    process.env.MCODE_PANE_KEY = originalPaneKey
   }
 })
 
@@ -15,7 +15,7 @@ describe('orchestration CLI migration recovery', () => {
   it.each([false, true])(
     'accepts an attested legacy worker_done settlement (replayed: %s)',
     async (replayed) => {
-      process.env.ORCA_PANE_KEY = 'tab-worker:leaf-worker'
+      process.env.MCODE_PANE_KEY = 'tab-worker:leaf-worker'
       const call = vi.fn().mockResolvedValue({
         result: {
           message: { id: 'msg_done' },

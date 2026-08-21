@@ -1,0 +1,36 @@
+{
+  "name": "MCode Official Plugins",
+  "owner": "stablyai",
+  "plugins": [
+    {
+      "id": "mcode.plugin-portuguese",
+      "source": {
+        "kind": "git",
+        "url": "https://github.com/mcode-ide/mcode-portuguese.git",
+        "ref": "v1.0.0"
+      },
+      "description": "Brazilian Portuguese translations for common MCode navigation.",
+      "categories": ["languages", "official"]
+    },
+    {
+      "id": "mcode.plugin-multipass-recipes",
+      "source": {
+        "kind": "git",
+        "url": "https://github.com/mcode-ide/mcode-multipass-recipes.git",
+        "ref": "v1.0.0"
+      },
+      "description": "A reviewed starter lifecycle for disposable Multipass workspaces.",
+      "categories": ["vm-recipes", "official"]
+    },
+    {
+      "id": "mcode.plugin-navigation-shortcuts",
+      "source": {
+        "kind": "git",
+        "url": "https://github.com/mcode-ide/mcode-navigation-shortcuts.git",
+        "ref": "v1.0.0"
+      },
+      "description": "Command aliases and optional shortcuts for frequent MCode views.",
+      "categories": ["keybindings", "official"]
+    }
+  ]
+}

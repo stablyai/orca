@@ -4,7 +4,7 @@ import { buildAgentNotificationId } from './agent-notification-id'
 describe('buildAgentNotificationId', () => {
   it('builds a stable id for the same agent event metadata', () => {
     const args = {
-      worktreeId: 'repo::/Users/me/orca/workspaces/feature',
+      worktreeId: 'repo::/Users/me/mcode/workspaces/feature',
       paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
       stateStartedAt: 1780000000123
     }
@@ -14,7 +14,7 @@ describe('buildAgentNotificationId', () => {
 
   it('changes when the agent state start time changes', () => {
     const base = {
-      worktreeId: 'repo::/Users/me/orca/workspaces/feature',
+      worktreeId: 'repo::/Users/me/mcode/workspaces/feature',
       paneKey: 'tab-1:11111111-1111-4111-8111-111111111111'
     }
 
@@ -32,13 +32,13 @@ describe('buildAgentNotificationId', () => {
     ).toBeNull()
     expect(
       buildAgentNotificationId({
-        worktreeId: 'repo::/Users/me/orca/workspaces/feature',
+        worktreeId: 'repo::/Users/me/mcode/workspaces/feature',
         stateStartedAt: 1780000000123
       })
     ).toBeNull()
     expect(
       buildAgentNotificationId({
-        worktreeId: 'repo::/Users/me/orca/workspaces/feature',
+        worktreeId: 'repo::/Users/me/mcode/workspaces/feature',
         paneKey: 'tab-1:11111111-1111-4111-8111-111111111111'
       })
     ).toBeNull()

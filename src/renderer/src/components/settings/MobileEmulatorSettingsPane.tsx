@@ -38,7 +38,7 @@ type MobileEmulatorSettingsPaneProps = {
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
 }
 
-const AUTOMATIC_DEVICE_VALUE = '__orca_automatic_emulator_device__'
+const AUTOMATIC_DEVICE_VALUE = '__mcode_automatic_emulator_device__'
 const AUTOMATIC_DEVICE_LABEL = 'Auto-select device'
 const SIMULATOR_STATE_SUFFIX_RE =
   /\s+\((Booted|Booting|Creating|Shutdown|Shutting Down|Unavailable|Unknown)\)\s*$/i
@@ -167,7 +167,7 @@ export function MobileEmulatorSettingsPane({
     if (devices.length === 0) {
       return translate(
         'auto.components.settings.MobileEmulatorSettingsPane.f62a1bb759',
-        'Orca will auto-select an emulator device after devices are detected.'
+        'MCode will auto-select an emulator device after devices are detected.'
       )
     }
     return translate(
@@ -185,7 +185,7 @@ export function MobileEmulatorSettingsPane({
         )}
         description={translate(
           'auto.components.settings.MobileEmulatorSettingsPane.bc39d0f115',
-          'Configure mobile emulator support for Orca and coding agents.'
+          'Configure mobile emulator support for MCode and coding agents.'
         )}
         keywords={getMobileEmulatorSearchEntries().flatMap((entry) => entry.keywords ?? [])}
         className="divide-y divide-border/40"
@@ -300,7 +300,7 @@ export function MobileEmulatorSettingsPane({
           )}
           description={translate(
             'auto.components.settings.MobileEmulatorSettingsPane.19d39113b6',
-            'Let coding agents control the active mobile emulator with Orca CLI commands.'
+            'Let coding agents control the active mobile emulator with MCode CLI commands.'
           )}
           keywords={getMobileEmulatorSearchEntries()[3]?.keywords}
         >

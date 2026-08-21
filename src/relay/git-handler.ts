@@ -1097,7 +1097,7 @@ export class GitHandler {
       }
       const upstream = await resolveEffectiveGitUpstream((args) => this.git(args, worktreePath))
       if (upstream && !upstream.isConfiguredUpstream) {
-        // Why: legacy Orca branches may track origin/main while pushes target origin/<branch>; pull the same effective branch the UI reports.
+        // Why: legacy MCode branches may track origin/main while pushes target origin/<branch>; pull the same effective branch the UI reports.
         await this.git(
           ['pull', ...effectiveArgs, upstream.remoteName, upstream.branchName],
           worktreePath

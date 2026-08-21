@@ -8,7 +8,7 @@ describe('durable file write', () => {
   let dir: string
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'orca-durable-'))
+    dir = mkdtempSync(join(tmpdir(), 'mcode-durable-'))
   })
 
   afterEach(() => {
@@ -47,7 +47,7 @@ describe('durable file write', () => {
       })
 
       it('round-trips a multi-megabyte payload without truncation', async () => {
-        // Why: the real orca-data.json is large; a partial fsync would surface here.
+        // Why: the real mcode-data.json is large; a partial fsync would surface here.
         const final = join(dir, 'big.json')
         const payload = JSON.stringify({ blob: 'x'.repeat(4 * 1024 * 1024) })
         await write(`${final}.tmp`, final, payload)

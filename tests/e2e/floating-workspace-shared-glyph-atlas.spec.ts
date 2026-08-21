@@ -1,5 +1,5 @@
 import type { Page } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { sendToTerminal, waitForActivePanePtyId } from './helpers/terminal'
 
@@ -11,7 +11,7 @@ const PANEL_SELECTOR = '[data-floating-terminal-panel]'
 // Why: the floating panel toggles via this window event
 // (src/renderer/src/lib/floating-terminal.ts); dispatching it exercises the
 // same code path as the status bar button and the keyboard shortcut.
-const TOGGLE_EVENT = 'orca-toggle-floating-terminal'
+const TOGGLE_EVENT = 'mcode-toggle-floating-terminal'
 
 // Why: a silent foreground command blocks the shell so no prompt framework
 // (e.g. async p10k segments) repaints while screenshots are compared.
@@ -343,29 +343,29 @@ async function captureWorkspaceAfterTrigger(
 
 test.describe('floating workspace shared glyph atlas @headful', () => {
   test('switching floating workspace tabs keeps workspace terminal glyphs intact', async ({
-    orcaPage
+    mcodePage
   }, testInfo) => {
     // Why: xterm WebGL terminals with identical font configs share one glyph
     // texture atlas. The floating tab switch resumes a hidden renderer, whose
     // atlas reset clears those shared pages; unless every sharing terminal
     // rebuilds its render model too, the visible workspace terminal keeps
     // stale glyph coordinates and paints garbage (the bug this guards).
-    const scenario = await setUpSharedAtlasScenario(orcaPage)
+    const scenario = await setUpSharedAtlasScenario(mcodePage)
     test.skip(!scenario, 'WebGL inactive or terminals do not share a glyph atlas')
     const { baseline, floatingTabIds } = scenario!
 
-    await toggleFloatingPanel(orcaPage, true)
-    await activateFloatingTab(orcaPage, floatingTabIds[1])
+    await toggleFloatingPanel(mcodePage, true)
+    await activateFloatingTab(mcodePage, floatingTabIds[1])
     // Why: the switched-to tab attaching WebGL proves the suspend/resume
     // (and with it the atlas reset trigger) actually ran.
     expect(
-      await waitForWebglOnTab(orcaPage, floatingTabIds[1]),
+      await waitForWebglOnTab(mcodePage, floatingTabIds[1]),
       'switched-to floating tab should resume WebGL'
     ).toBe(true)
-    await settleAtlasActivity(orcaPage)
-    await toggleFloatingPanel(orcaPage, false)
+    await settleAtlasActivity(mcodePage)
+    await toggleFloatingPanel(mcodePage, false)
 
-    const afterSwitch = await captureWorkspaceAfterTrigger(orcaPage, scenario!)
+    const afterSwitch = await captureWorkspaceAfterTrigger(mcodePage, scenario!)
     await testInfo.attach('baseline', { body: baseline, contentType: 'image/png' })
     await testInfo.attach('after-tab-switch', { body: afterSwitch, contentType: 'image/png' })
     console.log(`[shared-atlas] tabSwitchIntact=${afterSwitch.equals(baseline)}`)
@@ -377,20 +377,20 @@ test.describe('floating workspace shared glyph atlas @headful', () => {
   })
 
   test('reopening the floating workspace keeps workspace terminal glyphs intact', async ({
-    orcaPage
+    mcodePage
   }, testInfo) => {
     // Why: reopening the panel resumes its terminal, whose atlas reset clears
     // the shared pages just like a tab switch — the other user flow that
     // garbled visible workspace terminals before resets went global.
-    const scenario = await setUpSharedAtlasScenario(orcaPage)
+    const scenario = await setUpSharedAtlasScenario(mcodePage)
     test.skip(!scenario, 'WebGL inactive or terminals do not share a glyph atlas')
     const { baseline } = scenario!
 
-    await toggleFloatingPanel(orcaPage, true)
-    await settleAtlasActivity(orcaPage)
-    await toggleFloatingPanel(orcaPage, false)
+    await toggleFloatingPanel(mcodePage, true)
+    await settleAtlasActivity(mcodePage)
+    await toggleFloatingPanel(mcodePage, false)
 
-    const afterReopen = await captureWorkspaceAfterTrigger(orcaPage, scenario!)
+    const afterReopen = await captureWorkspaceAfterTrigger(mcodePage, scenario!)
     await testInfo.attach('baseline', { body: baseline, contentType: 'image/png' })
     await testInfo.attach('after-reopen', { body: afterReopen, contentType: 'image/png' })
     console.log(`[shared-atlas] reopenIntact=${afterReopen.equals(baseline)}`)

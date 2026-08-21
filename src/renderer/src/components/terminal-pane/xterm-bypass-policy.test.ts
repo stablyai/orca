@@ -40,7 +40,7 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
     ).toBe(false)
   })
 
-  it('does NOT bubble other Cmd chords — Orca window handlers intercept them before xterm', () => {
+  it('does NOT bubble other Cmd chords — MCode window handlers intercept them before xterm', () => {
     // Why: this policy is narrowly scoped to clipboard chords. Cmd+F, Cmd+D,
     // Cmd+K, Cmd+W, Cmd+Arrow, Cmd+Backspace are handled in keyboard-handlers.ts
     // with stopImmediatePropagation before xterm's textarea listener fires.

@@ -10,7 +10,7 @@ import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 const SHELL_HOME = '/var/services/homes/alice'
 const SFTP_HOME = '/homes/alice'
-const RELAY_DIR = '.orca-remote/relay-0.1.0+wire'
+const RELAY_DIR = '.mcode-remote/relay-0.1.0+wire'
 const SHELL_RELAY_DIR = `${SHELL_HOME}/${RELAY_DIR}`
 const SFTP_RELAY_DIR = `${SFTP_HOME}/${RELAY_DIR}`
 const MARKER_FILE = `.sftp-namespace-${'a'.repeat(32)}`
@@ -281,7 +281,7 @@ async function withSplitNamespaceFixture(
     backingRelayDir: string
   }) => Promise<void>
 ): Promise<void> {
-  const backingRoot = await mkdtemp(join(tmpdir(), 'orca-sftp-wire-remote-'))
+  const backingRoot = await mkdtemp(join(tmpdir(), 'mcode-sftp-wire-remote-'))
   const backingRelayDir = join(backingRoot, ...RELAY_DIR.split('/'))
   await mkdir(join(backingRelayDir, '.install-lock'), { recursive: true })
   await writeFile(join(backingRelayDir, '.install-lock', MARKER_FILE), '')
@@ -304,7 +304,7 @@ async function withSplitNamespaceFixture(
 }
 
 it('uploads through a verified split namespace over a real ssh2 SFTP session', async () => {
-  const localDir = await realpath(await mkdtemp(join(tmpdir(), 'orca-sftp-wire-local-')))
+  const localDir = await realpath(await mkdtemp(join(tmpdir(), 'mcode-sftp-wire-local-')))
   await mkdir(join(localDir, 'nested'))
   await writeFile(join(localDir, 'nested', 'payload.bin'), Buffer.from([0, 1, 2, 255]))
 
@@ -340,7 +340,7 @@ it('writes a mapped file through a verified split namespace over a real ssh2 SFT
   await withSplitNamespaceFixture(async ({ connection, fixture, backingRelayDir }) => {
     const mapping = splitNamespaceMapping(`${RELAY_DIR}/package.json`)
     const shellFilePath = `${SHELL_RELAY_DIR}/package.json`
-    const contents = '{"name":"orca-relay"}\n'
+    const contents = '{"name":"mcode-relay"}\n'
 
     await boundedTransfer(
       connection.writeFile(shellFilePath, contents, {

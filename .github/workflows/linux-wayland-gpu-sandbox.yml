@@ -62,7 +62,7 @@ jobs:
           echo "WAYLAND_DISPLAY=wayland-1" >> "$GITHUB_ENV"
           echo "XDG_SESSION_TYPE=wayland" >> "$GITHUB_ENV"
           echo "ELECTRON_OZONE_PLATFORM_HINT=wayland" >> "$GITHUB_ENV"
-          echo "ORCA_WAYLAND_GPU_VERBOSE=1" >> "$GITHUB_ENV"
+          echo "MCODE_WAYLAND_GPU_VERBOSE=1" >> "$GITHUB_ENV"
           for _ in $(seq 1 50); do
             if [ -S "$XDG_RUNTIME_DIR/wayland-1" ]; then
               break

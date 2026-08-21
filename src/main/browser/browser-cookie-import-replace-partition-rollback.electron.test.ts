@@ -207,7 +207,7 @@ run().catch((error) => {
 }
 
 async function runFixture(mode: FixtureMode): Promise<FixtureResult> {
-  const root = mkdtempSync(join(tmpdir(), `orca-replace-partition-rollback-${mode}-`))
+  const root = mkdtempSync(join(tmpdir(), `mcode-replace-partition-rollback-${mode}-`))
   fixtureRoots.push(root)
   const bundlePath = join(root, 'cookie-replace-rollback.cjs')
   const bundleEntryPath = join(root, 'cookie-replace-rollback.ts')

@@ -42,7 +42,7 @@ function flush(): Promise<void> {
 beforeEach(() => {
   vi.clearAllMocks()
   clearRuntimeCompatibilityCacheForTests()
-  delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
+  delete (globalThis as { __MCODE_WEB_CLIENT__?: boolean }).__MCODE_WEB_CLIENT__
   vi.stubGlobal('window', {
     location: { pathname: '/index.html' },
     api: {
@@ -136,7 +136,7 @@ describe('getNativeChatSessionTransport — selection', () => {
   })
 
   it('returns the local adapter on the web client even with an owner (R3 guard)', async () => {
-    ;(window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    ;(window as unknown as { __MCODE_WEB_CLIENT__?: boolean }).__MCODE_WEB_CLIENT__ = true
     nativeChatReadSession.mockResolvedValue({ messages: [] })
     const transport = getNativeChatSessionTransport(ENV)
 

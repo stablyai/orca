@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 
 import { TERMINAL_ACCESSORY_KEYS, type TerminalAccessoryKey } from './terminal-accessory-keys'
 
-export const TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY = 'orca:terminal-accessory-layout'
+export const TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY = 'mcode:terminal-accessory-layout'
 
 export type TerminalAccessoryLayout = {
   orderedBuiltInIds: string[]

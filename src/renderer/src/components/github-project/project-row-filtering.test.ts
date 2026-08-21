@@ -74,17 +74,17 @@ function table(rows: GitHubProjectRow[]): GitHubProjectTable {
 
 describe('filterProjectTableRowsByOpenRepos', () => {
   it('keeps rows whose repository slug resolves to at least one live repo', () => {
-    const rows = [row('visible', 'acme/orca'), row('missing', 'acme/removed')]
+    const rows = [row('visible', 'acme/mcode'), row('missing', 'acme/removed')]
     const filtered = filterProjectTableRowsByOpenRepos(table(rows), (slug) =>
-      slug?.toLowerCase() === 'acme/orca' ? [repo('repo-1')] : []
+      slug?.toLowerCase() === 'acme/mcode' ? [repo('repo-1')] : []
     )
 
     expect(filtered.rows.map((r) => r.id)).toEqual(['visible'])
     expect(filtered.totalCount).toBe(1)
   })
 
-  it('keeps rows while any of multiple Orca repos map to the slug', () => {
-    const rows = [row('visible', 'acme/orca')]
+  it('keeps rows while any of multiple MCode repos map to the slug', () => {
+    const rows = [row('visible', 'acme/mcode')]
     const filtered = filterProjectTableRowsByOpenRepos(table(rows), () => [
       repo('repo-1'),
       repo('repo-2')
@@ -94,7 +94,7 @@ describe('filterProjectTableRowsByOpenRepos', () => {
   })
 
   it('filters missing or unresolved repository slugs', () => {
-    const rows = [row('missing-slug', null), row('unresolved', 'gitlab/orca')]
+    const rows = [row('missing-slug', null), row('unresolved', 'gitlab/mcode')]
     const filtered = filterProjectTableRowsByOpenRepos(table(rows), () => [])
 
     expect(filtered.rows).toEqual([])
@@ -104,11 +104,11 @@ describe('filterProjectTableRowsByOpenRepos', () => {
 
 describe('filterProjectTableRowsBySelectedRepos', () => {
   it('keeps a row when at least one slug match is selected', () => {
-    const rows = [row('visible', 'acme/orca'), row('hidden', 'acme/tool')]
+    const rows = [row('visible', 'acme/mcode'), row('hidden', 'acme/tool')]
     const filtered = filterProjectTableRowsBySelectedRepos(
       table(rows),
       (slug) =>
-        originOnly(slug?.toLowerCase() === 'acme/orca' ? [repo('repo-1')] : [repo('repo-2')]),
+        originOnly(slug?.toLowerCase() === 'acme/mcode' ? [repo('repo-1')] : [repo('repo-2')]),
       true,
       new Set(['repo-1'])
     )
@@ -118,7 +118,7 @@ describe('filterProjectTableRowsBySelectedRepos', () => {
   })
 
   it('filters a row when only unselected repos match', () => {
-    const rows = [row('hidden', 'acme/orca')]
+    const rows = [row('hidden', 'acme/mcode')]
     const filtered = filterProjectTableRowsBySelectedRepos(
       table(rows),
       () => originOnly([repo('repo-2')]),
@@ -131,7 +131,7 @@ describe('filterProjectTableRowsBySelectedRepos', () => {
   })
 
   it('keeps a row whose only selected match is a fork of the row s repo', () => {
-    const rows = [row('fork-only', 'acme/orca')]
+    const rows = [row('fork-only', 'acme/mcode')]
     const filtered = filterProjectTableRowsBySelectedRepos(
       table(rows),
       () => ({ origin: [], upstream: [repo('fork')] }),
@@ -144,7 +144,7 @@ describe('filterProjectTableRowsBySelectedRepos', () => {
   })
 
   it('keeps a row with multiple selected matches for action ambiguity handling', () => {
-    const rows = [row('ambiguous', 'acme/orca')]
+    const rows = [row('ambiguous', 'acme/mcode')]
     const filtered = filterProjectTableRowsBySelectedRepos(
       table(rows),
       () => originOnly([repo('repo-1'), repo('repo-2'), repo('repo-3')]),
@@ -159,7 +159,7 @@ describe('filterProjectTableRowsBySelectedRepos', () => {
 describe('resolveSelectedProjectRowRepo', () => {
   it('reports loading without reading stale slug matches', () => {
     const resolution = resolveSelectedProjectRowRepo({
-      row: row('loading', 'acme/orca'),
+      row: row('loading', 'acme/mcode'),
       lookupSlugMatches: () => {
         throw new Error('should not read stale matches')
       },
@@ -181,9 +181,9 @@ describe('resolveSelectedProjectRowRepo', () => {
     expect(resolution.status).toBe('invalid_slug')
   })
 
-  it('reports no global match when Orca has no repo for the slug', () => {
+  it('reports no global match when MCode has no repo for the slug', () => {
     const resolution = resolveSelectedProjectRowRepo({
-      row: row('missing', 'acme/orca'),
+      row: row('missing', 'acme/mcode'),
       lookupSlugMatches: () => originOnly([]),
       slugIndexReady: true,
       selectedRepoIds: new Set(['repo-1'])
@@ -194,7 +194,7 @@ describe('resolveSelectedProjectRowRepo', () => {
 
   it('reports global-only matches when the repo is not selected', () => {
     const resolution = resolveSelectedProjectRowRepo({
-      row: row('unselected', 'acme/orca'),
+      row: row('unselected', 'acme/mcode'),
       lookupSlugMatches: () => originOnly([repo('repo-2')]),
       slugIndexReady: true,
       selectedRepoIds: new Set(['repo-1'])
@@ -205,7 +205,7 @@ describe('resolveSelectedProjectRowRepo', () => {
 
   it('returns the selected match when exactly one matching repo is selected', () => {
     const resolution = resolveSelectedProjectRowRepo({
-      row: row('selected', 'acme/orca'),
+      row: row('selected', 'acme/mcode'),
       lookupSlugMatches: () => originOnly([repo('repo-1'), repo('repo-2')]),
       slugIndexReady: true,
       selectedRepoIds: new Set(['repo-2'])
@@ -219,19 +219,19 @@ describe('resolveSelectedProjectRowRepo', () => {
 
     expect(
       resolveSelectedProjectRowRepo({
-        row: row('enterprise', 'acme/orca'),
+        row: row('enterprise', 'acme/mcode'),
         lookupSlugMatches,
         host: 'ghe.example:8443',
         slugIndexReady: true,
         selectedRepoIds: new Set(['repo-1'])
       })
     ).toMatchObject({ status: 'selected_match' })
-    expect(lookupSlugMatches).toHaveBeenCalledWith('acme/orca', 'ghe.example:8443')
+    expect(lookupSlugMatches).toHaveBeenCalledWith('acme/mcode', 'ghe.example:8443')
   })
 
   it('reports ambiguity when multiple matching repos are selected', () => {
     const resolution = resolveSelectedProjectRowRepo({
-      row: row('ambiguous', 'acme/orca'),
+      row: row('ambiguous', 'acme/mcode'),
       lookupSlugMatches: () => originOnly([repo('repo-1'), repo('repo-2')]),
       slugIndexReady: true,
       selectedRepoIds: new Set(['repo-1', 'repo-2'])
@@ -242,7 +242,7 @@ describe('resolveSelectedProjectRowRepo', () => {
 
   it('falls through to a selected fork when the upstream clone is unselected', () => {
     const resolution = resolveSelectedProjectRowRepo({
-      row: row('fork-selected', 'acme/orca'),
+      row: row('fork-selected', 'acme/mcode'),
       lookupSlugMatches: () => ({ origin: [repo('upstream')], upstream: [repo('fork')] }),
       slugIndexReady: true,
       selectedRepoIds: new Set(['fork'])
@@ -253,7 +253,7 @@ describe('resolveSelectedProjectRowRepo', () => {
 
   it('prefers the selected upstream clone over a selected fork of it', () => {
     const resolution = resolveSelectedProjectRowRepo({
-      row: row('both-selected', 'acme/orca'),
+      row: row('both-selected', 'acme/mcode'),
       lookupSlugMatches: () => ({ origin: [repo('upstream')], upstream: [repo('fork')] }),
       slugIndexReady: true,
       selectedRepoIds: new Set(['upstream', 'fork'])
@@ -264,7 +264,7 @@ describe('resolveSelectedProjectRowRepo', () => {
 
   it('still reports no selection when neither the upstream clone nor the fork is selected', () => {
     const resolution = resolveSelectedProjectRowRepo({
-      row: row('neither', 'acme/orca'),
+      row: row('neither', 'acme/mcode'),
       lookupSlugMatches: () => ({ origin: [repo('upstream')], upstream: [repo('fork')] }),
       slugIndexReady: true,
       selectedRepoIds: new Set(['other'])

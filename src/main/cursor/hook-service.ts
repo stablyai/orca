@@ -63,8 +63,8 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     return [
       '@echo off',
       'setlocal',
-      // Why: source current endpoint coordinates for PTYs surviving an Orca restart.
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
+      // Why: source current endpoint coordinates for PTYs surviving an MCode restart.
+      'if defined MCODE_AGENT_HOOK_ENDPOINT if exist "%MCODE_AGENT_HOOK_ENDPOINT%" call "%MCODE_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAgentHookPostCommand('cursor'),
       'exit /b 0',
@@ -77,24 +77,24 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
     // Why: refresh endpoint coordinates so surviving PTYs keep reporting.
-    'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
-    '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
+    'if [ -n "$MCODE_AGENT_HOOK_ENDPOINT" ] && [ -r "$MCODE_AGENT_HOOK_ENDPOINT" ]; then',
+    '  . "$MCODE_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
-    'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
+    'if [ -z "$MCODE_AGENT_HOOK_PORT" ] || [ -z "$MCODE_AGENT_HOOK_TOKEN" ] || [ -z "$MCODE_PANE_KEY" ]; then',
     '  exit 0',
     'fi',
     // Why: post form fields because path-bearing worktree IDs are unsafe in hand-built JSON.
     // Why: pipe payload to curl stdin to keep large output off the command line.
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/cursor" \\',
+    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${MCODE_AGENT_HOOK_PORT}/hook/cursor" \\',
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
-    '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
-    '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
-    '  --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
-    '  --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
-    '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
-    '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
-    '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
+    '  -H "X-MCode-Agent-Hook-Token: ${MCODE_AGENT_HOOK_TOKEN}" \\',
+    '  --data-urlencode "paneKey=${MCODE_PANE_KEY}" \\',
+    '  --data-urlencode "tabId=${MCODE_TAB_ID}" \\',
+    '  --data-urlencode "launchToken=${MCODE_AGENT_LAUNCH_TOKEN}" \\',
+    '  --data-urlencode "worktreeId=${MCODE_WORKTREE_ID}" \\',
+    '  --data-urlencode "env=${MCODE_AGENT_HOOK_ENV}" \\',
+    '  --data-urlencode "version=${MCODE_AGENT_HOOK_VERSION}" \\',
     '  --data-urlencode "payload@-" >/dev/null 2>&1 || true',
     'exit 0',
     ''
@@ -219,7 +219,7 @@ export class CursorHookService {
   // Installs managed Cursor hooks on an SSH remote (POSIX-only); the managed script/JSON shape must match local install() or remote panes report a different status.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = `${remoteHome.replace(/\/$/, '')}/.cursor/hooks.json`
-    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/cursor-hook.sh`
+    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.mcode/agent-hooks/cursor-hook.sh`
     try {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)
       if (!config) {

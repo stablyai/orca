@@ -43,10 +43,10 @@ function parseProbe(payload: string | null): WslGitReadEnvironment | null {
 
 function probeWslGitReadEnvironment(distro: string): Promise<ProbeOutcome> {
   const probeCommand = [
-    '_orca_git_path=$(command -v git 2>/dev/null || true)',
-    'case "$_orca_git_path" in /*) [ -x "$_orca_git_path" ] || exit 127 ;; *) exit 127 ;; esac',
+    '_mcode_git_path=$(command -v git 2>/dev/null || true)',
+    'case "$_mcode_git_path" in /*) [ -x "$_mcode_git_path" ] || exit 127 ;; *) exit 127 ;; esac',
     'if [ -n "${XDG_CONFIG_HOME:-}" ] || [ -n "${LD_LIBRARY_PATH:-}" ] || env | grep -q \'^GIT_\'; then exit 78; fi',
-    `printf '%s\\0%s\\0%s' "$PATH" "$_orca_git_path" "$HOME"`
+    `printf '%s\\0%s\\0%s' "$PATH" "$_mcode_git_path" "$HOME"`
   ].join('\n')
   const captured = buildWslCapturedLoginShellCommand(probeCommand)
   return new Promise((resolve) => {

@@ -25,7 +25,7 @@ export type SkillInstallServiceInput = Omit<
   scope: 'global' | 'workspace'
   homeDirectory: string
   workspaceDirectory?: string
-  orcaStateDirectory: string
+  mcodeStateDirectory: string
   detectedProviders: readonly string[]
   providerRootOverrides?: SkillProviderRootOverrides
   filesystem?: SkillInstallFilesystem
@@ -40,7 +40,7 @@ export type SkillRemoveServiceInput = {
   scope: 'global' | 'workspace'
   homeDirectory: string
   workspaceDirectory?: string
-  orcaStateDirectory: string
+  mcodeStateDirectory: string
   detectedProviders: readonly string[]
   providerRootOverrides?: SkillProviderRootOverrides
   conflictResolution?: 'replace-and-discard-local' | 'cancel'
@@ -64,7 +64,7 @@ export function skillInstallLocalInput(input: SkillInstallServiceInput): LocalSk
     operationId: input.operationId,
     archivePath: input.archivePath,
     destinationRoot: canonicalRoot(input),
-    stateDirectory: join(input.orcaStateDirectory, 'skill-installs'),
+    stateDirectory: join(input.mcodeStateDirectory, 'skill-installs'),
     scope: input.scope,
     destinationIdentity: input.destinationIdentity,
     hostIdentity: input.hostIdentity,
@@ -158,7 +158,7 @@ export async function removeSharedSkill(
   return removeLocalSharedSkill({
     operationId: input.operationId,
     canonicalPath: join(canonicalRoot(input), input.skillName),
-    stateDirectory: join(input.orcaStateDirectory, 'skill-installs'),
+    stateDirectory: join(input.mcodeStateDirectory, 'skill-installs'),
     allowedProviderRoots: providerDestinations
       .filter((destination) => !destination.readsCanonicalRoot)
       .map((destination) => destination.rootPath),

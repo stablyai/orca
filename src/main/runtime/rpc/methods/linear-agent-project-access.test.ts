@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../../orca-runtime'
+import { MCodeRuntimeService } from '../../mcode-runtime'
 import type * as LinearIssuesModule from '../../../linear/issues'
 
 type LinearProjectResolverTester = {
@@ -25,7 +25,7 @@ type LinearCreateTester = LinearProjectResolverTester & {
 
 describe('Linear agent project access helpers', () => {
   it('resolves Linear projects by UUID before searching names', async () => {
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     const tester = runtime as unknown as LinearProjectResolverTester
     const readById = vi.spyOn(tester, 'readLinearProjectByIdForCreate').mockResolvedValue({
       id: '11111111-1111-4111-8111-111111111111',
@@ -47,7 +47,7 @@ describe('Linear agent project access helpers', () => {
   })
 
   it('resolves Linear projects by trimmed case-insensitive exact name', async () => {
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     const tester = runtime as unknown as LinearProjectResolverTester
     vi.spyOn(tester, 'readLinearProjectByIdForCreate').mockResolvedValue(null as never)
     const readByName = vi.spyOn(tester, 'readLinearProjectsForCreate').mockResolvedValue([
@@ -75,7 +75,7 @@ describe('Linear agent project access helpers', () => {
   })
 
   it('resolves Linear projects by URL slug without a paginated exact-name scan', async () => {
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     const tester = runtime as unknown as LinearProjectResolverTester
     vi.spyOn(tester, 'readLinearProjectByIdForCreate').mockResolvedValue(null as never)
     vi.spyOn(tester, 'readLinearProjectsForCreate').mockResolvedValue([
@@ -98,7 +98,7 @@ describe('Linear agent project access helpers', () => {
   })
 
   it('resolves same-named Linear projects by target team compatibility', async () => {
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     const tester = runtime as unknown as LinearProjectResolverTester
     vi.spyOn(tester, 'readLinearProjectByIdForCreate').mockResolvedValue(null as never)
     vi.spyOn(tester, 'readLinearProjectsForCreate').mockResolvedValue([] as never)
@@ -121,7 +121,7 @@ describe('Linear agent project access helpers', () => {
   })
 
   it('rejects ambiguous Linear project names with candidate ids', async () => {
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     const tester = runtime as unknown as LinearProjectResolverTester
     vi.spyOn(tester, 'readLinearProjectByIdForCreate').mockResolvedValue(null as never)
     vi.spyOn(tester, 'readLinearProjectsForCreate').mockResolvedValue([] as never)
@@ -152,7 +152,7 @@ describe('Linear agent project access helpers', () => {
   })
 
   it('fails closed when Linear project team membership cannot be verified', async () => {
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     const tester = runtime as unknown as LinearProjectResolverTester
     vi.spyOn(tester, 'readLinearProjectByIdForCreate').mockResolvedValue(null as never)
     vi.spyOn(tester, 'readLinearProjectsForCreate').mockResolvedValue([] as never)
@@ -172,7 +172,7 @@ describe('Linear agent project access helpers', () => {
   })
 
   it('caps agent project lists globally and returns a narrow project DTO', async () => {
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     vi.spyOn(runtime, 'linearListProjects').mockResolvedValue({
       items: [
         {
@@ -228,7 +228,7 @@ describe('Linear agent project access helpers', () => {
       return { ...actual, createIssueForAgent }
     })
     try {
-      const { OrcaRuntimeService: RuntimeService } = await import('../../orca-runtime')
+      const { MCodeRuntimeService: RuntimeService } = await import('../../mcode-runtime')
       const runtime = new RuntimeService()
       const tester = runtime as unknown as LinearCreateTester
       vi.spyOn(tester, 'resolveLinearCreateTeam').mockResolvedValue({

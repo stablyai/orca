@@ -39,15 +39,15 @@ const SSH_FORK_PATH = '/tmp/ssh-fork-checkout'
 // origin -> personal fork, upstream -> parent (the classic fork checkout).
 const REMOTE_URLS_BY_REPO: Record<string, Record<string, string>> = {
   [FORK_PATH]: {
-    origin: 'https://github.com/fsdwen/orca.git',
-    upstream: 'https://github.com/stablyai/orca.git'
+    origin: 'https://github.com/fsdwen/mcode.git',
+    upstream: 'https://github.com/mcode-ide/mcode.git'
   },
   [NON_FORK_PATH]: {
-    origin: 'https://github.com/stablyai/orca.git'
+    origin: 'https://github.com/mcode-ide/mcode.git'
   },
   [SSH_FORK_PATH]: {
-    origin: 'git@github.com:fsdwen/orca.git',
-    upstream: 'git@github.com:stablyai/orca.git'
+    origin: 'git@github.com:fsdwen/mcode.git',
+    upstream: 'git@github.com:mcode-ide/mcode.git'
   }
 }
 
@@ -76,7 +76,7 @@ describe('issue #7331: fork PR owner/repo resolution', () => {
 
     // PRs live on the parent, so PR lookups must target it (matches
     // getIssueOwnerRepo).
-    expect(prRepo).toEqual({ owner: 'stablyai', repo: 'orca' })
+    expect(prRepo).toEqual({ owner: 'stablyai', repo: 'mcode' })
   })
 
   it('getOwnerRepo and getIssueOwnerRepo agree on a fork checkout', async () => {
@@ -89,7 +89,7 @@ describe('issue #7331: fork PR owner/repo resolution', () => {
   it('getOwnerRepo falls back to origin when there is no upstream remote', async () => {
     const prRepo = await getOwnerRepo(NON_FORK_PATH)
 
-    expect(prRepo).toEqual({ owner: 'stablyai', repo: 'orca' })
+    expect(prRepo).toEqual({ owner: 'stablyai', repo: 'mcode' })
   })
 
   it('caches the missing-upstream probe so repeat lookups skip the git spawn', async () => {
@@ -107,7 +107,7 @@ describe('issue #7331: fork PR owner/repo resolution', () => {
   it('resolves the upstream parent for SSH-style remote URLs', async () => {
     const prRepo = await getOwnerRepo(SSH_FORK_PATH)
 
-    expect(prRepo).toEqual({ owner: 'stablyai', repo: 'orca' })
+    expect(prRepo).toEqual({ owner: 'stablyai', repo: 'mcode' })
   })
 
   it('getOwnerRepoForRemote(origin) still resolves the fork itself', async () => {
@@ -115,7 +115,7 @@ describe('issue #7331: fork PR owner/repo resolution', () => {
     // resolvePrWorkItemSource) depend on an origin-only primitive.
     const origin = await getOwnerRepoForRemote(FORK_PATH, 'origin')
 
-    expect(origin).toEqual({ owner: 'fsdwen', repo: 'orca' })
+    expect(origin).toEqual({ owner: 'fsdwen', repo: 'mcode' })
   })
 
   it('getRepoUpstream still resolves the fork parent offline (regression)', async () => {
@@ -125,7 +125,7 @@ describe('issue #7331: fork PR owner/repo resolution', () => {
     const upstream = await getRepoUpstream(FORK_PATH)
 
     // Why: origin resolution pins github.com so host-scoped execution is explicit.
-    expect(upstream).toEqual({ owner: 'stablyai', repo: 'orca', host: 'github.com' })
+    expect(upstream).toEqual({ owner: 'stablyai', repo: 'mcode', host: 'github.com' })
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 })

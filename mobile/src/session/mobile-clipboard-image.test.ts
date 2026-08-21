@@ -53,14 +53,14 @@ describe('mobile clipboard image paste helpers', () => {
       ok('start', { uploadId: 'upload-1' }),
       ok('append-1', { receivedBase64Length: MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS }),
       ok('append-2', { receivedBase64Length: base64.length }),
-      ok('commit', '/tmp/orca-paste-image.png')
+      ok('commit', '/tmp/mcode-paste-image.png')
     ])
 
     await expect(
       saveMobileClipboardImageAsTempFile(client, `data:image/png;base64,${base64}`, {
         connectionId: 'ssh-1'
       })
-    ).resolves.toBe('/tmp/orca-paste-image.png')
+    ).resolves.toBe('/tmp/mcode-paste-image.png')
 
     expect(client.calls).toEqual([
       {
@@ -90,11 +90,11 @@ describe('mobile clipboard image paste helpers', () => {
   it('falls back to the legacy single-frame image save method when needed', async () => {
     const client = clientWithResponses([
       fail('start', 'method_not_found', 'missing'),
-      ok('save', '/tmp/orca-paste-image.png')
+      ok('save', '/tmp/mcode-paste-image.png')
     ])
 
     await expect(saveMobileClipboardImageAsTempFile(client, 'aGVsbG8=')).resolves.toBe(
-      '/tmp/orca-paste-image.png'
+      '/tmp/mcode-paste-image.png'
     )
 
     expect(client.calls).toEqual([
@@ -133,10 +133,10 @@ describe('mobile clipboard image paste helpers', () => {
       .mockResolvedValueOnce(ok('abort-1', { aborted: true }))
       .mockResolvedValueOnce(ok('start-2', { uploadId: 'upload-2' }))
       .mockResolvedValueOnce(ok('append-2', { receivedBase64Length: 8 }))
-      .mockResolvedValueOnce(ok('commit-2', '/tmp/orca-paste-image.png'))
+      .mockResolvedValueOnce(ok('commit-2', '/tmp/mcode-paste-image.png'))
 
     await expect(saveMobileClipboardImageAsTempFile({ sendRequest }, 'aGVsbG8=')).resolves.toBe(
-      '/tmp/orca-paste-image.png'
+      '/tmp/mcode-paste-image.png'
     )
 
     expect(sendRequest.mock.calls.map(([method]) => method)).toEqual([
@@ -150,7 +150,7 @@ describe('mobile clipboard image paste helpers', () => {
   })
 
   it('brackets generated image paths before sending to the terminal', () => {
-    expect(buildMobileImagePastePayload('/tmp/orca.png')).toBe('\x1b[200~/tmp/orca.png\x1b[201~')
+    expect(buildMobileImagePastePayload('/tmp/mcode.png')).toBe('\x1b[200~/tmp/mcode.png\x1b[201~')
     expect(buildMobileImagePastePayload('/tmp/\x1b.png')).toBe('\x1b[200~/tmp/\u241b.png\x1b[201~')
   })
 })

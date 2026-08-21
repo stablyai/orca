@@ -207,9 +207,9 @@ describe('runBackgroundWorktreeCreation', () => {
         id: 'repo-1',
         connectionId: null,
         gitRemoteIdentity: {
-          canonicalKey: 'github.com/stablyai/orca',
+          canonicalKey: 'github.com/mcode-ide/mcode',
           remoteName: 'origin',
-          remoteUrl: 'git@github.com:stablyai/orca.git'
+          remoteUrl: 'git@github.com:mcode-ide/mcode.git'
         }
       } as never
     ]
@@ -252,7 +252,7 @@ describe('runBackgroundWorktreeCreation', () => {
     expect(prepareEphemeralVmWorkspaceTargetMock).toHaveBeenCalledWith({
       repoId: 'repo-1',
       recipeId: 'cloud-sandbox',
-      projectId: 'github:stablyai/orca',
+      projectId: 'github:mcode-ide/mcode',
       workspaceName: 'feature',
       provisionId: 'creation-1',
       setupExistingFolder: store.setupProjectExistingFolder
@@ -299,7 +299,7 @@ describe('runBackgroundWorktreeCreation', () => {
         ephemeralVmRecipe: {
           sourceRepoId: 'repo-1',
           recipeId: 'cloud-sandbox',
-          projectId: 'github:stablyai/orca'
+          projectId: 'github:mcode-ide/mcode'
         },
         baseBranch: 'abc123',
         compareBaseRef: 'refs/remotes/origin/main',
@@ -453,9 +453,9 @@ describe('staged background worktree creation', () => {
       provider: 'jira' as const,
       type: 'issue' as const,
       number: 0,
-      title: 'ORCA-123 Durable Jira link',
-      url: 'https://company.atlassian.net/browse/ORCA-123',
-      jiraIdentifier: 'ORCA-123'
+      title: 'MCODE-123 Durable Jira link',
+      url: 'https://company.atlassian.net/browse/MCODE-123',
+      jiraIdentifier: 'MCODE-123'
     }
     const linkedTaskSourceContext = {
       kind: 'task-source' as const,
@@ -467,7 +467,7 @@ describe('staged background worktree creation', () => {
         provider: 'jira' as const,
         siteId: 'site-1',
         siteUrl: 'https://company.atlassian.net',
-        projectKey: 'ORCA'
+        projectKey: 'MCODE'
       },
       accountLabel: 'dev@company.test'
     }

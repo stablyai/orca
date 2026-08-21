@@ -26,7 +26,7 @@ describe('remote URL probe', () => {
   })
 
   it('bounds local and WSL remote reads with the shared timeout', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'git@github.com:acme/orca.git\n' })
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'git@github.com:acme/mcode.git\n' })
 
     await expect(
       readRemoteUrl({ repoPath: '/repo', wslDistro: 'Ubuntu' }, 'upstream')
@@ -50,7 +50,7 @@ describe('remote URL probe', () => {
   it('bounds the SSH remote read with the same deadline as the local one', async () => {
     const exec = vi.fn(
       async (_args: string[], _cwd: string, _options?: { signal?: AbortSignal }) => ({
-        stdout: 'git@github.com:acme/orca.git\n'
+        stdout: 'git@github.com:acme/mcode.git\n'
       })
     )
     getSshGitProviderMock.mockReturnValue({ exec })

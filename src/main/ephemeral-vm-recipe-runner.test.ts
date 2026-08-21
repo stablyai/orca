@@ -12,7 +12,7 @@ import {
   runEphemeralVmRecipeStart,
   runEphemeralVmRecipeSuspend
 } from './ephemeral-vm-recipe-runner'
-import type { OrcaVmRecipe } from '../shared/orca-yaml-hook-types'
+import type { MCodeVmRecipe } from '../shared/mcode-yaml-hook-types'
 
 const tmpRoots: string[] = []
 
@@ -23,7 +23,7 @@ afterEach(() => {
 })
 
 function makeRepo(): string {
-  const root = mkdtempSync(join(tmpdir(), 'orca-vm-recipe-runner-'))
+  const root = mkdtempSync(join(tmpdir(), 'mcode-vm-recipe-runner-'))
   tmpRoots.push(root)
   return root
 }
@@ -54,8 +54,8 @@ describe('runEphemeralVmRecipeStart', () => {
         scriptPath,
         [
           'console.log(JSON.stringify({',
-          '  schemaVersion: Number(process.env.ORCA_RECIPE_RESULT_SCHEMA_VERSION),',
-          '  ...(process.env.ORCA_RECIPE_RESULT_SCHEMA_VERSION === "2"',
+          '  schemaVersion: Number(process.env.MCODE_RECIPE_RESULT_SCHEMA_VERSION),',
+          '  ...(process.env.MCODE_RECIPE_RESULT_SCHEMA_VERSION === "2"',
           '    ? { checkoutMode: "provisioned-root" }',
           '    : {}),',
           `  pairingCode: ${JSON.stringify(makePairingCode())},`,
@@ -85,12 +85,12 @@ describe('runEphemeralVmRecipeStart', () => {
       scriptPath,
       [
         'console.error(`cwd:${process.cwd()}`)',
-        'console.error(`instance:${process.env.ORCA_VM_INSTANCE_ID}`)',
+        'console.error(`instance:${process.env.MCODE_VM_INSTANCE_ID}`)',
         'console.log(JSON.stringify({',
         '  schemaVersion: 1,',
         `  pairingCode: ${JSON.stringify(makePairingCode())},`,
         "  projectRoot: '/workspace/repo',",
-        '  userData: { providerResourceId: process.env.ORCA_VM_INSTANCE_ID }',
+        '  userData: { providerResourceId: process.env.MCODE_VM_INSTANCE_ID }',
         '}))'
       ].join('\n')
     )
@@ -107,7 +107,7 @@ describe('runEphemeralVmRecipeStart', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.context.recipeId).toBe('cloud-sandbox')
-      expect(result.context.instanceId).toMatch(/^orca-/)
+      expect(result.context.instanceId).toMatch(/^mcode-/)
       expect(getEphemeralVmRecipeResultProjectRoot(result.result)).toBe('/workspace/repo')
       expect(result.result.userData).toEqual({ providerResourceId: result.context.instanceId })
       expect(result.stderr).toContain(`cwd:${realpathSync(repoPath)}`)
@@ -127,7 +127,7 @@ describe('runEphemeralVmRecipeStart', () => {
         name: 'Cloud Sandbox',
         create: nodeCommand(scriptPath)
       },
-      context: { instanceId: 'orca-test-instance' }
+      context: { instanceId: 'mcode-test-instance' }
     })
 
     expect(result).toMatchObject({
@@ -136,7 +136,7 @@ describe('runEphemeralVmRecipeStart', () => {
       exitCode: 0,
       signal: null,
       context: {
-        instanceId: 'orca-test-instance',
+        instanceId: 'mcode-test-instance',
         recipeId: 'cloud-sandbox',
         repoPath
       }
@@ -207,18 +207,18 @@ describe('runEphemeralVmRecipeStart', () => {
 describe('runEphemeralVmRecipeCleanup', () => {
   it('builds a copyable cleanup payload and command', () => {
     const repoPath = makeRepo()
-    const recipe: OrcaVmRecipe = {
+    const recipe: MCodeVmRecipe = {
       id: 'cloud-sandbox',
       name: 'Cloud Sandbox',
       create: 'unused',
-      destroy: './scripts/orca-vm/destroy.sh'
+      destroy: './scripts/mcode-vm/destroy.sh'
     }
     const payload = buildEphemeralVmRecipeCleanupPayload({
       recipe,
       context: {
         recipeId: 'cloud-sandbox',
         repoPath,
-        instanceId: 'orca-test-instance',
+        instanceId: 'mcode-test-instance',
         workspaceName: 'fix-login-race'
       },
       recipeResult: {
@@ -232,7 +232,7 @@ describe('runEphemeralVmRecipeCleanup', () => {
       schemaVersion: 1,
       mode: 'destroy',
       recipeId: 'cloud-sandbox',
-      instanceId: 'orca-test-instance',
+      instanceId: 'mcode-test-instance',
       workspaceName: 'fix-login-race',
       recipeResult: { projectRoot: '/workspace/repo' }
     })
@@ -241,7 +241,7 @@ describe('runEphemeralVmRecipeCleanup', () => {
         destroyCommand: recipe.destroy!,
         payload
       })
-    ).toContain('| ./scripts/orca-vm/destroy.sh')
+    ).toContain('| ./scripts/mcode-vm/destroy.sh')
   })
 
   it('passes cleanup context and recipe result on stdin', async () => {
@@ -259,13 +259,13 @@ describe('runEphemeralVmRecipeCleanup', () => {
         '    recipeId: payload.recipeId,',
         '    instanceId: payload.instanceId,',
         '    projectRoot: payload.recipeResult.projectRoot,',
-        '    envMode: process.env.ORCA_VM_MODE,',
-        '    envWorkspace: process.env.ORCA_WORKSPACE_NAME',
+        '    envMode: process.env.MCODE_VM_MODE,',
+        '    envWorkspace: process.env.MCODE_WORKSPACE_NAME',
         '  }))',
         '})'
       ].join('\n')
     )
-    const recipe: OrcaVmRecipe = {
+    const recipe: MCodeVmRecipe = {
       id: 'cloud-sandbox',
       name: 'Cloud Sandbox',
       create: 'unused',
@@ -278,7 +278,7 @@ describe('runEphemeralVmRecipeCleanup', () => {
       context: {
         recipeId: 'cloud-sandbox',
         repoPath,
-        instanceId: 'orca-test-instance',
+        instanceId: 'mcode-test-instance',
         workspaceName: 'fix-login-race'
       },
       recipeResult: {
@@ -295,7 +295,7 @@ describe('runEphemeralVmRecipeCleanup', () => {
     expect(JSON.parse(result.stdout)).toEqual({
       mode: 'destroy',
       recipeId: 'cloud-sandbox',
-      instanceId: 'orca-test-instance',
+      instanceId: 'mcode-test-instance',
       projectRoot: '/workspace/repo',
       envMode: 'destroy',
       envWorkspace: 'fix-login-race'
@@ -316,7 +316,7 @@ describe('runEphemeralVmRecipeCleanup', () => {
       context: {
         recipeId: 'manual-sandbox',
         repoPath,
-        instanceId: 'orca-test-instance'
+        instanceId: 'mcode-test-instance'
       },
       recipeResult: {
         schemaVersion: 1,
@@ -347,7 +347,7 @@ describe('runEphemeralVmRecipeSuspend and runEphemeralVmRecipeResume', () => {
         "process.stdin.on('data', (chunk) => { input += chunk })",
         "process.stdin.on('end', () => {",
         '  const payload = JSON.parse(input)',
-        '  console.log(JSON.stringify({ mode: payload.mode, envMode: process.env.ORCA_VM_MODE }))',
+        '  console.log(JSON.stringify({ mode: payload.mode, envMode: process.env.MCODE_VM_MODE }))',
         '})'
       ].join('\n')
     )
@@ -363,7 +363,7 @@ describe('runEphemeralVmRecipeSuspend and runEphemeralVmRecipeResume', () => {
       context: {
         recipeId: 'cloud-sandbox',
         repoPath,
-        instanceId: 'orca-test-instance'
+        instanceId: 'mcode-test-instance'
       },
       recipeResult: {
         schemaVersion: 1,
@@ -409,7 +409,7 @@ describe('runEphemeralVmRecipeSuspend and runEphemeralVmRecipeResume', () => {
       context: {
         recipeId: 'cloud-sandbox',
         repoPath,
-        instanceId: 'orca-test-instance'
+        instanceId: 'mcode-test-instance'
       },
       recipeResult: {
         schemaVersion: 1,

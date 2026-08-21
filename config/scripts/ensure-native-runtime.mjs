@@ -269,7 +269,7 @@ function loadNodePtyNativeModule() {
   assertNodePtyWindowsConptyRuntime(native?.dir)
   if (requiresPatchedNodePtySourceBuild() && !isNodePtyReleaseBuildDir(native?.dir)) {
     throw new Error(
-      `node-pty resolved to ${native.dir}; expected build/Release so Orca's node-pty patch is active`
+      `node-pty resolved to ${native.dir}; expected build/Release so MCode's node-pty patch is active`
     )
   }
 }
@@ -300,7 +300,7 @@ function getPatchedNodePtyRebuildReason() {
     return null
   }
 
-  // Why: a loadable upstream node-pty prebuild is not enough; Orca's Unix
+  // Why: a loadable upstream node-pty prebuild is not enough; MCode's Unix
   // patch only lands in the source-built build/Release artifacts.
   const nodePtyDir = resolve(projectDir, 'node_modules', 'node-pty')
   const artifactPaths = [resolve(nodePtyDir, 'build', 'Release', 'pty.node')]

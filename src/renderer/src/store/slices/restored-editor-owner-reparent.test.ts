@@ -712,7 +712,7 @@ describe('restored editor owner reparent', () => {
     const listener = (event: Event): void => {
       externalChanges.push((event as CustomEvent).detail)
     }
-    window.addEventListener('orca:editor-external-file-change', listener)
+    window.addEventListener('mcode:editor-external-file-change', listener)
     const watcher = createExternalWatchEventHandler((path, owner) =>
       path === target.worktreePath && owner === null ? target : undefined
     )
@@ -751,7 +751,7 @@ describe('restored editor owner reparent', () => {
     ).toBe('renamed')
 
     watcher.dispose()
-    window.removeEventListener('orca:editor-external-file-change', listener)
+    window.removeEventListener('mcode:editor-external-file-change', listener)
     vi.useRealTimers()
   })
 })

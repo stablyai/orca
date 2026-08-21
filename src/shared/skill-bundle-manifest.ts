@@ -11,7 +11,7 @@ import {
 export const SKILL_BUNDLE_SCHEMA_VERSION = 1 as const
 export const AGENT_PLUGIN_SCHEMA_V1 =
   'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json' as const
-export const ORCA_SKILL_BUNDLE_MANIFEST_PATH = 'dev.orca.skill-sharing/manifest.json'
+export const MCODE_SKILL_BUNDLE_MANIFEST_PATH = 'dev.mcode.skill-sharing/manifest.json'
 export const AGENT_PLUGIN_MANIFEST_PATH = 'plugin.json'
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/

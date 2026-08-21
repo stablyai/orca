@@ -70,7 +70,7 @@ export async function resolveCurrentWorktreeSelector(
   if (!enclosingWorktree) {
     throw new RuntimeClientError(
       'selector_not_found',
-      `No Orca-managed worktree contains the current directory: ${currentPath}`
+      `No MCode-managed worktree contains the current directory: ${currentPath}`
     )
   }
 
@@ -144,7 +144,7 @@ export async function getBrowserWorktreeSelector(
 
 // Why: mirrors browser's implicit active-tab targeting. When --terminal is
 // omitted, resolve the active terminal in the current worktree so commands
-// like `orca terminal send --text "hello" --enter` Just Work.
+// like `mcode terminal send --text "hello" --enter` Just Work.
 export async function getTerminalHandle(
   flags: Map<string, string | boolean>,
   cwd: string,
@@ -215,7 +215,7 @@ export async function getComputerCommandTarget(
 export type EmulatorCliTarget = {
   worktree?: string
   device?: string
-  emulator?: string // Orca id from list
+  emulator?: string // MCode id from list
 }
 
 export async function getEmulatorWorktreeSelector(
@@ -237,11 +237,11 @@ export async function getEmulatorWorktreeSelector(
   if (client.isRemote) {
     return undefined
   }
-  const terminalWorktreeId = process.env.ORCA_WORKTREE_ID
+  const terminalWorktreeId = process.env.MCODE_WORKTREE_ID
   if (terminalWorktreeId?.trim()) {
     return terminalWorktreeId
   }
-  const folderWorkspaceId = process.env.ORCA_WORKSPACE_ID?.trim()
+  const folderWorkspaceId = process.env.MCODE_WORKSPACE_ID?.trim()
   if (folderWorkspaceId?.startsWith('folder:')) {
     return folderWorkspaceId
   }

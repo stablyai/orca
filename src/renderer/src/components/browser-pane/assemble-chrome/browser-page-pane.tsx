@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import { MCODE_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 import { normalizeExternalBrowserUrl } from '../../../../../shared/browser-url'
 import { getLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
@@ -249,7 +249,7 @@ export function BrowserPagePane({
   })
 
   // Why: a blank tab reads as 'about:blank' or the resolved data: URL, so match both to keep the "New Browser Tab" overlay visible.
-  const isBlankTab = browserTab.url === 'about:blank' || browserTab.url === ORCA_BROWSER_BLANK_URL
+  const isBlankTab = browserTab.url === 'about:blank' || browserTab.url === MCODE_BROWSER_BLANK_URL
   // Why: synchronous webview URL access blocks render; navigation handlers update this cache before their store writes can re-render the pane.
   const liveBrowserUrl = getLiveBrowserUrl(browserTab.id) ?? browserTab.url
   const externalUrl = getOpenableExternalUrl(liveBrowserUrl)

@@ -74,7 +74,7 @@ describe('createWorktreeSymlinks', () => {
   let error: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'orca-symlinks-'))
+    root = mkdtempSync(join(tmpdir(), 'mcode-symlinks-'))
     primary = join(root, 'primary')
     worktree = join(root, 'worktree')
     mkdirSync(primary, { recursive: true })
@@ -254,7 +254,7 @@ describe('createWorktreeSymlinks', () => {
     })
 
     expect(readFileSync(target, 'utf8')).toBe('RACE=1\n')
-    expect(existsSync(join(worktree, '.orca-apfs-clone-file-race'))).toBe(false)
+    expect(existsSync(join(worktree, '.mcode-apfs-clone-file-race'))).toBe(false)
     expect(warn).not.toHaveBeenCalled()
     expect(error).not.toHaveBeenCalled()
   })
@@ -429,7 +429,7 @@ describe('createWorktreeSharedPaths', () => {
   let error: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'orca-sharedpaths-'))
+    root = mkdtempSync(join(tmpdir(), 'mcode-sharedpaths-'))
     primary = join(root, 'primary')
     worktree = join(root, 'worktree')
     mkdirSync(primary, { recursive: true })
@@ -498,7 +498,7 @@ describe('createWorktreeCopiedPaths', () => {
   let error: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'orca-copiedpaths-'))
+    root = mkdtempSync(join(tmpdir(), 'mcode-copiedpaths-'))
     primary = join(root, 'primary')
     worktree = join(root, 'worktree')
     mkdirSync(primary, { recursive: true })
@@ -660,7 +660,7 @@ describe('removeWorktreeSymlinks', () => {
   let error: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'orca-unlink-'))
+    root = mkdtempSync(join(tmpdir(), 'mcode-unlink-'))
     primary = join(root, 'primary')
     worktree = join(root, 'worktree')
     mkdirSync(primary, { recursive: true })

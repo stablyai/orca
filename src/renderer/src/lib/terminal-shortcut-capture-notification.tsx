@@ -11,7 +11,7 @@ import {
 import { useAppStore } from '../store'
 import { translate } from '@/i18n/i18n'
 
-const STORAGE_PREFIX = 'orca.terminalShortcutCapturedNotice.'
+const STORAGE_PREFIX = 'mcode.terminalShortcutCapturedNotice.'
 const NOTICE_DURATION_MS = 20_000
 
 function hasShownNotice(actionId: KeybindingActionId): boolean {

@@ -2,26 +2,26 @@ import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../shared/cli-install-types'
 import { translate } from '@/i18n/i18n'
 
-type EnsureOrcaCliAvailableOptions = {
+type EnsureMCodeCliAvailableOptions = {
   onStatusChange?: (status: CliInstallStatus) => void
   registrationPromptDelayMs?: number
 }
 
 export const AGENT_SKILL_CLI_PREREQUISITE_NOTICE =
-  'Before opening setup, Orca may show a system prompt to register the Orca CLI command on PATH.'
+  'Before opening setup, MCode may show a system prompt to register the MCode CLI command on PATH.'
 
-export const CLI_PREREQUISITE_REGISTRATION_TOAST = 'Orca needs to register its CLI on PATH.'
+export const CLI_PREREQUISITE_REGISTRATION_TOAST = 'MCode needs to register its CLI on PATH.'
 export const CLI_PREREQUISITE_REGISTRATION_TOAST_DESCRIPTION =
-  'Approve the system prompt so skill setup can use the Orca CLI command.'
+  'Approve the system prompt so skill setup can use the MCode CLI command.'
 
-export function isOrcaCliAvailableOnPath(status: CliInstallStatus | null | undefined): boolean {
+export function isMCodeCliAvailableOnPath(status: CliInstallStatus | null | undefined): boolean {
   return status?.state === 'installed' && status.pathConfigured === true
 }
 
-export async function ensureOrcaCliAvailableForAgentSkillTerminal({
+export async function ensureMCodeCliAvailableForAgentSkillTerminal({
   onStatusChange,
   registrationPromptDelayMs = 700
-}: EnsureOrcaCliAvailableOptions = {}): Promise<CliInstallStatus | null> {
+}: EnsureMCodeCliAvailableOptions = {}): Promise<CliInstallStatus | null> {
   try {
     const status = await window.api.cli.getInstallStatus()
     onStatusChange?.(status)
@@ -39,7 +39,7 @@ export async function ensureOrcaCliAvailableForAgentSkillTerminal({
     if (status.state !== 'installed' || status.pathConfigured === false) {
       // Why: macOS may immediately show a native authorization prompt, so the
       // user needs app-level context before that OS dialog appears.
-      await showOrcaCliRegistrationPromptToast(registrationPromptDelayMs)
+      await showMCodeCliRegistrationPromptToast(registrationPromptDelayMs)
       const next = await window.api.cli.install()
       onStatusChange?.(next)
       showCliPrerequisiteWarning(next)
@@ -53,14 +53,14 @@ export async function ensureOrcaCliAvailableForAgentSkillTerminal({
         ? error.message
         : translate(
             'auto.lib.agent.skill.cli.prerequisite.8d6eedf97e',
-            'Failed to register the Orca CLI in PATH.'
+            'Failed to register the MCode CLI in PATH.'
           )
     )
     return null
   }
 }
 
-export async function showOrcaCliRegistrationPromptToast(delayMs = 700): Promise<void> {
+export async function showMCodeCliRegistrationPromptToast(delayMs = 700): Promise<void> {
   toast.message(CLI_PREREQUISITE_REGISTRATION_TOAST, {
     description: CLI_PREREQUISITE_REGISTRATION_TOAST_DESCRIPTION
   })
@@ -79,14 +79,14 @@ function showCliPrerequisiteWarning(status: CliInstallStatus): void {
     toast.warning(
       translate(
         'auto.lib.agent.skill.cli.prerequisite.2db0bd7515',
-        'Orca CLI registration is unavailable'
+        'MCode CLI registration is unavailable'
       ),
       {
         description:
           status.detail ??
           translate(
             'auto.lib.agent.skill.cli.prerequisite.15cbedc3e3',
-            'Install the Orca CLI before running agent skill setup.'
+            'Install the MCode CLI before running agent skill setup.'
           )
       }
     )
@@ -97,14 +97,14 @@ function showCliPrerequisiteWarning(status: CliInstallStatus): void {
     toast.warning(
       translate(
         'auto.lib.agent.skill.cli.prerequisite.e99d7dc36f',
-        'Orca CLI registration needs attention'
+        'MCode CLI registration needs attention'
       ),
       {
         description:
           status.detail ??
           translate(
             'auto.lib.agent.skill.cli.prerequisite.15cbedc3e3',
-            'Install the Orca CLI before running agent skill setup.'
+            'Install the MCode CLI before running agent skill setup.'
           )
       }
     )
@@ -115,7 +115,7 @@ function showCliPrerequisiteWarning(status: CliInstallStatus): void {
     toast.warning(
       translate(
         'auto.lib.agent.skill.cli.prerequisite.windowsPathUnknown',
-        'Orca could not check your Windows user PATH'
+        'MCode could not check your Windows user PATH'
       ),
       {
         description:
@@ -131,18 +131,18 @@ function showCliPrerequisiteWarning(status: CliInstallStatus): void {
 
   if (status.pathConfigured === false) {
     // Why: the skill installer opens a real shell; agents only get the expected
-    // Orca affordances when that shell can resolve the Orca CLI command.
+    // MCode affordances when that shell can resolve the MCode CLI command.
     toast.warning(
       translate(
         'auto.lib.agent.skill.cli.prerequisite.79371593b0',
-        'Orca CLI is not visible on PATH yet'
+        'MCode CLI is not visible on PATH yet'
       ),
       {
         description:
           status.detail ??
           translate(
             'auto.lib.agent.skill.cli.prerequisite.0f116999f1',
-            'Restart your shell or add the Orca CLI directory to PATH before setup.'
+            'Restart your shell or add the MCode CLI directory to PATH before setup.'
           )
       }
     )

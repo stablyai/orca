@@ -5,7 +5,7 @@ export const JA_UNIFIED_VALUES = {
   "Can't reach {{value0}}": '{{value0}} に接続できません',
   'Copy Address': 'アドレスをコピー',
   'Open Externally': '外部で開く',
-  'Show Orca Mobile Button': 'Orca Mobile ボタンを表示',
+  'Show MCode Mobile Button': 'MCode Mobile ボタンを表示',
   Paste: '貼り付け',
   'WSL default': 'WSL のデフォルト',
   'Unable to open the workspace attached to this issue.':
@@ -111,7 +111,7 @@ export const JA_UNIFIED_VALUES = {
   'Board settings': 'ボード設定',
   'Project on SSH host': 'SSH ホスト上のプロジェクト',
   'Created by automation': 'オートメーションによって作成',
-  'Open in Orca': 'Orca で開く',
+  'Open in MCode': 'MCode で開く',
   'Failed to copy link': 'リンクのコピーに失敗しました',
   'Delete Worktree': 'ワークツリーを削除',
   rename: '名前変更',
@@ -129,10 +129,10 @@ export const JA_UNIFIED_VALUES = {
   Replace: '置換',
   'Account scope': 'アカウントスコープ',
   'Agent Permissions': 'Agent の権限',
-  'Show the Orca Mobile button at the top of the left sidebar.':
-    '左サイドバー上部に Orca Mobile ボタンを表示します。',
-  'Enable Orca CLI': 'Orca CLI を有効化',
-  'Registered the Orca CLI in PATH.': 'Orca CLI を PATH に登録しました。',
+  'Show the MCode Mobile button at the top of the left sidebar.':
+    '左サイドバー上部に MCode Mobile ボタンを表示します。',
+  'Enable MCode CLI': 'MCode CLI を有効化',
+  'Registered the MCode CLI in PATH.': 'MCode CLI を PATH に登録しました。',
   'Failed to load CLI status.': 'CLI ステータスの読み込みに失敗しました。',
   'Fix PATH': 'PATH を修正',
   installed: 'インストール済み',
@@ -145,12 +145,12 @@ export const JA_UNIFIED_VALUES = {
     '接続された各 Linear ワークスペースには、アクティブなランタイムが保存したキーが 1 つあります。フルアクセスキーはキー所有者がアクセスできるすべてのチームを対象にできます。制限付きキーはいつでも置き換えられます。',
   'Add workspace access': 'ワークスペースへのアクセスを追加',
   'Learn more': '詳しく見る',
-  'Gitea credentials are configured but could not authenticate. Check the token, API base URL, and repository permissions, then restart Orca if environment variables changed.':
-    'Gitea の認証情報は設定されていますが、認証できませんでした。トークン、API ベース URL、リポジトリの権限を確認し、環境変数を変更した場合は Orca を再起動してください。',
-  'Azure DevOps credentials are configured but could not authenticate. Check the token, API base URL, and repository permissions, then restart Orca if environment variables changed.':
-    'Azure DevOps の認証情報は設定されていますが、認証できませんでした。トークン、API ベース URL、リポジトリの権限を確認し、環境変数を変更した場合は Orca を再起動してください。',
-  'Bitbucket credentials are configured but could not authenticate. Check the token and repository permissions, then restart Orca if environment variables changed.':
-    'Bitbucket の認証情報は設定されていますが、認証できませんでした。トークンとリポジトリの権限を確認し、環境変数を変更した場合は Orca を再起動してください。',
+  'Gitea credentials are configured but could not authenticate. Check the token, API base URL, and repository permissions, then restart MCode if environment variables changed.':
+    'Gitea の認証情報は設定されていますが、認証できませんでした。トークン、API ベース URL、リポジトリの権限を確認し、環境変数を変更した場合は MCode を再起動してください。',
+  'Azure DevOps credentials are configured but could not authenticate. Check the token, API base URL, and repository permissions, then restart MCode if environment variables changed.':
+    'Azure DevOps の認証情報は設定されていますが、認証できませんでした。トークン、API ベース URL、リポジトリの権限を確認し、環境変数を変更した場合は MCode を再起動してください。',
+  'Bitbucket credentials are configured but could not authenticate. Check the token and repository permissions, then restart MCode if environment variables changed.':
+    'Bitbucket の認証情報は設定されていますが、認証できませんでした。トークンとリポジトリの権限を確認し、環境変数を変更した場合は MCode を再起動してください。',
   'The GitLab CLI is installed but not authenticated. Run this command in a terminal:':
     'GitLab CLI はインストールされていますが、認証されていません。ターミナルで次のコマンドを実行してください:',
   'Install GitLab CLI': 'GitLab CLI をインストール',
@@ -241,6 +241,6 @@ export const JA_UNIFIED_VALUES = {
   '{{value0}} workspace{{value1}} connected':
     '{{value0}} ワークスペース{{value1}} が接続されました',
   Plugins: 'プラグイン',
-  'Orca will continue to work, but commands such as orca status, orca terminal, and orchestration are unavailable for this session.\n\n{{guidance}}\n\nCause: {{cause}}':
-    'Orca は引き続き使用できますが、このセッションでは orca status や orca terminal などのコマンドとオーケストレーションを利用できません。\n\n{{guidance}}\n\n原因: {{cause}}'
+  'MCode will continue to work, but commands such as mcode status, mcode terminal, and orchestration are unavailable for this session.\n\n{{guidance}}\n\nCause: {{cause}}':
+    'MCode は引き続き使用できますが、このセッションでは mcode status や mcode terminal などのコマンドとオーケストレーションを利用できません。\n\n{{guidance}}\n\n原因: {{cause}}'
 }

@@ -40,7 +40,7 @@ export type ShellWrapperFileBuilder = (root: string) => readonly ShellWrapperFil
 // itself. A future template that varies on something else about its location
 // would need that input folded in here, or two genuinely different trees would
 // collide on one directory.
-const HASH_PROBE_ROOT = '/__orca_shell_wrapper_root__'
+const HASH_PROBE_ROOT = '/__mcode_shell_wrapper_root__'
 const ROOT_HASH_LENGTH = 16
 // Why the hash sits ABOVE this leaf rather than below it: ZDOTDIR
 // self-reference guards -- in TS and as `*/shell-ready/zsh` globs baked into

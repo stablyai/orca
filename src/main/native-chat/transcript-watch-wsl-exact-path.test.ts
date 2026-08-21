@@ -3,9 +3,9 @@ import type * as NodeFsPromisesModule from 'node:fs/promises'
 
 const UBUNTU_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada'
 const ROLLOUT_LINUX =
-  '/home/ada/.local/share/orca/codex-runtime-home/home/sessions/2026/07/24/rollout-wsl.jsonl'
+  '/home/ada/.local/share/mcode/codex-runtime-home/home/sessions/2026/07/24/rollout-wsl.jsonl'
 const ROLLOUT_UNC =
-  '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.local\\share\\orca\\codex-runtime-home\\home\\sessions\\2026\\07\\24\\rollout-wsl.jsonl'
+  '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.local\\share\\mcode\\codex-runtime-home\\home\\sessions\\2026\\07\\24\\rollout-wsl.jsonl'
 
 const mocks = vi.hoisted(() => ({
   install: vi.fn(),

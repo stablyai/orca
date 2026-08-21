@@ -66,7 +66,7 @@ describe('runtime Jira client search bounds', () => {
       hostId: 'runtime:env-1' as const
     }
     jiraReadStatusLocal.mockResolvedValue({ connected: true, viewer: null })
-    jiraLookupIssueSummaryLocal.mockResolvedValue({ key: 'ORCA-1' })
+    jiraLookupIssueSummaryLocal.mockResolvedValue({ key: 'MCODE-1' })
     runtimeCall.mockImplementation(async (args: { method: string }) => {
       if (args.method === 'status.get') {
         return createCompatibleRuntimeStatusResponse()
@@ -75,23 +75,23 @@ describe('runtime Jira client search bounds', () => {
         id: 'rpc-1',
         ok: true,
         result:
-          args.method === 'jira.readStatus' ? { connected: true, viewer: null } : { key: 'ORCA-1' },
+          args.method === 'jira.readStatus' ? { connected: true, viewer: null } : { key: 'MCODE-1' },
         _meta: { runtimeId: 'remote-runtime' }
       }
     })
 
     await expect(jiraReadStatus(localContext)).resolves.toMatchObject({ connected: true })
-    await expect(jiraLookupIssueSummary(localContext, 'ORCA-1', 'site-1')).resolves.toMatchObject({
-      key: 'ORCA-1'
+    await expect(jiraLookupIssueSummary(localContext, 'MCODE-1', 'site-1')).resolves.toMatchObject({
+      key: 'MCODE-1'
     })
     await expect(jiraReadStatus(runtimeContext)).resolves.toMatchObject({ connected: true })
-    await expect(jiraLookupIssueSummary(runtimeContext, 'ORCA-1', 'site-1')).resolves.toMatchObject(
-      { key: 'ORCA-1' }
+    await expect(jiraLookupIssueSummary(runtimeContext, 'MCODE-1', 'site-1')).resolves.toMatchObject(
+      { key: 'MCODE-1' }
     )
 
     expect(jiraReadStatusLocal).toHaveBeenCalledTimes(1)
     expect(jiraLookupIssueSummaryLocal).toHaveBeenCalledWith({
-      key: 'ORCA-1',
+      key: 'MCODE-1',
       siteId: 'site-1',
       requestId: expect.any(String)
     })
@@ -101,7 +101,7 @@ describe('runtime Jira client search bounds', () => {
     expect(runtimeCall).toHaveBeenCalledWith(
       expect.objectContaining({
         method: 'jira.lookupIssueSummary',
-        params: { key: 'ORCA-1', siteId: 'site-1' },
+        params: { key: 'MCODE-1', siteId: 'site-1' },
         selector: 'env-1'
       })
     )
@@ -125,7 +125,7 @@ describe('runtime Jira client search bounds', () => {
     })
     const controller = new AbortController()
 
-    const lookup = jiraLookupIssueSummary(context, 'ORCA-1', 'site-1', controller.signal)
+    const lookup = jiraLookupIssueSummary(context, 'MCODE-1', 'site-1', controller.signal)
     controller.abort()
 
     await expect(lookup).rejects.toThrow('aborted')
@@ -160,7 +160,7 @@ describe('runtime Jira client search bounds', () => {
     await expect(
       jiraListAssignableUsers(
         { activeRuntimeEnvironmentId: 'env-1' },
-        'ORCA-1',
+        'MCODE-1',
         'x'.repeat(9 * 1024),
         'site-1'
       )
@@ -175,7 +175,7 @@ describe('runtime Jira client search bounds', () => {
       async (args: RuntimeSubscribeArgs, callbacks: RuntimeSubscribeCallbacks) => {
         const payload =
           args.method === 'jira.getIssueStream'
-            ? { key: 'ORCA-1', description: '![shot](data:image/png;base64,abc)' }
+            ? { key: 'MCODE-1', description: '![shot](data:image/png;base64,abc)' }
             : [{ id: 'comment-1', body: '![shot](data:image/png;base64,abc)' }]
         callbacks.onResponse({
           id: 'rpc-1',
@@ -194,10 +194,10 @@ describe('runtime Jira client search bounds', () => {
     )
 
     await expect(
-      jiraGetIssue({ activeRuntimeEnvironmentId: 'env-1' }, 'ORCA-1', 'site-1')
-    ).resolves.toMatchObject({ key: 'ORCA-1' })
+      jiraGetIssue({ activeRuntimeEnvironmentId: 'env-1' }, 'MCODE-1', 'site-1')
+    ).resolves.toMatchObject({ key: 'MCODE-1' })
     await expect(
-      jiraIssueComments({ activeRuntimeEnvironmentId: 'env-1' }, 'ORCA-1', 'site-1')
+      jiraIssueComments({ activeRuntimeEnvironmentId: 'env-1' }, 'MCODE-1', 'site-1')
     ).resolves.toMatchObject([{ id: 'comment-1' }])
 
     expect(runtimeSubscribe).toHaveBeenNthCalledWith(
@@ -205,7 +205,7 @@ describe('runtime Jira client search bounds', () => {
       {
         selector: 'env-1',
         method: 'jira.getIssueStream',
-        params: { key: 'ORCA-1', siteId: 'site-1' },
+        params: { key: 'MCODE-1', siteId: 'site-1' },
         timeoutMs: 60_000
       },
       expect.anything()
@@ -215,7 +215,7 @@ describe('runtime Jira client search bounds', () => {
       {
         selector: 'env-1',
         method: 'jira.issueCommentsStream',
-        params: { key: 'ORCA-1', siteId: 'site-1' },
+        params: { key: 'MCODE-1', siteId: 'site-1' },
         timeoutMs: 60_000
       },
       expect.anything()

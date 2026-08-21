@@ -74,14 +74,14 @@ describe('SSH config host picker search', () => {
       matchCount: 2,
       hasMore: false
     })
-    expect(result.hosts[0]).toMatchObject({ alias: 'prod', alreadyInOrca: true })
+    expect(result.hosts[0]).toMatchObject({ alias: 'prod', alreadyInMCode: true })
   })
 
-  it('marks a case-only alias variant as already in Orca', () => {
+  it('marks a case-only alias variant as already in MCode', () => {
     const result = searchSshConfigHosts([{ host: 'prod' }], [{ configHost: 'Prod', label: 'Prod' }])
 
     expect(result).toMatchObject({ totalHostCount: 1, newHostCount: 0 })
-    expect(result.hosts[0]).toMatchObject({ alias: 'prod', alreadyInOrca: true })
+    expect(result.hosts[0]).toMatchObject({ alias: 'prod', alreadyInMCode: true })
   })
 
   it('lists suppressed aliases for re-pick but excludes them from Add-all newHostCount', () => {
@@ -91,13 +91,13 @@ describe('SSH config host picker search', () => {
 
     expect(result).toMatchObject({ totalHostCount: 2, newHostCount: 1, matchCount: 2 })
     expect(result.hosts).toEqual([
-      expect.objectContaining({ alias: 'removed', previouslyRemoved: true, alreadyInOrca: false }),
-      expect.objectContaining({ alias: 'active', alreadyInOrca: false })
+      expect.objectContaining({ alias: 'removed', previouslyRemoved: true, alreadyInMCode: false }),
+      expect.objectContaining({ alias: 'active', alreadyInMCode: false })
     ])
     expect(result.hosts.find((host) => host.alias === 'active')?.previouslyRemoved).toBeUndefined()
   })
 
-  it('does not mark a host as previously removed when it is already in Orca', () => {
+  it('does not mark a host as previously removed when it is already in MCode', () => {
     const result = searchSshConfigHosts(
       [{ host: 'prod' }],
       [{ configHost: 'prod', label: 'Production' }],
@@ -107,7 +107,7 @@ describe('SSH config host picker search', () => {
 
     expect(result.hosts[0]).toMatchObject({
       alias: 'prod',
-      alreadyInOrca: true
+      alreadyInMCode: true
     })
     expect(result.hosts[0]?.previouslyRemoved).toBeUndefined()
     expect(result.newHostCount).toBe(0)

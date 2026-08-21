@@ -21,7 +21,7 @@ afterEach(async () => {
 })
 
 async function tempFile(initial: string): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-watch-'))
+  const root = await mkdtemp(join(tmpdir(), 'mcode-native-chat-watch-'))
   tempRoots.push(root)
   const filePath = join(root, 'rollout.jsonl')
   await writeFile(filePath, initial)
@@ -31,7 +31,7 @@ async function tempFile(initial: string): Promise<string> {
 // A path inside a fresh temp dir with nothing written yet — simulates a
 // just-created session whose agent hasn't flushed its first JSONL line (#8401).
 async function pendingFilePath(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-watch-pending-'))
+  const root = await mkdtemp(join(tmpdir(), 'mcode-native-chat-watch-pending-'))
   tempRoots.push(root)
   return join(root, 'rollout.jsonl')
 }

@@ -2,7 +2,7 @@
 //
 // The spike answers an empirical question (see README): what is the MINIMAL
 // set of files that must be copied out of a packaged win-unpacked build so a
-// COPIED Orca.exe (ELECTRON_RUN_AS_NODE=1) can host the terminal daemon and a
+// COPIED MCode.exe (ELECTRON_RUN_AS_NODE=1) can host the terminal daemon and a
 // real ConPTY session while holding no open handles into the install dir.
 
 export const TIERS = ['full', 'no-gpu', 'minimal']
@@ -15,17 +15,17 @@ Usage:
   node tests/tools/daemon-relocation-spike/spike.mjs --selftest
 
 Required (launch mode):
-  --app-dir <path>    Path to a packaged win-unpacked build (contains Orca.exe)
+  --app-dir <path>    Path to a packaged win-unpacked build (contains MCode.exe)
   --work-dir <path>   Scratch dir for the copied host + logs (created, then removed)
 
 Options:
   --tier <t>          File-set tier to copy: "full" (default), "no-gpu", "minimal"
-                        full    = Orca.exe + icudtl.dat + both snapshot blobs +
+                        full    = MCode.exe + icudtl.dat + both snapshot blobs +
                                   ALL top-level *.dll + daemon bundle + node-pty
                         no-gpu  = full minus GPU/render DLLs (libEGL, libGLESv2,
                                   vk_swiftshader, vulkan-1, d3dcompiler_47);
                                   ffmpeg.dll kept
-                        minimal = Orca.exe + icudtl.dat + both snapshots +
+                        minimal = MCode.exe + icudtl.dat + both snapshots +
                                   daemon bundle + node-pty only (no top-level DLLs)
   --keep-work-dir     Leave --work-dir on disk after the run (for inspection)
   --selftest          Validate arg parsing, tier defs, and the module-path filter

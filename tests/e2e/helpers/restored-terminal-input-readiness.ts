@@ -18,7 +18,7 @@ export async function waitForRestoredTerminalInputReady(
   let pendingAttempts: readonly ReadinessAttempt[] = []
 
   while (Date.now() < deadline) {
-    const marker = `ORCA_RESTORED_INPUT_READY_${randomUUID().replaceAll('-', '')}`
+    const marker = `MCODE_RESTORED_INPUT_READY_${randomUUID().replaceAll('-', '')}`
     const [input] = buildFreshShellProbeInputSequence(`echo ${marker}\r`)
     if (!input) {
       return false
@@ -32,10 +32,10 @@ export async function waitForRestoredTerminalInputReady(
               continue
             }
             const container = pane.container as HTMLElement & {
-              __orcaE2eTerminalInputReadinessInstanceId?: string
+              __mcodeE2eTerminalInputReadinessInstanceId?: string
             }
-            container.__orcaE2eTerminalInputReadinessInstanceId ??= crypto.randomUUID()
-            const paneInstanceId = container.__orcaE2eTerminalInputReadinessInstanceId
+            container.__mcodeE2eTerminalInputReadinessInstanceId ??= crypto.randomUUID()
+            const paneInstanceId = container.__mcodeE2eTerminalInputReadinessInstanceId
             const output = pane.serializeAddon?.serialize?.() ?? ''
             if (
               pendingAttempts.some(

@@ -1,4 +1,4 @@
-// One-paste freeze report: `await window.__orcaTerminalFreezeReport()` in the
+// One-paste freeze report: `await window.__mcodeTerminalFreezeReport()` in the
 // DevTools console of a frozen window returns renderer state, main state (with
 // per-pty delivery table), and both processes' breadcrumb history in a single
 // JSON blob. Assembled over invoke IPC — the direction proven alive in every
@@ -48,12 +48,12 @@ export async function buildTerminalFreezeReport(): Promise<TerminalFreezeReport>
 }
 
 type TerminalFreezeReportWindow = Window & {
-  __orcaTerminalFreezeReport?: () => Promise<TerminalFreezeReport>
+  __mcodeTerminalFreezeReport?: () => Promise<TerminalFreezeReport>
 }
 
 export function installTerminalFreezeReport(): void {
   if (typeof window === 'undefined') {
     return
   }
-  ;(window as TerminalFreezeReportWindow).__orcaTerminalFreezeReport = buildTerminalFreezeReport
+  ;(window as TerminalFreezeReportWindow).__mcodeTerminalFreezeReport = buildTerminalFreezeReport
 }

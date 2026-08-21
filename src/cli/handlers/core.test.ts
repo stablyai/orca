@@ -7,7 +7,7 @@ const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
 vi.mock('node:child_process', () => ({ spawn: spawnMock }))
 
 // Keep the socket runtime client out of the import graph; only the error type
-// and serveOrcaApp binding are referenced by the module under test.
+// and serveMCodeApp binding are referenced by the module under test.
 vi.mock('../runtime-client', () => ({
   RuntimeClientError: class RuntimeClientError extends Error {
     readonly code: string
@@ -16,7 +16,7 @@ vi.mock('../runtime-client', () => ({
       this.code = code
     }
   },
-  serveOrcaApp: vi.fn()
+  serveMCodeApp: vi.fn()
 }))
 
 import { CORE_HANDLERS } from './core'
@@ -39,7 +39,7 @@ function mockClaudeChild(): { once: (event: string, cb: (...args: unknown[]) => 
   return child
 }
 
-describe('orca claude-teams CLI handler', () => {
+describe('mcode claude-teams CLI handler', () => {
   const isWindows = process.platform === 'win32'
   let previousRunAsNode: string | undefined
   let previousPaneKey: string | undefined
@@ -69,12 +69,12 @@ describe('orca claude-teams CLI handler', () => {
       }
     })
     previousRunAsNode = process.env.ELECTRON_RUN_AS_NODE
-    previousPaneKey = process.env.ORCA_PANE_KEY
+    previousPaneKey = process.env.MCODE_PANE_KEY
     previousExitCode = process.exitCode
-    // The `orca` launcher runs Orca's Electron binary as Node, so the CLI process
+    // The `mcode` launcher runs MCode's Electron binary as Node, so the CLI process
     // itself carries ELECTRON_RUN_AS_NODE=1. Reproduce that inherited flag here.
     process.env.ELECTRON_RUN_AS_NODE = '1'
-    process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
+    process.env.MCODE_PANE_KEY = 'tab-1:leaf-1'
   })
 
   afterEach(() => {
@@ -84,9 +84,9 @@ describe('orca claude-teams CLI handler', () => {
       process.env.ELECTRON_RUN_AS_NODE = previousRunAsNode
     }
     if (previousPaneKey === undefined) {
-      delete process.env.ORCA_PANE_KEY
+      delete process.env.MCODE_PANE_KEY
     } else {
-      process.env.ORCA_PANE_KEY = previousPaneKey
+      process.env.MCODE_PANE_KEY = previousPaneKey
     }
     process.exitCode = previousExitCode
   })
@@ -112,20 +112,20 @@ describe('orca claude-teams CLI handler', () => {
   it.skipIf(isWindows)(
     'still forwards non-Electron parent env and prepareLaunch env to claude',
     async () => {
-      const previousMarker = process.env.ORCA_TEST_MARKER
-      process.env.ORCA_TEST_MARKER = 'keep-me'
+      const previousMarker = process.env.MCODE_TEST_MARKER
+      process.env.MCODE_TEST_MARKER = 'keep-me'
       try {
         await runClaudeTeams()
       } finally {
         if (previousMarker === undefined) {
-          delete process.env.ORCA_TEST_MARKER
+          delete process.env.MCODE_TEST_MARKER
         } else {
-          process.env.ORCA_TEST_MARKER = previousMarker
+          process.env.MCODE_TEST_MARKER = previousMarker
         }
       }
 
       const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env as SpawnEnv
-      expect(spawnEnv.ORCA_TEST_MARKER).toBe('keep-me')
+      expect(spawnEnv.MCODE_TEST_MARKER).toBe('keep-me')
       expect(spawnEnv.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS).toBe('1')
       expect(spawnEnv.PATH).toBe('/shim:/usr/bin')
     }

@@ -2,7 +2,7 @@
  * Env-gated diagnostics for the daemon→main stream backlog: samples the
  * batcher queue and each stream socket's user-space write buffer so
  * multi-second echo lag can be attributed to the hop that actually holds the
- * bytes. Enable by setting ORCA_DAEMON_STREAM_BACKLOG_FILE to a writable
+ * bytes. Enable by setting MCODE_DAEMON_STREAM_BACKLOG_FILE to a writable
  * path; zero cost otherwise. The timer only observes and appends JSONL — it
  * never mutates delivery state.
  */
@@ -27,7 +27,7 @@ export function recordDaemonStreamBacklogEvent(
   event: string,
   detail: Record<string, unknown>
 ): void {
-  const filePath = process.env.ORCA_DAEMON_STREAM_BACKLOG_FILE
+  const filePath = process.env.MCODE_DAEMON_STREAM_BACKLOG_FILE
   if (!filePath) {
     return
   }
@@ -39,7 +39,7 @@ export function recordDaemonStreamBacklogEvent(
 }
 
 export function startDaemonStreamBacklogProbe(sample: () => StreamBacklogSample): () => void {
-  const filePath = process.env.ORCA_DAEMON_STREAM_BACKLOG_FILE
+  const filePath = process.env.MCODE_DAEMON_STREAM_BACKLOG_FILE
   if (!filePath) {
     return () => {}
   }

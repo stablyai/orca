@@ -1,5 +1,5 @@
 /**
- * Real-fish regression for #13892: a terminal query reply Orca held back is overtaken
+ * Real-fish regression for #13892: a terminal query reply MCode held back is overtaken
  * by the DA1 answer written later in the same turn, so fish's read sentinel hands the
  * tty to the child while the OSC 11 reply is still queued — and the CHILD READS IT.
  *
@@ -26,7 +26,7 @@ import { PtyStartupIngress } from './pty-startup-ingress'
 const FISH = resolveFishBinary(4)
 const itWithFish = FISH.available ? it : it.skip
 
-const PROMPT_MARK = 'ORCA13892> '
+const PROMPT_MARK = 'MCODE13892> '
 
 /* oxlint-disable no-control-regex -- terminal query grammars are control sequences */
 /** Anchored at an ESC, first match wins; reply values match xterm.js's. */
@@ -40,7 +40,7 @@ const QUERY_GRAMMARS = [
   { re: /^\x1b\[\?996n/, reply: () => '\x1b[?997;1n' },
   { re: /^\x1b\[>0?c/, reply: () => '\x1b[>0;276;0c' },
   { re: /^\x1b\[0?c/, reply: () => '\x1b[?1;2c' },
-  { re: /^\x1b\[>0?q/, reply: () => '\x1bP>|Orca\x1b\\' },
+  { re: /^\x1b\[>0?q/, reply: () => '\x1bP>|MCode\x1b\\' },
   { re: /^\x1b\[\?u/, reply: () => '\x1b[?0u' }
 ] as const
 /** Still accumulating: no CSI final byte and no OSC/DCS terminator yet. */
@@ -82,7 +82,7 @@ describe('a held query reply never reaches the next child process (#13892)', () 
   itWithFish(
     'answers OSC 11 in the query turn so the reply cannot land in the child’s stdin',
     async () => {
-      configHome = mkdtempSync(path.join(tmpdir(), 'orca-fish-13892-'))
+      configHome = mkdtempSync(path.join(tmpdir(), 'mcode-fish-13892-'))
       mkdirSync(path.join(configHome, 'fish'), { recursive: true })
       writeFileSync(
         path.join(configHome, 'fish/config.fish'),
@@ -119,8 +119,8 @@ describe('a held query reply never reaches the next child process (#13892)', () 
           LANG: 'en_US.UTF-8',
           XDG_CONFIG_HOME: configHome,
           XDG_DATA_HOME: path.join(configHome, 'data'),
-          ORCA_NODE_BIN: process.execPath,
-          ORCA_CHILD_SCRIPT: childScript
+          MCODE_NODE_BIN: process.execPath,
+          MCODE_CHILD_SCRIPT: childScript
         }
       })
 
@@ -191,7 +191,7 @@ describe('a held query reply never reaches the next child process (#13892)', () 
         // OSC 11) and hands the tty over in the same breath.
         term.write('sleep 0.4\r')
         await sleep(150)
-        term.write('"$ORCA_NODE_BIN" "$ORCA_CHILD_SCRIPT"\r')
+        term.write('"$MCODE_NODE_BIN" "$MCODE_CHILD_SCRIPT"\r')
         await sleep(1_500)
         expect(oscQueryCount).toBeGreaterThan(oscQueriesBeforeHandoff)
 

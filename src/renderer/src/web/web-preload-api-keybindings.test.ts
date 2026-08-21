@@ -24,7 +24,7 @@ describe('web keybindings preload API', () => {
     })
 
     expect(updated.overrides['worktree.palette']).toEqual(['Ctrl+Alt+J'])
-    expect(storage.getItem('orca.web.keybindings.v1')).toContain('worktree.palette')
+    expect(storage.getItem('mcode.web.keybindings.v1')).toContain('worktree.palette')
 
     const disabled = await api.keybindings.setAction({
       actionId: 'worktree.palette',

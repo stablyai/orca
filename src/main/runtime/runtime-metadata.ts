@@ -21,7 +21,7 @@ export function clearRuntimeMetadata(userDataPath: string): void {
 
 /**
  * Why: clearing metadata unconditionally on quit would race with a sibling
- * Orca process during auto-updater handoff (the new process may already
+ * MCode process during auto-updater handoff (the new process may already
  * have written its own metadata before the old process finishes tearing
  * down). The ownership guard — pid + runtimeId must both match the values
  * the caller recorded at its own startup — keeps the clean-exit case honest

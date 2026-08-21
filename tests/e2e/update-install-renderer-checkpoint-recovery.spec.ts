@@ -1,20 +1,20 @@
 import path from 'node:path'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 
 const CHECKPOINT_ERROR = 'Renderer shutdown checkpoint was not completed.'
 
 test('recovers update install from a corrupt clean session but preserves dirty drafts', async ({
-  orcaPage,
+  mcodePage,
   testRepoPath
 }) => {
   const fallbackLogs: string[] = []
-  orcaPage.on('console', (message) => {
+  mcodePage.on('console', (message) => {
     if (message.text().includes('Full renderer session snapshot failed; using durable session')) {
       fallbackLogs.push(message.text())
     }
   })
 
-  const dirtyResult = await orcaPage.evaluate(
+  const dirtyResult = await mcodePage.evaluate(
     async ({ filePath, worktreeId }) => {
       const store = window.__store
       if (!store) {
@@ -48,13 +48,13 @@ test('recovers update install from a corrupt clean session but preserves dirty d
     },
     {
       filePath: path.join(testRepoPath, 'checkpoint-draft.txt'),
-      worktreeId: await orcaPage.evaluate(() => window.__store?.getState().activeWorktreeId ?? '')
+      worktreeId: await mcodePage.evaluate(() => window.__store?.getState().activeWorktreeId ?? '')
     }
   )
 
   expect(dirtyResult).toBe(CHECKPOINT_ERROR)
 
-  const cleanResult = await orcaPage.evaluate(async () => {
+  const cleanResult = await mcodePage.evaluate(async () => {
     const store = window.__store
     if (!store) {
       throw new Error('window.__store is not available')

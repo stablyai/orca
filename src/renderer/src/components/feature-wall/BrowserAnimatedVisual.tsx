@@ -6,7 +6,7 @@ import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { FeatureWallClickRing } from './FeatureWallClickRing'
 import { translate } from '@/i18n/i18n'
 
-// Why: this animation tells the full Orca story end-to-end — the user opens a
+// Why: this animation tells the full MCode story end-to-end — the user opens a
 // new browser tab, annotates a target on the pricing page, types a change,
 // hands off to Claude in a split pane, and Claude edits + verifies the page.
 // The DOM and timing track docs/feature-wall-workbench-tile-mock.html so the
@@ -15,7 +15,7 @@ import { translate } from '@/i18n/i18n'
 const PROMPT_TEXT = 'Make Starter card stand out'
 
 // Why: these hand-rolled tour popovers need the same dark-mode separation as
-// Orca's dropdown/popover primitives while staying inside the storyboard DOM.
+// MCode's dropdown/popover primitives while staying inside the storyboard DOM.
 const TOUR_FLOATING_SURFACE_CLASS =
   'border border-black/14 bg-[rgba(255,255,255,0.82)] text-popover-foreground shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl dark:border-white/14 dark:bg-[rgba(0,0,0,0.72)] dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)]'
 

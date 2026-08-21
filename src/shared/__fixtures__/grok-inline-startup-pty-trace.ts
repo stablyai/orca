@@ -6,7 +6,7 @@ import type { GrokStartupTraceChunk } from './grok-startup-pty-trace'
  * `[ui] screen_mode = "minimal"` in ~/.grok/config.toml.
  *
  * Recorded from: grok 1.0.0 (3cd0d0cbcebe) [stable] on macOS (darwin 25.3.0),
- * xterm-256color 120x30 via node-pty, cwd = an Orca git worktree, 10s of output
+ * xterm-256color 120x30 via node-pty, cwd = an MCode git worktree, 10s of output
  * from spawn.
  *
  * This mode emits NO alternate-screen switch, so the composer-glyph marker never

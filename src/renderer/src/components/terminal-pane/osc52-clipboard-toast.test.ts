@@ -119,7 +119,7 @@ describe('showOsc52ClipboardFailedToast', () => {
 
     expect(toastErrorMock).toHaveBeenCalledWith('Terminal clipboard copy could not be confirmed', {
       description:
-        'The terminal app requested a copy, but Orca could not confirm that it reached the system clipboard.',
+        'The terminal app requested a copy, but MCode could not confirm that it reached the system clipboard.',
       duration: 12_000
     })
   })

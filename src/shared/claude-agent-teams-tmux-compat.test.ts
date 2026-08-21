@@ -37,12 +37,12 @@ describe('claude agent teams tmux compat primitives', () => {
       renderTmuxFormat(
         '#{session_name}:#{window_index}:#{missing}',
         {
-          session_name: 'orca',
+          session_name: 'mcode',
           window_index: '0'
         },
         'fallback'
       )
-    ).toBe('orca:0:')
+    ).toBe('mcode:0:')
   })
 
   it('maps send-keys tokens using practical tmux semantics', () => {

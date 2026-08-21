@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import type { AppState } from '../../src/renderer/src/store/types'
-import { expect } from './helpers/orca-app'
+import { expect } from './helpers/mcode-app'
 
 export function configureIsolatedGitIdentity(homePath: string): void {
   writeFileSync(
@@ -48,7 +48,7 @@ export async function createProjectFixtures(): Promise<{
   reconnectCatalogPath: string
   rootPath: string
 }> {
-  const rootPath = realpathSync(await mkdtemp(path.join(os.tmpdir(), 'orca-pr11346-headed-')))
+  const rootPath = realpathSync(await mkdtemp(path.join(os.tmpdir(), 'mcode-pr11346-headed-')))
   const gitPath = path.join(rootPath, 'remote-git-project')
   const folderPath = path.join(rootPath, 'remote-plain-folder')
   const cloneParentPath = path.join(rootPath, 'remote-clones')

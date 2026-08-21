@@ -45,7 +45,7 @@ describe('resolveRemoteNodePath', () => {
     execCommandMock
       .mockResolvedValueOnce('/usr/bin/node\n/home/u/.nvm/versions/node/v22.22.0/bin/node\n')
       .mockRejectedValueOnce(new Error('/usr/bin/npm: not found'))
-      .mockResolvedValueOnce('__ORCA_NODE_VERSION__\nv22.22.0\n__ORCA_NPM_VERSION__\n11.13.0\n')
+      .mockResolvedValueOnce('__MCODE_NODE_VERSION__\nv22.22.0\n__MCODE_NPM_VERSION__\n11.13.0\n')
 
     await expect(resolveRemoteNodePath(conn)).resolves.toBe(
       '/home/u/.nvm/versions/node/v22.22.0/bin/node'
@@ -60,7 +60,7 @@ describe('resolveRemoteNodePath', () => {
   it.runIf(process.platform !== 'win32')(
     'accepts npm elsewhere on PATH without probing another Node candidate',
     async () => {
-      const root = mkdtempSync(path.join(os.tmpdir(), 'orca-split-node-npm-'))
+      const root = mkdtempSync(path.join(os.tmpdir(), 'mcode-split-node-npm-'))
       try {
         const nodePath = path.join(root, 'selected node', 'bin', 'node')
         const npmBinDir = path.join(root, 'npm elsewhere', 'bin')
@@ -193,7 +193,7 @@ describe('resolveRemoteNodePath', () => {
     await resolveRemoteNodePath(conn)
 
     const callScript = execCommandMock.mock.calls[0]![1] as string
-    const home = mkdtempSync(path.join(os.tmpdir(), 'orca-nvm-probe-'))
+    const home = mkdtempSync(path.join(os.tmpdir(), 'mcode-nvm-probe-'))
     try {
       const nodePath = path.join(home, 'tilde-nvm/versions/node/v20.11.0/bin/node')
       mkdirSync(path.dirname(nodePath), { recursive: true })

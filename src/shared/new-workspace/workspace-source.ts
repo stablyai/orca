@@ -121,7 +121,7 @@ export function getUsableLinearBranchName(
   branchName: string | null | undefined
 ): string | undefined {
   // Why: only a non-blank normalized value can safely enter the exact git-ref
-  // override path; missing values must keep Orca's generated-name fallback.
+  // override path; missing values must keep MCode's generated-name fallback.
   return branchName?.trim() || undefined
 }
 

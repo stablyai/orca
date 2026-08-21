@@ -9,13 +9,13 @@ const readyInput = {
   provider: 'github' as const,
   issueNumber: 42,
   template: 'gh issue view {{issue}} --repo {{artifact_url}}',
-  artifactUrl: 'https://github.com/stablyai/orca/issues/42'
+  artifactUrl: 'https://github.com/mcode-ide/mcode/issues/42'
 }
 
 describe('composer issue command', () => {
   it('renders a trusted GitHub issue command', () => {
     expect(buildTrustedComposerIssueCommand({ ...readyInput, trustDecision: 'run' })).toEqual({
-      command: 'gh issue view 42 --repo https://github.com/stablyai/orca/issues/42'
+      command: 'gh issue view 42 --repo https://github.com/mcode-ide/mcode/issues/42'
     })
   })
 

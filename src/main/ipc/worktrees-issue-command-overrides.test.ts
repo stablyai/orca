@@ -105,10 +105,10 @@ describe('registerWorktreeHandlers', () => {
       undefined
     )
     expect(result).toMatchObject({
-      runnerScriptPath: '/workspace/repo/.git/orca/issue-command-runner.sh',
+      runnerScriptPath: '/workspace/repo/.git/mcode/issue-command-runner.sh',
       envVars: {
-        ORCA_ROOT_PATH: '/workspace/repo',
-        ORCA_WORKTREE_PATH: '/workspace/improve-dashboard'
+        MCODE_ROOT_PATH: '/workspace/repo',
+        MCODE_WORKTREE_PATH: '/workspace/improve-dashboard'
       }
     })
   })
@@ -125,7 +125,7 @@ describe('registerWorktreeHandlers', () => {
     }
     const fsProvider = {
       readFile: vi.fn(async (filePath: string) => {
-        if (filePath.endsWith('/.orca/issue-command')) {
+        if (filePath.endsWith('/.mcode/issue-command')) {
           return { content: 'local command\n', isBinary: false }
         }
         throw new Error('shared read failed')
@@ -169,7 +169,7 @@ describe('registerWorktreeHandlers', () => {
     await expect(
       handlers['hooks:writeIssueCommand'](null, {
         repoId: 'repo-ssh',
-        content: 'orca issue command'
+        content: 'mcode issue command'
       })
     ).rejects.toThrow('ssh read failed')
 
@@ -192,7 +192,7 @@ describe('registerWorktreeHandlers', () => {
     }
     const fsProvider = {
       readFile: vi.fn(async (filePath: string) => {
-        if (filePath.endsWith('/.orca/issue-command')) {
+        if (filePath.endsWith('/.mcode/issue-command')) {
           return { content: 'remote command\n', isBinary: false }
         }
         throw Object.assign(new Error('missing'), { code: 'ENOENT' })
@@ -212,7 +212,7 @@ describe('registerWorktreeHandlers', () => {
       effectiveContent: 'remote command',
       source: 'local'
     })
-    expect(fsProvider.readFile).toHaveBeenCalledWith('/remote/repo/.orca/issue-command')
+    expect(fsProvider.readFile).toHaveBeenCalledWith('/remote/repo/.mcode/issue-command')
   })
 
   it('creates remote .gitignore only when it is missing while writing SSH issue commands', async () => {
@@ -237,14 +237,14 @@ describe('registerWorktreeHandlers', () => {
 
     await handlers['hooks:writeIssueCommand'](null, {
       repoId: 'repo-ssh',
-      content: 'orca issue command'
+      content: 'mcode issue command'
     })
 
-    expect(fsProvider.writeFile).toHaveBeenNthCalledWith(1, '/remote/repo/.gitignore', '.orca\n')
+    expect(fsProvider.writeFile).toHaveBeenNthCalledWith(1, '/remote/repo/.gitignore', '.mcode\n')
     expect(fsProvider.writeFile).toHaveBeenNthCalledWith(
       2,
-      '/remote/repo/.orca/issue-command',
-      'orca issue command\n'
+      '/remote/repo/.mcode/issue-command',
+      'mcode issue command\n'
     )
   })
 
@@ -264,7 +264,7 @@ describe('registerWorktreeHandlers', () => {
     await expect(
       handlers['hooks:writeIssueCommand'](null, {
         repoId: 'repo-ssh',
-        content: 'orca issue command'
+        content: 'mcode issue command'
       })
     ).rejects.toThrow('Remote filesystem unavailable')
   })

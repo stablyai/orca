@@ -5,7 +5,7 @@ describe('scanForShellReadyMarker', () => {
   it('strips the marker and preserves surrounding output', () => {
     const state = createShellReadyMarkerScanState()
 
-    expect(scanForShellReadyMarker(state, 'before \x1b]777;orca-shell-ready\x07 after')).toEqual({
+    expect(scanForShellReadyMarker(state, 'before \x1b]777;mcode-shell-ready\x07 after')).toEqual({
       output: 'before  after',
       matched: true
     })
@@ -14,7 +14,7 @@ describe('scanForShellReadyMarker', () => {
   it('matches markers split across chunks', () => {
     const state = createShellReadyMarkerScanState()
 
-    expect(scanForShellReadyMarker(state, 'before \x1b]777;orca')).toEqual({
+    expect(scanForShellReadyMarker(state, 'before \x1b]777;mcode')).toEqual({
       output: 'before ',
       matched: false
     })
@@ -27,8 +27,8 @@ describe('scanForShellReadyMarker', () => {
   it('flushes marker-like output when the full marker is not BEL-terminated', () => {
     const state = createShellReadyMarkerScanState()
 
-    expect(scanForShellReadyMarker(state, 'before \x1b]777;orca-shell-readyx')).toEqual({
-      output: 'before \x1b]777;orca-shell-readyx',
+    expect(scanForShellReadyMarker(state, 'before \x1b]777;mcode-shell-readyx')).toEqual({
+      output: 'before \x1b]777;mcode-shell-readyx',
       matched: false
     })
     expect(scanForShellReadyMarker(state, ' after')).toEqual({

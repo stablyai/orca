@@ -35,10 +35,10 @@ export function removeAppImageRuntimeEnv(env: Record<string, string>): void {
   }
 
   // Why: zsh treats exported ARGV0 as argv[0] for external commands, so an
-  // AppImage launch can make host commands think they were invoked as Orca.
+  // AppImage launch can make host commands think they were invoked as MCode.
   const appDir = normalizeAppDir(env.APPDIR)
   if (appDir) {
-    // Why: AppImage mount paths are for Orca's own loader; user shells should
+    // Why: AppImage mount paths are for MCode's own loader; user shells should
     // resolve commands and shared libraries from the host environment.
     for (const key of ['PATH', 'LD_LIBRARY_PATH'] as const) {
       const cleaned = removeAppDirPathEntries(env[key], appDir)

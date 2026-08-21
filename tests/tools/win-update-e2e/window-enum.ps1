@@ -17,14 +17,14 @@
 # Compile the P/Invoke enumerator once. Guard on the type already existing so
 # repeated dot-sourcing inside the watch loop does not re-run Add-Type (which
 # throws on a duplicate type).
-if (-not ('OrcaWinEnum.Native' -as [type])) {
+if (-not ('MCodeWinEnum.Native' -as [type])) {
   Add-Type -TypeDefinition @'
 using System;
 using System.Text;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
-namespace OrcaWinEnum {
+namespace MCodeWinEnum {
   public static class Native {
     private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
 
@@ -75,7 +75,7 @@ function Get-VisibleTopLevelWindows {
   # @() forces an array even when Enumerate() returns a single row — the PS 5.1
   # single-item unwrap pitfall that caused a production incident when a count
   # of "1" silently became a scalar.
-  $rows = @([OrcaWinEnum.Native]::Enumerate())
+  $rows = @([MCodeWinEnum.Native]::Enumerate())
 
   # Cache pid -> process name so we resolve each owning process at most once.
   $nameByPid = @{}

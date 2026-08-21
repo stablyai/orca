@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { readAgentStateFileSync } from '../agent-state-file-reader'
-import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
+import { getMCodeManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 import type { CodexSettingsPromotionHomes } from './config-settings-promotion'
 import type {
   CodexConfigSyncStallReason,
@@ -14,13 +14,13 @@ import type {
  *
  * The mirror preserves the managed runtime config when the source is missing or
  * blank, which is silent by design — but the stall can persist for every launch
- * (a downed WSL distro, an unhydrated cloud-synced home), leaving "Orca ignores
+ * (a downed WSL distro, an unhydrated cloud-synced home), leaving "MCode ignores
  * my config edits" with nothing to diagnose. Derived on demand from the same
  * predicates the mirror uses, so the two can never disagree.
  */
 export function getCodexConfigSyncStatus(
   homes: CodexSettingsPromotionHomes = {
-    runtimeHomePath: getOrcaManagedCodexHomePath(),
+    runtimeHomePath: getMCodeManagedCodexHomePath(),
     systemHomePath: getSystemCodexHomePath()
   }
 ): CodexConfigSyncStatus {

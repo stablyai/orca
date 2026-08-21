@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import { readExactWorkerOutput } from './orchestration-worker-output'
 
 function codexMessage(id: string, text: string): string {
@@ -16,12 +16,12 @@ describe('exact orchestration worker output', () => {
   let directory: string
   let transcriptA: string
   let transcriptB: string
-  let providerSession: ReturnType<OrcaRuntimeService['getExactWorkerProviderSession']>
-  let runtime: OrcaRuntimeService
+  let providerSession: ReturnType<MCodeRuntimeService['getExactWorkerProviderSession']>
+  let runtime: MCodeRuntimeService
   const readTerminal = vi.fn()
 
   beforeEach(async () => {
-    directory = await mkdtemp(join(tmpdir(), 'orca-worker-output-'))
+    directory = await mkdtemp(join(tmpdir(), 'mcode-worker-output-'))
     transcriptA = join(directory, 'session-a.jsonl')
     transcriptB = join(directory, 'session-b.jsonl')
     await writeFile(transcriptA, `${codexMessage('a', 'worker A only')}\n`)
@@ -50,7 +50,7 @@ describe('exact orchestration worker output', () => {
       getTerminalProcessIncarnation: vi.fn(() => 'pty:incarnation-1'),
       getTerminalPaneKey: vi.fn(() => 'tab:worker'),
       readTerminal
-    } as unknown as OrcaRuntimeService
+    } as unknown as MCodeRuntimeService
   })
 
   afterEach(async () => {

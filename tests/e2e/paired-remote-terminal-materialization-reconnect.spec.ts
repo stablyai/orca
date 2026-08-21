@@ -9,7 +9,7 @@ import type {
   RuntimeTerminalShow
 } from '../../src/shared/runtime-types'
 import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
 import {
   createRuntimeDesktopPairingOffer,
@@ -17,7 +17,7 @@ import {
 } from './helpers/paired-electron-client'
 import { getTerminalContent, waitForActivePanePtyId } from './helpers/terminal'
 
-const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-materialize-'))
+const scratch = mkdtempSync(path.join(os.tmpdir(), 'mcode-paired-materialize-'))
 const fixturePath = path.join(scratch, 'materialize-terminal.mjs')
 const processedInputPath = path.join(scratch, 'processed-input.txt')
 
@@ -332,14 +332,14 @@ async function runMaterializationJourney(
 }
 
 test('materializes a stopped terminal on reconnect from a headed paired host', async ({
-  orcaPage
+  mcodePage
 }, testInfo) => {
   test.setTimeout(120_000)
-  const worktreeId = await orcaPage.evaluate(() => window.__store?.getState().activeWorktreeId)
+  const worktreeId = await mcodePage.evaluate(() => window.__store?.getState().activeWorktreeId)
   if (!worktreeId) {
     throw new Error('Headed host has no active seeded workspace')
   }
-  const offer = await createRuntimeDesktopPairingOffer(orcaPage)
+  const offer = await createRuntimeDesktopPairingOffer(mcodePage)
   const client = await launchPairedElectronClient(offer, testInfo, 'headed-materialization-client')
   try {
     await showClient(client.app, client.page)
@@ -354,7 +354,7 @@ test('materializes a stopped terminal on reconnect from a headed paired host', a
   }
 })
 
-// Why fixme: this journey's fault injection cannot be set up on a headless `orca serve` host.
+// Why fixme: this journey's fault injection cannot be set up on a headless `mcode serve` host.
 // `terminal.stopExact` keeps returning terminal_exact_stop_failed because stopAndWait's
 // keep-history verification window expires before the parked PTY is observed gone, so the pane
 // never reaches pending-handle and the reconnect behavior is never exercised. That precondition

@@ -182,7 +182,7 @@ async function createStore(dir: string): Promise<TestStore> {
 }
 
 function dataFile(dir: string): string {
-  return join(dir, 'orca-data.json')
+  return join(dir, 'mcode-data.json')
 }
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
@@ -225,7 +225,7 @@ function seedStaleBackup(dir: string): void {
 function ringSnapshot(dir: string): Record<string, string> {
   const snapshot: Record<string, string> = {}
   for (const name of readdirSync(dir).sort()) {
-    if (name === 'orca-data.json' || name.startsWith('orca-data.json.bak.')) {
+    if (name === 'mcode-data.json' || name.startsWith('mcode-data.json.bak.')) {
       snapshot[name] = readFileSync(join(dir, name), 'utf-8')
     }
   }
@@ -236,7 +236,7 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
   const dirs: string[] = []
 
   function makeDir(): string {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-async-write-'))
+    const dir = mkdtempSync(join(tmpdir(), 'mcode-async-write-'))
     dirs.push(dir)
     return dir
   }
@@ -279,7 +279,7 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
 
     expect(fsCalls.syncCalls).toEqual([])
     // Rotation must actually have happened, else the assertion above is vacuous.
-    expect(ringSnapshot(dir)['orca-data.json.bak.0']).toBe(readFileSync(dataFile(dir), 'utf-8'))
+    expect(ringSnapshot(dir)['mcode-data.json.bak.0']).toBe(readFileSync(dataFile(dir), 'utf-8'))
   })
 
   it('uses an awaited stat, not statSync, for the backup rotation interval check', async () => {
@@ -304,8 +304,8 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
 
     expect(fsCalls.syncCalls).toEqual([])
     const ring = ringSnapshot(dir)
-    expect(Object.keys(ring)).toContain(`orca-data.json.bak.${BACKUP_COUNT - 1}`)
-    expect(Object.keys(ring)).not.toContain(`orca-data.json.bak.${BACKUP_COUNT}`)
+    expect(Object.keys(ring)).toContain(`mcode-data.json.bak.${BACKUP_COUNT - 1}`)
+    expect(Object.keys(ring)).not.toContain(`mcode-data.json.bak.${BACKUP_COUNT}`)
   })
 
   it('lets a main-thread timer keep firing while a rotating save is in flight', async () => {
@@ -340,7 +340,7 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
 
     expect(worstGapMs).toBeLessThan(stallMs)
     // The save really happened, so a small gap isn't just an absent write.
-    expect(ringSnapshot(dir)['orca-data.json.bak.0']).toBe(readFileSync(dataFile(dir), 'utf-8'))
+    expect(ringSnapshot(dir)['mcode-data.json.bak.0']).toBe(readFileSync(dataFile(dir), 'utf-8'))
   }, 20_000)
 
   it('skips rotation when a sync flush rotated during the rotation-interval await', async () => {
@@ -371,9 +371,9 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
 
     expect(flushed).toBe(true)
     const ring = ringSnapshot(dir)
-    expect(ring['orca-data.json.bak.0']).toBe(ring['orca-data.json'])
-    expect(ring['orca-data.json.bak.1']).toBe(staleBackup)
-    expect(ring['orca-data.json.bak.2']).toBeUndefined()
+    expect(ring['mcode-data.json.bak.0']).toBe(ring['mcode-data.json'])
+    expect(ring['mcode-data.json.bak.1']).toBe(staleBackup)
+    expect(ring['mcode-data.json.bak.2']).toBeUndefined()
   })
 
   it('a sync checkpoint vetoes an async write already parked on rename', async () => {
@@ -535,7 +535,7 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
     const renameRelease = deferred()
     const renameStarted = deferred()
     fsCalls.waitAsync = (fn, target) => {
-      if (fn !== 'rename' || !target.includes('orca-github-cache.json.')) {
+      if (fn !== 'rename' || !target.includes('mcode-github-cache.json.')) {
         return null
       }
       renameStarted.resolve()
@@ -597,10 +597,10 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
       fsCalls.waitAsync = null
     }
     const ring = ringSnapshot(dir)
-    expect(JSON.parse(ring['orca-data.json']).ui.sidebarWidth).toBe(373)
-    expect(JSON.parse(ring['orca-data.json.bak.0']).ui.sidebarWidth).toBe(372)
-    expect(ring['orca-data.json.bak.1']).toBe(staleBackup)
-    expect(ring['orca-data.json.bak.2']).toBeUndefined()
+    expect(JSON.parse(ring['mcode-data.json']).ui.sidebarWidth).toBe(373)
+    expect(JSON.parse(ring['mcode-data.json.bak.0']).ui.sidebarWidth).toBe(372)
+    expect(ring['mcode-data.json.bak.1']).toBe(staleBackup)
+    expect(ring['mcode-data.json.bak.2']).toBeUndefined()
   })
 
   it.each(ROTATION_INTERLEAVE_CASES)(
@@ -633,9 +633,9 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
 
       expect(flushed).toBe(true)
       const ring = ringSnapshot(dir)
-      expect(ring['orca-data.json.bak.0']).toBe(ring['orca-data.json'])
-      expect(ring['orca-data.json.bak.1']).toBe(staleBackup)
-      expect(ring['orca-data.json.bak.2']).toBeUndefined()
+      expect(ring['mcode-data.json.bak.0']).toBe(ring['mcode-data.json'])
+      expect(ring['mcode-data.json.bak.1']).toBe(staleBackup)
+      expect(ring['mcode-data.json.bak.2']).toBeUndefined()
     }
   )
 
@@ -714,7 +714,7 @@ describe('async persistence write path avoids synchronous fs syscalls', () => {
 
     const ring = ringSnapshot(asyncDir)
     expect(ring).toEqual(ringSnapshot(syncDir))
-    expect(Object.keys(ring)).toContain(`orca-data.json.bak.${BACKUP_COUNT - 1}`)
+    expect(Object.keys(ring)).toContain(`mcode-data.json.bak.${BACKUP_COUNT - 1}`)
   })
 
   it('persists SSH PTY consumer recovery without a sync syscall, durable once awaited', async () => {

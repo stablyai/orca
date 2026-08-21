@@ -53,7 +53,7 @@ export function codexRolloutHardlinkIdentity(file: {
  *
  * Host real home (null) is canonical: after the real-home flip the managed
  * home's auth.json is no longer refreshed, so resume must not stamp it. The
- * Orca managed runtime home and each per-account self-contained home
+ * MCode managed runtime home and each per-account self-contained home
  * (codex-accounts/<id>/home) beat other homes (WSL/remote real homes, custom
  * CODEX_HOMEs) because those are the roots codex actually refreshes for their
  * lane — the shared runtime home for the managed mirror, and the per-account

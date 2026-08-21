@@ -140,7 +140,7 @@ describe('UsageProviderStoreLifecycle', () => {
   }
 
   beforeEach(() => {
-    tempDirectory = mkdtempSync(join(tmpdir(), 'orca-usage-lifecycle-'))
+    tempDirectory = mkdtempSync(join(tmpdir(), 'mcode-usage-lifecycle-'))
     stores = []
     writeProbe.opens = 0
     writeProbe.renames = 0

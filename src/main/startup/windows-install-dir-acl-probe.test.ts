@@ -8,7 +8,7 @@ import {
   type WindowsInstallDirAclProbeOptions
 } from './windows-install-dir-acl-probe'
 
-const INSTALL_DIR = 'C:\\Users\\neil\\AppData\\Local\\Programs\\orca'
+const INSTALL_DIR = 'C:\\Users\\neil\\AppData\\Local\\Programs\\mcode'
 const SYSTEM_ACES = [
   '                    NT AUTHORITY\\SYSTEM:(I)(OI)(CI)(F)',
   '                    BUILTIN\\Administrators:(I)(OI)(CI)(F)',

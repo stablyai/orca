@@ -22,8 +22,8 @@ describe('getLiveWorktreeDisplayName', () => {
 
   it('falls back to repo only when the display name is blank', () => {
     expect(
-      getLiveWorktreeDisplayName([{ worktreeId: 'wt-1', displayName: '  ', repo: 'orca' }], 'wt-1')
-    ).toBe('orca')
+      getLiveWorktreeDisplayName([{ worktreeId: 'wt-1', displayName: '  ', repo: 'mcode' }], 'wt-1')
+    ).toBe('mcode')
   })
 
   it('ignores snapshots that do not contain the current worktree', () => {

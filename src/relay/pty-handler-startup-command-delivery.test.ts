@@ -122,7 +122,7 @@ describe('PtyHandler', () => {
       const spawnOptions = mockPtySpawn.mock.calls[0]?.[2] as
         | { env?: Record<string, string> }
         | undefined
-      expect(spawnOptions?.env?.ORCA_SHELL_FEATURES).toContain('ready')
+      expect(spawnOptions?.env?.MCODE_SHELL_FEATURES).toContain('ready')
       expect(handler.retainedStartupCommandCount).toBe(1)
       expect(handler.retainedStartupCommandBytes).toBe(0)
       vi.advanceTimersByTime(15_000)
@@ -161,7 +161,7 @@ describe('PtyHandler', () => {
       const spawnOptions = mockPtySpawn.mock.calls[0]?.[2] as
         | { env?: Record<string, string> }
         | undefined
-      expect(spawnOptions?.env?.ORCA_SHELL_FEATURES).toContain('ready')
+      expect(spawnOptions?.env?.MCODE_SHELL_FEATURES).toContain('ready')
       expect(handler.retainedStartupCommandCount).toBe(1)
     }
   )
@@ -199,7 +199,7 @@ describe('PtyHandler', () => {
       const spawnOptions = mockPtySpawn.mock.calls[0]?.[2] as
         | { env?: Record<string, string> }
         | undefined
-      expect(spawnOptions?.env?.ORCA_SHELL_FEATURES).toContain('ready')
+      expect(spawnOptions?.env?.MCODE_SHELL_FEATURES).toContain('ready')
     }
   )
 
@@ -238,7 +238,7 @@ describe('PtyHandler', () => {
       const spawnOptions = mockPtySpawn.mock.calls[0]?.[2] as
         | { env?: Record<string, string> }
         | undefined
-      expect(spawnOptions?.env?.ORCA_SHELL_FEATURES).toContain('ready')
+      expect(spawnOptions?.env?.MCODE_SHELL_FEATURES).toContain('ready')
     }
   )
 
@@ -284,7 +284,7 @@ describe('PtyHandler', () => {
       vi.advanceTimersByTime(1499)
       expect(term.write).not.toHaveBeenCalled()
 
-      dataCallback?.('\x1b]777;orca-shell-ready\x07user@remote $ ')
+      dataCallback?.('\x1b]777;mcode-shell-ready\x07user@remote $ ')
       vi.advanceTimersByTime(49)
       expect(term.write).not.toHaveBeenCalled()
       vi.advanceTimersByTime(1)
@@ -330,7 +330,7 @@ describe('PtyHandler', () => {
         rmSync(homeDir, { recursive: true, force: true })
       }
 
-      dataCallback?.(`\x1b]777;orca-shell-start:${process.pid}\x07\x1b[?2004hremote $ `)
+      dataCallback?.(`\x1b]777;mcode-shell-start:${process.pid}\x07\x1b[?2004hremote $ `)
       await vi.advanceTimersByTimeAsync(8)
 
       const promptOptions = mockCreateShellPromptReadinessProbe.mock.calls[0]?.[0] as {
@@ -381,7 +381,7 @@ describe('PtyHandler', () => {
         rmSync(homeDir, { recursive: true, force: true })
       }
 
-      dataCallback?.(`\x1b]777;orca-shell-start:${process.pid}\x07\x1b[?2004hremote $ `)
+      dataCallback?.(`\x1b]777;mcode-shell-start:${process.pid}\x07\x1b[?2004hremote $ `)
       await vi.advanceTimersByTimeAsync(8)
       expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
         id: 'pty-1',
@@ -397,7 +397,7 @@ describe('PtyHandler', () => {
       expect(term.write).not.toHaveBeenCalled()
       expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
         id: 'pty-1',
-        data: '\x1b]777;orca-shell-ready\x07'
+        data: '\x1b]777;mcode-shell-ready\x07'
       })
       expect(handler.retainedStartupCommandCount).toBe(0)
     }
@@ -434,13 +434,13 @@ describe('PtyHandler', () => {
       }
 
       dataCallback?.(
-        `\x1b]777;orca-shell-start:${process.pid}\x07\x1b]777;orca-shell-ready\x07remote $ `
+        `\x1b]777;mcode-shell-start:${process.pid}\x07\x1b]777;mcode-shell-ready\x07remote $ `
       )
       await vi.advanceTimersByTimeAsync(8)
 
       expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
         id: 'pty-1',
-        data: '\x1b]777;orca-shell-ready\x07remote $ '
+        data: '\x1b]777;mcode-shell-ready\x07remote $ '
       })
       expect(handler.retainedStartupCommandCount).toBe(0)
     }
@@ -476,7 +476,7 @@ describe('PtyHandler', () => {
         rmSync(homeDir, { recursive: true, force: true })
       }
 
-      dataCallback?.(`\x1b]777;orca-shell-start:${process.pid}\x07\x1b]777;orca-shell-ready`)
+      dataCallback?.(`\x1b]777;mcode-shell-start:${process.pid}\x07\x1b]777;mcode-shell-ready`)
       dataCallback?.('\x07remote $ ')
       await vi.advanceTimersByTimeAsync(8)
 
@@ -485,7 +485,7 @@ describe('PtyHandler', () => {
       expect(probe.dispose).toHaveBeenCalledOnce()
       expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
         id: 'pty-1',
-        data: '\x1b]777;orca-shell-ready\x07remote $ '
+        data: '\x1b]777;mcode-shell-ready\x07remote $ '
       })
       expect(handler.retainedStartupCommandCount).toBe(0)
     }
@@ -512,7 +512,7 @@ describe('PtyHandler', () => {
       const spawnOptions = mockPtySpawn.mock.calls[0]?.[2] as
         | { env?: Record<string, string> }
         | undefined
-      expect(spawnOptions?.env?.ORCA_SHELL_FEATURES).toBe('')
+      expect(spawnOptions?.env?.MCODE_SHELL_FEATURES).toBe('')
       expect(handler.retainedStartupCommandCount).toBe(0)
     }
   )
@@ -557,14 +557,14 @@ describe('PtyHandler', () => {
         rmSync(homeDir, { recursive: true, force: true })
       }
 
-      dataCallback?.('\x1b]777;orca-shell-ready')
+      dataCallback?.('\x1b]777;mcode-shell-ready')
       vi.advanceTimersByTime(1500)
 
       expect(term.write).toHaveBeenCalledWith('echo fallback\n')
       vi.advanceTimersByTime(8)
       expect(dispatcher.notify).toHaveBeenCalledWith('pty.data', {
         id: 'pty-1',
-        data: '\x1b]777;orca-shell-ready'
+        data: '\x1b]777;mcode-shell-ready'
       })
 
       const result = await attachPty({
@@ -573,7 +573,7 @@ describe('PtyHandler', () => {
       })
       expect(result).toEqual({
         incarnationId: spawn.incarnationId,
-        replay: '\x1b]777;orca-shell-ready'
+        replay: '\x1b]777;mcode-shell-ready'
       })
     }
   )

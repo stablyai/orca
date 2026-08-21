@@ -65,7 +65,7 @@ describe('filesystem-list-files ripgrep guidance', () => {
     getLocalGitOptionsForRegisteredWorktreeMock.mockReturnValue({})
     wslAwareSpawnMock.mockImplementation(
       (_command: string, _args: string[], options: SpawnOptions & { cwd?: string }) =>
-        spawn('orca-definitely-missing-rg', [], { stdio: options.stdio })
+        spawn('mcode-definitely-missing-rg', [], { stdio: options.stdio })
     )
   })
 

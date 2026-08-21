@@ -18,7 +18,7 @@ import { classifyConnection, verdictDisplayLabel } from './connection-health'
 // label looped "Connecting…" forever.
 //
 // Opt-in like rpc-client-live-recovery.test.ts — needs ~22s wall-clock:
-//   ORCA_MOBILE_LIVE_REPRO=1 pnpm vitest run src/transport/cellular-handshake-stall-real-socket.test.ts
+//   MCODE_MOBILE_LIVE_REPRO=1 pnpm vitest run src/transport/cellular-handshake-stall-real-socket.test.ts
 
 vi.mock('./e2ee', () => ({
   generateKeyPair: () => ({ publicKey: new Uint8Array(32), secretKey: new Uint8Array(32) }),
@@ -31,7 +31,7 @@ vi.mock('./e2ee', () => ({
 }))
 
 const RUN_LIVE =
-  process.env.ORCA_MOBILE_LIVE_REPRO === '1' || !!process.env.ORCA_MOBILE_LIVE_REPRO_FULL
+  process.env.MCODE_MOBILE_LIVE_REPRO === '1' || !!process.env.MCODE_MOBILE_LIVE_REPRO_FULL
 
 // Long enough for three handshake-timeout cycles (≈17s) plus CI scheduling slack.
 const OBSERVE_MS = 22_000
@@ -130,7 +130,7 @@ describe.runIf(RUN_LIVE)('issue #10119 — real socket, handshake slower than th
 
 // Why: vitest fails a file with zero tests; keep a sentinel for default runs.
 describe.runIf(!RUN_LIVE)('real-socket handshake stall (skipped)', () => {
-  it('is opt-in via ORCA_MOBILE_LIVE_REPRO=1', () => {
+  it('is opt-in via MCODE_MOBILE_LIVE_REPRO=1', () => {
     expect(true).toBe(true)
   })
 })

@@ -6,7 +6,7 @@ import {
 } from '@/lib/agent-feature-install-commands'
 import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  ensureOrcaCliAvailableForAgentSkillTerminal
+  ensureMCodeCliAvailableForAgentSkillTerminal
 } from '@/lib/agent-skill-cli-prerequisite'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
@@ -77,7 +77,7 @@ export function ComputerUseSkillSetupPanel(): React.JSX.Element {
         useAppStore.getState().recordFeatureInteraction('computer-use-setup')
         await (activeSkillRuntime.agentRuntime?.runtime === 'wsl'
           ? ensureWslCliAvailableForAgentSkillTerminal(activeSkillRuntime.agentRuntime)
-          : ensureOrcaCliAvailableForAgentSkillTerminal())
+          : ensureMCodeCliAvailableForAgentSkillTerminal())
       }}
       onRecheck={refreshComputerUseSkill}
       freshnessSkillName={

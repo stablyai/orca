@@ -356,7 +356,7 @@ describe('CodexRuntimeHomeService', () => {
     service.syncForCurrentSelection()
     expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(systemAuth)
 
-    // Codex used to refresh tokens directly in ~/.codex. With an Orca-owned
+    // Codex used to refresh tokens directly in ~/.codex. With an MCode-owned
     // runtime home, the same refresh must be read back to the system default.
     writeFileSync(runtimeAuthPath, refreshedAuth, 'utf-8')
     service.syncForCurrentSelection()

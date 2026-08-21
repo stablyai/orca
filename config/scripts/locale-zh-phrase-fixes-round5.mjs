@@ -1,20 +1,20 @@
 // Chinese phrase fixes from high-visibility UI audit round 5.
 export const ZH_PHRASE_FIXES_ROUND5 = [
-  { pattern: /Orca集成开发环境/g, replacement: 'Orca IDE', whenEnIncludes: 'Orca IDE' },
-  { pattern: /Orca第一/g, replacement: 'Orca 优先', whenEnIncludes: 'Orca first' },
-  { pattern: /Orca移动/g, replacement: 'Orca Mobile', whenEnIncludes: 'Orca Mobile' },
-  { pattern: /Orca标志/g, replacement: 'Orca 标志', whenEnIncludes: 'Orca logo' },
-  { pattern: /喜欢Orca/g, replacement: '喜欢 Orca', whenEnIncludes: 'Enjoying Orca' },
-  { pattern: /认识Orca/g, replacement: '了解 Orca', whenEnIncludes: 'Get to know Orca' },
-  { pattern: /支持Orca/g, replacement: '支持 Orca', whenEnIncludes: 'Support Orca' },
-  { pattern: /展开Orca/g, replacement: '展开 Orca', whenEnIncludes: 'Expand Orca' },
-  { pattern: /来自Orca/g, replacement: '来自 Orca', whenEnIncludes: 'from Orca' },
+  { pattern: /MCode集成开发环境/g, replacement: 'MCode IDE', whenEnIncludes: 'MCode IDE' },
+  { pattern: /MCode第一/g, replacement: 'MCode 优先', whenEnIncludes: 'MCode first' },
+  { pattern: /MCode移动/g, replacement: 'MCode Mobile', whenEnIncludes: 'MCode Mobile' },
+  { pattern: /MCode标志/g, replacement: 'MCode 标志', whenEnIncludes: 'MCode logo' },
+  { pattern: /喜欢MCode/g, replacement: '喜欢 MCode', whenEnIncludes: 'Enjoying MCode' },
+  { pattern: /认识MCode/g, replacement: '了解 MCode', whenEnIncludes: 'Get to know MCode' },
+  { pattern: /支持MCode/g, replacement: '支持 MCode', whenEnIncludes: 'Support MCode' },
+  { pattern: /展开MCode/g, replacement: '展开 MCode', whenEnIncludes: 'Expand MCode' },
+  { pattern: /来自MCode/g, replacement: '来自 MCode', whenEnIncludes: 'from MCode' },
   {
-    pattern: /正在重新启动Orca/g,
-    replacement: '正在重启 Orca',
-    whenEnIncludes: 'Restarting Orca'
+    pattern: /正在重新启动MCode/g,
+    replacement: '正在重启 MCode',
+    whenEnIncludes: 'Restarting MCode'
   },
-  { pattern: /Orca([\u4e00-\u9fff])/g, replacement: 'Orca $1', whenEnIncludes: 'Orca' },
+  { pattern: /MCode([\u4e00-\u9fff])/g, replacement: 'MCode $1', whenEnIncludes: 'MCode' },
   { pattern: /Linear([\u4e00-\u9fff])/g, replacement: 'Linear $1', whenEnIncludes: 'Linear' },
   { pattern: /Codex([\u4e00-\u9fff])/g, replacement: 'Codex $1', whenEnIncludes: 'Codex' },
   { pattern: /Claude([\u4e00-\u9fff])/g, replacement: 'Claude $1', whenEnIncludes: 'Claude' },
@@ -49,8 +49,8 @@ export const ZH_PHRASE_FIXES_ROUND5 = [
     whenEnIncludes: 'actionable issues'
   },
   {
-    pattern: /显示 Orca 移动按钮/g,
-    replacement: '显示 Orca Mobile 按钮',
-    whenEnIncludes: 'Show Orca Mobile Button'
+    pattern: /显示 MCode 移动按钮/g,
+    replacement: '显示 MCode Mobile 按钮',
+    whenEnIncludes: 'Show MCode Mobile Button'
   }
 ]

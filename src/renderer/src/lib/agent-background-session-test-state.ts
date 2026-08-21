@@ -172,7 +172,7 @@ export function expectReservedAgentBackgroundTabId(spawn: TestMock): string {
 
 export function expectStableAgentBackgroundPaneSpawn(spawn: TestMock): string {
   const spawnArgs = spawn.mock.calls[0]?.[0]
-  const paneKey = spawnArgs?.env?.ORCA_PANE_KEY
+  const paneKey = spawnArgs?.env?.MCODE_PANE_KEY
   const leafId = spawnArgs?.leafId
   expect(typeof paneKey).toBe('string')
   expect(typeof leafId).toBe('string')

@@ -4,7 +4,7 @@ import { isENOENT } from './filesystem-path-containment'
 
 /**
  * Creating a worktree over SSH failed with a raw
- * `ENOENT: no such file or directory, lstat '/home/neil/projects/orca-test1234'`.
+ * `ENOENT: no such file or directory, lstat '/home/neil/projects/mcode-test1234'`.
  *
  * The path was the one about to be created, so its absence was correct and expected — the caller
  * (`remotePathExists`) asks exactly that question and returns false on ENOENT. It could not: the
@@ -29,7 +29,7 @@ describe('isENOENT across the SSH relay boundary', () => {
   it('recognises an error rebuilt from the relay with a numeric transport code', () => {
     // Exactly what handleResponse produces: message preserved, code replaced by the JSON-RPC code.
     const fromRelay = new Error(
-      "ENOENT: no such file or directory, lstat '/home/neil/projects/orca-test1234'"
+      "ENOENT: no such file or directory, lstat '/home/neil/projects/mcode-test1234'"
     )
     Object.defineProperty(fromRelay, 'code', { value: -32000 })
 
@@ -40,7 +40,7 @@ describe('isENOENT across the SSH relay boundary', () => {
 
   it('recognises it through the IPC wrapper the renderer sees', () => {
     const throughIpc = new Error(
-      "Error invoking remote method 'worktrees:create': Error: ENOENT: no such file or directory, lstat '/home/neil/projects/orca-test1234-3'"
+      "Error invoking remote method 'worktrees:create': Error: ENOENT: no such file or directory, lstat '/home/neil/projects/mcode-test1234-3'"
     )
 
     expect(isENOENT(throughIpc)).toBe(true)

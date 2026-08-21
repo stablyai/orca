@@ -7,7 +7,7 @@ import { nodeFileContentsEqual, nodeFileContentsEqualSync } from './node-file-co
 const roots: string[] = []
 
 function createFile(contents: string): string {
-  const root = mkdtempSync(join(tmpdir(), 'orca-file-content-equality-'))
+  const root = mkdtempSync(join(tmpdir(), 'mcode-file-content-equality-'))
   roots.push(root)
   const filePath = join(root, 'owned-launcher')
   writeFileSync(filePath, contents)

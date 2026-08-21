@@ -1,13 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import {
-  getOrcaProfileDataFile,
+  getMCodeProfileDataFile,
   getProfileUserDataPath
-} from '../orca-profiles/profile-storage-paths'
-import { getOrcaProfileIndexPath, readProfileIndex } from '../orca-profiles/profile-index-store'
+} from '../mcode-profiles/profile-storage-paths'
+import { getMCodeProfileIndexPath, readProfileIndex } from '../mcode-profiles/profile-index-store'
 
 /**
- * Worktree ids owned by Orca profiles OTHER than the running one.
+ * Worktree ids owned by MCode profiles OTHER than the running one.
  *
  * Why the history GC needs these: terminal history is keyed by worktree id
  * under `userData/terminal-history`, which has no profile segment, and fish
@@ -28,7 +28,7 @@ export function getOtherProfileWorktreeIdsForHistoryGc(userDataPath = getProfile
   unreadableProfiles: number
 } {
   const ids = new Set<string>()
-  const index = readProfileIndex(getOrcaProfileIndexPath(userDataPath))
+  const index = readProfileIndex(getMCodeProfileIndexPath(userDataPath))
   if (!index) {
     return { ids, unreadableProfiles: 0 }
   }
@@ -37,7 +37,7 @@ export function getOtherProfileWorktreeIdsForHistoryGc(userDataPath = getProfile
     if (profile.id === index.activeProfileId) {
       continue
     }
-    const collected = readProfileWorktreeIds(getOrcaProfileDataFile(profile.id, userDataPath))
+    const collected = readProfileWorktreeIds(getMCodeProfileDataFile(profile.id, userDataPath))
     if (!collected) {
       unreadableProfiles += 1
       continue

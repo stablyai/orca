@@ -17,7 +17,7 @@ import { PluginService } from './plugin-service'
 const roots: string[] = []
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-plugin-content-test-'))
+  const root = await mkdtemp(join(tmpdir(), 'mcode-plugin-content-test-'))
   roots.push(root)
   return root
 }
@@ -31,10 +31,10 @@ function manifest(overrides: ManifestOverrides = {}): PluginManifest {
   return pluginManifestSchema.parse({
     manifestVersion: 1,
     id: 'demo',
-    publisher: 'orca-samples',
+    publisher: 'mcode-samples',
     name: 'Demo',
     version: '1.0.0',
-    engines: { orca: '>=1.0.0' },
+    engines: { mcode: '>=1.0.0' },
     pluginApi: 1,
     capabilities: [],
     ...manifestOverrides,
@@ -111,7 +111,7 @@ describe('declared plugin artifacts', () => {
         events: []
       }
     })
-    await writeFile(join(root, 'orca-plugin.json'), JSON.stringify(pluginManifest))
+    await writeFile(join(root, 'mcode-plugin.json'), JSON.stringify(pluginManifest))
 
     await expect(validateDeclaredPluginArtifacts(root, pluginManifest)).resolves.toMatchObject({
       ok: false

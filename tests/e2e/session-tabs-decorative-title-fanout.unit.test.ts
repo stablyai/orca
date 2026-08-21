@@ -6,7 +6,7 @@ import type {
 import { detectAgentStatusFromTitle } from '../../src/shared/agent-detection'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../src/shared/agent-status-types'
 import { isExplicitAgentStatusFresh } from '../../src/renderer/src/lib/agent-status'
-import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
+import { MCodeRuntimeService } from '../../src/main/runtime/mcode-runtime'
 import {
   SESSION_TABS_AGENT_STATUS_HEARTBEAT_INTERVAL_MS,
   SESSION_TABS_AGENT_STATUS_HEARTBEAT_SPACING_MS
@@ -78,7 +78,7 @@ function makeViewerState(): WebSessionTabsSyncState {
   }
 }
 
-function seedWorktree(runtime: OrcaRuntimeService, index: number): string {
+function seedWorktree(runtime: MCodeRuntimeService, index: number): string {
   const worktreeId = `workspace-${index}`
   const ptyId = `pty-${index}`
   const tabId = `host-tab-${index}`
@@ -142,7 +142,7 @@ describe('real PTY decorative session-tabs fanout', () => {
   })
 
   it('bounds host publication and renderer application across remote worktrees', () => {
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     const ptyIds = Array.from({ length: WORKTREE_COUNT }, (_, index) =>
       seedWorktree(runtime, index)
     )
@@ -307,7 +307,7 @@ describe('real PTY decorative session-tabs fanout', () => {
     ['build ⠁', 'build ⠂'],
     ['Codex working task ⠁', 'Codex working task ⠂']
   ])('publishes meaningful real-title changes from %j to %j', (firstTitle, secondTitle) => {
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     seedWorktree(runtime, 0)
     const published: RuntimeMobileSessionTabsResult[] = []
     const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => published.push(snapshot))
@@ -324,7 +324,7 @@ describe('real PTY decorative session-tabs fanout', () => {
   })
 
   it('globally caps decorative freshness while every working status stays fresh', () => {
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     const firstWorkingTitleAt = Date.now()
     const ptyIds = Array.from({ length: WORKTREE_COUNT }, (_, index) =>
       seedWorktree(runtime, index)
@@ -438,7 +438,7 @@ describe('real PTY decorative session-tabs fanout', () => {
       expectedTitle: '⠋ Grok'
     }
   ])('renews exact and normalized $agent frames beyond the viewer stale boundary', (testCase) => {
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     const firstWorkingTitleAt = Date.now()
     const ptyId = seedWorktree(runtime, 0)
     const internals = runtime as unknown as RuntimeInternals
@@ -521,7 +521,7 @@ describe('real PTY decorative session-tabs fanout', () => {
   })
 
   it('does not publish a stored working row over a later permission title', () => {
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     const ptyId = seedWorktree(runtime, 0)
     const internals = runtime as unknown as RuntimeInternals
     const seededTab = internals.mobileSessionTabsByWorktree.get('workspace-0')?.tabs[0]
@@ -562,7 +562,7 @@ describe('real PTY decorative session-tabs fanout', () => {
   })
 
   it('does not publish a prior done row over a newer working title', () => {
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     const ptyId = seedWorktree(runtime, 0)
     const internals = runtime as unknown as RuntimeInternals
     const seededTab = internals.mobileSessionTabsByWorktree.get('workspace-0')?.tabs[0]
@@ -623,7 +623,7 @@ describe('real PTY decorative session-tabs fanout', () => {
       resolveForegroundProcess = resolve
     })
     const getForegroundProcess = vi.fn(() => foregroundProcess)
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-0' }),
       write: () => true,
@@ -667,7 +667,7 @@ describe('real PTY decorative session-tabs fanout', () => {
     const foregroundProcess = new Promise<string | null>((resolve) => {
       resolveForegroundProcess = resolve
     })
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-0' }),
       write: () => true,
@@ -688,7 +688,7 @@ describe('real PTY decorative session-tabs fanout', () => {
   })
 
   it('renews retained hook status without resetting its state start', () => {
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     const ptyId = seedWorktree(runtime, 0)
     const internals = runtime as unknown as RuntimeInternals
     const seededTab = internals.mobileSessionTabsByWorktree.get('workspace-0')?.tabs[0]

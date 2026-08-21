@@ -31,7 +31,7 @@ export function remoteServerUpdateErrorMessage(error: unknown): string {
     case 'remote_update_requested_version_unavailable':
       return translate(
         'auto.runtime.remoteServerUpdateErrors.requestedVersionUnavailable',
-        'The server updater did not offer the requested Orca version.'
+        'The server updater did not offer the requested MCode version.'
       )
     case 'remote_update_status_unavailable':
       return translate(

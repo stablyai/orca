@@ -31,17 +31,17 @@ describe('OpenCode status plugin module contract', () => {
   }
   type PluginModule = {
     default?: { id?: unknown; server?: (ctx: unknown) => Promise<PluginHooks> }
-    OrcaOpenCodeStatusPlugin?: (ctx: unknown) => Promise<PluginHooks>
+    MCodeOpenCodeStatusPlugin?: (ctx: unknown) => Promise<PluginHooks>
   }
 
   // Why: the plugin resolves hook coords from the endpoint file first and only then from
-  // env. Pin every input here so the run does not depend on the developer's Orca session
-  // (an inherited ORCA_AGENT_HOOK_ENDPOINT would otherwise redirect the post to a live app).
+  // env. Pin every input here so the run does not depend on the developer's MCode session
+  // (an inherited MCODE_AGENT_HOOK_ENDPOINT would otherwise redirect the post to a live app).
   const ENV_KEYS = [
-    'ORCA_PANE_KEY',
-    'ORCA_AGENT_HOOK_ENDPOINT',
-    'ORCA_AGENT_HOOK_PORT',
-    'ORCA_AGENT_HOOK_TOKEN'
+    'MCODE_PANE_KEY',
+    'MCODE_AGENT_HOOK_ENDPOINT',
+    'MCODE_AGENT_HOOK_PORT',
+    'MCODE_AGENT_HOOK_TOKEN'
   ] as const
 
   let tempDir: string
@@ -49,15 +49,15 @@ describe('OpenCode status plugin module contract', () => {
   let savedEnv: Record<string, string | undefined>
 
   beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'orca-opencode-plugin-contract-'))
+    tempDir = mkdtempSync(join(tmpdir(), 'mcode-opencode-plugin-contract-'))
     savedFetch = globalThis.fetch
     savedEnv = {}
     for (const key of ENV_KEYS) {
       savedEnv[key] = process.env[key]
     }
-    delete process.env.ORCA_AGENT_HOOK_ENDPOINT
-    process.env.ORCA_AGENT_HOOK_PORT = '59999'
-    process.env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
+    delete process.env.MCODE_AGENT_HOOK_ENDPOINT
+    process.env.MCODE_AGENT_HOOK_PORT = '59999'
+    process.env.MCODE_AGENT_HOOK_TOKEN = 'test-token'
   })
 
   afterEach(() => {
@@ -76,7 +76,7 @@ describe('OpenCode status plugin module contract', () => {
     // Why: a unique basename per load defeats the ESM module cache between cases.
     const pluginPath = join(
       tempDir,
-      `orca-opencode-status-${Math.random().toString(36).slice(2)}.mjs`
+      `mcode-opencode-status-${Math.random().toString(36).slice(2)}.mjs`
     )
     writeFileSync(pluginPath, _internals.getOpenCodePluginSource())
     return (await import(pathToFileURL(pluginPath).href)) as PluginModule
@@ -87,7 +87,7 @@ describe('OpenCode status plugin module contract', () => {
 
     expect(module.default).toBeTypeOf('object')
     expect(typeof module.default?.id).toBe('string')
-    expect(module.default?.id).toBe('orca-opencode-status')
+    expect(module.default?.id).toBe('mcode-opencode-status')
     expect(module.default?.server).toBeTypeOf('function')
   })
 
@@ -103,21 +103,21 @@ describe('OpenCode status plugin module contract', () => {
   it('keeps the named factory export so the factory-based loader still resolves', async () => {
     const module = await loadPluginModule()
 
-    expect(module.OrcaOpenCodeStatusPlugin).toBeTypeOf('function')
+    expect(module.MCodeOpenCodeStatusPlugin).toBeTypeOf('function')
   })
 
   it('returns an event handler from the default export server(), like the named factory', async () => {
     const module = await loadPluginModule()
 
     const fromDefault = await module.default?.server?.({})
-    const fromNamed = await module.OrcaOpenCodeStatusPlugin?.({})
+    const fromNamed = await module.MCodeOpenCodeStatusPlugin?.({})
 
     expect(fromDefault?.event).toBeTypeOf('function')
     expect(fromNamed?.event).toBeTypeOf('function')
   })
 
   it('reports a session lifecycle event through the hook endpoint when driven via the default export', async () => {
-    process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
+    process.env.MCODE_PANE_KEY = 'tab-1:leaf-1'
     const posts: { url: string; body: unknown }[] = []
     globalThis.fetch = vi.fn(async (input: unknown, init?: { body?: unknown }) => {
       posts.push({ url: String(input), body: JSON.parse(String(init?.body ?? '{}')) })

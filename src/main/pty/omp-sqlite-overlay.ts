@@ -1,5 +1,5 @@
 // Why: OMP creates SQLite auth/history DBs lazily under PI_CODING_AGENT_DIR.
-// If Orca only mirrors files that already exist, /login writes land in a
+// If MCode only mirrors files that already exist, /login writes land in a
 // disposable overlay instead of the user's ~/.omp/agent store.
 
 import { closeSync, existsSync, mkdirSync, openSync } from 'node:fs'

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { _resetTracerForTests, setActiveSink, type TracerSink } from '../../observability/tracer'
-import type { OrcaRuntimeService } from '../orca-runtime'
+import type { MCodeRuntimeService } from '../mcode-runtime'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
 import { SESSION_TAB_METHODS } from './methods/session-tabs'
@@ -46,7 +46,7 @@ describe('runtime close attribution', () => {
       const runtime = {
         getRuntimeId: () => 'test-runtime',
         [call]: close
-      } as unknown as OrcaRuntimeService
+      } as unknown as MCodeRuntimeService
       const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
       const replies: string[] = []
 
@@ -107,7 +107,7 @@ describe('runtime close attribution', () => {
       const runtime = {
         getRuntimeId: () => 'test-runtime',
         closeMobileSessionTab: vi.fn().mockResolvedValue({ closed: true })
-      } as unknown as OrcaRuntimeService
+      } as unknown as MCodeRuntimeService
       const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
       await dispatcher.dispatchStreaming(request(method, params), vi.fn(), {

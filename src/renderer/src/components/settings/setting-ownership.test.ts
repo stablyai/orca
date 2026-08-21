@@ -34,7 +34,7 @@ describe('getSettingOwnershipSummary', () => {
     const summary = getSettingOwnershipSummary('terminalQuickCommands')
 
     expect(summary.ownership).toBe('host-collection')
-    expect(summary.description).toContain('selected Orca host')
+    expect(summary.description).toContain('selected MCode host')
     expect(summary.description).toContain('remain available in remote workspaces')
   })
 })

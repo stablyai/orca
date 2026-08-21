@@ -89,7 +89,7 @@ export function RuntimePairingGeneratorForm({
                   ),
                   translate(
                     'auto.components.settings.RuntimePairingUrlGenerator.localOnlyHelp',
-                    'A browser or Orca client on this computer'
+                    'A browser or MCode client on this computer'
                   )
                 ],
                 [
@@ -147,7 +147,7 @@ export function RuntimePairingGeneratorForm({
             <p className="mt-1 text-muted-foreground">
               {translate(
                 'auto.components.settings.RuntimePairingUrlGenerator.localLinkHelp',
-                'This link only works in a browser or Orca client running on this computer.'
+                'This link only works in a browser or MCode client running on this computer.'
               )}
             </p>
             <div className="mt-2 font-mono">{loopbackAddress}</div>
@@ -344,7 +344,7 @@ export function RuntimePairingGeneratorForm({
           )}
           description={translate(
             'auto.components.settings.RuntimePairingUrlGenerator.f7cafdc9f3',
-            'Browser link unavailable in this build. The pairing URL still works for Orca clients.'
+            'Browser link unavailable in this build. The pairing URL still works for MCode clients.'
           )}
         />
       ) : null}
@@ -353,11 +353,11 @@ export function RuntimePairingGeneratorForm({
         <GeneratedUrlRow
           label={translate(
             'auto.components.settings.RuntimePairingUrlGenerator.2e5c4e3c93',
-            'Pair another Orca client'
+            'Pair another MCode client'
           )}
           description={translate(
             'auto.components.settings.RuntimePairingUrlGenerator.849825e829',
-            'Paste this pairing URL into another Orca client.'
+            'Paste this pairing URL into another MCode client.'
           )}
           value={runtimePairingUrl}
           copied={copiedTarget === 'pairing'}

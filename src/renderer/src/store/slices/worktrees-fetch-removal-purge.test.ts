@@ -113,12 +113,12 @@ describe('fetchWorktrees', () => {
     // A shape-valid plugin panel tab also survives the purge.
     store.setState({
       rightSidebarTabByWorktree: {
-        [surviving.id]: 'plugin:orca-samples.my-plugin/dashboard' as never
+        [surviving.id]: 'plugin:mcode-samples.my-plugin/dashboard' as never
       }
     } as Partial<AppState>)
     await store.getState().fetchWorktrees('repo1')
     expect(store.getState().rightSidebarTabByWorktree).toEqual({
-      [surviving.id]: 'plugin:orca-samples.my-plugin/dashboard'
+      [surviving.id]: 'plugin:mcode-samples.my-plugin/dashboard'
     })
   })
 

@@ -25,7 +25,7 @@ const OLD_FETCH = globalThis.fetch
 
 describe('Gitea pull request creation', () => {
   beforeEach(() => {
-    process.env = { ...OLD_ENV, ORCA_GITEA_TOKEN: 'gitea-token' }
+    process.env = { ...OLD_ENV, MCODE_GITEA_TOKEN: 'gitea-token' }
     gitExecFileAsyncMock.mockReset()
     getSshGitProviderMock.mockReset()
     gitExecFileAsyncMock.mockResolvedValue({
@@ -43,7 +43,7 @@ describe('Gitea pull request creation', () => {
 
   it('requires a token for repo-scoped creation', () => {
     expect(isGiteaReviewCreationAuthenticated()).toBe(true)
-    delete process.env.ORCA_GITEA_TOKEN
+    delete process.env.MCODE_GITEA_TOKEN
     expect(isGiteaReviewCreationAuthenticated()).toBe(false)
   })
 

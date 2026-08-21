@@ -31,7 +31,7 @@ import {
 } from './terminal-path-exists-cache'
 import {
   getTerminalHtmlFileOpenHint,
-  getTerminalOrcaFileOpenHint,
+  getTerminalMCodeFileOpenHint,
   getTerminalWorktreePathOpenHint,
   getTerminalFileOpenHint,
   getTerminalUrlOpenHint
@@ -224,7 +224,7 @@ export function createFilePathLinkProvider(
                           : showActions
                             ? openLinkHint
                             : getTerminalFileOpenHint(false)
-                        : getTerminalOrcaFileOpenHint(showActions)
+                        : getTerminalMCodeFileOpenHint(showActions)
                     linkTooltip.textContent = `${mappedPath} (${hint})`
                     linkTooltip.style.display = ''
                   },

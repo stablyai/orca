@@ -103,8 +103,8 @@ async function waitFor(description, probe, timeoutMs = 30_000) {
 }
 
 function parseEndpoint(contents) {
-  const port = Number(/ORCA_AGENT_HOOK_PORT=['"]?(\d+)/.exec(contents)?.[1])
-  const token = /ORCA_AGENT_HOOK_TOKEN=['"]?([^'"\r\n]+)/.exec(contents)?.[1]
+  const port = Number(/MCODE_AGENT_HOOK_PORT=['"]?(\d+)/.exec(contents)?.[1])
+  const token = /MCODE_AGENT_HOOK_TOKEN=['"]?([^'"\r\n]+)/.exec(contents)?.[1]
   return Number.isInteger(port) && port > 0 && token ? { port, token } : null
 }
 
@@ -169,10 +169,10 @@ async function startStallingGuestServer(distro) {
 
 async function writeEndpoint(distro, path, endpoint) {
   const contents = [
-    `ORCA_AGENT_HOOK_PORT=${endpoint.port}`,
-    `ORCA_AGENT_HOOK_TOKEN=${endpoint.token}`,
-    'ORCA_AGENT_HOOK_ENV=benchmark',
-    'ORCA_AGENT_HOOK_VERSION=1',
+    `MCODE_AGENT_HOOK_PORT=${endpoint.port}`,
+    `MCODE_AGENT_HOOK_TOKEN=${endpoint.token}`,
+    'MCODE_AGENT_HOOK_ENV=benchmark',
+    'MCODE_AGENT_HOOK_VERSION=1',
     ''
   ].join('\n')
   await run(
@@ -181,7 +181,7 @@ async function writeEndpoint(distro, path, endpoint) {
       '/bin/sh',
       '-c',
       'umask 077; mkdir -p "$(dirname "$1")"; cat > "$1"',
-      'orca-wsl-benchmark',
+      'mcode-wsl-benchmark',
       path
     ]),
     { input: contents }
@@ -195,10 +195,10 @@ async function invokeHook(distro, scriptPath, endpointPath) {
     wslArgs(distro, [
       '/usr/bin/env',
       `PATH=${WSL_PATH}`,
-      `ORCA_AGENT_HOOK_ENDPOINT=${endpointPath}`,
-      `ORCA_PANE_KEY=${PANE_KEY}`,
-      'ORCA_TAB_ID=wsl-relay-bench',
-      'ORCA_WORKTREE_ID=wsl-relay-bench',
+      `MCODE_AGENT_HOOK_ENDPOINT=${endpointPath}`,
+      `MCODE_PANE_KEY=${PANE_KEY}`,
+      'MCODE_TAB_ID=wsl-relay-bench',
+      'MCODE_WORKTREE_ID=wsl-relay-bench',
       '/bin/sh',
       scriptPath
     ]),
@@ -273,7 +273,7 @@ async function main() {
     { allowFailure: true }
   )
   if (nodeVersion.status !== 0 || Number(nodeVersion.stdout.trim().split('.')[0]) < 18) {
-    throw new Error(`WSL distro '${distro}' needs Node.js 18 or newer to run Orca's relay`)
+    throw new Error(`WSL distro '${distro}' needs Node.js 18 or newer to run MCode's relay`)
   }
 
   const bundleDir = join(process.cwd(), 'out', 'relay', 'wsl')
@@ -292,8 +292,8 @@ async function main() {
   let manager = null
   let staller = null
   try {
-    userDataDir = mkdtempSync(join(tmpdir(), 'orca-wsl-relay-bench-'))
-    process.env.ORCA_USER_DATA_PATH = userDataDir
+    userDataDir = mkdtempSync(join(tmpdir(), 'mcode-wsl-relay-bench-'))
+    process.env.MCODE_USER_DATA_PATH = userDataDir
     const jiti = createJiti(import.meta.url, {
       alias: {
         electron: fileURLToPath(
@@ -339,11 +339,11 @@ async function main() {
       await run('wsl.exe', wslArgs(distro, ['/bin/sh', '-c', 'printf %s "$HOME"']))
     ).stdout.trim()
     const instanceKey = `bench-${process.pid}-${Date.now().toString(36)}`
-    const benchmarkRoot = `${guestHome}/.orca-wsl/benchmarks/${instanceKey}`
-    const scriptPath = `${benchmarkRoot}/.orca/agent-hooks/codex-hook.sh`
-    const endpointPath = `${guestHome}/.orca-wsl/agent-hooks/instance-${instanceKey}/endpoint.env`
-    cleanupPaths = [benchmarkRoot, `${guestHome}/.orca-wsl/agent-hooks/instance-${instanceKey}`]
-    if (cleanupPaths.some((cleanupPath) => !cleanupPath.startsWith(`${guestHome}/.orca-wsl/`))) {
+    const benchmarkRoot = `${guestHome}/.mcode-wsl/benchmarks/${instanceKey}`
+    const scriptPath = `${benchmarkRoot}/.mcode/agent-hooks/codex-hook.sh`
+    const endpointPath = `${guestHome}/.mcode-wsl/agent-hooks/instance-${instanceKey}/endpoint.env`
+    cleanupPaths = [benchmarkRoot, `${guestHome}/.mcode-wsl/agent-hooks/instance-${instanceKey}`]
+    if (cleanupPaths.some((cleanupPath) => !cleanupPath.startsWith(`${guestHome}/.mcode-wsl/`))) {
       throw new Error('Refusing to use an unexpected guest cleanup path')
     }
     const disabledTuiAgents = MANAGED_AGENT_HOOK_TARGETS.filter(
@@ -380,7 +380,7 @@ async function main() {
     if (typeof ptyController?.spawn !== 'function') {
       throw new Error('registerPtyHandlers did not install a runtime PTY controller')
     }
-    const survivingSessionId = `orca-wsl-relay-bench-${instanceKey}`
+    const survivingSessionId = `mcode-wsl-relay-bench-${instanceKey}`
     const spawnSurvivingPty = () =>
       ptyController.spawn({
         cols: TERMINAL_COLS,
@@ -398,10 +398,10 @@ async function main() {
         platform: () => 'win32',
         remoteHooksEnabled: () => true,
         hookCoordsEnv: () => ({
-          ORCA_AGENT_HOOK_PORT: String(preferredPort),
-          ORCA_AGENT_HOOK_TOKEN: token,
-          ORCA_AGENT_HOOK_ENV: 'benchmark',
-          ORCA_AGENT_HOOK_VERSION: '1'
+          MCODE_AGENT_HOOK_PORT: String(preferredPort),
+          MCODE_AGENT_HOOK_TOKEN: token,
+          MCODE_AGENT_HOOK_ENV: 'benchmark',
+          MCODE_AGENT_HOOK_VERSION: '1'
         }),
         instanceKey: () => instanceKey,
         resolveBundle: () => ({ jsPath: bundlePath, version: bundleVersion }),

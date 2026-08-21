@@ -3,7 +3,7 @@ name: Daemon Relocation Spike
 # Why: Phase 1 of the Windows update-survival work relocates the terminal
 # daemon's file closure out of the install dir so it survives an update. Before
 # implementing it in the app, this spike finds the MINIMAL set of packaged files
-# that a copied Orca.exe (run as node) needs to start the daemon and drive a
+# that a copied MCode.exe (run as node) needs to start the daemon and drive a
 # ConPTY session from a relocated directory, holding no install-dir file locks.
 # Runs from the feature branch via push (workflow_dispatch only works on the
 # default branch); main is never touched.

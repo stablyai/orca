@@ -113,7 +113,7 @@ describe('buildRows with pinned worktrees', () => {
     )
 
     expect(rows).toMatchObject([
-      { type: 'header', key: 'repo:repo-1', label: 'orca' },
+      { type: 'header', key: 'repo:repo-1', label: 'mcode' },
       {
         type: 'imported-worktrees-card',
         key: 'imported-worktrees-card:repo-group:repo-1',

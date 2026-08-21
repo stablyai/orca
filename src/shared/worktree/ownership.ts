@@ -16,7 +16,7 @@ import {
 } from './visibility-sources'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../external-worktree-visibility'
 import { shouldShowWorktree } from '../worktree-visibility-resolution'
-import type { GlobalSettings, OrcaWorkspaceLayout } from '../global-settings-types'
+import type { GlobalSettings, MCodeWorkspaceLayout } from '../global-settings-types'
 import type { Repo } from '../repo-types'
 import type { WorktreeMeta } from './meta-types'
 import type { DetectedWorktree, Worktree, WorktreeOwnership } from './types'
@@ -29,11 +29,11 @@ export {
 } from '../external-worktree-visibility'
 export { shouldShowWorktree } from '../worktree-visibility-resolution'
 
-export function buildKnownOrcaWorkspaceLayouts(
+export function buildKnownMCodeWorkspaceLayouts(
   settings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory'>,
   repo?: Pick<Repo, 'path' | 'connectionId' | 'worktreeBasePath'>
-): OrcaWorkspaceLayout[] {
-  const layouts: OrcaWorkspaceLayout[] = []
+): MCodeWorkspaceLayout[] {
+  const layouts: MCodeWorkspaceLayout[] = []
   for (const basePath of resolveConfiguredWorktreeBasePaths(repo)) {
     layouts.push({ path: basePath, nestWorkspaces: settings.nestWorkspaces })
   }
@@ -70,8 +70,8 @@ export function buildKnownOrcaWorkspaceLayouts(
 }
 
 function appendWorkspaceLayouts(
-  target: OrcaWorkspaceLayout[],
-  source: readonly OrcaWorkspaceLayout[]
+  target: MCodeWorkspaceLayout[],
+  source: readonly MCodeWorkspaceLayout[]
 ): void {
   // Why: workspace history is persisted user data and can grow large enough
   // for `push(...source)` to exceed the JavaScript call argument limit.
@@ -90,7 +90,7 @@ function shouldIncludeWorkspaceLayout(
 function buildWslWorkspaceLayouts(
   repoPath: string,
   settings: Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDirHistory'>
-): OrcaWorkspaceLayout[] {
+): MCodeWorkspaceLayout[] {
   const parsed = parseWslUncPath(repoPath)
   if (!parsed) {
     return []
@@ -100,7 +100,7 @@ function buildWslWorkspaceLayouts(
   if (!linuxHome) {
     return []
   }
-  const root = `//wsl.localhost/${parsed.distro}${linuxHome}/orca/workspaces`
+  const root = `//wsl.localhost/${parsed.distro}${linuxHome}/mcode/workspaces`
   const historicalModes = (settings.workspaceDirHistory ?? []).map(
     (layout) => layout.nestWorkspaces
   )
@@ -113,12 +113,12 @@ export function classifyWorktreeOwnership(args: {
   worktree: Pick<Worktree, 'path' | 'isMainWorktree'>
   meta?: WorktreeMeta
   settings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory'>
-  knownOrcaLayouts: OrcaWorkspaceLayout[]
+  knownMCodeLayouts: MCodeWorkspaceLayout[]
   agentScratchWorktreePathMatcher?: AgentScratchWorktreePathMatcher
   worktreeVisibilitySourceMatcher?: WorktreeVisibilitySourceMatcher
 }): WorktreeOwnership {
-  if (hasStrongOrcaMetadata(args.meta)) {
-    return 'orca-managed'
+  if (hasStrongMCodeMetadata(args.meta)) {
+    return 'mcode-managed'
   }
 
   // Why: sub-agent scratch worktrees (e.g. .claude/worktrees) are tool
@@ -145,13 +145,13 @@ export function classifyWorktreeOwnership(args: {
     return 'external'
   }
 
-  if (isUnderFlatOrUntrustedOrcaRoot(args.worktree.path, args.knownOrcaLayouts)) {
+  if (isUnderFlatOrUntrustedMCodeRoot(args.worktree.path, args.knownMCodeLayouts)) {
     return 'unknown-legacy'
   }
 
-  if (canClassifyAsExternal(args.worktree.path, args.knownOrcaLayouts)) {
-    // Why: a plain `git worktree add` can target Orca's nested workspace
-    // folder. Only metadata proves Orca created it.
+  if (canClassifyAsExternal(args.worktree.path, args.knownMCodeLayouts)) {
+    // Why: a plain `git worktree add` can target MCode's nested workspace
+    // folder. Only metadata proves MCode created it.
     return 'external'
   }
 
@@ -166,7 +166,7 @@ export function toDetectedWorktree(args: {
     GlobalSettings,
     'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory' | 'worktreeVisibilityDefaults'
   >
-  knownOrcaLayouts: OrcaWorkspaceLayout[]
+  knownMCodeLayouts: MCodeWorkspaceLayout[]
   isLegacyRepoForVisibility?: boolean
   agentScratchWorktreePathMatcher?: AgentScratchWorktreePathMatcher
   worktreeVisibilitySourceMatcher?: WorktreeVisibilitySourceMatcher
@@ -214,7 +214,7 @@ export function applyMetadataFallbackVisibility(detected: DetectedWorktree): Det
   return {
     ...detected,
     visible: true,
-    ownership: detected.ownership === 'orca-managed' ? 'orca-managed' : 'unknown-legacy'
+    ownership: detected.ownership === 'mcode-managed' ? 'mcode-managed' : 'unknown-legacy'
   }
 }
 
@@ -224,10 +224,10 @@ export function areRuntimePathsEqual(leftPath: string, rightPath: string): boole
   )
 }
 
-function hasStrongOrcaMetadata(meta: WorktreeMeta | undefined): boolean {
+function hasStrongMCodeMetadata(meta: WorktreeMeta | undefined): boolean {
   return Boolean(
-    meta?.orcaCreatedAt ||
-    meta?.orcaCreationWorkspaceLayout ||
+    meta?.mcodeCreatedAt ||
+    meta?.mcodeCreationWorkspaceLayout ||
     meta?.createdAt ||
     meta?.createdWithAgent ||
     meta?.pushTarget ||
@@ -237,11 +237,11 @@ function hasStrongOrcaMetadata(meta: WorktreeMeta | undefined): boolean {
   )
 }
 
-function isUnderFlatOrUntrustedOrcaRoot(
+function isUnderFlatOrUntrustedMCodeRoot(
   worktreePath: string,
-  knownOrcaLayouts: OrcaWorkspaceLayout[]
+  knownMCodeLayouts: MCodeWorkspaceLayout[]
 ): boolean {
-  for (const layout of knownOrcaLayouts) {
+  for (const layout of knownMCodeLayouts) {
     const relative = relativePathInsideRoot(layout.path, worktreePath)
     if (relative === null) {
       continue
@@ -255,12 +255,12 @@ function isUnderFlatOrUntrustedOrcaRoot(
 
 function canClassifyAsExternal(
   worktreePath: string,
-  knownOrcaLayouts: OrcaWorkspaceLayout[]
+  knownMCodeLayouts: MCodeWorkspaceLayout[]
 ): boolean {
-  if (knownOrcaLayouts.length === 0) {
+  if (knownMCodeLayouts.length === 0) {
     return false
   }
-  for (const layout of knownOrcaLayouts) {
+  for (const layout of knownMCodeLayouts) {
     const relative = relativePathInsideRoot(layout.path, worktreePath)
     if (relative === null) {
       continue

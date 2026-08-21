@@ -12,7 +12,7 @@ const homeSource = readFileSync(new URL('../../app/index.tsx', import.meta.url),
 function worktree(worktreeId: string): HomeWorktreeSummary {
   return {
     worktreeId,
-    repo: 'orca',
+    repo: 'mcode',
     branch: 'main',
     displayName: worktreeId,
     liveTerminalCount: 0

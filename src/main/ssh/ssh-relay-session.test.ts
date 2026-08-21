@@ -138,7 +138,7 @@ describe('SshRelaySession', () => {
       clientInstanceId: options.clientInstanceId,
       serverBuildId: 'test-relay-build'
     }))
-    delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
+    delete process.env.MCODE_FEATURE_REMOTE_AGENT_HOOKS
     muxRequestMock.mockReset()
     muxRequestMock.mockResolvedValue([])
     mockDeploySuccess()
@@ -207,7 +207,7 @@ describe('SshRelaySession', () => {
   })
 
   it('continues provider registration when the relay managed-hook request fails', async () => {
-    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
+    process.env.MCODE_FEATURE_REMOTE_AGENT_HOOKS = '1'
     muxRequestMock.mockImplementation(async (method: string) => {
       if (method === 'preflight.detectAgents') {
         return { agents: ['codex'] }
@@ -235,7 +235,7 @@ describe('SshRelaySession', () => {
   })
 
   it('suppresses expected managed-hook teardown errors during disconnect', async () => {
-    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
+    process.env.MCODE_FEATURE_REMOTE_AGENT_HOOKS = '1'
     muxRequestMock.mockImplementation(async (method: string) => {
       if (method === 'preflight.detectAgents') {
         return { agents: ['codex'] }
@@ -266,7 +266,7 @@ describe('SshRelaySession', () => {
   })
 
   it('does not run POSIX managed hook installers on Windows remotes', async () => {
-    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
+    process.env.MCODE_FEATURE_REMOTE_AGENT_HOOKS = '1'
     const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const mockConn = {
       writeFile: vi.fn().mockResolvedValue(undefined)
@@ -280,9 +280,9 @@ describe('SshRelaySession', () => {
       platform: 'win32-x64',
       hostPlatform: getRemoteHostPlatform('win32-x64'),
       remoteHome: 'C:/Users/me',
-      remoteRelayDir: 'C:/Users/me/.orca-remote/relay-v1',
+      remoteRelayDir: 'C:/Users/me/.mcode-remote/relay-v1',
       nodePath: 'C:/Program Files/nodejs/node.exe',
-      sockPath: '\\\\.\\pipe\\orca-relay-123'
+      sockPath: '\\\\.\\pipe\\mcode-relay-123'
     })
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
 
@@ -299,7 +299,7 @@ describe('SshRelaySession', () => {
   })
 
   it('does not register providers if dispose wins during initial plugin sync', async () => {
-    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
+    process.env.MCODE_FEATURE_REMOTE_AGENT_HOOKS = '1'
     let resolvePluginInstall!: () => void
     muxRequestMock.mockImplementation(async (method: string) => {
       if (method === AGENT_HOOK_INSTALL_PLUGINS_METHOD) {
@@ -367,7 +367,7 @@ describe('SshRelaySession', () => {
     expect(registerSshPtyProvider).toHaveBeenCalledWith('target-1', expect.anything())
   })
 
-  it('compiles a native Windows Orca CLI bridge without a cmd.exe shim', async () => {
+  it('compiles a native Windows MCode CLI bridge without a cmd.exe shim', async () => {
     const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const mockConn = {
       writeFile: vi.fn().mockResolvedValue(undefined)
@@ -381,9 +381,9 @@ describe('SshRelaySession', () => {
       platform: 'win32-x64',
       hostPlatform: getRemoteHostPlatform('win32-x64'),
       remoteHome: 'C:/Users/me',
-      remoteRelayDir: 'C:/Users/me/.orca-remote/relay-v1',
+      remoteRelayDir: 'C:/Users/me/.mcode-remote/relay-v1',
       nodePath: 'C:/Program Files/nodejs/node.exe',
-      sockPath: '\\\\.\\pipe\\orca-relay-123'
+      sockPath: '\\\\.\\pipe\\mcode-relay-123'
     })
 
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
@@ -394,12 +394,12 @@ describe('SshRelaySession', () => {
     expect(vi.mocked(execCommand).mock.calls[0]?.[1]).toContain('powershell.exe')
     expect(vi.mocked(execCommand).mock.calls[0]?.[2]).toEqual({ wrapCommand: false })
     expect(mockConn.writeFile).toHaveBeenCalledWith(
-      'C:/Users/me/.orca-relay/bin/orca-launcher.cs',
+      'C:/Users/me/.mcode-relay/bin/mcode-launcher.cs',
       expect.stringContaining('ProcessStartInfo'),
       { hostPlatform: getRemoteHostPlatform('win32-x64') }
     )
     const launcherSource = vi.mocked(mockConn.writeFile).mock.calls[0]?.[1] as string
-    expect(launcherSource).toContain('ORCA_RELAY_SOCKET_PATH')
+    expect(launcherSource).toContain('MCODE_RELAY_SOCKET_PATH')
     expect(launcherSource).not.toContain('cmd.exe')
     expect(launcherSource).not.toContain('%*')
     expect(vi.mocked(execCommand).mock.calls[1]?.[1]).toContain('powershell.exe')

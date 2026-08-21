@@ -14,7 +14,7 @@
  * the main-owned snapshot, WITHOUT a reload and WITHOUT any visibilitychange.
  */
 import type { Page } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { waitForSessionReady, waitForActiveWorktree, ensureTerminalVisible } from './helpers/store'
 import {
   waitForActiveTerminalManager,
@@ -41,35 +41,35 @@ async function getDeliverySnapshot(page: Page): Promise<DeliverySnapshot> {
 }
 
 test.describe('terminal stuck-occlusion recovery', () => {
-  test.afterEach(async ({ orcaPage }) => {
+  test.afterEach(async ({ mcodePage }) => {
     // Drop the instance shadow so the prototype getter (real state) rules
     // again, and fire one genuine visibilitychange to restore tracker trust.
-    await orcaPage.evaluate(() => {
+    await mcodePage.evaluate(() => {
       delete (document as { visibilityState?: string }).visibilityState
       document.dispatchEvent(new Event('visibilitychange'))
     })
   })
 
   test('a keystroke unlatches the hidden-delivery gate wedged by stale visibilityState', async ({
-    orcaPage
+    mcodePage
   }) => {
     test.setTimeout(120_000)
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage)
-    const ptyId = await waitForActivePanePtyId(orcaPage)
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
+    await ensureTerminalVisible(mcodePage)
+    await waitForActiveTerminalManager(mcodePage)
+    const ptyId = await waitForActivePanePtyId(mcodePage)
 
     // Live baseline: foreground delivery works. The $((…)) arithmetic keeps
     // the asserted string out of the typed command's local echo.
-    await execInTerminal(orcaPage, ptyId, 'echo live-before-$((41+1))')
+    await execInTerminal(mcodePage, ptyId, 'echo live-before-$((41+1))')
     await expect
-      .poll(async () => getTerminalContent(orcaPage), { timeout: 15_000 })
+      .poll(async () => getTerminalContent(mcodePage), { timeout: 15_000 })
       .toContain('live-before-42')
 
     // Emulate the Chromium occlusion wedge: visibilityState pins at 'hidden',
     // one last visibilitychange fires, then the tracker goes silent forever.
-    await orcaPage.evaluate(() => {
+    await mcodePage.evaluate(() => {
       Object.defineProperty(document, 'visibilityState', {
         get: () => 'hidden',
         configurable: true
@@ -80,57 +80,57 @@ test.describe('terminal stuck-occlusion recovery', () => {
     // The visible pane's pty gets marked hidden in main — the field state:
     // gate holding a pty that main's own visibility set says is visible.
     await expect
-      .poll(async () => (await getDeliverySnapshot(orcaPage)).hiddenDeliveryGatedPtyCount, {
+      .poll(async () => (await getDeliverySnapshot(mcodePage)).hiddenDeliveryGatedPtyCount, {
         timeout: 15_000
       })
       .toBeGreaterThan(0)
     expect(
-      (await getDeliverySnapshot(orcaPage)).hiddenDeliveryGatedVisiblePtyCount
+      (await getDeliverySnapshot(mcodePage)).hiddenDeliveryGatedVisiblePtyCount
     ).toBeGreaterThan(0)
 
     // The freeze repro: output produced now is dropped by main, not painted.
-    const droppedBefore = (await getDeliverySnapshot(orcaPage)).hiddenDeliveryDroppedChars
-    await execInTerminal(orcaPage, ptyId, 'echo occluded-$((70+8))')
+    const droppedBefore = (await getDeliverySnapshot(mcodePage)).hiddenDeliveryDroppedChars
+    await execInTerminal(mcodePage, ptyId, 'echo occluded-$((70+8))')
     await expect
-      .poll(async () => (await getDeliverySnapshot(orcaPage)).hiddenDeliveryDroppedChars, {
+      .poll(async () => (await getDeliverySnapshot(mcodePage)).hiddenDeliveryDroppedChars, {
         timeout: 15_000
       })
       .toBeGreaterThan(droppedBefore)
-    expect(await getTerminalContent(orcaPage)).not.toContain('occluded-78')
+    expect(await getTerminalContent(mcodePage)).not.toContain('occluded-78')
 
     // The staleness proof: one real keystroke while the document claims
     // hidden. No visibilitychange fires — recovery must ride the proof alone.
-    await orcaPage.keyboard.press('Shift')
+    await mcodePage.keyboard.press('Shift')
 
     // Gate unlatches and the missed output repaints from the main-owned
     // snapshot — no reload, visibilityState still reads 'hidden'.
     await expect
-      .poll(async () => getTerminalContent(orcaPage), { timeout: 30_000 })
+      .poll(async () => getTerminalContent(mcodePage), { timeout: 30_000 })
       .toContain('occluded-78')
     await expect
-      .poll(async () => (await getDeliverySnapshot(orcaPage)).hiddenDeliveryGatedVisiblePtyCount, {
+      .poll(async () => (await getDeliverySnapshot(mcodePage)).hiddenDeliveryGatedVisiblePtyCount, {
         timeout: 15_000
       })
       .toBe(0)
 
     // Live delivery continues under the override.
-    await execInTerminal(orcaPage, ptyId, 'echo live-after-$((200+56))')
+    await execInTerminal(mcodePage, ptyId, 'echo live-after-$((200+56))')
     await expect
-      .poll(async () => getTerminalContent(orcaPage), { timeout: 15_000 })
+      .poll(async () => getTerminalContent(mcodePage), { timeout: 15_000 })
       .toContain('live-after-256')
 
     // The one-paste freeze report is prod-reachable and carries the episode's
     // history: the stale-visibility latch and gate transitions must be in the
     // renderer breadcrumbs, and main's per-pty table must be populated.
-    const report = await orcaPage.evaluate(() =>
+    const report = await mcodePage.evaluate(() =>
       (
         window as Window & {
-          __orcaTerminalFreezeReport?: () => Promise<{
+          __mcodeTerminalFreezeReport?: () => Promise<{
             renderer: { breadcrumbs: { kind: string }[]; documentVisibilityProvenStale: boolean }
             main: { diagnostics: { perPty: unknown[]; breadcrumbs: { kind: string }[] } }
           }>
         }
-      ).__orcaTerminalFreezeReport?.()
+      ).__mcodeTerminalFreezeReport?.()
     )
     if (!report) {
       throw new Error('freeze report global missing from prod-path renderer')

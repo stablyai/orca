@@ -1,22 +1,22 @@
 import { randomUUID } from 'node:crypto'
 import { readOrchestrationCompatibilityEvidence } from '../../shared/orchestration-compatibility-evidence'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { MCodeRuntimeService } from '../runtime/mcode-runtime'
 import type { RpcResponse } from '../runtime/rpc/core'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import type {
-  RemoteOrcaCliPostOutput,
-  RemoteOrcaCliRequest
+  RemoteMCodeCliPostOutput,
+  RemoteMCodeCliRequest
 } from './ssh-remote-cli-host-passthrough'
 import { RemoteCliArgumentError, type ParsedRemoteCli } from './ssh-remote-cli-argument-error'
 import { optionalRemoteCliString, resolveRemoteCliHandle } from './ssh-remote-cli-args'
 
-export async function acknowledgeRemoteOrcaCliPostOutput(
-  runtime: OrcaRuntimeService,
+export async function acknowledgeRemoteMCodeCliPostOutput(
+  runtime: MCodeRuntimeService,
   args: {
-    postOutput: RemoteOrcaCliPostOutput
+    postOutput: RemoteMCodeCliPostOutput
     env: Record<string, string>
-    runtimeAuthority?: RemoteOrcaCliRequest['runtimeAuthority']
+    runtimeAuthority?: RemoteMCodeCliRequest['runtimeAuthority']
   }
 ): Promise<void> {
   const inheritedEvidence = readOrchestrationCompatibilityEvidence(args.env)
@@ -53,7 +53,7 @@ export async function acknowledgeRemoteOrcaCliPostOutput(
   }
 }
 
-export function parseRemoteOrcaCliPostOutput(value: unknown): RemoteOrcaCliPostOutput {
+export function parseRemoteMCodeCliPostOutput(value: unknown): RemoteMCodeCliPostOutput {
   if (!isRecord(value) || typeof value.kind !== 'string' || typeof value.terminal !== 'string') {
     throw invalidPostOutput()
   }
@@ -90,7 +90,7 @@ export function getRemoteCliPostOutput(
   parsed: ParsedRemoteCli,
   env: Record<string, string>,
   response: RpcResponse
-): RemoteOrcaCliPostOutput | undefined {
+): RemoteMCodeCliPostOutput | undefined {
   if (!response.ok || !isRecord(response.result)) {
     return undefined
   }

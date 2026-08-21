@@ -19,28 +19,28 @@ afterEach(() => {
 
 describe('pairing deep links', () => {
   it('extracts the QR pairing code from the hash payload', () => {
-    expect(extractPairingCodeFromUrl('orca://pair#abc123')).toBe('abc123')
+    expect(extractPairingCodeFromUrl('mcode://pair#abc123')).toBe('abc123')
   })
 
   it('extracts the pairing code from a query param', () => {
-    expect(extractPairingCodeFromUrl('orca://pair?code=abc123')).toBe('abc123')
+    expect(extractPairingCodeFromUrl('mcode://pair?code=abc123')).toBe('abc123')
   })
 
   it('accepts scanner casing and surrounding whitespace', () => {
-    expect(extractPairingCodeFromUrl('  ORCA://PAIR?code=abc123\n')).toBe('abc123')
+    expect(extractPairingCodeFromUrl('  MCODE://PAIR?code=abc123\n')).toBe('abc123')
   })
 
   it('rejects lookalike routes', () => {
-    expect(extractPairingCodeFromUrl('orca://pairing?code=abc123')).toBeNull()
-    expect(extractPairingCodeFromUrl('orca://pair-extra?code=abc123')).toBeNull()
+    expect(extractPairingCodeFromUrl('mcode://pairing?code=abc123')).toBeNull()
+    expect(extractPairingCodeFromUrl('mcode://pair-extra?code=abc123')).toBeNull()
   })
 
   it('prefers the query pairing code when both query and hash are present', () => {
-    expect(extractPairingCodeFromUrl('orca://pair?code=query-code#hash-code')).toBe('query-code')
+    expect(extractPairingCodeFromUrl('mcode://pair?code=query-code#hash-code')).toBe('query-code')
   })
 
   it('ignores empty and unrelated URLs', () => {
-    expect(extractPairingCodeFromUrl('orca://pair')).toBeNull()
+    expect(extractPairingCodeFromUrl('mcode://pair')).toBeNull()
     expect(extractPairingCodeFromUrl('https://example.com/pair#abc123')).toBeNull()
   })
 
@@ -53,20 +53,20 @@ describe('pairing deep links', () => {
       return realAtob(input)
     })
 
-    expect(decodePairingUrl(`orca://pair?code=${encodeOffer()}`)).toEqual(offer)
+    expect(decodePairingUrl(`mcode://pair?code=${encodeOffer()}`)).toEqual(offer)
   })
 
   it('parses a full pairing URL and a bare copied code', () => {
     const code = encodeOffer()
 
-    expect(parsePairingCode(`orca://pair?code=${code}`)).toEqual(offer)
+    expect(parsePairingCode(`mcode://pair?code=${code}`)).toEqual(offer)
     expect(parsePairingCode(code)).toEqual(offer)
   })
 
   it('preserves a TLS reverse-proxy endpoint with an explicit port and path', () => {
     const proxiedOffer = {
       ...offer,
-      endpoint: 'wss://proxy.example:443/orca/runtime'
+      endpoint: 'wss://proxy.example:443/mcode/runtime'
     }
     const code = encodeOffer(proxiedOffer)
 

@@ -4,7 +4,7 @@ import type { OpenFilePathRekey } from './editor'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 
 // Stage-1 foundation: rekeyOpenFilesForPathChange atomically retargets an open
-// edit session across an Orca-owned move (no close/reopen), preserving all
+// edit session across an MCode-owned move (no close/reopen), preserving all
 // id-keyed state and failing closed on collision/stale without mutating.
 
 function seedEditTab(overrides: Partial<Record<string, unknown>> = {}): void {

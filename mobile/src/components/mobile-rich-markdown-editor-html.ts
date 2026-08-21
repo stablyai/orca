@@ -657,7 +657,7 @@ ${MOBILE_RICH_MARKDOWN_KEYBOARD_DISMISS_SCRIPT}
         }
       });
 
-      window.__orcaRichMarkdown = { setMarkdown: setMarkdown, setEditable: setEditable, runCommand: runCommand, currentMarkdown: currentMarkdown, dismissKeyboard: dismissKeyboard };
+      window.__mcodeRichMarkdown = { setMarkdown: setMarkdown, setEditable: setEditable, runCommand: runCommand, currentMarkdown: currentMarkdown, dismissKeyboard: dismissKeyboard };
 ${MOBILE_RICH_MARKDOWN_KEYBOARD_INSET_SCRIPT}
       post({ type: 'ready' });
     })();

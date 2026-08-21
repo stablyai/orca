@@ -187,7 +187,7 @@ describe('connectPanePty', () => {
         ...mockStoreState,
         tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null, generation: 7 }] },
         ptyIdsByTabId: { 'tab-1': [] },
-        repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+        repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'mcode' }],
         sshConnectionStates: new Map([
           [
             'target-a',
@@ -241,7 +241,7 @@ describe('connectPanePty', () => {
       ...mockStoreState,
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null, generation: 7 }] },
       ptyIdsByTabId: { 'tab-1': [] },
-      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'mcode' }],
       sshConnectionStates: new Map([
         [
           'target-a',
@@ -308,7 +308,7 @@ describe('connectPanePty', () => {
       ...mockStoreState,
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null, generation: 7 }] },
       ptyIdsByTabId: { 'tab-1': [] },
-      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'mcode' }],
       sshConnectionStates: new Map([
         [
           'target-a',
@@ -361,7 +361,7 @@ describe('connectPanePty', () => {
       ...mockStoreState,
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null, generation: 7 }] },
       ptyIdsByTabId: { 'tab-1': [] },
-      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'mcode' }],
       sshConnectionStates: new Map([
         [
           'target-a',
@@ -430,7 +430,7 @@ describe('connectPanePty', () => {
       ...mockStoreState,
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null, generation: 7 }] },
       ptyIdsByTabId: { 'tab-1': [] },
-      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'mcode' }],
       sshConnectionStates: new Map([
         [
           'target-a',
@@ -512,7 +512,7 @@ describe('connectPanePty', () => {
       ...mockStoreState,
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: livePtyId, generation: 7 }] },
       ptyIdsByTabId: { 'tab-1': [livePtyId] },
-      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'mcode' }],
       sshConnectionStates: new Map([
         [
           'target-a',
@@ -575,7 +575,7 @@ describe('connectPanePty', () => {
       ...mockStoreState,
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: livePtyId, generation: 7 }] },
       ptyIdsByTabId: { 'tab-1': [livePtyId] },
-      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'mcode' }],
       sshConnectionStates: new Map([
         [
           'target-a',
@@ -661,7 +661,7 @@ describe('connectPanePty', () => {
       ...mockStoreState,
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null, generation: 7 }] },
       ptyIdsByTabId: { 'tab-1': [] },
-      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'mcode' }],
       sshConnectionStates: new Map([
         [
           'target-a',

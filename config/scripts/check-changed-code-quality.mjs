@@ -59,7 +59,7 @@ function splitNullDelimited(output) {
 function resolveBase(root, requestedBase) {
   for (const candidate of [
     requestedBase,
-    process.env.ORCA_CODE_QUALITY_BASE,
+    process.env.MCODE_CODE_QUALITY_BASE,
     'origin/main',
     'main'
   ]) {

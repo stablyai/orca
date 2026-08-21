@@ -62,7 +62,7 @@ const preview: PluginMarketplaceHostInstallPreview = {
     name: 'Worktree Notes',
     version: '1.0.0',
     description: 'Notes for active worktrees.',
-    engines: { orca: '>=1.0.0' },
+    engines: { mcode: '>=1.0.0' },
     pluginApi: 1,
     main: 'dist/worker.js',
     contributes: {

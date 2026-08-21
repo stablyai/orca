@@ -53,7 +53,7 @@ describe('TabBar PowerShell launch wiring', () => {
 
   it('uses the paired host platform to show Windows shell rows in a Mac browser', async () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
-    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    vi.stubGlobal('__MCODE_WEB_CLIENT__', true)
     vi.stubGlobal('window', {
       api: {
         wsl: {
@@ -121,7 +121,7 @@ describe('TabBar PowerShell launch wiring', () => {
 
   it('uses the active remote host platform to show Windows shell rows in a Mac desktop client', async () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
-    vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
+    vi.stubGlobal('__MCODE_WEB_CLIENT__', false)
     vi.stubGlobal('window', {
       api: {
         wsl: {
@@ -188,14 +188,14 @@ describe('TabBar PowerShell launch wiring', () => {
   })
 
   it('hides local Windows shell rows for a non-Windows serve runtime', async () => {
-    // Why: a Windows desktop client paired to a Linux `orca serve` runs its PTY on
+    // Why: a Windows desktop client paired to a Linux `mcode serve` runs its PTY on
     // the serve host. The local Windows shell choices (PowerShell/CMD/WSL) are
     // meaningless there; the plain "New Terminal" already opens the serve's default
     // shell. Sibling tests above assert that a win32 remote host still shows the
     // rows, so the LOCAL Windows-WSL project-runtime menu (hostPlatform 'win32')
     // is unaffected by this suppression.
     vi.stubGlobal('navigator', { userAgent: 'Windows' })
-    vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
+    vi.stubGlobal('__MCODE_WEB_CLIENT__', false)
     vi.stubGlobal('window', {
       api: {
         wsl: {

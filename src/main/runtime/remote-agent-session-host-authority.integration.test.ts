@@ -12,8 +12,8 @@ import type {
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 import type { SubprocessHandle } from '../daemon/session-subprocess-handle'
 import { TerminalHost } from '../daemon/terminal-host'
-import { OrcaRuntimeService } from './orca-runtime'
-import { OrcaRuntimeRpcServer } from './runtime-rpc'
+import { MCodeRuntimeService } from './mcode-runtime'
+import { MCodeRuntimeRpcServer } from './runtime-rpc'
 
 const TEST_TIMEOUT_MS = 15_000
 const REQUEST_TIMEOUT_MS = 5_000
@@ -47,7 +47,7 @@ function createControlledSubprocess(): ControlledSubprocess {
   }
 }
 
-function requirePairing(server: OrcaRuntimeRpcServer, name: string) {
+function requirePairing(server: MCodeRuntimeRpcServer, name: string) {
   const offer = server.createPairingOffer({ name, scope: 'runtime' })
   if (!offer.available) {
     throw new Error('pairing unavailable')
@@ -72,7 +72,7 @@ describe('remote agent-session host authority integration', () => {
     'deduplicates racing remote resumes, adopts retries, and retires exited surfaces',
     { timeout: TEST_TIMEOUT_MS },
     async () => {
-      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-agent-authority-repro-'))
+      const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-agent-authority-repro-'))
       cleanups.push(() => rmSync(userDataPath, { recursive: true, force: true }))
 
       const subprocesses: ControlledSubprocess[] = []
@@ -102,7 +102,7 @@ describe('remote agent-session host authority integration', () => {
         getWorktreeMeta: () => undefined,
         getProjects: () => []
       }
-      const runtime = new OrcaRuntimeService(store as never)
+      const runtime = new MCodeRuntimeService(store as never)
       let nextRequestedSession = 0
       runtime.setPtyController({
         spawn: async (options) => {
@@ -136,7 +136,7 @@ describe('remote agent-session host authority integration', () => {
         getForegroundProcess: async () => 'claude'
       })
 
-      const server = new OrcaRuntimeRpcServer({
+      const server = new MCodeRuntimeRpcServer({
         runtime,
         userDataPath,
         enableWebSocket: true,

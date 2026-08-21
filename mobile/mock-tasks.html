@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Orca Mobile - Tasks Mock</title>
+    <title>MCode Mobile - Tasks Mock</title>
     <style>
       * {
         box-sizing: border-box;
@@ -760,7 +760,7 @@
   </head>
   <body>
     <div class="stage">
-      <main class="phone" aria-label="Orca mobile Tasks mock">
+      <main class="phone" aria-label="MCode mobile Tasks mock">
         <section class="screen">
           <header class="top-chrome">
             <div class="status-bar">
@@ -869,9 +869,9 @@
       ]
 
       const repos = [
-        { id: 'repo-orca', displayName: 'orca', path: '/Users/jinwoo/orca' },
+        { id: 'repo-mcode', displayName: 'mcode', path: '/Users/jinwoo/mcode' },
         { id: 'repo-sdk', displayName: 'stably-sdk', path: '/Users/jinwoo/stably-sdk' },
-        { id: 'repo-ssh', displayName: 'prod-remote', path: 'ssh://desk/orca' },
+        { id: 'repo-ssh', displayName: 'prod-remote', path: 'ssh://desk/mcode' },
         {
           id: 'repo-folder',
           displayName: 'notes-folder',
@@ -881,8 +881,8 @@
       ]
 
       const teams = [
-        { id: 'team-mobile', name: 'Mobile', workspaceName: 'Orca' },
-        { id: 'team-runtime', name: 'Runtime', workspaceName: 'Orca' }
+        { id: 'team-mobile', name: 'Mobile', workspaceName: 'MCode' },
+        { id: 'team-runtime', name: 'Runtime', workspaceName: 'MCode' }
       ]
 
       const linearStates = [
@@ -899,8 +899,8 @@
             type: 'pr',
             number: 1284,
             title: 'Add mobile task drawer with repo-aware workspace creation',
-            repoId: 'repo-orca',
-            repoName: 'orca',
+            repoId: 'repo-mcode',
+            repoName: 'mcode',
             status: 'Open',
             state: 'open',
             updatedAt: '18m',
@@ -947,8 +947,8 @@
             type: 'issue',
             number: 1197,
             title: 'Investigate remote client selector_ambiguous errors when listing work items',
-            repoId: 'repo-orca',
-            repoName: 'orca',
+            repoId: 'repo-mcode',
+            repoName: 'mcode',
             status: 'Open',
             state: 'open',
             updatedAt: '2h',
@@ -988,8 +988,8 @@
             type: 'issue',
             number: 1088,
             title: 'Clean up stale task results after switching hosts',
-            repoId: 'repo-orca',
-            repoName: 'orca',
+            repoId: 'repo-mcode',
+            repoName: 'mcode',
             status: 'Closed',
             state: 'closed',
             updatedAt: '1d',
@@ -1007,8 +1007,8 @@
             type: 'mr',
             number: 73,
             title: 'Resolve merge request source branch from preferred GitLab remote',
-            repoId: 'repo-orca',
-            repoName: 'orca',
+            repoId: 'repo-mcode',
+            repoName: 'mcode',
             status: 'Open',
             state: 'opened',
             updatedAt: '12m',
@@ -1027,7 +1027,7 @@
                 author: 'lee',
                 createdAt: '2026-05-20',
                 body: 'This should mention which remote was selected.',
-                path: 'src/main/runtime/orca-runtime.ts',
+                path: 'src/main/runtime/mcode-runtime.ts',
                 line: 5210,
                 threadId: 'gl-discussion-1',
                 isResolved: false
@@ -1043,8 +1043,8 @@
             type: 'issue',
             number: 64,
             title: 'Support search query passthrough for GitLab work items',
-            repoId: 'repo-orca',
-            repoName: 'orca',
+            repoId: 'repo-mcode',
+            repoName: 'mcode',
             status: 'Open',
             state: 'opened',
             updatedAt: '3h',
@@ -1075,8 +1075,8 @@
             type: 'issue',
             number: 49,
             title: 'Keep folder-only repositories out of hosted task queries',
-            repoId: 'repo-orca',
-            repoName: 'orca',
+            repoId: 'repo-mcode',
+            repoName: 'mcode',
             status: 'Closed',
             state: 'closed',
             updatedAt: '4d',
@@ -1093,7 +1093,7 @@
             targetType: 'MergeRequest',
             targetIid: 73,
             title: 'Resolve merge request source branch from preferred GitLab remote',
-            projectPath: 'stably/orca',
+            projectPath: 'stably/mcode',
             status: 'review requested',
             updatedAt: '18m'
           },
@@ -1102,7 +1102,7 @@
             targetType: 'Issue',
             targetIid: 64,
             title: 'Support search query passthrough for GitLab work items',
-            projectPath: 'stably/orca',
+            projectPath: 'stably/mcode',
             status: 'mentioned',
             updatedAt: '3h'
           }
@@ -1193,7 +1193,7 @@
         selectedItem: null,
         createTitle: '',
         createBody: '',
-        createTargetId: 'repo-orca',
+        createTargetId: 'repo-mcode',
         loading: false
       }
 

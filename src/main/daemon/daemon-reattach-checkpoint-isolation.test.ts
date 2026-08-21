@@ -60,7 +60,7 @@ describe('STA-4173 reattach isolation from a stalled checkpoint', () => {
   let subprocesses: ReturnType<typeof createMockSubprocess>[]
 
   beforeEach(async () => {
-    dir = mkdtempSync(join(tmpdir(), 'orca-reattach-isolation-'))
+    dir = mkdtempSync(join(tmpdir(), 'mcode-reattach-isolation-'))
     subprocesses = []
     const log: DaemonFileLog = { log: () => {}, close: () => {} }
     server = new DaemonServer({

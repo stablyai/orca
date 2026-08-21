@@ -8,7 +8,7 @@ import { z } from 'zod'
  * conformance path, and tests.
  *
  * v0 is a closed set of unscoped kinds so a typo (or a capability from a newer
- * Orca) fails manifest validation instead of silently granting nothing.
+ * MCode) fails manifest validation instead of silently granting nothing.
  * Scoped kinds (net:fetch hosts, process:exec globs) arrive in later phases.
  */
 

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../../shared/constants'
 import { PAIRING_LOCAL_UI_FIELDS } from '../../../../shared/pairing-local-ui-fields'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import type { RpcRequest } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { CLIENT_UI_METHODS } from './client-ui'
@@ -17,7 +17,7 @@ describe('client UI RPC pairing-local field seams', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       updateUIState: vi.fn(() => getDefaultUIState())
-    } as unknown as OrcaRuntimeService
+    } as unknown as MCodeRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     // A paired web client restamps every repo onto its own runtime:web-* pseudo-host, so its
@@ -52,7 +52,7 @@ describe('client UI RPC pairing-local field seams', () => {
       const runtime = {
         getRuntimeId: () => 'test-runtime',
         updateUIState: vi.fn(() => getDefaultUIState())
-      } as unknown as OrcaRuntimeService
+      } as unknown as MCodeRuntimeService
       const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
       const response = await dispatcher.dispatch(
@@ -75,7 +75,7 @@ describe('client UI RPC pairing-local field seams', () => {
       const runtime = {
         getRuntimeId: () => 'test-runtime',
         getUIState: vi.fn(() => ({ ...getDefaultUIState(), [field]: pairingLocalSamples[field] }))
-      } as unknown as OrcaRuntimeService
+      } as unknown as MCodeRuntimeService
       const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
       const response = await dispatcher.dispatch(makeRequest('ui.get'))
@@ -94,7 +94,7 @@ describe('client UI RPC pairing-local field seams', () => {
         getRuntimeId: () => 'test-runtime',
         updateUIState: vi.fn(() => stored),
         recordFeatureInteraction: vi.fn(() => stored)
-      } as unknown as OrcaRuntimeService
+      } as unknown as MCodeRuntimeService
       const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
       const setResponse = await dispatcher.dispatch(makeRequest('ui.set', { sidebarWidth: 280 }))

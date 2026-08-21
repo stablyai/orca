@@ -181,7 +181,7 @@ function metaShapesFor(data: string): { label: string; meta: TerminalOutputMeta 
     { label: 'seq+rawLength!=len', meta: { seq: 9_000, rawLength: data.length + 7 } },
     { label: 'rawLength!=len only', meta: { rawLength: data.length + 3 } },
     { label: 'transformed', meta: { seq: 42, rawLength: data.length, transformed: true } },
-    { label: 'cwd-only', meta: { cwd: '/home/dev/orca' } },
+    { label: 'cwd-only', meta: { cwd: '/home/dev/mcode' } },
     { label: 'seq=0', meta: { seq: 0, rawLength: data.length } }
   ]
 }

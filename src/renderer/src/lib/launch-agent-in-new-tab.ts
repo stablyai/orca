@@ -94,7 +94,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
           repo.connectionId ? undefined : getLocalProjectExecutionRuntimeContext(store, worktreeId)
         )
       : CLIENT_PLATFORM)
-  // Why: SSH remotes deploy the shim as plain `orca`, so skip the Linux-only `orca-ide` rename for remote launches.
+  // Why: SSH remotes deploy the shim as plain `mcode`, so skip the Linux-only `mcode-ide` rename for remote launches.
   const isRemote = repo ? repoIsRemote(repo) : false
   const queuedShell = resolveLocalWindowsAgentStartupShell({
     platform: resolvedLaunchPlatform,
@@ -228,7 +228,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     }).then((delivered) => {
       if (delivered) {
         if (agent === 'command-code' && submitPastedPrompt) {
-          // Why: Command Code has no prompt-submit hook; when Orca submits a
+          // Why: Command Code has no prompt-submit hook; when MCode submits a
           // generated prompt after readiness, seed working at delivery time.
           seedCommandCodeSubmittedPromptStatus(worktreeId, tab.id, trimmedPrompt)
         }

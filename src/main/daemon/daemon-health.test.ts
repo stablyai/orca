@@ -297,7 +297,7 @@ describe('Linux process start-time parsing', () => {
     fields[0] = 'S'
     fields[19] = '987654'
 
-    expect(parseLinuxProcStartTicks(`123 (orca daemon) ${fields.join(' ')}`)).toBe(987654)
+    expect(parseLinuxProcStartTicks(`123 (mcode daemon) ${fields.join(' ')}`)).toBe(987654)
   })
 
   it('parses boot time seconds from proc stat output', () => {
@@ -307,7 +307,7 @@ describe('Linux process start-time parsing', () => {
   it('does not use line-array or whitespace-regex splitting', () => {
     const splitSpy = vi.spyOn(String.prototype, 'split')
 
-    parseLinuxProcStartTicks('123 (orca daemon) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 42')
+    parseLinuxProcStartTicks('123 (mcode daemon) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 42')
     parseLinuxBootTimeSeconds('cpu 1 2 3\nbtime 1700000000')
 
     const usedUnboundedSplit = splitSpy.mock.calls.some(
@@ -367,15 +367,15 @@ describe('parseWindowsProcessIdentityJson', () => {
   it('parses command line and start time from the CIM query output', () => {
     expect(
       parseWindowsProcessIdentityJson(
-        '{"cmd":"Orca.exe daemon-entry.js","start":1700000000000}\r\n'
+        '{"cmd":"MCode.exe daemon-entry.js","start":1700000000000}\r\n'
       )
-    ).toEqual({ commandLine: 'Orca.exe daemon-entry.js', startedAtMs: 1_700_000_000_000 })
+    ).toEqual({ commandLine: 'MCode.exe daemon-entry.js', startedAtMs: 1_700_000_000_000 })
   })
 
   it('returns a null start time when CreationDate was unavailable', () => {
     expect(
-      parseWindowsProcessIdentityJson('{"cmd":"Orca.exe daemon-entry.js","start":null}')
-    ).toEqual({ commandLine: 'Orca.exe daemon-entry.js', startedAtMs: null })
+      parseWindowsProcessIdentityJson('{"cmd":"MCode.exe daemon-entry.js","start":null}')
+    ).toEqual({ commandLine: 'MCode.exe daemon-entry.js', startedAtMs: null })
   })
 
   it('returns null for a missing process or inaccessible command line', () => {

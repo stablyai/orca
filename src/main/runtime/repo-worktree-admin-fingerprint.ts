@@ -59,7 +59,7 @@ async function readLinkedWorktreeStamp(
   const [head, locked, worktreeExists] = await Promise.all([
     readHeadStamp(commonDir, entryDir),
     readExistenceStamp(path.join(entryDir, 'locked')),
-    // Deleting a worktree directory outside Orca flips its `prunable` row without touching the admin dir.
+    // Deleting a worktree directory outside MCode flips its `prunable` row without touching the admin dir.
     gitdirTarget ? readExistenceStamp(path.dirname(gitdirTarget)) : Promise.resolve(MISSING)
   ])
   return [name, gitdirTarget ?? MISSING, head, locked, worktreeExists].join(FIELD_SEPARATOR)

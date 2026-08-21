@@ -191,7 +191,7 @@
   border-color: color-mix(in srgb, var(--border) 82%, transparent);
 }
 
-.orca-diff-comment-add-btn.rich-markdown-comment-add-btn {
+.mcode-diff-comment-add-btn.rich-markdown-comment-add-btn {
   display: flex;
   width: 24px;
   height: 24px;
@@ -205,7 +205,7 @@
     0 0 0 1px color-mix(in srgb, var(--primary) 10%, transparent);
 }
 
-.orca-diff-comment-add-btn.rich-markdown-comment-add-btn:hover {
+.mcode-diff-comment-add-btn.rich-markdown-comment-add-btn:hover {
   color: var(--primary);
   border-color: color-mix(in srgb, var(--primary) 68%, var(--border));
   background: color-mix(in srgb, var(--primary) 22%, var(--background));
@@ -311,12 +311,12 @@
   pointer-events: auto;
 }
 
-.rich-markdown-review-note-card.is-active > .orca-diff-comment-card {
+.rich-markdown-review-note-card.is-active > .mcode-diff-comment-card {
   border-color: color-mix(in srgb, var(--foreground) 18%, transparent);
   background: color-mix(in srgb, var(--foreground) 4%, var(--editor-surface));
 }
 
-.rich-markdown-review-note-card.is-attention > .orca-diff-comment-card {
+.rich-markdown-review-note-card.is-attention > .mcode-diff-comment-card {
   animation: rich-markdown-note-attention 900ms ease-out;
 }
 
@@ -691,17 +691,17 @@
   color: var(--muted-foreground);
 }
 
-.rich-markdown-editor .orca-details {
+.rich-markdown-editor .mcode-details {
   margin: 0.85em 0;
 }
 
-.rich-markdown-editor details.orca-details,
-.rich-markdown-editor .orca-details[data-type='details'] {
+.rich-markdown-editor details.mcode-details,
+.rich-markdown-editor .mcode-details[data-type='details'] {
   padding-left: 0.75em;
 }
 
-.rich-markdown-editor details.orca-details > summary,
-.rich-markdown-editor .orca-details[data-type='details'] summary {
+.rich-markdown-editor details.mcode-details > summary,
+.rich-markdown-editor .mcode-details[data-type='details'] summary {
   display: block;
   list-style: none;
   min-height: 1.6em;
@@ -710,17 +710,17 @@
   line-height: 1.35;
 }
 
-.rich-markdown-editor details.orca-details > summary::-webkit-details-marker,
-.rich-markdown-editor .orca-details[data-type='details'] summary::-webkit-details-marker {
+.rich-markdown-editor details.mcode-details > summary::-webkit-details-marker,
+.rich-markdown-editor .mcode-details[data-type='details'] summary::-webkit-details-marker {
   display: none;
 }
 
-.rich-markdown-editor .orca-details[data-type='details'] {
+.rich-markdown-editor .mcode-details[data-type='details'] {
   position: relative;
   padding-left: 1.65em;
 }
 
-.rich-markdown-editor .orca-details[data-type='details'] > button {
+.rich-markdown-editor .mcode-details[data-type='details'] > button {
   position: absolute;
   top: 0;
   left: 0.15em;
@@ -736,59 +736,59 @@
   cursor: pointer;
 }
 
-.rich-markdown-editor .orca-details[data-type='details'] > button::before {
+.rich-markdown-editor .mcode-details[data-type='details'] > button::before {
   content: '\203A';
   font-size: 1.25em;
   line-height: 1;
   transition: transform 120ms ease;
 }
 
-.rich-markdown-editor .orca-details[data-type='details'].is-open > button::before {
+.rich-markdown-editor .mcode-details[data-type='details'].is-open > button::before {
   transform: rotate(90deg);
 }
 
-.rich-markdown-editor details.orca-details > div[data-type='detailsContent'],
-.rich-markdown-editor .orca-details[data-type='details'] div[data-type='detailsContent'] {
+.rich-markdown-editor details.mcode-details > div[data-type='detailsContent'],
+.rich-markdown-editor .mcode-details[data-type='details'] div[data-type='detailsContent'] {
   padding-left: 0.15em;
 }
 
-.rich-markdown-editor details.orca-details[data-orca-toggle='heading-1'] > summary,
-.rich-markdown-editor .orca-details[data-type='details'][data-orca-toggle='heading-1'] summary {
+.rich-markdown-editor details.mcode-details[data-mcode-toggle='heading-1'] > summary,
+.rich-markdown-editor .mcode-details[data-type='details'][data-mcode-toggle='heading-1'] summary {
   font-size: 1.85em;
   font-weight: 700;
   letter-spacing: 0;
   line-height: 1.3;
 }
 
-.rich-markdown-editor .orca-details[data-type='details'][data-orca-toggle='heading-1'] > button {
+.rich-markdown-editor .mcode-details[data-type='details'][data-mcode-toggle='heading-1'] > button {
   height: 2.405em;
 }
 
 /* Heading toggle sizes mirror the plain h2–h5 scales (1.4 / 1.15 / 1 / 0.92em). */
-.rich-markdown-editor details.orca-details[data-orca-toggle='heading-2'] > summary,
-.rich-markdown-editor .orca-details[data-type='details'][data-orca-toggle='heading-2'] summary {
+.rich-markdown-editor details.mcode-details[data-mcode-toggle='heading-2'] > summary,
+.rich-markdown-editor .mcode-details[data-type='details'][data-mcode-toggle='heading-2'] summary {
   font-size: 1.4em;
   line-height: 1.3;
 }
 
-.rich-markdown-editor .orca-details[data-type='details'][data-orca-toggle='heading-2'] > button {
+.rich-markdown-editor .mcode-details[data-type='details'][data-mcode-toggle='heading-2'] > button {
   height: 1.82em;
 }
 
-.rich-markdown-editor details.orca-details[data-orca-toggle='heading-3'] > summary,
-.rich-markdown-editor .orca-details[data-type='details'][data-orca-toggle='heading-3'] summary {
+.rich-markdown-editor details.mcode-details[data-mcode-toggle='heading-3'] > summary,
+.rich-markdown-editor .mcode-details[data-type='details'][data-mcode-toggle='heading-3'] summary {
   font-size: 1.15em;
   line-height: 1.3;
 }
 
-.rich-markdown-editor details.orca-details[data-orca-toggle='heading-4'] > summary,
-.rich-markdown-editor .orca-details[data-type='details'][data-orca-toggle='heading-4'] summary {
+.rich-markdown-editor details.mcode-details[data-mcode-toggle='heading-4'] > summary,
+.rich-markdown-editor .mcode-details[data-type='details'][data-mcode-toggle='heading-4'] summary {
   font-size: 1em;
   line-height: 1.3;
 }
 
-.rich-markdown-editor details.orca-details[data-orca-toggle='heading-5'] > summary,
-.rich-markdown-editor .orca-details[data-type='details'][data-orca-toggle='heading-5'] summary {
+.rich-markdown-editor details.mcode-details[data-mcode-toggle='heading-5'] > summary,
+.rich-markdown-editor .mcode-details[data-type='details'][data-mcode-toggle='heading-5'] summary {
   font-size: 0.92em;
   color: var(--muted-foreground);
   line-height: 1.3;

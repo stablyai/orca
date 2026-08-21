@@ -8,7 +8,7 @@ type BrowserAutomationVisibilityBridge = {
 declare global {
   // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
   interface Window {
-    __orcaBrowserAutomationVisibility?: BrowserAutomationVisibilityBridge
+    __mcodeBrowserAutomationVisibility?: BrowserAutomationVisibilityBridge
   }
 }
 
@@ -141,7 +141,7 @@ export function installBrowserAutomationVisibilityBridge(): void {
   if (typeof window === 'undefined') {
     return
   }
-  window.__orcaBrowserAutomationVisibility = {
+  window.__mcodeBrowserAutomationVisibility = {
     acquire: acquireForMainProcess,
     release: releaseBrowserAutomationVisibility
   }

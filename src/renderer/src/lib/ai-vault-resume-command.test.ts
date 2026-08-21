@@ -264,7 +264,7 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toBe(
-      "Remove-Item Env:CODEX_HOME -ErrorAction SilentlyContinue; Remove-Item Env:ORCA_CODEX_HOME -ErrorAction SilentlyContinue; Set-Location -LiteralPath 'C:\\Users\\alice\\repo'; codex 'resume' 'session one'"
+      "Remove-Item Env:CODEX_HOME -ErrorAction SilentlyContinue; Remove-Item Env:MCODE_CODEX_HOME -ErrorAction SilentlyContinue; Set-Location -LiteralPath 'C:\\Users\\alice\\repo'; codex 'resume' 'session one'"
     )
   })
 
@@ -285,7 +285,7 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toBe(
-      'set "CODEX_HOME=" & set "ORCA_CODEX_HOME=" & cd /d "C:\\Users\\alice\\repo" && codex "resume" "session one"'
+      'set "CODEX_HOME=" & set "MCODE_CODEX_HOME=" & cd /d "C:\\Users\\alice\\repo" && codex "resume" "session one"'
     )
   })
 
@@ -306,7 +306,7 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toBe(
-      `cd '/home/alice/repo' && env -u CODEX_HOME -u ORCA_CODEX_HOME codex 'resume' 'session one'`
+      `cd '/home/alice/repo' && env -u CODEX_HOME -u MCODE_CODEX_HOME codex 'resume' 'session one'`
     )
   })
 
@@ -529,7 +529,7 @@ describe('ai vault resume command runtime', () => {
     ).toMatchObject({
       command: "codex 'resume' 'session one'",
       cwd: '/home/alice/repo',
-      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME']
+      envToDelete: ['CODEX_HOME', 'MCODE_CODEX_HOME']
     })
   })
 
@@ -553,7 +553,7 @@ describe('ai vault resume command runtime', () => {
     ).toMatchObject({
       command: "codex 'resume' 'session one'",
       cwd: '/home/alice/repo',
-      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
+      envToDelete: ['CODEX_HOME', 'MCODE_CODEX_HOME'],
       providerSession: { key: 'session_id', id: 'session one' }
     })
   })
@@ -598,7 +598,7 @@ describe('ai vault resume command runtime', () => {
     })
 
     expect(command).toBe(
-      `cd '/home/alice/repo' && env -u CODEX_HOME -u ORCA_CODEX_HOME codex 'resume' 'session one'`
+      `cd '/home/alice/repo' && env -u CODEX_HOME -u MCODE_CODEX_HOME codex 'resume' 'session one'`
     )
     expect(command).not.toContain('/retired/shared-home')
   })

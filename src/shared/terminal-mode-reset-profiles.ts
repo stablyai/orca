@@ -3,7 +3,7 @@
 // into an xterm) and the daemon (seeding a cold-restored session) must clear
 // the same mode bits, and duplicating the literals drifted them apart (#12101).
 
-// Why: SerializeAddon replays mode bits assuming reattach to a live TUI, but Orca restores against a fresh shell with none, so stale bits (e.g. focus reporting rings the bell on click) must be reset.
+// Why: SerializeAddon replays mode bits assuming reattach to a live TUI, but MCode restores against a fresh shell with none, so stale bits (e.g. focus reporting rings the bell on click) must be reset.
 export const RESET_TERMINAL_CURSOR_STYLE = '\x1b[0 q'
 export const RESET_KITTY_KEYBOARD_PROTOCOL = '\x1b[<99u\x1b[=0u'
 // Why: abandoned byte-gap replay drains live chunks, so a dropped intensity reset must not style them (STA-4042).

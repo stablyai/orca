@@ -103,7 +103,7 @@ jobs:
             src/shared/ephemeral-vm-runtime-rollback-projection.ts \
             src/shared/ephemeral-vm-runtimes.ts \
             src/shared/ephemeral-vm-recipes.ts \
-            src/shared/orca-yaml-hook-types.ts \
+            src/shared/mcode-yaml-hook-types.ts \
             src/main/ephemeral-vm-runtime-service.ts \
             src/main/ephemeral-vm-runtime-provisioning-persistence.ts \
             src/main/ephemeral-vm-failed-start-cleanup.ts; then
@@ -225,7 +225,7 @@ jobs:
       - name: Cache baseline Git build
         uses: actions/cache@v5
         with:
-          path: ~/.cache/orca-git-compat/git-2.25.5
+          path: ~/.cache/mcode-git-compat/git-2.25.5
           key: git-compat-baseline-${{ runner.os }}-${{ runner.arch }}-2.25.5
 
       - name: Verify Git binary compatibility matrix
@@ -233,7 +233,7 @@ jobs:
           pids=()
           (
             archive="$RUNNER_TEMP/git-2.25.5.tar.gz"
-            source="$HOME/.cache/orca-git-compat/git-2.25.5"
+            source="$HOME/.cache/mcode-git-compat/git-2.25.5"
             if [ ! -x "$source/git" ]; then
               curl -fsSL https://www.kernel.org/pub/software/scm/git/git-2.25.5.tar.gz -o "$archive"
               echo "41662c52fc16fec4963bfc41075e71f8ead6b5e386797eb6f9a1111ff95a8ddf  $archive" \
@@ -246,7 +246,7 @@ jobs:
               # produced them are most of the tree and would bloat the cache entry.
               find "$source" -name '*.o' -delete
             fi
-            ORCA_GIT_COMPAT_BINARY="$source/git" ORCA_GIT_COMPAT_VERSION="2.25.5" \
+            MCODE_GIT_COMPAT_BINARY="$source/git" MCODE_GIT_COMPAT_VERSION="2.25.5" \
               pnpm exec vitest run --config config/vitest.config.ts \
               src/shared/git-binary-compatibility.test.ts
           ) &
@@ -258,7 +258,7 @@ jobs:
             (
               image="${spec%%|*}"
               version="${spec#*|}"
-              ORCA_GIT_COMPAT_IMAGE="$image" ORCA_GIT_COMPAT_VERSION="$version" \
+              MCODE_GIT_COMPAT_IMAGE="$image" MCODE_GIT_COMPAT_VERSION="$version" \
                 pnpm exec vitest run --config config/vitest.config.ts \
                 src/shared/git-binary-compatibility.test.ts
             ) &
@@ -316,7 +316,7 @@ jobs:
       # right on a developer machine and wrong here — this job is a required check
       # and its fish lane is the only end-to-end guard for #9993, so a skip would
       # report green with nothing exercised. Turns those skips into failures.
-      ORCA_REQUIRE_FISH: '1'
+      MCODE_REQUIRE_FISH: '1'
 
     steps:
       - name: Checkout
@@ -357,7 +357,7 @@ jobs:
           # them. Retries are 1, not 3: a first attempt at these bounds already multiplied
           # 30s x 3 retries across every index file into a ~15 minute stall on a dead
           # mirror, which is worse than failing once and moving on.
-          sudo tee /etc/apt/apt.conf.d/99-orca-shell-contracts >/dev/null <<'APTCONF'
+          sudo tee /etc/apt/apt.conf.d/99-mcode-shell-contracts >/dev/null <<'APTCONF'
           Acquire::http::Timeout "15";
           Acquire::https::Timeout "15";
           Acquire::Retries "1";
@@ -380,7 +380,7 @@ jobs:
           timeout 300 sudo apt-get install -y zsh fish
 
       # Separate from the install so the failure names the contract, not an apt error.
-      # ORCA_REQUIRE_FISH re-checks this at test time; this step just fails in seconds
+      # MCODE_REQUIRE_FISH re-checks this at test time; this step just fails in seconds
       # instead of after a full dependency install.
       - name: Require fish 4+
         run: |
@@ -569,11 +569,11 @@ jobs:
 
       - name: Package unpacked app
         env:
-          ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
+          MCODE_REUSE_PREPARED_NATIVE_RUNTIME: '1'
         run: pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage --x64 --publish never
 
       - name: Verify headless serve signal shutdown
-        run: node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage
+        run: node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/mcode-linux.AppImage
 
       - name: Smoke packaged CLI
         run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/linux-unpacked
@@ -624,7 +624,7 @@ jobs:
           src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts
           src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts
           src/main/cli/wsl-cli-powershell-boundary.test.ts
-          src/main/orca-profiles/profile-index-store.test.ts
+          src/main/mcode-profiles/profile-index-store.test.ts
           src/main/runtime/repo-worktree-admin-fingerprint.test.ts
           src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts
           src/shared/secure-file-fsync-flags.test.ts
@@ -640,7 +640,7 @@ jobs:
 
       - name: Package unpacked app
         env:
-          ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
+          MCODE_REUSE_PREPARED_NATIVE_RUNTIME: '1'
         run: pnpm exec electron-builder --config config/electron-builder.config.cjs --dir
 
       - name: Smoke packaged CLI
@@ -678,7 +678,7 @@ jobs:
           HEAD="${{ github.event.pull_request.head.sha }}"
           CHANGED="$(git diff --name-only --diff-filter=AMCR --merge-base "$BASE" "$HEAD")"
           TEST_FILES="$(printf '%s\n' "$CHANGED" | grep -E '^tests/e2e/.*\.spec\.ts$' || true)"
-          if printf '%s\n' "$CHANGED" | grep -Eq '^src/(main/ephemeral-vm-(runtime-(service|provisioning-persistence)|failed-start-cleanup)|shared/(ephemeral-vm-runtime-(store|feature-store|rollback-projection|runtimes)|ephemeral-vm-recipes|orca-yaml-hook-types))\.ts$'; then
+          if printf '%s\n' "$CHANGED" | grep -Eq '^src/(main/ephemeral-vm-(runtime-(service|provisioning-persistence)|failed-start-cleanup)|shared/(ephemeral-vm-runtime-(store|feature-store|rollback-projection|runtimes)|ephemeral-vm-recipes|mcode-yaml-hook-types))\.ts$'; then
             TEST_FILES="$(printf '%s\n%s\n' "$TEST_FILES" 'tests/e2e/ephemeral-vm-provisioned-root.spec.ts' | sort -u)"
           fi
           # Why: the Docker-SSH specs only ever ran when someone edited a spec, so four

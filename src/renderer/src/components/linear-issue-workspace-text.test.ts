@@ -27,7 +27,7 @@ describe('buildLinearIssueBranchName', () => {
     )
   })
 
-  it('falls back to Orca’s generated workspace slug', () => {
+  it('falls back to MCode’s generated workspace slug', () => {
     expect(buildLinearIssueBranchName(makeIssue())).toBe('eng-123-fix-launch-context-handoff')
     expect(buildLinearIssueBranchName(makeIssue('   '))).toBe('eng-123-fix-launch-context-handoff')
   })

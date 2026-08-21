@@ -32,7 +32,7 @@ describe('detectRemoteHostPlatform', () => {
   })
 
   it('detects POSIX hosts from uname output', async () => {
-    execCommandMock.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux   x86_64\n')
+    execCommandMock.mockResolvedValueOnce('__MCODE_REMOTE_PLATFORM__ Linux   x86_64\n')
 
     await expect(detectRemoteHostPlatform(conn)).resolves.toMatchObject({
       relayPlatform: 'linux-x64',
@@ -42,14 +42,14 @@ describe('detectRemoteHostPlatform', () => {
     })
     expect(execCommandMock).toHaveBeenCalledWith(
       conn,
-      "printf '\\n%s ' '__ORCA_REMOTE_PLATFORM__'; uname -sm"
+      "printf '\\n%s ' '__MCODE_REMOTE_PLATFORM__'; uname -sm"
     )
   })
 
   it('falls back to PowerShell detection for Windows remotes', async () => {
     execCommandMock
       .mockRejectedValueOnce(new Error('uname unavailable'))
-      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Windows AMD64\r\n')
+      .mockResolvedValueOnce('__MCODE_REMOTE_PLATFORM__ Windows AMD64\r\n')
 
     await expect(detectRemoteHostPlatform(conn)).resolves.toMatchObject({
       relayPlatform: 'win32-x64',
@@ -65,7 +65,7 @@ describe('detectRemoteHostPlatform', () => {
     )
     const command = execCommandMock.mock.calls[1]?.[1] ?? ''
     expect(decodePowerShellCommand(command)).toContain(
-      'Write-Output ("`n__ORCA_REMOTE_PLATFORM__ Windows " + $arch)'
+      'Write-Output ("`n__MCODE_REMOTE_PLATFORM__ Windows " + $arch)'
     )
   })
 
@@ -74,7 +74,7 @@ describe('detectRemoteHostPlatform', () => {
       .mockRejectedValueOnce(new Error('uname unavailable'))
       .mockResolvedValueOnce(
         'Linux x86_64\r\nWindows AMD64\r\n#< CLIXML\r\n' +
-          '__ORCA_REMOTE_PLATFORM__ Windows ARM64\r\n'
+          '__MCODE_REMOTE_PLATFORM__ Windows ARM64\r\n'
       )
 
     await expect(detectRemoteHostPlatform(conn)).resolves.toMatchObject({
@@ -87,8 +87,8 @@ describe('detectRemoteHostPlatform', () => {
 
   it('ignores a marker concatenated to unterminated startup noise', async () => {
     execCommandMock.mockResolvedValueOnce(
-      'startup noise__ORCA_REMOTE_PLATFORM__ Linux x86_64\n' +
-        '__ORCA_REMOTE_PLATFORM__ Linux arm64\n'
+      'startup noise__MCODE_REMOTE_PLATFORM__ Linux x86_64\n' +
+        '__MCODE_REMOTE_PLATFORM__ Linux arm64\n'
     )
 
     await expect(detectRemoteHostPlatform(conn)).resolves.toMatchObject({
@@ -98,15 +98,15 @@ describe('detectRemoteHostPlatform', () => {
 
   it('returns null when neither probe yields a supported platform', async () => {
     execCommandMock
-      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux')
-      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ FreeBSD x86_64')
+      .mockResolvedValueOnce('__MCODE_REMOTE_PLATFORM__ Linux')
+      .mockResolvedValueOnce('__MCODE_REMOTE_PLATFORM__ FreeBSD x86_64')
 
     await expect(detectRemoteHostPlatform(conn)).resolves.toBeNull()
   })
 
   it('does not use whitespace regex splitting for remote platform output', async () => {
     const splitSpy = vi.spyOn(String.prototype, 'split')
-    execCommandMock.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Darwin      arm64 extra')
+    execCommandMock.mockResolvedValueOnce('__MCODE_REMOTE_PLATFORM__ Darwin      arm64 extra')
 
     await expect(detectRemoteHostPlatform(conn)).resolves.toMatchObject({
       relayPlatform: 'darwin-arm64'
@@ -145,7 +145,7 @@ describe('detectRemoteHostPlatform failure reporting', () => {
   it('still detects Windows when the uname probe hits the session limit', async () => {
     execCommandMock
       .mockRejectedValueOnce(maxSessionsError())
-      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Windows AMD64\r\n')
+      .mockResolvedValueOnce('__MCODE_REMOTE_PLATFORM__ Windows AMD64\r\n')
 
     await expect(detectRemoteHostPlatform(conn)).resolves.toMatchObject({
       relayPlatform: 'win32-x64'
@@ -179,10 +179,10 @@ describe('detectRemoteHostPlatform failure reporting', () => {
 
   it('prefers unrecognized uname output over a failed PowerShell probe', async () => {
     execCommandMock
-      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux')
+      .mockResolvedValueOnce('__MCODE_REMOTE_PLATFORM__ Linux')
       .mockRejectedValueOnce(new Error('powershell.exe: not found'))
 
-    await expect(detectRemoteHostPlatform(conn)).rejects.toThrow(/__ORCA_REMOTE_PLATFORM__ Linux/u)
+    await expect(detectRemoteHostPlatform(conn)).rejects.toThrow(/__MCODE_REMOTE_PLATFORM__ Linux/u)
   })
 
   it('reports the raw probe output when a POSIX host yields no marker line', async () => {
@@ -206,7 +206,7 @@ describe('detectRemoteHostPlatform failure reporting', () => {
 
   it('returns null when a parsed uname is genuinely unsupported', async () => {
     execCommandMock
-      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ FreeBSD x86_64\n')
+      .mockResolvedValueOnce('__MCODE_REMOTE_PLATFORM__ FreeBSD x86_64\n')
       .mockRejectedValueOnce(new Error('powershell.exe: not found'))
 
     await expect(detectRemoteHostPlatform(conn)).resolves.toBeNull()
@@ -215,7 +215,7 @@ describe('detectRemoteHostPlatform failure reporting', () => {
   it('does not call an unmappable uname unsupported when PowerShell was refused', async () => {
     // Cygwin sh on a win32-x64 host: only PowerShell can settle it, and it never ran.
     execCommandMock
-      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ CYGWIN_NT-10.0 x86_64\n')
+      .mockResolvedValueOnce('__MCODE_REMOTE_PLATFORM__ CYGWIN_NT-10.0 x86_64\n')
       .mockRejectedValueOnce(maxSessionsError())
 
     const error = await detectRemoteHostPlatform(conn).catch((err: unknown) => err)
@@ -228,8 +228,8 @@ describe('detectRemoteHostPlatform failure reporting', () => {
 
   it('falls through to PowerShell for a Cygwin uname it cannot map', async () => {
     execCommandMock
-      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ CYGWIN_NT-10.0 x86_64\n')
-      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Windows AMD64\r\n')
+      .mockResolvedValueOnce('__MCODE_REMOTE_PLATFORM__ CYGWIN_NT-10.0 x86_64\n')
+      .mockResolvedValueOnce('__MCODE_REMOTE_PLATFORM__ Windows AMD64\r\n')
 
     await expect(detectRemoteHostPlatform(conn)).resolves.toMatchObject({
       relayPlatform: 'win32-x64'

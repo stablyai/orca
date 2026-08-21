@@ -17,7 +17,7 @@ import {
   buildHostCliEnv,
   resolveHostCliEntryPath,
   resolveHostCliKillTimeoutMs,
-  runHostOrcaCliPassthrough
+  runHostMCodeCliPassthrough
 } from './ssh-remote-cli-host-passthrough'
 import { resolveOrchestrationAskClientTimeoutMs } from '../../shared/orchestration-ask-timeout'
 import { remoteCliRequestTimeoutMs } from '../../relay/remote-cli-timeout'
@@ -65,15 +65,15 @@ describe('resolveHostCliEntryPath', () => {
 })
 
 describe('buildHostCliEnv', () => {
-  it('forwards only Orca terminal-context vars from the remote env', () => {
+  it('forwards only MCode terminal-context vars from the remote env', () => {
     const env = buildHostCliEnv({
       hostEnv: { PATH: '/host/bin', NODE_OPTIONS: '--inspect' },
       remoteEnv: {
-        ORCA_TERMINAL_HANDLE: 'term_remote',
-        ORCA_WORKTREE_ID: 'repo::/home/alice/wt',
-        ORCA_PANE_KEY: 'pane-9',
-        ORCA_AGENT_LAUNCH_TOKEN: 'launch-secret',
-        ORCA_WORKSPACE_ID: 'ws-1',
+        MCODE_TERMINAL_HANDLE: 'term_remote',
+        MCODE_WORKTREE_ID: 'repo::/home/alice/wt',
+        MCODE_PANE_KEY: 'pane-9',
+        MCODE_AGENT_LAUNCH_TOKEN: 'launch-secret',
+        MCODE_WORKSPACE_ID: 'ws-1',
         [ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV]: 'wsl',
         [ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV]: 'caller-host',
         [ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV]: 'caller-incarnation',
@@ -82,7 +82,7 @@ describe('buildHostCliEnv', () => {
         // subprocess (PATH would break host binary lookup; user-data would
         // retarget the CLI at a different local instance).
         PATH: '/remote/bin',
-        ORCA_USER_DATA_PATH: '/remote/user-data'
+        MCODE_USER_DATA_PATH: '/remote/user-data'
       },
       userDataPath: '/host/user-data',
       remoteCwd: '/home/alice/wt/sub',
@@ -94,21 +94,21 @@ describe('buildHostCliEnv', () => {
       }
     })
 
-    expect(env.ORCA_TERMINAL_HANDLE).toBe('term_remote')
-    expect(env.ORCA_WORKTREE_ID).toBe('repo::/home/alice/wt')
-    expect(env.ORCA_PANE_KEY).toBe('pane-9')
-    expect(env.ORCA_AGENT_LAUNCH_TOKEN).toBe('launch-secret')
-    expect(env.ORCA_WORKSPACE_ID).toBe('ws-1')
+    expect(env.MCODE_TERMINAL_HANDLE).toBe('term_remote')
+    expect(env.MCODE_WORKTREE_ID).toBe('repo::/home/alice/wt')
+    expect(env.MCODE_PANE_KEY).toBe('pane-9')
+    expect(env.MCODE_AGENT_LAUNCH_TOKEN).toBe('launch-secret')
+    expect(env.MCODE_WORKSPACE_ID).toBe('ws-1')
     expect(env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV]).toBe('ssh')
     expect(env[ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV]).toBe('saved-target')
     expect(env[ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV]).toBe('connection-incarnation')
     expect(env[ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV]).toBe('runtime-attachment')
     expect(env.PATH).toBe('/host/bin')
-    expect(env.ORCA_USER_DATA_PATH).toBe('/host/user-data')
-    expect(env.ORCA_CLI_CWD).toBe('/home/alice/wt/sub')
+    expect(env.MCODE_USER_DATA_PATH).toBe('/host/user-data')
+    expect(env.MCODE_CLI_CWD).toBe('/home/alice/wt/sub')
     expect(env.ELECTRON_RUN_AS_NODE).toBe('1')
     expect(env.NODE_OPTIONS).toBeUndefined()
-    expect(env.ORCA_NODE_OPTIONS).toBe('--inspect')
+    expect(env.MCODE_NODE_OPTIONS).toBe('--inspect')
   })
 
   it('namespaces identical remote artifact paths by stable SSH target', () => {
@@ -221,16 +221,16 @@ describe('resolveHostCliKillTimeoutMs', () => {
   })
 })
 
-describe('runHostOrcaCliPassthrough', () => {
+describe('runHostMCodeCliPassthrough', () => {
   it('spawns the bundled CLI entry with the remote argv and returns captured output', async () => {
     const child = createFakeChild()
     const spawn = vi.fn(() => child)
 
-    const resultPromise = runHostOrcaCliPassthrough(
+    const resultPromise = runHostMCodeCliPassthrough(
       {
         argv: ['orchestration', 'task-create', '--spec', 'do the thing', '--json'],
         cwd: '/home/alice/wt',
-        env: { ORCA_TERMINAL_HANDLE: 'term_remote' }
+        env: { MCODE_TERMINAL_HANDLE: 'term_remote' }
       },
       { ...BASE_OPTIONS, spawn: spawn as never }
     )
@@ -259,8 +259,8 @@ describe('runHostOrcaCliPassthrough', () => {
       '--json'
     ])
     expect(options.env.ELECTRON_RUN_AS_NODE).toBe('1')
-    expect(options.env.ORCA_CLI_CWD).toBe('/home/alice/wt')
-    expect(options.env.ORCA_TERMINAL_HANDLE).toBe('term_remote')
+    expect(options.env.MCODE_CLI_CWD).toBe('/home/alice/wt')
+    expect(options.env.MCODE_TERMINAL_HANDLE).toBe('term_remote')
     // Why: stdin must be closed even without a payload so CLI handlers that
     // stream stdin see EOF instead of hanging forever.
     expect(child.stdin.end).toHaveBeenCalledWith()
@@ -270,7 +270,7 @@ describe('runHostOrcaCliPassthrough', () => {
     const child = createFakeChild()
     const spawn = vi.fn(() => child)
 
-    const resultPromise = runHostOrcaCliPassthrough(
+    const resultPromise = runHostMCodeCliPassthrough(
       {
         argv: ['linear', 'comment', 'add', 'ENG-1', '--body-file', '-'],
         cwd: '/home/alice/wt',
@@ -291,7 +291,7 @@ describe('runHostOrcaCliPassthrough', () => {
     const child = createFakeChild()
     const spawn = vi.fn(() => child)
 
-    const resultPromise = runHostOrcaCliPassthrough(
+    const resultPromise = runHostMCodeCliPassthrough(
       { argv: ['worktree', 'show'], cwd: '/', env: {} },
       { ...BASE_OPTIONS, spawn: spawn as never }
     )
@@ -306,7 +306,7 @@ describe('runHostOrcaCliPassthrough', () => {
   it('throws HostCliUnavailableError when the CLI entry is missing', async () => {
     const spawn = vi.fn()
     await expect(
-      runHostOrcaCliPassthrough(
+      runHostMCodeCliPassthrough(
         { argv: ['status'], cwd: '/', env: {} },
         { ...BASE_OPTIONS, entryExists: () => false, spawn: spawn as never }
       )
@@ -317,7 +317,7 @@ describe('runHostOrcaCliPassthrough', () => {
   it('rejects an invalid injected kill timeout before spawning', async () => {
     const spawn = vi.fn()
     await expect(
-      runHostOrcaCliPassthrough(
+      runHostMCodeCliPassthrough(
         { argv: ['status'], cwd: '/', env: {} },
         { ...BASE_OPTIONS, spawn: spawn as never, killTimeoutMs: 2_147_483_648 }
       )
@@ -329,7 +329,7 @@ describe('runHostOrcaCliPassthrough', () => {
     const child = createFakeChild()
     const spawn = vi.fn(() => child)
 
-    const resultPromise = runHostOrcaCliPassthrough(
+    const resultPromise = runHostMCodeCliPassthrough(
       { argv: ['status'], cwd: '/', env: {} },
       { ...BASE_OPTIONS, spawn: spawn as never }
     )
@@ -346,7 +346,7 @@ describe('runHostOrcaCliPassthrough', () => {
       const child = createFakeChild()
       const spawn = vi.fn(() => child)
 
-      const resultPromise = runHostOrcaCliPassthrough(
+      const resultPromise = runHostMCodeCliPassthrough(
         { argv: ['terminal', 'wait', '--for', 'exit'], cwd: '/', env: {} },
         { ...BASE_OPTIONS, spawn: spawn as never, killTimeoutMs: 1000 }
       )
@@ -365,7 +365,7 @@ describe('runHostOrcaCliPassthrough', () => {
     const child = createFakeChild()
     const spawn = vi.fn(() => child)
 
-    const resultPromise = runHostOrcaCliPassthrough(
+    const resultPromise = runHostMCodeCliPassthrough(
       { argv: ['terminal', 'read'], cwd: '/', env: {} },
       { ...BASE_OPTIONS, spawn: spawn as never }
     )

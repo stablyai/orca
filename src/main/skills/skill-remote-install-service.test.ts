@@ -113,7 +113,7 @@ describe('installSkillOnRemoteRuntime', () => {
   it('retries an idempotent direct install after a lost response', async () => {
     mocks.callRuntimeEnvironment
       .mockRejectedValueOnce(
-        Object.assign(new Error('Remote Orca runtime connection closed'), {
+        Object.assign(new Error('Remote MCode runtime connection closed'), {
           code: 'remote_runtime_unavailable'
         })
       )
@@ -199,7 +199,7 @@ describe('installSkillOnRemoteRuntime', () => {
         error: { code: 'runtime_error', message: 'skill-download-transport-failed' }
       })
       .mockRejectedValueOnce(
-        Object.assign(new Error('Remote Orca runtime connection closed'), {
+        Object.assign(new Error('Remote MCode runtime connection closed'), {
           code: 'remote_runtime_unavailable'
         })
       )

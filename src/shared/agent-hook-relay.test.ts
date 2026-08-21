@@ -4,7 +4,7 @@ import {
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD,
   AGENT_HOOK_SHED_FIELDS_KEY,
-  ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV,
+  MCODE_FEATURE_REMOTE_AGENT_HOOKS_ENV,
   createShedSubagentsField,
   isAgentHookSource,
   isRemoteAgentHooksEnabled,
@@ -60,15 +60,15 @@ describe('isRemoteAgentHooksEnabled', () => {
   })
 
   it('is off for empty / "0"', () => {
-    expect(isRemoteAgentHooksEnabled({ [ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV]: '' })).toBe(false)
-    expect(isRemoteAgentHooksEnabled({ [ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV]: '0' })).toBe(false)
-    expect(isRemoteAgentHooksEnabled({ [ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV]: '   ' })).toBe(false)
+    expect(isRemoteAgentHooksEnabled({ [MCODE_FEATURE_REMOTE_AGENT_HOOKS_ENV]: '' })).toBe(false)
+    expect(isRemoteAgentHooksEnabled({ [MCODE_FEATURE_REMOTE_AGENT_HOOKS_ENV]: '0' })).toBe(false)
+    expect(isRemoteAgentHooksEnabled({ [MCODE_FEATURE_REMOTE_AGENT_HOOKS_ENV]: '   ' })).toBe(false)
   })
 
   it('is on for any other non-empty value', () => {
-    expect(isRemoteAgentHooksEnabled({ [ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV]: '1' })).toBe(true)
-    expect(isRemoteAgentHooksEnabled({ [ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV]: 'on' })).toBe(true)
-    expect(isRemoteAgentHooksEnabled({ [ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV]: 'true' })).toBe(true)
+    expect(isRemoteAgentHooksEnabled({ [MCODE_FEATURE_REMOTE_AGENT_HOOKS_ENV]: '1' })).toBe(true)
+    expect(isRemoteAgentHooksEnabled({ [MCODE_FEATURE_REMOTE_AGENT_HOOKS_ENV]: 'on' })).toBe(true)
+    expect(isRemoteAgentHooksEnabled({ [MCODE_FEATURE_REMOTE_AGENT_HOOKS_ENV]: 'true' })).toBe(true)
   })
 })
 

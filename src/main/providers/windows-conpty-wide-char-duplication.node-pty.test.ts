@@ -11,7 +11,7 @@
  * wchar. Emitting the trailing cell as text produces exactly the reported
  * signature. So the assertion is on the bytes node-pty hands us, BEFORE xterm.
  *
- * Orca pins the ConPTY implementation with `useConptyDll: true`
+ * MCode pins the ConPTY implementation with `useConptyDll: true`
  * (local-pty-utils.ts, pty-subprocess.ts, windows-conpty-warmup.ts), so the
  * bundled OpenConsole build is a variable we control and the system one is the
  * A/B. Both are exercised here.

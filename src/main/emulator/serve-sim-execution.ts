@@ -15,7 +15,7 @@ import { EmulatorError } from './emulator-errors'
 import { materializeServeSimRuntime } from './serve-sim-runtime-materializer'
 
 const EXEC_TIMEOUT_MS = 90_000
-const MAC_OPEN_SHIM_DIR = join(tmpdir(), 'orca-serve-sim-open-shim')
+const MAC_OPEN_SHIM_DIR = join(tmpdir(), 'mcode-serve-sim-open-shim')
 const MAC_OPEN_SHIM_PATH = join(MAC_OPEN_SHIM_DIR, 'open')
 const MAC_OPEN_SHIM = `#!/bin/sh
 has_simulator_target=0
@@ -62,7 +62,7 @@ function getServeSimEnv(executable: ServeSimExecutable): NodeJS.ProcessEnv {
     : { ...process.env }
   const openShimDir = ensureMacOpenShim()
   if (openShimDir) {
-    // Why: serve-sim needs Simulator.app attached for display/rotation, but Orca embeds the stream.
+    // Why: serve-sim needs Simulator.app attached for display/rotation, but MCode embeds the stream.
     env.PATH = `${openShimDir}${delimiter}${env.PATH ?? ''}`
   }
   return env
@@ -209,7 +209,7 @@ export async function execServeSimCommand(
             reject(
               new EmulatorError(
                 'emulator_no_active',
-                'No active emulator for this worktree — use orca emulator list/attach or open the pane'
+                'No active emulator for this worktree — use mcode emulator list/attach or open the pane'
               )
             )
             return

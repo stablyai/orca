@@ -9,7 +9,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ORCA_INTERNAL_FILE_DRAG_TYPE } from '../../../../shared/native-file-drop'
+import { MCODE_INTERNAL_FILE_DRAG_TYPE } from '../../../../shared/native-file-drop'
 import { useFeedbackImageDrop } from './use-feedback-image-drop'
 
 let container: HTMLDivElement
@@ -159,7 +159,7 @@ describe('useFeedbackImageDrop', () => {
   it('leaves in-app drags alone on dragover', async () => {
     await renderHarness(true, vi.fn())
 
-    const event = dragEvent('dragover', [], ['Files', ORCA_INTERNAL_FILE_DRAG_TYPE])
+    const event = dragEvent('dragover', [], ['Files', MCODE_INTERNAL_FILE_DRAG_TYPE])
     act(() => {
       dialogChild().dispatchEvent(event)
     })

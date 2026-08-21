@@ -141,9 +141,9 @@ describe('worktree remote runtime mutations', () => {
       provider: 'jira' as const,
       type: 'issue' as const,
       number: 0,
-      title: 'ORCA-123 Link Jira',
-      url: 'https://company.atlassian.net/browse/ORCA-123',
-      jiraIdentifier: 'ORCA-123'
+      title: 'MCODE-123 Link Jira',
+      url: 'https://company.atlassian.net/browse/MCODE-123',
+      jiraIdentifier: 'MCODE-123'
     }
     const linkedTaskSourceContext = {
       kind: 'task-source' as const,
@@ -154,7 +154,7 @@ describe('worktree remote runtime mutations', () => {
         provider: 'jira' as const,
         siteId: 'site-1',
         siteUrl: 'https://company.atlassian.net',
-        projectKey: 'ORCA'
+        projectKey: 'MCODE'
       }
     }
     const createWorktree = store.getState().createWorktree
@@ -193,9 +193,9 @@ describe('worktree remote runtime mutations', () => {
         provider: 'jira',
         type: 'issue',
         number: 0,
-        title: 'ORCA-123 Link Jira',
-        url: 'https://company.atlassian.net/browse/ORCA-123',
-        jiraIdentifier: 'ORCA-123'
+        title: 'MCODE-123 Link Jira',
+        url: 'https://company.atlassian.net/browse/MCODE-123',
+        jiraIdentifier: 'MCODE-123'
       }
     }
 
@@ -242,11 +242,11 @@ describe('worktree remote runtime mutations', () => {
         undefined,
         {
           command: "codex 'summarize repo'",
-          env: { ORCA_AGENT_MODE: 'direct' },
+          env: { MCODE_AGENT_MODE: 'direct' },
           launchConfig: {
             agentCommand: 'codex',
             agentArgs: '--model gpt-5',
-            agentEnv: { ORCA_AGENT_MODE: 'direct' }
+            agentEnv: { MCODE_AGENT_MODE: 'direct' }
           }
         }
       )
@@ -262,11 +262,11 @@ describe('worktree remote runtime mutations', () => {
           displayName: 'Launch agent',
           createdWithAgent: 'codex',
           startupCommand: "codex 'summarize repo'",
-          startupEnv: { ORCA_AGENT_MODE: 'direct' },
+          startupEnv: { MCODE_AGENT_MODE: 'direct' },
           startupLaunchConfig: {
             agentCommand: 'codex',
             agentArgs: '--model gpt-5',
-            agentEnv: { ORCA_AGENT_MODE: 'direct' }
+            agentEnv: { MCODE_AGENT_MODE: 'direct' }
           },
           activate: true
         })
@@ -294,7 +294,7 @@ describe('worktree remote runtime mutations', () => {
     const createWorktree = store.getState().createWorktree
     const args: Parameters<typeof createWorktree> = ['repo1', 'task-draft', undefined, 'inherit']
     args[10] = 'codex'
-    args[25] = { startupDraft: 'https://github.com/stablyai/orca/issues/12' }
+    args[25] = { startupDraft: 'https://github.com/mcode-ide/mcode/issues/12' }
 
     await createWorktree(...args)
 
@@ -303,7 +303,7 @@ describe('worktree remote runtime mutations', () => {
         method: 'worktree.create',
         params: expect.objectContaining({
           createdWithAgent: 'codex',
-          startupDraft: 'https://github.com/stablyai/orca/issues/12'
+          startupDraft: 'https://github.com/mcode-ide/mcode/issues/12'
         })
       })
     )
@@ -346,7 +346,7 @@ describe('worktree remote runtime mutations', () => {
         undefined,
         {
           command: "claude --prefill 'summarize repo'",
-          env: { ORCA_AGENT_MODE: 'direct' },
+          env: { MCODE_AGENT_MODE: 'direct' },
           telemetry: {
             agent_kind: 'claude-code',
             launch_source: 'new_workspace_composer',
@@ -365,7 +365,7 @@ describe('worktree remote runtime mutations', () => {
         createdWithAgent: 'claude',
         startup: {
           command: "claude --prefill 'summarize repo'",
-          env: { ORCA_AGENT_MODE: 'direct' },
+          env: { MCODE_AGENT_MODE: 'direct' },
           telemetry: {
             agent_kind: 'claude-code',
             launch_source: 'new_workspace_composer',

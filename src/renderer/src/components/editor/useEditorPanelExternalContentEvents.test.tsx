@@ -4,7 +4,7 @@ import { act, useLayoutEffect, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
-import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
+import { MCODE_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
 import { useEditorPanelExternalContentEvents } from './useEditorPanelExternalContentEvents'
 
@@ -76,7 +76,7 @@ function makeCalls(): ProbeCalls {
 function dispatchExternalChange(relativePath: string): void {
   act(() => {
     window.dispatchEvent(
-      new CustomEvent(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, {
+      new CustomEvent(MCODE_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, {
         detail: {
           worktreeId: 'ssh-worktree',
           worktreePath: '/remote/repo',

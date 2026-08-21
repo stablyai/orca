@@ -17,7 +17,7 @@ function card(paneKey: string, worktreeId: string, idle: boolean): DashboardCard
     worktreeId,
     tabId: `tab-${paneKey}`,
     leafId: `leaf-${paneKey}`,
-    repoName: 'Orca',
+    repoName: 'MCode',
     worktreeName: worktreeId,
     startedAt: NOW - 60_000,
     finishedAt: idle ? NOW - 30_000 : null,

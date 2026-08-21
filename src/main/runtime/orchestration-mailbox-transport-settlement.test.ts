@@ -28,7 +28,7 @@ describe('orchestration mailbox transport settlement', () => {
 
   it('does not durably stage a pointer until transport settlement succeeds', async () => {
     vi.useFakeTimers()
-    const db = createDatabase('orca-mailbox-transport-settlement-')
+    const db = createDatabase('mcode-mailbox-transport-settlement-')
     const first = createRuntime(db)
     const observedWrite = vi.fn((_ptyId: string, _data: string) => true)
     let settleWrite: ((accepted: boolean) => void) | undefined

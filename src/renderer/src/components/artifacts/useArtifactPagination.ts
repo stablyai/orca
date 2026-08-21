@@ -4,7 +4,7 @@ import type {
   ArtifactListItem,
   ArtifactListPage
 } from '../../../../shared/artifacts'
-import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles'
+import type { MCodeProfileAuthStatus } from '../../../../shared/mcode-profiles'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
@@ -12,7 +12,7 @@ import { useAppStore } from '@/store'
 const LOCAL_RUNTIME = { kind: 'local' } as const
 const EMPTY_ARTIFACTS: readonly ArtifactListItem[] = []
 
-export function artifactAccountIdentity(authStatus: OrcaProfileAuthStatus | null): string | null {
+export function artifactAccountIdentity(authStatus: MCodeProfileAuthStatus | null): string | null {
   return authStatus?.state === 'connected'
     ? `${authStatus.activeProfileId}:${authStatus.cloud?.userId ?? ''}:${authStatus.cloud?.cloudProfileId ?? ''}:${authStatus.cloud?.activeOrgId ?? ''}`
     : null
@@ -33,12 +33,12 @@ function artifactRequestIsCurrent(
 ): boolean {
   return (
     sequence === currentSequence &&
-    artifactAccountIdentity(useAppStore.getState().orcaProfileAuthStatus) === identity
+    artifactAccountIdentity(useAppStore.getState().mcodeProfileAuthStatus) === identity
   )
 }
 
 export function useArtifactPagination(
-  authStatus: OrcaProfileAuthStatus | null,
+  authStatus: MCodeProfileAuthStatus | null,
   refreshAuth: () => Promise<unknown>
 ): {
   accountIdentity: string | null
@@ -96,7 +96,7 @@ export function useArtifactPagination(
         setError(
           translate(
             'auto.components.artifacts.ArtifactsPage.signInAgain',
-            'Sign in to Orca again to load artifacts.'
+            'Sign in to MCode again to load artifacts.'
           )
         )
       }
@@ -148,7 +148,7 @@ export function useArtifactPagination(
         setError(
           translate(
             'auto.components.artifacts.ArtifactsPage.signInAgain',
-            'Sign in to Orca again to load artifacts.'
+            'Sign in to MCode again to load artifacts.'
           )
         )
         return

@@ -8,8 +8,8 @@ import {
 describe('image paste agent map', () => {
   it('known image-capable agent attaches the temp file path', () => {
     expect(getAgentImageHandling('claude')).toBe('attachment')
-    const result = resolveImagePaste('claude', '/tmp/orca-img-123.png')
-    expect(result).toEqual({ kind: 'attach', path: '/tmp/orca-img-123.png' })
+    const result = resolveImagePaste('claude', '/tmp/mcode-img-123.png')
+    expect(result).toEqual({ kind: 'attach', path: '/tmp/mcode-img-123.png' })
   })
 
   it('codex also attaches image paths', () => {
@@ -21,9 +21,9 @@ describe('image paste agent map', () => {
 
   it('grok attaches image paths like other vision-capable TUIs', () => {
     expect(getAgentImageHandling('grok')).toBe('attachment')
-    expect(resolveImagePaste('grok', '/tmp/orca-paste-1.png')).toEqual({
+    expect(resolveImagePaste('grok', '/tmp/mcode-paste-1.png')).toEqual({
       kind: 'attach',
-      path: '/tmp/orca-paste-1.png'
+      path: '/tmp/mcode-paste-1.png'
     })
   })
 
@@ -40,11 +40,11 @@ describe('isNativeChatPastedImagePath', () => {
   it('detects clipboard-paste temp files (so the chip shows a friendly label)', () => {
     expect(
       isNativeChatPastedImagePath(
-        '/var/folders/x/orca-paste-1782775228480-c9a3c86b-1234-5678-9abc-def012345678.png'
+        '/var/folders/x/mcode-paste-1782775228480-c9a3c86b-1234-5678-9abc-def012345678.png'
       )
     ).toBe(true)
     // Windows-style separators resolve to the same basename.
-    expect(isNativeChatPastedImagePath('C:\\Temp\\orca-paste-1-2.png')).toBe(true)
+    expect(isNativeChatPastedImagePath('C:\\Temp\\mcode-paste-1-2.png')).toBe(true)
   })
 
   it('leaves picked/dropped files showing their real name', () => {

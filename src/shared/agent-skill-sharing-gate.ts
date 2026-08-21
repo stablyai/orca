@@ -3,11 +3,11 @@ import type { GlobalSettings } from './global-settings-types'
 export const AGENT_SKILL_SHARING_DISABLED_CODE = 'agent_skill_sharing_disabled'
 
 export const AGENT_SKILL_SHARING_DISABLED_MESSAGE =
-  'Publishing skill links from agents and the Orca CLI is off for this device.'
+  'Publishing skill links from agents and the MCode CLI is off for this device.'
 
 export const AGENT_SKILL_SHARING_DISABLED_NEXT_STEPS: readonly string[] = [
-  'Open Settings → Share Skills in the Orca desktop app on this device.',
-  'Turn on "Allow agents and the Orca CLI to publish skill links".',
+  'Open Settings → Share Skills in the MCode desktop app on this device.',
+  'Turn on "Allow agents and the MCode CLI to publish skill links".',
   'Run the share command again.'
 ]
 

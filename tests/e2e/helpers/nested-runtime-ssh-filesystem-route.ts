@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { expect } from './orca-app'
+import { expect } from './mcode-app'
 import type { PairedElectronClient } from './paired-electron-client'
 import type { ProjectedWorktreeRoute } from './nested-runtime-ssh-client-route'
 import { focusActiveTerminalInput, getTerminalContent } from './terminal'
@@ -56,7 +56,7 @@ export async function assertNestedFilesystemRoute(
     throw new Error(`Worktree ${route.worktreeId} has no runtime transport owner`)
   }
   const suffix = `${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`
-  const directory = `orca-nested-route-${suffix}`
+  const directory = `mcode-nested-route-${suffix}`
   const sourceName = 'source.txt'
   const renamedName = 'renamed.txt'
   const marker = `nested-files-seeded-${suffix}`
@@ -81,7 +81,7 @@ export async function assertNestedFilesystemRoute(
       state?.setRightSidebarTab('explorer')
       state?.setRightSidebarOpen(true)
     })
-    const explorer = client.page.locator('[data-orca-explorer-shell]')
+    const explorer = client.page.locator('[data-mcode-explorer-shell]')
     await expect(explorer).toBeVisible({ timeout: 15_000 })
     const row = (name: string) =>
       explorer.locator('[data-file-explorer-row]').filter({ hasText: name }).first()

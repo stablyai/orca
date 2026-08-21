@@ -1,4 +1,4 @@
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import {
   cleanupDockerSshRelayTarget,
   dockerSshRelayRepoSentinel,
@@ -17,7 +17,7 @@ import {
   rePairPairedElectronClient,
   type PairedElectronClient
 } from './helpers/paired-electron-client'
-import { createRestartSession } from './helpers/orca-restart'
+import { createRestartSession } from './helpers/mcode-restart'
 import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
@@ -32,11 +32,11 @@ import {
 } from './helpers/nested-runtime-ssh-client-route'
 
 const isDockerNestedRuntimeRun =
-  process.env.ORCA_E2E_NESTED_RUNTIME_SSH === '1' && process.env.ORCA_E2E_WEB_CLIENT === '1'
+  process.env.MCODE_E2E_NESTED_RUNTIME_SSH === '1' && process.env.MCODE_E2E_WEB_CLIENT === '1'
 
 test.skip(
   !isDockerNestedRuntimeRun,
-  'Run with ORCA_E2E_NESTED_RUNTIME_SSH=1 and ORCA_E2E_WEB_CLIENT=1'
+  'Run with MCODE_E2E_NESTED_RUNTIME_SSH=1 and MCODE_E2E_WEB_CLIENT=1'
 )
 
 test.describe.configure({ mode: 'serial' })
@@ -156,7 +156,7 @@ async function readRemoteShellPid(
 }
 
 test('isolates nested SSH worktrees across two HUB runtimes', async ({
-  orcaAppExtraEnv: _orcaAppExtraEnv
+  mcodeAppExtraEnv: _mcodeAppExtraEnv
 }, testInfo) => {
   test.setTimeout(720_000)
   const hubA = createRestartSession(testInfo)
@@ -366,11 +366,11 @@ test('isolates nested SSH worktrees across two HUB runtimes', async ({
 })
 
 test('routes nested SSH through a HUB without shared-control capability', async ({
-  orcaAppExtraEnv: _orcaAppExtraEnv
+  mcodeAppExtraEnv: _mcodeAppExtraEnv
 }, testInfo) => {
   test.setTimeout(360_000)
   const hub = createRestartSession(testInfo, {
-    ORCA_E2E_DISABLE_RUNTIME_SHARED_CONTROL: '1'
+    MCODE_E2E_DISABLE_RUNTIME_SHARED_CONTROL: '1'
   })
   let target: DockerSshRelayTarget | null = null
   let client: PairedElectronClient | null = null
@@ -419,7 +419,7 @@ test('routes nested SSH through a HUB without shared-control capability', async 
 })
 
 test('quarantines an old terminal stream after same-ID HUB re-pair', async ({
-  orcaAppExtraEnv: _orcaAppExtraEnv
+  mcodeAppExtraEnv: _mcodeAppExtraEnv
 }, testInfo) => {
   test.setTimeout(720_000)
   const hub = createRestartSession(testInfo)
@@ -667,7 +667,7 @@ test('quarantines an old terminal stream after same-ID HUB re-pair', async ({
 })
 
 test('restores a paired nested SSH route after the HUB restarts', async ({
-  orcaAppExtraEnv: _orcaAppExtraEnv
+  mcodeAppExtraEnv: _mcodeAppExtraEnv
 }, testInfo) => {
   test.setTimeout(720_000)
   const hub = createRestartSession(testInfo)
@@ -696,7 +696,7 @@ test('restores a paired nested SSH route after the HUB restarts', async ({
     const shellPidBeforeRestart = await readRemoteShellPid(
       client,
       beforeRestart.ptyId,
-      'ORCA_SHELL_BEFORE_RESTART_'
+      'MCODE_SHELL_BEFORE_RESTART_'
     )
     const preRestartEnvironmentId = client.environmentId
 
@@ -735,7 +735,7 @@ test('restores a paired nested SSH route after the HUB restarts', async ({
     )
     expect(afterRestartWithoutRepair.runtimeOwnerEnvironmentId).toBe(preRestartEnvironmentId)
     expect(
-      await readRemoteShellPid(client, afterRestartWithoutRepair.ptyId, 'ORCA_SHELL_AFTER_RESTART_')
+      await readRemoteShellPid(client, afterRestartWithoutRepair.ptyId, 'MCODE_SHELL_AFTER_RESTART_')
     ).toBe(shellPidBeforeRestart)
 
     const restartedOffer = await createRuntimeDesktopPairingOffer(hubLaunch.page)

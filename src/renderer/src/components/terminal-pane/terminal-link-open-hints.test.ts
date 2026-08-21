@@ -28,26 +28,26 @@ describe('getTerminalUrlOpenHint', () => {
     )
   })
 
-  // Why: with links already opening in Orca, inverting still lands on the system
-  // browser, so the hint must not promise Orca.
-  it('keeps the system-browser wording when inverting but links open in Orca', () => {
+  // Why: with links already opening in MCode, inverting still lands on the system
+  // browser, so the hint must not promise MCode.
+  it('keeps the system-browser wording when inverting but links open in MCode', () => {
     stubPlatform(true)
     expect(getTerminalUrlOpenHint({ openLinksInApp: true, modifierInverts: true })).toContain(
       'for system browser'
     )
   })
 
-  it('names Orca when inverting and links open externally', () => {
+  it('names MCode when inverting and links open externally', () => {
     stubPlatform(true)
     expect(getTerminalUrlOpenHint({ openLinksInApp: false, modifierInverts: true })).toBe(
-      'Click for actions, ⌘+click to open, or ⇧⌘+click to open in Orca'
+      'Click for actions, ⌘+click to open, or ⇧⌘+click to open in MCode'
     )
   })
 
   it('uses the Ctrl chord off macOS', () => {
     stubPlatform(false)
     expect(getTerminalUrlOpenHint({ openLinksInApp: false, modifierInverts: true })).toBe(
-      'Click for actions, Ctrl+click to open, or Shift+Ctrl+click to open in Orca'
+      'Click for actions, Ctrl+click to open, or Shift+Ctrl+click to open in MCode'
     )
   })
 
@@ -59,7 +59,7 @@ describe('getTerminalUrlOpenHint', () => {
         modifierInverts: true,
         showActions: false
       })
-    ).toBe('Ctrl+click to open, or Shift+Ctrl+click to open in Orca')
+    ).toBe('Ctrl+click to open, or Shift+Ctrl+click to open in MCode')
   })
 })
 
@@ -73,8 +73,8 @@ describe('terminalUrlOpenHintOptionsFor', () => {
     ).toEqual({ openLinksInApp: false, modifierInverts: true })
   })
 
-  // Why: openHttpLink refuses to route a remote-owned URL into Orca, so promising
-  // "open in Orca" there would advertise a click that lands somewhere else.
+  // Why: openHttpLink refuses to route a remote-owned URL into MCode, so promising
+  // "open in MCode" there would advertise a click that lands somewhere else.
   it('drops inversion while a remote runtime is active', () => {
     stubPlatform(true)
     const options = terminalUrlOpenHintOptionsFor({
@@ -106,7 +106,7 @@ describe('terminalUrlOpenHintOptionsFor', () => {
 
   // Why: a workspace-bound remote pane routes externally even with no globally
   // active runtime, so the global setting alone would advertise an impossible
-  // "open in Orca" destination.
+  // "open in MCode" destination.
   it.each([
     ['runtime', { kind: 'runtime', runtimeEnvironmentId: 'env-1' }] as const,
     ['ssh', { kind: 'ssh', connectionId: 'conn-1' }] as const,
@@ -127,7 +127,7 @@ describe('terminalUrlOpenHintOptionsFor', () => {
   })
 
   // Why: the clicked pane's owner wins over the global runtime — a local pane
-  // can still reach Orca while some other pane's runtime is active.
+  // can still reach MCode while some other pane's runtime is active.
   it('keeps inversion for a local pane while a remote runtime is active', () => {
     stubPlatform(true)
     const options = terminalUrlOpenHintOptionsFor(
@@ -140,10 +140,10 @@ describe('terminalUrlOpenHintOptionsFor', () => {
     )
 
     expect(options.modifierInverts).toBe(true)
-    expect(getTerminalUrlOpenHint(options)).toContain('to open in Orca')
+    expect(getTerminalUrlOpenHint(options)).toContain('to open in MCode')
   })
 
-  it('keeps inversion for a runtime pane when its host can open an Orca browser', () => {
+  it('keeps inversion for a runtime pane when its host can open an MCode browser', () => {
     const options = terminalUrlOpenHintOptionsFor(
       {
         openLinksInApp: false,
@@ -162,12 +162,12 @@ describe('terminalHttpLinkActionDestinationsFor', () => {
     const owner = { kind: 'runtime', runtimeEnvironmentId: 'env-1' } as const
 
     expect(terminalHttpLinkActionDestinationsFor({ openLinksInApp: true }, owner, true)).toEqual({
-      primary: 'orca',
+      primary: 'mcode',
       alternate: 'system'
     })
     expect(terminalHttpLinkActionDestinationsFor({ openLinksInApp: false }, owner, true)).toEqual({
       primary: 'system',
-      alternate: 'orca'
+      alternate: 'mcode'
     })
   })
 

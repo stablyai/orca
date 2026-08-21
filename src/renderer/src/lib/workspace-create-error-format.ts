@@ -15,7 +15,7 @@ export function formatWorkspaceCreateError(error: unknown): WorkspaceCreateError
       title: translate('auto.lib.workspace.create.error.format.64555d0014', 'No base branch found'),
       message: translate(
         'auto.lib.workspace.create.error.format.37cf0bc991',
-        'Orca could not resolve a usable base ref for this workspace.'
+        'MCode could not resolve a usable base ref for this workspace.'
       ),
       help: 'Create an initial commit (for example on main), or select an existing branch in Create From, then try again.'
     }

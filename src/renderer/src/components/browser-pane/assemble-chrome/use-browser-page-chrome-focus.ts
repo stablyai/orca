@@ -2,7 +2,7 @@ import { useCallback, useEffect, type MutableRefObject, type RefObject } from 'r
 import { useAppStore } from '@/store'
 import {
   consumeBrowserFocusRequest,
-  ORCA_BROWSER_FOCUS_REQUEST_EVENT,
+  MCODE_BROWSER_FOCUS_REQUEST_EVENT,
   type BrowserFocusRequestDetail
 } from '../host-guest/browser-focus'
 
@@ -151,9 +151,9 @@ export function useBrowserPageChromeFocus({
       focusWebviewNow()
     }
     // Why: an already-active page never remounts, so listen for the event to consume the durable focus request immediately.
-    window.addEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
+    window.addEventListener(MCODE_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
     return () =>
-      window.removeEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
+      window.removeEventListener(MCODE_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
   }, [browserTabId, focusAddressBarNow, focusWebviewNow, isActive, keepAddressBarFocusRef])
 
   return { focusAddressBarNow, focusWebviewNow }

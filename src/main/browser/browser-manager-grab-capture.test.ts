@@ -65,11 +65,11 @@ describe('browserManager grab operations', () => {
       })
       expect(guestExecuteJavaScriptMock).toHaveBeenNthCalledWith(
         1,
-        expect.stringContaining('__orcaGrab')
+        expect.stringContaining('__mcodeGrab')
       )
       expect(guestExecuteJavaScriptMock).toHaveBeenNthCalledWith(
         2,
-        expect.stringContaining('__orcaGrab')
+        expect.stringContaining('__mcodeGrab')
       )
       expect(guestExecuteJavaScriptMock).toHaveBeenNthCalledWith(3, 'window.innerWidth')
     })

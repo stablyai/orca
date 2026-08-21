@@ -25,7 +25,7 @@ export const RELAY_HOST: ExecutionHostId = 'runtime:env-1'
 export const HOST_COLLISION_MESSAGE =
   'Error: this workspace exists on multiple hosts at the same path'
 export const HOST_UNRESOLVED_MESSAGE =
-  'Orca cannot tell which host owns this workspace. Refresh projects and review it again.'
+  'MCode cannot tell which host owns this workspace. Refresh projects and review it again.'
 
 export type HostCheckout = { root: string; markerPath: string }
 

@@ -53,7 +53,7 @@ describe('Last-status persistence', () => {
   let userDataPath: string
 
   beforeEach(() => {
-    userDataPath = mkdtempSync(join(tmpdir(), 'orca-laststatus-'))
+    userDataPath = mkdtempSync(join(tmpdir(), 'mcode-laststatus-'))
   })
 
   afterEach(() => {

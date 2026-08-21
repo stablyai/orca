@@ -21,7 +21,7 @@ type Props = {
   onClose: () => void
 }
 
-// The repo-owned orca.yaml setup-hook trust prompt, shown before a workspace
+// The repo-owned mcode.yaml setup-hook trust prompt, shown before a workspace
 // create that would run an untrusted setup script. Extracted from NewWorktreeModal
 // to keep that file focused; the async persist/create logic stays with the caller.
 export function SetupHookTrustDrawer({
@@ -44,7 +44,7 @@ export function SetupHookTrustDrawer({
                 : `Run setup from ${prompt.repoName}?`}
             </Text>
             <Text style={styles.subtitle}>
-              This repository's orca.yaml runs before the workspace starts. Only run it if you trust
+              This repository's mcode.yaml runs before the workspace starts. Only run it if you trust
               this repository.
             </Text>
           </View>

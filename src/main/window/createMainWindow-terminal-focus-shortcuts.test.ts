@@ -482,7 +482,7 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenCalledWith('ui:openQuickOpen')
   })
 
-  it('notifies before Orca-first captures a risky terminal-focused shortcut', () => {
+  it('notifies before MCode-first captures a risky terminal-focused shortcut', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
       on: vi.fn((event, handler) => {
@@ -516,7 +516,7 @@ describe('createMainWindow', () => {
 
     createMainWindow({
       getUI: () => ({}),
-      getSettings: () => ({ terminalShortcutPolicy: 'orca-first' })
+      getSettings: () => ({ terminalShortcutPolicy: 'mcode-first' })
     } as never)
 
     const setFocusedListener = vi
@@ -547,7 +547,7 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenNthCalledWith(2, 'ui:toggleWorktreePalette')
   })
 
-  it('notifies before Orca-first captures a terminal-focused double-tap shortcut', () => {
+  it('notifies before MCode-first captures a terminal-focused double-tap shortcut', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
       on: vi.fn((event, handler) => {
@@ -582,7 +582,7 @@ describe('createMainWindow', () => {
     createMainWindow(
       {
         getUI: () => ({}),
-        getSettings: () => ({ terminalShortcutPolicy: 'orca-first' })
+        getSettings: () => ({ terminalShortcutPolicy: 'mcode-first' })
       } as never,
       {
         getKeybindings: () => ({ 'worktree.quickOpen': ['DoubleTap+Shift'] })

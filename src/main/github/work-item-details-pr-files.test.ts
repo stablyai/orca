@@ -228,20 +228,20 @@ describe('getWorkItemDetails PR file listing', () => {
   })
 
   it('backfills the Enterprise origin host before a host-less PR detail fan-out', async () => {
-    const enterprise = { owner: 'team', repo: 'orca', host: 'github.acme-corp.com' }
+    const enterprise = { owner: 'team', repo: 'mcode', host: 'github.acme-corp.com' }
     getWorkItemMock.mockResolvedValueOnce({
       ...pullRequestItem(8, 'Host-less Enterprise PR'),
       author: '',
-      prRepo: { owner: 'team', repo: 'orca' }
+      prRepo: { owner: 'team', repo: 'mcode' }
     })
     getOwnerRepoMock.mockResolvedValue(null)
     getEnterpriseGitHubRepoSlugMock.mockResolvedValue(enterprise)
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       const endpoint = args.find((arg) => arg.startsWith('repos/')) ?? ''
-      if (endpoint === 'repos/team/orca/pulls/8') {
+      if (endpoint === 'repos/team/mcode/pulls/8') {
         return { stdout: JSON.stringify({ body: 'Enterprise body' }) }
       }
-      if (endpoint === 'repos/team/orca/pulls/8/files?per_page=100') {
+      if (endpoint === 'repos/team/mcode/pulls/8/files?per_page=100') {
         return { stdout: '[]' }
       }
       return auxiliaryPRResponse(args)
@@ -272,7 +272,7 @@ describe('getWorkItemDetails PR file listing', () => {
   it('does not run bare PR detail commands when local host resolution fails', async () => {
     getWorkItemMock.mockResolvedValueOnce({
       ...pullRequestItem(9, 'Unresolved PR'),
-      prRepo: { owner: 'team', repo: 'orca' }
+      prRepo: { owner: 'team', repo: 'mcode' }
     })
     getOwnerRepoMock.mockResolvedValue(null)
 
@@ -287,15 +287,15 @@ describe('getWorkItemDetails PR file listing', () => {
   it('uses the selected upstream GitHub Enterprise repo for both PR file sides', async () => {
     const prRepo = {
       owner: 'team',
-      repo: 'orca',
+      repo: 'mcode',
       host: 'github.acme-corp.com'
     }
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       const endpoint = args.find((arg) => arg.startsWith('repos/')) ?? ''
-      if (endpoint === 'repos/team/orca/contents/src/path%23with%3Fchars.ts?ref=base-sha') {
+      if (endpoint === 'repos/team/mcode/contents/src/path%23with%3Fchars.ts?ref=base-sha') {
         return { stdout: 'base content' }
       }
-      if (endpoint === 'repos/team/orca/contents/src/path%23with%3Fchars.ts?ref=head-sha') {
+      if (endpoint === 'repos/team/mcode/contents/src/path%23with%3Fchars.ts?ref=head-sha') {
         return { stdout: 'head content' }
       }
       throw new Error(`unexpected gh call: ${args.join(' ')}`)
@@ -344,7 +344,7 @@ describe('getWorkItemDetails PR file listing', () => {
     await expect(
       getPRFileContents({
         repoPath: '/repo-root',
-        prRepo: { owner: 'team', repo: 'orca', host: 'github.acme-corp.com' },
+        prRepo: { owner: 'team', repo: 'mcode', host: 'github.acme-corp.com' },
         prNumber: 7,
         path: 'src/file.ts',
         status: 'modified',

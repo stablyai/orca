@@ -277,7 +277,7 @@ describe('fs:importExternalPaths — SSH operations', () => {
       status: 'failed',
       reason: 'EEXIST: destination already exists'
     })
-    // Why: a failed exclusive create does not prove Orca owns the destination.
+    // Why: a failed exclusive create does not prove MCode owns the destination.
     expect(provider.deletePath).not.toHaveBeenCalled()
   })
 

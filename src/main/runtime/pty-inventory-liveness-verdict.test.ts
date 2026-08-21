@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from './orca-runtime'
+import { MCodeRuntimeService } from './mcode-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { SSH_EXIT_UNCONFIRMED_REASON } from '../../shared/pty-liveness-verdict'
 
@@ -44,8 +44,8 @@ function makeStore() {
 function makeRuntimeMissingFromInventory(
   hasPty: () => boolean | null,
   listProcesses: () => Promise<{ id: string; worktreeId: string }[]> = vi.fn(async () => [])
-): OrcaRuntimeService {
-  const runtime = new OrcaRuntimeService(makeStore() as never)
+): MCodeRuntimeService {
+  const runtime = new MCodeRuntimeService(makeStore() as never)
   runtime.setPtyController({
     write: () => true,
     kill: () => true,
@@ -179,7 +179,7 @@ describe('inventory sweep liveness verdicts', () => {
   })
 
   it('retains unresolved verdicts for every still-addressable PTY', () => {
-    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const runtime = new MCodeRuntimeService(makeStore() as never)
     for (let index = 0; index < 257; index += 1) {
       const ptyId = `ssh:conn-1@@relay-${index}`
       runtime.registerPty(ptyId, WORKTREE_ID, 'conn-1')

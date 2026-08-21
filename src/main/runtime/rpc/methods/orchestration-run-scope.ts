@@ -2,7 +2,7 @@ import type { OrchestrationCompatibilityEvidence } from '../../../../shared/orch
 import { orchestrationSkillRecoveryData } from '../../../../shared/orchestration-rpc-contract'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { RunRow } from '../../orchestration/types'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 
 export type RunScopeParams = {
   runId?: string
@@ -16,7 +16,7 @@ export type RunScopeParams = {
 
 // Why: declared handles select mutable Run bindings, so attested callers may only name themselves.
 export function assertCallerHandleMatchesEvidence(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   callerTerminalHandle: string,
   callerEvidence?: OrchestrationCompatibilityEvidence
 ): void {
@@ -34,7 +34,7 @@ export function assertCallerHandleMatchesEvidence(
 }
 
 // Why: task and gate mutations must share one Run-binding rule.
-export function resolveRunScope(runtime: OrcaRuntimeService, params: RunScopeParams): RunRow {
+export function resolveRunScope(runtime: MCodeRuntimeService, params: RunScopeParams): RunRow {
   const db = runtime.getOrchestrationDb()
   const explicit = params.runId ? db.getRun(params.runId) : undefined
   if (params.runId && (!explicit || explicit.legacy === 1)) {

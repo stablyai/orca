@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { doctorEphemeralVmRecipe } from './ephemeral-vm-recipe-doctor'
-import type { OrcaVmRecipe } from './orca-yaml-hook-types'
+import type { MCodeVmRecipe } from './mcode-yaml-hook-types'
 
 const roots: string[] = []
 
@@ -14,7 +14,7 @@ afterEach(() => {
 })
 
 function makeRepo(scripts: Record<string, { body?: string; mode?: number }>): string {
-  const root = mkdtempSync(join(tmpdir(), 'orca-vm-doctor-'))
+  const root = mkdtempSync(join(tmpdir(), 'mcode-vm-doctor-'))
   roots.push(root)
   for (const [relPath, opts] of Object.entries(scripts)) {
     const full = join(root, relPath)
@@ -33,7 +33,7 @@ function checkById(
   return result.checks.find((check) => check.id === id)
 }
 
-function run(repoPath: string, recipe: OrcaVmRecipe): ReturnType<typeof doctorEphemeralVmRecipe> {
+function run(repoPath: string, recipe: MCodeVmRecipe): ReturnType<typeof doctorEphemeralVmRecipe> {
   return doctorEphemeralVmRecipe({
     repoPath,
     recipeId: recipe.id,

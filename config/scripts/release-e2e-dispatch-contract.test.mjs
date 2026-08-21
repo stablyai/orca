@@ -63,7 +63,7 @@ describe('release E2E dispatch contract', () => {
       expect(job.needs).toBe('build')
       expect(downloadStep.with.name).toBe('e2e-build-out')
       expect(downloadStep.with.path).toBe('out/')
-      expect(runStep.run).toContain('ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay"')
+      expect(runStep.run).toContain('MCODE_RELAY_PATH="$GITHUB_WORKSPACE/out/relay"')
     }
   })
 })

@@ -188,7 +188,7 @@ describe('OrchestrationDb Run state', () => {
     })
 
     it('replays an outstanding batch after reopening the database', () => {
-      const dir = mkdtempSync(join(tmpdir(), 'orca-delivery-'))
+      const dir = mkdtempSync(join(tmpdir(), 'mcode-delivery-'))
       const dbPath = join(dir, 'orchestration.db')
       try {
         const firstDb = new OrchestrationDb(dbPath)

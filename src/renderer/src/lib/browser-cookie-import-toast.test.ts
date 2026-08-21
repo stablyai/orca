@@ -68,7 +68,7 @@ describe('emitBrowserCookieImportToast', () => {
 
     const message = warningToastMock.mock.calls[0]?.[0]
     expect(message).toBe(
-      "Orca cannot decrypt 3 of this browser's cookies because they use app-bound encryption. You can import cookies from a file using “From File…”."
+      "MCode cannot decrypt 3 of this browser's cookies because they use app-bound encryption. You can import cookies from a file using “From File…”."
     )
     expect(message).not.toContain('export')
   })
@@ -82,7 +82,7 @@ describe('emitBrowserCookieImportToast', () => {
 
     expect(successToastMock).toHaveBeenCalledWith('Imported 2 cookies.')
     expect(warningToastMock).toHaveBeenCalledWith(
-      'Google cookies were not imported. Open a browser in Orca on Remote Mac with this profile, then sign into Google.',
+      'Google cookies were not imported. Open a browser in MCode on Remote Mac with this profile, then sign into Google.',
       { duration: 12000 }
     )
     expect(successToastMock.mock.invocationCallOrder[0]).toBeLessThan(
@@ -101,7 +101,7 @@ describe('emitBrowserCookieImportToast', () => {
 
     expect(successToastMock).toHaveBeenCalledWith('Imported 2 cookies.')
     expect(warningToastMock).toHaveBeenCalledWith(
-      '1 cookies were not imported because their site-partition could not be read. Sign in to those sites again in Orca.',
+      '1 cookies were not imported because their site-partition could not be read. Sign in to those sites again in MCode.',
       { duration: 12000 }
     )
   })
@@ -230,7 +230,7 @@ describe('emitBrowserCookieImportToast', () => {
         'Imported 1 of 2 cookies. The rest could not be loaded, and the restart fallback was unavailable. Try the import again.'
       ],
       [
-        'Google cookies were not imported. Open a browser in Orca on Remote Mac with this profile, then sign into Google.',
+        'Google cookies were not imported. Open a browser in MCode on Remote Mac with this profile, then sign into Google.',
         { duration: 12000 }
       ]
     ])

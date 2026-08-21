@@ -13,7 +13,7 @@ import * as pty from 'node-pty'
 import { afterEach, describe, expect, it } from 'vitest'
 import { resolveGitBashPath } from '../git-bash'
 import {
-  ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
+  MCODE_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
   resolveWindowsShellLaunchArgs
 } from './windows-shell-args'
 
@@ -21,7 +21,7 @@ const describeWindows = process.platform === 'win32' ? describe : describe.skip
 const tempDirs: string[] = []
 
 function makeTempDir(): string {
-  const root = mkdtempSync(join(tmpdir(), 'orca shell preflight '))
+  const root = mkdtempSync(join(tmpdir(), 'mcode shell preflight '))
   tempDirs.push(root)
   return root
 }
@@ -35,14 +35,14 @@ function linkNodeExecutable(destination: string): void {
 }
 
 function writeFailingPreflight(root: string): string {
-  const executable = join(root, 'orca preflight.exe')
+  const executable = join(root, 'mcode preflight.exe')
   linkNodeExecutable(executable)
   writeFileSync(
     join(root, 'agent'),
     [
       "const { writeFileSync } = require('node:fs')",
       "if (process.argv.slice(2).join(' ') !== 'hooks prepare-codex') process.exit(2)",
-      "writeFileSync(process.env.ORCA_PREFLIGHT_MARKER, 'ran')",
+      "writeFileSync(process.env.MCODE_PREFLIGHT_MARKER, 'ran')",
       'process.exit(7)'
     ].join('\n')
   )
@@ -136,9 +136,9 @@ describeWindows('Windows Codex shell preflight runtime', () => {
       cwd: root,
       env: {
         ...process.env,
-        ORCA_CODEX_LAUNCH_PREFLIGHT: preflight,
-        [ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV]: '"',
-        ORCA_PREFLIGHT_MARKER: preflightMarker
+        MCODE_CODEX_LAUNCH_PREFLIGHT: preflight,
+        [MCODE_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV]: '"',
+        MCODE_PREFLIGHT_MARKER: preflightMarker
       }
     })
 
@@ -159,8 +159,8 @@ describeWindows('Windows Codex shell preflight runtime', () => {
     linkNodeExecutable(codexExecutable)
     const preflightMarker = join(root, 'git-bash-preflight-ran')
     const codexMarker = join(root, 'git-bash-codex-ran')
-    const previousUserDataPath = process.env.ORCA_USER_DATA_PATH
-    process.env.ORCA_USER_DATA_PATH = join(root, 'user data')
+    const previousUserDataPath = process.env.MCODE_USER_DATA_PATH
+    process.env.MCODE_USER_DATA_PATH = join(root, 'user data')
 
     try {
       const resolved = resolveWindowsShellLaunchArgs(
@@ -179,13 +179,13 @@ describeWindows('Windows Codex shell preflight runtime', () => {
           ...withPathEntry(process.env, root),
           CHERE_INVOKING: '1',
           HOME: root,
-          ORCA_CODEX_LAUNCH_PREFLIGHT: preflight,
-          ORCA_PREFLIGHT_MARKER: preflightMarker,
-          ORCA_CODEX_MARKER: codexMarker,
+          MCODE_CODEX_LAUNCH_PREFLIGHT: preflight,
+          MCODE_PREFLIGHT_MARKER: preflightMarker,
+          MCODE_CODEX_MARKER: codexMarker,
           TERM: 'xterm-256color'
         },
         input:
-          "codex -e \"require('node:fs').writeFileSync(process.env.ORCA_CODEX_MARKER,'ran')\"\nexit\n",
+          "codex -e \"require('node:fs').writeFileSync(process.env.MCODE_CODEX_MARKER,'ran')\"\nexit\n",
         // Paired "Windows low spec" QA measured 12.7–15.8s across four runs: Git Bash
         // cold-starts two large Node executables for AV scanning, so allow 25s without
         // inflating the faster cmd.exe budget.
@@ -193,9 +193,9 @@ describeWindows('Windows Codex shell preflight runtime', () => {
       })
     } finally {
       if (previousUserDataPath === undefined) {
-        delete process.env.ORCA_USER_DATA_PATH
+        delete process.env.MCODE_USER_DATA_PATH
       } else {
-        process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+        process.env.MCODE_USER_DATA_PATH = previousUserDataPath
       }
     }
 

@@ -20,17 +20,17 @@ name: Daily macOS Dev Build
 #     a ticket every daily reads as a new client and silently loses file access
 #     under Documents/Desktop/Downloads.
 #
-# Artifacts publish to stablyai/orca-daily, never to stablyai/orca: the main
+# Artifacts publish to mcode-ide/mcode-daily, never to mcode-ide/mcode: the main
 # repo's releases atom feed exposes only its 10 newest entries, so high-volume
 # dev tags would evict every stable/RC entry and break updates for real users.
-# Separate from orca-hourly so someone riding main's hourlies never sees the
+# Separate from mcode-hourly so someone riding main's hourlies never sees the
 # sparse daily series mixed into that list.
 #
 # GITHUB_TOKEN is scoped to this repo and cannot publish there, so writes use the
-# same GitHub App as hourly (installed on orca-daily with Contents: Read and
+# same GitHub App as hourly (installed on mcode-daily with Contents: Read and
 # write). Provision the App secrets with
 # `bash config/scripts/setup-hourly-release-token.sh`, then grant the App access
-# to orca-daily with `bash config/scripts/setup-daily-release-repo.sh`:
+# to mcode-daily with `bash config/scripts/setup-daily-release-repo.sh`:
 #   HOURLY_RELEASE_APP_ID           the App's numeric id (shared with hourly/adhoc)
 #   HOURLY_RELEASE_APP_PRIVATE_KEY  the App's .pem private key
 #
@@ -65,13 +65,13 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  DAILY_REPO: stablyai/orca-daily
+  DAILY_REPO: mcode-ide/mcode-daily
   # Keep ~30 days so a regression can be bisected without holding a full year.
   DAILY_RETAIN_COUNT: 30
 
 jobs:
   build-daily-mac:
-    if: github.repository == 'stablyai/orca'
+    if: github.repository == 'mcode-ide/mcode'
     outputs:
       tag: ${{ steps.release.outputs.tag }}
       version: ${{ steps.daily.outputs.version }}
@@ -91,7 +91,7 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-          # Why: this job only reads stablyai/orca and never pushes; every write
+          # Why: this job only reads mcode-ide/mcode and never pushes; every write
           # goes to the daily repo through a minted App token passed by env.
           # Not persisting the checkout credential shrinks the blast radius if a
           # build step is compromised (zizmor: artipacked).
@@ -104,7 +104,7 @@ jobs:
           app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
           private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
           owner: stablyai
-          repositories: orca-daily
+          repositories: mcode-daily
 
       # Why: main is often idle. Rebuilding an unchanged commit burns a runner
       # hour and adds a redundant tag to the retention window.
@@ -176,7 +176,7 @@ jobs:
           retry_wait_seconds: 30
           command: pnpm install --frozen-lockfile
 
-      # Why: signing is what makes a daily installable over an existing Orca, so
+      # Why: signing is what makes a daily installable over an existing MCode, so
       # a missing cert must fail here rather than after a 20-minute build.
       - name: Verify macOS signing environment
         if: steps.freshness.outputs.should_build == 'true'
@@ -217,7 +217,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY" --limit 100 --exclude-drafts \
             --json tagName --jq '.[].tagName' || true)"
           echo "Highest published tag seen: $(head -1 <<<"$published")"
-          ORCA_PUBLISHED_VERSIONS="$published" ORCA_DAILY_RELEASE_NAMES="$names" \
+          MCODE_PUBLISHED_VERSIONS="$published" MCODE_DAILY_RELEASE_NAMES="$names" \
             node config/scripts/daily-build-version.mjs \
             >"$RUNNER_TEMP/daily-identity.txt"
           grep -E '^(version|build_number)=' "$RUNNER_TEMP/daily-identity.txt"
@@ -240,7 +240,7 @@ jobs:
           # Why: daily builds are not an official channel — telemetry's transport
           # gate accepts only 'stable' or 'rc', so leaving this unset keeps them
           # silent, which is correct for unvetted dev artifacts.
-          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+          MCODE_DIAGNOSTICS_TOKEN_URL: https://www.mcode.dev/diagnostics/token
 
       # Why a second mint: everything from here on writes to the daily repo, and
       # the notary round trip inside the publish step can be tens of minutes. The
@@ -255,7 +255,7 @@ jobs:
           app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
           private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
           owner: stablyai
-          repositories: orca-daily
+          repositories: mcode-daily
 
       - name: Create daily release
         id: release
@@ -278,15 +278,15 @@ jobs:
           cat >"$notes_file" <<EOF
           Automated daily macOS and Windows dev build from commit \`$short_sha\`.
 
-          Built from [\`stablyai/orca@$short_sha\`](https://github.com/stablyai/orca/commit/$SHA).
+          Built from [\`mcode-ide/mcode@$short_sha\`](https://github.com/mcode-ide/mcode/commit/$SHA).
 
           **Unvetted.** No tests ran. The macOS build is signed and notarized like a
-          release, so it installs through Orca's in-app updater and opens from a manual
+          release, so it installs through MCode's in-app updater and opens from a manual
           download without a Gatekeeper prompt — but nothing here has been reviewed.
 
           **Windows builds are unsigned.** They install and update normally once you
           are on one, but a signed Stable or RC build cannot install one through the
-          in-app updater — download \`orca-windows-setup.exe\` below and run it once
+          in-app updater — download \`mcode-windows-setup.exe\` below and run it once
           (SmartScreen will warn about an unknown publisher). Every later switch,
           including back to Stable, works in-app from there.
           EOF
@@ -320,13 +320,13 @@ jobs:
           timeout_minutes: 45
           max_attempts: 2
           retry_wait_seconds: 30
-          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_DAILY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
+          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && MCODE_MAC_DAILY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
         env:
           # Why: electron-builder's github publisher targets the repo named in the
-          # config; the token must therefore carry write access to orca-daily.
+          # config; the token must therefore carry write access to mcode-daily.
           GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
-          ORCA_DAILY_BUILD_VERSION: ${{ steps.daily.outputs.version }}
-          ORCA_BUILD_COMMIT: ${{ steps.daily.outputs.commit }}
+          MCODE_DAILY_BUILD_VERSION: ${{ steps.daily.outputs.version }}
+          MCODE_BUILD_COMMIT: ${{ steps.daily.outputs.commit }}
           CSC_LINK: ${{ secrets.MAC_CERTS }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
           # Why all three: electron-builder's notarize step authenticates to the
@@ -352,7 +352,7 @@ jobs:
           app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
           private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
           owner: stablyai
-          repositories: orca-daily
+          repositories: mcode-daily
 
       # Why: the updater resolves a tag, then fetches latest-mac.yml from it. A
       # release missing that manifest is a tag the picker offers and the download
@@ -488,7 +488,7 @@ jobs:
   # is currently red on main. Inlining it here would fail the daily after the
   # signed build already published. Same pattern as release-cut's post-release-e2e.
   #
-  # Why --ref main plus the SHA input: daily tags live on orca-daily, not this
+  # Why --ref main plus the SHA input: daily tags live on mcode-daily, not this
   # repo, so there is no cut tag for `gh workflow run --ref`. The workflow file
   # comes from main; checkout uses the exact commit this daily built.
   post-daily-e2e:

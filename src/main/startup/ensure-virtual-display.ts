@@ -2,7 +2,7 @@ import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { app } from 'electron'
 
-// Why: headless `orca serve` backs browser panes with offscreen BrowserWindows.
+// Why: headless `mcode serve` backs browser panes with offscreen BrowserWindows.
 // On Linux, Electron has no display platform without an X server and segfaults
 // when such a window loads a page (verified: --headless/--ozone-platform=headless
 // also crash; only a virtual display works). So before app.whenReady, ensure a

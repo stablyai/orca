@@ -27,7 +27,7 @@ const WINDOWS_POWERSHELL_LAUNCHER =
 
 // Why (#14828): Windows registers the bare script path when it is cmd-safe and only falls back
 // to the encoded launcher for a profile path that is not (#6078). windows-hook-launcher-chain
-// .test.ts pins which branch applies; these cases only care that Orca's hook is present.
+// .test.ts pins which branch applies; these cases only care that MCode's hook is present.
 function registersManagedGrokScript(command: string): boolean {
   return command.includes(GROK_SCRIPT_FILE_NAME) || WINDOWS_POWERSHELL_LAUNCHER.test(command)
 }
@@ -41,14 +41,14 @@ type WindowsGrokHookRun = {
 
 function createWindowsGrokHookEnvironment(grokHome?: string): NodeJS.ProcessEnv {
   const env = { ...process.env } as NodeJS.ProcessEnv
-  delete env.ORCA_AGENT_HOOK_ENDPOINT
+  delete env.MCODE_AGENT_HOOK_ENDPOINT
   if (grokHome === undefined) {
     delete env.GROK_HOME
   } else {
     env.GROK_HOME = grokHome
   }
-  env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
-  env.ORCA_PANE_KEY = 'pane-test'
+  env.MCODE_AGENT_HOOK_TOKEN = 'test-token'
+  env.MCODE_PANE_KEY = 'pane-test'
   return env
 }
 
@@ -80,7 +80,7 @@ async function runWindowsGrokHook(
   if (!address || typeof address === 'string') {
     throw new Error('Could not resolve Windows Grok hook test listener port')
   }
-  env.ORCA_AGENT_HOOK_PORT = String(address.port)
+  env.MCODE_AGENT_HOOK_PORT = String(address.port)
   try {
     const result = await new Promise<Omit<WindowsGrokHookRun, 'request'>>((resolve, reject) => {
       const child = spawn(process.env.ComSpec ?? 'cmd.exe', ['/d', '/c', scriptPath], {
@@ -109,7 +109,7 @@ describe('GrokHookService', () => {
   let homeDir: string
 
   beforeEach(() => {
-    homeDir = mkdtempSync(join(tmpdir(), 'orca-grok-home-'))
+    homeDir = mkdtempSync(join(tmpdir(), 'mcode-grok-home-'))
     homedirMock.mockReturnValue(homeDir)
   })
 
@@ -119,18 +119,18 @@ describe('GrokHookService', () => {
   })
 
   // Why: #9358 / #9941 — empty GROK_HOME + parse-time %VAR:~n,m% / `"\"` broke
-  // every SessionStart/UserPromptSubmit on Windows outside Orca terminals.
+  // every SessionStart/UserPromptSubmit on Windows outside MCode terminals.
   it('guards Windows GROK_HOME substring checks when empty (#9358)', () => {
     const script = buildWindowsGrokHookScript()
-    expect(script).toContain('set "ORCA_GROK_HOME="')
-    expect(script).toContain('if not defined GROK_HOME goto :orca_grok_home_ready')
+    expect(script).toContain('set "MCODE_GROK_HOME="')
+    expect(script).toContain('if not defined GROK_HOME goto :mcode_grok_home_ready')
     expect(script).toContain('%GROK_HOME:~4096,1%')
-    expect(script).toContain('set "ORCA_GROK_HOME=%GROK_HOME:"=%"')
-    expect(script).toContain('%ORCA_GROK_HOME:~4096,1%')
-    expect(script).toContain(':orca_grok_home_ready')
-    expect(script).toContain('if not defined ORCA_GROK_HOME goto :orca_grok_home_ready')
-    expect(script).toContain('if "%ORCA_GROK_HOME:~-1%"=="\\"')
-    expect(script).toContain('if not "%GROK_HOME:~4096,1%"=="" goto :orca_grok_home_ready')
+    expect(script).toContain('set "MCODE_GROK_HOME=%GROK_HOME:"=%"')
+    expect(script).toContain('%MCODE_GROK_HOME:~4096,1%')
+    expect(script).toContain(':mcode_grok_home_ready')
+    expect(script).toContain('if not defined MCODE_GROK_HOME goto :mcode_grok_home_ready')
+    expect(script).toContain('if "%MCODE_GROK_HOME:~-1%"=="\\"')
+    expect(script).toContain('if not "%GROK_HOME:~4096,1%"=="" goto :mcode_grok_home_ready')
     // Why: parenthesized `if defined (...)` still parse-expands the body early.
     expect(script).not.toMatch(/if defined GROK_HOME \(/)
   })
@@ -224,11 +224,11 @@ describe('GrokHookService', () => {
     const status = new GrokHookService().install()
 
     expect(status.state).toBe('installed')
-    expect(status.configPath).toBe(join(homeDir, '.grok', 'hooks', 'orca-status.json'))
+    expect(status.configPath).toBe(join(homeDir, '.grok', 'hooks', 'mcode-status.json'))
     expect(status.managedHooksPresent).toBe(true)
 
     const config = JSON.parse(
-      readFileSync(join(homeDir, '.grok', 'hooks', 'orca-status.json'), 'utf8')
+      readFileSync(join(homeDir, '.grok', 'hooks', 'mcode-status.json'), 'utf8')
     ) as {
       hooks: Record<string, { matcher?: string; hooks: { command: string }[] }[]>
     }
@@ -262,11 +262,11 @@ describe('GrokHookService', () => {
     expect(() => new RegExp(bareStar)).toThrow()
     expect(registersManagedGrokScript(config.hooks.PreToolUse[0].hooks[0].command)).toBe(true)
     if (process.platform !== 'win32') {
-      expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(join(homeDir, '.orca'))
+      expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(join(homeDir, '.mcode'))
     }
 
     const script = readFileSync(
-      join(homeDir, '.orca', 'agent-hooks', GROK_SCRIPT_FILE_NAME),
+      join(homeDir, '.mcode', 'agent-hooks', GROK_SCRIPT_FILE_NAME),
       'utf8'
     )
     expect(script).toContain('/hook/grok')
@@ -274,8 +274,8 @@ describe('GrokHookService', () => {
       expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
       // Why: windows-grok-hook-script.test.ts pins the GROK_HOME guard shape itself,
       // and does so on every platform rather than only on Windows runners.
-      expect(script).toContain('set "ORCA_GROK_HOME=%GROK_HOME:"=%"')
-      expect(script).toContain('--data-urlencode "grokHome=%ORCA_GROK_HOME%"')
+      expect(script).toContain('set "MCODE_GROK_HOME=%GROK_HOME:"=%"')
+      expect(script).toContain('--data-urlencode "grokHome=%MCODE_GROK_HOME%"')
     } else {
       // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
       // on the curl command line (EDR oversized-command-line false positive).
@@ -295,14 +295,14 @@ describe('GrokHookService', () => {
   it.skipIf(process.platform !== 'win32')(
     'wraps the managed hook command to survive spaces in the profile path (#6078)',
     () => {
-      const spaceHome = join(tmpdir(), 'orca grok home with spaces')
+      const spaceHome = join(tmpdir(), 'mcode grok home with spaces')
       mkdirSync(spaceHome, { recursive: true })
       homedirMock.mockReturnValue(spaceHome)
       try {
         expect(new GrokHookService().install().state).toBe('installed')
 
         const config = JSON.parse(
-          readFileSync(join(spaceHome, '.grok', 'hooks', 'orca-status.json'), 'utf8')
+          readFileSync(join(spaceHome, '.grok', 'hooks', 'mcode-status.json'), 'utf8')
         ) as { hooks: Record<string, { hooks: { command: string }[] }[]> }
 
         for (const eventName of ['SessionStart', 'UserPromptSubmit', 'Stop']) {
@@ -316,19 +316,19 @@ describe('GrokHookService', () => {
   )
 
   it('installs hooks under GROK_HOME when set', () => {
-    const grokHome = mkdtempSync(join(tmpdir(), 'orca-grok-home-env-'))
+    const grokHome = mkdtempSync(join(tmpdir(), 'mcode-grok-home-env-'))
     const previous = process.env.GROK_HOME
     process.env.GROK_HOME = grokHome
     try {
       const status = new GrokHookService().install()
       expect(status.state).toBe('installed')
-      expect(status.configPath).toBe(join(grokHome, 'hooks', 'orca-status.json'))
-      expect(readFileSync(join(grokHome, 'hooks', 'orca-status.json'), 'utf8')).toContain(
+      expect(status.configPath).toBe(join(grokHome, 'hooks', 'mcode-status.json'))
+      expect(readFileSync(join(grokHome, 'hooks', 'mcode-status.json'), 'utf8')).toContain(
         'SessionStart'
       )
       // Why: must not also write into the mocked ~/.grok when GROK_HOME wins.
       expect(() =>
-        readFileSync(join(homeDir, '.grok', 'hooks', 'orca-status.json'), 'utf8')
+        readFileSync(join(homeDir, '.grok', 'hooks', 'mcode-status.json'), 'utf8')
       ).toThrow()
     } finally {
       if (previous === undefined) {
@@ -340,8 +340,8 @@ describe('GrokHookService', () => {
     }
   })
 
-  it('preserves user-authored hook entries in the Orca Grok config file', () => {
-    const configPath = join(homeDir, '.grok', 'hooks', 'orca-status.json')
+  it('preserves user-authored hook entries in the MCode Grok config file', () => {
+    const configPath = join(homeDir, '.grok', 'hooks', 'mcode-status.json')
     mkdirSync(dirname(configPath), { recursive: true })
     writeFileSync(
       configPath,

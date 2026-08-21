@@ -299,9 +299,9 @@ describe('project group store routing', () => {
             provider: 'jira',
             type: 'issue',
             number: 0,
-            title: 'ORCA-123 Link Jira',
-            url: 'https://company.atlassian.net/browse/ORCA-123',
-            jiraIdentifier: 'ORCA-123'
+            title: 'MCODE-123 Link Jira',
+            url: 'https://company.atlassian.net/browse/MCODE-123',
+            jiraIdentifier: 'MCODE-123'
           }
         },
         { runtimeEnvironmentId: 'env-1' }
@@ -859,7 +859,7 @@ describe('project group store routing', () => {
         name: 'Broken folder'
       })
     ).rejects.toThrow(
-      'Folder not found. Orca cannot find /srv/app. Remove and re-import the folder.'
+      'Folder not found. MCode cannot find /srv/app. Remove and re-import the folder.'
     )
   })
 })

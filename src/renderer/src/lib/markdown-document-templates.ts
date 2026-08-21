@@ -8,7 +8,7 @@ import {
 } from '@/runtime/runtime-file-client'
 import { basename, joinPath, normalizeRelativePath } from './path'
 
-const MARKDOWN_TEMPLATE_ROOT = '.orca/templates'
+const MARKDOWN_TEMPLATE_ROOT = '.mcode/templates'
 const MARKDOWN_TEMPLATE_MAX_DEPTH = 8
 const MARKDOWN_TEMPLATE_MAX_COUNT = 100
 

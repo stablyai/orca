@@ -9,7 +9,7 @@ const smokeScript = path.join(projectDir, 'config', 'scripts', 'computer-use-smo
 
 describe('computer-use smoke script', () => {
   it('can launch a runtime before checking apps', () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'orca-computer-smoke-test-'))
+    const root = mkdtempSync(path.join(tmpdir(), 'mcode-computer-smoke-test-'))
     const cliPath = path.join(root, 'fake-cli.cjs')
     const callsPath = path.join(root, 'calls.jsonl')
     writeFileSync(
@@ -35,8 +35,8 @@ describe('computer-use smoke script', () => {
       encoding: 'utf8',
       env: {
         ...process.env,
-        ORCA_COMPUTER_SMOKE_CLI_PATH: cliPath,
-        ORCA_COMPUTER_SMOKE_USER_DATA_PATH: path.join(root, 'user-data')
+        MCODE_COMPUTER_SMOKE_CLI_PATH: cliPath,
+        MCODE_COMPUTER_SMOKE_USER_DATA_PATH: path.join(root, 'user-data')
       }
     })
 
@@ -53,16 +53,16 @@ describe('computer-use smoke script', () => {
   })
 
   it('fails closed when a target app is required but none are available', () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'orca-computer-smoke-test-'))
+    const root = mkdtempSync(path.join(tmpdir(), 'mcode-computer-smoke-test-'))
     const cliPath = writeFakeListAppsCli(root, [])
 
     const result = spawnSync(process.execPath, [smokeScript, '--require-target'], {
       encoding: 'utf8',
       env: {
         ...process.env,
-        ORCA_COMPUTER_SMOKE_CLI_PATH: cliPath,
-        ORCA_COMPUTER_SMOKE_USER_DATA_PATH: path.join(root, 'user-data'),
-        ORCA_COMPUTER_SMOKE_APPS: 'TestApp'
+        MCODE_COMPUTER_SMOKE_CLI_PATH: cliPath,
+        MCODE_COMPUTER_SMOKE_USER_DATA_PATH: path.join(root, 'user-data'),
+        MCODE_COMPUTER_SMOKE_APPS: 'TestApp'
       }
     })
 
@@ -71,16 +71,16 @@ describe('computer-use smoke script', () => {
   })
 
   it('keeps no-target smoke permissive by default for local probing', () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'orca-computer-smoke-test-'))
+    const root = mkdtempSync(path.join(tmpdir(), 'mcode-computer-smoke-test-'))
     const cliPath = writeFakeListAppsCli(root, [])
 
     const result = spawnSync(process.execPath, [smokeScript], {
       encoding: 'utf8',
       env: {
         ...process.env,
-        ORCA_COMPUTER_SMOKE_CLI_PATH: cliPath,
-        ORCA_COMPUTER_SMOKE_USER_DATA_PATH: path.join(root, 'user-data'),
-        ORCA_COMPUTER_SMOKE_APPS: 'TestApp'
+        MCODE_COMPUTER_SMOKE_CLI_PATH: cliPath,
+        MCODE_COMPUTER_SMOKE_USER_DATA_PATH: path.join(root, 'user-data'),
+        MCODE_COMPUTER_SMOKE_APPS: 'TestApp'
       }
     })
 
@@ -89,7 +89,7 @@ describe('computer-use smoke script', () => {
   })
 
   it('skips background apps that report window_not_found instead of failing smoke', () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'orca-computer-smoke-test-'))
+    const root = mkdtempSync(path.join(tmpdir(), 'mcode-computer-smoke-test-'))
     const cliPath = writeFakeSnapshotCli(
       root,
       [
@@ -105,9 +105,9 @@ describe('computer-use smoke script', () => {
       encoding: 'utf8',
       env: {
         ...process.env,
-        ORCA_COMPUTER_SMOKE_CLI_PATH: cliPath,
-        ORCA_COMPUTER_SMOKE_USER_DATA_PATH: path.join(root, 'user-data'),
-        ORCA_COMPUTER_SMOKE_APPS: 'Edge,Notepad'
+        MCODE_COMPUTER_SMOKE_CLI_PATH: cliPath,
+        MCODE_COMPUTER_SMOKE_USER_DATA_PATH: path.join(root, 'user-data'),
+        MCODE_COMPUTER_SMOKE_APPS: 'Edge,Notepad'
       }
     })
 
@@ -117,15 +117,15 @@ describe('computer-use smoke script', () => {
   })
 
   it('uses cross-platform default app targets for smoke snapshots', () => {
-    const root = mkdtempSync(path.join(tmpdir(), 'orca-computer-smoke-test-'))
+    const root = mkdtempSync(path.join(tmpdir(), 'mcode-computer-smoke-test-'))
     const cliPath = writeFakeSnapshotCli(root, [{ name: 'Notepad', bundleId: null }])
 
     const result = spawnSync(process.execPath, [smokeScript], {
       encoding: 'utf8',
       env: {
         ...process.env,
-        ORCA_COMPUTER_SMOKE_CLI_PATH: cliPath,
-        ORCA_COMPUTER_SMOKE_USER_DATA_PATH: path.join(root, 'user-data')
+        MCODE_COMPUTER_SMOKE_CLI_PATH: cliPath,
+        MCODE_COMPUTER_SMOKE_USER_DATA_PATH: path.join(root, 'user-data')
       }
     })
 

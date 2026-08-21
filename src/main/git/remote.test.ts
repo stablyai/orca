@@ -33,10 +33,10 @@ describe('git remote operations', () => {
         return { stdout: 'review/pr-1738\n', stderr: '' }
       }
       if (args[0] === 'config' && args.includes('branch.review/pr-1738.remote')) {
-        return { stdout: 'pr-prateek-orca\n', stderr: '' }
+        return { stdout: 'pr-prateek-mcode\n', stderr: '' }
       }
       if (args[0] === 'config' && args.includes('branch.review/pr-1738.pushRemote')) {
-        return { stdout: 'pr-prateek-orca\n', stderr: '' }
+        return { stdout: 'pr-prateek-mcode\n', stderr: '' }
       }
       if (args[0] === 'config' && args.includes('branch.review/pr-1738.merge')) {
         return { stdout: 'refs/heads/prateek/fix-sidebar-agents-toggle\n', stderr: '' }
@@ -54,7 +54,7 @@ describe('git remote operations', () => {
       { cwd: '/repo' }
     )
     expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
-      ['push', '--set-upstream', 'pr-prateek-orca', 'HEAD:prateek/fix-sidebar-agents-toggle'],
+      ['push', '--set-upstream', 'pr-prateek-mcode', 'HEAD:prateek/fix-sidebar-agents-toggle'],
       { cwd: '/repo' }
     )
   })
@@ -128,19 +128,19 @@ describe('git remote operations', () => {
         return { stdout: 'imp/chinese-translation\n', stderr: '' }
       }
       if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.pushRemote')) {
-        return { stdout: 'https://github.com/pynickle/orca.git\n', stderr: '' }
+        return { stdout: 'https://github.com/pynickle/mcode.git\n', stderr: '' }
       }
       if (args[0] === 'config' && args.includes('remote.pushDefault')) {
         throw new Error('missing pushDefault')
       }
       if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.remote')) {
-        return { stdout: 'https://github.com/pynickle/orca.git\n', stderr: '' }
+        return { stdout: 'https://github.com/pynickle/mcode.git\n', stderr: '' }
       }
       if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.merge')) {
         return { stdout: 'refs/heads/imp/chinese-translation\n', stderr: '' }
       }
       if (args[0] === 'remote' && args[1] === 'get-url') {
-        return { stdout: 'https://github.com/stablyai/orca.git\n', stderr: '' }
+        return { stdout: 'https://github.com/mcode-ide/mcode.git\n', stderr: '' }
       }
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
@@ -154,7 +154,7 @@ describe('git remote operations', () => {
       [
         'push',
         '--set-upstream',
-        'https://github.com/pynickle/orca.git',
+        'https://github.com/pynickle/mcode.git',
         'HEAD:imp/chinese-translation'
       ],
       { cwd: '/repo' }
@@ -173,19 +173,19 @@ describe('git remote operations', () => {
         throw new Error('missing pushDefault')
       }
       if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.remote')) {
-        return { stdout: 'https://github.com/pynickle/orca.git\n', stderr: '' }
+        return { stdout: 'https://github.com/pynickle/mcode.git\n', stderr: '' }
       }
       if (args[0] === 'config' && args.includes('branch.imp/chinese-translation.merge')) {
         return { stdout: 'refs/heads/imp/chinese-translation\n', stderr: '' }
       }
       if (args[0] === 'remote' && args[1] === 'get-url' && args[2] === 'origin') {
-        return { stdout: 'https://github.com/stablyai/orca.git\n', stderr: '' }
+        return { stdout: 'https://github.com/mcode-ide/mcode.git\n', stderr: '' }
       }
-      if (args[0] === 'remote' && args[1] === 'get-url' && args[2] === 'pr-pynickle-orca') {
-        return { stdout: 'https://github.com/pynickle/orca.git\n', stderr: '' }
+      if (args[0] === 'remote' && args[1] === 'get-url' && args[2] === 'pr-pynickle-mcode') {
+        return { stdout: 'https://github.com/pynickle/mcode.git\n', stderr: '' }
       }
       if (args[0] === 'remote') {
-        return { stdout: 'origin\npr-pynickle-orca\n', stderr: '' }
+        return { stdout: 'origin\npr-pynickle-mcode\n', stderr: '' }
       }
       return { stdout: '', stderr: '' }
     })
@@ -193,7 +193,7 @@ describe('git remote operations', () => {
     await gitPush('/repo', false)
 
     expect(gitExecFileAsyncMock).toHaveBeenLastCalledWith(
-      ['push', '--set-upstream', 'pr-pynickle-orca', 'HEAD:imp/chinese-translation'],
+      ['push', '--set-upstream', 'pr-pynickle-mcode', 'HEAD:imp/chinese-translation'],
       { cwd: '/repo' }
     )
   })

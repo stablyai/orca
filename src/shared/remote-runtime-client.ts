@@ -64,8 +64,8 @@ function formatRemoteRuntimeCloseMessage(code: number, reason: Buffer): string {
     suffixParts.push(reasonText)
   }
   return suffixParts.length > 0
-    ? `Remote Orca runtime closed the connection (${suffixParts.join(': ')}).`
-    : 'Remote Orca runtime closed the connection.'
+    ? `Remote MCode runtime closed the connection (${suffixParts.join(': ')}).`
+    : 'Remote MCode runtime closed the connection.'
 }
 
 export type RemoteRuntimeSubscription = {
@@ -186,7 +186,7 @@ async function sendRemoteRuntimeRequestOnSocket<TResult>(
       socket.off('error', onError)
       socket.off('close', onClose)
       socket.off('message', onMessage)
-      // Why: the settled one-shot no longer needs Orca callbacks, but a ws
+      // Why: the settled one-shot no longer needs MCode callbacks, but a ws
       // can still report a late transport error after close is requested.
       if (socket.readyState !== WebSocket.CLOSED) {
         socket.on('error', ignoreSettledRemoteRuntimeSocketError)
@@ -200,7 +200,7 @@ async function sendRemoteRuntimeRequestOnSocket<TResult>(
         ok: false,
         error: new RemoteRuntimeClientError(
           'runtime_timeout',
-          'Timed out waiting for the remote Orca runtime to respond.',
+          'Timed out waiting for the remote MCode runtime to respond.',
           { pairingStage: getPairingStage() }
         )
       })
@@ -276,7 +276,7 @@ async function sendRemoteRuntimeRequestOnSocket<TResult>(
         ok: false,
         error: new RemoteRuntimeClientError(
           'remote_runtime_unavailable',
-          'Could not connect to the remote Orca runtime.',
+          'Could not connect to the remote MCode runtime.',
           { pairingStage: getPairingStage() }
         )
       })
@@ -307,7 +307,7 @@ async function sendRemoteRuntimeRequestOnSocket<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an unexpected binary frame.',
+            'Remote MCode runtime returned an unexpected binary frame.',
             {
               pairingStage: state === 'awaiting_ready' ? 'host-identity' : getPairingStage()
             }
@@ -328,7 +328,7 @@ async function sendRemoteRuntimeRequestOnSocket<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an undecryptable frame.',
+            'Remote MCode runtime returned an undecryptable frame.',
             {
               pairingStage: state === 'awaiting_authenticated' ? 'host-identity' : getPairingStage()
             }
@@ -359,7 +359,7 @@ async function sendRemoteRuntimeRequestOnSocket<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an invalid E2EE handshake frame.',
+            'Remote MCode runtime returned an invalid E2EE handshake frame.',
             { pairingStage: 'host-identity' }
           )
         })
@@ -374,7 +374,7 @@ async function sendRemoteRuntimeRequestOnSocket<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an unexpected E2EE handshake frame.',
+            'Remote MCode runtime returned an unexpected E2EE handshake frame.',
             { pairingStage: 'host-identity' }
           )
         })
@@ -393,7 +393,7 @@ async function sendRemoteRuntimeRequestOnSocket<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an invalid E2EE auth frame.',
+            'Remote MCode runtime returned an invalid E2EE auth frame.',
             { pairingStage: 'host-identity' }
           )
         })
@@ -411,7 +411,7 @@ async function sendRemoteRuntimeRequestOnSocket<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             code,
-            'Remote Orca runtime rejected the pairing token.',
+            'Remote MCode runtime rejected the pairing token.',
             { pairingStage: code === 'unauthorized' ? 'access-grant' : 'host-identity' }
           )
         })
@@ -433,7 +433,7 @@ async function sendRemoteRuntimeRequestOnSocket<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'remote_runtime_unavailable',
-            'Remote Orca runtime request was released before it could be sent.'
+            'Remote MCode runtime request was released before it could be sent.'
           )
         })
         return
@@ -450,7 +450,7 @@ async function sendRemoteRuntimeRequestOnSocket<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an invalid response frame.',
+            'Remote MCode runtime returned an invalid response frame.',
             { pairingStage: 'runtime' }
           )
         })
@@ -466,7 +466,7 @@ async function sendRemoteRuntimeRequestOnSocket<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an invalid response frame.',
+            'Remote MCode runtime returned an invalid response frame.',
             { pairingStage: 'runtime' }
           )
         })
@@ -477,7 +477,7 @@ async function sendRemoteRuntimeRequestOnSocket<TResult>(
           ok: false,
           error: new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned a mismatched response id.',
+            'Remote MCode runtime returned a mismatched response id.',
             { pairingStage: 'runtime' }
           )
         })
@@ -553,7 +553,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
       socket.off('pong', onLivenessSignal)
       socket.off('ping', onLivenessSignal)
       ws = null
-      // Why: startup failures detach Orca callbacks before closing the ws,
+      // Why: startup failures detach MCode callbacks before closing the ws,
       // but ws can still emit a late transport error while close is in flight.
       if (socket.readyState !== WebSocket.CLOSED) {
         socket.on('error', ignoreSettledRemoteRuntimeSocketError)
@@ -574,7 +574,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
       fail(
         new RemoteRuntimeClientError(
           'runtime_timeout',
-          'Timed out waiting for the remote Orca runtime subscription to start.'
+          'Timed out waiting for the remote MCode runtime subscription to start.'
         )
       )
     }, timeoutMs)
@@ -605,7 +605,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
             fail(
               new RemoteRuntimeClientError(
                 'remote_runtime_unavailable',
-                'Remote Orca runtime send buffer overflow; reconnecting.'
+                'Remote MCode runtime send buffer overflow; reconnecting.'
               )
             )
         })
@@ -672,7 +672,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
       fail(
         new RemoteRuntimeClientError(
           'remote_runtime_unavailable',
-          'Could not connect to the remote Orca runtime.'
+          'Could not connect to the remote MCode runtime.'
         )
       )
     }
@@ -711,7 +711,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
         fail(
           new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an undecryptable frame.'
+            'Remote MCode runtime returned an undecryptable frame.'
           )
         )
         return
@@ -753,7 +753,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
         fail(
           new RemoteRuntimeClientError(
             'remote_runtime_unavailable',
-            'Remote Orca runtime stopped responding; the stream connection was reset.'
+            'Remote MCode runtime stopped responding; the stream connection was reset.'
           )
         )
         try {
@@ -774,7 +774,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
         fail(
           new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an invalid E2EE handshake frame.'
+            'Remote MCode runtime returned an invalid E2EE handshake frame.'
           )
         )
         return
@@ -787,7 +787,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
         fail(
           new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an unexpected E2EE handshake frame.'
+            'Remote MCode runtime returned an unexpected E2EE handshake frame.'
           )
         )
         return
@@ -804,7 +804,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
         fail(
           new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an invalid E2EE auth frame.'
+            'Remote MCode runtime returned an invalid E2EE auth frame.'
           )
         )
         return
@@ -817,7 +817,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
           (authenticated as { error?: { code?: unknown } }).error?.code === 'unauthorized'
             ? 'unauthorized'
             : 'invalid_runtime_response'
-        fail(new RemoteRuntimeClientError(code, 'Remote Orca runtime rejected the pairing token.'))
+        fail(new RemoteRuntimeClientError(code, 'Remote MCode runtime rejected the pairing token.'))
         return
       }
       state = 'ready'
@@ -833,7 +833,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
         fail(
           new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an invalid response frame.'
+            'Remote MCode runtime returned an invalid response frame.'
           )
         )
         return
@@ -847,7 +847,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
         fail(
           new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned a mismatched response id.'
+            'Remote MCode runtime returned a mismatched response id.'
           )
         )
         return
@@ -860,7 +860,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
         fail(
           new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned binary data before authentication.'
+            'Remote MCode runtime returned binary data before authentication.'
           )
         )
         return
@@ -870,7 +870,7 @@ export async function subscribeRemoteRuntimeRequest<TResult>(
         fail(
           new RemoteRuntimeClientError(
             'invalid_runtime_response',
-            'Remote Orca runtime returned an undecryptable binary frame.'
+            'Remote MCode runtime returned an undecryptable binary frame.'
           )
         )
         return

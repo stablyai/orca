@@ -18,7 +18,7 @@ afterEach(async () => {
 
 describe('Codex real-account validation harness', () => {
   it('forces home and Codex routing variables after stripping ambient values', async () => {
-    const primaryHome = path.join(os.tmpdir(), 'orca-primary-home-sentinel')
+    const primaryHome = path.join(os.tmpdir(), 'mcode-primary-home-sentinel')
     const { layout, env } = runValidationModule<{
       layout: { tempRoot: string; homeDir: string }
       env: Record<string, string | undefined>
@@ -31,7 +31,7 @@ describe('Codex real-account validation harness', () => {
           HOME: primaryHome,
           USERPROFILE: primaryHome,
           CODEX_HOME: '/unsafe/codex',
-          ORCA_CODEX_HOME: '/unsafe/orca-codex',
+          MCODE_CODEX_HOME: '/unsafe/mcode-codex',
           ZDOTDIR: '/unsafe/zsh',
           SAFE_VALUE: 'preserved'
         }, layout)
@@ -44,7 +44,7 @@ describe('Codex real-account validation harness', () => {
     expect(env.HOME).toBe(layout.homeDir)
     expect(env.USERPROFILE).toBe(layout.homeDir)
     expect(env.CODEX_HOME).toBeUndefined()
-    expect(env.ORCA_CODEX_HOME).toBeUndefined()
+    expect(env.MCODE_CODEX_HOME).toBeUndefined()
     expect(env.ZDOTDIR).toBeUndefined()
     expect(env.SAFE_VALUE).toBe('preserved')
   })
@@ -72,7 +72,7 @@ describe('Codex real-account validation harness', () => {
         await writeFile(path.join(managedHome, 'auth.json'), '{"refresh_token":"never-report-me"}\\n')
         console.log(JSON.stringify({ layout, snapshot: await snapshotValidationState(layout) }))
       `,
-      [path.join(os.tmpdir(), 'orca-primary-home-sentinel')]
+      [path.join(os.tmpdir(), 'mcode-primary-home-sentinel')]
     )
     cleanupPaths.push(layout.tempRoot)
 
@@ -83,7 +83,7 @@ describe('Codex real-account validation harness', () => {
   })
 
   it('honors a disposable temp parent override outside the primary home', async () => {
-    const tempParent = await mkdtemp(path.join(os.tmpdir(), 'orca-temp-parent-'))
+    const tempParent = await mkdtemp(path.join(os.tmpdir(), 'mcode-temp-parent-'))
     cleanupPaths.push(tempParent)
     const { layout } = runValidationModule<{ layout: { tempRoot: string } }>(
       `
@@ -91,8 +91,8 @@ describe('Codex real-account validation harness', () => {
         const layout = await createValidationLayout({ primaryHome: process.argv[2] })
         console.log(JSON.stringify({ layout }))
       `,
-      [path.join(os.tmpdir(), 'orca-primary-home-sentinel')],
-      { ORCA_CODEX_VALIDATION_TEMP_PARENT: tempParent }
+      [path.join(os.tmpdir(), 'mcode-primary-home-sentinel')],
+      { MCODE_CODEX_VALIDATION_TEMP_PARENT: tempParent }
     )
 
     expect(path.dirname(layout.tempRoot)).toBe(tempParent)
@@ -101,7 +101,7 @@ describe('Codex real-account validation harness', () => {
   it.skipIf(process.platform === 'win32')(
     'refuses a symlinked temp parent that resolves inside the primary home',
     async () => {
-      const root = await mkdtemp(path.join(os.tmpdir(), 'orca-symlink-guard-'))
+      const root = await mkdtemp(path.join(os.tmpdir(), 'mcode-symlink-guard-'))
       cleanupPaths.push(root)
       const primaryHome = path.join(root, 'primary-home')
       const insidePrimary = path.join(primaryHome, 'nested-temp')
@@ -120,7 +120,7 @@ describe('Codex real-account validation harness', () => {
         }
       `,
         [primaryHome],
-        { ORCA_CODEX_VALIDATION_TEMP_PARENT: link }
+        { MCODE_CODEX_VALIDATION_TEMP_PARENT: link }
       )
 
       expect(error).toContain('Refusing to place the disposable validation root')
@@ -144,7 +144,7 @@ describe('Codex real-account validation harness', () => {
 
     expect(error).toContain('Refusing to place the disposable validation root')
     expect(error).toContain('--temp-parent')
-    expect(error).toContain('ORCA_CODEX_VALIDATION_TEMP_PARENT')
+    expect(error).toContain('MCODE_CODEX_VALIDATION_TEMP_PARENT')
   })
 
   it('builds via process.execPath and the repo-local electron-vite entry, not npx', () => {
@@ -175,7 +175,7 @@ describe('Codex real-account validation harness', () => {
   })
 
   it('fails clearly when the repo-local electron-vite entry is unavailable', async () => {
-    const emptyRoot = await mkdtemp(path.join(os.tmpdir(), 'orca-no-electron-vite-'))
+    const emptyRoot = await mkdtemp(path.join(os.tmpdir(), 'mcode-no-electron-vite-'))
     cleanupPaths.push(emptyRoot)
     const { error } = runValidationModule<{ error: string | null }>(
       `
@@ -201,7 +201,7 @@ function runValidationModule<T>(source: string, args: string[], env?: Record<str
     {
       encoding: 'utf8',
       // Why: an ambient temp-parent override must not redirect unrelated cases.
-      env: { ...process.env, ORCA_CODEX_VALIDATION_TEMP_PARENT: '', ...env }
+      env: { ...process.env, MCODE_CODEX_VALIDATION_TEMP_PARENT: '', ...env }
     }
   )
   return JSON.parse(stdout.trim()) as T

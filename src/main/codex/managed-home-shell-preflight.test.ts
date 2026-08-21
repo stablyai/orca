@@ -10,7 +10,7 @@ import {
 const roots: string[] = []
 
 function makeRoot(): string {
-  const root = mkdtempSync(join(tmpdir(), 'orca-codex-shell-preflight-'))
+  const root = mkdtempSync(join(tmpdir(), 'mcode-codex-shell-preflight-'))
   roots.push(root)
   return root
 }
@@ -22,14 +22,14 @@ afterEach(() => {
 })
 
 describe('managed Codex shell preflight', () => {
-  it('accepts the Orca shared runtime home', () => {
+  it('accepts the MCode shared runtime home', () => {
     const userDataPath = makeRoot()
     const home = join(userDataPath, 'codex-runtime-home', 'home')
     mkdirSync(home, { recursive: true })
 
     expect(
       resolveManagedCodexShellPreflightHome(
-        { CODEX_HOME: home, ORCA_CODEX_HOME: home },
+        { CODEX_HOME: home, MCODE_CODEX_HOME: home },
         userDataPath
       )
     ).toBe(home)
@@ -39,7 +39,7 @@ describe('managed Codex shell preflight', () => {
     const userDataPath = makeRoot()
     const home = join(userDataPath, 'codex-accounts', 'account-1', 'home')
     mkdirSync(home, { recursive: true })
-    writeFileSync(join(home, '.orca-managed-home'), 'account-1\n')
+    writeFileSync(join(home, '.mcode-managed-home'), 'account-1\n')
     const install = vi.fn(() => ({
       agent: 'codex' as const,
       state: 'installed' as const,
@@ -47,7 +47,7 @@ describe('managed Codex shell preflight', () => {
       managedHooksPresent: true,
       detail: null
     }))
-    const env = { CODEX_HOME: home, ORCA_CODEX_HOME: home }
+    const env = { CODEX_HOME: home, MCODE_CODEX_HOME: home }
 
     expect(
       prepareManagedCodexHomeBeforeShellLaunch({ userDataPath, hooksEnabled: true, env, install })
@@ -69,19 +69,19 @@ describe('managed Codex shell preflight', () => {
 
     expect(
       resolveManagedCodexShellPreflightHome(
-        { CODEX_HOME: userHome, ORCA_CODEX_HOME: userHome },
+        { CODEX_HOME: userHome, MCODE_CODEX_HOME: userHome },
         userDataPath
       )
     ).toBeNull()
     expect(
       resolveManagedCodexShellPreflightHome(
-        { CODEX_HOME: userHome, ORCA_CODEX_HOME: managedHome },
+        { CODEX_HOME: userHome, MCODE_CODEX_HOME: managedHome },
         userDataPath
       )
     ).toBeNull()
     expect(
       resolveManagedCodexShellPreflightHome(
-        { CODEX_HOME: managedHome, ORCA_CODEX_HOME: undefined },
+        { CODEX_HOME: managedHome, MCODE_CODEX_HOME: undefined },
         userDataPath
       )
     ).toBeNull()
@@ -96,7 +96,7 @@ describe('managed Codex shell preflight', () => {
 
     expect(
       resolveManagedCodexShellPreflightHome(
-        { CODEX_HOME: candidate, ORCA_CODEX_HOME: candidate },
+        { CODEX_HOME: candidate, MCODE_CODEX_HOME: candidate },
         userDataPath
       )
     ).toBeNull()
@@ -107,13 +107,13 @@ describe('managed Codex shell preflight', () => {
     const outside = makeRoot()
     const accountDir = join(userDataPath, 'codex-accounts', 'account-1')
     mkdirSync(accountDir, { recursive: true })
-    writeFileSync(join(outside, '.orca-managed-home'), 'account-1\n')
+    writeFileSync(join(outside, '.mcode-managed-home'), 'account-1\n')
     symlinkSync(outside, join(accountDir, 'home'))
     const candidate = join(accountDir, 'home')
 
     expect(
       resolveManagedCodexShellPreflightHome(
-        { CODEX_HOME: candidate, ORCA_CODEX_HOME: candidate },
+        { CODEX_HOME: candidate, MCODE_CODEX_HOME: candidate },
         userDataPath
       )
     ).toBeNull()
@@ -124,11 +124,11 @@ describe('managed Codex shell preflight', () => {
     const candidate = join(userDataPath, 'home')
     mkdirSync(join(userDataPath, 'codex-accounts'))
     mkdirSync(candidate)
-    writeFileSync(join(candidate, '.orca-managed-home'), '..\n')
+    writeFileSync(join(candidate, '.mcode-managed-home'), '..\n')
 
     expect(
       resolveManagedCodexShellPreflightHome(
-        { CODEX_HOME: candidate, ORCA_CODEX_HOME: candidate },
+        { CODEX_HOME: candidate, MCODE_CODEX_HOME: candidate },
         userDataPath
       )
     ).toBeNull()
@@ -139,12 +139,12 @@ describe('managed Codex shell preflight', () => {
     const outside = makeRoot()
     const candidate = join(userDataPath, 'codex-accounts', 'account-1', 'home')
     mkdirSync(join(outside, 'account-1', 'home'), { recursive: true })
-    writeFileSync(join(outside, 'account-1', 'home', '.orca-managed-home'), 'account-1\n')
+    writeFileSync(join(outside, 'account-1', 'home', '.mcode-managed-home'), 'account-1\n')
     symlinkSync(outside, join(userDataPath, 'codex-accounts'))
 
     expect(
       resolveManagedCodexShellPreflightHome(
-        { CODEX_HOME: candidate, ORCA_CODEX_HOME: candidate },
+        { CODEX_HOME: candidate, MCODE_CODEX_HOME: candidate },
         userDataPath
       )
     ).toBeNull()

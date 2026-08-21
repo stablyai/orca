@@ -24,7 +24,7 @@ function card(overrides: Partial<DashboardCard> = {}): DashboardCard {
     worktreeId: 'worktree-1',
     tabId: 'tab-1',
     leafId: 'leaf-1',
-    repoName: 'Orca',
+    repoName: 'MCode',
     worktreeName: 'Agent map',
     startedAt: NOW - 2 * HOUR,
     finishedAt: null,

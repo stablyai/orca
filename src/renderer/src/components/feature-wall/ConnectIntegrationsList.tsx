@@ -107,7 +107,7 @@ export function ConnectIntegrationsList(): React.JSX.Element {
           )}
           description={translate(
             'auto.components.feature.wall.ConnectIntegrationsList.review_step_description',
-            'Connect a review provider so Orca can show PR or MR status, checks, and reviews.'
+            'Connect a review provider so MCode can show PR or MR status, checks, and reviews.'
           )}
           summary={
             <>
@@ -136,11 +136,11 @@ export function ConnectIntegrationsList(): React.JSX.Element {
           expanded={taskExpanded}
           title={translate(
             'auto.components.feature.wall.ConnectIntegrationsList.task_step_title',
-            'Start agents on your tasks without leaving Orca'
+            'Start agents on your tasks without leaving MCode'
           )}
           description={translate(
             'auto.components.feature.wall.ConnectIntegrationsList.33b650af52',
-            'Connect where your team tracks work. Orca starts workspaces with the issue title, link, and context already attached.'
+            'Connect where your team tracks work. MCode starts workspaces with the issue title, link, and context already attached.'
           )}
           summary={
             status.trackerProviderName ? (

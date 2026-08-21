@@ -1,6 +1,6 @@
 # Linux glibc Compatibility
 
-Orca's Linux builds target **stock Ubuntu 20.04 and newer** — glibc 2.31 and
+MCode's Linux builds target **stock Ubuntu 20.04 and newer** — glibc 2.31 and
 libstdc++ `GLIBCXX_3.4.28` (also Debian 11, RHEL 9), on both x64 and arm64.
 Packaging enforces this floor automatically; keep it in mind when adding or
 upgrading native dependencies. (The optional speech feature is the one
@@ -18,9 +18,9 @@ and the dynamic loader then refuses to load it:
 /lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.34' not found (required by .../pty.node)
 ```
 
-Because the Orca main process loads node-pty at startup, that failure crashes the
+Because the MCode main process loads node-pty at startup, that failure crashes the
 whole app before a window appears — this is exactly what shipped in v1.4.150 and
-broke launch on Ubuntu 20.04 ([#9902](https://github.com/stablyai/orca/issues/9902)).
+broke launch on Ubuntu 20.04 ([#9902](https://github.com/mcode-ide/mcode/issues/9902)).
 
 The specific trap is glibc's 2.32–2.34 "libpthread/libutil merge", which moved
 several long-stable functions into libc under brand-new symbol versions:

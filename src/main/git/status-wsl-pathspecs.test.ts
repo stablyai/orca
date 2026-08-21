@@ -48,7 +48,7 @@ describe('WSL git pathspecs', () => {
   })
 
   it('uses POSIX separators when discarding untracked files inside WSL', async () => {
-    const repo = await mkdtemp(path.join(tmpdir(), 'orca-wsl-pathspec-'))
+    const repo = await mkdtemp(path.join(tmpdir(), 'mcode-wsl-pathspec-'))
     const targetPath = path.resolve(repo, windowsRelativePath)
     await mkdir(path.dirname(targetPath), { recursive: true })
     await writeFile(targetPath, 'untracked')

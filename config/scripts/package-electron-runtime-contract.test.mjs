@@ -142,10 +142,10 @@ describe('Electron runtime package contract', () => {
         command.indexOf('electron-builder')
       )
     }
-    expect(macReleaseCommand).toContain(' && ORCA_MAC_RELEASE=1 ')
+    expect(macReleaseCommand).toContain(' && MCODE_MAC_RELEASE=1 ')
     expect(releaseCommands.get('linux-x64')).toContain(' && pnpm exec electron-builder ')
     expect(releaseCommands.get('linux-x64')).toContain('--linux AppImage deb rpm --x64')
-    expect(releaseCommands.get('linux-arm64')).toContain('ORCA_LINUX_ARM64_RELEASE=1')
+    expect(releaseCommands.get('linux-arm64')).toContain('MCODE_LINUX_ARM64_RELEASE=1')
     expect(releaseCommands.get('linux-arm64')).toContain('--linux AppImage deb rpm --arm64')
     expect(releaseCommands.get('win')).toContain(
       '; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder '
@@ -302,7 +302,7 @@ describe('Electron runtime package contract', () => {
     expect(releaseMacWorkflow.on.workflow_dispatch.inputs.release_run_id.required).toBe(true)
     expect(buildMacJob['runs-on']).toBe('blacksmith-6vcpu-macos-15')
     expect(checkoutStep.with.ref).toBe('refs/tags/${{ inputs.tag }}')
-    expect(publishStep.with.command).toContain('ORCA_MAC_RELEASE=1')
+    expect(publishStep.with.command).toContain('MCODE_MAC_RELEASE=1')
     expect(publishStep.with.command).toContain('electron-builder')
     expect(publishStep.with.command).toContain('--mac --publish always')
     expect(releaseMacWorkflowText).not.toContain('signpath/')
@@ -419,8 +419,8 @@ describe('Electron runtime package contract', () => {
       (step) => step.name === 'Copy cask into tap and open PR'
     )
 
-    expect(resolveCaskStep.run).toContain('token="orca@rc"')
-    expect(resolveCaskStep.run).toContain('token="orca"')
+    expect(resolveCaskStep.run).toContain('token="mcode@rc"')
+    expect(resolveCaskStep.run).toContain('token="mcode"')
     expect(renderStep.env.CASK_PATH).toBe('${{ steps.cask.outputs.path }}')
     expect(copyStep.run).toContain('cp "$CASK_PATH" "tap/$CASK_PATH"')
     expect(copyStep.run).toContain('git add "$CASK_PATH"')
@@ -463,32 +463,32 @@ describe('Electron runtime package contract', () => {
     expect(runStep.run).toContain('pnpm run test:e2e:terminal-perf:scale:report')
     expect(runStep.run).toContain('xvfb-run --auto-servernum')
     const manualProfileKnobs = [
-      ['ORCA_TERMINAL_PERF_FRAME_COUNT', 'frame_count', 'ORCA_E2E_OPENCODE_FRAME_COUNT'],
+      ['MCODE_TERMINAL_PERF_FRAME_COUNT', 'frame_count', 'MCODE_E2E_OPENCODE_FRAME_COUNT'],
       [
-        'ORCA_TERMINAL_PERF_FRAME_INTERVAL_MS',
+        'MCODE_TERMINAL_PERF_FRAME_INTERVAL_MS',
         'frame_interval_ms',
-        'ORCA_E2E_OPENCODE_FRAME_INTERVAL_MS'
+        'MCODE_E2E_OPENCODE_FRAME_INTERVAL_MS'
       ],
       [
-        'ORCA_TERMINAL_PERF_PRESSURE_OUTPUT_CHARS',
+        'MCODE_TERMINAL_PERF_PRESSURE_OUTPUT_CHARS',
         'pressure_output_chars',
-        'ORCA_E2E_OPENCODE_PRESSURE_OUTPUT_CHARS'
+        'MCODE_E2E_OPENCODE_PRESSURE_OUTPUT_CHARS'
       ],
-      ['ORCA_TERMINAL_PERF_SCALE_PANES', 'scale_panes', 'ORCA_E2E_OPENCODE_SCALE_PANES'],
+      ['MCODE_TERMINAL_PERF_SCALE_PANES', 'scale_panes', 'MCODE_E2E_OPENCODE_SCALE_PANES'],
       [
-        'ORCA_TERMINAL_PERF_SCALE_CROSS_WORKSPACE_PANES',
+        'MCODE_TERMINAL_PERF_SCALE_CROSS_WORKSPACE_PANES',
         'scale_cross_workspace_panes',
-        'ORCA_E2E_OPENCODE_SCALE_CROSS_WORKSPACE_PANES'
+        'MCODE_E2E_OPENCODE_SCALE_CROSS_WORKSPACE_PANES'
       ],
       [
-        'ORCA_TERMINAL_PERF_SCALE_PRESSURE_PANES',
+        'MCODE_TERMINAL_PERF_SCALE_PRESSURE_PANES',
         'scale_pressure_panes',
-        'ORCA_E2E_OPENCODE_SCALE_PRESSURE_PANES'
+        'MCODE_E2E_OPENCODE_SCALE_PRESSURE_PANES'
       ],
       [
-        'ORCA_TERMINAL_PERF_SCALE_HIDDEN_PRESSURE_PANES',
+        'MCODE_TERMINAL_PERF_SCALE_HIDDEN_PRESSURE_PANES',
         'scale_hidden_pressure_panes',
-        'ORCA_E2E_OPENCODE_SCALE_HIDDEN_PRESSURE_PANES'
+        'MCODE_E2E_OPENCODE_SCALE_HIDDEN_PRESSURE_PANES'
       ]
     ]
     for (const [workflowEnv, inputName, runnerEnv] of manualProfileKnobs) {
@@ -496,7 +496,7 @@ describe('Electron runtime package contract', () => {
       expect(runStep.run).toContain(runnerEnv)
     }
     expect(uploadStep.uses).toBe('actions/upload-artifact@v7')
-    expect(uploadStep.with.path).toBe('${{ env.ORCA_E2E_TERMINAL_PERF_REPORT_PATH }}')
+    expect(uploadStep.with.path).toBe('${{ env.MCODE_E2E_TERMINAL_PERF_REPORT_PATH }}')
   })
 
   it('keeps platform golden regressions in the manual and release workflows', () => {
@@ -625,7 +625,7 @@ describe('Electron runtime package contract', () => {
       releaseEvidenceJob.strategy.matrix.include.map(({ platform }) => platform).sort()
     ).toEqual(releaseEvidencePlatforms)
     expect(releaseEvidenceJob.steps.map((step) => step.run ?? '')).toContain(
-      'xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-release-evidence'
+      'xvfb-run --auto-servernum env SKIP_BUILD=1 MCODE_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-release-evidence'
     )
   })
 })

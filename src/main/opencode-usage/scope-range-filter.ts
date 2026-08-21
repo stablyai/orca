@@ -9,7 +9,7 @@ export function filterDailyAggregatesByScopeAndRange(
 ): OpenCodeUsageDailyAggregate[] {
   const cutoff = getUsageRangeCutoff(range)
   return dailyAggregates.filter((row) => {
-    if (scope === 'orca' && !row.worktreeId) {
+    if (scope === 'mcode' && !row.worktreeId) {
       return false
     }
     if (cutoff && row.day < cutoff) {
@@ -26,7 +26,7 @@ export function filterSessionsByScopeAndRange(
 ): OpenCodeUsageSession[] {
   const cutoff = getUsageRangeCutoff(range)
   return sessions.filter((session) => {
-    if (scope === 'orca' && !session.primaryWorktreeId) {
+    if (scope === 'mcode' && !session.primaryWorktreeId) {
       return false
     }
     if (cutoff) {

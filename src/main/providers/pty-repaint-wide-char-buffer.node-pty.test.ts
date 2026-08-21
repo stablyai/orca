@@ -12,7 +12,7 @@
  * wrong. The doubled text also pasted doubled into Notepad, so the corruption
  * was in the buffer.
  *
- * So the ConPTY output is replayed into Orca's own main-side emulator, resizing
+ * So the ConPTY output is replayed into MCode's own main-side emulator, resizing
  * it before the pty exactly as Session.resize does (session.ts), and the
  * resulting lines are compared to the fixtures.
  *

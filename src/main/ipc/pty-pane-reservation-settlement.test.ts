@@ -37,7 +37,7 @@ vi.mock('../telemetry/client', () =>
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
-vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
+vi.mock('../cli/linux-terminal-mcode-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../memory/pty-registry', () =>
@@ -159,9 +159,9 @@ describe('registerPtyHandlers', () => {
         tabId,
         leafId,
         env: {
-          ORCA_PANE_KEY: paneKey,
-          ORCA_TAB_ID: tabId,
-          ORCA_WORKTREE_ID: worktreeId
+          MCODE_PANE_KEY: paneKey,
+          MCODE_TAB_ID: tabId,
+          MCODE_WORKTREE_ID: worktreeId
         }
       })
 
@@ -258,9 +258,9 @@ describe('registerPtyHandlers', () => {
         tabId,
         leafId,
         env: {
-          ORCA_PANE_KEY: paneKey,
-          ORCA_TAB_ID: tabId,
-          ORCA_WORKTREE_ID: worktreeId
+          MCODE_PANE_KEY: paneKey,
+          MCODE_TAB_ID: tabId,
+          MCODE_WORKTREE_ID: worktreeId
         }
       })
     ).rejects.toThrow('terminal_pane_owner_conflict')
@@ -303,9 +303,9 @@ describe('registerPtyHandlers', () => {
         tabId: 'tab-host-scope',
         leafId,
         env: {
-          ORCA_PANE_KEY: paneKey,
-          ORCA_TAB_ID: 'tab-host-scope',
-          ORCA_WORKTREE_ID: worktreeId
+          MCODE_PANE_KEY: paneKey,
+          MCODE_TAB_ID: 'tab-host-scope',
+          MCODE_WORKTREE_ID: worktreeId
         }
       })
 
@@ -417,7 +417,7 @@ describe('registerPtyHandlers', () => {
       worktreeId: 'wt-1',
       tabId: 'tab-runtime-reservation',
       leafId,
-      env: { ORCA_PANE_KEY: paneKey },
+      env: { MCODE_PANE_KEY: paneKey },
       persistHostSessionBinding: true
     }
 

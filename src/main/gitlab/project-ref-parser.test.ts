@@ -7,9 +7,9 @@ describe('gitlab project ref parsing', () => {
       host: 'gitlab.com',
       path: 'acme/widgets'
     })
-    expect(parseGitLabProjectRef('git@gitlab.com:stablyai/orca.git')).toEqual({
+    expect(parseGitLabProjectRef('git@gitlab.com:mcode-ide/mcode.git')).toEqual({
       host: 'gitlab.com',
-      path: 'stablyai/orca'
+      path: 'mcode-ide/mcode'
     })
   })
 
@@ -25,7 +25,7 @@ describe('gitlab project ref parsing', () => {
   })
 
   it('returns null for non-GitLab hosts when host not in knownHosts', () => {
-    expect(parseGitLabProjectRef('git@github.com:stablyai/orca.git')).toBeNull()
+    expect(parseGitLabProjectRef('git@github.com:mcode-ide/mcode.git')).toBeNull()
     expect(parseGitLabProjectRef('git@example.com:foo/bar.git')).toBeNull()
   })
 
@@ -133,9 +133,9 @@ describe('gitlab project ref parsing', () => {
 
 describe('gitlab remote project ref candidates', () => {
   it('extracts self-hosted candidates before the host is trusted', () => {
-    expect(parseRemoteProjectRefCandidate('git@gitlab.internal:team/orca.git')).toEqual({
+    expect(parseRemoteProjectRefCandidate('git@gitlab.internal:team/mcode.git')).toEqual({
       host: 'gitlab.internal',
-      path: 'team/orca'
+      path: 'team/mcode'
     })
   })
 

@@ -27,9 +27,9 @@ import { Button } from '@/components/ui/button'
 import TabBar from './tab-bar/TabBar'
 import TerminalPane from './terminal-pane/TerminalPane'
 import {
-  ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT,
-  ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
-  ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT,
+  MCODE_EDITOR_REQUEST_FILE_CLOSE_EVENT,
+  MCODE_EDITOR_SAVE_AND_CLOSE_EVENT,
+  MCODE_EDITOR_REQUEST_CMD_SAVE_EVENT,
   type EditorRequestCmdSaveDetail,
   type EditorRequestFileCloseDetail,
   requestEditorSaveQuiesce
@@ -364,7 +364,7 @@ function Terminal(): React.JSX.Element | null {
   const activeTabType = useAppStore((s) => s.activeTabType)
   const keybindings = useAppStore((s) => s.keybindings)
   const terminalShortcutPolicy = useAppStore(
-    (s) => s.settings?.terminalShortcutPolicy ?? 'orca-first'
+    (s) => s.settings?.terminalShortcutPolicy ?? 'mcode-first'
   )
   const mobileEmulatorEnabled = useAppStore((s) => s.settings?.mobileEmulatorEnabled !== false)
   const setActiveTabType = useAppStore((s) => s.setActiveTabType)
@@ -427,7 +427,7 @@ function Terminal(): React.JSX.Element | null {
     workspaceSessionReady && hydrationSucceeded
   )
 
-  // Why: TabBar portals into the titlebar (target created by App.tsx) so tabs share the "Orca" title row.
+  // Why: TabBar portals into the titlebar (target created by App.tsx) so tabs share the "MCode" title row.
   const titlebarTabsTarget = document.getElementById('titlebar-tabs')
 
   useEffect(() => {
@@ -676,7 +676,7 @@ function Terminal(): React.JSX.Element | null {
 
     // Why: signal the headless autosave controller via event (not editor refs) so save-and-close flushes even when the editor panel has unmounted.
     setSaveDialogFileId(null)
-    window.dispatchEvent(new CustomEvent(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, { detail: { fileId } }))
+    window.dispatchEvent(new CustomEvent(MCODE_EDITOR_SAVE_AND_CLOSE_EVENT, { detail: { fileId } }))
     inFlightSaveFileIdRef.current = fileId
     let closed = false
     try {
@@ -776,12 +776,12 @@ function Terminal(): React.JSX.Element | null {
       queueEditorCloseRequests([fileId])
     }
     window.addEventListener(
-      ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT,
+      MCODE_EDITOR_REQUEST_FILE_CLOSE_EVENT,
       onRequestEditorClose as EventListener
     )
     return () =>
       window.removeEventListener(
-        ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT,
+        MCODE_EDITOR_REQUEST_FILE_CLOSE_EVENT,
         onRequestEditorClose as EventListener
       )
   }, [queueEditorCloseRequests])
@@ -2021,7 +2021,7 @@ function Terminal(): React.JSX.Element | null {
           terminalShortcutPolicy
         })
       const notifyTerminalCapture = (actionId: KeybindingActionId): void => {
-        if (context !== 'terminal' || terminalShortcutPolicy !== 'orca-first') {
+        if (context !== 'terminal' || terminalShortcutPolicy !== 'mcode-first') {
           return
         }
         showTerminalShortcutCaptureNotification({
@@ -2156,7 +2156,7 @@ function Terminal(): React.JSX.Element | null {
             e.preventDefault()
             notifyTerminalCapture('editor.save')
             window.dispatchEvent(
-              new CustomEvent<EditorRequestCmdSaveDetail>(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, {
+              new CustomEvent<EditorRequestCmdSaveDetail>(MCODE_EDITOR_REQUEST_CMD_SAVE_EVENT, {
                 detail: { fileId: requestedFileId }
               })
             )

@@ -1,6 +1,6 @@
 import type { LegacyAdoptedMailboxOwner, OrchestrationDb } from '../../orchestration/db'
 import type { DispatchContextRow } from '../../orchestration/types'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 
 export type SendRecipientWarning = {
   code:
@@ -27,7 +27,7 @@ export type BareRecipientResolution =
     }
 
 export function resolveBareOrchestrationRecipient(params: {
-  runtime: OrcaRuntimeService
+  runtime: MCodeRuntimeService
   db: OrchestrationDb
   handle: string
   senderRunId?: string

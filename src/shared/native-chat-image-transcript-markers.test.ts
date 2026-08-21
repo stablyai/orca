@@ -21,25 +21,25 @@ function userText(id: string, text: string): NativeChatMessage {
 describe('normalizeImageTranscriptMessages', () => {
   it('merges the paired [Image: source]/[Image #1] turns into one image-ref turn', () => {
     const out = normalizeImageTranscriptMessages([
-      userText('a', '[Image: source: /tmp/orca-paste-1-2.png]'),
+      userText('a', '[Image: source: /tmp/mcode-paste-1-2.png]'),
       userText('b', '[Image #1] describe this')
     ])
     expect(out).toHaveLength(1)
     expect(out[0]!.blocks).toEqual([
-      { type: 'image-ref', path: '/tmp/orca-paste-1-2.png' },
+      { type: 'image-ref', path: '/tmp/mcode-paste-1-2.png' },
       { type: 'text', text: 'describe this' }
     ])
   })
 
   it('merges a source turn into a prompt with a trailing image marker', () => {
     const out = normalizeImageTranscriptMessages([
-      userText('a', '[Image: source: /tmp/orca-paste-1-2.png]'),
+      userText('a', '[Image: source: /tmp/mcode-paste-1-2.png]'),
       userText('b', 'describe this[Image #1]')
     ])
 
     expect(out).toHaveLength(1)
     expect(out[0]!.blocks).toEqual([
-      { type: 'image-ref', path: '/tmp/orca-paste-1-2.png' },
+      { type: 'image-ref', path: '/tmp/mcode-paste-1-2.png' },
       { type: 'text', text: 'describe this' }
     ])
   })

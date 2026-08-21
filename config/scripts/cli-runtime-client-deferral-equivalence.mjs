@@ -119,7 +119,7 @@ function run(entry, argv, env) {
   if (result.error) {
     if (result.error.code === 'ETIMEDOUT') {
       throw new Error(
-        `orca ${argv.join(' ')} did not exit within ${RUN_TIMEOUT_MS} ms — it reached a blocking command`
+        `mcode ${argv.join(' ')} did not exit within ${RUN_TIMEOUT_MS} ms — it reached a blocking command`
       )
     }
     throw result.error
@@ -136,7 +136,7 @@ function run(entry, argv, env) {
 // answer is deterministic "not running" rather than whatever the dev machine
 // happens to be doing.
 function buildCases(isolatedUserData) {
-  const isolated = { ORCA_USER_DATA_PATH: isolatedUserData }
+  const isolated = { MCODE_USER_DATA_PATH: isolatedUserData }
   const cases = [
     // Paths that must never load the runtime client at all.
     [[], {}],
@@ -147,7 +147,7 @@ function buildCases(isolatedUserData) {
     [['worktree', '--help'], {}],
     [['help', 'no-such-command'], {}],
     [['no-such-command'], {}],
-    [['no-such-command'], { ORCA_PAIRING_CODE: 'garbage' }],
+    [['no-such-command'], { MCODE_PAIRING_CODE: 'garbage' }],
     [['wrktree', 'list'], {}],
     [['agent-context'], {}],
     [['agent-context', '--json'], {}],
@@ -160,26 +160,26 @@ function buildCases(isolatedUserData) {
     [['status', '--pairing-code', 'x', '--environment', 'y', '--json'], isolated],
     [['status', '--pairing-code', 'not-a-pairing-code'], isolated],
     [['status', '--pairing-code', 'not-a-pairing-code', '--json'], isolated],
-    [['status', '--pairing-code', 'orca://pair?code=zzzz'], isolated],
+    [['status', '--pairing-code', 'mcode://pair?code=zzzz'], isolated],
     [['status', '--environment', 'no-such-environment'], isolated],
     [['status', '--environment', 'no-such-environment', '--json'], isolated],
     [['worktree', 'list', '--environment', 'no-such-environment', '--json'], isolated],
     // The env-var fallback must stay live for non-suppressed commands...
-    [['status', '--json'], { ...isolated, ORCA_PAIRING_CODE: 'not-a-pairing-code' }],
-    [['status', '--json'], { ...isolated, ORCA_REMOTE_PAIRING: 'not-a-pairing-code' }],
-    [['status', '--json'], { ...isolated, ORCA_ENVIRONMENT: 'no-such-environment' }],
+    [['status', '--json'], { ...isolated, MCODE_PAIRING_CODE: 'not-a-pairing-code' }],
+    [['status', '--json'], { ...isolated, MCODE_REMOTE_PAIRING: 'not-a-pairing-code' }],
+    [['status', '--json'], { ...isolated, MCODE_ENVIRONMENT: 'no-such-environment' }],
     // ...and must stay suppressed for the local-only command groups.
     //
     // NOTE: the only commands that both live in a suppressed group AND touch
     // ctx.client are `agent hooks on|off`, which rewrite the user's real agent
     // hook configuration in ~/.claude and friends — far outside
-    // ORCA_USER_DATA_PATH. They are deliberately NOT invoked here. The
+    // MCODE_USER_DATA_PATH. They are deliberately NOT invoked here. The
     // null-vs-undefined suppression they would exercise is covered
     // side-effect-free by the constructor-argument assertions in
     // src/cli/runtime-client-deferral.test.ts instead.
-    [['environment', 'list', '--json'], { ...isolated, ORCA_ENVIRONMENT: 'no-such-environment' }],
-    [['environment', 'list', '--json'], { ...isolated, ORCA_PAIRING_CODE: 'not-a-pairing-code' }],
-    [['agent-context', '--json'], { ...isolated, ORCA_PAIRING_CODE: 'not-a-pairing-code' }],
+    [['environment', 'list', '--json'], { ...isolated, MCODE_ENVIRONMENT: 'no-such-environment' }],
+    [['environment', 'list', '--json'], { ...isolated, MCODE_PAIRING_CODE: 'not-a-pairing-code' }],
+    [['agent-context', '--json'], { ...isolated, MCODE_PAIRING_CODE: 'not-a-pairing-code' }],
     // Runtime-unavailable reporting (RuntimeClientError formatting).
     [['status'], isolated],
     [['status', '--json'], isolated],
@@ -206,7 +206,7 @@ function buildCases(isolatedUserData) {
     '--pairing-code',
     '--environment',
     '--worktree',
-    'orca://pair?code=!!!',
+    'mcode://pair?code=!!!',
     '',
     '-',
     '--',
@@ -246,10 +246,10 @@ function buildCases(isolatedUserData) {
 // Why: this script shells out to the REAL CLI with the developer's own HOME and
 // PATH, so an argv that reaches the wrong verb does real damage. Two classes:
 //
-//   1. FOREGROUND — `orca serve` runs Orca until Ctrl+C and `orca open` /
+//   1. FOREGROUND — `mcode serve` runs MCode until Ctrl+C and `mcode open` /
 //      `claude-teams` spawn processes that outlive the case. A blocking case
 //      does not fail the run, it stalls it, which is worse than a mismatch.
-//   2. MUTATING — writes outside ORCA_USER_DATA_PATH (`agent hooks off` parks
+//   2. MUTATING — writes outside MCODE_USER_DATA_PATH (`agent hooks off` parks
 //      the real ~/.claude hooks) or drives real browser/desktop input.
 //
 // Group tokens whose subcommands split read/write (`capture`, `intercept`,
@@ -365,7 +365,7 @@ const MUTATING_TOKENS = [
 
 const UNSAFE_TOKENS = new Map([
   ...FOREGROUND_TOKENS.map((token) => [token, 'runs in the foreground or spawns a process']),
-  ...MUTATING_TOKENS.map((token) => [token, 'can write outside ORCA_USER_DATA_PATH'])
+  ...MUTATING_TOKENS.map((token) => [token, 'can write outside MCODE_USER_DATA_PATH'])
 ])
 
 // Why: the deny list only catches verbs someone already thought of — `serve`
@@ -390,7 +390,7 @@ const READ_ONLY_FUZZ_TOKENS = new Set([
   '--pairing-code',
   '--environment',
   '--worktree',
-  'orca://pair?code=!!!',
+  'mcode://pair?code=!!!',
   '',
   '-',
   '--',

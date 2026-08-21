@@ -54,7 +54,7 @@ export function parseHtmlReportArgs(argv, env = process.env) {
   }
 
   const inputs = []
-  let outputPath = env.ORCA_E2E_TERMINAL_PERF_HTML_REPORT_PATH || DEFAULT_OUTPUT_PATH
+  let outputPath = env.MCODE_E2E_TERMINAL_PERF_HTML_REPORT_PATH || DEFAULT_OUTPUT_PATH
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]
     if (arg === '--output' || arg === '-o') {

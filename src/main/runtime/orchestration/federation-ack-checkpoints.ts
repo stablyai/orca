@@ -1,4 +1,4 @@
-import type { OrcaRuntimeService } from '../orca-runtime'
+import type { MCodeRuntimeService } from '../mcode-runtime'
 
 export type FederationAckIdentity = {
   environmentId: string
@@ -15,22 +15,22 @@ export type FederationAckLease = {
   dispatchState: FederationAckDispatchState
 }
 
-const federationAckStates = new WeakMap<OrcaRuntimeService, FederationAckRuntimeState>()
+const federationAckStates = new WeakMap<MCodeRuntimeService, FederationAckRuntimeState>()
 
-export function clearFederationAckCheckpoints(runtime: OrcaRuntimeService): void {
+export function clearFederationAckCheckpoints(runtime: MCodeRuntimeService): void {
   federationAckStates.delete(runtime)
 }
 
 /** Drops one settled dispatch's checkpoint; the durable ack watermark keeps replay suppressed. */
 export function releaseFederationAckCheckpoint(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   dispatchId: string
 ): void {
   federationAckStates.get(runtime)?.byDispatch.delete(dispatchId)
 }
 
 export function acquireFederationAckLease(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   dispatchId: string
 ): FederationAckLease {
   let runtimeState = federationAckStates.get(runtime)
@@ -59,7 +59,7 @@ export function getFederationAckedThrough(
 }
 
 export function recordFederationAckCheckpoint(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   lease: FederationAckLease,
   checkpoint: FederationAckCheckpoint
 ): void {

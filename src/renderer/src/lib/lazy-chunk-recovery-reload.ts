@@ -1,8 +1,8 @@
 import { prepareRendererForAppRestart } from '../../../shared/renderer-restart-preparation'
-import { ORCA_RENDERER_UNLOAD_PREVENTED_EVENT } from '../../../shared/renderer-shutdown-events'
+import { MCODE_RENDERER_UNLOAD_PREVENTED_EVENT } from '../../../shared/renderer-shutdown-events'
 import {
-  ORCA_APP_RESTART_ABORTED_EVENT,
-  ORCA_APP_RESTART_STARTED_EVENT
+  MCODE_APP_RESTART_ABORTED_EVENT,
+  MCODE_APP_RESTART_STARTED_EVENT
 } from '../../../shared/updater-renderer-events'
 
 // Bare reloads are vetoed by dirty tabs; restart preparation backs them up first.
@@ -33,7 +33,7 @@ function waitForRefusedNavigation(win: Window): RefusedNavigationWait {
       clearTimeout(graceTimer)
       graceTimer = undefined
     }
-    win.removeEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, onUnloadPrevented)
+    win.removeEventListener(MCODE_RENDERER_UNLOAD_PREVENTED_EVENT, onUnloadPrevented)
   }
   const outcome = new Promise<'unload-vetoed' | 'never-landed'>((resolve) => {
     const settle = (result: 'unload-vetoed' | 'never-landed'): void => {
@@ -41,7 +41,7 @@ function waitForRefusedNavigation(win: Window): RefusedNavigationWait {
       resolve(result)
     }
     onUnloadPrevented = () => settle('unload-vetoed')
-    win.addEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, onUnloadPrevented)
+    win.addEventListener(MCODE_RENDERER_UNLOAD_PREVENTED_EVENT, onUnloadPrevented)
     graceTimer = setTimeout(() => settle('never-landed'), RELOAD_SETTLE_GRACE_MS)
   })
   return { outcome, cancel }
@@ -56,8 +56,8 @@ export async function requestLazyChunkRecoveryReload(
 ): Promise<LazyChunkRecoveryReloadOutcome> {
   try {
     await prepareRendererForAppRestart(win, {
-      startedEventName: ORCA_APP_RESTART_STARTED_EVENT,
-      abortedEventName: ORCA_APP_RESTART_ABORTED_EVENT,
+      startedEventName: MCODE_APP_RESTART_STARTED_EVENT,
+      abortedEventName: MCODE_APP_RESTART_ABORTED_EVENT,
       awaitCheckpoint
     })
   } catch {
@@ -76,6 +76,6 @@ export async function requestLazyChunkRecoveryReload(
   } finally {
     cancelRefusalWait()
     // A surviving document must not retain the restart latch.
-    win.dispatchEvent(new Event(ORCA_APP_RESTART_ABORTED_EVENT))
+    win.dispatchEvent(new Event(MCODE_APP_RESTART_ABORTED_EVENT))
   }
 }

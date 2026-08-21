@@ -39,7 +39,7 @@ function staged(mode: string, path: string, sha = SHA1): string {
 }
 
 async function makeTempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-quick-open-readdir-'))
+  const root = await mkdtemp(join(tmpdir(), 'mcode-quick-open-readdir-'))
   tempDirs.push(root)
   return root
 }

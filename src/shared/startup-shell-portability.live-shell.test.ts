@@ -1,6 +1,6 @@
 /**
  * Proves the central claim of the POSIX startup dialect against real shells:
- * ONE emitted string is correct in sh, bash, zsh, dash and fish alike, so Orca
+ * ONE emitted string is correct in sh, bash, zsh, dash and fish alike, so MCode
  * never has to detect which shell will parse a queued command line.
  *
  * The shells are the oracle. Each case is handed to a real shell, which echoes
@@ -25,7 +25,7 @@ const FISH = resolveFishBinary(4)
 
 type LiveShell = { name: string; path: string }
 
-/** Every Unix shell on this machine a queued Orca command line could land in. */
+/** Every Unix shell on this machine a queued MCode command line could land in. */
 function discoverShells(): LiveShell[] {
   const shells: LiveShell[] = []
   for (const path of [
@@ -56,9 +56,9 @@ function basename(path: string): string {
 
 // Why a real (empty) HOME rather than a bogus one: fish needs a writable config
 // dir to hold universal variables, and warns loudly on every launch without it.
-const SANDBOX_HOME = mkdtempSync(path.join(tmpdir(), 'orca-shell-portability-'))
+const SANDBOX_HOME = mkdtempSync(path.join(tmpdir(), 'mcode-shell-portability-'))
 
-/** Env with no user shell config reachable, so only Orca's own text is exercised. */
+/** Env with no user shell config reachable, so only MCode's own text is exercised. */
 function sandboxEnv(): NodeJS.ProcessEnv {
   return {
     PATH: '/usr/bin:/bin:/usr/sbin:/sbin',
@@ -148,7 +148,7 @@ describe.skipIf(process.platform === 'win32')(
         // The child must read its own environment, the way the agent binary does;
         // expanding it in the caller would just echo the caller's value back.
         const launch = withoutEnvCommand(
-          ['CODEX_HOME', 'ORCA_CODEX_HOME'],
+          ['CODEX_HOME', 'MCODE_CODEX_HOME'],
           `sh -c 'printf "LAUNCHED:%s" "\${CODEX_HOME-unset}"'`,
           'posix'
         )
@@ -161,20 +161,20 @@ describe.skipIf(process.platform === 'win32')(
       })
 
       it('clears an exported variable with no wrapper installed', () => {
-        const clear = clearEnvCommand('ORCA_PI_PREFILL', 'posix')
+        const clear = clearEnvCommand('MCODE_PI_PREFILL', 'posix')
         const probe =
           shell.name === 'fish'
-            ? `set -gx ORCA_PI_PREFILL draft; ${clear}; set -q ORCA_PI_PREFILL; and echo STILL; or echo CLEARED`
-            : `ORCA_PI_PREFILL=draft; export ORCA_PI_PREFILL; ${clear}; echo "\${ORCA_PI_PREFILL:+STILL}\${ORCA_PI_PREFILL:-CLEARED}"`
+            ? `set -gx MCODE_PI_PREFILL draft; ${clear}; set -q MCODE_PI_PREFILL; and echo STILL; or echo CLEARED`
+            : `MCODE_PI_PREFILL=draft; export MCODE_PI_PREFILL; ${clear}; echo "\${MCODE_PI_PREFILL:+STILL}\${MCODE_PI_PREFILL:-CLEARED}"`
         expect(runInShell(shell, probe).trim()).toBe('CLEARED')
       })
 
       it('clears several variables in one statement', () => {
-        const clear = clearEnvCommand(['ORCA_A', 'ORCA_B'], 'posix')
+        const clear = clearEnvCommand(['MCODE_A', 'MCODE_B'], 'posix')
         const probe =
           shell.name === 'fish'
-            ? `set -gx ORCA_A 1; set -gx ORCA_B 2; ${clear}; set -q ORCA_A; or set -q ORCA_B; and echo STILL; or echo CLEARED`
-            : `ORCA_A=1 ORCA_B=2; export ORCA_A ORCA_B; ${clear}; echo "\${ORCA_A:+STILL}\${ORCA_B:+STILL}\${ORCA_A:-CLEARED}"`
+            ? `set -gx MCODE_A 1; set -gx MCODE_B 2; ${clear}; set -q MCODE_A; or set -q MCODE_B; and echo STILL; or echo CLEARED`
+            : `MCODE_A=1 MCODE_B=2; export MCODE_A MCODE_B; ${clear}; echo "\${MCODE_A:+STILL}\${MCODE_B:+STILL}\${MCODE_A:-CLEARED}"`
         expect(runInShell(shell, probe).trim()).toBe('CLEARED')
       })
 
@@ -185,11 +185,11 @@ describe.skipIf(process.platform === 'win32')(
         ['already set', true],
         ['already unset', false]
       ])('exits 0 and writes nothing to stderr when the variable is %s', (_label, preset) => {
-        const clear = clearEnvCommand('ORCA_PI_PREFILL', 'posix')
+        const clear = clearEnvCommand('MCODE_PI_PREFILL', 'posix')
         const setUp = preset
           ? shell.name === 'fish'
-            ? 'set -gx ORCA_PI_PREFILL draft; '
-            : 'ORCA_PI_PREFILL=draft; export ORCA_PI_PREFILL; '
+            ? 'set -gx MCODE_PI_PREFILL draft; '
+            : 'MCODE_PI_PREFILL=draft; export MCODE_PI_PREFILL; '
           : ''
         const stderr = execFileSync(shell.path, ['-c', `${setUp}${clear} 2>&1 1>/dev/null`], {
           encoding: 'utf8',
@@ -200,18 +200,18 @@ describe.skipIf(process.platform === 'win32')(
       })
 
       // Why INTERACTIVE (-i, script on stdin): aliases are only expanded by an
-      // interactive shell, which is the mode Orca types into — a `-c` run cannot
+      // interactive shell, which is the mode MCode types into — a `-c` run cannot
       // see this class of bug at all. A user with `alias test=…` would otherwise
       // silently skip both branches and keep the prefill exported.
       it.runIf(['bash', 'zsh'].includes(shell.name))(
         'clears even when `test` is aliased away in an interactive shell',
         () => {
-          const clear = clearEnvCommand('ORCA_PI_PREFILL', 'posix')
+          const clear = clearEnvCommand('MCODE_PI_PREFILL', 'posix')
           const script = [
             'alias test=false',
-            'ORCA_PI_PREFILL=draft; export ORCA_PI_PREFILL',
+            'MCODE_PI_PREFILL=draft; export MCODE_PI_PREFILL',
             clear,
-            'echo "RESULT=${ORCA_PI_PREFILL:+STILL}${ORCA_PI_PREFILL:-CLEARED}"'
+            'echo "RESULT=${MCODE_PI_PREFILL:+STILL}${MCODE_PI_PREFILL:-CLEARED}"'
           ].join('\n')
           const out = execFileSync(shell.path, ['-i'], {
             input: `${script}\n`,
@@ -232,7 +232,7 @@ describe.skipIf(process.platform === 'win32')(
       // interactive shell does not meaningfully use).
       // Scoped to bash/zsh because `set` is a POSIX special builtin: in sh, dash
       // and ksh a misfire aborts a NON-interactive shell before anything can be
-      // observed. Interactively — the mode Orca types into — they survive without
+      // observed. Interactively — the mode MCode types into — they survive without
       // errexit too, but that is not scriptable here. bash and zsh report `$-`
       // either way, and both DID silently enable errexit under the old `set -e`.
       // Why `-g` is not optional: without it, a name that exists ONLY as a
@@ -240,23 +240,23 @@ describe.skipIf(process.platform === 'win32')(
       // have — is permanently deleted from every future session. Reachable from
       // the clipboard command, which may run with no injected value at all.
       it.runIf(shell.name === 'fish')('never deletes a lone universal variable', () => {
-        const clear = clearEnvCommand('ORCA_PI_PREFILL', 'posix')
-        const probe = `set -Ux ORCA_PI_PREFILL persisted; ${clear}; set -q ORCA_PI_PREFILL; and echo "RESULT=$ORCA_PI_PREFILL"; or echo RESULT=DESTROYED; set -Ue ORCA_PI_PREFILL`
+        const clear = clearEnvCommand('MCODE_PI_PREFILL', 'posix')
+        const probe = `set -Ux MCODE_PI_PREFILL persisted; ${clear}; set -q MCODE_PI_PREFILL; and echo "RESULT=$MCODE_PI_PREFILL"; or echo RESULT=DESTROYED; set -Ue MCODE_PI_PREFILL`
         expect(runInShell(shell, probe)).toContain('RESULT=persisted')
       })
 
       // A universal shadowed by the injected global: the global goes, theirs
       // comes back. That is the wanted outcome, not a missed erase.
       it.runIf(shell.name === 'fish')('reveals a shadowed universal instead of deleting it', () => {
-        const clear = clearEnvCommand('ORCA_PI_PREFILL', 'posix')
-        const probe = `set -Ux ORCA_PI_PREFILL mine; set -gx ORCA_PI_PREFILL injected; ${clear}; echo "RESULT=$ORCA_PI_PREFILL"; set -Ue ORCA_PI_PREFILL`
+        const clear = clearEnvCommand('MCODE_PI_PREFILL', 'posix')
+        const probe = `set -Ux MCODE_PI_PREFILL mine; set -gx MCODE_PI_PREFILL injected; ${clear}; echo "RESULT=$MCODE_PI_PREFILL"; set -Ue MCODE_PI_PREFILL`
         expect(runInShell(shell, probe)).toContain('RESULT=mine')
       })
 
       it.runIf(['bash', 'zsh'].includes(shell.name))(
         'never enables errexit when $fish_pid misfires',
         () => {
-          const clear = clearEnvCommand('ORCA_PI_PREFILL', 'posix')
+          const clear = clearEnvCommand('MCODE_PI_PREFILL', 'posix')
           const probe = `fish_pid=1; export fish_pid; ${clear} 2>/dev/null; printf '%s' "$-"`
           expect(runInShell(shell, probe).trim()).not.toContain('e')
         }

@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, realpathSync, unlinkSync, writeFileSync } from 'node:fs'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 
 // Repro command:
 //   SKIP_BUILD=1 pnpm exec playwright test tests/e2e/git-no-upstream-polling-churn.spec.ts --config tests/playwright.config.ts --project electron-headless --reporter=json
@@ -193,19 +193,19 @@ function annotatePolling(
 
 test.describe('Git no-upstream polling churn repro', () => {
   test('active worktree polling does not repeatedly retry stable no-upstream probes', async ({
-    orcaPage,
+    mcodePage,
     testRepoPath
   }, testInfo) => {
     const repoPath = realpathSync(testRepoPath)
     prepareNoUpstreamBranch(repoPath)
-    await selectRepoForActivePolling(orcaPage, testRepoPath, repoPath)
+    await selectRepoForActivePolling(mcodePage, testRepoPath, repoPath)
 
-    const diagnostics = await readDiagnosticsStatus(orcaPage)
+    const diagnostics = await readDiagnosticsStatus(mcodePage)
     test.skip(!diagnostics.localFileEnabled, 'local diagnostic traces are disabled')
 
     clearTraceFile(diagnostics)
-    const measurement = await measureRendererDuringPolling(orcaPage)
-    await flushTraceFile(orcaPage, diagnostics)
+    const measurement = await measureRendererDuringPolling(mcodePage)
+    await flushTraceFile(mcodePage, diagnostics)
     const counts = readGitProbeFailureCounts(diagnostics.traceFilePath, repoPath)
     annotatePolling(testInfo, measurement, counts)
 

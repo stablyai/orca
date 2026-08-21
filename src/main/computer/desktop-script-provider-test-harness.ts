@@ -107,7 +107,7 @@ export function sampleBridgeSnapshot(name: string, value: string) {
 export function sampleCapabilities(actions: Partial<Record<string, boolean>> = {}) {
   return {
     platform: 'linux',
-    provider: 'orca-computer-use-linux',
+    provider: 'mcode-computer-use-linux',
     providerVersion: '1.0.0',
     protocolVersion: 1,
     supports: {

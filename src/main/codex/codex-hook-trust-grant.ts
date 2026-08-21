@@ -42,7 +42,7 @@ import { isCodexStateDbBackfillPending } from './codex-state-db'
 export const CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS = 5 * 60_000
 
 /** Ops escape hatch (not a setting): forces the unchanged fallback lane. */
-const DISABLE_ENV_FLAG = 'ORCA_DISABLE_CODEX_TRUST_RPC'
+const DISABLE_ENV_FLAG = 'MCODE_DISABLE_CODEX_TRUST_RPC'
 
 export type CodexManagedTrustGrantPlan = {
   /** Host-visible runtime home path (UNC for WSL) — ledger key + config reads. */
@@ -51,7 +51,7 @@ export type CodexManagedTrustGrantPlan = {
   tomlPath: string
   /** Exact command string written to the managed hooks.json entries. */
   managedCommand: string
-  /** Managed trust identities Orca just wrote (no trustedHash). */
+  /** Managed trust identities MCode just wrote (no trustedHash). */
   managedEntries: readonly CodexTrustEntry[]
   host: CodexTrustGrantHost
   telemetryLane: CodexTrustGrantTelemetryLane
@@ -166,7 +166,7 @@ function findLedgerGrant(
 }
 
 /**
- * Grants trust for Orca's managed Codex hooks through codex's own app-server
+ * Grants trust for MCode's managed Codex hooks through codex's own app-server
  * RPCs, verified by re-list. Returns the granted entries carrying Codex's
  * verbatim hashes, or a fallback marker — the caller then runs the previous
  * computeTrustedHash lane, byte-identical to the pre-RPC behavior. Never

@@ -89,12 +89,12 @@ vi.mock('electron', () => ({
   nativeTheme: nativeThemeMock
 }))
 
-vi.mock('../../../resources/tray/orca-menu-barTemplate.png?asset&asarUnpack', () => ({
-  default: '/assets/orca-menu-barTemplate.png'
+vi.mock('../../../resources/tray/mcode-menu-barTemplate.png?asset&asarUnpack', () => ({
+  default: '/assets/mcode-menu-barTemplate.png'
 }))
 
-vi.mock('../../../resources/tray/orca-menu-barTemplate@2x.png?asset&asarUnpack', () => ({
-  default: '/assets/orca-menu-barTemplate@2x.png'
+vi.mock('../../../resources/tray/mcode-menu-barTemplate@2x.png?asset&asarUnpack', () => ({
+  default: '/assets/mcode-menu-barTemplate@2x.png'
 }))
 
 vi.mock('../app-icon', () => ({
@@ -201,8 +201,8 @@ describe('createSystemTray', () => {
 
     expect(trayInstances).toHaveLength(1)
     expect(trayInstances[0].image).toBe(resizedImage)
-    expect(trayInstances[0].setToolTip).toHaveBeenCalledWith('Orca')
-    expect(builtMenuItems().map((item) => item.label)).toEqual(['Open Orca', undefined, 'Quit'])
+    expect(trayInstances[0].setToolTip).toHaveBeenCalledWith('MCode')
+    expect(builtMenuItems().map((item) => item.label)).toEqual(['Open MCode', undefined, 'Quit'])
     const clickHandler = trayInstances[0].on.mock.calls.find((call) => call[0] === 'click')?.[1]
     expect(clickHandler).toBeTypeOf('function')
 
@@ -228,7 +228,7 @@ describe('createSystemTray', () => {
       dataURL: 'data:image/png;base64,mac-retina'
     })
     expect(builtMenuItems().map((item) => item.label)).toEqual([
-      'Open Orca',
+      'Open MCode',
       undefined,
       'Settings',
       'Check for Updates...',
@@ -239,7 +239,7 @@ describe('createSystemTray', () => {
     expect(nativeThemeMock.on).toHaveBeenCalledWith('updated', expect.any(Function))
 
     for (const [label, callback] of [
-      ['Open Orca', options.onOpen],
+      ['Open MCode', options.onOpen],
       ['Settings', options.onOpenSettings],
       ['Check for Updates...', options.onCheckForUpdates],
       ['Quit', options.onQuit]
@@ -291,9 +291,9 @@ describe('dev instance indicator', () => {
     expect(devBadgeImage.setTemplateImage).toHaveBeenCalledWith(true)
     expect(trayInstances[0].image).toBe(devBadgeImage)
     expect(trayInstances[0].setTitle).not.toHaveBeenCalled()
-    expect(trayInstances[0].setToolTip).toHaveBeenCalledWith('Orca DEV (my-branch)')
+    expect(trayInstances[0].setToolTip).toHaveBeenCalledWith('MCode DEV (my-branch)')
     expect(builtMenuItems()[0]).toMatchObject({
-      label: 'Orca DEV (my-branch)',
+      label: 'MCode DEV (my-branch)',
       enabled: false
     })
   })
@@ -331,8 +331,8 @@ describe('dev instance indicator', () => {
 
     createSystemTray(createOptions({ isDevInstance: true }))
 
-    expect(trayInstances[0].setToolTip).toHaveBeenCalledWith('Orca DEV')
-    expect(builtMenuItems()[0]).toMatchObject({ label: 'Orca DEV', enabled: false })
+    expect(trayInstances[0].setToolTip).toHaveBeenCalledWith('MCode DEV')
+    expect(builtMenuItems()[0]).toMatchObject({ label: 'MCode DEV', enabled: false })
   })
 
   it('keeps the DEV marker in the tooltip across the attention toggle', async () => {
@@ -344,10 +344,10 @@ describe('dev instance indicator', () => {
 
     setTrayAttention(true)
     flushTraySceneMutation()
-    expect(created.setToolTip).toHaveBeenCalledWith('Orca DEV (my-branch) - activity waiting')
+    expect(created.setToolTip).toHaveBeenCalledWith('MCode DEV (my-branch) - activity waiting')
     setTrayAttention(false)
     flushTraySceneMutation()
-    expect(created.setToolTip).toHaveBeenLastCalledWith('Orca DEV (my-branch)')
+    expect(created.setToolTip).toHaveBeenLastCalledWith('MCode DEV (my-branch)')
   })
 
   it('marks the Windows tooltip without badging the icon', async () => {
@@ -356,9 +356,9 @@ describe('dev instance indicator', () => {
 
     createSystemTray(createOptions({ isDevInstance: true, devInstanceLabel: 'my-branch' }))
 
-    expect(trayInstances[0].setToolTip).toHaveBeenCalledWith('Orca DEV (my-branch)')
+    expect(trayInstances[0].setToolTip).toHaveBeenCalledWith('MCode DEV (my-branch)')
     expect(stampDevBadgeMock).not.toHaveBeenCalled()
-    expect(builtMenuItems()[0]).toMatchObject({ label: 'Orca DEV (my-branch)', enabled: false })
+    expect(builtMenuItems()[0]).toMatchObject({ label: 'MCode DEV (my-branch)', enabled: false })
   })
 
   it('adds no DEV marker for production instances', async () => {
@@ -369,7 +369,7 @@ describe('dev instance indicator', () => {
 
     expect(stampDevBadgeMock).not.toHaveBeenCalled()
     expect(trayInstances[0].image).toBe(baseMacImage)
-    expect(builtMenuItems()[0].label).toBe('Open Orca')
+    expect(builtMenuItems()[0].label).toBe('Open MCode')
   })
 })
 
@@ -428,13 +428,13 @@ describe('setTrayAttention', () => {
     })
     expect(attentionImage.setTemplateImage).toHaveBeenCalledWith(false)
     expect(created.setImage).toHaveBeenCalledWith(attentionImage)
-    expect(created.setToolTip).toHaveBeenCalledWith('Orca - activity waiting')
+    expect(created.setToolTip).toHaveBeenCalledWith('MCode - activity waiting')
 
     setTrayAttention(false)
     flushTraySceneMutation()
     expect(baseMacImage.setTemplateImage).toHaveBeenLastCalledWith(true)
     expect(created.setImage).toHaveBeenLastCalledWith(baseMacImage)
-    expect(created.setToolTip).toHaveBeenLastCalledWith('Orca')
+    expect(created.setToolTip).toHaveBeenLastCalledWith('MCode')
   })
 
   it('recomposes active macOS attention when the system appearance changes', async () => {
@@ -600,7 +600,7 @@ describe('macOS hardening', () => {
     setTrayAttention(true)
     expect(() => flushTraySceneMutation()).not.toThrow()
     expect(created.setImage).toHaveBeenLastCalledWith(baseMacImage)
-    expect(created.setToolTip).toHaveBeenLastCalledWith('Orca')
+    expect(created.setToolTip).toHaveBeenLastCalledWith('MCode')
     expect(warn).toHaveBeenCalledWith(
       '[system-tray] macOS attention icon failed; showing plain icon',
       expect.any(Error)

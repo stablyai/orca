@@ -113,7 +113,7 @@ afterEach(() => {
 
 describe('STA-4607 session resume under a briefly unreadable sessions tree', () => {
   it('refuses rather than resuming the selected account under another account home', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-sta4607-'))
+    const root = mkdtempSync(join(tmpdir(), 'mcode-sta4607-'))
     tempRoots.push(root)
     // Both accounts hold the same rollout id — exactly the bridged state where
     // the id alone no longer names an account.
@@ -154,7 +154,7 @@ describe('STA-4607 session resume under a briefly unreadable sessions tree', () 
   })
 
   it('still skips a definitively absent sessions tree', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-sta4607-'))
+    const root = mkdtempSync(join(tmpdir(), 'mcode-sta4607-'))
     tempRoots.push(root)
     const selectedHome = join(root, 'account-a-no-sessions')
     mkdirSync(selectedHome, { recursive: true })
@@ -179,7 +179,7 @@ describe('STA-4607 session resume under a briefly unreadable sessions tree', () 
   })
 
   it('refuses when the selected tree locks during listing after stat succeeds', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-sta4607-'))
+    const root = mkdtempSync(join(tmpdir(), 'mcode-sta4607-'))
     tempRoots.push(root)
     const selectedHome = makeHomeWithRollout(root, 'account-a')
     const otherHome = makeHomeWithRollout(root, 'account-b')
@@ -203,7 +203,7 @@ describe('STA-4607 session resume under a briefly unreadable sessions tree', () 
   // root being LISTED, not the failing directory, so a lock on a dated
   // subdirectory is covered too. Pinned so the question cannot recur.
   it('refuses when a NESTED dated directory locks and the root stats fine', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-sta4607-'))
+    const root = mkdtempSync(join(tmpdir(), 'mcode-sta4607-'))
     tempRoots.push(root)
     const selectedHome = makeHomeWithRollout(root, 'account-a')
     const otherHome = makeHomeWithRollout(root, 'account-b')
@@ -224,7 +224,7 @@ describe('STA-4607 session resume under a briefly unreadable sessions tree', () 
   })
 
   it('skips an unreadable home that is NOT the selected account', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-sta4607-'))
+    const root = mkdtempSync(join(tmpdir(), 'mcode-sta4607-'))
     tempRoots.push(root)
     const selectedHome = join(root, 'account-a-empty')
     mkdirSync(join(selectedHome, 'sessions'), { recursive: true })

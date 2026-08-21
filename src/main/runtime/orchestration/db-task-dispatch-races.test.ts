@@ -186,7 +186,7 @@ describe('Task/Dispatch concurrency', () => {
 
 function createDatabase(path?: string): DatabaseHarness {
   const dir = path ? harnesses.find((harness) => harness.path === path)?.dir : undefined
-  const ownedDir = dir ?? mkdtempSync(join(tmpdir(), 'orca-task-dispatch-races-'))
+  const ownedDir = dir ?? mkdtempSync(join(tmpdir(), 'mcode-task-dispatch-races-'))
   const dbPath = path ?? join(ownedDir, 'orchestration.db')
   const harness = { db: new OrchestrationDb(dbPath), dir: ownedDir, path: dbPath }
   harnesses.push(harness)

@@ -9,13 +9,13 @@ import {
 // Why: README HTML snippets can document escaped entities; repeated cleanup
 // passes must not turn `&amp;lt;` into a real tag and strip it.
 const escapedHtmlEntityTokens = [
-  { pattern: /&amp;nbsp;/gi, token: '\uE000ORCA_MD_ENTITY_NBSP\uE000', value: '&nbsp;' },
-  { pattern: /&amp;lt;/gi, token: '\uE000ORCA_MD_ENTITY_LT\uE000', value: '&lt;' },
-  { pattern: /&amp;gt;/gi, token: '\uE000ORCA_MD_ENTITY_GT\uE000', value: '&gt;' },
-  { pattern: /&amp;quot;/gi, token: '\uE000ORCA_MD_ENTITY_QUOT\uE000', value: '&quot;' },
-  { pattern: /&amp;#39;/gi, token: '\uE000ORCA_MD_ENTITY_APOS\uE000', value: '&#39;' },
-  { pattern: /&lt;/gi, token: '\uE000ORCA_MD_ENTITY_RAW_LT\uE000', value: '<' },
-  { pattern: /&gt;/gi, token: '\uE000ORCA_MD_ENTITY_RAW_GT\uE000', value: '>' }
+  { pattern: /&amp;nbsp;/gi, token: '\uE000MCODE_MD_ENTITY_NBSP\uE000', value: '&nbsp;' },
+  { pattern: /&amp;lt;/gi, token: '\uE000MCODE_MD_ENTITY_LT\uE000', value: '&lt;' },
+  { pattern: /&amp;gt;/gi, token: '\uE000MCODE_MD_ENTITY_GT\uE000', value: '&gt;' },
+  { pattern: /&amp;quot;/gi, token: '\uE000MCODE_MD_ENTITY_QUOT\uE000', value: '&quot;' },
+  { pattern: /&amp;#39;/gi, token: '\uE000MCODE_MD_ENTITY_APOS\uE000', value: '&#39;' },
+  { pattern: /&lt;/gi, token: '\uE000MCODE_MD_ENTITY_RAW_LT\uE000', value: '<' },
+  { pattern: /&gt;/gi, token: '\uE000MCODE_MD_ENTITY_RAW_GT\uE000', value: '>' }
 ] as const
 
 function protectEscapedHtmlEntities(value: string): string {
@@ -196,7 +196,7 @@ function normalizeInlineHtml(value: string): string {
 }
 
 // Why: Markdown code is literal source, so it must bypass the HTML strip pass.
-const CODE_PLACEHOLDER_PREFIX_BASE = '\uE000ORCA_MD_CODE_'
+const CODE_PLACEHOLDER_PREFIX_BASE = '\uE000MCODE_MD_CODE_'
 const CODE_PLACEHOLDER_SUFFIX = '\uE000'
 
 function escapeRegExp(value: string): string {

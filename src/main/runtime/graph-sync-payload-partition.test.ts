@@ -10,7 +10,7 @@ import type {
   RuntimeSyncWindowGraphResult
 } from '../../shared/runtime-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { OrcaRuntimeService } from './orca-runtime'
+import { MCodeRuntimeService } from './mcode-runtime'
 
 const WT_A = 'repo-1::/tmp/worktree-a'
 const WT_B = 'repo-1::/tmp/worktree-b'
@@ -73,7 +73,7 @@ type RuntimeInternals = {
 
 function createRuntime() {
   let session = makeSession()
-  const runtime = new OrcaRuntimeService({
+  const runtime = new MCodeRuntimeService({
     ...storeBase,
     getWorkspaceSession: () => session,
     setWorkspaceSession: (next: WorkspaceSessionState) => {

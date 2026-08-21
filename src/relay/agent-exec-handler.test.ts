@@ -26,7 +26,7 @@ describe('AgentExecHandler', () => {
   beforeEach(() => {
     spawnMock.mockReset()
     execFileMock.mockReset()
-    // Why: the guard rewrites these, so an already-guarded runner (Orca guards
+    // Why: the guard rewrites these, so an already-guarded runner (MCode guards
     // its own agent terminals) would not see its ambient values passed through.
     ambientGuardEnv = {}
     for (const key of Object.keys(process.env).filter((name) => GUARD_OWNED_ENV_RE.test(name))) {

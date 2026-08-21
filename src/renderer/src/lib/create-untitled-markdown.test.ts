@@ -139,10 +139,10 @@ describe('createUntitledMarkdownFile', () => {
       createUntitledMarkdownFile('/repo', 'wt-1', undefined, undefined, {
         now: new Date(2026, 4, 29, 7, 5),
         template: {
-          id: '.orca/templates/daily.md',
+          id: '.mcode/templates/daily.md',
           name: 'Daily',
-          filePath: '/repo/.orca/templates/daily.md',
-          relativePath: '.orca/templates/daily.md',
+          filePath: '/repo/.mcode/templates/daily.md',
+          relativePath: '.mcode/templates/daily.md',
           templateRelativePath: 'daily.md',
           basename: 'daily.md'
         }
@@ -154,7 +154,7 @@ describe('createUntitledMarkdownFile', () => {
     })
 
     expect(readFile).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/repo/.orca/templates/daily.md' })
+      expect.objectContaining({ filePath: '/repo/.mcode/templates/daily.md' })
     )
     expect(createFile).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/repo/untitled.md' })
@@ -180,7 +180,7 @@ describe('createUntitledMarkdownFile', () => {
     })
     const writeFile = vi.fn().mockResolvedValueOnce(undefined)
     const pathExists = vi.fn(async ({ filePath }: { filePath: string }) =>
-      filePath.endsWith('/.orca/templates')
+      filePath.endsWith('/.mcode/templates')
     )
     const unsubscribe = subscribeMarkdownTemplatePicker((request) => {
       const template = request.templates[0]
@@ -217,7 +217,7 @@ describe('createUntitledMarkdownFile', () => {
     }
 
     expect(readDir).toHaveBeenCalledWith(
-      expect.objectContaining({ dirPath: '/repo/.orca/templates' })
+      expect.objectContaining({ dirPath: '/repo/.mcode/templates' })
     )
     expect(writeFile).toHaveBeenCalledWith(
       expect.objectContaining({ filePath: '/repo/untitled.md', content: '# Untitled\n' })

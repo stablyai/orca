@@ -17,18 +17,18 @@ import remarkGfm from 'remark-gfm'
 import remarkParse from 'remark-parse'
 import { unified } from 'unified'
 
-const DOC_HEADINGS = Number.parseInt(process.env.ORCA_TOC_BENCH_HEADINGS ?? '400', 10)
-const PARAGRAPHS_PER_HEADING = Number.parseInt(process.env.ORCA_TOC_BENCH_PARAS ?? '6', 10)
+const DOC_HEADINGS = Number.parseInt(process.env.MCODE_TOC_BENCH_HEADINGS ?? '400', 10)
+const PARAGRAPHS_PER_HEADING = Number.parseInt(process.env.MCODE_TOC_BENCH_PARAS ?? '6', 10)
 // Number of debounced content changes in a sustained typing burst. The editor
 // debounces serialize at 300ms, so ~200 changes ≈ a minute of steady typing.
-const CONTENT_CHANGES = Number.parseInt(process.env.ORCA_TOC_BENCH_CHANGES ?? '200', 10)
-const WARMUP = Number.parseInt(process.env.ORCA_TOC_BENCH_WARMUP ?? '5', 10)
+const CONTENT_CHANGES = Number.parseInt(process.env.MCODE_TOC_BENCH_CHANGES ?? '200', 10)
+const WARMUP = Number.parseInt(process.env.MCODE_TOC_BENCH_WARMUP ?? '5', 10)
 
 for (const [name, value] of [
-  ['ORCA_TOC_BENCH_HEADINGS', DOC_HEADINGS],
-  ['ORCA_TOC_BENCH_PARAS', PARAGRAPHS_PER_HEADING],
-  ['ORCA_TOC_BENCH_CHANGES', CONTENT_CHANGES],
-  ['ORCA_TOC_BENCH_WARMUP', WARMUP]
+  ['MCODE_TOC_BENCH_HEADINGS', DOC_HEADINGS],
+  ['MCODE_TOC_BENCH_PARAS', PARAGRAPHS_PER_HEADING],
+  ['MCODE_TOC_BENCH_CHANGES', CONTENT_CHANGES],
+  ['MCODE_TOC_BENCH_WARMUP', WARMUP]
 ]) {
   if (!Number.isInteger(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer, received ${value}`)

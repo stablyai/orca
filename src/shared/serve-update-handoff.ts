@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 
-export const SERVE_UPDATE_HANDOFF_PATH_ENV = 'ORCA_SERVE_UPDATE_HANDOFF_PATH'
+export const SERVE_UPDATE_HANDOFF_PATH_ENV = 'MCODE_SERVE_UPDATE_HANDOFF_PATH'
 export const SERVE_UPDATE_HANDOFF_FILE = 'serve-update-handoff.json'
 
 export type ServeUpdateHandoffState =
@@ -29,7 +29,7 @@ export type ServeUpdateHandoffState =
     }
 
 export type ServeSupervisorMessage = {
-  type: 'orca:serve-ready'
+  type: 'mcode:serve-ready'
   version: string
   runtimeId: string
 }
@@ -67,7 +67,7 @@ export function parseServeSupervisorMessage(value: unknown): ServeSupervisorMess
   }
   const message = value as Record<string, unknown>
   if (
-    message.type !== 'orca:serve-ready' ||
+    message.type !== 'mcode:serve-ready' ||
     typeof message.version !== 'string' ||
     message.version.length === 0 ||
     typeof message.runtimeId !== 'string' ||

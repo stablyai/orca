@@ -23,24 +23,24 @@ const cachedTokens = new Map<string, string>()
 // failing reads without re-touching the keychain on every status poll.
 export const credentialErrors = new Map<string, string>()
 
-function getOrcaDir(): string {
-  return join(homedir(), '.orca')
+function getMCodeDir(): string {
+  return join(homedir(), '.mcode')
 }
 
 function getSiteFilePath(): string {
-  return join(getOrcaDir(), 'jira-sites.json')
+  return join(getMCodeDir(), 'jira-sites.json')
 }
 
 function getTokenDir(): string {
-  return join(getOrcaDir(), 'jira-tokens')
+  return join(getMCodeDir(), 'jira-tokens')
 }
 
 function getTokenPath(siteId: string): string {
   return join(getTokenDir(), `${Buffer.from(siteId).toString('base64url')}.enc`)
 }
 
-function ensureOrcaDir(): void {
-  const dir = getOrcaDir()
+function ensureMCodeDir(): void {
+  const dir = getMCodeDir()
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true })
   }
@@ -130,7 +130,7 @@ export function getSiteFile(): JiraSiteFile {
 }
 
 export function writeSiteFile(file: JiraSiteFile): void {
-  ensureOrcaDir()
+  ensureMCodeDir()
   const sites = file.sites.filter((site) => hasStoredToken(site.id))
   const activeSiteId =
     file.activeSiteId && sites.some((site) => site.id === file.activeSiteId)
@@ -192,7 +192,7 @@ export function readToken(siteId: string): string | null {
 }
 
 export function saveToken(siteId: string, apiToken: string): void {
-  ensureOrcaDir()
+  ensureMCodeDir()
   ensureTokenDir()
   writeEncryptedToken(getTokenPath(siteId), apiToken)
   cachedTokens.set(siteId, apiToken)

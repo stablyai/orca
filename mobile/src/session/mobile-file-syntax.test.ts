@@ -21,14 +21,14 @@ describe('mobile file syntax highlighting', () => {
   })
 
   it('emits semantic syntax segments for highlighted code', () => {
-    const result = highlightMobileCode('const label: string = "Orca"', 'typescript')
+    const result = highlightMobileCode('const label: string = "MCode"', 'typescript')
 
     expect(result.highlighted).toBe(true)
     expect(result.segments).toEqual(
       expect.arrayContaining([
         { text: 'const', kind: 'keyword' },
         { text: 'string', kind: 'type' },
-        { text: '"Orca"', kind: 'string' }
+        { text: '"MCode"', kind: 'string' }
       ])
     )
   })
@@ -66,10 +66,10 @@ describe('mobile file syntax highlighting', () => {
   })
 
   it('falls back to plain text when segment caps would create too many React Native nodes', () => {
-    const result = highlightMobileCode('const label: string = "Orca"', 'typescript', 1_000, 1)
+    const result = highlightMobileCode('const label: string = "MCode"', 'typescript', 1_000, 1)
 
     expect(result.highlighted).toBe(false)
-    expect(result.segments).toEqual([{ text: 'const label: string = "Orca"', kind: 'plain' }])
+    expect(result.segments).toEqual([{ text: 'const label: string = "MCode"', kind: 'plain' }])
   })
 
   it('caps highlighted diff lines and keeps later rows renderable as plain text', () => {

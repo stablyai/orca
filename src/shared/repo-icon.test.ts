@@ -30,26 +30,26 @@ describe('sanitizeRepoIcon', () => {
         type: 'image',
         src: 'https://github.com/stablyai.png?size=64',
         source: 'github',
-        label: 'stablyai/orca'
+        label: 'mcode-ide/mcode'
       })
     ).toEqual({
       type: 'image',
       src: 'https://github.com/stablyai.png?size=64',
       source: 'github',
-      label: 'stablyai/orca'
+      label: 'mcode-ide/mcode'
     })
     expect(
       sanitizeRepoIcon({
         type: 'image',
         src: 'https://github.acme.test/stablyai.png?size=64',
         source: 'github',
-        label: 'stablyai/orca'
+        label: 'mcode-ide/mcode'
       })
     ).toEqual({
       type: 'image',
       src: 'https://github.acme.test/stablyai.png?size=64',
       source: 'github',
-      label: 'stablyai/orca'
+      label: 'mcode-ide/mcode'
     })
     expect(
       sanitizeRepoIcon({

@@ -43,7 +43,7 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
     fontWeight: '300',
     fontWeightBold: '500',
     scrollback: DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,
-    // Why: Orca's default terminal cells are taller than many users' baseline
+    // Why: MCode's default terminal cells are taller than many users' baseline
     // terminal, so a small multiplier keeps row-per-wheel movement familiar.
     scrollSensitivity: DEFAULT_TERMINAL_SCROLL_SENSITIVITY,
     fastScrollSensitivity: DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
@@ -65,7 +65,7 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
       width: 7
     },
     // Why: advertise kitty keyboard protocol support so CLIs that probe
-    // (CSI ? u) know Orca accepts enhanced key reporting. Orca still writes
+    // (CSI ? u) know MCode accepts enhanced key reporting. MCode still writes
     // CSI-u for Shift+Enter on non-Windows platforms; programs that respect
     // the handshake otherwise fall back to legacy encodings and miss it.
     // Matches VS Code's xtermTerminal.ts.

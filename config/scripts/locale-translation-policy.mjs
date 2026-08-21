@@ -62,7 +62,7 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'OpenClaw',
   'OpenCode',
   'OpenCode Go',
-  'Orca',
+  'MCode',
   'Pi',
   'PostHog',
   'Qwen Code',
@@ -157,7 +157,7 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   '/home/user',
   '/home/user/project',
   '/path/to/destination',
-  '.orca/issue-command',
+  '.mcode/issue-command',
   'PLAN.md',
   'feat/mobile-page',
   'sk-...',
@@ -209,11 +209,11 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   '/signup',
   'npm run dev',
   'nbformat',
-  'orca.yaml',
+  'mcode.yaml',
   'upstream',
   'LIN-329',
   'GH #1799',
-  'orca · zsh'
+  'mcode · zsh'
 ])
 
 export const NATIVE_PICKER_LABELS = {
@@ -233,7 +233,7 @@ export function shouldPreserveEnglishValue(enValue, key = '') {
   if (!enValue?.trim()) {
     return true
   }
-  if (/^https?:\/\//.test(enValue) || enValue.startsWith('orca://')) {
+  if (/^https?:\/\//.test(enValue) || enValue.startsWith('mcode://')) {
     return true
   }
   if (isEnglishOnlyKey(key)) {
@@ -329,7 +329,7 @@ function applyCjkLatinTermSpacing(localeValue, locale) {
     )
   if (locale === 'ko') {
     // Korean particles attach to the noun (no space) only when the particle is a complete token at a
-    // boundary — re-glue "Orca 에"/"PR 을"/"에서는" but keep "Jira 이슈"/"Orca 로고"/"agent 에뮬레이터".
+    // boundary — re-glue "MCode 에"/"PR 을"/"에서는" but keep "Jira 이슈"/"MCode 로고"/"agent 에뮬레이터".
     result = result.replace(
       new RegExp(
         `(${CJK_LATIN_SPACED_TERM_PATTERN}) ((?:에서|에게|에는|에선|으로|로서|로써|부터|까지|보다|처럼|은|는|이|가|을|를|와|과|의|에|로|도|만)+)(?=$|[\\s.,!?…·:;)\\]}"'」』])`,
@@ -403,19 +403,19 @@ export function repairTranslatedValue({ key, enValue, localeValue, locale }) {
     result = applyCjkLatinTermSpacing(result, locale)
   }
 
-  if (enValue.includes('orca://')) {
-    result = result.replace(/虎鲸:\/\//g, 'orca://')
+  if (enValue.includes('mcode://')) {
+    result = result.replace(/虎鲸:\/\//g, 'mcode://')
   }
 
-  if (enValue === 'Orca' || enValue.startsWith('Orca ')) {
+  if (enValue === 'MCode' || enValue.startsWith('MCode ')) {
     result = result
-      .replaceAll('虎鲸', 'Orca')
-      .replaceAll('逆戟鲸', 'Orca')
-      .replaceAll('シャチ', 'Orca')
+      .replaceAll('虎鲸', 'MCode')
+      .replaceAll('逆戟鲸', 'MCode')
+      .replaceAll('シャチ', 'MCode')
   }
 
-  if (enValue.includes('orca://')) {
-    result = result.replace(/シャチ:\/\//g, 'orca://')
+  if (enValue.includes('mcode://')) {
+    result = result.replace(/シャチ:\/\//g, 'mcode://')
   }
 
   return result
@@ -478,22 +478,22 @@ export function repairCatalog(enCatalog, localeCatalog, locale) {
 
   if (localeCatalog.menu) {
     if (locale === 'zh') {
-      if (localeCatalog.menu.exploreOrca !== '探索 Orca') {
-        localeCatalog.menu.exploreOrca = '探索 Orca'
+      if (localeCatalog.menu.exploreMCode !== '探索 MCode') {
+        localeCatalog.menu.exploreMCode = '探索 MCode'
         repaired += 1
       }
-      if (localeCatalog.menu.gettingStarted !== 'Orca 入门') {
-        localeCatalog.menu.gettingStarted = 'Orca 入门'
+      if (localeCatalog.menu.gettingStarted !== 'MCode 入门') {
+        localeCatalog.menu.gettingStarted = 'MCode 入门'
         repaired += 1
       }
     }
     if (locale === 'ko') {
-      if (localeCatalog.menu.exploreOrca !== 'Orca 둘러보기') {
-        localeCatalog.menu.exploreOrca = 'Orca 둘러보기'
+      if (localeCatalog.menu.exploreMCode !== 'MCode 둘러보기') {
+        localeCatalog.menu.exploreMCode = 'MCode 둘러보기'
         repaired += 1
       }
-      if (localeCatalog.menu.gettingStarted !== 'Orca 시작하기') {
-        localeCatalog.menu.gettingStarted = 'Orca 시작하기'
+      if (localeCatalog.menu.gettingStarted !== 'MCode 시작하기') {
+        localeCatalog.menu.gettingStarted = 'MCode 시작하기'
         repaired += 1
       }
     }

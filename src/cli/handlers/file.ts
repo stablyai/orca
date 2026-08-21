@@ -60,7 +60,7 @@ async function getFileWorktreeSelector({ flags, cwd, client }: HandlerContext): 
  */
 function toWorktreeRootPathFlavor(rootPath: string, cwd: string, path: string): string {
   // Why: WSL_DISTRO_NAME reaches this process only if interop forwards it, but the
-  // WSL launcher always sets ORCA_CLI_CWD, and its UNC form names the distro itself.
+  // WSL launcher always sets MCODE_CLI_CWD, and its UNC form names the distro itself.
   const distro = process.env.WSL_DISTRO_NAME || parseWslUncPath(cwd)?.distro
   if (
     !distro ||

@@ -8,9 +8,9 @@ import {
 // install`, `git submodule update`) before dying on the first bash-only line is worse than not
 // starting: half-applied setup looks like a working worktree.
 const WINDOWS_RUNNER_SHEBANG_REFUSAL = [
-  'echo Orca setup: this script starts with a "#!" interpreter line, so it needs a POSIX shell. 1>&2',
-  'echo Orca setup: this worktree runs setup through cmd.exe, which cannot execute it. 1>&2',
-  'echo Orca setup: set the Windows terminal shell to Git Bash, or rewrite the script in cmd syntax. 1>&2',
+  'echo MCode setup: this script starts with a "#!" interpreter line, so it needs a POSIX shell. 1>&2',
+  'echo MCode setup: this worktree runs setup through cmd.exe, which cannot execute it. 1>&2',
+  'echo MCode setup: set the Windows terminal shell to Git Bash, or rewrite the script in cmd syntax. 1>&2',
   'exit /b 1',
   ''
 ].join('\r\n')

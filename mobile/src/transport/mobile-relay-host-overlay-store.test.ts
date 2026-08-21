@@ -15,7 +15,7 @@ import {
 } from './mobile-relay-host-overlay-store'
 import type { MobileRelayHostOverlay } from './mobile-relay-host-overlay'
 
-const STORAGE_KEY = 'orca:mobile-relay:host-overlays:v2'
+const STORAGE_KEY = 'mcode:mobile-relay:host-overlays:v2'
 const OVERLAY: MobileRelayHostOverlay = {
   v: 2,
   hostId: 'host-1',
@@ -24,14 +24,14 @@ const OVERLAY: MobileRelayHostOverlay = {
     {
       id: 'relay-primary',
       kind: 'relay',
-      url: 'wss://relay-c1.onorca.dev/v1/connect/AbCdEf0123_-xyZ9'
+      url: 'wss://relay-c1.mcode.dev/v1/connect/AbCdEf0123_-xyZ9'
     }
   ],
   relayHostId: 'AbCdEf0123_-xyZ9',
   relay: {
     v: 1,
-    directorUrl: 'https://relay.onorca.dev',
-    cellUrl: 'https://relay-c1.onorca.dev',
+    directorUrl: 'https://relay.mcode.dev',
+    cellUrl: 'https://relay-c1.mcode.dev',
     assignmentEpoch: 7,
     relayHostId: 'AbCdEf0123_-xyZ9',
     e2eeFraming: 2

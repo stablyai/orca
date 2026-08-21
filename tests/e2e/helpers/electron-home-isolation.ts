@@ -8,11 +8,11 @@ const RESTRICTED_ENV_KEYS = new Set([
   'HOMEDRIVE',
   'HOMEPATH',
   'CODEX_HOME',
-  'ORCA_CODEX_HOME',
-  'ORCA_E2E_USER_DATA_DIR',
-  'ORCA_E2E_HOME_DIR',
+  'MCODE_CODEX_HOME',
+  'MCODE_E2E_USER_DATA_DIR',
+  'MCODE_E2E_HOME_DIR',
   'ZDOTDIR',
-  'ORCA_ORIG_ZDOTDIR',
+  'MCODE_ORIG_ZDOTDIR',
   'BASH_ENV',
   'ENV'
 ])
@@ -66,13 +66,13 @@ export function createElectronHomeIsolation({
   realHome = os.homedir()
 }: ElectronHomeIsolationOptions): ElectronHomeIsolation {
   assertOverlayDoesNotReplaceIsolation(launchEnv, 'launchEnv')
-  assertOverlayDoesNotReplaceIsolation(extraEnv, 'orcaAppExtraEnv')
+  assertOverlayDoesNotReplaceIsolation(extraEnv, 'mcodeAppExtraEnv')
 
   const requestedIsolatedHome = path.join(userDataDir, 'home')
   mkdirSync(requestedIsolatedHome, { recursive: true, mode: 0o700 })
   // Why: tmpdir-rooted paths are aliases (macOS /var symlink, Windows 8.3
   // short names). Git canonicalizes worktree paths, so a non-canonical HOME
-  // makes freshly created worktrees invisible to Orca's listing comparisons.
+  // makes freshly created worktrees invisible to MCode's listing comparisons.
   const isolatedHome = realpathSync.native(requestedIsolatedHome)
   // Why: a bad fixture path must fail before Electron can resolve a real Codex
   // home; userData isolation alone does not change app.getPath('home').
@@ -89,8 +89,8 @@ export function createElectronHomeIsolation({
       ...extraEnv,
       HOME: isolatedHome,
       USERPROFILE: isolatedHome,
-      ORCA_E2E_USER_DATA_DIR: userDataDir,
-      ORCA_E2E_HOME_DIR: isolatedHome
+      MCODE_E2E_USER_DATA_DIR: userDataDir,
+      MCODE_E2E_HOME_DIR: isolatedHome
     }
   }
 }

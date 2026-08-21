@@ -102,9 +102,9 @@ describe('createPtySubprocess', () => {
         rows: 24,
         cwd: 'C:\\repo',
         env: {
-          ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
-          ORCA_PATH_ROOT: 'C:\\Users\\orca\\AppData\\Local',
-          PATH: '%orca_path_root%\\agy\\bin;C:\\Windows'
+          MCODE_AGENT_TEAMS_TEAM_ID: 'team-test',
+          MCODE_PATH_ROOT: 'C:\\Users\\mcode\\AppData\\Local',
+          PATH: '%mcode_path_root%\\agy\\bin;C:\\Windows'
         }
       })
     } finally {
@@ -114,21 +114,21 @@ describe('createPtySubprocess', () => {
     }
 
     expect(spawnMock.mock.calls.at(-1)?.[2].env.PATH).toBe(
-      'C:\\Users\\orca\\AppData\\Local\\agy\\bin;C:\\Windows'
+      'C:\\Users\\mcode\\AppData\\Local\\agy\\bin;C:\\Windows'
     )
   })
 
-  it('does not inherit parent Orca pane identity when caller omits pane env', async () => {
+  it('does not inherit parent MCode pane identity when caller omits pane env', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const saved = {
-      ORCA_PANE_KEY: process.env.ORCA_PANE_KEY,
-      ORCA_TAB_ID: process.env.ORCA_TAB_ID,
-      ORCA_WORKTREE_ID: process.env.ORCA_WORKTREE_ID
+      MCODE_PANE_KEY: process.env.MCODE_PANE_KEY,
+      MCODE_TAB_ID: process.env.MCODE_TAB_ID,
+      MCODE_WORKTREE_ID: process.env.MCODE_WORKTREE_ID
     }
-    process.env.ORCA_PANE_KEY = 'parent-tab:parent-leaf'
-    process.env.ORCA_TAB_ID = 'parent-tab'
-    process.env.ORCA_WORKTREE_ID = 'parent-worktree'
+    process.env.MCODE_PANE_KEY = 'parent-tab:parent-leaf'
+    process.env.MCODE_TAB_ID = 'parent-tab'
+    process.env.MCODE_WORKTREE_ID = 'parent-worktree'
 
     try {
       await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
@@ -143,22 +143,22 @@ describe('createPtySubprocess', () => {
     }
 
     const env = spawnMock.mock.calls.at(-1)?.[2].env
-    expect(env.ORCA_PANE_KEY).toBeUndefined()
-    expect(env.ORCA_TAB_ID).toBeUndefined()
-    expect(env.ORCA_WORKTREE_ID).toBeUndefined()
+    expect(env.MCODE_PANE_KEY).toBeUndefined()
+    expect(env.MCODE_TAB_ID).toBeUndefined()
+    expect(env.MCODE_WORKTREE_ID).toBeUndefined()
   })
 
-  it('preserves explicit child Orca pane identity over parent env', async () => {
+  it('preserves explicit child MCode pane identity over parent env', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const saved = {
-      ORCA_PANE_KEY: process.env.ORCA_PANE_KEY,
-      ORCA_TAB_ID: process.env.ORCA_TAB_ID,
-      ORCA_WORKTREE_ID: process.env.ORCA_WORKTREE_ID
+      MCODE_PANE_KEY: process.env.MCODE_PANE_KEY,
+      MCODE_TAB_ID: process.env.MCODE_TAB_ID,
+      MCODE_WORKTREE_ID: process.env.MCODE_WORKTREE_ID
     }
-    process.env.ORCA_PANE_KEY = 'parent-tab:parent-leaf'
-    process.env.ORCA_TAB_ID = 'parent-tab'
-    process.env.ORCA_WORKTREE_ID = 'parent-worktree'
+    process.env.MCODE_PANE_KEY = 'parent-tab:parent-leaf'
+    process.env.MCODE_TAB_ID = 'parent-tab'
+    process.env.MCODE_WORKTREE_ID = 'parent-worktree'
 
     try {
       await createPtySubprocess({
@@ -166,9 +166,9 @@ describe('createPtySubprocess', () => {
         cols: 80,
         rows: 24,
         env: {
-          ORCA_PANE_KEY: 'child-tab:child-leaf',
-          ORCA_TAB_ID: 'child-tab',
-          ORCA_WORKTREE_ID: 'child-worktree'
+          MCODE_PANE_KEY: 'child-tab:child-leaf',
+          MCODE_TAB_ID: 'child-tab',
+          MCODE_WORKTREE_ID: 'child-worktree'
         }
       })
     } finally {
@@ -182,22 +182,22 @@ describe('createPtySubprocess', () => {
     }
 
     const env = spawnMock.mock.calls.at(-1)?.[2].env
-    expect(env.ORCA_PANE_KEY).toBe('child-tab:child-leaf')
-    expect(env.ORCA_TAB_ID).toBe('child-tab')
-    expect(env.ORCA_WORKTREE_ID).toBe('child-worktree')
+    expect(env.MCODE_PANE_KEY).toBe('child-tab:child-leaf')
+    expect(env.MCODE_TAB_ID).toBe('child-tab')
+    expect(env.MCODE_WORKTREE_ID).toBe('child-worktree')
   })
 
   it.each([
     // fish EXPORTS fish_history, so a daemon started from a fish pane would hand
     // every session the launching worktree's history file (STA-4682). Only the
     // name this spawn asked for — the isolated one, or the user's — may stand.
-    ['drops an inherited Orca fish_history', undefined, undefined],
-    ['keeps the session this spawn injected', 'orca_c0ffee', 'orca_c0ffee'],
+    ['drops an inherited MCode fish_history', undefined, undefined],
+    ['keeps the session this spawn injected', 'mcode_c0ffee', 'mcode_c0ffee'],
     ['keeps a caller-supplied value', 'mine', 'mine']
   ])('%s', async (_name, requested, expected) => {
     spawnMock.mockReturnValue(mockPtyProcess())
     const saved = process.env.fish_history
-    process.env.fish_history = 'orca_abc123'
+    process.env.fish_history = 'mcode_abc123'
 
     try {
       await createPtySubprocess({
@@ -218,9 +218,9 @@ describe('createPtySubprocess', () => {
   })
 
   it.each([
-    // HISTFILE is exported too, so a daemon started from an Orca pane would hand
+    // HISTFILE is exported too, so a daemon started from an MCode pane would hand
     // every session the launching worktree's history file.
-    ['drops an inherited Orca HISTFILE', undefined, undefined],
+    ['drops an inherited MCode HISTFILE', undefined, undefined],
     [
       'keeps the path this spawn injected',
       '/fake/userData/terminal-history/00112233445566aa/zsh_history',
@@ -251,11 +251,11 @@ describe('createPtySubprocess', () => {
   })
 
   it.each([
-    // ORCA_HISTFILE is exported into every pane, so a daemon started from an
-    // Orca pane inherits one. Left in place it BOTH re-scopes the pane to
+    // MCODE_HISTFILE is exported into every pane, so a daemon started from an
+    // MCode pane inherits one. Left in place it BOTH re-scopes the pane to
     // another worktree's history file (#11146) and wraps a zsh pane nothing
     // asked to wrap, since `history` is selected on its presence.
-    ['drops an inherited Orca ORCA_HISTFILE', undefined, undefined],
+    ['drops an inherited MCode MCODE_HISTFILE', undefined, undefined],
     [
       'keeps the path this spawn injected',
       '/fake/userData/terminal-history/00112233445566aa/zsh_history',
@@ -264,8 +264,8 @@ describe('createPtySubprocess', () => {
     ['keeps a caller-supplied value', '/home/me/.zsh_history', '/home/me/.zsh_history']
   ])('%s', async (_name, requested, expected) => {
     spawnMock.mockReturnValue(mockPtyProcess())
-    const saved = process.env.ORCA_HISTFILE
-    process.env.ORCA_HISTFILE = '/fake/userData/terminal-history/aabbccddeeff0011/zsh_history'
+    const saved = process.env.MCODE_HISTFILE
+    process.env.MCODE_HISTFILE = '/fake/userData/terminal-history/aabbccddeeff0011/zsh_history'
 
     try {
       await createPtySubprocess({
@@ -273,21 +273,21 @@ describe('createPtySubprocess', () => {
         cols: 80,
         rows: 24,
         shellOverride: '/bin/zsh',
-        ...(requested === undefined ? {} : { env: { ORCA_HISTFILE: requested } })
+        ...(requested === undefined ? {} : { env: { MCODE_HISTFILE: requested } })
       })
     } finally {
       if (saved === undefined) {
-        delete process.env.ORCA_HISTFILE
+        delete process.env.MCODE_HISTFILE
       } else {
-        process.env.ORCA_HISTFILE = saved
+        process.env.MCODE_HISTFILE = saved
       }
     }
 
     const env = spawnMock.mock.calls.at(-1)?.[2].env
-    expect(env.ORCA_HISTFILE).toBe(expected)
-    // The wrapping consequence: no inherited value may point a pane at Orca's
+    expect(env.MCODE_HISTFILE).toBe(expected)
+    // The wrapping consequence: no inherited value may point a pane at MCode's
     // ZDOTDIR that the client scoped no history for.
-    expect(env.ORCA_SHELL_FEATURES).toBe(expected === undefined ? undefined : 'history')
+    expect(env.MCODE_SHELL_FEATURES).toBe(expected === undefined ? undefined : 'history')
   })
 
   it('does not inherit ELECTRON_RUN_AS_NODE from the daemon process env', async () => {
@@ -318,9 +318,9 @@ describe('createPtySubprocess', () => {
     const saved = Object.fromEntries(
       [...LEGACY_TERMINAL_SHIM_ENV_KEYS, 'PATH'].map((key) => [key, process.env[key]])
     )
-    process.env.ORCA_ENABLE_GIT_ATTRIBUTION = '1'
-    process.env.ORCA_ATTRIBUTION_SHIM_DIR = '/tmp/orca-terminal-attribution/posix'
-    process.env.PATH = `/tmp/orca-terminal-attribution/posix${delimiter}/usr/bin`
+    process.env.MCODE_ENABLE_GIT_ATTRIBUTION = '1'
+    process.env.MCODE_ATTRIBUTION_SHIM_DIR = '/tmp/mcode-terminal-attribution/posix'
+    process.env.PATH = `/tmp/mcode-terminal-attribution/posix${delimiter}/usr/bin`
 
     try {
       await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
@@ -342,8 +342,8 @@ describe('createPtySubprocess', () => {
   })
 
   it('does not inherit NODE_ENV from the daemon process env', async () => {
-    // Why: a dev-mode Orca forks the daemon with NODE_ENV=development; leaking
-    // Orca's build mode into user shells breaks `next build` and Vitest.
+    // Why: a dev-mode MCode forks the daemon with NODE_ENV=development; leaking
+    // MCode's build mode into user shells breaks `next build` and Vitest.
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
     const previous = process.env.NODE_ENV
@@ -406,15 +406,15 @@ describe('createPtySubprocess', () => {
       LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH
     }
     Object.defineProperty(process, 'platform', { value: 'linux' })
-    process.env.APPIMAGE = '/data/apps/orca.appimage'
-    process.env.APPDIR = '/tmp/.mount_orca123'
-    process.env.ARGV0 = '/data/apps/orca.appimage'
+    process.env.APPIMAGE = '/data/apps/mcode.appimage'
+    process.env.APPDIR = '/tmp/.mount_mcode123'
+    process.env.ARGV0 = '/data/apps/mcode.appimage'
     process.env.OWD = '/home/user/project'
-    process.env.APPIMAGE_LIBRARY_PATH = '/tmp/.mount_orca123/usr/lib'
-    process.env.PATH = ['/tmp/.mount_orca123', '/tmp/.mount_orca123/usr/sbin', '/usr/bin'].join(
+    process.env.APPIMAGE_LIBRARY_PATH = '/tmp/.mount_mcode123/usr/lib'
+    process.env.PATH = ['/tmp/.mount_mcode123', '/tmp/.mount_mcode123/usr/sbin', '/usr/bin'].join(
       delimiter
     )
-    process.env.LD_LIBRARY_PATH = ['/tmp/.mount_orca123/usr/lib', '/opt/audio/lib'].join(delimiter)
+    process.env.LD_LIBRARY_PATH = ['/tmp/.mount_mcode123/usr/lib', '/opt/audio/lib'].join(delimiter)
 
     try {
       await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
@@ -444,8 +444,8 @@ describe('createPtySubprocess', () => {
   it('does not inherit parent agent hook endpoint for development hook env', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
-    const previousEndpoint = process.env.ORCA_AGENT_HOOK_ENDPOINT
-    process.env.ORCA_AGENT_HOOK_ENDPOINT = '/tmp/stale-endpoint.env'
+    const previousEndpoint = process.env.MCODE_AGENT_HOOK_ENDPOINT
+    process.env.MCODE_AGENT_HOOK_ENDPOINT = '/tmp/stale-endpoint.env'
 
     try {
       await createPtySubprocess({
@@ -453,32 +453,32 @@ describe('createPtySubprocess', () => {
         cols: 80,
         rows: 24,
         env: {
-          ORCA_AGENT_HOOK_ENV: 'development',
-          ORCA_AGENT_HOOK_PORT: '1234',
-          ORCA_AGENT_HOOK_TOKEN: 'token',
-          ORCA_AGENT_HOOK_VERSION: '1'
+          MCODE_AGENT_HOOK_ENV: 'development',
+          MCODE_AGENT_HOOK_PORT: '1234',
+          MCODE_AGENT_HOOK_TOKEN: 'token',
+          MCODE_AGENT_HOOK_VERSION: '1'
         }
       })
     } finally {
       if (previousEndpoint === undefined) {
-        delete process.env.ORCA_AGENT_HOOK_ENDPOINT
+        delete process.env.MCODE_AGENT_HOOK_ENDPOINT
       } else {
-        process.env.ORCA_AGENT_HOOK_ENDPOINT = previousEndpoint
+        process.env.MCODE_AGENT_HOOK_ENDPOINT = previousEndpoint
       }
     }
 
     const env = spawnMock.mock.calls.at(-1)?.[2].env
-    expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
-    expect(env.ORCA_AGENT_HOOK_ENV).toBe('development')
-    expect(env.ORCA_AGENT_HOOK_PORT).toBe('1234')
-    expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('token')
+    expect(env.MCODE_AGENT_HOOK_ENDPOINT).toBeUndefined()
+    expect(env.MCODE_AGENT_HOOK_ENV).toBe('development')
+    expect(env.MCODE_AGENT_HOOK_PORT).toBe('1234')
+    expect(env.MCODE_AGENT_HOOK_TOKEN).toBe('token')
   })
 
   it('preserves explicit development agent hook endpoint files', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
-    const previousEndpoint = process.env.ORCA_AGENT_HOOK_ENDPOINT
-    process.env.ORCA_AGENT_HOOK_ENDPOINT = '/tmp/stale-endpoint.env'
+    const previousEndpoint = process.env.MCODE_AGENT_HOOK_ENDPOINT
+    process.env.MCODE_AGENT_HOOK_ENDPOINT = '/tmp/stale-endpoint.env'
 
     try {
       await createPtySubprocess({
@@ -486,26 +486,26 @@ describe('createPtySubprocess', () => {
         cols: 80,
         rows: 24,
         env: {
-          ORCA_AGENT_HOOK_ENV: 'development',
-          ORCA_AGENT_HOOK_PORT: '1234',
-          ORCA_AGENT_HOOK_TOKEN: 'token',
-          ORCA_AGENT_HOOK_VERSION: '1',
-          ORCA_AGENT_HOOK_ENDPOINT: '/tmp/fresh-endpoint.env'
+          MCODE_AGENT_HOOK_ENV: 'development',
+          MCODE_AGENT_HOOK_PORT: '1234',
+          MCODE_AGENT_HOOK_TOKEN: 'token',
+          MCODE_AGENT_HOOK_VERSION: '1',
+          MCODE_AGENT_HOOK_ENDPOINT: '/tmp/fresh-endpoint.env'
         }
       })
     } finally {
       if (previousEndpoint === undefined) {
-        delete process.env.ORCA_AGENT_HOOK_ENDPOINT
+        delete process.env.MCODE_AGENT_HOOK_ENDPOINT
       } else {
-        process.env.ORCA_AGENT_HOOK_ENDPOINT = previousEndpoint
+        process.env.MCODE_AGENT_HOOK_ENDPOINT = previousEndpoint
       }
     }
 
     const env = spawnMock.mock.calls.at(-1)?.[2].env
-    expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBe('/tmp/fresh-endpoint.env')
-    expect(env.ORCA_AGENT_HOOK_ENV).toBe('development')
-    expect(env.ORCA_AGENT_HOOK_PORT).toBe('1234')
-    expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('token')
+    expect(env.MCODE_AGENT_HOOK_ENDPOINT).toBe('/tmp/fresh-endpoint.env')
+    expect(env.MCODE_AGENT_HOOK_ENV).toBe('development')
+    expect(env.MCODE_AGENT_HOOK_PORT).toBe('1234')
+    expect(env.MCODE_AGENT_HOOK_TOKEN).toBe('token')
   })
 
   it('passes custom env to spawned process', async () => {
@@ -535,8 +535,8 @@ describe('createPtySubprocess', () => {
       env: {
         SHELL: '/bin/bash',
         TERM: 'screen-256color',
-        PATH: '/tmp/orca-agent-teams-bin:/usr/bin',
-        ORCA_AGENT_TEAMS_TEAM_ID: 'team-test'
+        PATH: '/tmp/mcode-agent-teams-bin:/usr/bin',
+        MCODE_AGENT_TEAMS_TEAM_ID: 'team-test'
       },
       envToDelete: ['TERM_PROGRAM']
     })
@@ -544,7 +544,7 @@ describe('createPtySubprocess', () => {
     const lastCall = spawnMock.mock.calls.at(-1)!
     expect(lastCall[2].name).toBe('screen-256color')
     expect(lastCall[2].env.TERM).toBe('screen-256color')
-    expect(lastCall[2].env.PATH.split(':')[0]).toBe('/tmp/orca-agent-teams-bin')
+    expect(lastCall[2].env.PATH.split(':')[0]).toBe('/tmp/mcode-agent-teams-bin')
     expect(lastCall[2].env.TERM_PROGRAM).toBeUndefined()
   })
 
@@ -562,8 +562,8 @@ describe('createPtySubprocess', () => {
         // Why: buildPtyHostEnv collapses Windows PATH onto one spelling before the daemon wire;
         // the daemon then spreads its own block underneath and can re-mint the other one.
         env: {
-          Path: '/tmp/orca-agent-teams-bin:/usr/bin',
-          ORCA_AGENT_TEAMS_TEAM_ID: 'team-test'
+          Path: '/tmp/mcode-agent-teams-bin:/usr/bin',
+          MCODE_AGENT_TEAMS_TEAM_ID: 'team-test'
         }
       })
     } finally {
@@ -574,7 +574,7 @@ describe('createPtySubprocess', () => {
 
     const env = spawnMock.mock.calls.at(-1)![2].env
     expect(Object.keys(env).filter((key) => /^path$/i.test(key))).toEqual(['Path'])
-    expect(env.Path.split(':')[0]).toBe('/tmp/orca-agent-teams-bin')
+    expect(env.Path.split(':')[0]).toBe('/tmp/mcode-agent-teams-bin')
   })
 
   it('keeps the daemon `PATH` block when the requested env has no path key', async () => {

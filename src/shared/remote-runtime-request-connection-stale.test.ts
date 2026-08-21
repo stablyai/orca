@@ -83,7 +83,7 @@ describe('RemoteRuntimeRequestConnection stale socket callbacks', () => {
     connection.close()
     connection.close()
 
-    await expect(request).rejects.toThrow('Remote Orca runtime closed the connection.')
+    await expect(request).rejects.toThrow('Remote MCode runtime closed the connection.')
     expect(socket.cleanup).toHaveBeenCalledTimes(1)
     expect(socket.ws.close).toHaveBeenCalledTimes(1)
   })

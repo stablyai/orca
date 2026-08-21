@@ -183,8 +183,8 @@ describe('createMainWindow', () => {
 
   it('keeps the headless E2E window hidden when the Windows fallback fires', () => {
     vi.useFakeTimers()
-    const previousHeadless = process.env.ORCA_E2E_HEADLESS
-    process.env.ORCA_E2E_HEADLESS = '1'
+    const previousHeadless = process.env.MCODE_E2E_HEADLESS
+    process.env.MCODE_E2E_HEADLESS = '1'
     const { browserWindowInstance } = createStartupRevealWindowFixture()
 
     try {
@@ -197,9 +197,9 @@ describe('createMainWindow', () => {
       })
     } finally {
       if (previousHeadless === undefined) {
-        delete process.env.ORCA_E2E_HEADLESS
+        delete process.env.MCODE_E2E_HEADLESS
       } else {
-        process.env.ORCA_E2E_HEADLESS = previousHeadless
+        process.env.MCODE_E2E_HEADLESS = previousHeadless
       }
     }
   })
@@ -234,8 +234,8 @@ describe('createMainWindow', () => {
 
   it('keeps the headless E2E window hidden when the Linux fallback fires', () => {
     vi.useFakeTimers()
-    const previousHeadless = process.env.ORCA_E2E_HEADLESS
-    process.env.ORCA_E2E_HEADLESS = '1'
+    const previousHeadless = process.env.MCODE_E2E_HEADLESS
+    process.env.MCODE_E2E_HEADLESS = '1'
     const { browserWindowInstance } = createStartupRevealWindowFixture()
 
     try {
@@ -248,9 +248,9 @@ describe('createMainWindow', () => {
       })
     } finally {
       if (previousHeadless === undefined) {
-        delete process.env.ORCA_E2E_HEADLESS
+        delete process.env.MCODE_E2E_HEADLESS
       } else {
-        process.env.ORCA_E2E_HEADLESS = previousHeadless
+        process.env.MCODE_E2E_HEADLESS = previousHeadless
       }
     }
   })

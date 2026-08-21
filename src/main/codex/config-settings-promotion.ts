@@ -4,7 +4,7 @@ import { observeAgentStateFile } from './codex-path-observation'
 import { resolvePromotionWriteTarget } from './config-settings-promotion-write-target'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { parseWslUncPath } from '../../shared/wsl-paths'
-import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
+import { getMCodeManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 import {
   createTomlLineScanState,
   getTomlTableHeader,
@@ -156,11 +156,11 @@ function readPromotedSettingValues(configPath: string): Map<string, TopLevelSett
 
 /**
  * Records the promotable settings the runtime config.toml holds after a mirror, so the next
- * promotion can tell "value Orca mirrored" from "value Codex wrote for the user".
+ * promotion can tell "value MCode mirrored" from "value Codex wrote for the user".
  * Call after a successful mirror only — advancing past an unpromoted change strands it forever.
  */
 export function snapshotCodexRuntimeSettingsBaseline(
-  runtimeHomePath = getOrcaManagedCodexHomePath(),
+  runtimeHomePath = getMCodeManagedCodexHomePath(),
   conflicts: ReadonlyMap<string, CodexSettingsConflict> = new Map()
 ): void {
   try {
@@ -193,7 +193,7 @@ export type CodexSettingsPromotionPlan = {
 
 function getHostPromotionHomes(): CodexSettingsPromotionHomes {
   return {
-    runtimeHomePath: getOrcaManagedCodexHomePath(),
+    runtimeHomePath: getMCodeManagedCodexHomePath(),
     systemHomePath: getSystemCodexHomePath()
   }
 }
@@ -262,7 +262,7 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   mkdirSync(dirname(writeTarget.path), { recursive: true, mode: 0o700 })
   // Why: this is the user's real ~/.codex/config.toml, and `existsSync` reading
   // `false` for a locked file sent it down the reconstruct branch below, which
-  // replaces the canonical config with settings derived from Orca's runtime
+  // replaces the canonical config with settings derived from MCode's runtime
   // copy. One read replaces the old existsSync + read pair and its TOCTOU gap.
   // The indeterminate arm is a backstop rather than the live guard: an
   // unreadable system config already refused in readPromotedSettingValues,

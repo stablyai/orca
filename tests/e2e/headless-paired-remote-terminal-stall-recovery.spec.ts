@@ -4,13 +4,13 @@ import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import type { RuntimeTerminalRead } from '../../src/shared/runtime-types'
 import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
 import { launchPairedWebClient } from './helpers/paired-electron-client'
 import { getTerminalContent, waitForActivePanePtyId } from './helpers/terminal'
 
 const MIN_EXHAUSTED_ACK_BYTES = 400 * 1024
-const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-headless-stalled-stream-'))
+const scratch = mkdtempSync(path.join(os.tmpdir(), 'mcode-headless-stalled-stream-'))
 const fixturePath = path.join(scratch, 'headless-stalled-stream.mjs')
 
 writeFileSync(
@@ -64,7 +64,7 @@ async function callRuntime<TResult>(page: Page, method: string, params: unknown)
   ) as Promise<TResult>
 }
 
-test('recovers an ACK-starved stream from an isolated headless Orca host @headful', async ({
+test('recovers an ACK-starved stream from an isolated headless MCode host @headful', async ({
   testRepoPath
 }) => {
   test.setTimeout(180_000)

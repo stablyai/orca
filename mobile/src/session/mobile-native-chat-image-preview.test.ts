@@ -17,9 +17,9 @@ describe('isRenderableImageUri', () => {
 
   it('rejects bare host paths (not loadable on the device) and empty values', () => {
     for (const uri of [
-      '/tmp/orca-attach.png',
+      '/tmp/mcode-attach.png',
       'C:\\tmp\\a.png',
-      'orca-attach.png',
+      'mcode-attach.png',
       '',
       undefined
     ]) {

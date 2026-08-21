@@ -7,14 +7,14 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
 
-const userDataPath = process.env.ORCA_USER_DATA_PATH ?? tmpdir()
+const userDataPath = process.env.MCODE_USER_DATA_PATH ?? tmpdir()
 
 export const BrowserWindow = undefined
 
 export const app = {
   isPackaged: false,
   getVersion: () => '0.0.0-wsl-relay-benchmark',
-  getName: () => 'orca-wsl-relay-benchmark',
+  getName: () => 'mcode-wsl-relay-benchmark',
   getPath: (name) => {
     if (name === 'userData') {
       return userDataPath

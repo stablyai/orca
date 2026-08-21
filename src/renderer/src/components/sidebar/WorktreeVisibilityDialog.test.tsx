@@ -79,7 +79,7 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
   return {
     id: 'repo-1',
     path: '/repo',
-    displayName: 'orca',
+    displayName: 'mcode',
     badgeColor: '#000000',
     addedAt: Date.UTC(2026, 4, 24),
     externalWorktreeVisibility: 'hide',
@@ -342,7 +342,7 @@ describe('WorktreeVisibilityDialog', () => {
     await renderDialog()
 
     expect(document.body.textContent).toContain('Hidden worktrees (0)')
-    expect(document.body.textContent).toContain('No non-Orca worktrees found')
+    expect(document.body.textContent).toContain('No non-MCode worktrees found')
   })
 
   it('says it is checking instead of claiming nothing is hidden on a fallback snapshot', async () => {
@@ -589,7 +589,7 @@ describe('WorktreeVisibilityDialog', () => {
     await click(sourceSwitch())
 
     expect(document.querySelector('[role="alert"]')?.textContent).toContain(
-      "This host doesn't support source-specific worktree visibility. Update Orca on the host to change this setting."
+      "This host doesn't support source-specific worktree visibility. Update MCode on the host to change this setting."
     )
     expect(document.querySelector('[role="alert"]')?.textContent).not.toContain('Try again')
     expect(mocks.state.fetchWorktrees).not.toHaveBeenCalled()
@@ -715,7 +715,7 @@ describe('WorktreeVisibilityDialog', () => {
     })
   })
 
-  it('keeps ordinary non-Orca visibility on its own source row', async () => {
+  it('keeps ordinary non-MCode visibility on its own source row', async () => {
     mocks.state.repos = [makeRepo({ externalWorktreeVisibility: 'show' })]
     // Why: global must also be Show here, or hiding the row would revert to it instead of overriding.
     mocks.state.settings = { worktreeVisibilityDefaults: { external: 'show' } }

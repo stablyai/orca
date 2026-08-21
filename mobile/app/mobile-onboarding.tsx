@@ -9,7 +9,7 @@ import {
 } from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { OrcaLogo } from '../src/components/OrcaLogo'
+import { MCodeLogo } from '../src/components/MCodeLogo'
 import { ensureNotificationPermissions } from '../src/notifications/mobile-notifications'
 import {
   MobileOnboardingPage,
@@ -143,8 +143,8 @@ function MobileOnboardingFlow({
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.brandRow}>
-        <OrcaLogo size={22} />
-        <Text style={styles.brandName}>Orca</Text>
+        <MCodeLogo size={22} />
+        <Text style={styles.brandName}>MCode</Text>
         {steps.length > 1 ? (
           <View
             accessible

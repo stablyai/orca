@@ -1,4 +1,4 @@
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   execInTerminal,
@@ -19,7 +19,7 @@ import {
 } from './helpers/docker-ssh-relay-connection'
 import { openTerminalTabInActiveGroup } from './helpers/terminal-tab-open'
 
-const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
+const RUN_DOCKER_SSH = process.env.MCODE_E2E_SSH_DOCKER === '1'
 
 /**
  * The two regressions this covers both shipped and both reached a user, because nothing here
@@ -56,10 +56,10 @@ const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
  * chain and the fix it implies: docs/reference/ssh-reconnect-source-recovery.md.
  */
 test.describe('SSH reconnect pane restore', () => {
-  test.skip(!RUN_DOCKER_SSH, 'Set ORCA_E2E_SSH_DOCKER=1 to run the dockerized SSH relay tests')
+  test.skip(!RUN_DOCKER_SSH, 'Set MCODE_E2E_SSH_DOCKER=1 to run the dockerized SSH relay tests')
 
   test('restores shell scrollback, a full-screen frame, and a usable new tab across a reconnect', async ({
-    orcaPage
+    mcodePage
   }, testInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
@@ -68,26 +68,26 @@ test.describe('SSH reconnect pane restore', () => {
       // The fixture image's shell emits no OSC 0, so without this every tab keeps its placeholder
       // title regardless of shell health and the title assertion below could never pass.
       enableDockerSshRelayTargetShellTitle(target)
-      await waitForSessionReady(orcaPage)
-      await waitForActiveWorktree(orcaPage)
-      const remote = await connectDockerSshRelayTarget(orcaPage, target)
-      await ensureTerminalVisible(orcaPage, 45_000)
-      await waitForActiveTerminalManager(orcaPage, 60_000)
-      const ptyId = await waitForActivePanePtyId(orcaPage, 60_000)
+      await waitForSessionReady(mcodePage)
+      await waitForActiveWorktree(mcodePage)
+      const remote = await connectDockerSshRelayTarget(mcodePage, target)
+      await ensureTerminalVisible(mcodePage, 45_000)
+      await waitForActiveTerminalManager(mcodePage, 60_000)
+      const ptyId = await waitForActivePanePtyId(mcodePage, 60_000)
 
       // A marker rather than a prompt: a prompt reappears on its own after a reconnect, so it cannot
       // distinguish restored scrollback from a fresh shell. This string only exists if the pane kept
       // what it had.
       const marker = `RECONNECT_MARKER_${Date.now()}`
-      await execInTerminal(orcaPage, ptyId, `echo ${marker}`)
-      await waitForTerminalOutput(orcaPage, marker, 30_000)
+      await execInTerminal(mcodePage, ptyId, `echo ${marker}`)
+      await waitForTerminalOutput(mcodePage, marker, 30_000)
 
-      await reconnectDockerSshRelayTarget(orcaPage, remote.targetId)
-      await waitForActiveTerminalManager(orcaPage, 60_000)
-      await waitForActivePanePtyId(orcaPage, 60_000)
+      await reconnectDockerSshRelayTarget(mcodePage, remote.targetId)
+      await waitForActiveTerminalManager(mcodePage, 60_000)
+      await waitForActivePanePtyId(mcodePage, 60_000)
 
       // REGRESSION 1: the pane painted nothing at all here, because the relay withheld the replay.
-      await waitForTerminalOutput(orcaPage, marker, 60_000)
+      await waitForTerminalOutput(mcodePage, marker, 60_000)
 
       // A FULL-SCREEN app is the second case: a reconnect must leave a TUI pane alive and drawing,
       // not blank or frozen.
@@ -105,40 +105,40 @@ test.describe('SSH reconnect pane restore', () => {
       // between main's pre-outage alt-screen belief and a replay produced during the outage, which
       // is not something this fixture can stage. Kept anyway: it is the only coverage that a
       // reconnected TUI pane recovers at all.
-      await execInTerminal(orcaPage, ptyId, 'top -b -n 1 > /dev/null; top')
-      await waitForTerminalOutput(orcaPage, 'load average', 30_000, 8000)
+      await execInTerminal(mcodePage, ptyId, 'top -b -n 1 > /dev/null; top')
+      await waitForTerminalOutput(mcodePage, 'load average', 30_000, 8000)
 
-      await reconnectDockerSshRelayTarget(orcaPage, remote.targetId)
-      await waitForActiveTerminalManager(orcaPage, 60_000)
-      await waitForActivePanePtyId(orcaPage, 60_000)
+      await reconnectDockerSshRelayTarget(mcodePage, remote.targetId)
+      await waitForActiveTerminalManager(mcodePage, 60_000)
+      await waitForActivePanePtyId(mcodePage, 60_000)
 
-      await waitForTerminalOutput(orcaPage, 'load average', 60_000, 8000)
-      const tuiContent = await getTerminalContent(orcaPage, 8000)
+      await waitForTerminalOutput(mcodePage, 'load average', 60_000, 8000)
+      const tuiContent = await getTerminalContent(mcodePage, 8000)
       expect(tuiContent).toContain('PID')
 
       // REGRESSION 2: opening a tab AFTER a reconnect. The prepaint could still fire on this mount
       // and write over the new shell, leaving a pane with no prompt and a generic tab title.
-      await openTerminalTabInActiveGroup(orcaPage)
-      await waitForActiveTerminalManager(orcaPage, 60_000)
-      const freshPtyId = await waitForActivePanePtyId(orcaPage, 60_000)
+      await openTerminalTabInActiveGroup(mcodePage)
+      await waitForActiveTerminalManager(mcodePage, 60_000)
+      const freshPtyId = await waitForActivePanePtyId(mcodePage, 60_000)
       expect(freshPtyId).not.toBe(ptyId)
 
       // The new pane must reach a shell that answers, which is what "usable" means and what a blank
       // pane fails. Echoing proves the shell read input and wrote back, not merely that a pty exists.
       const freshMarker = `NEW_TAB_MARKER_${Date.now()}`
-      await execInTerminal(orcaPage, freshPtyId, `echo ${freshMarker}`)
-      await waitForTerminalOutput(orcaPage, freshMarker, 60_000)
+      await execInTerminal(mcodePage, freshPtyId, `echo ${freshMarker}`)
+      await waitForTerminalOutput(mcodePage, freshMarker, 60_000)
 
       // And it must be a FRESH shell, not a repaint of the old pane's history.
-      const freshContent = await getTerminalContent(orcaPage, 8000)
+      const freshContent = await getTerminalContent(mcodePage, 8000)
       expect(freshContent).not.toContain(marker)
 
       // The title is the cheap signal the reported bug showed: it only stays generic when the shell
-      // never printed a prompt for Orca to read one from.
+      // never printed a prompt for MCode to read one from.
       await expect
         .poll(
           async () =>
-            orcaPage.evaluate(() => {
+            mcodePage.evaluate(() => {
               const store = window.__store
               const state = store?.getState()
               const worktreeId = state?.activeWorktreeId

@@ -18,7 +18,7 @@ type KittyStackFrame = { flags: number; known: boolean }
  * DECSET/DECRST 47/1047/1049, the full reset on RIS, and the soft reset on
  * DECSTR (CSI ! p).
  *
- * Why a mirror instead of reading xterm's internal state: Orca defensively
+ * Why a mirror instead of reading xterm's internal state: MCode defensively
  * wipes the renderer terminal's kitty flags at moments when the TUI may have
  * died (Ctrl+C interrupts, reattach resets) while the TUI is usually still
  * alive and expecting protocol-encoded input. This tracker is fed only by

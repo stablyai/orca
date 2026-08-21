@@ -12,7 +12,7 @@ export function getRepositoryGitWorktreeSearchEntries(repo: Repo): SettingsSearc
       ),
       description: translate(
         'auto.components.settings.repository.search.externalWorktreesDescription',
-        'Override whether worktrees created outside Orca appear for this project.'
+        'Override whether worktrees created outside MCode appear for this project.'
       ),
       keywords: [
         repo.displayName,

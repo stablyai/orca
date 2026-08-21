@@ -362,7 +362,7 @@ async function deployAndLaunchRelayAttempt(
   const hostPlatform = await detectRemoteHostPlatform(conn, { signal: deploySignal })
   if (!hostPlatform) {
     throw new Error(
-      'Unsupported remote platform. Orca relay supports: linux-x64, linux-arm64, darwin-x64, darwin-arm64, win32-x64, win32-arm64.'
+      'Unsupported remote platform. MCode relay supports: linux-x64, linux-arm64, darwin-x64, darwin-arm64, win32-x64, win32-arm64.'
     )
   }
   const platform = hostPlatform.relayPlatform
@@ -372,7 +372,7 @@ async function deployAndLaunchRelayAttempt(
   if (!localRelayDir) {
     throw new Error(
       `Relay package for ${platform} not found locally. ` +
-        `This may be a packaging issue — try reinstalling Orca.`
+        `This may be a packaging issue — try reinstalling MCode.`
     )
   }
   // Why: content-hashed version doubles as remote dir name and wire-handshake version; throws on missing rather than falling back (see docs/ssh-relay-versioned-install-dirs.md).
@@ -615,7 +615,7 @@ async function uploadRelay(
   if (!localRelayDir || !existsSync(localRelayDir)) {
     throw new Error(
       `Relay package for ${platform} not found. Searched: ${getLocalRelayCandidates(platform).join(', ')}. ` +
-        `This may be a packaging issue — try reinstalling Orca.`
+        `This may be a packaging issue — try reinstalling MCode.`
     )
   }
 
@@ -665,7 +665,7 @@ async function uploadRelay(
 }
 
 /**
- * A marker is only meaningful where a split namespace can occur and where Orca
+ * A marker is only meaningful where a split namespace can occur and where MCode
  * owns the SFTP session: POSIX hosts reached over the bundled ssh2 transport.
  */
 function createInstallNamespaceIfSupported(
@@ -704,7 +704,7 @@ const RELAY_NATIVE_DEPS = {
 
 type RelayNativeDepName = keyof typeof RELAY_NATIVE_DEPS
 const RELAY_NATIVE_DEP_NAMES = Object.keys(RELAY_NATIVE_DEPS) as RelayNativeDepName[]
-const NATIVE_DEPS_MISSING_PREFIX = 'ORCA-NATIVE-DEPS-MISSING:'
+const NATIVE_DEPS_MISSING_PREFIX = 'MCODE-NATIVE-DEPS-MISSING:'
 
 // Why: npm 12 blocks dependency lifecycle scripts unless each exact package version is approved, even with ignore-scripts disabled.
 const RELAY_NATIVE_DEP_SCRIPT_ALLOWLIST = Object.fromEntries(
@@ -738,7 +738,7 @@ async function probeRequiredNativeDeps(
   signal?: AbortSignal
 ): Promise<{ available: boolean; missing: RelayNativeDepName[] }> {
   const escapedNode = shellEscape(nodePath)
-  const probeJs = nativeDepsProbeJs('ORCA-NATIVE-DEPS-OK')
+  const probeJs = nativeDepsProbeJs('MCODE-NATIVE-DEPS-OK')
   try {
     const command = isWindowsRemoteHost(hostPlatform)
       ? commandWithNodePath(
@@ -754,7 +754,7 @@ async function probeRequiredNativeDeps(
           `(${escapedNode} -e ${shellEscape(probeJs)} 2>/dev/null || echo MISSING)`
         )
     const probe = await execHostCommand(conn, hostPlatform, command, { signal })
-    const available = probe.includes('ORCA-NATIVE-DEPS-OK')
+    const available = probe.includes('MCODE-NATIVE-DEPS-OK')
     return { available, missing: available ? [] : missingNativeDepsFromProbe(probe) }
   } catch {
     signal?.throwIfAborted()
@@ -961,7 +961,7 @@ async function installNativeDeps(
       hostPlatform,
       joinRemotePath(hostPlatform, remoteDir, 'package.json'),
       `${JSON.stringify({
-        name: 'orca-relay',
+        name: 'mcode-relay',
         version: '1.0.0',
         private: true,
         type: 'commonjs',
@@ -1282,7 +1282,7 @@ async function probeInstalledNativeDeps(
   stderr: string
 }> {
   // require() catches unloadable installs (wrong arch, missing prebuild, skipped lifecycle script) that require.resolve() and test -d miss.
-  const PROBE_OK = 'ORCA-NPTY-PROBE-OK'
+  const PROBE_OK = 'MCODE-NPTY-PROBE-OK'
   const stderrFile = joinRemotePath(hostPlatform, remoteDir, '.npty-probe.stderr')
   const escapedStderr = shellEscape(stderrFile)
   const probeJs = nativeDepsProbeJs(PROBE_OK)
@@ -1333,8 +1333,8 @@ function getLocalRelayPath(platform: RelayPlatform): string | null {
 
 export function getLocalRelayCandidates(platform: RelayPlatform): string[] {
   const candidates: string[] = []
-  if (process.env.ORCA_RELAY_PATH) {
-    candidates.push(join(process.env.ORCA_RELAY_PATH, platform))
+  if (process.env.MCODE_RELAY_PATH) {
+    candidates.push(join(process.env.MCODE_RELAY_PATH, platform))
   }
 
   // Why: electron-builder copies extraResources next to the app bundle, but app.getAppPath() points at app.asar in packaged builds.
@@ -1377,7 +1377,7 @@ async function launchRelay(
         )
   const escapedDir = shellEscape(remoteDir)
   const escapedNode = shellEscape(nodePath)
-  // Why: remoteRelayDir is shared across Orca targets for one account; hashing the target ID into the socket name stops cross-target attach.
+  // Why: remoteRelayDir is shared across MCode targets for one account; hashing the target ID into the socket name stops cross-target attach.
   const sockName = relaySocketNameForInstanceId(relayInstanceId)
   const sockFile = relayEndpointForHost(hostPlatform, remoteDir, sockName)
   const endpointDir = relayHookEndpointDirForHost(hostPlatform, remoteDir, sockFile)

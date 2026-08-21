@@ -110,7 +110,7 @@ export function NotificationSoundSection({
         <p className="text-xs text-muted-foreground">
           {translate(
             'auto.components.settings.NotificationsPane.2a2033c388',
-            'Choose the alert Orca plays when a desktop notification is delivered.'
+            'Choose the alert MCode plays when a desktop notification is delivered.'
           )}
         </p>
       </div>

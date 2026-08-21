@@ -1,4 +1,4 @@
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import type { Page } from '@stablyai/playwright-test'
 import type { TerminalPaneLayoutNode } from '../../src/shared/terminal-tab-types'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
@@ -211,20 +211,20 @@ async function getSmartSortScenarioReadiness(
 }
 
 test.describe('Worktree Smart Sort', () => {
-  test.beforeEach(async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
+  test.beforeEach(async ({ mcodePage }) => {
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
+    await ensureTerminalVisible(mcodePage)
   })
 
   test('renders attention-needed worktrees above finished agents in Smart mode', async ({
-    orcaPage
+    mcodePage
   }) => {
-    const scenario = await seedSmartSortScenario(orcaPage)
+    const scenario = await seedSmartSortScenario(mcodePage)
     const { blockedId, doneId } = scenario
 
     await expect
-      .poll(() => getSmartSortScenarioReadiness(orcaPage, scenario), {
+      .poll(() => getSmartSortScenarioReadiness(mcodePage, scenario), {
         timeout: 8_000,
         message: 'Smart sort scenario did not seed live PTYs and fresh agent statuses'
       })
@@ -237,13 +237,13 @@ test.describe('Worktree Smart Sort', () => {
       })
 
     await expect
-      .poll(async () => (await getVisibleWorktreeIdsByTop(orcaPage)).slice(0, 2), {
+      .poll(async () => (await getVisibleWorktreeIdsByTop(mcodePage)).slice(0, 2), {
         timeout: 12_000,
         message: 'Smart sort did not promote the blocked worktree in the visible sidebar'
       })
       .toEqual([blockedId, doneId])
 
-    await expect(worktreeRow(orcaPage, blockedId)).toBeVisible()
-    await expect(worktreeRow(orcaPage, doneId)).toBeVisible()
+    await expect(worktreeRow(mcodePage, blockedId)).toBeVisible()
+    await expect(worktreeRow(mcodePage, doneId)).toBeVisible()
   })
 })

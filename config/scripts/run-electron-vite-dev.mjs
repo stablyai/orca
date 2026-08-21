@@ -37,10 +37,10 @@ const rawForwardedArgs = process.argv.slice(2)
 // Why: keep an escape hatch for tools that key off Electron's stock app name.
 // The flag is runner-only and must not leak into Chromium/electron-vite.
 const useStableElectronName =
-  process.env.ORCA_DEV_STABLE_NAME === '1' || rawForwardedArgs.includes(STABLE_NAME_FLAG)
+  process.env.MCODE_DEV_STABLE_NAME === '1' || rawForwardedArgs.includes(STABLE_NAME_FLAG)
 const forwardedRaw = rawForwardedArgs.filter((arg) => arg !== STABLE_NAME_FLAG)
 if (useStableElectronName) {
-  process.env.ORCA_DEV_STABLE_NAME = '1'
+  process.env.MCODE_DEV_STABLE_NAME = '1'
 }
 
 function readGitValue(args) {
@@ -70,33 +70,33 @@ function formatDevInstanceLabel(branch, worktreeName) {
 }
 
 function createDockTitle(branch, label) {
-  return `Orca: ${branch || label || 'dev'}`
+  return `MCode: ${branch || label || 'dev'}`
 }
 
 function seedDevInstanceIdentityEnv() {
   const branch =
-    process.env.ORCA_DEV_BRANCH ||
+    process.env.MCODE_DEV_BRANCH ||
     readGitValue(['symbolic-ref', '--quiet', '--short', 'HEAD']) ||
     readGitValue(['rev-parse', '--short', 'HEAD'])
-  const worktreeName = process.env.ORCA_DEV_WORKTREE_NAME || path.basename(repoRoot)
-  const label = process.env.ORCA_DEV_INSTANCE_LABEL || formatDevInstanceLabel(branch, worktreeName)
-  const identitySeed = process.env.ORCA_DEV_INSTANCE_KEY || repoRoot
-  const dockTitle = process.env.ORCA_DEV_DOCK_TITLE || createDockTitle(branch, label)
+  const worktreeName = process.env.MCODE_DEV_WORKTREE_NAME || path.basename(repoRoot)
+  const label = process.env.MCODE_DEV_INSTANCE_LABEL || formatDevInstanceLabel(branch, worktreeName)
+  const identitySeed = process.env.MCODE_DEV_INSTANCE_KEY || repoRoot
+  const dockTitle = process.env.MCODE_DEV_DOCK_TITLE || createDockTitle(branch, label)
 
-  process.env.ORCA_DEV_REPO_ROOT ||= repoRoot
-  process.env.ORCA_DEV_INSTANCE_KEY ||= identitySeed
+  process.env.MCODE_DEV_REPO_ROOT ||= repoRoot
+  process.env.MCODE_DEV_INSTANCE_KEY ||= identitySeed
   if (branch) {
-    process.env.ORCA_DEV_BRANCH ||= branch
+    process.env.MCODE_DEV_BRANCH ||= branch
   }
   if (worktreeName) {
-    process.env.ORCA_DEV_WORKTREE_NAME ||= worktreeName
+    process.env.MCODE_DEV_WORKTREE_NAME ||= worktreeName
   }
   if (label) {
     // Why: parallel `pn dev` runs need a stable origin label for window titles,
     // Dock names, and automation sessions without re-running git in Electron.
-    process.env.ORCA_DEV_INSTANCE_LABEL ||= label
+    process.env.MCODE_DEV_INSTANCE_LABEL ||= label
   }
-  process.env.ORCA_DEV_DOCK_TITLE ||= dockTitle
+  process.env.MCODE_DEV_DOCK_TITLE ||= dockTitle
 }
 
 function setPlistValue(plistPath, key, value) {
@@ -112,7 +112,7 @@ function sanitizeMacAppBundleName(value) {
       .join('')
       .replace(/\s+/g, ' ')
       .trim()
-      .slice(0, 120) || 'Orca'
+      .slice(0, 120) || 'MCode'
   )
 }
 
@@ -143,7 +143,7 @@ function pruneStaleDevBundles(distDir) {
         const dir = path.join(root, entry.name)
         return {
           dir,
-          hasMarker: existsSync(path.join(dir, 'orca-dev-electron-app.json')),
+          hasMarker: existsSync(path.join(dir, 'mcode-dev-electron-app.json')),
           mtimeMs: getMtimeMs(dir)
         }
       })
@@ -186,8 +186,8 @@ function prepareMacDevElectronApp() {
     electronVersion = JSON.parse(readFileSync(electronPackagePath, 'utf8')).version ?? null
   } catch {}
 
-  const title = process.env.ORCA_DEV_DOCK_TITLE || 'Orca: dev'
-  const identityKey = process.env.ORCA_DEV_INSTANCE_KEY || repoRoot
+  const title = process.env.MCODE_DEV_DOCK_TITLE || 'MCode: dev'
+  const identityKey = process.env.MCODE_DEV_INSTANCE_KEY || repoRoot
   // v11: stop patching the branch title into Info.plist so every dev bundle signs to one cdhash.
   // A stale copy only emits extra fields the parser ignores, so narrowing its schema needs no bump.
   const bundleLayoutVersion = 'stable-cdhash-dock-name-from-bundle-dir-v11'
@@ -203,10 +203,10 @@ function prepareMacDevElectronApp() {
   // and it sits outside the code signature, so varying it does not disturb the cdhash.
   const appBundleName = `${sanitizeMacAppBundleName(title)}.app`
   const appPath = path.join(distDir, appBundleName)
-  const markerPath = path.join(distDir, 'orca-dev-electron-app.json')
+  const markerPath = path.join(distDir, 'mcode-dev-electron-app.json')
   // Why: one stable id for every dev instance. Per-instance ids registered a
   // new macOS Notification Settings entry for each branch × Electron version,
-  // piling up "Orca: <branch>" rows forever and breaking the notification
+  // piling up "MCode: <branch>" rows forever and breaking the notification
   // settings deep-link (System Settings can't resolve an id it has no entry
   // for and falls back to the root list). macOS keys notification permission
   // by bundle id, so a single id also means granting notifications to one dev
@@ -215,7 +215,7 @@ function prepareMacDevElectronApp() {
   // Electron drops clicks for notification ids it didn't create, so the
   // click is lost, not misdirected.
   const bundleId = DEV_BUNDLE_ID
-  process.env.ORCA_DEV_MACOS_BUNDLE_ID = bundleId
+  process.env.MCODE_DEV_MACOS_BUNDLE_ID = bundleId
   // Why the patches are in the marker: bundleLayoutVersion alone does not cover them, so a cache
   // built before a patch value changed would be reused and keep presenting the old identity.
   const expectedMarker = JSON.stringify(
@@ -245,7 +245,7 @@ function prepareMacDevElectronApp() {
   )
   const requiredResourcePaths = [
     chromiumResourcePath,
-    path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout')
+    path.join(appPath, 'Contents', 'MacOS', 'mcode-keyboard-layout')
   ]
 
   function copiedAppIsUsable() {
@@ -290,7 +290,7 @@ function prepareMacDevElectronApp() {
     existsSync(chromiumResourcePath)
   ) {
     console.warn(
-      `[orca-dev] Another dev instance is running from this bundle; reusing it instead of rebuilding. Quit the other instance (or delete ${distDir}) to force a rebuild.`
+      `[mcode-dev] Another dev instance is running from this bundle; reusing it instead of rebuilding. Quit the other instance (or delete ${distDir}) to force a rebuild.`
     )
     process.env.ELECTRON_EXEC_PATH = executablePath
     return
@@ -339,13 +339,13 @@ function prepareMacDevElectronApp() {
         bundleId,
         '--single-arch',
         '--output',
-        path.join(appPath, 'Contents', 'MacOS', 'orca-notification-status')
+        path.join(appPath, 'Contents', 'MacOS', 'mcode-notification-status')
       ],
       { stdio: 'inherit' }
     )
   } catch (error) {
     console.warn(
-      `[orca-dev] notification-status helper build failed (permission card falls back to probes): ${error?.message ?? error}`
+      `[mcode-dev] notification-status helper build failed (permission card falls back to probes): ${error?.message ?? error}`
     )
   }
 
@@ -356,13 +356,13 @@ function prepareMacDevElectronApp() {
         path.join(repoRoot, 'config', 'scripts', 'build-keyboard-layout-macos.mjs'),
         '--single-arch',
         '--output',
-        path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout')
+        path.join(appPath, 'Contents', 'MacOS', 'mcode-keyboard-layout')
       ],
       { stdio: 'inherit' }
     )
   } catch (error) {
     console.warn(
-      `[orca-dev] keyboard-layout helper build failed (shifted Option composition stays conservative): ${error?.message ?? error}`
+      `[mcode-dev] keyboard-layout helper build failed (shifted Option composition stays conservative): ${error?.message ?? error}`
     )
   }
 
@@ -379,7 +379,7 @@ function prepareMacDevElectronApp() {
   } catch (error) {
     signed = false
     console.warn(
-      `[orca-dev] ad-hoc codesign failed (dev notifications will not deliver): ${error?.message ?? error}`
+      `[mcode-dev] ad-hoc codesign failed (dev notifications will not deliver): ${error?.message ?? error}`
     )
   }
   // Why only when signed: the marker is what marks this bundle reusable. Writing it after a failed
@@ -437,21 +437,21 @@ function restoreElectronFrameworkSymlinks(appPath) {
 }
 
 function getDevUserDataPath() {
-  if (process.env.ORCA_DEV_USER_DATA_PATH) {
-    return process.env.ORCA_DEV_USER_DATA_PATH
+  if (process.env.MCODE_DEV_USER_DATA_PATH) {
+    return process.env.MCODE_DEV_USER_DATA_PATH
   }
   if (process.platform === 'darwin') {
-    return path.join(process.env.HOME ?? '', 'Library', 'Application Support', 'orca-dev')
+    return path.join(process.env.HOME ?? '', 'Library', 'Application Support', 'mcode-dev')
   }
   if (process.platform === 'win32') {
     return path.join(
       process.env.APPDATA ?? path.join(process.env.USERPROFILE ?? '', 'AppData', 'Roaming'),
-      'orca-dev'
+      'mcode-dev'
     )
   }
   return path.join(
     process.env.XDG_CONFIG_HOME ?? path.join(process.env.HOME ?? '', '.config'),
-    'orca-dev'
+    'mcode-dev'
   )
 }
 
@@ -464,7 +464,7 @@ function prepareDevCliWrapper() {
   })
 
   process.env.PATH = `${binDir}${path.delimiter}${process.env.PATH ?? ''}`
-  console.log(`[orca-dev] Prepared wrapper in ${binDir}`)
+  console.log(`[mcode-dev] Prepared wrapper in ${binDir}`)
 }
 
 function getElectronExecutable() {
@@ -474,22 +474,22 @@ function getElectronExecutable() {
   return path.join(repoRoot, 'node_modules', '.bin', 'electron')
 }
 
-if (process.env.ORCA_SKIP_DEV_CLI_PREPARE !== '1') {
+if (process.env.MCODE_SKIP_DEV_CLI_PREPARE !== '1') {
   prepareDevCliWrapper()
 }
 
 seedDevInstanceIdentityEnv()
-if (!useStableElectronName && process.env.ORCA_SKIP_DEV_ELECTRON_APP_PREPARE !== '1') {
+if (!useStableElectronName && process.env.MCODE_SKIP_DEV_ELECTRON_APP_PREPARE !== '1') {
   prepareMacDevElectronApp()
 }
 
 // Why: tests inject a tiny fake CLI here so they can verify Ctrl+C tears down
 // the full child tree without depending on a real electron-vite install.
 const electronViteCli =
-  process.env.ORCA_ELECTRON_VITE_CLI ||
+  process.env.MCODE_ELECTRON_VITE_CLI ||
   path.join(path.dirname(require.resolve('electron-vite/package.json')), 'bin', 'electron-vite.js')
 const viteCli =
-  process.env.ORCA_VITE_CLI ||
+  process.env.MCODE_VITE_CLI ||
   path.join(path.dirname(require.resolve('vite/package.json')), 'bin', 'vite.js')
 
 function getMtimeMs(filePath) {
@@ -543,21 +543,21 @@ function isDevWebClientFresh() {
 }
 
 function prepareDevWebClient() {
-  if (process.env.ORCA_SKIP_DEV_WEB_PREPARE === '1' || isHelpOrVersion) {
+  if (process.env.MCODE_SKIP_DEV_WEB_PREPARE === '1' || isHelpOrVersion) {
     return
   }
   // Why: fresh worktrees should start Electron immediately; pairing already
   // falls back to non-browser URLs when the optional web bundle is unavailable.
-  if (!existsSync(getDevWebClientIndexPath()) && process.env.ORCA_DEV_WEB_PREPARE !== '1') {
+  if (!existsSync(getDevWebClientIndexPath()) && process.env.MCODE_DEV_WEB_PREPARE !== '1') {
     console.error(
-      '[orca-dev] Web client bundle missing; skipping pairing web build. Run `pnpm run build:web` or set ORCA_DEV_WEB_PREPARE=1 when you need browser pairing.'
+      '[mcode-dev] Web client bundle missing; skipping pairing web build. Run `pnpm run build:web` or set MCODE_DEV_WEB_PREPARE=1 when you need browser pairing.'
     )
     return
   }
   if (isDevWebClientFresh()) {
     return
   }
-  console.error('[orca-dev] Building web client for pairing...')
+  console.error('[mcode-dev] Building web client for pairing...')
   execFileSync(
     process.execPath,
     [viteCli, 'build', '--config', path.join(repoRoot, 'vite.web.config.ts')],
@@ -621,8 +621,8 @@ const userPassedPort = forwardedRaw.some(
 // Why: --help/--version exit immediately; binding a probe socket and printing
 // a debug-port line would be noise.
 const isHelpOrVersion = forwardedRaw.some((a) => a === '--help' || a === '-h' || a === '--version')
-if (!isHelpOrVersion && process.env.ORCA_DEV_INSTANCE_LABEL) {
-  console.error(`[orca-dev] Instance: ${process.env.ORCA_DEV_INSTANCE_LABEL}`)
+if (!isHelpOrVersion && process.env.MCODE_DEV_INSTANCE_LABEL) {
+  console.error(`[mcode-dev] Instance: ${process.env.MCODE_DEV_INSTANCE_LABEL}`)
 }
 let forwardedExtras = []
 if (!userPassedPort && !isHelpOrVersion) {
@@ -632,7 +632,7 @@ if (!userPassedPort && !isHelpOrVersion) {
     port = parseDebugPortEnv(envPortRaw)
     if (port === null) {
       console.error(
-        `[orca-dev] Ignoring invalid REMOTE_DEBUGGING_PORT=${JSON.stringify(envPortRaw)}; falling back to probe.`
+        `[mcode-dev] Ignoring invalid REMOTE_DEBUGGING_PORT=${JSON.stringify(envPortRaw)}; falling back to probe.`
       )
     }
   }
@@ -644,10 +644,10 @@ if (!userPassedPort && !isHelpOrVersion) {
     // Why: stderr keeps stdout clean for downstream parsing; log uses
     // 127.0.0.1 to match the interface we actually probed (localhost may
     // resolve to ::1 on IPv6-first hosts).
-    console.error(`[orca-dev] Remote debugging on http://127.0.0.1:${port}`)
+    console.error(`[mcode-dev] Remote debugging on http://127.0.0.1:${port}`)
   } else {
     console.error(
-      '[orca-dev] No free debug port found in sweep; starting without --remote-debugging-port.'
+      '[mcode-dev] No free debug port found in sweep; starting without --remote-debugging-port.'
     )
   }
 }

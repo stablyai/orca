@@ -1,5 +1,5 @@
 /**
- * Structured failure when an Anywhere (Orca Relay) pairing mint cannot attach Relay.
+ * Structured failure when an Anywhere (MCode Relay) pairing mint cannot attach Relay.
  * Returned instead of silently degrading to a LAN-only QR under the Relay label.
  */
 export type MobileRelayMintFailureStage =

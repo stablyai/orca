@@ -94,7 +94,7 @@ export type SkillFreshnessInstallation = {
 }
 
 // A scope whose contents belong to someone other than the user: a project's own checkout,
-// or a plugin's bundled copy. Orca's global update never writes here, so the owner's
+// or a plugin's bundled copy. MCode's global update never writes here, so the owner's
 // content is not the user's drift — which is why ownership outranks byte status when
 // labelling a location.
 const OWNER_MANAGED_SKILL_SCOPES: ReadonlySet<SkillInstallationTopology> = new Set([
@@ -106,8 +106,8 @@ export function isOwnerManagedSkillScope(topology: SkillInstallationTopology): b
   return OWNER_MANAGED_SKILL_SCOPES.has(topology)
 }
 
-// Why: Orca's updater only ever passes --global, so a copy a project owns is not
-// something Orca can act on — it has no remedy by design. Reporting it as global drift
+// Why: MCode's updater only ever passes --global, so a copy a project owns is not
+// something MCode can act on — it has no remedy by design. Reporting it as global drift
 // produced an amber badge no user action could clear, over a copy their own repo
 // legitimately owns. Stated by scope rather than by byte status on purpose: an outdated
 // or unreadable project copy is just as far outside the global updater's reach as an
@@ -126,7 +126,7 @@ export function skillPlacementParticipatesInGlobalFreshness(
  * amber must also produce a row there. An out-of-date copy the command converges is
  * ordinary work, not a problem; a plugin's own copy of a same-named skill is the vendor's
  * business rather than the user's drift, and a project's own copy is outside the reach of
- * the only update Orca runs.
+ * the only update MCode runs.
  */
 export function isSkillCopyNeedingAttention(installation: SkillFreshnessInstallation): boolean {
   return (
@@ -161,7 +161,7 @@ export type SkillFreshnessScanIssue = {
   errorCode: string | null
 }
 
-// Why: a real read failure is a fact about the user's disk and stays actionable. Orca's
+// Why: a real read failure is a fact about the user's disk and stays actionable. MCode's
 // own traversal bounds are not — reporting them as attention turns an ordinary large
 // plugin cache into a permanent amber pill on every skill.
 //

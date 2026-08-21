@@ -36,13 +36,13 @@ export async function connectDockerSshRelayTarget(
         const { target: createdTarget, repoReadoptions } = await window.api.ssh.addTarget({
           target: {
             label: `${viaProxyJump ? 'Docker SSH ProxyJump' : 'Docker SSH Relay'} E2E ${Date.now()}`,
-            ...(viaProxyJump ? { configHost: 'orca-e2e-destination' } : {}),
+            ...(viaProxyJump ? { configHost: 'mcode-e2e-destination' } : {}),
             host: target.host,
             port: viaProxyJump ? 22 : target.port,
             username: 'root',
             identityFile: target.identityFile,
             identitiesOnly: true,
-            ...(viaProxyJump ? { jumpHost: 'orca-e2e-jump' } : {}),
+            ...(viaProxyJump ? { jumpHost: 'mcode-e2e-jump' } : {}),
             relayGracePeriodSeconds
           }
         })

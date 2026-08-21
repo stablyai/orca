@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { remoteRpcContentBudget } from '../../../../shared/remote-rpc-content-budget'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import { FILE_METHODS } from './files'
@@ -25,7 +25,7 @@ describe('file preview RPC transport budgets', () => {
         getRuntimeId: () => 'test-runtime',
         readFileExplorerPreview,
         readTerminalArtifactPreview
-      } as unknown as OrcaRuntimeService
+      } as unknown as MCodeRuntimeService
       const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
       const id = '\u0001'.repeat(8_192)
       const reply = vi.fn()

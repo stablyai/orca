@@ -30,7 +30,7 @@ import {
   type SetupHookTrust
 } from '../tasks/setup-hook-trust'
 import { isMobileTuiAgentEnabled } from '../tasks/mobile-tui-agents'
-import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
+import type { PersistedTrustedMCodeHooks } from '../../../src/shared/mcode-yaml-hook-types'
 import type { Repo as SharedRepo } from '../../../src/shared/repo-types'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { SshConnectionState } from '../../../src/shared/ssh-types'
@@ -229,7 +229,7 @@ function NewWorktreeModalContent({
     useNewWorktreeRuntimeCapabilities(client, visible)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [setupHookDetails, setSetupHookDetails] = useState<SetupHookDetails | null>(null)
-  const [trustedOrcaHooks, setTrustedOrcaHooks] = useState<PersistedTrustedOrcaHooks>({})
+  const [trustedMCodeHooks, setTrustedMCodeHooks] = useState<PersistedTrustedMCodeHooks>({})
   const [setupTrustPrompt, setSetupTrustPrompt] = useState<SetupTrustPrompt | null>(null)
   const [setupDecisionChoice, setSetupDecisionChoice] = useState<Exclude<
     SetupDecision,
@@ -393,8 +393,8 @@ function NewWorktreeModalContent({
       }
       const uiResult = okResult(uiRes)
       if (uiResult) {
-        const ui = (uiResult.result as { ui?: { trustedOrcaHooks?: PersistedTrustedOrcaHooks } }).ui
-        setTrustedOrcaHooks(ui?.trustedOrcaHooks ?? {})
+        const ui = (uiResult.result as { ui?: { trustedMCodeHooks?: PersistedTrustedMCodeHooks } }).ui
+        setTrustedMCodeHooks(ui?.trustedMCodeHooks ?? {})
       }
 
       const [preflightRes, linearRes] = await probes
@@ -646,16 +646,16 @@ function NewWorktreeModalContent({
         setupDecision === 'run' &&
         setupTrust &&
         setupTrust.contentHash !== options.approvedSetupContentHash &&
-        !isSetupHookTrusted(trustedOrcaHooks, selectedRepo.id, setupTrust.contentHash)
+        !isSetupHookTrusted(trustedMCodeHooks, selectedRepo.id, setupTrust.contentHash)
       ) {
-        // Why: desktop prompts before running repo-owned orca.yaml setup hooks.
+        // Why: desktop prompts before running repo-owned mcode.yaml setup hooks.
         // Mobile stores the same trust hash so approvals carry across surfaces.
         setSetupTrustPrompt({
           repoId: selectedRepo.id,
           repoName: selectedRepo.displayName,
           scriptContent: setupTrust.scriptContent,
           contentHash: setupTrust.contentHash,
-          previouslyApproved: wasSetupHookPreviouslyApproved(trustedOrcaHooks, selectedRepo.id)
+          previouslyApproved: wasSetupHookPreviouslyApproved(trustedMCodeHooks, selectedRepo.id)
         })
         transitionDrawer('trust')
         return
@@ -764,12 +764,12 @@ function NewWorktreeModalContent({
     try {
       const nextTrust = await persistSetupHookTrustApproval({
         client,
-        trust: trustedOrcaHooks,
+        trust: trustedMCodeHooks,
         repoId: setupTrustPrompt.repoId,
         contentHash: setupTrustPrompt.contentHash,
         alwaysTrust
       })
-      setTrustedOrcaHooks(nextTrust)
+      setTrustedMCodeHooks(nextTrust)
       const approvedHash = setupTrustPrompt.contentHash
       setSetupTrustPrompt(null)
       transitionDrawer('form')
@@ -957,7 +957,7 @@ function NewWorktreeModalContent({
                       {setupSource && (
                         <View style={styles.sourceBadge}>
                           <Text style={styles.sourceBadgeText}>
-                            {setupSource === 'orca.yaml' ? 'ORCA.YAML' : 'HOOKS'}
+                            {setupSource === 'mcode.yaml' ? 'MCODE.YAML' : 'HOOKS'}
                           </Text>
                         </View>
                       )}

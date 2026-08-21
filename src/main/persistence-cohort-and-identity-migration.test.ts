@@ -58,7 +58,7 @@ vi.mock('./telemetry/cohort-classifier', () => ({
 
 describe('Store', () => {
   beforeEach(() => {
-    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+    testState.dir = mkdtempSync(join(tmpdir(), 'mcode-test-'))
     trackMock.mockReset()
     getCohortAtEmitMock.mockReset()
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
@@ -149,7 +149,7 @@ describe('Store.migrateTabSwitchKeybindings', () => {
   // Freezes the tab-switch cohort on first load, keying on `fileExistedOnLoad` (not field presence) so the verdict survives later launches.
 
   beforeEach(() => {
-    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+    testState.dir = mkdtempSync(join(tmpdir(), 'mcode-test-'))
   })
 
   afterEach(() => {
@@ -206,7 +206,7 @@ describe('Store.migrateWorktreeIdentity', () => {
   const NEW_WORKSPACE_KEY = worktreeWorkspaceKey(NEW)
 
   beforeEach(() => {
-    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+    testState.dir = mkdtempSync(join(tmpdir(), 'mcode-test-'))
   })
 
   afterEach(() => {

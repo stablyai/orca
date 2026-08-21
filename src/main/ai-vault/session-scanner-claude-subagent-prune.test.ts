@@ -14,7 +14,7 @@ afterEach(async () => {
 
 describe('scanAiVaultSessions Claude subagent pruning', () => {
   it('prunes subagents/ transcripts instead of listing them as sessions', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-subagent-prune-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-subagent-prune-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
     const subagentsDir = join(roots.claudeProjectsDir, 'project', 'claude-session', 'subagents')

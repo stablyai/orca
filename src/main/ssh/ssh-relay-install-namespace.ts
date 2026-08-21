@@ -1,7 +1,7 @@
 // Transfer-owner identity for relay installs that cross a split shell/SFTP namespace.
 //
 // The shell and SFTP paths share one validated home-relative suffix
-// (`.orca-remote/relay-<fullVersion>`); a random marker inside the shared install
+// (`.mcode-remote/relay-<fullVersion>`); a random marker inside the shared install
 // lock or attempt stage proves which shell-owned directory the SFTP session sees.
 //
 // See: docs/ssh-relay-sftp-namespace.md

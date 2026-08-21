@@ -18,7 +18,7 @@ afterEach(async () => {
 })
 
 async function createPrimaryHome(): Promise<string> {
-  const primaryHome = await mkdtemp(path.join(os.tmpdir(), 'orca-codex-tripwire-'))
+  const primaryHome = await mkdtemp(path.join(os.tmpdir(), 'mcode-codex-tripwire-'))
   cleanupPaths.push(primaryHome)
   await mkdir(path.join(primaryHome, '.codex'))
   return primaryHome
@@ -70,7 +70,7 @@ describe('Codex primary-home tripwire', () => {
     'does not follow symlinks outside the watched home',
     async () => {
       const primaryHome = await createPrimaryHome()
-      const externalRoot = await mkdtemp(path.join(os.tmpdir(), 'orca-codex-tripwire-external-'))
+      const externalRoot = await mkdtemp(path.join(os.tmpdir(), 'mcode-codex-tripwire-external-'))
       cleanupPaths.push(externalRoot)
       const externalFile = path.join(externalRoot, 'credential.txt')
       await writeFile(externalFile, 'before')

@@ -14,7 +14,7 @@ const lazyArabicShapingJoinerByTerminal = new WeakMap<
   LazyArabicShapingJoinerState
 >()
 
-// Why: xterm lacks BiDi/shaping (xterm.js#701, Orca #5262); joining each RTL run into one cell lets the browser shape and reorder it.
+// Why: xterm lacks BiDi/shaping (xterm.js#701, MCode #5262); joining each RTL run into one cell lets the browser shape and reorder it.
 
 // Every strong-RTL block sits at/above U+0590, so ASCII/Latin bails out with a single charCodeAt sweep.
 const RTL_SCAN_FLOOR = 0x0590

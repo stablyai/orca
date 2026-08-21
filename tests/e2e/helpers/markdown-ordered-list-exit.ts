@@ -54,7 +54,7 @@ export async function createMarkdownFixture(
   workerIndex: number,
   initialMarkdown: string
 ): Promise<string> {
-  const directory = path.join(context.rootPath, '.orca-e2e-markdown-ordered-list')
+  const directory = path.join(context.rootPath, '.mcode-e2e-markdown-ordered-list')
   await mkdir(directory, { recursive: true })
 
   const filePath = path.join(directory, `${slug}-${workerIndex}-${Date.now()}-${randomUUID()}.md`)

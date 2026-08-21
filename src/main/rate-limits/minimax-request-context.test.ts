@@ -142,7 +142,7 @@ describe('makeMiniMaxRequestHeaders', () => {
     expect(headers['Accept-Language']).toBe('en-US,en;q=0.9')
     expect(headers.Referer).toBe('https://platform.minimax.io/console/usage')
     expect(headers['User-Agent']).toMatch(/^Mozilla\/5\.0/)
-    expect(headers['User-Agent']).not.toContain('orca-minimax-usage')
+    expect(headers['User-Agent']).not.toContain('mcode-minimax-usage')
   })
 
   it('omits X-Group-Id when groupId is null', () => {
@@ -191,7 +191,7 @@ describe('fetchMiniMaxWithSessionCookieJar', () => {
       groupId: '12345',
       signal: controller.signal
     })
-    expect(sessionFromPartitionMock).toHaveBeenCalledWith('orca-minimax-rate-limit-fetch')
+    expect(sessionFromPartitionMock).toHaveBeenCalledWith('mcode-minimax-rate-limit-fetch')
     expect(clearStorageDataMock).toHaveBeenCalledTimes(2)
     expect(clearStorageDataMock).toHaveBeenNthCalledWith(1, {
       origin: 'https://platform.minimax.io',
@@ -235,7 +235,7 @@ describe('fetchMiniMaxWithSessionCookieJar', () => {
 
   it('clears the dedicated MiniMax partition on demand', async () => {
     await clearMiniMaxSessionCookieJar()
-    expect(sessionFromPartitionMock).toHaveBeenCalledWith('orca-minimax-rate-limit-fetch')
+    expect(sessionFromPartitionMock).toHaveBeenCalledWith('mcode-minimax-rate-limit-fetch')
     expect(clearStorageDataMock).toHaveBeenCalledWith({
       origin: 'https://platform.minimax.io',
       storages: ['cookies']
@@ -331,7 +331,7 @@ describe('fetchMiniMaxWithManualCookieHeader', () => {
       signal: controller.signal
     })
     expect(result.transport).toBe('manual-cookie-header')
-    expect(sessionFromPartitionMock).toHaveBeenCalledWith('orca-minimax-rate-limit-fetch')
+    expect(sessionFromPartitionMock).toHaveBeenCalledWith('mcode-minimax-rate-limit-fetch')
     expect(clearStorageDataMock).toHaveBeenCalledTimes(2)
     expect(cookiesSetMock).not.toHaveBeenCalled()
     expect(netFetchMock).toHaveBeenCalledTimes(1)

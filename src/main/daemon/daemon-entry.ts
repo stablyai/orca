@@ -208,7 +208,7 @@ async function main(): Promise<void> {
   // audit-session teardown), so e2e drives the oracles from a verdict file:
   // 'alive' → accepted/healthy, 'dead' → rejected/unhealthy, 'hang' →
   // timeout-inconclusive/unhealthy (the fail-safe path), else inconclusive.
-  const e2eProbeFile = process.env.ORCA_E2E_LOGIN_SESSION_PROBE_FILE
+  const e2eProbeFile = process.env.MCODE_E2E_LOGIN_SESSION_PROBE_FILE
   const readE2eVerdict = (): string => {
     try {
       return readFileSync(e2eProbeFile as string, 'utf8').trim()

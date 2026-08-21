@@ -314,7 +314,7 @@ export function QuickCommandsPane({
         <div className="px-3 py-6 text-sm text-muted-foreground">
           {translate(
             'auto.components.settings.QuickCommandsPane.d59bd333c3',
-            'Update this Orca server to manage its quick commands.'
+            'Update this MCode server to manage its quick commands.'
           )}
         </div>
       ) : selectedRuntimeCommandsAreCurrent &&

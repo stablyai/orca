@@ -12,7 +12,7 @@ afterEach(async () => {
 
 describe('skill bundle artifacts', () => {
   it('loads the committed schema-2 artifacts and rejects a stamped schema-1 manifest', async () => {
-    const resourceRoot = await mkdtemp(join(tmpdir(), 'orca-skill-artifacts-'))
+    const resourceRoot = await mkdtemp(join(tmpdir(), 'mcode-skill-artifacts-'))
     temporaryDirectories.push(resourceRoot)
     const target = join(resourceRoot, 'skills')
     const source = resolve('resources', 'skills')
@@ -32,7 +32,7 @@ describe('skill bundle artifacts', () => {
     expect(artifacts.manifest.schemaVersion).toBe(2)
     expect(artifacts.manifest.skills.length).toBeGreaterThan(0)
 
-    const legacyRoot = await mkdtemp(join(tmpdir(), 'orca-skill-artifacts-'))
+    const legacyRoot = await mkdtemp(join(tmpdir(), 'mcode-skill-artifacts-'))
     temporaryDirectories.push(legacyRoot)
     const legacyTarget = join(legacyRoot, 'skills')
     await mkdir(legacyTarget, { recursive: true })
@@ -54,7 +54,7 @@ describe('skill bundle artifacts', () => {
   })
 
   it('rejects malformed nested release entries before building provenance', async () => {
-    const resourceRoot = await mkdtemp(join(tmpdir(), 'orca-skill-artifacts-'))
+    const resourceRoot = await mkdtemp(join(tmpdir(), 'mcode-skill-artifacts-'))
     temporaryDirectories.push(resourceRoot)
     const target = join(resourceRoot, 'skills')
     const source = resolve('resources', 'skills')

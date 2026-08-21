@@ -11,17 +11,17 @@ import { PluginLanguagePackRegistry } from './plugin-language-pack-registry'
 const roots: string[] = []
 
 async function pluginWithCatalog(catalog: unknown): Promise<ValidDiscoveredPlugin> {
-  const rootDir = await mkdtemp(join(tmpdir(), 'orca-plugin-language-registry-'))
+  const rootDir = await mkdtemp(join(tmpdir(), 'mcode-plugin-language-registry-'))
   roots.push(rootDir)
   await mkdir(join(rootDir, 'locales'))
   await writeFile(join(rootDir, 'locales', 'pt-BR.json'), JSON.stringify(catalog))
   const manifest = pluginManifestSchema.parse({
     manifestVersion: 1,
     id: 'portuguese',
-    publisher: 'orca-samples',
+    publisher: 'mcode-samples',
     name: 'Portuguese',
     version: '1.0.0',
-    engines: { orca: '>=1.0.0' },
+    engines: { mcode: '>=1.0.0' },
     pluginApi: 1,
     contributes: {
       languagePacks: [{ locale: 'pt-BR', path: 'locales/pt-BR.json' }]
@@ -29,7 +29,7 @@ async function pluginWithCatalog(catalog: unknown): Promise<ValidDiscoveredPlugi
     capabilities: []
   })
   return {
-    pluginKey: 'orca-samples.portuguese',
+    pluginKey: 'mcode-samples.portuguese',
     rootDir,
     manifest,
     consentFingerprint: fingerprintPluginConsent(manifest),
@@ -51,10 +51,10 @@ describe('PluginLanguagePackRegistry', () => {
 
     expect(registry.list()).toEqual([
       {
-        id: 'plugin:orca-samples.portuguese/pt-BR',
+        id: 'plugin:mcode-samples.portuguese/pt-BR',
         resourceLanguage:
           'plugin0070006c007500670069006e003a006f007200630061002d00730061006d0070006c00650073002e0070006f00720074007500670075006500730065002f00700074002d00420052',
-        pluginKey: 'orca-samples.portuguese',
+        pluginKey: 'mcode-samples.portuguese',
         locale: 'pt-BR',
         catalog: { common: { save: 'Salvar' } }
       }

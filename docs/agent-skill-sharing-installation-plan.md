@@ -15,19 +15,19 @@ Provider registry:
 
 ## Decision summary
 
-Orca will own a focused Skill Bundle packaging and installation pipeline for private sharing. A
+MCode will own a focused Skill Bundle packaging and installation pipeline for private sharing. A
 bundle contains one or many skills; sharing one skill is the same flow with one selected item.
 
 The community [`vercel-labs/skills`](https://github.com/vercel-labs/skills) project will
 remain a behavioral reference, not a runtime dependency or source donor. Its npm package
 exposes a CLI rather than a supported programmatic API, and its install/update behavior does
-not provide the transaction, provenance, or private-package semantics Orca needs.
+not provide the transaction, provenance, or private-package semantics MCode needs.
 
-Orca will:
+MCode will:
 
 1. Package one or many local skills into one immutable, content-addressed artifact and durable
    link.
-2. Store private artifacts behind unlisted, revocable Orca Cloud share records.
+2. Store private artifacts behind unlisted, revocable MCode Cloud share records.
 3. Treat possession of an active share link as recipient authorization, then resolve it into a
    short-lived download grant.
 4. Execute installation on the machine that will use the skill.
@@ -42,37 +42,37 @@ Orca will:
 10. Give authenticated owners a private active-link inventory for copy and revocation; this is a
     management surface, not recipient discovery.
 
-The portable archive root follows Agent Plugins 1.0.0 for a skills-only package. Orca does not
+The portable archive root follows Agent Plugins 1.0.0 for a skills-only package. MCode does not
 present Skill Bundles as a new executable plugin system: MCP servers, hooks, processes, connectors,
 and permissions are out of scope. Loose-skill installation remains the universal/default delivery
 path, with provider-native plugin adapters generated only where they improve compatibility.
 
-The first release will support Orca package sources only. Arbitrary Git, npm, and community
+The first release will support MCode package sources only. Arbitrary Git, npm, and community
 registry sources remain delegated to existing tools until there is a product need to own
 that larger package-manager surface.
 
 ## Current execution status
 
-The Orca implementation is on `skills-share` through `2a0b7b2acf`; no Orca pull request exists.
+The MCode implementation is on `skills-share` through `2a0b7b2acf`; no MCode pull request exists.
 The local working tree also contains the install-IPC compatibility fix and the in-progress Skills
 UI overhaul. Cloud bundle ingestion, bearer links, recovery, load testing, production bootstrap,
-OIDC smoke, and monitor ownership merged through `stablyai/orca-cloud#361`. Final infrastructure
+OIDC smoke, and monitor ownership merged through `mcode-ide/mcode-cloud#361`. Final infrastructure
 hardening merged in `#364` as `57c4958979fc32ed4753959cea45edd3a7c8775c`.
 
 Production is live. Two reviewed targeted Terraform phases added the dedicated app deploy identity,
 restricted both GitHub WIF providers to exact workflows, added resource-scoped API/Auth/monitor and
 Relay bindings, then removed five broad legacy bindings. A separate exact plan updated only the
 bearer request-log exclusion and all eight skill alert policies; the alerts use the dedicated
-`Orca skill sharing alerts` email channel. No full production plan was applied because it contains
+`MCode skill sharing alerts` email channel. No full production plan was applied because it contains
 unrelated Relay drift.
 
-Production deploy run `31661421728` promoted `orca-cloud-api-00025-qup` at 100% traffic from merged
+Production deploy run `31661421728` promoted `mcode-cloud-api-00025-qup` at 100% traffic from merged
 `main`, using immutable digest
 `sha256:e4f044105ff2345574bdceb36eec1629761428cc2edf9d743939390b857d61e0`. Candidate and canonical
 authenticated artifact and skill smoke passed, `/health` and `/ready` are green, and the direct
-unlisted landing route returns only generic install copy plus the Orca deep link with `no-store`,
+unlisted landing route returns only generic install copy plus the MCode deep link with `no-store`,
 `no-referrer`, and restrictive CSP headers. Monitor execution
-`orca-cloud-skill-storage-monitor-lfd26` passed on the same digest and emitted only aggregate
+`mcode-cloud-skill-storage-monitor-lfd26` passed on the same digest and emitted only aggregate
 inventory. The implementation checklist records the remaining desktop and physical-host gates.
 
 The final reliability hardening gives every skill Cloud request a default deadline, makes bundle
@@ -88,7 +88,7 @@ The final combined physical `windows 2` run at `44d1266641` passed 449 tests acr
 17 intentional platform skips while native-Windows, real-process, and Ubuntu 24.04 WSL coverage
 were enabled together. Windows harness fixes at `97b831dd17` made recovery evidence path-semantic
 and time-deterministic. The run exposed and fixed a WSL alias edge at `44d1266641`: when native UNC
-`lstat` misses an existing distro symlink, Orca now verifies the alias through WSL and uses
+`lstat` misses an existing distro symlink, MCode now verifies the alias through WSL and uses
 `ln -sT` for creation. The Windows checkout was clean and WSL `/tmp` had no test debris. Only
 Ubuntu 24.04 is installed; second-distro permutations are post-launch rather than a first-release
 gate.
@@ -97,7 +97,7 @@ The release workflow now runs the exact unpacked Linux package under Electron-as
 Ubuntu 20.04 container and requires packaged `node-pty` to spawn `/bin/sh`. A physical x64 build at
 `f1dccb4f42` passed the existing 18-binary ABI scan and this load/spawn smoke. A native ARM64 build
 at `abe92d565b` then passed the same scan for all 18 bundled binaries and emitted
-`orca-node-pty-floor-ok` from an ARM64 Ubuntu 20.04 container on native `aarch64` hardware. The
+`mcode-node-pty-floor-ok` from an ARM64 Ubuntu 20.04 container on native `aarch64` hardware. The
 isolated ARM64 GCE builder had no service account or scopes, remained clean at the exact source
 commit, and was deleted with its auto-delete boot disk after verification. The physical runs also
 caught and corrected assumptions about the Linux executable name and packaged runtime-module
@@ -147,7 +147,7 @@ real-process macOS crash-recovery matrix passes all 17 boundaries; physical plat
 tracked in the checklist.
 
 The dedicated staging bucket, IAM, database, principal, enabled secret version, metrics, dashboard,
-and alerts exist in `onorca-cloud-staging`. The complete skill-infrastructure target is zero-diff.
+and alerts exist in `mcode-cloud-staging`. The complete skill-infrastructure target is zero-diff.
 After `#314`, the targeted Auth/API plan also reports zero intended changes. Known shared Cloud SQL
 and artifact-bucket drift was excluded and never applied. Staging was awakened only through guarded
 run `31534564230`. Sleep run `31536547916` returned all three cells to zero; read-only status run
@@ -190,14 +190,14 @@ zero overdue objects and no identifiers or paths. SQL remained `NEVER`/`STOPPED`
 MIG targets remained zero, and production remained disabled and untouched.
 
 A separate read-only production prerequisite check confirmed that
-`onorca-cloud-skill-packages` is currently unallocated, the production skill database and secret
+`mcode-cloud-skill-packages` is currently unallocated, the production skill database and secret
 names do not collide, and the intended API service and runtime identity already exist. Cloud Run
 quota headroom exceeds the existing 20-instance API ceiling; V1 adds no database instance and
 requires no quota increase. No production resource was planned or changed.
 
-Auth deploy run `31535179937` promoted `orca-cloud-auth-staging-00017-dug` with exact staging-only
+Auth deploy run `31535179937` promoted `mcode-cloud-auth-staging-00017-dug` with exact staging-only
 GitHub OIDC constraints, healthy JWKS, and zero deployment-window errors. API run `31535438327`
-promoted `orca-cloud-api-staging-00042-hef` with `authenticatedSmoke: true` and `skillSmoke: true`.
+promoted `mcode-cloud-api-staging-00042-hef` with `authenticatedSmoke: true` and `skillSmoke: true`.
 The ten-minute, non-refreshable smoke principals exercised artifact CRUD and skill upload,
 finalize, immutable versions, recipient/outsider authorization, local and remote grants, rollback,
 expiry, revocation, deletion, and signed-object cleanup. Structured skill logs exposed only
@@ -206,7 +206,7 @@ privacy-safe request metadata and produced zero sensitive-value matches.
 Cloud PR `#320` passed PR run `31564069382`, merged-`main` run `31564235724`, and a targeted
 staging logging-exclusion plan of one addition, zero changes, and zero deletions. Guarded wake run
 `31564370807` prepared staging. Deploy run `31564803943` promoted
-`orca-cloud-api-staging-00051-yoq` at 100% traffic with immutable image digest
+`mcode-cloud-api-staging-00051-yoq` at 100% traffic with immutable image digest
 `sha256:511c0196511d2079bd9138092ad3cf065304b46a089b02d8df9318e0ae2e656a`. Candidate and canonical
 smoke covered owner upload/finalize/share creation/inventory/revocation and anonymous preview,
 local/remote download grants, version selection, expiry, uniform unavailable responses, package
@@ -215,7 +215,7 @@ same non-cached `404`; the serving revision produced zero errors, and Cloud Logg
 per-link platform request logs. Cloud PR `#329` and desktop run `31569902499` subsequently passed
 the complete browser-free publish/install/conflict/update/rollback/revoke/remove/delete journey.
 Cloud PR `#330` merged as `8045c85dad`; deploy `31579844413` promoted revision
-`orca-cloud-api-staging-00057-kat`, and recovery smoke `31580071168` proved generation-aware GCS
+`mcode-cloud-api-staging-00057-kat`, and recovery smoke `31580071168` proved generation-aware GCS
 soft-delete restoration, transactional reference repointing, bearer download, and cleanup.
 Guarded sleep `31580339694` restored SQL to `NEVER`/`STOPPED` and all Relay MIG targets to zero.
 Load run `31585710645` then exercised 12 concurrent 30-skill bundles at roughly 3.95 MiB extracted
@@ -226,14 +226,14 @@ manifest-proven quarantine generations were deleted with GCS preconditions. Guar
 `31587083752` then returned SQL to `NEVER`/`STOPPED`, all three stable Relay MIGs to zero, and every
 active Cloud Run revision minimum to zero. Guarded wake `31589384191` later restored only the two
 configured Relay cells, and Auth deploy `31589963244` promoted
-`orca-cloud-auth-staging-00025-zuz`. The browser-free physical `windows 2` staging journey then
+`mcode-cloud-auth-staging-00025-zuz`. The browser-free physical `windows 2` staging journey then
 passed publish, native Windows install, update, independent local version selection, rollback,
 revocation preservation, removal, and Cloud deletion using encrypted credential run
 `31591275227`; its ciphertext artifact and one-time local key material were deleted immediately.
 Guarded wake `31603249983` later restored only the two configured cells. A disposable
 no-service-account Ubuntu 20.04/glibc 2.31 VM passed the full live SSH staging lifecycle in 31.3
 seconds, including host-owned install, update, rollback, revocation preservation, removal, and
-Cloud deletion. The encrypted credential artifact, one-time keys, Orca SSH target, remote install,
+Cloud deletion. The encrypted credential artifact, one-time keys, MCode SSH target, remote install,
 and VM were removed. Guarded sleep `31604391897` passed and independent reads confirmed SQL
 `NEVER`/`STOPPED` plus all three Relay MIGs at stable target zero. Guarded wake `31605729090` then
 enabled the same topology for an isolated headless paired host with a separate home/profile. The
@@ -263,7 +263,7 @@ time-gated quarantine deletion remain open.
 Cloud PR `#355` removed internal publisher and organization identifiers from recipient responses,
 passed code, Terraform, and PostgreSQL 16/17 checks, and merged as
 `b3213bd34d1b224d8a3b11527eceaac883965400`. Guarded wake `31639920301` prepared staging. Deploy
-`31640677572` promoted `orca-cloud-api-staging-00060-qay` at 100% traffic with immutable digest
+`31640677572` promoted `mcode-cloud-api-staging-00060-qay` at 100% traffic with immutable digest
 `sha256:31cb0a91a7abf1f82e4de08bd31e98fbd71519adc731a005fc95f60480658f73`; authenticated and skill
 candidate/canonical smoke passed. Its unrelated post-promotion storage-monitor image update lacked
 `iam.serviceAccounts.actAs`; the prior monitor image remains serving and unchanged. Guarded sleep
@@ -274,25 +274,25 @@ MIGs stable and reached at target zero, and the API at minimum scale zero while 
 Production deployment completed on 2026-08-12. The exact skill-only Terraform apply created the
 private bucket, database, secret, least-privilege identities, request-log exclusion, metrics,
 alerts, and dashboard with 40 additions and zero updates, replacements, or deletions. Disabled-route
-bootstrap run `31648015091` migrated the schema and promoted `orca-cloud-api-00016-yem` while all
+bootstrap run `31648015091` migrated the schema and promoted `mcode-cloud-api-00016-yem` while all
 four controls remained false. Cloud PR `#357` enabled all four controls in one launch. Cloud PR
 `#358` replaced the missing long-lived production smoke secret with an exchange restricted to the
 exact production `main` workflow, GitHub environment, dispatch event, repository/owner IDs, and
 audience; issued principals expire in ten minutes and have no refresh credentials. Auth run
 `31649381596` passed candidate and canonical health. API run `31650178315` passed candidate and
 canonical authenticated artifact plus skill lifecycle smoke, promoted
-`orca-cloud-api-00022-maq` to 100% traffic, and completed the aggregate monitor image update. All
+`mcode-cloud-api-00022-maq` to 100% traffic, and completed the aggregate monitor image update. All
 four skill controls are true, the serving revision reported zero deployment-window errors, and
 both API and Auth health are green.
 
 Cloud PR `#359` codified the deploy identity's `roles/iam.serviceAccountUser` grant only on the
 read-only skill storage monitor identity. Its exact production apply added one resource with zero
 changes or deletions, and the repeat targeted plan was zero-diff. Manual execution
-`orca-cloud-skill-storage-monitor-bmm4q` completed successfully. Cloud PRs `#360` and `#361` keep
+`mcode-cloud-skill-storage-monitor-bmm4q` completed successfully. Cloud PRs `#360` and `#361` keep
 Terraform ownership of the monitor shape while assigning its immutable image and Cloud Run client
 metadata to the release workflow; the exact production monitor plan is zero-diff after the live
-image advance. The development Orca instance
-`skill-sharing-manual` now points at `login.onorca.dev` and `cloud-api.onorca.dev`; sign-in and the
+image advance. The development MCode instance
+`skill-sharing-manual` now points at `login.mcode.dev` and `cloud-api.mcode.dev`; sign-in and the
 desktop/real-host production lifecycle remain user-driven validation.
 
 A final renderer lifecycle review fenced managed-install inventory by request generation so a
@@ -310,8 +310,8 @@ The portable bundle assessment used
 [`agentplugins/agent-plugins-spec`](https://github.com/agentplugins/agent-plugins-spec) commit
 `bd383552095128f6effe895b9257cfd580a6d179`, specifically `spec/1.0.0.md`. The local reviewed clone
 is `/Users/jinwoo/refs/misc/agent-plugins-spec`; the example repository is
-`/Users/jinwoo/refs/misc/agent-plugins-example`. Orca independently implements the reviewed
-behavior. The specification prose is CC BY 4.0 and its schemas/software are Apache 2.0, so Orca
+`/Users/jinwoo/refs/misc/agent-plugins-example`. MCode independently implements the reviewed
+behavior. The specification prose is CC BY 4.0 and its schemas/software are Apache 2.0, so MCode
 will not copy the prose or vendor the schemas unless the corresponding notices are deliberately
 handled.
 
@@ -323,7 +323,7 @@ Useful upstream behavior:
 - Archive path, entry-count, and extracted-byte limits.
 - Tests for aliases, broken links, and provider-specific placement.
 
-Behavior Orca will not inherit:
+Behavior MCode will not inherit:
 
 - Deleting the destination before the replacement is ready.
 - Updating without checking whether installed files were modified.
@@ -332,16 +332,16 @@ Behavior Orca will not inherit:
 - Treating an expiring signed artifact URL as package identity.
 - Coupling installation to prompts, terminal output, telemetry, and process exits.
 
-Orca will not copy upstream source, tests, fixtures, or registry entries. Provider paths will be
+MCode will not copy upstream source, tests, fixtures, or registry entries. Provider paths will be
 implemented independently from official provider documentation and verified installations. Under
-that constraint, Orca does not incorporate upstream copyrightable material and needs no upstream
+that constraint, MCode does not incorporate upstream copyrightable material and needs no upstream
 attribution. Revisit this decision if implementation work ever proposes copying material.
 
 ## Goals
 
 - Share one or many private skills with a teammate through one durable, intuitive link.
 - Select and review large bundles, including groups of 30 skills, without repetitive dialogs.
-- Install on the local computer or any compatible connected Orca runtime.
+- Install on the local computer or any compatible connected MCode runtime.
 - Support global scope and folder-workspace/project scope.
 - Work on macOS, Linux, and Windows.
 - Preserve executable bits and all files in the skill package.
@@ -352,7 +352,7 @@ attribution. Revisit this decision if implementation work ever proposes copying 
   or provenance publication.
 - Keep share authorization separate from short-lived blob access.
 - Support immutable versions, updates, removal, and eventual team-wide reconciliation.
-- Remain compatible with independently updated desktop clients and remote Orca servers.
+- Remain compatible with independently updated desktop clients and remote MCode servers.
 - Treat ordinary folder workspaces as first-class; Git is not required.
 - Preserve enough portable metadata for export, SSH/remote transfer, and offline validation.
 
@@ -368,7 +368,7 @@ attribution. Revisit this decision if implementation work ever proposes copying 
 - Shipping a full plugin runtime, MCP servers, hooks, processes, connectors, or portable
   permissions.
 - Requiring a provider-native plugin installer; unsupported agents still receive loose skills.
-- End-to-end encryption from Orca Cloud operators in the initial trust model. Private means
+- End-to-end encryption from MCode Cloud operators in the initial trust model. Private means
   unlisted and accessible through an active bearer link, with authenticated owner management.
   Application-level package encryption can be added later without changing package identity.
 
@@ -378,7 +378,7 @@ attribution. Revisit this decision if implementation work ever proposes copying 
 
 The existing Skills page has three header actions: **Share skills**, **Install from link**, and
 **Manage**. **Share skills** enters selection mode across installed and workspace skills. Search
-and filter changes retain selections; **Select all results** is explicit and Orca never silently
+and filter changes retain selections; **Select all results** is explicit and MCode never silently
 selects everything. The existing per-card share action remains a one-skill shortcut.
 
 Ineligible skills are disabled with a visible reason. Duplicate skill names must be resolved before
@@ -393,12 +393,12 @@ The review dialog shows:
 - A clear warning that anyone with the unlisted link can inspect and install the bundle.
 - Optional version label and release notes.
 
-After confirmation, Orca validates and packages the exact bytes shown in the preview. Progress is
+After confirmation, MCode validates and packages the exact bytes shown in the preview. Progress is
 named **Preparing skills**, **Uploading**, **Verifying**, and **Publishing link**. Completion returns
 one durable URL such as:
 
 ```text
-https://app.orca.dev/skills/share/<share-id>
+https://app.mcode.dev/skills/share/<share-id>
 ```
 
 The URL identifies a revocable bearer share record, not a blob-storage object or permanent GCS
@@ -409,7 +409,7 @@ deletion still require the owner to sign in.
 
 ### Installing
 
-Opening a deep link launches Orca and inspects the bundle without installing it. Preview identifies
+Opening a deep link launches MCode and inspects the bundle without installing it. Preview identifies
 the immutable version, release notes, skill count, scripts, and executable files. V1 deliberately
 omits publisher identity from the recipient response and UI; internal creator and tenant records
 remain private authorization and management data. The recipient can select all or a subset of the
@@ -448,7 +448,7 @@ Selected skill folders
 Package builder -- validates and creates immutable artifact
     |
     v
-Orca Cloud -- private blob + version metadata + revocable bearer share
+MCode Cloud -- private blob + version metadata + revocable bearer share
     |
     v
 Download grant -- short-lived and scoped to one immutable digest
@@ -482,7 +482,7 @@ skills/
 ├── skill-b/
 │   └── SKILL.md
 └── ...
-dev.orca.skill-sharing/
+dev.mcode.skill-sharing/
 └── manifest.json
 ```
 
@@ -516,7 +516,7 @@ Rules:
 
 - `packageId` is stable across versions; `versionId` identifies one immutable publication.
 - `plugin.json` uses the canonical Agent Plugins 1.0.0 `$schema`, a valid portable plugin name,
-  bundle version, description, and optional standard metadata. Orca validates from locally owned
+  bundle version, description, and optional standard metadata. MCode validates from locally owned
   rules and never fetches the schema while loading.
 - Every immediate `skills/<name>/SKILL.md` is required and must parse successfully.
 - Each skill digest uses normalized relative paths, executable state, classification, and file
@@ -533,14 +533,14 @@ Rules:
 - Names are normalized once during publication. Installation never silently renames a conflict.
 - The archive has no outer `bundle/` wrapper, so its root remains directly consumable by agents
   that implement Agent Plugins.
-- Orca-specific integrity and version data lives in `dev.orca.skill-sharing/manifest.json` rather
+- MCode-specific integrity and version data lives in `dev.mcode.skill-sharing/manifest.json` rather
   than a top-level custom field or GCS metadata alone. It therefore survives export, SSH/remote
   transfer, and offline validation and can describe every skill and file.
 - GCS custom metadata stays compact and operational. PostgreSQL stores only the package, share,
   version, ownership, and lifecycle records needed to resolve a known link or manage an owned
   bundle. Legacy ACL records may remain during migration but never gate bearer-link access.
-- Orca constructs a fresh staging root. If imported content already contains
-  `dev.orca.skill-sharing`, Orca accepts only an appropriate recognized schema and rejects unknown,
+- MCode constructs a fresh staging root. If imported content already contains
+  `dev.mcode.skill-sharing`, MCode accepts only an appropriate recognized schema and rejects unknown,
   malformed, or conflicting contents; it never overwrites the namespace silently.
 - V1 rejects symlinks and special files. A later package-builder feature may safely dereference
   internal links after proving they remain within the source root.
@@ -553,7 +553,7 @@ observes the staged copies again, and only packages them if every identity agree
 shown to the user is bound to that final bundle digest.
 
 The original unpublished `manifest.json + skill/` staging format has no production compatibility
-commitment. Orca will replace it before launch and migrate or discard staging-only records. Remote
+commitment. MCode will replace it before launch and migrate or discard staging-only records. Remote
 bundle RPCs use a new `skills.install.bundle.v1` capability and additive methods so older peers do
 not interpret bundle requests as single-skill requests.
 
@@ -561,16 +561,16 @@ not interpret bundle requests as single-skill requests.
 
 ### Existing production baseline
 
-Read-only inspection of the active `onorca-cloud` project on 2026-08-11 found:
+Read-only inspection of the active `mcode-cloud` project on 2026-08-11 found:
 
 | Resource          | Existing state relevant to skill sharing                                                                                                                                   |
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Cloud Run         | `orca-cloud-api`, `orca-cloud-auth`, `orca-cloud-relay`, and `orca-cloud-relay-fence` run in `us-central1`                                                                 |
-| API service       | `orca-cloud-api` uses its own service account, scales from 0 to 20 instances, has a 300-second timeout, and already owns artifact-sharing endpoints                        |
-| Object storage    | `onorca-cloud-artifacts` is a `US` bucket with uniform bucket-level access, public-access prevention, exact CORS for `https://share.onorca.dev`, and seven-day soft delete |
-| Database          | `orca-cloud-auth-db` is PostgreSQL 17 in `us-central1`, regional/high-availability, with backups and point-in-time recovery                                                |
-| Database contents | The instance currently contains `orca_auth` and `orca_relay` databases; there is no skill database                                                                         |
-| IAM               | `orca-cloud-api@onorca-cloud.iam.gserviceaccount.com` owns objects in the existing artifact bucket                                                                         |
+| Cloud Run         | `mcode-cloud-api`, `mcode-cloud-auth`, `mcode-cloud-relay`, and `mcode-cloud-relay-fence` run in `us-central1`                                                                 |
+| API service       | `mcode-cloud-api` uses its own service account, scales from 0 to 20 instances, has a 300-second timeout, and already owns artifact-sharing endpoints                        |
+| Object storage    | `mcode-cloud-artifacts` is a `US` bucket with uniform bucket-level access, public-access prevention, exact CORS for `https://share.mcode.dev`, and seven-day soft delete |
+| Database          | `mcode-cloud-auth-db` is PostgreSQL 17 in `us-central1`, regional/high-availability, with backups and point-in-time recovery                                                |
+| Database contents | The instance currently contains `mcode_auth` and `mcode_relay` databases; there is no skill database                                                                         |
+| IAM               | `mcode-cloud-api@mcode-cloud.iam.gserviceaccount.com` owns objects in the existing artifact bucket                                                                         |
 | APIs              | Cloud Run, Cloud Storage, Cloud SQL Admin, IAM Credentials, Secret Manager, Logging, Monitoring, and Pub/Sub are enabled                                                   |
 | Excluded services | Firestore and Cloud Asset Inventory are disabled; Cloud Tasks is not enabled                                                                                               |
 
@@ -583,7 +583,7 @@ Use the existing project, API service, authentication service, PostgreSQL instan
 pipeline, and Terraform state. Add a dedicated package bucket and database instead of putting
 private skill packages into the existing general artifact namespace.
 
-The V1 control plane remains in `orca-cloud-api`. Package validation is bounded and streaming, so a
+The V1 control plane remains in `mcode-cloud-api`. Package validation is bounded and streaming, so a
 separate worker service is not justified at the initial 40 MiB compressed-package ceiling. Protect
 the existing API workload with a small per-instance package-finalization semaphore and return a
 retryable response when that lane is full.
@@ -592,29 +592,29 @@ Split package processing into a dedicated Cloud Run service later if finalize la
 interferes with artifact sharing. Do not reduce the entire API service's current concurrency merely
 to accommodate one endpoint family.
 
-Firestore is not required. Skill metadata belongs in PostgreSQL beside the existing Orca Cloud
+Firestore is not required. Skill metadata belongs in PostgreSQL beside the existing MCode Cloud
 identity model. Cloud Tasks and Pub/Sub are not required for V1 because upload expiry is enforced
 by a GCS lifecycle rule and package finalization stays synchronous and bounded.
 
 ### Required GCP changes
 
-All production changes are declared in the existing Orca Cloud Terraform configuration. Do not
+All production changes are declared in the existing MCode Cloud Terraform configuration. Do not
 create durable resources manually with `gcloud`.
 
 | Change              | Proposed production value                                                                                                     |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| GCS bucket          | `onorca-cloud-skill-packages`, subject to Terraform name validation                                                           |
+| GCS bucket          | `mcode-cloud-skill-packages`, subject to Terraform name validation                                                           |
 | Location            | `US`, matching existing shared-artifact storage; revisit per-region buckets when data residency becomes a product requirement |
 | Access              | Uniform bucket-level access and public-access prevention enforced                                                             |
 | Soft delete         | Seven days, matching the current artifact bucket                                                                              |
 | Object versioning   | Disabled; package keys are immutable and GCS generations are recorded                                                         |
 | Temporary lifecycle | Delete `uploads/` objects after one day                                                                                       |
-| CORS                | Exact approved Orca share/app origins; no wildcard origin                                                                     |
-| Database            | `orca_skills` on `orca-cloud-auth-db`                                                                                         |
-| Database principal  | Dedicated `orca_skills_app` user with access only to `orca_skills`                                                            |
-| Database secret     | `orca-cloud-skills-database-url` in Secret Manager                                                                            |
-| Cloud Run service   | Extend `orca-cloud-api`; mount the existing Cloud SQL instance and inject only the skill database secret                      |
-| Package signer      | Reuse `orca-cloud-api@onorca-cloud.iam.gserviceaccount.com` for V1                                                            |
+| CORS                | Exact approved MCode share/app origins; no wildcard origin                                                                     |
+| Database            | `mcode_skills` on `mcode-cloud-auth-db`                                                                                         |
+| Database principal  | Dedicated `mcode_skills_app` user with access only to `mcode_skills`                                                            |
+| Database secret     | `mcode-cloud-skills-database-url` in Secret Manager                                                                            |
+| Cloud Run service   | Extend `mcode-cloud-api`; mount the existing Cloud SQL instance and inject only the skill database secret                      |
+| Package signer      | Reuse `mcode-cloud-api@mcode-cloud.iam.gserviceaccount.com` for V1                                                            |
 | Metrics/logging     | Extend existing Cloud Logging and Monitoring configuration with skill endpoint dashboards and alerts                          |
 
 The bucket is separate because skill packages need different authorization, retention, signed
@@ -624,7 +624,7 @@ switch without disrupting existing artifact links.
 ### Bucket layout
 
 ```text
-gs://onorca-cloud-skill-packages/
+gs://mcode-cloud-skill-packages/
   uploads/<upload-id>/package.tar.gz
   packages/v1/tenants/<tenant-hash>/sha256/<first-two-hex>/<archive-sha256>/package.tar.gz
 ```
@@ -652,7 +652,7 @@ Rules:
 Use a V4 signed POST policy rather than a signed unrestricted PUT. The POST policy enforces:
 
 - Exact quarantine object key.
-- `application/vnd.orca.skill+tar+gzip` content type.
+- `application/vnd.mcode.skill+tar+gzip` content type.
 - A content-length range capped at 40 MiB.
 - Required upload ID and expected archive SHA-256 metadata.
 - A 15-minute expiration.
@@ -662,7 +662,7 @@ incompressible input. The package builder still enforces the lower extracted-con
 
 Upload sequence:
 
-1. `orca-cloud-api` authenticates the user through the existing auth integration.
+1. `mcode-cloud-api` authenticates the user through the existing auth integration.
 2. The API checks organization membership, package quota, per-user rate limits, and concurrent
    upload limits.
 3. It inserts a pending upload row and returns a signed POST policy for the unique quarantine key.
@@ -683,7 +683,7 @@ returns `429` or `503` with `Retry-After`; it does not queue unbounded package b
 
 ### Download grants
 
-After resolving an active bearer share, `orca-cloud-api` creates a V4 signed GET URL with:
+After resolving an active bearer share, `mcode-cloud-api` creates a V4 signed GET URL with:
 
 - Exact final object key and stored generation.
 - Five-minute expiration.
@@ -694,7 +694,7 @@ The URL is the short-lived grant. The durable share URL is never signed directly
 GCS. Revocation cannot invalidate an already-issued GCS URL, so the five-minute lifetime is the
 maximum revocation delay.
 
-The destination runtime accepts download URLs only from the configured GCS origin for the Orca
+The destination runtime accepts download URLs only from the configured GCS origin for the MCode
 skill bucket, rejects credential-bearing redirects to any other host, enforces the expected byte
 count while streaming, and verifies both archive SHA-256 and package digest before installation.
 
@@ -708,7 +708,7 @@ Apply least privilege at the dedicated bucket and service-account level:
 - Allow the API service account to use IAM Credentials `signBlob` for itself so it can generate V4
   policies and URLs without a downloaded service-account key. The Terraform binding is scoped to
   that service account.
-- Grant Secret Manager accessor only for `orca-cloud-skills-database-url` and any future
+- Grant Secret Manager accessor only for `mcode-cloud-skills-database-url` and any future
   skill-specific secret.
 - Keep bucket IAM free of `allUsers` and `allAuthenticatedUsers`.
 - Do not give the desktop, remote runtime, or user identity direct bucket IAM. They receive only a
@@ -716,7 +716,7 @@ Apply least privilege at the dedicated bucket and service-account level:
 - Keep the existing deployment service account's impersonation/deploy permissions unchanged
   except where Terraform needs to manage the new resources.
 
-No long-lived GCP key is shipped in Orca or stored on a remote runtime.
+No long-lived GCP key is shipped in MCode or stored on a remote runtime.
 
 ### PostgreSQL schema
 
@@ -755,22 +755,22 @@ revocation, and deletion require an authenticated owner.
 
 ### Cloud Run changes
 
-Add skill endpoints to `orca-cloud-api` and configure:
+Add skill endpoints to `mcode-cloud-api` and configure:
 
 ```text
-ORCA_SKILL_PACKAGE_BUCKET=onorca-cloud-skill-packages
-ORCA_SKILL_PACKAGE_MAX_COMPRESSED_BYTES=41943040
-ORCA_SKILL_PACKAGE_UPLOAD_TTL_SECONDS=900
-ORCA_SKILL_PACKAGE_DOWNLOAD_TTL_SECONDS=300
-ORCA_SKILL_PACKAGE_FINALIZE_CONCURRENCY=<small fixed value>
-ORCA_SKILLS_DATABASE_URL=<Secret Manager reference>
+MCODE_SKILL_PACKAGE_BUCKET=mcode-cloud-skill-packages
+MCODE_SKILL_PACKAGE_MAX_COMPRESSED_BYTES=41943040
+MCODE_SKILL_PACKAGE_UPLOAD_TTL_SECONDS=900
+MCODE_SKILL_PACKAGE_DOWNLOAD_TTL_SECONDS=300
+MCODE_SKILL_PACKAGE_FINALIZE_CONCURRENCY=<small fixed value>
+MCODE_SKILLS_DATABASE_URL=<Secret Manager reference>
 ```
 
 Use the existing auth base URL and CORS-origin configuration. Do not add a second authentication
 implementation for skills.
 
 Every API image rollout must stamp the complete Terraform-owned literal environment and exact
-`ORCA_SKILLS_DATABASE_URL` secret reference in one no-traffic candidate. Before smoke or promotion,
+`MCODE_SKILLS_DATABASE_URL` secret reference in one no-traffic candidate. Before smoke or promotion,
 compare the candidate with both the reviewed release values and the serving Terraform runtime
 shape. Reject any unexpected secret or environment entry, changed service account, Cloud SQL
 attachment, scaling bound, resource limit, volume, mount, port, or probe. This keeps ordinary image
@@ -801,7 +801,7 @@ accept idempotency keys.
 
 ### CORS and public routing
 
-- Route the endpoint family through the existing Orca Cloud API hostname and deployment path.
+- Route the endpoint family through the existing MCode Cloud API hostname and deployment path.
 - Add only exact production and approved development app/share origins to the skill bucket's CORS
   policy.
 - Allow `POST` for signed upload policy submission and `GET`/`HEAD` for signed download.
@@ -842,15 +842,15 @@ policies, signed URLs, or ACL membership.
 
 ### Provisioning and deployment sequence
 
-1. Confirm the existing Orca Cloud Terraform worktree and staging environment are current.
+1. Confirm the existing MCode Cloud Terraform worktree and staging environment are current.
 2. If there is no isolated staging GCP project, create or designate one before testing package
-   upload; do not exercise new lifecycle/IAM behavior first in `onorca-cloud` production.
+   upload; do not exercise new lifecycle/IAM behavior first in `mcode-cloud` production.
 3. Add the bucket, lifecycle, CORS, IAM, database, database user, secret, Cloud SQL attachment, API
    configuration, dashboards, alerts, and budget thresholds to Terraform.
 4. Run Terraform formatting, validation, and a reviewed plan. The expected production plan contains
    no replacement of the existing artifact bucket, Cloud SQL instance, or Cloud Run services.
 5. Apply the reviewed skill-only infrastructure plan in staging without shared-resource drift.
-6. Deploy `orca-cloud-api` with all skill controls disabled. When the database secret is present,
+6. Deploy `mcode-cloud-api` with all skill controls disabled. When the database secret is present,
    startup applies PostgreSQL migrations without registering the skill routes.
 7. Verify the migration-ready event, zero error logs, ordinary artifact behavior, and `404` skill
    route boundary before changing any control.
@@ -868,11 +868,11 @@ policies, signed URLs, or ACL membership.
 Production verification uses read-only commands such as:
 
 ```bash
-gcloud storage buckets describe gs://onorca-cloud-skill-packages --project=onorca-cloud
-gcloud run services describe orca-cloud-api --region=us-central1 --project=onorca-cloud
-gcloud sql databases list --instance=orca-cloud-auth-db --project=onorca-cloud
+gcloud storage buckets describe gs://mcode-cloud-skill-packages --project=mcode-cloud
+gcloud run services describe mcode-cloud-api --region=us-central1 --project=mcode-cloud
+gcloud sql databases list --instance=mcode-cloud-auth-db --project=mcode-cloud
 gcloud iam service-accounts get-iam-policy \
-  orca-cloud-api@onorca-cloud.iam.gserviceaccount.com --project=onorca-cloud
+  mcode-cloud-api@mcode-cloud.iam.gserviceaccount.com --project=mcode-cloud
 ```
 
 Never print Secret Manager payloads or signed policies/URLs during verification.
@@ -912,28 +912,28 @@ paths or mutate the distro through translated Windows paths.
 
 ### SSH-only scope
 
-An SSH target without an Orca runtime cannot execute the runtime RPC directly. Before GA, add a
+An SSH target without an MCode runtime cannot execute the runtime RPC directly. Before GA, add a
 host-side installation command invoked through the existing SSH execution and file-transfer
-providers. The desktop uploads the immutable package through SFTP, invokes the bundled Orca
+providers. The desktop uploads the immutable package through SFTP, invokes the bundled MCode
 installer on the SSH host, and receives the same structured result as runtime RPC.
 
-If the required host component is unavailable, Orca reports the limitation and provides a local
+If the required host component is unavailable, MCode reports the limitation and provides a local
 package download or command; it never installs into the desktop's home as a fallback.
 
 ## Provider destination strategy
 
-Orca owns a small data-only registry for agents Orca supports. Each entry describes:
+MCode owns a small data-only registry for agents MCode supports. Each entry describes:
 
-- Orca agent ID.
+- MCode agent ID.
 - Whether it reads the universal `.agents/skills` root.
 - Global provider-specific path resolver when required.
 - Project provider-specific path resolver when required.
 - Detection evidence required before creating the path.
 - Supported alias mechanism by platform.
 
-The registry is authored from official agent documentation and Orca's own verified installations.
+The registry is authored from official agent documentation and MCode's own verified installations.
 Upstream may reveal that a compatibility case exists, but its implementation, path table, and
-tests are not copied or transformed into Orca code.
+tests are not copied or transformed into MCode code.
 
 Policy:
 
@@ -946,13 +946,13 @@ Policy:
 7. Never create configuration roots for dozens of undetected agents.
 8. Never replace an unowned provider-specific copy without an explicit decision.
 
-Provider releases and official documentation are reviewed periodically. Orca's registry changes
+Provider releases and official documentation are reviewed periodically. MCode's registry changes
 only through normal review and platform tests; no upstream synchronization script owns it.
 
 The portable root does not imply every agent can install it as a native plugin. Cursor can consume
 the root `plugin.json` package directly. Claude expects `.claude-plugin/plugin.json`; Codex and
 ChatGPT expect `.codex-plugin/plugin.json`; the Codex IDE extension does not currently support
-plugins. Orca therefore installs loose skills by default and may generate provider-native adapters
+plugins. MCode therefore installs loose skills by default and may generate provider-native adapters
 for detected compatible clients:
 
 - Cursor: use the portable package directly.
@@ -984,7 +984,7 @@ Create narrow modules with explicit responsibilities:
   compressed-byte limits.
 - `src/main/skills/skill-install-destinations.ts`: global, workspace, WSL, and provider path
   resolution.
-- `src/main/skills/skill-provider-destinations.ts`: Orca-owned provider registry.
+- `src/main/skills/skill-provider-destinations.ts`: MCode-owned provider registry.
 - `src/main/skills/skill-install-planner.ts`: current-state inspection and conflict decisions.
 - `src/main/skills/skill-install-transaction.ts`: locking, staging, commit journal, rollback, and
   recovery.
@@ -1009,7 +1009,7 @@ and test the same contract accurately.
 - Manager-only package details include ownership and active, unexpired share records; anonymous
   recipients never receive management metadata.
 
-Exact files follow the repository that owns Orca Cloud APIs; desktop contracts stay provider
+Exact files follow the repository that owns MCode Cloud APIs; desktop contracts stay provider
 neutral.
 
 ### Runtime and IPC
@@ -1121,7 +1121,7 @@ SSH helper may run concurrently.
 
 - Stream the archive into a bounded temporary file.
 - For grants, require HTTPS when the configured cloud endpoint is HTTPS and restrict redirects and
-  final hosts to approved Orca storage origins.
+  final hosts to approved MCode storage origins.
 - Abort when compressed bytes exceed the manifest contract.
 - Hash while streaming and compare the archive identity supplied by Cloud.
 - Delete partial bytes on cancellation, expiration, disconnect, or failure.
@@ -1144,16 +1144,16 @@ Canonical outcomes:
 
 - Missing: install is allowed.
 - Same requested digest: no-op; continue to placement repair.
-- Matches Orca receipt and remains unmodified: update is allowed.
-- Differs from its Orca receipt: return a modified conflict.
-- Exists without Orca provenance: return an unowned conflict.
+- Matches MCode receipt and remains unmodified: update is allowed.
+- Differs from its MCode receipt: return a modified conflict.
+- Exists without MCode provenance: return an unowned conflict.
 - External or broken link: return a topology conflict.
 
 Provider outcomes:
 
-- Correct alias or matching Orca-owned fallback copy: no-op.
+- Correct alias or matching MCode-owned fallback copy: no-op.
 - Missing: create after canonical commit.
-- Broken Orca-owned alias: repair.
+- Broken MCode-owned alias: repair.
 - Unowned or modified placement: leave untouched and report incomplete coverage unless the user
   explicitly chooses replacement.
 
@@ -1202,7 +1202,7 @@ Write a bounded, versioned receipt outside the installed skill folder containing
 - Canonical path identity.
 - Provider placements and topologies.
 - Previous version identity for interrupted-update recovery.
-- Installation timestamp and Orca host/runtime identity.
+- Installation timestamp and MCode host/runtime identity.
 
 Do not store credentials, download URLs, share bearer values, or package contents.
 
@@ -1227,23 +1227,23 @@ staging bytes.
 4. If bytes match the receipt, use the normal installation transaction.
 5. If bytes were modified, offer:
    - Keep local version.
-   - Publish local bytes as a new immutable version when exactly one non-missing Orca-managed
+   - Publish local bytes as a new immutable version when exactly one non-missing MCode-managed
      install matches the skill name and scope; Cloud rechecks ownership of that stable package ID.
    - Replace and discard local changes after explicit confirmation.
 6. Reconcile all recorded aliases and fallback copies.
 7. Preserve the previous package version in Cloud; rollback is a normal install of that immutable
    version.
 
-Do not invoke `npx skills update` for Orca-owned packages or write entries that cause the community
+Do not invoke `npx skills update` for MCode-owned packages or write entries that cause the community
 CLI to claim ownership of them.
 
 ## Removal behavior
 
-1. Read Orca provenance and observe every recorded placement.
+1. Read MCode provenance and observe every recorded placement.
 2. Remove only aliases that still point to the recorded canonical path.
 3. Remove independent copies only when their bytes still match their recorded digest, unless the
    user explicitly confirms discarding modifications.
-4. Remove the canonical copy only when it is Orca-owned, unmodified, and no retained placement or
+4. Remove the canonical copy only when it is MCode-owned, unmodified, and no retained placement or
    receipt depends on it.
 5. Publish the provenance change durably.
 6. Leave an unowned or changed destination untouched and report what remains.
@@ -1406,7 +1406,7 @@ destination containment, and expected identities must all agree.
    skill.
 2. Share on machine A, install into a folder workspace on a connected remote runtime, and discover
    it only in that workspace.
-3. Modify the installed copy, publish an update, and prove Orca refuses silent replacement.
+3. Modify the installed copy, publish an update, and prove MCode refuses silent replacement.
 4. Disconnect during commit, reconnect, recover, and obtain either the complete old or complete
    new version.
 5. Revoke a share, prove new installation fails, and prove an existing local installation remains.
@@ -1444,7 +1444,7 @@ Deliver:
 
 Exit criteria:
 
-- No `npx` or Node installation dependency outside Orca's own runtime.
+- No `npx` or Node installation dependency outside MCode's own runtime.
 - Same bytes produce the same digest on every target platform.
 - Invalid archive classes fail before destination mutation.
 
@@ -1458,7 +1458,7 @@ Deliver:
 - Durable journal and recovery.
 - Canonical install, update, and removal.
 - Provenance receipts and aggregate index recovery.
-- Provider registry for Orca's primary detected agents.
+- Provider registry for MCode's primary detected agents.
 - POSIX aliases, Windows junctions, and verified copy fallback.
 - Structured preview/result contracts.
 - CLI-only developer harness for deterministic integration tests.
@@ -1477,7 +1477,7 @@ Estimate: 5–8 engineer-days.
 Deliver:
 
 - Reviewed Terraform for the dedicated private GCS bucket, lifecycle, CORS, bucket-scoped IAM,
-  service-account signing, `orca_skills` database, database secret, Cloud SQL attachment,
+  service-account signing, `mcode_skills` database, database secret, Cloud SQL attachment,
   monitoring, and budgets.
 - PostgreSQL migrations for package, version, upload, share, ownership, and audit records, with
   legacy ACL storage tolerated during migration.
@@ -1499,7 +1499,7 @@ Exit criteria:
 
 Estimate: 1–2 engineer-weeks across desktop and Cloud work.
 
-### Phase 3: paired Orca runtime installation
+### Phase 3: paired MCode runtime installation
 
 Deliver:
 
@@ -1574,7 +1574,7 @@ Before enabling Cloud or remote installation by default:
 
 ## Effort summary
 
-For one engineer familiar with Orca:
+For one engineer familiar with MCode:
 
 | Scope                               |                                     Estimate |
 | ----------------------------------- | -------------------------------------------: |
@@ -1598,4 +1598,4 @@ than delaying private sharing for organization-wide policy features.
 - Installed bytes, not child-process exit codes, determine success.
 - Unknown or modified local state fails closed.
 - Remote hosts own their paths and mutations.
-- Upstream behavior informs compatibility but does not define Orca's internal architecture.
+- Upstream behavior informs compatibility but does not define MCode's internal architecture.

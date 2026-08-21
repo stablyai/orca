@@ -1,4 +1,4 @@
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   execInTerminal,
@@ -8,29 +8,29 @@ import {
 } from './helpers/terminal'
 
 test.describe('Windows terminal env and shell identity', () => {
-  test.beforeEach(async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
+  test.beforeEach(async ({ mcodePage }) => {
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
+    await ensureTerminalVisible(mcodePage)
   })
 
-  test('dev terminal preserves parent PATH so PATH commands resolve', async ({ orcaPage }) => {
-    await waitForActiveTerminalManager(orcaPage)
+  test('dev terminal preserves parent PATH so PATH commands resolve', async ({ mcodePage }) => {
+    await waitForActiveTerminalManager(mcodePage)
 
-    const ptyId = await waitForActivePanePtyId(orcaPage)
-    const marker = `__ORCA_E2E_NODE_PATH_${Date.now()}__`
+    const ptyId = await waitForActivePanePtyId(mcodePage)
+    const marker = `__MCODE_E2E_NODE_PATH_${Date.now()}__`
 
     // Why: before the dev PATH fallback, daemon-spawned PTYs could get PATH set
-    // to only Orca's dev CLI bin. A real terminal command catches that failure.
-    await execInTerminal(orcaPage, ptyId, `node -e "console.log('${marker}')"`)
+    // to only MCode's dev CLI bin. A real terminal command catches that failure.
+    await execInTerminal(mcodePage, ptyId, `node -e "console.log('${marker}')"`)
 
-    await waitForTerminalOutput(orcaPage, marker, 15_000)
+    await waitForTerminalOutput(mcodePage, marker, 15_000)
   })
 
-  test('Windows tab icons stay pinned to the shell used at tab creation', async ({ orcaPage }) => {
+  test('Windows tab icons stay pinned to the shell used at tab creation', async ({ mcodePage }) => {
     test.skip(process.platform !== 'win32', 'Windows shell icons only render on Windows')
 
-    const tabIds = await orcaPage.evaluate(() => {
+    const tabIds = await mcodePage.evaluate(() => {
       const store = window.__store
       if (!store) {
         throw new Error('Store unavailable')
@@ -58,7 +58,7 @@ test.describe('Windows terminal env and shell identity', () => {
       return { wslTabId: wslTab.id, cmdTabId: cmdTab.id }
     })
 
-    const tabSnapshot = await orcaPage.evaluate(({ wslTabId, cmdTabId }) => {
+    const tabSnapshot = await mcodePage.evaluate(({ wslTabId, cmdTabId }) => {
       const state = window.__store!.getState()
       const tabs = Object.values(state.tabsByWorktree).flat()
       return {
@@ -72,10 +72,10 @@ test.describe('Windows terminal env and shell identity', () => {
       cmdShell: 'cmd.exe'
     })
 
-    const wslTab = orcaPage.locator(
+    const wslTab = mcodePage.locator(
       `[data-testid="sortable-tab"][data-tab-id="${tabIds.wslTabId}"]`
     )
-    const cmdTab = orcaPage.locator(
+    const cmdTab = mcodePage.locator(
       `[data-testid="sortable-tab"][data-tab-id="${tabIds.cmdTabId}"]`
     )
     await expect(wslTab).toBeVisible()

@@ -143,7 +143,7 @@ export function GitHubItemDialogIssueHeader({
             <span className="ml-2 font-light text-muted-foreground">#{workItem.number}</span>
           </h1>
           <div className="flex shrink-0 items-center gap-2">
-            {/* Why: Orca's signature affordance — keep primary so it stands out against GitHub's familiar surface. */}
+            {/* Why: MCode's signature affordance — keep primary so it stands out against GitHub's familiar surface. */}
             {issueAttachedWorkspace ? (
               <DropdownMenu modal={false}>
                 <ButtonGroup>

@@ -14,7 +14,7 @@ export type ClearSshHostWorkspacesResult = {
  *  - 'delete-remote': the host is connected, so run the normal remote removal
  *    for each worktree (deletes the remote git worktree) and the host-scoped
  *    project removal for each root repo.
- *  - 'forget-local': the host is offline/gone, so only clear Orca's records —
+ *  - 'forget-local': the host is offline/gone, so only clear MCode's records —
  *    no remote files, worktrees, or branches are touched.
  *
  * Worktrees are removed before their root repos so a root removal never races a
@@ -51,7 +51,7 @@ export async function clearSshHostWorkspaces(
   // this host's row instead of falling back to the focused host — otherwise the
   // wrong (local) project could be removed and the SSH ghost left behind. For an
   // offline/ghost host this hits the local backend path (no live runtime target),
-  // clearing Orca's records without a successful remote call.
+  // clearing MCode's records without a successful remote call.
   for (const repoId of resolution.hostRepoIds) {
     try {
       await store.removeProject(repoId, { hostId })

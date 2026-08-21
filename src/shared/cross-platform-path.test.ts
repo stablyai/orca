@@ -114,7 +114,7 @@ describe('cross-platform path containment', () => {
   })
 
   it('matches macOS NFD paths against agent-recorded NFC paths', () => {
-    // Regression for #10832: macOS file pickers hand Orca decomposed (NFD) paths
+    // Regression for #10832: macOS file pickers hand MCode decomposed (NFD) paths
     // while Claude Code records cwd and names its project dirs in NFC, so a
     // non-ASCII workspace never matched its own sessions.
     const nfc = '/Users/ada/내 드라이브/프로젝트'

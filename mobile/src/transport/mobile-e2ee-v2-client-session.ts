@@ -49,7 +49,7 @@ export class MobileE2EEV2ClientSession {
         clientNonceB64: encodeBase64(clientNonce),
         capabilities: { framing: [2], payloadKinds: ['text', 'binary'] },
         context: {
-          protocol: 'orca-mobile-e2ee',
+          protocol: 'mcode-mobile-e2ee',
           initiator: 'mobile',
           responder: 'desktop',
           transport: args.transport,

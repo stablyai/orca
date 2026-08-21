@@ -15,7 +15,7 @@ import type {
 } from '../../../../shared/browser-workspace-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { GRAB_BUDGET, type BrowserPageAnnotation } from '../../../../shared/browser-grab-types'
-import { FLOATING_TERMINAL_WORKTREE_ID, ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID, MCODE_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import {
@@ -257,9 +257,9 @@ function normalizeUrl(url: string): string {
 function normalizeBrowserTitle(title: string | null | undefined, url: string): string {
   if (
     url === 'about:blank' ||
-    url === ORCA_BROWSER_BLANK_URL ||
+    url === MCODE_BROWSER_BLANK_URL ||
     title === 'about:blank' ||
-    title === ORCA_BROWSER_BLANK_URL ||
+    title === MCODE_BROWSER_BLANK_URL ||
     !title
   ) {
     // Why: don't surface the internal blank-guest URL as a title (leaks an impl detail, looks broken); show "New Tab" instead.
@@ -402,7 +402,7 @@ function buildBrowserPage(
     url: normalizedUrl,
     title: normalizeBrowserTitle(title, normalizedUrl),
     // Why: blank pages mount an inert guest (no real navigation); marking them loading would flash the loading affordance.
-    loading: normalizedUrl !== 'about:blank' && normalizedUrl !== ORCA_BROWSER_BLANK_URL,
+    loading: normalizedUrl !== 'about:blank' && normalizedUrl !== MCODE_BROWSER_BLANK_URL,
     faviconUrl: null,
     canGoBack: false,
     canGoForward: false,
@@ -661,7 +661,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       const shouldFocusAddressBar =
         (shouldUpdateGlobalActiveSurface || shouldFocusFloatingTab) &&
         (options?.focusAddressBar ??
-          (page.url === 'about:blank' || page.url === ORCA_BROWSER_BLANK_URL))
+          (page.url === 'about:blank' || page.url === MCODE_BROWSER_BLANK_URL))
 
       return {
         browserTabsByWorktree: {
@@ -1127,7 +1127,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         s.activeBrowserTabIdByWorktree[workspace.worktreeId] === workspaceId
       const shouldFocusAddressBar =
         shouldUpdateGlobalActiveSurface &&
-        (page.url === 'about:blank' || page.url === ORCA_BROWSER_BLANK_URL)
+        (page.url === 'about:blank' || page.url === MCODE_BROWSER_BLANK_URL)
 
       return {
         browserPagesByWorkspace: {
@@ -1557,7 +1557,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
 
   setBrowserPageUrl: (pageId, url, options) => {
     const nextUrl = normalizeUrl(url)
-    if (nextUrl !== 'about:blank' && nextUrl !== ORCA_BROWSER_BLANK_URL) {
+    if (nextUrl !== 'about:blank' && nextUrl !== MCODE_BROWSER_BLANK_URL) {
       const currentPage = findPage(get().browserPagesByWorkspace, pageId)
       if (currentPage) {
         get().recordFeatureInteraction?.('browser')
@@ -2337,7 +2337,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
 
   addBrowserHistoryEntry: (url, title) => {
     const safeUrl = redactKagiSessionToken(url)
-    if (safeUrl === ORCA_BROWSER_BLANK_URL || safeUrl === 'about:blank' || !safeUrl) {
+    if (safeUrl === MCODE_BROWSER_BLANK_URL || safeUrl === 'about:blank' || !safeUrl) {
       return
     }
     const normalized = normalizeBrowserHistoryUrl(safeUrl)

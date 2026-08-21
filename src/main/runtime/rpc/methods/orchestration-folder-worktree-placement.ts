@@ -1,9 +1,9 @@
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 
 export async function assertOrchestrationWorktreeCreationSupported(args: {
-  runtime: OrcaRuntimeService
+  runtime: MCodeRuntimeService
   repoSelector: string
   existingPlacement: string
 }): Promise<void> {

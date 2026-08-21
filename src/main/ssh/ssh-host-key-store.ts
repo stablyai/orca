@@ -1,5 +1,5 @@
 /**
- * Orca's own record of accepted SSH host keys, consulted alongside the user's `known_hosts`.
+ * MCode's own record of accepted SSH host keys, consulted alongside the user's `known_hosts`.
  *
  * We read `known_hosts` but never write it (D1), so accepted keys land here instead. See
  * docs/reference/ssh-host-key-verification.md — D1, D5 and D8 are the load-bearing decisions.
@@ -20,7 +20,7 @@ const STORE_VERSION = 1
 const MAX_PORT = 65535
 
 export type TrustedHostKeyRecord = {
-  /** Lower-cased `HostKeyAlias` or resolved hostname — never the Orca target label (D2 lookup key). */
+  /** Lower-cased `HostKeyAlias` or resolved hostname — never the MCode target label (D2 lookup key). */
   host: string
   port: number
   keyType: string
@@ -164,7 +164,7 @@ async function readStore(storeFile: string): Promise<StoreSnapshot> {
     return { status: 'ok', records: [] }
   }
 
-  // Why the version is consulted: it was written and never read, so a store from a future Orca would
+  // Why the version is consulted: it was written and never read, so a store from a future MCode would
   // have every record dropped by validateRecord and then be REWRITTEN as v1 — silently discarding
   // whatever that version knew. Refusing both to trust and to overwrite keeps the file intact for the
   // version that owns it.

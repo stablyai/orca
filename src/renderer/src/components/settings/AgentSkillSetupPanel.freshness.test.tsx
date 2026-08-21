@@ -31,7 +31,7 @@ function panelProps(
   return {
     title: 'Linear skill',
     description: null,
-    command: 'npx skills add orca-linear --global',
+    command: 'npx skills add mcode-linear --global',
     terminalTitle: 'Linear skill setup',
     terminalAriaLabel: 'Linear skill install terminal',
     terminalWorktreeId: 'settings-linear-skill-terminal',
@@ -40,7 +40,7 @@ function panelProps(
     error: null,
     hideHeader: true,
     showRecheckWhenInstalled: true,
-    freshnessSkillName: 'orca-linear',
+    freshnessSkillName: 'mcode-linear',
     onRecheck
   }
 }
@@ -81,7 +81,7 @@ describe('AgentSkillSetupPanel freshness re-check', () => {
     let completeRescan: ((value: SkillFreshnessInventory) => void) | null = null
     const freshnessInventory = vi
       .fn()
-      .mockResolvedValueOnce(inventory(['orca-linear']))
+      .mockResolvedValueOnce(inventory(['mcode-linear']))
       .mockImplementationOnce(
         () =>
           new Promise<SkillFreshnessInventory>((resolve) => {
@@ -132,7 +132,7 @@ describe('AgentSkillSetupPanel freshness re-check', () => {
   it('shows a failed verdict when the post-recheck inventory scan fails', async () => {
     const freshnessInventory = vi
       .fn()
-      .mockResolvedValueOnce(inventory(['orca-linear']))
+      .mockResolvedValueOnce(inventory(['mcode-linear']))
       .mockRejectedValueOnce(new Error('inventory unavailable'))
     window.api = { skills: { freshnessInventory } } as never
 

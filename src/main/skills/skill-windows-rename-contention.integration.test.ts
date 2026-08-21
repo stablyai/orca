@@ -6,15 +6,15 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { renameSkillPathWithWindowsRetry } from './skill-filesystem-retry'
 
 const RUN_REAL_WINDOWS =
-  process.platform === 'win32' && process.env.ORCA_REAL_WINDOWS_SKILL_TEST === '1'
+  process.platform === 'win32' && process.env.MCODE_REAL_WINDOWS_SKILL_TEST === '1'
 const roots: string[] = []
 const lockers: ChildProcessWithoutNullStreams[] = []
 
 const LOCK_SCRIPT = [
-  '$stream = [System.IO.File]::Open($env:ORCA_SKILL_LOCK_PATH, [System.IO.FileMode]::Open,',
+  '$stream = [System.IO.File]::Open($env:MCODE_SKILL_LOCK_PATH, [System.IO.FileMode]::Open,',
   '  [System.IO.FileAccess]::Read, [System.IO.FileShare]::None)',
   "[Console]::Out.WriteLine('LOCKED')",
-  'Start-Sleep -Milliseconds ([int]$env:ORCA_SKILL_LOCK_DURATION_MS)',
+  'Start-Sleep -Milliseconds ([int]$env:MCODE_SKILL_LOCK_DURATION_MS)',
   '$stream.Dispose()'
 ].join('\n')
 
@@ -26,8 +26,8 @@ function holdFile(path: string, durationMs: number) {
       windowsHide: true,
       env: {
         ...process.env,
-        ORCA_SKILL_LOCK_PATH: path,
-        ORCA_SKILL_LOCK_DURATION_MS: String(durationMs)
+        MCODE_SKILL_LOCK_PATH: path,
+        MCODE_SKILL_LOCK_DURATION_MS: String(durationMs)
       }
     }
   )
@@ -63,7 +63,7 @@ function holdFile(path: string, durationMs: number) {
 }
 
 async function fixture(label: string) {
-  const root = await mkdtemp(join(tmpdir(), `orca-windows-rename-${label}-`))
+  const root = await mkdtemp(join(tmpdir(), `mcode-windows-rename-${label}-`))
   roots.push(root)
   const source = join(root, 'source')
   const target = join(root, 'target')

@@ -71,7 +71,7 @@ describe('STA-4228 keep-history stop bounds only the caller wait on the final ch
   let releaseStall: (() => void) | undefined
 
   beforeEach(async () => {
-    dir = mkdtempSync(join(tmpdir(), 'orca-final-checkpoint-deadline-'))
+    dir = mkdtempSync(join(tmpdir(), 'mcode-final-checkpoint-deadline-'))
     subprocesses = []
     releaseStall = undefined
     const log: DaemonFileLog = { log: () => {}, close: () => {} }

@@ -103,7 +103,7 @@ export async function dispatchTaskToWorker(params: {
     processIncarnation
   )
 
-  // Why: dispatched agents use orca-dev in dev mode to reach the dev runtime's socket, not production (Section 6.4).
+  // Why: dispatched agents use mcode-dev in dev mode to reach the dev runtime's socket, not production (Section 6.4).
   const preamble = buildDispatchPreamble({
     taskId: task.id,
     dispatchId: dispatch.id,
@@ -111,7 +111,7 @@ export async function dispatchTaskToWorker(params: {
     taskSpec: strippedSpec,
     coordinatorHandle: params.coordinatorHandle,
     workerHandle: targetHandle,
-    devMode: process.env.ORCA_USER_DATA_PATH?.includes('orca-dev'),
+    devMode: process.env.MCODE_USER_DATA_PATH?.includes('mcode-dev'),
     ...(runtime.getTerminalOrchestrationCliCommand
       ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(targetHandle) }
       : {}),

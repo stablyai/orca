@@ -32,8 +32,8 @@ describe('ensure-native-runtime', () => {
         cwd: projectDir,
         encoding: 'utf8',
         env: envWithPrependedPath(binDir, {
-          ORCA_NATIVE_TEST_LOG: logPath,
-          ORCA_NATIVE_TEST_MARKER: markerPath
+          MCODE_NATIVE_TEST_LOG: logPath,
+          MCODE_NATIVE_TEST_MARKER: markerPath
         })
       })
 
@@ -68,8 +68,8 @@ describe('ensure-native-runtime', () => {
           cwd: projectDir,
           encoding: 'utf8',
           env: envWithPrependedPath(binDir, {
-            ORCA_NATIVE_TEST_LOG: logPath,
-            ORCA_NATIVE_TEST_MARKER: markerPath
+            MCODE_NATIVE_TEST_LOG: logPath,
+            MCODE_NATIVE_TEST_MARKER: markerPath
           })
         })
 
@@ -104,13 +104,13 @@ describe('ensure-native-runtime', () => {
           cwd: projectDir,
           encoding: 'utf8',
           env: envWithPrependedPath(binDir, {
-            ORCA_NATIVE_TEST_LOG: logPath,
-            ORCA_NATIVE_TEST_MARKER: markerPath
+            MCODE_NATIVE_TEST_LOG: logPath,
+            MCODE_NATIVE_TEST_MARKER: markerPath
           })
         })
 
         expect(result.status, result.stderr).toBe(0)
-        expect(result.stderr).toContain("expected build/Release so Orca's node-pty patch is active")
+        expect(result.stderr).toContain("expected build/Release so MCode's node-pty patch is active")
         expect(readFileSync(logPath, 'utf8')).toContain('pnpm rebuild node-pty\n')
       } finally {
         rmSync(projectDir, { recursive: true, force: true })
@@ -138,8 +138,8 @@ describe('ensure-native-runtime', () => {
           cwd: projectDir,
           encoding: 'utf8',
           env: envWithPrependedPath(binDir, {
-            ORCA_NATIVE_TEST_LOG: logPath,
-            ORCA_NATIVE_TEST_MARKER: markerPath
+            MCODE_NATIVE_TEST_LOG: logPath,
+            MCODE_NATIVE_TEST_MARKER: markerPath
           })
         })
 
@@ -154,7 +154,7 @@ describe('ensure-native-runtime', () => {
 })
 
 function mkTempProject() {
-  const projectDir = mkdtempSync(join(tmpdir(), 'orca-native-runtime-'))
+  const projectDir = mkdtempSync(join(tmpdir(), 'mcode-native-runtime-'))
   mkdirSync(join(projectDir, 'config', 'scripts'), { recursive: true })
   return projectDir
 }
@@ -182,9 +182,9 @@ function writeFakeNativeModules(projectDir) {
 const { appendFileSync, existsSync } = require('node:fs')
 
 exports.loadNativeModule = function loadNativeModule(nativeName) {
-  const markerExists = existsSync(process.env.ORCA_NATIVE_TEST_MARKER)
+  const markerExists = existsSync(process.env.MCODE_NATIVE_TEST_MARKER)
   appendFileSync(
-    process.env.ORCA_NATIVE_TEST_LOG,
+    process.env.MCODE_NATIVE_TEST_LOG,
     \`node-pty \${process.argv.includes('--check-only') ? 'child' : 'parent'} \${nativeName} marker=\${markerExists}\\n\`
   )
   if (!markerExists) {
@@ -207,10 +207,10 @@ function writeLoadableNativeModules(projectDir, { nativeDir = null } = {}) {
 const { appendFileSync, existsSync } = require('node:fs')
 
 exports.loadNativeModule = function loadNativeModule(nativeName) {
-  const rebuilt = existsSync(process.env.ORCA_NATIVE_TEST_MARKER)
+  const rebuilt = existsSync(process.env.MCODE_NATIVE_TEST_MARKER)
   const dir = ${JSON.stringify(nativeDir)} ??
     (rebuilt ? '../build/Release/' : '../prebuilds/' + process.platform + '-' + process.arch + '/')
-  appendFileSync(process.env.ORCA_NATIVE_TEST_LOG, \`node-pty load \${nativeName} dir=\${dir}\\n\`)
+  appendFileSync(process.env.MCODE_NATIVE_TEST_LOG, \`node-pty load \${nativeName} dir=\${dir}\\n\`)
   return { dir, module: {} }
 }
 `
@@ -252,8 +252,8 @@ function writeFakePnpm(binDir) {
     `
 const { appendFileSync, writeFileSync } = require('node:fs')
 
-appendFileSync(process.env.ORCA_NATIVE_TEST_LOG, \`pnpm \${process.argv.slice(2).join(' ')}\\n\`)
-writeFileSync(process.env.ORCA_NATIVE_TEST_MARKER, 'rebuilt')
+appendFileSync(process.env.MCODE_NATIVE_TEST_LOG, \`pnpm \${process.argv.slice(2).join(' ')}\\n\`)
+writeFileSync(process.env.MCODE_NATIVE_TEST_MARKER, 'rebuilt')
 `
   )
 

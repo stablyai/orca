@@ -20,7 +20,7 @@ function sourceBetween(contents, startMarker, endMarker) {
 describe('Windows computer-use horizontal scroll', () => {
   it('routes left and right through the horizontal wheel with native signs', () => {
     const windows = source('native/computer-use-windows/runtime.ps1')
-    const mouseEvents = sourceBetween(windows, '$MouseEvents = @{', 'function Write-OrcaJson')
+    const mouseEvents = sourceBetween(windows, '$MouseEvents = @{', 'function Write-MCodeJson')
     const scroll = sourceBetween(windows, '        "scroll" {', '        "drag" {')
     const left = sourceBetween(
       scroll,
@@ -40,7 +40,7 @@ describe('Windows computer-use horizontal scroll', () => {
     expect(right).toContain('$mouseEvent = $MouseEvents.HorizontalWheel')
     expect(right).not.toContain('$delta = -1 * $delta')
     expect(scroll).toContain(
-      '[OrcaDesktopWin32]::mouse_event($mouseEvent, 0, 0, $delta, [UIntPtr]::Zero)'
+      '[MCodeDesktopWin32]::mouse_event($mouseEvent, 0, 0, $delta, [UIntPtr]::Zero)'
     )
     expect(scroll).not.toContain('mouse_event($MouseEvents.Wheel')
     expect(scroll).toContain('throw "unsupported scroll direction: $($Operation.direction)"')

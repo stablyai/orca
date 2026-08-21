@@ -1,5 +1,5 @@
 import type { Page } from '@stablyai/playwright-test'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 const LOCAL_PROJECT = 'E2E Palette Local Project'
@@ -133,51 +133,51 @@ async function selectRemoteHost(page: Page, useKeyboard = false): Promise<void> 
 }
 
 test.describe('Worktree jump-palette filters', () => {
-  test.beforeEach(async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
+  test.beforeEach(async ({ mcodePage }) => {
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
   })
 
   test('filters workspace results by host, intersects project selection, and resets on close', async ({
-    orcaPage
+    mcodePage
   }) => {
-    const fixture = await seedPaletteFilterFixture(orcaPage)
-    await openPalette(orcaPage)
-    await searchFixtureWorkspaces(orcaPage, fixture)
+    const fixture = await seedPaletteFilterFixture(mcodePage)
+    await openPalette(mcodePage)
+    await searchFixtureWorkspaces(mcodePage, fixture)
 
     // P1: keyboard focus reaches the control; its rendered selection narrows rows.
-    await selectRemoteHost(orcaPage, true)
-    await expect(filterTrigger(orcaPage)).toContainText('1')
-    await expect(palette(orcaPage).getByLabel(`Remove filter ${REMOTE_HOST}`)).toBeVisible()
-    await expect(worktreeRow(orcaPage, fixture.remoteWorktreeId)).toBeVisible()
-    await expect(worktreeRow(orcaPage, fixture.localWorktreeId)).toHaveCount(0)
+    await selectRemoteHost(mcodePage, true)
+    await expect(filterTrigger(mcodePage)).toContainText('1')
+    await expect(palette(mcodePage).getByLabel(`Remove filter ${REMOTE_HOST}`)).toBeVisible()
+    await expect(worktreeRow(mcodePage, fixture.remoteWorktreeId)).toBeVisible()
+    await expect(worktreeRow(mcodePage, fixture.localWorktreeId)).toHaveCount(0)
 
     // P2: host and project fields intersect, with the filter-specific empty state.
-    await palette(orcaPage).getByPlaceholder(SEARCH_PLACEHOLDER).fill('')
-    await filterTrigger(orcaPage).click()
-    await palette(orcaPage).getByText('Projects', { exact: true }).click()
-    const projects = palette(orcaPage).getByRole('listbox', { name: 'Projects' })
+    await palette(mcodePage).getByPlaceholder(SEARCH_PLACEHOLDER).fill('')
+    await filterTrigger(mcodePage).click()
+    await palette(mcodePage).getByText('Projects', { exact: true }).click()
+    const projects = palette(mcodePage).getByRole('listbox', { name: 'Projects' })
     const localProject = projects.getByRole('option', { name: LOCAL_PROJECT })
     await expect(localProject).toBeVisible()
     await localProject.click()
-    await filterTrigger(orcaPage).click()
-    await expect(palette(orcaPage).getByText('No results match the active filter')).toBeVisible()
+    await filterTrigger(mcodePage).click()
+    await expect(palette(mcodePage).getByText('No results match the active filter')).toBeVisible()
     await expect(
-      palette(orcaPage).getByText('Clear the filter above, or widen it to more hosts and projects.')
+      palette(mcodePage).getByText('Clear the filter above, or widen it to more hosts and projects.')
     ).toBeVisible()
 
     // P3: clear restores both rows; closing drops the ephemeral filter.
-    await filterTrigger(orcaPage).click()
-    await palette(orcaPage).getByRole('button', { name: 'Clear all' }).last().click()
-    await filterTrigger(orcaPage).click()
-    await expect(filterTrigger(orcaPage)).not.toContainText('1')
-    await searchFixtureWorkspaces(orcaPage, fixture)
+    await filterTrigger(mcodePage).click()
+    await palette(mcodePage).getByRole('button', { name: 'Clear all' }).last().click()
+    await filterTrigger(mcodePage).click()
+    await expect(filterTrigger(mcodePage)).not.toContainText('1')
+    await searchFixtureWorkspaces(mcodePage, fixture)
 
-    await selectRemoteHost(orcaPage)
-    await orcaPage.evaluate(() => window.__store?.getState().closeModal())
-    await expect(palette(orcaPage)).toBeHidden()
-    await openPalette(orcaPage)
-    await searchFixtureWorkspaces(orcaPage, fixture)
-    await expect(filterTrigger(orcaPage)).not.toContainText('1')
+    await selectRemoteHost(mcodePage)
+    await mcodePage.evaluate(() => window.__store?.getState().closeModal())
+    await expect(palette(mcodePage)).toBeHidden()
+    await openPalette(mcodePage)
+    await searchFixtureWorkspaces(mcodePage, fixture)
+    await expect(filterTrigger(mcodePage)).not.toContainText('1')
   })
 })

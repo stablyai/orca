@@ -139,7 +139,7 @@ export class ClaudeAgentTeamsTmuxDispatcher {
 
   // Why: Claude Code's pane backend creates a teammate pane in two steps — it
   // splits a holding pane running `cat`, then `respawn-pane -k`s it with the
-  // real teammate command. Orca panes are PTYs that cannot swap their program in
+  // real teammate command. MCode panes are PTYs that cannot swap their program in
   // place, so we honor respawn by closing the placeholder terminal and
   // re-splitting from the same origin with the real command, keeping the fake
   // pane id stable so later send-keys/kill-pane/list-panes still resolve.

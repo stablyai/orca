@@ -4,7 +4,7 @@ import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const FLOOR_IMAGE = 'ubuntu:20.04'
-const LINUX_EXECUTABLE = 'orca-ide'
+const LINUX_EXECUTABLE = 'mcode-ide'
 const FLOOR_PACKAGES = [
   'ca-certificates',
   'libasound2',

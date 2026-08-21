@@ -45,23 +45,23 @@ nodeModule.registerHooks({
   }
 })
 
-const ITERATIONS = Number(process.env.ORCA_FRAME_CHUNK_BENCH_ITERATIONS ?? '40')
-const GATE_ITERATIONS = Number(process.env.ORCA_FRAME_GATE_BENCH_ITERATIONS ?? '2000')
-const WARMUP = Number(process.env.ORCA_FRAME_CHUNK_BENCH_WARMUP ?? '8')
-const ROUNDS = Number(process.env.ORCA_FRAME_CHUNK_BENCH_ROUNDS ?? '6')
+const ITERATIONS = Number(process.env.MCODE_FRAME_CHUNK_BENCH_ITERATIONS ?? '40')
+const GATE_ITERATIONS = Number(process.env.MCODE_FRAME_GATE_BENCH_ITERATIONS ?? '2000')
+const WARMUP = Number(process.env.MCODE_FRAME_CHUNK_BENCH_WARMUP ?? '8')
+const ROUNDS = Number(process.env.MCODE_FRAME_CHUNK_BENCH_ROUNDS ?? '6')
 
 for (const [name, value] of [
-  ['ORCA_FRAME_CHUNK_BENCH_ITERATIONS', ITERATIONS],
-  ['ORCA_FRAME_GATE_BENCH_ITERATIONS', GATE_ITERATIONS],
-  ['ORCA_FRAME_CHUNK_BENCH_WARMUP', WARMUP],
-  ['ORCA_FRAME_CHUNK_BENCH_ROUNDS', ROUNDS]
+  ['MCODE_FRAME_CHUNK_BENCH_ITERATIONS', ITERATIONS],
+  ['MCODE_FRAME_GATE_BENCH_ITERATIONS', GATE_ITERATIONS],
+  ['MCODE_FRAME_CHUNK_BENCH_WARMUP', WARMUP],
+  ['MCODE_FRAME_CHUNK_BENCH_ROUNDS', ROUNDS]
 ]) {
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer, received ${value}`)
   }
 }
 if (ROUNDS % 2 !== 0) {
-  throw new Error(`ORCA_FRAME_CHUNK_BENCH_ROUNDS must be even so each arm leads equally`)
+  throw new Error(`MCODE_FRAME_CHUNK_BENCH_ROUNDS must be even so each arm leads equally`)
 }
 
 const CHUNK_SOURCE = readFileSync(

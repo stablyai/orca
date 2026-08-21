@@ -20,7 +20,7 @@ source "$HOME/.config/zsh/env"
 EOF
 
     # Run: check discovered ZDOTDIR
-    zsh -c 'env | grep -E "^(ORCA_|ZDOTDIR|HOME)=" | sort'
+    zsh -c 'env | grep -E "^(MCODE_|ZDOTDIR|HOME)=" | sort'
   `)
 
   expect(stdout).toMatchInlineSnapshot(`
@@ -33,13 +33,13 @@ EOF
 
 ## How it works
 
-1. **Creates temp directories** for `$HOME` and Orca's `userDataPath`
+1. **Creates temp directories** for `$HOME` and MCode's `userDataPath`
 
 2. **Splits the script** on the `# Run:` marker:
    - Lines before the marker → setup commands
    - Lines after the marker → run command to test
 
-3. **Gets Orca's wrapper config** by calling `getShellLaunchConfig()` with the features `selectShellStartupFeatures()` picks for a startup-command launch
+3. **Gets MCode's wrapper config** by calling `getShellLaunchConfig()` with the features `selectShellStartupFeatures()` picks for a startup-command launch
 
 4. **Executes setup** (if present) with bash in temp HOME, using wrapper env
 
@@ -80,10 +80,10 @@ source "$HOME/.config/zsh/env"
 EOF
 
 # Run command (after # Run: marker):
-zsh -c 'env | grep -E "^(ORCA_|ZDOTDIR|HOME)=" | sort'
+zsh -c 'env | grep -E "^(MCODE_|ZDOTDIR|HOME)=" | sort'
 ```
 
-**Note**: The test framework applies Orca's wrapper configuration (sets `ZDOTDIR` to wrapper directory, etc.). When running manually, you'll see different output unless you also configure the wrapper environment.
+**Note**: The test framework applies MCode's wrapper configuration (sets `ZDOTDIR` to wrapper directory, etc.). When running manually, you'll see different output unless you also configure the wrapper environment.
 
 ## Snapshot testing
 

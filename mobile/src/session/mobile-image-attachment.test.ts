@@ -34,7 +34,7 @@ describe('attachMobileImageToTerminal', () => {
         error: { code: 'method_not_found', message: 'no' },
         _meta: { runtimeId: 'r' }
       },
-      ok('save', '/tmp/orca-attach.png'),
+      ok('save', '/tmp/mcode-attach.png'),
       ok('send', { send: { accepted: true } })
     ])
 
@@ -50,7 +50,7 @@ describe('attachMobileImageToTerminal', () => {
     const sendCall = client.calls.find((c) => c.method === 'terminal.send')
     expect(sendCall?.params).toEqual({
       terminal: 'term-1',
-      text: '\x1b[200~/tmp/orca-attach.png\x1b[201~',
+      text: '\x1b[200~/tmp/mcode-attach.png\x1b[201~',
       enter: false,
       client: { id: 'device-9', type: 'mobile' }
     })

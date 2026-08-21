@@ -4,7 +4,7 @@ import type { GhosttyImportPreview, GlobalSettings } from '../../shared/global-s
 import type { Store } from '../persistence'
 import { findGhosttyConfigPaths } from './discovery'
 import { parseGhosttyConfig } from './parser'
-import { mapGhosttyToOrca } from './mapper'
+import { mapGhosttyToMCode } from './mapper'
 import { resolveGhosttyThemeColors } from './theme-resolution'
 
 // Why: defensive upper bound on the Ghostty config size we're willing to read
@@ -13,7 +13,7 @@ import { resolveGhosttyThemeColors } from './theme-resolution'
 // would rather surface an error than OOM the main process.
 const MAX_CONFIG_BYTES = 1_000_000
 
-// Why: mapGhosttyToOrca creates new object instances for nested values like
+// Why: mapGhosttyToMCode creates new object instances for nested values like
 // terminalColorOverrides. A reference comparison (!==) would always report
 // them as changed even when the contents are identical. The stringifier sorts
 // keys at every object depth so persisted settings whose storage preserves a
@@ -142,7 +142,7 @@ export async function previewGhosttyImport(store: Store): Promise<GhosttyImportP
 
   const themeUnsupportedKeys = await applyThemeReference(parsed)
 
-  const { diff: rawDiff, unsupportedKeys: mappedUnsupportedKeys } = mapGhosttyToOrca(
+  const { diff: rawDiff, unsupportedKeys: mappedUnsupportedKeys } = mapGhosttyToMCode(
     parsed,
     platform() === 'darwin'
   )

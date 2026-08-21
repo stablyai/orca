@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from './orca-runtime'
+import { MCodeRuntimeService } from './mcode-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 
-// STA repro (silent-send incident): `orca terminal send` to a leaf whose ptyId
+// STA repro (silent-send incident): `mcode terminal send` to a leaf whose ptyId
 // no provider in this process owns was a silent no-op reported as success —
 // the stale graph mirror answers writable=true and provider writes to unknown
 // ids are accepted fire-and-forget. The leaf branch must reject ONLY on
@@ -42,11 +42,11 @@ async function makeRuntimeWithLeafHandle(options: {
   probePtyLiveness?: (ptyId: string) => Promise<boolean | null>
   hasPty?: (ptyId: string) => boolean | null
 }): Promise<{
-  runtime: OrcaRuntimeService
+  runtime: MCodeRuntimeService
   handle: string
   write: ReturnType<typeof vi.fn>
 }> {
-  const runtime = new OrcaRuntimeService(makeStore() as never)
+  const runtime = new MCodeRuntimeService(makeStore() as never)
   const write = vi.fn(() => true)
   runtime.setPtyController({
     spawn: vi.fn(async () => ({ id: 'never' })),
@@ -64,7 +64,7 @@ async function makeRuntimeWithLeafHandle(options: {
 }
 
 // Re-invocable: every graph resync replaces leaf records with fresh objects.
-function publishLeafGraph(runtime: OrcaRuntimeService, leafPtyId: string): void {
+function publishLeafGraph(runtime: MCodeRuntimeService, leafPtyId: string): void {
   runtime.syncWindowGraph(1, {
     tabs: [
       {
@@ -405,7 +405,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     const payloads = write.mock.calls
       .map(([, data]) => data)
       .filter((data): data is string => typeof data === 'string')
-    const pointers = payloads.filter((data) => data.includes('orca orchestration check'))
+    const pointers = payloads.filter((data) => data.includes('mcode orchestration check'))
     expect(pointers).toHaveLength(1)
     expect(pointers[0]).toContain('You have 1 orchestration message')
     expect(payloads.some((data) => data.includes('unclaimed status'))).toBe(false)
@@ -450,7 +450,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     const payloads = write.mock.calls
       .map(([, data]) => data)
       .filter((data): data is string => typeof data === 'string')
-    const pointers = payloads.filter((data) => data.includes('orca orchestration check'))
+    const pointers = payloads.filter((data) => data.includes('mcode orchestration check'))
     expect(pointers).toHaveLength(1)
     expect(pointers[0]).toContain('You have 2 orchestration messages')
     expect(payloads.some((data) => data.includes('unclaimed status'))).toBe(false)
@@ -510,7 +510,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
 
       const pointerWrites = () =>
         write.mock.calls.filter(
-          ([, data]) => typeof data === 'string' && data.includes('orca orchestration check')
+          ([, data]) => typeof data === 'string' && data.includes('mcode orchestration check')
         )
       expect(pointerWrites()).toHaveLength(1)
       expect(pointerWrites()[0]?.[1]).toContain('You have 1 orchestration message')
@@ -563,7 +563,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
 
       const pointerWrites = () =>
         write.mock.calls.filter(
-          ([, data]) => typeof data === 'string' && data.includes('orca orchestration check')
+          ([, data]) => typeof data === 'string' && data.includes('mcode orchestration check')
         )
       expect(pointerWrites()).toHaveLength(1)
       expect(pointerWrites()[0]?.[1]).toContain('You have 1 orchestration message')
@@ -614,13 +614,13 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       runtime.deliverPendingMessagesForHandle(handle)
       expect(
         write.mock.calls.filter(
-          ([, data]) => typeof data === 'string' && data.includes('orca orchestration check')
+          ([, data]) => typeof data === 'string' && data.includes('mcode orchestration check')
         )
       ).toHaveLength(1)
       runtime.onPtyData(STALE_PTY_ID, '\x1b]0;Codex working\x07', 200)
       runtime.onPtyData(STALE_PTY_ID, '\x1b]0;Codex done\x07', 201)
       const payloadWrites = write.mock.calls.filter(
-        ([, data]) => typeof data === 'string' && data.includes('orca orchestration check')
+        ([, data]) => typeof data === 'string' && data.includes('mcode orchestration check')
       )
       expect(payloadWrites).toHaveLength(2)
       await vi.advanceTimersByTimeAsync(500)

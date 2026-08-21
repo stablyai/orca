@@ -15,7 +15,7 @@ import {
   type AiVaultSessionLimit
 } from './ai-vault-session-limit'
 
-export const AI_VAULT_VIEW_OPTIONS_STORAGE_KEY = 'orca.aiVault.viewOptions.v1'
+export const AI_VAULT_VIEW_OPTIONS_STORAGE_KEY = 'mcode.aiVault.viewOptions.v1'
 
 export type AiVaultViewOptions = {
   disabledAgents: AiVaultAgent[]

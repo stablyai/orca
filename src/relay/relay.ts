@@ -3,7 +3,7 @@
 
 /* eslint-disable max-lines -- Why: splitting the entrypoint's startup/reconnect/registration would hide the startup order, the key invariant here. */
 
-// Orca Relay — lightweight daemon deployed to remote hosts over SCP and launched via an SSH exec channel.
+// MCode Relay — lightweight daemon deployed to remote hosts over SCP and launched via an SSH exec channel.
 // Communicates over stdin/stdout using the framed JSON-RPC protocol.
 // On client disconnect it enters a grace period, keeping PTYs alive on a Unix domain socket; a later launch
 // reconnects via `relay.js --connect`, bridging the new SSH channel's stdio to the existing relay's socket.
@@ -90,12 +90,12 @@ const SOCK_NAME = 'relay.sock'
 const CONNECT_TIMEOUT_MS = 5_000
 const STALE_SOCKET_PROBE_TIMEOUT_MS = 500
 const EMPTY_DETACHED_STARTUP_GRACE_MS = parseNonNegativeIntEnv(
-  'ORCA_RELAY_EMPTY_STARTUP_GRACE_MS',
+  'MCODE_RELAY_EMPTY_STARTUP_GRACE_MS',
   60_000
 )
 // Why: a relay holding zero PTYs preserves nothing, so an unlimited grace only accumulates idle daemons.
 // The env override is test-only — the remote relay is launched over a non-interactive SSH exec channel that carries no client env.
-const IDLE_RELAY_GRACE_MS = parseNonNegativeIntEnv('ORCA_RELAY_IDLE_GRACE_MS', 15 * 60_000)
+const IDLE_RELAY_GRACE_MS = parseNonNegativeIntEnv('MCODE_RELAY_IDLE_GRACE_MS', 15 * 60_000)
 
 type SocketIdentity = {
   dev: bigint
@@ -160,7 +160,7 @@ function parseArgs(argv: string[]): {
       i++
     } else if (argv[i] === '--connect') {
       connectMode = true
-    } else if (argv[i] === '--orca-cli') {
+    } else if (argv[i] === '--mcode-cli') {
       cliMode = true
     } else if (argv[i] === '--detached') {
       detached = true
@@ -307,7 +307,7 @@ function runConnectMode(sockPath: string, endpointCredential?: string): void {
   })
 }
 
-async function runOrcaCliMode(
+async function runMCodeCliMode(
   sockPath: string,
   argv: string[],
   endpointCredential?: string
@@ -323,7 +323,7 @@ async function runOrcaCliMode(
   }
   const stdin =
     preparedArtifact.stdin ??
-    (shouldReadRemoteCliStdin(argv) ? await readOrcaCliStdin() : undefined)
+    (shouldReadRemoteCliStdin(argv) ? await readMCodeCliStdin() : undefined)
   const env = pickRemoteCliEnv(process.env)
   const requestParams: RemoteArtifactCliForwardingParams = {
     argv,
@@ -369,7 +369,7 @@ async function runOrcaCliMode(
       {
         jsonrpc: '2.0',
         id: requestId,
-        method: 'orca.cli',
+        method: 'mcode.cli',
         params: requestParams
       },
       nextSeq++,
@@ -389,7 +389,7 @@ async function runOrcaCliMode(
         {
           jsonrpc: '2.0',
           id: postOutputRequestId,
-          method: 'orca.cli.postOutput',
+          method: 'mcode.cli.postOutput',
           params: { postOutput, env: pickRemoteCliEnv(process.env) }
         },
         nextSeq++,
@@ -485,7 +485,7 @@ async function runOrcaCliMode(
   })
 
   const connectTimeout = setTimeout(() => {
-    process.stderr.write(`[orca-cli] Relay connection timed out after ${CONNECT_TIMEOUT_MS}ms\n`)
+    process.stderr.write(`[mcode-cli] Relay connection timed out after ${CONNECT_TIMEOUT_MS}ms\n`)
     sock.destroy()
     process.exit(1)
   }, CONNECT_TIMEOUT_MS)
@@ -512,12 +512,12 @@ async function runOrcaCliMode(
 
   sock.on('error', (err) => {
     clearTimeout(connectTimeout)
-    process.stderr.write(`[orca-cli] Relay socket error: ${err.message}\n`)
+    process.stderr.write(`[mcode-cli] Relay socket error: ${err.message}\n`)
     process.exit(1)
   })
 }
 
-async function readOrcaCliStdin(): Promise<string | undefined> {
+async function readMCodeCliStdin(): Promise<string | undefined> {
   if (process.stdin.isTTY) {
     return undefined
   }
@@ -548,8 +548,8 @@ async function main(): Promise<void> {
     return
   }
   if (cliMode) {
-    const marker = process.argv.indexOf('--orca-cli')
-    await runOrcaCliMode(
+    const marker = process.argv.indexOf('--mcode-cli')
+    await runMCodeCliMode(
       sockPath,
       marker !== -1 ? process.argv.slice(marker + 1) : [],
       endpointCredential
@@ -752,14 +752,14 @@ async function main(): Promise<void> {
     () => ({ grantedCapabilities: null, services: null })
   )
 
-  dispatcher.onRequest('orca.cli', async (params, context) => {
-    return await dispatcher.requestAnyClient('orca.cli', params, {
+  dispatcher.onRequest('mcode.cli', async (params, context) => {
+    return await dispatcher.requestAnyClient('mcode.cli', params, {
       excludeClientId: context.clientId,
       timeoutMs: remoteCliRequestTimeoutMs(params)
     })
   })
-  dispatcher.onRequest('orca.cli.postOutput', async (params, context) => {
-    return await dispatcher.requestAnyClient('orca.cli.postOutput', params, {
+  dispatcher.onRequest('mcode.cli.postOutput', async (params, context) => {
+    return await dispatcher.requestAnyClient('mcode.cli.postOutput', params, {
       excludeClientId: context.clientId,
       timeoutMs: remoteCliRequestTimeoutMs(params)
     })
@@ -784,14 +784,14 @@ async function main(): Promise<void> {
   )
 
   // ── Agent-hook server ─────────────────────────────────────────────
-  // Why: loopback HTTP receiver so remote-PTY agent CLIs post hook events to a local port (they can't reach Orca's host); the relay forwards them as agent.hook notifications.
+  // Why: loopback HTTP receiver so remote-PTY agent CLIs post hook events to a local port (they can't reach MCode's host); the relay forwards them as agent.hook notifications.
   const hookServer = new RelayAgentHookServer({
     // Why: scope endpoint.env/cmd by socket path so multiple relay daemons on one account can't overwrite each other's hook tokens.
     endpointDir: endpointDir ?? endpointDirForRelaySocket(sockPath),
     // Why: publication is fire-and-forget and drops during reconnect; the per-paneKey cache lets us replay last status after --connect.
     forward: (envelope) => publishAgentHookEnvelope(dispatcher, envelope)
   })
-  // Why: await the bind before announcing readiness so the first PTY spawn already sees ORCA_AGENT_HOOK_* env; bind failure is soft (log and continue).
+  // Why: await the bind before announcing readiness so the first PTY spawn already sees MCODE_AGENT_HOOK_* env; bind failure is soft (log and continue).
   try {
     await hookServer.start({ publishEndpoint: false })
   } catch (err) {
@@ -800,7 +800,7 @@ async function main(): Promise<void> {
     )
   }
 
-  // Why: read the augmenter on every spawn so a late (or restarted) hook-server bind still lands in the next PTY's ORCA_AGENT_HOOK_* env.
+  // Why: read the augmenter on every spawn so a late (or restarted) hook-server bind still lands in the next PTY's MCODE_AGENT_HOOK_* env.
   ptyHandler.addEnvAugmenter(() => hookServer.buildPtyEnv())
 
   // Why: plugin paths resolve on the relay host — OpenCode gets a relay-local overlay; Pi/OMP get extensions in their real remote dirs.
@@ -814,14 +814,14 @@ async function main(): Promise<void> {
       const dir = pluginOverlay.materializeOpenCode(overlayId, sourceDir)
       if (dir) {
         env.OPENCODE_CONFIG_DIR = dir
-        env.ORCA_OPENCODE_CONFIG_DIR = dir
+        env.MCODE_OPENCODE_CONFIG_DIR = dir
         if (sourceDir) {
-          env.ORCA_OPENCODE_SOURCE_CONFIG_DIR = sourceDir
+          env.MCODE_OPENCODE_SOURCE_CONFIG_DIR = sourceDir
         }
       }
     }
     if (pluginOverlay.hasPiSource()) {
-      // Why: install Orca's guarded extension into the launched agent's (Pi vs OMP) real remote dir without redirecting PI_CODING_AGENT_DIR.
+      // Why: install MCode's guarded extension into the launched agent's (Pi vs OMP) real remote dir without redirecting PI_CODING_AGENT_DIR.
       const launchCommandHint = resolveSetupAgentSequenceLaunchCommand(ctx.env, ctx.command)
       const explicitKind = isPiCompatibleAgentType(ctx.launchAgent)
         ? ctx.launchAgent
@@ -840,7 +840,7 @@ async function main(): Promise<void> {
           materializeDefaultHome: explicitKind === 'pi'
         })
         if (result?.sourceAgentDir) {
-          env.ORCA_PI_SOURCE_AGENT_DIR = result.sourceAgentDir
+          env.MCODE_PI_SOURCE_AGENT_DIR = result.sourceAgentDir
         }
       }
       if (shouldPrepareOmpShadow) {
@@ -848,17 +848,17 @@ async function main(): Promise<void> {
         const sourceDir =
           kind === 'omp'
             ? resolvePiSourceAgentDir(ctx.env, ctx.shell, 'omp')
-            : ctx.env.ORCA_OMP_SOURCE_AGENT_DIR
+            : ctx.env.MCODE_OMP_SOURCE_AGENT_DIR
         const result = pluginOverlay.materializePi(overlayId, sourceDir, 'omp', {
           materializeDefaultHome: explicitKind === 'omp'
         })
         // Why: status-only fallback (no sourceAgentDir) is intentional for bare
-        // shells without ~/.omp — still export ORCA_OMP_STATUS_EXTENSION (#10196).
+        // shells without ~/.omp — still export MCODE_OMP_STATUS_EXTENSION (#10196).
         if (result?.statusExtensionPath) {
-          env.ORCA_OMP_STATUS_EXTENSION = result.statusExtensionPath
+          env.MCODE_OMP_STATUS_EXTENSION = result.statusExtensionPath
         }
         if (result?.sourceAgentDir) {
-          env.ORCA_OMP_SOURCE_AGENT_DIR = result.sourceAgentDir
+          env.MCODE_OMP_SOURCE_AGENT_DIR = result.sourceAgentDir
         }
       }
       if (kind === 'prime-agent') {
@@ -867,7 +867,7 @@ async function main(): Promise<void> {
           materializeDefaultHome: explicitKind === 'prime-agent'
         })
         if (result?.sourceAgentDir) {
-          env.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR = result.sourceAgentDir
+          env.MCODE_PRIME_AGENT_SOURCE_AGENT_DIR = result.sourceAgentDir
         }
       }
     }
@@ -882,7 +882,7 @@ async function main(): Promise<void> {
     pluginOverlay.clearOverlay(paneKey ?? id)
   })
 
-  // Why: forward cached entries as notifications before returning, so the response trails every replay and Orca can't treat replay as done while frames are still in flight.
+  // Why: forward cached entries as notifications before returning, so the response trails every replay and MCode can't treat replay as done while frames are still in flight.
   dispatcher.onRequest(AGENT_HOOK_REQUEST_REPLAY_METHOD, async () => {
     const replayed = hookServer.replayCachedPayloadsForPanes()
     return { replayed }
@@ -891,8 +891,8 @@ async function main(): Promise<void> {
   // Why: relay-local installers collapse hundreds of SFTP request/response RTTs to one RPC.
   registerManagedHookInstaller(dispatcher)
 
-  // Why: plugin sources ship over the wire — the relay is versioned independently of Orca, so bundling them would make every agent-event change a relay redeploy.
-  // Why: bound per-source size so a buggy/hostile Orca can't OOM the relay by pushing a giant string.
+  // Why: plugin sources ship over the wire — the relay is versioned independently of MCode, so bundling them would make every agent-event change a relay redeploy.
+  // Why: bound per-source size so a buggy/hostile MCode can't OOM the relay by pushing a giant string.
   dispatcher.onRequest(AGENT_HOOK_INSTALL_PLUGINS_METHOD, async (params) => {
     const opencode = params.opencodePluginSource
     const pi = params.piExtensionSource

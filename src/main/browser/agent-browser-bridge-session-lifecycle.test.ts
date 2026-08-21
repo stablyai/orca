@@ -100,7 +100,7 @@ describe('AgentBrowserBridge', () => {
       const rejection = expect(promise).rejects.toMatchObject({
         code: 'browser_owner_unavailable',
         message:
-          'Could not reset stale helper session orca-tab-tab-1; retry after agent-browser exits'
+          'Could not reset stale helper session mcode-tab-tab-1; retry after agent-browser exits'
       })
 
       await vi.advanceTimersByTimeAsync(3_000)
@@ -171,7 +171,7 @@ describe('AgentBrowserBridge', () => {
 
     const destroyPromise = (
       bridge as unknown as { destroySession: (name: string) => Promise<void> }
-    ).destroySession('orca-tab-tab-1')
+    ).destroySession('mcode-tab-tab-1')
     const nextSnapshot = bridge.snapshot()
 
     await Promise.resolve()
@@ -215,7 +215,7 @@ describe('AgentBrowserBridge', () => {
           webContentsId: number
         ) => Promise<void>
       }
-    ).ensureSession('orca-tab-tab-1', 'tab-1', 100)
+    ).ensureSession('mcode-tab-tab-1', 'tab-1', 100)
 
     await vi.waitFor(() => {
       expect(releaseStaleClose).not.toBeNull()
@@ -224,7 +224,7 @@ describe('AgentBrowserBridge', () => {
 
     const destroyPromise = (
       bridge as unknown as { destroySession: (name: string) => Promise<void> }
-    ).destroySession('orca-tab-tab-1')
+    ).destroySession('mcode-tab-tab-1')
 
     releaseStaleClose!()
     await ensurePromise
@@ -273,7 +273,7 @@ describe('AgentBrowserBridge', () => {
 
     const destroyPromise = (
       bridge as unknown as { destroySession: (name: string) => Promise<void> }
-    ).destroySession('orca-tab-tab-1')
+    ).destroySession('mcode-tab-tab-1')
 
     expect(activeChild.kill).toHaveBeenCalledTimes(1)
     await expect(runningSnapshot).rejects.toMatchObject({

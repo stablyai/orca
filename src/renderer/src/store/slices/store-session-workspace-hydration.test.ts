@@ -31,7 +31,7 @@ function makeDetectedWorktreeResult(
     source: authoritative ? 'git' : 'metadata-fallback',
     worktrees: worktrees.map((worktree) => ({
       ...worktree,
-      ownership: 'orca-managed',
+      ownership: 'mcode-managed',
       selectedCheckout: false,
       visible: true
     }))

@@ -114,7 +114,7 @@ describe('terminal link action routing', () => {
     expect(context.request).not.toHaveBeenCalled()
   })
 
-  it('offers system browser first and Orca second when system browser is the default', () => {
+  it('offers system browser first and MCode second when system browser is the default', () => {
     const request = vi.fn()
     const event = plainEvent()
 
@@ -122,7 +122,7 @@ describe('terminal link action routing', () => {
       handleTerminalHttpLink('https://example.com/path', event, {
         worktreeId: 'wt-1',
         linkActionContext: actionContext(request),
-        actionDestinations: { primary: 'system', alternate: 'orca' }
+        actionDestinations: { primary: 'system', alternate: 'mcode' }
       })
     ).toBe(true)
     expect(openUrl).not.toHaveBeenCalled()
@@ -137,7 +137,7 @@ describe('terminal link action routing', () => {
     )
     expect(request.mock.calls[0][0].primary.label).toBe('System Browser')
     expect(request.mock.calls[0][0].primary.external).toBe(true)
-    expect(request.mock.calls[0][0].alternate.label).toBe('Orca Browser')
+    expect(request.mock.calls[0][0].alternate.label).toBe('MCode Browser')
     expect(request.mock.calls[0][0].alternate.external).toBe(false)
 
     request.mock.calls[0][0].primary.run()
@@ -149,16 +149,16 @@ describe('terminal link action routing', () => {
     })
   })
 
-  it('offers Orca first and system browser second when Orca is the default', () => {
+  it('offers MCode first and system browser second when MCode is the default', () => {
     const request = vi.fn()
 
     handleTerminalHttpLink('https://example.com/path', plainEvent(), {
       worktreeId: 'wt-1',
       linkActionContext: actionContext(request),
-      actionDestinations: { primary: 'orca', alternate: 'system' }
+      actionDestinations: { primary: 'mcode', alternate: 'system' }
     })
 
-    expect(request.mock.calls[0][0].primary.label).toBe('Orca Browser')
+    expect(request.mock.calls[0][0].primary.label).toBe('MCode Browser')
     expect(request.mock.calls[0][0].primary.external).toBe(false)
     expect(request.mock.calls[0][0].alternate.label).toBe('System Browser')
     expect(request.mock.calls[0][0].alternate.external).toBe(true)
@@ -187,14 +187,14 @@ describe('terminal link action routing', () => {
     expect(request.mock.calls[0][0].alternate).toBeUndefined()
   })
 
-  it('routes an explicit Orca Browser action to the owning runtime', () => {
+  it('routes an explicit MCode Browser action to the owning runtime', () => {
     const request = vi.fn()
 
     handleTerminalHttpLink('https://example.com/path', plainEvent(), {
       worktreeId: 'wt-1',
       sourceOwner: { kind: 'runtime', runtimeEnvironmentId: 'env-1' },
       linkActionContext: actionContext(request),
-      actionDestinations: { primary: 'system', alternate: 'orca' }
+      actionDestinations: { primary: 'system', alternate: 'mcode' }
     })
 
     request.mock.calls[0][0].primary.run()
@@ -214,7 +214,7 @@ describe('terminal link action routing', () => {
 
     handleTerminalHttpLink('https://example.com/path', event, {
       worktreeId: 'wt-1',
-      actionDestinations: { primary: 'system', alternate: 'orca' }
+      actionDestinations: { primary: 'system', alternate: 'mcode' }
     })
 
     expect(createBrowserTab).toHaveBeenCalledWith('wt-1', 'https://example.com/path', {

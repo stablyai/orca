@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/protocol-version'
-import { OrcaRuntimeService } from '../../orca-runtime'
+import { MCodeRuntimeService } from '../../mcode-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import { ORCHESTRATION_METHODS } from './orchestration'
 
@@ -17,11 +17,11 @@ const SSH_PROVIDER_GONE = 'its SSH provider is no longer registered'
 
 describe('federation host liveness verdicts', () => {
   let db: OrchestrationDb
-  let runtime: OrcaRuntimeService
+  let runtime: MCodeRuntimeService
 
   beforeEach(() => {
     db = new OrchestrationDb(':memory:')
-    runtime = new OrcaRuntimeService()
+    runtime = new MCodeRuntimeService()
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(PANE_KEY)
     vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockReturnValue(INCARNATION)

@@ -3,9 +3,9 @@ import { isWorkItemLookupText } from './work-item-lookup-text'
 
 describe('isWorkItemLookupText', () => {
   it('detects GitHub PR and issue URLs', () => {
-    expect(isWorkItemLookupText('https://github.com/stablyai/orca/pull/4900')).toBe(true)
-    expect(isWorkItemLookupText('https://github.com/stablyai/orca/issues/123')).toBe(true)
-    expect(isWorkItemLookupText('  https://www.github.com/stablyai/orca/pull/1 ')).toBe(true)
+    expect(isWorkItemLookupText('https://github.com/mcode-ide/mcode/pull/4900')).toBe(true)
+    expect(isWorkItemLookupText('https://github.com/mcode-ide/mcode/issues/123')).toBe(true)
+    expect(isWorkItemLookupText('  https://www.github.com/mcode-ide/mcode/pull/1 ')).toBe(true)
   })
 
   it('detects hash-number shorthand', () => {

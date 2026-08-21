@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import * as client from '../github/client'
-import { OrcaRuntimeService } from './orca-runtime'
+import { MCodeRuntimeService } from './mcode-runtime'
 
 vi.mock('../github/client', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -32,7 +32,7 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
   }
 }
 
-function attachStore(runtime: OrcaRuntimeService, repos: Repo[]) {
+function attachStore(runtime: MCodeRuntimeService, repos: Repo[]) {
   const updateRepo = vi.fn((repoId: string, updates: Partial<Repo>) => {
     const index = repos.findIndex((repo) => repo.id === repoId)
     repos[index] = { ...repos[index], ...updates }
@@ -47,7 +47,7 @@ afterEach(() => {
 
 describe('startup fork-upstream backfill', () => {
   it('keeps a renamed fork own owner avatar while recording the upstream', async () => {
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     const updateRepo = attachStore(runtime, [makeRepo()])
     getRepoUpstream.mockResolvedValue({ owner: 'upstream-org', repo: 'rocket' })
     getRepoSlug.mockResolvedValue({ owner: 'acme', repo: 'rocket-pro' })
@@ -66,7 +66,7 @@ describe('startup fork-upstream backfill', () => {
   })
 
   it('migrates a same-name fork to the upstream owner avatar', async () => {
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     const updateRepo = attachStore(runtime, [
       makeRepo({
         path: '/workspace/rocket',
@@ -95,7 +95,7 @@ describe('startup fork-upstream backfill', () => {
   })
 
   it('keeps an icon chosen while avatar detection is pending', async () => {
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     const repo = makeRepo()
     const repos = [repo]
     const updateRepo = attachStore(runtime, repos)

@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { expect, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
 import type Database from '../sqlite/sync-database'
-import { OrcaRuntimeService } from './orca-runtime'
+import { MCodeRuntimeService } from './mcode-runtime'
 import { OrchestrationDb } from './orchestration/db'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
@@ -58,7 +58,7 @@ export function insertDirectRunMessage(db: OrchestrationDb, runId: string, subje
 }
 
 export type MailboxNotificationHarness = {
-  runtime: OrcaRuntimeService
+  runtime: MCodeRuntimeService
   write: ReturnType<typeof vi.fn>
 }
 
@@ -82,7 +82,7 @@ export type MailboxCheckOptions = {
 }
 
 export function createRuntime(db: OrchestrationDb): MailboxNotificationHarness {
-  const runtime = new OrcaRuntimeService(null, undefined, {
+  const runtime = new MCodeRuntimeService(null, undefined, {
     attestAgentHookCompatibilityAuthority: ({ paneKey }) =>
       paneKey === PANE_KEY || paneKey.startsWith(`${SECOND_TAB_ID}:`)
         ? { paneKey, source: 'current_hook' }
@@ -127,7 +127,7 @@ export function createRuntime(db: OrchestrationDb): MailboxNotificationHarness {
 }
 
 export function registerSecondPane(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   leafId = SECOND_LEAF_ID,
   includeFirstPane = true
 ): void {
@@ -182,7 +182,7 @@ export function registerSecondPane(
   })
 }
 
-export async function driveToLiveIdle(runtime: OrcaRuntimeService): Promise<void> {
+export async function driveToLiveIdle(runtime: MCodeRuntimeService): Promise<void> {
   await runtime.listTerminals()
   runtime.onPtyData(PTY_ID, '\x1b]0;Codex working\x07', 1)
   runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 2)
@@ -191,12 +191,12 @@ export async function driveToLiveIdle(runtime: OrcaRuntimeService): Promise<void
 
 export function pointerCount(write: ReturnType<typeof vi.fn>): number {
   return write.mock.calls.filter(([, payload]) =>
-    String(payload).includes('orca orchestration check')
+    String(payload).includes('mcode orchestration check')
   ).length
 }
 
 export async function checkBoundMailbox(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   options: MailboxCheckOptions = {}
 ): Promise<MailboxCheckResult> {
   const response = await dispatchMailboxCheck(runtime, options)
@@ -208,7 +208,7 @@ export async function checkBoundMailbox(
 }
 
 export async function dispatchMailboxCheck(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   options: MailboxCheckOptions = {}
 ) {
   const terminal = options.terminal ?? TERMINAL_HANDLE

@@ -1,4 +1,4 @@
-import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
+import type { MCodeVmRecipe } from '../../shared/mcode-yaml-hook-types'
 import { parsePluginVmRecipeArtifact } from '../../shared/plugins/plugin-vm-recipe-artifact'
 import {
   PLUGIN_VM_RECIPE_MAX_BYTES,
@@ -16,7 +16,7 @@ const VM_RECIPE_LOAD_CONCURRENCY = 4
 
 export type PluginVmRecipeRegistration = {
   pluginKey: string
-  recipe: OrcaVmRecipe
+  recipe: MCodeVmRecipe
 }
 
 type VmRecipeLoadResult =

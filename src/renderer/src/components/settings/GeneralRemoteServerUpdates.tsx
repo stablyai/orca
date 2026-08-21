@@ -79,11 +79,11 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
     <SearchableSetting
       title={translate(
         'auto.components.settings.GeneralRemoteServerUpdates.title',
-        'Remote Orca Servers'
+        'Remote MCode Servers'
       )}
       description={translate(
         'auto.components.settings.GeneralRemoteServerUpdates.description',
-        'Check and update paired Orca servers from this client.'
+        'Check and update paired MCode servers from this client.'
       )}
       keywords={['remote server', 'update all', 'paired', 'version']}
       className="space-y-3"
@@ -92,13 +92,13 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
         <div className="text-sm font-medium">
           {translate(
             'auto.components.settings.GeneralRemoteServerUpdates.title',
-            'Remote Orca Servers'
+            'Remote MCode Servers'
           )}
         </div>
         <p className="text-xs text-muted-foreground">
           {translate(
             'auto.components.settings.GeneralRemoteServerUpdates.description',
-            'Check and update paired Orca servers from this client.'
+            'Check and update paired MCode servers from this client.'
           )}
         </p>
       </div>

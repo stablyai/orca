@@ -143,7 +143,7 @@ describe('getActivityThreadTaskTitle', () => {
           stateHistory: [
             {
               state: 'done',
-              prompt: `You are working inside Orca, a multi-agent IDE. Your task ID is: task-1
+              prompt: `You are working inside MCode, a multi-agent IDE. Your task ID is: task-1
 
 === TASK ===
 Compare gpt5 claude prompting`,

@@ -3,7 +3,7 @@ import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
-import { OrcaRuntimeService } from '../../orca-runtime'
+import { MCodeRuntimeService } from '../../mcode-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import { RpcDispatcher } from '../dispatcher'
 import { ORCHESTRATION_METHODS } from './orchestration'
@@ -18,9 +18,9 @@ describe('orchestration migration behavior', () => {
     }
   })
 
-  function createRuntime(): { db: OrchestrationDb; runtime: OrcaRuntimeService } {
+  function createRuntime(): { db: OrchestrationDb; runtime: MCodeRuntimeService } {
     const db = new OrchestrationDb(':memory:')
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     runtime.setOrchestrationDb(db)
     databases.push(db)
     return { db, runtime }

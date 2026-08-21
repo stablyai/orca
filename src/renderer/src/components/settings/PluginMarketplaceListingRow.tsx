@@ -75,7 +75,7 @@ export function PluginMarketplaceListingRow({
           <span>
             {translate(
               'auto.components.settings.PluginMarketplaceListingRow.blocked',
-              "Blocked by Orca's safety list: {{value0}}",
+              "Blocked by MCode's safety list: {{value0}}",
               { value0: blocked.reason }
             )}
           </span>

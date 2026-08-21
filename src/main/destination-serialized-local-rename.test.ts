@@ -28,7 +28,7 @@ vi.mock('fs/promises', async () => {
 
 import { renameLocalPathSerializedByDestination } from './destination-serialized-local-rename'
 import { registerFilesystemMutationHandlers } from './ipc/filesystem-mutations'
-import { RuntimeFileCommands } from './runtime/orca-runtime-files'
+import { RuntimeFileCommands } from './runtime/mcode-runtime-files'
 
 const REPO_PATH = path.resolve('/workspace/repo')
 const store = {

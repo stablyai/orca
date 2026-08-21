@@ -10,7 +10,7 @@ import { buildWslCodexAppServerArgs } from '../codex-accounts/wsl-codex-command'
 import { resolveCodexCommand } from '../codex-cli/command'
 import { terminateCodexProbeChild } from '../rate-limits/codex-probe-termination'
 import { getSpawnArgsForWindows } from '../win32-utils'
-import { getOrcaUserDataPath } from './codex-home-paths'
+import { getMCodeUserDataPath } from './codex-home-paths'
 import {
   BACKFILL_PENDING_MIN_SESSION_FILES,
   countCodexSessionFilesUpTo,
@@ -176,7 +176,7 @@ export async function runCodexStateDbBackfillRecovery(
 export function resolveCodexBackfillSupervisorLockRoot(codexHomePath: string): string {
   const homeKey = normalizeRuntimePathForComparison(codexHomePath)
   const digest = createHash('sha256').update(homeKey).digest('hex')
-  return join(getOrcaUserDataPath(), 'codex-state-db-backfill-locks', digest)
+  return join(getMCodeUserDataPath(), 'codex-state-db-backfill-locks', digest)
 }
 
 function scopeRecoveryHostIdentity(hostIdentity: string, codexHomePath: string): string {

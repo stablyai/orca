@@ -163,7 +163,7 @@ describe('browserManager grab operations', () => {
     })
 
     it('resolves with cancelled when guest returns teardown cancellation marker', async () => {
-      guestExecuteJavaScriptMock.mockResolvedValueOnce({ __orcaCancelled: true })
+      guestExecuteJavaScriptMock.mockResolvedValueOnce({ __mcodeCancelled: true })
 
       const result = await browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
       expect(result).toEqual({ opId: 'op-1', kind: 'cancelled', reason: 'user' })

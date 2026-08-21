@@ -111,7 +111,7 @@ function buildEntries(overrides: Partial<Parameters<typeof buildSearchableWorksp
   const tab = makeUnifiedTab()
   return buildSearchableWorkspaceTabs({
     worktrees: [worktree],
-    repoMap: new Map([[worktree.repoId, { displayName: 'repo/orca' }]]),
+    repoMap: new Map([[worktree.repoId, { displayName: 'repo/mcode' }]]),
     worktreeOrder: new Map([[worktree.id, 0]]),
     unifiedTabsByWorktree: { [worktree.id]: [tab] },
     tabsByWorktree: { [worktree.id]: [makeTerminalTab()] },

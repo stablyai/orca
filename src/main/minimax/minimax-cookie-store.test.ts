@@ -39,9 +39,9 @@ vi.mock('../../shared/secure-file', () => ({
   writeSecureFile: writeSecureFileMock
 }))
 
-const storePath = '/home/test/.orca/minimax-session-cookie.enc'
+const storePath = '/home/test/.mcode/minimax-session-cookie.enc'
 const envelope = (kind: 'encrypted' | 'plaintext', value: string): string =>
-  `orca-minimax-cookie:v1:${kind}:${Buffer.from(value, 'utf8').toString('base64')}`
+  `mcode-minimax-cookie:v1:${kind}:${Buffer.from(value, 'utf8').toString('base64')}`
 
 async function loadStore(): Promise<typeof MiniMaxCookieStore> {
   return await import('./minimax-cookie-store')

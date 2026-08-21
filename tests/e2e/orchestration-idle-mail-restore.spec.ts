@@ -13,7 +13,7 @@
  * already exist when pty:spawn returns the restore payload, and a cold relaunch
  * publishes its graph after that — so the leaf here comes back with no agent
  * status rather than a seeded idle, and this spec passes with the gate removed.
- * The gate is pinned in src/main/runtime/orca-runtime.test.ts
+ * The gate is pinned in src/main/runtime/mcode-runtime.test.ts
  * ('does not push on a cold-restore seeded idle status with no live
  * observation'), which can stage that ordering directly. What earns this spec
  * its two Electron launches is that neither half of the restart behavior above
@@ -21,9 +21,9 @@
  */
 import { existsSync, readFileSync } from 'node:fs'
 import type { ElectronApplication } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
-import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/mcode-restart'
 import {
   execInTerminal,
   waitForActivePaneHookDescriptor,
@@ -39,7 +39,7 @@ import {
 import { mailDisposition, readMailRow } from './helpers/orchestration-mail-store'
 import { waitForPtyShellEcho } from './terminal-pty-readiness'
 
-const POINTER_COMMAND = 'orca orchestration check'
+const POINTER_COMMAND = 'mcode orchestration check'
 const NO_DELIVERY_SETTLE_MS = 5_000
 const DELIVERY_TIMEOUT_MS = 20_000
 

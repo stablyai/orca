@@ -72,7 +72,7 @@ beforeEach(() => {
 })
 
 describe('openFileInBrowserTab', () => {
-  it('opens a local file URL in the Orca browser with the filename as title', () => {
+  it('opens a local file URL in the MCode browser with the filename as title', () => {
     openFileInBrowserTab({
       filePath: '/tmp/example file.html',
       worktreeId: 'wt-1'
@@ -137,7 +137,7 @@ describe('openFileInBrowserTab', () => {
     })
 
     await vi.waitFor(() =>
-      expect(mocks.toastError).toHaveBeenCalledWith('Unable to open this file in Orca Browser.')
+      expect(mocks.toastError).toHaveBeenCalledWith('Unable to open this file in MCode Browser.')
     )
     expect(mocks.closeEmptyGroup).not.toHaveBeenCalled()
     expect(mocks.createBrowserTab).not.toHaveBeenCalled()
@@ -212,7 +212,7 @@ describe('openFileInBrowserTab', () => {
       sourceGroupId: 'group-1'
     })
 
-    expect(mocks.toastError).toHaveBeenCalledWith('Unable to open this file in Orca Browser.')
+    expect(mocks.toastError).toHaveBeenCalledWith('Unable to open this file in MCode Browser.')
     expect(mocks.createEmptySplitGroup).not.toHaveBeenCalled()
     expect(mocks.createBrowserTab).not.toHaveBeenCalled()
     expect(mocks.createWebRuntimeSessionBrowserTab).not.toHaveBeenCalled()

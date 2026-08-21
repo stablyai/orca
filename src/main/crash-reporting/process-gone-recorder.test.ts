@@ -350,7 +350,7 @@ describe('recordProcessGoneCrash', () => {
 
   it('durably records a sanitized crash-report persistence failure', async () => {
     const persistError = Object.assign(
-      new Error('EPERM at C:\\Users\\alice\\AppData\\Roaming\\Orca\\crash-reports.json'),
+      new Error('EPERM at C:\\Users\\alice\\AppData\\Roaming\\MCode\\crash-reports.json'),
       { code: 'EPERM' }
     )
     const record = vi.fn().mockRejectedValue(persistError)

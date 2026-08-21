@@ -14,7 +14,7 @@ describe('shell process readiness', () => {
   it.skipIf(process.platform === 'win32')(
     'resolves bare shell commands through the spawn PATH',
     async () => {
-      const root = await mkdtemp(join(tmpdir(), 'orca-shell-path-'))
+      const root = await mkdtemp(join(tmpdir(), 'mcode-shell-path-'))
       const link = join(root, 'shell-name')
       await symlink(process.execPath, link)
       try {
@@ -39,7 +39,7 @@ describe('shell process readiness', () => {
   it.skipIf(process.platform === 'win32')(
     'resolves relative shell paths against the PTY cwd',
     async () => {
-      const root = await mkdtemp(join(tmpdir(), 'orca-relative-shell-'))
+      const root = await mkdtemp(join(tmpdir(), 'mcode-relative-shell-'))
       const bin = join(root, 'bin')
       await symlink(dirname(process.execPath), bin)
       try {
@@ -55,7 +55,7 @@ describe('shell process readiness', () => {
   it.skipIf(process.platform === 'win32')(
     'skips searchable directories that shadow a later PATH executable',
     async () => {
-      const root = await mkdtemp(join(tmpdir(), 'orca-shadowed-shell-'))
+      const root = await mkdtemp(join(tmpdir(), 'mcode-shadowed-shell-'))
       const first = join(root, 'first')
       const second = join(root, 'second')
       await mkdir(join(first, 'shell-name'), { recursive: true })

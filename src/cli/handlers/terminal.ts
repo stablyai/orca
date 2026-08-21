@@ -97,7 +97,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     if (screen && result.result.terminal.source === undefined) {
       throw new RuntimeClientError(
         'incompatible_runtime',
-        'This Orca host does not support --screen reads, so it answered with accumulated output instead of the rendered screen. Update Orca on the host, or drop --screen to read accumulated output deliberately.'
+        'This MCode host does not support --screen reads, so it answered with accumulated output instead of the rendered screen. Update MCode on the host, or drop --screen to read accumulated output deliberately.'
       )
     }
     printResult(result, json, formatTerminalRead)
@@ -112,7 +112,7 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       enter,
       interrupt,
       ...(text && enter && !interrupt ? { agentPrompt: true } : {}),
-      client: { id: 'orca-cli', type: 'desktop' }
+      client: { id: 'mcode-cli', type: 'desktop' }
     })
     printResult(result, json, formatTerminalSend)
   },

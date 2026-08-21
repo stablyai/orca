@@ -5,11 +5,11 @@ import { installCliFromFeatureTip } from './feature-tip-cli-install-action'
 function cliStatus(overrides: Partial<CliInstallStatus> = {}): CliInstallStatus {
   return {
     platform: 'darwin',
-    commandName: 'orca',
-    commandPath: '/usr/local/bin/orca',
+    commandName: 'mcode',
+    commandPath: '/usr/local/bin/mcode',
     pathDirectory: '/usr/local/bin',
     pathConfigured: true,
-    launcherPath: '/Applications/Orca.app/Contents/MacOS/orca',
+    launcherPath: '/Applications/MCode.app/Contents/MacOS/mcode',
     installMethod: 'symlink',
     supported: true,
     state: 'installed',
@@ -33,7 +33,7 @@ describe('feature tip CLI install action', () => {
   it('returns needs-attention when installation does not finish cleanly', async () => {
     const status = cliStatus({
       state: 'conflict',
-      detail: 'Another orca command is already on PATH.'
+      detail: 'Another mcode command is already on PATH.'
     })
 
     await expect(installCliFromFeatureTip(async () => status)).resolves.toEqual({

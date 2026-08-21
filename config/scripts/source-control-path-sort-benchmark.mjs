@@ -15,12 +15,12 @@ import { execFileSync } from 'node:child_process'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
 
-const ITERATIONS = Number(process.env.ORCA_SC_SORT_BENCH_ITERATIONS ?? '25')
-const WARMUP = Number(process.env.ORCA_SC_SORT_BENCH_WARMUP ?? '5')
+const ITERATIONS = Number(process.env.MCODE_SC_SORT_BENCH_ITERATIONS ?? '25')
+const WARMUP = Number(process.env.MCODE_SC_SORT_BENCH_WARMUP ?? '5')
 
 for (const [name, value] of [
-  ['ORCA_SC_SORT_BENCH_ITERATIONS', ITERATIONS],
-  ['ORCA_SC_SORT_BENCH_WARMUP', WARMUP]
+  ['MCODE_SC_SORT_BENCH_ITERATIONS', ITERATIONS],
+  ['MCODE_SC_SORT_BENCH_WARMUP', WARMUP]
 ]) {
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer, received ${value}`)

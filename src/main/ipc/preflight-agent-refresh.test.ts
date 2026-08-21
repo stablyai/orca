@@ -128,7 +128,7 @@ describe('preflight', () => {
       }
       const script = String(args[5])
       if (script.includes("'claude'")) {
-        return { stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n' }
+        return { stdout: '__MCODE_AGENT_PATH__claude\t/home/test/.local/bin/claude\n' }
       }
       throw new Error('not found')
     })

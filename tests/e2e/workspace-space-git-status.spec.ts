@@ -2,19 +2,19 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { loadWorktreesUntilPathsPresent } from './helpers/worktree-registration'
 
 test.describe('Workspace Space git status checks', () => {
   test('checks every scanned deletable row, including rows after the first 50', async ({
-    orcaPage,
+    mcodePage,
     testRepoPath
   }) => {
-    // Why: on symlinked tmpdirs (/var→/private/var on macOS, /tmp→… on CI) Orca
+    // Why: on symlinked tmpdirs (/var→/private/var on macOS, /tmp→… on CI) MCode
     // registers worktrees under their realpath, so the parent must be canonical
     // before `git worktree add` or the recorded paths won't match and rows drop.
     const worktreeParent = realpathSync(
-      mkdtempSync(path.join(os.tmpdir(), 'orca-space-git-status-'))
+      mkdtempSync(path.join(os.tmpdir(), 'mcode-space-git-status-'))
     )
     const worktreePaths = Array.from({ length: 60 }, (_, index) =>
       path.join(worktreeParent, `worktree-${index}`)
@@ -31,7 +31,7 @@ test.describe('Workspace Space git status checks', () => {
         realpathSync(worktreePath)
       )
 
-      const repoId = await orcaPage.evaluate((testRepoPath) => {
+      const repoId = await mcodePage.evaluate((testRepoPath) => {
         const store = window.__store
         if (!store) {
           throw new Error('Expected e2e store to be exposed')
@@ -45,9 +45,9 @@ test.describe('Workspace Space git status checks', () => {
 
       // Why: the 60 worktrees were added via raw git, so poll past the 5s scan
       // cache TTL until every path registers before deriving the space rows.
-      await loadWorktreesUntilPathsPresent(orcaPage, repoId, registeredWorktreePaths)
+      await loadWorktreesUntilPathsPresent(mcodePage, repoId, registeredWorktreePaths)
 
-      const rowDisplayNames = await orcaPage.evaluate(
+      const rowDisplayNames = await mcodePage.evaluate(
         async ({ testRepoPath, worktreePaths }) => {
           const store = window.__store
           if (!store) {
@@ -137,7 +137,7 @@ test.describe('Workspace Space git status checks', () => {
       // Why: `toHaveCount(0)` passes trivially while the list is still empty, so
       // every row has to be on screen before the absent-status assertion means
       // anything.
-      const rowCheckboxes = orcaPage.getByRole('checkbox', {
+      const rowCheckboxes = mcodePage.getByRole('checkbox', {
         name: new RegExp(
           `^Select (?:${rowDisplayNames
             .map((displayName) => displayName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
@@ -146,7 +146,7 @@ test.describe('Workspace Space git status checks', () => {
       })
       await expect(rowCheckboxes).toHaveCount(rowDisplayNames.length, { timeout: 30_000 })
 
-      await expect(orcaPage.getByText('Keep: git not checked')).toHaveCount(0, { timeout: 30_000 })
+      await expect(mcodePage.getByText('Keep: git not checked')).toHaveCount(0, { timeout: 30_000 })
     } finally {
       for (const worktreePath of worktreePaths) {
         try {

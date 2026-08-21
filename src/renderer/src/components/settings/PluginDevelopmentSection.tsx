@@ -66,7 +66,7 @@ export function PluginDevelopmentSection({
         <p className="max-w-2xl text-xs leading-5 text-muted-foreground">
           {translate(
             'auto.components.settings.PluginDevelopmentSection.help',
-            'Load plugins directly from folders on this computer while you develop them. Dev plugins still require permission review. Workers run on this desktop host; SSH workspace actions route through Orca, so paths here are desktop paths.'
+            'Load plugins directly from folders on this computer while you develop them. Dev plugins still require permission review. Workers run on this desktop host; SSH workspace actions route through MCode, so paths here are desktop paths.'
           )}
         </p>
         {paths.map((path, index) => (

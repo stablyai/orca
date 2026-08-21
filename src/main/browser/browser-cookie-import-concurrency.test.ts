@@ -175,7 +175,7 @@ describe('two concurrent imports into one partition', () => {
   let releaseFirstWrite: () => void
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'orca-cookie-concurrency-'))
+    tmpDir = mkdtempSync(join(tmpdir(), 'mcode-cookie-concurrency-'))
     appGetPathMock.mockReturnValue(join(tmpDir, 'userData'))
     events = []
     copyFileWithWindowsRetryMock
@@ -297,7 +297,7 @@ describe('two concurrent NATIVE imports into one partition', () => {
   }
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'orca-cookie-native-concurrency-'))
+    tmpDir = mkdtempSync(join(tmpdir(), 'mcode-cookie-native-concurrency-'))
     appGetPathMock.mockReturnValue(join(tmpDir, 'userData'))
     events = []
     stagingCopyCount = 0
@@ -436,7 +436,7 @@ describe('cold-init probe on a partition that has never stored a cookie', () => 
   let stableSession: object
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'orca-cookie-probe-'))
+    tmpDir = mkdtempSync(join(tmpdir(), 'mcode-cookie-probe-'))
     appGetPathMock.mockReturnValue(join(tmpDir, 'userData'))
     events = []
     platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')

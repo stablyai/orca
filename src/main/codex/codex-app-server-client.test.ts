@@ -120,7 +120,7 @@ function createStubRequest(options: {
   managedCommand: string
   timeoutMs?: number
 }): { request: CodexHookTrustGrantRequest; recordFile: string; pidFile: string } {
-  const root = mkdtempSync(join(tmpdir(), 'orca-codex-stub-'))
+  const root = mkdtempSync(join(tmpdir(), 'mcode-codex-stub-'))
   tempRoots.push(root)
   const stubPath = join(root, 'stub-app-server.cjs')
   writeFileSync(stubPath, STUB_SERVER_SOURCE)
@@ -151,7 +151,7 @@ function createStubRequest(options: {
   }
 }
 
-const MANAGED_COMMAND = "/bin/sh '/tmp/orca/codex-hook.sh'"
+const MANAGED_COMMAND = "/bin/sh '/tmp/mcode/codex-hook.sh'"
 
 function managedHook(key: string, trustStatus = 'untrusted'): StubHook {
   return { key, command: MANAGED_COMMAND, currentHash: `sha256:hash-of-${key}`, trustStatus }
@@ -455,7 +455,7 @@ describe('runCodexHookTrustGrantSession', () => {
   it('surfaces spawn failures as regular errors, not capability signals', async () => {
     const request: CodexHookTrustGrantRequest = {
       invocation: {
-        command: join(tmpdir(), 'orca-codex-missing-binary-does-not-exist'),
+        command: join(tmpdir(), 'mcode-codex-missing-binary-does-not-exist'),
         args: [],
         timeoutMs: 2_000
       },
@@ -471,7 +471,7 @@ describe('runCodexHookTrustGrantSession', () => {
 
 describe('runCodexHookTrustGrantSessionSync', () => {
   function writeEntryFixture(source: string): string {
-    const root = mkdtempSync(join(tmpdir(), 'orca-codex-entry-'))
+    const root = mkdtempSync(join(tmpdir(), 'mcode-codex-entry-'))
     tempRoots.push(root)
     const entryPath = join(root, 'grant-entry.cjs')
     writeFileSync(entryPath, source)
@@ -543,7 +543,7 @@ describe('resolveCodexGrantEntryPath', () => {
   const entryName = 'codex-app-server-grant-entry.js'
 
   it('finds the sibling entry from emitted main and chunk directories', () => {
-    const mainDir = join('/opt', 'orca', 'out', 'main')
+    const mainDir = join('/opt', 'mcode', 'out', 'main')
     expect(
       resolveCodexGrantEntryPath(
         (candidate) => candidate === join(mainDir, 'codex', entryName),
@@ -561,7 +561,7 @@ describe('resolveCodexGrantEntryPath', () => {
   })
 
   it('redirects app.asar to unpacked without double-unpacking an existing path', () => {
-    const resourcesDir = join('/Applications', 'Orca.app', 'Contents', 'Resources')
+    const resourcesDir = join('/Applications', 'MCode.app', 'Contents', 'Resources')
     const expected = join(resourcesDir, 'app.asar.unpacked', 'out', 'main', 'codex', entryName)
     for (const archiveDir of ['app.asar', 'app.asar.unpacked']) {
       const moduleDir = join(resourcesDir, archiveDir, 'out', 'main', 'chunks')

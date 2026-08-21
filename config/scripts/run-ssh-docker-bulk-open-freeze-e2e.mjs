@@ -7,7 +7,7 @@ if (!pnpmEntry) {
 }
 const env = {
   ...process.env,
-  ORCA_E2E_SSH_DOCKER: '1'
+  MCODE_E2E_SSH_DOCKER: '1'
 }
 
 const runtime = spawnSync(process.execPath, [pnpmEntry, 'run', 'ensure:electron-runtime'], {

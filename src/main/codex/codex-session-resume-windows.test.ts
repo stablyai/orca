@@ -15,7 +15,7 @@ afterEach(() => {
 
 describe('Codex session resume on native Windows', () => {
   windowsIt('resumes an extended-length rollout from its ordinary trusted home', async () => {
-    const homePath = mkdtempSync(join(tmpdir(), 'orca-codex-resume-'))
+    const homePath = mkdtempSync(join(tmpdir(), 'mcode-codex-resume-'))
     cleanupPaths.push(homePath)
     const rolloutPath = join(
       homePath,

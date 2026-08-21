@@ -80,7 +80,7 @@ export function makeFile(overrides: Partial<OpenFile> = {}): OpenFile {
   const id = overrides.id ?? 'file-1'
   return {
     id,
-    filePath: overrides.filePath ?? `/tmp/orca/${id}.md`,
+    filePath: overrides.filePath ?? `/tmp/mcode/${id}.md`,
     relativePath: overrides.relativePath ?? `${id}.md`,
     worktreeId: overrides.worktreeId ?? FLOATING_TERMINAL_WORKTREE_ID,
     language: overrides.language ?? 'markdown',

@@ -5,7 +5,7 @@
  * source controls and close affordance are present.
  */
 
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { waitForSessionReady, waitForActiveWorktree, getStoreState } from './helpers/store'
 
 type RenderedTaskSource = {
@@ -134,10 +134,10 @@ async function openInstrumentedGitHubTasksPage(
       number: 999,
       title: 'Existing GitHub issue',
       state: 'open' as const,
-      url: 'https://github.com/orca/e2e/issues/999',
+      url: 'https://github.com/mcode/e2e/issues/999',
       labels: [],
       updatedAt: '2026-08-08T00:00:00Z',
-      author: 'orca-e2e',
+      author: 'mcode-e2e',
       repoId: repo.id,
       assignees: [],
       reviewRequests: []
@@ -146,7 +146,7 @@ async function openInstrumentedGitHubTasksPage(
     store.setState({
       repos: state.repos.map((candidate) =>
         candidate.id === repo.id
-          ? { ...candidate, upstream: { owner: 'orca', repo: 'e2e' } }
+          ? { ...candidate, upstream: { owner: 'mcode', repo: 'e2e' } }
           : candidate
       ),
       settings: {
@@ -208,19 +208,19 @@ async function resetTaskSearchRequestProbe(
 }
 
 test.describe('Tasks page', () => {
-  test.beforeEach(async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
+  test.beforeEach(async ({ mcodePage }) => {
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
   })
 
-  test('opening the tasks view renders the tasks UI', async ({ orcaPage }) => {
-    await openTasksPage(orcaPage)
+  test('opening the tasks view renders the tasks UI', async ({ mcodePage }) => {
+    await openTasksPage(mcodePage)
 
     await expect
-      .poll(async () => getStoreState<string>(orcaPage, 'activeView'), { timeout: 5_000 })
+      .poll(async () => getStoreState<string>(mcodePage, 'activeView'), { timeout: 5_000 })
       .toBe('tasks')
 
-    await expect(orcaPage.getByRole('button', { name: 'Close tasks' })).toBeVisible({
+    await expect(mcodePage.getByRole('button', { name: 'Close tasks' })).toBeVisible({
       timeout: 10_000
     })
 
@@ -230,7 +230,7 @@ test.describe('Tasks page', () => {
     await expect
       .poll(
         async () => {
-          renderedSources = await getRenderedTaskSources(orcaPage)
+          renderedSources = await getRenderedTaskSources(mcodePage)
           return renderedSources.length
         },
         {
@@ -243,7 +243,7 @@ test.describe('Tasks page', () => {
     await expect
       .poll(
         async () => {
-          renderedSources = await getRenderedTaskSources(orcaPage)
+          renderedSources = await getRenderedTaskSources(mcodePage)
           return renderedSources.some((source) => source.active)
         },
         {
@@ -253,27 +253,27 @@ test.describe('Tasks page', () => {
       )
       .toBe(true)
     if (renderedSources.some((source) => source.source === 'github' && source.active)) {
-      await expect(orcaPage.getByRole('button', { name: 'Issues', exact: true })).toBeVisible()
-      await expect(orcaPage.getByRole('button', { name: 'PRs', exact: true })).toBeVisible()
-      await expect(orcaPage.getByRole('button', { name: 'Projects', exact: true })).toBeVisible()
-      await expect(orcaPage.getByPlaceholder(/Search GitHub (issues|PRs)/i)).toBeVisible()
+      await expect(mcodePage.getByRole('button', { name: 'Issues', exact: true })).toBeVisible()
+      await expect(mcodePage.getByRole('button', { name: 'PRs', exact: true })).toBeVisible()
+      await expect(mcodePage.getByRole('button', { name: 'Projects', exact: true })).toBeVisible()
+      await expect(mcodePage.getByPlaceholder(/Search GitHub (issues|PRs)/i)).toBeVisible()
     }
   })
 
-  test('closing the tasks page returns to the previous view', async ({ orcaPage }) => {
-    const previousView = await getStoreState<string>(orcaPage, 'activeView')
+  test('closing the tasks page returns to the previous view', async ({ mcodePage }) => {
+    const previousView = await getStoreState<string>(mcodePage, 'activeView')
 
-    await openTasksPage(orcaPage)
+    await openTasksPage(mcodePage)
     await expect
-      .poll(async () => getStoreState<string>(orcaPage, 'activeView'), { timeout: 5_000 })
+      .poll(async () => getStoreState<string>(mcodePage, 'activeView'), { timeout: 5_000 })
       .toBe('tasks')
     // Sanity: the tasks UI actually painted before we close it.
-    await expect(orcaPage.getByRole('button', { name: 'Close tasks' })).toBeVisible()
+    await expect(mcodePage.getByRole('button', { name: 'Close tasks' })).toBeVisible()
 
-    await orcaPage.getByRole('button', { name: 'Close tasks' }).click()
+    await mcodePage.getByRole('button', { name: 'Close tasks' }).click()
 
     await expect
-      .poll(async () => getStoreState<string>(orcaPage, 'activeView'), { timeout: 5_000 })
+      .poll(async () => getStoreState<string>(mcodePage, 'activeView'), { timeout: 5_000 })
       .toBe(previousView)
     // Why: the load-bearing check is that the previous view's DOM actually
     // re-rendered — a store-only `activeView` assertion would pass even if the
@@ -282,85 +282,85 @@ test.describe('Tasks page', () => {
     // previous view was terminal (by far the common case in E2E setup), that
     // element must be visible. Tasks-close also hides the "Close tasks"
     // button regardless of previous view, so we assert that too.
-    await expect(orcaPage.getByRole('button', { name: 'Close tasks' })).toHaveCount(0)
+    await expect(mcodePage.getByRole('button', { name: 'Close tasks' })).toHaveCount(0)
     if (previousView === 'terminal') {
-      await expect(orcaPage.locator('.xterm').first()).toBeVisible({ timeout: 5_000 })
+      await expect(mcodePage.locator('.xterm').first()).toBeVisible({ timeout: 5_000 })
     }
   })
 
-  test('reopening restores the GitHub page and scroll position', async ({ orcaPage }) => {
-    await openMockedPaginatedGitHubTasks(orcaPage)
+  test('reopening restores the GitHub page and scroll position', async ({ mcodePage }) => {
+    await openMockedPaginatedGitHubTasks(mcodePage)
 
-    await orcaPage.getByRole('button', { name: 'Page 28', exact: true }).click()
-    await expect(orcaPage.getByText('Issue page 28 item 1', { exact: true })).toBeVisible()
+    await mcodePage.getByRole('button', { name: 'Page 28', exact: true }).click()
+    await expect(mcodePage.getByText('Issue page 28 item 1', { exact: true })).toBeVisible()
 
-    const list = orcaPage.locator('[data-task-list-scroll="github"]')
+    const list = mcodePage.locator('[data-task-list-scroll="github"]')
     await list.evaluate((element) => {
       element.scrollTop = 360
       element.dispatchEvent(new Event('scroll'))
     })
     await expect.poll(() => list.evaluate((element) => element.scrollTop)).toBeGreaterThan(300)
 
-    await orcaPage.getByRole('button', { name: 'Close tasks' }).click()
+    await mcodePage.getByRole('button', { name: 'Close tasks' }).click()
     await expect(list).toHaveCount(0)
-    const clampedRowsStyle = await orcaPage.addStyleTag({
+    const clampedRowsStyle = await mcodePage.addStyleTag({
       content:
         '[data-task-list-scroll="github"] > .divide-y { max-height: 0 !important; overflow: hidden !important; }'
     })
-    await openTasksPage(orcaPage)
+    await openTasksPage(mcodePage)
 
-    await expect(orcaPage.getByRole('button', { name: 'Page 28', exact: true })).toHaveAttribute(
+    await expect(mcodePage.getByRole('button', { name: 'Page 28', exact: true })).toHaveAttribute(
       'aria-current',
       'page'
     )
-    const restoredList = orcaPage.locator('[data-task-list-scroll="github"]')
+    const restoredList = mcodePage.locator('[data-task-list-scroll="github"]')
     await expect.poll(() => restoredList.evaluate((element) => element.scrollTop)).toBe(0)
     await clampedRowsStyle.evaluate((element) => element.remove())
-    await expect(orcaPage.getByText('Issue page 28 item 1', { exact: true })).toBeVisible()
+    await expect(mcodePage.getByText('Issue page 28 item 1', { exact: true })).toBeVisible()
     await expect
       .poll(() => restoredList.evaluate((element) => element.scrollTop))
       .toBeGreaterThan(300)
 
-    await orcaPage.getByText('Issue page 28 item 12', { exact: true }).click()
+    await mcodePage.getByText('Issue page 28 item 12', { exact: true }).click()
     await expect(restoredList).toHaveCount(0)
     await expect
       .poll(async () => {
-        const position = await getStoreState<{ scrollTop: number }>(orcaPage, 'taskListPosition')
+        const position = await getStoreState<{ scrollTop: number }>(mcodePage, 'taskListPosition')
         return position.scrollTop
       })
       .toBeGreaterThan(300)
-    await orcaPage.getByRole('button', { name: 'GitHub list', exact: true }).click()
-    await expect(orcaPage.getByText('Issue page 28 item 1', { exact: true })).toBeVisible()
+    await mcodePage.getByRole('button', { name: 'GitHub list', exact: true }).click()
+    await expect(mcodePage.getByText('Issue page 28 item 1', { exact: true })).toBeVisible()
     await expect
       .poll(() => restoredList.evaluate((element) => element.scrollTop))
       .toBeGreaterThan(300)
 
-    await orcaPage.getByRole('button', { name: 'Close tasks' }).click()
-    const pendingRestoreStyle = await orcaPage.addStyleTag({
+    await mcodePage.getByRole('button', { name: 'Close tasks' }).click()
+    const pendingRestoreStyle = await mcodePage.addStyleTag({
       content:
         '[data-task-list-scroll="github"] > .divide-y { max-height: 0 !important; overflow: hidden !important; }'
     })
-    await openTasksPage(orcaPage)
-    await expect(orcaPage.getByRole('button', { name: 'Page 28', exact: true })).toHaveAttribute(
+    await openTasksPage(mcodePage)
+    await expect(mcodePage.getByRole('button', { name: 'Page 28', exact: true })).toHaveAttribute(
       'aria-current',
       'page'
     )
-    await orcaPage.getByRole('button', { name: 'Page 1', exact: true }).click()
+    await mcodePage.getByRole('button', { name: 'Page 1', exact: true }).click()
     await pendingRestoreStyle.evaluate((element) => element.remove())
-    await expect(orcaPage.getByRole('button', { name: 'Page 1', exact: true })).toHaveAttribute(
+    await expect(mcodePage.getByRole('button', { name: 'Page 1', exact: true })).toHaveAttribute(
       'aria-current',
       'page'
     )
     await expect
       .poll(() =>
-        orcaPage
+        mcodePage
           .locator('[data-task-list-scroll="github"]')
           .evaluate((element) => element.scrollTop)
       )
       .toBe(0)
 
-    await orcaPage.getByRole('button', { name: 'Page 28', exact: true }).click()
-    await expect(orcaPage.getByText('Issue page 28 item 1', { exact: true })).toBeVisible()
+    await mcodePage.getByRole('button', { name: 'Page 28', exact: true }).click()
+    await expect(mcodePage.getByText('Issue page 28 item 1', { exact: true })).toBeVisible()
     await restoredList.evaluate((element) => {
       element.scrollTop = 360
       element.dispatchEvent(new Event('scroll'))
@@ -368,22 +368,22 @@ test.describe('Tasks page', () => {
     await expect
       .poll(() => restoredList.evaluate((element) => element.scrollTop))
       .toBeGreaterThan(300)
-    await orcaPage.getByRole('button', { name: 'Close tasks' }).click()
+    await mcodePage.getByRole('button', { name: 'Close tasks' }).click()
 
-    const permanentlyClampedRowsStyle = await orcaPage.addStyleTag({
+    const permanentlyClampedRowsStyle = await mcodePage.addStyleTag({
       content:
         '[data-task-list-scroll="github"] > .divide-y { max-height: 0 !important; overflow: hidden !important; }'
     })
-    await openTasksPage(orcaPage)
-    await expect(orcaPage.getByRole('button', { name: 'Page 28', exact: true })).toHaveAttribute(
+    await openTasksPage(mcodePage)
+    await expect(mcodePage.getByRole('button', { name: 'Page 28', exact: true })).toHaveAttribute(
       'aria-current',
       'page'
     )
-    await orcaPage.waitForTimeout(5_500)
-    await orcaPage.getByRole('button', { name: 'Close tasks' }).click()
+    await mcodePage.waitForTimeout(5_500)
+    await mcodePage.getByRole('button', { name: 'Close tasks' }).click()
     await expect
       .poll(async () => {
-        const position = await getStoreState<{ scrollTop: number }>(orcaPage, 'taskListPosition')
+        const position = await getStoreState<{ scrollTop: number }>(mcodePage, 'taskListPosition')
         return position.scrollTop
       })
       .toBe(0)
@@ -391,40 +391,40 @@ test.describe('Tasks page', () => {
   })
 
   test('GitHub search waits for idle, keeps rows visible, and Enter does not double-fetch', async ({
-    orcaPage
+    mcodePage
   }) => {
-    await openInstrumentedGitHubTasksPage(orcaPage)
+    await openInstrumentedGitHubTasksPage(mcodePage)
 
-    const input = orcaPage.getByPlaceholder('Search GitHub issues...')
-    const existingIssue = orcaPage.getByText('Existing GitHub issue', { exact: true })
+    const input = mcodePage.getByPlaceholder('Search GitHub issues...')
+    const existingIssue = mcodePage.getByText('Existing GitHub issue', { exact: true })
     await expect(input).toBeVisible()
     await expect(existingIssue).toBeVisible()
 
     await input.fill('')
-    await orcaPage.waitForTimeout(800)
-    await resetTaskSearchRequestProbe(orcaPage)
+    await mcodePage.waitForTimeout(800)
+    await resetTaskSearchRequestProbe(mcodePage)
 
     await input.pressSequentially('rate', { delay: 400 })
 
-    expect(await readTaskSearchRequestProbe(orcaPage)).toEqual({
+    expect(await readTaskSearchRequestProbe(mcodePage)).toEqual({
       countQueries: [],
       fetchQueries: []
     })
     await expect(existingIssue).toBeVisible()
 
     await expect
-      .poll(async () => readTaskSearchRequestProbe(orcaPage), { timeout: 2_000 })
+      .poll(async () => readTaskSearchRequestProbe(mcodePage), { timeout: 2_000 })
       .toEqual({ countQueries: ['is:issue rate'], fetchQueries: ['is:issue rate'] })
 
-    await resetTaskSearchRequestProbe(orcaPage)
+    await resetTaskSearchRequestProbe(mcodePage)
     await input.pressSequentially('x')
     await input.press('Enter')
 
     await expect
-      .poll(async () => readTaskSearchRequestProbe(orcaPage), { timeout: 2_000 })
+      .poll(async () => readTaskSearchRequestProbe(mcodePage), { timeout: 2_000 })
       .toEqual({ countQueries: ['is:issue ratex'], fetchQueries: ['is:issue ratex'] })
-    await orcaPage.waitForTimeout(800)
-    expect(await readTaskSearchRequestProbe(orcaPage)).toEqual({
+    await mcodePage.waitForTimeout(800)
+    expect(await readTaskSearchRequestProbe(mcodePage)).toEqual({
       countQueries: ['is:issue ratex'],
       fetchQueries: ['is:issue ratex']
     })

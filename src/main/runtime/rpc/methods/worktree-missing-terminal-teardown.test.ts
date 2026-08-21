@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import { RpcDispatcher } from '../dispatcher'
 import { WORKTREE_METHODS } from './worktree'
 
@@ -10,7 +10,7 @@ describe('worktree missing-terminal teardown RPC', () => {
       teardownMissingManagedWorktreeTerminals: vi
         .fn()
         .mockResolvedValue({ stoppedWorktreeIds: ['repo-1::/workspace/deleted'] })
-    } as unknown as OrcaRuntimeService
+    } as unknown as MCodeRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     const response = await dispatcher.dispatch({

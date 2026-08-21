@@ -2,14 +2,14 @@
 set -euo pipefail
 
 signal_name=${1:?signal name is required}
-app_root=${ORCA_TEST_APP_ROOT:-/artifacts/root}
-signal_target_kind=${ORCA_SIGNAL_TARGET:-app}
-entrypoint_kind=${ORCA_TEST_ENTRYPOINT:-app}
-int_delivery=${ORCA_INT_DELIVERY:-foreground-process-group}
-startup_timeout_seconds=${ORCA_STARTUP_TIMEOUT_SECONDS:-90}
+app_root=${MCODE_TEST_APP_ROOT:-/artifacts/root}
+signal_target_kind=${MCODE_SIGNAL_TARGET:-app}
+entrypoint_kind=${MCODE_TEST_ENTRYPOINT:-app}
+int_delivery=${MCODE_INT_DELIVERY:-foreground-process-group}
+startup_timeout_seconds=${MCODE_STARTUP_TIMEOUT_SECONDS:-90}
 
 if ((EUID == 0)); then
-  exec runuser --user orca --preserve-environment -- "$0" "$@"
+  exec runuser --user mcode --preserve-environment -- "$0" "$@"
 fi
 
 case "$signal_name" in
@@ -17,7 +17,7 @@ case "$signal_name" in
   *) echo "unsupported signal: $signal_name" >&2; exit 64 ;;
 esac
 
-state_dir=$(mktemp -d "/tmp/orca-shutdown-${signal_name}.XXXXXX")
+state_dir=$(mktemp -d "/tmp/mcode-shutdown-${signal_name}.XXXXXX")
 stdout_log="$state_dir/stdout.log"
 stderr_log="$state_dir/stderr.log"
 ulimit -c 0
@@ -43,7 +43,7 @@ case "$entrypoint_kind" in
   app) entrypoint=("$app_root/AppRun" --no-sandbox) ;;
   launcher)
     export ELECTRON_DISABLE_SANDBOX=1
-    entrypoint=("$app_root/resources/bin/orca-ide")
+    entrypoint=("$app_root/resources/bin/mcode-ide")
     ;;
   *) echo "unsupported entrypoint: $entrypoint_kind" >&2; exit 64 ;;
 esac
@@ -57,11 +57,11 @@ app_start_ticks=$(awk '{print $22}' "/proc/$app_pid/stat")
 # shellcheck disable=SC2016
 ready_line=$(timeout "$startup_timeout_seconds" bash -c '
   tail --pid="$1" -n +1 -F "$2" 2>/dev/null \
-    | jq --unbuffered -nc '\''first(inputs | select(.type == "orca_server_ready" and .schemaVersion == 1))'\''
+    | jq --unbuffered -nc '\''first(inputs | select(.type == "mcode_server_ready" and .schemaVersion == 1))'\''
 ' bash "$app_pid" "$stdout_log" || true)
 if [[ -z "$ready_line" ]]; then
   cat "$stdout_log" "$stderr_log" >&2
-  echo "FAIL: AppRun exited or timed out before orca_server_ready" >&2
+  echo "FAIL: AppRun exited or timed out before mcode_server_ready" >&2
   exit 1
 fi
 
@@ -104,7 +104,7 @@ fi
 
 signal_target_pid=$app_pid
 if [[ "$signal_target_kind" == serving-electron ]]; then
-  signal_target_pid=$(awk '/\/orca-ide .* --serve / {print $1; exit}' <<<"$tree_snapshot")
+  signal_target_pid=$(awk '/\/mcode-ide .* --serve / {print $1; exit}' <<<"$tree_snapshot")
   [[ -n "$signal_target_pid" ]] || { echo "FAIL: serving Electron process not found" >&2; exit 1; }
 elif [[ "$signal_target_kind" != app ]]; then
   echo "unsupported signal target: $signal_target_kind" >&2
@@ -148,7 +148,7 @@ for pid in "${tree_pids[@]}"; do
   fi
 done
 owned_residue=$(ps -eo pid=,ppid=,stat=,args= | awk -v state="$state_dir" \
-  '($0 ~ state || $0 ~ /\/artifacts\/root\/orca-ide/ || $0 ~ /[X]vfb :99 /) && $0 !~ /awk -v state=/ {print}' || true)
+  '($0 ~ state || $0 ~ /\/artifacts\/root\/mcode-ide/ || $0 ~ /[X]vfb :99 /) && $0 !~ /awk -v state=/ {print}' || true)
 
 canary_alive=false
 if kill -0 "$canary_pid" 2>/dev/null \

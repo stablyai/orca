@@ -14,10 +14,10 @@ describe('Git binary compatibility PR gate', () => {
     // must come from a key that pins the same version the tarball line declares.
     expect(step?.run).toContain('if [ ! -x "$source/git" ]; then')
     expect(step?.run).toContain('41662c52fc16fec4963bfc41075e71f8ead6b5e386797eb6f9a1111ff95a8ddf')
-    expect(step?.run).toContain('ORCA_GIT_COMPAT_BINARY="$source/git"')
+    expect(step?.run).toContain('MCODE_GIT_COMPAT_BINARY="$source/git"')
     expect(step?.run).toContain('alpine/git:edge-2.38.1|2.38.1')
     expect(step?.run).toContain('alpine/git:v2.49.1|2.49.1')
-    expect(step?.run).toContain('ORCA_GIT_COMPAT_IMAGE="$image"')
+    expect(step?.run).toContain('MCODE_GIT_COMPAT_IMAGE="$image"')
     expect(step?.run).toContain('src/shared/git-binary-compatibility.test.ts')
     expect(step?.run).toContain('-j"$(nproc)"')
     expect(step?.run).toContain('pids+=("$!")')
@@ -36,8 +36,8 @@ describe('Git binary compatibility PR gate', () => {
     expect(cacheIndex).toBeLessThan(matrixIndex)
     // The cached path and the build path must be the same directory or the guard
     // above would rebuild on every run while still reporting a cache hit.
-    expect(steps[cacheIndex].with.path).toBe('~/.cache/orca-git-compat/git-2.25.5')
-    expect(steps[matrixIndex].run).toContain('source="$HOME/.cache/orca-git-compat/git-2.25.5"')
+    expect(steps[cacheIndex].with.path).toBe('~/.cache/mcode-git-compat/git-2.25.5')
+    expect(steps[matrixIndex].run).toContain('source="$HOME/.cache/mcode-git-compat/git-2.25.5"')
     expect(steps[cacheIndex].with.key).toContain('2.25.5')
   })
 })

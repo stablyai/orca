@@ -17,7 +17,7 @@ function settled(dir: string) {
 }
 
 /** A `ps -Awwo command=` line for a dev instance running out of `dir`. */
-function psLine(dir: string, appName = 'Orca: some-branch') {
+function psLine(dir: string, appName = 'MCode: some-branch') {
   return `${dir}/${appName}.app/Contents/MacOS/Electron --remote-debugging-port=9333`
 }
 
@@ -49,13 +49,13 @@ describe('dev-electron-bundle-cache', () => {
   it('protects a live bundle whose path contains spaces', () => {
     // Regression: an extraction regex using \S* could not cross a space, so any developer with a
     // space in their checkout path got "nothing is live" and had the running bundle deleted.
-    const spaced = '/Users/me/My Projects/orca/out/electron-dev/aaaaaaaaaaaa'
-    const other = '/Users/me/My Projects/orca/out/electron-dev/bbbbbbbbbbbb'
+    const spaced = '/Users/me/My Projects/mcode/out/electron-dev/aaaaaaaaaaaa'
+    const other = '/Users/me/My Projects/mcode/out/electron-dev/bbbbbbbbbbbb'
     expect(
       selectStaleDevBundleDirs({
         bundles: [settled(spaced), settled(other)],
         currentDir: C,
-        processTable: psLine(spaced, 'Orca: my branch'),
+        processTable: psLine(spaced, 'MCode: my branch'),
         nowMs: NOW
       })
     ).toEqual([other])

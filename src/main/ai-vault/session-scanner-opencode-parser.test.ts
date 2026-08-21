@@ -23,7 +23,7 @@ function userMessage(text: string, createdAt: number): string {
 
 describe('parseOpenCodeSessionFile', () => {
   it('skips a corrupt message file instead of discarding the whole session', async () => {
-    const storageRoot = await mkdtemp(join(tmpdir(), 'orca-opencode-parser-'))
+    const storageRoot = await mkdtemp(join(tmpdir(), 'mcode-opencode-parser-'))
     tempDirs.push(storageRoot)
     const sessionDir = join(storageRoot, 'session', 'project')
     const messageDir = join(storageRoot, 'message', 'ses_corrupt')
@@ -62,7 +62,7 @@ describe('parseOpenCodeSessionFile', () => {
   })
 
   it('orders messages by created time when file order disagrees', async () => {
-    const storageRoot = await mkdtemp(join(tmpdir(), 'orca-opencode-parser-'))
+    const storageRoot = await mkdtemp(join(tmpdir(), 'mcode-opencode-parser-'))
     tempDirs.push(storageRoot)
     const sessionDir = join(storageRoot, 'session', 'project')
     const messageDir = join(storageRoot, 'message', 'ses_order')

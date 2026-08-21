@@ -15,7 +15,7 @@ import {
 
 // Why: Kimi Code's managed coding plan exposes subscription usage at
 // `${base}/usages` (see packages/oauth/src/managed-usage.ts in the CLI bundle).
-// The base URL is overridable via the same env var the CLI honours so Orca
+// The base URL is overridable via the same env var the CLI honours so MCode
 // stays aligned with a user's self-hosted/staging config.
 const KIMI_BASE_URL = process.env.KIMI_CODE_BASE_URL ?? 'https://api.kimi.com/coding/v1'
 const API_TIMEOUT_MS = 10_000
@@ -267,7 +267,7 @@ function expiredSessionMessage(home: KimiHomeResolution): string {
   const where =
     home.runtime === 'wsl'
       ? `inside WSL (${home.wslDistro ?? 'default distro'})`
-      : 'on the computer running Orca'
+      : 'on the computer running MCode'
   return `Kimi session expired — run kimi ${where}, then retry usage.`
 }
 
@@ -296,7 +296,7 @@ function result(
  *
  * Why read-only: the access token lives in `<kimi home>/credentials/kimi-code.json`
  * and is refreshed by the Kimi CLI itself (15-min TTL, refresh-token rotation).
- * Orca must NEVER refresh or rewrite that file — a rotated refresh token would
+ * MCode must NEVER refresh or rewrite that file — a rotated refresh token would
  * log out a live `kimi` session. We only read the current token and call the
  * same `GET /usages` endpoint, with the same headers, that the CLI's own
  * `/usage` command uses. The completion endpoint (the one Moonshot gates to

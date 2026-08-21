@@ -29,7 +29,7 @@ export function UpdateStatusSegment({
         label: `${pct}%`,
         tooltip: translate(
           'auto.components.status.bar.UpdateStatusSegment.248ee5d8ef',
-          'Orca v{{value0}} downloading… {{value1}}%',
+          'MCode v{{value0}} downloading… {{value1}}%',
           { value0: status.version, value1: pct }
         ),
         ariaLabel: translate(
@@ -48,7 +48,7 @@ export function UpdateStatusSegment({
         ),
         tooltip: translate(
           'auto.components.status.bar.UpdateStatusSegment.9d13213a56',
-          'Orca v{{value0}} ready to install',
+          'MCode v{{value0}} ready to install',
           { value0: status.version }
         ),
         ariaLabel: translate(

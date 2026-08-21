@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
-const PINS_PREFIX = 'orca:pins:'
-const NOTIF_KEY = 'orca:pushNotificationsEnabled'
+const PINS_PREFIX = 'mcode:pins:'
+const NOTIF_KEY = 'mcode:pushNotificationsEnabled'
 
 export type PushNotificationsPreference = {
   readonly value: boolean | null
@@ -30,7 +30,7 @@ export async function savePushNotificationsEnabled(enabled: boolean): Promise<vo
   await AsyncStorage.setItem(NOTIF_KEY, String(enabled))
 }
 
-const TEXT_SCALE_KEY = 'orca:terminalTextScale'
+const TEXT_SCALE_KEY = 'mcode:terminalTextScale'
 
 // Why: the mobile terminal fits the desktop's full column count to the phone
 // width with a CSS scale, so xterm's raw fontSize is cancelled out and can't
@@ -61,7 +61,7 @@ export async function saveTerminalTextScale(scale: number): Promise<void> {
   await AsyncStorage.setItem(TEXT_SCALE_KEY, String(scale))
 }
 
-const AUTOCOMPLETE_KEY = 'orca:terminalAutocompleteEnabled'
+const AUTOCOMPLETE_KEY = 'mcode:terminalAutocompleteEnabled'
 
 // Why: terminal command inputs default to autocorrect/suggestions OFF so the
 // keyboard never mangles commands, flags, or paths. Users who want phone-style
@@ -79,7 +79,7 @@ export async function saveTerminalAutocompleteEnabled(enabled: boolean): Promise
   await AsyncStorage.setItem(AUTOCOMPLETE_KEY, String(enabled))
 }
 
-const TERMINAL_LIVE_INPUT_DISABLED_PREFIX = 'orca:terminalLiveInputDisabled:'
+const TERMINAL_LIVE_INPUT_DISABLED_PREFIX = 'mcode:terminalLiveInputDisabled:'
 
 export type DisabledTerminalLiveInputHandlesPreference = {
   readonly handles: Set<string>
@@ -126,7 +126,7 @@ export async function saveDisabledTerminalLiveInputHandles(
   )
 }
 
-const SIDEBAR_WIDTH_KEY = 'orca:hostSidebarWidth'
+const SIDEBAR_WIDTH_KEY = 'mcode:hostSidebarWidth'
 
 // Bounds for the draggable host worktree-list sidebar on tablet/foldable
 // layouts (mirrors the desktop's resizable sidebar). The caller additionally
@@ -158,7 +158,7 @@ export async function saveHostSidebarWidth(width: number): Promise<void> {
   await AsyncStorage.setItem(SIDEBAR_WIDTH_KEY, String(clampHostSidebarWidth(width)))
 }
 
-const DOCK_WIDTH_KEY = 'orca:hostDockWidth'
+const DOCK_WIDTH_KEY = 'mcode:hostDockWidth'
 
 // Bounds for the draggable right-hand session dock (Source Control / Files / PR)
 // on wide layouts. Mirrors the left worktree-list sidebar's bounds so the two
@@ -192,15 +192,15 @@ export async function saveHostDockWidth(width: number): Promise<void> {
   await AsyncStorage.setItem(DOCK_WIDTH_KEY, String(clampHostDockWidth(width)))
 }
 
-export type MobileTerminalLinkOpenMode = 'orca-browser' | 'phone-browser'
+export type MobileTerminalLinkOpenMode = 'mcode-browser' | 'phone-browser'
 
-const TERMINAL_LINK_OPEN_MODE_KEY = 'orca:terminalLinkOpenMode'
-export const DEFAULT_TERMINAL_LINK_OPEN_MODE: MobileTerminalLinkOpenMode = 'orca-browser'
+const TERMINAL_LINK_OPEN_MODE_KEY = 'mcode:terminalLinkOpenMode'
+export const DEFAULT_TERMINAL_LINK_OPEN_MODE: MobileTerminalLinkOpenMode = 'mcode-browser'
 
 export async function loadTerminalLinkOpenMode(): Promise<MobileTerminalLinkOpenMode> {
   try {
     const raw = await AsyncStorage.getItem(TERMINAL_LINK_OPEN_MODE_KEY)
-    return raw === 'phone-browser' || raw === 'orca-browser' ? raw : DEFAULT_TERMINAL_LINK_OPEN_MODE
+    return raw === 'phone-browser' || raw === 'mcode-browser' ? raw : DEFAULT_TERMINAL_LINK_OPEN_MODE
   } catch {
     return DEFAULT_TERMINAL_LINK_OPEN_MODE
   }

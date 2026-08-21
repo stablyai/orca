@@ -185,7 +185,7 @@ export function FileExplorerFilesTreePane({
           connectionId={activeRepo?.connectionId ?? null}
           runtimeDownloadContext={runtimeDownloadContext}
           supportsFolderDownload={supportsFolderDownload}
-          canOpenInOrcaBrowser={canOpenWorkspaceFileBrowserForPath}
+          canOpenInMCodeBrowser={canOpenWorkspaceFileBrowserForPath}
           onClick={handleRowClick}
           onDoubleClick={handleDoubleClick}
           onViewFile={handleClick}

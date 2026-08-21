@@ -14,7 +14,7 @@ afterEach(async () => {
 
 describe('scanAiVaultSessions Claude title selection', () => {
   it('prefers the latest generated ai-title over the first user prompt, but a custom-title wins over both', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-ai-title-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-ai-title-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
     const projectDir = join(roots.claudeProjectsDir, 'project')
@@ -72,7 +72,7 @@ describe('scanAiVaultSessions Claude title selection', () => {
   })
 
   it('excludes Claude Task subagent transcripts from the session list', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-subagents-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-subagents-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
     const sessionDir = join(roots.claudeProjectsDir, 'project', 'claude-session')

@@ -70,7 +70,7 @@ for (const [agent, config] of Object.entries(TUI_AGENT_CONFIG) as [
   ]) {
     const normalized = normalizeProcessName(candidate)
     if (normalized) {
-      // Why: claude-agent-teams is an Orca wrapper whose child process is the
+      // Why: claude-agent-teams is an MCode wrapper whose child process is the
       // real `claude` binary. Do not let wrapper configs overwrite canonical
       // CLI ownership for the same foreground process name.
       if (!PROCESS_TO_AGENT.has(normalized)) {
@@ -151,7 +151,7 @@ function tokenLooksExecutable(token: string, index: number, firstNormalized: str
     return false
   }
   // Why: only inspect interpreter script paths. Prompt text can mention other
-  // agents ("compare opencode vs orca"), and treating every argv token as an
+  // agents ("compare opencode vs mcode"), and treating every argv token as an
   // executable would reintroduce the substring-style false identity class that
   // foreground-process detection is meant to avoid.
   return token.includes('/') || token.includes('\\') || PROCESS_EXTENSION_RE.test(token)
@@ -290,7 +290,7 @@ export function recognizeAgentProcessFromCommandLine(
   const tokens = tokenizeCommandLine(commandLine)
   const firstNormalized = normalizeProcessName(tokens[0])
   let direct = recognizeAgentProcess(tokens[0])
-  // Why: the generic Orca CLI is not an agent; only this subcommand launches its TUI mode.
+  // Why: the generic MCode CLI is not an agent; only this subcommand launches its TUI mode.
   if (direct?.agent === 'claude-agent-teams' && tokens[1]?.toLowerCase() !== 'claude-teams') {
     direct = null
   }

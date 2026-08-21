@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
+import { MCodeRuntimeService } from '../../src/main/runtime/mcode-runtime'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
@@ -21,13 +21,13 @@ type RuntimeInternals = {
 type Harness = {
   internals: RuntimeInternals
   publications: RuntimeMobileSessionTabsResult[]
-  runtime: OrcaRuntimeService
+  runtime: MCodeRuntimeService
   tab: TerminalTab
   unsubscribe: () => void
 }
 
 function createHarness(): Harness {
-  const runtime = new OrcaRuntimeService()
+  const runtime = new MCodeRuntimeService()
   runtime.registerPty(PTY_ID, WORKTREE_ID)
   const tab: TerminalTab = {
     type: 'terminal',

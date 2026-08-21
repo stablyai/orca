@@ -107,7 +107,7 @@ const SidebarWorkspaceFilterSection = React.memo(function SidebarWorkspaceFilter
           )}
           ariaLabel={translate(
             'auto.components.sidebar.SidebarWorkspaceFilterSection.otherClientsAria',
-            'Hide workspaces created from other Orca clients on shared remote servers'
+            'Hide workspaces created from other MCode clients on shared remote servers'
           )}
           checked={hideWorkspacesFromOtherDevices}
           onChange={setHideWorkspacesFromOtherDevices}

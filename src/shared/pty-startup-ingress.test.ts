@@ -312,7 +312,7 @@ describe('PtyStartupIngress', () => {
 
   it('swallows a cooked POSIX echo coalesced behind earlier program output', () => {
     // Why this shape: an agent pane is launched by writing a command into an interactive
-    // shell, so the tty echo of Orca's reply never arrives at the head of a read (#12112).
+    // shell, so the tty echo of MCode's reply never arrives at the head of a read (#12112).
     vi.useFakeTimers()
     for (const echoOf of POSIX_COOKED_ECHOES) {
       const replies: string[] = []
@@ -662,7 +662,7 @@ describe('PtyStartupIngress', () => {
   it('keeps swallowing an echo split across the query-authority handoff', () => {
     // Why the asymmetry with snapshotBarrier is deliberate: closing query authority
     // hands off who may answer, but the reply is already on the wire and its echo is
-    // still Orca's to swallow. Cutting the hold here would show its first half.
+    // still MCode's to swallow. Cutting the hold here would show its first half.
     vi.useFakeTimers()
     const { ingress, writes, emissions } = createHarness()
     const echo = FOREGROUND_REPLY.replaceAll('\x1b', '^[')
@@ -680,7 +680,7 @@ describe('PtyStartupIngress', () => {
 
   it('swallows an echo whose halves straddle a relay-sized stall', () => {
     // Why: an expired hold releases raw, so a hold shorter than real inter-chunk
-    // jitter reinstates the leak on exactly the links Orca has to work over.
+    // jitter reinstates the leak on exactly the links MCode has to work over.
     vi.useFakeTimers()
     const echo = FOREGROUND_REPLY.replaceAll('\x1b', '^[')
     for (const gapMs of [50, 200, 400]) {

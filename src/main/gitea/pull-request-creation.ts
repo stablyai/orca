@@ -25,16 +25,16 @@ function normalizeApiBaseUrl(value: string): string {
 }
 
 function configuredApiBaseUrl(repo: GiteaRepoRef): string {
-  const configured = envValue('ORCA_GITEA_API_BASE_URL')
+  const configured = envValue('MCODE_GITEA_API_BASE_URL')
   return configured ? normalizeApiBaseUrl(configured) : repo.apiBaseUrl
 }
 
 export function isGiteaReviewCreationAuthenticated(): boolean {
-  return envValue('ORCA_GITEA_TOKEN') !== null
+  return envValue('MCODE_GITEA_TOKEN') !== null
 }
 
 function authHeaders(): Record<string, string> {
-  const token = envValue('ORCA_GITEA_TOKEN')
+  const token = envValue('MCODE_GITEA_TOKEN')
   return token ? { Authorization: `token ${token}` } : {}
 }
 
@@ -68,7 +68,7 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
       ok: false,
       code: 'auth_required',
       error:
-        'Create PR failed: Gitea is not authenticated. Next step: set ORCA_GITEA_TOKEN in this environment.'
+        'Create PR failed: Gitea is not authenticated. Next step: set MCODE_GITEA_TOKEN in this environment.'
     }
   }
   if (status === 409 || lower.includes('already exists') || lower.includes('already open')) {

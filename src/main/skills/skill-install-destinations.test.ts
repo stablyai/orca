@@ -12,7 +12,7 @@ afterEach(async () => {
 })
 
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), 'orca-skill-destination-test-'))
+  const root = await mkdtemp(join(tmpdir(), 'mcode-skill-destination-test-'))
   roots.push(root)
   const home = join(root, 'home')
   const worktree = join(root, 'worktree')

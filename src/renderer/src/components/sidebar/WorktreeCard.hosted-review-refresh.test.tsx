@@ -67,9 +67,9 @@ vi.mock('./WorktreeCardAgents', () => ({
 
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
-  CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
+  CLOSE_ALL_CONTEXT_MENUS_EVENT: 'mcode:test-close-context-menus',
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu',
-  WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope'
+  WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-mcode-context-menu-scope'
 }))
 
 vi.mock('./use-worktree-activity-status', () => ({
@@ -80,7 +80,7 @@ function makeRepo(): Repo {
   return {
     id: 'repo-1',
     path: '/repo',
-    displayName: 'orca',
+    displayName: 'mcode',
     badgeColor: '#999999',
     addedAt: 1
   }

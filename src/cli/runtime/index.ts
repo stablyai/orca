@@ -1,5 +1,5 @@
 export { RuntimeClient } from './client'
-export { serveOrcaApp } from './launch'
+export { serveMCodeApp } from './launch'
 export { getDefaultUserDataPath } from './metadata'
 export {
   RuntimeClientError,

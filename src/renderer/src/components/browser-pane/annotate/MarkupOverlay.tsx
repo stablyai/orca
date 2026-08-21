@@ -38,7 +38,7 @@ export function MarkupOverlay({
   return (
     <div
       ref={editor.rootRef}
-      data-orca-markup-overlay
+      data-mcode-markup-overlay
       className="absolute inset-0 z-20 overflow-hidden"
     >
       <img

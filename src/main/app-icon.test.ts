@@ -33,19 +33,19 @@ vi.mock('../../resources/icon-dev.png?asset', () => ({
   default: 'classic-dev-icon'
 }))
 
-vi.mock('../../resources/app-icons/orca-watercolor.png?asset', () => ({
+vi.mock('../../resources/app-icons/mcode-watercolor.png?asset', () => ({
   default: 'watercolor-icon'
 }))
 
-vi.mock('../../resources/app-icons/orca-watercolor.png?asset&asarUnpack', () => ({
+vi.mock('../../resources/app-icons/mcode-watercolor.png?asset&asarUnpack', () => ({
   default: 'watercolor-icon-unpacked'
 }))
 
-vi.mock('../../resources/app-icons/orca-blue.png?asset', () => ({
+vi.mock('../../resources/app-icons/mcode-blue.png?asset', () => ({
   default: 'blue-icon'
 }))
 
-vi.mock('../../resources/app-icons/orca-blue.png?asset&asarUnpack', () => ({
+vi.mock('../../resources/app-icons/mcode-blue.png?asset&asarUnpack', () => ({
   default: 'blue-icon-unpacked'
 }))
 
@@ -125,7 +125,7 @@ describe('app icon selection', () => {
     )
 
     persistMacDockIcon('watercolor', {
-      appBundlePath: '/Applications/Orca.app',
+      appBundlePath: '/Applications/MCode.app',
       execFile,
       isDevApp: false,
       platform: 'darwin'
@@ -137,8 +137,8 @@ describe('app icon selection', () => {
       expect.arrayContaining(['-e', expect.stringContaining('setIcon:image forFile:appPath')]),
       expect.objectContaining({
         env: expect.objectContaining({
-          ORCA_APP_BUNDLE_PATH: '/Applications/Orca.app',
-          ORCA_APP_ICON_PATH: 'watercolor-icon-unpacked'
+          MCODE_APP_BUNDLE_PATH: '/Applications/MCode.app',
+          MCODE_APP_ICON_PATH: 'watercolor-icon-unpacked'
         })
       }),
       expect.any(Function)
@@ -162,7 +162,7 @@ describe('app icon selection', () => {
     )
 
     persistMacDockIcon('classic', {
-      appBundlePath: '/Applications/Orca.app',
+      appBundlePath: '/Applications/MCode.app',
       execFile,
       isDevApp: false,
       platform: 'darwin'
@@ -178,7 +178,7 @@ describe('app icon selection', () => {
       ]),
       expect.objectContaining({
         env: expect.objectContaining({
-          ORCA_APP_BUNDLE_PATH: '/Applications/Orca.app'
+          MCODE_APP_BUNDLE_PATH: '/Applications/MCode.app'
         }),
         timeout: 10_000
       }),
@@ -186,7 +186,7 @@ describe('app icon selection', () => {
     )
     expect(execFile).toHaveBeenCalledWith(
       '/usr/bin/xattr',
-      ['-d', 'com.apple.FinderInfo', '/Applications/Orca.app'],
+      ['-d', 'com.apple.FinderInfo', '/Applications/MCode.app'],
       expect.objectContaining({
         timeout: 10_000
       }),
@@ -194,7 +194,7 @@ describe('app icon selection', () => {
     )
     expect(execFile).toHaveBeenCalledWith(
       '/usr/bin/xattr',
-      ['-d', 'com.apple.ResourceFork', '/Applications/Orca.app'],
+      ['-d', 'com.apple.ResourceFork', '/Applications/MCode.app'],
       expect.objectContaining({
         timeout: 10_000
       }),
@@ -224,7 +224,7 @@ describe('app icon selection', () => {
     )
 
     persistMacDockIcon('classic', {
-      appBundlePath: '/Applications/Orca.app',
+      appBundlePath: '/Applications/MCode.app',
       execFile,
       isDevApp: false,
       platform: 'darwin'
@@ -258,7 +258,7 @@ describe('app icon selection', () => {
     )
 
     persistMacDockIcon('classic', {
-      appBundlePath: '/Applications/Orca.app',
+      appBundlePath: '/Applications/MCode.app',
       execFile,
       isDevApp: false,
       platform: 'darwin'
@@ -291,7 +291,7 @@ describe('app icon selection', () => {
     )
 
     persistMacDockIcon('watercolor', {
-      appBundlePath: '/Applications/Orca.app',
+      appBundlePath: '/Applications/MCode.app',
       execFile,
       isDevApp: false,
       platform: 'darwin'
@@ -299,13 +299,13 @@ describe('app icon selection', () => {
     await waitForQueuedPersistence()
 
     persistMacDockIcon('blue', {
-      appBundlePath: '/Applications/Orca.app',
+      appBundlePath: '/Applications/MCode.app',
       execFile,
       isDevApp: false,
       platform: 'darwin'
     })
     persistMacDockIcon('classic', {
-      appBundlePath: '/Applications/Orca.app',
+      appBundlePath: '/Applications/MCode.app',
       execFile,
       isDevApp: false,
       platform: 'darwin'
@@ -317,7 +317,7 @@ describe('app icon selection', () => {
       expect.any(Array),
       expect.objectContaining({
         env: expect.objectContaining({
-          ORCA_APP_ICON_PATH: 'watercolor-icon-unpacked'
+          MCODE_APP_ICON_PATH: 'watercolor-icon-unpacked'
         })
       }),
       expect.any(Function)
@@ -332,7 +332,7 @@ describe('app icon selection', () => {
       expect.any(Array),
       expect.objectContaining({
         env: expect.objectContaining({
-          ORCA_APP_ICON_PATH: 'blue-icon-unpacked'
+          MCODE_APP_ICON_PATH: 'blue-icon-unpacked'
         })
       }),
       expect.any(Function)
@@ -346,7 +346,7 @@ describe('app icon selection', () => {
       ]),
       expect.objectContaining({
         env: expect.objectContaining({
-          ORCA_APP_BUNDLE_PATH: '/Applications/Orca.app'
+          MCODE_APP_BUNDLE_PATH: '/Applications/MCode.app'
         }),
         timeout: 10_000
       }),
@@ -359,7 +359,7 @@ describe('app icon selection', () => {
     expect(execFile).toHaveBeenNthCalledWith(
       3,
       '/usr/bin/xattr',
-      ['-d', 'com.apple.FinderInfo', '/Applications/Orca.app'],
+      ['-d', 'com.apple.FinderInfo', '/Applications/MCode.app'],
       expect.objectContaining({
         timeout: 10_000
       }),
@@ -368,7 +368,7 @@ describe('app icon selection', () => {
     expect(execFile).toHaveBeenNthCalledWith(
       4,
       '/usr/bin/xattr',
-      ['-d', 'com.apple.ResourceFork', '/Applications/Orca.app'],
+      ['-d', 'com.apple.ResourceFork', '/Applications/MCode.app'],
       expect.objectContaining({
         timeout: 10_000
       }),
@@ -405,7 +405,7 @@ describe('app icon selection', () => {
     )
 
     persistMacDockIcon('watercolor', {
-      appBundlePath: '/Applications/Orca.app',
+      appBundlePath: '/Applications/MCode.app',
       execFile,
       isDevApp: false,
       platform: 'darwin'
@@ -413,7 +413,7 @@ describe('app icon selection', () => {
     await waitForQueuedPersistenceMicrotasks()
 
     persistMacDockIcon('blue', {
-      appBundlePath: '/Applications/Orca.app',
+      appBundlePath: '/Applications/MCode.app',
       execFile,
       isDevApp: false,
       platform: 'darwin'
@@ -439,7 +439,7 @@ describe('app icon selection', () => {
       expect.any(Array),
       expect.objectContaining({
         env: expect.objectContaining({
-          ORCA_APP_ICON_PATH: 'blue-icon-unpacked'
+          MCODE_APP_ICON_PATH: 'blue-icon-unpacked'
         }),
         timeout: 10_000
       }),

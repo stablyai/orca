@@ -25,7 +25,7 @@ describe('skillCloudRequest', () => {
     vi.useRealTimers()
   })
 
-  it('sends credentials only to the validated Orca origin', async () => {
+  it('sends credentials only to the validated MCode origin', async () => {
     const fetcher = vi.fn(async (input: URL | RequestInfo, init?: RequestInit) => {
       expect(String(input)).toBe('http://127.0.0.1:8787/v1/skill-shares/share_1')
       expect(new Headers(init?.headers).get('authorization')).toBe('Bearer private-token')

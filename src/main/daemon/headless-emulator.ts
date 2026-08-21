@@ -2,7 +2,7 @@ import './xterm-env-polyfill'
 import { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
-import { activateOrcaTerminalUnicodeProvider } from '../../shared/terminal-unicode-provider'
+import { activateMCodeTerminalUnicodeProvider } from '../../shared/terminal-unicode-provider'
 import {
   readSavedCursorRegister,
   serializeWithAbsoluteCursor
@@ -94,7 +94,7 @@ export class HeadlessEmulator {
 
     // Why Unicode 11: must match the renderer's char-width measurement, else emoji rows mismeasure and the mirror accumulates cell-shifted tears.
     this.terminal.loadAddon(new Unicode11Addon())
-    activateOrcaTerminalUnicodeProvider(this.terminal)
+    activateMCodeTerminalUnicodeProvider(this.terminal)
 
     // Why gated: an emulator query reply would beat the renderer's to the shell's stdin (OSC 11 default-black was the casualty).
     this.onQueryReply = opts.onQueryReply ?? null

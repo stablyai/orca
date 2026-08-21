@@ -25,15 +25,15 @@ beforeEach(() => {
 
 describe('joinRemotePath', () => {
   it('joins POSIX remote paths', () => {
-    expect(joinRemotePath(getRemoteHostPlatform('linux-x64'), '/home/me', '.orca-remote')).toBe(
-      '/home/me/.orca-remote'
+    expect(joinRemotePath(getRemoteHostPlatform('linux-x64'), '/home/me', '.mcode-remote')).toBe(
+      '/home/me/.mcode-remote'
     )
   })
 
   it('normalizes and joins Windows remote paths with forward slashes for SFTP and Node', () => {
     expect(
-      joinRemotePath(getRemoteHostPlatform('win32-x64'), 'C:\\Users\\me', '.orca-remote', 'relay')
-    ).toBe('C:/Users/me/.orca-remote/relay')
+      joinRemotePath(getRemoteHostPlatform('win32-x64'), 'C:\\Users\\me', '.mcode-remote', 'relay')
+    ).toBe('C:/Users/me/.mcode-remote/relay')
   })
 })
 
@@ -60,8 +60,8 @@ describe('assertSafeRemotePathSegment', () => {
   })
 
   it.each([
-    '..\\..\\.ssh\\orca_drop',
-    'report.txt:orca',
+    '..\\..\\.ssh\\mcode_drop',
+    'report.txt:mcode',
     'question?.txt',
     'trailing.',
     'trailing ',
@@ -80,7 +80,7 @@ describe('assertSafeRemotePathSegment', () => {
 
 describe('detectRemoteHostPlatform', () => {
   it('uses uname when the remote is POSIX', async () => {
-    vi.mocked(execCommand).mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Darwin arm64')
+    vi.mocked(execCommand).mockResolvedValueOnce('__MCODE_REMOTE_PLATFORM__ Darwin arm64')
 
     await expect(detectRemoteHostPlatform(conn)).resolves.toMatchObject({
       relayPlatform: 'darwin-arm64',
@@ -91,7 +91,7 @@ describe('detectRemoteHostPlatform', () => {
   it('falls back to PowerShell when uname is unavailable on Windows', async () => {
     vi.mocked(execCommand)
       .mockRejectedValueOnce(new Error('uname not recognized'))
-      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Windows AMD64')
+      .mockResolvedValueOnce('__MCODE_REMOTE_PLATFORM__ Windows AMD64')
 
     await expect(detectRemoteHostPlatform(conn)).resolves.toMatchObject({
       relayPlatform: 'win32-x64',
@@ -104,6 +104,6 @@ describe('detectRemoteHostPlatform', () => {
     expect(script).toContain('$arch = $env:PROCESSOR_ARCHITECTURE')
     expect(script).toContain('try { $runtimeArch =')
     expect(script).toContain('catch {}')
-    expect(script).toContain('Write-Output ("`n__ORCA_REMOTE_PLATFORM__ Windows " + $arch)')
+    expect(script).toContain('Write-Output ("`n__MCODE_REMOTE_PLATFORM__ Windows " + $arch)')
   })
 })

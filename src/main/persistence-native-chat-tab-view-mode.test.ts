@@ -46,7 +46,7 @@ vi.mock('./telemetry/cohort-classifier', () => ({
 
 describe('Store native-chat tab viewMode persistence', () => {
   beforeEach(() => {
-    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+    testState.dir = mkdtempSync(join(tmpdir(), 'mcode-test-'))
   })
 
   afterEach(() => {

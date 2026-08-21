@@ -1,6 +1,6 @@
 import { normalizeAbsolutePathForComparison } from '@/components/right-sidebar/file-explorer-paths'
 
-// Tracks Orca-owned moves in flight, for the rename + rekey duration only — no TTL, which would race a slow SSH rename.
+// Tracks MCode-owned moves in flight, for the rename + rekey duration only — no TTL, which would race a slow SSH rename.
 // Source side only: while live, a watcher delete under any source ROOT is the move's own echo (prefix-matched so a file
 // opened under a moving directory is covered), not an external delete — don't tombstone. Destination is verified by the coordinator.
 
@@ -48,7 +48,7 @@ export function hasActiveEditorPathMoves(): boolean {
   return operations.size > 0
 }
 
-/** True when this delete is the source side of a live Orca-owned move. */
+/** True when this delete is the source side of a live MCode-owned move. */
 export function isActiveMoveSourcePath(
   worktreeId: string,
   runtimeEnvironmentId: string | null | undefined,

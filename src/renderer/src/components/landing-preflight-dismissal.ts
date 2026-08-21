@@ -10,7 +10,7 @@ import type { Repo } from '../../../shared/repo-types'
 // present at dismiss time; a later set that contains a key not in the snapshot
 // means a genuinely new GitHub project appeared and the nudge should return.
 
-const STORAGE_PREFIX = 'orca.preflightBanner.dismissed.'
+const STORAGE_PREFIX = 'mcode.preflightBanner.dismissed.'
 
 type DismissalRecord = {
   /** GitHub project identity keys present when the user dismissed. */

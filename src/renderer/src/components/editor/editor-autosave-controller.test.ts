@@ -3,8 +3,8 @@ import { createStore, type StoreApi } from 'zustand/vanilla'
 import { createEditorSlice } from '@/store/slices/editor'
 import type { AppState } from '@/store'
 import {
-  ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
-  ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT
+  MCODE_EDITOR_PREPARE_HOT_EXIT_EVENT,
+  MCODE_EDITOR_SAVE_DIRTY_FILES_EVENT
 } from '../../../../shared/editor-save-events'
 import { requestEditorFileSave, requestEditorSaveQuiesce } from './editor-autosave'
 import { attachEditorAutosaveController } from './editor-autosave-controller'
@@ -70,7 +70,7 @@ async function requestDirtyFileSave(): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     let claimed = false
     window.dispatchEvent(
-      new CustomEvent(ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT, {
+      new CustomEvent(MCODE_EDITOR_SAVE_DIRTY_FILES_EVENT, {
         detail: {
           claim: () => {
             claimed = true
@@ -91,7 +91,7 @@ async function requestEditorHotExitBackup(): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     let claimed = false
     window.dispatchEvent(
-      new CustomEvent(ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT, {
+      new CustomEvent(MCODE_EDITOR_PREPARE_HOT_EXIT_EVENT, {
         detail: {
           claim: () => {
             claimed = true

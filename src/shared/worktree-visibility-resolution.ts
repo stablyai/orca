@@ -21,7 +21,7 @@ export function shouldShowWorktree(args: {
   importedExternalWorktreePaths?: readonly string[] | undefined
   visibilitySource?: ReturnType<WorktreeVisibilitySourceMatcher>
 }): boolean {
-  if (args.isSelectedCheckout || args.ownership === 'orca-managed') {
+  if (args.isSelectedCheckout || args.ownership === 'mcode-managed') {
     return true
   }
   if (

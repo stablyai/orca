@@ -137,7 +137,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk python3 zsh
 
       # Why: Electron on Linux needs an X display even when the app
-      # suppresses mainWindow.show() via ORCA_E2E_HEADLESS. xvfb provides a
+      # suppresses mainWindow.show() via MCODE_E2E_HEADLESS. xvfb provides a
       # virtual framebuffer so Chromium can initialize without a real display.
       - name: Install xvfb
         run: sudo apt-get install -y xvfb
@@ -182,10 +182,10 @@ jobs:
       # headless suite across separate runners.
       # SKIP_BUILD makes Playwright globalSetup reuse the single build job's
       # artifact instead of starting five concurrent electron-vite builds.
-      # ORCA_E2E_FORWARD_APP_LOGS keeps startup failures visible when Electron
+      # MCODE_E2E_FORWARD_APP_LOGS keeps startup failures visible when Electron
       # launches but never creates a BrowserWindow.
       - name: Run E2E tests (${{ matrix.shard_name }})
-        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay" pnpm run test:e2e --shard=${{ matrix.shard }}
+        run: xvfb-run --auto-servernum env SKIP_BUILD=1 MCODE_E2E_FORWARD_APP_LOGS=1 MCODE_E2E_WEB_CLIENT=1 MCODE_RELAY_PATH="$GITHUB_WORKSPACE/out/relay" pnpm run test:e2e --shard=${{ matrix.shard }}
 
       # Why: Playwright retains traces/screenshots only on failure. Uploading
       # them as an artifact makes post-mortem debugging on CI possible without
@@ -259,13 +259,13 @@ jobs:
             echo "Changed startup-readiness specs are owned by the dedicated live lane."
             exit 0
           fi
-          E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay")
-          # Second clause: a spec that reads ORCA_E2E_SSH_DOCKER test.skip()s itself without it, so
+          E2E_ENV=(SKIP_BUILD=1 MCODE_E2E_FORWARD_APP_LOGS=1 MCODE_E2E_WEB_CLIENT=1 MCODE_RELAY_PATH="$GITHUB_WORKSPACE/out/relay")
+          # Second clause: a spec that reads MCODE_E2E_SSH_DOCKER test.skip()s itself without it, so
           # naming only one trigger silently skipped every other Docker-SSH spec in this lane.
           # The first clause stays because that spec needs Docker without referencing the variable.
           if printf '%s\n' "${TEST_FILES[@]}" | grep -qx 'tests/e2e/ephemeral-vm-provisioned-root.spec.ts' \
-            || grep -l 'ORCA_E2E_SSH_DOCKER' "${TEST_FILES[@]}" >/dev/null 2>&1; then
-            E2E_ENV+=(ORCA_E2E_SSH_DOCKER=1)
+            || grep -l 'MCODE_E2E_SSH_DOCKER' "${TEST_FILES[@]}" >/dev/null 2>&1; then
+            E2E_ENV+=(MCODE_E2E_SSH_DOCKER=1)
           fi
           E2E_PROJECT_ARGS=()
           if grep -l '@headful' "${TEST_FILES[@]}" >/dev/null; then
@@ -337,13 +337,13 @@ jobs:
       # Why: this is the release-path proof that the deployed Linux relay keeps
       # its PTY and explorer live across a real watcher SIGSEGV.
       - name: Run Docker SSH watcher isolation E2E
-        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-watcher-isolation
+        run: xvfb-run --auto-servernum env SKIP_BUILD=1 MCODE_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-watcher-isolation
 
       # Why always(): this lane gates SSH parking/retention plus startup-exec
       # readiness across live SSH, headed paired, and headless serve topologies.
       - name: Run Docker SSH terminal parking + startup readiness E2E
         if: always()
-        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-terminal-parking
+        run: xvfb-run --auto-servernum env SKIP_BUILD=1 MCODE_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-terminal-parking
 
       - name: Upload watcher isolation traces
         if: failure()

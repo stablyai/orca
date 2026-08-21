@@ -3,7 +3,7 @@ import { startStatusWatchdog } from './live-remote-status-watchdog.mjs'
 
 describe('startStatusWatchdog', () => {
   it('collects status samples and stops cleanly', async () => {
-    // Real path: actually invokes `orca status --json` (must be available in CI/dev with Orca or fail soft).
+    // Real path: actually invokes `mcode status --json` (must be available in CI/dev with MCode or fail soft).
     const watch = startStatusWatchdog({ intervalMs: 50, timeoutMs: 5_000 })
     await new Promise((r) => setTimeout(r, 180))
     const result = await watch.stop()
@@ -20,7 +20,7 @@ describe('startStatusWatchdog', () => {
     const watch = startStatusWatchdog({
       intervalMs: 50,
       timeoutMs: 1000,
-      cliCommand: 'orca-freeze-watchdog-missing-command'
+      cliCommand: 'mcode-freeze-watchdog-missing-command'
     })
     const result = await watch.stop()
 
@@ -33,7 +33,7 @@ describe('startStatusWatchdog', () => {
     const watch = startStatusWatchdog({
       intervalMs: 50,
       timeoutMs: 1000,
-      cliCommand: 'orca-freeze-watchdog-missing-command',
+      cliCommand: 'mcode-freeze-watchdog-missing-command',
       sampleHistoryLimit: 1
     })
     const result = await watch.stop()

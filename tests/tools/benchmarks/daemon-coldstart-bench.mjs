@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Orca daemon cold-start benchmark (Windows-focused).
+ * MCode daemon cold-start benchmark (Windows-focused).
  *
  * Reproduces the "daemon was force-killed / machine rebooted" launch path:
  * every daemon pid file (current protocol + all legacy versions) is planted
@@ -13,7 +13,7 @@
  * Usage:
  *   node tests/tools/benchmarks/daemon-coldstart-bench.mjs --label baseline
  *     [--iterations 3] [--linger-ms 15000] [--timeout-ms 240000]
- *     [--exe <path-to-packaged-Orca.exe>]
+ *     [--exe <path-to-packaged-MCode.exe>]
  *
  * Prereq (when not using --exe): `pnpm build:electron-vite` so out/ exists.
  * Results: tests/tools/benchmarks/results/daemon-coldstart-<label>-<timestamp>.json
@@ -172,15 +172,15 @@ function runIteration({ exe, fixtureDir, timeoutMs, lingerMs }) {
     mkdirSync(isolatedHome, { recursive: true })
     const env = {
       ...process.env,
-      ORCA_STARTUP_DIAGNOSTICS: '1',
-      ORCA_E2E_USER_DATA_DIR: fixtureDir,
+      MCODE_STARTUP_DIAGNOSTICS: '1',
+      MCODE_E2E_USER_DATA_DIR: fixtureDir,
       HOME: isolatedHome,
       USERPROFILE: isolatedHome,
-      ORCA_E2E_HOME_DIR: isolatedHome,
-      ORCA_E2E_HEADLESS: '1'
+      MCODE_E2E_HOME_DIR: isolatedHome,
+      MCODE_E2E_HEADLESS: '1'
     }
     delete env.CODEX_HOME
-    delete env.ORCA_CODEX_HOME
+    delete env.MCODE_CODEX_HOME
     const child = spawn(command, commandArgs, {
       env,
       stdio: ['ignore', 'ignore', 'pipe']
@@ -299,7 +299,7 @@ function formatMs(value) {
 
 async function main() {
   const args = parseArgs(process.argv)
-  const fixtureDir = resolve(join(os.tmpdir(), 'orca-daemon-bench', 'userdata'))
+  const fixtureDir = resolve(join(os.tmpdir(), 'mcode-daemon-bench', 'userdata'))
   ensureFixture(fixtureDir)
 
   if (!args.exe && !existsSync(join(repoRoot, 'out', 'main', 'index.js'))) {

@@ -2,10 +2,10 @@
 
 import { appendFileSync, existsSync } from 'node:fs'
 
-const markerPath = process.env.ORCA_REPRO_SPAWN_MARKER
-const exitTriggerPath = process.env.ORCA_REPRO_EXIT_TRIGGER
-const inputMarkerPath = process.env.ORCA_REPRO_INPUT_MARKER
-const agentSessionToken = process.env.ORCA_REPRO_AGENT_SESSION_TOKEN
+const markerPath = process.env.MCODE_REPRO_SPAWN_MARKER
+const exitTriggerPath = process.env.MCODE_REPRO_EXIT_TRIGGER
+const inputMarkerPath = process.env.MCODE_REPRO_INPUT_MARKER
+const agentSessionToken = process.env.MCODE_REPRO_AGENT_SESSION_TOKEN
 if (!markerPath || !exitTriggerPath) {
   process.exit(2)
 }

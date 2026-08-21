@@ -55,7 +55,7 @@ function provenanceBadge(props: PluginConsentProvenanceProps): React.JSX.Element
   if (props.source?.kind === 'bundled') {
     return (
       <Badge variant="outline">
-        {translate('auto.components.settings.PluginConsentProvenance.bundled', 'Bundled with Orca')}
+        {translate('auto.components.settings.PluginConsentProvenance.bundled', 'Bundled with MCode')}
       </Badge>
     )
   }

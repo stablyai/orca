@@ -18,9 +18,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 // from one counter beside a seq from another — a pair that looks internally valid
 // on the next launch and is therefore trusted, silently cutting real notifications.
 // A single JSON value cannot tear that way.
-const WATERMARK_STORAGE_KEY_PREFIX = 'orca:mobileNotificationsWatermark:'
+const WATERMARK_STORAGE_KEY_PREFIX = 'mcode:mobileNotificationsWatermark:'
 // Pre-#8591 installs wrote the seq alone. Read once to migrate; never written.
-const LEGACY_SEQ_STORAGE_KEY_PREFIX = 'orca:mobileNotificationsLastSeq:'
+const LEGACY_SEQ_STORAGE_KEY_PREFIX = 'mcode:mobileNotificationsLastSeq:'
 
 function watermarkStorageKey(hostId: string): string {
   return WATERMARK_STORAGE_KEY_PREFIX + encodeURIComponent(hostId)

@@ -1,7 +1,7 @@
 name: Windows Crash-Survival E2E
 
 # Why: proves the detached daemon-host relocation makes terminal sessions SURVIVE
-# a CRASH of Orca's main process (GitHub #7742), the companion guarantee to the
+# a CRASH of MCode's main process (GitHub #7742), the companion guarantee to the
 # update-survival harness. Builds an (unsigned) installer FROM THIS BRANCH,
 # silent-installs it, opens a terminal, force-kills ONLY the app main (no
 # tree-kill), and asserts the daemon + shell stay alive, a relaunch adopts the
@@ -66,7 +66,7 @@ jobs:
         id: cache-installer
         uses: actions/cache@v4
         with:
-          path: dist/orca-windows-setup.exe
+          path: dist/mcode-windows-setup.exe
           key: >-
             crash-survival-installer-${{ hashFiles(
               'src/**',
@@ -109,20 +109,20 @@ jobs:
           pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
 
       # Why: silent-install the branch build so the crash harness has a packaged
-      # Orca.exe to drive. A clean CI runner installs to the default per-user
-      # location (%LOCALAPPDATA%\Programs\Orca), which the harness auto-locates.
+      # MCode.exe to drive. A clean CI runner installs to the default per-user
+      # location (%LOCALAPPDATA%\Programs\MCode), which the harness auto-locates.
       - name: Silent-install branch build
         shell: pwsh
         run: |
-          $exe = "dist/orca-windows-setup.exe"
+          $exe = "dist/mcode-windows-setup.exe"
           if (-not (Test-Path $exe)) { throw "Installer not found at $exe" }
           Start-Process -FilePath $exe -ArgumentList '/S' -Wait
-          $installed = Join-Path $env:LOCALAPPDATA 'Programs/Orca/Orca.exe'
+          $installed = Join-Path $env:LOCALAPPDATA 'Programs/MCode/MCode.exe'
           if (-not (Test-Path $installed)) {
-            $installed = Join-Path $env:LOCALAPPDATA 'Programs/orca/Orca.exe'
+            $installed = Join-Path $env:LOCALAPPDATA 'Programs/mcode/MCode.exe'
           }
-          if (-not (Test-Path $installed)) { throw "Installed Orca.exe not found after silent install" }
-          "ORCA_EXE=$installed" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          if (-not (Test-Path $installed)) { throw "Installed MCode.exe not found after silent install" }
+          "MCODE_EXE=$installed" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       # Why: crash ONLY the app main and assert the relocated daemon + its shell
       # survive, then that relaunch adopts them and input causes no pwsh FailFast.
@@ -130,13 +130,13 @@ jobs:
         id: harness
         shell: pwsh
         env:
-          ORCA_E2E_DIAG_DIR: artifacts/diag
+          MCODE_E2E_DIAG_DIR: artifacts/diag
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
           $log = "artifacts/crash-survival-output.log"
           node tests/tools/win-crash-survival-e2e/run.mjs `
             --expect "$env:EXPECT" `
-            --exe-path "$env:ORCA_EXE" `
+            --exe-path "$env:MCODE_EXE" `
             --soak-seconds 8 2>&1 | Tee-Object -FilePath $log
           exit $LASTEXITCODE
 

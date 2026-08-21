@@ -13,7 +13,7 @@ function buildAtomFeed(tags: string[]): string {
   return `<?xml version="1.0" encoding="UTF-8"?><feed>${tags
     .map(
       (tag) =>
-        `<entry><link rel="alternate" type="text/html" href="https://github.com/stablyai/orca/releases/tag/${tag}"/><title>${tag}</title></entry>`
+        `<entry><link rel="alternate" type="text/html" href="https://github.com/mcode-ide/mcode/releases/tag/${tag}"/><title>${tag}</title></entry>`
     )
     .join('')}</feed>`
 }
@@ -23,9 +23,9 @@ function buildManifest(tag: string): string {
   return [
     `version: ${version}`,
     'files:',
-    `  - url: Orca-${version}-arm64-mac.zip`,
+    `  - url: MCode-${version}-arm64-mac.zip`,
     '    sha512: test',
-    `path: Orca-${version}-arm64-mac.zip`
+    `path: MCode-${version}-arm64-mac.zip`
   ].join('\n')
 }
 
@@ -44,7 +44,7 @@ function respondWithAtom(
   const missingAssets = new Set(missingAssetTags)
   const unavailableManifests = new Set(unavailableManifestTags)
   netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
-    if (url === 'https://github.com/stablyai/orca/releases.atom') {
+    if (url === 'https://github.com/mcode-ide/mcode/releases.atom') {
       return Promise.resolve({
         ok: true,
         status: 200,
@@ -178,7 +178,7 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
 
   it('reports transport failures as unavailable instead of not-ready', async () => {
     netFetchMock.mockImplementation((url: string) => {
-      if (url === 'https://github.com/stablyai/orca/releases.atom') {
+      if (url === 'https://github.com/mcode-ide/mcode/releases.atom') {
         return Promise.resolve({
           ok: true,
           status: 200,
@@ -199,7 +199,7 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
 
   it('requires every asset referenced by the manifest files list to be reachable', async () => {
     netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
-      if (url === 'https://github.com/stablyai/orca/releases.atom') {
+      if (url === 'https://github.com/mcode-ide/mcode/releases.atom') {
         return Promise.resolve({
           ok: true,
           status: 200,
@@ -218,11 +218,11 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
               [
                 `version: ${version}`,
                 'files:',
-                '  - url: orca-windows-setup.exe',
+                '  - url: mcode-windows-setup.exe',
                 '    sha512: test',
-                `  - url: Orca-${version}-mac.zip`,
+                `  - url: MCode-${version}-mac.zip`,
                 '    sha512: test',
-                `path: Orca-${version}-mac.zip`
+                `path: MCode-${version}-mac.zip`
               ].join('\n')
             )
         })
@@ -230,8 +230,8 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
 
       if (init?.method === 'HEAD') {
         const latest = url.includes('/v1.4.28/')
-        const unavailable = latest && url.endsWith('/Orca-1.4.28-mac.zip')
-        const missing = latest && url.endsWith('/orca-windows-setup.exe')
+        const unavailable = latest && url.endsWith('/MCode-1.4.28-mac.zip')
+        const missing = latest && url.endsWith('/mcode-windows-setup.exe')
         return Promise.resolve({
           ok: !missing && !unavailable,
           status: missing ? publishingIncident.missingWindowsAssetStatus : unavailable ? 503 : 200,
@@ -255,7 +255,7 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
 
   it('treats an explicit asset 404 as not-ready when another asset is unavailable', async () => {
     netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
-      if (url === 'https://github.com/stablyai/orca/releases.atom') {
+      if (url === 'https://github.com/mcode-ide/mcode/releases.atom') {
         return Promise.resolve({
           ok: true,
           status: 200,
@@ -271,16 +271,16 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
               [
                 'version: 1.4.28',
                 'files:',
-                '  - url: orca-windows-setup.exe',
+                '  - url: mcode-windows-setup.exe',
                 '    sha512: test',
-                '  - url: Orca-1.4.28-mac.zip',
+                '  - url: MCode-1.4.28-mac.zip',
                 '    sha512: test'
               ].join('\n')
             )
         })
       }
       if (init?.method === 'HEAD') {
-        const isWindowsAsset = url.endsWith('/orca-windows-setup.exe')
+        const isWindowsAsset = url.endsWith('/mcode-windows-setup.exe')
         return Promise.resolve({
           ok: false,
           status: isWindowsAsset ? publishingIncident.missingWindowsAssetStatus : 503,
@@ -301,7 +301,7 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
   it('accepts absolute manifest asset URLs without rewriting them to release asset paths', async () => {
     const assetUrls: string[] = []
     netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
-      if (url === 'https://github.com/stablyai/orca/releases.atom') {
+      if (url === 'https://github.com/mcode-ide/mcode/releases.atom') {
         return Promise.resolve({
           ok: true,
           status: 200,
@@ -317,7 +317,7 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
               [
                 'version: 1.4.27',
                 'files:',
-                '  - url: https://downloads.example.com/Orca-1.4.27-arm64-mac.zip',
+                '  - url: https://downloads.example.com/MCode-1.4.27-arm64-mac.zip',
                 '    sha512: test'
               ].join('\n')
             )
@@ -335,12 +335,12 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
     const { fetchNewerReleaseTag } = await import('./updater-prerelease-feed')
 
     expect(await fetchNewerReleaseTag('1.4.26')).toBe('v1.4.27')
-    expect(assetUrls).toEqual(['https://downloads.example.com/Orca-1.4.27-arm64-mac.zip'])
+    expect(assetUrls).toEqual(['https://downloads.example.com/MCode-1.4.27-arm64-mac.zip'])
   })
 
   it('treats malformed updater manifests as not ready', async () => {
     netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
-      if (url === 'https://github.com/stablyai/orca/releases.atom') {
+      if (url === 'https://github.com/mcode-ide/mcode/releases.atom') {
         return Promise.resolve({
           ok: true,
           text: () => Promise.resolve(buildAtomFeed(['v1.4.28', 'v1.4.27']))

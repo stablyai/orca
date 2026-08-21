@@ -15,13 +15,13 @@ describe('terminal clipboard paste', () => {
       saveClipboardImageAsTempFile: vi
         .fn()
         .mockResolvedValue(
-          '/var/folders/3l/b7w02vh17tg5r5s3nhhdf3kh0000gn/T/orca-paste-1760000000000-id.png'
+          '/var/folders/3l/b7w02vh17tg5r5s3nhhdf3kh0000gn/T/mcode-paste-1760000000000-id.png'
         ),
       pasteText
     })
 
     expect(pasteText).toHaveBeenCalledWith(
-      '/var/folders/3l/b7w02vh17tg5r5s3nhhdf3kh0000gn/T/orca-paste-1760000000000-id.png',
+      '/var/folders/3l/b7w02vh17tg5r5s3nhhdf3kh0000gn/T/mcode-paste-1760000000000-id.png',
       { forceBracketedPaste: true, recoverImagePasteWebglAtlas: true }
     )
   })
@@ -44,12 +44,12 @@ describe('terminal clipboard paste', () => {
       readClipboardText: vi.fn().mockResolvedValue(''),
       saveClipboardImageAsTempFile: vi
         .fn()
-        .mockResolvedValue('/tmp/orca-paste-1760000000000-id.png'),
+        .mockResolvedValue('/tmp/mcode-paste-1760000000000-id.png'),
       pasteText: (text, options) => pasteTerminalText(terminal, text, options)
     })
 
     expect(terminal.input).toHaveBeenCalledWith(
-      '\x1b[200~/tmp/orca-paste-1760000000000-id.png\x1b[201~'
+      '\x1b[200~/tmp/mcode-paste-1760000000000-id.png\x1b[201~'
     )
     expect(terminal.paste).not.toHaveBeenCalled()
     expect(observedIgnoreBracketedPasteMode).toEqual([false])
@@ -73,12 +73,12 @@ describe('terminal clipboard paste', () => {
       readClipboardText: vi.fn().mockResolvedValue(''),
       saveClipboardImageAsTempFile: vi
         .fn()
-        .mockResolvedValue('/tmp/orca-paste-1760000000000-id.png'),
+        .mockResolvedValue('/tmp/mcode-paste-1760000000000-id.png'),
       pasteText: (text, options) => pasteTerminalText(terminal, text, options)
     })
 
     expect(terminal.input).toHaveBeenCalledWith(
-      '\x1b[200~/tmp/orca-paste-1760000000000-id.png\x1b[201~'
+      '\x1b[200~/tmp/mcode-paste-1760000000000-id.png\x1b[201~'
     )
     expect(terminal.paste).not.toHaveBeenCalled()
     expect(observedIgnoreBracketedPasteMode).toEqual([false])
@@ -89,7 +89,7 @@ describe('terminal clipboard paste', () => {
     const pasteText = vi.fn()
     const saveClipboardImageAsTempFile = vi
       .fn()
-      .mockResolvedValue('/var/tmp/orca-paste-1760000000000-id.png')
+      .mockResolvedValue('/var/tmp/mcode-paste-1760000000000-id.png')
 
     await pasteTerminalClipboard({
       readClipboardText: vi.fn().mockResolvedValue(''),
@@ -102,7 +102,7 @@ describe('terminal clipboard paste', () => {
       connectionId: 'ssh-1',
       runtimeEnvironmentId: undefined
     })
-    expect(pasteText).toHaveBeenCalledWith('/var/tmp/orca-paste-1760000000000-id.png', {
+    expect(pasteText).toHaveBeenCalledWith('/var/tmp/mcode-paste-1760000000000-id.png', {
       forceBracketedPaste: true,
       recoverImagePasteWebglAtlas: true
     })
@@ -112,7 +112,7 @@ describe('terminal clipboard paste', () => {
     const pasteText = vi.fn()
     const saveClipboardImageAsTempFile = vi
       .fn()
-      .mockResolvedValue('/tmp/orca-paste-1760000000000-runtime.png')
+      .mockResolvedValue('/tmp/mcode-paste-1760000000000-runtime.png')
 
     await pasteTerminalClipboard({
       readClipboardText: vi.fn().mockResolvedValue(''),
@@ -125,7 +125,7 @@ describe('terminal clipboard paste', () => {
       connectionId: undefined,
       runtimeEnvironmentId: 'remote-host-1'
     })
-    expect(pasteText).toHaveBeenCalledWith('/tmp/orca-paste-1760000000000-runtime.png', {
+    expect(pasteText).toHaveBeenCalledWith('/tmp/mcode-paste-1760000000000-runtime.png', {
       forceBracketedPaste: true,
       recoverImagePasteWebglAtlas: true
     })
@@ -138,11 +138,11 @@ describe('terminal clipboard paste', () => {
       readClipboardText: vi.fn().mockResolvedValue(''),
       saveClipboardImageAsTempFile: vi
         .fn()
-        .mockResolvedValue('/tmp/orca-paste-1760000000000-id.png'),
+        .mockResolvedValue('/tmp/mcode-paste-1760000000000-id.png'),
       pasteText
     })
 
-    expect(pasteText).toHaveBeenCalledWith('/tmp/orca-paste-1760000000000-id.png', {
+    expect(pasteText).toHaveBeenCalledWith('/tmp/mcode-paste-1760000000000-id.png', {
       forceBracketedPaste: true,
       recoverImagePasteWebglAtlas: true
     })
@@ -152,7 +152,7 @@ describe('terminal clipboard paste', () => {
     const pasteText = vi.fn()
     const saveClipboardImageAsTempFile = vi
       .fn()
-      .mockResolvedValue('/tmp/orca-paste-1760000000000-id.png')
+      .mockResolvedValue('/tmp/mcode-paste-1760000000000-id.png')
 
     await pasteTerminalClipboard({
       readClipboardText: vi.fn().mockRejectedValue(new Error('No text clipboard permission')),
@@ -164,7 +164,7 @@ describe('terminal clipboard paste', () => {
       connectionId: undefined,
       runtimeEnvironmentId: undefined
     })
-    expect(pasteText).toHaveBeenCalledWith('/tmp/orca-paste-1760000000000-id.png', {
+    expect(pasteText).toHaveBeenCalledWith('/tmp/mcode-paste-1760000000000-id.png', {
       forceBracketedPaste: true,
       recoverImagePasteWebglAtlas: true
     })
@@ -251,7 +251,7 @@ describe('terminal clipboard paste', () => {
       readClipboardText: vi.fn().mockResolvedValue(''),
       saveClipboardImageAsTempFile: vi
         .fn()
-        .mockResolvedValue('/tmp/orca-paste-1760000000000-id.png'),
+        .mockResolvedValue('/tmp/mcode-paste-1760000000000-id.png'),
       pasteText: vi.fn().mockResolvedValue(false),
       onImagePasteError
     })

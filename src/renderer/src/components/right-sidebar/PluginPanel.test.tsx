@@ -48,8 +48,8 @@ const dashboardPanel: ActivePluginPanel = {
   id: 'dashboard',
   title: 'Dashboard',
   icon: 'gauge',
-  tabKey: 'plugin:orca-samples.my-plugin/dashboard',
-  pluginKey: 'orca-samples.my-plugin',
+  tabKey: 'plugin:mcode-samples.my-plugin/dashboard',
+  pluginKey: 'mcode-samples.my-plugin',
   pluginName: 'My Plugin'
 }
 
@@ -115,18 +115,18 @@ describe('PluginPanel', () => {
       sessionToken: SESSION_TOKEN
     })
 
-    await renderPanel('plugin:orca-samples.my-plugin/dashboard')
+    await renderPanel('plugin:mcode-samples.my-plugin/dashboard')
 
     const initialIframe = container.querySelector('iframe')
     expect(initialIframe).not.toBeNull()
     expect(readPanelEntryMock).toHaveBeenCalledWith({
-      pluginKey: 'orca-samples.my-plugin',
+      pluginKey: 'mcode-samples.my-plugin',
       panelId: 'dashboard'
     })
     expect(initialIframe?.getAttribute('srcdoc')).toContain('<h1>Hello plugin</h1>')
     expect(initialIframe?.getAttribute('title')).toBe('Dashboard')
     expect(initialIframe?.getAttribute('name')).toBe(
-      'orca-plugin-panel:plugin:orca-samples.my-plugin/dashboard'
+      'mcode-plugin-panel:plugin:mcode-samples.my-plugin/dashboard'
     )
     // Why: allow-same-origin would let plugin HTML reach the app DOM/storage;
     // the sandbox must stay scripts-only.
@@ -139,7 +139,7 @@ describe('PluginPanel', () => {
       sessionToken: SESSION_TOKEN
     })
 
-    await renderPanel('plugin:orca-samples.my-plugin/dashboard')
+    await renderPanel('plugin:mcode-samples.my-plugin/dashboard')
 
     const iframe = container.querySelector('iframe')
     expect(iframe).not.toBeNull()
@@ -163,10 +163,10 @@ describe('PluginPanel', () => {
 
   it('remounts with fresh host theme tokens when the app theme changes', async () => {
     readPanelEntryMock.mockResolvedValue({
-      html: '<html class="__ORCA_COLOR_SCHEME__"><head><style>:root{/*__ORCA_PANEL_TOKENS__*/}</style></head>',
+      html: '<html class="__MCODE_COLOR_SCHEME__"><head><style>:root{/*__MCODE_PANEL_TOKENS__*/}</style></head>',
       sessionToken: SESSION_TOKEN
     })
-    await renderPanel('plugin:orca-samples.my-plugin/dashboard')
+    await renderPanel('plugin:mcode-samples.my-plugin/dashboard')
     const lightFrame = container.querySelector('iframe')
     expect(lightFrame?.getAttribute('srcdoc')).toContain('<html class="light">')
 
@@ -185,7 +185,7 @@ describe('PluginPanel', () => {
       html: '<h1>Hello plugin</h1>',
       sessionToken: SESSION_TOKEN
     })
-    await renderPanel('plugin:orca-samples.my-plugin/dashboard')
+    await renderPanel('plugin:mcode-samples.my-plugin/dashboard')
     const iframe = container.querySelector('iframe')
     expect(iframe).not.toBeNull()
     expect(watchdogStartMock).toHaveBeenCalledTimes(1)
@@ -205,7 +205,7 @@ describe('PluginPanel', () => {
 
     const event = new MessageEvent('message', {
       data: {
-        type: 'orca-panel-action',
+        type: 'mcode-panel-action',
         requestId: 'request-one',
         action: 'notifications.show',
         params: { title: 'Hello' }
@@ -228,7 +228,7 @@ describe('PluginPanel', () => {
       html: '<h1>Initial plugin</h1>',
       sessionToken: SESSION_TOKEN
     })
-    await renderPanel('plugin:orca-samples.my-plugin/dashboard')
+    await renderPanel('plugin:mcode-samples.my-plugin/dashboard')
 
     let resolveObsolete!: (entry: null) => void
     let resolveCurrent!: (entry: { html: string; sessionToken: string }) => void
@@ -267,7 +267,7 @@ describe('PluginPanel', () => {
   it('shows an error state when the panel entry cannot be read', async () => {
     readPanelEntryMock.mockResolvedValue(null)
 
-    await renderPanel('plugin:orca-samples.my-plugin/dashboard')
+    await renderPanel('plugin:mcode-samples.my-plugin/dashboard')
 
     expect(container.querySelector('iframe')).toBeNull()
     expect(container.textContent).toContain('The plugin panel could not be loaded.')
@@ -278,7 +278,7 @@ describe('PluginPanel', () => {
       html: '<h1>Hello plugin</h1>',
       sessionToken: SESSION_TOKEN
     })
-    await renderPanel('plugin:orca-samples.my-plugin/dashboard')
+    await renderPanel('plugin:mcode-samples.my-plugin/dashboard')
     const initialFrame = container.querySelector('iframe')
 
     readPanelEntryMock.mockResolvedValueOnce(null)
@@ -300,7 +300,7 @@ describe('PluginPanel', () => {
     expect(container.querySelector('iframe')).not.toBe(initialFrame)
     expect(container.querySelector('iframe')?.getAttribute('srcdoc')).toContain('Hello plugin')
     expect(setPanelHealthMock).toHaveBeenLastCalledWith(
-      'plugin:orca-samples.my-plugin/dashboard',
+      'plugin:mcode-samples.my-plugin/dashboard',
       'healthy'
     )
   })
@@ -310,12 +310,12 @@ describe('PluginPanel', () => {
       html: '<h1>Hello plugin</h1>',
       sessionToken: SESSION_TOKEN
     })
-    await renderPanel('plugin:orca-samples.my-plugin/dashboard')
+    await renderPanel('plugin:mcode-samples.my-plugin/dashboard')
 
     await act(async () => watchdogCallbacks.onUnresponsive?.())
 
     expect(setPanelHealthMock).toHaveBeenCalledWith(
-      'plugin:orca-samples.my-plugin/dashboard',
+      'plugin:mcode-samples.my-plugin/dashboard',
       'error'
     )
     expect(container.textContent).toContain('stopped responding and was suspended')
@@ -326,7 +326,7 @@ describe('PluginPanel', () => {
       html: '<h1>Hello plugin</h1>',
       sessionToken: SESSION_TOKEN
     })
-    await renderPanel('plugin:orca-samples.my-plugin/dashboard')
+    await renderPanel('plugin:mcode-samples.my-plugin/dashboard')
     setPanelHealthMock.mockClear()
     await act(async () => watchdogCallbacks.onUnresponsive?.())
 
@@ -334,7 +334,7 @@ describe('PluginPanel', () => {
 
     expect(setPanelHealthMock).toHaveBeenCalledTimes(1)
     expect(setPanelHealthMock).toHaveBeenCalledWith(
-      'plugin:orca-samples.my-plugin/dashboard',
+      'plugin:mcode-samples.my-plugin/dashboard',
       'error'
     )
   })
@@ -342,7 +342,7 @@ describe('PluginPanel', () => {
   it('shows an unavailable state for a tab whose plugin is gone', async () => {
     usePluginPanelsMock.mockReturnValue([])
 
-    await renderPanel('plugin:orca-samples.removed-plugin/dashboard')
+    await renderPanel('plugin:mcode-samples.removed-plugin/dashboard')
 
     expect(readPanelEntryMock).not.toHaveBeenCalled()
     expect(container.textContent).toContain('This plugin panel is no longer available.')

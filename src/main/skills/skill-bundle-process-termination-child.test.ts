@@ -4,7 +4,7 @@ import { describe, it } from 'vitest'
 import { createSkillBundleArchive } from './skill-bundle-creation'
 import { installSkillBundle } from './skill-bundle-install-service'
 
-const CHILD = process.env.ORCA_SKILL_BUNDLE_PROCESS_CHILD === '1'
+const CHILD = process.env.MCODE_SKILL_BUNDLE_PROCESS_CHILD === '1'
 
 async function createLargeSkill(root: string): Promise<string> {
   const source = join(root, 'source')
@@ -32,8 +32,8 @@ async function markReady(path: string): Promise<void> {
 
 describe.runIf(CHILD)('skill bundle process termination child', () => {
   it('extracts a bundle until the parent terminates this process', async () => {
-    const root = process.env.ORCA_SKILL_BUNDLE_CRASH_ROOT
-    const marker = process.env.ORCA_SKILL_BUNDLE_CRASH_MARKER
+    const root = process.env.MCODE_SKILL_BUNDLE_CRASH_ROOT
+    const marker = process.env.MCODE_SKILL_BUNDLE_CRASH_MARKER
     if (!root || !marker) {
       throw new Error('missing-bundle-crash-environment')
     }
@@ -56,7 +56,7 @@ describe.runIf(CHILD)('skill bundle process termination child', () => {
       expectedArchiveSha256: bundle.archiveSha256,
       scope: 'global',
       homeDirectory: join(root, 'home'),
-      orcaStateDirectory: join(root, 'state'),
+      mcodeStateDirectory: join(root, 'state'),
       detectedProviders: [],
       destinationIdentity: 'global:bundle-process-test',
       hostIdentity: 'bundle-process-test'

@@ -23,7 +23,7 @@ function worktree(overrides: Partial<Worktree> & { id: string }): Worktree {
 }
 
 const repoMap = new Map<string, Repo>([
-  ['repo-a', { id: 'repo-a', displayName: 'orca' } as Repo],
+  ['repo-a', { id: 'repo-a', displayName: 'mcode' } as Repo],
   ['repo-b', { id: 'repo-b', displayName: 'atlas' } as Repo]
 ])
 
@@ -78,7 +78,7 @@ describe('matchWorkspaceBoardWorktrees', () => {
       worktree({ id: 'wrong-repo', displayName: 'Other', repoId: 'repo-b', branch: 'main' })
     ]
 
-    expect(match(worktrees, 'orca/main')).toEqual(identities(worktrees[0]!))
+    expect(match(worktrees, 'mcode/main')).toEqual(identities(worktrees[0]!))
   })
 
   it('is case-insensitive', () => {

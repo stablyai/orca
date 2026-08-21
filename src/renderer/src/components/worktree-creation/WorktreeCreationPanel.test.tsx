@@ -127,14 +127,14 @@ describe('WorktreeCreationPanel', () => {
     mocks.state.pendingWorktreeCreations['create-1'] = {
       ...mocks.state.pendingWorktreeCreations['create-1'],
       phase: 'provisioning-vm',
-      provisioningLog: 'creating sandbox\nstarting orca serve\n'
+      provisioningLog: 'creating sandbox\nstarting mcode serve\n'
     }
 
     const container = await renderPanel(false)
 
     expect(container.textContent).toContain('Provisioning VM')
     expect(container.querySelector('pre')?.textContent).toBe(
-      'creating sandbox\nstarting orca serve\n'
+      'creating sandbox\nstarting mcode serve\n'
     )
     // Constant height so the log box never grows before the scroll kicks in.
     expect(container.querySelector('pre')?.className).toContain('h-72')

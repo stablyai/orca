@@ -241,7 +241,7 @@ describe('WorktreeCardSshHostControl', () => {
     })
   })
 
-  it('routes connect to the owning Orca server for a remote-owned target', async () => {
+  it('routes connect to the owning MCode server for a remote-owned target', async () => {
     const connect = vi.fn().mockResolvedValue(undefined)
     installSshApi(connect)
     environmentSshMocks.connectRuntimeEnvironmentSshTarget.mockResolvedValue(null)

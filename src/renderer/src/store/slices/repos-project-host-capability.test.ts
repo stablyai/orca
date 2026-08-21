@@ -112,7 +112,7 @@ describe('repo slice project-host setup runtime capability', () => {
       store.getState().setupProjectClone({
         projectId: 'project-1',
         hostId: 'runtime:env-1',
-        url: 'https://github.com/stablyai/orca.git',
+        url: 'https://github.com/mcode-ide/mcode.git',
         destination: '/srv'
       })
     ).resolves.toBeNull()
@@ -137,7 +137,7 @@ describe('repo slice project-host setup runtime capability', () => {
       store.getState().setupProjectClone({
         projectId: 'project-1',
         hostId: 'runtime:env-1',
-        url: 'https://github.com/stablyai/orca.git',
+        url: 'https://github.com/mcode-ide/mcode.git',
         destination: '/srv'
       })
     ).resolves.toBeNull()

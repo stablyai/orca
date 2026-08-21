@@ -31,7 +31,7 @@ describe('CodexAccountService.addAccountFromHome', () => {
 
   it('registers a managed Codex account by importing an authenticated CODEX_HOME', async () => {
     vi.doMock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
-    const sourceHome = mkdtempSync(join(tmpdir(), 'orca-codex-source-'))
+    const sourceHome = mkdtempSync(join(tmpdir(), 'mcode-codex-source-'))
     writeFileSync(
       join(sourceHome, 'auth.json'),
       createCodexAuthJson('new@example.com', 'provider-account-1', 'refresh-token'),
@@ -65,7 +65,7 @@ describe('CodexAccountService.addAccountFromHome', () => {
 
   it('restores settings and runtime selection when post-write activation fails', async () => {
     vi.doMock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
-    const sourceHome = mkdtempSync(join(tmpdir(), 'orca-codex-source-rollback-'))
+    const sourceHome = mkdtempSync(join(tmpdir(), 'mcode-codex-source-rollback-'))
     writeFileSync(
       join(sourceHome, 'auth.json'),
       createCodexAuthJson('new@example.com', 'provider-account-1', 'refresh-token'),
@@ -104,7 +104,7 @@ describe('CodexAccountService.addAccountFromHome', () => {
 
   it('rejects when the source home has no auth.json', async () => {
     vi.doMock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
-    const sourceHome = mkdtempSync(join(tmpdir(), 'orca-codex-source-empty-'))
+    const sourceHome = mkdtempSync(join(tmpdir(), 'mcode-codex-source-empty-'))
 
     try {
       const settings = createSettings()

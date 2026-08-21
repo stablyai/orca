@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
 import {
   createRuntimeDesktopPairingOffer,
@@ -80,7 +80,7 @@ function cleanupExecBarrier(startedPath: string, releasePath: string): void {
 
 test('recovers startup exec through a headed paired desktop owner @headful', async ({
   electronApp,
-  orcaPage
+  mcodePage
 }) => {
   test.setTimeout(90_000)
   const runId = `headed_${Date.now()}`
@@ -89,11 +89,11 @@ test('recovers startup exec through a headed paired desktop owner @headful', asy
   const startedPath = path.join(homePath, `.sta4067-${runId}.started`)
   const releasePath = path.join(homePath, `.sta4067-${runId}.release`)
   const removeProfile = installZshExecProfile(homePath, runId, { releasePath, startedPath })
-  const worktreeId = await orcaPage.evaluate(() => window.__store?.getState().activeWorktreeId)
+  const worktreeId = await mcodePage.evaluate(() => window.__store?.getState().activeWorktreeId)
   if (!worktreeId) {
     throw new Error('Headed owner has no active worktree')
   }
-  const offer = await createRuntimeDesktopPairingOffer(orcaPage)
+  const offer = await createRuntimeDesktopPairingOffer(mcodePage)
   const client = await launchPairedWebClient(electronApp, offer)
   let terminal: string | null = null
   try {
@@ -105,21 +105,21 @@ test('recovers startup exec through a headed paired desktop owner @headful', asy
       ledgerPath,
       'paired-client',
       '/bin/zsh',
-      { ORCA_ORIG_ZDOTDIR: homePath, ORCA_ZSHENV_SOURCE_DIR: homePath }
+      { MCODE_ORIG_ZDOTDIR: homePath, MCODE_ZSHENV_SOURCE_DIR: homePath }
     )
     terminal = created.terminal
     await releaseExecBarrier(startedPath, releasePath, ledgerPath)
     await expectStartupExecRecovery(client.page, created, runId)
     expectLedger(ledgerPath)
   } finally {
-    await closeStartupExecTerminal(orcaPage, terminal)
+    await closeStartupExecTerminal(mcodePage, terminal)
     await client.dispose()
     removeProfile()
     cleanupExecBarrier(startedPath, releasePath)
   }
 })
 
-test('recovers the same startup exec through an isolated headless orca serve', async ({
+test('recovers the same startup exec through an isolated headless mcode serve', async ({
   testRepoPath
 }) => {
   test.setTimeout(120_000)
@@ -161,7 +161,7 @@ test('recovers the same startup exec through an isolated headless orca serve', a
       ledgerPath,
       'paired-client',
       '/bin/zsh',
-      { ORCA_ORIG_ZDOTDIR: homePath, ORCA_ZSHENV_SOURCE_DIR: homePath }
+      { MCODE_ORIG_ZDOTDIR: homePath, MCODE_ZSHENV_SOURCE_DIR: homePath }
     )
     terminal = created.terminal
     await releaseExecBarrier(startedPath, releasePath, ledgerPath)

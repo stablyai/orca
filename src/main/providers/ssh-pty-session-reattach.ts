@@ -186,8 +186,8 @@ export async function reattachSshPtySession(args: {
   console.warn(`[ssh-pty] spawn() called with sessionId=${args.sessionId}, attempting pty.attach`)
   try {
     // Why: expected pane identity prevents a reused relay id from attaching the wrong shell.
-    const expectedPaneKey = args.options.paneKey ?? args.options.env?.ORCA_PANE_KEY
-    const expectedTabId = args.options.tabId ?? args.options.env?.ORCA_TAB_ID
+    const expectedPaneKey = args.options.paneKey ?? args.options.env?.MCODE_PANE_KEY
+    const expectedTabId = args.options.tabId ?? args.options.env?.MCODE_TAB_ID
     const attachResult = await requestSshPtyAttach({
       mux: args.mux,
       relayPtyId: relaySessionId,

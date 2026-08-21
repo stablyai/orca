@@ -62,7 +62,7 @@ export async function readLinearIssueContext(
 
 async function missingIssueInput(): Promise<CurrentIssueLink> {
   throw linearError('linear_issue_required', 'Pass an issue id or use --current.', {
-    nextSteps: ['Run `orca linear issue ENG-123` or retry from a linked worktree with --current.']
+    nextSteps: ['Run `mcode linear issue ENG-123` or retry from a linked worktree with --current.']
   })
 }
 

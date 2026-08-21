@@ -26,7 +26,7 @@ function formatCookieImportWarning(warning: CookieImportWarning): string {
   if (!isHandledWireDiscriminant(code, HANDLED_WARNING_CODES)) {
     return translate(
       'auto.lib.browser.cookie.import.toast.unrecognizedWarning',
-      'The cookie import finished with a warning this version of Orca does not recognize. Update Orca to see the details, then check this profile before relying on its cookies.'
+      'The cookie import finished with a warning this version of MCode does not recognize. Update MCode to see the details, then check this profile before relying on its cookies.'
     )
   }
   switch (warning.code) {
@@ -50,7 +50,7 @@ function formatCookieImportWarning(warning: CookieImportWarning): string {
       if (!isHandledWireDiscriminant(reason, HANDLED_UNDECRYPTABLE_REASONS)) {
         return translate(
           'auto.lib.browser.cookie.import.toast.undecryptableUnrecognizedReason',
-          '{{value0}} cookies could not be decrypted and were skipped for a reason this version of Orca does not recognize. Update Orca to see the details, then try the import again.',
+          '{{value0}} cookies could not be decrypted and were skipped for a reason this version of MCode does not recognize. Update MCode to see the details, then try the import again.',
           { value0: warning.failedCookies }
         )
       }
@@ -59,12 +59,12 @@ function formatCookieImportWarning(warning: CookieImportWarning): string {
           return warning.otherFailedCookies
             ? translate(
                 'auto.lib.browser.cookie.import.toast.undecryptableAppBoundMixed',
-                "Orca cannot decrypt {{value0}} of this browser's cookies because they use app-bound encryption; {{value1}} more could not be decrypted for another reason. You can import cookies from a file using “From File…”.",
+                "MCode cannot decrypt {{value0}} of this browser's cookies because they use app-bound encryption; {{value1}} more could not be decrypted for another reason. You can import cookies from a file using “From File…”.",
                 { value0: warning.failedCookies, value1: warning.otherFailedCookies }
               )
             : translate(
                 'auto.lib.browser.cookie.import.toast.undecryptableAppBound',
-                "Orca cannot decrypt {{value0}} of this browser's cookies because they use app-bound encryption. You can import cookies from a file using “From File…”.",
+                "MCode cannot decrypt {{value0}} of this browser's cookies because they use app-bound encryption. You can import cookies from a file using “From File…”.",
                 { value0: warning.failedCookies }
               )
         case 'linux-keyring-unavailable':
@@ -100,7 +100,7 @@ function emitGoogleCookieImportWarning(
   toast.warning(
     translate(
       'auto.lib.browser.cookie.import.toast.googleCookiesSkipped',
-      'Google cookies were not imported. Open a browser in Orca on {{value0}} with this profile, then sign into Google.',
+      'Google cookies were not imported. Open a browser in MCode on {{value0}} with this profile, then sign into Google.',
       { value0: executionHostLabel }
     ),
     { duration: 12000 }
@@ -116,7 +116,7 @@ function emitPartitionSkippedImportWarning(summary: BrowserCookieImportSummary):
   toast.warning(
     translate(
       'auto.lib.browser.cookie.import.toast.partitionSkipped',
-      '{{value0}} cookies were not imported because their site-partition could not be read. Sign in to those sites again in Orca.',
+      '{{value0}} cookies were not imported because their site-partition could not be read. Sign in to those sites again in MCode.',
       { value0: summary.partitionSkippedCookies }
     ),
     { duration: 12000 }

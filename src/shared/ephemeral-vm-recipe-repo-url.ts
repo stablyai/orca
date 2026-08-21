@@ -1,8 +1,8 @@
 import { stripCredentialsFromMessage } from './git-remote-error'
-import type { OrcaVmRecipe } from './orca-yaml-hook-types'
+import type { MCodeVmRecipe } from './mcode-yaml-hook-types'
 
 export function getProvisionedRootRecipeRepoUrl(
-  checkoutMode: OrcaVmRecipe['checkoutMode'],
+  checkoutMode: MCodeVmRecipe['checkoutMode'],
   remoteUrl: string | undefined
 ): string | undefined {
   if (checkoutMode !== 'provisioned-root' || !remoteUrl) {

@@ -18,7 +18,7 @@ async function recipePlugin(
   id: string,
   artifacts: { path: string; recipe: unknown }[]
 ): Promise<ValidDiscoveredPlugin> {
-  const rootDir = await mkdtemp(join(tmpdir(), 'orca-plugin-vm-recipe-'))
+  const rootDir = await mkdtemp(join(tmpdir(), 'mcode-plugin-vm-recipe-'))
   roots.push(rootDir)
   await mkdir(join(rootDir, 'recipes'))
   await Promise.all(
@@ -29,10 +29,10 @@ async function recipePlugin(
   const manifest = pluginManifestSchema.parse({
     manifestVersion: 1,
     id,
-    publisher: 'orca-samples',
+    publisher: 'mcode-samples',
     name: id,
     version: '1.0.0',
-    engines: { orca: '>=1.0.0' },
+    engines: { mcode: '>=1.0.0' },
     pluginApi: 1,
     contributes: { vmRecipes: artifacts.map((artifact) => ({ path: artifact.path })) },
     capabilities: []
@@ -42,7 +42,7 @@ async function recipePlugin(
     throw new Error(content.error)
   }
   return {
-    pluginKey: `orca-samples.${id}`,
+    pluginKey: `mcode-samples.${id}`,
     rootDir,
     manifest,
     consentFingerprint: fingerprintPluginConsent(manifest, content.hash),

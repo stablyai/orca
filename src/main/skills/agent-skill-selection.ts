@@ -20,14 +20,14 @@ export function selectDiscoveredSkills(
     if (named.length === 0) {
       throw new AgentSkillSharingError(
         AGENT_SKILL_SELECTOR_NOT_FOUND_CODE,
-        `Installed skill "${selector}" was not found. Run \`orca skills installed\` to list valid selectors.`,
+        `Installed skill "${selector}" was not found. Run \`mcode skills installed\` to list valid selectors.`,
         { selector }
       )
     }
     if (named.length > 1) {
       throw new AgentSkillSharingError(
         AGENT_SKILL_SELECTOR_AMBIGUOUS_CODE,
-        `More than one installed skill is named "${selector}". Use its discovery ID from \`orca skills installed\`.`,
+        `More than one installed skill is named "${selector}". Use its discovery ID from \`mcode skills installed\`.`,
         { selector, matchingIds: named.map((skill) => skill.id) }
       )
     }

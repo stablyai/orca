@@ -43,8 +43,8 @@ export async function importExternalPathsSsh(
   const provider = requireSshFilesystemProvider(connectionId)
 
   if (options?.ensureDir) {
-    // Why: terminal-drop staging needs `${worktree}/.orca/drops` to exist
-    // before the first upload. .orca/ is reserved as Orca-owned remote state;
+    // Why: terminal-drop staging needs `${worktree}/.mcode/drops` to exist
+    // before the first upload. .mcode/ is reserved as MCode-owned remote state;
     // see docs/terminal-drop-ssh.md.
     await ensureDropStagingDir(provider, destDir, options.assertCurrent)
   }

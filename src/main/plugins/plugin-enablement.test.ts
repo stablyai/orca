@@ -8,14 +8,14 @@ import { applyPluginConsent, applyPluginEnablement } from './plugin-enablement'
 import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import type { PluginService } from './plugin-service'
 
-const pluginKey = 'orca-samples.demo'
+const pluginKey = 'mcode-samples.demo'
 const manifest = pluginManifestSchema.parse({
   manifestVersion: 1,
   id: 'demo',
-  publisher: 'orca-samples',
+  publisher: 'mcode-samples',
   name: 'Demo',
   version: '1.0.0',
-  engines: { orca: '>=1.0.0' },
+  engines: { mcode: '>=1.0.0' },
   pluginApi: 1,
   contributes: {},
   capabilities: []
@@ -122,7 +122,7 @@ describe('applyPluginEnablement', () => {
       applyPluginEnablement({
         store: harness.store,
         pluginService,
-        pluginKey: 'orca-samples.unknown',
+        pluginKey: 'mcode-samples.unknown',
         enabled: false
       })
     ).rejects.toThrow('unknown plugin')

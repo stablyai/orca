@@ -8,7 +8,7 @@ export type TerminalTab = {
   worktreeId: string
   title: string
   /** Stable fallback label for default-named terminals ("Terminal 1", etc.).
-   *  Why: agent CLIs overwrite the live title via OSC updates, but Orca still
+   *  Why: agent CLIs overwrite the live title via OSC updates, but MCode still
    *  needs the original terminal label for numbering and reset behavior. */
   defaultTitle?: string
   /** Stable opt-in label derived from the first known agent prompt. */
@@ -37,7 +37,7 @@ export type TerminalTab = {
   /** Why: explorer-created terminals can start below the workspace root while
    *  still belonging to that workspace for tab/session ownership. */
   startupCwd?: string
-  /** Why: the coding-harness agent Orca launched in this tab. Lets the tab bar
+  /** Why: the coding-harness agent MCode launched in this tab. Lets the tab bar
    *  show the provider icon immediately, before the agent emits its first hook
    *  event (a freshly-launched, idle agent reports no live status yet). Live
    *  hook status overrides this once the agent does anything. Plain terminals

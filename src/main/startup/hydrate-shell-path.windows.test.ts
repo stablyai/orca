@@ -130,7 +130,7 @@ describe('Windows shell PATH hydration', () => {
     proc.stdout.emit(
       'data',
       Buffer.from(
-        'profile banner\r\n__ORCA_SHELL_PATH__C:\\profile-node;C:\\Windows__ORCA_SHELL_PATH__'
+        'profile banner\r\n__MCODE_SHELL_PATH__C:\\profile-node;C:\\Windows__MCODE_SHELL_PATH__'
       )
     )
     proc.emit('close', 0, null)
@@ -159,7 +159,7 @@ describe('Windows shell PATH hydration', () => {
 
     proc.stdout.emit(
       'data',
-      Buffer.from('__ORCA_SHELL_PATH__C:\\git-node;C:\\Windows__ORCA_SHELL_PATH__')
+      Buffer.from('__MCODE_SHELL_PATH__C:\\git-node;C:\\Windows__MCODE_SHELL_PATH__')
     )
     proc.emit('close', 0, null)
 

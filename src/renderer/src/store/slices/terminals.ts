@@ -593,7 +593,7 @@ export type TerminalSlice = {
   restoredRuntimeHostIdByWorkspaceSessionKey: Record<string, ExecutionHostId>
   defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
   markDefaultTerminalTabsApplied: (worktreeId: string) => void
-  /** True only after hydrateWorkspaceSession loaded real orca-data.json; guards the session writer so an early-startup crash can't overwrite good data on disk. */
+  /** True only after hydrateWorkspaceSession loaded real mcode-data.json; guards the session writer so an early-startup crash can't overwrite good data on disk. */
   hydrationSucceeded: boolean
   setHydrationSucceeded: (value: boolean) => void
   pendingReconnectWorktreeIds: string[]

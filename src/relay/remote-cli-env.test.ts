@@ -2,25 +2,25 @@ import { describe, expect, it } from 'vitest'
 import { pickRemoteCliEnv } from './remote-cli-env'
 
 describe('pickRemoteCliEnv', () => {
-  it('forwards SSH Orca terminal and worktree context for remote CLI calls', () => {
+  it('forwards SSH MCode terminal and worktree context for remote CLI calls', () => {
     expect(
       pickRemoteCliEnv({
-        ORCA_TERMINAL_HANDLE: 'term_ssh',
-        ORCA_WORKTREE_ID: 'repo::remote',
-        ORCA_PANE_KEY: 'pane-1',
-        ORCA_AGENT_LAUNCH_TOKEN: 'launch-secret',
-        ORCA_WORKSPACE_ID: 'workspace-1',
-        ORCA_USER_DATA_PATH: '/tmp/orca',
+        MCODE_TERMINAL_HANDLE: 'term_ssh',
+        MCODE_WORKTREE_ID: 'repo::remote',
+        MCODE_PANE_KEY: 'pane-1',
+        MCODE_AGENT_LAUNCH_TOKEN: 'launch-secret',
+        MCODE_WORKSPACE_ID: 'workspace-1',
+        MCODE_USER_DATA_PATH: '/tmp/mcode',
         PATH: '/usr/bin',
         SECRET_TOKEN: 'nope'
       })
     ).toEqual({
-      ORCA_TERMINAL_HANDLE: 'term_ssh',
-      ORCA_WORKTREE_ID: 'repo::remote',
-      ORCA_PANE_KEY: 'pane-1',
-      ORCA_AGENT_LAUNCH_TOKEN: 'launch-secret',
-      ORCA_WORKSPACE_ID: 'workspace-1',
-      ORCA_USER_DATA_PATH: '/tmp/orca',
+      MCODE_TERMINAL_HANDLE: 'term_ssh',
+      MCODE_WORKTREE_ID: 'repo::remote',
+      MCODE_PANE_KEY: 'pane-1',
+      MCODE_AGENT_LAUNCH_TOKEN: 'launch-secret',
+      MCODE_WORKSPACE_ID: 'workspace-1',
+      MCODE_USER_DATA_PATH: '/tmp/mcode',
       PATH: '/usr/bin'
     })
   })

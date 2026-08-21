@@ -5,7 +5,7 @@ const extraArgs = rawExtraArgs[0] === '--' ? rawExtraArgs.slice(1) : rawExtraArg
 const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 const env = {
   ...process.env,
-  ORCA_E2E_WEB_CLIENT: '1'
+  MCODE_E2E_WEB_CLIENT: '1'
 }
 
 // Why: Node's CVE-2024-27980 hardening rejects .cmd spawns without shell on Windows.

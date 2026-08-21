@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { runInternalDevSetup } from './run-internal-dev-setup.mjs'
 
 describe('runInternalDevSetup', () => {
-  it('does nothing when ORCA_INTERNAL_DEV_SETUP is unset', () => {
+  it('does nothing when MCODE_INTERNAL_DEV_SETUP is unset', () => {
     const spawn = vi.fn()
 
     expect(runInternalDevSetup({ env: {}, exists: vi.fn(), spawn })).toBe(0)
@@ -14,7 +14,7 @@ describe('runInternalDevSetup', () => {
 
     expect(
       runInternalDevSetup({
-        env: { ORCA_INTERNAL_DEV_SETUP: '/tmp/missing' },
+        env: { MCODE_INTERNAL_DEV_SETUP: '/tmp/missing' },
         exists: () => false,
         spawn
       })
@@ -27,7 +27,7 @@ describe('runInternalDevSetup', () => {
 
     expect(
       runInternalDevSetup({
-        env: { ORCA_INTERNAL_DEV_SETUP: '/tmp/setup' },
+        env: { MCODE_INTERNAL_DEV_SETUP: '/tmp/setup' },
         platform: 'linux',
         exists: () => true,
         access: () => {
@@ -45,8 +45,8 @@ describe('runInternalDevSetup', () => {
     expect(
       runInternalDevSetup({
         env: {
-          ORCA_INTERNAL_DEV_SETUP: '/tmp/setup',
-          ORCA_WORKTREE_PATH: '/tmp/worktree'
+          MCODE_INTERNAL_DEV_SETUP: '/tmp/setup',
+          MCODE_WORKTREE_PATH: '/tmp/worktree'
         },
         platform: 'linux',
         exists: () => true,
@@ -65,8 +65,8 @@ describe('runInternalDevSetup', () => {
     expect(
       runInternalDevSetup({
         env: {
-          ORCA_INTERNAL_DEV_SETUP: 'C:\\tools\\setup.cmd',
-          ORCA_WORKTREE_PATH: 'C:\\repo\\worktree'
+          MCODE_INTERNAL_DEV_SETUP: 'C:\\tools\\setup.cmd',
+          MCODE_WORKTREE_PATH: 'C:\\repo\\worktree'
         },
         platform: 'win32',
         exists: () => true,

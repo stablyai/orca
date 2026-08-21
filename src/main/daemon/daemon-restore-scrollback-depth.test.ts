@@ -103,7 +103,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
     let reader: HistoryReader
 
     beforeEach(async () => {
-      dir = mkdtempSync(join(tmpdir(), 'orca-restore-depth-'))
+      dir = mkdtempSync(join(tmpdir(), 'mcode-restore-depth-'))
       manager = new HistoryManager(dir)
       reader = new HistoryReader(dir)
       await manager.openSession('restore-depth', { cwd: '/tmp', cols: 80, rows: 24 })
@@ -245,7 +245,7 @@ describe('STA-4091 previously recoverable restore depth', () => {
     let lastSubprocess: ReturnType<typeof createMockSubprocess>
 
     beforeEach(async () => {
-      dir = mkdtempSync(join(tmpdir(), 'orca-restore-depth-adapter-'))
+      dir = mkdtempSync(join(tmpdir(), 'mcode-restore-depth-adapter-'))
       historyDir = join(dir, 'history')
       const log: DaemonFileLog = { log: () => {}, close: () => {} }
       server = new DaemonServer({

@@ -16,8 +16,8 @@ export type TestWindow = {
 export type StarNagMocks = {
   appMock: { getVersion: Mock }
   browserWindowMock: { getAllWindows: Mock<() => TestWindow[]> }
-  checkOrcaStarredMock: Mock
-  starOrcaMock: Mock
+  checkMCodeStarredMock: Mock
+  starMCodeMock: Mock
   trackMock: Mock
   getCohortAtEmitMock: Mock<() => { nth_repo_added: number }>
   ipcMainHandleMock: Mock
@@ -38,10 +38,10 @@ export function resetStarNagMocks(mocks: StarNagMocks): void {
   mocks.appMock.getVersion.mockReturnValue('1.2.3')
   mocks.browserWindowMock.getAllWindows.mockReset()
   mocks.browserWindowMock.getAllWindows.mockReturnValue([])
-  mocks.checkOrcaStarredMock.mockReset()
-  mocks.checkOrcaStarredMock.mockResolvedValue(false)
-  mocks.starOrcaMock.mockReset()
-  mocks.starOrcaMock.mockResolvedValue(true)
+  mocks.checkMCodeStarredMock.mockReset()
+  mocks.checkMCodeStarredMock.mockResolvedValue(false)
+  mocks.starMCodeMock.mockReset()
+  mocks.starMCodeMock.mockResolvedValue(true)
   mocks.trackMock.mockReset()
   mocks.getCohortAtEmitMock.mockReset()
   mocks.getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 3 })

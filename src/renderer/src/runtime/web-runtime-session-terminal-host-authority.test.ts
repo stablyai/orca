@@ -260,7 +260,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         command: "codex 'linked issue context'",
         cwd: '/repo/packages/app',
         env: { CODEX_PROFILE: 'captured' },
-        envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
+        envToDelete: ['CODEX_HOME', 'MCODE_CODEX_HOME'],
         startupCommandDelivery: 'shell-ready',
         launchConfig: {
           agentArgs: '--model gpt-5',

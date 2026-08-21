@@ -40,7 +40,7 @@ function invokeHandlerWithStatus(
 }
 
 beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'orca-config-sync-ipc-'))
+  root = mkdtempSync(join(tmpdir(), 'mcode-config-sync-ipc-'))
   homedirMock.mockReturnValue(root)
   mkdirSync(join(root, '.codex'), { recursive: true })
 })

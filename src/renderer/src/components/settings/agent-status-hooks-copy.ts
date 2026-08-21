@@ -12,7 +12,7 @@ export function getAgentStatusHooksTitle(): string {
 export function getAgentStatusHooksDescription(): string {
   return translate(
     AGENT_STATUS_HOOKS_DESCRIPTION_KEY,
-    'Shows working, waiting, and done states in Orca. Turn off to remove Orca-managed hooks and stop reinstalling them.'
+    'Shows working, waiting, and done states in MCode. Turn off to remove MCode-managed hooks and stop reinstalling them.'
   )
 }
 

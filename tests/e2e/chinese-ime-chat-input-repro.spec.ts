@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { CDPSession, Page, TestInfo } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   focusActiveTerminalInput,
@@ -115,7 +115,7 @@ function emitState(reason) {
   if (suffixColumns > 0) {
     process.stdout.write('\\x1b[' + suffixColumns + 'D')
   }
-  process.stdout.write('\\x1b]1337;OrcaImeState=' + Buffer.from(JSON.stringify({
+  process.stdout.write('\\x1b]1337;MCodeImeState=' + Buffer.from(JSON.stringify({
     reason,
     model,
     cursor,
@@ -187,8 +187,8 @@ process.stdin.on('data', handleData)
 
 async function installImeEventProbe(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const targetWindow = window as unknown as { __orcaImeEventLog?: ImeEventLogEntry[] }
-    targetWindow.__orcaImeEventLog = []
+    const targetWindow = window as unknown as { __mcodeImeEventLog?: ImeEventLogEntry[] }
+    targetWindow.__mcodeImeEventLog = []
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
     const tabId =
@@ -208,7 +208,7 @@ async function installImeEventProbe(page: Page): Promise<void> {
       const composition = event instanceof CompositionEvent ? event : null
       const keyboard = event instanceof KeyboardEvent ? event : null
       const rect = textarea.getBoundingClientRect()
-      targetWindow.__orcaImeEventLog!.push({
+      targetWindow.__mcodeImeEventLog!.push({
         type: event.type,
         at: performance.now(),
         data: input?.data ?? composition?.data ?? null,
@@ -249,8 +249,8 @@ async function installImeEventProbe(page: Page): Promise<void> {
 
 async function readImeEventLog(page: Page): Promise<ImeEventLogEntry[]> {
   return page.evaluate(() => {
-    const targetWindow = window as unknown as { __orcaImeEventLog?: ImeEventLogEntry[] }
-    return targetWindow.__orcaImeEventLog ?? []
+    const targetWindow = window as unknown as { __mcodeImeEventLog?: ImeEventLogEntry[] }
+    return targetWindow.__mcodeImeEventLog ?? []
   })
 }
 
@@ -415,7 +415,7 @@ async function dispatchOrphanLetterKeyup(session: CDPSession): Promise<void> {
 
 async function dispatchSogouEmptyCompositionUpdate(page: Page): Promise<void> {
   // Why: Sogou/fcitx emits empty compositionupdate data while its candidate
-  // popup is still open (#6765); Orca's tracker must not flip inactive on it.
+  // popup is still open (#6765); MCode's tracker must not flip inactive on it.
   await page.evaluate(() => {
     const active = document.activeElement
     if (!(active instanceof HTMLTextAreaElement)) {
@@ -427,7 +427,7 @@ async function dispatchSogouEmptyCompositionUpdate(page: Page): Promise<void> {
 
 async function dispatchSogouPostCompositionEnd(page: Page, data: string): Promise<void> {
   // Why: some Sogou/fcitx traces deliver the plain selector key after
-  // compositionend; target the terminal element so Orca's tracker sees the end
+  // compositionend; target the terminal element so MCode's tracker sees the end
   // without making xterm finalize a synthetic preedit string.
   await page.evaluate((data) => {
     const active = document.activeElement
@@ -514,67 +514,67 @@ async function launchCodexTui(page: Page, ptyId: string): Promise<void> {
 
 test.describe('Chinese IME terminal chat input repro', () => {
   test('keeps composed Chinese text, cursor movement, and Backspace stable in the agent input surface', async ({
-    orcaPage,
+    mcodePage,
     testRepoPath
   }, testInfo) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
+    await ensureTerminalVisible(mcodePage)
+    await waitForActiveTerminalManager(mcodePage, 30_000)
 
-    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const ptyId = await waitForActivePanePtyId(mcodePage)
     const runId = randomUUID()
-    const scriptPath = path.join(testRepoPath, `.orca-chinese-ime-harness-${runId}.cjs`)
+    const scriptPath = path.join(testRepoPath, `.mcode-chinese-ime-harness-${runId}.cjs`)
     writeFileSync(scriptPath, terminalImeHarnessScript(runId))
-    const session = await orcaPage.context().newCDPSession(orcaPage)
+    const session = await mcodePage.context().newCDPSession(mcodePage)
 
     try {
-      await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
-      await waitForTerminalOutput(orcaPage, `IME_HARNESS_READY_${runId}`, 10_000, 20_000)
-      await focusActiveTerminalInput(orcaPage)
-      await installImeEventProbe(orcaPage)
+      await sendToTerminal(mcodePage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
+      await waitForTerminalOutput(mcodePage, `IME_HARNESS_READY_${runId}`, 10_000, 20_000)
+      await focusActiveTerminalInput(mcodePage)
+      await installImeEventProbe(mcodePage)
 
       await dispatchImeProcessKey(session, 'KeyN')
-      await composeAndCommitChineseText(session, orcaPage, ['n', 'ni', '你', '你好'], '你好')
-      await waitForLivePrompt(orcaPage, '你好')
-      await attachImeEvidence(orcaPage, testInfo, 'after-compose-hello')
-      await orcaPage.keyboard.press('Enter')
+      await composeAndCommitChineseText(session, mcodePage, ['n', 'ni', '你', '你好'], '你好')
+      await waitForLivePrompt(mcodePage, '你好')
+      await attachImeEvidence(mcodePage, testInfo, 'after-compose-hello')
+      await mcodePage.keyboard.press('Enter')
       await expect
-        .poll(async () => (await readPromptState(orcaPage))?.submitted.at(-1) ?? null, {
+        .poll(async () => (await readPromptState(mcodePage))?.submitted.at(-1) ?? null, {
           timeout: 5_000,
           message: 'first submitted prompt did not match the composed Chinese text'
         })
         .toBe('你好')
 
       await commitImeText(session, '一二三四五六七八九十')
-      await waitForLivePrompt(orcaPage, '一二三四五六七八九十')
+      await waitForLivePrompt(mcodePage, '一二三四五六七八九十')
       for (let index = 0; index < 5; index += 1) {
-        await orcaPage.keyboard.press('ArrowLeft')
+        await mcodePage.keyboard.press('ArrowLeft')
       }
       await dispatchImeProcessKey(session, 'KeyZ')
-      await composeAndCommitChineseText(session, orcaPage, ['z', 'zh', '中'], '中')
-      await waitForLivePrompt(orcaPage, '一二三四五中六七八九十')
-      await attachImeEvidence(orcaPage, testInfo, 'after-middle-insert')
+      await composeAndCommitChineseText(session, mcodePage, ['z', 'zh', '中'], '中')
+      await waitForLivePrompt(mcodePage, '一二三四五中六七八九十')
+      await attachImeEvidence(mcodePage, testInfo, 'after-middle-insert')
 
       await setImeComposition(session, 'x')
-      await orcaPage.keyboard.press('Backspace')
-      await waitForLivePrompt(orcaPage, '一二三四五中六七八九十')
+      await mcodePage.keyboard.press('Backspace')
+      await waitForLivePrompt(mcodePage, '一二三四五中六七八九十')
       await setImeComposition(session, '')
       await commitImeText(session, '')
 
-      await orcaPage.keyboard.press('Backspace')
-      await waitForLivePrompt(orcaPage, '一二三四五六七八九十')
-      await attachImeEvidence(orcaPage, testInfo, 'after-single-backspace')
+      await mcodePage.keyboard.press('Backspace')
+      await waitForLivePrompt(mcodePage, '一二三四五六七八九十')
+      await attachImeEvidence(mcodePage, testInfo, 'after-single-backspace')
 
-      await orcaPage.keyboard.press('Enter')
+      await mcodePage.keyboard.press('Enter')
       await expect
-        .poll(async () => (await readPromptState(orcaPage))?.submitted.at(-1) ?? null, {
+        .poll(async () => (await readPromptState(mcodePage))?.submitted.at(-1) ?? null, {
           timeout: 5_000,
           message: 'second submitted prompt did not match the visible Chinese text'
         })
         .toBe('一二三四五六七八九十')
 
-      const log = await readImeEventLog(orcaPage)
+      const log = await readImeEventLog(mcodePage)
       expect(
         log.some((entry) => entry.type === 'compositionstart'),
         'CDP IME path should exercise Chromium/xterm composition events'
@@ -588,71 +588,71 @@ test.describe('Chinese IME terminal chat input repro', () => {
         'Backspace should be observable for both the composition and single-delete assertions'
       ).toBe(2)
     } finally {
-      await attachImeEvidence(orcaPage, testInfo, 'final-ime-evidence').catch(() => undefined)
+      await attachImeEvidence(mcodePage, testInfo, 'final-ime-evidence').catch(() => undefined)
       await session.detach().catch(() => undefined)
-      await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
+      await sendToTerminal(mcodePage, ptyId, '\x03').catch(() => undefined)
       rmSync(scriptPath, { force: true })
     }
   })
 
   test('commits the active Pinyin preedit when Shift toggles the Windows IME', async ({
-    orcaPage,
+    mcodePage,
     testRepoPath
   }, testInfo) => {
-    await reloadWithWindowsImePolicy(orcaPage)
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
+    await reloadWithWindowsImePolicy(mcodePage)
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
+    await ensureTerminalVisible(mcodePage)
+    await waitForActiveTerminalManager(mcodePage, 30_000)
 
-    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const ptyId = await waitForActivePanePtyId(mcodePage)
     const runId = randomUUID()
-    const scriptPath = path.join(testRepoPath, `.orca-windows-shift-ime-${runId}.cjs`)
-    const inputLogPath = path.join(testRepoPath, `.orca-windows-shift-ime-${runId}.jsonl`)
+    const scriptPath = path.join(testRepoPath, `.mcode-windows-shift-ime-${runId}.cjs`)
+    const inputLogPath = path.join(testRepoPath, `.mcode-windows-shift-ime-${runId}.jsonl`)
     writeFileSync(scriptPath, terminalImeHarnessScript(runId, inputLogPath))
     writeFileSync(inputLogPath, '')
-    const session = await orcaPage.context().newCDPSession(orcaPage)
+    const session = await mcodePage.context().newCDPSession(mcodePage)
 
     try {
-      await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
-      await waitForTerminalOutput(orcaPage, `IME_HARNESS_READY_${runId}`, 10_000, 20_000)
-      await focusActiveTerminalInput(orcaPage)
-      await installImeEventProbe(orcaPage)
+      await sendToTerminal(mcodePage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
+      await waitForTerminalOutput(mcodePage, `IME_HARNESS_READY_${runId}`, 10_000, 20_000)
+      await focusActiveTerminalInput(mcodePage)
+      await installImeEventProbe(mcodePage)
 
       await setImeComposition(session, 's')
       const inputCountBeforeShift = readPtyInputCount(inputLogPath)
       await dispatchWindowsImeShiftToggle(session)
 
-      await waitForLivePrompt(orcaPage, 's')
-      await expect.poll(() => readActiveCompositionText(orcaPage)).toBe('')
-      await expect.poll(async () => (await readPromptState(orcaPage))?.submitted).toEqual([])
+      await waitForLivePrompt(mcodePage, 's')
+      await expect.poll(() => readActiveCompositionText(mcodePage)).toBe('')
+      await expect.poll(async () => (await readPromptState(mcodePage))?.submitted).toEqual([])
       await expect
         .poll(() => readPtyInputs(inputLogPath).slice(inputCountBeforeShift))
         .toEqual(['s'])
     } finally {
-      await attachImeEvidence(orcaPage, testInfo, 'windows-shift-ime-evidence').catch(
+      await attachImeEvidence(mcodePage, testInfo, 'windows-shift-ime-evidence').catch(
         () => undefined
       )
       await session.detach().catch(() => undefined)
-      await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
+      await sendToTerminal(mcodePage, ptyId, '\x03').catch(() => undefined)
       rmSync(scriptPath, { force: true })
       rmSync(inputLogPath, { force: true })
     }
   })
 
   test('keeps Sogou-style candidate selection keys out of the PTY while committing Chinese text', async ({
-    orcaPage,
+    mcodePage,
     testRepoPath
   }, testInfo) => {
-    await reloadWithLinuxImePolicy(orcaPage)
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
+    await reloadWithLinuxImePolicy(mcodePage)
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
+    await ensureTerminalVisible(mcodePage)
+    await waitForActiveTerminalManager(mcodePage, 30_000)
 
-    const ptyId = await waitForActivePanePtyId(orcaPage)
+    const ptyId = await waitForActivePanePtyId(mcodePage)
     const runId = randomUUID()
-    const scriptPath = path.join(testRepoPath, `.orca-sogou-ime-harness-${runId}.cjs`)
+    const scriptPath = path.join(testRepoPath, `.mcode-sogou-ime-harness-${runId}.cjs`)
     let session: CDPSession | null = null
     let harnessStarted = false
 
@@ -660,29 +660,29 @@ test.describe('Chinese IME terminal chat input repro', () => {
       // Why: create the session/harness inside the try so a mid-setup throw
       // still hits finally and removes the harness script.
       writeFileSync(scriptPath, terminalImeHarnessScript(runId))
-      session = await orcaPage.context().newCDPSession(orcaPage)
-      await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
+      session = await mcodePage.context().newCDPSession(mcodePage)
+      await sendToTerminal(mcodePage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
       harnessStarted = true
-      await waitForTerminalOutput(orcaPage, `IME_HARNESS_READY_${runId}`, 10_000, 20_000)
-      await focusActiveTerminalInput(orcaPage)
-      await installImeEventProbe(orcaPage)
+      await waitForTerminalOutput(mcodePage, `IME_HARNESS_READY_${runId}`, 10_000, 20_000)
+      await focusActiveTerminalInput(mcodePage)
+      await installImeEventProbe(mcodePage)
 
       // Space selects the first candidate. Sogou keeps emitting empty
       // compositionupdate frames while the popup is open, and the plain Space
       // press arrives around the commit rather than as a Process/229 key.
       await setImeComposition(session, 'n')
-      await orcaPage.waitForTimeout(80)
+      await mcodePage.waitForTimeout(80)
       await setImeComposition(session, 'ni')
-      await orcaPage.waitForTimeout(80)
-      await dispatchSogouEmptyCompositionUpdate(orcaPage)
+      await mcodePage.waitForTimeout(80)
+      await dispatchSogouEmptyCompositionUpdate(mcodePage)
       await dispatchCandidateSelectionKey(session, { key: ' ', code: 'Space', keyCode: 32 }, () =>
         commitImeText(session, '你')
       )
-      await waitForLivePrompt(orcaPage, '你')
-      await attachImeEvidence(orcaPage, testInfo, 'sogou-after-space-commit')
-      await orcaPage.keyboard.press('Enter')
+      await waitForLivePrompt(mcodePage, '你')
+      await attachImeEvidence(mcodePage, testInfo, 'sogou-after-space-commit')
+      await mcodePage.keyboard.press('Enter')
       await expect
-        .poll(async () => (await readPromptState(orcaPage))?.submitted.at(-1) ?? null, {
+        .poll(async () => (await readPromptState(mcodePage))?.submitted.at(-1) ?? null, {
           timeout: 5_000,
           message: 'space-selected candidate did not submit the committed Chinese character'
         })
@@ -691,16 +691,16 @@ test.describe('Chinese IME terminal chat input repro', () => {
       // Digit selects a non-first candidate for a word/phrase commit — the
       // #7543 shape where only the number used to reach the TUI.
       await setImeComposition(session, 'nihao')
-      await orcaPage.waitForTimeout(80)
-      await dispatchSogouEmptyCompositionUpdate(orcaPage)
+      await mcodePage.waitForTimeout(80)
+      await dispatchSogouEmptyCompositionUpdate(mcodePage)
       await dispatchCandidateSelectionKey(session, { key: '2', code: 'Digit2', keyCode: 50 }, () =>
         commitImeText(session, '你好')
       )
-      await waitForLivePrompt(orcaPage, '你好')
-      await attachImeEvidence(orcaPage, testInfo, 'sogou-after-digit-commit')
-      await orcaPage.keyboard.press('Enter')
+      await waitForLivePrompt(mcodePage, '你好')
+      await attachImeEvidence(mcodePage, testInfo, 'sogou-after-digit-commit')
+      await mcodePage.keyboard.press('Enter')
       await expect
-        .poll(async () => (await readPromptState(orcaPage))?.submitted.at(-1) ?? null, {
+        .poll(async () => (await readPromptState(mcodePage))?.submitted.at(-1) ?? null, {
           timeout: 5_000,
           message: 'digit-selected candidate did not submit the committed Chinese phrase'
         })
@@ -708,16 +708,16 @@ test.describe('Chinese IME terminal chat input repro', () => {
 
       // Post-composition traces can deliver the selector after compositionend;
       // the short post-end guard must still keep that plain digit out of the PTY.
-      const postCompositionLogStart = (await readImeEventLog(orcaPage)).length
+      const postCompositionLogStart = (await readImeEventLog(mcodePage)).length
       await setImeComposition(session, 'zaijian')
-      await orcaPage.waitForTimeout(80)
-      await dispatchSogouEmptyCompositionUpdate(orcaPage)
-      await dispatchSogouPostCompositionEnd(orcaPage, '再见')
+      await mcodePage.waitForTimeout(80)
+      await dispatchSogouEmptyCompositionUpdate(mcodePage)
+      await dispatchSogouPostCompositionEnd(mcodePage, '再见')
       await dispatchCandidateSelectionKey(session, { key: '3', code: 'Digit3', keyCode: 51 }, () =>
         commitImeText(session, '再见')
       )
-      await waitForLivePrompt(orcaPage, '再见')
-      const postCompositionLog = await readImeEventLog(orcaPage)
+      await waitForLivePrompt(mcodePage, '再见')
+      const postCompositionLog = await readImeEventLog(mcodePage)
       const postCompositionEndIndex = postCompositionLog.findIndex(
         (entry, index) =>
           index >= postCompositionLogStart &&
@@ -736,10 +736,10 @@ test.describe('Chinese IME terminal chat input repro', () => {
         postCompositionSelectorIndex,
         'plain digit selector must arrive after compositionend in the post-composition repro'
       ).toBeGreaterThan(postCompositionEndIndex)
-      await attachImeEvidence(orcaPage, testInfo, 'sogou-after-post-composition-digit-commit')
-      await orcaPage.keyboard.press('Enter')
+      await attachImeEvidence(mcodePage, testInfo, 'sogou-after-post-composition-digit-commit')
+      await mcodePage.keyboard.press('Enter')
       await expect
-        .poll(async () => (await readPromptState(orcaPage))?.submitted.at(-1) ?? null, {
+        .poll(async () => (await readPromptState(mcodePage))?.submitted.at(-1) ?? null, {
           timeout: 5_000,
           message: 'post-composition digit-selected candidate did not submit cleanly'
         })
@@ -749,81 +749,81 @@ test.describe('Chinese IME terminal chat input repro', () => {
       // expose only an orphaned Latin release before the candidate digit.
       await dispatchOrphanLetterKeyup(session)
       await dispatchCandidateSelectionKey(session, { key: '4', code: 'Digit4', keyCode: 52 })
-      await orcaPage.keyboard.press('Enter')
+      await mcodePage.keyboard.press('Enter')
       await expect
-        .poll(async () => (await readPromptState(orcaPage))?.submitted.at(-1) ?? null, {
+        .poll(async () => (await readPromptState(mcodePage))?.submitted.at(-1) ?? null, {
           timeout: 5_000,
           message: 'orphan-keyup candidate digit leaked into the submitted terminal input'
         })
         .toBe('')
-      await attachImeEvidence(orcaPage, testInfo, 'sogou-after-orphan-keyup-digit-suppression')
+      await attachImeEvidence(mcodePage, testInfo, 'sogou-after-orphan-keyup-digit-suppression')
 
-      const promptState = await readPromptState(orcaPage)
+      const promptState = await readPromptState(mcodePage)
       expect(
         promptState?.submitted,
         'candidate Space/digit selectors and pinyin preedit must not leak into the PTY'
       ).toEqual(['你', '你好', '再见', ''])
     } finally {
-      await attachImeEvidence(orcaPage, testInfo, 'sogou-final-ime-evidence').catch(() => undefined)
+      await attachImeEvidence(mcodePage, testInfo, 'sogou-final-ime-evidence').catch(() => undefined)
       await session?.detach().catch(() => undefined)
       if (harnessStarted) {
-        await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
+        await sendToTerminal(mcodePage, ptyId, '\x03').catch(() => undefined)
       }
       rmSync(scriptPath, { force: true })
     }
   })
 
   test('keeps composed Chinese text stable in the real Codex TUI input @real-codex-ime', async ({
-    orcaPage
+    mcodePage
   }, testInfo) => {
     test.skip(
-      process.env.ORCA_E2E_REAL_CODEX_IME !== '1',
-      'Set ORCA_E2E_REAL_CODEX_IME=1 to exercise the locally installed Codex TUI'
+      process.env.MCODE_E2E_REAL_CODEX_IME !== '1',
+      'Set MCODE_E2E_REAL_CODEX_IME=1 to exercise the locally installed Codex TUI'
     )
 
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
+    await ensureTerminalVisible(mcodePage)
+    await waitForActiveTerminalManager(mcodePage, 30_000)
 
-    const ptyId = await waitForActivePanePtyId(orcaPage)
-    const session = await orcaPage.context().newCDPSession(orcaPage)
+    const ptyId = await waitForActivePanePtyId(mcodePage)
+    const session = await mcodePage.context().newCDPSession(mcodePage)
 
     try {
-      await launchCodexTui(orcaPage, ptyId)
-      await installImeEventProbe(orcaPage)
+      await launchCodexTui(mcodePage, ptyId)
+      await installImeEventProbe(mcodePage)
 
       await dispatchImeProcessKey(session, 'KeyN')
-      await composeAndCommitChineseText(session, orcaPage, ['n', 'ni', '你', '你好'], '你好')
-      await waitForCleanTerminalText(orcaPage, /你好/, 'Codex input did not show composed Chinese')
-      await attachImeEvidence(orcaPage, testInfo, 'codex-after-compose-hello', {
-        cleanTerminal: stripTerminalControls(await getTerminalContent(orcaPage, 20_000))
+      await composeAndCommitChineseText(session, mcodePage, ['n', 'ni', '你', '你好'], '你好')
+      await waitForCleanTerminalText(mcodePage, /你好/, 'Codex input did not show composed Chinese')
+      await attachImeEvidence(mcodePage, testInfo, 'codex-after-compose-hello', {
+        cleanTerminal: stripTerminalControls(await getTerminalContent(mcodePage, 20_000))
       })
 
       await dispatchImeProcessKey(session, 'KeyZ')
-      await composeAndCommitChineseText(session, orcaPage, ['z', 'zh', '中'], '中')
+      await composeAndCommitChineseText(session, mcodePage, ['z', 'zh', '中'], '中')
       await waitForCleanTerminalText(
-        orcaPage,
+        mcodePage,
         /你好中/,
         'Codex input did not keep previously composed text before middle-edit checks'
       )
 
-      await orcaPage.keyboard.press('ArrowLeft')
+      await mcodePage.keyboard.press('ArrowLeft')
       await setImeComposition(session, 'x')
-      await orcaPage.keyboard.press('Backspace')
+      await mcodePage.keyboard.press('Backspace')
       await waitForCleanTerminalText(
-        orcaPage,
+        mcodePage,
         /你好中/,
         'Backspace during Codex composition removed committed Chinese text'
       )
       await setImeComposition(session, '')
       await commitImeText(session, '')
 
-      await attachImeEvidence(orcaPage, testInfo, 'codex-after-composition-backspace', {
-        cleanTerminal: stripTerminalControls(await getTerminalContent(orcaPage, 20_000))
+      await attachImeEvidence(mcodePage, testInfo, 'codex-after-composition-backspace', {
+        cleanTerminal: stripTerminalControls(await getTerminalContent(mcodePage, 20_000))
       })
 
-      const cleanTerminal = stripTerminalControls(await getTerminalContent(orcaPage, 20_000))
+      const cleanTerminal = stripTerminalControls(await getTerminalContent(mcodePage, 20_000))
       expect(
         cleanTerminal,
         'Codex should keep committed Chinese text when Backspace cancels an IME preedit'
@@ -831,11 +831,11 @@ test.describe('Chinese IME terminal chat input repro', () => {
       expect(cleanTerminal).not.toMatch(/\bn(?:i)?你好/)
       expect(cleanTerminal).not.toMatch(/\bz(?:h)?中/)
     } finally {
-      await attachImeEvidence(orcaPage, testInfo, 'codex-final-ime-evidence', {
-        cleanTerminal: stripTerminalControls(await getTerminalContent(orcaPage, 20_000))
+      await attachImeEvidence(mcodePage, testInfo, 'codex-final-ime-evidence', {
+        cleanTerminal: stripTerminalControls(await getTerminalContent(mcodePage, 20_000))
       }).catch(() => undefined)
       await session.detach().catch(() => undefined)
-      await sendToTerminal(orcaPage, ptyId, '\x03/quit\r').catch(() => undefined)
+      await sendToTerminal(mcodePage, ptyId, '\x03/quit\r').catch(() => undefined)
     }
   })
 })

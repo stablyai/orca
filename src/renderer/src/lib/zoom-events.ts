@@ -5,7 +5,7 @@ export type ZoomLevelChangedEventDetail = {
   percent: number
 }
 
-export const ZOOM_LEVEL_CHANGED_EVENT = 'orca:zoom-level-changed'
+export const ZOOM_LEVEL_CHANGED_EVENT = 'mcode:zoom-level-changed'
 
 export function dispatchZoomLevelChanged(type: ZoomTargetType, percent: number): void {
   window.dispatchEvent(

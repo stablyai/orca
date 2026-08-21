@@ -60,7 +60,7 @@ describe('macOS daemon TCC attribution main-thread cost', () => {
     dir = mkdtempSync(join(tmpdir(), 'daemon-tcc-main-thread-test-'))
     socketPath = join(dir, 'daemon.sock')
     tokenPath = join(dir, 'daemon.token')
-    spawnerExecPath = join(dir, 'Orca')
+    spawnerExecPath = join(dir, 'MCode')
     writeFileSync(spawnerExecPath, '')
     psCommandLine.value = `node daemon-entry --socket ${socketPath} --token ${tokenPath}`
     psError.value = null

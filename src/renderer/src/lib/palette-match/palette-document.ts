@@ -25,7 +25,7 @@ export type PaletteEvidenceFieldSource = PaletteFieldSource & {
 }
 
 /**
- * A `left/right` token may cover two visible fields at once, e.g. `orca/main`
+ * A `left/right` token may cover two visible fields at once, e.g. `mcode/main`
  * meaning repo + branch. Both halves must hit or the token falls back to a
  * literal match inside one field.
  */

@@ -94,7 +94,7 @@ export async function runRendererBackpressureRevisitScenario<
   maxWorstKeyLatencyMs,
   mainRendererPressureTargetChars,
   pressureOutputChars,
-  orcaPage,
+  mcodePage,
   testInfo,
   testRepoPath
 }: {
@@ -107,13 +107,13 @@ export async function runRendererBackpressureRevisitScenario<
   maxWorstKeyLatencyMs: number
   mainRendererPressureTargetChars: number
   pressureOutputChars: number
-  orcaPage: Page
+  mcodePage: Page
   testInfo: TestInfo
   testRepoPath: string
 }): Promise<void> {
-  await waitForSessionReady(orcaPage)
-  const firstWorktreeId = await waitForActiveWorktree(orcaPage)
-  const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find((id) => id !== firstWorktreeId)
+  await waitForSessionReady(mcodePage)
+  const firstWorktreeId = await waitForActiveWorktree(mcodePage)
+  const secondWorktreeId = (await getAllWorktreeIds(mcodePage)).find((id) => id !== firstWorktreeId)
   expect(Boolean(secondWorktreeId), 'renderer backpressure revisit needs a second worktree').toBe(
     true
   )
@@ -123,54 +123,54 @@ export async function runRendererBackpressureRevisitScenario<
 
   const runId = randomUUID()
   const typingPtyReadyMarker = `OPENCODE_REVISIT_TYPING_PTY_READY_${runId}`
-  await switchToWorktree(orcaPage, secondWorktreeId)
-  await ensureTerminalVisible(orcaPage)
-  await waitForActiveTerminalManager(orcaPage, 30_000)
-  const typingPtyId = await waitForActivePanePtyId(orcaPage)
-  await sendToTerminal(orcaPage, typingPtyId, `printf '\\n${typingPtyReadyMarker}\\n'\r`)
-  await waitForMarkerLatency(orcaPage, typingPtyReadyMarker, 10_000)
+  await switchToWorktree(mcodePage, secondWorktreeId)
+  await ensureTerminalVisible(mcodePage)
+  await waitForActiveTerminalManager(mcodePage, 30_000)
+  const typingPtyId = await waitForActivePanePtyId(mcodePage)
+  await sendToTerminal(mcodePage, typingPtyId, `printf '\\n${typingPtyReadyMarker}\\n'\r`)
+  await waitForMarkerLatency(mcodePage, typingPtyReadyMarker, 10_000)
 
-  await switchToWorktree(orcaPage, firstWorktreeId)
-  await ensureTerminalVisible(orcaPage)
-  await waitForActiveTerminalManager(orcaPage, 30_000)
-  const panes = await deps.ensureActiveWorktreePaneLoad(orcaPage, backgroundPaneCount + 1)
+  await switchToWorktree(mcodePage, firstWorktreeId)
+  await ensureTerminalVisible(mcodePage)
+  await waitForActiveTerminalManager(mcodePage, 30_000)
+  const panes = await deps.ensureActiveWorktreePaneLoad(mcodePage, backgroundPaneCount + 1)
   const [revisitPane, ...loadPanes] = panes
-  await deps.focusPane(orcaPage, revisitPane.paneKey)
+  await deps.focusPane(mcodePage, revisitPane.paneKey)
 
-  const typingScriptPath = path.join(testRepoPath, `.orca-revisit-typing-${runId}.mjs`)
-  const pressureScriptPath = path.join(testRepoPath, `.orca-revisit-pressure-${runId}.mjs`)
+  const typingScriptPath = path.join(testRepoPath, `.mcode-revisit-typing-${runId}.mjs`)
+  const pressureScriptPath = path.join(testRepoPath, `.mcode-revisit-pressure-${runId}.mjs`)
   const revisitMarker = `OPENCODE_REVISIT_READY_${runId}`
   const pressureDoneMarker = `OPENCODE_PRESSURE_DONE_${runId}_0`
   deps.writeInteractivePromptScript(typingScriptPath, runId)
   writePressureOutputScript(pressureScriptPath, runId, 'tui')
-  await deps.resetTerminalPtyOutputDebug(orcaPage)
+  await deps.resetTerminalPtyOutputDebug(mcodePage)
   await deps.holdTerminalAckGate(
-    orcaPage,
+    mcodePage,
     loadPanes.map((pane) => pane.ptyId)
   )
   try {
     await startRealPtyPressureCommands({
       loadPanes,
-      orcaPage,
+      mcodePage,
       pressureOutputChars,
       pressureScriptPath
     })
-    const pressureBeforeSwitch = await deps.waitForMainPtyPressureBacklog(orcaPage)
+    const pressureBeforeSwitch = await deps.waitForMainPtyPressureBacklog(mcodePage)
 
-    await switchToWorktree(orcaPage, secondWorktreeId)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
-    await waitForTerminalPtyVisible(orcaPage, typingPtyId)
+    await switchToWorktree(mcodePage, secondWorktreeId)
+    await ensureTerminalVisible(mcodePage)
+    await waitForActiveTerminalManager(mcodePage, 30_000)
+    await waitForTerminalPtyVisible(mcodePage, typingPtyId)
     const measurement = await deps.measureTypingDuringLoad(
-      orcaPage,
+      mcodePage,
       typingScriptPath,
       typingPtyId,
       runId
     )
-    const duringPressure = await deps.readMainPtyPressureDebug(orcaPage)
-    const ackGate = await deps.readTerminalAckGateDebug(orcaPage)
-    const scheduler = await deps.readTerminalOutputSchedulerDebug(orcaPage)
-    const hiddenDebug = await deps.readTerminalPtyOutputDebug(orcaPage)
+    const duringPressure = await deps.readMainPtyPressureDebug(mcodePage)
+    const ackGate = await deps.readTerminalAckGateDebug(mcodePage)
+    const scheduler = await deps.readTerminalOutputSchedulerDebug(mcodePage)
+    const hiddenDebug = await deps.readTerminalPtyOutputDebug(mcodePage)
     deps.annotateTypingMeasurement(
       testInfo,
       'opencode-main-pressure-worktree-revisit-typing',
@@ -195,14 +195,14 @@ export async function runRendererBackpressureRevisitScenario<
       duringPressure
     })
 
-    await switchToWorktree(orcaPage, firstWorktreeId)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
+    await switchToWorktree(mcodePage, firstWorktreeId)
+    await ensureTerminalVisible(mcodePage)
+    await waitForActiveTerminalManager(mcodePage, 30_000)
     // Why: hidden PaneManagers persist, so manager readiness alone can race the reveal commit.
-    await waitForTerminalPtyVisible(orcaPage, revisitPane.ptyId)
-    await deps.focusPane(orcaPage, revisitPane.paneKey)
-    await sendToTerminal(orcaPage, revisitPane.ptyId, `printf '\\n${revisitMarker}\\n'\r`)
-    const revisitLatencyMs = await waitForMarkerLatency(orcaPage, revisitMarker, 10_000)
+    await waitForTerminalPtyVisible(mcodePage, revisitPane.ptyId)
+    await deps.focusPane(mcodePage, revisitPane.paneKey)
+    await sendToTerminal(mcodePage, revisitPane.ptyId, `printf '\\n${revisitMarker}\\n'\r`)
+    const revisitLatencyMs = await waitForMarkerLatency(mcodePage, revisitMarker, 10_000)
     testInfo.annotations.push({
       type: 'opencode-main-pressure-worktree-revisit-marker',
       description: `panes=${panes.length + 1} revisit=${revisitLatencyMs.toFixed(
@@ -214,10 +214,10 @@ export async function runRendererBackpressureRevisitScenario<
     // bound rather than the unloaded worst-key budget.
     expect(revisitLatencyMs).toBeLessThan(maxRevisitLatencyMs)
 
-    await deps.releaseTerminalAckGate(orcaPage)
-    await deps.focusPane(orcaPage, loadPanes[0]?.paneKey ?? revisitPane.paneKey)
-    const pressureDrainLatencyMs = await waitForMarkerLatency(orcaPage, pressureDoneMarker, 20_000)
-    const finalScheduler = await deps.readTerminalOutputSchedulerDebug(orcaPage)
+    await deps.releaseTerminalAckGate(mcodePage)
+    await deps.focusPane(mcodePage, loadPanes[0]?.paneKey ?? revisitPane.paneKey)
+    const pressureDrainLatencyMs = await waitForMarkerLatency(mcodePage, pressureDoneMarker, 20_000)
+    const finalScheduler = await deps.readTerminalOutputSchedulerDebug(mcodePage)
     testInfo.annotations.push({
       type: 'opencode-main-pressure-worktree-revisit-drain',
       description: `panes=${panes.length + 1} drain=${pressureDrainLatencyMs.toFixed(
@@ -231,11 +231,11 @@ export async function runRendererBackpressureRevisitScenario<
       maxRendererSchedulerQueuedChars
     )
   } finally {
-    await deps.releaseTerminalAckGate(orcaPage)
-    await sendToTerminal(orcaPage, typingPtyId, '\x03').catch(() => undefined)
-    await sendToTerminal(orcaPage, revisitPane.ptyId, '\x03').catch(() => undefined)
+    await deps.releaseTerminalAckGate(mcodePage)
+    await sendToTerminal(mcodePage, typingPtyId, '\x03').catch(() => undefined)
+    await sendToTerminal(mcodePage, revisitPane.ptyId, '\x03').catch(() => undefined)
     await Promise.all(
-      loadPanes.map((pane) => sendToTerminal(orcaPage, pane.ptyId, '\x03').catch(() => undefined))
+      loadPanes.map((pane) => sendToTerminal(mcodePage, pane.ptyId, '\x03').catch(() => undefined))
     )
     rmSync(typingScriptPath, { force: true })
     rmSync(pressureScriptPath, { force: true })
@@ -244,19 +244,19 @@ export async function runRendererBackpressureRevisitScenario<
 
 async function startRealPtyPressureCommands({
   loadPanes,
-  orcaPage,
+  mcodePage,
   pressureOutputChars,
   pressureScriptPath
 }: {
   loadPanes: RevisitPressurePane[]
-  orcaPage: Page
+  mcodePage: Page
   pressureOutputChars: number
   pressureScriptPath: string
 }): Promise<void> {
   await Promise.all(
     loadPanes.map((pane, paneIndex) =>
       sendToTerminal(
-        orcaPage,
+        mcodePage,
         pane.ptyId,
         `node ${JSON.stringify(pressureScriptPath)} ${paneIndex} ${pressureOutputChars}\r`
       )

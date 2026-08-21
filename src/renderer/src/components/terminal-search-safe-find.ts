@@ -11,7 +11,7 @@ type SearchOptions = Parameters<SearchAddon['findNext']>[1]
  * _verifyPositiveIntegers throws "This API only accepts positive integers"
  * synchronously inside findNext/findPrevious. Thrown from a React effect/handler,
  * it trips RecoverableRenderErrorBoundary and kills the whole terminal surface
- * (crash report 0b9ab636, Orca 1.4.104).
+ * (crash report 0b9ab636, MCode 1.4.104).
  *
  * Match navigation happens before decoration creation, so swallowing this
  * specific decoration failure keeps search functional and merely drops the

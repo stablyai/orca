@@ -12,9 +12,9 @@ describe('orchestration compatibility evidence', () => {
   it('reads inherited pane evidence and a complete runtime-stamped WSL scope', () => {
     expect(
       readOrchestrationCompatibilityEvidence({
-        ORCA_TERMINAL_HANDLE: 'term_wsl',
-        ORCA_PANE_KEY: 'tab:leaf',
-        ORCA_AGENT_LAUNCH_TOKEN: 'launch-secret',
+        MCODE_TERMINAL_HANDLE: 'term_wsl',
+        MCODE_PANE_KEY: 'tab:leaf',
+        MCODE_AGENT_LAUNCH_TOKEN: 'launch-secret',
         [ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV]: 'wsl',
         [ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV]: 'local',
         [ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV]: 'Ubuntu'
@@ -30,7 +30,7 @@ describe('orchestration compatibility evidence', () => {
   it('rejects partial host stamps instead of accepting caller-chosen scope', () => {
     expect(
       readOrchestrationCompatibilityEvidence({
-        ORCA_PANE_KEY: 'tab:leaf',
+        MCODE_PANE_KEY: 'tab:leaf',
         [ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV]: 'ssh',
         [ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV]: 'saved-target',
         [ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV]: 'connection-only'

@@ -16,7 +16,7 @@ describe('keybinding-file', () => {
   let filePath: string
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), 'orca-keybindings-'))
+    dir = mkdtempSync(join(tmpdir(), 'mcode-keybindings-'))
     filePath = join(dir, 'keybindings.json')
   })
 
@@ -24,9 +24,9 @@ describe('keybinding-file', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  it('resolves the user-facing keybindings path under ~/.orca', () => {
+  it('resolves the user-facing keybindings path under ~/.mcode', () => {
     expect(getUserKeybindingsPath('/home/test')).toBe(
-      join('/home/test', '.orca', 'keybindings.json')
+      join('/home/test', '.mcode', 'keybindings.json')
     )
   })
 
@@ -97,7 +97,7 @@ describe('keybinding-file', () => {
       filePath,
       JSON.stringify({
         keybindings: {
-          'plugin:orca-samples.tasks/open': 'Mod+Shift+T',
+          'plugin:mcode-samples.tasks/open': 'Mod+Shift+T',
           'plugin:tasks/open': 'Mod+Alt+T'
         }
       }),
@@ -106,15 +106,15 @@ describe('keybinding-file', () => {
 
     const snapshot = readKeybindingFile(filePath, 'linux')
     expect(snapshot.overrides).toEqual({
-      'plugin:orca-samples.tasks/open': ['Mod+Shift+T']
+      'plugin:mcode-samples.tasks/open': ['Mod+Shift+T']
     })
     expect(snapshot.diagnostics).toMatchObject([
       { severity: 'warning', actionId: 'plugin:tasks/open' }
     ])
 
-    writeKeybindingOverride(filePath, 'linux', 'plugin:orca-samples.tasks/open', [])
+    writeKeybindingOverride(filePath, 'linux', 'plugin:mcode-samples.tasks/open', [])
     expect(readKeybindingFile(filePath, 'linux').overrides).toEqual({
-      'plugin:orca-samples.tasks/open': []
+      'plugin:mcode-samples.tasks/open': []
     })
   })
 

@@ -43,7 +43,7 @@ const SNAPSHOT_FILE_MAX_BYTES = 16 * 1024 * 1024
 export function marketplaceSourceId(source: PluginMarketplaceGitSource): string {
   const parsed = pluginMarketplaceGitSourceSchema.parse(source)
   return createHash('sha256')
-    .update(`orca-plugin-marketplace-source-v1\0${parsed.url}\0${parsed.ref}`)
+    .update(`mcode-plugin-marketplace-source-v1\0${parsed.url}\0${parsed.ref}`)
     .digest('hex')
     .slice(0, 32)
 }

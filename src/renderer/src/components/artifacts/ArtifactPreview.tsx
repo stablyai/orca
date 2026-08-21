@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, Loader2 } from 'lucide-react'
-import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser-guest-web-preferences'
+import { MCODE_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser-guest-web-preferences'
 import { moveFocusToRendererBeforeWebviewDetach } from '@/components/browser-pane/host-guest/webview-registry'
 import { translate } from '@/i18n/i18n'
 
@@ -35,7 +35,7 @@ function attachArtifactWebview({
 }): () => void {
   const webview = document.createElement('webview') as Electron.WebviewTag
   webview.setAttribute('partition', partition)
-  webview.setAttribute('webpreferences', ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE)
+  webview.setAttribute('webpreferences', MCODE_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE)
   webview.setAttribute(
     'aria-label',
     translate('auto.components.artifacts.preview', 'Artifact preview')

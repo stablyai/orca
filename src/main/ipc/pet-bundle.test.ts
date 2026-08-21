@@ -31,7 +31,7 @@ function webpVp8x(width: number, height: number): Buffer {
 }
 
 describe('applyCodexPetDefaults', () => {
-  it('fills Codex pet manifests that omit Orca sprite metadata', () => {
+  it('fills Codex pet manifests that omit MCode sprite metadata', () => {
     const manifest = applyCodexPetDefaults({ id: 'apupepe', displayName: 'Pepe' })
 
     expect(manifest.spritesheetPath).toBe(CODEX_PET_SPRITESHEET_PATH)
@@ -98,7 +98,7 @@ describe('applyCodexPetDefaults', () => {
     expect(sprite.animations?.idle.frameDurationsMs).toEqual([125, 125, 125, 125, 125, 125])
   })
 
-  it('does not override explicit Orca bundle sprite metadata', () => {
+  it('does not override explicit MCode bundle sprite metadata', () => {
     const manifest = applyCodexPetDefaults({
       spritesheetPath: 'custom.png',
       frame: { width: 64, height: 64 },

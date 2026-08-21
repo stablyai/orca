@@ -7,7 +7,7 @@ export function HeroIntro({ onStart }: { onStart: () => void }): React.JSX.Eleme
     <div className="mp-intro-shell">
       <div className="mp-eyebrow-row">
         <span className="mp-eyebrow">
-          {translate('auto.components.mobile.MobileHero.5410d55d79', 'Orca Mobile')}
+          {translate('auto.components.mobile.MobileHero.5410d55d79', 'MCode Mobile')}
         </span>
       </div>
       <h1 className="mp-h1">
@@ -19,7 +19,7 @@ export function HeroIntro({ onStart }: { onStart: () => void }): React.JSX.Eleme
       <p className="mp-lead">
         {translate(
           'auto.components.mobile.MobileHero.b4ccce5cb7',
-          "Control Orca from your phone. Check on agents, review changes, and kick off tasks while you're away from your desk."
+          "Control MCode from your phone. Check on agents, review changes, and kick off tasks while you're away from your desk."
         )}
       </p>
       <div

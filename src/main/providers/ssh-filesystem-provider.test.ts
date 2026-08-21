@@ -303,7 +303,7 @@ describe('SshFilesystemProvider', () => {
       const sftp = { createWriteStream, end: vi.fn() }
       const createSftp = vi.fn().mockResolvedValue(sftp)
       provider = new SshFilesystemProvider('conn-1', mux as never, createSftp as never)
-      const dir = mkdtempSync(join(tmpdir(), 'orca-sftp-upload-session-'))
+      const dir = mkdtempSync(join(tmpdir(), 'mcode-sftp-upload-session-'))
       const first = join(dir, 'first.txt')
       const second = join(dir, 'second.txt')
       writeFileSync(first, 'first')

@@ -85,7 +85,7 @@ describe('MCP-compatible Linear issue listing', () => {
     })
 
     expect(rawRequest).toHaveBeenCalledWith(
-      expect.stringContaining('query OrcaLinearListIssues'),
+      expect.stringContaining('query MCodeLinearListIssues'),
       expect.objectContaining({
         first: 100,
         after: 'current-page',

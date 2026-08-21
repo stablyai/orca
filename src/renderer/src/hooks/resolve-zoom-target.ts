@@ -38,7 +38,7 @@ export function resolveZoomTarget(args: {
   if (activeTabType === 'simulator') {
     return 'simulator'
   }
-  // Why: keyboard/menu zoom in an active browser tab belongs to Orca chrome.
+  // Why: keyboard/menu zoom in an active browser tab belongs to MCode chrome.
   // Browser page zoom has a dedicated route for wheel and page-specific IPC.
   if (activeTabType === 'browser') {
     return 'ui'

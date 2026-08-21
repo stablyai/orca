@@ -13,7 +13,7 @@ const scriptPath = 'config/scripts/compare-benchmark-artifacts.mjs'
 const tempDirs = []
 
 function makeTempDir() {
-  const dir = mkdtempSync(join(tmpdir(), 'orca-benchmark-comparison-'))
+  const dir = mkdtempSync(join(tmpdir(), 'mcode-benchmark-comparison-'))
   tempDirs.push(dir)
   return dir
 }

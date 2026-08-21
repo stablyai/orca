@@ -203,7 +203,7 @@ export class DesktopScriptProviderClient {
   }
 
   private async callBridge(request: BridgeRequest): Promise<BridgeResponse> {
-    const operationDirectory = await mkdtemp(join(tmpdir(), 'orca-computer-use-'))
+    const operationDirectory = await mkdtemp(join(tmpdir(), 'mcode-computer-use-'))
     const operationPath = join(operationDirectory, 'operation.json')
     try {
       await writeFile(operationPath, JSON.stringify(request), { encoding: 'utf8', mode: 0o600 })

@@ -24,7 +24,7 @@ export function showRuntimeDisconnectedToast(
       )
     : translate(
         'auto.store.slices.runtime.status.runtimeHostUnreachable',
-        "Can't reach Orca server"
+        "Can't reach MCode server"
       )
   activeRuntimeDisconnectedToasts.set(toastId, activation)
   const clearActiveToast = (): void => {
@@ -38,7 +38,7 @@ export function showRuntimeDisconnectedToast(
       id: toastId,
       description: translate(
         'auto.store.slices.runtime.status.runtimeHostDisconnectedDescription',
-        'Check that Orca is running on this server and that your network connection is working, then try again.'
+        'Check that MCode is running on this server and that your network connection is working, then try again.'
       ),
       duration,
       action: {

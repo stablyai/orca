@@ -165,10 +165,10 @@ describe('connectPanePty', () => {
       agentArgs: '--model gpt-5 --reasoning-effort high',
       agentEnv: {
         CODEX_PROFILE: 'captured',
-        ORCA_PANE_KEY: 'wrong-pane',
-        ORCA_TAB_ID: 'wrong-tab',
-        ORCA_WORKTREE_ID: 'wrong-worktree',
-        ORCA_WORKSPACE_ID: 'wrong-workspace'
+        MCODE_PANE_KEY: 'wrong-pane',
+        MCODE_TAB_ID: 'wrong-tab',
+        MCODE_WORKTREE_ID: 'wrong-worktree',
+        MCODE_WORKSPACE_ID: 'wrong-workspace'
       }
     }
     mockStoreState = {
@@ -217,11 +217,11 @@ describe('connectPanePty', () => {
         command: "codex '--model' 'gpt-5' '--reasoning-effort' 'high' 'resume' 'codex-session-1'",
         env: expect.objectContaining({
           CODEX_PROFILE: 'captured',
-          ORCA_PANE_KEY: paneKey,
-          ORCA_TAB_ID: 'tab-1',
-          ORCA_WORKTREE_ID: 'wt-1',
-          ORCA_WORKSPACE_ID: 'wt-1',
-          ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
+          MCODE_PANE_KEY: paneKey,
+          MCODE_TAB_ID: 'tab-1',
+          MCODE_WORKTREE_ID: 'wt-1',
+          MCODE_WORKSPACE_ID: 'wt-1',
+          MCODE_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
         })
       })
     )
@@ -386,7 +386,7 @@ describe('connectPanePty', () => {
         sessionId: 'lost-pty',
         command: "codex '--model' 'gpt-5-mini' 'resume' 'codex-session-1'",
         env: expect.objectContaining({
-          ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
+          MCODE_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
         })
       })
     )

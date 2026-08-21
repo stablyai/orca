@@ -15,15 +15,15 @@ import { spawn } from 'node:child_process'
 const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx'
 
 const knobByFlag = {
-  '--panes': 'ORCA_TYPING_BENCH_LOAD_PANES',
-  '--rate-kbps': 'ORCA_TYPING_BENCH_RATE_KBPS',
-  '--keys': 'ORCA_TYPING_BENCH_KEYS',
-  '--cadence-ms': 'ORCA_TYPING_BENCH_KEY_CADENCE_MS',
-  '--cpu-workers': 'ORCA_TYPING_BENCH_CPU_WORKERS',
-  '--label': 'ORCA_TYPING_BENCH_LABEL'
+  '--panes': 'MCODE_TYPING_BENCH_LOAD_PANES',
+  '--rate-kbps': 'MCODE_TYPING_BENCH_RATE_KBPS',
+  '--keys': 'MCODE_TYPING_BENCH_KEYS',
+  '--cadence-ms': 'MCODE_TYPING_BENCH_KEY_CADENCE_MS',
+  '--cpu-workers': 'MCODE_TYPING_BENCH_CPU_WORKERS',
+  '--label': 'MCODE_TYPING_BENCH_LABEL'
 }
 
-const env = { ...process.env, ORCA_TYPING_BENCH: '1' }
+const env = { ...process.env, MCODE_TYPING_BENCH: '1' }
 const passthroughArgs = []
 const argv = process.argv.slice(2)
 for (let i = 0; i < argv.length; i++) {

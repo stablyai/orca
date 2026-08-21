@@ -11,7 +11,7 @@ describe('resolveModifierRouting', () => {
     for (const openLinksInApp of [true, false]) {
       for (const inverts of [true, false]) {
         expect(resolveModifierRouting(false, openLinksInApp, inverts)).toEqual({
-          wantsOrca: false,
+          wantsMCode: false,
           wantsSystemBrowser: false
         })
       }
@@ -22,25 +22,25 @@ describe('resolveModifierRouting', () => {
   // byte-for-byte unchanged for every existing user.
   it('always forces the system browser when inverting is off', () => {
     expect(resolveModifierRouting(true, true, false)).toEqual({
-      wantsOrca: false,
+      wantsMCode: false,
       wantsSystemBrowser: true
     })
     expect(resolveModifierRouting(true, false, false)).toEqual({
-      wantsOrca: false,
+      wantsMCode: false,
       wantsSystemBrowser: true
     })
   })
 
-  it('still reaches the system browser when inverting and links open in Orca', () => {
+  it('still reaches the system browser when inverting and links open in MCode', () => {
     expect(resolveModifierRouting(true, true, true)).toEqual({
-      wantsOrca: false,
+      wantsMCode: false,
       wantsSystemBrowser: true
     })
   })
 
-  it('reaches Orca when inverting and links open in the system browser', () => {
+  it('reaches MCode when inverting and links open in the system browser', () => {
     expect(resolveModifierRouting(true, false, true)).toEqual({
-      wantsOrca: true,
+      wantsMCode: true,
       wantsSystemBrowser: false
     })
   })
@@ -82,7 +82,7 @@ describe('modifier routing across link source owners', () => {
     vi.unstubAllGlobals()
   })
 
-  it('still lets the inverting modifier pull a local link into Orca', () => {
+  it('still lets the inverting modifier pull a local link into MCode', () => {
     storeState.settings = { openLinksInApp: false, openLinksInAppModifierInverts: true }
 
     openHttpLink('https://example.com/', {
@@ -96,7 +96,7 @@ describe('modifier routing across link source owners', () => {
     })
   })
 
-  it('lets an inverting modifier reach Orca on the owning runtime', () => {
+  it('lets an inverting modifier reach MCode on the owning runtime', () => {
     storeState.settings = {
       openLinksInApp: false,
       openLinksInAppModifierInverts: true,

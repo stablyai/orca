@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../../orca-runtime'
+import { MCodeRuntimeService } from '../../mcode-runtime'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-types'
 
 function setMobileSessionSnapshot(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   snapshot: RuntimeMobileSessionTabsSnapshot
 ): void {
   ;(
@@ -51,7 +51,7 @@ function browserTab({
 
 describe('session tab move validation', () => {
   it('validates reorder moves against sanitized visible tab groups', async () => {
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     const moveSessionTab = vi.fn()
     runtime.setNotifier({ moveSessionTab } as never)
     runtime.setAgentBrowserBridge({
@@ -114,7 +114,7 @@ describe('session tab move validation', () => {
   })
 
   it('rejects moves into groups hidden from the sanitized session model', async () => {
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     const moveSessionTab = vi.fn()
     runtime.setNotifier({ moveSessionTab } as never)
     runtime.setAgentBrowserBridge({
@@ -154,7 +154,7 @@ describe('session tab move validation', () => {
   })
 
   it('rejects reorder moves when the moved tab is absent from the target order', async () => {
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     const moveSessionTab = vi.fn()
     runtime.setNotifier({ moveSessionTab } as never)
     runtime.setAgentBrowserBridge({

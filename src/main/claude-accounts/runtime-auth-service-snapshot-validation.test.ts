@@ -193,7 +193,7 @@ describe('ClaudeRuntimeAuthService', () => {
     const staleManagedCredentials = createClaudeCredentialsJson('managed@example.com', 'managed')
     const managedAuthPath = join(testState.userDataDir, 'claude-accounts', 'account-1', 'auth')
     mkdirSync(managedAuthPath, { recursive: true })
-    writeFileSync(join(managedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
+    writeFileSync(join(managedAuthPath, '.mcode-managed-claude-auth'), 'account-1\n', 'utf-8')
     mkdirSync(join(testState.userDataDir, 'claude-runtime-auth'), { recursive: true })
     writeFileSync(
       snapshotPath,
@@ -238,7 +238,7 @@ describe('ClaudeRuntimeAuthService', () => {
     const staleManagedCredentials = createClaudeCredentialsJson('managed@example.com', 'managed')
     const managedAuthPath = join(testState.userDataDir, 'claude-accounts', 'account-1', 'auth')
     mkdirSync(managedAuthPath, { recursive: true })
-    writeFileSync(join(managedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
+    writeFileSync(join(managedAuthPath, '.mcode-managed-claude-auth'), 'account-1\n', 'utf-8')
     writeFileSync(
       runtimeConfigPath,
       `${JSON.stringify({ oauthAccount: { accountUuid: 'account-1' } })}\n`,

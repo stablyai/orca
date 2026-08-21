@@ -6,7 +6,7 @@ import type { ClaudeUsagePersistedState } from './types'
 import type * as Scanner from './scanner'
 
 const { getPathMock } = vi.hoisted(() => ({
-  getPathMock: vi.fn(() => '/tmp/orca-test-userdata')
+  getPathMock: vi.fn(() => '/tmp/mcode-test-userdata')
 }))
 
 vi.mock('electron', () => ({
@@ -55,7 +55,7 @@ describe('ClaudeUsageStore', () => {
   let tempUserData: string
 
   beforeEach(() => {
-    tempUserData = mkdtempSync(join(tmpdir(), 'orca-claude-usage-store-'))
+    tempUserData = mkdtempSync(join(tmpdir(), 'mcode-claude-usage-store-'))
     getPathMock.mockReturnValue(tempUserData)
     initClaudeUsagePath()
     vi.mocked(scanClaudeUsageFiles).mockReset()
@@ -75,7 +75,7 @@ describe('ClaudeUsageStore', () => {
 
   it('defaults a null legacy opt-in while invalidating the cache', () => {
     writeFileSync(
-      join(tempUserData, 'orca-claude-usage.json'),
+      join(tempUserData, 'mcode-claude-usage.json'),
       JSON.stringify({ schemaVersion: 4, scanState: { enabled: null } })
     )
 
@@ -84,7 +84,7 @@ describe('ClaudeUsageStore', () => {
     expect(store.getScanState().enabled).toBe(false)
   })
 
-  it('reports no data for Orca scope when only non-Orca usage exists', async () => {
+  it('reports no data for MCode scope when only non-MCode usage exists', async () => {
     const store = createStoreWithState({
       sessions: [
         {
@@ -134,7 +134,7 @@ describe('ClaudeUsageStore', () => {
       ]
     })
 
-    const summary = await store.getSummary('orca', '30d')
+    const summary = await store.getSummary('mcode', '30d')
 
     expect(summary.hasAnyClaudeData).toBe(false)
     expect(summary.sessions).toBe(0)
@@ -192,7 +192,7 @@ describe('ClaudeUsageStore', () => {
       ]
     })
 
-    const recentSessions = await store.getRecentSessions('orca', '7d', 10)
+    const recentSessions = await store.getRecentSessions('mcode', '7d', 10)
 
     expect(recentSessions).toHaveLength(1)
     expect(recentSessions[0]?.sessionId).toBe('session-1')
@@ -218,7 +218,7 @@ describe('ClaudeUsageStore', () => {
       ]
     })
 
-    const summary = await store.getSummary('orca', '30d')
+    const summary = await store.getSummary('mcode', '30d')
 
     expect(summary.turns).toBe(5)
     expect(summary.zeroCacheReadTurns).toBe(2)
@@ -244,8 +244,8 @@ describe('ClaudeUsageStore', () => {
       ]
     })
 
-    const summary = await store.getSummary('orca', '30d')
-    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+    const summary = await store.getSummary('mcode', '30d')
+    const breakdown = await store.getBreakdown('mcode', '30d', 'model')
 
     expect(summary.estimatedCostUsd).toBeCloseTo(36.75)
     expect(
@@ -287,8 +287,8 @@ describe('ClaudeUsageStore', () => {
       ]
     })
 
-    const summary = await store.getSummary('orca', '30d')
-    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+    const summary = await store.getSummary('mcode', '30d')
+    const breakdown = await store.getBreakdown('mcode', '30d', 'model')
 
     expect(summary.estimatedCostUsd).toBeCloseTo(73.5)
     expect(
@@ -347,7 +347,7 @@ describe('ClaudeUsageStore', () => {
       ]
     })
 
-    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+    const breakdown = await store.getBreakdown('mcode', '30d', 'model')
 
     expect(breakdown.find((row) => row.key === 'claude-opus-5')?.estimatedCostUsd).toBeCloseTo(
       36.75
@@ -380,7 +380,7 @@ describe('ClaudeUsageStore', () => {
       ]
     })
 
-    const summary = await store.getSummary('orca', '30d')
+    const summary = await store.getSummary('mcode', '30d')
 
     // Why: Sonnet 4.6 and earlier bill above 200k at a premium; Sonnet 5 does not.
     expect(summary.estimatedCostUsd).toBeCloseTo(6.615)
@@ -404,7 +404,7 @@ describe('ClaudeUsageStore', () => {
       }))
     })
 
-    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+    const breakdown = await store.getBreakdown('mcode', '30d', 'model')
 
     // Why: the 4.5 tier premium only survives if `-4-5-` never matches the `-5`
     // family regex, so this doubles as the digit-boundary proof for both families.
@@ -452,7 +452,7 @@ describe('ClaudeUsageStore', () => {
       ]
     })
 
-    const summary = await store.getSummary('orca', '30d')
+    const summary = await store.getSummary('mcode', '30d')
 
     expect(summary.estimatedCostUsd).toBeCloseTo(73.5)
   })
@@ -491,7 +491,7 @@ describe('ClaudeUsageStore', () => {
       ]
     })
 
-    const summary = await store.getSummary('orca', '30d')
+    const summary = await store.getSummary('mcode', '30d')
 
     expect(summary.estimatedCostUsd).toBeCloseTo(220.5)
   })
@@ -516,7 +516,7 @@ describe('ClaudeUsageStore', () => {
       ]
     })
 
-    const summary = await store.getSummary('orca', '30d')
+    const summary = await store.getSummary('mcode', '30d')
 
     expect(summary.estimatedCostUsd).toBeCloseTo(8.07)
   })
@@ -609,6 +609,6 @@ describe('ClaudeUsageStore', () => {
     await store.refresh(true)
 
     expect(scanClaudeUsageFiles).toHaveBeenCalledWith([], [])
-    expect(readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')).toContain('\n')
+    expect(readFileSync(join(tempUserData, 'mcode-claude-usage.json'), 'utf-8')).toContain('\n')
   })
 })

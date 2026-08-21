@@ -101,9 +101,9 @@ describe('resolveTerminalStartupCwd', () => {
   it('falls back to a non-ASCII workspace root for a missing cwd (#7239)', () => {
     // Why: issue #7239 reproduced in a Japanese-named worktree; the fallback
     // must preserve the selected worktree path verbatim.
-    const worktreePath = '/Users/motoki/orca/workspaces/nakamuramotoki/Fableと議論'
+    const worktreePath = '/Users/motoki/mcode/workspaces/nakamuramotoki/Fableと議論'
     expect(
-      resolveTerminalStartupCwd(worktreePath, '/var/tmp/orca-stale', {
+      resolveTerminalStartupCwd(worktreePath, '/var/tmp/mcode-stale', {
         directoryExists: (path) => path === worktreePath
       })
     ).toBe(worktreePath)

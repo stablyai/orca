@@ -1995,7 +1995,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
   }
 
   // Why: unlike dispose(), leave history files unclean (no endedAt) so the next launch treats them as crash-recoverable,
-  // but still write a final checkpoint so a daemon crash while Orca is closed has recovery data.
+  // but still write a final checkpoint so a daemon crash while MCode is closed has recovery data.
   async disconnectOnly(): Promise<void> {
     if (!this.disconnectOnlyPromise) {
       this.respawnAdoptionClosed = true

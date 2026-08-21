@@ -5,10 +5,10 @@ import {
   registerUpdaterBeforeUnloadBypass
 } from './updater-beforeunload'
 import {
-  ORCA_APP_RESTART_ABORTED_EVENT,
-  ORCA_APP_RESTART_STARTED_EVENT,
-  ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
-  ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT
+  MCODE_APP_RESTART_ABORTED_EVENT,
+  MCODE_APP_RESTART_STARTED_EVENT,
+  MCODE_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
+  MCODE_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT
 } from '../../../shared/updater-renderer-events'
 
 type WindowEventStub = Pick<Window, 'addEventListener' | 'removeEventListener' | 'dispatchEvent'>
@@ -31,11 +31,11 @@ describe('registerUpdaterBeforeUnloadBypass', () => {
     const cleanup = registerUpdaterBeforeUnloadBypass()
     expect(isUpdaterQuitAndInstallInProgress()).toBe(false)
 
-    window.dispatchEvent(new Event(ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT))
+    window.dispatchEvent(new Event(MCODE_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT))
     expect(isUpdaterQuitAndInstallInProgress()).toBe(true)
     expect(isIntentionalAppRestartInProgress()).toBe(true)
 
-    window.dispatchEvent(new Event(ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT))
+    window.dispatchEvent(new Event(MCODE_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT))
     expect(isUpdaterQuitAndInstallInProgress()).toBe(false)
     expect(isIntentionalAppRestartInProgress()).toBe(false)
 
@@ -46,11 +46,11 @@ describe('registerUpdaterBeforeUnloadBypass', () => {
     const cleanup = registerUpdaterBeforeUnloadBypass()
     expect(isIntentionalAppRestartInProgress()).toBe(false)
 
-    window.dispatchEvent(new Event(ORCA_APP_RESTART_STARTED_EVENT))
+    window.dispatchEvent(new Event(MCODE_APP_RESTART_STARTED_EVENT))
     expect(isIntentionalAppRestartInProgress()).toBe(true)
     expect(isUpdaterQuitAndInstallInProgress()).toBe(true)
 
-    window.dispatchEvent(new Event(ORCA_APP_RESTART_ABORTED_EVENT))
+    window.dispatchEvent(new Event(MCODE_APP_RESTART_ABORTED_EVENT))
     expect(isIntentionalAppRestartInProgress()).toBe(false)
 
     cleanup()
@@ -59,7 +59,7 @@ describe('registerUpdaterBeforeUnloadBypass', () => {
   it('resets the bypass flag during cleanup', () => {
     const cleanup = registerUpdaterBeforeUnloadBypass()
 
-    window.dispatchEvent(new Event(ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT))
+    window.dispatchEvent(new Event(MCODE_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT))
     expect(isUpdaterQuitAndInstallInProgress()).toBe(true)
 
     cleanup()

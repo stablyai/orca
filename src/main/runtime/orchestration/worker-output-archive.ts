@@ -1,5 +1,5 @@
 import type { AgentType, NativeChatMessage } from '../../../shared/native-chat-types'
-import type { OrcaRuntimeService } from '../orca-runtime'
+import type { MCodeRuntimeService } from '../mcode-runtime'
 import { OrchestrationError } from './orchestration-error'
 import {
   MAX_WORKER_TRANSCRIPT_MESSAGE_LIMIT,
@@ -48,7 +48,7 @@ export type WorkerOutputArchiveCapture =
 // hook-reported provider transcript; falls back to bounded redacted terminal output. Throws
 // typed archive_failed so release retains the live terminal when no evidence can be preserved.
 export async function captureWorkerOutputArchive(args: {
-  runtime: OrcaRuntimeService
+  runtime: MCodeRuntimeService
   dispatchId: string
   terminalHandle: string
   attachedAtMs: number

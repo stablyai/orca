@@ -9,7 +9,7 @@ const DEFAULT_RIGHT_GAP = 24
 const DEFAULT_BOTTOM_GAP = 84
 const PANEL_EDGE_MARGIN = 8
 
-export const FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY = 'orca-floating-terminal-panel-bounds-v1'
+export const FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY = 'mcode-floating-terminal-panel-bounds-v1'
 
 export type FloatingTerminalPanelBounds = {
   left: number

@@ -1,13 +1,13 @@
 /**
  * Freeze repro R2 — direct SSH topology via Docker SSH relay.
  *
- * Requires: ORCA_E2E_SSH_DOCKER=1 and Docker available.
+ * Requires: MCODE_E2E_SSH_DOCKER=1 and Docker available.
  *
  * Run:
- *   ORCA_E2E_SSH_DOCKER=1 pnpm run test:e2e:ssh-docker-bulk-open-freeze
+ *   MCODE_E2E_SSH_DOCKER=1 pnpm run test:e2e:ssh-docker-bulk-open-freeze
  */
 import path from 'node:path'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import {
   cleanupDockerSshRelayTarget,
   DOCKER_SSH_RELAY_REMOTE_REPO_PATH,
@@ -28,7 +28,7 @@ import {
 import { startRendererLagProbe } from './paired-runtime-retention-metrics'
 import { HARD_FREEZE_LAG_MS, SOFT_FREEZE_LAG_MS } from './helpers/remote-session-bulk-open-oracle'
 
-const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
+const RUN_DOCKER_SSH = process.env.MCODE_E2E_SSH_DOCKER === '1'
 const REPORT_DIR = path.join(process.cwd(), 'test-results', 'freeze-repro')
 const SESSION_SPLITS = 5
 
@@ -50,10 +50,10 @@ function continuousFloodCommand(runId: string, index: number): string {
 }
 
 test.describe('R2 Docker SSH bulk-open freeze', () => {
-  test.skip(!RUN_DOCKER_SSH, 'Set ORCA_E2E_SSH_DOCKER=1 to run Docker SSH freeze repro')
+  test.skip(!RUN_DOCKER_SSH, 'Set MCODE_E2E_SSH_DOCKER=1 to run Docker SSH freeze repro')
 
   test('bulk-open many flooding SSH terminals and measure renderer lag @freeze-repro', async ({
-    orcaPage,
+    mcodePage,
     registerPostElectronShutdownCleanup
   }) => {
     test.setTimeout(420_000)
@@ -66,49 +66,49 @@ test.describe('R2 Docker SSH bulk-open freeze', () => {
         }
       })
 
-      await connectDockerSshRelayTarget(orcaPage, target, {
+      await connectDockerSshRelayTarget(mcodePage, target, {
         remotePath: DOCKER_SSH_RELAY_REMOTE_REPO_PATH
       })
-      await waitForSessionReady(orcaPage)
-      await waitForActiveWorktree(orcaPage)
+      await waitForSessionReady(mcodePage)
+      await waitForActiveWorktree(mcodePage)
 
       const runId = `${Date.now()}`
       // First terminal on the SSH worktree.
-      await waitForActiveTerminalManager(orcaPage)
-      await execInTerminal(orcaPage, continuousFloodCommand(runId, 0))
-      await waitForTerminalOutput(orcaPage, `READY:SSH_BULK_${runId}_0`, 60_000)
+      await waitForActiveTerminalManager(mcodePage)
+      await execInTerminal(mcodePage, continuousFloodCommand(runId, 0))
+      await waitForTerminalOutput(mcodePage, `READY:SSH_BULK_${runId}_0`, 60_000)
 
       for (let i = 1; i < SESSION_SPLITS; i += 1) {
-        await splitActiveTerminalPane(orcaPage)
-        await focusLastTerminalPane(orcaPage)
-        await waitForActivePanePtyId(orcaPage, 30_000)
-        await execInTerminal(orcaPage, continuousFloodCommand(runId, i))
-        await waitForTerminalOutput(orcaPage, `READY:SSH_BULK_${runId}_${i}`, 60_000)
+        await splitActiveTerminalPane(mcodePage)
+        await focusLastTerminalPane(mcodePage)
+        await waitForActivePanePtyId(mcodePage, 30_000)
+        await execInTerminal(mcodePage, continuousFloodCommand(runId, i))
+        await waitForTerminalOutput(mcodePage, `READY:SSH_BULK_${runId}_${i}`, 60_000)
       }
 
       // Leave the workspace view so panes go inactive while flooding.
-      await orcaPage.evaluate(() => window.__store?.getState().setActiveView('tasks'))
-      await orcaPage.waitForTimeout(4_000)
+      await mcodePage.evaluate(() => window.__store?.getState().setActiveView('tasks'))
+      await mcodePage.waitForTimeout(4_000)
 
-      const hiddenProbe = await startRendererLagProbe(orcaPage)
-      await orcaPage.waitForTimeout(2_000)
+      const hiddenProbe = await startRendererLagProbe(mcodePage)
+      await mcodePage.waitForTimeout(2_000)
       const hiddenFloodMaxLagMs = await hiddenProbe.evaluate((probe) => probe.stop())
       await hiddenProbe.dispose()
 
       // Burst open: return to terminal and cycle panes rapidly.
-      const openProbe = await startRendererLagProbe(orcaPage)
-      await orcaPage.evaluate(() => window.__store?.getState().setActiveView('terminal'))
+      const openProbe = await startRendererLagProbe(mcodePage)
+      await mcodePage.evaluate(() => window.__store?.getState().setActiveView('terminal'))
       for (let pass = 0; pass < 3; pass += 1) {
         for (let i = 0; i < SESSION_SPLITS; i += 1) {
-          await orcaPage.keyboard.press(process.platform === 'darwin' ? 'Meta+]' : 'Control+]')
-          await orcaPage.waitForTimeout(50)
+          await mcodePage.keyboard.press(process.platform === 'darwin' ? 'Meta+]' : 'Control+]')
+          await mcodePage.waitForTimeout(50)
         }
       }
-      await orcaPage.waitForTimeout(3_000)
+      await mcodePage.waitForTimeout(3_000)
       const bulkOpenMaxLagMs = await openProbe.evaluate((probe) => probe.stop())
       await openProbe.dispose()
 
-      const interactionProbeMs = await orcaPage.evaluate(async () => {
+      const interactionProbeMs = await mcodePage.evaluate(async () => {
         const started = performance.now()
         const state = window.__store?.getState()
         const view = state?.activeView

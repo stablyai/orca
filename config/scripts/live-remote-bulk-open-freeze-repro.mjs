@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * Live freeze repro against a running Orca desktop + paired remote runtime.
+ * Live freeze repro against a running MCode desktop + paired remote runtime.
  *
  * Models bulk-open of remote sessions under multi-worktree load.
  *
  * Usage:
  *   node config/scripts/live-remote-bulk-open-freeze-repro.mjs
- *   ORCA_FREEZE_ENV=paired-remote ORCA_FREEZE_CREATE=12 ORCA_FREEZE_SWITCH_PASSES=5 \
- *     ORCA_FREEZE_PARALLEL=8 node config/scripts/live-remote-bulk-open-freeze-repro.mjs
+ *   MCODE_FREEZE_ENV=paired-remote MCODE_FREEZE_CREATE=12 MCODE_FREEZE_SWITCH_PASSES=5 \
+ *     MCODE_FREEZE_PARALLEL=8 node config/scripts/live-remote-bulk-open-freeze-repro.mjs
  */
 import { spawnSync } from 'node:child_process'
 import { mkdirSync, writeFileSync, copyFileSync } from 'node:fs'
@@ -23,23 +23,23 @@ import {
   shouldCapSwitchTargets,
   worktreeSelector
 } from './live-remote-bulk-open-freeze-metrics.mjs'
-import { createOrcaRpc } from './live-remote-freeze-rpc.mjs'
+import { createMCodeRpc } from './live-remote-freeze-rpc.mjs'
 
 const root = path.resolve(import.meta.dirname, '../..')
 const reportDir = path.join(root, 'test-results', 'freeze-repro')
-const envName = process.env.ORCA_FREEZE_ENV || 'paired-remote'
-const createCount = Math.max(0, readFreezeNumberEnv('ORCA_FREEZE_CREATE', 0))
-const switchPasses = Math.max(1, readFreezeNumberEnv('ORCA_FREEZE_SWITCH_PASSES', 3))
-const parallel = Math.max(1, readFreezeNumberEnv('ORCA_FREEZE_PARALLEL', 1))
+const envName = process.env.MCODE_FREEZE_ENV || 'paired-remote'
+const createCount = Math.max(0, readFreezeNumberEnv('MCODE_FREEZE_CREATE', 0))
+const switchPasses = Math.max(1, readFreezeNumberEnv('MCODE_FREEZE_SWITCH_PASSES', 3))
+const parallel = Math.max(1, readFreezeNumberEnv('MCODE_FREEZE_PARALLEL', 1))
 // 0 = no cap (use all live terminals). Only positive env values limit targets.
-const maxSwitchTargets = Math.max(0, readFreezeNumberEnv('ORCA_FREEZE_MAX_SWITCH_TARGETS', 0))
-const softMs = readFreezeNumberEnv('ORCA_FREEZE_SOFT_MS', DEFAULT_SOFT_MS)
-const hardMs = readFreezeNumberEnv('ORCA_FREEZE_HARD_MS', DEFAULT_HARD_MS)
-const createWorktreeSpan = Math.max(1, readFreezeNumberEnv('ORCA_FREEZE_CREATE_WT_SPAN', 16))
-const preFloodMs = Math.max(0, readFreezeNumberEnv('ORCA_FREEZE_PRE_FLOOD_MS', 3000))
-const scratchDir = process.env.ORCA_FREEZE_SCRATCH || ''
+const maxSwitchTargets = Math.max(0, readFreezeNumberEnv('MCODE_FREEZE_MAX_SWITCH_TARGETS', 0))
+const softMs = readFreezeNumberEnv('MCODE_FREEZE_SOFT_MS', DEFAULT_SOFT_MS)
+const hardMs = readFreezeNumberEnv('MCODE_FREEZE_HARD_MS', DEFAULT_HARD_MS)
+const createWorktreeSpan = Math.max(1, readFreezeNumberEnv('MCODE_FREEZE_CREATE_WT_SPAN', 16))
+const preFloodMs = Math.max(0, readFreezeNumberEnv('MCODE_FREEZE_PRE_FLOOD_MS', 3000))
+const scratchDir = process.env.MCODE_FREEZE_SCRATCH || ''
 
-const { orcaJsonSync, orcaJsonAsync } = createOrcaRpc({ envName })
+const { mcodeJsonSync, mcodeJsonAsync } = createMCodeRpc({ envName })
 
 async function mapPool(items, concurrency, worker) {
   const results = Array.from({ length: items.length })
@@ -56,17 +56,17 @@ async function mapPool(items, concurrency, worker) {
   return results
 }
 
-function sampleOrcaIfPossible() {
+function sampleMCodeIfPossible() {
   if (process.platform !== 'darwin') {
     return null
   }
   try {
-    const status = orcaJsonSync(['status'], { local: true }).result
+    const status = mcodeJsonSync(['status'], { local: true }).result
     const pid = status?.app?.pid
     if (!pid) {
       return null
     }
-    const out = path.join(reportDir, `orca-sample-${Date.now()}.txt`)
+    const out = path.join(reportDir, `mcode-sample-${Date.now()}.txt`)
     const sampled = spawnSync('sample', [String(pid), '5', '-file', out], {
       timeout: 20_000,
       stdio: 'ignore'
@@ -94,14 +94,14 @@ async function main() {
     `[live-freeze] env=${envName} create=${createCount} passes=${switchPasses} parallel=${parallel}`
   )
 
-  const status = orcaJsonSync(['status'])
+  const status = mcodeJsonSync(['status'])
   notes.push(
     `remote version=${status.result?.runtime?.appVersion} state=${status.result?.runtime?.state}`
   )
-  const local = orcaJsonSync(['status'], { local: true })
+  const local = mcodeJsonSync(['status'], { local: true })
   notes.push(`local version=${local.result?.runtime?.appVersion} pid=${local.result?.app?.pid}`)
 
-  const worktrees = orcaJsonSync(['worktree', 'list']).result
+  const worktrees = mcodeJsonSync(['worktree', 'list']).result
   const wtList = worktrees?.worktrees || worktrees?.items || worktrees || []
   if (!Array.isArray(wtList) || wtList.length === 0) {
     throw new Error(`No worktrees on environment ${envName}`)
@@ -125,7 +125,7 @@ async function main() {
       }
       const marker = `LIVE_BULK_${Date.now()}_${i}`
       try {
-        const createdTerm = await orcaJsonAsync(
+        const createdTerm = await mcodeJsonAsync(
           [
             'terminal',
             'create',
@@ -165,7 +165,7 @@ async function main() {
 
   let live = []
   try {
-    const listed = orcaJsonSync(['terminal', 'list'])
+    const listed = mcodeJsonSync(['terminal', 'list'])
     const terms = listed.result?.terminals || []
     live = terms
       .filter(
@@ -213,7 +213,7 @@ async function main() {
       const batchResults = await Promise.all(
         batch.map(async (handle) => {
           try {
-            const sw = await orcaJsonAsync(['terminal', 'switch', '--terminal', handle], {
+            const sw = await mcodeJsonAsync(['terminal', 'switch', '--terminal', handle], {
               timeoutMs: 90_000
             })
             return { handle, ms: sw.elapsedMs, ok: true }
@@ -253,10 +253,10 @@ async function main() {
   const bulkWallMs = performance.now() - switchStarted
   const avgSwitchMs = switchCount ? sumSwitchMs / switchCount : 0
 
-  const statusProbe = orcaJsonSync(['status'], { local: true })
+  const statusProbe = mcodeJsonSync(['status'], { local: true })
   let memoryProbeMs = null
   try {
-    const mem = orcaJsonSync(['diagnostics', 'memory'], { local: true, timeoutMs: 120_000 })
+    const mem = mcodeJsonSync(['diagnostics', 'memory'], { local: true, timeoutMs: 120_000 })
     memoryProbeMs = mem.elapsedMs
     notes.push(`memory diagnostic ms=${mem.elapsedMs.toFixed(0)}`)
   } catch (error) {
@@ -274,7 +274,7 @@ async function main() {
 
   let samplePath = null
   if (softFreeze || hardFreeze) {
-    samplePath = sampleOrcaIfPossible()
+    samplePath = sampleMCodeIfPossible()
     if (samplePath) {
       notes.push(`sample=${samplePath}`)
     } else {

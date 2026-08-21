@@ -40,13 +40,13 @@ describe('grantDirAclAsync', () => {
     )
     const { getIcaclsExePath, grantDirAclAsync } = await import('./win32-utils')
 
-    const pending = grantDirAclAsync('C:\\Users\\alice\\Orca')
+    const pending = grantDirAclAsync('C:\\Users\\alice\\MCode')
     await Promise.resolve()
 
     expect(execFileSyncMock).not.toHaveBeenCalled()
     expect(execFileMock).toHaveBeenCalledWith(
       getIcaclsExePath(),
-      ['C:\\Users\\alice\\Orca', '/grant:r', 'alice:(OI)(CI)(F)'],
+      ['C:\\Users\\alice\\MCode', '/grant:r', 'alice:(OI)(CI)(F)'],
       { encoding: 'utf-8', windowsHide: true, timeout: 10_000 },
       expect.any(Function)
     )
@@ -71,7 +71,7 @@ describe('grantDirAclAsync', () => {
       )
     const { getWhoamiExePath, grantDirAclAsync } = await import('./win32-utils')
 
-    await grantDirAclAsync('C:\\Orca')
+    await grantDirAclAsync('C:\\MCode')
 
     expect(execFileMock.mock.calls[0]?.slice(0, 3)).toEqual([
       getWhoamiExePath(),
@@ -79,7 +79,7 @@ describe('grantDirAclAsync', () => {
       { encoding: 'utf-8', windowsHide: true, timeout: 5000 }
     ])
     expect(execFileMock.mock.calls[1]?.[1]).toEqual([
-      'C:\\Orca',
+      'C:\\MCode',
       '/grant:r',
       '*S-1-5-21-123:(OI)(CI)(F)'
     ])
@@ -105,14 +105,14 @@ describe('grantDirAclAsync', () => {
     execFileSyncMock.mockReturnValue('"DOMAIN\\sync","S-1-5-21-456"\r\n')
     const { grantDirAclAsync, resolveCurrentWindowsIdentity } = await import('./win32-utils')
 
-    const pending = grantDirAclAsync('C:\\Orca')
+    const pending = grantDirAclAsync('C:\\MCode')
     await Promise.resolve()
     expect(resolveCurrentWindowsIdentity()).toBe('*S-1-5-21-456')
     completeWhoami?.(null, '"DOMAIN\\async","S-1-5-21-789"\r\n', '')
     await pending
 
     expect(execFileMock.mock.calls[1]?.[1]).toEqual([
-      'C:\\Orca',
+      'C:\\MCode',
       '/grant:r',
       '*S-1-5-21-456:(OI)(CI)(F)'
     ])
@@ -141,14 +141,14 @@ describe('grantDirAclAsync', () => {
       )
     const { getWhoamiExePath, grantDirAclAsync } = await import('./win32-utils')
 
-    await grantDirAclAsync('C:\\Orca')
-    await grantDirAclAsync('C:\\Orca')
+    await grantDirAclAsync('C:\\MCode')
+    await grantDirAclAsync('C:\\MCode')
 
     expect(
       execFileMock.mock.calls.filter(([command]) => command === getWhoamiExePath())
     ).toHaveLength(2)
     expect(execFileMock.mock.calls[2]?.[1]).toEqual([
-      'C:\\Orca',
+      'C:\\MCode',
       '/grant:r',
       '*S-1-5-21-123:(OI)(CI)(F)'
     ])

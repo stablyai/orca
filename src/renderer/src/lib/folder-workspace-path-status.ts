@@ -65,7 +65,7 @@ export function getFolderWorkspacePathStatusDescription(
   if (!isHandledPathStatusReason(status.reason)) {
     return translate(
       'auto.lib.folderWorkspacePathStatus.description.unrecognized',
-      'Orca cannot use {{path}}, and this version does not recognize the reason. Update Orca to see the details.',
+      'MCode cannot use {{path}}, and this version does not recognize the reason. Update MCode to see the details.',
       { path: status.path }
     )
   }
@@ -73,7 +73,7 @@ export function getFolderWorkspacePathStatusDescription(
     case 'missing':
       return translate(
         'auto.lib.folderWorkspacePathStatus.description.missing',
-        'Orca cannot find {{path}}. Remove and re-import this folder workspace.',
+        'MCode cannot find {{path}}. Remove and re-import this folder workspace.',
         { path: status.path }
       )
     case 'not-directory':
@@ -85,13 +85,13 @@ export function getFolderWorkspacePathStatusDescription(
     case 'ambiguous-connection':
       return translate(
         'auto.lib.folderWorkspacePathStatus.description.ambiguousConnection',
-        'Orca cannot tell which SSH connection owns this folder scope.'
+        'MCode cannot tell which SSH connection owns this folder scope.'
       )
     case undefined:
     case 'unavailable':
       return translate(
         'auto.lib.folderWorkspacePathStatus.description.unavailable',
-        'Orca cannot verify this folder right now. Check the runtime or SSH connection and try again.'
+        'MCode cannot verify this folder right now. Check the runtime or SSH connection and try again.'
       )
   }
 }
@@ -110,7 +110,7 @@ export function formatFolderWorkspaceCreateError(error: unknown): {
       ),
       description: translate(
         'auto.lib.folderWorkspacePathStatus.createError.description.missing',
-        'Orca cannot find {{path}}. Remove and re-import the folder.',
+        'MCode cannot find {{path}}. Remove and re-import the folder.',
         { path }
       )
     }
@@ -136,7 +136,7 @@ export function formatFolderWorkspaceCreateError(error: unknown): {
       ),
       description: translate(
         'auto.lib.folderWorkspacePathStatus.createError.description.ambiguousConnection',
-        'Orca cannot tell which SSH connection owns this folder scope.'
+        'MCode cannot tell which SSH connection owns this folder scope.'
       )
     }
   }
@@ -148,7 +148,7 @@ export function formatFolderWorkspaceCreateError(error: unknown): {
       ),
       description: translate(
         'auto.lib.folderWorkspacePathStatus.createError.description.unavailable',
-        'Orca cannot verify this folder right now. Check the runtime or SSH connection and try again.'
+        'MCode cannot verify this folder right now. Check the runtime or SSH connection and try again.'
       )
     }
   }

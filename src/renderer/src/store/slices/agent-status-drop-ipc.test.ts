@@ -8,7 +8,7 @@ import { createTestStore } from './store-test-helpers'
 // Why: dropAgentStatus and dismissRetainedAgentsByWorktree mirror the renderer-
 // side dismissal to the main-process hook cache via window.api.agentStatus.drop
 // so the on-disk last-status file evicts dismissed paneKeys. Without this, a
-// dismissed row would re-appear after Orca restart from the hydrated cache.
+// dismissed row would re-appear after MCode restart from the hydrated cache.
 
 const originalWindow = (globalThis as { window?: unknown }).window
 

@@ -20,7 +20,7 @@ let manager: HistoryManager
 let reader: HistoryReader
 
 beforeEach(async () => {
-  dir = mkdtempSync(join(tmpdir(), 'orca-incremental-restore-'))
+  dir = mkdtempSync(join(tmpdir(), 'mcode-incremental-restore-'))
   manager = new HistoryManager(dir)
   reader = new HistoryReader(dir)
   await manager.openSession(SESSION_ID, { cwd: '/home/user', cols: 80, rows: 24 })

@@ -26,7 +26,7 @@ describe('createEditorSlice floating editor activation', () => {
 
     store.getState().openFile(
       {
-        filePath: '/tmp/orca/notes.md',
+        filePath: '/tmp/mcode/notes.md',
         relativePath: 'notes.md',
         worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
         runtimeEnvironmentId: null,
@@ -39,7 +39,7 @@ describe('createEditorSlice floating editor activation', () => {
     const tab = store.getState().unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.[0]
     expect(tab).toMatchObject({
       contentType: 'editor',
-      entityId: '/tmp/orca/notes.md',
+      entityId: '/tmp/mcode/notes.md',
       label: 'notes.md',
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID
     })
@@ -48,7 +48,7 @@ describe('createEditorSlice floating editor activation', () => {
       tabOrder: [tab?.id]
     })
     expect(store.getState().activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(
-      '/tmp/orca/notes.md'
+      '/tmp/mcode/notes.md'
     )
   })
 
@@ -62,7 +62,7 @@ describe('createEditorSlice floating editor activation', () => {
     } as Partial<AppState>)
 
     store.getState().openFile({
-      filePath: '/tmp/orca/untitled.md',
+      filePath: '/tmp/mcode/untitled.md',
       relativePath: 'untitled.md',
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
       language: 'markdown',
@@ -73,7 +73,7 @@ describe('createEditorSlice floating editor activation', () => {
     expect(store.getState().activeFileId).toBe('/repo/main.md')
     expect(store.getState().activeTabType).toBe('editor')
     expect(store.getState().activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe(
-      '/tmp/orca/untitled.md'
+      '/tmp/mcode/untitled.md'
     )
     expect(store.getState().activeTabTypeByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toBe('editor')
   })

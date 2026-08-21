@@ -98,7 +98,7 @@ describe('findSystemSsh', () => {
   })
 
   it('keeps an explicit system ssh override authoritative', () => {
-    vi.stubEnv('ORCA_SYSTEM_SSH_PATH', 'C:\\Custom\\ssh.exe')
+    vi.stubEnv('MCODE_SYSTEM_SSH_PATH', 'C:\\Custom\\ssh.exe')
 
     expect(findSystemSsh()).toBe('C:\\Custom\\ssh.exe')
     expect(existsSyncMock).not.toHaveBeenCalled()

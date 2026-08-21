@@ -59,7 +59,7 @@ function detected(
 ): DetectedWorktreeListResult['worktrees'][number] {
   return {
     ...makeWorktree({ id, repoId, hostId }),
-    ownership: 'orca-managed',
+    ownership: 'mcode-managed',
     selectedCheckout: true,
     visible: true
   } as DetectedWorktreeListResult['worktrees'][number]

@@ -46,7 +46,7 @@ describe('orchestration notification mailbox consistency', () => {
 
   it('never points direct Run A mail after the pane is rebound to Run B', async () => {
     vi.useFakeTimers()
-    const db = createDatabase('orca-mailbox-consistency-')
+    const db = createDatabase('mcode-mailbox-consistency-')
     const first = createRuntime(db)
     const runA = createBoundRun(db, 'Run A')
     const staleDirectMessage = insertDirectRunMessage(db, runA.id, 'Run A completion')
@@ -72,7 +72,7 @@ describe('orchestration notification mailbox consistency', () => {
 
   it('does not point unbound direct mail that a later Run binding would hide', async () => {
     vi.useFakeTimers()
-    const db = createDatabase('orca-mailbox-unbound-bind-race-')
+    const db = createDatabase('mcode-mailbox-unbound-bind-race-')
     const harness = createRuntime(db)
     const runA = createBoundRun(db, 'Unbound Run A')
     const message = insertDirectRunMessage(db, runA.id, 'Run A before later binding')
@@ -101,7 +101,7 @@ describe('orchestration notification mailbox consistency', () => {
 
   it('reconciles the persisted production mismatch after runtime restart', async () => {
     vi.useFakeTimers()
-    const directory = mkdtempSync(join(tmpdir(), 'orca-mailbox-upgrade-restart-'))
+    const directory = mkdtempSync(join(tmpdir(), 'mcode-mailbox-upgrade-restart-'))
     temporaryDirectories.push(directory)
     const dbPath = join(directory, 'orchestration.db')
     const oldDb = new OrchestrationDb(dbPath)
@@ -145,7 +145,7 @@ describe('orchestration notification mailbox consistency', () => {
 
   it('pages a large persisted mismatch and coalesces each mailbox wake', async () => {
     vi.useFakeTimers()
-    const db = createDatabase('orca-mailbox-paged-reconciliation-')
+    const db = createDatabase('mcode-mailbox-paged-reconciliation-')
     const harness = createRuntime(db)
     const runA = createBoundRun(db, 'Backlog Run A')
     const messages = Array.from({ length: 151 }, (_, index) =>
@@ -182,7 +182,7 @@ describe('orchestration notification mailbox consistency', () => {
   })
 
   it('uses composite indexes for direct ownership reconciliation', () => {
-    const db = createDatabase('orca-mailbox-routing-indexes-')
+    const db = createDatabase('mcode-mailbox-routing-indexes-')
     const sqlite = sqliteFor(db)
     const plan = (sql: string, ...params: string[]): string =>
       (sqlite.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...params) as { detail: string }[])
@@ -233,7 +233,7 @@ describe('orchestration notification mailbox consistency', () => {
   })
 
   it('finds owned mail without scanning an older unowned direct backlog', () => {
-    const db = createDatabase('orca-mailbox-owned-routing-plan-')
+    const db = createDatabase('mcode-mailbox-owned-routing-plan-')
     const detachedHandle = 'term_backlogged_detached'
     const ownedRun = db.createRun({
       objective: 'Owned after backlog',
@@ -282,7 +282,7 @@ describe('orchestration notification mailbox consistency', () => {
 
   it('does not submit or replay a pointer after ownership changes during Enter delay', async () => {
     vi.useFakeTimers()
-    const directory = mkdtempSync(join(tmpdir(), 'orca-mailbox-restart-'))
+    const directory = mkdtempSync(join(tmpdir(), 'mcode-mailbox-restart-'))
     temporaryDirectories.push(directory)
     const dbPath = join(directory, 'orchestration.db')
     const firstDb = new OrchestrationDb(dbPath)
@@ -315,7 +315,7 @@ describe('orchestration notification mailbox consistency', () => {
 
   it('does not replay a staged same-Run pointer when the runtime restarts before Enter', async () => {
     vi.useFakeTimers()
-    const directory = mkdtempSync(join(tmpdir(), 'orca-mailbox-staged-restart-'))
+    const directory = mkdtempSync(join(tmpdir(), 'mcode-mailbox-staged-restart-'))
     temporaryDirectories.push(directory)
     const dbPath = join(directory, 'orchestration.db')
     const firstDb = new OrchestrationDb(dbPath)
@@ -342,7 +342,7 @@ describe('orchestration notification mailbox consistency', () => {
 
   it('fences the pointed mailbox instead of checking a rebound empty Run', async () => {
     vi.useFakeTimers()
-    const db = createDatabase('orca-mailbox-post-submit-rebind-')
+    const db = createDatabase('mcode-mailbox-post-submit-rebind-')
     const harness = createRuntime(db)
     const runA = createBoundRun(db, 'Run A')
     insertDirectRunMessage(db, runA.id, 'Run A completion')
@@ -388,7 +388,7 @@ describe('orchestration notification mailbox consistency', () => {
 
   it('releases a staged pointer when its Run moves to another live pane', async () => {
     vi.useFakeTimers()
-    const db = createDatabase('orca-mailbox-live-rebind-')
+    const db = createDatabase('mcode-mailbox-live-rebind-')
     const harness = createRuntime(db)
     const runA = createBoundRun(db, 'Run A')
     const message = insertDirectRunMessage(db, runA.id, 'Run A completion')
@@ -409,7 +409,7 @@ describe('orchestration notification mailbox consistency', () => {
     expect(
       harness.write.mock.calls.filter(
         ([ptyId, payload]) =>
-          ptyId === SECOND_PTY_ID && String(payload).includes('orca orchestration check')
+          ptyId === SECOND_PTY_ID && String(payload).includes('mcode orchestration check')
       )
     ).toHaveLength(1)
     expect(
@@ -429,7 +429,7 @@ describe('orchestration notification mailbox consistency', () => {
 
   it('serializes equivalent panes while newer mail arrives during Enter delay', async () => {
     vi.useFakeTimers()
-    const db = createDatabase('orca-mailbox-equivalent-pane-flight-')
+    const db = createDatabase('mcode-mailbox-equivalent-pane-flight-')
     const harness = createRuntime(db)
     const run = createBoundRun(db, 'Equivalent pane Run')
     const first = insertDirectRunMessage(db, run.id, 'First status')
@@ -449,7 +449,7 @@ describe('orchestration notification mailbox consistency', () => {
     expect(
       harness.write.mock.calls.filter(
         ([ptyId, payload]) =>
-          ptyId === SECOND_PTY_ID && String(payload).includes('orca orchestration check')
+          ptyId === SECOND_PTY_ID && String(payload).includes('mcode orchestration check')
       )
     ).toHaveLength(0)
 
@@ -457,7 +457,7 @@ describe('orchestration notification mailbox consistency', () => {
     expect(
       harness.write.mock.calls.filter(
         ([ptyId, payload]) =>
-          ptyId === PTY_ID && String(payload).includes('orca orchestration check')
+          ptyId === PTY_ID && String(payload).includes('mcode orchestration check')
       )
     ).toHaveLength(2)
     await vi.advanceTimersByTimeAsync(500)
@@ -472,7 +472,7 @@ describe('orchestration notification mailbox consistency', () => {
 
   it('does not submit or duplicate a pointer after the agent becomes working', async () => {
     vi.useFakeTimers()
-    const db = createDatabase('orca-mailbox-working-before-enter-')
+    const db = createDatabase('mcode-mailbox-working-before-enter-')
     const harness = createRuntime(db)
     const run = createBoundRun(db, 'Working-before-Enter Run')
     const message = insertDirectRunMessage(db, run.id, 'Actionable status')
@@ -492,7 +492,7 @@ describe('orchestration notification mailbox consistency', () => {
 
   it('releases staged pointer state when an explicit check owns the batch', async () => {
     vi.useFakeTimers()
-    const db = createDatabase('orca-mailbox-explicit-check-')
+    const db = createDatabase('mcode-mailbox-explicit-check-')
     const harness = createRuntime(db)
     const run = createBoundRun(db, 'Explicit-check Run')
     insertDirectRunMessage(db, run.id, 'Checked before Enter')
@@ -512,7 +512,7 @@ describe('orchestration notification mailbox consistency', () => {
 
   it('routes same-Run direct mail through the bound check and acknowledgment path', async () => {
     vi.useFakeTimers()
-    const db = createDatabase('orca-mailbox-current-run-')
+    const db = createDatabase('mcode-mailbox-current-run-')
     const harness = createRuntime(db)
     const run = createBoundRun(db, 'Current Run')
     const messages = Array.from({ length: 51 }, (_, index) =>
@@ -572,7 +572,7 @@ describe('orchestration notification mailbox consistency', () => {
 
   it('does not replay a successfully submitted actionable pointer after restart', async () => {
     vi.useFakeTimers()
-    const directory = mkdtempSync(join(tmpdir(), 'orca-mailbox-actionable-restart-'))
+    const directory = mkdtempSync(join(tmpdir(), 'mcode-mailbox-actionable-restart-'))
     temporaryDirectories.push(directory)
     const dbPath = join(directory, 'orchestration.db')
     const firstDb = new OrchestrationDb(dbPath)
@@ -604,7 +604,7 @@ describe('orchestration notification mailbox consistency', () => {
 
   it('does not replay a visible pointer when the provider rejects Enter', async () => {
     vi.useFakeTimers()
-    const db = createDatabase('orca-mailbox-provider-refusal-')
+    const db = createDatabase('mcode-mailbox-provider-refusal-')
     const first = createRuntime(db)
     const recordWrite = first.write as unknown as (id: string, payload: string) => unknown
     const write = vi.fn((ptyId: string, data: string) => {
@@ -632,7 +632,7 @@ describe('orchestration notification mailbox consistency', () => {
 
   it('does not point newer Run mail behind an outstanding Delivery', async () => {
     vi.useFakeTimers()
-    const db = createDatabase('orca-mailbox-outstanding-')
+    const db = createDatabase('mcode-mailbox-outstanding-')
     const harness = createRuntime(db)
     const run = createBoundRun(db, 'Outstanding Delivery Run')
     const firstMessage = db.insertMessage({
@@ -663,7 +663,7 @@ describe('orchestration notification mailbox consistency', () => {
   })
 
   it('drains persisted Run pages before installing a filtered waiter', async () => {
-    const db = createDatabase('orca-mailbox-filtered-run-backlog-')
+    const db = createDatabase('mcode-mailbox-filtered-run-backlog-')
     const harness = createRuntime(db)
     const run = createBoundRun(db, 'Filtered Run backlog')
     for (let index = 0; index < 50; index += 1) {
@@ -699,7 +699,7 @@ describe('orchestration notification mailbox consistency', () => {
   })
 
   it('wakes a filtered waiter when reconciliation moves its type on a later page', async () => {
-    const db = createDatabase('orca-mailbox-filtered-reconciliation-wake-')
+    const db = createDatabase('mcode-mailbox-filtered-reconciliation-wake-')
     const harness = createRuntime(db)
     const run = createBoundRun(db, 'Filtered reconciliation wake')
     const waiting = checkBoundMailbox(harness.runtime, { wait: true, types: 'question' })
@@ -741,7 +741,7 @@ describe('orchestration notification mailbox consistency', () => {
   })
 
   it('drains persisted Dispatch pages before installing a filtered waiter', async () => {
-    const db = createDatabase('orca-mailbox-filtered-dispatch-backlog-')
+    const db = createDatabase('mcode-mailbox-filtered-dispatch-backlog-')
     const harness = createRuntime(db)
     const run = db.createRun({
       objective: 'Filtered Dispatch backlog',

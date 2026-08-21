@@ -41,12 +41,12 @@ function stringFlag(ctx: HandlerContext, name: string): string | undefined {
 }
 
 function rejectForwardedSkillFilesystem(ctx: HandlerContext, command: string): void {
-  if (!process.env.ORCA_CLI_CWD && !ctx.client.isRemote) {
+  if (!process.env.MCODE_CLI_CWD && !ctx.client.isRemote) {
     return
   }
   throw new RuntimeClientError(
     'invalid_environment',
-    `orca skills ${command} must run on the machine whose installed skills you want to use. Run the command from an Orca terminal on that machine.`
+    `mcode skills ${command} must run on the machine whose installed skills you want to use. Run the command from an MCode terminal on that machine.`
   )
 }
 
@@ -74,7 +74,7 @@ function requireCloudOperation<T>(operation: SkillCloudOperation<T>): T {
     return operation.value
   }
   if (operation.status === 'reconnect-required') {
-    throw new RuntimeClientError('authentication_required', 'Sign in to Orca and try again.')
+    throw new RuntimeClientError('authentication_required', 'Sign in to MCode and try again.')
   }
   throw new RuntimeClientError('authentication_unconfigured', operation.message)
 }
@@ -134,7 +134,7 @@ async function callShare(
     if (error instanceof RuntimeRpcFailureError && error.code === 'method_not_found') {
       throw new RuntimeClientError(
         'update_required',
-        'The connected Orca runtime does not support agent skill sharing yet. Update Orca on that machine and try again.'
+        'The connected MCode runtime does not support agent skill sharing yet. Update MCode on that machine and try again.'
       )
     }
     throw error
@@ -158,7 +158,7 @@ export const SKILL_SHARING_HANDLERS: Record<string, CommandHandler> = {
     if (skillSelectors.length === 0) {
       throw new RuntimeClientError(
         'invalid_argument',
-        'Select at least one installed skill with --skill. Run `orca skills installed` to list them.'
+        'Select at least one installed skill with --skill. Run `mcode skills installed` to list them.'
       )
     }
     const bundleLabel = stringFlag(ctx, 'bundle-name')

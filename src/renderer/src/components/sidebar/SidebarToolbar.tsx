@@ -9,7 +9,7 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { hasFeatureInteraction } from '../../../../shared/feature-interactions'
 
-const WORKSPACE_BOARD_MOVED_HINT_STORAGE_KEY = 'orca.workspaceBoardMovedHintSeen.v1'
+const WORKSPACE_BOARD_MOVED_HINT_STORAGE_KEY = 'mcode.workspaceBoardMovedHintSeen.v1'
 const WORKSPACE_BOARD_MOVED_HINT_DURATION_MS = 12000
 
 type SidebarToolbarProps = {
@@ -24,7 +24,7 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
   onWorkspaceBoardToggle
 }: SidebarToolbarProps) {
   // Why: this memo boundary needs its own language subscription, while
-  // translate() preserves Orca's pseudo-localization behavior. Without it the
+  // translate() preserves MCode's pseudo-localization behavior. Without it the
   // toolbar (and the ScrollToCurrentWorkspaceToolbarButton it renders) keeps
   // whatever language was active at boot — English, since the persisted locale
   // is applied asynchronously after the lazy catalog loads.

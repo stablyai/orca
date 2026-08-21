@@ -71,7 +71,7 @@ export async function loadMobileDiffReviewSnapshot(
   const statusResponse = await client.sendRequest('git.status', { worktree: `id:${worktreeId}` })
   if (!statusResponse.ok) {
     if (isMobileGitUnavailable(statusResponse.error?.code, statusResponse.error?.message)) {
-      return { kind: 'unavailable', message: 'Update Orca desktop to review changes on mobile.' }
+      return { kind: 'unavailable', message: 'Update MCode desktop to review changes on mobile.' }
     }
     throw new Error(statusResponse.error?.message || 'Unable to load changes')
   }

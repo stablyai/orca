@@ -5,7 +5,7 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
-import { buildRemediation, reloadOrcaRenderer } from './GhAuthErrorHelp'
+import { buildRemediation, reloadMCodeRenderer } from './GhAuthErrorHelp'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -72,7 +72,7 @@ describe('GitHub Project auth remediation host routing', () => {
       location: { reload: locationReload }
     })
 
-    reloadOrcaRenderer()
+    reloadMCodeRenderer()
     await vi.waitFor(() => expect(errors).toHaveBeenCalledTimes(1))
 
     expect(reload).toHaveBeenCalledTimes(1)

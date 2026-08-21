@@ -284,7 +284,7 @@ describe('keybindings', () => {
     expect(
       keybindingMatchesAction('tab.closeAll', linuxCloseAll, 'linux', undefined, {
         context: 'terminal',
-        terminalShortcutPolicy: 'orca-first'
+        terminalShortcutPolicy: 'mcode-first'
       })
     ).toBe(true)
     // Why: close-all is a workspace tab command, so terminal-first mode should

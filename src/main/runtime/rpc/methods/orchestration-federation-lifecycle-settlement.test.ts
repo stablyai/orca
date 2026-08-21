@@ -5,7 +5,7 @@ import {
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import { OrcaRuntimeService } from '../../orca-runtime'
+import { MCodeRuntimeService } from '../../mcode-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import type { OrchestrationEnvironmentTransport } from '../../orchestration/environment-transport'
 import { waitForFederatedLifecycleSettlement } from '../../orchestration/federation-lifecycle-settlement'
@@ -16,8 +16,8 @@ import { createFederationWorkerStartRequest as startRequest } from './orchestrat
 describe('orchestration federation lifecycle settlement', () => {
   let homeDb: OrchestrationDb
   let workerDb: OrchestrationDb
-  let homeRuntime: OrcaRuntimeService
-  let workerRuntime: OrcaRuntimeService
+  let homeRuntime: MCodeRuntimeService
+  let workerRuntime: MCodeRuntimeService
   let homeDispatcher: RpcDispatcher
   let workerDispatcher: RpcDispatcher
   let workerCapabilities: string[]
@@ -28,7 +28,7 @@ describe('orchestration federation lifecycle settlement', () => {
   beforeEach(() => {
     homeDb = new OrchestrationDb(':memory:')
     workerDb = new OrchestrationDb(':memory:')
-    workerRuntime = new OrcaRuntimeService()
+    workerRuntime = new MCodeRuntimeService()
     workerRuntime.setOrchestrationDb(workerDb)
     workerDispatcher = new RpcDispatcher({ runtime: workerRuntime, methods: ORCHESTRATION_METHODS })
     workerCapabilities = [...(workerRuntime.getStatus().capabilities ?? [])]
@@ -67,7 +67,7 @@ describe('orchestration federation lifecycle settlement', () => {
         })) as RuntimeRpcResponse<unknown>
       }
     }
-    homeRuntime = new OrcaRuntimeService(null, undefined, {
+    homeRuntime = new MCodeRuntimeService(null, undefined, {
       orchestrationEnvironmentTransport: transport
     })
     homeRuntime.setOrchestrationDb(homeDb)
@@ -118,7 +118,7 @@ describe('orchestration federation lifecycle settlement', () => {
     vi.spyOn(workerRuntime, 'getTerminalProcessIncarnation').mockReturnValue(
       'windows_runtime:pty:1'
     )
-    vi.spyOn(workerRuntime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+    vi.spyOn(workerRuntime, 'getTerminalOrchestrationCliCommand').mockReturnValue('mcode')
     vi.spyOn(workerRuntime, 'sendTerminalAgentPrompt').mockResolvedValue({
       handle: 'term_windows_worker',
       accepted: true,
@@ -137,7 +137,7 @@ describe('orchestration federation lifecycle settlement', () => {
 
   function restartHomeRuntime(): void {
     homeRuntime.stopOrchestrationFederationRelay()
-    homeRuntime = new OrcaRuntimeService(null, undefined, {
+    homeRuntime = new MCodeRuntimeService(null, undefined, {
       orchestrationEnvironmentTransport: transport
     })
     homeRuntime.setOrchestrationDb(homeDb)
@@ -145,7 +145,7 @@ describe('orchestration federation lifecycle settlement', () => {
 
   function restartWorkerRuntime(): void {
     workerRuntime.stopOrchestrationFederationRelay()
-    workerRuntime = new OrcaRuntimeService()
+    workerRuntime = new MCodeRuntimeService()
     workerRuntime.setOrchestrationDb(workerDb)
     workerDispatcher = new RpcDispatcher({ runtime: workerRuntime, methods: ORCHESTRATION_METHODS })
     configureWorkerRuntime()

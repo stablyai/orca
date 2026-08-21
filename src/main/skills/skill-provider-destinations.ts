@@ -5,15 +5,15 @@ import {
   type SkillInstallProviderId
 } from '../../shared/skill-install-providers'
 
-export type OrcaSkillProviderId = SkillInstallProviderId
+export type MCodeSkillProviderId = SkillInstallProviderId
 
 export type SkillProviderDestination = {
-  provider: OrcaSkillProviderId
+  provider: MCodeSkillProviderId
   readsCanonicalRoot: boolean
   rootPath: string
 }
 
-export type SkillProviderRootOverrides = Partial<Record<OrcaSkillProviderId, string>>
+export type SkillProviderRootOverrides = Partial<Record<MCodeSkillProviderId, string>>
 
 function normalizedPath(path: string): string {
   const normalized = resolve(path)

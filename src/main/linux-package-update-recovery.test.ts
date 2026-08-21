@@ -40,7 +40,7 @@ vi.mock('node:fs', async (importOriginal) => {
 const describePosix = describe.skipIf(process.platform === 'win32')
 
 const VERSION = '1.2.3'
-const PAYLOAD = 'orca package payload'
+const PAYLOAD = 'mcode package payload'
 const SHA512 = createHash('sha512').update(PAYLOAD).digest('base64')
 
 let recovery: typeof RecoveryModule
@@ -68,7 +68,7 @@ async function writePackage(name: string, contents = PAYLOAD): Promise<string> {
 
 /** Captures a well-formed downloaded event unless a field is overridden. */
 function capture(overrides: Record<string, unknown> = {}): void {
-  const downloadedFile = (overrides.downloadedFile ?? path.join(downloadDir, 'orca.deb')) as string
+  const downloadedFile = (overrides.downloadedFile ?? path.join(downloadDir, 'mcode.deb')) as string
   recovery.captureLinuxPackageArtifact({
     version: VERSION,
     files: [{ url: path.basename(downloadedFile), sha512: SHA512 }],
@@ -83,9 +83,9 @@ beforeEach(async () => {
   showItemInFolderMock.mockReset()
   getPackageTypeMock.mockReset().mockReturnValue('deb')
   buildCommandMock.mockReset().mockReturnValue({ ok: true, command: 'installed command' })
-  tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'orca-recovery-'))
+  tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), 'mcode-recovery-'))
   cacheRoot = path.join(tempRoot, 'cache')
-  updaterDir = path.join(cacheRoot, 'orca-updater')
+  updaterDir = path.join(cacheRoot, 'mcode-updater')
   // The only shape electron-updater downloads into: <cacheRoot>/<updaterCacheDirName>/pending.
   downloadDir = path.join(updaterDir, 'pending')
   outsideDir = path.join(tempRoot, 'outside')
@@ -107,7 +107,7 @@ describe('captureLinuxPackageArtifact', () => {
     expect(recovery.getTrackedLinuxPackageArtifact()).toEqual({
       packageType: 'deb',
       version: VERSION,
-      path: path.join(downloadDir, 'orca.deb'),
+      path: path.join(downloadDir, 'mcode.deb'),
       sha512: SHA512
     })
   })
@@ -119,7 +119,7 @@ describe('captureLinuxPackageArtifact', () => {
   })
 
   it('requires an absolute downloaded path', () => {
-    capture({ downloadedFile: 'orca.deb' })
+    capture({ downloadedFile: 'mcode.deb' })
     expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
   })
 
@@ -127,19 +127,19 @@ describe('captureLinuxPackageArtifact', () => {
     recovery.captureLinuxPackageArtifact({
       downloadedFile: 123,
       version: VERSION,
-      files: [{ url: 'orca.deb', sha512: SHA512 }]
+      files: [{ url: 'mcode.deb', sha512: SHA512 }]
     })
     expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
   })
 
   it('requires the package extension to match the installed format', () => {
-    capture({ downloadedFile: path.join(downloadDir, 'orca.rpm') })
+    capture({ downloadedFile: path.join(downloadDir, 'mcode.rpm') })
     expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
   })
 
   it('accepts an uppercase extension', () => {
-    capture({ downloadedFile: path.join(downloadDir, 'Orca.DEB') })
-    expect(recovery.getTrackedLinuxPackageArtifact()?.path).toBe(path.join(downloadDir, 'Orca.DEB'))
+    capture({ downloadedFile: path.join(downloadDir, 'MCode.DEB') })
+    expect(recovery.getTrackedLinuxPackageArtifact()?.path).toBe(path.join(downloadDir, 'MCode.DEB'))
   })
 
   it('requires a non-empty string version', () => {
@@ -151,23 +151,23 @@ describe('captureLinuxPackageArtifact', () => {
 
   it('matches an absolute file URL by basename', () => {
     capture({
-      files: [{ url: 'https://downloads.example.com/releases/1.2.3/orca.deb', sha512: SHA512 }]
+      files: [{ url: 'https://downloads.example.com/releases/1.2.3/mcode.deb', sha512: SHA512 }]
     })
     expect(recovery.getTrackedLinuxPackageArtifact()?.sha512).toBe(SHA512)
   })
 
   it('matches a percent-encoded relative URL against the decoded basename', () => {
-    const downloadedFile = path.join(downloadDir, 'Orca Setup 1.2.3.deb')
-    capture({ downloadedFile, files: [{ url: 'Orca%20Setup%201.2.3.deb', sha512: SHA512 }] })
+    const downloadedFile = path.join(downloadDir, 'MCode Setup 1.2.3.deb')
+    capture({ downloadedFile, files: [{ url: 'MCode%20Setup%201.2.3.deb', sha512: SHA512 }] })
     expect(recovery.getTrackedLinuxPackageArtifact()?.path).toBe(downloadedFile)
   })
 
   it('ignores entries for other files and formats', () => {
     capture({
       files: [
-        { url: 'orca.AppImage', sha512: 'other-appimage-digest' },
-        { url: 'orca-arm64.deb', sha512: 'other-arch-digest' },
-        { url: 'orca.deb', sha512: SHA512 }
+        { url: 'mcode.AppImage', sha512: 'other-appimage-digest' },
+        { url: 'mcode-arm64.deb', sha512: 'other-arch-digest' },
+        { url: 'mcode.deb', sha512: SHA512 }
       ]
     })
     expect(recovery.getTrackedLinuxPackageArtifact()?.sha512).toBe(SHA512)
@@ -176,8 +176,8 @@ describe('captureLinuxPackageArtifact', () => {
   it('accepts duplicate entries that agree on the digest', () => {
     capture({
       files: [
-        { url: 'orca.deb', sha512: SHA512 },
-        { url: 'https://downloads.example.com/orca.deb', sha512: SHA512 }
+        { url: 'mcode.deb', sha512: SHA512 },
+        { url: 'https://downloads.example.com/mcode.deb', sha512: SHA512 }
       ]
     })
     expect(recovery.getTrackedLinuxPackageArtifact()?.sha512).toBe(SHA512)
@@ -186,54 +186,54 @@ describe('captureLinuxPackageArtifact', () => {
   it('refuses an ambiguous basename with two different digests', () => {
     capture({
       files: [
-        { url: 'orca.deb', sha512: SHA512 },
-        { url: 'https://mirror.example.com/orca.deb', sha512: 'conflicting-digest' }
+        { url: 'mcode.deb', sha512: SHA512 },
+        { url: 'https://mirror.example.com/mcode.deb', sha512: 'conflicting-digest' }
       ]
     })
     expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
   })
 
   it('refuses an entry with a missing or non-string digest', () => {
-    capture({ files: [{ url: 'orca.deb' }] })
+    capture({ files: [{ url: 'mcode.deb' }] })
     expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
-    capture({ files: [{ url: 'orca.deb', sha512: 42 }] })
+    capture({ files: [{ url: 'mcode.deb', sha512: 42 }] })
     expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
   })
 
   it('refuses a digest that cannot decode to 64 bytes', () => {
     // Why: an undecodable digest is a metadata problem — arming here would blame the user's file.
     capture({
-      files: [{ url: 'orca.deb', sha512: createHash('sha256').update(PAYLOAD).digest('base64') }]
+      files: [{ url: 'mcode.deb', sha512: createHash('sha256').update(PAYLOAD).digest('base64') }]
     })
     expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
   })
 
   it('refuses a digest with characters outside the base64 alphabet', () => {
     // Buffer.from would silently drop the '!', so the round-trip check must reject this.
-    capture({ files: [{ url: 'orca.deb', sha512: `${SHA512.slice(0, 4)}!${SHA512.slice(4)}` }] })
+    capture({ files: [{ url: 'mcode.deb', sha512: `${SHA512.slice(0, 4)}!${SHA512.slice(4)}` }] })
     expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
   })
 
   it('refuses a digest that is not base64 at all', () => {
-    capture({ files: [{ url: 'orca.deb', sha512: 'not-a-digest' }] })
+    capture({ files: [{ url: 'mcode.deb', sha512: 'not-a-digest' }] })
     expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
   })
 
   it('keeps a retained artifact when a later event carries a malformed digest', () => {
     capture()
-    capture({ files: [{ url: 'orca.deb', sha512: 'not-a-digest' }] })
+    capture({ files: [{ url: 'mcode.deb', sha512: 'not-a-digest' }] })
     expect(recovery.getTrackedLinuxPackageArtifact()?.sha512).toBe(SHA512)
   })
 
   it('refuses a malformed percent-encoded URL', () => {
-    capture({ files: [{ url: 'orca%ZZ.deb', sha512: SHA512 }] })
+    capture({ files: [{ url: 'mcode%ZZ.deb', sha512: SHA512 }] })
     expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
   })
 
   it('refuses a missing or non-array file list', () => {
     capture({ files: undefined })
     expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
-    capture({ files: { url: 'orca.deb', sha512: SHA512 } })
+    capture({ files: { url: 'mcode.deb', sha512: SHA512 } })
     expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
   })
 
@@ -246,28 +246,28 @@ describe('captureLinuxPackageArtifact', () => {
     capture()
     capture({
       version: '1.2.4',
-      downloadedFile: path.join(downloadDir, 'orca-next.deb'),
-      files: [{ url: 'orca-next.deb', sha512: SHA512 }]
+      downloadedFile: path.join(downloadDir, 'mcode-next.deb'),
+      files: [{ url: 'mcode-next.deb', sha512: SHA512 }]
     })
     expect(recovery.getTrackedLinuxPackageArtifact()).toMatchObject({
       version: '1.2.4',
-      path: path.join(downloadDir, 'orca-next.deb')
+      path: path.join(downloadDir, 'mcode-next.deb')
     })
   })
 
   it('keeps the retained artifact when a new download has no usable digest', () => {
     capture()
-    capture({ files: [{ url: 'orca.deb' }] })
-    expect(recovery.getTrackedLinuxPackageArtifact()?.path).toBe(path.join(downloadDir, 'orca.deb'))
+    capture({ files: [{ url: 'mcode.deb' }] })
+    expect(recovery.getTrackedLinuxPackageArtifact()?.path).toBe(path.join(downloadDir, 'mcode.deb'))
   })
 
   it('does not arm recovery from a download with no usable digest', () => {
-    capture({ files: [{ url: 'orca.deb' }] })
-    capture({ files: [{ url: 'orca%ZZ.deb', sha512: SHA512 }] })
+    capture({ files: [{ url: 'mcode.deb' }] })
+    capture({ files: [{ url: 'mcode%ZZ.deb', sha512: SHA512 }] })
     capture({
       files: [
-        { url: 'orca.deb', sha512: SHA512 },
-        { url: 'https://mirror.example.com/orca.deb', sha512: 'conflicting-digest' }
+        { url: 'mcode.deb', sha512: SHA512 },
+        { url: 'https://mirror.example.com/mcode.deb', sha512: 'conflicting-digest' }
       ]
     })
     expect(recovery.getTrackedLinuxPackageArtifact()).toBeNull()
@@ -275,8 +275,8 @@ describe('captureLinuxPackageArtifact', () => {
 
   it('keeps the retained artifact when an unrelated download event arrives', () => {
     capture()
-    capture({ downloadedFile: path.join(downloadDir, 'orca.AppImage') })
-    expect(recovery.getTrackedLinuxPackageArtifact()?.path).toBe(path.join(downloadDir, 'orca.deb'))
+    capture({ downloadedFile: path.join(downloadDir, 'mcode.AppImage') })
+    expect(recovery.getTrackedLinuxPackageArtifact()?.path).toBe(path.join(downloadDir, 'mcode.deb'))
   })
 })
 
@@ -315,12 +315,12 @@ describe('clearTrackedLinuxPackageArtifact', () => {
 
 describePosix('resolveLinuxPackageInstallInstructions', () => {
   it('returns the built command and package file name for a verified package', async () => {
-    const filePath = await writePackage('orca.deb')
+    const filePath = await writePackage('mcode.deb')
     capture()
     await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
       ok: true,
       command: 'installed command',
-      packageFileName: 'orca.deb'
+      packageFileName: 'mcode.deb'
     })
     expect(buildCommandMock).toHaveBeenCalledWith('deb', filePath)
   })
@@ -333,7 +333,7 @@ describePosix('resolveLinuxPackageInstallInstructions', () => {
   })
 
   it('reports missing when the recovery version does not match', async () => {
-    await writePackage('orca.deb')
+    await writePackage('mcode.deb')
     capture()
     await expect(
       recovery.resolveLinuxPackageInstallInstructions(recoveryFor({ version: '9.9.9' }))
@@ -341,7 +341,7 @@ describePosix('resolveLinuxPackageInstallInstructions', () => {
   })
 
   it('reports missing when the recovery package type does not match', async () => {
-    await writePackage('orca.deb')
+    await writePackage('mcode.deb')
     capture()
     await expect(
       recovery.resolveLinuxPackageInstallInstructions(recoveryFor({ packageType: 'rpm' }))
@@ -349,7 +349,7 @@ describePosix('resolveLinuxPackageInstallInstructions', () => {
   })
 
   it('reports missing when the package was deleted', async () => {
-    const filePath = await writePackage('orca.deb')
+    const filePath = await writePackage('mcode.deb')
     capture()
     await fsp.rm(filePath)
     await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
@@ -359,7 +359,7 @@ describePosix('resolveLinuxPackageInstallInstructions', () => {
   })
 
   it('propagates a package-manager discovery failure', async () => {
-    await writePackage('orca.deb')
+    await writePackage('mcode.deb')
     capture()
     buildCommandMock.mockReturnValue({ ok: false, reason: 'no-sudo' })
     await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
@@ -376,7 +376,7 @@ describePosix('resolveLinuxPackageInstallInstructions', () => {
 
 describePosix('digest validation', () => {
   it('rejects a package whose contents changed', async () => {
-    const filePath = await writePackage('orca.deb')
+    const filePath = await writePackage('mcode.deb')
     capture()
     await fsp.writeFile(filePath, 'tampered payload')
     await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
@@ -386,10 +386,10 @@ describePosix('digest validation', () => {
   })
 
   it('rejects a well-formed digest that belongs to another file', async () => {
-    await writePackage('orca.deb')
+    await writePackage('mcode.deb')
     capture({
       files: [
-        { url: 'orca.deb', sha512: createHash('sha512').update('other payload').digest('base64') }
+        { url: 'mcode.deb', sha512: createHash('sha512').update('other payload').digest('base64') }
       ]
     })
     await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
@@ -399,8 +399,8 @@ describePosix('digest validation', () => {
   })
 
   it('never hashes a package that a malformed digest failed to arm', async () => {
-    await writePackage('orca.deb')
-    capture({ files: [{ url: 'orca.deb', sha512: 'not-a-digest' }] })
+    await writePackage('mcode.deb')
+    capture({ files: [{ url: 'mcode.deb', sha512: 'not-a-digest' }] })
     await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
       ok: false,
       reason: 'missing'
@@ -409,7 +409,7 @@ describePosix('digest validation', () => {
   })
 
   it.runIf(process.getuid?.() !== 0)('reports read-failed for an unreadable package', async () => {
-    const filePath = await writePackage('orca.deb')
+    const filePath = await writePackage('mcode.deb')
     capture()
     await fsp.chmod(filePath, 0o000)
     await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
@@ -422,9 +422,9 @@ describePosix('digest validation', () => {
 
 describePosix('cache containment', () => {
   it('rejects a path that traverses out of the cache', async () => {
-    const filePath = path.join(outsideDir, 'orca.deb')
+    const filePath = path.join(outsideDir, 'mcode.deb')
     await fsp.writeFile(filePath, PAYLOAD)
-    capture({ downloadedFile: path.join(downloadDir, '..', '..', '..', 'outside', 'orca.deb') })
+    capture({ downloadedFile: path.join(downloadDir, '..', '..', '..', 'outside', 'mcode.deb') })
     await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
       ok: false,
       reason: 'not-regular'
@@ -432,7 +432,7 @@ describePosix('cache containment', () => {
   })
 
   it('rejects a path outside the cache root', async () => {
-    const filePath = path.join(outsideDir, 'orca.deb')
+    const filePath = path.join(outsideDir, 'mcode.deb')
     await fsp.writeFile(filePath, PAYLOAD)
     capture({ downloadedFile: filePath })
     await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
@@ -453,7 +453,7 @@ describePosix('cache containment', () => {
   })
 
   it('rejects a directory in place of the package', async () => {
-    await fsp.mkdir(path.join(downloadDir, 'orca.deb'))
+    await fsp.mkdir(path.join(downloadDir, 'mcode.deb'))
     capture()
     await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
       ok: false,
@@ -463,7 +463,7 @@ describePosix('cache containment', () => {
 
   it('rejects a symlink to a real package inside the cache', async () => {
     await writePackage('real.deb')
-    const linkPath = path.join(downloadDir, 'orca.deb')
+    const linkPath = path.join(downloadDir, 'mcode.deb')
     await fsp.symlink(path.join(downloadDir, 'real.deb'), linkPath)
     capture()
     await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
@@ -473,9 +473,9 @@ describePosix('cache containment', () => {
   })
 
   it('rejects a package whose parent symlink escapes the cache', async () => {
-    await fsp.writeFile(path.join(outsideDir, 'orca.deb'), PAYLOAD)
+    await fsp.writeFile(path.join(outsideDir, 'mcode.deb'), PAYLOAD)
     await fsp.symlink(outsideDir, path.join(cacheRoot, 'escape'))
-    capture({ downloadedFile: path.join(cacheRoot, 'escape', 'orca.deb') })
+    capture({ downloadedFile: path.join(cacheRoot, 'escape', 'mcode.deb') })
     await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
       ok: false,
       reason: 'not-regular'
@@ -485,7 +485,7 @@ describePosix('cache containment', () => {
   it('rejects a subdirectory of the pending directory', async () => {
     const nested = path.join(downloadDir, 'nested')
     await fsp.mkdir(nested)
-    const filePath = path.join(nested, 'orca.deb')
+    const filePath = path.join(nested, 'mcode.deb')
     await fsp.writeFile(filePath, PAYLOAD)
     capture({ downloadedFile: filePath })
     await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
@@ -497,9 +497,9 @@ describePosix('cache containment', () => {
   it('uses the home cache when XDG_CACHE_HOME is unset', async () => {
     // Why: the fallback is the only reason an unset XDG_CACHE_HOME still finds the real download.
     const homeCache = path.join(tempRoot, 'home')
-    const homeDownloadDir = path.join(homeCache, '.cache', 'orca-updater', 'pending')
+    const homeDownloadDir = path.join(homeCache, '.cache', 'mcode-updater', 'pending')
     await fsp.mkdir(homeDownloadDir, { recursive: true })
-    const filePath = path.join(homeDownloadDir, 'orca.deb')
+    const filePath = path.join(homeDownloadDir, 'mcode.deb')
     await fsp.writeFile(filePath, PAYLOAD)
     vi.stubEnv('XDG_CACHE_HOME', '')
     vi.spyOn(os, 'homedir').mockReturnValue(homeCache)
@@ -507,7 +507,7 @@ describePosix('cache containment', () => {
     await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
       ok: true,
       command: 'installed command',
-      packageFileName: 'orca.deb'
+      packageFileName: 'mcode.deb'
     })
   })
 })
@@ -521,7 +521,7 @@ describePosix('pending-directory anchoring', () => {
   it('rejects a package in an attacker-owned directory under the cache root', async () => {
     const evilDir = path.join(cacheRoot, 'evil')
     await fsp.mkdir(evilDir)
-    const filePath = path.join(evilDir, 'orca.deb')
+    const filePath = path.join(evilDir, 'mcode.deb')
     await fsp.writeFile(filePath, PAYLOAD)
     capture({ downloadedFile: filePath })
     await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
@@ -531,7 +531,7 @@ describePosix('pending-directory anchoring', () => {
   })
 
   it('rejects a package in the updater directory itself', async () => {
-    const filePath = path.join(updaterDir, 'orca.deb')
+    const filePath = path.join(updaterDir, 'mcode.deb')
     await fsp.writeFile(filePath, PAYLOAD)
     capture({ downloadedFile: filePath })
     await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
@@ -543,7 +543,7 @@ describePosix('pending-directory anchoring', () => {
   it('rejects a pending directory buried deeper than one level under the cache root', async () => {
     const deepPending = path.join(cacheRoot, 'evil', 'nested', 'pending')
     await fsp.mkdir(deepPending, { recursive: true })
-    const filePath = path.join(deepPending, 'orca.deb')
+    const filePath = path.join(deepPending, 'mcode.deb')
     await fsp.writeFile(filePath, PAYLOAD)
     capture({ downloadedFile: filePath })
     await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
@@ -553,11 +553,11 @@ describePosix('pending-directory anchoring', () => {
   })
 
   it('rejects a pending directory that is a symlink out of the cache', async () => {
-    await fsp.writeFile(path.join(outsideDir, 'orca.deb'), PAYLOAD)
-    const fakeUpdaterDir = path.join(cacheRoot, 'orca-updater-2')
+    await fsp.writeFile(path.join(outsideDir, 'mcode.deb'), PAYLOAD)
+    const fakeUpdaterDir = path.join(cacheRoot, 'mcode-updater-2')
     await fsp.mkdir(fakeUpdaterDir)
     await fsp.symlink(outsideDir, path.join(fakeUpdaterDir, 'pending'))
-    capture({ downloadedFile: path.join(fakeUpdaterDir, 'pending', 'orca.deb') })
+    capture({ downloadedFile: path.join(fakeUpdaterDir, 'pending', 'mcode.deb') })
     await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
       ok: false,
       reason: 'not-regular'
@@ -566,33 +566,33 @@ describePosix('pending-directory anchoring', () => {
 
   it('accepts any updater directory name that holds the pending directory', async () => {
     // The cache directory name comes from the app, so only its position is fixed.
-    const otherPending = path.join(cacheRoot, 'orca-updater-next', 'pending')
+    const otherPending = path.join(cacheRoot, 'mcode-updater-next', 'pending')
     await fsp.mkdir(otherPending, { recursive: true })
-    const filePath = path.join(otherPending, 'orca.deb')
+    const filePath = path.join(otherPending, 'mcode.deb')
     await fsp.writeFile(filePath, PAYLOAD)
     capture({ downloadedFile: filePath })
     await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
       ok: true,
       command: 'installed command',
-      packageFileName: 'orca.deb'
+      packageFileName: 'mcode.deb'
     })
   })
 
   it('accepts a pending directory reached through a symlink that stays in the cache', async () => {
-    await writePackage('orca.deb')
+    await writePackage('mcode.deb')
     await fsp.symlink(updaterDir, path.join(cacheRoot, 'link-to-updater'))
-    capture({ downloadedFile: path.join(cacheRoot, 'link-to-updater', 'pending', 'orca.deb') })
+    capture({ downloadedFile: path.join(cacheRoot, 'link-to-updater', 'pending', 'mcode.deb') })
     await expect(recovery.resolveLinuxPackageInstallInstructions(recoveryFor())).resolves.toEqual({
       ok: true,
       command: 'installed command',
-      packageFileName: 'orca.deb'
+      packageFileName: 'mcode.deb'
     })
   })
 })
 
 describePosix('validation coalescing', () => {
   it('performs one hash pass for concurrent requests', async () => {
-    await writePackage('orca.deb')
+    await writePackage('mcode.deb')
     capture()
     const [first, second] = await Promise.all([
       recovery.resolveLinuxPackageInstallInstructions(recoveryFor()),
@@ -604,7 +604,7 @@ describePosix('validation coalescing', () => {
   })
 
   it('revalidates once the in-flight pass settles', async () => {
-    await writePackage('orca.deb')
+    await writePackage('mcode.deb')
     capture()
     await recovery.resolveLinuxPackageInstallInstructions(recoveryFor())
     await recovery.resolveLinuxPackageInstallInstructions(recoveryFor())
@@ -614,7 +614,7 @@ describePosix('validation coalescing', () => {
   // Why: a verdict handed to a root package manager must cover the bytes as of the click, not the
   // bytes a Copy click started streaming seconds earlier.
   it('never reuses an in-flight pass for a pre-install re-proof', async () => {
-    await writePackage('orca.deb')
+    await writePackage('mcode.deb')
     capture()
     const artifact = recovery.getTrackedLinuxPackageArtifact()
     const copyPass = recovery.resolveLinuxPackageInstallInstructions(recoveryFor())
@@ -626,7 +626,7 @@ describePosix('validation coalescing', () => {
   })
 
   it('lets a later Copy click join the pre-install pass', async () => {
-    await writePackage('orca.deb')
+    await writePackage('mcode.deb')
     capture()
     const artifact = recovery.getTrackedLinuxPackageArtifact()
     const installPass = recovery.revalidateLinuxPackageForInstall(artifact!)
@@ -637,14 +637,14 @@ describePosix('validation coalescing', () => {
   })
 
   it('does not reuse an in-flight pass for a different artifact', async () => {
-    await writePackage('orca.deb')
-    await writePackage('orca-next.deb')
+    await writePackage('mcode.deb')
+    await writePackage('mcode-next.deb')
     capture()
     const first = recovery.resolveLinuxPackageInstallInstructions(recoveryFor())
     capture({
       version: '1.2.4',
-      downloadedFile: path.join(downloadDir, 'orca-next.deb'),
-      files: [{ url: 'orca-next.deb', sha512: SHA512 }]
+      downloadedFile: path.join(downloadDir, 'mcode-next.deb'),
+      files: [{ url: 'mcode-next.deb', sha512: SHA512 }]
     })
     const second = recovery.resolveLinuxPackageInstallInstructions(
       recoveryFor({ version: '1.2.4' })
@@ -656,7 +656,7 @@ describePosix('validation coalescing', () => {
 
 describePosix('revalidateLinuxPackageForInstall', () => {
   it('proves the retained package still matches its release digest', async () => {
-    await writePackage('orca.deb')
+    await writePackage('mcode.deb')
     capture()
     const artifact = recovery.getTrackedLinuxPackageArtifact()
     await expect(recovery.revalidateLinuxPackageForInstall(artifact!)).resolves.toEqual({
@@ -665,10 +665,10 @@ describePosix('revalidateLinuxPackageForInstall', () => {
   })
 
   it('rejects a package swapped after the download was verified', async () => {
-    await writePackage('orca.deb')
+    await writePackage('mcode.deb')
     capture()
     const artifact = recovery.getTrackedLinuxPackageArtifact()
-    await writePackage('orca.deb', 'attacker supplied package')
+    await writePackage('mcode.deb', 'attacker supplied package')
     await expect(recovery.revalidateLinuxPackageForInstall(artifact!)).resolves.toEqual({
       ok: false,
       reason: 'hash-mismatch'
@@ -676,7 +676,7 @@ describePosix('revalidateLinuxPackageForInstall', () => {
   })
 
   it('reports a package deleted from the cache as missing', async () => {
-    const filePath = await writePackage('orca.deb')
+    const filePath = await writePackage('mcode.deb')
     capture()
     const artifact = recovery.getTrackedLinuxPackageArtifact()
     await fsp.rm(filePath)
@@ -689,14 +689,14 @@ describePosix('revalidateLinuxPackageForInstall', () => {
 
 describePosix('revealLinuxPackage', () => {
   it('reveals a verified package on the machine that owns it', async () => {
-    const filePath = await writePackage('orca.deb')
+    const filePath = await writePackage('mcode.deb')
     capture()
     await expect(recovery.revealLinuxPackage(recoveryFor())).resolves.toEqual({ ok: true })
     expect(showItemInFolderMock).toHaveBeenCalledWith(filePath)
   })
 
   it('does not reveal a package that fails validation', async () => {
-    const filePath = await writePackage('orca.deb')
+    const filePath = await writePackage('mcode.deb')
     capture()
     await fsp.writeFile(filePath, 'tampered payload')
     await expect(recovery.revealLinuxPackage(recoveryFor())).resolves.toEqual({
@@ -707,7 +707,7 @@ describePosix('revealLinuxPackage', () => {
   })
 
   it('reports read-failed when the desktop file manager throws', async () => {
-    await writePackage('orca.deb')
+    await writePackage('mcode.deb')
     capture()
     showItemInFolderMock.mockImplementation(() => {
       throw new Error('no file manager available')

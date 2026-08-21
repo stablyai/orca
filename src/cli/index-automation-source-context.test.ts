@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 const {
   callMock,
   runtimeClientConstructorMock,
-  serveOrcaAppMock,
+  serveMCodeAppMock,
   getDefaultUserDataPathMock,
   addEnvironmentFromPairingCodeMock,
   listEnvironmentsMock,
@@ -11,8 +11,8 @@ const {
 } = vi.hoisted(() => ({
   callMock: vi.fn(),
   runtimeClientConstructorMock: vi.fn(),
-  serveOrcaAppMock: vi.fn(),
-  getDefaultUserDataPathMock: vi.fn(() => '/tmp/orca-user-data'),
+  serveMCodeAppMock: vi.fn(),
+  getDefaultUserDataPathMock: vi.fn(() => '/tmp/mcode-user-data'),
   addEnvironmentFromPairingCodeMock: vi.fn(),
   listEnvironmentsMock: vi.fn(),
   spawnMock: vi.fn()
@@ -23,7 +23,7 @@ vi.mock('./runtime-client', async () => {
   return createRuntimeClientModuleMock({
     callMock,
     runtimeClientConstructorMock,
-    serveOrcaAppMock,
+    serveMCodeAppMock,
     getDefaultUserDataPathMock
   })
 })
@@ -44,10 +44,10 @@ import { main } from './index'
 import { okFixture, queueFixtures } from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
-describe('orca cli worktree awareness', () => {
+describe('mcode cli worktree awareness', () => {
   useWorktreeAwarenessEnvironment({
     callMock,
-    serveOrcaAppMock,
+    serveMCodeAppMock,
     getDefaultUserDataPathMock,
     addEnvironmentFromPairingCodeMock,
     listEnvironmentsMock,
@@ -58,11 +58,11 @@ describe('orca cli worktree awareness', () => {
     const sourceContext = {
       kind: 'task-source',
       provider: 'github',
-      projectId: 'github:stablyai/orca',
+      projectId: 'github:mcode-ide/mcode',
       hostId: 'runtime:gpu',
       projectHostSetupId: 'setup-gpu',
       repoId: 'repo-gpu',
-      providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' },
+      providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'mcode' },
       accountLabel: 'gpu-bot'
     }
     queueFixtures(

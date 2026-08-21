@@ -36,7 +36,7 @@ describe('redactLinuxPackageInstallText', () => {
   })
 
   it('replaces the cached package path with a placeholder', () => {
-    const packagePath = '/home/user/.cache/orca-updater/Orca-1.2.3.deb'
+    const packagePath = '/home/user/.cache/mcode-updater/MCode-1.2.3.deb'
     const text = `dpkg: error processing ${packagePath} (--install)`
     expect(diagnostic.redactLinuxPackageInstallText(text, packagePath)).toBe(
       'dpkg: error processing <package> (--install)'
@@ -44,7 +44,7 @@ describe('redactLinuxPackageInstallText', () => {
   })
 
   it('replaces every occurrence of the package path', () => {
-    const packagePath = '/tmp/orca.deb'
+    const packagePath = '/tmp/mcode.deb'
     const text = `${packagePath} failed; retry ${packagePath}`
     expect(diagnostic.redactLinuxPackageInstallText(text, packagePath)).toBe(
       '<package> failed; retry <package>'
@@ -53,15 +53,15 @@ describe('redactLinuxPackageInstallText', () => {
 
   it('replaces the home directory with a placeholder', () => {
     const home = os.homedir()
-    const text = `could not read ${home}/.config/orca/settings.json`
+    const text = `could not read ${home}/.config/mcode/settings.json`
     expect(diagnostic.redactLinuxPackageInstallText(text, null)).toBe(
-      'could not read <home>/.config/orca/settings.json'
+      'could not read <home>/.config/mcode/settings.json'
     )
   })
 
   it('prefers the package placeholder for a path inside the home directory', () => {
     const home = os.homedir()
-    const packagePath = `${home}/.cache/orca-updater/Orca-1.2.3.deb`
+    const packagePath = `${home}/.cache/mcode-updater/MCode-1.2.3.deb`
     expect(diagnostic.redactLinuxPackageInstallText(`install ${packagePath}`, packagePath)).toBe(
       'install <package>'
     )
@@ -149,8 +149,8 @@ describe('redactLinuxPackageInstallText', () => {
 describe('createUpdaterDiagnosticLogger', () => {
   it('retains redacted error output while capturing', () => {
     const logger = diagnostic.createUpdaterDiagnosticLogger()
-    diagnostic.beginLinuxPackageInstallDiagnosticCapture('/tmp/orca.deb')
-    logger.error(`${ESC}[31mpkexec: /tmp/orca.deb  not authorized${ESC}[0m`)
+    diagnostic.beginLinuxPackageInstallDiagnosticCapture('/tmp/mcode.deb')
+    logger.error(`${ESC}[31mpkexec: /tmp/mcode.deb  not authorized${ESC}[0m`)
     expect(diagnostic.getLinuxPackageInstallDiagnostic()).toEqual({
       message: 'pkexec: <package> not authorized',
       reason: 'authentication-denied'

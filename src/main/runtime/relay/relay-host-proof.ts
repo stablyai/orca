@@ -1,8 +1,8 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import nacl from 'tweetnacl'
 
-const HOST_PROOF_TRANSCRIPT_DOMAIN = 'orca-relay-host-proof/v1'
-const HOST_CHALLENGE_PLAINTEXT_DOMAIN = 'orca-relay-host-challenge/v1'
+const HOST_PROOF_TRANSCRIPT_DOMAIN = 'mcode-relay-host-proof/v1'
+const HOST_CHALLENGE_PLAINTEXT_DOMAIN = 'mcode-relay-host-challenge/v1'
 // Covers routine NTP drift without extending the signed challenge window.
 const RELAY_HOST_PROOF_CLOCK_SKEW_MS = 30_000
 const MAX_HOST_PROOF_CHALLENGE_WINDOW_MS = 10_000

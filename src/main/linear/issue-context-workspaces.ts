@@ -43,7 +43,7 @@ export function resolveWorkspaceSelector(
 
 export function unknownWorkspace(workspaceId: string): ReturnType<typeof linearError> {
   return linearError('linear_invalid_workspace', `Unknown Linear workspace ${workspaceId}.`, {
-    nextSteps: ['Run `orca linear search <query> --workspace all --json` to inspect workspace ids.']
+    nextSteps: ['Run `mcode linear search <query> --workspace all --json` to inspect workspace ids.']
   })
 }
 

@@ -1,5 +1,5 @@
 import { resolve, relative, isAbsolute, posix, sep, win32 } from 'node:path'
-import type { GlobalSettings, OrcaWorkspaceLayout } from '../../shared/global-settings-types'
+import type { GlobalSettings, MCodeWorkspaceLayout } from '../../shared/global-settings-types'
 import type { Repo } from '../../shared/repo-types'
 import { isWindowsAbsolutePathLike, resolveRuntimePath } from '../../shared/cross-platform-path'
 import { isWslUncPath, resolveWslRepoWorktreeBasePath } from '../../shared/wsl-paths'
@@ -95,8 +95,8 @@ export function ensurePathWithinWorkspace(targetPath: string, workspaceDir: stri
  * must also live on the WSL filesystem. Creating them on the Windows side
  * (/mnt/c/...) would be extremely slow due to cross-filesystem I/O and
  * the terminal would open a Windows shell instead of WSL. We mirror the
- * Windows workspace layout inside ~/orca/workspaces on the WSL filesystem
- * (e.g. \\wsl.localhost\Ubuntu\home\user\orca\workspaces\repo\feature).
+ * Windows workspace layout inside ~/mcode/workspaces on the WSL filesystem
+ * (e.g. \\wsl.localhost\Ubuntu\home\user\mcode\workspaces\repo\feature).
  */
 export function computeWorktreePath(
   sanitizedName: string,
@@ -138,7 +138,7 @@ async function computeWorkspaceRootAsync(
   if (wsl && shouldMirrorWorkspaceDirInsideWsl(repoPath, settings.workspaceDir)) {
     const wslHome = await getWslHomeAsync(wsl.distro)
     if (wslHome) {
-      return win32.join(wslHome, 'orca', 'workspaces')
+      return win32.join(wslHome, 'mcode', 'workspaces')
     }
   }
   return resolveWorkspaceDirForRepo(repoPath, settings.workspaceDir)
@@ -153,7 +153,7 @@ export function computeWorkspaceRoot(repoPath: string, settings: { workspaceDir:
       // Mirror absolute local desktop workspace roots inside the distro so
       // terminals stay on the WSL filesystem; repo-relative roots can resolve
       // directly against the WSL repo path.
-      return win32.join(wslHome, 'orca', 'workspaces')
+      return win32.join(wslHome, 'mcode', 'workspaces')
     }
   }
   return resolveWorkspaceDirForRepo(repoPath, settings.workspaceDir)
@@ -191,7 +191,7 @@ export function getWorktreePathSettings(
 export function getWorktreeCreationLayout(
   repo: WorktreeBasePathRepo,
   settings: WorktreePathSettings
-): OrcaWorkspaceLayout {
+): MCodeWorkspaceLayout {
   return {
     path: getEffectiveWorktreeBasePath(repo, settings),
     nestWorkspaces: settings.nestWorkspaces

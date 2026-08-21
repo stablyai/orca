@@ -25,7 +25,7 @@ describe('Node source/copy content equality', () => {
   })
 
   it('compares multi-megabyte sparse files with fixed-size chunks', () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-resource-compare-'))
+    const root = mkdtempSync(join(tmpdir(), 'mcode-resource-compare-'))
     roots.push(root)
     const sourcePath = join(root, 'source.md')
     const copyPath = join(root, 'copy.md')
@@ -47,7 +47,7 @@ describe('Node source/copy content equality', () => {
   })
 
   it('rejects a non-file copy without attempting to consume it', () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-resource-compare-dir-'))
+    const root = mkdtempSync(join(tmpdir(), 'mcode-resource-compare-dir-'))
     roots.push(root)
     const sourcePath = join(root, 'source.md')
     writeFileSync(sourcePath, 'contents')

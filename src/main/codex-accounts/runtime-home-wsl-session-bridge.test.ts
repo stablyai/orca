@@ -47,7 +47,7 @@ describe('CodexRuntimeHomeService', () => {
 
       service.migrateLegacyWslActiveHomePointer(
         'Ubuntu',
-        '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\codex-runtime-home\\home'
+        '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\mcode\\codex-runtime-home\\home'
       )
 
       expect(execFileSyncMock).toHaveBeenCalledTimes(1)
@@ -60,22 +60,22 @@ describe('CodexRuntimeHomeService', () => {
 
       const shellCommand = args[5]
       expect(shellCommand).toContain(
-        "if [ ! -e '/home/alice/.local/share/orca/codex-runtime-home/active/wsl/home' ] && [ ! -L '/home/alice/.local/share/orca/codex-runtime-home/active/wsl/home' ]; then :"
+        "if [ ! -e '/home/alice/.local/share/mcode/codex-runtime-home/active/wsl/home' ] && [ ! -L '/home/alice/.local/share/mcode/codex-runtime-home/active/wsl/home' ]; then :"
       )
       expect(shellCommand).toContain(
-        "elif [ -e '/home/alice/.local/share/orca/codex-runtime-home/active/wsl/home' ] && [ ! -L '/home/alice/.local/share/orca/codex-runtime-home/active/wsl/home' ]; then :"
+        "elif [ -e '/home/alice/.local/share/mcode/codex-runtime-home/active/wsl/home' ] && [ ! -L '/home/alice/.local/share/mcode/codex-runtime-home/active/wsl/home' ]; then :"
       )
       expect(shellCommand).toContain(
-        "mkdir -p '/home/alice/.local/share/orca/codex-runtime-home/active/wsl'"
+        "mkdir -p '/home/alice/.local/share/mcode/codex-runtime-home/active/wsl'"
       )
       expect(shellCommand).toContain(
-        "ln -s -- '/home/alice/.local/share/orca/codex-runtime-home/home' '/home/alice/.local/share/orca/codex-runtime-home/active/wsl/home.next-"
+        "ln -s -- '/home/alice/.local/share/mcode/codex-runtime-home/home' '/home/alice/.local/share/mcode/codex-runtime-home/active/wsl/home.next-"
       )
       expect(shellCommand).toContain(
-        "mv -Tf -- '/home/alice/.local/share/orca/codex-runtime-home/active/wsl/home.next-"
+        "mv -Tf -- '/home/alice/.local/share/mcode/codex-runtime-home/active/wsl/home.next-"
       )
       expect(shellCommand).toContain(
-        "' '/home/alice/.local/share/orca/codex-runtime-home/active/wsl/home'"
+        "' '/home/alice/.local/share/mcode/codex-runtime-home/active/wsl/home'"
       )
       expect(shellCommand).not.toContain('[! -L')
       expect(shellCommand).not.toContain('mv -Tf--')
@@ -117,7 +117,7 @@ describe('CodexRuntimeHomeService', () => {
         wslHome,
         '.local',
         'share',
-        'orca',
+        'mcode',
         'codex-runtime-home',
         'home'
       )
@@ -171,7 +171,7 @@ describe('CodexRuntimeHomeService', () => {
         wslHome,
         '.local',
         'share',
-        'orca',
+        'mcode',
         'codex-runtime-home',
         'home'
       )
@@ -180,18 +180,18 @@ describe('CodexRuntimeHomeService', () => {
       expect(service.prepareForCodexLaunch({ runtime: 'wsl', wslDistro: 'Ubuntu' })).toBe(
         wslRuntimeHomePath
       )
-      const baselinePath = join(wslRuntimeHomePath, '.orca-config-settings-baseline.json')
+      const baselinePath = join(wslRuntimeHomePath, '.mcode-config-settings-baseline.json')
       expect(existsSync(baselinePath)).toBe(true)
 
-      // A direct WSL Codex edit wins and is mirrored into Orca's runtime before
-      // the baseline advances, so later in-Orca changes remain promotable.
+      // A direct WSL Codex edit wins and is mirrored into MCode's runtime before
+      // the baseline advances, so later in-MCode changes remain promotable.
       const runtimeConfigPath = join(wslRuntimeHomePath, 'config.toml')
       writeFileSync(wslSystemConfigPath, 'model = "outside-edit"\n', 'utf-8')
       service.prepareForCodexLaunch({ runtime: 'wsl', wslDistro: 'Ubuntu' })
       expect(readFileSync(runtimeConfigPath, 'utf-8')).toBe('model = "outside-edit"\n')
       expect(readFileSync(baselinePath, 'utf-8')).toContain('"model": "\\"outside-edit\\""')
 
-      // Codex now persists a /model change inside Orca's reconciled runtime.
+      // Codex now persists a /model change inside MCode's reconciled runtime.
       writeFileSync(
         runtimeConfigPath,
         readFileSync(runtimeConfigPath, 'utf-8').replace('model = "outside-edit"', 'model = "o4"'),
@@ -239,7 +239,7 @@ describe('CodexRuntimeHomeService', () => {
         wslHome,
         '.local',
         'share',
-        'orca',
+        'mcode',
         'codex-runtime-home',
         'home'
       )
@@ -273,7 +273,7 @@ describe('CodexRuntimeHomeService', () => {
       wslHome,
       '.local',
       'share',
-      'orca',
+      'mcode',
       'codex-runtime-home',
       'home'
     )
@@ -286,7 +286,7 @@ describe('CodexRuntimeHomeService', () => {
         candidate === wslRuntimeHomePath
           ? {
               distro: 'Debian',
-              linuxPath: '/home/alice/.local/share/orca/codex-runtime-home/home'
+              linuxPath: '/home/alice/.local/share/mcode/codex-runtime-home/home'
             }
           : null
     }))
@@ -304,7 +304,7 @@ describe('CodexRuntimeHomeService', () => {
             managedHomePath,
             managedHomeRuntime: 'wsl',
             wslDistro: 'Debian',
-            wslLinuxHomePath: '/home/alice/.local/share/orca/codex-accounts/debian/home',
+            wslLinuxHomePath: '/home/alice/.local/share/mcode/codex-accounts/debian/home',
             providerAccountId: null,
             workspaceLabel: null,
             workspaceAccountId: null,

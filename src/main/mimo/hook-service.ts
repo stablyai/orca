@@ -5,7 +5,7 @@ import { homedir } from 'node:os'
 import { getOpenCodeFamilyPluginSource } from '../opencode/hook-service'
 import { mirrorEntry, safeRemoveTree } from '../pty/overlay-mirror'
 
-const ORCA_MIMOCODE_PLUGIN_FILE = 'orca-mimocode-status.js'
+const MCODE_MIMOCODE_PLUGIN_FILE = 'mcode-mimocode-status.js'
 const MIMOCODE_HOOKS_DIR = 'mimocode-hooks'
 const MIMOCODE_SHARED_HOME = 'shared'
 
@@ -33,7 +33,7 @@ function mirrorConfigDir(sourceConfigDir: string, targetConfigDir: string): void
       for (const pluginEntry of readdirSync(join(sourceConfigDir, 'plugins'), {
         withFileTypes: true
       })) {
-        if (pluginEntry.name === ORCA_MIMOCODE_PLUGIN_FILE) {
+        if (pluginEntry.name === MCODE_MIMOCODE_PLUGIN_FILE) {
           continue
         }
         mirrorEntry(
@@ -67,7 +67,7 @@ export class MimoCodeHookService {
       const pluginsDir = join(home, 'config', 'plugins')
       mkdirSync(pluginsDir, { recursive: true })
       writeFileSync(
-        join(pluginsDir, ORCA_MIMOCODE_PLUGIN_FILE),
+        join(pluginsDir, MCODE_MIMOCODE_PLUGIN_FILE),
         getOpenCodeFamilyPluginSource('/hook/mimo-code')
       )
     } catch {

@@ -1,5 +1,5 @@
 /**
- * Real-zsh proof that a wrapper dir holding files from two Orca builds still
+ * Real-zsh proof that a wrapper dir holding files from two MCode builds still
  * loads the user's own zsh config.
  *
  * A shared dir used to mean a shell could read one build's `.zshenv` and
@@ -8,9 +8,9 @@
  * daemon trees by naming each one after a hash of its contents, so two builds
  * never write the same directory.
  *
- * The relay is the one writer left on a fixed path — `~/.orca-relay/shell-ready`
+ * The relay is the one writer left on a fixed path — `~/.mcode-relay/shell-ready`
  * — so this is where the scenario is still reachable, and it is now much smaller:
- * Orca writes one file, and that file hands ZDOTDIR back before anything else
+ * MCode writes one file, and that file hands ZDOTDIR back before anything else
  * runs. Both halves are pinned here:
  *
  * 1. Files an older build left beside the hook are inert — zsh reads .zprofile,
@@ -32,18 +32,18 @@ const itWithZsh = hasZsh ? it : it.skip
 
 /** The three files an older build wrote alongside its own `.zshenv`. */
 const OLDER_BUILD_FILES = {
-  '.zprofile': 'export ORCA_TEST_STALE_ZPROFILE=1\n',
-  '.zshrc': 'export ORCA_TEST_STALE_ZSHRC=1\n',
-  '.zlogin': 'export ORCA_TEST_STALE_ZLOGIN=1\n'
+  '.zprofile': 'export MCODE_TEST_STALE_ZPROFILE=1\n',
+  '.zshrc': 'export MCODE_TEST_STALE_ZSHRC=1\n',
+  '.zlogin': 'export MCODE_TEST_STALE_ZLOGIN=1\n'
 }
 
 describe.skipIf(process.platform === 'win32')('zsh wrapper dir written by mixed builds', () => {
   itWithZsh('ignores an older build’s files and loads the user’s config instead', async () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-wrapper-mismatch-'))
+    const root = mkdtempSync(join(tmpdir(), 'mcode-wrapper-mismatch-'))
     const home = makeZshHome({
-      '.zshenv': 'export ORCA_TEST_USER_ZSHENV=1\n',
-      '.zprofile': 'export ORCA_TEST_USER_ZPROFILE=1\n',
-      '.zshrc': 'export ORCA_TEST_USER_ZSHRC=1\n'
+      '.zshenv': 'export MCODE_TEST_USER_ZSHENV=1\n',
+      '.zprofile': 'export MCODE_TEST_USER_ZPROFILE=1\n',
+      '.zshrc': 'export MCODE_TEST_USER_ZSHRC=1\n'
     })
     try {
       expect(ensureOverlayRestoreWrappers(root)).toBe(true)
@@ -57,26 +57,26 @@ describe.skipIf(process.platform === 'win32')('zsh wrapper dir written by mixed 
           PATH: '/usr/bin:/bin',
           HOME: home,
           ZDOTDIR: zshDir,
-          ORCA_ORIG_ZDOTDIR: home,
-          ORCA_SHELL_FEATURES: 'history',
-          ORCA_HISTFILE: join(home, 'scoped_history')
+          MCODE_ORIG_ZDOTDIR: home,
+          MCODE_SHELL_FEATURES: 'history',
+          MCODE_HISTFILE: join(home, 'scoped_history')
         },
         report: [
-          'ORCA_TEST_USER_ZPROFILE',
-          'ORCA_TEST_USER_ZSHRC',
-          'ORCA_TEST_STALE_ZPROFILE',
-          'ORCA_TEST_STALE_ZSHRC',
-          'ORCA_TEST_STALE_ZLOGIN',
+          'MCODE_TEST_USER_ZPROFILE',
+          'MCODE_TEST_USER_ZSHRC',
+          'MCODE_TEST_STALE_ZPROFILE',
+          'MCODE_TEST_STALE_ZSHRC',
+          'MCODE_TEST_STALE_ZLOGIN',
           'HISTFILE'
         ]
       })
 
       // The user's own files loaded; the older build's leftovers did not.
-      expect(values.ORCA_TEST_USER_ZPROFILE).toBe('1')
-      expect(values.ORCA_TEST_USER_ZSHRC).toBe('1')
-      expect(values.ORCA_TEST_STALE_ZPROFILE).toBe('UNSET')
-      expect(values.ORCA_TEST_STALE_ZSHRC).toBe('UNSET')
-      expect(values.ORCA_TEST_STALE_ZLOGIN).toBe('UNSET')
+      expect(values.MCODE_TEST_USER_ZPROFILE).toBe('1')
+      expect(values.MCODE_TEST_USER_ZSHRC).toBe('1')
+      expect(values.MCODE_TEST_STALE_ZPROFILE).toBe('UNSET')
+      expect(values.MCODE_TEST_STALE_ZSHRC).toBe('UNSET')
+      expect(values.MCODE_TEST_STALE_ZLOGIN).toBe('UNSET')
       expect(values.HISTFILE).toBe(join(home, 'scoped_history'))
     } finally {
       rmSync(root, { recursive: true, force: true })
@@ -85,7 +85,7 @@ describe.skipIf(process.platform === 'win32')('zsh wrapper dir written by mixed 
   })
 
   it('leaves an older build’s files in place so that build can still use them', () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-wrapper-mismatch-keep-'))
+    const root = mkdtempSync(join(tmpdir(), 'mcode-wrapper-mismatch-keep-'))
     try {
       expect(ensureOverlayRestoreWrappers(root)).toBe(true)
       const zshDir = join(root, 'zsh')

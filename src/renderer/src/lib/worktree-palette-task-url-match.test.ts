@@ -31,18 +31,18 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
   }
 }
 
-const orcaRepo: Repo = {
+const mcodeRepo: Repo = {
   id: 'repo-1',
-  path: '/repo/orca',
-  displayName: 'stablyai/orca',
+  path: '/repo/mcode',
+  displayName: 'mcode-ide/mcode',
   badgeColor: '#22c55e',
   addedAt: 0
 }
 
 function gitLabRepo(canonicalKey: string): Repo {
   return {
-    ...orcaRepo,
-    displayName: 'orca',
+    ...mcodeRepo,
+    displayName: 'mcode',
     gitRemoteIdentity: {
       canonicalKey,
       remoteName: 'origin',
@@ -54,8 +54,8 @@ function gitLabRepo(canonicalKey: string): Repo {
 /** Basename displayName: the common non-fork case, where only the remote identifies the repo. */
 function gitHubRepo(canonicalKey: string): Repo {
   return {
-    ...orcaRepo,
-    displayName: 'orca',
+    ...mcodeRepo,
+    displayName: 'mcode',
     gitRemoteIdentity: {
       canonicalKey,
       remoteName: 'origin',
@@ -66,18 +66,18 @@ function gitHubRepo(canonicalKey: string): Repo {
 
 describe('parseCmdJTaskSourceUrl', () => {
   it('parses GitHub issue and pull URLs', () => {
-    expect(parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/issues/14198')).toEqual({
+    expect(parseCmdJTaskSourceUrl('https://github.com/mcode-ide/mcode/issues/14198')).toEqual({
       provider: 'github',
       link: {
-        slug: { owner: 'stablyai', repo: 'orca', host: 'github.com' },
+        slug: { owner: 'stablyai', repo: 'mcode', host: 'github.com' },
         type: 'issue',
         number: 14198
       }
     })
-    expect(parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/pull/12789')).toEqual({
+    expect(parseCmdJTaskSourceUrl('https://github.com/mcode-ide/mcode/pull/12789')).toEqual({
       provider: 'github',
       link: {
-        slug: { owner: 'stablyai', repo: 'orca', host: 'github.com' },
+        slug: { owner: 'stablyai', repo: 'mcode', host: 'github.com' },
         type: 'pr',
         number: 12789
       }
@@ -94,15 +94,15 @@ describe('parseCmdJTaskSourceUrl', () => {
       intent: { identifier: 'STA-4052', organizationUrlKey: 'stably' }
     })
     expect(
-      parseCmdJTaskSourceUrl('https://gitlab.com/acme/orca/-/merge_requests/17')
+      parseCmdJTaskSourceUrl('https://gitlab.com/acme/mcode/-/merge_requests/17')
     ).toMatchObject({
       provider: 'gitlab',
       link: { type: 'mr', number: 17 }
     })
-    expect(parseCmdJTaskSourceUrl('https://company.atlassian.net/browse/ORCA-123')).toEqual({
+    expect(parseCmdJTaskSourceUrl('https://company.atlassian.net/browse/MCODE-123')).toEqual({
       provider: 'jira',
       parsed: {
-        issueKey: 'ORCA-123',
+        issueKey: 'MCODE-123',
         origin: 'https://company.atlassian.net',
         sitePath: ''
       }
@@ -111,14 +111,14 @@ describe('parseCmdJTaskSourceUrl', () => {
 
   it('does not treat names or repo homepages as task URLs', () => {
     expect(parseCmdJTaskSourceUrl('sta-4052-agent-terminals')).toBeNull()
-    expect(parseCmdJTaskSourceUrl('https://github.com/stablyai/orca')).toBeNull()
+    expect(parseCmdJTaskSourceUrl('https://github.com/mcode-ide/mcode')).toBeNull()
     expect(parseCmdJTaskSourceUrl('#14198')).toBeNull()
   })
 })
 
 describe('matchWorktreePaletteTaskUrl', () => {
   it('retains the matched workspace host for host-qualified consumers', () => {
-    const intent = parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/issues/123')
+    const intent = parseCmdJTaskSourceUrl('https://github.com/mcode-ide/mcode/issues/123')
     expect(intent).not.toBeNull()
 
     expect(
@@ -130,7 +130,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
             type: 'issue',
             number: 123,
             title: 'Host-qualified match',
-            url: 'https://github.com/stablyai/orca/issues/123'
+            url: 'https://github.com/mcode-ide/mcode/issues/123'
           }
         }),
         intent: intent!
@@ -139,14 +139,14 @@ describe('matchWorktreePaletteTaskUrl', () => {
   })
 
   it('matches a GitHub issue URL to the linked worktree in the same repo', () => {
-    const intent = parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/issues/14198')
+    const intent = parseCmdJTaskSourceUrl('https://github.com/mcode-ide/mcode/issues/14198')
     expect(intent).not.toBeNull()
 
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({ linkedIssue: 14198 }),
         intent: intent!,
-        repo: orcaRepo
+        repo: mcodeRepo
       })
     ).toMatchObject({
       worktreeId: 'wt-1',
@@ -157,13 +157,13 @@ describe('matchWorktreePaletteTaskUrl', () => {
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({ linkedIssue: 14198 }),
         intent: intent!,
-        repo: { ...orcaRepo, displayName: 'other/repo' }
+        repo: { ...mcodeRepo, displayName: 'other/repo' }
       })
     ).toBeNull()
   })
 
   it('matches a GitHub work-item number when the stored URL is missing', () => {
-    const intent = parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/pull/12789')
+    const intent = parseCmdJTaskSourceUrl('https://github.com/mcode-ide/mcode/pull/12789')
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({
@@ -176,13 +176,13 @@ describe('matchWorktreePaletteTaskUrl', () => {
           }
         }),
         intent: intent!,
-        repo: orcaRepo
+        repo: mcodeRepo
       })
     ).toMatchObject({ matchedFields: ['pr'] })
   })
 
   it('matches a GitHub pull URL via the stored work-item URL', () => {
-    const intent = parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/pull/12789')
+    const intent = parseCmdJTaskSourceUrl('https://github.com/mcode-ide/mcode/pull/12789')
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({
@@ -191,17 +191,17 @@ describe('matchWorktreePaletteTaskUrl', () => {
             type: 'pr',
             number: 12789,
             title: 'Perf',
-            url: 'https://github.com/stablyai/orca/pull/12789'
+            url: 'https://github.com/mcode-ide/mcode/pull/12789'
           }
         }),
         intent: intent!,
-        repo: { ...orcaRepo, displayName: 'Repo 1' }
+        repo: { ...mcodeRepo, displayName: 'Repo 1' }
       })
     ).toMatchObject({ matchedFields: ['pr'], supportingText: { text: 'PR #12789' } })
   })
 
   it('gates a stored GitHub number on the repo remote identity', () => {
-    const intent = parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/pull/12789')
+    const intent = parseCmdJTaskSourceUrl('https://github.com/mcode-ide/mcode/pull/12789')
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({ linkedPR: 12789 }),
@@ -213,13 +213,13 @@ describe('matchWorktreePaletteTaskUrl', () => {
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({ linkedPR: 12789 }),
         intent: intent!,
-        repo: gitHubRepo('github.com/stablyai/orca')
+        repo: gitHubRepo('github.com/mcode-ide/mcode')
       })
     ).toMatchObject({ matchedFields: ['pr'], supportingText: { text: 'PR #12789' } })
   })
 
   it('gates a stored GitHub work item with no URL on the repo remote identity', () => {
-    const intent = parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/issues/14198')
+    const intent = parseCmdJTaskSourceUrl('https://github.com/mcode-ide/mcode/issues/14198')
     const worktree = makeWorktree({
       linkedWorkItem: { provider: 'github', type: 'issue', number: 14198, title: 'Bug', url: '' }
     })
@@ -234,37 +234,37 @@ describe('matchWorktreePaletteTaskUrl', () => {
       matchWorktreePaletteTaskUrl({
         worktree,
         intent: intent!,
-        repo: gitHubRepo('github.com/stablyai/orca')
+        repo: gitHubRepo('github.com/mcode-ide/mcode')
       })
     ).toMatchObject({ matchedFields: ['issue'] })
   })
 
   it('does not match a GitHub URL on a different host for the same owner/repo', () => {
-    const intent = parseCmdJTaskSourceUrl('https://ghe.example.com/stablyai/orca/pull/12789')
+    const intent = parseCmdJTaskSourceUrl('https://ghe.example.com/mcode-ide/mcode/pull/12789')
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({ linkedPR: 12789 }),
         intent: intent!,
-        repo: gitHubRepo('github.com/stablyai/orca')
+        repo: gitHubRepo('github.com/mcode-ide/mcode')
       })
     ).toBeNull()
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({ linkedPR: 12789 }),
         intent: intent!,
-        repo: gitHubRepo('ghe.example.com/stablyai/orca')
+        repo: gitHubRepo('ghe.example.com/mcode-ide/mcode')
       })
     ).toMatchObject({ matchedFields: ['pr'] })
   })
 
   it('matches GitHub remotes whose host is an SSH alias or www form of github.com', () => {
-    const intent = parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/pull/12789')
+    const intent = parseCmdJTaskSourceUrl('https://github.com/mcode-ide/mcode/pull/12789')
     for (const canonicalKey of [
       // ssh://git@ssh.github.com:443/... — GitHub's port-443 workaround.
-      'ssh.github.com/stablyai/orca',
+      'ssh.github.com/mcode-ide/mcode',
       // git@github-work:... — an OpenSSH `Host` alias `git remote -v` cannot expand.
-      'github-work/stablyai/orca',
-      'www.github.com/stablyai/orca'
+      'github-work/mcode-ide/mcode',
+      'www.github.com/mcode-ide/mcode'
     ]) {
       expect(
         matchWorktreePaletteTaskUrl({
@@ -279,29 +279,29 @@ describe('matchWorktreePaletteTaskUrl', () => {
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({ linkedPR: 12789 }),
         intent: intent!,
-        repo: gitHubRepo('ghe.example.com/stablyai/orca')
+        repo: gitHubRepo('ghe.example.com/mcode-ide/mcode')
       })
     ).toBeNull()
   })
 
   it('normalizes host case, port, and owner case before comparing GitHub identities', () => {
-    const intent = parseCmdJTaskSourceUrl('https://GHE.Example.com:8443/StablyAI/Orca/pull/12789')
+    const intent = parseCmdJTaskSourceUrl('https://GHE.Example.com:8443/StablyAI/MCode/pull/12789')
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({ linkedPR: 12789 }),
         intent: intent!,
-        repo: gitHubRepo('ghe.example.com/stablyai/orca')
+        repo: gitHubRepo('ghe.example.com/mcode-ide/mcode')
       })
     ).toMatchObject({ matchedFields: ['pr'] })
   })
 
   it('stays permissive for GitHub numbers when the repo remote identity is unknown', () => {
-    const intent = parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/pull/12789')
+    const intent = parseCmdJTaskSourceUrl('https://github.com/mcode-ide/mcode/pull/12789')
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({ linkedPR: 12789 }),
         intent: intent!,
-        repo: { ...orcaRepo, displayName: 'orca' }
+        repo: { ...mcodeRepo, displayName: 'mcode' }
       })
     ).toMatchObject({ matchedFields: ['pr'] })
     expect(
@@ -312,14 +312,14 @@ describe('matchWorktreePaletteTaskUrl', () => {
   it('stays permissive for a GitHub fork whose identity resolved to the upstream remote', () => {
     // `deriveGitRemoteIdentity` prefers `upstream`, so the fork's own `origin` is not visible here.
     const forkRepo: Repo = {
-      ...gitHubRepo('github.com/stablyai/orca'),
+      ...gitHubRepo('github.com/mcode-ide/mcode'),
       gitRemoteIdentity: {
-        canonicalKey: 'github.com/stablyai/orca',
+        canonicalKey: 'github.com/mcode-ide/mcode',
         remoteName: 'upstream',
-        remoteUrl: 'git@github.com:stablyai/orca.git'
+        remoteUrl: 'git@github.com:mcode-ide/mcode.git'
       }
     }
-    const intent = parseCmdJTaskSourceUrl('https://github.com/me/orca/pull/12789')
+    const intent = parseCmdJTaskSourceUrl('https://github.com/me/mcode/pull/12789')
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({ linkedPR: 12789 }),
@@ -332,19 +332,19 @@ describe('matchWorktreePaletteTaskUrl', () => {
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({ linkedPR: 12789 }),
         intent: intent!,
-        repo: gitHubRepo('github.com/stablyai/orca')
+        repo: gitHubRepo('github.com/mcode-ide/mcode')
       })
     ).toBeNull()
   })
 
   it('keeps the GitHub number gate type-aware across repos', () => {
-    const prIntent = parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/pull/12789')
-    const issueIntent = parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/issues/12789')
+    const prIntent = parseCmdJTaskSourceUrl('https://github.com/mcode-ide/mcode/pull/12789')
+    const issueIntent = parseCmdJTaskSourceUrl('https://github.com/mcode-ide/mcode/issues/12789')
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({ linkedIssue: 12789 }),
         intent: prIntent!,
-        repo: gitHubRepo('github.com/stablyai/orca')
+        repo: gitHubRepo('github.com/mcode-ide/mcode')
       })
     ).toBeNull()
     expect(
@@ -358,23 +358,23 @@ describe('matchWorktreePaletteTaskUrl', () => {
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({ linkedIssue: 12789 }),
         intent: issueIntent!,
-        repo: gitHubRepo('github.com/stablyai/orca')
+        repo: gitHubRepo('github.com/mcode-ide/mcode')
       })
     ).toMatchObject({ matchedFields: ['issue'], supportingText: { text: 'Issue #12789' } })
   })
 
   it('keeps an owner/repo displayName authoritative over a host-alias remote', () => {
-    const intent = parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/pull/12789')
+    const intent = parseCmdJTaskSourceUrl('https://github.com/mcode-ide/mcode/pull/12789')
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({ linkedPR: 12789 }),
         intent: intent!,
         repo: {
-          ...orcaRepo,
+          ...mcodeRepo,
           gitRemoteIdentity: {
-            canonicalKey: 'git-mirror.example.com/stablyai/orca',
+            canonicalKey: 'git-mirror.example.com/mcode-ide/mcode',
             remoteName: 'origin',
-            remoteUrl: 'git@git-mirror.example.com:stablyai/orca.git'
+            remoteUrl: 'git@git-mirror.example.com:mcode-ide/mcode.git'
           }
         }
       })
@@ -382,7 +382,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
   })
 
   it('matches a GitHub PR URL via the linked review URL regardless of remote identity', () => {
-    const intent = parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/pull/12789')
+    const intent = parseCmdJTaskSourceUrl('https://github.com/mcode-ide/mcode/pull/12789')
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree(),
@@ -393,7 +393,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
           number: 12789,
           title: 'Fork PR',
           state: 'open',
-          url: 'https://github.com/stablyai/orca/pull/12789',
+          url: 'https://github.com/mcode-ide/mcode/pull/12789',
           status: 'pending',
           updatedAt: '2026-01-01T00:00:00Z',
           mergeable: 'UNKNOWN'
@@ -403,7 +403,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
   })
 
   it('rejects a GitLab MR URL from a different project than the stored URL', () => {
-    const intent = parseCmdJTaskSourceUrl('https://gitlab.com/acme/orca/-/merge_requests/17')
+    const intent = parseCmdJTaskSourceUrl('https://gitlab.com/acme/mcode/-/merge_requests/17')
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({
@@ -423,7 +423,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
   })
 
   it('matches a GitLab MR URL for the same project', () => {
-    const intent = parseCmdJTaskSourceUrl('https://gitlab.com/acme/orca/-/merge_requests/17')
+    const intent = parseCmdJTaskSourceUrl('https://gitlab.com/acme/mcode/-/merge_requests/17')
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({
@@ -433,7 +433,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
             type: 'mr',
             number: 17,
             title: 'Same project MR',
-            url: 'https://gitlab.com/acme/orca/-/merge_requests/17'
+            url: 'https://gitlab.com/acme/mcode/-/merge_requests/17'
           }
         }),
         intent: intent!,
@@ -446,7 +446,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
   })
 
   it('does not match a GitLab issue URL against a stored MR of the same number', () => {
-    const intent = parseCmdJTaskSourceUrl('https://gitlab.com/acme/orca/-/merge_requests/17')
+    const intent = parseCmdJTaskSourceUrl('https://gitlab.com/acme/mcode/-/merge_requests/17')
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({
@@ -456,7 +456,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
             type: 'issue',
             number: 17,
             title: 'Issue',
-            url: 'https://gitlab.com/acme/orca/-/issues/17'
+            url: 'https://gitlab.com/acme/mcode/-/issues/17'
           }
         }),
         intent: intent!
@@ -465,7 +465,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
   })
 
   it('does not match a GitLab URL on a different host for the same project path', () => {
-    const intent = parseCmdJTaskSourceUrl('https://gitlab.com/acme/orca/-/merge_requests/17')
+    const intent = parseCmdJTaskSourceUrl('https://gitlab.com/acme/mcode/-/merge_requests/17')
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({
@@ -475,17 +475,17 @@ describe('matchWorktreePaletteTaskUrl', () => {
             type: 'mr',
             number: 17,
             title: 'Self-hosted MR',
-            url: 'https://gitlab.example.com/acme/orca/-/merge_requests/17'
+            url: 'https://gitlab.example.com/acme/mcode/-/merge_requests/17'
           }
         }),
         intent: intent!,
-        repo: gitLabRepo('gitlab.example.com/acme/orca')
+        repo: gitLabRepo('gitlab.example.com/acme/mcode')
       })
     ).toBeNull()
   })
 
   it('gates a stored GitLab number with no work item on the repo remote identity', () => {
-    const intent = parseCmdJTaskSourceUrl('https://gitlab.com/acme/orca/-/merge_requests/17')
+    const intent = parseCmdJTaskSourceUrl('https://gitlab.com/acme/mcode/-/merge_requests/17')
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({ linkedGitLabMR: 17 }),
@@ -497,18 +497,18 @@ describe('matchWorktreePaletteTaskUrl', () => {
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({ linkedGitLabMR: 17 }),
         intent: intent!,
-        repo: gitLabRepo('gitlab.com/acme/orca')
+        repo: gitLabRepo('gitlab.com/acme/mcode')
       })
     ).toMatchObject({ matchedFields: ['mr'] })
   })
 
   it('matches GitLab remotes whose host is an SSH alias or www form of gitlab.com', () => {
-    const intent = parseCmdJTaskSourceUrl('https://gitlab.com/acme/orca/-/merge_requests/17')
+    const intent = parseCmdJTaskSourceUrl('https://gitlab.com/acme/mcode/-/merge_requests/17')
     for (const canonicalKey of [
       // altssh.gitlab.com is GitLab's port-443 SSH endpoint; `gitlab-work` is an ssh-config alias.
-      'altssh.gitlab.com/acme/orca',
-      'gitlab-work/acme/orca',
-      'www.gitlab.com/acme/orca'
+      'altssh.gitlab.com/acme/mcode',
+      'gitlab-work/acme/mcode',
+      'www.gitlab.com/acme/mcode'
     ]) {
       expect(
         matchWorktreePaletteTaskUrl({
@@ -522,18 +522,18 @@ describe('matchWorktreePaletteTaskUrl', () => {
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({ linkedGitLabMR: 17 }),
         intent: intent!,
-        repo: gitLabRepo('gitlab.example.com/acme/orca')
+        repo: gitLabRepo('gitlab.example.com/acme/mcode')
       })
     ).toBeNull()
   })
 
   it('stays permissive for GitLab numbers when the repo remote identity is unknown', () => {
-    const intent = parseCmdJTaskSourceUrl('https://gitlab.com/acme/orca/-/merge_requests/17')
+    const intent = parseCmdJTaskSourceUrl('https://gitlab.com/acme/mcode/-/merge_requests/17')
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({ linkedGitLabMR: 17 }),
         intent: intent!,
-        repo: orcaRepo
+        repo: mcodeRepo
       })
     ).toMatchObject({ matchedFields: ['mr'] })
     expect(
@@ -549,17 +549,17 @@ describe('matchWorktreePaletteTaskUrl', () => {
     // `deriveGitRemoteIdentity` prefers `upstream`, so the fork's own `origin` is not visible here;
     // an MR URL from the fork itself is the accepted false negative of gating on the known project.
     const forkRepo: Repo = {
-      ...gitLabRepo('gitlab.com/acme/orca'),
+      ...gitLabRepo('gitlab.com/acme/mcode'),
       gitRemoteIdentity: {
-        canonicalKey: 'gitlab.com/acme/orca',
+        canonicalKey: 'gitlab.com/acme/mcode',
         remoteName: 'upstream',
-        remoteUrl: 'git@gitlab.com:acme/orca.git'
+        remoteUrl: 'git@gitlab.com:acme/mcode.git'
       }
     }
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({ linkedGitLabMR: 17 }),
-        intent: parseCmdJTaskSourceUrl('https://gitlab.com/me/orca/-/merge_requests/17')!,
+        intent: parseCmdJTaskSourceUrl('https://gitlab.com/me/mcode/-/merge_requests/17')!,
         repo: forkRepo
       })
     ).toBeNull()
@@ -567,7 +567,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({ linkedGitLabMR: 17 }),
-        intent: parseCmdJTaskSourceUrl('https://gitlab.com/acme/orca/-/merge_requests/17')!,
+        intent: parseCmdJTaskSourceUrl('https://gitlab.com/acme/mcode/-/merge_requests/17')!,
         repo: forkRepo
       })
     ).toMatchObject({ matchedFields: ['mr'] })
@@ -575,16 +575,16 @@ describe('matchWorktreePaletteTaskUrl', () => {
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({ linkedGitLabMR: 17 }),
-        intent: parseCmdJTaskSourceUrl('https://gitlab.com/me/orca/-/merge_requests/17')!,
-        repo: gitLabRepo('gitlab.com/acme/orca')
+        intent: parseCmdJTaskSourceUrl('https://gitlab.com/me/mcode/-/merge_requests/17')!,
+        repo: gitLabRepo('gitlab.com/acme/mcode')
       })
     ).toBeNull()
   })
 
   it('matches both GitLab issue URL forms and rejects other projects', () => {
     for (const url of [
-      'https://gitlab.com/acme/orca/-/issues/17',
-      'https://gitlab.com/acme/orca/-/work_items/17'
+      'https://gitlab.com/acme/mcode/-/issues/17',
+      'https://gitlab.com/acme/mcode/-/work_items/17'
     ]) {
       const intent = parseCmdJTaskSourceUrl(url)
       expect(intent).toMatchObject({ provider: 'gitlab', link: { type: 'issue', number: 17 } })
@@ -592,7 +592,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
         matchWorktreePaletteTaskUrl({
           worktree: makeWorktree({ linkedGitLabIssue: 17 }),
           intent: intent!,
-          repo: gitLabRepo('gitlab.com/acme/orca')
+          repo: gitLabRepo('gitlab.com/acme/mcode')
         })
       ).toMatchObject({
         matchedFields: ['issue'],
@@ -609,7 +609,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
   })
 
   it('matches a GitLab MR URL via the linked review URL', () => {
-    const intent = parseCmdJTaskSourceUrl('https://gitlab.com/acme/orca/-/merge_requests/17')
+    const intent = parseCmdJTaskSourceUrl('https://gitlab.com/acme/mcode/-/merge_requests/17')
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree(),
@@ -620,7 +620,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
           number: 17,
           title: 'Fork MR',
           state: 'open',
-          url: 'https://gitlab.com/acme/orca/-/merge_requests/17',
+          url: 'https://gitlab.com/acme/mcode/-/merge_requests/17',
           status: 'pending',
           updatedAt: '2026-01-01T00:00:00Z',
           mergeable: 'UNKNOWN'
@@ -755,7 +755,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
             number: 0,
             title: 'Linked elsewhere',
             jiraIdentifier: 'PROJ-123',
-            url: 'https://github.com/stablyai/orca/issues/14198'
+            url: 'https://github.com/mcode-ide/mcode/issues/14198'
           }
         }),
         intent: intent!
@@ -791,23 +791,23 @@ describe('getCmdJTaskUrlCreatePreview', () => {
   it('describes GitHub issue and pull URLs without fetching', () => {
     expect(
       getCmdJTaskUrlCreatePreview(
-        parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/issues/14198')!
+        parseCmdJTaskSourceUrl('https://github.com/mcode-ide/mcode/issues/14198')!
       )
     ).toEqual({
       provider: 'github',
       identifier: '#14198',
-      subtitle: 'stablyai/orca',
+      subtitle: 'mcode-ide/mcode',
       kindLabel: 'GitHub issue',
-      createLabel: 'Create worktree from GitHub issue stablyai/orca#14198'
+      createLabel: 'Create worktree from GitHub issue mcode-ide/mcode#14198'
     })
     expect(
       getCmdJTaskUrlCreatePreview(
-        parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/pull/12789')!
+        parseCmdJTaskSourceUrl('https://github.com/mcode-ide/mcode/pull/12789')!
       )?.kindLabel
     ).toBe('GitHub pull request')
     expect(
       getCmdJTaskUrlCreatePreview(
-        parseCmdJTaskSourceUrl('https://gitlab.com/acme/orca/-/merge_requests/17')!
+        parseCmdJTaskSourceUrl('https://gitlab.com/acme/mcode/-/merge_requests/17')!
       )
     ).toMatchObject({
       provider: 'gitlab',
@@ -816,18 +816,18 @@ describe('getCmdJTaskUrlCreatePreview', () => {
     })
     expect(
       getCmdJTaskUrlCreatePreview(
-        parseCmdJTaskSourceUrl('https://company.atlassian.net/browse/ORCA-123')!
+        parseCmdJTaskSourceUrl('https://company.atlassian.net/browse/MCODE-123')!
       )
     ).toMatchObject({
       provider: 'jira',
-      identifier: 'ORCA-123',
+      identifier: 'MCODE-123',
       kindLabel: 'Jira issue'
     })
   })
 
   it('replaces the GitHub subtitle with the resolved issue title', () => {
     const preview = getCmdJTaskUrlCreatePreview(
-      parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/issues/14198')!
+      parseCmdJTaskSourceUrl('https://github.com/mcode-ide/mcode/issues/14198')!
     )!
     expect(
       withResolvedCmdJGitHubPreview(preview, 'Agent terminals disappearing randomly', false)
@@ -835,7 +835,7 @@ describe('getCmdJTaskUrlCreatePreview', () => {
       expect.objectContaining({
         subtitle: 'Agent terminals disappearing randomly',
         createLabel:
-          'Create worktree from GitHub issue stablyai/orca#14198: Agent terminals disappearing randomly',
+          'Create worktree from GitHub issue mcode-ide/mcode#14198: Agent terminals disappearing randomly',
         loading: false
       })
     )

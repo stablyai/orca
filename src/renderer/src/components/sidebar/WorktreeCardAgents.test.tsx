@@ -626,7 +626,7 @@ describe('WorktreeCardAgents', () => {
         state: 'done',
         startedAt: 1000,
         prompt: 'Check screenshot',
-        lastAssistantMessage: 'Result:\n\n![Image #1](blob:orca-preview-1)'
+        lastAssistantMessage: 'Result:\n\n![Image #1](blob:mcode-preview-1)'
       })
     ]
     const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')

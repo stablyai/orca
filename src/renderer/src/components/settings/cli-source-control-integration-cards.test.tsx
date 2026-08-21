@@ -93,7 +93,7 @@ describe('CLI source-control integration card account scope', () => {
     expect(rendered.textContent).toContain('Connected')
     expect(rendered.textContent).toContain(`Account scope: ${LOCAL_HOST_LABEL}`)
     expect(rendered.textContent).toContain(
-      'Credentials and account checks for this provider are owned by this desktop client. Use Settings > Remote Orca Servers > Advanced to edit server-owned credentials.'
+      'Credentials and account checks for this provider are owned by this desktop client. Use Settings > Remote MCode Servers > Advanced to edit server-owned credentials.'
     )
     await act(async () => {
       Array.from(rendered.querySelectorAll('button'))
@@ -122,7 +122,7 @@ describe('CLI source-control integration card account scope', () => {
     expect(rendered.textContent).toContain('GitLab')
     expect(rendered.textContent).toContain('Account scope: Remote server: runtime-1')
     expect(rendered.textContent).toContain(
-      'Credentials and account checks for this provider are owned by this remote server. Use Settings > Remote Orca Servers > Advanced to edit another default runtime scope.'
+      'Credentials and account checks for this provider are owned by this remote server. Use Settings > Remote MCode Servers > Advanced to edit another default runtime scope.'
     )
     expect(rendered.textContent).toContain('glab auth login')
   })

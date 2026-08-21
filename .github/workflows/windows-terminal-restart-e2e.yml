@@ -51,8 +51,8 @@ jobs:
       - name: Run Windows terminal restart regressions
         env:
           SKIP_BUILD: '1'
-          ORCA_E2E_FORWARD_APP_LOGS: '1'
-          ORCA_REQUIRE_WINDOWS_TERMINAL_RESTART_E2E: '1'
+          MCODE_E2E_FORWARD_APP_LOGS: '1'
+          MCODE_REQUIRE_WINDOWS_TERMINAL_RESTART_E2E: '1'
         # Why: pnpm forwards a literal `--` to Playwright, which makes the
         # grep and worker flags positional filters instead of CLI options.
         run: >-

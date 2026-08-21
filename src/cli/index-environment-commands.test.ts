@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 const {
   callMock,
   runtimeClientConstructorMock,
-  serveOrcaAppMock,
+  serveMCodeAppMock,
   getDefaultUserDataPathMock,
   addEnvironmentFromPairingCodeMock,
   listEnvironmentsMock,
@@ -11,8 +11,8 @@ const {
 } = vi.hoisted(() => ({
   callMock: vi.fn(),
   runtimeClientConstructorMock: vi.fn(),
-  serveOrcaAppMock: vi.fn(),
-  getDefaultUserDataPathMock: vi.fn(() => '/tmp/orca-user-data'),
+  serveMCodeAppMock: vi.fn(),
+  getDefaultUserDataPathMock: vi.fn(() => '/tmp/mcode-user-data'),
   addEnvironmentFromPairingCodeMock: vi.fn(),
   listEnvironmentsMock: vi.fn(),
   spawnMock: vi.fn()
@@ -23,7 +23,7 @@ vi.mock('./runtime-client', async () => {
   return createRuntimeClientModuleMock({
     callMock,
     runtimeClientConstructorMock,
-    serveOrcaAppMock,
+    serveMCodeAppMock,
     getDefaultUserDataPathMock
   })
 })
@@ -43,41 +43,41 @@ vi.mock('child_process', async () => {
 import { main } from './index'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
-describe('orca cli worktree awareness', () => {
+describe('mcode cli worktree awareness', () => {
   useWorktreeAwarenessEnvironment({
     callMock,
-    serveOrcaAppMock,
+    serveMCodeAppMock,
     getDefaultUserDataPathMock,
     addEnvironmentFromPairingCodeMock,
     listEnvironmentsMock,
     spawnMock
   })
 
-  it('lists saved environments even when ORCA_ENVIRONMENT is set', async () => {
-    process.env.ORCA_ENVIRONMENT = 'stale-env'
+  it('lists saved environments even when MCODE_ENVIRONMENT is set', async () => {
+    process.env.MCODE_ENVIRONMENT = 'stale-env'
     listEnvironmentsMock.mockReturnValue([addEnvironmentFromPairingCodeMock()])
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main(['environment', 'list', '--json'], '/tmp/repo')
 
-    expect(listEnvironmentsMock).toHaveBeenCalledWith('/tmp/orca-user-data')
+    expect(listEnvironmentsMock).toHaveBeenCalledWith('/tmp/mcode-user-data')
     expect(callMock).not.toHaveBeenCalled()
     expect(logSpy.mock.calls[0]?.[0]).not.toContain('token')
     expect(logSpy.mock.calls[0]?.[0]).not.toContain('publicKeyB64')
   })
 
-  it('adds saved environments even when ORCA_ENVIRONMENT is set', async () => {
-    process.env.ORCA_ENVIRONMENT = 'stale-env'
+  it('adds saved environments even when MCODE_ENVIRONMENT is set', async () => {
+    process.env.MCODE_ENVIRONMENT = 'stale-env'
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main(
-      ['environment', 'add', '--name', 'desk', '--pairing-code', 'orca://pair#abc', '--json'],
+      ['environment', 'add', '--name', 'desk', '--pairing-code', 'mcode://pair#abc', '--json'],
       '/tmp/repo'
     )
 
-    expect(addEnvironmentFromPairingCodeMock).toHaveBeenCalledWith('/tmp/orca-user-data', {
+    expect(addEnvironmentFromPairingCodeMock).toHaveBeenCalledWith('/tmp/mcode-user-data', {
       name: 'desk',
-      pairingCode: 'orca://pair#abc'
+      pairingCode: 'mcode://pair#abc'
     })
     expect(callMock).not.toHaveBeenCalled()
     expect(logSpy.mock.calls[0]?.[0]).not.toContain('token')

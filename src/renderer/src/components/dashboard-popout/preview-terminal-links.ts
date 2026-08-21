@@ -5,7 +5,7 @@ import { isTerminalHttpLinkActivation } from '@/components/terminal-pane/termina
 
 /**
  * Makes URLs in the preview clickable under the same Mod+click gesture a pane
- * uses. Links always open in the system browser: Orca's in-app browser routing
+ * uses. Links always open in the system browser: MCode's in-app browser routing
  * is workspace-scoped, and the pop-out window hosts no browser pane.
  */
 export function installPreviewTerminalLinks(terminal: Terminal): void {

@@ -41,7 +41,7 @@ afterEach(async () => {
 
 describe('native chat transcript watcher unsubscribe race', () => {
   it('does not emit an initial read error after unsubscribe', async () => {
-    root = await mkdtemp(join(tmpdir(), 'orca-native-chat-unsubscribe-race-'))
+    root = await mkdtemp(join(tmpdir(), 'mcode-native-chat-unsubscribe-race-'))
     const filePath = join(root, 'transcript.jsonl')
     await writeFile(filePath, '{}\n')
     const snapshots = vi.fn()

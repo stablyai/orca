@@ -28,9 +28,9 @@ import {
   writePairingKeychainItem
 } from './pairing-keychain'
 
-const GENERATION_KEY = 'orca:pairing-keychain-generation'
-const TOKEN_KEY = 'orca.host-token.host-1782629088232'
-const TOKEN_PRESENCE_KEY = `orca:pairing-keychain-presence:${TOKEN_KEY}`
+const GENERATION_KEY = 'mcode:pairing-keychain-generation'
+const TOKEN_KEY = 'mcode.host-token.host-1782629088232'
+const TOKEN_PRESENCE_KEY = `mcode:pairing-keychain-presence:${TOKEN_KEY}`
 
 // Why: the exact Android failure from #6600 — expo maps a null-message GeneralSecurityException to this.
 const ENCRYPT_REJECTION = new Error(
@@ -89,7 +89,7 @@ describe('pairing keychain', () => {
     await writePairingKeychainItem(TOKEN_KEY, 'token')
 
     const rotated = secureStoreMock.setItemAsync.mock.calls.at(-1)!
-    expect(serviceOf(rotated[2] as Options)).toBe('orca.pairing.v1')
+    expect(serviceOf(rotated[2] as Options)).toBe('mcode.pairing.v1')
     expect(rotated[1]).toBe('token')
     expect(generationRecord).toBe('1')
   })
@@ -111,7 +111,7 @@ describe('pairing keychain', () => {
     expect(generationRecord).toBe('1:pending')
     expect(secureStoreMock.setItemAsync).toHaveBeenCalledTimes(1)
     expect(serviceOf(secureStoreMock.setItemAsync.mock.calls[0]![2] as Options)).toBe(
-      'orca.pairing.v1'
+      'mcode.pairing.v1'
     )
   })
 
@@ -123,7 +123,7 @@ describe('pairing keychain', () => {
     expect(generationRecord).toBe('1')
     expect(secureStoreMock.setItemAsync).toHaveBeenCalledTimes(1)
     expect(serviceOf(secureStoreMock.setItemAsync.mock.calls[0]![2] as Options)).toBe(
-      'orca.pairing.v1'
+      'mcode.pairing.v1'
     )
   })
 
@@ -182,7 +182,7 @@ describe('pairing keychain', () => {
 
     await writePairingKeychainItem(TOKEN_KEY, 'token')
 
-    expect(order).toEqual(['record:1:pending', 'store:orca.pairing.v1', 'record:1'])
+    expect(order).toEqual(['record:1:pending', 'store:mcode.pairing.v1', 'record:1'])
   })
 
   it('keeps a successful rotated write reachable when confirmation storage fails', async () => {
@@ -207,7 +207,7 @@ describe('pairing keychain', () => {
 
     expect(generationRecord).toBe('1:pending')
     secureStoreMock.getItemAsync.mockImplementation(async (_k: string, options: Options) =>
-      serviceOf(options) === 'orca.pairing.v1' ? 'token' : null
+      serviceOf(options) === 'mcode.pairing.v1' ? 'token' : null
     )
     await expect(readPairingKeychainItem(TOKEN_KEY)).resolves.toBe('token')
   })
@@ -215,7 +215,7 @@ describe('pairing keychain', () => {
   it('reads through the rotated service once a rotation has been committed', async () => {
     generationRecord = '1'
     secureStoreMock.getItemAsync.mockImplementation(async (_k: string, options: Options) =>
-      serviceOf(options) === 'orca.pairing.v1' ? 'rotated-token' : null
+      serviceOf(options) === 'mcode.pairing.v1' ? 'rotated-token' : null
     )
 
     await expect(readPairingKeychainItem(TOKEN_KEY)).resolves.toBe('rotated-token')
@@ -236,7 +236,7 @@ describe('pairing keychain', () => {
     generationRecord = '1'
     const currentError = new Error('Could not decrypt the value')
     secureStoreMock.getItemAsync.mockImplementation(async (_k: string, options: Options) => {
-      if (serviceOf(options) === 'orca.pairing.v1') {
+      if (serviceOf(options) === 'mcode.pairing.v1') {
         throw currentError
       }
       return 'legacy-token'
@@ -308,7 +308,7 @@ describe('pairing keychain', () => {
       return null
     })
     secureStoreMock.getItemAsync.mockImplementation(async (_k: string, options: Options) =>
-      serviceOf(options) === 'orca.pairing.v2' ? 'rotated-token' : null
+      serviceOf(options) === 'mcode.pairing.v2' ? 'rotated-token' : null
     )
 
     await expect(readPairingKeychainItem(TOKEN_KEY)).resolves.toBe('rotated-token')
@@ -334,7 +334,7 @@ describe('pairing keychain', () => {
     const services = secureStoreMock.deleteItemAsync.mock.calls.map((call) =>
       serviceOf(call[1] as Options)
     )
-    expect(services).toEqual(['orca.pairing.v2', 'orca.pairing.v1', undefined])
+    expect(services).toEqual(['mcode.pairing.v2', 'mcode.pairing.v1', undefined])
     expect(asyncStorageMock.removeItem).toHaveBeenCalledWith(TOKEN_PRESENCE_KEY)
   })
 
@@ -342,7 +342,7 @@ describe('pairing keychain', () => {
     generationRecord = '2'
     const deleteError = new Error('delete failed')
     secureStoreMock.deleteItemAsync.mockImplementation(async (_k: string, options: Options) => {
-      if (serviceOf(options) === 'orca.pairing.v2') {
+      if (serviceOf(options) === 'mcode.pairing.v2') {
         throw deleteError
       }
     })
@@ -374,7 +374,7 @@ describe('pairing keychain', () => {
     async (raw) => {
       generationRecord = raw
       secureStoreMock.getItemAsync.mockImplementation(async (_k: string, options: Options) =>
-        serviceOf(options) === 'orca.pairing.v2' ? 'rotated-token' : null
+        serviceOf(options) === 'mcode.pairing.v2' ? 'rotated-token' : null
       )
 
       await expect(readPairingKeychainItem(TOKEN_KEY)).resolves.toBe('rotated-token')

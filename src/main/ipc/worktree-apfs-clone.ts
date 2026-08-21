@@ -148,7 +148,7 @@ async function cloneFileWithApfs(
   target: string,
   deps: ApfsCloneDeps
 ): Promise<void> {
-  const tempTarget = resolve(dirname(target), `.orca-apfs-clone-${deps.randomUUID()}`)
+  const tempTarget = resolve(dirname(target), `.mcode-apfs-clone-${deps.randomUUID()}`)
   try {
     await deps.execFileAsync('/bin/cp', ['-c', source, tempTarget])
     try {

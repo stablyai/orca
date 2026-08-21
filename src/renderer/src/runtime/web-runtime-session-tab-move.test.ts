@@ -61,7 +61,7 @@ afterEach(() => resetWebSessionCloseIntentForTests())
 
 describe('moveWebRuntimeSessionTab', () => {
   beforeEach(() => {
-    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    vi.stubGlobal('__MCODE_WEB_CLIENT__', true)
     mocks.getState.mockReturnValue({
       settings: {
         activeRuntimeEnvironmentId: ENVIRONMENT_ID

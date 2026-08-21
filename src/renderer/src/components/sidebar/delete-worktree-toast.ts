@@ -60,16 +60,16 @@ export function getDeleteWorktreeToastCopy(
           { value0: worktreeName }
         ),
         // Why: Force Delete proceeds either way, so the copy must say which case this is.
-        // Telling a user "could not confirm" about terminals Orca watched stay alive asks
+        // Telling a user "could not confirm" about terminals MCode watched stay alive asks
         // them to waive a doubt that does not exist, and any running agent's work dies with it.
         description: isProvenLivePtyRemovalError(error)
           ? translate(
               'auto.components.sidebar.delete.worktree.toast.unstoppedPtyLive',
-              'This workspace still has running terminals, so Orca stopped before deleting any files. Force Delete will kill them and discard any uncommitted work they hold.'
+              'This workspace still has running terminals, so MCode stopped before deleting any files. Force Delete will kill them and discard any uncommitted work they hold.'
             )
           : translate(
               'auto.components.sidebar.delete.worktree.toast.unstoppedPty',
-              'Orca could not confirm every terminal in this workspace has exited, so it stopped before deleting any files. Use Force Delete to remove it anyway.'
+              'MCode could not confirm every terminal in this workspace has exited, so it stopped before deleting any files. Use Force Delete to remove it anyway.'
             ),
         isDestructive: false
       }
@@ -83,7 +83,7 @@ export function getDeleteWorktreeToastCopy(
         ),
         description: translate(
           'auto.components.sidebar.delete.worktree.toast.905fc8efac',
-          'Git already removed this workspace. Use Force Delete to clear it from Orca.'
+          'Git already removed this workspace. Use Force Delete to clear it from MCode.'
         ),
         isDestructive: false
       }
@@ -100,7 +100,7 @@ export function getDeleteWorktreeToastCopy(
       ),
       // Why: git commonly refuses the first delete when the worktree still has
       // modified or untracked files. Showing raw stderr in a destructive toast
-      // made a normal cleanup step look like an Orca bug, so this common case
+      // made a normal cleanup step look like an MCode bug, so this common case
       // gets a concise explanation plus the force-delete path instead.
       isDestructive: false
     }

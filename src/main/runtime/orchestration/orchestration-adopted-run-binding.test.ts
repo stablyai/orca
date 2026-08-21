@@ -40,7 +40,7 @@ type AdoptedFixture = {
 
 /** Builds a pre-cutover graph at schema 18 and reopens it so adoption runs. */
 function createAdoptedFixture(options: { settleWork: boolean }): AdoptedFixture {
-  const dir = mkdtempSync(join(tmpdir(), 'orca-adopted-bind-'))
+  const dir = mkdtempSync(join(tmpdir(), 'mcode-adopted-bind-'))
   tempDirs.push(dir)
   const dbPath = join(dir, 'orchestration.db')
 
@@ -112,7 +112,7 @@ describe('adopted Run binding without --takeover-legacy', () => {
         code: 'consumer_fenced',
         data: {
           effectsApplied: false,
-          recoveryCommand: `orca orchestration run-use --id ${adoptedRunId} --takeover-legacy`
+          recoveryCommand: `mcode orchestration run-use --id ${adoptedRunId} --takeover-legacy`
         }
       })
     )

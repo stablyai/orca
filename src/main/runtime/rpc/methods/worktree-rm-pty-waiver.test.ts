@@ -1,17 +1,17 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import { WORKTREE_METHODS } from './worktree'
 
-function makeRuntime(): OrcaRuntimeService {
+function makeRuntime(): MCodeRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
     dedupeWorktreeCreate: <T>(_repo: string, _id: string | undefined, run: () => Promise<T>) =>
       run(),
     showManagedWorktree: vi.fn().mockResolvedValue({ hostId: 'ssh:builder' }),
     removeManagedWorktree: vi.fn().mockResolvedValue({})
-  } as unknown as OrcaRuntimeService
+  } as unknown as MCodeRuntimeService
 }
 
 // Why (#11960): waiving the proof that every PTY stopped must ride its own field.

@@ -38,7 +38,7 @@ async function writeSubagentTranscript(args: {
 
 describe('listClaudeSubagentSessions', () => {
   it('lists subagents titled by the spawn description, newest first, linked to the parent', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-subagent-list-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-subagent-list-'))
     tempRoots.push(root)
     const parentFilePath = join(root, 'project', 'parent-session.jsonl')
     const subagentsDir = join(root, 'project', 'parent-session', 'subagents')
@@ -98,7 +98,7 @@ describe('listClaudeSubagentSessions', () => {
   })
 
   it('falls back to the Task prompt title when the meta sidecar is missing or corrupt', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-subagent-meta-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-subagent-meta-'))
     tempRoots.push(root)
     const parentFilePath = join(root, 'project', 'parent-session.jsonl')
     const subagentsDir = join(root, 'project', 'parent-session', 'subagents')
@@ -128,7 +128,7 @@ describe('listClaudeSubagentSessions', () => {
   })
 
   it('resolves statuses from parent task notifications, falling back to transcript recency', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-subagent-status-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-subagent-status-'))
     tempRoots.push(root)
     const parentFilePath = join(root, 'project', 'parent-session.jsonl')
     const subagentsDir = join(root, 'project', 'parent-session', 'subagents')
@@ -213,7 +213,7 @@ describe('listClaudeSubagentSessions', () => {
   })
 
   it('reads a terminal status whose <status> sits past the title truncation limit', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-subagent-longnote-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-subagent-longnote-'))
     tempRoots.push(root)
     const parentFilePath = join(root, 'project', 'parent-session.jsonl')
     const subagentsDir = join(root, 'project', 'parent-session', 'subagents')
@@ -225,7 +225,7 @@ describe('listClaudeSubagentSessions', () => {
     const notification =
       '<task-notification>\n<task-id>bigtask</task-id>\n' +
       '<tool-use-id>toolu_01HB57dwUE6hQVK6Mh8jVFHA</tool-use-id>\n' +
-      '<output-file>/private/tmp/claude-501/-Users-me-orca-workspaces-project/' +
+      '<output-file>/private/tmp/claude-501/-Users-me-mcode-workspaces-project/' +
       'parent-session/tasks/bigtask.output</output-file>\n' +
       '<status>completed</status>\n<summary>Agent finished</summary>\n</task-notification>'
     expect(notification.indexOf('<status>')).toBeGreaterThan(96)
@@ -261,7 +261,7 @@ describe('listClaudeSubagentSessions', () => {
   })
 
   it('ignores a quoted notification in a user prompt so it cannot overwrite a real status', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-subagent-quoted-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-subagent-quoted-'))
     tempRoots.push(root)
     const parentFilePath = join(root, 'project', 'parent-session.jsonl')
     const subagentsDir = join(root, 'project', 'parent-session', 'subagents')
@@ -306,7 +306,7 @@ describe('listClaudeSubagentSessions', () => {
   })
 
   it('reads a sync-Task toolUseResult status even when its report quotes a notification', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-subagent-turmarker-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-subagent-turmarker-'))
     tempRoots.push(root)
     const parentFilePath = join(root, 'project', 'parent-session.jsonl')
     const subagentsDir = join(root, 'project', 'parent-session', 'subagents')
@@ -349,7 +349,7 @@ describe('listClaudeSubagentSessions', () => {
   })
 
   it('links to the parent derived from its file path even when the transcript has no sessionId', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-subagent-parent-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-subagent-parent-'))
     tempRoots.push(root)
     const parentFilePath = join(root, 'project', 'parent-session.jsonl')
     const subagentsDir = join(root, 'project', 'parent-session', 'subagents')
@@ -376,7 +376,7 @@ describe('listClaudeSubagentSessions', () => {
   })
 
   it('returns an empty list when the session never spawned subagents', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-subagent-none-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-subagent-none-'))
     tempRoots.push(root)
     const parentFilePath = join(root, 'project', 'parent-session.jsonl')
     await writeJsonlFile(parentFilePath, [

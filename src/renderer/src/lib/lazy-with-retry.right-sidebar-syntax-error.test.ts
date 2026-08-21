@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { isLazyChunkLoadError, loadLazyWithRetry } from './lazy-with-retry'
 
-// Regression guard for crash report e08749bb-777c-446e-b407-5d1f154b6173 (Orca 1.4.104).
+// Regression guard for crash report e08749bb-777c-446e-b407-5d1f154b6173 (MCode 1.4.104).
 // boundary_id=right-sidebar, surface=right-sidebar, error_name=SyntaxError,
 // error_message="Unexpected token ')'". component_stack: Lazy -> Suspense ->
 // RightSidebarPanelContent -> ... -> RecoverableRenderErrorBoundary.
@@ -24,7 +24,7 @@ import { isLazyChunkLoadError, loadLazyWithRetry } from './lazy-with-retry'
 // reported crash. The fix treats a parse-time SyntaxError as a recoverable
 // corrupt-chunk failure; these tests pin that behavior.
 
-const RELOAD_GUARD_KEY = 'orca:lazy-chunk-reload-attempted'
+const RELOAD_GUARD_KEY = 'mcode:lazy-chunk-reload-attempted'
 const LANDED_RELOAD_GUARD_VALUE = 'doc-before-the-reload'
 
 // The exact error the renderer received from the corrupt right-sidebar chunk.

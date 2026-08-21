@@ -11,7 +11,7 @@ import {
 } from './skill-install-capability'
 export { SKILL_INSTALL_RESULT_V2_CAPABILITY } from './skill-install-capability'
 
-// Why: declares the Orca runtime RPC compatibility contract. Desktop,
+// Why: declares the MCode runtime RPC compatibility contract. Desktop,
 // headless server, CLI, and mobile builds may drift in app version, but
 // they must agree on this protocol range before runtime RPCs are allowed.
 //
@@ -104,7 +104,7 @@ export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
 // Why: older runtimes strip mutation owner fields, so clients must fence writes before RPC.
 export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-ownership.v1' as const
 export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =
-  'Remote file changes require a newer Orca server. Update the HUB and try again.'
+  'Remote file changes require a newer MCode server. Update the HUB and try again.'
 export const WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY =
   'worktree.visibility-defaults.v1' as const
 export const WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY =

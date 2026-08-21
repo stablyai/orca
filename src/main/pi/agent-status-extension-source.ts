@@ -3,19 +3,19 @@
 // etc.). To get pi panes into the unified agent-hooks pipeline alongside
 // Claude/Codex/Gemini/OpenCode/Cursor, we ship a bundled extension into
 // the selected Pi/OMP extension dir (PiTitlebarExtensionService) that POSTs to
-// /hook/<kind> using the same ORCA_AGENT_HOOK_* + ORCA_PANE_KEY env that every
+// /hook/<kind> using the same MCODE_AGENT_HOOK_* + MCODE_PANE_KEY env that every
 // PTY already receives from ipc/pty.ts.
 //
 // Each Pi process gets its own paneKey through env. Like the OpenCode plugin,
 // the returned source is a string (loaded by jiti from disk inside the pi process), so we
 // keep the source body in plain JS without TS types and avoid pulling pi or
-// any Orca dep into the pi runtime.
+// any MCode dep into the pi runtime.
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 import { getPiAgentStatusHandlerSourceLines } from './agent-status-handler-source'
 import { getPiAgentStatusRuntimeDetectionSourceLines } from './agent-status-runtime-detection-source'
 import { getPiAgentStatusWslCurlSourceLines } from './agent-status-wsl-curl-source'
 
-export const ORCA_PI_AGENT_STATUS_EXTENSION_FILE = 'orca-agent-status.ts'
+export const MCODE_PI_AGENT_STATUS_EXTENSION_FILE = 'mcode-agent-status.ts'
 
 export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): string {
   // Why: OMP needs the file only to reject ephemeral sessions; disclose just its resume id.
@@ -87,9 +87,9 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
       : '    payload: { hook_event_name: hookEventName, ...metadata, ...extra },'
 
   // Why: keep this string self-contained — it runs inside the pi process,
-  // so it cannot import from Orca's main bundle. fs/http coords come from
+  // so it cannot import from MCode's main bundle. fs/http coords come from
   // the same endpoint file the OpenCode plugin reads (process.env is frozen
-  // at PTY spawn, so on Orca restart we have to re-read it from disk).
+  // at PTY spawn, so on MCode restart we have to re-read it from disk).
   return [
     '// Why: no package-specific type import here. Pi and OMP expose the same',
     '// extension API, but publish their types under different package names.',
@@ -98,7 +98,7 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     'let warnedBadEndpoint = false',
     '// Why: Pi awaits extension handlers. Status delivery stays off that',
     '// critical path, and the latest-only pending slot prevents a stalled',
-    '// Orca receiver from building an unbounded queue of obsolete snapshots.',
+    '// MCode receiver from building an unbounded queue of obsolete snapshots.',
     'const HOOK_POST_TIMEOUT_MS = 1000',
     'let activePost = false',
     'let pendingPost: { hookEventName: string; extra: Record<string, unknown>; metadata: Record<string, unknown>; ompRuntime: boolean } | null = null',
@@ -111,7 +111,7 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     'let cachedEndpointValues: Record<string, string> | null = null',
     '',
     'function readEndpointFile(): Record<string, string> | null {',
-    '  const path = process.env.ORCA_AGENT_HOOK_ENDPOINT',
+    '  const path = process.env.MCODE_AGENT_HOOK_ENDPOINT',
     '  if (!path) return null',
     '  try {',
     "    const fs = require('fs')",
@@ -142,7 +142,7 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '    const code = (err as { code?: string } | null)?.code',
     "    if (err && code !== 'ENOENT' && !warnedBadEndpoint) {",
     '      warnedBadEndpoint = true',
-    "      console.warn('[orca-pi-status] failed to parse endpoint file:', (err as Error).message)",
+    "      console.warn('[mcode-pi-status] failed to parse endpoint file:', (err as Error).message)",
     '    }',
     '    return null',
     '  }',
@@ -151,10 +151,10 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     'function resolveHookCoords() {',
     '  const fileEnv = readEndpointFile() || {}',
     '  return {',
-    '    port: fileEnv.ORCA_AGENT_HOOK_PORT || process.env.ORCA_AGENT_HOOK_PORT,',
-    '    token: fileEnv.ORCA_AGENT_HOOK_TOKEN || process.env.ORCA_AGENT_HOOK_TOKEN,',
-    "    env: fileEnv.ORCA_AGENT_HOOK_ENV || process.env.ORCA_AGENT_HOOK_ENV || '',",
-    "    version: fileEnv.ORCA_AGENT_HOOK_VERSION || process.env.ORCA_AGENT_HOOK_VERSION || '',",
+    '    port: fileEnv.MCODE_AGENT_HOOK_PORT || process.env.MCODE_AGENT_HOOK_PORT,',
+    '    token: fileEnv.MCODE_AGENT_HOOK_TOKEN || process.env.MCODE_AGENT_HOOK_TOKEN,',
+    "    env: fileEnv.MCODE_AGENT_HOOK_ENV || process.env.MCODE_AGENT_HOOK_ENV || '',",
+    "    version: fileEnv.MCODE_AGENT_HOOK_VERSION || process.env.MCODE_AGENT_HOOK_VERSION || '',",
     '  }',
     '}',
     '',
@@ -191,14 +191,14 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '  ompRuntime: boolean',
     '): Promise<void> {',
     '  const coords = resolveHookCoords()',
-    '  const paneKey = process.env.ORCA_PANE_KEY',
+    '  const paneKey = process.env.MCODE_PANE_KEY',
     '  if (!coords.port || !coords.token || !paneKey) return',
     '  const url = `http://127.0.0.1:${coords.port}${resolveHookPath(ompRuntime)}`',
     '  const body = JSON.stringify({',
     '    paneKey,',
-    "    launchToken: process.env.ORCA_AGENT_LAUNCH_TOKEN || '',",
-    "    tabId: process.env.ORCA_TAB_ID || '',",
-    "    worktreeId: process.env.ORCA_WORKTREE_ID || '',",
+    "    launchToken: process.env.MCODE_AGENT_LAUNCH_TOKEN || '',",
+    "    tabId: process.env.MCODE_TAB_ID || '',",
+    "    worktreeId: process.env.MCODE_WORKTREE_ID || '',",
     '    env: coords.env,',
     '    version: coords.version,',
     payloadLine,
@@ -208,7 +208,7 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '  const timeoutPromise = new Promise<never>((_resolve, reject) => {',
     '    timeout = setTimeout(() => {',
     '      controller?.abort()',
-    "      reject(new Error('Orca hook delivery timed out'))",
+    "      reject(new Error('MCode hook delivery timed out'))",
     '    }, HOOK_POST_TIMEOUT_MS)',
     "    if (typeof timeout.unref === 'function') timeout.unref()",
     '  })',
@@ -218,7 +218,7 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     "        method: 'POST',",
     '        headers: {',
     "          'Content-Type': 'application/json',",
-    "          'X-Orca-Agent-Hook-Token': coords.token,",
+    "          'X-MCode-Agent-Hook-Token': coords.token,",
     '        },',
     '        body,',
     '        ...(controller ? { signal: controller.signal } : {}),',
@@ -226,8 +226,8 @@ export function getPiAgentStatusExtensionSource(kind: PiAgentKind = 'pi'): strin
     '      timeoutPromise,',
     '    ])',
     '  } catch {',
-    '    // Why: status reporting must never fail the pi run just because Orca',
-    '    // is unavailable or the loopback request failed (e.g. Orca restart).',
+    '    // Why: status reporting must never fail the pi run just because MCode',
+    '    // is unavailable or the loopback request failed (e.g. MCode restart).',
     '    if (!isWslRuntime()) return',
     '    postViaWindowsCurl(body, ompRuntime)',
     '  } finally {',

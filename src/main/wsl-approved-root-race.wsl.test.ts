@@ -5,8 +5,8 @@ import { containedDeleteCommand } from './wsl-contained-delete'
 import { parseWslPath } from './wsl'
 
 const execFileAsync = promisify(execFile)
-const DISTRO = process.env.ORCA_WSL_TEST_DISTRO ?? 'Ubuntu-24.04'
-const runRealWsl = process.platform === 'win32' && process.env.ORCA_REAL_WSL_DELETE_TEST === '1'
+const DISTRO = process.env.MCODE_WSL_TEST_DISTRO ?? 'Ubuntu-24.04'
+const runRealWsl = process.platform === 'win32' && process.env.MCODE_REAL_WSL_DELETE_TEST === '1'
 
 function unc(linuxPath: string): string {
   return `\\\\wsl.localhost\\${DISTRO}${linuxPath.replaceAll('/', '\\')}`
@@ -15,7 +15,7 @@ function unc(linuxPath: string): string {
 async function wsl(command: string, ...args: string[]): Promise<string> {
   const result = await execFileAsync(
     'wsl.exe',
-    ['-d', DISTRO, '--exec', 'sh', '-c', command, 'orca-wsl-test', ...args],
+    ['-d', DISTRO, '--exec', 'sh', '-c', command, 'mcode-wsl-test', ...args],
     { encoding: 'utf-8', timeout: 30000 }
   )
   return result.stdout.trim()
@@ -25,13 +25,13 @@ describe.skipIf(!runRealWsl)('WSL approved-root traversal race', () => {
   let fixtureRoot: string
 
   beforeAll(async () => {
-    fixtureRoot = await wsl("mktemp -d -p /tmp 'orca-wsl-root-race.XXXXXX'")
+    fixtureRoot = await wsl("mktemp -d -p /tmp 'mcode-wsl-root-race.XXXXXX'")
     const statHook = String.raw`#!/bin/sh
 for argument do last=$argument; done
-if [ "$PWD" = "$ORCA_RACE_PARENT" ] && [ "$(/usr/bin/basename "$last")" = vault ]; then
+if [ "$PWD" = "$MCODE_RACE_PARENT" ] && [ "$(/usr/bin/basename "$last")" = vault ]; then
   inspected=$(/usr/bin/stat "$@") || exit $?
-  /usr/bin/mv -- "$ORCA_RACE_PARENT/vault" "$ORCA_RACE_PARENT/vault-original" || exit $?
-  /usr/bin/ln -s -- "$ORCA_RACE_OUTSIDE" "$ORCA_RACE_PARENT/vault" || exit $?
+  /usr/bin/mv -- "$MCODE_RACE_PARENT/vault" "$MCODE_RACE_PARENT/vault-original" || exit $?
+  /usr/bin/ln -s -- "$MCODE_RACE_OUTSIDE" "$MCODE_RACE_PARENT/vault" || exit $?
   printf '%s\n' "$inspected"
   exit 0
 fi
@@ -52,7 +52,7 @@ exec /usr/bin/stat "$@"
   })
 
   afterAll(async () => {
-    if (/^\/tmp\/orca-wsl-root-race\.[A-Za-z0-9]+$/u.test(fixtureRoot)) {
+    if (/^\/tmp\/mcode-wsl-root-race\.[A-Za-z0-9]+$/u.test(fixtureRoot)) {
       await wsl('chmod -f 700 "$1/execute-only" 2>/dev/null; rm -rf -- "$1"', fixtureRoot)
     }
   })
@@ -74,13 +74,13 @@ exec /usr/bin/stat "$@"
           '--exec',
           'env',
           `PATH=${fixtureRoot}/hook-bin:/usr/bin:/bin`,
-          `ORCA_RACE_PARENT=${fixtureRoot}/race`,
-          `ORCA_RACE_OUTSIDE=${fixtureRoot}/outside/root-target`,
+          `MCODE_RACE_PARENT=${fixtureRoot}/race`,
+          `MCODE_RACE_OUTSIDE=${fixtureRoot}/outside/root-target`,
           ...(command ?? [])
         ],
         { encoding: 'utf-8', timeout: 30000 }
       )
-    ).rejects.toMatchObject({ stderr: expect.stringContaining('ORCA_WSL_DELETE_REJECT:race') })
+    ).rejects.toMatchObject({ stderr: expect.stringContaining('MCODE_WSL_DELETE_REJECT:race') })
 
     await expect(
       wsl(

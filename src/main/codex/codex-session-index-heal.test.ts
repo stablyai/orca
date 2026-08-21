@@ -115,7 +115,7 @@ function createHealRig(options: {
   buildInvocation: (systemCodexHomePath: string, timeoutMs: number) => CodexAppServerInvocation
   readLog: () => { serverStarts: number; threadIds: string[]; maxInFlight: number }
 } {
-  const root = mkdtempSync(join(tmpdir(), 'orca-codex-heal-'))
+  const root = mkdtempSync(join(tmpdir(), 'mcode-codex-heal-'))
   tempRoots.push(root)
   const systemSessionsRoot = join(root, 'real-home', 'sessions')
   const stateDir = join(root, 'state')

@@ -1,5 +1,5 @@
 /**
- * STA-3107: a paired client working against a remote Orca host is slept
+ * STA-3107: a paired client working against a remote MCode host is slept
  * (laptop closed), then woken. Every terminal tab is still open and still has a
  * live host PTY, but the sidebar shows fewer agents than there are tabs.
  *

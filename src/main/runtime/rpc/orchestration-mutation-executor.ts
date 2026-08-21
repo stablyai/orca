@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { isOrchestrationMutation } from '../../../shared/orchestration-rpc-contract'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
-import type { OrcaRuntimeService } from '../orca-runtime'
+import type { MCodeRuntimeService } from '../mcode-runtime'
 import { OrchestrationError } from '../orchestration/orchestration-error'
 import type { RpcRequest } from './core'
 
@@ -18,7 +18,7 @@ export type DurableMutationInvocation = {
 export class OrchestrationMutationExecutor {
   private readonly inFlight = new Map<string, Promise<unknown>>()
 
-  constructor(private readonly runtime: OrcaRuntimeService) {}
+  constructor(private readonly runtime: MCodeRuntimeService) {}
 
   async run(
     request: RpcRequest,
@@ -89,7 +89,7 @@ export class OrchestrationMutationExecutor {
             ? {
                 requestId,
                 dispatchId: recovery.dispatchId,
-                recoveryCommand: `orca orchestration worker-show --dispatch ${recovery.dispatchId} --json`
+                recoveryCommand: `mcode orchestration worker-show --dispatch ${recovery.dispatchId} --json`
               }
             : { requestId }
         )
@@ -124,10 +124,10 @@ export class OrchestrationMutationExecutor {
   }
 }
 
-const executorsByRuntime = new WeakMap<OrcaRuntimeService, OrchestrationMutationExecutor>()
+const executorsByRuntime = new WeakMap<MCodeRuntimeService, OrchestrationMutationExecutor>()
 
 export function getOrchestrationMutationExecutor(
-  runtime: OrcaRuntimeService
+  runtime: MCodeRuntimeService
 ): OrchestrationMutationExecutor {
   const existing = executorsByRuntime.get(runtime)
   if (existing) {
@@ -142,7 +142,7 @@ export function fingerprintAuthenticatedPairingCredential(token: string): string
   return createHash('sha256').update(token).digest('hex')
 }
 
-function replayStableCallerParams(runtime: OrcaRuntimeService, params: unknown): unknown {
+function replayStableCallerParams(runtime: MCodeRuntimeService, params: unknown): unknown {
   if (!params || typeof params !== 'object' || Array.isArray(params)) {
     return params
   }

@@ -14,7 +14,7 @@ export function addLifecycleRejectionMarker(
   }
   return JSON.stringify({
     ...parsed,
-    _orcaLifecycleRejection: { code, reason }
+    _mcodeLifecycleRejection: { code, reason }
   })
 }
 
@@ -24,7 +24,7 @@ export function hasLifecycleRejectionMarker(payload: string | null): boolean {
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       return false
     }
-    const marker = (value as Record<string, unknown>)._orcaLifecycleRejection
+    const marker = (value as Record<string, unknown>)._mcodeLifecycleRejection
     return Boolean(
       marker &&
       typeof marker === 'object' &&

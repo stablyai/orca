@@ -1,4 +1,4 @@
-export const BOOTSTRAP_FATAL_EXIT_GUARD_KEY = '__ORCA_BOOTSTRAP_FATAL_EXIT_GUARD__'
+export const BOOTSTRAP_FATAL_EXIT_GUARD_KEY = '__MCODE_BOOTSTRAP_FATAL_EXIT_GUARD__'
 
 type BootstrapFatalExitGlobal = typeof globalThis & {
   [BOOTSTRAP_FATAL_EXIT_GUARD_KEY]?: () => void

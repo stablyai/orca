@@ -19,7 +19,7 @@ async function postTruncatedHook(
   await new Promise<void>((resolve, reject) => {
     const socket = connect({ port, host: '127.0.0.1' }, () => {
       socket.write(
-        `POST ${pathname} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/x-www-form-urlencoded\r\nX-Orca-Agent-Hook-Token: ${token}\r\nContent-Length: ${announcedLength}\r\n\r\n${sentBytes}`
+        `POST ${pathname} HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/x-www-form-urlencoded\r\nX-MCode-Agent-Hook-Token: ${token}\r\nContent-Length: ${announcedLength}\r\n\r\n${sentBytes}`
       )
       // Why: an RST mid-body is what an inspecting IDS does; a FIN would be an ordinary client hangup.
       setTimeout(() => {
@@ -39,12 +39,12 @@ async function postTruncatedHook(
   await new Promise((resolve) => setTimeout(resolve, 50))
 }
 
-/** Opens a POST that announces a body and then never sends it, so Orca's own slowloris cap ends it. */
+/** Opens a POST that announces a body and then never sends it, so MCode's own slowloris cap ends it. */
 async function postStalledHook(port: number, token: string): Promise<void> {
   const socket = connect({ port, host: '127.0.0.1' })
   await new Promise<void>((resolve) => socket.on('connect', () => resolve()))
   socket.write(
-    `POST /hook/claude HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/x-www-form-urlencoded\r\nX-Orca-Agent-Hook-Token: ${token}\r\nContent-Length: 100000\r\n\r\n`
+    `POST /hook/claude HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/x-www-form-urlencoded\r\nX-MCode-Agent-Hook-Token: ${token}\r\nContent-Length: 100000\r\n\r\n`
   )
   await new Promise<void>((resolve) => {
     socket.on('close', () => resolve())
@@ -59,7 +59,7 @@ async function postCompleteHook(port: number, token: string): Promise<void> {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
-      'X-Orca-Agent-Hook-Token': token
+      'X-MCode-Agent-Hook-Token': token
     },
     body
   })
@@ -94,8 +94,8 @@ describe('AgentHookServer transport interference', () => {
     const env = server.buildPtyEnv()
     return {
       server,
-      port: Number(env.ORCA_AGENT_HOOK_PORT),
-      token: env.ORCA_AGENT_HOOK_TOKEN,
+      port: Number(env.MCODE_AGENT_HOOK_PORT),
+      token: env.MCODE_AGENT_HOOK_TOKEN,
       reports
     }
   }
@@ -133,7 +133,7 @@ describe('AgentHookServer transport interference', () => {
 
     await postTruncatedHook(port, token)
     await postTruncatedHook(port, token)
-    // Why: Orca destroys this one itself at HOOK_REQUEST_SLOWLORIS_MS; counting it would make
+    // Why: MCode destroys this one itself at HOOK_REQUEST_SLOWLORIS_MS; counting it would make
     // every stalled agent look like an IDS block.
     await postStalledHook(port, token)
     expect(reports).toEqual([])

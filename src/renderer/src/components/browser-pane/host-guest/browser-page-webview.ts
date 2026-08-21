@@ -1,4 +1,4 @@
-import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../../shared/browser-guest-web-preferences'
+import { MCODE_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../../shared/browser-guest-web-preferences'
 import {
   destroyPersistentWebview,
   registerPersistentWebview,
@@ -59,7 +59,7 @@ export function ensureBrowserPageWebview({
   webview.setAttribute('allowpopups', '')
   // Why: Electron spreads the webpreferences keys verbatim, so the shared
   // camelCase attribute must stay intact for fullscreen containment to work.
-  webview.setAttribute('webpreferences', ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE)
+  webview.setAttribute('webpreferences', MCODE_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE)
   webview.style.display = 'flex'
   webview.style.flex = '1'
   webview.style.width = '100%'
@@ -67,7 +67,7 @@ export function ensureBrowserPageWebview({
   webview.style.border = 'none'
   setBrowserPageWebviewInputLock(webview, inputLocked)
   // Why: some pages never paint a background, and a white viewport matches
-  // normal browser behavior instead of leaking Orca chrome through the guest.
+  // normal browser behavior instead of leaking MCode chrome through the guest.
   webview.style.background = '#ffffff'
   registerPersistentWebview(browserTabId, webview)
   activeContainer.appendChild(webview)

@@ -6,7 +6,7 @@ import { dirname, join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createSkillPackageArchive } from './skill-package-creation'
 
-const RUN_REAL_PROCESS = process.env.ORCA_REAL_PROCESS_SKILL_TEST === '1'
+const RUN_REAL_PROCESS = process.env.MCODE_REAL_PROCESS_SKILL_TEST === '1'
 const require = createRequire(import.meta.url)
 const vitestBin = join(dirname(require.resolve('vitest/package.json')), 'vitest.mjs')
 const childTest = resolve('src/main/skills/skill-process-contention-child.test.ts')
@@ -63,14 +63,14 @@ function startChild(input: {
       cwd: process.cwd(),
       env: {
         ...process.env,
-        ORCA_REAL_PROCESS_SKILL_TEST: '0',
-        ORCA_SKILL_CONTENTION_CHILD: '1',
-        ORCA_SKILL_CONTENTION_ROOT: input.root,
-        ORCA_SKILL_CONTENTION_ARCHIVE: input.archivePath,
-        ORCA_SKILL_CONTENTION_ROLE: input.role,
-        ORCA_SKILL_CONTENTION_READY: input.readyPath,
-        ORCA_SKILL_CONTENTION_RELEASE: input.releasePath,
-        ORCA_SKILL_CONTENTION_RESULT: input.resultPath
+        MCODE_REAL_PROCESS_SKILL_TEST: '0',
+        MCODE_SKILL_CONTENTION_CHILD: '1',
+        MCODE_SKILL_CONTENTION_ROOT: input.root,
+        MCODE_SKILL_CONTENTION_ARCHIVE: input.archivePath,
+        MCODE_SKILL_CONTENTION_ROLE: input.role,
+        MCODE_SKILL_CONTENTION_READY: input.readyPath,
+        MCODE_SKILL_CONTENTION_RELEASE: input.releasePath,
+        MCODE_SKILL_CONTENTION_RESULT: input.resultPath
       },
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true
@@ -116,7 +116,7 @@ afterEach(async () => {
 
 describe.runIf(RUN_REAL_PROCESS)('skill multi-process contention', () => {
   it('fails busy without residue, then converges after the owner releases', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skill-process-contention-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skill-process-contention-'))
     roots.push(root)
     const source = join(root, 'source')
     await mkdir(source)
@@ -179,7 +179,7 @@ describe.runIf(RUN_REAL_PROCESS)('skill multi-process contention', () => {
       status: 'unchanged'
     })
     expect(await readdir(join(root, 'state', 'receipts'))).toHaveLength(1)
-    expect((await readdir(join(root, 'skills'))).filter((name) => name.includes('.orca-'))).toEqual(
+    expect((await readdir(join(root, 'skills'))).filter((name) => name.includes('.mcode-'))).toEqual(
       []
     )
   }, 30_000)

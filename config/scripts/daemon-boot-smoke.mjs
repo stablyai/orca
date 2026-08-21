@@ -49,7 +49,7 @@ function makeSocketPath(userDataDir) {
   // Why: Windows AF_UNIX-style IPC uses named pipes; POSIX uses a filesystem
   // socket kept under the scratch userData dir so cleanup removes it.
   if (process.platform === 'win32') {
-    return `\\\\.\\pipe\\orca-daemon-smoke-${process.pid}-${randomUUID()}`
+    return `\\\\.\\pipe\\mcode-daemon-smoke-${process.pid}-${randomUUID()}`
   }
   return join(userDataDir, 'daemon.sock')
 }
@@ -150,7 +150,7 @@ async function runPtySpawnHealthCheck(socketPath, tokenPath, protocolVersion) {
 }
 
 async function main() {
-  const userDataDir = mkdtempSync(join(tmpdir(), 'orca-daemon-boot-smoke-'))
+  const userDataDir = mkdtempSync(join(tmpdir(), 'mcode-daemon-boot-smoke-'))
   const socketPath = makeSocketPath(userDataDir)
   const tokenPath = join(userDataDir, 'daemon.token')
   const pidPath = join(userDataDir, 'daemon.pid')
@@ -179,7 +179,7 @@ async function main() {
       // CI, and this is exactly the runtime where a leaked `require("electron")`
       // throws MODULE_NOT_FOUND — the failure this smoke exists to catch.
       stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
-      env: { ...process.env, ORCA_USER_DATA_PATH: userDataDir }
+      env: { ...process.env, MCODE_USER_DATA_PATH: userDataDir }
     }
   )
 

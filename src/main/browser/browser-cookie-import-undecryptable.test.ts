@@ -101,7 +101,7 @@ describe('importCookiesFromBrowser — undecryptable cookies', () => {
   let platformSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'orca-linux-keyring-test-'))
+    tmpDir = mkdtempSync(join(tmpdir(), 'mcode-linux-keyring-test-'))
     cookiesSetMock = vi.fn().mockResolvedValue(undefined)
     targetJar = []
     cookiesRemoveMock = vi.fn(async (_url: string, name: string) => {

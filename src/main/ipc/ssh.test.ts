@@ -352,7 +352,7 @@ describe('SSH IPC handlers', () => {
       .mockRejectedValue(
         new Error(
           'Relay package for linux-x64 not found locally. ' +
-            'This may be a packaging issue — try reinstalling Orca.'
+            'This may be a packaging issue — try reinstalling MCode.'
         )
       )
 

@@ -12,14 +12,14 @@ afterEach(async () => {
 
 describe('PluginAuditLog retention', () => {
   it('rotates bounded segments while preserving recent entries across the boundary', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-plugin-audit-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-plugin-audit-'))
     roots.push(root)
     const audit = new PluginAuditLog(root, { maxBytes: 240 })
 
     for (let index = 0; index < 8; index += 1) {
       await audit.record({
         ts: index,
-        actor: 'plugin:orca-samples.demo',
+        actor: 'plugin:mcode-samples.demo',
         method: 'storage.set',
         summary: `key=${index}`,
         outcome: 'ok'

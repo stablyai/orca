@@ -116,7 +116,7 @@ describe('active agent note send', () => {
         terminal: 'term-2',
         text: `${PASTE_BEGIN}notes${PASTE_END}`,
         requireAgentStatus: 'sendable',
-        client: { id: 'orca-desktop', type: 'desktop' }
+        client: { id: 'mcode-desktop', type: 'desktop' }
       },
       { timeoutMs: 15000 }
     )
@@ -127,7 +127,7 @@ describe('active agent note send', () => {
         terminal: 'term-2',
         enter: true,
         requireAgentStatus: 'sendable',
-        client: { id: 'orca-desktop', type: 'desktop' }
+        client: { id: 'mcode-desktop', type: 'desktop' }
       },
       { timeoutMs: 15000 }
     )
@@ -642,10 +642,10 @@ describe('active agent note send', () => {
     expect(
       activeAgentNotesSendFailureMessage('partial-submit-failed', { explicitTarget: true })
     ).toBe(
-      'The notes may already be pasted in the selected terminal, but Orca could not submit them.'
+      'The notes may already be pasted in the selected terminal, but MCode could not submit them.'
     )
     expect(activeAgentNotesSendFailureMessage('partial-submit-failed')).toBe(
-      'The notes may already be pasted in the active terminal, but Orca could not submit them.'
+      'The notes may already be pasted in the active terminal, but MCode could not submit them.'
     )
   })
 

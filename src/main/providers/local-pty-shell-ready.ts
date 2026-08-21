@@ -2,7 +2,7 @@
  * Shell-ready launch configuration for local PTYs.
  *
  * Why: startup commands must wait until the shell has fully initialized. Picks the args/env
- * that point each shell at its Orca wrapper (which emits the OSC 777 marker the scanner detects).
+ * that point each shell at its MCode wrapper (which emits the OSC 777 marker the scanner detects).
  */
 import { basename, win32 as pathWin32 } from 'node:path'
 import {
@@ -50,7 +50,7 @@ function wrapperTreeUsable(): boolean {
   return ensured && shellReadyWrappersExist()
 }
 
-/** Args that point bash at Orca's rcfile, or null when it is not usable. */
+/** Args that point bash at MCode's rcfile, or null when it is not usable. */
 export function getBashWrapperLaunchArgs(): string[] | null {
   return shellReadyWrappersExist()
     ? ['--rcfile', `${getShellReadyWrapperRoot()}/bash/rcfile`]
@@ -73,7 +73,7 @@ export function getShellLaunchConfig(
     }
     if (!wrapperTreeUsable()) {
       // Why plain login zsh: ZDOTDIR pointed at an incomplete wrapper dir makes
-      // zsh skip the user's whole config. Losing Orca's features is recoverable.
+      // zsh skip the user's whole config. Losing MCode's features is recoverable.
       return { args: ['-l'], env: {}, supportsReadyMarker: false }
     }
     return {

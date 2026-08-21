@@ -113,7 +113,7 @@ describe('pr-comment-presentation', () => {
   })
 
   it('falls back to the default variant when localStorage is unset', () => {
-    window.localStorage.removeItem('orca:pr-comment-presentation')
+    window.localStorage.removeItem('mcode:pr-comment-presentation')
     expect(resolvePRCommentPresentationVariant()).toBe(DEFAULT_PR_COMMENT_PRESENTATION_VARIANT)
   })
 })

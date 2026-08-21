@@ -184,7 +184,7 @@ describe('Pi-compatible title detection', () => {
     ['\u280b π: tmp', 'omp', '\u280b OMP'],
     ['\u280b π - tmp', 'omp', '\u280b OMP'],
     ['\u280b OMP', 'pi', '\u280b Pi'],
-    ['lucky-echidna | \u283c π - Diagnose Orca terminal title flicker - test', 'omp', '\u280b OMP'],
+    ['lucky-echidna | \u283c π - Diagnose MCode terminal title flicker - test', 'omp', '\u280b OMP'],
     ['lucky-echidna | Pi ready', 'omp', 'OMP ready'],
     ['Codex | Pi ready', 'omp', 'OMP ready'],
     // Why: the wrapped whole reads as a braille Claude title, but the re-ownable
@@ -244,10 +244,10 @@ describe('Pi-compatible title detection', () => {
 })
 
 describe('Cursor agent title identity', () => {
-  // Why: the accepted vocabulary is the set of labels Orca actually synthesizes for Cursor.
+  // Why: the accepted vocabulary is the set of labels MCode actually synthesizes for Cursor.
   // Pin it to that profile so renaming a label there cannot silently drop @cursor to zero
   // recipients (and desync the auto-Enter suppression that shares this predicate).
-  it('accepts every label Orca synthesizes for Cursor', () => {
+  it('accepts every label MCode synthesizes for Cursor', () => {
     const profile = SYNTHETIC_AGENT_TITLE_PROFILES.cursor
 
     for (const label of [
@@ -267,7 +267,7 @@ describe('Cursor agent title identity', () => {
     '⣿ Cursor Agent',
     'Cursor ready',
     'Cursor - action required'
-  ])('accepts the native or Orca-synthesized Cursor title %j', (title) => {
+  ])('accepts the native or MCode-synthesized Cursor title %j', (title) => {
     expect(isCursorAgentTitle(title)).toBe(true)
   })
 
@@ -278,7 +278,7 @@ describe('Cursor agent title identity', () => {
     '✳ Fix the text cursor blink',
     '. fix cursor position',
     '* cursor rendering done',
-    'Terminal Cursor and Orca slows down',
+    'Terminal Cursor and MCode slows down',
     'cursor-agent',
     'cursor.exe',
     '~/cursor-rules',

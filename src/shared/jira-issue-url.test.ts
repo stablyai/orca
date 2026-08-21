@@ -9,11 +9,11 @@ function site(id: string, siteUrl: string): JiraSite {
 function issue(overrides: Partial<JiraIssue> = {}): JiraIssue {
   return {
     id: '100',
-    key: 'ORCA-123',
+    key: 'MCODE-123',
     siteId: 'cloud',
     title: 'Link Jira',
-    url: 'https://company.atlassian.net/browse/ORCA-123',
-    project: { id: '10', key: 'ORCA', name: 'Orca' },
+    url: 'https://company.atlassian.net/browse/MCODE-123',
+    project: { id: '10', key: 'MCODE', name: 'MCode' },
     issueType: { id: '1', name: 'Task' },
     status: { id: '1', name: 'Open', categoryKey: 'new', categoryName: 'To Do' },
     labels: [],
@@ -26,8 +26,8 @@ function issue(overrides: Partial<JiraIssue> = {}): JiraIssue {
 describe('parseJiraIssueUrl', () => {
   it.each([
     [
-      'https://company.atlassian.net/browse/orca-123?focusedCommentId=1#comment',
-      { issueKey: 'ORCA-123', origin: 'https://company.atlassian.net', sitePath: '' }
+      'https://company.atlassian.net/browse/mcode-123?focusedCommentId=1#comment',
+      { issueKey: 'MCODE-123', origin: 'https://company.atlassian.net', sitePath: '' }
     ],
     [
       'http://jira.company.com:8080/jira/browse/TEAM_CORE-42',
@@ -50,16 +50,16 @@ describe('parseJiraIssueUrl', () => {
   })
 
   it.each([
-    'ORCA-123',
-    '/browse/ORCA-123',
-    'ftp://jira.example.com/browse/ORCA-123',
-    'https://user:secret@jira.example.com/browse/ORCA-123',
+    'MCODE-123',
+    '/browse/MCODE-123',
+    'ftp://jira.example.com/browse/MCODE-123',
+    'https://user:secret@jira.example.com/browse/MCODE-123',
     'https://jira.example.com/browse/123',
     'https://jira.example.com/browse/-123',
-    'https://jira.example.com/browse/ORCA_123',
-    'https://jira.example.com/browse/ORCA-X',
-    'https://jira.example.com/browse/ORCA-123/extra',
-    'https://jira.example.com/browse/ORCA-123/'
+    'https://jira.example.com/browse/MCODE_123',
+    'https://jira.example.com/browse/MCODE-X',
+    'https://jira.example.com/browse/MCODE-123/extra',
+    'https://jira.example.com/browse/MCODE-123/'
   ])('rejects %s', (value) => {
     expect(parseJiraIssueUrl(value)).toBeNull()
   })
@@ -67,7 +67,7 @@ describe('parseJiraIssueUrl', () => {
 
 describe('Jira site and issue matching', () => {
   it('matches the complete origin and base path while retaining duplicate accounts', () => {
-    const parsed = parseJiraIssueUrl('https://jira.company.com:8443/jira/browse/ORCA-123')!
+    const parsed = parseJiraIssueUrl('https://jira.company.com:8443/jira/browse/MCODE-123')!
     const matches = getMatchingJiraSites(parsed, [
       site('a', 'https://jira.company.com:8443/jira'),
       site('b', 'https://jira.company.com:8443/jira/'),
@@ -79,16 +79,16 @@ describe('Jira site and issue matching', () => {
   })
 
   it('requires the key, site id, and canonical URL site to agree', () => {
-    const parsed = parseJiraIssueUrl('https://company.atlassian.net/browse/ORCA-123')!
+    const parsed = parseJiraIssueUrl('https://company.atlassian.net/browse/MCODE-123')!
     const connectedSite = site('cloud', 'https://company.atlassian.net')
     expect(isResolvedJiraIssueMatch(parsed, connectedSite, issue())).toBe(true)
-    expect(isResolvedJiraIssueMatch(parsed, connectedSite, issue({ key: 'ORCA-124' }))).toBe(false)
+    expect(isResolvedJiraIssueMatch(parsed, connectedSite, issue({ key: 'MCODE-124' }))).toBe(false)
     expect(isResolvedJiraIssueMatch(parsed, connectedSite, issue({ siteId: 'other' }))).toBe(false)
     expect(
       isResolvedJiraIssueMatch(
         parsed,
         connectedSite,
-        issue({ url: 'https://other.atlassian.net/browse/ORCA-123' })
+        issue({ url: 'https://other.atlassian.net/browse/MCODE-123' })
       )
     ).toBe(false)
   })

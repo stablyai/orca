@@ -44,8 +44,8 @@ export function probeNotificationDelivery(): Promise<NotificationDeliveryProbeRe
   permissionDialogTriggeredThisSession = true
 
   const probe = new Notification({
-    title: 'Orca notifications are on',
-    body: 'Orca will alert you when agents finish or terminals need attention.',
+    title: 'MCode notifications are on',
+    body: 'MCode will alert you when agents finish or terminals need attention.',
     silent: true
   })
   activeNotifications.add(probe)

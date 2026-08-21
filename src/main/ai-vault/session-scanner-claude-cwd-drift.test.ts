@@ -20,7 +20,7 @@ describe('scanAiVaultSessions — Claude cwd drift', () => {
     // changed directory mid-run, resuming with the last-seen cwd fails with
     // "No conversation found". The session's representative cwd must stay the
     // start directory.
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-cwd-drift-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-cwd-drift-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
     await mkdir(join(roots.claudeProjectsDir, 'project'), { recursive: true })

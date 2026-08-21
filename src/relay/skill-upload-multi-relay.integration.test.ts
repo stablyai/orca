@@ -12,12 +12,12 @@ const relays: RelayProcess[] = []
 const roots: string[] = []
 
 beforeAll(async () => {
-  const externalEntry = process.env.ORCA_SKILL_UPLOAD_RELAY_ENTRY
+  const externalEntry = process.env.MCODE_SKILL_UPLOAD_RELAY_ENTRY
   if (externalEntry) {
     relayEntry = resolve(externalEntry)
     return
   }
-  bundleRoot = await mkdtemp(join(tmpdir(), 'orca-skill-multi-relay-bundle-'))
+  bundleRoot = await mkdtemp(join(tmpdir(), 'mcode-skill-multi-relay-bundle-'))
   relayEntry = join(bundleRoot, 'relay.js')
   await build({
     entryPoints: [resolve('src/relay/relay.ts')],
@@ -75,7 +75,7 @@ async function stagedArchives(uploadRoot: string): Promise<string[]> {
 }
 
 async function uploadRootForOracle(home: string): Promise<string> {
-  const installRoot = join(home, '.orca', 'skill-installs')
+  const installRoot = join(home, '.mcode', 'skill-installs')
   const current = join(installRoot, 'remote-uploads-v2')
   return (await stat(current).catch(() => null)) ? current : join(installRoot, 'remote-uploads')
 }
@@ -92,7 +92,7 @@ function packageIdentity(bytes: Buffer, suffix: string) {
 
 describe('skill upload ownership across relay processes', () => {
   it('keeps each live relay upload isolated and cleans each exact owner', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skill-multi-relay-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skill-multi-relay-'))
     roots.push(root)
     const home = join(root, 'home')
     const environment = { ...process.env, HOME: home, USERPROFILE: home }
@@ -194,15 +194,15 @@ describe('skill upload ownership across relay processes', () => {
   })
 
   it
-    .runIf(Boolean(process.env.ORCA_SKILL_UPLOAD_LEGACY_RELAY_ENTRY))
+    .runIf(Boolean(process.env.MCODE_SKILL_UPLOAD_LEGACY_RELAY_ENTRY))
     .each(['legacy-first', 'current-first'] as const)(
     'keeps %s mixed-version uploads isolated',
     async (order) => {
-      const root = await mkdtemp(join(tmpdir(), 'orca-skill-mixed-relay-'))
+      const root = await mkdtemp(join(tmpdir(), 'mcode-skill-mixed-relay-'))
       roots.push(root)
       const home = join(root, 'home')
       const environment = { ...process.env, HOME: home, USERPROFILE: home }
-      const legacyEntry = resolve(process.env.ORCA_SKILL_UPLOAD_LEGACY_RELAY_ENTRY!)
+      const legacyEntry = resolve(process.env.MCODE_SKILL_UPLOAD_LEGACY_RELAY_ENTRY!)
       const entries =
         order === 'legacy-first'
           ? [
@@ -239,7 +239,7 @@ describe('skill upload ownership across relay processes', () => {
         uploads.push({ relay, uploadId: begun.uploadId, bytes, kind: owner.kind })
       }
 
-      const installRoot = join(home, '.orca', 'skill-installs')
+      const installRoot = join(home, '.mcode', 'skill-installs')
       const legacyFiles = (await readdir(join(installRoot, 'remote-uploads'))).filter((name) =>
         name.endsWith('.tar.gz')
       )

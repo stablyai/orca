@@ -75,10 +75,10 @@ describe.skipIf(process.platform === 'win32')('getControlSocketPath', () => {
     const second = getControlSocketPath(createTarget(), createResolved())
 
     expect(first).toBe(second)
-    expect(first).toMatch(new RegExp(`/orca-ssh-${CURRENT_UID}/[0-9a-f]{16}$`))
+    expect(first).toMatch(new RegExp(`/mcode-ssh-${CURRENT_UID}/[0-9a-f]{16}$`))
     // Why: OpenSSH creates a temporary mux listener by appending a suffix first.
     expect(first!.length).toBeLessThanOrEqual(90)
-    expect(mkdirSyncMock).toHaveBeenCalledWith(`/tmp/orca-ssh-${CURRENT_UID}`, {
+    expect(mkdirSyncMock).toHaveBeenCalledWith(`/tmp/mcode-ssh-${CURRENT_UID}`, {
       recursive: true,
       mode: 0o700
     })
@@ -119,7 +119,7 @@ describe.skipIf(process.platform === 'win32')('getControlSocketPath', () => {
 
     const path = getControlSocketPath(createTarget(), createResolved())
 
-    expect(path).toMatch(/^\/run\/user\/501\/orca-ssh\/[0-9a-f]{16}$/)
+    expect(path).toMatch(/^\/run\/user\/501\/mcode-ssh\/[0-9a-f]{16}$/)
   })
 
   it('falls back to non-multiplexed SSH when the control directory is unsafe', () => {

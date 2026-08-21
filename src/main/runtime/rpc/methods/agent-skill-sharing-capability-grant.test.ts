@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { OrcaRuntimeService } from '../../orca-runtime'
+import { MCodeRuntimeService } from '../../mcode-runtime'
 import { SettingsUpdate } from './client-ui-schemas'
 
 vi.mock('electron', () => ({
-  app: { getPath: () => '/orca-state', isPackaged: true }
+  app: { getPath: () => '/mcode-state', isPackaged: true }
 }))
 
-function runtimeWithSharing(agentSkillSharingEnabled: unknown): OrcaRuntimeService {
-  return new OrcaRuntimeService({
+function runtimeWithSharing(agentSkillSharingEnabled: unknown): MCodeRuntimeService {
+  return new MCodeRuntimeService({
     getSettings: () => ({ ...getDefaultSettings('/tmp'), agentSkillSharingEnabled })
   } as never)
 }

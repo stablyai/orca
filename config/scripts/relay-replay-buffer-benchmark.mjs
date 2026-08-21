@@ -16,9 +16,9 @@ import { readFileSync } from 'node:fs'
 import { performance } from 'node:perf_hooks'
 
 const ROUNDS = 6
-const SECONDS = Number(process.env.ORCA_REPLAY_BENCH_SECONDS ?? '1')
+const SECONDS = Number(process.env.MCODE_REPLAY_BENCH_SECONDS ?? '1')
 if (!Number.isFinite(SECONDS) || SECONDS <= 0) {
-  throw new Error(`ORCA_REPLAY_BENCH_SECONDS must be positive, received ${SECONDS}`)
+  throw new Error(`MCODE_REPLAY_BENCH_SECONDS must be positive, received ${SECONDS}`)
 }
 
 // Why re-read the sources: the claim is that the relay now appends into a chunk deque

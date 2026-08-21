@@ -49,5 +49,5 @@ export const pdfViewPositionCache = new Map<string, PdfViewPosition>()
 // Why: Diff editors need more than a numeric scroll offset to restore the same
 // working context. Monaco's diff view state also carries cursor/selection state
 // for both sides plus diff model state, which matches VS Code's restore path
-// more closely than Orca's previous scroll-only cache.
+// more closely than MCode's previous scroll-only cache.
 export const diffViewStateCache = new Map<string, editor.IDiffEditorViewState>()

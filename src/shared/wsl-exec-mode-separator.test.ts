@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
 // Two spellings reach wsl.exe, and both have shipped a regression: an argv array, and
 // a command line built as a string (PowerShell setup commands). Comments describing
 // the old form are allowed — only code is scanned.
-// Guest programs Orca hands to wsl.exe. An allowlist rather than "any quoted
+// Guest programs MCode hands to wsl.exe. An allowlist rather than "any quoted
 // token", because git's own `--` pathspec separator is followed by one too.
 const GUEST_PROGRAM = String.raw`(?:\/[\w./-]+\/)?(?:sh|bash|zsh|dash|ash|ksh|mksh|env|rm|cat|printf|node|python3?)`
 // `\s*` has to cross newlines: the formatter puts each argv element on its own

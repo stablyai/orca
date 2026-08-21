@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
 import {
   discoverActivePtyId,
@@ -12,7 +12,7 @@ import {
   waitForTerminalOutput
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/mcode-restart'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 import { PTY_SESSION_ID_SEPARATOR } from '../../src/shared/pty-session-id-format'
 
@@ -73,7 +73,7 @@ test('reattaches daemon PTYs when daemon init outlasts the first-window timeout'
     // Why: session.launch() inherits this process's env, so this reaches the
     // relaunched app's main process and delays initDaemonPtyProvider past the
     // first-window timeout.
-    process.env.ORCA_E2E_DAEMON_INIT_DELAY_MS = String(DAEMON_INIT_DELAY_MS)
+    process.env.MCODE_E2E_DAEMON_INIT_DELAY_MS = String(DAEMON_INIT_DELAY_MS)
     try {
       const secondLaunch = await session.launch()
       secondApp = secondLaunch.app
@@ -99,7 +99,7 @@ test('reattaches daemon PTYs when daemon init outlasts the first-window timeout'
       expect(readDaemonPid(session.userDataDir)).toBe(daemonPidBefore)
       expect(await getTerminalContent(secondLaunch.page)).not.toContain('--- session restored ---')
     } finally {
-      delete process.env.ORCA_E2E_DAEMON_INIT_DELAY_MS
+      delete process.env.MCODE_E2E_DAEMON_INIT_DELAY_MS
     }
   } finally {
     if (secondApp) {

@@ -40,7 +40,7 @@ describe('automation run output snapshot buffer', () => {
   it('strips ST-terminated OSC title and progress frames from Codex TUI output', () => {
     const buffer = createAutomationRunOutputSnapshotBuffer()
 
-    buffer.append('\u001b]0;\u2834 orca q\u2022Working q\u001b\\')
+    buffer.append('\u001b]0;\u2834 mcode q\u2022Working q\u001b\\')
     buffer.append('\u001b]9;4;3;Working\u001b\\')
     buffer.append('\u001b[32m\u2022 Ran agent-slack channel list --all\u001b[0m\r\n')
     buffer.append('\u2514 { "name": "stably-bugs-and-feedback" }\r\n')
@@ -159,7 +159,7 @@ describe('automation run output snapshot buffer', () => {
 
   it('prefers agent transcript text over raw terminal redraw output', () => {
     const rawTerminalSnapshot = createAutomationRunOutputSnapshotFromText(
-      'q;\u2834 orca q\u2022Working q q'
+      'q;\u2834 mcode q\u2022Working q q'
     )
 
     expect(selectAutomationRunOutputSnapshot('Posted to #releases.', rawTerminalSnapshot)).toEqual({

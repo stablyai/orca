@@ -91,7 +91,7 @@ describe('folderWorkspaceToWorktree', () => {
         provider: 'jira' as const,
         siteId: 'site-1',
         siteUrl: 'https://company.atlassian.net',
-        projectKey: 'ORCA'
+        projectKey: 'MCODE'
       }
     }
     const worktree = folderWorkspaceToWorktree(
@@ -100,9 +100,9 @@ describe('folderWorkspaceToWorktree', () => {
           provider: 'jira',
           type: 'issue',
           number: 0,
-          title: 'ORCA-123 Link Jira',
-          url: 'https://company.atlassian.net/browse/ORCA-123',
-          jiraIdentifier: 'ORCA-123'
+          title: 'MCODE-123 Link Jira',
+          url: 'https://company.atlassian.net/browse/MCODE-123',
+          jiraIdentifier: 'MCODE-123'
         },
         linkedTaskSourceContext
       })
@@ -111,7 +111,7 @@ describe('folderWorkspaceToWorktree', () => {
     expect(worktree.linkedIssue).toBeNull()
     expect(worktree.linkedWorkItem).toMatchObject({
       provider: 'jira',
-      jiraIdentifier: 'ORCA-123'
+      jiraIdentifier: 'MCODE-123'
     })
     expect(worktree.linkedTaskSourceContext).toEqual(linkedTaskSourceContext)
   })

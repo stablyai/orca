@@ -3,7 +3,7 @@ import path from 'node:path'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { RuntimeClient } from '../../src/cli/runtime/client'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import { openFileExplorer } from './helpers/file-explorer'
 import {
   launchHeadlessPairedRuntimeHost,
@@ -188,7 +188,7 @@ async function runReconciliationFailureJourney(args: {
       )
     ).toBe(true)
 
-    await expect(page.getByText('Unable to open this file in Orca Browser.')).toBeVisible({
+    await expect(page.getByText('Unable to open this file in MCode Browser.')).toBeVisible({
       timeout: 30_000
     })
     await expect
@@ -293,7 +293,7 @@ async function runCapabilityFailureJourney(args: {
     })
     await openPreviewToSide.click()
 
-    await expect(page.getByText('Unable to open this file in Orca Browser.')).toBeVisible({
+    await expect(page.getByText('Unable to open this file in MCode Browser.')).toBeVisible({
       timeout: 30_000
     })
     await expect
@@ -315,7 +315,7 @@ async function runCapabilityFailureJourney(args: {
 
 test('rolls back a headed-host browser when client reconciliation times out @headful', async ({
   electronApp,
-  orcaPage,
+  mcodePage,
   testRepoPath
 }, testInfo) => {
   test.setTimeout(300_000)
@@ -323,10 +323,10 @@ test('rolls back a headed-host browser when client reconciliation times out @hea
     path.join(testRepoPath, FIXTURE_NAME),
     '<!doctype html><html><body><h1>browser reconciliation fault</h1></body></html>\n'
   )
-  await waitForSessionReady(orcaPage)
-  await waitForActiveWorktree(orcaPage)
-  await ensureTerminalVisible(orcaPage)
-  const offer = await createRuntimeDesktopPairingOffer(orcaPage)
+  await waitForSessionReady(mcodePage)
+  await waitForActiveWorktree(mcodePage)
+  await ensureTerminalVisible(mcodePage)
+  const offer = await createRuntimeDesktopPairingOffer(mcodePage)
   const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
   await runReconciliationFailureJourney({
     hostClient: new RuntimeClient(userDataDir, 5_000),
@@ -339,7 +339,7 @@ test('rolls back a headed-host browser when client reconciliation times out @hea
 
 test('cleans up a headed-host preview when capability rejects after preflight @headful', async ({
   electronApp,
-  orcaPage,
+  mcodePage,
   testRepoPath
 }, testInfo) => {
   test.setTimeout(300_000)
@@ -347,10 +347,10 @@ test('cleans up a headed-host preview when capability rejects after preflight @h
     path.join(testRepoPath, FIXTURE_NAME),
     '<!doctype html><html><body><h1>browser capability fault</h1></body></html>\n'
   )
-  await waitForSessionReady(orcaPage)
-  await waitForActiveWorktree(orcaPage)
-  await ensureTerminalVisible(orcaPage)
-  const offer = await createRuntimeDesktopPairingOffer(orcaPage)
+  await waitForSessionReady(mcodePage)
+  await waitForActiveWorktree(mcodePage)
+  await ensureTerminalVisible(mcodePage)
+  const offer = await createRuntimeDesktopPairingOffer(mcodePage)
   const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
   await runCapabilityFailureJourney({
     hostClient: new RuntimeClient(userDataDir, 5_000),

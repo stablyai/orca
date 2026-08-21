@@ -1,7 +1,7 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export type RemoveWorktreeOptions = {
-  // 'forget-local' drops the workspace from Orca only (no remote Git/FS work)
+  // 'forget-local' drops the workspace from MCode only (no remote Git/FS work)
   // for workspaces pinned to a removed/disconnected SSH host. Reuses the same
   // renderer-side teardown/purge as a normal remove.
   mode?: 'remove' | 'forget-local'

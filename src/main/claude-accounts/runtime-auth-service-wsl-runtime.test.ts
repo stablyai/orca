@@ -60,7 +60,7 @@ describe('ClaudeRuntimeAuthService', () => {
         createClaudeAccount('ubuntu-account', ubuntuAuthPath, {
           managedAuthRuntime: 'wsl',
           wslDistro: 'Ubuntu',
-          wslLinuxAuthPath: '/home/alice/.local/share/orca/claude-accounts/ubuntu/auth'
+          wslLinuxAuthPath: '/home/alice/.local/share/mcode/claude-accounts/ubuntu/auth'
         })
       ],
       activeClaudeManagedAccountId: null,
@@ -81,7 +81,7 @@ describe('ClaudeRuntimeAuthService', () => {
     expect(preparation).toMatchObject({
       runtime: 'wsl',
       wslDistro: 'Ubuntu',
-      wslLinuxConfigDir: '/home/alice/.local/share/orca/claude-accounts/ubuntu/auth',
+      wslLinuxConfigDir: '/home/alice/.local/share/mcode/claude-accounts/ubuntu/auth',
       provenance: 'managed:ubuntu-account:wsl:Ubuntu',
       stripAuthEnv: true
     })
@@ -106,7 +106,7 @@ describe('ClaudeRuntimeAuthService', () => {
         createClaudeAccount('ubuntu-account', ubuntuAuthPath, {
           managedAuthRuntime: 'wsl',
           wslDistro: 'Ubuntu',
-          wslLinuxAuthPath: '/home/alice/.local/share/orca/claude-accounts/ubuntu/auth'
+          wslLinuxAuthPath: '/home/alice/.local/share/mcode/claude-accounts/ubuntu/auth'
         })
       ],
       activeClaudeManagedAccountId: null,
@@ -182,13 +182,13 @@ describe('ClaudeRuntimeAuthService', () => {
   it('clears a selected WSL managed account when its credentials are missing', async () => {
     const managedAuthPath = join(testState.userDataDir, 'claude-accounts', 'account-1', 'auth')
     mkdirSync(managedAuthPath, { recursive: true })
-    writeFileSync(join(managedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
+    writeFileSync(join(managedAuthPath, '.mcode-managed-claude-auth'), 'account-1\n', 'utf-8')
     const settings = createSettings({
       claudeManagedAccounts: [
         createClaudeAccount('account-1', managedAuthPath, {
           managedAuthRuntime: 'wsl',
           wslDistro: 'Ubuntu',
-          wslLinuxAuthPath: '/home/alice/.local/share/orca/claude-accounts/account-1/auth'
+          wslLinuxAuthPath: '/home/alice/.local/share/mcode/claude-accounts/account-1/auth'
         })
       ],
       activeClaudeManagedAccountId: null,
@@ -235,12 +235,12 @@ describe('ClaudeRuntimeAuthService', () => {
         createClaudeAccount('ubuntu-account', ubuntuAuthPath, {
           managedAuthRuntime: 'wsl',
           wslDistro: 'Ubuntu',
-          wslLinuxAuthPath: '/home/alice/.local/share/orca/claude-accounts/ubuntu/auth'
+          wslLinuxAuthPath: '/home/alice/.local/share/mcode/claude-accounts/ubuntu/auth'
         }),
         createClaudeAccount('debian-account', debianAuthPath, {
           managedAuthRuntime: 'wsl',
           wslDistro: 'Debian',
-          wslLinuxAuthPath: '/home/alice/.local/share/orca/claude-accounts/debian/auth'
+          wslLinuxAuthPath: '/home/alice/.local/share/mcode/claude-accounts/debian/auth'
         })
       ],
       activeClaudeManagedAccountId: null,
@@ -262,7 +262,7 @@ describe('ClaudeRuntimeAuthService', () => {
       expect(preparation).toMatchObject({
         runtime: 'wsl',
         wslDistro: 'Ubuntu',
-        wslLinuxConfigDir: '/home/alice/.local/share/orca/claude-accounts/ubuntu/auth',
+        wslLinuxConfigDir: '/home/alice/.local/share/mcode/claude-accounts/ubuntu/auth',
         provenance: 'managed:ubuntu-account:wsl:Ubuntu',
         stripAuthEnv: true
       })

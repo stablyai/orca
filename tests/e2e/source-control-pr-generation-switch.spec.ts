@@ -1,7 +1,7 @@
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   createBranchCommit,
@@ -151,12 +151,12 @@ test.describe('Source Control AI PR generation worktree switching', () => {
   test.describe.configure({ mode: 'serial' })
 
   test('keeps checks-panel PR generation running after switching worktrees', async ({
-    orcaPage
+    mcodePage
   }, testInfo) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
     const { primaryWorktreeId, prWorktreeId, prWorktreePath, primaryBranch } =
-      await seedCreatePrComposer(orcaPage)
+      await seedCreatePrComposer(mcodePage)
     createBranchCommit(prWorktreePath)
 
     const screenshotDir = path.join(
@@ -171,39 +171,39 @@ test.describe('Source Control AI PR generation worktree switching', () => {
     })
     const generatorScriptPath = path.join(screenshotDir, 'delayed-checks-pr-generator.cjs')
     const callLogPath = path.join(screenshotDir, 'delayed-checks-pr-generator.log')
-    await installDelayedPrGenerator(orcaPage, generatorScriptPath, callLogPath, primaryBranch)
+    await installDelayedPrGenerator(mcodePage, generatorScriptPath, callLogPath, primaryBranch)
 
-    await openChecks(orcaPage, prWorktreeId)
-    const generate = orcaPage.getByRole('button', {
+    await openChecks(mcodePage, prWorktreeId)
+    const generate = mcodePage.getByRole('button', {
       name: 'Generate pull request details with AI'
     })
     await expect(generate).toBeVisible({ timeout: 10_000 })
     await expect(generate).toBeEnabled()
     await generate.click()
     await expect(
-      orcaPage.getByRole('button', { name: 'Stop generating pull request details' })
+      mcodePage.getByRole('button', { name: 'Stop generating pull request details' })
     ).toBeVisible()
     await expect.poll(() => readLog(callLogPath)).toContain('start')
-    await orcaPage.screenshot({
+    await mcodePage.screenshot({
       path: path.join(screenshotDir, '01-checks-pr-generation-pending-on-a.png')
     })
 
-    await openChecks(orcaPage, primaryWorktreeId)
-    await expect(orcaPage.getByText('Generated PR title after switch')).toHaveCount(0)
-    await orcaPage.screenshot({
+    await openChecks(mcodePage, primaryWorktreeId)
+    await expect(mcodePage.getByText('Generated PR title after switch')).toHaveCount(0)
+    await mcodePage.screenshot({
       path: path.join(screenshotDir, '02-checks-switched-to-b-no-generated-fields.png')
     })
 
     await expect.poll(() => readLog(callLogPath), { timeout: 10_000 }).toContain('finish')
-    await openChecks(orcaPage, prWorktreeId)
-    await expect(orcaPage.getByRole('textbox', { name: 'Pull request title' })).toHaveValue(
+    await openChecks(mcodePage, prWorktreeId)
+    await expect(mcodePage.getByRole('textbox', { name: 'Pull request title' })).toHaveValue(
       'Generated PR title after switch',
       { timeout: 10_000 }
     )
-    await expect(orcaPage.getByRole('textbox', { name: 'Pull request description' })).toHaveValue(
+    await expect(mcodePage.getByRole('textbox', { name: 'Pull request description' })).toHaveValue(
       'Generated PR body after switch'
     )
-    await orcaPage.screenshot({
+    await mcodePage.screenshot({
       path: path.join(screenshotDir, '03-checks-returned-to-a-generated-fields.png')
     })
     await writeEvidence(testInfo, screenshotDir, 'checks-pr-generation-switch-evidence.json', {
@@ -214,12 +214,12 @@ test.describe('Source Control AI PR generation worktree switching', () => {
   })
 
   test('keeps pending PR generation attached to its original worktree', async ({
-    orcaPage
+    mcodePage
   }, testInfo) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
     const { primaryWorktreeId, prWorktreeId, prWorktreePath, primaryBranch } =
-      await seedCreatePrComposer(orcaPage)
+      await seedCreatePrComposer(mcodePage)
     createBranchCommit(prWorktreePath)
 
     const screenshotDir = path.join(
@@ -234,37 +234,37 @@ test.describe('Source Control AI PR generation worktree switching', () => {
     })
     const generatorScriptPath = path.join(screenshotDir, 'delayed-pr-generator.cjs')
     const callLogPath = path.join(screenshotDir, 'delayed-pr-generator.log')
-    await installDelayedPrGenerator(orcaPage, generatorScriptPath, callLogPath, primaryBranch)
+    await installDelayedPrGenerator(mcodePage, generatorScriptPath, callLogPath, primaryBranch)
 
-    await openSourceControl(orcaPage, prWorktreeId)
-    const generate = orcaPage.getByRole('button', {
+    await openSourceControl(mcodePage, prWorktreeId)
+    const generate = mcodePage.getByRole('button', {
       name: 'Generate pull request details with AI'
     })
     await expect(generate).toBeVisible({ timeout: 10_000 })
     await expect(generate).toBeEnabled()
     await generate.click()
     await expect(
-      orcaPage.getByRole('button', { name: 'Stop generating pull request details' })
+      mcodePage.getByRole('button', { name: 'Stop generating pull request details' })
     ).toBeVisible()
     await expect
       .poll(() => {
         return readLog(callLogPath)
       })
       .toContain('start')
-    const pendingEvidence = await orcaPage.evaluate(() => {
+    const pendingEvidence = await mcodePage.evaluate(() => {
       const state = window.__store?.getState()
       return {
         activeWorktreeId: state?.activeWorktreeId,
         rightSidebarTab: state?.rightSidebarTab
       }
     })
-    await orcaPage.screenshot({
+    await mcodePage.screenshot({
       path: path.join(screenshotDir, '01-pr-generation-pending-on-a.png')
     })
 
-    await openSourceControl(orcaPage, primaryWorktreeId)
-    await expect(orcaPage.getByText('Generated PR title after switch')).toHaveCount(0)
-    const switchedEvidence = await orcaPage.evaluate(() => {
+    await openSourceControl(mcodePage, primaryWorktreeId)
+    await expect(mcodePage.getByText('Generated PR title after switch')).toHaveCount(0)
+    const switchedEvidence = await mcodePage.evaluate(() => {
       const state = window.__store?.getState()
       return {
         activeWorktreeId: state?.activeWorktreeId,
@@ -273,24 +273,24 @@ test.describe('Source Control AI PR generation worktree switching', () => {
         )
       }
     })
-    await orcaPage.screenshot({
+    await mcodePage.screenshot({
       path: path.join(screenshotDir, '02-switched-to-b-no-generated-fields.png')
     })
 
     await expect
       .poll(() => readFileSync(callLogPath, 'utf8'), { timeout: 10_000 })
       .toContain('finish')
-    await waitForPrGenerationStored(orcaPage, prWorktreeId)
-    await openSourceControl(orcaPage, prWorktreeId)
-    await waitForPrGenerationHydrated(orcaPage, prWorktreeId)
-    await expect(orcaPage.getByRole('textbox', { name: 'Pull request title' })).toHaveValue(
+    await waitForPrGenerationStored(mcodePage, prWorktreeId)
+    await openSourceControl(mcodePage, prWorktreeId)
+    await waitForPrGenerationHydrated(mcodePage, prWorktreeId)
+    await expect(mcodePage.getByRole('textbox', { name: 'Pull request title' })).toHaveValue(
       'Generated PR title after switch',
       { timeout: 10_000 }
     )
-    await expect(orcaPage.getByRole('textbox', { name: 'Pull request description' })).toHaveValue(
+    await expect(mcodePage.getByRole('textbox', { name: 'Pull request description' })).toHaveValue(
       'Generated PR body after switch'
     )
-    const finalEvidence = await orcaPage.evaluate(() => {
+    const finalEvidence = await mcodePage.evaluate(() => {
       const state = window.__store?.getState()
       return {
         activeWorktreeId: state?.activeWorktreeId,
@@ -301,7 +301,7 @@ test.describe('Source Control AI PR generation worktree switching', () => {
         )?.value
       }
     })
-    await orcaPage.screenshot({
+    await mcodePage.screenshot({
       path: path.join(screenshotDir, '03-returned-to-a-generated-fields.png')
     })
     await writeEvidence(testInfo, screenshotDir, 'pr-generation-evidence.json', {
@@ -315,11 +315,11 @@ test.describe('Source Control AI PR generation worktree switching', () => {
   })
 
   test('hydrates pending PR generation after Source Control remounts', async ({
-    orcaPage
+    mcodePage
   }, testInfo) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    const { prWorktreeId, prWorktreePath, primaryBranch } = await seedCreatePrComposer(orcaPage)
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
+    const { prWorktreeId, prWorktreePath, primaryBranch } = await seedCreatePrComposer(mcodePage)
     createBranchCommit(prWorktreePath)
 
     const screenshotDir = path.join(
@@ -334,41 +334,41 @@ test.describe('Source Control AI PR generation worktree switching', () => {
     })
     const generatorScriptPath = path.join(screenshotDir, 'delayed-pr-generator.cjs')
     const callLogPath = path.join(screenshotDir, 'delayed-pr-generator.log')
-    await installDelayedPrGenerator(orcaPage, generatorScriptPath, callLogPath, primaryBranch)
+    await installDelayedPrGenerator(mcodePage, generatorScriptPath, callLogPath, primaryBranch)
 
-    await openSourceControl(orcaPage, prWorktreeId)
-    const generate = orcaPage.getByRole('button', {
+    await openSourceControl(mcodePage, prWorktreeId)
+    const generate = mcodePage.getByRole('button', {
       name: 'Generate pull request details with AI'
     })
     await expect(generate).toBeVisible({ timeout: 10_000 })
     await expect(generate).toBeEnabled()
     await generate.click()
     await expect(
-      orcaPage.getByRole('button', { name: 'Stop generating pull request details' })
+      mcodePage.getByRole('button', { name: 'Stop generating pull request details' })
     ).toBeVisible()
     await expect.poll(() => readLog(callLogPath)).toContain('start')
 
-    await orcaPage.evaluate(() => {
+    await mcodePage.evaluate(() => {
       window.__store?.getState().setRightSidebarTab('explorer')
     })
     await expect(
-      orcaPage.getByRole('button', { name: 'Stop generating pull request details' })
+      mcodePage.getByRole('button', { name: 'Stop generating pull request details' })
     ).toHaveCount(0)
     await expect
       .poll(() => readFileSync(callLogPath, 'utf8'), { timeout: 10_000 })
       .toContain('finish')
-    await waitForPrGenerationStored(orcaPage, prWorktreeId)
+    await waitForPrGenerationStored(mcodePage, prWorktreeId)
 
-    await openSourceControl(orcaPage, prWorktreeId)
-    await waitForPrGenerationHydrated(orcaPage, prWorktreeId)
-    await expect(orcaPage.getByRole('textbox', { name: 'Pull request title' })).toHaveValue(
+    await openSourceControl(mcodePage, prWorktreeId)
+    await waitForPrGenerationHydrated(mcodePage, prWorktreeId)
+    await expect(mcodePage.getByRole('textbox', { name: 'Pull request title' })).toHaveValue(
       'Generated PR title after switch',
       { timeout: 10_000 }
     )
-    await expect(orcaPage.getByRole('textbox', { name: 'Pull request description' })).toHaveValue(
+    await expect(mcodePage.getByRole('textbox', { name: 'Pull request description' })).toHaveValue(
       'Generated PR body after switch'
     )
-    await orcaPage.screenshot({
+    await mcodePage.screenshot({
       path: path.join(screenshotDir, '01-remounted-source-control-hydrated-pr-fields.png')
     })
     await writeEvidence(testInfo, screenshotDir, 'pr-generation-remount-evidence.json', {
@@ -378,12 +378,12 @@ test.describe('Source Control AI PR generation worktree switching', () => {
   })
 
   test('keeps pending commit message generation attached to its original worktree', async ({
-    orcaPage
+    mcodePage
   }, testInfo) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
     const { primaryWorktreeId, commitWorktreeId, commitWorktreePath } =
-      await seedCommitMessageComposer(orcaPage)
+      await seedCommitMessageComposer(mcodePage)
     createStagedCommitMessageChange(commitWorktreePath)
 
     const screenshotDir = path.join(
@@ -398,29 +398,29 @@ test.describe('Source Control AI PR generation worktree switching', () => {
     })
     const generatorScriptPath = path.join(screenshotDir, 'delayed-commit-generator.cjs')
     const callLogPath = path.join(screenshotDir, 'delayed-commit-generator.log')
-    await installDelayedCommitMessageGenerator(orcaPage, generatorScriptPath, callLogPath)
+    await installDelayedCommitMessageGenerator(mcodePage, generatorScriptPath, callLogPath)
 
-    await openSourceControl(orcaPage, commitWorktreeId)
+    await openSourceControl(mcodePage, commitWorktreeId)
     await expect(
-      orcaPage
+      mcodePage
         .getByTestId('source-control-entry')
         .getByText('e2e-commit-message-generation.txt', { exact: true })
     ).toBeVisible({ timeout: 10_000 })
-    const generate = orcaPage.getByRole('button', {
+    const generate = mcodePage.getByRole('button', {
       name: 'Generate commit message with AI'
     })
     await expect(generate).toBeVisible({ timeout: 10_000 })
     await expect(generate).toBeEnabled()
     await generate.click()
     await expect(
-      orcaPage.getByRole('button', { name: 'Stop generating commit message' })
+      mcodePage.getByRole('button', { name: 'Stop generating commit message' })
     ).toBeVisible()
     await expect
       .poll(() => {
         return readLog(callLogPath)
       })
       .toContain('start')
-    const pendingEvidence = await orcaPage.evaluate(() => {
+    const pendingEvidence = await mcodePage.evaluate(() => {
       const state = window.__store?.getState()
       return {
         activeWorktreeId: state?.activeWorktreeId,
@@ -429,16 +429,16 @@ test.describe('Source Control AI PR generation worktree switching', () => {
         )?.value
       }
     })
-    await orcaPage.screenshot({
+    await mcodePage.screenshot({
       path: path.join(screenshotDir, '01-commit-message-generation-pending-on-a.png')
     })
 
-    await openSourceControl(orcaPage, primaryWorktreeId)
-    await expect(orcaPage.getByText('Generated commit message after switch')).toHaveCount(0)
+    await openSourceControl(mcodePage, primaryWorktreeId)
+    await expect(mcodePage.getByText('Generated commit message after switch')).toHaveCount(0)
     await expect(
-      orcaPage.getByRole('button', { name: 'Stop generating commit message' })
+      mcodePage.getByRole('button', { name: 'Stop generating commit message' })
     ).toHaveCount(0)
-    const switchedEvidence = await orcaPage.evaluate(() => {
+    const switchedEvidence = await mcodePage.evaluate(() => {
       const state = window.__store?.getState()
       return {
         activeWorktreeId: state?.activeWorktreeId,
@@ -447,21 +447,21 @@ test.describe('Source Control AI PR generation worktree switching', () => {
         )
       }
     })
-    await orcaPage.screenshot({
+    await mcodePage.screenshot({
       path: path.join(screenshotDir, '02-switched-to-b-no-generated-commit-message.png')
     })
 
     await expect
       .poll(() => readFileSync(callLogPath, 'utf8'), { timeout: 10_000 })
       .toContain('finish')
-    await waitForCommitGenerationStored(orcaPage, commitWorktreeId)
-    await openSourceControl(orcaPage, commitWorktreeId)
-    await waitForCommitGenerationHydrated(orcaPage, commitWorktreeId)
-    await expect(orcaPage.getByRole('textbox', { name: 'Commit message' })).toHaveValue(
+    await waitForCommitGenerationStored(mcodePage, commitWorktreeId)
+    await openSourceControl(mcodePage, commitWorktreeId)
+    await waitForCommitGenerationHydrated(mcodePage, commitWorktreeId)
+    await expect(mcodePage.getByRole('textbox', { name: 'Commit message' })).toHaveValue(
       'Generated commit message after switch\n\nGenerated from staged e2e-commit-message-generation.txt after switching worktrees',
       { timeout: 10_000 }
     )
-    const finalEvidence = await orcaPage.evaluate(() => {
+    const finalEvidence = await mcodePage.evaluate(() => {
       const state = window.__store?.getState()
       return {
         activeWorktreeId: state?.activeWorktreeId,
@@ -470,7 +470,7 @@ test.describe('Source Control AI PR generation worktree switching', () => {
         )?.value
       }
     })
-    await orcaPage.screenshot({
+    await mcodePage.screenshot({
       path: path.join(screenshotDir, '03-returned-to-a-generated-commit-message.png')
     })
     await writeEvidence(testInfo, screenshotDir, 'commit-message-generation-evidence.json', {
@@ -484,11 +484,11 @@ test.describe('Source Control AI PR generation worktree switching', () => {
   })
 
   test('hydrates pending commit message generation after Source Control remounts', async ({
-    orcaPage
+    mcodePage
   }, testInfo) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    const { commitWorktreeId, commitWorktreePath } = await seedCommitMessageComposer(orcaPage)
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
+    const { commitWorktreeId, commitWorktreePath } = await seedCommitMessageComposer(mcodePage)
     createStagedCommitMessageChange(commitWorktreePath)
 
     const screenshotDir = path.join(
@@ -503,34 +503,34 @@ test.describe('Source Control AI PR generation worktree switching', () => {
     })
     const generatorScriptPath = path.join(screenshotDir, 'delayed-commit-generator.cjs')
     const callLogPath = path.join(screenshotDir, 'delayed-commit-generator.log')
-    await installDelayedCommitMessageGenerator(orcaPage, generatorScriptPath, callLogPath)
+    await installDelayedCommitMessageGenerator(mcodePage, generatorScriptPath, callLogPath)
 
-    await openSourceControl(orcaPage, commitWorktreeId)
-    const generate = orcaPage.getByRole('button', {
+    await openSourceControl(mcodePage, commitWorktreeId)
+    const generate = mcodePage.getByRole('button', {
       name: 'Generate commit message with AI'
     })
     await expect(generate).toBeVisible({ timeout: 10_000 })
     await expect(generate).toBeEnabled()
     await generate.click()
     await expect(
-      orcaPage.getByRole('button', { name: 'Stop generating commit message' })
+      mcodePage.getByRole('button', { name: 'Stop generating commit message' })
     ).toBeVisible()
     await expect.poll(() => readLog(callLogPath)).toContain('start')
 
-    await orcaPage.evaluate(() => {
+    await mcodePage.evaluate(() => {
       window.__store?.getState().setRightSidebarTab('explorer')
     })
     await expect(
-      orcaPage.getByRole('button', { name: 'Stop generating commit message' })
+      mcodePage.getByRole('button', { name: 'Stop generating commit message' })
     ).toHaveCount(0)
     await expect
       .poll(() => readFileSync(callLogPath, 'utf8'), { timeout: 10_000 })
       .toContain('finish')
-    await waitForCommitGenerationStored(orcaPage, commitWorktreeId)
+    await waitForCommitGenerationStored(mcodePage, commitWorktreeId)
 
-    await openSourceControl(orcaPage, commitWorktreeId)
-    await waitForCommitGenerationHydrated(orcaPage, commitWorktreeId)
-    await expect(orcaPage.getByRole('textbox', { name: 'Commit message' })).toHaveValue(
+    await openSourceControl(mcodePage, commitWorktreeId)
+    await waitForCommitGenerationHydrated(mcodePage, commitWorktreeId)
+    await expect(mcodePage.getByRole('textbox', { name: 'Commit message' })).toHaveValue(
       [
         'Generated commit message after switch',
         '',
@@ -538,7 +538,7 @@ test.describe('Source Control AI PR generation worktree switching', () => {
       ].join('\n'),
       { timeout: 10_000 }
     )
-    await orcaPage.screenshot({
+    await mcodePage.screenshot({
       path: path.join(screenshotDir, '01-remounted-source-control-hydrated-message.png')
     })
     await writeEvidence(
@@ -553,11 +553,11 @@ test.describe('Source Control AI PR generation worktree switching', () => {
   })
 
   test('hides the commit AI composer on a clean branch empty state', async ({
-    orcaPage
+    mcodePage
   }, testInfo) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    const primaryWorktreeId = await seedCleanBranchEmptyState(orcaPage)
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
+    const primaryWorktreeId = await seedCleanBranchEmptyState(mcodePage)
 
     const screenshotDir = path.join(
       process.cwd(),
@@ -570,15 +570,15 @@ test.describe('Source Control AI PR generation worktree switching', () => {
       contentType: 'text/plain'
     })
 
-    await openSourceControl(orcaPage, primaryWorktreeId)
+    await openSourceControl(mcodePage, primaryWorktreeId)
     await expect
       .poll(
         async () => {
           // Why: this full-suite spec shares the physical E2E repo with other
           // workers. Keep DOM assertions inside the reseeded poll instead of
           // racing unrelated real git-status refreshes after the poll settles.
-          await seedCleanBranchEmptyState(orcaPage, primaryWorktreeId)
-          return orcaPage.evaluate(() => {
+          await seedCleanBranchEmptyState(mcodePage, primaryWorktreeId)
+          return mcodePage.evaluate(() => {
             const emptyStateVisible =
               document.body.textContent?.includes('No changes on this branch') === true
             const commitMessageInput = document.querySelector('[aria-label="Commit message"]')
@@ -602,8 +602,8 @@ test.describe('Source Control AI PR generation worktree switching', () => {
         hasCommitMessageInput: false,
         hasCommitAiButton: false
       })
-    await seedCleanBranchEmptyState(orcaPage, primaryWorktreeId)
-    await orcaPage.screenshot({
+    await seedCleanBranchEmptyState(mcodePage, primaryWorktreeId)
+    await mcodePage.screenshot({
       path: path.join(screenshotDir, '01-clean-branch-no-commit-ai-composer.png')
     })
   })

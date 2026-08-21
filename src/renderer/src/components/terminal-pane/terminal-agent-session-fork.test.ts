@@ -536,7 +536,7 @@ describe('copyAgentSessionContextFromPane', () => {
     const clipped = (mockWriteClipboardText.mock.calls as unknown as string[][])[0][0]
     expect(clipped).toContain('User: standalone copy')
     // Why: standalone copy must not carry the fork header/footer the dialog adds.
-    expect(clipped).not.toContain('fork of an existing Orca agent session')
+    expect(clipped).not.toContain('fork of an existing MCode agent session')
     expect(clipped).not.toContain('wait for my next instruction')
     expect(mockToast.message).toHaveBeenCalledWith('Context copied')
     expect(mockToast.message).not.toHaveBeenCalledWith(

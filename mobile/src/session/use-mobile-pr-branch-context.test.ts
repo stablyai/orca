@@ -101,7 +101,7 @@ describe('loadMobilePrBranchContext', () => {
         return { ok: false, error: { message: 'compare failed' } }
       }
       if (method === 'github.repoSlug') {
-        return { ok: true, result: { owner: 'stablyai', repo: 'orca' } }
+        return { ok: true, result: { owner: 'stablyai', repo: 'mcode' } }
       }
       return { ok: false, error: { message: `unexpected ${method}` } }
     })
@@ -119,7 +119,7 @@ describe('loadMobilePrBranchContext', () => {
   it('loads repo eligibility without waiting for git status or branch compare', async () => {
     const sendRequest = vi.fn(async (method: string) => {
       if (method === 'github.repoSlug') {
-        return { ok: true, result: { owner: 'stablyai', repo: 'orca' } }
+        return { ok: true, result: { owner: 'stablyai', repo: 'mcode' } }
       }
       return { ok: false, error: { message: `unexpected ${method}` } }
     })

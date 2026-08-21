@@ -3,7 +3,7 @@ import type { GitHubPrStartPoint } from '../worktree/types'
 export const FORK_PUSH_NO_MAINTAINER_EDIT_WARNING =
   'This PR has "Allow edits from maintainers" off; pushing to the fork may be rejected by GitHub.'
 
-// Why: this is the one fork target where Orca can prepare the workspace but a
+// Why: this is the one fork target where MCode can prepare the workspace but a
 // later push may still be rejected by GitHub permissions.
 export function getForkPushWarning(
   result: Pick<GitHubPrStartPoint, 'pushTarget' | 'maintainerCanModify'>

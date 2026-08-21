@@ -82,8 +82,8 @@ describe('worktree card title display', () => {
   it('uses Jira issue titles when the card title would otherwise be the branch', () => {
     expect(
       getWorktreeCardTitleDisplay({
-        storedDisplayName: 'feature/orca-123',
-        branchName: 'feature/orca-123',
+        storedDisplayName: 'feature/mcode-123',
+        branchName: 'feature/mcode-123',
         jiraIssueTitle: 'Link Jira from create'
       })
     ).toBe('Link Jira from create')

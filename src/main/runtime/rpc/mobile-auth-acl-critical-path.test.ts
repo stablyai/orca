@@ -61,7 +61,7 @@ describe('mobile auth critical path', () => {
     timeline.length = 0
     process.env.SystemRoot = 'C:\\Windows'
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    userDataPath = mkdtempSync(join(tmpdir(), 'orca-auth-acl-'))
+    userDataPath = mkdtempSync(join(tmpdir(), 'mcode-auth-acl-'))
     vi.mocked(execFileSync).mockReset()
     vi.mocked(execFile).mockReset()
     vi.mocked(execFileSync).mockImplementation((file) => {

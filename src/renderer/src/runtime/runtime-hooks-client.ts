@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
+import type { MCodeHooks } from '../../../shared/mcode-yaml-hook-types'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { SetupScriptImportCandidate } from '../../../shared/setup-script-imports'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
@@ -18,7 +18,7 @@ function getHookInspectionTarget(
 export type HookCheckResult = {
   status?: 'ok' | 'error'
   hasHooks: boolean
-  hooks: OrcaHooks | null
+  hooks: MCodeHooks | null
   mayNeedUpdate: boolean
 }
 

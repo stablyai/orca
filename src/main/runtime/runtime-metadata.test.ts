@@ -28,7 +28,7 @@ describe('runtime metadata', () => {
   })
 
   it('writes and reads runtime metadata atomically', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-metadata-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-metadata-'))
     tempDirs.push(userDataPath)
 
     writeRuntimeMetadata(userDataPath, {
@@ -37,7 +37,7 @@ describe('runtime metadata', () => {
       transports: [
         {
           kind: 'unix',
-          endpoint: '/tmp/orca.sock'
+          endpoint: '/tmp/mcode.sock'
         }
       ],
       authToken: 'secret',
@@ -50,7 +50,7 @@ describe('runtime metadata', () => {
       transports: [
         {
           kind: 'unix',
-          endpoint: '/tmp/orca.sock'
+          endpoint: '/tmp/mcode.sock'
         }
       ],
       authToken: 'secret',
@@ -59,7 +59,7 @@ describe('runtime metadata', () => {
   })
 
   it('clears the runtime metadata file', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-metadata-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-metadata-'))
     tempDirs.push(userDataPath)
 
     writeRuntimeMetadata(userDataPath, {
@@ -73,12 +73,12 @@ describe('runtime metadata', () => {
     clearRuntimeMetadata(userDataPath)
 
     expect(readRuntimeMetadata(userDataPath)).toBeNull()
-    expect(getRuntimeMetadataPath(userDataPath)).toContain('orca-runtime.json')
+    expect(getRuntimeMetadataPath(userDataPath)).toContain('mcode-runtime.json')
   })
 
   describe('clearRuntimeMetadataIfOwned', () => {
     it('clears metadata when pid and runtimeId both match', () => {
-      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-metadata-'))
+      const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-metadata-'))
       tempDirs.push(userDataPath)
       writeRuntimeMetadata(userDataPath, {
         runtimeId: 'rt_owner',
@@ -94,7 +94,7 @@ describe('runtime metadata', () => {
     })
 
     it('retains metadata when the pid does not match (simulates auto-update handoff)', () => {
-      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-metadata-'))
+      const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-metadata-'))
       tempDirs.push(userDataPath)
       writeRuntimeMetadata(userDataPath, {
         runtimeId: 'rt_replacement',
@@ -116,7 +116,7 @@ describe('runtime metadata', () => {
       // Why: pid reuse is possible across an auto-update (fork+exec keeps the
       // old pid if the OS reassigns it quickly). The runtimeId check is the
       // second-level guard that catches this even when pid collides.
-      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-metadata-'))
+      const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-metadata-'))
       tempDirs.push(userDataPath)
       writeRuntimeMetadata(userDataPath, {
         runtimeId: 'rt_replacement',
@@ -135,7 +135,7 @@ describe('runtime metadata', () => {
     })
 
     it('is a no-op when no metadata exists', () => {
-      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-metadata-'))
+      const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-metadata-'))
       tempDirs.push(userDataPath)
 
       expect(() => clearRuntimeMetadataIfOwned(userDataPath, 42, 'rt_owner')).not.toThrow()
@@ -146,7 +146,7 @@ describe('runtime metadata', () => {
   it.runIf(process.platform !== 'win32')(
     'restricts runtime metadata permissions to the current user on Unix',
     () => {
-      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-metadata-'))
+      const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-metadata-'))
       tempDirs.push(userDataPath)
 
       writeRuntimeMetadata(userDataPath, {
@@ -155,7 +155,7 @@ describe('runtime metadata', () => {
         transports: [
           {
             kind: 'unix',
-            endpoint: '/tmp/orca.sock'
+            endpoint: '/tmp/mcode.sock'
           }
         ],
         authToken: 'secret',
@@ -173,7 +173,7 @@ describe('runtime metadata', () => {
   it.runIf(process.platform !== 'win32')(
     'uses hardened atomic writes for runtime credential stores on Unix',
     () => {
-      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-secure-files-'))
+      const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-secure-files-'))
       tempDirs.push(userDataPath)
 
       new DeviceRegistry(userDataPath).addDevice('phone')
@@ -189,8 +189,8 @@ describe('runtime metadata', () => {
       })
 
       for (const path of [
-        join(userDataPath, 'orca-devices.json'),
-        join(userDataPath, 'orca-e2ee-keypair.json'),
+        join(userDataPath, 'mcode-devices.json'),
+        join(userDataPath, 'mcode-e2ee-keypair.json'),
         getEnvironmentStorePath(userDataPath)
       ]) {
         expect(statSync(path).mode & 0o777).toBe(0o600)
@@ -203,7 +203,7 @@ describe('runtime metadata', () => {
   it.runIf(process.platform !== 'win32')(
     'hardens existing runtime credential stores before reading them on Unix',
     () => {
-      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-existing-secure-files-'))
+      const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-existing-secure-files-'))
       tempDirs.push(userDataPath)
       const keyMaterial = Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
       const pairingCode = encodePairingOffer({
@@ -217,8 +217,8 @@ describe('runtime metadata', () => {
         pairingCode
       })
 
-      const devicesPath = join(userDataPath, 'orca-devices.json')
-      const keypairPath = join(userDataPath, 'orca-e2ee-keypair.json')
+      const devicesPath = join(userDataPath, 'mcode-devices.json')
+      const keypairPath = join(userDataPath, 'mcode-e2ee-keypair.json')
       const environmentsPath = getEnvironmentStorePath(userDataPath)
       writeFileSync(
         devicesPath,
@@ -256,9 +256,9 @@ describe('runtime metadata', () => {
   )
 
   it('replaces oversized E2EE keypair files instead of reading them as metadata', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-large-keypair-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-large-keypair-'))
     tempDirs.push(userDataPath)
-    const keypairPath = join(userDataPath, 'orca-e2ee-keypair.json')
+    const keypairPath = join(userDataPath, 'mcode-e2ee-keypair.json')
     writeFileSync(keypairPath, 'x'.repeat(9 * 1024))
 
     const keypair = loadOrCreateE2EEKeypair(userDataPath)

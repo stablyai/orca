@@ -7,7 +7,7 @@ import {
 // Why: issue-list layout is a per-device view preference, not host state. Routing it
 // through `ui.set` put it inside a strict nested schema, where a host that predates
 // the field silently discarded the WHOLE taskResumeState — github and jira included.
-const STORAGE_KEY = 'orca.linear.issue-view.v1'
+const STORAGE_KEY = 'mcode.linear.issue-view.v1'
 
 export function loadLinearIssueView(): LinearIssueViewResumeState {
   try {

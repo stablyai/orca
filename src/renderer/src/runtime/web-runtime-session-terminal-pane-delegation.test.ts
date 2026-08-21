@@ -64,7 +64,7 @@ afterEach(() => resetWebSessionCloseIntentForTests())
 
 describe('splitWebRuntimeTerminal', () => {
   beforeEach(() => {
-    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    vi.stubGlobal('__MCODE_WEB_CLIENT__', true)
   })
 
   afterEach(() => {
@@ -160,7 +160,7 @@ describe('splitWebRuntimeTerminal', () => {
     })
 
     expect(splitWebRuntimeTerminal('pty-local-1', 'horizontal', 'keyboard')).toBe(false)
-    vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
+    vi.stubGlobal('__MCODE_WEB_CLIENT__', false)
     expect(splitWebRuntimeTerminal('remote:web-env-1@@terminal-1', 'horizontal', 'keyboard')).toBe(
       true
     )
@@ -171,7 +171,7 @@ describe('splitWebRuntimeTerminal', () => {
 
 describe('closeWebRuntimeTerminal', () => {
   beforeEach(() => {
-    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    vi.stubGlobal('__MCODE_WEB_CLIENT__', true)
   })
 
   afterEach(() => {
@@ -233,14 +233,14 @@ describe('closeWebRuntimeTerminal', () => {
     })
 
     expect(closeWebRuntimeTerminal('pty-local-1')).toBe(false)
-    vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
+    vi.stubGlobal('__MCODE_WEB_CLIENT__', false)
     expect(closeWebRuntimeTerminal('remote:web-env-1@@terminal-1')).toBe(true)
 
     await vi.waitFor(() => expect(runtimeCall).toHaveBeenCalledTimes(1))
   })
 
   it('treats any configured remote runtime environment as a shared session', () => {
-    vi.stubGlobal('__ORCA_WEB_CLIENT__', false)
+    vi.stubGlobal('__MCODE_WEB_CLIENT__', false)
 
     expect(isWebRuntimeSessionActive('env-1')).toBe(true)
     expect(isWebRuntimeSessionActive('   ')).toBe(false)

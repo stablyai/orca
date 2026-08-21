@@ -1,7 +1,7 @@
 /**
  * Env pinning git subprocess output to untranslated English (issue #7808).
  *
- * Why: Orca parses git's stderr diagnostics and progress lines (e.g.
+ * Why: MCode parses git's stderr diagnostics and progress lines (e.g.
  * isNoUpstreamError, clone progress/`fatal:` matching); a gettext-enabled git
  * under a non-English locale translates even the `fatal:` prefix and silently
  * breaks those parsers. An English UTF-8 locale rather than plain `C` keeps a

@@ -22,11 +22,11 @@ function userDataWithProfiles(
   activeProfileId: string,
   profiles: { id: string; state?: unknown; raw?: string }[]
 ): string {
-  const root = mkdtempSync(join(tmpdir(), 'orca-gc-profiles-'))
+  const root = mkdtempSync(join(tmpdir(), 'mcode-gc-profiles-'))
   roots.push(root)
   mkdirSync(join(root, 'profiles'), { recursive: true })
   writeFileSync(
-    join(root, 'orca-profile-index.json'),
+    join(root, 'mcode-profile-index.json'),
     JSON.stringify({
       activeProfileId,
       profiles: profiles.map(({ id }) => ({
@@ -43,10 +43,10 @@ function userDataWithProfiles(
   for (const profile of profiles) {
     mkdirSync(join(root, 'profiles', profile.id), { recursive: true })
     if (profile.raw !== undefined) {
-      writeFileSync(join(root, 'profiles', profile.id, 'orca-data.json'), profile.raw)
+      writeFileSync(join(root, 'profiles', profile.id, 'mcode-data.json'), profile.raw)
     } else if (profile.state !== undefined) {
       writeFileSync(
-        join(root, 'profiles', profile.id, 'orca-data.json'),
+        join(root, 'profiles', profile.id, 'mcode-data.json'),
         JSON.stringify(profile.state)
       )
     }
@@ -106,7 +106,7 @@ describe('getOtherProfileWorktreeIdsForHistoryGc', () => {
   // A single-profile install must not pay for this, and no index at all is the
   // pre-profiles layout rather than an error.
   it('is empty and complete when there is no profile index', () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-gc-profiles-'))
+    const root = mkdtempSync(join(tmpdir(), 'mcode-gc-profiles-'))
     roots.push(root)
 
     expect(getOtherProfileWorktreeIdsForHistoryGc(root)).toEqual({

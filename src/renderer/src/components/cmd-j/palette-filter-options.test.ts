@@ -53,8 +53,8 @@ function worktree(id: string, repoId: string, extra: Partial<Worktree> = {}): Wo
 }
 
 // Two repos behind one project: one local checkout, one on the SSH host.
-const repos = [repo('r1', 'Orca'), repo('r2', 'Orca (builder)', 'ssh-1'), repo('r3', 'Solo')]
-const projects = [project('p1', 'Orca')]
+const repos = [repo('r1', 'MCode'), repo('r2', 'MCode (builder)', 'ssh-1'), repo('r3', 'Solo')]
+const projects = [project('p1', 'MCode')]
 const projectHostSetups = [setup('s1', 'p1', 'local', 'r1'), setup('s2', 'p1', 'ssh-1', 'r2')]
 const hostOptions = buildSidebarHostOptions({
   repos,
@@ -71,10 +71,10 @@ describe('buildPaletteFilterModel', () => {
 
     expect(model.repoIdsByProjectKey.get('project:p1')).toEqual(['r1', 'r2'])
     expect(model.projects.map((option) => [option.id, option.label, option.count])).toEqual([
-      ['project:p1', 'Orca', 2],
+      ['project:p1', 'MCode', 2],
       ['repo:r3', 'Solo', 1]
     ])
-    expect(model.projects[0]?.searchText).toBe('orca')
+    expect(model.projects[0]?.searchText).toBe('mcode')
   })
 
   it('counts a worktree against its own host stamp, not its repo host', () => {
@@ -117,8 +117,8 @@ describe('buildPaletteFilterModel', () => {
   it('sorts project rows by workspace count then label', () => {
     const model = buildModel([worktree('w1', 'r3'), worktree('w2', 'r1'), worktree('w3', 'r2')])
 
-    // Orca has 2 workspaces, Solo has 1 — popularity beats alpha.
-    expect(model.projects.map((option) => option.label)).toEqual(['Orca', 'Solo'])
+    // MCode has 2 workspaces, Solo has 1 — popularity beats alpha.
+    expect(model.projects.map((option) => option.label)).toEqual(['MCode', 'Solo'])
   })
 
   it('prefers a busier project ahead of an alphabetically earlier quiet one', () => {
@@ -131,7 +131,7 @@ describe('buildPaletteFilterModel', () => {
 
     expect(model.projects.map((option) => [option.label, option.count])).toEqual([
       ['Solo', 3],
-      ['Orca', 1]
+      ['MCode', 1]
     ])
   })
 })

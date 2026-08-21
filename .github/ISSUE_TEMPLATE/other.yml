@@ -1,5 +1,5 @@
 name: Other
-description: Report another Orca issue type
+description: Report another MCode issue type
 title: '[Other]: '
 body:
   - type: markdown

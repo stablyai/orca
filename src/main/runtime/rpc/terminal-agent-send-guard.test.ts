@@ -1,14 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { OrcaRuntimeService } from '../orca-runtime'
+import type { MCodeRuntimeService } from '../mcode-runtime'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
 
-function stubRuntime(overrides: Partial<OrcaRuntimeService>): OrcaRuntimeService {
+function stubRuntime(overrides: Partial<MCodeRuntimeService>): MCodeRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
     ...overrides
-  } as OrcaRuntimeService
+  } as MCodeRuntimeService
 }
 
 function guardedSendRequest(): RpcRequest {

@@ -1,5 +1,5 @@
 /**
- * Builds the exact bytes Orca writes into an interactive shell to deliver and
+ * Builds the exact bytes MCode writes into an interactive shell to deliver and
  * submit a startup command (agent launch, setup script, etc.).
  *
  * Why bracketed paste: agent launch prompts are single-quoted, but their
@@ -22,7 +22,7 @@ export type StartupCommandSubmissionOptions = {
    *  POSIX; SSH relays remote shells with CR. A caller-supplied trailing submit
    *  byte on `command` is preserved as-is. */
   submit: string
-  /** Whether the target line editor has bracketed-paste mode active (Orca's
+  /** Whether the target line editor has bracketed-paste mode active (MCode's
    *  wrapped bash/zsh/fish). Only wrap multiline payloads when true — a shell
    *  without bracketed paste would echo the ESC[200~ markers as literal garbage. */
   bracketedPasteSafe: boolean

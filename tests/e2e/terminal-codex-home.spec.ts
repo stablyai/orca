@@ -1,4 +1,4 @@
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import {
   execInTerminal,
   getTerminalContent,
@@ -9,7 +9,7 @@ import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } fro
 
 type CodexHomeProbe = {
   codexHome: string | null
-  orcaCodexHome: string | null
+  mcodeCodexHome: string | null
 }
 
 function readCodexHomeProbe(pageContent: string, marker: string): CodexHomeProbe | null {
@@ -21,39 +21,39 @@ function readCodexHomeProbe(pageContent: string, marker: string): CodexHomeProbe
 }
 
 test.describe('Terminal Codex runtime home', () => {
-  test.beforeEach(async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
+  test.beforeEach(async ({ mcodePage }) => {
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
+    await ensureTerminalVisible(mcodePage)
   })
 
-  test('terminal process receives the Orca-managed Codex home', async ({ orcaPage }) => {
-    await waitForActiveTerminalManager(orcaPage)
-    const ptyId = await waitForActivePanePtyId(orcaPage)
-    const marker = `__ORCA_CODEX_HOME_E2E_${Date.now()}__`
+  test('terminal process receives the MCode-managed Codex home', async ({ mcodePage }) => {
+    await waitForActiveTerminalManager(mcodePage)
+    const ptyId = await waitForActivePanePtyId(mcodePage)
+    const marker = `__MCODE_CODEX_HOME_E2E_${Date.now()}__`
     const command = [
       'node -e',
-      `"console.log('${marker}:' + JSON.stringify({codexHome: process.env.CODEX_HOME || null, orcaCodexHome: process.env.ORCA_CODEX_HOME || null}))"`
+      `"console.log('${marker}:' + JSON.stringify({codexHome: process.env.CODEX_HOME || null, mcodeCodexHome: process.env.MCODE_CODEX_HOME || null}))"`
     ].join(' ')
 
-    await execInTerminal(orcaPage, ptyId, command)
+    await execInTerminal(mcodePage, ptyId, command)
 
     let probe: CodexHomeProbe | null = null
     await expect
       .poll(
         async () => {
-          probe = readCodexHomeProbe(await getTerminalContent(orcaPage), marker)
+          probe = readCodexHomeProbe(await getTerminalContent(mcodePage), marker)
           return Boolean(
             probe?.codexHome &&
-            probe.orcaCodexHome &&
-            probe.codexHome === probe.orcaCodexHome &&
+            probe.mcodeCodexHome &&
+            probe.codexHome === probe.mcodeCodexHome &&
             /[\\/]codex-runtime-home[\\/]home$/.test(probe.codexHome)
           )
         },
-        { timeout: 15_000, message: 'Terminal did not expose Orca-managed Codex home env' }
+        { timeout: 15_000, message: 'Terminal did not expose MCode-managed Codex home env' }
       )
       .toBe(true)
 
-    expect(probe?.codexHome).toBe(probe?.orcaCodexHome)
+    expect(probe?.codexHome).toBe(probe?.mcodeCodexHome)
   })
 })

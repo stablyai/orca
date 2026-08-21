@@ -36,7 +36,7 @@ import {
   registerWorkspaceSpaceAnalysisSnapshotPruneTombstones
 } from './workspace-space-analysis-snapshot'
 
-const SNAPSHOT_FILE = 'orca-workspace-space-analysis.json'
+const SNAPSHOT_FILE = 'mcode-workspace-space-analysis.json'
 const NOW = 1_700_000_000_000
 
 function makeWorktreeRow(overrides: Partial<WorkspaceSpaceWorktree> = {}): WorkspaceSpaceWorktree {
@@ -100,7 +100,7 @@ function makeAnalysis(worktrees: WorkspaceSpaceWorktree[]): WorkspaceSpaceAnalys
 describe('workspace space analysis snapshot', () => {
   beforeEach(async () => {
     snapshotWriteSpy.mockClear()
-    userDataDirHolder.dir = await mkdtemp(join(tmpdir(), 'orca-space-snapshot-'))
+    userDataDirHolder.dir = await mkdtemp(join(tmpdir(), 'mcode-space-snapshot-'))
   })
 
   afterEach(async () => {
@@ -302,7 +302,7 @@ describe('workspace space analysis snapshot', () => {
   })
 
   it('keeps profile snapshots isolated', async () => {
-    const otherProfile = await mkdtemp(join(tmpdir(), 'orca-space-snapshot-other-'))
+    const otherProfile = await mkdtemp(join(tmpdir(), 'mcode-space-snapshot-other-'))
     try {
       await persistWorkspaceSpaceAnalysisSnapshot(
         userDataDirHolder.dir,

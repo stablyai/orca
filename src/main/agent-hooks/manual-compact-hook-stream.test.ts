@@ -57,7 +57,7 @@ function postHook(port: number, token: string, payload: Record<string, unknown>)
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Orca-Agent-Hook-Token': token
+      'X-MCode-Agent-Hook-Token': token
     },
     body: JSON.stringify({ paneKey: PANE_KEY, payload })
   })
@@ -87,39 +87,39 @@ describe('manual Claude compact hook stream', () => {
     })
 
     await postHook(
-      Number(env.ORCA_AGENT_HOOK_PORT),
-      env.ORCA_AGENT_HOOK_TOKEN,
+      Number(env.MCODE_AGENT_HOOK_PORT),
+      env.MCODE_AGENT_HOOK_TOKEN,
       claudeHook('UserPromptSubmit', PROMPT_ID_2, { prompt: 'work before compact' })
     )
     await postHook(
-      Number(env.ORCA_AGENT_HOOK_PORT),
-      env.ORCA_AGENT_HOOK_TOKEN,
+      Number(env.MCODE_AGENT_HOOK_PORT),
+      env.MCODE_AGENT_HOOK_TOKEN,
       claudeHook('PreCompact', PROMPT_ID_1, { trigger: 'manual' })
     )
     await postHook(
-      Number(env.ORCA_AGENT_HOOK_PORT),
-      env.ORCA_AGENT_HOOK_TOKEN,
+      Number(env.MCODE_AGENT_HOOK_PORT),
+      env.MCODE_AGENT_HOOK_TOKEN,
       claudeHook('SubagentStart', PROMPT_ID_1, {
         agent_id: 'compact-agent',
         agent_type: 'general-purpose'
       })
     )
     await postHook(
-      Number(env.ORCA_AGENT_HOOK_PORT),
-      env.ORCA_AGENT_HOOK_TOKEN,
+      Number(env.MCODE_AGENT_HOOK_PORT),
+      env.MCODE_AGENT_HOOK_TOKEN,
       claudeHook('SubagentStop', PROMPT_ID_1, {
         agent_id: 'compact-agent',
         agent_type: 'general-purpose'
       })
     )
     await postHook(
-      Number(env.ORCA_AGENT_HOOK_PORT),
-      env.ORCA_AGENT_HOOK_TOKEN,
+      Number(env.MCODE_AGENT_HOOK_PORT),
+      env.MCODE_AGENT_HOOK_TOKEN,
       claudeHook('PostCompact', PROMPT_ID_1, { trigger: 'manual' })
     )
     await postHook(
-      Number(env.ORCA_AGENT_HOOK_PORT),
-      env.ORCA_AGENT_HOOK_TOKEN,
+      Number(env.MCODE_AGENT_HOOK_PORT),
+      env.MCODE_AGENT_HOOK_TOKEN,
       claudeHook('PostCompact', PROMPT_ID_1, { trigger: 'manual' })
     )
 
@@ -145,7 +145,7 @@ describe('manual Claude compact hook stream', () => {
     const forwarded: AgentHookRelayEnvelope[] = []
     const emitted: string[] = []
     const connectionId = 'conn-a'
-    const endpointDir = mkdtempSync(join(tmpdir(), 'orca-compact-relay-'))
+    const endpointDir = mkdtempSync(join(tmpdir(), 'mcode-compact-relay-'))
     temporaryPaths.push(endpointDir)
     const relay = new RelayAgentHookServer({
       endpointDir,
@@ -270,7 +270,7 @@ describe('manual Claude compact hook stream', () => {
   it('keeps automatic compact hooks working without settling the turn', async () => {
     const main = new AgentHookServer()
     const forwarded: AgentHookRelayEnvelope[] = []
-    const endpointDir = mkdtempSync(join(tmpdir(), 'orca-auto-compact-relay-'))
+    const endpointDir = mkdtempSync(join(tmpdir(), 'mcode-auto-compact-relay-'))
     temporaryPaths.push(endpointDir)
     const relay = new RelayAgentHookServer({
       endpointDir,
@@ -324,20 +324,20 @@ describe('manual Claude compact hook stream', () => {
   })
 
   it('hydrates a manual PreCompact identity and accepts only its exact local completion', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-compact-restore-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-compact-restore-'))
     temporaryPaths.push(userDataPath)
     const first = new AgentHookServer()
     servers.push(first)
     await first.start({ env: 'production', userDataPath })
     const firstEnv = first.buildPtyEnv()
     await postHook(
-      Number(firstEnv.ORCA_AGENT_HOOK_PORT),
-      firstEnv.ORCA_AGENT_HOOK_TOKEN,
+      Number(firstEnv.MCODE_AGENT_HOOK_PORT),
+      firstEnv.MCODE_AGENT_HOOK_TOKEN,
       claudeHook('UserPromptSubmit', PROMPT_ID_2, { prompt: 'work before compact' })
     )
     await postHook(
-      Number(firstEnv.ORCA_AGENT_HOOK_PORT),
-      firstEnv.ORCA_AGENT_HOOK_TOKEN,
+      Number(firstEnv.MCODE_AGENT_HOOK_PORT),
+      firstEnv.MCODE_AGENT_HOOK_TOKEN,
       claudeHook('PreCompact', PROMPT_ID_1, { trigger: 'manual' })
     )
     first.stop()
@@ -347,15 +347,15 @@ describe('manual Claude compact hook stream', () => {
     await restored.start({ env: 'production', userDataPath })
     const restoredEnv = restored.buildPtyEnv()
     await postHook(
-      Number(restoredEnv.ORCA_AGENT_HOOK_PORT),
-      restoredEnv.ORCA_AGENT_HOOK_TOKEN,
+      Number(restoredEnv.MCODE_AGENT_HOOK_PORT),
+      restoredEnv.MCODE_AGENT_HOOK_TOKEN,
       claudeHook('PostCompact', PROMPT_ID_2, { trigger: 'manual' })
     )
     expect(restored.getStatusSnapshot()[0]).toMatchObject({ state: 'working' })
 
     await postHook(
-      Number(restoredEnv.ORCA_AGENT_HOOK_PORT),
-      restoredEnv.ORCA_AGENT_HOOK_TOKEN,
+      Number(restoredEnv.MCODE_AGENT_HOOK_PORT),
+      restoredEnv.MCODE_AGENT_HOOK_TOKEN,
       claudeHook('PostCompact', PROMPT_ID_1, { trigger: 'manual' })
     )
     expect(restored.getStatusSnapshot()[0]).toMatchObject({

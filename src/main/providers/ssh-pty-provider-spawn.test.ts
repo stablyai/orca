@@ -387,7 +387,7 @@ describe('spawn', () => {
 
   it('preserves explicit TERM and forwards final env deletions to the relay', async () => {
     mux.request.mockResolvedValue({ id: 'pty-env-precedence' })
-    const envToDelete = ['TERM_PROGRAM', 'ORCA_STALE_TEST_ENV']
+    const envToDelete = ['TERM_PROGRAM', 'MCODE_STALE_TEST_ENV']
 
     await provider.spawn({
       cols: 120,
@@ -395,7 +395,7 @@ describe('spawn', () => {
       env: {
         TERM: 'screen-256color',
         TERM_PROGRAM: 'stale-terminal',
-        ORCA_STALE_TEST_ENV: '/tmp/stale-env'
+        MCODE_STALE_TEST_ENV: '/tmp/stale-env'
       },
       envToDelete
     })
@@ -412,7 +412,7 @@ describe('spawn', () => {
     })
     const spawnCall = mux.request.mock.calls.find((call) => call[0] === 'pty.spawn')
     expect(spawnCall?.[1]?.env).not.toHaveProperty('TERM_PROGRAM')
-    expect(spawnCall?.[1]?.env).not.toHaveProperty('ORCA_STALE_TEST_ENV')
+    expect(spawnCall?.[1]?.env).not.toHaveProperty('MCODE_STALE_TEST_ENV')
   })
 
   it('forwards provider command delivery to the relay', async () => {
@@ -437,19 +437,19 @@ describe('spawn', () => {
     })
   })
 
-  it('injects the relay-backed Orca CLI bridge into remote PTY env', async () => {
+  it('injects the relay-backed MCode CLI bridge into remote PTY env', async () => {
     mux.request.mockResolvedValue({ id: 'pty-bridge' })
     provider = new SshPtyProvider('conn-1', mux as never, {
-      binDir: '/home/user/.orca-relay/bin',
-      relayDir: '/home/user/.orca-relay/relay-v1',
+      binDir: '/home/user/.mcode-relay/bin',
+      relayDir: '/home/user/.mcode-relay/relay-v1',
       nodePath: '/usr/bin/node',
-      sockPath: '/home/user/.orca-relay/relay.sock'
+      sockPath: '/home/user/.mcode-relay/relay.sock'
     })
 
     await provider.spawn({
       cols: 120,
       rows: 40,
-      env: { PATH: '/usr/bin', ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { PATH: '/usr/bin', MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expectRequest(mux.request, 'pty.spawn', {
@@ -457,13 +457,13 @@ describe('spawn', () => {
       rows: 40,
       cwd: undefined,
       env: {
-        PATH: '/home/user/.orca-relay/bin:/usr/bin',
-        ORCA_TERMINAL_HANDLE: 'term_ssh',
+        PATH: '/home/user/.mcode-relay/bin:/usr/bin',
+        MCODE_TERMINAL_HANDLE: 'term_ssh',
         [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
-        ORCA_REMOTE_CLI_BIN_DIR: '/home/user/.orca-relay/bin',
-        ORCA_RELAY_DIR: '/home/user/.orca-relay/relay-v1',
-        ORCA_RELAY_NODE_PATH: '/usr/bin/node',
-        ORCA_RELAY_SOCKET_PATH: '/home/user/.orca-relay/relay.sock'
+        MCODE_REMOTE_CLI_BIN_DIR: '/home/user/.mcode-relay/bin',
+        MCODE_RELAY_DIR: '/home/user/.mcode-relay/relay-v1',
+        MCODE_RELAY_NODE_PATH: '/usr/bin/node',
+        MCODE_RELAY_SOCKET_PATH: '/home/user/.mcode-relay/relay.sock'
       }
     })
   })
@@ -471,16 +471,16 @@ describe('spawn', () => {
   it('does not clobber the remote relay PATH when caller env has no PATH', async () => {
     mux.request.mockResolvedValue({ id: 'pty-bridge' })
     provider = new SshPtyProvider('conn-1', mux as never, {
-      binDir: '/home/user/.orca-relay/bin',
-      relayDir: '/home/user/.orca-relay/relay-v1',
+      binDir: '/home/user/.mcode-relay/bin',
+      relayDir: '/home/user/.mcode-relay/relay-v1',
       nodePath: '/usr/bin/node',
-      sockPath: '/home/user/.orca-relay/relay.sock'
+      sockPath: '/home/user/.mcode-relay/relay.sock'
     })
 
     await provider.spawn({
       cols: 120,
       rows: 40,
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expectRequest(mux.request, 'pty.spawn', {
@@ -488,12 +488,12 @@ describe('spawn', () => {
       rows: 40,
       cwd: undefined,
       env: {
-        ORCA_TERMINAL_HANDLE: 'term_ssh',
+        MCODE_TERMINAL_HANDLE: 'term_ssh',
         [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
-        ORCA_REMOTE_CLI_BIN_DIR: '/home/user/.orca-relay/bin',
-        ORCA_RELAY_DIR: '/home/user/.orca-relay/relay-v1',
-        ORCA_RELAY_NODE_PATH: '/usr/bin/node',
-        ORCA_RELAY_SOCKET_PATH: '/home/user/.orca-relay/relay.sock'
+        MCODE_REMOTE_CLI_BIN_DIR: '/home/user/.mcode-relay/bin',
+        MCODE_RELAY_DIR: '/home/user/.mcode-relay/relay-v1',
+        MCODE_RELAY_NODE_PATH: '/usr/bin/node',
+        MCODE_RELAY_SOCKET_PATH: '/home/user/.mcode-relay/relay.sock'
       }
     })
   })
@@ -501,10 +501,10 @@ describe('spawn', () => {
   it('uses Windows PATH delimiters for native Windows SSH bridge env', async () => {
     mux.request.mockResolvedValue({ id: 'pty-bridge' })
     provider = new SshPtyProvider('conn-1', mux as never, {
-      binDir: 'C:/Users/me/.orca-relay/bin',
-      relayDir: 'C:/Users/me/.orca-remote/relay-v1',
+      binDir: 'C:/Users/me/.mcode-relay/bin',
+      relayDir: 'C:/Users/me/.mcode-remote/relay-v1',
       nodePath: 'C:/Program Files/nodejs/node.exe',
-      sockPath: '\\\\.\\pipe\\orca-relay-123',
+      sockPath: '\\\\.\\pipe\\mcode-relay-123',
       pathDelimiter: ';'
     })
 
@@ -519,12 +519,12 @@ describe('spawn', () => {
       rows: 40,
       cwd: undefined,
       env: {
-        Path: 'C:/Users/me/.orca-relay/bin;C:/Windows/System32;C:/Tools',
+        Path: 'C:/Users/me/.mcode-relay/bin;C:/Windows/System32;C:/Tools',
         [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true',
-        ORCA_REMOTE_CLI_BIN_DIR: 'C:/Users/me/.orca-relay/bin',
-        ORCA_RELAY_DIR: 'C:/Users/me/.orca-remote/relay-v1',
-        ORCA_RELAY_NODE_PATH: 'C:/Program Files/nodejs/node.exe',
-        ORCA_RELAY_SOCKET_PATH: '\\\\.\\pipe\\orca-relay-123'
+        MCODE_REMOTE_CLI_BIN_DIR: 'C:/Users/me/.mcode-relay/bin',
+        MCODE_RELAY_DIR: 'C:/Users/me/.mcode-remote/relay-v1',
+        MCODE_RELAY_NODE_PATH: 'C:/Program Files/nodejs/node.exe',
+        MCODE_RELAY_SOCKET_PATH: '\\\\.\\pipe\\mcode-relay-123'
       }
     })
   })

@@ -9,13 +9,13 @@ describe('createPluginPanelCallAdmission', () => {
       now: () => now
     })
 
-    expect(admission.admit('orca-samples.one', { method: 'one' })).toBeNull()
-    expect(admission.admit('orca-samples.one', { method: 'two' })).toBeNull()
-    expect(admission.admit('orca-samples.one', { method: 'three' })).toBe('rate_limited')
-    expect(admission.admit('orca-samples.two', { method: 'one' })).toBeNull()
+    expect(admission.admit('mcode-samples.one', { method: 'one' })).toBeNull()
+    expect(admission.admit('mcode-samples.one', { method: 'two' })).toBeNull()
+    expect(admission.admit('mcode-samples.one', { method: 'three' })).toBe('rate_limited')
+    expect(admission.admit('mcode-samples.two', { method: 'one' })).toBeNull()
 
     now = 1_000
-    expect(admission.admit('orca-samples.one', { method: 'four' })).toBeNull()
+    expect(admission.admit('mcode-samples.one', { method: 'four' })).toBeNull()
   })
 
   it('rejects oversized calls and can revoke a plugin budget', () => {
@@ -24,9 +24,9 @@ describe('createPluginPanelCallAdmission', () => {
       now: () => 0
     })
 
-    expect(admission.admit('orca-samples.one', { payload: 'x'.repeat(64) })).toBe('oversized')
-    expect(admission.admit('orca-samples.one', {})).toBe('rate_limited')
-    admission.clear('orca-samples.one')
-    expect(admission.admit('orca-samples.one', {})).toBeNull()
+    expect(admission.admit('mcode-samples.one', { payload: 'x'.repeat(64) })).toBe('oversized')
+    expect(admission.admit('mcode-samples.one', {})).toBe('rate_limited')
+    admission.clear('mcode-samples.one')
+    expect(admission.admit('mcode-samples.one', {})).toBeNull()
   })
 })

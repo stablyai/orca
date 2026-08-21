@@ -25,7 +25,7 @@ function getDiagLogPath(): string {
     try {
       _diagLog = join(app.getPath('userData'), 'cookie-import-diag.log')
     } catch {
-      _diagLog = join(tmpdir(), 'orca-cookie-import-diag.log')
+      _diagLog = join(tmpdir(), 'mcode-cookie-import-diag.log')
     }
   }
   return _diagLog
@@ -658,7 +658,7 @@ async function importValidatedCookies(
     return {
       ok: false,
       reason:
-        'This Orca client cannot report cookies skipped for an unreadable site partition. Update Orca on this device and try again.'
+        'This MCode client cannot report cookies skipped for an unreadable site partition. Update MCode on this device and try again.'
     }
   }
   // Why: a family-suppressed sibling is a partition skip too, so partitionSkippedCookies is a
@@ -1396,7 +1396,7 @@ async function importCookiesFromFirefox(
 ): Promise<BrowserCookieImportResult> {
   diag(`importCookiesFromFirefox: partition="${targetPartition}"`)
 
-  const tmpDir = mkdtempSync(join(tmpdir(), 'orca-cookie-import-'))
+  const tmpDir = mkdtempSync(join(tmpdir(), 'mcode-cookie-import-'))
   const tmpCookiesPath = join(tmpDir, 'cookies.sqlite')
 
   try {
@@ -1531,7 +1531,7 @@ async function importCookiesFromSafari(
       return {
         ok: false,
         reason:
-          'macOS denied access to Safari cookies. Grant Full Disk Access to Orca in System Settings → Privacy & Security → Full Disk Access.'
+          'macOS denied access to Safari cookies. Grant Full Disk Access to MCode in System Settings → Privacy & Security → Full Disk Access.'
       }
     }
     return { ok: false, reason: 'Could not read Safari cookies.' }
@@ -1703,7 +1703,7 @@ export async function importCookiesFromBrowser(
       let colList: string | null = null
       let placeholders: string | null = null
       if (stagingAvailable) {
-        // Why: the staged file is Orca's own partition DB, also named "Cookies", so the same
+        // Why: the staged file is MCode's own partition DB, also named "Cookies", so the same
         // transient AV handle can make opening it throw — degrade instead of killing the import.
         try {
           stagingDb = new DatabaseSync(stagingCookiesPath)
@@ -2016,7 +2016,7 @@ export async function importCookiesFromBrowser(
         return {
           ok: false,
           reason:
-            'This Orca client cannot report cookies skipped for an unreadable site partition. Update Orca on this device and try again.'
+            'This MCode client cannot report cookies skipped for an unreadable site partition. Update MCode on this device and try again.'
         }
       }
 

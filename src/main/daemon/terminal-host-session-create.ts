@@ -108,7 +108,7 @@ async function spawnAndPublishSession(
     sessionId: opts.sessionId,
     cols: size.cols,
     rows: size.rows,
-    terminalHandle: opts.env?.ORCA_TERMINAL_HANDLE,
+    terminalHandle: opts.env?.MCODE_TERMINAL_HANDLE,
     launchAgent: opts.launchAgent,
     subprocess,
     ownerBackend: resolvePtyOwnerBackend({
@@ -146,7 +146,7 @@ async function spawnAndPublishSession(
 
   if (opts.command && !subprocess.startupCommandDeliveredInShellArgs) {
     const submit = process.platform === 'win32' ? '\r' : '\n'
-    // Why: only Orca-wrapped shells advertise the paste-safe startup barrier.
+    // Why: only MCode-wrapped shells advertise the paste-safe startup barrier.
     session.write(
       buildStartupCommandSubmission(opts.command, {
         submit,

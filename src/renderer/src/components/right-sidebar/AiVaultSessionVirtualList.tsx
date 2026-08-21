@@ -23,7 +23,7 @@ import {
   type AiVaultSessionWorktreeInfo
 } from './ai-vault-session-worktree'
 import {
-  canOpenAiVaultSessionLogInOrca,
+  canOpenAiVaultSessionLogInMCode,
   canUseLocalAiVaultSessionPathActions
 } from './ai-vault-session-path-actions'
 import {
@@ -327,10 +327,10 @@ function AiVaultVirtualRow({
   const resumeLabel = resumeState ? aiVaultSessionResumeLabel(resumeState) : ''
   const canOpenLocalSessionPaths =
     row.type === 'session' && canUseLocalAiVaultSessionPathActions(row.session.executionHostId)
-  // Why: in-Orca View Log additionally withholds synthetic (SQLite/OpenCode)
+  // Why: in-MCode View Log additionally withholds synthetic (SQLite/OpenCode)
   // identities that have no single file to open, while Reveal/CWD stay on the
   // existing local-path gate.
-  const canOpenLogInOrca = row.type === 'session' && canOpenAiVaultSessionLogInOrca(row.session)
+  const canOpenLogInMCode = row.type === 'session' && canOpenAiVaultSessionLogInMCode(row.session)
 
   return (
     <div
@@ -401,7 +401,7 @@ function AiVaultVirtualRow({
           }
           onCopyId={() => onCopyId(row.session)}
           onCopyPath={() => onCopyPath(row.session)}
-          onOpenLog={canOpenLogInOrca ? () => onOpenLog(row.session) : undefined}
+          onOpenLog={canOpenLogInMCode ? () => onOpenLog(row.session) : undefined}
           onRevealLog={canOpenLocalSessionPaths ? () => onRevealLog(row.session) : undefined}
           onOpenCwd={
             canOpenLocalSessionPaths && row.session.cwd ? () => onOpenCwd(row.session) : undefined

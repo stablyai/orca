@@ -19,7 +19,7 @@ afterEach(async () => {
 
 describe('Antigravity AI Vault discovery', () => {
   it('discovers canonical transcripts from WSL homes without indexing sibling artifacts', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-antigravity-wsl-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-antigravity-wsl-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
     const wslHome = join(root, 'wsl-home')
@@ -64,7 +64,7 @@ describe('Antigravity AI Vault discovery', () => {
   })
 
   it('uses a unique history match in the default workspace view', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-antigravity-workspace-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-antigravity-workspace-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
     const sessionId = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff'
@@ -74,7 +74,7 @@ describe('Antigravity AI Vault discovery', () => {
         source: 'USER_EXPLICIT',
         type: 'USER_INPUT',
         created_at: '2026-07-15T11:39:10.000Z',
-        content: '<USER_REQUEST>ORCA_8742_REPRO</USER_REQUEST>'
+        content: '<USER_REQUEST>MCODE_8742_REPRO</USER_REQUEST>'
       }
     ])
 
@@ -83,7 +83,7 @@ describe('Antigravity AI Vault discovery', () => {
 
     await writeAntigravityHistory(roots.antigravityBrainDir, [
       {
-        display: 'ORCA_8742_REPRO',
+        display: 'MCODE_8742_REPRO',
         timestamp: Date.parse('2026-07-15T11:39:10.100Z'),
         workspace
       }
@@ -106,7 +106,7 @@ describe('Antigravity AI Vault discovery', () => {
   })
 
   it('keeps workspace unknown when matching history rows are ambiguous', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-antigravity-ambiguous-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-antigravity-ambiguous-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
     const sessionId = 'cccccccc-dddd-4eee-8fff-aaaaaaaaaaaa'
@@ -137,7 +137,7 @@ describe('Antigravity AI Vault discovery', () => {
   })
 
   it('does not join workspace from a colliding truncated prompt title', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-antigravity-long-title-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-antigravity-long-title-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
     const sessionId = 'eeeeeeee-ffff-4aaa-8bbb-cccccccccccc'

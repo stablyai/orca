@@ -44,7 +44,7 @@ function trackDownloadStarted(
 }
 
 // Why: an interrupted-resumable download never fires Chromium's 'done' (no
-// finished event), and Orca has no resume path — without this transition the
+// finished event), and MCode has no resume path — without this transition the
 // veto would outlive the download for the whole session. A resumed download
 // re-actives on its next 'progressing' tick, restoring the veto.
 function trackDownloadProgress(

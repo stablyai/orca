@@ -189,7 +189,7 @@ export function SkillBundleInstallFlow(props: {
       } else if (operation.status !== 'ok') {
         setError(
           operation.status === 'reconnect-required'
-            ? 'Reconnect your Orca account before installing.'
+            ? 'Reconnect your MCode account before installing.'
             : operation.message
         )
       } else {
@@ -204,7 +204,7 @@ export function SkillBundleInstallFlow(props: {
       }
     } catch (cause) {
       console.warn('[skills] bundle install failed:', cause)
-      setError('Installation failed before Orca could verify the requested bundle.')
+      setError('Installation failed before MCode could verify the requested bundle.')
     } finally {
       installProgress.finish()
       setBusy(false)

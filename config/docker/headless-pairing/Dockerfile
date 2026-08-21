@@ -31,7 +31,7 @@ RUN apt-get update \
     zlib1g-dev \
   && rm -rf /var/lib/apt/lists/*
 
-RUN useradd --create-home --shell /bin/bash orca
+RUN useradd --create-home --shell /bin/bash mcode
 
 COPY config/docker/headless-pairing/run-appimage-case.sh /usr/local/bin/run-appimage-case
 

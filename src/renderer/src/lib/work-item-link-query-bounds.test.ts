@@ -7,7 +7,7 @@ import {
 
 describe('work item link query bounds', () => {
   it('allows normal work item link queries', () => {
-    expect(isWorkItemLinkQueryTooLarge('https://github.com/stablyai/orca/issues/923')).toBe(false)
+    expect(isWorkItemLinkQueryTooLarge('https://github.com/mcode-ide/mcode/issues/923')).toBe(false)
   })
 
   it('measures UTF-8 bytes for pasted link queries', () => {

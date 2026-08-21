@@ -29,10 +29,10 @@ export function isCodexForegroundProcess(processName: string | null): boolean {
  * Decides whether a pane may be shown a Codex account-restart prompt.
  *
  * Why this is not just a foreground-name match: Windows reports the DEEPEST
- * process in the PTY tree, so an Orca "Codex" pane running a subagent reads as
+ * process in the PTY tree, so an MCode "Codex" pane running a subagent reads as
  * `pwsh -> node -> codex.exe -> claude.exe` => "claude" and was filtered out
  * before the stale-account registry was ever consulted. `launchAgent` is
- * recorded metadata (Orca started Codex in this tab), not a repaintable label,
+ * recorded metadata (MCode started Codex in this tab), not a repaintable label,
  * so it survives that. A restart notice makes the pane drop every keystroke, so
  * the fallback is deliberately paired with a foreground that can only be a
  * deeper *agent* (or the node/python wrapper that has not resolved to one yet):

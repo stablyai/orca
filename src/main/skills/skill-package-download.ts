@@ -14,7 +14,7 @@ import { startSkillPhaseOperation } from './skill-operation-observability'
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308])
 const MAX_REDIRECTS = 3
-const PROCESS_DOWNLOAD_ROOT_PREFIX = '.orca-skill-download-process-'
+const PROCESS_DOWNLOAD_ROOT_PREFIX = '.mcode-skill-download-process-'
 const processDownloadRootName = `${PROCESS_DOWNLOAD_ROOT_PREFIX}${process.pid}-${randomUUID()}`
 const initializedTemporaryRoots = new Map<string, Promise<string>>()
 
@@ -142,7 +142,7 @@ async function prepareTemporaryRoot(path: string): Promise<string> {
       await Promise.all(
         entries.map(async (entry) => {
           const match = entry.isDirectory()
-            ? entry.name.match(/^\.orca-skill-download-process-(\d+)-/)
+            ? entry.name.match(/^\.mcode-skill-download-process-(\d+)-/)
             : null
           const pid = Number(match?.[1])
           if (match && Number.isSafeInteger(pid) && !processIsAlive(pid)) {
@@ -206,7 +206,7 @@ async function downloadSkillPackageGrantUnobserved(
     }
 
     const processRoot = await prepareTemporaryRoot(input.temporaryRoot)
-    const temporaryDirectory = await mkdtemp(join(processRoot, '.orca-skill-download-'))
+    const temporaryDirectory = await mkdtemp(join(processRoot, '.mcode-skill-download-'))
     const archivePath = join(temporaryDirectory, 'package.tar.gz')
     try {
       const handle = await open(archivePath, 'wx', 0o600)

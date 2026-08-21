@@ -14,18 +14,18 @@ describe('getUntitledFileRoot', () => {
   it('falls back to the file root for floating markdown files', () => {
     expect(
       getUntitledFileRoot({
-        filePath: '/Users/alice/Library/Application Support/Orca/floating-workspace/untitled.md',
+        filePath: '/Users/alice/Library/Application Support/MCode/floating-workspace/untitled.md',
         relativePath: 'untitled.md'
       })
-    ).toBe('/Users/alice/Library/Application Support/Orca/floating-workspace')
+    ).toBe('/Users/alice/Library/Application Support/MCode/floating-workspace')
   })
 
   it('handles nested untitled relative paths', () => {
     expect(
       getUntitledFileRoot({
-        filePath: '/tmp/orca/floating-workspace/notes/untitled.md',
+        filePath: '/tmp/mcode/floating-workspace/notes/untitled.md',
         relativePath: 'notes/untitled.md'
       })
-    ).toBe('/tmp/orca/floating-workspace')
+    ).toBe('/tmp/mcode/floating-workspace')
   })
 })

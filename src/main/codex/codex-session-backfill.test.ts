@@ -224,10 +224,10 @@ beforeEach(() => {
   fsMockState.failMkdirPath = null
   fsMockState.failDirectoryPath = null
   fsMockState.failLstatPath = null
-  fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-codex-backfill-home-'))
-  userDataDir = mkdtempSync(join(tmpdir(), 'orca-codex-backfill-user-data-'))
-  previousUserDataPath = process.env.ORCA_USER_DATA_PATH
-  process.env.ORCA_USER_DATA_PATH = userDataDir
+  fakeHomeDir = mkdtempSync(join(tmpdir(), 'mcode-codex-backfill-home-'))
+  userDataDir = mkdtempSync(join(tmpdir(), 'mcode-codex-backfill-user-data-'))
+  previousUserDataPath = process.env.MCODE_USER_DATA_PATH
+  process.env.MCODE_USER_DATA_PATH = userDataDir
   homedirMock.mockReturnValue(fakeHomeDir)
 })
 
@@ -235,9 +235,9 @@ afterEach(() => {
   rmSync(fakeHomeDir, { recursive: true, force: true })
   rmSync(userDataDir, { recursive: true, force: true })
   if (previousUserDataPath === undefined) {
-    delete process.env.ORCA_USER_DATA_PATH
+    delete process.env.MCODE_USER_DATA_PATH
   } else {
-    process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+    process.env.MCODE_USER_DATA_PATH = previousUserDataPath
   }
   vi.clearAllMocks()
 })

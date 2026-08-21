@@ -30,9 +30,9 @@ describe('RelayAgentHookServer', () => {
   })
 
   it('keeps named-pipe endpoint files on a real filesystem path', () => {
-    const endpointDir = endpointDirForRelaySocket('\\\\.\\pipe\\orca-relay-abc123')
+    const endpointDir = endpointDirForRelaySocket('\\\\.\\pipe\\mcode-relay-abc123')
 
-    expect(endpointDir).toBe(join(homedir(), '.orca-relay', 'agent-hooks', 'orca-relay-abc123'))
+    expect(endpointDir).toBe(join(homedir(), '.mcode-relay', 'agent-hooks', 'mcode-relay-abc123'))
     expect(endpointDir).not.toContain('\\\\.\\pipe')
   })
 
@@ -46,7 +46,7 @@ describe('RelayAgentHookServer', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': token
+          'X-MCode-Agent-Hook-Token': token
         },
         body: JSON.stringify({
           paneKey: PANE_KEY,
@@ -67,7 +67,7 @@ describe('RelayAgentHookServer', () => {
       expect(envelope.payload.state).toBe('working')
       expect(envelope.payload.prompt).toBe('hi')
       expect(envelope.claudeRunningNonAgentTask).toBe(false)
-      // Why: the relay forwards body env/version so Orca's warn-once
+      // Why: the relay forwards body env/version so MCode's warn-once
       // protocol diagnostics and remote-location marker survive the wire.
       expect(envelope.env).toBe('remote')
       expect(envelope.version).toBe('1')
@@ -86,7 +86,7 @@ describe('RelayAgentHookServer', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': token
+          'X-MCode-Agent-Hook-Token': token
         },
         body: JSON.stringify({
           paneKey: PANE_KEY,
@@ -116,7 +116,7 @@ describe('RelayAgentHookServer', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': 'wrong'
+          'X-MCode-Agent-Hook-Token': 'wrong'
         },
         body: '{}'
       })
@@ -137,7 +137,7 @@ describe('RelayAgentHookServer', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': token
+          'X-MCode-Agent-Hook-Token': token
         },
         body: JSON.stringify({
           paneKey: PANE_KEY,
@@ -173,7 +173,7 @@ describe('RelayAgentHookServer', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': token
+          'X-MCode-Agent-Hook-Token': token
         },
         body: JSON.stringify({
           paneKey: PANE_KEY,
@@ -229,7 +229,7 @@ describe('RelayAgentHookServer', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': token
+          'X-MCode-Agent-Hook-Token': token
         },
         body: JSON.stringify({
           paneKey: PANE_KEY,
@@ -247,7 +247,7 @@ describe('RelayAgentHookServer', () => {
   })
 
   // Why: the relay should still drop malformed HTTP events before they reach
-  // the wire, even though Orca main re-validates at the SSH trust boundary.
+  // the wire, even though MCode main re-validates at the SSH trust boundary.
   it('does not forward when normalizeHookPayload rejects the event', async () => {
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
@@ -258,7 +258,7 @@ describe('RelayAgentHookServer', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': token
+          'X-MCode-Agent-Hook-Token': token
         },
         body: JSON.stringify({
           paneKey: 'tab-1:0',
@@ -279,17 +279,17 @@ describe('RelayAgentHookServer', () => {
     }
   })
 
-  it('exposes ORCA_AGENT_HOOK_* env vars after start', async () => {
+  it('exposes MCODE_AGENT_HOOK_* env vars after start', async () => {
     const forward = vi.fn()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
     await server.start()
     try {
       const env = server.buildPtyEnv()
-      expect(env.ORCA_AGENT_HOOK_PORT).toMatch(/^\d+$/)
-      expect(env.ORCA_AGENT_HOOK_TOKEN).toBeTruthy()
-      expect(env.ORCA_AGENT_HOOK_ENV).toBe('remote')
-      expect(env.ORCA_AGENT_HOOK_VERSION).toBe('1')
-      expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeTruthy()
+      expect(env.MCODE_AGENT_HOOK_PORT).toMatch(/^\d+$/)
+      expect(env.MCODE_AGENT_HOOK_TOKEN).toBeTruthy()
+      expect(env.MCODE_AGENT_HOOK_ENV).toBe('remote')
+      expect(env.MCODE_AGENT_HOOK_VERSION).toBe('1')
+      expect(env.MCODE_AGENT_HOOK_ENDPOINT).toBeTruthy()
     } finally {
       server.stop()
     }
@@ -300,9 +300,9 @@ describe('RelayAgentHookServer', () => {
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
     await server.start({ publishEndpoint: false })
     try {
-      expect(server.buildPtyEnv().ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
+      expect(server.buildPtyEnv().MCODE_AGENT_HOOK_ENDPOINT).toBeUndefined()
       expect(server.publishEndpointFile()).toBe(true)
-      expect(server.buildPtyEnv().ORCA_AGENT_HOOK_ENDPOINT).toBeTruthy()
+      expect(server.buildPtyEnv().MCODE_AGENT_HOOK_ENDPOINT).toBeTruthy()
     } finally {
       server.stop()
     }
@@ -320,7 +320,7 @@ describe('RelayAgentHookServer', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': token
+          'X-MCode-Agent-Hook-Token': token
         },
         body: JSON.stringify({
           paneKey: PANE_KEY,
@@ -334,7 +334,7 @@ describe('RelayAgentHookServer', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': token
+          'X-MCode-Agent-Hook-Token': token
         },
         body: JSON.stringify({
           paneKey: PANE_KEY,
@@ -382,7 +382,7 @@ describe('RelayAgentHookServer', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': token
+          'X-MCode-Agent-Hook-Token': token
         },
         body: JSON.stringify({
           paneKey: PANE_KEY,
@@ -396,7 +396,7 @@ describe('RelayAgentHookServer', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': token
+          'X-MCode-Agent-Hook-Token': token
         },
         body: JSON.stringify({
           paneKey: PANE_KEY,
@@ -438,7 +438,7 @@ describe('RelayAgentHookServer', () => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Orca-Agent-Hook-Token': token
+            'X-MCode-Agent-Hook-Token': token
           },
           body: JSON.stringify({
             paneKey,
@@ -494,7 +494,7 @@ describe('RelayAgentHookServer', () => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Orca-Agent-Hook-Token': token
+            'X-MCode-Agent-Hook-Token': token
           },
           body: JSON.stringify({
             paneKey: PANE_KEY,
@@ -543,7 +543,7 @@ describe('RelayAgentHookServer', () => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Orca-Agent-Hook-Token': token
+            'X-MCode-Agent-Hook-Token': token
           },
           body: JSON.stringify({
             paneKey: PANE_KEY,

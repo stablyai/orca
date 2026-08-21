@@ -96,7 +96,7 @@ export async function hashPluginTree(root: string): Promise<PluginTreeHashResult
     const hash = createHash('sha256')
     // Why: every record is length-framed so path/content delimiters inside a
     // plugin file cannot make two different trees share one hash preimage.
-    hash.update('orca-plugin-tree-v1\0')
+    hash.update('mcode-plugin-tree-v1\0')
     let totalBytes = 0
     for (const file of files) {
       totalBytes += file.size

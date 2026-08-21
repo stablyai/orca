@@ -82,7 +82,7 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
   // registry row the daemon 404s on, behind an inventory slow enough to consume
   // the sweep budget. Verification must still get far enough to prove absence.
   it('removes the reported wedged automation workspace without --force', async () => {
-    const worktreeId = 'repo-1::C:/Users/admin/orca/workspaces/repo/auto-review-run-28'
+    const worktreeId = 'repo-1::C:/Users/admin/mcode/workspaces/repo/auto-review-run-28'
     // Slow enough that a fixed 2s grace could not absorb it, but far enough from
     // the budget that the list-completion and timeout timers can't land in the
     // same tick — a 100ms margin here raced under parallel load.

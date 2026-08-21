@@ -19,16 +19,16 @@ describe('fish history session naming', () => {
   it('mints a session name that is a valid fish variable value', () => {
     // fish falls back to the shared default for anything that is not a valid
     // variable name, which would silently un-isolate the worktree.
-    expect(SESSION_A).toBe('orca_a1b2c3d4e5f60718')
+    expect(SESSION_A).toBe('mcode_a1b2c3d4e5f60718')
     expect(SESSION_A).toMatch(/^[A-Za-z_][A-Za-z0-9_]*$/)
   })
 
   it.each([
-    ['orca_deadbeef', true],
-    ['orca_', false],
+    ['mcode_deadbeef', true],
+    ['mcode_', false],
     ['fish_history', false],
-    ['orca_../../etc/passwd', false],
-    ['orca_DEADBEEF', false],
+    ['mcode_../../etc/passwd', false],
+    ['mcode_DEADBEEF', false],
     ['', false],
     [undefined, false],
     [42, false]
@@ -65,7 +65,7 @@ describe('fish history deletion', () => {
   let fishDir: string
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'orca-fish-history-'))
+    root = mkdtempSync(join(tmpdir(), 'mcode-fish-history-'))
     fishDir = join(root, 'fish')
     mkdirSync(fishDir, { recursive: true })
   })
@@ -123,7 +123,7 @@ describe('orphaned fish history sweep', () => {
   let fishDir: string
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'orca-fish-sweep-'))
+    root = mkdtempSync(join(tmpdir(), 'mcode-fish-sweep-'))
     fishDir = join(root, 'fish')
     mkdirSync(fishDir, { recursive: true })
   })
@@ -142,8 +142,8 @@ describe('orphaned fish history sweep', () => {
   })
 
   it("never touches the user's own history files", () => {
-    // The whole safety of the sweep rests on the orca_<hex>_ prefix.
-    const untouched = ['fish_history', 'work_history', 'orca_history', 'orca_nothex_history']
+    // The whole safety of the sweep rests on the mcode_<hex>_ prefix.
+    const untouched = ['fish_history', 'work_history', 'mcode_history', 'mcode_nothex_history']
     for (const name of untouched) {
       writeFileSync(join(fishDir, name), 'mine\n')
     }
@@ -199,14 +199,14 @@ describe('orphaned fish history sweep', () => {
 
 /**
  * A relay host keyed by its CLIENT's worktree ids shares one fish data dir with
- * any desktop Orca on the same machine, whose live set knows nothing of those
+ * any desktop MCode on the same machine, whose live set knows nothing of those
  * ids. The name is the only thing that keeps that sweep off remote history.
  */
 describe('relay fish history naming', () => {
   let relayRoot: string
 
   beforeEach(() => {
-    relayRoot = mkdtempSync(join(tmpdir(), 'orca-fish-relay-'))
+    relayRoot = mkdtempSync(join(tmpdir(), 'mcode-fish-relay-'))
   })
 
   afterEach(() => {

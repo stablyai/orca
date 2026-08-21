@@ -36,7 +36,7 @@ describe('observed skill git tree identity', () => {
   // directories, an executable, binary bytes, and the `z.txt` vs `z/` edge where
   // git's slash-append ordering diverges from a plain name sort.
   it('matches git write-tree over nesting, executables and the directory sort edge', async () => {
-    const base = await mkdtemp(join(tmpdir(), 'orca-skill-tree-sha-'))
+    const base = await mkdtemp(join(tmpdir(), 'mcode-skill-tree-sha-'))
     temporaryDirectories.push(base)
     const work = join(base, 'work')
     const repoShell = join(base, 'repo')

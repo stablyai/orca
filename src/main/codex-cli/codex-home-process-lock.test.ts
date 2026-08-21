@@ -111,13 +111,13 @@ describe('withCodexHomeProcessLock', () => {
 
   it('keys a stripped child env to the real default home, not ambient CODEX_HOME', () => {
     const previousCodexHome = process.env.CODEX_HOME
-    process.env.CODEX_HOME = '/nested-orca/managed-home'
+    process.env.CODEX_HOME = '/nested-mcode/managed-home'
     try {
       expect(resolveCodexHomeProcessLockKeyForSpawnEnv({ PATH: process.env.PATH })).toBe(
         resolveCodexHomeProcessLockKey(join(homedir(), '.codex'))
       )
       expect(resolveCodexHomeProcessLockKeyForSpawnEnv(undefined)).toBe(
-        resolveCodexHomeProcessLockKey('/nested-orca/managed-home')
+        resolveCodexHomeProcessLockKey('/nested-mcode/managed-home')
       )
     } finally {
       if (previousCodexHome === undefined) {

@@ -40,14 +40,14 @@ let container: HTMLDivElement | null = null
 function discoveredSkill(overrides: Partial<DiscoveredSkill>): DiscoveredSkill {
   return {
     id: 'skill-1',
-    name: 'orca-linear',
+    name: 'mcode-linear',
     description: null,
     providers: ['agent-skills'],
     sourceKind: 'home',
     sourceLabel: 'Agent skills home',
     rootPath: '/Users/test/.agents/skills',
-    directoryPath: '/Users/test/.agents/skills/orca-linear',
-    skillFilePath: '/Users/test/.agents/skills/orca-linear/SKILL.md',
+    directoryPath: '/Users/test/.agents/skills/mcode-linear',
+    skillFilePath: '/Users/test/.agents/skills/mcode-linear/SKILL.md',
     installed: true,
     updatedAt: null,
     ...overrides
@@ -110,13 +110,13 @@ describe('LinearAgentSkillInstallCta', () => {
     const rendered = await renderCta()
 
     expect(rendered.textContent).toContain('Agent skill:')
-    expect(rendered.textContent).toContain('orca-linear')
+    expect(rendered.textContent).toContain('mcode-linear')
     expect(rendered.textContent).toContain('Not installed')
     expect(rendered.textContent).toContain(
       'Full guided setup (connect + skill + visibility) is under Settings → Task Sources.'
     )
     expect(rendered.textContent).toContain(
-      'npx skills add https://github.com/stablyai/orca --skill orca-linear --global'
+      'npx skills add https://github.com/mcode-ide/mcode --skill mcode-linear --global'
     )
   })
 
@@ -130,20 +130,20 @@ describe('LinearAgentSkillInstallCta', () => {
     })
 
     expect(mocks.clipboardWrite).toHaveBeenCalledWith(
-      'npx skills add https://github.com/stablyai/orca --skill orca-linear --global'
+      'npx skills add https://github.com/mcode-ide/mcode --skill mcode-linear --global'
     )
     expect(mocks.toastSuccess).toHaveBeenCalled()
   })
 
   it('shows a subtle confirmation and the update command when installed', async () => {
     mocks.skillState.installed = true
-    mocks.skillState.skills = [discoveredSkill({ name: 'orca-linear' })]
+    mocks.skillState.skills = [discoveredSkill({ name: 'mcode-linear' })]
 
     const rendered = await renderCta()
 
     expect(rendered.textContent).toContain('Installed')
     expect(rendered.textContent).toContain('Agent skill installed. To update it, run:')
-    expect(rendered.textContent).toContain('npx skills update orca-linear --global')
+    expect(rendered.textContent).toContain('npx skills update mcode-linear --global')
     expect(rendered.textContent).not.toContain('Not installed')
   })
 

@@ -124,7 +124,7 @@ describe('createIpcPtyTransport', () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawnMock = vi
       .fn()
-      .mockRejectedValue(new Error('No PTY provider for connection runtime-ssh-orca-1'))
+      .mockRejectedValue(new Error('No PTY provider for connection runtime-ssh-mcode-1'))
     ;(globalThis as { window: typeof window }).window = {
       ...originalWindow,
       api: {
@@ -143,7 +143,7 @@ describe('createIpcPtyTransport', () => {
     } as unknown as typeof window
 
     const onError = vi.fn()
-    await createIpcPtyTransport({ connectionId: 'runtime-ssh-orca-1' }).connect({
+    await createIpcPtyTransport({ connectionId: 'runtime-ssh-mcode-1' }).connect({
       url: '',
       callbacks: { onError }
     })

@@ -19,7 +19,7 @@
  * green B proves renderer parking cannot be the boundary that breaks the stream.
  */
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
+import { MCodeRuntimeService } from '../../src/main/runtime/mcode-runtime'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import type { RpcRequest } from '../../src/main/runtime/rpc/core'
 import { TERMINAL_METHODS } from '../../src/main/runtime/rpc/methods/terminal'
@@ -203,7 +203,7 @@ type RuntimeInternals = {
   issuePtyHandle: (pty: unknown) => string
 }
 
-function internals(runtime: OrcaRuntimeService): RuntimeInternals {
+function internals(runtime: MCodeRuntimeService): RuntimeInternals {
   return runtime as unknown as RuntimeInternals
 }
 
@@ -216,7 +216,7 @@ function createHostProvider() {
   const session = { cols: 120, rows: 40, attached: true, screen: '' }
   const attachCalls: string[] = []
   const writes: [string, string][] = []
-  let runtime: OrcaRuntimeService | null = null
+  let runtime: MCodeRuntimeService | null = null
   const controller = {
     write: (id: string, text: string) => {
       writes.push([id, text])
@@ -251,7 +251,7 @@ function createHostProvider() {
     attachCalls,
     writes,
     session,
-    bind(target: OrcaRuntimeService) {
+    bind(target: MCodeRuntimeService) {
       runtime = target
     },
     emitData(data: string): boolean {
@@ -265,7 +265,7 @@ function createHostProvider() {
   }
 }
 
-function startMultiplex(runtime: OrcaRuntimeService, connectionId: string) {
+function startMultiplex(runtime: MCodeRuntimeService, connectionId: string) {
   const messages: { result?: { type?: string; streamId?: number | null } }[] = []
   const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
   const handlers = new Map<
@@ -364,7 +364,7 @@ function errorFrames(harness: Harness): number {
 
 describe('STA-2854 B: remote subscriber survives a fully unmounted host renderer', () => {
   it('streams, accepts input, and re-subscribes with no host renderer pane at all', async () => {
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     const provider = createHostProvider()
     provider.bind(runtime)
     runtime.setPtyController(provider.controller as never)
@@ -423,7 +423,7 @@ describe('STA-2854 B: remote subscriber survives a fully unmounted host renderer
   })
 
   it('counterfactual: losing every subscriber is what clears the thinning veto', async () => {
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     const provider = createHostProvider()
     provider.bind(runtime)
     runtime.setPtyController(provider.controller as never)
@@ -463,7 +463,7 @@ describe('STA-2854 B: remote subscriber survives a fully unmounted host renderer
 
 describe('STA-2854 C: an unattached host PTY with no mountable renderer pane', () => {
   it('still streams to the remote subscriber without any renderer mount', async () => {
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     const provider = createHostProvider()
     // Parked/never-activated: no pane ever attached this daemon session, so the
     // provider is not emitting and only main can start it.

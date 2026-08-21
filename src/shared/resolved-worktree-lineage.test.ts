@@ -70,7 +70,7 @@ describe('projectResolvedWorktreeLineage', () => {
   it.each([
     ['repo', { repoId: 'other-repo' }, {}],
     ['known host', { hostId: 'local' as const }, { hostId: 'ssh:remote' as const }],
-    ['known project', { projectId: 'github:stablyai/orca' }, { projectId: 'github:other/project' }]
+    ['known project', { projectId: 'github:mcode-ide/mcode' }, { projectId: 'github:other/project' }]
   ])('rejects a %s boundary mismatch', (_label, childOverrides, parentOverrides) => {
     const boundedChild = worktree('child', 'child-instance', childOverrides)
     const boundedParent = worktree('parent', 'parent-instance', parentOverrides)
@@ -88,7 +88,7 @@ describe('projectResolvedWorktreeLineage', () => {
   it('accepts legacy records when only one side has host or project identity', () => {
     const legacyChild = worktree('child', 'child-instance', {
       hostId: 'local',
-      projectId: 'github:stablyai/orca'
+      projectId: 'github:mcode-ide/mcode'
     })
 
     const projected = projectResolvedWorktreeLineage([legacyChild, parent], {

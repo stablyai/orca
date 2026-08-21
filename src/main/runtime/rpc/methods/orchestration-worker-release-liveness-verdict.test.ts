@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
 import type { WorkerTerminalResourceRow } from '../../orchestration/worker-terminal-ownership'
 import { completeWorkerTerminalRelease } from './orchestration-worker-release-completion'
@@ -43,7 +43,7 @@ describe('orchestration worker release liveness verdict', () => {
       })),
       closeTerminal: vi.fn(async () => close),
       notifyMessageArrived: vi.fn()
-    } as unknown as OrcaRuntimeService
+    } as unknown as MCodeRuntimeService
     const markWorkerTerminalReleaseUnknown = vi.fn((_resourceId: string, releaseError: string) => ({
       ...resource,
       release_state: 'unknown',

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 const {
   callMock,
   runtimeClientConstructorMock,
-  serveOrcaAppMock,
+  serveMCodeAppMock,
   getDefaultUserDataPathMock,
   addEnvironmentFromPairingCodeMock,
   listEnvironmentsMock,
@@ -11,8 +11,8 @@ const {
 } = vi.hoisted(() => ({
   callMock: vi.fn(),
   runtimeClientConstructorMock: vi.fn(),
-  serveOrcaAppMock: vi.fn(),
-  getDefaultUserDataPathMock: vi.fn(() => '/tmp/orca-user-data'),
+  serveMCodeAppMock: vi.fn(),
+  getDefaultUserDataPathMock: vi.fn(() => '/tmp/mcode-user-data'),
   addEnvironmentFromPairingCodeMock: vi.fn(),
   listEnvironmentsMock: vi.fn(),
   spawnMock: vi.fn()
@@ -23,7 +23,7 @@ vi.mock('./runtime-client', async () => {
   return createRuntimeClientModuleMock({
     callMock,
     runtimeClientConstructorMock,
-    serveOrcaAppMock,
+    serveMCodeAppMock,
     getDefaultUserDataPathMock
   })
 })
@@ -44,10 +44,10 @@ import { main } from './index'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
 import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
 
-describe('orca cli worktree awareness', () => {
+describe('mcode cli worktree awareness', () => {
   useWorktreeAwarenessEnvironment({
     callMock,
-    serveOrcaAppMock,
+    serveMCodeAppMock,
     getDefaultUserDataPathMock,
     addEnvironmentFromPairingCodeMock,
     listEnvironmentsMock,
@@ -130,11 +130,11 @@ describe('orca cli worktree awareness', () => {
         setups: [
           {
             id: 'setup-local',
-            projectId: 'github:stablyai/orca',
+            projectId: 'github:mcode-ide/mcode',
             hostId: 'local',
             repoId: 'repo-local',
-            path: '/tmp/orca',
-            displayName: 'Orca',
+            path: '/tmp/mcode',
+            displayName: 'MCode',
             setupState: 'ready',
             setupMethod: 'legacy-repo',
             createdAt: 1,
@@ -142,11 +142,11 @@ describe('orca cli worktree awareness', () => {
           },
           {
             id: 'setup-gpu',
-            projectId: 'github:stablyai/orca',
+            projectId: 'github:mcode-ide/mcode',
             hostId: 'runtime:gpu',
             repoId: 'repo-gpu',
-            path: '/srv/orca',
-            displayName: 'Orca',
+            path: '/srv/mcode',
+            displayName: 'MCode',
             setupState: 'ready',
             setupMethod: 'legacy-repo',
             createdAt: 1,
@@ -173,7 +173,7 @@ describe('orca cli worktree awareness', () => {
         '--provider',
         'codex',
         '--project',
-        'github:stablyai/orca',
+        'github:mcode-ide/mcode',
         '--host',
         'runtime:gpu',
         '--json'
@@ -190,11 +190,11 @@ describe('orca cli worktree awareness', () => {
         repo: 'id:repo-gpu',
         runContext: {
           kind: 'workspace-run',
-          projectId: 'github:stablyai/orca',
+          projectId: 'github:mcode-ide/mcode',
           hostId: 'runtime:gpu',
           projectHostSetupId: 'setup-gpu',
           repoId: 'repo-gpu',
-          path: '/srv/orca'
+          path: '/srv/mcode'
         },
         workspace: undefined,
         workspaceMode: 'new_per_run'
@@ -209,11 +209,11 @@ describe('orca cli worktree awareness', () => {
         setups: [
           {
             id: 'setup-gpu',
-            projectId: 'github:stablyai/orca',
+            projectId: 'github:mcode-ide/mcode',
             hostId: 'runtime:gpu',
             repoId: 'repo-gpu',
-            path: '/srv/orca',
-            displayName: 'Orca',
+            path: '/srv/mcode',
+            displayName: 'MCode',
             setupState: 'ready',
             setupMethod: 'legacy-repo',
             createdAt: 1,
@@ -242,11 +242,11 @@ describe('orca cli worktree awareness', () => {
           repo: 'id:repo-gpu',
           runContext: {
             kind: 'workspace-run',
-            projectId: 'github:stablyai/orca',
+            projectId: 'github:mcode-ide/mcode',
             hostId: 'runtime:gpu',
             projectHostSetupId: 'setup-gpu',
             repoId: 'repo-gpu',
-            path: '/srv/orca'
+            path: '/srv/mcode'
           }
         })
       })

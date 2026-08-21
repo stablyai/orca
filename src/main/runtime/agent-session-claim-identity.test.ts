@@ -45,7 +45,7 @@ describe('agent session claim identity', () => {
   })
 
   it('canonicalizes Prime identity by its transcript path', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-prime-claim-'))
+    const dir = mkdtempSync(join(tmpdir(), 'mcode-prime-claim-'))
     const transcriptPath = join(dir, 'session.jsonl')
     try {
       writeFileSync(transcriptPath, '{}\n')

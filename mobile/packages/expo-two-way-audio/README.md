@@ -1,6 +1,6 @@
-# Orca Two Way Audio
+# MCode Two Way Audio
 
-Vendored Expo module for capturing and playing PCM audio data in the Orca mobile app (iOS and Android).
+Vendored Expo module for capturing and playing PCM audio data in the MCode mobile app (iOS and Android).
 
 The aim of the module is to facilitate creating real-time conversational apps. The following features are provided:
 
@@ -13,7 +13,7 @@ The aim of the module is to facilitate creating real-time conversational apps. T
 ## Installation
 
 ```
-npm i @orca/expo-two-way-audio
+npm i @mcode/expo-two-way-audio
 ```
 
 ## Usage
@@ -21,7 +21,7 @@ npm i @orca/expo-two-way-audio
 1. Request permissions for recording audio
 
    ```JSX
-   import {useMicrophonePermissions} from "@orca/expo-two-way-audio";
+   import {useMicrophonePermissions} from "@mcode/expo-two-way-audio";
 
    const [micPermission, requestMicPermission] = useMicrophonePermissions();
    console.log(micPermission);
@@ -73,7 +73,7 @@ npm i @orca/expo-two-way-audio
 
 ## Notes
 
-Some audio features of expo-two-way-audio like Acoustic Echo Cancelling, noise reduction or microphone modes (iOS) don't work on simulator. Run the Orca mobile app on a real device to test these features.
+Some audio features of expo-two-way-audio like Acoustic Echo Cancelling, noise reduction or microphone modes (iOS) don't work on simulator. Run the MCode mobile app on a real device to test these features.
 
 ```bash
 # iOS

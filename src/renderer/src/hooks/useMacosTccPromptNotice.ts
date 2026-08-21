@@ -14,7 +14,7 @@ import {
 
 /**
  * Shows the Full Disk Access hint after macOS raises a consent dialog naming
- * Orca (#9756). Users who never see one never see this.
+ * MCode (#9756). Users who never see one never see this.
  */
 export function useMacosTccPromptNotice(): void {
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
@@ -42,12 +42,12 @@ export function useMacosTccPromptNotice(): void {
       toast.warning(
         translate(
           'auto.hooks.useMacosTccPromptNotice.title',
-          'Seeing “Orca would like to access…” prompts?'
+          'Seeing “MCode would like to access…” prompts?'
         ),
         {
           description: translate(
             'auto.hooks.useMacosTccPromptNotice.description',
-            'Permission messages from macOS may appear when an agent or terminal tool running in Orca attempts to access protected files. Grant Full Disk Access in Settings to reduce these prompts.'
+            'Permission messages from macOS may appear when an agent or terminal tool running in MCode attempts to access protected files. Grant Full Disk Access in Settings to reduce these prompts.'
           ),
           duration: Infinity,
           onDismiss: acknowledge,

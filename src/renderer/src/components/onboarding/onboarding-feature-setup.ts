@@ -5,14 +5,14 @@ import type {
 } from '../../../../shared/computer-use-permissions-types'
 import {
   COMPUTER_USE_SKILL_NAME,
-  ORCA_LINEAR_SKILL_NAME,
-  ORCA_CLI_SKILL_NAME,
+  MCODE_LINEAR_SKILL_NAME,
+  MCODE_CLI_SKILL_NAME,
   ORCHESTRATION_SKILL_NAME,
   buildAgentFeatureSkillInstallCommand
 } from '@/lib/agent-feature-install-commands'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
 import { e2eConfig } from '@/lib/e2e-config'
-import { showOrcaCliRegistrationPromptToast } from '@/lib/agent-skill-cli-prerequisite'
+import { showMCodeCliRegistrationPromptToast } from '@/lib/agent-skill-cli-prerequisite'
 import type { ProjectAgentSkillRuntime } from '@/lib/project-skill-runtime'
 import type { OnboardingFeatureSetupRuntimeContext } from './onboarding-feature-setup-runtime'
 import {
@@ -55,10 +55,10 @@ const ONBOARDING_PROGRESS_FEATURE_SETUP_IDS: readonly OnboardingFeatureSetupId[]
 ]
 
 const FEATURE_SKILL_NAMES: Record<OnboardingFeatureSetupId, string> = {
-  browserUse: ORCA_CLI_SKILL_NAME,
+  browserUse: MCODE_CLI_SKILL_NAME,
   computerUse: COMPUTER_USE_SKILL_NAME,
   orchestration: ORCHESTRATION_SKILL_NAME,
-  linearTickets: ORCA_LINEAR_SKILL_NAME
+  linearTickets: MCODE_LINEAR_SKILL_NAME
 }
 
 const FEATURE_TELEMETRY_IDS: Record<
@@ -177,7 +177,7 @@ export function createOnboardingFeatureSetupDeps(
     return e2eDeps
   }
 
-  // Register `orca` on the same PATH used by the skill install (#12103).
+  // Register `mcode` on the same PATH used by the skill install (#12103).
   const wslDistroRequest =
     agentRuntime?.runtime === 'wsl' ? getWslCliDistroRequest(agentRuntime) : undefined
   const isWsl = agentRuntime?.runtime === 'wsl'
@@ -186,7 +186,7 @@ export function createOnboardingFeatureSetupDeps(
       isWsl
         ? window.api.cli.getWslInstallStatus(wslDistroRequest)
         : window.api.cli.getInstallStatus(),
-    showCliRegistrationPrompt: showOrcaCliRegistrationPromptToast,
+    showCliRegistrationPrompt: showMCodeCliRegistrationPromptToast,
     installCli: () =>
       isWsl ? window.api.cli.installWsl(wslDistroRequest) : window.api.cli.install(),
     writeClipboardText: (text) => window.api.ui.writeClipboardText(text),
@@ -247,13 +247,13 @@ export async function runOnboardingFeatureSetup(
     if (!status.supported) {
       warnings.push({
         featureId: 'cli',
-        message: status.detail ?? 'Orca CLI registration is not available on this platform.'
+        message: status.detail ?? 'MCode CLI registration is not available on this platform.'
       })
     } else if (status.pathConfigured === null) {
       // Why: an unknown registry read cannot safely drive a PATH read-modify-write.
       warnings.push({
         featureId: 'cli',
-        message: status.detail ?? 'Orca could not check your Windows user PATH.'
+        message: status.detail ?? 'MCode could not check your Windows user PATH.'
       })
     } else if (status.state !== 'installed' || status.pathConfigured === false) {
       await deps.showCliRegistrationPrompt?.()
@@ -262,7 +262,7 @@ export async function runOnboardingFeatureSetup(
       if (next.state !== 'installed') {
         warnings.push({
           featureId: 'cli',
-          message: next.detail ?? 'Orca CLI registration needs attention.'
+          message: next.detail ?? 'MCode CLI registration needs attention.'
         })
       } else if (next.pathConfigured !== true && next.detail) {
         warnings.push({ featureId: 'cli', message: next.detail })

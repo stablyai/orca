@@ -109,12 +109,12 @@ describe('getWorkItemDetails PR file viewed state', () => {
       number: 42,
       title: 'Review files',
       state: 'open',
-      url: 'https://github.com/stablyai/orca/pull/42',
+      url: 'https://github.com/mcode-ide/mcode/pull/42',
       labels: [],
       updatedAt: '2026-04-01T00:00:00Z',
       author: null
     })
-    getOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+    getOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'mcode' })
     getPRCommentsMock.mockResolvedValue([])
     getPRChecksMock.mockResolvedValue([])
     ghExecFileAsyncMock.mockImplementation((args: string[]) => {
@@ -147,7 +147,7 @@ describe('getWorkItemDetails PR file viewed state', () => {
         })
       }
       const endpoint = args.find((arg) => arg.startsWith('repos/')) ?? ''
-      if (endpoint === 'repos/stablyai/orca/pulls/42') {
+      if (endpoint === 'repos/mcode-ide/mcode/pulls/42') {
         return Promise.resolve({
           stdout: JSON.stringify({
             body: 'PR body',
@@ -156,7 +156,7 @@ describe('getWorkItemDetails PR file viewed state', () => {
           })
         })
       }
-      if (endpoint === 'repos/stablyai/orca/pulls/42/files?per_page=100') {
+      if (endpoint === 'repos/mcode-ide/mcode/pulls/42/files?per_page=100') {
         return Promise.resolve({
           stdout: JSON.stringify([
             {
@@ -194,7 +194,7 @@ describe('getWorkItemDetails PR file viewed state', () => {
       '/repo-root',
       42,
       'head-sha',
-      { owner: 'stablyai', repo: 'orca', host: 'github.com' },
+      { owner: 'stablyai', repo: 'mcode', host: 'github.com' },
       undefined,
       undefined
     )
@@ -224,12 +224,12 @@ describe('getWorkItemDetails PR file viewed state', () => {
       number: 42,
       title: 'Review files',
       state: 'open',
-      url: 'https://github.com/stablyai/orca/pull/42',
+      url: 'https://github.com/mcode-ide/mcode/pull/42',
       labels: [],
       updatedAt: '2026-04-01T00:00:00Z',
       author: null
     })
-    getOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+    getOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'mcode' })
     getPRCommentsMock.mockResolvedValue([])
     getPRChecksMock.mockRejectedValue(
       Object.assign(new Error('Command failed: gh pr checks 42'), {
@@ -261,7 +261,7 @@ describe('getWorkItemDetails PR file viewed state', () => {
         })
       }
       const endpoint = args.find((arg) => arg.startsWith('repos/')) ?? ''
-      if (endpoint === 'repos/stablyai/orca/pulls/42') {
+      if (endpoint === 'repos/mcode-ide/mcode/pulls/42') {
         return Promise.resolve({
           stdout: JSON.stringify({
             body: 'PR body',
@@ -270,7 +270,7 @@ describe('getWorkItemDetails PR file viewed state', () => {
           })
         })
       }
-      if (endpoint === 'repos/stablyai/orca/pulls/42/files?per_page=100') {
+      if (endpoint === 'repos/mcode-ide/mcode/pulls/42/files?per_page=100') {
         return Promise.resolve({ stdout: '[]' })
       }
       return Promise.reject(new Error(`unexpected gh call: ${args.join(' ')}`))

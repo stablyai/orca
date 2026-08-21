@@ -33,7 +33,7 @@ describe('selectedExplorerFolderRelativePath', () => {
       getAttribute: (name: string) => (name === 'data-selected-folder-relative-path' ? 'src' : null)
     } as Element
     const child = {
-      closest: (selector: string) => (selector === '[data-orca-explorer-shell]' ? shell : null)
+      closest: (selector: string) => (selector === '[data-mcode-explorer-shell]' ? shell : null)
     } as Element
 
     expect(selectedExplorerFolderRelativePath(child)).toBe('src')
@@ -44,7 +44,7 @@ describe('selectedExplorerFolderRelativePath', () => {
       getAttribute: (name: string) => (name === 'data-selected-folder-relative-path' ? '' : null)
     } as Element
     const child = {
-      closest: (selector: string) => (selector === '[data-orca-explorer-shell]' ? shell : null)
+      closest: (selector: string) => (selector === '[data-mcode-explorer-shell]' ? shell : null)
     } as Element
 
     expect(selectedExplorerFolderRelativePath(child)).toBe('')

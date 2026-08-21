@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { ORCHESTRATION_WORKER_READ_SOURCES } from '../../../../shared/orchestration-worker-output'
 import type { RuntimeTerminalInteractiveWait } from '../../../../shared/runtime-types'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { RemoteDispatchAttachmentRow } from '../../orchestration/types'
 import { defineMethod, type RpcMethod } from '../core'
@@ -195,7 +195,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS: RpcMethod[] = [
 ]
 
 function requireHomeAttachment(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   dispatchId: string,
   callerFingerprint: string | undefined
 ): RemoteDispatchAttachmentRow {
@@ -210,10 +210,10 @@ function requireHomeAttachment(
 }
 
 async function inspectRemoteAttachment(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   dispatchId: string
 ): Promise<{
-  terminal: Awaited<ReturnType<OrcaRuntimeService['showTerminal']>> | null
+  terminal: Awaited<ReturnType<MCodeRuntimeService['showTerminal']>> | null
   exact: boolean
   status: 'unattached' | 'missing' | 'identity_changed' | 'live' | 'exited' | 'unverifiable'
   /** Set with `unverifiable`; names what we lost contact with. */

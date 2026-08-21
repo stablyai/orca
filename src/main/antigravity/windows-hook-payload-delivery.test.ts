@@ -14,7 +14,7 @@ const { homedirMock } = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   app: {
-    getPath: () => '/tmp/orca-user-data'
+    getPath: () => '/tmp/mcode-user-data'
   }
 }))
 
@@ -34,7 +34,7 @@ import { getManagedScript } from './hook-script'
 // delayed expansion cmd eats it out of a percent-expanded curl argument, so bake one into
 // every value the script forwards rather than asserting the `setlocal` line alone.
 const PANE_KEY = 'tab-1:leaf-1!bang'
-const WORKTREE_ID = 'repo-1::C:\\Users\\alice\\orca\\feature!branch'
+const WORKTREE_ID = 'repo-1::C:\\Users\\alice\\mcode\\feature!branch'
 const HOOK_TOKEN = 'antigravity-payload-delivery-token'
 // Why: exercise the sizes and bytes a real hook carries — a multi-KB body crosses the pipe
 // in several chunks, and non-ASCII catches a launcher that recodes stdin through a code page.
@@ -73,7 +73,7 @@ async function startHookListener(): Promise<{
         paneKey: form.get('paneKey'),
         worktreeId: form.get('worktreeId'),
         hookEventName: form.get('hook_event_name'),
-        token: (req.headers['x-orca-agent-hook-token'] as string | undefined) ?? null,
+        token: (req.headers['x-mcode-agent-hook-token'] as string | undefined) ?? null,
         contentType: (req.headers['content-type'] as string | undefined) ?? null
       })
       res.writeHead(200, { 'content-type': 'application/json' })
@@ -94,7 +94,7 @@ type HookRun = { exitCode: number | null; stdout: string; stderr: string; timedO
 function runWrapper(
   wrapperPath: string,
   env: NodeJS.ProcessEnv,
-  // Why: `null` abandons stdin instead of closing it — the shape a caller outside an Orca
+  // Why: `null` abandons stdin instead of closing it — the shape a caller outside an MCode
   // pane produces, and the only way to prove the env guard exits before reading (#11549).
   stdinPayload: string | null = PAYLOAD
 ): Promise<HookRun> {
@@ -139,7 +139,7 @@ function runWrapper(
 
 function hookEnvironment(extra: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const base = Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => !key.startsWith('ORCA_'))
+    Object.entries(process.env).filter(([key]) => !key.startsWith('MCODE_'))
   )
   return { ...base, ...extra }
 }
@@ -160,8 +160,8 @@ describe('Antigravity Windows hook post command', () => {
 
     expect(script).not.toMatch(/powershell/i)
     expect(script).toContain('"%SystemRoot%\\System32\\curl.exe" -sS -X POST')
-    expect(script).toContain('http://127.0.0.1:%ORCA_AGENT_HOOK_PORT%/hook/antigravity')
-    expect(script).toContain('--data-urlencode "hook_event_name=%ORCA_ANTIGRAVITY_EVENT%"')
+    expect(script).toContain('http://127.0.0.1:%MCODE_AGENT_HOOK_PORT%/hook/antigravity')
+    expect(script).toContain('--data-urlencode "hook_event_name=%MCODE_ANTIGRAVITY_EVENT%"')
     // Why: keep the payload off the command line so multi-KB tool output cannot trip an
     // EDR oversized-command-line rule.
     expect(script).toContain('--data-urlencode "payload@-"')
@@ -185,11 +185,11 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
   })
 
   it('delivers every event wrapper payload to the listener without spawning PowerShell', async () => {
-    home = mkdtempSync(join(tmpdir(), 'orca-antigravity-hook-'))
+    home = mkdtempSync(join(tmpdir(), 'mcode-antigravity-hook-'))
     homedirMock.mockReturnValue(home)
     expect(new AntigravityHookService().install().state).toBe('installed')
 
-    const hooksDir = join(home, '.orca', 'agent-hooks')
+    const hooksDir = join(home, '.mcode', 'agent-hooks')
     const coreScript = readFileSync(join(hooksDir, 'antigravity-hook.cmd'), 'utf8')
     expect(coreScript).not.toMatch(/powershell/i)
 
@@ -198,10 +198,10 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
     const env = hookEnvironment({
       USERPROFILE: home,
       HOME: home,
-      ORCA_AGENT_HOOK_PORT: String(listener.port),
-      ORCA_AGENT_HOOK_TOKEN: HOOK_TOKEN,
-      ORCA_PANE_KEY: PANE_KEY,
-      ORCA_WORKTREE_ID: WORKTREE_ID
+      MCODE_AGENT_HOOK_PORT: String(listener.port),
+      MCODE_AGENT_HOOK_TOKEN: HOOK_TOKEN,
+      MCODE_PANE_KEY: PANE_KEY,
+      MCODE_WORKTREE_ID: WORKTREE_ID
     })
 
     for (const event of ANTIGRAVITY_EVENTS) {
@@ -237,20 +237,20 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
   // `{}` before posting; curl forwards the empty body, so prove the post still happens — the
   // listener's matching allowance is covered in agent-hook-listener-antigravity.test.ts.
   it('still posts a status event when the agent supplies no payload', async () => {
-    home = mkdtempSync(join(tmpdir(), 'orca-antigravity-hook-'))
+    home = mkdtempSync(join(tmpdir(), 'mcode-antigravity-hook-'))
     homedirMock.mockReturnValue(home)
     expect(new AntigravityHookService().install().state).toBe('installed')
 
     const listener = await startHookListener()
     server = listener.server
     const result = await runWrapper(
-      join(home, '.orca', 'agent-hooks', 'antigravity-pre-invocation.cmd'),
+      join(home, '.mcode', 'agent-hooks', 'antigravity-pre-invocation.cmd'),
       hookEnvironment({
         USERPROFILE: home,
         HOME: home,
-        ORCA_AGENT_HOOK_PORT: String(listener.port),
-        ORCA_AGENT_HOOK_TOKEN: HOOK_TOKEN,
-        ORCA_PANE_KEY: PANE_KEY
+        MCODE_AGENT_HOOK_PORT: String(listener.port),
+        MCODE_AGENT_HOOK_TOKEN: HOOK_TOKEN,
+        MCODE_PANE_KEY: PANE_KEY
       }),
       ''
     )
@@ -265,16 +265,16 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
   }, 30_000)
 
   it('exits without reading stdin when the pane env is missing', async () => {
-    home = mkdtempSync(join(tmpdir(), 'orca-antigravity-hook-'))
+    home = mkdtempSync(join(tmpdir(), 'mcode-antigravity-hook-'))
     homedirMock.mockReturnValue(home)
     expect(new AntigravityHookService().install().state).toBe('installed')
 
     const listener = await startHookListener()
     server = listener.server
-    // Why (#11549): outside an Orca pane the caller may abandon stdin rather than close it,
+    // Why (#11549): outside an MCode pane the caller may abandon stdin rather than close it,
     // so the guard must exit before the read — otherwise the console lingers indefinitely.
     const result = await runWrapper(
-      join(home, '.orca', 'agent-hooks', 'antigravity-pre-tool-use.cmd'),
+      join(home, '.mcode', 'agent-hooks', 'antigravity-pre-tool-use.cmd'),
       hookEnvironment({ USERPROFILE: home, HOME: home }),
       null
     )

@@ -25,7 +25,7 @@ const WORKING_CHILD: AgentSubagentSnapshot = {
 let dir: string
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'orca-restored-subagent-'))
+  dir = mkdtempSync(join(tmpdir(), 'mcode-restored-subagent-'))
 })
 
 afterEach(() => {
@@ -35,7 +35,7 @@ afterEach(() => {
 
 /** Persist a pane whose lead has finished but whose roster still holds a working
  *  child, then restart into a fresh server — the shape a machine sleep leaves
- *  behind when the child's SubagentStop is lost while Orca is down. */
+ *  behind when the child's SubagentStop is lost while MCode is down. */
 async function restartWithInFlightSubagent(options?: {
   connectionId?: string
   state?: 'working' | 'waiting'

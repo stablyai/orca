@@ -3,7 +3,7 @@ export function isWebClientLocation(): boolean {
     return false
   }
   return (
-    Boolean((window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__) ||
+    Boolean((window as unknown as { __MCODE_WEB_CLIENT__?: boolean }).__MCODE_WEB_CLIENT__) ||
     window.location.pathname.endsWith('/web-index.html')
   )
 }

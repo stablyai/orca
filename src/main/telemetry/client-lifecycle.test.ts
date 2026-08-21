@@ -129,7 +129,7 @@ describe('persistBannerAcknowledgeWithoutEmitting()', () => {
 // posthog.capture(telemetry_opted_out) on the Turn-off path would be dropped.
 describe('shouldOptOutSdkAtInit()', () => {
   it('opts out the SDK for every disabled-reason', () => {
-    for (const reason of ['user_opt_out', 'ci', 'do_not_track', 'orca_disabled'] as const) {
+    for (const reason of ['user_opt_out', 'ci', 'do_not_track', 'mcode_disabled'] as const) {
       expect(shouldOptOutSdkAtInit({ effective: 'disabled', reason })).toBe(true)
     }
   })

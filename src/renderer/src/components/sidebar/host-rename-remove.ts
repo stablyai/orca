@@ -43,7 +43,7 @@ export type HostRemovalTarget =
   | null
 
 /** Resolves how a host should be removed. SSH targets are removed inline via the
- *  ssh API; runtime environments deep-link into the Orca servers pane because
+ *  ssh API; runtime environments deep-link into the MCode servers pane because
  *  their removal needs active-environment/error context that lives there. */
 export function resolveHostRemoval(hostId: ExecutionHostId): HostRemovalTarget {
   const parsed = parseExecutionHostId(hostId)

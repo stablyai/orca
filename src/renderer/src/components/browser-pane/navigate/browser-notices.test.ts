@@ -18,14 +18,14 @@ describe('browser notice formatting', () => {
         permission: 'media',
         origin: 'https://example.com'
       })
-    ).toBe('https://example.com asked for camera or microphone access, and Orca denied it.')
+    ).toBe('https://example.com asked for camera or microphone access, and MCode denied it.')
     expect(
       formatPermissionNotice({
         browserPageId: 'browser-1',
         permission: 'geolocation',
         origin: 'unknown'
       })
-    ).toBe('this page asked for your location, and Orca denied it.')
+    ).toBe('this page asked for your location, and MCode denied it.')
   })
 
   it('names the storage permission in words rather than its raw token', () => {
@@ -36,7 +36,7 @@ describe('browser notice formatting', () => {
     })
     expect(notice).not.toContain('top-level-storage-access')
     expect(notice).toBe(
-      'https://example.com asked for cookie access on behalf of an embedded site, and Orca denied it.'
+      'https://example.com asked for cookie access on behalf of an embedded site, and MCode denied it.'
     )
   })
 
@@ -46,7 +46,7 @@ describe('browser notice formatting', () => {
     ['display-capture', 'permission to capture your screen'],
     ['window-management', 'screen information and multi-screen window placement'],
     ['keyboardLock', 'permission to capture keyboard input'],
-    ['openExternal', 'permission to open a link outside Orca'],
+    ['openExternal', 'permission to open a link outside MCode'],
     ['fileSystem', 'access to your files or folders'],
     ['hid', 'access to a connected human interface device'],
     ['usb', 'access to a USB device'],
@@ -62,7 +62,7 @@ describe('browser notice formatting', () => {
         permission,
         origin: 'https://example.com'
       })
-    ).toBe(`https://example.com asked for ${description}, and Orca denied it.`)
+    ).toBe(`https://example.com asked for ${description}, and MCode denied it.`)
   })
 
   // Pin the raw-token fallback for permissions Chromium adds later.
@@ -73,7 +73,7 @@ describe('browser notice formatting', () => {
         permission: 'some-future-permission',
         origin: 'https://example.com'
       })
-    ).toBe('https://example.com asked for some-future-permission, and Orca denied it.')
+    ).toBe('https://example.com asked for some-future-permission, and MCode denied it.')
   })
 
   it('formats popup outcomes', () => {
@@ -81,9 +81,9 @@ describe('browser notice formatting', () => {
       formatPopupNotice({
         browserPageId: 'browser-1',
         origin: 'https://example.com',
-        action: 'opened-in-orca'
+        action: 'opened-in-mcode'
       })
-    ).toBe('https://example.com opened a new page in Orca.')
+    ).toBe('https://example.com opened a new page in MCode.')
 
     expect(
       formatPopupNotice({
@@ -99,7 +99,7 @@ describe('browser notice formatting', () => {
         origin: 'unknown',
         action: 'blocked'
       })
-    ).toBe('A site tried to open a popup Orca does not support here.')
+    ).toBe('A site tried to open a popup MCode does not support here.')
   })
 
   it('formats download completion and byte counts', () => {
@@ -201,10 +201,10 @@ describe('browser notice formatting', () => {
       "The certificate for localhost:3443 isn't valid at the current date and time."
     )
     expect(formatLoadFailureDescription(loadError(-202), meta)).toBe(
-      "Orca doesn't trust the authority that issued the certificate for localhost:3443."
+      "MCode doesn't trust the authority that issued the certificate for localhost:3443."
     )
     expect(formatLoadFailureDescription(loadError(-208), meta)).toBe(
-      "Orca couldn't verify the certificate for localhost:3443."
+      "MCode couldn't verify the certificate for localhost:3443."
     )
     expect(isCertificateLoadError(loadError(-219))).toBe(true)
     expect(isCertificateLoadError(loadError(-215))).toBe(false)

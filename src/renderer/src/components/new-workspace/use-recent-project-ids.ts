@@ -5,7 +5,7 @@ import { NEW_WORKSPACE_PROJECT_GROUP_OPTION_PREFIX } from '@/lib/new-workspace-p
 
 /**
  * Most-recently-used project option ids, newest first, derived from when the
- * user last created a workspace in each project. Orca stores no explicit
+ * user last created a workspace in each project. MCode stores no explicit
  * per-project recency, and workspace creation is exactly the action this picker
  * is about to repeat, so it's the honest proxy rather than a new store field.
  */

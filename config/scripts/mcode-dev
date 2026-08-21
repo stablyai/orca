@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Dev CLI wrapper — uses a separate userData path to avoid clobbering production MCode data.
+set -euo pipefail
+
+# Resolve through symlinks so this works when called via /usr/local/bin/mcode-dev
+SOURCE="$0"
+while [ -L "$SOURCE" ]; do
+  DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd "$(dirname "$SOURCE")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+CLI_ENTRY="$REPO_ROOT/out/cli/index.js"
+
+if [ ! -f "$CLI_ENTRY" ]; then
+  echo "mcode-dev: CLI not built yet. Run 'pnpm run build:cli' first." >&2
+  exit 1
+fi
+
+case "$(uname -s)" in
+  Darwin)       default_data="$HOME/Library/Application Support/mcode-dev" ;;
+  MINGW*|MSYS*) default_data="${APPDATA:-$HOME/AppData/Roaming}/mcode-dev" ;;
+  *)            default_data="${XDG_CONFIG_HOME:-$HOME/.config}/mcode-dev" ;;
+esac
+
+export MCODE_USER_DATA_PATH="${MCODE_DEV_USER_DATA_PATH:-$default_data}"
+electron_executable="$REPO_ROOT/node_modules/.bin/electron"
+case "$(uname -s)" in
+  MINGW*|MSYS*) electron_executable="$REPO_ROOT/node_modules/electron/dist/electron.exe" ;;
+esac
+if [ -z "${MCODE_APP_EXECUTABLE:-}" ] && [ -x "$electron_executable" ]; then
+  export MCODE_APP_EXECUTABLE="$electron_executable"
+  export MCODE_APP_EXECUTABLE_NEEDS_APP_ROOT=1
+fi
+exec node "$CLI_ENTRY" "$@"

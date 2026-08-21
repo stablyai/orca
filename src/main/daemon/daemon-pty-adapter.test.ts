@@ -368,7 +368,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await new Promise((resolve) => setTimeout(resolve, 350))
       expect(lastSubprocess.write).not.toHaveBeenCalled()
 
-      lastSubprocess._simulateData('\x1b]777;orca-shell-ready\x07')
+      lastSubprocess._simulateData('\x1b]777;mcode-shell-ready\x07')
       lastSubprocess._simulateData('\r\nuser@host $ ')
 
       await waitFor(() => vi.mocked(lastSubprocess.write).mock.calls.length > 0)

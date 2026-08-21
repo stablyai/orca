@@ -12,16 +12,16 @@ import { hashPluginTree } from './plugin-content-hash'
 
 const roots: string[] = []
 const services: PluginService[] = []
-const pluginKey = 'orca-samples.demo'
+const pluginKey = 'mcode-samples.demo'
 
 function manifest(options: { main?: string; capabilities?: PluginManifest['capabilities'] } = {}) {
   return pluginManifestSchema.parse({
     manifestVersion: 1,
     id: 'demo',
-    publisher: 'orca-samples',
+    publisher: 'mcode-samples',
     name: 'Demo',
     version: '1.0.0',
-    engines: { orca: '>=1.0.0' },
+    engines: { mcode: '>=1.0.0' },
     pluginApi: 1,
     main: options.main ?? 'worker.js',
     contributes: {
@@ -34,9 +34,9 @@ function manifest(options: { main?: string; capabilities?: PluginManifest['capab
 }
 
 async function pluginRoot(pluginManifest = manifest()): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-plugin-reconcile-'))
+  const root = await mkdtemp(join(tmpdir(), 'mcode-plugin-reconcile-'))
   roots.push(root)
-  await writeFile(join(root, 'orca-plugin.json'), JSON.stringify(pluginManifest))
+  await writeFile(join(root, 'mcode-plugin.json'), JSON.stringify(pluginManifest))
   await writeFile(join(root, 'worker.js'), 'export default async function () {}')
   await writeFile(join(root, 'worker-v2.js'), 'export default async function () {}')
   await writeFile(join(root, 'panel.html'), '<h1>Panel</h1>')
@@ -77,7 +77,7 @@ function createHarness(root: string) {
     getDevPluginPaths: () => devPaths,
     getPluginKillListEntry: (key) =>
       killed && key === pluginKey
-        ? { pluginKey, reason: 'Security incident', advisoryUrl: 'https://orca.example/advisory' }
+        ? { pluginKey, reason: 'Security incident', advisoryUrl: 'https://mcode.example/advisory' }
         : null,
     workerFactory: factory
   })
@@ -118,10 +118,10 @@ describe('PluginService worker reconciliation', () => {
       pluginManifestSchema.parse({
         manifestVersion: 1,
         id,
-        publisher: 'orca-samples',
+        publisher: 'mcode-samples',
         name: id,
         version: '1.0.0',
-        engines: { orca: '>=1.0.0' },
+        engines: { mcode: '>=1.0.0' },
         pluginApi: 1,
         main: 'worker.js',
         contributes: {
@@ -149,8 +149,8 @@ describe('PluginService worker reconciliation', () => {
       isPluginSystemEnabled: () => true,
       getDisabledPlugins: () => [],
       getPluginConsents: () => ({
-        'orca-samples.first': fingerprintPluginConsent(firstManifest, firstHash.hash),
-        'orca-samples.second': fingerprintPluginConsent(secondManifest, secondHash.hash)
+        'mcode-samples.first': fingerprintPluginConsent(firstManifest, firstHash.hash),
+        'mcode-samples.second': fingerprintPluginConsent(secondManifest, secondHash.hash)
       }),
       getDevPluginPaths: () => [firstRoot, secondRoot],
       getKeybindings: () => keybindings,
@@ -160,10 +160,10 @@ describe('PluginService worker reconciliation', () => {
 
     await service.initialize()
 
-    expect(service.activationError('orca-samples.first')).toContain('conflicts')
-    expect(service.getGrantedCapabilities('orca-samples.first')).toBeNull()
-    await expect(service.invokeCommand('orca-samples.first', 'run')).rejects.toThrow('not enabled')
-    await expect(service.panels.readEntry('orca-samples.first', 'panel')).resolves.toBeNull()
+    expect(service.activationError('mcode-samples.first')).toContain('conflicts')
+    expect(service.getGrantedCapabilities('mcode-samples.first')).toBeNull()
+    await expect(service.invokeCommand('mcode-samples.first', 'run')).rejects.toThrow('not enabled')
+    await expect(service.panels.readEntry('mcode-samples.first', 'panel')).resolves.toBeNull()
     service.emitEvent('worktree.created', {
       worktreeId: 'worktree-1',
       path: '/repo',
@@ -172,14 +172,14 @@ describe('PluginService worker reconciliation', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(factory).not.toHaveBeenCalled()
 
-    keybindings = { 'plugin:orca-samples.first/run': ['Mod+Shift+T'] }
+    keybindings = { 'plugin:mcode-samples.first/run': ['Mod+Shift+T'] }
     await service.reconcileActivationState()
 
-    expect(service.activationError('orca-samples.first')).toBeNull()
-    await expect(service.panels.readEntry('orca-samples.first', 'panel')).resolves.toMatchObject({
+    expect(service.activationError('mcode-samples.first')).toBeNull()
+    await expect(service.panels.readEntry('mcode-samples.first', 'panel')).resolves.toMatchObject({
       html: expect.stringContaining('<h1>Panel</h1>')
     })
-    await expect(service.invokeCommand('orca-samples.first', 'run')).resolves.toBeNull()
+    await expect(service.invokeCommand('mcode-samples.first', 'run')).resolves.toBeNull()
     expect(factory).toHaveBeenCalledOnce()
   })
 
@@ -187,10 +187,10 @@ describe('PluginService worker reconciliation', () => {
     const aliasManifest = pluginManifestSchema.parse({
       manifestVersion: 1,
       id: 'demo',
-      publisher: 'orca-samples',
+      publisher: 'mcode-samples',
       name: 'Demo',
       version: '1.0.0',
-      engines: { orca: '>=1.0.0' },
+      engines: { mcode: '>=1.0.0' },
       pluginApi: 1,
       contributes: {
         commands: [{ id: 'tasks', title: 'Tasks', action: 'view.tasks' }]
@@ -288,7 +288,7 @@ describe('PluginService worker reconciliation', () => {
     const harness = createHarness(root)
     await activate(harness.service)
     await writeFile(
-      join(root, 'orca-plugin.json'),
+      join(root, 'mcode-plugin.json'),
       JSON.stringify(manifest({ capabilities: [{ kind: 'storage' }] }))
     )
 
@@ -305,7 +305,7 @@ describe('PluginService worker reconciliation', () => {
     const harness = createHarness(root)
     await activate(harness.service)
     await writeFile(
-      join(root, 'orca-plugin.json'),
+      join(root, 'mcode-plugin.json'),
       JSON.stringify(manifest({ main: 'worker-v2.js' }))
     )
 
@@ -346,7 +346,7 @@ describe('PluginService worker reconciliation', () => {
     services.push(service)
     await activate(service)
     await writeFile(
-      join(root, 'orca-plugin.json'),
+      join(root, 'mcode-plugin.json'),
       JSON.stringify(manifest({ main: 'worker-v2.js' }))
     )
 

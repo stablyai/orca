@@ -19,7 +19,7 @@ export async function configureGoldenStubAgent(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const store = window.__store
     if (!store) {
-      throw new Error('Orca store is unavailable')
+      throw new Error('MCode store is unavailable')
     }
     await store.getState().updateSettings({
       defaultTuiAgent: 'codex',

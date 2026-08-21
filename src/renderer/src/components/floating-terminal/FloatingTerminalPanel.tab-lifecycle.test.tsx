@@ -198,7 +198,7 @@ describe('FloatingTerminalPanel close behavior', () => {
           canGoForward: false,
           loadError: null,
           sessionProfileId: 'profile-1',
-          sessionPartition: 'persist:orca-browser-session-profile-1',
+          sessionPartition: 'persist:mcode-browser-session-profile-1',
           createdAt: 1
         }
       ]
@@ -230,7 +230,7 @@ describe('FloatingTerminalPanel close behavior', () => {
       {
         title: 'Example',
         sessionProfileId: 'profile-1',
-        sessionPartition: 'persist:orca-browser-session-profile-1',
+        sessionPartition: 'persist:mcode-browser-session-profile-1',
         targetGroupId: 'floating-group',
         browserRuntimeEnvironmentId: null
       }

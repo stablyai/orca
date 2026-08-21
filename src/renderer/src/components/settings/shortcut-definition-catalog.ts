@@ -42,7 +42,7 @@ export function buildShortcutDefinitionCatalog(options: {
     options.keybindings,
     {
       ignoredActionIds: ignoredConflictActionIds,
-      // Plugin defaults are external additions to Orca's conflict-free static
+      // Plugin defaults are external additions to MCode's conflict-free static
       // registry, so surface their collisions even before the user customizes one.
       relevantActionIds: pluginDefinitions.map((definition) => definition.id)
     }

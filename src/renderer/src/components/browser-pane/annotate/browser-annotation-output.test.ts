@@ -83,7 +83,7 @@ describe('formatBrowserAnnotationsAsMarkdown', () => {
 
     expect(markdown).toContain('## Design Feedback: /pricing')
     expect(markdown).toContain('**Browser tab id:** page-1')
-    expect(markdown).not.toContain('Orca CLI')
+    expect(markdown).not.toContain('MCode CLI')
     expect(markdown).not.toContain('--page page-1')
     expect(markdown).not.toContain('Page Feedback')
     expect(markdown).toContain('**Selector:** `main.pricing > button.primary`')

@@ -196,7 +196,7 @@ function remoteCodexSources(
       remoteHome,
       '.local',
       'share',
-      'orca',
+      'mcode',
       'codex-runtime-home',
       'home'
     )

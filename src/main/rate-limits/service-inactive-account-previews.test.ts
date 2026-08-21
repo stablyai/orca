@@ -121,7 +121,7 @@ describe('RateLimitService', () => {
   it('passes WSL Codex managed homes into inactive account rate-limit fetches', async () => {
     const service = new RateLimitService()
     const wslCodexHome =
-      '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
+      '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\mcode\\codex-accounts\\a\\home'
     service.setInactiveCodexAccountsResolver(() => [
       inactiveCodexAccount('account-1', wslCodexHome)
     ])

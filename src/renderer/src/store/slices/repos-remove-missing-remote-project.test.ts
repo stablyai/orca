@@ -1,5 +1,5 @@
 /**
- * #11994: a project deleted on the paired Orca host stayed in the client's sidebar and
+ * #11994: a project deleted on the paired MCode host stayed in the client's sidebar and
  * could not be removed there. `repo.rm` answers `repo_not_found` (it is already gone on
  * the host) and `removeProject` wrapped its whole body in one try/catch, so the rejection
  * aborted the local purge before the `set()` — the ghost row survived and nothing was

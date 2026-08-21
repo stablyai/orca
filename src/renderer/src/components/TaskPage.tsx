@@ -280,10 +280,10 @@ import {
 import {
   collectLinkedLinearIssueRefsFromWorktrees,
   filterLinearIssuesBySearchQuery,
-  filterLinearIssuesForInOrcaWorkspace,
+  filterLinearIssuesForInMCodeWorkspace,
   linkedLinearIssueRefsSignature,
   readLinkedLinearIssuesWithLimit
-} from '@/components/task-page-linear-in-orca-issues'
+} from '@/components/task-page-linear-in-mcode-issues'
 import {
   linearIssueAttributeFilterSignature,
   type LinearIssueAttributeFilter
@@ -5285,7 +5285,7 @@ export default function TaskPage(): React.JSX.Element {
     () => buildLinearIssueWorkspaceAttachmentIndex(linearAttachmentWorkspaces),
     [linearAttachmentWorkspaces]
   )
-  const inOrcaLinkedLinearRefs = useMemo(
+  const inMCodeLinkedLinearRefs = useMemo(
     () =>
       collectLinkedLinearIssueRefsFromWorktrees(linearAttachmentWorkspaces, {
         workspaceId: selectedLinearWorkspaceId,
@@ -5293,24 +5293,24 @@ export default function TaskPage(): React.JSX.Element {
       }),
     [linearAttachmentWorkspaces, linearStatus.workspaces, selectedLinearWorkspaceId]
   )
-  const inOrcaLinkedLinearRefsSignature = useMemo(
-    () => linkedLinearIssueRefsSignature(inOrcaLinkedLinearRefs),
-    [inOrcaLinkedLinearRefs]
+  const inMCodeLinkedLinearRefsSignature = useMemo(
+    () => linkedLinearIssueRefsSignature(inMCodeLinkedLinearRefs),
+    [inMCodeLinkedLinearRefs]
   )
-  const inOrcaLinkedLinearRefsRef = useRef(inOrcaLinkedLinearRefs)
-  // Keep latest linked refs for the in-orca loader without re-running it on identity churn.
+  const inMCodeLinkedLinearRefsRef = useRef(inMCodeLinkedLinearRefs)
+  // Keep latest linked refs for the in-mcode loader without re-running it on identity churn.
   useEffect(() => {
-    inOrcaLinkedLinearRefsRef.current = inOrcaLinkedLinearRefs
-  }, [inOrcaLinkedLinearRefs])
+    inMCodeLinkedLinearRefsRef.current = inMCodeLinkedLinearRefs
+  }, [inMCodeLinkedLinearRefs])
 
   const filteredLinearIssues = useMemo(() => {
     const searchedIssues =
-      linearMode === 'in-orca'
+      linearMode === 'in-mcode'
         ? filterLinearIssuesBySearchQuery(displayedLinearIssues, appliedLinearSearch)
         : displayedLinearIssues
-    // Why: 'in-orca' is scoped by local workspace links, not by team, and it has no "Fetch more" —
+    // Why: 'in-mcode' is scoped by local workspace links, not by team, and it has no "Fetch more" —
     // a team filter would silently drop a linked ticket with no way to recover it.
-    if (activeLinearIssueContextLabel || linearMode === 'in-orca') {
+    if (activeLinearIssueContextLabel || linearMode === 'in-mcode') {
       return searchedIssues
     }
     // Why: team options can arrive after issue rows render; treat an empty selection as "all" until reconciliation sets teams.
@@ -8197,13 +8197,13 @@ export default function TaskPage(): React.JSX.Element {
     if (!taskResumeApplied) {
       return
     }
-    if (taskSource !== 'linear' || linearMode !== 'in-orca' || !linearConnected) {
+    if (taskSource !== 'linear' || linearMode !== 'in-mcode' || !linearConnected) {
       return
     }
 
     let cancelled = false
-    const linkedRefs = inOrcaLinkedLinearRefsRef.current
-    const requestSignature = `in-orca::${selectedLinearWorkspaceId ?? 'default'}::${inOrcaLinkedLinearRefsSignature}`
+    const linkedRefs = inMCodeLinkedLinearRefsRef.current
+    const requestSignature = `in-mcode::${selectedLinearWorkspaceId ?? 'default'}::${inMCodeLinkedLinearRefsSignature}`
     const previousRequest = lastLinearRequestRef.current
     const isNewSignature = previousRequest?.signature !== requestSignature
     const forceRefresh = linearRefreshNonce > 0 && previousRequest?.nonce !== linearRefreshNonce
@@ -8246,7 +8246,7 @@ export default function TaskPage(): React.JSX.Element {
           setLinearError(
             translate(
               'auto.components.TaskPage.linearHasWorktreeLoadFailed',
-              'Unable to load Linear issues linked to an Orca workspace.'
+              'Unable to load Linear issues linked to an MCode workspace.'
             )
           )
           setLinearIssues([])
@@ -8257,11 +8257,11 @@ export default function TaskPage(): React.JSX.Element {
           setLinearError(
             translate(
               'auto.components.TaskPage.linearHasWorktreePartialLoadFailed',
-              'Some Linear issues linked to an Orca workspace could not be loaded. Refresh to try again.'
+              'Some Linear issues linked to an MCode workspace could not be loaded. Refresh to try again.'
             )
           )
         }
-        setLinearIssues(filterLinearIssuesForInOrcaWorkspace(loaded, selectedLinearWorkspaceId))
+        setLinearIssues(filterLinearIssuesForInMCodeWorkspace(loaded, selectedLinearWorkspaceId))
         setLinearLoading(false)
       })
       .catch((err) => {
@@ -8283,7 +8283,7 @@ export default function TaskPage(): React.JSX.Element {
     // churn (activity stamps, unread flags) can't re-issue one read per linked ticket.
   }, [
     fetchLinearIssue,
-    inOrcaLinkedLinearRefsSignature,
+    inMCodeLinkedLinearRefsSignature,
     linearConnected,
     linearMode,
     linearRefreshNonce,
@@ -9435,7 +9435,7 @@ export default function TaskPage(): React.JSX.Element {
                               ? 'border-border/50 bg-foreground/90 text-background'
                               : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
                           )
-                          if (mode.id === 'in-orca') {
+                          if (mode.id === 'in-mcode') {
                             return (
                               <Tooltip key={mode.id}>
                                 <TooltipTrigger asChild>
@@ -9451,7 +9451,7 @@ export default function TaskPage(): React.JSX.Element {
                                 <TooltipContent side="bottom" sideOffset={6}>
                                   {translate(
                                     'auto.components.TaskPage.linearModeHasWorktreeTooltip',
-                                    'Linear tickets linked to an Orca workspace'
+                                    'Linear tickets linked to an MCode workspace'
                                   )}
                                 </TooltipContent>
                               </Tooltip>
@@ -9548,7 +9548,7 @@ export default function TaskPage(): React.JSX.Element {
                               size="icon"
                               onClick={() => setLinearRefreshNonce((n) => n + 1)}
                               disabled={
-                                linearMode === 'issues' || linearMode === 'in-orca'
+                                linearMode === 'issues' || linearMode === 'in-mcode'
                                   ? linearLoading
                                   : linearMode === 'projects'
                                     ? linearProjectsLoading || linearProjectDetailLoading
@@ -9560,7 +9560,7 @@ export default function TaskPage(): React.JSX.Element {
                               )}
                               className="size-8 border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
                             >
-                              {(linearMode === 'issues' || linearMode === 'in-orca') &&
+                              {(linearMode === 'issues' || linearMode === 'in-mcode') &&
                               linearLoading ? (
                                 <LoaderCircle className="size-4 animate-spin" />
                               ) : linearMode === 'projects' &&
@@ -9581,7 +9581,7 @@ export default function TaskPage(): React.JSX.Element {
                       </div>
                     </div>
 
-                    {linearMode === 'issues' || linearMode === 'in-orca' ? (
+                    {linearMode === 'issues' || linearMode === 'in-mcode' ? (
                       <div className="mt-3 flex min-w-0 items-center gap-2">
                         {showLinearAttributeFilters ? (
                           <LinearIssueAttributeFilterDropdowns
@@ -9619,18 +9619,18 @@ export default function TaskPage(): React.JSX.Element {
                                 setAppliedLinearSearch(trimmed)
                                 setTaskResumeState({
                                   linearQuery: trimmed,
-                                  linearMode: linearMode === 'in-orca' ? 'in-orca' : 'issues'
+                                  linearMode: linearMode === 'in-mcode' ? 'in-mcode' : 'issues'
                                 })
-                                if (linearMode !== 'in-orca') {
+                                if (linearMode !== 'in-mcode') {
                                   setLinearRefreshNonce((n) => n + 1)
                                 }
                               }
                             }}
                             placeholder={
-                              linearMode === 'in-orca'
+                              linearMode === 'in-mcode'
                                 ? translate(
                                     'auto.components.TaskPage.linearHasWorktreeSearchPlaceholder',
-                                    'Filter issues linked to an Orca workspace...'
+                                    'Filter issues linked to an MCode workspace...'
                                   )
                                 : translate(
                                     'auto.components.TaskPage.eec0c5c079',
@@ -9651,9 +9651,9 @@ export default function TaskPage(): React.JSX.Element {
                                 setAppliedLinearSearch('')
                                 setTaskResumeState({
                                   linearQuery: '',
-                                  linearMode: linearMode === 'in-orca' ? 'in-orca' : 'issues'
+                                  linearMode: linearMode === 'in-mcode' ? 'in-mcode' : 'issues'
                                 })
-                                if (linearMode !== 'in-orca') {
+                                if (linearMode !== 'in-mcode') {
                                   setLinearRefreshNonce((n) => n + 1)
                                 }
                               }}
@@ -10095,7 +10095,7 @@ export default function TaskPage(): React.JSX.Element {
                 ) : null}
 
                 {!tasksError && githubUnavailable ? (
-                  // Why: name the GitHub outage explicitly so an empty list isn't misread as an Orca bug; takes priority over the count banner.
+                  // Why: name the GitHub outage explicitly so an empty list isn't misread as an MCode bug; takes priority over the count banner.
                   <div
                     role="alert"
                     className="border-b border-border/50 bg-destructive/10 px-4 py-3 text-sm text-destructive"
@@ -11243,7 +11243,7 @@ export default function TaskPage(): React.JSX.Element {
                   ) : null}
                   <div className="min-w-0 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                     {activeLinearIssueContextLabel ??
-                      (linearMode === 'in-orca'
+                      (linearMode === 'in-mcode'
                         ? translate(
                             'auto.components.TaskPage.linearModeHasWorktree',
                             'Has Workspace'
@@ -11452,7 +11452,7 @@ export default function TaskPage(): React.JSX.Element {
                     </p>
                     <p className="mt-2 text-sm text-muted-foreground">
                       {(() => {
-                        if (linearMode === 'in-orca') {
+                        if (linearMode === 'in-mcode') {
                           if (linearSearchActive) {
                             return translate(
                               'auto.components.TaskPage.2bdefbcac3',
@@ -11461,7 +11461,7 @@ export default function TaskPage(): React.JSX.Element {
                           }
                           return translate(
                             'auto.components.TaskPage.linearEmptyHasWorktree',
-                            'No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.'
+                            'No Linear tickets are linked to an MCode workspace yet. Start work from a Linear issue to see it here.'
                           )
                         }
                         const emptyKind = resolveLinearIssueEmptyKind({
@@ -11503,7 +11503,7 @@ export default function TaskPage(): React.JSX.Element {
                 filteredLinearIssues.length === 0 ? (
                   <div className="px-4 py-10 text-center">
                     <p className="text-sm font-medium text-foreground">
-                      {linearMode === 'in-orca' && linearSearchActive
+                      {linearMode === 'in-mcode' && linearSearchActive
                         ? translate('auto.components.TaskPage.903c7af49f', 'No Linear issues found')
                         : translate(
                             'auto.components.TaskPage.618107fab3',
@@ -11511,7 +11511,7 @@ export default function TaskPage(): React.JSX.Element {
                           )}
                     </p>
                     <p className="mt-2 text-sm text-muted-foreground">
-                      {linearMode === 'in-orca' && linearSearchActive
+                      {linearMode === 'in-mcode' && linearSearchActive
                         ? translate(
                             'auto.components.TaskPage.2bdefbcac3',
                             'Try a different search query.'
@@ -11521,7 +11521,7 @@ export default function TaskPage(): React.JSX.Element {
                             'Try selecting more teams or refreshing; team filters apply to the current fetched issue set.'
                           )}
                     </p>
-                    {linearMode !== 'in-orca' &&
+                    {linearMode !== 'in-mcode' &&
                     shouldOfferLinearIssueFetchMore({
                       emptyKind: 'client-team',
                       serverHasMore: linearIssuesHasMore

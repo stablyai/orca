@@ -13,7 +13,7 @@ function session(cwd: string | null): Pick<AiVaultSession, 'cwd'> {
 function worktree(overrides: Partial<Worktree> & { worktreeId: string; path: string }): Worktree {
   return {
     repoId: 'repo-1',
-    repo: 'orca',
+    repo: 'mcode',
     branch: 'main',
     displayName: overrides.worktreeId,
     liveTerminalCount: 0,

@@ -28,7 +28,7 @@
 
 import { existsSync, readFileSync } from 'node:fs'
 import type { ElectronApplication } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
 import {
   discoverActivePtyId,
@@ -36,7 +36,7 @@ import {
   waitForPaneCount
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/mcode-restart'
 
 // Why: this suite does a quit→relaunch cycle that depends on the daemon
 // surviving the first app close and the second launch reattaching to the

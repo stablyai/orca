@@ -24,11 +24,11 @@ export function buildWindowsCmdRunnerDelayedLaunchCommand(runnerScriptPath: stri
     '$processInfo = [System.Diagnostics.ProcessStartInfo]::new()',
     '$processInfo.FileName = $env:ComSpec',
     "if (-not $processInfo.FileName) { $processInfo.FileName = 'cmd.exe' }",
-    // Why: /s strips exactly the outer quote pair, leaving "!ORCA_SETUP_RUNNER!" for /v:on to substitute verbatim.
-    '$processInfo.Arguments = \'/d /s /v:on /c ""!ORCA_SETUP_RUNNER!""\'',
+    // Why: /s strips exactly the outer quote pair, leaving "!MCODE_SETUP_RUNNER!" for /v:on to substitute verbatim.
+    '$processInfo.Arguments = \'/d /s /v:on /c ""!MCODE_SETUP_RUNNER!""\'',
     // Why: no redirection means stdio is inherited, so setup output still reaches the ConPTY.
     '$processInfo.UseShellExecute = $false',
-    '$processInfo.EnvironmentVariables["ORCA_SETUP_RUNNER"] = $runner',
+    '$processInfo.EnvironmentVariables["MCODE_SETUP_RUNNER"] = $runner',
     '$process = [System.Diagnostics.Process]::Start($processInfo)',
     '$process.WaitForExit()',
     'exit $process.ExitCode'

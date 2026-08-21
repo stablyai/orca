@@ -205,7 +205,7 @@ export function useDiffCommentDecorator({
           continue
         }
         const dom = document.createElement('div')
-        dom.className = 'orca-diff-comment-inline'
+        dom.className = 'mcode-diff-comment-inline'
         // Swallow mousedown on the zone so the editor doesn't steal focus / start a selection drag; Delete still fires (click is on the button).
         const disposeMouseDownStopper = installDiffCommentZoneMouseDownStopper(dom)
 

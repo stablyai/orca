@@ -27,16 +27,16 @@ export function installMainThreadHangWatchdog(options: {
     return null
   }
   // Why: dev main threads pause in debuggers routinely; watch packaged builds only unless forced.
-  if (!app.isPackaged && process.env.ORCA_HANG_WATCHDOG_FORCE !== '1') {
+  if (!app.isPackaged && process.env.MCODE_HANG_WATCHDOG_FORCE !== '1') {
     return null
   }
   const workerPath = resolveHangWatchdogWorkerPath(app.getAppPath(), app.isPackaged)
   const workerData: HangWatchdogWorkerData = {
     parentPid: process.pid,
     markerPath: hangDetectionMarkerPath(options.userDataPath),
-    timeoutMs: positiveTiming(process.env.ORCA_HANG_WATCHDOG_TIMEOUT_MS, HANG_WATCHDOG_TIMEOUT_MS),
+    timeoutMs: positiveTiming(process.env.MCODE_HANG_WATCHDOG_TIMEOUT_MS, HANG_WATCHDOG_TIMEOUT_MS),
     checkIntervalMs: positiveTiming(
-      process.env.ORCA_HANG_WATCHDOG_CHECK_INTERVAL_MS,
+      process.env.MCODE_HANG_WATCHDOG_CHECK_INTERVAL_MS,
       HANG_WATCHDOG_CHECK_INTERVAL_MS
     )
   }
@@ -44,7 +44,7 @@ export function installMainThreadHangWatchdog(options: {
   try {
     // Why: the worker survives an AppKit main-thread deadlock without another Electron process.
     worker = new Worker(workerPath, {
-      name: 'orca-main-thread-hang-watchdog',
+      name: 'mcode-main-thread-hang-watchdog',
       workerData
     })
   } catch (error) {

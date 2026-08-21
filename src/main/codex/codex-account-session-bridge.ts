@@ -6,7 +6,7 @@ import type { CodexSessionBridgeIncrementalOptions } from './codex-session-file-
 import { linkCodexSessionFile } from './codex-session-link'
 
 /**
- * Bridges Codex history between Orca-managed Codex homes.
+ * Bridges Codex history between MCode-managed Codex homes.
  *
  * Why: a managed account launches Codex against its own self-contained
  * CODEX_HOME, and Codex's `/resume` picker only lists rollouts under that home.

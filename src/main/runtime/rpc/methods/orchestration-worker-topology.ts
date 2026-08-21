@@ -1,6 +1,6 @@
 import type { AgentLaunchPreferences } from '../../../../shared/agent-session-host-authority'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
 
 export type WorkerEffect = {
@@ -37,7 +37,7 @@ export type WorkerSetupReceipt = {
     | 'not_applicable'
 }
 
-export function requireWorkerAuthority(runtime: OrcaRuntimeService, terminalHandle: string) {
+export function requireWorkerAuthority(runtime: MCodeRuntimeService, terminalHandle: string) {
   const authority = runtime.getOrchestrationDispatchAuthority(terminalHandle)
   const paneKey = authority?.paneKey ?? runtime.getTerminalPaneKey(terminalHandle)
   const processIncarnation =
@@ -54,7 +54,7 @@ export function requireWorkerAuthority(runtime: OrcaRuntimeService, terminalHand
 }
 
 export async function createExistingWorktreeWorkerTerminal(args: {
-  runtime: OrcaRuntimeService
+  runtime: MCodeRuntimeService
   worktreeId: string
   agent: TuiAgent
   launchPreferences?: AgentLaunchPreferences
@@ -105,11 +105,11 @@ export function applyWaitForSetupOutcome(
 }
 
 export async function createWorkerWorktree(args: {
-  runtime: OrcaRuntimeService
+  runtime: MCodeRuntimeService
   db: OrchestrationDb
   dispatchId: string
   requestedWorktree: string
-  coordinatorWorktree: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>
+  coordinatorWorktree: Awaited<ReturnType<MCodeRuntimeService['showManagedWorktree']>>
   params: {
     repo?: string
     name?: string
@@ -123,7 +123,7 @@ export async function createWorkerWorktree(args: {
   launchPreferences?: AgentLaunchPreferences
   effects: WorkerEffect[]
 }): Promise<{
-  worktree: Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>
+  worktree: Awaited<ReturnType<MCodeRuntimeService['showManagedWorktree']>>
   terminalHandle: string
   setupReceipt: WorkerSetupReceipt
 }> {
@@ -209,14 +209,14 @@ export async function createWorkerWorktree(args: {
     terminalId: setupTerminalHandle ?? setupTerminal?.id
   })
   return {
-    worktree: created.worktree as Awaited<ReturnType<OrcaRuntimeService['showManagedWorktree']>>,
+    worktree: created.worktree as Awaited<ReturnType<MCodeRuntimeService['showManagedWorktree']>>,
     terminalHandle,
     setupReceipt
   }
 }
 
 export function monitorWorkerSetup(args: {
-  runtime: OrcaRuntimeService
+  runtime: MCodeRuntimeService
   db: OrchestrationDb
   runId: string
   dispatchId: string

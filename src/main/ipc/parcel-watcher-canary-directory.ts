@@ -4,7 +4,7 @@ import { join } from 'node:path'
 
 export function createWatcherCanaryDirectory(): string | null {
   try {
-    return mkdtempSync(join(tmpdir(), 'orca-watcher-canary-'))
+    return mkdtempSync(join(tmpdir(), 'mcode-watcher-canary-'))
   } catch (error) {
     // Why: the canary is diagnostic only; read-only temp storage must not
     // disable the crash-isolated watcher itself.

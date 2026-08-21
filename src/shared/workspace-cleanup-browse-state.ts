@@ -16,7 +16,7 @@ export const WORKSPACE_CLEANUP_BROWSE_STATE_VERSION = 1
 /**
  * Serializable slice of the cleanup dialog persisted under
  * `WorkspaceCleanupUIState.browse`. Everything here is plain JSON so it
- * round-trips through orca-data.json and the client-ui RPC schema.
+ * round-trips through mcode-data.json and the client-ui RPC schema.
  */
 export type WorkspaceCleanupBrowseState = {
   version: number

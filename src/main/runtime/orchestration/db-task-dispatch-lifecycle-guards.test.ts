@@ -398,7 +398,7 @@ describe('Task/Dispatch lifecycle guards', () => {
 })
 
 function createDatabase(): OrchestrationDb {
-  dir = mkdtempSync(join(tmpdir(), 'orca-task-dispatch-lifecycle-'))
+  dir = mkdtempSync(join(tmpdir(), 'mcode-task-dispatch-lifecycle-'))
   db = new OrchestrationDb(join(dir, 'orchestration.db'))
   return db
 }

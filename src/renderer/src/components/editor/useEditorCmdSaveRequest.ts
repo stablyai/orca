@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import {
-  ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT,
+  MCODE_EDITOR_REQUEST_CMD_SAVE_EVENT,
   type EditorRequestCmdSaveDetail
 } from './editor-autosave'
 import type { FileContent } from './editor-panel-content-types'
@@ -50,7 +50,7 @@ export function useEditorCmdSaveRequest({
         (activeFile.mode === 'markdown-preview' ? fileContents[activeFile.id]?.content : '')
       void handleSave(fallbackContent ?? '')
     }
-    window.addEventListener(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, handler)
-    return () => window.removeEventListener(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, handler)
+    window.addEventListener(MCODE_EDITOR_REQUEST_CMD_SAVE_EVENT, handler)
+    return () => window.removeEventListener(MCODE_EDITOR_REQUEST_CMD_SAVE_EVENT, handler)
   }, [activeFile, enabled, fileContents, handleSave, openFiles])
 }

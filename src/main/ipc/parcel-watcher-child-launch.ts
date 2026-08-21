@@ -34,7 +34,7 @@ export function launchWatcherChild(
       env: {
         ...process.env,
         ELECTRON_RUN_AS_NODE: '1',
-        ...(canaryDir ? { ORCA_WATCHER_CANARY_DIR: canaryDir } : {})
+        ...(canaryDir ? { MCODE_WATCHER_CANARY_DIR: canaryDir } : {})
       },
       ...(process.platform === 'win32' ? { windowsHide: true } : {})
     })
@@ -44,7 +44,7 @@ export function launchWatcherChild(
     console.error('[parcel-watcher-process] failed to fork watcher process:', error)
     return null
   }
-  const faultHarnessPidFile = process.env.ORCA_WATCHER_CHILD_PID_FILE
+  const faultHarnessPidFile = process.env.MCODE_WATCHER_CHILD_PID_FILE
   if (faultHarnessPidFile && child.pid) {
     try {
       // Why: exclusive creation lets the harness identify the child without a

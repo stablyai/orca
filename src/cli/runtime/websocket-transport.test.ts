@@ -13,7 +13,7 @@ import {
   publicKeyToBase64
 } from '../../shared/e2ee-crypto'
 import { RuntimeClient } from './client'
-import { launchOrcaApp } from './launch'
+import { launchMCodeApp } from './launch'
 import { addEnvironmentFromPairingCode } from './environments'
 import { RuntimeClientError } from './types'
 import {
@@ -27,7 +27,7 @@ import {
 } from '../../shared/protocol-version'
 
 vi.mock('./launch', () => ({
-  launchOrcaApp: vi.fn()
+  launchMCodeApp: vi.fn()
 }))
 
 type TestRuntime = {
@@ -44,7 +44,7 @@ describe('CLI remote WebSocket transport', () => {
   const servers: TestRuntime[] = []
 
   afterEach(async () => {
-    vi.mocked(launchOrcaApp).mockClear()
+    vi.mocked(launchMCodeApp).mockClear()
     await Promise.all(servers.splice(0).map((server) => server.close()))
   })
 
@@ -82,7 +82,7 @@ describe('CLI remote WebSocket transport', () => {
     )
   })
 
-  it('accepts a bare pairing payload as well as the orca URL wrapper', async () => {
+  it('accepts a bare pairing payload as well as the mcode URL wrapper', async () => {
     const runtime = await startTestRuntime('runtime-ws-2', {
       appVersion: '1.5.0',
       remoteUpdateSupport: {
@@ -133,16 +133,16 @@ describe('CLI remote WebSocket transport', () => {
       })
     )
 
-    const status = await client.openOrca()
+    const status = await client.openMCode()
 
     expect(status.result.app.desktopWindowStatus).toBe('initializing')
-    expect(launchOrcaApp).not.toHaveBeenCalled()
+    expect(launchMCodeApp).not.toHaveBeenCalled()
   })
 
   it('connects through a saved environment selector', async () => {
     const runtime = await startTestRuntime('runtime-env-1')
     servers.push(runtime)
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-cli-env-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-cli-env-'))
     addEnvironmentFromPairingCode(userDataPath, {
       name: 'remote-dev',
       pairingCode: encodePairingOffer({

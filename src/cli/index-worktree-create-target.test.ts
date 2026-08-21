@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 const {
   callMock,
   runtimeClientConstructorMock,
-  serveOrcaAppMock,
+  serveMCodeAppMock,
   getDefaultUserDataPathMock,
   addEnvironmentFromPairingCodeMock,
   listEnvironmentsMock,
@@ -11,8 +11,8 @@ const {
 } = vi.hoisted(() => ({
   callMock: vi.fn(),
   runtimeClientConstructorMock: vi.fn(),
-  serveOrcaAppMock: vi.fn(),
-  getDefaultUserDataPathMock: vi.fn(() => '/tmp/orca-user-data'),
+  serveMCodeAppMock: vi.fn(),
+  getDefaultUserDataPathMock: vi.fn(() => '/tmp/mcode-user-data'),
   addEnvironmentFromPairingCodeMock: vi.fn(),
   listEnvironmentsMock: vi.fn(),
   spawnMock: vi.fn()
@@ -23,7 +23,7 @@ vi.mock('./runtime-client', async () => {
   return createRuntimeClientModuleMock({
     callMock,
     runtimeClientConstructorMock,
-    serveOrcaAppMock,
+    serveMCodeAppMock,
     getDefaultUserDataPathMock
   })
 })
@@ -44,10 +44,10 @@ import { main } from './index'
 import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
 import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
 
-describe('orca cli worktree awareness', () => {
+describe('mcode cli worktree awareness', () => {
   useWorktreeAwarenessEnvironment({
     callMock,
-    serveOrcaAppMock,
+    serveMCodeAppMock,
     getDefaultUserDataPathMock,
     addEnvironmentFromPairingCodeMock,
     listEnvironmentsMock,
@@ -94,11 +94,11 @@ describe('orca cli worktree awareness', () => {
         setups: [
           {
             id: 'setup-local',
-            projectId: 'github:stablyai/orca',
+            projectId: 'github:mcode-ide/mcode',
             hostId: 'local',
             repoId: 'repo-local',
-            path: '/tmp/orca',
-            displayName: 'Orca',
+            path: '/tmp/mcode',
+            displayName: 'MCode',
             setupState: 'ready',
             setupMethod: 'legacy-repo',
             createdAt: 1,
@@ -106,11 +106,11 @@ describe('orca cli worktree awareness', () => {
           },
           {
             id: 'setup-gpu',
-            projectId: 'github:stablyai/orca',
+            projectId: 'github:mcode-ide/mcode',
             hostId: 'runtime:gpu',
             repoId: 'repo-gpu',
-            path: '/srv/orca',
-            displayName: 'Orca',
+            path: '/srv/mcode',
+            displayName: 'MCode',
             setupState: 'ready',
             setupMethod: 'legacy-repo',
             createdAt: 1,
@@ -119,7 +119,7 @@ describe('orca cli worktree awareness', () => {
         ]
       }),
       okFixture('req_create', {
-        worktree: buildWorktree('/srv/orca/feature', 'feature', 'abc', 'repo-gpu'),
+        worktree: buildWorktree('/srv/mcode/feature', 'feature', 'abc', 'repo-gpu'),
         lineage: null,
         warnings: []
       })
@@ -131,7 +131,7 @@ describe('orca cli worktree awareness', () => {
         'worktree',
         'create',
         '--project',
-        'github:stablyai/orca',
+        'github:mcode-ide/mcode',
         '--host',
         'runtime:gpu',
         '--name',
@@ -166,11 +166,11 @@ describe('orca cli worktree awareness', () => {
         setups: [
           {
             id: 'setup-gpu',
-            projectId: 'github:stablyai/orca',
+            projectId: 'github:mcode-ide/mcode',
             hostId: 'runtime:gpu',
             repoId: 'repo-gpu',
-            path: '/srv/orca',
-            displayName: 'Orca',
+            path: '/srv/mcode',
+            displayName: 'MCode',
             setupState: 'ready',
             setupMethod: 'legacy-repo',
             createdAt: 1,
@@ -179,7 +179,7 @@ describe('orca cli worktree awareness', () => {
         ]
       }),
       okFixture('req_create', {
-        worktree: buildWorktree('/srv/orca/feature', 'feature', 'abc', 'repo-gpu'),
+        worktree: buildWorktree('/srv/mcode/feature', 'feature', 'abc', 'repo-gpu'),
         lineage: null,
         warnings: []
       })
@@ -219,7 +219,7 @@ describe('orca cli worktree awareness', () => {
         '--repo',
         'id:repo-local',
         '--project',
-        'github:stablyai/orca',
+        'github:mcode-ide/mcode',
         '--name',
         'feature',
         '--json'
@@ -237,7 +237,7 @@ describe('orca cli worktree awareness', () => {
   })
 
   it('passes caller terminal handle through worktree.create with cwd fallback', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_parent'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_parent'
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
@@ -275,7 +275,7 @@ describe('orca cli worktree awareness', () => {
   it('marks every worktree.create as CLI-created even from an external shell', async () => {
     // Why: the sidebar badge/filter must catch hand-typed creates too, so the
     // provenance request is sent with no terminal handle rather than omitted.
-    delete process.env.ORCA_TERMINAL_HANDLE
+    delete process.env.MCODE_TERMINAL_HANDLE
     queueFixtures(
       callMock,
       okFixture('req_create_external', {

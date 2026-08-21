@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { describe, it } from 'vitest'
 import { installLocalSkillPackage } from './skill-install-transaction'
 
-const CHILD = process.env.ORCA_SKILL_CONTENTION_CHILD === '1'
+const CHILD = process.env.MCODE_SKILL_CONTENTION_CHILD === '1'
 
 async function waitForRelease(path: string): Promise<void> {
   const deadline = Date.now() + 15_000
@@ -18,10 +18,10 @@ async function waitForRelease(path: string): Promise<void> {
 
 describe.runIf(CHILD)('skill process contention child', () => {
   it('runs one transaction process', async () => {
-    const root = process.env.ORCA_SKILL_CONTENTION_ROOT
-    const archivePath = process.env.ORCA_SKILL_CONTENTION_ARCHIVE
-    const resultPath = process.env.ORCA_SKILL_CONTENTION_RESULT
-    const role = process.env.ORCA_SKILL_CONTENTION_ROLE
+    const root = process.env.MCODE_SKILL_CONTENTION_ROOT
+    const archivePath = process.env.MCODE_SKILL_CONTENTION_ARCHIVE
+    const resultPath = process.env.MCODE_SKILL_CONTENTION_RESULT
+    const role = process.env.MCODE_SKILL_CONTENTION_ROLE
     if (!root || !archivePath || !resultPath || !role) {
       throw new Error('missing-skill-contention-input')
     }
@@ -41,8 +41,8 @@ describe.runIf(CHILD)('skill process contention child', () => {
           if (role !== 'holder' || phase !== 'prepared' || boundary !== 'before') {
             return
           }
-          const readyPath = process.env.ORCA_SKILL_CONTENTION_READY
-          const releasePath = process.env.ORCA_SKILL_CONTENTION_RELEASE
+          const readyPath = process.env.MCODE_SKILL_CONTENTION_READY
+          const releasePath = process.env.MCODE_SKILL_CONTENTION_RELEASE
           if (!readyPath || !releasePath) {
             throw new Error('missing-skill-contention-coordination')
           }

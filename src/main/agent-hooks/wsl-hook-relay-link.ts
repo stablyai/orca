@@ -32,7 +32,7 @@ export function wireWslRelayLink(options: WslRelayLinkOptions): void {
     if (typeof (params as { paneKey?: unknown }).paneKey !== 'string') {
       return
     }
-    if (process.env.ORCA_WSL_HOOK_RELAY_DEBUG === '1') {
+    if (process.env.MCODE_WSL_HOOK_RELAY_DEBUG === '1') {
       const p = params as { paneKey?: string; payload?: { state?: string } }
       warn(
         `[agent-hooks] WSL relay envelope (${distro}): pane=${p.paneKey} state=${p.payload?.state ?? '?'}`

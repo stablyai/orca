@@ -346,7 +346,7 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
             <DialogTitle>
               {translate(
                 'auto.components.sidebar.WorktreeVisibilityDialog.83a5ba8dd1',
-                'Non-Orca worktrees'
+                'Non-MCode worktrees'
               )}
             </DialogTitle>
             <WorktreeVisibilityHelpPopover />

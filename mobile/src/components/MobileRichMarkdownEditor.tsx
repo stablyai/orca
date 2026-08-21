@@ -35,7 +35,7 @@ import {
   escapeInjectedJavaScriptString
 } from './mobile-rich-markdown-editor-html'
 
-const EDITOR_DOCUMENT_ORIGIN = 'https://orca-mobile-editor.invalid'
+const EDITOR_DOCUMENT_ORIGIN = 'https://mcode-mobile-editor.invalid'
 const EDITOR_DOCUMENT_URL = `${EDITOR_DOCUMENT_ORIGIN}/rich-markdown-editor`
 
 function normalizeExternalEditorUrl(value: string): string | null {
@@ -140,7 +140,7 @@ function MobileRichMarkdownEditorInner(
       documentGenerationRef.current += 1
       currentWebViewContentRef.current = nextContent
       inject(
-        `window.__orcaRichMarkdown && window.__orcaRichMarkdown.setMarkdown(${escapeInjectedJavaScriptString(nextContent)}, ${documentGenerationRef.current});`
+        `window.__mcodeRichMarkdown && window.__mcodeRichMarkdown.setMarkdown(${escapeInjectedJavaScriptString(nextContent)}, ${documentGenerationRef.current});`
       )
     },
     [inject]
@@ -149,7 +149,7 @@ function MobileRichMarkdownEditorInner(
   const applyEditable = useCallback(
     (nextEditable: boolean) => {
       inject(
-        `window.__orcaRichMarkdown && window.__orcaRichMarkdown.setEditable(${nextEditable ? 'true' : 'false'});`
+        `window.__mcodeRichMarkdown && window.__mcodeRichMarkdown.setEditable(${nextEditable ? 'true' : 'false'});`
       )
     },
     [inject]
@@ -233,7 +233,7 @@ function MobileRichMarkdownEditorInner(
   const runCommand = useCallback(
     (command: RichMarkdownCommand) => {
       inject(
-        `window.__orcaRichMarkdown && window.__orcaRichMarkdown.runCommand(${escapeInjectedJavaScriptString(command)});`
+        `window.__mcodeRichMarkdown && window.__mcodeRichMarkdown.runCommand(${escapeInjectedJavaScriptString(command)});`
       )
     },
     [inject]
@@ -242,7 +242,7 @@ function MobileRichMarkdownEditorInner(
   const dismissKeyboard = useCallback(() => {
     // Why: the caret lives in the WebView, so the injected blur is what closes the keyboard;
     // Keyboard.dismiss only clears a native TextInput that stole focus first.
-    inject('window.__orcaRichMarkdown && window.__orcaRichMarkdown.dismissKeyboard();')
+    inject('window.__mcodeRichMarkdown && window.__mcodeRichMarkdown.dismissKeyboard();')
     Keyboard.dismiss()
   }, [inject])
 

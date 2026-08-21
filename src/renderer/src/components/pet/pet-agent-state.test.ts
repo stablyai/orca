@@ -60,7 +60,7 @@ describe('selectPetAnimationName', () => {
     expect(select([], { retainedCount: 1 })).toBe('review')
   })
 
-  it('maps interrupted completion to review because Orca does not expose failure as a state', () => {
+  it('maps interrupted completion to review because MCode does not expose failure as a state', () => {
     expect(select([entry('done', { interrupted: true })])).toBe('review')
     expect(select([entry('working'), entry('done', { interrupted: true })])).toBe('running')
   })

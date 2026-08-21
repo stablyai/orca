@@ -72,8 +72,8 @@ vi.mock('./WorktreeCardAgents', () => ({
 
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
-  CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
-  WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope',
+  CLOSE_ALL_CONTEXT_MENUS_EVENT: 'mcode:test-close-context-menus',
+  WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-mcode-context-menu-scope',
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu'
 }))
 
@@ -89,7 +89,7 @@ function makeRepo(): Repo {
   return {
     id: 'repo-1',
     path: '/repo',
-    displayName: 'orca',
+    displayName: 'mcode',
     badgeColor: '#999999',
     addedAt: 1
   }
@@ -158,8 +158,8 @@ describe('WorktreeCard quick actions', () => {
       <WorktreeCard worktree={makeWorktree()} repo={makeRepo()} isActive={false} />
     )
 
-    expect(markup).not.toContain('aria-label="Project orca"')
-    expect(markup).toContain('>orca</span>')
+    expect(markup).not.toContain('aria-label="Project mcode"')
+    expect(markup).toContain('>mcode</span>')
     expect(markup).toContain('data-worktree-card-meta-row=""')
   })
 
@@ -324,14 +324,14 @@ describe('WorktreeCard quick actions', () => {
 
     const markup = renderToStaticMarkup(
       <WorktreeCard
-        worktree={makeWorktree({ displayName: 'orca', branch: '' })}
+        worktree={makeWorktree({ displayName: 'mcode', branch: '' })}
         repo={makeRepo()}
         isActive={false}
         hideRepoBadge
       />
     )
 
-    expect(markup).toContain('orca')
+    expect(markup).toContain('mcode')
     expect(markup).toContain('data-worktree-card-meta-row=""')
     expect(markup).toContain('Detached HEAD @ abc123')
     expect(markup).toContain('Detached HEAD at abc123. You are viewing a commit, not a branch.')

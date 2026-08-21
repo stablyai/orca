@@ -3,7 +3,7 @@ import { existsSyncMock, accessSyncMock, spawnMock } from './pty-ipc-mock-regist
 import { posixOnlyIt, makeDeferred } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { isHiddenRendererPty } from './pty-hidden-delivery-gate'
-import { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { MCodeRuntimeService } from '../runtime/mcode-runtime'
 import { registerPtyHandlers } from './pty'
 import { join } from 'node:path'
 // Why resolved rather than hardcoded: the wrapper tree is content-addressed.
@@ -37,7 +37,7 @@ vi.mock('../telemetry/client', () =>
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
-vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
+vi.mock('../cli/linux-terminal-mcode-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../memory/pty-registry', () =>
@@ -198,7 +198,7 @@ describe('registerPtyHandlers', () => {
     it('answers DA1 from the model on the first chunk of a hidden-at-spawn PTY', async () => {
       // End-to-end through a REAL runtime: spawn-marked → first chunk dropped → emulator parses query → replies; main answers, the renderer never saw the bytes.
       const daemon = installObservableDaemonTestProvider()
-      const runtime = new OrcaRuntimeService({
+      const runtime = new MCodeRuntimeService({
         getRepo: () => undefined,
         getRepos: () => [],
         addRepo: () => {},
@@ -414,9 +414,9 @@ describe('registerPtyHandlers', () => {
         expect.objectContaining({
           cwd: '/tmp',
           env: expect.objectContaining({
-            ORCA_OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-config',
+            MCODE_OPENCODE_CONFIG_DIR: '/tmp/mcode-opencode-config',
             // No `ready`: the fallback shell carries an overlay, not a startup command.
-            ORCA_SHELL_FEATURES: 'overlay,history,markers',
+            MCODE_SHELL_FEATURES: 'overlay,history,markers',
             ZDOTDIR: join(getShellReadyWrapperRoot(), 'zsh')
           })
         })

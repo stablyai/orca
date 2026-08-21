@@ -4,7 +4,7 @@ import {
   ORCHESTRATION_CONTRACT_VERSION,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
-import { OrcaRuntimeService } from '../../orca-runtime'
+import { MCodeRuntimeService } from '../../mcode-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import type { OrchestrationEnvironmentTransport } from '../../orchestration/environment-transport'
 import { RpcDispatcher } from '../dispatcher'
@@ -15,8 +15,8 @@ describe('orchestration federation', () => {
   const databases: OrchestrationDb[] = []
   let homeDb: OrchestrationDb
   let workerDb: OrchestrationDb
-  let homeRuntime: OrcaRuntimeService
-  let workerRuntime: OrcaRuntimeService
+  let homeRuntime: MCodeRuntimeService
+  let workerRuntime: MCodeRuntimeService
   let homeDispatcher: RpcDispatcher
   let workerDispatcher: RpcDispatcher
   let workerCapabilities: string[]
@@ -27,7 +27,7 @@ describe('orchestration federation', () => {
     homeDb = new OrchestrationDb(':memory:')
     workerDb = new OrchestrationDb(':memory:')
     databases.push(homeDb, workerDb)
-    workerRuntime = new OrcaRuntimeService()
+    workerRuntime = new MCodeRuntimeService()
     workerRuntime.setOrchestrationDb(workerDb)
     workerDispatcher = new RpcDispatcher({
       runtime: workerRuntime,
@@ -67,7 +67,7 @@ describe('orchestration federation', () => {
         return response
       }
     }
-    homeRuntime = new OrcaRuntimeService(null, undefined, {
+    homeRuntime = new MCodeRuntimeService(null, undefined, {
       orchestrationEnvironmentTransport: transport
     })
     homeRuntime.setOrchestrationDb(homeDb)
@@ -97,7 +97,7 @@ describe('orchestration federation', () => {
     return homeDb.createTask({ spec: 'Audit Windows behavior', runId: run.id })
   }
 
-  function configureWorkerRuntime(runtime: OrcaRuntimeService): void {
+  function configureWorkerRuntime(runtime: MCodeRuntimeService): void {
     vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
     vi.spyOn(runtime, 'showRepo').mockResolvedValue({
       id: 'windows-repo',
@@ -132,7 +132,7 @@ describe('orchestration federation', () => {
       'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
     )
     vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockReturnValue('windows_runtime:pty:1')
-    vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+    vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('mcode')
     vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
       handle: 'term_windows_worker',
       accepted: true,
@@ -158,7 +158,7 @@ describe('orchestration federation', () => {
   }
 
   function restartWorkerRuntime(): void {
-    workerRuntime = new OrcaRuntimeService()
+    workerRuntime = new MCodeRuntimeService()
     workerRuntime.setOrchestrationDb(workerDb)
     configureWorkerRuntime(workerRuntime)
     workerDispatcher = new RpcDispatcher({

@@ -20,9 +20,9 @@ vi.mock('../ui/dropdown-menu', () => ({
 }))
 
 const plugin: PluginHostListEntry = {
-  pluginKey: 'stablyai.orca-skills',
+  pluginKey: 'mcode.plugin-skills',
   consentFingerprint: 'sha256-consent',
-  name: 'Orca Skills',
+  name: 'MCode Skills',
   version: '1.0.0',
   publisher: 'stablyai',
   status: 'disabled',
@@ -37,11 +37,11 @@ const plugin: PluginHostListEntry = {
   restarts: 0,
   blockedByKillList: {
     reason: 'A vulnerable release was revoked',
-    advisoryUrl: 'https://onorca.dev/advisories/orca-skills'
+    advisoryUrl: 'https://mcode.dev/advisories/mcode-skills'
   },
   source: {
     kind: 'bundled',
-    reference: 'bundled:stablyai.orca-skills',
+    reference: 'bundled:mcode.plugin-skills',
     resolvedCommit: null,
     contentHash: 'sha256-content'
   }
@@ -78,7 +78,7 @@ describe('PluginSettingsRow', () => {
     expect(container.textContent).toContain('View advisory')
     expect(container.textContent).not.toContain('Remove')
     expect(
-      container.querySelector<HTMLButtonElement>('[aria-label="Enable Orca Skills"]')?.disabled
+      container.querySelector<HTMLButtonElement>('[aria-label="Enable MCode Skills"]')?.disabled
     ).toBe(true)
     act(() => root.unmount())
   })

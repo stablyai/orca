@@ -14,7 +14,7 @@ afterEach(async () => {
 })
 
 async function writeCodexFixture(records: unknown[]): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-codex-history-'))
+  const root = await mkdtemp(join(tmpdir(), 'mcode-native-chat-codex-history-'))
   tempRoots.push(root)
   const filePath = join(root, 'rollout.jsonl')
   await writeFile(filePath, records.map((record) => JSON.stringify(record)).join('\n'))

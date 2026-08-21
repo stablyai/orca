@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { UpdateStatus } from './update-status-types'
-import { ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT } from './renderer-shutdown-events'
+import { MCODE_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT } from './renderer-shutdown-events'
 import {
   createUpdaterQuitAbortRelay,
   prepareRendererForAppRestart
@@ -12,7 +12,7 @@ describe('prepareRendererForAppRestart', () => {
     const started = vi.fn()
     const aborted = vi.fn()
     const checkpoint = vi.fn((event: Event) => {
-      event.currentTarget?.dispatchEvent(new Event(ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT))
+      event.currentTarget?.dispatchEvent(new Event(MCODE_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT))
       event.preventDefault()
     })
     eventTarget.addEventListener('restart-started', started)

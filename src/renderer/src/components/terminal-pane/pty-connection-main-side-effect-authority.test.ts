@@ -403,8 +403,8 @@ describe('connectPanePty', () => {
       onPtySpawn('pty-fact-pr')
 
       const link = {
-        url: 'https://github.com/acme/orca/pull/42',
-        slug: { owner: 'acme', repo: 'orca' },
+        url: 'https://github.com/acme/mcode/pull/42',
+        slug: { owner: 'acme', repo: 'mcode' },
         number: 42
       }
       handler._dispatchTerminalSideEffectBatchForTest({
@@ -445,7 +445,7 @@ describe('connectPanePty', () => {
       await flushAsyncTicks()
       expect(capturedDataCallback.current).not.toBeNull()
 
-      capturedDataCallback.current?.('Created https://github.com/acme/orca/pull/42\r\n')
+      capturedDataCallback.current?.('Created https://github.com/acme/mcode/pull/42\r\n')
       capturedDataCallback.current?.('\x1b]133;D;130\x07prompt $ ')
 
       expect(mockStoreState.observeTerminalGitHubPullRequestLink).not.toHaveBeenCalled()

@@ -27,10 +27,10 @@ import {
  *
  * Off by default; enabled via localStorage so a production build can arm it
  * from DevTools without a settings-schema change:
- *   localStorage.setItem('orca:render-desync-sentinel', '1')  // then reload
+ *   localStorage.setItem('mcode:render-desync-sentinel', '1')  // then reload
  */
 
-export const RENDER_DESYNC_SENTINEL_FLAG = 'orca:render-desync-sentinel'
+export const RENDER_DESYNC_SENTINEL_FLAG = 'mcode:render-desync-sentinel'
 const SAMPLE_INTERVAL_MS = 250
 const SAMPLE_BURST_MS = 10_000
 // A real desync is pinned to fixed screen cells; scroll/frame lag moves around.

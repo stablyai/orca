@@ -45,7 +45,7 @@ export function handleTerminalWebLinkClick(
       linkActionContext: deps.linkActionContext,
       actionDestinations: deps.actionDestinations
     })
-    // Why: WebLinksAddon only knows the physical row; Orca's logical hit-test
+    // Why: WebLinksAddon only knows the physical row; MCode's logical hit-test
     // preserves the complete URL rendered across hard-wrapped TUI rows.
     event.preventDefault()
   } else {

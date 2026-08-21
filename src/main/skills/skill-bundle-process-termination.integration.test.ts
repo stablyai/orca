@@ -6,7 +6,7 @@ import { dirname, join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { recoverPendingSkillTransactions } from './skill-transaction-startup-recovery'
 
-const RUN_REAL_PROCESS = process.env.ORCA_REAL_PROCESS_SKILL_TEST === '1'
+const RUN_REAL_PROCESS = process.env.MCODE_REAL_PROCESS_SKILL_TEST === '1'
 const require = createRequire(import.meta.url)
 const vitestBin = join(dirname(require.resolve('vitest/package.json')), 'vitest.mjs')
 const childTest = resolve('src/main/skills/skill-bundle-process-termination-child.test.ts')
@@ -126,10 +126,10 @@ async function startChild(root: string): Promise<{ child: ChildProcess; marker: 
       cwd: process.cwd(),
       env: {
         ...process.env,
-        ORCA_REAL_PROCESS_SKILL_TEST: '0',
-        ORCA_SKILL_BUNDLE_PROCESS_CHILD: '1',
-        ORCA_SKILL_BUNDLE_CRASH_ROOT: root,
-        ORCA_SKILL_BUNDLE_CRASH_MARKER: marker
+        MCODE_REAL_PROCESS_SKILL_TEST: '0',
+        MCODE_SKILL_BUNDLE_PROCESS_CHILD: '1',
+        MCODE_SKILL_BUNDLE_CRASH_ROOT: root,
+        MCODE_SKILL_BUNDLE_CRASH_MARKER: marker
       },
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true
@@ -144,7 +144,7 @@ afterEach(async () => {
 
 describe.runIf(RUN_REAL_PROCESS)('skill bundle process termination recovery', () => {
   it('removes a partially extracted bundle and its durable journal after process death', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skill-bundle-process-crash-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skill-bundle-process-crash-'))
     roots.push(root)
     const stateDirectory = join(root, 'state', 'skill-installs')
     const { child, marker } = await startChild(root)
@@ -168,7 +168,7 @@ describe.runIf(RUN_REAL_PROCESS)('skill bundle process termination recovery', ()
     await expect(readdir(join(stateDirectory, 'extraction-journals'))).resolves.toEqual([])
     expect(
       (await readdir(join(root, 'home', '.agents', 'skills')).catch(() => [])).filter((name) =>
-        name.includes('.orca-')
+        name.includes('.mcode-')
       )
     ).toEqual([])
   }, 45_000)

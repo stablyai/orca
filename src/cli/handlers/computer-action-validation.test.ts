@@ -6,7 +6,7 @@ vi.mock('../runtime-client', async () => {
   class RuntimeClient {
     call = callMock
     getCliStatus = vi.fn()
-    openOrca = vi.fn()
+    openMCode = vi.fn()
   }
 
   // Why: re-export the REAL error classes rather than redefining them. format.ts
@@ -20,7 +20,7 @@ vi.mock('../runtime-client', async () => {
 import { main } from '../index'
 import { okFixture, queueFixtures } from '../test-fixtures'
 
-describe('orca computer action CLI validation', () => {
+describe('mcode computer action CLI validation', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     callMock.mockReset()

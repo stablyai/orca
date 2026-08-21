@@ -9,7 +9,7 @@ export const MANAGE_SESSIONS_SECTION_ID = 'terminal-manage-sessions'
 /**
  * Why this exists: macOS pins the TCC "responsible process" of the detached terminal
  * daemon to the app binary that forked it. Once that binary is deleted (packaged
- * updates replace the bundle), Accessibility/Automation grants on Orca silently stop
+ * updates replace the bundle), Accessibility/Automation grants on MCode silently stop
  * covering every daemon-hosted terminal (osascript -25211) with no OS-side signal —
  * so the remedy has to be surfaced here, next to the permissions it breaks (STA-3491).
  */
@@ -81,7 +81,7 @@ export function TerminalTccAttributionNotice(props: {
           <p className="text-xs leading-snug">
             {translate(
               'auto.components.settings.TerminalTccAttributionNotice.body',
-              'The terminal daemon was started by an Orca install that no longer exists, so macOS can’t attribute its commands to Orca — Accessibility and Automation grants are silently ignored (osascript fails with error -25211). Restarting the daemon fixes this; running terminal sessions will close.'
+              'The terminal daemon was started by an MCode install that no longer exists, so macOS can’t attribute its commands to MCode — Accessibility and Automation grants are silently ignored (osascript fails with error -25211). Restarting the daemon fixes this; running terminal sessions will close.'
             )}
           </p>
         </div>

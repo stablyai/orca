@@ -2,7 +2,7 @@ import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { runNodeScriptInTerminal } from './helpers/run-node-script-in-terminal'
 import {
   ensureTerminalVisible,
@@ -33,10 +33,10 @@ type ParkingDebugWindow = Window & {
 // window. The fast-park override must be scoped to THIS spec's app launches —
 // mutating process.env at module scope leaked into later specs when a worker
 // reloaded files without replaying this file's afterAll.
-const PARKING_DELAY_MS = Number(process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS) || 500
+const PARKING_DELAY_MS = Number(process.env.MCODE_E2E_TERMINAL_PARKING_DELAY_MS) || 500
 
 test.use({
-  orcaAppExtraEnv: { ORCA_E2E_TERMINAL_PARKING_DELAY_MS: String(PARKING_DELAY_MS) }
+  mcodeAppExtraEnv: { MCODE_E2E_TERMINAL_PARKING_DELAY_MS: String(PARKING_DELAY_MS) }
 })
 
 const PARKED_FRAME_SCRIPT_DELAY_MS = 750
@@ -276,31 +276,31 @@ async function setUpParkableTabA(page: Page): Promise<ParkableTabSetup> {
 
 test.describe('Terminal hidden view parking', () => {
   test('parks a hidden terminal tab and restores rich TUI output on reveal', async ({
-    orcaPage,
+    mcodePage,
     testRepoPath
   }, testInfo: TestInfo) => {
-    await waitForSessionReady(orcaPage)
-    const setup = await setUpParkableTabA(orcaPage)
+    await waitForSessionReady(mcodePage)
+    const setup = await setUpParkableTabA(mcodePage)
     const { worktreeId, tabAId, tabAPtyId } = setup
 
     const runId = randomUUID()
     const finalMarker = `PARKED_RESTORE_FINAL_${runId}_${PARKED_FRAME_COUNT - 1}`
-    const scriptPath = path.join(testRepoPath, `.orca-parked-rich-tui-${runId}.mjs`)
+    const scriptPath = path.join(testRepoPath, `.mcode-parked-rich-tui-${runId}.mjs`)
     writeParkedFrameScript(scriptPath, runId)
     try {
-      await sendToTerminal(orcaPage, tabAPtyId, `node ${JSON.stringify(scriptPath)}\r`)
+      await sendToTerminal(mcodePage, tabAPtyId, `node ${JSON.stringify(scriptPath)}\r`)
       await expect
-        .poll(() => getTerminalContent(orcaPage, 12_000), {
+        .poll(() => getTerminalContent(mcodePage, 12_000), {
           timeout: 15_000,
           message: 'rich TUI final frame did not render while tab A was visible'
         })
         .toContain(finalMarker)
 
-      const tabBId = await createActiveTerminalTab(orcaPage, worktreeId)
-      const parkDetectedAfterMs = await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabAId, {
+      const tabBId = await createActiveTerminalTab(mcodePage, worktreeId)
+      const parkDetectedAfterMs = await parkHiddenTabBehindDecoy(mcodePage, worktreeId, tabAId, {
         parkDelayMs: PARKING_DELAY_MS
       })
-      const wiring = await readParkingWiring(orcaPage)
+      const wiring = await readParkingWiring(mcodePage)
       testInfo.annotations.push({
         type: 'terminal-parking',
         description: `parkDelayMs=${wiring.parkDelayMs ?? PARKING_DELAY_MS} parkDetectedAfterMs=${parkDetectedAfterMs}`
@@ -309,49 +309,49 @@ test.describe('Terminal hidden view parking', () => {
       // Why: parking must be scoped to the parked tab — tab B (hidden more
       // recently, so #8262 keeps it warm) still holds a live pane manager and
       // xterm while tab A tore down.
-      const tabBState = await readTerminalTabViewState(orcaPage, tabBId)
+      const tabBState = await readTerminalTabViewState(mcodePage, tabBId)
       expect(tabBState.hasManager).toBe(true)
       expect(tabBState.paneCount).toBeGreaterThan(0)
 
-      await activateTerminalTab(orcaPage, tabAId)
-      await waitForActiveTerminalManager(orcaPage, 30_000)
-      const revealedSnapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
+      await activateTerminalTab(mcodePage, tabAId)
+      await waitForActiveTerminalManager(mcodePage, 30_000)
+      const revealedSnapshot = await waitForPaneIdentitySnapshot(mcodePage, 1)
       expect(revealedSnapshot.tabId).toBe(tabAId)
       // Why: parking only tears down the renderer view; the PTY session must
       // survive so reveal reattaches to the same shell.
       expect(revealedSnapshot.panes[0]?.ptyId).toBe(tabAPtyId)
 
       await expect
-        .poll(() => getTerminalContent(orcaPage, 12_000), {
+        .poll(() => getTerminalContent(mcodePage, 12_000), {
           timeout: 15_000,
           message: 'parked rich TUI frame did not restore when the tab was revealed'
         })
         .toContain(finalMarker)
 
-      const content = await getTerminalContent(orcaPage, 12_000)
+      const content = await getTerminalContent(mcodePage, 12_000)
       expect(content).toContain(`Frame ${String(PARKED_FRAME_COUNT - 1).padStart(3, '0')}`)
       expect(content).toContain('╭')
       expect(content).toContain('├')
       expect(content).toContain('█')
-      expect(content).not.toContain('Orca skipped hidden terminal output')
+      expect(content).not.toContain('MCode skipped hidden terminal output')
 
       // Why: the typed marker only appears joined in command *output*, so this
       // proves the revealed terminal accepts input end-to-end, not just echo.
       const typedMarker = `PARKED_TYPED_OK_${runId}`
       const typedProbeScript = `console.log('PARKED_TYPED_OK_' + '${runId}')`
       // Why: delivered via a temp file — `node -e` quoting is not PowerShell-safe (#8521).
-      await runNodeScriptInTerminal(orcaPage, tabAPtyId, typedProbeScript, {
-        prefix: 'orca-parked-typed-probe'
+      await runNodeScriptInTerminal(mcodePage, tabAPtyId, typedProbeScript, {
+        prefix: 'mcode-parked-typed-probe'
       })
       await expect
-        .poll(() => getTerminalContent(orcaPage, 12_000), {
+        .poll(() => getTerminalContent(mcodePage, 12_000), {
           timeout: 10_000,
           message: 'revealed terminal did not execute and display typed input'
         })
         .toContain(typedMarker)
 
       const screenshotPath = testInfo.outputPath('parked-tab-restore-final.png')
-      await orcaPage.screenshot({ path: screenshotPath, fullPage: true })
+      await mcodePage.screenshot({ path: screenshotPath, fullPage: true })
       await testInfo.attach('parked-tab-restore-final.png', {
         path: screenshotPath,
         contentType: 'image/png'
@@ -361,13 +361,13 @@ test.describe('Terminal hidden view parking', () => {
     }
   })
 
-  test('keeps bell and title side effects live while parked', async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
-    const setup = await setUpParkableTabA(orcaPage)
+  test('keeps bell and title side effects live while parked', async ({ mcodePage }) => {
+    await waitForSessionReady(mcodePage)
+    const setup = await setUpParkableTabA(mcodePage)
     const { worktreeId, tabAId, tabAPtyId } = setup
 
-    await createActiveTerminalTab(orcaPage, worktreeId)
-    await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabAId, {
+    await createActiveTerminalTab(mcodePage, worktreeId)
+    await parkHiddenTabBehindDecoy(mcodePage, worktreeId, tabAId, {
       parkDelayMs: PARKING_DELAY_MS
     })
 
@@ -381,24 +381,24 @@ test.describe('Terminal hidden view parking', () => {
     const payload = `\x1b]0;${parkedTitle}\x07\x07${marker}\n`
     const sideEffectScript = `process.stdout.write(${JSON.stringify(payload)}); setTimeout(() => process.exit(0), 30000)`
     // Why: delivered via a temp file — `node -e` quoting is not PowerShell-safe (#8521).
-    await runNodeScriptInTerminal(orcaPage, tabAPtyId, sideEffectScript, {
-      prefix: 'orca-parked-side-effect'
+    await runNodeScriptInTerminal(mcodePage, tabAPtyId, sideEffectScript, {
+      prefix: 'mcode-parked-side-effect'
     })
 
     await expect
-      .poll(() => getTerminalTabTitle(orcaPage, worktreeId, tabAId), {
+      .poll(() => getTerminalTabTitle(mcodePage, worktreeId, tabAId), {
         timeout: 10_000,
         message: 'parked OSC 0 title did not update the tab title in the store'
       })
       .toBe(parkedTitle)
     await expect
-      .poll(async () => (await getUnreadTerminalTabIds(orcaPage)).includes(tabAId), {
+      .poll(async () => (await getUnreadTerminalTabIds(mcodePage)).includes(tabAId), {
         timeout: 10_000,
         message: 'parked BEL did not mark the terminal tab unread'
       })
       .toBe(true)
     await expect
-      .poll(() => isWorktreeUnread(orcaPage, worktreeId), {
+      .poll(() => isWorktreeUnread(mcodePage, worktreeId), {
         timeout: 10_000,
         message: 'parked BEL did not mark the worktree unread'
       })
@@ -406,39 +406,39 @@ test.describe('Terminal hidden view parking', () => {
 
     // Why: side effects must come from the pane-less watcher — the burst must
     // not have woken the parked view back up.
-    expect((await readTerminalTabViewState(orcaPage, tabAId)).hasManager).toBe(false)
+    expect((await readTerminalTabViewState(mcodePage, tabAId)).hasManager).toBe(false)
 
-    await activateTerminalTab(orcaPage, tabAId)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
+    await activateTerminalTab(mcodePage, tabAId)
+    await waitForActiveTerminalManager(mcodePage, 30_000)
     await expect
-      .poll(() => getTerminalContent(orcaPage, 12_000), {
+      .poll(() => getTerminalContent(mcodePage, 12_000), {
         timeout: 15_000,
         message: 'parked side-effect marker did not restore when the tab was revealed'
       })
       .toContain(marker)
   })
 
-  test('does not park excluded tabs', async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
-    const setup = await setUpParkableTabA(orcaPage)
+  test('does not park excluded tabs', async ({ mcodePage }) => {
+    await waitForSessionReady(mcodePage)
+    const setup = await setUpParkableTabA(mcodePage)
     const { worktreeId, tabAId } = setup
 
     // Tab C: parking-excluded because it has a pending startup command. Queue
     // it after the pane mounted so the mount-time consume cannot drain it.
-    const tabCId = await createActiveTerminalTab(orcaPage, worktreeId)
-    await orcaPage.evaluate((tabId) => {
+    const tabCId = await createActiveTerminalTab(mcodePage, worktreeId)
+    await mcodePage.evaluate((tabId) => {
       const store = window.__store
       if (!store) {
         throw new Error('parking exclusion spec: window.__store is unavailable')
       }
       store.getState().queueTabStartupCommand(tabId, { command: 'echo parked-exclusion-probe' })
     }, tabCId)
-    expect(await hasPendingStartupCommand(orcaPage, tabCId)).toBe(true)
+    expect(await hasPendingStartupCommand(mcodePage, tabCId)).toBe(true)
 
     // Tab B on top hides both A and C.
-    const tabBId = await createActiveTerminalTab(orcaPage, worktreeId)
+    const tabBId = await createActiveTerminalTab(mcodePage, worktreeId)
     await expect
-      .poll(() => getActiveTabId(orcaPage), {
+      .poll(() => getActiveTabId(mcodePage), {
         timeout: 5_000,
         message: 'tab B did not stay active while waiting on the parking window'
       })
@@ -448,14 +448,14 @@ test.describe('Terminal hidden view parking', () => {
     // instance, so the tab C assertion below is not vacuously green. A decoy
     // takes the #8262 last-active exemption (tab C is excluded, not a candidate)
     // so tab A is the one that cold-parks.
-    await parkHiddenTabBehindDecoy(orcaPage, worktreeId, tabAId, {
+    await parkHiddenTabBehindDecoy(mcodePage, worktreeId, tabAId, {
       parkDelayMs: PARKING_DELAY_MS
     })
-    await orcaPage.waitForTimeout(PARKING_DELAY_MS * 3)
+    await mcodePage.waitForTimeout(PARKING_DELAY_MS * 3)
 
     // Premise guard: nothing consumed the pending startup while hidden.
-    expect(await hasPendingStartupCommand(orcaPage, tabCId)).toBe(true)
-    const tabCState = await readTerminalTabViewState(orcaPage, tabCId)
+    expect(await hasPendingStartupCommand(mcodePage, tabCId)).toBe(true)
+    const tabCState = await readTerminalTabViewState(mcodePage, tabCId)
     expect(tabCState.hasManager).toBe(true)
     expect(tabCState.paneCount).toBeGreaterThan(0)
   })
@@ -467,22 +467,22 @@ test.describe('Terminal hidden view parking', () => {
   // snapshot restore + PTY reattach path the fuzz suites model in isolation, and
   // fails if any single cycle — or accumulated drift across 25 — garbles a cell.
   test('reproduces a static frame byte-for-byte across 25 park/reveal cycles', async ({
-    orcaPage,
+    mcodePage,
     testRepoPath
   }, testInfo: TestInfo) => {
     test.setTimeout(180_000)
-    await waitForSessionReady(orcaPage)
-    const setup = await setUpParkableTabA(orcaPage)
+    await waitForSessionReady(mcodePage)
+    const setup = await setUpParkableTabA(mcodePage)
     const { worktreeId, tabAId, tabAPtyId } = setup
 
     const runId = randomUUID()
     const marker = `CYCLE_REFERENCE_${runId}`
-    const scriptPath = path.join(testRepoPath, `.orca-cycle-reference-${runId}.mjs`)
+    const scriptPath = path.join(testRepoPath, `.mcode-cycle-reference-${runId}.mjs`)
     writeCycleReferenceScript(scriptPath, runId)
     try {
-      await sendToTerminal(orcaPage, tabAPtyId, `node ${JSON.stringify(scriptPath)}\r`)
+      await sendToTerminal(mcodePage, tabAPtyId, `node ${JSON.stringify(scriptPath)}\r`)
       await expect
-        .poll(() => getTerminalContent(orcaPage, 12_000), {
+        .poll(() => getTerminalContent(mcodePage, 12_000), {
           timeout: 15_000,
           message: 'cycle reference frame did not render while tab A was visible'
         })
@@ -492,8 +492,8 @@ test.describe('Terminal hidden view parking', () => {
       // between them is the deterministic hide/reveal driver. The decoy tab
       // absorbs the #8262 last-active exemption each cycle (hidden after B) so
       // tab A — not the just-hidden view — is the one that cold-parks.
-      const tabBId = await createActiveTerminalTab(orcaPage, worktreeId)
-      const decoyTabId = await createActiveTerminalTab(orcaPage, worktreeId)
+      const tabBId = await createActiveTerminalTab(mcodePage, worktreeId)
+      const decoyTabId = await createActiveTerminalTab(mcodePage, worktreeId)
 
       // One park/reveal cycle to run the frame through the snapshot restore for a
       // baseline. Why not compare against the visible-before-park content: an
@@ -503,23 +503,23 @@ test.describe('Terminal hidden view parking', () => {
       // omits — that is contract, not garble. Baselining after one reveal makes
       // both sides pass through identical machinery, so any later diff is drift.
       const runOneParkRevealCycle = async (cycle: number): Promise<string[]> => {
-        await activateTerminalTab(orcaPage, tabBId)
+        await activateTerminalTab(mcodePage, tabBId)
         // Hide tab B behind the decoy so B (not A) holds the #8262 exemption.
-        await activateTerminalTab(orcaPage, decoyTabId)
-        await waitForTabParked(orcaPage, tabAId, { parkDelayMs: PARKING_DELAY_MS })
-        await activateTerminalTab(orcaPage, tabAId)
-        await waitForActiveTerminalManager(orcaPage, 30_000)
-        const revealed = await waitForPaneIdentitySnapshot(orcaPage, 1)
+        await activateTerminalTab(mcodePage, decoyTabId)
+        await waitForTabParked(mcodePage, tabAId, { parkDelayMs: PARKING_DELAY_MS })
+        await activateTerminalTab(mcodePage, tabAId)
+        await waitForActiveTerminalManager(mcodePage, 30_000)
+        const revealed = await waitForPaneIdentitySnapshot(mcodePage, 1)
         expect(revealed.panes[0]?.ptyId).toBe(tabAPtyId)
         await expect
-          .poll(() => getTerminalContent(orcaPage, 12_000), {
+          .poll(() => getTerminalContent(mcodePage, 12_000), {
             timeout: 15_000,
             message: `cycle ${cycle}: reference frame did not restore on reveal`
           })
           .toContain(marker)
-        const rows = terminalContentRows(await getTerminalContent(orcaPage, 12_000))
+        const rows = terminalContentRows(await getTerminalContent(mcodePage, 12_000))
         // Garble sentinel: the hidden-skip banner must never appear.
-        expect(rows.join('\n')).not.toContain('Orca skipped hidden terminal output')
+        expect(rows.join('\n')).not.toContain('MCode skipped hidden terminal output')
         return rows
       }
 
@@ -535,7 +535,7 @@ test.describe('Terminal hidden view parking', () => {
       for (let cycle = 1; cycle < CYCLES; cycle++) {
         // Why: each cycle intentionally flips this tab's rendered verdict twice.
         // Let the production anti-churn burst window lapse before the next one.
-        await orcaPage.waitForTimeout(PARK_VERDICT_BURST_SETTLE_MS)
+        await mcodePage.waitForTimeout(PARK_VERDICT_BURST_SETTLE_MS)
         const rows = await runOneParkRevealCycle(cycle)
         if (JSON.stringify(rows) !== JSON.stringify(referenceRows)) {
           mismatches.push(
@@ -554,7 +554,7 @@ test.describe('Terminal hidden view parking', () => {
       ).toEqual([])
 
       const screenshotPath = testInfo.outputPath('park-reveal-25-cycles-final.png')
-      await orcaPage.screenshot({ path: screenshotPath, fullPage: true })
+      await mcodePage.screenshot({ path: screenshotPath, fullPage: true })
       await testInfo.attach('park-reveal-25-cycles-final.png', {
         path: screenshotPath,
         contentType: 'image/png'

@@ -18,9 +18,9 @@ const result = spawnSync(
     cwd: process.cwd(),
     env: {
       ...process.env,
-      ORCA_E2E_NESTED_RUNTIME_SSH: '1',
-      ORCA_E2E_SSH_DOCKER: '1',
-      ORCA_E2E_WEB_CLIENT: '1'
+      MCODE_E2E_NESTED_RUNTIME_SSH: '1',
+      MCODE_E2E_SSH_DOCKER: '1',
+      MCODE_E2E_WEB_CLIENT: '1'
     },
     stdio: 'inherit'
   }

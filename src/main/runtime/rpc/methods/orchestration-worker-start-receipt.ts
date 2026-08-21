@@ -35,8 +35,8 @@ export function failWorkerStartWithReceipt(args: {
     ...(unknown
       ? {
           nextCommands: [
-            `orca orchestration worker-show --dispatch ${args.dispatchId} --json`,
-            `orca orchestration worker-abandon --dispatch ${args.dispatchId} --json`
+            `mcode orchestration worker-show --dispatch ${args.dispatchId} --json`,
+            `mcode orchestration worker-abandon --dispatch ${args.dispatchId} --json`
           ]
         }
       : {})

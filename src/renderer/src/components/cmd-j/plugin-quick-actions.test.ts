@@ -6,7 +6,7 @@ vi.mock('@/lib/plugin-command-execution', () => ({ executePluginCommand: vi.fn()
 
 function command(context: 'global' | 'worktree'): ActivePluginCommand {
   return {
-    pluginKey: 'orca-samples.tasks',
+    pluginKey: 'mcode-samples.tasks',
     pluginName: 'Tasks Pack',
     id: 'open',
     title: 'Open Tasks',
@@ -21,7 +21,7 @@ describe('plugin Cmd+J actions', () => {
     const action = buildPluginQuickActions([command('global')])[0]!
 
     expect(action).toMatchObject({
-      id: 'plugin:orca-samples.tasks/open',
+      id: 'plugin:mcode-samples.tasks/open',
       title: 'Open Tasks',
       description: 'Tasks Pack plugin command'
     })

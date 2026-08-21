@@ -30,13 +30,13 @@ async function ensureSetupHookCommitted(page: TestPage): Promise<void> {
     return activeWorktree.path
   })
 
-  writeFileSync(path.join(activeWorktreePath, 'orca.yaml'), SETUP_HOOK_CONTENT, 'utf-8')
-  execFileSync('git', ['add', 'orca.yaml'], { cwd: activeWorktreePath, stdio: 'pipe' })
+  writeFileSync(path.join(activeWorktreePath, 'mcode.yaml'), SETUP_HOOK_CONTENT, 'utf-8')
+  execFileSync('git', ['add', 'mcode.yaml'], { cwd: activeWorktreePath, stdio: 'pipe' })
 
   try {
     execFileSync('git', ['diff', '--cached', '--quiet'], { cwd: activeWorktreePath, stdio: 'pipe' })
   } catch {
-    // Why: worktree creation reads orca.yaml from the created worktree, so the
+    // Why: worktree creation reads mcode.yaml from the created worktree, so the
     // temp repo must commit this hook before `git worktree add` copies it.
     execFileSync('git', ['commit', '-m', 'Add e2e setup hook'], {
       cwd: activeWorktreePath,

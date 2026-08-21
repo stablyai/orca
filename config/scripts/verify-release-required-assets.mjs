@@ -11,22 +11,22 @@ export function getRequiredReleaseAssetNames(tag) {
     'latest-linux-arm64.yml',
     'latest-mac.yml',
     'latest.yml',
-    'orca-linux.AppImage',
-    'orca-linux-arm64.AppImage',
-    `orca-ide_${version}_amd64.deb`,
-    `orca-ide_${version}_arm64.deb`,
-    `orca-ide-${version}.x86_64.rpm`,
-    `orca-ide-${version}.aarch64.rpm`,
-    'orca-windows-setup.exe',
-    'orca-windows-setup.exe.blockmap',
-    `Orca-${version}-mac.zip`,
-    `Orca-${version}-mac.zip.blockmap`,
-    `Orca-${version}-arm64-mac.zip`,
-    `Orca-${version}-arm64-mac.zip.blockmap`,
-    'orca-macos-x64.dmg',
-    'orca-macos-x64.dmg.blockmap',
-    'orca-macos-arm64.dmg',
-    'orca-macos-arm64.dmg.blockmap'
+    'mcode-linux.AppImage',
+    'mcode-linux-arm64.AppImage',
+    `mcode-ide_${version}_amd64.deb`,
+    `mcode-ide_${version}_arm64.deb`,
+    `mcode-ide-${version}.x86_64.rpm`,
+    `mcode-ide-${version}.aarch64.rpm`,
+    'mcode-windows-setup.exe',
+    'mcode-windows-setup.exe.blockmap',
+    `MCode-${version}-mac.zip`,
+    `MCode-${version}-mac.zip.blockmap`,
+    `MCode-${version}-arm64-mac.zip`,
+    `MCode-${version}-arm64-mac.zip.blockmap`,
+    'mcode-macos-x64.dmg',
+    'mcode-macos-x64.dmg.blockmap',
+    'mcode-macos-arm64.dmg',
+    'mcode-macos-arm64.dmg.blockmap'
   ]
 }
 
@@ -150,7 +150,7 @@ async function main() {
   if (!token) {
     throw new Error('GH_TOKEN or GITHUB_TOKEN must be set')
   }
-  const repo = process.env.GITHUB_REPOSITORY || 'stablyai/orca'
+  const repo = process.env.GITHUB_REPOSITORY || 'mcode-ide/mcode'
   const result = await verifyRequiredReleaseAssets({ repo, tag, token })
   console.log(`Verified ${result.checked.length} required release assets for ${repo}@${tag}`)
 }

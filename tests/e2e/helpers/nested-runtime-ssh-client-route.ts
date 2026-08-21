@@ -1,4 +1,4 @@
-import { expect } from './orca-app'
+import { expect } from './mcode-app'
 import type {
   createRuntimeDesktopPairingOffer,
   PairedElectronClient
@@ -31,7 +31,7 @@ export async function assertNestedTerminalDestination(
   expectedSentinel: string
 ): Promise<void> {
   await focusActiveTerminalInput(client.page)
-  await client.page.keyboard.insertText('cat .orca-e2e-destination-id')
+  await client.page.keyboard.insertText('cat .mcode-e2e-destination-id')
   await client.page.keyboard.press('Enter')
   await expect
     .poll(() => getTerminalContent(client.page), { timeout: 15_000 })

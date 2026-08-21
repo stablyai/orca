@@ -5,10 +5,10 @@ function manifest(contributes: Record<string, unknown>): Record<string, unknown>
   return {
     manifestVersion: 1,
     id: 'content-pack',
-    publisher: 'orca-samples',
+    publisher: 'mcode-samples',
     name: 'Content pack',
     version: '1.0.0',
-    engines: { orca: '>=1.0.0' },
+    engines: { mcode: '>=1.0.0' },
     pluginApi: 1,
     contributes,
     capabilities: []

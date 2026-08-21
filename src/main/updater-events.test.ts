@@ -25,7 +25,7 @@ vi.mock('./linux-update-package-type', () => ({
 vi.mock('./updater-changelog', () => ({ fetchChangelog: vi.fn().mockResolvedValue(null) }))
 vi.mock('./updater-lifecycle-diagnostics', () => ({ recordUpdaterLifecycle: vi.fn() }))
 
-const DEB_PATH = '/home/tester/.cache/orca-updater/pending/orca-ide_1.0.61_amd64.deb'
+const DEB_PATH = '/home/tester/.cache/mcode-updater/pending/mcode-ide_1.0.61_amd64.deb'
 // A real 64-byte SHA-512; capture rejects a digest that cannot decode to one.
 const DEB_SHA512 =
   'LHlL7dKoqg98gS2nfQv878dK+UoktbAkm4M20/hoJ2Qr0Kqsa3MSL4VmWy/Lll/MYjQFkpvOxduQ/vswentozA=='
@@ -96,7 +96,7 @@ function downloadedEvent(overrides?: Record<string, unknown>): Record<string, un
   return {
     version: '1.0.61',
     downloadedFile: DEB_PATH,
-    files: [{ url: 'orca-ide_1.0.61_amd64.deb', sha512: DEB_SHA512 }],
+    files: [{ url: 'mcode-ide_1.0.61_amd64.deb', sha512: DEB_SHA512 }],
     ...overrides
   }
 }

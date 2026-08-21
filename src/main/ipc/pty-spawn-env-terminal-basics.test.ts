@@ -37,7 +37,7 @@ vi.mock('../telemetry/client', () =>
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
-vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
+vi.mock('../cli/linux-terminal-mcode-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../memory/pty-registry', () =>
@@ -79,7 +79,7 @@ describe('registerPtyHandlers', () => {
           buildSpawnEnv: (id, baseEnv, context) =>
             buildPtyHostEnv(id, baseEnv, {
               isPackaged: true,
-              userDataPath: '/tmp/orca-user-data',
+              userDataPath: '/tmp/mcode-user-data',
               selectedCodexHomePath: null,
               agentStatusHooksEnabled: false,
               isWsl: context?.isWsl,
@@ -93,20 +93,20 @@ describe('registerPtyHandlers', () => {
           shellOverride: 'wsl.exe',
           terminalWindowsWslDistro: 'Ubuntu',
           env: {
-            PATH: 'C:\\Orca\\bin;C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps',
-            WSLENV: 'ORCA_TERMINAL_HANDLE/u'
+            PATH: 'C:\\MCode\\bin;C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps',
+            WSLENV: 'MCODE_TERMINAL_HANDLE/u'
           }
         })
         const [file, , options] = spawnMock.mock.calls.at(-1)!
 
         expect(file).toBe('wsl.exe')
         expect(options.env.PATH).toBe(
-          'C:\\Orca\\bin;C:\\Windows\\System32;C:\\Python314;C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps'
+          'C:\\MCode\\bin;C:\\Windows\\System32;C:\\Python314;C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps'
         )
         const forwardedKeys = options.env.WSLENV.split(':').map((entry) =>
           entry.split('/')[0]!.toLowerCase()
         )
-        expect(options.env.WSLENV).toContain('ORCA_TERMINAL_HANDLE/u')
+        expect(options.env.WSLENV).toContain('MCODE_TERMINAL_HANDLE/u')
         expect(forwardedKeys).not.toContain('path')
       } finally {
         __resetPersistedWindowsPathCacheForTests()
@@ -200,7 +200,7 @@ describe('registerPtyHandlers', () => {
       const env = await spawnAndGetEnv()
       expect(env.TERM).toBe('xterm-256color')
       expect(env.COLORTERM).toBe('truecolor')
-      expect(env.TERM_PROGRAM).toBe('Orca')
+      expect(env.TERM_PROGRAM).toBe('MCode')
     })
     it('keeps indexed Git prompt guards in a local agent terminal env', async () => {
       const env = await spawnAndGetEnv(undefined, undefined, undefined, undefined, 'claude')
@@ -222,27 +222,27 @@ describe('registerPtyHandlers', () => {
       expect(env.GCM_INTERACTIVE).toBe('never')
     })
     it('advertises OSC 8 hyperlink support via FORCE_HYPERLINK', async () => {
-      // Why: supports-hyperlinks allowlists TERM_PROGRAM and reports false for Orca, so FORCE_HYPERLINK=1 forces detection on (xterm.js handles OSC 8 natively).
+      // Why: supports-hyperlinks allowlists TERM_PROGRAM and reports false for MCode, so FORCE_HYPERLINK=1 forces detection on (xterm.js handles OSC 8 natively).
       const env = await spawnAndGetEnv()
       expect(env.FORCE_HYPERLINK).toBe('1')
     })
-    it('surfaces ORCA_APP_VERSION as TERM_PROGRAM_VERSION for TUI feature gating', async () => {
-      const env = await spawnAndGetEnv(undefined, { ORCA_APP_VERSION: '1.2.3-test' })
+    it('surfaces MCODE_APP_VERSION as TERM_PROGRAM_VERSION for TUI feature gating', async () => {
+      const env = await spawnAndGetEnv(undefined, { MCODE_APP_VERSION: '1.2.3-test' })
       expect(env.TERM_PROGRAM_VERSION).toBe('1.2.3-test')
     })
-    it('falls back to a placeholder version when ORCA_APP_VERSION is unset', async () => {
-      const env = await spawnAndGetEnv(undefined, { ORCA_APP_VERSION: undefined })
+    it('falls back to a placeholder version when MCODE_APP_VERSION is unset', async () => {
+      const env = await spawnAndGetEnv(undefined, { MCODE_APP_VERSION: undefined })
       expect(env.TERM_PROGRAM_VERSION).toBe('0.0.0-dev')
     })
-    it('injects the selected Codex home into Orca terminal PTYs', async () => {
+    it('injects the selected Codex home into MCode terminal PTYs', async () => {
       const env = await withBundledCli(() =>
         spawnAndGetEnv(undefined, undefined, () => TEST_CODEX_HOME)
       )
       expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
-      expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
+      expect(env.MCODE_CODEX_HOME).toBe(TEST_CODEX_HOME)
       // Why (STA-4270): a bare name would be resolved by the post-profile PATH the codex()
       // wrapper inherits, so the preflight must carry the CLI's verified absolute path.
-      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBe(BUNDLED_CLI_PATH)
+      expect(env.MCODE_CODEX_LAUNCH_PREFLIGHT).toBe(BUNDLED_CLI_PATH)
     })
     it('skips the Codex launch preflight when the bundled CLI is not executable', async () => {
       const env = await withBundledCli(
@@ -251,10 +251,10 @@ describe('registerPtyHandlers', () => {
       )
 
       expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
-      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBeUndefined()
+      expect(env.MCODE_CODEX_LAUNCH_PREFLIGHT).toBeUndefined()
     })
     // Why (STA-4270): profile scripts run before the codex() wrapper and routinely prepend
-    // directories to PATH, so a scratch `orca` there must never become the preflight.
+    // directories to PATH, so a scratch `mcode` there must never become the preflight.
     it('pins the Codex launch preflight to the bundled CLI even when PATH leads elsewhere', async () => {
       const env = await withBundledCli(() =>
         spawnAndGetEnv(
@@ -264,9 +264,9 @@ describe('registerPtyHandlers', () => {
         )
       )
 
-      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBe(BUNDLED_CLI_PATH)
-      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).not.toBe('orca')
-      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT.startsWith('/tmp/hijack-scratch')).toBe(false)
+      expect(env.MCODE_CODEX_LAUNCH_PREFLIGHT).toBe(BUNDLED_CLI_PATH)
+      expect(env.MCODE_CODEX_LAUNCH_PREFLIGHT).not.toBe('mcode')
+      expect(env.MCODE_CODEX_LAUNCH_PREFLIGHT.startsWith('/tmp/hijack-scratch')).toBe(false)
     })
     it('does not install the Codex launch preflight when Codex hooks are disabled', async () => {
       const env = await spawnAndGetEnv(
@@ -277,7 +277,7 @@ describe('registerPtyHandlers', () => {
       )
 
       expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
-      expect(env.ORCA_CODEX_LAUNCH_PREFLIGHT).toBeUndefined()
+      expect(env.MCODE_CODEX_LAUNCH_PREFLIGHT).toBeUndefined()
     })
     it('resumes an automatic Codex session from its prepared originating home', async () => {
       const selectedHome = vi.fn(() => '/managed/current/home')
@@ -316,7 +316,7 @@ describe('registerPtyHandlers', () => {
       )
       expect(selectedHome).not.toHaveBeenCalled()
       expect(env.CODEX_HOME).toBe('/managed/origin/home')
-      expect(env.ORCA_CODEX_HOME).toBe('/managed/origin/home')
+      expect(env.MCODE_CODEX_HOME).toBe('/managed/origin/home')
     })
     it('blocks a shared-runtime resume when auth reconciliation fails', async () => {
       const selectedHome = vi.fn(() => {
@@ -378,7 +378,7 @@ describe('registerPtyHandlers', () => {
         rows: 24,
         command: 'codex resume session-a',
         env: { CODEX_HOME: '/custom/codex', REMOVE_ME: 'stale' },
-        envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME', 'REMOVE_ME'],
+        envToDelete: ['CODEX_HOME', 'MCODE_CODEX_HOME', 'REMOVE_ME'],
         launchAgent: 'codex',
         resumeProviderSession: {
           key: 'session_id',
@@ -390,7 +390,7 @@ describe('registerPtyHandlers', () => {
       const env = spawnMock.mock.calls.at(-1)![2].env as Record<string, string>
       expect(selectedHome).not.toHaveBeenCalled()
       expect(env.CODEX_HOME).toBe(systemHome)
-      expect(env.ORCA_CODEX_HOME).toBe(systemHome)
+      expect(env.MCODE_CODEX_HOME).toBe(systemHome)
       expect(env.REMOVE_ME).toBeUndefined()
     })
     it('does not fall back to the selected account when automatic resume provenance is rejected', async () => {

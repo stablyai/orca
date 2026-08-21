@@ -130,7 +130,7 @@ export type OpenFile = {
   pendingLiveDiskVerification?: boolean
   /** Blocks saves while a restored tab's filesystem authority is being replaced. */
   pendingOwnerMigration?: boolean
-  /** Why: routes an Orca-owned move's destination-watcher echo into content verification. On the tab so it survives the atomic rekey; operationId supersedes a stale verification on re-move. Not persisted. */
+  /** Why: routes an MCode-owned move's destination-watcher echo into content verification. On the tab so it survives the atomic rekey; operationId supersedes a stale verification on re-move. Not persisted. */
   pendingSelfMoveEcho?: { operationId: string; targetPath: string }
   /** Why: diff bodies are cached in EditorPanel; bump this on re-select so the panel refetches instead of reusing a stale snapshot. */
   diffContentReloadNonce?: number

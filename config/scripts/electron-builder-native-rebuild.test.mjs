@@ -8,7 +8,7 @@ const {
 } = require('./electron-builder-native-rebuild.cjs')
 
 describe('electron-builder native rebuild hook', () => {
-  it('passes the target platform and arch to Orca native rebuild script', () => {
+  it('passes the target platform and arch to MCode native rebuild script', () => {
     expect(
       buildNativeRebuildArgs({
         platform: { nodeName: 'darwin' },
@@ -44,7 +44,7 @@ describe('electron-builder native rebuild hook', () => {
 
   it('reuses a prepared native runtime only for the host target', () => {
     const runtime = {
-      environment: { ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1' },
+      environment: { MCODE_REUSE_PREPARED_NATIVE_RUNTIME: '1' },
       hostPlatform: 'linux',
       hostArch: 'x64'
     }

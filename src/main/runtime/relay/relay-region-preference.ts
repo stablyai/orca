@@ -9,7 +9,7 @@ import { hardenExistingSecureFile, writeSecureJsonFile } from '../../../shared/s
 export const RELAY_REGIONS = ['us-central1', 'asia-east2'] as const
 export type RelayRegion = (typeof RELAY_REGIONS)[number]
 
-const RELAY_REGION_CACHE_FILENAME = 'orca-relay-region-preference.json'
+const RELAY_REGION_CACHE_FILENAME = 'mcode-relay-region-preference.json'
 const CACHE_MAX_BYTES = 8 * 1024
 const CATALOG_MAX_BYTES = 16 * 1024
 const CACHE_TTL_MS = 24 * 60 * 60_000
@@ -95,7 +95,7 @@ export class RelayRegionPreferenceResolver {
 
   async resolve(): Promise<RelayRegion | undefined> {
     const override = RelayRegionSchema.safeParse(
-      this.options.diagnosticOverride ?? process.env.ORCA_RELAY_REGION_OVERRIDE
+      this.options.diagnosticOverride ?? process.env.MCODE_RELAY_REGION_OVERRIDE
     )
     if (override.success) {
       return override.data

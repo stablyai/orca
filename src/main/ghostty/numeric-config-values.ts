@@ -11,7 +11,7 @@ export const parseStrictInt = (v: string): number | null => {
 }
 
 // Why: Ghostty accepts "top,bottom" / "left,right" pairs for window paddings,
-// but Orca stores a single value per axis — average the pair so the total
+// but MCode stores a single value per axis — average the pair so the total
 // padding along the axis stays the same.
 export const parsePaddingValue = (v: string): number | null => {
   const parts = v.split(',')

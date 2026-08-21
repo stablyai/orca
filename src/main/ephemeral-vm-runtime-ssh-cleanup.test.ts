@@ -33,7 +33,7 @@ function createRuntime(
       connection: {
         type: 'ssh',
         projectRoot: '/workspace/repo',
-        target: { label: 'VM', host: 'host', port: 22, username: 'orca' }
+        target: { label: 'VM', host: 'host', port: 22, username: 'mcode' }
       }
     },
     ...overrides
@@ -41,7 +41,7 @@ function createRuntime(
 }
 
 it('retains the hidden target identity when removal fails', async () => {
-  const userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-ssh-cleanup-'))
+  const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-vm-ssh-cleanup-'))
   tempDirs.push(userDataPath)
 
   await expect(
@@ -58,7 +58,7 @@ it('retains the hidden target identity when removal fails', async () => {
 })
 
 it('keeps provider cleanup retryable until target removal succeeds', async () => {
-  const userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-ssh-cleanup-'))
+  const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-vm-ssh-cleanup-'))
   tempDirs.push(userDataPath)
   const failed = await removeEphemeralVmRuntimeSshTarget({
     userDataPath,
@@ -85,7 +85,7 @@ it('keeps provider cleanup retryable until target removal succeeds', async () =>
 })
 
 it('preserves the provider destroy error after target removal', async () => {
-  const userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-ssh-cleanup-'))
+  const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-vm-ssh-cleanup-'))
   tempDirs.push(userDataPath)
   const runtime = createRuntime(userDataPath, 'cleanup_failed', {
     cleanupStatus: 'failed',
@@ -107,7 +107,7 @@ it('preserves the provider destroy error after target removal', async () => {
 })
 
 it('does not let a stale concurrent failure regress completed cleanup', async () => {
-  const userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-ssh-cleanup-'))
+  const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-vm-ssh-cleanup-'))
   tempDirs.push(userDataPath)
   const runtime = createRuntime(userDataPath, 'cleaned')
   let rejectStaleRemoval!: (error: Error) => void
@@ -139,7 +139,7 @@ it('does not let a stale concurrent failure regress completed cleanup', async ()
 })
 
 it('repairs completed cleanup records that already lost their target id', async () => {
-  const userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-ssh-cleanup-'))
+  const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-vm-ssh-cleanup-'))
   tempDirs.push(userDataPath)
   const runtime = createRuntime(userDataPath, 'cleanup_failed', {
     cleanupStatus: 'succeeded',

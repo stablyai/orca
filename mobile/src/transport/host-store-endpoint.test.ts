@@ -54,7 +54,7 @@ describe('updateHostNameAndEndpoint', () => {
 
     expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1)
     expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-      'orca:hosts',
+      'mcode:hosts',
       JSON.stringify([
         { ...stored[0], name: 'Home Desk', endpoint: 'ws://192.168.1.10:6768' },
         stored[1]
@@ -68,7 +68,7 @@ describe('updateHostNameAndEndpoint', () => {
     await updateHostNameAndEndpoint('host-1', { name: 'Home Desk' })
 
     expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-      'orca:hosts',
+      'mcode:hosts',
       JSON.stringify([{ ...stored[0], name: 'Home Desk' }, stored[1]])
     )
   })
@@ -79,7 +79,7 @@ describe('updateHostNameAndEndpoint', () => {
     await updateHostNameAndEndpoint('host-1', { endpoint: 'ws://192.168.1.10:6768' })
 
     expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-      'orca:hosts',
+      'mcode:hosts',
       JSON.stringify([{ ...stored[0], endpoint: 'ws://192.168.1.10:6768' }, stored[1]])
     )
   })

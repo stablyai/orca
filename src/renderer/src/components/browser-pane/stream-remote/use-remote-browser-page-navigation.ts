@@ -19,7 +19,7 @@ import type { RemoteBrowserOperationToken } from './remote-browser-stream-tokens
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import {
   consumeBrowserFocusRequest,
-  ORCA_BROWSER_FOCUS_REQUEST_EVENT,
+  MCODE_BROWSER_FOCUS_REQUEST_EVENT,
   type BrowserFocusRequestDetail
 } from '../host-guest/browser-focus'
 import type { BrowserPageUrlSetter, BrowserTabPageState } from '../describe-page/browser-page-types'
@@ -137,9 +137,9 @@ export function useRemoteBrowserPageNavigation({
       const target = imageRef.current ?? remoteViewportRef.current
       target?.focus()
     }
-    window.addEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
+    window.addEventListener(MCODE_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
     return () =>
-      window.removeEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
+      window.removeEventListener(MCODE_BROWSER_FOCUS_REQUEST_EVENT, handleBrowserFocusRequest)
   }, [addressBarInputRef, browserTab.id, imageRef, isActive, remoteViewportRef])
 
   const runRemoteNavigation = useCallback(

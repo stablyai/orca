@@ -1,5 +1,5 @@
 // Single source of truth for the app's logs directory and the files inside it.
-// macOS convention is `~/Library/Application Support/Orca/logs/`; Windows and
+// macOS convention is `~/Library/Application Support/MCode/logs/`; Windows and
 // Linux resolve the same intent via Electron's `userData` dir. Falls back to a
 // homedir-derived path when Electron's `app` is unavailable (unit tests).
 
@@ -15,12 +15,12 @@ function getUserDataDir(): string {
     // fallback so callers can resolve the path without the Electron runtime.
     const home = homedir()
     if (platform() === 'darwin') {
-      return join(home, 'Library', 'Application Support', 'Orca')
+      return join(home, 'Library', 'Application Support', 'MCode')
     }
     if (platform() === 'win32') {
-      return join(process.env.APPDATA ?? home, 'Orca')
+      return join(process.env.APPDATA ?? home, 'MCode')
     }
-    return join(home, '.config', 'Orca')
+    return join(home, '.config', 'MCode')
   }
 }
 

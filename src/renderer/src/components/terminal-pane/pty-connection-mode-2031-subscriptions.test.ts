@@ -239,7 +239,7 @@ describe('connectPanePty', () => {
     })
 
     // One fish prompt cycle, exactly as fish's tty_handoff.rs emits it.
-    const FISH_PROMPT_HANDOFF = '\x1b[?2031h\x1b[0m~/orca \x1b[32m❯\x1b[0m \x1b[?2031l'
+    const FISH_PROMPT_HANDOFF = '\x1b[?2031h\x1b[0m~/mcode \x1b[32m❯\x1b[0m \x1b[?2031l'
 
     it('stays silent across three fish prompts', async () => {
       const { transport, emit, dispose } = await connectVisiblePane()

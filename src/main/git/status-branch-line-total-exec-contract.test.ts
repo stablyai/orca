@@ -80,7 +80,7 @@ function git(repo: string, args: string[]): string {
 }
 
 async function createFixtureRepo(): Promise<{ repo: string; mergeBase: string }> {
-  const root = await mkdtemp(path.join(tmpdir(), 'orca-branch-line-total-exec-'))
+  const root = await mkdtemp(path.join(tmpdir(), 'mcode-branch-line-total-exec-'))
   tempRoots.push(root)
   const repo = path.join(root, 'repo')
   execFileSync('git', ['init', '-q', repo])
@@ -172,7 +172,7 @@ describe('branch line total completeness', () => {
   })
 
   it('omits the total for a directory that is not a git worktree', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'orca-branch-line-total-folder-'))
+    const root = await mkdtemp(path.join(tmpdir(), 'mcode-branch-line-total-folder-'))
     tempRoots.push(root)
 
     const result = await getStatus(root, { branchLineTotalMergeBase: BOGUS_MERGE_BASE })

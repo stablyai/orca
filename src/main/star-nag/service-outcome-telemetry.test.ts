@@ -16,8 +16,8 @@ const mocks = vi.hoisted(() => ({
   browserWindowMock: {
     getAllWindows: vi.fn<() => TestWindow[]>(() => [])
   },
-  checkOrcaStarredMock: vi.fn(),
-  starOrcaMock: vi.fn(),
+  checkMCodeStarredMock: vi.fn(),
+  starMCodeMock: vi.fn(),
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn(() => ({ nth_repo_added: 3 })),
   ipcMainHandleMock: vi.fn()
@@ -32,8 +32,8 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../github/client', () => ({
-  checkOrcaStarred: mocks.checkOrcaStarredMock,
-  starOrca: mocks.starOrcaMock
+  checkMCodeStarred: mocks.checkMCodeStarredMock,
+  starMCode: mocks.starMCodeMock
 }))
 
 vi.mock('../telemetry/client', () => ({
@@ -44,7 +44,7 @@ vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: mocks.getCohortAtEmitMock
 }))
 
-const { browserWindowMock, checkOrcaStarredMock, ipcMainHandleMock, trackMock } = mocks
+const { browserWindowMock, checkMCodeStarredMock, ipcMainHandleMock, trackMock } = mocks
 const getIpcHandler = createIpcHandlerLookup(mocks.ipcMainHandleMock)
 
 describe('StarNagService', () => {
@@ -79,7 +79,7 @@ describe('StarNagService', () => {
     })
 
     trackMock.mockClear()
-    checkOrcaStarredMock.mockResolvedValue(true)
+    checkMCodeStarredMock.mockResolvedValue(true)
     const next = createHarness()
     next.service.start()
     next.emitAgentStarted(45)
@@ -185,7 +185,7 @@ describe('StarNagService', () => {
   it('does not emit confirmed star telemetry for web fallback handoff', async () => {
     const window = createWindow()
     browserWindowMock.getAllWindows.mockReturnValue([window])
-    checkOrcaStarredMock.mockResolvedValue(null)
+    checkMCodeStarredMock.mockResolvedValue(null)
     const { service, ui } = createHarness()
 
     service.registerIpcHandlers()
@@ -197,7 +197,7 @@ describe('StarNagService', () => {
       expect.objectContaining({ outcome: 'opened_repo', source: 'onboarding_completed' })
     )
     expect(trackMock).not.toHaveBeenCalledWith(
-      'app_starred_orca',
+      'app_starred_mcode',
       expect.objectContaining({ source: 'onboarding_completed' })
     )
     expect(ui.starNagCompleted).toBeUndefined()

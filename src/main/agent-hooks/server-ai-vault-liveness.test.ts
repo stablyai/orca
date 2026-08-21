@@ -41,7 +41,7 @@ describe('AgentHookServer AI Vault liveness identity', () => {
   })
 
   it('hydrates dismissed provider identity without reviving visible status', async () => {
-    const userDataPath = await mkdtemp(join(tmpdir(), 'orca-ai-vault-liveness-'))
+    const userDataPath = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-liveness-'))
     const first = new AgentHookServer()
     try {
       await first.start({ env: 'production', userDataPath })

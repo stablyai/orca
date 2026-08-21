@@ -10,7 +10,7 @@ describe('gitLabPipelineJobsToPRChecks', () => {
         name: 'unit',
         stage: 'test',
         status: 'failed',
-        webUrl: 'https://gitlab.com/acme/orca/-/jobs/1',
+        webUrl: 'https://gitlab.com/acme/mcode/-/jobs/1',
         duration: 12
       },
       {
@@ -26,7 +26,7 @@ describe('gitLabPipelineJobsToPRChecks', () => {
         name: 'delayed deploy',
         stage: 'deploy',
         status: 'scheduled',
-        webUrl: 'https://gitlab.com/acme/orca/-/jobs/3',
+        webUrl: 'https://gitlab.com/acme/mcode/-/jobs/3',
         duration: null
       },
       {
@@ -34,7 +34,7 @@ describe('gitLabPipelineJobsToPRChecks', () => {
         name: 'external callback',
         stage: 'integration',
         status: 'waiting_for_callback',
-        webUrl: 'https://gitlab.com/acme/orca/-/jobs/4',
+        webUrl: 'https://gitlab.com/acme/mcode/-/jobs/4',
         duration: null
       }
     ]
@@ -44,7 +44,7 @@ describe('gitLabPipelineJobsToPRChecks', () => {
         name: 'test: unit',
         status: 'completed',
         conclusion: 'failure',
-        url: 'https://gitlab.com/acme/orca/-/jobs/1',
+        url: 'https://gitlab.com/acme/mcode/-/jobs/1',
         gitlabJobId: 1
       },
       {
@@ -58,14 +58,14 @@ describe('gitLabPipelineJobsToPRChecks', () => {
         name: 'deploy: delayed deploy',
         status: 'queued',
         conclusion: 'pending',
-        url: 'https://gitlab.com/acme/orca/-/jobs/3',
+        url: 'https://gitlab.com/acme/mcode/-/jobs/3',
         gitlabJobId: 3
       },
       {
         name: 'integration: external callback',
         status: 'queued',
         conclusion: 'pending',
-        url: 'https://gitlab.com/acme/orca/-/jobs/4',
+        url: 'https://gitlab.com/acme/mcode/-/jobs/4',
         gitlabJobId: 4
       }
     ])

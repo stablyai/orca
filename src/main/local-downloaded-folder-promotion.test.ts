@@ -32,7 +32,7 @@ describe('promoteLocalDownloadedFolder', () => {
     tempPath: string
     destinationPath: string
   }> {
-    const root = await mkdtemp(join(tmpdir(), 'orca-folder-promotion-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-folder-promotion-'))
     roots.push(root)
     const tempPath = join(root, '.transfer.download')
     const destinationPath = join(root, 'downloaded')
@@ -66,7 +66,7 @@ describe('promoteLocalDownloadedFolder', () => {
   })
 
   it('does not replace a file added inside a claimed destination', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-folder-promotion-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-folder-promotion-'))
     roots.push(root)
     const sourcePath = join(root, 'remote.txt')
     const destinationPath = join(root, 'third-party.txt')
@@ -82,7 +82,7 @@ describe('promoteLocalDownloadedFolder', () => {
   })
 
   it('preserves a mutation made after hard-link state is recorded', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-folder-promotion-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-folder-promotion-'))
     roots.push(root)
     const sourcePath = join(root, 'remote.txt')
     const destinationPath = join(root, 'published.txt')
@@ -128,7 +128,7 @@ describe('promoteLocalDownloadedFolder', () => {
   })
 
   it('preserves a third-party file mutation when later publication fails', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-folder-promotion-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-folder-promotion-'))
     roots.push(root)
     const tempPath = join(root, '.transfer.download')
     const destinationPath = join(root, 'downloaded')
@@ -161,7 +161,7 @@ describe('promoteLocalDownloadedFolder', () => {
   })
 
   it('cancels between entries and rolls back unchanged published files', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-folder-promotion-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-folder-promotion-'))
     roots.push(root)
     const tempPath = join(root, '.transfer.download')
     const destinationPath = join(root, 'downloaded')
@@ -190,7 +190,7 @@ describe('promoteLocalDownloadedFolder', () => {
   })
 
   it('cancels a chunked exclusive-copy fallback and removes its partial file', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-folder-promotion-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-folder-promotion-'))
     roots.push(root)
     const sourcePath = join(root, 'large-source.bin')
     const destinationPath = join(root, 'large-destination.bin')

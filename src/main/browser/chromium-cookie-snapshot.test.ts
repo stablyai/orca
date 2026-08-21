@@ -41,7 +41,7 @@ describe('createChromiumCookieSnapshot', () => {
   let writer: DatabaseSync | null
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'orca-chromium-snapshot-test-'))
+    root = mkdtempSync(join(tmpdir(), 'mcode-chromium-snapshot-test-'))
     writer = null
     beforeCopyMock.mockReset()
   })

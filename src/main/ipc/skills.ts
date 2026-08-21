@@ -1,6 +1,6 @@
 import { app, BrowserWindow } from 'electron'
 import type { Store } from '../persistence'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { MCodeRuntimeService } from '../runtime/mcode-runtime'
 import {
   SkillDiscoveryTargetSchema,
   type SkillDiscoveryResult,
@@ -23,7 +23,7 @@ import {
 import { registerSkillCloudIpcHandlers } from './skill-cloud-ipc-handlers'
 import { handleMainWindowSkillIpc } from './skill-ipc-main-window'
 
-export function registerSkillsHandlers(store: Store, runtime?: OrcaRuntimeService): void {
+export function registerSkillsHandlers(store: Store, runtime?: MCodeRuntimeService): void {
   const discover = async (target?: SkillDiscoveryTarget): Promise<SkillDiscoveryResult> => {
     const parsedTarget = target ? SkillDiscoveryTargetSchema.parse(target) : undefined
     const resolvedTarget = resolveSkillDiscoveryTarget(parsedTarget)

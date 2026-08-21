@@ -22,8 +22,8 @@ describe('project host setup projection', () => {
   it('keeps timestamps stable when addedAt is 0 across different now values', () => {
     const target = repo({
       id: 'repo-1',
-      path: '/Users/alice/orca',
-      displayName: 'orca',
+      path: '/Users/alice/mcode',
+      displayName: 'mcode',
       addedAt: 0
     })
     const first = projectHostSetupProjectionFromRepos([target], 1_000)
@@ -42,18 +42,18 @@ describe('project host setup projection', () => {
   // project's timestamps. The accumulator carries 0 when the *first* sibling is the unknown one.
   const timestampedSibling = repo({
     id: 'local-repo',
-    path: '/Users/alice/orca',
-    displayName: 'Orca',
+    path: '/Users/alice/mcode',
+    displayName: 'MCode',
     addedAt: 100,
-    upstream: { owner: 'StablyAI', repo: 'Orca' }
+    upstream: { owner: 'StablyAI', repo: 'MCode' }
   })
   const unknownSibling = repo({
     id: 'remote-repo',
-    path: '/home/alice/orca',
-    displayName: 'orca',
+    path: '/home/alice/mcode',
+    displayName: 'mcode',
     addedAt: 0,
     connectionId: 'gpu-vm',
-    upstream: { owner: 'stablyai', repo: 'orca' }
+    upstream: { owner: 'stablyai', repo: 'mcode' }
   })
 
   it('does not wipe a persisted createdAt when a sibling repo has addedAt 0', () => {
@@ -90,14 +90,14 @@ describe('project host setup projection', () => {
 
   it('projects a legacy local repo into one project and one ready local setup', () => {
     const projection = projectHostSetupProjectionFromRepos(
-      [repo({ id: 'repo-1', path: '/Users/alice/orca', displayName: 'orca' })],
+      [repo({ id: 'repo-1', path: '/Users/alice/mcode', displayName: 'mcode' })],
       500
     )
 
     expect(projection.projects).toEqual([
       {
         id: 'repo:repo-1',
-        displayName: 'orca',
+        displayName: 'mcode',
         badgeColor: '#737373',
         kind: 'git',
         sourceRepoIds: ['repo-1'],
@@ -111,8 +111,8 @@ describe('project host setup projection', () => {
         projectId: 'repo:repo-1',
         hostId: 'local',
         repoId: 'repo-1',
-        path: '/Users/alice/orca',
-        displayName: 'orca',
+        path: '/Users/alice/mcode',
+        displayName: 'mcode',
         kind: 'git',
         setupState: 'ready',
         setupMethod: 'legacy-repo',
@@ -126,8 +126,8 @@ describe('project host setup projection', () => {
     const projection = projectHostSetupProjectionFromRepos([
       repo({
         id: 'remote-repo',
-        path: '/home/alice/orca',
-        displayName: 'orca',
+        path: '/home/alice/mcode',
+        displayName: 'mcode',
         connectionId: 'openclaw 2',
         worktreeBasePath: '../worktrees',
         gitUsername: 'alice'
@@ -147,8 +147,8 @@ describe('project host setup projection', () => {
     const projection = projectHostSetupProjectionFromRepos([
       repo({
         id: 'repo-1',
-        path: '/Users/alice/orca',
-        displayName: 'orca',
+        path: '/Users/alice/mcode',
+        displayName: 'mcode',
         projectHostSetupMethod: 'cloned'
       })
     ])
@@ -160,26 +160,26 @@ describe('project host setup projection', () => {
     const projection = projectHostSetupProjectionFromRepos([
       repo({
         id: 'local-repo',
-        path: '/Users/alice/orca',
-        displayName: 'Orca',
-        upstream: { owner: 'StablyAI', repo: 'Orca' }
+        path: '/Users/alice/mcode',
+        displayName: 'MCode',
+        upstream: { owner: 'StablyAI', repo: 'MCode' }
       }),
       repo({
         id: 'remote-repo',
-        path: '/home/alice/orca',
-        displayName: 'orca',
+        path: '/home/alice/mcode',
+        displayName: 'mcode',
         connectionId: 'gpu-vm',
-        upstream: { owner: 'stablyai', repo: 'orca' }
+        upstream: { owner: 'stablyai', repo: 'mcode' }
       })
     ])
 
     expect(projection.projects).toHaveLength(1)
     expect(projection.projects[0]).toMatchObject({
-      id: 'github:stablyai/orca',
+      id: 'github:mcode-ide/mcode',
       sourceRepoIds: ['local-repo', 'remote-repo'],
-      providerIdentity: { provider: 'github', owner: 'StablyAI', repo: 'Orca' }
+      providerIdentity: { provider: 'github', owner: 'StablyAI', repo: 'MCode' }
     })
-    expect(getProjectHostSetupsForProject(projection.setups, 'github:stablyai/orca')).toHaveLength(
+    expect(getProjectHostSetupsForProject(projection.setups, 'github:mcode-ide/mcode')).toHaveLength(
       2
     )
   })
@@ -254,36 +254,36 @@ describe('project host setup projection', () => {
     const projection = projectHostSetupProjectionFromRepos([
       repo({
         id: 'local-repo',
-        path: '/Users/alice/orca',
-        displayName: 'Orca',
+        path: '/Users/alice/mcode',
+        displayName: 'MCode',
         repoIcon: {
           type: 'image',
           src: 'https://github.com/stablyai.png?size=64',
           source: 'github',
-          label: 'stablyai/orca'
+          label: 'mcode-ide/mcode'
         }
       }),
       repo({
         id: 'remote-repo',
-        path: '/home/alice/orca',
-        displayName: 'orca',
+        path: '/home/alice/mcode',
+        displayName: 'mcode',
         connectionId: 'gpu-vm',
         repoIcon: {
           type: 'image',
           src: 'https://github.com/stablyai.png?size=64',
           source: 'github',
-          label: 'StablyAI/Orca'
+          label: 'StablyAI/MCode'
         }
       })
     ])
 
     expect(projection.projects).toHaveLength(1)
     expect(projection.projects[0]).toMatchObject({
-      id: 'github:stablyai/orca',
+      id: 'github:mcode-ide/mcode',
       sourceRepoIds: ['local-repo', 'remote-repo'],
-      providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
+      providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'mcode' }
     })
-    expect(getProjectHostSetupsForProject(projection.setups, 'github:stablyai/orca')).toHaveLength(
+    expect(getProjectHostSetupsForProject(projection.setups, 'github:mcode-ide/mcode')).toHaveLength(
       2
     )
   })
@@ -292,33 +292,33 @@ describe('project host setup projection', () => {
     const projection = projectHostSetupProjectionFromRepos([
       repo({
         id: 'canonical-local-repo',
-        path: '/Users/alice/stably/orca',
-        displayName: 'orca',
+        path: '/Users/alice/stably/mcode',
+        displayName: 'mcode',
         gitRemoteIdentity: {
-          canonicalKey: 'github.com/stablyai/orca',
+          canonicalKey: 'github.com/mcode-ide/mcode',
           remoteName: 'origin',
-          remoteUrl: 'git@github.com:stablyai/orca.git'
+          remoteUrl: 'git@github.com:mcode-ide/mcode.git'
         }
       }),
       repo({
         id: 'old-branch-checkout',
-        path: '/Users/alice/orca/workspaces/orca/re-enable-webgl-for-remote-runtime-terminals',
+        path: '/Users/alice/mcode/workspaces/mcode/re-enable-webgl-for-remote-runtime-terminals',
         displayName: 're-enable-webgl-for-remote-runtime-terminals',
         repoIcon: {
           type: 'image',
           src: 'https://github.com/stablyai.png?size=64',
           source: 'github',
-          label: 'stablyai/orca'
+          label: 'mcode-ide/mcode'
         }
       })
     ])
 
     expect(projection.projects).toHaveLength(1)
     expect(projection.projects[0]).toMatchObject({
-      id: 'github:stablyai/orca',
-      displayName: 'orca',
+      id: 'github:mcode-ide/mcode',
+      displayName: 'mcode',
       sourceRepoIds: ['canonical-local-repo', 'old-branch-checkout'],
-      providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
+      providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'mcode' }
     })
   })
 
@@ -511,8 +511,8 @@ describe('project host setup projection', () => {
     const projection = projectHostSetupProjectionFromRepos([
       repo({
         id: 'repo-1',
-        path: '/Users/alice/orca',
-        displayName: 'orca',
+        path: '/Users/alice/mcode',
+        displayName: 'mcode',
         upstream: { owner: 'stablyai', repo: 42 } as never
       })
     ])
@@ -524,15 +524,15 @@ describe('project host setup projection', () => {
   it('derives workspace ownership metadata from the repo setup', () => {
     const targetRepo = repo({
       id: 'remote-repo',
-      path: '/home/alice/orca',
-      displayName: 'orca',
+      path: '/home/alice/mcode',
+      displayName: 'mcode',
       connectionId: 'openclaw 2',
-      upstream: { owner: 'stablyai', repo: 'orca' }
+      upstream: { owner: 'stablyai', repo: 'mcode' }
     })
     const projection = projectHostSetupProjectionFromRepos([targetRepo])
 
     expect(getProjectHostSetupWorktreeMeta(projection.setups, targetRepo)).toEqual({
-      projectId: 'github:stablyai/orca',
+      projectId: 'github:mcode-ide/mcode',
       hostId: 'ssh:openclaw%202',
       projectHostSetupId: 'remote-repo'
     })
@@ -545,7 +545,7 @@ describe('isGitHubBackedRepo', () => {
       id: 'r',
       path: '/r',
       displayName: 'r',
-      upstream: { owner: 'stablyai', repo: 'orca' }
+      upstream: { owner: 'stablyai', repo: 'mcode' }
     })
     expect(isGitHubBackedRepo(target)).toBe(true)
   })
@@ -559,7 +559,7 @@ describe('isGitHubBackedRepo', () => {
         type: 'image',
         src: 'https://github.com/stablyai.png?size=64',
         source: 'github',
-        label: 'stablyai/orca'
+        label: 'mcode-ide/mcode'
       }
     })
     expect(isGitHubBackedRepo(target)).toBe(true)
@@ -589,10 +589,10 @@ describe('getProjectIdForProviderIdentity', () => {
       getProjectIdForProviderIdentity({
         provider: 'github',
         owner: 'Acme',
-        repo: 'Orca',
+        repo: 'MCode',
         host: 'GITHUB.ACME.TEST:8443'
       })
-    ).toBe('github:github.acme.test:8443/acme/orca')
+    ).toBe('github:github.acme.test:8443/acme/mcode')
   })
 })
 
@@ -614,16 +614,16 @@ describe('isProjectRemoteIdentityPending', () => {
         repo({
           ...base,
           gitRemoteIdentity: {
-            canonicalKey: 'gitlab.example.com/team/orca',
+            canonicalKey: 'gitlab.example.com/team/mcode',
             remoteName: 'origin',
-            remoteUrl: 'git@gitlab.example.com:team/orca.git'
+            remoteUrl: 'git@gitlab.example.com:team/mcode.git'
           }
         })
       )
     ).toBe(false)
     expect(
       isProjectRemoteIdentityPending(
-        repo({ ...base, upstream: { owner: 'stablyai', repo: 'orca' } })
+        repo({ ...base, upstream: { owner: 'stablyai', repo: 'mcode' } })
       )
     ).toBe(false)
   })

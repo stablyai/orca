@@ -59,7 +59,7 @@ type SortableTabProps = {
   onToggleViewMode?: () => void
 }
 
-export const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
+export const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'mcode-close-all-context-menus'
 
 export default function SortableTab({
   tab,

@@ -49,10 +49,10 @@ describe('Session History session drag data', () => {
       title: 'Fix terminal split',
       command: "cd '/repo' && claude --resume session-1",
       sessionFilePath: '/Users/ada/.claude/projects/-repo/session-1.jsonl',
-      codexHome: '/Users/ada/Library/Application Support/orca/codex-runtime-home/home',
+      codexHome: '/Users/ada/Library/Application Support/mcode/codex-runtime-home/home',
       sessionCwd: '/repo',
       env: { ANTHROPIC_BASE_URL: 'https://claude.example.test' },
-      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
+      envToDelete: ['CODEX_HOME', 'MCODE_CODEX_HOME'],
       launchConfig: {
         agentCommand: 'claude --dangerously-skip-permissions',
         agentArgs: '--dangerously-skip-permissions',
@@ -60,7 +60,7 @@ describe('Session History session drag data', () => {
       },
       realHomeStartup: {
         command: "cd '/repo' && claude --resume session-1",
-        envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME']
+        envToDelete: ['CODEX_HOME', 'MCODE_CODEX_HOME']
       }
     }
 
@@ -78,8 +78,8 @@ describe('Session History session drag data', () => {
       sessionId: 'session-3',
       title: 'Session without a recorded cwd',
       command: 'codex resume session-3',
-      sessionFilePath: '/tmp/orca/codex-accounts/a/home/sessions/2026/07/20/rollout-x.jsonl',
-      codexHome: '/tmp/orca/codex-accounts/a/home',
+      sessionFilePath: '/tmp/mcode/codex-accounts/a/home/sessions/2026/07/20/rollout-x.jsonl',
+      codexHome: '/tmp/mcode/codex-accounts/a/home',
       sessionCwd: null
     }
 

@@ -1,24 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 function installRegistryMock(): {
-  configureForOrcaProfileMock: ReturnType<typeof vi.fn>
+  configureForMCodeProfileMock: ReturnType<typeof vi.fn>
   applyPendingCookieImportMock: ReturnType<typeof vi.fn>
   initializeBrowserSessionsFromPersistedStateMock: ReturnType<typeof vi.fn>
 } {
-  const configureForOrcaProfileMock = vi.fn()
+  const configureForMCodeProfileMock = vi.fn()
   const applyPendingCookieImportMock = vi.fn()
   const initializeBrowserSessionsFromPersistedStateMock = vi.fn()
 
   vi.doMock('./browser-session-registry', () => ({
     browserSessionRegistry: {
-      configureForOrcaProfile: configureForOrcaProfileMock,
+      configureForMCodeProfile: configureForMCodeProfileMock,
       applyPendingCookieImport: applyPendingCookieImportMock,
       initializeBrowserSessionsFromPersistedState: initializeBrowserSessionsFromPersistedStateMock
     }
   }))
 
   return {
-    configureForOrcaProfileMock,
+    configureForMCodeProfileMock,
     applyPendingCookieImportMock,
     initializeBrowserSessionsFromPersistedStateMock
   }
@@ -44,24 +44,24 @@ describe('initializeBrowserSessionsForApp', () => {
     )
   })
 
-  it('configures the active Orca profile before replaying browser sessions', async () => {
+  it('configures the active MCode profile before replaying browser sessions', async () => {
     const {
-      configureForOrcaProfileMock,
+      configureForMCodeProfileMock,
       applyPendingCookieImportMock,
       initializeBrowserSessionsFromPersistedStateMock
     } = installRegistryMock()
     const { initializeBrowserSessionsForApp } = await import('./browser-session-startup')
 
     initializeBrowserSessionsForApp({
-      orcaProfileId: 'local-work',
+      mcodeProfileId: 'local-work',
       profileDirectory: '/profiles/local-work'
     })
 
-    expect(configureForOrcaProfileMock).toHaveBeenCalledWith({
-      orcaProfileId: 'local-work',
+    expect(configureForMCodeProfileMock).toHaveBeenCalledWith({
+      mcodeProfileId: 'local-work',
       profileDirectory: '/profiles/local-work'
     })
-    expect(configureForOrcaProfileMock.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(configureForMCodeProfileMock.mock.invocationCallOrder[0]).toBeLessThan(
       applyPendingCookieImportMock.mock.invocationCallOrder[0]
     )
     expect(applyPendingCookieImportMock.mock.invocationCallOrder[0]).toBeLessThan(

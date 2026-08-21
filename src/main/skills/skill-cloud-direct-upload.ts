@@ -58,12 +58,12 @@ export async function uploadSkillPackageToSignedPolicy(input: {
   if (!archive.isFile() || archive.size !== input.expectedBytes) {
     throw new Error('skill-cloud-upload-source-changed')
   }
-  const boundary = `orca-skill-${randomBytes(18).toString('hex')}`
+  const boundary = `mcode-skill-${randomBytes(18).toString('hex')}`
   const fields = Object.entries(input.policy.fields).map(([name, value]) =>
     fieldBytes(boundary, name, value)
   )
   const fileHeader = Buffer.from(
-    `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="package.tar.gz"\r\nContent-Type: application/vnd.orca.skill+tar+gzip\r\n\r\n`,
+    `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="package.tar.gz"\r\nContent-Type: application/vnd.mcode.skill+tar+gzip\r\n\r\n`,
     'utf8'
   )
   const ending = Buffer.from(`\r\n--${boundary}--\r\n`, 'utf8')

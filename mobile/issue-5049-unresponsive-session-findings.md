@@ -1,7 +1,7 @@
 # Issue #5049: Android Remote Session Unresponsiveness — Findings
 
 Date: 2026-06-09
-Issue: https://github.com/stablyai/orca/issues/5049
+Issue: https://github.com/mcode-ide/mcode/issues/5049
 
 ## Reported symptoms
 
@@ -69,9 +69,9 @@ alive but ignores input, recoverable only by an app restart:
 - `src/transport/rpc-client-live-recovery.test.ts`: opt-in live harness running the
   REAL rpc-client (real sockets, real tweetnacl E2EE, real timers) against an
   in-process ws server with a blackhole toggle:
-  - `ORCA_MOBILE_LIVE_REPRO=1 pnpm vitest run src/transport/rpc-client-live-recovery.test.ts`
+  - `MCODE_MOBILE_LIVE_REPRO=1 pnpm vitest run src/transport/rpc-client-live-recovery.test.ts`
     — half-open-link scenario (~15s).
-  - `ORCA_MOBILE_LIVE_REPRO_FULL=1 …` — full parked-loop scenario (~8.5 min): waits
+  - `MCODE_MOBILE_LIVE_REPRO_FULL=1 …` — full parked-loop scenario (~8.5 min): waits
     out all 12 backoff attempts, proves the loop stays parked even after the server
     returns, then proves `notifyForeground()` recovers it.
 

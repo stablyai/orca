@@ -85,7 +85,7 @@ export function OpenAiTranscriptionKeyDialog({
           <Lock className="size-3 shrink-0" />
           {translate(
             'auto.components.settings.OpenAiTranscriptionKeyDialog.d246b2bdb3',
-            'Local runtime keys are stored in ~/.orca using Electron encrypted storage when available.'
+            'Local runtime keys are stored in ~/.mcode using Electron encrypted storage when available.'
           )}
         </p>
         <DialogFooter>

@@ -11,7 +11,7 @@ describe('buildMarkdownExportHtml', () => {
     expect(html).toContain('<meta charset="utf-8"')
     expect(html).toContain('<title>Hello</title>')
     expect(html).toContain('<h1>Hello</h1><p>world</p>')
-    expect(html).toContain('class="orca-export-root"')
+    expect(html).toContain('class="mcode-export-root"')
     expect(html).toContain('<style>')
   })
 

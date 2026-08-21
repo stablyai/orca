@@ -3,7 +3,7 @@ import { sha256 } from '@noble/hashes/sha256'
 import { z } from 'zod'
 import type { CodexResetCreditExpectedScope } from '../../../src/shared/codex-reset-credit-scope'
 
-const STORAGE_PREFIX = 'orca:codex-reset-credit-attempt:v1:'
+const STORAGE_PREFIX = 'mcode:codex-reset-credit-attempt:v1:'
 const IdempotencyKeySchema = z.uuid()
 
 export const CodexResetCreditExpectedScopeSchema = z

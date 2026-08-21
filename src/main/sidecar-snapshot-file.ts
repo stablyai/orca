@@ -1,5 +1,5 @@
-// Why a sidecar next to orca-data.json: scan snapshots rewrite wholesale and can reach hundreds
-// of KB; folding them into orca-data.json would rewrite the whole state file per scan (the
+// Why a sidecar next to mcode-data.json: scan snapshots rewrite wholesale and can reach hundreds
+// of KB; folding them into mcode-data.json would rewrite the whole state file per scan (the
 // githubCache sidecar precedent). Best-effort by design: a lost snapshot only costs a rescan.
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'

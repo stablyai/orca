@@ -19,7 +19,7 @@ importers:
       '@noble/hashes':
         specifier: 1.8.0
         version: 1.8.0
-      '@orca/expo-two-way-audio':
+      '@mcode/expo-two-way-audio':
         specifier: file:./packages/expo-two-way-audio
         version: file:packages/expo-two-way-audio(expo@55.0.27)(react-native@0.83.9(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.6))(react@19.2.6)
       '@react-native-async-storage/async-storage':
@@ -1937,7 +1937,7 @@ packages:
     resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
     engines: {node: ^14.21.3 || >=16}
 
-  '@orca/expo-two-way-audio@file:packages/expo-two-way-audio':
+  '@mcode/expo-two-way-audio@file:packages/expo-two-way-audio':
     resolution: {directory: packages/expo-two-way-audio, type: directory}
     peerDependencies:
       expo: '*'
@@ -9326,7 +9326,7 @@ snapshots:
 
   '@noble/hashes@1.8.0': {}
 
-  '@orca/expo-two-way-audio@file:packages/expo-two-way-audio(expo@55.0.27)(react-native@0.83.9(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.6))(react@19.2.6)':
+  '@mcode/expo-two-way-audio@file:packages/expo-two-way-audio(expo@55.0.27)(react-native@0.83.9(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.6))(react@19.2.6)':
     dependencies:
       expo: 55.0.27(@babel/core@7.29.7)(@expo/dom-webview@55.0.5)(@expo/metro-runtime@55.0.10)(expo-router@55.0.14)(react-dom@19.2.6(react@19.2.6))(react-native-webview@13.16.1(react-native@0.83.9(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.6))(react@19.2.6))(react-native-worklets@0.8.3(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(react-native@0.83.9(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.6))(react@19.2.6))(react-native@0.83.9(@babel/core@7.29.7)(@react-native/metro-config@0.85.2(@babel/core@7.29.7))(@types/react@19.2.14)(react@19.2.6))(react@19.2.6)(typescript@6.0.3)
       react: 19.2.6

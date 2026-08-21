@@ -10,7 +10,7 @@ import {
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { makePaneKey } from '../../shared/stable-pane-id'
-import { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { MCodeRuntimeService } from '../runtime/mcode-runtime'
 import {
   registerPtyHandlers,
   clearProviderPtyState,
@@ -46,7 +46,7 @@ vi.mock('../telemetry/client', () =>
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
-vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
+vi.mock('../cli/linux-terminal-mcode-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../memory/pty-registry', () =>
@@ -174,7 +174,7 @@ describe('registerPtyHandlers', () => {
     const leafId = '55555555-5555-4555-8555-555555555555'
     const ptyId = `${worktreeId}@@session-restore-1`
     const session = getDefaultWorkspaceSession()
-    const runtime = new OrcaRuntimeService({
+    const runtime = new MCodeRuntimeService({
       getWorkspaceSession: () => session,
       setWorkspaceSession: () => {},
       getRepos: () => [
@@ -276,7 +276,7 @@ describe('registerPtyHandlers', () => {
       worktreeId: 'wt-gated',
       tabId,
       leafId,
-      env: { ORCA_PANE_KEY: paneKey }
+      env: { MCODE_PANE_KEY: paneKey }
     })
 
     // The renderer owns the emulator snapshot here — but the list/read records
@@ -330,7 +330,7 @@ describe('registerPtyHandlers', () => {
       lastTitle: 'checkpoint-title'
     })
   })
-  // Why windowless: `orca serve`/CLI runtime creation is the topology that most
+  // Why windowless: `mcode serve`/CLI runtime creation is the topology that most
   // needs informative records — its controller.spawn path must seed them too.
   it('seeds restore records for a runtime-controller created terminal (headless reattach)', async () => {
     const worktreeId = 'repo-restore::/tmp/restore-records'
@@ -343,7 +343,7 @@ describe('registerPtyHandlers', () => {
       badgeColor: '#000000',
       addedAt: 0
     }
-    const runtime = new OrcaRuntimeService({
+    const runtime = new MCodeRuntimeService({
       getWorkspaceSession: () => session,
       setWorkspaceSession: () => {},
       getRepo: (repoId: string) => (repoId === repo.id ? repo : undefined),
@@ -417,7 +417,7 @@ describe('registerPtyHandlers', () => {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
       leafId,
-      env: { ORCA_PANE_KEY: 'tab-1:0' }
+      env: { MCODE_PANE_KEY: 'tab-1:0' }
     })
 
     expect(registerPtyMock).toHaveBeenLastCalledWith(
@@ -441,7 +441,7 @@ describe('registerPtyHandlers', () => {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
       leafId,
-      env: { ORCA_PANE_KEY: stablePaneKey }
+      env: { MCODE_PANE_KEY: stablePaneKey }
     })
 
     expect(registerPtyMock).toHaveBeenLastCalledWith(
@@ -457,7 +457,7 @@ describe('registerPtyHandlers', () => {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
       leafId,
-      env: { ORCA_PANE_KEY: makePaneKey('tab-2', leafId) }
+      env: { MCODE_PANE_KEY: makePaneKey('tab-2', leafId) }
     })
 
     expect(registerPtyMock).toHaveBeenLastCalledWith(
@@ -477,7 +477,7 @@ describe('registerPtyHandlers', () => {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
       leafId,
-      env: { ORCA_PANE_KEY: stablePaneKey }
+      env: { MCODE_PANE_KEY: stablePaneKey }
     })) as { id: string }
     const second = (await handlers.get('pty:spawn')!(null, {
       cols: 80,
@@ -485,7 +485,7 @@ describe('registerPtyHandlers', () => {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
       leafId,
-      env: { ORCA_PANE_KEY: stablePaneKey }
+      env: { MCODE_PANE_KEY: stablePaneKey }
     })) as { id: string }
 
     expect(getPtyIdForPaneKey(stablePaneKey)).toBe(second.id)
@@ -510,7 +510,7 @@ describe('registerPtyHandlers', () => {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
       leafId,
-      env: { ORCA_PANE_KEY: stablePaneKey }
+      env: { MCODE_PANE_KEY: stablePaneKey }
     })) as { id: string }
 
     expect(getPtyIdForPaneKey(stablePaneKey)).toBe(current.id)

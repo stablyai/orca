@@ -23,7 +23,7 @@ function githubHeaders(token) {
   return {
     Accept: 'application/vnd.github+json',
     Authorization: `Bearer ${token}`,
-    'User-Agent': 'orca-pr-test-loc',
+    'User-Agent': 'mcode-pr-test-loc',
     'X-GitHub-Api-Version': '2022-11-28'
   }
 }
@@ -60,7 +60,7 @@ function writeGithubOutput(totals) {
   const block = `${renderLocBlock(totals)}\n`
   const outputPath = process.env.GITHUB_OUTPUT
   if (outputPath != null) {
-    appendFileSync(outputPath, `summary<<ORCA_PR_LOC_EOF\n${block}ORCA_PR_LOC_EOF\n`)
+    appendFileSync(outputPath, `summary<<MCODE_PR_LOC_EOF\n${block}MCODE_PR_LOC_EOF\n`)
   }
   const summaryPath = process.env.GITHUB_STEP_SUMMARY
   if (summaryPath != null) {

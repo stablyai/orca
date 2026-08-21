@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeDurableSecureJsonFile, writeSecureJsonFile } from '../../shared/secure-file'
-import { getOrcaProfileDirectory } from '../orca-profiles/profile-storage-paths'
+import { getMCodeProfileDirectory } from '../mcode-profiles/profile-storage-paths'
 
 export type ArtifactShareScope = {
   cloudUserId: string
@@ -37,7 +37,7 @@ type ParsedArtifactShareRecordFile = {
 const MAX_ARTIFACT_SHARE_RECORDS = 10_000
 
 function recordPath(profileId: string, userDataPath: string): string {
-  return join(getOrcaProfileDirectory(profileId, userDataPath), 'artifact-shares.json')
+  return join(getMCodeProfileDirectory(profileId, userDataPath), 'artifact-shares.json')
 }
 
 function isRecord(value: unknown): value is ArtifactShareRecord {

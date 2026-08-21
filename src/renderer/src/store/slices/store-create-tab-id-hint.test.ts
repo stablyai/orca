@@ -27,7 +27,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 
 createStoreCascadesMockApi()
 
-// Why: CLI-spawned terminals stamp ORCA_PANE_KEY at spawn; renderer must adopt the tab under that id so hook events route correctly.
+// Why: CLI-spawned terminals stamp MCODE_PANE_KEY at spawn; renderer must adopt the tab under that id so hook events route correctly.
 describe('createTab tabId hint', () => {
   it('uses the supplied id when no collision exists', () => {
     const store = createTestStore()

@@ -19,7 +19,7 @@ const CONSOLE_HOST_PROCESSES = new Set([
 ])
 
 // The app's own windows are expected on relaunch and never count as a flash.
-const APP_OWNER_PROCESSES = new Set(['orca', 'electron'])
+const APP_OWNER_PROCESSES = new Set(['mcode', 'electron'])
 
 /**
  * Split window-watch events into unexpected flashes vs benign. Unexpected =

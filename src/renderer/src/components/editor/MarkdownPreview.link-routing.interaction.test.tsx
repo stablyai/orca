@@ -6,7 +6,7 @@
 // run. openHttpLink stays real (wired through its registerHttpLinkStoreAccessor
 // seam); only its store data and window.api are controlled. This is the
 // regression guard for "Cmd+Shift-click opens the system browser, plain/Cmd
-// click opens the Orca browser".
+// click opens the MCode browser".
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -163,7 +163,7 @@ describe('MarkdownPreview http link routing (Cmd vs Cmd+Shift click)', () => {
     })
   }
 
-  it('plain Cmd-click opens the link in the Orca browser', () => {
+  it('plain Cmd-click opens the link in the MCode browser', () => {
     const anchor = render()
     click(anchor, { metaKey: true })
     expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {

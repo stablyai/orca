@@ -37,7 +37,7 @@ import {
   workspaceCleanupScanSnapshotFingerprint
 } from './workspace-cleanup-scan-snapshot'
 
-const SNAPSHOT_FILE = 'orca-workspace-cleanup-scan.json'
+const SNAPSHOT_FILE = 'mcode-workspace-cleanup-scan.json'
 const NOW = 1_700_000_000_000
 
 function makeCandidate(
@@ -78,7 +78,7 @@ function makeBroadResult(candidates: WorkspaceCleanupCandidate[]): WorkspaceClea
 describe('workspace cleanup scan snapshot', () => {
   beforeEach(async () => {
     snapshotWriteSpy.mockClear()
-    userDataDirHolder.dir = await mkdtemp(join(tmpdir(), 'orca-cleanup-snapshot-'))
+    userDataDirHolder.dir = await mkdtemp(join(tmpdir(), 'mcode-cleanup-snapshot-'))
   })
 
   afterEach(async () => {
@@ -328,7 +328,7 @@ describe('workspace cleanup scan snapshot', () => {
   })
 
   it('keeps profile snapshots isolated', async () => {
-    const otherProfile = await mkdtemp(join(tmpdir(), 'orca-cleanup-snapshot-other-'))
+    const otherProfile = await mkdtemp(join(tmpdir(), 'mcode-cleanup-snapshot-other-'))
     try {
       await persistWorkspaceCleanupScanResult(
         userDataDirHolder.dir,

@@ -13,11 +13,11 @@ import {
 } from '../../src/renderer/src/components/editor/rich-markdown-doc-link-scan.ts'
 
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url))
-const ITERATIONS = Number(process.env.ORCA_DOC_LINK_BENCH_ITERATIONS ?? '41')
+const ITERATIONS = Number(process.env.MCODE_DOC_LINK_BENCH_ITERATIONS ?? '41')
 const WARMUP_ITERATIONS = Math.min(9, ITERATIONS)
 
 if (!Number.isSafeInteger(ITERATIONS) || ITERATIONS <= 0) {
-  throw new Error(`ORCA_DOC_LINK_BENCH_ITERATIONS must be a positive integer, got ${ITERATIONS}`)
+  throw new Error(`MCODE_DOC_LINK_BENCH_ITERATIONS must be a positive integer, got ${ITERATIONS}`)
 }
 
 const schema = new Schema({

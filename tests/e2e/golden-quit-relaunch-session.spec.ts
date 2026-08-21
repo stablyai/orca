@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs'
 import type { ElectronApplication } from '@stablyai/playwright-test'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import { openFileExplorer } from './helpers/file-explorer'
-import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/mcode-restart'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
 import { createTerminalTabFromMenu, SORTABLE_TAB } from './helpers/terminal-tab-menu'
 import {

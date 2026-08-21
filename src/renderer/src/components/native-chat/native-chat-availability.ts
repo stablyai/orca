@@ -16,7 +16,7 @@ export type NativeChatAvailabilityInput = {
   /** Feature flag: hidden unless enabled from Settings > Experimental. */
   experimentalNativeChatEnabled?: boolean
   contentType: Tab['contentType']
-  /** The coding-agent Orca launched in this terminal, if any (from TerminalTab). */
+  /** The coding-agent MCode launched in this terminal, if any (from TerminalTab). */
   launchAgent?: TuiAgent | null
   /** The agent identity from a live agent-status entry for any pane of this tab,
    *  when one exists — i.e. an agent detected at runtime even though

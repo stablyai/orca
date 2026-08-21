@@ -267,7 +267,7 @@ describe('fetchGrokRateLimits', () => {
     const result = await fetchGrokRateLimits()
     expect(result.status).toBe('error')
     expect(result.error).toMatch(/expired/i)
-    expect(result.error).toMatch(/run grok on the computer running Orca/i)
+    expect(result.error).toMatch(/run grok on the computer running MCode/i)
     expect(result.error).toMatch(/sign in if prompted/i)
     expect(result.error).toMatch(/no chat message is needed/i)
     expect(result.usageMetadata).toEqual({

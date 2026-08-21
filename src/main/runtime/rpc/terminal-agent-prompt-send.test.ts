@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { OrcaRuntimeService } from '../orca-runtime'
+import type { MCodeRuntimeService } from '../mcode-runtime'
 import type { RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal'
@@ -8,11 +8,11 @@ function makeRequest(params: unknown): RpcRequest {
   return { id: 'request', authToken: 'token', method: 'terminal.send', params }
 }
 
-function makeRuntime(overrides: Partial<OrcaRuntimeService>): OrcaRuntimeService {
+function makeRuntime(overrides: Partial<MCodeRuntimeService>): MCodeRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
     ...overrides
-  } as OrcaRuntimeService
+  } as MCodeRuntimeService
 }
 
 describe('terminal agent prompt send RPC', () => {
@@ -38,7 +38,7 @@ describe('terminal agent prompt send RPC', () => {
         text: 'review this change',
         enter: true,
         agentPrompt: true,
-        client: { id: 'orca-cli', type: 'desktop' }
+        client: { id: 'mcode-cli', type: 'desktop' }
       })
     )
 
@@ -73,7 +73,7 @@ describe('terminal agent prompt send RPC', () => {
         text: 'echo x',
         enter: true,
         agentPrompt: true,
-        client: { id: 'orca-cli', type: 'desktop' }
+        client: { id: 'mcode-cli', type: 'desktop' }
       })
     )
 

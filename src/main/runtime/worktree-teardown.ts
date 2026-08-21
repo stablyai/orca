@@ -1,5 +1,5 @@
 import type { IPtyProvider } from '../providers/types'
-import type { OrcaRuntimeService } from './orca-runtime'
+import type { MCodeRuntimeService } from './mcode-runtime'
 import { listRegisteredPtys } from '../memory/pty-registry'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
@@ -23,7 +23,7 @@ import {
 const WORKTREE_TEARDOWN_CONCURRENCY = 32
 
 export type WorktreeTeardownDeps = {
-  runtime?: OrcaRuntimeService
+  runtime?: MCodeRuntimeService
   /** Authoritative id for callers whose selector no longer resolves (orphaned workspace). */
   resolvedWorktreeId?: string
   /** SSH connection owning `resolvedWorktreeId`; prevents same-id cross-host graph matches. */

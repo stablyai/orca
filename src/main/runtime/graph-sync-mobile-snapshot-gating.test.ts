@@ -10,7 +10,7 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../shared/runtime-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
-import { OrcaRuntimeService } from './orca-runtime'
+import { MCodeRuntimeService } from './mcode-runtime'
 
 // Freshness predicate of shouldApplyWebSessionTabsSnapshot in
 // src/renderer/src/runtime/web-session-tabs-sync.ts, copied as a literal
@@ -92,7 +92,7 @@ function makeTerminalTab(id: string, ptyId: string | null) {
 
 function createRuntime(initialSession: WorkspaceSessionState) {
   let session = initialSession
-  const runtime = new OrcaRuntimeService({
+  const runtime = new MCodeRuntimeService({
     ...storeBase,
     getWorkspaceSession: () => session,
     setWorkspaceSession: (next: WorkspaceSessionState) => {

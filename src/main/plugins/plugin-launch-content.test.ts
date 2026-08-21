@@ -26,12 +26,12 @@ afterEach(async () => {
 describe('Phase 1 launch plugin content', () => {
   it('lists and validates the launch plugin packs', async () => {
     const marketplace = pluginMarketplaceSchema.parse(
-      await readJson(join(launchRoot, 'orca-marketplace.json'))
+      await readJson(join(launchRoot, 'mcode-marketplace.json'))
     )
     expect(marketplace.plugins.map((plugin) => plugin.id).sort()).toEqual([
-      'stablyai.orca-multipass-recipes',
-      'stablyai.orca-navigation-shortcuts',
-      'stablyai.orca-portuguese'
+      'mcode.plugin-multipass-recipes',
+      'mcode.plugin-navigation-shortcuts',
+      'mcode.plugin-portuguese'
     ])
     expect(
       marketplace.plugins.filter(
@@ -76,7 +76,7 @@ describe('Phase 1 launch plugin content', () => {
   })
 
   it('publishes every bundled pack only when its release hash matches exact bytes', async () => {
-    const userDataPath = await mkdtemp(join(tmpdir(), 'orca-launch-content-'))
+    const userDataPath = await mkdtemp(join(tmpdir(), 'mcode-launch-content-'))
     temporaryRoots.push(userDataPath)
 
     const result = await bootstrapBundledPlugins({
@@ -91,8 +91,8 @@ describe('Phase 1 launch plugin content', () => {
   })
 
   it('boots release-indexed content from the packaged resources layout', async () => {
-    const resourcesPath = await mkdtemp(join(tmpdir(), 'orca-packaged-resources-'))
-    const userDataPath = await mkdtemp(join(tmpdir(), 'orca-packaged-user-data-'))
+    const resourcesPath = await mkdtemp(join(tmpdir(), 'mcode-packaged-resources-'))
+    const userDataPath = await mkdtemp(join(tmpdir(), 'mcode-packaged-user-data-'))
     temporaryRoots.push(resourcesPath, userDataPath)
     const packagedRoot = join(resourcesPath, 'plugins', 'launch')
     await cp(launchRoot, packagedRoot, { recursive: true })
@@ -108,6 +108,6 @@ describe('Phase 1 launch plugin content', () => {
     })
 
     expect(result.errors).toEqual([])
-    expect(result.installed).toEqual(['stablyai.orca-navigation-shortcuts'])
+    expect(result.installed).toEqual(['mcode.plugin-navigation-shortcuts'])
   })
 })

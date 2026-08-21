@@ -28,7 +28,7 @@ export function ChromePreview({ variant }: { variant: GlobalSettings['theme'] })
 }
 
 function ChromeMock({ dark }: { dark: boolean }) {
-  // Tiny Orca chrome: sidebar with two rows + a content area with a tab and
+  // Tiny MCode chrome: sidebar with two rows + a content area with a tab and
   // a composer line. Pure Tailwind so it stays lightweight inside the tile.
   const bg = dark ? 'bg-[#0f1115]' : 'bg-[#f7f8fa]'
   const sidebar = dark ? 'bg-[#16181d]' : 'bg-[#eceef2]'

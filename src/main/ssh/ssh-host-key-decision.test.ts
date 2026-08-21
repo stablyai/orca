@@ -50,11 +50,11 @@ describe('deciding what to do with a presented host key', () => {
     // `ssh-keygen -R` that cures it, so "remove the saved key" has to name a file or it names
     // nothing. M1 fixed the case known_hosts CAN rescue; this is the one it cannot.
     const decision = decideHostKey(
-      input({ storeOutcome: 'mismatch', hostKeyStoreFile: '/data/orca/ssh-host-keys.json' })
+      input({ storeOutcome: 'mismatch', hostKeyStoreFile: '/data/mcode/ssh-host-keys.json' })
     )
 
     expect(decision.action).toBe('reject')
-    expect(decision.reason).toContain('/data/orca/ssh-host-keys.json')
+    expect(decision.reason).toContain('/data/mcode/ssh-host-keys.json')
   })
 
   it('falls back to the generic hint when the store path is unknown', () => {
@@ -149,7 +149,7 @@ describe('deciding what to do with a presented host key', () => {
 
     it('does not tell the user to edit known_hosts when our own record disagrees', () => {
       const decision = decideHostKey(input({ storeOutcome: 'mismatch' }))
-      expect(decision.disagreeingSource).toBe('orca-store')
+      expect(decision.disagreeingSource).toBe('mcode-store')
       expect(decision.reason).not.toContain('ssh-keygen -R')
     })
 
@@ -165,7 +165,7 @@ describe('deciding what to do with a presented host key', () => {
     // Our own record is not in known_hosts, so ssh-keygen -R would remove nothing.
     it('does not name ssh-keygen for an unfamiliar key type only we know about', () => {
       const decision = decideHostKey(input({ storeOutcome: 'unknown-type-known-host' }))
-      expect(decision.disagreeingSource).toBe('orca-store')
+      expect(decision.disagreeingSource).toBe('mcode-store')
       expect(decision.reason).not.toContain('ssh-keygen -R')
       expect(decision.reason).toContain('rebuilt')
     })
@@ -174,7 +174,7 @@ describe('deciding what to do with a presented host key', () => {
     // treats a CA-covered host presenting a plain key as first contact and connects. Refusing was
     // stricter than ssh, and because `@cert-authority *` is the normal Teleport/Vault-SSH/Smallstep
     // shape it failed EVERY target for those users — with an escape hatch that is an environment
-    // variable, unreachable when Orca is launched from the Dock.
+    // variable, unreachable when MCode is launched from the Dock.
     it('does not refuse a certificate-authority host', () => {
       const decision = decideHostKey(input({ knownHostsOutcome: 'ca-only' }))
       expect(decision.action).toBe('accept-and-remember')

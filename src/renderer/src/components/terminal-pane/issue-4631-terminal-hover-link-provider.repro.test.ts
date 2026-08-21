@@ -36,7 +36,7 @@ async function writeTerminal(terminal: Terminal, data: string): Promise<void> {
 }
 
 function configuredRowCount(): number {
-  const raw = process.env.ORCA_4631_WRAP_ROWS
+  const raw = process.env.MCODE_4631_WRAP_ROWS
   if (!raw) {
     return 50_000
   }
@@ -45,7 +45,7 @@ function configuredRowCount(): number {
 }
 
 function logStage(stage: string, details: Record<string, unknown>): void {
-  if (process.env.ORCA_LOG_4631_REPRO !== '1') {
+  if (process.env.MCODE_LOG_4631_REPRO !== '1') {
     return
   }
   process.stderr.write(`${JSON.stringify({ issue: 4631, stage, ...details })}\n`)

@@ -96,7 +96,7 @@ export async function scanKnownPluginSkillCandidates(
       return
     }
     // Why: an attention issue is the only thing that can turn the headline off "all up to
-    // date", so evicting one for display budget makes Orca report all-clear over a read
+    // date", so evicting one for display budget makes MCode report all-clear over a read
     // failure. Reserving a few keeps that unbounded on a tree full of unreadable folders.
     const attention =
       isSkillScanAttentionReason(reason) &&
@@ -106,7 +106,7 @@ export async function scanKnownPluginSkillCandidates(
     const required = explainsCandidate || attention || isTruncatingSkillScanReason(reason)
     // Why: this budget bounds what the dialog lists, not how far the scan reaches.
     // Ending the walk here would truncate coverage over a display limit — and since
-    // Orca's own bounds no longer raise attention, it would do so silently.
+    // MCode's own bounds no longer raise attention, it would do so silently.
     if (!required && issues.length >= MAXIMUM_PLUGIN_SCAN_ISSUES) {
       if (!issues.some((issue) => issue.reason === 'issue-limit')) {
         issues.push({
@@ -135,7 +135,7 @@ export async function scanKnownPluginSkillCandidates(
 
   // Why: a directory only proves it is a skill by carrying SKILL.md. Matching a known
   // name alone would promote any same-named plugin or vendor folder into an installation
-  // Orca never verified.
+  // MCode never verified.
   async function hasSkillFile(
     directory: string,
     entries: readonly Dirent[],
@@ -237,7 +237,7 @@ export async function scanKnownPluginSkillCandidates(
     }
 
     // Why: pruning payload is a topology decision, not a coverage failure, so it stays
-    // silent — recording it would put Orca's own traversal rules in the user's dialog.
+    // silent — recording it would put MCode's own traversal rules in the user's dialog.
     const nextPayloadDepth = isSkillPackage ? 0 : payloadDepth === null ? null : payloadDepth + 1
     if (nextPayloadDepth !== null && nextPayloadDepth > MAXIMUM_NESTED_SKILL_DEPTH) {
       return

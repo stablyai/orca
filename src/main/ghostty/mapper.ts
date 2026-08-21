@@ -34,7 +34,7 @@ const normalizeHex = (v: string): string => (v.startsWith('#') ? v : `#${v}`)
 
 type FieldParser = (value: string, rawValue: string | string[]) => FieldResult
 
-export function mapGhosttyToOrca(
+export function mapGhosttyToMCode(
   parsed: Record<string, string | string[]>,
   isMacOS = process.platform === 'darwin'
 ): {
@@ -251,7 +251,7 @@ export function mapGhosttyToOrca(
     },
 
     'focus-follows-mouse': (v) => {
-      // Why: Ghostty's focus-follows-mouse is semantically identical to Orca's
+      // Why: Ghostty's focus-follows-mouse is semantically identical to MCode's
       // terminalFocusFollowsMouse — both control pointer-hover focus transfer.
       if (v !== 'true' && v !== 'false') {
         return null
@@ -303,7 +303,7 @@ export function mapGhosttyToOrca(
       continue
     }
 
-    // Why: Orca's windowBackgroundBlur is a boolean; the numeric radius is lost.
+    // Why: MCode's windowBackgroundBlur is a boolean; the numeric radius is lost.
     // Only note the drop when blur is actually being turned on — a `0` cleanly
     // maps to `false` and there is no radius to lose.
     if (

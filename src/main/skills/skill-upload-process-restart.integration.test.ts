@@ -7,7 +7,7 @@ import { dirname, join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { SkillUploadSessionService } from './skill-upload-session-service'
 
-const RUN_REAL_PROCESS = process.env.ORCA_REAL_PROCESS_SKILL_TEST === '1'
+const RUN_REAL_PROCESS = process.env.MCODE_REAL_PROCESS_SKILL_TEST === '1'
 const require = createRequire(import.meta.url)
 const vitestBin = join(dirname(require.resolve('vitest/package.json')), 'vitest.mjs')
 const childTest = resolve('src/main/skills/skill-upload-process-restart-child.test.ts')
@@ -121,11 +121,11 @@ async function terminateUpload(root: string, boundary: string): Promise<string> 
       cwd: process.cwd(),
       env: {
         ...process.env,
-        ORCA_REAL_PROCESS_SKILL_TEST: '0',
-        ORCA_SKILL_UPLOAD_PROCESS_CHILD: '1',
-        ORCA_SKILL_UPLOAD_RESTART_ROOT: uploadRoot,
-        ORCA_SKILL_UPLOAD_RESTART_MARKER: marker,
-        ORCA_SKILL_UPLOAD_RESTART_BOUNDARY: boundary
+        MCODE_REAL_PROCESS_SKILL_TEST: '0',
+        MCODE_SKILL_UPLOAD_PROCESS_CHILD: '1',
+        MCODE_SKILL_UPLOAD_RESTART_ROOT: uploadRoot,
+        MCODE_SKILL_UPLOAD_RESTART_MARKER: marker,
+        MCODE_SKILL_UPLOAD_RESTART_BOUNDARY: boundary
       },
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true
@@ -187,7 +187,7 @@ describe.runIf(RUN_REAL_PROCESS)('skill upload process restart recovery', () => 
   it.each(['begun', 'partial', 'uploaded', 'committed'])(
     'cleans and replaces a %s upload after host process death',
     async (boundary) => {
-      const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-restart-'))
+      const root = await mkdtemp(join(tmpdir(), 'mcode-skill-upload-restart-'))
       roots.push(root)
       const uploadRoot = join(root, 'uploads')
       const abandonedId = await terminateUpload(root, boundary)

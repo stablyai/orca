@@ -78,7 +78,7 @@ export async function prepareRemoteArtifactCliInput(
   }
   if (result.status === 'too-large') {
     throw new Error(
-      'Artifact is too large for the Orca CLI transport. Use the browser upload page instead.'
+      'Artifact is too large for the MCode CLI transport. Use the browser upload page instead.'
     )
   }
   if (result.status === 'empty') {

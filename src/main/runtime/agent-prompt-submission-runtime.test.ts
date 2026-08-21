@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_PROMPT_BRACKETED_PASTE_END } from '../../shared/agent-prompt-injection'
-import { OrcaRuntimeService } from './orca-runtime'
+import { MCodeRuntimeService } from './mcode-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 
 const WORKTREE_PATH = '/tmp/worktree-a'
@@ -27,9 +27,9 @@ vi.mock('../git/worktree', () => ({
 }))
 
 async function createPromptRuntime(
-  onWrite: (runtime: OrcaRuntimeService, data: string, writeIndex: number) => void
-): Promise<{ runtime: OrcaRuntimeService; handle: string; writes: string[] }> {
-  const runtime = new OrcaRuntimeService(makeStore() as never)
+  onWrite: (runtime: MCodeRuntimeService, data: string, writeIndex: number) => void
+): Promise<{ runtime: MCodeRuntimeService; handle: string; writes: string[] }> {
+  const runtime = new MCodeRuntimeService(makeStore() as never)
   const writes: string[] = []
   runtime.setPtyController({
     spawn: vi.fn().mockResolvedValue({ id: 'pty-prompt' }),
@@ -345,7 +345,7 @@ describe('agent prompt submission runtime', () => {
     vi.setSystemTime(1_000)
     let handle = ''
     const writes: string[] = []
-    const runtime = new OrcaRuntimeService(makeStore() as never, undefined, {
+    const runtime = new MCodeRuntimeService(makeStore() as never, undefined, {
       getAgentStatusSnapshot: () => [
         {
           paneKey: 'prompt-pane',

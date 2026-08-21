@@ -1,9 +1,9 @@
 import {
   getOpenFilesForExternalFileChange,
-  ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
-  ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT,
-  ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
-  ORCA_EDITOR_SAVE_FILE_EVENT,
+  MCODE_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
+  MCODE_EDITOR_QUIESCE_FILE_SAVES_EVENT,
+  MCODE_EDITOR_SAVE_AND_CLOSE_EVENT,
+  MCODE_EDITOR_SAVE_FILE_EVENT,
   type EditorSaveFileDetail,
   type EditorSaveQuiesceDetail
 } from './editor-autosave'
@@ -16,8 +16,8 @@ import { createEditorSaveQueue, type AppStoreApi } from './editor-save-queue'
 import { createEditorRestartSaveHandlers } from './editor-restart-save-handlers'
 import { createEditorExternalChangeTabReset } from './editor-external-change-tab-reset'
 import {
-  ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
-  ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT
+  MCODE_EDITOR_PREPARE_HOT_EXIT_EVENT,
+  MCODE_EDITOR_SAVE_DIRTY_FILES_EVENT
 } from '../../../../shared/editor-save-events'
 
 export function attachEditorAutosaveController(store: AppStoreApi): () => void {
@@ -117,34 +117,34 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
   })
   syncAutoSave()
 
-  window.addEventListener(ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT, handleSaveDirtyFiles as EventListener)
-  window.addEventListener(ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT, handlePrepareHotExit as EventListener)
-  window.addEventListener(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, handleSaveAndClose as EventListener)
-  window.addEventListener(ORCA_EDITOR_SAVE_FILE_EVENT, handleSaveFile as EventListener)
-  window.addEventListener(ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT, handleQuiesce as EventListener)
+  window.addEventListener(MCODE_EDITOR_SAVE_DIRTY_FILES_EVENT, handleSaveDirtyFiles as EventListener)
+  window.addEventListener(MCODE_EDITOR_PREPARE_HOT_EXIT_EVENT, handlePrepareHotExit as EventListener)
+  window.addEventListener(MCODE_EDITOR_SAVE_AND_CLOSE_EVENT, handleSaveAndClose as EventListener)
+  window.addEventListener(MCODE_EDITOR_SAVE_FILE_EVENT, handleSaveFile as EventListener)
+  window.addEventListener(MCODE_EDITOR_QUIESCE_FILE_SAVES_EVENT, handleQuiesce as EventListener)
   window.addEventListener(
-    ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
+    MCODE_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
     handleExternalFileChange as EventListener
   )
 
   return () => {
     unsubscribe()
     window.removeEventListener(
-      ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
+      MCODE_EDITOR_SAVE_DIRTY_FILES_EVENT,
       handleSaveDirtyFiles as EventListener
     )
     window.removeEventListener(
-      ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
+      MCODE_EDITOR_PREPARE_HOT_EXIT_EVENT,
       handlePrepareHotExit as EventListener
     )
     window.removeEventListener(
-      ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
+      MCODE_EDITOR_SAVE_AND_CLOSE_EVENT,
       handleSaveAndClose as EventListener
     )
-    window.removeEventListener(ORCA_EDITOR_SAVE_FILE_EVENT, handleSaveFile as EventListener)
-    window.removeEventListener(ORCA_EDITOR_QUIESCE_FILE_SAVES_EVENT, handleQuiesce as EventListener)
+    window.removeEventListener(MCODE_EDITOR_SAVE_FILE_EVENT, handleSaveFile as EventListener)
+    window.removeEventListener(MCODE_EDITOR_QUIESCE_FILE_SAVES_EVENT, handleQuiesce as EventListener)
     window.removeEventListener(
-      ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
+      MCODE_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
       handleExternalFileChange as EventListener
     )
     saveQueue.dispose()

@@ -200,8 +200,8 @@ describe('registerTerminalSideEffectFactConsumer', () => {
         {
           kind: 'pr-link',
           link: {
-            url: 'https://github.com/acme/orca/pull/42',
-            slug: { owner: 'acme', repo: 'orca' },
+            url: 'https://github.com/acme/mcode/pull/42',
+            slug: { owner: 'acme', repo: 'mcode' },
             number: 42
           }
         },
@@ -211,7 +211,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
 
     expect(events).toEqual([
       ['finished', 130],
-      ['pr', 'https://github.com/acme/orca/pull/42', 42],
+      ['pr', 'https://github.com/acme/mcode/pull/42', 42],
       ['finished', null]
     ])
   })
@@ -315,8 +315,8 @@ describe('registerTerminalSideEffectFactConsumer', () => {
           {
             kind: 'pr-link',
             link: {
-              url: 'https://github.com/acme/orca/pull/42',
-              slug: { owner: 'acme', repo: 'orca' },
+              url: 'https://github.com/acme/mcode/pull/42',
+              slug: { owner: 'acme', repo: 'mcode' },
               number: 42
             }
           }

@@ -1,5 +1,5 @@
 /**
- * The one vocabulary Orca uses to talk about whether a PTY is live.
+ * The one vocabulary MCode uses to talk about whether a PTY is live.
  *
  * `exited` requires positive evidence of absence from the owning host. Losing
  * contact with that host — an unregistered SSH provider, a dropped relay, an

@@ -1,4 +1,4 @@
-// Scoped local fork of the hosted-git-info@9.0.3 behavior Orca used.
+// Scoped local fork of the hosted-git-info@9.0.3 behavior MCode used.
 // Why: source links only need GitHub/GitLab/Bitbucket remote parsing and file
 // URL construction, so we keep that small surface local and tested.
 type HostedRemoteProvider = 'github' | 'gitlab' | 'bitbucket'

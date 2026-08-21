@@ -79,7 +79,7 @@ export function withMacTailscaleDnsHintForDiagnostic(
     return message
   }
 
-  // Why: Claude/Codex own the failing API transports, so Orca can only point
+  // Why: Claude/Codex own the failing API transports, so MCode can only point
   // users at the macOS resolver configuration that makes those transports fail.
   return `${message} macOS is using Tailscale MagicDNS (100.100.100.100) as the only global DNS resolver; add an upstream DNS server to the active network service or configure Tailscale global nameservers, then retry.`
 }

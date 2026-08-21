@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
-import { OrcaRuntimeService } from '../orca-runtime'
+import { MCodeRuntimeService } from '../mcode-runtime'
 import { OrchestrationDb } from '../orchestration/db'
 import { defineMethod, type RpcRequest } from './core'
 import { RpcDispatcher } from './dispatcher'
@@ -18,7 +18,7 @@ describe('orchestration contract fence', () => {
   function createHarness(method = 'orchestration.send') {
     const database = new OrchestrationDb(':memory:')
     databases.push(database)
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     runtime.setOrchestrationDb(database)
     const effect = vi.fn(() => ({ accepted: true }))
     const dispatcher = new RpcDispatcher({

@@ -21,7 +21,7 @@ describe('transferSkillPackageToRuntime', () => {
   let root = ''
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'orca-skill-transfer-test-'))
+    root = await mkdtemp(join(tmpdir(), 'mcode-skill-transfer-test-'))
     mocks.callRuntimeEnvironment.mockReset()
     mocks.downloadSkillPackageGrant.mockReset()
   })

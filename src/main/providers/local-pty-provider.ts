@@ -2,7 +2,7 @@
 import { basename, delimiter, win32 as pathWin32 } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import {
-  ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
+  MCODE_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
   resolveWindowsShellLaunchArgs
 } from './windows-shell-args'
 import {
@@ -24,8 +24,8 @@ import {
   logHistoryInjection,
   type HistoryInjectionResult
 } from '../terminal-history'
-import { dropInheritedOrcaFishHistory } from '../fish-history-session'
-import { dropInheritedOrcaHistFile } from '../worktree-history-file-path'
+import { dropInheritedMCodeFishHistory } from '../fish-history-session'
+import { dropInheritedMCodeHistFile } from '../worktree-history-file-path'
 import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
 import {
   ensureNodePtySpawnHelperExecutable,
@@ -68,7 +68,7 @@ import { canConfirmAgentFromConsolePresence } from './windows-console-foreground
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from './pty-default-cwd'
-import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
+import { MCODE_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 import { PtyStartupIngress, type PtyIngressEmission } from '../../shared/pty-startup-ingress'
@@ -92,10 +92,10 @@ import {
 import { resolveProcessExitCause, type TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 const PANE_IDENTITY_ENV_KEYS = [
-  'ORCA_PANE_KEY',
-  'ORCA_TAB_ID',
-  'ORCA_WORKTREE_ID',
-  'ORCA_AGENT_LAUNCH_TOKEN'
+  'MCODE_PANE_KEY',
+  'MCODE_TAB_ID',
+  'MCODE_WORKTREE_ID',
+  'MCODE_AGENT_LAUNCH_TOKEN'
 ] as const
 
 let ptyCounter = 0
@@ -188,7 +188,7 @@ function promoteAgentTeamsShimPath(
   env: Record<string, string>,
   requestedPath: string | undefined
 ): void {
-  if (!env.ORCA_AGENT_TEAMS_TEAM_ID || !requestedPath) {
+  if (!env.MCODE_AGENT_TEAMS_TEAM_ID || !requestedPath) {
     return
   }
   const normalizedRequestedPath =
@@ -702,13 +702,13 @@ export class LocalPtyProvider implements IPtyProvider {
       ...mergeGitConfigEnvProtocol(stripInheritedBuildModeEnv(process.env), args.env),
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
-      TERM_PROGRAM: 'Orca',
+      TERM_PROGRAM: 'MCode',
       // Why: TUIs feature-gate on TERM_PROGRAM_VERSION; the fallback keeps tests and non-Electron runs working.
-      TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev',
-      // Why: supports-hyperlinks rejects TERM_PROGRAM=Orca, so tools drop OSC 8 links; force it since xterm.js parses them.
+      TERM_PROGRAM_VERSION: process.env.MCODE_APP_VERSION ?? '0.0.0-dev',
+      // Why: supports-hyperlinks rejects TERM_PROGRAM=MCode, so tools drop OSC 8 links; force it since xterm.js parses them.
       FORCE_HYPERLINK: '1'
     } as Record<string, string>
-    // Why: Orca can be launched from an Orca terminal; pane identity belongs to the child PTY, not the parent shell.
+    // Why: MCode can be launched from an MCode terminal; pane identity belongs to the child PTY, not the parent shell.
     removeUnspecifiedPaneIdentityEnv(spawnEnv, args.env)
     removeAppImageRuntimeEnv(spawnEnv)
     removeInheritedNoColor(spawnEnv)
@@ -756,12 +756,12 @@ export class LocalPtyProvider implements IPtyProvider {
         if (codexHomeWslInfo) {
           if (launchWslDistro && launchWslDistro !== codexHomeWslInfo.distro) {
             delete finalEnv.CODEX_HOME
-            delete finalEnv.ORCA_CODEX_HOME
+            delete finalEnv.MCODE_CODEX_HOME
           } else {
             finalEnv.CODEX_HOME = codexHomeWslInfo.linuxPath
-            finalEnv.ORCA_CODEX_HOME = codexHomeWslInfo.linuxPath
+            finalEnv.MCODE_CODEX_HOME = codexHomeWslInfo.linuxPath
             // Why: wsl.exe only imports non-default env vars named in WSLENV.
-            addWslEnvKeys(finalEnv, ['CODEX_HOME', 'ORCA_CODEX_HOME'])
+            addWslEnvKeys(finalEnv, ['CODEX_HOME', 'MCODE_CODEX_HOME'])
             if (!launchWslDistro) {
               const resolved = resolveWindowsShellLaunchArgs(shellPath, cwd, defaultCwd, {
                 distro: codexHomeWslInfo.distro
@@ -774,35 +774,35 @@ export class LocalPtyProvider implements IPtyProvider {
             }
           }
         } else if (isHostCodexHomeForWsl(finalEnv.CODEX_HOME)) {
-          // Why: Orca's Codex home is host-local; WSL Codex must use its Linux-side ~/.codex, not a Windows path.
+          // Why: MCode's Codex home is host-local; WSL Codex must use its Linux-side ~/.codex, not a Windows path.
           delete finalEnv.CODEX_HOME
-          delete finalEnv.ORCA_CODEX_HOME
+          delete finalEnv.MCODE_CODEX_HOME
         } else if (finalEnv.CODEX_HOME) {
-          addWslEnvKeys(finalEnv, ['CODEX_HOME', 'ORCA_CODEX_HOME'])
+          addWslEnvKeys(finalEnv, ['CODEX_HOME', 'MCODE_CODEX_HOME'])
         }
         if (finalEnv.CLAUDE_CONFIG_DIR) {
           // Why: managed WSL Claude passes a Linux CLAUDE_CONFIG_DIR through wsl.exe; non-default vars need WSLENV import.
           addWslEnvKeys(finalEnv, ['CLAUDE_CONFIG_DIR'])
         }
-        if (finalEnv[ORCA_HERMES_STARTUP_QUERY_ENV] !== undefined) {
+        if (finalEnv[MCODE_HERMES_STARTUP_QUERY_ENV] !== undefined) {
           // Why: wsl.exe drops custom Windows env vars; the startup wrapper needs this imported inside WSL.
-          addWslEnvKeys(finalEnv, [ORCA_HERMES_STARTUP_QUERY_ENV])
+          addWslEnvKeys(finalEnv, [MCODE_HERMES_STARTUP_QUERY_ENV])
         }
       } else if (codexHomeWslInfo || isWslCodexHomeForHost(finalEnv.CODEX_HOME)) {
-        // Why: WSL Codex homes are Linux paths Windows can't use; also drop ORCA_CODEX_HOME (shell-ready restores CODEX_HOME from it).
+        // Why: WSL Codex homes are Linux paths Windows can't use; also drop MCODE_CODEX_HOME (shell-ready restores CODEX_HOME from it).
         delete finalEnv.CODEX_HOME
-        delete finalEnv.ORCA_CODEX_HOME
+        delete finalEnv.MCODE_CODEX_HOME
       }
 
       const shellBasename = pathWin32.basename(shellPath).toLowerCase()
-      const codexLaunchPreflightCommand = finalEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
+      const codexLaunchPreflightCommand = finalEnv.MCODE_CODEX_LAUNCH_PREFLIGHT
       if (
         codexLaunchPreflightCommand &&
         (shellBasename === 'cmd.exe' || isWindowsGitBashShellPath(shellPath))
       ) {
         if (shellBasename === 'cmd.exe') {
           // Why: node-pty backslash-escapes argv quotes; expand the quote inside cmd.exe instead.
-          finalEnv[ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV] = '"'
+          finalEnv[MCODE_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV] = '"'
         }
         const resolved = resolveWindowsShellLaunchArgs(
           shellPath,
@@ -855,14 +855,14 @@ export class LocalPtyProvider implements IPtyProvider {
       logHistoryInjection(worktreeId, historyResult)
     } else {
       // Why: injectHistoryEnv is what normally clears it, so when history is off
-      // an inherited ORCA_HISTFILE would still reach the wrapper. Credit: #11146.
-      delete finalEnv.ORCA_HISTFILE
+      // an inherited MCODE_HISTFILE would still reach the wrapper. Credit: #11146.
+      delete finalEnv.MCODE_HISTFILE
       // Same for an exported `fish_history` from the fish pane that launched this
-      // Orca: history off means fish's own default, not another worktree's file.
-      dropInheritedOrcaFishHistory(finalEnv)
+      // MCode: history off means fish's own default, not another worktree's file.
+      dropInheritedMCodeFishHistory(finalEnv)
       // And for an exported HISTFILE: history off means the shell's own default,
-      // not the history file of the worktree this Orca was launched from.
-      dropInheritedOrcaHistFile(finalEnv)
+      // not the history file of the worktree this MCode was launched from.
+      dropInheritedMCodeHistFile(finalEnv)
     }
 
     if (!wslInfo && process.platform !== 'win32') {
@@ -878,9 +878,9 @@ export class LocalPtyProvider implements IPtyProvider {
             command: args.command as string,
             startupCommandDelivery: args.startupCommandDelivery
           }))
-      // Why delete: ORCA_SHELL_FEATURES is Orca-owned, and only the launch
+      // Why delete: MCODE_SHELL_FEATURES is MCode-owned, and only the launch
       // config below may name features for this shell.
-      delete finalEnv.ORCA_SHELL_FEATURES
+      delete finalEnv.MCODE_SHELL_FEATURES
       getFallbackShellReadyConfig = (shell) =>
         getShellLaunchConfig(
           shell,
@@ -962,8 +962,8 @@ export class LocalPtyProvider implements IPtyProvider {
       ptyAgentSessionIds.add(id)
     }
     ptyShellName.set(id, getSpawnedShellName(shellPath))
-    if (finalEnv.ORCA_TERMINAL_HANDLE) {
-      ptyTerminalHandle.set(id, finalEnv.ORCA_TERMINAL_HANDLE)
+    if (finalEnv.MCODE_TERMINAL_HANDLE) {
+      ptyTerminalHandle.set(id, finalEnv.MCODE_TERMINAL_HANDLE)
     }
     if (args.worktreeId) {
       ptyWorktreeId.set(id, args.worktreeId)

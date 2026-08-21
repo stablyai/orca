@@ -59,7 +59,7 @@ describe('updatePRState', () => {
   })
 
   it('reopens pull requests through the gh PR command', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'mcode' })
     ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
 
     await expect(updatePRState('/repo-root', 3977, { state: 'open' })).resolves.toEqual({
@@ -67,7 +67,7 @@ describe('updatePRState', () => {
     })
 
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      ['pr', 'reopen', '3977', '--repo', 'stablyai/orca'],
+      ['pr', 'reopen', '3977', '--repo', 'mcode-ide/mcode'],
       { cwd: '/repo-root', host: 'github.com' }
     )
     expect(acquireMock).toHaveBeenCalledTimes(1)
@@ -75,7 +75,7 @@ describe('updatePRState', () => {
   })
 
   it('closes pull requests through the gh PR command', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'mcode' })
     ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
 
     await expect(updatePRState('/repo-root', 3977, { state: 'closed' })).resolves.toEqual({
@@ -83,13 +83,13 @@ describe('updatePRState', () => {
     })
 
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      ['pr', 'close', '3977', '--repo', 'stablyai/orca'],
+      ['pr', 'close', '3977', '--repo', 'mcode-ide/mcode'],
       { cwd: '/repo-root', host: 'github.com' }
     )
   })
 
   it('reopens SSH-backed pull requests without local cwd options', async () => {
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'mcode' })
     ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
 
     await expect(
@@ -99,7 +99,7 @@ describe('updatePRState', () => {
     })
 
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      ['pr', 'reopen', '3977', '--repo', 'stablyai/orca'],
+      ['pr', 'reopen', '3977', '--repo', 'mcode-ide/mcode'],
       { host: 'github.com' }
     )
   })

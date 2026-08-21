@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it, vi } from 'vitest'
 
 // Live end-to-end harness for ssh:connect against a real host. Skipped unless
-// ORCA_LIVE_SSH_HOST is set; never runs in normal CI or unit-test loops.
+// MCODE_LIVE_SSH_HOST is set; never runs in normal CI or unit-test loops.
 vi.mock('electron', () => ({
   app: { getAppPath: () => process.cwd() }
 }))
@@ -12,12 +12,12 @@ import { resolveSshConfigHomePath } from './ssh-config-path-expansion'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import type { SshTarget } from '../../shared/ssh-types'
 
-const LIVE_HOST = process.env.ORCA_LIVE_SSH_HOST
-const LIVE_USER = process.env.ORCA_LIVE_SSH_USER ?? process.env.USERNAME ?? process.env.USER ?? ''
+const LIVE_HOST = process.env.MCODE_LIVE_SSH_HOST
+const LIVE_USER = process.env.MCODE_LIVE_SSH_USER ?? process.env.USERNAME ?? process.env.USER ?? ''
 const LIVE_IDENTITY = resolveSshConfigHomePath(
-  process.env.ORCA_LIVE_SSH_IDENTITY ?? '~/.ssh/id_ed25519'
+  process.env.MCODE_LIVE_SSH_IDENTITY ?? '~/.ssh/id_ed25519'
 )
-const rawLivePort = process.env.ORCA_LIVE_SSH_PORT
+const rawLivePort = process.env.MCODE_LIVE_SSH_PORT
 const LIVE_PORT = rawLivePort ? Number.parseInt(rawLivePort, 10) : 22
 
 const startedAt = Date.now()
@@ -42,7 +42,7 @@ describe.skipIf(!LIVE_HOST)('live ssh:connect pipeline', () => {
 
   it('connects, deploys the relay, and spawns a real PTY', { timeout: 360_000 }, async () => {
     if (!Number.isInteger(LIVE_PORT) || LIVE_PORT < 1 || LIVE_PORT > 65535) {
-      throw new Error(`Invalid ORCA_LIVE_SSH_PORT: ${rawLivePort}`)
+      throw new Error(`Invalid MCODE_LIVE_SSH_PORT: ${rawLivePort}`)
     }
 
     const target: SshTarget = {

@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import type { AiVaultSession } from '../../src/shared/ai-vault-types'
 import type { AiVaultDeleteSessionResult } from '../../src/shared/ai-vault-session-deletion'
 
@@ -50,7 +50,7 @@ function deleteSession(page: Page, session: AiVaultSession): Promise<AiVaultDele
 test.describe('AI Vault session delete', () => {
   test('trashes a single-file session and removes it from the list', async ({
     electronApp,
-    orcaPage
+    mcodePage
   }) => {
     const homeDir = await isolatedHome(electronApp)
     const title = `E2E gemini ${Date.now()}`
@@ -67,19 +67,19 @@ test.describe('AI Vault session delete', () => {
       })
     )
 
-    const session = await findSession(orcaPage, 'gemini', title)
+    const session = await findSession(mcodePage, 'gemini', title)
     expect(session, 'seeded gemini session should be listed').toBeTruthy()
 
-    const result = await deleteSession(orcaPage, session as AiVaultSession)
+    const result = await deleteSession(mcodePage, session as AiVaultSession)
 
     expect(result.outcome).toBe('deleted')
     expect(existsSync(filePath), 'transcript should be gone from disk').toBe(false)
-    expect(await findSession(orcaPage, 'gemini', title)).toBeFalsy()
+    expect(await findSession(mcodePage, 'gemini', title)).toBeFalsy()
   })
 
   test('trashes a claude directory session and its companions but keeps file-history', async ({
     electronApp,
-    orcaPage
+    mcodePage
   }) => {
     const homeDir = await isolatedHome(electronApp)
     const title = `E2E claude ${Date.now()}`
@@ -110,10 +110,10 @@ test.describe('AI Vault session delete', () => {
     const rewindFile = path.join(fileHistoryDir, 'deadbeef@v1')
     writeFileSync(rewindFile, 'earlier version of a user file\n')
 
-    const session = await findSession(orcaPage, 'claude', title)
+    const session = await findSession(mcodePage, 'claude', title)
     expect(session, 'seeded claude session should be listed').toBeTruthy()
 
-    const result = await deleteSession(orcaPage, session as AiVaultSession)
+    const result = await deleteSession(mcodePage, session as AiVaultSession)
 
     expect(result.outcome).toBe('deleted')
     expect(existsSync(transcript), 'transcript gone').toBe(false)
@@ -123,6 +123,6 @@ test.describe('AI Vault session delete', () => {
     ).toBe(false)
     expect(existsSync(sessionEnvDir), 'session-env companion gone').toBe(false)
     expect(existsSync(rewindFile), 'file-history rewind buffer preserved').toBe(true)
-    expect(await findSession(orcaPage, 'claude', title)).toBeFalsy()
+    expect(await findSession(mcodePage, 'claude', title)).toBeFalsy()
   })
 })

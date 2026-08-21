@@ -4,9 +4,9 @@ import { join } from 'node:path'
 import { EventEmitter } from 'node:events'
 import type WebSocket from 'ws'
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from './orca-runtime'
+import { MCodeRuntimeService } from './mcode-runtime'
 import { OrchestrationDb } from './orchestration/db'
-import { OrcaRuntimeRpcServer } from './runtime-rpc'
+import { MCodeRuntimeRpcServer } from './runtime-rpc'
 import { DeviceRegistry } from './device-registry'
 import {
   withCurrentOrchestrationContract,
@@ -35,13 +35,13 @@ class FakeWebSocket extends EventEmitter {
   readyState = this.OPEN
 }
 
-describe('OrcaRuntimeRpcServer', () => {
+describe('MCodeRuntimeRpcServer', () => {
   it('caps WebSocket long-polls and aborts them when the socket closes', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = new OrcaRuntimeService()
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-rpc-'))
+    const runtime = new MCodeRuntimeService()
     const db = new OrchestrationDb(':memory:')
     runtime.setOrchestrationDb(db)
-    const server = new OrcaRuntimeRpcServer({
+    const server = new MCodeRuntimeRpcServer({
       runtime,
       userDataPath,
       enableWebSocket: false,
@@ -112,13 +112,13 @@ describe('OrcaRuntimeRpcServer', () => {
   })
 
   it('applies the ask sub-cap on the WebSocket path and releases both counters on close', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = new OrcaRuntimeService()
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-rpc-'))
+    const runtime = new MCodeRuntimeService()
     const db = new OrchestrationDb(':memory:')
     runtime.setOrchestrationDb(db)
     seedSupervisedAskWorkers(db, ['term_w0', 'term_w1', 'term_w2'])
     // Why: cap 4 → ask sub-cap 2, so the third ask must be shed while waits keep the other half.
-    const server = new OrcaRuntimeRpcServer({
+    const server = new MCodeRuntimeRpcServer({
       runtime,
       userDataPath,
       enableWebSocket: false,
@@ -201,9 +201,9 @@ describe('OrcaRuntimeRpcServer', () => {
   })
 
   it('shares one socket close listener across concurrent WebSocket dispatches', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
-    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-rpc-'))
+    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as MCodeRuntimeService
+    const server = new MCodeRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
     const entry = server['deviceRegistry']!.addDevice('runtime-test', 'runtime')
     const ws = new FakeWebSocket()

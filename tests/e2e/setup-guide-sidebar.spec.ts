@@ -1,6 +1,6 @@
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import type { SkillDiscoveryResult } from '../../src/shared/skills'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { getStoreState, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 const CHECKLIST_TEXT = 'Onboarding checklist'
@@ -11,56 +11,56 @@ type SetupGuideFlashMonitor = {
 }
 
 test.describe('Setup guide sidebar entry', () => {
-  test.beforeEach(async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
+  test.beforeEach(async ({ mcodePage }) => {
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
   })
 
   test('does not flash while completed setup waits for capability readiness', async ({
     electronApp,
-    orcaPage
+    mcodePage
   }) => {
     await installBlockedCompletedCapabilityFakes(electronApp)
-    await orcaPage.reload()
-    await orcaPage.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
-    await waitForSessionReady(orcaPage)
-    await seedCompletedSetupExceptCapabilityReadiness(orcaPage)
+    await mcodePage.reload()
+    await mcodePage.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
+    await waitForSessionReady(mcodePage)
+    await seedCompletedSetupExceptCapabilityReadiness(mcodePage)
 
     await expect
-      .poll(async () => getStoreState<boolean>(orcaPage, 'setupGuideSidebarDismissed'), {
+      .poll(async () => getStoreState<boolean>(mcodePage, 'setupGuideSidebarDismissed'), {
         timeout: 5_000
       })
       .toBe(false)
-    await expect(orcaPage.getByText(CHECKLIST_TEXT)).toHaveCount(0)
+    await expect(mcodePage.getByText(CHECKLIST_TEXT)).toHaveCount(0)
 
-    await startSetupGuideFlashMonitor(orcaPage)
+    await startSetupGuideFlashMonitor(mcodePage)
 
-    await setActiveViewForFlashProbe(orcaPage, 'tasks')
+    await setActiveViewForFlashProbe(mcodePage, 'tasks')
     await expect
-      .poll(async () => getStoreState<string>(orcaPage, 'activeView'), { timeout: 5_000 })
+      .poll(async () => getStoreState<string>(mcodePage, 'activeView'), { timeout: 5_000 })
       .toBe('tasks')
-    await orcaPage.waitForTimeout(500)
+    await mcodePage.waitForTimeout(500)
 
-    await setActiveViewForFlashProbe(orcaPage, 'automations')
+    await setActiveViewForFlashProbe(mcodePage, 'automations')
     await expect
-      .poll(async () => getStoreState<string>(orcaPage, 'activeView'), { timeout: 5_000 })
+      .poll(async () => getStoreState<string>(mcodePage, 'activeView'), { timeout: 5_000 })
       .toBe('automations')
-    await orcaPage.waitForTimeout(500)
+    await mcodePage.waitForTimeout(500)
 
-    await setActiveViewForFlashProbe(orcaPage, 'mobile')
+    await setActiveViewForFlashProbe(mcodePage, 'mobile')
     await expect
-      .poll(async () => getStoreState<string>(orcaPage, 'activeView'), { timeout: 5_000 })
+      .poll(async () => getStoreState<string>(mcodePage, 'activeView'), { timeout: 5_000 })
       .toBe('mobile')
-    await orcaPage.waitForTimeout(500)
+    await mcodePage.waitForTimeout(500)
 
-    const flashSamples = await stopSetupGuideFlashMonitor(orcaPage)
+    const flashSamples = await stopSetupGuideFlashMonitor(mcodePage)
     expect(flashSamples, `setup guide sidebar flashed at ${flashSamples.join(', ')}`).toEqual([])
 
     // Unblock pending skill discovery IPC calls before teardown. Completion
     // after release is covered by the focused progress unit tests.
     await releaseBlockedSkillDiscovery(electronApp)
-    await orcaPage.evaluate(() => {
-      window.dispatchEvent(new CustomEvent('orca:installed-agent-skills-changed'))
+    await mcodePage.evaluate(() => {
+      window.dispatchEvent(new CustomEvent('mcode:installed-agent-skills-changed'))
     })
   })
 })
@@ -107,9 +107,9 @@ async function installBlockedCompletedCapabilityFakes(
       providers: ['agent-skills'],
       sourceKind: 'home',
       sourceLabel: 'E2E skill home',
-      rootPath: '/tmp/orca-e2e-skills',
-      directoryPath: `/tmp/orca-e2e-skills/${name}`,
-      skillFilePath: `/tmp/orca-e2e-skills/${name}/SKILL.md`,
+      rootPath: '/tmp/mcode-e2e-skills',
+      directoryPath: `/tmp/mcode-e2e-skills/${name}`,
+      skillFilePath: `/tmp/mcode-e2e-skills/${name}/SKILL.md`,
       installed: true,
       updatedAt: 1
     })
@@ -119,7 +119,7 @@ async function installBlockedCompletedCapabilityFakes(
       await waitForSkillDiscoveryRelease()
       return {
         skills: [
-          makeSkill('orca-cli', 'e2e-orca-cli'),
+          makeSkill('mcode-cli', 'e2e-mcode-cli'),
           makeSkill('computer-use', 'e2e-computer-use'),
           makeSkill('orchestration', 'e2e-orchestration')
         ],

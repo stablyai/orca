@@ -34,7 +34,7 @@ beforeEach(async () => {
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   appMock.isPackaged = true
   setPlatform('linux')
-  resourcesDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'orca-package-type-'))
+  resourcesDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'mcode-package-type-'))
   setResourcesPath(resourcesDir)
 })
 

@@ -67,7 +67,7 @@ export function appendGitConfigEnv(
   const base = readValidGitConfigEnvCount(env)
   if (base === null) {
     // Why: ambiguous protocol state may contain caller data at any index, so
-    // scalar guards are safer than overwriting it with Orca-owned entries.
+    // scalar guards are safer than overwriting it with MCode-owned entries.
     return next
   }
   entries.forEach(([key, value], index) => {

@@ -27,7 +27,7 @@ import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
 export { getGitPaneSearchEntries }
 
 const KEEP_LOCAL_MAIN_UP_TO_DATE_DESCRIPTION =
-  'When you create a workspace, Orca refreshes the remote base and safely fast-forwards your matching local branch, such as main or master. This keeps commands like git diff main...HEAD from comparing against stale history. Orca skips the update if that branch has uncommitted changes or local-only commits.'
+  'When you create a workspace, MCode refreshes the remote base and safely fast-forwards your matching local branch, such as main or master. This keeps commands like git diff main...HEAD from comparing against stale history. MCode skips the update if that branch has uncommitted changes or local-only commits.'
 const KEEP_LOCAL_MAIN_UP_TO_DATE_KEYWORDS = [
   'main',
   'master',
@@ -259,7 +259,7 @@ export function GitPane({
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.GitPane.976afc6b3e',
-              'When you create a workspace, Orca refreshes the remote base and safely fast-forwards your matching local branch, such as'
+              'When you create a workspace, MCode refreshes the remote base and safely fast-forwards your matching local branch, such as'
             )}{' '}
             <code>{translate('auto.components.settings.GitPane.ffba483bae', 'main')}</code>{' '}
             {translate('auto.components.settings.GitPane.5bf885be48', 'or')}{' '}
@@ -273,7 +273,7 @@ export function GitPane({
             </code>{' '}
             {translate(
               'auto.components.settings.GitPane.36e3de3619',
-              'from comparing against stale history. Orca skips the update if that branch has uncommitted changes or local-only commits.'
+              'from comparing against stale history. MCode skips the update if that branch has uncommitted changes or local-only commits.'
             )}
           </p>
         </div>

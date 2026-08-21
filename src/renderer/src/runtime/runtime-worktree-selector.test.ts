@@ -8,8 +8,8 @@ import { brandEphemeralSetupTerminalWorktreeId } from '../../../shared/ephemeral
 describe('toRuntimeWorktreeSelector', () => {
   it('addresses raw worktree IDs as runtime ID selectors', () => {
     expect(toRuntimeWorktreeSelector('wt-1')).toBe('id:wt-1')
-    expect(toRuntimeWorktreeSelector('repo-1::C:/Users/me/orca/workspaces/orca/new-worktree')).toBe(
-      'id:repo-1::C:/Users/me/orca/workspaces/orca/new-worktree'
+    expect(toRuntimeWorktreeSelector('repo-1::C:/Users/me/mcode/workspaces/mcode/new-worktree')).toBe(
+      'id:repo-1::C:/Users/me/mcode/workspaces/mcode/new-worktree'
     )
   })
 

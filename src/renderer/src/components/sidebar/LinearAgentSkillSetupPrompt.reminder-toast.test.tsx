@@ -16,7 +16,7 @@ import {
 } from './linear-agent-skill-setup-reminder-toast'
 import { getExistingLinearAgentSkillSetupReminderState } from './linear-agent-skill-setup-reminders'
 
-const HOST_DISMISS_STORAGE_KEY = 'orca.linearTicketsSkill.setupDismissed.host'
+const HOST_DISMISS_STORAGE_KEY = 'mcode.linearTicketsSkill.setupDismissed.host'
 
 const mocks = vi.hoisted(() => ({
   skillState: {
@@ -50,8 +50,8 @@ vi.mock('@/hooks/useInstalledAgentSkills', async (importOriginal) => ({
 
 vi.mock('@/lib/agent-skill-cli-prerequisite', () => ({
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE: 'CLI registration notice',
-  ensureOrcaCliAvailableForAgentSkillTerminal: mocks.ensureCli,
-  isOrcaCliAvailableOnPath: (status: CliInstallStatus | null | undefined) =>
+  ensureMCodeCliAvailableForAgentSkillTerminal: mocks.ensureCli,
+  isMCodeCliAvailableOnPath: (status: CliInstallStatus | null | undefined) =>
     status?.state === 'installed' && status.pathConfigured
 }))
 
@@ -95,15 +95,15 @@ let container: HTMLDivElement | null = null
 function cliStatus(overrides: Partial<CliInstallStatus>): CliInstallStatus {
   return {
     platform: 'darwin',
-    commandName: 'orca',
-    commandPath: '/usr/local/bin/orca',
+    commandName: 'mcode',
+    commandPath: '/usr/local/bin/mcode',
     pathDirectory: '/usr/local/bin',
     pathConfigured: true,
-    launcherPath: '/Applications/Orca.app/Contents/MacOS/Orca',
+    launcherPath: '/Applications/MCode.app/Contents/MacOS/MCode',
     installMethod: 'symlink',
     supported: true,
     state: 'installed',
-    currentTarget: '/Applications/Orca.app/Contents/MacOS/Orca',
+    currentTarget: '/Applications/MCode.app/Contents/MacOS/MCode',
     unsupportedReason: null,
     detail: null,
     ...overrides
@@ -218,11 +218,11 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
       'Enable agents to read and edit the attached Linear ticket.'
     )
     expect(toast.warning).toHaveBeenCalledWith(
-      'Orca CLI and Linear skill are missing',
+      'MCode CLI and Linear skill are missing',
       expect.objectContaining({
-        id: 'linear-agent-skill-setup-orca.linearTicketsSkill.setupDismissed.host',
+        id: 'linear-agent-skill-setup-mcode.linearTicketsSkill.setupDismissed.host',
         description:
-          'Install the Orca CLI and the Linear skill to enable your agents to read and edit Linear tasks.',
+          'Install the MCode CLI and the Linear skill to enable your agents to read and edit Linear tasks.',
         action: {
           label: 'Set up',
           onClick: expect.any(Function)
@@ -231,15 +231,15 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
     )
   })
 
-  it('does not repeat the Orca CLI in CLI-only reminder toast copy', async () => {
+  it('does not repeat the MCode CLI in CLI-only reminder toast copy', async () => {
     mocks.skillState.installed = true
     await snoozeInitialModal({ linked: true, remote: false, surface: 'modal' })
     await renderPrompt({ linked: true, remote: false, surface: 'modal' })
 
     expect(toast.warning).toHaveBeenCalledWith(
-      'Orca CLI is missing',
+      'MCode CLI is missing',
       expect.objectContaining({
-        description: 'Install the Orca CLI to enable your agents to read and edit Linear tasks.'
+        description: 'Install the MCode CLI to enable your agents to read and edit Linear tasks.'
       })
     )
   })
@@ -249,10 +249,10 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
     await renderPrompt({ linked: true, remote: true, surface: 'modal' })
 
     expect(toast.warning).toHaveBeenCalledWith(
-      'Orca CLI and Linear skill are missing',
+      'MCode CLI and Linear skill are missing',
       expect.objectContaining({
         description:
-          'Install the Orca CLI and the Linear skill to enable your agents to read and edit Linear tasks. Remote agent environments may need their own setup.'
+          'Install the MCode CLI and the Linear skill to enable your agents to read and edit Linear tasks. Remote agent environments may need their own setup.'
       })
     )
   })
@@ -274,10 +274,10 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
     await renderPrompt(wslProps)
 
     expect(toast.warning).toHaveBeenCalledWith(
-      'Orca CLI and Linear skill are missing',
+      'MCode CLI and Linear skill are missing',
       expect.objectContaining({
         description:
-          'Install the Orca CLI and the Linear skill to enable your agents to read and edit Linear tasks. This setup runs in the selected WSL agent runtime.'
+          'Install the MCode CLI and the Linear skill to enable your agents to read and edit Linear tasks. This setup runs in the selected WSL agent runtime.'
       })
     )
   })
@@ -298,7 +298,7 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
     )
     expect(document.body.textContent).toContain('Mock install')
     expect(toast.dismiss).toHaveBeenCalledWith(
-      'linear-agent-skill-setup-orca.linearTicketsSkill.setupDismissed.host'
+      'linear-agent-skill-setup-mcode.linearTicketsSkill.setupDismissed.host'
     )
   })
 
@@ -324,7 +324,7 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
 
     expect(getExistingLinearAgentSkillSetupReminderState(HOST_DISMISS_STORAGE_KEY)).toBeUndefined()
     expect(toast.dismiss).toHaveBeenCalledWith(
-      'linear-agent-skill-setup-orca.linearTicketsSkill.setupDismissed.host'
+      'linear-agent-skill-setup-mcode.linearTicketsSkill.setupDismissed.host'
     )
   })
 
@@ -354,7 +354,7 @@ describe('LinearAgentSkillSetupPrompt reminder toast', () => {
 
     expect(window.localStorage.getItem(HOST_DISMISS_STORAGE_KEY)).toBe('1')
     expect(toast.dismiss).toHaveBeenCalledWith(
-      'linear-agent-skill-setup-orca.linearTicketsSkill.setupDismissed.host'
+      'linear-agent-skill-setup-mcode.linearTicketsSkill.setupDismissed.host'
     )
   })
 })

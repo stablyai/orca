@@ -18,10 +18,10 @@ beforeEach(() => {
   // Stand in for the guest shell: rc banner first, then the payload inside the
   // command's own fence. The identity script execs, so no closing fence is written.
   execFileSyncMock.mockImplementation((_command: string, args: string[]) => {
-    const nonce = /__ORCA_WSL_CAPTURE_BEGIN_([^_]+)__/.exec(String(args.at(-1)))?.[1] ?? ''
+    const nonce = /__MCODE_WSL_CAPTURE_BEGIN_([^_]+)__/.exec(String(args.at(-1)))?.[1] ?? ''
     return (
       'To run a command as administrator (user "root"), use "sudo <command>".\n\n' +
-      `__ORCA_WSL_CAPTURE_BEGIN_${nonce}__/home/alice/.local/bin/codex\ncodex-cli 1.2.3\n`
+      `__MCODE_WSL_CAPTURE_BEGIN_${nonce}__/home/alice/.local/bin/codex\ncodex-cli 1.2.3\n`
     )
   })
   resolveCodexCommandMock.mockReset()

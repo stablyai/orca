@@ -5,7 +5,7 @@
  * Memory dashboard collector.
  *
  * One snapshot covers two sources:
- *   - Orca's own Electron processes, via `app.getAppMetrics()`, bucketed
+ *   - MCode's own Electron processes, via `app.getAppMetrics()`, bucketed
  *     into main / renderer / other.
  *   - Each registered PTY's process subtree, enumerated once from a host-
  *     wide process sweep (PowerShell CIM with a Typeperf fallback on Windows).
@@ -312,7 +312,7 @@ function resolveWorktreeNames(
   repoId: string
   repoName: string
 } {
-  // Orca worktree ids look like `${repoId}::${absolutePath}`.
+  // MCode worktree ids look like `${repoId}::${absolutePath}`.
   const parsed = splitWorktreeIdForFilesystem(worktreeId)
   const repoId = parsed?.repoId ?? worktreeId
   const worktreePath = parsed?.worktreePath ?? ''

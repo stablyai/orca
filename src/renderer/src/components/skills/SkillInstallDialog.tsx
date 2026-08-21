@@ -91,7 +91,7 @@ export function SkillInstallDialog({
   const resolveLink = useCallback(async (value: string): Promise<void> => {
     const shareId = parseSkillShareId(value)
     if (!shareId) {
-      setError('Enter an Orca skill share link.')
+      setError('Enter an MCode skill share link.')
       return
     }
     setBusy(true)
@@ -204,7 +204,7 @@ export function SkillInstallDialog({
       if (operation.status !== 'ok') {
         setError(
           operation.status === 'reconnect-required'
-            ? 'Reconnect your Orca account before installing.'
+            ? 'Reconnect your MCode account before installing.'
             : operation.message
         )
         return
@@ -215,7 +215,7 @@ export function SkillInstallDialog({
       }
     } catch (cause) {
       console.warn('[skills] install failed:', cause)
-      setError('Installation failed before Orca could verify the requested version.')
+      setError('Installation failed before MCode could verify the requested version.')
     } finally {
       installProgress.finish()
       setBusy(false)

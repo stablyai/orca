@@ -1,8 +1,8 @@
 import type { SkillInstallDestination } from '../../shared/skill-install-contract'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { MCodeRuntimeService } from '../runtime/mcode-runtime'
 
 export async function classifySkillCloudInstallTarget(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   input: { environmentId?: string; destination: SkillInstallDestination }
 ): Promise<'local' | 'remote'> {
   return input.environmentId || (await runtime.skillInstallDestinationUsesSsh(input.destination))

@@ -24,7 +24,7 @@ describe('CLI runtime environments', () => {
   const posixModeIt = process.platform === 'win32' ? it.skip : it
 
   it('saves, resolves, and removes a paired environment', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-env-store-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-env-store-'))
     const saved = addEnvironmentFromPairingCode(userDataPath, {
       name: 'workstation',
       pairingCode: pairingCode(),
@@ -47,7 +47,7 @@ describe('CLI runtime environments', () => {
   })
 
   posixModeIt('stores paired environments with owner-only POSIX permissions', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-env-store-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-env-store-'))
 
     addEnvironmentFromPairingCode(userDataPath, {
       name: 'workstation',
@@ -61,7 +61,7 @@ describe('CLI runtime environments', () => {
   })
 
   it('rejects an environment with the same name', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-env-store-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-env-store-'))
     const first = addEnvironmentFromPairingCode(userDataPath, {
       name: 'workstation',
       pairingCode: pairingCode('ws://127.0.0.1:1111'),

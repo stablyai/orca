@@ -12,7 +12,7 @@ vi.mock('node:child_process', () => ({
 }))
 
 vi.mock('electron', () => ({
-  app: { getPath: () => 'C:\\orca-review-11407' }
+  app: { getPath: () => 'C:\\mcode-review-11407' }
 }))
 
 vi.mock('../codex-cli/command', () => ({
@@ -162,7 +162,7 @@ describe('native Windows Claude login completion oracle', () => {
       args: ['auth', 'login', '--claudeai'],
       config: {
         windowsPath: 'C:\\isolated-auth',
-        linuxPath: '/home/orca/isolated-auth',
+        linuxPath: '/home/mcode/isolated-auth',
         wslDistro: 'Ubuntu-Oracle'
       }
     }

@@ -3,7 +3,7 @@ import process from 'node:process'
 import { randomUUID } from 'node:crypto'
 import { DaemonPtyAdapter } from '../../../src/main/daemon/daemon-pty-adapter'
 import type { DaemonPtyRouter } from '../../../src/main/daemon/daemon-pty-router'
-import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
+import { MCodeRuntimeService } from '../../../src/main/runtime/mcode-runtime'
 import { RpcDispatcher } from '../../../src/main/runtime/rpc/dispatcher'
 import { SESSION_TAB_METHODS } from '../../../src/main/runtime/rpc/methods/session-tabs'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../src/shared/runtime-types'
@@ -113,7 +113,7 @@ async function connectThroughDesktopDiscovery(
     router.write(session.sessionId, `PING ${session.label} ${nonce}\r`)
     await waitFor(`${session.label} reconnect reply`, () =>
       (outputBySessionId.get(session.sessionId) ?? '').includes(
-        `ORCA_GENERATION_CANARY_ACK ${session.label} ${nonce}`
+        `MCODE_GENERATION_CANARY_ACK ${session.label} ${nonce}`
       )
     )
   }
@@ -148,7 +148,7 @@ function createRuntimeClosePath(
     const leafId = `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`
     return { session, leafId, mobileTabId: `${PARENT_TAB_ID}::${leafId}` }
   })
-  const runtime = new OrcaRuntimeService()
+  const runtime = new MCodeRuntimeService()
   runtime.setPtyController({
     write: (ptyId, data) => {
       router.write(ptyId, data)

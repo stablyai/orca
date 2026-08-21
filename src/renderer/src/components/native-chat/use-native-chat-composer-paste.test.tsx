@@ -154,7 +154,7 @@ describe('useNativeChatComposerPaste', () => {
   })
 
   it('saves on the SSH host and attaches the returned remote path', async () => {
-    mocks.saveClipboardImageAsTempFile.mockResolvedValue('/remote/tmp/orca-paste-1.png')
+    mocks.saveClipboardImageAsTempFile.mockResolvedValue('/remote/tmp/mcode-paste-1.png')
     const attachResolvedPaths = vi.fn()
     const probe = await renderProbe({
       resolveAttachmentOwner: () => sshOwner,
@@ -164,7 +164,7 @@ describe('useNativeChatComposerPaste', () => {
       probe.latest().handlePaste(imagePasteEvent())
     })
     expect(mocks.saveClipboardImageAsTempFile).toHaveBeenCalledWith({ connectionId: 'conn-1' })
-    expect(attachResolvedPaths).toHaveBeenCalledWith(['/remote/tmp/orca-paste-1.png'])
+    expect(attachResolvedPaths).toHaveBeenCalledWith(['/remote/tmp/mcode-paste-1.png'])
   })
 
   it('stops pasteFromClipboard on a failed save instead of falling through to text', async () => {

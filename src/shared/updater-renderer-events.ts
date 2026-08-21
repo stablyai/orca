@@ -1,4 +1,4 @@
-export const ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT = 'orca:updater-quit-and-install-started'
-export const ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT = 'orca:updater-quit-and-install-aborted'
-export const ORCA_APP_RESTART_STARTED_EVENT = 'orca:app-restart-started'
-export const ORCA_APP_RESTART_ABORTED_EVENT = 'orca:app-restart-aborted'
+export const MCODE_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT = 'mcode:updater-quit-and-install-started'
+export const MCODE_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT = 'mcode:updater-quit-and-install-aborted'
+export const MCODE_APP_RESTART_STARTED_EVENT = 'mcode:app-restart-started'
+export const MCODE_APP_RESTART_ABORTED_EVENT = 'mcode:app-restart-aborted'

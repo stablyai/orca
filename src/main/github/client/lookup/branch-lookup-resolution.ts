@@ -247,7 +247,7 @@ export async function resolvePRForBranchOutcome(input: {
   const shouldPreserveMergedFallback =
     !explicitHeadHidesMergedImplicitPR &&
     (fallbackConfirmedMergedBranch || options.acceptMergedFallbackPR === true)
-  // Why: a visible PR can be merged outside Orca; keep a caller-marked fallback fresh even when GitHub no longer reports it by branch (e.g. deleted heads).
+  // Why: a visible PR can be merged outside MCode; keep a caller-marked fallback fresh even when GitHub no longer reports it by branch (e.g. deleted heads).
   if ((await hideMergedImplicitPR(data, dataRepo)) && !shouldPreserveMergedFallback) {
     return { kind: 'no-pr', fetchedAt: Date.now() }
   }

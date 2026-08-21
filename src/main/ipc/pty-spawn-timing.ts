@@ -1,7 +1,7 @@
 // Why: pty:spawn latency has four very different suspects (startup barrier,
 // Claude auth prep, buildPtyHostEnv filesystem work, provider/daemon spawn).
 // A single opt-in log line per spawn lets benchmarks attribute the cost
-// without a tracing dependency. Enabled via ORCA_PTY_SPAWN_TIMING=1.
+// without a tracing dependency. Enabled via MCODE_PTY_SPAWN_TIMING=1.
 
 export type PtySpawnTiming = {
   mark(phase: string): void
@@ -14,7 +14,7 @@ const noopTiming: PtySpawnTiming = {
 }
 
 export function createPtySpawnTiming(): PtySpawnTiming {
-  const flag = process.env.ORCA_PTY_SPAWN_TIMING
+  const flag = process.env.MCODE_PTY_SPAWN_TIMING
   if (!flag || flag === '0' || flag.toLowerCase() === 'false') {
     return noopTiming
   }

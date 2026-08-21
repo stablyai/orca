@@ -11,7 +11,7 @@ import {
 import { restoreScrollbackBuffers } from './layout-serialization'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
-const UNCLOSED_BOLD_FIXTURE = 'ORCA-SGR-REPRO \x1b[1mBOLD-RUN-LEFT-OPEN\x1b[1;34H'
+const UNCLOSED_BOLD_FIXTURE = 'MCODE-SGR-REPRO \x1b[1mBOLD-RUN-LEFT-OPEN\x1b[1;34H'
 const terminals: Terminal[] = []
 
 function createTerminal(): Terminal {
@@ -131,7 +131,7 @@ describe('fresh-shell terminal restore SGR state', () => {
     ['alternate-screen TUI', POST_REPLAY_REATTACH_RESET_KEEP_MOUSE]
   ])('preserves a %s pen across daemon reattach', async (_kind, reset) => {
     const terminal = createTerminal()
-    await writeTerminal(terminal, 'ORCA-SGR-REPRO \x1b[1;34mBOLD-RUN-LEFT-OPEN\x1b[1;34H')
+    await writeTerminal(terminal, 'MCODE-SGR-REPRO \x1b[1;34mBOLD-RUN-LEFT-OPEN\x1b[1;34H')
     await writeTerminal(terminal, reset)
     await writeTerminal(terminal, 'LIVE-CONTINUATION')
 

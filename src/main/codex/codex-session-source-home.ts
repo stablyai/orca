@@ -3,7 +3,7 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 /**
  * Resolves the user-configured Codex *session history* source home, if any.
  *
- * Why: Orca relocates CODEX_HOME to a managed home, then bridges history from
+ * Why: MCode relocates CODEX_HOME to a managed home, then bridges history from
  * the user's real Codex home so /resume finds it. That source defaults to
  * ~/.codex, but users who run Codex with a custom CODEX_HOME need to point
  * history discovery at that folder. This override affects history only; auth,

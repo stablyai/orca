@@ -174,7 +174,7 @@ describe('registerFilesystemHandlers', () => {
     )
   })
 
-  it('prepares the Orca-managed Codex home for the default system selection', async () => {
+  it('prepares the MCode-managed Codex home for the default system selection', async () => {
     const context = {
       branch: 'feature/ai',
       stagedSummary: 'M\tREADME.md',
@@ -189,7 +189,7 @@ describe('registerFilesystemHandlers', () => {
     })
 
     registerFilesystemHandlers(store as never, {
-      prepareForCodexLaunch: () => '/orca-managed/codex-home'
+      prepareForCodexLaunch: () => '/mcode-managed/codex-home'
     })
 
     await handlers.get('git:generateCommitMessage')!(null, {
@@ -202,7 +202,7 @@ describe('registerFilesystemHandlers', () => {
       expect.objectContaining({
         kind: 'local',
         cwd: WORKTREE_FEATURE_PATH,
-        env: expect.objectContaining({ CODEX_HOME: '/orca-managed/codex-home' })
+        env: expect.objectContaining({ CODEX_HOME: '/mcode-managed/codex-home' })
       })
     )
   })

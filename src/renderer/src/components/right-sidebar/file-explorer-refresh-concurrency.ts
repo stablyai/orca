@@ -11,7 +11,7 @@ export const FILE_EXPLORER_REMOTE_REFRESH_CONCURRENCY = 4
  *
  * Why: tiers come from the owner, not from `getFileExplorerOperationRoute`,
  * which maps every non-SSH runtime host to `expectedExecutionHostId: 'local'` —
- * including an `orca serve` runtime reached over a network socket, whose reads
+ * including an `mcode serve` runtime reached over a network socket, whose reads
  * are RPC round trips rather than disk reads.
  */
 export function fileExplorerRefreshConcurrency(owner: FileExplorerOperationOwner): number {

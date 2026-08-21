@@ -5,7 +5,7 @@ import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { PNG } from 'pngjs'
 import type { RuntimeTerminalRead } from '../../src/shared/runtime-types'
 import { toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import {
   createRuntimeDesktopPairingOffer,
   launchPairedWebClient
@@ -14,7 +14,7 @@ import { getTerminalContent, waitForActivePanePtyId } from './helpers/terminal'
 
 const MIN_EXHAUSTED_ACK_BYTES = 400 * 1024
 const PUBLICATION_DEADLINE_MS = 10_000
-const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-stalled-stream-'))
+const scratch = mkdtempSync(path.join(os.tmpdir(), 'mcode-paired-stalled-stream-'))
 const fixturePath = path.join(scratch, 'stalled-stream-terminal.mjs')
 writeFileSync(
   fixturePath,
@@ -227,11 +227,11 @@ async function findHostPaneWithMarker(
 
 test('restarts one ACK-starved paired terminal stream without replacing its PTY @headful', async ({
   electronApp,
-  orcaPage
+  mcodePage
 }, testInfo) => {
   test.setTimeout(150_000)
   const liveMarker = `PAIRED_STALL_RECOVERED_${Date.now()}`
-  const worktree = await orcaPage.evaluate(() => {
+  const worktree = await mcodePage.evaluate(() => {
     const state = window.__store?.getState()
     const id = state?.activeWorktreeId
     const active = state?.allWorktrees().find((candidate) => candidate.id === id)
@@ -241,10 +241,10 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
     return { id: active.id }
   })
   const noClientResources = await getAppResourceProxies(electronApp)
-  const offer = await createRuntimeDesktopPairingOffer(orcaPage)
+  const offer = await createRuntimeDesktopPairingOffer(mcodePage)
   const client = await launchPairedWebClient(electronApp, offer, {
     disableRemoteTerminalStallRecovery:
-      process.env.ORCA_E2E_DISABLE_REMOTE_TERMINAL_STALL_RECOVERY === '1'
+      process.env.MCODE_E2E_DISABLE_REMOTE_TERMINAL_STALL_RECOVERY === '1'
   })
   let observer: Awaited<ReturnType<typeof launchPairedWebClient>> | null = null
   let terminal: string | null = null
@@ -263,7 +263,7 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
         { timeout: 30_000 }
       )
       .toBe(true)
-    const observerOffer = await createRuntimeDesktopPairingOffer(orcaPage)
+    const observerOffer = await createRuntimeDesktopPairingOffer(mcodePage)
     observer = await launchPairedWebClient(electronApp, observerOffer)
     await showHeadedClient(electronApp, client.page)
     await showHeadedClient(electronApp, observer.page)
@@ -282,7 +282,7 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
       )
       .toBe(true)
     const connectedIdleResources = await getAppResourceProxies(electronApp)
-    await minimizeHeadedHost(electronApp, orcaPage)
+    await minimizeHeadedHost(electronApp, mcodePage)
     const createStartedAt = performance.now()
     const created = await callRuntime<{
       tab: { id: string; parentTabId: string; terminal: string | null }
@@ -329,7 +329,7 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
     await expect
       .poll(
         () =>
-          orcaPage.evaluate(
+          mcodePage.evaluate(
             ({ tabId, worktreeId }) =>
               (window.__store?.getState().tabsByWorktree[worktreeId] ?? []).some(
                 (tab) => tab.id === tabId
@@ -483,26 +483,26 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
       'authoritative inventory dropped the terminal during ACK recovery'
     ).toBe(true)
 
-    await restoreHeadedHost(electronApp, orcaPage)
-    await orcaPage.evaluate(
+    await restoreHeadedHost(electronApp, mcodePage)
+    await mcodePage.evaluate(
       (worktreeId) => window.__store?.getState().setActiveWorktree(worktreeId),
       worktree.id
     )
-    const hostTab = orcaPage.locator(
+    const hostTab = mcodePage.locator(
       `[data-testid="sortable-tab"][data-tab-id="${created.tab.parentTabId}"]`
     )
     await expect(hostTab).toBeVisible({ timeout: 30_000 })
     await hostTab.click()
-    const hostPane = await findHostPaneWithMarker(orcaPage, `LIVE:${liveMarker}`)
+    const hostPane = await findHostPaneWithMarker(mcodePage, `LIVE:${liveMarker}`)
     expect(hostPane.tabId).toBe(created.tab.parentTabId)
-    await orcaPage.evaluate(({ paneId, tabId }) => {
+    await mcodePage.evaluate(({ paneId, tabId }) => {
       const manager = window.__paneManagers?.get(tabId)
       manager?.setActivePane?.(paneId, { focus: true })
     }, hostPane)
     await expect
-      .poll(() => getTerminalContent(orcaPage), { timeout: 30_000 })
+      .poll(() => getTerminalContent(mcodePage), { timeout: 30_000 })
       .toContain(`LIVE:${liveMarker}`)
-    const restoredTerminalScreenshot = await orcaPage
+    const restoredTerminalScreenshot = await mcodePage
       .locator(
         `[data-terminal-tab-id="${hostPane.tabId}"] .pane[data-pane-id="${hostPane.paneId}"] .xterm-screen`
       )
@@ -526,7 +526,7 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
       'authoritative inventory dropped the terminal while restoring the host'
     ).toBe(true)
 
-    await minimizeHeadedHost(electronApp, orcaPage)
+    await minimizeHeadedHost(electronApp, mcodePage)
     await showHeadedClient(electronApp, observer.page)
 
     const authoritativeInventory = await callRuntime<{
@@ -559,7 +559,7 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
       .poll(
         () =>
           Promise.all([
-            orcaPage.evaluate(
+            mcodePage.evaluate(
               ({ tabId, worktreeId }) =>
                 (window.__store?.getState().tabsByWorktree[worktreeId] ?? []).some(
                   (candidate) => candidate.id === tabId
@@ -586,8 +586,8 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
       .toEqual([false, false, false])
     terminal = null
 
-    await restoreHeadedHost(electronApp, orcaPage)
-    const restoredHostScreenshot = await orcaPage.screenshot({ fullPage: true })
+    await restoreHeadedHost(electronApp, mcodePage)
+    const restoredHostScreenshot = await mcodePage.screenshot({ fullPage: true })
     expect(
       countForegroundPixels(restoredHostScreenshot),
       'host compositor remained blank after the background close toggle'

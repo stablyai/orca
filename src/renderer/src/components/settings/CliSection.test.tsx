@@ -5,8 +5,8 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
-  ORCA_CLI_SKILL_INSTALL_COMMAND,
-  ORCA_CLI_SKILL_UPDATE_COMMAND
+  MCODE_CLI_SKILL_INSTALL_COMMAND,
+  MCODE_CLI_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
 import { CliSection } from './CliSection'
 
@@ -80,7 +80,7 @@ describe('CliSection project runtime defaults', () => {
   it('exposes freshness only for a resolved local host runtime', () => {
     const settings = getDefaultSettings('/tmp')
     renderToStaticMarkup(<CliSection currentPlatform="darwin" settings={settings} />)
-    expect(capturedPanel.props?.freshnessSkillName).toBe('orca-cli')
+    expect(capturedPanel.props?.freshnessSkillName).toBe('mcode-cli')
 
     capturedPanel.canUseLocalSkillFreshness = false
     renderToStaticMarkup(<CliSection currentPlatform="darwin" settings={settings} />)
@@ -134,14 +134,14 @@ describe('CliSection project runtime defaults', () => {
     await capturedPanel.props?.onBeforeOpenTerminal()
 
     expect(capturedPanel.useInstalledAgentSkill).toHaveBeenCalledWith(
-      'orca-cli',
+      'mcode-cli',
       expect.objectContaining({
         discoveryTarget: { runtime: 'wsl', wslDistro: 'Ubuntu' },
         sourceKinds: ['global']
       })
     )
-    expect(capturedPanel.props?.command).toBe(ORCA_CLI_SKILL_INSTALL_COMMAND)
-    expect(capturedPanel.props?.installedCommand).toBe(ORCA_CLI_SKILL_UPDATE_COMMAND)
+    expect(capturedPanel.props?.command).toBe(MCODE_CLI_SKILL_INSTALL_COMMAND)
+    expect(capturedPanel.props?.installedCommand).toBe(MCODE_CLI_SKILL_UPDATE_COMMAND)
     expect(capturedPanel.props?.terminalRuntime).toEqual({
       runtime: 'wsl',
       wslDistro: 'Ubuntu',
@@ -154,17 +154,17 @@ describe('CliSection project runtime defaults', () => {
   it('renders an inline unknown PATH state without offering a mutation', async () => {
     const getInstallStatus = vi.fn().mockResolvedValue({
       platform: 'win32',
-      commandName: 'orca',
-      commandPath: 'C:\\Program Files\\Orca\\resources\\bin\\orca.exe',
-      pathDirectory: 'C:\\Program Files\\Orca\\resources\\bin',
+      commandName: 'mcode',
+      commandPath: 'C:\\Program Files\\MCode\\resources\\bin\\mcode.exe',
+      pathDirectory: 'C:\\Program Files\\MCode\\resources\\bin',
       pathConfigured: null,
-      launcherPath: 'C:\\Program Files\\Orca\\resources\\bin\\orca.exe',
+      launcherPath: 'C:\\Program Files\\MCode\\resources\\bin\\mcode.exe',
       installMethod: 'wrapper',
       supported: true,
       state: 'installed',
-      currentTarget: 'C:\\Program Files\\Orca\\resources\\bin\\orca.exe',
+      currentTarget: 'C:\\Program Files\\MCode\\resources\\bin\\mcode.exe',
       unsupportedReason: null,
-      detail: 'Orca could not read the Windows user PATH registry value.'
+      detail: 'MCode could not read the Windows user PATH registry value.'
     })
     Object.assign(window, {
       api: {

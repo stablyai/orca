@@ -41,7 +41,7 @@ describe('notification route coordination', () => {
   it('mounts the host before replacing it with the notification session, from a cold navigator', () => {
     const target = getNotificationNavigationTarget({
       hostId: 'host/one',
-      worktreeId: 'repo::/Users/me/orca/workspaces/feature'
+      worktreeId: 'repo::/Users/me/mcode/workspaces/feature'
     })
     // Cold start: the tap is handled before the root navigator has committed any state.
     const harness = navigationHarness(undefined)

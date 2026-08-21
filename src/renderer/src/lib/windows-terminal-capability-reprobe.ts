@@ -1,6 +1,6 @@
 import type { WindowsTerminalCapabilities } from './windows-terminal-capabilities'
 
-// Why: an absent WSL must stay re-checkable (a distro can finish provisioning while Orca runs),
+// Why: an absent WSL must stay re-checkable (a distro can finish provisioning while MCode runs),
 // but every re-check spawns wsl.exe/pwsh.exe, so stable answers fall back to a low-frequency poll.
 const REPROBE_BASE_DELAY_MS = 30_000
 const REPROBE_MAX_DELAY_MS = 5 * 60_000

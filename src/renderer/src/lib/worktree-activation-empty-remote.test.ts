@@ -10,10 +10,10 @@ import { ensureWebRuntimeWorktreeTerminalAfterWake } from './web-runtime-worktre
 const initialAppStoreState = useAppStore.getState()
 const WORKTREE_PATH = path.join('workspace', 'feature')
 const REPO_PATH = path.join('workspace', 'repo')
-const ORCA_WORKSPACES_PATH = path.join('workspace', '.orca-workspaces')
+const MCODE_WORKSPACES_PATH = path.join('workspace', '.mcode-workspaces')
 
 afterEach(() => {
-  delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
+  delete (globalThis as { __MCODE_WEB_CLIENT__?: boolean }).__MCODE_WEB_CLIENT__
   vi.unstubAllGlobals()
   resetWebSessionTabsSnapshotFreshnessForTests()
   resetWebRuntimeWakeTerminalRespawnForTests()
@@ -65,7 +65,7 @@ describe('empty remote worktree activation', () => {
         snapshotVersion: 1
       }
     })
-    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    ;(globalThis as { __MCODE_WEB_CLIENT__?: boolean }).__MCODE_WEB_CLIENT__ = true
     vi.stubGlobal('window', {
       api: {
         runtimeEnvironments: {
@@ -89,7 +89,7 @@ describe('empty remote worktree activation', () => {
       tabsByWorktree: {},
       ptyIdsByTabId: {},
       settings: {
-        ...getDefaultSettings(ORCA_WORKSPACES_PATH),
+        ...getDefaultSettings(MCODE_WORKSPACES_PATH),
         activeRuntimeEnvironmentId: 'web-runtime-1'
       },
       reconcileWorktreeTabModel: vi.fn(() => ({

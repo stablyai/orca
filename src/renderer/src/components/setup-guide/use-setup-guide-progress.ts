@@ -9,7 +9,7 @@ import { hasEffectiveSetupCommand } from '@/lib/setup-script-status'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import {
   COMPUTER_USE_SKILL_NAME,
-  ORCA_CLI_SKILL_NAME,
+  MCODE_CLI_SKILL_NAME,
   ORCHESTRATION_SKILL_NAME
 } from '@/lib/agent-feature-install-commands'
 import {
@@ -75,7 +75,7 @@ export function useSetupGuideProgress(
     useState(false)
   const [computerUseUnavailable, setComputerUseUnavailable] = useState(false)
   const { installed: detectedBrowserUseSkillInstalled, loading: detectedBrowserUseSkillLoading } =
-    useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
+    useInstalledAgentSkill(MCODE_CLI_SKILL_NAME, {
       enabled: shouldRefreshCoreState,
       discoveryTarget: activeSkillRuntime.discoveryTarget,
       sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS

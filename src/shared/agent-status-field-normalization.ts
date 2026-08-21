@@ -6,8 +6,8 @@
 
 import {
   compactDispatchPromptForStatus,
-  isOrcaDispatchStatusPrompt
-} from './orca-dispatch-status-prompt'
+  isMCodeDispatchStatusPrompt
+} from './mcode-dispatch-status-prompt'
 
 /** Maximum character length for the prompt field. Truncated on parse. */
 export const AGENT_STATUS_MAX_FIELD_LENGTH = 200
@@ -40,12 +40,12 @@ function normalizeField(value: unknown, maxLength: number = AGENT_STATUS_MAX_FIE
   return normalizeSingleLinePreview(value, maxLength)
 }
 
-/** Normalize the agent prompt field, compacting Orca dispatch preambles. */
+/** Normalize the agent prompt field, compacting MCode dispatch preambles. */
 export function normalizePromptField(value: unknown): string {
   if (typeof value !== 'string') {
     return ''
   }
-  if (isOrcaDispatchStatusPrompt(value)) {
+  if (isMCodeDispatchStatusPrompt(value)) {
     return compactDispatchPromptForStatus(
       value,
       AGENT_STATUS_MAX_FIELD_LENGTH,

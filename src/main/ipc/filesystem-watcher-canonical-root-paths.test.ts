@@ -93,16 +93,16 @@ describe('local filesystem watcher canonical root paths', () => {
   }
 
   it('reports symlink-resolved event paths under the subscribed root', async () => {
-    const worktreePath = resolve('/tmp/orca-link')
-    const payload = await emitAndCapture(worktreePath, resolve('/private/tmp/orca-real'), [
-      { path: resolve('/private/tmp/orca-real/src/agent-edit.ts'), type: 'update' }
+    const worktreePath = resolve('/tmp/mcode-link')
+    const payload = await emitAndCapture(worktreePath, resolve('/private/tmp/mcode-real'), [
+      { path: resolve('/private/tmp/mcode-real/src/agent-edit.ts'), type: 'update' }
     ])
 
     expect(payload.worktreePath).toBe(worktreePath)
     expect(payload.events).toEqual([
       {
         kind: 'update',
-        absolutePath: resolve('/tmp/orca-link/src/agent-edit.ts'),
+        absolutePath: resolve('/tmp/mcode-link/src/agent-edit.ts'),
         isDirectory: false
       }
     ])
@@ -111,18 +111,18 @@ describe('local filesystem watcher canonical root paths', () => {
   it.runIf(process.platform === 'darwin' || process.platform === 'win32')(
     'reports on-disk casing under the subscribed spelling',
     async () => {
-      const worktreePath = resolve('/tmp/orca-case/repo')
+      const worktreePath = resolve('/tmp/mcode-case/repo')
       const payload = await emitAndCapture(worktreePath, worktreePath, [
-        { path: resolve('/tmp/orca-case/Repo/src/agent-edit.ts'), type: 'update' }
+        { path: resolve('/tmp/mcode-case/Repo/src/agent-edit.ts'), type: 'update' }
       ])
 
-      expect(payload.events[0]!.absolutePath).toBe(resolve('/tmp/orca-case/repo/src/agent-edit.ts'))
+      expect(payload.events[0]!.absolutePath).toBe(resolve('/tmp/mcode-case/repo/src/agent-edit.ts'))
     }
   )
 
   it('leaves already-matching event paths untouched', async () => {
-    const worktreePath = resolve('/tmp/orca-plain')
-    const eventPath = resolve('/tmp/orca-plain/src/agent-edit.ts')
+    const worktreePath = resolve('/tmp/mcode-plain')
+    const eventPath = resolve('/tmp/mcode-plain/src/agent-edit.ts')
     const payload = await emitAndCapture(worktreePath, worktreePath, [
       { path: eventPath, type: 'update' }
     ])

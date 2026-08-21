@@ -129,15 +129,15 @@ vi.mock('./WorktreeCardAgents', () => ({
 
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
-  CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
-  WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope',
+  CLOSE_ALL_CONTEXT_MENUS_EVENT: 'mcode:test-close-context-menus',
+  WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-mcode-context-menu-scope',
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu'
 }))
 
 let workspacePortScan: { key: string; result: WorkspacePortScanResult } | null = null
 
 function makeRepo(): Repo {
-  return { id: 'repo-1', path: '/repo', displayName: 'orca', badgeColor: '#999999', addedAt: 1 }
+  return { id: 'repo-1', path: '/repo', displayName: 'mcode', badgeColor: '#999999', addedAt: 1 }
 }
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {

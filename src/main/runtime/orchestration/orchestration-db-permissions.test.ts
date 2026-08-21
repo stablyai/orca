@@ -16,7 +16,7 @@ describe.skipIf(process.platform === 'win32')('orchestration database permission
   })
 
   it('restricts the database and live SQLite sidecars to the current user', () => {
-    directory = mkdtempSync(join(tmpdir(), 'orca-orchestration-permissions-'))
+    directory = mkdtempSync(join(tmpdir(), 'mcode-orchestration-permissions-'))
     const dbPath = join(directory, 'orchestration.db')
     db = new OrchestrationDb(dbPath)
 

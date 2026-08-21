@@ -58,7 +58,7 @@ const NODE_PTY_CONSOLE_LIST_PATCH_SOURCE = join(
 
 // Why: lets the packaging contract test build into a temp tree instead of
 // clobbering a developer's out/relay or racing tests that read it.
-const OUT_ROOT = process.env.ORCA_RELAY_OUT_ROOT ?? join(ROOT, 'out', 'relay')
+const OUT_ROOT = process.env.MCODE_RELAY_OUT_ROOT ?? join(ROOT, 'out', 'relay')
 
 const RELAY_VERSION = '0.1.0'
 

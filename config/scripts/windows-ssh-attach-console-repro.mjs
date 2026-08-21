@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path'
 
 const projectDir = resolve(import.meta.dirname, '..', '..')
 const relayBuildDir = join(projectDir, 'out', 'relay', 'win32-x64')
-const SENTINEL = Buffer.from('ORCA-RELAY v0.1.0 READY\n')
+const SENTINEL = Buffer.from('MCODE-RELAY v0.1.0 READY\n')
 const HEADER_LENGTH = 13
 const REGRESSION_TIMEOUT_MS = 15_000
 const NODE_PTY_PATCH_FILENAME = 'node-pty-1.1.0-console-list-agent-patch.cjs'
@@ -36,7 +36,7 @@ const runDir = mkdtempSync(join(projectDir, '.issue-9586-relay-repro-'))
 const relayPath = join(runDir, 'relay.js')
 const stdoutLog = join(runDir, 'relay.log')
 const stderrLog = join(runDir, 'relay.err.log')
-const socketPath = `\\\\.\\pipe\\orca-issue-9586-${process.pid}-${Date.now()}`
+const socketPath = `\\\\.\\pipe\\mcode-issue-9586-${process.pid}-${Date.now()}`
 let relayPid
 
 try {

@@ -276,7 +276,7 @@ describe('Claude terminal session option detection', () => {
     const screen =
       '\u001b[1mClaude Code\u001b[0m v2.1.211\r\n' +
       '\u001b[38;2;102;102;102mOpus 4.8 with high effort · API Usage Billing\r\n' +
-      '~/Documents/projects/orca'
+      '~/Documents/projects/mcode'
 
     expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
       model: 'opus',

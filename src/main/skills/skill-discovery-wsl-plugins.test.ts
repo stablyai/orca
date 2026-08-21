@@ -24,7 +24,7 @@ describe('WSL Claude plugin skill discovery', () => {
 
   it('reads enabled plugin metadata and scans the selected install inside the distro', async () => {
     const homeDir = '/home/alice'
-    const cwd = '/work/orca'
+    const cwd = '/work/mcode'
     const pluginId = 'compound-engineering@compound-engineering-plugin'
     const installPath = '/home/alice/.claude/plugins/cache/compound/3.14.3'
     const installed = JSON.stringify({

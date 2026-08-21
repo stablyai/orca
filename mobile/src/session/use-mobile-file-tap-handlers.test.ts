@@ -33,7 +33,7 @@ describe('useMobileFileTapHandlers', () => {
       client: { sendRequest },
       hostId: 'host-1',
       worktreeId: 'wt-1',
-      worktreeName: 'Orca',
+      worktreeName: 'MCode',
       nativeChatSessionId: 'session-1',
       activeHandleRef: { current: 'terminal-1' as string | null },
       terminalCwdRef: { current: new Map([['terminal-1', '/repo/sub']]) },

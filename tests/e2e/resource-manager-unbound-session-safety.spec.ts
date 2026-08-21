@@ -1,7 +1,7 @@
 /**
  * E2E regression for #8459 — Resource Manager force-killed live daemon sessions as "orphans".
  *
- * The incident: a packaged `orca serve` still owned live AI terminals after the GUI quit. On
+ * The incident: a packaged `mcode serve` still owned live AI terminals after the GUI quit. On
  * relaunch the renderer's binding map had not caught up, so those sessions rendered as unbound.
  * "Kill orphan terminals" then destroyed them with no confirmation dialog.
  *
@@ -17,7 +17,7 @@
 
 import { existsSync, readFileSync } from 'node:fs'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
 import {
   discoverActivePtyId,
@@ -30,7 +30,7 @@ import {
   waitForActiveWorktree,
   waitForSessionReady
 } from './helpers/store'
-import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/mcode-restart'
 
 /**
  * Every binding source Resource Manager consults, mirroring buildResourceSessionBindingIndex. A

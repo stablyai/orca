@@ -100,7 +100,7 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename
     publishedVersions: readPublishedVersionsFromEnv(),
     // Titles are newline separated and contain spaces, so this cannot reuse the
     // whitespace split the version list gets.
-    releaseNames: (process.env.ORCA_DAILY_RELEASE_NAMES ?? '').split('\n').filter(Boolean)
+    releaseNames: (process.env.MCODE_DAILY_RELEASE_NAMES ?? '').split('\n').filter(Boolean)
   })
   // Consumed by the workflow via $GITHUB_OUTPUT.
   process.stdout.write(

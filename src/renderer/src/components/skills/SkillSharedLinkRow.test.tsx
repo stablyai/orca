@@ -8,7 +8,7 @@ import { SkillSharedLinkRow } from './SkillSharedLinkRow'
 
 const share: SkillCloudOwnedShare = {
   id: 'shr_1',
-  url: 'https://share.onorca.dev/skills/share/shr_1',
+  url: 'https://share.mcode.dev/skills/share/shr_1',
   packageId: 'pkg_1',
   name: 'agent-discord-and-1-more',
   description: 'Team skills',

@@ -114,7 +114,7 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
                 <p className="text-xs text-muted-foreground">
                   {translate(
                     'auto.components.settings.AdvancedPane.87a2cb2ac8',
-                    'Orca applies this networking mode at startup.'
+                    'MCode applies this networking mode at startup.'
                   )}
                 </p>
               </div>

@@ -10,7 +10,7 @@ import {
 } from './keychain'
 import { restorePlatform, setPlatform } from './claude-account-service-test-harness'
 
-const CLAUDE_SERVICE_TEST_ROOT = join(tmpdir(), 'orca-claude-service-config-dir-test')
+const CLAUDE_SERVICE_TEST_ROOT = join(tmpdir(), 'mcode-claude-service-config-dir-test')
 
 vi.mock('electron', () => ({
   app: {
@@ -78,7 +78,7 @@ describe('ClaudeAccountService.addAccountFromConfigDir', () => {
   }
 
   it('registers a managed account by capturing an authenticated config dir', async () => {
-    sourceDir = mkdtempSync(join(tmpdir(), 'orca-claude-source-'))
+    sourceDir = mkdtempSync(join(tmpdir(), 'mcode-claude-source-'))
     writeFileSync(
       join(sourceDir, '.credentials.json'),
       '{"claudeAiOauth":{"accessToken":"tok"}}\n',
@@ -116,7 +116,7 @@ describe('ClaudeAccountService.addAccountFromConfigDir', () => {
 
   it('captures only the config-scoped macOS Keychain credential', async () => {
     setPlatform('darwin')
-    sourceDir = mkdtempSync(join(tmpdir(), 'orca-claude-source-keychain-'))
+    sourceDir = mkdtempSync(join(tmpdir(), 'mcode-claude-source-keychain-'))
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockImplementation(async (configDir) =>
       configDir ? '{"claudeAiOauth":{"accessToken":"scoped"}}' : 'legacy-credentials'
     )
@@ -142,7 +142,7 @@ describe('ClaudeAccountService.addAccountFromConfigDir', () => {
 
   it('does not mistake an unchanged legacy Keychain credential for the temp login', async () => {
     setPlatform('darwin')
-    sourceDir = mkdtempSync(join(tmpdir(), 'orca-claude-source-keychain-empty-'))
+    sourceDir = mkdtempSync(join(tmpdir(), 'mcode-claude-source-keychain-empty-'))
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockImplementation(async (configDir) =>
       configDir ? null : 'legacy-credentials'
     )
@@ -165,7 +165,7 @@ describe('ClaudeAccountService.addAccountFromConfigDir', () => {
 
   it('captures a legacy Keychain credential that changed after login began', async () => {
     setPlatform('darwin')
-    sourceDir = mkdtempSync(join(tmpdir(), 'orca-claude-source-keychain-legacy-'))
+    sourceDir = mkdtempSync(join(tmpdir(), 'mcode-claude-source-keychain-legacy-'))
     const previousCredentials = '{"claudeAiOauth":{"accessToken":"previous"}}'
     const newCredentials = '{"claudeAiOauth":{"accessToken":"new","email":"new@example.com"}}'
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockImplementation(async (configDir) =>
@@ -198,7 +198,7 @@ describe('ClaudeAccountService.addAccountFromConfigDir', () => {
   it('still registers when the daemon cannot spawn `claude auth status`', async () => {
     // Why: `allowFailure` covers a non-zero exit but not a spawn error, so a daemon
     // started with a minimal PATH would hard-fail an add the user already signed in for.
-    sourceDir = mkdtempSync(join(tmpdir(), 'orca-claude-source-nostatus-'))
+    sourceDir = mkdtempSync(join(tmpdir(), 'mcode-claude-source-nostatus-'))
     writeFileSync(
       join(sourceDir, '.credentials.json'),
       '{"claudeAiOauth":{"accessToken":"tok"}}\n',
@@ -232,7 +232,7 @@ describe('ClaudeAccountService.addAccountFromConfigDir', () => {
   })
 
   it('rejects and rolls back when the config dir has no credentials', async () => {
-    sourceDir = mkdtempSync(join(tmpdir(), 'orca-claude-source-empty-'))
+    sourceDir = mkdtempSync(join(tmpdir(), 'mcode-claude-source-empty-'))
     const deps = makeDeps()
     const { ClaudeAccountService } = await import('./service')
     const service = new ClaudeAccountService(

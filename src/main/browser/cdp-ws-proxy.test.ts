@@ -33,7 +33,7 @@ describe('CdpWsProxy', () => {
   function expectPdfStreamHandle(response: Record<string, unknown>): string {
     const result = response.result as Record<string, unknown>
     expect(result.data).toBe('')
-    expect(result.stream).toEqual(expect.stringMatching(/^orca-pdf-[\da-f-]{36}-\d+$/))
+    expect(result.stream).toEqual(expect.stringMatching(/^mcode-pdf-[\da-f-]{36}-\d+$/))
     return result.stream as string
   }
 
@@ -95,12 +95,12 @@ describe('CdpWsProxy', () => {
     const primaryPageAttachResponse = await sendAndReceive(client, {
       id: 31,
       method: 'Target.attachToTarget',
-      params: { targetId: 'orca-proxy-target', flatten: true }
+      params: { targetId: 'mcode-proxy-target', flatten: true }
     })
 
     expect(primaryPageAttachResponse).toEqual({
       id: 31,
-      result: { sessionId: 'orca-proxy-session' }
+      result: { sessionId: 'mcode-proxy-session' }
     })
 
     const attachResponse = await sendAndReceive(client, {
@@ -111,34 +111,34 @@ describe('CdpWsProxy', () => {
 
     expect(attachResponse).toEqual({
       id: 32,
-      result: { sessionId: 'orca-proxy-browser-session' }
+      result: { sessionId: 'mcode-proxy-browser-session' }
     })
     expect(getSendCommandMethods(mock)).not.toContain('Target.attachToBrowserTarget')
 
     const pageAttachResponse = await sendAndReceive(client, {
       id: 33,
       method: 'Target.attachToTarget',
-      params: { targetId: 'orca-proxy-target', flatten: true },
-      sessionId: 'orca-proxy-browser-session'
+      params: { targetId: 'mcode-proxy-target', flatten: true },
+      sessionId: 'mcode-proxy-browser-session'
     })
 
     expect(pageAttachResponse).toEqual({
       id: 33,
-      result: { sessionId: 'orca-proxy-session-2' },
-      sessionId: 'orca-proxy-browser-session'
+      result: { sessionId: 'mcode-proxy-session-2' },
+      sessionId: 'mcode-proxy-browser-session'
     })
 
     const sessionResponse = await sendAndReceive(client, {
       id: 34,
       method: 'Runtime.evaluate',
       params: { expression: 'document.title' },
-      sessionId: 'orca-proxy-session-2'
+      sessionId: 'mcode-proxy-session-2'
     })
 
     expect(sessionResponse).toEqual({
       id: 34,
       result: {},
-      sessionId: 'orca-proxy-session-2'
+      sessionId: 'mcode-proxy-session-2'
     })
     expect(getSendCommandCalls(mock)).toContainEqual([
       'Runtime.evaluate',
@@ -148,39 +148,39 @@ describe('CdpWsProxy', () => {
     const detachResponse = await sendAndReceive(client, {
       id: 35,
       method: 'Target.detachFromTarget',
-      params: { sessionId: 'orca-proxy-session-2' },
-      sessionId: 'orca-proxy-browser-session'
+      params: { sessionId: 'mcode-proxy-session-2' },
+      sessionId: 'mcode-proxy-browser-session'
     })
 
     expect(detachResponse).toEqual({
       id: 35,
       result: {},
-      sessionId: 'orca-proxy-browser-session'
+      sessionId: 'mcode-proxy-browser-session'
     })
 
     const primaryPageResponse = await sendAndReceive(client, {
       id: 36,
       method: 'Runtime.evaluate',
       params: { expression: 'document.URL' },
-      sessionId: 'orca-proxy-session'
+      sessionId: 'mcode-proxy-session'
     })
 
     expect(primaryPageResponse).toEqual({
       id: 36,
       result: {},
-      sessionId: 'orca-proxy-session'
+      sessionId: 'mcode-proxy-session'
     })
 
     const browserSessionResponse = await sendAndReceive(client, {
       id: 37,
       method: 'Target.getTargets',
       params: {},
-      sessionId: 'orca-proxy-browser-session'
+      sessionId: 'mcode-proxy-browser-session'
     })
 
     expect(browserSessionResponse).toMatchObject({
       id: 37,
-      sessionId: 'orca-proxy-browser-session'
+      sessionId: 'mcode-proxy-browser-session'
     })
     client.close()
   })
@@ -191,18 +191,18 @@ describe('CdpWsProxy', () => {
     const attachResponse = await sendAndReceive(client, {
       id: 33,
       method: 'Target.attachToTarget',
-      params: { targetId: 'orca-proxy-target', flatten: true }
+      params: { targetId: 'mcode-proxy-target', flatten: true }
     })
 
     expect(attachResponse).toEqual({
       id: 33,
-      result: { sessionId: 'orca-proxy-session' }
+      result: { sessionId: 'mcode-proxy-session' }
     })
 
     const detachResponse = await sendAndReceive(client, {
       id: 34,
       method: 'Target.detachFromTarget',
-      params: { sessionId: 'orca-proxy-session' }
+      params: { sessionId: 'mcode-proxy-session' }
     })
 
     expect(detachResponse).toEqual({ id: 34, result: {} })
@@ -221,12 +221,12 @@ describe('CdpWsProxy', () => {
     const reattachResponse = await sendAndReceive(client, {
       id: 35,
       method: 'Target.attachToTarget',
-      params: { targetId: 'orca-proxy-target', flatten: true }
+      params: { targetId: 'mcode-proxy-target', flatten: true }
     })
 
     expect(reattachResponse).toEqual({
       id: 35,
-      result: { sessionId: 'orca-proxy-session-2' }
+      result: { sessionId: 'mcode-proxy-session-2' }
     })
     client.close()
   })
@@ -505,7 +505,7 @@ describe('CdpWsProxy', () => {
       id: 16,
       error: {
         code: -32000,
-        message: 'Page.reload parameter "loaderId" is not supported for Orca tab reloads'
+        message: 'Page.reload parameter "loaderId" is not supported for MCode tab reloads'
       }
     })
     expect(mock.webContents.reload).not.toHaveBeenCalled()

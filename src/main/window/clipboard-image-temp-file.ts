@@ -27,7 +27,7 @@ export async function saveClipboardImageBufferAsTempFile(
 ): Promise<string> {
   assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
 
-  const fileName = `orca-paste-${Date.now()}-${randomUUID()}.png`
+  const fileName = `mcode-paste-${Date.now()}-${randomUUID()}.png`
 
   if (args?.connectionId) {
     const provider = requireSshFilesystemProvider(args.connectionId)

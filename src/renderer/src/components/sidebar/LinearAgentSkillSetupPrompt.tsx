@@ -9,12 +9,12 @@ import {
 } from '@/hooks/useInstalledAgentSkills'
 import {
   LINEAR_AGENT_SKILL_NAMES,
-  ORCA_LINEAR_SKILL_INSTALL_COMMAND
+  MCODE_LINEAR_SKILL_INSTALL_COMMAND
 } from '@/lib/agent-feature-install-commands'
 import { getLinearAgentSkillUpdateCommand } from '@/lib/linear-agent-skill-update-command'
 import {
-  ensureOrcaCliAvailableForAgentSkillTerminal,
-  isOrcaCliAvailableOnPath
+  ensureMCodeCliAvailableForAgentSkillTerminal,
+  isMCodeCliAvailableOnPath
 } from '@/lib/agent-skill-cli-prerequisite'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { cn } from '@/lib/utils'
@@ -122,7 +122,7 @@ export function LinearAgentSkillSetupPrompt({
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   const command = useMemo(
-    () => buildSkillCommandForRuntime(ORCA_LINEAR_SKILL_INSTALL_COMMAND, agentRuntime),
+    () => buildSkillCommandForRuntime(MCODE_LINEAR_SKILL_INSTALL_COMMAND, agentRuntime),
     [agentRuntime]
   )
   const installedCommand = useMemo(
@@ -186,7 +186,7 @@ export function LinearAgentSkillSetupPrompt({
     void refreshCliStatus()
   }, [refreshCliStatus])
 
-  const cliAvailable = isOrcaCliAvailableOnPath(cliStatus)
+  const cliAvailable = isMCodeCliAvailableOnPath(cliStatus)
   const setupReady = linked && !cliLoading && !skill.loading && cliAvailable && skill.installed
   const missingSetup = linked && !localDismissed && !cliLoading && !skill.loading && !setupReady
   const explicitCheckMatchesContext = activeSetupCheckIdentity === setupCheckIdentity
@@ -309,7 +309,7 @@ export function LinearAgentSkillSetupPrompt({
           const nextStatus =
             agentRuntime.runtime === 'wsl'
               ? await ensureWslCliAvailableForAgentSkillTerminal(agentRuntime)
-              : await ensureOrcaCliAvailableForAgentSkillTerminal({
+              : await ensureMCodeCliAvailableForAgentSkillTerminal({
                   onStatusChange: (nextCliStatus) => {
                     writeIfCurrent(() => setCliStatus(nextCliStatus))
                   }

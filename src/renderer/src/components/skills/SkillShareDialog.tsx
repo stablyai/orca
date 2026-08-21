@@ -32,11 +32,11 @@ function operationError(status: string): string {
   return status === 'reconnect-required'
     ? translate(
         'auto.components.skills.SkillShareDialog.reconnect',
-        'Reconnect your Orca account before sharing.'
+        'Reconnect your MCode account before sharing.'
       )
     : translate(
         'auto.components.skills.SkillShareDialog.unconfigured',
-        'Connect an Orca Cloud account before sharing.'
+        'Connect an MCode Cloud account before sharing.'
       )
 }
 
@@ -94,7 +94,7 @@ export function SkillShareDialog({
         ...(managedInstall ? { packageId: managedInstall.packageId } : {})
       })
       retainedPreparationId = nextPreview.preparationId
-      const auth = await window.api.orcaProfiles.authStatus()
+      const auth = await window.api.mcodeProfiles.authStatus()
       return { nextPreview, auth, managedInstall }
     })()
       .then(async ({ nextPreview, auth, managedInstall }) => {
@@ -231,7 +231,7 @@ export function SkillShareDialog({
     } catch {
       cancellationRequested.current = false
       setCancelling(false)
-      setError('Orca could not send the cancellation request. The upload may still finish.')
+      setError('MCode could not send the cancellation request. The upload may still finish.')
     }
   }
 

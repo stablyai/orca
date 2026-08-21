@@ -1,0 +1,23 @@
+{
+  "manifestVersion": 1,
+  "id": "hello-mcode",
+  "publisher": "mcode-samples",
+  "name": "Hello MCode",
+  "version": "1.0.0",
+  "description": "Sample plugin combining a sandboxed panel, a worker command, and event subscriptions.",
+  "engines": { "mcode": ">=1.4.0" },
+  "pluginApi": 1,
+  "main": "main.mjs",
+  "contributes": {
+    "panels": [{ "id": "hello", "title": "Hello MCode", "icon": "plug", "entry": "panel.html" }],
+    "commands": [{ "id": "hello-ping", "title": "Hello: Ping" }],
+    "events": [{ "on": "worktree.created" }, { "on": "agent.status.changed" }]
+  },
+  "capabilities": [
+    { "kind": "workspace:read" },
+    { "kind": "terminal:send" },
+    { "kind": "notifications:show" },
+    { "kind": "storage" },
+    { "kind": "events:subscribe" }
+  ]
+}

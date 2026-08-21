@@ -62,7 +62,7 @@ export function AzureDevOpsIntegrationCard(): React.JSX.Element {
                 <span className="font-mono text-[11px]">
                   {translate(
                     'auto.components.settings.token.source.control.integration.cards.48842720d2',
-                    'ORCA_AZURE_DEVOPS_TOKEN'
+                    'MCODE_AZURE_DEVOPS_TOKEN'
                   )}
                 </span>
                 {translate(
@@ -72,7 +72,7 @@ export function AzureDevOpsIntegrationCard(): React.JSX.Element {
                 <span className="font-mono text-[11px]">
                   {translate(
                     'auto.components.settings.token.source.control.integration.cards.fbfd237f5e',
-                    'ORCA_AZURE_DEVOPS_ACCESS_TOKEN'
+                    'MCODE_AZURE_DEVOPS_ACCESS_TOKEN'
                   )}
                 </span>
                 {translate(
@@ -82,18 +82,18 @@ export function AzureDevOpsIntegrationCard(): React.JSX.Element {
                 <span className="font-mono text-[11px]">
                   {translate(
                     'auto.components.settings.token.source.control.integration.cards.186a6689df',
-                    'ORCA_AZURE_DEVOPS_API_BASE_URL'
+                    'MCODE_AZURE_DEVOPS_API_BASE_URL'
                   )}
                 </span>{' '}
                 {translate(
                   'auto.components.settings.token.source.control.integration.cards.7bd345e3f6',
-                  'only when Orca cannot derive the API base URL from the git remote.'
+                  'only when MCode cannot derive the API base URL from the git remote.'
                 )}
               </>
             ) : (
               translate(
                 'auto.components.settings.token.source.control.integration.cards.40f678df73',
-                'Azure DevOps credentials are configured but could not authenticate. Check the token, API base URL, and repository permissions, then restart Orca if environment variables changed.'
+                'Azure DevOps credentials are configured but could not authenticate. Check the token, API base URL, and repository permissions, then restart MCode if environment variables changed.'
               )
             )}
           </p>
@@ -186,7 +186,7 @@ export function GiteaIntegrationCard(): React.JSX.Element {
                 <span className="font-mono text-[11px]">
                   {translate(
                     'auto.components.settings.token.source.control.integration.cards.6d5c2a3005',
-                    'ORCA_GITEA_TOKEN'
+                    'MCODE_GITEA_TOKEN'
                   )}
                 </span>{' '}
                 {translate(
@@ -196,18 +196,18 @@ export function GiteaIntegrationCard(): React.JSX.Element {
                 <span className="font-mono text-[11px]">
                   {translate(
                     'auto.components.settings.token.source.control.integration.cards.709057ad91',
-                    'ORCA_GITEA_API_BASE_URL'
+                    'MCODE_GITEA_API_BASE_URL'
                   )}
                 </span>{' '}
                 {translate(
                   'auto.components.settings.token.source.control.integration.cards.60708f23da',
-                  'only when Orca cannot derive the API URL from the remote.'
+                  'only when MCode cannot derive the API URL from the remote.'
                 )}
               </>
             ) : (
               translate(
                 'auto.components.settings.token.source.control.integration.cards.19fb419c12',
-                'Gitea credentials are configured but could not authenticate. Check the token, API base URL, and repository permissions, then restart Orca if environment variables changed.'
+                'Gitea credentials are configured but could not authenticate. Check the token, API base URL, and repository permissions, then restart MCode if environment variables changed.'
               )
             )}
           </p>

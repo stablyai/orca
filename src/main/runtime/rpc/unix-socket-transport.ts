@@ -134,7 +134,7 @@ export class UnixSocketTransport implements RpcTransport {
         return
       }
       buffer += chunk
-      // Why: the Orca runtime lives in Electron main, so it must reject
+      // Why: the MCode runtime lives in Electron main, so it must reject
       // oversized local RPC frames instead of letting a local client grow an
       // unbounded buffer and stall the app.
       if (Buffer.byteLength(buffer, 'utf8') > MAX_RUNTIME_RPC_MESSAGE_BYTES) {

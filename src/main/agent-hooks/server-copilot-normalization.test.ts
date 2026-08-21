@@ -146,13 +146,13 @@ describe('Copilot hook normalization', () => {
       buildBody({
         hook_event_name: 'PermissionRequest',
         tool_name: 'bash',
-        tool_input: { command: 'rm -rf /tmp/orca-test' }
+        tool_input: { command: 'rm -rf /tmp/mcode-test' }
       }),
       'production'
     )
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.toolName).toBe('bash')
-    expect(result?.payload.toolInput).toBe('rm -rf /tmp/orca-test')
+    expect(result?.payload.toolInput).toBe('rm -rf /tmp/mcode-test')
   })
 
   it('surfaces lowercase Copilot file tool input previews', () => {
@@ -244,7 +244,7 @@ describe('Copilot hook normalization', () => {
   })
 
   it('Stop reads the final assistant message from Copilot transcript events', () => {
-    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-copilot-transcript-'))
+    const tmpDir = mkdtempSync(join(tmpdir(), 'mcode-copilot-transcript-'))
     const transcriptPath = join(tmpDir, 'events.jsonl')
     try {
       const lines = [
@@ -291,11 +291,11 @@ describe('Copilot hook normalization', () => {
       const env = server.buildPtyEnv()
       const listener = vi.fn()
       server.setListener(listener)
-      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/copilot`, {
+      const response = await fetch(`http://127.0.0.1:${env.MCODE_AGENT_HOOK_PORT}/hook/copilot`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          'X-MCode-Agent-Hook-Token': env.MCODE_AGENT_HOOK_TOKEN
         },
         body: JSON.stringify(
           buildBody({ hook_event_name: 'Notification', notificationType: 'permission_prompt' })
@@ -316,7 +316,7 @@ describe('Copilot hook normalization', () => {
 
   it('updates Copilot Stop with final transcript text after a non-blocking retry', async () => {
     const server = new AgentHookServer()
-    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-copilot-transcript-retry-'))
+    const tmpDir = mkdtempSync(join(tmpdir(), 'mcode-copilot-transcript-retry-'))
     const transcriptPath = join(tmpDir, 'events.jsonl')
     writeFileSync(transcriptPath, '')
     await server.start({ env: 'production' })
@@ -325,11 +325,11 @@ describe('Copilot hook normalization', () => {
       const listener = vi.fn()
       server.setListener(listener)
 
-      await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/copilot`, {
+      await fetch(`http://127.0.0.1:${env.MCODE_AGENT_HOOK_PORT}/hook/copilot`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          'X-MCode-Agent-Hook-Token': env.MCODE_AGENT_HOOK_TOKEN
         },
         body: JSON.stringify(
           buildBody({
@@ -338,11 +338,11 @@ describe('Copilot hook normalization', () => {
           })
         )
       })
-      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/copilot`, {
+      const response = await fetch(`http://127.0.0.1:${env.MCODE_AGENT_HOOK_PORT}/hook/copilot`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          'X-MCode-Agent-Hook-Token': env.MCODE_AGENT_HOOK_TOKEN
         },
         body: JSON.stringify(
           buildBody({ hook_event_name: 'Stop', transcript_path: transcriptPath })
@@ -350,11 +350,11 @@ describe('Copilot hook normalization', () => {
       })
 
       expect(response.status).toBe(204)
-      await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/copilot`, {
+      await fetch(`http://127.0.0.1:${env.MCODE_AGENT_HOOK_PORT}/hook/copilot`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          'X-MCode-Agent-Hook-Token': env.MCODE_AGENT_HOOK_TOKEN
         },
         body: JSON.stringify(buildBody({ hook_event_name: 'SessionEnd', reason: 'complete' }))
       })
@@ -394,7 +394,7 @@ describe('Copilot hook normalization', () => {
 
   it('updates Grok Stop with final chat-history text after a non-blocking retry', async () => {
     const server = new AgentHookServer()
-    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-grok-chat-history-retry-'))
+    const tmpDir = mkdtempSync(join(tmpdir(), 'mcode-grok-chat-history-retry-'))
     const sessionId = '019e37f4-5135-7b63-a4ab-6d13aa6bf528'
     const cwd = join(tmpDir, 'workspace')
     const sessionDir = join(tmpDir, '.grok', 'sessions', encodeURIComponent(cwd), sessionId)
@@ -408,19 +408,19 @@ describe('Copilot hook normalization', () => {
       const listener = vi.fn()
       server.setListener(listener)
 
-      await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/grok`, {
+      await fetch(`http://127.0.0.1:${env.MCODE_AGENT_HOOK_PORT}/hook/grok`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          'X-MCode-Agent-Hook-Token': env.MCODE_AGENT_HOOK_TOKEN
         },
         body: JSON.stringify(buildBody({ hookEventName: 'user_prompt_submit', prompt: 'hihi' }))
       })
-      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/grok`, {
+      const response = await fetch(`http://127.0.0.1:${env.MCODE_AGENT_HOOK_PORT}/hook/grok`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          'X-MCode-Agent-Hook-Token': env.MCODE_AGENT_HOOK_TOKEN
         },
         body: JSON.stringify(buildBody({ hookEventName: 'Stop', sessionId, cwd }))
       })

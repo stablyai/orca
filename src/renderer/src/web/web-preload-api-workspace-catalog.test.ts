@@ -140,9 +140,9 @@ describe('web repos preload API', () => {
   })
 
   it.each([
-    ['/home/alice', '/home/alice/orca/projects'],
-    ['/', '/orca/projects'],
-    ['C:\\', 'C:\\orca\\projects']
+    ['/home/alice', '/home/alice/mcode/projects'],
+    ['/', '/mcode/projects'],
+    ['C:\\', 'C:\\mcode\\projects']
   ])(
     'resolves the default create-project parent from runtime host home %s',
     async (resolvedPath, expectedParent) => {
@@ -336,7 +336,7 @@ describe('web worktree preload API', () => {
     })
 
     await expect(serverAList).rejects.toThrow(
-      'The paired Orca server changed while the request was in progress.'
+      'The paired MCode server changed while the request was in progress.'
     )
     await expect(globals.window.api.worktrees.listAll()).resolves.toMatchObject([
       { id: 'worktree-b', runtimeOwnerEnvironmentId: paired.environment.id }
@@ -460,7 +460,7 @@ describe('web worktree preload API', () => {
         {
           id: worktree.id,
           runtimeOwnerEnvironmentId: 'web-env-1',
-          ownership: 'orca-managed',
+          ownership: 'mcode-managed',
           visible: true
         }
       ]
@@ -506,7 +506,7 @@ describe('web worktree preload API', () => {
     })
 
     await expect(detected).rejects.toThrow(
-      'The paired Orca server changed while the request was in progress.'
+      'The paired MCode server changed while the request was in progress.'
     )
     expect(runtimeCalls).toEqual(['worktree.detectedList'])
   })
@@ -564,11 +564,11 @@ describe('web worktree preload API', () => {
       createdWithAgent: 'codex',
       startup: {
         command: "codex 'summarize repo'",
-        env: { ORCA_AGENT_MODE: 'direct' },
+        env: { MCODE_AGENT_MODE: 'direct' },
         launchConfig: {
           agentCommand: 'codex',
           agentArgs: '--model gpt-5',
-          agentEnv: { ORCA_AGENT_MODE: 'direct' }
+          agentEnv: { MCODE_AGENT_MODE: 'direct' }
         },
         startupCommandDelivery: 'shell-ready'
       }
@@ -603,11 +603,11 @@ describe('web worktree preload API', () => {
           compareBaseRef: 'refs/remotes/origin/main',
           createdWithAgent: 'codex',
           startupCommand: "codex 'summarize repo'",
-          startupEnv: { ORCA_AGENT_MODE: 'direct' },
+          startupEnv: { MCODE_AGENT_MODE: 'direct' },
           startupLaunchConfig: {
             agentCommand: 'codex',
             agentArgs: '--model gpt-5',
-            agentEnv: { ORCA_AGENT_MODE: 'direct' }
+            agentEnv: { MCODE_AGENT_MODE: 'direct' }
           },
           startupCommandDelivery: 'shell-ready',
           activate: true

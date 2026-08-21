@@ -55,7 +55,7 @@ describe('local Windows worktree removal recovery (live Git)', () => {
   it.runIf(process.platform === 'win32')(
     'finishes deletion when Git deregisters before a directory-not-empty failure',
     async () => {
-      const root = await mkdtemp(path.join(tmpdir(), 'orca-worktree-enotempty-'))
+      const root = await mkdtemp(path.join(tmpdir(), 'mcode-worktree-enotempty-'))
       tempRoots.push(root)
       const repoPath = path.join(root, 'repo')
       const worktreePath = path.join(root, 'worktree')

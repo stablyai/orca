@@ -152,11 +152,11 @@ describe('buildRows workspace lineage nesting', () => {
 
   it('nests stable-update resolved legacy lineage when generalized lineage is absent', () => {
     const parentId =
-      '32a0226d-9f33-42e8-8b7b-24867dea06d4::/Users/jinwoo/orca/workspaces/orca/assigned-issues'
+      '32a0226d-9f33-42e8-8b7b-24867dea06d4::/Users/jinwoo/mcode/workspaces/mcode/assigned-issues'
     const childId =
-      '32a0226d-9f33-42e8-8b7b-24867dea06d4::/Users/jinwoo/orca/workspaces/orca/issue-9276-nested-ssh-runtime-routing'
+      '32a0226d-9f33-42e8-8b7b-24867dea06d4::/Users/jinwoo/mcode/workspaces/mcode/issue-9276-nested-ssh-runtime-routing'
     const secondChildId =
-      '32a0226d-9f33-42e8-8b7b-24867dea06d4::/Users/jinwoo/orca/workspaces/orca/issue-9744-terminal-close-lifecycle'
+      '32a0226d-9f33-42e8-8b7b-24867dea06d4::/Users/jinwoo/mcode/workspaces/mcode/issue-9744-terminal-close-lifecycle'
     const resolvedParent: ResolvedLineageWorktree = {
       ...parent,
       id: parentId,
@@ -326,14 +326,14 @@ describe('buildRows workspace lineage nesting', () => {
       ...parent,
       repoId: 'repo-1',
       hostId: 'local' as const,
-      projectId: 'github:stablyai/orca',
+      projectId: 'github:mcode-ide/mcode',
       ...boundary
     }
     const boundedChild: ResolvedLineageWorktree = {
       ...child,
       repoId: 'repo-1',
       hostId: 'local' as const,
-      projectId: 'github:stablyai/orca',
+      projectId: 'github:mcode-ide/mcode',
       lineage
     }
     const rows = buildRows(

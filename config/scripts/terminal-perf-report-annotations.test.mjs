@@ -11,7 +11,7 @@ import {
 const tempDirs = []
 
 function makeReportPath(content) {
-  const dir = mkdtempSync(join(tmpdir(), 'orca-terminal-perf-annotations-'))
+  const dir = mkdtempSync(join(tmpdir(), 'mcode-terminal-perf-annotations-'))
   tempDirs.push(dir)
   const reportPath = join(dir, 'report.json')
   writeFileSync(reportPath, content)

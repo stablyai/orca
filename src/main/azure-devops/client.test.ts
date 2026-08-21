@@ -37,7 +37,7 @@ const OLD_FETCH = globalThis.fetch
 
 describe('Azure DevOps client', () => {
   beforeEach(() => {
-    process.env = { ...OLD_ENV, ORCA_AZURE_DEVOPS_TOKEN: 'pat-token' }
+    process.env = { ...OLD_ENV, MCODE_AZURE_DEVOPS_TOKEN: 'pat-token' }
     gitExecFileAsyncMock.mockReset()
     _resetAzureDevOpsRepoRefCache()
     _resetAzureDevOpsPreviewApiVersionCache()
@@ -57,7 +57,7 @@ describe('Azure DevOps client', () => {
   })
 
   it('marks token-only auth as configured but unverified because repository remotes supply the API base URL', async () => {
-    delete process.env.ORCA_AZURE_DEVOPS_API_BASE_URL
+    delete process.env.MCODE_AZURE_DEVOPS_API_BASE_URL
     await expect(getAzureDevOpsAuthStatus()).resolves.toEqual({
       configured: true,
       authenticated: false,
@@ -68,7 +68,7 @@ describe('Azure DevOps client', () => {
   })
 
   it('authenticates against an on-prem Server that requires -preview api-versions (STA-3494)', async () => {
-    process.env.ORCA_AZURE_DEVOPS_API_BASE_URL = 'https://ado.example.com:8443/tfs/MyCollection'
+    process.env.MCODE_AZURE_DEVOPS_API_BASE_URL = 'https://ado.example.com:8443/tfs/MyCollection'
     const versions: (string | null)[] = []
     globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
       const url = new URL(String(input))

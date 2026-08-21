@@ -4,7 +4,7 @@ const extraArgs = process.argv.slice(2)
 const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 const env = {
   ...process.env,
-  ORCA_E2E_SSH_DOCKER: '1'
+  MCODE_E2E_SSH_DOCKER: '1'
 }
 
 const runtime = spawnSync(pnpm, ['run', 'ensure:electron-runtime'], {

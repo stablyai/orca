@@ -12,7 +12,7 @@ import {
 const temporaryHomes: string[] = []
 
 async function createHome(): Promise<string> {
-  const home = await mkdtemp(join(tmpdir(), 'orca-codex-state-db-'))
+  const home = await mkdtemp(join(tmpdir(), 'mcode-codex-state-db-'))
   temporaryHomes.push(home)
   return home
 }

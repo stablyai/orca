@@ -283,7 +283,7 @@ describe('buildSubmatchRegex', () => {
 
 describe('ingestGitGrepLine', () => {
   it('parses actual git grep null-delimited output from the current git binary', () => {
-    const rootPath = mkdtempSync(join(tmpdir(), 'orca-search-git-'))
+    const rootPath = mkdtempSync(join(tmpdir(), 'mcode-search-git-'))
     try {
       execFileSync('git', ['init'], { cwd: rootPath, stdio: 'ignore' })
       mkdirSync(join(rootPath, 'src'))

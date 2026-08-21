@@ -8,8 +8,8 @@ import {
 const REAL_HOME_ROLLOUT =
   '/Users/ada/.codex/sessions/2026/07/01/rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl'
 const MANAGED_HOME_ROLLOUT =
-  '/Users/ada/Library/Application Support/orca/codex-runtime-home/home/sessions/2026/07/01/rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl'
-const MANAGED_HOME = '/Users/ada/Library/Application Support/orca/codex-runtime-home/home'
+  '/Users/ada/Library/Application Support/mcode/codex-runtime-home/home/sessions/2026/07/01/rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl'
+const MANAGED_HOME = '/Users/ada/Library/Application Support/mcode/codex-runtime-home/home'
 
 function codexSession(overrides: Partial<AiVaultSession>): AiVaultSession {
   return {
@@ -71,8 +71,8 @@ describe('dedupeCodexRolloutFileAliases', () => {
   it('prefers the managed runtime home over other non-default homes', () => {
     const managed = {
       agent: 'codex',
-      path: `\\\\wsl$\\Ubuntu\\home\\ada\\.local\\share\\orca\\codex-runtime-home\\home\\sessions\\2026\\07\\01\\rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl`,
-      codexHome: '\\\\wsl$\\Ubuntu\\home\\ada\\.local\\share\\orca\\codex-runtime-home\\home',
+      path: `\\\\wsl$\\Ubuntu\\home\\ada\\.local\\share\\mcode\\codex-runtime-home\\home\\sessions\\2026\\07\\01\\rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl`,
+      codexHome: '\\\\wsl$\\Ubuntu\\home\\ada\\.local\\share\\mcode\\codex-runtime-home\\home',
       hardlinkIdentity: '1:42'
     }
     const wslReal = {
@@ -87,8 +87,8 @@ describe('dedupeCodexRolloutFileAliases', () => {
   it('recognizes the managed runtime home with backslash separators', () => {
     const managed = {
       agent: 'codex',
-      path: 'C:\\Users\\ada\\AppData\\Roaming\\orca\\codex-runtime-home\\home\\sessions\\2026\\07\\01\\rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl',
-      codexHome: 'C:\\Users\\ada\\AppData\\Roaming\\orca\\codex-runtime-home\\home',
+      path: 'C:\\Users\\ada\\AppData\\Roaming\\mcode\\codex-runtime-home\\home\\sessions\\2026\\07\\01\\rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl',
+      codexHome: 'C:\\Users\\ada\\AppData\\Roaming\\mcode\\codex-runtime-home\\home',
       hardlinkIdentity: '7:9'
     }
     const custom = {
@@ -171,9 +171,9 @@ describe('dedupeCodexRolloutFileAliases', () => {
   it('prefers a per-account self-contained home over other non-default homes', () => {
     const perAccount = {
       agent: 'codex',
-      path: '/Users/ada/Library/Application Support/orca/codex-accounts/019f0000-aaaa-bbbb/home/sessions/2026/07/01/rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl',
+      path: '/Users/ada/Library/Application Support/mcode/codex-accounts/019f0000-aaaa-bbbb/home/sessions/2026/07/01/rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl',
       codexHome:
-        '/Users/ada/Library/Application Support/orca/codex-accounts/019f0000-aaaa-bbbb/home',
+        '/Users/ada/Library/Application Support/mcode/codex-accounts/019f0000-aaaa-bbbb/home',
       hardlinkIdentity: '3:71'
     }
     const custom = {
@@ -189,9 +189,9 @@ describe('dedupeCodexRolloutFileAliases', () => {
   it('keeps the real home over a per-account home when they alias', () => {
     const perAccount = {
       agent: 'codex',
-      path: '/Users/ada/Library/Application Support/orca/codex-accounts/019f0000-aaaa-bbbb/home/sessions/2026/07/01/rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl',
+      path: '/Users/ada/Library/Application Support/mcode/codex-accounts/019f0000-aaaa-bbbb/home/sessions/2026/07/01/rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl',
       codexHome:
-        '/Users/ada/Library/Application Support/orca/codex-accounts/019f0000-aaaa-bbbb/home',
+        '/Users/ada/Library/Application Support/mcode/codex-accounts/019f0000-aaaa-bbbb/home',
       hardlinkIdentity: '1:42'
     }
     const real = {
@@ -290,8 +290,8 @@ describe('dedupeCodexSessionsBySessionId', () => {
     const wslManaged = codexSession({
       sessionId: 'wsl-pair',
       filePath:
-        '\\\\wsl$\\Ubuntu\\home\\ada\\.local\\share\\orca\\codex-runtime-home\\home\\sessions\\rollout-a.jsonl',
-      codexHome: '\\\\wsl$\\Ubuntu\\home\\ada\\.local\\share\\orca\\codex-runtime-home\\home'
+        '\\\\wsl$\\Ubuntu\\home\\ada\\.local\\share\\mcode\\codex-runtime-home\\home\\sessions\\rollout-a.jsonl',
+      codexHome: '\\\\wsl$\\Ubuntu\\home\\ada\\.local\\share\\mcode\\codex-runtime-home\\home'
     })
     const wslReal = codexSession({
       sessionId: 'wsl-pair',
@@ -310,9 +310,9 @@ describe('dedupeCodexSessionsBySessionId', () => {
     })
     const wsl = codexSession({
       sessionId: 'shared-id',
-      filePath: `\\\\wsl.localhost\\Ubuntu\\home\\ada\\.local\\share\\orca\\codex-runtime-home\\home\\sessions\\${rolloutName}`,
+      filePath: `\\\\wsl.localhost\\Ubuntu\\home\\ada\\.local\\share\\mcode\\codex-runtime-home\\home\\sessions\\${rolloutName}`,
       codexHome:
-        '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.local\\share\\orca\\codex-runtime-home\\home'
+        '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.local\\share\\mcode\\codex-runtime-home\\home'
     })
 
     expect(dedupeCodexSessionsBySessionId([host, wsl])).toEqual([host, wsl])

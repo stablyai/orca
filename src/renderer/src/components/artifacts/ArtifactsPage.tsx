@@ -19,10 +19,10 @@ const LOCAL_RUNTIME = { kind: 'local' } as const
 
 export default function ArtifactsPage(): React.JSX.Element {
   const closePage = useAppStore((state) => state.closeArtifactsPage)
-  const authStatus = useAppStore((state) => state.orcaProfileAuthStatus)
-  const connecting = useAppStore((state) => state.orcaProfileConnecting)
-  const connect = useAppStore((state) => state.connectCurrentOrcaProfile)
-  const refreshAuth = useAppStore((state) => state.refreshCurrentOrcaProfileAuth)
+  const authStatus = useAppStore((state) => state.mcodeProfileAuthStatus)
+  const connecting = useAppStore((state) => state.mcodeProfileConnecting)
+  const connect = useAppStore((state) => state.connectCurrentMCodeProfile)
+  const refreshAuth = useAppStore((state) => state.refreshCurrentMCodeProfileAuth)
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const settings = useAppStore((state) => state.settings)
@@ -36,7 +36,7 @@ export default function ArtifactsPage(): React.JSX.Element {
   const signedIn = authStatus?.state === 'connected'
   const needsReconnect = authStatus?.state === 'reconnect-required'
   const openAccountSettings = (): void => {
-    openSettingsTarget({ pane: 'orca-account', repoId: null })
+    openSettingsTarget({ pane: 'mcode-account', repoId: null })
     openSettingsPage()
   }
   const {
@@ -129,7 +129,7 @@ export default function ArtifactsPage(): React.JSX.Element {
       return
     }
     const requestedAccountIsCurrent = (): boolean =>
-      artifactAccountIdentity(useAppStore.getState().orcaProfileAuthStatus) === requestedIdentity
+      artifactAccountIdentity(useAppStore.getState().mcodeProfileAuthStatus) === requestedIdentity
     if (!requestedAccountIsCurrent()) {
       return
     }

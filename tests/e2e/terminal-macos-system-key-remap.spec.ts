@@ -33,7 +33,7 @@
  * remap path with the substitution set to that character itself, which is the config's second line.
  */
 import type { CDPSession } from '@stablyai/playwright-test'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import { closeTerminalImePaneArena, openTerminalImePaneArena } from './terminal-ime-pane-arena'
 import { readTerminalImeBoundaryTrace } from './terminal-ime-boundary-probe'
 import {
@@ -108,21 +108,21 @@ test.describe('Terminal macOS system key remap', () => {
       const forbidden = committed === BACKQUOTE ? layout.character : BACKQUOTE
 
       test(`sends ${committed} for the ${layout.label} backquote key when ${arm.name}`, async ({
-        orcaPage,
+        mcodePage,
         testRepoPath
       }, testInfo) => {
-        await applyImePlatformPolicy(orcaPage, 'mac')
-        await expectImePlatformPolicy(orcaPage, 'mac')
-        const arena = await openTerminalImePaneArena(orcaPage)
+        await applyImePlatformPolicy(mcodePage, 'mac')
+        await expectImePlatformPolicy(mcodePage, 'mac')
+        const arena = await openTerminalImePaneArena(mcodePage)
         const reader = createTerminalImeByteReader(testRepoPath, 1)
         let completed = false
         try {
-          await startTerminalImeByteReader(orcaPage, arena.ptyId, reader)
+          await startTerminalImeByteReader(mcodePage, arena.ptyId, reader)
           await arm.dispatch(arena.session, layoutKey, committed)
-          await orcaPage.waitForTimeout(60)
+          await mcodePage.waitForTimeout(60)
           await dispatchPlainEnter(arena.session)
 
-          const trace = await readTerminalImeBoundaryTrace(orcaPage)
+          const trace = await readTerminalImeBoundaryTrace(mcodePage)
 
           // A remap is not an IME. Nothing here may open a composition session, and a spec that
           // accidentally replayed one would be testing a path the suite already covers.
@@ -145,7 +145,7 @@ test.describe('Terminal macOS system key remap', () => {
           )
           expect(sent).toBe(`${committed}\r`)
 
-          const received = await waitForTerminalImeBytes(orcaPage, reader)
+          const received = await waitForTerminalImeBytes(mcodePage, reader)
           expect(received).toEqual([Buffer.from(`${committed}\n`).toString('hex')])
           completed = true
         } finally {

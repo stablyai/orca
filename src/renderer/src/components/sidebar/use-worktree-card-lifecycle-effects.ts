@@ -87,7 +87,7 @@ export function useWorktreeCardLifecycleEffects({
         staleWhileRevalidate: true
       })
     }
-    // Why: PRs created outside Orca (e.g. `gh pr create`) emit no renderer event; poll visible cards to discover them.
+    // Why: PRs created outside MCode (e.g. `gh pr create`) emit no renderer event; poll visible cards to discover them.
     return installWindowVisibilityInterval({
       run: refreshHostedReview,
       intervalMs: HOSTED_REVIEW_CARD_REFRESH_INTERVAL_MS

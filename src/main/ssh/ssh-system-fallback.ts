@@ -1,7 +1,7 @@
 export { findSystemSsh } from './system-ssh-binary'
 export {
   buildSshArgs,
-  getOrcaControlSocketPath,
+  getMCodeControlSocketPath,
   type SystemSshBuildArgsOptions
 } from './system-ssh-args'
 export { spawnSystemSsh, spawnSystemSshCommand, type SystemSshProcess } from './system-ssh-command'

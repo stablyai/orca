@@ -9,7 +9,7 @@ export type TrustConfigFixture = {
 
 /** Throwaway home for a Codex `config.toml` trust test. */
 export function createTrustConfigFixture(): TrustConfigFixture {
-  const tmpDir = mkdtempSync(join(tmpdir(), 'orca-codex-trust-test-'))
+  const tmpDir = mkdtempSync(join(tmpdir(), 'mcode-codex-trust-test-'))
   return { tmpDir, configPath: join(tmpDir, 'config.toml') }
 }
 

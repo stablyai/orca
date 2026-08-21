@@ -13,9 +13,9 @@ import {
   sampleProductionPerformance
 } from './hang-watchdog-process-metrics.mjs'
 
-const INTERNAL_ENV = 'ORCA_HANG_WATCHDOG_BENCH_INTERNAL'
-const BOUNDARY_ENV = 'ORCA_HANG_WATCHDOG_BENCH_BOUNDARY'
-const RESULT_PREFIX = 'ORCA_HANG_WATCHDOG_BENCH_RESULT='
+const INTERNAL_ENV = 'MCODE_HANG_WATCHDOG_BENCH_INTERNAL'
+const BOUNDARY_ENV = 'MCODE_HANG_WATCHDOG_BENCH_BOUNDARY'
+const RESULT_PREFIX = 'MCODE_HANG_WATCHDOG_BENCH_RESULT='
 const DEFAULT_TRIALS = 7
 const SETTLE_MS = 2_000
 const SAMPLE_COUNT = 5
@@ -94,10 +94,10 @@ function startChild(markerPath, timeoutMs, checkIntervalMs) {
     env: {
       ...process.env,
       ELECTRON_RUN_AS_NODE: '1',
-      ORCA_HANG_WATCHDOG_PARENT_PID: String(process.pid),
-      ORCA_HANG_WATCHDOG_MARKER_PATH: markerPath,
-      ORCA_HANG_WATCHDOG_TIMEOUT_MS: String(timeoutMs),
-      ORCA_HANG_WATCHDOG_CHECK_INTERVAL_MS: String(checkIntervalMs)
+      MCODE_HANG_WATCHDOG_PARENT_PID: String(process.pid),
+      MCODE_HANG_WATCHDOG_MARKER_PATH: markerPath,
+      MCODE_HANG_WATCHDOG_TIMEOUT_MS: String(timeoutMs),
+      MCODE_HANG_WATCHDOG_CHECK_INTERVAL_MS: String(checkIntervalMs)
     }
   })
   const startupMs = Number(process.hrtime.bigint() - startedAt) / 1e6
@@ -257,7 +257,7 @@ async function runInternal() {
   }
   const { app } = await import('electron')
   const boundary = process.env[BOUNDARY_ENV]
-  const profileDir = mkdtempSync(path.join(tmpdir(), 'orca-watchdog-bench-'))
+  const profileDir = mkdtempSync(path.join(tmpdir(), 'mcode-watchdog-bench-'))
   app.setPath('userData', profileDir)
   try {
     await app.whenReady()
@@ -317,10 +317,10 @@ function runTrial(executable, boundary) {
   for (let attempt = 1; attempt <= MAX_LAUNCH_ATTEMPTS; attempt += 1) {
     const env = { ...process.env, [INTERNAL_ENV]: '1', [BOUNDARY_ENV]: boundary }
     delete env.ELECTRON_RUN_AS_NODE
-    const launcherDir = mkdtempSync(path.join(tmpdir(), 'orca-watchdog-bench-launcher-'))
+    const launcherDir = mkdtempSync(path.join(tmpdir(), 'mcode-watchdog-bench-launcher-'))
     writeFileSync(
       path.join(launcherDir, 'package.json'),
-      JSON.stringify({ name: 'orca-watchdog-benchmark', main: 'main.cjs' })
+      JSON.stringify({ name: 'mcode-watchdog-benchmark', main: 'main.cjs' })
     )
     writeFileSync(
       path.join(launcherDir, 'main.cjs'),
@@ -366,7 +366,7 @@ function runBenchmark() {
   }
   const options = parseArgs(process.argv.slice(2))
   const builtEntry = readFileSync(entryPath, 'utf8')
-  const hasChildContract = builtEntry.includes('ORCA_HANG_WATCHDOG_PARENT_PID')
+  const hasChildContract = builtEntry.includes('MCODE_HANG_WATCHDOG_PARENT_PID')
   const hasWorkerContract = builtEntry.includes('workerData') && builtEntry.includes('parentPort')
   if (
     (options.boundary === 'child' && !hasChildContract) ||

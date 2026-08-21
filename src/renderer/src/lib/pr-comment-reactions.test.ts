@@ -13,7 +13,7 @@ function comment(overrides: Partial<PRComment> = {}): PRComment {
     authorAvatarUrl: '',
     body: 'Looks good',
     createdAt: '2026-08-09T12:00:00Z',
-    url: 'https://github.com/acme/orca/pull/1#issuecomment-1',
+    url: 'https://github.com/acme/mcode/pull/1#issuecomment-1',
     ...overrides
   }
 }

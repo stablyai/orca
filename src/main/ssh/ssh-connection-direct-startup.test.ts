@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { EventEmitter } from 'node:events'
 import {
-  getOrcaControlSocketPathMock,
+  getMCodeControlSocketPathMock,
   removeControlSocketPathMock,
   resetSshConnectionMocks,
   spawnSystemSshCommandMock,
@@ -84,9 +84,9 @@ describe('SshConnection', () => {
   })
 
   it('retries direct system SSH connections without ControlMaster after mux startup failure', async () => {
-    getOrcaControlSocketPathMock.mockImplementation(
+    getMCodeControlSocketPathMock.mockImplementation(
       (_target: SshTarget, options?: { disableControlMaster?: boolean }) =>
-        options?.disableControlMaster ? null : '/tmp/orca-ssh-501/stale-socket'
+        options?.disableControlMaster ? null : '/tmp/mcode-ssh-501/stale-socket'
     )
     spawnSystemSshMock
       .mockReturnValueOnce(createFailingSystemSshProcess(255))
@@ -96,7 +96,7 @@ describe('SshConnection', () => {
 
     await conn.connectViaSystemSsh()
 
-    expect(removeControlSocketPathMock).toHaveBeenCalledWith('/tmp/orca-ssh-501/stale-socket')
+    expect(removeControlSocketPathMock).toHaveBeenCalledWith('/tmp/mcode-ssh-501/stale-socket')
     expect(spawnSystemSshMock).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ configHost: 'fdpass-host' }),
@@ -119,7 +119,7 @@ describe('SshConnection', () => {
     'Permission denied (publickey,password).',
     'Encrypted private key detected, but no passphrase given'
   ])('skips a direct retry for terminal credential failures: %s', async (message) => {
-    getOrcaControlSocketPathMock.mockReturnValue('/tmp/orca-ssh-501/stale-socket')
+    getMCodeControlSocketPathMock.mockReturnValue('/tmp/mcode-ssh-501/stale-socket')
     spawnSystemSshMock.mockImplementation(() => {
       throw new Error(message)
     })
@@ -128,7 +128,7 @@ describe('SshConnection', () => {
 
     await expect(conn.connectViaSystemSsh()).rejects.toThrow(message)
     expect(spawnSystemSshMock).toHaveBeenCalledTimes(1)
-    expect(removeControlSocketPathMock).toHaveBeenCalledWith('/tmp/orca-ssh-501/stale-socket')
+    expect(removeControlSocketPathMock).toHaveBeenCalledWith('/tmp/mcode-ssh-501/stale-socket')
   })
 
   it('kills delayed direct system SSH startup on disconnect and ignores late stdout', async () => {
@@ -147,7 +147,7 @@ describe('SshConnection', () => {
     await conn.disconnect()
 
     expect(proc.kill).toHaveBeenCalled()
-    proc.stdout.emit('data', Buffer.from('ORCA-SYSTEM-SSH-READY'))
+    proc.stdout.emit('data', Buffer.from('MCODE-SYSTEM-SSH-READY'))
 
     await expect(connectResult).resolves.toMatchObject({
       message: 'SSH connection attempt was cancelled'
@@ -222,7 +222,7 @@ describe('SshConnection', () => {
   })
 
   it('does not spawn direct system SSH retry after cancellation between mux failure and retry', async () => {
-    getOrcaControlSocketPathMock.mockReturnValue('/tmp/orca-ssh-501/stale-socket')
+    getMCodeControlSocketPathMock.mockReturnValue('/tmp/mcode-ssh-501/stale-socket')
     const firstProc = createPendingSystemSshProcess()
     let conn!: SshConnection
     firstProc.onExit = vi.fn((handler: (exitCode: number | null) => void) => {

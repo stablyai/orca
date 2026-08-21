@@ -60,7 +60,7 @@ export function MobileEmulatorAgentSetupGuide({
               </span>
               {translate(
                 'auto.components.emulator.pane.MobileEmulatorAgentSetupGuide.72736b051f',
-                'Set up Orca CLI + skill when you want agents to drive this simulator.'
+                'Set up MCode CLI + skill when you want agents to drive this simulator.'
               )}
             </>
           )}

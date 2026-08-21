@@ -2,7 +2,7 @@ import { existsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { readAgentStateFileSync, readAgentStateJsonFileSync } from '../agent-state-file-reader'
 
-const SETTINGS_BASELINE_FILE = '.orca-config-settings-baseline.json'
+const SETTINGS_BASELINE_FILE = '.mcode-config-settings-baseline.json'
 
 export type CodexSettingsConflict = {
   runtime: string | null

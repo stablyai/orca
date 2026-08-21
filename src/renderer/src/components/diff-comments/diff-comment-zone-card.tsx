@@ -108,7 +108,7 @@ export function renderDiffCommentZoneCard(
               modeIdParts={['diff-comment-note', worktreeId, filePath, comment.id]}
               scopes={getSingleCommentSendScopes(comment, formatCommentPrompt)}
               targetModeLabel="This note"
-              triggerClassName="orca-diff-comment-edit"
+              triggerClassName="mcode-diff-comment-edit"
               disabledTooltip="Note already sent"
               onDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
             />

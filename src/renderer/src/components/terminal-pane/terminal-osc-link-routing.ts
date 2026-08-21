@@ -125,7 +125,7 @@ export function handleOscLink(
   }
 
   if (parsed.protocol === 'file:') {
-    // Why: file:// URIs should open inside Orca, not via the OS default editor
+    // Why: file:// URIs should open inside MCode, not via the OS default editor
     // (shell.openPath). We extract the path from the URI and route it through
     // the same openDetectedFilePath logic used for detected file-path links.
     // Remote file hosts stay rejected; Windows LAN shares are the

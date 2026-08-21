@@ -51,12 +51,12 @@ export function getDeleteWorktreeDialogCopy(args: {
       : 'break-all font-medium text-foreground',
     descriptionSuffix: args.isBatchDelete
       ? allFolderWorkspaceDeletes
-        ? 'from Orca. Project folders on disk will not be deleted.'
+        ? 'from MCode. Project folders on disk will not be deleted.'
         : mixedFolderWorkspaceDeletes
-          ? 'from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.'
+          ? 'from MCode. Git worktrees will also be removed from git and disk; folder workspaces will only remove the MCode workspace entry.'
           : 'from git and delete their workspace folders.'
       : args.isFolderWorkspaceDelete
-        ? 'from Orca. The project folder on disk will not be deleted.'
+        ? 'from MCode. The project folder on disk will not be deleted.'
         : 'from git and delete its workspace folder.',
     mainWorktreeBlocker: args.isFolderWorkspaceDelete
       ? 'Remove the folder project instead of deleting this workspace.'
@@ -83,9 +83,9 @@ export function getDeleteWorktreeLineageDialogCopy(args: {
         ? '1 child workspace'
         : `${args.childWorkspaceCount} child workspaces`,
     descriptionSuffix: allFolderWorkspaceDeletes
-      ? 'from Orca. Project folders on disk will not be deleted.'
+      ? 'from MCode. Project folders on disk will not be deleted.'
       : mixedFolderWorkspaceDeletes
-        ? 'from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.'
+        ? 'from MCode. Git worktrees will also be removed from git and disk; folder workspaces will only remove the MCode workspace entry.'
         : 'from git and delete their workspace folders.'
   }
 }

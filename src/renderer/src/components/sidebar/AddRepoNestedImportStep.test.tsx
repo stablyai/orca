@@ -83,7 +83,7 @@ describe('AddRepoNestedImportStep', () => {
     expect(html).not.toContain('What is a')
     expect(html).toContain('Group these repositories?')
     expect(html).toContain('Choose this if these projects belong together')
-    expect(html).toContain('Orca will group them and let you work from the parent folder')
+    expect(html).toContain('MCode will group them and let you work from the parent folder')
     expect(html).toContain('No, import separately')
     expect(html).toContain('Yes, import as group')
     expect(html).toContain('payments/api')

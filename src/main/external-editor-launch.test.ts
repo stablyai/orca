@@ -39,7 +39,7 @@ describe('resolveExternalEditorLaunchSpec', () => {
     )
 
     expect(
-      resolveExternalEditorLaunchSpec('idea', 'C:\\workspaces\\orca', {
+      resolveExternalEditorLaunchSpec('idea', 'C:\\workspaces\\mcode', {
         platform: 'win32',
         fileExists: (candidate) => candidate === `${installBin}\\idea64.exe`
       })
@@ -47,7 +47,7 @@ describe('resolveExternalEditorLaunchSpec', () => {
       kind: 'executable',
       hideWindowsConsole: true,
       spawnCmd: `${installBin}\\idea64.exe`,
-      spawnArgs: ['C:\\workspaces\\orca']
+      spawnArgs: ['C:\\workspaces\\mcode']
     })
     // Why: a bare PATH `idea64` may belong to a different, stale install.
     expect(resolveCliCommandMock).toHaveBeenCalledWith('idea', { platform: 'win32' })
@@ -61,7 +61,7 @@ describe('resolveExternalEditorLaunchSpec', () => {
     )
 
     expect(
-      resolveExternalEditorLaunchSpec('goland64', 'C:\\workspaces\\orca', {
+      resolveExternalEditorLaunchSpec('goland64', 'C:\\workspaces\\mcode', {
         platform: 'win32',
         fileExists: (candidate) => candidate === `${installBin}\\goland64.exe`
       }).spawnCmd
@@ -75,7 +75,7 @@ describe('resolveExternalEditorLaunchSpec', () => {
     )
 
     expect(
-      resolveExternalEditorLaunchSpec('idea', 'C:\\workspaces\\orca', {
+      resolveExternalEditorLaunchSpec('idea', 'C:\\workspaces\\mcode', {
         platform: 'win32',
         fileExists: () => false
       })
@@ -84,7 +84,7 @@ describe('resolveExternalEditorLaunchSpec', () => {
       hideWindowsConsole: true,
       detachedGui: true,
       spawnCmd: toolboxShim,
-      spawnArgs: ['C:\\workspaces\\orca']
+      spawnArgs: ['C:\\workspaces\\mcode']
     })
   })
 
@@ -175,17 +175,17 @@ describe('resolveExternalEditorLaunchSpec', () => {
 
   // Why: `start` re-parses argv, so only JetBrains shims may take that path.
   it.each([
-    ['code', 'C:\\Tools\\code.cmd', ['C:\\workspaces\\orca']],
+    ['code', 'C:\\Tools\\code.cmd', ['C:\\workspaces\\mcode']],
     [
       'cursor',
       'C:\\Users\\me\\AppData\\Local\\Programs\\cursor\\bin\\cursor.cmd',
-      ['--new-window', 'C:\\workspaces\\orca']
+      ['--new-window', 'C:\\workspaces\\mcode']
     ]
   ])('does not detach the %s batch shim through start', (command, resolvedCommand, spawnArgs) => {
     resolveCliCommandMock.mockImplementation(() => resolvedCommand)
 
     expect(
-      resolveExternalEditorLaunchSpec(command, 'C:\\workspaces\\orca', { platform: 'win32' })
+      resolveExternalEditorLaunchSpec(command, 'C:\\workspaces\\mcode', { platform: 'win32' })
     ).toEqual({
       kind: 'executable',
       hideWindowsConsole: true,
@@ -249,14 +249,14 @@ describe('resolveExternalEditorLaunchSpec', () => {
 
   it('runs GUI compound Windows commands verbatim instead of re-parsing them under start', () => {
     expect(
-      resolveExternalEditorLaunchSpec('code --reuse-window', 'C:\\workspaces\\orca', {
+      resolveExternalEditorLaunchSpec('code --reuse-window', 'C:\\workspaces\\mcode', {
         platform: 'win32'
       })
     ).toEqual({
       kind: 'shell',
       hideWindowsConsole: true,
       spawnCmd: getCmdExePath(),
-      spawnArgs: ['/d', '/s', '/c', 'code --reuse-window C:\\workspaces\\orca']
+      spawnArgs: ['/d', '/s', '/c', 'code --reuse-window C:\\workspaces\\mcode']
     })
   })
 
@@ -275,14 +275,14 @@ describe('resolveExternalEditorLaunchSpec', () => {
     expect(
       resolveExternalEditorLaunchSpec(
         'C:\\Program Files\\Neovim\\bin\\nvim.exe',
-        'C:\\workspaces\\orca',
+        'C:\\workspaces\\mcode',
         { platform: 'win32' }
       )
     ).toEqual({
       kind: 'executable',
       hideWindowsConsole: false,
       spawnCmd: 'C:\\Program Files\\Neovim\\bin\\nvim.exe',
-      spawnArgs: ['C:\\workspaces\\orca']
+      spawnArgs: ['C:\\workspaces\\mcode']
     })
   })
 
@@ -290,27 +290,27 @@ describe('resolveExternalEditorLaunchSpec', () => {
     expect(
       resolveExternalEditorLaunchSpec(
         '"C:\\Program Files\\Neovim\\bin\\nvim.exe"',
-        'C:\\workspaces\\orca',
+        'C:\\workspaces\\mcode',
         { platform: 'win32' }
       )
     ).toEqual({
       kind: 'executable',
       hideWindowsConsole: false,
       spawnCmd: 'C:\\Program Files\\Neovim\\bin\\nvim.exe',
-      spawnArgs: ['C:\\workspaces\\orca']
+      spawnArgs: ['C:\\workspaces\\mcode']
     })
   })
 
   it('shows the Windows console for NeoVim shell commands with arguments', () => {
     expect(
-      resolveExternalEditorLaunchSpec('nvim --clean', 'C:\\workspaces\\orca', {
+      resolveExternalEditorLaunchSpec('nvim --clean', 'C:\\workspaces\\mcode', {
         platform: 'win32'
       })
     ).toEqual({
       kind: 'shell',
       hideWindowsConsole: false,
       spawnCmd: getCmdExePath(),
-      spawnArgs: ['/d', '/s', '/c', 'nvim --clean C:\\workspaces\\orca']
+      spawnArgs: ['/d', '/s', '/c', 'nvim --clean C:\\workspaces\\mcode']
     })
   })
 
@@ -396,7 +396,7 @@ describe('resolveExternalEditorLaunchSpec', () => {
     ])
   })
 
-  it.each(['C:\\workspaces\\orca', '\\\\server\\share\\project'])(
+  it.each(['C:\\workspaces\\mcode', '\\\\server\\share\\project'])(
     'keeps the non-WSL Windows path %s local',
     (pathValue) => {
       expect(

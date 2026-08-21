@@ -153,7 +153,7 @@ function readSourceChipsRow(sourceDbPath: string): SourceChipsRow {
 }
 
 async function runFixture(): Promise<{ fixture: FixtureResult; sourceChips: SourceChipsRow }> {
-  const root = mkdtempSync(join(tmpdir(), 'orca-partition-success-'))
+  const root = mkdtempSync(join(tmpdir(), 'mcode-partition-success-'))
   fixtureRoots.push(root)
   const bundlePath = join(root, 'cookie-import-success.cjs')
   const bundleEntryPath = join(root, 'cookie-import-success.ts')

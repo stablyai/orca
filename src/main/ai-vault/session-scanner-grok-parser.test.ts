@@ -52,7 +52,7 @@ describe('AI Vault Grok session parser', () => {
   })
 
   it('stores the unwrapped user_query as firstUserPrompt under full capture', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-grok-first-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-grok-first-'))
     tempRoots.push(root)
     const sessionDir = join(root, 'session-1')
     await mkdir(sessionDir, { recursive: true })

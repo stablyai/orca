@@ -21,8 +21,8 @@ import {
 
 const MANAGED_MARKER = getWslLauncherMarker()
 const BRIDGE_MANAGED_MARKER = getWslBridgeMarker()
-const WSL_COMMAND_NAME = 'orca-ide'
-const LEGACY_WSL_COMMAND_NAME = 'orca'
+const WSL_COMMAND_NAME = 'mcode-ide'
+const LEGACY_WSL_COMMAND_NAME = 'mcode'
 const WSL_COMMAND_TIMEOUT_MS = 10_000
 
 function normalizeManagedScriptContent(content: string): string {
@@ -74,7 +74,7 @@ export class WslCliInstaller {
         state: 'not_installed',
         currentTarget: null,
         pathConfigured: ready.pathConfigured,
-        detail: `Register ${ready.commandPath} to use Orca from WSL.`
+        detail: `Register ${ready.commandPath} to use MCode from WSL.`
       })
     }
 
@@ -86,7 +86,7 @@ export class WslCliInstaller {
         state: 'conflict',
         currentTarget: null,
         pathConfigured: ready.pathConfigured,
-        detail: `${ready.commandPath} exists but is not an Orca launcher script.`
+        detail: `${ready.commandPath} exists but is not an MCode launcher script.`
       })
     }
 
@@ -123,7 +123,7 @@ export class WslCliInstaller {
         detail:
           bridgeContent === null || bridgeManaged
             ? `${ready.commandPath} is missing its PowerShell bridge.`
-            : `${ready.bridgePath} exists but is not managed by Orca.`
+            : `${ready.bridgePath} exists but is not managed by MCode.`
       })
     }
 
@@ -139,10 +139,10 @@ export class WslCliInstaller {
       currentTarget,
       pathConfigured: ready.pathConfigured,
       detail: !managed
-        ? `${ready.commandPath} exists but is not managed by Orca.`
+        ? `${ready.commandPath} exists but is not managed by MCode.`
         : bridgeConflict
-          ? `${ready.bridgePath} exists but is not managed by Orca.`
-          : `${ready.commandPath} points to a different Orca launcher.`
+          ? `${ready.bridgePath} exists but is not managed by MCode.`
+          : `${ready.commandPath} points to a different MCode launcher.`
     })
   }
 
@@ -161,7 +161,7 @@ export class WslCliInstaller {
     }
     if (status.state === 'conflict') {
       // Why: a user-owned bridge conflicts with repair, but the launcher is
-      // still Orca-managed and must remain registered for future reconciliation.
+      // still MCode-managed and must remain registered for future reconciliation.
       return { changed: false, managed: status.currentTarget !== null, status }
     }
 
@@ -205,7 +205,7 @@ export class WslCliInstaller {
       throw new Error(status.detail ?? 'WSL CLI registration is unavailable.')
     }
     if (status.state === 'conflict') {
-      throw new Error(`Refusing to replace non-Orca command at ${status.commandPath}.`)
+      throw new Error(`Refusing to replace non-MCode command at ${status.commandPath}.`)
     }
 
     // Why: the launcher and PowerShell bridge are one registration; the
@@ -243,12 +243,12 @@ export class WslCliInstaller {
           getBridgePathFromCommandPath(status.commandPath),
           BRIDGE_MANAGED_MARKER
         ),
-        `cat > "$command_tmp" <<'ORCA_WSL_CLI'`,
+        `cat > "$command_tmp" <<'MCODE_WSL_CLI'`,
         buildWslLauncher(status.launcherPath, getBridgePathFromCommandPath(status.commandPath)),
-        'ORCA_WSL_CLI',
-        `cat > "$bridge_tmp" <<'ORCA_WSL_BRIDGE'`,
+        'MCODE_WSL_CLI',
+        `cat > "$bridge_tmp" <<'MCODE_WSL_BRIDGE'`,
         buildWslBridgeScript(),
-        'ORCA_WSL_BRIDGE',
+        'MCODE_WSL_BRIDGE',
         'chmod 755 "$command_tmp"',
         'chmod 644 "$bridge_tmp"',
         buildSafeReplaceGuard(status.commandPath, MANAGED_MARKER),
@@ -262,8 +262,8 @@ export class WslCliInstaller {
         `mv -f "$command_tmp" ${quoteShell(status.commandPath)}`,
         'committed=1',
         'rm -f "$bridge_backup"',
-        // Why: the command was renamed to avoid GNOME Orca; remove only the
-        // old Orca-managed WSL wrapper after the replacement has committed.
+        // Why: the command was renamed to avoid GNOME MCode; remove only the
+        // old MCode-managed WSL wrapper after the replacement has committed.
         buildManagedLegacyRemoveCommand('"$legacy_command_path"'),
         'trap - EXIT'
       ].join('\n')
@@ -278,7 +278,7 @@ export class WslCliInstaller {
     }
     const legacyCommandPath = `${getPosixDirname(status.commandPath)}/${LEGACY_WSL_COMMAND_NAME}`
     if (status.state === 'not_installed') {
-      // Why: a managed legacy `orca` left behind would later be re-adopted by
+      // Why: a managed legacy `mcode` left behind would later be re-adopted by
       // startup reconciliation as opt-in proof, silently undoing this removal.
       await this.run(
         this.distro as string,
@@ -289,7 +289,7 @@ export class WslCliInstaller {
       return status
     }
     if (status.state === 'conflict') {
-      throw new Error(`Refusing to remove non-Orca command at ${status.commandPath}.`)
+      throw new Error(`Refusing to remove non-MCode command at ${status.commandPath}.`)
     }
 
     await this.run(
@@ -328,7 +328,7 @@ export class WslCliInstaller {
       return {
         status: this.unsupported(
           hostStatus.unsupportedReason ?? 'launcher_missing',
-          hostStatus.detail ?? 'The Windows Orca CLI launcher is missing.'
+          hostStatus.detail ?? 'The Windows MCode CLI launcher is missing.'
         )
       }
     }
@@ -351,13 +351,13 @@ export class WslCliInstaller {
       return {
         status: this.unsupported(
           'launcher_missing',
-          'WSL Windows interop is unavailable; Orca cannot launch the Windows CLI from WSL.'
+          'WSL Windows interop is unavailable; MCode cannot launch the Windows CLI from WSL.'
         )
       }
     }
 
     const pathDirectory = `${home}/.local/bin`
-    // Why: matches the Linux CLI rename to `orca-ide` (avoids GNOME Orca conflict).
+    // Why: matches the Linux CLI rename to `mcode-ide` (avoids GNOME MCode conflict).
     const commandPath = `${pathDirectory}/${WSL_COMMAND_NAME}`
     const pathConfigured =
       (
@@ -384,20 +384,20 @@ export class WslCliInstaller {
       distro,
       [
         `if [ -L ${quoteShell(commandPath)} ]; then`,
-        '  printf __ORCA_NOT_FILE__',
+        '  printf __MCODE_NOT_FILE__',
         `elif [ ! -e ${quoteShell(commandPath)} ]; then`,
-        '  printf __ORCA_MISSING__',
+        '  printf __MCODE_MISSING__',
         `elif [ ! -f ${quoteShell(commandPath)} ]; then`,
-        '  printf __ORCA_NOT_FILE__',
+        '  printf __MCODE_NOT_FILE__',
         'else',
         `  cat ${quoteShell(commandPath)}`,
         'fi'
       ].join('\n')
     )
-    if (output === '__ORCA_MISSING__') {
+    if (output === '__MCODE_MISSING__') {
       return null
     }
-    if (output === '__ORCA_NOT_FILE__') {
+    if (output === '__MCODE_NOT_FILE__') {
       return 'not_file'
     }
     return output

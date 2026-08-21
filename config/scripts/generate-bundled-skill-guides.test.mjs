@@ -23,7 +23,7 @@ const temporaryDirectories = []
 const execFileAsync = promisify(execFile)
 
 async function createFixture() {
-  const root = await mkdtemp(path.join(tmpdir(), 'orca-bundled-skill-guides-'))
+  const root = await mkdtemp(path.join(tmpdir(), 'mcode-bundled-skill-guides-'))
   temporaryDirectories.push(root)
   await Promise.all([
     cp(path.join(projectDir, 'skill-guides'), path.join(root, 'skill-guides'), {
@@ -74,49 +74,49 @@ describe('bundled skill guide generator', () => {
 
   it('keeps pre-guide fallback useful and read-only for every converted domain', async () => {
     const expectedFallbackCommands = {
-      'computer-use': ['ORCA computer capabilities --json', 'ORCA computer list-apps --json'],
-      'linear-tickets': ['ORCA linear --help', 'ORCA linear issue --current --full --json'],
-      'orca-emulator': ['ORCA emulator list --json'],
-      'orca-emulator-android': ['ORCA emulator devices --json'],
-      'orca-linear': ['ORCA linear --help', 'ORCA linear issue --current --full --json'],
-      'orca-per-workspace-env': ['ORCA vm recipe doctor <recipe-id> --repo-path <repo> --json'],
-      orchestration: ['ORCA orchestration task-list --json', 'ORCA terminal list --json']
+      'computer-use': ['MCODE computer capabilities --json', 'MCODE computer list-apps --json'],
+      'linear-tickets': ['MCODE linear --help', 'MCODE linear issue --current --full --json'],
+      'mcode-emulator': ['MCODE emulator list --json'],
+      'mcode-emulator-android': ['MCODE emulator devices --json'],
+      'mcode-linear': ['MCODE linear --help', 'MCODE linear issue --current --full --json'],
+      'mcode-per-workspace-env': ['MCODE vm recipe doctor <recipe-id> --repo-path <repo> --json'],
+      orchestration: ['MCODE orchestration task-list --json', 'MCODE terminal list --json']
     }
 
     for (const [name, commands] of Object.entries(expectedFallbackCommands)) {
       const stub = await readFile(path.join(projectDir, 'skill-stubs', `${name}.md`), 'utf8')
-      const fallback = stub.split('## If an older Orca does not recognize `skills get`')[1]
+      const fallback = stub.split('## If an older MCode does not recognize `skills get`')[1]
 
       expect(fallback, name).toBeDefined()
       for (const command of commands) {
         expect(fallback, name).toContain(command)
       }
-      expect(fallback, name).not.toContain('ORCA worktree ps --json')
+      expect(fallback, name).not.toContain('MCODE worktree ps --json')
     }
   })
 
   it('uses the exported recipe id variable in per-workspace environment examples', async () => {
     const source = await readFile(
-      path.join(projectDir, 'skill-guides', 'orca-per-workspace-env.md'),
+      path.join(projectDir, 'skill-guides', 'mcode-per-workspace-env.md'),
       'utf8'
     )
 
-    expect(source).toContain('ORCA_RECIPE_ID')
-    expect(source).not.toContain('ORCA_VM_RECIPE_ID')
+    expect(source).toContain('MCODE_RECIPE_ID')
+    expect(source).not.toContain('MCODE_VM_RECIPE_ID')
     expect(source).toContain('recipe_id="${recipe_id//./-}"')
     expect(source).toContain('max_recipe_id_length=$((128 - ${#instance_id} - 6))')
-    expect(source).toContain('name="orca-${recipe_id:0:max_recipe_id_length}-${instance_id}"')
+    expect(source).toContain('name="mcode-${recipe_id:0:max_recipe_id_length}-${instance_id}"')
   })
 
   it.skipIf(process.platform === 'win32')(
     'keeps Vercel sandbox names valid while preserving the instance suffix',
     async () => {
       const source = await readFile(
-        path.join(projectDir, 'skill-guides', 'orca-per-workspace-env.md'),
+        path.join(projectDir, 'skill-guides', 'mcode-per-workspace-env.md'),
         'utf8'
       )
-      const startMarker = 'recipe_id="${ORCA_RECIPE_ID:-vercel-sandbox}"'
-      const endMarker = 'name="orca-${recipe_id:0:max_recipe_id_length}-${instance_id}"'
+      const startMarker = 'recipe_id="${MCODE_RECIPE_ID:-vercel-sandbox}"'
+      const endMarker = 'name="mcode-${recipe_id:0:max_recipe_id_length}-${instance_id}"'
       const start = source.indexOf(startMarker)
       const endStart = source.indexOf(endMarker, start)
       expect(start).toBeGreaterThanOrEqual(0)
@@ -125,11 +125,11 @@ describe('bundled skill guide generator', () => {
       const renderName = async (recipeId, instanceId) =>
         (
           await execFileAsync('bash', ['-u', '-c', script], {
-            env: { ...process.env, ORCA_RECIPE_ID: recipeId, ORCA_VM_INSTANCE_ID: instanceId }
+            env: { ...process.env, MCODE_RECIPE_ID: recipeId, MCODE_VM_INSTANCE_ID: instanceId }
           })
         ).stdout
 
-      const instanceId = 'orca-123e4567-e89b-12d3-a456-426614174000'
+      const instanceId = 'mcode-123e4567-e89b-12d3-a456-426614174000'
       const dotted = await renderName('provider.cloud_sandbox', instanceId)
       const maximum = await renderName(`a${'.'.repeat(63)}`, instanceId)
       const longInstanceId = 'i'.repeat(100)
@@ -138,7 +138,7 @@ describe('bundled skill guide generator', () => {
         longInstanceId
       )
 
-      expect(dotted).toBe(`orca-provider-cloud_sandbox-${instanceId}`)
+      expect(dotted).toBe(`mcode-provider-cloud_sandbox-${instanceId}`)
       expect(maximum).toMatch(/^[a-zA-Z0-9_-]{1,128}$/u)
       expect(capped).toHaveLength(128)
       expect(capped.endsWith(`-${longInstanceId}`)).toBe(true)
@@ -164,19 +164,19 @@ describe('bundled skill guide generator', () => {
   })
 
   it('keeps CLI guide examples safe across shells and Linux command names', async () => {
-    for (const name of ['orca-cli', 'computer-use', 'orca-emulator', 'orca-emulator-android']) {
+    for (const name of ['mcode-cli', 'computer-use', 'mcode-emulator', 'mcode-emulator-android']) {
       const source = await readFile(path.join(projectDir, 'skill-guides', `${name}.md`), 'utf8')
 
-      expect(source).toContain('ORCA_CLI_COMMAND')
-      expect(source).toContain('orca-dev')
-      expect(source).toContain('orca-ide')
+      expect(source).toContain('MCODE_CLI_COMMAND')
+      expect(source).toContain('mcode-dev')
+      expect(source).toContain('mcode-ide')
       expect(source).toContain('PowerShell')
       expect(source).toContain('cmd.exe')
-      expect(source).toMatch(/^ORCA .+--json$/mu)
-      // Why: bare command lines can launch GNOME Orca, while shell variables make
+      expect(source).toMatch(/^MCODE .+--json$/mu)
+      // Why: bare command lines can launch GNOME MCode, while shell variables make
       // the same guide unusable from PowerShell and cmd.exe.
-      expect(source).not.toMatch(/^orca /mu)
-      expect(source).not.toMatch(/\$ORCA(?:_|\b)/u)
+      expect(source).not.toMatch(/^mcode /mu)
+      expect(source).not.toMatch(/\$MCODE(?:_|\b)/u)
     }
   })
 

@@ -2,7 +2,7 @@
 // Why: users leave review notes on specific lines of the modified side of
 // a diff so they can be handed back to an AI agent (pasted into a terminal
 // or used to bootstrap a new agent session). Stored on WorktreeMeta so the
-// existing persistence layer writes them to orca-data.json automatically.
+// existing persistence layer writes them to mcode-data.json automatically.
 export type DiffCommentSource = 'diff' | 'markdown'
 export type DiffReviewScope = 'unstaged' | 'staged' | 'branch'
 

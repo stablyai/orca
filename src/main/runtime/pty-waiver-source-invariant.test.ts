@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 // while silently disabling the PTY gate on that path. `force` is set by the
 // ordinary delete confirmation (to skip the dirty-file prompt) and is NOT user
 // intent to delete past live terminals — so pin the wiring itself, at every site.
-const FILES = [join(__dirname, '..', 'ipc', 'worktrees.ts'), join(__dirname, 'orca-runtime.ts')]
+const FILES = [join(__dirname, '..', 'ipc', 'worktrees.ts'), join(__dirname, 'mcode-runtime.ts')]
 
 // Why: a comment quoting `allowUnverifiedStop:` would otherwise count as a site —
 // and this very invariant invites people to write one in the file it guards.

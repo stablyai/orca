@@ -11,7 +11,7 @@ import {
 } from './terminal-history'
 
 const worktreeId = 'relay-test::/remote/worktree'
-const historyDir = join(homedir(), '.orca-remote', 'terminal-history')
+const historyDir = join(homedir(), '.mcode-remote', 'terminal-history')
 const historyPrefix = hashWorktreeId(worktreeId)
 
 afterEach(() => {
@@ -47,9 +47,9 @@ describe('relay shell history', () => {
         'zsh_history'
       )
     ]
-  ])('replaces a %s HISTFILE inherited from a parent Orca', (_kind, inherited) => {
+  ])('replaces a %s HISTFILE inherited from a parent MCode', (_kind, inherited) => {
     // HISTFILE is exported, so a relay (or the client that spawned it) started
-    // from an Orca pane would otherwise scope every remote pane to that one
+    // from an MCode pane would otherwise scope every remote pane to that one
     // worktree's history file.
     const env: Record<string, string> = { HISTFILE: inherited }
 

@@ -46,7 +46,7 @@ function hashPackagedPluginTree(root) {
     }
   }
   visit(root)
-  const hash = createHash('sha256').update('orca-plugin-tree-v1\0')
+  const hash = createHash('sha256').update('mcode-plugin-tree-v1\0')
   for (const file of files) {
     const relativePath = relative(root, file.path).replaceAll('\\', '/')
     hashLength(hash, Buffer.byteLength(relativePath, 'utf8'))
@@ -73,7 +73,7 @@ function verifyPackagedPluginResources(resourcesDir) {
     throw new Error(`[verify-packaged-plugin-resources] missing launch directory at ${launchRoot}`)
   }
   const index = readJsonFile(join(launchRoot, 'bundled-plugins.json'), 'bundled plugin index')
-  readJsonFile(join(launchRoot, 'orca-marketplace.json'), 'marketplace index')
+  readJsonFile(join(launchRoot, 'mcode-marketplace.json'), 'marketplace index')
   if (index?.version !== 1 || !Array.isArray(index.plugins) || index.plugins.length === 0) {
     throw new Error('[verify-packaged-plugin-resources] bundled plugin index is empty or invalid')
   }
@@ -91,7 +91,7 @@ function verifyPackagedPluginResources(resourcesDir) {
     if (!fromRoot || fromRoot === '..' || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) {
       throw new Error('[verify-packaged-plugin-resources] bundled plugin path escapes launch root')
     }
-    const manifest = readJsonFile(join(pluginRoot, 'orca-plugin.json'), 'plugin manifest')
+    const manifest = readJsonFile(join(pluginRoot, 'mcode-plugin.json'), 'plugin manifest')
     if (`${manifest.publisher}.${manifest.id}` !== entry.pluginKey) {
       throw new Error(
         `[verify-packaged-plugin-resources] manifest identity does not match ${entry.pluginKey}`

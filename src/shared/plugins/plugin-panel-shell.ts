@@ -24,8 +24,8 @@ export const PLUGIN_PANEL_CSP =
 /** Renderer-substituted placeholders. Main cannot know the renderer's theme
  *  or token values; the renderer replaces these with a color-scheme class and
  *  CSS custom-property declarations before mounting the srcdoc. */
-export const PANEL_SHELL_TOKENS_PLACEHOLDER = '/*__ORCA_PANEL_TOKENS__*/'
-export const PANEL_SHELL_COLOR_SCHEME_PLACEHOLDER = '__ORCA_COLOR_SCHEME__'
+export const PANEL_SHELL_TOKENS_PLACEHOLDER = '/*__MCODE_PANEL_TOKENS__*/'
+export const PANEL_SHELL_COLOR_SCHEME_PLACEHOLDER = '__MCODE_COLOR_SCHEME__'
 
 /** Curated design-token subset injected into panel documents. Deliberately
  *  NOT all of main.css (~257 custom properties): freezing every token as

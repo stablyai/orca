@@ -152,8 +152,8 @@ describe('fetchViaPty', () => {
     const [spawnFile, spawnArgs] = spawnMock.mock.calls[0] as [string, string[]]
     expect(spawnFile).toBe('wsl.exe')
     const bashCommand = spawnArgs.at(-1) as string
-    expect(bashCommand).toContain('mkdir -p "$orca_rate_limit_cwd"')
-    expect(bashCommand).toContain('cd "$orca_rate_limit_cwd"')
+    expect(bashCommand).toContain('mkdir -p "$mcode_rate_limit_cwd"')
+    expect(bashCommand).toContain('cd "$mcode_rate_limit_cwd"')
     expect(bashCommand).toContain("export HTTPS_PROXY='http://127.0.0.1:7890'")
     expect(bashCommand).toContain('exec claude')
 

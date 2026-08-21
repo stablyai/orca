@@ -1,7 +1,7 @@
 import { defineConfig } from 'i18next-cli'
 
 const output =
-  process.env.ORCA_I18N_EXTRACTION_OUTPUT ?? 'tmp/localization-extraction/{{language}}.json'
+  process.env.MCODE_I18N_EXTRACTION_OUTPUT ?? 'tmp/localization-extraction/{{language}}.json'
 
 export default defineConfig({
   locales: ['en'],

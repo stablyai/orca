@@ -108,7 +108,7 @@ describe('useNativeChatExternalAttachments', () => {
       expectedSshTargetId: 'conn-1',
       expectedSshConnectionGeneration: 4
     })
-    mocks.uploadNativeChatAttachmentPaths.mockResolvedValue(['/remote/wt/.orca/drops/a.txt'])
+    mocks.uploadNativeChatAttachmentPaths.mockResolvedValue(['/remote/wt/.mcode/drops/a.txt'])
     const attachResolvedPaths = vi.fn()
     const probe = await renderProbe({ attachResolvedPaths })
     await act(async () => {
@@ -122,7 +122,7 @@ describe('useNativeChatExternalAttachments', () => {
       expectedSshTargetId: 'conn-1',
       expectedSshConnectionGeneration: 4
     })
-    expect(attachResolvedPaths).toHaveBeenCalledWith(['/remote/wt/.orca/drops/a.txt'])
+    expect(attachResolvedPaths).toHaveBeenCalledWith(['/remote/wt/.mcode/drops/a.txt'])
   })
 
   it('shows the not-ready notice instead of attaching unresolved paths', async () => {
@@ -159,7 +159,7 @@ describe('useNativeChatExternalAttachments', () => {
     })
     await probe.setDisabled(true)
     await act(async () => {
-      resolveUpload(['/remote/wt/.orca/drops/a.txt'])
+      resolveUpload(['/remote/wt/.mcode/drops/a.txt'])
     })
     expect(attachResolvedPaths).not.toHaveBeenCalled()
   })

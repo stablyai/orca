@@ -71,7 +71,7 @@ describe('plugin overlay env source resolution', () => {
       resolveOpenCodeSourceConfigDir(
         {
           HOME: homeDir,
-          ORCA_OPENCODE_SOURCE_CONFIG_DIR: '/remote/original-opencode',
+          MCODE_OPENCODE_SOURCE_CONFIG_DIR: '/remote/original-opencode',
           OPENCODE_CONFIG_DIR: '/tmp/inherited-opencode-overlay'
         },
         '/bin/zsh'
@@ -96,7 +96,7 @@ describe('plugin overlay env source resolution', () => {
       resolvePiSourceAgentDir(
         {
           HOME: homeDir,
-          ORCA_PRIME_AGENT_SOURCE_AGENT_DIR: '/remote/original-prime',
+          MCODE_PRIME_AGENT_SOURCE_AGENT_DIR: '/remote/original-prime',
           PRIME_AGENT_CODING_AGENT_DIR: '/tmp/inherited-prime'
         },
         '/bin/zsh',

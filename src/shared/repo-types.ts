@@ -1,6 +1,6 @@
 import type { RepoIcon } from './repo-icon'
 import type { GitHubRepositoryIdentity } from './github/pull-request-types'
-import type { RepoHookSettings } from './orca-yaml-hook-types'
+import type { RepoHookSettings } from './mcode-yaml-hook-types'
 import type { ForkSyncMode } from './git-fork-sync'
 import type { GitRemoteIdentity } from './git-remote-identity'
 import type { RepoSourceControlAiOverrides } from './source-control-ai-types'
@@ -68,11 +68,11 @@ export type Repo = {
    *  identically to `'auto'`; writers leave it undefined on creation so
    *  existing persisted records stay forward-compatible. */
   issueSourcePreference?: IssueSourcePreference
-  /** Controls Orca's fork-default-branch sync offer for repos with upstream metadata. */
+  /** Controls MCode's fork-default-branch sync offer for repos with upstream metadata. */
   forkSyncMode?: ForkSyncMode
-  /** Canonical identity for the repo remote Orca should use for provider-level grouping. */
+  /** Canonical identity for the repo remote MCode should use for provider-level grouping. */
   gitRemoteIdentity?: GitRemoteIdentity | null
-  /** Controls whether worktrees Orca did not create appear in the sidebar. */
+  /** Controls whether worktrees MCode did not create appear in the sidebar. */
   externalWorktreeVisibility?: ExternalWorktreeVisibility
   /** True when the repo predates hidden-by-default external worktrees. */
   externalWorktreeVisibilityLegacy?: boolean

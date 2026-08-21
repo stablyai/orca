@@ -13,7 +13,7 @@ function settingsWithTelemetry(telemetry: GlobalSettings['telemetry']): GlobalSe
 // and restore explicitly.
 const ENV_KEYS_UNDER_TEST = [
   'DO_NOT_TRACK',
-  'ORCA_TELEMETRY_DISABLED',
+  'MCODE_TELEMETRY_DISABLED',
   'CI',
   'GITHUB_ACTIONS',
   'GITLAB_CI',
@@ -80,8 +80,8 @@ describe('resolveConsent', () => {
     })
   })
 
-  it('returns orca_disabled when ORCA_TELEMETRY_DISABLED=1', () => {
-    process.env.ORCA_TELEMETRY_DISABLED = '1'
+  it('returns mcode_disabled when MCODE_TELEMETRY_DISABLED=1', () => {
+    process.env.MCODE_TELEMETRY_DISABLED = '1'
     expect(
       resolveConsent(
         settingsWithTelemetry({
@@ -92,13 +92,13 @@ describe('resolveConsent', () => {
       )
     ).toEqual({
       effective: 'disabled',
-      reason: 'orca_disabled'
+      reason: 'mcode_disabled'
     })
   })
 
-  it('prefers do_not_track over orca_disabled when both are set', () => {
+  it('prefers do_not_track over mcode_disabled when both are set', () => {
     process.env.DO_NOT_TRACK = '1'
-    process.env.ORCA_TELEMETRY_DISABLED = '1'
+    process.env.MCODE_TELEMETRY_DISABLED = '1'
     expect(
       resolveConsent(
         settingsWithTelemetry({
@@ -254,7 +254,7 @@ describe('resolveConsent', () => {
   })
 
   it('env-var override wins over a stored pending_banner state', () => {
-    process.env.ORCA_TELEMETRY_DISABLED = '1'
+    process.env.MCODE_TELEMETRY_DISABLED = '1'
     expect(
       resolveConsent(
         settingsWithTelemetry({
@@ -263,6 +263,6 @@ describe('resolveConsent', () => {
           existedBeforeTelemetryRelease: true
         })
       )
-    ).toEqual({ effective: 'disabled', reason: 'orca_disabled' })
+    ).toEqual({ effective: 'disabled', reason: 'mcode_disabled' })
   })
 })

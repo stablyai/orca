@@ -221,7 +221,7 @@ export class CdpWsProxy {
       return
     }
     // Why: CDP Page.reload can destroy Electron webview targets during process swaps.
-    // Use the same direct webContents reload path as Orca's own browser.reload.
+    // Use the same direct webContents reload path as MCode's own browser.reload.
     if (msg.method === 'Page.reload' && !this.webContents.isDestroyed()) {
       void this.navigation.reloadWithLifecycle(client, clientId, msg.params ?? {}, msg.sessionId)
       return

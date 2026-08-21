@@ -1,5 +1,5 @@
 import type { CDPSession, Page, TestInfo } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   focusActiveTerminalInput,
@@ -100,11 +100,11 @@ test.describe('Terminal IME exact-byte forwarding', () => {
   test.skip(process.platform !== 'linux', 'Linux composition order is covered by this suite')
 
   test('replays the observed IBus Hangul mixed-input order through xterm and the PTY', async ({
-    orcaPage,
+    mcodePage,
     testRepoPath
   }, testInfo) => {
     await runExactByteScenario(
-      orcaPage,
+      mcodePage,
       testInfo,
       testRepoPath,
       '한abc글',
@@ -119,11 +119,11 @@ test.describe('Terminal IME exact-byte forwarding', () => {
   })
 
   test('keeps retained Hangul commits and stale fallbacks in their transactions', async ({
-    orcaPage,
+    mcodePage,
     testRepoPath
   }, testInfo) => {
     await runExactByteScenario(
-      orcaPage,
+      mcodePage,
       testInfo,
       testRepoPath,
       '테a스',
@@ -141,11 +141,11 @@ test.describe('Terminal IME exact-byte forwarding', () => {
     { name: 'Chinese', frames: ['n', 'ni', '你好'], committedText: '你好' }
   ]) {
     test(`does not suppress repeated legitimate ${scenario.name} conversions`, async ({
-      orcaPage,
+      mcodePage,
       testRepoPath
     }, testInfo) => {
       await runExactByteScenario(
-        orcaPage,
+        mcodePage,
         testInfo,
         testRepoPath,
         scenario.committedText.repeat(2),

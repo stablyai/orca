@@ -91,7 +91,7 @@ function SuggestionToastBody({
       <p className="text-sm leading-5 text-popover-foreground/80">
         {translate(
           'auto.components.sidebar.local.base.ref.suggestion.toast.f15fd80989',
-          'Your new worktree is current, but local {{value0}} is {{value1}} {{value2}} behind, so AI diffs may compare to stale history. Let Orca keep it up to date automatically. Change this anytime in',
+          'Your new worktree is current, but local {{value0}} is {{value1}} {{value2}} behind, so AI diffs may compare to stale history. Let MCode keep it up to date automatically. Change this anytime in',
           {
             value0: suggestion.localBranch,
             value1: suggestion.behind,

@@ -32,7 +32,7 @@ describe('GitResponseStreamRegistry client ownership', () => {
     registries.push(registry)
     const payload = Buffer.alloc(GIT_RESPONSE_CHUNK_SIZE * (STREAM_ACK_WINDOW_CHUNKS * 3))
     const marker = registry.startStream(payload, dispatcher, context)
-    const streamId = marker.__orcaGitResponseStream.streamId
+    const streamId = marker.__mcodeGitResponseStream.streamId
 
     await flushPump()
     expect(notifyBulk).toHaveBeenCalledTimes(STREAM_ACK_WINDOW_CHUNKS)
@@ -88,7 +88,7 @@ describe('GitResponseStreamRegistry client ownership', () => {
       clientId: ownerClientId,
       isStale: () => false
     })
-    const streamId = marker.__orcaGitResponseStream.streamId
+    const streamId = marker.__mcodeGitResponseStream.streamId
     await flushPump()
     expect(notifyBulk).toHaveBeenCalledTimes(1)
 
@@ -102,7 +102,7 @@ describe('GitResponseStreamRegistry client ownership', () => {
       { streamId, seq: 12 },
       ownerClientId
     )
-    expect(marker.__orcaGitResponseStream.chunkCount).toBe(2)
+    expect(marker.__mcodeGitResponseStream.chunkCount).toBe(2)
     expect(notifyBulk).toHaveBeenCalledTimes(3)
     const chunks = notifyBulk.mock.calls
       .filter(([method]) => method === 'git.responseChunk')

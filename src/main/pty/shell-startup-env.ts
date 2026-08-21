@@ -6,10 +6,10 @@ import { posix } from 'node:path'
 // a stale .bash_profile on a zsh user would clobber the real .zshrc value.
 const ZSH_ENV_FILE = '.zshenv'
 const ZSH_AFTER_ENV_FILES = ['.zprofile', '.zshrc', '.zlogin']
-// Why: Orca launches bash as a login shell (see local-pty-shell-ready.ts
+// Why: MCode launches bash as a login shell (see local-pty-shell-ready.ts
 // getBashShellReadyRcfileContent and daemon/shell-ready.ts) which sources
 // .bash_profile / .bash_login / .profile but intentionally does NOT force
-// .bashrc. Scanning .bashrc would mirror values the live Orca bash never sees.
+// .bashrc. Scanning .bashrc would mirror values the live MCode bash never sees.
 const BASH_LOGIN_FILES = ['.bash_profile', '.bash_login', '.profile']
 // Why: fish sources conf.d/*.fish (sorted by name) before config.fish, for
 // login and non-login shells alike — verified against fish 4.7.
@@ -94,7 +94,7 @@ function shellStartupFiles(
   configHome: string | undefined
 ): ShellStartupFiles {
   if (!shell) {
-    // Why: Orca's POSIX default shell is /bin/zsh when $SHELL is unset.
+    // Why: MCode's POSIX default shell is /bin/zsh when $SHELL is unset.
     return { paths: zshStartupFilePaths(home), syntax: 'export' }
   }
 
@@ -115,7 +115,7 @@ function shellStartupFiles(
     }
   }
   // Why: unsupported explicit shells (nushell, custom wrappers) do not use
-  // Orca's zsh/bash/fish shell-ready startup files, so scanning those files
+  // MCode's zsh/bash/fish shell-ready startup files, so scanning those files
   // would mirror values the live PTY shell never sees.
   return { paths: [], syntax: 'export' }
 }
@@ -199,7 +199,7 @@ const cache = new Map<string, string | undefined>()
  * Best-effort static read of a single env-var assignment from the user's
  * POSIX shell startup files.
  *
- * Why: GUI-launched Orca does not inherit interactive shell exports, but the
+ * Why: GUI-launched MCode does not inherit interactive shell exports, but the
  * PTY's startup file will later re-export them and override our overlay. By
  * peeking at the assignment up-front we can preserve the user's source value
  * before installing the overlay.

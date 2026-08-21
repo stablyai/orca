@@ -58,22 +58,22 @@ const STAGE_OWNER = '.sftp-namespace-00000000000000000000000000000000'
 
 export function makeStagedFirstInstallExecPrefix(): ExecResponse[] {
   return [
-    '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
+    '__MCODE_REMOTE_PLATFORM__ Linux x86_64',
     '/home/u',
     '', // bounded stale-stage recovery
-    `__ORCA_UPLOAD_STAGE_SLOT__${STAGE_OWNER}:slot-0`,
+    `__MCODE_UPLOAD_STAGE_SLOT__${STAGE_OWNER}:slot-0`,
     '', // chmod staged node
     '', // final install namespace marker
-    `__ORCA_UPLOAD_STAGE_PROMOTION__${STAGE_OWNER}:PROMOTED`
+    `__MCODE_UPLOAD_STAGE_PROMOTION__${STAGE_OWNER}:PROMOTED`
   ]
 }
 
 // Repair reconnect (isRelayAlreadyInstalled → true) where BOTH native deps are broken and the host
 // cannot compile node-pty, so the caller's resets must survive into the node-pty-less reinstall.
 export function makeRepairToolchainSkipExecResponses(): ExecResponse[] {
-  const bothMissing = 'ORCA-NATIVE-DEPS-MISSING:node-pty,@parcel/watcher\nMISSING'
+  const bothMissing = 'MCODE-NATIVE-DEPS-MISSING:node-pty,@parcel/watcher\nMISSING'
   return [
-    '__ORCA_REMOTE_PLATFORM__ Linux x86_64',
+    '__MCODE_REMOTE_PLATFORM__ Linux x86_64',
     '/home/u',
     bothMissing, // health probe before lock
     bothMissing, // re-probe under the repair lock
@@ -81,7 +81,7 @@ export function makeRepairToolchainSkipExecResponses(): ExecResponse[] {
     { reject: 'gyp ERR! stack Error: not found: make' },
     'PKG apk', // toolchain probe: no HAVE lines
     '', // reset both deps + reinstall without node-pty
-    'ORCA-NATIVE-DEPS-MISSING:node-pty\nMISSING\n', // watcher probe: only node-pty still absent
+    'MCODE-NATIVE-DEPS-MISSING:node-pty\nMISSING\n', // watcher probe: only node-pty still absent
     '', // cat probe stderr
     '', // rm -f probe stderr
     'DEAD',
@@ -139,8 +139,8 @@ export function makeExecResponses(opts: {
       '', // rm -rf node-pty + reinstall without it
       // node-pty is always reported missing here; the probe never resolves OK, so cat + rm both run.
       opts.nodePtySkipWatcher === 'missing'
-        ? 'ORCA-NATIVE-DEPS-MISSING:node-pty,@parcel/watcher\nMISSING\n'
-        : 'ORCA-NATIVE-DEPS-MISSING:node-pty\nMISSING\n',
+        ? 'MCODE-NATIVE-DEPS-MISSING:node-pty,@parcel/watcher\nMISSING\n'
+        : 'MCODE-NATIVE-DEPS-MISSING:node-pty\nMISSING\n',
       '', // cat probe stderr
       '', // rm -f probe stderr
       '', // clean stage root
@@ -154,7 +154,7 @@ export function makeExecResponses(opts: {
     opts.probeStdoutOverride !== undefined
       ? opts.probeStdoutOverride
       : probe === 'ok'
-        ? 'ORCA-NPTY-PROBE-OK\n'
+        ? 'MCODE-NPTY-PROBE-OK\n'
         : probe === 'missing'
           ? 'MISSING\n' // shell-level `|| echo MISSING` after require throw
           : probe === 'dir-gone'
@@ -169,7 +169,7 @@ export function makeExecResponses(opts: {
   // Cleanup execs only run when the probe resolved (not when it rejected).
   const probeResolved = typeof probeSlot === 'string'
   if (probeResolved) {
-    const probeOk = probeSlot.includes('ORCA-NPTY-PROBE-OK')
+    const probeOk = probeSlot.includes('MCODE-NPTY-PROBE-OK')
     if (!probeOk) {
       slots.push('') // cat stderr (graceful failure path captures detail)
     }
@@ -177,9 +177,9 @@ export function makeExecResponses(opts: {
     if (!probeOk) {
       slots.push('') // npm rebuild with lifecycle scripts explicitly enabled
       slots.push('') // chmod prebuilds after rebuild
-      const repairProbe = opts.repairProbe === 'ok' ? 'ORCA-NPTY-PROBE-OK\n' : 'MISSING\n'
+      const repairProbe = opts.repairProbe === 'ok' ? 'MCODE-NPTY-PROBE-OK\n' : 'MISSING\n'
       slots.push(repairProbe)
-      if (!repairProbe.includes('ORCA-NPTY-PROBE-OK')) {
+      if (!repairProbe.includes('MCODE-NPTY-PROBE-OK')) {
         slots.push('') // cat stderr after unsuccessful rebuild
       }
       slots.push('') // rm -f stderr after rebuild probe

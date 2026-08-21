@@ -248,7 +248,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       tabId: 'tab-1',
       leafId: 'pane:1',
       command: "codex 'linked issue context'",
-      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
+      envToDelete: ['CODEX_HOME', 'MCODE_CODEX_HOME'],
       startupCommandDelivery: 'shell-ready',
       terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' }
     })
@@ -261,7 +261,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         method: 'terminal.create',
         params: expect.objectContaining({
           command: "codex 'linked issue context'",
-          envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
+          envToDelete: ['CODEX_HOME', 'MCODE_CODEX_HOME'],
           startupCommandDelivery: 'shell-ready',
           terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' }
         })
@@ -297,7 +297,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     await transport.connect({
       url: '',
       command: "codex '--model' 'gpt-5' 'resume' 'session-1'",
-      env: { CODEX_PROFILE: 'captured', ORCA_AGENT_LAUNCH_TOKEN: 'fresh-token' },
+      env: { CODEX_PROFILE: 'captured', MCODE_AGENT_LAUNCH_TOKEN: 'fresh-token' },
       launchConfig: {
         agentArgs: '--model gpt-5',
         agentEnv: { CODEX_PROFILE: 'captured' },
@@ -412,7 +412,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     await transport.connect({
       url: '',
       command: "codex '--model' 'gpt-5' 'resume' 'session-1'",
-      env: { CODEX_PROFILE: 'captured', ORCA_AGENT_LAUNCH_TOKEN: 'fresh-token' },
+      env: { CODEX_PROFILE: 'captured', MCODE_AGENT_LAUNCH_TOKEN: 'fresh-token' },
       launchConfig: {
         agentArgs: '--model gpt-5',
         agentEnv: { CODEX_PROFILE: 'captured' }
@@ -429,7 +429,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         worktree: 'id:wt-1',
         clientMutationId: expect.any(String),
         command: "codex '--model' 'gpt-5' 'resume' 'session-1'",
-        env: { CODEX_PROFILE: 'captured', ORCA_AGENT_LAUNCH_TOKEN: 'fresh-token' },
+        env: { CODEX_PROFILE: 'captured', MCODE_AGENT_LAUNCH_TOKEN: 'fresh-token' },
         launchConfig: {
           agentArgs: '--model gpt-5',
           agentEnv: { CODEX_PROFILE: 'captured' }

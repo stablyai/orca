@@ -33,7 +33,7 @@ describe('federated read RPC transport routing', () => {
   let environmentId: string
 
   beforeEach(() => {
-    userDataPath = mkdtempSync(join(tmpdir(), 'orca-federated-read-routing-'))
+    userDataPath = mkdtempSync(join(tmpdir(), 'mcode-federated-read-routing-'))
     environmentId = addEnvironmentFromPairingCode(userDataPath, {
       name: 'worker',
       pairingCode: encodePairingOffer({

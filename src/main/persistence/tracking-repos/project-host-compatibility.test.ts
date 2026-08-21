@@ -3,14 +3,14 @@ import type { ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import { mergeProjectHostSetupCompatibilityState } from './project-host-compatibility'
 
-const PROJECT_ID = 'github:acme/orca'
+const PROJECT_ID = 'github:acme/mcode'
 
 function repo(overrides: Partial<Repo> & Pick<Repo, 'id'>): Repo {
   return {
     path: `/src/${overrides.id}`,
-    displayName: 'orca',
+    displayName: 'mcode',
     addedAt: 1,
-    upstream: { owner: 'acme', repo: 'orca' },
+    upstream: { owner: 'acme', repo: 'mcode' },
     ...overrides
   } as Repo
 }
@@ -22,7 +22,7 @@ function pendingSetup(overrides: Partial<ProjectHostSetup> = {}): ProjectHostSet
     hostId: 'ssh:devbox',
     repoId: '',
     path: '',
-    displayName: 'orca',
+    displayName: 'mcode',
     setupState: 'not-set-up',
     setupMethod: 'pending',
     createdAt: 1,

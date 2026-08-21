@@ -139,7 +139,7 @@ describe('isTerminalQueryReply', () => {
 
 // Regression for the `gh auth login` report: termenv writes `OSC 11 ;? ST` then
 // `CSI 6n` and reads exactly one response, treating a CPR-first answer as "no OSC
-// support" without draining further. Orca defers the color reply behind an ECHO
+// support" without draining further. MCode defers the color reply behind an ECHO
 // probe, so a CPR taken straight to the PTY overtakes it and leaves `ESC ]` in the
 // tty for the next program — bubbletea then dies with
 // "unexpected escape sequence from terminal: ['\x1b' ']']".

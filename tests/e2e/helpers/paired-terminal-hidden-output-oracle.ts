@@ -1,7 +1,7 @@
 import type { Page } from '@stablyai/playwright-test'
 import type { RuntimeTerminalRead } from '../../../src/shared/runtime-types'
 import { startRendererLagProbe } from '../paired-runtime-retention-metrics'
-import { expect } from './orca-app'
+import { expect } from './mcode-app'
 
 const MAX_HIDDEN_FLOOD_LAG_MS = 500
 

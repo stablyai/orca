@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
-import { expect, test } from './helpers/orca-app'
-import { createRestartSession } from './helpers/orca-restart'
+import { expect, test } from './helpers/mcode-app'
+import { createRestartSession } from './helpers/mcode-restart'
 import {
   createRuntimeDesktopPairingOffer,
   launchPairedElectronClient,
@@ -11,7 +11,7 @@ import {
 } from './helpers/paired-electron-client'
 import { addPairedRuntimeEnvironment } from './helpers/nested-runtime-ssh-client-route'
 
-const missingGitPath = mkdtempSync(path.join(os.tmpdir(), 'orca-preflight-path-'))
+const missingGitPath = mkdtempSync(path.join(os.tmpdir(), 'mcode-preflight-path-'))
 
 test.use({ seedTestRepo: false })
 test.describe.configure({ mode: 'serial' })
@@ -180,10 +180,10 @@ async function runRuntimePreflightJourney(
 
 test('routes landing preflight across runtime switch and reconnect', async ({
   electronApp,
-  orcaPage
-}, testInfo) => runRuntimePreflightJourney(electronApp, orcaPage, testInfo, false))
+  mcodePage
+}, testInfo) => runRuntimePreflightJourney(electronApp, mcodePage, testInfo, false))
 
 test('routes landing preflight across runtime switch and reconnect @headful', async ({
   electronApp,
-  orcaPage
-}, testInfo) => runRuntimePreflightJourney(electronApp, orcaPage, testInfo, true))
+  mcodePage
+}, testInfo) => runRuntimePreflightJourney(electronApp, mcodePage, testInfo, true))

@@ -13,7 +13,7 @@ function dispatchLoadFailure(
   Object.assign(event, {
     errorCode: failure.errorCode,
     errorDescription: 'failed',
-    validatedURL: 'https://share.onorca.dev/a/report',
+    validatedURL: 'https://share.mcode.dev/a/report',
     isMainFrame: failure.isMainFrame
   })
   webview.dispatchEvent(event)
@@ -23,7 +23,7 @@ describe('ArtifactPreview', () => {
   beforeEach(() => {
     Object.assign(window, {
       api: {
-        browser: { sessionResolvePartition: vi.fn().mockResolvedValue('persist:orca-default') }
+        browser: { sessionResolvePartition: vi.fn().mockResolvedValue('persist:mcode-default') }
       }
     })
   })
@@ -34,7 +34,7 @@ describe('ArtifactPreview', () => {
   })
 
   it('ignores child-frame failures and aborted navigations', async () => {
-    render(<ArtifactPreview shareUrl="https://share.onorca.dev/a/report" />)
+    render(<ArtifactPreview shareUrl="https://share.mcode.dev/a/report" />)
     const webview = await waitFor(() => {
       const element = document.querySelector('webview')
       expect(element).not.toBeNull()
@@ -50,7 +50,7 @@ describe('ArtifactPreview', () => {
 
   it('stops waiting when navigation stalls', async () => {
     vi.useFakeTimers()
-    render(<ArtifactPreview shareUrl="https://share.onorca.dev/a/report" />)
+    render(<ArtifactPreview shareUrl="https://share.mcode.dev/a/report" />)
     await act(async () => {
       await Promise.resolve()
       await Promise.resolve()
@@ -65,7 +65,7 @@ describe('ArtifactPreview', () => {
   it('stops waiting when preview-session resolution stalls', () => {
     vi.useFakeTimers()
     vi.mocked(window.api.browser.sessionResolvePartition).mockReturnValue(new Promise(() => {}))
-    render(<ArtifactPreview shareUrl="https://share.onorca.dev/a/report" />)
+    render(<ArtifactPreview shareUrl="https://share.mcode.dev/a/report" />)
 
     act(() => vi.advanceTimersByTime(20_000))
 

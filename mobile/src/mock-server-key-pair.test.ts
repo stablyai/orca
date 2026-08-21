@@ -19,7 +19,7 @@ type ConcurrentCreator = {
 }
 
 function keyFilePath(): string {
-  const directory = mkdtempSync(join(tmpdir(), 'orca-mock-key-'))
+  const directory = mkdtempSync(join(tmpdir(), 'mcode-mock-key-'))
   temporaryDirectories.push(directory)
   return join(directory, 'server-key')
 }

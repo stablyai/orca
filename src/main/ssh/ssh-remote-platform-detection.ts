@@ -10,7 +10,7 @@ import { isSshSessionLimitError } from './ssh-session-limit-error'
 import { getRemoteHostPlatform, type RemoteHostPlatform } from './ssh-remote-platform'
 import { powerShellCommand } from './ssh-remote-powershell'
 
-const PLATFORM_PROBE_MARKER = '__ORCA_REMOTE_PLATFORM__'
+const PLATFORM_PROBE_MARKER = '__MCODE_REMOTE_PLATFORM__'
 const MAX_UNAME_FIELD_CHARS = 64
 const MAX_THROWN_OUTPUT_CHARS = 200
 const MAX_LOGGED_OUTPUT_CHARS = 1000

@@ -143,7 +143,7 @@ export function LocalNetworkConnectionTest(): React.JSX.Element {
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.DeveloperPermissionsPane.connectionTestDescription',
-              'Enter a service on another device on your local network. Orca tests the same network path used by terminal tools.'
+              'Enter a service on another device on your local network. MCode tests the same network path used by terminal tools.'
             )}
           </p>
           {failure && (

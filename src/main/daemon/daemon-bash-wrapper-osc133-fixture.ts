@@ -23,7 +23,7 @@ export function runInteractiveBashRcfile(rcfileContent: string, tempDir: string)
       env: {
         ...process.env,
         HOME: tempDir,
-        ORCA_SHELL_FEATURES: 'ready',
+        MCODE_SHELL_FEATURES: 'ready',
         TERM: process.env.TERM || 'xterm'
       },
       timeout: 5000

@@ -41,17 +41,17 @@ describe('automation run identity', () => {
     const value = automation({
       runContext: {
         kind: 'workspace-run',
-        projectId: 'github:stablyai/orca',
+        projectId: 'github:mcode-ide/mcode',
         hostId: 'ssh:builder',
         projectHostSetupId: 'setup-builder',
         repoId: 'remote-repo',
-        path: '/remote/orca'
+        path: '/remote/mcode'
       }
     })
 
     expect(getAutomationLegacyRepoId(value)).toBe('legacy-repo')
     expect(getAutomationRunRepoId(value)).toBe('remote-repo')
-    expect(getAutomationRunProjectId(value)).toBe('github:stablyai/orca')
+    expect(getAutomationRunProjectId(value)).toBe('github:mcode-ide/mcode')
   })
 
   it('falls back to the legacy repo id for pre-host-context automations', () => {

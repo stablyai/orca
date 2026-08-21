@@ -8,7 +8,7 @@
  * `clearPaneForegroundAgentByWorktree`, but the bulk `purgeWorktreeTerminalState`
  * reducer (used by the authoritative-scan reconcile, remove-project, and the
  * hydration stale-purge) never ran terminal teardown — so an externally-removed
- * worktree (CLI `git worktree remove`, another Orca window, SSH, or a removed
+ * worktree (CLI `git worktree remove`, another MCode window, SSH, or a removed
  * project) orphaned one entry per agent pane for the lifetime of the renderer
  * session, plus a phantom unread dock badge.
  */

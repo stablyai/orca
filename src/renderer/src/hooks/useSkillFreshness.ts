@@ -103,7 +103,7 @@ export async function refreshSkillFreshness(force = true): Promise<void> {
       publishSnapshot({
         inventory: null,
         loading: false,
-        error: cause instanceof Error ? cause.message : 'Could not inspect Orca skills.'
+        error: cause instanceof Error ? cause.message : 'Could not inspect MCode skills.'
       })
     }
   }

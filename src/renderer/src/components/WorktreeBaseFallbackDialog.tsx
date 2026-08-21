@@ -64,7 +64,7 @@ export default function WorktreeBaseFallbackDialog(): React.JSX.Element {
             <DialogDescription className="text-xs leading-relaxed">
               {translate(
                 'auto.components.WorktreeBaseFallbackDialog.description',
-                'The remote-tracking ref "{{value0}}" was unavailable, so Orca used local "{{value1}}" instead. This workspace may not include the latest remote changes.',
+                'The remote-tracking ref "{{value0}}" was unavailable, so MCode used local "{{value1}}" instead. This workspace may not include the latest remote changes.',
                 { value0: displayedNotice.requestedRef, value1: displayedNotice.localRef }
               )}
             </DialogDescription>

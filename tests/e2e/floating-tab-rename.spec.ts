@@ -1,8 +1,8 @@
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { waitForSessionReady } from './helpers/store'
-import { createRestartSession } from './helpers/orca-restart'
+import { createRestartSession } from './helpers/mcode-restart'
 
 // Why: mirrors FLOATING_TERMINAL_WORKTREE_ID in src/shared/constants.ts.
 // E2E specs avoid importing renderer/shared modules into the Playwright runner.
@@ -87,21 +87,21 @@ async function openFloatingPanel(page: Page): Promise<void> {
     OPEN_PANEL_SELECTOR
   )
   if (!alreadyOpen) {
-    await page.evaluate(() => window.dispatchEvent(new Event('orca-toggle-floating-terminal')))
+    await page.evaluate(() => window.dispatchEvent(new Event('mcode-toggle-floating-terminal')))
   }
   await expect(page.locator(OPEN_PANEL_SELECTOR)).toBeVisible()
 }
 
 test('concurrent floating Markdown renames do not clobber the destination', async ({
-  orcaPage
+  mcodePage
 }) => {
-  const directory = await orcaPage.evaluate(() => window.api.app.getFloatingMarkdownDirectory())
+  const directory = await mcodePage.evaluate(() => window.api.app.getFloatingMarkdownDirectory())
   const suffix = Date.now().toString(36)
   const firstPath = path.join(directory, `floating-first-${suffix}.md`)
   const secondPath = path.join(directory, `floating-second-${suffix}.md`)
   const destinationPath = path.join(directory, `floating-destination-${suffix}.md`)
 
-  const result = await orcaPage.evaluate(
+  const result = await mcodePage.evaluate(
     async ({ firstPath, secondPath, destinationPath }) => {
       await window.api.fs.createFile({ filePath: firstPath })
       await window.api.fs.createFile({ filePath: secondPath })
@@ -141,16 +141,16 @@ test('concurrent floating Markdown renames do not clobber the destination', asyn
   ).toEqual(['first\n', 'second\n'])
 })
 
-test('Electron serializes native Unicode rename aliases', async ({ orcaPage }) => {
+test('Electron serializes native Unicode rename aliases', async ({ mcodePage }) => {
   test.skip(process.platform !== 'darwin', 'Requires native Unicode aliasing')
-  const directory = await orcaPage.evaluate(() => window.api.app.getFloatingMarkdownDirectory())
+  const directory = await mcodePage.evaluate(() => window.api.app.getFloatingMarkdownDirectory())
   const suffix = Date.now().toString(36)
   const firstPath = path.join(directory, `floating-unicode-first-${suffix}.md`)
   const secondPath = path.join(directory, `floating-unicode-second-${suffix}.md`)
   const sharpSDestination = path.join(directory, `floating-destination-${suffix}-straße.md`)
   const expandedDestination = path.join(directory, `floating-destination-${suffix}-STRASSE.MD`)
 
-  const result = await orcaPage.evaluate(
+  const result = await mcodePage.evaluate(
     async ({ firstPath, secondPath, sharpSDestination, expandedDestination }) => {
       await window.api.fs.createFile({ filePath: firstPath })
       await window.api.fs.createFile({ filePath: secondPath })

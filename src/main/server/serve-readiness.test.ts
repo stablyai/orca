@@ -8,14 +8,14 @@ import {
 const ready: ServeReadiness = {
   runtimeId: 'runtime-1',
   boundEndpoint: 'ws://0.0.0.0:6768',
-  advertisedEndpoint: 'wss://orca.example.test/runtime',
+  advertisedEndpoint: 'wss://mcode.example.test/runtime',
   managedWslCliReconciliation: 'settled',
   pairing: {
     available: true,
-    url: 'orca://pair?code=secret',
-    endpoint: 'wss://orca.example.test/runtime',
+    url: 'mcode://pair?code=secret',
+    endpoint: 'wss://mcode.example.test/runtime',
     deviceId: 'device-1',
-    webClientUrl: 'https://orca.example.test/runtime/web-index.html#pairing=secret',
+    webClientUrl: 'https://mcode.example.test/runtime/web-index.html#pairing=secret',
     scope: 'runtime',
     qr: null
   }
@@ -31,22 +31,22 @@ describe('ServeReadinessPublisher', () => {
     expect(write).toHaveBeenCalledOnce()
     expect(write).toHaveBeenCalledWith(
       expect.stringContaining(
-        'Orca server ready\nBound endpoint: ws://0.0.0.0:6768\nAdvertised endpoint: wss://orca.example.test/runtime'
+        'MCode server ready\nBound endpoint: ws://0.0.0.0:6768\nAdvertised endpoint: wss://mcode.example.test/runtime'
       )
     )
     expect(write).toHaveBeenCalledWith(
-      expect.stringContaining('Pairing URL: orca://pair?code=secret\n')
+      expect.stringContaining('Pairing URL: mcode://pair?code=secret\n')
     )
   })
 
   it('publishes a versioned JSON contract with explicit endpoints and pairing availability', () => {
     expect(JSON.parse(renderServeReadiness(ready, { mode: 'json' }))).toEqual({
-      type: 'orca_server_ready',
+      type: 'mcode_server_ready',
       schemaVersion: 1,
       runtimeId: 'runtime-1',
       endpoint: 'ws://0.0.0.0:6768',
       boundEndpoint: 'ws://0.0.0.0:6768',
-      advertisedEndpoint: 'wss://orca.example.test/runtime',
+      advertisedEndpoint: 'wss://mcode.example.test/runtime',
       managedWslCliReconciliation: 'settled',
       pairing: ready.pairing
     })
@@ -72,7 +72,7 @@ describe('ServeReadinessPublisher', () => {
 
   it('preserves the recipe JSON contract', () => {
     expect(renderServeReadiness(ready, { mode: 'recipe-json', projectRoot: '/workspace' })).toBe(
-      '{"schemaVersion":1,"pairingCode":"orca://pair?code=secret","projectRoot":"/workspace"}'
+      '{"schemaVersion":1,"pairingCode":"mcode://pair?code=secret","projectRoot":"/workspace"}'
     )
   })
 

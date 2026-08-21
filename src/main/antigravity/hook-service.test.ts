@@ -28,7 +28,7 @@ const ANTIGRAVITY_POST_TOOL_USE_COMMAND =
   process.platform === 'win32' ? 'antigravity-post-tool-use.cmd' : 'antigravity-hook.sh'
 const ANTIGRAVITY_PRE_TOOL_USE_COMMAND =
   process.platform === 'win32' ? 'antigravity-pre-tool-use.cmd' : 'antigravity-hook.sh'
-// Why: the gate decision Orca is allowed to emit — "allow" would auto-approve every observed tool call.
+// Why: the gate decision MCode is allowed to emit — "allow" would auto-approve every observed tool call.
 const PRE_TOOL_USE_DECISION = '{"decision":"ask"}'
 const POLICY_OVERRIDING_DECISIONS = ['allow', 'deny', 'force_ask', 'deny_unless_prior_grant']
 
@@ -48,7 +48,7 @@ describe('AntigravityHookService', () => {
   let homeDir: string
 
   beforeEach(() => {
-    homeDir = mkdtempSync(join(tmpdir(), 'orca-antigravity-home-'))
+    homeDir = mkdtempSync(join(tmpdir(), 'mcode-antigravity-home-'))
     homedirMock.mockReturnValue(homeDir)
   })
 
@@ -67,45 +67,45 @@ describe('AntigravityHookService', () => {
     const config = JSON.parse(
       readFileSync(join(homeDir, '.gemini', 'config', 'hooks.json'), 'utf8')
     ) as {
-      'orca-status': Record<
+      'mcode-status': Record<
         string,
         { matcher?: string; command?: string; hooks?: { command: string }[] }[]
       >
     }
-    expect(Object.keys(config['orca-status']).sort()).toEqual(
+    expect(Object.keys(config['mcode-status']).sort()).toEqual(
       ['PostInvocation', 'PostToolUse', 'PreInvocation', 'PreToolUse', 'Stop'].sort()
     )
-    expect(config['orca-status'].PreToolUse[0].matcher).toBe('*')
-    expect(config['orca-status'].PreToolUse[0].hooks?.[0]?.command).toContain(
+    expect(config['mcode-status'].PreToolUse[0].matcher).toBe('*')
+    expect(config['mcode-status'].PreToolUse[0].hooks?.[0]?.command).toContain(
       ANTIGRAVITY_PRE_TOOL_USE_COMMAND
     )
-    expect(config['orca-status'].PostToolUse[0].matcher).toBe('*')
-    expect(config['orca-status'].PreInvocation[0].command).toContain(
+    expect(config['mcode-status'].PostToolUse[0].matcher).toBe('*')
+    expect(config['mcode-status'].PreInvocation[0].command).toContain(
       ANTIGRAVITY_PRE_INVOCATION_COMMAND
     )
     if (process.platform === 'win32') {
-      expect(config['orca-status'].PreInvocation[0].command).not.toContain('ORCA_ANTIGRAVITY_EVENT')
+      expect(config['mcode-status'].PreInvocation[0].command).not.toContain('MCODE_ANTIGRAVITY_EVENT')
     } else {
-      expect(config['orca-status'].PreInvocation[0].command).toContain(
-        "ORCA_ANTIGRAVITY_EVENT='PreInvocation'"
+      expect(config['mcode-status'].PreInvocation[0].command).toContain(
+        "MCODE_ANTIGRAVITY_EVENT='PreInvocation'"
       )
-      expect(config['orca-status'].Stop[0].command).toContain("ORCA_ANTIGRAVITY_EVENT='Stop'")
+      expect(config['mcode-status'].Stop[0].command).toContain("MCODE_ANTIGRAVITY_EVENT='Stop'")
     }
 
     const script = readFileSync(
-      join(homeDir, '.orca', 'agent-hooks', ANTIGRAVITY_SCRIPT_FILE_NAME),
+      join(homeDir, '.mcode', 'agent-hooks', ANTIGRAVITY_SCRIPT_FILE_NAME),
       'utf8'
     )
     expect(script).toContain('/hook/antigravity')
     if (process.platform === 'win32') {
       expect(script).not.toContain('powershell.exe')
       expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
-      expect(script).toContain('hook_event_name=%ORCA_ANTIGRAVITY_EVENT%')
+      expect(script).toContain('hook_event_name=%MCODE_ANTIGRAVITY_EVENT%')
       expect(script).toContain('--data-urlencode "payload@-"')
       // Why (#9358/#9941): delayed expansion eats `!` out of percent-expanded curl args.
       expect(script).toContain('setlocal DisableDelayedExpansion')
     } else {
-      expect(script).toContain('hook_event_name=${ORCA_ANTIGRAVITY_EVENT}')
+      expect(script).toContain('hook_event_name=${MCODE_ANTIGRAVITY_EVENT}')
       expect(script).toContain(`payload=$(${POSIX_HOOK_STDIN_READER})`)
       expect(script).toContain("payload='{}'")
       expect(script).not.toContain('if [ -z "$payload" ]; then\n  exit 0\nfi')
@@ -129,15 +129,15 @@ describe('AntigravityHookService', () => {
 
       const result = spawnSync(
         '/bin/sh',
-        [join(homeDir, '.orca', 'agent-hooks', 'antigravity-hook.sh')],
+        [join(homeDir, '.mcode', 'agent-hooks', 'antigravity-hook.sh')],
         {
           env: {
             ...process.env,
-            ORCA_ANTIGRAVITY_EVENT: 'PreToolUse',
-            ORCA_AGENT_HOOK_ENDPOINT: '',
-            ORCA_AGENT_HOOK_PORT: '',
-            ORCA_AGENT_HOOK_TOKEN: '',
-            ORCA_PANE_KEY: ''
+            MCODE_ANTIGRAVITY_EVENT: 'PreToolUse',
+            MCODE_AGENT_HOOK_ENDPOINT: '',
+            MCODE_AGENT_HOOK_PORT: '',
+            MCODE_AGENT_HOOK_TOKEN: '',
+            MCODE_PANE_KEY: ''
           },
           input: '{"toolCall":{"name":"run_command","args":{"CommandLine":"ls"}}}',
           encoding: 'utf8'
@@ -154,19 +154,19 @@ describe('AntigravityHookService', () => {
     'keeps answering the PreToolUse gate when the managed script is missing',
     () => {
       new AntigravityHookService().install()
-      rmSync(join(homeDir, '.orca', 'agent-hooks'), { recursive: true, force: true })
+      rmSync(join(homeDir, '.mcode', 'agent-hooks'), { recursive: true, force: true })
 
       const config = JSON.parse(
         readFileSync(join(homeDir, '.gemini', 'config', 'hooks.json'), 'utf8')
-      ) as { 'orca-status': Record<string, { hooks?: { command: string }[] }[]> }
-      const command = config['orca-status'].PreToolUse[0].hooks?.[0]?.command
+      ) as { 'mcode-status': Record<string, { hooks?: { command: string }[] }[]> }
+      const command = config['mcode-status'].PreToolUse[0].hooks?.[0]?.command
 
       const result = spawnSync('/bin/sh', ['-c', command!], {
         input: '{"toolCall":{"name":"run_command"}}',
         encoding: 'utf8'
       })
 
-      // Why: hooks.json lives in ~/.gemini and outlives ~/.orca, so a swept script must not deny every tool call.
+      // Why: hooks.json lives in ~/.gemini and outlives ~/.mcode, so a swept script must not deny every tool call.
       expect(result.status).toBe(0)
       expect(result.stdout).toBe(`${PRE_TOOL_USE_DECISION}\n`)
     }
@@ -176,15 +176,15 @@ describe('AntigravityHookService', () => {
     'leaves non-gate Antigravity events silent when the managed script is missing',
     () => {
       new AntigravityHookService().install()
-      rmSync(join(homeDir, '.orca', 'agent-hooks'), { recursive: true, force: true })
+      rmSync(join(homeDir, '.mcode', 'agent-hooks'), { recursive: true, force: true })
 
       const config = JSON.parse(
         readFileSync(join(homeDir, '.gemini', 'config', 'hooks.json'), 'utf8')
       ) as {
-        'orca-status': Record<string, { command?: string; hooks?: { command: string }[] }[]>
+        'mcode-status': Record<string, { command?: string; hooks?: { command: string }[] }[]>
       }
-      const postToolUse = config['orca-status'].PostToolUse[0].hooks?.[0]?.command
-      const preInvocation = config['orca-status'].PreInvocation[0].command
+      const postToolUse = config['mcode-status'].PostToolUse[0].hooks?.[0]?.command
+      const preInvocation = config['mcode-status'].PreInvocation[0].command
 
       for (const command of [postToolUse, preInvocation]) {
         const result = spawnSync('/bin/sh', ['-c', command!], { input: '{}', encoding: 'utf8' })
@@ -199,7 +199,7 @@ describe('AntigravityHookService', () => {
       const configPath = join(homeDir, '.gemini', 'config', 'hooks.json')
       const staleScriptPath = join(
         homeDir,
-        '.orca',
+        '.mcode',
         'agent-hooks',
         'antigravity-hook.cmd'
       ).replaceAll('/', '\\')
@@ -208,14 +208,14 @@ describe('AntigravityHookService', () => {
         configPath,
         `${JSON.stringify(
           {
-            'orca-status': {
+            'mcode-status': {
               PreToolUse: [
                 {
                   matcher: '*',
                   hooks: [
                     {
                       type: 'command',
-                      command: `cmd /d /s /c "set "ORCA_ANTIGRAVITY_EVENT=PreToolUse" && call "${staleScriptPath}""`
+                      command: `cmd /d /s /c "set "MCODE_ANTIGRAVITY_EVENT=PreToolUse" && call "${staleScriptPath}""`
                     }
                   ]
                 }
@@ -237,12 +237,12 @@ describe('AntigravityHookService', () => {
       expect(status.state).toBe('installed')
 
       const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
-        'orca-status': Record<
+        'mcode-status': Record<
           string,
           { matcher?: string; command?: string; hooks?: { command: string }[] }[]
         >
       }
-      expect(config['orca-status'].PreToolUse).toHaveLength(1)
+      expect(config['mcode-status'].PreToolUse).toHaveLength(1)
 
       const expectedWrappers = {
         PreInvocation: 'antigravity-pre-invocation.cmd',
@@ -252,17 +252,17 @@ describe('AntigravityHookService', () => {
         PostToolUse: 'antigravity-post-tool-use.cmd'
       }
       for (const [eventName, wrapperFileName] of Object.entries(expectedWrappers)) {
-        const definition = config['orca-status'][eventName][0]
+        const definition = config['mcode-status'][eventName][0]
         const command = ['PreToolUse', 'PostToolUse'].includes(eventName)
           ? definition.hooks?.[0]?.command
           : definition.command
         expect(createManagedCommandMatcher(wrapperFileName)(command)).toBe(true)
         expect(command).not.toContain('cmd /d /s /c')
-        expect(command).not.toContain('ORCA_ANTIGRAVITY_EVENT')
+        expect(command).not.toContain('MCODE_ANTIGRAVITY_EVENT')
 
-        const wrapper = readFileSync(join(homeDir, '.orca', 'agent-hooks', wrapperFileName), 'utf8')
-        expect(wrapper).toContain(`set "ORCA_ANTIGRAVITY_EVENT=${eventName}"`)
-        expect(wrapper).toContain('call "%ORCA_ANTIGRAVITY_CORE%"')
+        const wrapper = readFileSync(join(homeDir, '.mcode', 'agent-hooks', wrapperFileName), 'utf8')
+        expect(wrapper).toContain(`set "MCODE_ANTIGRAVITY_EVENT=${eventName}"`)
+        expect(wrapper).toContain('call "%MCODE_ANTIGRAVITY_CORE%"')
         // Why: the wrapper is the stdin owner when the core script is gone, so it must answer the gate itself.
         if (eventName === 'PreToolUse') {
           expect(wrapper).toContain(`echo ${PRE_TOOL_USE_DECISION}`)
@@ -273,18 +273,18 @@ describe('AntigravityHookService', () => {
       }
 
       const script = readFileSync(
-        join(homeDir, '.orca', 'agent-hooks', 'antigravity-hook.cmd'),
+        join(homeDir, '.mcode', 'agent-hooks', 'antigravity-hook.cmd'),
         'utf8'
       )
       expect(script).toContain('/hook/antigravity')
       expect(script).not.toContain('powershell.exe')
       expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
-      expect(script).toContain('hook_event_name=%ORCA_ANTIGRAVITY_EVENT%')
+      expect(script).toContain('hook_event_name=%MCODE_ANTIGRAVITY_EVENT%')
       expect(script).toContain('setlocal DisableDelayedExpansion')
     })
   })
 
-  it('preserves user-authored hook bundles and entries in Orca bundle', () => {
+  it('preserves user-authored hook bundles and entries in MCode bundle', () => {
     const configPath = join(homeDir, '.gemini', 'config', 'hooks.json')
     mkdirSync(dirname(configPath), { recursive: true })
     writeFileSync(
@@ -294,8 +294,8 @@ describe('AntigravityHookService', () => {
           'user-hook': {
             PreInvocation: [{ type: 'command', command: '/usr/local/bin/user-hook' }]
           },
-          'orca-status': {
-            PreInvocation: [{ type: 'command', command: '/usr/local/bin/orca-extra' }]
+          'mcode-status': {
+            PreInvocation: [{ type: 'command', command: '/usr/local/bin/mcode-extra' }]
           }
         },
         null,
@@ -307,11 +307,11 @@ describe('AntigravityHookService', () => {
 
     const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
       'user-hook': { PreInvocation: { command: string }[] }
-      'orca-status': { PreInvocation: { command: string }[] }
+      'mcode-status': { PreInvocation: { command: string }[] }
     }
     expect(config['user-hook'].PreInvocation[0].command).toBe('/usr/local/bin/user-hook')
-    const commands = config['orca-status'].PreInvocation.map((entry) => entry.command)
-    expect(commands).toContain('/usr/local/bin/orca-extra')
+    const commands = config['mcode-status'].PreInvocation.map((entry) => entry.command)
+    expect(commands).toContain('/usr/local/bin/mcode-extra')
     expect(commands.some((command) => command.includes(ANTIGRAVITY_PRE_INVOCATION_COMMAND))).toBe(
       true
     )
@@ -324,7 +324,7 @@ describe('AntigravityHookService', () => {
       configPath,
       `${JSON.stringify(
         {
-          'orca-status': {
+          'mcode-status': {
             OldEvent: [
               {
                 type: 'command',
@@ -347,24 +347,24 @@ describe('AntigravityHookService', () => {
     new AntigravityHookService().install()
 
     const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
-      'orca-status': Record<string, { command?: string; hooks?: { command: string }[] }[]>
+      'mcode-status': Record<string, { command?: string; hooks?: { command: string }[] }[]>
     }
-    expect(config['orca-status'].OldEvent).toBeUndefined()
+    expect(config['mcode-status'].OldEvent).toBeUndefined()
     // Why: the pre-a480e6b7 PreToolUse entry pointed at a script with no gate branch; it must be replaced, not kept.
-    const preToolCommands = config['orca-status'].PreToolUse.flatMap((definition) =>
+    const preToolCommands = config['mcode-status'].PreToolUse.flatMap((definition) =>
       (definition.hooks ?? []).map((hook) => hook.command)
     )
     expect(preToolCommands).toHaveLength(1)
     expect(preToolCommands[0]).toContain(
-      join(homeDir, '.orca', 'agent-hooks', ANTIGRAVITY_PRE_TOOL_USE_COMMAND)
+      join(homeDir, '.mcode', 'agent-hooks', ANTIGRAVITY_PRE_TOOL_USE_COMMAND)
     )
     expect(preToolCommands[0]).not.toContain('/tmp/old/agent-hooks/antigravity-hook.sh')
-    const commands = config['orca-status'].PostToolUse.flatMap((definition) =>
+    const commands = config['mcode-status'].PostToolUse.flatMap((definition) =>
       (definition.hooks ?? []).map((hook) => hook.command)
     )
     expect(commands).toHaveLength(1)
     expect(commands[0]).toContain(
-      join(homeDir, '.orca', 'agent-hooks', ANTIGRAVITY_POST_TOOL_USE_COMMAND)
+      join(homeDir, '.mcode', 'agent-hooks', ANTIGRAVITY_POST_TOOL_USE_COMMAND)
     )
   })
 })

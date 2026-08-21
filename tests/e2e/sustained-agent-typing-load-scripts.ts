@@ -25,7 +25,7 @@ export function sustainedLoadReadyFilePath(
   runId: string,
   paneIndex: number
 ): string {
-  return path.join(directory, `.orca-mwt-load-ready-${runId}-${paneIndex}`)
+  return path.join(directory, `.mcode-mwt-load-ready-${runId}-${paneIndex}`)
 }
 
 export function typingProbeReadyMarker(runId: string): string {
@@ -66,7 +66,7 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 // panes the stream scrolls a READY marker out of the buffer's serialize
 // window before the spec's sequential checks reach it.
 writeFileSync(
-  ${JSON.stringify(readyFileDirectory)} + '/.orca-mwt-load-ready-${runId}-' + paneIndex,
+  ${JSON.stringify(readyFileDirectory)} + '/.mcode-mwt-load-ready-${runId}-' + paneIndex,
   String(Date.now())
 )
 process.stdout.write('${'MWT_LOAD_READY_'}${runId}_' + paneIndex + '\\r\\n')

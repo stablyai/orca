@@ -18,7 +18,7 @@ function makeReview(overrides: Partial<HostedReviewInfo> = {}): HostedReviewInfo
     number: 2192,
     title: 'Open PR in checks',
     state: 'open',
-    url: 'https://github.com/stablyai/orca/pull/2192',
+    url: 'https://github.com/mcode-ide/mcode/pull/2192',
     status: 'pending',
     updatedAt: '2026-05-17T00:00:00Z',
     mergeable: 'UNKNOWN',

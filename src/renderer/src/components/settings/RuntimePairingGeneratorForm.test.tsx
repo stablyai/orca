@@ -58,7 +58,7 @@ describe('RuntimePairingGeneratorForm', () => {
   it('hides generated links after the selected address changes', () => {
     const markup = renderForm('another', '100.76.32.125', {
       address: '192.168.1.10',
-      runtimePairingUrl: 'orca://pair?code=stale-secret',
+      runtimePairingUrl: 'mcode://pair?code=stale-secret',
       webClientUrl: 'https://example.test/?pair=stale-secret'
     })
 

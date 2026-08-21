@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import type { RpcContext } from '../core'
 import { OrchestrationDb } from '../../orchestration/db'
-import { OrcaRuntimeService } from '../../orca-runtime'
+import { MCodeRuntimeService } from '../../mcode-runtime'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
@@ -18,7 +18,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 describe('orchestration worker release', () => {
   let db: OrchestrationDb
   let dbOpen = false
-  let runtime: OrcaRuntimeService
+  let runtime: MCodeRuntimeService
   let ctx: RpcContext
   let activeRunId: string
   let inspectProcessLiveness: ReturnType<typeof vi.fn>
@@ -29,7 +29,7 @@ describe('orchestration worker release', () => {
   function setup(): void {
     db = new OrchestrationDb(':memory:')
     dbOpen = true
-    runtime = new OrcaRuntimeService()
+    runtime = new MCodeRuntimeService()
     runtime.setOrchestrationDb(db)
     inspectProcessLiveness = vi.fn().mockResolvedValue('live')
     ;(
@@ -76,7 +76,7 @@ describe('orchestration worker release', () => {
       status: 'running',
       exitCode: null
     })
-    vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+    vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('mcode')
     vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
       handle: 'term_worker',
       accepted: true,
@@ -341,7 +341,7 @@ describe('orchestration worker release', () => {
   it('lets user takeover cancel a release while output capture is pending', async () => {
     setup()
     const { dispatchId } = await startSettledWorker()
-    const pendingRead = deferred<Awaited<ReturnType<OrcaRuntimeService['readTerminal']>>>()
+    const pendingRead = deferred<Awaited<ReturnType<MCodeRuntimeService['readTerminal']>>>()
     vi.mocked(runtime.readTerminal).mockReturnValue(pendingRead.promise)
 
     const release = call('orchestration.workerRelease', { dispatch: dispatchId })
@@ -366,7 +366,7 @@ describe('orchestration worker release', () => {
   it('lets an explicit retain cancel a release while output capture is pending', async () => {
     setup()
     const { dispatchId } = await startSettledWorker()
-    const pendingRead = deferred<Awaited<ReturnType<OrcaRuntimeService['readTerminal']>>>()
+    const pendingRead = deferred<Awaited<ReturnType<MCodeRuntimeService['readTerminal']>>>()
     vi.mocked(runtime.readTerminal).mockReturnValue(pendingRead.promise)
 
     const release = call('orchestration.workerRelease', { dispatch: dispatchId })
@@ -390,7 +390,7 @@ describe('orchestration worker release', () => {
   it('does not claim retention succeeded after terminal close was committed', async () => {
     setup()
     const { dispatchId } = await startSettledWorker()
-    const pendingClose = deferred<Awaited<ReturnType<OrcaRuntimeService['closeTerminal']>>>()
+    const pendingClose = deferred<Awaited<ReturnType<MCodeRuntimeService['closeTerminal']>>>()
     vi.mocked(runtime.closeTerminal).mockReturnValue(pendingClose.promise)
 
     const release = call('orchestration.workerRelease', { dispatch: dispatchId })
@@ -457,7 +457,7 @@ describe('orchestration worker release', () => {
   it('re-proves process identity after archive capture before closing', async () => {
     setup()
     const { dispatchId } = await startSettledWorker()
-    const pendingRead = deferred<Awaited<ReturnType<OrcaRuntimeService['readTerminal']>>>()
+    const pendingRead = deferred<Awaited<ReturnType<MCodeRuntimeService['readTerminal']>>>()
     vi.mocked(runtime.readTerminal).mockReturnValue(pendingRead.promise)
 
     const release = call('orchestration.workerRelease', { dispatch: dispatchId })
@@ -616,7 +616,7 @@ describe('orchestration worker release', () => {
 
   it('reads an immutable transcript snapshot after the provider file disappears', async () => {
     setup()
-    const directory = await mkdtemp(join(tmpdir(), 'orca-worker-release-snapshot-'))
+    const directory = await mkdtemp(join(tmpdir(), 'mcode-worker-release-snapshot-'))
     const transcriptPath = join(directory, 'rollout.jsonl')
     try {
       await writeFile(

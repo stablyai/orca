@@ -49,7 +49,7 @@ export function isLazyChunkLoadError(error: unknown): error is LazyChunkLoadErro
 
 // The session guard survives a landed reload to prevent loops, but a surviving
 // document clears its own token so a later failure can retry recovery.
-const RELOAD_GUARD_KEY = 'orca:lazy-chunk-reload-attempted'
+const RELOAD_GUARD_KEY = 'mcode:lazy-chunk-reload-attempted'
 // Reloading reevaluates this fallback, giving the new document a different token.
 const FALLBACK_RELOAD_TOKEN = `doc-${Math.random().toString(36).slice(2)}`
 const DEFAULT_RETRIES = 2

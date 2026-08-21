@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { MCodeRuntimeService } from '../runtime/mcode-runtime'
 import { isLinearProjectListResult } from './ssh-remote-linear-result-guards'
-import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
+import { runRemoteMCodeCli } from './ssh-remote-mcode-cli'
 
 function createRuntime() {
   const runtime = {
@@ -188,20 +188,20 @@ function createRuntime() {
         deduplicated: false
       }
     }))
-  } as unknown as OrcaRuntimeService
+  } as unknown as MCodeRuntimeService
   return runtime
 }
 
-describe('runRemoteOrcaCli Linear commands', () => {
+describe('runRemoteMCodeCli Linear commands', () => {
   it('dispatches Linear issue reads through the remote runtime with SSH context hints', async () => {
     const runtime = createRuntime()
 
-    const result = await runRemoteOrcaCli(runtime, {
+    const result = await runRemoteMCodeCli(runtime, {
       argv: ['linear', 'issue', '--current', '--full', '--json'],
       cwd: '/home/alice/remote-repo',
       env: {
-        ORCA_TERMINAL_HANDLE: 'term_ssh',
-        ORCA_WORKTREE_ID: 'repo::remote'
+        MCODE_TERMINAL_HANDLE: 'term_ssh',
+        MCODE_WORKTREE_ID: 'repo::remote'
       }
     })
 
@@ -226,10 +226,10 @@ describe('runRemoteOrcaCli Linear commands', () => {
   it('accepts leading boolean flags before SSH Linear commands', async () => {
     const runtime = createRuntime()
 
-    const result = await runRemoteOrcaCli(runtime, {
+    const result = await runRemoteMCodeCli(runtime, {
       argv: ['--json', 'linear', 'issue', 'ENG-123', '--full'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(0)
@@ -247,10 +247,10 @@ describe('runRemoteOrcaCli Linear commands', () => {
   it('dispatches Linear search positional queries through the remote runtime', async () => {
     const runtime = createRuntime()
 
-    const result = await runRemoteOrcaCli(runtime, {
+    const result = await runRemoteMCodeCli(runtime, {
       argv: ['linear', 'search', 'auth bug', '--limit', '5', '--workspace', 'all', '--json'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(0)
@@ -269,17 +269,17 @@ describe('runRemoteOrcaCli Linear commands', () => {
   it('dispatches Linear discovery and list reads through the remote runtime', async () => {
     const runtime = createRuntime()
 
-    const teamList = await runRemoteOrcaCli(runtime, {
+    const teamList = await runRemoteMCodeCli(runtime, {
       argv: ['linear', 'team', 'list', '--workspace', 'all', '--json'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
-    const labels = await runRemoteOrcaCli(runtime, {
+    const labels = await runRemoteMCodeCli(runtime, {
       argv: ['linear', 'team', 'labels', '--team', 'ENG', '--workspace', 'workspace-1', '--json'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
-    const list = await runRemoteOrcaCli(runtime, {
+    const list = await runRemoteMCodeCli(runtime, {
       argv: [
         'linear',
         'list',
@@ -294,9 +294,9 @@ describe('runRemoteOrcaCli Linear commands', () => {
         '--json'
       ],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
-    const projects = await runRemoteOrcaCli(runtime, {
+    const projects = await runRemoteMCodeCli(runtime, {
       argv: [
         'linear',
         'project',
@@ -310,7 +310,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
         '--json'
       ],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(teamList.exitCode).toBe(0)
@@ -347,10 +347,10 @@ describe('runRemoteOrcaCli Linear commands', () => {
   it('formats SSH Linear project list in non-json mode', async () => {
     const runtime = createRuntime()
 
-    const result = await runRemoteOrcaCli(runtime, {
+    const result = await runRemoteMCodeCli(runtime, {
       argv: ['linear', 'project', 'list', '--query', 'launch', '--workspace', 'workspace-1'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(0)
@@ -391,12 +391,12 @@ describe('runRemoteOrcaCli Linear commands', () => {
   it('dispatches Linear status writes through the remote runtime with SSH context hints', async () => {
     const runtime = createRuntime()
 
-    const result = await runRemoteOrcaCli(runtime, {
+    const result = await runRemoteMCodeCli(runtime, {
       argv: ['linear', 'status', 'set', 'ENG-123', '--to', 'In Review', '--json'],
       cwd: '/home/alice/remote-repo',
       env: {
-        ORCA_TERMINAL_HANDLE: 'term_ssh',
-        ORCA_WORKTREE_ID: 'repo::remote'
+        MCODE_TERMINAL_HANDLE: 'term_ssh',
+        MCODE_WORKTREE_ID: 'repo::remote'
       }
     })
 
@@ -420,12 +420,12 @@ describe('runRemoteOrcaCli Linear commands', () => {
   it('dispatches Linear task-field writes through the SSH remote runtime', async () => {
     const runtime = createRuntime()
 
-    const result = await runRemoteOrcaCli(runtime, {
+    const result = await runRemoteMCodeCli(runtime, {
       argv: ['linear', 'priority', 'set', 'ENG-123', '--to', 'high', '--json'],
       cwd: '/home/alice/remote-repo',
       env: {
-        ORCA_TERMINAL_HANDLE: 'term_ssh',
-        ORCA_WORKTREE_ID: 'repo::remote'
+        MCODE_TERMINAL_HANDLE: 'term_ssh',
+        MCODE_WORKTREE_ID: 'repo::remote'
       }
     })
 
@@ -445,7 +445,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
   it('dispatches Linear creates with project input through the SSH remote runtime', async () => {
     const runtime = createRuntime()
 
-    const result = await runRemoteOrcaCli(runtime, {
+    const result = await runRemoteMCodeCli(runtime, {
       argv: [
         'linear',
         'create',
@@ -459,8 +459,8 @@ describe('runRemoteOrcaCli Linear commands', () => {
       ],
       cwd: '/home/alice/remote-repo',
       env: {
-        ORCA_TERMINAL_HANDLE: 'term_ssh',
-        ORCA_WORKTREE_ID: 'repo::remote'
+        MCODE_TERMINAL_HANDLE: 'term_ssh',
+        MCODE_WORKTREE_ID: 'repo::remote'
       }
     })
 
@@ -480,12 +480,12 @@ describe('runRemoteOrcaCli Linear commands', () => {
   it('formats SSH Linear creates with project input in non-json mode', async () => {
     const runtime = createRuntime()
 
-    const result = await runRemoteOrcaCli(runtime, {
+    const result = await runRemoteMCodeCli(runtime, {
       argv: ['linear', 'create', '--title', 'Follow-up', '--team', 'ENG', '--project', 'project-1'],
       cwd: '/home/alice/remote-repo',
       env: {
-        ORCA_TERMINAL_HANDLE: 'term_ssh',
-        ORCA_WORKTREE_ID: 'repo::remote'
+        MCODE_TERMINAL_HANDLE: 'term_ssh',
+        MCODE_WORKTREE_ID: 'repo::remote'
       }
     })
 
@@ -497,12 +497,12 @@ describe('runRemoteOrcaCli Linear commands', () => {
   it('parses --me as a boolean for SSH Linear assignee writes', async () => {
     const runtime = createRuntime()
 
-    const result = await runRemoteOrcaCli(runtime, {
+    const result = await runRemoteMCodeCli(runtime, {
       argv: ['linear', 'assignee', 'set', '--me', 'ENG-123', '--json'],
       cwd: '/home/alice/remote-repo',
       env: {
-        ORCA_TERMINAL_HANDLE: 'term_ssh',
-        ORCA_WORKTREE_ID: 'repo::remote'
+        MCODE_TERMINAL_HANDLE: 'term_ssh',
+        MCODE_WORKTREE_ID: 'repo::remote'
       }
     })
 
@@ -522,7 +522,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
   it('preserves repeated labels for SSH Linear label writes', async () => {
     const runtime = createRuntime()
 
-    const result = await runRemoteOrcaCli(runtime, {
+    const result = await runRemoteMCodeCli(runtime, {
       argv: [
         'linear',
         'label',
@@ -535,7 +535,7 @@ describe('runRemoteOrcaCli Linear commands', () => {
         '--json'
       ],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(0)
@@ -554,10 +554,10 @@ describe('runRemoteOrcaCli Linear commands', () => {
   it('formats SSH Linear writes in non-json mode', async () => {
     const runtime = createRuntime()
 
-    const result = await runRemoteOrcaCli(runtime, {
+    const result = await runRemoteMCodeCli(runtime, {
       argv: ['linear', 'comment', 'add', 'ENG-123', '--body', 'Done'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(0)
@@ -568,10 +568,10 @@ describe('runRemoteOrcaCli Linear commands', () => {
   it('dispatches body-file stdin writes in the SSH shim', async () => {
     const runtime = createRuntime()
 
-    const result = await runRemoteOrcaCli(runtime, {
+    const result = await runRemoteMCodeCli(runtime, {
       argv: ['linear', 'comment', 'add', '--current', '--body-file', '-', '--json'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' },
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' },
       stdin: 'line one\nline two\n'
     })
 
@@ -587,10 +587,10 @@ describe('runRemoteOrcaCli Linear commands', () => {
   it('rejects body-file stdin writes when SSH stdin is unavailable', async () => {
     const runtime = createRuntime()
 
-    const result = await runRemoteOrcaCli(runtime, {
+    const result = await runRemoteMCodeCli(runtime, {
       argv: ['linear', 'comment', 'add', '--current', '--body-file', '-', '--json'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(1)
@@ -608,10 +608,10 @@ describe('runRemoteOrcaCli Linear commands', () => {
   it('rejects remote body-file paths in the SSH shim before dispatch', async () => {
     const runtime = createRuntime()
 
-    const result = await runRemoteOrcaCli(runtime, {
+    const result = await runRemoteMCodeCli(runtime, {
       argv: ['linear', 'comment', 'add', '--current', '--body-file', 'body.md', '--json'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(1)
@@ -629,10 +629,10 @@ describe('runRemoteOrcaCli Linear commands', () => {
   it('formats SSH Linear issue reads in non-json mode', async () => {
     const runtime = createRuntime()
 
-    const result = await runRemoteOrcaCli(runtime, {
+    const result = await runRemoteMCodeCli(runtime, {
       argv: ['linear', 'issue', '--current'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(0)
@@ -668,10 +668,10 @@ describe('runRemoteOrcaCli Linear commands', () => {
       }
     })
 
-    const result = await runRemoteOrcaCli(runtime, {
+    const result = await runRemoteMCodeCli(runtime, {
       argv: ['linear', 'search', 'auth'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(0)
@@ -695,10 +695,10 @@ describe('runRemoteOrcaCli Linear commands', () => {
       }
     })
 
-    const result = await runRemoteOrcaCli(runtime, {
+    const result = await runRemoteMCodeCli(runtime, {
       argv: ['linear', 'search', 'auth'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(0)
@@ -713,10 +713,10 @@ describe('runRemoteOrcaCli Linear commands', () => {
     ).linearIssueContext
     linearIssueContext.mockRejectedValueOnce(new Error('Linear is not connected.'))
 
-    const result = await runRemoteOrcaCli(runtime, {
+    const result = await runRemoteMCodeCli(runtime, {
       argv: ['linear', 'issue', '--current'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(1)
@@ -732,14 +732,14 @@ describe('runRemoteOrcaCli Linear commands', () => {
     linearIssueAddComment.mockRejectedValueOnce(
       Object.assign(new Error('Linear may have applied the write.'), {
         code: 'linear_write_unconfirmed',
-        data: { nextSteps: ['Retry once with the pinned command: `orca linear comment add`.'] }
+        data: { nextSteps: ['Retry once with the pinned command: `mcode linear comment add`.'] }
       })
     )
 
-    const result = await runRemoteOrcaCli(runtime, {
+    const result = await runRemoteMCodeCli(runtime, {
       argv: ['linear', 'comment', 'add', 'ENG-123', '--body', 'Done'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(1)
@@ -754,15 +754,15 @@ describe('runRemoteOrcaCli Linear commands', () => {
       runtime as unknown as { linearIssueContext: ReturnType<typeof vi.fn> }
     ).linearIssueContext
 
-    const result = await runRemoteOrcaCli(runtime, {
+    const result = await runRemoteMCodeCli(runtime, {
       argv: ['linear', 'issue', '--help'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(0)
-    expect(result.stdout).toContain('orca linear issue')
-    expect(result.stdout).toContain('Usage: orca linear issue')
+    expect(result.stdout).toContain('mcode linear issue')
+    expect(result.stdout).toContain('Usage: mcode linear issue')
     expect(linearIssueContext).not.toHaveBeenCalled()
   })
 
@@ -772,15 +772,15 @@ describe('runRemoteOrcaCli Linear commands', () => {
       runtime as unknown as { linearIssueContext: ReturnType<typeof vi.fn> }
     ).linearIssueContext
 
-    const result = await runRemoteOrcaCli(runtime, {
+    const result = await runRemoteMCodeCli(runtime, {
       argv: ['linear', '--help'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(0)
-    expect(result.stdout).toContain('orca linear')
-    expect(result.stdout).toContain('Usage: orca linear <command> [options]')
+    expect(result.stdout).toContain('mcode linear')
+    expect(result.stdout).toContain('Usage: mcode linear <command> [options]')
     expect(result.stdout).toContain('search')
     expect(result.stdout).toContain('team list')
     expect(result.stdout).toContain('label set')
@@ -794,31 +794,31 @@ describe('runRemoteOrcaCli Linear commands', () => {
       runtime as unknown as { linearIssueContext: ReturnType<typeof vi.fn> }
     ).linearIssueContext
 
-    const group = await runRemoteOrcaCli(runtime, {
+    const group = await runRemoteMCodeCli(runtime, {
       argv: ['help', 'linear'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
-    const issue = await runRemoteOrcaCli(runtime, {
+    const issue = await runRemoteMCodeCli(runtime, {
       argv: ['help', 'linear', 'issue'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(group.exitCode).toBe(0)
-    expect(group.stdout).toContain('Usage: orca linear <command> [options]')
+    expect(group.stdout).toContain('Usage: mcode linear <command> [options]')
     expect(issue.exitCode).toBe(0)
-    expect(issue.stdout).toContain('Usage: orca linear issue')
+    expect(issue.stdout).toContain('Usage: mcode linear issue')
     expect(linearIssueContext).not.toHaveBeenCalled()
   })
 
   it('rejects ambiguous Linear issue positional and flag ids in the remote shim', async () => {
     const runtime = createRuntime()
 
-    const result = await runRemoteOrcaCli(runtime, {
+    const result = await runRemoteMCodeCli(runtime, {
       argv: ['linear', 'issue', 'ENG-123', '--id', 'ENG-456', '--json'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(1)
@@ -836,10 +836,10 @@ describe('runRemoteOrcaCli Linear commands', () => {
   it('rejects invalid Linear numeric flags in the remote shim', async () => {
     const runtime = createRuntime()
 
-    const result = await runRemoteOrcaCli(runtime, {
+    const result = await runRemoteMCodeCli(runtime, {
       argv: ['linear', 'search', 'auth', '--limit', 'bad', '--json'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(1)
@@ -857,10 +857,10 @@ describe('runRemoteOrcaCli Linear commands', () => {
   it('preserves Linear-specific JSON error codes for pre-dispatch remote shim validation', async () => {
     const runtime = createRuntime()
 
-    const result = await runRemoteOrcaCli(runtime, {
+    const result = await runRemoteMCodeCli(runtime, {
       argv: ['linear', 'issue', 'ENG-123', '--workspace', 'all', '--json'],
       cwd: '/home/alice/remote-repo',
-      env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      env: { MCODE_TERMINAL_HANDLE: 'term_ssh' }
     })
 
     expect(result.exitCode).toBe(1)

@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import {
   createRuntimeDesktopPairingOffer,
   launchPairedWebClient
@@ -16,7 +16,7 @@ type ClientMirror = {
   tabGroups: { id: string; tabOrder: string[] }[]
 }
 
-const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-headed-agent-focus-'))
+const scratch = mkdtempSync(path.join(os.tmpdir(), 'mcode-headed-agent-focus-'))
 const spawnMarkerPath = path.join(scratch, 'agent-spawns.txt')
 const inputMarkerPath = path.join(scratch, 'agent-input.txt')
 const exitTriggerPath = path.join(scratch, 'exit-agent')
@@ -35,9 +35,9 @@ const writableShellScript = path.join(
 
 test.use({
   launchEnv: {
-    ORCA_REPRO_EXIT_TRIGGER: exitTriggerPath,
-    ORCA_REPRO_INPUT_MARKER: inputMarkerPath,
-    ORCA_REPRO_SPAWN_MARKER: spawnMarkerPath
+    MCODE_REPRO_EXIT_TRIGGER: exitTriggerPath,
+    MCODE_REPRO_INPUT_MARKER: inputMarkerPath,
+    MCODE_REPRO_SPAWN_MARKER: spawnMarkerPath
   }
 })
 
@@ -246,22 +246,22 @@ async function launchAgent(
 
 test('headed paired host keeps structured agent focus viewer-local @headful', async ({
   electronApp,
-  orcaPage
+  mcodePage
 }) => {
   test.setTimeout(180_000)
   const override = fixtureCommand(fixtureScript)
-  await orcaPage.evaluate(async (agentCommand) => {
+  await mcodePage.evaluate(async (agentCommand) => {
     const settings = await window.api.settings.set({
       agentCmdOverrides: { codex: agentCommand }
     })
     window.__store?.setState({ settings })
   }, override)
 
-  const offer = await createRuntimeDesktopPairingOffer(orcaPage)
+  const offer = await createRuntimeDesktopPairingOffer(mcodePage)
   const client = await launchPairedWebClient(electronApp, offer)
   let cleanupWorktreeId: string | null = null
   try {
-    const worktreeId = await orcaPage.evaluate(() => {
+    const worktreeId = await mcodePage.evaluate(() => {
       const state = window.__store?.getState()
       if (!state?.activeWorktreeId) {
         throw new Error('Headed host did not select its seeded worktree')
@@ -368,7 +368,7 @@ test('headed paired host keeps structured agent focus viewer-local @headful', as
       .not.toBeNull()
     const legacy = await launchAgent(client.page, {
       ...session,
-      hostPage: orcaPage,
+      hostPage: mcodePage,
       kind: 'fresh',
       activate: false,
       afterTabId: toWebTerminalSurfaceTabId(`${predecessorHostTabId}::${predecessorHostLeafId}`)
@@ -392,26 +392,26 @@ test('headed paired host keeps structured agent focus viewer-local @headful', as
     expectImmediatelyAfter(authoritativeTabOrder, legacy.terminal.tabId, successorHostTabId)
     const freshFocused = await launchAgent(client.page, {
       ...session,
-      hostPage: orcaPage,
+      hostPage: mcodePage,
       kind: 'fresh',
       activate: true
     })
     const freshBackground = await launchAgent(client.page, {
       ...session,
-      hostPage: orcaPage,
+      hostPage: mcodePage,
       kind: 'fresh',
       activate: false
     })
     const resumeFocused = await launchAgent(client.page, {
       ...session,
-      hostPage: orcaPage,
+      hostPage: mcodePage,
       kind: 'resume',
       activate: true,
       providerSessionId: 'headed-focus-resume'
     })
     const resumeBackground = await launchAgent(client.page, {
       ...session,
-      hostPage: orcaPage,
+      hostPage: mcodePage,
       kind: 'resume',
       activate: false,
       providerSessionId: 'headed-background-resume'
@@ -430,7 +430,7 @@ test('headed paired host keeps structured agent focus viewer-local @headful', as
     await expect
       .poll(
         () =>
-          orcaPage.evaluate(async () =>
+          mcodePage.evaluate(async () =>
             (await window.api.pty.listSessions()).map((session) => session.id)
           ),
         { timeout: 15_000 }
@@ -503,7 +503,7 @@ test('headed paired host keeps structured agent focus viewer-local @headful', as
     await expect
       .poll(
         () =>
-          orcaPage.evaluate(
+          mcodePage.evaluate(
             async (ptyIds) =>
               (await window.api.pty.listSessions())
                 .map((session) => session.id)

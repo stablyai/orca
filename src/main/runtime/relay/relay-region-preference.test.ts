@@ -18,7 +18,7 @@ afterEach(() => {
 })
 
 function userDataPath(): string {
-  const path = mkdtempSync(join(tmpdir(), 'orca-relay-region-'))
+  const path = mkdtempSync(join(tmpdir(), 'mcode-relay-region-'))
   tempPaths.push(path)
   return path
 }
@@ -37,7 +37,7 @@ function sampledProbe(samples: Record<string, number[]>) {
 }
 
 function cachePath(path: string): string {
-  return join(path, 'orca-relay-region-preference.json')
+  return join(path, 'mcode-relay-region-preference.json')
 }
 
 describe('Relay region preference', () => {

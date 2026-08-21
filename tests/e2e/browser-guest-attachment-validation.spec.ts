@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { Page } from '@stablyai/playwright-test'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import { ensureTerminalVisible, getActiveWorktreeId, waitForActiveWorktree } from './helpers/store'
 
 type BrowserFixture = {
@@ -15,7 +15,7 @@ async function createBrowserFixture(
   page: Page,
   registerCleanup: (cleanup: () => Promise<void>) => void
 ): Promise<BrowserFixture> {
-  const fixtureDir = mkdtempSync(path.join(os.tmpdir(), 'orca-browser-attachment-'))
+  const fixtureDir = mkdtempSync(path.join(os.tmpdir(), 'mcode-browser-attachment-'))
   registerCleanup(async () => {
     rmSync(fixtureDir, { recursive: true, force: true })
   })
@@ -72,20 +72,20 @@ async function readGuestState(page: Page, browserTabId: string) {
 
 test('resume validation waits for an attaching guest without replacing it', async ({
   electronApp,
-  orcaPage,
+  mcodePage,
   registerPostElectronShutdownCleanup
 }) => {
   const { browserTab, fixtureUrl } = await createBrowserFixture(
-    orcaPage,
+    mcodePage,
     registerPostElectronShutdownCleanup
   )
   await expect
-    .poll(() => readGuestState(orcaPage, browserTab.id))
+    .poll(() => readGuestState(mcodePage, browserTab.id))
     .toMatchObject({ marker: 'painted-attachment-guest', url: fixtureUrl })
-  const before = await readGuestState(orcaPage, browserTab.id)
+  const before = await readGuestState(mcodePage, browserTab.id)
   expect(before.webContentsId).not.toBeNull()
 
-  await orcaPage.evaluate((targetBrowserTabId) => {
+  await mcodePage.evaluate((targetBrowserTabId) => {
     const webview = document.querySelector(
       `[data-browser-overlay-tab-id="${targetBrowserTabId}"] webview`
     ) as Electron.WebviewTag
@@ -106,7 +106,7 @@ test('resume validation waits for an attaching guest without replacing it', asyn
     })
   }, browserTab.id)
 
-  await orcaPage.evaluate(
+  await mcodePage.evaluate(
     (browserPageId) => window.api.browser.unregisterGuest({ browserPageId }),
     browserTab.activePageId
   )
@@ -116,7 +116,7 @@ test('resume validation waits for an attaching guest without replacing it', asyn
   })
   await expect
     .poll(() =>
-      orcaPage.evaluate(
+      mcodePage.evaluate(
         (targetBrowserTabId) =>
           document
             .querySelector(`[data-browser-overlay-tab-id="${targetBrowserTabId}"] webview`)
@@ -125,14 +125,14 @@ test('resume validation waits for an attaching guest without replacing it', asyn
       )
     )
     .toBe('true')
-  await orcaPage.evaluate((targetBrowserTabId) => {
+  await mcodePage.evaluate((targetBrowserTabId) => {
     document
       .querySelector(`[data-browser-overlay-tab-id="${targetBrowserTabId}"] webview`)
       ?.dispatchEvent(new Event('dom-ready'))
   }, browserTab.id)
   await expect
     .poll(() =>
-      orcaPage.evaluate((targetBrowserTabId) => {
+      mcodePage.evaluate((targetBrowserTabId) => {
         const webview = document.querySelector(
           `[data-browser-overlay-tab-id="${targetBrowserTabId}"] webview`
         ) as Electron.WebviewTag | null
@@ -146,7 +146,7 @@ test('resume validation waits for an attaching guest without replacing it', asyn
     .toEqual({ forcedRead: 'true', identity: 'original', successfulRead: 'true' })
 
   await expect
-    .poll(() => readGuestState(orcaPage, browserTab.id))
+    .poll(() => readGuestState(mcodePage, browserTab.id))
     .toMatchObject({
       chromePresent: true,
       marker: 'painted-attachment-guest',
@@ -155,7 +155,7 @@ test('resume validation waits for an attaching guest without replacing it', asyn
     })
   await expect
     .poll(() =>
-      orcaPage.evaluate(
+      mcodePage.evaluate(
         ({ browserPageId, webContentsId }) =>
           window.api.browser.isGuestRegistered({ browserPageId, webContentsId }),
         { browserPageId: browserTab.activePageId, webContentsId: before.webContentsId! }
@@ -164,7 +164,7 @@ test('resume validation waits for an attaching guest without replacing it', asyn
     .toBe(true)
   await expect
     .poll(() =>
-      orcaPage.evaluate(
+      mcodePage.evaluate(
         ({ workspaceId, browserPageId }) =>
           window.__store
             ?.getState()

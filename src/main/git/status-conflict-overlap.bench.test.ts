@@ -27,7 +27,7 @@ import { getStatusOp } from '../../relay/git-handler-status-ops'
 const BENCH_DELAY_MS = 25
 const BENCH_SAMPLES = 31
 const BENCH_WARMUPS = 5
-const describeBench = process.env.ORCA_GIT_STATUS_OVERLAP_BENCH === '1' ? describe : describe.skip
+const describeBench = process.env.MCODE_GIT_STATUS_OVERLAP_BENCH === '1' ? describe : describe.skip
 
 type Deferred<T> = {
   promise: Promise<T>

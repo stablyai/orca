@@ -6,7 +6,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
 import type { Page } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { ensureTerminalVisible, getActiveWorktreeId, waitForActiveWorktree } from './helpers/store'
 
 const execFileAsync = promisify(execFile)
@@ -31,7 +31,7 @@ if (process.platform !== 'win32') {
 }
 
 test.use({
-  orcaAppExtraEnv: {
+  mcodeAppExtraEnv: {
     AGENT_BROWSER_SOCKET_DIR: helperSocketDir,
     PATH: `${path.join(process.cwd(), 'node_modules', '.bin')}${path.delimiter}${process.env.PATH ?? ''}`
   }
@@ -162,7 +162,7 @@ async function stopHelperDaemon(sessionName: string): Promise<void> {
 
 test('stale helper cannot take goto or eval away from the real embedded webview', async ({
   electronApp,
-  orcaPage,
+  mcodePage,
   registerPostElectronShutdownCleanup
 }) => {
   registerPostElectronShutdownCleanup(async () => {
@@ -170,24 +170,24 @@ test('stale helper cannot take goto or eval away from the real embedded webview'
   })
   const server = await startOwnershipServer()
   try {
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-    const worktreeId = await getActiveWorktreeId(orcaPage)
+    await waitForActiveWorktree(mcodePage)
+    await ensureTerminalVisible(mcodePage)
+    const worktreeId = await getActiveWorktreeId(mcodePage)
     if (!worktreeId) {
       throw new Error('Expected an active worktree for the embedded browser smoke test')
     }
-    const browserTab = await createBrowserTab(orcaPage, worktreeId, server.sourceUrl)
+    const browserTab = await createBrowserTab(mcodePage, worktreeId, server.sourceUrl)
 
     await expect
-      .poll(() => readEmbeddedPage(orcaPage, browserTab.id), { timeout: 10_000 })
+      .poll(() => readEmbeddedPage(mcodePage, browserTab.id), { timeout: 10_000 })
       .toMatchObject({ marker: 'source-webview', title: 'Owned source', url: server.sourceUrl })
 
-    const snapshot = await callBrowserRuntime(orcaPage, 'browser.snapshot', {
+    const snapshot = await callBrowserRuntime(mcodePage, 'browser.snapshot', {
       page: browserTab.pageId
     })
     expect(snapshot, JSON.stringify(snapshot)).toMatchObject({ ok: true })
 
-    const sessionName = `orca-tab-${browserTab.pageId}`
+    const sessionName = `mcode-tab-${browserTab.pageId}`
     await expect
       .poll(() => existsSync(path.join(helperSocketDir, `${sessionName}.pid`)), {
         timeout: 5_000
@@ -200,7 +200,7 @@ test('stale helper cannot take goto or eval away from the real embedded webview'
     }, blockedBrowserPath)
     await stopHelperDaemon(sessionName)
 
-    const navigation = await callBrowserRuntime(orcaPage, 'browser.goto', {
+    const navigation = await callBrowserRuntime(mcodePage, 'browser.goto', {
       page: browserTab.pageId,
       url: server.destinationUrl
     })
@@ -210,17 +210,17 @@ test('stale helper cannot take goto or eval away from the real embedded webview'
       result: { url: server.destinationUrl, title: 'Owned destination' }
     })
     await expect
-      .poll(() => readEmbeddedPage(orcaPage, browserTab.id), { timeout: 10_000 })
+      .poll(() => readEmbeddedPage(mcodePage, browserTab.id), { timeout: 10_000 })
       .toMatchObject({
         marker: 'destination-webview',
         title: 'Owned destination',
         url: server.destinationUrl
       })
-    await expect(orcaPage.locator(`[data-tab-id="${browserTab.id}"]`)).toContainText(
+    await expect(mcodePage.locator(`[data-tab-id="${browserTab.id}"]`)).toContainText(
       'Owned destination'
     )
 
-    const evaluation = await callBrowserRuntime(orcaPage, 'browser.eval', {
+    const evaluation = await callBrowserRuntime(mcodePage, 'browser.eval', {
       page: browserTab.pageId,
       expression: 'document.querySelector("#marker")?.textContent'
     })

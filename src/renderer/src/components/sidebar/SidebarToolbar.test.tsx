@@ -111,7 +111,7 @@ describe('SidebarToolbar moved workspace board hint', () => {
 
     expect(onWorkspaceBoardToggle).toHaveBeenCalledOnce()
     expect(container.textContent).not.toContain('Workspace board moved to the bottom bar')
-    expect(window.localStorage.getItem('orca.workspaceBoardMovedHintSeen.v1')).toBeNull()
+    expect(window.localStorage.getItem('mcode.workspaceBoardMovedHintSeen.v1')).toBeNull()
   })
 
   it('shows the moved hint once to users who had already used the workspace board', async () => {
@@ -125,7 +125,7 @@ describe('SidebarToolbar moved workspace board hint', () => {
     const { container } = await renderToolbar()
 
     expect(container.textContent).toContain('Workspace board moved to the bottom bar')
-    expect(window.localStorage.getItem('orca.workspaceBoardMovedHintSeen.v1')).toBe('true')
+    expect(window.localStorage.getItem('mcode.workspaceBoardMovedHintSeen.v1')).toBe('true')
   })
 
   // Why: the toolbar is a React.memo boundary whose props never change on a

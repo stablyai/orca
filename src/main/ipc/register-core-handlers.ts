@@ -3,7 +3,7 @@ import { registerAppHandlers } from './app'
 import { registerCliHandlers } from './cli'
 import { registerPreflightHandlers } from './preflight'
 import type { Store } from '../persistence'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { MCodeRuntimeService } from '../runtime/mcode-runtime'
 import type { StatsCollector } from '../stats/collector'
 import { registerFilesystemHandlers } from './filesystem'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
@@ -53,7 +53,7 @@ import { registerEmulatorFrameStreamHandlers } from './emulator-frame-stream'
 import { registerEmulatorVideoStreamHandlers } from './emulator-video-stream'
 import { registerSpeechHandlers } from './speech'
 import { registerTerminalRenderDesyncEvidenceHandler } from './terminal-render-desync-evidence'
-import { registerOrcaProfileHandlers } from './orca-profiles'
+import { registerMCodeProfileHandlers } from './mcode-profiles'
 import { registerCodexAccountHandlers } from './codex-accounts'
 import { registerAgentHookHandlers } from './agent-hooks'
 import { registerCodexConfigSyncHandlers } from './codex-config-sync'
@@ -95,8 +95,8 @@ let registered = false
 
 type CoreHandlerLifecycleOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
-  onOrcaProfileAuthMutation?: () => void
-  onBeforeOrcaProfileSignOut?: () => void
+  MCodeProfileAuthMutation?: () => void
+  onBeforeMCodeProfileSignOut?: () => void
   getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
   prepareAiVaultSessionResume?: (
     args: AiVaultPrepareSessionResumeArgs
@@ -105,7 +105,7 @@ type CoreHandlerLifecycleOptions = {
 
 export function registerCoreHandlers(
   store: Store,
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   stats: StatsCollector,
   claudeUsage: ClaudeUsageStore,
   codexUsage: CodexUsageStore,
@@ -188,10 +188,10 @@ export function registerCoreHandlers(
     registerPluginHandlers(store, pluginService, runtime, marketplaceServices)
   }
   registerTelemetryHandlers(store)
-  registerOrcaProfileHandlers(store, {
+  registerMCodeProfileHandlers(store, {
     onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch,
-    onAuthMutation: lifecycleOptions.onOrcaProfileAuthMutation,
-    onBeforeSignOut: lifecycleOptions.onBeforeOrcaProfileSignOut
+    onAuthMutation: lifecycleOptions.MCodeProfileAuthMutation,
+    onBeforeSignOut: lifecycleOptions.onBeforeMCodeProfileSignOut
   })
   registerBrowserHandlers()
   registerShellHandlers(store)

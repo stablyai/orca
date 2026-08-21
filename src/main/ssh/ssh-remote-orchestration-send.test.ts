@@ -17,7 +17,7 @@ describe('remote orchestration send compatibility', () => {
     expect(
       resolveRemoteOrchestrationSender(
         new Map([['from', 'term_explicit']]),
-        { ORCA_TERMINAL_HANDLE: 'term_env' },
+        { MCODE_TERMINAL_HANDLE: 'term_env' },
         'worker_done'
       )
     ).toBe('term_explicit')

@@ -1,7 +1,7 @@
 // Argument parsing for `node run.mjs` (crash-survival harness).
 //
 // Unlike win-update-e2e, this harness installs nothing: it drives an ALREADY
-// installed, packaged Orca.exe. So its only source is `--exe-path` (defaulting
+// installed, packaged MCode.exe. So its only source is `--exe-path` (defaulting
 // to the per-user install location). Exactly one profile (--expect) is required.
 
 import { existsSync } from 'node:fs'
@@ -15,13 +15,13 @@ const BOOLEAN_FLAGS = new Set(['--keep-profile'])
 const USAGE = `
 win-crash-survival-e2e — packaged crash-survival proof harness (Windows only)
 
-Proves that force-killing ONLY Orca's main process (a real crash, no tree-kill)
+Proves that force-killing ONLY MCode's main process (a real crash, no tree-kill)
 leaves the detached terminal daemon + its pwsh shell alive, with no pwsh FailFast
 (0xE9 "No process is on the other end of the pipe"), and that a relaunch ADOPTS
 the surviving daemon instead of forking a new one. See #7742.
 
 Usage:
-  node tests/tools/win-crash-survival-e2e/run.mjs --expect <profile> [--exe-path <Orca.exe>] [options]
+  node tests/tools/win-crash-survival-e2e/run.mjs --expect <profile> [--exe-path <MCode.exe>] [options]
 
 Required:
   --expect <profile>       Assertion profile:
@@ -34,8 +34,8 @@ Required:
                              on a fixed build this profile is EXPECTED to fail.
 
 Options:
-  --exe-path <path>        Installed Orca.exe to drive (default: the per-user
-                           install under %LOCALAPPDATA%\\Programs\\Orca). The
+  --exe-path <path>        Installed MCode.exe to drive (default: the per-user
+                           install under %LOCALAPPDATA%\\Programs\\MCode). The
                            harness NEVER installs/uninstalls — it only launches
                            this exe against an isolated userData dir.
   --soak-seconds <n>       Post-crash observation window before relaunch (default: 8)
@@ -52,7 +52,7 @@ export function parseArgs(argv) {
   const opts = {
     // Only auto-locate on win32: off-win32 this would needlessly spawn powershell,
     // and run.mjs asserts win32 first so the platform message wins over any
-    // "no Orca.exe found" default-resolution error.
+    // "no MCode.exe found" default-resolution error.
     exePath:
       takeValue(argv, '--exe-path') ??
       (process.platform === 'win32' ? locateInstalledExe() : undefined) ??
@@ -81,7 +81,7 @@ function validate(opts, exePathFlagPresent, argv) {
     errors.push('--exe-path requires a path value')
   } else if (!opts.exePath) {
     errors.push(
-      'No installed Orca.exe found under %LOCALAPPDATA%\\Programs — pass --exe-path <Orca.exe>'
+      'No installed MCode.exe found under %LOCALAPPDATA%\\Programs — pass --exe-path <MCode.exe>'
     )
   } else if (!existsSync(opts.exePath)) {
     errors.push(`--exe-path does not exist: ${opts.exePath}`)

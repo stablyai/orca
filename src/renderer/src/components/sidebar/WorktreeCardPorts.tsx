@@ -12,7 +12,7 @@ import {
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
   refreshWorkspacePortScanAfterStop,
-  resolvePortOpenInOrcaBrowser
+  resolvePortOpenInMCodeBrowser
 } from '@/lib/workspace-port-actions'
 import { useLocalhostLabelRouteForPort } from '@/lib/workspace-port-localhost-label-selector'
 import { addressForPort } from '@/lib/workspace-port-urls'
@@ -125,7 +125,7 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
       recordFeatureInteraction('ports')
-      const openInOrcaBrowser = resolvePortOpenInOrcaBrowser({
+      const openInMCodeBrowser = resolvePortOpenInMCodeBrowser({
         settings,
         // Why: keyboard activations have detail=0; only pointer clicks carry
         // the modifier intent for the system-browser escape hatch.
@@ -137,7 +137,7 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
         runtimeTarget,
         createBrowserTab,
         setRemoteBrowserPageHandle,
-        openInOrcaBrowser,
+        openInMCodeBrowser,
         localhostLabelRoute
       }).then((result) => {
         if (!result.ok) {

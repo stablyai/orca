@@ -10,11 +10,11 @@ Add-Type -TypeDefinition @"
 using System.Collections;
 using System.Collections.Generic;
 
-public sealed class OrcaRenderTestCounter {
+public sealed class MCodeRenderTestCounter {
     public int FindAll;
 }
 
-public sealed class OrcaRenderTestBounds {
+public sealed class MCodeRenderTestBounds {
     public bool IsEmpty = true;
     public double X;
     public double Y;
@@ -22,34 +22,34 @@ public sealed class OrcaRenderTestBounds {
     public double Height;
 }
 
-public sealed class OrcaRenderTestControlType {
+public sealed class MCodeRenderTestControlType {
     public string ProgrammaticName = "";
 }
 
-public sealed class OrcaRenderTestCurrent {
+public sealed class MCodeRenderTestCurrent {
     public string AutomationId = "";
-    public OrcaRenderTestBounds BoundingRectangle = new OrcaRenderTestBounds();
+    public MCodeRenderTestBounds BoundingRectangle = new MCodeRenderTestBounds();
     public string ClassName = "fake";
-    public OrcaRenderTestControlType ControlType = new OrcaRenderTestControlType();
+    public MCodeRenderTestControlType ControlType = new MCodeRenderTestControlType();
     public bool IsPassword;
     public string LocalizedControlType = "";
     public string Name = "";
     public long NativeWindowHandle;
 }
 
-public sealed class OrcaRenderTestPatternCurrent {
+public sealed class MCodeRenderTestPatternCurrent {
     public bool IsSelected;
     public string Value = "";
 }
 
-public sealed class OrcaRenderTestPattern {
-    public OrcaRenderTestPatternCurrent Current = new OrcaRenderTestPatternCurrent();
+public sealed class MCodeRenderTestPattern {
+    public MCodeRenderTestPatternCurrent Current = new MCodeRenderTestPatternCurrent();
 }
 
-public sealed class OrcaRenderTestCollection : IEnumerable {
-    private readonly OrcaRenderTestElement[] values;
+public sealed class MCodeRenderTestCollection : IEnumerable {
+    private readonly MCodeRenderTestElement[] values;
 
-    public OrcaRenderTestCollection(OrcaRenderTestElement[] values) {
+    public MCodeRenderTestCollection(MCodeRenderTestElement[] values) {
         this.values = values;
     }
 
@@ -57,7 +57,7 @@ public sealed class OrcaRenderTestCollection : IEnumerable {
         get { return values.Length; }
     }
 
-    public OrcaRenderTestElement Item(int index) {
+    public MCodeRenderTestElement Item(int index) {
         return values[index];
     }
 
@@ -66,25 +66,25 @@ public sealed class OrcaRenderTestCollection : IEnumerable {
     }
 }
 
-public sealed class OrcaRenderTestElement {
-    public readonly List<OrcaRenderTestElement> Children =
-        new List<OrcaRenderTestElement>();
-    public OrcaRenderTestCounter Counter = new OrcaRenderTestCounter();
-    public readonly OrcaRenderTestCurrent Current = new OrcaRenderTestCurrent();
+public sealed class MCodeRenderTestElement {
+    public readonly List<MCodeRenderTestElement> Children =
+        new List<MCodeRenderTestElement>();
+    public MCodeRenderTestCounter Counter = new MCodeRenderTestCounter();
+    public readonly MCodeRenderTestCurrent Current = new MCodeRenderTestCurrent();
     public bool FailFindAll;
     public int RuntimeIdValue;
     public string ValueText = "";
 
-    public OrcaRenderTestCollection FindAll(object scope, object condition) {
+    public MCodeRenderTestCollection FindAll(object scope, object condition) {
         Counter.FindAll++;
         if (FailFindAll) {
             throw new System.InvalidOperationException("defunct node");
         }
-        return new OrcaRenderTestCollection(Children.ToArray());
+        return new MCodeRenderTestCollection(Children.ToArray());
     }
 
-    public OrcaRenderTestPattern GetCurrentPattern(object pattern) {
-        OrcaRenderTestPattern result = new OrcaRenderTestPattern();
+    public MCodeRenderTestPattern GetCurrentPattern(object pattern) {
+        MCodeRenderTestPattern result = new MCodeRenderTestPattern();
         result.Current.Value = ValueText;
         return result;
     }
@@ -100,7 +100,7 @@ public sealed class OrcaRenderTestElement {
 "@
 
 function New-TestCounter {
-    New-Object -TypeName OrcaRenderTestCounter
+    New-Object -TypeName MCodeRenderTestCounter
 }
 
 function New-TestElement {
@@ -113,7 +113,7 @@ function New-TestElement {
         [switch]$FailFindAll,
         [int]$RuntimeId = 1
     )
-    $element = New-Object -TypeName OrcaRenderTestElement
+    $element = New-Object -TypeName MCodeRenderTestElement
     $element.Counter = $Counter
     $element.FailFindAll = [bool]$FailFindAll
     $element.RuntimeIdValue = $RuntimeId
@@ -127,7 +127,7 @@ function New-TestElement {
     $element
 }
 
-$operationPath = Join-Path ([IO.Path]::GetTempPath()) ("orca-runtime-render-test-" + [guid]::NewGuid() + ".json")
+$operationPath = Join-Path ([IO.Path]::GetTempPath()) ("mcode-runtime-render-test-" + [guid]::NewGuid() + ".json")
 try {
     Set-Content -LiteralPath $operationPath -Encoding UTF8 -Value '{"tool":"handshake"}'
     $runtimeOutput = . (Join-Path $PSScriptRoot "runtime.ps1") -OperationPath $operationPath
@@ -137,7 +137,7 @@ try {
     $counter = New-TestCounter
     $leaf = New-TestElement -Role "text" -Name "unused" -Counter $counter -RuntimeId 2
     $root = New-TestElement -Role "button" -Name "Save" -Children @($leaf) -Counter $counter
-    $tree = Render-OrcaTree $root $null
+    $tree = Render-MCodeTree $root $null
     Assert-TestEqual $tree.elements.Count 1 "named control record count"
     Assert-TestEqual ([string]$tree.lines[0]) "0 button Save" "named control line"
     Assert-TestEqual $counter.findAll 1 "named control child enumeration"
@@ -145,7 +145,7 @@ try {
     $counter = New-TestCounter
     $leaf = New-TestElement -Role "text" -Name "body" -Counter $counter -RuntimeId 2
     $root = New-TestElement -Role "group" -Name "Details" -Children @($leaf) -Counter $counter
-    $tree = Render-OrcaTree $root $null
+    $tree = Render-MCodeTree $root $null
     Assert-TestEqual (($tree.elements | ForEach-Object { $_.name }) -join "|") "Details|body" "named generic records"
     Assert-TestEqual (@($tree.lines) -join "|") "0 group Details|`t1 text body" "named generic lines"
     Assert-TestEqual $counter.findAll 2 "named generic child enumeration"
@@ -154,7 +154,7 @@ try {
     $alpha = New-TestElement -Role "text" -Name "Alpha" -Counter $counter -RuntimeId 2
     $beta = New-TestElement -Role "text" -Name "Beta" -Counter $counter -RuntimeId 3
     $root = New-TestElement -Role "group" -Children @($alpha, $beta) -Counter $counter
-    $tree = Render-OrcaTree $root $null
+    $tree = Render-MCodeTree $root $null
     Assert-TestEqual $tree.elements.Count 1 "anonymous generic record count"
     Assert-TestEqual ([string]$tree.lines[0]) "0 group, Text: Alpha Beta" "anonymous generic summary"
     Assert-TestEqual $counter.findAll 7 "anonymous generic child enumeration"
@@ -163,7 +163,7 @@ try {
     $alpha = New-TestElement -Role "text" -Name "Alpha" -Counter $counter -RuntimeId 2
     $beta = New-TestElement -Role "text" -Name "Beta" -Counter $counter -RuntimeId 3
     $root = New-TestElement -Role "row" -Name "Invoice" -Children @($alpha, $beta) -Counter $counter
-    $tree = Render-OrcaTree $root $null
+    $tree = Render-MCodeTree $root $null
     Assert-TestEqual (($tree.elements | ForEach-Object { $_.name }) -join "|") "Invoice|Alpha|Beta" "row records"
     Assert-TestEqual ([string]$tree.lines[0]) "0 row Invoice, Text: Alpha Beta" "row summary"
     Assert-TestEqual $counter.findAll 6 "row child enumeration"
@@ -171,14 +171,14 @@ try {
     $counter = New-TestCounter
     $button = New-TestElement -Role "button" -Name "Continue" -Counter $counter -RuntimeId 2
     $root = New-TestElement -Role "group" -Children @($button) -Counter $counter
-    $tree = Render-OrcaTree $root $null
+    $tree = Render-MCodeTree $root $null
     Assert-TestEqual $tree.elements.Count 1 "elided wrapper record count"
     Assert-TestEqual ([string]$tree.lines[0]) "0 button Continue" "elided wrapper line"
     Assert-TestEqual $counter.findAll 4 "elided wrapper child enumeration"
 
     $counter = New-TestCounter
     $root = New-TestElement -Role "row" -Name "Invoice" -Counter $counter -FailFindAll
-    $tree = Render-OrcaTree $root $null
+    $tree = Render-MCodeTree $root $null
     Assert-TestEqual $tree.elements.Count 1 "failed child read record count"
     Assert-TestEqual ([string]$tree.lines[0]) "0 row Invoice" "failed child read line"
     Assert-TestEqual $counter.findAll 2 "failed child read retries"
@@ -192,7 +192,7 @@ try {
             $children += New-TestElement -Role "text" -Name "Item $index" -Counter $counter -RuntimeId ($index + 2)
         }
         $root = New-TestElement -Role "document" -Name "Results" -Children $children -Counter $counter
-        $tree = Render-OrcaTree $root $null
+        $tree = Render-MCodeTree $root $null
         Assert-TestEqual $tree.elements.Count 3 "node limit record count"
         Assert-TestEqual ([string]$tree.elements[-1].name) "Item 1" "node limit prefix"
         Assert-TestEqual $tree.truncation.truncated $true "node limit truncation"
@@ -209,7 +209,7 @@ try {
         for ($depth = 2; $depth -ge 0; $depth--) {
             $root = New-TestElement -Role "document" -Name "Depth $depth" -Children @($root) -Counter $counter -RuntimeId ($depth + 1)
         }
-        $tree = Render-OrcaTree $root $null
+        $tree = Render-MCodeTree $root $null
         Assert-TestEqual $tree.elements.Count 3 "depth limit record count"
         Assert-TestEqual ([string]$tree.elements[-1].name) "Depth 2" "depth limit prefix"
         Assert-TestEqual $tree.truncation.truncated $true "depth limit truncation"

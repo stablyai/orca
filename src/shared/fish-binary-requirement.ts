@@ -7,12 +7,12 @@ import { spawnSync } from 'node:child_process'
  * Why the strictness is configurable: on a developer machine without fish these
  * suites must skip, but the `shell contracts` CI job is a required check whose
  * fish lane is the only end-to-end guard for #9993. There, a skip would report
- * green with nothing exercised, so ORCA_REQUIRE_FISH=1 turns it into a failure.
+ * green with nothing exercised, so MCODE_REQUIRE_FISH=1 turns it into a failure.
  */
 const FISH_CANDIDATES = ['fish', '/opt/homebrew/bin/fish', '/usr/local/bin/fish'] as const
 
 /** Env var CI sets to make a missing or too-old fish fail instead of skip. */
-export const REQUIRE_FISH_ENV_VAR = 'ORCA_REQUIRE_FISH'
+export const REQUIRE_FISH_ENV_VAR = 'MCODE_REQUIRE_FISH'
 
 export type FishBinaryLookup =
   | { available: true; path: string; majorVersion: number }

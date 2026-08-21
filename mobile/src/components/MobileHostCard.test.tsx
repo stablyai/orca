@@ -99,7 +99,7 @@ describe('MobileHostCard', () => {
     })
 
     expect(lines).toContain('Connecting via Relay…')
-    expect(lines).not.toContain(' · Orca Relay')
+    expect(lines).not.toContain(' · MCode Relay')
   })
 
   it('names the relay while a failed direct dial is still retrying', async () => {
@@ -110,7 +110,7 @@ describe('MobileHostCard', () => {
     })
 
     expect(lines).toContain('Connecting via Relay…')
-    expect(lines).not.toContain(' · Orca Relay')
+    expect(lines).not.toContain(' · MCode Relay')
   })
 
   it('leaves an idle disconnected host unlabelled', async () => {
@@ -120,7 +120,7 @@ describe('MobileHostCard', () => {
       path: 'relay'
     })
 
-    expect(lines).not.toContain(' · Orca Relay')
+    expect(lines).not.toContain(' · MCode Relay')
   })
 
   it('does not guess a direct path before the dial resolves', async () => {

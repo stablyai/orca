@@ -71,7 +71,7 @@ function createDispatcher(
 function watcherBatch(count: number): WatcherProcessEvent[] {
   return Array.from({ length: count }, (_, index) => ({
     type: index % 3 === 0 ? 'create' : index % 3 === 1 ? 'update' : 'delete',
-    path: `/Users/dev/workspaces/orca/node_modules/.pnpm/@scope+package@1.2.3/dist/chunk-${String(index).padStart(6, '0')}.js`,
+    path: `/Users/dev/workspaces/mcode/node_modules/.pnpm/@scope+package@1.2.3/dist/chunk-${String(index).padStart(6, '0')}.js`,
     isDirectory: false
   })) as WatcherProcessEvent[]
 }

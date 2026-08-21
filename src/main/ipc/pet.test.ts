@@ -47,7 +47,7 @@ describe('registerPetHandlers', () => {
   const handlers = new Map<string, (event: unknown, ...args: unknown[]) => Promise<unknown>>()
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'orca-pet-test-'))
+    tempDir = await mkdtemp(join(tmpdir(), 'mcode-pet-test-'))
     userDataDir = join(tempDir, 'user-data')
     handlers.clear()
     appGetPathMock.mockReset()

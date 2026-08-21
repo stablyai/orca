@@ -46,10 +46,10 @@ let userDataDir: string
 let previousUserDataPath: string | undefined
 
 beforeEach(() => {
-  tmpHome = mkdtempSync(join(tmpdir(), 'orca-codex-home-'))
-  userDataDir = mkdtempSync(join(tmpdir(), 'orca-codex-user-data-'))
-  previousUserDataPath = process.env.ORCA_USER_DATA_PATH
-  process.env.ORCA_USER_DATA_PATH = userDataDir
+  tmpHome = mkdtempSync(join(tmpdir(), 'mcode-codex-home-'))
+  userDataDir = mkdtempSync(join(tmpdir(), 'mcode-codex-user-data-'))
+  previousUserDataPath = process.env.MCODE_USER_DATA_PATH
+  process.env.MCODE_USER_DATA_PATH = userDataDir
   homedirMock.mockReturnValue(tmpHome)
   getPathMock.mockImplementation((name: string) => {
     if (name === 'userData') {
@@ -63,9 +63,9 @@ afterEach(() => {
   rmSync(tmpHome, { recursive: true, force: true })
   rmSync(userDataDir, { recursive: true, force: true })
   if (previousUserDataPath === undefined) {
-    delete process.env.ORCA_USER_DATA_PATH
+    delete process.env.MCODE_USER_DATA_PATH
   } else {
-    process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+    process.env.MCODE_USER_DATA_PATH = previousUserDataPath
   }
   vi.clearAllMocks()
 })
@@ -149,7 +149,7 @@ describe('codex hook trust write-back promotion', () => {
     )
   })
 
-  it('keeps an in-Orca approval of a user hook across launches and promotes it to ~/.codex', () => {
+  it('keeps an in-MCode approval of a user hook across launches and promotes it to ~/.codex', () => {
     writeSystemUserHook()
     const service = new CodexHookService()
     service.install()
@@ -182,7 +182,7 @@ describe('codex hook trust write-back promotion', () => {
     expect(readFileSync(runtimeTomlPath, 'utf-8')).toBe(runtimeTomlAfterPromotion)
   })
 
-  it('never promotes trust for the Orca-managed status hook into ~/.codex', () => {
+  it('never promotes trust for the MCode-managed status hook into ~/.codex', () => {
     writeSystemUserHook()
     const service = new CodexHookService()
     service.install()
@@ -233,7 +233,7 @@ describe('codex hook trust write-back promotion', () => {
     expect(readSystemToml()).not.toContain('[hooks.state.')
   })
 
-  it('promotes an in-Orca disable of a mirrored user hook back to the system config', () => {
+  it('promotes an in-MCode disable of a mirrored user hook back to the system config', () => {
     writeSystemUserHook()
     const systemTomlPath = join(systemCodexDir(), 'config.toml')
     writeFileSync(systemTomlPath, upsertHookTrustEntriesInContent('', [systemUserStopEntry()]))
@@ -241,7 +241,7 @@ describe('codex hook trust write-back promotion', () => {
     const service = new CodexHookService()
     service.install()
 
-    // User disables the hook via /hooks inside Orca-launched Codex.
+    // User disables the hook via /hooks inside MCode-launched Codex.
     const runtimeTomlPath = join(runtimeHomeDir(), 'config.toml')
     const runtimeToml = readFileSync(runtimeTomlPath, 'utf-8')
     const approvalKey = computeTrustKey(runtimeUserStopEntry())
@@ -268,7 +268,7 @@ describe('codex hook trust write-back promotion', () => {
     const service = new CodexHookService()
     service.install()
 
-    const driftedHash = 'sha256:codex-next-gen-hash-orca-cannot-reproduce'
+    const driftedHash = 'sha256:codex-next-gen-hash-mcode-cannot-reproduce'
     simulateCodexApproval(runtimeUserStopEntry(), { hash: driftedHash })
 
     service.install()
@@ -292,7 +292,7 @@ describe('codex hook trust write-back promotion', () => {
     // build without provenance snapshots, managed hooks only.
     const service = new CodexHookService()
     service.install()
-    rmSync(join(runtimeHomeDir(), '.orca-hook-trust-provenance.json'), { force: true })
+    rmSync(join(runtimeHomeDir(), '.mcode-hook-trust-provenance.json'), { force: true })
 
     service.install()
 
@@ -309,7 +309,7 @@ describe('codex hook trust write-back promotion', () => {
     writeFileSync(systemTomlPath, upsertHookTrustEntriesInContent('', [systemUserStopEntry()]))
     const service = new CodexHookService()
     service.install()
-    rmSync(join(runtimeHomeDir(), '.orca-hook-trust-provenance.json'), { force: true })
+    rmSync(join(runtimeHomeDir(), '.mcode-hook-trust-provenance.json'), { force: true })
     const systemTomlBefore = readSystemToml()
 
     service.install()
@@ -326,7 +326,7 @@ describe('codex hook trust write-back promotion', () => {
     writeFileSync(systemTomlPath, upsertHookTrustEntriesInContent('', [systemUserStopEntry()]))
     const service = new CodexHookService()
     service.install()
-    rmSync(join(runtimeHomeDir(), '.orca-hook-trust-provenance.json'), { force: true })
+    rmSync(join(runtimeHomeDir(), '.mcode-hook-trust-provenance.json'), { force: true })
     writeFileSync(systemTomlPath, '')
 
     service.install()
@@ -347,7 +347,7 @@ describe('codex hook trust write-back promotion', () => {
     writeFileSync(systemTomlPath, upsertHookTrustEntriesInContent('', [systemUserStopEntry()]))
     const service = new CodexHookService()
     service.install()
-    rmSync(join(runtimeHomeDir(), '.orca-hook-trust-provenance.json'), { force: true })
+    rmSync(join(runtimeHomeDir(), '.mcode-hook-trust-provenance.json'), { force: true })
     writeFileSync(
       systemTomlPath,
       upsertHookTrustEntriesInContent('', [{ ...systemUserStopEntry(), enabled: false }])

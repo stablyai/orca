@@ -14,7 +14,7 @@ import {
 const tempDirs: string[] = []
 
 function tempFile(name: string): string {
-  const directory = mkdtempSync(join(tmpdir(), 'orca-agent-state-'))
+  const directory = mkdtempSync(join(tmpdir(), 'mcode-agent-state-'))
   tempDirs.push(directory)
   return join(directory, name)
 }

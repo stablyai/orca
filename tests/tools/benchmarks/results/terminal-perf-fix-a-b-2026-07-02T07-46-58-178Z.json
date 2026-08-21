@@ -282,96 +282,96 @@
       "samples": [
         {
           "index": 0,
-          "worktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo",
-          "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@588e69ce",
+          "worktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo",
+          "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@588e69ce",
           "activationMs": 240,
           "ptyBindMs": 247,
           "paintSettleMs": 254
         },
         {
           "index": 1,
-          "worktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-one",
-          "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-one@@407494c8",
+          "worktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-one",
+          "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-one@@407494c8",
           "activationMs": 423,
           "ptyBindMs": 573,
           "paintSettleMs": 584
         },
         {
           "index": 2,
-          "worktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-two",
-          "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-two@@5d681b07",
+          "worktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-two",
+          "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-two@@5d681b07",
           "activationMs": 355,
           "ptyBindMs": 441,
           "paintSettleMs": 464
         },
         {
           "index": 3,
-          "worktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo",
-          "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@588e69ce",
+          "worktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo",
+          "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@588e69ce",
           "activationMs": 152,
           "ptyBindMs": 177,
           "paintSettleMs": 182
         },
         {
           "index": 4,
-          "worktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-one",
-          "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-one@@407494c8",
+          "worktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-one",
+          "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-one@@407494c8",
           "activationMs": 294,
           "ptyBindMs": 330,
           "paintSettleMs": 341
         },
         {
           "index": 5,
-          "worktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-two",
-          "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-two@@5d681b07",
+          "worktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-two",
+          "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-two@@5d681b07",
           "activationMs": 167,
           "ptyBindMs": 192,
           "paintSettleMs": 200
         },
         {
           "index": 6,
-          "worktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo",
-          "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@588e69ce",
+          "worktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo",
+          "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@588e69ce",
           "activationMs": 141,
           "ptyBindMs": 158,
           "paintSettleMs": 164
         },
         {
           "index": 7,
-          "worktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-one",
-          "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-one@@407494c8",
+          "worktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-one",
+          "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-one@@407494c8",
           "activationMs": 115,
           "ptyBindMs": 139,
           "paintSettleMs": 145
         },
         {
           "index": 8,
-          "worktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-two",
-          "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-two@@5d681b07",
+          "worktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-two",
+          "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-two@@5d681b07",
           "activationMs": 123,
           "ptyBindMs": 147,
           "paintSettleMs": 154
         },
         {
           "index": 9,
-          "worktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo",
-          "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@588e69ce",
+          "worktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo",
+          "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@588e69ce",
           "activationMs": 258,
           "ptyBindMs": 284,
           "paintSettleMs": 294
         },
         {
           "index": 10,
-          "worktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-one",
-          "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-one@@407494c8",
+          "worktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-one",
+          "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-one@@407494c8",
           "activationMs": 153,
           "ptyBindMs": 176,
           "paintSettleMs": 185
         },
         {
           "index": 11,
-          "worktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-two",
-          "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-two@@5d681b07",
+          "worktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-two",
+          "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-two@@5d681b07",
           "activationMs": 123,
           "ptyBindMs": 151,
           "paintSettleMs": 158
@@ -474,7 +474,7 @@
     "hydrationSucceeded": true,
     "activeView": "terminal",
     "activeRepoId": "62e7f2fd-6fb6-446e-bded-2866c26a968e",
-    "activeWorktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-two",
+    "activeWorktreeId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-two",
     "activeTabType": "terminal",
     "activeTabId": "5cf37be5-4f5e-4e6f-a00c-5116e3f6127e",
     "terminalGpuAcceleration": "auto",
@@ -483,13 +483,13 @@
       "62e7f2fd-6fb6-446e-bded-2866c26a968e": 3
     },
     "ptyIdsByTabId": [
-      "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-two@@5d681b07"
+      "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-two@@5d681b07"
     ],
     "paneManagerCount": 3,
     "activePane": {
       "id": 1,
       "leafId": "74365402-0e1f-4d28-b14b-212e48cb4584",
-      "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-two@@5d681b07",
+      "ptyId": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-two@@5d681b07",
       "cols": 175,
       "rows": 73,
       "buffer": {
@@ -600,17 +600,17 @@
     "ptySessions": {
       "value": [
         {
-          "id": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@588e69ce",
+          "id": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@588e69ce",
           "cwd": "",
           "title": "shell"
         },
         {
-          "id": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-one@@407494c8",
+          "id": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-one@@407494c8",
           "cwd": "",
           "title": "shell"
         },
         {
-          "id": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-two@@5d681b07",
+          "id": "62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-two@@5d681b07",
           "cwd": "",
           "title": "shell"
         }
@@ -689,7 +689,7 @@
     },
     {
       "source": "stderr",
-      "line": "[55788:0702/034723.201:INFO:CONSOLE:1080] \"[React Grab] v0.1.34 is outdated (latest: v0.1.47). Run `npx grab@latest upgrade` to upgrade.\", source: http://localhost:5173/@fs/C:/Users/jinwo/orca/workspaces/orca/windows-performance-improvement/node_modules/.vite/deps/react-grab.js?v=43681c89 (1080)",
+      "line": "[55788:0702/034723.201:INFO:CONSOLE:1080] \"[React Grab] v0.1.34 is outdated (latest: v0.1.47). Run `npx grab@latest upgrade` to upgrade.\", source: http://localhost:5173/@fs/C:/Users/jinwo/mcode/workspaces/mcode/windows-performance-improvement/node_modules/.vite/deps/react-grab.js?v=43681c89 (1080)",
       "at": 1782978443201
     },
     {
@@ -784,12 +784,12 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@588e69ce total=1879ms preflight=0ms auth=0ms host_env=50ms options=0ms provider_spawn=1829ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@588e69ce total=1879ms preflight=0ms auth=0ms host_env=50ms options=0ms provider_spawn=1829ms daemon=true reattach=false",
       "at": 1782978450823
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@15f1dbf7 total=1880ms preflight=0ms auth=0ms host_env=55ms options=0ms provider_spawn=1825ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@15f1dbf7 total=1880ms preflight=0ms auth=0ms host_env=55ms options=0ms provider_spawn=1825ms daemon=true reattach=false",
       "at": 1782978450875
     },
     {
@@ -804,7 +804,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@1ee97184 total=118ms preflight=0ms auth=0ms host_env=53ms options=0ms provider_spawn=64ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@1ee97184 total=118ms preflight=0ms auth=0ms host_env=53ms options=0ms provider_spawn=64ms daemon=true reattach=false",
       "at": 1782978451864
     },
     {
@@ -824,7 +824,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@04171bdd total=113ms preflight=0ms auth=0ms host_env=48ms options=0ms provider_spawn=65ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@04171bdd total=113ms preflight=0ms auth=0ms host_env=48ms options=0ms provider_spawn=65ms daemon=true reattach=false",
       "at": 1782978452806
     },
     {
@@ -839,7 +839,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@46952210 total=97ms preflight=0ms auth=0ms host_env=46ms options=0ms provider_spawn=51ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@46952210 total=97ms preflight=0ms auth=0ms host_env=46ms options=0ms provider_spawn=51ms daemon=true reattach=false",
       "at": 1782978453647
     },
     {
@@ -859,12 +859,12 @@
     },
     {
       "source": "stderr",
-      "line": "[55788:0702/034734.488:INFO:CONSOLE:397] \"Tooltip is changing from controlled to uncontrolled. Components should not switch from controlled to uncontrolled (or vice versa). Decide between using a controlled or uncontrolled value for the lifetime of the component.\", source: http://localhost:5173/@fs/C:/Users/jinwo/orca/workspaces/orca/windows-performance-improvement/node_modules/.vite/deps/chunk-22L5D3A7.js?v=43681c89 (397)",
+      "line": "[55788:0702/034734.488:INFO:CONSOLE:397] \"Tooltip is changing from controlled to uncontrolled. Components should not switch from controlled to uncontrolled (or vice versa). Decide between using a controlled or uncontrolled value for the lifetime of the component.\", source: http://localhost:5173/@fs/C:/Users/jinwo/mcode/workspaces/mcode/windows-performance-improvement/node_modules/.vite/deps/chunk-22L5D3A7.js?v=43681c89 (397)",
       "at": 1782978454488
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@c7cc0a5b total=98ms preflight=0ms auth=0ms host_env=45ms options=0ms provider_spawn=53ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@c7cc0a5b total=98ms preflight=0ms auth=0ms host_env=45ms options=0ms provider_spawn=53ms daemon=true reattach=false",
       "at": 1782978454518
     },
     {
@@ -879,7 +879,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@07c16de2 total=110ms preflight=0ms auth=0ms host_env=46ms options=0ms provider_spawn=64ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@07c16de2 total=110ms preflight=0ms auth=0ms host_env=46ms options=0ms provider_spawn=64ms daemon=true reattach=false",
       "at": 1782978455389
     },
     {
@@ -899,7 +899,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@316fcc20 total=96ms preflight=0ms auth=0ms host_env=44ms options=0ms provider_spawn=52ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@316fcc20 total=96ms preflight=0ms auth=0ms host_env=44ms options=0ms provider_spawn=52ms daemon=true reattach=false",
       "at": 1782978456228
     },
     {
@@ -914,7 +914,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@6993e5e7 total=95ms preflight=0ms auth=0ms host_env=39ms options=0ms provider_spawn=56ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@6993e5e7 total=95ms preflight=0ms auth=0ms host_env=39ms options=0ms provider_spawn=56ms daemon=true reattach=false",
       "at": 1782978457082
     },
     {
@@ -929,7 +929,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@56d1407f total=114ms preflight=0ms auth=0ms host_env=47ms options=1ms provider_spawn=66ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@56d1407f total=114ms preflight=0ms auth=0ms host_env=47ms options=1ms provider_spawn=66ms daemon=true reattach=false",
       "at": 1782978457962
     },
     {
@@ -949,7 +949,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@d077bcb8 total=106ms preflight=0ms auth=0ms host_env=43ms options=0ms provider_spawn=63ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@d077bcb8 total=106ms preflight=0ms auth=0ms host_env=43ms options=0ms provider_spawn=63ms daemon=true reattach=false",
       "at": 1782978458358
     },
     {
@@ -964,7 +964,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@f465a9a7 total=118ms preflight=1ms auth=0ms host_env=48ms options=0ms provider_spawn=69ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@f465a9a7 total=118ms preflight=1ms auth=0ms host_env=48ms options=0ms provider_spawn=69ms daemon=true reattach=false",
       "at": 1782978458921
     },
     {
@@ -979,7 +979,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@2223d5a6 total=113ms preflight=0ms auth=0ms host_env=54ms options=0ms provider_spawn=59ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@2223d5a6 total=113ms preflight=0ms auth=0ms host_env=54ms options=0ms provider_spawn=59ms daemon=true reattach=false",
       "at": 1782978459316
     },
     {
@@ -1009,7 +1009,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-one@@407494c8 total=108ms preflight=0ms auth=0ms host_env=48ms options=0ms provider_spawn=60ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-one@@407494c8 total=108ms preflight=0ms auth=0ms host_env=48ms options=0ms provider_spawn=60ms daemon=true reattach=false",
       "at": 1782978466025
     },
     {
@@ -1029,7 +1029,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-two@@5d681b07 total=109ms preflight=0ms auth=0ms host_env=52ms options=0ms provider_spawn=57ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-two@@5d681b07 total=109ms preflight=0ms auth=0ms host_env=52ms options=0ms provider_spawn=57ms daemon=true reattach=false",
       "at": 1782978466535
     },
     {
@@ -1039,20 +1039,20 @@
     }
   ],
   "ptySpawnTimings": [
-    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@588e69ce total=1879ms preflight=0ms auth=0ms host_env=50ms options=0ms provider_spawn=1829ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@15f1dbf7 total=1880ms preflight=0ms auth=0ms host_env=55ms options=0ms provider_spawn=1825ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@1ee97184 total=118ms preflight=0ms auth=0ms host_env=53ms options=0ms provider_spawn=64ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@04171bdd total=113ms preflight=0ms auth=0ms host_env=48ms options=0ms provider_spawn=65ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@46952210 total=97ms preflight=0ms auth=0ms host_env=46ms options=0ms provider_spawn=51ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@c7cc0a5b total=98ms preflight=0ms auth=0ms host_env=45ms options=0ms provider_spawn=53ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@07c16de2 total=110ms preflight=0ms auth=0ms host_env=46ms options=0ms provider_spawn=64ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@316fcc20 total=96ms preflight=0ms auth=0ms host_env=44ms options=0ms provider_spawn=52ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@6993e5e7 total=95ms preflight=0ms auth=0ms host_env=39ms options=0ms provider_spawn=56ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@56d1407f total=114ms preflight=0ms auth=0ms host_env=47ms options=1ms provider_spawn=66ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@d077bcb8 total=106ms preflight=0ms auth=0ms host_env=43ms options=0ms provider_spawn=63ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@f465a9a7 total=118ms preflight=1ms auth=0ms host_env=48ms options=0ms provider_spawn=69ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/repo@@2223d5a6 total=113ms preflight=0ms auth=0ms host_env=54ms options=0ms provider_spawn=59ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-one@@407494c8 total=108ms preflight=0ms auth=0ms host_env=48ms options=0ms provider_spawn=60ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-rrZN7p/wt-two@@5d681b07 total=109ms preflight=0ms auth=0ms host_env=52ms options=0ms provider_spawn=57ms daemon=true reattach=false"
+    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@588e69ce total=1879ms preflight=0ms auth=0ms host_env=50ms options=0ms provider_spawn=1829ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@15f1dbf7 total=1880ms preflight=0ms auth=0ms host_env=55ms options=0ms provider_spawn=1825ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@1ee97184 total=118ms preflight=0ms auth=0ms host_env=53ms options=0ms provider_spawn=64ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@04171bdd total=113ms preflight=0ms auth=0ms host_env=48ms options=0ms provider_spawn=65ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@46952210 total=97ms preflight=0ms auth=0ms host_env=46ms options=0ms provider_spawn=51ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@c7cc0a5b total=98ms preflight=0ms auth=0ms host_env=45ms options=0ms provider_spawn=53ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@07c16de2 total=110ms preflight=0ms auth=0ms host_env=46ms options=0ms provider_spawn=64ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@316fcc20 total=96ms preflight=0ms auth=0ms host_env=44ms options=0ms provider_spawn=52ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@6993e5e7 total=95ms preflight=0ms auth=0ms host_env=39ms options=0ms provider_spawn=56ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@56d1407f total=114ms preflight=0ms auth=0ms host_env=47ms options=1ms provider_spawn=66ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@d077bcb8 total=106ms preflight=0ms auth=0ms host_env=43ms options=0ms provider_spawn=63ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@f465a9a7 total=118ms preflight=1ms auth=0ms host_env=48ms options=0ms provider_spawn=69ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/repo@@2223d5a6 total=113ms preflight=0ms auth=0ms host_env=54ms options=0ms provider_spawn=59ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-one@@407494c8 total=108ms preflight=0ms auth=0ms host_env=48ms options=0ms provider_spawn=60ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=62e7f2fd-6fb6-446e-bded-2866c26a968e::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-rrZN7p/wt-two@@5d681b07 total=109ms preflight=0ms auth=0ms host_env=52ms options=0ms provider_spawn=57ms daemon=true reattach=false"
   ]
 }

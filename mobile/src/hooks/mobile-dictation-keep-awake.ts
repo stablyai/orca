@@ -1,6 +1,6 @@
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
 
-const MOBILE_DICTATION_KEEP_AWAKE_TAG_PREFIX = 'orca-mobile-dictation'
+const MOBILE_DICTATION_KEEP_AWAKE_TAG_PREFIX = 'mcode-mobile-dictation'
 
 // Native keep-awake promises can be lost during Activity teardown; a bounded
 // wait keeps the serialized queue below from wedging dictation until restart.

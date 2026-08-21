@@ -13,7 +13,7 @@ type ImeModifierGestureEvent = ImeKeyboardEvent & {
   shiftKey?: boolean
 }
 
-/** True when the IME, rather than Orca, owns a keyboard event. */
+/** True when the IME, rather than MCode, owns a keyboard event. */
 export function isImeOwnedKeyboardEvent(event: object): boolean {
   const candidate = event as ImeKeyboardEvent
   return (

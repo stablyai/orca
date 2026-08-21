@@ -38,7 +38,7 @@ export function chipTooltip(chip: SkillLocationChip): string {
     case 'newer':
       return translate(
         'auto.components.skills.SkillFreshnessRow.tipNewer',
-        'This copy is a later version than the one this build of Orca ships.'
+        'This copy is a later version than the one this build of MCode ships.'
       )
     case 'unrecognized':
       return translate(
@@ -48,7 +48,7 @@ export function chipTooltip(chip: SkillLocationChip): string {
     case 'inaccessible':
       return translate(
         'auto.components.skills.SkillFreshnessRow.tipInaccessible',
-        'Orca couldn’t read this copy (a permissions or file error).'
+        'MCode couldn’t read this copy (a permissions or file error).'
       )
     case 'duplicate':
       return translate(
@@ -58,7 +58,7 @@ export function chipTooltip(chip: SkillLocationChip): string {
     case 'external-link':
       return translate(
         'auto.components.skills.SkillFreshnessRow.tipExternalLink',
-        'A shortcut pointing outside Orca’s skill folders.'
+        'A shortcut pointing outside MCode’s skill folders.'
       )
     case 'broken-link':
       return translate(

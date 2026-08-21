@@ -64,7 +64,7 @@ export function showLocalBaseRefRefreshToast(
       description: worktreeName
         ? translate(
             'auto.store.slices.worktrees.localBaseRefRefreshFailedDescriptionNamed',
-            'Workspace "{{value0}}" was created from {{value1}}, but Orca could not fast-forward local {{value2}}. {{value3}}',
+            'Workspace "{{value0}}" was created from {{value1}}, but MCode could not fast-forward local {{value2}}. {{value3}}',
             {
               value0: worktreeName,
               value1: result.baseRef,
@@ -74,7 +74,7 @@ export function showLocalBaseRefRefreshToast(
           )
         : translate(
             'auto.store.slices.worktrees.903b51c2ed',
-            'Workspace created from {{value0}}, but Orca could not fast-forward local {{value1}}. {{value2}}',
+            'Workspace created from {{value0}}, but MCode could not fast-forward local {{value1}}. {{value2}}',
             { value0: result.baseRef, value1: result.localBranch, value2: detail }
           ),
       duration: Infinity,

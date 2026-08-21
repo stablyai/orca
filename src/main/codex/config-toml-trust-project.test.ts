@@ -118,7 +118,7 @@ describe('upsertProjectTrustLevel', () => {
   })
 
   it('updates an existing legacy Windows forward-slash project block', () => {
-    // Why: older Orca builds normalized to forward slashes; backslash fixes must not duplicate them.
+    // Why: older MCode builds normalized to forward slashes; backslash fixes must not duplicate them.
     const original = [
       '[projects."C:/Users/nw/repo"]',
       'notes = "keep"',

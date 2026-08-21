@@ -339,14 +339,14 @@ describe('SidebarNav', () => {
     const container = await renderSidebarNav()
 
     expect(queryButtonByText(container, 'Automations')).not.toBeNull()
-    expect(queryButtonByText(container, 'Orca Mobile')).not.toBeNull()
+    expect(queryButtonByText(container, 'MCode Mobile')).not.toBeNull()
 
     await act(async () => {
       await i18n.changeLanguage('zh')
     })
 
     expect(queryButtonByText(container, '自动化')).not.toBeNull()
-    expect(queryButtonByText(container, 'Orca 手机端')).not.toBeNull()
+    expect(queryButtonByText(container, 'MCode 手机端')).not.toBeNull()
   })
 
   it('updates labels when pseudo-localization is enabled after mount', async () => {
@@ -357,12 +357,12 @@ describe('SidebarNav', () => {
     })
 
     expect(queryButtonByText(container, '[Automations]')).not.toBeNull()
-    expect(queryButtonByText(container, '[Orca Mobile]')).not.toBeNull()
+    expect(queryButtonByText(container, '[MCode Mobile]')).not.toBeNull()
   })
 
   it('shows the inline hide control only once a device is paired', async () => {
     const beforePairing = await renderSidebarNav()
-    expect(queryButtonByText(beforePairing, 'Orca Mobile')).not.toBeNull()
+    expect(queryButtonByText(beforePairing, 'MCode Mobile')).not.toBeNull()
     expect(beforePairing.querySelector('button[aria-label="Hide from sidebar"]')).toBeNull()
 
     mocks.hasPairedMobileDevice = true
@@ -371,7 +371,7 @@ describe('SidebarNav', () => {
       'button[aria-label="Hide from sidebar"]'
     )
 
-    expect(queryButtonByText(container, 'Orca Mobile')).not.toBeNull()
+    expect(queryButtonByText(container, 'MCode Mobile')).not.toBeNull()
     expect(hideButton).not.toBeNull()
     expect(hideButton?.querySelector('svg')).not.toBeNull()
 
@@ -419,7 +419,7 @@ describe('SidebarNav', () => {
   it('hides Mobile from its sidebar context menu', async () => {
     const container = await renderSidebarNav()
 
-    const mobileMenu = getButtonByText(container, 'Orca Mobile').closest(
+    const mobileMenu = getButtonByText(container, 'MCode Mobile').closest(
       '[data-testid="context-menu"]'
     )
     expect(mobileMenu).not.toBeNull()

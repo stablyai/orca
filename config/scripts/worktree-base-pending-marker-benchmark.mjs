@@ -8,24 +8,24 @@ import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { createJiti } from 'jiti'
 
-const CANDIDATE_COUNT = Number(process.env.ORCA_PENDING_MARKER_BENCH_CANDIDATES ?? '64')
-const TOTAL_TICKS = Number(process.env.ORCA_PENDING_MARKER_BENCH_TICKS ?? '900')
-const STEADY_TICKS = Number(process.env.ORCA_PENDING_MARKER_BENCH_STEADY_TICKS ?? '300')
+const CANDIDATE_COUNT = Number(process.env.MCODE_PENDING_MARKER_BENCH_CANDIDATES ?? '64')
+const TOTAL_TICKS = Number(process.env.MCODE_PENDING_MARKER_BENCH_TICKS ?? '900')
+const STEADY_TICKS = Number(process.env.MCODE_PENDING_MARKER_BENCH_STEADY_TICKS ?? '300')
 
 for (const [name, value] of [
-  ['ORCA_PENDING_MARKER_BENCH_CANDIDATES', CANDIDATE_COUNT],
-  ['ORCA_PENDING_MARKER_BENCH_TICKS', TOTAL_TICKS],
-  ['ORCA_PENDING_MARKER_BENCH_STEADY_TICKS', STEADY_TICKS]
+  ['MCODE_PENDING_MARKER_BENCH_CANDIDATES', CANDIDATE_COUNT],
+  ['MCODE_PENDING_MARKER_BENCH_TICKS', TOTAL_TICKS],
+  ['MCODE_PENDING_MARKER_BENCH_STEADY_TICKS', STEADY_TICKS]
 ]) {
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer, received ${value}`)
   }
 }
 if (STEADY_TICKS >= TOTAL_TICKS) {
-  throw new Error('ORCA_PENDING_MARKER_BENCH_STEADY_TICKS must be smaller than total ticks')
+  throw new Error('MCODE_PENDING_MARKER_BENCH_STEADY_TICKS must be smaller than total ticks')
 }
 
-const root = await mkdtemp(join(os.tmpdir(), 'orca-pending-marker-bench-'))
+const root = await mkdtemp(join(os.tmpdir(), 'mcode-pending-marker-bench-'))
 const markerPaths = new Set()
 for (let index = 0; index < CANDIDATE_COUNT; index += 1) {
   const candidate = join(root, `ordinary-folder-${index}`)

@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import en from '@/i18n/locales/en.json'
 
 const DISCLOSURE_TITLE = "Google logins aren't imported"
-const DISCLOSURE_DESCRIPTION = 'Sign in to Google directly in Orca.'
+const DISCLOSURE_DESCRIPTION = 'Sign in to Google directly in MCode.'
 
 vi.mock('@/components/ui/dropdown-menu', () => dropdownMenuStubs())
 vi.mock('../ui/dropdown-menu', () => dropdownMenuStubs())

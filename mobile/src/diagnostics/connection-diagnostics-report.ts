@@ -18,9 +18,9 @@ export function buildConnectionDiagnosticsReport(args: {
 }): string {
   const now = args.nowMs ?? Date.now()
   const lines: string[] = []
-  lines.push('Orca Mobile connection diagnostics')
+  lines.push('MCode Mobile connection diagnostics')
   lines.push(`Generated: ${new Date(now).toISOString()}`)
-  lines.push(`App: Orca Mobile ${args.appVersion} · ${args.platform}`)
+  lines.push(`App: MCode Mobile ${args.appVersion} · ${args.platform}`)
   lines.push(`Host: ${args.hostName}`)
   lines.push(
     `Endpoint: ${formatEndpoint(args.endpoint)}${isTailscaleEndpoint(args.endpoint) ? ' (Tailscale)' : ''}`

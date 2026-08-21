@@ -32,7 +32,7 @@ function chunkData(chunk: GrokStartupTraceChunk): string {
  * without another chunk. `null` means the caller's hard timeout wins, which for
  * the main-process path means the draft is dropped entirely.
  *
- * Mirrors the callers in agent-draft-readiness.ts and orca-runtime.ts: the quiet
+ * Mirrors the callers in agent-draft-readiness.ts and mcode-runtime.ts: the quiet
  * timer is re-armed on every chunk that asks for it, a chunk arriving before the
  * deadline cancels it, and the hard timeout outranks both — a marker that lands
  * after it is too late for the real waiters, which have already settled.
@@ -85,7 +85,7 @@ describe('grok startup trace replay (inline mode, no alternate screen)', () => {
   it('still delivers through the quiet window when the marker never anchors', () => {
     // Why: inline grok emits no \x1b[?1049h, so the composer glyph never counts.
     // Anchoring the quiet window on the alt-screen switch too would leave this
-    // launch with NO delivery path — orca-runtime drops the draft when readiness
+    // launch with NO delivery path — mcode-runtime drops the draft when readiness
     // resolves null, so the issue URL would vanish instead of arriving late.
     const readyAt = replayReadyAtMs('grok-composer-prompt', GROK_INLINE_STARTUP_PTY_TRACE)
     expect(readyAt).not.toBeNull()

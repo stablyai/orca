@@ -1,11 +1,11 @@
 import { app } from 'electron'
 import { totalmem } from 'node:os'
 
-const RENDERER_HEAP_ENV_VAR = 'ORCA_RENDERER_HEAP_MB'
+const RENDERER_HEAP_ENV_VAR = 'MCODE_RENDERER_HEAP_MB'
 const BYTES_PER_GIB = 1024 * 1024 * 1024
 // Why: Chromium sizes the renderer's V8 old-space heap from a physical-memory
 // heuristic (~RAM/4), so an 8 GB machine caps the renderer near ~2.2 GB even
-// though V8's pointer-compression cage allows up to ~4 GB. Heavy Orca sessions
+// though V8's pointer-compression cage allows up to ~4 GB. Heavy MCode sessions
 // (many agent terminals × scrollback, PR/git caches, React tree) legitimately
 // reach that low default and V8 aborts with an OOM — the dominant renderer
 // crash in the crash channel. Reclaim the unused headroom up to the 4 GB cage

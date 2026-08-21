@@ -137,7 +137,7 @@ describe('#7329 remote-server snapshot corruption', () => {
 
   it('does not eat the continuation byte when the tail and continuation are contiguous', async () => {
     // The safety property the fix relies on (mirrors the snapshot-seq accounting
-    // in orca-runtime/getOutputAfterSnapshotSeq): the snapshot seq counts the
+    // in mcode-runtime/getOutputAfterSnapshotSeq): the snapshot seq counts the
     // tail bytes, so the FIRST live chunk after the snapshot is the exact
     // continuation and completes the dangling sequence with no eaten byte.
     const emu = new HeadlessEmulator({ cols: 80, rows: 24 })

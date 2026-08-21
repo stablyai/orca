@@ -45,7 +45,7 @@ export function setupContextualCopy({
   const copyHintWidget: editor.IContentWidget = {
     allowEditorOverflow: true,
     suppressMouseDown: true,
-    getId: () => `orca.copy-context-hint.${filePath}`,
+    getId: () => `mcode.copy-context-hint.${filePath}`,
     getDomNode: () => copyHintNode,
     getPosition: () => copyHintWidgetPosition
   }
@@ -257,7 +257,7 @@ export function setupContextualCopy({
 
     // Why: terminal agents only receive pasted plain text. We write the
     // contextual payload at copy time so file and line metadata survives
-    // once the snippet leaves Orca and is pasted into a terminal.
+    // once the snippet leaves MCode and is pasted into a terminal.
     await window.api.ui.writeClipboardText(copiedText)
     // Why: once the user has copied this exact selection, surfacing the
     // affordance again during the confirmation toast reads like duplicate

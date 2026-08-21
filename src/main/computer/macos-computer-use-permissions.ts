@@ -10,7 +10,7 @@ import type {
   ComputerUsePermissionStatusResult
 } from '../../shared/computer-use-permissions-types'
 
-const DEFAULT_COMPUTER_USE_BUNDLE_ID = 'com.stablyai.orca.computer-use'
+const DEFAULT_COMPUTER_USE_BUNDLE_ID = 'com.mcode.desktop.computer-use'
 
 export { getComputerUsePermissionStatus } from './macos-computer-use-permission-status'
 
@@ -40,7 +40,7 @@ async function openComputerUsePermissionsAsync(
 
   const helperAppPath = resolveMacOSComputerUseAppPath()
   if (!helperAppPath) {
-    throw new RuntimeClientError('accessibility_error', 'Orca Computer Use.app was not found')
+    throw new RuntimeClientError('accessibility_error', 'MCode Computer Use.app was not found')
   }
   const status = await getComputerUsePermissionStatus()
   if (status.helperUnavailableReason) {
@@ -99,7 +99,7 @@ async function resetComputerUsePermissionsAsync(): Promise<ComputerUsePermission
 
   const helperAppPath = resolveMacOSComputerUseAppPath()
   if (!helperAppPath) {
-    throw new RuntimeClientError('accessibility_error', 'Orca Computer Use.app was not found')
+    throw new RuntimeClientError('accessibility_error', 'MCode Computer Use.app was not found')
   }
 
   const status = await getComputerUsePermissionStatus()
@@ -122,8 +122,8 @@ function closeExistingPermissionHelpers(): void {
   // Why: status probes use --permission-status-file and must not be killed
   // while setup helpers are being replaced.
   const setupHelperPatterns = [
-    'orca-computer-use-macos[[:space:]]+--permission([[:space:]]|$)',
-    'orca-computer-use-macos[[:space:]]+--permissions([[:space:]]|$)'
+    'mcode-computer-use-macos[[:space:]]+--permission([[:space:]]|$)',
+    'mcode-computer-use-macos[[:space:]]+--permissions([[:space:]]|$)'
   ]
   for (const pattern of setupHelperPatterns) {
     spawnSync('/usr/bin/pkill', ['-f', pattern], {
@@ -171,5 +171,5 @@ function nextPermissionStep(
   if (!missing) {
     return null
   }
-  return `Grant ${missing.id === 'accessibility' ? 'Accessibility' : 'Screen Recording'} to Orca Computer Use, then retry get-app-state.`
+  return `Grant ${missing.id === 'accessibility' ? 'Accessibility' : 'Screen Recording'} to MCode Computer Use, then retry get-app-state.`
 }

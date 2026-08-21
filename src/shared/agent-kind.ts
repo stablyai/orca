@@ -1,4 +1,4 @@
-// Mapping from the renderer's `TuiAgent` union (every agent Orca knows how
+// Mapping from the renderer's `TuiAgent` union (every agent MCode knows how
 // to launch) to the closed `agentKindSchema` enum on telemetry events. Every
 // shipped agent maps to a concrete telemetry value so dashboards can
 // distinguish launch interest instead of collapsing the long tail to `other`.

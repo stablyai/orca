@@ -39,7 +39,7 @@ describe('settings navigation metadata', () => {
       'orchestration',
       'computer-use',
       'voice',
-      'orca-account',
+      'mcode-account',
       'setup-guide',
       'general',
       'integrations',
@@ -105,18 +105,18 @@ describe('settings navigation metadata', () => {
     expect(workflowIds.slice(0, 3)).toEqual(['automations', 'artifacts', 'share-skills'])
   })
 
-  it('places the Orca account in Set Up on desktop only', () => {
+  it('places the MCode account in Set Up on desktop only', () => {
     const desktopSections = buildSettingsNavigationMetadata({
       isMac: false,
       isWindows: false,
       isWebClient: false,
       repos: [repo]
     })
-    const account = desktopSections.find((section) => section.id === 'orca-account')
+    const account = desktopSections.find((section) => section.id === 'mcode-account')
 
     expect(account?.group).toBe('setup')
-    expect(account?.searchEntries[0]?.title).toBe('Orca account')
-    expect(ids({ isWebClient: true })).not.toContain('orca-account')
+    expect(account?.searchEntries[0]?.title).toBe('MCode account')
+    expect(ids({ isWebClient: true })).not.toContain('mcode-account')
   })
 
   it('puts web-safe AI capability panes at the top while hiding desktop-only panes', () => {

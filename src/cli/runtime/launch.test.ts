@@ -21,7 +21,7 @@ vi.mock('child_process', () => ({
   spawn: spawnMock
 }))
 
-import { launchOrcaApp, serveOrcaApp } from './launch'
+import { launchMCodeApp, serveMCodeApp } from './launch'
 
 class FakeChildProcess extends EventEmitter {
   stdout = new EventEmitter()
@@ -40,7 +40,7 @@ const RECIPE_JSON = JSON.stringify({
   }),
   projectRoot: '/workspace/repo'
 })
-const SERVE_INSTALL_STATUS = '[serve] orca CLI install: installed'
+const SERVE_INSTALL_STATUS = '[serve] mcode CLI install: installed'
 const SSH_PRIVATE_KEY = 'TOP-SECRET-PRIVATE-KEY'
 const SSH_AUTHORIZATION = 'Bearer TOP-SECRET-AUTHORIZATION'
 const SSH_PASSPHRASE = 'TOP-SECRET-PASSPHRASE'
@@ -74,27 +74,27 @@ function startRecipeJsonServer() {
   spawnMock.mockReturnValue(child)
   const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
   const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
-  const result = serveOrcaApp({
+  const result = serveMCodeApp({
     recipeJson: true,
     projectRoot: '/workspace/repo'
   })
   return { child, result, stdoutSpy, stderrSpy }
 }
 
-describe('serveOrcaApp', () => {
+describe('serveMCodeApp', () => {
   const temporaryDirectories: string[] = []
 
   beforeEach(() => {
     spawnMock.mockReset()
-    process.env.ORCA_APP_EXECUTABLE = '/Applications/Orca.app/Contents/MacOS/Orca'
+    process.env.MCODE_APP_EXECUTABLE = '/Applications/MCode.app/Contents/MacOS/MCode'
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
-    delete process.env.ORCA_APP_EXECUTABLE
-    delete process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT
-    delete process.env.ORCA_APPIMAGE_NO_SANDBOX
-    delete process.env.ORCA_USER_DATA_PATH
+    delete process.env.MCODE_APP_EXECUTABLE
+    delete process.env.MCODE_APP_EXECUTABLE_NEEDS_APP_ROOT
+    delete process.env.MCODE_APPIMAGE_NO_SANDBOX
+    delete process.env.MCODE_USER_DATA_PATH
     return Promise.all(
       temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true }))
     )
@@ -103,10 +103,10 @@ describe('serveOrcaApp', () => {
   it.runIf(process.platform === 'darwin')(
     'keeps the serve supervisor alive until the installed target version can take ownership',
     async () => {
-      const root = await mkdtemp(join(tmpdir(), 'orca-serve-update-'))
+      const root = await mkdtemp(join(tmpdir(), 'mcode-serve-update-'))
       temporaryDirectories.push(root)
-      const appPath = join(root, 'Orca.app')
-      const executable = join(appPath, 'Contents', 'MacOS', 'Orca')
+      const appPath = join(root, 'MCode.app')
+      const executable = join(appPath, 'Contents', 'MacOS', 'MCode')
       const infoPlistPath = join(appPath, 'Contents', 'Info.plist')
       const userDataPath = join(root, 'user-data')
       await mkdir(join(appPath, 'Contents', 'MacOS'), { recursive: true })
@@ -115,20 +115,20 @@ describe('serveOrcaApp', () => {
         infoPlistPath,
         '<plist><dict><key>CFBundleShortVersionString</key><string>1.0.51</string></dict></plist>'
       )
-      process.env.ORCA_APP_EXECUTABLE = executable
-      process.env.ORCA_USER_DATA_PATH = userDataPath
+      process.env.MCODE_APP_EXECUTABLE = executable
+      process.env.MCODE_USER_DATA_PATH = userDataPath
 
       const oldOwner = new FakeChildProcess()
       const replacementOwner = new FakeChildProcess()
       replacementOwner.pid = 4102
       spawnMock.mockReturnValueOnce(oldOwner).mockReturnValueOnce(replacementOwner)
       let supervisorExited = false
-      const supervisor = serveOrcaApp({ json: true }).then((code) => {
+      const supervisor = serveMCodeApp({ json: true }).then((code) => {
         supervisorExited = true
         return code
       })
       const childEnv = spawnMock.mock.calls[0]?.[2]?.env as NodeJS.ProcessEnv | undefined
-      const handoffPath = childEnv?.ORCA_SERVE_UPDATE_HANDOFF_PATH
+      const handoffPath = childEnv?.MCODE_SERVE_UPDATE_HANDOFF_PATH
       expect(handoffPath).toBeTruthy()
       await writeFile(
         handoffPath!,
@@ -157,7 +157,7 @@ describe('serveOrcaApp', () => {
       await rename(updateAppPath, appPath)
       await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
       replacementOwner.emit('message', {
-        type: 'orca:serve-ready',
+        type: 'mcode:serve-ready',
         version: '1.0.61',
         runtimeId: 'runtime-new'
       })
@@ -172,10 +172,10 @@ describe('serveOrcaApp', () => {
   it.runIf(process.platform === 'darwin')(
     'records a replacement version mismatch without starting a retry loop',
     async () => {
-      const root = await mkdtemp(join(tmpdir(), 'orca-serve-update-mismatch-'))
+      const root = await mkdtemp(join(tmpdir(), 'mcode-serve-update-mismatch-'))
       temporaryDirectories.push(root)
-      const appPath = join(root, 'Orca.app')
-      const executable = join(appPath, 'Contents', 'MacOS', 'Orca')
+      const appPath = join(root, 'MCode.app')
+      const executable = join(appPath, 'Contents', 'MacOS', 'MCode')
       const userDataPath = join(root, 'user-data')
       await mkdir(join(appPath, 'Contents', 'MacOS'), { recursive: true })
       await mkdir(userDataPath, { recursive: true })
@@ -194,17 +194,17 @@ describe('serveOrcaApp', () => {
           servingPid: 4101
         })
       )
-      process.env.ORCA_APP_EXECUTABLE = executable
-      process.env.ORCA_USER_DATA_PATH = userDataPath
+      process.env.MCODE_APP_EXECUTABLE = executable
+      process.env.MCODE_USER_DATA_PATH = userDataPath
       const replacementOwner = new FakeChildProcess()
       replacementOwner.pid = 4102
       spawnMock.mockReturnValue(replacementOwner)
       vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
 
-      const supervisor = serveOrcaApp({ json: true })
+      const supervisor = serveMCodeApp({ json: true })
       await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
       replacementOwner.emit('message', {
-        type: 'orca:serve-ready',
+        type: 'mcode:serve-ready',
         version: '1.0.51',
         runtimeId: 'runtime-old'
       })
@@ -226,10 +226,10 @@ describe('serveOrcaApp', () => {
   it.runIf(process.platform === 'darwin')(
     'records replacement spawn failure before rejecting without a retry loop',
     async () => {
-      const root = await mkdtemp(join(tmpdir(), 'orca-serve-update-spawn-failure-'))
+      const root = await mkdtemp(join(tmpdir(), 'mcode-serve-update-spawn-failure-'))
       temporaryDirectories.push(root)
-      const appPath = join(root, 'Orca.app')
-      const executable = join(appPath, 'Contents', 'MacOS', 'Orca')
+      const appPath = join(root, 'MCode.app')
+      const executable = join(appPath, 'Contents', 'MacOS', 'MCode')
       const userDataPath = join(root, 'user-data')
       await mkdir(join(appPath, 'Contents', 'MacOS'), { recursive: true })
       await mkdir(userDataPath, { recursive: true })
@@ -248,13 +248,13 @@ describe('serveOrcaApp', () => {
           servingPid: 4101
         })
       )
-      process.env.ORCA_APP_EXECUTABLE = executable
-      process.env.ORCA_USER_DATA_PATH = userDataPath
+      process.env.MCODE_APP_EXECUTABLE = executable
+      process.env.MCODE_USER_DATA_PATH = userDataPath
       const replacementOwner = new FakeChildProcess()
       spawnMock.mockReturnValue(replacementOwner)
       vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
 
-      const supervisor = serveOrcaApp({ json: true })
+      const supervisor = serveMCodeApp({ json: true })
       await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
       replacementOwner.emit('error', new Error('spawn ENOENT'))
 
@@ -274,10 +274,10 @@ describe('serveOrcaApp', () => {
     'fails a replacement that never reports runtime readiness without retrying it',
     async () => {
       vi.useFakeTimers()
-      const root = await mkdtemp(join(tmpdir(), 'orca-serve-update-no-readiness-'))
+      const root = await mkdtemp(join(tmpdir(), 'mcode-serve-update-no-readiness-'))
       temporaryDirectories.push(root)
-      const appPath = join(root, 'Orca.app')
-      const executable = join(appPath, 'Contents', 'MacOS', 'Orca')
+      const appPath = join(root, 'MCode.app')
+      const executable = join(appPath, 'Contents', 'MacOS', 'MCode')
       const userDataPath = join(root, 'user-data')
       await mkdir(join(appPath, 'Contents', 'MacOS'), { recursive: true })
       await mkdir(userDataPath, { recursive: true })
@@ -296,14 +296,14 @@ describe('serveOrcaApp', () => {
           servingPid: 4101
         })
       )
-      process.env.ORCA_APP_EXECUTABLE = executable
-      process.env.ORCA_USER_DATA_PATH = userDataPath
+      process.env.MCODE_APP_EXECUTABLE = executable
+      process.env.MCODE_USER_DATA_PATH = userDataPath
       const replacementOwner = new FakeChildProcess()
       spawnMock.mockReturnValue(replacementOwner)
       vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
 
       try {
-        const supervisor = serveOrcaApp({ json: true })
+        const supervisor = serveMCodeApp({ json: true })
         await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
 
         await vi.advanceTimersByTimeAsync(SERVE_REPLACEMENT_READY_TIMEOUT_MS)
@@ -340,10 +340,10 @@ describe('serveOrcaApp', () => {
     }
     spawnMock.mockReturnValue(child)
 
-    await expect(serveOrcaApp({ json: true })).resolves.toBe(0)
+    await expect(serveMCodeApp({ json: true })).resolves.toBe(0)
 
     expect(spawnMock).toHaveBeenCalledWith(
-      '/Applications/Orca.app/Contents/MacOS/Orca',
+      '/Applications/MCode.app/Contents/MacOS/MCode',
       ['--serve', '--serve-json'],
       expect.objectContaining({
         cwd: resolve(__dirname, '../../..')
@@ -366,7 +366,7 @@ describe('serveOrcaApp', () => {
     spawnMock.mockReturnValue(child)
 
     await expect(
-      serveOrcaApp({
+      serveMCodeApp({
         json: true,
         port: '6768',
         pairingAddress: '100.64.1.20',
@@ -375,7 +375,7 @@ describe('serveOrcaApp', () => {
     ).resolves.toBe(0)
 
     expect(spawnMock).toHaveBeenCalledWith(
-      '/Applications/Orca.app/Contents/MacOS/Orca',
+      '/Applications/MCode.app/Contents/MacOS/MCode',
       [
         '--serve',
         '--serve-json',
@@ -392,7 +392,7 @@ describe('serveOrcaApp', () => {
   })
 
   it('preserves an AppImage no-sandbox launch for the server child', async () => {
-    process.env.ORCA_APPIMAGE_NO_SANDBOX = '1'
+    process.env.MCODE_APPIMAGE_NO_SANDBOX = '1'
     const child = {
       kill: vi.fn(),
       once: vi.fn(
@@ -406,20 +406,20 @@ describe('serveOrcaApp', () => {
     }
     spawnMock.mockReturnValue(child)
 
-    await expect(serveOrcaApp({ json: true })).resolves.toBe(0)
+    await expect(serveMCodeApp({ json: true })).resolves.toBe(0)
 
     expect(spawnMock).toHaveBeenCalledWith(
-      '/Applications/Orca.app/Contents/MacOS/Orca',
+      '/Applications/MCode.app/Contents/MacOS/MCode',
       ['--no-sandbox', '--serve', '--serve-json'],
       expect.any(Object)
     )
     const spawnOptions = spawnMock.mock.calls[0]?.[2] as { env?: NodeJS.ProcessEnv }
-    expect(spawnOptions.env).not.toHaveProperty('ORCA_APPIMAGE_NO_SANDBOX')
+    expect(spawnOptions.env).not.toHaveProperty('MCODE_APPIMAGE_NO_SANDBOX')
   })
 
   it('passes the app root before serve flags for dev Electron executables', async () => {
-    process.env.ORCA_APP_EXECUTABLE = '/repo/node_modules/.bin/electron'
-    process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT = '1'
+    process.env.MCODE_APP_EXECUTABLE = '/repo/node_modules/.bin/electron'
+    process.env.MCODE_APP_EXECUTABLE_NEEDS_APP_ROOT = '1'
     const child = {
       kill: vi.fn(),
       once: vi.fn(
@@ -433,7 +433,7 @@ describe('serveOrcaApp', () => {
     }
     spawnMock.mockReturnValue(child)
 
-    await expect(serveOrcaApp({ json: true, port: '6768' })).resolves.toBe(0)
+    await expect(serveMCodeApp({ json: true, port: '6768' })).resolves.toBe(0)
 
     expect(spawnMock).toHaveBeenCalledWith(
       '/repo/node_modules/.bin/electron',
@@ -449,7 +449,7 @@ describe('serveOrcaApp', () => {
     spawnMock.mockReturnValue(child)
     const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
 
-    const result = serveOrcaApp({
+    const result = serveMCodeApp({
       pairingAddress: 'wss://sandbox.example.com',
       recipeJson: true,
       projectRoot: '/workspace/repo'
@@ -461,7 +461,7 @@ describe('serveOrcaApp', () => {
     await expect(result).resolves.toBe(0)
 
     expect(spawnMock).toHaveBeenCalledWith(
-      '/Applications/Orca.app/Contents/MacOS/Orca',
+      '/Applications/MCode.app/Contents/MacOS/MCode',
       [
         '--serve',
         '--serve-pairing-address',
@@ -523,9 +523,9 @@ describe('serveOrcaApp', () => {
     const { child, result, stdoutSpy, stderrSpy } = startRecipeJsonServer()
     const secrets = ['UPPER-SECRET', 'SLASH-SECRET', 'LEGACY-SECRET', 'PRIVATE-SECRET']
     const untrustedLines = [
-      'ORCA://pair?code=UPPER-SECRET',
-      'orca://pair/?code=SLASH-SECRET',
-      'orca://pair#LEGACY-SECRET',
+      'MCODE://pair?code=UPPER-SECRET',
+      'mcode://pair/?code=SLASH-SECRET',
+      'mcode://pair#LEGACY-SECRET',
       '"embedded privateKey PRIVATE-SECRET"',
       '{privateKey:"PRIVATE-SECRET"}'
     ].join('\n')
@@ -537,7 +537,7 @@ describe('serveOrcaApp', () => {
 
     await expect(result).rejects.toMatchObject({
       code: 'runtime_serve_failed',
-      message: 'Orca serve exited before printing valid recipe JSON with code 0.'
+      message: 'MCode serve exited before printing valid recipe JSON with code 0.'
     })
     expect(stdoutSpy).not.toHaveBeenCalled()
     expect(stderrSpy).toHaveBeenCalledTimes(5)
@@ -565,7 +565,7 @@ describe('serveOrcaApp', () => {
   it('uses a shell when a Windows npm command shim is the Electron executable', async () => {
     const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'win32' })
-    process.env.ORCA_APP_EXECUTABLE = 'C:\\repo\\node_modules\\.bin\\electron.cmd'
+    process.env.MCODE_APP_EXECUTABLE = 'C:\\repo\\node_modules\\.bin\\electron.cmd'
     const child = {
       kill: vi.fn(),
       once: vi.fn(
@@ -580,7 +580,7 @@ describe('serveOrcaApp', () => {
     spawnMock.mockReturnValue(child)
 
     try {
-      await expect(serveOrcaApp({ json: true })).resolves.toBe(0)
+      await expect(serveMCodeApp({ json: true })).resolves.toBe(0)
       expect(spawnMock).toHaveBeenCalledWith(
         'C:\\repo\\node_modules\\.bin\\electron.cmd',
         ['--serve', '--serve-json'],
@@ -596,23 +596,23 @@ describe('serveOrcaApp', () => {
   })
 })
 
-describe('launchOrcaApp', () => {
+describe('launchMCodeApp', () => {
   beforeEach(() => {
     spawnMock.mockReset()
   })
 
   afterEach(() => {
-    delete process.env.ORCA_OPEN_COMMAND
-    delete process.env.ORCA_APP_EXECUTABLE
-    delete process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT
+    delete process.env.MCODE_OPEN_COMMAND
+    delete process.env.MCODE_APP_EXECUTABLE
+    delete process.env.MCODE_APP_EXECUTABLE_NEEDS_APP_ROOT
   })
 
   it('handles asynchronous detached spawn errors without throwing', async () => {
-    process.env.ORCA_APP_EXECUTABLE = '/missing/Orca'
+    process.env.MCODE_APP_EXECUTABLE = '/missing/MCode'
     const child = new FakeChildProcess()
     spawnMock.mockReturnValue(child)
 
-    launchOrcaApp()
+    launchMCodeApp()
     child.emit('error', new Error('ENOENT'))
     await Promise.resolve()
 

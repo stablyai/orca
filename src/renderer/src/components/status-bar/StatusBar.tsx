@@ -546,7 +546,7 @@ function getClaudeStatusAccountsFromSettings(
   }
 }
 
-// Why: with a Remote Orca Server, local GlobalSettings describe this desktop, not the owner — the server snapshot wins (#7973).
+// Why: with a Remote MCode Server, local GlobalSettings describe this desktop, not the owner — the server snapshot wins (#7973).
 export function resolveCodexStatusAccountState(
   settings: GlobalSettings | null | undefined,
   runtimeState: CodexRateLimitAccountsState
@@ -1986,7 +1986,7 @@ export function ProviderDetailsMenu({
   )
 }
 
-const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
+const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'mcode-close-all-context-menus'
 
 function useStatusBarMenuFocusHandoff(): {
   reset: () => void
@@ -2093,7 +2093,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     }
     setIsRefreshing(true)
     try {
-      // Why: re-run PATH detection so a freshly-installed/removed CLI's bar appears/hides without restarting Orca.
+      // Why: re-run PATH detection so a freshly-installed/removed CLI's bar appears/hides without restarting MCode.
       await Promise.all([refreshRateLimits(), refreshDetectedAgents()])
     } finally {
       if (mountedRef.current) {
@@ -2424,7 +2424,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                 >
                   <PanelsTopLeft className="size-3.5" />
                   {showFloatingWorkspaceAttentionDot ? (
-                    // Why: amber = Orca's "needs attention" convention; ring matches the fill so the dot reads on the icon.
+                    // Why: amber = MCode's "needs attention" convention; ring matches the fill so the dot reads on the icon.
                     <span
                       aria-hidden
                       data-floating-terminal-attention

@@ -24,7 +24,7 @@ export function createLegacyStorageCutoverFixture(): {
   fixture: LegacyStorageCutoverFixture
   tempDir: string
 } {
-  const tempDir = mkdtempSync(join(tmpdir(), 'orca-legacy-storage-'))
+  const tempDir = mkdtempSync(join(tmpdir(), 'mcode-legacy-storage-'))
   const dbPath = join(tempDir, 'orchestration.db')
   const first = new OrchestrationDb(dbPath)
   const currentRun = first.createRun({
@@ -99,14 +99,14 @@ export function createLegacyStorageCutoverFixture(): {
     to: 'term_legacy_coord',
     subject: 'Rejected heartbeat',
     type: 'heartbeat',
-    payload: JSON.stringify({ _orcaLifecycleRejection: { code: 'migration', reason: 'cutover' } })
+    payload: JSON.stringify({ _mcodeLifecycleRejection: { code: 'migration', reason: 'cutover' } })
   })
   const lookalike = first.insertMessage({
     from: 'term_legacy_worker',
     to: 'term_legacy_coord',
     subject: 'Ordinary legacy mail',
     payload: JSON.stringify({
-      userData: { _orcaLifecycleRejection: { code: 'not-a-top-level-audit-marker' } }
+      userData: { _mcodeLifecycleRejection: { code: 'not-a-top-level-audit-marker' } }
     })
   })
   const malformedRejections = [
@@ -114,45 +114,45 @@ export function createLegacyStorageCutoverFixture(): {
       from: 'term_legacy_worker',
       to: 'term_legacy_coord',
       subject: 'Invalid JSON marker',
-      payload: '{"_orcaLifecycleRejection":'
+      payload: '{"_mcodeLifecycleRejection":'
     }),
     first.insertMessage({
       from: 'term_legacy_worker',
       to: 'term_legacy_coord',
       subject: 'Array marker',
-      payload: JSON.stringify({ _orcaLifecycleRejection: [] })
+      payload: JSON.stringify({ _mcodeLifecycleRejection: [] })
     }),
     first.insertMessage({
       from: 'term_legacy_worker',
       to: 'term_legacy_coord',
       subject: 'String marker',
-      payload: JSON.stringify({ _orcaLifecycleRejection: 'migration' })
+      payload: JSON.stringify({ _mcodeLifecycleRejection: 'migration' })
     }),
     first.insertMessage({
       from: 'term_legacy_worker',
       to: 'term_legacy_coord',
       subject: 'Incomplete marker',
-      payload: JSON.stringify({ _orcaLifecycleRejection: { code: 'migration' } })
+      payload: JSON.stringify({ _mcodeLifecycleRejection: { code: 'migration' } })
     }),
     first.insertMessage({
       from: 'term_legacy_worker',
       to: 'term_legacy_coord',
       subject: 'Non-string marker fields',
-      payload: JSON.stringify({ _orcaLifecycleRejection: { code: 19, reason: false } })
+      payload: JSON.stringify({ _mcodeLifecycleRejection: { code: 19, reason: false } })
     }),
     first.insertMessage({
       from: 'term_legacy_worker',
       to: 'term_legacy_coord',
       subject: 'Array root',
       payload: JSON.stringify([
-        { _orcaLifecycleRejection: { code: 'migration', reason: 'nested' } }
+        { _mcodeLifecycleRejection: { code: 'migration', reason: 'nested' } }
       ])
     }),
     first.insertMessage({
       from: 'term_legacy_worker',
       to: 'term_legacy_coord',
       subject: 'String root',
-      payload: JSON.stringify('_orcaLifecycleRejection')
+      payload: JSON.stringify('_mcodeLifecycleRejection')
     })
   ]
   first.close()

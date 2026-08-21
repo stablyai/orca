@@ -11,7 +11,7 @@ const git = (args: string[], cwd: string): string =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
 
 function createRepo(): string {
-  const repo = mkdtempSync(join(tmpdir(), 'orca-porcelain-v1-'))
+  const repo = mkdtempSync(join(tmpdir(), 'mcode-porcelain-v1-'))
   tempRoots.push(repo)
   git(['init', '-q', '-b', 'main'], repo)
   git(['config', 'user.email', 'test@example.com'], repo)

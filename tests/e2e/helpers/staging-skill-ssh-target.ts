@@ -10,9 +10,9 @@ export type StagingSkillSshTarget = {
 }
 
 export function stagingSkillSshTargetFromEnvironment(): StagingSkillSshTarget | null {
-  const host = process.env.ORCA_E2E_SKILL_SSH_HOST?.trim()
-  const username = process.env.ORCA_E2E_SKILL_SSH_USERNAME?.trim()
-  const identityFile = process.env.ORCA_E2E_SKILL_SSH_IDENTITY_FILE?.trim()
+  const host = process.env.MCODE_E2E_SKILL_SSH_HOST?.trim()
+  const username = process.env.MCODE_E2E_SKILL_SSH_USERNAME?.trim()
+  const identityFile = process.env.MCODE_E2E_SKILL_SSH_IDENTITY_FILE?.trim()
   const configured = [host, username, identityFile].filter(Boolean).length
   if (configured === 0) {
     return null
@@ -20,7 +20,7 @@ export function stagingSkillSshTargetFromEnvironment(): StagingSkillSshTarget | 
   if (configured !== 3 || !host || !username || !identityFile) {
     throw new Error('staging SSH requires host, username, and identity-file environment values')
   }
-  const port = Number(process.env.ORCA_E2E_SKILL_SSH_PORT?.trim() || '22')
+  const port = Number(process.env.MCODE_E2E_SKILL_SSH_PORT?.trim() || '22')
   if (!Number.isInteger(port) || port <= 0 || port > 65_535) {
     throw new Error('staging SSH port is invalid')
   }

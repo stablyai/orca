@@ -7,10 +7,10 @@ import {
 
 describe('serve-mode-argv', () => {
   it('detects --serve and bare serve subcommand', () => {
-    expect(argvRequestsServeMode(['orca', '--serve'])).toBe(true)
+    expect(argvRequestsServeMode(['mcode', '--serve'])).toBe(true)
     expect(argvRequestsServeMode(['/AppRun', 'serve'])).toBe(true)
     expect(argvRequestsServeMode(['/AppRun', '--no-sandbox', 'serve', '--port', '8080'])).toBe(true)
-    expect(argvRequestsServeMode(['orca'])).toBe(false)
+    expect(argvRequestsServeMode(['mcode'])).toBe(false)
   })
 
   it('does not treat serve as a subcommand when it is an option value', () => {
@@ -63,15 +63,15 @@ describe('serve-mode-argv', () => {
     // Why: a false positive here is the expensive direction — the window never opens and a runtime
     // server binds instead. These are the argv shapes the desktop actually receives.
     for (const argv of [
-      ['/Applications/Orca.app/Contents/MacOS/Orca', '-psn_0_123456'],
-      ['C:\\Program Files\\Orca\\Orca.exe', '--squirrel-firstrun'],
-      ['C:\\Program Files\\Orca\\Orca.exe', 'orca://worktree/serve'],
-      ['/opt/orca/orca-ide', '/home/u/serve'],
+      ['/Applications/MCode.app/Contents/MacOS/MCode', '-psn_0_123456'],
+      ['C:\\Program Files\\MCode\\MCode.exe', '--squirrel-firstrun'],
+      ['C:\\Program Files\\MCode\\MCode.exe', 'mcode://worktree/serve'],
+      ['/opt/mcode/mcode-ide', '/home/u/serve'],
       // `--pairing-code` takes the next token, so its value is never the subcommand.
-      ['/opt/orca/orca-ide', '--pairing-code', 'serve'],
-      ['/opt/orca/orca-ide', '--environment=serve'],
-      ['/opt/orca/orca-ide', '--', 'serve'],
-      ['/opt/orca/orca-ide', 'Serve']
+      ['/opt/mcode/mcode-ide', '--pairing-code', 'serve'],
+      ['/opt/mcode/mcode-ide', '--environment=serve'],
+      ['/opt/mcode/mcode-ide', '--', 'serve'],
+      ['/opt/mcode/mcode-ide', 'Serve']
     ]) {
       expect(argvRequestsServeMode(argv), argv.join(' ')).toBe(false)
       expect(normalizeServeModeArgv(argv)).toEqual(argv)
@@ -108,10 +108,10 @@ describe('serve-mode-argv', () => {
   })
 
   it('leaves already-normalized argv unchanged', () => {
-    // Why every value flag: the CLI's own `orca serve` spawns the app with exactly this shape
-    // (serveOrcaApp), and the rewrite now runs over it too — a bad mapping would drop the port here.
+    // Why every value flag: the CLI's own `mcode serve` spawns the app with exactly this shape
+    // (serveMCodeApp), and the rewrite now runs over it too — a bad mapping would drop the port here.
     const argv = [
-      'orca',
+      'mcode',
       '--serve',
       '--serve-json',
       '--serve-port',
@@ -135,8 +135,8 @@ describe('serve-mode-argv', () => {
 
   it('translates serve flags in the mixed `--serve --port` form', () => {
     // Why: leaving these untranslated silently kept pairing enabled despite --no-pairing.
-    expect(normalizeServeModeArgv(['orca', '--serve', '--port', '9090', '--no-pairing'])).toEqual([
-      'orca',
+    expect(normalizeServeModeArgv(['mcode', '--serve', '--port', '9090', '--no-pairing'])).toEqual([
+      'mcode',
       '--serve',
       '--serve-port',
       '9090',
@@ -145,7 +145,7 @@ describe('serve-mode-argv', () => {
   })
 
   it('leaves a non-serve launch untouched', () => {
-    const argv = ['orca', '--no-sandbox', '/home/u/project']
+    const argv = ['mcode', '--no-sandbox', '/home/u/project']
     expect(argvRequestsServeMode(argv)).toBe(false)
     expect(normalizeServeModeArgv(argv)).toEqual(argv)
   })

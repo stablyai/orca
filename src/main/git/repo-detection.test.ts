@@ -26,7 +26,7 @@ describe('isGitRepo', () => {
   let tmpDir: string
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(path.join(tmpdir(), 'orca-repo-detect-'))
+    tmpDir = mkdtempSync(path.join(tmpdir(), 'mcode-repo-detect-'))
   })
 
   afterEach(() => {
@@ -146,9 +146,9 @@ describe('isGitRepo', () => {
     git(realRepo, ['init', '--quiet'])
     git(realRepo, [
       '-c',
-      'user.name=Orca Test',
+      'user.name=MCode Test',
       '-c',
-      'user.email=orca@example.com',
+      'user.email=mcode@example.com',
       'commit',
       '--allow-empty',
       '--message',
@@ -195,7 +195,7 @@ describe('isGitRepo', () => {
   it('rejects a .git file that points at a missing gitdir when git cannot be run', () => {
     const fakeRepo = path.join(tmpDir, 'missing-gitdir')
     mkdirSync(fakeRepo)
-    writeFileSync(path.join(fakeRepo, '.git'), 'gitdir: /missing/orca/gitdir')
+    writeFileSync(path.join(fakeRepo, '.git'), 'gitdir: /missing/mcode/gitdir')
 
     withGitUnavailable(() => {
       expect(isGitRepo(fakeRepo)).toBe(false)
@@ -338,7 +338,7 @@ describe('getLinkedWorktreeMainRepoRoot', () => {
   let tmpDir: string
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(path.join(tmpdir(), 'orca-linked-worktree-'))
+    tmpDir = mkdtempSync(path.join(tmpdir(), 'mcode-linked-worktree-'))
   })
 
   afterEach(() => {
@@ -348,8 +348,8 @@ describe('getLinkedWorktreeMainRepoRoot', () => {
   function initRepoWithCommit(repoRoot: string): void {
     mkdirSync(repoRoot, { recursive: true })
     git(repoRoot, ['init', '--quiet'])
-    git(repoRoot, ['config', 'user.email', 'test@orca.test'])
-    git(repoRoot, ['config', 'user.name', 'Orca Test'])
+    git(repoRoot, ['config', 'user.email', 'test@mcode.test'])
+    git(repoRoot, ['config', 'user.name', 'MCode Test'])
     writeFileSync(path.join(repoRoot, 'README.md'), 'seed\n')
     git(repoRoot, ['add', 'README.md'])
     git(repoRoot, ['commit', '--quiet', '-m', 'seed'])

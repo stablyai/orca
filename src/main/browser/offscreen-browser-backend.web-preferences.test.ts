@@ -20,8 +20,8 @@ describe('OffscreenBrowserBackend web preferences', () => {
     const webPreferencesBlock = sourceBetween(source, 'webPreferences: {', 'partition,')
 
     expect(source).toContain(
-      "import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'"
+      "import { MCODE_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'"
     )
-    expect(webPreferencesBlock).toContain('...ORCA_BROWSER_GUEST_WEB_PREFERENCES')
+    expect(webPreferencesBlock).toContain('...MCODE_BROWSER_GUEST_WEB_PREFERENCES')
   })
 })

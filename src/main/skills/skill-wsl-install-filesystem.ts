@@ -215,7 +215,7 @@ export class WslSkillInstallFilesystem implements SkillInstallFilesystem {
     try {
       const { stdout } = await execFileAsync(
         'wsl.exe',
-        ['-d', this.distro, '--exec', 'sh', '-c', script, 'orca-skill', ...args],
+        ['-d', this.distro, '--exec', 'sh', '-c', script, 'mcode-skill', ...args],
         {
           encoding: 'utf8',
           timeout: GUEST_COMMAND_TIMEOUT_MS,

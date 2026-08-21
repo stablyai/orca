@@ -17,9 +17,9 @@ const REMOTE_TRANSFER_CLEANUP_TIMEOUT_MS = 15_000
 
 function allowedOrigins(allowConfiguredOrigins: boolean): string[] {
   const origins = ['https://storage.googleapis.com']
-  if (allowConfiguredOrigins && process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
+  if (allowConfiguredOrigins && process.env.MCODE_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
     origins.push(
-      ...process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS.split(',')
+      ...process.env.MCODE_SKILL_PACKAGE_DOWNLOAD_ORIGINS.split(',')
         .map((origin) => origin.trim())
         .filter(Boolean)
     )

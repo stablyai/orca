@@ -5,7 +5,7 @@ import {
   redactKagiSessionToken
 } from '../../../../../shared/browser-url'
 import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import { MCODE_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import { translate } from '@/i18n/i18n'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from './browser-page-guest-recovery'
 import { rememberLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
@@ -148,7 +148,7 @@ export function createBrowserPageWebviewLoadingHandlers({
       setAddressBarValue(toDisplayUrl(browserModelUrl))
     }
     onSetUrlRef.current(browserTabId, browserModelUrl)
-    if (keepAddressBarFocusRef.current && currentUrl === ORCA_BROWSER_BLANK_URL) {
+    if (keepAddressBarFocusRef.current && currentUrl === MCODE_BROWSER_BLANK_URL) {
       focusAddressBarNow()
     } else {
       keepAddressBarFocusRef.current = false

@@ -120,7 +120,7 @@ function mapProxyPrefixedStaticPathname(pathname: string): string {
   const assetIndex = pathname.indexOf(assetMarker)
   if (assetIndex !== -1) {
     // Why: reverse proxies may forward the external path prefix through to
-    // Orca. Only the bundled /assets subtree is served after the prefix.
+    // MCode. Only the bundled /assets subtree is served after the prefix.
     return pathname.slice(assetIndex)
   }
   return pathname

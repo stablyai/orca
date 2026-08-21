@@ -137,7 +137,7 @@ describe('createDraftRelease', () => {
       .mockResolvedValueOnce(jsonResponse({ tag_name: 'v1.4.36', draft: true }))
 
     await createDraftRelease({
-      repo: 'stablyai/orca',
+      repo: 'mcode-ide/mcode',
       tag: 'v1.4.36',
       token: 'token',
       fetchImpl,
@@ -146,12 +146,12 @@ describe('createDraftRelease', () => {
 
     expect(fetchImpl).toHaveBeenNthCalledWith(
       1,
-      'https://api.github.com/repos/stablyai/orca/releases?per_page=100&page=1',
+      'https://api.github.com/repos/mcode-ide/mcode/releases?per_page=100&page=1',
       expect.any(Object)
     )
     expect(fetchImpl).toHaveBeenNthCalledWith(
       2,
-      'https://api.github.com/repos/stablyai/orca/releases/generate-notes',
+      'https://api.github.com/repos/mcode-ide/mcode/releases/generate-notes',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({
@@ -163,7 +163,7 @@ describe('createDraftRelease', () => {
     )
     expect(fetchImpl).toHaveBeenNthCalledWith(
       3,
-      'https://api.github.com/repos/stablyai/orca/releases',
+      'https://api.github.com/repos/mcode-ide/mcode/releases',
       expect.objectContaining({
         method: 'POST',
         body: expect.any(String)
@@ -189,7 +189,7 @@ describe('createDraftRelease', () => {
       .mockResolvedValueOnce(jsonResponse({ tag_name: 'v1.4.36-rc.1', draft: true }))
 
     await createDraftRelease({
-      repo: 'stablyai/orca',
+      repo: 'mcode-ide/mcode',
       tag: 'v1.4.36-rc.1',
       token: 'token',
       fetchImpl,
@@ -208,7 +208,7 @@ describe('createDraftRelease', () => {
       .mockResolvedValueOnce(jsonResponse({ tag_name: 'v1.4.36', draft: true }))
 
     await createDraftRelease({
-      repo: 'stablyai/orca',
+      repo: 'mcode-ide/mcode',
       tag: 'v1.4.36',
       token: 'token',
       fetchImpl,
@@ -230,7 +230,7 @@ describe('createDraftRelease', () => {
       .mockResolvedValueOnce(jsonResponse({ tag_name: 'v1.4.36', draft: true }))
 
     await createDraftRelease({
-      repo: 'stablyai/orca',
+      repo: 'mcode-ide/mcode',
       tag: 'v1.4.36',
       token: 'token',
       fetchImpl,
@@ -239,12 +239,12 @@ describe('createDraftRelease', () => {
 
     expect(fetchImpl).toHaveBeenNthCalledWith(
       1,
-      'https://api.github.com/repos/stablyai/orca/releases?per_page=100&page=1',
+      'https://api.github.com/repos/mcode-ide/mcode/releases?per_page=100&page=1',
       expect.any(Object)
     )
     expect(fetchImpl).toHaveBeenNthCalledWith(
       2,
-      'https://api.github.com/repos/stablyai/orca/releases?per_page=100&page=2',
+      'https://api.github.com/repos/mcode-ide/mcode/releases?per_page=100&page=2',
       expect.any(Object)
     )
     const generateNotesBody = JSON.parse(fetchImpl.mock.calls[2][1].body)

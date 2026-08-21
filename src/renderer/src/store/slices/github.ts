@@ -2422,7 +2422,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
     // Why: labels/assignees go through the issue endpoint for both (GitHub PRs are issues for those); title/body split PR→updatePullRequestBySlug vs issue→updateIssueBySlug.
     let envelope: GitHubProjectMutationResult = { ok: true }
-    // Why: slug-only Project rows have no registered Orca repo, so fall back to the view source in the cache key, not the focused host.
+    // Why: slug-only Project rows have no registered MCode repo, so fall back to the view source in the cache key, not the focused host.
     const target = getActiveRuntimeTarget(
       settingsForProjectRowOwner(
         get(),
@@ -2718,7 +2718,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           query: query || undefined,
           ...(options?.noCache ? { noCache: true } : {})
         })
-        // Why: stamp repoId at the fetch boundary so downstream consumers can rely on it — main doesn't know Orca's Repo.id.
+        // Why: stamp repoId at the fetch boundary so downstream consumers can rely on it — main doesn't know MCode's Repo.id.
         const items: GitHubWorkItem[] = envelope.items.map((item) => ({ ...item, repoId }))
         if (options?.requireComplete && (envelope.errors?.issues || envelope.errors?.prs)) {
           throw new Error('GitHub work-item fetch returned a partial result.')

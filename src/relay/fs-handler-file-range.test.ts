@@ -20,7 +20,7 @@ afterEach(async () => {
 })
 
 async function fileWith(contents: Buffer | string): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-relay-range-'))
+  const root = await mkdtemp(join(tmpdir(), 'mcode-relay-range-'))
   roots.push(root)
   const path = join(root, 'data.bin')
   await writeFile(path, contents)
@@ -124,7 +124,7 @@ describe('readRelayFileRange', () => {
   })
 
   it('rejects a missing file', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-relay-range-missing-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-relay-range-missing-'))
     roots.push(root)
     await expect(readRelayFileRange(join(root, 'nope.bin'), 0, 4)).rejects.toThrow()
   })

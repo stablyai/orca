@@ -29,13 +29,13 @@ describe('getDeleteWorktreeToastCopy', () => {
     ).toEqual({
       title: 'Failed to delete workspace feature/foo',
       description:
-        'Orca could not confirm every terminal in this workspace has exited, so it stopped before deleting any files. Use Force Delete to remove it anyway.',
+        'MCode could not confirm every terminal in this workspace has exited, so it stopped before deleting any files. Use Force Delete to remove it anyway.',
       isDestructive: false
     })
   })
 
   // Why: Force Delete proceeds on a proven-live PTY too, so the copy must not describe
-  // that as an unconfirmed exit — the user is killing a terminal Orca watched running.
+  // that as an unconfirmed exit — the user is killing a terminal MCode watched running.
   it('names the running terminals when verification proved they are still live', () => {
     expect(
       toastCopyForRemovalError(
@@ -45,7 +45,7 @@ describe('getDeleteWorktreeToastCopy', () => {
     ).toEqual({
       title: 'Failed to delete workspace feature/foo',
       description:
-        'This workspace still has running terminals, so Orca stopped before deleting any files. Force Delete will kill them and discard any uncommitted work they hold.',
+        'This workspace still has running terminals, so MCode stopped before deleting any files. Force Delete will kill them and discard any uncommitted work they hold.',
       isDestructive: false
     })
   })
@@ -61,7 +61,7 @@ describe('getDeleteWorktreeToastCopy', () => {
     ).toEqual({
       title: 'Failed to delete workspace feature/foo',
       description:
-        'Orca could not confirm every terminal in this workspace has exited, so it stopped before deleting any files. Use Force Delete to remove it anyway.',
+        'MCode could not confirm every terminal in this workspace has exited, so it stopped before deleting any files. Use Force Delete to remove it anyway.',
       isDestructive: false
     })
   })
@@ -77,7 +77,7 @@ describe('getDeleteWorktreeToastCopy', () => {
     ).toEqual({
       title: 'Failed to delete workspace feature/foo',
       description:
-        'Orca could not confirm every terminal in this workspace has exited, so it stopped before deleting any files. Use Force Delete to remove it anyway.',
+        'MCode could not confirm every terminal in this workspace has exited, so it stopped before deleting any files. Use Force Delete to remove it anyway.',
       isDestructive: false
     })
   })
@@ -106,7 +106,7 @@ describe('getDeleteWorktreeToastCopy', () => {
       )
     ).toEqual({
       title: 'Failed to delete workspace feature/foo',
-      description: 'Git already removed this workspace. Use Force Delete to clear it from Orca.',
+      description: 'Git already removed this workspace. Use Force Delete to clear it from MCode.',
       isDestructive: false
     })
   })

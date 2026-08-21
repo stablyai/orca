@@ -55,7 +55,7 @@ const LIVE = 'repo-gone::/workspace/live'
 
 describe('worktree removal across host session partitions', () => {
   beforeEach(() => {
-    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+    testState.dir = mkdtempSync(join(tmpdir(), 'mcode-test-'))
   })
 
   afterEach(() => {

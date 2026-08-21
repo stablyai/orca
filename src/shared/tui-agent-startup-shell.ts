@@ -1,10 +1,10 @@
 import { tokenizeCustomCommandTemplate, type CommandTokenSpan } from './commit-message-prompt'
 
 /**
- * `'posix'` covers every Unix shell Orca can type into, fish included — not
+ * `'posix'` covers every Unix shell MCode can type into, fish included — not
  * because they agree, but because everything this module emits for it is built
  * to be correct in all of them (see quoteStartupArg and clearEnvCommand). There
- * is deliberately no fish member: a dialect Orca has to detect is a dialect it
+ * is deliberately no fish member: a dialect MCode has to detect is a dialect it
  * can get wrong, and it cannot detect one reliably for a remote or WSL host.
  */
 export type AgentStartupShell = 'posix' | 'powershell' | 'cmd'
@@ -152,7 +152,7 @@ export function tokenizeStartupCommand(
   value: string,
   shell: AgentStartupShell
 ): StartupCommandTokens {
-  // Why one Unix parse: the input is a string the user typed into an Orca
+  // Why one Unix parse: the input is a string the user typed into an MCode
   // settings field, and the shell never parses it — every token is re-quoted by
   // quoteStartupArg before the line is built. Parsing it differently per shell
   // would make the same setting mean different things in different workspaces.
@@ -170,7 +170,7 @@ export function resolveStartupShell(
 }
 
 /**
- * Quotes one argument so the SAME text is literal in every Unix shell Orca can
+ * Quotes one argument so the SAME text is literal in every Unix shell MCode can
  * be typing into — sh, bash, zsh, dash and fish.
  *
  * Why not plain sh quoting: fish's single quotes are not literal. Inside `'…'`
@@ -181,7 +181,7 @@ export function resolveStartupShell(
  * Both shell families agree on two things: a single-quoted run is literal apart
  * from those escapes, and `"\\"` is one backslash. So emitting backslashes as
  * `"\\"` and apostrophes as `"'"` between single-quoted runs round-trips in all
- * of them, and Orca never has to know which shell will read the line.
+ * of them, and MCode never has to know which shell will read the line.
  *
  * Verified against sh, bash, zsh, dash and fish 4.7.1 over regex escapes, UNC
  * and drive paths, trailing/lone backslashes, mixed quotes, `$`/backtick/`$()`
@@ -244,10 +244,10 @@ export function buildShellCommandFromArgv(
  * does not exist in fish, and `set -e` in bash enables errexit rather than
  * clearing anything, so neither spelling is safe alone.
  *
- * Why not a helper function defined by Orca's shell wrappers: Orca only wraps
+ * Why not a helper function defined by MCode's shell wrappers: MCode only wraps
  * zsh, bash and fish. A login shell of `sh`, `dash` or `ksh` launches
  * UNWRAPPED, and this text is also copied to the clipboard and pasted into
- * shells Orca never spawned — in all of those a helper would be `command not
+ * shells MCode never spawned — in all of those a helper would be `command not
  * found`, which is the exact failure this exists to avoid.
  *
  * Why two statements rather than `A && B || C`: in fish, `set -e` on a variable
@@ -277,7 +277,7 @@ export function buildShellCommandFromArgv(
  * only as a UNIVERSAL — `set -Ux CODEX_HOME …`, a perfectly normal thing for a
  * fish user to have — is permanently deleted from every future session. That is
  * real data loss to undo one launch's injection, and it is reachable from the
- * clipboard command, which a user may run with no Orca-injected value at all.
+ * clipboard command, which a user may run with no MCode-injected value at all.
  * With `-g`, a universal shadowed by an injected global is revealed again
  * instead, which is the wanted outcome.
  *

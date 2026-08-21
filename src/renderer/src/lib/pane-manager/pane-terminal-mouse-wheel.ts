@@ -18,7 +18,7 @@ export {
 export type { TerminalTuiMouseWheelDistanceState } from './pane-terminal-tui-wheel-reports'
 
 const XTERM_MOUSE_REPORTING_CLASS = 'enable-mouse-events'
-const REPLAYED_WHEEL_EVENT_PROPERTY = '__orcaReplayedTerminalWheelEvent'
+const REPLAYED_WHEEL_EVENT_PROPERTY = '__mcodeReplayedTerminalWheelEvent'
 const DOM_DELTA_LINE = 1
 
 type TerminalWheelTarget = Pick<Terminal, 'attachCustomWheelEventHandler' | 'element' | 'rows'> & {

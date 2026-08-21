@@ -111,7 +111,7 @@ function agent(overrides: Partial<RuntimeWorktreeAgentRow> = {}): RuntimeWorktre
 
 const baseItem: TestItem = {
   worktreeId: 'worktree-1',
-  repo: 'orca',
+  repo: 'mcode',
   branch: 'feature/mobile-list',
   displayName: 'mobile-list',
   liveTerminalCount: 1,

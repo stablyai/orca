@@ -25,7 +25,7 @@ describe('useInstalledPluginRouteReconciliation', () => {
     const root = createRoot(container)
     roots.push(root)
     const setStoredTab = vi.fn()
-    const storedTab = 'plugin:orca-samples.removed/dashboard' as const
+    const storedTab = 'plugin:mcode-samples.removed/dashboard' as const
     const Harness = ({ fetchStatus }: { fetchStatus: PluginPanelsFetchStatus }) => {
       useInstalledPluginRouteReconciliation({
         pluginSystemEnabled: true,
@@ -51,7 +51,7 @@ describe('useInstalledPluginRouteReconciliation', () => {
     const root = createRoot(container)
     roots.push(root)
     const setStoredTab = vi.fn()
-    const storedTab = 'plugin:orca-samples.present/dashboard' as const
+    const storedTab = 'plugin:mcode-samples.present/dashboard' as const
     const Harness = () => {
       useInstalledPluginRouteReconciliation({
         pluginSystemEnabled: true,
@@ -73,7 +73,7 @@ describe('useInstalledPluginRouteReconciliation', () => {
     const root = createRoot(container)
     roots.push(root)
     const setStoredTab = vi.fn()
-    const storedTab = 'plugin:orca-samples.present/dashboard' as const
+    const storedTab = 'plugin:mcode-samples.present/dashboard' as const
     const Harness = () => {
       useInstalledPluginRouteReconciliation({
         pluginSystemEnabled: false,

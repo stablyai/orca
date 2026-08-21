@@ -6,7 +6,7 @@ export type RendererRecoveryCircuitBreakerOptions = {
 }
 
 // Why: a deterministic per-load renderer fault (bad GPU driver, corrupt chunk,
-// AV interference) crashes on every load. Orca auto-reloads recoverable
+// AV interference) crashes on every load. MCode auto-reloads recoverable
 // renderer deaths, so without a breaker it reloads every ~0.25-1.3s forever,
 // burning CPU and spamming breadcrumbs (Windows clusters F0BDRAZN55L /
 // F0BDPCL93UM). 3 reloads in 60s is well above any single transient crash but

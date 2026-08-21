@@ -96,7 +96,7 @@ describe('skill sharing CLI handlers', () => {
         result: {
           status: 'ok',
           value: {
-            share: { id: 'shr_public', url: 'https://share.onorca.dev/skills/share/shr_public' },
+            share: { id: 'shr_public', url: 'https://share.mcode.dev/skills/share/shr_public' },
             version: {
               packageId: 'pkg_public',
               versionId: 'ver_public',
@@ -155,7 +155,7 @@ describe('skill sharing CLI handlers', () => {
         result: {
           status: 'ok',
           value: {
-            share: { id: 'shr_public', url: 'https://share.onorca.dev/skills/share/shr_public' },
+            share: { id: 'shr_public', url: 'https://share.mcode.dev/skills/share/shr_public' },
             version: {
               packageId: 'pkg_public',
               versionId: 'ver_public',
@@ -215,7 +215,7 @@ describe('skill sharing CLI handlers', () => {
     ['a paired runtime', true, undefined]
   ])('rejects %s before any discovery or publish call', async (_label, isRemote, forwardedCwd) => {
     if (forwardedCwd) {
-      vi.stubEnv('ORCA_CLI_CWD', forwardedCwd)
+      vi.stubEnv('MCODE_CLI_CWD', forwardedCwd)
     }
     const call = vi.fn()
 

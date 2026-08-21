@@ -19,16 +19,16 @@ export function prepareDevCliTerminalWrappers({
   mkdirSync(userDataBinDir, { recursive: true })
 
   if (platform === 'win32') {
-    const wrapperContent = `@echo off\r\nset "ORCA_USER_DATA_PATH=${escapeWindowsBatchValue(userDataPath)}"\r\nset "ORCA_DEV_CLI_INVOCATION=1"\r\nset "ORCA_APP_EXECUTABLE=${escapeWindowsBatchValue(electronExecutable)}"\r\nset "ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT=1"\r\nnode "${escapeWindowsBatchValue(cliPath)}" %*\r\n`
+    const wrapperContent = `@echo off\r\nset "MCODE_USER_DATA_PATH=${escapeWindowsBatchValue(userDataPath)}"\r\nset "MCODE_DEV_CLI_INVOCATION=1"\r\nset "MCODE_APP_EXECUTABLE=${escapeWindowsBatchValue(electronExecutable)}"\r\nset "MCODE_APP_EXECUTABLE_NEEDS_APP_ROOT=1"\r\nnode "${escapeWindowsBatchValue(cliPath)}" %*\r\n`
     for (const targetDir of [binDir, userDataBinDir]) {
-      for (const commandName of ['orca-dev.cmd', 'orca.cmd']) {
+      for (const commandName of ['mcode-dev.cmd', 'mcode.cmd']) {
         writeFileSync(path.join(targetDir, commandName), wrapperContent, 'utf8')
       }
     }
   } else {
-    const wrapperContent = `#!/usr/bin/env bash\nexport ORCA_USER_DATA_PATH=${JSON.stringify(userDataPath)}\nexport ORCA_DEV_CLI_INVOCATION=1\nexport ORCA_APP_EXECUTABLE=${JSON.stringify(electronExecutable)}\nexport ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT=1\nexec node ${JSON.stringify(cliPath)} "$@"\n`
+    const wrapperContent = `#!/usr/bin/env bash\nexport MCODE_USER_DATA_PATH=${JSON.stringify(userDataPath)}\nexport MCODE_DEV_CLI_INVOCATION=1\nexport MCODE_APP_EXECUTABLE=${JSON.stringify(electronExecutable)}\nexport MCODE_APP_EXECUTABLE_NEEDS_APP_ROOT=1\nexec node ${JSON.stringify(cliPath)} "$@"\n`
     for (const targetDir of [binDir, userDataBinDir]) {
-      for (const commandName of ['orca-dev', 'orca']) {
+      for (const commandName of ['mcode-dev', 'mcode']) {
         const wrapperPath = path.join(targetDir, commandName)
         writeFileSync(wrapperPath, wrapperContent, 'utf8')
         chmodSync(wrapperPath, 0o755)

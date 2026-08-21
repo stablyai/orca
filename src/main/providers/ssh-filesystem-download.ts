@@ -66,7 +66,7 @@ function joinSftpChildPath(
 function classifySftpEntry(entry: FileEntryWithStats): 'directory' | 'file' {
   if (entry.attrs.isSymbolicLink()) {
     // Why: following either file or directory links can escape the selected tree;
-    // local symlink creation is also not portable across Orca's supported hosts.
+    // local symlink creation is also not portable across MCode's supported hosts.
     throw new Error(`Cannot download symbolic link '${entry.filename}'`)
   }
   if (entry.attrs.isDirectory()) {

@@ -37,7 +37,7 @@ import {
   registerSshFilesystemProvider,
   unregisterSshFilesystemProvider
 } from '../providers/ssh-filesystem-dispatch'
-import { OrcaRuntimeService } from './orca-runtime'
+import { MCodeRuntimeService } from './mcode-runtime'
 
 const REPO_ID = 'repo-1'
 const REPO_PATH = '/repo'
@@ -136,7 +136,7 @@ describe('orchestration worker workspace resolution', () => {
     ['path', `path:${WORKTREE_PATH}`],
     ['name', 'name:Feature']
   ])('resolves a local worktree by %s with one catalog scan', async (_label, selector) => {
-    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const runtime = new MCodeRuntimeService(makeStore() as never)
 
     await expect(runtime.showManagedTerminalWorkspace(selector)).resolves.toMatchObject({
       id: WORKTREE_ID,
@@ -154,7 +154,7 @@ describe('orchestration worker workspace resolution', () => {
       addedAt: 1,
       connectionId: 'ssh-1'
     } satisfies Repo
-    const runtime = new OrcaRuntimeService(
+    const runtime = new MCodeRuntimeService(
       makeStore({
         repos: [remoteRepo],
         meta: { [WORKTREE_ID]: makeMeta('Remote feature') }
@@ -168,7 +168,7 @@ describe('orchestration worker workspace resolution', () => {
   })
 
   it('does not fall back from the floating terminal sentinel to another workspace', async () => {
-    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const runtime = new MCodeRuntimeService(makeStore() as never)
 
     await expect(
       runtime.showManagedTerminalWorkspace(`id:${FLOATING_TERMINAL_WORKTREE_ID}`)
@@ -185,7 +185,7 @@ describe('orchestration worker workspace resolution', () => {
         { path: secondPath, head: 'b', branch: 'two', isBare: false, isMainWorktree: false }
       ]
     })
-    const runtime = new OrcaRuntimeService(
+    const runtime = new MCodeRuntimeService(
       makeStore({
         meta: {
           [WORKTREE_ID]: makeMeta('Duplicate'),
@@ -219,7 +219,7 @@ describe('orchestration worker workspace resolution', () => {
         }
       ])
     })
-    const runtime = new OrcaRuntimeService(
+    const runtime = new MCodeRuntimeService(
       makeStore({
         repos: [makeStore().getRepos()[0], remoteRepo],
         meta: {
@@ -235,7 +235,7 @@ describe('orchestration worker workspace resolution', () => {
   })
 
   it('resolves local and SSH folder workspaces without a Git catalog scan', async () => {
-    const localPath = await mkdtemp(join(tmpdir(), 'orca-worker-local-folder-'))
+    const localPath = await mkdtemp(join(tmpdir(), 'mcode-worker-local-folder-'))
     tempPaths.push(localPath)
     const group = { id: 'group-1', name: 'Group', parentPath: localPath } as ProjectGroup
     const localFolder = {
@@ -255,7 +255,7 @@ describe('orchestration worker workspace resolution', () => {
       stat: vi.fn().mockResolvedValue({ type: 'directory', size: 0, mtime: 1 })
     } as never)
     try {
-      const runtime = new OrcaRuntimeService(
+      const runtime = new MCodeRuntimeService(
         makeStore({
           folderWorkspaces: [localFolder, remoteFolder],
           projectGroups: [group]
@@ -296,7 +296,7 @@ describe('orchestration worker workspace resolution', () => {
       addedAt: 1,
       ...repo
     })) as Repo[]
-    const runtime = new OrcaRuntimeService(
+    const runtime = new MCodeRuntimeService(
       makeStore({ repos, folderWorkspaces: [folder], projectGroups: [group] }) as never
     )
 

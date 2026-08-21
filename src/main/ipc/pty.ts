@@ -12,7 +12,7 @@ import {
   powerMonitor
 } from 'electron'
 export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-ready-bash-rcfile'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { MCodeRuntimeService } from '../runtime/mcode-runtime'
 import type { PtyBindingSourceExpectation, Store } from '../persistence'
 import { retireTerminalSurfaceFromPersistence } from '../runtime/mobile-session-terminal-persistence-retirement'
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../shared/pty-liveness-verdict'
@@ -118,7 +118,7 @@ import {
   markClaudePtyExited,
   markClaudePtySpawned
 } from '../claude-accounts/live-pty-gate'
-import { ensureLinuxTerminalOrcaCliShimDir } from '../cli/linux-terminal-orca-cli-shim'
+import { ensureLinuxTerminalMCodeCliShimDir } from '../cli/linux-terminal-mcode-cli-shim'
 import {
   isLegacyTerminalShimPathEntry,
   LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS,
@@ -167,7 +167,7 @@ import {
 } from '../agent-hooks/migration-unsupported-pty-state'
 import { parseWslPath, wslUncDirectoryExistsAsync } from '../wsl'
 import { mergePersistedWindowsPath, resolvePathEnvKey } from '../pty/windows-environment-path'
-import { addOrcaWslInteropEnv, stampWslOrchestrationCompatibilityHost } from '../pty/wsl-orca-env'
+import { addMCodeWslInteropEnv, stampWslOrchestrationCompatibilityHost } from '../pty/wsl-mcode-env'
 import { resolveCodexShellLaunchPreflightCommand } from '../pty/codex-shell-launch-preflight'
 import { PtyProducerFlowController } from './pty-producer-flow-control'
 import { beginTerminalInstall } from './watcher-removal-gate'
@@ -338,16 +338,16 @@ const ptyPaneKey = new Map<string, string>()
 const paneKeyPtyId = new Map<string, string>()
 
 const AGENT_HOOK_RUNTIME_ENV_KEYS = [
-  'ORCA_AGENT_HOOK_PORT',
-  'ORCA_AGENT_HOOK_TOKEN',
-  'ORCA_AGENT_HOOK_ENV',
-  'ORCA_AGENT_HOOK_VERSION',
-  'ORCA_AGENT_HOOK_ENDPOINT',
+  'MCODE_AGENT_HOOK_PORT',
+  'MCODE_AGENT_HOOK_TOKEN',
+  'MCODE_AGENT_HOOK_ENV',
+  'MCODE_AGENT_HOOK_VERSION',
+  'MCODE_AGENT_HOOK_ENDPOINT',
   // Why: PR 2778 briefly exported this path; keep deleting stale inherited values so older PTYs can't leak the reverted path.
-  'ORCA_CLAUDE_AGENT_STATUS_SETTINGS'
+  'MCODE_CLAUDE_AGENT_STATUS_SETTINGS'
 ] as const
 
-// Why: Orca never sets these, so an inherited value means a pty host launched from inside a Claude session — Claude reads it as a nested child and silently stops persisting the transcript.
+// Why: MCode never sets these, so an inherited value means a pty host launched from inside a Claude session — Claude reads it as a nested child and silently stops persisting the transcript.
 const CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS = [
   'CLAUDE_CODE_CHILD_SESSION',
   'CLAUDE_CODE_SESSION_ID',
@@ -405,7 +405,7 @@ let agentSessionOwnerReconciliation: Promise<void> | null = null
 // The runtime's empty-record guard makes a second seed for the same session a
 // no-op, so overlapping paths cannot double-apply history.
 function seedTerminalRestoreRecordsFromSpawnResult(
-  runtime: OrcaRuntimeService | undefined,
+  runtime: MCodeRuntimeService | undefined,
   result: PtySpawnResult
 ): void {
   const text =
@@ -539,7 +539,7 @@ function admitRendererAgentLaunchAuthority(args: {
     typeof args.launchToken !== 'string' ||
     args.launchToken.length === 0 ||
     args.launchToken.length > AGENT_LAUNCH_TOKEN_MAX_LENGTH ||
-    args.spawnEnv?.ORCA_AGENT_LAUNCH_TOKEN !== args.launchToken
+    args.spawnEnv?.MCODE_AGENT_LAUNCH_TOKEN !== args.launchToken
   ) {
     return null
   }
@@ -735,7 +735,7 @@ function resolvePersistedStablePaneOwner(
 }
 
 function resolveStablePaneOwner(
-  runtime: OrcaRuntimeService | undefined,
+  runtime: MCodeRuntimeService | undefined,
   store: Store | undefined,
   paneKey: string | null | undefined,
   worktreeId: string | undefined,
@@ -744,8 +744,8 @@ function resolveStablePaneOwner(
   if (!paneKey || !worktreeId) {
     return null
   }
-  let resolved: ReturnType<OrcaRuntimeService['resolveTerminalPane']> | null = null
-  let resolvedHandleCandidate: ReturnType<OrcaRuntimeService['resolveTerminalPane']> | null = null
+  let resolved: ReturnType<MCodeRuntimeService['resolveTerminalPane']> | null = null
+  let resolvedHandleCandidate: ReturnType<MCodeRuntimeService['resolveTerminalPane']> | null = null
   if (runtime && typeof runtime.resolveTerminalPane === 'function') {
     try {
       const candidate = runtime.resolveTerminalPane(paneKey, worktreeId)
@@ -828,7 +828,7 @@ function retirePersistedStablePaneOwner(
 }
 
 type StablePaneSpawnContext = {
-  runtime: OrcaRuntimeService | undefined
+  runtime: MCodeRuntimeService | undefined
   store?: Store
   provider: IPtyProvider
   spawnOptions: PtySpawnOptions
@@ -1022,18 +1022,18 @@ function stripRemotePaneEnvWhenHooksDisabled(
   }
   if (
     !env ||
-    (!('ORCA_PANE_KEY' in env) &&
-      !('ORCA_TAB_ID' in env) &&
-      !('ORCA_WORKTREE_ID' in env) &&
-      !('ORCA_AGENT_LAUNCH_TOKEN' in env))
+    (!('MCODE_PANE_KEY' in env) &&
+      !('MCODE_TAB_ID' in env) &&
+      !('MCODE_WORKTREE_ID' in env) &&
+      !('MCODE_AGENT_LAUNCH_TOKEN' in env))
   ) {
     return env
   }
   const stripped = { ...env }
-  delete stripped.ORCA_PANE_KEY
-  delete stripped.ORCA_TAB_ID
-  delete stripped.ORCA_WORKTREE_ID
-  delete stripped.ORCA_AGENT_LAUNCH_TOKEN
+  delete stripped.MCODE_PANE_KEY
+  delete stripped.MCODE_TAB_ID
+  delete stripped.MCODE_WORKTREE_ID
+  delete stripped.MCODE_AGENT_LAUNCH_TOKEN
   return stripped
 }
 
@@ -1172,9 +1172,9 @@ export type BuildPtyHostEnvOptions = {
   selectedCodexHomePath: string | null
   skipCodexHomeEnv?: boolean
   /** System-default real-home routing (flag ON): inject no managed CODEX_HOME,
-   *  and strip only an inherited Orca-owned override so nested Orca panes do not
+   *  and strip only an inherited MCode-owned override so nested MCode panes do not
    *  leak the parent's managed home. A user-set CODEX_HOME is preserved. */
-  stripInheritedOrcaCodexHome?: boolean
+  stripInheritedMCodeCodexHome?: boolean
   /** Launch command the renderer chose (e.g. 'pi', 'omp', 'claude'); resolves the per-agent
    *  extension target for Pi/OMP. Undefined for bare shells → defaults to Pi. NEVER infer from
    *  disk presence (cross-agent shadowing when both dirs exist). */
@@ -1205,7 +1205,7 @@ function promoteAgentTeamsShimPath(
   env: Record<string, string> | undefined,
   requestedPath: string | undefined
 ): void {
-  if (!env?.ORCA_AGENT_TEAMS_TEAM_ID) {
+  if (!env?.MCODE_AGENT_TEAMS_TEAM_ID) {
     return
   }
   const shimPath = firstPathEntry(requestedPath)
@@ -1219,7 +1219,7 @@ function promoteAgentTeamsShimPath(
   const remaining = currentPath
     .split(delimiter)
     .filter((entry) => entry.length > 0 && entry !== shimPath)
-  // Why: host env injection prepends Orca's shims; Claude Agent Teams must still resolve our fake tmux before any real tmux.
+  // Why: host env injection prepends MCode's shims; Claude Agent Teams must still resolve our fake tmux before any real tmux.
   env[currentPathKey] = [shimPath, ...remaining].join(delimiter)
 }
 
@@ -1249,9 +1249,9 @@ function isCodexStatusHooksEnabled(settings: GlobalSettings | undefined): boolea
 }
 
 // Why: with the real-home flag ON, a host system-default launch resolves to a
-// null managed home. Signal the env builder to strip a nested-Orca-inherited
+// null managed home. Signal the env builder to strip a nested-MCode-inherited
 // override instead of injecting one, so Codex runs on the user's own ~/.codex.
-function shouldStripInheritedOrcaCodexHome(args: {
+function shouldStripInheritedMCodeCodexHome(args: {
   target: CodexAccountSelectionTarget
   selectedCodexHomePath: string | null
   skipCodexHomeEnv: boolean
@@ -1262,26 +1262,26 @@ function shouldStripInheritedOrcaCodexHome(args: {
   )
 }
 
-const CODEX_HOME_ENV_KEYS = ['CODEX_HOME', 'ORCA_CODEX_HOME'] as const
+const CODEX_HOME_ENV_KEYS = ['CODEX_HOME', 'MCODE_CODEX_HOME'] as const
 
 // Why: system-default real-home routing runs Codex on the user's own ~/.codex.
-// Nested Orca panes inherit the parent's Orca-owned override; strip only that
-// (CODEX_HOME matching Orca's private ORCA_CODEX_HOME marker), and always drop
+// Nested MCode panes inherit the parent's MCode-owned override; strip only that
+// (CODEX_HOME matching MCode's private MCODE_CODEX_HOME marker), and always drop
 // the marker so a shell-ready wrapper cannot restore the managed home. A
-// user-set CODEX_HOME with no Orca marker is preserved untouched (see #8606).
-function stripInheritedOrcaCodexHomeOverride(baseEnv: Record<string, string>): void {
-  for (const key of getLocalOrcaCodexHomeEnvKeysToDelete(baseEnv)) {
+// user-set CODEX_HOME with no MCode marker is preserved untouched (see #8606).
+function stripInheritedMCodeCodexHomeOverride(baseEnv: Record<string, string>): void {
+  for (const key of getLocalMCodeCodexHomeEnvKeysToDelete(baseEnv)) {
     delete baseEnv[key]
   }
 }
 
 // Why: in-process spawns share main's inherited environment, so equality with
 // the private marker is authoritative here. Persistent daemons compare locally.
-function getLocalOrcaCodexHomeEnvKeysToDelete(env: Record<string, string>): string[] {
-  const inheritedOrcaOverride = env.ORCA_CODEX_HOME ?? process.env.ORCA_CODEX_HOME
+function getLocalMCodeCodexHomeEnvKeysToDelete(env: Record<string, string>): string[] {
+  const inheritedMCodeOverride = env.MCODE_CODEX_HOME ?? process.env.MCODE_CODEX_HOME
   const inheritedCodexHome = env.CODEX_HOME ?? process.env.CODEX_HOME
-  const keysToDelete = ['ORCA_CODEX_HOME']
-  if (inheritedOrcaOverride && inheritedCodexHome === inheritedOrcaOverride) {
+  const keysToDelete = ['MCODE_CODEX_HOME']
+  if (inheritedMCodeOverride && inheritedCodexHome === inheritedMCodeOverride) {
     keysToDelete.push('CODEX_HOME')
   }
   return keysToDelete
@@ -1591,13 +1591,13 @@ function resolvePiAgentSourceDir(
     )
   }
 
-  const overlayKey = kind === 'omp' ? 'ORCA_OMP_CODING_AGENT_DIR' : 'ORCA_PI_CODING_AGENT_DIR'
-  const otherOverlayKey = kind === 'omp' ? 'ORCA_PI_CODING_AGENT_DIR' : 'ORCA_OMP_CODING_AGENT_DIR'
+  const overlayKey = kind === 'omp' ? 'MCODE_OMP_CODING_AGENT_DIR' : 'MCODE_PI_CODING_AGENT_DIR'
+  const otherOverlayKey = kind === 'omp' ? 'MCODE_PI_CODING_AGENT_DIR' : 'MCODE_OMP_CODING_AGENT_DIR'
 
   const publicDir = readEnvWithProcessFallback(baseEnv, primaryKey)
   const ownOverlayDir = readEnvWithProcessFallback(baseEnv, overlayKey)
   const otherOverlayDir = readEnvWithProcessFallback(baseEnv, otherOverlayKey)
-  // Why: if PI_CODING_AGENT_DIR is a restored Orca overlay with no source shadow, remirroring leaks another agent's overlay tree; fall through to defaults.
+  // Why: if PI_CODING_AGENT_DIR is a restored MCode overlay with no source shadow, remirroring leaks another agent's overlay tree; fall through to defaults.
   if (publicDir && publicDir !== ownOverlayDir && publicDir !== otherOverlayDir) {
     return publicDir
   }
@@ -1614,18 +1614,18 @@ function resolveScopedPiAgentSourceDir(
 
 function clearPiAgentShadowEnv(baseEnv: Record<string, string>, kind: PiAgentKind): void {
   if (kind === 'omp') {
-    delete baseEnv.ORCA_OMP_CODING_AGENT_DIR
-    delete baseEnv.ORCA_OMP_SOURCE_AGENT_DIR
-    delete baseEnv.ORCA_OMP_STATUS_EXTENSION
+    delete baseEnv.MCODE_OMP_CODING_AGENT_DIR
+    delete baseEnv.MCODE_OMP_SOURCE_AGENT_DIR
+    delete baseEnv.MCODE_OMP_STATUS_EXTENSION
     return
   }
   if (kind === 'prime-agent') {
-    delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
-    delete baseEnv.ORCA_PRIME_AGENT_STATUS_EXTENSION
+    delete baseEnv.MCODE_PRIME_AGENT_SOURCE_AGENT_DIR
+    delete baseEnv.MCODE_PRIME_AGENT_STATUS_EXTENSION
     return
   }
-  delete baseEnv.ORCA_PI_CODING_AGENT_DIR
-  delete baseEnv.ORCA_PI_SOURCE_AGENT_DIR
+  delete baseEnv.MCODE_PI_CODING_AGENT_DIR
+  delete baseEnv.MCODE_PI_SOURCE_AGENT_DIR
 }
 
 function exposePiManagedExtensionEnv(
@@ -1634,32 +1634,32 @@ function exposePiManagedExtensionEnv(
   managedEnv: Record<string, string>
 ): void {
   if (kind === 'omp') {
-    delete baseEnv.ORCA_OMP_CODING_AGENT_DIR
-    if (managedEnv.ORCA_OMP_SOURCE_AGENT_DIR) {
-      baseEnv.ORCA_OMP_SOURCE_AGENT_DIR = managedEnv.ORCA_OMP_SOURCE_AGENT_DIR
+    delete baseEnv.MCODE_OMP_CODING_AGENT_DIR
+    if (managedEnv.MCODE_OMP_SOURCE_AGENT_DIR) {
+      baseEnv.MCODE_OMP_SOURCE_AGENT_DIR = managedEnv.MCODE_OMP_SOURCE_AGENT_DIR
     } else {
-      delete baseEnv.ORCA_OMP_SOURCE_AGENT_DIR
+      delete baseEnv.MCODE_OMP_SOURCE_AGENT_DIR
     }
-    if (managedEnv.ORCA_OMP_STATUS_EXTENSION) {
-      baseEnv.ORCA_OMP_STATUS_EXTENSION = managedEnv.ORCA_OMP_STATUS_EXTENSION
+    if (managedEnv.MCODE_OMP_STATUS_EXTENSION) {
+      baseEnv.MCODE_OMP_STATUS_EXTENSION = managedEnv.MCODE_OMP_STATUS_EXTENSION
     } else {
-      delete baseEnv.ORCA_OMP_STATUS_EXTENSION
+      delete baseEnv.MCODE_OMP_STATUS_EXTENSION
     }
     return
   }
   if (kind === 'prime-agent') {
-    if (managedEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR) {
-      baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR = managedEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
+    if (managedEnv.MCODE_PRIME_AGENT_SOURCE_AGENT_DIR) {
+      baseEnv.MCODE_PRIME_AGENT_SOURCE_AGENT_DIR = managedEnv.MCODE_PRIME_AGENT_SOURCE_AGENT_DIR
     } else {
-      delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
+      delete baseEnv.MCODE_PRIME_AGENT_SOURCE_AGENT_DIR
     }
     return
   }
-  delete baseEnv.ORCA_PI_CODING_AGENT_DIR
-  if (managedEnv.ORCA_PI_SOURCE_AGENT_DIR) {
-    baseEnv.ORCA_PI_SOURCE_AGENT_DIR = managedEnv.ORCA_PI_SOURCE_AGENT_DIR
+  delete baseEnv.MCODE_PI_CODING_AGENT_DIR
+  if (managedEnv.MCODE_PI_SOURCE_AGENT_DIR) {
+    baseEnv.MCODE_PI_SOURCE_AGENT_DIR = managedEnv.MCODE_PI_SOURCE_AGENT_DIR
   } else {
-    delete baseEnv.ORCA_PI_SOURCE_AGENT_DIR
+    delete baseEnv.MCODE_PI_SOURCE_AGENT_DIR
   }
 }
 
@@ -1676,7 +1676,7 @@ function mergePtyEnvDeletions(
 
 function removeCodexHomeDeletionRequests(keys: string[] | undefined): string[] | undefined {
   // Why: resume provenance is launch-authoritative; late deletions must not fall back to the current account.
-  const filtered = keys?.filter((key) => key !== 'CODEX_HOME' && key !== 'ORCA_CODEX_HOME')
+  const filtered = keys?.filter((key) => key !== 'CODEX_HOME' && key !== 'MCODE_CODEX_HOME')
   return filtered?.length ? filtered : undefined
 }
 
@@ -1697,7 +1697,7 @@ function getInheritedClaudeSessionStampEnvKeysToDelete(
   return CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS.filter((key) => env[key] === undefined)
 }
 
-// Why: a nested terminal can inherit prior OpenCode/Pi/OMP overlay env; restore the user's recorded source dir, else strip only Orca-owned values.
+// Why: a nested terminal can inherit prior OpenCode/Pi/OMP overlay env; restore the user's recorded source dir, else strip only MCode-owned values.
 function restoreOrStripOverlayEnv(
   baseEnv: Record<string, string>,
   keys: {
@@ -1725,13 +1725,13 @@ function isMimoLaunchCommand(launchCommand: string | undefined): boolean {
 }
 
 function resolveMimocodeSourceHome(baseEnv: Record<string, string>): string | undefined {
-  const sourceHome = baseEnv.ORCA_MIMOCODE_SOURCE_HOME ?? process.env.ORCA_MIMOCODE_SOURCE_HOME
+  const sourceHome = baseEnv.MCODE_MIMOCODE_SOURCE_HOME ?? process.env.MCODE_MIMOCODE_SOURCE_HOME
   if (sourceHome) {
     return sourceHome
   }
   const configHome = baseEnv.MIMOCODE_HOME ?? process.env.MIMOCODE_HOME
-  const orcaHome = baseEnv.ORCA_MIMOCODE_HOME ?? process.env.ORCA_MIMOCODE_HOME
-  if (configHome && orcaHome && configHome === orcaHome) {
+  const mcodeHome = baseEnv.MCODE_MIMOCODE_HOME ?? process.env.MCODE_MIMOCODE_HOME
+  if (configHome && mcodeHome && configHome === mcodeHome) {
     return undefined
   }
   return configHome
@@ -1739,15 +1739,15 @@ function resolveMimocodeSourceHome(baseEnv: Record<string, string>): string | un
 
 function resolveOpenCodeSourceConfigDir(baseEnv: Record<string, string>): string | undefined {
   const sourceDir =
-    baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR ?? process.env.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+    baseEnv.MCODE_OPENCODE_SOURCE_CONFIG_DIR ?? process.env.MCODE_OPENCODE_SOURCE_CONFIG_DIR
   if (sourceDir) {
     return sourceDir
   }
 
   const configDir = baseEnv.OPENCODE_CONFIG_DIR ?? process.env.OPENCODE_CONFIG_DIR
-  const orcaConfigDir = baseEnv.ORCA_OPENCODE_CONFIG_DIR ?? process.env.ORCA_OPENCODE_CONFIG_DIR
-  // Why: with no recorded source dir, an inherited OPENCODE_CONFIG_DIR is Orca-owned, not user config; treating it as user config makes child Orcas mirror the hook dir.
-  if (configDir && orcaConfigDir && configDir === orcaConfigDir) {
+  const mcodeConfigDir = baseEnv.MCODE_OPENCODE_CONFIG_DIR ?? process.env.MCODE_OPENCODE_CONFIG_DIR
+  // Why: with no recorded source dir, an inherited OPENCODE_CONFIG_DIR is MCode-owned, not user config; treating it as user config makes child MCodes mirror the hook dir.
+  if (configDir && mcodeConfigDir && configDir === mcodeConfigDir) {
     return undefined
   }
 
@@ -1800,40 +1800,40 @@ export function buildPtyHostEnv(
       : resolveScopedPiAgentSourceDir(baseEnv, 'prime-agent')
 
   if (opts.agentStatusHooksEnabled) {
-    // Why: OPENCODE_CONFIG_DIR is a single path, not a colon-list; mirror the user's value into an overlay so their plugins and Orca's status plugin coexist. See docs/opencode-config-dir-collision.md.
+    // Why: OPENCODE_CONFIG_DIR is a single path, not a colon-list; mirror the user's value into an overlay so their plugins and MCode's status plugin coexist. See docs/opencode-config-dir-collision.md.
     Object.assign(baseEnv, openCodeHookService.buildPtyEnv(id, preexistingOpenCodeConfigDir))
     if (baseEnv.OPENCODE_CONFIG_DIR) {
       // Why: ~/.zshrc can re-export the user's default after spawn; shell-ready wrappers restore this PTY-scoped value.
-      baseEnv.ORCA_OPENCODE_CONFIG_DIR = baseEnv.OPENCODE_CONFIG_DIR
+      baseEnv.MCODE_OPENCODE_CONFIG_DIR = baseEnv.OPENCODE_CONFIG_DIR
       if (preexistingOpenCodeConfigDir) {
-        // Why: nested Orca terminals inherit the overlay as OPENCODE_CONFIG_DIR; keep the real source so overlays don't mirror overlays.
-        baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR = preexistingOpenCodeConfigDir
+        // Why: nested MCode terminals inherit the overlay as OPENCODE_CONFIG_DIR; keep the real source so overlays don't mirror overlays.
+        baseEnv.MCODE_OPENCODE_SOURCE_CONFIG_DIR = preexistingOpenCodeConfigDir
       } else {
-        delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+        delete baseEnv.MCODE_OPENCODE_SOURCE_CONFIG_DIR
       }
     }
     if (isMimoLaunchCommand(launchCommandHint)) {
       const preexistingMimocodeHome = resolveMimocodeSourceHome(baseEnv)
       Object.assign(baseEnv, mimoCodeHookService.buildPtyEnv(id, preexistingMimocodeHome))
       if (baseEnv.MIMOCODE_HOME) {
-        baseEnv.ORCA_MIMOCODE_HOME = baseEnv.MIMOCODE_HOME
+        baseEnv.MCODE_MIMOCODE_HOME = baseEnv.MIMOCODE_HOME
         if (preexistingMimocodeHome) {
-          baseEnv.ORCA_MIMOCODE_SOURCE_HOME = preexistingMimocodeHome
+          baseEnv.MCODE_MIMOCODE_SOURCE_HOME = preexistingMimocodeHome
         } else {
-          delete baseEnv.ORCA_MIMOCODE_SOURCE_HOME
+          delete baseEnv.MCODE_MIMOCODE_SOURCE_HOME
         }
       }
     }
   } else {
     restoreOrStripOverlayEnv(baseEnv, {
       primary: 'OPENCODE_CONFIG_DIR',
-      overlay: 'ORCA_OPENCODE_CONFIG_DIR',
-      source: 'ORCA_OPENCODE_SOURCE_CONFIG_DIR'
+      overlay: 'MCODE_OPENCODE_CONFIG_DIR',
+      source: 'MCODE_OPENCODE_SOURCE_CONFIG_DIR'
     })
     restoreOrStripOverlayEnv(baseEnv, {
       primary: 'MIMOCODE_HOME',
-      overlay: 'ORCA_MIMOCODE_HOME',
-      source: 'ORCA_MIMOCODE_SOURCE_HOME'
+      overlay: 'MCODE_MIMOCODE_HOME',
+      source: 'MCODE_MIMOCODE_SOURCE_HOME'
     })
   }
 
@@ -1849,24 +1849,24 @@ export function buildPtyHostEnv(
       wslHookRelayManager.ensureForDistro(distro)
       const guestEndpoint = wslHookRelayManager.getGuestEndpointFilePath(distro)
       if (guestEndpoint) {
-        baseEnv.ORCA_AGENT_HOOK_ENDPOINT = guestEndpoint
+        baseEnv.MCODE_AGENT_HOOK_ENDPOINT = guestEndpoint
       }
       // Why: OpenCode loads its status plugin from a guest config overlay, so point OPENCODE_CONFIG_DIR at the guest dir the relay materialized.
       const opencodeOverlayDir = wslHookRelayManager.getOpenCodeOverlayDir(distro)
       if (opencodeOverlayDir) {
         baseEnv.OPENCODE_CONFIG_DIR = opencodeOverlayDir
-        baseEnv.ORCA_OPENCODE_CONFIG_DIR = opencodeOverlayDir
-        delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+        baseEnv.MCODE_OPENCODE_CONFIG_DIR = opencodeOverlayDir
+        delete baseEnv.MCODE_OPENCODE_SOURCE_CONFIG_DIR
       } else {
         // Why: relay not connected yet (or older guest bundle) — never cross the Windows overlay path into WSL; drop it so in-guest OpenCode uses its own config (pre-fix behavior, no status but no regression).
         delete baseEnv.OPENCODE_CONFIG_DIR
-        delete baseEnv.ORCA_OPENCODE_CONFIG_DIR
-        delete baseEnv.ORCA_OPENCODE_SOURCE_CONFIG_DIR
+        delete baseEnv.MCODE_OPENCODE_CONFIG_DIR
+        delete baseEnv.MCODE_OPENCODE_SOURCE_CONFIG_DIR
       }
     }
   }
 
-  // Why: PI_CODING_AGENT_DIR is the user's config/session root; install only Orca-owned extension files, don't override it.
+  // Why: PI_CODING_AGENT_DIR is the user's config/session root; install only MCode-owned extension files, don't override it.
   if (opts.agentStatusHooksEnabled) {
     clearPiAgentShadowEnv(baseEnv, 'pi')
     clearPiAgentShadowEnv(baseEnv, 'omp')
@@ -1906,28 +1906,28 @@ export function buildPtyHostEnv(
     // Why: nested PTYs must not inherit stale source or overlay state from another agent.
     restoreOrStripOverlayEnv(baseEnv, {
       primary: 'PI_CODING_AGENT_DIR',
-      overlay: 'ORCA_PI_CODING_AGENT_DIR',
-      source: 'ORCA_PI_SOURCE_AGENT_DIR'
+      overlay: 'MCODE_PI_CODING_AGENT_DIR',
+      source: 'MCODE_PI_SOURCE_AGENT_DIR'
     })
     restoreOrStripOverlayEnv(baseEnv, {
       primary: 'PI_CODING_AGENT_DIR',
-      overlay: 'ORCA_OMP_CODING_AGENT_DIR',
-      source: 'ORCA_OMP_SOURCE_AGENT_DIR'
+      overlay: 'MCODE_OMP_CODING_AGENT_DIR',
+      source: 'MCODE_OMP_SOURCE_AGENT_DIR'
     })
-    delete baseEnv.ORCA_OMP_STATUS_EXTENSION
-    delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
-    delete baseEnv.ORCA_PRIME_AGENT_STATUS_EXTENSION
+    delete baseEnv.MCODE_OMP_STATUS_EXTENSION
+    delete baseEnv.MCODE_PRIME_AGENT_SOURCE_AGENT_DIR
+    delete baseEnv.MCODE_PRIME_AGENT_STATUS_EXTENSION
   }
 
-  // Why: keep the Codex home override PTY-scoped so dev/prod Orcas don't share hooks through ~/.codex.
+  // Why: keep the Codex home override PTY-scoped so dev/prod MCodes don't share hooks through ~/.codex.
   if (opts.skipCodexHomeEnv) {
     delete baseEnv.CODEX_HOME
-    delete baseEnv.ORCA_CODEX_HOME
-    delete baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
+    delete baseEnv.MCODE_CODEX_HOME
+    delete baseEnv.MCODE_CODEX_LAUNCH_PREFLIGHT
   } else if (opts.selectedCodexHomePath) {
     baseEnv.CODEX_HOME = opts.selectedCodexHomePath
     // Why: user startup files may re-export CODEX_HOME; shell-ready wrappers restore this runtime home before Codex launches.
-    baseEnv.ORCA_CODEX_HOME = opts.selectedCodexHomePath
+    baseEnv.MCODE_CODEX_HOME = opts.selectedCodexHomePath
     const preflightCommand = resolveCodexShellLaunchPreflightCommand({
       hooksEnabled: opts.codexStatusHooksEnabled ?? opts.agentStatusHooksEnabled,
       isPackaged: opts.isPackaged,
@@ -1937,29 +1937,29 @@ export function buildPtyHostEnv(
       resourcesPath: opts.resourcesPath
     })
     if (preflightCommand) {
-      baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT = preflightCommand
+      baseEnv.MCODE_CODEX_LAUNCH_PREFLIGHT = preflightCommand
     } else {
-      delete baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
+      delete baseEnv.MCODE_CODEX_LAUNCH_PREFLIGHT
     }
-  } else if (opts.stripInheritedOrcaCodexHome) {
-    stripInheritedOrcaCodexHomeOverride(baseEnv)
-    delete baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
+  } else if (opts.stripInheritedMCodeCodexHome) {
+    stripInheritedMCodeCodexHomeOverride(baseEnv)
+    delete baseEnv.MCODE_CODEX_LAUNCH_PREFLIGHT
   } else {
-    delete baseEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
+    delete baseEnv.MCODE_CODEX_LAUNCH_PREFLIGHT
   }
 
-  // Why: WSL shells need the managed userData root for shell-ready wrappers; dev-mode terminals need the same export so `orca` targets the live dev instance.
+  // Why: WSL shells need the managed userData root for shell-ready wrappers; dev-mode terminals need the same export so `mcode` targets the live dev instance.
   if (opts.isWsl) {
-    baseEnv.ORCA_USER_DATA_PATH = opts.userDataPath
-    // Why: managed WSL registration uses `orca-ide`; exposing that literal scopes agent guidance to WSL without a bare-orca shim.
-    baseEnv.ORCA_CLI_COMMAND = opts.isPackaged ? 'orca-ide' : 'orca-dev'
+    baseEnv.MCODE_USER_DATA_PATH = opts.userDataPath
+    // Why: managed WSL registration uses `mcode-ide`; exposing that literal scopes agent guidance to WSL without a bare-mcode shim.
+    baseEnv.MCODE_CLI_COMMAND = opts.isPackaged ? 'mcode-ide' : 'mcode-dev'
   } else {
     if (!opts.isPackaged) {
-      baseEnv.ORCA_USER_DATA_PATH ??= opts.userDataPath
+      baseEnv.MCODE_USER_DATA_PATH ??= opts.userDataPath
     }
-    delete baseEnv.ORCA_CLI_COMMAND
+    delete baseEnv.MCODE_CLI_COMMAND
   }
-  // Why: dev mode needs the launcher PATH override so `orca` resolves to the dev build instead of the production binary at /usr/local/bin/orca.
+  // Why: dev mode needs the launcher PATH override so `mcode` resolves to the dev build instead of the production binary at /usr/local/bin/mcode.
   if (!opts.isPackaged) {
     const devCliBin = join(opts.userDataPath, 'cli', 'bin')
     const inheritedPath = readInheritedPath(baseEnv)
@@ -1968,8 +1968,8 @@ export function buildPtyHostEnv(
       ? `${devCliBin}${delimiter}${inheritedPath}`
       : devCliBin
   } else if (process.platform === 'linux') {
-    // Why: bare-`orca` shim scoped to Orca PTYs — Linux CLI installs as `orca-ide` to avoid shadowing GNOME's /usr/bin/orca screen reader (stablyai/orca#7904).
-    const shimDir = ensureLinuxTerminalOrcaCliShimDir({ userDataPath: opts.userDataPath })
+    // Why: bare-`mcode` shim scoped to MCode PTYs — Linux CLI installs as `mcode-ide` to avoid shadowing GNOME's /usr/bin/mcode screen reader (mcode-ide/mcode#7904).
+    const shimDir = ensureLinuxTerminalMCodeCliShimDir({ userDataPath: opts.userDataPath })
     if (shimDir) {
       const inheritedEntries = readInheritedPath(baseEnv)
         .split(delimiter)
@@ -1980,7 +1980,7 @@ export function buildPtyHostEnv(
     opts.resourcesPath &&
     (process.platform === 'darwin' || process.platform === 'win32')
   ) {
-    // Why: global CLI registration is optional, but agents in Orca-managed PTYs must always reach this app's bundled CLI.
+    // Why: global CLI registration is optional, but agents in MCode-managed PTYs must always reach this app's bundled CLI.
     const bundledCliBin = join(opts.resourcesPath, 'bin')
     const inheritedPath = readInheritedPath(baseEnv)
     baseEnv[resolvePathEnvKey(baseEnv, process.platform)] = inheritedPath
@@ -2433,7 +2433,7 @@ export function unbindLocalProviderListeners(): void {
 
 export function registerPtyHandlers(
   mainWindow: BrowserWindow,
-  runtime?: OrcaRuntimeService,
+  runtime?: MCodeRuntimeService,
   getSelectedCodexHomePath?: GetSelectedCodexHomePath,
   getSettings?: () => GlobalSettings,
   prepareClaudeAuth?: PrepareClaudeAuth,
@@ -2532,7 +2532,7 @@ export function registerPtyHandlers(
           userDataPath: app.getPath('userData'),
           selectedCodexHomePath,
           skipCodexHomeEnv,
-          stripInheritedOrcaCodexHome: shouldStripInheritedOrcaCodexHome({
+          stripInheritedMCodeCodexHome: shouldStripInheritedMCodeCodexHome({
             target: codexSelectionTarget,
             selectedCodexHomePath,
             skipCodexHomeEnv,
@@ -2547,16 +2547,16 @@ export function registerPtyHandlers(
           networkProxySettings: ptySettings
         })
         // Why: agents need their terminal handle at process start to self-identify in orchestration messages without an extra RPC.
-        const requestedHandle = baseEnv.ORCA_TERMINAL_HANDLE
+        const requestedHandle = baseEnv.MCODE_TERMINAL_HANDLE
         const preAllocatedHandle =
           requestedHandle && trustedTerminalHandleEnv.has(requestedHandle)
             ? requestedHandle
             : runtime?.preAllocateHandleForPty(id)
         if (requestedHandle && requestedHandle !== preAllocatedHandle) {
-          delete env.ORCA_TERMINAL_HANDLE
+          delete env.MCODE_TERMINAL_HANDLE
         }
         if (preAllocatedHandle) {
-          env.ORCA_TERMINAL_HANDLE = preAllocatedHandle
+          env.MCODE_TERMINAL_HANDLE = preAllocatedHandle
         }
         stampWslOrchestrationCompatibilityHost(
           env,
@@ -2564,7 +2564,7 @@ export function registerPtyHandlers(
           ctx?.isWsl === true ? ctx.wslDistro : null
         )
         if (ctx?.isWsl === true) {
-          addOrcaWslInteropEnv(env)
+          addMCodeWslInteropEnv(env)
         }
         return env
       },
@@ -4418,7 +4418,7 @@ export function registerPtyHandlers(
     return resumeHome.codexHomePath
   }
 
-  /** Why: buildPtyHostEnv prefers ORCA_SEQUENCED_STARTUP_COMMAND over the launch command
+  /** Why: buildPtyHostEnv prefers MCODE_SEQUENCED_STARTUP_COMMAND over the launch command
    *  and the sequenced wrapper `eval`s it, so a dropped resume argv has to go there too. */
   const stripSequencedStartupResumeArgv = <T extends Record<string, string> | undefined>(
     env: T,
@@ -4719,12 +4719,12 @@ export function registerPtyHandlers(
       let env: Record<string, string> | undefined = claudeAuth
         ? { ...sshScopedEnv, ...claudeAuth.envPatch }
         : sshScopedEnv
-      const requestedAgentTeamsPath = env?.ORCA_AGENT_TEAMS_TEAM_ID
+      const requestedAgentTeamsPath = env?.MCODE_AGENT_TEAMS_TEAM_ID
         ? env[resolvePathEnvKey(env, process.platform)]
         : undefined
       env = stripSequencedStartupResumeArgv(env, codexResumeLaunch)
       if (args.preAllocatedHandle) {
-        env = { ...env, ORCA_TERMINAL_HANDLE: args.preAllocatedHandle }
+        env = { ...env, MCODE_TERMINAL_HANDLE: args.preAllocatedHandle }
       }
       let selectedCodexHomePath = resolveSelectedCodexHomeOrRefuseSpawn(() =>
         !preAdoptedStablePane && !args.connectionId
@@ -4792,9 +4792,9 @@ export function registerPtyHandlers(
         shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd) &&
         !selectedCodexHomePath
       const ptySettings = isDaemonHostSpawn ? getSettings?.() : undefined
-      const stripInheritedOrcaCodexHome =
+      const stripInheritedMCodeCodexHome =
         isDaemonHostSpawn &&
-        shouldStripInheritedOrcaCodexHome({
+        shouldStripInheritedMCodeCodexHome({
           target: codexSelectionTarget,
           selectedCodexHomePath,
           skipCodexHomeEnv,
@@ -4810,7 +4810,7 @@ export function registerPtyHandlers(
           userDataPath: app.getPath('userData'),
           selectedCodexHomePath,
           skipCodexHomeEnv,
-          stripInheritedOrcaCodexHome,
+          stripInheritedMCodeCodexHome,
           launchCommand,
           launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
           isWsl: shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd),
@@ -4860,7 +4860,7 @@ export function registerPtyHandlers(
       spawnOptions.envToDelete = mergePtyEnvDeletions(
         authEnvToDelete,
         args.envToDelete ?? [],
-        // Why: disable old hosts without removing ORCA_REAL_* while their Windows shim remains on PATH.
+        // Why: disable old hosts without removing MCODE_REAL_* while their Windows shim remains on PATH.
         isDaemonHostSpawn || args.connectionId ? LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS : [],
         isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(env) : [],
         // Why: ungated, unlike the agent-hook keys — the local provider and the relay host also spread their own process.env into every spawn.
@@ -4871,11 +4871,11 @@ export function registerPtyHandlers(
           spawnOptions.envToDelete,
           CODEX_HOME_ENV_KEYS
         )
-      } else if (stripInheritedOrcaCodexHome) {
+      } else if (stripInheritedMCodeCodexHome) {
         // Why: the daemon owns a persistent inherited environment that may
-        // differ from main. ORCA_CODEX_HOME asks it to compare/delete the pair.
+        // differ from main. MCODE_CODEX_HOME asks it to compare/delete the pair.
         spawnOptions.envToDelete = mergePtyEnvDeletions(spawnOptions.envToDelete, [
-          'ORCA_CODEX_HOME'
+          'MCODE_CODEX_HOME'
         ])
       }
       if (codexResumeHomeSelected) {
@@ -5441,7 +5441,7 @@ export function registerPtyHandlers(
           }
         }
         // Why: runtime-owned CLI PTYs bypass the renderer pty:spawn handler; record paneKey here too since hook titles and cache cleanup need this reverse lookup.
-        const paneKey = rememberPaneKeyForPty(result.id, env?.ORCA_PANE_KEY)
+        const paneKey = rememberPaneKeyForPty(result.id, env?.MCODE_PANE_KEY)
         const pendingSerializer = paneKey ? pendingByPaneKey.get(paneKey) : undefined
         const inheritRendererReadiness =
           result.isReattach === true &&
@@ -6339,7 +6339,7 @@ export function registerPtyHandlers(
         const baseEnvWithAuth = claudeAuth
           ? { ...sshSourceEnv, ...claudeAuth.envPatch }
           : sshSourceEnv
-        const spawnPaneKey = baseEnvWithAuth?.ORCA_PANE_KEY
+        const spawnPaneKey = baseEnvWithAuth?.MCODE_PANE_KEY
         const parsedSpawnPaneKey = parseValidPaneKey(spawnPaneKey)
         const verifiedPaneKey =
           parsedSpawnPaneKey &&
@@ -6408,31 +6408,31 @@ export function registerPtyHandlers(
             }
           }
         }
-        const requestedAgentTeamsPath = baseEnv?.ORCA_AGENT_TEAMS_TEAM_ID
+        const requestedAgentTeamsPath = baseEnv?.MCODE_AGENT_TEAMS_TEAM_ID
           ? baseEnv[resolvePathEnvKey(baseEnv, process.platform)]
           : undefined
         const agentTeamsEnvToDelete = shouldRefreshAgentTeamsEnv ? ['TERM_PROGRAM'] : undefined
         if (baseEnv && stablePaneKey) {
-          baseEnv.ORCA_PANE_KEY = stablePaneKey
+          baseEnv.MCODE_PANE_KEY = stablePaneKey
           if (typeof args.tabId === 'string') {
-            baseEnv.ORCA_TAB_ID = args.tabId
+            baseEnv.MCODE_TAB_ID = args.tabId
           } else if (!args.connectionId) {
-            delete baseEnv.ORCA_TAB_ID
+            delete baseEnv.MCODE_TAB_ID
           }
           if (typeof args.worktreeId === 'string') {
-            baseEnv.ORCA_WORKTREE_ID = args.worktreeId
+            baseEnv.MCODE_WORKTREE_ID = args.worktreeId
           } else if (!args.connectionId) {
-            delete baseEnv.ORCA_WORKTREE_ID
+            delete baseEnv.MCODE_WORKTREE_ID
           }
         } else if (baseEnv) {
-          // Why: ORCA_PANE_KEY crosses into shells/hook registries; only a key proven to match this spawn's tab+leaf may cross the IPC boundary.
-          delete baseEnv.ORCA_PANE_KEY
-          delete baseEnv.ORCA_TAB_ID
-          delete baseEnv.ORCA_WORKTREE_ID
-          delete baseEnv.ORCA_AGENT_LAUNCH_TOKEN
+          // Why: MCODE_PANE_KEY crosses into shells/hook registries; only a key proven to match this spawn's tab+leaf may cross the IPC boundary.
+          delete baseEnv.MCODE_PANE_KEY
+          delete baseEnv.MCODE_TAB_ID
+          delete baseEnv.MCODE_WORKTREE_ID
+          delete baseEnv.MCODE_AGENT_LAUNCH_TOKEN
         }
         const validatedPaneKey = stablePaneKey
-        // Why: SSH can strip ORCA_PANE_KEY when remote hooks are off; IPC tab/leaf metadata still names the pane.
+        // Why: SSH can strip MCODE_PANE_KEY when remote hooks are off; IPC tab/leaf metadata still names the pane.
         const reservationPaneKey = metadataPaneKey ?? validatedPaneKey
         const validatedLeafId = verifiedLeafId ?? metadataLeafId
         const effectiveShellOverride = terminalRuntimeOptions.shellOverride
@@ -6528,9 +6528,9 @@ export function registerPtyHandlers(
           shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, cwd) &&
           !selectedCodexHomePath
         const ptySettings = isDaemonHostSpawn ? getSettings?.() : undefined
-        const stripInheritedOrcaCodexHome =
+        const stripInheritedMCodeCodexHome =
           isDaemonHostSpawn &&
-          shouldStripInheritedOrcaCodexHome({
+          shouldStripInheritedMCodeCodexHome({
             target: codexSelectionTarget,
             selectedCodexHomePath,
             skipCodexHomeEnv,
@@ -6555,7 +6555,7 @@ export function registerPtyHandlers(
               userDataPath: app.getPath('userData'),
               selectedCodexHomePath,
               skipCodexHomeEnv,
-              stripInheritedOrcaCodexHome,
+              stripInheritedMCodeCodexHome,
               launchCommand,
               launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
               isWsl: shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, cwd),
@@ -6582,7 +6582,7 @@ export function registerPtyHandlers(
         }
         spawnTiming.mark('host_env')
         const spawnEnv = preAllocatedHandle
-          ? { ...env, ORCA_TERMINAL_HANDLE: preAllocatedHandle }
+          ? { ...env, MCODE_TERMINAL_HANDLE: preAllocatedHandle }
           : env
         const envToDelete = claudeAuth?.stripAuthEnv
           ? [...CLAUDE_AUTH_ENV_VARS, 'ANTHROPIC_CUSTOM_HEADERS']
@@ -6591,14 +6591,14 @@ export function registerPtyHandlers(
           envToDelete,
           args.envToDelete ?? [],
           agentTeamsEnvToDelete ?? [],
-          // Why: disable old hosts without removing ORCA_REAL_* while their Windows shim remains on PATH.
+          // Why: disable old hosts without removing MCODE_REAL_* while their Windows shim remains on PATH.
           isDaemonHostSpawn || args.connectionId ? LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS : [],
           isDaemonHostSpawn ? getInheritedAgentHookEnvKeysToDelete(spawnEnv) : [],
           getInheritedClaudeSessionStampEnvKeysToDelete(spawnEnv),
           skipCodexHomeEnv ? CODEX_HOME_ENV_KEYS : [],
           // Why: the persistent daemon compares its own merged CODEX_HOME pair;
           // main cannot safely decide ownership for a process it may not parent.
-          stripInheritedOrcaCodexHome ? ['ORCA_CODEX_HOME'] : []
+          stripInheritedMCodeCodexHome ? ['MCODE_CODEX_HOME'] : []
         )
         if (codexResumeHomeSelected) {
           combinedEnvToDelete = removeCodexHomeDeletionRequests(combinedEnvToDelete)
@@ -6934,7 +6934,7 @@ export function registerPtyHandlers(
         }
         const relayResultId = getRelayPtyId(args.connectionId, result.id)
         if (store && args.connectionId) {
-          // Why: remote PTYs live in the SSH relay grace window after Orca detaches; persist IDs immediately so reconnect reattaches instead of spawning a fresh shell.
+          // Why: remote PTYs live in the SSH relay grace window after MCode detaches; persist IDs immediately so reconnect reattaches instead of spawning a fresh shell.
           store.upsertSshRemotePtyLease({
             targetId: args.connectionId,
             ptyId: relayResultId,
@@ -7989,7 +7989,7 @@ export function registerPtyHandlers(
 }
 
 export function registerHeadlessPtyRuntime(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   getSelectedCodexHomePath?: GetSelectedCodexHomePath,
   getSettings?: () => GlobalSettings,
   prepareClaudeAuth?: PrepareClaudeAuth,
@@ -8000,7 +8000,7 @@ export function registerHeadlessPtyRuntime(
     onPtyExit?: (id: string, exitSequence: number) => void
   }
 ): void {
-  // Why: headless `orca serve` has no renderer window but still needs the same PTY handlers so remote clients can drive terminals.
+  // Why: headless `mcode serve` has no renderer window but still needs the same PTY handlers so remote clients can drive terminals.
   const headlessWindow = {
     isDestroyed: () => true,
     webContents: {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { mergePiOverlayUiSettings } from './pi-overlay-ui-settings'
 
 describe('mergePiOverlayUiSettings', () => {
-  it('preserves user settings while forcing Orca-only Pi UI safety settings', () => {
+  it('preserves user settings while forcing MCode-only Pi UI safety settings', () => {
     const merged = mergePiOverlayUiSettings({
       defaultProvider: 'amazon-bedrock',
       hideThinkingBlock: false,

@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../../orca-runtime'
+import { MCodeRuntimeService } from '../../mcode-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import { ORCHESTRATION_METHODS } from './orchestration'
 
@@ -19,7 +19,7 @@ const TAB_ID = 'tab-worker'
 const WORKTREE_ID = 'wt-worker'
 const PTY_ID = 'pty-worker'
 
-// Captured verbatim from cursor-agent 2026.08.11-e8db854 driven through Orca.
+// Captured verbatim from cursor-agent 2026.08.11-e8db854 driven through MCode.
 function fixture(name: string): string {
   return readFileSync(join(__dirname, '../../__fixtures__', `${name}.txt`), 'utf8')
 }
@@ -40,7 +40,7 @@ describe('worker-show interactive wait (STA-3714, STA-4513)', () => {
   afterEach(() => db?.close())
 
   async function showWorkerPaneServing(paneOutput: string, opts?: { breakIdentity?: boolean }) {
-    const runtime = new OrcaRuntimeService(null)
+    const runtime = new MCodeRuntimeService(null)
     const internals = runtime as unknown as {
       resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
     }
@@ -142,7 +142,7 @@ describe('worker-show interactive wait (STA-3714, STA-4513)', () => {
   })
 
   it('omits the field entirely for a worker it could not verify', async () => {
-    // Why not null: null is a claim that Orca looked. A replaced process is never looked at,
+    // Why not null: null is a claim that MCode looked. A replaced process is never looked at,
     // and reporting "no wait" there is the false negative this field exists to remove.
     const result = (await showWorkerPaneServing(fixture('cursor-agent-approval-prompt'), {
       breakIdentity: true

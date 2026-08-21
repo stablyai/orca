@@ -19,10 +19,10 @@ function deps() {
 
 describe('requestGuestOpenCodeOverlayDir', () => {
   it('reports the guest overlay dir', async () => {
-    const { mux } = fakeMux(async () => ({ overlayDirs: { opencode: '/home/jin/.orca-relay/x' } }))
+    const { mux } = fakeMux(async () => ({ overlayDirs: { opencode: '/home/jin/.mcode-relay/x' } }))
     await expect(requestGuestOpenCodeOverlayDir(mux, deps(), 'Ubuntu')).resolves.toEqual({
       kind: 'dir',
-      dir: '/home/jin/.orca-relay/x'
+      dir: '/home/jin/.mcode-relay/x'
     })
   })
 

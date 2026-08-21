@@ -90,7 +90,7 @@ export function formatMessageBanner(
       msg.to_handle.startsWith('run:') || msg.to_handle.startsWith('dispatch:')
         ? ''
         : ` --from ${msg.to_handle}`
-    lines.push(`[Reply: orca orchestration reply --id ${msg.id}${explicitFrom} --body "..."]`)
+    lines.push(`[Reply: mcode orchestration reply --id ${msg.id}${explicitFrom} --body "..."]`)
   }
   lines.push(SEPARATOR)
 
@@ -113,5 +113,5 @@ export function formatMessagePointer(count: number, mailboxHandle?: string): str
   const runFlag = mailboxHandle?.startsWith('run:')
     ? ` --run ${mailboxHandle.slice('run:'.length)}`
     : ''
-  return `\nYou have ${count} orchestration ${noun}. Run \`orca orchestration check${runFlag}\`.\n`
+  return `\nYou have ${count} orchestration ${noun}. Run \`mcode orchestration check${runFlag}\`.\n`
 }

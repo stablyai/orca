@@ -13,7 +13,7 @@ export const MAX_QUICK_COMMAND_LABEL_LENGTH = 80
 export const MAX_QUICK_COMMAND_REPO_ID_LENGTH = 200
 export const MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH = 4000
 // Why: agent prompt quick commands still launch through startup commands for
-// argv/flag agents, so this must stay within Orca's Windows shell safety cap.
+// argv/flag agents, so this must stay within MCode's Windows shell safety cap.
 export const MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH = 6000
 const REMOVED_PRESET_IDS = new Set(['default-pwd', 'default-git-status'])
 

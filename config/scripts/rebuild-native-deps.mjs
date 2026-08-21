@@ -66,7 +66,7 @@ const NATIVE_MODULES = [
 ]
 const onlyModules = NATIVE_MODULES.filter((m) => !ignoreModules.includes(m))
 const forceRebuild =
-  process.env.ORCA_FORCE_NATIVE_REBUILD === '1' ||
+  process.env.MCODE_FORCE_NATIVE_REBUILD === '1' ||
   cliOptions.force ||
   rebuildPlatform !== osPlatform() ||
   rebuildArch !== process.arch
@@ -151,10 +151,10 @@ try {
   if (isWindowsNativeLockError(err)) {
     console.error(
       '[rebuild] A Windows process appears to be using a native .node file. ' +
-        'Close running Orca/Electron/dev processes for this worktree, then rerun `pnpm install` ' +
+        'Close running MCode/Electron/dev processes for this worktree, then rerun `pnpm install` ' +
         'or `pnpm run rebuild:electron`.'
     )
-    if (isPostinstall() && process.env.ORCA_STRICT_NATIVE_REBUILD !== '1') {
+    if (isPostinstall() && process.env.MCODE_STRICT_NATIVE_REBUILD !== '1') {
       console.error(
         '[rebuild] Continuing postinstall because the failure is a Windows file lock. ' +
           'The next dev/start command will re-check native modules.'
@@ -279,7 +279,7 @@ function resetPartialElectronInstall() {
 }
 
 function continuePostinstallWithoutElectron() {
-  if (!isPostinstall() || process.env.ORCA_STRICT_ELECTRON_INSTALL === '1') {
+  if (!isPostinstall() || process.env.MCODE_STRICT_ELECTRON_INSTALL === '1') {
     return false
   }
   console.error(
@@ -399,7 +399,7 @@ function getPatchedNodePtyRebuildReason() {
     return null
   }
 
-  // Why: Orca patches node-pty's native Unix spawn path; upstream prebuilds can
+  // Why: MCode patches node-pty's native Unix spawn path; upstream prebuilds can
   // load successfully in Electron while missing the patched fd/error handling.
   const nodePtyDir = resolve(projectDir, 'node_modules', 'node-pty')
   const artifactPaths = [resolve(nodePtyDir, 'build', 'Release', 'pty.node')]
@@ -480,7 +480,7 @@ function loadNativeModule(moduleName) {
       throw new Error(
         'node-pty resolved to ' +
           native.dir +
-          '; expected build/Release so Orca\\'s node-pty patch is active'
+          '; expected build/Release so MCode\\'s node-pty patch is active'
       )
     }
     return

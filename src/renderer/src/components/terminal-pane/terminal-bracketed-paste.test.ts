@@ -58,12 +58,12 @@ describe('terminal bracketed paste policy', () => {
     })
 
     markTerminalBracketedPasteInterrupted(terminal)
-    pasteTerminalText(terminal, '/tmp/orca-paste-1760000000000-id.png', {
+    pasteTerminalText(terminal, '/tmp/mcode-paste-1760000000000-id.png', {
       forceBracketedPaste: true
     })
 
     expect(terminal.input).toHaveBeenCalledWith(
-      '\x1b[200~/tmp/orca-paste-1760000000000-id.png\x1b[201~'
+      '\x1b[200~/tmp/mcode-paste-1760000000000-id.png\x1b[201~'
     )
     expect(terminal.paste).not.toHaveBeenCalled()
     expect(observedIgnoreValues).toEqual([false])
@@ -77,12 +77,12 @@ describe('terminal bracketed paste policy', () => {
       observedIgnoreValues.push(terminal.options.ignoreBracketedPasteMode)
     })
 
-    pasteTerminalText(terminal, '/tmp/orca-paste-1760000000000-id.png', {
+    pasteTerminalText(terminal, '/tmp/mcode-paste-1760000000000-id.png', {
       forceBracketedPaste: true
     })
 
     expect(terminal.input).toHaveBeenCalledWith(
-      '\x1b[200~/tmp/orca-paste-1760000000000-id.png\x1b[201~'
+      '\x1b[200~/tmp/mcode-paste-1760000000000-id.png\x1b[201~'
     )
     expect(terminal.paste).not.toHaveBeenCalled()
     expect(observedIgnoreValues).toEqual([false])

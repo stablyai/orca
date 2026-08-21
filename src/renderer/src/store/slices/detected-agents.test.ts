@@ -627,7 +627,7 @@ describe('createDetectedAgentsSlice remote detection', () => {
     const store = createTestStore()
     // An empty [] is truthy, so a prior "no agents found" must not be cached:
     // a later install / PATH fix has to be picked up without a reconnect. This is
-    // the Orca-serve path (kind: 'runtime'), distinct from the SSH remote path.
+    // the MCode-serve path (kind: 'runtime'), distinct from the SSH remote path.
     let detectCalls = 0
     runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
       let result: unknown

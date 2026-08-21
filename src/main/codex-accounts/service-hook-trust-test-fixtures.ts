@@ -3,7 +3,7 @@ import { testState } from './service-test-harness'
 
 export type CanonicalHookTrustFixture = {
   config: string
-  orcaKeys: string[]
+  mcodeKeys: string[]
   userKey: string
 }
 
@@ -38,7 +38,7 @@ export async function createCanonicalHookTrustFixture(): Promise<CanonicalHookTr
   const expectedHashKey = computeTrustKey(expectedHashEntry)
   const ledgerHashKey = computeTrustKey(ledgerHashEntry)
   const userKey = computeTrustKey(userEntry)
-  const ledgerTrustedHash = 'sha256:codex-granted-orca-hook'
+  const ledgerTrustedHash = 'sha256:codex-granted-mcode-hook'
   writeCodexTrustGrantLedgerHome(sourceHomePath, {
     binary: null,
     entries: {
@@ -57,7 +57,7 @@ export async function createCanonicalHookTrustFixture(): Promise<CanonicalHookTr
       block(ledgerHashKey, ledgerTrustedHash),
       block(userKey, computeTrustedHash(userEntry))
     ].join('\n\n'),
-    orcaKeys: [expectedHashKey, ledgerHashKey],
+    mcodeKeys: [expectedHashKey, ledgerHashKey],
     userKey
   }
 }

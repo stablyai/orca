@@ -11,7 +11,7 @@
  *
  * Attaches over CDP to an already-running dev app:
  *
- *   ORCA_DEV_USER_DATA_PATH=... REMOTE_DEBUGGING_PORT=9455 pn dev
+ *   MCODE_DEV_USER_DATA_PATH=... REMOTE_DEBUGGING_PORT=9455 pn dev
  *   node tests/tools/benchmarks/workspace-switch-paint-latency.mjs --port 9455
  *
  * Exits non-zero when the median first-paint exceeds --budget (default 200ms),

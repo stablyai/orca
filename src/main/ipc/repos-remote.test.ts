@@ -152,13 +152,13 @@ describe('repos:addRemote', () => {
   it('clones a repo on an SSH target and registers the cloned path', async () => {
     const result = await handlers.get('repos:cloneRemote')!(null, {
       connectionId: 'conn-1',
-      url: 'https://github.com/stablyai/orca.git',
+      url: 'https://github.com/mcode-ide/mcode.git',
       destination: '/home/user'
     })
 
     expect(mockFilesystemProvider.createDir).toHaveBeenCalledWith('/home/user')
     expect(mockGitProvider.clone).toHaveBeenCalledWith(
-      ['clone', '--progress', '--', 'https://github.com/stablyai/orca.git', 'orca'],
+      ['clone', '--progress', '--', 'https://github.com/mcode-ide/mcode.git', 'mcode'],
       '/home/user',
       expect.objectContaining({
         signal: expect.any(AbortSignal),
@@ -168,17 +168,17 @@ describe('repos:addRemote', () => {
     )
     expect(mockStore.addRepo).toHaveBeenCalledWith(
       expect.objectContaining({
-        path: '/home/user/orca',
+        path: '/home/user/mcode',
         connectionId: 'conn-1',
         kind: 'git',
-        displayName: 'orca',
+        displayName: 'mcode',
         badgeColor: DEFAULT_REPO_BADGE_COLOR
       })
     )
     expect(mockMultiplexer.notify).toHaveBeenCalledWith('session.registerRoot', {
-      rootPath: '/home/user/orca'
+      rootPath: '/home/user/mcode'
     })
-    expect(result).toHaveProperty('path', '/home/user/orca')
+    expect(result).toHaveProperty('path', '/home/user/mcode')
     expect(result).toHaveProperty('connectionId', 'conn-1')
   })
 
@@ -196,7 +196,7 @@ describe('repos:addRemote', () => {
 
     await handlers.get('repos:cloneRemote')!(null, {
       connectionId: 'conn-1',
-      url: 'https://github.com/stablyai/orca.git',
+      url: 'https://github.com/mcode-ide/mcode.git',
       destination: '/home/user'
     })
 
@@ -209,9 +209,9 @@ describe('repos:addRemote', () => {
   it('returns an existing SSH repo instead of cloning the same target again', async () => {
     const existing = {
       id: 'existing-id',
-      path: '/home/user/orca',
+      path: '/home/user/mcode',
       connectionId: 'conn-1',
-      displayName: 'orca',
+      displayName: 'mcode',
       badgeColor: '#fff',
       addedAt: 1000,
       kind: 'git'
@@ -220,7 +220,7 @@ describe('repos:addRemote', () => {
 
     const result = await handlers.get('repos:cloneRemote')!(null, {
       connectionId: 'conn-1',
-      url: 'https://github.com/stablyai/orca.git',
+      url: 'https://github.com/mcode-ide/mcode.git',
       destination: '/home/user'
     })
 
@@ -232,9 +232,9 @@ describe('repos:addRemote', () => {
   it('upgrades an existing SSH folder repo after cloning into that path', async () => {
     const existing = {
       id: 'existing-folder',
-      path: '/home/user/orca',
+      path: '/home/user/mcode',
       connectionId: 'conn-1',
-      displayName: 'orca',
+      displayName: 'mcode',
       badgeColor: '#fff',
       addedAt: 1000,
       kind: 'folder'
@@ -245,12 +245,12 @@ describe('repos:addRemote', () => {
 
     const result = await handlers.get('repos:cloneRemote')!(null, {
       connectionId: 'conn-1',
-      url: 'https://github.com/stablyai/orca.git',
+      url: 'https://github.com/mcode-ide/mcode.git',
       destination: '/home/user'
     })
 
     expect(mockGitProvider.clone).toHaveBeenCalledWith(
-      ['clone', '--progress', '--', 'https://github.com/stablyai/orca.git', 'orca'],
+      ['clone', '--progress', '--', 'https://github.com/mcode-ide/mcode.git', 'mcode'],
       '/home/user',
       expect.objectContaining({
         signal: expect.any(AbortSignal),
@@ -273,7 +273,7 @@ describe('repos:addRemote', () => {
     await expect(
       handlers.get('repos:cloneRemote')!(null, {
         connectionId: 'conn-1',
-        url: 'https://github.com/stablyai/orca.git',
+        url: 'https://github.com/mcode-ide/mcode.git',
         destination: '/home/user'
       })
     ).rejects.toThrow('repository not found')
@@ -292,7 +292,7 @@ describe('repos:addRemote', () => {
 
     const firstClone = handlers.get('repos:cloneRemote')!(null, {
       connectionId: 'conn-1',
-      url: 'https://github.com/stablyai/orca.git',
+      url: 'https://github.com/mcode-ide/mcode.git',
       destination: '/home/user'
     })
     await waitForAssertion(() => expect(mockGitProvider.clone).toHaveBeenCalledTimes(1))
@@ -300,7 +300,7 @@ describe('repos:addRemote', () => {
     await expect(
       handlers.get('repos:cloneRemote')!(null, {
         connectionId: 'conn-1',
-        url: 'https://github.com/stablyai/orca.git',
+        url: 'https://github.com/mcode-ide/mcode.git',
         destination: '/home/user'
       })
     ).rejects.toThrow('A clone is already in progress for this SSH destination')
@@ -314,7 +314,7 @@ describe('repos:addRemote', () => {
 
     await handlers.get('repos:cloneRemote')!(null, {
       connectionId: 'conn-1',
-      url: 'https://github.com/stablyai/orca.git',
+      url: 'https://github.com/mcode-ide/mcode.git',
       destination: '~/projects'
     })
 
@@ -322,7 +322,7 @@ describe('repos:addRemote', () => {
       path: '~/projects'
     })
     expect(mockGitProvider.clone).toHaveBeenCalledWith(
-      ['clone', '--progress', '--', 'https://github.com/stablyai/orca.git', 'orca'],
+      ['clone', '--progress', '--', 'https://github.com/mcode-ide/mcode.git', 'mcode'],
       '/home/ubuntu/projects',
       expect.any(Object)
     )
@@ -335,7 +335,7 @@ describe('repos:addRemote', () => {
     await expect(
       handlers.get('repos:cloneRemote')!(null, {
         connectionId: 'conn-1',
-        url: 'https://github.com/stablyai/orca.git',
+        url: 'https://github.com/mcode-ide/mcode.git',
         destination: '/home/user'
       })
     ).rejects.toThrow('destination already exists')
@@ -354,7 +354,7 @@ describe('repos:addRemote', () => {
 
     const clonePromise = handlers.get('repos:cloneRemote')!(null, {
       connectionId: 'conn-1',
-      url: 'https://github.com/stablyai/orca.git',
+      url: 'https://github.com/mcode-ide/mcode.git',
       destination: '/home/user'
     })
     await waitForAssertion(() => expect(mockGitProvider.clone).toHaveBeenCalledTimes(1))
@@ -371,7 +371,7 @@ describe('repos:addRemote', () => {
     await expect(
       handlers.get('repos:cloneRemote')!(null, {
         connectionId: 'conn-1',
-        url: 'https://github.com/stablyai/orca.git',
+        url: 'https://github.com/mcode-ide/mcode.git',
         destination: 'relative/path'
       })
     ).rejects.toThrow('Clone destination must be an absolute path on the SSH host')
@@ -684,9 +684,9 @@ describe('repos:addRemote', () => {
   it('returns an existing SSH repo when a selected subdirectory resolves to the repo root', async () => {
     const existing = {
       id: 'existing-id',
-      path: '/home/user/orca',
+      path: '/home/user/mcode',
       connectionId: 'conn-1',
-      displayName: 'orca',
+      displayName: 'mcode',
       badgeColor: '#fff',
       addedAt: 1000,
       kind: 'git'
@@ -694,12 +694,12 @@ describe('repos:addRemote', () => {
     mockStore.getRepos.mockReturnValue([existing])
     mockGitProvider.isGitRepoAsync.mockResolvedValueOnce({
       isRepo: true,
-      rootPath: '/home/user/orca'
+      rootPath: '/home/user/mcode'
     })
 
     const result = await handlers.get('repos:addRemote')!(null, {
       connectionId: 'conn-1',
-      remotePath: '/home/user/orca/src'
+      remotePath: '/home/user/mcode/src'
     })
 
     expect(result).toEqual({ repo: existing })

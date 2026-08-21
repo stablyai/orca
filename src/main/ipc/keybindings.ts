@@ -21,7 +21,7 @@ export function registerKeybindingHandlers(
 
   ipcMain.handle('keybindings:ensureFile', () => {
     const snapshot = service.ensureFile()
-    // Why: keybindings.json lives in Orca's app config directory, not inside a
+    // Why: keybindings.json lives in MCode's app config directory, not inside a
     // workspace. Opening it in the editor still needs normal fs IPC access.
     authorizeExternalPath(snapshot.path)
     broadcastKeybindingsChanged(snapshot)

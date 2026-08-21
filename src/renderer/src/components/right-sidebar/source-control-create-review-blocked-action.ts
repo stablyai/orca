@@ -28,10 +28,10 @@ export function resolveHostedReviewAuthInstruction(provider: HostedReviewProvide
     return 'Run glab auth login'
   }
   if (provider === 'azure-devops') {
-    return 'Set ORCA_AZURE_DEVOPS_TOKEN'
+    return 'Set MCODE_AZURE_DEVOPS_TOKEN'
   }
   if (provider === 'gitea') {
-    return 'Set ORCA_GITEA_TOKEN'
+    return 'Set MCODE_GITEA_TOKEN'
   }
   if (provider === 'bitbucket') {
     return 'Connect Bitbucket in Settings > Integrations'
@@ -43,7 +43,7 @@ export function resolveUnavailableCreateReviewLookupNoticeMessage(
   provider: HostedReviewProvider
 ): string {
   const copy = localizedHostedReviewCopy(resolveSupportedHostedReviewCopyProvider(provider))
-  return `Create ${copy.shortLabel} failed: Orca could not confirm whether this branch already has a ${copy.reviewLabel}. Retry once the ${copy.providerName} lookup succeeds.`
+  return `Create ${copy.shortLabel} failed: MCode could not confirm whether this branch already has a ${copy.reviewLabel}. Retry once the ${copy.providerName} lookup succeeds.`
 }
 
 export function resolveBlockedCreateReviewNoticeMessage(

@@ -11,7 +11,7 @@ import type { MediaAccessPermissionRequest } from 'electron'
 //
 // These helpers let both the main window session and the browser-tab sessions
 // consult the same macOS-aware logic, so once a user has granted Camera or
-// Microphone to Orca (via Settings → Permissions or directly in System
+// Microphone to MCode (via Settings → Permissions or directly in System
 // Settings), a page inside an in-app browser tab actually receives the stream.
 
 export function requestedMediaTypes(

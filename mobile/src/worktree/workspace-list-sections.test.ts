@@ -12,12 +12,12 @@ import { DEFAULT_MOBILE_WORKSPACE_STATUSES } from './mobile-workspace-statuses'
 import { getMobileWorkspaceLineageGroupKey } from './mobile-workspace-lineage'
 
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
-  const worktreePath = join('/tmp', 'orca', 'worktrees', 'feature')
+  const worktreePath = join('/tmp', 'mcode', 'worktrees', 'feature')
   return {
     workspaceKind: 'git',
     worktreeId: `repo-1::${worktreePath}`,
     repoId: 'repo-1',
-    repo: 'orca',
+    repo: 'mcode',
     branch: 'feature/mobile-parity',
     displayName: 'feature',
     path: worktreePath,
@@ -242,7 +242,7 @@ describe('getWorktreeStatus', () => {
 
 describe('buildSections', () => {
   it('keys same-id rows by host inside a section', () => {
-    const worktreeId = 'repo-1::/work/orca'
+    const worktreeId = 'repo-1::/work/mcode'
     const sections = buildSections(
       [worktree({ worktreeId, hostId: 'local' }), worktree({ worktreeId, hostId: 'ssh:builder' })],
       'name',
@@ -484,14 +484,14 @@ describe('buildSections', () => {
     const parent = worktree({
       worktreeId: 'parent',
       displayName: 'Add agents to mobile',
-      repo: 'orca',
+      repo: 'mcode',
       sortOrder: 30,
       status: 'inactive'
     })
     const child = worktree({
       worktreeId: 'child',
       displayName: 'Agent Session History resume (PR2)',
-      repo: 'orca',
+      repo: 'mcode',
       parentWorktreeId: 'parent',
       sortOrder: 20,
       status: 'inactive'
@@ -499,7 +499,7 @@ describe('buildSections', () => {
     const unrelatedActive = worktree({
       worktreeId: 'active',
       displayName: 'Overlapping tui output',
-      repo: 'orca',
+      repo: 'mcode',
       sortOrder: 10,
       status: 'working',
       unread: true,
@@ -513,7 +513,7 @@ describe('buildSections', () => {
       '',
       'repo',
       new Set(),
-      new Map([['orca', 'repo-1']]),
+      new Map([['mcode', 'repo-1']]),
       DEFAULT_MOBILE_WORKSPACE_STATUSES
     )
 
@@ -525,14 +525,14 @@ describe('buildSections', () => {
     const child = worktree({
       worktreeId: 'child',
       displayName: 'Child',
-      repo: 'orca',
+      repo: 'mcode',
       sortOrder: 30,
       isMainWorktree: false
     })
     const main = worktree({
       worktreeId: 'main',
       displayName: 'Main',
-      repo: 'orca',
+      repo: 'mcode',
       sortOrder: 10,
       isMainWorktree: true
     })
@@ -544,7 +544,7 @@ describe('buildSections', () => {
       '',
       'repo',
       new Set(),
-      new Map([['orca', 'repo-1']])
+      new Map([['mcode', 'repo-1']])
     )
 
     expect(sections[0]?.data.map((item) => item.worktreeId)).toEqual(['main', 'child'])
@@ -552,14 +552,14 @@ describe('buildSections', () => {
 
   it('renders empty repo sections from repo placeholders in repo grouping', () => {
     const sections = buildSections(
-      [worktree({ repoId: 'repo-1', repo: 'orca' })],
+      [worktree({ repoId: 'repo-1', repo: 'mcode' })],
       'manual',
       { filterRepoIds: new Set(), hideSleeping: false, hideDefaultBranch: false },
       '',
       'repo',
       new Set(),
       new Map([
-        ['orca', 'repo-1'],
+        ['mcode', 'repo-1'],
         ['zoom-img', 'repo-missing']
       ])
     )
@@ -567,8 +567,8 @@ describe('buildSections', () => {
     expect(withoutSectionListKeys(sections)).toEqual([
       {
         key: 'repo:repo-1',
-        title: 'orca',
-        data: [worktree({ repoId: 'repo-1', repo: 'orca' })]
+        title: 'mcode',
+        data: [worktree({ repoId: 'repo-1', repo: 'mcode' })]
       },
       { key: 'repo:repo-missing', title: 'zoom-img', data: [] }
     ])

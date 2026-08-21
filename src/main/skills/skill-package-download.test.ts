@@ -15,7 +15,7 @@ afterEach(async () => {
 })
 
 async function temporaryRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-skill-download-test-'))
+  const root = await mkdtemp(join(tmpdir(), 'mcode-skill-download-test-'))
   roots.push(root)
   return root
 }
@@ -63,7 +63,7 @@ describe('downloadSkillPackageGrant', () => {
     const downloadInput = await input()
     const abandoned = join(
       downloadInput.temporaryRoot,
-      '.orca-skill-download-process-2147483647-abandoned'
+      '.mcode-skill-download-process-2147483647-abandoned'
     )
     await mkdir(abandoned)
     await writeFile(join(abandoned, 'package.tar.gz'), 'private bytes')

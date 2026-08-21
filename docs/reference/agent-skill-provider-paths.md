@@ -5,10 +5,10 @@ Last verified: 2026-08-11.
 V1 supports only providers whose paths are independently established by official documentation.
 The registry is deliberately small; it is not copied or synchronized from a community path table.
 
-| Provider | Detection | Global canonical support | Workspace support | Orca placement |
+| Provider | Detection | Global canonical support | Workspace support | MCode placement |
 | --- | --- | --- | --- | --- |
-| Codex | `codex` CLI found through Orca's host-owned PATH detection | Reads `$HOME/.agents/skills` directly | Reads `.agents/skills` from the current directory through the repository root | Canonical copy only |
-| Claude Code | `claude` CLI found through Orca's host-owned PATH detection | Reads `$HOME/.claude/skills` | Reads `.claude/skills` from the launch directory through the repository root, plus nested directories as files are accessed | Relative directory symlink on POSIX, directory junction on Windows, or verified independent-copy fallback |
+| Codex | `codex` CLI found through MCode's host-owned PATH detection | Reads `$HOME/.agents/skills` directly | Reads `.agents/skills` from the current directory through the repository root | Canonical copy only |
+| Claude Code | `claude` CLI found through MCode's host-owned PATH detection | Reads `$HOME/.claude/skills` | Reads `.claude/skills` from the launch directory through the repository root, plus nested directories as files are accessed | Relative directory symlink on POSIX, directory junction on Windows, or verified independent-copy fallback |
 
 Codex locations and symlink behavior are documented in the official OpenAI documentation:
 [Build skills](https://learn.chatgpt.com/docs/build-skills#where-codex-loads-local-skills).
@@ -18,8 +18,8 @@ documented in the official Anthropic documentation:
 [Extend Claude with skills](https://code.claude.com/docs/en/skills#where-skills-live).
 
 Codex therefore needs no provider-specific placement. Claude Code does not document
-`.agents/skills` as a discovery root, so Orca reconciles its documented `.claude/skills` path back
-to the canonical copy. Orca never replaces a path it does not own. If alias creation is unavailable,
+`.agents/skills` as a discovery root, so MCode reconciles its documented `.claude/skills` path back
+to the canonical copy. MCode never replaces a path it does not own. If alias creation is unavailable,
 the verified copy fallback is tracked in the install receipt so update and removal can detect drift.
 
 ## Registry change process

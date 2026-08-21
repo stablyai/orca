@@ -37,14 +37,14 @@ function countGlobalSettingsFields(source) {
 }
 
 const SETTINGS_FIELDS = countGlobalSettingsFields(TYPES_SOURCE)
-const ROWS = Number.parseInt(process.env.ORCA_OWNER_SETTINGS_BENCH_ROWS ?? '43', 10)
-const WRITES = Number.parseInt(process.env.ORCA_OWNER_SETTINGS_BENCH_WRITES ?? '2000', 10)
-const WARMUP = Number.parseInt(process.env.ORCA_OWNER_SETTINGS_BENCH_WARMUP ?? '200', 10)
+const ROWS = Number.parseInt(process.env.MCODE_OWNER_SETTINGS_BENCH_ROWS ?? '43', 10)
+const WRITES = Number.parseInt(process.env.MCODE_OWNER_SETTINGS_BENCH_WRITES ?? '2000', 10)
+const WARMUP = Number.parseInt(process.env.MCODE_OWNER_SETTINGS_BENCH_WARMUP ?? '200', 10)
 
 for (const [name, value] of [
-  ['ORCA_OWNER_SETTINGS_BENCH_ROWS', ROWS],
-  ['ORCA_OWNER_SETTINGS_BENCH_WRITES', WRITES],
-  ['ORCA_OWNER_SETTINGS_BENCH_WARMUP', WARMUP]
+  ['MCODE_OWNER_SETTINGS_BENCH_ROWS', ROWS],
+  ['MCODE_OWNER_SETTINGS_BENCH_WRITES', WRITES],
+  ['MCODE_OWNER_SETTINGS_BENCH_WARMUP', WARMUP]
 ]) {
   if (!Number.isInteger(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer, received ${value}`)

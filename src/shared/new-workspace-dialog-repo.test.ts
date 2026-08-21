@@ -63,7 +63,7 @@ describe('new workspace dialog repo selection', () => {
     const eligible = getNewWorkspaceDialogEligibleRepos([
       makeRepo('local-repo'),
       makeRepo('user-ssh', { connectionId: 'my-server' }),
-      makeRepo('runtime-ssh', { connectionId: 'runtime-ssh-orca-1' })
+      makeRepo('runtime-ssh', { connectionId: 'runtime-ssh-mcode-1' })
     ])
 
     expect(eligible.map((repo) => repo.id)).toEqual(['local-repo', 'user-ssh'])

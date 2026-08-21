@@ -10,7 +10,7 @@ import {
 const tempDirs = []
 
 function tempReportPath() {
-  const dir = mkdtempSync(join(tmpdir(), 'orca-terminal-perf-gate-'))
+  const dir = mkdtempSync(join(tmpdir(), 'mcode-terminal-perf-gate-'))
   tempDirs.push(dir)
   return join(dir, 'report.json')
 }
@@ -68,7 +68,7 @@ describe('run-terminal-scale-perf-report-gate', () => {
 
     const status = runTerminalScalePerfReportGate({
       argv: ['--report', reportPath, '--grep', '25 ACK-backpressured real PTYs'],
-      env: { ...process.env, ORCA_TEST_MARKER: '1' },
+      env: { ...process.env, MCODE_TEST_MARKER: '1' },
       spawnSyncImpl
     })
 
@@ -87,7 +87,7 @@ describe('run-terminal-scale-perf-report-gate', () => {
       '--grep',
       '25 ACK-backpressured real PTYs'
     ])
-    expect(calls[0].options.env.ORCA_TEST_MARKER).toBe('1')
+    expect(calls[0].options.env.MCODE_TEST_MARKER).toBe('1')
     expect(calls[1].args).toEqual(['config/scripts/summarize-terminal-perf-report.mjs', reportPath])
     expect(calls[2].args).toEqual([
       'config/scripts/check-terminal-perf-report-budgets.mjs',
@@ -106,7 +106,7 @@ describe('run-terminal-scale-perf-report-gate', () => {
     const { calls, spawnSyncImpl } = makeSpawnSync()
 
     const status = runTerminalScalePerfReportGate({
-      env: { ...process.env, ORCA_E2E_TERMINAL_PERF_REPORT_PATH: reportPath },
+      env: { ...process.env, MCODE_E2E_TERMINAL_PERF_REPORT_PATH: reportPath },
       spawnSyncImpl
     })
 
@@ -121,8 +121,8 @@ describe('run-terminal-scale-perf-report-gate', () => {
     const status = runTerminalScalePerfReportGate({
       env: {
         ...process.env,
-        ORCA_E2E_TERMINAL_PERF_HTML_REPORT_PATH: 'tmp/terminal-report.html',
-        ORCA_E2E_TERMINAL_PERF_REPORT_PATH: reportPath
+        MCODE_E2E_TERMINAL_PERF_HTML_REPORT_PATH: 'tmp/terminal-report.html',
+        MCODE_E2E_TERMINAL_PERF_REPORT_PATH: reportPath
       },
       spawnSyncImpl
     })

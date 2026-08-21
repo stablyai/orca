@@ -52,7 +52,7 @@ export function TaskSourceLinearSetup({
           )}
           description={translate(
             'auto.components.settings.TaskSourceLinearSetup.connectDescription',
-            'Add a Personal API key so Orca can browse issues and open workspaces with ticket context.'
+            'Add a Personal API key so MCode can browse issues and open workspaces with ticket context.'
           )}
           action={
             <Button
@@ -105,7 +105,7 @@ export function TaskSourceLinearSetup({
           )}
           description={translate(
             'auto.components.settings.TaskSourceLinearSetup.skillDescription',
-            'Gives agents /orca-linear to read tickets, post updates, move states, and attach pull or merge requests.'
+            'Gives agents /mcode-linear to read tickets, post updates, move states, and attach pull or merge requests.'
           )}
           className={skillInstallBlocked ? 'opacity-60' : undefined}
         >

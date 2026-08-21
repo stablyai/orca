@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Cross-terminal pipeline benchmark. Run INSIDE the terminal under test
- * (Orca pane, iTerm2, Ghostty, Terminal.app, VS Code, ...) — it measures the
+ * (MCode pane, iTerm2, Ghostty, Terminal.app, VS Code, ...) — it measures the
  * full byte path of whatever terminal hosts it: PTY -> (daemon/ptyHost ->
  * IPC ->) parser -> response.
  *

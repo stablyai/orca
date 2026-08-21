@@ -38,12 +38,12 @@ function readMirroredConstant(name) {
 // instead of quietly changing what this benchmark claims.
 const ASSISTANT_MESSAGE_CAP = readMirroredConstant('AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH')
 
-const ITERATIONS = Number.parseInt(process.env.ORCA_HOOK_NORM_BENCH_ITERATIONS ?? '400', 10)
-const WARMUP = Number.parseInt(process.env.ORCA_HOOK_NORM_BENCH_WARMUP ?? '200', 10)
+const ITERATIONS = Number.parseInt(process.env.MCODE_HOOK_NORM_BENCH_ITERATIONS ?? '400', 10)
+const WARMUP = Number.parseInt(process.env.MCODE_HOOK_NORM_BENCH_WARMUP ?? '200', 10)
 
 for (const [name, value] of [
-  ['ORCA_HOOK_NORM_BENCH_ITERATIONS', ITERATIONS],
-  ['ORCA_HOOK_NORM_BENCH_WARMUP', WARMUP]
+  ['MCODE_HOOK_NORM_BENCH_ITERATIONS', ITERATIONS],
+  ['MCODE_HOOK_NORM_BENCH_WARMUP', WARMUP]
 ]) {
   if (!Number.isInteger(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer, received ${value}`)

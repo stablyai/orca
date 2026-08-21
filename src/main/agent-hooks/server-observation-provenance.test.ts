@@ -236,7 +236,7 @@ describe('agent status observation provenance', () => {
   })
 
   it('never persists the observation to last-status.json', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-observation-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-observation-'))
     try {
       const server = newServer()
       await server.start({ env: 'production', userDataPath })

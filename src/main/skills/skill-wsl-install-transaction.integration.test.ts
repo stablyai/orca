@@ -10,8 +10,8 @@ import { createSkillPackageArchive } from './skill-package-creation'
 import { createWslSkillInstallFilesystem } from './skill-wsl-install-filesystem'
 
 const execFileAsync = promisify(execFile)
-const DISTRO = process.env.ORCA_REAL_WSL_SKILL_DISTRO ?? 'Ubuntu-24.04'
-const RUN_REAL_WSL = process.platform === 'win32' && process.env.ORCA_REAL_WSL_SKILL_TEST === '1'
+const DISTRO = process.env.MCODE_REAL_WSL_SKILL_DISTRO ?? 'Ubuntu-24.04'
+const RUN_REAL_WSL = process.platform === 'win32' && process.env.MCODE_REAL_WSL_SKILL_TEST === '1'
 
 async function runWsl(...args: string[]): Promise<string> {
   const { stdout } = await execFileAsync('wsl.exe', ['-d', DISTRO, '--exec', ...args], {
@@ -53,9 +53,9 @@ describe.runIf(RUN_REAL_WSL)('real WSL skill install transactions', () => {
   let workspaceDirectory = ''
 
   beforeAll(async () => {
-    localRoot = await mkdtemp(join(tmpdir(), 'orca-wsl-skill-integration-'))
-    guestRoot = await runWsl('mktemp', '-d', '/tmp/orca-skill-integration.XXXXXX')
-    if (!guestRoot.startsWith('/tmp/orca-skill-integration.')) {
+    localRoot = await mkdtemp(join(tmpdir(), 'mcode-wsl-skill-integration-'))
+    guestRoot = await runWsl('mktemp', '-d', '/tmp/mcode-skill-integration.XXXXXX')
+    if (!guestRoot.startsWith('/tmp/mcode-skill-integration.')) {
       throw new Error('unexpected-wsl-integration-root')
     }
     await runWsl('mkdir', '-p', `${guestRoot}/home`, `${guestRoot}/workspace`)
@@ -65,7 +65,7 @@ describe.runIf(RUN_REAL_WSL)('real WSL skill install transactions', () => {
 
   afterAll(async () => {
     await rm(localRoot, { recursive: true, force: true })
-    if (guestRoot.startsWith('/tmp/orca-skill-integration.')) {
+    if (guestRoot.startsWith('/tmp/mcode-skill-integration.')) {
       await runWsl('rm', '-rf', '--', guestRoot)
     }
   })
@@ -96,7 +96,7 @@ describe.runIf(RUN_REAL_WSL)('real WSL skill install transactions', () => {
       scope,
       homeDirectory,
       ...(scope === 'workspace' ? { workspaceDirectory } : {}),
-      orcaStateDirectory: join(localRoot, `state-${scope}`),
+      mcodeStateDirectory: join(localRoot, `state-${scope}`),
       detectedProviders: ['codex', 'claude'],
       destinationIdentity: `${scope}:real-wsl`,
       hostIdentity: 'windows-2',
@@ -138,7 +138,7 @@ describe.runIf(RUN_REAL_WSL)('real WSL skill install transactions', () => {
       skillName: 'real-wsl-skill',
       scope: 'global' as const,
       homeDirectory,
-      orcaStateDirectory: join(localRoot, 'state-global'),
+      mcodeStateDirectory: join(localRoot, 'state-global'),
       detectedProviders: ['codex', 'claude'],
       filesystem
     }
@@ -180,7 +180,7 @@ describe.runIf(RUN_REAL_WSL)('real WSL skill install transactions', () => {
           scope: 'workspace',
           homeDirectory,
           workspaceDirectory,
-          orcaStateDirectory: join(localRoot, 'state-workspace'),
+          mcodeStateDirectory: join(localRoot, 'state-workspace'),
           detectedProviders: ['codex', 'claude'],
           filesystem
         })
@@ -200,7 +200,7 @@ describe.runIf(RUN_REAL_WSL)('real WSL skill install transactions', () => {
     const input = {
       ...installInput(archive, 'workspace', filesystem),
       workspaceDirectory: windowsWorkspace,
-      orcaStateDirectory: join(localRoot, 'state-drvfs')
+      mcodeStateDirectory: join(localRoot, 'state-drvfs')
     }
 
     expect((await installSharedSkill(input)).status).toBe('installed')
@@ -218,7 +218,7 @@ describe.runIf(RUN_REAL_WSL)('real WSL skill install transactions', () => {
           scope: 'workspace',
           homeDirectory,
           workspaceDirectory: windowsWorkspace,
-          orcaStateDirectory: join(localRoot, 'state-drvfs'),
+          mcodeStateDirectory: join(localRoot, 'state-drvfs'),
           detectedProviders: ['codex', 'claude'],
           filesystem
         })

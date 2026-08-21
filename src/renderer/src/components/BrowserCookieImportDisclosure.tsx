@@ -18,7 +18,7 @@ export function BrowserCookieImportDisclosure(): React.JSX.Element {
           <span className="block leading-4 text-muted-foreground">
             {translate(
               'auto.components.BrowserCookieImportDisclosure.description',
-              'Sign in to Google directly in Orca.'
+              'Sign in to Google directly in MCode.'
             )}
           </span>
         </span>

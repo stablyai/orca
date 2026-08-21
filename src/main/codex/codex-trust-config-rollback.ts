@@ -94,9 +94,9 @@ export function restoreCodexTrustConfig(
     }
   }
   // Why: rollback protects config integrity too; direct truncating writes can
-  // leave Codex unusable if Orca exits midway through recovery.
+  // leave Codex unusable if MCode exits midway through recovery.
   // Why: Codex's writer preserves config.toml symlinks. Restore through their
-  // real target too, or Orca's atomic rename would disconnect dotfiles users.
+  // real target too, or MCode's atomic rename would disconnect dotfiles users.
   const tempPath = `${restorePath}.${process.pid}.${randomUUID()}.rollback.tmp`
   try {
     writeFileSync(tempPath, snapshot.contents, { mode: snapshot.mode })

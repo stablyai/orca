@@ -9,13 +9,13 @@ export type ClientEnvironmentInfo = {
 }
 
 const FOOTER_MARKER = '---'
-const ORCA_LINE_PREFIX = 'Orca:'
+const MCODE_LINE_PREFIX = 'MCode:'
 
 // Why: match the whole prefilled block (optional Shell line included) so strip
 // keeps authored text both above and below — users who click past the footer
 // and type must still be able to send.
 const CLIENT_ENVIRONMENT_FOOTER_BLOCK =
-  /(^|\r?\n)---\r?\nOrca:[^\r\n]*\r?\nOS:[^\r\n]*(?:\r?\nShell:[^\r\n]*)?/
+  /(^|\r?\n)---\r?\nMCode:[^\r\n]*\r?\nOS:[^\r\n]*(?:\r?\nShell:[^\r\n]*)?/
 
 function normalizeEnvironmentValue(value: string): string {
   return value.trim().replace(/[\r\n]+/g, ' ')
@@ -27,7 +27,7 @@ export function formatClientEnvironmentInfo(info: ClientEnvironmentInfo): string
   const osRelease = normalizeEnvironmentValue(info.osRelease)
   const arch = normalizeEnvironmentValue(info.arch)
   const osParts = [platform, osRelease, arch ? `(${arch})` : ''].filter(Boolean)
-  const lines = [`${ORCA_LINE_PREFIX} ${version}`, `OS: ${osParts.join(' ')}`]
+  const lines = [`${MCODE_LINE_PREFIX} ${version}`, `OS: ${osParts.join(' ')}`]
   const shell = info.shell ? normalizeEnvironmentValue(info.shell) : ''
   if (shell) {
     lines.push(`Shell: ${shell}`)

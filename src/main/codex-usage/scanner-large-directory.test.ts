@@ -21,14 +21,14 @@ vi.mock('fs/promises', async () => {
 })
 
 const FILE_COUNT = 125_000
-const FAKE_ROOT = join('/', 'tmp', 'orca-large-codex-home')
+const FAKE_ROOT = join('/', 'tmp', 'mcode-large-codex-home')
 const RUNTIME_SESSIONS_ROOT = join(FAKE_ROOT, 'runtime', 'sessions')
 const SYSTEM_SESSIONS_ROOT = join(FAKE_ROOT, 'system', 'sessions')
 const RUNTIME_BULK_DIR = join(RUNTIME_SESSIONS_ROOT, 'bulk')
 
 vi.mock('../codex/codex-home-paths', () => ({
-  getOrcaManagedCodexHomePath: () => join(FAKE_ROOT, 'runtime'),
-  getOrcaUserDataPath: () => FAKE_ROOT,
+  getMCodeManagedCodexHomePath: () => join(FAKE_ROOT, 'runtime'),
+  getMCodeUserDataPath: () => FAKE_ROOT,
   getSystemCodexHomePath: () => join(FAKE_ROOT, 'system')
 }))
 

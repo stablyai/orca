@@ -109,8 +109,8 @@ const hostOptions: ProjectHostSetupOption[] = [
     hostId: 'local',
     repoId: 'repo-a',
     label: 'Local Mac',
-    detail: 'Orca',
-    path: '/Users/alice/orca'
+    detail: 'MCode',
+    path: '/Users/alice/mcode'
   },
   {
     kind: 'needs-setup',

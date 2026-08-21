@@ -183,7 +183,7 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
         ]
       },
       browserTabsByWorktree: {
-        [FLOATING_TERMINAL_WORKTREE_ID]: [{ id: 'floating-browser', url: 'https://orca.test' }]
+        [FLOATING_TERMINAL_WORKTREE_ID]: [{ id: 'floating-browser', url: 'https://mcode.test' }]
       },
       openFiles: [
         floatingFile,
@@ -237,7 +237,7 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
       ]
     })
     expect(store.getState().browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]).toEqual([
-      { id: 'floating-browser', url: 'https://orca.test' }
+      { id: 'floating-browser', url: 'https://mcode.test' }
     ])
     expect(store.getState().openFiles).toEqual([floatingFile])
     expect(store.getState().activeFileIdByWorktree).toEqual({
@@ -255,7 +255,7 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
     const store = createTestStore()
     const tabsByWorktree = {}
     const browserTabsByWorktree = {
-      [FLOATING_TERMINAL_WORKTREE_ID]: [{ id: 'floating-browser', url: 'https://orca.test' }]
+      [FLOATING_TERMINAL_WORKTREE_ID]: [{ id: 'floating-browser', url: 'https://mcode.test' }]
     }
     const openFiles = [
       {

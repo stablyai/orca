@@ -93,7 +93,7 @@ describe('getWorkItemDetails Enterprise host routing', () => {
   it('uses the GitHub Enterprise host for SSH-backed issue work item details', async () => {
     const enterpriseRepository = {
       owner: 'team',
-      repo: 'orca',
+      repo: 'mcode',
       host: 'github.acme-corp.com'
     }
     getWorkItemMock.mockResolvedValueOnce({
@@ -102,7 +102,7 @@ describe('getWorkItemDetails Enterprise host routing', () => {
       number: 7,
       title: 'Enterprise issue',
       state: 'open',
-      url: 'https://github.acme-corp.com/team/orca/issues/7',
+      url: 'https://github.acme-corp.com/team/mcode/issues/7',
       labels: [],
       updatedAt: '2026-07-16T00:00:00Z',
       author: 'issue-author'
@@ -128,7 +128,7 @@ describe('getWorkItemDetails Enterprise host routing', () => {
         }
       }
       const endpoint = args.find((arg) => arg.startsWith('repos/')) ?? ''
-      if (endpoint === 'repos/team/orca/issues/7/timeline?per_page=100&page=1') {
+      if (endpoint === 'repos/team/mcode/issues/7/timeline?per_page=100&page=1') {
         return { stdout: '' }
       }
       throw new Error(`unexpected gh call: ${args.join(' ')}`)
@@ -168,17 +168,17 @@ describe('getWorkItemDetails Enterprise host routing', () => {
       number: 7,
       title: 'Enterprise PR files',
       state: 'open',
-      url: 'https://github.acme-corp.com/team/orca/pull/7',
+      url: 'https://github.acme-corp.com/team/mcode/pull/7',
       labels: [],
       updatedAt: '2026-07-16T00:00:00Z',
       author: 'pr-author',
-      prRepo: { owner: 'team', repo: 'orca', host: 'github.acme-corp.com' }
+      prRepo: { owner: 'team', repo: 'mcode', host: 'github.acme-corp.com' }
     })
     getPRCommentsMock.mockResolvedValue([])
     getPRChecksMock.mockResolvedValue([])
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       const endpoint = args.find((arg) => arg.startsWith('repos/')) ?? ''
-      if (endpoint === 'repos/team/orca/pulls/7') {
+      if (endpoint === 'repos/team/mcode/pulls/7') {
         return {
           stdout: JSON.stringify({
             body: 'Enterprise PR body',
@@ -187,7 +187,7 @@ describe('getWorkItemDetails Enterprise host routing', () => {
           })
         }
       }
-      if (endpoint === 'repos/team/orca/pulls/7/files?per_page=100') {
+      if (endpoint === 'repos/team/mcode/pulls/7/files?per_page=100') {
         return {
           stdout: JSON.stringify([
             {
@@ -252,14 +252,14 @@ describe('getWorkItemDetails Enterprise host routing', () => {
     expect(getPRCommentsMock).toHaveBeenCalledWith(
       '/remote/repo',
       7,
-      { prRepo: { owner: 'team', repo: 'orca', host: 'github.acme-corp.com' } },
+      { prRepo: { owner: 'team', repo: 'mcode', host: 'github.acme-corp.com' } },
       'ssh-1'
     )
     expect(getPRChecksMock).toHaveBeenCalledWith(
       '/remote/repo',
       7,
       'head-sha',
-      { owner: 'team', repo: 'orca', host: 'github.acme-corp.com' },
+      { owner: 'team', repo: 'mcode', host: 'github.acme-corp.com' },
       undefined,
       'ssh-1'
     )
@@ -295,7 +295,7 @@ describe('getWorkItemDetails Enterprise host routing', () => {
       number: 7,
       title: 'Unresolved Enterprise PR',
       state: 'open',
-      url: 'https://github.acme-corp.com/team/orca/pull/7',
+      url: 'https://github.acme-corp.com/team/mcode/pull/7',
       labels: [],
       updatedAt: '2026-07-16T00:00:00Z',
       author: 'pr-author'

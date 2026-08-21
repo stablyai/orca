@@ -111,10 +111,10 @@ jobs:
           IOS_DIST_CERT_PASSWORD: ${{ secrets.IOS_DIST_CERT_PASSWORD }}
         run: |
           set -euo pipefail
-          KEYCHAIN_PATH="$RUNNER_TEMP/orca-signing.keychain-db"
+          KEYCHAIN_PATH="$RUNNER_TEMP/mcode-signing.keychain-db"
           # Random per-run keychain password; never persisted.
           KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
-          CERT_PATH="$RUNNER_TEMP/orca-dist-cert.p12"
+          CERT_PATH="$RUNNER_TEMP/mcode-dist-cert.p12"
 
           echo "$IOS_DIST_CERT_P12" | base64 --decode > "$CERT_PATH"
 
@@ -145,7 +145,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: orca-mobile-ipa
+          name: mcode-mobile-ipa
           path: mobile/build/*.ipa
           if-no-files-found: ignore
 

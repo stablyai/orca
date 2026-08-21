@@ -285,7 +285,7 @@ export function toLegacyDetectedWorktreeResult(
     source: 'session-fallback',
     worktrees: result.worktrees.map((worktree) => ({
       ...worktree,
-      ownership: 'orca-managed',
+      ownership: 'mcode-managed',
       selectedCheckout: false,
       visible: true
     }))

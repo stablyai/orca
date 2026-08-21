@@ -20,7 +20,7 @@ const CHECKOUT_FORMAT = 1
 // the shared codec. Skipping cli/relay keeps a cold CI extraction a few seconds.
 const ARCHIVE_PATHS = ['src/main', 'src/shared', 'src/preload', 'src/renderer', 'src/types']
 
-const BASELINE_REF_ENV = 'ORCA_CROSS_VERSION_BASELINE_REF'
+const BASELINE_REF_ENV = 'MCODE_CROSS_VERSION_BASELINE_REF'
 const STABLE_DESKTOP_RELEASE_TAG = /^v\d+\.\d+\.\d+$/
 
 export type ReleaseCheckout = {

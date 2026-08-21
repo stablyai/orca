@@ -87,7 +87,7 @@ would otherwise hit spurious mismatches. It appears nowhere in `src/main/ssh/` t
 
 **Lookup key.** Config resolution uses `configHost || label` (`ssh-connection.ts:660`) while ssh2
 dials `effectiveHost` (`ssh-connection-utils.ts:188`). The `known_hosts` lookup must use
-`HostKeyAlias` if set, else the **resolved hostname** — keying on the Orca label would miss every
+`HostKeyAlias` if set, else the **resolved hostname** — keying on the MCode label would miss every
 existing entry.
 
 **Two ordered lookup passes, not one candidate set.** Verified against OpenSSH 10.2p1: a non-default
@@ -172,7 +172,7 @@ hard-fails changed and revoked; `accept-new` persists silently; `yes` denies unk
 **ca-only, reversed after review.** The rejection was stricter than ssh, and the blast radius was
 mispriced. An SSH CA user holds ONE line — very often `@cert-authority *` — which matches every
 candidate, so EVERY target failed, not just CA-signed ones, including on-demand runtime VMs, and
-`StrictHostKeyChecking=no` did not help. `ORCA_SSH_FORCE_SYSTEM_TRANSPORT=1` is read from the
+`StrictHostKeyChecking=no` did not help. `MCODE_SSH_FORCE_SYSTEM_TRANSPORT=1` is read from the
 process environment, which an Electron app launched from the Dock or Start Menu does not have, so
 the documented escape was unreachable for exactly the people who needed it. And OpenSSH's own
 verdict for a CA-covered host presenting a plain key is `HOST_NEW`: it connects. ssh2 cannot
@@ -200,7 +200,7 @@ shows the stored fingerprint so the user is choosing knowingly.
 Offer it only when **our** store is what disagreed; when `known_hosts` disagrees, forgetting our
 record cannot unblock the connect. Messages, written to avoid naming internals:
 
-> **Ours disagreed** — "The host key for `build-01` changed since you last connected from Orca. If you
+> **Ours disagreed** — "The host key for `build-01` changed since you last connected from MCode. If you
 > rebuilt or reprovisioned this machine, this is expected." → *Forget the saved key* / *Cancel*
 
 > **`known_hosts` disagreed** — "The host key for `build-01` does not match the entry in
@@ -358,7 +358,7 @@ Fixed after review:
    only answer match/mismatch/unknown, so a record of a *different* type read as `unknown`. D3's
    downgrade, applied to the records we create ourselves. Stored types now also feed the algorithm
    ordering — without that the guard is only half present.
-2. **We keyed on the Orca label.** `ssh -G` echoes its own argument back as `hostname` when no Host
+2. **We keyed on the MCode label.** `ssh -G` echoes its own argument back as `hostname` when no Host
    block matches, so for a manual target `resolved.hostname` *is* the label — the one name D2
    forbids. We consulted no entries at all.
 3. **A refused key still walked the credential ladder.** ssh2 reports a denial as a generic auth
@@ -404,7 +404,7 @@ tooltip, and the terminal reconnect overlay never asked for it at all. Still ope
   `getPublicSshState`, so a paired-web client always sees exactly `SSH connection unavailable`.
   Pre-existing, but it makes the Phase 2 dialog message unreachable there without a change. Note the
   redaction is not web-only: any target owned by a paired runtime environment is redacted, so a
-  *desktop* user viewing a remote-Orca-server-owned host gets the same generic string.
+  *desktop* user viewing a remote-MCode-server-owned host gets the same generic string.
 - **RPC fail-fast** becomes load-bearing the moment the dialog exists (see Phasing).
 
 **Known gaps that Phase 1 accepts, listed so they are choices and not surprises:**
@@ -418,6 +418,6 @@ tooltip, and the terminal reconnect overlay never asked for it at all. Still ope
   ssh2 upgrade that changes it fails CI rather than shipping — but the pin has to be honoured, not
   deleted, because ssh2 throws `Unsupported algorithm` and every target stops connecting.
 
-**Rollout:** the first release carrying this is the first time Orca can refuse an SSH connection at
+**Rollout:** the first release carrying this is the first time MCode can refuse an SSH connection at
 all. Worth a staged rollout or a kill switch: the failure modes we could not find are, by the shape
 of the five above, far more likely to be "a legitimate host is refused" than "a bad key is accepted".

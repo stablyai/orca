@@ -139,7 +139,7 @@ describe('relay oversized notification survival', () => {
     expect(capacityFor(NODE21_HWM)).toBe(12288)
 
     // agent.hook: fits a modern remote, over-cap on an older one — which is why the remote's
-    // Node major, not Orca's, decides whether a maximal envelope has to shed.
+    // Node major, not MCode's, decides whether a maximal envelope has to shed.
     expect(hookBytes).toBeLessThan(capacityFor(NODE22_HWM))
     expect(hookBytes).toBeGreaterThan(capacityFor(NODE21_HWM))
 

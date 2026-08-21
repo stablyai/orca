@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   focusActiveTerminalInput,
@@ -119,17 +119,17 @@ async function runNativeScenario(
 
 test.describe('Native macOS 2-Set Korean terminal input @headful', () => {
   test.skip(
-    process.platform !== 'darwin' || process.env.ORCA_E2E_NATIVE_MACOS_KOREAN !== '1',
+    process.platform !== 'darwin' || process.env.MCODE_E2E_NATIVE_MACOS_KOREAN !== '1',
     'Requires macOS with 2-Set Korean selected and Accessibility access'
   )
 
   test('forwards physical Hangul input as exact PTY bytes', async ({
     electronApp,
-    orcaPage,
+    mcodePage,
     testRepoPath
   }, testInfo) => {
     await runNativeScenario(
-      orcaPage,
+      mcodePage,
       testInfo,
       testRepoPath,
       electronApp.process().pid!,
@@ -140,11 +140,11 @@ test.describe('Native macOS 2-Set Korean terminal input @headful', () => {
 
   test('preserves leading vowels and composes the following syllable', async ({
     electronApp,
-    orcaPage,
+    mcodePage,
     testRepoPath
   }, testInfo) => {
     await runNativeScenario(
-      orcaPage,
+      mcodePage,
       testInfo,
       testRepoPath,
       electronApp.process().pid!,
@@ -155,11 +155,11 @@ test.describe('Native macOS 2-Set Korean terminal input @headful', () => {
 
   test('flushes each syllable while the next remains in preedit', async ({
     electronApp,
-    orcaPage,
+    mcodePage,
     testRepoPath
   }, testInfo) => {
     await runNativeScenario(
-      orcaPage,
+      mcodePage,
       testInfo,
       testRepoPath,
       electronApp.process().pid!,

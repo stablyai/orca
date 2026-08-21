@@ -92,7 +92,7 @@ describe('WebRuntimeClient', () => {
     })
 
     client.close()
-    await expect(call).rejects.toThrow('Remote Orca runtime connection closed.')
+    await expect(call).rejects.toThrow('Remote MCode runtime connection closed.')
   })
 
   it('closes child subscription clients when the owning client closes', () => {
@@ -205,7 +205,7 @@ describe('WebRuntimeClient', () => {
 
       client.close()
 
-      await expect(callPromise).rejects.toThrow('Remote Orca runtime connection closed.')
+      await expect(callPromise).rejects.toThrow('Remote MCode runtime connection closed.')
       expect(vi.getTimerCount()).toBe(0)
     } finally {
       vi.useRealTimers()

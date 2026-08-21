@@ -33,7 +33,7 @@ export class SimulatedMobileE2EEV2Peer {
       clientNonceB64: Buffer.from(clientNonce).toString('base64'),
       capabilities: { framing: [2], payloadKinds: ['text', 'binary'] },
       context: {
-        protocol: 'orca-mobile-e2ee',
+        protocol: 'mcode-mobile-e2ee',
         initiator: 'mobile',
         responder: 'desktop',
         transport: 'relay',

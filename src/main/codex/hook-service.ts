@@ -54,7 +54,7 @@ import {
   type CodexHookTrustState,
   type CodexTrustEntry
 } from './config-toml-trust'
-import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
+import { getMCodeManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
 import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
 import {
   createCodexWslRuntimeHookInstallPlan,
@@ -83,7 +83,7 @@ import {
 import type { CodexTrustGrantLedgerHome } from './codex-trust-grant-ledger'
 import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-rebase'
 
-// Why: Pre/PostToolUse feed the live in-flight-tool readout; PermissionRequest exits with no decision so Codex still shows its approval UI while Orca flips the pane to waiting.
+// Why: Pre/PostToolUse feed the live in-flight-tool readout; PermissionRequest exits with no decision so Codex still shows its approval UI while MCode flips the pane to waiting.
 const CODEX_EVENTS = [
   'SessionStart',
   'UserPromptSubmit',
@@ -95,16 +95,16 @@ const CODEX_EVENTS = [
   'Stop'
 ] as const
 
-function getConfigPath(runtimeHomePath: string = getOrcaManagedCodexHomePath()): string {
+function getConfigPath(runtimeHomePath: string = getMCodeManagedCodexHomePath()): string {
   return join(runtimeHomePath, 'hooks.json')
 }
 
 function writeCodexHooksJson(configPath: string, hooks: Record<string, HookDefinition[]>): void {
-  // Why: Codex rejects unknown top-level hooks.json fields, so plugin bookkeeping like `_managed` must not survive Orca's rewrite.
+  // Why: Codex rejects unknown top-level hooks.json fields, so plugin bookkeeping like `_managed` must not survive MCode's rewrite.
   writeHooksJson(configPath, { hooks })
 }
 
-function getCodexConfigTomlPath(runtimeHomePath: string = getOrcaManagedCodexHomePath()): string {
+function getCodexConfigTomlPath(runtimeHomePath: string = getMCodeManagedCodexHomePath()): string {
   return join(runtimeHomePath, 'config.toml')
 }
 
@@ -131,9 +131,9 @@ const CODEX_PLUGIN_ONLY_HOOK_PLACEHOLDERS = [
   '${PLUGIN_DATA}'
 ] as const
 
-const LEGACY_ORCA_PROFILE_NAME = 'orca-agent-status'
-const LEGACY_ORCA_PROFILE_BLOCK_START = '# BEGIN ORCA AGENT STATUS HOOKS'
-const LEGACY_ORCA_PROFILE_BLOCK_END = '# END ORCA AGENT STATUS HOOKS'
+const LEGACY_MCODE_PROFILE_NAME = 'mcode-agent-status'
+const LEGACY_MCODE_PROFILE_BLOCK_START = '# BEGIN MCODE AGENT STATUS HOOKS'
+const LEGACY_MCODE_PROFILE_BLOCK_END = '# END MCODE AGENT STATUS HOOKS'
 
 type MirroredRuntimeUserHookTrustEntry = {
   entry: CodexTrustEntry
@@ -200,7 +200,7 @@ function getSystemCodexConfigTomlPath(): string {
 }
 
 function getLegacyCodexProfileTomlPath(): string {
-  return join(getSystemCodexHomePath(), `${LEGACY_ORCA_PROFILE_NAME}.config.toml`)
+  return join(getSystemCodexHomePath(), `${LEGACY_MCODE_PROFILE_NAME}.config.toml`)
 }
 
 function collectManagedTrustEntries(
@@ -358,7 +358,7 @@ function getTrustedSystemUserHookSignatures(
   try {
     trustEntries = readHookTrustEntries(getSystemCodexConfigTomlPath())
   } catch (error) {
-    // Why: a hand-broken system config.toml should only disable user-hook trust mirroring, not block Orca's managed runtime hooks.
+    // Why: a hand-broken system config.toml should only disable user-hook trust mirroring, not block MCode's managed runtime hooks.
     console.warn('[codex-hook-service] failed to read system hook trust entries', error)
     return signatures
   }
@@ -632,10 +632,10 @@ function cleanupLegacySystemManagedHooks(): void {
     }
   }
 
-  // Why: Codex hooks moved to Orca's managed CODEX_HOME; stale ~/.codex entries would keep external Codex sessions reporting into Orca.
+  // Why: Codex hooks moved to MCode's managed CODEX_HOME; stale ~/.codex entries would keep external Codex sessions reporting into MCode.
   if (removedManagedHook) {
-    // Why: this is the user's system hooks file, not Orca's runtime copy.
-    // Remove only stale Orca hook entries and preserve other managers' metadata.
+    // Why: this is the user's system hooks file, not MCode's runtime copy.
+    // Remove only stale MCode hook entries and preserve other managers' metadata.
     const hooksWritePath = resolveHooksJsonWritePath(legacyConfigPath)
     const previousMode = statSync(hooksWritePath).mode
     mutateRealHomeHooksPreservingUserTrust({
@@ -669,12 +669,12 @@ function cleanupLegacySystemManagedHooks(): void {
 }
 
 function stripLegacyManagedProfileBlock(content: string): string {
-  const start = content.indexOf(LEGACY_ORCA_PROFILE_BLOCK_START)
+  const start = content.indexOf(LEGACY_MCODE_PROFILE_BLOCK_START)
   if (start === -1) {
     return content
   }
-  const endMarker = content.indexOf(LEGACY_ORCA_PROFILE_BLOCK_END, start)
-  const end = endMarker === -1 ? content.length : endMarker + LEGACY_ORCA_PROFILE_BLOCK_END.length
+  const endMarker = content.indexOf(LEGACY_MCODE_PROFILE_BLOCK_END, start)
+  const end = endMarker === -1 ? content.length : endMarker + LEGACY_MCODE_PROFILE_BLOCK_END.length
   const before = content.slice(0, start).replace(/[ \t]*(?:\r?\n)*$/, '')
   const after = content.slice(end).replace(/^(?:\r?\n)+/, '')
   if (!before) {
@@ -697,7 +697,7 @@ function cleanupLegacyCodexProfileHooks(): void {
   if (next === existing) {
     return
   }
-  // Why: #2778 wrote Orca hooks into a Codex profile file; runtime CODEX_HOME supersedes it, so remove only Orca's marked block.
+  // Why: #2778 wrote MCode hooks into a Codex profile file; runtime CODEX_HOME supersedes it, so remove only MCode's marked block.
   if (next.trim().length === 0) {
     unlinkSync(profilePath)
   } else {
@@ -718,7 +718,7 @@ function removeRuntimeManagedHookTrustEntries(configPath: string): void {
   try {
     removeCodexManagedHookTrustEntries({
       tomlPath: getCodexConfigTomlPath(),
-      runtimeHomePath: getOrcaManagedCodexHomePath(),
+      runtimeHomePath: getMCodeManagedCodexHomePath(),
       sourcePath: configPath,
       command: getManagedCommand(getManagedScriptPath()),
       managedEventLabels: CODEX_MANAGED_EVENT_LABELS,
@@ -759,7 +759,7 @@ function removeStaleWslRuntimeManagedHookTrustEntries(
     managedEventLabels: CODEX_MANAGED_EVENT_LABELS,
     timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS,
     buildManagedCommand: (linuxRuntimeHome) =>
-      wrapReadablePosixHookCommand(`${linuxRuntimeHome}/.orca/agent-hooks/codex-hook.sh`),
+      wrapReadablePosixHookCommand(`${linuxRuntimeHome}/.mcode/agent-hooks/codex-hook.sh`),
     priorLedgerHomes
   })
 }
@@ -770,7 +770,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       '@echo off',
       'setlocal',
       // Why: the endpoint file holds this install's live port/token; sourcing it lets a surviving PTY reach the current server (see claude/hook-service.ts).
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
+      'if defined MCODE_AGENT_HOOK_ENDPOINT if exist "%MCODE_AGENT_HOOK_ENDPOINT%" call "%MCODE_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAgentHookCurlPostCommand('codex'),
       'exit /b 0',
@@ -782,20 +782,20 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   return [
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
-    // Why: sourcing refreshes PORT/TOKEN/ENV/VERSION from the current Orca so a surviving PTY keeps reporting after a restart (see claude/hook-service.ts).
+    // Why: sourcing refreshes PORT/TOKEN/ENV/VERSION from the current MCode so a surviving PTY keeps reporting after a restart (see claude/hook-service.ts).
     'load_hook_endpoint() {',
     '  endpoint_path="$1"',
     '  case "$endpoint_path" in',
     '    *.cmd)',
-    // Why: Windows passes endpoint.cmd into WSL via WSLENV; parse only Orca's known assignments since cmd.exe `set` lines aren't shell syntax.
+    // Why: Windows passes endpoint.cmd into WSL via WSLENV; parse only MCode's known assignments since cmd.exe `set` lines aren't shell syntax.
     '      endpoint_cr=$(printf "\\r")',
     '      while IFS= read -r endpoint_line || [ -n "$endpoint_line" ]; do',
     '        endpoint_line=${endpoint_line%"$endpoint_cr"}',
     '        case "$endpoint_line" in',
-    '          "set ORCA_AGENT_HOOK_PORT="*) ORCA_AGENT_HOOK_PORT=${endpoint_line#*=} ;;',
-    '          "set ORCA_AGENT_HOOK_TOKEN="*) ORCA_AGENT_HOOK_TOKEN=${endpoint_line#*=} ;;',
-    '          "set ORCA_AGENT_HOOK_ENV="*) ORCA_AGENT_HOOK_ENV=${endpoint_line#*=} ;;',
-    '          "set ORCA_AGENT_HOOK_VERSION="*) ORCA_AGENT_HOOK_VERSION=${endpoint_line#*=} ;;',
+    '          "set MCODE_AGENT_HOOK_PORT="*) MCODE_AGENT_HOOK_PORT=${endpoint_line#*=} ;;',
+    '          "set MCODE_AGENT_HOOK_TOKEN="*) MCODE_AGENT_HOOK_TOKEN=${endpoint_line#*=} ;;',
+    '          "set MCODE_AGENT_HOOK_ENV="*) MCODE_AGENT_HOOK_ENV=${endpoint_line#*=} ;;',
+    '          "set MCODE_AGENT_HOOK_VERSION="*) MCODE_AGENT_HOOK_VERSION=${endpoint_line#*=} ;;',
     '        esac',
     '      done < "$endpoint_path"',
     '      ;;',
@@ -804,10 +804,10 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '      ;;',
     '  esac',
     '}',
-    'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
-    '  load_hook_endpoint "$ORCA_AGENT_HOOK_ENDPOINT"',
+    'if [ -n "$MCODE_AGENT_HOOK_ENDPOINT" ] && [ -r "$MCODE_AGENT_HOOK_ENDPOINT" ]; then',
+    '  load_hook_endpoint "$MCODE_AGENT_HOOK_ENDPOINT"',
     'fi',
-    'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
+    'if [ -z "$MCODE_AGENT_HOOK_PORT" ] || [ -z "$MCODE_AGENT_HOOK_TOKEN" ] || [ -z "$MCODE_PANE_KEY" ]; then',
     '  exit 0',
     'fi',
     'post_codex_hook() {',
@@ -816,17 +816,17 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  max_time="${3:-1.5}"',
     // Why: worktreeId embeds a path, so hand-building JSON in shell is unsafe with quotes/newlines; post raw payload plus metadata as form fields instead.
     // Why: pipe payload to curl's stdin (`payload@-`) not an inline arg, so tens-of-KB tool output stays off the command line (EDR false positives).
-    '  printf \'%s\' "$payload" | "$curl_bin" -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/codex" \\',
+    '  printf \'%s\' "$payload" | "$curl_bin" -sS -X POST "http://127.0.0.1:${MCODE_AGENT_HOOK_PORT}/hook/codex" \\',
     '    --connect-timeout "$connect_timeout" --max-time "$max_time" \\',
     '    --noproxy "127.0.0.1" \\',
     '    -H "Content-Type: application/x-www-form-urlencoded" \\',
-    '    -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
-    '    --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
-    '    --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
-    '    --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
-    '    --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
-    '    --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
-    '    --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
+    '    -H "X-MCode-Agent-Hook-Token: ${MCODE_AGENT_HOOK_TOKEN}" \\',
+    '    --data-urlencode "paneKey=${MCODE_PANE_KEY}" \\',
+    '    --data-urlencode "tabId=${MCODE_TAB_ID}" \\',
+    '    --data-urlencode "launchToken=${MCODE_AGENT_LAUNCH_TOKEN}" \\',
+    '    --data-urlencode "worktreeId=${MCODE_WORKTREE_ID}" \\',
+    '    --data-urlencode "env=${MCODE_AGENT_HOOK_ENV}" \\',
+    '    --data-urlencode "version=${MCODE_AGENT_HOOK_VERSION}" \\',
     '    --data-urlencode "payload@-"',
     '}',
     'is_wsl_runtime() {',
@@ -922,7 +922,7 @@ function installManagedHooksIntoWslRuntime(
     })
     if (grant.lane === 'fallback') {
       // Why: WSL runtime homes may carry user hook approvals we did not rebuild
-      // here; only upsert Orca's entries instead of sweeping the whole source.
+      // here; only upsert MCode's entries instead of sweeping the whole source.
       upsertHookTrustEntries(plan.tomlPath, trustEntries)
     }
   } catch (error) {
@@ -1114,13 +1114,13 @@ export class CodexHookService {
     return wslPlan ? refreshWslRuntimeUserHooks(wslPlan) : null
   }
 
-  getStatus(runtimeHomePath: string = getOrcaManagedCodexHomePath()): AgentHookInstallStatus {
+  getStatus(runtimeHomePath: string = getMCodeManagedCodexHomePath()): AgentHookInstallStatus {
     return this.getStatusAfterInstall(null, runtimeHomePath)
   }
 
   private getStatusAfterInstall(
     recentGrantEntries: readonly CodexTrustEntry[] | null,
-    runtimeHomePath: string = getOrcaManagedCodexHomePath()
+    runtimeHomePath: string = getMCodeManagedCodexHomePath()
   ): AgentHookInstallStatus {
     const configPath = getConfigPath(runtimeHomePath)
     const scriptPath = getManagedScriptPath()
@@ -1261,11 +1261,11 @@ export class CodexHookService {
   // Why: runtimeHomePath defaults to the shared managed mirror, but a managed
   // account launching against its own self-contained CODEX_HOME passes that
   // per-account home so hooks.json/config.toml/trust land where codex reads.
-  install(runtimeHomePath: string = getOrcaManagedCodexHomePath()): AgentHookInstallStatus {
+  install(runtimeHomePath: string = getMCodeManagedCodexHomePath()): AgentHookInstallStatus {
     const configPath = getConfigPath(runtimeHomePath)
     const scriptPath = getManagedScriptPath()
     // Why: must run before this install rewrites hooks.json/config.toml —
-    // approvals the user made inside Orca-launched Codex are keyed to the
+    // approvals the user made inside MCode-launched Codex are keyed to the
     // previous launch's runtime layout, and stale-trust cleanup below would
     // delete them once the system config stops backing them.
     promoteCodexRuntimeHookApprovalsToSystem(runtimeHomePath)
@@ -1372,7 +1372,7 @@ export class CodexHookService {
       } else {
         // Why: system user hook approvals are mirrored into runtime CODEX_HOME.
         // If the user later revokes approval in ~/.codex/config.toml, preserving
-        // all old runtime [hooks.state.*] blocks would keep Orca Codex trusted.
+        // all old runtime [hooks.state.*] blocks would keep MCode Codex trusted.
         // Upsert first so duplicate repair can preserve a disabled managed copy
         // before stale cleanup removes old managed hook keys.
         upsertHookTrustEntries(tomlPath, trustEntries)
@@ -1402,7 +1402,7 @@ export class CodexHookService {
     sftp: SFTPWrapper,
     remoteHome: string,
     options?: {
-      /** Explicit CODEX_HOME dir (flat layout). WSL sessions read Orca's managed runtime home, not ~/.codex, so the default location leaves them hookless. */
+      /** Explicit CODEX_HOME dir (flat layout). WSL sessions read MCode's managed runtime home, not ~/.codex, so the default location leaves them hookless. */
       codexHomeDir?: string
       /** Skip the trust write when config.toml is absent — the WSL launch path seeds it only-if-absent, so creating it here would cancel that seed. */
       deferTrustUntilConfigToml?: boolean
@@ -1412,7 +1412,7 @@ export class CodexHookService {
       options?.codexHomeDir?.replace(/\/$/, '') ?? `${remoteHome.replace(/\/$/, '')}/.codex`
     const remoteConfigPath = `${codexHomeBase}/hooks.json`
     const remoteTomlPath = `${codexHomeBase}/config.toml`
-    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/codex-hook.sh`
+    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.mcode/agent-hooks/codex-hook.sh`
     try {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)
       if (!config) {
@@ -1462,9 +1462,9 @@ export class CodexHookService {
 
       config.hooks = nextHooks
       // Why: write script/settings before trust TOML; a partial trust write leaves Codex asking approval instead of running a missing script.
-      // Why: SSH remotes use POSIX `.sh` paths even when Orca runs on Windows; never derive remote script syntax from local OS.
+      // Why: SSH remotes use POSIX `.sh` paths even when MCode runs on Windows; never derive remote script syntax from local OS.
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
-      // Why: SSH edits the user's remote ~/.codex/hooks.json directly, so preserve non-Orca top-level metadata while replacing the hooks tree.
+      // Why: SSH edits the user's remote ~/.codex/hooks.json directly, so preserve non-MCode top-level metadata while replacing the hooks tree.
       await writeHooksJsonRemote(sftp, remoteConfigPath, { ...config, hooks: nextHooks })
       try {
         const existingTomlRaw = await readTextFileRemote(sftp, remoteTomlPath)
@@ -1513,10 +1513,10 @@ export class CodexHookService {
   }
 
   refreshRuntimeUserHooks(
-    runtimeHomePath: string = getOrcaManagedCodexHomePath()
+    runtimeHomePath: string = getMCodeManagedCodexHomePath()
   ): AgentHookInstallStatus {
     const configPath = getConfigPath(runtimeHomePath)
-    // Why: same as install() — capture in-Orca approvals before this refresh
+    // Why: same as install() — capture in-MCode approvals before this refresh
     // rewrites the runtime files they are keyed against.
     promoteCodexRuntimeHookApprovalsToSystem(runtimeHomePath)
     const config = readHooksJson(configPath)
@@ -1544,8 +1544,8 @@ export class CodexHookService {
         runtimeHomePath,
         systemHomePath: getSystemCodexHomePath()
       })
-      // Why: this path is used when Orca status hooks are disabled. The
-      // runtime CODEX_HOME should keep user hooks, but not Orca-managed trust.
+      // Why: this path is used when MCode status hooks are disabled. The
+      // runtime CODEX_HOME should keep user hooks, but not MCode-managed trust.
       // Write current mirrored user trust first so stale cleanup compares
       // against current hashes while deleting old managed hook keys.
       upsertHookTrustEntries(tomlPath, trustEntries)

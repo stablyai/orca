@@ -12,7 +12,7 @@ beforeEach(() => {
 
 describe('getOrCreateRendererRoot', () => {
   it('reuses the root retained by an HMR entry module', () => {
-    const hotData: { orcaRendererRoot?: Root } = {}
+    const hotData: { mcodeRendererRoot?: Root } = {}
     const root = { render: vi.fn(), unmount: vi.fn() } as unknown as Root
     vi.mocked(createRoot).mockReturnValue(root)
 

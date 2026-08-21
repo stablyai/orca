@@ -61,7 +61,7 @@ export const runtimeCall: PreloadStub = vi.fn()
 /** Registers the stubbed window.api fs/runtime surface shared by the runtime file client suites. */
 export function installRuntimeFileClientEnvironment(): void {
   beforeEach(() => {
-    delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
+    delete (globalThis as { __MCODE_WEB_CLIENT__?: boolean }).__MCODE_WEB_CLIENT__
     clearRuntimeCompatibilityCacheForTests()
     clearLegacyQuickOpenInventoryCacheForTests()
     replaceRuntimeEnvironmentRevisions([])

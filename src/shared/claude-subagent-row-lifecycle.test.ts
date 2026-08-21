@@ -10,7 +10,7 @@
  *     row outright, and idle teammate-shaped rows survive lead-Stop folds
  *     only when a TeammateIdle confirmed a live teammate owns the id.
  *
- *  2. "Never disappear even when killed from Orca": a subagent killed without
+ *  2. "Never disappear even when killed from MCode": a subagent killed without
  *     its SubagentStop hook (SIGKILL'd process tree / lost event) stayed
  *     `working` forever and pinned the pane working. Fixed: a lead Stop's
  *     background_tasks reaps unlisted children — hyphen-free one-shots always,

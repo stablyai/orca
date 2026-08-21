@@ -16,7 +16,7 @@ function destPath(hostRoot, destRel) {
 /**
  * Execute the copy plan. Returns { hostRoot, hostExePath, daemonEntryPath,
  * nodePtyNativeDir, skipped } — nodePtyNativeDir is the <native>/ dir under the
- * copied node-pty, offered to callers that want to set ORCA_NODE_PTY_NATIVE_DIR
+ * copied node-pty, offered to callers that want to set MCODE_NODE_PTY_NATIVE_DIR
  * (see README: the current branch's node-pty patch does NOT read it, so it is
  * belt-and-suspenders here).
  */

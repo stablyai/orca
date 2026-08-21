@@ -12,7 +12,7 @@ const TAILSCALE_DOWNLOAD_URL = 'https://tailscale.com/download'
 // Why: only the "runtime is unreachable" family of failures has a Tailscale
 // remedy; auth/protocol errors pass through untouched.
 const REMOTE_RUNTIME_UNREACHABLE_RE =
-  /could not connect to the remote orca runtime|remote orca runtime closed the connection|timed out (?:waiting for|while connecting to) the remote orca runtime/i
+  /could not connect to the remote mcode runtime|remote mcode runtime closed the connection|timed out (?:waiting for|while connecting to) the remote mcode runtime/i
 
 const TAILSCALE_MAGIC_DNS_SUFFIX_RE = /(?:^|\.)ts\.net$/i
 // Why: gate the CGNAT check on a full IPv4 literal — the range regex alone also

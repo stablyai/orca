@@ -23,7 +23,7 @@ export function RepositoryIconEmojiPicker({
   // Minimal selector: only the theme string is needed; default to system before settings load.
   const settingsTheme = useAppStore((state) => state.settings?.theme ?? 'system')
   const systemPrefersDark = useSystemPrefersDark()
-  // Theme.AUTO only follows the OS setting, which can disagree with Orca's manual theme.
+  // Theme.AUTO only follows the OS setting, which can disagree with MCode's manual theme.
   const isDarkTheme = settingsTheme === 'dark' || (settingsTheme === 'system' && systemPrefersDark)
 
   /** Saves the picked emoji, rejecting anything over sanitizeRepoIcon's 16-char cap. */

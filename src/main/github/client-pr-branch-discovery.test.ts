@@ -76,10 +76,10 @@ describe('getPRForBranch', () => {
   it('resolves fork PRs from the upstream PR repo with the origin head owner', async () => {
     resolvePRRepositoryCandidatesMock.mockResolvedValueOnce({
       candidates: [
-        { owner: 'stablyai', repo: 'orca' },
-        { owner: 'fork', repo: 'orca' }
+        { owner: 'stablyai', repo: 'mcode' },
+        { owner: 'fork', repo: 'mcode' }
       ],
-      headRepo: { owner: 'fork', repo: 'orca' }
+      headRepo: { owner: 'fork', repo: 'mcode' }
     })
     ghExecFileAsyncMock.mockResolvedValueOnce({
       stdout: JSON.stringify([
@@ -87,7 +87,7 @@ describe('getPRForBranch', () => {
           number: 1738,
           title: 'Fork PR',
           state: 'open',
-          html_url: 'https://github.com/stablyai/orca/pull/1738',
+          html_url: 'https://github.com/mcode-ide/mcode/pull/1738',
           updated_at: '2026-03-28T00:00:00Z',
           draft: false,
           mergeable_state: 'clean',
@@ -100,13 +100,13 @@ describe('getPRForBranch', () => {
     const pr = await getPRForBranch('/repo-root', 'feature/test')
 
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
-      ['api', 'repos/stablyai/orca/pulls?head=fork%3Afeature%2Ftest&state=all&per_page=1'],
+      ['api', 'repos/mcode-ide/mcode/pulls?head=fork%3Afeature%2Ftest&state=all&per_page=1'],
       { cwd: '/repo-root' }
     )
     expect(pr).toMatchObject({
       number: 1738,
-      prRepo: { owner: 'stablyai', repo: 'orca' },
-      headRepo: { owner: 'fork', repo: 'orca' }
+      prRepo: { owner: 'stablyai', repo: 'mcode' },
+      headRepo: { owner: 'fork', repo: 'mcode' }
     })
   })
 

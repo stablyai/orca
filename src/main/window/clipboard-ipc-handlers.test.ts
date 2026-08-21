@@ -142,7 +142,7 @@ import {
 
 const REMOTE_CLIPBOARD_STAGING_ROOT = join(
   '/tmp',
-  `orca-clipboard-files${typeof process.getuid === 'function' ? `-${process.getuid()}` : ''}`
+  `mcode-clipboard-files${typeof process.getuid === 'function' ? `-${process.getuid()}` : ''}`
 )
 
 function getRegisteredHandlers(): Map<string, (...args: unknown[]) => unknown> {
@@ -163,7 +163,7 @@ function makeClipboardEvent(senderOverrides: Record<string, unknown> = {}): {
     sender: {
       id: 17,
       getType: () => 'window',
-      getURL: () => 'file:///orca/index.html',
+      getURL: () => 'file:///mcode/index.html',
       isDestroyed: () => false,
       ...senderOverrides
     }
@@ -552,7 +552,7 @@ describe('registerClipboardHandlers', () => {
     const png = Buffer.from([0, 1, 2, 3])
     const expectedPath = join(
       '/tmp',
-      'orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png'
+      'mcode-paste-1760000000000-00000000-0000-4000-8000-000000000000.png'
     )
     clipboardReadImageMock.mockReturnValue({
       getSize: () => ({ height: 1, width: 1 }),
@@ -629,7 +629,7 @@ describe('registerClipboardHandlers', () => {
 
       const handler = getRegisteredHandlers().get('clipboard:saveImageAsTempFile')
       await expect(handler?.(makeClipboardEvent(), { connectionId: 'ssh-1' })).resolves.toBe(
-        '/var/tmp/orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png'
+        '/var/tmp/mcode-paste-1760000000000-00000000-0000-4000-8000-000000000000.png'
       )
       expect(clipboardReadBufferMock).toHaveBeenCalledWith('FileNameW')
       expect(clipboardReadBufferMock).toHaveBeenCalledWith('Shell IDList Array')
@@ -637,7 +637,7 @@ describe('registerClipboardHandlers', () => {
       expect(nativeImageCreateFromBufferMock).toHaveBeenCalledWith(source)
       expect(close).toHaveBeenCalled()
       expect(writeFileBase64).toHaveBeenCalledWith(
-        '/var/tmp/orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png',
+        '/var/tmp/mcode-paste-1760000000000-00000000-0000-4000-8000-000000000000.png',
         png.toString('base64')
       )
       expect(fsWriteFileMock).not.toHaveBeenCalled()
@@ -668,7 +668,7 @@ describe('registerClipboardHandlers', () => {
       if (method === 'clipboard.commitImageUpload') {
         return {
           ok: true,
-          result: '/tmp/orca-paste-remote.png',
+          result: '/tmp/mcode-paste-remote.png',
           _meta: { runtimeId: 'runtime-1' }
         }
       }
@@ -682,7 +682,7 @@ describe('registerClipboardHandlers', () => {
       handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), {
         runtimeEnvironmentId: 'remote-host-1'
       })
-    ).resolves.toBe('/tmp/orca-paste-remote.png')
+    ).resolves.toBe('/tmp/mcode-paste-remote.png')
     expect(callRuntimeEnvironmentMock).toHaveBeenNthCalledWith(
       1,
       '/tmp',
@@ -787,11 +787,11 @@ describe('registerClipboardHandlers', () => {
       handlers.get('clipboard:saveImageAsTempFile')?.(makeClipboardEvent(), {
         connectionId: 'ssh-1'
       })
-    ).resolves.toBe('/var/tmp/orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png')
+    ).resolves.toBe('/var/tmp/mcode-paste-1760000000000-00000000-0000-4000-8000-000000000000.png')
     expect(getSshFilesystemProviderMock).toHaveBeenCalledWith('ssh-1')
     expect(getTempDir).toHaveBeenCalled()
     expect(writeFileBase64).toHaveBeenCalledWith(
-      '/var/tmp/orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png',
+      '/var/tmp/mcode-paste-1760000000000-00000000-0000-4000-8000-000000000000.png',
       png.toString('base64')
     )
     expect(fsWriteFileMock).not.toHaveBeenCalled()
@@ -818,10 +818,10 @@ describe('registerClipboardHandlers', () => {
         connectionId: 'ssh-1'
       })
     ).resolves.toBe(
-      'C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png'
+      'C:\\Users\\alice\\AppData\\Local\\Temp\\mcode-paste-1760000000000-00000000-0000-4000-8000-000000000000.png'
     )
     expect(writeFileBase64).toHaveBeenCalledWith(
-      'C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-1760000000000-00000000-0000-4000-8000-000000000000.png',
+      'C:\\Users\\alice\\AppData\\Local\\Temp\\mcode-paste-1760000000000-00000000-0000-4000-8000-000000000000.png',
       png.toString('base64')
     )
   })

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import {
   CLIPBOARD_IMAGE_MAX_BASE64_CHARS,
   CLIPBOARD_IMAGE_TOO_LARGE_ERROR
@@ -27,7 +27,7 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 function makeDispatcher(): RpcDispatcher {
-  const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
+  const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as MCodeRuntimeService
   return new RpcDispatcher({ runtime, methods: CLIPBOARD_METHODS })
 }
 
@@ -44,7 +44,7 @@ describe('clipboard RPC methods', () => {
 
   it('saves browser-provided clipboard image bytes on the runtime host', async () => {
     saveClipboardImageBufferAsTempFile.mockResolvedValue(
-      'C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-image.png'
+      'C:\\Users\\alice\\AppData\\Local\\Temp\\mcode-paste-image.png'
     )
     const dispatcher = makeDispatcher()
 
@@ -57,7 +57,7 @@ describe('clipboard RPC methods', () => {
 
     expect(response).toMatchObject({
       ok: true,
-      result: 'C:\\Users\\alice\\AppData\\Local\\Temp\\orca-paste-image.png'
+      result: 'C:\\Users\\alice\\AppData\\Local\\Temp\\mcode-paste-image.png'
     })
     expect(saveClipboardImageBufferAsTempFile).toHaveBeenCalledWith(Buffer.from('png-bytes'), {
       connectionId: null
@@ -98,7 +98,7 @@ describe('clipboard RPC methods', () => {
   })
 
   it('accepts chunked uploads and forwards the recorded connectionId on commit', async () => {
-    saveClipboardImageBufferAsTempFile.mockResolvedValue('/tmp/orca-paste-image.png')
+    saveClipboardImageBufferAsTempFile.mockResolvedValue('/tmp/mcode-paste-image.png')
     const dispatcher = makeDispatcher()
     const contentBase64 = Buffer.from('png-bytes').toString('base64')
 
@@ -136,7 +136,7 @@ describe('clipboard RPC methods', () => {
       dispatcher.dispatch(
         makeRequest('clipboard.commitImageUpload', { uploadId: uploadId.uploadId })
       )
-    ).resolves.toMatchObject({ ok: true, result: '/tmp/orca-paste-image.png' })
+    ).resolves.toMatchObject({ ok: true, result: '/tmp/mcode-paste-image.png' })
     expect(saveClipboardImageBufferAsTempFile).toHaveBeenCalledWith(Buffer.from('png-bytes'), {
       connectionId: 'ssh-1'
     })

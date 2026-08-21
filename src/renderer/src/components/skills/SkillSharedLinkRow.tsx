@@ -87,7 +87,7 @@ export function SkillSharedLinkRow({
         toast.error(
           translate(
             'auto.components.skills.SkillSharedLinkRow.deleteFailed',
-            'Orca could not delete this from the Cloud.'
+            'MCode could not delete this from the Cloud.'
           )
         )
         return

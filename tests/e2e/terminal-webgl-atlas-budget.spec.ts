@@ -1,5 +1,5 @@
 import type { Page } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { waitForActiveTerminalManager } from './helpers/terminal'
 
 type AtlasPage = {
@@ -432,11 +432,11 @@ test.describe('terminal WebGL atlas budget', () => {
   test.describe.configure({ timeout: 120_000 })
 
   test('keeps shared glyph pages bindable through overflow and recovery @terminal-rendering-golden', async ({
-    orcaPage
+    mcodePage
   }) => {
-    await waitForActiveTerminalManager(orcaPage)
-    test.skip(!(await forceActivePaneWebgl(orcaPage)), 'WebGL unavailable in this environment')
-    const result = await runAtlasBudgetScenario(orcaPage)
+    await waitForActiveTerminalManager(mcodePage)
+    test.skip(!(await forceActivePaneWebgl(mcodePage)), 'WebGL unavailable in this environment')
+    const result = await runAtlasBudgetScenario(mcodePage)
 
     expect(result.realBudget).toBeGreaterThanOrEqual(result.budget)
     expect(result.shared).toBe(true)
@@ -452,11 +452,11 @@ test.describe('terminal WebGL atlas budget', () => {
   })
 
   test('rebuilds cached vertices after attaching a different shared atlas @terminal-rendering-golden', async ({
-    orcaPage
+    mcodePage
   }) => {
-    await waitForActiveTerminalManager(orcaPage)
-    test.skip(!(await forceActivePaneWebgl(orcaPage)), 'WebGL unavailable in this environment')
-    const result = await runAtlasReplacementScenario(orcaPage)
+    await waitForActiveTerminalManager(mcodePage)
+    test.skip(!(await forceActivePaneWebgl(mcodePage)), 'WebGL unavailable in this environment')
+    const result = await runAtlasReplacementScenario(mcodePage)
 
     expect(result.distinctAtlases).toBe(true)
     expect(result.baselineInkPixels).toBeGreaterThan(1000)

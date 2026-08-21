@@ -28,7 +28,7 @@ describe('getPosixPtyForegroundGroup', () => {
   })
 
   it('refuses when this process shares the PTY', () => {
-    // Why: a dev daemon can inherit its launch TTY; group-signalling would hit Orca.
+    // Why: a dev daemon can inherit its launch TTY; group-signalling would hit MCode.
     const shared = ['84644 84985 ttys318', '4242 84985 ttys318'].join('\n')
     expect(getPosixPtyForegroundGroup(shared, 84644, '/dev/ttys318', 4242)).toBeNull()
   })

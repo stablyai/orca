@@ -17,10 +17,10 @@ export function registerCodexAccountsTestHomes(): void {
   beforeEach(() => {
     vi.resetModules()
     vi.clearAllMocks()
-    testState.userDataDir = mkdtempSync(join(tmpdir(), 'orca-codex-accounts-'))
-    testState.fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-codex-home-'))
-    testState.previousUserDataPath = process.env.ORCA_USER_DATA_PATH
-    process.env.ORCA_USER_DATA_PATH = testState.userDataDir
+    testState.userDataDir = mkdtempSync(join(tmpdir(), 'mcode-codex-accounts-'))
+    testState.fakeHomeDir = mkdtempSync(join(tmpdir(), 'mcode-codex-home-'))
+    testState.previousUserDataPath = process.env.MCODE_USER_DATA_PATH
+    process.env.MCODE_USER_DATA_PATH = testState.userDataDir
     mkdirSync(join(testState.fakeHomeDir, '.codex'), { recursive: true })
   })
 
@@ -28,9 +28,9 @@ export function registerCodexAccountsTestHomes(): void {
     rmSync(testState.userDataDir, { recursive: true, force: true })
     rmSync(testState.fakeHomeDir, { recursive: true, force: true })
     if (testState.previousUserDataPath === undefined) {
-      delete process.env.ORCA_USER_DATA_PATH
+      delete process.env.MCODE_USER_DATA_PATH
     } else {
-      process.env.ORCA_USER_DATA_PATH = testState.previousUserDataPath
+      process.env.MCODE_USER_DATA_PATH = testState.previousUserDataPath
     }
   })
 }
@@ -66,10 +66,10 @@ export function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalS
     terminalLigatures: 'auto',
     terminalCursorStyle: 'block',
     terminalCursorBlink: false,
-    terminalThemeDark: 'orca-dark',
+    terminalThemeDark: 'mcode-dark',
     terminalDividerColorDark: '#000000',
     terminalUseSeparateLightTheme: false,
-    terminalThemeLight: 'orca-light',
+    terminalThemeLight: 'mcode-light',
     terminalDividerColorLight: '#ffffff',
     terminalInactivePaneOpacity: 0.5,
     terminalActivePaneOpacity: 1,
@@ -219,7 +219,7 @@ export function createManagedHome(
 ): string {
   const managedHomePath = join(rootDir, 'codex-accounts', accountId, 'home')
   mkdirSync(managedHomePath, { recursive: true })
-  writeFileSync(join(managedHomePath, '.orca-managed-home'), `${accountId}\n`, 'utf-8')
+  writeFileSync(join(managedHomePath, '.mcode-managed-home'), `${accountId}\n`, 'utf-8')
   if (config) {
     writeFileSync(join(managedHomePath, 'config.toml'), config, 'utf-8')
   }

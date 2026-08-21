@@ -67,7 +67,7 @@ function deferred<T>() {
 }
 
 beforeEach(() => {
-  delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
+  delete (globalThis as { __MCODE_WEB_CLIENT__?: boolean }).__MCODE_WEB_CLIENT__
   clearRuntimeCompatibilityCacheForTests()
   resetRuntimeCatalogListingForTests()
   vi.clearAllMocks()
@@ -132,7 +132,7 @@ beforeEach(() => {
                           repoId: detectedRepoId,
                           path: detectedPath
                         }),
-                        ownership: 'orca-managed',
+                        ownership: 'mcode-managed',
                         selectedCheckout: true,
                         visible: true
                       }
@@ -161,7 +161,7 @@ beforeEach(() => {
           repoId: 'repo-env-1',
           path: '/env-1/repo'
         }),
-        ownership: 'orca-managed',
+        ownership: 'mcode-managed',
         selectedCheckout: true,
         visible: true
       }
@@ -448,7 +448,7 @@ describe('createSettingsSlice runtime switching', () => {
   })
 
   it('does not close host-owned mirrored resources when a paired web client switches servers', async () => {
-    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    ;(globalThis as { __MCODE_WEB_CLIENT__?: boolean }).__MCODE_WEB_CLIENT__ = true
     const store = createTestStore()
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
@@ -639,7 +639,7 @@ describe('createSettingsSlice runtime switching', () => {
 
   it('keeps the current environment when the selected remote server is unreachable', async () => {
     runtimeEnvironmentGetStatus.mockRejectedValueOnce(
-      new Error('Remote Orca runtime closed the connection.')
+      new Error('Remote MCode runtime closed the connection.')
     )
     const store = createTestStore()
     store.setState({
@@ -666,7 +666,7 @@ describe('createSettingsSlice runtime switching', () => {
     expect(store.getState().repos.map((repo) => repo.id)).toEqual(['repo-env-1'])
     expect(store.getState().ptyIdsByTabId).toEqual({ tab1: ['remote:env-1@@terminal-a'] })
     expect(toast.error).toHaveBeenCalledWith('Failed to switch servers', {
-      description: 'Remote Orca runtime closed the connection.'
+      description: 'Remote MCode runtime closed the connection.'
     })
   })
 

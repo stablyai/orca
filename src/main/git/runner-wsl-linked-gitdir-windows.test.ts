@@ -14,7 +14,7 @@ import {
 import { listWorktrees } from './worktree'
 import { resetWslLinkedWorktreeGitRoutingForTests } from './wsl-linked-worktree-git-routing'
 
-const distro = process.env.ORCA_TEST_WSL_DISTRO?.trim()
+const distro = process.env.MCODE_TEST_WSL_DISTRO?.trim()
 const fixtureRoots: string[] = []
 const wslFixtureRoots: string[] = []
 
@@ -31,7 +31,7 @@ afterEach(async () => {
     fixtureRoots.splice(0).map((path) => rm(path, { recursive: true, force: true }))
   )
   for (const path of wslFixtureRoots.splice(0)) {
-    if (!/^\/tmp\/orca-wsl-native-[A-Za-z0-9]+$/.test(path)) {
+    if (!/^\/tmp\/mcode-wsl-native-[A-Za-z0-9]+$/.test(path)) {
       throw new Error(`Refusing to remove unexpected WSL fixture path: ${path}`)
     }
     wslExec(['rm', '-rf', '--', path])
@@ -48,7 +48,7 @@ describe.runIf(process.platform === 'win32' && Boolean(distro))(
       const linkedPath = join(fixtureRoot, 'linked')
 
       hostGit(['init', mainPath], fixtureRoot)
-      hostGit(['config', 'user.name', 'Orca Test'], mainPath)
+      hostGit(['config', 'user.name', 'MCode Test'], mainPath)
       hostGit(['config', 'user.email', 'test@invalid'], mainPath)
       await writeFile(join(mainPath, 'tracked.txt'), 'tracked\n')
       hostGit(['add', 'tracked.txt'], mainPath)
@@ -138,12 +138,12 @@ describe.runIf(process.platform === 'win32' && Boolean(distro))(
     })
 
     it('keeps WSL-native repositories on WSL Git', async () => {
-      const linuxRoot = wslExec(['mktemp', '-d', '/tmp/orca-wsl-native-XXXXXX']).trim()
+      const linuxRoot = wslExec(['mktemp', '-d', '/tmp/mcode-wsl-native-XXXXXX']).trim()
       wslFixtureRoots.push(linuxRoot)
       const windowsRoot = toWindowsWslPath(linuxRoot, distro!)
 
       wslExec(['git', 'init', linuxRoot])
-      wslExec(['git', '-C', linuxRoot, 'config', 'user.name', 'Orca Test'])
+      wslExec(['git', '-C', linuxRoot, 'config', 'user.name', 'MCode Test'])
       wslExec(['git', '-C', linuxRoot, 'config', 'user.email', 'test@invalid'])
       await writeFile(join(windowsRoot, 'tracked.txt'), 'tracked\n')
       wslExec(['git', '-C', linuxRoot, 'add', 'tracked.txt'])

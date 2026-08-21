@@ -30,7 +30,7 @@ vi.mock('../git/worktree', async (importOriginal) => ({
 }))
 
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import { OrcaRuntimeService } from './orca-runtime'
+import { MCodeRuntimeService } from './mcode-runtime'
 
 const REPO_ID = 'repo-remote'
 const REPO_PATH = '/home/user/projects/app'
@@ -163,7 +163,7 @@ describe('worktree.ps on a degraded repo scan', () => {
     vi.useFakeTimers()
     try {
       getSshGitProviderMock.mockReturnValue({ listWorktrees: vi.fn(neverSettles) })
-      const runtime = new OrcaRuntimeService(makeStore({ connectionId: 'ssh-remote-1' }) as never)
+      const runtime = new MCodeRuntimeService(makeStore({ connectionId: 'ssh-remote-1' }) as never)
 
       const result = await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
 
@@ -175,7 +175,7 @@ describe('worktree.ps on a degraded repo scan', () => {
 
   it('keeps persisted worktrees when a remote repo is unreachable', async () => {
     getSshGitProviderMock.mockReturnValue(undefined)
-    const runtime = new OrcaRuntimeService(makeStore({ connectionId: 'ssh-remote-1' }) as never)
+    const runtime = new MCodeRuntimeService(makeStore({ connectionId: 'ssh-remote-1' }) as never)
 
     const result = await runtime.getWorktreePs(10_000)
 
@@ -186,7 +186,7 @@ describe('worktree.ps on a degraded repo scan', () => {
     vi.useFakeTimers()
     try {
       listWorktreesStrictMock.mockImplementation(neverSettles)
-      const runtime = new OrcaRuntimeService(makeStore() as never)
+      const runtime = new MCodeRuntimeService(makeStore() as never)
 
       const result = await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
 
@@ -200,7 +200,7 @@ describe('worktree.ps on a degraded repo scan', () => {
   // selector resolution for local repos the way a stall does.
   it('treats a rejected scan as a real answer instead of restoring persisted worktrees', async () => {
     listWorktreesStrictMock.mockRejectedValue(new Error('git unavailable'))
-    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const runtime = new MCodeRuntimeService(makeStore() as never)
 
     const result = await runtime.getWorktreePs(10_000)
 
@@ -209,7 +209,7 @@ describe('worktree.ps on a degraded repo scan', () => {
 
   it('still reports selector_not_found for a local worktree when the scan rejects', async () => {
     listWorktreesStrictMock.mockRejectedValue(new Error('git unavailable'))
-    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const runtime = new MCodeRuntimeService(makeStore() as never)
 
     await expect(runtime.showManagedWorktree(`id:${WORKTREE_ID}`)).rejects.toThrow(
       'selector_not_found'
@@ -221,7 +221,7 @@ describe('worktree.ps on a degraded repo scan', () => {
     vi.useFakeTimers()
     try {
       listWorktreesStrictMock.mockResolvedValue([])
-      const runtime = new OrcaRuntimeService(makeStore() as never)
+      const runtime = new MCodeRuntimeService(makeStore() as never)
 
       await runtime.getWorktreePs(10_000)
       await vi.advanceTimersByTimeAsync(2_000)
@@ -237,7 +237,7 @@ describe('worktree.ps on a degraded repo scan', () => {
     vi.useFakeTimers()
     try {
       listWorktreesStrictMock.mockRejectedValue(new Error('spawn git EAGAIN'))
-      const runtime = new OrcaRuntimeService(makeStore() as never)
+      const runtime = new MCodeRuntimeService(makeStore() as never)
 
       await runtime.getWorktreePs(10_000)
       await vi.advanceTimersByTimeAsync(2_000)
@@ -257,7 +257,7 @@ describe('worktree.ps on a degraded repo scan', () => {
         throw new Error('provider offline')
       })
       getSshGitProviderMock.mockReturnValue({ listWorktrees })
-      const runtime = new OrcaRuntimeService(
+      const runtime = new MCodeRuntimeService(
         makeStore({ connectionId: SSH_CONNECTION_ID }) as never
       )
 
@@ -277,7 +277,7 @@ describe('worktree.ps on a degraded repo scan', () => {
     try {
       getSshGitProviderMock.mockReturnValue(makeHealthySshScan())
       listWorktreesStrictMock.mockImplementation(neverSettles)
-      const runtime = new OrcaRuntimeService(
+      const runtime = new MCodeRuntimeService(
         makeStore({
           connectionId: SSH_CONNECTION_ID,
           coHostedRepos: [{ id: REPO_ID, path: LOCAL_REPO_PATH }],
@@ -307,7 +307,7 @@ describe('worktree.ps on a degraded repo scan', () => {
     try {
       getSshGitProviderMock.mockReturnValue(makeHealthySshScan())
       listWorktreesStrictMock.mockImplementation(neverSettles)
-      const runtime = new OrcaRuntimeService(
+      const runtime = new MCodeRuntimeService(
         makeStore({
           connectionId: SSH_CONNECTION_ID,
           coHostedRepos: [{ id: REPO_ID, path: LOCAL_REPO_PATH }],
@@ -333,7 +333,7 @@ describe('worktree.ps on a degraded repo scan', () => {
     vi.useFakeTimers()
     try {
       listWorktreesStrictMock.mockImplementation(neverSettles)
-      const runtime = new OrcaRuntimeService(
+      const runtime = new MCodeRuntimeService(
         makeStore({
           metaById: {
             [WORKTREE_ID]: makeMeta({ hostId: LOCAL_EXECUTION_HOST_ID }),
@@ -368,7 +368,7 @@ describe('worktree.ps on a degraded repo scan', () => {
     vi.useFakeTimers()
     try {
       listWorktreesStrictMock.mockImplementation(neverSettles)
-      const runtime = new OrcaRuntimeService(makeStore() as never)
+      const runtime = new MCodeRuntimeService(makeStore() as never)
 
       await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
       await advancePastRepoScanBudget(runtime.getWorktreePs(10_000))
@@ -385,7 +385,7 @@ describe('worktree.ps on a degraded repo scan', () => {
     listWorktreesStrictMock.mockResolvedValue([
       { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
     ])
-    const runtime = new OrcaRuntimeService(
+    const runtime = new MCodeRuntimeService(
       makeStore({ removeWorktreeLineage, removeWorkspaceLineage }) as never
     )
 
@@ -402,7 +402,7 @@ describe('worktree.ps on a degraded repo scan', () => {
       const removeWorktreeLineage = vi.fn()
       const removeWorkspaceLineage = vi.fn()
       listWorktreesStrictMock.mockImplementation(neverSettles)
-      const runtime = new OrcaRuntimeService(
+      const runtime = new MCodeRuntimeService(
         makeStore({ removeWorktreeLineage, removeWorkspaceLineage }) as never
       )
 
@@ -420,7 +420,7 @@ describe('worktree.ps on a degraded repo scan', () => {
       { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
     ])
     const store = makeStore()
-    const runtime = new OrcaRuntimeService(store as never)
+    const runtime = new MCodeRuntimeService(store as never)
 
     await runtime.getWorktreePs(10_000)
 
@@ -431,7 +431,7 @@ describe('worktree.ps on a degraded repo scan', () => {
     vi.useFakeTimers()
     try {
       listWorktreesStrictMock.mockImplementation(neverSettles)
-      const runtime = new OrcaRuntimeService(
+      const runtime = new MCodeRuntimeService(
         makeStore({
           metaById: {
             [WORKTREE_ID]: makeMeta(),

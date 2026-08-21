@@ -157,7 +157,7 @@ export function recoverVisibleTerminalWindowWake({
   clearGlyphAtlases
 }: RecoverVisibleTerminalWindowWakeArgs): void {
   // Why: macOS screensaver/display wake can leave xterm visible but with a
-  // stale renderer/input surface; Orca's own hidden-state resume never runs.
+  // stale renderer/input surface; MCode's own hidden-state resume never runs.
   // Why: backlog writes can expose transient viewport geometry while parsing.
   syncTerminalViewportIntents(manager)
   for (const pane of manager.getPanes()) {

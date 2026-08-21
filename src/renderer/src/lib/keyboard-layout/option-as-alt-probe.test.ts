@@ -344,7 +344,7 @@ describe('createOptionAsAltProbe', () => {
 
   it('re-probes the input source ID on focus-in so mid-session layout switches are picked up', async () => {
     // Simulate: user boots on US, flips to ABC via the Input Source menu,
-    // Orca regains focus. Fingerprint stays US the whole time; the
+    // MCode regains focus. Fingerprint stays US the whole time; the
     // input-source override is what notices the switch.
     let activeInputSourceId: string | null = 'com.apple.keylayout.US'
     const win = makeMockWindow(US_MAP)

@@ -273,7 +273,7 @@ describe('ClaudeRuntimeAuthService', () => {
     await service.syncForCurrentSelection()
 
     // A stale account-1 Claude process refreshed the shared runtime file after
-    // Orca selected account-2. Persist that refresh to account-1, then restore
+    // MCode selected account-2. Persist that refresh to account-1, then restore
     // the selected account in the shared Claude runtime credentials.
     writeFileSync(runtimeCredentialsPath, account1Refreshed, 'utf-8')
     testState.scopedKeychainCredentials = account1Refreshed

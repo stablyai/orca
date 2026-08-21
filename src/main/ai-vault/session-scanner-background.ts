@@ -26,7 +26,7 @@ import type { AiVaultWorkerScanOptions } from './session-scanner-worker-protocol
 import { listLocalAiVaultSubagentSessions } from './session-subagent-reader'
 
 export function shouldUseAiVaultServiceProcess(): boolean {
-  const configured = process.env.ORCA_AI_VAULT_SERVICE_PROCESS
+  const configured = process.env.MCODE_AI_VAULT_SERVICE_PROCESS
   if (configured === '1') {
     return true
   }

@@ -187,7 +187,7 @@ describe('mobile-file-preview-request', () => {
         isDirectory: false,
         openTarget: {
           kind: 'absolute-file',
-          absolutePath: '/Users/ada/orca-plans/result.html',
+          absolutePath: '/Users/ada/mcode-plans/result.html',
           grantId: 'grant-2',
           readOnly: true
         }
@@ -201,9 +201,9 @@ describe('mobile-file-preview-request', () => {
       {
         source: 'terminalArtifact',
         worktreeId: 'wt-1',
-        absolutePath: '/Users/ada/orca-plans/result.html',
+        absolutePath: '/Users/ada/mcode-plans/result.html',
         grantId: 'grant-1',
-        pathText: '~/orca-plans/result.html',
+        pathText: '~/mcode-plans/result.html',
         nativeChatContext: { tabId: 'tab-1', sessionId: 'session-1' }
       },
       undefined,
@@ -212,7 +212,7 @@ describe('mobile-file-preview-request', () => {
 
     expect(client.sendRequest).toHaveBeenNthCalledWith(2, 'files.resolveTerminalPath', {
       worktree: 'id:wt-1',
-      pathText: '~/orca-plans/result.html',
+      pathText: '~/mcode-plans/result.html',
       nativeChatContext: { tabId: 'tab-1', sessionId: 'session-1' }
     })
     expect(onTerminalArtifactSourceRefreshed).toHaveBeenCalledWith(
@@ -292,7 +292,7 @@ describe('mobile-file-preview-request', () => {
         {
           source: 'terminalArtifact',
           worktreeId: 'wt-1',
-          absolutePath: '/Users/ada/orca-plans/result.html',
+          absolutePath: '/Users/ada/mcode-plans/result.html',
           grantId: 'grant-1',
           readOnly: true
         },

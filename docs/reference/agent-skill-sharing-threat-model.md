@@ -5,14 +5,14 @@ security approval.
 
 ## Scope and trust model
 
-This model covers private skill packaging, Orca Cloud publication and authorization, durable share
+This model covers private skill packaging, MCode Cloud publication and authorization, durable share
 resolution, local and remote installation, provider placement, update, rollback, removal, and
-operator recovery. It applies to macOS, Linux, native Windows, WSL, paired Orca runtimes, and SSH
+operator recovery. It applies to macOS, Linux, native Windows, WSL, paired MCode runtimes, and SSH
 targets.
 
 Private means unlisted: an unpredictable active share ID is a bearer credential, while publication
-and management remain access-controlled to authenticated Orca users and organizations. V1 is not
-end-to-end encrypted from Orca Cloud operators. A skill is code from its author: `SKILL.md` can
+and management remain access-controlled to authenticated MCode users and organizations. V1 is not
+end-to-end encrypted from MCode Cloud operators. A skill is code from its author: `SKILL.md` can
 change agent behavior and packaged scripts may be executed later by a user or agent, although the
 installer itself never executes package content.
 
@@ -30,15 +30,15 @@ installer itself never executes package content.
 ## Actors and boundaries
 
 Actors include an authorized publisher, an authorized recipient, an authenticated but unauthorized
-Orca user, a malicious skill author, a compromised renderer, an untrusted remote RPC caller, an
+MCode user, a malicious skill author, a compromised renderer, an untrusted remote RPC caller, an
 attacker controlling a network endpoint, and an operator with GCP or database access.
 
 Trust boundaries are:
 
 1. Source skill directory to the owner-private package staging directory.
 2. Desktop renderer to the main process and its authenticated Cloud client.
-3. Orca client to a paired runtime or SSH host across independently versioned protocols.
-4. Orca Cloud API authorization to short-lived GCS access.
+3. MCode client to a paired runtime or SSH host across independently versioned protocols.
+4. MCode Cloud API authorization to short-lived GCS access.
 5. GCS quarantine to validated immutable publication and PostgreSQL metadata.
 6. Extracted staging to canonical destination and provider placements.
 7. Local diagnostic records to a user-reviewed support-bundle upload.
@@ -77,7 +77,7 @@ Trust boundaries are:
 | TM-11 | A compromised renderer, old client, or arbitrary RPC caller sends credentials, local paths, unknown opcodes, or unsupported operations to a host. | Main owns auth tokens and grants; remote requests use strict schemas and capabilities; package transfer is separate from install; no stream opcode was added; mixed versions fail with update-required results.                                                                                                                               | Real client-newer/server-newer and SSH parity gates remain required.                     |
 | TM-12 | Transfer replay, overlap, disconnect, or abandoned staging consumes disk or commits different bytes.                                              | Session count, idle time, total bytes, and chunk size are bounded. Offsets are monotonic, identical retry is idempotent, changed replay fails, commit hashes the exact staged file, and cancellation/disconnect cleanup is bounded.                                                                                                           | Exercise offline-GCS and real disconnects at every transfer boundary.                    |
 | TM-13 | Provider aliases or junctions escape canonical storage or point at external content.                                                              | POSIX aliases are relative from real parents, Windows junctions use absolute canonical targets, targets are revalidated, and unowned/broken/external links are conflicts. Copy fallback is independently hashed and receipt-owned. Real Windows and WSL coverage includes existing, broken, external, denied, and drifted placement behavior. | Preserve the physical placement matrix in release coverage.                              |
-| TM-14 | Skill instructions or scripts are mistaken for trusted Orca code or executed during install.                                                      | Share/install previews identify author, organization, scripts, executable files, digest, and version. Installation never runs scripts. Trust copy says the package is code from its author.                                                                                                                                                   | Security and design must approve the final trust wording and accessibility behavior.     |
+| TM-14 | Skill instructions or scripts are mistaken for trusted MCode code or executed during install.                                                      | Share/install previews identify author, organization, scripts, executable files, digest, and version. Installation never runs scripts. Trust copy says the package is code from its author.                                                                                                                                                   | Security and design must approve the final trust wording and accessibility behavior.     |
 | TM-15 | Telemetry, logs, or support bundles leak instructions, filenames, paths, ACLs, grants, policies, or credentials.                                  | Desktop install diagnostics map values to bounded categories before tracing. Deployed staging logs contain route templates and bounded request metadata only, and the logging exclusion removes bearer URLs. Support-bundle tests inject private canaries and prove they are absent from collected output.                                    | Preserve deployed-log and support-bundle privacy checks for future changes.              |
 | TM-16 | Permissive staging permissions expose package bytes to another local user.                                                                        | Package archives, downloads, extraction, relayed uploads, locks, journals, and receipts use owner-private modes on POSIX; Windows uses owner-profile paths and inherited ACLs. Existing POSIX download roots are tightened before use. Real Windows, WSL, Ubuntu-floor, and SSH validation passed.                                            | Preserve owner-private staging checks across supported hosts.                            |
 | TM-17 | Deletion, revocation, retention, or user departure leaves unauthorized grants or unrecoverable metadata/blob divergence.                          | Revocation blocks new grants immediately; existing grants expire within five minutes. Database references govern final deletion, quarantine lifecycle cleans abandonment, and GCS soft delete supplies recovery. Local installs remain independent.                                                                                           | Approve departure/legal-retention policy and exercise coordinated database/GCS recovery. |

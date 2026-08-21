@@ -187,7 +187,7 @@ export function NotificationStep({
           <p className="text-[13px] leading-relaxed text-muted-foreground">
             {translate(
               'auto.components.onboarding.NotificationStep.0fe570690c',
-              'Pick the alert Orca plays after a desktop notification is delivered.'
+              'Pick the alert MCode plays after a desktop notification is delivered.'
             )}
           </p>
         </div>

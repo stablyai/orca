@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createStoreWithState, setupCodexUsageStoreEnv } from './store-test-harness'
 
 const { getPathMock } = vi.hoisted(() => ({
-  getPathMock: vi.fn(() => '/tmp/orca-test-userdata')
+  getPathMock: vi.fn(() => '/tmp/mcode-test-userdata')
 }))
 
 vi.mock('electron', () => ({
@@ -39,7 +39,7 @@ describe('CodexUsageStore', () => {
       ]
     })
 
-    const summary = await store.getSummary('orca', '30d')
+    const summary = await store.getSummary('mcode', '30d')
 
     expect(summary.estimatedCostUsd).toBeCloseTo(0.0014)
     expect(summary.totalTokens).toBe(1250)
@@ -112,8 +112,8 @@ describe('CodexUsageStore', () => {
       ]
     })
 
-    const summary = await store.getSummary('orca', '30d')
-    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+    const summary = await store.getSummary('mcode', '30d')
+    const breakdown = await store.getBreakdown('mcode', '30d', 'model')
 
     expect(summary.estimatedCostUsd).toBeCloseTo(107.486)
     expect(breakdown.find((row) => row.key === 'gpt-5.2-codex')?.estimatedCostUsd).toBeCloseTo(
@@ -145,8 +145,8 @@ describe('CodexUsageStore', () => {
       }))
     })
 
-    const summary = await store.getSummary('orca', '30d')
-    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+    const summary = await store.getSummary('mcode', '30d')
+    const breakdown = await store.getBreakdown('mcode', '30d', 'model')
 
     expect(summary.estimatedCostUsd).toBeCloseTo(85.7208)
     expect(breakdown.find((row) => row.key === 'gpt-5.6-sol')?.estimatedCostUsd).toBeCloseTo(50.424)
@@ -177,7 +177,7 @@ describe('CodexUsageStore', () => {
       }))
     })
 
-    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+    const breakdown = await store.getBreakdown('mcode', '30d', 'model')
 
     expect(breakdown.find((row) => row.key === 'gpt-5.6-terra-high')?.estimatedCostUsd).toBeCloseTo(
       0.5125
@@ -206,7 +206,7 @@ describe('CodexUsageStore', () => {
       }))
     })
 
-    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+    const breakdown = await store.getBreakdown('mcode', '30d', 'model')
 
     expect(breakdown.find((row) => row.key === 'gpt-5.6')?.estimatedCostUsd).toBeCloseTo(1.025)
     expect(breakdown.find((row) => row.key === 'gpt-5.6-luna')?.estimatedCostUsd).toBeCloseTo(0.205)
@@ -263,7 +263,7 @@ describe('CodexUsageStore', () => {
       ]
     })
 
-    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+    const breakdown = await store.getBreakdown('mcode', '30d', 'model')
 
     expect(breakdown.find((row) => row.key === 'gpt-5.4-mini-high')?.estimatedCostUsd).toBeCloseTo(
       4.9125
@@ -297,7 +297,7 @@ describe('CodexUsageStore', () => {
       ]
     })
 
-    const summary = await store.getSummary('orca', '30d')
+    const summary = await store.getSummary('mcode', '30d')
 
     expect(summary.estimatedCostUsd).toBeCloseTo(858.929724)
   })

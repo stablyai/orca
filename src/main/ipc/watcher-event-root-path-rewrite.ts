@@ -5,7 +5,7 @@
  *
  * - Linux: `@parcel/watcher` passes `IN_DONT_FOLLOW | IN_ONLYDIR` to
  *   `inotify_add_watch`, so a symlinked root fails outright with ENOTDIR
- *   ("Not a directory"). The watch never installs, and Orca caches the root in
+ *   ("Not a directory"). The watch never installs, and MCode caches the root in
  *   `unwatchableRoots`, so it is not retried for the rest of the session.
  * - macOS: FSEvents installs the watch but reports OS-canonical paths —
  *   symlinks resolved, each directory in its on-disk spelling — so events land

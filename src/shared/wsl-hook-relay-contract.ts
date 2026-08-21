@@ -6,22 +6,22 @@
 // See docs/agent-status-over-wsl.md (STA-1515).
 
 /** Guest-side install dir for the relay bundle, relative to `$HOME`. */
-export const WSL_HOOK_RELAY_DIR = '.orca-wsl/hook-relay'
+export const WSL_HOOK_RELAY_DIR = '.mcode-wsl/hook-relay'
 export const WSL_HOOK_RELAY_BUNDLE_NAME = 'wsl-agent-hook-relay.js'
 export const WSL_HOOK_RELAY_VERSION_FILE = '.version'
 
 /** Host-expected bundle version, crossed into the guest launch script via
  *  WSLENV so a stale guest install is detected by the guest itself. Also
- *  namespaces the guest install dir, so concurrent Orca instances with
+ *  namespaces the guest install dir, so concurrent MCode instances with
  *  different bundle versions (dev + prod) never reinstall over each other. */
-export const WSL_HOOK_RELAY_VERSION_ENV = 'ORCA_WSL_HOOK_RELAY_VERSION'
+export const WSL_HOOK_RELAY_VERSION_ENV = 'MCODE_WSL_HOOK_RELAY_VERSION'
 
 /** Stable per-instance identity for the guest endpoint dir, crossed via
  *  WSLENV. Derived from the Windows endpoint file path (userData +
  *  namespace), NOT the hook port: the port changes every app launch, and a
  *  port-keyed dir would leave daemon-surviving agents sourcing a stale file
- *  after an Orca restart — the exact re-coordination this exists to serve. */
-export const WSL_HOOK_RELAY_INSTANCE_ENV = 'ORCA_WSL_HOOK_INSTANCE'
+ *  after an MCode restart — the exact re-coordination this exists to serve. */
+export const WSL_HOOK_RELAY_INSTANCE_ENV = 'MCODE_WSL_HOOK_INSTANCE'
 
 /** Launch-script exit codes. 42 mirrors the SSH relay's handshake-mismatch
  *  convention: the host reinstalls the bundle and relaunches once. */
@@ -61,7 +61,7 @@ export type WslFsResult<T extends object = object> = ({ ok: true } & T) | WslFsF
  *  that rewrite is what re-coordinates them onto fresh port/token. */
 export function wslHookRelayEndpointDir(guestHome: string, instanceKey: string): string {
   const home = guestHome.endsWith('/') ? guestHome.slice(0, -1) : guestHome
-  return `${home}/.orca-wsl/agent-hooks/instance-${instanceKey}`
+  return `${home}/.mcode-wsl/agent-hooks/instance-${instanceKey}`
 }
 
 /** Keep instance keys shell/path-inert on both sides of the boundary. */

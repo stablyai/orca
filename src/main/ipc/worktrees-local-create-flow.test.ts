@@ -375,7 +375,7 @@ describe('registerWorktreeHandlers', () => {
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::../worktrees/feature',
       expect.objectContaining({
-        orcaCreationWorkspaceLayout: { path: '../worktrees', nestWorkspaces: false }
+        mcodeCreationWorkspaceLayout: { path: '../worktrees', nestWorkspaces: false }
       })
     )
   })
@@ -522,7 +522,7 @@ describe('registerWorktreeHandlers', () => {
       createdWithAgent: 'claude',
       startup: {
         command: 'claude --prefill test',
-        env: { ORCA_AGENT_MODE: 'direct' },
+        env: { MCODE_AGENT_MODE: 'direct' },
         viewMode: 'chat',
         telemetry: {
           agent_kind: 'claude',
@@ -542,7 +542,7 @@ describe('registerWorktreeHandlers', () => {
       {
         claudeAgentTeamsSourceCommand: 'claude --prefill test',
         command: 'claude --prefill test',
-        env: { ORCA_AGENT_MODE: 'direct' },
+        env: { MCODE_AGENT_MODE: 'direct' },
         launchAgent: 'claude',
         viewMode: 'chat',
         startupCommandDelivery: undefined,
@@ -559,10 +559,10 @@ describe('registerWorktreeHandlers', () => {
       'id:repo-1::/workspace/improve-dashboard',
       {
         title: 'Setup',
-        command: expect.stringContaining('bash /workspace/repo/.git/orca/setup-runner.sh'),
+        command: expect.stringContaining('bash /workspace/repo/.git/mcode/setup-runner.sh'),
         env: {
-          ORCA_ROOT_PATH: '/workspace/repo',
-          ORCA_WORKTREE_PATH: '/workspace/improve-dashboard'
+          MCODE_ROOT_PATH: '/workspace/repo',
+          MCODE_WORKTREE_PATH: '/workspace/improve-dashboard'
         },
         activate: false
       }
@@ -575,7 +575,7 @@ describe('registerWorktreeHandlers', () => {
     const startupCommand = (startupCreateCall[1] as { command: string }).command
     const setupCommand = (setupCreateCall[1] as { command: string }).command
     expect(startupCommand).toBe('claude --prefill test')
-    expect(setupCommand).toBe('bash /workspace/repo/.git/orca/setup-runner.sh')
+    expect(setupCommand).toBe('bash /workspace/repo/.git/mcode/setup-runner.sh')
     expect(result.setup).toBeUndefined()
     expect(result.startupTerminal).toEqual({ spawned: true, surface: 'visible' })
     expect(result.timing?.phases.map((phase) => phase.phase)).toEqual(
@@ -605,11 +605,11 @@ describe('registerWorktreeHandlers', () => {
     getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { setup: 'pnpm install' } })
     shouldRunSetupForCreateMock.mockReturnValue(true)
     createSetupRunnerScriptMock.mockReturnValueOnce({
-      runnerScriptPath: 'C:\\workspace\\repo\\.git\\orca\\setup-runner.sh',
+      runnerScriptPath: 'C:\\workspace\\repo\\.git\\mcode\\setup-runner.sh',
       shell: { family: 'posix', executable: 'wsl.exe' },
       envVars: {
-        ORCA_ROOT_PATH: 'C:\\workspace\\repo',
-        ORCA_WORKTREE_PATH: 'C:\\workspace\\improve-dashboard'
+        MCODE_ROOT_PATH: 'C:\\workspace\\repo',
+        MCODE_WORKTREE_PATH: 'C:\\workspace\\improve-dashboard'
       },
       waitForAgentStartup: true
     })
@@ -623,7 +623,7 @@ describe('registerWorktreeHandlers', () => {
       createdWithAgent: 'claude',
       startup: {
         command: 'claude --prefill test',
-        env: { ORCA_AGENT_MODE: 'direct' },
+        env: { MCODE_AGENT_MODE: 'direct' },
         telemetry: {
           agent_kind: 'claude',
           launch_source: 'new_workspace_composer',
@@ -634,8 +634,8 @@ describe('registerWorktreeHandlers', () => {
 
     expect(result.setup).toEqual(
       expect.objectContaining({
-        runnerScriptPath: 'C:\\workspace\\repo\\.git\\orca\\setup-runner.sh',
-        command: expect.stringContaining('bash /mnt/c/workspace/repo/.git/orca/setup-runner.sh')
+        runnerScriptPath: 'C:\\workspace\\repo\\.git\\mcode\\setup-runner.sh',
+        command: expect.stringContaining('bash /mnt/c/workspace/repo/.git/mcode/setup-runner.sh')
       })
     )
     expect(result.setup?.command).toContain('printf')

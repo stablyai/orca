@@ -1,5 +1,5 @@
 /**
- * Regression: a worktree created via the CLI (`orca worktree
+ * Regression: a worktree created via the CLI (`mcode worktree
  * create`) must appear in the sidebar even while a remote runtime is active.
  *
  * The faithful trigger is the real CLI path — the RuntimeClient connects to the
@@ -12,19 +12,19 @@
  * needed.
  */
 
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { waitForSessionReady, waitForActiveWorktree } from './helpers/store'
 import { RuntimeClient } from '../../src/cli/runtime-client'
 
 test.describe('worktree visibility with a remote runtime active', () => {
   test('a CLI-created worktree appears in the sidebar while a remote runtime is active', async ({
-    orcaPage,
+    mcodePage,
     electronApp
   }) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
 
-    const repoId = await orcaPage.evaluate(() => {
+    const repoId = await mcodePage.evaluate(() => {
       const repos = window.__store?.getState().repos ?? []
       // This case reproduces only for a local-host repo — one whose execution
       // host resolves to local (executionHostId unset or 'local') and which has
@@ -41,7 +41,7 @@ test.describe('worktree visibility with a remote runtime active', () => {
     })
 
     // The CLI talks to the running app over the socket recorded in its userData
-    // dir — exactly what `orca worktree create` does from a terminal.
+    // dir — exactly what `mcode worktree create` does from a terminal.
     const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
     const client = new RuntimeClient(userDataDir, 30_000, null, null)
     const createViaCli = async (name: string): Promise<string> => {
@@ -54,7 +54,7 @@ test.describe('worktree visibility with a remote runtime active', () => {
       return response.result.worktree.id
     }
     const worktreeRow = (worktreeId: string) =>
-      orcaPage.locator(`[data-worktree-id=${JSON.stringify(worktreeId)}]`).first()
+      mcodePage.locator(`[data-worktree-id=${JSON.stringify(worktreeId)}]`).first()
 
     // Guard: with no runtime active, a CLI-created worktree appears. This proves
     // the create+notify path works, so the assertion below isolates the bug
@@ -63,7 +63,7 @@ test.describe('worktree visibility with a remote runtime active', () => {
     await expect(worktreeRow(controlId)).toBeVisible({ timeout: 15_000 })
 
     // Stage a remote runtime as active — the condition that triggered the drop.
-    await orcaPage.evaluate(() => {
+    await mcodePage.evaluate(() => {
       window.__store?.setState((current) => ({
         settings: { ...current.settings, activeRuntimeEnvironmentId: 'e2e-fake-runtime' }
       }))

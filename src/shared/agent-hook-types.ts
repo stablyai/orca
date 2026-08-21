@@ -48,4 +48,4 @@ export type AgentHookInstallStatus = {
 // first launch but no v1 fleet ever shipped, and Cursor's managed script is
 // rewritten on every install() call so there is no durable on-disk v1 script
 // to inherit. Reserve the next bump for a real wire change.
-export const ORCA_HOOK_PROTOCOL_VERSION = '1' as const
+export const MCODE_HOOK_PROTOCOL_VERSION = '1' as const

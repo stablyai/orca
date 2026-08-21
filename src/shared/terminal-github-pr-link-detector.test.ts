@@ -11,10 +11,10 @@ describe('createTerminalGitHubPRLinkDetector', () => {
   it('extracts GitHub pull request URLs from terminal output', () => {
     const observe = createTerminalGitHubPRLinkDetector()
 
-    expect(observe('Created https://github.com/acme/orca/pull/42\r\n')).toEqual([
+    expect(observe('Created https://github.com/acme/mcode/pull/42\r\n')).toEqual([
       {
-        url: 'https://github.com/acme/orca/pull/42',
-        slug: { owner: 'acme', repo: 'orca', host: 'github.com' },
+        url: 'https://github.com/acme/mcode/pull/42',
+        slug: { owner: 'acme', repo: 'mcode', host: 'github.com' },
         number: 42
       }
     ])
@@ -82,11 +82,11 @@ describe('createTerminalGitHubPRLinkDetector', () => {
   it('waits for a boundary when the URL is split across PTY chunks', () => {
     const observe = createTerminalGitHubPRLinkDetector()
 
-    expect(observe('https://github.com/acme/orca/pull/4')).toEqual([])
+    expect(observe('https://github.com/acme/mcode/pull/4')).toEqual([])
     expect(observe('2\r\n')).toEqual([
       {
-        url: 'https://github.com/acme/orca/pull/42',
-        slug: { owner: 'acme', repo: 'orca', host: 'github.com' },
+        url: 'https://github.com/acme/mcode/pull/42',
+        slug: { owner: 'acme', repo: 'mcode', host: 'github.com' },
         number: 42
       }
     ])
@@ -96,10 +96,10 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     const observe = createTerminalGitHubPRLinkDetector()
 
     expect(observe('created https://gith')).toEqual([])
-    expect(observe('ub.com/acme/orca/pull/42\n')).toEqual([
+    expect(observe('ub.com/acme/mcode/pull/42\n')).toEqual([
       {
-        url: 'https://github.com/acme/orca/pull/42',
-        slug: { owner: 'acme', repo: 'orca', host: 'github.com' },
+        url: 'https://github.com/acme/mcode/pull/42',
+        slug: { owner: 'acme', repo: 'mcode', host: 'github.com' },
         number: 42
       }
     ])
@@ -108,22 +108,22 @@ describe('createTerminalGitHubPRLinkDetector', () => {
   it('trims terminal punctuation around printed URLs', () => {
     const observe = createTerminalGitHubPRLinkDetector()
 
-    expect(observe('Opened (https://github.com/acme/orca/pull/42).\n')[0]?.url).toBe(
-      'https://github.com/acme/orca/pull/42'
+    expect(observe('Opened (https://github.com/acme/mcode/pull/42).\n')[0]?.url).toBe(
+      'https://github.com/acme/mcode/pull/42'
     )
   })
 
   it('does not repeat the same PR URL from overlapping carry text', () => {
     const observe = createTerminalGitHubPRLinkDetector()
 
-    expect(observe('https://github.com/acme/orca/pull/42\n')).toHaveLength(1)
+    expect(observe('https://github.com/acme/mcode/pull/42\n')).toHaveLength(1)
     expect(observe('more output\n')).toEqual([])
   })
 
   it('ignores non-PR GitHub-shaped links', () => {
     const observe = createTerminalGitHubPRLinkDetector()
 
-    expect(observe('https://github.com/acme/orca/issues/42\n')).toEqual([])
+    expect(observe('https://github.com/acme/mcode/issues/42\n')).toEqual([])
   })
 
   it('extracts GitHub Enterprise pull request URLs from terminal output', () => {
@@ -168,10 +168,10 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     const observe = createTerminalGitHubPRLinkDetector()
     const noise = `${'/pull/not-a-url '.repeat(20_000)}\n`
 
-    expect(observe(`${noise}Created https://github.com/acme/orca/pull/42\r\n`)).toEqual([
+    expect(observe(`${noise}Created https://github.com/acme/mcode/pull/42\r\n`)).toEqual([
       {
-        url: 'https://github.com/acme/orca/pull/42',
-        slug: { owner: 'acme', repo: 'orca', host: 'github.com' },
+        url: 'https://github.com/acme/mcode/pull/42',
+        slug: { owner: 'acme', repo: 'mcode', host: 'github.com' },
         number: 42
       }
     ])
@@ -181,7 +181,7 @@ describe('createTerminalGitHubPRLinkDetector', () => {
   it('drops overlong incomplete URL carry instead of retaining pasted megabytes', () => {
     const observe = createTerminalGitHubPRLinkDetector()
 
-    expect(observe(`https://github.com/acme/orca/pull/${'4'.repeat(10_000)}`)).toEqual([])
+    expect(observe(`https://github.com/acme/mcode/pull/${'4'.repeat(10_000)}`)).toEqual([])
     expect(observe('2\r\n')).toEqual([])
   })
 
@@ -190,13 +190,13 @@ describe('createTerminalGitHubPRLinkDetector', () => {
   it('still joins a PR URL split across chunks after a large scheme-free chunk', () => {
     const observe = createTerminalGitHubPRLinkDetector()
 
-    expect(observe(`${'filler output\n'.repeat(5_000)}https://github.com/acme/orca/pull/`)).toEqual(
+    expect(observe(`${'filler output\n'.repeat(5_000)}https://github.com/acme/mcode/pull/`)).toEqual(
       []
     )
     expect(observe('7\r\n')).toEqual([
       {
-        url: 'https://github.com/acme/orca/pull/7',
-        slug: { owner: 'acme', repo: 'orca', host: 'github.com' },
+        url: 'https://github.com/acme/mcode/pull/7',
+        slug: { owner: 'acme', repo: 'mcode', host: 'github.com' },
         number: 7
       }
     ])
@@ -207,7 +207,7 @@ describe('createTerminalGitHubPRLinkDetector', () => {
 
     // The URL opened >512 bytes before the chunk end, so it already overran the
     // cap and must not resurrect on the next chunk.
-    expect(observe(`https://github.com/acme/orca/pull/${'4'.repeat(600)}`)).toEqual([])
+    expect(observe(`https://github.com/acme/mcode/pull/${'4'.repeat(600)}`)).toEqual([])
     expect(observe('2\r\n')).toEqual([])
   })
 
@@ -244,8 +244,8 @@ describe('createTerminalGitHubPRLinkDetector', () => {
 
     // The earlier scheme already overran the cap, so the trailing 'https'
     // fragment must not restart a carry and revive the abandoned URL.
-    expect(observe(`https://github.com/acme/orca/pull/1${'x'.repeat(600)}https`)).toEqual([])
-    expect(observe('://github.com/acme/orca/pull/12\n')).toEqual([])
+    expect(observe(`https://github.com/acme/mcode/pull/1${'x'.repeat(600)}https`)).toEqual([])
+    expect(observe('://github.com/acme/mcode/pull/12\n')).toEqual([])
   })
 
   it('does not fabricate a link by splicing a stale fragment onto later output', () => {
@@ -253,7 +253,7 @@ describe('createTerminalGitHubPRLinkDetector', () => {
 
     // Keeping the 'h' would splice it onto the next chunk and emit a PR link for
     // a repo that never appeared in the stream.
-    expect(observe(`https://github.com/acme/orca/pull/1${'x'.repeat(600)}h`)).toEqual([])
+    expect(observe(`https://github.com/acme/mcode/pull/1${'x'.repeat(600)}h`)).toEqual([])
     expect(observe('ttps://github.com/zz/yy/pull/9\n')).toEqual([])
   })
 
@@ -283,10 +283,10 @@ describe('createTerminalGitHubPRLinkDetector', () => {
     const observe = createTerminalGitHubPRLinkDetector()
 
     expect(observe(`${'x'.repeat(1_000)}https`)).toEqual([])
-    expect(observe('://github.com/acme/orca/pull/12\n')).toEqual([
+    expect(observe('://github.com/acme/mcode/pull/12\n')).toEqual([
       {
-        url: 'https://github.com/acme/orca/pull/12',
-        slug: { owner: 'acme', repo: 'orca', host: 'github.com' },
+        url: 'https://github.com/acme/mcode/pull/12',
+        slug: { owner: 'acme', repo: 'mcode', host: 'github.com' },
         number: 12
       }
     ])

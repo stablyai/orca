@@ -1,4 +1,4 @@
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   focusActiveTerminalInput,
@@ -47,39 +47,39 @@ async function wedgeActivePaneWritePipeline(
 
 test.describe('Wedged terminal write pipeline recovery', () => {
   test('pane recovers rendering and input after its write pipeline wedges', async ({
-    orcaPage
+    mcodePage
   }) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
-    await waitForActivePanePtyId(orcaPage)
-    await focusActiveTerminalInput(orcaPage)
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
+    await ensureTerminalVisible(mcodePage)
+    await waitForActiveTerminalManager(mcodePage, 30_000)
+    await waitForActivePanePtyId(mcodePage)
+    await focusActiveTerminalInput(mcodePage)
 
     // Prove the pane is healthy first.
     const runId = Date.now()
     const beforeMarker = `WEDGE_BASELINE_${runId}`
-    await orcaPage.keyboard.type(`echo ${beforeMarker}`, { delay: 20 })
-    await orcaPage.keyboard.press('Enter')
+    await mcodePage.keyboard.type(`echo ${beforeMarker}`, { delay: 20 })
+    await mcodePage.keyboard.press('Enter')
     await expect
-      .poll(async () => (await getTerminalContent(orcaPage)).includes(beforeMarker), {
+      .poll(async () => (await getTerminalContent(mcodePage)).includes(beforeMarker), {
         timeout: 15_000,
         message: 'Baseline echo did not render — pane unhealthy before wedge'
       })
       .toBe(true)
 
-    await wedgeActivePaneWritePipeline(orcaPage)
+    await wedgeActivePaneWritePipeline(mcodePage)
 
     // Type through the wedge. The PTY is alive: bytes reach the shell and the
     // shell echoes them — but a wedged pipeline never parses the echo, so
     // without recovery the marker never renders.
     const afterMarker = `WEDGE_RECOVERED_${runId}`
-    await focusActiveTerminalInput(orcaPage)
-    await orcaPage.keyboard.type(`echo ${afterMarker}`, { delay: 20 })
-    await orcaPage.keyboard.press('Enter')
+    await focusActiveTerminalInput(mcodePage)
+    await mcodePage.keyboard.type(`echo ${afterMarker}`, { delay: 20 })
+    await mcodePage.keyboard.press('Enter')
 
     await expect
-      .poll(async () => (await getTerminalContent(orcaPage)).includes(afterMarker), {
+      .poll(async () => (await getTerminalContent(mcodePage)).includes(afterMarker), {
         // Generous: recovery is certified by a probe write with a 10s stall
         // check, so the rebuild can legitimately take >20s to kick in.
         timeout: 45_000,
@@ -90,21 +90,21 @@ test.describe('Wedged terminal write pipeline recovery', () => {
   })
 
   test('pane recovers after its xterm is disposed under live bindings (zombie pane)', async ({
-    orcaPage
+    mcodePage
   }) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
-    const ptyId = await waitForActivePanePtyId(orcaPage)
-    await focusActiveTerminalInput(orcaPage)
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
+    await ensureTerminalVisible(mcodePage)
+    await waitForActiveTerminalManager(mcodePage, 30_000)
+    const ptyId = await waitForActivePanePtyId(mcodePage)
+    await focusActiveTerminalInput(mcodePage)
 
     const runId = Date.now()
     const beforeMarker = `ZOMBIE_BASELINE_${runId}`
-    await orcaPage.keyboard.type(`echo ${beforeMarker}`, { delay: 20 })
-    await orcaPage.keyboard.press('Enter')
+    await mcodePage.keyboard.type(`echo ${beforeMarker}`, { delay: 20 })
+    await mcodePage.keyboard.press('Enter')
     await expect
-      .poll(async () => (await getTerminalContent(orcaPage)).includes(beforeMarker), {
+      .poll(async () => (await getTerminalContent(mcodePage)).includes(beforeMarker), {
         timeout: 15_000,
         message: 'Baseline echo did not render — pane unhealthy before dispose'
       })
@@ -115,7 +115,7 @@ test.describe('Wedged terminal write pipeline recovery', () => {
     // terminal silently drops its completion callback (verified against
     // 6.1.0-beta.287), so delivery acks leak and keyboard onData never fires —
     // the pane looks painted but is a fossil: input dead, output dead, PTY alive.
-    await orcaPage.evaluate(() => {
+    await mcodePage.evaluate(() => {
       const state = window.__store?.getState()
       const worktreeId = state?.activeWorktreeId
       const tabId =
@@ -136,10 +136,10 @@ test.describe('Wedged terminal write pipeline recovery', () => {
     // health signal recovery must catch (typing can't be one here — a disposed
     // xterm emits no onData at all).
     const outputMarker = `ZOMBIE_OUTPUT_${runId}`
-    await sendToTerminal(orcaPage, ptyId, `echo ${outputMarker}\r`)
+    await sendToTerminal(mcodePage, ptyId, `echo ${outputMarker}\r`)
 
     await expect
-      .poll(async () => (await getTerminalContent(orcaPage)).includes(outputMarker), {
+      .poll(async () => (await getTerminalContent(mcodePage)).includes(outputMarker), {
         timeout: 45_000,
         message:
           'Output written after the pane xterm was disposed never rendered — zombie pane was not recovered'
@@ -147,12 +147,12 @@ test.describe('Wedged terminal write pipeline recovery', () => {
       .toBe(true)
 
     // Input must be live again end-to-end after recovery.
-    await focusActiveTerminalInput(orcaPage)
+    await focusActiveTerminalInput(mcodePage)
     const typedMarker = `ZOMBIE_INPUT_${runId}`
-    await orcaPage.keyboard.type(`echo ${typedMarker}`, { delay: 20 })
-    await orcaPage.keyboard.press('Enter')
+    await mcodePage.keyboard.type(`echo ${typedMarker}`, { delay: 20 })
+    await mcodePage.keyboard.press('Enter')
     await expect
-      .poll(async () => (await getTerminalContent(orcaPage)).includes(typedMarker), {
+      .poll(async () => (await getTerminalContent(mcodePage)).includes(typedMarker), {
         timeout: 15_000,
         message: 'Typed input never reached the PTY after zombie-pane recovery'
       })

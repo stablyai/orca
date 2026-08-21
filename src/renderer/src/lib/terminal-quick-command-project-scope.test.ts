@@ -13,8 +13,8 @@ const WINDOWS_REPO_ID = 'a0a2b4a4-1bff-494c-b005-d77918abc6a7'
 
 function command(repoId: string): TerminalQuickCommand {
   return {
-    id: 'test-orca',
-    label: 'Test Orca',
+    id: 'test-mcode',
+    label: 'Test MCode',
     action: 'terminal-command',
     command: 'pnpm test',
     appendEnter: true,
@@ -25,7 +25,7 @@ function command(repoId: string): TerminalQuickCommand {
 function setup(
   hostId: ExecutionHostId,
   repoId: string,
-  projectId = 'github:stablyai/orca'
+  projectId = 'github:mcode-ide/mcode'
 ): ScopeSetup {
   return { hostId, projectId, repoId }
 }
@@ -54,20 +54,20 @@ describe('terminalQuickCommandMatchesWorkspaceProject', () => {
     const repo = (id: string, path: string, executionHostId?: ExecutionHostId): Repo => ({
       id,
       path,
-      displayName: 'orca',
+      displayName: 'mcode',
       badgeColor: '#737373',
       addedAt: 100,
       kind: 'git',
       gitRemoteIdentity: {
-        canonicalKey: 'github.com/stablyai/orca',
+        canonicalKey: 'github.com/mcode-ide/mcode',
         remoteName: 'origin',
-        remoteUrl: 'git@github.com:stablyai/orca.git'
+        remoteUrl: 'git@github.com:mcode-ide/mcode.git'
       },
       ...(executionHostId ? { executionHostId } : {})
     })
     const projectHostSetups = projectHostSetupProjectionFromRepos([
-      repo(LOCAL_REPO_ID, '/Users/alice/orca'),
-      repo(WINDOWS_REPO_ID, 'C:\\Users\\alice\\orca', 'runtime:windows-2')
+      repo(LOCAL_REPO_ID, '/Users/alice/mcode'),
+      repo(WINDOWS_REPO_ID, 'C:\\Users\\alice\\mcode', 'runtime:windows-2')
     ]).setups
 
     expect(

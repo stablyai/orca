@@ -52,8 +52,8 @@ let directory: string
 let storeFile: string
 
 beforeEach(async () => {
-  directory = await mkdtemp(join(tmpdir(), 'orca-host-key-store-'))
-  storeFile = getSshHostKeyStoreFile(join(directory, 'orca-data.json'))
+  directory = await mkdtemp(join(tmpdir(), 'mcode-host-key-store-'))
+  storeFile = getSshHostKeyStoreFile(join(directory, 'mcode-data.json'))
 })
 
 afterEach(async () => {
@@ -64,7 +64,7 @@ afterEach(async () => {
 
 describe('ssh host key store', () => {
   it('places the store beside the profile data file, not inside it', () => {
-    expect(getSshHostKeyStoreFile(join('/profiles', 'p1', 'orca-data.json'))).toBe(
+    expect(getSshHostKeyStoreFile(join('/profiles', 'p1', 'mcode-data.json'))).toBe(
       join('/profiles', 'p1', 'ssh-host-keys.json')
     )
   })
@@ -111,7 +111,7 @@ describe('ssh host key store', () => {
   it('scopes trust to the endpoint, so a second target naming the same host is already trusted', async () => {
     await trustHostKey(query({ host: 'build-01' }), storeFile)
 
-    // A different Orca target, same machine — no target id is recorded anywhere.
+    // A different MCode target, same machine — no target id is recorded anywhere.
     expect(await isTrusted(query({ host: 'BUILD-01' }), storeFile)).toBe('match')
     const [record] = await loadTrustedHostKeys(storeFile)
     expect(Object.keys(record ?? {})).toEqual([
@@ -293,13 +293,13 @@ describe('ssh host key store', () => {
 /**
  * Rollback safety for a brand-new on-disk format.
  *
- * `version` was written and never read, so a store from a future Orca would have every record
+ * `version` was written and never read, so a store from a future MCode would have every record
  * dropped by validation and then be rewritten as v1 — the file silently losing whatever that version
  * knew. v1 is the only place this can be made safe, because v2 cannot retrofit it.
  */
 describe('a host key store written by a newer version', () => {
   it('is not trusted and not overwritten', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'orca-host-key-store-'))
+    const dir = await mkdtemp(join(tmpdir(), 'mcode-host-key-store-'))
     const storeFile = join(dir, 'ssh-host-keys.json')
     const future = JSON.stringify({
       version: 99,

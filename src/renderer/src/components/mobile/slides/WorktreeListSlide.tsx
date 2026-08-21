@@ -81,7 +81,7 @@ export function WorktreeListSlide({ tapping }: { tapping: boolean }): React.JSX.
           name="feat/mobile-page"
           pr="#2491"
           repoColor="#3b82f6"
-          repo="orca"
+          repo="mcode"
           branch="feat/mobile-page"
           preview="claude · refactoring v3 mock to use real screens…"
           tcount={2}
@@ -93,7 +93,7 @@ export function WorktreeListSlide({ tapping }: { tapping: boolean }): React.JSX.
           name="runtime/web-pairing"
           pr="#2487"
           repoColor="#22c55e"
-          repo="orca"
+          repo="mcode"
           branch="feat/web-pairing"
           preview="$ pnpm test --filter web-runtime"
           tcount={1}
@@ -103,7 +103,7 @@ export function WorktreeListSlide({ tapping }: { tapping: boolean }): React.JSX.
           indicator="red"
           name="infra/notifier"
           repoColor="#f97316"
-          repo="orca"
+          repo="mcode"
           branch="main"
           preview="awaiting permission · sudo apt install"
           tcount={1}
@@ -122,7 +122,7 @@ export function WorktreeListSlide({ tapping }: { tapping: boolean }): React.JSX.
           indicator="green"
           name="docs/styleguide-update"
           repoColor="#8b5cf6"
-          repo="orca"
+          repo="mcode"
           branch="feat/styleguide"
           preview="$ pnpm lint"
           tcount={1}
@@ -132,7 +132,7 @@ export function WorktreeListSlide({ tapping }: { tapping: boolean }): React.JSX.
           indicator="muted"
           name="feat/runtime-perf"
           repoColor="#3b82f6"
-          repo="orca"
+          repo="mcode"
           branch="feat/runtime-perf"
         />
         <div className="mp-wl-sep" />
@@ -141,7 +141,7 @@ export function WorktreeListSlide({ tapping }: { tapping: boolean }): React.JSX.
           name="fix/notifier-cooldown"
           pr="#2483"
           repoColor="#f97316"
-          repo="orca"
+          repo="mcode"
           branch="feat/notifier-cooldown"
           preview="claude · investigating macOS notification queue…"
           tcount={1}
@@ -151,7 +151,7 @@ export function WorktreeListSlide({ tapping }: { tapping: boolean }): React.JSX.
           indicator="muted"
           name="chore/deps-bump"
           repoColor="#22c55e"
-          repo="orca"
+          repo="mcode"
           branch="feat/deps-bump"
         />
         <div className="mp-wl-sep" />
@@ -159,9 +159,9 @@ export function WorktreeListSlide({ tapping }: { tapping: boolean }): React.JSX.
           indicator="green"
           name="experiment/ssh-multiplex"
           repoColor="#3b82f6"
-          repo="orca"
+          repo="mcode"
           branch="feat/ssh-mux"
-          preview="$ ssh -O check orca-relay"
+          preview="$ ssh -O check mcode-relay"
           tcount={2}
         />
         <div className="mp-wl-sep" />
@@ -169,7 +169,7 @@ export function WorktreeListSlide({ tapping }: { tapping: boolean }): React.JSX.
           indicator="muted"
           name="refactor/host-store"
           repoColor="#8b5cf6"
-          repo="orca"
+          repo="mcode"
           branch="feat/host-store"
         />
       </div>

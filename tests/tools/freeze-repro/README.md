@@ -9,14 +9,14 @@ Two harnesses for bulk-open / reconnect freeze repros on large paired remotes:
 
 ## Prerequisites
 
-1. **Desktop Orca running** (`orca status --json`).
+1. **Desktop MCode running** (`mcode status --json`).
 2. A **large paired remote** (many worktrees / agent terminals). Lab fleets often have ~60 worktrees and 100+ terminals.
 3. Repo checkout with these scripts.
 
 ```bash
-orca environment list --json
-orca worktree list --environment <name> --json | head
-orca terminal list --environment <name> --json | head
+mcode environment list --json
+mcode worktree list --environment <name> --json | head
+mcode terminal list --environment <name> --json | head
 ```
 
 ---
@@ -27,27 +27,27 @@ Story: remotes keep streaming while the user is away; user returns (optionally a
 
 ```bash
 # Idle + human-paced open
-ORCA_FREEZE_ENV=paired-remote \
-ORCA_FREEZE_SCENARIO=idle-backlog-open \
-ORCA_FREEZE_CREATE=8 \
-ORCA_FREEZE_IDLE_MS=45000 \
-ORCA_FREEZE_OPEN_COUNT=24 \
+MCODE_FREEZE_ENV=paired-remote \
+MCODE_FREEZE_SCENARIO=idle-backlog-open \
+MCODE_FREEZE_CREATE=8 \
+MCODE_FREEZE_IDLE_MS=45000 \
+MCODE_FREEZE_OPEN_COUNT=24 \
 pnpm run repro:live-remote-realistic-freeze
 
 # Wake-like: idle + reconnect metadata storm + open  ← hard freeze in lab
-ORCA_FREEZE_ENV=paired-remote \
-ORCA_FREEZE_SCENARIO=idle-backlog-reconnect-open \
-ORCA_FREEZE_CREATE=10 \
-ORCA_FREEZE_IDLE_MS=60000 \
-ORCA_FREEZE_OPEN_COUNT=40 \
+MCODE_FREEZE_ENV=paired-remote \
+MCODE_FREEZE_SCENARIO=idle-backlog-reconnect-open \
+MCODE_FREEZE_CREATE=10 \
+MCODE_FREEZE_IDLE_MS=60000 \
+MCODE_FREEZE_OPEN_COUNT=40 \
 pnpm run repro:live-remote-realistic-freeze
 
-# Restart-proxy: idle + orca open + refresh storm + open (does not kill desktop)
-ORCA_FREEZE_ENV=paired-remote \
-ORCA_FREEZE_SCENARIO=restart-proxy \
-ORCA_FREEZE_CREATE=0 \
-ORCA_FREEZE_IDLE_MS=20000 \
-ORCA_FREEZE_OPEN_COUNT=30 \
+# Restart-proxy: idle + mcode open + refresh storm + open (does not kill desktop)
+MCODE_FREEZE_ENV=paired-remote \
+MCODE_FREEZE_SCENARIO=restart-proxy \
+MCODE_FREEZE_CREATE=0 \
+MCODE_FREEZE_IDLE_MS=20000 \
+MCODE_FREEZE_OPEN_COUNT=30 \
 pnpm run repro:live-remote-realistic-freeze
 ```
 
@@ -55,25 +55,25 @@ Or: `node config/scripts/live-remote-realistic-freeze-repro.mjs`
 
 ### Scenarios
 
-| `ORCA_FREEZE_SCENARIO`        | Models                                                                                        |
+| `MCODE_FREEZE_SCENARIO`        | Models                                                                                        |
 | ----------------------------- | --------------------------------------------------------------------------------------------- |
 | `idle-backlog-open`           | User away while agents stream; returns and opens sessions                                     |
 | `idle-backlog-reconnect-open` | Same + parallel status/worktree/terminal refresh (wake/reconnect client storm)                |
-| `restart-proxy`               | `orca open` + refresh storm + open (post-restart discovery; no process kill)                  |
-| `lockup-storm`                | Idle + flood + reconnect + **concurrent** open fan-out + **mid-storm `orca status` watchdog** |
+| `restart-proxy`               | `mcode open` + refresh storm + open (post-restart discovery; no process kill)                  |
+| `lockup-storm`                | Idle + flood + reconnect + **concurrent** open fan-out + **mid-storm `mcode status` watchdog** |
 
 ### Realistic knobs
 
 | Variable                          | Default             | Meaning                                                           |
 | --------------------------------- | ------------------- | ----------------------------------------------------------------- |
-| `ORCA_FREEZE_ENV`                 | `paired-remote`     | Paired remote environment name                                    |
-| `ORCA_FREEZE_SCENARIO`            | `idle-backlog-open` | See table above                                                   |
-| `ORCA_FREEZE_CREATE`              | `0`                 | New flood terminals; mutation requires an explicit positive value |
-| `ORCA_FREEZE_IDLE_MS`             | `45000`             | Time “away” while floods run                                      |
-| `ORCA_FREEZE_OPEN_COUNT`          | `20`                | Sessions to open after return                                     |
-| `ORCA_FREEZE_PACE_MS`             | `250`               | Base delay between opens (human pace)                             |
-| `ORCA_FREEZE_PACE_JITTER_MS`      | `150`               | Random extra delay                                                |
-| `ORCA_FREEZE_SOFT_MS` / `HARD_MS` | 2000 / 5000         | Thresholds                                                        |
+| `MCODE_FREEZE_ENV`                 | `paired-remote`     | Paired remote environment name                                    |
+| `MCODE_FREEZE_SCENARIO`            | `idle-backlog-open` | See table above                                                   |
+| `MCODE_FREEZE_CREATE`              | `0`                 | New flood terminals; mutation requires an explicit positive value |
+| `MCODE_FREEZE_IDLE_MS`             | `45000`             | Time “away” while floods run                                      |
+| `MCODE_FREEZE_OPEN_COUNT`          | `20`                | Sessions to open after return                                     |
+| `MCODE_FREEZE_PACE_MS`             | `250`               | Base delay between opens (human pace)                             |
+| `MCODE_FREEZE_PACE_JITTER_MS`      | `150`               | Random extra delay                                                |
+| `MCODE_FREEZE_SOFT_MS` / `HARD_MS` | 2000 / 5000         | Thresholds                                                        |
 
 ### Lab results (2026-07-31, client 1.4.163 / remote 1.4.163-rc.0)
 
@@ -82,7 +82,7 @@ Or: `node config/scripts/live-remote-realistic-freeze-repro.mjs`
 | idle-backlog-open                                  | 6      | 45s    | 24             | **1.7s** max open                                    | none (&lt; soft)                                                          |
 | **idle-backlog-reconnect-open**                    | 10     | 60s    | 40             | **11.0s** max open; reconnect refresh **3.6s**       | **HARD (recovered)**                                                      |
 | **restart-proxy**                                  | 0      | 20s    | 30             | **11.2s** max open                                   | **HARD (recovered)**                                                      |
-| **lockup-storm** (parallel open + overlap refresh) | 12–16  | 45–60s | 64–80 @ p20–32 | **27–35s** batches; some `Terminal reveal timed out` | **HARD stalls + reveal timeouts; app still answers `orca status` ~150ms** |
+| **lockup-storm** (parallel open + overlap refresh) | 12–16  | 45–60s | 64–80 @ p20–32 | **27–35s** batches; some `Terminal reveal timed out` | **HARD stalls + reveal timeouts; app still answers `mcode status` ~150ms** |
 
 ### Full-app forever freeze?
 
@@ -96,10 +96,10 @@ Latest lockup-storm with watchdog (2026-07-31):
 | Mid-storm status samples    | **95**, max **~631ms**, **0 hangs** |
 | Peak open/batch             | **~34s** (recovered hard stall)     |
 | `Terminal reveal timed out` | yes (under fan-out)                 |
-| Post-storm `orca status`    | **~113ms**                          |
+| Post-storm `mcode status`    | **~113ms**                          |
 | Force Quit required         | **no**                              |
 
-Bar for full-app freeze in the harness: continuous **≥30s** window where `orca status` hangs/fails or stays ≥15s slow (`evaluateFullAppFreeze` / `foreverUiLockupObserved`).
+Bar for full-app freeze in the harness: continuous **≥30s** window where `mcode status` hangs/fails or stays ≥15s slow (`evaluateFullAppFreeze` / `foreverUiLockupObserved`).
 CLI spawn failures are reported as harness infrastructure errors, not product freezes.
 
 What we **do** reproduce: severe multi-second / multi-tens-of-seconds stalls + flaky reveal.
@@ -116,9 +116,9 @@ What we **do not**: UI dead forever until Force Quit. That likely needs **real O
 
 ```bash
 # Full-app freeze attempt (watchdog on)
-ORCA_FREEZE_ENV=paired-remote ORCA_FREEZE_SCENARIO=lockup-storm \
-  ORCA_FREEZE_CREATE=12 ORCA_FREEZE_IDLE_MS=30000 ORCA_FREEZE_OPEN_COUNT=80 \
-  ORCA_FREEZE_STORM_PARALLEL=28 ORCA_FREEZE_FOREVER_WINDOW_MS=30000 \
+MCODE_FREEZE_ENV=paired-remote MCODE_FREEZE_SCENARIO=lockup-storm \
+  MCODE_FREEZE_CREATE=12 MCODE_FREEZE_IDLE_MS=30000 MCODE_FREEZE_OPEN_COUNT=80 \
+  MCODE_FREEZE_STORM_PARALLEL=28 MCODE_FREEZE_FOREVER_WINDOW_MS=30000 \
   pnpm run repro:live-remote-realistic-freeze
 # Expect exit 2 (recovered hard) unless foreverUiLockupObserved becomes true
 ```
@@ -134,10 +134,10 @@ Reports: `test-results/freeze-repro/live-realistic-freeze-<env>-<scenario>.json`
 Artificial concurrency lever; still useful for ceilings / CI stress.
 
 ```bash
-ORCA_FREEZE_ENV=paired-remote \
-ORCA_FREEZE_CREATE=0 \
-ORCA_FREEZE_SWITCH_PASSES=3 \
-ORCA_FREEZE_PARALLEL=16 \
+MCODE_FREEZE_ENV=paired-remote \
+MCODE_FREEZE_CREATE=0 \
+MCODE_FREEZE_SWITCH_PASSES=3 \
+MCODE_FREEZE_PARALLEL=16 \
 pnpm run repro:live-remote-bulk-open-freeze
 ```
 
@@ -162,7 +162,7 @@ Generation-aware **latest-wins single-flight** for exclusive host focus:
 
 | Layer    | Module                                                                             |
 | -------- | ---------------------------------------------------------------------------------- |
-| Runtime  | `TerminalFocusNavigationCoalescer` via `OrcaRuntimeService.focusTerminal`          |
+| Runtime  | `TerminalFocusNavigationCoalescer` via `MCodeRuntimeService.focusTerminal`          |
 | Contract | `RuntimeTerminalFocus.navigated?: boolean` — `false` when superseded / nav skipped |
 
 **In scope:** concurrent `terminal.focus` / bulk-switch storms.
@@ -185,19 +185,19 @@ Generation-aware **latest-wins single-flight** for exclusive host focus:
 
 ## Safety
 
-- Both harnesses default to `ORCA_FREEZE_CREATE=0`. A positive value creates persistent, high-output remote terminals; use it only on an isolated target you can clean up.
-- `restart-proxy` does **not** kill Orca; it runs `orca open` + refresh RPCs only.
-- Manual capture if UI fully freezes: `sample Orca 5 -file ~/Desktop/orca-freeze-sample.txt`
+- Both harnesses default to `MCODE_FREEZE_CREATE=0`. A positive value creates persistent, high-output remote terminals; use it only on an isolated target you can clean up.
+- `restart-proxy` does **not** kill MCode; it runs `mcode open` + refresh RPCs only.
+- Manual capture if UI fully freezes: `sample MCode 5 -file ~/Desktop/mcode-freeze-sample.txt`
 
-The scripts honor `ORCA_CLI_COMMAND`, then use `orca-dev` in a dev runtime, `orca-ide` on Linux, and `orca` elsewhere.
+The scripts honor `MCODE_CLI_COMMAND`, then use `mcode-dev` in a dev runtime, `mcode-ide` on Linux, and `mcode` elsewhere.
 
 PowerShell equivalent for the first example:
 
 ```powershell
-$env:ORCA_FREEZE_ENV = 'paired-remote'
-$env:ORCA_FREEZE_SCENARIO = 'idle-backlog-open'
-$env:ORCA_FREEZE_CREATE = '8'
-$env:ORCA_FREEZE_IDLE_MS = '45000'
-$env:ORCA_FREEZE_OPEN_COUNT = '24'
+$env:MCODE_FREEZE_ENV = 'paired-remote'
+$env:MCODE_FREEZE_SCENARIO = 'idle-backlog-open'
+$env:MCODE_FREEZE_CREATE = '8'
+$env:MCODE_FREEZE_IDLE_MS = '45000'
+$env:MCODE_FREEZE_OPEN_COUNT = '24'
 pnpm run repro:live-remote-realistic-freeze
 ```

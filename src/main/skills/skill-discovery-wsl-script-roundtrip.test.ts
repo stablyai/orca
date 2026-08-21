@@ -25,7 +25,7 @@ function root(id: string, path: string): SkillScanRoot {
 
 describe.skipIf(process.platform === 'win32')('WSL skill discovery script round-trip', () => {
   it('parses back exactly what the generated script emits', async () => {
-    const base = await mkdtemp(join(tmpdir(), 'orca-wsl-roundtrip-'))
+    const base = await mkdtemp(join(tmpdir(), 'mcode-wsl-roundtrip-'))
     const presentRoot = join(base, 'skills')
     await mkdir(join(presentRoot, 'review'), { recursive: true })
     await writeFile(

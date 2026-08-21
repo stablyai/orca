@@ -4,7 +4,7 @@ import type {
   OrchestrationWorkerReadSource
 } from '../../../../shared/orchestration-worker-output'
 import type { RuntimeTerminalState } from '../../../../shared/runtime-types'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import {
   createWorkerOutputSourceIdentity,
@@ -15,7 +15,7 @@ import { redactWorkerTerminalLines } from '../../orchestration/worker-transcript
 import { readWorkerTranscript } from '../../orchestration/worker-transcript-read'
 
 export async function readExactWorkerOutput(args: {
-  runtime: OrcaRuntimeService
+  runtime: MCodeRuntimeService
   dispatchId: string
   terminalHandle: string
   workerState: string

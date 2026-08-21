@@ -5,8 +5,8 @@ import { buildWslLoginShellCommand, buildWslExecArgs } from '../shared/wsl-login
 import { getLocalWorktreePathAccess } from './local-worktree-filesystem'
 
 const execFileAsync = promisify(execFile)
-const DISTRO = process.env.ORCA_WSL_TEST_DISTRO ?? 'Ubuntu-24.04'
-const runRealWsl = process.platform === 'win32' && process.env.ORCA_REAL_WSL_BANNER_TEST === '1'
+const DISTRO = process.env.MCODE_WSL_TEST_DISTRO ?? 'Ubuntu-24.04'
+const runRealWsl = process.platform === 'win32' && process.env.MCODE_REAL_WSL_BANNER_TEST === '1'
 
 const FILE_CONTENTS = 'line one\nline two\n'
 
@@ -17,7 +17,7 @@ function unc(linuxPath: string): string {
 async function wsl(command: string, ...args: string[]): Promise<string> {
   const { stdout } = await execFileAsync(
     'wsl.exe',
-    ['-d', DISTRO, '--exec', 'sh', '-c', command, 'orca-wsl-test', ...args],
+    ['-d', DISTRO, '--exec', 'sh', '-c', command, 'mcode-wsl-test', ...args],
     { encoding: 'utf-8', timeout: 30000 }
   )
   return stdout.trim()
@@ -37,12 +37,12 @@ describe.skipIf(!runRealWsl)('WSL worktree reads carry no shell chatter', () => 
   let fixtureRoot: string
 
   beforeAll(async () => {
-    fixtureRoot = await wsl("mktemp -d -p /tmp 'orca-wsl-banner.XXXXXX'")
+    fixtureRoot = await wsl("mktemp -d -p /tmp 'mcode-wsl-banner.XXXXXX'")
     await wsl('mkdir -p "$1/dir" && printf \'%s\' "$2" > "$1/file.txt"', fixtureRoot, FILE_CONTENTS)
   }, 120_000)
 
   afterAll(async () => {
-    if (/^\/tmp\/orca-wsl-banner\.[A-Za-z0-9]+$/u.test(fixtureRoot)) {
+    if (/^\/tmp\/mcode-wsl-banner\.[A-Za-z0-9]+$/u.test(fixtureRoot)) {
       await wsl('rm -rf -- "$1"', fixtureRoot)
     }
   }, 120_000)

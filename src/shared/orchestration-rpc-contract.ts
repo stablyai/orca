@@ -71,7 +71,7 @@ export function orchestrationSkillRecoveryData(): {
     guide: { topic: 'orchestration', full: true },
     nextCommandArgs: ORCHESTRATION_SKILL_COMMAND_ARGS,
     nextSteps: [
-      'Using this same Orca CLI executable, run: skills get orchestration --full',
+      'Using this same MCode CLI executable, run: skills get orchestration --full',
       'Read the returned guide completely and do not retry the previous command unchanged.'
     ]
   }

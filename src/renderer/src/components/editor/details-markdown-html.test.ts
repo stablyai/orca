@@ -51,22 +51,22 @@ describe('details markdown html', () => {
   it('accepts heading-5 toggle variants and rejects unsupported levels', () => {
     expect(parseToggleHeadingVariant('heading-5')).toBe('heading-5')
     expect(parseToggleHeadingVariant('heading-6')).toBeNull()
-    expect(parseDetailsAttributes(' data-orca-toggle="heading-5"')).toMatchObject({
+    expect(parseDetailsAttributes(' data-mcode-toggle="heading-5"')).toMatchObject({
       variant: 'heading-5'
     })
-    expect(parseDetailsAttributes(' data-orca-toggle="heading-6"')).toMatchObject({
+    expect(parseDetailsAttributes(' data-mcode-toggle="heading-6"')).toMatchObject({
       variant: null
     })
 
     const editableHeading5: DetailsHtmlBlock = {
       raw: '',
-      openingAttributes: ' data-orca-toggle="heading-5"',
+      openingAttributes: ' data-mcode-toggle="heading-5"',
       inner: '<summary>Toggle</summary><p>Body</p>',
       hasNestedDetails: false
     }
     const unsupportedHeading6: DetailsHtmlBlock = {
       raw: '',
-      openingAttributes: ' data-orca-toggle="heading-6"',
+      openingAttributes: ' data-mcode-toggle="heading-6"',
       inner: '<summary>Toggle</summary><p>Body</p>',
       hasNestedDetails: false
     }

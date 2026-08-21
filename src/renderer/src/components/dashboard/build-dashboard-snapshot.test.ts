@@ -377,7 +377,7 @@ describe('buildDashboardSnapshot', () => {
     expect(nameByPaneKey.get(siblingPaneKey)).toBe('Redis cache strategy')
   })
 
-  // Why: `orca terminal rename --title` is unbounded, and the main-process
+  // Why: `mcode terminal rename --title` is unbounded, and the main-process
   // validator drops any card whose label exceeds the shared bound.
   it('truncates labels to the length the snapshot validator accepts', () => {
     const snapshot = buildDashboardSnapshot(

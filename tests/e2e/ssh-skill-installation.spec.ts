@@ -1,6 +1,6 @@
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import type { SkillInstallDestination } from '../../src/shared/skill-install-contract'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import {
   cleanupDockerSshRelayTarget,
   execDockerSshRelayTargetCommand,
@@ -19,19 +19,19 @@ import {
   type RemoteSkillCloudFixture
 } from './helpers/remote-skill-cloud-fixture'
 
-const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
-const REMOTE_FOLDER = '/tmp/orca-skill-folder-workspace'
+const RUN_DOCKER_SSH = process.env.MCODE_E2E_SSH_DOCKER === '1'
+const REMOTE_FOLDER = '/tmp/mcode-skill-folder-workspace'
 
 let cloud: RemoteSkillCloudFixture | null = null
 
 test.use({
-  orcaAppExtraEnv: {
-    ORCA_ARTIFACTS_API_URL: REMOTE_SKILL_CLOUD_ORIGIN,
-    ORCA_CLOUD_API_URL: REMOTE_SKILL_CLOUD_ORIGIN,
-    ORCA_CLOUD_CLIENT_ID: 'skills-e2e-client',
-    ORCA_CLOUD_DEV_AUTH: '1',
-    ORCA_CLOUD_ALLOW_PLAINTEXT_SESSION: '1',
-    ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS: REMOTE_SKILL_CLOUD_ORIGIN
+  mcodeAppExtraEnv: {
+    MCODE_ARTIFACTS_API_URL: REMOTE_SKILL_CLOUD_ORIGIN,
+    MCODE_CLOUD_API_URL: REMOTE_SKILL_CLOUD_ORIGIN,
+    MCODE_CLOUD_CLIENT_ID: 'skills-e2e-client',
+    MCODE_CLOUD_DEV_AUTH: '1',
+    MCODE_CLOUD_ALLOW_PLAINTEXT_SESSION: '1',
+    MCODE_SKILL_PACKAGE_DOWNLOAD_ORIGINS: REMOTE_SKILL_CLOUD_ORIGIN
   }
 })
 
@@ -48,11 +48,11 @@ test.afterAll(async () => {
 })
 
 test.describe('SSH skill installation', () => {
-  test.skip(!RUN_DOCKER_SSH, 'Set ORCA_E2E_SSH_DOCKER=1 to run Docker-backed SSH tests.')
+  test.skip(!RUN_DOCKER_SSH, 'Set MCODE_E2E_SSH_DOCKER=1 to run Docker-backed SSH tests.')
   test.skip(process.platform === 'win32', 'Docker SSH tests use POSIX ssh tooling.')
 
   test('installs and removes global, Git-worktree, and folder copies through the real relay', async ({
-    orcaPage
+    mcodePage
   }, testInfo: TestInfo) => {
     test.slow()
     const fixture = requireCloudFixture()
@@ -60,10 +60,10 @@ test.describe('SSH skill installation', () => {
     try {
       target = startDockerSshRelayTarget(testInfo)
       execDockerSshRelayTargetCommand(target, `mkdir -p ${REMOTE_FOLDER}`)
-      await waitForSessionReady(orcaPage)
-      await waitForActiveWorktree(orcaPage)
-      const remote = await connectDockerSshRelayTarget(orcaPage, target)
-      const auth = await orcaPage.evaluate(() => window.api.orcaProfiles.connectCurrent())
+      await waitForSessionReady(mcodePage)
+      await waitForActiveWorktree(mcodePage)
+      const remote = await connectDockerSshRelayTarget(mcodePage, target)
+      const auth = await mcodePage.evaluate(() => window.api.mcodeProfiles.connectCurrent())
       expect(auth.status).toBe('connected')
 
       const globalDestination: SkillInstallDestination = {
@@ -71,12 +71,12 @@ test.describe('SSH skill installation', () => {
         executionTarget: { kind: 'ssh', connectionId: remote.targetId }
       }
       await installAndVerify(
-        orcaPage,
+        mcodePage,
         target,
         globalDestination,
         '/root/.agents/skills/remote-e2e-skill'
       )
-      const globalInstalls = await orcaPage.evaluate(
+      const globalInstalls = await mcodePage.evaluate(
         (environmentId) => window.api.skills.listManagedInstalls(environmentId),
         `ssh:${remote.targetId}`
       )
@@ -92,9 +92,9 @@ test.describe('SSH skill installation', () => {
           }
         ]
       })
-      await previewUnchanged(orcaPage, globalDestination)
+      await previewUnchanged(mcodePage, globalDestination)
       await removeAndVerify(
-        orcaPage,
+        mcodePage,
         target,
         globalDestination,
         '/root/.agents/skills/remote-e2e-skill'
@@ -104,18 +104,18 @@ test.describe('SSH skill installation', () => {
         scope: 'workspace',
         worktreeId: remote.worktreeId
       }
-      const worktreePath = '/tmp/orca-docker-relay-perf-repo/.agents/skills/remote-e2e-skill'
-      await installAndVerify(orcaPage, target, worktreeDestination, worktreePath)
-      await removeAndVerify(orcaPage, target, worktreeDestination, worktreePath)
+      const worktreePath = '/tmp/mcode-docker-relay-perf-repo/.agents/skills/remote-e2e-skill'
+      await installAndVerify(mcodePage, target, worktreeDestination, worktreePath)
+      await removeAndVerify(mcodePage, target, worktreeDestination, worktreePath)
 
-      const folderWorkspaceId = await createRemoteFolderWorkspace(orcaPage, remote.targetId)
+      const folderWorkspaceId = await createRemoteFolderWorkspace(mcodePage, remote.targetId)
       const folderDestination: SkillInstallDestination = {
         scope: 'workspace',
         folderWorkspaceId
       }
       const folderPath = `${REMOTE_FOLDER}/.agents/skills/remote-e2e-skill`
-      await installAndVerify(orcaPage, target, folderDestination, folderPath)
-      await removeAndVerify(orcaPage, target, folderDestination, folderPath)
+      await installAndVerify(mcodePage, target, folderDestination, folderPath)
+      await removeAndVerify(mcodePage, target, folderDestination, folderPath)
 
       expect(fixture.requests.filter((request) => request.method === 'POST')).toHaveLength(3)
       expect(fixture.requests.filter((request) => request.path === '/package.tar.gz')).toHaveLength(

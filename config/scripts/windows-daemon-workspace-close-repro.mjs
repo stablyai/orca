@@ -2,7 +2,7 @@
  * Reproduces issue #8048 against the built daemon on Windows.
  *
  * A witness PowerShell stays alive while victim sessions receive the same
- * graceful-then-immediate kill pair emitted when Orca closes a workspace.
+ * graceful-then-immediate kill pair emitted when MCode closes a workspace.
  * The daemon PID and witness session must survive every iteration.
  */
 import { fork } from 'node:child_process'
@@ -14,7 +14,7 @@ import { join, resolve } from 'node:path'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const entryPath = join(projectDir, 'out', 'main', 'daemon-entry.js')
-const iterations = Number(process.env.ORCA_WINDOWS_DAEMON_CLOSE_ITERATIONS ?? 25)
+const iterations = Number(process.env.MCODE_WINDOWS_DAEMON_CLOSE_ITERATIONS ?? 25)
 const requestTimeoutMs = 15_000
 
 function log(message) {
@@ -290,8 +290,8 @@ async function main() {
     throw new Error(`Missing ${entryPath}; run pnpm build:electron-vite first`)
   }
 
-  const scratch = mkdtempSync(join(tmpdir(), 'orca-windows-daemon-close-'))
-  const socketPath = `\\\\.\\pipe\\orca-daemon-close-${process.pid}-${randomUUID()}`
+  const scratch = mkdtempSync(join(tmpdir(), 'mcode-windows-daemon-close-'))
+  const socketPath = `\\\\.\\pipe\\mcode-daemon-close-${process.pid}-${randomUUID()}`
   const tokenPath = join(scratch, 'daemon.token')
   const daemonLogPath = join(scratch, 'daemon.log')
   const child = fork(
@@ -300,7 +300,7 @@ async function main() {
     {
       stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
       windowsHide: true,
-      env: { ...process.env, ORCA_USER_DATA_PATH: scratch }
+      env: { ...process.env, MCODE_USER_DATA_PATH: scratch }
     }
   )
   const daemonPid = child.pid

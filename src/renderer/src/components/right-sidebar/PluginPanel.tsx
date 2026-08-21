@@ -61,7 +61,7 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
   const panelId = panel?.id ?? null
   const panelShell = entryState.status === 'ready' ? entryState.shellHtml : null
   const panelDocument = panelShell ? fillPanelShell(panelShell) : null
-  // Why: the shell bakes Orca's color scheme + design tokens into srcdoc, so the
+  // Why: the shell bakes MCode's color scheme + design tokens into srcdoc, so the
   // frame must be rebuilt when the app theme changes, not only when the document does.
   const panelFrameKey =
     entryState.status === 'ready'

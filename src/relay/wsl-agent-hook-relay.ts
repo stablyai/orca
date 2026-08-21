@@ -2,7 +2,7 @@
 // Guest-resident WSL agent-hook relay (STA-1515). Runs inside a WSL distro,
 // binds a loopback hook receiver on the very port the Windows host issued
 // (free under NAT — that port only exists Windows-side), and forwards every
-// parsed hook envelope to Orca over this process's own stdin/stdout using the
+// parsed hook envelope to MCode over this process's own stdin/stdout using the
 // framed JSON-RPC protocol the SSH relay already speaks. Also hosts the
 // home-scoped fs bridge the host uses to install hook configs into the guest.
 //
@@ -31,10 +31,10 @@ import {
 } from '../shared/wsl-hook-relay-contract'
 
 async function main(): Promise<void> {
-  const windowsPort = Number(process.env.ORCA_AGENT_HOOK_PORT ?? '')
-  const token = process.env.ORCA_AGENT_HOOK_TOKEN ?? ''
+  const windowsPort = Number(process.env.MCODE_AGENT_HOOK_PORT ?? '')
+  const token = process.env.MCODE_AGENT_HOOK_TOKEN ?? ''
   if (!Number.isInteger(windowsPort) || windowsPort <= 0 || token.length === 0) {
-    process.stderr.write('[wsl-hook-relay] missing ORCA_AGENT_HOOK_PORT/TOKEN in env\n')
+    process.stderr.write('[wsl-hook-relay] missing MCODE_AGENT_HOOK_PORT/TOKEN in env\n')
     process.exit(1)
   }
 

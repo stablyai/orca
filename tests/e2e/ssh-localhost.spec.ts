@@ -1,7 +1,7 @@
 import os from 'node:os'
 
 import type { Page } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   UUID_RE,
@@ -20,23 +20,23 @@ type LocalhostSshTarget = {
   identityFile?: string
 }
 
-const RUN_LOCALHOST_SSH = process.env.ORCA_E2E_SSH_LOCALHOST === '1'
+const RUN_LOCALHOST_SSH = process.env.MCODE_E2E_SSH_LOCALHOST === '1'
 const RUN_REMOTE_HOOKS =
-  process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS === undefined ||
-  (process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS.trim() !== '' &&
-    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS.trim() !== '0')
+  process.env.MCODE_FEATURE_REMOTE_AGENT_HOOKS === undefined ||
+  (process.env.MCODE_FEATURE_REMOTE_AGENT_HOOKS.trim() !== '' &&
+    process.env.MCODE_FEATURE_REMOTE_AGENT_HOOKS.trim() !== '0')
 
 function parsePort(value: string | undefined): number {
   const parsed = Number(value ?? '22')
   if (Number.isInteger(parsed) && parsed > 0 && parsed <= 65535) {
     return parsed
   }
-  throw new Error(`Invalid ORCA_E2E_SSH_PORT: ${value}`)
+  throw new Error(`Invalid MCODE_E2E_SSH_PORT: ${value}`)
 }
 
 function currentUsername(): string {
   return (
-    process.env.ORCA_E2E_SSH_USER ??
+    process.env.MCODE_E2E_SSH_USER ??
     process.env.USER ??
     process.env.USERNAME ??
     os.userInfo().username
@@ -44,14 +44,14 @@ function currentUsername(): string {
 }
 
 function readLocalhostSshTarget(): LocalhostSshTarget {
-  const configHost = process.env.ORCA_E2E_SSH_CONFIG_HOST?.trim()
-  const host = process.env.ORCA_E2E_SSH_HOST?.trim() ?? (configHost ? '' : '127.0.0.1')
-  const identityFile = process.env.ORCA_E2E_SSH_IDENTITY_FILE?.trim()
+  const configHost = process.env.MCODE_E2E_SSH_CONFIG_HOST?.trim()
+  const host = process.env.MCODE_E2E_SSH_HOST?.trim() ?? (configHost ? '' : '127.0.0.1')
+  const identityFile = process.env.MCODE_E2E_SSH_IDENTITY_FILE?.trim()
 
   return {
     label: `Localhost SSH E2E ${Date.now()}`,
     host,
-    port: parsePort(process.env.ORCA_E2E_SSH_PORT),
+    port: parsePort(process.env.MCODE_E2E_SSH_PORT),
     username: currentUsername(),
     ...(configHost ? { configHost } : {}),
     ...(identityFile ? { identityFile } : {})
@@ -63,7 +63,7 @@ function shellQuote(value: string): string {
 }
 
 function marker(name: string): string {
-  return `__ORCA_${name}_${Date.now()}__`
+  return `__MCODE_${name}_${Date.now()}__`
 }
 
 function emitMarkerCommand(value: string): string {
@@ -114,20 +114,20 @@ async function postCodexHook(
     page,
     ptyId,
     [
-      'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
-      '  echo __ORCA_AGENT_HOOK_ENV_MISSING__',
+      'if [ -z "$MCODE_AGENT_HOOK_PORT" ] || [ -z "$MCODE_AGENT_HOOK_TOKEN" ] || [ -z "$MCODE_PANE_KEY" ]; then',
+      '  echo __MCODE_AGENT_HOOK_ENV_MISSING__',
       'else',
       `  hook_payload=${shellQuote(JSON.stringify(payload))}`,
       '  (',
       '    sleep 0.1',
-      '    if curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/codex" \\',
+      '    if curl -sS -X POST "http://127.0.0.1:${MCODE_AGENT_HOOK_PORT}/hook/codex" \\',
       '      -H "Content-Type: application/x-www-form-urlencoded" \\',
-      '      -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
-      '      --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
-      '      --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
-      '      --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
-      '      --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
-      '      --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
+      '      -H "X-MCode-Agent-Hook-Token: ${MCODE_AGENT_HOOK_TOKEN}" \\',
+      '      --data-urlencode "paneKey=${MCODE_PANE_KEY}" \\',
+      '      --data-urlencode "tabId=${MCODE_TAB_ID}" \\',
+      '      --data-urlencode "worktreeId=${MCODE_WORKTREE_ID}" \\',
+      '      --data-urlencode "env=${MCODE_AGENT_HOOK_ENV}" \\',
+      '      --data-urlencode "version=${MCODE_AGENT_HOOK_VERSION}" \\',
       '      --data-urlencode "payload=${hook_payload}" >/dev/null; then',
       `      ${emitMarkerCommand(hookPostedMarker)}`,
       '    fi',
@@ -141,24 +141,24 @@ async function postCodexHook(
 test.describe('Localhost SSH', () => {
   test.skip(
     !RUN_LOCALHOST_SSH,
-    'Set ORCA_E2E_SSH_LOCALHOST=1 to run this local-machine-only SSH E2E test.'
+    'Set MCODE_E2E_SSH_LOCALHOST=1 to run this local-machine-only SSH E2E test.'
   )
   test.skip(
     !RUN_REMOTE_HOOKS,
-    'Unset ORCA_FEATURE_REMOTE_AGENT_HOOKS or set it to 1 so remote PTYs keep pane identity and forward hook events.'
+    'Unset MCODE_FEATURE_REMOTE_AGENT_HOOKS or set it to 1 so remote PTYs keep pane identity and forward hook events.'
   )
   test.skip(process.platform === 'win32', 'Localhost SSH hook E2E uses POSIX hook scripts.')
 
   test('routes a terminal and agent-hook status over localhost SSH', async ({
-    orcaPage,
+    mcodePage,
     testRepoPath
   }) => {
     test.slow()
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
 
     const target = readLocalhostSshTarget()
-    const remote = await orcaPage.evaluate(
+    const remote = await mcodePage.evaluate(
       async ({ remotePath, target }) => {
         const store = window.__store
         if (!store) {
@@ -238,10 +238,10 @@ test.describe('Localhost SSH', () => {
     )
 
     await expect(remote.targetId).toBeTruthy()
-    await ensureTerminalVisible(orcaPage, 30_000)
-    await waitForActiveTerminalManager(orcaPage, 45_000)
-    const ptyId = await waitForActivePanePtyId(orcaPage, 45_000)
-    const paneKey = await orcaPage.evaluate(() => {
+    await ensureTerminalVisible(mcodePage, 30_000)
+    await waitForActiveTerminalManager(mcodePage, 45_000)
+    const ptyId = await waitForActivePanePtyId(mcodePage, 45_000)
+    const paneKey = await mcodePage.evaluate(() => {
       const store = window.__store
       if (!store) {
         throw new Error('Store unavailable')
@@ -268,7 +268,7 @@ test.describe('Localhost SSH', () => {
     })
     const paneKeyLeafId = paneKey.slice(paneKey.indexOf(':') + 1)
     expect(paneKeyLeafId).toMatch(UUID_RE)
-    await orcaPage.evaluate(() => {
+    await mcodePage.evaluate(() => {
       const state = window as unknown as {
         __sshAgentStatusEvents?: unknown[]
         __sshAgentStatusUnsubscribe?: () => void
@@ -281,33 +281,33 @@ test.describe('Localhost SSH', () => {
     })
 
     const terminalMarker = marker('LOCALHOST_SSH')
-    await execInTerminal(orcaPage, ptyId, emitMarkerCommand(terminalMarker))
-    await waitForTerminalOutput(orcaPage, terminalMarker, 20_000)
+    await execInTerminal(mcodePage, ptyId, emitMarkerCommand(terminalMarker))
+    await waitForTerminalOutput(mcodePage, terminalMarker, 20_000)
 
     const envMarker = marker('AGENT_HOOK_ENV_OK')
     const envFailedMarker = marker('AGENT_HOOK_ENV_BAD')
     await execInTerminal(
-      orcaPage,
+      mcodePage,
       ptyId,
       [
-        `if [ "$ORCA_PANE_KEY" = ${shellQuote(paneKey)} ] && [ -n "$ORCA_AGENT_HOOK_PORT" ] && [ -n "$ORCA_AGENT_HOOK_TOKEN" ] && /bin/sh -c 'test -n "$ORCA_PANE_KEY" && test -n "$ORCA_AGENT_HOOK_PORT" && test -n "$ORCA_AGENT_HOOK_TOKEN"'; then`,
+        `if [ "$MCODE_PANE_KEY" = ${shellQuote(paneKey)} ] && [ -n "$MCODE_AGENT_HOOK_PORT" ] && [ -n "$MCODE_AGENT_HOOK_TOKEN" ] && /bin/sh -c 'test -n "$MCODE_PANE_KEY" && test -n "$MCODE_AGENT_HOOK_PORT" && test -n "$MCODE_AGENT_HOOK_TOKEN"'; then`,
         `  ${emitMarkerCommand(envMarker)}`,
         'else',
-        '  token_state=${ORCA_AGENT_HOOK_TOKEN:+set}',
-        `  printf '%s pane=%s port=%s token=%s endpoint=%s\\n' ${shellQuote(envFailedMarker)} "$ORCA_PANE_KEY" "$ORCA_AGENT_HOOK_PORT" "$token_state" "$ORCA_AGENT_HOOK_ENDPOINT"`,
+        '  token_state=${MCODE_AGENT_HOOK_TOKEN:+set}',
+        `  printf '%s pane=%s port=%s token=%s endpoint=%s\\n' ${shellQuote(envFailedMarker)} "$MCODE_PANE_KEY" "$MCODE_AGENT_HOOK_PORT" "$token_state" "$MCODE_AGENT_HOOK_ENDPOINT"`,
         'fi'
       ].join('\n')
     )
-    await waitForTerminalOutput(orcaPage, envMarker, 20_000)
+    await waitForTerminalOutput(mcodePage, envMarker, 20_000)
 
     const pluginOverlayMarker = marker('AGENT_PLUGIN_OVERLAYS_OK')
     const pluginOverlayFailedMarker = marker('AGENT_PLUGIN_OVERLAYS_BAD')
     await execInTerminal(
-      orcaPage,
+      mcodePage,
       ptyId,
       [
-        'opencode_status_file="$OPENCODE_CONFIG_DIR/plugins/orca-opencode-status.js"',
-        'pi_status_file="$HOME/.pi/agent/extensions/orca-agent-status.ts"',
+        'opencode_status_file="$OPENCODE_CONFIG_DIR/plugins/mcode-opencode-status.js"',
+        'pi_status_file="$HOME/.pi/agent/extensions/mcode-agent-status.ts"',
         'if [ -n "$OPENCODE_CONFIG_DIR" ] && [ -f "$opencode_status_file" ] && [ -f "$pi_status_file" ]; then',
         `  ${emitMarkerCommand(pluginOverlayMarker)}`,
         'else',
@@ -315,11 +315,11 @@ test.describe('Localhost SSH', () => {
         'fi'
       ].join('\n')
     )
-    await waitForTerminalOutput(orcaPage, pluginOverlayMarker, 20_000)
+    await waitForTerminalOutput(mcodePage, pluginOverlayMarker, 20_000)
 
-    const prompt = `orca ssh e2e prompt ${Date.now()}`
+    const prompt = `mcode ssh e2e prompt ${Date.now()}`
     await postCodexHook(
-      orcaPage,
+      mcodePage,
       ptyId,
       { hook_event_name: 'UserPromptSubmit', prompt },
       'AGENT_HOOK_POSTED'
@@ -328,7 +328,7 @@ test.describe('Localhost SSH', () => {
     await expect
       .poll(
         async () =>
-          orcaPage.evaluate(
+          mcodePage.evaluate(
             ({ paneKey, prompt, targetId, worktreeId }) => {
               const state = window.__store?.getState()
               const entries = Object.values(state?.agentStatusByPaneKey ?? {})
@@ -353,18 +353,18 @@ test.describe('Localhost SSH', () => {
       )
       .toBe(true)
 
-    const ctrlPrompt = `orca ssh ctrl-c interrupt ${Date.now()}`
+    const ctrlPrompt = `mcode ssh ctrl-c interrupt ${Date.now()}`
     await postCodexHook(
-      orcaPage,
+      mcodePage,
       ptyId,
       { hook_event_name: 'UserPromptSubmit', prompt: ctrlPrompt },
       'AGENT_HOOK_CTRL_WORKING'
     )
-    await focusTerminal(orcaPage)
-    await orcaPage.keyboard.press('Control+C')
-    await orcaPage.waitForTimeout(750)
+    await focusTerminal(mcodePage)
+    await mcodePage.keyboard.press('Control+C')
+    await mcodePage.waitForTimeout(750)
     expect(
-      await orcaPage.evaluate(
+      await mcodePage.evaluate(
         ({ paneKey, prompt, targetId, worktreeId }) => {
           const state = window.__store?.getState()
           const entry = state?.agentStatusByPaneKey[paneKey]
@@ -400,7 +400,7 @@ test.describe('Localhost SSH', () => {
     })
 
     await postCodexHook(
-      orcaPage,
+      mcodePage,
       ptyId,
       {
         hook_event_name: 'PreToolUse',
@@ -412,7 +412,7 @@ test.describe('Localhost SSH', () => {
     await expect
       .poll(
         () =>
-          orcaPage.evaluate(
+          mcodePage.evaluate(
             ({ paneKey }) => {
               const entry = window.__store?.getState().agentStatusByPaneKey[paneKey]
               return {
@@ -427,18 +427,18 @@ test.describe('Localhost SSH', () => {
       )
       .toEqual({ state: 'working', interrupted: undefined, prompt: ctrlPrompt })
 
-    const escapePrompt = `orca ssh escape interrupt ${Date.now()}`
+    const escapePrompt = `mcode ssh escape interrupt ${Date.now()}`
     await postCodexHook(
-      orcaPage,
+      mcodePage,
       ptyId,
       { hook_event_name: 'UserPromptSubmit', prompt: escapePrompt },
       'AGENT_HOOK_ESCAPE_WORKING'
     )
-    await focusTerminal(orcaPage)
-    await orcaPage.keyboard.press('Escape')
-    await orcaPage.waitForTimeout(750)
+    await focusTerminal(mcodePage)
+    await mcodePage.keyboard.press('Escape')
+    await mcodePage.waitForTimeout(750)
     expect(
-      await orcaPage.evaluate(
+      await mcodePage.evaluate(
         ({ paneKey }) => {
           const entry = window.__store?.getState().agentStatusByPaneKey[paneKey]
           return {

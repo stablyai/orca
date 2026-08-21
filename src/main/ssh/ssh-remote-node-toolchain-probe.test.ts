@@ -10,8 +10,8 @@ describe('remote Node/npm toolchain probe', () => {
     // Deploy runs bare `npm` under the same prepended PATH, so accept npm from
     // anywhere on PATH rather than requiring it colocated with node (#9165).
     expect(buildPosixNodeToolchainProbe('/home/u/My Node/bin/node')).toBe(
-      "printf '%s\\n' '__ORCA_NODE_VERSION__' && '/home/u/My Node/bin/node' --version && " +
-        "printf '%s\\n' '__ORCA_NPM_VERSION__' && PATH='/home/u/My Node/bin':$PATH npm --version"
+      "printf '%s\\n' '__MCODE_NODE_VERSION__' && '/home/u/My Node/bin/node' --version && " +
+        "printf '%s\\n' '__MCODE_NPM_VERSION__' && PATH='/home/u/My Node/bin':$PATH npm --version"
     )
   })
 
@@ -27,17 +27,17 @@ describe('remote Node/npm toolchain probe', () => {
   it('requires marked, parseable Node and npm versions', () => {
     expect(
       nodeToolchainVersionsMeetRequirements(
-        'banner\n__ORCA_NODE_VERSION__\nv22.22.0\n__ORCA_NPM_VERSION__\n11.13.0\n'
+        'banner\n__MCODE_NODE_VERSION__\nv22.22.0\n__MCODE_NPM_VERSION__\n11.13.0\n'
       )
     ).toBe(true)
     expect(
       nodeToolchainVersionsMeetRequirements(
-        '__ORCA_NODE_VERSION__\nv22.22.0\n__ORCA_NPM_VERSION__\nshim did nothing\n'
+        '__MCODE_NODE_VERSION__\nv22.22.0\n__MCODE_NPM_VERSION__\nshim did nothing\n'
       )
     ).toBe(false)
     expect(
       nodeToolchainVersionsMeetRequirements(
-        '__ORCA_NODE_VERSION__\nv16.20.2\n__ORCA_NPM_VERSION__\n10.8.2\n'
+        '__MCODE_NODE_VERSION__\nv16.20.2\n__MCODE_NPM_VERSION__\n10.8.2\n'
       )
     ).toBe(false)
   })

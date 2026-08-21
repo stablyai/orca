@@ -4,7 +4,7 @@ import path from 'node:path'
 import { _electron as electron, type ElectronApplication } from '@stablyai/playwright-test'
 import { RuntimeClient } from '../../../src/cli/runtime/client'
 import { getE2ECompletedOnboardingProfile } from './e2e-completed-onboarding-profile'
-import { getOrcaElectronLaunchArgs } from './electron-launch-args'
+import { getMCodeElectronLaunchArgs } from './electron-launch-args'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './electron-process-shutdown'
 import {
   assertElectronResolvedIsolatedHome,
@@ -22,7 +22,7 @@ type ServeReady = {
 }
 
 const STARTUP_DIAGNOSTIC_LIMIT = 8_000
-const PAIRING_URL_PATTERN = /orca:\/\/[^\s"\\]+/g
+const PAIRING_URL_PATTERN = /mcode:\/\/[^\s"\\]+/g
 const WEB_CLIENT_PAIRING_PATTERN = /([#&]pairing=)[^&\s"\\]+/g
 
 export type HeadlessPairedRuntimeHost = {
@@ -97,7 +97,7 @@ export function parseHeadlessPairedRuntimePairingOffer(
   const readiness = parsed as ServeReady
   const pairing = readiness.pairing
   if (
-    readiness.type !== 'orca_server_ready' ||
+    readiness.type !== 'mcode_server_ready' ||
     pairing?.available !== true ||
     typeof pairing.url !== 'string'
   ) {
@@ -111,7 +111,7 @@ export function parseHeadlessPairedRuntimePairingOffer(
 
 function redactPairingMaterial(value: string): string {
   return value
-    .replace(PAIRING_URL_PATTERN, 'orca://[redacted]')
+    .replace(PAIRING_URL_PATTERN, 'mcode://[redacted]')
     .replace(WEB_CLIENT_PAIRING_PATTERN, '$1[redacted]')
 }
 
@@ -184,11 +184,11 @@ async function readPairingOffer(app: ElectronApplication): Promise<RuntimeDeskto
 }
 
 export async function launchHeadlessPairedRuntimeHost(): Promise<HeadlessPairedRuntimeHost> {
-  const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-headless-paired-'))
+  const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'mcode-e2e-headless-paired-'))
   let app: ElectronApplication | undefined
   try {
     writeFileSync(
-      path.join(userDataDir, 'orca-data.json'),
+      path.join(userDataDir, 'mcode-data.json'),
       `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
     )
     const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
@@ -197,8 +197,8 @@ export async function launchHeadlessPairedRuntimeHost(): Promise<HeadlessPairedR
       inheritedEnv: cleanEnv,
       launchEnv: {
         NODE_ENV: 'development',
-        ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK: '1',
-        ORCA_E2E_HEADLESS: '1'
+        MCODE_E2E_ENFORCE_SINGLE_INSTANCE_LOCK: '1',
+        MCODE_E2E_HEADLESS: '1'
       },
       extraEnv: {},
       userDataDir
@@ -206,7 +206,7 @@ export async function launchHeadlessPairedRuntimeHost(): Promise<HeadlessPairedR
     const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
     app = await electron.launch({
       args: [
-        ...getOrcaElectronLaunchArgs(mainPath, false),
+        ...getMCodeElectronLaunchArgs(mainPath, false),
         '--serve',
         '--serve-json',
         '--serve-port',

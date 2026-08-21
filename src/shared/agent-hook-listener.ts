@@ -1,4 +1,4 @@
-/* eslint-disable max-lines -- Why: canonical transport-agnostic listener; parser, normalizer, per-CLI extractors, and endpoint writer share invariants that must not drift between Orca's main process and the relay. */
+/* eslint-disable max-lines -- Why: canonical transport-agnostic listener; parser, normalizer, per-CLI extractors, and endpoint writer share invariants that must not drift between MCode's main process and the relay. */
 
 // Why: extracted from src/main/agent-hooks/server.ts so the relay can host the same pipeline without Electron — this file must stay on Node builtins and other shared/ modules, or the relay bundle breaks.
 import type { IncomingMessage } from 'node:http'
@@ -54,7 +54,7 @@ import {
   reconcileCodexSubagentTranscript,
   type CodexSubagentTranscriptState
 } from './codex-subagent-transcript'
-import { ORCA_HOOK_PROTOCOL_VERSION } from './agent-hook-types'
+import { MCODE_HOOK_PROTOCOL_VERSION } from './agent-hook-types'
 import { REMOTE_AGENT_HOOK_ENV, type AgentHookSource } from './agent-hook-relay'
 import {
   agentProviderSessionsEqual,
@@ -123,7 +123,7 @@ export function normalizeClaudePromptId(value: unknown): string | undefined {
   return CLAUDE_PROMPT_ID_RE.test(normalized) ? normalized : undefined
 }
 
-/** Per-listener-instance caches needing per-PTY teardown; Orca's main process and the relay each get their own, never shared. */
+/** Per-listener-instance caches needing per-PTY teardown; MCode's main process and the relay each get their own, never shared. */
 export type HookListenerState = {
   warnedVersions: Set<string>
   warnedEnvs: Set<string>
@@ -304,13 +304,13 @@ export function warnOnHookEnvOrVersionMismatch(
   const { version, env, expectedEnv } = fields
   if (
     version &&
-    version !== ORCA_HOOK_PROTOCOL_VERSION &&
+    version !== MCODE_HOOK_PROTOCOL_VERSION &&
     !state.warnedVersions.has(version) &&
     state.warnedVersions.size < MAX_WARNED_KEYS
   ) {
     state.warnedVersions.add(version)
     console.warn(
-      `[agent-hooks] received hook v${version}; server expects v${ORCA_HOOK_PROTOCOL_VERSION}. ` +
+      `[agent-hooks] received hook v${version}; server expects v${MCODE_HOOK_PROTOCOL_VERSION}. ` +
         'Reinstall agent hooks from Settings to upgrade the managed script.'
     )
   }
@@ -320,7 +320,7 @@ export function warnOnHookEnvOrVersionMismatch(
       state.warnedEnvs.add(key)
       console.warn(
         `[agent-hooks] received ${env} hook on ${expectedEnv} server. ` +
-          'Likely a stale terminal from another Orca install.'
+          'Likely a stale terminal from another MCode install.'
       )
     }
   }
@@ -330,7 +330,7 @@ export type AgentHookEventPayload = {
   paneKey: string
   /** Authenticated hook route that produced this event. */
   source?: AgentHookSource
-  /** Ephemeral Orca launch identity stamped into the PTY env for this process. */
+  /** Ephemeral MCode launch identity stamped into the PTY env for this process. */
   launchToken?: string
   tabId?: string
   worktreeId?: string
@@ -2753,7 +2753,7 @@ export function markClaudeLeadTurnInterrupted(state: HookListenerState, paneKey:
   state.claudeActiveSessionCronPaneKeys.delete(paneKey)
 }
 
-/** Rebuild a pane's working roster from a persisted snapshot; live activity confirms a seed, a complete task inventory may reap an unconfirmed one whose finish hook arrived while Orca was offline. */
+/** Rebuild a pane's working roster from a persisted snapshot; live activity confirms a seed, a complete task inventory may reap an unconfirmed one whose finish hook arrived while MCode was offline. */
 export function seedClaudeSubagentRosterFromSnapshots(
   state: HookListenerState,
   paneKey: string,
@@ -2773,7 +2773,7 @@ export function seedClaudeSubagentRosterFromSnapshots(
       startedAt: snapshot.startedAt,
       agentType: snapshot.agentType,
       description: snapshot.description,
-      // Why: the seed can be a phantom (child finished while Orca was down, SubagentStop lost); let a PRESENT background_tasks list omitting the id remove it, not gate the pane 'working' forever.
+      // Why: the seed can be a phantom (child finished while MCode was down, SubagentStop lost); let a PRESENT background_tasks list omitting the id remove it, not gate the pane 'working' forever.
       backgroundTasksAuthoritative: true,
       // Why: an idle parent never emits that list, so the inventory reap alone can strand the seed; mark it for the liveness reap below.
       restoredFromSnapshot: true
@@ -2807,7 +2807,7 @@ export function seedClaudeLeadTurnFromPersistedStatus(
 }
 
 /** Reap this pane's unconfirmed restored seeds because no live agent process backs
- *  the pane any more (its PTY died while Orca was down, so no finish hook could
+ *  the pane any more (its PTY died while MCode was down, so no finish hook could
  *  arrive). Callers must have proven the pane is LOCAL-launched — a remote/SSH
  *  agent runs on the far host and can never appear in a local process index.
  *  Returns whether the roster changed. */
@@ -4708,10 +4708,10 @@ export function writeEndpointFile(
   const tmpPath = join(endpointDir, `.endpoint-${process.pid}-${randomUUID()}.tmp`)
   const prefix = process.platform === 'win32' ? 'set ' : ''
   const valuesToWrite: [string, string][] = [
-    ['ORCA_AGENT_HOOK_PORT', String(fields.port)],
-    ['ORCA_AGENT_HOOK_TOKEN', fields.token],
-    ['ORCA_AGENT_HOOK_ENV', fields.env],
-    ['ORCA_AGENT_HOOK_VERSION', fields.version]
+    ['MCODE_AGENT_HOOK_PORT', String(fields.port)],
+    ['MCODE_AGENT_HOOK_TOKEN', fields.token],
+    ['MCODE_AGENT_HOOK_ENV', fields.env],
+    ['MCODE_AGENT_HOOK_VERSION', fields.version]
   ]
   for (const [key, value] of valuesToWrite) {
     if (!isShellSafeEndpointValue(value)) {

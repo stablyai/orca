@@ -19,7 +19,7 @@ const ESC = '\x1b'
 const BEL = '\x07'
 
 // A fish prompt cycle: subscribe, paint the prompt, hand the tty to the child.
-const FISH_PROMPT_HANDOFF = `${ESC}[?2031h${ESC}[0m~/orca ${ESC}[32m❯${ESC}[0m ${ESC}[?2031l`
+const FISH_PROMPT_HANDOFF = `${ESC}[?2031h${ESC}[0m~/mcode ${ESC}[32m❯${ESC}[0m ${ESC}[?2031l`
 
 function trackerRecording(overrides: TerminalTitleTrackerCallbacks = {}): {
   subscribes: number
@@ -146,9 +146,9 @@ describe('DECSET 2031 replies follow the chunk-final state (#9993)', () => {
  */
 const FISH_PROMPT_ACCEPT_CHUNKS: readonly string[] = [
   // 1. Prompt setup: capability probes plus the 2031 arm. Ends SUBSCRIBED.
-  `${ESC}]0;~/orca${BEL}${ESC}[m${ESC}]11;?${ESC}\\${ESC}[6n${ESC}[0c${ESC}[?2004h${ESC}[?2031h${ESC}[>4;1m${ESC}=`,
+  `${ESC}]0;~/mcode${BEL}${ESC}[m${ESC}]11;?${ESC}\\${ESC}[6n${ESC}[0c${ESC}[?2004h${ESC}[?2031h${ESC}[>4;1m${ESC}=`,
   // 2. The prompt itself.
-  `${ESC}]133;A;click_events=1${BEL}~/orca ❯ ${ESC}]133;B${BEL}${ESC}[K\r${ESC}[9C`,
+  `${ESC}]133;A;click_events=1${BEL}~/mcode ❯ ${ESC}]133;B${BEL}${ESC}[K\r${ESC}[9C`,
   // 3. Echo of the typed command.
   `npx${ESC}[12C -y${ESC}[15C`,
   // 4. Accept: fish withdraws 2031 before handing the tty over. Ends UNSUBSCRIBED.

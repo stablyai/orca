@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../../shared/constants'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import type { RpcRequest } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { CLIENT_UI_METHODS } from './client-ui'
@@ -15,7 +15,7 @@ function makeDispatcher(): { dispatcher: RpcDispatcher; updateUIState: ReturnTyp
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     updateUIState
-  } as unknown as OrcaRuntimeService
+  } as unknown as MCodeRuntimeService
   return { dispatcher: new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS }), updateUIState }
 }
 

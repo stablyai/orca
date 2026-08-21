@@ -15,7 +15,7 @@ const MIN_GLIBC = Object.freeze([2, 31])
 // The symbol-version families this gate checks, each with the highest version
 // node stock Ubuntu 20.04 provides. glibc is the #9902 launch-crash axis;
 // libstdc++ (GLIBCXX_/CXXABI_) is the same crash class for C++ native modules
-// against the system libstdc++ (Orca does not bundle one).
+// against the system libstdc++ (MCode does not bundle one).
 const VERSION_FLOORS = Object.freeze([
   Object.freeze({ prefix: 'GLIBC_', floor: MIN_GLIBC }),
   Object.freeze({ prefix: 'GLIBCXX_', floor: Object.freeze([3, 4, 28]) }),

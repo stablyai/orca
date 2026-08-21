@@ -51,7 +51,7 @@ describe('scoped pending browser cookie imports', () => {
   let stagedPath: string
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'orca-scoped-cookie-replay-'))
+    tmpDir = mkdtempSync(join(tmpdir(), 'mcode-scoped-cookie-replay-'))
     livePath = join(tmpDir, 'Partitions', 'test', 'Network', 'Cookies')
     metaPath = join(tmpDir, 'browser-session-meta.json')
     stagedPath = join(tmpDir, 'staged-cookies')
@@ -76,7 +76,7 @@ describe('scoped pending browser cookie imports', () => {
     applyPendingBrowserCookieImports({
       resolveMetadataPath: () => metaPath,
       defaultPartition: PARTITION,
-      activeOrcaProfileId: 'test-profile'
+      activeMCodeProfileId: 'test-profile'
     })
   }
 
@@ -175,7 +175,7 @@ describe('scoped pending browser cookie imports', () => {
     const replayed = new DatabaseSync(replayedPath, { readOnly: true })
     expect(
       replayed
-        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'orca_%'")
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'mcode_%'")
         .all()
     ).toEqual([])
     replayed.close()
@@ -230,7 +230,7 @@ describe('scoped pending browser cookie imports', () => {
     ]).close()
     createScopedStage()
     const invalidStage = new DatabaseSync(stagedPath)
-    invalidStage.exec('UPDATE orca_cookie_import_scope SET format_version = 999')
+    invalidStage.exec('UPDATE mcode_cookie_import_scope SET format_version = 999')
     invalidStage.close()
     markPending()
 

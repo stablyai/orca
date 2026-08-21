@@ -27,14 +27,14 @@ const item: ArtifactListItem = {
     byteSize: 12,
     deletedAt: null
   },
-  shareUrl: 'https://share.onorca.dev/a/artifact-1'
+  shareUrl: 'https://share.mcode.dev/a/artifact-1'
 }
 
 afterEach(() => vi.restoreAllMocks())
 
 describe('artifact CLI handlers', () => {
   it('reads a relative HTML file and sends sanitized content to the runtime', async () => {
-    const cwd = await mkdtemp(join(tmpdir(), 'orca-artifact-cli-'))
+    const cwd = await mkdtemp(join(tmpdir(), 'mcode-artifact-cli-'))
     await writeFile(join(cwd, 'report.html'), '<h1>Hi</h1>', 'utf8')
     const call = vi.fn().mockResolvedValue({
       id: 'request-1',
@@ -64,7 +64,7 @@ describe('artifact CLI handlers', () => {
   })
 
   it('rejects unsupported file extensions before calling the runtime', async () => {
-    const cwd = await mkdtemp(join(tmpdir(), 'orca-artifact-cli-'))
+    const cwd = await mkdtemp(join(tmpdir(), 'mcode-artifact-cli-'))
     await writeFile(join(cwd, 'report.txt'), 'hello', 'utf8')
     const call = vi.fn()
 
@@ -80,7 +80,7 @@ describe('artifact CLI handlers', () => {
   })
 
   it('rejects a sparse oversized file before attempting the RPC', async () => {
-    const cwd = await mkdtemp(join(tmpdir(), 'orca-artifact-cli-'))
+    const cwd = await mkdtemp(join(tmpdir(), 'mcode-artifact-cli-'))
     const handle = await open(join(cwd, 'oversized.html'), 'w')
     await handle.truncate(ARTIFACT_CLI_MAX_RPC_BYTES + 1)
     await handle.close()
@@ -131,7 +131,7 @@ describe('artifact CLI handlers', () => {
   it.each(['artifacts share', 'artifacts update'])(
     'denies `%s` from the capability preflight without reading or shipping the file',
     async (command) => {
-      const cwd = await mkdtemp(join(tmpdir(), 'orca-artifact-cli-'))
+      const cwd = await mkdtemp(join(tmpdir(), 'mcode-artifact-cli-'))
       await writeFile(join(cwd, 'report.html'), '<h1>Hi</h1>', 'utf8')
       const call = vi.fn().mockResolvedValue({
         id: 'request-1',
@@ -160,7 +160,7 @@ describe('artifact CLI handlers', () => {
     ['omits the capability field', {}],
     ['cannot answer the preflight', null]
   ])('still attempts the publish RPC when the host %s', async (_label, settings) => {
-    const cwd = await mkdtemp(join(tmpdir(), 'orca-artifact-cli-'))
+    const cwd = await mkdtemp(join(tmpdir(), 'mcode-artifact-cli-'))
     await writeFile(join(cwd, 'report.html'), '<h1>Hi</h1>', 'utf8')
     const call = vi.fn().mockImplementation((method: string) => {
       if (method === 'settings.get') {
@@ -199,7 +199,7 @@ describe('artifact CLI handlers', () => {
   it.each(['artifacts share', 'artifacts update'])(
     'surfaces the capability denial from `%s` with actionable next steps',
     async (command) => {
-      const cwd = await mkdtemp(join(tmpdir(), 'orca-artifact-cli-'))
+      const cwd = await mkdtemp(join(tmpdir(), 'mcode-artifact-cli-'))
       await writeFile(join(cwd, 'report.html'), '<h1>Hi</h1>', 'utf8')
       const call = vi.fn().mockRejectedValue(
         new RuntimeRpcFailureError({
@@ -242,7 +242,7 @@ describe('artifact CLI handlers', () => {
   )
 
   it('reports the denial with a stable code in --json mode', async () => {
-    const cwd = await mkdtemp(join(tmpdir(), 'orca-artifact-cli-'))
+    const cwd = await mkdtemp(join(tmpdir(), 'mcode-artifact-cli-'))
     await writeFile(join(cwd, 'report.html'), '<h1>Hi</h1>', 'utf8')
     const call = vi.fn().mockRejectedValue(
       new RuntimeRpcFailureError({

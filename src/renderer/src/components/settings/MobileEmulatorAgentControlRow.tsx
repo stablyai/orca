@@ -1,12 +1,12 @@
 import { Import, Loader2 } from 'lucide-react'
 import {
-  ORCA_CLI_SKILL_INSTALL_COMMAND,
-  ORCA_CLI_SKILL_NAME,
-  ORCA_CLI_SKILL_UPDATE_COMMAND
+  MCODE_CLI_SKILL_INSTALL_COMMAND,
+  MCODE_CLI_SKILL_NAME,
+  MCODE_CLI_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
 import {
   AGENT_SKILL_CLI_PREREQUISITE_NOTICE,
-  ensureOrcaCliAvailableForAgentSkillTerminal
+  ensureMCodeCliAvailableForAgentSkillTerminal
 } from '@/lib/agent-skill-cli-prerequisite'
 import { cn } from '@/lib/utils'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
@@ -20,10 +20,10 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/
 import { translate } from '@/i18n/i18n'
 
 const EMULATOR_CLI_COMMANDS = [
-  'orca emulator list --json',
-  'orca emulator attach "iPhone 16 Pro" --json',
-  'orca emulator tap 0.5 0.7 --json',
-  'orca emulator type "hello" --json'
+  'mcode emulator list --json',
+  'mcode emulator attach "iPhone 16 Pro" --json',
+  'mcode emulator tap 0.5 0.7 --json',
+  'mcode emulator type "hello" --json'
 ] as const
 
 export function MobileEmulatorAgentControlRow(): React.JSX.Element {
@@ -31,8 +31,8 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   // Why: skill detection here scans the local host only, so keep building host
   // commands; routing them to a WSL runtime would install where we never look.
-  const cliSkillInstallCommand = buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND)
-  const cliSkillUpdateCommand = buildSkillCommandForRuntime(ORCA_CLI_SKILL_UPDATE_COMMAND)
+  const cliSkillInstallCommand = buildSkillCommandForRuntime(MCODE_CLI_SKILL_INSTALL_COMMAND)
+  const cliSkillUpdateCommand = buildSkillCommandForRuntime(MCODE_CLI_SKILL_UPDATE_COMMAND)
 
   const handleEnableCli = async (): Promise<void> => {
     await setup.handleEnableCli()
@@ -51,7 +51,7 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.MobileEmulatorAgentControlRow.ff4b7e65d6',
-              'Let coding agents control the active mobile emulator with Orca CLI commands.'
+              'Let coding agents control the active mobile emulator with MCode CLI commands.'
             )}
           </p>
         </div>
@@ -76,13 +76,13 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
             <p className="text-sm font-medium">
               {translate(
                 'auto.components.settings.MobileEmulatorAgentControlRow.4f2205f3b6',
-                'Enable Orca CLI'
+                'Enable MCode CLI'
               )}
             </p>
             <p className="text-xs text-muted-foreground">
               {translate(
                 'auto.components.settings.MobileEmulatorAgentControlRow.2fef055608',
-                'Registers the Orca CLI command so agents can control the active emulator from their shell.'
+                'Registers the MCode CLI command so agents can control the active emulator from their shell.'
               )}
             </p>
             {setup.cliInstallStatus?.commandPath && setup.cliEnabled ? (
@@ -103,7 +103,7 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
               <p className="text-[11px] leading-snug text-muted-foreground">
                 {translate(
                   'auto.components.settings.MobileEmulatorAgentControlRow.3d34423e88',
-                  'Registering the Orca CLI'
+                  'Registering the MCode CLI'
                 )}{' '}
                 {setup.cliInstallStatus?.commandPath ? (
                   <code className="rounded bg-muted px-1 py-0.5">
@@ -151,17 +151,17 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
             variant="inline"
             title={translate(
               'auto.components.settings.MobileEmulatorAgentControlRow.67e19ee03c',
-              'Orca CLI skill'
+              'MCode CLI skill'
             )}
             description={translate(
               'auto.components.settings.MobileEmulatorAgentControlRow.d94ca6a623',
-              'Enables agents to use Orca CLI commands, including mobile emulator control.'
+              'Enables agents to use MCode CLI commands, including mobile emulator control.'
             )}
             command={cliSkillInstallCommand}
             installedCommand={cliSkillUpdateCommand}
-            terminalTitle="Orca CLI skill setup"
-            terminalAriaLabel="Orca CLI skill install terminal"
-            terminalWorktreeId="settings-mobile-emulator-orca-cli-skill-terminal"
+            terminalTitle="MCode CLI skill setup"
+            terminalAriaLabel="MCode CLI skill install terminal"
+            terminalWorktreeId="settings-mobile-emulator-mcode-cli-skill-terminal"
             terminalShellOverride={activeSkillRuntime.terminalShellOverride}
             installed={setup.cliSkillInstalled}
             loading={setup.cliSkillLoading}
@@ -171,14 +171,14 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
             preInstallNotice={AGENT_SKILL_CLI_PREREQUISITE_NOTICE}
             openingHint={translate(
               'auto.components.settings.MobileEmulatorAgentControlRow.3941719a56',
-              'Checking Orca CLI before opening skill setup.'
+              'Checking MCode CLI before opening skill setup.'
             )}
             onBeforeOpenTerminal={async () => {
-              await ensureOrcaCliAvailableForAgentSkillTerminal()
+              await ensureMCodeCliAvailableForAgentSkillTerminal()
             }}
             onRecheck={setup.refreshCliSkill}
             freshnessSkillName={
-              activeSkillRuntime.canUseLocalSkillFreshness ? ORCA_CLI_SKILL_NAME : undefined
+              activeSkillRuntime.canUseLocalSkillFreshness ? MCODE_CLI_SKILL_NAME : undefined
             }
           />
         </div>

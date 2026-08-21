@@ -356,7 +356,7 @@ const STARTUP_DRAFT_PASTE_QUIET_MS = 1500
 // Why: the notice deliberately omits the rejected path — saved cwds can
 // contain private repo/user names; the terminal itself shows where it opened.
 export const STARTUP_CWD_FALLBACK_NOTICE =
-  '\r\n[Orca opened this terminal at the workspace root because its saved start folder no longer exists.]\r\n'
+  '\r\n[MCode opened this terminal at the workspace root because its saved start folder no longer exists.]\r\n'
 const HIDDEN_OUTPUT_RESTORE_PENDING_CHARS = 512 * 1024
 const HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MS = 50
 const HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MAX = 3
@@ -419,7 +419,7 @@ const FOREGROUND_GRID_DRIFT_CHECK_MIN_MS = 250
 // Why: this is only shown if hidden renderer output was skipped and main-owned
 // terminal state is unavailable, so the user has an explicit loss signal.
 const HIDDEN_OUTPUT_RESTORE_UNAVAILABLE_WARNING =
-  '\r\n[Orca skipped hidden terminal output because main recovery was unavailable.]\r\n'
+  '\r\n[MCode skipped hidden terminal output because main recovery was unavailable.]\r\n'
 type E2eTerminalPtyDataInjectionApi = {
   inject: (paneKey: string, data: string, meta?: PtyDataMeta) => boolean
   keys: () => string[]
@@ -1357,7 +1357,7 @@ export function connectPanePty(
   ): void => {
     if (!effectiveLaunchConfig) {
       if (metadata?.launchAgent) {
-        // Why: daemon launch identity can outlive the process while Orca is
+        // Why: daemon launch identity can outlive the process while MCode is
         // closed. Use it to request confirmation, never as current byte authority.
         useAppStore.getState().setPaneForegroundAgent(cacheKey, {
           agent: metadata.launchAgent,
@@ -1899,7 +1899,7 @@ export function connectPanePty(
       }
       // Why: restored idle agent TUIs can repaint after reattach SIGWINCH and
       // reapply DECSCUSR steady-bar; the normal working→idle reset will not
-      // fire because the agent was already idle before Orca restarted.
+      // fire because the agent was already idle before MCode restarted.
       queueAgentIdleTerminalModeReset()
     }, REATTACH_IDLE_AGENT_CURSOR_RESET_DELAY_MS)
   }
@@ -1939,7 +1939,7 @@ export function connectPanePty(
   ): void => {
     const state = useAppStore.getState()
     if (!entry) {
-      // Why: an Orca-started agent can exit before its first hook status. The
+      // Why: an MCode-started agent can exit before its first hook status. The
       // launch registry was still created up front, so clear it on command exit.
       state.clearAgentLaunchConfig(cacheKey)
       return
@@ -2342,7 +2342,7 @@ export function connectPanePty(
     ) {
       return
     }
-    // Why: user shell frameworks (bash-preexec/iTerm2) can replace Orca's
+    // Why: user shell frameworks (bash-preexec/iTerm2) can replace MCode's
     // OSC 133;C hook, so a manually launched agent produces no command-start
     // signal at all. Enter at a shell-foreground prompt is the user-side
     // equivalent; the sample is gated to panes with no live agent identity
@@ -2902,7 +2902,7 @@ export function connectPanePty(
         initialStatus.agent,
         getAuthoritativePaneAgent()
       ),
-      // Why: Orca launched this agent, so this row predates any provider signal for the pane.
+      // Why: MCode launched this agent, so this row predates any provider signal for the pane.
       observation: rendererAgentStatusObservations.observe(cacheKey, {
         origin: 'launch',
         observedAt: Date.now(),
@@ -3162,7 +3162,7 @@ export function connectPanePty(
   // underneath. See POST_REPLAY_MODE_RESET in shared/terminal-mode-reset-profiles.ts.
   const onBell = (): void => {
     // Why: restored Claude Code sessions have been observed to emit a real
-    // standalone BEL some time after daemon snapshot reattach, even when Orca
+    // standalone BEL some time after daemon snapshot reattach, even when MCode
     // did not just forward focus/control input. Treat the BEL as authoritative
     // PTY output here; any product-side suppression should be an explicit UX
     // decision higher up, not a transport-layer guess.
@@ -3449,10 +3449,10 @@ export function connectPanePty(
     // Why: title reversion alone is not process death. The process/PTY tracker
     // owns removing agent rows when the TUI actually exits.
   }
-  // Why: inject ORCA_PANE_KEY so global Claude/Codex hooks can attribute their
-  // callbacks to the correct Orca pane without resolving worktrees from cwd.
+  // Why: inject MCODE_PANE_KEY so global Claude/Codex hooks can attribute their
+  // callbacks to the correct MCode pane without resolving worktrees from cwd.
   // The key matches the `${tabId}:${leafId}` composite used for cacheTimerByKey
-  // and agentStatusByPaneKey. Treat it as opaque outside Orca.
+  // and agentStatusByPaneKey. Treat it as opaque outside MCode.
   const state = useAppStore.getState()
   const parsedWorkspaceKey = parseWorkspaceKey(deps.worktreeId)
   const folderWorkspace =
@@ -3461,17 +3461,17 @@ export function connectPanePty(
           (workspace) => workspace.id === parsedWorkspaceKey.folderWorkspaceId
         )
       : null
-  const workspaceEnv: Record<string, string> = { ORCA_WORKSPACE_ID: deps.worktreeId }
+  const workspaceEnv: Record<string, string> = { MCODE_WORKSPACE_ID: deps.worktreeId }
   if (folderWorkspace) {
-    workspaceEnv.ORCA_PROJECT_GROUP_ID = folderWorkspace.projectGroupId
-    workspaceEnv.ORCA_WORKSPACE_ROOT = folderWorkspace.folderPath
+    workspaceEnv.MCODE_PROJECT_GROUP_ID = folderWorkspace.projectGroupId
+    workspaceEnv.MCODE_WORKSPACE_ROOT = folderWorkspace.folderPath
   }
   const paneIdentityEnv = {
     ...workspaceEnv,
-    ORCA_PANE_KEY: cacheKey,
-    ORCA_TAB_ID: deps.tabId,
-    ORCA_WORKTREE_ID: deps.worktreeId,
-    ...(launchToken ? { ORCA_AGENT_LAUNCH_TOKEN: launchToken } : {})
+    MCODE_PANE_KEY: cacheKey,
+    MCODE_TAB_ID: deps.tabId,
+    MCODE_WORKTREE_ID: deps.worktreeId,
+    ...(launchToken ? { MCODE_AGENT_LAUNCH_TOKEN: launchToken } : {})
   }
   const paneEnv = {
     ...paneStartup?.env,
@@ -3963,7 +3963,7 @@ export function connectPanePty(
           onAgentBecameWorking,
           onAgentExited
         }),
-    // Why: local IPC terminals are now model-owned in main: OrcaRuntimeService
+    // Why: local IPC terminals are now model-owned in main: MCodeRuntimeService
     // parses OSC 9999 before renderer delivery and forwards through the hook
     // server with local/SSH identity. Remote-runtime streams do not pass through
     // local main, so the renderer remains their status owner for now.
@@ -5160,7 +5160,7 @@ export function connectPanePty(
         command: startupPlan.launchCommand,
         env: {
           ...startupPlan.env,
-          ORCA_AGENT_LAUNCH_TOKEN: coldRestoreLaunchToken
+          MCODE_AGENT_LAUNCH_TOKEN: coldRestoreLaunchToken
         },
         launchConfig: startupPlan.launchConfig,
         resumeProviderSession: providerSession,
@@ -5199,8 +5199,8 @@ export function connectPanePty(
         ? {
             ...env,
             ...paneIdentityEnv,
-            ...(env.ORCA_AGENT_LAUNCH_TOKEN
-              ? { ORCA_AGENT_LAUNCH_TOKEN: env.ORCA_AGENT_LAUNCH_TOKEN }
+            ...(env.MCODE_AGENT_LAUNCH_TOKEN
+              ? { MCODE_AGENT_LAUNCH_TOKEN: env.MCODE_AGENT_LAUNCH_TOKEN }
               : {})
           }
         : undefined
@@ -5637,7 +5637,7 @@ export function connectPanePty(
       if (shouldPreserveAgentReattachModes()) {
         return buildPostReplayLiveAgentReattachReset(payload)
       }
-      // Why: an alt-screen pane is a live TUI Orca just does not recognise as an agent, and the
+      // Why: an alt-screen pane is a live TUI MCode just does not recognise as an agent, and the
       // replay already re-armed its mouse modes — keep them instead of wiping them (#8291).
       return (isAlternateScreen ?? kittyKeyboardModes.isAlternateScreen)
         ? POST_REPLAY_REATTACH_RESET_KEEP_MOUSE

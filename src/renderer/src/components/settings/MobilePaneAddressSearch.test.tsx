@@ -6,7 +6,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type StoreState = {
-  orcaProfileAuthStatus: { state: 'connected' }
+  mcodeProfileAuthStatus: { state: 'connected' }
   settingsSearchQuery: string
   settings: { mobileAutoRestoreFitMs: number | null }
   updateSettings: () => Promise<void>
@@ -50,7 +50,7 @@ import { MobilePane } from './MobilePane'
 describe('MobilePane address disclosure search wiring', () => {
   beforeEach(() => {
     mocks.holder.state = {
-      orcaProfileAuthStatus: { state: 'connected' },
+      mcodeProfileAuthStatus: { state: 'connected' },
       settingsSearchQuery: '',
       settings: { mobileAutoRestoreFitMs: null },
       updateSettings: vi.fn().mockResolvedValue(undefined),

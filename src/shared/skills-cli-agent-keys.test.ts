@@ -98,7 +98,7 @@ describe('skills CLI agent keys', () => {
     expect(SKILLS_CLI_VALID_AGENT_KEYS).toContain(SKILLS_CLI_UNIVERSAL_AGENT_KEY)
   })
 
-  it('covers every agent Orca can detect', () => {
+  it('covers every agent MCode can detect', () => {
     // Why: a new TuiAgent must be considered here, even if the answer is null —
     // otherwise it silently falls back to universal-only with no decision made.
     expect(Object.keys(SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT).sort()).toEqual(
@@ -106,11 +106,11 @@ describe('skills CLI agent keys', () => {
     )
   })
 
-  it("follows Orca's own evidence for the two non-obvious mappings", () => {
+  it("follows MCode's own evidence for the two non-obvious mappings", () => {
     // Why: src/shared/native-chat-agent-profiles.ts states OpenClaude reads
     // Claude-owned roots, so it is not unmappable.
     expect(SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT.openclaude).toBe('claude-code')
-    // Why: Orca detects trae via `traecli`, which tui-agent-config calls an alias
+    // Why: MCode detects trae via `traecli`, which tui-agent-config calls an alias
     // only TRAE CN ships, so the CN directory is the right target.
     expect(SKILLS_CLI_AGENT_KEY_BY_TUI_AGENT.trae).toBe('trae-cn')
   })

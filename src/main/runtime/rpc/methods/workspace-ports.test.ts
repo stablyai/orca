@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import { WORKSPACE_PORT_METHODS } from './workspace-ports'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
@@ -19,7 +19,7 @@ describe('workspace port RPC methods', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       scanWorkspacePorts: vi.fn().mockResolvedValue(scan)
-    } as unknown as OrcaRuntimeService
+    } as unknown as MCodeRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKSPACE_PORT_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -34,7 +34,7 @@ describe('workspace port RPC methods', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       killWorkspacePort: vi.fn().mockResolvedValue({ ok: true })
-    } as unknown as OrcaRuntimeService
+    } as unknown as MCodeRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKSPACE_PORT_METHODS })
 
     const response = await dispatcher.dispatch(

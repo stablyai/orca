@@ -6,10 +6,10 @@ import type { Readable } from 'node:stream'
 export type LogStreamChild = ChildProcessByStdio<null, Readable, Readable>
 
 /**
- * Counts the macOS TCC consent dialogs that name Orca as the responsible
+ * Counts the macOS TCC consent dialogs that name MCode as the responsible
  * process (#9756). Terminal children — agent CLIs and anything else the user
  * runs — perform the access, but TCC walks the responsibility chain back to
- * Orca and puts Orca's name on the dialog, so users read it as Orca snooping.
+ * MCode and puts MCode's name on the dialog, so users read it as MCode snooping.
  *
  * tccd emits one `AUTHREQ_PROMPTING` line per dialog it actually displays,
  * carrying the service and both identities, so this never has to correlate
@@ -18,13 +18,13 @@ export type LogStreamChild = ChildProcessByStdio<null, Readable, Readable>
  */
 
 /** Why: terminals run from the detached helper, which TCC can hold responsible independently. */
-const ORCA_RESPONSIBLE_IDENTIFIERS = new Set([
-  'com.stablyai.orca',
-  'com.stablyai.orca.helper',
-  'com.stablyai.orca.dev',
-  'com.stablyai.orca.dev.helper',
-  'com.stablyai.orca.local',
-  'com.stablyai.orca.local.helper'
+const MCODE_RESPONSIBLE_IDENTIFIERS = new Set([
+  'com.mcode.desktop',
+  'com.mcode.desktop.helper',
+  'com.mcode.desktop.dev',
+  'com.mcode.desktop.dev.helper',
+  'com.mcode.desktop.local',
+  'com.mcode.desktop.local.helper'
 ])
 
 /** Why: the prompt classes #9756 is about — other-apps' data plus the protected home folders agents sweep. */
@@ -72,10 +72,10 @@ export function parseTccPromptEvent(line: string): TccPromptEvent | null {
   }
 }
 
-/** True when this dialog is one macOS raised in Orca's name for a watched file-access service. */
-export function isOrcaAttributedPrompt(event: TccPromptEvent): boolean {
+/** True when this dialog is one macOS raised in MCode's name for a watched file-access service. */
+export function isMCodeAttributedPrompt(event: TccPromptEvent): boolean {
   return (
-    ORCA_RESPONSIBLE_IDENTIFIERS.has(event.responsibleIdentifier) &&
+    MCODE_RESPONSIBLE_IDENTIFIERS.has(event.responsibleIdentifier) &&
     WATCHED_SERVICES.has(event.service)
   )
 }
@@ -99,7 +99,7 @@ function spawnDefaultLogStream(): LogStreamChild {
 }
 
 /**
- * Watches for Orca-attributed TCC dialogs. macOS-only; `start()` is a no-op
+ * Watches for MCode-attributed TCC dialogs. macOS-only; `start()` is a no-op
  * elsewhere so callers don't need their own platform guard.
  */
 export class MacosTccPromptWatch {
@@ -151,7 +151,7 @@ export class MacosTccPromptWatch {
 
   private handleLine(line: string): void {
     const event = parseTccPromptEvent(line)
-    if (!event || !isOrcaAttributedPrompt(event)) {
+    if (!event || !isMCodeAttributedPrompt(event)) {
       return
     }
     this.options.onPrompt(event)

@@ -190,8 +190,8 @@ async function runInsideSession(evidenceDir) {
         cwd: projectDir,
         env: {
           ...process.env,
-          ORCA_E2E_FORWARD_APP_LOGS: '1',
-          ORCA_E2E_NATIVE_IBUS_HANGUL: '1'
+          MCODE_E2E_FORWARD_APP_LOGS: '1',
+          MCODE_E2E_NATIVE_IBUS_HANGUL: '1'
         },
         stdio: 'inherit'
       }
@@ -247,7 +247,7 @@ async function runOuter() {
     throw new Error('The native IBus Hangul E2E runner requires Linux/X11')
   }
 
-  const evidenceDir = mkdtempSync(path.join(os.tmpdir(), 'orca-terminal-ime-e2e-'))
+  const evidenceDir = mkdtempSync(path.join(os.tmpdir(), 'mcode-terminal-ime-e2e-'))
   const runtimeDir = path.join(evidenceDir, 'runtime')
   mkdirSync(runtimeDir, { mode: 0o700 })
   mkdirSync(path.join(evidenceDir, 'config'))

@@ -60,11 +60,11 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
     await server.start({ env: 'production' })
     try {
       const env = server.buildPtyEnv()
-      const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/codex`, {
+      const response = await fetch(`http://127.0.0.1:${env.MCODE_AGENT_HOOK_PORT}/hook/codex`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          'X-MCode-Agent-Hook-Token': env.MCODE_AGENT_HOOK_TOKEN
         },
         body: JSON.stringify({
           paneKey: PANE_KEY,
@@ -111,11 +111,11 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
     await server.start({ env: 'production' })
     try {
       const env = server.buildPtyEnv()
-      await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/codex`, {
+      await fetch(`http://127.0.0.1:${env.MCODE_AGENT_HOOK_PORT}/hook/codex`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+          'X-MCode-Agent-Hook-Token': env.MCODE_AGENT_HOOK_TOKEN
         },
         body: JSON.stringify({
           paneKey: PANE_KEY,
@@ -153,7 +153,7 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
     }
   })
 
-  // Why: a nested non-codex CLI inherits the pane's ORCA_PANE_KEY, so its hook must not tear down the codex poll.
+  // Why: a nested non-codex CLI inherits the pane's MCODE_PANE_KEY, so its hook must not tear down the codex poll.
   it('keeps polling when a nested non-codex hook lands on the same pane', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'agent-hook-codex-subagent-'))
     dirs.push(dir)
@@ -166,11 +166,11 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
     try {
       const env = server.buildPtyEnv()
       const post = (path: string, payload: unknown): Promise<Response> =>
-        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}${path}`, {
+        fetch(`http://127.0.0.1:${env.MCODE_AGENT_HOOK_PORT}${path}`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+            'X-MCode-Agent-Hook-Token': env.MCODE_AGENT_HOOK_TOKEN
           },
           body: JSON.stringify({ paneKey: PANE_KEY, tabId: 'tab-1', worktreeId: 'wt-1', payload })
         })

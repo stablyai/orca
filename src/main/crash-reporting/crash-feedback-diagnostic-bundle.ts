@@ -5,7 +5,7 @@ import {
   type CrashReportDiagnosticBundle
 } from '../../shared/crash-reporting'
 import { collectDiagnosticBundle, getDiagnosticsStatus } from '../observability'
-import { resolveDiagnosticOrcaChannel } from '../observability/diagnostic-upload-endpoint'
+import { resolveDiagnosticMCodeChannel } from '../observability/diagnostic-upload-endpoint'
 import type { FeedbackDiagnosticBundleAttachment, FeedbackSubmitResult } from '../ipc/feedback'
 
 const CRASH_REPORT_LOG_LOOKBACK_MINUTES = 3 * 24 * 60
@@ -46,7 +46,7 @@ function collectCrashDiagnosticBundleAttachment(): CrashDiagnosticBundleAttachme
       platform: os.platform(),
       arch: os.arch(),
       osRelease: os.release(),
-      orcaChannel: resolveDiagnosticOrcaChannel(),
+      mcodeChannel: resolveDiagnosticMCodeChannel(),
       // Why: Help > Report Crash is often used after relaunch, long after the
       // default 30 minute support bundle window would miss the failure context.
       lookbackMinutes: CRASH_REPORT_LOG_LOOKBACK_MINUTES

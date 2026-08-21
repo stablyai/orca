@@ -1,5 +1,5 @@
-export const MOBILE_E2EE_V2_PROTOCOL = 'orca-mobile-e2ee'
-export const MOBILE_E2EE_V2_TRANSCRIPT_DOMAIN = 'orca-mobile-e2ee/v2/transcript'
+export const MOBILE_E2EE_V2_PROTOCOL = 'mcode-mobile-e2ee'
+export const MOBILE_E2EE_V2_TRANSCRIPT_DOMAIN = 'mcode-mobile-e2ee/v2/transcript'
 
 export type MobileE2EETransport = 'direct' | 'relay'
 export type MobileE2EEPayloadKind = 'text' | 'binary'

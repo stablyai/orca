@@ -128,7 +128,7 @@ describe('STA-4735 an unreadable runtime auth.json must not be written over', ()
     const service = await createService()
     const runtimeAuthPath = getRuntimeCodexAuthPath()
     const ROTATED = createCodexAuthJson('user@example.com', 'acct-1', 'refresh-rotated-by-codex')
-    const STALE = createCodexAuthJson('user@example.com', 'acct-1', 'refresh-stale-orca-copy')
+    const STALE = createCodexAuthJson('user@example.com', 'acct-1', 'refresh-stale-mcode-copy')
     realFs.mkdirSync(join(runtimeAuthPath, '..'), { recursive: true })
     realFs.writeFileSync(runtimeAuthPath, ROTATED, 'utf-8')
 
@@ -138,7 +138,7 @@ describe('STA-4735 an unreadable runtime auth.json must not be written over', ()
     // The fault really was consumed by the code under test.
     expect(denials.readsFor(runtimeAuthPath)).toBeGreaterThan(0)
     // THE FIX. Before it, "could not read" counted as "differs" and the write
-    // below replaced a freshly rotated refresh token with Orca's stale copy.
+    // below replaced a freshly rotated refresh token with MCode's stale copy.
     expect(wrote).toBe(false)
     expect(realFs.readFileSync(runtimeAuthPath, 'utf-8')).toBe(ROTATED)
   })

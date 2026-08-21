@@ -12,7 +12,7 @@ type WorkspaceMock = {
 }
 
 const WORKSPACES: readonly WorkspaceMock[] = [
-  { id: 'a', name: 'set up orca.yaml', agents: ['claude'] },
+  { id: 'a', name: 'set up mcode.yaml', agents: ['claude'] },
   { id: 'b', name: 'fix login race condition', agents: ['claude', 'opencode', 'codex'] },
   { id: 'c', name: 'speed up CI pipeline', agents: ['claude', 'codex'] }
 ]

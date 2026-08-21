@@ -110,7 +110,7 @@ export function createRemoveWorktree(
       if (!forgetLocalOnly) {
         removalGenerationGuard?.assertCurrent()
       }
-      // Why: forget-local clears Orca's records via local IPC regardless of host — the remote is gone or unreachable.
+      // Why: forget-local clears MCode's records via local IPC regardless of host — the remote is gone or unreachable.
       const target = getActiveRuntimeTarget(
         removalRoute
           ? settingsForWorktreeOperationRoute(get().settings, removalRoute)

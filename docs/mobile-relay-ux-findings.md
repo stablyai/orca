@@ -132,7 +132,7 @@ Post-pairing phase:
 9. When the direct dial finally fails, the relay dial runs invisibly (same `migrateTo` mechanism
    as S2) → green. Worst case with a director resolution failure and grace-credential retry:
    ~29–58s under the old session's labels.
-10. The "Orca Relay" path label only renders once `state === 'connected'`
+10. The "MCode Relay" path label only renders once `state === 'connected'`
     (`src/components/MobileHostCard.tsx:23,47`) — the user learns the phone is using relay only
     after the wait ends, and `classifyConnection` has no relay-aware branch
     (`src/transport/connection-health.ts:45-100`).
@@ -153,7 +153,7 @@ Bare pushes remaining (host stack plausibly cold at each):
 | `app/_layout.tsx:127` via `src/notifications/notification-routing.ts:58,64` | `/h/<id>/session/<wt>` or `/h/<id>` | **Coldest path** — `getLastNotificationResponse()` after launch from a killed app, plus the warm listener |
 | `app/index.tsx:740-746` (Resume) | `/h/[hostId]/session/[worktreeId]` | Fixed by PR #12001 |
 | `app/index.tsx:835` (Account-usage card) | `/h/<id>/accounts` | Home is the root route |
-| `orca://` deep links (scheme in `app.json:9`, no linking config) | any `/h/...` | Default filesystem linking, zero coordination; `app/_layout.tsx:52-58` only intercepts pairing codes |
+| `mcode://` deep links (scheme in `app.json:9`, no linking config) | any `/h/...` | Default filesystem linking, zero coordination; `app/_layout.tsx:52-58` only intercepts pairing codes |
 | `app/h/[hostId]/history/[worktreeId].tsx:15`, `pr/[worktreeId].tsx:16` | redirect to source-control | A cold deep link to these hits the same cold-navigator resolution first |
 
 Shallow index-only pushes (`app/index.tsx:723,803`, onboarding/pair flows) don't need coordination.
@@ -228,7 +228,7 @@ and `tasks.tsx:10970`).
 - Direct→relay upgrade path has no sink at all (`src/transport/mobile-endpoint-lifecycle.ts:49-58`,
   `mobile-relay-direct-upgrade-controller.ts:19`).
 - Pairing relay path fully silent (S3 above); pairing logs never reach `connectionLogStore`.
-- Path label ("Orca Relay") gated on `connected` (`src/components/MobileHostCard.tsx:47`);
+- Path label ("MCode Relay") gated on `connected` (`src/components/MobileHostCard.tsx:47`);
   `classifyConnection` collapses `connecting`/`handshaking`/`reconnecting` and has no relay branch.
 - Regression suite for connect-label stalls exists for the direct path only
   (`src/transport/cellular-connecting-label-stall.test.ts`); no relay equivalent.
@@ -320,7 +320,7 @@ extend `pairing-relay-candidate.test.ts` for per-attempt lines.
 Approach: route notification taps (`app/_layout.tsx:127` + `src/notifications/notification-routing.ts`)
 and the Account-usage card (`app/index.tsx:835`) through `src/navigation/host-stack-navigation.ts`
 once #12001 lands; migrate host-edit onto the same stricter mechanism (#12001's own noted
-follow-up). `orca://` deep links can follow later via a route-level guard.
+follow-up). `mcode://` deep links can follow later via a route-level guard.
 Risk: notification cold-start ordering (push before root nav ready) — the mechanism already
 tolerates that by waiting for state commits.
 Tests: reuse the `host-stack-navigation.test.ts` harness for a notification-shaped target.
@@ -331,7 +331,7 @@ Approach: while the logical client is `suspended`/`'disconnected'`, have `migrat
 dialing session's state publishes (`connecting`/`handshaking`) to `publishState`, unbinding on
 success (normal bind takes over) or failure (restore `'disconnected'`). Guard: never downgrade a
 still-`'connected'` previous session (make-before-break migrations must stay green). Follow-on UI:
-show the path being dialed ("Connecting via Orca Relay…") by exposing the pending path, and let
+show the path being dialed ("Connecting via MCode Relay…") by exposing the pending path, and let
 `MobileHostCard`/`classifyConnection` render it while not yet connected.
 Files: `src/transport/stable-logical-rpc-client.ts` (+ its test), `src/transport/connection-health.ts`,
 `src/components/MobileHostCard.tsx`, `src/transport/mobile-connection-path-label.ts`.

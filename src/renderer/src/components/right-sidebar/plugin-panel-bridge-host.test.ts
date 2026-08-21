@@ -21,7 +21,7 @@ function messageEvent(data: unknown, source: unknown): MessageEvent {
 const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
 
 const VALID_DATA = {
-  type: 'orca-panel-action',
+  type: 'mcode-panel-action',
   requestId: 'req-1',
   action: 'terminal.sendText',
   params: { terminalId: 'term-1', text: '/model haiku', enter: true }
@@ -56,7 +56,7 @@ describe('createPanelBridgeMessageHandler', () => {
     })
     expect(panelWindow.postMessage).toHaveBeenCalledWith(
       {
-        type: 'orca-panel-action-result',
+        type: 'mcode-panel-action-result',
         requestId: 'req-1',
         ok: true,
         value: { accepted: true }
@@ -99,7 +99,7 @@ describe('createPanelBridgeMessageHandler', () => {
     expect(callPanelAction).not.toHaveBeenCalled()
     expect(panelWindow.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: 'orca-panel-action-result',
+        type: 'mcode-panel-action-result',
         requestId: 'req-1',
         ok: false,
         errorCode: 'invalid_request'
@@ -125,7 +125,7 @@ describe('createPanelBridgeMessageHandler', () => {
     expect(callPanelAction).not.toHaveBeenCalled()
     expect(panelWindow.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: 'orca-panel-action-result',
+        type: 'mcode-panel-action-result',
         requestId: 'req-1',
         ok: false,
         errorCode: 'invalid_request'
@@ -145,13 +145,13 @@ describe('createPanelBridgeMessageHandler', () => {
     })
 
     handler(messageEvent({ type: 'invalid-hostile-message' }, panelWindow))
-    handler(messageEvent({ type: 'orca-panel-pong', pingId: 7 }, panelWindow))
+    handler(messageEvent({ type: 'mcode-panel-pong', pingId: 7 }, panelWindow))
     handler(messageEvent(VALID_DATA, panelWindow))
 
     expect(callPanelAction).not.toHaveBeenCalled()
     expect(panelWindow.postMessage).toHaveBeenCalledWith(
       expect.objectContaining({
-        type: 'orca-panel-action-result',
+        type: 'mcode-panel-action-result',
         requestId: 'req-1',
         ok: false,
         errorCode: 'rate_limited'
@@ -173,7 +173,7 @@ describe('createPanelBridgeMessageHandler', () => {
 
     expect(panelWindow.postMessage).toHaveBeenCalledWith(
       {
-        type: 'orca-panel-action-result',
+        type: 'mcode-panel-action-result',
         requestId: 'req-1',
         ok: false,
         errorCode: 'capability_denied',
@@ -238,7 +238,7 @@ describe('createPanelBridgeMessageHandler', () => {
     })
 
     handler(messageEvent({ type: 'invalid-hostile-message' }, panelWindow))
-    handler(messageEvent({ type: 'orca-panel-pong', pingId: 7 }, panelWindow))
+    handler(messageEvent({ type: 'mcode-panel-pong', pingId: 7 }, panelWindow))
 
     // The pong spends data budget too, so the reserved lane grants liveness
     // without also granting a free channel for unmetered host work.
@@ -260,9 +260,9 @@ describe('createPanelBridgeMessageHandler', () => {
       controlBudget: { maxBytes: 1024, admit: controlAdmit }
     })
 
-    handler(messageEvent({ type: 'orca-panel-pong', pingId: -1 }, panelWindow))
-    handler(messageEvent({ type: 'orca-panel-pong', pingId: 'seven' }, panelWindow))
-    handler(messageEvent({ type: 'orca-panel-pong' }, panelWindow))
+    handler(messageEvent({ type: 'mcode-panel-pong', pingId: -1 }, panelWindow))
+    handler(messageEvent({ type: 'mcode-panel-pong', pingId: 'seven' }, panelWindow))
+    handler(messageEvent({ type: 'mcode-panel-pong' }, panelWindow))
 
     expect(admit).toHaveBeenCalledTimes(3)
     expect(controlAdmit).not.toHaveBeenCalled()
@@ -279,7 +279,7 @@ describe('createPanelBridgeMessageHandler', () => {
       budget: { maxBytes: 1024, admit: () => 'rate_limited' }
     })
 
-    handler(messageEvent({ type: 'orca-panel-pong', pingId: 7 }, panelWindow))
+    handler(messageEvent({ type: 'mcode-panel-pong', pingId: 7 }, panelWindow))
 
     expect(onPong).toHaveBeenCalledWith(7)
   })
@@ -300,10 +300,10 @@ describe('createPanelBridgeMessageHandler', () => {
     // for this window arrives. Any per-window count on the reserved lane would
     // have been spent by the flood and would drop pingId 99.
     for (let i = 0; i < 500; i += 1) {
-      handler(messageEvent({ type: 'orca-panel-pong', pingId: i }, panelWindow))
+      handler(messageEvent({ type: 'mcode-panel-pong', pingId: i }, panelWindow))
       clock += 1
     }
-    handler(messageEvent({ type: 'orca-panel-pong', pingId: 99 }, panelWindow))
+    handler(messageEvent({ type: 'mcode-panel-pong', pingId: 99 }, panelWindow))
 
     expect(onPong).toHaveBeenLastCalledWith(99)
   })
@@ -320,7 +320,7 @@ describe('createPanelBridgeMessageHandler', () => {
 
     handler(
       messageEvent(
-        { type: 'orca-panel-pong', pingId: 7, padding: 'x'.repeat(4 * 1024) },
+        { type: 'mcode-panel-pong', pingId: 7, padding: 'x'.repeat(4 * 1024) },
         panelWindow
       )
     )

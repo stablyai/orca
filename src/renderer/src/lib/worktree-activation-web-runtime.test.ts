@@ -11,7 +11,7 @@ registerWorktreeActivationReset()
 
 describe('ensureWorktreeHasInitialTerminal', () => {
   it('does not create a local fallback tab in the paired web runtime client', () => {
-    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    ;(globalThis as { __MCODE_WEB_CLIENT__?: boolean }).__MCODE_WEB_CLIENT__ = true
     useAppStore.setState((state) => ({
       settings: state.settings
         ? { ...state.settings, activeRuntimeEnvironmentId: 'web-runtime-1' }
@@ -37,7 +37,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
   })
 
   it('queues returned setup fallback on an existing web runtime tab', () => {
-    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    ;(globalThis as { __MCODE_WEB_CLIENT__?: boolean }).__MCODE_WEB_CLIENT__ = true
     useAppStore.setState((state) => ({
       settings: state.settings
         ? { ...state.settings, activeRuntimeEnvironmentId: 'web-runtime-1' }
@@ -67,8 +67,8 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       'wt-1',
       { command: 'claude' },
       {
-        runnerScriptPath: '/tmp/repo/.git/orca/setup-runner.sh',
-        envVars: { ORCA_ROOT_PATH: '/tmp/repo' },
+        runnerScriptPath: '/tmp/repo/.git/mcode/setup-runner.sh',
+        envVars: { MCODE_ROOT_PATH: '/tmp/repo' },
         waitForAgentStartup: true
       }
     )
@@ -82,7 +82,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     expect(store.queueTabStartupCommand).toHaveBeenCalledWith(
       'tab-2',
       expect.objectContaining({
-        command: expect.stringContaining('bash /tmp/repo/.git/orca/setup-runner.sh')
+        command: expect.stringContaining('bash /tmp/repo/.git/mcode/setup-runner.sh')
       })
     )
     expect(store.queueTabStartupCommand).toHaveBeenCalledWith(
@@ -94,7 +94,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
   })
 
   it('holds the issue command for the first mirrored web runtime tab when none exists yet', () => {
-    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    ;(globalThis as { __MCODE_WEB_CLIENT__?: boolean }).__MCODE_WEB_CLIENT__ = true
     useAppStore.setState((state) => ({
       settings: state.settings
         ? { ...state.settings, activeRuntimeEnvironmentId: 'web-runtime-1' }

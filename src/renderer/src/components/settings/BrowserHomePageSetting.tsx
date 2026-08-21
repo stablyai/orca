@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
+import { MCODE_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -55,7 +55,7 @@ export function BrowserHomePageSetting({
             return
           }
           const normalized = normalizeBrowserNavigationUrl(trimmed)
-          if (normalized && normalized !== ORCA_BROWSER_BLANK_URL) {
+          if (normalized && normalized !== MCODE_BROWSER_BLANK_URL) {
             onSave(normalized)
             toast.success(
               translate(

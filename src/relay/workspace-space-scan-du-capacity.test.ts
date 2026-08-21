@@ -55,7 +55,7 @@ describe('relay workspace space scan du path', () => {
   })
 
   it('fails closed instead of repeating the traversal through the portable walker', async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'orca-relay-du-capacity-'))
+    tempDir = await mkdtemp(join(tmpdir(), 'mcode-relay-du-capacity-'))
     const rootPath = join(tempDir, 'repo')
     await mkdir(rootPath, { recursive: true })
     await Promise.all(['one', 'two', 'three'].map((name) => writeFile(join(rootPath, name), name)))

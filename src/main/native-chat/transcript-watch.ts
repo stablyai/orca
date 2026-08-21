@@ -97,7 +97,7 @@ function subscribeViaResolvePoll(
       },
       Math.min(delay, untilFallbackResolve)
     )
-    // Why: never hold the event loop open (headless `orca serve` shutdown) for
+    // Why: never hold the event loop open (headless `mcode serve` shutdown) for
     // a session that may genuinely never resolve.
     pollTimer.unref?.()
     // Only back off in production; a test-supplied interval stays fixed so

@@ -28,7 +28,7 @@ import { PluginSecretsStore } from './plugin-secrets-store'
 const roots: string[] = []
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-plugin-secrets-'))
+  const root = await mkdtemp(join(tmpdir(), 'mcode-plugin-secrets-'))
   roots.push(root)
   return root
 }

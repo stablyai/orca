@@ -19,7 +19,7 @@ function sourceBetween(contents, startMarker, endMarker) {
 
 describe('computer-use mouse button routing', () => {
   it('maps the macOS middle button onto the otherMouse event family', () => {
-    const macOS = source('native/computer-use-macos/Sources/OrcaComputerUseMacOS/main.swift')
+    const macOS = source('native/computer-use-macos/Sources/MCodeComputerUseMacOS/main.swift')
     const mapping = sourceBetween(
       macOS,
       'extension MouseButtonSelection {',
@@ -34,7 +34,7 @@ describe('computer-use mouse button routing', () => {
   })
 
   it('validates the macOS mouse button before any accessibility shortcut runs', () => {
-    const macOS = source('native/computer-use-macos/Sources/OrcaComputerUseMacOS/main.swift')
+    const macOS = source('native/computer-use-macos/Sources/MCodeComputerUseMacOS/main.swift')
     const click = sourceBetween(
       macOS,
       'private func click(params:',

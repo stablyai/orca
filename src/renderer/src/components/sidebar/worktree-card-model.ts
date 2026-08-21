@@ -107,7 +107,7 @@ export function formatSparseDirectoryPreview(directories: string[]): string {
 }
 
 export function isWebClient(): boolean {
-  return Boolean((window as unknown as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__)
+  return Boolean((window as unknown as { __MCODE_WEB_CLIENT__?: boolean }).__MCODE_WEB_CLIENT__)
 }
 
 export function getDirectoryName(folderPath: string): string {

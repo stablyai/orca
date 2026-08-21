@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
-import { ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT } from './editor-autosave'
+import { MCODE_EDITOR_REQUEST_CMD_SAVE_EVENT } from './editor-autosave'
 import { useEditorCmdSaveRequest } from './useEditorCmdSaveRequest'
 
 const storeState = vi.hoisted(() => ({ editorDrafts: {} as Record<string, string> }))
@@ -91,7 +91,7 @@ describe('useEditorCmdSaveRequest', () => {
     })
     act(() => {
       window.dispatchEvent(
-        new CustomEvent(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, {
+        new CustomEvent(MCODE_EDITOR_REQUEST_CMD_SAVE_EVENT, {
           detail: { fileId: visibleFile.id }
         })
       )
@@ -126,12 +126,12 @@ describe('useEditorCmdSaveRequest', () => {
     })
     act(() => {
       window.dispatchEvent(
-        new CustomEvent(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, {
+        new CustomEvent(MCODE_EDITOR_REQUEST_CMD_SAVE_EVENT, {
           detail: { fileId: sourceFile.id }
         })
       )
       window.dispatchEvent(
-        new CustomEvent(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, {
+        new CustomEvent(MCODE_EDITOR_REQUEST_CMD_SAVE_EVENT, {
           detail: { fileId: previewFile.id }
         })
       )

@@ -18,7 +18,7 @@ function setPlatform(platform: NodeJS.Platform): void {
 function superviseUntilExit(code: number | null, signal: NodeJS.Signals | null): Promise<number> {
   const child = new FakeChildProcess()
   const supervised = superviseForegroundServe({
-    executable: '/Applications/Orca.app/Contents/MacOS/Orca',
+    executable: '/Applications/MCode.app/Contents/MacOS/MCode',
     childArgs: ['--serve'],
     spawnOptions: {},
     spawnChild: vi.fn() as never,
@@ -45,7 +45,7 @@ describe('serveSignalExitError', () => {
     expect(error.data).toMatchObject({
       nextSteps: [
         expect.stringContaining('macOS desktop login'),
-        expect.stringContaining('~/Library/Logs/DiagnosticReports/Orca-*.ips')
+        expect.stringContaining('~/Library/Logs/DiagnosticReports/MCode-*.ips')
       ]
     })
   })
@@ -54,7 +54,7 @@ describe('serveSignalExitError', () => {
     for (const platform of ['linux', 'win32'] as const) {
       const error = serveSignalExitError('SIGABRT', platform)
 
-      expect(error.message).toBe('Orca serve exited via SIGABRT.')
+      expect(error.message).toBe('MCode serve exited via SIGABRT.')
       expect(error.data).toBeUndefined()
     }
   })
@@ -62,13 +62,13 @@ describe('serveSignalExitError', () => {
   it('does not claim the macOS cause for other darwin signals', () => {
     const error = serveSignalExitError('SIGKILL', 'darwin')
 
-    expect(error.message).toBe('Orca serve exited via SIGKILL.')
+    expect(error.message).toBe('MCode serve exited via SIGKILL.')
     expect(error.data).toBeUndefined()
   })
 
   it('stays clear when neither a code nor a signal is reported', () => {
     expect(serveSignalExitError(null, 'darwin').message).toBe(
-      'Orca serve exited without reporting an exit code or signal.'
+      'MCode serve exited without reporting an exit code or signal.'
     )
   })
 })
@@ -86,7 +86,7 @@ describe('superviseForegroundServe signal exits', () => {
     setPlatform('linux')
 
     await expect(superviseUntilExit(null, 'SIGABRT')).rejects.toThrow(
-      'Orca serve exited via SIGABRT.'
+      'MCode serve exited via SIGABRT.'
     )
   })
 

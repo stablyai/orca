@@ -27,7 +27,7 @@ type WorktreeCardSshHostControlProps = {
   /** Null for runtime-owned targets: renders the passive connected glyph, as before. */
   status: SshConnectionStatus | null
   targetRemoved: boolean
-  /** Non-null when the SSH target belongs to a remote Orca server; routes connect to that runtime. */
+  /** Non-null when the SSH target belongs to a remote MCode server; routes connect to that runtime. */
   sshOwnerEnvironmentId: string | null
   /** True when the row cannot afford a visible label: icon-only with an sr-only label. */
   iconOnly: boolean

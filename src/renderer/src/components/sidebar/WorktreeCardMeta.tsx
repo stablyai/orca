@@ -70,9 +70,9 @@ export function WorktreeCardDetailsHover({
   onWorkspaceTitleEditingChange,
   onEditIssue,
   onEditComment,
-  onOpenGitHubIssueInOrca,
-  onOpenLinearIssueInOrca,
-  onOpenReviewInOrca,
+  onOpenGitHubIssueInMCode,
+  onOpenLinearIssueInMCode,
+  onOpenReviewInMCode,
   onUnlinkReview,
   onOpenAutomation,
   onOpenAutomationRun,
@@ -210,8 +210,8 @@ export function WorktreeCardDetailsHover({
             onIssueMenuOpenChange={handleIssueMenuOpenChange}
             onCopyIssueLink={issue?.url ? handleCopyIssueLink : undefined}
             onEditIssue={onEditIssue}
-            onOpenGitHubIssueInOrca={
-              onOpenGitHubIssueInOrca ? dismissAndRun(onOpenGitHubIssueInOrca) : undefined
+            onOpenGitHubIssueInMCode={
+              onOpenGitHubIssueInMCode ? dismissAndRun(onOpenGitHubIssueInMCode) : undefined
             }
           />
 
@@ -226,13 +226,13 @@ export function WorktreeCardDetailsHover({
                 )}
                 actions={
                   <>
-                    {linearIssue.url && onOpenLinearIssueInOrca && (
+                    {linearIssue.url && onOpenLinearIssueInMCode && (
                       <MetadataActionIcon
                         label={translate(
                           'auto.components.sidebar.WorktreeCardMeta.2c67730e07',
-                          'Open in Orca'
+                          'Open in MCode'
                         )}
-                        onClick={dismissAndRun(onOpenLinearIssueInOrca)}
+                        onClick={dismissAndRun(onOpenLinearIssueInMCode)}
                       >
                         <MonitorUp className="size-3" />
                       </MetadataActionIcon>
@@ -305,7 +305,7 @@ export function WorktreeCardDetailsHover({
             review={review}
             reviewMenuOpen={reviewMenuOpen}
             onReviewMenuOpenChange={handleReviewMenuOpenChange}
-            onOpenReviewInOrca={onOpenReviewInOrca}
+            onOpenReviewInMCode={onOpenReviewInMCode}
             onCopyReviewLink={review?.url ? handleCopyReviewLink : undefined}
             onUnlinkReview={onUnlinkReview}
             closeHover={closeHover}

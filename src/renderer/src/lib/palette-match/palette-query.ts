@@ -76,7 +76,7 @@ export function createPaletteQueryToken(text: string, index: number): PaletteQue
 
 /**
  * Folds the query once per keystroke and splits it on whitespace only —
- * punctuation stays inside tokens so `08-13` and `orca/main` survive intact.
+ * punctuation stays inside tokens so `08-13` and `mcode/main` survive intact.
  */
 export function preparePaletteQuery(query: string): PreparedPaletteQuery {
   if (isWorktreePaletteQueryTooLarge(query)) {

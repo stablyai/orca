@@ -156,27 +156,27 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
         }
       }
     })
-    getPathMock.mockReturnValue('/tmp/orca-user-data')
-    // Why: wrapper roots resolve from ORCA_USER_DATA_PATH; mirror the mocked userData so ZDOTDIR/wrapper assertions match.
-    process.env.ORCA_USER_DATA_PATH = '/tmp/orca-user-data'
+    getPathMock.mockReturnValue('/tmp/mcode-user-data')
+    // Why: wrapper roots resolve from MCODE_USER_DATA_PATH; mirror the mocked userData so ZDOTDIR/wrapper assertions match.
+    process.env.MCODE_USER_DATA_PATH = '/tmp/mcode-user-data'
     existsSyncMock.mockReturnValue(true)
     // size: the shell wrapper writer verifies each generated file is non-empty.
     statSyncMock.mockReturnValue({ isDirectory: () => true, mode: 0o755, size: 1 })
     readFileSyncMock.mockReturnValue('')
     openCodeBuildPtyEnvMock.mockImplementation((_ptyId: string, existingConfigDir?: string) => ({
-      ORCA_OPENCODE_HOOK_PORT: '4567',
-      ORCA_OPENCODE_HOOK_TOKEN: 'opencode-token',
-      ORCA_OPENCODE_PTY_ID: 'test-pty',
+      MCODE_OPENCODE_HOOK_PORT: '4567',
+      MCODE_OPENCODE_HOOK_TOKEN: 'opencode-token',
+      MCODE_OPENCODE_PTY_ID: 'test-pty',
       OPENCODE_CONFIG_DIR: existingConfigDir
-        ? '/tmp/orca-opencode-overlay'
-        : '/tmp/orca-opencode-config'
+        ? '/tmp/mcode-opencode-overlay'
+        : '/tmp/mcode-opencode-config'
     }))
     mimoCodeBuildPtyEnvMock.mockImplementation((_ptyId: string, existingHome?: string) => ({
-      MIMOCODE_HOME: existingHome ? '/tmp/orca-mimocode-overlay' : '/tmp/orca-mimocode-shared'
+      MIMOCODE_HOME: existingHome ? '/tmp/mcode-mimocode-overlay' : '/tmp/mcode-mimocode-shared'
     }))
     buildAgentHookEnvMock.mockReturnValue({
-      ORCA_AGENT_HOOK_PORT: '5678',
-      ORCA_AGENT_HOOK_TOKEN: 'agent-token'
+      MCODE_AGENT_HOOK_PORT: '5678',
+      MCODE_AGENT_HOOK_TOKEN: 'agent-token'
     })
     piBuildPtyEnvMock.mockImplementation(
       (
@@ -190,13 +190,13 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
           // Why: bare shells no longer create ~/.omp; only a userData status path is set (#10196).
           if (!existingAgentDir && !materializeDefaultHome) {
             return {
-              ORCA_OMP_STATUS_EXTENSION:
-                '/tmp/orca-user-data/omp-managed-status-extension/orca-agent-status.ts'
+              MCODE_OMP_STATUS_EXTENSION:
+                '/tmp/mcode-user-data/omp-managed-status-extension/mcode-agent-status.ts'
             }
           }
           return {
-            ORCA_OMP_SOURCE_AGENT_DIR: existingAgentDir ?? '/tmp/default-omp-agent',
-            ORCA_OMP_STATUS_EXTENSION: `${existingAgentDir ?? '/tmp/default-omp-agent'}/extensions/orca-agent-status.ts`
+            MCODE_OMP_SOURCE_AGENT_DIR: existingAgentDir ?? '/tmp/default-omp-agent',
+            MCODE_OMP_STATUS_EXTENSION: `${existingAgentDir ?? '/tmp/default-omp-agent'}/extensions/mcode-agent-status.ts`
           }
         }
         if (kind === 'prime-agent') {
@@ -204,14 +204,14 @@ export function createPtyIpcSuiteEnvironment(): PtyIpcSuiteEnvironment {
             return {}
           }
           return {
-            ORCA_PRIME_AGENT_SOURCE_AGENT_DIR: existingAgentDir ?? '/tmp/default-prime-agent'
+            MCODE_PRIME_AGENT_SOURCE_AGENT_DIR: existingAgentDir ?? '/tmp/default-prime-agent'
           }
         }
         if (!existingAgentDir && !materializeDefaultHome) {
           return {}
         }
         return {
-          ORCA_PI_SOURCE_AGENT_DIR: existingAgentDir ?? '/tmp/default-pi-agent'
+          MCODE_PI_SOURCE_AGENT_DIR: existingAgentDir ?? '/tmp/default-pi-agent'
         }
       }
     )

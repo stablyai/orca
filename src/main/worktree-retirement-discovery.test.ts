@@ -14,30 +14,30 @@ const SECOND = MARINE_CREATURES[1].toLowerCase()
 
 describe('extractBucketLeafCandidates', () => {
   it('takes everything past the encoded parent as the leaf', () => {
-    expect(extractBucketLeafCandidates(`-w-orca-${FIRST}`, ['-w-orca'])).toEqual([FIRST])
+    expect(extractBucketLeafCandidates(`-w-mcode-${FIRST}`, ['-w-mcode'])).toEqual([FIRST])
   })
 
   it('does not treat the parent directory as a leaf when the workspace name is numeric', () => {
-    // Real data: `-Users-x-orca-workspaces-orca-7474` must not retire `orca`, which is in the pool.
-    expect(extractBucketLeafCandidates('-w-workspaces-orca-7474', ['-w-workspaces-orca'])).toEqual([
+    // Real data: `-Users-x-mcode-workspaces-mcode-7474` must not retire `mcode`, which is in the pool.
+    expect(extractBucketLeafCandidates('-w-workspaces-mcode-7474', ['-w-workspaces-mcode'])).toEqual([
       '7474'
     ])
   })
 
   it('offers the first segment too, so an agent run in a subdirectory still retires the leaf', () => {
-    expect(extractBucketLeafCandidates(`-w-orca-${FIRST}-packages-api`, ['-w-orca'])).toEqual([
+    expect(extractBucketLeafCandidates(`-w-mcode-${FIRST}-packages-api`, ['-w-mcode'])).toEqual([
       `${FIRST}-packages-api`,
       FIRST
     ])
   })
 
   it('rejects a sibling directory that shares the parent prefix', () => {
-    expect(extractBucketLeafCandidates(`-w-orcadyne-${FIRST}`, ['-w-orca'])).toEqual([])
-    expect(extractBucketLeafCandidates(`-w-orca-secret-${FIRST}`, ['-w-orca-fix'])).toEqual([])
+    expect(extractBucketLeafCandidates(`-w-mcodedyne-${FIRST}`, ['-w-mcode'])).toEqual([])
+    expect(extractBucketLeafCandidates(`-w-mcode-secret-${FIRST}`, ['-w-mcode-fix'])).toEqual([])
   })
 
   it('yields nothing for the parent bucket itself', () => {
-    expect(extractBucketLeafCandidates('-w-orca', ['-w-orca'])).toEqual([])
+    expect(extractBucketLeafCandidates('-w-mcode', ['-w-mcode'])).toEqual([])
   })
 })
 
@@ -61,7 +61,7 @@ describe('discoverRetiredWorktreeNames', () => {
     buckets: readonly string[],
     run: (home: string) => Promise<void>
   ): Promise<void> {
-    const home = await mkdtemp(join(tmpdir(), 'orca-retirement-home-'))
+    const home = await mkdtemp(join(tmpdir(), 'mcode-retirement-home-'))
     try {
       for (const bucket of buckets) {
         await mkdir(join(home, '.claude', 'projects', bucket), { recursive: true })
@@ -77,8 +77,8 @@ describe('discoverRetiredWorktreeNames', () => {
     // no workspace root until the first create. Reporting that as incomplete would turn the
     // one-time seed into a rescan on every composer open for the life of the process.
     const retired = await discoverRetiredWorktreeNames({
-      workspaceRoots: [join(tmpdir(), 'orca-retirement-absent-root')],
-      home: join(tmpdir(), 'orca-retirement-absent-home'),
+      workspaceRoots: [join(tmpdir(), 'mcode-retirement-absent-root')],
+      home: join(tmpdir(), 'mcode-retirement-absent-home'),
       env: {}
     })
 
@@ -87,9 +87,9 @@ describe('discoverRetiredWorktreeNames', () => {
   })
 
   it('matches a plain POSIX workspace root', async () => {
-    await withFakeHome([`-Users-ada-orca-workspaces-orca-${FIRST}`], async (home) => {
+    await withFakeHome([`-Users-ada-mcode-workspaces-mcode-${FIRST}`], async (home) => {
       const retired = await discoverRetiredWorktreeNames({
-        workspaceRoots: ['/Users/ada/orca/workspaces/orca'],
+        workspaceRoots: ['/Users/ada/mcode/workspaces/mcode'],
         home,
         env: {}
       })
@@ -110,9 +110,9 @@ describe('discoverRetiredWorktreeNames', () => {
   })
 
   it('matches a dot-directory root, where the separator run encodes to two dashes', async () => {
-    await withFakeHome([`-Users-ada--orca-worktrees-${FIRST}`], async (home) => {
+    await withFakeHome([`-Users-ada--mcode-worktrees-${FIRST}`], async (home) => {
       const retired = await discoverRetiredWorktreeNames({
-        workspaceRoots: ['/Users/ada/.orca/worktrees'],
+        workspaceRoots: ['/Users/ada/.mcode/worktrees'],
         home,
         env: {}
       })
@@ -121,11 +121,11 @@ describe('discoverRetiredWorktreeNames', () => {
   })
 
   it('matches a Windows drive root', async () => {
-    // `getDefaultWorkspaceDir` returns `C:\Users\<user>\orca\workspaces` on Windows, so an encoder
+    // `getDefaultWorkspaceDir` returns `C:\Users\<user>\mcode\workspaces` on Windows, so an encoder
     // that collapsed `:\` rejected every bucket on that platform by default.
-    await withFakeHome([`C--Users-ada-orca-workspaces-${FIRST}`], async (home) => {
+    await withFakeHome([`C--Users-ada-mcode-workspaces-${FIRST}`], async (home) => {
       const retired = await discoverRetiredWorktreeNames({
-        workspaceRoots: ['C:\\Users\\ada\\orca\\workspaces'],
+        workspaceRoots: ['C:\\Users\\ada\\mcode\\workspaces'],
         home,
         env: {}
       })
@@ -134,9 +134,9 @@ describe('discoverRetiredWorktreeNames', () => {
   })
 
   it('matches a WSL UNC root', async () => {
-    await withFakeHome([`--wsl--Ubuntu-home-ada-orca-workspaces-${FIRST}`], async (home) => {
+    await withFakeHome([`--wsl--Ubuntu-home-ada-mcode-workspaces-${FIRST}`], async (home) => {
       const retired = await discoverRetiredWorktreeNames({
-        workspaceRoots: ['\\\\wsl$\\Ubuntu\\home\\ada\\orca\\workspaces'],
+        workspaceRoots: ['\\\\wsl$\\Ubuntu\\home\\ada\\mcode\\workspaces'],
         home,
         env: {},
         // Stubbed even though this case asserts the host-side bucket: the real resolver shells out
@@ -149,10 +149,10 @@ describe('discoverRetiredWorktreeNames', () => {
 
   it('ignores buckets belonging to a sibling root with the same prefix', async () => {
     await withFakeHome(
-      [`-Users-ada-orca-workspaces-orcadyne-${FIRST}`, `-Users-ada-orca-workspaces-orca-${SECOND}`],
+      [`-Users-ada-mcode-workspaces-mcodedyne-${FIRST}`, `-Users-ada-mcode-workspaces-mcode-${SECOND}`],
       async (home) => {
         const retired = await discoverRetiredWorktreeNames({
-          workspaceRoots: ['/Users/ada/orca/workspaces/orca'],
+          workspaceRoots: ['/Users/ada/mcode/workspaces/mcode'],
           home,
           env: {}
         })
@@ -162,7 +162,7 @@ describe('discoverRetiredWorktreeNames', () => {
   })
 
   it('reads buckets from CLAUDE_CONFIG_DIR when it is set', async () => {
-    const configDir = await mkdtemp(join(tmpdir(), 'orca-retirement-config-'))
+    const configDir = await mkdtemp(join(tmpdir(), 'mcode-retirement-config-'))
     await withFakeHome([`-Users-ada-w-${SECOND}`], async (home) => {
       try {
         await mkdir(join(configDir, 'projects', `-Users-ada-w-${FIRST}`), { recursive: true })
@@ -183,14 +183,14 @@ describe('discoverRetiredWorktreeNames', () => {
     // The agent for a WSL workspace is spawned through `wsl.exe`, so it runs inside the distro:
     // its cwd is `/home/ada/...`, and its bucket lands in the distro's own home — not the
     // Windows-side one. After the workspace directory is gone, that bucket is the only evidence.
-    const distroHome = await mkdtemp(join(tmpdir(), 'orca-retirement-distro-'))
+    const distroHome = await mkdtemp(join(tmpdir(), 'mcode-retirement-distro-'))
     await withFakeHome([], async (home) => {
       try {
-        await mkdir(join(distroHome, '.claude', 'projects', `-home-ada-orca-workspaces-${FIRST}`), {
+        await mkdir(join(distroHome, '.claude', 'projects', `-home-ada-mcode-workspaces-${FIRST}`), {
           recursive: true
         })
         const retired = await discoverRetiredWorktreeNames({
-          workspaceRoots: ['\\\\wsl.localhost\\Ubuntu\\home\\ada\\orca\\workspaces'],
+          workspaceRoots: ['\\\\wsl.localhost\\Ubuntu\\home\\ada\\mcode\\workspaces'],
           home,
           env: {},
           resolveWslHome: async (distro) => (distro === 'Ubuntu' ? distroHome : null)
@@ -205,10 +205,10 @@ describe('discoverRetiredWorktreeNames', () => {
   it('still reads the Windows-side home for a WSL root when the distro home cannot be resolved', async () => {
     // A stopped distro must not cost the retirements the host can still see.
     await withFakeHome(
-      [`--wsl-localhost-Ubuntu-home-ada-orca-workspaces-${FIRST}`],
+      [`--wsl-localhost-Ubuntu-home-ada-mcode-workspaces-${FIRST}`],
       async (home) => {
         const retired = await discoverRetiredWorktreeNames({
-          workspaceRoots: ['\\\\wsl.localhost\\Ubuntu\\home\\ada\\orca\\workspaces'],
+          workspaceRoots: ['\\\\wsl.localhost\\Ubuntu\\home\\ada\\mcode\\workspaces'],
           home,
           env: {},
           resolveWslHome: async () => null
@@ -219,7 +219,7 @@ describe('discoverRetiredWorktreeNames', () => {
   })
 
   it('retires live workspace directories alongside surviving buckets', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-retirement-roots-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-retirement-roots-'))
     await withFakeHome([], async (home) => {
       try {
         await mkdir(join(root, SECOND), { recursive: true })

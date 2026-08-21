@@ -19,7 +19,7 @@ import {
   mergeGitHubPRStack
 } from './github-pr-stack'
 
-const repository = { owner: 'stablyai', repo: 'orca', host: 'github.com' }
+const repository = { owner: 'stablyai', repo: 'mcode', host: 'github.com' }
 const summary: GitHubPRStack = {
   number: 51,
   position: 2,
@@ -55,7 +55,7 @@ describe('hydrateGitHubPRStack', () => {
                       pullRequest: {
                         number: 202,
                         title: 'API',
-                        url: 'https://github.com/stablyai/orca/pull/202',
+                        url: 'https://github.com/mcode-ide/mcode/pull/202',
                         updatedAt: '2026-08-10T00:00:00Z',
                         state: 'OPEN',
                         isDraft: false,
@@ -72,7 +72,7 @@ describe('hydrateGitHubPRStack', () => {
                       pullRequest: {
                         number: 201,
                         title: 'Models',
-                        url: 'https://github.com/stablyai/orca/pull/201',
+                        url: 'https://github.com/mcode-ide/mcode/pull/201',
                         updatedAt: '2026-08-10T00:00:00Z',
                         state: 'OPEN',
                         isDraft: false,
@@ -138,7 +138,7 @@ describe('hydrateGitHubPRStack', () => {
                       pullRequest: {
                         number: 202,
                         title: 'API',
-                        url: 'https://github.com/stablyai/orca/pull/202',
+                        url: 'https://github.com/mcode-ide/mcode/pull/202',
                         updatedAt,
                         state: 'OPEN',
                         isDraft,
@@ -231,7 +231,7 @@ describe('mergeGitHubPRStack', () => {
       1,
       expect.arrayContaining([
         'PUT',
-        'repos/stablyai/orca/pulls/202/merge-async',
+        'repos/mcode-ide/mcode/pulls/202/merge-async',
         'merge_method=squash',
         'merge_action=direct_merge',
         'sha=api-sha'
@@ -240,7 +240,7 @@ describe('mergeGitHubPRStack', () => {
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
-      ['api', 'repos/stablyai/orca/pulls/202/merge-async/merge-uuid'],
+      ['api', 'repos/mcode-ide/mcode/pulls/202/merge-async/merge-uuid'],
       expect.objectContaining({ cwd: '/repo', host: 'github.com' })
     )
   })

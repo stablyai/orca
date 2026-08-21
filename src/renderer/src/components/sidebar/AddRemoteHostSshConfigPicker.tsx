@@ -25,7 +25,7 @@ export function AddRemoteHostSshConfigPicker({
   onQueryChange,
   onRetry,
   onBack,
-  onAddAllToOrca
+  onAddAllToMCode
 }: {
   hosts: SshConfigHostSummary[]
   totalHostCount: number
@@ -40,7 +40,7 @@ export function AddRemoteHostSshConfigPicker({
   onQueryChange: (query: string) => void
   onRetry: () => void
   onBack: () => void
-  onAddAllToOrca: () => void
+  onAddAllToMCode: () => void
 }): React.JSX.Element {
   const [query, setQuery] = useState('')
   const queryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -72,7 +72,7 @@ export function AddRemoteHostSshConfigPicker({
         <DialogDescription>
           {translate(
             'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerDescription',
-            'Pick a host to fill the form, or add every new host to Orca’s host list.'
+            'Pick a host to fill the form, or add every new host to MCode’s host list.'
           )}
         </DialogDescription>
       </DialogHeader>
@@ -164,7 +164,7 @@ export function AddRemoteHostSshConfigPicker({
               <li key={host.alias}>
                 <button
                   type="button"
-                  disabled={picksDisabled || host.alreadyInOrca}
+                  disabled={picksDisabled || host.alreadyInMCode}
                   className={cn(
                     'flex w-full items-start justify-between gap-3 px-3 py-2.5 text-left',
                     'hover:bg-accent focus-visible:bg-accent focus-visible:outline-none',
@@ -192,14 +192,14 @@ export function AddRemoteHostSshConfigPicker({
                         'Reading…'
                       )}
                     </span>
-                  ) : host.alreadyInOrca ? (
+                  ) : host.alreadyInMCode ? (
                     <Badge
                       variant="outline"
                       className="mt-0.5 shrink-0 border-emerald-500/40 text-[10.5px] text-emerald-400"
                     >
                       {translate(
-                        'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerInOrca',
-                        'In Orca'
+                        'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerInMCode',
+                        'In MCode'
                       )}
                     </Badge>
                   ) : host.previouslyRemoved ? (
@@ -209,7 +209,7 @@ export function AddRemoteHostSshConfigPicker({
                     >
                       {translate(
                         'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerPreviouslyRemoved',
-                        'Removed from Orca'
+                        'Removed from MCode'
                       )}
                     </Badge>
                   ) : null}
@@ -235,7 +235,7 @@ export function AddRemoteHostSshConfigPicker({
           type="button"
           variant="secondary"
           disabled={!canAddAll}
-          onClick={onAddAllToOrca}
+          onClick={onAddAllToMCode}
           className="w-full sm:w-auto"
         >
           {isBulkImporting
@@ -246,10 +246,10 @@ export function AddRemoteHostSshConfigPicker({
             : newHostCount > 0
               ? translate(
                   'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerAddAll',
-                  'Add all {{value0}} to Orca',
+                  'Add all {{value0}} to MCode',
                   { value0: newHostCount }
                 )
-              : // Why: the remainder can be already-in-Orca or merely tombstoned, so the
+              : // Why: the remainder can be already-in-MCode or merely tombstoned, so the
                 // label cannot claim either one specifically.
                 totalHostCount > 0
                 ? translate(
@@ -258,7 +258,7 @@ export function AddRemoteHostSshConfigPicker({
                   )
                 : translate(
                     'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerAddAllEmpty',
-                    'Add all to Orca'
+                    'Add all to MCode'
                   )}
         </Button>
         <Button

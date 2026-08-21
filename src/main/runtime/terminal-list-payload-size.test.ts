@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from './orca-runtime'
+import { MCodeRuntimeService } from './mcode-runtime'
 
 // Measures the real `terminal.list` wire payload for a large listing, so the
 // visualLayouts opt-out keeps paying for itself. Sized against a live
@@ -10,7 +10,7 @@ const TAB_COUNT = TERMINAL_COUNT / PANES_PER_TAB
 // Leaves ~19% headroom over the measured 75,467 B while catching material bloat.
 const MAX_OPTED_OUT_PAYLOAD_BYTES = 90_000
 const REPO_ID = 'repo-7f3a91c2e4b85d60'
-const WORKTREE_PATH = '/Users/dev/orca/workspaces/orca/perf-terminal-list-diet'
+const WORKTREE_PATH = '/Users/dev/mcode/workspaces/mcode/perf-terminal-list-diet'
 const WORKTREE_ID = `${REPO_ID}::${WORKTREE_PATH}`
 
 const uuid = (n: number): string => {
@@ -22,7 +22,7 @@ const leafIdFor = (index: number): string => uuid(index)
 const tabIdFor = (tab: number): string => `tab-${uuid(1_000 + tab)}`
 const ptyIdFor = (index: number): string => `pty-${uuid(2_000 + index)}`
 const groupIdFor = (tab: number): string => `group-${uuid(3_000 + (tab % 2))}`
-const titleFor = (index: number): string => `claude — orca/perf-terminal-list-diet #${index}`
+const titleFor = (index: number): string => `claude — mcode/perf-terminal-list-diet #${index}`
 
 const makeStore = () => ({
   getRepo: (id: string) => makeStore().getRepos()[0] ?? (id as never),
@@ -94,8 +94,8 @@ type MobileTab = {
   isActive: boolean
 }
 
-function buildLoadedRuntime(): OrcaRuntimeService {
-  const runtime = new OrcaRuntimeService(makeStore() as never)
+function buildLoadedRuntime(): MCodeRuntimeService {
+  const runtime = new MCodeRuntimeService(makeStore() as never)
   const tabs: GraphTab[] = []
   const leaves: GraphLeaf[] = []
   const mobileTabs: MobileTab[] = []

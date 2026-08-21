@@ -198,7 +198,7 @@ export function exitEmptyDetailsBody(editor: Editor): boolean {
   return true
 }
 
-const OrcaDetails = Details.extend({
+const MCodeDetails = Details.extend({
   // Why: details summary Enter must run before StarterKit's generic paragraph
   // splitting so typing a toggle title then pressing Enter moves into the body.
   priority: 1000,
@@ -208,10 +208,10 @@ const OrcaDetails = Details.extend({
       ...this.parent?.(),
       variant: {
         default: null,
-        parseHTML: (element) => parseToggleHeadingVariant(element.getAttribute('data-orca-toggle')),
+        parseHTML: (element) => parseToggleHeadingVariant(element.getAttribute('data-mcode-toggle')),
         renderHTML: ({ variant }) => {
           const parsed = parseToggleHeadingVariant(variant)
-          return parsed ? { 'data-orca-toggle': parsed } : {}
+          return parsed ? { 'data-mcode-toggle': parsed } : {}
         }
       }
     }
@@ -286,7 +286,7 @@ const OrcaDetails = Details.extend({
   }
 })
 
-const OrcaDetailsContent = DetailsContent.extend({
+const MCodeDetailsContent = DetailsContent.extend({
   // Why: detailsContent's double-Enter escape must run before StarterKit's
   // generic paragraph split, otherwise users can get stuck inside a toggle.
   priority: 1000,
@@ -306,15 +306,15 @@ const OrcaDetailsContent = DetailsContent.extend({
   }
 })
 
-export function createOrcaDetailsExtensions(): AnyExtension[] {
+export function createMCodeDetailsExtensions(): AnyExtension[] {
   return [
-    OrcaDetails.configure({
+    MCodeDetails.configure({
       persist: true,
       HTMLAttributes: {
-        class: 'orca-details'
+        class: 'mcode-details'
       }
     }),
     DetailsSummary,
-    OrcaDetailsContent
+    MCodeDetailsContent
   ]
 }

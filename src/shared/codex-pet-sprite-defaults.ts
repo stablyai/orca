@@ -47,7 +47,7 @@ export function codexAnimationsAtUniformFps(fps: number): Record<string, SpriteA
 
 export type CustomPetSprite = NonNullable<CustomPet['sprite']>
 
-/** The exact sprite an old Orca build baked for an imported Codex bundle:
+/** The exact sprite an old MCode build baked for an imported Codex bundle:
  *  192x208 frames on an 8-wide sheet at the flat 8 fps rate, idle default, and
  *  the nine Codex rows carrying no per-frame durations. Matching the full
  *  geometry (not just the row map) keeps a hand-authored 8 fps sheet that merely

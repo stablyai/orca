@@ -491,7 +491,7 @@ export function createPtyOutputProcessor({
   ): void {
     const rawLength = meta?.rawLength ?? data.length
     const suppressAttentionEvents = options.suppressAttentionEvents === true
-    // Why: parse Orca's OSC 9999 before xterm; carry parser state across chunks so partial reads don't drop status or print escape garbage.
+    // Why: parse MCode's OSC 9999 before xterm; carry parser state across chunks so partial reads don't drop status or print escape garbage.
     const processed = processAgentStatusChunk(data)
     data = processed.cleanData
     // Why: during eager-buffer replay, suppress stale agent-status callbacks from a prior session (bytes still consumed so nothing leaks into xterm).

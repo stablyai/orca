@@ -26,15 +26,15 @@ function placement(
   overrides: Partial<SkillFreshnessInstallation> = {}
 ): SkillFreshnessInstallation {
   return {
-    id: 'orca-cli',
-    name: 'orca-cli',
+    id: 'mcode-cli',
+    name: 'mcode-cli',
     rootId: 'home-agents',
     providers: ['agent-skills'],
     sourceKind: 'home',
     sourceLabel: 'Agent skills home',
-    unresolvedPath: '/home/.agents/skills/orca-cli',
-    resolvedPath: '/home/.agents/skills/orca-cli',
-    physicalIdentity: 'physical-orca-cli',
+    unresolvedPath: '/home/.agents/skills/mcode-cli',
+    resolvedPath: '/home/.agents/skills/mcode-cli',
+    physicalIdentity: 'physical-mcode-cli',
     topology: 'canonical-copy',
     status: 'outdated',
     installedReleaseRevision: 1,
@@ -52,7 +52,7 @@ function eligibleInventory(): SkillFreshnessInventory {
   return {
     schemaVersion: 1,
     installations: [placement()],
-    eligibleUpdateNames: ['orca-cli'],
+    eligibleUpdateNames: ['mcode-cli'],
     scanIssues: [],
     scannedAt: 1
   }
@@ -112,7 +112,7 @@ async function rerenderNudge(): Promise<void> {
   })
 }
 
-const DISMISSAL_KEY = ['physical-orca-cli', 'orca-cli', '2'].join('\0')
+const DISMISSAL_KEY = ['physical-mcode-cli', 'mcode-cli', '2'].join('\0')
 
 describe('SkillFreshnessNudge', () => {
   beforeEach(() => {
@@ -261,12 +261,12 @@ describe('SkillFreshnessNudge', () => {
           id: 'repo-copy',
           topology: 'repo-scope',
           sourceKind: 'repo',
-          unresolvedPath: '/home/projects/work/.agents/skills/orca-cli',
-          resolvedPath: '/home/projects/work/.agents/skills/orca-cli',
-          physicalIdentity: 'physical-repo-orca-cli'
+          unresolvedPath: '/home/projects/work/.agents/skills/mcode-cli',
+          resolvedPath: '/home/projects/work/.agents/skills/mcode-cli',
+          physicalIdentity: 'physical-repo-mcode-cli'
         })
       ],
-      eligibleUpdateNames: ['orca-cli'],
+      eligibleUpdateNames: ['mcode-cli'],
       scanIssues: [],
       scannedAt: 1
     }
@@ -289,10 +289,10 @@ describe('SkillFreshnessNudge', () => {
           id: 'repo-copy',
           topology: 'repo-scope',
           sourceKind: 'repo',
-          physicalIdentity: 'physical-repo-orca-cli-after-checkout'
+          physicalIdentity: 'physical-repo-mcode-cli-after-checkout'
         })
       ],
-      eligibleUpdateNames: ['orca-cli'],
+      eligibleUpdateNames: ['mcode-cli'],
       scanIssues: [],
       scannedAt: 2
     }

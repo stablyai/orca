@@ -1,4 +1,4 @@
-import { getOrcaProfileBrowserSessionPartition } from '../../shared/orca-profiles'
+import { getMCodeProfileBrowserSessionPartition } from '../../shared/mcode-profiles'
 import type { BrowserSessionProfile } from '../../shared/browser-workspace-types'
 
 const BROWSER_SESSION_PROFILE_ID_RE =
@@ -7,7 +7,7 @@ const BROWSER_SESSION_PROFILE_ID_RE =
 // Why: validate on-disk profile shape so a tampered JSON file can't inject an arbitrary partition into the will-attach-webview allowlist.
 export function isValidPersistedBrowserSessionProfile(
   profile: unknown,
-  activeOrcaProfileId: string
+  activeMCodeProfileId: string
 ): profile is BrowserSessionProfile {
   if (!profile || typeof profile !== 'object') {
     return false
@@ -22,17 +22,17 @@ export function isValidPersistedBrowserSessionProfile(
     (candidate.userAgentMode === undefined ||
       candidate.userAgentMode === 'clean' ||
       candidate.userAgentMode === 'native') &&
-    isProfileOwnedSessionPartition(candidate.id, candidate.partition, activeOrcaProfileId)
+    isProfileOwnedSessionPartition(candidate.id, candidate.partition, activeMCodeProfileId)
   )
 }
 
 function isProfileOwnedSessionPartition(
   profileId: string,
   partition: string,
-  activeOrcaProfileId: string
+  activeMCodeProfileId: string
 ): boolean {
   return (
     BROWSER_SESSION_PROFILE_ID_RE.test(profileId) &&
-    partition === getOrcaProfileBrowserSessionPartition(activeOrcaProfileId, profileId)
+    partition === getMCodeProfileBrowserSessionPartition(activeMCodeProfileId, profileId)
   )
 }

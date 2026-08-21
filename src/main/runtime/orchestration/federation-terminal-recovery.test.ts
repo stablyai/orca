@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../orca-runtime'
+import { MCodeRuntimeService } from '../mcode-runtime'
 
 describe('terminal federation acknowledgment recovery', () => {
   afterEach(() => {
@@ -12,7 +12,7 @@ describe('terminal federation acknowledgment recovery', () => {
       dispatchId: `dispatch_${index + 1}`,
       rowId: index + 1
     }))
-    const runtime = new OrcaRuntimeService(null, undefined, {
+    const runtime = new MCodeRuntimeService(null, undefined, {
       orchestrationEnvironmentTransport: {
         resolve: vi.fn(),
         call: vi.fn()
@@ -47,7 +47,7 @@ describe('terminal federation acknowledgment recovery', () => {
       dispatchId: `dispatch_${rowId}`,
       rowId
     }))
-    const runtime = new OrcaRuntimeService(null, undefined, {
+    const runtime = new MCodeRuntimeService(null, undefined, {
       orchestrationEnvironmentTransport: {
         resolve: vi.fn(),
         call: vi.fn()
@@ -77,7 +77,7 @@ describe('terminal federation acknowledgment recovery', () => {
     vi.useFakeTimers()
     let release!: () => void
     const blocked = new Promise<void>((resolve) => (release = resolve))
-    const runtime = new OrcaRuntimeService(null, undefined, {
+    const runtime = new MCodeRuntimeService(null, undefined, {
       orchestrationEnvironmentTransport: {
         resolve: vi.fn(),
         call: vi.fn()

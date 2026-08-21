@@ -1,5 +1,5 @@
 import type { TestInfo } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { getActiveTabId, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   getTerminalContent,
@@ -16,18 +16,18 @@ import {
 import { connectDockerSshRelayTarget } from './helpers/docker-ssh-relay-connection'
 import { createAndActivateDockerSshRelayWorktree } from './helpers/docker-ssh-relay-worktree-activation'
 
-const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
-const PARKING_DELAY_MS = Number(process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS) || 500
+const RUN_DOCKER_SSH = process.env.MCODE_E2E_SSH_DOCKER === '1'
+const PARKING_DELAY_MS = Number(process.env.MCODE_E2E_TERMINAL_PARKING_DELAY_MS) || 500
 
 test.use({
   // Why no seeded local repo: matching every green Docker SSH spec — the same
   // mid-session repo-add misroute hits a remote repo added beside a local one.
   seedTestRepo: false,
-  orcaAppExtraEnv: {
-    ORCA_E2E_TERMINAL_PARKING_DELAY_MS: String(PARKING_DELAY_MS),
+  mcodeAppExtraEnv: {
+    MCODE_E2E_TERMINAL_PARKING_DELAY_MS: String(PARKING_DELAY_MS),
     // Why limit=1: two hidden un-parkable worktrees then exceed the budget while
     // the last-active exemption still spares exactly one — the smallest live proof.
-    ORCA_E2E_TERMINAL_RETENTION_LIMIT: '1'
+    MCODE_E2E_TERMINAL_RETENTION_LIMIT: '1'
   }
 })
 
@@ -35,33 +35,33 @@ test.use({
 // slice A's terminalSshViewParking off) force-park beyond the retention budget,
 // least-recently-hidden first, and reveal restores content from the relay replay.
 test.describe('terminal hidden-worktree retention budget', () => {
-  test.skip(!RUN_DOCKER_SSH, 'Set ORCA_E2E_SSH_DOCKER=1 to run Docker-backed SSH tests.')
+  test.skip(!RUN_DOCKER_SSH, 'Set MCODE_E2E_SSH_DOCKER=1 to run Docker-backed SSH tests.')
   test.skip(process.platform === 'win32', 'Docker SSH parking uses POSIX SSH tooling.')
 
   test('force-parks the older hidden un-parkable worktree and spares the newest', async ({
-    orcaPage
+    mcodePage
   }, testInfo: TestInfo) => {
     test.setTimeout(240_000)
     let target: DockerSshRelayTarget | null = null
     try {
       target = startDockerSshRelayTarget(testInfo)
-      await waitForSessionReady(orcaPage)
+      await waitForSessionReady(mcodePage)
 
-      const older = await connectDockerSshRelayTarget(orcaPage, target)
+      const older = await connectDockerSshRelayTarget(mcodePage, target)
       await expect
-        .poll(() => waitForActiveWorktree(orcaPage), { timeout: 30_000 })
+        .poll(() => waitForActiveWorktree(mcodePage), { timeout: 30_000 })
         .toBe(older.worktreeId)
-      await waitForActiveTerminalManager(orcaPage, 60_000)
-      const olderPtyId = await waitForActivePanePtyId(orcaPage, 60_000)
-      const olderTabId = await getActiveTabId(orcaPage)
+      await waitForActiveTerminalManager(mcodePage, 60_000)
+      const olderPtyId = await waitForActivePanePtyId(mcodePage, 60_000)
+      const olderTabId = await getActiveTabId(mcodePage)
       if (!olderTabId) {
         throw new Error('older SSH terminal tab did not become active')
       }
       // Why the ':' terminator: match the exact echoed line, not the typed command.
       const olderMarker = `RETENTION_OLD_${Date.now()}`
-      await sendToTerminal(orcaPage, olderPtyId, `echo "${olderMarker}:"\r`)
+      await sendToTerminal(mcodePage, olderPtyId, `echo "${olderMarker}:"\r`)
       await expect
-        .poll(() => getTerminalContent(orcaPage, 20_000), {
+        .poll(() => getTerminalContent(mcodePage, 20_000), {
           timeout: 30_000,
           message: 'older worktree marker did not render before hiding'
         })
@@ -71,7 +71,7 @@ test.describe('terminal hidden-worktree retention budget', () => {
       // hidden remote worktrees join the un-parkable class the budget governs.
       // Written after the first terminal is live so it cannot race target setup;
       // parking eligibility reads it at verdict time, not spawn time.
-      await orcaPage.evaluate(async () => {
+      await mcodePage.evaluate(async () => {
         await window.__store?.getState().updateSettings({ terminalSshViewParking: false })
       })
 
@@ -81,16 +81,16 @@ test.describe('terminal hidden-worktree retention budget', () => {
       // Activating the second worktree hides the older one, making the older the
       // least-recently-hidden candidate.
       const newer = await createAndActivateDockerSshRelayWorktree(
-        orcaPage,
+        mcodePage,
         older.repoId,
         'retention-newer'
       )
       await expect
-        .poll(() => waitForActiveWorktree(orcaPage), { timeout: 30_000 })
+        .poll(() => waitForActiveWorktree(mcodePage), { timeout: 30_000 })
         .toBe(newer.worktreeId)
-      await waitForActiveTerminalManager(orcaPage, 60_000)
-      await waitForActivePanePtyId(orcaPage, 60_000)
-      const newerTabId = await getActiveTabId(orcaPage)
+      await waitForActiveTerminalManager(mcodePage, 60_000)
+      await waitForActivePanePtyId(mcodePage, 60_000)
+      const newerTabId = await getActiveTabId(mcodePage)
       if (!newerTabId) {
         throw new Error('newer SSH terminal tab did not become active')
       }
@@ -99,19 +99,19 @@ test.describe('terminal hidden-worktree retention budget', () => {
       // un-parkable worktrees against a budget of one. It stays visible, so it
       // is never a retention candidate itself.
       const third = await createAndActivateDockerSshRelayWorktree(
-        orcaPage,
+        mcodePage,
         older.repoId,
         'retention-third'
       )
       await expect
-        .poll(() => waitForActiveWorktree(orcaPage), { timeout: 30_000 })
+        .poll(() => waitForActiveWorktree(mcodePage), { timeout: 30_000 })
         .toBe(third.worktreeId)
-      await waitForActiveTerminalManager(orcaPage, 60_000)
+      await waitForActiveTerminalManager(mcodePage, 60_000)
 
       // The older worktree must force-park (its pane managers unmount)…
-      await waitForTabParked(orcaPage, olderTabId, { parkDelayMs: PARKING_DELAY_MS })
+      await waitForTabParked(mcodePage, olderTabId, { parkDelayMs: PARKING_DELAY_MS })
       // …while the newest hidden worktree keeps its mounted panes (last-active exemption).
-      const newerStillMounted = await orcaPage.evaluate(
+      const newerStillMounted = await mcodePage.evaluate(
         (tabId) => window.__paneManagers?.get(tabId) !== undefined,
         newerTabId
       )
@@ -119,7 +119,7 @@ test.describe('terminal hidden-worktree retention budget', () => {
 
       // Reveal the evicted worktree: with SSH parking disabled the model paint is
       // off, so the relay replay must restore the marker tail — never a blank pane.
-      await orcaPage.evaluate(
+      await mcodePage.evaluate(
         ({ worktreeId, tabId }) => {
           const state = window.__store?.getState()
           state?.setActiveWorktree(worktreeId)
@@ -128,9 +128,9 @@ test.describe('terminal hidden-worktree retention budget', () => {
         },
         { worktreeId: older.worktreeId, tabId: olderTabId }
       )
-      await waitForActiveTerminalManager(orcaPage, 60_000)
+      await waitForActiveTerminalManager(mcodePage, 60_000)
       await expect
-        .poll(() => getTerminalContent(orcaPage, 20_000), {
+        .poll(() => getTerminalContent(mcodePage, 20_000), {
           timeout: 60_000,
           message: 'revealed evicted worktree did not restore the marker via relay replay'
         })

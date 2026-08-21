@@ -4,7 +4,7 @@ import { createUsageProviderApi } from './usage-provider-api'
 describe('usage provider preload API', () => {
   it('keeps every provider on its existing IPC channels', async () => {
     const invoke = vi.fn().mockResolvedValue(undefined)
-    const query = { scope: 'orca' as const, range: '30d' as const }
+    const query = { scope: 'mcode' as const, range: '30d' as const }
 
     for (const prefix of ['claudeUsage', 'codexUsage', 'openCodeUsage'] as const) {
       const api = createUsageProviderApi({ invoke } as never, prefix)

@@ -1,4 +1,4 @@
-// Opt in: ORCA_WORKSPACE_SNAPSHOT_PRUNE_BENCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/workspace-snapshot-pruning.bench.test.ts
+// Opt in: MCODE_WORKSPACE_SNAPSHOT_PRUNE_BENCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/workspace-snapshot-pruning.bench.test.ts
 import { performance } from 'node:perf_hooks'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -15,7 +15,7 @@ import {
   pruneWorkspaceSpaceAnalysisSnapshots
 } from './workspace-space-analysis-snapshot'
 
-const describeBench = process.env.ORCA_WORKSPACE_SNAPSHOT_PRUNE_BENCH ? describe : describe.skip
+const describeBench = process.env.MCODE_WORKSPACE_SNAPSHOT_PRUNE_BENCH ? describe : describe.skip
 const ROW_COUNT = 610
 const DELETE_COUNT = 100
 
@@ -23,7 +23,7 @@ describeBench('workspace snapshot bulk pruning', () => {
   let snapshotDirectory = ''
 
   beforeAll(async () => {
-    snapshotDirectory = await mkdtemp(join(tmpdir(), 'orca-snapshot-prune-bench-'))
+    snapshotDirectory = await mkdtemp(join(tmpdir(), 'mcode-snapshot-prune-bench-'))
   })
 
   afterAll(async () => {
@@ -60,10 +60,10 @@ describeBench('workspace snapshot bulk pruning', () => {
     ])
     const pruneMs = performance.now() - startedAt
     const cleanupPayload = JSON.parse(
-      await readFile(join(snapshotDirectory, 'orca-workspace-cleanup-scan.json'), 'utf-8')
+      await readFile(join(snapshotDirectory, 'mcode-workspace-cleanup-scan.json'), 'utf-8')
     ) as { result: { candidates: unknown[] } }
     const spacePayload = JSON.parse(
-      await readFile(join(snapshotDirectory, 'orca-workspace-space-analysis.json'), 'utf-8')
+      await readFile(join(snapshotDirectory, 'mcode-workspace-space-analysis.json'), 'utf-8')
     ) as { analysis: { worktrees: unknown[] } }
 
     console.log(

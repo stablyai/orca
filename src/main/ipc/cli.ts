@@ -48,7 +48,7 @@ async function hydrateLocalShellPathForCli(force = false): Promise<void> {
   if (process.platform === 'win32') {
     return
   }
-  // Why: CLI registration must match `which orca` in the user's terminal, not
+  // Why: CLI registration must match `which mcode` in the user's terminal, not
   // the sparse PATH a GUI-launched Electron process inherited from launchd.
   const hydration = await hydrateShellPath(force ? { force: true } : undefined)
   if (hydration.ok) {

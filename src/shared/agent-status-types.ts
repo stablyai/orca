@@ -55,7 +55,7 @@ export type AgentStateHistoryEntry = {
   /** When this state was first reported. */
   startedAt: number
   /** True when this `done` was a cancellation (agent hook like Claude `is_interrupt`,
-   *  or Orca's guarded fallback). Always falsy for non-`done` states so retention logic can preserve it. */
+   *  or MCode's guarded fallback). Always falsy for non-`done` states so retention logic can preserve it. */
   interrupted?: boolean
 }
 
@@ -133,7 +133,7 @@ export type AgentStatusEntry = {
    *  so `lastAssistantMessage` is already cleared by the time a subscriber observes it. */
   lastCompletedAssistantMessage?: string
   /** True when this `done` was reached via interrupt, not normal completion
-   *  (agent-reported or Orca's guarded fallback). Undefined otherwise. */
+   *  (agent-reported or MCode's guarded fallback). Undefined otherwise. */
   interrupted?: boolean
   /** True when this `done` is a session boundary, not a completed turn. See AgentStatusPayload. */
   sessionBoundary?: boolean
@@ -144,7 +144,7 @@ export type AgentStatusEntry = {
    *  none are tracked; the sidebar derives indented child rows from it. */
   subagents?: AgentSubagentSnapshot[]
   /** Provider-owned conversation/session id captured from hook payloads.
-   *  Used only for exact CLI resume; Orca terminal ids are not agent-session ids. */
+   *  Used only for exact CLI resume; MCode terminal ids are not agent-session ids. */
   providerSession?: AgentProviderSessionMetadata
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string

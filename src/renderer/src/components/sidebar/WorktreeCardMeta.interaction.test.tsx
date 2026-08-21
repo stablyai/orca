@@ -78,7 +78,7 @@ const reviewFixture = {
   number: 456,
   title: 'Fix stale GH PR',
   state: 'open' as const,
-  url: 'https://github.com/acme/orca/pull/456',
+  url: 'https://github.com/acme/mcode/pull/456',
   status: 'success' as const,
   updatedAt: '2026-05-17T00:00:00.000Z',
   mergeable: 'MERGEABLE' as const
@@ -128,7 +128,7 @@ describe('WorktreeCardDetailsHover interactions', () => {
           comment={null}
           onEditIssue={vi.fn()}
           onEditComment={vi.fn()}
-          onOpenReviewInOrca={vi.fn()}
+          onOpenReviewInMCode={vi.fn()}
           onUnlinkReview={onUnlinkReview}
         >
           <span>Linked PR</span>
@@ -277,7 +277,7 @@ describe('WorktreeCardDetailsHover interactions', () => {
       await Promise.resolve()
     })
 
-    expect(writeClipboardText).toHaveBeenCalledWith('https://github.com/acme/orca/pull/456')
+    expect(writeClipboardText).toHaveBeenCalledWith('https://github.com/acme/mcode/pull/456')
     expect(onUnlinkReview).not.toHaveBeenCalled()
     expect(toastMocks.success).toHaveBeenCalledWith('PR link copied')
     expect(container.querySelector('[data-hover-open]')?.getAttribute('data-hover-open')).toBe(
@@ -306,7 +306,7 @@ describe('WorktreeCardDetailsHover interactions', () => {
       await Promise.resolve()
     })
 
-    expect(writeClipboardText).toHaveBeenCalledWith('https://github.com/acme/orca/pull/456')
+    expect(writeClipboardText).toHaveBeenCalledWith('https://github.com/acme/mcode/pull/456')
     expect(onUnlinkReview).not.toHaveBeenCalled()
     expect(toastMocks.error).toHaveBeenCalledWith('Failed to copy link')
   })

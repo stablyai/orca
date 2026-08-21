@@ -50,7 +50,7 @@ import {
   getPtyIdsForConnection,
   getSshPtyProvider
 } from './pty'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { MCodeRuntimeService } from '../runtime/mcode-runtime'
 import {
   initializeSshConnectionGenerationSession,
   resetSshConnectionGenerations
@@ -71,7 +71,7 @@ let persistedStore: Store | null = null
 let advertisedUrlWatcherUnsubscribe: (() => void) | null = null
 let powerMonitorUnsubscribe: (() => void) | null = null
 let currentGetMainWindow: () => BrowserWindow | null = () => null
-let currentRuntime: OrcaRuntimeService | undefined
+let currentRuntime: MCodeRuntimeService | undefined
 
 const SSH_IPC_CHANNELS = [
   'ssh:listTargets',
@@ -953,7 +953,7 @@ function refreshActiveRelaySessions(): void {
 export function registerSshHandlers(
   store: Store,
   getMainWindow: () => BrowserWindow | null,
-  runtime?: OrcaRuntimeService
+  runtime?: MCodeRuntimeService
 ): { connectionManager: SshConnectionManager; sshStore: SshConnectionStore } {
   initializeSshConnectionGenerationSession()
   // Why: macOS re-activation re-calls this with a new BrowserWindow; ipcMain.handle() throws on a duplicate channel, so remove prior handlers first.
@@ -1064,7 +1064,7 @@ export function registerSshHandlers(
   // ── Connection lifecycle ───────────────────────────────────────────
 
   async function connectTarget(targetId: string): Promise<SshConnectionState> {
-    const e2eProbePath = process.env.ORCA_E2E_FORBID_LOCAL_SSH_CONNECT_PROBE
+    const e2eProbePath = process.env.MCODE_E2E_FORBID_LOCAL_SSH_CONNECT_PROBE
     if (e2eProbePath) {
       appendFileSync(e2eProbePath, `${JSON.stringify(targetId)}\n`)
       throw new Error('e2e_forbidden_local_ssh_connect')

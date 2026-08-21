@@ -44,7 +44,7 @@ async function loadReader() {
 }
 
 async function createHermesHome(): Promise<string> {
-  hermesHome = await mkdtemp(join(tmpdir(), 'orca-hermes-output-'))
+  hermesHome = await mkdtemp(join(tmpdir(), 'mcode-hermes-output-'))
   process.env.HERMES_HOME = hermesHome
   return hermesHome
 }
@@ -188,7 +188,7 @@ Run summary: monitor automation completed successfully.
   it('does not hydrate referenced logs outside Hermes home', async () => {
     const home = await createHermesHome()
     const outputDir = join(home, 'cron', 'output', 'job-1')
-    const outsideDir = await mkdtemp(join(tmpdir(), 'orca-hermes-outside-'))
+    const outsideDir = await mkdtemp(join(tmpdir(), 'mcode-hermes-outside-'))
     extraTempDirs.push(outsideDir)
     const outsideLogPath = join(outsideDir, 'secret.log')
     await mkdir(outputDir, { recursive: true })

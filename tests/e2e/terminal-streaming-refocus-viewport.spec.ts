@@ -1,6 +1,6 @@
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   execInTerminal,
@@ -26,7 +26,7 @@ type RevealFrame = {
 async function closeFeatureTips(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
-    store?.getState().markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
+    store?.getState().markFeatureTipsSeen(['mcode-cli', 'cmd-j-palette', 'voice-dictation'])
     if (store?.getState().activeModal === 'feature-tips') {
       store.getState().closeModal()
     }
@@ -192,22 +192,22 @@ async function sampleRevealFrames(page: Page, targetTabId: string): Promise<Reve
 
 test.describe('terminal streaming refocus viewport', () => {
   test('keeps follow-output at the bottom through a queued-write refocus wobble', async ({
-    orcaPage
+    mcodePage
   }) => {
-    await waitForSessionReady(orcaPage)
-    await closeFeatureTips(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
-    const ptyId = await waitForActivePanePtyId(orcaPage)
-    const { paneKey } = await waitForActivePaneHookDescriptor(orcaPage)
+    await waitForSessionReady(mcodePage)
+    await closeFeatureTips(mcodePage)
+    await waitForActiveWorktree(mcodePage)
+    await ensureTerminalVisible(mcodePage)
+    await waitForActiveTerminalManager(mcodePage, 30_000)
+    const ptyId = await waitForActivePanePtyId(mcodePage)
+    const { paneKey } = await waitForActivePaneHookDescriptor(mcodePage)
     const tabId = paneKey.slice(0, paneKey.indexOf(':'))
-    await waitForTerminalPtyDataInjector(orcaPage, paneKey)
-    await execInTerminal(orcaPage, ptyId, nodeTerminalCommand([STREAMING_FIXTURE_PATH]))
-    await waitForPhaseOneAtBottom(orcaPage, tabId)
+    await waitForTerminalPtyDataInjector(mcodePage, paneKey)
+    await execInTerminal(mcodePage, ptyId, nodeTerminalCommand([STREAMING_FIXTURE_PATH]))
+    await waitForPhaseOneAtBottom(mcodePage, tabId)
 
-    const framesPromise = sampleRevealFrames(orcaPage, tabId)
-    await injectQueuedWriteAndRefocus(orcaPage, tabId, paneKey)
+    const framesPromise = sampleRevealFrames(mcodePage, tabId)
+    await injectQueuedWriteAndRefocus(mcodePage, tabId, paneKey)
     const frames = await framesPromise
 
     expect(frames.filter((frame) => !frame.targetPresented)).toEqual([])
@@ -224,9 +224,9 @@ test.describe('terminal streaming refocus viewport', () => {
       frames.filter((frame) => (frame.maxThumbTop ?? 0) > 1 && (frame.thumbTop ?? 0) <= 1)
     ).toEqual([])
     await expect
-      .poll(() => getTerminalContent(orcaPage), { timeout: 15_000 })
+      .poll(() => getTerminalContent(mcodePage), { timeout: 15_000 })
       .toContain('REFOCUS_STREAM_DONE')
-    const visibleScrollbar = orcaPage.locator('.xterm-scrollbar.xterm-vertical:visible').first()
+    const visibleScrollbar = mcodePage.locator('.xterm-scrollbar.xterm-vertical:visible').first()
     await expect(visibleScrollbar).toBeVisible()
     expect(
       await visibleScrollbar.evaluate((scrollbar) => {

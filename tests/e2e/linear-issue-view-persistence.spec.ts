@@ -10,14 +10,14 @@
 
 import { existsSync, readFileSync } from 'node:fs'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
-import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { test, expect } from './helpers/mcode-app'
+import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/mcode-restart'
 import { getStoreState, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { TEST_REPO_PATH_FILE } from './global-setup'
 
 // Mirrors src/renderer/src/components/linear-issue-view-storage.ts; hardcoded so a
 // silent key rename shows up here as a failing round-trip.
-const LINEAR_ISSUE_VIEW_STORAGE_KEY = 'orca.linear.issue-view.v1'
+const LINEAR_ISSUE_VIEW_STORAGE_KEY = 'mcode.linear.issue-view.v1'
 
 const WORKSPACE_A = {
   id: 'linear-workspace-a',
@@ -394,22 +394,22 @@ function seededRepoPathOrSkip(): string {
 test.describe('Linear issue view persistence', () => {
   test('preserves view mode, grouping, ordering, and filters across a tasks remount', async ({
     electronApp,
-    orcaPage
+    mcodePage
   }) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
     await installLinearPersistenceBackend(electronApp)
-    await openLinearTasks(orcaPage)
-    await waitForLinearIssuesChrome(orcaPage, ISSUE_A.title)
+    await openLinearTasks(mcodePage)
+    await waitForLinearIssuesChrome(mcodePage, ISSUE_A.title)
 
-    await setLinearViewPreferences(orcaPage, {
+    await setLinearViewPreferences(mcodePage, {
       viewMode: 'Board',
       groupBy: 'Status',
       orderBy: 'Updated'
     })
-    await applyStatusFilter(orcaPage, STATE_A.name)
+    await applyStatusFilter(mcodePage, STATE_A.name)
 
-    await waitForLinearIssueViewPersisted(orcaPage, (view) => {
+    await waitForLinearIssueViewPersisted(mcodePage, (view) => {
       if (
         !view ||
         view.viewMode !== 'board' ||
@@ -423,68 +423,68 @@ test.describe('Linear issue view persistence', () => {
     })
 
     // User-visible before remount.
-    await expectRestoredLinearView(orcaPage)
-    const statusChip = orcaPage.getByRole('button', { name: 'Remove Status filter' }).locator('..')
+    await expectRestoredLinearView(mcodePage)
+    const statusChip = mcodePage.getByRole('button', { name: 'Remove Status filter' }).locator('..')
     await expect(statusChip).toContainText(STATE_A.name)
 
-    await closeTasksPage(orcaPage)
-    await openLinearTasks(orcaPage)
-    await waitForLinearIssuesChrome(orcaPage, ISSUE_A.title)
+    await closeTasksPage(mcodePage)
+    await openLinearTasks(mcodePage)
+    await waitForLinearIssuesChrome(mcodePage, ISSUE_A.title)
 
-    await expectRestoredLinearView(orcaPage)
+    await expectRestoredLinearView(mcodePage)
     await expect(
-      orcaPage.getByRole('button', { name: 'Remove Status filter' }).locator('..')
+      mcodePage.getByRole('button', { name: 'Remove Status filter' }).locator('..')
     ).toContainText(STATE_A.name)
     // Board surface, not the flat list column header.
-    await expect(orcaPage.getByText(STATE_A.name, { exact: true }).first()).toBeVisible()
+    await expect(mcodePage.getByText(STATE_A.name, { exact: true }).first()).toBeVisible()
   })
 
-  test('keeps attribute filters scoped per Linear workspace', async ({ electronApp, orcaPage }) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
+  test('keeps attribute filters scoped per Linear workspace', async ({ electronApp, mcodePage }) => {
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
     await installLinearPersistenceBackend(electronApp, { multiWorkspace: true })
-    await openLinearTasks(orcaPage)
-    await waitForLinearIssuesChrome(orcaPage, ISSUE_A.title)
+    await openLinearTasks(mcodePage)
+    await waitForLinearIssuesChrome(mcodePage, ISSUE_A.title)
 
-    await applyPriorityFilter(orcaPage, 'High')
+    await applyPriorityFilter(mcodePage, 'High')
     await expect(
-      orcaPage.getByRole('button', { name: 'Remove Priority filter' }).locator('..')
+      mcodePage.getByRole('button', { name: 'Remove Priority filter' }).locator('..')
     ).toContainText('High')
 
-    await waitForLinearIssueViewPersisted(orcaPage, (view) => {
+    await waitForLinearIssueViewPersisted(mcodePage, (view) => {
       const filter = view?.filtersByWorkspaceId?.[WORKSPACE_A.id]
       return Boolean(filter?.priorities?.includes(2))
     })
 
-    await switchLinearWorkspace(orcaPage, WORKSPACE_B.organizationName)
-    await waitForLinearIssuesChrome(orcaPage, ISSUE_B.title)
+    await switchLinearWorkspace(mcodePage, WORKSPACE_B.organizationName)
+    await waitForLinearIssuesChrome(mcodePage, ISSUE_B.title)
     // Workspace B starts unfiltered — Alpha's High must not leak.
-    await expect(orcaPage.getByRole('button', { name: 'Remove Priority filter' })).toHaveCount(0)
+    await expect(mcodePage.getByRole('button', { name: 'Remove Priority filter' })).toHaveCount(0)
 
-    await applyPriorityFilter(orcaPage, 'Low')
+    await applyPriorityFilter(mcodePage, 'Low')
     await expect(
-      orcaPage.getByRole('button', { name: 'Remove Priority filter' }).locator('..')
+      mcodePage.getByRole('button', { name: 'Remove Priority filter' }).locator('..')
     ).toContainText('Low')
 
-    await waitForLinearIssueViewPersisted(orcaPage, (view) => {
+    await waitForLinearIssueViewPersisted(mcodePage, (view) => {
       const a = view?.filtersByWorkspaceId?.[WORKSPACE_A.id]
       const b = view?.filtersByWorkspaceId?.[WORKSPACE_B.id]
       return Boolean(a?.priorities?.includes(2) && b?.priorities?.includes(4))
     })
 
-    await switchLinearWorkspace(orcaPage, WORKSPACE_A.organizationName)
-    await waitForLinearIssuesChrome(orcaPage, ISSUE_A.title)
+    await switchLinearWorkspace(mcodePage, WORKSPACE_A.organizationName)
+    await waitForLinearIssuesChrome(mcodePage, ISSUE_A.title)
     await expect(
-      orcaPage.getByRole('button', { name: 'Remove Priority filter' }).locator('..')
+      mcodePage.getByRole('button', { name: 'Remove Priority filter' }).locator('..')
     ).toContainText('High')
     await expect(
-      orcaPage.getByRole('button', { name: 'Remove Priority filter' }).locator('..')
+      mcodePage.getByRole('button', { name: 'Remove Priority filter' }).locator('..')
     ).not.toContainText('Low')
 
-    await switchLinearWorkspace(orcaPage, WORKSPACE_B.organizationName)
-    await waitForLinearIssuesChrome(orcaPage, ISSUE_B.title)
+    await switchLinearWorkspace(mcodePage, WORKSPACE_B.organizationName)
+    await waitForLinearIssuesChrome(mcodePage, ISSUE_B.title)
     await expect(
-      orcaPage.getByRole('button', { name: 'Remove Priority filter' }).locator('..')
+      mcodePage.getByRole('button', { name: 'Remove Priority filter' }).locator('..')
     ).toContainText('Low')
   })
 })

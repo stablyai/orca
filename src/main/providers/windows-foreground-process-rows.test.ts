@@ -2,7 +2,7 @@
 // powershell.exe (or the wmic fallback) on a ~1s/pane cadence. Electron's main
 // process has no console, so a spawn without windowsHide pops a fresh conhost
 // window per scan that flashes and steals keyboard focus from the foreground app
-// (including Orca's own terminal). Both probes MUST pass windowsHide: true.
+// (including MCode's own terminal). Both probes MUST pass windowsHide: true.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn() }))

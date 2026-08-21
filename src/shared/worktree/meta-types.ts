@@ -1,6 +1,6 @@
 import type { ExecutionHostId } from '../execution-host'
 import type { TaskSourceContext } from '../task-source-context'
-import type { EphemeralVmCheckoutMode } from '../orca-yaml-hook-types'
+import type { EphemeralVmCheckoutMode } from '../mcode-yaml-hook-types'
 import type {
   AutomationWorkspaceProvenance,
   CliWorkspaceProvenance,
@@ -10,7 +10,7 @@ import type {
   WorkspaceStatus
 } from './types'
 import type { TuiAgent } from '../tui-agent'
-import type { OrcaWorkspaceLayout } from '../global-settings-types'
+import type { MCodeWorkspaceLayout } from '../global-settings-types'
 import type { DiffComment, MobileDiffReviewState } from '../diff-comment-types'
 
 // ─── Worktree metadata (persisted user-authored fields only) ─────────
@@ -53,9 +53,9 @@ export type WorktreeMeta = {
   /** User-authored sidebar ordering. Higher values render earlier in Manual sort. */
   manualOrder?: number
   lastActivityAt: number
-  /** See {@link Worktree.createdAt}. Persisted to orca-data.json. */
+  /** See {@link Worktree.createdAt}. Persisted to mcode-data.json. */
   createdAt?: number
-  /** See {@link Worktree.createdWithAgent}. Persisted to orca-data.json. */
+  /** See {@link Worktree.createdWithAgent}. Persisted to mcode-data.json. */
   createdWithAgent?: TuiAgent
   /** See {@link Worktree.pendingFirstAgentMessageRename}. */
   pendingFirstAgentMessageRename?: boolean
@@ -66,15 +66,15 @@ export type WorktreeMeta = {
   sparsePresetId?: string
   /** Intended create base for stale-base probes. Persisted metadata, not UI drift state. */
   baseRef?: string
-  /** True when Orca checked out a pre-existing local branch that delete must not prune. */
+  /** True when MCode checked out a pre-existing local branch that delete must not prune. */
   preserveBranchOnDelete?: boolean
   /** See {@link Worktree.pushTarget}. Persisted so refreshed worktree lists keep the target. */
   pushTarget?: GitPushTarget
-  /** Explicit marker stamped when Orca creates the worktree. */
-  orcaCreatedAt?: number
-  orcaCreationSource?: 'desktop' | 'runtime' | 'cli' | 'ssh'
-  /** Workspace layout active when Orca created the worktree. */
-  orcaCreationWorkspaceLayout?: OrcaWorkspaceLayout
+  /** Explicit marker stamped when MCode creates the worktree. */
+  mcodeCreatedAt?: number
+  mcodeCreationSource?: 'desktop' | 'runtime' | 'cli' | 'ssh'
+  /** Workspace layout active when MCode created the worktree. */
+  mcodeCreationWorkspaceLayout?: MCodeWorkspaceLayout
   /** User-assigned workspace board status for manual sidebar organization. */
   workspaceStatus?: WorkspaceStatus
   diffComments?: DiffComment[]
@@ -86,6 +86,6 @@ export type WorktreeMeta = {
   mobileDiffReview?: MobileDiffReviewState
   /** System-owned provenance for workspaces created by automation new-per-run dispatches. */
   automationProvenance?: AutomationWorkspaceProvenance
-  /** System-owned provenance for workspaces created via `orca worktree create`. */
+  /** System-owned provenance for workspaces created via `mcode worktree create`. */
   cliProvenance?: CliWorkspaceProvenance
 }

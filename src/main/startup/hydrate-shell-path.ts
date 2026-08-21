@@ -7,11 +7,11 @@ import { WindowsShellPathOwnership, windowsPathSegmentKey } from './windows-shel
 // Why: GUI-launched Electron can miss PATH entries added by shell profiles.
 // Tools installed into ~/.opencode/bin, ~/.cargo/bin, pyenv/volta/fnm
 // shims, and countless other user-local locations end up invisible to our
-// `which` probe even though they work fine from Terminal (see stablyai/orca#829).
+// `which` probe even though they work fine from Terminal (see mcode-ide/mcode#829).
 //
 // Probe the profile-loading shell once instead of hard-coding every tool's install path.
 
-const DELIMITER = '__ORCA_SHELL_PATH__'
+const DELIMITER = '__MCODE_SHELL_PATH__'
 const SPAWN_TIMEOUT_MS = 5000
 
 // ANSI escape sequences can leak into the captured output when the user's rc
@@ -124,7 +124,7 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
       // Why: inherit current env so the shell sees the same baseline, then let
       // it layer its own rc files on top. Do NOT forward stdio — some shells
       // (oh-my-zsh setups, powerlevel10k) print a lot to stderr on startup,
-      // and we don't want that in Orca's console.
+      // and we don't want that in MCode's console.
       env: process.env,
       stdio: ['ignore', 'pipe', 'ignore'],
       detached: false,

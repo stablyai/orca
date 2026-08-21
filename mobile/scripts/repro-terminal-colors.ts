@@ -7,7 +7,7 @@
  * or are still present and therefore being lost during mobile WebView replay.
  *
  * Usage:
- *   ORCA_MOBILE_WS_URL=ws://127.0.0.1:6768 \
+ *   MCODE_MOBILE_WS_URL=ws://127.0.0.1:6768 \
  *     pnpm exec tsx scripts/repro-terminal-colors.ts <deviceToken> <serverPublicKeyB64> <worktreeSelector> [handleA] [handleB]
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
@@ -15,7 +15,7 @@ import { join } from 'node:path'
 import nacl from 'tweetnacl'
 import WebSocket from 'ws'
 
-const WS_URL = process.env.ORCA_MOBILE_WS_URL ?? 'ws://127.0.0.1:6768'
+const WS_URL = process.env.MCODE_MOBILE_WS_URL ?? 'ws://127.0.0.1:6768'
 const token = process.argv[2]
 const serverPublicKeyB64 = process.argv[3]
 const worktreeSelector = process.argv[4]

@@ -22,7 +22,7 @@ const githubRepo: Repo = {
   badgeColor: '#000000',
   addedAt: 0,
   kind: 'git',
-  upstream: { owner: 'orca', repo: 'orca' }
+  upstream: { owner: 'mcode', repo: 'mcode' }
 }
 
 beforeEach(() => {

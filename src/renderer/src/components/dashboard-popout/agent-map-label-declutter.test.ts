@@ -39,7 +39,7 @@ function layoutOf(
     projects: [
       {
         id: 'project-1',
-        name: 'orca',
+        name: 'mcode',
         x: 0,
         // Parked far above the workspaces so the project label is not itself
         // the thing under test unless a case moves it.

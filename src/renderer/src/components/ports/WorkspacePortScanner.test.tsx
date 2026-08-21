@@ -139,7 +139,7 @@ async function flushPromises(): Promise<void> {
 function seedRemoteWorkspace(environmentId = 'env-1'): void {
   useAppStore.setState({
     settings: {
-      ...getDefaultSettings('/tmp/orca-workspaces'),
+      ...getDefaultSettings('/tmp/mcode-workspaces'),
       activeRuntimeEnvironmentId: environmentId
     },
     repos: [
@@ -287,7 +287,7 @@ describe('WorkspacePortScanner', () => {
     await act(async () => {
       useAppStore.setState({
         settings: {
-          ...getDefaultSettings('/tmp/orca-workspaces'),
+          ...getDefaultSettings('/tmp/mcode-workspaces'),
           activeRuntimeEnvironmentId: 'env-1'
         }
       })
@@ -451,7 +451,7 @@ describe('WorkspacePortScanner', () => {
     await act(async () => {
       useAppStore.setState({
         settings: {
-          ...getDefaultSettings('/tmp/orca-workspaces'),
+          ...getDefaultSettings('/tmp/mcode-workspaces'),
           activeRuntimeEnvironmentId: 'env-2'
         }
       })

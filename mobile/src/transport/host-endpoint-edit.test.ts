@@ -17,8 +17,8 @@ describe('resolveHostEndpointEdit', () => {
     ['implicit LAN websocket', 'ws://desk.local'],
     ['explicit websocket default', 'ws://desk.local:80'],
     ['explicit websocket custom', 'ws://desk.local:6768'],
-    ['secure path-routed proxy', 'wss://desk.example.com/orca'],
-    ['secure query-routed proxy', 'wss://desk.example.com/orca?route=runtime'],
+    ['secure path-routed proxy', 'wss://desk.example.com/mcode'],
+    ['secure query-routed proxy', 'wss://desk.example.com/mcode?route=runtime'],
     ['legacy bare hostname', 'desk.local'],
     ['legacy bare host and port', 'desk.local:7777'],
     ['legacy unparsable endpoint', 'not-a-url']
@@ -66,7 +66,7 @@ describe('resolveHostEndpointEdit', () => {
 
   it('discriminates invalid input without a candidate endpoint', () => {
     expect(
-      resolveHostEndpointEdit('wss://desk.example.com/orca', 'https://desk.example.com')
+      resolveHostEndpointEdit('wss://desk.example.com/mcode', 'https://desk.example.com')
     ).toEqual({
       kind: 'invalid',
       error: 'Use ws:// or wss:// (or host:port).'
@@ -74,7 +74,7 @@ describe('resolveHostEndpointEdit', () => {
   })
 
   it('stays stable through repeated name-only edits', () => {
-    const stored = 'wss://desk.example.com/orca?route=runtime'
+    const stored = 'wss://desk.example.com/mcode?route=runtime'
     const once = persistedAfterEdit(stored)
 
     expect(once).toBe(stored)

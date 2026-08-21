@@ -282,96 +282,96 @@
       "samples": [
         {
           "index": 0,
-          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo",
-          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@5810ae88",
+          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo",
+          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@5810ae88",
           "activationMs": 217,
           "ptyBindMs": 219,
           "paintSettleMs": 233
         },
         {
           "index": 1,
-          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-one",
-          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-one@@c450cf26",
+          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-one",
+          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-one@@c450cf26",
           "activationMs": 480,
           "ptyBindMs": 575,
           "paintSettleMs": 601
         },
         {
           "index": 2,
-          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two",
-          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two@@ae6fdb06",
+          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-two",
+          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-two@@ae6fdb06",
           "activationMs": 382,
           "ptyBindMs": 557,
           "paintSettleMs": 573
         },
         {
           "index": 3,
-          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo",
-          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@5810ae88",
+          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo",
+          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@5810ae88",
           "activationMs": 268,
           "ptyBindMs": 295,
           "paintSettleMs": 299
         },
         {
           "index": 4,
-          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-one",
-          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-one@@c450cf26",
+          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-one",
+          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-one@@c450cf26",
           "activationMs": 154,
           "ptyBindMs": 178,
           "paintSettleMs": 184
         },
         {
           "index": 5,
-          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two",
-          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two@@ae6fdb06",
+          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-two",
+          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-two@@ae6fdb06",
           "activationMs": 145,
           "ptyBindMs": 166,
           "paintSettleMs": 178
         },
         {
           "index": 6,
-          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo",
-          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@5810ae88",
+          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo",
+          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@5810ae88",
           "activationMs": 159,
           "ptyBindMs": 184,
           "paintSettleMs": 192
         },
         {
           "index": 7,
-          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-one",
-          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-one@@c450cf26",
+          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-one",
+          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-one@@c450cf26",
           "activationMs": 328,
           "ptyBindMs": 349,
           "paintSettleMs": 354
         },
         {
           "index": 8,
-          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two",
-          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two@@ae6fdb06",
+          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-two",
+          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-two@@ae6fdb06",
           "activationMs": 139,
           "ptyBindMs": 158,
           "paintSettleMs": 167
         },
         {
           "index": 9,
-          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo",
-          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@5810ae88",
+          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo",
+          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@5810ae88",
           "activationMs": 150,
           "ptyBindMs": 177,
           "paintSettleMs": 183
         },
         {
           "index": 10,
-          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-one",
-          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-one@@c450cf26",
+          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-one",
+          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-one@@c450cf26",
           "activationMs": 150,
           "ptyBindMs": 169,
           "paintSettleMs": 179
         },
         {
           "index": 11,
-          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two",
-          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two@@ae6fdb06",
+          "worktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-two",
+          "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-two@@ae6fdb06",
           "activationMs": 134,
           "ptyBindMs": 166,
           "paintSettleMs": 182
@@ -474,7 +474,7 @@
     "hydrationSucceeded": true,
     "activeView": "terminal",
     "activeRepoId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b",
-    "activeWorktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two",
+    "activeWorktreeId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-two",
     "activeTabType": "terminal",
     "activeTabId": "15055907-3232-4ca1-8814-e5484ba78a5b",
     "terminalGpuAcceleration": "auto",
@@ -483,13 +483,13 @@
       "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b": 3
     },
     "ptyIdsByTabId": [
-      "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two@@ae6fdb06"
+      "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-two@@ae6fdb06"
     ],
     "paneManagerCount": 3,
     "activePane": {
       "id": 1,
       "leafId": "78b7478c-39a9-4111-aed8-1e2ddf568c24",
-      "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two@@ae6fdb06",
+      "ptyId": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-two@@ae6fdb06",
       "cols": 175,
       "rows": 73,
       "buffer": {
@@ -600,17 +600,17 @@
     "ptySessions": {
       "value": [
         {
-          "id": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@5810ae88",
+          "id": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@5810ae88",
           "cwd": "",
           "title": "shell"
         },
         {
-          "id": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-one@@c450cf26",
+          "id": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-one@@c450cf26",
           "cwd": "",
           "title": "shell"
         },
         {
-          "id": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two@@ae6fdb06",
+          "id": "cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-two@@ae6fdb06",
           "cwd": "",
           "title": "shell"
         }
@@ -784,12 +784,12 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@5810ae88 total=1300ms preflight=0ms auth=1ms host_env=44ms options=0ms provider_spawn=1255ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@5810ae88 total=1300ms preflight=0ms auth=1ms host_env=44ms options=0ms provider_spawn=1255ms daemon=true reattach=false",
       "at": 1782979184130
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@2c485ebc total=1308ms preflight=0ms auth=0ms host_env=49ms options=0ms provider_spawn=1259ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@2c485ebc total=1308ms preflight=0ms auth=0ms host_env=49ms options=0ms provider_spawn=1259ms daemon=true reattach=false",
       "at": 1782979184185
     },
     {
@@ -809,7 +809,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@c3018b1f total=108ms preflight=0ms auth=0ms host_env=47ms options=0ms provider_spawn=61ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@c3018b1f total=108ms preflight=0ms auth=0ms host_env=47ms options=0ms provider_spawn=61ms daemon=true reattach=false",
       "at": 1782979185197
     },
     {
@@ -824,7 +824,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@59074e83 total=123ms preflight=0ms auth=0ms host_env=50ms options=0ms provider_spawn=73ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@59074e83 total=123ms preflight=0ms auth=0ms host_env=50ms options=0ms provider_spawn=73ms daemon=true reattach=false",
       "at": 1782979186159
     },
     {
@@ -844,7 +844,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@562113d2 total=111ms preflight=0ms auth=0ms host_env=51ms options=0ms provider_spawn=60ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@562113d2 total=111ms preflight=0ms auth=0ms host_env=51ms options=0ms provider_spawn=60ms daemon=true reattach=false",
       "at": 1782979187082
     },
     {
@@ -859,7 +859,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@b5230dba total=105ms preflight=0ms auth=0ms host_env=48ms options=0ms provider_spawn=57ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@b5230dba total=105ms preflight=0ms auth=0ms host_env=48ms options=0ms provider_spawn=57ms daemon=true reattach=false",
       "at": 1782979187978
     },
     {
@@ -869,7 +869,7 @@
     },
     {
       "source": "stderr",
-      "line": "[47624:0702/035948.434:INFO:CONSOLE:397] \"Tooltip is changing from controlled to uncontrolled. Components should not switch from controlled to uncontrolled (or vice versa). Decide between using a controlled or uncontrolled value for the lifetime of the component.\", source: http://localhost:5173/@fs/C:/Users/jinwo/orca/workspaces/orca/windows-performance-improvement/node_modules/.vite/deps/chunk-22L5D3A7.js?v=43681c89 (397)",
+      "line": "[47624:0702/035948.434:INFO:CONSOLE:397] \"Tooltip is changing from controlled to uncontrolled. Components should not switch from controlled to uncontrolled (or vice versa). Decide between using a controlled or uncontrolled value for the lifetime of the component.\", source: http://localhost:5173/@fs/C:/Users/jinwo/mcode/workspaces/mcode/windows-performance-improvement/node_modules/.vite/deps/chunk-22L5D3A7.js?v=43681c89 (397)",
       "at": 1782979188434
     },
     {
@@ -884,7 +884,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@95bb2f74 total=101ms preflight=0ms auth=0ms host_env=47ms options=0ms provider_spawn=54ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@95bb2f74 total=101ms preflight=0ms auth=0ms host_env=47ms options=0ms provider_spawn=54ms daemon=true reattach=false",
       "at": 1782979188862
     },
     {
@@ -899,7 +899,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@09fc3731 total=94ms preflight=0ms auth=0ms host_env=41ms options=0ms provider_spawn=53ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@09fc3731 total=94ms preflight=0ms auth=0ms host_env=41ms options=0ms provider_spawn=53ms daemon=true reattach=false",
       "at": 1782979189734
     },
     {
@@ -919,7 +919,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@fceb8b39 total=91ms preflight=0ms auth=0ms host_env=39ms options=1ms provider_spawn=51ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@fceb8b39 total=91ms preflight=0ms auth=0ms host_env=39ms options=1ms provider_spawn=51ms daemon=true reattach=false",
       "at": 1782979190601
     },
     {
@@ -934,7 +934,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@badd8d38 total=104ms preflight=0ms auth=0ms host_env=47ms options=0ms provider_spawn=56ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@badd8d38 total=104ms preflight=0ms auth=0ms host_env=47ms options=0ms provider_spawn=56ms daemon=true reattach=false",
       "at": 1782979191511
     },
     {
@@ -949,7 +949,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@ad09f3fe total=102ms preflight=0ms auth=0ms host_env=38ms options=0ms provider_spawn=64ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@ad09f3fe total=102ms preflight=0ms auth=0ms host_env=38ms options=0ms provider_spawn=64ms daemon=true reattach=false",
       "at": 1782979191926
     },
     {
@@ -964,7 +964,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@0bb8c245 total=112ms preflight=0ms auth=0ms host_env=48ms options=0ms provider_spawn=64ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@0bb8c245 total=112ms preflight=0ms auth=0ms host_env=48ms options=0ms provider_spawn=64ms daemon=true reattach=false",
       "at": 1782979192422
     },
     {
@@ -984,7 +984,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@3ef141e6 total=152ms preflight=0ms auth=0ms host_env=41ms options=0ms provider_spawn=111ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@3ef141e6 total=152ms preflight=0ms auth=0ms host_env=41ms options=0ms provider_spawn=111ms daemon=true reattach=false",
       "at": 1782979192875
     },
     {
@@ -1014,7 +1014,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-one@@c450cf26 total=113ms preflight=0ms auth=0ms host_env=47ms options=0ms provider_spawn=66ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-one@@c450cf26 total=113ms preflight=0ms auth=0ms host_env=47ms options=0ms provider_spawn=66ms daemon=true reattach=false",
       "at": 1782979199463
     },
     {
@@ -1029,7 +1029,7 @@
     },
     {
       "source": "stdout",
-      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two@@ae6fdb06 total=104ms preflight=0ms auth=0ms host_env=43ms options=0ms provider_spawn=61ms daemon=true reattach=false",
+      "line": "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-two@@ae6fdb06 total=104ms preflight=0ms auth=0ms host_env=43ms options=0ms provider_spawn=61ms daemon=true reattach=false",
       "at": 1782979199957
     },
     {
@@ -1039,20 +1039,20 @@
     }
   ],
   "ptySpawnTimings": [
-    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@5810ae88 total=1300ms preflight=0ms auth=1ms host_env=44ms options=0ms provider_spawn=1255ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@2c485ebc total=1308ms preflight=0ms auth=0ms host_env=49ms options=0ms provider_spawn=1259ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@c3018b1f total=108ms preflight=0ms auth=0ms host_env=47ms options=0ms provider_spawn=61ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@59074e83 total=123ms preflight=0ms auth=0ms host_env=50ms options=0ms provider_spawn=73ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@562113d2 total=111ms preflight=0ms auth=0ms host_env=51ms options=0ms provider_spawn=60ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@b5230dba total=105ms preflight=0ms auth=0ms host_env=48ms options=0ms provider_spawn=57ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@95bb2f74 total=101ms preflight=0ms auth=0ms host_env=47ms options=0ms provider_spawn=54ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@09fc3731 total=94ms preflight=0ms auth=0ms host_env=41ms options=0ms provider_spawn=53ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@fceb8b39 total=91ms preflight=0ms auth=0ms host_env=39ms options=1ms provider_spawn=51ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@badd8d38 total=104ms preflight=0ms auth=0ms host_env=47ms options=0ms provider_spawn=56ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@ad09f3fe total=102ms preflight=0ms auth=0ms host_env=38ms options=0ms provider_spawn=64ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@0bb8c245 total=112ms preflight=0ms auth=0ms host_env=48ms options=0ms provider_spawn=64ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/repo@@3ef141e6 total=152ms preflight=0ms auth=0ms host_env=41ms options=0ms provider_spawn=111ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-one@@c450cf26 total=113ms preflight=0ms auth=0ms host_env=47ms options=0ms provider_spawn=66ms daemon=true reattach=false",
-    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/orca-termperf-IyoYoT/wt-two@@ae6fdb06 total=104ms preflight=0ms auth=0ms host_env=43ms options=0ms provider_spawn=61ms daemon=true reattach=false"
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@5810ae88 total=1300ms preflight=0ms auth=1ms host_env=44ms options=0ms provider_spawn=1255ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@2c485ebc total=1308ms preflight=0ms auth=0ms host_env=49ms options=0ms provider_spawn=1259ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@c3018b1f total=108ms preflight=0ms auth=0ms host_env=47ms options=0ms provider_spawn=61ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@59074e83 total=123ms preflight=0ms auth=0ms host_env=50ms options=0ms provider_spawn=73ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@562113d2 total=111ms preflight=0ms auth=0ms host_env=51ms options=0ms provider_spawn=60ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@b5230dba total=105ms preflight=0ms auth=0ms host_env=48ms options=0ms provider_spawn=57ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@95bb2f74 total=101ms preflight=0ms auth=0ms host_env=47ms options=0ms provider_spawn=54ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@09fc3731 total=94ms preflight=0ms auth=0ms host_env=41ms options=0ms provider_spawn=53ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@fceb8b39 total=91ms preflight=0ms auth=0ms host_env=39ms options=1ms provider_spawn=51ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@badd8d38 total=104ms preflight=0ms auth=0ms host_env=47ms options=0ms provider_spawn=56ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@ad09f3fe total=102ms preflight=0ms auth=0ms host_env=38ms options=0ms provider_spawn=64ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@0bb8c245 total=112ms preflight=0ms auth=0ms host_env=48ms options=0ms provider_spawn=64ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/repo@@3ef141e6 total=152ms preflight=0ms auth=0ms host_env=41ms options=0ms provider_spawn=111ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-one@@c450cf26 total=113ms preflight=0ms auth=0ms host_env=47ms options=0ms provider_spawn=66ms daemon=true reattach=false",
+    "[pty-spawn-timing] id=cd78ddb3-9689-4d21-b87b-8e38f92d2e7b::C:/Users/jinwo/AppData/Local/Temp/mcode-termperf-IyoYoT/wt-two@@ae6fdb06 total=104ms preflight=0ms auth=0ms host_env=43ms options=0ms provider_spawn=61ms daemon=true reattach=false"
   ]
 }

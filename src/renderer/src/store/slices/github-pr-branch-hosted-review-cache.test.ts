@@ -46,7 +46,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
             number: 12,
             title: 'Old PR status',
             state: 'open',
-            url: 'https://github.com/acme/orca/pull/12',
+            url: 'https://github.com/acme/mcode/pull/12',
             status: 'pending',
             updatedAt: '2026-03-28T00:00:00Z',
             mergeable: 'UNKNOWN'
@@ -101,7 +101,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       number: 12,
       title: 'Newer hosted review status',
       state: 'open',
-      url: 'https://github.com/acme/orca/pull/12',
+      url: 'https://github.com/acme/mcode/pull/12',
       status: 'success',
       updatedAt: '2026-03-28T00:00:00Z',
       mergeable: 'MERGEABLE'
@@ -148,7 +148,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       number: 12,
       title: 'Newer hosted review status',
       state: 'open',
-      url: 'https://github.com/acme/orca/pull/12',
+      url: 'https://github.com/acme/mcode/pull/12',
       status: 'success',
       updatedAt: '2026-03-28T00:00:00Z',
       mergeable: 'MERGEABLE'
@@ -250,7 +250,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       number: 12,
       title: 'Existing same-ms hosted review status',
       state: 'open',
-      url: 'https://github.com/acme/orca/pull/12',
+      url: 'https://github.com/acme/mcode/pull/12',
       status: 'pending',
       updatedAt: '2026-03-28T00:00:00Z',
       mergeable: 'UNKNOWN'
@@ -314,7 +314,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
             number: 12,
             title: 'Existing PR',
             state: 'open',
-            url: 'https://github.com/acme/orca/pull/12',
+            url: 'https://github.com/acme/mcode/pull/12',
             status: 'pending',
             updatedAt: '2026-03-28T00:00:00Z',
             mergeable: 'UNKNOWN'
@@ -378,7 +378,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       number: 5,
       title: 'GitLab MR',
       state: 'open',
-      url: 'https://gitlab.com/acme/orca/-/merge_requests/5',
+      url: 'https://gitlab.com/acme/mcode/-/merge_requests/5',
       status: 'pending',
       updatedAt: '2026-03-28T00:00:00Z',
       mergeable: 'UNKNOWN'
@@ -564,7 +564,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       number: 5,
       title: 'GitLab MR',
       state: 'open',
-      url: 'https://gitlab.com/acme/orca/-/merge_requests/5',
+      url: 'https://gitlab.com/acme/mcode/-/merge_requests/5',
       status: 'success',
       updatedAt: '2026-03-28T00:00:00Z',
       mergeable: 'MERGEABLE'
@@ -622,7 +622,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       number: 5,
       title: 'GitLab MR',
       state: 'open',
-      url: 'https://gitlab.com/acme/orca/-/merge_requests/5',
+      url: 'https://gitlab.com/acme/mcode/-/merge_requests/5',
       status: 'success',
       updatedAt: '2026-03-28T00:00:00Z',
       mergeable: 'MERGEABLE'
@@ -667,7 +667,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
             number: 12,
             title: 'Old GitHub PR',
             state: 'open',
-            url: 'https://github.com/acme/orca/pull/12',
+            url: 'https://github.com/acme/mcode/pull/12',
             status: 'pending',
             updatedAt: '2026-03-28T00:00:00Z',
             mergeable: 'UNKNOWN'
@@ -703,7 +703,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       number: 5,
       title: 'GitLab MR',
       state: 'open' as const,
-      url: 'https://gitlab.com/acme/orca/-/merge_requests/5',
+      url: 'https://gitlab.com/acme/mcode/-/merge_requests/5',
       status: 'success' as const,
       updatedAt: '2026-03-28T00:00:00Z',
       mergeable: 'MERGEABLE' as const

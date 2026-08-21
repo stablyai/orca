@@ -3,7 +3,7 @@
  * the pty. Written to reproduce #15299, where a digit typed straight after a Hangul syllable was
  * dropped under Wayland but not under X11.
  *
- * THIS DOES NOT RUN IN CI. It is gated on ORCA_E2E_NATIVE_IBUS_HANGUL=1 and needs a compositor
+ * THIS DOES NOT RUN IN CI. It is gated on MCODE_E2E_NATIVE_IBUS_HANGUL=1 and needs a compositor
  * session that CI does not have, so it is a manual reproduction harness rather than coverage.
  * That is stated plainly because this repo already carries native IME specs that are skipped
  * everywhere and were mistaken for coverage they never provided.
@@ -12,7 +12,7 @@
  *
  *   Xvfb :65 -extension GLX &
  *   DISPLAY=:65 gnome-shell --nested --wayland     # nested, NOT --headless
- *   ORCA_E2E_NATIVE_IBUS_HANGUL=1 ORCA_E2E_IME_INJECTOR=nested npx playwright test \
+ *   MCODE_E2E_NATIVE_IBUS_HANGUL=1 MCODE_E2E_IME_INJECTOR=nested npx playwright test \
  *     tests/e2e/terminal-hangul-terminating-digit-native.spec.ts
  *
  * Eight things that decide whether a run is real or a silent false negative, each of which cost a
@@ -44,7 +44,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   focusActiveTerminalInput,
@@ -65,27 +65,27 @@ import {
 } from './terminal-ime-byte-reader'
 
 const NATIVE_COMMAND_TIMEOUT_MS = 10_000
-const REPETITIONS = Number(process.env.ORCA_E2E_DIGIT_REPETITIONS ?? 3)
-const INJECTOR = process.env.ORCA_E2E_IME_INJECTOR ?? 'xdotool'
-const WAYLAND_INJECT = process.env.ORCA_E2E_WAYLAND_INJECT ?? '/tmp/ime15299/wayland-inject.py'
+const REPETITIONS = Number(process.env.MCODE_E2E_DIGIT_REPETITIONS ?? 3)
+const INJECTOR = process.env.MCODE_E2E_IME_INJECTOR ?? 'xdotool'
+const WAYLAND_INJECT = process.env.MCODE_E2E_WAYLAND_INJECT ?? '/tmp/ime15299/wayland-inject.py'
 // The nested compositor is one X11 window; keys land on it and mutter routes
 // them to the focused Wayland client through the IME.
-const NESTED_FOCUS_CMD = process.env.ORCA_E2E_NESTED_FOCUS_CMD ?? '/tmp/ime15299/focus-nested.sh'
+const NESTED_FOCUS_CMD = process.env.MCODE_E2E_NESTED_FOCUS_CMD ?? '/tmp/ime15299/focus-nested.sh'
 // Dubeolsik: d=ㅇ, k=ㅏ, so `d k` composes 아 and the digit terminates it.
-const KEY_TOKENS = (process.env.ORCA_E2E_DIGIT_KEYS ?? 'd k 1 Return').split(' ').filter(Boolean)
-const EXPECTED_LINE = process.env.ORCA_E2E_DIGIT_EXPECTED ?? '아1'
+const KEY_TOKENS = (process.env.MCODE_E2E_DIGIT_KEYS ?? 'd k 1 Return').split(' ').filter(Boolean)
+const EXPECTED_LINE = process.env.MCODE_E2E_DIGIT_EXPECTED ?? '아1'
 
 test.use({
-  orcaAppExtraEnv: {
+  mcodeAppExtraEnv: {
     GTK_IM_MODULE: 'ibus',
     IBUS_ENABLE_SYNC_MODE: '1',
     QT_IM_MODULE: 'ibus',
     XMODIFIERS: '@im=ibus',
-    ...(process.env.ORCA_E2E_EXTRA_APP_ENV
-      ? (JSON.parse(process.env.ORCA_E2E_EXTRA_APP_ENV) as Record<string, string>)
+    ...(process.env.MCODE_E2E_EXTRA_APP_ENV
+      ? (JSON.parse(process.env.MCODE_E2E_EXTRA_APP_ENV) as Record<string, string>)
       : {})
   },
-  orcaAppExtraArgs: (process.env.ORCA_E2E_EXTRA_APP_ARGS ?? '').split(' ').filter(Boolean)
+  mcodeAppExtraArgs: (process.env.MCODE_E2E_EXTRA_APP_ARGS ?? '').split(' ').filter(Boolean)
 })
 
 function injectKeys(tokens: string[]): void {
@@ -127,7 +127,7 @@ function captureNestedScreen(name: string): void {
 
 async function focusNativeTerminalWindow(page: Page): Promise<void> {
   await focusActiveTerminalInput(page)
-  const title = `ORCA_NATIVE_IBUS_${randomUUID()}`
+  const title = `MCODE_NATIVE_IBUS_${randomUUID()}`
   await page.evaluate((nextTitle) => {
     document.title = nextTitle
   }, title)
@@ -170,11 +170,11 @@ async function writeEvidence(
 }
 
 test.describe('Hangul terminating digit @headful', () => {
-  test.skip(process.env.ORCA_E2E_NATIVE_IBUS_HANGUL !== '1', 'native ibus harness only')
+  test.skip(process.env.MCODE_E2E_NATIVE_IBUS_HANGUL !== '1', 'native ibus harness only')
 
   test('a digit typed right after a Hangul syllable reaches the pty', async ({
     electronApp,
-    orcaPage: page,
+    mcodePage: page,
     testRepoPath
   }, testInfo) => {
     const launchDiagnostics = await electronApp.evaluate(({ app: electron, BrowserWindow }) => ({

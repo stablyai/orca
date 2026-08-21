@@ -18,7 +18,7 @@ import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 
 const REPO_ROOT = new URL('../..', import.meta.url)
-const ROUNDS = Number(process.env.ORCA_YIELD_BENCH_ROUNDS ?? '10')
+const ROUNDS = Number(process.env.MCODE_YIELD_BENCH_ROUNDS ?? '10')
 
 // Why re-read the source: the claim is that the scanner yields once per batch across
 // two loops. If the batch size or the yield sites change, these numbers stop meaning

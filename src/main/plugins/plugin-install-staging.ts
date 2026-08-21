@@ -5,7 +5,7 @@ import {
   PLUGIN_MANIFEST_FILENAME,
   parsePluginManifest,
   qualifiedPluginKey,
-  satisfiesOrcaEngineRange,
+  satisfiesMCodeEngineRange,
   type PluginManifest
 } from '../../shared/plugins/plugin-manifest'
 import { fingerprintPluginConsent } from '../../shared/plugins/plugin-consent-fingerprint'
@@ -70,10 +70,10 @@ async function readInstallManifest(
   if (!parsed.ok) {
     return { ok: false, error: `invalid manifest: ${parsed.error}` }
   }
-  if (!satisfiesOrcaEngineRange(hostVersion, parsed.manifest.engines.orca)) {
+  if (!satisfiesMCodeEngineRange(hostVersion, parsed.manifest.engines.mcode)) {
     return {
       ok: false,
-      error: `plugin requires Orca ${parsed.manifest.engines.orca} (this is ${hostVersion})`
+      error: `plugin requires MCode ${parsed.manifest.engines.mcode} (this is ${hostVersion})`
     }
   }
   return { ok: true, manifest: parsed.manifest }
@@ -140,7 +140,7 @@ export async function installStagedPluginTree(input: {
   }
   const blockedReason = input.blockedPluginReason?.(sourceInspection.pluginKey)
   if (blockedReason) {
-    return { ok: false, error: `plugin is blocked by Orca's safety list: ${blockedReason}` }
+    return { ok: false, error: `plugin is blocked by MCode's safety list: ${blockedReason}` }
   }
   let manifest = sourceInspection.manifest
   const pluginKey = sourceInspection.pluginKey

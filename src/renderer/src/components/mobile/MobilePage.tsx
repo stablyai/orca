@@ -38,7 +38,7 @@ export default function MobilePage(): React.JSX.Element {
   const [pairingQrError, setPairingQrError] = useState(false)
   const [relayMintFailure, setRelayMintFailure] = useState<MobileRelayMintFailure | null>(null)
   const [pairLoading, setPairLoading] = useState(false)
-  const signedIn = useAppStore((state) => state.orcaProfileAuthStatus?.state === 'connected')
+  const signedIn = useAppStore((state) => state.mcodeProfileAuthStatus?.state === 'connected')
   const [connectionMode, setConnectionMode] = useMobilePairingConnectionMode()
   const [networkInterfaces, setNetworkInterfaces] = useState<MobileNetworkInterface[]>([])
   const pairingAddressChangeRef = useRef<(change: MobilePairingAddressChange) => void>(() => {})

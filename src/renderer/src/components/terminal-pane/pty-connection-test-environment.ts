@@ -102,7 +102,7 @@ export async function restoreTerminalTestGlobals(): Promise<void> {
   // Under fake timers those continuations cannot run, so they only become
   // schedulable here — flush them while `window` still exists, or a late
   // continuation throws `ReferenceError: window is not defined` and fails the
-  // whole file (orca#14728, CI-only because it needs a slow enough tick).
+  // whole file (mcode#14728, CI-only because it needs a slow enough tick).
   await flushAsyncTicks(20)
   vi.restoreAllMocks()
   if (originalRequestAnimationFrame) {
@@ -124,7 +124,7 @@ export async function restoreTerminalTestGlobals(): Promise<void> {
   }
   // Why: an in-flight reattach/settle chain can resolve after teardown and call
   // `window.api.pty.*`. Deleting `window` turned that into a ReferenceError that
-  // failed the whole file (orca#14728). A real renderer never loses `window`, so
+  // failed the whole file (mcode#14728). A real renderer never loses `window`, so
   // swap in an inert stand-in instead: late calls become harmless no-ops, and the
   // next test replaces it wholesale via installTerminalTestGlobals().
   ;(globalThis as unknown as { window?: unknown }).window = { api: createInertApi() }

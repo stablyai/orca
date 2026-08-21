@@ -218,7 +218,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
       if (!result.skipped && runtime.runtimeEnvironmentId) {
         const pairingCode = getEphemeralVmRecipeResultPairingCode(result.runtime.recipeResult)
         if (!pairingCode) {
-          throw new Error('Resume result did not include an Orca Server pairing code.')
+          throw new Error('Resume result did not include an MCode Server pairing code.')
         }
         updateEnvironmentFromPairingCode(userDataPath, runtime.runtimeEnvironmentId, {
           pairingCode

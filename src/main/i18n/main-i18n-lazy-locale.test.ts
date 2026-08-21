@@ -72,19 +72,19 @@ describe('main-i18n lazy locale loading', () => {
   })
 
   it('loads a contributed catalog for native menus and dialogs', async () => {
-    const id = 'plugin:orca-samples.portuguese/pt-BR' as const
+    const id = 'plugin:mcode-samples.portuguese/pt-BR' as const
     setMainPluginLanguagePacks([
       {
         id,
         resourceLanguage: pluginLanguageResourceId(id),
-        pluginKey: 'orca-samples.portuguese',
+        pluginKey: 'mcode-samples.portuguese',
         locale: 'pt-BR',
-        catalog: { menu: { file: 'Arquivo Orca' } }
+        catalog: { menu: { file: 'Arquivo MCode' } }
       }
     ])
 
     await setMainUiLanguage(id)
-    expect(translateMain('menu.file', 'File')).toBe('Arquivo Orca')
+    expect(translateMain('menu.file', 'File')).toBe('Arquivo MCode')
 
     setMainPluginLanguagePacks([])
     expect(await setMainUiLanguage(id)).toBe('en')

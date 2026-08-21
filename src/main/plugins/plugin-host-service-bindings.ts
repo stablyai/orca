@@ -4,7 +4,7 @@ import type { PluginHostServices } from './plugin-host-methods'
 import { PluginSecretsStore } from './plugin-secrets-store'
 import { PluginKvStore } from './plugin-storage-store'
 
-/** Structural subset of OrcaRuntimeService exposed to plugin facade bindings. */
+/** Structural subset of MCodeRuntimeService exposed to plugin facade bindings. */
 export type PluginRuntimeDelegate = {
   resolveActiveWorktreeContext(): Promise<{
     worktreeId: string

@@ -22,7 +22,7 @@ afterEach(() => {
 })
 
 function createTempDb(): { db: Database.Database; path: string } {
-  const dir = mkdtempSync(join(tmpdir(), 'orca-opencode-bounds-'))
+  const dir = mkdtempSync(join(tmpdir(), 'mcode-opencode-bounds-'))
   tempDirs.push(dir)
   const path = join(dir, 'opencode.db')
   return { db: new Database(path), path }

@@ -3,15 +3,15 @@ import {
   isSetupHookTrusted,
   normalizeSetupHookTrust,
   persistSetupHookTrustApproval,
-  trustedOrcaHooksWithSetupApproval,
+  trustedMCodeHooksWithSetupApproval,
   wasSetupHookPreviouslyApproved
 } from './setup-hook-trust'
-import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
+import type { PersistedTrustedMCodeHooks } from '../../../src/shared/mcode-yaml-hook-types'
 import type { RpcClient } from '../transport/rpc-client'
 
 describe('setup hook trust', () => {
   it('trusts a setup script only when the approved hash matches', () => {
-    const trust: PersistedTrustedOrcaHooks = {
+    const trust: PersistedTrustedMCodeHooks = {
       'repo-1': { setup: { contentHash: 'hash-1', approvedAt: 1000 } }
     }
 
@@ -20,7 +20,7 @@ describe('setup hook trust', () => {
   })
 
   it('treats an always-trusted repo as trusted for changed setup scripts', () => {
-    const trust: PersistedTrustedOrcaHooks = {
+    const trust: PersistedTrustedMCodeHooks = {
       'repo-1': { all: { approvedAt: 1000 } }
     }
 
@@ -28,14 +28,14 @@ describe('setup hook trust', () => {
   })
 
   it('preserves unrelated trust entries when approving setup', () => {
-    const trust: PersistedTrustedOrcaHooks = {
+    const trust: PersistedTrustedMCodeHooks = {
       'repo-1': {
         archive: { contentHash: 'archive-hash', approvedAt: 1000 }
       }
     }
 
     expect(
-      trustedOrcaHooksWithSetupApproval({
+      trustedMCodeHooksWithSetupApproval({
         trust,
         repoId: 'repo-1',
         contentHash: 'setup-hash',
@@ -51,14 +51,14 @@ describe('setup hook trust', () => {
   })
 
   it('records always-trust without dropping existing script approvals', () => {
-    const trust: PersistedTrustedOrcaHooks = {
+    const trust: PersistedTrustedMCodeHooks = {
       'repo-1': {
         setup: { contentHash: 'setup-hash', approvedAt: 1000 }
       }
     }
 
     expect(
-      trustedOrcaHooksWithSetupApproval({
+      trustedMCodeHooksWithSetupApproval({
         trust,
         repoId: 'repo-1',
         contentHash: 'ignored-for-all',
@@ -90,7 +90,7 @@ describe('setup hook trust', () => {
       alwaysTrust: false
     })
 
-    expect(persisted).toEqual({ trustedOrcaHooks: next })
+    expect(persisted).toEqual({ trustedMCodeHooks: next })
     expect(isSetupHookTrusted(next, 'repo-1', 'setup-hash')).toBe(true)
   })
 

@@ -56,9 +56,9 @@ export const TERMINAL_FILE_LINK_TAP_CONFORMANCE_CASES: TerminalFileLinkTapConfor
   },
   {
     name: 'spaced path with line and column',
-    lineText: 'wrote /tmp/orca report/result.json:12:3 for you',
+    lineText: 'wrote /tmp/mcode report/result.json:12:3 for you',
     tapText: 'result',
-    expected: { pathText: '/tmp/orca report/result.json', line: 12, column: 3 }
+    expected: { pathText: '/tmp/mcode report/result.json', line: 12, column: 3 }
   },
   {
     name: 'spaced path with dotted directory',

@@ -26,7 +26,7 @@ function contextFor(
     keybindings: undefined,
     terminalInput: LOCAL_MAC,
     getKittyKeyboardFlags: () => (overrides.kitty === true ? 1 : 0),
-    terminalShortcutPolicy: 'orca-first',
+    terminalShortcutPolicy: 'mcode-first',
     ...overrides
   }
 }

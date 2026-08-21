@@ -138,7 +138,7 @@ describe('submitFolderWorkspaceCreate', () => {
       autoRenameBranchFromWork: true,
       agentCmdOverrides: {},
       agentArgs: '--model gpt-5.4',
-      agentEnv: { ORCA_AGENT_PROFILE: 'review' },
+      agentEnv: { MCODE_AGENT_PROFILE: 'review' },
       launchSource: 'new_workspace_composer',
       runtimeEnvironmentId: 'env-1',
       createFolderWorkspace,
@@ -159,7 +159,7 @@ describe('submitFolderWorkspaceCreate', () => {
         runtimeEnvironmentId: 'env-1',
         startup: expect.objectContaining({
           command: expect.stringContaining('codex'),
-          env: { ORCA_AGENT_PROFILE: 'review' },
+          env: { MCODE_AGENT_PROFILE: 'review' },
           telemetry: expect.objectContaining({
             launch_source: 'new_workspace_composer'
           })
@@ -204,7 +204,7 @@ describe('submitFolderWorkspaceCreate', () => {
       type: 'issue' as const,
       number: 42,
       title: 'Restore checkout polish',
-      url: 'https://github.com/stablyai/orca/issues/42',
+      url: 'https://github.com/mcode-ide/mcode/issues/42',
       repoId: 'repo-1'
     }
 
@@ -236,9 +236,9 @@ describe('submitFolderWorkspaceCreate', () => {
       provider: 'jira' as const,
       type: 'issue' as const,
       number: 0,
-      title: 'ORCA-123 Link Jira',
-      url: 'https://company.atlassian.net/browse/ORCA-123',
-      jiraIdentifier: 'ORCA-123'
+      title: 'MCODE-123 Link Jira',
+      url: 'https://company.atlassian.net/browse/MCODE-123',
+      jiraIdentifier: 'MCODE-123'
     }
     const linkedTaskSourceContext = {
       kind: 'task-source' as const,
@@ -249,7 +249,7 @@ describe('submitFolderWorkspaceCreate', () => {
         provider: 'jira' as const,
         siteId: 'site-1',
         siteUrl: 'https://company.atlassian.net',
-        projectKey: 'ORCA'
+        projectKey: 'MCODE'
       }
     }
 
@@ -269,7 +269,7 @@ describe('submitFolderWorkspaceCreate', () => {
 
     expect(createFolderWorkspace).toHaveBeenCalledWith({
       projectGroupId: 'group-1',
-      name: 'ORCA-123 Link Jira',
+      name: 'MCODE-123 Link Jira',
       connectionId: null,
       linkedTask: linkedWorkItem,
       linkedTaskSourceContext
@@ -283,7 +283,7 @@ describe('submitFolderWorkspaceCreate', () => {
       type: 'pr' as const,
       number: 91,
       title: 'Restore linked quick-create',
-      url: 'https://github.com/stablyai/orca/pull/91',
+      url: 'https://github.com/mcode-ide/mcode/pull/91',
       repoId: 'repo-1'
     }
 
@@ -340,7 +340,7 @@ describe('submitFolderWorkspaceCreate', () => {
       type: 'pr' as const,
       number: 92,
       title: 'Trust remote folder draft',
-      url: 'https://github.com/stablyai/orca/pull/92',
+      url: 'https://github.com/mcode-ide/mcode/pull/92',
       repoId: 'repo-1'
     }
     const projectGroup = {
@@ -497,7 +497,7 @@ describe('submitFolderWorkspaceCreate', () => {
     )
     expect(startup?.command).not.toContain('Distinctive folder Linear body.')
     expect(startup?.command).not.toContain('--- BEGIN LINKED WORK ITEM CONTEXT ---')
-    expect(startup?.command).not.toContain('orca linear')
+    expect(startup?.command).not.toContain('mcode linear')
     expect(mocks.ensureAgentStartupInTerminal).not.toHaveBeenCalled()
   })
 
@@ -508,7 +508,7 @@ describe('submitFolderWorkspaceCreate', () => {
       type: 'issue' as const,
       number: 42,
       title: 'Restore checkout polish',
-      url: 'https://github.com/stablyai/orca/issues/42',
+      url: 'https://github.com/mcode-ide/mcode/issues/42',
       repoId: 'repo-1'
     }
 
@@ -688,7 +688,7 @@ describe('submitFolderWorkspaceCreate', () => {
 })
 
 describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
-  const ISSUE_URL = 'https://github.com/stablyai/orca/issues/42'
+  const ISSUE_URL = 'https://github.com/mcode-ide/mcode/issues/42'
   const linkedIssue = {
     provider: 'github' as const,
     type: 'issue' as const,
@@ -800,7 +800,7 @@ describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
 })
 
 describe('folder-workspace draft: seeded set == chat-opening set', () => {
-  const ISSUE_URL = 'https://github.com/stablyai/orca/issues/42'
+  const ISSUE_URL = 'https://github.com/mcode-ide/mcode/issues/42'
   const linkedIssue = {
     provider: 'github' as const,
     type: 'issue' as const,

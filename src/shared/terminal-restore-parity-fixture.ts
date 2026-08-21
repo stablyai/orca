@@ -7,7 +7,7 @@
 import { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
-import { activateOrcaTerminalUnicodeProvider } from './terminal-unicode-provider'
+import { activateMCodeTerminalUnicodeProvider } from './terminal-unicode-provider'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
 import {
   readSavedCursorRegister,
@@ -26,7 +26,7 @@ export type ParityTerminal = {
 /** Builds an @xterm/headless terminal configured exactly like the renderer
  *  pane where buffer state is concerned: scrollback + kitty vtExtensions from
  *  buildDefaultTerminalOptions (pane-terminal-options.ts), Unicode11Addon
- *  (pane-dom-creation.ts) and the Orca ZWJ provider (pane-lifecycle.ts).
+ *  (pane-dom-creation.ts) and the MCode ZWJ provider (pane-lifecycle.ts).
  *  Font/cursor/render options are omitted — they never alter buffer cells. */
 export function createRendererParityTerminal(dims: { cols: number; rows: number }): ParityTerminal {
   const terminal = new Terminal({
@@ -39,7 +39,7 @@ export function createRendererParityTerminal(dims: { cols: number; rows: number 
   const serializeAddon = new SerializeAddon()
   terminal.loadAddon(serializeAddon)
   terminal.loadAddon(new Unicode11Addon())
-  activateOrcaTerminalUnicodeProvider(terminal)
+  activateMCodeTerminalUnicodeProvider(terminal)
   return { terminal, serializeAddon }
 }
 
@@ -88,7 +88,7 @@ function canonicalColorMode(mode: number, color: number): number {
  *  - glyph cells: char, width, fg, bg, all attribute flags;
  *  - blank cells: width, bg, and fg only when inverse swaps it into the cell
  *    background. Literal spaces retain underline/strikethrough/overline,
- *    while Orca's WebGL glyph renderer skips decorations on null cells.
+ *    while MCode's WebGL glyph renderer skips decorations on null cells.
  *    SerializeAddon may materialize a skipped null run as plain spaces, so
  *    invisible fg/bold/italic state cannot fail the garble gate.
  *  Trailing default blanks are trimmed: the serializer does not re-emit
@@ -206,7 +206,7 @@ export type ParityMainSnapshot = {
 /** Mirror of the production main-buffer snapshot the renderer restore path
  *  consumes: HeadlessEmulator.getSnapshot (snapshotAnsi normalization +
  *  rehydrateSequences + absolute-cursor/DECSC epilogue) composed exactly like
- *  OrcaRuntime.serializeHeadlessTerminalBuffer (normal buffer separated from
+ *  MCodeRuntime.serializeHeadlessTerminalBuffer (normal buffer separated from
  *  an active alt frame). The renderer fuzz cannot import
  *  HeadlessEmulator itself — tsconfig.tc.web.json excludes src/main/daemon. */
 export function buildParityMainBufferSnapshot(

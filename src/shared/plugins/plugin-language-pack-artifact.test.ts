@@ -79,7 +79,7 @@ describe('plugin language-pack artifacts', () => {
   // about what plugins may do — that copy is the whole reason the prefix is broad.
   it.each([
     ['description', 'Plugins are sandboxed and cannot read your files.'],
-    ['systemDescription', 'Every plugin here has been reviewed by Orca.'],
+    ['systemDescription', 'Every plugin here has been reviewed by MCode.'],
     ['featureOff', 'Installed plugins keep running while the system is off.']
   ])('still refuses PluginsSettingsSection.%s', (key, value) => {
     expect(

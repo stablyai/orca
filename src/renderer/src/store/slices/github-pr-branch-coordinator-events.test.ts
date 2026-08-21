@@ -571,7 +571,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
               number: 12,
               title: 'Visible event PR',
               state,
-              url: 'https://github.com/acme/orca/pull/12',
+              url: 'https://github.com/acme/mcode/pull/12',
               status: 'pending',
               updatedAt: '2026-03-28T00:00:00Z',
               mergeable: 'UNKNOWN'

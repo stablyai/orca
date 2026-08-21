@@ -36,7 +36,7 @@ import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-
  * - 'unavailable': the grant lane could not trust the entry (old binary,
  *   unsupported RPC, verify failure). The entry is rolled back and the host
  *   stays on the managed-home lane.
- * - 'removed': hooks are opted out; Orca entries are swept from the real home.
+ * - 'removed': hooks are opted out; MCode entries are swept from the real home.
  */
 export type RealHomeCodexHookLane = 'pending' | 'installed' | 'unavailable' | 'removed'
 
@@ -64,7 +64,7 @@ function getRealHomeConfigTomlPath(): string {
   return join(getSystemCodexHomePath(), 'config.toml')
 }
 
-/** Orca-side state dir; nothing extra is ever written into the user's ~/.codex. */
+/** MCode-side state dir; nothing extra is ever written into the user's ~/.codex. */
 function getRealHomeHookStateDir(userDataPath: string): string {
   return join(userDataPath, 'codex-real-home-hooks')
 }
@@ -78,13 +78,13 @@ function assertHooksJsonGeneration(
   if (currentRaw !== expectedRaw || resolveHooksJsonWritePath(hooksJsonPath) !== hooksWritePath) {
     // Why: the pre-mutation RPC can overlap a user's editor save. Abort rather
     // than atomically replacing a newer file with the stale parsed snapshot.
-    throw new Error('Codex hooks.json changed while Orca prepared its trust repair')
+    throw new Error('Codex hooks.json changed while MCode prepared its trust repair')
   }
 }
 
 /**
  * Ensures the real-home hook state matches the settings: installs and trusts
- * the Orca status hook when enabled, sweeps it when opted out. Idempotent and
+ * the MCode status hook when enabled, sweeps it when opted out. Idempotent and
  * synchronous (launch prep); repeat calls are cheap — an unchanged hooks.json
  * write no-ops and a valid grant ledger skips the RPC session entirely.
  * Never throws: any failure logs and leaves the host on the managed lane.
@@ -157,7 +157,7 @@ function installRealHomeCodexHook(userDataPath: string): RealHomeCodexHookLane {
       timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
     })
   }
-  // Why: sweep stale Orca entries out of events the managed lane no longer
+  // Why: sweep stale MCode entries out of events the managed lane no longer
   // subscribes to, mirroring the managed installer's upgrade behavior.
   for (const [eventName, definitions] of Object.entries(nextHooks)) {
     if ((material.events as readonly string[]).includes(eventName) || !Array.isArray(definitions)) {
@@ -203,7 +203,7 @@ function installRealHomeCodexHook(userDataPath: string): RealHomeCodexHookLane {
     return 'installed'
   }
 
-  // Why: never leave an untrusted Orca entry in the user's real home — it
+  // Why: never leave an untrusted MCode entry in the user's real home — it
   // would surface as "Hooks need review". Roll the file back to its prior
   // bytes and keep this host on the managed-home lane; the grant client
   // already logged the fallback reason.
@@ -245,7 +245,7 @@ function reconcileManagedHookDefinition(
     const hasDirectCommand = directCommandKeys.some((key) => typeof definition[key] === 'string')
     if (definition.matcher === undefined && !hasDirectCommand) {
       const definitions = [...current]
-      // Why: users can append groups or handlers after Orca's first install.
+      // Why: users can append groups or handlers after MCode's first install.
       // Reusing the exact slot preserves all later positional trust keys.
       const hooks = [...definition.hooks!]
       hooks[handlerIndex] = buildManagedCommandHook(command)
@@ -320,10 +320,10 @@ function sweepRealHomeCodexHook(): RealHomeCodexHookLane {
       },
       restoreHooks: () => restoreRealHomeHooksJson(hooksWritePath, previousRaw, previousMode)
     })
-    // Why: dead [hooks.state] blocks for a removed hook are Orca-owned records;
+    // Why: dead [hooks.state] blocks for a removed hook are MCode-owned records;
     // dropping them keeps the user's config.toml from accumulating orphans.
     // Verify ownership by the expected hash or grant ledger: stale/mixed hook
-    // groups must never make Orca delete a user's trust record at the same key.
+    // groups must never make MCode delete a user's trust record at the same key.
     try {
       removeCodexManagedHookTrustEntries({
         tomlPath: getRealHomeConfigTomlPath(),
@@ -334,19 +334,19 @@ function sweepRealHomeCodexHook(): RealHomeCodexHookLane {
         timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
       })
     } catch (error) {
-      console.warn('[codex-real-home-hooks] failed to drop Orca trust entries:', error)
+      console.warn('[codex-real-home-hooks] failed to drop MCode trust entries:', error)
     }
   }
   return 'removed'
 }
 
-/** One-time pristine copy of the user's file, kept under Orca's userData. */
+/** One-time pristine copy of the user's file, kept under MCode's userData. */
 function backupRealHomeHooksJsonOnce(userDataPath: string, previousRaw: string | null): void {
   if (previousRaw === null) {
     return
   }
   const backupDir = getRealHomeHookStateDir(userDataPath)
-  const backupPath = join(backupDir, 'hooks.json.pre-orca')
+  const backupPath = join(backupDir, 'hooks.json.pre-mcode')
   if (existsSync(backupPath)) {
     return
   }

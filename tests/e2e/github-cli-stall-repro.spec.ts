@@ -2,10 +2,10 @@ import { execSync } from 'node:child_process'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { test as base, expect } from './helpers/orca-app'
+import { test as base, expect } from './helpers/mcode-app'
 import { waitForSessionReady } from './helpers/store'
 
-const fakeGhDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-fake-gh-'))
+const fakeGhDir = mkdtempSync(path.join(os.tmpdir(), 'mcode-e2e-fake-gh-'))
 const fakeGhBody = `#!/usr/bin/env node
 const args = process.argv.slice(2)
 const joined = args.join(' ')
@@ -54,7 +54,7 @@ const test = base.extend({
   launchEnv: [
     {
       PATH: `${fakeGhDir}${path.delimiter}${process.env.PATH ?? ''}`,
-      ORCA_GH_EXEC_TIMEOUT_MS: '1000'
+      MCODE_GH_EXEC_TIMEOUT_MS: '1000'
     },
     { option: true }
   ]
@@ -86,13 +86,13 @@ function configureGitHubRemote(repoPath: string): void {
 }
 
 test('GitHub Tasks drawer recovers when gh stalls on issue details', async ({
-  orcaPage,
+  mcodePage,
   testRepoPath
 }) => {
   configureGitHubRemote(testRepoPath)
-  await waitForSessionReady(orcaPage)
+  await waitForSessionReady(mcodePage)
 
-  const { repoId } = await orcaPage.evaluate((repoPath) => {
+  const { repoId } = await mcodePage.evaluate((repoPath) => {
     const store = window.__store
     if (!store) {
       throw new Error('window.__store is not available')
@@ -119,14 +119,14 @@ test('GitHub Tasks drawer recovers when gh stalls on issue details', async ({
 
   // The item detail opens as an inline task-detail page (no longer a modal
   // dialog): the item title heading proves it mounted.
-  const detailHeading = orcaPage.getByRole('heading', {
+  const detailHeading = mcodePage.getByRole('heading', {
     name: /Issue detail fetch that hangs in gh/
   })
   await expect(detailHeading).toBeVisible({ timeout: 10_000 })
 
   // Why: the bounded gh timeout rejects instead of hanging, so this terminal
   // error text (replacing the body, not a spinner) proves the stall recovered.
-  await expect(orcaPage.getByText('Unable to load details for this GitHub item.')).toBeVisible({
+  await expect(mcodePage.getByText('Unable to load details for this GitHub item.')).toBeVisible({
     timeout: 5_000
   })
 

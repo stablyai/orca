@@ -15,7 +15,7 @@ import type {
 } from '../../shared/skill-install-contract'
 import type { SkillCloudDownloadGrant } from '../../shared/skill-cloud-contract'
 import { getRuntimeEnvironmentStatus } from '../ipc/runtime-environment-transport-routing'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { MCodeRuntimeService } from '../runtime/mcode-runtime'
 import { skillInstallFailureFromError } from './skill-install-operation-error'
 import { recordSkillCapabilityAbsence } from './skill-operation-observability'
 import {
@@ -70,7 +70,7 @@ function bundleFailureResult(
 }
 
 export async function installSkillBundleCloudGrant(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   grant: SkillCloudDownloadGrant,
   input: SkillBundleCloudGrantInstallInput,
   signal?: AbortSignal,
@@ -141,7 +141,7 @@ export async function installSkillBundleCloudGrant(
 }
 
 export async function installSkillCloudGrant(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   grant: SkillCloudDownloadGrant,
   input: SkillCloudGrantInstallInput,
   signal?: AbortSignal

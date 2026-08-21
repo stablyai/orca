@@ -247,8 +247,8 @@ describe('store selectors', () => {
     const repos = [
       makeRepo({
         id: 'repo-1',
-        path: '/Users/alice/orca',
-        displayName: 'orca'
+        path: '/Users/alice/mcode',
+        displayName: 'mcode'
       })
     ]
     const state = { repos }
@@ -409,8 +409,8 @@ describe('store selectors', () => {
     const repos = [
       makeRepo({
         id: 'repo-1',
-        path: '/Users/alice/orca',
-        displayName: 'orca'
+        path: '/Users/alice/mcode',
+        displayName: 'mcode'
       })
     ]
     const projects = [
@@ -429,8 +429,8 @@ describe('store selectors', () => {
         projectId: 'project-1',
         hostId: 'local' as const,
         repoId: 'repo-1',
-        path: '/Users/alice/orca',
-        displayName: 'orca',
+        path: '/Users/alice/mcode',
+        displayName: 'mcode',
         setupState: 'ready' as const,
         setupMethod: 'legacy-repo' as const,
         createdAt: 1,
@@ -447,33 +447,33 @@ describe('store selectors', () => {
   it('groups hydrated VM project setups under the repo-derived project identity', () => {
     const repos = [
       makeRepo({
-        id: 'local-orca',
-        path: '/Users/alice/stably/orca',
-        displayName: 'orca',
-        upstream: { owner: 'stablyai', repo: 'orca' }
+        id: 'local-mcode',
+        path: '/Users/alice/stably/mcode',
+        displayName: 'mcode',
+        upstream: { owner: 'stablyai', repo: 'mcode' }
       }),
       makeRepo({
-        id: 'vm-orca',
-        path: '/vercel/sandbox/orca',
-        displayName: 'orca',
-        upstream: { owner: 'stablyai', repo: 'orca' },
+        id: 'vm-mcode',
+        path: '/vercel/sandbox/mcode',
+        displayName: 'mcode',
+        upstream: { owner: 'stablyai', repo: 'mcode' },
         executionHostId: toRuntimeExecutionHostId('vm-env')
       })
     ]
     const projects = [
       {
-        id: 'github:stablyai/orca',
-        displayName: 'orca',
+        id: 'github:mcode-ide/mcode',
+        displayName: 'mcode',
         badgeColor: '#737373',
-        sourceRepoIds: ['local-orca'],
+        sourceRepoIds: ['local-mcode'],
         createdAt: 1,
         updatedAt: 1
       },
       {
-        id: 'repo:vm-orca',
-        displayName: 'vercel/sandbox/orca',
+        id: 'repo:vm-mcode',
+        displayName: 'vercel/sandbox/mcode',
         badgeColor: '#737373',
-        sourceRepoIds: ['vm-orca'],
+        sourceRepoIds: ['vm-mcode'],
         createdAt: 1,
         updatedAt: 1
       }
@@ -481,11 +481,11 @@ describe('store selectors', () => {
     const projectHostSetups = [
       {
         id: 'local-setup',
-        projectId: 'github:stablyai/orca',
+        projectId: 'github:mcode-ide/mcode',
         hostId: 'local' as const,
-        repoId: 'local-orca',
-        path: '/Users/alice/stably/orca',
-        displayName: 'orca',
+        repoId: 'local-mcode',
+        path: '/Users/alice/stably/mcode',
+        displayName: 'mcode',
         setupState: 'ready' as const,
         setupMethod: 'legacy-repo' as const,
         createdAt: 1,
@@ -493,11 +493,11 @@ describe('store selectors', () => {
       },
       {
         id: 'vm-setup',
-        projectId: 'repo:vm-orca',
+        projectId: 'repo:vm-mcode',
         hostId: toRuntimeExecutionHostId('vm-env'),
-        repoId: 'vm-orca',
-        path: '/vercel/sandbox/orca',
-        displayName: 'orca',
+        repoId: 'vm-mcode',
+        path: '/vercel/sandbox/mcode',
+        displayName: 'mcode',
         setupState: 'ready' as const,
         setupMethod: 'provisioned' as const,
         createdAt: 1,
@@ -511,11 +511,11 @@ describe('store selectors', () => {
       projectHostSetups
     })
 
-    expect(projection.projects.map((project) => project.id)).toEqual(['github:stablyai/orca'])
+    expect(projection.projects.map((project) => project.id)).toEqual(['github:mcode-ide/mcode'])
     expect(projection.setups).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ id: 'local-setup', projectId: 'github:stablyai/orca' }),
-        expect.objectContaining({ id: 'vm-setup', projectId: 'github:stablyai/orca' })
+        expect.objectContaining({ id: 'local-setup', projectId: 'github:mcode-ide/mcode' }),
+        expect.objectContaining({ id: 'vm-setup', projectId: 'github:mcode-ide/mcode' })
       ])
     )
   })
@@ -524,9 +524,9 @@ describe('store selectors', () => {
     const repos = [
       makeRepo({
         id: 'repo-1',
-        path: '/Users/alice/orca',
-        displayName: 'orca',
-        upstream: { owner: 'stablyai', repo: 'orca' }
+        path: '/Users/alice/mcode',
+        displayName: 'mcode',
+        upstream: { owner: 'stablyai', repo: 'mcode' }
       })
     ]
 
@@ -538,17 +538,17 @@ describe('store selectors', () => {
 
     expect(projection.projects).toEqual([
       expect.objectContaining({
-        id: 'github:stablyai/orca',
+        id: 'github:mcode-ide/mcode',
         sourceRepoIds: ['repo-1']
       })
     ])
     expect(projection.setups).toEqual([
       expect.objectContaining({
         id: 'repo-1',
-        projectId: 'github:stablyai/orca',
+        projectId: 'github:mcode-ide/mcode',
         repoId: 'repo-1',
         hostId: 'local',
-        path: '/Users/alice/orca'
+        path: '/Users/alice/mcode'
       })
     ])
   })
@@ -557,8 +557,8 @@ describe('store selectors', () => {
     const repos = [
       makeRepo({
         id: 'repo-1',
-        path: '/Users/alice/orca',
-        displayName: 'orca'
+        path: '/Users/alice/mcode',
+        displayName: 'mcode'
       })
     ]
     const projects = [

@@ -10,7 +10,7 @@ import {
   hasSkillCopyNeedingAttention
 } from './skill-freshness-display-status'
 
-const SKILL_NAME = 'orca-cli'
+const SKILL_NAME = 'mcode-cli'
 
 function scanIssue(
   reason: SkillFreshnessScanIssueReason
@@ -126,7 +126,7 @@ describe('getSkillFreshnessDisplayStatus', () => {
     // recreate it. Amber here is clean-on-main turned permanently amber.
     ['outside-root']
   ] as const)('does not report attention for the %s traversal bound', (reason) => {
-    // Why: these are Orca's own bounds. A large but healthy plugin cache would
+    // Why: these are MCode's own bounds. A large but healthy plugin cache would
     // otherwise pin every skill amber with nothing the user could do about it.
     expect(
       getSkillFreshnessDisplayStatus(
@@ -137,7 +137,7 @@ describe('getSkillFreshnessDisplayStatus', () => {
   })
 
   // Why: the only reason left that is a fact about the user's own disk rather than a
-  // bound Orca chose, so the only one a person can actually clear.
+  // bound MCode chose, so the only one a person can actually clear.
   it('reports needs attention for the io-error scan fault', () => {
     expect(
       getSkillFreshnessDisplayStatus(
@@ -222,7 +222,7 @@ describe('hasSkillCopyNeedingAttention', () => {
   })
 
   // The exact shape of the rc.4 report: a pristine global install alongside a drifted
-  // copy inside a work directory. Orca only updates global skills, so the project copy
+  // copy inside a work directory. MCode only updates global skills, so the project copy
   // must not turn the badge amber over drift it has no way to fix.
   it('reports up to date for a current global copy beside a drifted project copy', () => {
     const value = inventory([placement('current'), repoPlacement('unrecognized')])
@@ -244,7 +244,7 @@ describe('hasSkillCopyNeedingAttention', () => {
   )
 
   // A project copy is not evidence the skill is installed globally, so it reports
-  // presence rather than a freshness claim about a copy Orca does not manage.
+  // presence rather than a freshness claim about a copy MCode does not manage.
   it('reports presence only when every copy is project-owned', () => {
     expect(getSkillFreshnessDisplayStatus(inventory([repoPlacement()]), SKILL_NAME)).toBe(
       'installed'
@@ -261,7 +261,7 @@ describe('hasSkillCopyNeedingAttention', () => {
     )
   })
 
-  // Why: an unreadable plugin path could hide a copy of anything, but a skill Orca
+  // Why: an unreadable plugin path could hide a copy of anything, but a skill MCode
   // never found anywhere is not the one to blame for it — that reads as a problem
   // with a skill the user has not installed.
   it('does not blame a skill with no placement for a fault elsewhere in the cache', () => {

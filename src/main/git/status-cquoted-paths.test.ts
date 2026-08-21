@@ -8,7 +8,7 @@ import { getStatus, stageFile } from './status'
 const tempRoots: string[] = []
 
 async function createRepo(): Promise<string> {
-  const repo = await mkdtemp(path.join(tmpdir(), 'orca-status-cquoted-'))
+  const repo = await mkdtemp(path.join(tmpdir(), 'mcode-status-cquoted-'))
   tempRoots.push(repo)
   execFileSync('git', ['init', '-q'], { cwd: repo })
   execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: repo })

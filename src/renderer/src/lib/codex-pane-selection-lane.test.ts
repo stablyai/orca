@@ -50,7 +50,7 @@ function laneState(args?: {
         ]
       : [],
     worktreesByRepo: {
-      repo1: [{ id: 'wt1', repoId: 'repo1', path: args?.worktreePath ?? '/Users/dev/code/orca' }]
+      repo1: [{ id: 'wt1', repoId: 'repo1', path: args?.worktreePath ?? '/Users/dev/code/mcode' }]
     }
   } as unknown as LaneState
 }
@@ -84,7 +84,7 @@ describe('resolveCodexPaneSelectionLaneKey', () => {
   it('keys a pane in a WSL UNC worktree to that distro lane', () => {
     expect(
       resolveCodexPaneSelectionLaneKey({
-        state: laneState({ worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\dev\\orca' }),
+        state: laneState({ worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\dev\\mcode' }),
         tab: HOST_TAB,
         ptyId: 'pty-1'
       })

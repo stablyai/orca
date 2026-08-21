@@ -222,7 +222,7 @@ export function AutomationsDetailPane({
                     selectedAutomationRunPage.scheduledFor,
                     relativeNow
                   ),
-                  'Orca',
+                  'MCode',
                   selectedAutomationRunPageWorkspaceDisplay?.detailLabel ??
                     translate(
                       'auto.components.automations.AutomationsPage.noWorkspace',

@@ -141,7 +141,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('fetches a fork PR head via the SSH pull-head RPC, not git.exec', async () => {
-    const durableLocalRef = `refs/orca/pull/${ORIGIN_HEAD_COMPONENT}/42`
+    const durableLocalRef = `refs/mcode/pull/${ORIGIN_HEAD_COMPONENT}/42`
     const fetchGitHubPullRequestHead = vi.fn(async () => durableLocalRef)
     const exec = vi.fn(async (args: string[]) => {
       if (args[0] === 'remote') {
@@ -184,7 +184,7 @@ describe('registerWorktreeHandlers', () => {
   })
 
   it('fetches a fork PR head from origin, not the first remote, over SSH', async () => {
-    const durableLocalRef = `refs/orca/pull/${ORIGIN_HEAD_COMPONENT}/42`
+    const durableLocalRef = `refs/mcode/pull/${ORIGIN_HEAD_COMPONENT}/42`
     const fetchGitHubPullRequestHead = vi.fn(async () => durableLocalRef)
     // Why: `fork` is listed first, but fork PR heads live on the hosting remote (origin).
     const exec = vi.fn(async (args: string[]) => {
@@ -256,7 +256,7 @@ describe('registerWorktreeHandlers', () => {
         'fetch',
         '--no-tags',
         'origin',
-        `+refs/pull/1849/head:refs/orca/pull/${ORIGIN_HEAD_COMPONENT}/1849`
+        `+refs/pull/1849/head:refs/mcode/pull/${ORIGIN_HEAD_COMPONENT}/1849`
       ],
       { cwd: '/workspace/repo', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
     )
@@ -306,7 +306,7 @@ describe('registerWorktreeHandlers', () => {
         'fetch',
         '--no-tags',
         'origin',
-        `+refs/pull/1849/head:refs/orca/pull/${ORIGIN_HEAD_COMPONENT}/1849`
+        `+refs/pull/1849/head:refs/mcode/pull/${ORIGIN_HEAD_COMPONENT}/1849`
       ],
       { cwd: '/workspace/repo', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
     )

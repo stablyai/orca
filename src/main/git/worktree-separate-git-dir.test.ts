@@ -50,7 +50,7 @@ async function createSeparateGitDirRepo(): Promise<{
   gitDirPath: string
   worktreePath: string
 }> {
-  const root = await mkdtemp(path.join(tmpdir(), 'orca-separate-git-dir-'))
+  const root = await mkdtemp(path.join(tmpdir(), 'mcode-separate-git-dir-'))
   tempRoots.push(root)
   const sourcePath = await createCommittedRepo(root, 'source')
   const requestedWorktreePath = path.join(root, 'worktree')
@@ -72,13 +72,13 @@ async function createSeparateGitDirRepo(): Promise<{
 }
 
 async function createNormalRepo(): Promise<string> {
-  const root = await mkdtemp(path.join(tmpdir(), 'orca-normal-worktree-'))
+  const root = await mkdtemp(path.join(tmpdir(), 'mcode-normal-worktree-'))
   tempRoots.push(root)
   return createCommittedRepo(root, 'repo')
 }
 
 async function createBareRepo(): Promise<string> {
-  const root = await mkdtemp(path.join(tmpdir(), 'orca-bare-worktree-'))
+  const root = await mkdtemp(path.join(tmpdir(), 'mcode-bare-worktree-'))
   tempRoots.push(root)
   const repoPath = path.join(root, 'repo.git')
   execFileSync('git', ['init', '--bare', '--quiet', repoPath])
@@ -137,7 +137,7 @@ describe('git worktree separate git dir paths', () => {
       // (git reports the realpath toplevel), so the git-common-dir gate must
       // still skip the rewrite since the main entry is a real working root.
       const repoPath = await createNormalRepo()
-      const linkRoot = await mkdtemp(path.join(tmpdir(), 'orca-symlink-worktree-'))
+      const linkRoot = await mkdtemp(path.join(tmpdir(), 'mcode-symlink-worktree-'))
       tempRoots.push(linkRoot)
       const linkedRepoPath = path.join(linkRoot, 'linked-repo')
       await symlink(repoPath, linkedRepoPath)

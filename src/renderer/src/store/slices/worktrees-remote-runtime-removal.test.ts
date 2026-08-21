@@ -406,7 +406,7 @@ describe('worktree remote runtime mutations', () => {
     })
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      trustedOrcaHooks: { 'repo-shared': { all: { approvedAt: 1 } } },
+      trustedMCodeHooks: { 'repo-shared': { all: { approvedAt: 1 } } },
       worktreesByRepo: { 'repo-shared': [original] }
     } as Partial<AppState>)
 
@@ -512,16 +512,16 @@ describe('worktree remote runtime mutations', () => {
   it('removes SSH-owned worktrees through local IPC even when a runtime is focused', async () => {
     const store = createTestStore()
     const wt = makeWorktree({
-      id: 'repo-ssh::/home/orca/wt1',
+      id: 'repo-ssh::/home/mcode/wt1',
       repoId: 'repo-ssh',
-      path: '/home/orca/wt1'
+      path: '/home/mcode/wt1'
     })
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       repos: [
         {
           id: 'repo-ssh',
-          path: '/home/orca/repo',
+          path: '/home/mcode/repo',
           displayName: 'SSH Repo',
           badgeColor: '#000',
           addedAt: 0,

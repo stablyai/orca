@@ -240,7 +240,7 @@ export function AgentPermissionsSetting({
         }
         description={translate(
           'auto.components.settings.AgentsPane.agentPermissionsDescription',
-          'Choose whether Orca launches agents with fewer permission prompts or with manual checks.'
+          'Choose whether MCode launches agents with fewer permission prompts or with manual checks.'
         )}
         action={
           <SettingsSegmentedControl<AgentPermissionMode>
@@ -715,7 +715,7 @@ export function AgentsPane({
       : null
   )
   // Why: refresh re-spawns the target host's login shell to re-capture PATH
-  // (preflight:refreshAgents). This handles the "installed a new CLI, Orca
+  // (preflight:refreshAgents). This handles the "installed a new CLI, MCode
   // doesn't see it yet" case without a restart.
   const handleRefresh = (): void => {
     void refreshTargetAgents()

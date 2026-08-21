@@ -15,8 +15,8 @@ vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Arr
 
 const relay: MobileRelayEndpoint = {
   v: 1,
-  directorUrl: 'https://relay-staging.onorca.dev',
-  cellUrl: 'https://c1.relay-staging.onorca.dev',
+  directorUrl: 'https://relay-staging.mcode.dev',
+  cellUrl: 'https://c1.relay-staging.mcode.dev',
   assignmentEpoch: 4,
   relayHostId: 'AbCdEf0123_-xyZ9',
   e2eeFraming: 2

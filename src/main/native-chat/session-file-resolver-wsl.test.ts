@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFsPromisesModule from 'node:fs/promises'
 
 const UBUNTU_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada'
-const WSL_MANAGED_SESSIONS_DIR = `${UBUNTU_HOME}\\.local\\share\\orca\\codex-runtime-home\\home\\sessions`
+const WSL_MANAGED_SESSIONS_DIR = `${UBUNTU_HOME}\\.local\\share\\mcode\\codex-runtime-home\\home\\sessions`
 const ROLLOUT_LINUX =
-  '/home/ada/.local/share/orca/codex-runtime-home/home/sessions/2026/07/24/rollout-wsl-sess.jsonl'
+  '/home/ada/.local/share/mcode/codex-runtime-home/home/sessions/2026/07/24/rollout-wsl-sess.jsonl'
 const ROLLOUT_UNC =
-  '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.local\\share\\orca\\codex-runtime-home\\home\\sessions\\2026\\07\\24\\rollout-wsl-sess.jsonl'
+  '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.local\\share\\mcode\\codex-runtime-home\\home\\sessions\\2026\\07\\24\\rollout-wsl-sess.jsonl'
 
 vi.mock('../wsl', () => ({
   listWslDistrosAsync: vi.fn(async () => ['Ubuntu']),

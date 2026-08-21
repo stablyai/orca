@@ -17,7 +17,7 @@ export function runOxlintPluginOnSource({
   source,
   extension = 'tsx'
 }) {
-  const directory = mkdtempSync(path.join(tmpdir(), `orca-${pluginName}-lint-`))
+  const directory = mkdtempSync(path.join(tmpdir(), `mcode-${pluginName}-lint-`))
   const sourcePath = path.join(directory, `sample.${extension}`)
   const configPath = path.join(directory, 'oxlint.json')
 

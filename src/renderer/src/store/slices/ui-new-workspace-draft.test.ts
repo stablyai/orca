@@ -113,14 +113,14 @@ describe('createUISlice new workspace draft', () => {
         provider: 'jira' as const,
         siteId: 'site-1',
         siteUrl: 'https://company.atlassian.net',
-        projectKey: 'ORCA'
+        projectKey: 'MCODE'
       },
       accountLabel: 'ada@example.com'
     }
 
     store.getState().setNewWorkspaceDraft({
       repoId: 'repo-1',
-      name: 'orca-123-link-jira',
+      name: 'mcode-123-link-jira',
       prompt: '',
       note: '',
       attachments: [],
@@ -128,9 +128,9 @@ describe('createUISlice new workspace draft', () => {
         provider: 'jira',
         type: 'issue',
         number: 0,
-        title: 'ORCA-123 Link Jira',
-        url: 'https://company.atlassian.net/browse/ORCA-123',
-        jiraIdentifier: 'ORCA-123'
+        title: 'MCODE-123 Link Jira',
+        url: 'https://company.atlassian.net/browse/MCODE-123',
+        jiraIdentifier: 'MCODE-123'
       },
       linkedTaskSourceContext,
       agent: 'claude',
@@ -143,7 +143,7 @@ describe('createUISlice new workspace draft', () => {
     expect(store.getState().newWorkspaceDraft).toMatchObject({
       linkedWorkItem: {
         provider: 'jira',
-        jiraIdentifier: 'ORCA-123'
+        jiraIdentifier: 'MCODE-123'
       },
       linkedTaskSourceContext
     })

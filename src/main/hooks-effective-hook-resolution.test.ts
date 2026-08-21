@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { getDefaultTabsLaunch } from './effective-hook-config'
 import {
   makeHookTestRepo,
-  TEST_REPO_ORCA_YAML_PATH,
-  TEST_WORKTREE_ORCA_YAML_PATH,
+  TEST_REPO_MCODE_YAML_PATH,
+  TEST_WORKTREE_MCODE_YAML_PATH,
   TEST_WORKTREE_PATH
 } from './hooks-test-fixtures'
 
@@ -26,7 +26,7 @@ describe('getEffectiveHooks', () => {
     scripts?: { setup: string; archive: string }
   }) => makeHookTestRepo(hookSettings)
 
-  it('uses hooks from orca.yaml when present', async () => {
+  it('uses hooks from mcode.yaml when present', async () => {
     const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  setup: |\n    echo "yaml setup"\n')
@@ -43,16 +43,16 @@ describe('getEffectiveHooks', () => {
     })
   })
 
-  it("loads setup hooks from the target worktree's orca.yaml when a worktree path is provided", async () => {
+  it("loads setup hooks from the target worktree's mcode.yaml when a worktree path is provided", async () => {
     const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockImplementation(
-      (path) => path === TEST_REPO_ORCA_YAML_PATH || path === TEST_WORKTREE_ORCA_YAML_PATH
+      (path) => path === TEST_REPO_MCODE_YAML_PATH || path === TEST_WORKTREE_MCODE_YAML_PATH
     )
     vi.mocked(fs.readFileSync).mockImplementation((path) => {
-      if (path === TEST_REPO_ORCA_YAML_PATH) {
+      if (path === TEST_REPO_MCODE_YAML_PATH) {
         return 'scripts:\n  setup: |\n    echo old-version\n'
       }
-      if (path === TEST_WORKTREE_ORCA_YAML_PATH) {
+      if (path === TEST_WORKTREE_MCODE_YAML_PATH) {
         return 'scripts:\n  setup: |\n    echo new-version\n'
       }
       return ''
@@ -162,7 +162,7 @@ describe('getEffectiveHooks', () => {
     })
   })
 
-  it('uses local settings by default even when orca.yaml defines only one command', async () => {
+  it('uses local settings by default even when mcode.yaml defines only one command', async () => {
     const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  archive: |\n    echo "yaml archive"\n')
@@ -224,7 +224,7 @@ describe('getEffectiveHooks', () => {
     })
   })
 
-  it('treats legacy shared-first policy as orca.yaml only', async () => {
+  it('treats legacy shared-first policy as mcode.yaml only', async () => {
     const fs = await import('node:fs')
     vi.mocked(fs.existsSync).mockReturnValue(true)
     vi.mocked(fs.readFileSync).mockReturnValue('scripts:\n  archive: |\n    echo "yaml archive"\n')

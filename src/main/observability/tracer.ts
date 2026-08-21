@@ -1,5 +1,5 @@
 // A small, plain-TS span recorder modeled on a local-first
-// `LocalFileTracer` / `TraceSink` pair. Orca does not use Effect, so we
+// `LocalFileTracer` / `TraceSink` pair. MCode does not use Effect, so we
 // port the *behavior* — span lifecycle, attribute capture, exit-status
 // recording — rather than the Effect Tracer.Tracer interface, and emit the
 // same NDJSON record shape our local sink expects (`type: 'effect-span'`,

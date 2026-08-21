@@ -1,4 +1,4 @@
-import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
+import type { MCodeHooks } from '../../../../shared/mcode-yaml-hook-types'
 import type {
   NeedsSetupProjectHostOption,
   ProjectHostSetupOption,
@@ -6,7 +6,7 @@ import type {
 } from '@/lib/project-host-setup-options'
 import { translate } from '@/i18n/i18n'
 
-export type EphemeralVmRecipeOption = NonNullable<OrcaHooks['environmentRecipes']>[number]
+export type EphemeralVmRecipeOption = NonNullable<MCodeHooks['environmentRecipes']>[number]
 
 export const RUN_TARGET_ADD_HOST_KEY = 'add-host'
 export const RUN_TARGET_RECIPES_KEY = 'per-workspace-env'

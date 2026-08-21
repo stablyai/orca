@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import { LINEAR_METHODS } from './linear'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
@@ -17,7 +17,7 @@ describe('linear RPC methods', () => {
       linearConnect: vi.fn().mockResolvedValue({ ok: true, viewer: { displayName: 'Ada' } }),
       linearSelectWorkspace: vi.fn().mockResolvedValue({ connected: true, viewer: null }),
       linearDisconnect: vi.fn().mockResolvedValue({ ok: true })
-    } as unknown as OrcaRuntimeService
+    } as unknown as MCodeRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: LINEAR_METHODS })
 
     await dispatcher.dispatch(makeRequest('linear.status'))
@@ -44,7 +44,7 @@ describe('linear RPC methods', () => {
       linearUpdateIssue: vi.fn().mockResolvedValue({ ok: true }),
       linearAddIssueComment: vi.fn().mockResolvedValue({ ok: true, id: 'comment-1' }),
       linearIssueComments: vi.fn().mockResolvedValue([{ id: 'comment-2' }])
-    } as unknown as OrcaRuntimeService
+    } as unknown as MCodeRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: LINEAR_METHODS })
 
     await dispatcher.dispatch(
@@ -205,7 +205,7 @@ describe('linear RPC methods', () => {
       linearTeamStates: vi.fn().mockResolvedValue([{ id: 'state-1' }]),
       linearTeamLabels: vi.fn().mockResolvedValue([{ id: 'label-1' }]),
       linearTeamMembers: vi.fn().mockResolvedValue([{ id: 'member-1' }])
-    } as unknown as OrcaRuntimeService
+    } as unknown as MCodeRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: LINEAR_METHODS })
 
     await dispatcher.dispatch(makeRequest('linear.listTeams', { workspaceId: 'all' }))

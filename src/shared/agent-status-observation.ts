@@ -14,11 +14,11 @@ export const AGENT_STATUS_OBSERVATION_ORIGINS = [
   'hook',
   /** OSC 9999 structured payload parsed out of PTY bytes. Canonical payload, no provider normalizer. */
   'osc',
-  /** Inferred from a terminal title. The weakest evidence Orca acts on. */
+  /** Inferred from a terminal title. The weakest evidence MCode acts on. */
   'title',
   /** Derived from the pane's own process/output evidence (e.g. Command Code output seeds). */
   'process',
-  /** Seeded when Orca launched the agent itself, before any provider signal. */
+  /** Seeded when MCode launched the agent itself, before any provider signal. */
   'launch',
   /** Stamped by orchestration dispatch rather than by the agent. */
   'orchestration'

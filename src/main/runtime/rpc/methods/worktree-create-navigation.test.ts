@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import { WORKTREE_METHODS } from './worktree'
 
 const repo = {
@@ -35,7 +35,7 @@ describe('worktree.create navigation authority', () => {
         dedupeWorktreeCreate: passthroughDedupe,
         showRepo: vi.fn().mockResolvedValue(repo),
         createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
-      } as unknown as OrcaRuntimeService
+      } as unknown as MCodeRuntimeService
       const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
       await dispatcher.dispatchStreaming(
@@ -59,7 +59,7 @@ describe('worktree.create navigation authority', () => {
       dedupeWorktreeCreate: passthroughDedupe,
       showRepo: vi.fn().mockResolvedValue(repo),
       createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
-    } as unknown as OrcaRuntimeService
+    } as unknown as MCodeRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     await dispatcher.dispatchStreaming(
@@ -84,7 +84,7 @@ describe('worktree.create navigation authority', () => {
       dedupeWorktreeCreate: passthroughDedupe,
       showRepo: vi.fn().mockResolvedValue(repo),
       createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
-    } as unknown as OrcaRuntimeService
+    } as unknown as MCodeRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     await dispatcher.dispatchStreaming(
@@ -104,7 +104,7 @@ describe('worktree.create navigation authority', () => {
       dedupeWorktreeCreate: passthroughDedupe,
       showRepo: vi.fn().mockResolvedValue(repo),
       createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
-    } as unknown as OrcaRuntimeService
+    } as unknown as MCodeRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     await dispatcher.dispatchStreaming(
@@ -129,7 +129,7 @@ describe('worktree.create navigation authority', () => {
       dedupeWorktreeCreate: passthroughDedupe,
       showRepo: vi.fn().mockResolvedValue(repo),
       createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
-    } as unknown as OrcaRuntimeService
+    } as unknown as MCodeRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     await dispatcher.dispatchStreaming(

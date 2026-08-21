@@ -42,19 +42,19 @@ const { markCodexProjectTrusted, markCopilotFolderTrusted, markCursorWorkspaceTr
   await import('./agent-trust-presets')
 
 beforeEach(() => {
-  testState.fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-trust-presets-'))
-  testState.userDataDir = mkdtempSync(join(tmpdir(), 'orca-trust-presets-user-data-'))
-  testState.previousUserDataPath = process.env.ORCA_USER_DATA_PATH
-  process.env.ORCA_USER_DATA_PATH = testState.userDataDir
+  testState.fakeHomeDir = mkdtempSync(join(tmpdir(), 'mcode-trust-presets-'))
+  testState.userDataDir = mkdtempSync(join(tmpdir(), 'mcode-trust-presets-user-data-'))
+  testState.previousUserDataPath = process.env.MCODE_USER_DATA_PATH
+  process.env.MCODE_USER_DATA_PATH = testState.userDataDir
 })
 
 afterEach(() => {
   rmSync(testState.fakeHomeDir, { recursive: true, force: true })
   rmSync(testState.userDataDir, { recursive: true, force: true })
   if (testState.previousUserDataPath === undefined) {
-    delete process.env.ORCA_USER_DATA_PATH
+    delete process.env.MCODE_USER_DATA_PATH
   } else {
-    process.env.ORCA_USER_DATA_PATH = testState.previousUserDataPath
+    process.env.MCODE_USER_DATA_PATH = testState.previousUserDataPath
   }
   testState.fakeHomeDir = ''
   testState.userDataDir = ''
@@ -63,7 +63,7 @@ afterEach(() => {
 
 describe('markCursorWorkspaceTrusted', () => {
   it('writes ~/.cursor/projects/<slug>/.workspace-trusted with the cwd payload', () => {
-    const workspace = mkdtempSync(join(tmpdir(), 'orca-cursor-ws-'))
+    const workspace = mkdtempSync(join(tmpdir(), 'mcode-cursor-ws-'))
     try {
       markCursorWorkspaceTrusted(workspace)
       const projectsDir = join(testState.fakeHomeDir, '.cursor', 'projects')
@@ -80,7 +80,7 @@ describe('markCursorWorkspaceTrusted', () => {
   })
 
   it('is idempotent — re-marking the same workspace does not overwrite trustedAt', () => {
-    const workspace = mkdtempSync(join(tmpdir(), 'orca-cursor-ws-'))
+    const workspace = mkdtempSync(join(tmpdir(), 'mcode-cursor-ws-'))
     try {
       markCursorWorkspaceTrusted(workspace)
       const projectsDir = join(testState.fakeHomeDir, '.cursor', 'projects')
@@ -98,7 +98,7 @@ describe('markCursorWorkspaceTrusted', () => {
 
 describe('markCopilotFolderTrusted', () => {
   it('appends the workspace to trustedFolders in ~/.copilot/config.json', () => {
-    const workspace = mkdtempSync(join(tmpdir(), 'orca-copilot-ws-'))
+    const workspace = mkdtempSync(join(tmpdir(), 'mcode-copilot-ws-'))
     try {
       markCopilotFolderTrusted(workspace)
       const configPath = join(testState.fakeHomeDir, '.copilot', 'config.json')
@@ -113,7 +113,7 @@ describe('markCopilotFolderTrusted', () => {
   })
 
   it('preserves existing config keys and dedups already-trusted folders', () => {
-    const workspace = mkdtempSync(join(tmpdir(), 'orca-copilot-ws-'))
+    const workspace = mkdtempSync(join(tmpdir(), 'mcode-copilot-ws-'))
     const realpath = realpathSync(workspace)
     try {
       mkdirSync(join(testState.fakeHomeDir, '.copilot'), { recursive: true })
@@ -138,7 +138,7 @@ describe('markCopilotFolderTrusted', () => {
 
 describe('markCodexProjectTrusted', () => {
   it('trusts the main repository root for a linked worktree without reading commondir', () => {
-    const fixtureRoot = mkdtempSync(join(tmpdir(), 'orca-codex-linked-ws-'))
+    const fixtureRoot = mkdtempSync(join(tmpdir(), 'mcode-codex-linked-ws-'))
     const repository = join(fixtureRoot, 'repo')
     const workspace = join(fixtureRoot, 'worktrees', 'feature')
     const worktreeGitDir = join(repository, '.git', 'worktrees', 'feature')
@@ -172,7 +172,7 @@ describe('markCodexProjectTrusted', () => {
   })
 
   it('does not broaden trust through arbitrary or adversarial Git metadata', () => {
-    const fixtureRoot = mkdtempSync(join(tmpdir(), 'orca-codex-untrusted-gitdir-'))
+    const fixtureRoot = mkdtempSync(join(tmpdir(), 'mcode-codex-untrusted-gitdir-'))
     const workspace = join(fixtureRoot, 'workspace')
     const arbitraryGitDir = join(fixtureRoot, 'metadata', 'feature')
     const unrelatedRoot = join(fixtureRoot, 'unrelated')
@@ -203,7 +203,7 @@ describe('markCodexProjectTrusted', () => {
   })
 
   it('writes ~/.codex/config.toml with the project marked trusted', () => {
-    const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
+    const workspace = mkdtempSync(join(tmpdir(), 'mcode-codex-ws-'))
     try {
       const realpath = realpathSync.native(workspace)
       markCodexProjectTrusted(workspace)
@@ -228,7 +228,7 @@ describe('markCodexProjectTrusted', () => {
   })
 
   it('preserves existing config keys and updates an existing project block', () => {
-    const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
+    const workspace = mkdtempSync(join(tmpdir(), 'mcode-codex-ws-'))
     const realpath = realpathSync.native(workspace)
     try {
       const codexDir = join(testState.fakeHomeDir, '.codex')

@@ -17,7 +17,7 @@ describe('resolveTerminalDropTargetShell', () => {
     expect(
       resolveTerminalDropTargetShell({
         activeRuntimeEnvironmentId: 'env-1',
-        worktreePath: '/home/orca/repo',
+        worktreePath: '/home/mcode/repo',
         connectionId: null,
         userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       })

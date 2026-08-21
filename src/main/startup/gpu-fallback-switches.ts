@@ -9,7 +9,7 @@ export type GpuFallbackCommandLine = {
  * GL, so a GPU process being killed by a bad driver or injected DLL keeps dying after
  * the fallback engages. `--in-process-gpu` is the only switch that removes the child.
  * SwiftShader is disabled because `--in-process-gpu` would otherwise move untrusted
- * WebGL command parsing into Orca's privileged main process. Terminals safely fall
+ * WebGL command parsing into MCode's privileged main process. Terminals safely fall
  * back to the DOM renderer in this post-crash mode.
  */
 const GPU_FALLBACK_COMMAND_LINE_SWITCHES = [

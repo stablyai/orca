@@ -9,7 +9,7 @@ const STOP_AFTER_MS = 60_000
  * in milestone timestamps unless a milestone happens to straddle it. A timer
  * that should fire every 25ms fires late by exactly the blocked duration, so
  * the max observed gap is a direct measurement of the worst main-thread stall
- * in each window. Only runs under ORCA_STARTUP_DIAGNOSTICS, stops after 60s.
+ * in each window. Only runs under MCODE_STARTUP_DIAGNOSTICS, stops after 60s.
  */
 export function startEventLoopStallProbe(): void {
   let last = performance.now()

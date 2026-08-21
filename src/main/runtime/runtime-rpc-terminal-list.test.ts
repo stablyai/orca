@@ -2,9 +2,9 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from './orca-runtime'
+import { MCodeRuntimeService } from './mcode-runtime'
 import { readRuntimeMetadata } from './runtime-metadata'
-import { OrcaRuntimeRpcServer } from './runtime-rpc'
+import { MCodeRuntimeRpcServer } from './runtime-rpc'
 import { sendRequest } from './runtime-rpc-test-harness'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 
@@ -24,10 +24,10 @@ vi.mock('../git/worktree', () => {
   }
 })
 
-describe('OrcaRuntimeRpcServer', () => {
+describe('MCodeRuntimeRpcServer', () => {
   it('serves terminal.list and terminal.show for live runtime terminals', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-rpc-'))
+    const runtime = new MCodeRuntimeService(makeStore() as never)
     const writes: string[] = []
     runtime.setPtyController({
       write: (_ptyId, data) => {
@@ -37,7 +37,7 @@ describe('OrcaRuntimeRpcServer', () => {
       kill: () => true,
       getForegroundProcess: async () => null
     })
-    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+    const server = new MCodeRuntimeRpcServer({ runtime, userDataPath })
 
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
@@ -164,9 +164,9 @@ describe('OrcaRuntimeRpcServer', () => {
   })
 
   it('serves terminal.list with visual split-group and pane nesting', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = new OrcaRuntimeService(makeStore() as never)
-    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-rpc-'))
+    const runtime = new MCodeRuntimeService(makeStore() as never)
+    const server = new MCodeRuntimeRpcServer({ runtime, userDataPath })
     const worktreeId = 'repo-1::/tmp/worktree-a'
     const leftLeaf = '11111111-1111-4111-8111-111111111111'
     const topLeaf = '22222222-2222-4222-8222-222222222222'

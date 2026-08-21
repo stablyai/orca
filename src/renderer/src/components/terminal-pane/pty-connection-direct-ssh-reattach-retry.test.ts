@@ -177,7 +177,7 @@ describe('connectPanePty', () => {
         'wt-1': [{ id: 'tab-1', ptyId: restoredPtyId, generation: 7 }]
       },
       ptyIdsByTabId: { 'tab-1': [restoredPtyId] },
-      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'mcode' }],
       sshConnectionStates: new Map([
         [
           'target-a',
@@ -241,7 +241,7 @@ describe('connectPanePty', () => {
         'wt-1': [{ id: 'tab-1', ptyId: restoredPtyId, generation: 7 }]
       },
       ptyIdsByTabId: { 'tab-1': [restoredPtyId] },
-      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'mcode' }],
       sshConnectionStates: new Map([
         [
           'target-a',
@@ -312,7 +312,7 @@ describe('connectPanePty', () => {
         'wt-1': [{ id: 'tab-1', ptyId: restoredPtyId, generation: 7 }]
       },
       ptyIdsByTabId: { 'tab-1': [restoredPtyId] },
-      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'mcode' }],
       sshConnectionStates: new Map([
         [
           'target-a',
@@ -411,7 +411,7 @@ describe('connectPanePty', () => {
         'wt-1': [{ id: 'tab-1', ptyId: restoredPtyId, generation: 7 }]
       },
       ptyIdsByTabId: { 'tab-1': [restoredPtyId] },
-      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'mcode' }],
       sshConnectionStates: new Map([
         [
           'target-a',
@@ -490,7 +490,7 @@ describe('connectPanePty', () => {
         'wt-1': [{ id: 'tab-1', ptyId: restoredPtyId, generation: 7 }]
       },
       ptyIdsByTabId: { 'tab-1': [restoredPtyId] },
-      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'mcode' }],
       sshConnectionStates: new Map([
         [
           'target-a',
@@ -558,7 +558,7 @@ describe('connectPanePty', () => {
         'wt-1': [{ id: 'tab-1', ptyId: firstPtyId, generation: 7 }]
       },
       ptyIdsByTabId: { 'tab-1': [firstPtyId, siblingPtyId] },
-      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'orca' }],
+      repos: [{ id: 'repo1', connectionId: 'target-a', displayName: 'mcode' }],
       sshConnectionStates: new Map([
         [
           'target-a',

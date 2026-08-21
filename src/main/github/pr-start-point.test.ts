@@ -13,10 +13,10 @@ vi.mock('./client', () => ({
 import { resolveGitHubPrStartPoint } from './pr-start-point'
 import { reviewHeadRemoteRefComponent } from '../../shared/review-head-tracking-ref'
 
-const ORIGIN_URL = 'git@github.com:acme/orca.git'
+const ORIGIN_URL = 'git@github.com:acme/mcode.git'
 const ORIGIN_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIGIN_URL)
 const durablePrLocalRef = (prNumber: number): string =>
-  `refs/orca/pull/${ORIGIN_COMPONENT}/${prNumber}`
+  `refs/mcode/pull/${ORIGIN_COMPONENT}/${prNumber}`
 const durablePrRev = (prNumber: number): string => `${durablePrLocalRef(prNumber)}^{commit}`
 const remoteGetUrl = (args: string[]): { stdout: string; stderr: string } | null =>
   args[0] === 'remote' && args[1] === 'get-url' ? { stdout: `${ORIGIN_URL}\n`, stderr: '' } : null
@@ -37,9 +37,9 @@ describe('resolveGitHubPrStartPoint', () => {
   it('falls back to the GitHub PR head ref when a direct branch fetch fails', async () => {
     getPullRequestPushTargetMock.mockResolvedValue({
       pushTarget: {
-        remoteName: 'pr-contributor-orca',
+        remoteName: 'pr-contributor-mcode',
         branchName: 'fix-issue-6933',
-        remoteUrl: 'git@github.com:contributor/orca.git'
+        remoteUrl: 'git@github.com:contributor/mcode.git'
       }
     })
     const fetchRemoteTrackingRef = vi.fn(async (_remote: string, branch: string) => {
@@ -78,9 +78,9 @@ describe('resolveGitHubPrStartPoint', () => {
       headSha: 'def456',
       branchNameOverride: 'fix-issue-6933',
       pushTarget: {
-        remoteName: 'pr-contributor-orca',
+        remoteName: 'pr-contributor-mcode',
         branchName: 'fix-issue-6933',
-        remoteUrl: 'git@github.com:contributor/orca.git'
+        remoteUrl: 'git@github.com:contributor/mcode.git'
       }
     })
   })
@@ -173,7 +173,7 @@ describe('resolveGitHubPrStartPoint', () => {
     })
     fetchPullRequestHeadRefMock.mockRejectedValue(
       new Error(
-        'This SSH host is running an older Orca relay that cannot fetch pull request heads.'
+        'This SSH host is running an older MCode relay that cannot fetch pull request heads.'
       )
     )
     const gitExec = vi.fn(async () => ({ stdout: '', stderr: '' }))
@@ -190,7 +190,7 @@ describe('resolveGitHubPrStartPoint', () => {
 
     expect(result).toEqual({
       error:
-        'Failed to fetch refs/pull/77/head: This SSH host is running an older Orca relay that cannot fetch pull request heads.'
+        'Failed to fetch refs/pull/77/head: This SSH host is running an older MCode relay that cannot fetch pull request heads.'
     })
   })
 
@@ -198,7 +198,7 @@ describe('resolveGitHubPrStartPoint', () => {
     getPullRequestPushTargetMock.mockRejectedValue(new Error('head repo is unavailable'))
     const fetchRemoteTrackingRef = vi.fn(async () => {})
     // Why: simulate a concurrent `git fetch origin` clobbering FETCH_HEAD with the
-    // default-branch tip. The resolved start-point must come from the durable Orca ref.
+    // default-branch tip. The resolved start-point must come from the durable MCode ref.
     const gitExec = vi.fn(async (args: string[]) => {
       if (args[0] === 'rev-parse') {
         const ref = args.at(-1)
@@ -237,7 +237,7 @@ describe('resolveGitHubPrStartPoint', () => {
 
   it('keeps the durable PR head when the head fetch fails but the local ref resolves', async () => {
     // Why: mirror compare-base soft-keep — a transient fetch failure must not
-    // fail the resolve when a prior fetch already pinned refs/orca/pull/<N>.
+    // fail the resolve when a prior fetch already pinned refs/mcode/pull/<N>.
     getPullRequestPushTargetMock.mockRejectedValue(new Error('head repo is unavailable'))
     fetchPullRequestHeadRefMock.mockRejectedValue(
       new Error('fatal: unable to access repo: Could not resolve host: github.com')
@@ -286,7 +286,7 @@ describe('resolveGitHubPrStartPoint', () => {
     ["fatal: couldn't find remote ref refs/pull/1849/head", 'deleted PR / cleaned fork'],
     ['Authentication failed. Check your remote credentials.', 'auth failure'],
     [
-      'This SSH host is running an older Orca relay that cannot fetch pull request heads. Reconnect to deploy the latest relay, then try again.',
+      'This SSH host is running an older MCode relay that cannot fetch pull request heads. Reconnect to deploy the latest relay, then try again.',
       'stale relay'
     ]
   ])('fails hard instead of soft-keeping the durable PR head on: %s', async (message) => {
@@ -375,9 +375,9 @@ describe('resolveGitHubPrStartPoint', () => {
     })
     getPullRequestPushTargetMock.mockResolvedValue({
       pushTarget: {
-        remoteName: 'pr-contributor-orca',
+        remoteName: 'pr-contributor-mcode',
         branchName: 'contributor/fix',
-        remoteUrl: 'git@github.com:contributor/orca.git'
+        remoteUrl: 'git@github.com:contributor/mcode.git'
       }
     })
     const fetchRemoteTrackingRef = vi.fn(async () => {})
@@ -416,9 +416,9 @@ describe('resolveGitHubPrStartPoint', () => {
       headSha: 'abc123',
       branchNameOverride: 'contributor/fix',
       pushTarget: {
-        remoteName: 'pr-contributor-orca',
+        remoteName: 'pr-contributor-mcode',
         branchName: 'contributor/fix',
-        remoteUrl: 'git@github.com:contributor/orca.git'
+        remoteUrl: 'git@github.com:contributor/mcode.git'
       }
     })
   })
@@ -426,9 +426,9 @@ describe('resolveGitHubPrStartPoint', () => {
   it('surfaces maintainerCanModify=false for a fork PR so the caller can warn', async () => {
     getPullRequestPushTargetMock.mockResolvedValue({
       pushTarget: {
-        remoteName: 'pr-contributor-orca',
+        remoteName: 'pr-contributor-mcode',
         branchName: 'contributor/fix',
-        remoteUrl: 'git@github.com:contributor/orca.git'
+        remoteUrl: 'git@github.com:contributor/mcode.git'
       },
       maintainerCanModify: false
     })
@@ -460,9 +460,9 @@ describe('resolveGitHubPrStartPoint', () => {
       headSha: 'abc123',
       branchNameOverride: 'contributor/fix',
       pushTarget: {
-        remoteName: 'pr-contributor-orca',
+        remoteName: 'pr-contributor-mcode',
         branchName: 'contributor/fix',
-        remoteUrl: 'git@github.com:contributor/orca.git'
+        remoteUrl: 'git@github.com:contributor/mcode.git'
       },
       maintainerCanModify: false
     })

@@ -1,13 +1,13 @@
 <h1 align="center">
-  <a href="https://onOrca.dev"><img src="../../resources/build/icon.png" alt="Orca" width="64" valign="middle" /></a> Orca
+  <a href="https://MCode.dev"><img src="../../resources/build/icon.png" alt="MCode" width="64" valign="middle" /></a> MCode
 </h1>
 
 <p align="center">
-  <a href="https://github.com/stablyai/orca"><img src="https://img.shields.io/github/stars/stablyai/orca?style=flat&amp;label=%E2%98%85&amp;color=08C" alt="GitHub スター数" /></a>
-  <a href="https://github.com/stablyai/orca/releases"><img src="../assets/readme-downloads.svg" alt="全リリースの合計ダウンロード数" /></a>
+  <a href="https://github.com/mcode-ide/mcode"><img src="https://img.shields.io/github/stars/mcode-ide/mcode?style=flat&amp;label=%E2%98%85&amp;color=08C" alt="GitHub スター数" /></a>
+  <a href="https://github.com/mcode-ide/mcode/releases"><img src="../assets/readme-downloads.svg" alt="全リリースの合計ダウンロード数" /></a>
   <img src="https://img.shields.io/badge/license-MIT-08C?style=flat" alt="ライセンス: MIT" />
-  <a href="https://discord.gg/fzjDKHxv8Q"><img src="https://img.shields.io/badge/Discord-5865F2?logo=discord&logoColor=white" alt="Orca の Discord に参加" /></a>
-  <a href="https://x.com/orca_build"><img src="https://img.shields.io/badge/X-000000?logo=x&logoColor=white" alt="X で Orca をフォロー" /></a>
+  <a href="https://discord.gg/fzjDKHxv8Q"><img src="https://img.shields.io/badge/Discord-5865F2?logo=discord&logoColor=white" alt="MCode の Discord に参加" /></a>
+  <a href="https://x.com/mcode_build"><img src="https://img.shields.io/badge/X-000000?logo=x&logoColor=white" alt="X で MCode をフォロー" /></a>
   <img src="https://img.shields.io/badge/macOS%20%7C%20Windows%20%7C%20Linux-4493F8?style=flat-square" alt="対応プラットフォーム: macOS、Windows、Linux" />
 </p>
 
@@ -20,10 +20,10 @@
   Codex、Claude Code、OpenCode、Pi を並べて実行 — それぞれを専用のワークツリーで動かし、1 か所で追跡できます。
 </p>
 
-<h3 align="center"><a href="https://onorca.dev/download"><ins>Orca をダウンロード</ins></a></h3>
+<h3 align="center"><a href="https://mcode.dev/download"><ins>MCode をダウンロード</ins></a></h3>
 
 <p align="center">
-  <img src="../assets/readme-hero.jpg" alt="並列ワークツリーでエージェントを実行する Orca デスクトップアプリと、隅に表示された Orca モバイル companion アプリ" width="960" />
+  <img src="../assets/readme-hero.jpg" alt="並列ワークツリーでエージェントを実行する MCode デスクトップアプリと、隅に表示された MCode モバイル companion アプリ" width="960" />
 </p>
 
 ## 機能
@@ -36,11 +36,11 @@
 
 スマートフォンからエージェントを監視・操作 — エージェントの完了を通知で受け取り、どこからでもフォローアップを送信できます。
 
-[iOS App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) · [Android APK](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.43/app-release.apk) · [ドキュメント →](https://www.onorca.dev/docs/mobile)
+[iOS App Store](https://apps.apple.com/us/app/mcode-ide/id6766130217) · [Android APK](https://github.com/mcode-ide/mcode/releases/download/mobile-android-v0.0.43/app-release.apk) · [ドキュメント →](https://www.mcode.dev/docs/mobile)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/mobile"><picture><source srcset="../assets/feature-wall/mobile-companion-app-showcase.gif" type="image/gif"><img src="../assets/feature-wall/mobile-companion-app-showcase.jpg" alt="Orca デスクトップとモバイル companion アプリ" width="100%" /></picture></a>
+  <a href="https://www.mcode.dev/docs/mobile"><picture><source srcset="../assets/feature-wall/mobile-companion-app-showcase.gif" type="image/gif"><img src="../assets/feature-wall/mobile-companion-app-showcase.jpg" alt="MCode デスクトップとモバイル companion アプリ" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -50,11 +50,11 @@
 
 1 つのプロンプトを 5 つのエージェントに展開し、それぞれを独立した git ワークツリーで実行 — 結果を比較して、最良のものをマージできます。
 
-[ドキュメント →](https://www.onorca.dev/docs/model/worktrees)
+[ドキュメント →](https://www.mcode.dev/docs/model/worktrees)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/model/worktrees"><picture><source srcset="../assets/feature-wall/parallel-worktrees.gif" type="image/gif"><img src="../assets/feature-wall/parallel-worktrees.jpg" alt="並列ワークツリーのオーケストレーション" width="100%" /></picture></a>
+  <a href="https://www.mcode.dev/docs/model/worktrees"><picture><source srcset="../assets/feature-wall/parallel-worktrees.gif" type="image/gif"><img src="../assets/feature-wall/parallel-worktrees.jpg" alt="並列ワークツリーのオーケストレーション" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -64,11 +64,11 @@
 
 WebGL レンダリング、無制限の分割、再起動後も残るスクロールバックを備えた Ghostty クラスのターミナル。
 
-[ドキュメント →](https://www.onorca.dev/docs/terminal)
+[ドキュメント →](https://www.mcode.dev/docs/terminal)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/terminal"><picture><source srcset="../assets/feature-wall/terminal-splits.gif" type="image/gif"><img src="../assets/feature-wall/terminal-splits.jpg" alt="ターミナル分割" width="100%" /></picture></a>
+  <a href="https://www.mcode.dev/docs/terminal"><picture><source srcset="../assets/feature-wall/terminal-splits.gif" type="image/gif"><img src="../assets/feature-wall/terminal-splits.jpg" alt="ターミナル分割" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -78,11 +78,11 @@ WebGL レンダリング、無制限の分割、再起動後も残るスクロ�
 
 実際の Chromium ウィンドウで任意の UI 要素をクリックすると、その HTML、CSS、切り抜いたスクリーンショットがそのままエージェントのプロンプトに送られます。
 
-[ドキュメント →](https://www.onorca.dev/docs/browser/design-mode)
+[ドキュメント →](https://www.mcode.dev/docs/browser/design-mode)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/browser/design-mode"><picture><source srcset="../assets/feature-wall/design-mode.gif" type="image/gif"><img src="../assets/feature-wall/design-mode.jpg" alt="組み込みブラウザとデザインモード" width="100%" /></picture></a>
+  <a href="https://www.mcode.dev/docs/browser/design-mode"><picture><source srcset="../assets/feature-wall/design-mode.gif" type="image/gif"><img src="../assets/feature-wall/design-mode.jpg" alt="組み込みブラウザとデザインモード" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -92,11 +92,11 @@ WebGL レンダリング、無制限の分割、再起動後も残るスクロ�
 
 PR、Issue、プロジェクトボードをアプリ内で閲覧 — 任意のタスクからワークツリーを開き、コンテキストスイッチなしでレビューできます。
 
-[ドキュメント →](https://www.onorca.dev/docs/review/linear)
+[ドキュメント →](https://www.mcode.dev/docs/review/linear)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/review/linear"><picture><source srcset="../assets/feature-wall/github-linear.gif" type="image/gif"><img src="../assets/feature-wall/github-linear.jpg" alt="Orca の GitHub と Linear タスクワークフロー" width="100%" /></picture></a>
+  <a href="https://www.mcode.dev/docs/review/linear"><picture><source srcset="../assets/feature-wall/github-linear.gif" type="image/gif"><img src="../assets/feature-wall/github-linear.jpg" alt="MCode の GitHub と Linear タスクワークフロー" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -106,11 +106,11 @@ PR、Issue、プロジェクトボードをアプリ内で閲覧 — 任意の�
 
 強力なリモートマシン上でエージェントを実行 — ファイル編集、git、ターミナルをフルに使え、自動再接続とポートフォワーディングも付属します。
 
-[ドキュメント →](https://www.onorca.dev/docs/ssh)
+[ドキュメント →](https://www.mcode.dev/docs/ssh)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/ssh"><picture><source srcset="../assets/feature-wall/ssh-worktrees.gif" type="image/gif"><img src="../assets/feature-wall/ssh-worktrees.jpg" alt="SSH 経由のリモートワークツリー" width="100%" /></picture></a>
+  <a href="https://www.mcode.dev/docs/ssh"><picture><source srcset="../assets/feature-wall/ssh-worktrees.gif" type="image/gif"><img src="../assets/feature-wall/ssh-worktrees.jpg" alt="SSH 経由のリモートワークツリー" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -118,13 +118,13 @@ PR、Issue、プロジェクトボードをアプリ内で閲覧 — 任意の�
 
 ### AI Diff に注釈
 
-任意の Diff 行にコメントを付けてエージェントへ送り返せます — Orca から離れずにレビュー、編集、コミットまで完結します。
+任意の Diff 行にコメントを付けてエージェントへ送り返せます — MCode から離れずにレビュー、編集、コミットまで完結します。
 
-[ドキュメント →](https://www.onorca.dev/docs/review/annotate-ai-diff)
+[ドキュメント →](https://www.mcode.dev/docs/review/annotate-ai-diff)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/review/annotate-ai-diff"><picture><source srcset="../assets/feature-wall/annotate-diff.gif" type="image/gif"><img src="../assets/feature-wall/annotate-diff.jpg" alt="AI が生成した Diff への注釈" width="100%" /></picture></a>
+  <a href="https://www.mcode.dev/docs/review/annotate-ai-diff"><picture><source srcset="../assets/feature-wall/annotate-diff.gif" type="image/gif"><img src="../assets/feature-wall/annotate-diff.jpg" alt="AI が生成した Diff への注釈" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
@@ -134,43 +134,43 @@ PR、Issue、プロジェクトボードをアプリ内で閲覧 — 任意の�
 
 オートセーブが全面的に効く VS Code のエディタ — ファイルや画像をそのままエージェントのプロンプトへドラッグできます。
 
-[ドキュメント →](https://www.onorca.dev/docs/editing/file-explorer)
+[ドキュメント →](https://www.mcode.dev/docs/editing/file-explorer)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/editing/file-explorer"><picture><source srcset="../assets/feature-wall/file-drag.gif" type="image/gif"><img src="../assets/feature-wall/file-drag.jpg" alt="ファイルや画像をエージェントのプロンプトへドラッグ" width="100%" /></picture></a>
+  <a href="https://www.mcode.dev/docs/editing/file-explorer"><picture><source srcset="../assets/feature-wall/file-drag.gif" type="image/gif"><img src="../assets/feature-wall/file-drag.jpg" alt="ファイルや画像をエージェントのプロンプトへドラッグ" width="100%" /></picture></a>
 </td>
 </tr>
 <tr>
 <td width="50%" valign="middle">
 
-### Orca CLI
+### MCode CLI
 
-エージェント自身も Orca を操作できます — `orca worktree create`、`snapshot`、`click`、`fill` であらゆるワークフローをスクリプト化できます。
+エージェント自身も MCode を操作できます — `mcode worktree create`、`snapshot`、`click`、`fill` であらゆるワークフローをスクリプト化できます。
 
-[ドキュメント →](https://www.onorca.dev/docs/cli/overview)
+[ドキュメント →](https://www.mcode.dev/docs/cli/overview)
 
 </td>
 <td width="50%">
-  <a href="https://www.onorca.dev/docs/cli/overview"><picture><source srcset="../assets/feature-wall/orca-cli.gif" type="image/gif"><img src="../assets/feature-wall/orca-cli.jpg" alt="CLI から Orca をスクリプト操作" width="100%" /></picture></a>
+  <a href="https://www.mcode.dev/docs/cli/overview"><picture><source srcset="../assets/feature-wall/mcode-cli.gif" type="image/gif"><img src="../assets/feature-wall/mcode-cli.jpg" alt="CLI から MCode をスクリプト操作" width="100%" /></picture></a>
 </td>
 </tr>
 </table>
 
 **さらに同梱:**
 
-- **[クイックオープン](https://www.onorca.dev/docs/model/quick-open)** — フローを離れずに、ワークツリー、ファイル、エージェント、コマンド、リポジトリコンテキストを横断検索できます。
-- **[アカウント切り替えと使用量トラッキング](https://www.onorca.dev/docs/agents/usage-tracking)** — Claude と Codex の使用量やレート制限のリセットを確認し、再ログインなしでアカウントを切り替えられます。
-- **[リッチなリポジトリプレビュー](https://www.onorca.dev/docs/editing/markdown)** — Markdown、画像、PDF、リポジトリ文書をワークスペース内でプレビューできます。
-- **[Computer Use](https://www.onorca.dev/docs/cli/computer-use)** — 実際の操作が必要なワークフローでは、エージェントにデスクトップアプリや画面上の UI を操作させられます。
-- **[通知と未読ステータス](https://www.onorca.dev/docs/notifications)** — エージェントの完了や要対応をすぐに把握し、スレッドを未読に戻して後で確認できます。
-- **その他、まだまだたくさん** — 毎日リリースしているので、このリストは常に追いついていません。本当の機能一覧は[チェンジログ](https://github.com/stablyai/orca/releases)です。
+- **[クイックオープン](https://www.mcode.dev/docs/model/quick-open)** — フローを離れずに、ワークツリー、ファイル、エージェント、コマンド、リポジトリコンテキストを横断検索できます。
+- **[アカウント切り替えと使用量トラッキング](https://www.mcode.dev/docs/agents/usage-tracking)** — Claude と Codex の使用量やレート制限のリセットを確認し、再ログインなしでアカウントを切り替えられます。
+- **[リッチなリポジトリプレビュー](https://www.mcode.dev/docs/editing/markdown)** — Markdown、画像、PDF、リポジトリ文書をワークスペース内でプレビューできます。
+- **[Computer Use](https://www.mcode.dev/docs/cli/computer-use)** — 実際の操作が必要なワークフローでは、エージェントにデスクトップアプリや画面上の UI を操作させられます。
+- **[通知と未読ステータス](https://www.mcode.dev/docs/notifications)** — エージェントの完了や要対応をすぐに把握し、スレッドを未読に戻して後で確認できます。
+- **その他、まだまだたくさん** — 毎日リリースしているので、このリストは常に追いついていません。本当の機能一覧は[チェンジログ](https://github.com/mcode-ide/mcode/releases)です。
 
 ---
 
 ## 対応するエージェント
 
-**あらゆる CLI エージェント**で動作します — ターミナルで動くものなら、Orca でも動きます。
+**あらゆる CLI エージェント**で動作します — ターミナルで動くものなら、MCode でも動きます。
 
 <p>
   <a href="https://docs.anthropic.com/claude/docs/claude-code"><kbd><img src="../assets/claude-logo.svg" alt="Claude Code logo" width="16" valign="middle" /> Claude Code</kbd></a> &nbsp;
@@ -209,35 +209,35 @@ PR、Issue、プロジェクトボードをアプリ内で閲覧 — 任意の�
 
 ### デスクトップ — macOS, Windows, Linux
 
-- **[onOrca.dev からダウンロード](https://onorca.dev/download)**
-- またはビルドを直接入手: [macOS Apple Silicon](https://github.com/stablyai/orca/releases/latest/download/orca-macos-arm64.dmg) · [macOS Intel](https://github.com/stablyai/orca/releases/latest/download/orca-macos-x64.dmg) · [Windows (.exe)](https://github.com/stablyai/orca/releases/latest/download/orca-windows-setup.exe) · [Linux AppImage](https://github.com/stablyai/orca/releases/latest/download/orca-linux.AppImage) · [すべてのビルド](https://github.com/stablyai/orca/releases/latest)
+- **[MCode.dev からダウンロード](https://mcode.dev/download)**
+- またはビルドを直接入手: [macOS Apple Silicon](https://github.com/mcode-ide/mcode/releases/latest/download/mcode-macos-arm64.dmg) · [macOS Intel](https://github.com/mcode-ide/mcode/releases/latest/download/mcode-macos-x64.dmg) · [Windows (.exe)](https://github.com/mcode-ide/mcode/releases/latest/download/mcode-windows-setup.exe) · [Linux AppImage](https://github.com/mcode-ide/mcode/releases/latest/download/mcode-linux.AppImage) · [すべてのビルド](https://github.com/mcode-ide/mcode/releases/latest)
 
 _パッケージマネージャーからもインストールできます:_
 
 ```bash
 # macOS (Homebrew)
-brew install --cask stablyai/orca/orca
+brew install --cask mcode-ide/mcode/mcode
 
-# Arch Linux (AUR) — or stably-orca-git to build from source
-yay -S stably-orca-bin
+# Arch Linux (AUR) — or stably-mcode-git to build from source
+yay -S stably-mcode-bin
 ```
 
 ### モバイル Companion — iOS, Android
 
 デスクトップアプリとペアリングして、スマートフォンからエージェントを監視・操作できます。
 
-- **iOS:** [App Store からダウンロード](https://apps.apple.com/us/app/orca-ide/id6766130217)
-- **Android:** [APK をダウンロード](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.43/app-release.apk)
+- **iOS:** [App Store からダウンロード](https://apps.apple.com/us/app/mcode-ide/id6766130217)
+- **Android:** [APK をダウンロード](https://github.com/mcode-ide/mcode/releases/download/mobile-android-v0.0.43/app-release.apk)
 
 ---
 
 ## コミュニティとサポート
 
 - **Discord:** **[Discord](https://discord.gg/fzjDKHxv8Q)** のコミュニティに参加してください。
-- **Twitter / X:** アップデートやお知らせは **[@orca_build](https://x.com/orca_build)** をフォローしてください。
-- **フィードバックとアイデア:** 私たちは高速にリリースしています。足りない機能がありますか？[機能リクエストを送信](https://github.com/stablyai/orca/issues)してください。
-- **プライバシー:** Orca が収集する匿名の利用データとオプトアウトの方法については、[プライバシーとテレメトリーのドキュメント](https://www.onorca.dev/docs/telemetry)をご覧ください。
-- **応援する:** 毎日のリリースを追うために、このリポジトリに[スター](https://github.com/stablyai/orca)を付けてください。
+- **Twitter / X:** アップデートやお知らせは **[@mcode_build](https://x.com/mcode_build)** をフォローしてください。
+- **フィードバックとアイデア:** 私たちは高速にリリースしています。足りない機能がありますか？[機能リクエストを送信](https://github.com/mcode-ide/mcode/issues)してください。
+- **プライバシー:** MCode が収集する匿名の利用データとオプトアウトの方法については、[プライバシーとテレメトリーのドキュメント](https://www.mcode.dev/docs/telemetry)をご覧ください。
+- **応援する:** 毎日のリリースを追うために、このリポジトリに[スター](https://github.com/mcode-ide/mcode)を付けてください。
 
 ---
 
@@ -245,10 +245,10 @@ yay -S stably-orca-bin
 
 貢献したい、またはローカルで実行したいですか？ [CONTRIBUTING.md](../../.github/CONTRIBUTING.md) ガイドをご覧ください。
 
-<a href="https://github.com/stablyai/orca/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=stablyai/orca" alt="Orca のコントリビューター" />
+<a href="https://github.com/mcode-ide/mcode/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=mcode-ide/mcode" alt="MCode のコントリビューター" />
 </a>
 
 ## ライセンス
 
-Orca は [MIT License](../../LICENSE) の下で無料かつオープンソースです。
+MCode は [MIT License](../../LICENSE) の下で無料かつオープンソースです。

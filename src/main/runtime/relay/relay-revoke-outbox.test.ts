@@ -30,7 +30,7 @@ describe('RelayRevokeOutbox', () => {
   })
 
   it('durably retains an idempotent account-scoped revoke after local deletion', () => {
-    const path = mkdtempSync(join(tmpdir(), 'orca-relay-revoke-'))
+    const path = mkdtempSync(join(tmpdir(), 'mcode-relay-revoke-'))
     paths.push(path)
     const binding = {
       relayHostId: 'AbCdEf0123_-xyZ9',
@@ -48,7 +48,7 @@ describe('RelayRevokeOutbox', () => {
   })
 
   it('does not retain an enqueue that failed to reach disk', () => {
-    const path = mkdtempSync(join(tmpdir(), 'orca-relay-revoke-'))
+    const path = mkdtempSync(join(tmpdir(), 'mcode-relay-revoke-'))
     paths.push(path)
     const binding = {
       relayHostId: 'AbCdEf0123_-xyZ9',
@@ -67,7 +67,7 @@ describe('RelayRevokeOutbox', () => {
   })
 
   it('does not remove an item in memory when the durable removal fails', () => {
-    const path = mkdtempSync(join(tmpdir(), 'orca-relay-revoke-'))
+    const path = mkdtempSync(join(tmpdir(), 'mcode-relay-revoke-'))
     paths.push(path)
     const binding = {
       relayHostId: 'AbCdEf0123_-xyZ9',

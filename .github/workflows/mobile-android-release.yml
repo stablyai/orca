@@ -73,7 +73,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
-          name: orca-mobile-apk
+          name: mcode-mobile-apk
           path: mobile/android/app/build/outputs/apk/release/*.apk
 
       - name: Ensure GitHub release tag
@@ -106,7 +106,7 @@ jobs:
           else
             gh release create "$tag" \
               --repo "$GITHUB_REPOSITORY" \
-              --title "Orca Mobile Android $tag" \
+              --title "MCode Mobile Android $tag" \
               --prerelease \
               --latest=false \
               --generate-notes \

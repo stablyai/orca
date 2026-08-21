@@ -14,7 +14,7 @@ describe('verify-packaged-daemon-entry', () => {
   let resourcesDir
 
   beforeEach(() => {
-    resourcesDir = mkdtempSync(join(tmpdir(), 'orca-daemon-entry-verify-'))
+    resourcesDir = mkdtempSync(join(tmpdir(), 'mcode-daemon-entry-verify-'))
   })
 
   afterEach(() => {
@@ -44,7 +44,7 @@ describe('verify-packaged-daemon-entry', () => {
   })
 
   it('fails when the packaged entry cannot resolve its module graph', () => {
-    writePackagedEntry('require("orca-module-that-does-not-exist")\n')
+    writePackagedEntry('require("mcode-module-that-does-not-exist")\n')
     expect(() => verifyPackagedDaemonEntryBoots(resourcesDir)).toThrow(
       /failed to load under plain Node/
     )

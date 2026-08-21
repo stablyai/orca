@@ -45,7 +45,7 @@ function lookupArgs(command: string, mode: '-lc' | '-ilc' = '-lc'): string[] {
     [
       buildPosixCommandPathLookupScript({ kind: 'literal', value: command }),
       'if [ -n "$resolved" ]; then',
-      'printf \'__ORCA_AGENT_PATH__%s\\n\' "$resolved"',
+      'printf \'__MCODE_AGENT_PATH__%s\\n\' "$resolved"',
       'fi'
     ].join('\n')
   ]
@@ -57,7 +57,7 @@ function fishLookupArgs(command: string): string[] {
     [
       `set -l resolved (command -v ${command} 2>/dev/null)`,
       'if test -n "$resolved"',
-      'printf \'__ORCA_AGENT_PATH__%s\\n\' "$resolved"',
+      'printf \'__MCODE_AGENT_PATH__%s\\n\' "$resolved"',
       'end'
     ].join('\n')
   ]
@@ -157,7 +157,7 @@ describe('isCommandOnPathForRelay', () => {
   it('falls back to inherited PATH when shell startup returns no absolute command path', async () => {
     execFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'welcome\ncodex is a function\n' })
-      .mockResolvedValueOnce({ stdout: '__ORCA_AGENT_PATH__/relay/path/codex\n' })
+      .mockResolvedValueOnce({ stdout: '__MCODE_AGENT_PATH__/relay/path/codex\n' })
 
     await expect(
       isCommandOnPathForRelay('codex', {
@@ -181,7 +181,7 @@ describe('isCommandOnPathForRelay', () => {
   it('falls back to inherited PATH when shell startup fails', async () => {
     execFileAsyncMock
       .mockRejectedValueOnce(new Error('startup failed'))
-      .mockResolvedValueOnce({ stdout: '__ORCA_AGENT_PATH__/relay/path/codex\n' })
+      .mockResolvedValueOnce({ stdout: '__MCODE_AGENT_PATH__/relay/path/codex\n' })
 
     await expect(
       isCommandOnPathForRelay('codex', {
@@ -194,7 +194,7 @@ describe('isCommandOnPathForRelay', () => {
   })
 
   it('does not execute an untrusted configured shell before inherited PATH lookup', async () => {
-    execFileAsyncMock.mockResolvedValueOnce({ stdout: '__ORCA_AGENT_PATH__/relay/path/codex\n' })
+    execFileAsyncMock.mockResolvedValueOnce({ stdout: '__MCODE_AGENT_PATH__/relay/path/codex\n' })
 
     await expect(
       isCommandOnPathForRelay('codex', {
@@ -225,7 +225,7 @@ describe('hasAbsoluteCommandPath', () => {
 
   it('recognizes a sentinel-marked command path amid shell startup and exit output', () => {
     expect(
-      hasAbsoluteCommandPath('welcome\n__ORCA_AGENT_PATH__/opt/bin/codex\nlogout-banner\n', 'linux')
+      hasAbsoluteCommandPath('welcome\n__MCODE_AGENT_PATH__/opt/bin/codex\nlogout-banner\n', 'linux')
     ).toBe(true)
   })
 
@@ -240,8 +240,8 @@ describe('PreflightHandler', () => {
   it('honors required commands when reporting detected agents', async () => {
     execFileAsyncMock.mockImplementation(async (_file, args) => {
       const script = String(args[1])
-      if (script.includes("'orca'")) {
-        return { stdout: '__ORCA_AGENT_PATH__/relay/path/orca\n' }
+      if (script.includes("'mcode'")) {
+        return { stdout: '__MCODE_AGENT_PATH__/relay/path/mcode\n' }
       }
       throw new Error('not found')
     })
@@ -261,7 +261,7 @@ describe('PreflightHandler', () => {
     await expect(
       handler!({
         commands: [
-          { id: 'claude-agent-teams', cmd: 'orca', requiredCommands: ['claude'] },
+          { id: 'claude-agent-teams', cmd: 'mcode', requiredCommands: ['claude'] },
           { id: 'claude', cmd: 'claude' }
         ]
       })
@@ -278,8 +278,8 @@ describe('PreflightHandler', () => {
       if (String(args[0]) === 'claude') {
         return { stdout: 'C:\\Users\\test\\AppData\\Roaming\\npm\\claude.cmd\r\n' }
       }
-      if (String(args[0]) === 'orca') {
-        return { stdout: 'C:\\Program Files\\Orca\\orca.cmd\r\n' }
+      if (String(args[0]) === 'mcode') {
+        return { stdout: 'C:\\Program Files\\MCode\\mcode.cmd\r\n' }
       }
       throw new Error('not found')
     })
@@ -301,7 +301,7 @@ describe('PreflightHandler', () => {
           commands: [
             {
               id: 'claude-agent-teams',
-              cmd: 'orca',
+              cmd: 'mcode',
               requiredCommands: ['claude'],
               unsupportedRuntimes: ['win32']
             },

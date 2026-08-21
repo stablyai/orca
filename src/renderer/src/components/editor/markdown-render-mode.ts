@@ -31,7 +31,7 @@ export function getMarkdownRenderMode({
   }
 
   // Why: rich view is the user's "formatted markdown" choice, not a promise
-  // that Tiptap owns the document. Now that Orca has a dedicated preview tab,
+  // that Tiptap owns the document. Now that MCode has a dedicated preview tab,
   // unsafe rich documents should stay editable in source mode here instead of
   // silently turning the current editor tab into a read-only preview surface.
   return hasRichModeUnsupportedContent ? 'source' : 'rich-editor'

@@ -3,7 +3,7 @@
  * Ground-truth repro harness for issue #9993: color-scheme (CSI ?997;1n) replies
  * leaking into a child process' stdin under fish.
  *
- * Simulates Orca's terminal pipeline around a REAL fish shell:
+ * Simulates MCode's terminal pipeline around a REAL fish shell:
  *   node-pty  ->  scanMode2031ReplyDecision() (the real scanner from
  *                 src/shared/terminal-color-scheme-protocol.ts)
  *             ->  reply `CSI ?997;1n` written back to the PTY, optionally after
@@ -208,7 +208,7 @@ function answerProbes(data) {
     ptyWrite('\x1b[1;1R', 'probe reply CPR')
   }
   if (/\x1b\[>q/.test(data)) {
-    ptyWrite('\x1bP>|orca-harness(1)\x1b\\', 'probe reply XTVERSION')
+    ptyWrite('\x1bP>|mcode-harness(1)\x1b\\', 'probe reply XTVERSION')
   }
   if (/\x1b\]10;\?/.test(data)) {
     ptyWrite('\x1b]10;rgb:ffff/ffff/ffff\x1b\\', 'probe reply OSC 10')

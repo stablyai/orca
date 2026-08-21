@@ -56,7 +56,7 @@ export type ElectronModuleMock = {
 }
 
 export const electronModuleMock = (): ElectronModuleMock => ({
-  // Why defined-but-undefined: the real OrcaRuntimeService guards BrowserWindow with `?.`; vitest throws on reading exports the mock omits.
+  // Why defined-but-undefined: the real MCodeRuntimeService guards BrowserWindow with `?.`; vitest throws on reading exports the mock omits.
   BrowserWindow: undefined,
   app: {
     isPackaged: true,
@@ -151,8 +151,8 @@ export const classifyErrorModuleMock = () => ({
 
 // Why: the real ensure writes to process.resourcesPath (absent under vitest); env assembly only needs the returned dir path.
 export const linuxCliShimModuleMock = () => ({
-  ensureLinuxTerminalOrcaCliShimDir: (options: { userDataPath: string }) =>
-    join(options.userDataPath, 'linux-orca-cli-shim')
+  ensureLinuxTerminalMCodeCliShimDir: (options: { userDataPath: string }) =>
+    join(options.userDataPath, 'linux-mcode-cli-shim')
 })
 
 export const ptyRegistryModuleMock = () => ({

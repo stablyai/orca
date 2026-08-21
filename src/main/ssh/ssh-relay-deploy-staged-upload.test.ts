@@ -11,7 +11,7 @@ vi.mock('fs', () => ({
 
 vi.mock('./relay-protocol', () => ({
   RELAY_VERSION: '0.1.0',
-  RELAY_REMOTE_DIR: '.orca-remote',
+  RELAY_REMOTE_DIR: '.mcode-remote',
   parseUnameToRelayPlatform: vi.fn((os: string, arch: string) => {
     const normalizedOs = os.toLowerCase()
     const normalizedArch = arch.toLowerCase()
@@ -27,7 +27,7 @@ vi.mock('./relay-protocol', () => ({
     }
     return null
   }),
-  RELAY_SENTINEL: 'ORCA-RELAY v0.1.0 READY\n',
+  RELAY_SENTINEL: 'MCODE-RELAY v0.1.0 READY\n',
   RELAY_SENTINEL_TIMEOUT_MS: 10_000
 }))
 
@@ -41,7 +41,7 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
   isUnconfirmedSshCommandTermination: (error: unknown) =>
     error instanceof Error &&
     (error as Error & { sshChannelCloseConfirmed?: boolean }).sshChannelCloseConfirmed === false,
-  execCommand: vi.fn().mockResolvedValue('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+  execCommand: vi.fn().mockResolvedValue('__MCODE_REMOTE_PLATFORM__ Linux x86_64')
 }))
 
 vi.mock('./ssh-remote-node-resolution', () => ({
@@ -50,7 +50,7 @@ vi.mock('./ssh-remote-node-resolution', () => ({
 
 vi.mock('./ssh-relay-versioned-install', () => ({
   readLocalFullVersion: vi.fn().mockReturnValue('0.1.0+abcdef012345'),
-  computeRemoteRelayDir: (home: string, v: string) => `${home}/.orca-remote/relay-${v}`,
+  computeRemoteRelayDir: (home: string, v: string) => `${home}/.mcode-remote/relay-${v}`,
   isRelayAlreadyInstalled: vi.fn().mockResolvedValue(true),
   finalizeInstall: vi.fn().mockResolvedValue(undefined),
   abandonInstall: vi.fn().mockResolvedValue(undefined),
@@ -112,11 +112,11 @@ function makeMockConnection(): SshConnection {
 
 function stageCommandResponse(command: string): string | undefined {
   const marker = command.match(/\.sftp-namespace-[0-9a-f]{32}/u)?.[0]
-  if (command.includes('__ORCA_UPLOAD_STAGE_SLOT__') && marker) {
-    return `__ORCA_UPLOAD_STAGE_SLOT__${marker}:slot-0`
+  if (command.includes('__MCODE_UPLOAD_STAGE_SLOT__') && marker) {
+    return `__MCODE_UPLOAD_STAGE_SLOT__${marker}:slot-0`
   }
-  if (command.includes('__ORCA_UPLOAD_STAGE_PROMOTION__') && marker) {
-    return `__ORCA_UPLOAD_STAGE_PROMOTION__${marker}:PROMOTED`
+  if (command.includes('__MCODE_UPLOAD_STAGE_PROMOTION__') && marker) {
+    return `__MCODE_UPLOAD_STAGE_PROMOTION__${marker}:PROMOTED`
   }
   return command.includes('.upload-stages') ? '' : undefined
 }
@@ -124,7 +124,7 @@ function stageCommandResponse(command: string): string | undefined {
 describe('deployAndLaunchRelay staged uploads', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(execCommand).mockReset().mockResolvedValue('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+    vi.mocked(execCommand).mockReset().mockResolvedValue('__MCODE_REMOTE_PLATFORM__ Linux x86_64')
     vi.mocked(waitForSentinel).mockReset().mockResolvedValue({
       write: vi.fn(),
       onData: vi.fn(),
@@ -142,7 +142,7 @@ describe('deployAndLaunchRelay staged uploads', () => {
       vi.mocked(isRelayAlreadyInstalled).mockReset().mockResolvedValue(true)
       vi.mocked(execCommand).mockImplementation((_conn, command) => {
         if (command.includes('uname')) {
-          return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+          return Promise.resolve('__MCODE_REMOTE_PLATFORM__ Linux x86_64')
         }
         if (command === 'echo $HOME') {
           return Promise.resolve('/home/user')
@@ -182,7 +182,7 @@ describe('deployAndLaunchRelay staged uploads', () => {
       vi.mocked(isRelayAlreadyInstalled).mockReset().mockResolvedValue(false)
       vi.mocked(execCommand).mockImplementation((_conn, command) => {
         if (command.includes('uname')) {
-          return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+          return Promise.resolve('__MCODE_REMOTE_PLATFORM__ Linux x86_64')
         }
         if (command === 'echo $HOME') {
           return Promise.resolve('/home/user')
@@ -228,7 +228,7 @@ describe('deployAndLaunchRelay staged uploads', () => {
         return Promise.resolve(stageResponse)
       }
       if (command.includes('uname')) {
-        return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+        return Promise.resolve('__MCODE_REMOTE_PLATFORM__ Linux x86_64')
       }
       if (command === 'echo $HOME') {
         return Promise.resolve('/home/user')
@@ -236,8 +236,8 @@ describe('deployAndLaunchRelay staged uploads', () => {
       if (command.includes('test -S')) {
         return Promise.resolve(socketProbe++ === 0 ? 'DEAD' : 'READY')
       }
-      if (command.includes('ORCA-NATIVE')) {
-        return Promise.resolve('ORCA-NATIVE-DEPS-OK')
+      if (command.includes('MCODE-NATIVE')) {
+        return Promise.resolve('MCODE-NATIVE-DEPS-OK')
       }
       return Promise.resolve('')
     })
@@ -281,7 +281,7 @@ describe('deployAndLaunchRelay staged uploads', () => {
         return Promise.resolve(stageResponse)
       }
       if (command.includes('uname')) {
-        return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+        return Promise.resolve('__MCODE_REMOTE_PLATFORM__ Linux x86_64')
       }
       if (command === 'echo $HOME') {
         return Promise.resolve('/home/user')
@@ -305,7 +305,7 @@ describe('deployAndLaunchRelay staged uploads', () => {
       (command) => /\.sftp-namespace-[0-9a-f]{32}/u.test(command) && command.includes('rm -rf')
     )
     expect(uploadStageRemovals).toHaveLength(1)
-    expect(uploadStageRemovals[0]).toContain('/.orca-remote/.upload-stages/claim-0')
+    expect(uploadStageRemovals[0]).toContain('/.mcode-remote/.upload-stages/claim-0')
   })
 
   it('runs bounded fixed-path recovery before a fresh upload', async () => {
@@ -325,7 +325,7 @@ describe('deployAndLaunchRelay staged uploads', () => {
         return Promise.resolve(stageResponse)
       }
       if (command.includes('uname')) {
-        return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+        return Promise.resolve('__MCODE_REMOTE_PLATFORM__ Linux x86_64')
       }
       if (command === 'echo $HOME') {
         return Promise.resolve('/home/user')
@@ -333,8 +333,8 @@ describe('deployAndLaunchRelay staged uploads', () => {
       if (command.includes('test -S')) {
         return Promise.resolve(socketProbe++ === 0 ? 'DEAD' : 'READY')
       }
-      if (command.includes('ORCA-NATIVE')) {
-        return Promise.resolve('ORCA-NATIVE-DEPS-OK')
+      if (command.includes('MCODE-NATIVE')) {
+        return Promise.resolve('MCODE-NATIVE-DEPS-OK')
       }
       return Promise.resolve('')
     })
@@ -369,13 +369,13 @@ describe('deployAndLaunchRelay staged uploads', () => {
         return Promise.resolve(stageResponse)
       }
       if (command.includes('uname')) {
-        return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+        return Promise.resolve('__MCODE_REMOTE_PLATFORM__ Linux x86_64')
       }
       if (command === 'echo $HOME') {
         return Promise.resolve('/home/user')
       }
-      if (command.includes('ORCA-NATIVE')) {
-        return Promise.resolve('ORCA-NATIVE-DEPS-OK')
+      if (command.includes('MCODE-NATIVE')) {
+        return Promise.resolve('MCODE-NATIVE-DEPS-OK')
       }
       if (command.includes('test -S')) {
         return Promise.resolve(socketProbe++ % 2 === 0 ? 'DEAD' : 'READY')
@@ -410,7 +410,7 @@ describe('deployAndLaunchRelay staged uploads', () => {
         return Promise.resolve(stageResponse)
       }
       if (command.includes('uname')) {
-        return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+        return Promise.resolve('__MCODE_REMOTE_PLATFORM__ Linux x86_64')
       }
       if (command === 'echo $HOME') {
         return Promise.resolve('/home/user')
@@ -418,8 +418,8 @@ describe('deployAndLaunchRelay staged uploads', () => {
       if (command.includes('test -S')) {
         return Promise.resolve(socketProbe++ === 0 ? 'DEAD' : 'READY')
       }
-      if (command.includes('ORCA-NATIVE')) {
-        return Promise.resolve('ORCA-NATIVE-DEPS-OK')
+      if (command.includes('MCODE-NATIVE')) {
+        return Promise.resolve('MCODE-NATIVE-DEPS-OK')
       }
       return Promise.resolve('')
     })
@@ -444,7 +444,7 @@ describe('deployAndLaunchRelay staged uploads', () => {
         return Promise.resolve(stageResponse)
       }
       return Promise.resolve(
-        command.includes('uname') ? '__ORCA_REMOTE_PLATFORM__ Linux x86_64' : '/home/user'
+        command.includes('uname') ? '__MCODE_REMOTE_PLATFORM__ Linux x86_64' : '/home/user'
       )
     })
     conn.writeFile = vi.fn().mockResolvedValue(undefined)
@@ -494,7 +494,7 @@ describe('deployAndLaunchRelay staged uploads', () => {
         return Promise.resolve(stageResponse)
       }
       if (command.includes('uname')) {
-        return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+        return Promise.resolve('__MCODE_REMOTE_PLATFORM__ Linux x86_64')
       }
       if (command === 'echo $HOME') {
         return Promise.resolve('/home/user')
@@ -502,8 +502,8 @@ describe('deployAndLaunchRelay staged uploads', () => {
       if (command.includes('test -S')) {
         return Promise.resolve(socketProbe++ === 0 ? 'DEAD' : 'READY')
       }
-      if (command.includes('ORCA-NATIVE')) {
-        return Promise.resolve('ORCA-NATIVE-DEPS-OK')
+      if (command.includes('MCODE-NATIVE')) {
+        return Promise.resolve('MCODE-NATIVE-DEPS-OK')
       }
       return Promise.resolve('')
     })
@@ -534,7 +534,7 @@ describe('deployAndLaunchRelay staged uploads', () => {
         return Promise.resolve(stageResponse)
       }
       if (command.includes('uname')) {
-        return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+        return Promise.resolve('__MCODE_REMOTE_PLATFORM__ Linux x86_64')
       }
       if (command === 'echo $HOME') {
         return Promise.resolve('/home/user')
@@ -542,8 +542,8 @@ describe('deployAndLaunchRelay staged uploads', () => {
       if (command.includes('test -S')) {
         return Promise.resolve(socketProbe++ === 0 ? 'DEAD' : 'READY')
       }
-      if (command.includes('ORCA-NATIVE')) {
-        return Promise.resolve('ORCA-NATIVE-DEPS-OK')
+      if (command.includes('MCODE-NATIVE')) {
+        return Promise.resolve('MCODE-NATIVE-DEPS-OK')
       }
       return Promise.resolve('')
     })

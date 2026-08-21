@@ -19,7 +19,7 @@ function sourceBetween(contents, startMarker, endMarker) {
 
 describe('computer-use modifier safety', () => {
   it('uses mouse-event flags instead of held modifier keys on macOS', () => {
-    const macOS = source('native/computer-use-macos/Sources/OrcaComputerUseMacOS/main.swift')
+    const macOS = source('native/computer-use-macos/Sources/MCodeComputerUseMacOS/main.swift')
     const clickInput = sourceBetween(macOS, 'static func click(', 'static func scroll(')
     const mouseInput = sourceBetween(
       macOS,
@@ -45,8 +45,8 @@ describe('computer-use modifier safety', () => {
     )
     const mouseClick = sourceBetween(
       windows,
-      'function Send-OrcaMouseClick',
-      'function Send-OrcaDrag'
+      'function Send-MCodeMouseClick',
+      'function Send-MCodeDrag'
     )
 
     expect(modifiedClick).toContain('SendInput((uint)values.Length, values')
@@ -55,7 +55,7 @@ describe('computer-use modifier safety', () => {
     expect(modifiedClick).toContain('releases.Add(MouseInput(mouseInput, mouseUp))')
     expect(modifiedClick).not.toContain('int count')
     expect(mouseClick).toMatch(
-      /for \(\$i = 0; \$i -lt \$clickCount; \$i\+\+\) \{\s+\[OrcaDesktopWin32\]::SendModifiedClick\(/
+      /for \(\$i = 0; \$i -lt \$clickCount; \$i\+\+\) \{\s+\[MCodeDesktopWin32\]::SendModifiedClick\(/
     )
     expect(mouseClick).toContain('if ($i + 1 -lt $clickCount) { Start-Sleep -Milliseconds 35 }')
     expect(windows).not.toContain('keybd_event')

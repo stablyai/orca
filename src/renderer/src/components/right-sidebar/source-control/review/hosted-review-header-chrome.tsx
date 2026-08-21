@@ -68,7 +68,7 @@ export function HostedReviewHeaderLink({
         className={className}
         onClick={(e) => {
           e.stopPropagation()
-          // Why: GitHub PR and GitLab MR details live in Orca's Checks tab; keep
+          // Why: GitHub PR and GitLab MR details live in MCode's Checks tab; keep
           // the sidebar workflow in-app instead of opening the browser.
           onOpenHostedReviewInChecks()
         }}

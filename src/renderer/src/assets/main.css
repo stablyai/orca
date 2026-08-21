@@ -16,7 +16,7 @@
 }
 
 @font-face {
-  font-family: 'Orca Nerd Font Symbols';
+  font-family: 'MCode Nerd Font Symbols';
   src: url('./fonts/SymbolsNerdFontMono-Regular.woff2') format('woff2');
   font-weight: 400;
   font-style: normal;
@@ -135,23 +135,23 @@
     'SF Mono', SFMono-Regular, ui-monospace, 'Cascadia Code', Menlo, Consolas, 'Liberation Mono',
     monospace;
   --radius: 0.625rem;
-  --orca-security-background: #fff;
-  --orca-security-foreground: #0a0a0a;
-  --orca-security-card: #fff;
-  --orca-security-card-foreground: #0a0a0a;
-  --orca-security-popover: #fff;
-  --orca-security-popover-foreground: #0a0a0a;
-  --orca-security-primary: #171717;
-  --orca-security-primary-foreground: #fafafa;
-  --orca-security-secondary: #f5f5f5;
-  --orca-security-secondary-foreground: #171717;
-  --orca-security-muted: #f5f5f5;
-  --orca-security-muted-foreground: #737373;
-  --orca-security-accent: #f5f5f5;
-  --orca-security-accent-foreground: #171717;
-  --orca-security-border: #e5e5e5;
-  --orca-security-input: #e5e5e5;
-  --orca-security-ring: #a1a1a1;
+  --mcode-security-background: #fff;
+  --mcode-security-foreground: #0a0a0a;
+  --mcode-security-card: #fff;
+  --mcode-security-card-foreground: #0a0a0a;
+  --mcode-security-popover: #fff;
+  --mcode-security-popover-foreground: #0a0a0a;
+  --mcode-security-primary: #171717;
+  --mcode-security-primary-foreground: #fafafa;
+  --mcode-security-secondary: #f5f5f5;
+  --mcode-security-secondary-foreground: #171717;
+  --mcode-security-muted: #f5f5f5;
+  --mcode-security-muted-foreground: #737373;
+  --mcode-security-accent: #f5f5f5;
+  --mcode-security-accent-foreground: #171717;
+  --mcode-security-border: #e5e5e5;
+  --mcode-security-input: #e5e5e5;
+  --mcode-security-ring: #a1a1a1;
   --background: #fff;
   --editor-surface: #ffffff;
   --foreground: #0a0a0a;
@@ -249,23 +249,23 @@
 /* ── Dark Mode ───────────────────────────────────────── */
 
 .dark {
-  --orca-security-background: #0a0a0a;
-  --orca-security-foreground: #fafafa;
-  --orca-security-card: #171717;
-  --orca-security-card-foreground: #fafafa;
-  --orca-security-popover: #171717;
-  --orca-security-popover-foreground: #fafafa;
-  --orca-security-primary: #e5e5e5;
-  --orca-security-primary-foreground: #171717;
-  --orca-security-secondary: #262626;
-  --orca-security-secondary-foreground: #fafafa;
-  --orca-security-muted: #262626;
-  --orca-security-muted-foreground: #a1a1a1;
-  --orca-security-accent: #404040;
-  --orca-security-accent-foreground: #fafafa;
-  --orca-security-border: rgb(255 255 255 / 0.07);
-  --orca-security-input: rgb(255 255 255 / 0.15);
-  --orca-security-ring: #737373;
+  --mcode-security-background: #0a0a0a;
+  --mcode-security-foreground: #fafafa;
+  --mcode-security-card: #171717;
+  --mcode-security-card-foreground: #fafafa;
+  --mcode-security-popover: #171717;
+  --mcode-security-popover-foreground: #fafafa;
+  --mcode-security-primary: #e5e5e5;
+  --mcode-security-primary-foreground: #171717;
+  --mcode-security-secondary: #262626;
+  --mcode-security-secondary-foreground: #fafafa;
+  --mcode-security-muted: #262626;
+  --mcode-security-muted-foreground: #a1a1a1;
+  --mcode-security-accent: #404040;
+  --mcode-security-accent-foreground: #fafafa;
+  --mcode-security-border: rgb(255 255 255 / 0.07);
+  --mcode-security-input: rgb(255 255 255 / 0.15);
+  --mcode-security-ring: #737373;
   --background: #0a0a0a;
   --editor-surface: #1e1e1e;
   --foreground: #fafafa;
@@ -359,23 +359,23 @@
 .plugin-security-chrome {
   /* Why: plugin themes may style the app, but provenance and consent must
      retain host-owned contrast so a pack cannot disguise a trust decision. */
-  --background: var(--orca-security-background);
-  --foreground: var(--orca-security-foreground);
-  --card: var(--orca-security-card);
-  --card-foreground: var(--orca-security-card-foreground);
-  --popover: var(--orca-security-popover);
-  --popover-foreground: var(--orca-security-popover-foreground);
-  --primary: var(--orca-security-primary);
-  --primary-foreground: var(--orca-security-primary-foreground);
-  --secondary: var(--orca-security-secondary);
-  --secondary-foreground: var(--orca-security-secondary-foreground);
-  --muted: var(--orca-security-muted);
-  --muted-foreground: var(--orca-security-muted-foreground);
-  --accent: var(--orca-security-accent);
-  --accent-foreground: var(--orca-security-accent-foreground);
-  --border: var(--orca-security-border);
-  --input: var(--orca-security-input);
-  --ring: var(--orca-security-ring);
+  --background: var(--mcode-security-background);
+  --foreground: var(--mcode-security-foreground);
+  --card: var(--mcode-security-card);
+  --card-foreground: var(--mcode-security-card-foreground);
+  --popover: var(--mcode-security-popover);
+  --popover-foreground: var(--mcode-security-popover-foreground);
+  --primary: var(--mcode-security-primary);
+  --primary-foreground: var(--mcode-security-primary-foreground);
+  --secondary: var(--mcode-security-secondary);
+  --secondary-foreground: var(--mcode-security-secondary-foreground);
+  --muted: var(--mcode-security-muted);
+  --muted-foreground: var(--mcode-security-muted-foreground);
+  --accent: var(--mcode-security-accent);
+  --accent-foreground: var(--mcode-security-accent-foreground);
+  --border: var(--mcode-security-border);
+  --input: var(--mcode-security-input);
+  --ring: var(--mcode-security-ring);
 }
 
 .linear-priority-bars {
@@ -434,7 +434,7 @@
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
   /* Why: Sonner's dark-theme defaults can resolve the close icon and button
-     background to the same color; keep the X readable on both Orca themes. */
+     background to the same color; keep the X readable on both MCode themes. */
   color: var(--popover-foreground);
   background: var(--popover);
   border-color: rgb(0 0 0 / 0.14);
@@ -2174,41 +2174,41 @@ html.native-shell .app-layout {
 
 /* ── Git conflict decorations ───────────────────────────────────── */
 
-.monaco-editor .orca-conflict-marker-line {
+.monaco-editor .mcode-conflict-marker-line {
   background: color-mix(in srgb, var(--destructive) 12%, transparent);
 }
 
-.monaco-editor .orca-conflict-section-line {
+.monaco-editor .mcode-conflict-section-line {
   border-left: 3px solid transparent;
 }
 
-.monaco-editor .orca-conflict-current-line {
+.monaco-editor .mcode-conflict-current-line {
   background: color-mix(in srgb, var(--git-decoration-modified) 12%, transparent);
   border-left-color: color-mix(in srgb, var(--git-decoration-modified) 72%, transparent);
 }
 
-.monaco-editor .orca-conflict-base-line {
+.monaco-editor .mcode-conflict-base-line {
   background: color-mix(in srgb, var(--muted-foreground) 7%, transparent);
   border-left-color: color-mix(in srgb, var(--muted-foreground) 36%, transparent);
 }
 
-.monaco-editor .orca-conflict-incoming-line {
+.monaco-editor .mcode-conflict-incoming-line {
   background: color-mix(in srgb, var(--git-decoration-renamed) 11%, transparent);
   border-left-color: color-mix(in srgb, var(--git-decoration-renamed) 68%, transparent);
 }
 
-.monaco-editor .orca-conflict-line-decoration {
+.monaco-editor .mcode-conflict-line-decoration {
   width: 4px !important;
   margin-left: 3px;
   background: var(--destructive);
   border-radius: 999px;
 }
 
-.monaco-editor .orca-conflict-margin {
+.monaco-editor .mcode-conflict-margin {
   background: color-mix(in srgb, var(--destructive) 8%, transparent);
 }
 
-.monaco-editor .orca-conflict-marker-label {
+.monaco-editor .mcode-conflict-marker-label {
   color: var(--destructive);
   font-family: var(--font-sans, system-ui, sans-serif);
   font-size: 11px;
@@ -2647,12 +2647,12 @@ html.native-shell .app-layout {
   animation: feature-wall-meta-pulse 1100ms ease-out 1;
 }
 
-.orca-contextual-tour-target-rings {
+.mcode-contextual-tour-target-rings {
   border-radius: 9999px;
   pointer-events: none;
 }
 
-.orca-contextual-tour-target-rings::before {
+.mcode-contextual-tour-target-rings::before {
   content: '';
   position: absolute;
   inset: -2px;
@@ -2677,7 +2677,7 @@ html.native-shell .app-layout {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .orca-contextual-tour-target-rings::before {
+  .mcode-contextual-tour-target-rings::before {
     animation: none;
     opacity: 0.72;
     transform: scale(1.28);
@@ -2690,7 +2690,7 @@ html.native-shell .app-layout {
    useDiffCommentDecorator. Keep it visually subtle until hovered so it does
    not distract from the diff itself. Left position overlaps the glyph margin
    so the affordance reads as "add comment on this line". */
-.orca-diff-comment-add-btn {
+.mcode-diff-comment-add-btn {
   position: absolute;
   left: 4px;
   width: 18px;
@@ -2714,27 +2714,27 @@ html.native-shell .app-layout {
     box-shadow 100ms ease;
 }
 
-.orca-diff-comment-add-btn:hover {
+.mcode-diff-comment-add-btn:hover {
   color: var(--primary);
   border-color: color-mix(in srgb, var(--primary) 52%, var(--border));
   background: color-mix(in srgb, var(--primary) 12%, var(--background));
   box-shadow: 0 1px 4px color-mix(in srgb, var(--foreground) 16%, transparent);
 }
 
-.orca-diff-comment-add-btn:focus-visible {
+.mcode-diff-comment-add-btn:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 1px;
 }
 
-.orca-diff-comment-range-highlight {
+.mcode-diff-comment-range-highlight {
   background: rgba(59, 130, 246, 0.14);
 }
 
-.dark .orca-diff-comment-range-highlight {
+.dark .mcode-diff-comment-range-highlight {
   background: rgba(96, 165, 250, 0.18);
 }
 
-.orca-diff-comment-inline {
+.mcode-diff-comment-inline {
   width: 100%;
   /* Why: Monaco's view-zone node already starts after the diff gutter. Avoid
      adding a second left inset so saved notes sit flush with the code column. */
@@ -2742,7 +2742,7 @@ html.native-shell .app-layout {
   box-sizing: border-box;
 }
 
-.orca-diff-comment-inline > .orca-diff-comment-card {
+.mcode-diff-comment-inline > .mcode-diff-comment-card {
   max-width: 420px;
 }
 
@@ -2754,7 +2754,7 @@ html.native-shell .app-layout {
    to produce roughly the same absolute luminance delta above its editor
    surface — the foreground color is different (white vs black) so equal
    percentages would not give equal contrast. Override lives in `.dark`. */
-.orca-diff-comment-card {
+.mcode-diff-comment-card {
   position: relative;
   /* Why: Monaco's view-lines overlay (data-mprt=8) is positioned absolutely on
      top of view-zone DOM. Without an explicit z-index here, clicks on
@@ -2778,7 +2778,7 @@ html.native-shell .app-layout {
     background-color 150ms ease;
 }
 
-.dark .orca-diff-comment-card {
+.dark .mcode-diff-comment-card {
   border-color: color-mix(in srgb, var(--foreground) 12%, var(--border));
   background: color-mix(in srgb, var(--foreground) 2%, var(--editor-surface));
   box-shadow:
@@ -2787,7 +2787,7 @@ html.native-shell .app-layout {
 }
 
 /* Content Column */
-.orca-diff-comment-content-col {
+.mcode-diff-comment-content-col {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
@@ -2796,7 +2796,7 @@ html.native-shell .app-layout {
 }
 
 /* Header Row */
-.orca-diff-comment-header {
+.mcode-diff-comment-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2805,7 +2805,7 @@ html.native-shell .app-layout {
 }
 
 /* Meta Group (Name, line, timestamp) */
-.orca-diff-comment-meta-group {
+.mcode-diff-comment-meta-group {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -2818,7 +2818,7 @@ html.native-shell .app-layout {
 }
 
 /* Action button pill: segmented control like Notion's Resolve / ... */
-.orca-diff-comment-actions-pill {
+.mcode-diff-comment-actions-pill {
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -2830,12 +2830,12 @@ html.native-shell .app-layout {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
-.dark .orca-diff-comment-actions-pill {
+.dark .mcode-diff-comment-actions-pill {
   border-color: color-mix(in srgb, var(--foreground) 14%, var(--border));
   background: color-mix(in srgb, var(--foreground) 4%, var(--editor-surface));
 }
 
-.orca-diff-comment-pill-btn {
+.mcode-diff-comment-pill-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2853,24 +2853,24 @@ html.native-shell .app-layout {
     color 100ms ease;
 }
 
-.orca-diff-comment-edit {
+.mcode-diff-comment-edit {
   min-width: 28px;
   height: 24px;
   padding: 4px 7px;
   border-radius: 4px;
 }
 
-.orca-diff-comment-pill-btn:hover {
+.mcode-diff-comment-pill-btn:hover {
   background: color-mix(in srgb, var(--foreground) 6%, transparent);
   color: var(--foreground);
 }
 
-.orca-diff-comment-pill-btn-danger:hover {
+.mcode-diff-comment-pill-btn-danger:hover {
   background: color-mix(in srgb, var(--destructive) 10%, transparent);
   color: var(--destructive);
 }
 
-.orca-diff-comment-pill-divider {
+.mcode-diff-comment-pill-divider {
   width: 1px;
   height: 12px;
   background: color-mix(in srgb, var(--foreground) 12%, var(--border));
@@ -2878,7 +2878,7 @@ html.native-shell .app-layout {
 }
 
 /* Quote/Reference block: Warm, gorgeous Notion-like callout */
-.orca-diff-comment-quote {
+.mcode-diff-comment-quote {
   display: flex;
   align-items: flex-start;
   gap: 8px;
@@ -2890,7 +2890,7 @@ html.native-shell .app-layout {
   line-height: 1.35;
 }
 
-.orca-diff-comment-quote-text {
+.mcode-diff-comment-quote-text {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -2899,7 +2899,7 @@ html.native-shell .app-layout {
 }
 
 /* Comment Body */
-.orca-diff-comment-body {
+.mcode-diff-comment-body {
   font-size: 13.5px;
   line-height: 1.5;
   color: var(--foreground);
@@ -2909,7 +2909,7 @@ html.native-shell .app-layout {
 }
 
 /* Popover for adding new comment */
-.orca-diff-comment-popover {
+.mcode-diff-comment-popover {
   position: absolute;
   left: 56px;
   right: 24px;
@@ -2925,7 +2925,7 @@ html.native-shell .app-layout {
     0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
-.dark .orca-diff-comment-popover {
+.dark .mcode-diff-comment-popover {
   border-color: color-mix(in srgb, var(--foreground) 14%, var(--border));
   background: color-mix(in srgb, var(--foreground) 2%, var(--editor-surface));
   box-shadow:
@@ -2933,7 +2933,7 @@ html.native-shell .app-layout {
     0 4px 16px rgba(0, 0, 0, 0.2);
 }
 
-.orca-diff-comment-popover-label {
+.mcode-diff-comment-popover-label {
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -2942,7 +2942,7 @@ html.native-shell .app-layout {
   margin-bottom: 2px;
 }
 
-.orca-diff-comment-popover-textarea {
+.mcode-diff-comment-popover-textarea {
   width: 100%;
   min-height: 56px;
   max-height: 240px;
@@ -2962,36 +2962,36 @@ html.native-shell .app-layout {
     box-shadow 150ms ease;
 }
 
-.dark .orca-diff-comment-popover-textarea {
+.dark .mcode-diff-comment-popover-textarea {
   border-color: color-mix(in srgb, var(--foreground) 10%, var(--border));
   background: color-mix(in srgb, var(--foreground) 3%, var(--editor-surface));
 }
 
-.orca-diff-comment-popover-textarea:focus {
+.mcode-diff-comment-popover-textarea:focus {
   border-color: color-mix(in srgb, var(--ring) 70%, var(--border));
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 18%, transparent);
 }
 
-.dark .orca-diff-comment-popover-textarea:focus {
+.dark .mcode-diff-comment-popover-textarea:focus {
   border-color: color-mix(in srgb, var(--ring) 70%, var(--border));
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--ring) 12%, transparent);
 }
 
-.orca-diff-comment-popover-textarea::-webkit-scrollbar {
+.mcode-diff-comment-popover-textarea::-webkit-scrollbar {
   width: 12px;
 }
 
-.orca-diff-comment-popover-textarea::-webkit-scrollbar-track {
+.mcode-diff-comment-popover-textarea::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.orca-diff-comment-popover-textarea::-webkit-scrollbar-thumb {
+.mcode-diff-comment-popover-textarea::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--muted-foreground, #737373) 28%, transparent);
   border: 3px solid transparent;
   background-clip: padding-box;
 }
 
-.orca-diff-comment-popover-footer {
+.mcode-diff-comment-popover-footer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -3000,7 +3000,7 @@ html.native-shell .app-layout {
 }
 
 /* Why: tours need a distinct item surface without highlighting the underlying target. */
-.orca-contextual-tour-panel {
+.mcode-contextual-tour-panel {
   --contextual-tour-panel-surface: color-mix(in srgb, var(--foreground) 7%, var(--popover));
   --contextual-tour-panel-border: color-mix(in srgb, var(--foreground) 14%, var(--border));
   background: var(--contextual-tour-panel-surface);
@@ -3010,7 +3010,7 @@ html.native-shell .app-layout {
     0 10px 24px rgba(0, 0, 0, 0.18);
 }
 
-.dark .orca-contextual-tour-panel {
+.dark .mcode-contextual-tour-panel {
   --contextual-tour-panel-surface: color-mix(in srgb, var(--foreground) 10%, var(--popover));
   --contextual-tour-panel-border: color-mix(in srgb, var(--foreground) 16%, var(--border));
   box-shadow:

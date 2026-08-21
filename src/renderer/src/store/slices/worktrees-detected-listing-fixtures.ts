@@ -18,7 +18,7 @@ export function makeDetectedResult(
     ...overrides,
     worktrees: worktrees.map((worktree) => ({
       ...worktree,
-      ownership: 'orca-managed' as const,
+      ownership: 'mcode-managed' as const,
       selectedCheckout: false,
       visible: true
     }))

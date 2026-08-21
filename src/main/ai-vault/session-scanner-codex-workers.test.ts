@@ -17,7 +17,7 @@ function jsonLines(records: unknown[]): string {
 
 describe('scanAiVaultSessions Codex worker sessions', () => {
   it('hides Codex worker transcripts from session history', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-workers-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-codex-workers-'))
     tempRoots.push(root)
     const codexSessionsDir = join(root, 'codex-sessions')
     await mkdir(join(codexSessionsDir, '2026', '06', '12'), { recursive: true })

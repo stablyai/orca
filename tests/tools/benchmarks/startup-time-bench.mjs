@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * Orca startup-time benchmark.
+ * MCode startup-time benchmark.
  *
  * Launches the built app (out/) against a synthetic userData fixture that
  * mimics a long-lived real profile (tens of thousands of Chromium cache
  * files — the documented pathological case for the win32 startup ACL grant),
- * parses `ORCA_STARTUP_DIAGNOSTICS=1` milestone lines from stderr, and
+ * parses `MCODE_STARTUP_DIAGNOSTICS=1` milestone lines from stderr, and
  * reports per-phase timings across iterations.
  *
  * Usage:
@@ -14,7 +14,7 @@
  *     [--state-profile none|restored-local-tabs] [--session-tabs 200]
  *     [--github-repos 3] [--gh-hang-ms 30000]
  *     [--wait-for-event renderer-startup-hydration-done]
- *     [--exe <path-to-packaged-Orca>] [--timeout-ms 240000]
+ *     [--exe <path-to-packaged-MCode>] [--timeout-ms 240000]
  *
  * Issue #7225 freeze reproduction: `--github-repos N` seeds N git repos with
  * GitHub remotes and no configured username, so repo hydration reaches the
@@ -110,7 +110,7 @@ function parseArgs(argv) {
 /**
  * Build a userData tree shaped like a real long-lived profile. The file count
  * drives the win32 icacls walk cost; contents are irrelevant, so files are
- * tiny. Layout mirrors Chromium cache dirs plus a few Orca-owned dirs.
+ * tiny. Layout mirrors Chromium cache dirs plus a few MCode-owned dirs.
  */
 function ensureFixture(fixtureDir, options) {
   const { fileCount, stateProfile, sessionTabs, githubRepos } = options
@@ -201,7 +201,7 @@ function buildGithubRepoFixtures(fixtureDir, githubRepos) {
         'remote',
         'add',
         'origin',
-        `https://github.com/orca-bench/bench-gh-repo-${i}.git`
+        `https://github.com/mcode-bench/bench-gh-repo-${i}.git`
       ],
       { stdio: 'ignore' }
     )
@@ -222,7 +222,7 @@ function buildGithubRepoFixtures(fixtureDir, githubRepos) {
 }
 
 function writePersistedStateFixture(fixtureDir, { stateProfile, sessionTabs, githubRepos }) {
-  const dataPath = join(fixtureDir, 'orca-data.json')
+  const dataPath = join(fixtureDir, 'mcode-data.json')
   if (stateProfile === 'none' && githubRepos === 0) {
     try {
       unlinkSync(dataPath)
@@ -359,15 +359,15 @@ function buildLaunchEnvironment({ fixtureDir, githubRepos, ghShimDir }) {
   mkdirSync(isolatedHome, { recursive: true })
   const env = {
     ...process.env,
-    ORCA_STARTUP_DIAGNOSTICS: '1',
-    ORCA_E2E_USER_DATA_DIR: fixtureDir,
+    MCODE_STARTUP_DIAGNOSTICS: '1',
+    MCODE_E2E_USER_DATA_DIR: fixtureDir,
     HOME: isolatedHome,
     USERPROFILE: isolatedHome,
-    ORCA_E2E_HOME_DIR: isolatedHome,
-    ORCA_E2E_HEADLESS: '1'
+    MCODE_E2E_HOME_DIR: isolatedHome,
+    MCODE_E2E_HEADLESS: '1'
   }
   delete env.CODEX_HOME
-  delete env.ORCA_CODEX_HOME
+  delete env.MCODE_CODEX_HOME
   if (ghShimDir) {
     env.PATH = `${ghShimDir}${delimiter}${env.PATH ?? ''}`
   }
@@ -584,7 +584,7 @@ async function main() {
     args.fixtureDir ??
       join(
         os.tmpdir(),
-        'orca-startup-bench',
+        'mcode-startup-bench',
         `userdata-${args.files}-${args.stateProfile}-${args.sessionTabs}-gh${args.githubRepos}`
       )
   )

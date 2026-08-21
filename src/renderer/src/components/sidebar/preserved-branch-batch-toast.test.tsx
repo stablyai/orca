@@ -118,7 +118,7 @@ describe('showPreservedBranchBatchToast', () => {
       expect.objectContaining({ dismissible: true, duration: Infinity })
     )
     expect(body.textContent).toContain('Kept branches do not retain workspace folders')
-    expect(body.textContent).toContain('Orca may continue freeing workspace disk space')
+    expect(body.textContent).toContain('MCode may continue freeing workspace disk space')
 
     await clickButton(body, 'Review 2 Branches')
 

@@ -7,8 +7,8 @@ vi.mock('node:child_process', () => ({ execFile: execFileMock }))
 import { tryDeleteWslUncPath } from './wsl-unc-delete'
 
 const DISTRO = 'Ubuntu'
-const FIXTURE_ROOT = '/tmp/orca-wsl-vault-delete-repro/vault'
-const OUTSIDE_ROOT = '/tmp/orca-wsl-vault-delete-repro/outside'
+const FIXTURE_ROOT = '/tmp/mcode-wsl-vault-delete-repro/vault'
+const OUTSIDE_ROOT = '/tmp/mcode-wsl-vault-delete-repro/outside'
 const SENTINEL = `${OUTSIDE_ROOT}/unrelated-sentinel`
 const LINK = `${FIXTURE_ROOT}/linked-project`
 

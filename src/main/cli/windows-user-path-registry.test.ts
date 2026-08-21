@@ -17,7 +17,7 @@ function registryModule(pathValue?: string, type = 2) {
 
 describe('WindowsUserPathRegistryReader', () => {
   it('reads Unicode REG_EXPAND_SZ values without expanding the stored text', async () => {
-    const registry = registryModule('%LOCALAPPDATA%\\Orca;C:\\工具\\bin;C:\\Développement')
+    const registry = registryModule('%LOCALAPPDATA%\\MCode;C:\\工具\\bin;C:\\Développement')
     const reader = new WindowsUserPathRegistryReader({
       platform: 'win32',
       registryLoader: async () => registry
@@ -25,7 +25,7 @@ describe('WindowsUserPathRegistryReader', () => {
 
     await expect(reader.read()).resolves.toEqual({
       state: 'success',
-      value: '%LOCALAPPDATA%\\Orca;C:\\工具\\bin;C:\\Développement',
+      value: '%LOCALAPPDATA%\\MCode;C:\\工具\\bin;C:\\Développement',
       expandable: true
     })
     expect(registry.getRegistryKey).toHaveBeenCalledWith(0x80000001, 'Environment')
@@ -82,10 +82,10 @@ describe('WindowsUserPathRegistryReader', () => {
     now += 1
     const refreshed = reader.readFresh()
     expect(registryLoader).toHaveBeenCalledTimes(2)
-    resolveRegistry(registryModule('C:\\Tools;C:\\Orca'))
+    resolveRegistry(registryModule('C:\\Tools;C:\\MCode'))
     await expect(refreshed).resolves.toEqual({
       state: 'success',
-      value: 'C:\\Tools;C:\\Orca',
+      value: 'C:\\Tools;C:\\MCode',
       expandable: true
     })
   })
@@ -96,12 +96,12 @@ describe('WindowsUserPathRegistryReader', () => {
   ])('preserves whether registry type $type expands variables', async ({ type, expandable }) => {
     const reader = new WindowsUserPathRegistryReader({
       platform: 'win32',
-      registryLoader: async () => registryModule('%LOCALAPPDATA%\\Orca', type)
+      registryLoader: async () => registryModule('%LOCALAPPDATA%\\MCode', type)
     })
 
     await expect(reader.read()).resolves.toEqual({
       state: 'success',
-      value: '%LOCALAPPDATA%\\Orca',
+      value: '%LOCALAPPDATA%\\MCode',
       expandable
     })
   })

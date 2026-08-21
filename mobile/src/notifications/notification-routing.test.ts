@@ -11,7 +11,7 @@ describe('notification routing', () => {
       buildLocalNotificationData(
         {
           source: 'agent-task-complete',
-          worktreeId: 'repo::/Users/me/orca/workspaces/feature',
+          worktreeId: 'repo::/Users/me/mcode/workspaces/feature',
           notificationId: 'agent:one'
         },
         'host-1'
@@ -19,7 +19,7 @@ describe('notification routing', () => {
     ).toEqual({
       source: 'agent-task-complete',
       hostId: 'host-1',
-      worktreeId: 'repo::/Users/me/orca/workspaces/feature',
+      worktreeId: 'repo::/Users/me/mcode/workspaces/feature',
       notificationId: 'agent:one'
     })
   })
@@ -29,13 +29,13 @@ describe('notification routing', () => {
     expect(
       getNotificationNavigationTarget({
         hostId: 'host-1',
-        worktreeId: 'repo::/Users/me/orca/workspaces/feature'
+        worktreeId: 'repo::/Users/me/mcode/workspaces/feature'
       })
     ).toEqual({
       hostId: 'host-1',
       sessionTarget: {
         name: '[hostId]/session/[worktreeId]',
-        params: { hostId: 'host-1', worktreeId: 'repo::/Users/me/orca/workspaces/feature' }
+        params: { hostId: 'host-1', worktreeId: 'repo::/Users/me/mcode/workspaces/feature' }
       }
     })
   })

@@ -369,7 +369,7 @@ describe('worktree remote runtime mutations', () => {
   it('hydrates a missing push target for an existing linked GitHub PR', async () => {
     const store = createTestStore()
     const pushTarget = {
-      remoteName: 'pr-tmchow-orca',
+      remoteName: 'pr-tmchow-mcode',
       branchName: 'tmchow/worktree-delete-button'
     }
     const wt = makeWorktree({
@@ -517,9 +517,9 @@ describe('worktree remote runtime mutations', () => {
     const store = createTestStore()
     const pushTarget = { remoteName: 'fork', branchName: 'feature/ssh-pr' }
     const wt = makeWorktree({
-      id: 'repo-ssh::/home/orca/runtime-wt',
+      id: 'repo-ssh::/home/mcode/runtime-wt',
       repoId: 'repo-ssh',
-      path: '/home/orca/runtime-wt',
+      path: '/home/mcode/runtime-wt',
       linkedPR: 5571
     })
     mockApi.worktrees.resolvePrBase.mockResolvedValueOnce({
@@ -531,7 +531,7 @@ describe('worktree remote runtime mutations', () => {
       repos: [
         {
           id: 'repo-ssh',
-          path: '/home/orca/repo',
+          path: '/home/mcode/repo',
           displayName: 'SSH Repo',
           badgeColor: '#000',
           addedAt: 0,

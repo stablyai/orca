@@ -5,8 +5,8 @@ import {
   scanShellStartupOutput
 } from './shell-startup-output-scanner'
 
-const READY_MARKER = '\x1b]777;orca-shell-ready\x07'
-const IDENTITY_MARKER = '\x1b]777;orca-shell-start:12345\x07'
+const READY_MARKER = '\x1b]777;mcode-shell-ready\x07'
+const IDENTITY_MARKER = '\x1b]777;mcode-shell-start:12345\x07'
 
 function scanChunks(chunks: string[]): {
   output: string
@@ -104,18 +104,18 @@ describe('shell startup output scanner', () => {
 
   it('drains every incomplete scanner prefix in byte order', () => {
     const state = createShellStartupOutputScanState()
-    expect(scanShellStartupOutput(state, '\x1b]777;orca-shell-st').output).toBe('')
+    expect(scanShellStartupOutput(state, '\x1b]777;mcode-shell-st').output).toBe('')
 
-    expect(drainShellStartupOutputScanState(state)).toBe('\x1b]777;orca-shell-st')
+    expect(drainShellStartupOutputScanState(state)).toBe('\x1b]777;mcode-shell-st')
   })
 
   it('drains simultaneous identity and readiness prefixes in input order', () => {
     const state = createShellStartupOutputScanState()
-    expect(scanShellStartupOutput(state, '\x1b]777;orca-shell-st').output).toBe('')
-    expect(scanShellStartupOutput(state, '\x1b]777;orca-shell-rea').output).toBe('')
+    expect(scanShellStartupOutput(state, '\x1b]777;mcode-shell-st').output).toBe('')
+    expect(scanShellStartupOutput(state, '\x1b]777;mcode-shell-rea').output).toBe('')
 
     expect(drainShellStartupOutputScanState(state)).toBe(
-      '\x1b]777;orca-shell-st\x1b]777;orca-shell-rea'
+      '\x1b]777;mcode-shell-st\x1b]777;mcode-shell-rea'
     )
   })
 })

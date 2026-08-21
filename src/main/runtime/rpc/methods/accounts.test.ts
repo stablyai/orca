@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import { isStreamingMethod } from '../core'
 import { ACCOUNT_METHODS } from './accounts'
 
@@ -38,7 +38,7 @@ describe('account RPC methods', () => {
     }
   ])('allows local-socket $methodName calls', async (testCase) => {
     const add = vi.fn().mockResolvedValue({ accounts: [] })
-    const runtime = { [testCase.runtimeMethod]: add } as unknown as OrcaRuntimeService
+    const runtime = { [testCase.runtimeMethod]: add } as unknown as MCodeRuntimeService
     const addMethod = method(testCase.methodName)
     if (isStreamingMethod(addMethod)) {
       throw new Error(`${testCase.methodName} must be a request method`)
@@ -56,7 +56,7 @@ describe('account RPC methods', () => {
     const runtime = {
       addClaudeAccountFromConfigDir: vi.fn(),
       addCodexAccountFromHome: vi.fn()
-    } as unknown as OrcaRuntimeService
+    } as unknown as MCodeRuntimeService
     const addMethod = method(methodName)
     if (isStreamingMethod(addMethod)) {
       throw new Error(`${methodName} must be a request method`)
@@ -64,7 +64,7 @@ describe('account RPC methods', () => {
 
     for (const clientKind of ['mobile', 'runtime'] as const) {
       await expect(addMethod.handler(params, { runtime, clientKind })).rejects.toThrow(
-        /only available on the Orca host runtime/
+        /only available on the MCode host runtime/
       )
     }
     expect(runtime.addClaudeAccountFromConfigDir).not.toHaveBeenCalled()
@@ -76,7 +76,7 @@ describe('account RPC methods', () => {
     const runtime = {
       refreshAccountsForMobile: vi.fn().mockResolvedValue(undefined),
       getAccountsSnapshot: vi.fn(() => snapshot)
-    } as unknown as OrcaRuntimeService
+    } as unknown as MCodeRuntimeService
     const list = method('accounts.list')
     if (isStreamingMethod(list)) {
       throw new Error('accounts.list must be a request method')
@@ -92,7 +92,7 @@ describe('account RPC methods', () => {
     const runtime = {
       refreshAccountsForMobile: vi.fn().mockResolvedValue(undefined),
       getAccountsSnapshot: vi.fn(() => snapshot)
-    } as unknown as OrcaRuntimeService
+    } as unknown as MCodeRuntimeService
     const list = method('accounts.list')
     if (isStreamingMethod(list)) {
       throw new Error('accounts.list must be a request method')
@@ -118,7 +118,7 @@ describe('account RPC methods', () => {
       snapshot: { claude: null, codex: null }
     }
     const consumeCodexRateLimitResetCredit = vi.fn().mockResolvedValue(result)
-    const runtime = { consumeCodexRateLimitResetCredit } as unknown as OrcaRuntimeService
+    const runtime = { consumeCodexRateLimitResetCredit } as unknown as MCodeRuntimeService
     const reset = method('accounts.consumeCodexResetCredit')
     if (isStreamingMethod(reset)) {
       throw new Error('accounts.consumeCodexResetCredit must be a request method')
@@ -158,7 +158,7 @@ describe('account RPC methods', () => {
     const selectCodexAccountForTarget = vi
       .fn()
       .mockResolvedValue({ accounts: [], activeAccountId: null })
-    const runtime = { selectCodexAccountForTarget } as unknown as OrcaRuntimeService
+    const runtime = { selectCodexAccountForTarget } as unknown as MCodeRuntimeService
     const select = method('accounts.selectCodexForTarget')
     if (isStreamingMethod(select)) {
       throw new Error('accounts.selectCodexForTarget must be a request method')
@@ -205,7 +205,7 @@ describe('account RPC methods', () => {
       }),
       refreshAccountsForMobile: vi.fn().mockResolvedValue(undefined),
       refreshAccountsForMobileSubscriber: vi.fn().mockResolvedValue(undefined)
-    } as unknown as OrcaRuntimeService
+    } as unknown as MCodeRuntimeService
     const subscribe = method('accounts.subscribe')
     if (!isStreamingMethod(subscribe)) {
       throw new Error('accounts.subscribe must be a streaming method')

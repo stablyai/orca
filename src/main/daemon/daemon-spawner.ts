@@ -104,7 +104,7 @@ export function getDaemonSocketPath(
   // an older build is never reused after a breaking protocol change.
   if (process.platform === 'win32') {
     const suffix = createHash('sha256').update(runtimeDir).digest('hex').slice(0, 12)
-    return `\\\\?\\pipe\\orca-terminal-host-v${protocolVersion}-${suffix}`
+    return `\\\\?\\pipe\\mcode-terminal-host-v${protocolVersion}-${suffix}`
   }
   return join(runtimeDir, `daemon-v${protocolVersion}.sock`)
 }

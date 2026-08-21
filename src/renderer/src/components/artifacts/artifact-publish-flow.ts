@@ -73,7 +73,7 @@ export async function publishArtifactFromSurface(
       toast.error(
         translate(
           'auto.components.artifacts.artifact-publish-flow.bba20daa6d',
-          'Sign in to Orca and try again.'
+          'Sign in to MCode and try again.'
         )
       )
       return null
@@ -95,14 +95,14 @@ export async function publishArtifactFromSurface(
 
 async function ensureArtifactAccountConnected(): Promise<boolean> {
   const state = useAppStore.getState()
-  if (state.orcaProfileAuthStatus?.state === 'connected') {
+  if (state.mcodeProfileAuthStatus?.state === 'connected') {
     return true
   }
-  return (await state.connectCurrentOrcaProfile())?.status === 'connected'
+  return (await state.connectCurrentMCodeProfile())?.status === 'connected'
 }
 
 async function reconnectArtifactAccount(): Promise<boolean> {
-  return (await useAppStore.getState().connectCurrentOrcaProfile())?.status === 'connected'
+  return (await useAppStore.getState().connectCurrentMCodeProfile())?.status === 'connected'
 }
 
 function showArtifactPublishedToast(result: ArtifactPublishResult): void {
@@ -123,12 +123,12 @@ function artifactPreparationErrorDescription(code: ArtifactPublishPreparationErr
     case 'too-large':
       return translate(
         'auto.components.artifacts.artifact-publish-flow.6112db5a1c',
-        'Artifacts shared from Orca must be smaller than 800 KB.'
+        'Artifacts shared from MCode must be smaller than 800 KB.'
       )
     case 'unreadable':
       return translate(
         'auto.components.artifacts.artifact-publish-flow.e2ed5acd8c',
-        "Orca couldn't read this file. Open it from a workspace and try again."
+        "MCode couldn't read this file. Open it from a workspace and try again."
       )
     case 'unsupported':
       return translate(

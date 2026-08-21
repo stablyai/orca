@@ -1,4 +1,4 @@
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import {
   connectDockerSshRelayTarget,
   reconnectDockerSshRelayTarget
@@ -20,14 +20,14 @@ import {
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { waitForActiveTerminalManager } from './helpers/terminal'
 
-const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
+const RUN_DOCKER_SSH = process.env.MCODE_E2E_SSH_DOCKER === '1'
 
 test.describe('startup exec readiness over live SSH', () => {
-  test.skip(!RUN_DOCKER_SSH, 'Set ORCA_E2E_SSH_DOCKER=1 to run Docker-backed SSH E2E.')
+  test.skip(!RUN_DOCKER_SSH, 'Set MCODE_E2E_SSH_DOCKER=1 to run Docker-backed SSH E2E.')
   test.skip(process.platform === 'win32', 'Docker SSH E2E uses POSIX ssh tooling.')
 
   test('survives an SSH reconnect while the replacement shell is not ready @headful', async ({
-    orcaPage
+    mcodePage
   }, testInfo) => {
     test.setTimeout(150_000)
     const runId = `ssh_${Date.now()}`
@@ -38,20 +38,20 @@ test.describe('startup exec readiness over live SSH', () => {
     let terminal: string | null = null
     try {
       target = startDockerSshRelayTarget(testInfo)
-      await waitForSessionReady(orcaPage)
-      await waitForActiveWorktree(orcaPage)
-      const remote = await connectDockerSshRelayTarget(orcaPage, target, {
+      await waitForSessionReady(mcodePage)
+      await waitForActiveWorktree(mcodePage)
+      const remote = await connectDockerSshRelayTarget(mcodePage, target, {
         relayGracePeriodSeconds: 15
       })
-      await ensureTerminalVisible(orcaPage, 45_000)
-      await waitForActiveTerminalManager(orcaPage, 60_000)
+      await ensureTerminalVisible(mcodePage, 45_000)
+      await waitForActiveTerminalManager(mcodePage, 60_000)
       writeDockerSshRelayTargetFile(
         target,
         '/root/.bash_profile',
         bashExecProfileContents(runId, { releasePath, startedPath })
       )
       const created = await createStartupExecTerminal(
-        orcaPage,
+        mcodePage,
         remote.worktreeId,
         runId,
         ledgerPath,
@@ -68,7 +68,7 @@ test.describe('startup exec readiness over live SSH', () => {
           { timeout: 30_000 }
         )
         .toBe('ready')
-      await expectStartupCommandQueuedByCompatibilityFallback(orcaPage, created)
+      await expectStartupCommandQueuedByCompatibilityFallback(mcodePage, created)
       expect(
         execDockerSshRelayTargetControlCommand(
           target,
@@ -76,7 +76,7 @@ test.describe('startup exec readiness over live SSH', () => {
         )
       ).toBe('pending')
 
-      await reconnectDockerSshRelayTarget(orcaPage, remote.targetId)
+      await reconnectDockerSshRelayTarget(mcodePage, remote.targetId)
       execDockerSshRelayTargetControlCommand(target, `: > '${releasePath}'`)
       await expect
         .poll(
@@ -88,7 +88,7 @@ test.describe('startup exec readiness over live SSH', () => {
           { timeout: 8_000 }
         )
         .toMatch(/^[0-9]+\|\/dev\/pts\/[0-9]+$/)
-      await expectStartupExecRecovery(orcaPage, created, runId)
+      await expectStartupExecRecovery(mcodePage, created, runId)
 
       const [pidText, tty] = execDockerSshRelayTargetControlCommand(
         target,
@@ -104,7 +104,7 @@ test.describe('startup exec readiness over live SSH', () => {
         execDockerSshRelayTargetControlCommand(target, `ps -o tpgid= -p '${pid}' | tr -d ' '`)
       ).toBe(String(pid))
     } finally {
-      await closeStartupExecTerminal(orcaPage, terminal)
+      await closeStartupExecTerminal(mcodePage, terminal)
       cleanupDockerSshRelayTarget(target)
     }
   })

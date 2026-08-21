@@ -36,17 +36,17 @@ describe('workspace source policy', () => {
   it('persists a Jira title without repeating its separately stored identifier', () => {
     expect(
       buildJiraWorkspaceSource({
-        key: 'ORCA-123',
+        key: 'MCODE-123',
         title: 'Fix Jira card details',
-        url: 'https://company.atlassian.net/browse/ORCA-123'
+        url: 'https://company.atlassian.net/browse/MCODE-123'
       })
     ).toEqual({
       provider: 'jira',
       type: 'issue',
       number: 0,
       title: 'Fix Jira card details',
-      url: 'https://company.atlassian.net/browse/ORCA-123',
-      jiraIdentifier: 'ORCA-123'
+      url: 'https://company.atlassian.net/browse/MCODE-123',
+      jiraIdentifier: 'MCODE-123'
     })
   })
 

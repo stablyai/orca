@@ -9,7 +9,7 @@ import type {
 } from './types'
 
 const { getPathMock } = vi.hoisted(() => ({
-  getPathMock: vi.fn(() => '/tmp/orca-test-userdata')
+  getPathMock: vi.fn(() => '/tmp/mcode-test-userdata')
 }))
 
 vi.mock('electron', () => ({
@@ -160,7 +160,7 @@ describe('OpenCodeUsageStore', () => {
   let tempUserData: string
 
   beforeEach(() => {
-    tempUserData = mkdtempSync(join(tmpdir(), 'orca-opencode-usage-store-'))
+    tempUserData = mkdtempSync(join(tmpdir(), 'mcode-opencode-usage-store-'))
     getPathMock.mockReturnValue(tempUserData)
     initOpenCodeUsagePath()
     vi.mocked(scanOpenCodeUsageDatabases).mockReset()
@@ -186,12 +186,12 @@ describe('OpenCodeUsageStore', () => {
 
     await store.refresh(true)
 
-    const persistedJson = readFileSync(join(tempUserData, 'orca-opencode-usage.json'), 'utf-8')
+    const persistedJson = readFileSync(join(tempUserData, 'mcode-opencode-usage.json'), 'utf-8')
     expect(scanOpenCodeUsageDatabases).toHaveBeenCalledWith([], [])
     expect(persistedJson).toContain('\n')
   })
 
-  it('reports no data for Orca scope when only non-Orca OpenCode usage exists', async () => {
+  it('reports no data for MCode scope when only non-MCode OpenCode usage exists', async () => {
     const store = createStoreWithState({
       sessions: [
         makeSession({
@@ -210,7 +210,7 @@ describe('OpenCodeUsageStore', () => {
       ]
     })
 
-    const summary = await store.getSummary('orca', '30d')
+    const summary = await store.getSummary('mcode', '30d')
 
     expect(summary.hasAnyOpenCodeData).toBe(false)
     expect(summary.sessions).toBe(0)
@@ -256,9 +256,9 @@ describe('OpenCodeUsageStore', () => {
       ]
     })
 
-    const summary = await store.getSummary('orca', '30d')
-    const daily = await store.getDaily('orca', '30d')
-    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+    const summary = await store.getSummary('mcode', '30d')
+    const daily = await store.getDaily('mcode', '30d')
+    const breakdown = await store.getBreakdown('mcode', '30d', 'model')
 
     expect(summary).toMatchObject({
       sessions: 2,
@@ -295,7 +295,7 @@ describe('OpenCodeUsageStore', () => {
       dailyAggregates: [makeDaily()]
     })
 
-    const sessions = await store.getRecentSessions('orca', '30d', 5)
+    const sessions = await store.getRecentSessions('mcode', '30d', 5)
 
     expect(sessions).toEqual([
       {

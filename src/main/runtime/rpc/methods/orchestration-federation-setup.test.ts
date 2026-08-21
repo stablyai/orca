@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../../orca-runtime'
+import { MCodeRuntimeService } from '../../mcode-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { monitorFederatedSetup } from './orchestration-federation-setup'
 
 describe('orchestration federated setup evidence', () => {
   const databases: OrchestrationDb[] = []
-  const runtimes: OrcaRuntimeService[] = []
+  const runtimes: MCodeRuntimeService[] = []
 
   afterEach(() => {
     for (const runtime of runtimes.splice(0)) {
@@ -17,9 +17,9 @@ describe('orchestration federated setup evidence', () => {
     }
   })
 
-  function createRuntime(): { db: OrchestrationDb; runtime: OrcaRuntimeService } {
+  function createRuntime(): { db: OrchestrationDb; runtime: MCodeRuntimeService } {
     const db = new OrchestrationDb(':memory:')
-    const runtime = new OrcaRuntimeService()
+    const runtime = new MCodeRuntimeService()
     runtime.setOrchestrationDb(db)
     databases.push(db)
     runtimes.push(runtime)

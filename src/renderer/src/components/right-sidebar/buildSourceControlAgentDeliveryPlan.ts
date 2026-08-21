@@ -14,7 +14,7 @@ type BuildSourceControlAgentDeliveryPlanArgs = {
   connectionUnavailable: boolean
   launchPlatform?: NodeJS.Platform
   /** Why: keep the previewed command label in sync with the real remote launch,
-   * which omits the Linux-only `orca-ide` rename for SSH hosts. */
+   * which omits the Linux-only `mcode-ide` rename for SSH hosts. */
   isRemote?: boolean
 }
 

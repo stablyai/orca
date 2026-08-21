@@ -2,7 +2,7 @@ const { writeFileSync } = require('node:fs')
 const { join } = require('node:path')
 const compatibilityContract = require('../../src/shared/local-build-compatibility-contract.json')
 
-const MAC_BUILD_COMPATIBILITY_FILENAME = 'orca-local-build.json'
+const MAC_BUILD_COMPATIBILITY_FILENAME = 'mcode-local-build.json'
 
 function createMacBuildCompatibility({ version, commit, architecture }) {
   if (architecture !== 'arm64' && architecture !== 'x64') {

@@ -360,7 +360,7 @@ describe('CodexRuntimeHomeService', () => {
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     new CodexRuntimeHomeService(store as never)
     const runtimeAuthPath = getRuntimeCodexAuthPath()
-    const heldAuthPath = `${runtimeAuthPath}.orca-guarded`
+    const heldAuthPath = `${runtimeAuthPath}.mcode-guarded`
     renameSync(runtimeAuthPath, heldAuthPath)
 
     setShellStartupEnvProbeSupportedForTest(true)

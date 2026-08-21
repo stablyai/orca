@@ -134,9 +134,9 @@ describe('AccountsPane', () => {
   })
 
   it('omits the scope control on the web client, which cannot select Local desktop', () => {
-    const webGlobal = globalThis as { window?: { __ORCA_WEB_CLIENT__?: boolean } }
+    const webGlobal = globalThis as { window?: { __MCODE_WEB_CLIENT__?: boolean } }
     const hadWindow = 'window' in webGlobal
-    webGlobal.window = { ...webGlobal.window, __ORCA_WEB_CLIENT__: true }
+    webGlobal.window = { ...webGlobal.window, __MCODE_WEB_CLIENT__: true }
     try {
       const markup = renderPane({
         ...getDefaultSettings('/tmp'),

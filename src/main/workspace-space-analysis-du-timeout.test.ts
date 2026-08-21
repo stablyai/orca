@@ -52,7 +52,7 @@ describe('analyzeWorkspaceSpace local du timeout', () => {
   let tempDir: string | null = null
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'orca-space-du-timeout-'))
+    tempDir = await mkdtemp(join(tmpdir(), 'mcode-space-du-timeout-'))
     execFileMock.mockReset()
     listRepoWorktreesMock.mockReset()
   })
@@ -73,7 +73,7 @@ describe('analyzeWorkspaceSpace local du timeout', () => {
     const repo: Repo = {
       id: 'repo-1',
       path: repoPath,
-      displayName: 'orca',
+      displayName: 'mcode',
       badgeColor: '#000',
       addedAt: 0
     }

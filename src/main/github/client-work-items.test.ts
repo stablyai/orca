@@ -157,7 +157,7 @@ describe('listWorkItems', () => {
   })
 
   it('routes GHES work-item listing through the Enterprise host', async () => {
-    const ghes = { owner: 'team', repo: 'orca', host: 'github.acme-corp.com' }
+    const ghes = { owner: 'team', repo: 'mcode', host: 'github.acme-corp.com' }
     getIssueOwnerRepoMock.mockResolvedValue(ghes)
     getOwnerRepoMock.mockResolvedValue(ghes)
     ghExecFileAsyncMock.mockResolvedValue({ stdout: '[]' })
@@ -760,15 +760,15 @@ describe('listWorkItems', () => {
   })
 
   it('marks fork PRs as cross-repository when REST payload only includes head.label', async () => {
-    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
-    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'mcode' })
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'mcode' })
     ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' }).mockResolvedValueOnce({
       stdout: JSON.stringify([
         {
           number: 1849,
           title: 'Fork PR with missing head repo',
           state: 'open',
-          html_url: 'https://github.com/stablyai/orca/pull/1849',
+          html_url: 'https://github.com/mcode-ide/mcode/pull/1849',
           updated_at: '2026-04-01T00:00:00Z',
           user: { login: 'contributor' },
           head: {
@@ -790,14 +790,14 @@ describe('listWorkItems', () => {
         number: 1849,
         title: 'Fork PR with missing head repo',
         state: 'open',
-        url: 'https://github.com/stablyai/orca/pull/1849',
+        url: 'https://github.com/mcode-ide/mcode/pull/1849',
         labels: [],
         updatedAt: '2026-04-01T00:00:00Z',
         author: 'contributor',
         branchName: 'feat/onboarding-model-choice-782',
         baseRefName: 'main',
         headSha: 'head-1849',
-        prRepo: { owner: 'stablyai', repo: 'orca' },
+        prRepo: { owner: 'stablyai', repo: 'mcode' },
         isCrossRepository: true
       }
     ])

@@ -37,7 +37,7 @@ export class ClaudeAgentTeamsService {
     const pathValue = [args.shimDir, args.baseEnv[pathKey]]
       .filter(Boolean)
       .join(process.platform === 'win32' ? ';' : ':')
-    const tmuxValue = `/tmp/orca-claude-agent-teams/${teamId},0,1`
+    const tmuxValue = `/tmp/mcode-claude-agent-teams/${teamId},0,1`
     const env: Record<string, string> = {
       CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
       [pathKey]: pathValue,
@@ -45,19 +45,19 @@ export class ClaudeAgentTeamsService {
       TMUX_PANE: leaderPane,
       TERM: 'screen-256color',
       COLORTERM: args.baseEnv.COLORTERM || 'truecolor',
-      ORCA_AGENT_TEAMS_TEAM_ID: teamId,
-      ORCA_AGENT_TEAMS_TOKEN: token,
-      ORCA_AGENT_TEAMS_LEADER_PANE: leaderPane,
-      ORCA_AGENT_TEAMS_SHIM_DIR: args.shimDir
+      MCODE_AGENT_TEAMS_TEAM_ID: teamId,
+      MCODE_AGENT_TEAMS_TOKEN: token,
+      MCODE_AGENT_TEAMS_LEADER_PANE: leaderPane,
+      MCODE_AGENT_TEAMS_SHIM_DIR: args.shimDir
     }
     if (args.shimBin) {
-      env.ORCA_AGENT_TEAMS_SHIM_BIN = args.shimBin
+      env.MCODE_AGENT_TEAMS_SHIM_BIN = args.shimBin
     }
-    if (args.baseEnv.ORCA_PAIRING_CODE) {
-      env.ORCA_PAIRING_CODE = args.baseEnv.ORCA_PAIRING_CODE
+    if (args.baseEnv.MCODE_PAIRING_CODE) {
+      env.MCODE_PAIRING_CODE = args.baseEnv.MCODE_PAIRING_CODE
     }
-    if (args.baseEnv.ORCA_ENVIRONMENT) {
-      env.ORCA_ENVIRONMENT = args.baseEnv.ORCA_ENVIRONMENT
+    if (args.baseEnv.MCODE_ENVIRONMENT) {
+      env.MCODE_ENVIRONMENT = args.baseEnv.MCODE_ENVIRONMENT
     }
 
     const leader: TeamPane = { fakePaneId: leaderPane, handle: args.leaderHandle, index: 0 }
@@ -66,7 +66,7 @@ export class ClaudeAgentTeamsService {
       token,
       leaderPane,
       leaderHandle: args.leaderHandle,
-      sessionName: 'orca',
+      sessionName: 'mcode',
       windowIndex: '0',
       tmuxValue,
       baseEnv: env,

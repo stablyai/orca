@@ -167,7 +167,7 @@ export async function collectRendererCensus(page, configuredLineageDepth) {
     ).length
     let diagnosticCensus = null
     try {
-      diagnosticCensus = window.__orcaTypingDiagnostic?.report().census ?? null
+      diagnosticCensus = window.__mcodeTypingDiagnostic?.report().census ?? null
     } catch {}
     const collapsedLineageGroups = [...lineageParentIds].filter((parentId) =>
       state.collapsedGroups.has(`lineage:${parentId}`)

@@ -46,21 +46,21 @@ const { AdvertisedUrlWatcher, extractUrlCandidates, stripTerminalControls } = aw
 )
 
 const BUFFER_LIMIT = 4096
-const ITERATIONS = Number(process.env.ORCA_ADVERTISED_URL_BENCH_ITERATIONS ?? '10000')
-const ROUNDS = Number(process.env.ORCA_ADVERTISED_URL_BENCH_ROUNDS ?? '12')
-const WARMUP = Number(process.env.ORCA_ADVERTISED_URL_BENCH_WARMUP ?? '1000')
+const ITERATIONS = Number(process.env.MCODE_ADVERTISED_URL_BENCH_ITERATIONS ?? '10000')
+const ROUNDS = Number(process.env.MCODE_ADVERTISED_URL_BENCH_ROUNDS ?? '12')
+const WARMUP = Number(process.env.MCODE_ADVERTISED_URL_BENCH_WARMUP ?? '1000')
 
 for (const [name, value] of [
-  ['ORCA_ADVERTISED_URL_BENCH_ITERATIONS', ITERATIONS],
-  ['ORCA_ADVERTISED_URL_BENCH_ROUNDS', ROUNDS],
-  ['ORCA_ADVERTISED_URL_BENCH_WARMUP', WARMUP]
+  ['MCODE_ADVERTISED_URL_BENCH_ITERATIONS', ITERATIONS],
+  ['MCODE_ADVERTISED_URL_BENCH_ROUNDS', ROUNDS],
+  ['MCODE_ADVERTISED_URL_BENCH_WARMUP', WARMUP]
 ]) {
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw new Error(`${name} must be a positive integer, received ${value}`)
   }
 }
 if (ROUNDS % 2 !== 0) {
-  throw new Error('ORCA_ADVERTISED_URL_BENCH_ROUNDS must be even')
+  throw new Error('MCODE_ADVERTISED_URL_BENCH_ROUNDS must be even')
 }
 
 class BeforePtyBuffer {

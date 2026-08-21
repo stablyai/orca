@@ -152,7 +152,7 @@ export async function removeLocalSharedSkill(
           sourcePath: placement.path,
           backupPath: join(
             dirname(placement.path),
-            `.${basename(placement.path)}.orca-remove-backup-${randomUUID()}`
+            `.${basename(placement.path)}.mcode-remove-backup-${randomUUID()}`
           ),
           placement,
           ...(placement.topology === 'provider-alias'
@@ -184,7 +184,7 @@ export async function removeLocalSharedSkill(
         sourcePath: input.canonicalPath,
         backupPath: join(
           dirname(input.canonicalPath),
-          `.${basename(input.canonicalPath)}.orca-remove-backup-${randomUUID()}`
+          `.${basename(input.canonicalPath)}.mcode-remove-backup-${randomUUID()}`
         ),
         placement: {
           provider: 'agent-skills',

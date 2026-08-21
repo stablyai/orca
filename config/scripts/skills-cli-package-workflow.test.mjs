@@ -17,7 +17,7 @@ describe('packaged skills CLI PR gates', () => {
     expect(prepareStep.run).toBe('node config/scripts/ensure-native-runtime.mjs --runtime=electron')
     expect(packageStep.run).toContain('electron-builder')
     expect(packageStep.run).toContain('--dir')
-    expect(packageStep.env.ORCA_REUSE_PREPARED_NATIVE_RUNTIME).toBe('1')
+    expect(packageStep.env.MCODE_REUSE_PREPARED_NATIVE_RUNTIME).toBe('1')
     expect(smokeStep.run).toBe(
       'node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/win-unpacked'
     )

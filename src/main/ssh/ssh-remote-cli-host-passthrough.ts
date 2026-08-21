@@ -1,7 +1,7 @@
-// Why: the SSH relay shim (`~/.orca-relay/bin/orca`) forwards CLI invocations
+// Why: the SSH relay shim (`~/.mcode-relay/bin/mcode`) forwards CLI invocations
 // to the host app. Instead of re-implementing every command in a hand-rolled
-// switch (the cause of "Unsupported SSH Orca CLI command", #7716), the host
-// runs the real bundled `orca` CLI entry in Electron node mode — the same
+// switch (the cause of "Unsupported SSH MCode CLI command", #7716), the host
+// runs the real bundled `mcode` CLI entry in Electron node mode — the same
 // entry the local shell command uses — so remote invocations get the full
 // command surface (orchestration, worktree, terminal, ...) by construction.
 import { app } from 'electron'
@@ -36,7 +36,7 @@ export type SshCliRuntimeAuthority = {
   attachmentId: string
 }
 
-export type RemoteOrcaCliRequest = {
+export type RemoteMCodeCliRequest = {
   argv: string[]
   cwd: string
   env: Record<string, string>
@@ -45,14 +45,14 @@ export type RemoteOrcaCliRequest = {
   runtimeAuthority?: SshCliRuntimeAuthority
 }
 
-export type RemoteOrcaCliResult = {
+export type RemoteMCodeCliResult = {
   stdout: string
   stderr: string
   exitCode: number
-  postOutput?: RemoteOrcaCliPostOutput
+  postOutput?: RemoteMCodeCliPostOutput
 }
 
-export type RemoteOrcaCliPostOutput =
+export type RemoteMCodeCliPostOutput =
   | {
       kind: 'legacy_check_ack'
       terminal: string
@@ -81,16 +81,16 @@ export type HostCliPassthroughOptions = {
  * working even on broken installs. */
 export class HostCliUnavailableError extends Error {}
 
-// Why: only Orca terminal-context vars may cross from the remote shell into
-// the host CLI process. Remote PATH / ORCA_USER_DATA_PATH are paths on the
+// Why: only MCode terminal-context vars may cross from the remote shell into
+// the host CLI process. Remote PATH / MCODE_USER_DATA_PATH are paths on the
 // remote machine (meaningless or instance-hijacking on the host), and
 // NODE_OPTIONS-style vars could alter host execution.
 const REMOTE_CONTEXT_ENV_VARS = [
-  'ORCA_TERMINAL_HANDLE',
-  'ORCA_WORKTREE_ID',
-  'ORCA_PANE_KEY',
-  'ORCA_AGENT_LAUNCH_TOKEN',
-  'ORCA_WORKSPACE_ID'
+  'MCODE_TERMINAL_HANDLE',
+  'MCODE_WORKTREE_ID',
+  'MCODE_PANE_KEY',
+  'MCODE_AGENT_LAUNCH_TOKEN',
+  'MCODE_WORKSPACE_ID'
 ] as const
 
 // Why: bound captured output so a runaway command cannot balloon the relay
@@ -154,15 +154,15 @@ export function buildHostCliEnv(args: {
   }
   // Why: bind the subprocess to this app instance's runtime metadata (dev and
   // parallel instances use non-default userData dirs).
-  env.ORCA_USER_DATA_PATH = args.userDataPath
+  env.MCODE_USER_DATA_PATH = args.userDataPath
   // Why: the caller's working directory lives on the remote machine, so the
-  // subprocess cwd cannot be chdir'd there; ORCA_CLI_CWD carries it for
+  // subprocess cwd cannot be chdir'd there; MCODE_CLI_CWD carries it for
   // cwd-based selectors like `--worktree active`.
-  env.ORCA_CLI_CWD = args.remoteCwd
+  env.MCODE_CLI_CWD = args.remoteCwd
   // Why: same node-mode hygiene as the shipped CLI launchers — stash and clear
   // NODE_OPTIONS so Electron's node bootstrap does not inherit them.
-  env.ORCA_NODE_OPTIONS = args.hostEnv.NODE_OPTIONS ?? ''
-  env.ORCA_NODE_REPL_EXTERNAL_MODULE = args.hostEnv.NODE_REPL_EXTERNAL_MODULE ?? ''
+  env.MCODE_NODE_OPTIONS = args.hostEnv.NODE_OPTIONS ?? ''
+  env.MCODE_NODE_REPL_EXTERNAL_MODULE = args.hostEnv.NODE_REPL_EXTERNAL_MODULE ?? ''
   delete env.NODE_OPTIONS
   delete env.NODE_REPL_EXTERNAL_MODULE
   delete env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV]
@@ -187,10 +187,10 @@ export function buildHostCliEnv(args: {
   return env
 }
 
-export async function runHostOrcaCliPassthrough(
-  request: RemoteOrcaCliRequest,
+export async function runHostMCodeCliPassthrough(
+  request: RemoteMCodeCliRequest,
   options: HostCliPassthroughOptions = {}
-): Promise<RemoteOrcaCliResult> {
+): Promise<RemoteMCodeCliResult> {
   // Why: per-field lazy defaults keep the module testable — tests inject all
   // three, so no Electron API is touched outside the production path.
   const execPath = options.execPath ?? process.execPath
@@ -205,8 +205,8 @@ export async function runHostOrcaCliPassthrough(
         appPath: app.getAppPath()
       })
     // Why: must match the userData dir the runtime RPC server writes metadata
-    // to (see index.ts OrcaRuntimeRpcServer wiring), or the CLI subprocess
-    // reports "Orca is not running" against a healthy app.
+    // to (see index.ts MCodeRuntimeRpcServer wiring), or the CLI subprocess
+    // reports "MCode is not running" against a healthy app.
     userDataPath = options.userDataPath ?? getCanonicalUserDataPath()
   } catch (err) {
     // Why: no Electron app context (or broken install paths) — degrade to the
@@ -226,7 +226,7 @@ export async function runHostOrcaCliPassthrough(
   }
 
   if (!entryExists(cliEntryPath)) {
-    throw new HostCliUnavailableError(`Orca CLI entry not found at ${cliEntryPath}`)
+    throw new HostCliUnavailableError(`MCode CLI entry not found at ${cliEntryPath}`)
   }
 
   const env = buildHostCliEnv({
@@ -238,7 +238,7 @@ export async function runHostOrcaCliPassthrough(
     artifactInput: request.artifactInput
   })
 
-  return await new Promise<RemoteOrcaCliResult>((resolve, reject) => {
+  return await new Promise<RemoteMCodeCliResult>((resolve, reject) => {
     let settled = false
     const child = spawn(execPath, [cliEntryPath, ...request.argv], {
       env,
@@ -261,7 +261,7 @@ export async function runHostOrcaCliPassthrough(
       }
       resolve({
         stdout: stdout.toString(),
-        stderr: `${stderr.toString()}Orca CLI bridge timed out after ${killTimeoutMs}ms on the host.\n`,
+        stderr: `${stderr.toString()}MCode CLI bridge timed out after ${killTimeoutMs}ms on the host.\n`,
         exitCode: 1
       })
     }, killTimeoutMs)
@@ -277,7 +277,7 @@ export async function runHostOrcaCliPassthrough(
       // runnable at all — signal the caller to use the legacy fallback rather
       // than reporting a confusing per-command failure.
       reject(
-        new HostCliUnavailableError(`Failed to launch the Orca CLI on the host: ${err.message}`)
+        new HostCliUnavailableError(`Failed to launch the MCode CLI on the host: ${err.message}`)
       )
     })
 
@@ -334,6 +334,6 @@ class CappedOutputCollector {
 
   toString(): string {
     const text = Buffer.concat(this.chunks).toString('utf8')
-    return this.truncated ? `${text}\n[orca ssh cli] output truncated\n` : text
+    return this.truncated ? `${text}\n[mcode ssh cli] output truncated\n` : text
   }
 }

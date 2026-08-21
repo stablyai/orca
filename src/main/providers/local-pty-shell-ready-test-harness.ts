@@ -5,18 +5,18 @@ import {
   STARTUP_COMMAND_FEATURES
 } from '../shell-startup-launch-intent-fixtures'
 
-// Why: can't import electron (bundled into the plain-node daemon-entry fork), so tests set the wrapper root via ORCA_USER_DATA_PATH instead of mocking app.
+// Why: can't import electron (bundled into the plain-node daemon-entry fork), so tests set the wrapper root via MCODE_USER_DATA_PATH instead of mocking app.
 export function setTestUserDataPath(path: string): void {
-  process.env.ORCA_USER_DATA_PATH = path
+  process.env.MCODE_USER_DATA_PATH = path
 }
 
 export function restoreUserDataPathAfterEach(): void {
-  const original = process.env.ORCA_USER_DATA_PATH
+  const original = process.env.MCODE_USER_DATA_PATH
   afterEach(() => {
     if (original === undefined) {
-      delete process.env.ORCA_USER_DATA_PATH
+      delete process.env.MCODE_USER_DATA_PATH
     } else {
-      process.env.ORCA_USER_DATA_PATH = original
+      process.env.MCODE_USER_DATA_PATH = original
     }
   })
 }

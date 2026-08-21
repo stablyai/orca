@@ -60,13 +60,13 @@ describe('createIpcPtyTransport', () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
     const transport = createIpcPtyTransport({
-      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME']
+      envToDelete: ['CODEX_HOME', 'MCODE_CODEX_HOME']
     })
 
     await transport.connect({ url: '', callbacks: {} })
 
     expect(spawn).toHaveBeenCalledWith(
-      expect.objectContaining({ envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'] })
+      expect.objectContaining({ envToDelete: ['CODEX_HOME', 'MCODE_CODEX_HOME'] })
     )
   })
 

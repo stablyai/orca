@@ -105,7 +105,7 @@ describe('installed agent skill discovery lifecycle', () => {
 
   it('serves a warm cache unforced and rescans when forced', async () => {
     // Why: the focus listener and every "re-check" action force a refresh so a
-    // skill installed outside Orca is detected; a warm cache must not short it.
+    // skill installed outside MCode is detected; a warm cache must not short it.
     const discover = discoverSkillsForRuntimeTarget
     discover.mockResolvedValueOnce(result(1))
     discover.mockResolvedValueOnce(result(2))

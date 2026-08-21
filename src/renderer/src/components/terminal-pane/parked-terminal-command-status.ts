@@ -85,7 +85,7 @@ export function createParkedTerminalCommandStatusPolicy(options: {
   const dropCommandFinishedStatusIfSameTurn = (entry: AgentStatusEntry | undefined): void => {
     const state = useAppStore.getState()
     if (!entry) {
-      // Why: an Orca-started agent can exit before its first hook status; clear the launch
+      // Why: an MCode-started agent can exit before its first hook status; clear the launch
       // registry on command exit like the mounted path does.
       state.clearAgentLaunchConfig(paneKey)
       return

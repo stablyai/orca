@@ -29,7 +29,7 @@ export function installDiffCommentAddButtonOverlay({
 }: AddButtonOverlayArgs): () => void {
   const plus = document.createElement('button')
   plus.type = 'button'
-  plus.className = 'orca-diff-comment-add-btn'
+  plus.className = 'mcode-diff-comment-add-btn'
   plus.title = addButtonLabel
   plus.setAttribute('aria-label', addButtonLabel)
   plus.innerHTML =
@@ -73,7 +73,7 @@ export function installDiffCommentAddButtonOverlay({
         range: new monaco.Range(from, 1, to, 1),
         options: {
           isWholeLine: true,
-          className: 'orca-diff-comment-range-highlight'
+          className: 'mcode-diff-comment-range-highlight'
         }
       }
     ])

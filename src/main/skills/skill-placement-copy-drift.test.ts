@@ -10,7 +10,7 @@ import { isRemovableSkillPlacement } from './skill-removable-placement'
 const roots: string[] = []
 
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), 'orca-skill-copy-drift-'))
+  const root = await mkdtemp(join(tmpdir(), 'mcode-skill-copy-drift-'))
   roots.push(root)
   const canonicalPath = join(root, 'canonical', 'private-skill')
   const providerRoot = join(root, 'provider')

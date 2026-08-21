@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import type { ElectronApplication } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
 import { waitForActiveTerminalManager, waitForPaneCount } from './helpers/terminal'
 import {
@@ -10,7 +10,7 @@ import {
   waitForActiveWorktree,
   waitForSessionReady
 } from './helpers/store'
-import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/mcode-restart'
 import { worktreeRowSurface } from './worktree-row-locators'
 import { RuntimeClient } from '../../src/cli/runtime/client'
 import { RuntimeRpcFailureError } from '../../src/cli/runtime/types'

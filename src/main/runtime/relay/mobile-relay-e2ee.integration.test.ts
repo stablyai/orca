@@ -118,7 +118,7 @@ describe('desktop relay E2EE integration', () => {
       }
     })
 
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-relay-e2ee-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-relay-e2ee-'))
     userDataPaths.push(userDataPath)
     const registry = new DeviceRegistry(userDataPath)
     const device = registry.addDevice('Phone', 'mobile')

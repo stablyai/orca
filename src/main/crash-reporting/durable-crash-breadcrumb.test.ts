@@ -83,7 +83,7 @@ describe('recordDurableCrashBreadcrumb', () => {
     recordDurableCrashBreadcrumb(
       'crash_report_persist_failed',
       { errorCode: 'EPERM' },
-      'EPERM at C:\\Users\\alice\\AppData\\Roaming\\Orca'
+      'EPERM at C:\\Users\\alice\\AppData\\Roaming\\MCode'
     )
 
     expect(sink.records).toEqual([

@@ -246,7 +246,7 @@ describe('scanWorkspaceSpaceEntryTree', () => {
   // cap — and its verdict must not depend on where the worktree is checked out.
   describe('capacity at the production default limits', () => {
     // A real worktree checkout path; the bug appeared above ~58 characters.
-    const DEEP_ROOT = '/Users/octocat/projects/orca/.claude/worktrees/wf_d39acf3c-e7d-2'
+    const DEEP_ROOT = '/Users/octocat/projects/mcode/.claude/worktrees/wf_d39acf3c-e7d-2'
 
     function scanAtDefaults(
       rootPath: string,

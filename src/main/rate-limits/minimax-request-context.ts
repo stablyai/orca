@@ -5,7 +5,7 @@ export const MINIMAX_USAGE_ENDPOINT =
 
 const MINIMAX_ORIGIN = 'https://platform.minimax.io'
 const MINIMAX_REFERER = 'https://platform.minimax.io/console/usage'
-const MINIMAX_SESSION_PARTITION = 'orca-minimax-rate-limit-fetch'
+const MINIMAX_SESSION_PARTITION = 'mcode-minimax-rate-limit-fetch'
 const SENSITIVE_COOKIE_NAMES = new Set([
   '_token',
   '_twpid',

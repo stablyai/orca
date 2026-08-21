@@ -19,7 +19,7 @@ import {
 const roots: string[] = []
 
 async function tempRoot(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-marketplace-service-'))
+  const root = await mkdtemp(join(tmpdir(), 'mcode-marketplace-service-'))
   roots.push(root)
   return root
 }
@@ -137,26 +137,26 @@ describe('PluginMarketplaceService', () => {
       pluginsDataDir: await tempRoot(),
       fetcher: async () =>
         fetched(
-          marketplace('Attack', 'community.orca-secrets', 'https://github.com/attacker/x.git')
+          marketplace('Attack', 'community.mcode-secrets', 'https://github.com/attacker/x.git')
         )
     })
 
     await expect(service.addSource(source())).rejects.toThrow(
-      'reserved plugin identity community.orca-secrets'
+      'reserved plugin identity community.mcode-secrets'
     )
     await expect(service.listSources()).resolves.toEqual([])
   })
 
   it('derives the Official badge only from the canonical marketplace and source organization', async () => {
     const officialMarketplace: PluginMarketplace = {
-      name: 'Orca Plugins',
+      name: 'MCode Plugins',
       owner: 'stablyai',
       plugins: [
         {
-          id: 'stablyai.orca-shortcuts',
+          id: 'mcode.plugin-shortcuts',
           source: {
             kind: 'git',
-            url: 'git@github.com:stablyai/orca-shortcuts.git',
+            url: 'git@github.com:mcode-ide/mcode-shortcuts.git',
             ref: 'main'
           },
           categories: ['keybindings']
@@ -168,10 +168,10 @@ describe('PluginMarketplaceService', () => {
       fetcher: async () => fetched(officialMarketplace)
     })
 
-    await service.addSource(source('https://github.com/stablyai/orca-plugins.git'))
+    await service.addSource(source('https://github.com/mcode-ide/mcode-plugins.git'))
 
     await expect(service.listPlugins()).resolves.toEqual([
-      expect.objectContaining({ pluginKey: 'stablyai.orca-shortcuts', official: true })
+      expect.objectContaining({ pluginKey: 'mcode.plugin-shortcuts', official: true })
     ])
   })
 
@@ -215,9 +215,9 @@ describe('PluginMarketplaceService', () => {
   it('seeds the official marketplace once and keeps it configured across restarts', async () => {
     const root = await tempRoot()
     const officialMarketplace = marketplace(
-      'Orca Plugins',
-      'stablyai.orca-notes',
-      'https://github.com/stablyai/orca-notes.git'
+      'MCode Plugins',
+      'mcode.plugin-notes',
+      'https://github.com/mcode-ide/mcode-notes.git'
     )
     officialMarketplace.owner = 'stablyai'
     const fetcher = vi.fn(async () => fetched(officialMarketplace))
@@ -225,7 +225,7 @@ describe('PluginMarketplaceService', () => {
 
     await expect(first.seedOfficialSource()).resolves.toMatchObject({
       official: true,
-      marketplace: { name: 'Orca Plugins' }
+      marketplace: { name: 'MCode Plugins' }
     })
     await expect(first.seedOfficialSource()).resolves.toMatchObject({ official: true })
     expect(fetcher).toHaveBeenCalledTimes(1)
@@ -258,9 +258,9 @@ describe('PluginMarketplaceService', () => {
       addedAt: 1
     }
     const officialMarketplace = marketplace(
-      'Orca Plugins',
-      'stablyai.orca-notes',
-      'https://github.com/stablyai/orca-notes.git'
+      'MCode Plugins',
+      'mcode.plugin-notes',
+      'https://github.com/mcode-ide/mcode-notes.git'
     )
     officialMarketplace.owner = 'stablyai'
     const listSources = vi
@@ -289,7 +289,7 @@ describe('PluginMarketplaceService', () => {
       expect.objectContaining({ id: registered.id, official: true })
     ])
     await expect(service.seedOfficialSource()).resolves.toMatchObject({
-      marketplace: { name: 'Orca Plugins' },
+      marketplace: { name: 'MCode Plugins' },
       official: true
     })
   })
@@ -303,9 +303,9 @@ describe('PluginMarketplaceService', () => {
       )
     )
     const officialMarketplace = marketplace(
-      'Orca Plugins',
-      'stablyai.orca-notes',
-      'https://github.com/stablyai/orca-notes.git'
+      'MCode Plugins',
+      'mcode.plugin-notes',
+      'https://github.com/mcode-ide/mcode-notes.git'
     )
     officialMarketplace.owner = 'stablyai'
     const service = new PluginMarketplaceService({

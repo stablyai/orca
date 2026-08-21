@@ -13,7 +13,7 @@ The investigation was limited to `mobile/`. Server-side files under `src/main/` 
 - `TerminalWebView` can render text when the React Native side writes to it after xterm initializes. A temporary marker written after `init()` appeared visibly in the WebView.
 - Messages posted to the WebView before its page installs message handlers can be dropped. The mobile fix queues `init`, `write`, and `clear` until the WebView reports `web-ready`.
 - The WebView also has an internal queue for writes that arrive after `web-ready` but before xterm finishes `init()`.
-- The selected physical-phone test worktree was `refs/heads/tasks-improvements` at `/Users/jinwoohong/orca/workspaces/orca/pr-1172-review`.
+- The selected physical-phone test worktree was `refs/heads/tasks-improvements` at `/Users/jinwoohong/mcode/workspaces/mcode/pr-1172-review`.
 - For that test worktree, `terminal.subscribe` produced an initial `scrollback` event with an empty `lines` array and no serialized buffer.
 - Sending commands to that test terminal returned `ok:true`, but a direct WebSocket `terminal.read` for the same handle still returned an empty tail and no live `data` chunks were observed.
 - Creating a fresh terminal with `terminal.create` in that same worktree also returned a writable handle, but `terminal.send` followed by delayed `terminal.read` still returned an empty tail.
@@ -47,8 +47,8 @@ agent-device snapshot --platform android --serial R3CX105QXRH --json
 agent-device fill @e33 "ls" --platform android --serial R3CX105QXRH --json
 agent-device click @e34 --platform android --serial R3CX105QXRH --json
 agent-device screenshot /tmp/mobile-terminal.png --platform android --serial R3CX105QXRH --json
-orca terminal send --terminal term_926b8898-f843-461a-acd2-482f741327ad --text r --json
-orca terminal read --terminal term_926b8898-f843-461a-acd2-482f741327ad --json
+mcode terminal send --terminal term_926b8898-f843-461a-acd2-482f741327ad --text r --json
+mcode terminal read --terminal term_926b8898-f843-461a-acd2-482f741327ad --json
 ```
 
 ## Next Debug Boundary

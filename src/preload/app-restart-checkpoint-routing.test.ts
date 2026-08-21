@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PreloadApi } from './api-types'
 import {
-  ORCA_APP_RESTART_ABORTED_EVENT,
-  ORCA_APP_RESTART_STARTED_EVENT
+  MCODE_APP_RESTART_ABORTED_EVENT,
+  MCODE_APP_RESTART_STARTED_EVENT
 } from '../shared/updater-renderer-events'
 import { KEYBOARD_LAYOUT_CHANGED_CHANNEL } from '../shared/keyboard-layout-events'
 
@@ -64,7 +64,7 @@ describe('native preload destructive app actions', () => {
     it(`prepares and awaits durability before ${action}`, async () => {
       const api = await loadApi()
       const calls: string[] = []
-      eventTarget.addEventListener(ORCA_APP_RESTART_STARTED_EVENT, () => calls.push('prepared'))
+      eventTarget.addEventListener(MCODE_APP_RESTART_STARTED_EVENT, () => calls.push('prepared'))
       invoke.mockImplementation(async (channel: string) => {
         calls.push(channel)
         return channel === 'app:await-before-unload-checkpoint' ? { ok: true } : undefined
@@ -78,7 +78,7 @@ describe('native preload destructive app actions', () => {
     it(`refuses ${action} when the durable checkpoint fails`, async () => {
       const api = await loadApi()
       const aborted = vi.fn()
-      eventTarget.addEventListener(ORCA_APP_RESTART_ABORTED_EVENT, aborted)
+      eventTarget.addEventListener(MCODE_APP_RESTART_ABORTED_EVENT, aborted)
       invoke.mockImplementation(async (channel: string) =>
         channel === 'app:await-before-unload-checkpoint' ? { ok: false } : undefined
       )

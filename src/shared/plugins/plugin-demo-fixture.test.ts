@@ -4,11 +4,11 @@ import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { pluginManifestSchema } from './plugin-manifest'
 
-describe('hello Orca plugin fixture', () => {
+describe('hello MCode plugin fixture', () => {
   it('uses an ESM entry that remains loadable outside a type-module package', async () => {
-    const root = join(process.cwd(), 'examples', 'plugins', 'hello-orca')
+    const root = join(process.cwd(), 'examples', 'plugins', 'hello-mcode')
     const manifest = pluginManifestSchema.parse(
-      JSON.parse(await readFile(join(root, 'orca-plugin.json'), 'utf8'))
+      JSON.parse(await readFile(join(root, 'mcode-plugin.json'), 'utf8'))
     )
 
     expect(manifest.main).toBe('main.mjs')

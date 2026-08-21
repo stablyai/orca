@@ -75,19 +75,19 @@ describe('pending worktree creation state', () => {
         taskSourceContext: {
           kind: 'task-source',
           provider: 'github',
-          projectId: 'github:stablyai/orca',
+          projectId: 'github:mcode-ide/mcode',
           hostId: 'local',
           projectHostSetupId: 'setup-local',
           repoId: 'repo-local',
-          providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
+          providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'mcode' }
         },
         workspaceRunContext: {
           kind: 'workspace-run',
-          projectId: 'github:stablyai/orca',
+          projectId: 'github:mcode-ide/mcode',
           hostId: 'ssh:ssh-1',
           projectHostSetupId: 'setup-ssh',
           repoId: 'repo-ssh',
-          path: '/home/orca/orca'
+          path: '/home/mcode/mcode'
         },
         name: 'feature',
         setupDecision: 'inherit',

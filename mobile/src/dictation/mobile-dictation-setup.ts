@@ -11,7 +11,7 @@ export type MobileSpeechModel = RuntimeSpeechSetupState['models'][number]
 // instead of dead-ending on a toast.
 const SETUP_REQUIRED_CODES = new Set(['voice_dictation_disabled', 'voice_model_not_selected'])
 const LEGACY_DESKTOP_SPEECH_SETUP_MESSAGE =
-  'Update the paired desktop Orca app to use mobile voice settings.'
+  'Update the paired desktop MCode app to use mobile voice settings.'
 
 // Why: mobile can pair with older desktop runtimes that predate speech.models.list;
 // show upgrade guidance instead of leaking the raw denial or not-found error.

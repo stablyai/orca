@@ -3,7 +3,7 @@ import { join, relative, resolve, sep } from 'node:path'
 import { app } from 'electron'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 
-const MANAGED_AUTH_MARKER = '.orca-managed-claude-auth'
+const MANAGED_AUTH_MARKER = '.mcode-managed-claude-auth'
 
 export function getClaudeManagedAccountsRoot(): string {
   return join(app.getPath('userData'), 'claude-accounts')
@@ -78,7 +78,7 @@ export function writeClaudeManagedAuthFile(
 ): void {
   const filePath = resolve(managedAuthPath, filename)
   if (existsSync(filePath) && !isOwnedChildFile(managedAuthPath, filePath)) {
-    throw new Error('Managed Claude auth child file is not owned by Orca.')
+    throw new Error('Managed Claude auth child file is not owned by MCode.')
   }
   writeFileAtomically(filePath, contents, { mode: 0o600 })
 }

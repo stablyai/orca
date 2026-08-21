@@ -5,8 +5,8 @@ describe('scanForShellReady', () => {
   it('flushes marker-like output when the full marker is not BEL-terminated', () => {
     const state = createShellReadyScanState()
 
-    expect(scanForShellReady(state, 'before \x1b]777;orca-shell-readyx')).toEqual({
-      output: 'before \x1b]777;orca-shell-readyx',
+    expect(scanForShellReady(state, 'before \x1b]777;mcode-shell-readyx')).toEqual({
+      output: 'before \x1b]777;mcode-shell-readyx',
       matched: false,
       postMarkerBytesObserved: false
     })
@@ -19,21 +19,21 @@ describe('scanForShellReady', () => {
 
   it('reports post-marker bytes only when bytes follow the BEL terminator in the matching call', () => {
     let state = createShellReadyScanState()
-    expect(scanForShellReady(state, 'before \x1b]777;orca-shell-ready\x07')).toEqual({
+    expect(scanForShellReady(state, 'before \x1b]777;mcode-shell-ready\x07')).toEqual({
       output: 'before ',
       matched: true,
       postMarkerBytesObserved: false
     })
 
     state = createShellReadyScanState()
-    expect(scanForShellReady(state, 'before \x1b]777;orca-shell-ready\x07% ')).toEqual({
+    expect(scanForShellReady(state, 'before \x1b]777;mcode-shell-ready\x07% ')).toEqual({
       output: 'before % ',
       matched: true,
       postMarkerBytesObserved: true
     })
 
     state = createShellReadyScanState()
-    expect(scanForShellReady(state, 'before \x1b]777;orca-shell-ready')).toEqual({
+    expect(scanForShellReady(state, 'before \x1b]777;mcode-shell-ready')).toEqual({
       output: 'before ',
       matched: false,
       postMarkerBytesObserved: false
@@ -45,7 +45,7 @@ describe('scanForShellReady', () => {
     })
 
     state = createShellReadyScanState()
-    expect(scanForShellReady(state, '\x1b]777;orca-shell-ready')).toEqual({
+    expect(scanForShellReady(state, '\x1b]777;mcode-shell-ready')).toEqual({
       output: '',
       matched: false,
       postMarkerBytesObserved: false

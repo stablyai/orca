@@ -36,7 +36,7 @@ afterEach(async () => {
 
 describe('native chat transcript watcher errors', () => {
   it('handles a watcher error and rebinds after the directory is readable', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-watch-error-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-native-chat-watch-error-'))
     roots.push(root)
     const filePath = join(root, 'transcript.jsonl')
     await writeFile(filePath, '')
@@ -57,7 +57,7 @@ describe('native chat transcript watcher errors', () => {
   })
 
   it('keeps retrying after the old recovery window and tails a recreated directory', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-watch-gap-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-native-chat-watch-gap-'))
     roots.push(root)
     const filePath = join(root, 'transcript.jsonl')
     await writeFile(filePath, '')
@@ -96,7 +96,7 @@ describe('native chat transcript watcher errors', () => {
   })
 
   it('surfaces an error snapshot when the initial drain throws', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-initial-error-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-native-chat-initial-error-'))
     roots.push(root)
     // A directory sitting at the transcript path: it exists (so install does not
     // defer to the not-yet-flushed resolve poll, #8401) but every tail read
@@ -127,7 +127,7 @@ describe('native chat transcript watcher errors', () => {
   })
 
   it('still wins with a real initial snapshot once the transcript becomes readable', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-initial-recover-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-native-chat-initial-recover-'))
     roots.push(root)
     // Same unreadable-directory setup as above; the error frame must not be
     // terminal once the path is replaced with a readable transcript.

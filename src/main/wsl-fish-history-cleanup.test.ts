@@ -20,7 +20,7 @@ describe('deleteWslFishHistoryFile', () => {
   it('uses direct argv and bounds a distro cleanup subprocess', async () => {
     const run = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
 
-    await deleteWslFishHistoryFile('Ubuntu Test', 'orca_0123456789abcdef', run)
+    await deleteWslFishHistoryFile('Ubuntu Test', 'mcode_0123456789abcdef', run)
 
     expect(run).toHaveBeenCalledWith(
       'wsl.exe',
@@ -30,7 +30,7 @@ describe('deleteWslFishHistoryFile', () => {
         '--exec',
         'fish',
         '--command',
-        expect.stringContaining('orca_0123456789abcdef_history')
+        expect.stringContaining('mcode_0123456789abcdef_history')
       ],
       { timeout: 5_000, windowsHide: true }
     )
@@ -53,7 +53,7 @@ describe('deleteWslFishHistoryFile', () => {
         settle = () => resolve({ stdout: '', stderr: '' })
       })
     )
-    const session = 'orca_0123456789abcdef'
+    const session = 'mcode_0123456789abcdef'
 
     const first = deleteWslFishHistoryFile('Ubuntu', session, run)
     const second = deleteWslFishHistoryFile('Ubuntu', session, run)
@@ -68,8 +68,8 @@ describe('deleteWslFishHistoryFile', () => {
     const run = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
 
     await Promise.all([
-      deleteWslFishHistoryFile('Ubuntu', 'orca_0123456789abcdef', run),
-      deleteWslFishHistoryFile('Debian', 'orca_0123456789abcdef', run)
+      deleteWslFishHistoryFile('Ubuntu', 'mcode_0123456789abcdef', run),
+      deleteWslFishHistoryFile('Debian', 'mcode_0123456789abcdef', run)
     ])
 
     expect(run).toHaveBeenCalledTimes(2)
@@ -80,7 +80,7 @@ describe('deleteWslFishHistoryFile', () => {
       stdout: '',
       stderr: ''
     })
-    const session = 'orca_0123456789abcdef'
+    const session = 'mcode_0123456789abcdef'
 
     await expect(deleteWslFishHistoryFile('Ubuntu', session, run)).rejects.toThrow('distro offline')
     await expect(deleteWslFishHistoryFile('Ubuntu', session, run)).resolves.toBeUndefined()

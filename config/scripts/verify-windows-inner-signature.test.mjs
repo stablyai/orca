@@ -27,8 +27,8 @@ const validSignature = {
 }
 
 function withTempFile(callback) {
-  const dir = mkdtempSync(join(tmpdir(), 'orca-inner-signature-'))
-  const filePath = join(dir, 'Orca.exe')
+  const dir = mkdtempSync(join(tmpdir(), 'mcode-inner-signature-'))
+  const filePath = join(dir, 'MCode.exe')
   writeFileSync(filePath, 'placeholder executable')
 
   try {
@@ -39,25 +39,25 @@ function withTempFile(callback) {
 }
 
 describe('verify-windows-inner-signature', () => {
-  const originalExpectedSigners = process.env.ORCA_WINDOWS_EXPECTED_SIGNERS
-  const originalExpectedThumbprints = process.env.ORCA_WINDOWS_EXPECTED_THUMBPRINTS
+  const originalExpectedSigners = process.env.MCODE_WINDOWS_EXPECTED_SIGNERS
+  const originalExpectedThumbprints = process.env.MCODE_WINDOWS_EXPECTED_THUMBPRINTS
 
   beforeEach(() => {
-    delete process.env.ORCA_WINDOWS_EXPECTED_SIGNERS
-    delete process.env.ORCA_WINDOWS_EXPECTED_THUMBPRINTS
+    delete process.env.MCODE_WINDOWS_EXPECTED_SIGNERS
+    delete process.env.MCODE_WINDOWS_EXPECTED_THUMBPRINTS
   })
 
   afterEach(() => {
     if (originalExpectedSigners === undefined) {
-      delete process.env.ORCA_WINDOWS_EXPECTED_SIGNERS
+      delete process.env.MCODE_WINDOWS_EXPECTED_SIGNERS
     } else {
-      process.env.ORCA_WINDOWS_EXPECTED_SIGNERS = originalExpectedSigners
+      process.env.MCODE_WINDOWS_EXPECTED_SIGNERS = originalExpectedSigners
     }
 
     if (originalExpectedThumbprints === undefined) {
-      delete process.env.ORCA_WINDOWS_EXPECTED_THUMBPRINTS
+      delete process.env.MCODE_WINDOWS_EXPECTED_THUMBPRINTS
     } else {
-      process.env.ORCA_WINDOWS_EXPECTED_THUMBPRINTS = originalExpectedThumbprints
+      process.env.MCODE_WINDOWS_EXPECTED_THUMBPRINTS = originalExpectedThumbprints
     }
   })
 
@@ -93,7 +93,7 @@ describe('verify-windows-inner-signature', () => {
 
   it('rejects missing, nonexistent, and directory executable paths before PowerShell', () => {
     expect(() => validateExecutablePath('')).toThrow(/Usage:/)
-    expect(() => validateExecutablePath(join(tmpdir(), 'missing-Orca.exe'))).toThrow(
+    expect(() => validateExecutablePath(join(tmpdir(), 'missing-MCode.exe'))).toThrow(
       /does not exist/
     )
 
@@ -167,26 +167,26 @@ describe('verify-windows-inner-signature', () => {
       return { status: 0, stdout: JSON.stringify(validSignature), stderr: '' }
     }
 
-    expect(getPowerShellSignatureJson('C:\\Path With Spaces\\Orca.exe', spawnSyncImpl)).toBe(
+    expect(getPowerShellSignatureJson('C:\\Path With Spaces\\MCode.exe', spawnSyncImpl)).toBe(
       JSON.stringify(validSignature)
     )
     expect(calls[0].command).toBe('pwsh')
     expect(calls[0].args).toContain('-Command')
-    expect(calls[0].args.at(-1)).not.toBe('C:\\Path With Spaces\\Orca.exe')
+    expect(calls[0].args.at(-1)).not.toBe('C:\\Path With Spaces\\MCode.exe')
     expect(calls[0].options).toEqual(
       expect.objectContaining({
         encoding: 'utf8',
         env: expect.objectContaining({
-          ORCA_WINDOWS_INNER_EXECUTABLE: 'C:\\Path With Spaces\\Orca.exe'
+          MCODE_WINDOWS_INNER_EXECUTABLE: 'C:\\Path With Spaces\\MCode.exe'
         })
       })
     )
 
     expect(() =>
-      getPowerShellSignatureJson('Orca.exe', () => ({ status: 0, stdout: '{}', stderr: 'warning' }))
+      getPowerShellSignatureJson('MCode.exe', () => ({ status: 0, stdout: '{}', stderr: 'warning' }))
     ).toThrow(/stderr/)
     expect(() =>
-      getPowerShellSignatureJson('Orca.exe', () => ({ status: 7, stdout: '', stderr: '' }))
+      getPowerShellSignatureJson('MCode.exe', () => ({ status: 7, stdout: '', stderr: '' }))
     ).toThrow(/exit code 7/)
   })
 

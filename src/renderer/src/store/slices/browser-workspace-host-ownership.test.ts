@@ -125,13 +125,13 @@ describe('createBrowserSlice runtime guard', () => {
 
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
       sessionProfileId: 'profile-isolated',
-      sessionPartition: 'persist:orca-browser-session-profile-isolated'
+      sessionPartition: 'persist:mcode-browser-session-profile-isolated'
     })
 
     expect(tab.sessionProfileId).toBe('profile-isolated')
-    expect(tab.sessionPartition).toBe('persist:orca-browser-session-profile-isolated')
+    expect(tab.sessionPartition).toBe('persist:mcode-browser-session-profile-isolated')
     expect(store.getState().browserTabsByWorktree['wt-1']?.[0]?.sessionPartition).toBe(
-      'persist:orca-browser-session-profile-isolated'
+      'persist:mcode-browser-session-profile-isolated'
     )
   })
 
@@ -139,7 +139,7 @@ describe('createBrowserSlice runtime guard', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com', {
       sessionProfileId: null,
-      sessionPartition: 'persist:orca-browser'
+      sessionPartition: 'persist:mcode-browser'
     })
 
     store
@@ -147,13 +147,13 @@ describe('createBrowserSlice runtime guard', () => {
       .switchBrowserTabProfile(
         tab.id,
         'profile-isolated',
-        'persist:orca-browser-session-profile-isolated'
+        'persist:mcode-browser-session-profile-isolated'
       )
 
     expect(store.getState().browserTabsByWorktree['wt-1']?.[0]).toEqual(
       expect.objectContaining({
         sessionProfileId: 'profile-isolated',
-        sessionPartition: 'persist:orca-browser-session-profile-isolated'
+        sessionPartition: 'persist:mcode-browser-session-profile-isolated'
       })
     )
   })

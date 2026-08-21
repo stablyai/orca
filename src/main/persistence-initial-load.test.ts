@@ -59,7 +59,7 @@ vi.mock('./telemetry/cohort-classifier', () => ({
 
 describe('Store', () => {
   beforeEach(() => {
-    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+    testState.dir = mkdtempSync(join(tmpdir(), 'mcode-test-'))
     trackMock.mockReset()
     getCohortAtEmitMock.mockReset()
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
@@ -198,7 +198,7 @@ describe('Store', () => {
 
   it('loads state from an explicit profile data file path', async () => {
     const profileDataDirectory = join(testState.dir, 'profiles', 'local-default')
-    const profileDataFile = join(profileDataDirectory, 'orca-data.json')
+    const profileDataFile = join(profileDataDirectory, 'mcode-data.json')
     mkdirSync(profileDataDirectory, { recursive: true })
     writeDataFile({
       schemaVersion: 1,
@@ -227,16 +227,16 @@ describe('Store', () => {
       repos: [
         makeRepo({
           id: 'local-repo',
-          path: '/Users/alice/orca',
-          displayName: 'Orca',
-          upstream: { owner: 'StablyAI', repo: 'Orca' }
+          path: '/Users/alice/mcode',
+          displayName: 'MCode',
+          upstream: { owner: 'StablyAI', repo: 'MCode' }
         }),
         makeRepo({
           id: 'remote-repo',
-          path: '/home/alice/orca',
-          displayName: 'orca',
+          path: '/home/alice/mcode',
+          displayName: 'mcode',
           connectionId: 'gpu-vm',
-          upstream: { owner: 'stablyai', repo: 'orca' }
+          upstream: { owner: 'stablyai', repo: 'mcode' }
         })
       ]
     })
@@ -245,22 +245,22 @@ describe('Store', () => {
 
     expect(store.getProjects()).toEqual([
       expect.objectContaining({
-        id: 'github:stablyai/orca',
+        id: 'github:mcode-ide/mcode',
         sourceRepoIds: ['local-repo', 'remote-repo']
       })
     ])
     expect(store.getProjectHostSetups()).toEqual([
       expect.objectContaining({
         id: 'local-repo',
-        projectId: 'github:stablyai/orca',
+        projectId: 'github:mcode-ide/mcode',
         hostId: 'local',
-        path: '/Users/alice/orca'
+        path: '/Users/alice/mcode'
       }),
       expect.objectContaining({
         id: 'remote-repo',
-        projectId: 'github:stablyai/orca',
+        projectId: 'github:mcode-ide/mcode',
         hostId: 'ssh:gpu-vm',
-        path: '/home/alice/orca'
+        path: '/home/alice/mcode'
       })
     ])
 

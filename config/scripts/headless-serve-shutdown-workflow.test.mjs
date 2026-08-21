@@ -25,19 +25,19 @@ function readSystemdUnitBlocks(doc, unitName) {
 describe('headless serve shutdown PR gate', () => {
   it('reads only exact, closed systemd unit blocks', () => {
     expect(
-      readSystemdUnitBlocks('# /etc/systemd/system/orca-serveXservice\n```', 'orca-serve.service')
+      readSystemdUnitBlocks('# /etc/systemd/system/mcode-serveXservice\n```', 'mcode-serve.service')
     ).toEqual([])
     expect(() =>
-      readSystemdUnitBlocks('# /etc/systemd/system/orca-serve.service\n', 'orca-serve.service')
-    ).toThrow('Missing closing code fence for orca-serve.service')
+      readSystemdUnitBlocks('# /etc/systemd/system/mcode-serve.service\n', 'mcode-serve.service')
+    ).toThrow('Missing closing code fence for mcode-serve.service')
     expect(() =>
       readSystemdUnitBlocks(
-        '# /etc/systemd/system/orca-serve.service\n' +
+        '# /etc/systemd/system/mcode-serve.service\n' +
           'KillMode=mixed\n' +
           '# /etc/systemd/system/other.service\n```',
-        'orca-serve.service'
+        'mcode-serve.service'
       )
-    ).toThrow('Missing closing code fence for orca-serve.service')
+    ).toThrow('Missing closing code fence for mcode-serve.service')
   })
 
   it('packages an x64 AppImage before running the Docker signal oracle', () => {
@@ -47,18 +47,18 @@ describe('headless serve shutdown PR gate', () => {
 
     expect(packageStep.run).toContain('--linux AppImage --x64 --publish never')
     expect(shutdownStep.run).toBe(
-      'node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage'
+      'node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/mcode-linux.AppImage'
     )
     expect(steps.indexOf(shutdownStep)).toBeGreaterThan(steps.indexOf(packageStep))
   })
 
   it('keeps owned Xvfb alive during the documented systemd graceful stop', () => {
-    const serveUnits = readSystemdUnitBlocks(headlessLinuxGuide, 'orca-serve.service')
+    const serveUnits = readSystemdUnitBlocks(headlessLinuxGuide, 'mcode-serve.service')
     const ownedXvfbUnits = serveUnits.filter((unit) => !/^Environment=DISPLAY=/m.test(unit))
     const managedXvfbUnits = serveUnits.filter((unit) => /^Environment=DISPLAY=/m.test(unit))
 
     expect(ownedXvfbUnits).toHaveLength(1)
-    expect(ownedXvfbUnits[0]).toMatch(/^ExecStart=.*orca-linux\.AppImage serve.*$/m)
+    expect(ownedXvfbUnits[0]).toMatch(/^ExecStart=.*mcode-linux\.AppImage serve.*$/m)
     expect(ownedXvfbUnits[0]).toMatch(/^KillMode=mixed$/m)
     expect(managedXvfbUnits).toHaveLength(1)
     expect(managedXvfbUnits[0]).not.toMatch(/^KillMode=/m)

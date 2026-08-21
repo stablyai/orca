@@ -19,7 +19,7 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
-import { openAiVaultSessionLogInOrca } from './ai-vault-session-log-open'
+import { openAiVaultSessionLogInMCode } from './ai-vault-session-log-open'
 
 const LOG_PATH = '/home/user/.claude/sessions/log.jsonl'
 
@@ -56,12 +56,12 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('openAiVaultSessionLogInOrca', () => {
+describe('openAiVaultSessionLogInMCode', () => {
   it('authorizes the exact path and opens a permanent read-only local tab', async () => {
     const state = makeState()
     getStateMock.mockReturnValue(state)
 
-    await openAiVaultSessionLogInOrca({ filePath: LOG_PATH, executionHostId: 'local' })
+    await openAiVaultSessionLogInMCode({ filePath: LOG_PATH, executionHostId: 'local' })
 
     expect(authorizeMock).toHaveBeenCalledWith({ targetPath: LOG_PATH })
     expect(state.openFile).toHaveBeenCalledTimes(1)
@@ -89,9 +89,9 @@ describe('openAiVaultSessionLogInOrca', () => {
     const state = makeState()
     getStateMock.mockReturnValue(state)
 
-    await openAiVaultSessionLogInOrca({ filePath: '   ', executionHostId: 'local' })
-    await openAiVaultSessionLogInOrca({ filePath: LOG_PATH, executionHostId: 'ssh:dev-box' })
-    await openAiVaultSessionLogInOrca({
+    await openAiVaultSessionLogInMCode({ filePath: '   ', executionHostId: 'local' })
+    await openAiVaultSessionLogInMCode({ filePath: LOG_PATH, executionHostId: 'ssh:dev-box' })
+    await openAiVaultSessionLogInMCode({
       filePath: '/home/user/.opencode/db.sqlite#sess_1',
       executionHostId: 'local'
     })
@@ -105,7 +105,7 @@ describe('openAiVaultSessionLogInOrca', () => {
     getStateMock.mockReturnValue(state)
     authorizeMock.mockRejectedValue(new Error('denied'))
 
-    await openAiVaultSessionLogInOrca({ filePath: LOG_PATH, executionHostId: 'local' })
+    await openAiVaultSessionLogInMCode({ filePath: LOG_PATH, executionHostId: 'local' })
 
     expect(state.openFile).not.toHaveBeenCalled()
     expect(toastErrorMock).toHaveBeenCalledWith("Couldn't open log — path not authorized.")
@@ -116,7 +116,7 @@ describe('openAiVaultSessionLogInOrca', () => {
     const stateAfter = makeState({ worktreesByRepo: {}, folderWorkspaces: [] })
     getStateMock.mockReturnValueOnce(state).mockReturnValue(stateAfter)
 
-    await openAiVaultSessionLogInOrca({ filePath: LOG_PATH, executionHostId: 'local' })
+    await openAiVaultSessionLogInMCode({ filePath: LOG_PATH, executionHostId: 'local' })
 
     expect(state.openFile).not.toHaveBeenCalled()
     expect(stateAfter.openFile).not.toHaveBeenCalled()
@@ -139,7 +139,7 @@ describe('openAiVaultSessionLogInOrca', () => {
     })
     getStateMock.mockReturnValue(state)
 
-    await openAiVaultSessionLogInOrca({ filePath: LOG_PATH, executionHostId: 'local' })
+    await openAiVaultSessionLogInMCode({ filePath: LOG_PATH, executionHostId: 'local' })
 
     expect(state.openFile).toHaveBeenCalledTimes(1)
     expect(toastMock).toHaveBeenCalledWith('Log is already open for editing.')
@@ -157,8 +157,8 @@ describe('openAiVaultSessionLogInOrca', () => {
         })
     )
 
-    const first = openAiVaultSessionLogInOrca({ filePath: LOG_PATH, executionHostId: 'local' })
-    const second = openAiVaultSessionLogInOrca({ filePath: LOG_PATH, executionHostId: 'local' })
+    const first = openAiVaultSessionLogInMCode({ filePath: LOG_PATH, executionHostId: 'local' })
+    const second = openAiVaultSessionLogInMCode({ filePath: LOG_PATH, executionHostId: 'local' })
     resolveAuth?.()
     await Promise.all([first, second])
 

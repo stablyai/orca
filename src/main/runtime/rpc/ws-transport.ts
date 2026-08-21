@@ -1,4 +1,4 @@
-// WebSocket transport letting mobile clients reach the Orca runtime over LAN (wss:// with TLS, else ws://); auth is per-device tokens, independent of transport encryption.
+// WebSocket transport letting mobile clients reach the MCode runtime over LAN (wss:// with TLS, else ws://); auth is per-device tokens, independent of transport encryption.
 import { createServer as createHttpsServer, type Server as HttpsServer } from 'node:https'
 import { createServer as createHttpServer, type Server as HttpServer } from 'node:http'
 import { WebSocketServer, type WebSocket } from 'ws'

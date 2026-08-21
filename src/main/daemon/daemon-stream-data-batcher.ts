@@ -24,7 +24,7 @@ const STREAM_DATA_BATCH_INTERVAL_MS = 2
 // Shallow socket: the stream is one FIFO, so a deep buffer buries a visible pane's echo behind other panes' bulk; bulk stops here and is HELD (flushSession can jump it), bounding echo latency.
 // 128KB stays above the socket's ~16KB highWaterMark so a held state implies a false write() and thus a guaranteed 'drain' wake-up.
 const SHALLOW_SOCKET_WRITE_GATE_BYTES =
-  process.env.ORCA_DAEMON_SHALLOW_SOCKET_GATE === '0' ? Number.POSITIVE_INFINITY : 128 * 1024
+  process.env.MCODE_DAEMON_SHALLOW_SOCKET_GATE === '0' ? Number.POSITIVE_INFINITY : 128 * 1024
 // Sliced writes: a coalesced entry can grow to megabytes; writing it whole would re-deepen the socket past the gate in one call.
 const BULK_WRITE_SLICE_CHARS = 64 * 1024
 // Safety valve: past this, write through — bounded daemon memory beats bounded echo latency in the extreme. Must sit FAR above the pacer's pause watermark + overshoot (~5MB) or an engaged valve buries interactive echo behind the whole backlog.

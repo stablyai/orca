@@ -18,7 +18,7 @@ function claudeEvent(
   return normalizeHookPayload(state, 'claude', { paneKey, payload }, 'production')
 }
 
-// A fresh listener state is what Orca has after a restart: the lead-turn cache is in-memory only,
+// A fresh listener state is what MCode has after a restart: the lead-turn cache is in-memory only,
 // so a session that outlived the app reports its next child event with no cached lead.
 describe('Claude child lifecycle events with no cached lead state', () => {
   it('makes no status claim from an unknown start-less SubagentStop', () => {

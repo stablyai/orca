@@ -7,7 +7,7 @@
  * runs, and later `write()` calls only re-schedule processing when the
  * buffer is EMPTY — which a stalled buffer never is again.
  *
- * In Orca, write-completion callbacks run settleForegroundRender → refresh →
+ * In MCode, write-completion callbacks run settleForegroundRender → refresh →
  * renderer/WebGL code (pane-terminal-foreground-render-settle.ts) and the
  * replay-guard decrement (replay-guard.ts). So one renderer exception during
  * write completion freezes that pane's output forever AND latches the replay
@@ -50,7 +50,7 @@ describe('xterm WriteBuffer stall (vendored 6.1.0-beta.287)', () => {
   })
 
   it('permanently stops completing writes after a sync throw in a custom parser handler', () => {
-    // Orca registers custom CSI/OSC handlers (capability replies, titles,
+    // MCode registers custom CSI/OSC handlers (capability replies, titles,
     // agent status). The parser does NOT isolate sync handler exceptions:
     // they escape _action and wedge the buffer exactly like the callback
     // case — custom handlers are a second freeze vector.

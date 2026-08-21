@@ -1,5 +1,5 @@
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import { MCODE_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import type { BrowserTabInfo } from '../../../../../shared/runtime-types'
 import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
 import type {
@@ -120,7 +120,7 @@ export class RemoteBrowserPageSession {
     const worktree = this.deps.getWorktreeSelector()
     const currentUrl = this.deps.getCurrentUrl()
     const initialUrl =
-      currentUrl === ORCA_BROWSER_BLANK_URL ? 'about:blank' : currentUrl || 'about:blank'
+      currentUrl === MCODE_BROWSER_BLANK_URL ? 'about:blank' : currentUrl || 'about:blank'
     const created = await this.deps.callRpc<{ browserPageId: string }>(
       target,
       'browser.tabCreate',

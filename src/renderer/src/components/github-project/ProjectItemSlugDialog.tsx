@@ -1,5 +1,5 @@
 // Why: when a Project row's `content.repository` does not match any
-// registered Orca repo, the main `GitHubItemDialog` cannot be used in
+// registered MCode repo, the main `GitHubItemDialog` cannot be used in
 // repo-backed mode — it requires a `repoPath` for label/assignee pickers
 // and conversation details. Per design doc §Dialog editing from Project
 // rows, the dialog for unknown-repo rows is allowed to be a simplified

@@ -28,7 +28,7 @@ afterEach(async () => {
 })
 
 async function makeTempDir(): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-parse-cache-agents-'))
+  const root = await mkdtemp(join(tmpdir(), 'mcode-parse-cache-agents-'))
   tempRoots.push(root)
   return root
 }

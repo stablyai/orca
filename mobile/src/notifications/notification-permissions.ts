@@ -24,7 +24,7 @@ export async function getNotificationPermissionState(): Promise<NotificationPerm
   }
 }
 
-// Why: re-read OS state every call — users can change it in Settings while Orca is backgrounded.
+// Why: re-read OS state every call — users can change it in Settings while MCode is backgrounded.
 export async function ensureNotificationPermissions(): Promise<boolean> {
   const existing = await getNotificationPermissionState()
   if (existing.granted) {

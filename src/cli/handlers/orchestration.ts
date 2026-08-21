@@ -42,7 +42,7 @@ function getLifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): str
 
 // Why: test-only escape hatch so subprocess tests avoid the full 15 s window; bogus values fall back to the default.
 function resolveKeepaliveIntervalMs(): number {
-  const raw = process.env.ORCA_KEEPALIVE_INTERVAL_MS ?? process.env.ORCA_HEARTBEAT_INTERVAL_MS
+  const raw = process.env.MCODE_KEEPALIVE_INTERVAL_MS ?? process.env.MCODE_HEARTBEAT_INTERVAL_MS
   if (!raw) {
     return DEFAULT_KEEPALIVE_INTERVAL_MS
   }
@@ -129,25 +129,25 @@ type OrchestrationSendResult =
       warnings?: SendRecipientWarning[]
     }
 
-function resolveCompatibilityCliCommand(): 'orca' | 'orca-ide' | 'orca-dev' {
-  const configured = process.env.ORCA_CLI_COMMAND
-  if (configured === 'orca' || configured === 'orca-ide' || configured === 'orca-dev') {
+function resolveCompatibilityCliCommand(): 'mcode' | 'mcode-ide' | 'mcode-dev' {
+  const configured = process.env.MCODE_CLI_COMMAND
+  if (configured === 'mcode' || configured === 'mcode-ide' || configured === 'mcode-dev') {
     return configured
   }
-  return process.platform === 'linux' ? 'orca-ide' : 'orca'
+  return process.platform === 'linux' ? 'mcode-ide' : 'mcode'
 }
 
-function resolvePackagedWindowsCompatibilityCommand(): 'orca' | 'orca-ide' | undefined {
-  if (process.env.ORCA_WINDOWS_PACKAGED_CLI_LAUNCHER !== '1') {
+function resolvePackagedWindowsCompatibilityCommand(): 'mcode' | 'mcode-ide' | undefined {
+  if (process.env.MCODE_WINDOWS_PACKAGED_CLI_LAUNCHER !== '1') {
     return undefined
   }
-  const command = process.env.ORCA_CLI_COMMAND
-  if (command === 'orca' || command === 'orca-ide') {
+  const command = process.env.MCODE_CLI_COMMAND
+  if (command === 'mcode' || command === 'mcode-ide') {
     return command
   }
   throw new RuntimeClientError(
     'invalid_argument',
-    'The packaged Orca launcher did not provide a valid resume command. No question was created.'
+    'The packaged MCode launcher did not provide a valid resume command. No question was created.'
   )
 }
 
@@ -232,10 +232,10 @@ async function resolveOrchestrationTerminalHandle(
   if (explicit) {
     return explicit
   }
-  const envHandle = process.env.ORCA_TERMINAL_HANDLE
+  const envHandle = process.env.MCODE_TERMINAL_HANDLE
   if (envHandle && envHandle.length > 0) {
     if (flagName === 'from' && options.validateEnvHandle) {
-      // Why: long-lived shells can retain a stale ORCA_TERMINAL_HANDLE after remint; don't bake it into coordinator preambles.
+      // Why: long-lived shells can retain a stale MCODE_TERMINAL_HANDLE after remint; don't bake it into coordinator preambles.
       const live = await isLiveTerminalHandle(envHandle, client)
       if (!live) {
         const reminted = await resolveOrchestrationPaneTerminalHandle(client)
@@ -289,7 +289,7 @@ async function resolveOrchestrationPaneTerminalHandle(
   client: Parameters<CommandHandler>[0]['client'],
   options: { optional?: boolean } = {}
 ): Promise<string | undefined> {
-  const paneKey = process.env.ORCA_PANE_KEY
+  const paneKey = process.env.MCODE_PANE_KEY
   if (!paneKey || paneKey.length === 0) {
     return undefined
   }
@@ -367,14 +367,14 @@ function throwNoActiveSenderTerminal(): never {
   throw new RuntimeClientError(
     'no_active_sender_terminal',
     'Could not determine the sender terminal for this orchestration command. ' +
-      'Pass --from <terminal-handle> or run the command inside a live Orca terminal with ORCA_TERMINAL_HANDLE set.'
+      'Pass --from <terminal-handle> or run the command inside a live MCode terminal with MCODE_TERMINAL_HANDLE set.'
   )
 }
 
 function isDevCliInvocation(): boolean {
   return (
-    process.env.ORCA_DEV_CLI_INVOCATION === '1' ||
-    (process.env.ORCA_USER_DATA_PATH?.includes('orca-dev') ?? false)
+    process.env.MCODE_DEV_CLI_INVOCATION === '1' ||
+    (process.env.MCODE_USER_DATA_PATH?.includes('mcode-dev') ?? false)
   )
 }
 
@@ -577,13 +577,13 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     if (
       (type === 'worker_done' || type === 'heartbeat') &&
       !getOptionalStringFlag(flags, 'from') &&
-      !process.env.ORCA_TERMINAL_HANDLE
+      !process.env.MCODE_TERMINAL_HANDLE
     ) {
       // Why: focus isn't lifecycle authority — an identity-less subprocess must fail closed rather than guess the worker.
       throwNoActiveSenderTerminal()
     }
 
-    // Why: lifecycle senders preserve ORCA_TERMINAL_HANDLE across restarts for older runtimes.
+    // Why: lifecycle senders preserve MCODE_TERMINAL_HANDLE across restarts for older runtimes.
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
     const sendParams = {
       from,
@@ -596,7 +596,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       threadId: getOptionalStringFlag(flags, 'thread-id'),
       payload: getOptionalStructuredMessagePayload(flags),
       // Why: pane key is the remint-stable sender identity the runtime verifies lifecycle ownership against; older runtimes strip it.
-      senderPaneKey: process.env.ORCA_PANE_KEY || undefined,
+      senderPaneKey: process.env.MCODE_PANE_KEY || undefined,
       waitForLifecycleSettlement: type === 'worker_done' ? true : undefined,
       devMode: isDevCliInvocation()
     }
@@ -666,7 +666,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     try {
       result = await callMutation<CheckResult>(client, flags, 'orchestration.check', {
         terminal,
-        terminalPaneKey: explicitTerminal ? undefined : process.env.ORCA_PANE_KEY || undefined,
+        terminalPaneKey: explicitTerminal ? undefined : process.env.MCODE_PANE_KEY || undefined,
         // Why: peek also sends unread:false so pre-peek runtimes degrade to non-consuming all mode instead of destructive mark-read.
         unread: flags.has('unread') ? true : peek ? false : undefined,
         peek: peek ? true : undefined,
@@ -889,7 +889,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       ) {
         throw new RuntimeClientError(
           'incompatible_runtime',
-          'The connected Orca runtime does not support worker model or effort overrides. Update or restart Orca and try again.'
+          'The connected MCode runtime does not support worker model or effort overrides. Update or restart MCode and try again.'
         )
       }
     }

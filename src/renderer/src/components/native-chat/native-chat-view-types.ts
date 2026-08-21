@@ -11,7 +11,7 @@ export type NativeChatViewProps = {
   paneKey?: string
   /** PTY bound to `paneKey`, used for composer and interactive-card sends. */
   targetPtyId?: string | null
-  /** Launch-time agent hint from the TerminalTab, when Orca started one. */
+  /** Launch-time agent hint from the TerminalTab, when MCode started one. */
   launchAgent?: TuiAgent | null
   /** Trusted title/foreground fallback for manually-started agents. */
   resolvedAgent?: TuiAgent | null

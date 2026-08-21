@@ -107,7 +107,7 @@ export function buildConfiguredProxyEnv(
     all_proxy: proxy.value
   }
   const bypassRules = normalizeProxyBypassRules(settings?.httpProxyBypassRules)
-  // Why: explicit Orca proxy settings should not accidentally inherit a
+  // Why: explicit MCode proxy settings should not accidentally inherit a
   // parent shell's NO_PROXY. The bypass field above is the single source for
   // local child process bypass behavior when a configured proxy is present.
   const noProxy = bypassRules ? bypassRules.replaceAll(';', ',') : ''

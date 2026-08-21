@@ -92,13 +92,13 @@ export async function adoptProvisionedRootSshCheckout(args: {
   }
   const requestedBranch = request.branchNameOverride ?? request.name
   if (gitWorktree.branch !== `refs/heads/${requestedBranch}`) {
-    throw new Error("The recipe projectRoot is not checked out on Orca's requested branch.")
+    throw new Error("The recipe projectRoot is not checked out on MCode's requested branch.")
   }
   if (request.baseBranch && !request.expectedRefHead) {
     throw new Error('The requested provisioned-root ref identity is missing.')
   }
   if (request.expectedRefHead && gitWorktree.head !== request.expectedRefHead) {
-    throw new Error("The recipe projectRoot was not created from Orca's requested ref.")
+    throw new Error("The recipe projectRoot was not created from MCode's requested ref.")
   }
 
   const worktreeId = `${repo.id}::${gitWorktree.path}`
@@ -167,10 +167,10 @@ function buildProvisionedRootMeta(
     displayName: args.displayName || args.name,
     lastActivityAt: now,
     createdAt: now,
-    orcaCreatedAt: now,
-    orcaCreationSource: 'ssh',
+    mcodeCreatedAt: now,
+    mcodeCreationSource: 'ssh',
     creatorProvenance: { kind: 'host' },
-    orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, store.getSettings()),
+    mcodeCreationWorkspaceLayout: getWorktreeCreationLayout(repo, store.getSettings()),
     ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
     ...(args.compareBaseRef || args.baseBranch
       ? { baseRef: args.compareBaseRef ?? args.baseBranch }

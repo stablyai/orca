@@ -59,7 +59,7 @@ vi.mock('@tanstack/react-virtual', () => ({
 }))
 
 vi.mock('@/hooks/useVirtualizedScrollAnchor', () => ({
-  VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT: 'orca:test-record-scroll-anchor',
+  VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT: 'mcode:test-record-scroll-anchor',
   useVirtualizedScrollAnchor: vi.fn()
 }))
 
@@ -113,7 +113,7 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 
 vi.mock('./WorktreeCardAgents', () => ({
   default: () => <div>Agent row</div>,
-  SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT: 'orca:test-suppress-scroll-adjustment'
+  SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT: 'mcode:test-suppress-scroll-adjustment'
 }))
 
 vi.mock('./WorktreeCard', async () => {

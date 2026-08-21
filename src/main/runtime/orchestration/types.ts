@@ -275,7 +275,7 @@ export type DispatchContextRow = {
   status: DispatchStatus
   failure_count: number
   last_failure: string | null
-  /** Why the dispatch ended, when Orca could establish it — `operator_close`,
+  /** Why the dispatch ended, when MCode could establish it — `operator_close`,
    *  `signaled`, `exited`, `unknown`. Null on rows written before STA-4603. */
   termination_reason: TerminalExitCause['kind'] | null
   dispatched_at: string | null

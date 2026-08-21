@@ -31,7 +31,7 @@ import { discoverRetiredWorktreeNames } from './worktree-retirement-discovery'
 import { runRetirementBackfillScan } from './worktree-retirement-backfill-scan'
 import { hasCachedWslHome, parseWslPath } from './wsl'
 
-const RETIREMENT_PROBE_NAME = 'orca-retirement-probe'
+const RETIREMENT_PROBE_NAME = 'mcode-retirement-probe'
 
 type RetirementReadStore = {
   getRetiredWorktreeNameRegistry(repoId: string): RetiredNameRegistry
@@ -129,7 +129,7 @@ async function getRetirementCollisionKey(
   return key
 }
 
-/** True when the repo executes on an Orca-provisioned on-demand runtime, whose address and
+/** True when the repo executes on an MCode-provisioned on-demand runtime, whose address and
  *  filesystem are both replaced on every provision. */
 function isRuntimeOwnedRetirementHost(repo: Repo): boolean {
   const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))

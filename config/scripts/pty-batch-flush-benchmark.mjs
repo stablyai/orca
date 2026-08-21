@@ -2,12 +2,12 @@
 import { performance } from 'node:perf_hooks'
 import v8 from 'node:v8'
 
-const PTY_COUNT = Number.parseInt(process.env.ORCA_PTY_BENCH_PTY_COUNT ?? '24', 10)
-const PAYLOAD_CHARS = Number.parseInt(process.env.ORCA_PTY_BENCH_PAYLOAD_CHARS ?? '262144', 10)
-const RUNS = Number.parseInt(process.env.ORCA_PTY_BENCH_RUNS ?? '30', 10)
-const MEASURE_TIMER_DELAYS = process.env.ORCA_PTY_BENCH_MEASURE_TIMER_DELAYS !== '0'
-const INGRESS_CHUNKS = Number.parseInt(process.env.ORCA_PTY_BENCH_INGRESS_CHUNKS ?? '96', 10)
-const INGRESS_CHUNK_CHARS = Number.parseInt(process.env.ORCA_PTY_BENCH_INGRESS_CHARS ?? '65536', 10)
+const PTY_COUNT = Number.parseInt(process.env.MCODE_PTY_BENCH_PTY_COUNT ?? '24', 10)
+const PAYLOAD_CHARS = Number.parseInt(process.env.MCODE_PTY_BENCH_PAYLOAD_CHARS ?? '262144', 10)
+const RUNS = Number.parseInt(process.env.MCODE_PTY_BENCH_RUNS ?? '30', 10)
+const MEASURE_TIMER_DELAYS = process.env.MCODE_PTY_BENCH_MEASURE_TIMER_DELAYS !== '0'
+const INGRESS_CHUNKS = Number.parseInt(process.env.MCODE_PTY_BENCH_INGRESS_CHUNKS ?? '96', 10)
+const INGRESS_CHUNK_CHARS = Number.parseInt(process.env.MCODE_PTY_BENCH_INGRESS_CHARS ?? '65536', 10)
 const CHUNK_CHARS = 16 * 1024
 const MAX_WRITES_PER_SLICE = 2
 const RECENT_PTY_OUTPUT_LIMIT = 4096
@@ -18,19 +18,19 @@ const OSC_TITLE_RE = /\x1b\]([012]);([^\x07\x1b]*?)(?:\x07|\x1b\\)/g
 const URL_CANDIDATE_PATTERN = /\bhttps?:\/\/[^\s<>"'`]+/gi
 
 if (!Number.isInteger(PTY_COUNT) || PTY_COUNT <= 0) {
-  throw new Error(`ORCA_PTY_BENCH_PTY_COUNT must be positive, received ${PTY_COUNT}`)
+  throw new Error(`MCODE_PTY_BENCH_PTY_COUNT must be positive, received ${PTY_COUNT}`)
 }
 if (!Number.isInteger(PAYLOAD_CHARS) || PAYLOAD_CHARS <= 0) {
-  throw new Error(`ORCA_PTY_BENCH_PAYLOAD_CHARS must be positive, received ${PAYLOAD_CHARS}`)
+  throw new Error(`MCODE_PTY_BENCH_PAYLOAD_CHARS must be positive, received ${PAYLOAD_CHARS}`)
 }
 if (!Number.isInteger(RUNS) || RUNS <= 0) {
-  throw new Error(`ORCA_PTY_BENCH_RUNS must be positive, received ${RUNS}`)
+  throw new Error(`MCODE_PTY_BENCH_RUNS must be positive, received ${RUNS}`)
 }
 if (!Number.isInteger(INGRESS_CHUNKS) || INGRESS_CHUNKS <= 0) {
-  throw new Error(`ORCA_PTY_BENCH_INGRESS_CHUNKS must be positive, received ${INGRESS_CHUNKS}`)
+  throw new Error(`MCODE_PTY_BENCH_INGRESS_CHUNKS must be positive, received ${INGRESS_CHUNKS}`)
 }
 if (!Number.isInteger(INGRESS_CHUNK_CHARS) || INGRESS_CHUNK_CHARS <= 0) {
-  throw new Error(`ORCA_PTY_BENCH_INGRESS_CHARS must be positive, received ${INGRESS_CHUNK_CHARS}`)
+  throw new Error(`MCODE_PTY_BENCH_INGRESS_CHARS must be positive, received ${INGRESS_CHUNK_CHARS}`)
 }
 
 function makePendingData() {

@@ -24,7 +24,7 @@ describe('connectMacOSProviderSocket', () => {
       const socket = new FakeSocket()
       createConnectionMock.mockReturnValueOnce(socket)
 
-      const promise = connectMacOSProviderSocket('/tmp/orca-computer.sock', 50)
+      const promise = connectMacOSProviderSocket('/tmp/mcode-computer.sock', 50)
       await Promise.resolve()
 
       expect(socket.listenerCount('error')).toBe(1)
@@ -50,7 +50,7 @@ describe('connectMacOSProviderSocket', () => {
     createConnectionMock.mockReturnValueOnce(socket)
     const abort = new AbortController()
 
-    const promise = connectMacOSProviderSocket('/tmp/orca-computer.sock', 5_000, abort.signal)
+    const promise = connectMacOSProviderSocket('/tmp/mcode-computer.sock', 5_000, abort.signal)
     await Promise.resolve()
     abort.abort()
 

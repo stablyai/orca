@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { AGENT_KIND_VALUES, type AgentKind } from '../../shared/telemetry-events'
-import { ORCA_HOOK_PROTOCOL_VERSION } from '../../shared/agent-hook-types'
+import { MCODE_HOOK_PROTOCOL_VERSION } from '../../shared/agent-hook-types'
 import {
   clearAllListenerCaches,
   clearPaneCacheState,
@@ -694,7 +694,7 @@ export class AgentHookServer {
   private server: ReturnType<typeof createServer> | null = null
   private port = 0
   private token = ''
-  // Why: identifies this Orca instance so the server can detect dev vs. prod cross-talk; set at start() from packaged-build knowledge.
+  // Why: identifies this MCode instance so the server can detect dev vs. prod cross-talk; set at start() from packaged-build knowledge.
   private env = 'production'
   private onAgentStatus: ((payload: EnrichedAgentHookEventPayload) => void) | null = null
   private onClaudeStatusLine: ((event: ClaudeStatusLineRateLimits) => void) | null = null
@@ -1537,7 +1537,7 @@ export class AgentHookServer {
     body: unknown,
     original: EnrichedAgentHookEventPayload
   ): void {
-    // Why: a nested non-codex CLI inherits ORCA_PANE_KEY, so clearing here would silently end a live codex poll.
+    // Why: a nested non-codex CLI inherits MCODE_PANE_KEY, so clearing here would silently end a live codex poll.
     if (source !== 'codex') {
       return
     }
@@ -2132,7 +2132,7 @@ export class AgentHookServer {
     }
     // Why: the OSC 9999 wire payload has no providerSession field at all, so an OSC observation is
     // never evidence that the session ended — yet overwriting the row dropped the cached identity.
-    // That erased it from persisted rows (lost across restart) and from headless `orca serve`, which
+    // That erased it from persisted rows (lost across restart) and from headless `mcode serve`, which
     // serves these rows to mobile directly instead of the renderer store, blanking Chat UI (#10630).
     // A new turn after `done` still starts clean so a reused pane cannot inherit a finished session.
     // Why: mirror resolveAgentStatusIdentity, which treats a literal 'unknown' exactly like an
@@ -2429,7 +2429,7 @@ export class AgentHookServer {
         return
       }
 
-      if (req.headers['x-orca-agent-hook-token'] !== this.token) {
+      if (req.headers['x-mcode-agent-hook-token'] !== this.token) {
         res.writeHead(403)
         res.end()
         return
@@ -2547,7 +2547,7 @@ export class AgentHookServer {
       clearTimeout(timer)
     }
     this.codexSubagentPollTimers.clear()
-    // Why: don't unlink the endpoint file — a stale file matches fail-open and avoids a TOCTOU race with a concurrent Orca.
+    // Why: don't unlink the endpoint file — a stale file matches fail-open and avoids a TOCTOU race with a concurrent MCode.
     this.endpointDir = null
     this.endpointFilePathCache = null
     this.endpointFileWritten = false
@@ -2786,7 +2786,7 @@ export class AgentHookServer {
   }
 
   /** Second reap path for restored Claude subagent rows: drop the ones whose pane
-   *  has no live local agent process behind it any more. A PTY that dies while Orca
+   *  has no live local agent process behind it any more. A PTY that dies while MCode
    *  is down never runs the teardown that clears pane state, so hydrate rebuilds a
    *  roster nothing can ever retire — the inventory reap needs the parent to emit a
    *  complete `background_tasks` list and an idle parent never does. The row then
@@ -2880,14 +2880,14 @@ export class AgentHookServer {
     }
 
     const env: Record<string, string> = {
-      ORCA_AGENT_HOOK_PORT: String(this.port),
-      ORCA_AGENT_HOOK_TOKEN: this.token,
-      ORCA_AGENT_HOOK_ENV: this.env,
-      ORCA_AGENT_HOOK_VERSION: ORCA_HOOK_PROTOCOL_VERSION
+      MCODE_AGENT_HOOK_PORT: String(this.port),
+      MCODE_AGENT_HOOK_TOKEN: this.token,
+      MCODE_AGENT_HOOK_ENV: this.env,
+      MCODE_AGENT_HOOK_VERSION: MCODE_HOOK_PROTOCOL_VERSION
     }
     // Why: hooks source this file at invocation; dev namespaces it so parallel `pnpm dev` runs don't steal each other's hooks.
     if (this.endpointFileWritten && this.endpointFilePathCache) {
-      env.ORCA_AGENT_HOOK_ENDPOINT = this.endpointFilePathCache
+      env.MCODE_AGENT_HOOK_ENDPOINT = this.endpointFilePathCache
     }
     return env
   }
@@ -2910,7 +2910,7 @@ export class AgentHookServer {
       port: this.port,
       token: this.token,
       env: this.env,
-      version: ORCA_HOOK_PROTOCOL_VERSION
+      version: MCODE_HOOK_PROTOCOL_VERSION
     })
     this.endpointFileWritten = ok
   }

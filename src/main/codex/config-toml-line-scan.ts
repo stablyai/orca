@@ -1,4 +1,4 @@
-// Why: Orca edits Codex config.toml byte-preservingly (no TOML dependency), so
+// Why: MCode edits Codex config.toml byte-preservingly (no TOML dependency), so
 // every editor must agree on which lines sit inside multiline strings or
 // arrays vs real TOML structure. Keep the line-scanner in one place to avoid
 // drift.

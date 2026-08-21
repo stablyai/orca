@@ -36,7 +36,7 @@ vi.mock('../telemetry/client', () =>
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
-vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
+vi.mock('../cli/linux-terminal-mcode-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../memory/pty-registry', () =>
@@ -170,7 +170,7 @@ describe('registerPtyHandlers', () => {
       cols: 80,
       rows: 24,
       command: 'codex resume session-a',
-      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
+      envToDelete: ['CODEX_HOME', 'MCODE_CODEX_HOME'],
       launchAgent: 'codex',
       resumeProviderSession: {
         key: 'session_id',

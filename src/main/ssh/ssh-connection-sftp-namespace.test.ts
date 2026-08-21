@@ -16,7 +16,7 @@ vi.mock('ssh2', () => ({
 }))
 
 vi.mock('./ssh-system-fallback', () => ({
-  getOrcaControlSocketPath: vi.fn().mockReturnValue(null),
+  getMCodeControlSocketPath: vi.fn().mockReturnValue(null),
   spawnSystemSsh: vi.fn(),
   spawnSystemSshCommand: vi.fn(),
   downloadFileViaSystemSsh: vi.fn().mockResolvedValue(undefined),
@@ -38,7 +38,7 @@ import type { SshTarget } from '../../shared/ssh-types'
 
 const SHELL_HOME = '/var/services/homes/alice'
 const SFTP_HOME = '/homes/alice'
-const RELAY_DIR = '.orca-remote/relay-0.1.0+hash'
+const RELAY_DIR = '.mcode-remote/relay-0.1.0+hash'
 const MARKER = '.install-lock/.sftp-namespace-cafebabe'
 const SHELL_RELAY_DIR = `${SHELL_HOME}/${RELAY_DIR}`
 
@@ -174,7 +174,7 @@ describe('SshConnection SFTP namespace resolution', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     // realpath: macOS /var is a symlink and uploadDirectory rejects a root that resolves elsewhere.
-    localDir = realpathSync(mkdtempSync(join(tmpdir(), 'orca-relay-')))
+    localDir = realpathSync(mkdtempSync(join(tmpdir(), 'mcode-relay-')))
     writeFileSync(join(localDir, 'relay.js'), 'console.log(1)')
   })
 

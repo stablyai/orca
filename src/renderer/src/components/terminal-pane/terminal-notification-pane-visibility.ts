@@ -7,7 +7,7 @@ type NotificationPaneVisibilityState = {
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot>
 }
 
-export function isOrcaWindowForegroundFocused(): boolean {
+export function isMCodeWindowForegroundFocused(): boolean {
   if (typeof document === 'undefined') {
     return true
   }
@@ -19,7 +19,7 @@ export function isVisibleForegroundPaneKey(
   worktreeId: string,
   paneKey: string
 ): boolean {
-  if (!isOrcaWindowForegroundFocused() || state.activeWorktreeId !== worktreeId) {
+  if (!isMCodeWindowForegroundFocused() || state.activeWorktreeId !== worktreeId) {
     return false
   }
 

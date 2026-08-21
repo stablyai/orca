@@ -20,14 +20,14 @@ import { RuntimeClientError } from './types'
 
 const IGNORED_NON_RECIPE_STDOUT = '[serve] ignored non-recipe stdout'
 
-export function launchOrcaApp(): void {
-  const overrideCommand = process.env.ORCA_OPEN_COMMAND
+export function launchMCodeApp(): void {
+  const overrideCommand = process.env.MCODE_OPEN_COMMAND
   if (typeof overrideCommand === 'string' && overrideCommand.trim().length > 0) {
     spawnDetached(overrideCommand, [], { shell: true })
     return
   }
 
-  const overrideExecutable = process.env.ORCA_APP_EXECUTABLE
+  const overrideExecutable = process.env.MCODE_APP_EXECUTABLE
   if (typeof overrideExecutable === 'string' && overrideExecutable.trim().length > 0) {
     spawnDetached(overrideExecutable, getExecutableAppArgs(), {
       ...getExecutableSpawnOptions(overrideExecutable),
@@ -58,7 +58,7 @@ export function launchOrcaApp(): void {
 
   throw new RuntimeClientError(
     'runtime_open_failed',
-    'Could not determine how to launch Orca. Start Orca manually and try again.'
+    'Could not determine how to launch MCode. Start MCode manually and try again.'
   )
 }
 
@@ -69,12 +69,12 @@ function spawnDetached(command: string, args: string[], options: SpawnOptions): 
     ...options
   })
   // Why: detached launch errors are reported asynchronously after this function
-  // returns; openOrca already reports the user-facing timeout if startup fails.
+  // returns; openMCode already reports the user-facing timeout if startup fails.
   child.once('error', () => {})
   child.unref()
 }
 
-export function serveOrcaApp(
+export function serveMCodeApp(
   args: {
     json?: boolean
     port?: string | null
@@ -85,9 +85,9 @@ export function serveOrcaApp(
     projectRoot?: string | null
   } = {}
 ): Promise<number> {
-  const executable = resolveForegroundOrcaExecutable()
+  const executable = resolveForegroundMCodeExecutable()
   const childArgs = [...getExecutableAppArgs()]
-  if (process.env.ORCA_APPIMAGE_NO_SANDBOX === '1') {
+  if (process.env.MCODE_APPIMAGE_NO_SANDBOX === '1') {
     childArgs.push('--no-sandbox')
   }
   childArgs.push('--serve')
@@ -121,7 +121,7 @@ export function serveOrcaApp(
       ? getServeUpdateHandoffPath(getDefaultUserDataPath())
       : null
   const childEnv = stripElectronRunAsNode(process.env)
-  delete childEnv.ORCA_APPIMAGE_NO_SANDBOX
+  delete childEnv.MCODE_APPIMAGE_NO_SANDBOX
   if (handoffPath) {
     childEnv[SERVE_UPDATE_HANDOFF_PATH_ENV] = handoffPath
   }
@@ -205,7 +205,7 @@ function waitForRecipeJson(child: ReturnType<typeof spawnProcess>): Promise<numb
         writeIgnoredRecipeStdout()
         return
       }
-      if (getEphemeralVmRecipeResultConnection(parsed.result).type !== 'orca-server') {
+      if (getEphemeralVmRecipeResultConnection(parsed.result).type !== 'mcode-server') {
         writeIgnoredRecipeStdout()
         return
       }
@@ -243,8 +243,8 @@ function waitForRecipeJson(child: ReturnType<typeof spawnProcess>): Promise<numb
         new RuntimeClientError(
           'runtime_serve_failed',
           typeof code === 'number'
-            ? `Orca serve exited before printing valid recipe JSON with code ${code}.`
-            : `Orca serve exited before printing valid recipe JSON via ${signal}.`
+            ? `MCode serve exited before printing valid recipe JSON with code ${code}.`
+            : `MCode serve exited before printing valid recipe JSON via ${signal}.`
         )
       )
     }
@@ -257,7 +257,7 @@ function waitForRecipeJson(child: ReturnType<typeof spawnProcess>): Promise<numb
 }
 
 function getExecutableAppArgs(): string[] {
-  return process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT === '1' ? [resolveAppRoot()] : []
+  return process.env.MCODE_APP_EXECUTABLE_NEEDS_APP_ROOT === '1' ? [resolveAppRoot()] : []
 }
 
 function getExecutableSpawnOptions(executable: string): Pick<SpawnOptions, 'shell'> {
@@ -266,13 +266,13 @@ function getExecutableSpawnOptions(executable: string): Pick<SpawnOptions, 'shel
 
 function resolveAppRoot(): string {
   // Why: dev-mode resource resolution in the Electron child may consult
-  // process.cwd(). Pin it to the app root so `orca serve` behaves the same
+  // process.cwd(). Pin it to the app root so `mcode serve` behaves the same
   // regardless of the shell directory it was launched from.
   return resolve(__dirname, '../../..')
 }
 
-function resolveForegroundOrcaExecutable(): string {
-  const overrideExecutable = process.env.ORCA_APP_EXECUTABLE
+function resolveForegroundMCodeExecutable(): string {
+  const overrideExecutable = process.env.MCODE_APP_EXECUTABLE
   if (typeof overrideExecutable === 'string' && overrideExecutable.trim().length > 0) {
     return overrideExecutable
   }
@@ -281,7 +281,7 @@ function resolveForegroundOrcaExecutable(): string {
   }
   throw new RuntimeClientError(
     'runtime_serve_failed',
-    'Could not determine how to start Orca server. Set ORCA_APP_EXECUTABLE to the Orca executable.'
+    'Could not determine how to start MCode server. Set MCODE_APP_EXECUTABLE to the MCode executable.'
   )
 }
 

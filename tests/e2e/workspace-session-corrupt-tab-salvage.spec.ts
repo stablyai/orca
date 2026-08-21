@@ -1,9 +1,9 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
-import { test, expect } from './helpers/orca-app'
-import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { DEFAULT_LOCAL_MCODE_PROFILE_ID } from '../../src/shared/mcode-profiles'
+import { test, expect } from './helpers/mcode-app'
+import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/mcode-restart'
 import { ensureTerminalVisible, getActiveWorktreeId, waitForSessionReady } from './helpers/store'
 import { TEST_REPO_PATH_FILE } from './global-setup'
 
@@ -19,7 +19,7 @@ type PersistedData = {
 }
 
 function persistedDataPath(userDataDir: string): string {
-  return path.join(userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID, 'orca-data.json')
+  return path.join(userDataDir, 'profiles', DEFAULT_LOCAL_MCODE_PROFILE_ID, 'mcode-data.json')
 }
 
 function injectTruncatedTab(userDataDir: string, worktreeId: string, startupCwd: string): void {

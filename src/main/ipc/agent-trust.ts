@@ -10,8 +10,8 @@ import { markRemoteAgentWorkspaceTrusted } from '../remote-agent-trust-presets'
 /**
  * Why: cursor-agent, GitHub Copilot CLI, and Codex gate first-launch in an
  * unfamiliar directory behind a "Do you trust this folder?" menu that consumes
- * keystrokes (numbered options / single-letter shortcuts). Orca's draft-URL
- * paste flow needs the input box, not the menu, so before Orca spawns the
+ * keystrokes (numbered options / single-letter shortcuts). MCode's draft-URL
+ * paste flow needs the input box, not the menu, so before MCode spawns the
  * agent it asks main to write the same trust artifacts the agents write
  * after the user accepts. Best-effort: any IO error is swallowed so a failed
  * trust write never blocks the workspace from opening.

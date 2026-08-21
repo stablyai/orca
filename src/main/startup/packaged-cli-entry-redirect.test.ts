@@ -5,8 +5,8 @@ import {
   maybeRedirectPackagedCliEntryLaunch
 } from './packaged-cli-entry-redirect'
 
-const resourcesPath = 'C:\\Users\\me\\AppData\\Local\\Programs\\Orca\\resources'
-const execPath = 'C:\\Users\\me\\AppData\\Local\\Programs\\Orca\\Orca.exe'
+const resourcesPath = 'C:\\Users\\me\\AppData\\Local\\Programs\\MCode\\resources'
+const execPath = 'C:\\Users\\me\\AppData\\Local\\Programs\\MCode\\MCode.exe'
 const cliEntryPath = win32.join(resourcesPath, 'app.asar.unpacked', 'out', 'cli', 'index.js')
 
 describe('packaged CLI entry redirect', () => {
@@ -55,9 +55,9 @@ describe('packaged CLI entry redirect', () => {
     expect(spawn).toHaveBeenCalledWith(execPath, [cliEntryPath, 'status', '--json'], {
       env: expect.objectContaining({
         ELECTRON_RUN_AS_NODE: '1',
-        ORCA_PACKAGED_CLI_ENTRY_REDIRECTED: '1',
-        ORCA_NODE_OPTIONS: '--inspect',
-        ORCA_NODE_REPL_EXTERNAL_MODULE: 'external-loader'
+        MCODE_PACKAGED_CLI_ENTRY_REDIRECTED: '1',
+        MCODE_NODE_OPTIONS: '--inspect',
+        MCODE_NODE_REPL_EXTERNAL_MODULE: 'external-loader'
       }),
       stdio: 'inherit'
     })
@@ -89,11 +89,11 @@ describe('packaged CLI entry redirect', () => {
     const spawn = vi.fn()
 
     const result = maybeRedirectPackagedCliEntryLaunch({
-      argv: ['C:\\dev\\Orca.exe', cliEntryPath, 'status'],
+      argv: ['C:\\dev\\MCode.exe', cliEntryPath, 'status'],
       platform: 'win32',
       isPackaged: false,
       resourcesPath,
-      execPath: 'C:\\dev\\Orca.exe',
+      execPath: 'C:\\dev\\MCode.exe',
       exists: () => true,
       spawn: spawn as never
     })
@@ -119,7 +119,7 @@ describe('packaged CLI entry redirect', () => {
 
       expect(result).toEqual({ redirected: true, status: 1 })
       expect(stderrWrite).toHaveBeenCalledWith(
-        `Unable to locate the Orca CLI entrypoint at ${cliEntryPath}\n`
+        `Unable to locate the MCode CLI entrypoint at ${cliEntryPath}\n`
       )
       expect(spawn).not.toHaveBeenCalled()
     } finally {
@@ -135,7 +135,7 @@ describe('packaged CLI entry redirect', () => {
       const result = maybeRedirectPackagedCliEntryLaunch({
         argv: [execPath, cliEntryPath, 'status', '--json'],
         env: {
-          ORCA_PACKAGED_CLI_ENTRY_REDIRECTED: '1'
+          MCODE_PACKAGED_CLI_ENTRY_REDIRECTED: '1'
         },
         platform: 'win32',
         isPackaged: true,
@@ -147,7 +147,7 @@ describe('packaged CLI entry redirect', () => {
 
       expect(result).toEqual({ redirected: true, status: 1 })
       expect(stderrWrite).toHaveBeenCalledWith(
-        'Unable to start the Orca CLI through Electron node mode.\n'
+        'Unable to start the MCode CLI through Electron node mode.\n'
       )
       expect(spawn).not.toHaveBeenCalled()
     } finally {

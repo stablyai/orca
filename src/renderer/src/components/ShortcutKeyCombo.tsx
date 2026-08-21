@@ -50,7 +50,7 @@ export function ShortcutKeyCombo({
       {keys.map((key, index) => (
         <React.Fragment key={`${key}-${index}`}>
           <KeyCap label={key} className={keyCapClassName} />
-          {/* Why: Orca renders Mac shortcuts as adjacent glyphs, but Windows/Linux
+          {/* Why: MCode renders Mac shortcuts as adjacent glyphs, but Windows/Linux
               shortcuts read more naturally with explicit "+" separators. A
               double-tap reads as the same key twice, so it gets a space, not "+". */}
           {!isMac && !doubleTap && index < keys.length - 1 ? (

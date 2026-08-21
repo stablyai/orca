@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { MobileNotificationEvent } from './orca-runtime'
+import type { MobileNotificationEvent } from './mcode-runtime'
 
 // Why: when a mobile client's socket is reaped (background/sleep, or a warm
 // proxy that delays the heartbeat reap), notifications dispatched in that

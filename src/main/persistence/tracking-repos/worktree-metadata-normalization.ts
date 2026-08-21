@@ -16,7 +16,7 @@ import {
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
 import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
 
-// Why: worktrees deleted outside Orca orphan their worktreeMeta, so the map grew monotonically (63% dead on a heavy install).
+// Why: worktrees deleted outside MCode orphan their worktreeMeta, so the map grew monotonically (63% dead on a heavy install).
 // GC stays narrow: local-host entries only (a local existsSync would falsely condemn SSH/WSL remote paths) and only after a 30-day idle grace.
 export const WORKTREE_META_GC_GRACE_MS = 30 * 24 * 60 * 60 * 1000
 export const STALE_DURABLE_WRITE_TEMP_AGE_MS = 24 * 60 * 60 * 1000

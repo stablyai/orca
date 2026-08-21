@@ -34,7 +34,7 @@ describe('classifySubprocessCommand', () => {
   })
 
   it.each([
-    // Orca's own spawns use --exec; `--`/`-e` still arrive from foreign wsl.exe processes.
+    // MCode's own spawns use --exec; `--`/`-e` still arrive from foreign wsl.exe processes.
     ['--exec', '--exec'],
     ['-e', '-e'],
     ['--', '--']

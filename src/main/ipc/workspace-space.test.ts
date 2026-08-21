@@ -144,7 +144,7 @@ describe('registerWorkspaceSpaceHandlers', () => {
       scannedRepoCount: 0,
       totalWorktreeCount: 2,
       scannedWorktreeCount: 1,
-      currentRepoDisplayName: 'orca',
+      currentRepoDisplayName: 'mcode',
       currentWorktreeDisplayName: 'feature'
     }
     onProgress?.(progress)
@@ -177,7 +177,7 @@ describe('registerWorkspaceSpaceHandlers', () => {
         totalRepoCount: 1,
         scannedRepoCount: 0,
         totalWorktreeCount: 2,
-        currentRepoDisplayName: 'orca',
+        currentRepoDisplayName: 'mcode',
         currentWorktreeDisplayName: 'feature'
       }
       onProgress?.({ ...base, scannedWorktreeCount: 0 })

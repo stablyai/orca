@@ -70,7 +70,7 @@ describe('createWorktree base status merge', () => {
 
   it('marks the create payload as a generated name only when the caller says so', async () => {
     // Why: the host retires generated names permanently, and the creature pool contains ordinary
-    // words ("orca", "runner", "molly"). A name the user typed must stay reusable.
+    // words ("mcode", "runner", "molly"). A name the user typed must stay reusable.
     const store = createTestStore()
     mockApi.worktrees.create.mockResolvedValue({
       worktree: makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })

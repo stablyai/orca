@@ -17,7 +17,7 @@ const { homedirMock } = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   app: {
-    getPath: () => '/tmp/orca-user-data'
+    getPath: () => '/tmp/mcode-user-data'
   }
 }))
 
@@ -72,20 +72,20 @@ describe('Windows managed hook post interpreter', () => {
   let home = ''
 
   beforeEach(() => {
-    previousUserDataPath = process.env.ORCA_USER_DATA_PATH
-    isolatedUserDataDir = mkdtempSync(join(tmpdir(), 'orca-hook-interpreter-user-data-'))
-    // Why: Orca-managed Codex hooks resolve through ORCA_USER_DATA_PATH before the mocked
+    previousUserDataPath = process.env.MCODE_USER_DATA_PATH
+    isolatedUserDataDir = mkdtempSync(join(tmpdir(), 'mcode-hook-interpreter-user-data-'))
+    // Why: MCode-managed Codex hooks resolve through MCODE_USER_DATA_PATH before the mocked
     // home; an inherited live path would let this test rewrite the developer's own hooks.
-    process.env.ORCA_USER_DATA_PATH = isolatedUserDataDir
-    home = mkdtempSync(join(tmpdir(), 'orca-hook-interpreter-'))
+    process.env.MCODE_USER_DATA_PATH = isolatedUserDataDir
+    home = mkdtempSync(join(tmpdir(), 'mcode-hook-interpreter-'))
     homedirMock.mockReturnValue(home)
   })
 
   afterEach(() => {
     if (previousUserDataPath === undefined) {
-      delete process.env.ORCA_USER_DATA_PATH
+      delete process.env.MCODE_USER_DATA_PATH
     } else {
-      process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+      process.env.MCODE_USER_DATA_PATH = previousUserDataPath
     }
     rmSync(isolatedUserDataDir, { recursive: true, force: true })
     homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
@@ -98,7 +98,7 @@ describe('Windows managed hook post interpreter', () => {
       for (const entry of BATCH_SCRIPT_INSTALLERS) {
         expect(entry.install().state, `${entry.agent} install status`).toBe('installed')
       }
-      const hooksDir = join(home, '.orca', 'agent-hooks')
+      const hooksDir = join(home, '.mcode', 'agent-hooks')
       return readdirSync(hooksDir)
         .filter((name) => name.endsWith('.cmd'))
         .map((name) => ({ name, body: readFileSync(join(hooksDir, name), 'utf8') }))
@@ -120,7 +120,7 @@ describe('Windows managed hook post interpreter', () => {
 
     // Why: `%~dp0` marks an event wrapper that only sets env and delegates to the core script.
     const isWrapper = (body: string): boolean => body.includes('%~dp0')
-    const posts = (body: string): boolean => body.includes('127.0.0.1:%ORCA_AGENT_HOOK_PORT%')
+    const posts = (body: string): boolean => body.includes('127.0.0.1:%MCODE_AGENT_HOOK_PORT%')
 
     // Why: name the script that stopped posting rather than failing on a bare count.
     expect(

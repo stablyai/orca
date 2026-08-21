@@ -57,8 +57,8 @@ function consumeStagedCookieImport(stagedPath: string): void {
 export function applyPendingBrowserCookieImports({
   resolveMetadataPath,
   defaultPartition,
-  activeOrcaProfileId
-}: PendingCookieImportTarget & { activeOrcaProfileId: string }): void {
+  activeMCodeProfileId
+}: PendingCookieImportTarget & { activeMCodeProfileId: string }): void {
   try {
     const meta = loadBrowserSessionMeta(resolveMetadataPath, defaultPartition)
     const pendingEntries = Object.entries(meta.pendingCookieImports)
@@ -68,7 +68,7 @@ export function applyPendingBrowserCookieImports({
     // Why: replay writes to partition-derived paths, so corrupted metadata must pass the same validation as the webview allowlist.
     const knownPartitions = new Set([defaultPartition])
     for (const profile of meta.profiles) {
-      if (isValidPersistedBrowserSessionProfile(profile, activeOrcaProfileId)) {
+      if (isValidPersistedBrowserSessionProfile(profile, activeMCodeProfileId)) {
         knownPartitions.add(profile.partition)
       }
     }

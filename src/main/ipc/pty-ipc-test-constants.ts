@@ -13,14 +13,14 @@ export type PlatformGatedTest = (
 
 export const isWindowsHost = process.platform === 'win32'
 export const posixOnlyIt: PlatformGatedTest = isWindowsHost ? it.skip : it
-export const BUNDLED_RESOURCES_PATH = join('/tmp', 'orca-bundled-resources')
+export const BUNDLED_RESOURCES_PATH = join('/tmp', 'mcode-bundled-resources')
 // Why: this suite forces darwin before every test, including on Linux CI.
 export const BUNDLED_CLI_PATH = getBundledLauncherPath('darwin', BUNDLED_RESOURCES_PATH) as string
 // Why: bare shells no longer mkdir ~/.omp; OMP status lives under userData (#10196).
 export const expectedOmpStatusExtension = posix.join(
-  '/tmp/orca-user-data',
+  '/tmp/mcode-user-data',
   'omp-managed-status-extension',
-  'orca-agent-status.ts'
+  'mcode-agent-status.ts'
 )
 
 // Why: Windows resolves a bare PowerShell name to an absolute exe before ConPTY, else CreateProcessW fails with error 5 (PR #6537 / #5161).
@@ -37,8 +37,8 @@ export function powerShellOsc133ArgsForCwd(cwd: string = DEFAULT_WINDOWS_PTY_CWD
 export const POWERSHELL_OSC133_ARGS = powerShellOsc133ArgsForCwd()
 export const TEST_CODEX_HOME =
   process.platform === 'win32'
-    ? 'C:\\Users\\test\\AppData\\Roaming\\orca\\codex-runtime-home\\home'
-    : '/tmp/orca-codex-home'
+    ? 'C:\\Users\\test\\AppData\\Roaming\\mcode\\codex-runtime-home\\home'
+    : '/tmp/mcode-codex-home'
 export const TEST_CODEX_AUTH_JSON = JSON.stringify({
   tokens: {
     access_token: 'access',

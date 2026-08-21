@@ -9,7 +9,7 @@ type GiteaPullRequestScanEntry = {
 }
 
 // Why: long enough to absorb a push-event burst that refreshes every worktree
-// card at once, short enough that a PR opened outside Orca shows up promptly.
+// card at once, short enough that a PR opened outside MCode shows up promptly.
 const SCAN_TTL_MS = 30_000
 // Why: a short failure cooldown still coalesces rapid card retries without
 // turning a transient outage into a 30-second authoritative "no PR" result.
@@ -135,7 +135,7 @@ export async function scanGiteaPullRequests(
   }
 }
 
-/** Drop the cached scan after a mutation Orca itself performed (PR create),
+/** Drop the cached scan after a mutation MCode itself performed (PR create),
  *  so the next card refresh sees the new PR instead of a stale miss. */
 export function invalidateGiteaPullRequestScan(repoKey: string): void {
   removeScanCacheEntry(repoKey)

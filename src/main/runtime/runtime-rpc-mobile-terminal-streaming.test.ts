@@ -3,9 +3,9 @@ import { rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from './orca-runtime'
+import { MCodeRuntimeService } from './mcode-runtime'
 import { readRuntimeMetadata } from './runtime-metadata'
-import { OrcaRuntimeRpcServer } from './runtime-rpc'
+import { MCodeRuntimeRpcServer } from './runtime-rpc'
 import { parsePairingCode } from '../../shared/pairing'
 import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
 import {
@@ -40,10 +40,10 @@ vi.mock('../git/worktree', () => {
   }
 })
 
-describe('OrcaRuntimeRpcServer', () => {
+describe('MCodeRuntimeRpcServer', () => {
   it('mirrors laptop-created remote runtime terminals into phone session tabs over RPC', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-rpc-'))
+    const runtime = new MCodeRuntimeService(makeStore() as never)
     const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
     runtime.setPtyController({
       spawn,
@@ -51,7 +51,7 @@ describe('OrcaRuntimeRpcServer', () => {
       kill: () => true,
       getForegroundProcess: async () => null
     })
-    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+    const server = new MCodeRuntimeRpcServer({ runtime, userDataPath })
 
     await server.start()
 
@@ -152,9 +152,9 @@ describe('OrcaRuntimeRpcServer', () => {
   })
 
   it('streams laptop-created runtime terminals to a paired phone WebSocket client', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-rpc-'))
     const writes: string[] = []
-    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const runtime = new MCodeRuntimeService(makeStore() as never)
     const spawn = vi.fn().mockResolvedValue({ id: 'paired-laptop-pty' })
     runtime.setPtyController({
       spawn,
@@ -165,7 +165,7 @@ describe('OrcaRuntimeRpcServer', () => {
       kill: () => true,
       getForegroundProcess: async () => null
     })
-    const server = new OrcaRuntimeRpcServer({
+    const server = new MCodeRuntimeRpcServer({
       runtime,
       userDataPath,
       enableWebSocket: true,
@@ -295,8 +295,8 @@ describe('OrcaRuntimeRpcServer', () => {
   })
 
   it('authorizes a mobile artifact tap after first-connect backfill even once the raw window scrolls', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-rpc-'))
+    const runtime = new MCodeRuntimeService(makeStore() as never)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
       write: () => true,
@@ -304,14 +304,14 @@ describe('OrcaRuntimeRpcServer', () => {
       getCwd: async () => '/tmp/worktree-a',
       getForegroundProcess: async () => null
     })
-    const server = new OrcaRuntimeRpcServer({
+    const server = new MCodeRuntimeRpcServer({
       runtime,
       userDataPath,
       enableWebSocket: true,
       wsPort: 0
     })
     // Real artifact under the temp root so the grant path stats it.
-    const artifactPath = join(tmpdir(), `orca-artifact-${process.pid}-${Date.now()}.json`)
+    const artifactPath = join(tmpdir(), `mcode-artifact-${process.pid}-${Date.now()}.json`)
     await writeFile(artifactPath, '{"ok":true}')
 
     runtime.attachWindow(1)
@@ -399,7 +399,7 @@ describe('OrcaRuntimeRpcServer', () => {
   })
 
   it('completes remote E2EE authentication against a runtime proxy without activateRecentPtyPathCandidateTracking', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-rpc-'))
     // Why: a remote-host runtime proxy only implements RPC-forwarded methods;
     // activation is a local-host concern, so the proxy legitimately lacks
     // activateRecentPtyPathCandidateTracking and onReady must not throw.
@@ -410,12 +410,12 @@ describe('OrcaRuntimeRpcServer', () => {
       cleanupSubscriptionsForConnection: () => {},
       cancelMobileDictationForConnection: () => {},
       onClientDisconnected: () => {}
-    } as unknown as OrcaRuntimeService
+    } as unknown as MCodeRuntimeService
     expect(
       (runtimeProxy as { activateRecentPtyPathCandidateTracking?: unknown })
         .activateRecentPtyPathCandidateTracking
     ).toBeUndefined()
-    const server = new OrcaRuntimeRpcServer({
+    const server = new MCodeRuntimeRpcServer({
       runtime: runtimeProxy,
       userDataPath,
       enableWebSocket: true,
@@ -451,9 +451,9 @@ describe('OrcaRuntimeRpcServer', () => {
   })
 
   it('keeps active runtime multiplex streams responsive while a background stream is ACK-limited over WebSocket', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-rpc-'))
     const writes: { terminal: string; text: string }[] = []
-    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const runtime = new MCodeRuntimeService(makeStore() as never)
     const spawn = vi
       .fn()
       .mockResolvedValueOnce({ id: 'multiplex-background-pty' })
@@ -467,7 +467,7 @@ describe('OrcaRuntimeRpcServer', () => {
       kill: () => true,
       getForegroundProcess: async () => null
     })
-    const server = new OrcaRuntimeRpcServer({
+    const server = new MCodeRuntimeRpcServer({
       runtime,
       userDataPath,
       enableWebSocket: true,

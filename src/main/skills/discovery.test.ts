@@ -61,7 +61,7 @@ describe('skill discovery', () => {
   // age see it reject. Re-throwing turned one slow root into a failed discovery that
   // emptied the picker for every healthy root beside it.
   it('keeps every healthy root when one root walk is aborted', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-'))
     const home = join(root, 'home')
     const healthySkill = join(home, '.codex', 'skills', 'review')
     const stalledSkill = join(home, '.omp', 'agent', 'skills', 'planning')
@@ -81,7 +81,7 @@ describe('skill discovery', () => {
   // `unavailable` must stay distinct from `missing`: a root that did not answer is
   // unknown, not empty, and a consumer must not read it as "these skills are gone".
   it('does not report an aborted root as missing', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-'))
     const home = join(root, 'home')
     const absentRoot = join(home, '.codex', 'skills')
     const stalledRoot = join(home, '.omp', 'agent', 'skills')
@@ -104,7 +104,7 @@ describe('skill discovery', () => {
   // list, so an empty list for an unanswered root made an installed skill offer
   // Install again the moment a mount stalled.
   it('serves the last answered skills for a root whose rescan did not answer', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-'))
     const home = join(root, 'home')
     const stalledRoot = join(home, '.omp', 'agent', 'skills')
     await mkdir(join(stalledRoot, 'planning'), { recursive: true })
@@ -127,7 +127,7 @@ describe('skill discovery', () => {
   })
 
   it('drops the retained copy once a root answers as absent', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-'))
     const home = join(root, 'home')
     const stalledRoot = join(home, '.omp', 'agent', 'skills')
     await mkdir(join(stalledRoot, 'planning'), { recursive: true })
@@ -148,7 +148,7 @@ describe('skill discovery', () => {
   })
 
   it('stops serving a retained copy once it is older than the retention window', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-'))
     const home = join(root, 'home')
     const stalledRoot = join(home, '.omp', 'agent', 'skills')
     await mkdir(join(stalledRoot, 'planning'), { recursive: true })
@@ -171,7 +171,7 @@ describe('skill discovery', () => {
   })
 
   it('discovers home and repo SKILL.md packages with provider metadata', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-'))
     const home = join(root, 'home')
     const repo = join(root, 'repo')
     const codexSkill = join(home, '.codex', 'skills', 'review')
@@ -208,7 +208,7 @@ describe('skill discovery', () => {
   })
 
   it('discovers the enabled Claude plugin version applicable to the project cwd', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-'))
     const home = join(root, 'home')
     const project = join(root, 'project')
     const cwd = join(project, 'worktree')
@@ -251,7 +251,7 @@ describe('skill discovery', () => {
   })
 
   it('skips Claude plugin discovery when no explicit cwd targets the scan (Settings shape)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-'))
     const home = join(root, 'home')
     const install = join(home, '.claude', 'plugins', 'cache', 'compound', '3.14.3')
     const pluginId = 'compound-engineering@compound-engineering-plugin'
@@ -273,7 +273,7 @@ describe('skill discovery', () => {
   })
 
   it('records every contributing root when symlinked roots dedup to one skill', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-'))
     const home = join(root, 'home')
     const codexSkills = join(home, '.codex', 'skills')
     await mkdir(join(codexSkills, 'review'), { recursive: true })
@@ -296,7 +296,7 @@ describe('skill discovery', () => {
   })
 
   it('keys every deduped root to an owning source so per-agent coverage resolves', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-'))
     const home = join(root, 'home')
     const claudeSkills = join(home, '.claude', 'skills')
     await mkdir(join(claudeSkills, 'orchestration'), { recursive: true })
@@ -431,13 +431,13 @@ describe('skill discovery', () => {
   })
 
   it('discovers skill packages through symlinked skill directories', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-'))
     const home = join(root, 'home')
-    const realSkill = join(root, 'central-skills', 'orca-cli')
-    const linkedSkill = join(home, '.agents', 'skills', 'orca-cli')
+    const realSkill = join(root, 'central-skills', 'mcode-cli')
+    const linkedSkill = join(home, '.agents', 'skills', 'mcode-cli')
     await mkdir(realSkill, { recursive: true })
     await mkdir(join(home, '.agents', 'skills'), { recursive: true })
-    await writeFile(join(realSkill, 'SKILL.md'), '# Orca CLI\n\nUse the Orca CLI.')
+    await writeFile(join(realSkill, 'SKILL.md'), '# MCode CLI\n\nUse the MCode CLI.')
     await symlink(realSkill, linkedSkill, process.platform === 'win32' ? 'junction' : 'dir')
 
     const result = await discoverSkills({
@@ -445,13 +445,13 @@ describe('skill discovery', () => {
       cwd: join(root, 'missing-cwd')
     })
 
-    const skill = result.skills.find((entry) => entry.name === 'Orca CLI')
+    const skill = result.skills.find((entry) => entry.name === 'MCode CLI')
     expect(skill?.sourceKind).toBe('home')
     expect(skill?.directoryPath).toBe(linkedSkill)
   })
 
   it('discovers a symlinked skill inside a provider home root (#8256/#8503)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-'))
     const home = join(root, 'home')
     const realSkill = join(root, 'central-skills', 'orchestration')
     const linkedSkill = join(home, '.pi', 'agent', 'skills', 'orchestration')
@@ -472,7 +472,7 @@ describe('skill discovery', () => {
   })
 
   it('discovers worktree .agents skill symlinks from the requested cwd', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-'))
     const home = join(root, 'home')
     const worktree = join(root, 'worktree')
     const realSkill = join(root, 'central-skills', 'ref-oss')
@@ -499,13 +499,13 @@ describe('skill discovery', () => {
   })
 
   it('keeps home classification when cwd points at the same directory as home', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-'))
     const home = join(root, 'home')
-    const skillDir = join(home, '.agents', 'skills', 'orca-cli')
+    const skillDir = join(home, '.agents', 'skills', 'mcode-cli')
     await mkdir(skillDir, { recursive: true })
     await writeFile(
       join(skillDir, 'SKILL.md'),
-      ['---', 'name: orca-cli', 'description: Use the Orca CLI.', '---', ''].join('\n')
+      ['---', 'name: mcode-cli', 'description: Use the MCode CLI.', '---', ''].join('\n')
     )
 
     const result = await discoverSkills({
@@ -514,7 +514,7 @@ describe('skill discovery', () => {
       repos: []
     })
 
-    expect(result.skills.filter((entry) => entry.name === 'orca-cli')).toMatchObject([
+    expect(result.skills.filter((entry) => entry.name === 'mcode-cli')).toMatchObject([
       {
         sourceKind: 'home',
         sourceLabel: 'Agent skills home',
@@ -524,7 +524,7 @@ describe('skill discovery', () => {
   })
 
   it('does not loop through recursive symlinked skill directories', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-'))
     const home = join(root, 'home')
     const skillRoot = join(home, '.agents', 'skills')
     await mkdir(skillRoot, { recursive: true })
@@ -543,7 +543,7 @@ describe('skill discovery', () => {
   })
 
   it('enforces depth limits for valid child directories whose names start with dot-dot', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-'))
     const home = join(root, 'home')
     const deepSkill = join(home, '.agents', 'skills', '..deep', 'a', 'b', 'c', 'd', 'too-deep')
     await mkdir(deepSkill, { recursive: true })

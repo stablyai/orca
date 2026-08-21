@@ -43,12 +43,12 @@ import { validateGitPushTarget } from '../git/push-target-validation'
 import { assertGitPushTargetShape } from '../../shared/git-push-target-validation'
 import { gitExecFileAsync } from '../git/runner'
 import type {
-  OrcaRuntimeService,
+  MCodeRuntimeService,
   RemoteFetchResult,
   RemoteTrackingBase
-} from '../runtime/orca-runtime'
+} from '../runtime/mcode-runtime'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-projection'
-import { getEffectiveHooks, loadHooks, parseOrcaYaml } from '../hooks'
+import { getEffectiveHooks, loadHooks, parseMCodeYaml } from '../hooks'
 import { buildPosixRunnerScript, buildWindowsRunnerScript } from '../setup-runner-script-text'
 import { createSetupRunnerScript, resolveSetupRunnerShell } from '../worktree-runner-script'
 import { getSetupRunnerEnvVars } from '../setup-hook-env-vars'
@@ -263,7 +263,7 @@ function countNonEmptyGitOutputLines(output: string): number {
 }
 
 async function spawnLocalStartupAndSetupTerminals(args: {
-  runtime: OrcaRuntimeService | undefined
+  runtime: MCodeRuntimeService | undefined
   worktree: Pick<Worktree, 'id' | 'path'>
   startup: CreateWorktreeArgs['startup']
   setup: CreateWorktreeResult['setup']
@@ -488,7 +488,7 @@ async function getOrStartSshWorktreeCreateFetch(
       return
     }
     await fetch()
-    // Why: SSH creation has no OrcaRuntimeService to share; still reuse recent fetches for repeated creates on the same target.
+    // Why: SSH creation has no MCodeRuntimeService to share; still reuse recent fetches for repeated creates on the same target.
     rememberSshWorktreeCreateFetchCompletedAt(key)
   }).finally(() => {
     if (sshWorktreeCreateFetchInflight.get(key) === promise) {
@@ -1086,7 +1086,7 @@ async function prepareWorktreePushTargetSsh(
     const existingRemote = await findRemoteForUrl(execGit, repoPath, target.remoteUrl)
     if (existingRemote) {
       remoteName = existingRemote
-      // Why: a reused Orca-created fork remote must inherit ownership so deleting the final user can remove it.
+      // Why: a reused MCode-created fork remote must inherit ownership so deleting the final user can remove it.
       remoteCreated = store
         ? isPushTargetRemoteCreatedByKnownWorktree(
             store,
@@ -1140,16 +1140,16 @@ async function readRemoteEffectiveHooks(
   fsProvider: IFilesystemProvider,
   hooksRootPath: string
 ): Promise<ReturnType<typeof getEffectiveHooksFromConfig>> {
-  return getEffectiveHooksFromConfig(repo, await readRemoteOrcaYaml(fsProvider, hooksRootPath))
+  return getEffectiveHooksFromConfig(repo, await readRemoteMCodeYaml(fsProvider, hooksRootPath))
 }
 
-async function readRemoteOrcaYaml(
+async function readRemoteMCodeYaml(
   fsProvider: IFilesystemProvider,
   hooksRootPath: string
-): Promise<ReturnType<typeof parseOrcaYaml>> {
+): Promise<ReturnType<typeof parseMCodeYaml>> {
   try {
-    const result = await fsProvider.readFile(joinWorktreeRelativePath(hooksRootPath, 'orca.yaml'))
-    return result.isBinary ? null : parseOrcaYaml(result.content)
+    const result = await fsProvider.readFile(joinWorktreeRelativePath(hooksRootPath, 'mcode.yaml'))
+    return result.isBinary ? null : parseMCodeYaml(result.content)
   } catch {
     return null
   }
@@ -1165,7 +1165,7 @@ async function createRemoteSetupRunnerScript(
   const useWindowsFormat = isWindowsAbsolutePathLike(worktreePath)
   // Why: SSH terminals choose their shell on the remote host; local Windows
   // preferences cannot safely select a remote runner format or launch command.
-  const runnerRelativePath = useWindowsFormat ? 'orca/setup-runner.cmd' : 'orca/setup-runner.sh'
+  const runnerRelativePath = useWindowsFormat ? 'mcode/setup-runner.cmd' : 'mcode/setup-runner.sh'
   const { stdout } = await gitProvider.exec(
     ['rev-parse', '--git-path', runnerRelativePath],
     worktreePath
@@ -1828,10 +1828,10 @@ export async function createRemoteWorktree(
     lastActivityAt: now,
     // Why: grace window atop Recent so ambient PTY bumps on others during create don't bury the new worktree. See smart-sort.ts `CREATE_GRACE_MS`.
     createdAt: now,
-    orcaCreatedAt: now,
-    orcaCreationSource: 'ssh',
+    mcodeCreatedAt: now,
+    mcodeCreationSource: 'ssh',
     creatorProvenance: { kind: 'host' },
-    orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
+    mcodeCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
     ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
     ...(args.cliProvenance ? { cliProvenance: args.cliProvenance } : {}),
     baseRef: metadataBaseRef,
@@ -1882,13 +1882,13 @@ export async function createRemoteWorktree(
   })
   const workspaceLineage = recordWorkspaceLineageForCreatedWorktree(store, args, worktree, now)
 
-  // Why: shared/symlink paths, `orca.yaml` shared directories, and `.worktreeinclude` copies are local-only; remote (SSH) support needs a new relay method + auth surface, so all are skipped here.
+  // Why: shared/symlink paths, `mcode.yaml` shared directories, and `.worktreeinclude` copies are local-only; remote (SSH) support needs a new relay method + auth surface, so all are skipped here.
 
   let setup: CreateWorktreeResult['setup']
   let defaultTabs: CreateWorktreeResult['defaultTabs']
   if (fsProvider) {
     await timing.time('prepare_setup', async () => {
-      const yamlHooks = await readRemoteOrcaYaml(fsProvider, created.path)
+      const yamlHooks = await readRemoteMCodeYaml(fsProvider, created.path)
       const hooks = getEffectiveHooksFromConfig(repo, yamlHooks)
       try {
         defaultTabs = getDefaultTabsLaunch(yamlHooks, repo, args.setupDecision)
@@ -1943,7 +1943,7 @@ export async function createLocalWorktree(
   repo: Repo,
   store: Store,
   mainWindow: BrowserWindow,
-  runtime?: OrcaRuntimeService
+  runtime?: MCodeRuntimeService
 ): Promise<CreateWorktreeResult> {
   const timing = createWorktreeCreateTimingRecorder()
   const settings = store.getSettings()
@@ -2468,10 +2468,10 @@ export async function createLocalWorktree(
     lastActivityAt: now,
     // createdAt protects the new worktree from ambient PTY bumps for CREATE_GRACE_MS (see createRemoteWorktree above).
     createdAt: now,
-    orcaCreatedAt: now,
-    orcaCreationSource: 'desktop',
+    mcodeCreatedAt: now,
+    mcodeCreationSource: 'desktop',
     creatorProvenance: { kind: 'host' },
-    orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
+    mcodeCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
     ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
     ...(args.cliProvenance ? { cliProvenance: args.cliProvenance } : {}),
     baseRef: metadataBaseRef,
@@ -2535,7 +2535,7 @@ export async function createLocalWorktree(
     })
   }
 
-  // Why: project-level `orca.yaml` shared directories add to (never replace) the per-user
+  // Why: project-level `mcode.yaml` shared directories add to (never replace) the per-user
   // setting, so a repo's shared dirs reach every teammate (issue #10451).
   const sharedDirectories = await timing.time('resolve_shared_directories', () =>
     resolveWorktreeSharedDirectories(repo.path, localWorktreeGitOptions)
@@ -2566,7 +2566,7 @@ export async function createLocalWorktree(
     })
   }
 
-  // Why: the worktree's base-branch `orca.yaml` is authoritative; we don't re-gate on content parity with the primary checkout since benign divergence silently disabled setup (#1280).
+  // Why: the worktree's base-branch `mcode.yaml` is authoritative; we don't re-gate on content parity with the primary checkout since benign divergence silently disabled setup (#1280).
   let setup: CreateWorktreeResult['setup']
   let defaultTabs: CreateWorktreeResult['defaultTabs']
   await timing.time('prepare_setup', async () => {

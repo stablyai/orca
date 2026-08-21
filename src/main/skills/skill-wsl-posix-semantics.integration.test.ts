@@ -18,8 +18,8 @@ import { detectSkillProvidersInWsl } from './skill-wsl-provider-detection'
 import { createWslSkillInstallFilesystem } from './skill-wsl-install-filesystem'
 
 const execFileAsync = promisify(execFile)
-const DISTRO = process.env.ORCA_REAL_WSL_SKILL_DISTRO ?? 'Ubuntu-24.04'
-const RUN_REAL_WSL = process.platform === 'win32' && process.env.ORCA_REAL_WSL_SKILL_TEST === '1'
+const DISTRO = process.env.MCODE_REAL_WSL_SKILL_DISTRO ?? 'Ubuntu-24.04'
+const RUN_REAL_WSL = process.platform === 'win32' && process.env.MCODE_REAL_WSL_SKILL_TEST === '1'
 
 async function runWsl(...args: string[]): Promise<string> {
   const { stdout } = await execFileAsync('wsl.exe', ['-d', DISTRO, '--exec', ...args], {
@@ -51,9 +51,9 @@ describe.runIf(RUN_REAL_WSL)('real WSL POSIX skill semantics', () => {
   let guestRoot = ''
 
   beforeAll(async () => {
-    localRoot = await mkdtemp(join(tmpdir(), 'orca-wsl-posix-semantics-'))
-    guestRoot = await runWsl('mktemp', '-d', '/tmp/orca-skill-posix.XXXXXX')
-    if (!guestRoot.startsWith('/tmp/orca-skill-posix.')) {
+    localRoot = await mkdtemp(join(tmpdir(), 'mcode-wsl-posix-semantics-'))
+    guestRoot = await runWsl('mktemp', '-d', '/tmp/mcode-skill-posix.XXXXXX')
+    if (!guestRoot.startsWith('/tmp/mcode-skill-posix.')) {
       throw new Error('unexpected-wsl-posix-root')
     }
     await runWsl('mkdir', '-p', `${guestRoot}/home`)
@@ -61,7 +61,7 @@ describe.runIf(RUN_REAL_WSL)('real WSL POSIX skill semantics', () => {
 
   afterAll(async () => {
     await rm(localRoot, { recursive: true, force: true })
-    if (guestRoot.startsWith('/tmp/orca-skill-posix.')) {
+    if (guestRoot.startsWith('/tmp/mcode-skill-posix.')) {
       await runWsl('rm', '-rf', '--', guestRoot)
     }
   })
@@ -109,7 +109,7 @@ describe.runIf(RUN_REAL_WSL)('real WSL POSIX skill semantics', () => {
       archivePath,
       scope: 'global',
       homeDirectory,
-      orcaStateDirectory: join(localRoot, 'state'),
+      mcodeStateDirectory: join(localRoot, 'state'),
       detectedProviders: [],
       destinationIdentity: 'global:wsl-posix',
       hostIdentity: 'windows-2',
@@ -160,7 +160,7 @@ describe.runIf(RUN_REAL_WSL)('real WSL POSIX skill semantics', () => {
       expectedArchiveSha256: bundle.archiveSha256,
       scope: 'global',
       homeDirectory,
-      orcaStateDirectory: join(localRoot, 'bundle-state'),
+      mcodeStateDirectory: join(localRoot, 'bundle-state'),
       detectedProviders: [],
       destinationIdentity: 'global:wsl-bundle',
       hostIdentity: 'windows-2',

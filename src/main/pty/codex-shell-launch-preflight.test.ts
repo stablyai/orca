@@ -36,7 +36,7 @@ function runAliasLaunch(
     '#!/bin/sh\nif [ -f "$CODEX_HOME/trusted" ]; then printf "normal\\n"; else printf "hooks-review\\n"; fi\n'
   )
   writeExecutable(
-    join(bin, 'orca-test'),
+    join(bin, 'mcode-test'),
     preflightSucceeds
       ? '#!/bin/sh\n[ "$1 $2 $3" = "agent hooks prepare-codex" ] || exit 2\nprintf "valid\\n" > "$CODEX_HOME/trusted"\n'
       : '#!/bin/sh\nexit 7\n'
@@ -62,8 +62,8 @@ function runAliasLaunch(
         ...process.env,
         PATH: `${bin}:${process.env.PATH ?? ''}`,
         CODEX_HOME: home,
-        ORCA_CODEX_HOME: home,
-        ORCA_CODEX_LAUNCH_PREFLIGHT: join(bin, 'orca-test')
+        MCODE_CODEX_HOME: home,
+        MCODE_CODEX_LAUNCH_PREFLIGHT: join(bin, 'mcode-test')
       }
     }
   ).trim()
@@ -77,8 +77,8 @@ afterEach(() => {
 
 describe.skipIf(process.platform === 'win32')('Codex shell launch preflight', () => {
   it('repairs trust invalidated after shell creation before an alias launches Codex', () => {
-    const beforeRoot = mkdtempSync(join(tmpdir(), 'orca-codex-shell-before-'))
-    const afterRoot = mkdtempSync(join(tmpdir(), 'orca-codex-shell-after-'))
+    const beforeRoot = mkdtempSync(join(tmpdir(), 'mcode-codex-shell-before-'))
+    const afterRoot = mkdtempSync(join(tmpdir(), 'mcode-codex-shell-after-'))
     roots.push(beforeRoot, afterRoot)
 
     expect(runAliasLaunch(beforeRoot, '')).toBe('hooks-review')
@@ -86,14 +86,14 @@ describe.skipIf(process.platform === 'win32')('Codex shell launch preflight', ()
   })
 
   it.skipIf(!existsSync('/bin/zsh'))('repairs a zsh cx alias before Codex starts', () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-codex-zsh-alias-'))
+    const root = mkdtempSync(join(tmpdir(), 'mcode-codex-zsh-alias-'))
     roots.push(root)
 
     expect(runAliasLaunch(root, getPosixCodexShellLaunchPreflight(), '/bin/zsh')).toBe('normal')
   })
 
   it('still launches Codex when the best-effort preflight fails', () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-codex-preflight-failure-'))
+    const root = mkdtempSync(join(tmpdir(), 'mcode-codex-preflight-failure-'))
     roots.push(root)
 
     expect(runAliasLaunch(root, getPosixCodexShellLaunchPreflight(), '/bin/bash', false)).toBe(
@@ -108,7 +108,7 @@ describe.skipIf(process.platform === 'win32')('Codex shell launch preflight', ()
     if (!existsSync(shell)) {
       return
     }
-    const root = mkdtempSync(join(tmpdir(), 'orca-codex-strict-startup-'))
+    const root = mkdtempSync(join(tmpdir(), 'mcode-codex-strict-startup-'))
     roots.push(root)
 
     const output = execFileSync(
@@ -120,7 +120,7 @@ describe.skipIf(process.platform === 'win32')('Codex shell launch preflight', ()
       ],
       {
         encoding: 'utf-8',
-        env: { ...process.env, PATH: root, ORCA_CODEX_LAUNCH_PREFLIGHT: 'orca-test' }
+        env: { ...process.env, PATH: root, MCODE_CODEX_LAUNCH_PREFLIGHT: 'mcode-test' }
       }
     )
 
@@ -134,7 +134,7 @@ describe.skipIf(process.platform === 'win32')('Codex shell launch preflight', ()
         '--no-config',
         '-c',
         [
-          'set -gx ORCA_CODEX_LAUNCH_PREFLIGHT missing-preflight',
+          'set -gx MCODE_CODEX_LAUNCH_PREFLIGHT missing-preflight',
           'function codex; echo custom-codex; end',
           getFishCodexShellLaunchPreflight(),
           'codex'
@@ -150,18 +150,18 @@ describe.skipIf(process.platform === 'win32')('Codex shell launch preflight', ()
 describe('PowerShell Codex shell launch preflight', () => {
   it('preserves a user-defined command', () => {
     expect(getPowerShellCodexShellLaunchPreflight()).toContain(
-      '$orcaCodexCommand.CommandType -in @("Application", "ExternalScript")'
+      '$mcodeCodexCommand.CommandType -in @("Application", "ExternalScript")'
     )
   })
 
   it.skipIf(!pwshAvailable)('fails open when native errors are promoted', () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-codex-pwsh-failure-'))
+    const root = mkdtempSync(join(tmpdir(), 'mcode-codex-pwsh-failure-'))
     const bin = join(root, 'bin')
     roots.push(root)
     mkdirSync(bin)
     const executableSuffix = process.platform === 'win32' ? '.cmd' : ''
     writeExecutable(
-      join(bin, `orca-test${executableSuffix}`),
+      join(bin, `mcode-test${executableSuffix}`),
       process.platform === 'win32' ? '@exit /b 7\r\n' : '#!/bin/sh\nexit 7\n'
     )
     writeExecutable(
@@ -187,7 +187,7 @@ describe('PowerShell Codex shell launch preflight', () => {
         env: {
           ...process.env,
           PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
-          ORCA_CODEX_LAUNCH_PREFLIGHT: join(bin, `orca-test${executableSuffix}`)
+          MCODE_CODEX_LAUNCH_PREFLIGHT: join(bin, `mcode-test${executableSuffix}`)
         }
       }
     )
@@ -199,7 +199,7 @@ describe('PowerShell Codex shell launch preflight', () => {
 
 describe('Codex shell launch preflight command', () => {
   function makeCliRoot(): { root: string; userDataPath: string; resourcesPath: string } {
-    const root = mkdtempSync(join(tmpdir(), 'orca-codex-preflight-cli-'))
+    const root = mkdtempSync(join(tmpdir(), 'mcode-codex-preflight-cli-'))
     roots.push(root)
     const userDataPath = join(root, 'user-data')
     const resourcesPath = join(root, 'resources')
@@ -209,9 +209,9 @@ describe('Codex shell launch preflight command', () => {
   }
 
   it.each([
-    { platform: 'darwin' as const, bundled: 'orca' },
-    { platform: 'linux' as const, bundled: 'orca-ide' },
-    { platform: 'win32' as const, bundled: 'orca.exe' }
+    { platform: 'darwin' as const, bundled: 'mcode' },
+    { platform: 'linux' as const, bundled: 'mcode-ide' },
+    { platform: 'win32' as const, bundled: 'mcode.exe' }
   ])('carries the verified bundled $platform launcher as an absolute path', (config) => {
     const { userDataPath, resourcesPath } = makeCliRoot()
     const launcherPath = join(resourcesPath, 'bin', config.bundled)
@@ -231,7 +231,7 @@ describe('Codex shell launch preflight command', () => {
 
   it('carries the verified dev launcher as an absolute path', () => {
     const { userDataPath, resourcesPath } = makeCliRoot()
-    const launcherPath = join(userDataPath, 'cli', 'bin', 'orca-dev')
+    const launcherPath = join(userDataPath, 'cli', 'bin', 'mcode-dev')
     writeExecutable(launcherPath, '#!/bin/sh\nexit 0\n')
 
     expect(
@@ -248,8 +248,8 @@ describe('Codex shell launch preflight command', () => {
 
   it('never returns an unqualified command name that a profile-rewritten PATH could hijack', () => {
     const { userDataPath, resourcesPath } = makeCliRoot()
-    writeExecutable(join(resourcesPath, 'bin', 'orca'), '#!/bin/sh\nexit 0\n')
-    writeExecutable(join(userDataPath, 'cli', 'bin', 'orca-dev'), '#!/bin/sh\nexit 0\n')
+    writeExecutable(join(resourcesPath, 'bin', 'mcode'), '#!/bin/sh\nexit 0\n')
+    writeExecutable(join(userDataPath, 'cli', 'bin', 'mcode-dev'), '#!/bin/sh\nexit 0\n')
 
     for (const isPackaged of [true, false]) {
       const command = resolveCodexShellLaunchPreflightCommand({
@@ -271,7 +271,7 @@ describe('Codex shell launch preflight command', () => {
     { label: 'the launcher path is a directory', create: 'directory' as const }
   ])('skips the preflight when $label', (config) => {
     const { userDataPath, resourcesPath } = makeCliRoot()
-    const launcherPath = join(resourcesPath, 'bin', 'orca')
+    const launcherPath = join(resourcesPath, 'bin', 'mcode')
     if (config.create === 'directory') {
       mkdirSync(launcherPath)
     } else if (config.create !== null) {
@@ -312,7 +312,7 @@ describe('Codex shell launch preflight command', () => {
     { hooksEnabled: true, isWsl: false, managedHomePath: null }
   ])('does not enable an unsupported preflight for %o', (options) => {
     const { userDataPath, resourcesPath } = makeCliRoot()
-    writeExecutable(join(resourcesPath, 'bin', 'orca'), '#!/bin/sh\nexit 0\n')
+    writeExecutable(join(resourcesPath, 'bin', 'mcode'), '#!/bin/sh\nexit 0\n')
 
     expect(
       resolveCodexShellLaunchPreflightCommand({
@@ -330,10 +330,10 @@ describe('Codex shell launch preflight command', () => {
 // Program Files (Windows) both put spaces in it.
 describe.skipIf(process.platform === 'win32')('Codex preflight paths containing spaces', () => {
   function writeSpacedPreflight(root: string): { preflightPath: string; markerPath: string } {
-    const dir = join(root, 'Orca Dev.app', 'Contents', 'Resources', 'bin')
+    const dir = join(root, 'MCode Dev.app', 'Contents', 'Resources', 'bin')
     mkdirSync(dir, { recursive: true })
     const markerPath = join(root, 'preflight-ran')
-    const preflightPath = join(dir, 'orca')
+    const preflightPath = join(dir, 'mcode')
     writeExecutable(
       preflightPath,
       `#!/bin/sh\n[ "$1 $2 $3" = "agent hooks prepare-codex" ] || exit 2\nprintf ran > ${JSON.stringify(markerPath)}\n`
@@ -342,7 +342,7 @@ describe.skipIf(process.platform === 'win32')('Codex preflight paths containing 
   }
 
   it('invokes a POSIX preflight whose absolute path contains spaces', () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-codex-spaced-posix-'))
+    const root = mkdtempSync(join(tmpdir(), 'mcode-codex-spaced-posix-'))
     roots.push(root)
     const bin = join(root, 'bin')
     mkdirSync(bin)
@@ -356,7 +356,7 @@ describe.skipIf(process.platform === 'win32')('Codex preflight paths containing 
         env: {
           ...process.env,
           PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
-          ORCA_CODEX_LAUNCH_PREFLIGHT: preflightPath
+          MCODE_CODEX_LAUNCH_PREFLIGHT: preflightPath
         }
       }
     )
@@ -365,7 +365,7 @@ describe.skipIf(process.platform === 'win32')('Codex preflight paths containing 
   })
 
   it.skipIf(!fishAvailable)('invokes a fish preflight whose absolute path contains spaces', () => {
-    const root = mkdtempSync(join(tmpdir(), 'orca-codex-spaced-fish-'))
+    const root = mkdtempSync(join(tmpdir(), 'mcode-codex-spaced-fish-'))
     roots.push(root)
     const bin = join(root, 'bin')
     mkdirSync(bin)
@@ -376,7 +376,7 @@ describe.skipIf(process.platform === 'win32')('Codex preflight paths containing 
       env: {
         ...process.env,
         PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
-        ORCA_CODEX_LAUNCH_PREFLIGHT: preflightPath
+        MCODE_CODEX_LAUNCH_PREFLIGHT: preflightPath
       }
     })
 
@@ -386,7 +386,7 @@ describe.skipIf(process.platform === 'win32')('Codex preflight paths containing 
   it.skipIf(!pwshAvailable)(
     'invokes a PowerShell preflight whose absolute path contains spaces',
     () => {
-      const root = mkdtempSync(join(tmpdir(), 'orca-codex-spaced-pwsh-'))
+      const root = mkdtempSync(join(tmpdir(), 'mcode-codex-spaced-pwsh-'))
       roots.push(root)
       const bin = join(root, 'bin')
       mkdirSync(bin)
@@ -401,7 +401,7 @@ describe.skipIf(process.platform === 'win32')('Codex preflight paths containing 
           env: {
             ...process.env,
             PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
-            ORCA_CODEX_LAUNCH_PREFLIGHT: preflightPath
+            MCODE_CODEX_LAUNCH_PREFLIGHT: preflightPath
           }
         }
       )

@@ -1,4 +1,4 @@
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
 import { applyWaitForSetupOutcome, type WorkerSetupReceipt } from './orchestration-worker-topology'
 import {
@@ -49,7 +49,7 @@ export function persistFederatedSetupWaitOutcome(
 }
 
 export function monitorFederatedSetup(
-  args: FederationSetupStageArgs & { runtime: OrcaRuntimeService }
+  args: FederationSetupStageArgs & { runtime: MCodeRuntimeService }
 ): void {
   const setupTerminal = args.effects.find(
     (effect) => effect.kind === 'terminal' && effect.role === 'setup' && effect.id

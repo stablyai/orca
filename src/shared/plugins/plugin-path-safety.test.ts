@@ -24,10 +24,10 @@ describe('plugin path portability', () => {
     const base = {
       manifestVersion: 1,
       id: 'demo',
-      publisher: 'orca-samples',
+      publisher: 'mcode-samples',
       name: 'Demo',
       version: '1.0.0',
-      engines: { orca: '>=1.0.0' },
+      engines: { mcode: '>=1.0.0' },
       pluginApi: 1,
       contributes: { panels: [], commands: [], events: [] },
       capabilities: []

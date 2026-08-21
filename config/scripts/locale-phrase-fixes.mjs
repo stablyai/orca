@@ -135,7 +135,7 @@ export const LOCALE_PHRASE_FIXES = {
     { pattern: /会议/g, replacement: '会话', whenEnIncludes: 'session' },
     { pattern: /港口/g, replacement: '端口', whenEnIncludes: 'ort' },
     { pattern: /公关/g, replacement: 'PR', whenEnIncludes: 'PR' },
-    { pattern: /虎鲸:\/\//g, replacement: 'orca://', whenEnIncludes: 'orca://' },
+    { pattern: /虎鲸:\/\//g, replacement: 'mcode://', whenEnIncludes: 'mcode://' },
     { pattern: /代理商/g, replacement: '代理', whenEnIncludes: 'agent' },
     { pattern: /智能体/g, replacement: '代理', whenEnIncludes: 'agent' },
     { pattern: /分支机构/g, replacement: '分支', whenEnIncludes: 'ranch' },
@@ -169,11 +169,11 @@ export const LOCALE_PHRASE_FIXES = {
       whenEnIncludes: 'Listening for shortcut'
     },
     { pattern: /寻找捷径/g, replacement: '搜索快捷键', whenEnIncludes: 'Find shortcuts' },
-    { pattern: /连接到Orca/g, replacement: '连接到 Orca', whenEnIncludes: 'Connect to Orca' },
+    { pattern: /连接到MCode/g, replacement: '连接到 MCode', whenEnIncludes: 'Connect to MCode' },
     {
-      pattern: /开始使用Orca/g,
-      replacement: '开始使用 Orca',
-      whenEnIncludes: 'get started with Orca'
+      pattern: /开始使用MCode/g,
+      replacement: '开始使用 MCode',
+      whenEnIncludes: 'get started with MCode'
     },
     { pattern: /本机桌面/g, replacement: '原生桌面', whenEnIncludes: 'Native desktop' },
     { pattern: /当前的/g, replacement: '当前', whenEnIncludes: 'Current' },

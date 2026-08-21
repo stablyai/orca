@@ -20,14 +20,14 @@ export function resolveRemoteOrchestrationSender(
   type: string | undefined
 ): string {
   const explicit = optionalString(flags, 'from')
-  const envHandle = env.ORCA_TERMINAL_HANDLE || undefined
+  const envHandle = env.MCODE_TERMINAL_HANDLE || undefined
   if ((type === 'worker_done' || type === 'heartbeat') && !explicit && !envHandle) {
     // Why: the fallback must not turn missing remote identity into the
     // synthetic "unknown" handle for lifecycle authority decisions.
     throw new RemoteCliArgumentError(
       'no_active_sender_terminal',
       'Could not determine the sender terminal for this orchestration command. ' +
-        'Pass --from <terminal-handle> or run the command inside a live Orca terminal with ORCA_TERMINAL_HANDLE set.'
+        'Pass --from <terminal-handle> or run the command inside a live MCode terminal with MCODE_TERMINAL_HANDLE set.'
     )
   }
   return explicit ?? envHandle ?? 'unknown'

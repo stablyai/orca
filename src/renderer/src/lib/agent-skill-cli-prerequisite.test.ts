@@ -4,8 +4,8 @@ import type { CliInstallStatus } from '../../../shared/cli-install-types'
 import {
   CLI_PREREQUISITE_REGISTRATION_TOAST,
   CLI_PREREQUISITE_REGISTRATION_TOAST_DESCRIPTION,
-  ensureOrcaCliAvailableForAgentSkillTerminal,
-  isOrcaCliAvailableOnPath
+  ensureMCodeCliAvailableForAgentSkillTerminal,
+  isMCodeCliAvailableOnPath
 } from './agent-skill-cli-prerequisite'
 
 vi.mock('sonner', () => ({
@@ -19,11 +19,11 @@ vi.mock('sonner', () => ({
 function cliStatus(overrides: Partial<CliInstallStatus> = {}): CliInstallStatus {
   return {
     platform: 'darwin',
-    commandName: 'orca',
-    commandPath: '/usr/local/bin/orca',
+    commandName: 'mcode',
+    commandPath: '/usr/local/bin/mcode',
     pathDirectory: '/usr/local/bin',
     pathConfigured: true,
-    launcherPath: '/Applications/Orca.app/Contents/MacOS/orca',
+    launcherPath: '/Applications/MCode.app/Contents/MacOS/mcode',
     installMethod: 'symlink',
     supported: true,
     state: 'installed',
@@ -34,15 +34,15 @@ function cliStatus(overrides: Partial<CliInstallStatus> = {}): CliInstallStatus 
   }
 }
 
-describe('isOrcaCliAvailableOnPath', () => {
+describe('isMCodeCliAvailableOnPath', () => {
   it('requires the installed CLI command to be visible on PATH', () => {
-    expect(isOrcaCliAvailableOnPath(cliStatus())).toBe(true)
-    expect(isOrcaCliAvailableOnPath(cliStatus({ pathConfigured: false }))).toBe(false)
-    expect(isOrcaCliAvailableOnPath(cliStatus({ state: 'not_installed' }))).toBe(false)
+    expect(isMCodeCliAvailableOnPath(cliStatus())).toBe(true)
+    expect(isMCodeCliAvailableOnPath(cliStatus({ pathConfigured: false }))).toBe(false)
+    expect(isMCodeCliAvailableOnPath(cliStatus({ state: 'not_installed' }))).toBe(false)
   })
 })
 
-describe('ensureOrcaCliAvailableForAgentSkillTerminal', () => {
+describe('ensureMCodeCliAvailableForAgentSkillTerminal', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
@@ -69,7 +69,7 @@ describe('ensureOrcaCliAvailableForAgentSkillTerminal', () => {
     })
 
     await expect(
-      ensureOrcaCliAvailableForAgentSkillTerminal({
+      ensureMCodeCliAvailableForAgentSkillTerminal({
         onStatusChange,
         registrationPromptDelayMs: 0
       })
@@ -87,7 +87,7 @@ describe('ensureOrcaCliAvailableForAgentSkillTerminal', () => {
     const initial = cliStatus({
       platform: 'win32',
       pathConfigured: null,
-      detail: 'Orca could not read the Windows user PATH registry value.'
+      detail: 'MCode could not read the Windows user PATH registry value.'
     })
     const install = vi.fn()
     vi.stubGlobal('window', {
@@ -95,7 +95,7 @@ describe('ensureOrcaCliAvailableForAgentSkillTerminal', () => {
     })
 
     await expect(
-      ensureOrcaCliAvailableForAgentSkillTerminal({ registrationPromptDelayMs: 0 })
+      ensureMCodeCliAvailableForAgentSkillTerminal({ registrationPromptDelayMs: 0 })
     ).resolves.toBe(initial)
 
     expect(install).not.toHaveBeenCalled()
@@ -122,7 +122,7 @@ describe('ensureOrcaCliAvailableForAgentSkillTerminal', () => {
       }
     })
 
-    const pending = ensureOrcaCliAvailableForAgentSkillTerminal({ registrationPromptDelayMs: 700 })
+    const pending = ensureMCodeCliAvailableForAgentSkillTerminal({ registrationPromptDelayMs: 700 })
     await vi.waitFor(() => {
       expect(toast.message).toHaveBeenCalledWith(CLI_PREREQUISITE_REGISTRATION_TOAST, {
         description: CLI_PREREQUISITE_REGISTRATION_TOAST_DESCRIPTION

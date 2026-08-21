@@ -1,4 +1,4 @@
-export type ClaudeUsageScope = 'orca' | 'all'
+export type ClaudeUsageScope = 'mcode' | 'all'
 export type ClaudeUsageRange = '7d' | '30d' | '90d' | 'all'
 export type ClaudeUsageBreakdownKind = 'model' | 'project'
 

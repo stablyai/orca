@@ -38,7 +38,7 @@ export type CodexPaneScanResult = {
   eligible: boolean
   /** Inspection failed or the handle was stale, so a later read may answer differently. */
   inconclusive: boolean
-  /** Orca launched Codex in this tab, so a shell foreground can still be reattach settle. */
+  /** MCode launched Codex in this tab, so a shell foreground can still be reattach settle. */
   launchedCodex: boolean
   /** A restart notice was raised for this pane by this scan. */
   notified: boolean
@@ -80,7 +80,7 @@ async function readRecordedCodexPaneLanes(
  * session (#11064), and a spurious shell here silently skips the restart card —
  * no error, no retry. Mirrors main's terminalHasShellForegroundProcess, which
  * already refuses to conclude "agent done" from an unconfirmed shell reading.
- * Gated to Orca-launched Codex panes so an account switch never spends the
+ * Gated to MCode-launched Codex panes so an account switch never spends the
  * expensive fresh scan on ordinary shell terminals, and only an affirmative
  * codex answer flips the decision: a confirmed shell (user exited Codex) and a
  * null (scan failed or unsupported) both keep today's ineligible outcome.
@@ -274,7 +274,7 @@ export async function markLiveCodexSessionsForRestart(args: {
  *
  * Why: restart notices are renderer state, but the shells they describe live in
  * the PTY daemon and survive a full app restart with the old account still
- * baked into their environment. Without this, quitting Orca before restarting a
+ * baked into their environment. Without this, quitting MCode before restarting a
  * stale pane silently strands it on the previous account forever.
  *
  * Returns one result per inspected pane so the bind-driven sweep can tell an

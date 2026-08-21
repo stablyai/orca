@@ -133,7 +133,7 @@ describe('Session terminal control', () => {
       await vi.advanceTimersByTimeAsync(10)
       withPlatform('win32', () => session.clearScrollback())
       expect(subprocess.written).toEqual([])
-      subprocess.simulateData('\x1b]777;orca-shell-ready\x07\r\nPS C:\\Users\\me> ')
+      subprocess.simulateData('\x1b]777;mcode-shell-ready\x07\r\nPS C:\\Users\\me> ')
       await vi.advanceTimersByTimeAsync(10)
       expect(subprocess.written).toEqual([])
     })

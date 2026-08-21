@@ -84,7 +84,7 @@ export function openSharedControlSocket(
       }
       liveness.onDead(
         remoteRuntimeUnavailableError(
-          'Remote Orca runtime stopped responding; resetting the control connection.'
+          'Remote MCode runtime stopped responding; resetting the control connection.'
         )
       )
     },

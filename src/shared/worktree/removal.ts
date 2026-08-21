@@ -17,13 +17,13 @@ export type WorktreeForceDeleteReason =
   | 'unstopped-pty'
 
 // Why: everything before this separator is the worktree id — a user-chosen filesystem path.
-// Only the detail after it is Orca's own wording, so verdict matchers anchor on the boundary
+// Only the detail after it is MCode's own wording, so verdict matchers anchor on the boundary
 // rather than scanning the whole message and letting a path spell out a verdict.
 export const UNSTOPPED_PTY_DETAIL_SEPARATOR = ' — '
 
 // Why: verification distinguishes a PTY it watched stay alive from one it could not reach,
 // and the delete toast must not flatten the two — a user waiving "we could not confirm" is
-// making a different decision than one killing a terminal Orca just saw running. The marker
+// making a different decision than one killing a terminal MCode just saw running. The marker
 // and its matcher stay together for the same reason the force hint does.
 export const UNSTOPPED_PTY_LIVE_DETAIL_PREFIX = 'still live:'
 
@@ -93,7 +93,7 @@ export function classifyWorktreeForceDeleteReason(
 ): WorktreeForceDeleteReason | null {
   if (isLockedWorktreeRemovalError(error)) {
     // Why: a Git lock can represent an external safety contract. It must be
-    // unlocked explicitly rather than folded into Orca's dirty-file force path.
+    // unlocked explicitly rather than folded into MCode's dirty-file force path.
     return null
   }
   // Why (#11960): this must be decided before the `force` guard below. The ordinary

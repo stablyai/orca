@@ -22,9 +22,9 @@ vi.mock('fs', () => ({
 
 vi.mock('./relay-protocol', () => ({
   RELAY_VERSION: '0.1.0',
-  RELAY_REMOTE_DIR: '.orca-remote',
+  RELAY_REMOTE_DIR: '.mcode-remote',
   parseUnameToRelayPlatform: vi.fn().mockReturnValue('linux-x64'),
-  RELAY_SENTINEL: 'ORCA-RELAY v0.1.0 READY\n',
+  RELAY_SENTINEL: 'MCODE-RELAY v0.1.0 READY\n',
   RELAY_SENTINEL_TIMEOUT_MS: 10_000
 }))
 
@@ -104,23 +104,23 @@ describe('cross-version isolation', () => {
     const mockExec = vi.mocked(execCommand)
 
     // Simulated remote where:
-    //   v1 dir = ~/.orca-remote/relay-0.1.0+111111111111/  (live daemon, listening)
-    //   v2 dir = ~/.orca-remote/relay-0.1.0+222222222222/  (does not yet exist)
+    //   v1 dir = ~/.mcode-remote/relay-0.1.0+111111111111/  (live daemon, listening)
+    //   v2 dir = ~/.mcode-remote/relay-0.1.0+222222222222/  (does not yet exist)
     // The v2 client has fullVersion='0.1.0+222222222222' (from the fs mock above).
     //
     mockExec.mockImplementation((_conn, command) => {
-      if (command.includes('__ORCA_UPLOAD_STAGE_SLOT__')) {
+      if (command.includes('__MCODE_UPLOAD_STAGE_SLOT__')) {
         return Promise.resolve(
-          '__ORCA_UPLOAD_STAGE_SLOT__.sftp-namespace-00000000000000000000000000000000:slot-0'
+          '__MCODE_UPLOAD_STAGE_SLOT__.sftp-namespace-00000000000000000000000000000000:slot-0'
         )
       }
-      if (command.includes('__ORCA_UPLOAD_STAGE_PROMOTION__')) {
+      if (command.includes('__MCODE_UPLOAD_STAGE_PROMOTION__')) {
         return Promise.resolve(
-          '__ORCA_UPLOAD_STAGE_PROMOTION__.sftp-namespace-00000000000000000000000000000000:PROMOTED'
+          '__MCODE_UPLOAD_STAGE_PROMOTION__.sftp-namespace-00000000000000000000000000000000:PROMOTED'
         )
       }
-      if (command.includes('__ORCA_REMOTE_PLATFORM__')) {
-        return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+      if (command.includes('__MCODE_REMOTE_PLATFORM__')) {
+        return Promise.resolve('__MCODE_REMOTE_PLATFORM__ Linux x86_64')
       }
       if (command === 'echo $HOME') {
         return Promise.resolve('/home/u')
@@ -137,8 +137,8 @@ describe('cross-version isolation', () => {
       if (command.includes('.install-lock') && command.includes('&& echo OK || echo BUSY')) {
         return Promise.resolve('OK')
       }
-      if (command.includes('ORCA-NPTY-PROBE-OK')) {
-        return Promise.resolve('ORCA-NPTY-PROBE-OK\n')
+      if (command.includes('MCODE-NPTY-PROBE-OK')) {
+        return Promise.resolve('MCODE-NPTY-PROBE-OK\n')
       }
       if (command.includes('process.stdout.write("READY")')) {
         return Promise.resolve('READY')
@@ -146,7 +146,7 @@ describe('cross-version isolation', () => {
       if (command.includes('test -S') && command.includes('echo ALIVE || echo DEAD')) {
         return Promise.resolve('DEAD')
       }
-      if (command.includes('__ORCA_RELAY_GC_FIND_STATUS__')) {
+      if (command.includes('__MCODE_RELAY_GC_FIND_STATUS__')) {
         return Promise.resolve('relay-0.1.0+111111111111\nrelay-0.1.0+222222222222\n')
       }
       if (command.includes('relay-0.1.0+111111111111/.install-lock')) {

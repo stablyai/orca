@@ -2,7 +2,7 @@ import type { ExecutionHostId } from './execution-host'
 import type { RepoIcon } from './repo-icon'
 import type { GitRemoteIdentity } from './git-remote-identity'
 import type { LocalWindowsRuntimePreference } from './project-execution-runtime'
-import type { RepoHookSettings } from './orca-yaml-hook-types'
+import type { RepoHookSettings } from './mcode-yaml-hook-types'
 import type { RepoSourceControlAiOverrides } from './source-control-ai-types'
 import type { Repo, RepoKind } from './repo-types'
 

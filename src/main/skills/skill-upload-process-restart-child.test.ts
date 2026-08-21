@@ -3,7 +3,7 @@ import { open } from 'node:fs/promises'
 import { describe, it } from 'vitest'
 import { SkillUploadSessionService } from './skill-upload-session-service'
 
-const CHILD = process.env.ORCA_SKILL_UPLOAD_PROCESS_CHILD === '1'
+const CHILD = process.env.MCODE_SKILL_UPLOAD_PROCESS_CHILD === '1'
 const BYTES = Buffer.from('upload process restart package')
 
 function packageIdentity() {
@@ -17,7 +17,7 @@ function packageIdentity() {
 }
 
 async function stopAtBoundary(uploadId: string): Promise<void> {
-  const marker = process.env.ORCA_SKILL_UPLOAD_RESTART_MARKER
+  const marker = process.env.MCODE_SKILL_UPLOAD_RESTART_MARKER
   if (!marker) {
     throw new Error('missing-upload-restart-marker')
   }
@@ -33,8 +33,8 @@ async function stopAtBoundary(uploadId: string): Promise<void> {
 
 describe.runIf(CHILD)('skill upload process restart child', () => {
   it('stops at the requested upload boundary', async () => {
-    const root = process.env.ORCA_SKILL_UPLOAD_RESTART_ROOT
-    const boundary = process.env.ORCA_SKILL_UPLOAD_RESTART_BOUNDARY
+    const root = process.env.MCODE_SKILL_UPLOAD_RESTART_ROOT
+    const boundary = process.env.MCODE_SKILL_UPLOAD_RESTART_BOUNDARY
     if (!root || !boundary) {
       throw new Error('missing-upload-restart-configuration')
     }

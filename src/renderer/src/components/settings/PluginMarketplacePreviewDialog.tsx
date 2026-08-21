@@ -234,7 +234,7 @@ export function PluginMarketplacePreviewDialog({
                 <span>
                   {translate(
                     'auto.components.settings.PluginMarketplacePreviewDialog.workerWarning',
-                    "Capabilities limit how this plugin uses Orca's API. Its worker still runs as a normal process on this computer with full access to your files, network, and other processes."
+                    "Capabilities limit how this plugin uses MCode's API. Its worker still runs as a normal process on this computer with full access to your files, network, and other processes."
                   )}
                 </span>
               </div>
@@ -243,7 +243,7 @@ export function PluginMarketplacePreviewDialog({
               <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3.5 py-3 text-sm text-destructive">
                 {translate(
                   'auto.components.settings.PluginMarketplacePreviewDialog.blocked',
-                  "Orca's safety list blocks this plugin: {{value0}}",
+                  "MCode's safety list blocks this plugin: {{value0}}",
                   { value0: blocked.reason }
                 )}
               </p>

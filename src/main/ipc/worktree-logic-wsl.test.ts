@@ -19,7 +19,7 @@ import {
   getWorktreePathSettings
 } from './worktree-logic'
 import {
-  buildKnownOrcaWorkspaceLayouts,
+  buildKnownMCodeWorkspaceLayouts,
   classifyWorktreeOwnership
 } from '../../shared/worktree/ownership'
 import { relativePathInsideRoot } from '../../shared/cross-platform-path'
@@ -44,7 +44,7 @@ describe('computeWorktreePath WSL layout', () => {
         nestWorkspaces: true,
         workspaceDir: 'C:\\workspaces'
       })
-    ).toBe('\\\\wsl.localhost\\Ubuntu\\home\\jin\\orca\\workspaces\\repo\\feature')
+    ).toBe('\\\\wsl.localhost\\Ubuntu\\home\\jin\\mcode\\workspaces\\repo\\feature')
   })
 
   it('falls back to the configured Windows workspace when WSL home lookup fails', () => {
@@ -70,16 +70,16 @@ describe('computeWorktreePath WSL layout', () => {
     getWslHomeMock.mockReturnValue('\\\\wsl.localhost\\Ubuntu\\home\\jin')
     const repo = {
       path: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo',
-      worktreeBasePath: '/home/jin/src/.orca-worktrees'
+      worktreeBasePath: '/home/jin/src/.mcode-worktrees'
     }
     const settings = { nestWorkspaces: false, workspaceDir: 'C:\\workspaces' }
 
     expect(computeWorktreePath('feature', repo.path, getWorktreePathSettings(repo, settings))).toBe(
-      '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\.orca-worktrees\\feature'
+      '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\.mcode-worktrees\\feature'
     )
     // Why repeat: cached follow-up calls must resolve identically to the first.
     expect(computeWorktreePath('feature', repo.path, getWorktreePathSettings(repo, settings))).toBe(
-      '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\.orca-worktrees\\feature'
+      '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\.mcode-worktrees\\feature'
     )
     expect(getWslHomeMock).not.toHaveBeenCalled()
   })
@@ -142,7 +142,7 @@ describe('computeWorktreePath WSL layout', () => {
         repo.path,
         getWorktreePathSettings(repo, { nestWorkspaces: false, workspaceDir: 'C:\\workspaces' })
       )
-    ).toBe('\\\\wsl.localhost\\Ubuntu\\home\\jin\\orca\\workspaces\\feature')
+    ).toBe('\\\\wsl.localhost\\Ubuntu\\home\\jin\\mcode\\workspaces\\feature')
   })
 
   it('classifies whatever creation produces for Linux bases, dotted or not', () => {
@@ -169,9 +169,9 @@ describe('computeWorktreePath WSL layout', () => {
         repo.path,
         getWorktreePathSettings(repo, settings)
       )
-      const layouts = buildKnownOrcaWorkspaceLayouts({ ...settings, workspaceDirHistory: [] }, repo)
+      const layouts = buildKnownMCodeWorkspaceLayouts({ ...settings, workspaceDirHistory: [] }, repo)
       // Why containment, not just ownership: a regressed resolver lands in the
-      // ~/orca/workspaces mirror layout, which also classifies 'external'.
+      // ~/mcode/workspaces mirror layout, which also classifies 'external'.
       // layouts[0] is the repo-base layout — it is always pushed first.
       expect(relativePathInsideRoot(layouts[0].path, createdPath)).not.toBeNull()
       expect(
@@ -179,7 +179,7 @@ describe('computeWorktreePath WSL layout', () => {
           repo,
           settings: { ...settings, workspaceDirHistory: [] },
           worktree: { path: createdPath, isMainWorktree: false },
-          knownOrcaLayouts: layouts
+          knownMCodeLayouts: layouts
         })
       ).toBe('external')
     }
@@ -194,7 +194,7 @@ describe('computeWorktreePath WSL layout', () => {
     getWslHomeAsyncMock.mockResolvedValue('\\\\wsl.localhost\\Ubuntu\\home\\jin')
     const repo = {
       path: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo',
-      worktreeBasePath: '/home/jin/src/.orca-worktrees'
+      worktreeBasePath: '/home/jin/src/.mcode-worktrees'
     }
     const pathSettings = getWorktreePathSettings(repo, {
       nestWorkspaces: false,

@@ -5,8 +5,8 @@ name: Windows Update-Survival E2E
 # packaged artifacts (daemon survival, terminal interactivity, zero console
 # flashes). This MUST run on a disposable CI Windows: electron-builder's oneClick
 # installer uninstalls the registry-registered copy of the app before every
-# install, so running the harness on a machine with a real Orca install would
-# delete it. A fresh runner has no Orca registered, so it is the only safe home
+# install, so running the harness on a machine with a real MCode install would
+# delete it. A fresh runner has no MCode registered, so it is the only safe home
 # for install-based testing. Manual dispatch only.
 
 # Why: workflow_dispatch only works once a workflow is on the default branch.
@@ -112,7 +112,7 @@ jobs:
           "FROM_EXE=$($from.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "TO_EXE=$($to.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      # Why: no --install-dir here. A CI runner has no real Orca registered, so
+      # Why: no --install-dir here. A CI runner has no real MCode registered, so
       # the harness installs to the default per-user location and owns it — the
       # isolated-install machinery exists only to (imperfectly) protect a real
       # developer install, which does not apply on a throwaway runner.
@@ -122,7 +122,7 @@ jobs:
         env:
           # Why: on a driving failure the harness dumps a screenshot + DOM state
           # here so the actual post-onboarding UI is visible in the artifacts.
-          ORCA_E2E_DIAG_DIR: artifacts/diag
+          MCODE_E2E_DIAG_DIR: artifacts/diag
         run: |
           $log = "artifacts/harness-output.log"
           node tests/tools/win-update-e2e/run.mjs `

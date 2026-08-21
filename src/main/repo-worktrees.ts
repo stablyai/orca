@@ -27,7 +27,7 @@ export function createFolderWorktree(repo: Repo): GitWorktreeInfo {
     branch: '',
     isBare: false,
     // Why: folder mode has no linked worktree graph. Treat the folder itself
-    // as the single primary worktree so the rest of Orca's worktree-first UI
+    // as the single primary worktree so the rest of MCode's worktree-first UI
     // can keep using one stable workspace identity.
     isMainWorktree: true
   }

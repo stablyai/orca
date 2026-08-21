@@ -213,7 +213,7 @@ export function AutomationDetail({
         <div className="rounded-md border border-border/50 bg-muted/50 p-3 text-sm text-muted-foreground shadow-sm">
           {translate(
             'auto.components.automations.AutomationDetail.dbef8dc110',
-            'This SSH automation runs only while Orca can reach the SSH host. If reconnect needs interactive credentials or the host is unavailable, the run is recorded as skipped.'
+            'This SSH automation runs only while MCode can reach the SSH host. If reconnect needs interactive credentials or the host is unavailable, the run is recorded as skipped.'
           )}
         </div>
       ) : null}

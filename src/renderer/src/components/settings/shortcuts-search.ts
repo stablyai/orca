@@ -12,7 +12,7 @@ export const getTerminalShortcutPolicySearchEntry = createLocalizedCatalog(
     ),
     description: translate(
       'auto.components.settings.shortcuts.search.ebd7d81e1d',
-      'Choose whether Orca or the focused terminal wins when shortcuts overlap.'
+      'Choose whether MCode or the focused terminal wins when shortcuts overlap.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.shortcuts.search.ca6a0c2df7', 'shortcut'),
@@ -24,7 +24,7 @@ export const getTerminalShortcutPolicySearchEntry = createLocalizedCatalog(
       ...translateSearchKeyword('auto.components.settings.shortcuts.search.0ecfc47434', 'conflict'),
       ...translateSearchKeyword(
         'auto.components.settings.shortcuts.search.afda131738',
-        'orca first'
+        'mcode first'
       ),
       ...translateSearchKeyword(
         'auto.components.settings.shortcuts.search.4811a8264a',

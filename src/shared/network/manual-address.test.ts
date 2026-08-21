@@ -235,12 +235,12 @@ describe('parseManualNetworkAddress', () => {
     })
 
     it('accepts reverse-proxy paths and query strings', () => {
-      expect(parseManualNetworkAddress('wss://example.com/orca?route=runtime').ok).toBe(true)
+      expect(parseManualNetworkAddress('wss://example.com/mcode?route=runtime').ok).toBe(true)
     })
 
     it('accepts HTTP URLs that the main process normalizes to WebSocket URLs', () => {
-      expect(parseManualNetworkAddress('http://example.com/orca').ok).toBe(true)
-      expect(parseManualNetworkAddress('https://example.com/orca?route=runtime').ok).toBe(true)
+      expect(parseManualNetworkAddress('http://example.com/mcode').ok).toBe(true)
+      expect(parseManualNetworkAddress('https://example.com/mcode?route=runtime').ok).toBe(true)
     })
 
     it('rejects URLs the pairing endpoint cannot advertise', () => {

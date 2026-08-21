@@ -13,7 +13,7 @@ const failedJob: PRCheckDetail = {
   name: 'Component Tests: Purchase API',
   status: 'completed',
   conclusion: 'failure',
-  url: 'https://gitlab.example.test/acme/orca/-/jobs/42',
+  url: 'https://gitlab.example.test/acme/mcode/-/jobs/42',
   gitlabJobId: 42
 }
 

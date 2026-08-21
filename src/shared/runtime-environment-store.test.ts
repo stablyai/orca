@@ -42,7 +42,7 @@ describe('runtime environment store', () => {
   })
 
   it('rejects duplicate server names instead of silently replacing the saved server', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-env-store-'))
     tempDirs.push(userDataPath)
 
     const first = addEnvironmentFromPairingCode(userDataPath, {
@@ -60,7 +60,7 @@ describe('runtime environment store', () => {
   })
 
   it('advances pairing revisions across equal and backward clock readings', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-env-store-'))
     tempDirs.push(userDataPath)
     const environment = addEnvironmentFromPairingCode(userDataPath, {
       name: 'dev box',
@@ -89,7 +89,7 @@ describe('runtime environment store', () => {
   })
 
   it('keeps SSH-tunnel metadata only while the pairing endpoint is loopback', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-env-store-'))
     tempDirs.push(userDataPath)
     const environment = addEnvironmentFromPairingCode(userDataPath, {
       name: 'tunneled box',
@@ -112,7 +112,7 @@ describe('runtime environment store', () => {
   })
 
   it('throttles lastUsedAt writes so it does not rewrite the store on every runtime call', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-env-store-'))
     tempDirs.push(userDataPath)
     const env = addEnvironmentFromPairingCode(userDataPath, {
       name: 'dev box',
@@ -136,7 +136,7 @@ describe('runtime environment store', () => {
   })
 
   it('persists immediately when the runtimeId changes within the throttle window', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-env-store-'))
     tempDirs.push(userDataPath)
     const env = addEnvironmentFromPairingCode(userDataPath, {
       name: 'dev box',
@@ -153,7 +153,7 @@ describe('runtime environment store', () => {
   })
 
   it('persists paired device identity from pairing and status backfill', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-env-store-'))
     tempDirs.push(userDataPath)
     const paired = addEnvironmentFromPairingCode(userDataPath, {
       name: 'paired box',
@@ -178,7 +178,7 @@ describe('runtime environment store', () => {
   })
 
   it('rejects an oversized sparse environment store before parsing it', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-bound-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-env-store-bound-'))
     tempDirs.push(userDataPath)
     const path = getEnvironmentStorePath(userDataPath)
     writeFileSync(path, '{"version":1,"environments":[]}')
@@ -188,7 +188,7 @@ describe('runtime environment store', () => {
   })
 
   it('rejects an oversized write without replacing the durable environment list', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-write-bound-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-env-store-write-bound-'))
     tempDirs.push(userDataPath)
     const first = addEnvironmentFromPairingCode(userDataPath, {
       name: 'dev box',

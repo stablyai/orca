@@ -19,7 +19,7 @@ function record(overrides: Partial<RuntimeMetadata> = {}): RuntimeMetadata {
   return {
     runtimeId: OWNED_RUNTIME_ID,
     pid: OWNED_PID,
-    transports: [{ kind: 'unix', endpoint: '/tmp/orca-owner.sock' }],
+    transports: [{ kind: 'unix', endpoint: '/tmp/mcode-owner.sock' }],
     authToken: 'secret',
     startedAt: 100,
     ...overrides
@@ -104,7 +104,7 @@ describe('watchRuntimeMetadataOwnership', () => {
   }
 
   function makeUserDataPath(): string {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-ownership-'))
+    const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-runtime-ownership-'))
     userDataPaths.push(userDataPath)
     return userDataPath
   }

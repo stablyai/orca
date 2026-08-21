@@ -23,7 +23,7 @@ export function parseWebPairingInput(input: string): WebPairingOffer | null {
   }
 
   try {
-    if (trimmed.toLowerCase().startsWith('orca://')) {
+    if (trimmed.toLowerCase().startsWith('mcode://')) {
       const code = extractPairingCodeFromUrl(trimmed)
       return code ? decodePairingPayload(code) : null
     }
@@ -46,7 +46,7 @@ export function readPairingInputFromLocation(location: Location): string | null 
   if (!hash) {
     return null
   }
-  if (hash.startsWith('orca://pair')) {
+  if (hash.startsWith('mcode://pair')) {
     return hash
   }
   const hashParams = new URLSearchParams(hash)
@@ -125,9 +125,9 @@ function extractPairingCodeFromUrl(url: string): string | null {
   } catch {
     return null
   }
-  // Why: prefix checks accepted routes like `orca://pairing?...`; only the
+  // Why: prefix checks accepted routes like `mcode://pairing?...`; only the
   // pairing deep-link host may carry runtime auth material.
-  if (parsed.protocol !== 'orca:' || parsed.hostname !== 'pair') {
+  if (parsed.protocol !== 'mcode:' || parsed.hostname !== 'pair') {
     return null
   }
   if (parsed.pathname !== '' && parsed.pathname !== '/') {

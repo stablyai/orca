@@ -13,7 +13,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 import { MobilePageToolbar } from './MobilePageToolbar'
 
 describe('MobilePageToolbar', () => {
-  it('labels the sidebar toggle explicitly when Orca Mobile is visible in the sidebar', () => {
+  it('labels the sidebar toggle explicitly when MCode Mobile is visible in the sidebar', () => {
     const html = renderToStaticMarkup(
       <MobilePageToolbar showMobileButton onClose={vi.fn()} onToggleMobileSidebarButton={vi.fn()} />
     )
@@ -21,10 +21,10 @@ describe('MobilePageToolbar', () => {
     expect(html).toContain('Hide from sidebar')
     expect(html).toContain('mp-page-toolbar-primary')
     expect(html).toContain('Configure in Settings')
-    expect(html).not.toContain('Remove Orca Mobile')
+    expect(html).not.toContain('Remove MCode Mobile')
   })
 
-  it('labels the restore action explicitly when Orca Mobile is hidden from the sidebar', () => {
+  it('labels the restore action explicitly when MCode Mobile is hidden from the sidebar', () => {
     const html = renderToStaticMarkup(
       <MobilePageToolbar
         showMobileButton={false}

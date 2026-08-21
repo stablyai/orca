@@ -12,9 +12,9 @@ name: Adhoc macOS Dev Build
 #     grants survive an update; an unnotarized build reads as a new client and
 #     silently loses file access under Documents/Desktop/Downloads.
 #
-# Artifacts publish to stablyai/orca-adhoc — separate from both orca and
-# orca-hourly. Separate from orca because the main repo's releases atom feed
-# exposes only its 10 newest entries. Separate from orca-hourly because a build
+# Artifacts publish to mcode-ide/mcode-adhoc — separate from both mcode and
+# mcode-hourly. Separate from mcode because the main repo's releases atom feed
+# exposes only its 10 newest entries. Separate from mcode-hourly because a build
 # from someone's branch must never be picked up by a developer who only meant to
 # ride main; the two are different levels of "unvetted".
 #
@@ -29,7 +29,7 @@ name: Adhoc macOS Dev Build
 # branch carrying a stale copy of this file would otherwise run that copy.
 #
 # GITHUB_TOKEN is scoped to this repo and cannot publish there, so writes use the
-# same GitHub App as hourly, additionally installed on orca-adhoc with
+# same GitHub App as hourly, additionally installed on mcode-adhoc with
 # Contents: Read and write. The secret names below are historical — one App, one
 # private key, both dev-channel repos — and rotating it stays a single operation.
 # Provision with `bash config/scripts/setup-hourly-release-token.sh`.
@@ -52,7 +52,7 @@ on:
         # than the one the workflow file itself is read from — normally leave the
         # picker on main and name your branch here, so a stale copy of this
         # workflow on an old branch is not what runs.
-        description: 'Branch, tag, or SHA to build — must live in stablyai/orca; PR refs are refused (default: the branch selected above)'
+        description: 'Branch, tag, or SHA to build — must live in mcode-ide/mcode; PR refs are refused (default: the branch selected above)'
         required: false
         default: ''
         type: string
@@ -74,7 +74,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  ADHOC_REPO: stablyai/orca-adhoc
+  ADHOC_REPO: mcode-ide/mcode-adhoc
   # Why age and not a count like hourly: this channel is low-volume and bursty, so
   # a count would either hold one week's experiments forever or evict a build
   # someone is still running after a busy afternoon. A month is well past the "few
@@ -83,7 +83,7 @@ env:
 
 jobs:
   build-adhoc-mac:
-    if: github.repository == 'stablyai/orca'
+    if: github.repository == 'mcode-ide/mcode'
     # Why an environment: it gives the signing/notary/App secrets somewhere to
     # live that a stale copy of this workflow on an old branch cannot reach.
     # Referencing it is a no-op until repo settings give it teeth; the intended
@@ -122,7 +122,7 @@ jobs:
           set -euo pipefail
           case "$REQUESTED_REF" in
             refs/pull/*|pull/*)
-              echo "::error::Refusing to build PR ref '$REQUESTED_REF': this workflow signs with release credentials, so it only builds branches, tags, or commits of stablyai/orca. Push the code to a branch of this repo instead."
+              echo "::error::Refusing to build PR ref '$REQUESTED_REF': this workflow signs with release credentials, so it only builds branches, tags, or commits of mcode-ide/mcode. Push the code to a branch of this repo instead."
               exit 1
               ;;
           esac
@@ -142,7 +142,7 @@ jobs:
             sha=""
           done
           if [[ -z "$sha" ]]; then
-            echo "::error::'$REQUESTED_REF' does not resolve to a branch, tag, or commit of stablyai/orca."
+            echo "::error::'$REQUESTED_REF' does not resolve to a branch, tag, or commit of mcode-ide/mcode."
             exit 1
           fi
           # The object resolving locally is not proof a branch or tag reaches
@@ -150,7 +150,7 @@ jobs:
           # GitHub serves PR-only commits by SHA. Reachability is the actual
           # trust test.
           if [[ -z "$(git -C "$scratch" for-each-ref --contains "$sha" refs/heads refs/tags | head -1)" ]]; then
-            echo "::error::Commit $REQUESTED_REF is not reachable from any branch or tag of stablyai/orca; refusing to build it with release credentials."
+            echo "::error::Commit $REQUESTED_REF is not reachable from any branch or tag of mcode-ide/mcode; refusing to build it with release credentials."
             exit 1
           fi
           echo "Vetted $REQUESTED_REF -> $sha"
@@ -165,7 +165,7 @@ jobs:
           # applies main's current copy of this file to an arbitrary branch.
           ref: ${{ steps.vetted.outputs.sha }}
           fetch-depth: 0
-          # This job only reads stablyai/orca and never pushes; every write goes
+          # This job only reads mcode-ide/mcode and never pushes; every write goes
           # to the adhoc repo through a minted App token passed by env. Not
           # persisting the checkout credential shrinks the blast radius if a build
           # step is compromised (zizmor: artipacked).
@@ -201,7 +201,7 @@ jobs:
           command: pnpm install --frozen-lockfile
 
       # Why: signing is what makes an adhoc build installable over an existing
-      # Orca, so a missing cert must fail here rather than after a 20-minute build.
+      # MCode, so a missing cert must fail here rather than after a 20-minute build.
       - name: Verify macOS signing environment
         run: node config/scripts/verify-macos-release-env.mjs
         env:
@@ -235,7 +235,7 @@ jobs:
           published="$(GH_TOKEN="$MAIN_REPO_TOKEN" gh release list \
             --repo "$GITHUB_REPOSITORY" --limit 100 --exclude-drafts \
             --json tagName --jq '.[].tagName' || true)"
-          ORCA_PUBLISHED_VERSIONS="$published" ORCA_ADHOC_LABEL="${LABEL:-$REF}" \
+          MCODE_PUBLISHED_VERSIONS="$published" MCODE_ADHOC_LABEL="${LABEL:-$REF}" \
             node config/scripts/adhoc-build-version.mjs \
             >"$RUNNER_TEMP/adhoc-identity.txt"
           if ! grep -q '^name=' "$RUNNER_TEMP/adhoc-identity.txt"; then
@@ -251,7 +251,7 @@ jobs:
           # Why: adhoc builds are not an official channel — telemetry's transport
           # gate accepts only 'stable' or 'rc', so leaving this unset keeps them
           # silent, which is correct for unvetted branch artifacts.
-          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+          MCODE_DIAGNOSTICS_TOKEN_URL: https://www.mcode.dev/diagnostics/token
 
       # Why the token is minted here and not at the top: installation tokens live
       # one hour, everything before this point writes nothing, and the notary round
@@ -264,7 +264,7 @@ jobs:
           app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
           private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
           owner: stablyai
-          repositories: orca-adhoc
+          repositories: mcode-adhoc
 
       - name: Create adhoc release
         id: release
@@ -297,16 +297,16 @@ jobs:
             --draft \
             --notes "Adhoc macOS and Windows dev build of \`$REF\` at commit \`$short_sha\`.
 
-          Built from [\`stablyai/orca@$short_sha\`](https://github.com/stablyai/orca/commit/$SHA), cut by @$ACTOR.
+          Built from [\`mcode-ide/mcode@$short_sha\`](https://github.com/mcode-ide/mcode/commit/$SHA), cut by @$ACTOR.
 
           **Unlanded and unvetted.** This is somebody's branch, not main. No tests
           ran. The macOS build is signed and notarized like a release, so it installs
-          through Orca's in-app updater and opens without a Gatekeeper prompt — but the
+          through MCode's in-app updater and opens without a Gatekeeper prompt — but the
           branch may never merge, and this build is deleted after $ADHOC_RETAIN_DAYS days.
 
           **Windows builds are unsigned.** They install and update normally once you
           are on one, but a signed Stable or RC build cannot install one through the
-          in-app updater — download \`orca-windows-setup.exe\` below and run it once
+          in-app updater — download \`mcode-windows-setup.exe\` below and run it once
           (SmartScreen will warn about an unknown publisher). Every later switch,
           including back to Stable, works in-app from there."
           echo "tag=$TAG" >>"$GITHUB_OUTPUT"
@@ -321,13 +321,13 @@ jobs:
           timeout_minutes: 45
           max_attempts: 2
           retry_wait_seconds: 30
-          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_ADHOC=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
+          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && MCODE_MAC_ADHOC=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
         env:
           # Why: electron-builder's github publisher targets the repo named in the
-          # config; the token must therefore carry write access to orca-adhoc.
+          # config; the token must therefore carry write access to mcode-adhoc.
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
-          ORCA_ADHOC_BUILD_VERSION: ${{ steps.adhoc.outputs.version }}
-          ORCA_BUILD_COMMIT: ${{ steps.adhoc.outputs.commit }}
+          MCODE_ADHOC_BUILD_VERSION: ${{ steps.adhoc.outputs.version }}
+          MCODE_BUILD_COMMIT: ${{ steps.adhoc.outputs.commit }}
           CSC_LINK: ${{ secrets.MAC_CERTS }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
           # Why all three: electron-builder's notarize step authenticates to the

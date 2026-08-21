@@ -12,9 +12,9 @@ vi.mock('fs', () => ({
 
 vi.mock('./relay-protocol', () => ({
   RELAY_VERSION: '0.1.0',
-  RELAY_REMOTE_DIR: '.orca-remote',
+  RELAY_REMOTE_DIR: '.mcode-remote',
   parseUnameToRelayPlatform: vi.fn().mockReturnValue('linux-x64'),
-  RELAY_SENTINEL: 'ORCA-RELAY v0.1.0 READY\n',
+  RELAY_SENTINEL: 'MCODE-RELAY v0.1.0 READY\n',
   RELAY_SENTINEL_TIMEOUT_MS: 10_000
 }))
 
@@ -42,7 +42,7 @@ vi.mock('./ssh-relay-install-marker', async (importOriginal) => ({
 
 vi.mock('./ssh-relay-versioned-install', () => ({
   readLocalFullVersion: vi.fn().mockReturnValue('0.1.0+testhash'),
-  computeRemoteRelayDir: (home: string, v: string) => `${home}/.orca-remote/relay-${v}`,
+  computeRemoteRelayDir: (home: string, v: string) => `${home}/.mcode-remote/relay-${v}`,
   isRelayAlreadyInstalled: vi.fn().mockResolvedValue(false),
   finalizeInstall: vi.fn().mockResolvedValue(undefined),
   abandonInstall: vi.fn().mockResolvedValue(undefined),
@@ -131,7 +131,7 @@ describe('installNativeDeps staged uploads', () => {
     const written = sftpCapture.contents[pkgPath as string]
     expect(written).toBeTruthy()
     const parsed = JSON.parse(written) as Record<string, unknown>
-    expect(parsed.name).toBe('orca-relay')
+    expect(parsed.name).toBe('mcode-relay')
     expect(parsed.version).toBe('1.0.0')
     expect(parsed.private).toBe(true)
     expect(parsed.type).toBe('commonjs')
@@ -203,11 +203,11 @@ describe('installNativeDeps staged uploads', () => {
   it('retains the lock after an unconfirmed promotion termination', async () => {
     const conn = makeMockConnection(sftpCapture)
     vi.mocked(execCommand)
-      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
+      .mockResolvedValueOnce('__MCODE_REMOTE_PLATFORM__ Linux x86_64')
       .mockResolvedValueOnce('/home/u')
       .mockResolvedValueOnce('')
       .mockResolvedValueOnce(
-        '__ORCA_UPLOAD_STAGE_SLOT__.sftp-namespace-00000000000000000000000000000000:slot-0'
+        '__MCODE_UPLOAD_STAGE_SLOT__.sftp-namespace-00000000000000000000000000000000:slot-0'
       )
       .mockResolvedValueOnce('')
       .mockResolvedValueOnce('')

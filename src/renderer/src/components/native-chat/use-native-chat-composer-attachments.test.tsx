@@ -91,23 +91,23 @@ describe('useNativeChatComposerAttachments', () => {
     const first = await renderProbe('pty-1')
 
     await act(async () => {
-      first.latest().attachResolvedPaths(['/tmp/orca-native-chat-attach-test.png'])
+      first.latest().attachResolvedPaths(['/tmp/mcode-native-chat-attach-test.png'])
     })
 
     // Images are NOT sent to the TUI on attach — they ride along on submit, so
     // the chip and the TUI input never diverge and removing a chip is clean.
     expect(first.latest().imageAttachments).toMatchObject([
-      { path: '/tmp/orca-native-chat-attach-test.png' }
+      { path: '/tmp/mcode-native-chat-attach-test.png' }
     ])
     expect(readNativeChatAttachmentCache('pty-1')).toMatchObject([
-      { path: '/tmp/orca-native-chat-attach-test.png' }
+      { path: '/tmp/mcode-native-chat-attach-test.png' }
     ])
 
     act(() => first.root.unmount())
     const second = await renderProbe('pty-1')
 
     expect(second.latest().imageAttachments).toMatchObject([
-      { path: '/tmp/orca-native-chat-attach-test.png' }
+      { path: '/tmp/mcode-native-chat-attach-test.png' }
     ])
     act(() => second.root.unmount())
   })
@@ -115,7 +115,7 @@ describe('useNativeChatComposerAttachments', () => {
   it('removes an attached image chip cleanly', async () => {
     const probe = await renderProbe('pty-1')
     await act(async () => {
-      probe.latest().attachResolvedPaths(['/tmp/orca-native-chat-remove-test.png'])
+      probe.latest().attachResolvedPaths(['/tmp/mcode-native-chat-remove-test.png'])
     })
     const id = probe.latest().imageAttachments[0]?.id
     expect(id).toBeDefined()
@@ -130,10 +130,10 @@ describe('useNativeChatComposerAttachments', () => {
   it('rescopes attachments when the scope key changes (composer reused for another pane)', async () => {
     const probe = await renderProbe('pty-1')
     await act(async () => {
-      probe.latest().attachResolvedPaths(['/tmp/orca-native-chat-pane-1.png'])
+      probe.latest().attachResolvedPaths(['/tmp/mcode-native-chat-pane-1.png'])
     })
     expect(probe.latest().imageAttachments).toMatchObject([
-      { path: '/tmp/orca-native-chat-pane-1.png' }
+      { path: '/tmp/mcode-native-chat-pane-1.png' }
     ])
 
     // Reused for a different pane: pane-1's chip must not stay live (it would
@@ -144,7 +144,7 @@ describe('useNativeChatComposerAttachments', () => {
     // Switching back restores pane-1's still-cached chip.
     await probe.rerender('pty-1')
     expect(probe.latest().imageAttachments).toMatchObject([
-      { path: '/tmp/orca-native-chat-pane-1.png' }
+      { path: '/tmp/mcode-native-chat-pane-1.png' }
     ])
     act(() => probe.root.unmount())
   })

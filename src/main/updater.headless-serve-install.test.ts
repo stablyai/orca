@@ -199,7 +199,7 @@ describe('headless serve update install handoff', () => {
           status.state === 'error' &&
           'message' in status &&
           typeof status.message === 'string' &&
-          status.message.includes('orca serve')
+          status.message.includes('mcode serve')
       ),
       deferralDiagnostics: recordUpdaterLifecycleMock.mock.calls.filter(
         ([event]) => event === 'headless_serve_install_deferred'
@@ -401,7 +401,7 @@ describe('headless serve update install handoff', () => {
       )
       expect(send).toHaveBeenCalledWith(
         'updater:status',
-        expect.objectContaining({ state: 'error', message: expect.stringContaining('orca serve') })
+        expect.objectContaining({ state: 'error', message: expect.stringContaining('mcode serve') })
       )
     }
   )
@@ -463,7 +463,7 @@ describe('headless serve update install handoff', () => {
       expect(killAllPtyMock).not.toHaveBeenCalled()
       expect(send).toHaveBeenCalledWith(
         'updater:status',
-        expect.objectContaining({ state: 'error', message: expect.stringContaining('orca serve') })
+        expect.objectContaining({ state: 'error', message: expect.stringContaining('mcode serve') })
       )
     }
   )

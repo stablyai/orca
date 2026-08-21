@@ -1,7 +1,7 @@
-// Identify and inspect the Orca terminal daemon on Windows.
+// Identify and inspect the MCode terminal daemon on Windows.
 //
 // The daemon is forked with ELECTRON_RUN_AS_NODE=1, so on Windows its process
-// image is Orca.exe (the Electron binary running as plain Node) — it CANNOT be
+// image is MCode.exe (the Electron binary running as plain Node) — it CANNOT be
 // matched by executable name. The only reliable discriminators are the
 // command-line markers the fork always passes: the daemon entry script
 // (daemon-entry.js) and its --socket / --token arguments. See
@@ -19,11 +19,11 @@ import { runCommandSync } from './powershell-runner.mjs'
 
 const DAEMON_ENTRY_MARKER = 'daemon-entry.js'
 
-/** Default packaged userData root on Windows: %APPDATA%\Orca. */
+/** Default packaged userData root on Windows: %APPDATA%\MCode. */
 export function defaultUserDataDir() {
   const appData =
     process.env.APPDATA ?? path.join(process.env.USERPROFILE ?? '', 'AppData', 'Roaming')
-  return path.join(appData, 'Orca')
+  return path.join(appData, 'MCode')
 }
 
 /**
@@ -39,7 +39,7 @@ export function defaultUserDataDir() {
 export function findDaemonProcesses(scope = '') {
   assertWin32('daemon-processes')
   // Match by command-line marker only, never by exe name: with
-  // ELECTRON_RUN_AS_NODE the daemon's image is Orca.exe today but a relocated
+  // ELECTRON_RUN_AS_NODE the daemon's image is MCode.exe today but a relocated
   // Phase 1 host may run from a differently-named copied binary. @() around the
   // filtered result guards the PS 5.1 single-item unwrap — one match must still
   // serialize as an array or the JS side sees an object and .length explodes.

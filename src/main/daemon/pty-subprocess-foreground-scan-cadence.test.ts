@@ -98,9 +98,9 @@ describe('daemon pty foreground scan cadence', () => {
     isPwshAvailableMock.mockReset()
     isPwshAvailableMock.mockReturnValue(false)
     resolveAgentForegroundProcessMock.mockReset()
-    previousUserDataPath = process.env.ORCA_USER_DATA_PATH
+    previousUserDataPath = process.env.MCODE_USER_DATA_PATH
     userDataPath = mkdtempSync(join(tmpdir(), 'daemon-pty-scan-cadence-test-'))
-    process.env.ORCA_USER_DATA_PATH = userDataPath
+    process.env.MCODE_USER_DATA_PATH = userDataPath
     platform = Object.getOwnPropertyDescriptor(process, 'platform')
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(BASE_TIME_MS)
@@ -112,9 +112,9 @@ describe('daemon pty foreground scan cadence', () => {
       Object.defineProperty(process, 'platform', platform)
     }
     if (previousUserDataPath === undefined) {
-      delete process.env.ORCA_USER_DATA_PATH
+      delete process.env.MCODE_USER_DATA_PATH
     } else {
-      process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+      process.env.MCODE_USER_DATA_PATH = previousUserDataPath
     }
     rmSync(userDataPath, { recursive: true, force: true })
   })

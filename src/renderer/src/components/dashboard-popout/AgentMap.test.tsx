@@ -156,7 +156,7 @@ describe('AgentMap', () => {
     expect(ring).toHaveClass('is-open')
     expect(screen.queryByRole('button', { name: 'Focus ring' })).not.toBeInTheDocument()
     // The popover names the project; the map itself draws it uppercased.
-    expect(screen.getByText('Orca')).toBeInTheDocument()
+    expect(screen.getByText('MCode')).toBeInTheDocument()
     expect(screen.getByText('1 agent · 1 active · 0 done')).toBeInTheDocument()
     expect(screen.getByText('Agent alpha')).toBeInTheDocument()
     fireEvent.click(screen.getAllByRole('button', { name: /Agent alpha/ })[1])

@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import type { Page } from '@stablyai/playwright-test'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import {
   createRuntimeDesktopPairingOffer,
   launchPairedElectronClient,
@@ -124,7 +124,7 @@ function remoteTerminalHandle(ptyId: string): string {
 }
 
 test('opens a paired-runtime terminal link on its owning host', async ({
-  orcaPage,
+  mcodePage,
   testRepoPath
 }, testInfo) => {
   test.setTimeout(240_000)
@@ -132,15 +132,15 @@ test('opens a paired-runtime terminal link on its owning host', async ({
   let client: PairedElectronClient | null = null
   let observerActive = false
   try {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage)
-    const hostPtyId = await waitForActivePanePtyId(orcaPage)
-    await execInTerminal(orcaPage, hostPtyId, `printf '%s\\n' ${JSON.stringify(fixture.url)}`)
-    await waitForTerminalOutput(orcaPage, fixture.url)
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
+    await ensureTerminalVisible(mcodePage)
+    await waitForActiveTerminalManager(mcodePage)
+    const hostPtyId = await waitForActivePanePtyId(mcodePage)
+    await execInTerminal(mcodePage, hostPtyId, `printf '%s\\n' ${JSON.stringify(fixture.url)}`)
+    await waitForTerminalOutput(mcodePage, fixture.url)
 
-    const offer = await createRuntimeDesktopPairingOffer(orcaPage)
+    const offer = await createRuntimeDesktopPairingOffer(mcodePage)
     client = await launchPairedElectronClient(offer, testInfo, 'Remote terminal browser link')
     const page = client.page
     const worktreeId = await expect
@@ -193,9 +193,9 @@ test('opens a paired-runtime terminal link on its owning host', async ({
     await expect(
       actionPopover.getByRole('button').filter({ hasText: 'System Browser' })
     ).toBeVisible()
-    const orcaBrowserAction = actionPopover.getByRole('button').filter({ hasText: 'Orca Browser' })
-    await expect(orcaBrowserAction).toBeVisible()
-    await orcaBrowserAction.click()
+    const mcodeBrowserAction = actionPopover.getByRole('button').filter({ hasText: 'MCode Browser' })
+    await expect(mcodeBrowserAction).toBeVisible()
+    await mcodeBrowserAction.click()
 
     const identity = await expect
       .poll(

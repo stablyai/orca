@@ -116,7 +116,7 @@ describe('BrowserAddressBar autocomplete preview', () => {
       )
     })
 
-    const input = container.querySelector<HTMLInputElement>('input[data-orca-browser-address-bar]')
+    const input = container.querySelector<HTMLInputElement>('input[data-mcode-browser-address-bar]')
     expect(input).not.toBeNull()
 
     await act(async () => {
@@ -152,7 +152,7 @@ describe('BrowserAddressBar autocomplete preview', () => {
       )
     })
 
-    const input = container.querySelector<HTMLInputElement>('input[data-orca-browser-address-bar]')
+    const input = container.querySelector<HTMLInputElement>('input[data-mcode-browser-address-bar]')
     expect(input).not.toBeNull()
 
     await act(async () => {
@@ -187,7 +187,7 @@ describe('BrowserAddressBar autocomplete preview', () => {
       )
     })
 
-    const input = container.querySelector<HTMLInputElement>('input[data-orca-browser-address-bar]')
+    const input = container.querySelector<HTMLInputElement>('input[data-mcode-browser-address-bar]')
     expect(input).not.toBeNull()
 
     await act(async () => {
@@ -224,7 +224,7 @@ describe('BrowserAddressBar autocomplete preview', () => {
       )
     })
 
-    const input = container.querySelector<HTMLInputElement>('input[data-orca-browser-address-bar]')
+    const input = container.querySelector<HTMLInputElement>('input[data-mcode-browser-address-bar]')
     expect(input).not.toBeNull()
 
     await act(async () => {

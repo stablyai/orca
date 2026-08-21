@@ -31,7 +31,7 @@ function jsonLines(records: unknown[]): string {
 }
 
 async function seedSession(sessionId: string, turns: number): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-cache-'))
+  const root = await mkdtemp(join(tmpdir(), 'mcode-native-chat-cache-'))
   tempRoots.push(root)
   const projectDir = join(root, '.claude', 'projects', '-repo')
   await mkdir(projectDir, { recursive: true })
@@ -51,7 +51,7 @@ async function seedSession(sessionId: string, turns: number): Promise<string> {
 // (padded via one big user message), returning the path. Read it back by passing
 // the path as `transcriptPath` so resolution doesn't depend on process.env.HOME.
 async function seedBigFile(name: string, bytes: number): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-cache-bytes-'))
+  const root = await mkdtemp(join(tmpdir(), 'mcode-native-chat-cache-bytes-'))
   tempRoots.push(root)
   const filePath = join(root, `${name}.jsonl`)
   const record = {
@@ -129,7 +129,7 @@ describe('readNativeChatTranscriptCached', () => {
   // worktree's cached parse be served to the other whenever their file mtimes
   // coincided, leaking A's chat transcript into C's panel (#7326).
   it('never serves one file’s parse for a different file that shares a sessionId', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-cache-xwt-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-native-chat-cache-xwt-'))
     tempRoots.push(root)
     const fileA = join(root, 'worktree-a.jsonl')
     const fileC = join(root, 'worktree-c.jsonl')

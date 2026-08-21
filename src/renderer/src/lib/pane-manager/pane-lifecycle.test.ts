@@ -88,7 +88,7 @@ describe('buildDefaultTerminalOptions', () => {
   it('shows the slim xterm scrollbar in its reserved gutter', () => {
     // Why: 7px gutter is an accepted ~1-column cost (VS Code reserves 14);
     // the v1.4.51 table corruption that once forced width 0 was the ZWJ
-    // width bug, fixed separately by the Orca unicode provider.
+    // width bug, fixed separately by the MCode unicode provider.
     expect(buildDefaultTerminalOptions().scrollbar?.width).toBe(7)
   })
 
@@ -125,7 +125,7 @@ describe('buildDefaultTerminalOptions', () => {
   })
 
   it('advertises kitty keyboard protocol so CLIs enable enhanced key reporting', () => {
-    // Why: Orca already writes CSI-u bytes for extended key chords like
+    // Why: MCode already writes CSI-u bytes for extended key chords like
     // Shift+Enter on non-Windows platforms (see terminal-shortcut-policy.ts).
     // CLIs that gate enhanced input on a CSI ? u handshake only read those
     // bytes once the terminal advertises support. Regressing this flag

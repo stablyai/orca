@@ -178,7 +178,7 @@ function readValidationDaemonPids(userDataDir) {
 }
 
 export async function cleanupValidationDaemons(userDataDir) {
-  // Why: Orca intentionally keeps its daemon warm after app quit, but this
+  // Why: MCode intentionally keeps its daemon warm after app quit, but this
   // harness must never leave a process holding disposable account credentials.
   for (const pid of readValidationDaemonPids(userDataDir)) {
     await forceKillPidTree(pid)

@@ -72,7 +72,7 @@ jobs:
         id: cache-installer
         uses: actions/cache@v4
         with:
-          path: dist/orca-windows-setup.exe
+          path: dist/mcode-windows-setup.exe
           key: branch-installer-${{ hashFiles('src/**', 'config/**', 'native/**', 'resources/win32/**', 'package.json', 'pnpm-lock.yaml') }}
 
       - name: Build Windows installer (unsigned)
@@ -86,15 +86,15 @@ jobs:
       # over it, and assert the relocated daemon survives. Same build on both
       # sides isolates the survival mechanism (NSIS kill sweep + userData daemon
       # + adoption) from cross-version staleness policy. No --install-dir: a CI
-      # runner has no real Orca to protect.
+      # runner has no real MCode to protect.
       - name: Run survival harness
         id: harness
         shell: pwsh
         env:
-          ORCA_E2E_DIAG_DIR: artifacts/diag
+          MCODE_E2E_DIAG_DIR: artifacts/diag
         run: |
           New-Item -ItemType Directory -Force artifacts | Out-Null
-          $exe = "dist/orca-windows-setup.exe"
+          $exe = "dist/mcode-windows-setup.exe"
           if (-not (Test-Path $exe)) { throw "Installer not found at $exe" }
           $log = "artifacts/survival-output.log"
           node tests/tools/win-update-e2e/run.mjs `

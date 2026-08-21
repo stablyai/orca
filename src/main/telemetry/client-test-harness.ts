@@ -36,7 +36,7 @@ export const BASE_COMMON: CommonProps = {
   os_release: '25.3.0',
   install_id: '00000000-0000-4000-8000-000000000000',
   session_id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
-  orca_channel: 'stable'
+  mcode_channel: 'stable'
 }
 
 export function makeMockPostHog(): MockPostHog {
@@ -95,7 +95,7 @@ export function makeFakeStore(settings: GlobalSettings): Store {
 
 const CONSENT_ENV_VARS = [
   'DO_NOT_TRACK',
-  'ORCA_TELEMETRY_DISABLED',
+  'MCODE_TELEMETRY_DISABLED',
   'CI',
   'GITHUB_ACTIONS',
   'GITLAB_CI',

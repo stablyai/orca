@@ -11,7 +11,7 @@
 import nacl from 'tweetnacl'
 import WebSocket from 'ws'
 
-const WS_URL = process.env.ORCA_MOBILE_WS_URL ?? 'ws://127.0.0.1:6768'
+const WS_URL = process.env.MCODE_MOBILE_WS_URL ?? 'ws://127.0.0.1:6768'
 const token = process.argv[2]
 const serverPublicKeyB64 = process.argv[3]
 const worktreeSelector = process.argv[4]

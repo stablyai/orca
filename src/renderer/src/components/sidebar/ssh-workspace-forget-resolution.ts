@@ -6,7 +6,7 @@ import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
  * How a workspace on an SSH host should be deleted, given the host's live
  * state. Drives whether the delete flow can go straight through the normal
  * remote removal, must offer a reconnect-first choice, or can only forget the
- * workspace from Orca because the SSH target is gone entirely.
+ * workspace from MCode because the SSH target is gone entirely.
  */
 export type SshWorkspaceForgetResolution =
   | { kind: 'not-ssh' }
@@ -16,7 +16,7 @@ export type SshWorkspaceForgetResolution =
   // a local-only forget fallback.
   | { kind: 'disconnected'; targetId: string; status: SshConnectionState['status'] }
   // Target was removed; only a project-only "ghost" host remains. Reconnect is
-  // impossible, so forget-from-Orca is the only path.
+  // impossible, so forget-from-MCode is the only path.
   | { kind: 'ghost'; targetId: string }
 
 export function resolveSshWorkspaceForget(args: {
@@ -37,7 +37,7 @@ export function resolveSshWorkspaceForget(args: {
 
   // Why: a target the user removed leaves repos pinned to a dead id with no
   // configured target — the grey ghost host. Reconnect can never succeed, so
-  // the only escape is to forget it from Orca.
+  // the only escape is to forget it from MCode.
   if (!isConfigured) {
     return { kind: 'ghost', targetId: connectionId }
   }

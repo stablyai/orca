@@ -31,11 +31,11 @@ describe('sftp-upload', () => {
   it('can create the first binary upload chunk without clobbering an existing temp file', async () => {
     const sftp = createSftpMock()
 
-    await uploadBuffer(sftp, Buffer.from('png'), '/remote/.logo.orca-upload', {
+    await uploadBuffer(sftp, Buffer.from('png'), '/remote/.logo.mcode-upload', {
       exclusive: true
     })
 
-    expect(sftp.createWriteStream).toHaveBeenCalledWith('/remote/.logo.orca-upload', {
+    expect(sftp.createWriteStream).toHaveBeenCalledWith('/remote/.logo.mcode-upload', {
       flags: 'wx'
     })
     const writeStream = vi.mocked(sftp.createWriteStream).mock.results[0]?.value as Writable
@@ -44,7 +44,7 @@ describe('sftp-upload', () => {
   })
 
   it('uses no-clobber writes for nested files during exclusive directory upload', async () => {
-    const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-'))
+    const localDir = await mkdtemp(join(tmpdir(), 'mcode-sftp-upload-'))
     await mkdir(join(localDir, 'nested'))
     await writeFile(join(localDir, 'nested', 'asset.txt'), 'asset')
     const sftp = createSftpMock()
@@ -63,7 +63,7 @@ describe('sftp-upload', () => {
   })
 
   it('uploads files from valid dot-dot-prefixed local directories', async () => {
-    const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-'))
+    const localDir = await mkdtemp(join(tmpdir(), 'mcode-sftp-upload-'))
     await mkdir(join(localDir, '..fixtures'))
     await writeFile(join(localDir, '..fixtures', 'asset.txt'), 'asset')
     const sftp = createSftpMock()
@@ -79,7 +79,7 @@ describe('sftp-upload', () => {
   })
 
   it('rejects sibling directories outside the upload root', async () => {
-    const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-'))
+    const localDir = await mkdtemp(join(tmpdir(), 'mcode-sftp-upload-'))
     const escapedDir = `${localDir}-sibling`
     await mkdir(escapedDir)
     await writeFile(join(escapedDir, 'asset.txt'), 'asset')
@@ -96,7 +96,7 @@ describe('sftp-upload', () => {
   })
 
   it('does not create the remote file when the local source is a symlink', async () => {
-    const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-'))
+    const localDir = await mkdtemp(join(tmpdir(), 'mcode-sftp-upload-'))
     const targetPath = join(localDir, process.platform === 'win32' ? 'target-dir' : 'target.txt')
     const linkPath = join(localDir, process.platform === 'win32' ? 'link-dir' : 'link.txt')
     if (process.platform === 'win32') {
@@ -116,7 +116,7 @@ describe('sftp-upload', () => {
   })
 
   it('joins local file-descriptor teardown when a live upload is aborted', async () => {
-    const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-abort-'))
+    const localDir = await mkdtemp(join(tmpdir(), 'mcode-sftp-upload-abort-'))
     const localPath = join(localDir, 'relay.js')
     const controller = new AbortController()
     const blockedWrite = new Writable({
@@ -150,7 +150,7 @@ describe('sftp-upload', () => {
   })
 
   it('joins the local read when the remote write fails', async () => {
-    const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-failure-'))
+    const localDir = await mkdtemp(join(tmpdir(), 'mcode-sftp-upload-failure-'))
     const localPath = join(localDir, 'relay.js')
     const sftp = createSftpMock()
     vi.mocked(sftp.createWriteStream).mockReturnValue(

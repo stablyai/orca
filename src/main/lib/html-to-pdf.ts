@@ -32,7 +32,7 @@ new Promise((resolve) => {
 
 export async function htmlToPdf(html: string): Promise<Buffer> {
   const tempDir = app.getPath('temp')
-  const tempPath = path.join(tempDir, `orca-export-${randomUUID()}.html`)
+  const tempPath = path.join(tempDir, `mcode-export-${randomUUID()}.html`)
   await writeFile(tempPath, html, 'utf-8')
 
   const win = new BrowserWindow({

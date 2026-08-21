@@ -1,5 +1,5 @@
 import type WebSocket from 'ws'
-import type { OrcaCloudAuthConfig } from '../../orca-profiles/profile-cloud-auth-config'
+import type { MCodeCloudAuthConfig } from '../../mcode-profiles/profile-cloud-auth-config'
 import type { MobileRelayStatus } from '../../../shared/mobile-relay-status'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import type { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
@@ -14,7 +14,7 @@ export type RelayIdentity = {
 }
 
 export type RelaySessionBrokerOptions = {
-  authConfig: OrcaCloudAuthConfig
+  authConfig: MCodeCloudAuthConfig
   accessToken: string
   identity: RelayIdentity
   keypair: E2EEKeypair

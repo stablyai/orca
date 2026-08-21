@@ -18,7 +18,7 @@ describe('getStatus shared symlink exclusion', () => {
   let worktree: string
 
   beforeEach(() => {
-    root = mkdtempSync(join(tmpdir(), 'orca-status-shared-'))
+    root = mkdtempSync(join(tmpdir(), 'mcode-status-shared-'))
     primary = join(root, 'primary')
     worktree = join(root, 'worktree')
     mkdirSync(primary)
@@ -107,7 +107,7 @@ describe('getStatus shared symlink exclusion', () => {
     expect(status.entries).toEqual([expect.objectContaining({ path: 'notes', area: 'untracked' })])
   })
 
-  // Why: only *untracked* entries are Orca's artifacts. A symlink Git tracks is
+  // Why: only *untracked* entries are MCode's artifacts. A symlink Git tracks is
   // versioned content, so an edit to it is the user's work even when the path is
   // declared shared — dropping it would hide a committable change.
   it('keeps a modified tracked symlink at a declared shared path', async () => {

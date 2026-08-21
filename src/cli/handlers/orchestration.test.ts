@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
 const getTerminalHandleMock = vi.hoisted(() => vi.fn())
-const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
-const originalPaneKey = process.env.ORCA_PANE_KEY
+const originalTerminalHandle = process.env.MCODE_TERMINAL_HANDLE
+const originalPaneKey = process.env.MCODE_PANE_KEY
 function lifecycleGroupRecipientError(type: 'worker_done' | 'heartbeat'): string {
   return `${type} messages belong to one exact Dispatch and cannot target a group address.`
 }
@@ -37,14 +37,14 @@ function stubStaleHandleRemintFailure(error: RuntimeClientError): void {
 afterEach(() => {
   getTerminalHandleMock.mockReset()
   if (originalTerminalHandle === undefined) {
-    delete process.env.ORCA_TERMINAL_HANDLE
+    delete process.env.MCODE_TERMINAL_HANDLE
   } else {
-    process.env.ORCA_TERMINAL_HANDLE = originalTerminalHandle
+    process.env.MCODE_TERMINAL_HANDLE = originalTerminalHandle
   }
   if (originalPaneKey === undefined) {
-    delete process.env.ORCA_PANE_KEY
+    delete process.env.MCODE_PANE_KEY
   } else {
-    process.env.ORCA_PANE_KEY = originalPaneKey
+    process.env.MCODE_PANE_KEY = originalPaneKey
   }
 })
 
@@ -52,8 +52,8 @@ describe('orchestration send structured payload flags', () => {
   beforeEach(() => {
     callMock.mockReset().mockResolvedValue({ result: { lifecycle: { action: 'completed' } } })
     getTerminalHandleMock.mockReset()
-    delete process.env.ORCA_TERMINAL_HANDLE
-    delete process.env.ORCA_PANE_KEY
+    delete process.env.MCODE_TERMINAL_HANDLE
+    delete process.env.MCODE_PANE_KEY
   })
 
   const invokeSend = (flags: Map<string, string | boolean>) =>
@@ -213,8 +213,8 @@ describe('orchestration send structured payload flags', () => {
     })
   })
 
-  it('sends lifecycle messages from ORCA_TERMINAL_HANDLE without a liveness probe', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_worker_env'
+  it('sends lifecycle messages from MCODE_TERMINAL_HANDLE without a liveness probe', async () => {
+    process.env.MCODE_TERMINAL_HANDLE = 'term_worker_env'
 
     await invokeSend(
       new Map<string, string | boolean>([
@@ -243,8 +243,8 @@ describe('orchestration send structured payload flags', () => {
   it.each(['worker_done', 'heartbeat'] as const)(
     'never probes or remints a %s sender even when a pane key is set',
     async (type) => {
-      process.env.ORCA_TERMINAL_HANDLE = 'term_worker_env'
-      process.env.ORCA_PANE_KEY = 'tab_worker:leaf_worker'
+      process.env.MCODE_TERMINAL_HANDLE = 'term_worker_env'
+      process.env.MCODE_PANE_KEY = 'tab_worker:leaf_worker'
 
       await invokeSend(
         new Map<string, string | boolean>([
@@ -267,9 +267,9 @@ describe('orchestration send structured payload flags', () => {
     }
   )
 
-  it('passes ORCA_PANE_KEY as the sender pane identity', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_worker_env'
-    process.env.ORCA_PANE_KEY = 'tab_worker:leaf_worker'
+  it('passes MCODE_PANE_KEY as the sender pane identity', async () => {
+    process.env.MCODE_TERMINAL_HANDLE = 'term_worker_env'
+    process.env.MCODE_PANE_KEY = 'tab_worker:leaf_worker'
 
     await invokeSend(
       new Map<string, string | boolean>([
@@ -333,8 +333,8 @@ describe('orchestration dispatch coordinator handle', () => {
   beforeEach(() => {
     callMock.mockReset()
     getTerminalHandleMock.mockReset()
-    delete process.env.ORCA_TERMINAL_HANDLE
-    delete process.env.ORCA_PANE_KEY
+    delete process.env.MCODE_TERMINAL_HANDLE
+    delete process.env.MCODE_PANE_KEY
   })
 
   const invokeDispatch = (flags: Map<string, string | boolean>) =>
@@ -362,8 +362,8 @@ describe('orchestration dispatch coordinator handle', () => {
     } as never)
 
   it('remints a stale coordinator env handle from the caller pane key', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_stale_coord'
-    process.env.ORCA_PANE_KEY = 'tab_coord:leaf_coord'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_stale_coord'
+    process.env.MCODE_PANE_KEY = 'tab_coord:leaf_coord'
     stubStaleHandleRemint('term_live_coord', {
       result: { dispatch: { id: 'ctx_1', task_id: 'task_1', status: 'dispatched' } }
     })
@@ -396,7 +396,7 @@ describe('orchestration dispatch coordinator handle', () => {
   })
 
   it('rejects stale coordinator env handles when the caller pane cannot be proven', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_stale_coord'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_stale_coord'
     callMock.mockRejectedValueOnce(staleHandleError())
     getTerminalHandleMock.mockResolvedValue('term_wrong_active')
 
@@ -416,8 +416,8 @@ describe('orchestration dispatch coordinator handle', () => {
   })
 
   it('propagates unexpected caller pane remint failures for coordinator commands', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_stale_coord'
-    process.env.ORCA_PANE_KEY = 'tab_coord:leaf_coord'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_stale_coord'
+    process.env.MCODE_PANE_KEY = 'tab_coord:leaf_coord'
     stubStaleHandleRemintFailure(
       new RuntimeClientError('runtime_unavailable', 'runtime_unavailable')
     )
@@ -445,8 +445,8 @@ describe('orchestration dispatch coordinator handle', () => {
   })
 
   it('uses a live coordinator handle for dispatch-show preamble previews', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_stale_coord'
-    process.env.ORCA_PANE_KEY = 'tab_coord:leaf_coord'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_stale_coord'
+    process.env.MCODE_PANE_KEY = 'tab_coord:leaf_coord'
     stubStaleHandleRemint('term_live_coord', {
       result: { dispatch: null, preamble: 'preamble' }
     })
@@ -492,8 +492,8 @@ describe('orchestration task-create caller handle', () => {
   beforeEach(() => {
     callMock.mockReset()
     getTerminalHandleMock.mockReset()
-    delete process.env.ORCA_TERMINAL_HANDLE
-    delete process.env.ORCA_PANE_KEY
+    delete process.env.MCODE_TERMINAL_HANDLE
+    delete process.env.MCODE_PANE_KEY
   })
 
   const invokeTaskCreate = (flags: Map<string, string | boolean>) =>
@@ -505,7 +505,7 @@ describe('orchestration task-create caller handle', () => {
     } as never)
 
   it('records a live env terminal handle as task creator', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_creator'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_creator'
     callMock
       .mockResolvedValueOnce({ result: { terminal: { handle: 'term_creator' } } })
       .mockResolvedValueOnce({ result: { task: { id: 'task_1', status: 'ready' } } })
@@ -525,7 +525,7 @@ describe('orchestration task-create caller handle', () => {
   })
 
   it('fails closed when a stale task creator handle cannot be reminted', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_stale'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_stale'
     callMock.mockRejectedValueOnce(staleHandleError())
     getTerminalHandleMock.mockResolvedValue('term_wrong_active')
 
@@ -539,7 +539,7 @@ describe('orchestration task-create caller handle', () => {
   })
 
   it('propagates runtime unavailability while proving the bound coordinator', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_creator'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_creator'
     callMock.mockRejectedValueOnce(
       new RuntimeClientError('runtime_unavailable', 'runtime_unavailable')
     )
@@ -554,8 +554,8 @@ describe('orchestration task-create caller handle', () => {
   })
 
   it('propagates runtime unavailability while reminting the bound coordinator', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_stale'
-    process.env.ORCA_PANE_KEY = 'tab_creator:leaf_creator'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_stale'
+    process.env.MCODE_PANE_KEY = 'tab_creator:leaf_creator'
     stubStaleHandleRemintFailure(
       new RuntimeClientError('runtime_unavailable', 'runtime_unavailable')
     )
@@ -574,8 +574,8 @@ describe('orchestration task-create caller handle', () => {
   })
 
   it('propagates unexpected caller pane remint failures for task creation', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_stale'
-    process.env.ORCA_PANE_KEY = 'tab_creator:leaf_creator'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_stale'
+    process.env.MCODE_PANE_KEY = 'tab_creator:leaf_creator'
     stubStaleHandleRemintFailure(new RuntimeClientError('permission_denied', 'denied'))
     getTerminalHandleMock.mockResolvedValue('term_wrong_active')
 
@@ -594,7 +594,7 @@ describe('orchestration task-create caller handle', () => {
   })
 
   it('propagates unexpected env handle validation failures', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_creator'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_creator'
     callMock.mockRejectedValueOnce(new RuntimeClientError('permission_denied', 'denied'))
 
     await expect(
@@ -607,8 +607,8 @@ describe('orchestration task-create caller handle', () => {
   })
 
   it('remints a stale task creator env handle from the caller pane key', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_stale'
-    process.env.ORCA_PANE_KEY = 'tab_creator:leaf_creator'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_stale'
+    process.env.MCODE_PANE_KEY = 'tab_creator:leaf_creator'
     stubStaleHandleRemint('term_live', {
       result: { task: { id: 'task_1', status: 'ready' } }
     })
@@ -643,8 +643,8 @@ describe('orchestration timeout flag validation', () => {
 
   beforeEach(() => {
     callMock.mockReset()
-    delete process.env.ORCA_TERMINAL_HANDLE
-    delete process.env.ORCA_PANE_KEY
+    delete process.env.MCODE_TERMINAL_HANDLE
+    delete process.env.MCODE_PANE_KEY
   })
 
   const invokeCheck = (flags: Map<string, string | boolean>) =>
@@ -674,7 +674,7 @@ describe('orchestration timeout flag validation', () => {
   })
 
   it('passes a parsed check timeout and peek mode into the RPC payload', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_worker'
     callMock.mockResolvedValue({ result: { messages: [], count: 0 } })
 
     await invokeCheck(
@@ -695,7 +695,7 @@ describe('orchestration timeout flag validation', () => {
       all: undefined,
       types: undefined,
       format: undefined,
-      compatibilityCliCommand: expect.stringMatching(/^orca(?:-ide)?$/),
+      compatibilityCliCommand: expect.stringMatching(/^mcode(?:-ide)?$/),
       run: undefined,
       ack: undefined,
       wait: true,
@@ -704,7 +704,7 @@ describe('orchestration timeout flag validation', () => {
   })
 
   it('filters already-read rows from a peek response for pre-peek runtimes', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_worker'
     callMock.mockResolvedValue({
       result: {
         messages: [
@@ -730,7 +730,7 @@ describe('orchestration timeout flag validation', () => {
   })
 
   it('rejects combined read modes before calling the runtime', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_worker'
     callMock.mockClear()
 
     await expect(
@@ -748,7 +748,7 @@ describe('orchestration timeout flag validation', () => {
   })
 
   it('warns when a pre-peek runtime returned a full 100-row page', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_worker'
     const rows = Array.from({ length: 100 }, (_, i) => ({
       id: `msg_${i}`,
       from_handle: 'a',
@@ -765,7 +765,7 @@ describe('orchestration timeout flag validation', () => {
   })
 
   it('fails --peek --wait against a runtime that returned only read rows', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_worker'
     callMock.mockResolvedValue({
       result: {
         messages: [{ id: 'msg_old', from_handle: 'a', subject: 'seen', read: 1 }],
@@ -795,7 +795,7 @@ describe('orchestration timeout flag validation', () => {
   })
 
   it('uses the parsed ask timeout for both runtime wait and client timeout', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_worker'
     callMock.mockResolvedValue({
       result: {
         answer: 'yes',
@@ -824,7 +824,7 @@ describe('orchestration timeout flag validation', () => {
         options: undefined,
         timeoutMs: 123,
         from: 'term_worker',
-        compatibilityCliCommand: expect.stringMatching(/^orca(?:-ide)?$/),
+        compatibilityCliCommand: expect.stringMatching(/^mcode(?:-ide)?$/),
         compatibilityWindowsCommand: undefined
       },
       { timeoutMs: 5_123, orchestrationCapability: undefined }
@@ -832,7 +832,7 @@ describe('orchestration timeout flag validation', () => {
   })
 
   it('passes an ask resume without creating a new question payload', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_worker'
     callMock.mockResolvedValue({
       result: {
         answer: 'yes',
@@ -855,7 +855,7 @@ describe('orchestration timeout flag validation', () => {
         options: undefined,
         timeoutMs: undefined,
         from: 'term_worker',
-        compatibilityCliCommand: expect.stringMatching(/^orca(?:-ide)?$/),
+        compatibilityCliCommand: expect.stringMatching(/^mcode(?:-ide)?$/),
         compatibilityWindowsCommand: undefined
       },
       { timeoutMs: 605_000, orchestrationCapability: undefined }
@@ -863,7 +863,7 @@ describe('orchestration timeout flag validation', () => {
   })
 
   it('rejects ambiguous ask create/resume input before RPC', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    process.env.MCODE_TERMINAL_HANDLE = 'term_worker'
     await expect(
       invokeAsk(
         new Map<string, string | boolean>([

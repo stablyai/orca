@@ -50,7 +50,7 @@ function normalizeFeatureSectionLines(lines: string[], start: number, end: numbe
   if (!hasHooksKey) {
     const firstDeprecatedIndex = deprecatedIndexes.shift()
     if (firstDeprecatedIndex !== undefined) {
-      // Why: Codex 0.133 warns on the old key. Mirror into Orca's runtime
+      // Why: Codex 0.133 warns on the old key. Mirror into MCode's runtime
       // config using the new key without rewriting the user's real config.
       lines[firstDeprecatedIndex] = lines[firstDeprecatedIndex]!.replace(
         /^([ \t]*)codex_hooks([ \t]*=)/,

@@ -6,7 +6,7 @@ function controlResponseLine(models: unknown[]): string {
     type: 'control_response',
     response: {
       subtype: 'success',
-      request_id: 'orca-model-discovery',
+      request_id: 'mcode-model-discovery',
       response: { models }
     }
   })
@@ -87,7 +87,7 @@ describe('parseClaudeModelList', () => {
   it('returns no models for the control error emitted by CLIs without list_models', () => {
     // Captured from `claude` 2.1.100: unsupported subtype still exits 0.
     const stdout =
-      '{"type":"control_response","response":{"subtype":"error","request_id":"orca-model-discovery","error":"Unsupported control request subtype: list_models"}}\n'
+      '{"type":"control_response","response":{"subtype":"error","request_id":"mcode-model-discovery","error":"Unsupported control request subtype: list_models"}}\n'
     expect(parseClaudeModelList(stdout)).toEqual([])
   })
 

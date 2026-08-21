@@ -170,7 +170,7 @@ describe('createMainWindow', () => {
     expect(openExternalMock).toHaveBeenCalledTimes(4)
 
     const allowBlankEvent = { preventDefault: vi.fn() }
-    const allowBlankPrefs = { partition: 'persist:orca-browser' }
+    const allowBlankPrefs = { partition: 'persist:mcode-browser' }
     windowHandlers['will-attach-webview'](
       allowBlankEvent as never,
       allowBlankPrefs as never,
@@ -179,7 +179,7 @@ describe('createMainWindow', () => {
     expect(allowBlankEvent.preventDefault).not.toHaveBeenCalled()
     expect(allowBlankPrefs).toMatchObject({
       disableHtmlFullscreenWindowResize: true,
-      partition: 'persist:orca-browser',
+      partition: 'persist:mcode-browser',
       preload: expect.stringMatching(/browser-window-close-preload\.js$/),
       sandbox: true
     })
@@ -187,7 +187,7 @@ describe('createMainWindow', () => {
     const denyInlineHtmlEvent = { preventDefault: vi.fn() }
     windowHandlers['will-attach-webview'](
       denyInlineHtmlEvent as never,
-      { partition: 'persist:orca-browser' } as never,
+      { partition: 'persist:mcode-browser' } as never,
       { src: 'data:text/html,<script>alert(1)</script>' } as never
     )
     expect(denyInlineHtmlEvent.preventDefault).toHaveBeenCalledTimes(1)
@@ -201,7 +201,7 @@ describe('createMainWindow', () => {
       preload: 'file:///tmp/untrusted-preload.js'
     }
     const hardenedPrefs = {
-      partition: 'persist:orca-browser',
+      partition: 'persist:mcode-browser',
       preload: '/tmp/untrusted-preload.js'
     }
     windowHandlers['will-attach-webview'](

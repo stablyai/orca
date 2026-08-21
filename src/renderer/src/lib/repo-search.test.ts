@@ -5,8 +5,8 @@ import type { Repo } from '../../../shared/repo-types'
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
   return {
     id: 'repo-1',
-    path: '/Users/test/src/orca',
-    displayName: 'stablyai/orca',
+    path: '/Users/test/src/mcode',
+    displayName: 'mcode-ide/mcode',
     badgeColor: '#22c55e',
     addedAt: 0,
     ...overrides
@@ -34,16 +34,16 @@ describe('repo-search', () => {
 
   it('matches display names case-insensitively', () => {
     const repos = [
-      makeRepo({ id: '1', displayName: 'stablyai/orca', path: '/repos/orca' }),
+      makeRepo({ id: '1', displayName: 'mcode-ide/mcode', path: '/repos/mcode' }),
       makeRepo({ id: '2', displayName: 'stablyai/noqa', path: '/repos/noqa' })
     ]
 
-    expect(searchRepos(repos, 'ORCA').map((repo) => repo.id)).toEqual(['1'])
+    expect(searchRepos(repos, 'MCODE').map((repo) => repo.id)).toEqual(['1'])
   })
 
   it('falls back to matching repo paths', () => {
     const repos = [
-      makeRepo({ id: '1', displayName: 'frontend', path: '/src/team-a/orca' }),
+      makeRepo({ id: '1', displayName: 'frontend', path: '/src/team-a/mcode' }),
       makeRepo({ id: '2', displayName: 'backend', path: '/src/team-b/noqa' })
     ]
 
@@ -52,11 +52,11 @@ describe('repo-search', () => {
 
   it('keeps display-name matches ahead of path-only matches', () => {
     const repos = [
-      makeRepo({ id: '1', displayName: 'misc', path: '/src/orca-tools/misc' }),
-      makeRepo({ id: '2', displayName: 'orca', path: '/src/team-a/project' })
+      makeRepo({ id: '1', displayName: 'misc', path: '/src/mcode-tools/misc' }),
+      makeRepo({ id: '2', displayName: 'mcode', path: '/src/team-a/project' })
     ]
 
-    expect(searchRepos(repos, 'orca').map((repo) => repo.id)).toEqual(['2', '1'])
+    expect(searchRepos(repos, 'mcode').map((repo) => repo.id)).toEqual(['2', '1'])
   })
 
   it('rejects oversized pasted queries before reading repo names or paths', () => {

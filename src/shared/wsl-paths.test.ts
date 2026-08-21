@@ -39,8 +39,8 @@ describe('resolveWslRepoWorktreeBasePath', () => {
   const WSL_REPO = '\\\\wsl.localhost\\Ubuntu-24.04\\home\\jin\\src\\repo'
 
   it('resolves an absolute Linux base path into the repo distro (STA-4772)', () => {
-    expect(resolveWslRepoWorktreeBasePath(WSL_REPO, '/home/jin/project/.orca-worktrees')).toBe(
-      '\\\\wsl.localhost\\Ubuntu-24.04\\home\\jin\\project\\.orca-worktrees'
+    expect(resolveWslRepoWorktreeBasePath(WSL_REPO, '/home/jin/project/.mcode-worktrees')).toBe(
+      '\\\\wsl.localhost\\Ubuntu-24.04\\home\\jin\\project\\.mcode-worktrees'
     )
     expect(resolveWslRepoWorktreeBasePath('\\\\wsl$\\Debian\\srv\\repo', '/srv/trees')).toBe(
       '\\\\wsl.localhost\\Debian\\srv\\trees'

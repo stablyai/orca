@@ -6,7 +6,7 @@ const pr: PRInfo = {
   number: 12,
   title: 'Add queue badges',
   state: 'open',
-  url: 'https://github.com/acme/orca/pull/12',
+  url: 'https://github.com/acme/mcode/pull/12',
   checksStatus: 'pending',
   updatedAt: '2026-05-12T00:00:00.000Z',
   mergeable: 'MERGEABLE',
@@ -15,7 +15,7 @@ const pr: PRInfo = {
 
 describe('hostedReviewInfoFromGitHubPRInfo', () => {
   it('maps PRInfo into sidebar hosted review metadata', () => {
-    const githubRepository = { owner: 'upstream', repo: 'orca' }
+    const githubRepository = { owner: 'upstream', repo: 'mcode' }
     const review = hostedReviewInfoFromGitHubPRInfo({ ...pr, prRepo: githubRepository })
 
     expect(review).toMatchObject({

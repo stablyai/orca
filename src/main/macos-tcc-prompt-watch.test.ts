@@ -4,18 +4,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   MacosTccPromptWatch,
   type LogStreamChild,
-  isOrcaAttributedPrompt,
+  isMCodeAttributedPrompt,
   parseTccPromptEvent
 } from './macos-tcc-prompt-watch'
 
 // Captured verbatim from `log stream --predicate 'subsystem == "com.apple.TCC"'`
 // on macOS 26.5 while a real consent dialog was displayed and denied.
 const REAL_PROMPT_LINE =
-  '2026-07-27 15:35:26.136 Df tccd[79149:c81551c] [com.apple.TCC:access] AUTHREQ_PROMPTING: msgID=80871.81, service=kTCCServiceSystemPolicyDocumentsFolder, subject=Sub:{com.orca.tccprobe.shapecapture}Resp:{TCCDProcess: identifier=com.orca.tccprobe.shapecapture, pid=74171, auid=501, euid=501, binary_path=/private/tmp/tccprobe/TccProbe.app/Contents/MacOS/TccProbe},'
+  '2026-07-27 15:35:26.136 Df tccd[79149:c81551c] [com.apple.TCC:access] AUTHREQ_PROMPTING: msgID=80871.81, service=kTCCServiceSystemPolicyDocumentsFolder, subject=Sub:{com.mcode.tccprobe.shapecapture}Resp:{TCCDProcess: identifier=com.mcode.tccprobe.shapecapture, pid=74171, auid=501, euid=501, binary_path=/private/tmp/tccprobe/TccProbe.app/Contents/MacOS/TccProbe},'
 
-// Same shape, but the #9756 case: an agent CLI accesses, Orca is held responsible.
-const ORCA_APPDATA_LINE =
-  '2026-07-27 15:40:02.001 Df tccd[79149:c81551c] [com.apple.TCC:access] AUTHREQ_PROMPTING: msgID=80871.99, service=kTCCServiceSystemPolicyAppData, subject=Sub:{node-5555494487fbc7467d473fd8b0a397018cbf954b}Resp:{TCCDProcess: identifier=com.stablyai.orca, pid=47548, auid=501, euid=501, binary_path=/opt/homebrew/Cellar/node/26.5.0/bin/node},'
+// Same shape, but the #9756 case: an agent CLI accesses, MCode is held responsible.
+const MCODE_APPDATA_LINE =
+  '2026-07-27 15:40:02.001 Df tccd[79149:c81551c] [com.apple.TCC:access] AUTHREQ_PROMPTING: msgID=80871.99, service=kTCCServiceSystemPolicyAppData, subject=Sub:{node-5555494487fbc7467d473fd8b0a397018cbf954b}Resp:{TCCDProcess: identifier=com.mcode.desktop, pid=47548, auid=501, euid=501, binary_path=/opt/homebrew/Cellar/node/26.5.0/bin/node},'
 
 // Preflight checks dominate the TCC subsystem and must never count as a dialog.
 const PREFLIGHT_LINE =
@@ -25,16 +25,16 @@ describe('parseTccPromptEvent', () => {
   it('parses a real captured AUTHREQ_PROMPTING line', () => {
     expect(parseTccPromptEvent(REAL_PROMPT_LINE)).toEqual({
       service: 'kTCCServiceSystemPolicyDocumentsFolder',
-      accessingIdentifier: 'com.orca.tccprobe.shapecapture',
-      responsibleIdentifier: 'com.orca.tccprobe.shapecapture',
+      accessingIdentifier: 'com.mcode.tccprobe.shapecapture',
+      responsibleIdentifier: 'com.mcode.tccprobe.shapecapture',
       binaryPath: '/private/tmp/tccprobe/TccProbe.app/Contents/MacOS/TccProbe'
     })
   })
 
   it('separates the accessing binary from the responsible app', () => {
-    const event = parseTccPromptEvent(ORCA_APPDATA_LINE)
-    // The whole point of #9756: the dialog says Orca, but node did the access.
-    expect(event?.responsibleIdentifier).toBe('com.stablyai.orca')
+    const event = parseTccPromptEvent(MCODE_APPDATA_LINE)
+    // The whole point of #9756: the dialog says MCode, but node did the access.
+    expect(event?.responsibleIdentifier).toBe('com.mcode.desktop')
     expect(event?.accessingIdentifier).toBe('node-5555494487fbc7467d473fd8b0a397018cbf954b')
     expect(event?.binaryPath).toBe('/opt/homebrew/Cellar/node/26.5.0/bin/node')
   })
@@ -48,18 +48,18 @@ describe('parseTccPromptEvent', () => {
   })
 })
 
-describe('isOrcaAttributedPrompt', () => {
-  it('accepts the app and detached terminal helper across Orca build identities', () => {
+describe('isMCodeAttributedPrompt', () => {
+  it('accepts the app and detached terminal helper across MCode build identities', () => {
     for (const id of [
-      'com.stablyai.orca',
-      'com.stablyai.orca.helper',
-      'com.stablyai.orca.dev',
-      'com.stablyai.orca.dev.helper',
-      'com.stablyai.orca.local',
-      'com.stablyai.orca.local.helper'
+      'com.mcode.desktop',
+      'com.mcode.desktop.helper',
+      'com.mcode.desktop.dev',
+      'com.mcode.desktop.dev.helper',
+      'com.mcode.desktop.local',
+      'com.mcode.desktop.local.helper'
     ]) {
       expect(
-        isOrcaAttributedPrompt({
+        isMCodeAttributedPrompt({
           service: 'kTCCServiceSystemPolicyAppData',
           accessingIdentifier: 'find',
           responsibleIdentifier: id
@@ -70,7 +70,7 @@ describe('isOrcaAttributedPrompt', () => {
 
   it('rejects dialogs another app is responsible for', () => {
     expect(
-      isOrcaAttributedPrompt({
+      isMCodeAttributedPrompt({
         service: 'kTCCServiceSystemPolicyAppData',
         accessingIdentifier: 'find',
         responsibleIdentifier: 'com.apple.Terminal'
@@ -78,12 +78,12 @@ describe('isOrcaAttributedPrompt', () => {
     ).toBe(false)
   })
 
-  it('rejects unrelated services even when Orca is responsible', () => {
+  it('rejects unrelated services even when MCode is responsible', () => {
     expect(
-      isOrcaAttributedPrompt({
+      isMCodeAttributedPrompt({
         service: 'kTCCServiceMicrophone',
-        accessingIdentifier: 'orca',
-        responsibleIdentifier: 'com.stablyai.orca'
+        accessingIdentifier: 'mcode',
+        responsibleIdentifier: 'com.mcode.desktop'
       })
     ).toBe(false)
   })
@@ -135,7 +135,7 @@ describe('MacosTccPromptWatch', () => {
     expect(spawnLogStream).not.toHaveBeenCalled()
   })
 
-  it('reports only Orca-attributed dialogs from a live stream', async () => {
+  it('reports only MCode-attributed dialogs from a live stream', async () => {
     const { child, stdout } = createFakeLogStream()
     const onPrompt = vi.fn()
     const watch = new MacosTccPromptWatch({ onPrompt, spawnLogStream: () => child })
@@ -144,7 +144,7 @@ describe('MacosTccPromptWatch', () => {
     stdout.write('Filtering the log data using "subsystem == ..."\n')
     stdout.write(`${PREFLIGHT_LINE}\n`)
     stdout.write(`${REAL_PROMPT_LINE}\n`) // another app is responsible
-    stdout.write(`${ORCA_APPDATA_LINE}\n`)
+    stdout.write(`${MCODE_APPDATA_LINE}\n`)
     await new Promise((resolve) => {
       setImmediate(resolve)
     })
@@ -152,7 +152,7 @@ describe('MacosTccPromptWatch', () => {
     expect(onPrompt).toHaveBeenCalledTimes(1)
     expect(onPrompt.mock.calls[0][0]).toMatchObject({
       service: 'kTCCServiceSystemPolicyAppData',
-      responsibleIdentifier: 'com.stablyai.orca'
+      responsibleIdentifier: 'com.mcode.desktop'
     })
     watch.stop()
   })

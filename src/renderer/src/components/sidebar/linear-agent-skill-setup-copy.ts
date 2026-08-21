@@ -8,13 +8,13 @@ export function getLinearAgentSkillSetupMissingLabel(
   if (!cliAvailable && !skillInstalled) {
     return translate(
       'auto.components.sidebar.LinearAgentSkillSetupPrompt.missingCliAndSkill',
-      'Orca CLI and Linear agent skill are missing.'
+      'MCode CLI and Linear agent skill are missing.'
     )
   }
   if (!cliAvailable) {
     return translate(
       'auto.components.sidebar.LinearAgentSkillSetupPrompt.missingCli',
-      'Orca CLI is missing.'
+      'MCode CLI is missing.'
     )
   }
   return translate(
@@ -30,13 +30,13 @@ export function getLinearAgentSkillSetupToastTitle(
   if (!cliAvailable && !skillInstalled) {
     return translate(
       'auto.components.sidebar.LinearAgentSkillSetupPrompt.toastMissingCliAndSkill',
-      'Orca CLI and Linear skill are missing'
+      'MCode CLI and Linear skill are missing'
     )
   }
   if (!cliAvailable) {
     return translate(
       'auto.components.sidebar.LinearAgentSkillSetupPrompt.toastMissingCli',
-      'Orca CLI is missing'
+      'MCode CLI is missing'
     )
   }
   return translate(
@@ -76,18 +76,18 @@ function getLinearAgentSkillSetupToastBaseDescription(
   if (!cliAvailable && !skillInstalled) {
     return translate(
       'auto.components.sidebar.LinearAgentSkillSetupPrompt.toastInstallCliAndSkillDescription',
-      'Install the Orca CLI and the Linear skill to enable your agents to read and edit Linear tasks.'
+      'Install the MCode CLI and the Linear skill to enable your agents to read and edit Linear tasks.'
     )
   }
   if (!cliAvailable) {
     return translate(
       'auto.components.sidebar.LinearAgentSkillSetupPrompt.toastInstallCliDescription',
-      'Install the Orca CLI to enable your agents to read and edit Linear tasks.'
+      'Install the MCode CLI to enable your agents to read and edit Linear tasks.'
     )
   }
   return translate(
     'auto.components.sidebar.LinearAgentSkillSetupPrompt.toastInstallSkillDescription',
-    'Install the Linear skill to enable your agents to read and edit Linear tasks through the Orca CLI.'
+    'Install the Linear skill to enable your agents to read and edit Linear tasks through the MCode CLI.'
   )
 }
 

@@ -8,7 +8,7 @@ import type { GitAvailability } from './create-project-defaults'
 function renderCreateStep({
   createName = '',
   gitAvailability = 'available',
-  createParent = '/Users/alice/orca/projects',
+  createParent = '/Users/alice/mcode/projects',
   parentDefaultPending = false
 }: {
   createName?: string
@@ -24,7 +24,7 @@ function renderCreateStep({
           createParent={createParent}
           createError={null}
           isCreating={false}
-          defaultParent="/Users/alice/orca/projects"
+          defaultParent="/Users/alice/mcode/projects"
           gitAvailability={gitAvailability}
           runtimeParentStatus="idle"
           parentDefaultPending={parentDefaultPending}
@@ -44,7 +44,7 @@ describe('CreateStep', () => {
 
     expect(html).toContain('Create a new project')
     expect(html).toContain('Name')
-    expect(html).toContain('Git repository in ~/orca/projects')
+    expect(html).toContain('Git repository in ~/mcode/projects')
     // The summary card itself is the collapsed disclosure for the uncommon settings.
     expect(html).toContain('aria-expanded="false"')
     expect(html).not.toContain('Project kind')
@@ -58,7 +58,7 @@ describe('CreateStep', () => {
       gitAvailability: 'unavailable'
     })
 
-    expect(html).toContain('Git repository in ~/orca/projects')
+    expect(html).toContain('Git repository in ~/mcode/projects')
     expect(html).toContain('Git is required to create a project.')
     expect(html).toContain('disabled=""')
   })

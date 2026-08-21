@@ -1,8 +1,8 @@
 import {
-  ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT,
+  MCODE_EDITOR_PREPARE_HOT_EXIT_EVENT,
   type EditorPrepareHotExitDetail
 } from './editor-save-events'
-import { ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT } from './renderer-shutdown-events'
+import { MCODE_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT } from './renderer-shutdown-events'
 import type { UpdateStatus } from './update-status-types'
 
 export type AppRestartPrepOptions = {
@@ -16,7 +16,7 @@ function requestEditorHotExitBackup(eventTarget: EventTarget): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     let claimed = false
     eventTarget.dispatchEvent(
-      new CustomEvent<EditorPrepareHotExitDetail>(ORCA_EDITOR_PREPARE_HOT_EXIT_EVENT, {
+      new CustomEvent<EditorPrepareHotExitDetail>(MCODE_EDITOR_PREPARE_HOT_EXIT_EVENT, {
         detail: {
           claim: () => {
             claimed = true
@@ -50,7 +50,7 @@ export async function prepareRendererForAppRestart(
       checkpointFailed = true
     }
     eventTarget.addEventListener(
-      ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT,
+      MCODE_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT,
       markCheckpointFailed
     )
     try {
@@ -58,7 +58,7 @@ export async function prepareRendererForAppRestart(
       eventTarget.dispatchEvent(new Event('beforeunload', { cancelable: true }))
     } finally {
       eventTarget.removeEventListener(
-        ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT,
+        MCODE_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT,
         markCheckpointFailed
       )
     }

@@ -124,16 +124,16 @@ describe('feature_interaction_usage_bucket_reached schema', () => {
   })
 })
 
-describe('app_starred_orca schema', () => {
+describe('app_starred_mcode schema', () => {
   it('accepts every declared app star source', () => {
     for (const source of appStarSourceSchema.options) {
-      const parsed = eventSchemas.app_starred_orca.safeParse({ source })
+      const parsed = eventSchemas.app_starred_mcode.safeParse({ source })
       expect(parsed.success).toBe(true)
     }
   })
 
   it('accepts cohort context on successful app star telemetry', () => {
-    const parsed = eventSchemas.app_starred_orca.safeParse({
+    const parsed = eventSchemas.app_starred_mcode.safeParse({
       source: 'settings',
       nth_repo_added: 2
     })
@@ -141,16 +141,16 @@ describe('app_starred_orca schema', () => {
   })
 
   it('rejects unknown app star source values', () => {
-    const parsed = eventSchemas.app_starred_orca.safeParse({
+    const parsed = eventSchemas.app_starred_mcode.safeParse({
       source: 'github_website'
     })
     expect(parsed.success).toBe(false)
   })
 
   it('rejects extra keys via .strict()', () => {
-    const parsed = eventSchemas.app_starred_orca.safeParse({
+    const parsed = eventSchemas.app_starred_mcode.safeParse({
       source: 'landing',
-      repo: 'stablyai/orca'
+      repo: 'mcode-ide/mcode'
     })
     expect(parsed.success).toBe(false)
   })
@@ -367,7 +367,7 @@ describe('daemon_lifecycle schema', () => {
     ]
     for (const base of bases) {
       for (const leak of [
-        { daemon_path: '/Users/alice/Orca.app' },
+        { daemon_path: '/Users/alice/MCode.app' },
         { daemon_app_version: '1.4.129' },
         { live_session_count: 3 }
       ]) {
@@ -507,7 +507,7 @@ describe('add_repo_setup_step_action schema', () => {
   it('rejects extra keys via .strict()', () => {
     const parsed = eventSchemas.add_repo_setup_step_action.safeParse({
       action: 'skip',
-      repo_name: 'orca' // raw repo names are UGC — must not cross the wire
+      repo_name: 'mcode' // raw repo names are UGC — must not cross the wire
     })
     expect(parsed.success).toBe(false)
   })

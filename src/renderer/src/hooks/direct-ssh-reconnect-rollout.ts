@@ -1,4 +1,4 @@
-export const DIRECT_SSH_RECONNECT_SESSION_ROUTE_KEY = 'orca.directSshReconnectCoordinator.enabled'
+export const DIRECT_SSH_RECONNECT_SESSION_ROUTE_KEY = 'mcode.directSshReconnectCoordinator.enabled'
 
 export function resolveDirectSshReconnectCoordinatorRouting(args: {
   buildValue?: string

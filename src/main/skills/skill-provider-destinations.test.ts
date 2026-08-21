@@ -4,7 +4,7 @@ import { selectedOrDetectedSkillProviders } from '../../shared/skill-install-pro
 import { resolveSkillProviderDestinations } from './skill-provider-destinations'
 
 const HOME = join('/home', 'dev')
-const WORKSPACE = join('/repos', 'orca')
+const WORKSPACE = join('/repos', 'mcode')
 
 describe('resolveSkillProviderDestinations', () => {
   it('gives an agent that reads the canonical root no placement of its own', () => {
@@ -123,7 +123,7 @@ describe('resolveSkillProviderDestinations', () => {
     ).toThrow('skill-install-provider-root-collision')
   })
 
-  it('ignores agents Orca cannot place skills for', () => {
+  it('ignores agents MCode cannot place skills for', () => {
     expect(
       resolveSkillProviderDestinations({
         scope: 'global',

@@ -146,7 +146,7 @@ describe.skipIf(process.platform !== 'win32')('Windows setup-agent sequencing', 
 })
 
 function makeTempDir(directoryName: string): string {
-  const root = mkdtempSync(join(tmpdir(), 'orca-setup-sequencing-'))
+  const root = mkdtempSync(join(tmpdir(), 'mcode-setup-sequencing-'))
   TEMP_DIRS.push(root)
   const dir = join(root, directoryName)
   mkdirSync(dir)

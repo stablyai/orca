@@ -23,7 +23,7 @@ export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
     ),
     description: translate(
       'auto.components.settings.git.search.0e993bf00f',
-      'When you create a workspace, Orca refreshes the remote base and safely fast-forwards your matching local branch, such as main or master. This keeps commands like git diff main...HEAD from comparing against stale history. Orca skips the update if that branch has uncommitted changes or local-only commits.'
+      'When you create a workspace, MCode refreshes the remote base and safely fast-forwards your matching local branch, such as main or master. This keeps commands like git diff main...HEAD from comparing against stale history. MCode skips the update if that branch has uncommitted changes or local-only commits.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.git.search.e3e9adde59', 'main'),

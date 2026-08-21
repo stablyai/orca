@@ -13,7 +13,7 @@ function source(hostId: TaskSourceContext['hostId']): TaskSourceContext {
   return {
     kind: 'task-source',
     provider: 'github',
-    projectId: 'github:stablyai/orca',
+    projectId: 'github:mcode-ide/mcode',
     hostId,
     repoId: `repo-${hostId}`
   }

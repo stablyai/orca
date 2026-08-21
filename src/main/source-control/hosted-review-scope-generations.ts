@@ -3,7 +3,7 @@ import { MAX_BRANCH_MAP_ENTRIES } from './hosted-review-refresh-pacing'
 /**
  * Per-repo invalidation counter for hosted-review lookups (#11532).
  *
- * A lookup that was already out when Orca opened a review has an answer older
+ * A lookup that was already out when MCode opened a review has an answer older
  * than the invalidation, so it must not store. Comparing the generation it
  * started at against the current one is what tells the two apart.
  */

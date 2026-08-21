@@ -42,13 +42,13 @@ export type WorktreeCreationRequest = {
    *  host intent for retry, diagnostics, and future metadata writes. */
   workspaceRunContext?: WorkspaceRunContext | null
   /** Ephemeral VM runtime provisioned for this create. Used for best-effort
-   *  cleanup if Orca fails before the workspace owns the runtime. */
+   *  cleanup if MCode fails before the workspace owns the runtime. */
   ephemeralVmRuntimeId?: string
   /** Runtime environment created from the VM's pairing code. Used to refresh
    *  live status immediately after the workspace takes ownership. */
   ephemeralVmRuntimeEnvironmentId?: string
   /** Checkout ownership selected by the provisioned recipe. */
-  ephemeralVmCheckoutMode?: 'orca-worktree' | 'provisioned-root'
+  ephemeralVmCheckoutMode?: 'mcode-worktree' | 'provisioned-root'
   /** Source-host commit captured before a provisioned-root recipe starts. */
   ephemeralVmExpectedRefHead?: string
   /** Recipe to provision before creating the worktree. Kept serializable so
@@ -57,7 +57,7 @@ export type WorktreeCreationRequest = {
     sourceRepoId: string
     recipeId: string
     projectId: string
-    checkoutMode?: 'orca-worktree' | 'provisioned-root'
+    checkoutMode?: 'mcode-worktree' | 'provisioned-root'
   }
   /** Captured from the repo/run owner at submit time so Retry keeps the same
    *  local-vs-runtime progress behavior even if the focused runtime changes. */

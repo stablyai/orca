@@ -23,7 +23,7 @@ const MAX_REPORTED_RENDERER_ERROR_KEYS = 50
 let pendingReactErrorBoundaryReport: CrashReportRecord | null = null
 
 export const REACT_ERROR_BOUNDARY_REPORT_AVAILABLE_EVENT =
-  'orca:react-error-boundary-report-available'
+  'mcode:react-error-boundary-report-available'
 
 function stringFromThrown(value: unknown): { name: string; message: string; stack?: string } {
   if (value instanceof Error) {

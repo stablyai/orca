@@ -5,7 +5,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import {
   LEGACY_WORKSPACE_ID,
-  ensureOrcaDir,
+  ensureMCodeDir,
   getWorkspaceFilePath,
   getWorkspaceTokenPath
 } from './linear-credential-paths'
@@ -106,7 +106,7 @@ export function getWorkspaceFile(): LinearWorkspaceFile {
 }
 
 export function writeWorkspaceFile(file: LinearWorkspaceFile): void {
-  ensureOrcaDir()
+  ensureMCodeDir()
   const persistedWorkspaces = file.workspaces.filter(
     (workspace) => workspace.id !== LEGACY_WORKSPACE_ID
   )

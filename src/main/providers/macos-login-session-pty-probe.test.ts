@@ -24,7 +24,7 @@ describe('runMacosLoginSessionPtyProbe', () => {
     const abortController = new AbortController()
     execFileMock.mockImplementation(
       (_file: string, _args: string[], _options: unknown, callback: ExecFileCallback) => {
-        callback(null, '^D\b\bORCA_LOGIN_PREFLIGHT_OK', '')
+        callback(null, '^D\b\bMCODE_LOGIN_PREFLIGHT_OK', '')
         return { stdin: { end: stdinEndMock } }
       }
     )
@@ -37,12 +37,12 @@ describe('runMacosLoginSessionPtyProbe', () => {
       [
         '-c',
         expect.stringContaining(
-          'spawn -noecho /usr/bin/login -flpq $env(ORCA_LOGIN_PROBE_USERNAME)'
+          'spawn -noecho /usr/bin/login -flpq $env(MCODE_LOGIN_PROBE_USERNAME)'
         )
       ],
       expect.objectContaining({
         cwd: '/Users/ada',
-        env: expect.objectContaining({ ORCA_LOGIN_PROBE_USERNAME: 'ada' }),
+        env: expect.objectContaining({ MCODE_LOGIN_PROBE_USERNAME: 'ada' }),
         killSignal: 'SIGKILL',
         maxBuffer: 1_024,
         signal: abortController.signal,

@@ -93,20 +93,20 @@ describe('getRelayShellLaunchConfig', () => {
     () => {
       const config = getRelayShellLaunchConfig('/bin/zsh', {
         HOME: homeDir,
-        ORCA_OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-overlay'
+        MCODE_OPENCODE_CONFIG_DIR: '/tmp/mcode-opencode-overlay'
       })
-      const zshRoot = join(homeDir, '.orca-relay', 'shell-ready', 'zsh')
+      const zshRoot = join(homeDir, '.mcode-relay', 'shell-ready', 'zsh')
 
       expect(config.args).toEqual(['-l'])
       expect(config.env.ZDOTDIR).toBe(zshRoot)
       const zshenv = readFileSync(join(zshRoot, '.zshenv'), 'utf8')
-      // Why no ORCA_USER_ZDOTDIR: the relay used to republish the inherited
+      // Why no MCODE_USER_ZDOTDIR: the relay used to republish the inherited
       // ZDOTDIR under that name so its three later wrapper files could prefer it
       // over the spawn-time value. There are no later wrapper files, and a
       // ZDOTDIR the user's own .zshenv exports simply stands.
-      expect(zshenv).not.toContain('ORCA_USER_ZDOTDIR')
-      expect(zshenv).toContain('builtin export ZDOTDIR="$ORCA_ORIG_ZDOTDIR"')
-      expect(zshenv).toContain('builtin source -- "$_orca_user_zshenv"')
+      expect(zshenv).not.toContain('MCODE_USER_ZDOTDIR')
+      expect(zshenv).toContain('builtin export ZDOTDIR="$MCODE_ORIG_ZDOTDIR"')
+      expect(zshenv).toContain('builtin source -- "$_mcode_user_zshenv"')
       for (const name of ['.zprofile', '.zshrc', '.zlogin']) {
         expect(existsSync(join(zshRoot, name))).toBe(false)
       }
@@ -140,22 +140,22 @@ describe('getRelayShellLaunchConfig', () => {
     () => {
       // Why the real builder: the relay's wrapping rule is only meaningful
       // against the env main actually sends. Every relay session with a CLI
-      // bridge sets ORCA_REMOTE_CLI_BIN_DIR, which was already enough to wrap.
+      // bridge sets MCODE_REMOTE_CLI_BIN_DIR, which was already enough to wrap.
       const env = buildSshPtySpawnEnv({
         env: { HOME: homeDir, PATH: '/usr/bin:/bin' },
         remoteCliBridgeEnv: {
-          binDir: '/home/remote/.orca-relay/bin',
-          relayDir: '/home/remote/.orca-relay',
-          nodePath: '/home/remote/.orca-relay/node',
-          sockPath: '/home/remote/.orca-relay/relay.sock'
+          binDir: '/home/remote/.mcode-relay/bin',
+          relayDir: '/home/remote/.mcode-relay',
+          nodePath: '/home/remote/.mcode-relay/node',
+          sockPath: '/home/remote/.mcode-relay/relay.sock'
         }
       })
-      env.ORCA_HISTFILE = join(homeDir, 'orca-history', 'zsh_history')
+      env.MCODE_HISTFILE = join(homeDir, 'mcode-history', 'zsh_history')
 
       const config = getRelayShellLaunchConfig('/bin/zsh', env)
 
-      expect(config.env.ZDOTDIR).toBe(join(homeDir, '.orca-relay', 'shell-ready', 'zsh'))
-      expect(config.env.ORCA_SHELL_FEATURES).toBe('overlay,history,markers')
+      expect(config.env.ZDOTDIR).toBe(join(homeDir, '.mcode-relay', 'shell-ready', 'zsh'))
+      expect(config.env.MCODE_SHELL_FEATURES).toBe('overlay,history,markers')
     }
   )
 
@@ -167,17 +167,17 @@ describe('getRelayShellLaunchConfig', () => {
       // It is the one pane class the relay was NOT already wrapping, and
       // leaving it unwrapped silently loses its worktree history.
       const env = buildSshPtySpawnEnv({ env: { HOME: homeDir, PATH: '/usr/bin:/bin' } })
-      env.ORCA_HISTFILE = join(homeDir, 'orca-history', 'zsh_history')
+      env.MCODE_HISTFILE = join(homeDir, 'mcode-history', 'zsh_history')
 
       const config = getRelayShellLaunchConfig('/bin/zsh', env)
 
-      expect(config.env.ZDOTDIR).toBe(join(homeDir, '.orca-relay', 'shell-ready', 'zsh'))
-      expect(config.env.ORCA_SHELL_FEATURES).toBe('history')
+      expect(config.env.ZDOTDIR).toBe(join(homeDir, '.mcode-relay', 'shell-ready', 'zsh'))
+      expect(config.env.MCODE_SHELL_FEATURES).toBe('history')
     }
   )
 
   it.skipIf(process.platform === 'win32')(
-    'keeps a remote zsh with nothing Orca-owned on the plain login path',
+    'keeps a remote zsh with nothing MCode-owned on the plain login path',
     () => {
       const env = buildSshPtySpawnEnv({ env: { HOME: homeDir, PATH: '/usr/bin:/bin' } })
 
@@ -198,17 +198,17 @@ describe('getRelayShellLaunchConfig', () => {
   })
 
   it.skipIf(process.platform === 'win32')('rewrites stale persistent wrapper files', () => {
-    const zshRoot = join(homeDir, '.orca-relay', 'shell-ready', 'zsh')
+    const zshRoot = join(homeDir, '.mcode-relay', 'shell-ready', 'zsh')
     mkdirSync(zshRoot, { recursive: true })
     writeFileSync(join(zshRoot, '.zshenv'), '# stale relay wrapper\n')
 
     getRelayShellLaunchConfig('/bin/zsh', {
       HOME: homeDir,
-      ORCA_OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-overlay'
+      MCODE_OPENCODE_CONFIG_DIR: '/tmp/mcode-opencode-overlay'
     })
 
     expect(readFileSync(join(zshRoot, '.zshenv'), 'utf8')).toContain(
-      'builtin export ZDOTDIR="$ORCA_ORIG_ZDOTDIR"'
+      'builtin export ZDOTDIR="$MCODE_ORIG_ZDOTDIR"'
     )
   })
 
@@ -217,17 +217,17 @@ describe('getRelayShellLaunchConfig', () => {
     () => {
       const config = getRelayShellLaunchConfig('/bin/zsh', {
         HOME: homeDir,
-        ORCA_MIMOCODE_HOME: '/tmp/orca-mimocode-overlay'
+        MCODE_MIMOCODE_HOME: '/tmp/mcode-mimocode-overlay'
       })
-      const zshRoot = join(homeDir, '.orca-relay', 'shell-ready', 'zsh')
+      const zshRoot = join(homeDir, '.mcode-relay', 'shell-ready', 'zsh')
       // Why .zshenv: the overlay restores live in the one epilogue defined there.
       const zshenv = readFileSync(join(zshRoot, '.zshenv'), 'utf8')
 
       expect(config.args).toEqual(['-l'])
       expect(config.env.ZDOTDIR).toBe(zshRoot)
-      expect(config.env.ORCA_SHELL_FEATURES).toBe('overlay,history,markers')
+      expect(config.env.MCODE_SHELL_FEATURES).toBe('overlay,history,markers')
       expect(zshenv).toContain(
-        '[[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"'
+        '[[ -n "${MCODE_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${MCODE_MIMOCODE_HOME}"'
       )
     }
   )
@@ -236,13 +236,13 @@ describe('getRelayShellLaunchConfig', () => {
     'wraps bash even without overlay env for OSC 133 lifecycle markers',
     () => {
       const config = getRelayShellLaunchConfig('/bin/bash', { HOME: homeDir })
-      const rcfile = join(homeDir, '.orca-relay', 'shell-ready', 'bash', 'rcfile')
+      const rcfile = join(homeDir, '.mcode-relay', 'shell-ready', 'bash', 'rcfile')
       const bashRc = readFileSync(rcfile, 'utf8')
 
       expect(config.args).toEqual(['--rcfile', rcfile])
       // Why the empty allowlist: bash keeps its unconditional OSC 133 hooks, and
       // an explicit empty value also overrides anything the relay inherited.
-      expect(config.env).toEqual({ ORCA_SHELL_FEATURES: '' })
+      expect(config.env).toEqual({ MCODE_SHELL_FEATURES: '' })
       expect(bashRc).toContain('printf "\\033]133;D;%s\\007"')
       expect(bashRc).toContain('printf "\\033]133;C\\007"')
     }
@@ -254,18 +254,18 @@ describe('getRelayShellLaunchConfig', () => {
       const config = getRelayShellLaunchConfig('/bin/zsh', { HOME: homeDir }, 'linux', {
         emitReadyMarker: true
       })
-      const zshRoot = join(homeDir, '.orca-relay', 'shell-ready', 'zsh')
+      const zshRoot = join(homeDir, '.mcode-relay', 'shell-ready', 'zsh')
       const zshenv = readFileSync(join(zshRoot, '.zshenv'), 'utf8')
 
       expect(config.args).toEqual(['-l'])
       expect(config.env.ZDOTDIR).toBe(zshRoot)
       expect(config.supportsReadyMarker).toBe(true)
-      expect(config.env.ORCA_SHELL_FEATURES).toContain('ready')
-      expect(zshenv).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
+      expect(config.env.MCODE_SHELL_FEATURES).toContain('ready')
+      expect(zshenv).toContain('printf "\\033]777;mcode-shell-start:%s\\007" "$$"')
       // Why: the channel is destroyed before the user's own config is sourced.
-      expect(zshenv).toContain('builtin unset ORCA_SHELL_FEATURES')
-      expect(zshenv).toContain('zle -N zle-line-init __orca_prompt_mark')
-      expect(zshenv).toContain('printf "\\033]777;orca-shell-ready\\007"')
+      expect(zshenv).toContain('builtin unset MCODE_SHELL_FEATURES')
+      expect(zshenv).toContain('zle -N zle-line-init __mcode_prompt_mark')
+      expect(zshenv).toContain('printf "\\033]777;mcode-shell-ready\\007"')
     }
   )
 
@@ -278,11 +278,11 @@ describe('getRelayShellLaunchConfig', () => {
       const bashRc = readFileSync(config.args[1] as string, 'utf8')
 
       expect(config.supportsReadyMarker).toBe(true)
-      expect(config.env.ORCA_SHELL_FEATURES).toContain('ready')
-      expect(bashRc).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
-      expect(bashRc).toContain('builtin unset ORCA_SHELL_FEATURES')
-      expect(bashRc).toContain('__orca_append_prompt_command "__orca_prompt_mark"')
-      expect(bashRc).toContain('printf "\\033]777;orca-shell-ready\\007"')
+      expect(config.env.MCODE_SHELL_FEATURES).toContain('ready')
+      expect(bashRc).toContain('printf "\\033]777;mcode-shell-start:%s\\007" "$$"')
+      expect(bashRc).toContain('builtin unset MCODE_SHELL_FEATURES')
+      expect(bashRc).toContain('__mcode_append_prompt_command "__mcode_prompt_mark"')
+      expect(bashRc).toContain('printf "\\033]777;mcode-shell-ready\\007"')
     }
   )
 
@@ -293,12 +293,12 @@ describe('getRelayShellLaunchConfig', () => {
         emitStartupIdentity: true
       })
 
-      expect(config.env.ZDOTDIR).toBe(join(homeDir, '.orca-relay', 'shell-ready', 'zsh'))
-      expect(config.env.ORCA_SHELL_FEATURES).toContain('identity')
+      expect(config.env.ZDOTDIR).toBe(join(homeDir, '.mcode-relay', 'shell-ready', 'zsh'))
+      expect(config.env.MCODE_SHELL_FEATURES).toContain('identity')
       // Why the negative half: identity emission alone must not arm the
       // readiness handshake, or the delivering side waits for a marker that
       // this shell was never told to print.
-      expect(config.env.ORCA_SHELL_FEATURES).not.toContain('ready')
+      expect(config.env.MCODE_SHELL_FEATURES).not.toContain('ready')
       expect(config.supportsReadyMarker).toBe(false)
     }
   )
@@ -308,16 +308,16 @@ describe('getRelayShellLaunchConfig', () => {
     const bashRc = readFileSync(config.args[1] as string, 'utf8')
     const output = runInteractiveBashRcfile(config.args[1] as string, homeDir)
 
-    expect(bashRc).toContain('[[ -z "${__orca_in_command:-}" ]] || return 0')
+    expect(bashRc).toContain('[[ -z "${__mcode_in_command:-}" ]] || return 0')
     expectBashOsc133Lifecycle(output)
   })
 
   itWithBash('emits lifecycle for foreground text ending like an internal hook', () => {
     const config = getRelayShellLaunchConfig('/bin/bash', { HOME: homeDir })
-    const input = 'echo user:__orca_osc133_prompt_done\nfalse\nexit 0\n'
+    const input = 'echo user:__mcode_osc133_prompt_done\nfalse\nexit 0\n'
     const output = runInteractiveBashRcfile(config.args[1] as string, homeDir, input)
 
-    expect(output).toContain('user:__orca_osc133_prompt_done')
+    expect(output).toContain('user:__mcode_osc133_prompt_done')
     expectBashOsc133Lifecycle(output)
   })
 
@@ -335,8 +335,8 @@ describe('getRelayShellLaunchConfig', () => {
     expect(output).toContain('PROMPT_HOOK')
     expect(output).toContain('USER_DEBUG_AFTER')
     expect(output).toContain('USER_DEBUG_AFTER:<printf "PROMPT_HOOK\\n">')
-    expect(output).not.toContain('USER_DEBUG_AFTER:<(( __orca_exit_code == 0 ))>')
-    expect(output).not.toContain('USER_DEBUG_AFTER:<__orca_restore_prompt_status')
+    expect(output).not.toContain('USER_DEBUG_AFTER:<(( __mcode_exit_code == 0 ))>')
+    expect(output).not.toContain('USER_DEBUG_AFTER:<__mcode_restore_prompt_status')
     expectBashOsc133Lifecycle(output)
   })
 
@@ -373,7 +373,7 @@ describe('getRelayShellLaunchConfig', () => {
 
   // Why: RHEL-family /etc/bashrc prepends "history -a; " to PROMPT_COMMAND
   // outside its BASHRCSOURCED guard (repeated across re-sources), so the value
-  // Orca inherits ends in a ";"+whitespace separator. Prepend/append must not
+  // MCode inherits ends in a ";"+whitespace separator. Prepend/append must not
   // splice an empty command (";;") that breaks the prompt with a syntax error.
   itWithBash('normalizes an inherited PROMPT_COMMAND ending in a separator', () => {
     writeFileSync(

@@ -30,9 +30,9 @@ function settingsWithSelection(
 }
 
 beforeEach(() => {
-  previousUserDataPath = process.env.ORCA_USER_DATA_PATH
-  userDataPath = mkdtempSync(join(tmpdir(), 'orca-codex-pane-accounts-'))
-  process.env.ORCA_USER_DATA_PATH = userDataPath
+  previousUserDataPath = process.env.MCODE_USER_DATA_PATH
+  userDataPath = mkdtempSync(join(tmpdir(), 'mcode-codex-pane-accounts-'))
+  process.env.MCODE_USER_DATA_PATH = userDataPath
   _internals.resetCache()
 })
 
@@ -40,9 +40,9 @@ afterEach(() => {
   __resetShellStartupEnvCache()
   rmSync(userDataPath, { recursive: true, force: true })
   if (previousUserDataPath === undefined) {
-    delete process.env.ORCA_USER_DATA_PATH
+    delete process.env.MCODE_USER_DATA_PATH
   } else {
-    process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+    process.env.MCODE_USER_DATA_PATH = previousUserDataPath
   }
   _internals.resetCache()
 })

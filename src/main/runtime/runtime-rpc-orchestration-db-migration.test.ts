@@ -21,7 +21,7 @@ vi.mock('../git/worktree', () => {
   }
 })
 
-describe('OrcaRuntimeRpcServer', () => {
+describe('MCodeRuntimeRpcServer', () => {
   // Why: §6 test for the idempotent + hard-fail schema migration. A broken
   // migration must crash startup loudly rather than serve traffic against a
   // schema missing the delivered_at column.
@@ -31,7 +31,7 @@ describe('OrcaRuntimeRpcServer', () => {
       const db1 = new OrchestrationDb(':memory:')
       db1.close()
       // File path reuse is meaningless with :memory:, so use a tmp file.
-      const tmpPath = join(mkdtempSync(join(tmpdir(), 'orca-orch-mig-')), 'orch.sqlite')
+      const tmpPath = join(mkdtempSync(join(tmpdir(), 'mcode-orch-mig-')), 'orch.sqlite')
       const a = new OrchestrationDb(tmpPath)
       a.close()
       // Second construction must not throw "duplicate column name".
@@ -52,7 +52,7 @@ describe('OrcaRuntimeRpcServer', () => {
       // To exercise the hard-fail path we need a DB that actually has work
       // to migrate — a v2-shape file without the delivered_at column — so
       // the guarded ALTER runs and the stub can fire.
-      const tmpPath = join(mkdtempSync(join(tmpdir(), 'orca-orch-mig-')), 'orch.sqlite')
+      const tmpPath = join(mkdtempSync(join(tmpdir(), 'mcode-orch-mig-')), 'orch.sqlite')
       const seed = new Database(tmpPath)
       seed.exec(`
         CREATE TABLE messages (

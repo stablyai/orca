@@ -44,7 +44,7 @@ describe('TerminalKittyKeyboardModeTracker', () => {
     expect(tracker.flags).toBe(4)
   })
 
-  it("clears state for Orca's defensive reset sequence and RIS", () => {
+  it("clears state for MCode's defensive reset sequence and RIS", () => {
     const tracker = new TerminalKittyKeyboardModeTracker()
     tracker.scan('\x1b[>1u')
     tracker.scan('\x1b[<99u\x1b[=0u')

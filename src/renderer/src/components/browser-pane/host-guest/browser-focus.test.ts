@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   consumeBrowserFocusRequest,
-  ORCA_BROWSER_FOCUS_REQUEST_EVENT,
+  MCODE_BROWSER_FOCUS_REQUEST_EVENT,
   queueBrowserFocusRequest,
   requestBrowserFocus
 } from './browser-focus'
@@ -26,9 +26,9 @@ describe('browser-focus', () => {
     const onFocusRequest = (event: Event): void => {
       events.push(event as CustomEvent)
     }
-    window.addEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, onFocusRequest)
+    window.addEventListener(MCODE_BROWSER_FOCUS_REQUEST_EVENT, onFocusRequest)
     requestBrowserFocus(detail)
-    window.removeEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, onFocusRequest)
+    window.removeEventListener(MCODE_BROWSER_FOCUS_REQUEST_EVENT, onFocusRequest)
 
     expect(consumeBrowserFocusRequest('page-req')).toBe('address-bar')
     expect(events[0]?.detail).toEqual(detail)

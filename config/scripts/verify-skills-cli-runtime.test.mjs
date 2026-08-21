@@ -34,7 +34,7 @@ describe('skills CLI runtime closure', () => {
   })
 
   it('reports the missing final-artifact import and its owner', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-cli-closure-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-cli-closure-'))
     try {
       await writeSkillsCliFixture(root, "require('../../main/codex-cli/command')\n")
 
@@ -47,7 +47,7 @@ describe('skills CLI runtime closure', () => {
   })
 
   it('walks static and dynamic relative imports', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-cli-closure-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-cli-closure-'))
     try {
       const sharedDir = join(root, 'shared')
       await mkdir(sharedDir, { recursive: true })
@@ -69,7 +69,7 @@ describe('skills CLI runtime closure', () => {
   })
 
   it('ignores import-shaped text in comments and strings', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-cli-closure-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-cli-closure-'))
     try {
       await writeSkillsCliFixture(
         root,
@@ -87,7 +87,7 @@ describe('skills CLI runtime closure', () => {
   })
 
   it('can inspect a cross-arch artifact without executing it', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-cli-closure-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-cli-closure-'))
     try {
       await writeSkillsCliFixture(root, '')
 
@@ -101,7 +101,7 @@ describe('skills CLI runtime closure', () => {
   })
 
   it('bounds command execution time', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-cli-closure-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-cli-closure-'))
     try {
       await writeSkillsCliFixture(root, 'setInterval(() => {}, 1_000)\n')
 
@@ -112,7 +112,7 @@ describe('skills CLI runtime closure', () => {
   })
 
   it('rejects bare imports resolved outside the artifact', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-cli-closure-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-cli-closure-'))
     try {
       const artifactRoot = join(root, 'artifact')
       const outDir = join(artifactRoot, 'out')
@@ -135,7 +135,7 @@ describe('skills CLI runtime closure', () => {
   })
 
   it('rejects package dependencies resolved outside the artifact', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-cli-closure-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-cli-closure-'))
     try {
       const artifactRoot = join(root, 'artifact')
       const outDir = join(artifactRoot, 'out')
@@ -166,7 +166,7 @@ describe('skills CLI runtime closure', () => {
   })
 
   it('allows absent dependencies declared optional by their package', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-cli-closure-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-cli-closure-'))
     try {
       const artifactRoot = join(root, 'artifact')
       const outDir = join(artifactRoot, 'out')
@@ -195,7 +195,7 @@ describe('skills CLI runtime closure', () => {
   })
 
   it('rejects optional dependencies resolved only outside the artifact', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-cli-closure-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skills-cli-closure-'))
     try {
       const artifactRoot = join(root, 'artifact')
       const outDir = join(artifactRoot, 'out')

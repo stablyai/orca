@@ -11,7 +11,7 @@ const MAX_PENDING_ENTRIES = 32
 const MAX_CACHE_ENTRIES = 256
 const URL_CANDIDATE_LIMIT = 2048
 
-// ANSI/OSC strippers mirror the runtime normalizer in src/main/runtime/orca-runtime.ts, plus URL-specific cursor-move handling to avoid fusing skipped text.
+// ANSI/OSC strippers mirror the runtime normalizer in src/main/runtime/mcode-runtime.ts, plus URL-specific cursor-move handling to avoid fusing skipped text.
 const OSC_PATTERN = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g
 // Why: cursor moves in differential redraws skip on-screen cells; a URL-invalid guard drops the damaged candidate.
 const CURSOR_MOVE_PATTERN = /\x1b\[[0-?]*[ -/]*[CDGHf]/g

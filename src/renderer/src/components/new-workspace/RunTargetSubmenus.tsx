@@ -168,12 +168,12 @@ export function AddHostSubmenuRow({
             <RunTargetRow
               icon={<Cloud className="size-3.5 shrink-0 text-muted-foreground" />}
               label={translate(
-                'auto.components.NewWorkspaceComposerCard.addRemoteOrcaServer',
-                'Add Remote Orca Server'
+                'auto.components.NewWorkspaceComposerCard.addRemoteMCodeServer',
+                'Add Remote MCode Server'
               )}
               detail={translate(
-                'auto.components.NewWorkspaceComposerCard.addRemoteOrcaServerHint',
-                'Pair another Orca runtime'
+                'auto.components.NewWorkspaceComposerCard.addRemoteMCodeServerHint',
+                'Pair another MCode runtime'
               )}
               armed={hoveredKey === 'remote'}
               current={false}

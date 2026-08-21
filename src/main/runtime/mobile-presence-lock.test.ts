@@ -3,7 +3,7 @@
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import type * as GitUsernameModule from '../git/git-username'
-import { OrcaRuntimeService } from './orca-runtime'
+import { MCodeRuntimeService } from './mcode-runtime'
 
 vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([]),
@@ -71,7 +71,7 @@ function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
     ...store,
     getSettings: () => ({ ...store.getSettings(), mobileAutoRestoreFitMs })
   }
-  const runtime = new OrcaRuntimeService(effectiveStore)
+  const runtime = new MCodeRuntimeService(effectiveStore)
   const ptySizes = new Map<string, { cols: number; rows: number }>([
     ['pty-1', { cols: 150, rows: 40 }]
   ])
@@ -609,7 +609,7 @@ describe('mobile presence lock — multi-mobile semantics', () => {
 
 // Why (#7588): reproduce the held-modal state — a null-viewport resubscribe re-registers an active subscriber while the phone-fit override is still held (where Restore used to no-op).
 async function reachHeldModalWithNullViewportResubscribe(
-  runtime: OrcaRuntimeService
+  runtime: MCodeRuntimeService
 ): Promise<void> {
   await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 45, rows: 20 })
   runtime.handleMobileUnsubscribe('pty-1', 'phone-A')

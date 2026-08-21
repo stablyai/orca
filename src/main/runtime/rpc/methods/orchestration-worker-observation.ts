@@ -1,5 +1,5 @@
 import type { RuntimeTerminalInteractiveWait } from '../../../../shared/runtime-types'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type {
@@ -9,11 +9,11 @@ import type {
 } from '../../orchestration/types'
 
 export async function inspectWorkerTerminal(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   db: OrchestrationDb,
   dispatchId: string
 ): Promise<{
-  terminal: Awaited<ReturnType<OrcaRuntimeService['showTerminal']>> | null
+  terminal: Awaited<ReturnType<MCodeRuntimeService['showTerminal']>> | null
   exact: boolean
   status: 'unattached' | 'missing' | 'identity_changed' | 'live' | 'exited' | 'unverifiable'
   /** Set with `unverifiable`; names what we lost contact with. */
@@ -81,7 +81,7 @@ export function exposeContextOnlyWorker(dispatch: DispatchContextRow) {
 }
 
 export async function showContextOnlyWorker(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   db: OrchestrationDb,
   dispatch: DispatchContextRow
 ) {
@@ -110,21 +110,21 @@ export function exposeWorker(worker: WorkerDispatchRow) {
 }
 
 export function resolvePinnedFederatedServer(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   federated: FederatedDispatchRow
 ) {
   const server = runtime.resolveOrchestrationWorkerServer(federated.environment_id)
   if (server.peerFingerprint !== federated.peer_fingerprint) {
     throw new OrchestrationError(
       'peer_changed',
-      `Saved environment ${federated.environment_name} now identifies a different Orca server.`
+      `Saved environment ${federated.environment_name} now identifies a different MCode server.`
     )
   }
   return server
 }
 
 export async function callFederatedWorkerShow(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   federated: FederatedDispatchRow
 ): Promise<{
   runtimeEpoch: string

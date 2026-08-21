@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { getVisibleAutomationSetupDecision } from './automation-setup-decision'
 import type { AutomationCreateTarget, AutomationDraft } from './AutomationEditorDialog'
-import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
+import type { MCodeHooks } from '../../../../shared/mcode-yaml-hook-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 
@@ -14,7 +14,7 @@ type AutomationSetupDecisionFieldProps = {
   draft: AutomationDraft
   repos: readonly Repo[]
   projectHostSetups: readonly ProjectHostSetup[]
-  yamlHooks?: OrcaHooks | null
+  yamlHooks?: MCodeHooks | null
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
   onSetupDecisionTouched: () => void
 }

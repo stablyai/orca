@@ -38,7 +38,7 @@ describe('AutomationsSettingsPane', () => {
 
     expect(screen.getByText('How Automations work')).toBeInTheDocument()
     expect(screen.getByText('Describe the work')).toBeInTheDocument()
-    expect(screen.getByText('Orca starts each run')).toBeInTheDocument()
+    expect(screen.getByText('MCode starts each run')).toBeInTheDocument()
     expect(screen.getByText('Review the results')).toBeInTheDocument()
     expect(screen.getByText('Create schedules and inspect recent runs.')).toBeInTheDocument()
   })

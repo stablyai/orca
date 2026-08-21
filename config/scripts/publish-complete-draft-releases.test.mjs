@@ -19,7 +19,7 @@ function git(cwd, args) {
 }
 
 function withGitRepo(run) {
-  const dir = mkdtempSync(join(tmpdir(), 'orca-draft-release-'))
+  const dir = mkdtempSync(join(tmpdir(), 'mcode-draft-release-'))
   try {
     git(dir, ['init', '--initial-branch=main'])
     git(dir, ['config', 'user.name', 'Test Bot'])
@@ -143,7 +143,7 @@ describe('publishCompleteDraftReleases', () => {
     const log = vi.fn()
 
     const result = await publishCompleteDraftReleases({
-      repo: 'stablyai/orca',
+      repo: 'mcode-ide/mcode',
       token: 'token',
       fetchImpl,
       verifyReleaseAssets,
@@ -161,7 +161,7 @@ describe('publishCompleteDraftReleases', () => {
       ]
     })
     expect(fetchImpl).toHaveBeenLastCalledWith(
-      'https://api.github.com/repos/stablyai/orca/releases/7',
+      'https://api.github.com/repos/mcode-ide/mcode/releases/7',
       expect.objectContaining({
         method: 'PATCH',
         body: JSON.stringify({ draft: false, prerelease: true })
@@ -185,7 +185,7 @@ describe('publishCompleteDraftReleases', () => {
     const log = vi.fn()
 
     const result = await publishCompleteDraftReleases({
-      repo: 'stablyai/orca',
+      repo: 'mcode-ide/mcode',
       token: 'token',
       fetchImpl,
       verifyReleaseAssets,
@@ -204,7 +204,7 @@ describe('publishCompleteDraftReleases', () => {
 
 describe('writeGithubOutputs', () => {
   it('writes count outputs for workflow conditions', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-release-outputs-'))
+    const dir = mkdtempSync(join(tmpdir(), 'mcode-release-outputs-'))
     const outputPath = join(dir, 'output')
     try {
       writeGithubOutputs(

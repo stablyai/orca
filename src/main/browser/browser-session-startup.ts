@@ -11,7 +11,7 @@ export function initializeBrowserSessionsForApp(
   }
 
   if (activeProfile) {
-    browserSessionRegistry.configureForOrcaProfile(activeProfile)
+    browserSessionRegistry.configureForMCodeProfile(activeProfile)
   }
 
   // Why: cookie replay must happen before the first session.fromPartition()

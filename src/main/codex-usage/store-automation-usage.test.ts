@@ -3,7 +3,7 @@ import type { CodexUsagePersistedState } from './types'
 import { createStoreWithState, setupCodexUsageStoreEnv } from './store-test-harness'
 
 const { getPathMock } = vi.hoisted(() => ({
-  getPathMock: vi.fn(() => '/tmp/orca-test-userdata')
+  getPathMock: vi.fn(() => '/tmp/mcode-test-userdata')
 }))
 
 vi.mock('electron', () => ({

@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 
 export type NotificationAuthorizationStatus = 'authorized' | 'denied' | 'not-determined' | 'unknown'
 
-const HELPER_EXECUTABLE = 'orca-notification-status'
+const HELPER_EXECUTABLE = 'mcode-notification-status'
 const HELPER_TIMEOUT_MS = 4000
 
 let cachedHelperPath: string | null | undefined

@@ -239,7 +239,7 @@ export function FloatingTerminalToggleButton({
           >
             <PanelsTopLeft className="size-4" />
             {showAttentionDot ? (
-              // Why: amber matches Orca's "needs attention / unread" convention
+              // Why: amber matches MCode's "needs attention / unread" convention
               // (the tab-unread bell); the ring matches the button fill so the
               // dot reads on both light (bg-card) and dark (dark:bg-accent).
               <span

@@ -17,7 +17,7 @@ function jsonLines(records: unknown[]): string {
 
 describe('parseCodexSessionFile', () => {
   it('uses completed user items for paginated session metadata', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-paginated-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-codex-paginated-'))
     tempRoots.push(root)
     const sessionPath = join(root, 'sessions', '2026', '08', '10', 'rollout-paginated.jsonl')
     await mkdir(dirname(sessionPath), { recursive: true })
@@ -87,7 +87,7 @@ describe('parseCodexSessionFile', () => {
   })
 
   it('uses user-message events instead of later injected user-role records', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-last-prompt-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-codex-last-prompt-'))
     tempRoots.push(root)
     const sessionPath = join(root, 'sessions', '2026', '07', '21', 'rollout-last-prompt.jsonl')
     await mkdir(dirname(sessionPath), { recursive: true })
@@ -132,7 +132,7 @@ describe('parseCodexSessionFile', () => {
   })
 
   it('does not double-count usage when token count formats switch', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-token-switch-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-codex-token-switch-'))
     tempRoots.push(root)
     const sessionPath = join(root, 'sessions', '2026', '06', '18', 'rollout-token-switch.jsonl')
     await mkdir(dirname(sessionPath), { recursive: true })
@@ -202,7 +202,7 @@ describe('parseCodexSessionFile', () => {
   })
 
   it('extracts the model from turn context, latest turn winning', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-model-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-ai-vault-codex-model-'))
     tempRoots.push(root)
     const sessionPath = join(root, 'sessions', '2026', '07', '05', 'rollout-model.jsonl')
     await mkdir(dirname(sessionPath), { recursive: true })

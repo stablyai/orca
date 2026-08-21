@@ -43,7 +43,7 @@ vi.mock('../telemetry/client', () =>
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
-vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
+vi.mock('../cli/linux-terminal-mcode-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../memory/pty-registry', () =>
@@ -108,7 +108,7 @@ describe('registerPtyHandlers', () => {
 
         expect(daemonSpawn.mock.calls.at(-1)?.[0].env).toMatchObject({
           CODEX_HOME: TEST_CODEX_HOME,
-          ORCA_CODEX_HOME: TEST_CODEX_HOME
+          MCODE_CODEX_HOME: TEST_CODEX_HOME
         })
       })
       it('resolves valid managed Codex auth synchronously', () => {
@@ -176,7 +176,7 @@ describe('registerPtyHandlers', () => {
         expect(resolveHome).toHaveBeenCalledTimes(2)
         expect(daemonSpawn.mock.calls[0]?.[0].env).toMatchObject({
           CODEX_HOME: nextHome,
-          ORCA_CODEX_HOME: nextHome
+          MCODE_CODEX_HOME: nextHome
         })
       })
       it('does not gate a non-Codex daemon PTY on managed Codex auth', async () => {
@@ -431,8 +431,8 @@ describe('registerPtyHandlers', () => {
           OPENCODE_CONFIG_DIR: undefined
         })
         expect(openCodeBuildPtyEnvMock).toHaveBeenCalled()
-        expect(env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-config')
-        expect(env.ORCA_OPENCODE_HOOK_PORT).toBe('4567')
+        expect(env.OPENCODE_CONFIG_DIR).toBe('/tmp/mcode-opencode-config')
+        expect(env.MCODE_OPENCODE_HOOK_PORT).toBe('4567')
       })
       it('mirrors a user-provided OPENCODE_CONFIG_DIR into a source-scoped overlay on the daemon path', async () => {
         const env = await daemonSpawnAndGetEnv({ OPENCODE_CONFIG_DIR: '/user/custom/opencode' })
@@ -441,22 +441,22 @@ describe('registerPtyHandlers', () => {
           expect.any(String),
           '/user/custom/opencode'
         )
-        expect(env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-overlay')
-        expect(env.ORCA_OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-overlay')
-        expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBe('/user/custom/opencode')
+        expect(env.OPENCODE_CONFIG_DIR).toBe('/tmp/mcode-opencode-overlay')
+        expect(env.MCODE_OPENCODE_CONFIG_DIR).toBe('/tmp/mcode-opencode-overlay')
+        expect(env.MCODE_OPENCODE_SOURCE_CONFIG_DIR).toBe('/user/custom/opencode')
       })
       it('uses source OpenCode config env instead of remirroring a parent overlay', async () => {
         const env = await daemonSpawnAndGetEnv({
-          OPENCODE_CONFIG_DIR: '/tmp/parent-orca-opencode-overlay',
-          ORCA_OPENCODE_SOURCE_CONFIG_DIR: '/user/custom/opencode'
+          OPENCODE_CONFIG_DIR: '/tmp/parent-mcode-opencode-overlay',
+          MCODE_OPENCODE_SOURCE_CONFIG_DIR: '/user/custom/opencode'
         })
         expect(openCodeBuildPtyEnvMock).toHaveBeenCalledWith(
           expect.any(String),
           '/user/custom/opencode'
         )
-        expect(env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-overlay')
-        expect(env.ORCA_OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-overlay')
-        expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBe('/user/custom/opencode')
+        expect(env.OPENCODE_CONFIG_DIR).toBe('/tmp/mcode-opencode-overlay')
+        expect(env.MCODE_OPENCODE_CONFIG_DIR).toBe('/tmp/mcode-opencode-overlay')
+        expect(env.MCODE_OPENCODE_SOURCE_CONFIG_DIR).toBe('/user/custom/opencode')
       })
       it('installs Pi managed extensions without redirecting homes on the daemon path', async () => {
         const env = await daemonSpawnAndGetEnv({ PI_CODING_AGENT_DIR: '/user/.pi/agent' })
@@ -472,10 +472,10 @@ describe('registerPtyHandlers', () => {
           materializeDefaultHome: false
         })
         expect(env.PI_CODING_AGENT_DIR).toBe('/user/.pi/agent')
-        expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
-        expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/user/.pi/agent')
-        expect(env.ORCA_OMP_CODING_AGENT_DIR).toBeUndefined()
-        expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(expectedOmpStatusExtension)
+        expect(env.MCODE_PI_CODING_AGENT_DIR).toBeUndefined()
+        expect(env.MCODE_PI_SOURCE_AGENT_DIR).toBe('/user/.pi/agent')
+        expect(env.MCODE_OMP_CODING_AGENT_DIR).toBeUndefined()
+        expect(env.MCODE_OMP_STATUS_EXTENSION).toBe(expectedOmpStatusExtension)
       })
       it('does not materialize agent homes when another daemon agent mentions OMP', async () => {
         const env = await daemonSpawnAndGetEnv(undefined, undefined, undefined, undefined, {
@@ -487,7 +487,7 @@ describe('registerPtyHandlers', () => {
         expect(piBuildPtyEnvMock).toHaveBeenCalledWith(expect.any(String), undefined, 'pi', {
           materializeDefaultHome: false
         })
-        expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
+        expect(env.MCODE_PI_SOURCE_AGENT_DIR).toBeUndefined()
       })
       it('threads command: "omp" through to piBuildPtyEnv on the daemon path with OMP status metadata', async () => {
         // Why: mirror of the local-spawn OMP threading assertion; the daemon path's `command` forwarding could silently regress otherwise.
@@ -505,13 +505,13 @@ describe('registerPtyHandlers', () => {
           { materializeDefaultHome: true }
         )
         expect(env.PI_CODING_AGENT_DIR).toBe('/user/.omp/agent')
-        expect(env.ORCA_OMP_CODING_AGENT_DIR).toBeUndefined()
-        expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(
-          '/user/.omp/agent/extensions/orca-agent-status.ts'
+        expect(env.MCODE_OMP_CODING_AGENT_DIR).toBeUndefined()
+        expect(env.MCODE_OMP_STATUS_EXTENSION).toBe(
+          '/user/.omp/agent/extensions/mcode-agent-status.ts'
         )
-        expect(env.ORCA_OMP_SOURCE_AGENT_DIR).toBe('/user/.omp/agent')
-        expect(env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
-        expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
+        expect(env.MCODE_OMP_SOURCE_AGENT_DIR).toBe('/user/.omp/agent')
+        expect(env.MCODE_PI_CODING_AGENT_DIR).toBeUndefined()
+        expect(env.MCODE_PI_SOURCE_AGENT_DIR).toBeUndefined()
       })
       it('uses sequenced startup env as the daemon OMP launch hint when command is a wrapper', async () => {
         const env = await daemonSpawnAndGetEnv(
@@ -531,15 +531,15 @@ describe('registerPtyHandlers', () => {
           'omp',
           { materializeDefaultHome: true }
         )
-        expect(env.ORCA_OMP_STATUS_EXTENSION).toBe(
-          '/user/.omp/agent/extensions/orca-agent-status.ts'
+        expect(env.MCODE_OMP_STATUS_EXTENSION).toBe(
+          '/user/.omp/agent/extensions/mcode-agent-status.ts'
         )
-        expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBeUndefined()
+        expect(env.MCODE_PI_SOURCE_AGENT_DIR).toBeUndefined()
       })
       it('injects the selected Codex home on the daemon path', async () => {
         const env = await daemonSpawnAndGetEnv({}, () => TEST_CODEX_HOME)
         expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
-        expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
+        expect(env.MCODE_CODEX_HOME).toBe(TEST_CODEX_HOME)
       })
     })
   })

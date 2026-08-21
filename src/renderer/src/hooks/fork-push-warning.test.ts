@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { FORK_PUSH_NO_MAINTAINER_EDIT_WARNING, getForkPushWarning } from './fork-push-warning'
 
-const forkTarget = { remoteName: 'pr-contributor-orca', branchName: 'contributor/fix' }
+const forkTarget = { remoteName: 'pr-contributor-mcode', branchName: 'contributor/fix' }
 const originTarget = { remoteName: 'origin', branchName: 'feature/fix' }
 
 describe('getForkPushWarning', () => {

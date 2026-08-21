@@ -76,7 +76,7 @@ describe('openMobileEmulatorTab', () => {
   })
 
   it('rejects web-client invocation before creating a tab or attaching', async () => {
-    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    vi.stubGlobal('__MCODE_WEB_CLIENT__', true)
     mockStoreState.settings = {
       mobileEmulatorEnabled: true,
       activeRuntimeEnvironmentId: 'runtime-1'

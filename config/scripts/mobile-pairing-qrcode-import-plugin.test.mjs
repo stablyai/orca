@@ -10,7 +10,7 @@ const oxlintPath = path.resolve(
 )
 
 function lintSource(source) {
-  const directory = mkdtempSync(path.join(tmpdir(), 'orca-qrcode-import-lint-'))
+  const directory = mkdtempSync(path.join(tmpdir(), 'mcode-qrcode-import-lint-'))
   const sourcePath = path.join(directory, 'sample.ts')
   const configPath = path.join(directory, 'oxlint.json')
   writeFileSync(sourcePath, source)

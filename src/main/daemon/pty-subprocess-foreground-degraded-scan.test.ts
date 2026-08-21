@@ -85,9 +85,9 @@ describe('daemon pty foreground degraded-scan handling', () => {
     resolveAgentForegroundProcessMock.mockReset()
     readConptyMock.mockReset()
     readConptyMock.mockResolvedValue(null)
-    previousUserDataPath = process.env.ORCA_USER_DATA_PATH
+    previousUserDataPath = process.env.MCODE_USER_DATA_PATH
     userDataPath = mkdtempSync(join(tmpdir(), 'daemon-pty-degraded-scan-test-'))
-    process.env.ORCA_USER_DATA_PATH = userDataPath
+    process.env.MCODE_USER_DATA_PATH = userDataPath
     platform = Object.getOwnPropertyDescriptor(process, 'platform')
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(BASE_TIME_MS)
@@ -99,9 +99,9 @@ describe('daemon pty foreground degraded-scan handling', () => {
       Object.defineProperty(process, 'platform', platform)
     }
     if (previousUserDataPath === undefined) {
-      delete process.env.ORCA_USER_DATA_PATH
+      delete process.env.MCODE_USER_DATA_PATH
     } else {
-      process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+      process.env.MCODE_USER_DATA_PATH = previousUserDataPath
     }
     rmSync(userDataPath, { recursive: true, force: true })
   })

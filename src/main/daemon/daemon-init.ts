@@ -123,9 +123,9 @@ function getDaemonEntryPath(): string {
   return join(basePath, 'out', 'main', 'daemon-entry.js')
 }
 
-// Why: pass a log-file arg so field failures are diagnosable, but honor the ORCA_DIAGNOSTICS_DISABLED privacy switch.
+// Why: pass a log-file arg so field failures are diagnosable, but honor the MCODE_DIAGNOSTICS_DISABLED privacy switch.
 function daemonLogArgs(): string[] {
-  const disabled = (process.env.ORCA_DIAGNOSTICS_DISABLED ?? '').trim().toLowerCase()
+  const disabled = (process.env.MCODE_DIAGNOSTICS_DISABLED ?? '').trim().toLowerCase()
   if (disabled === '1' || disabled === 'true') {
     return []
   }
@@ -269,7 +269,7 @@ async function reconcileDaemonPidOwnership(
  * Publishing a repaired record without them makes a healthy daemon look permanently stale.
  * The values come from the authenticated hello rather than the owner's command line: a command
  * line is a single space-joined string, so any install path containing a space (`C:\Program
- * Files\...`, `/Applications/Orca 2.app/...`) cannot be split back into argv unambiguously.
+ * Files\...`, `/Applications/MCode 2.app/...`) cannot be split back into argv unambiguously.
  */
 async function readDaemonOwnerMetadata(
   identity: DaemonEndpointIdentity
@@ -692,14 +692,14 @@ function createOutOfProcessLauncher(
           // Why: detached+unref outlives Electron; stdout 'ignore' (else blocks exit), stderr 'pipe' captures startup crashes lost in v1.4.129-rc.1.
           detached: true,
           stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
-          // Why: run the byte-identical relocated Orca.exe so the image path sits outside the updater's kill zone.
+          // Why: run the byte-identical relocated MCode.exe so the image path sits outside the updater's kill zone.
           ...(relocatedHost ? { execPath: relocatedHost.execPath } : {}),
           // Why: run the fork as plain Node so Electron's GPU/display init can't interfere with node-pty's posix_spawn of the spawn-helper.
           env: {
             ...process.env,
             ELECTRON_RUN_AS_NODE: '1',
             // Why: the detached plain-Node daemon can't call app.getPath(), but shell rcfiles must live outside swept tmp.
-            ORCA_USER_DATA_PATH: userDataPath
+            MCODE_USER_DATA_PATH: userDataPath
           }
         }
       )
@@ -924,7 +924,7 @@ export async function initDaemonPtyProvider(
 ): Promise<void> {
   logDaemonMilestone('daemon-init-start')
   // Why: e2e coverage for the startup PTY gate (#5232) needs a daemon init that deterministically outlasts the first-window timeout.
-  const e2eInitDelayMs = Number(process.env.ORCA_E2E_DAEMON_INIT_DELAY_MS)
+  const e2eInitDelayMs = Number(process.env.MCODE_E2E_DAEMON_INIT_DELAY_MS)
   if (Number.isFinite(e2eInitDelayMs) && e2eInitDelayMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, e2eInitDelayMs))
   }
@@ -1265,7 +1265,7 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
 }
 
 // Disconnect without killing: the daemon survives app quit so sessions stay warm for reattach.
-// Leave history sessions marked "unclean" so a daemon crash while Orca is closed stays recoverable.
+// Leave history sessions marked "unclean" so a daemon crash while MCode is closed stays recoverable.
 export async function disconnectDaemon(): Promise<void> {
   await adapter?.disconnectOnly()
   adapter = null

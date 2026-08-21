@@ -1,7 +1,7 @@
 /**
  * Drives a real zsh through a real PTY, to the first prompt and beyond.
  *
- * Why a PTY and not `zsh -i -c '<probe>'`: everything Orca owns now runs from a
+ * Why a PTY and not `zsh -i -c '<probe>'`: everything MCode owns now runs from a
  * `precmd` hook, and `-c` never reaches a prompt, so `precmd` never fires. A
  * probe run that way would report the wrapper doing nothing at all — for the
  * right reason, at the wrong question. These tests have to reach a prompt to
@@ -25,8 +25,8 @@ export const ZSH_PATH = hasZsh
 
 /** OSC sequences the wrapper emits, as the terminal would receive them. */
 export const MARKERS = {
-  identity: /\]777;orca-shell-start:\d+/,
-  ready: ']777;orca-shell-ready',
+  identity: /\]777;mcode-shell-start:\d+/,
+  ready: ']777;mcode-shell-ready',
   promptStart: ']133;A',
   commandStart: ']133;C',
   commandDone: /\]133;D;\d+/
@@ -89,8 +89,8 @@ function parseValues(resultPath: string): Record<string, string> {
  * so a slow prompt framework makes the run slower, never flaky.
  */
 export async function runZshPty(options: ZshPtyOptions): Promise<ZshPtyRun> {
-  const sentinel = '@@ORCA-PTY-READY@@'
-  const workDir = mkdtempSync(join(tmpdir(), 'orca-zsh-pty-'))
+  const sentinel = '@@MCODE-PTY-READY@@'
+  const workDir = mkdtempSync(join(tmpdir(), 'mcode-zsh-pty-'))
   const resultPath = join(workDir, 'probe.txt')
   const timeoutMs = options.timeoutMs ?? 20_000
 
@@ -103,7 +103,7 @@ export async function runZshPty(options: ZshPtyOptions): Promise<ZshPtyRun> {
       ...options.env,
       // Why the sentinel is env-borne: the prompt is overwritten from the PTY
       // below, and it has to survive whatever prompt the user's config installs.
-      ORCA_PTY_SENTINEL: sentinel
+      MCODE_PTY_SENTINEL: sentinel
     }
   })
 
@@ -180,7 +180,7 @@ export async function runZshPty(options: ZshPtyOptions): Promise<ZshPtyRun> {
     // Why PS1 and not PROMPT: a config that leaves the shell in sh emulation
     // renders PS1, where PROMPT is just an ordinary variable. In zsh's own mode
     // the two name the same parameter, so PS1 covers both.
-    proc.write(`PS1="$ORCA_PTY_SENTINEL"\r`)
+    proc.write(`PS1="$MCODE_PTY_SENTINEL"\r`)
     // Why `exited` is raced here too: a user .zshenv that calls `exit` never
     // reaches a prompt, and that is an outcome worth comparing rather than a
     // twenty-second timeout.
@@ -212,7 +212,7 @@ export async function runZshPty(options: ZshPtyOptions): Promise<ZshPtyRun> {
 
 /** Writes a throwaway $HOME with the given zsh startup files. */
 export function makeZshHome(files: Record<string, string>): string {
-  const home = mkdtempSync(join(tmpdir(), 'orca-zsh-home-'))
+  const home = mkdtempSync(join(tmpdir(), 'mcode-zsh-home-'))
   for (const [name, content] of Object.entries(files)) {
     writeFileSync(join(home, name), content)
   }

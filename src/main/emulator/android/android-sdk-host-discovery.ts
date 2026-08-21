@@ -4,7 +4,7 @@ import { discoverAndroidSdk, type AndroidSdkPaths } from './android-sdk-discover
 
 let configuredSdkPath: string | null = null
 
-// Lets the user point Orca at an Android SDK in a non-standard location (saved in
+// Lets the user point MCode at an Android SDK in a non-standard location (saved in
 // settings). Applied as the highest-priority candidate; an invalid path falls
 // back to ANDROID_HOME / ANDROID_SDK_ROOT / the default install location.
 export function setConfiguredAndroidSdkPath(path: string | null): void {

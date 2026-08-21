@@ -13,7 +13,7 @@ type PatchableMutationObserver = {
 }
 
 const MUTATION_LISTENERS_SYMBOL_DESCRIPTION = 'mutationListeners'
-const RETENTION_INSTALLED = Symbol.for('orca.happyDomMutationObserverRetention')
+const RETENTION_INSTALLED = Symbol.for('mcode.happyDomMutationObserverRetention')
 
 const retainedCallbacks = new WeakMap<object, Set<unknown>>()
 

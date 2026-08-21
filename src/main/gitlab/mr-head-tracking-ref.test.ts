@@ -25,7 +25,7 @@ describe('fetchGitLabMergeRequestHeadRef', () => {
     })
   })
 
-  it('fetches a GitLab MR head into its remote-scoped Orca ref for local repos', async () => {
+  it('fetches a GitLab MR head into its remote-scoped MCode ref for local repos', async () => {
     const localRef = await fetchGitLabMergeRequestHeadRef(
       { path: '/repo', connectionId: null },
       null,
@@ -39,12 +39,12 @@ describe('fetchGitLabMergeRequestHeadRef', () => {
         'fetch',
         '--no-tags',
         'origin',
-        `+refs/merge-requests/42/head:refs/orca/merge-requests/${ORIGIN_COMPONENT}/42`
+        `+refs/merge-requests/42/head:refs/mcode/merge-requests/${ORIGIN_COMPONENT}/42`
       ],
       { cwd: '/repo', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
     )
     expect(localRef).toBe(gitlabMergeRequestHeadLocalRef(ORIGIN_COMPONENT, 42))
-    expect(localRef).toBe(`refs/orca/merge-requests/${ORIGIN_COMPONENT}/42`)
+    expect(localRef).toBe(`refs/mcode/merge-requests/${ORIGIN_COMPONENT}/42`)
   })
 
   it('fails the MR-head fetch when the remote is not configured', async () => {
@@ -84,14 +84,14 @@ describe('fetchGitLabMergeRequestHeadRef', () => {
         'fetch',
         '--no-tags',
         'origin',
-        `+refs/merge-requests/42/head:refs/orca/merge-requests/${ORIGIN_COMPONENT}/42`
+        `+refs/merge-requests/42/head:refs/mcode/merge-requests/${ORIGIN_COMPONENT}/42`
       ],
       { cwd: '/repo', wslDistro: 'Ubuntu', timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
     )
   })
 
   it('uses the SSH GitLab MR-head RPC and never runs git directly', async () => {
-    const expectedRef = `refs/orca/merge-requests/${ORIGIN_COMPONENT}/77`
+    const expectedRef = `refs/mcode/merge-requests/${ORIGIN_COMPONENT}/77`
     const fetchGitLabMergeRequestHead = vi.fn(async () => expectedRef)
 
     const localRef = await fetchGitLabMergeRequestHeadRef(

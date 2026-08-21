@@ -9,7 +9,7 @@ describe('lifecycle-rejection-marker', () => {
     const marked = addLifecycleRejectionMarker('{"keep":true}', 'rejected', 'not current')
     expect(JSON.parse(marked)).toMatchObject({
       keep: true,
-      _orcaLifecycleRejection: { code: 'rejected', reason: 'not current' }
+      _mcodeLifecycleRejection: { code: 'rejected', reason: 'not current' }
     })
     expect(hasLifecycleRejectionMarker(marked)).toBe(true)
   })
@@ -17,7 +17,7 @@ describe('lifecycle-rejection-marker', () => {
   it('treats missing, non-object, and incomplete markers as absent', () => {
     expect(hasLifecycleRejectionMarker(null)).toBe(false)
     expect(hasLifecycleRejectionMarker('[]')).toBe(false)
-    expect(hasLifecycleRejectionMarker('{"_orcaLifecycleRejection":{"code":1}}')).toBe(false)
+    expect(hasLifecycleRejectionMarker('{"_mcodeLifecycleRejection":{"code":1}}')).toBe(false)
     expect(hasLifecycleRejectionMarker('not-json')).toBe(false)
   })
 })

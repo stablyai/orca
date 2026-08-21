@@ -7,10 +7,10 @@ import {
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
   return {
-    id: 'repo-1::/repo/orca',
+    id: 'repo-1::/repo/mcode',
     repoId: 'repo-1',
-    displayName: 'orca',
-    path: '/repo/orca',
+    displayName: 'mcode',
+    path: '/repo/mcode',
     head: 'abc123',
     branch: 'main',
     isBare: false,
@@ -31,7 +31,7 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
 describe('deriveAiVaultWorkspaceScopePaths', () => {
   it('returns the active workspace path', () => {
     const active = makeWorktree()
-    expect(deriveAiVaultWorkspaceScopePaths(active, [active])).toEqual(['/repo/orca'])
+    expect(deriveAiVaultWorkspaceScopePaths(active, [active])).toEqual(['/repo/mcode'])
   })
 
   it('returns nothing without an active workspace', () => {
@@ -40,35 +40,35 @@ describe('deriveAiVaultWorkspaceScopePaths', () => {
 
   it('includes prior paths so renamed workspaces keep their transcripts', () => {
     const active = makeWorktree({
-      id: 'repo-1::/repo/orca-renamed',
-      path: '/repo/orca-renamed',
-      priorWorktreeIds: ['repo-1::/repo/orca']
+      id: 'repo-1::/repo/mcode-renamed',
+      path: '/repo/mcode-renamed',
+      priorWorktreeIds: ['repo-1::/repo/mcode']
     })
 
     expect(deriveAiVaultWorkspaceScopePaths(active, [active])).toEqual([
-      '/repo/orca-renamed',
-      '/repo/orca'
+      '/repo/mcode-renamed',
+      '/repo/mcode'
     ])
   })
 
   it('drops a prior path another live workspace now owns', () => {
     // Sessions are keyed by cwd alone, so claiming a path a live workspace
     // occupies would show that workspace's transcripts under this one.
-    const claimant = makeWorktree({ id: 'repo-1::/repo/orca', path: '/repo/orca' })
+    const claimant = makeWorktree({ id: 'repo-1::/repo/mcode', path: '/repo/mcode' })
     const active = makeWorktree({
-      id: 'repo-1::/repo/orca-renamed',
-      path: '/repo/orca-renamed',
-      priorWorktreeIds: ['repo-1::/repo/orca']
+      id: 'repo-1::/repo/mcode-renamed',
+      path: '/repo/mcode-renamed',
+      priorWorktreeIds: ['repo-1::/repo/mcode']
     })
 
     expect(deriveAiVaultWorkspaceScopePaths(active, [claimant, active])).toEqual([
-      '/repo/orca-renamed'
+      '/repo/mcode-renamed'
     ])
   })
 
   it('keeps a prior path the active workspace itself still owns', () => {
-    const active = makeWorktree({ priorWorktreeIds: ['repo-1::/repo/orca'] })
-    expect(deriveAiVaultWorkspaceScopePaths(active, [active])).toEqual(['/repo/orca'])
+    const active = makeWorktree({ priorWorktreeIds: ['repo-1::/repo/mcode'] })
+    expect(deriveAiVaultWorkspaceScopePaths(active, [active])).toEqual(['/repo/mcode'])
   })
 
   it('drops a claimed prior path regardless of where the claimant sits in the list', () => {
@@ -76,15 +76,15 @@ describe('deriveAiVaultWorkspaceScopePaths', () => {
     // exclude the active workspace up front, or listing it before a claimant
     // that shares the path would mask the claim.
     const active = makeWorktree({
-      id: 'repo-1::/repo/orca-renamed',
-      path: '/repo/orca-renamed',
-      priorWorktreeIds: ['repo-1::/repo/orca']
+      id: 'repo-1::/repo/mcode-renamed',
+      path: '/repo/mcode-renamed',
+      priorWorktreeIds: ['repo-1::/repo/mcode']
     })
-    const claimant = makeWorktree({ id: 'repo-1::/repo/orca', path: '/repo/orca' })
+    const claimant = makeWorktree({ id: 'repo-1::/repo/mcode', path: '/repo/mcode' })
     // The active workspace also listed at the prior path — the only shape where
     // a first-writer-wins map would name the active workspace the owner and so
     // report the path unclaimed.
-    const activeAtPriorPath = makeWorktree({ id: active.id, path: '/repo/orca' })
+    const activeAtPriorPath = makeWorktree({ id: active.id, path: '/repo/mcode' })
 
     for (const liveWorktrees of [
       [active, claimant],
@@ -93,7 +93,7 @@ describe('deriveAiVaultWorkspaceScopePaths', () => {
       [claimant, activeAtPriorPath]
     ]) {
       expect(deriveAiVaultWorkspaceScopePaths(active, liveWorktrees)).toEqual([
-        '/repo/orca-renamed'
+        '/repo/mcode-renamed'
       ])
     }
   })
@@ -101,7 +101,7 @@ describe('deriveAiVaultWorkspaceScopePaths', () => {
   it('derives workspace scope paths at scale', () => {
     // Separate from the session-scope guard: a quadratic dedupe reintroduced
     // only in the workspace pass would not surface there.
-    const prefix = '/Users/dev/orca/workspaces/orca-monorepo/feature-'
+    const prefix = '/Users/dev/mcode/workspaces/mcode-monorepo/feature-'
     const worktrees = Array.from({ length: 1200 }, (_, i) =>
       makeWorktree({ id: `repo-1::${prefix}${i}`, path: `${prefix}${i}` })
     )
@@ -122,7 +122,7 @@ describe('deriveAiVaultWorkspaceScopePaths', () => {
 
   it('ignores prior ids belonging to another repo', () => {
     const active = makeWorktree({ priorWorktreeIds: ['repo-2::/repo/other'] })
-    expect(deriveAiVaultWorkspaceScopePaths(active, [active])).toEqual(['/repo/orca'])
+    expect(deriveAiVaultWorkspaceScopePaths(active, [active])).toEqual(['/repo/mcode'])
   })
 
   it('skips relative and blank paths', () => {
@@ -143,7 +143,7 @@ describe('deriveAiVaultScopeSessionPaths', () => {
     })
 
     expect(deriveAiVaultScopeSessionPaths(active, [active, sibling, otherRepo])).toEqual([
-      '/repo/orca',
+      '/repo/mcode',
       '/repo/feature'
     ])
   })
@@ -151,11 +151,11 @@ describe('deriveAiVaultScopeSessionPaths', () => {
   it('deduplicates paths that differ only by separators or trailing slash', () => {
     // The dedupe compares normalized keys; the first spelling is what ships.
     const active = makeWorktree()
-    const trailing = makeWorktree({ id: 'repo-1::a', path: '/repo/orca/' })
-    const doubled = makeWorktree({ id: 'repo-1::b', path: '/repo//orca' })
+    const trailing = makeWorktree({ id: 'repo-1::a', path: '/repo/mcode/' })
+    const doubled = makeWorktree({ id: 'repo-1::b', path: '/repo//mcode' })
 
     expect(deriveAiVaultScopeSessionPaths(active, [active, trailing, doubled])).toEqual([
-      '/repo/orca'
+      '/repo/mcode'
     ])
   })
 
@@ -176,7 +176,7 @@ describe('deriveAiVaultScopeSessionPaths', () => {
     // Path length matters as much as count: normalize() cost scales with it,
     // so short synthetic paths would understate the old shape. ~50 chars
     // matches the real profile this was measured on.
-    const prefix = '/Users/dev/orca/workspaces/orca-monorepo/feature-'
+    const prefix = '/Users/dev/mcode/workspaces/mcode-monorepo/feature-'
     const worktrees = Array.from({ length: 1200 }, (_, i) =>
       makeWorktree({ id: `repo-1::${prefix}${i}`, path: `${prefix}${i}` })
     )

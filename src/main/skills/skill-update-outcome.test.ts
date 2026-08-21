@@ -46,46 +46,46 @@ function placement(
 describe('skillUpdateFailedNames', () => {
   it('treats a convergent copy that is now current as landed', () => {
     expect(
-      skillUpdateFailedNames(['orca-cli'], [placement('orca-cli', 'current')], noLocks)
+      skillUpdateFailedNames(['mcode-cli'], [placement('mcode-cli', 'current')], noLocks)
     ).toEqual([])
   })
 
   it('reports a copy the run left outdated', () => {
     expect(
-      skillUpdateFailedNames(['orca-cli'], [placement('orca-cli', 'outdated')], noLocks)
-    ).toEqual(['orca-cli'])
+      skillUpdateFailedNames(['mcode-cli'], [placement('mcode-cli', 'outdated')], noLocks)
+    ).toEqual(['mcode-cli'])
   })
 
   it('reports a half-written bundle instead of reading it as success', () => {
     // The old "still eligible?" test passed here: an unrecognized copy is not
     // eligible either, so a corrupt write looked identical to a clean update.
     expect(
-      skillUpdateFailedNames(['orca-cli'], [placement('orca-cli', 'unrecognized')], noLocks)
-    ).toEqual(['orca-cli'])
+      skillUpdateFailedNames(['mcode-cli'], [placement('mcode-cli', 'unrecognized')], noLocks)
+    ).toEqual(['mcode-cli'])
   })
 
   it('reports an unreadable copy', () => {
     expect(
-      skillUpdateFailedNames(['orca-cli'], [placement('orca-cli', 'inaccessible')], noLocks)
-    ).toEqual(['orca-cli'])
+      skillUpdateFailedNames(['mcode-cli'], [placement('mcode-cli', 'inaccessible')], noLocks)
+    ).toEqual(['mcode-cli'])
   })
 
   it('reports a skill the run removed outright', () => {
-    expect(skillUpdateFailedNames(['orca-cli'], [], noLocks)).toEqual(['orca-cli'])
+    expect(skillUpdateFailedNames(['mcode-cli'], [], noLocks)).toEqual(['mcode-cli'])
   })
 
   it('accepts a revision newer than this build ships', () => {
     // The CLI pulls from the source repo, which runs ahead of the bundled manifest.
     expect(
-      skillUpdateFailedNames(['orca-cli'], [placement('orca-cli', 'newer-known')], noLocks)
+      skillUpdateFailedNames(['mcode-cli'], [placement('mcode-cli', 'newer-known')], noLocks)
     ).toEqual([])
   })
 
   it('ignores placements the update command never writes to', () => {
     expect(
       skillUpdateFailedNames(
-        ['orca-cli'],
-        [placement('orca-cli', 'current'), placement('orca-cli', 'outdated', 'plugin-cache')],
+        ['mcode-cli'],
+        [placement('mcode-cli', 'current'), placement('mcode-cli', 'outdated', 'plugin-cache')],
         noLocks
       )
     ).toEqual([])
@@ -94,18 +94,18 @@ describe('skillUpdateFailedNames', () => {
   it('fails the name when any convergent alias was left behind', () => {
     expect(
       skillUpdateFailedNames(
-        ['orca-cli'],
-        [placement('orca-cli', 'current'), placement('orca-cli', 'outdated', 'provider-alias')],
+        ['mcode-cli'],
+        [placement('mcode-cli', 'current'), placement('mcode-cli', 'outdated', 'provider-alias')],
         noLocks
       )
-    ).toEqual(['orca-cli'])
+    ).toEqual(['mcode-cli'])
   })
 
   it('judges each requested name independently', () => {
     expect(
       skillUpdateFailedNames(
-        ['orca-cli', 'orchestration'],
-        [placement('orca-cli', 'current'), placement('orchestration', 'outdated')],
+        ['mcode-cli', 'orchestration'],
+        [placement('mcode-cli', 'current'), placement('orchestration', 'outdated')],
         noLocks
       )
     ).toEqual(['orchestration'])
@@ -116,9 +116,9 @@ describe('skillUpdateFailedNames', () => {
     // the CLI's own record of what it wrote.
     expect(
       skillUpdateFailedNames(
-        ['orca-cli'],
-        [placement('orca-cli', 'unrecognized', 'canonical-copy', 'ahead-of-bundle')],
-        new Map([['orca-cli', 'ahead-of-bundle']])
+        ['mcode-cli'],
+        [placement('mcode-cli', 'unrecognized', 'canonical-copy', 'ahead-of-bundle')],
+        new Map([['mcode-cli', 'ahead-of-bundle']])
       )
     ).toEqual([])
   })
@@ -126,45 +126,45 @@ describe('skillUpdateFailedNames', () => {
   it('still reports unrecognized content whose bytes do not match the lock', () => {
     expect(
       skillUpdateFailedNames(
-        ['orca-cli'],
-        [placement('orca-cli', 'unrecognized', 'canonical-copy', 'half-written-bytes')],
-        new Map([['orca-cli', 'ahead-of-bundle']])
+        ['mcode-cli'],
+        [placement('mcode-cli', 'unrecognized', 'canonical-copy', 'half-written-bytes')],
+        new Map([['mcode-cli', 'ahead-of-bundle']])
       )
-    ).toEqual(['orca-cli'])
+    ).toEqual(['mcode-cli'])
   })
 
   it('still reports unrecognized content when the skill has no lock entry', () => {
     expect(
       skillUpdateFailedNames(
-        ['orca-cli'],
-        [placement('orca-cli', 'unrecognized', 'canonical-copy', 'ahead-of-bundle')],
+        ['mcode-cli'],
+        [placement('mcode-cli', 'unrecognized', 'canonical-copy', 'ahead-of-bundle')],
         noLocks
       )
-    ).toEqual(['orca-cli'])
+    ).toEqual(['mcode-cli'])
   })
 
   it('never forgives an outdated copy, even at the lock hash', () => {
     // Lock == disk on an outdated copy means the command provably wrote nothing.
     expect(
       skillUpdateFailedNames(
-        ['orca-cli'],
-        [placement('orca-cli', 'outdated', 'canonical-copy', 'locked-revision')],
-        new Map([['orca-cli', 'locked-revision']])
+        ['mcode-cli'],
+        [placement('mcode-cli', 'outdated', 'canonical-copy', 'locked-revision')],
+        new Map([['mcode-cli', 'locked-revision']])
       )
-    ).toEqual(['orca-cli'])
+    ).toEqual(['mcode-cli'])
   })
 
   it('does not let a lock-matching canonical copy excuse a degraded alias', () => {
     expect(
       skillUpdateFailedNames(
-        ['orca-cli'],
+        ['mcode-cli'],
         [
-          placement('orca-cli', 'unrecognized', 'canonical-copy', 'ahead-of-bundle'),
-          placement('orca-cli', 'inaccessible', 'provider-alias')
+          placement('mcode-cli', 'unrecognized', 'canonical-copy', 'ahead-of-bundle'),
+          placement('mcode-cli', 'inaccessible', 'provider-alias')
         ],
-        new Map([['orca-cli', 'ahead-of-bundle']])
+        new Map([['mcode-cli', 'ahead-of-bundle']])
       )
-    ).toEqual(['orca-cli'])
+    ).toEqual(['mcode-cli'])
   })
 })
 
@@ -179,15 +179,15 @@ describe('skillUpdateFailedNames over a real inventory', () => {
   })
 
   async function postCutFixture(): Promise<{ homeDir: string; installedTreeSha: string }> {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skill-outcome-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-skill-outcome-'))
     temporaryDirectories.push(root)
     const homeDir = join(root, 'home')
-    const skillDir = join(homeDir, '.agents', 'skills', 'orca-cli')
+    const skillDir = join(homeDir, '.agents', 'skills', 'mcode-cli')
     await mkdir(skillDir, { recursive: true })
     // Current bytes plus one upstream edit: content no snapshot in this build's
     // registry has ever seen, exactly what `skills update` installs after the
     // source repo moves past the release cut.
-    const current = await readFile(join(repoRoot, 'skills', 'orca-cli', 'SKILL.md'))
+    const current = await readFile(join(repoRoot, 'skills', 'mcode-cli', 'SKILL.md'))
     await writeFile(
       join(skillDir, 'SKILL.md'),
       Buffer.concat([current, Buffer.from('\nUpstream edit published after this build.\n')])
@@ -201,10 +201,10 @@ describe('skillUpdateFailedNames over a real inventory', () => {
       JSON.stringify({
         version: 3,
         skills: {
-          'orca-cli': {
+          'mcode-cli': {
             skillFolderHash,
-            skillPath: 'skills/orca-cli',
-            source: 'github.com/stablyai/orca'
+            skillPath: 'skills/mcode-cli',
+            source: 'github.com/mcode-ide/mcode'
           }
         }
       })
@@ -227,13 +227,13 @@ describe('skillUpdateFailedNames over a real inventory', () => {
     // come from the lock — the scan now reclassifies that match to 'newer-known'
     // (the #11220 scan half), and the verdict accepts it either way.
     const canonical = inventory.installations.filter(
-      (entry) => entry.name === 'orca-cli' && entry.topology === 'canonical-copy'
+      (entry) => entry.name === 'mcode-cli' && entry.topology === 'canonical-copy'
     )
     expect(canonical).toHaveLength(1)
     expect(canonical[0].status).toBe('newer-known')
     expect(canonical[0].installedReleaseRevision).toBeNull()
 
-    expect(skillUpdateFailedNames(['orca-cli'], inventory.installations, locks)).toEqual([])
+    expect(skillUpdateFailedNames(['mcode-cli'], inventory.installations, locks)).toEqual([])
   })
 
   it('keeps failing the same content when the lock names different bytes', async () => {
@@ -248,8 +248,8 @@ describe('skillUpdateFailedNames over a real inventory', () => {
     })
     const locks = await readGloballyUpdatableSkillLocks({ homeDir })
 
-    expect(skillUpdateFailedNames(['orca-cli'], inventory.installations, locks)).toEqual([
-      'orca-cli'
+    expect(skillUpdateFailedNames(['mcode-cli'], inventory.installations, locks)).toEqual([
+      'mcode-cli'
     ])
   })
 })

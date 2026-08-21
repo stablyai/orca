@@ -59,7 +59,7 @@ export function getFeatureWallSetupProgress(
       input.settings.notifications.agentTaskComplete === true,
     'two-worktrees': countAvailableNonMainWorktrees(input.worktreesByRepo) >= 1,
     // Why: the 'browser' interaction fires when a non-blank page is viewed, so
-    // opening any real page in Orca's browser durably completes this milestone.
+    // opening any real page in MCode's browser durably completes this milestone.
     browser: hasFeatureInteraction(input.featureInteractions, 'browser'),
     'task-sources': input.hasConnectedTaskSource,
     'agent-capabilities': agentCapabilitiesDone,

@@ -229,7 +229,7 @@ describe('CodexRuntimeHomeService', () => {
     // A managed home that has lost its auth.json (only the marker remains).
     const brokenHome = join(testState.userDataDir, 'codex-accounts', 'account-1', 'home')
     mkdirSync(brokenHome, { recursive: true })
-    writeFileSync(join(brokenHome, '.orca-managed-home'), 'account-1\n', 'utf-8')
+    writeFileSync(join(brokenHome, '.mcode-managed-home'), 'account-1\n', 'utf-8')
     const settings = createSettings({
       shellStartupEnvProbeSupported: true,
       codexManagedAccounts: [

@@ -31,7 +31,7 @@ import {
 import {
   mergeHookInstallDetail,
   parseDevinHooksConfigText,
-  readConfigFromOrcaOverlapDetail,
+  readConfigFromMCodeOverlapDetail,
   readDevinHooksConfig,
   readDevinHooksSource,
   serializeDevinHooksConfig
@@ -42,8 +42,8 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     return [
       '@echo off',
       'setlocal',
-      // Why: endpoint file holds the live port/token; a PTY that outlives an Orca restart carries stale env, so `call` it to refresh (else PTY env).
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
+      // Why: endpoint file holds the live port/token; a PTY that outlives an MCode restart carries stale env, so `call` it to refresh (else PTY env).
+      'if defined MCODE_AGENT_HOOK_ENDPOINT if exist "%MCODE_AGENT_HOOK_ENDPOINT%" call "%MCODE_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAgentHookPostCommand('devin'),
       'exit /b 0',
@@ -55,26 +55,26 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   return [
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
-    // Why: endpoint file holds the live port/token; PTYs that outlive an Orca restart carry stale env, so source it to reach the new server (else PTY env).
+    // Why: endpoint file holds the live port/token; PTYs that outlive an MCode restart carry stale env, so source it to reach the new server (else PTY env).
     // Why: silence the `.` builtin (2>/dev/null + `|| :`) so a TOCTOU race or CRLF-mangled line can't leak shell parse errors into agent transcripts (fail-open).
-    'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
-    '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
+    'if [ -n "$MCODE_AGENT_HOOK_ENDPOINT" ] && [ -r "$MCODE_AGENT_HOOK_ENDPOINT" ]; then',
+    '  . "$MCODE_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
-    'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
+    'if [ -z "$MCODE_AGENT_HOOK_PORT" ] || [ -z "$MCODE_AGENT_HOOK_TOKEN" ] || [ -z "$MCODE_PANE_KEY" ]; then',
     '  exit 0',
     'fi',
     // Why: worktreeId embeds a filesystem path, so hand-building JSON in shell is unsafe (quotes/newlines); post as form fields instead.
     // Why: pipe payload to curl's stdin (payload@-) not an inline arg, so large tool output stays off the command line (EDR false positives).
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/devin" \\',
+    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${MCODE_AGENT_HOOK_PORT}/hook/devin" \\',
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
-    '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
-    '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
-    '  --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
-    '  --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
-    '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
-    '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
-    '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
+    '  -H "X-MCode-Agent-Hook-Token: ${MCODE_AGENT_HOOK_TOKEN}" \\',
+    '  --data-urlencode "paneKey=${MCODE_PANE_KEY}" \\',
+    '  --data-urlencode "tabId=${MCODE_TAB_ID}" \\',
+    '  --data-urlencode "launchToken=${MCODE_AGENT_LAUNCH_TOKEN}" \\',
+    '  --data-urlencode "worktreeId=${MCODE_WORKTREE_ID}" \\',
+    '  --data-urlencode "env=${MCODE_AGENT_HOOK_ENV}" \\',
+    '  --data-urlencode "version=${MCODE_AGENT_HOOK_VERSION}" \\',
     '  --data-urlencode "payload@-" >/dev/null 2>&1 || true',
     'exit 0',
     ''
@@ -135,7 +135,7 @@ export class DevinHookService {
       state,
       configPath,
       managedHooksPresent,
-      detail: mergeHookInstallDetail(detail, readConfigFromOrcaOverlapDetail(config))
+      detail: mergeHookInstallDetail(detail, readConfigFromMCodeOverlapDetail(config))
     }
   }
 
@@ -171,7 +171,7 @@ export class DevinHookService {
     // Why: remote-Windows is out of scope for v1; process.platform here is the local box, not the remote, so assume POSIX.
     const remoteConfigPath = getDevinRemoteConfigPath(remoteHome)
     const remoteScriptFileName = getDevinPosixManagedScriptFileName()
-    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
+    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.mcode/agent-hooks/${remoteScriptFileName}`
     // Why: SFTP I/O fails far more often than local fs; wrap the flow so failures surface as a structured error, not an unhandled rejection.
     try {
       // Why: Devin config.json is JSONC (comments), so JSON.parse rejects it; parse via jsonc-parser.
@@ -193,7 +193,7 @@ export class DevinHookService {
       const nextConfig = applyDevinManagedHooks(config, command, remoteScriptFileName)
 
       // Why: write script before settings so a mid-install failure never leaves settings.json referencing a missing script.
-      // Why: SSH remotes use POSIX `.sh` hooks even when Orca runs on Windows; never derive remote script syntax from local OS.
+      // Why: SSH remotes use POSIX `.sh` hooks even when MCode runs on Windows; never derive remote script syntax from local OS.
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
       await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig, {
         serialized: serializeDevinHooksConfig(body, nextConfig)

@@ -93,7 +93,7 @@ export type BrowserApi = {
   onPaneFocus: (
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void
   ) => () => void
-  onOpenLinkInOrcaTab: (
+  onOpenLinkInMCodeTab: (
     callback: (event: { browserPageId: string; url: string }) => void
   ) => () => void
   cancelDownload: (args: { downloadId: string }) => Promise<boolean>

@@ -13,7 +13,7 @@ import {
   type EphemeralVmRuntimeRecord
 } from './ephemeral-vm-runtimes'
 
-const EPHEMERAL_VM_RUNTIME_FEATURES_FILE = 'orca-ephemeral-vm-runtime-features.json'
+const EPHEMERAL_VM_RUNTIME_FEATURES_FILE = 'mcode-ephemeral-vm-runtime-features.json'
 export const MAX_EPHEMERAL_VM_RUNTIME_FEATURE_STORE_FILE_BYTES = 1024 * 1024
 
 const EphemeralVmRuntimeFeatureEntrySchema = z
@@ -21,7 +21,7 @@ const EphemeralVmRuntimeFeatureEntrySchema = z
     id: z.string().min(1),
     recipeId: z.string().min(1),
     createdAt: z.number().finite(),
-    recipeCheckoutMode: z.enum(['orca-worktree', 'provisioned-root']).optional(),
+    recipeCheckoutMode: z.enum(['mcode-worktree', 'provisioned-root']).optional(),
     resultCheckoutMode: z.literal('provisioned-root').optional()
   })
   .strict()

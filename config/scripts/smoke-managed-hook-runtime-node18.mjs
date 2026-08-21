@@ -21,7 +21,7 @@ const require = createRequire(import.meta.url)
 
 assert.match(process.versions.node, /^18\./, 'This smoke test must run under Node 18')
 
-const home = await mkdtemp(join(tmpdir(), 'orca-managed-hook-node18-'))
+const home = await mkdtemp(join(tmpdir(), 'mcode-managed-hook-node18-'))
 const originalHome = process.env.HOME
 const originalUserProfile = process.env.USERPROFILE
 const originalGetuid = process.getuid
@@ -42,10 +42,10 @@ try {
 
   const codexHooks = await readFile(join(home, '.codex', 'hooks.json'), 'utf8')
   const claudeSettings = await readFile(join(home, '.claude', 'settings.json'), 'utf8')
-  assert.match(codexHooks, /\.orca\/agent-hooks\/codex-hook\.sh/)
-  assert.match(claudeSettings, /\.orca\/agent-hooks\/claude-hook\.sh/)
-  await access(join(home, '.orca', 'agent-hooks', 'codex-hook.sh'), constants.X_OK)
-  await access(join(home, '.orca', 'agent-hooks', 'claude-hook.sh'), constants.X_OK)
+  assert.match(codexHooks, /\.mcode\/agent-hooks\/codex-hook\.sh/)
+  assert.match(claudeSettings, /\.mcode\/agent-hooks\/claude-hook\.sh/)
+  await access(join(home, '.mcode', 'agent-hooks', 'codex-hook.sh'), constants.X_OK)
+  await access(join(home, '.mcode', 'agent-hooks', 'claude-hook.sh'), constants.X_OK)
 } finally {
   if (originalHome === undefined) {
     delete process.env.HOME

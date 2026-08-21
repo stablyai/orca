@@ -47,7 +47,7 @@ describe('dismissOverlays', () => {
     expect(dialogClose.click).toHaveBeenCalledOnce()
     expect(windowClose.click).not.toHaveBeenCalled()
     expect(page.getByRole).toHaveBeenCalledWith('dialog', {
-      name: 'Let agents drive Orca with the Orca CLI'
+      name: 'Let agents drive MCode with the MCode CLI'
     })
   })
 

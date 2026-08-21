@@ -3,7 +3,7 @@ import { mkdir, open, readFile, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import {
   AGENT_PLUGIN_MANIFEST_PATH,
-  ORCA_SKILL_BUNDLE_MANIFEST_PATH,
+  MCODE_SKILL_BUNDLE_MANIFEST_PATH,
   parseAgentPluginManifest,
   parseSkillBundleManifest,
   type AgentPluginManifestV1,
@@ -186,7 +186,7 @@ export async function extractSkillBundleArchive(input: {
       await readJsonEntry(archive.reader, AGENT_PLUGIN_MANIFEST_PATH, input.signal)
     )
     const manifest = parseSkillBundleManifest(
-      await readJsonEntry(archive.reader, ORCA_SKILL_BUNDLE_MANIFEST_PATH, input.signal)
+      await readJsonEntry(archive.reader, MCODE_SKILL_BUNDLE_MANIFEST_PATH, input.signal)
     )
     if (
       pluginManifest.name !== manifest.bundleName ||

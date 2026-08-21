@@ -32,7 +32,7 @@ import { ORCHESTRATION_RUN_METHODS } from './orchestration-runs'
 import { ORCHESTRATION_WORKER_METHODS } from './orchestration-worker-methods'
 import { ORCHESTRATION_FEDERATION_METHODS } from './orchestration-federation-methods'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import type { MCodeRuntimeService } from '../../mcode-runtime'
 import type { RunRow } from '../../orchestration/types'
 import { encodeFederatedControlMessage } from '../../orchestration/federation-control-message'
 import { bindCoordinatorMutationPayload } from '../../orchestration/dispatch-message-binding'
@@ -175,7 +175,7 @@ const CheckParams = z
     ack: OptionalString,
     compatibilityAck: OptionalString,
     compatibilityQuestionAck: OptionalString,
-    compatibilityCliCommand: z.enum(['orca', 'orca-ide', 'orca-dev']).optional(),
+    compatibilityCliCommand: z.enum(['mcode', 'mcode-ide', 'mcode-dev']).optional(),
     run: OptionalString,
     wait: OptionalBoolean,
     timeoutMs: OptionalFiniteNumber
@@ -275,8 +275,8 @@ const AskParams = z
     timeoutMs: OptionalFiniteNumber,
     from: OptionalString,
     run: OptionalString,
-    compatibilityCliCommand: z.enum(['orca', 'orca-ide', 'orca-dev']).optional(),
-    compatibilityWindowsCommand: z.enum(['orca', 'orca-ide']).optional()
+    compatibilityCliCommand: z.enum(['mcode', 'mcode-ide', 'mcode-dev']).optional(),
+    compatibilityWindowsCommand: z.enum(['mcode', 'mcode-ide']).optional()
   })
   .superRefine((params, ctx) => {
     if ((params.question ? 1 : 0) + (params.resume ? 1 : 0) !== 1) {
@@ -318,7 +318,7 @@ function parseMessageTypes(rawTypes: string | undefined): MessageType[] | undefi
 }
 
 function resolveMessageRun(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   params: {
     from?: string
     senderPaneKey?: string
@@ -383,7 +383,7 @@ function resolveMessageRun(
 }
 
 function legacyWorkerDeliveryContract(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   runId: string | undefined,
   recipient: string
 ): 'legacy_direct' | undefined {
@@ -638,7 +638,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           ) {
             throw new OrchestrationError(
               'capability_unsupported',
-              `Federated Dispatch ${dispatchId} does not support coordinator control mail; start a fresh worker after updating its Orca server.`
+              `Federated Dispatch ${dispatchId} does not support coordinator control mail; start a fresh worker after updating its MCode server.`
             )
           }
           if (db.getWorkerDispatch(dispatchId)?.state !== 'ready') {
@@ -1933,7 +1933,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
 
 async function askRemoteRunHome(args: {
   params: z.infer<typeof AskParams>
-  runtime: OrcaRuntimeService
+  runtime: MCodeRuntimeService
   signal?: AbortSignal
   orchestrationCapability?: string
   recordMutationReceipt?: (receipt: unknown) => void

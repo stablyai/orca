@@ -1,6 +1,6 @@
 // Why: Claude Code (>=2.1.80) pipes `rate_limits` to the statusLine command on every
 // turn — piggybacked on Messages API responses, so reading it costs no usage-endpoint
-// budget (the endpoint 429s under Orca's polling; see rate-limits/service.ts).
+// budget (the endpoint 429s under MCode's polling; see rate-limits/service.ts).
 
 export const CLAUDE_STATUSLINE_PATHNAME = '/statusline/claude'
 

@@ -166,7 +166,7 @@ function runNpxSkills(args: string[]): Promise<number> {
 
 type SkillMutationVerb = 'install' | 'update'
 
-/** Agents Orca can see on this host, as `skills --agent` keys. */
+/** Agents MCode can see on this host, as `skills --agent` keys. */
 function detectSkillsCliAgentKeys(): string[] {
   const runtime = process.platform
   const probes = getTuiAgentDetectionProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, runtime)
@@ -223,7 +223,7 @@ function resolveInstallAgentKeys(flags: Map<string, string | boolean>): string[]
     'invalid_environment',
     'No coding agent detected on this host, so there is no install target. Pass ' +
       '--agent <name>[,<name>...] to choose targets explicitly — --agent universal ' +
-      'writes only the shared .agents/skills directory that Orca reads.'
+      'writes only the shared .agents/skills directory that MCode reads.'
   )
 }
 
@@ -252,8 +252,8 @@ function formatSkillSelectionHelp(verb: SkillMutationVerb, skillNames: string[])
     `Choose one or more skills to ${verb}:`,
     ...skillNames.map((name) => `  ${name}`),
     '',
-    `Usage: orca skills ${verb} --skill <name> [--skill <name> ...]`,
-    `   or: orca skills ${verb} --all`
+    `Usage: mcode skills ${verb} --skill <name> [--skill <name> ...]`,
+    `   or: mcode skills ${verb} --all`
   ].join('\n')
 }
 
@@ -277,11 +277,11 @@ function createSkillMutationHandler(verb: SkillMutationVerb): CommandHandler {
     // Why: this runs before target resolution because the answer belongs to the
     // other machine — agents detected here would be the wrong host's, and a host
     // that detects none would hide the forwarding problem behind that error.
-    if (process.env.ORCA_CLI_CWD) {
+    if (process.env.MCODE_CLI_CWD) {
       throw new RuntimeClientError(
         'invalid_environment',
-        `orca skills ${verb} writes to the machine that runs it, but this shell forwards ` +
-          `orca to the Orca host. Run the same orca skills ${verb} command on the machine ` +
+        `mcode skills ${verb} writes to the machine that runs it, but this shell forwards ` +
+          `mcode to the MCode host. Run the same mcode skills ${verb} command on the machine ` +
           "you want it on, where it can detect that host's agents."
       )
     }
@@ -307,7 +307,7 @@ function createSkillMutationHandler(verb: SkillMutationVerb): CommandHandler {
       // that stream is not JSON, so --json can't be honored here.
       throw new RuntimeClientError(
         'invalid_argument',
-        `orca skills ${verb} --json only supports --dry-run. Real ${verb}s stream ` +
+        `mcode skills ${verb} --json only supports --dry-run. Real ${verb}s stream ` +
           "npx's own output, which isn't JSON."
       )
     }

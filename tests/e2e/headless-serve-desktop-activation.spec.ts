@@ -3,10 +3,10 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import os from 'node:os'
 import path from 'node:path'
 import { _electron as electron, type ElectronApplication } from '@stablyai/playwright-test'
-import { test, expect, forwardElectronProcessLogs } from './helpers/orca-app'
+import { test, expect, forwardElectronProcessLogs } from './helpers/mcode-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
 import { getE2ECompletedOnboardingProfile } from './helpers/e2e-completed-onboarding-profile'
-import { getOrcaElectronLaunchArgs } from './helpers/electron-launch-args'
+import { getMCodeElectronLaunchArgs } from './helpers/electron-launch-args'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './helpers/electron-process-shutdown'
 import {
   assertElectronResolvedIsolatedHome,
@@ -31,7 +31,7 @@ import type {
 } from '../../src/shared/runtime-types'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 import { parsePaneKey } from '../../src/shared/stable-pane-id'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
+import { DEFAULT_LOCAL_MCODE_PROFILE_ID } from '../../src/shared/mcode-profiles'
 
 const electronPackageDir = path.join(process.cwd(), 'node_modules', 'electron')
 const electronPath = path.join(
@@ -47,10 +47,10 @@ function createHeadlessLaunchIsolation(userDataDir: string): ElectronHomeIsolati
     inheritedEnv: cleanEnv,
     launchEnv: {
       NODE_ENV: 'development',
-      ORCA_E2E_HEADLESS: '1',
+      MCODE_E2E_HEADLESS: '1',
       // Why: production builds always use the lock; this opt-in makes the dev
       // E2E bundle exercise the same second-instance ownership path.
-      ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK: '1'
+      MCODE_E2E_ENFORCE_SINGLE_INSTANCE_LOCK: '1'
     },
     extraEnv: {},
     userDataDir
@@ -78,7 +78,7 @@ function readPersistedPromotionBinding(
   try {
     const persisted = JSON.parse(
       readFileSync(
-        path.join(userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID, 'orca-data.json'),
+        path.join(userDataDir, 'profiles', DEFAULT_LOCAL_MCODE_PROFILE_ID, 'mcode-data.json'),
         'utf8'
       )
     ) as {
@@ -126,20 +126,20 @@ test('promotes the headless owner without replacing its daemon terminal', async 
   }
 
   const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
-  const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-serve-promotion-'))
+  const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'mcode-e2e-serve-promotion-'))
   const homeIsolation = createHeadlessLaunchIsolation(userDataDir)
   const env = homeIsolation.env
   let serveApp: ElectronApplication | null = null
   let activatingProcess: ChildProcess | null = null
 
   writeFileSync(
-    path.join(userDataDir, 'orca-data.json'),
+    path.join(userDataDir, 'mcode-data.json'),
     `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
   )
 
   try {
     serveApp = await electron.launch({
-      args: [...getOrcaElectronLaunchArgs(mainPath, false), '--serve', '--serve-no-pairing'],
+      args: [...getMCodeElectronLaunchArgs(mainPath, false), '--serve', '--serve-no-pairing'],
       env
     })
     const resolvedHome = await serveApp.evaluate(({ app }) => app.getPath('home'))
@@ -202,8 +202,8 @@ test('promotes the headless owner without replacing its daemon terminal', async 
       )
       .toContain(beforeMarker)
 
-    const forwardAppLogs = process.env.ORCA_E2E_FORWARD_APP_LOGS === '1'
-    activatingProcess = spawn(electronPath, getOrcaElectronLaunchArgs(mainPath, false), {
+    const forwardAppLogs = process.env.MCODE_E2E_FORWARD_APP_LOGS === '1'
+    activatingProcess = spawn(electronPath, getMCodeElectronLaunchArgs(mainPath, false), {
       env,
       stdio: forwardAppLogs ? 'pipe' : 'ignore'
     })

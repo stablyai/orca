@@ -2,7 +2,7 @@ import { link, lstat, mkdir } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
 import {
   getCodexSessionBackfillStateDirPath,
-  getOrcaManagedCodexHomePath,
+  getMCodeManagedCodexHomePath,
   getSystemCodexHomePath
 } from './codex-home-paths'
 import {
@@ -46,7 +46,7 @@ export function resolveCodexSessionBackfillPaths(
 ): CodexSessionBackfillPaths {
   const stateDir = getCodexSessionBackfillStateDirPath()
   return {
-    managedSessionsRoot: join(getOrcaManagedCodexHomePath(), 'sessions'),
+    managedSessionsRoot: join(getMCodeManagedCodexHomePath(), 'sessions'),
     systemSessionsRoot: join(systemCodexHomePathOverride || getSystemCodexHomePath(), 'sessions'),
     auditLogPath: join(stateDir, 'audit.jsonl'),
     markerPath: join(stateDir, 'backfill-complete.json')

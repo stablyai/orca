@@ -77,7 +77,7 @@ export async function waitForPtyColumnsAtMost(
   let lastMarker = ''
   let lastTerminalTail = ''
   while (Date.now() < deadline) {
-    const marker = `ORCA_PTY_COLUMNS_${randomUUID()}`
+    const marker = `MCODE_PTY_COLUMNS_${randomUUID()}`
     lastMarker = marker
     for (const input of buildFreshShellProbeInputSequence(
       `${nodeTerminalCommand([

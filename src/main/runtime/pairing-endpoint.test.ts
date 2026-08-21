@@ -27,11 +27,11 @@ describe('resolveAdvertisedPairingEndpoint', () => {
     ['2001:db8::0', 'ws://[2001:db8::]:6768'],
     ['[2001:db8::4]:7443', 'ws://[2001:db8::4]:7443'],
     ['[0:0:0:0:0:0:0:1]:7443', 'ws://[::1]:7443'],
-    ['http://proxy.example.test/orca', 'ws://proxy.example.test/orca'],
-    ['https://proxy.example.test/orca', 'wss://proxy.example.test/orca'],
+    ['http://proxy.example.test/mcode', 'ws://proxy.example.test/mcode'],
+    ['https://proxy.example.test/mcode', 'wss://proxy.example.test/mcode'],
     [
-      'wss://proxy.example.test:8443/orca?route=runtime',
-      'wss://proxy.example.test:8443/orca?route=runtime'
+      'wss://proxy.example.test:8443/mcode?route=runtime',
+      'wss://proxy.example.test:8443/mcode?route=runtime'
     ]
   ])('normalizes %s', (input, expected) => {
     expect(resolveAdvertisedPairingEndpoint(bound, input)).toEqual({
@@ -119,7 +119,7 @@ describe('resolveAdvertisedPairingHostname', () => {
     ['100.64.1.20', '100.64.1.20'],
     ['192.168.1.5:6768', '192.168.1.5'],
     ['desktop', 'desktop'],
-    ['wss://proxy.example.test:8443/orca', 'proxy.example.test']
+    ['wss://proxy.example.test:8443/mcode', 'proxy.example.test']
   ])('reads the advertised host of %s', (input, hostname) => {
     expect(resolveAdvertisedPairingHostname(input)).toBe(hostname)
   })

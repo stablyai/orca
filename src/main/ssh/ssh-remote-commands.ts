@@ -122,7 +122,7 @@ export const MAX_RELAY_GC_LISTING_ENTRIES = 64
 
 export function listRelayBaseDirsCommand(host: RemoteHostPlatform, baseDir: string): string {
   if (!isWindowsRemoteHost(host)) {
-    const statusPrefix = '__ORCA_RELAY_GC_FIND_STATUS__'
+    const statusPrefix = '__MCODE_RELAY_GC_FIND_STATUS__'
     return [
       `base=${shellEscape(baseDir)}; [ -d "$base" ] || exit 0;`,
       `{ find "$base" -mindepth 1 -maxdepth 1 -type d -name 'relay-*' -print; status=$?; printf '\n${statusPrefix}%s\n' "$status"; } |`,
@@ -182,7 +182,7 @@ export function relayLivenessProbeCommand(
   const js = [
     'const fs=require("fs"),path=require("path"),net=require("net");',
     'const [dir,...seed]=process.argv.slice(1);',
-    'const valid=/^\\\\\\\\[.?]\\\\pipe\\\\orca-relay-[0-9a-f]{20}$/i;',
+    'const valid=/^\\\\\\\\[.?]\\\\pipe\\\\mcode-relay-[0-9a-f]{20}$/i;',
     'const pipes=[];',
     'let markerCount=0;',
     'for(const p of seed){if(valid.test(p)&&!pipes.includes(p))pipes.push(p)}',

@@ -151,7 +151,7 @@ run().catch((error) => {
 }
 
 async function runFixture(): Promise<FixtureResult> {
-  const root = mkdtempSync(join(tmpdir(), 'orca-partition-cookie-'))
+  const root = mkdtempSync(join(tmpdir(), 'mcode-partition-cookie-'))
   fixtureRoots.push(root)
   const importPath = join(root, 'browser-cookie-import.cjs')
   const registryStubPath = join(root, 'browser-session-registry.cjs')

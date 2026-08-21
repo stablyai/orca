@@ -32,8 +32,8 @@ let repoPath: string
 
 beforeEach(() => {
   handlers.clear()
-  userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-ref-user-data-'))
-  repoPath = mkdtempSync(join(tmpdir(), 'orca-vm-ref-repo-'))
+  userDataPath = mkdtempSync(join(tmpdir(), 'mcode-vm-ref-user-data-'))
+  repoPath = mkdtempSync(join(tmpdir(), 'mcode-vm-ref-repo-'))
   getPathMock.mockReturnValue(userDataPath)
   handleMock.mockImplementation((channel: string, handler: never) => handlers.set(channel, handler))
   connectRuntimeOwnedSshTargetMock.mockResolvedValue({
@@ -172,7 +172,7 @@ function writeRecipe(path: string, createCountPath: string, createEnvPath?: stri
       `require('node:fs').appendFileSync(${JSON.stringify(createCountPath)}, 'x')`,
       ...(createEnvPath
         ? [
-            `require('node:fs').writeFileSync(${JSON.stringify(createEnvPath)}, JSON.stringify({ref:process.env.ORCA_REPO_REF,refHead:process.env.ORCA_REPO_REF_HEAD,repoUrl:process.env.ORCA_REPO_URL}))`
+            `require('node:fs').writeFileSync(${JSON.stringify(createEnvPath)}, JSON.stringify({ref:process.env.MCODE_REPO_REF,refHead:process.env.MCODE_REPO_REF_HEAD,repoUrl:process.env.MCODE_REPO_URL}))`
           ]
         : []),
       'console.log(JSON.stringify({schemaVersion:2,checkoutMode:"provisioned-root",',
@@ -181,7 +181,7 @@ function writeRecipe(path: string, createCountPath: string, createEnvPath?: stri
     ].join('\n')
   )
   writeFileSync(
-    join(path, 'orca.yaml'),
+    join(path, 'mcode.yaml'),
     [
       'environmentRecipes:',
       '  - id: cloud-sandbox',

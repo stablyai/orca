@@ -12,7 +12,7 @@
  * production flow.
  */
 
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import {
   waitForSessionReady,
   waitForActiveWorktree,
@@ -33,12 +33,12 @@ const STRESS_ITERATIONS = 5
 test.describe('Dead Terminal Reproduction @headful', () => {
   const createdWorktreeIds: string[] = []
 
-  test.beforeEach(async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
+  test.beforeEach(async ({ mcodePage }) => {
+    await waitForSessionReady(mcodePage)
+    await waitForActiveWorktree(mcodePage)
+    await ensureTerminalVisible(mcodePage)
 
-    await orcaPage.evaluate(async () => {
+    await mcodePage.evaluate(async () => {
       const state = window.__store?.getState()
       if (!state) {
         return
@@ -47,106 +47,106 @@ test.describe('Dead Terminal Reproduction @headful', () => {
     })
   })
 
-  test.afterEach(async ({ orcaPage }) => {
+  test.afterEach(async ({ mcodePage }) => {
     for (const id of createdWorktreeIds) {
-      await removeWorktreeViaStore(orcaPage, id)
+      await removeWorktreeViaStore(mcodePage, id)
     }
     createdWorktreeIds.length = 0
   })
 
-  test('@headful setup-split flow does not produce dead terminals', async ({ orcaPage }) => {
+  test('@headful setup-split flow does not produce dead terminals', async ({ mcodePage }) => {
     test.setTimeout(120_000)
-    const homeWorktreeId = await waitForActiveWorktree(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
-    await checkWebglState(orcaPage, 'home-initial')
+    const homeWorktreeId = await waitForActiveWorktree(mcodePage)
+    await waitForActiveTerminalManager(mcodePage, 30_000)
+    await checkWebglState(mcodePage, 'home-initial')
 
     for (let i = 0; i < STRESS_ITERATIONS; i++) {
       const direction = i % 2 === 0 ? 'vertical' : 'horizontal'
-      const newId = await createAndActivateWorktreeWithSetup(orcaPage, `setup-${i}`, direction)
+      const newId = await createAndActivateWorktreeWithSetup(mcodePage, `setup-${i}`, direction)
       createdWorktreeIds.push(newId)
 
-      await expect.poll(async () => getActiveWorktreeId(orcaPage), { timeout: 10_000 }).toBe(newId)
-      await ensureTerminalVisible(orcaPage)
-      await waitForActiveTerminalManager(orcaPage, 30_000)
-      await waitForPaneCount(orcaPage, 2, 15_000)
-      await checkWebglState(orcaPage, `setup-${i}`)
-      await waitForAllPanesToHaveContent(orcaPage, `setup-${i} both panes`)
+      await expect.poll(async () => getActiveWorktreeId(mcodePage), { timeout: 10_000 }).toBe(newId)
+      await ensureTerminalVisible(mcodePage)
+      await waitForActiveTerminalManager(mcodePage, 30_000)
+      await waitForPaneCount(mcodePage, 2, 15_000)
+      await checkWebglState(mcodePage, `setup-${i}`)
+      await waitForAllPanesToHaveContent(mcodePage, `setup-${i} both panes`)
 
-      await switchToWorktree(orcaPage, homeWorktreeId)
+      await switchToWorktree(mcodePage, homeWorktreeId)
       await expect
-        .poll(async () => getActiveWorktreeId(orcaPage), { timeout: 10_000 })
+        .poll(async () => getActiveWorktreeId(mcodePage), { timeout: 10_000 })
         .toBe(homeWorktreeId)
-      await removeWorktreeViaStore(orcaPage, newId)
+      await removeWorktreeViaStore(mcodePage, newId)
       createdWorktreeIds.pop()
     }
   })
 
-  test('@headful setup-split then switch-back does not leave panes dead', async ({ orcaPage }) => {
+  test('@headful setup-split then switch-back does not leave panes dead', async ({ mcodePage }) => {
     test.setTimeout(120_000)
-    const homeWorktreeId = await waitForActiveWorktree(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
+    const homeWorktreeId = await waitForActiveWorktree(mcodePage)
+    await waitForActiveTerminalManager(mcodePage, 30_000)
 
     for (let i = 0; i < STRESS_ITERATIONS; i++) {
       const newId = await createAndActivateWorktreeWithSetup(
-        orcaPage,
+        mcodePage,
         `switchback-${i}`,
         'vertical'
       )
       createdWorktreeIds.push(newId)
 
-      await expect.poll(async () => getActiveWorktreeId(orcaPage), { timeout: 10_000 }).toBe(newId)
-      await ensureTerminalVisible(orcaPage)
-      await waitForActiveTerminalManager(orcaPage, 30_000)
-      await waitForPaneCount(orcaPage, 2, 15_000)
-      await waitForAllPanesToHaveContent(orcaPage, `switchback-${i} initial`)
+      await expect.poll(async () => getActiveWorktreeId(mcodePage), { timeout: 10_000 }).toBe(newId)
+      await ensureTerminalVisible(mcodePage)
+      await waitForActiveTerminalManager(mcodePage, 30_000)
+      await waitForPaneCount(mcodePage, 2, 15_000)
+      await waitForAllPanesToHaveContent(mcodePage, `switchback-${i} initial`)
 
-      await switchToWorktree(orcaPage, homeWorktreeId)
+      await switchToWorktree(mcodePage, homeWorktreeId)
       await expect
-        .poll(async () => getActiveWorktreeId(orcaPage), { timeout: 10_000 })
+        .poll(async () => getActiveWorktreeId(mcodePage), { timeout: 10_000 })
         .toBe(homeWorktreeId)
-      await ensureTerminalVisible(orcaPage)
-      await waitForActiveTerminalManager(orcaPage, 15_000)
+      await ensureTerminalVisible(mcodePage)
+      await waitForActiveTerminalManager(mcodePage, 15_000)
 
-      await switchToWorktree(orcaPage, newId)
-      await expect.poll(async () => getActiveWorktreeId(orcaPage), { timeout: 10_000 }).toBe(newId)
-      await ensureTerminalVisible(orcaPage)
-      await waitForActiveTerminalManager(orcaPage, 15_000)
-      await waitForAllPanesToHaveContent(orcaPage, `switchback-${i} after return`)
+      await switchToWorktree(mcodePage, newId)
+      await expect.poll(async () => getActiveWorktreeId(mcodePage), { timeout: 10_000 }).toBe(newId)
+      await ensureTerminalVisible(mcodePage)
+      await waitForActiveTerminalManager(mcodePage, 15_000)
+      await waitForAllPanesToHaveContent(mcodePage, `switchback-${i} after return`)
 
-      await switchToWorktree(orcaPage, homeWorktreeId)
+      await switchToWorktree(mcodePage, homeWorktreeId)
       await expect
-        .poll(async () => getActiveWorktreeId(orcaPage), { timeout: 10_000 })
+        .poll(async () => getActiveWorktreeId(mcodePage), { timeout: 10_000 })
         .toBe(homeWorktreeId)
-      await removeWorktreeViaStore(orcaPage, newId)
+      await removeWorktreeViaStore(mcodePage, newId)
       createdWorktreeIds.pop()
     }
   })
 
-  test('@headful rapid switching between many setup-split worktrees', async ({ orcaPage }) => {
+  test('@headful rapid switching between many setup-split worktrees', async ({ mcodePage }) => {
     test.setTimeout(120_000)
-    const homeWorktreeId = await waitForActiveWorktree(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
+    const homeWorktreeId = await waitForActiveWorktree(mcodePage)
+    await waitForActiveTerminalManager(mcodePage, 30_000)
 
     const worktreeIds = [homeWorktreeId]
     for (let i = 0; i < 4; i++) {
-      const newId = await createAndActivateWorktreeWithSetup(orcaPage, `multi-${i}`, 'vertical')
+      const newId = await createAndActivateWorktreeWithSetup(mcodePage, `multi-${i}`, 'vertical')
       createdWorktreeIds.push(newId)
       worktreeIds.push(newId)
 
-      await expect.poll(async () => getActiveWorktreeId(orcaPage), { timeout: 10_000 }).toBe(newId)
-      await ensureTerminalVisible(orcaPage)
-      await waitForActiveTerminalManager(orcaPage, 30_000)
-      await waitForPaneCount(orcaPage, 2, 15_000)
-      await waitForAllPanesToHaveContent(orcaPage, `multi-create-${i}`)
+      await expect.poll(async () => getActiveWorktreeId(mcodePage), { timeout: 10_000 }).toBe(newId)
+      await ensureTerminalVisible(mcodePage)
+      await waitForActiveTerminalManager(mcodePage, 30_000)
+      await waitForPaneCount(mcodePage, 2, 15_000)
+      await waitForAllPanesToHaveContent(mcodePage, `multi-create-${i}`)
     }
 
     for (let round = 0; round < 3; round++) {
       for (const wId of worktreeIds) {
-        await switchToWorktree(orcaPage, wId)
-        await expect.poll(async () => getActiveWorktreeId(orcaPage), { timeout: 10_000 }).toBe(wId)
-        await ensureTerminalVisible(orcaPage)
-        await waitForActiveTerminalManager(orcaPage, 15_000)
-        await waitForAllPanesToHaveContent(orcaPage, `multi-r${round}-${wId.slice(0, 8)}`)
+        await switchToWorktree(mcodePage, wId)
+        await expect.poll(async () => getActiveWorktreeId(mcodePage), { timeout: 10_000 }).toBe(wId)
+        await ensureTerminalVisible(mcodePage)
+        await waitForActiveTerminalManager(mcodePage, 15_000)
+        await waitForAllPanesToHaveContent(mcodePage, `multi-r${round}-${wId.slice(0, 8)}`)
       }
     }
   })

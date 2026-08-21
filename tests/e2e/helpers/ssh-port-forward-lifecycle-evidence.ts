@@ -47,18 +47,18 @@ export function startRemoteHttpListener(
   execDockerSshRelayTargetCommand(
     target,
     [
-      `nohup node -e ${shellQuote(script)} >/tmp/orca-http-${port}.log 2>&1 < /dev/null &`,
-      `echo $! >/tmp/orca-http-${port}.pid`
+      `nohup node -e ${shellQuote(script)} >/tmp/mcode-http-${port}.log 2>&1 < /dev/null &`,
+      `echo $! >/tmp/mcode-http-${port}.pid`
     ].join(' ')
   )
-  return Number(execDockerSshRelayTargetCommand(target, `cat /tmp/orca-http-${port}.pid`))
+  return Number(execDockerSshRelayTargetCommand(target, `cat /tmp/mcode-http-${port}.pid`))
 }
 
 export function readRemoteListenerIdentity(
   target: DockerSshRelayTarget,
   port: number
 ): { pid: number; executable: string; command: string } {
-  const pid = Number(execDockerSshRelayTargetCommand(target, `cat /tmp/orca-http-${port}.pid`))
+  const pid = Number(execDockerSshRelayTargetCommand(target, `cat /tmp/mcode-http-${port}.pid`))
   return {
     pid,
     executable: execDockerSshRelayTargetCommand(target, `readlink /proc/${pid}/exe`),

@@ -35,7 +35,7 @@ export type FileExplorerRowProps = {
   connectionId?: string | null
   runtimeDownloadContext?: RuntimeFileOperationArgs | null
   supportsFolderDownload?: boolean
-  canOpenInOrcaBrowser: boolean
+  canOpenInMCodeBrowser: boolean
   canCollapseFolderSubtree: boolean
   targetDir: string
   targetDepth: number
@@ -76,7 +76,7 @@ export function FileExplorerRow({
   connectionId,
   runtimeDownloadContext,
   supportsFolderDownload = false,
-  canOpenInOrcaBrowser,
+  canOpenInMCodeBrowser,
   canCollapseFolderSubtree,
   targetDir,
   targetDepth,
@@ -254,7 +254,7 @@ export function FileExplorerRow({
         connectionId={connectionId}
         runtimeDownloadContext={runtimeDownloadContext}
         supportsFolderDownload={supportsFolderDownload}
-        canOpenInOrcaBrowser={canOpenInOrcaBrowser}
+        canOpenInMCodeBrowser={canOpenInMCodeBrowser}
         canCollapseFolderSubtree={canCollapseFolderSubtree}
         targetDir={targetDir}
         targetDepth={targetDepth}

@@ -10,7 +10,7 @@ import { useAppStore } from '../../store'
 import { PrivacyDiagnosticsSection } from './PrivacyDiagnosticsSection'
 import { translate } from '@/i18n/i18n'
 
-export type EnvBlockedReason = 'do_not_track' | 'orca_disabled' | 'ci'
+export type EnvBlockedReason = 'do_not_track' | 'mcode_disabled' | 'ci'
 export type BlockedReason = { kind: 'env'; reason: EnvBlockedReason }
 
 type PrivacyPaneProps = {
@@ -26,7 +26,7 @@ export function isEnvBlocked(consent: TelemetryConsentState | null): consent is 
   return (
     consent?.effective === 'disabled' &&
     (consent.reason === 'do_not_track' ||
-      consent.reason === 'orca_disabled' ||
+      consent.reason === 'mcode_disabled' ||
       consent.reason === 'ci')
   )
 }
@@ -35,8 +35,8 @@ export function envVarNameForReason(reason: EnvBlockedReason): string {
   if (reason === 'do_not_track') {
     return 'DO_NOT_TRACK'
   }
-  if (reason === 'orca_disabled') {
-    return 'ORCA_TELEMETRY_DISABLED'
+  if (reason === 'mcode_disabled') {
+    return 'MCODE_TELEMETRY_DISABLED'
   }
   return 'CI'
 }
@@ -100,7 +100,7 @@ export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.PrivacyPane.8bfdd23a88',
-              'Help us figure out what to build next. Orca sends anonymous counts of which features you use and where things break.'
+              'Help us figure out what to build next. MCode sends anonymous counts of which features you use and where things break.'
             )}{' '}
             <button
               type="button"

@@ -225,7 +225,7 @@ export function OrchestrationPage(props: {
       pendingMirror.current = { ...INITIAL_CHILD_PENDING }
       if (!childCountControlledRef.current) {
         // Reveal each child workspace when the matching shell command appears,
-        // so the CLI tip reads as Claude driving the exact Orca workflow shown.
+        // so the CLI tip reads as Claude driving the exact MCode workflow shown.
         later(() => {
           setCreatedChildCount(1)
         }, CHILD_ONE_CREATE_MS)

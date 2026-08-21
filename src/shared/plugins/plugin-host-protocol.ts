@@ -3,7 +3,7 @@ import { PLUGIN_COMMAND_LIMIT, PLUGIN_EVENT_NAMES, pluginCommandIdSchema } from 
 import { PLUGIN_CAPABILITY_KINDS } from './plugin-capabilities'
 
 /**
- * Message protocol between the Orca process and the out-of-process plugin
+ * Message protocol between the MCode process and the out-of-process plugin
  * worker (child_process.fork channel). Zod-validated on both sides because
  * the child runs third-party code — nothing it sends is trusted structurally.
  */

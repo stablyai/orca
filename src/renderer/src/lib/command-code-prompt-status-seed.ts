@@ -5,7 +5,7 @@ import { resolveLiveAgentStatusConnectionRouting } from './agent-status-connecti
 import { rendererAgentStatusObservations } from './renderer-agent-status-observations'
 
 /**
- * Why: Command Code has no prompt-submit hook, so when Orca submits a generated
+ * Why: Command Code has no prompt-submit hook, so when MCode submits a generated
  * prompt after the TUI is ready, seed `working` at delivery time so sidebar and
  * activity surfaces don't stay idle until the first real hook event arrives.
  */

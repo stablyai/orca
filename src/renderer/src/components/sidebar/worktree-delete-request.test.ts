@@ -17,7 +17,7 @@ import {
   toWorktreeDeleteIdentities
 } from './worktree-delete-request'
 
-const SHARED_ID = 'repo-1::/work/orca'
+const SHARED_ID = 'repo-1::/work/mcode'
 const LOCAL: ExecutionHostId = 'local'
 const SSH: ExecutionHostId = 'ssh:build-box'
 
@@ -26,7 +26,7 @@ function row(hostId: ExecutionHostId | undefined, overrides: Partial<Worktree> =
     id: SHARED_ID,
     instanceId: `instance-${hostId ?? 'none'}`,
     repoId: 'repo-1',
-    path: '/work/orca',
+    path: '/work/mcode',
     isMainWorktree: false,
     ...(hostId ? { hostId } : {}),
     ...overrides

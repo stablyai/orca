@@ -118,7 +118,7 @@ const FAILURE_EXCERPT_TAIL_BUDGET = 130
 const FAILURE_EXCERPT_SINGLE_BUDGET = 240
 
 // Why: agent CLIs share no error format, and per-CLI parsing rots every time a
-// vendor rewords a message. Orca deliberately does NOT interpret failure
+// vendor rewords a message. MCode deliberately does NOT interpret failure
 // output — it excerpts it positionally (first lines plus last line) so every
 // CLI's real failure text reaches the user. Callers must still sanitize the
 // excerpt before display or persistence.

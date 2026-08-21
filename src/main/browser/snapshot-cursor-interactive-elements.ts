@@ -51,7 +51,7 @@ export async function findCursorInteractiveElements(
           } catch {}
         });
 
-        window.__orcaCursorInteractive = matchedElements;
+        window.__mcodeCursorInteractive = matchedElements;
         return JSON.stringify(found);
       })()`,
       returnByValue: true
@@ -62,7 +62,7 @@ export async function findCursorInteractiveElements(
     for (let i = 0; i < elements.length; i++) {
       try {
         const { result: objResult } = (await sendCommand('Runtime.evaluate', {
-          expression: `window.__orcaCursorInteractive[${i}]`
+          expression: `window.__mcodeCursorInteractive[${i}]`
         })) as { result: { objectId?: string } }
 
         if (!objResult.objectId) {
@@ -91,7 +91,7 @@ export async function findCursorInteractiveElements(
 
     // Clean up
     await sendCommand('Runtime.evaluate', {
-      expression: 'delete window.__orcaCursorInteractive',
+      expression: 'delete window.__mcodeCursorInteractive',
       returnByValue: true
     })
   } catch {

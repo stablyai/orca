@@ -73,14 +73,14 @@ describe('formatMessageBanner', () => {
   it('includes reply hint with message ID', () => {
     const banner = formatMessageBanner(makeMessage({ id: 'msg_xyz789' }))
     expect(banner).toContain(
-      '[Reply: orca orchestration reply --id msg_xyz789 --from term_coord --body "..."]'
+      '[Reply: mcode orchestration reply --id msg_xyz789 --from term_coord --body "..."]'
     )
   })
 
   it('lets the CLI resolve the live sender for Run and Dispatch addresses', () => {
     for (const to_handle of ['run:run_test', 'dispatch:dispatch_test']) {
       const banner = formatMessageBanner(makeMessage({ to_handle }))
-      expect(banner).toContain('[Reply: orca orchestration reply --id msg_test1 --body "..."]')
+      expect(banner).toContain('[Reply: mcode orchestration reply --id msg_test1 --body "..."]')
       expect(banner).not.toContain(`--from ${to_handle}`)
     }
   })
@@ -100,13 +100,13 @@ describe('formatMessageBanner', () => {
     const banner = formatMessageBanner(makeMessage({ id: 'msg_legacy' }), {
       authority: 'legacy_compatibility',
       supportedActionHints: [
-        'orca orchestration reply --id msg_legacy --from term_coord --body "..."'
+        'mcode orchestration reply --id msg_legacy --from term_coord --body "..."'
       ]
     })
 
     expect(banner).toContain('[LEGACY COMPATIBILITY]')
     expect(banner).toContain(
-      '[Supported action: orca orchestration reply --id msg_legacy --from term_coord --body "..."]'
+      '[Supported action: mcode orchestration reply --id msg_legacy --from term_coord --body "..."]'
     )
     expect(banner).not.toContain('[Reply:')
     expect(banner).not.toContain('acknowledgment')
@@ -115,18 +115,18 @@ describe('formatMessageBanner', () => {
   it('warns that a bounded legacy recovery replay may already have been seen', () => {
     const banner = formatMessageBanner(makeMessage(), {
       authority: 'legacy_recovery_replay',
-      supportedActionHints: ['orca orchestration check --ack delivery_legacy']
+      supportedActionHints: ['mcode orchestration check --ack delivery_legacy']
     })
 
     expect(banner).toContain('[LEGACY RECOVERY REPLAY — MAY HAVE BEEN SEEN]')
     expect(banner).toContain('bounded recovery replay may already have been seen')
-    expect(banner).toContain('[Supported action: orca orchestration check --ack delivery_legacy]')
+    expect(banner).toContain('[Supported action: mcode orchestration check --ack delivery_legacy]')
     expect(banner).not.toContain('[Reply:')
   })
 
   it('does not infer live compatibility from legacy database provenance', () => {
     const banner = formatMessageBanner(makeMessage({ run_id: 'run_legacy_local' }), {
-      supportedActionHints: ['orca orchestration check --ack delivery_legacy']
+      supportedActionHints: ['mcode orchestration check --ack delivery_legacy']
     })
 
     expect(banner).toContain('[LEGACY READ-ONLY]')
@@ -187,7 +187,7 @@ describe('formatMessagesForInjection', () => {
 describe('formatMessagePointer', () => {
   it('formats a singular pointer without message content', () => {
     expect(formatMessagePointer(1, 'run:run_1')).toBe(
-      '\nYou have 1 orchestration message. Run `orca orchestration check --run run_1`.\n'
+      '\nYou have 1 orchestration message. Run `mcode orchestration check --run run_1`.\n'
     )
   })
 

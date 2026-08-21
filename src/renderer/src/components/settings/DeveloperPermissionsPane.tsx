@@ -126,7 +126,7 @@ const PERMISSIONS: PermissionDefinition[] = [
     get description() {
       return translate(
         'auto.components.settings.DeveloperPermissionsPane.7ca17b62c8',
-        "macOS names Orca when the agents it runs read other apps' data, because Orca is the responsible process for terminal commands. Grant this to Orca to reduce those prompts. Then quit and reopen Orca."
+        "macOS names MCode when the agents it runs read other apps' data, because MCode is the responsible process for terminal commands. Grant this to MCode to reduce those prompts. Then quit and reopen MCode."
       )
     },
     get actionLabel() {
@@ -167,7 +167,7 @@ const PERMISSIONS: PermissionDefinition[] = [
     get description() {
       return translate(
         'auto.components.settings.DeveloperPermissionsPane.f903bf20b5',
-        "Allows terminals and development tools to connect to services on your local network. macOS does not report this permission's current status to Orca."
+        "Allows terminals and development tools to connect to services on your local network. macOS does not report this permission's current status to MCode."
       )
     },
     get actionLabel() {
@@ -273,7 +273,7 @@ export function DeveloperPermissionsPane({
   }, [refresh])
 
   // Why: after the user flips a permission in System Settings and switches
-  // back to Orca, the chip should reflect the new status without a manual
+  // back to MCode, the chip should reflect the new status without a manual
   // Refresh click. Tied to window focus rather than a polling interval so
   // we don't keep hammering `systemPreferences` while the pane is idle.
   useEffect(() => {
@@ -323,13 +323,13 @@ export function DeveloperPermissionsPane({
             <ShieldCheck className="size-4" />
             {translate(
               'auto.components.settings.DeveloperPermissionsPane.6f011b9bf6',
-              "Terminal tools inherit Orca's macOS privacy envelope."
+              "Terminal tools inherit MCode's macOS privacy envelope."
             )}
           </div>
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.DeveloperPermissionsPane.6326a4c5cc',
-              'Use these controls when a CLI, local app, or automation tool needs macOS privacy access. Orca does not ask at startup.'
+              'Use these controls when a CLI, local app, or automation tool needs macOS privacy access. MCode does not ask at startup.'
             )}
           </p>
         </div>

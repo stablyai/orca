@@ -8,15 +8,15 @@ import {
 describe('composer drop upload result', () => {
   it('separates imported files and folders while counting skipped or failed paths', () => {
     const results: ComposerDropUploadImportResult[] = [
-      { status: 'imported', kind: 'file', destPath: '/repo/.orca/drops/file.txt' },
-      { status: 'imported', kind: 'directory', destPath: '/repo/.orca/drops/folder' },
+      { status: 'imported', kind: 'file', destPath: '/repo/.mcode/drops/file.txt' },
+      { status: 'imported', kind: 'directory', destPath: '/repo/.mcode/drops/folder' },
       { status: 'skipped' },
       { status: 'failed' }
     ]
 
     expect(collectComposerDropUploadResult(results)).toEqual({
-      filePaths: ['/repo/.orca/drops/file.txt'],
-      folderPaths: ['/repo/.orca/drops/folder'],
+      filePaths: ['/repo/.mcode/drops/file.txt'],
+      folderPaths: ['/repo/.mcode/drops/folder'],
       skippedOrFailed: 2
     })
   })

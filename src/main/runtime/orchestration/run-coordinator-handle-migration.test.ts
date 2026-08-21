@@ -20,7 +20,7 @@ describe('Run coordinator handle history migration', () => {
   })
 
   it('preserves v27 coordinator authority for mail arriving after a rebind', () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'orca-run-coordinator-handle-migration-'))
+    tempDir = mkdtempSync(join(tmpdir(), 'mcode-run-coordinator-handle-migration-'))
     const dbPath = join(tempDir, 'orchestration.db')
     db = new OrchestrationDb(dbPath)
     const run = db.createRun({
@@ -67,7 +67,7 @@ describe('Run coordinator handle history migration', () => {
   })
 
   it('self-converges a v28 database created before coordinator history existed', () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'orca-run-coordinator-v28-convergence-'))
+    tempDir = mkdtempSync(join(tmpdir(), 'mcode-run-coordinator-v28-convergence-'))
     const dbPath = join(tempDir, 'orchestration.db')
     db = new OrchestrationDb(dbPath)
     const run = db.createRun({
@@ -94,7 +94,7 @@ describe('Run coordinator handle history migration', () => {
   })
 
   it('records every coordinator rebind performed by an older runtime', () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'orca-run-coordinator-old-runtime-'))
+    tempDir = mkdtempSync(join(tmpdir(), 'mcode-run-coordinator-old-runtime-'))
     const dbPath = join(tempDir, 'orchestration.db')
     db = new OrchestrationDb(dbPath)
     const run = db.createRun({
@@ -139,7 +139,7 @@ describe('Run coordinator handle history migration', () => {
   })
 
   it('reinstalls coordinator routing after a migration removes the trigger', () => {
-    tempDir = mkdtempSync(join(tmpdir(), 'orca-run-coordinator-trigger-migration-'))
+    tempDir = mkdtempSync(join(tmpdir(), 'mcode-run-coordinator-trigger-migration-'))
     const dbPath = join(tempDir, 'orchestration.db')
     db = new OrchestrationDb(dbPath)
     const run = db.createRun({

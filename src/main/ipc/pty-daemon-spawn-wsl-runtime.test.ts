@@ -37,7 +37,7 @@ vi.mock('../telemetry/client', () =>
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
-vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
+vi.mock('../cli/linux-terminal-mcode-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../memory/pty-registry', () =>
@@ -255,9 +255,9 @@ describe('registerPtyHandlers', () => {
           const spawnOptions = daemonSpawn.mock.calls.at(-1)?.[0] as DaemonSpawnCall
           expect(spawnOptions.terminalWindowsWslDistro).toBe('Ubuntu')
           expect(spawnOptions.env).toMatchObject({
-            ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND: 'wsl',
-            ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID: 'compat-host',
-            ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION: 'Ubuntu'
+            MCODE_ORCHESTRATION_COMPATIBILITY_HOST_KIND: 'wsl',
+            MCODE_ORCHESTRATION_COMPATIBILITY_HOST_ID: 'compat-host',
+            MCODE_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION: 'Ubuntu'
           })
           expect(runtime.preparePtyExecutionContext).toHaveBeenCalledWith(
             expect.any(String),
@@ -415,9 +415,9 @@ describe('registerPtyHandlers', () => {
             worktreeId: 'wt-runtime',
             command: 'claude',
             env: {
-              PATH: `/tmp/orca-agent-teams-bin${delimiter}/usr/bin`,
-              ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
-              TERM_PROGRAM: 'Orca'
+              PATH: `/tmp/mcode-agent-teams-bin${delimiter}/usr/bin`,
+              MCODE_AGENT_TEAMS_TEAM_ID: 'team-test',
+              TERM_PROGRAM: 'MCode'
             },
             envToDelete: ['TERM_PROGRAM']
           })
@@ -427,7 +427,7 @@ describe('registerPtyHandlers', () => {
 
         const spawnOptions = daemonSpawn.mock.calls.at(-1)?.[0] as DaemonSpawnCall
         const spawnedPath = spawnOptions.env.PATH.split(delimiter)
-        expect(spawnedPath[0]).toBe('/tmp/orca-agent-teams-bin')
+        expect(spawnedPath[0]).toBe('/tmp/mcode-agent-teams-bin')
         expect(spawnedPath.some((entry) => entry.includes(join('cli', 'bin')))).toBe(true)
         expect(spawnOptions.env.TERM_PROGRAM).toBeUndefined()
         expect(spawnOptions.envToDelete).toEqual(expect.arrayContaining(['TERM_PROGRAM']))
@@ -439,11 +439,11 @@ describe('registerPtyHandlers', () => {
         mockedApp.isPackaged = false
         try {
           const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
-            ORCA_AGENT_HOOK_ENDPOINT: '/tmp/stale-endpoint.env'
+            MCODE_AGENT_HOOK_ENDPOINT: '/tmp/stale-endpoint.env'
           })
-          expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeUndefined()
-          expect(env.ORCA_AGENT_HOOK_PORT).toBe('5678')
-          expect(env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
+          expect(env.MCODE_AGENT_HOOK_ENDPOINT).toBeUndefined()
+          expect(env.MCODE_AGENT_HOOK_PORT).toBe('5678')
+          expect(env.MCODE_AGENT_HOOK_TOKEN).toBe('agent-token')
         } finally {
           mockedApp.isPackaged = prev
         }
@@ -459,9 +459,9 @@ describe('registerPtyHandlers', () => {
         try {
           spawnOptions = await daemonSpawnAndGetOptions(
             {
-              PATH: `/tmp/orca-agent-teams-bin${delimiter}/usr/bin`,
-              ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
-              TERM_PROGRAM: 'Orca'
+              PATH: `/tmp/mcode-agent-teams-bin${delimiter}/usr/bin`,
+              MCODE_AGENT_TEAMS_TEAM_ID: 'team-test',
+              TERM_PROGRAM: 'MCode'
             },
             undefined,
             undefined,
@@ -476,12 +476,12 @@ describe('registerPtyHandlers', () => {
         }
 
         const spawnedPath = spawnOptions.env.PATH.split(delimiter)
-        expect(spawnedPath[0]).toBe('/tmp/orca-agent-teams-bin')
+        expect(spawnedPath[0]).toBe('/tmp/mcode-agent-teams-bin')
         expect(spawnedPath.some((entry) => entry.includes(join('cli', 'bin')))).toBe(true)
         expect(spawnOptions.env.TERM_PROGRAM).toBeUndefined()
         expect(spawnOptions.envToDelete).toEqual(expect.arrayContaining(['TERM_PROGRAM']))
       })
-      it('injects dev-mode ORCA_USER_DATA_PATH + dev CLI PATH on the daemon path', async () => {
+      it('injects dev-mode MCODE_USER_DATA_PATH + dev CLI PATH on the daemon path', async () => {
         // Why: the mocked `app` is a plain object, so we can flip isPackaged for the test's scope.
         const { app } = await import('electron')
         const mockedApp = app as unknown as { isPackaged: boolean }
@@ -489,8 +489,8 @@ describe('registerPtyHandlers', () => {
         mockedApp.isPackaged = false
         try {
           const env = await daemonSpawnAndGetEnv({ PATH: '/usr/bin' })
-          expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
-          expect(env.PATH).toContain(join('/tmp/orca-user-data', 'cli', 'bin'))
+          expect(env.MCODE_USER_DATA_PATH).toBe('/tmp/mcode-user-data')
+          expect(env.PATH).toContain(join('/tmp/mcode-user-data', 'cli', 'bin'))
         } finally {
           mockedApp.isPackaged = prev
         }
@@ -504,9 +504,9 @@ describe('registerPtyHandlers', () => {
           const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
             PATH: '/system/bin'
           })
-          expect(env.ORCA_USER_DATA_PATH).toBe('/tmp/orca-user-data')
+          expect(env.MCODE_USER_DATA_PATH).toBe('/tmp/mcode-user-data')
           expect(env.PATH).toContain(
-            `${join('/tmp/orca-user-data', 'cli', 'bin')}${delimiter}/system/bin`
+            `${join('/tmp/mcode-user-data', 'cli', 'bin')}${delimiter}/system/bin`
           )
         } finally {
           mockedApp.isPackaged = prev
@@ -521,9 +521,9 @@ describe('registerPtyHandlers', () => {
         mockedApp.isPackaged = false
         try {
           const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
-            PATH: `/tmp/orca-user-data/orca-terminal-attribution/posix${delimiter}/system/bin`
+            PATH: `/tmp/mcode-user-data/mcode-terminal-attribution/posix${delimiter}/system/bin`
           })
-          expect(env.PATH).not.toContain('orca-terminal-attribution')
+          expect(env.PATH).not.toContain('mcode-terminal-attribution')
           expect(env.PATH).toContain('/system/bin')
         } finally {
           mockedApp.isPackaged = prev

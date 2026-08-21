@@ -42,7 +42,7 @@ function getDefaultState(): CodexUsagePersistedState {
 
 export function normalizePersistedState(state: CodexUsagePersistedState): CodexUsagePersistedState {
   if (state.schemaVersion !== SCHEMA_VERSION) {
-    // Why: Orca-scoped Codex projections now depend on locationModelBreakdown.
+    // Why: MCode-scoped Codex projections now depend on locationModelBreakdown.
     // Reusing an older cache would silently serve wrong model/session rows
     // until the next forced rescan, so schema changes must invalidate stale
     // persisted analytics instead of best-effort patching partial data.
@@ -67,12 +67,12 @@ export function normalizePersistedState(state: CodexUsagePersistedState): CodexU
 }
 
 export function initCodexUsagePath(): void {
-  _codexUsageFile = join(app.getPath('userData'), 'orca-codex-usage.json')
+  _codexUsageFile = join(app.getPath('userData'), 'mcode-codex-usage.json')
 }
 
 function getCodexUsageFile(): string {
   if (!_codexUsageFile) {
-    _codexUsageFile = join(app.getPath('userData'), 'orca-codex-usage.json')
+    _codexUsageFile = join(app.getPath('userData'), 'mcode-codex-usage.json')
   }
   return _codexUsageFile
 }

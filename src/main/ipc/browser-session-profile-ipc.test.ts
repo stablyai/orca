@@ -48,7 +48,7 @@ describe('browser session profile IPC', () => {
     const profile = {
       id: 'profile-google',
       scope: 'isolated',
-      partition: 'persist:orca-browser-session-profile-google',
+      partition: 'persist:mcode-browser-session-profile-google',
       label: 'Google',
       source: null,
       userAgentMode: 'native'

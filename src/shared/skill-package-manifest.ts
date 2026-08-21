@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { z } from 'zod'
 
 export const SKILL_PACKAGE_SCHEMA_VERSION = 1 as const
-export const SKILL_PACKAGE_CONTENT_TYPE = 'application/vnd.orca.skill+tar+gzip'
+export const SKILL_PACKAGE_CONTENT_TYPE = 'application/vnd.mcode.skill+tar+gzip'
 export const SKILL_PACKAGE_MAX_COMPRESSED_BYTES = 40 * 1024 * 1024
 export const SKILL_PACKAGE_MAX_MANIFEST_BYTES = 1024 * 1024
 

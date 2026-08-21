@@ -67,7 +67,7 @@ export type RawActivityResponse = {
 }
 
 export const ACTIVITY_QUERY = `
-  query OrcaAgentLinearIssueActivity($id: String!, $first: Int, $after: String) {
+  query MCodeAgentLinearIssueActivity($id: String!, $first: Int, $after: String) {
     issue(id: $id) {
       history(first: $first, after: $after) {
         nodes {

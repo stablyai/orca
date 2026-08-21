@@ -49,7 +49,7 @@ export const CLAUDE_EVENTS = [
     definition: { hooks: [{ type: 'command', command: '' }] }
   },
   // Why: OpenClaude skips normal Stop hooks after API/model errors and emits
-  // StopFailure instead; without this hook Orca leaves the turn spinning.
+  // StopFailure instead; without this hook MCode leaves the turn spinning.
   {
     eventName: 'StopFailure',
     definition: { hooks: [{ type: 'command', command: '' }] }
@@ -157,7 +157,7 @@ export function getManagedLifecycleHook(
 export function getWindowsManagedLifecycleHook(scriptPath: string): HookCommandConfig {
   const scriptFileName = win32.basename(scriptPath)
   // Why: runtime profile resolution keeps the managed entry portable across users (STA-3348).
-  const quotedRelativePath = quotePowerShellString(`.orca\\agent-hooks\\${scriptFileName}`)
+  const quotedRelativePath = quotePowerShellString(`.mcode\\agent-hooks\\${scriptFileName}`)
   // Why: compat consumers require neutral JSON even when the managed script is missing (#14818).
   const innerCommand =
     `$scriptPath = Join-Path $env:USERPROFILE ${quotedRelativePath}; ` +

@@ -1,4 +1,4 @@
-/** One tab's migration in an Orca-owned move; precomputed by the move coordinator. */
+/** One tab's migration in an MCode-owned move; precomputed by the move coordinator. */
 export type OpenFilePathRekey = {
   oldFileId: string
   newFileId: string

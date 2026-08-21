@@ -14,7 +14,7 @@ describe('formatWorkspaceCreateError', () => {
 
     expect(formatted).toEqual({
       title: 'No base branch found',
-      message: 'Orca could not resolve a usable base ref for this workspace.',
+      message: 'MCode could not resolve a usable base ref for this workspace.',
       help: 'Create an initial commit (for example on main), or select an existing branch in Create From, then try again.'
     })
     expect(getWorkspaceCreateErrorToastMessage(formatted)).toBe('No base branch found')

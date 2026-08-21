@@ -16,7 +16,7 @@ import {
 const SOURCE_ID = 'a'.repeat(32)
 const MARKETPLACE_COMMIT = 'b'.repeat(40)
 const PLUGIN_COMMIT = 'c'.repeat(40)
-const PLUGIN_KEY = 'orca-samples.demo'
+const PLUGIN_KEY = 'mcode-samples.demo'
 
 let handlers: Map<string, IpcHandler>
 

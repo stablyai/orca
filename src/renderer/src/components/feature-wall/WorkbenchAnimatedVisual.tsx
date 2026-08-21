@@ -8,7 +8,7 @@ import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { FeatureWallClickRing } from './FeatureWallClickRing'
 import { translate } from '@/i18n/i18n'
 
-// Why: the right-click menu needs the same icons as the real Orca menu so the
+// Why: the right-click menu needs the same icons as the real MCode menu so the
 // visual reads as the actual product, not a generic terminal mockup.
 function SplitRightIcon(): JSX.Element {
   return (

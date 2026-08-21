@@ -46,7 +46,7 @@ function createScanState(overrides: Partial<CodexUsageScanState> = {}): CodexUsa
 
 function createSummary(totalTokens: number): CodexUsageSummary {
   return {
-    scope: 'orca',
+    scope: 'mcode',
     range: '30d',
     sessions: totalTokens / 100,
     events: totalTokens / 10,
@@ -57,7 +57,7 @@ function createSummary(totalTokens: number): CodexUsageSummary {
     totalTokens,
     estimatedCostUsd: 1,
     topModel: 'gpt-5',
-    topProject: 'orca',
+    topProject: 'mcode',
     hasAnyCodexData: true
   }
 }

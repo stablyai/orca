@@ -23,7 +23,7 @@ export default function globalTeardown(): void {
     try {
       const siblings = readdirSync(parentDir)
       for (const name of siblings) {
-        if (name.startsWith('orca-e2e-worktree-') || name.startsWith('e2e-test-')) {
+        if (name.startsWith('mcode-e2e-worktree-') || name.startsWith('e2e-test-')) {
           rmSync(path.join(parentDir, name), { recursive: true, force: true })
         }
       }

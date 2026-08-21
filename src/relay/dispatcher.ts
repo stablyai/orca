@@ -814,7 +814,7 @@ export class RelayDispatcher {
     // Why: prefer a real socket client over the synthetic primary so requests don't forward to a dead stdout.
     const target = candidates.find((client) => client !== this.primaryClient) ?? candidates[0]
     if (!target) {
-      return Promise.reject(new Error('No owning Orca client is connected to the relay'))
+      return Promise.reject(new Error('No owning MCode client is connected to the relay'))
     }
     return this.requestClient(target.id, method, params, options)
   }

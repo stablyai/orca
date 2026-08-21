@@ -17,15 +17,15 @@ vi.mock('node:os', async () => {
 
 beforeEach(() => {
   vi.resetModules()
-  testState.userData = mkdtempSync(join(tmpdir(), 'orca-codex-status-home-ud-'))
-  testState.home = mkdtempSync(join(tmpdir(), 'orca-codex-status-home-'))
+  testState.userData = mkdtempSync(join(tmpdir(), 'mcode-codex-status-home-ud-'))
+  testState.home = mkdtempSync(join(tmpdir(), 'mcode-codex-status-home-'))
   // Why: the real-home check consults CODEX_HOME and the shell rc, so a
   // developer who exports one would otherwise fail this suite locally.
-  for (const key of ['ORCA_USER_DATA_PATH', 'CODEX_HOME', 'ORCA_CODEX_HOME']) {
+  for (const key of ['MCODE_USER_DATA_PATH', 'CODEX_HOME', 'MCODE_CODEX_HOME']) {
     previousEnv[key] = process.env[key]
     delete process.env[key]
   }
-  process.env.ORCA_USER_DATA_PATH = testState.userData
+  process.env.MCODE_USER_DATA_PATH = testState.userData
   mkdirSync(join(testState.home, '.codex'), { recursive: true })
 })
 
@@ -56,7 +56,7 @@ function createStore(accounts: CodexManagedAccount[], activeId: string | null) {
 function createManagedAccount(id: string): CodexManagedAccount {
   const home = join(testState.userData, 'codex-accounts', id, 'home')
   mkdirSync(home, { recursive: true })
-  writeFileSync(join(home, '.orca-managed-home'), `${id}\n`, 'utf-8')
+  writeFileSync(join(home, '.mcode-managed-home'), `${id}\n`, 'utf-8')
   writeFileSync(join(home, 'auth.json'), '{}', 'utf-8')
   return {
     id,
@@ -93,14 +93,14 @@ describe('CodexRuntimeHomeService.getMirroredHostHomePathForStatus', () => {
   it('returns the shared runtime home when a custom CODEX_HOME keeps the mirror lane', async () => {
     process.env.CODEX_HOME = join(testState.home, 'custom-codex-home')
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const { getOrcaManagedCodexHomePath } = await import('../codex/codex-home-paths')
+    const { getMCodeManagedCodexHomePath } = await import('../codex/codex-home-paths')
     const service = new CodexRuntimeHomeService(createStore([], null) as never)
 
     // Why: compare against the real helper, not a repeated literal, so the
     // status cannot silently drift if the managed home layout ever moves.
     expect(service.getMirroredHostHomePathForStatus()).toEqual({
       kind: 'ready',
-      homePath: getOrcaManagedCodexHomePath()
+      homePath: getMCodeManagedCodexHomePath()
     })
   })
 })

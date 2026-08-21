@@ -133,8 +133,8 @@ describe('spawnShellWithFallback on Windows', () => {
     const ptySpawn = vi.fn(() => {
       throw new Error(ACCESS_DENIED_5)
     }) as unknown as typeof pty.spawn
-    const previousVersion = process.env.ORCA_APP_VERSION
-    process.env.ORCA_APP_VERSION = '1.4.178-test'
+    const previousVersion = process.env.MCODE_APP_VERSION
+    process.env.MCODE_APP_VERSION = '1.4.178-test'
 
     try {
       expect(() =>
@@ -148,12 +148,12 @@ describe('spawnShellWithFallback on Windows', () => {
           ptySpawn,
           windowsFallbackAttempts: attempts
         })
-      ).toThrow(/Failed to spawn shell.*orca: 1\.4\.178-test/)
+      ).toThrow(/Failed to spawn shell.*mcode: 1\.4\.178-test/)
     } finally {
       if (previousVersion === undefined) {
-        delete process.env.ORCA_APP_VERSION
+        delete process.env.MCODE_APP_VERSION
       } else {
-        process.env.ORCA_APP_VERSION = previousVersion
+        process.env.MCODE_APP_VERSION = previousVersion
       }
     }
   })

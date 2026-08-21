@@ -66,12 +66,12 @@ const SAMPLE_ID_LENGTH = 24
 // Mirrors terminal-control-stripping.ts; the marker guard above fails if either is retuned.
 const CONTROL_DENSITY_BLOCK_CODE_UNITS = 64
 const CONTROL_DENSITY_FALLBACK_COUNT = 32
-const ITERATIONS = Number(process.env.ORCA_STRIP_BENCH_ITERATIONS ?? '501')
+const ITERATIONS = Number(process.env.MCODE_STRIP_BENCH_ITERATIONS ?? '501')
 let resultChecksum = 0
 let validatedPairs = 0
 
 if (!Number.isSafeInteger(ITERATIONS) || ITERATIONS <= 0) {
-  throw new Error(`ORCA_STRIP_BENCH_ITERATIONS must be a positive integer, got ${ITERATIONS}`)
+  throw new Error(`MCODE_STRIP_BENCH_ITERATIONS must be a positive integer, got ${ITERATIONS}`)
 }
 
 function isStrippedCode(code) {

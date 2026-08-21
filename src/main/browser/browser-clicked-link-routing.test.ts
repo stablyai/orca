@@ -9,10 +9,10 @@ import {
   installBrowserClickedLinkRouting
 } from './browser-clicked-link-routing'
 
-const FOREGROUND_FRAME_NAME = '__orca_clicked_link_foreground_test'
+const FOREGROUND_FRAME_NAME = '__mcode_clicked_link_foreground_test'
 
 type RoutingGlobal = typeof globalThis & {
-  __orcaBrowserClickedLinkRouting?: {
+  __mcodeBrowserClickedLinkRouting?: {
     listener: (event: MouseEvent) => void
   }
 }
@@ -21,12 +21,12 @@ let cleanupIframeRouting: (() => void) | null = null
 
 function resetRouting(): void {
   const routingGlobal = globalThis as RoutingGlobal
-  const state = routingGlobal.__orcaBrowserClickedLinkRouting
+  const state = routingGlobal.__mcodeBrowserClickedLinkRouting
   if (state) {
     window.removeEventListener('click', state.listener)
     window.removeEventListener('auxclick', state.listener)
   }
-  delete routingGlobal.__orcaBrowserClickedLinkRouting
+  delete routingGlobal.__mcodeBrowserClickedLinkRouting
   cleanupIframeRouting?.()
   cleanupIframeRouting = null
 }
@@ -64,7 +64,7 @@ describe('browser clicked-link routing', () => {
     vi.restoreAllMocks()
   })
 
-  it('routes plain target=_blank links back into the current Orca tab', () => {
+  it('routes plain target=_blank links back into the current MCode tab', () => {
     const link = document.createElement('a')
     link.href = 'https://docs.example.com/guide'
     link.target = '_blank'
@@ -177,13 +177,13 @@ describe('browser clicked-link routing', () => {
     const link = document.createElement('a')
     link.href = 'https://example.com/reference'
     document.body.append(link)
-    installBrowserClickedLinkRouting('__orca_clicked_link_old_fg', true, true)
-    installBrowserClickedLinkRouting('__orca_clicked_link_new_fg', false, true)
+    installBrowserClickedLinkRouting('__mcode_clicked_link_old_fg', true, true)
+    installBrowserClickedLinkRouting('__mcode_clicked_link_new_fg', false, true)
 
     expect(addEventListener.mock.calls.filter(([event]) => event === 'click')).toHaveLength(1)
     expect(clickLink(link, { ctrlKey: true }).open).toHaveBeenCalledWith(
       'https://example.com/reference',
-      '__orca_clicked_link_new_fg'
+      '__mcode_clicked_link_new_fg'
     )
   })
 

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ORCA_RENDERER_UNLOAD_PREVENTED_EVENT } from '../../../shared/renderer-shutdown-events'
+import { MCODE_RENDERER_UNLOAD_PREVENTED_EVENT } from '../../../shared/renderer-shutdown-events'
 import { requestLazyChunkRecoveryReload } from './lazy-chunk-recovery-reload'
 
 describe('requestLazyChunkRecoveryReload', () => {
@@ -25,7 +25,7 @@ describe('requestLazyChunkRecoveryReload', () => {
     vi.spyOn(window.location, 'reload').mockImplementation(() => {
       order.push('reload')
       // A real landed reload destroys the document; veto so the wait settles.
-      window.dispatchEvent(new Event(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT))
+      window.dispatchEvent(new Event(MCODE_RENDERER_UNLOAD_PREVENTED_EVENT))
     })
 
     await expect(

@@ -18,7 +18,7 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'ios', Version: 18 }
 }))
 
-const WATERMARK_KEY = 'orca:mobileNotificationsWatermark:host-1'
+const WATERMARK_KEY = 'mcode:mobileNotificationsWatermark:host-1'
 const storage = new Map<string, string>()
 let getItemImpl: (key: string) => Promise<string | null> = async (key) => storage.get(key) ?? null
 

@@ -14,7 +14,7 @@ type StarNagApi = {
   dismiss: ReturnType<typeof vi.fn>
   later: ReturnType<typeof vi.fn>
   openWeb: ReturnType<typeof vi.fn>
-  starOrca: ReturnType<typeof vi.fn>
+  starMCode: ReturnType<typeof vi.fn>
 }
 
 type ShellApi = {
@@ -53,7 +53,7 @@ describe('StarNagCard', () => {
       dismiss: vi.fn().mockResolvedValue(undefined),
       later: vi.fn().mockResolvedValue(undefined),
       openWeb: vi.fn().mockResolvedValue(undefined),
-      starOrca: vi.fn().mockResolvedValue(true)
+      starMCode: vi.fn().mockResolvedValue(true)
     }
     shell = {
       openUrl: vi.fn().mockResolvedValue(undefined)
@@ -71,7 +71,7 @@ describe('StarNagCard', () => {
   })
 
   it('switches to the explicit GitHub fallback when direct starring fails', async () => {
-    starNag.starOrca.mockResolvedValueOnce(false)
+    starNag.starMCode.mockResolvedValueOnce(false)
     ;({ root, container } = renderCard())
 
     act(() => showCallback?.({ mode: 'gh', surface: 'card' }))
@@ -86,7 +86,7 @@ describe('StarNagCard', () => {
       initialButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
-    expect(starNag.starOrca).toHaveBeenCalledTimes(1)
+    expect(starNag.starMCode).toHaveBeenCalledTimes(1)
     expect(shell.openUrl).not.toHaveBeenCalled()
     expect(starNag.openWeb).not.toHaveBeenCalled()
     expect(container.textContent).toContain('Open GitHub')

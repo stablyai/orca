@@ -71,7 +71,7 @@ describe('mobile E2EE v2 contract', () => {
     expect(validateMobileE2EEV2Handshake({ ...hello, context: relayWithoutId }, ready)).toBeNull()
 
     const directContext = {
-      protocol: 'orca-mobile-e2ee' as const,
+      protocol: 'mcode-mobile-e2ee' as const,
       initiator: 'mobile' as const,
       responder: 'desktop' as const,
       transport: 'direct' as const

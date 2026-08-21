@@ -6,7 +6,7 @@ import { SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE } from '../../shared/skill-instal
 import type { SkillDiscoveryResult, SkillDiscoveryTargetSchema } from '../../shared/skills'
 import type { SkillCloudDownloadGrant } from '../../shared/skill-cloud-contract'
 import type { SkillBundleInstallProgress } from '../../shared/skill-bundle-install-contract'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { MCodeRuntimeService } from '../runtime/mcode-runtime'
 import {
   installSkillBundleCloudGrant,
   installSkillCloudGrant
@@ -44,7 +44,7 @@ const packageVersionSchema = z
   .strict()
 
 function registerSharingHandlers(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   discover: (target?: z.infer<typeof SkillDiscoveryTargetSchema>) => Promise<SkillDiscoveryResult>
 ): void {
   const preparations = new SkillSharePreparationService(
@@ -89,7 +89,7 @@ function registerSharingHandlers(
   })
 }
 
-function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
+function registerCloudInstallHandlers(runtime: MCodeRuntimeService): void {
   const remoteInstallCancellation = new SkillRemoteInstallCancellation()
   const installAuthorizedGrant = async (
     grant: SkillCloudDownloadGrant,
@@ -288,7 +288,7 @@ function registerCloudInstallHandlers(runtime: OrcaRuntimeService): void {
 }
 
 export function registerSkillCloudIpcHandlers(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   discover: (target?: z.infer<typeof SkillDiscoveryTargetSchema>) => Promise<SkillDiscoveryResult>
 ): void {
   registerSharingHandlers(runtime, discover)

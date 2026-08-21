@@ -187,7 +187,7 @@ export function WindowsTerminalStep({
           <p className="text-[13px] leading-relaxed text-muted-foreground">
             {translate(
               'auto.components.onboarding.WindowsTerminalStep.defaultShellDescription',
-              'Choose the shell Orca opens for new Windows terminal panes.'
+              'Choose the shell MCode opens for new Windows terminal panes.'
             )}
           </p>
         </div>

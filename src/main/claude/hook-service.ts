@@ -67,19 +67,19 @@ function getManagedScript(
       'setlocal',
       // Why: Claude-compatible permission hooks fail closed on empty stdout (#14818).
       'echo {}',
-      // Why: refresh endpoint coordinates for PTYs surviving an Orca restart.
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
+      // Why: refresh endpoint coordinates for PTYs surviving an MCode restart.
+      'if defined MCODE_AGENT_HOOK_ENDPOINT if exist "%MCODE_AGENT_HOOK_ENDPOINT%" call "%MCODE_AGENT_HOOK_ENDPOINT%" 2>nul',
       // Why (#11549): the env guards must outrank the Devin skip — the Devin skip parks in more.com,
-      // and outside an Orca pane the caller can abandon stdin, so more.com never returns.
+      // and outside an MCode pane the caller can abandon stdin, so more.com never returns.
       ...buildWindowsHookEnvironmentGuardLines(),
       // Why: a backgrounded session runs in a daemon worker that inherited the dispatching
-      // pane's env, so ORCA_PANE_KEY names a pane this session does not run in (#9236).
+      // pane's env, so MCODE_PANE_KEY names a pane this session does not run in (#9236).
       // Why exit, not the drain label: the drain parks in more.com and a worker is outside
-      // an Orca pane — the abandoned-stdin hang #11549 guards against.
+      // an MCode pane — the abandoned-stdin hang #11549 guards against.
       'if not "%CLAUDE_JOB_DIR%"=="" exit /b 0',
       ...(options.skipWhenDevinImportsClaude
         ? [
-            // Why: Devin imports .claude hooks by default; skip Orca's managed hook there so status posts stay attributed to Devin.
+            // Why: Devin imports .claude hooks by default; skip MCode's managed hook there so status posts stay attributed to Devin.
             `if not "%DEVIN_PROJECT_DIR%"=="" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`
           ]
         : []),
@@ -98,37 +98,37 @@ function getManagedScript(
     ...buildPosixHookPayloadCapture(),
     ...(options.skipWhenDevinImportsClaude
       ? [
-          // Why: Devin imports .claude hooks by default; skip Orca's managed hook there so status posts stay attributed to Devin.
+          // Why: Devin imports .claude hooks by default; skip MCode's managed hook there so status posts stay attributed to Devin.
           'if [ -n "$DEVIN_PROJECT_DIR" ]; then',
           '  exit 0',
           'fi'
         ]
       : []),
     // Why: a backgrounded session runs in a daemon worker that inherited the dispatching
-    // pane's env, so ORCA_PANE_KEY names a pane this session does not run in (#9236).
+    // pane's env, so MCODE_PANE_KEY names a pane this session does not run in (#9236).
     'if [ -n "$CLAUDE_JOB_DIR" ]; then',
     '  exit 0',
     'fi',
-    // Why: refresh endpoint coordinates for PTYs surviving an Orca restart.
+    // Why: refresh endpoint coordinates for PTYs surviving an MCode restart.
     // Why: suppress parse errors so they neither leak nor trip outer set -e.
-    'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
-    '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
+    'if [ -n "$MCODE_AGENT_HOOK_ENDPOINT" ] && [ -r "$MCODE_AGENT_HOOK_ENDPOINT" ]; then',
+    '  . "$MCODE_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
-    'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
+    'if [ -z "$MCODE_AGENT_HOOK_PORT" ] || [ -z "$MCODE_AGENT_HOOK_TOKEN" ] || [ -z "$MCODE_PANE_KEY" ]; then',
     '  exit 0',
     'fi',
     // Why: post form fields because path-bearing payloads are unsafe in hand-built JSON.
     // Why: pipe payload to curl stdin to keep large output off the command line.
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/claude" \\',
+    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${MCODE_AGENT_HOOK_PORT}/hook/claude" \\',
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
-    '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
-    '  --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
-    '  --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
-    '  --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
-    '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
-    '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
-    '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
+    '  -H "X-MCode-Agent-Hook-Token: ${MCODE_AGENT_HOOK_TOKEN}" \\',
+    '  --data-urlencode "paneKey=${MCODE_PANE_KEY}" \\',
+    '  --data-urlencode "tabId=${MCODE_TAB_ID}" \\',
+    '  --data-urlencode "launchToken=${MCODE_AGENT_LAUNCH_TOKEN}" \\',
+    '  --data-urlencode "worktreeId=${MCODE_WORKTREE_ID}" \\',
+    '  --data-urlencode "env=${MCODE_AGENT_HOOK_ENV}" \\',
+    '  --data-urlencode "version=${MCODE_AGENT_HOOK_VERSION}" \\',
     '  --data-urlencode "payload@-" >/dev/null 2>&1 || true',
     'exit 0',
     ''
@@ -262,7 +262,7 @@ export class ClaudeHookService {
     // Why: remote Windows is unsupported; local process.platform cannot identify the remote OS.
     const remoteConfigPath = getRemoteConfigPath(remoteHome, this.options.settings)
     const remoteScriptFileName = getPosixManagedScriptFileName(this.options.settings)
-    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
+    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.mcode/agent-hooks/${remoteScriptFileName}`
     // Why: surface fallible SFTP installs as structured errors.
     try {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)
@@ -335,7 +335,7 @@ export class ClaudeHookService {
     }
     if (this.options.agent === 'claude') {
       try {
-        // Why: an Orca-level uninstall resets the opt-out memory so a later re-enable installs the statusline again.
+        // Why: an MCode-level uninstall resets the opt-out memory so a later re-enable installs the statusline again.
         rmSync(getStatusLineInstallMarkerPath(this.options.settings), { force: true })
       } catch {
         // ignore — marker cleanup is best-effort

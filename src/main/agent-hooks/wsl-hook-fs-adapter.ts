@@ -16,7 +16,7 @@ import { wslCodexRuntimeHomeForGuestHome } from '../pty/codex-home-wsl-env'
 import { WSL_HOOK_FS_METHODS, type WslFsResult } from '../../shared/wsl-hook-relay-contract'
 
 /** Run the shared remote hook installers against a WSL guest over the relay's
- *  fs bridge. Codex is the one agent whose home Orca redirects for WSL
+ *  fs bridge. Codex is the one agent whose home MCode redirects for WSL
  *  sessions, so its hooks go to the managed runtime home. */
 export async function installWslGuestHooks(options: {
   mux: SshChannelMultiplexer

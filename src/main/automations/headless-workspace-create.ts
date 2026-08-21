@@ -1,10 +1,10 @@
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { buildAutomationWorkspaceProvenance } from '../../shared/automation-workspace-provenance'
 import type { Repo } from '../../shared/repo-types'
-import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import type { MCodeRuntimeService } from '../runtime/mcode-runtime'
 
 type HeadlessAutomationRunForWorkspace = Pick<AutomationRun, 'id' | 'title' | 'scheduledFor'>
-type RuntimeCreateManagedWorktreeArgs = Parameters<OrcaRuntimeService['createManagedWorktree']>[0]
+type RuntimeCreateManagedWorktreeArgs = Parameters<MCodeRuntimeService['createManagedWorktree']>[0]
 
 export function buildHeadlessAutomationWorkspaceName(
   runTitle: string,

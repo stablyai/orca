@@ -9,11 +9,11 @@ import {
 function cliStatus(overrides: Partial<CliInstallStatus> = {}): CliInstallStatus {
   return {
     platform: 'darwin',
-    commandName: 'orca',
-    commandPath: '/usr/local/bin/orca',
+    commandName: 'mcode',
+    commandPath: '/usr/local/bin/mcode',
     pathDirectory: '/usr/local/bin',
     pathConfigured: true,
-    launcherPath: '/Applications/Orca.app/Contents/MacOS/orca',
+    launcherPath: '/Applications/MCode.app/Contents/MacOS/mcode',
     installMethod: 'symlink',
     supported: true,
     state: 'installed',

@@ -3,10 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resetAgentStartupDelayedDeliveryForTests } from '@/lib/agent-startup-delayed-delivery'
 
 // Deterministic reproduction for issue2-hidden-output-skip:
-//   "[Orca skipped hidden terminal output because main recovery was unavailable.]"
+//   "[MCode skipped hidden terminal output because main recovery was unavailable.]"
 //   printed into a live remote-runtime agent pane.
 //
-// Topology modeled (renderer contract level, per reproduce-orca-remote-server-issues):
+// Topology modeled (renderer contract level, per reproduce-mcode-remote-server-issues):
 //   remote-runtime-owned PTY ("remote:" id) -> transport.serializeBuffer is the ONLY
 //   recovery for hidden-time output (canUseMainBufferSnapshot is structurally false;
 //   the host DROPS paused/hidden stream output, so the reveal snapshot is the sole
@@ -514,7 +514,7 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
         repo1: [{ id: 'wt-1', repoId: 'repo1', path: '/tmp/wt-1', displayName: 'feat/notis' }]
       },
       runtimeStatusByEnvironmentId: new Map(),
-      repos: [{ id: 'repo1', connectionId: null, displayName: 'orca' }],
+      repos: [{ id: 'repo1', connectionId: null, displayName: 'mcode' }],
       projects: [],
       sshConnectionStates: new Map(),
       transientClearedAgentStatusConnectionIds: {},

@@ -218,7 +218,7 @@ describe('shouldRecordProcessGoneCrash', () => {
       shouldRecordProcessGoneCrash({
         source: 'child',
         processType: 'Utility',
-        serviceName: 'com.orca.unexpected',
+        serviceName: 'com.mcode.unexpected',
         reason: 'crashed',
         exitCode: 5,
         expectedTeardown: 'none'
@@ -329,7 +329,7 @@ describe('shouldRecordProcessGoneCrash', () => {
       shouldRecordProcessGoneCrash({
         source: 'child',
         processType: 'Utility',
-        serviceName: 'com.orca.unexpected',
+        serviceName: 'com.mcode.unexpected',
         reason: 'killed',
         exitCode: 9,
         expectedTeardown: 'renderer-reload'

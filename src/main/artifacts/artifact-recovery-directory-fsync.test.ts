@@ -49,7 +49,7 @@ afterEach(() => {
 })
 
 it('skips directory fsync on Windows and propagates I/O failures elsewhere', () => {
-  const directory = mkdtempSync(join(tmpdir(), 'orca-artifact-directory-fsync-eio-'))
+  const directory = mkdtempSync(join(tmpdir(), 'mcode-artifact-directory-fsync-eio-'))
   createdPaths.push(directory)
   fsyncMockState.directoryErrorCode = 'EIO'
 
@@ -62,7 +62,7 @@ it('skips directory fsync on Windows and propagates I/O failures elsewhere', () 
 })
 
 it('keeps durable artifact records usable when directory fsync is unsupported', () => {
-  const userDataPath = mkdtempSync(join(tmpdir(), 'orca-artifact-directory-fsync-'))
+  const userDataPath = mkdtempSync(join(tmpdir(), 'mcode-artifact-directory-fsync-'))
   createdPaths.push(userDataPath)
   const recordPath = join(userDataPath, 'artifact-shares.json')
 
@@ -78,7 +78,7 @@ it('keeps durable artifact records usable when directory fsync is unsupported', 
         cloudUserId: 'user-a',
         cloudProfileId: 'profile-a',
         cloudOrganizationId: 'org-a',
-        apiOrigin: 'https://share.onorca.dev'
+        apiOrigin: 'https://share.mcode.dev'
       },
       'key-a',
       { content: 'hello', contentType: 'text/markdown', fileName: 'report.md' }

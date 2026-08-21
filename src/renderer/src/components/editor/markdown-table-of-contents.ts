@@ -26,7 +26,7 @@ function isMarkdownTocLevel(value: number): value is MarkdownTocLevel {
   return value >= 1 && value <= 5
 }
 
-// Scoped local fork of the tiny entities@6.0.1 surface Orca used here.
+// Scoped local fork of the tiny entities@6.0.1 surface MCode used here.
 // Why: TOC labels only need common/numeric entity decoding before inline
 // Markdown stripping, not the full entity database.
 function decodeTocHtmlEntities(text: string): string {

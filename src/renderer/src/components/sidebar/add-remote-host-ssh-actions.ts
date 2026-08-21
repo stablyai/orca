@@ -109,7 +109,7 @@ export async function saveNewSshHostFromForm({
       toast.error(
         translate(
           'auto.components.sidebar.AddRemoteHostDialog.sshAlreadyExists',
-          'That SSH host is already in Orca.'
+          'That SSH host is already in MCode.'
         )
       )
       return 'validation-failed'
@@ -147,7 +147,7 @@ export async function prefillFormFromSshConfigHost(
     throw new Error(
       translate(
         'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerRestartRequired',
-        'Restart Orca to finish applying the SSH config picker update.'
+        'Restart MCode to finish applying the SSH config picker update.'
       )
     )
   }
@@ -162,8 +162,8 @@ export async function prefillFormFromSshConfigHost(
   }
 }
 
-/** Bulk-load ~/.ssh/config hosts into Orca’s host list (sidebar targets). */
-export async function addAllSshConfigHostsToOrca({
+/** Bulk-load ~/.ssh/config hosts into MCode’s host list (sidebar targets). */
+export async function addAllSshConfigHostsToMCode({
   ssh,
   recordSshRepoReadoptions,
   setSshTargetsMetadata,
@@ -194,7 +194,7 @@ export async function addAllSshConfigHostsToOrca({
     toast.success(
       translate(
         'auto.components.sidebar.AddRemoteHostDialog.sshImportSynced',
-        'Added {{value0}} host{{value1}} to Orca.',
+        'Added {{value0}} host{{value1}} to MCode.',
         { value0: result.targets.length, value1: result.targets.length > 1 ? 's' : '' }
       )
     )
@@ -246,7 +246,7 @@ function normalizeSshConfigHostListResult(value: unknown): SshConfigHostListResu
       totalHostCount: value.length,
       newHostCount: value.filter(
         (host): host is SshConfigHostSummary =>
-          typeof host === 'object' && host !== null && host.alreadyInOrca === false
+          typeof host === 'object' && host !== null && host.alreadyInMCode === false
       ).length,
       matchCount: value.length,
       hasMore: value.length > hosts.length

@@ -6,7 +6,7 @@ import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { translate } from '@/i18n/i18n'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import { canOpenAiVaultSessionLogInOrca } from './ai-vault-session-path-actions'
+import { canOpenAiVaultSessionLogInMCode } from './ai-vault-session-path-actions'
 
 type AiVaultLogSession = Pick<AiVaultSession, 'filePath' | 'executionHostId'>
 
@@ -42,16 +42,16 @@ function focusEditorContent(): void {
 }
 
 /**
- * Open a local AI Vault session log inside Orca as a permanent, read-only editor
+ * Open a local AI Vault session log inside MCode as a permanent, read-only editor
  * tab (or activate an existing tab without reducing its authority). Reuses
- * Orca's external-file authorize + `openFile` pipeline; it never grants write
+ * MCode's external-file authorize + `openFile` pipeline; it never grants write
  * capability by itself and never redirects the open to a remote host.
  */
-export async function openAiVaultSessionLogInOrca(session: AiVaultLogSession): Promise<void> {
+export async function openAiVaultSessionLogInMCode(session: AiVaultLogSession): Promise<void> {
   const filePath = session.filePath?.trim()
   // Defensive: UI availability should already withhold blank/remote/synthetic
   // paths. Bail silently rather than toast — there is no user-actionable error.
-  if (!filePath || !canOpenAiVaultSessionLogInOrca(session)) {
+  if (!filePath || !canOpenAiVaultSessionLogInMCode(session)) {
     return
   }
   if (inFlightOpenPaths.has(filePath)) {
@@ -87,7 +87,7 @@ export async function openAiVaultSessionLogInOrca(session: AiVaultLogSession): P
 
     try {
       // The exact scanned path is the authorization oracle; the user click is the
-      // trust gesture. Reuses Orca's existing external R/W open grant.
+      // trust gesture. Reuses MCode's existing external R/W open grant.
       await window.api.fs.authorizeExternalPath({ targetPath: filePath })
     } catch {
       toast.error(

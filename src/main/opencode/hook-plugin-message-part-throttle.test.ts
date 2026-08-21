@@ -1,9 +1,9 @@
 /**
  * Executes the generated OpenCode plugin source (the artifact that runs inside
  * OpenCode's process) to verify streamed message.part.updated events are
- * coalesced and capped before POSTing to Orca's agent-hook server. The
+ * coalesced and capped before POSTing to MCode's agent-hook server. The
  * un-throttled plugin re-posted the full accumulated reply per streamed
- * append — O(n²) bytes per turn — which saturated Orca's main + renderer
+ * append — O(n²) bytes per turn — which saturated MCode's main + renderer
  * event loops on Windows and froze the UI mid-reply.
  */
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -34,7 +34,7 @@ type RecordedPost = {
 
 type PluginEventHandler = (input: { event: unknown }) => Promise<void>
 
-const ENV_KEYS = ['ORCA_PANE_KEY', 'ORCA_AGENT_HOOK_PORT', 'ORCA_AGENT_HOOK_TOKEN'] as const
+const ENV_KEYS = ['MCODE_PANE_KEY', 'MCODE_AGENT_HOOK_PORT', 'MCODE_AGENT_HOOK_TOKEN'] as const
 
 describe('OpenCode plugin MessagePart throttling', () => {
   let tempDir: string
@@ -43,15 +43,15 @@ describe('OpenCode plugin MessagePart throttling', () => {
   let savedFetch: typeof globalThis.fetch
 
   beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'orca-opencode-plugin-test-'))
+    tempDir = mkdtempSync(join(tmpdir(), 'mcode-opencode-plugin-test-'))
     posts = []
     savedEnv = {}
     for (const key of ENV_KEYS) {
       savedEnv[key] = process.env[key]
     }
-    process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
-    process.env.ORCA_AGENT_HOOK_PORT = '45678'
-    process.env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
+    process.env.MCODE_PANE_KEY = 'tab-1:leaf-1'
+    process.env.MCODE_AGENT_HOOK_PORT = '45678'
+    process.env.MCODE_AGENT_HOOK_TOKEN = 'test-token'
     savedFetch = globalThis.fetch
     globalThis.fetch = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
       posts.push({ url: String(url), body: JSON.parse(String(init?.body)) })
@@ -74,10 +74,10 @@ describe('OpenCode plugin MessagePart throttling', () => {
   })
 
   async function loadPluginEventHandler(): Promise<PluginEventHandler> {
-    const pluginPath = join(tempDir, 'orca-opencode-status.mjs')
+    const pluginPath = join(tempDir, 'mcode-opencode-status.mjs')
     writeFileSync(pluginPath, _internals.getOpenCodePluginSource())
     const module = (await import(pathToFileURL(pluginPath).href)) as {
-      OrcaOpenCodeStatusPlugin: (ctx: unknown) => Promise<{ event: PluginEventHandler }>
+      MCodeOpenCodeStatusPlugin: (ctx: unknown) => Promise<{ event: PluginEventHandler }>
     }
     const client = {
       session: {
@@ -85,7 +85,7 @@ describe('OpenCode plugin MessagePart throttling', () => {
         list: async () => ({ data: [{ id: 'session-1' }] })
       }
     }
-    const hooks = await module.OrcaOpenCodeStatusPlugin({ client })
+    const hooks = await module.MCodeOpenCodeStatusPlugin({ client })
     return hooks.event
   }
 

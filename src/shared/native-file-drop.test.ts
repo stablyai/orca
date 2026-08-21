@@ -3,7 +3,7 @@ import {
   NATIVE_FILE_DROP_MAX_PATH_BYTES,
   NATIVE_FILE_DROP_MAX_PATHS,
   NATIVE_FILE_DROP_TARGET,
-  ORCA_INTERNAL_FILE_DRAG_TYPE,
+  MCODE_INTERNAL_FILE_DRAG_TYPE,
   createNativeFileDropPayload,
   createRejectedNativeFileDropPayload,
   hasNativeFileDragTypes,
@@ -17,8 +17,8 @@ describe('hasNativeFileDragTypes', () => {
     expect(hasNativeFileDragTypes(['Files'])).toBe(true)
   })
 
-  it('rejects internal Orca file moves and URL/text drags', () => {
-    expect(hasNativeFileDragTypes(['Files', ORCA_INTERNAL_FILE_DRAG_TYPE])).toBe(false)
+  it('rejects internal MCode file moves and URL/text drags', () => {
+    expect(hasNativeFileDragTypes(['Files', MCODE_INTERNAL_FILE_DRAG_TYPE])).toBe(false)
     expect(hasNativeFileDragTypes(['text/uri-list'])).toBe(false)
     expect(hasNativeFileDragTypes(['text/plain'])).toBe(false)
   })

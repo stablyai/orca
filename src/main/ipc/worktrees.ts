@@ -26,7 +26,7 @@ import {
   pruneWorkspaceSpaceAnalysisSnapshots
 } from '../workspace-space-analysis-snapshot'
 import { recordWorkspaceCleanupRemovalSnapshotPrune } from '../workspace-cleanup-removal-snapshot-prune'
-import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
+import type { MCodeHooks } from '../../shared/mcode-yaml-hook-types'
 import type { Repo } from '../../shared/repo-types'
 import type {
   AdoptProvisionedRootArgs,
@@ -73,7 +73,7 @@ import type {
 import { isAdmissibleDirectSshAuthority } from '../../shared/ssh-retained-payload-admission'
 import {
   applyMetadataFallbackVisibility,
-  buildKnownOrcaWorkspaceLayouts,
+  buildKnownMCodeWorkspaceLayouts,
   isLegacyRepoForExternalWorktreeVisibility,
   toDetectedWorktree
 } from '../../shared/worktree/ownership'
@@ -103,10 +103,10 @@ import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
   getEffectiveHooks,
   loadHooks,
-  parseOrcaYaml,
+  parseMCodeYaml,
   runHook,
   hasHooksFile,
-  hasUnrecognizedOrcaYamlKeys
+  hasUnrecognizedMCodeYamlKeys
 } from '../hooks'
 import { createIssueCommandRunnerScript, resolveSetupRunnerShell } from '../worktree-runner-script'
 import { getSetupRunnerEnvVars } from '../setup-hook-env-vars'
@@ -137,7 +137,7 @@ import {
   invalidateAuthorizedRootsCache,
   registerWorktreeRootsForRepo
 } from './registered-worktree-roots-cache'
-import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runtime/orca-runtime'
+import type { MCodeRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runtime/mcode-runtime'
 import { killAllProcessesForWorktree } from '../runtime/worktree-teardown'
 import { clearProviderPtyState, getLocalPtyProvider, getSshPtyProvider } from './pty'
 import { findExistingWorktreeSymlinkPaths, removeWorktreeLinkedPaths } from './worktree-symlinks'
@@ -178,7 +178,7 @@ type RemoveWorktreeArgs = {
 type DetectedWorktreeRequestArgs = { repoId: string } | ListDetectedWorktreesArgs
 
 async function stopPtysForDestructiveWorktreeRemoval(
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   worktreeId: string,
   options: { connectionId?: string; allowUnverifiedStop?: boolean } = {}
 ): Promise<void> {
@@ -230,14 +230,14 @@ import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { localhostWorktreeLabelProxy } from '../localhost-worktree-label-proxy'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
-  canCleanupUnregisteredOrcaLeftoverDirectory,
-  canCleanupUnregisteredOrcaWorktreeDirectory,
+  canCleanupUnregisteredMCodeLeftoverDirectory,
+  canCleanupUnregisteredMCodeWorktreeDirectory,
   canSafelyRemoveOrphanedWorktreeDirectory,
   findRegisteredDeletableWorktree,
   isDangerousWorktreeRemovalPath,
   isWorktreePathMissing,
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE,
-  stripOrcaProvenanceMetaUpdates,
+  stripMCodeProvenanceMetaUpdates,
   UNREGISTERED_MISSING_WORKTREE_MESSAGE
 } from '../worktree-removal-safety'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
@@ -485,7 +485,7 @@ function getWorktreeRemovalInFlightKey(worktreeId: string, hostId?: ExecutionHos
   return `${hostId ?? ''}\0${worktreeId}`
 }
 
-async function getArchiveHooksForRemoval(repo: Repo): Promise<OrcaHooks | null> {
+async function getArchiveHooksForRemoval(repo: Repo): Promise<MCodeHooks | null> {
   if (!repo.connectionId) {
     return getEffectiveHooks(repo)
   }
@@ -496,8 +496,8 @@ async function getArchiveHooksForRemoval(repo: Repo): Promise<OrcaHooks | null> 
   }
 
   try {
-    const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
-    const yamlHooks = result.isBinary ? null : parseOrcaYaml(result.content)
+    const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'mcode.yaml'))
+    const yamlHooks = result.isBinary ? null : parseMCodeYaml(result.content)
     return getEffectiveHooksFromConfig(repo, yamlHooks)
   } catch {
     return getEffectiveHooksFromConfig(repo, null)
@@ -878,7 +878,7 @@ function buildDetectedGitWorktrees(
   gitWorktrees: GitWorktreeInfo[]
 ): DetectedWorktree[] {
   const settings = store.getSettings()
-  const knownOrcaLayouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
+  const knownMCodeLayouts = buildKnownMCodeWorkspaceLayouts(settings, repo)
   const isLegacyRepoForVisibility = isLegacyRepoForExternalWorktreeVisibility(repo)
   // Why: a prunable registration has no working directory (issue #8389); only this listing omits it — cleanup flows list separately.
   const liveWorktrees = dedupeWorktreesByPath(
@@ -898,7 +898,7 @@ function buildDetectedGitWorktrees(
       worktree,
       meta,
       settings,
-      knownOrcaLayouts,
+      knownMCodeLayouts,
       isLegacyRepoForVisibility,
       worktreeVisibilitySourceMatcher
     })
@@ -912,7 +912,7 @@ function buildDetectedGitWorktrees(
       worktree: mergeWorktree(repo.id, gitWorktree, meta, repo.displayName),
       meta,
       settings,
-      knownOrcaLayouts,
+      knownMCodeLayouts,
       isLegacyRepoForVisibility,
       worktreeVisibilitySourceMatcher
     })
@@ -1048,7 +1048,7 @@ function buildFolderDetectedWorktrees(store: Store, repo: Repo): DetectedWorktre
       worktree,
       meta: store.getWorktreeMeta(worktree.id),
       settings,
-      knownOrcaLayouts: [],
+      knownMCodeLayouts: [],
       isLegacyRepoForVisibility: true,
       worktreeVisibilitySourceMatcher
     })
@@ -1085,8 +1085,8 @@ function createFolderWorkspace(
     displayName: args.displayName || args.name,
     lastActivityAt: now,
     createdAt: now,
-    orcaCreatedAt: now,
-    orcaCreationSource: 'desktop',
+    mcodeCreatedAt: now,
+    mcodeCreationSource: 'desktop',
     creatorProvenance: { kind: 'host' },
     ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
     ...(args.cliProvenance ? { cliProvenance: args.cliProvenance } : {}),
@@ -1135,7 +1135,7 @@ function buildDisconnectedDetectedWorktrees(
       worktree,
       meta,
       settings,
-      knownOrcaLayouts: [],
+      knownMCodeLayouts: [],
       isLegacyRepoForVisibility: true,
       worktreeVisibilitySourceMatcher
     })
@@ -1634,7 +1634,7 @@ function filterLineageForHost(
   return { worktreeLineageById, workspaceLineageByChildKey }
 }
 
-async function hydrateLineageWithinDeadline(runtime: OrcaRuntimeService): Promise<boolean> {
+async function hydrateLineageWithinDeadline(runtime: MCodeRuntimeService): Promise<boolean> {
   let timeout: ReturnType<typeof setTimeout> | undefined
   const hydration = Promise.resolve()
     .then(() => runtime.hydrateInferredWorktreeLineage())
@@ -1656,7 +1656,7 @@ async function hydrateLineageWithinDeadline(runtime: OrcaRuntimeService): Promis
 
 async function listDesktopLineageForHost(
   store: Store,
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   args: ListDesktopLineageForHostArgs
 ): Promise<HostLineageSnapshot> {
   const parsedHost = parseExecutionHostId(args?.executionHostId)
@@ -1847,7 +1847,7 @@ async function listHostQualifiedDetectedWorktrees(
 export function registerWorktreeHandlers(
   mainWindow: BrowserWindow,
   store: Store,
-  runtime: OrcaRuntimeService,
+  runtime: MCodeRuntimeService,
   options?: { onWorktreeLifecycle?: (event: RuntimeWorktreeLifecycleEvent) => void }
 ): void {
   const detectedWorktreeCancellations = createSenderScopedRequestCancellations()
@@ -2072,7 +2072,7 @@ export function registerWorktreeHandlers(
   )
 
   // Why: gcStaleWorktreeMeta cannot stat a remote path, so SSH metadata outlives the worktree and the fallback
-  // above re-lists a worktree deleted outside Orca on every launch. An authoritative scan is the only proof of
+  // above re-lists a worktree deleted outside MCode on every launch. An authoritative scan is the only proof of
   // absence, so the renderer reports what it retired here and the row is dropped like a local GC would.
   ipcMain.handle(
     'worktrees:forgetRemovedForExecutionHost',
@@ -2576,7 +2576,7 @@ export function registerWorktreeHandlers(
               : null
             let canCleanOrphanedDirectory = false
             if (
-              canCleanupUnregisteredOrcaWorktreeDirectory({
+              canCleanupUnregisteredMCodeWorktreeDirectory({
                 meta: removedMeta
               })
             ) {
@@ -2685,7 +2685,7 @@ export function registerWorktreeHandlers(
                 localWorktreeGitOptions
               )
               if (
-                await canCleanupUnregisteredOrcaLeftoverDirectory({
+                await canCleanupUnregisteredMCodeLeftoverDirectory({
                   meta: removedMeta,
                   worktreePath,
                   runtimeWorktreePath,
@@ -2737,10 +2737,10 @@ export function registerWorktreeHandlers(
             }
             if (await isAlreadyRemovedWorktreePath(repo, worktreePath, localWorktreeGitOptions)) {
               if (!args.force && !removedMeta) {
-                // Why: without persisted metadata, require the renderer recovery path before deleting Orca-only state for an unregistered path.
+                // Why: without persisted metadata, require the renderer recovery path before deleting MCode-only state for an unregistered path.
                 throw new Error(UNREGISTERED_MISSING_WORKTREE_MESSAGE)
               }
-              // Why: a manually deleted worktree is already gone; persisted metadata proves it was an Orca-known row, so no force is needed.
+              // Why: a manually deleted worktree is already gone; persisted metadata proves it was an MCode-known row, so no force is needed.
               if (repo.connectionId) {
                 // Why history first: the worktree is already gone from git and
                 // disk by here, so a rejecting push-target cleanup must not be
@@ -2974,7 +2974,7 @@ export function registerWorktreeHandlers(
             )
           }
 
-          // Why: `orca.yaml` shared directories are symlinked in too, and a
+          // Why: `mcode.yaml` shared directories are symlinked in too, and a
           // directory-only ignore rule leaves those links untracked, so removal must
           // tolerate and unlink them exactly like the per-user shared paths.
           const linkedPaths = getWorktreeSharedLinkPaths(repo)
@@ -3359,7 +3359,7 @@ export function registerWorktreeHandlers(
               firstAgentMessageRenameError: null
             }
           : validatedUpdates
-      const meta = store.setWorktreeMeta(args.worktreeId, stripOrcaProvenanceMetaUpdates(updates))
+      const meta = store.setWorktreeMeta(args.worktreeId, stripMCodeProvenanceMetaUpdates(updates))
       // Do NOT notify here: renderer already applied this optimistically; a notification would re-sort the sidebar (bug PR #209).
       if (args.updates.displayName !== undefined) {
         // Why: remote clients have no optimistic rename and stopped polling titles, so push a remote-only invalidation; gate on displayName so per-click isUnread updates stay event-free.
@@ -3449,11 +3449,11 @@ export function registerWorktreeHandlers(
           return { status: 'error', hasHooks: false, hooks: null, mayNeedUpdate: false }
         }
         try {
-          const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
+          const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'mcode.yaml'))
           return {
             status: 'ok',
             hasHooks: !result.isBinary,
-            hooks: result.isBinary ? null : parseOrcaYaml(result.content),
+            hooks: result.isBinary ? null : parseMCodeYaml(result.content),
             mayNeedUpdate: false
           }
         } catch (error) {
@@ -3468,8 +3468,8 @@ export function registerWorktreeHandlers(
 
       const has = hasHooksFile(repo.path)
       const hooks = has ? loadHooks(repo.path) : null
-      // Why: unrecognised top-level keys mean the file is well-formed but from a newer Orca; suggest updating rather than "could not be parsed".
-      const mayNeedUpdate = has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path)
+      // Why: unrecognised top-level keys mean the file is well-formed but from a newer MCode; suggest updating rather than "could not be parsed".
+      const mayNeedUpdate = has && !hooks && hasUnrecognizedMCodeYamlKeys(repo.path)
       return {
         status: 'ok',
         hasHooks: has,
@@ -3576,7 +3576,7 @@ export function registerWorktreeHandlers(
         }
       }
       if (repo.connectionId) {
-        const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
+        const issueCommandPath = joinWorktreeRelativePath(repo.path, '.mcode/issue-command')
         const fsProvider = getSshFilesystemProvider(repo.connectionId)
         if (!fsProvider) {
           return {
@@ -3601,10 +3601,10 @@ export function registerWorktreeHandlers(
           }
         }
         try {
-          const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
+          const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'mcode.yaml'))
           sharedContent = result.isBinary
             ? null
-            : parseOrcaYaml(result.content)?.issueCommand?.trim() || null
+            : parseMCodeYaml(result.content)?.issueCommand?.trim() || null
         } catch (error) {
           if (!isENOENT(error)) {
             status = 'error'
@@ -3636,7 +3636,7 @@ export function registerWorktreeHandlers(
         return
       }
       if (repo.connectionId) {
-        const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
+        const issueCommandPath = joinWorktreeRelativePath(repo.path, '.mcode/issue-command')
         const fsProvider = getSshFilesystemProvider(repo.connectionId)
         if (!fsProvider) {
           throw new Error(
@@ -3652,19 +3652,19 @@ export function registerWorktreeHandlers(
           })
           return
         }
-        await fsProvider.createDir(joinWorktreeRelativePath(repo.path, '.orca'))
+        await fsProvider.createDir(joinWorktreeRelativePath(repo.path, '.mcode'))
         const gitignorePath = joinWorktreeRelativePath(repo.path, '.gitignore')
         try {
           const result = await fsProvider.readFile(gitignorePath)
-          if (!result.isBinary && !/^\.orca\/?$/m.test(result.content)) {
+          if (!result.isBinary && !/^\.mcode\/?$/m.test(result.content)) {
             const separator = result.content.endsWith('\n') ? '' : '\n'
-            await fsProvider.writeFile(gitignorePath, `${result.content}${separator}.orca\n`)
+            await fsProvider.writeFile(gitignorePath, `${result.content}${separator}.mcode\n`)
           }
         } catch (error) {
           if (!isENOENT(error)) {
             throw error
           }
-          await fsProvider.writeFile(gitignorePath, '.orca\n')
+          await fsProvider.writeFile(gitignorePath, '.mcode\n')
         }
         await fsProvider.writeFile(issueCommandPath, `${trimmed}\n`)
         return

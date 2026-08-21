@@ -16,7 +16,7 @@ export function notifyRuntimeScopeForbiddenIfNeeded(error: unknown): boolean {
       id: RUNTIME_SCOPE_FORBIDDEN_TOAST_ID,
       description: translate(
         'auto.store.slices.worktrees.runtimeScopeForbiddenDescription',
-        'Workspaces are unavailable on a mobile-scope pairing. Reconnect using the browser access link from Settings → Runtime Environments → Share this Orca server.'
+        'Workspaces are unavailable on a mobile-scope pairing. Reconnect using the browser access link from Settings → Runtime Environments → Share this MCode server.'
       )
     }
   )

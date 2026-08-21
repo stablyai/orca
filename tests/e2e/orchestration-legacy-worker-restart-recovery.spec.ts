@@ -2,9 +2,9 @@ import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import os from 'node:os'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
-import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
+import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/mcode-restart'
 import {
   ensureTerminalVisible,
   getActiveTabId,
@@ -21,14 +21,14 @@ import {
   LEGACY_CONTRACT_VERSION,
   LEGACY_RUN_ID
 } from '../../src/main/runtime/orchestration/db'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
+import { DEFAULT_LOCAL_MCODE_PROFILE_ID } from '../../src/shared/mcode-profiles'
 import type { RuntimeTerminalListResult, RuntimeTerminalRead } from '../../src/shared/runtime-types'
 import { listAllOrchestrationRuns } from './orchestration-run-pages'
 import { buildFakeAgentCommandOverride } from './helpers/fake-agent-command-override'
 import { FAKE_AGENT_PASTE_END_SCANNER_SOURCE } from './helpers/fake-agent-paste-end-scanner'
 
 const PROVIDER_SESSION_ID = 'e2e-legacy-orchestration-worker'
-const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-legacy-worker-'))
+const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'mcode-e2e-legacy-worker-'))
 const spawnLedgerPath = path.join(fakeCliDir, 'spawn.jsonl')
 const interruptionLedgerPath = path.join(fakeCliDir, 'interruption.jsonl')
 const authorityLedgerPath = path.join(fakeCliDir, 'authority.jsonl')
@@ -47,23 +47,23 @@ function appendLedger(envName, event) {
   } catch {}
 }
 async function emitAuthorityHook() {
-  const port = process.env.ORCA_AGENT_HOOK_PORT
-  const token = process.env.ORCA_AGENT_HOOK_TOKEN
-  const launchToken = process.env.ORCA_AGENT_LAUNCH_TOKEN
-  if (!port || !token || !launchToken || !process.env.ORCA_PANE_KEY) return
+  const port = process.env.MCODE_AGENT_HOOK_PORT
+  const token = process.env.MCODE_AGENT_HOOK_TOKEN
+  const launchToken = process.env.MCODE_AGENT_LAUNCH_TOKEN
+  if (!port || !token || !launchToken || !process.env.MCODE_PANE_KEY) return
   try {
     const response = await fetch('http://127.0.0.1:' + port + '/hook/codex', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Orca-Agent-Hook-Token': token
+        'X-MCode-Agent-Hook-Token': token
       },
       body: JSON.stringify({
-        paneKey: process.env.ORCA_PANE_KEY,
-        tabId: process.env.ORCA_TAB_ID,
-        worktreeId: process.env.ORCA_WORKTREE_ID,
-        env: process.env.ORCA_AGENT_HOOK_ENV,
-        version: process.env.ORCA_AGENT_HOOK_VERSION,
+        paneKey: process.env.MCODE_PANE_KEY,
+        tabId: process.env.MCODE_TAB_ID,
+        worktreeId: process.env.MCODE_WORKTREE_ID,
+        env: process.env.MCODE_AGENT_HOOK_ENV,
+        version: process.env.MCODE_AGENT_HOOK_VERSION,
         launchToken,
         payload: {
           hook_event_name: 'UserPromptSubmit',
@@ -71,9 +71,9 @@ async function emitAuthorityHook() {
         }
       })
     })
-    appendLedger('ORCA_E2E_AUTHORITY_LEDGER', { event: 'authority-hook', status: response.status })
+    appendLedger('MCODE_E2E_AUTHORITY_LEDGER', { event: 'authority-hook', status: response.status })
   } catch (error) {
-    appendLedger('ORCA_E2E_AUTHORITY_LEDGER', {
+    appendLedger('MCODE_E2E_AUTHORITY_LEDGER', {
       event: 'authority-hook-error',
       error: error instanceof Error ? error.message : String(error)
     })
@@ -83,7 +83,7 @@ if (process.argv.slice(2).includes('app-server')) {
   process.stderr.write("error: unrecognized subcommand 'app-server'\\n")
   process.exit(2)
 }
-appendLedger('ORCA_E2E_SPAWN_LEDGER', { event: 'spawn', argv: process.argv.slice(2) })
+appendLedger('MCODE_E2E_SPAWN_LEDGER', { event: 'spawn', argv: process.argv.slice(2) })
 process.stdout.write('\\u001b]0;Codex Ready\\u0007OpenAI Codex\\nmodel: e2e\\ndirectory: e2e\\n')
 void emitAuthorityHook()
 let acknowledged = false
@@ -99,18 +99,18 @@ process.stdin.on('data', (chunk) => {
     process.stdout.write('\\x1b[?25h')
   }
   if (input.includes('\\x03')) {
-    appendLedger('ORCA_E2E_INTERRUPTION_LEDGER', { event: 'stdin-ctrl-c' })
+    appendLedger('MCODE_E2E_INTERRUPTION_LEDGER', { event: 'stdin-ctrl-c' })
   }
   if (!acknowledged && pasteEnded && input.includes('\\r')) {
     acknowledged = true
     process.stdout.write('\\u001b]0;Codex Working\\u0007ACK\\n')
     setTimeout(() => process.stdout.write('\\u001b]0;Codex Ready\\u0007'), 10)
   }
-  const legacyCompletion = input.match(/ORCA_E2E_RUN_LEGACY_DONE:([A-Za-z0-9+/=]+)/)
+  const legacyCompletion = input.match(/MCODE_E2E_RUN_LEGACY_DONE:([A-Za-z0-9+/=]+)/)
   if (!lifecycleSent && legacyCompletion) {
     lifecycleSent = true
     const identity = JSON.parse(Buffer.from(legacyCompletion[1], 'base64').toString('utf8'))
-    const cliEntry = process.env.ORCA_E2E_CLI_ENTRY
+    const cliEntry = process.env.MCODE_E2E_CLI_ENTRY
     const args = [
       'orchestration',
       'send',
@@ -135,8 +135,8 @@ process.stdin.on('data', (chunk) => {
           env: process.env,
           encoding: 'utf8'
         })
-      : { status: 127, stdout: '', stderr: 'ORCA_E2E_CLI_ENTRY missing' }
-    appendLedger('ORCA_E2E_LIFECYCLE_LEDGER', {
+      : { status: 127, stdout: '', stderr: 'MCODE_E2E_CLI_ENTRY missing' }
+    appendLedger('MCODE_E2E_LIFECYCLE_LEDGER', {
       event: 'legacy-command',
       argv: args,
       status: result.status,
@@ -149,7 +149,7 @@ process.stdin.on('data', (chunk) => {
 process.stdin.setRawMode?.(true)
 for (const signal of ['SIGINT', 'SIGHUP', 'SIGTERM']) {
   process.on(signal, () => {
-    appendLedger('ORCA_E2E_INTERRUPTION_LEDGER', { event: 'signal', signal })
+    appendLedger('MCODE_E2E_INTERRUPTION_LEDGER', { event: 'signal', signal })
     process.exit(0)
   })
 }
@@ -222,7 +222,7 @@ function isProcessAlive(pid: number): boolean {
 }
 
 function persistedDataPath(userDataDir: string): string {
-  return path.join(userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID, 'orca-data.json')
+  return path.join(userDataDir, 'profiles', DEFAULT_LOCAL_MCODE_PROFILE_ID, 'mcode-data.json')
 }
 
 function readPersistedData(userDataDir: string): PersistedData {
@@ -415,11 +415,11 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
 
     const session = createRestartSession(testInfo, {
       PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`,
-      ORCA_E2E_SPAWN_LEDGER: spawnLedgerPath,
-      ORCA_E2E_INTERRUPTION_LEDGER: interruptionLedgerPath,
-      ORCA_E2E_AUTHORITY_LEDGER: authorityLedgerPath,
-      ORCA_E2E_LIFECYCLE_LEDGER: lifecycleLedgerPath,
-      ORCA_E2E_CLI_ENTRY: path.join(process.cwd(), 'out', 'cli', 'index.js')
+      MCODE_E2E_SPAWN_LEDGER: spawnLedgerPath,
+      MCODE_E2E_INTERRUPTION_LEDGER: interruptionLedgerPath,
+      MCODE_E2E_AUTHORITY_LEDGER: authorityLedgerPath,
+      MCODE_E2E_LIFECYCLE_LEDGER: lifecycleLedgerPath,
+      MCODE_E2E_CLI_ENTRY: path.join(process.cwd(), 'out', 'cli', 'index.js')
     })
     let firstApp: ElectronApplication | null = null
     let secondApp: ElectronApplication | null = null
@@ -707,7 +707,7 @@ for (const contractVersion of [LEGACY_CONTRACT_VERSION, CURRENT_CONTRACT_VERSION
         ).toString('base64')
         await secondClient.call('terminal.send', {
           terminal: recovered!.handle,
-          text: `ORCA_E2E_RUN_LEGACY_DONE:${legacyCompletion}`,
+          text: `MCODE_E2E_RUN_LEGACY_DONE:${legacyCompletion}`,
           enter: true
         })
         await expect

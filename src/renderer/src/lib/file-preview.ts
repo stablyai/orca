@@ -13,8 +13,8 @@ import { findSiblingGroupId } from '@/store/slices/tabs'
 
 export type PreviewableLanguage = 'html'
 export const REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE =
-  'Open in Orca Browser is only available for local files.'
-const FILE_BROWSER_OPEN_FAILED_MESSAGE = 'Unable to open this file in Orca Browser.'
+  'Open in MCode Browser is only available for local files.'
+const FILE_BROWSER_OPEN_FAILED_MESSAGE = 'Unable to open this file in MCode Browser.'
 
 type WorkspaceFileBrowserActionMode = 'local-client' | 'paired-runtime' | null
 
@@ -93,7 +93,7 @@ export function getWorkspaceFileBrowserOpenTarget(params: {
 }): WorkspaceFileBrowserOpenTarget {
   if (getConnectionIdForFile(params.worktreeId, params.filePath) !== null) {
     // Why: Chromium resolves file:// URLs on the local machine. Remote files
-    // need an Orca-served URL before the browser can render them correctly.
+    // need an MCode-served URL before the browser can render them correctly.
     return {
       status: 'unsupported',
       reason: 'remote-worktree',

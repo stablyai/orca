@@ -42,7 +42,7 @@ describe('ensureWindowsUserDataAclGrant', () => {
   let userDataPath: string
 
   beforeEach(() => {
-    userDataPath = mkdtempSync(join(os.tmpdir(), 'orca-acl-test-'))
+    userDataPath = mkdtempSync(join(os.tmpdir(), 'mcode-acl-test-'))
   })
 
   afterEach(() => {

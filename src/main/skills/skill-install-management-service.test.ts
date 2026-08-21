@@ -14,7 +14,7 @@ describe('skill install management', () => {
   let stateDirectory = ''
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'orca-skill-management-test-'))
+    root = await mkdtemp(join(tmpdir(), 'mcode-skill-management-test-'))
     homeDirectory = join(root, 'home')
     stateDirectory = join(root, 'state')
     await Promise.all([mkdir(homeDirectory), mkdir(stateDirectory)])

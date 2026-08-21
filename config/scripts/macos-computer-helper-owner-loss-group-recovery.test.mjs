@@ -3,7 +3,7 @@ import { signalValidatedProcessGroup } from './macos-computer-helper-owner-loss-
 
 describe('macOS helper owner-loss benchmark group recovery', () => {
   it('retains uncertain stop state across cleanup stage failures', () => {
-    const marker = 'ORCA_OWNER_GROUP=trial'
+    const marker = 'MCODE_OWNER_GROUP=trial'
     const members = [{ pid: 41, pgid: 41, command: `/launcher ${marker}` }]
     const groupState = { stopped: false }
     let scanCount = 0
@@ -40,7 +40,7 @@ describe('macOS helper owner-loss benchmark group recovery', () => {
   })
 
   it('retains an uncertain anchor stop across cleanup stage failures', () => {
-    const marker = 'ORCA_OWNER_GROUP=trial'
+    const marker = 'MCODE_OWNER_GROUP=trial'
     const members = [{ pid: 41, pgid: 41, command: `/launcher ${marker}` }]
     const groupState = { stopped: false, anchorPid: null }
     let scanCount = 0
@@ -77,7 +77,7 @@ describe('macOS helper owner-loss benchmark group recovery', () => {
   })
 
   it('recovers a retained anchor before selecting a new one', () => {
-    const marker = 'ORCA_OWNER_GROUP=trial'
+    const marker = 'MCODE_OWNER_GROUP=trial'
     const firstAnchor = { pid: 41, pgid: 41, command: `/launcher ${marker}` }
     const finalAnchor = { pid: 42, pgid: 41, command: `/child ${marker}` }
     const groupState = { stopped: false, anchorPid: null }
@@ -110,7 +110,7 @@ describe('macOS helper owner-loss benchmark group recovery', () => {
   })
 
   it('preserves group authority errors when compensation fails', () => {
-    const marker = 'ORCA_OWNER_GROUP=trial'
+    const marker = 'MCODE_OWNER_GROUP=trial'
     const ownershipError = 'Benchmark process group no longer belongs to this trial'
     let thrown
 

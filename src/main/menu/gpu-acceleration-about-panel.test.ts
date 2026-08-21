@@ -29,14 +29,14 @@ describe('GPU acceleration About panel', () => {
   it('uses the Linux-visible copyright field', () => {
     expect(
       createGpuAccelerationAboutPanelOptions({
-        appName: 'Orca',
+        appName: 'MCode',
         appVersion: '1.2.3',
         platform: 'linux',
         gpuFallbackActive: false,
         gpuFeatureStatus: { gpu_compositing: 'enabled' }
       })
     ).toEqual({
-      applicationName: 'Orca',
+      applicationName: 'MCode',
       applicationVersion: '1.2.3',
       copyright: 'GPU acceleration: Enabled'
     })
@@ -45,14 +45,14 @@ describe('GPU acceleration About panel', () => {
   it.each(['darwin', 'win32'] satisfies NodeJS.Platform[])('uses credits on %s', (platform) => {
     expect(
       createGpuAccelerationAboutPanelOptions({
-        appName: 'Orca',
+        appName: 'MCode',
         appVersion: '1.2.3',
         platform,
         gpuFallbackActive: true,
         gpuFeatureStatus: null
       })
     ).toEqual({
-      applicationName: 'Orca',
+      applicationName: 'MCode',
       applicationVersion: '1.2.3',
       credits: 'GPU acceleration: Disabled (Safe Graphics Mode)'
     })

@@ -32,10 +32,10 @@ function markedText(): string {
 describe('MatchedText', () => {
   it('underlines the matched run', () => {
     act(() => {
-      root.render(<MatchedText text="orca" hits={[0, 1, 2, 3]} />)
+      root.render(<MatchedText text="mcode" hits={[0, 1, 2, 3]} />)
     })
 
-    expect(markedText()).toBe('orca')
+    expect(markedText()).toBe('mcode')
   })
 
   // Hits are UTF-16 offsets; rendering splits by code point. An astral glyph is
@@ -46,26 +46,26 @@ describe('MatchedText', () => {
       kind: 'project',
       id: 'p1',
       projectId: 'p1',
-      displayName: '🚀 orca',
+      displayName: '🚀 mcode',
       badgeColor: '#111111',
-      detail: '~/dev/orca'
+      detail: '~/dev/mcode'
     }
-    const [match] = rankProjectOptions([option], 'orca', [])
+    const [match] = rankProjectOptions([option], 'mcode', [])
     expect(match).toBeDefined()
 
     act(() => {
       root.render(<MatchedText text={option.displayName} hits={match!.nameHits} />)
     })
 
-    expect(markedText()).toBe('orca')
+    expect(markedText()).toBe('mcode')
   })
 
   it('leaves text unmarked when there are no hits', () => {
     act(() => {
-      root.render(<MatchedText text="🚀 orca" hits={[]} />)
+      root.render(<MatchedText text="🚀 mcode" hits={[]} />)
     })
 
     expect(container.querySelectorAll('mark')).toHaveLength(0)
-    expect(container.textContent).toBe('🚀 orca')
+    expect(container.textContent).toBe('🚀 mcode')
   })
 })

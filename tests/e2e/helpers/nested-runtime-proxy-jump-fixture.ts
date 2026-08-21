@@ -11,7 +11,7 @@ export type NestedRuntimeProxyJumpFixture = {
 }
 
 export function createNestedRuntimeProxyJumpFixture(): NestedRuntimeProxyJumpFixture {
-  const directory = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-proxy-jump-'))
+  const directory = mkdtempSync(path.join(os.tmpdir(), 'mcode-e2e-proxy-jump-'))
   const configPath = path.join(directory, 'ssh-config')
   const wrapperPath = path.join(directory, 'ssh')
   try {

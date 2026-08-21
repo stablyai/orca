@@ -182,7 +182,7 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: macos-15
     env:
-      ORCA_COMPUTER_E2E: '1'
+      MCODE_COMPUTER_E2E: '1'
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -202,7 +202,7 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-22.04
     env:
-      ORCA_COMPUTER_E2E: '1'
+      MCODE_COMPUTER_E2E: '1'
       ACCESSIBILITY_ENABLED: '1'
     steps:
       - uses: actions/checkout@v6
@@ -229,7 +229,7 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: windows-latest
     env:
-      ORCA_COMPUTER_E2E: '1'
+      MCODE_COMPUTER_E2E: '1'
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6

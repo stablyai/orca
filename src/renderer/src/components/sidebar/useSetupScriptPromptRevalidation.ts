@@ -7,7 +7,7 @@ import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared
 import type { SetupScriptPromptState } from './setup-script-prompt-render-state'
 
 /**
- * Re-runs the setup-script prompt inspection when a shared `orca.yaml` setup hook
+ * Re-runs the setup-script prompt inspection when a shared `mcode.yaml` setup hook
  * can have become effective outside SetupScriptPromptCard's reactive inputs, so a
  * stale "Add a setup script" prompt clears without a full sidebar reopen.
  */
@@ -42,8 +42,8 @@ export function useSetupScriptPromptRevalidation(input: {
     (promptState?.status === 'error' ||
       (promptState?.status === 'ok' && !promptState.hasEffectiveSetup))
 
-  // Why: orca.yaml is edited on disk or the hook runs in a terminal outside React
-  // state. Re-inspect on window focus so returning to Orca detects it (mirrors
+  // Why: mcode.yaml is edited on disk or the hook runs in a terminal outside React
+  // state. Re-inspect on window focus so returning to MCode detects it (mirrors
   // useInstalledAgentSkills' focus revalidation).
   useEffect(() => {
     if (
@@ -76,7 +76,7 @@ export function useSetupScriptPromptRevalidation(input: {
   useEffect(() => {
     const worktreeChanged = previousWorktreeIdRef.current !== activeWorktreeId
     const hostChanged = previousRepoHostIdentityRef.current !== activeRepoHostIdentity
-    // Why: a runtime reconnect can turn an unreadable orca.yaml into a readable one,
+    // Why: a runtime reconnect can turn an unreadable mcode.yaml into a readable one,
     // and nothing else in the card's inputs changes when that happens.
     const reconnected = repoConnectionGeneration > previousConnectionGenerationRef.current
     previousWorktreeIdRef.current = activeWorktreeId

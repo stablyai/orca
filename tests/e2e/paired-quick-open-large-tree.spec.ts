@@ -1,5 +1,5 @@
 import type { Page } from '@stablyai/playwright-test'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
 import {
   createRuntimeDesktopPairingOffer,
@@ -57,7 +57,7 @@ async function expectQuickOpenAndRuntimeHealthy(
 ): Promise<void> {
   const dialog = client.page.getByRole('dialog', { name: 'Go to file' })
   const input = dialog.getByPlaceholder('Go to file...')
-  for (const targetPath of [fixture.gitIgnoredTargetPath, fixture.orcaIgnoredTargetPath]) {
+  for (const targetPath of [fixture.gitIgnoredTargetPath, fixture.mcodeIgnoredTargetPath]) {
     const filename = targetPath.split('/').at(-1)!
     const stat = await client.page.evaluate(
       async ({ environmentId, worktreeId, targetPath }) => {
@@ -81,7 +81,7 @@ async function expectQuickOpenAndRuntimeHealthy(
     await expect(dialog.getByText('Loading files...')).toHaveCount(0, { timeout: 60_000 })
     await expect(dialog.getByRole('option').filter({ hasText: filename })).toHaveCount(1)
     await expect(dialog).not.toContainText('Outbound reply buffer overflow')
-    await expect(dialog).not.toContainText('Remote Orca runtime closed the connection')
+    await expect(dialog).not.toContainText('Remote MCode runtime closed the connection')
   }
 
   const response = await client.page.evaluate(
@@ -128,7 +128,7 @@ async function expectQuickOpenAndRuntimeHealthy(
       },
       { environmentId: client.environmentId, worktreeId, targetPath }
     )
-  for (const targetPath of [fixture.gitIgnoredTargetPath, fixture.orcaIgnoredTargetPath]) {
+  for (const targetPath of [fixture.gitIgnoredTargetPath, fixture.mcodeIgnoredTargetPath]) {
     const queryResult = await queryOracle(targetPath)
     const repeatedResult = await queryOracle(targetPath)
     console.log(
@@ -154,21 +154,21 @@ async function expectQuickOpenAndRuntimeHealthy(
 }
 
 test('finds paths beyond the old prefix on a headed paired runtime @headful', async ({
-  orcaPage
+  mcodePage
 }, testInfo) => {
   test.setTimeout(240_000)
   const fixture = createPairedQuickOpenLargeTreeFixture()
   let client: PairedElectronClient | null = null
   try {
-    await waitForSessionReady(orcaPage)
-    await orcaPage.evaluate(async (repoPath) => {
+    await waitForSessionReady(mcodePage)
+    await mcodePage.evaluate(async (repoPath) => {
       const store = window.__store
       if (!store || !(await store.getState().addRepoPath(repoPath))) {
         throw new Error('headed host could not add the large-tree repo')
       }
     }, fixture.root)
     client = await launchPairedElectronClient(
-      await createRuntimeDesktopPairingOffer(orcaPage),
+      await createRuntimeDesktopPairingOffer(mcodePage),
       testInfo,
       'STA-4354 headed host'
     )

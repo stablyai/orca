@@ -185,7 +185,7 @@ describe('TerminalHost', () => {
       // ECHO enabled when it arrives. The flush waits for the prompt draw
       // plus a short delay so readline has switched the PTY into raw mode
       // first. Otherwise the command would be visibly double-echoed.
-      lastSubprocess._onDataCb?.('\x1b]777;orca-shell-ready\x07')
+      lastSubprocess._onDataCb?.('\x1b]777;mcode-shell-ready\x07')
       expect(lastSubprocess.write).not.toHaveBeenCalled()
 
       lastSubprocess._onDataCb?.('\r\nuser@host $ ')
@@ -207,7 +207,7 @@ describe('TerminalHost', () => {
           streamClient: { onData: vi.fn(), onExit: vi.fn() }
         })
 
-        lastSubprocess._onDataCb?.('\x1b]777;orca-shell-ready\x07\r\nuser@host $ ')
+        lastSubprocess._onDataCb?.('\x1b]777;mcode-shell-ready\x07\r\nuser@host $ ')
         vi.advanceTimersByTime(29)
         expect(lastSubprocess.write).not.toHaveBeenCalled()
 
@@ -822,11 +822,11 @@ describe('TerminalHost', () => {
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
 
-      lastSubprocess._onDataCb?.('\x1b]777;orca-shell-ready')
+      lastSubprocess._onDataCb?.('\x1b]777;mcode-shell-ready')
       await host.dispose()
 
       expect(onFinalCheckpoint).toHaveBeenCalledWith('session-1', expect.any(Object), [
-        { kind: 'output', data: '\x1b]777;orca-shell-ready' }
+        { kind: 'output', data: '\x1b]777;mcode-shell-ready' }
       ])
     })
 

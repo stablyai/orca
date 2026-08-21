@@ -24,8 +24,8 @@ function sendJson(res: ServerResponse, body: unknown): void {
 
 describe('Gitea hosted review integration', () => {
   beforeEach(() => {
-    process.env = { ...OLD_ENV, ORCA_GITEA_TOKEN: 'local-token' }
-    delete process.env.ORCA_GITEA_API_BASE_URL
+    process.env = { ...OLD_ENV, MCODE_GITEA_TOKEN: 'local-token' }
+    delete process.env.MCODE_GITEA_API_BASE_URL
     _resetGiteaRepoRefCache()
   })
 
@@ -69,7 +69,7 @@ describe('Gitea hosted review integration', () => {
     })
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
 
-    const repoPath = await mkdtemp(join(tmpdir(), 'orca-gitea-review-'))
+    const repoPath = await mkdtemp(join(tmpdir(), 'mcode-gitea-review-'))
     try {
       const address = server.address()
       if (!address || typeof address === 'string') {

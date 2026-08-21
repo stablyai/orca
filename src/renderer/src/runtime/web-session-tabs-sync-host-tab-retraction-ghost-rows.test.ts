@@ -350,7 +350,7 @@ describe('a host-retracted paired tab leaves no ghost agent row behind', () => {
     const release = replayClientByteStatus(store, RETRACTED_TAB, RETRACTED_LEAF, 'working', T0)
     expect(store.getState().agentStatusByPaneKey[GHOST_PANE_KEY]?.state).toBe('working')
 
-    // Host closes the reviewer tab (e.g. `orca terminal` lifecycle on the host).
+    // Host closes the reviewer tab (e.g. `mcode terminal` lifecycle on the host).
     applyHostSnapshot(
       store,
       makeHostSnapshot({ snapshotVersion: 2, hostTabIds: [KEEP_TAB], hostNow: T0 + 1_000 }),

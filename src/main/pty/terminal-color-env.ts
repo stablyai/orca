@@ -1,5 +1,5 @@
 export function removeInheritedNoColor(env: Record<string, string>): void {
-  // Why: Orca can be launched by agent/dev shells that disable color for their
+  // Why: MCode can be launched by agent/dev shells that disable color for their
   // own logs. A terminal emulator should not inherit that parent-only choice;
   // if the user's login shell exports these, startup files can still set them.
   delete env.NO_COLOR

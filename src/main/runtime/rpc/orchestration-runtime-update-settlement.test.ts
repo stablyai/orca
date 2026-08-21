@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
 import Database from '../../sqlite/sync-database'
-import { OrcaRuntimeService } from '../orca-runtime'
+import { MCodeRuntimeService } from '../mcode-runtime'
 import { OrchestrationDb } from '../orchestration/db'
 import type { RpcRequest, RpcResponse } from './core'
 import { RpcDispatcher } from './dispatcher'
@@ -53,7 +53,7 @@ afterEach(() => {
 })
 
 function createUpdateHarness(): Harness {
-  const dir = mkdtempSync(join(tmpdir(), 'orca-update-settlement-'))
+  const dir = mkdtempSync(join(tmpdir(), 'mcode-update-settlement-'))
   tempDirs.push(dir)
   const markerPath = join(dir, 'worker-result.txt')
   const dbPath = join(dir, 'orchestration.db')
@@ -103,7 +103,7 @@ function createUpdateHarness(): Harness {
         launchToken: 'current-coordinator-launch-token'
       }
     ]
-    const runtime = new OrcaRuntimeService(null, undefined, {
+    const runtime = new MCodeRuntimeService(null, undefined, {
       attestAgentHookCompatibilityAuthority: ({ paneKey, launchTokenHash }) => {
         const authority = authorities.find((candidate) => candidate.paneKey === paneKey)
         return authority &&

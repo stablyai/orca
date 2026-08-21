@@ -33,14 +33,14 @@ const RETRY_MS = 60 * 1000
 const NOW_MS = 1_760_000_000_000
 const TEMP_ROOT = resolve('fixture-temp')
 const UID_SUFFIX = typeof process.getuid === 'function' ? `-${process.getuid()}` : ''
-const STAGING_ROOT = join(TEMP_ROOT, `orca-clipboard-files${UID_SUFFIX}`)
+const STAGING_ROOT = join(TEMP_ROOT, `mcode-clipboard-files${UID_SUFFIX}`)
 const MARKER_PATH = join(STAGING_ROOT, '.legacy-cleanup-complete')
 const UUID_A = '00000000-0000-4000-8000-000000000000'
 const UUID_B = '00000000-0000-4000-8000-000000000001'
 const EXPIRED_TRANSFER = `1759990000000-${UUID_A}`
 const FRESH_TRANSFER = `1760000000000-${UUID_B}`
-const LEGACY_EXPIRED = `orca-clipboard-file-${EXPIRED_TRANSFER}`
-const LEGACY_FRESH = `orca-clipboard-file-${FRESH_TRANSFER}`
+const LEGACY_EXPIRED = `mcode-clipboard-file-${EXPIRED_TRANSFER}`
+const LEGACY_FRESH = `mcode-clipboard-file-${FRESH_TRANSFER}`
 
 type MockDirent = { name: string; isDirectory: () => boolean }
 
@@ -295,7 +295,7 @@ describe('legacy remote clipboard staging compatibility', () => {
   it('removes only exact expired legacy children encountered inside the bound', async () => {
     opendirMock.mockResolvedValue(
       openedDirectory([
-        directoryEntry('orca-clipboard-file-lookalike'),
+        directoryEntry('mcode-clipboard-file-lookalike'),
         directoryEntry(LEGACY_EXPIRED),
         directoryEntry(LEGACY_EXPIRED, false)
       ])

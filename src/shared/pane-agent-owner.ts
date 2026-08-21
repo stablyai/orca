@@ -6,7 +6,7 @@ import type { AgentType } from './agent-status-types'
  * each call site passes only what it holds; absent signals are skipped.
  */
 export type PaneAgentOwnerSignals = {
-  /** Tab-scoped launch intent — what Orca launched into this tab. */
+  /** Tab-scoped launch intent — what MCode launched into this tab. */
   launchAgent?: AgentType | null
   /** Never-cleared per-connection launch seed (pane connection only). */
   startupLaunchAgent?: AgentType | null

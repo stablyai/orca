@@ -29,7 +29,7 @@ export function isTerminalModelQueryAuthorityEnabled(
 }
 
 /** Per-chunk reply-ownership predicate, evaluated once at ingestion in
- *  OrcaRuntimeService.onPtyData — the same module state and tick as the
+ *  MCodeRuntimeService.onPtyData — the same module state and tick as the
  *  hidden-gate drop sites, so "chunk dropped" and "main answers" cannot
  *  diverge for live chunks. Remote view subscribers (mobile/web/remote
  *  desktop xterms on the multiplexed stream) keep view authority, so main

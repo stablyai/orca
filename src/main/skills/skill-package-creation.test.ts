@@ -9,7 +9,7 @@ import { extractSkillPackageArchive } from './skill-package-extraction'
 const temporaryDirectories: string[] = []
 
 async function temporaryDirectory(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), 'orca-skill-package-test-'))
+  const directory = await mkdtemp(join(tmpdir(), 'mcode-skill-package-test-'))
   temporaryDirectories.push(directory)
   return directory
 }

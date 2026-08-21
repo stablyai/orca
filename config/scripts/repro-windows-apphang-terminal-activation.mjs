@@ -124,7 +124,7 @@ async function main() {
     throw new Error('No user WSL distro found. Install/enable WSL or pass --distro=NAME.')
   }
   console.log(
-    `[apphang-repro] issue=https://github.com/stablyai/orca/issues/6874 distro=${distro} gpuModes=${args.gpuModes.join(',')} cycles=${args.cycles}`
+    `[apphang-repro] issue=https://github.com/mcode-ide/mcode/issues/6874 distro=${distro} gpuModes=${args.gpuModes.join(',')} cycles=${args.cycles}`
   )
   const fixture = createWslFixture(distro)
   console.log(
@@ -146,7 +146,7 @@ async function main() {
   }
 
   const payload = {
-    issue: 'https://github.com/stablyai/orca/issues/6874',
+    issue: 'https://github.com/mcode-ide/mcode/issues/6874',
     expect: args.expect,
     distro,
     fixture: args.keep ? fixture : { removed: true, baseLinuxPath: fixture.baseLinuxPath },

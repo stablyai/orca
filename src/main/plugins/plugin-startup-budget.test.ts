@@ -33,7 +33,7 @@ function dummyManifest(index: number): PluginManifest {
     publisher: 'startup-budget',
     name: `Startup Dummy ${index}`,
     version: '1.0.0',
-    engines: { orca: '>=1.0.0' },
+    engines: { mcode: '>=1.0.0' },
     pluginApi: 1,
     contributes: {
       panels: [],
@@ -79,7 +79,7 @@ function nearestRankP95(samples: readonly number[]): number {
 
 describe('plugin startup budget', () => {
   beforeAll(async () => {
-    userDataPath = await mkdtemp(join(tmpdir(), 'orca-plugin-startup-budget-'))
+    userDataPath = await mkdtemp(join(tmpdir(), 'mcode-plugin-startup-budget-'))
     const installed = await Promise.all(
       Array.from({ length: PLUGIN_COUNT }, (_, index) => installDummy(index))
     )
@@ -120,7 +120,7 @@ describe('plugin startup budget', () => {
     }
 
     const p95 = nearestRankP95(samples)
-    if (process.env.ORCA_PLUGIN_STARTUP_BUDGET_REPORT === '1') {
+    if (process.env.MCODE_PLUGIN_STARTUP_BUDGET_REPORT === '1') {
       process.stdout.write(`plugin startup P95 ${p95.toFixed(2)}ms (${SAMPLE_COUNT} samples)\n`)
     }
     expect(workerFactory).not.toHaveBeenCalled()

@@ -31,19 +31,19 @@ function getPreservedBranchDescription(
   if (!targetName) {
     return translate(
       'auto.store.slices.worktrees.78e08cd877',
-      'Git could not safely delete branch "{{value0}}", so Orca kept it to avoid losing local commits.',
+      'Git could not safely delete branch "{{value0}}", so MCode kept it to avoid losing local commits.',
       { value0: branch }
     )
   }
   return isWorkspace
     ? translate(
         'auto.store.slices.worktrees.3b57982bf6',
-        'Git could not safely delete branch "{{value0}}" after deleting workspace "{{value1}}", so Orca kept it to avoid losing local commits.',
+        'Git could not safely delete branch "{{value0}}" after deleting workspace "{{value1}}", so MCode kept it to avoid losing local commits.',
         { value0: branch, value1: targetName }
       )
     : translate(
         'auto.store.slices.worktrees.81f13f48d2',
-        'Git could not safely delete branch "{{value0}}" after deleting worktree "{{value1}}", so Orca kept it to avoid losing local commits.',
+        'Git could not safely delete branch "{{value0}}" after deleting worktree "{{value1}}", so MCode kept it to avoid losing local commits.',
         { value0: branch, value1: targetName }
       )
 }

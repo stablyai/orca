@@ -63,12 +63,12 @@ vi.mock('../../main/agent-hooks/managed-agent-hook-controls', () => ({
 import { main } from '../index'
 
 function readDataFile(userDataPath: string): PersistedState {
-  return JSON.parse(readFileSync(join(userDataPath, 'orca-data.json'), 'utf-8')) as PersistedState
+  return JSON.parse(readFileSync(join(userDataPath, 'mcode-data.json'), 'utf-8')) as PersistedState
 }
 
 function writeDataFile(userDataPath: string, state: PersistedState): void {
   mkdirSync(userDataPath, { recursive: true })
-  writeFileSync(join(userDataPath, 'orca-data.json'), JSON.stringify(state, null, 2), 'utf-8')
+  writeFileSync(join(userDataPath, 'mcode-data.json'), JSON.stringify(state, null, 2), 'utf-8')
 }
 
 async function runAgentHooksOff(userDataPath: string): Promise<void> {
@@ -80,7 +80,7 @@ describe('agent hooks CLI handler', () => {
   let userDataPath: string
 
   beforeEach(() => {
-    userDataPath = mkdtempSync(join(tmpdir(), 'orca-agent-hooks-cli-'))
+    userDataPath = mkdtempSync(join(tmpdir(), 'mcode-agent-hooks-cli-'))
     applyAgentStatusHooksEnabledMock.mockReturnValue([])
     callMock.mockReset()
     getCliStatusMock.mockClear()
@@ -162,7 +162,7 @@ describe('agent hooks CLI handler', () => {
     profile.settings.agentStatusHooksEnabled = false
     writeDataFile(join(userDataPath, 'profiles', profileId), profile)
     writeFileSync(
-      join(userDataPath, 'orca-profile-index.json'),
+      join(userDataPath, 'mcode-profile-index.json'),
       JSON.stringify({
         activeProfileId: profileId,
         profiles: [{ id: profileId }]

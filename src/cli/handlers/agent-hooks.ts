@@ -30,7 +30,7 @@ type AgentHookCommandResult = {
 
 function getDataPath(): string {
   const userDataPath = getDefaultUserDataPath()
-  const indexPath = join(userDataPath, 'orca-profile-index.json')
+  const indexPath = join(userDataPath, 'mcode-profile-index.json')
   for (const candidate of [indexPath, `${indexPath}.bak`]) {
     try {
       const parsed: unknown = JSON.parse(readFileSync(candidate, 'utf-8'))
@@ -43,13 +43,13 @@ function getDataPath(): string {
         /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(profileId) &&
         parsed.profiles.some((profile) => isRecord(profile) && profile.id === profileId)
       ) {
-        return join(userDataPath, 'profiles', profileId, 'orca-data.json')
+        return join(userDataPath, 'profiles', profileId, 'mcode-data.json')
       }
     } catch {
       // Try the profile-index backup, then the legacy pre-profile path.
     }
   }
-  return join(userDataPath, 'orca-data.json')
+  return join(userDataPath, 'mcode-data.json')
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -206,11 +206,11 @@ describe('AgentHookServer listener replay', () => {
     try {
       const env = server.buildPtyEnv()
       const postHook = (prompt: string): Promise<Response> =>
-        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+        fetch(`http://127.0.0.1:${env.MCODE_AGENT_HOOK_PORT}/hook/claude`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+            'X-MCode-Agent-Hook-Token': env.MCODE_AGENT_HOOK_TOKEN
           },
           body: JSON.stringify(buildBody({ hook_event_name: 'UserPromptSubmit', prompt }))
         })
@@ -235,11 +235,11 @@ describe('AgentHookServer listener replay', () => {
     try {
       const env = server.buildPtyEnv()
       const postHook = (payload: Record<string, unknown>): Promise<Response> =>
-        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+        fetch(`http://127.0.0.1:${env.MCODE_AGENT_HOOK_PORT}/hook/claude`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+            'X-MCode-Agent-Hook-Token': env.MCODE_AGENT_HOOK_TOKEN
           },
           body: JSON.stringify(buildBody(payload, { launchToken: 'retired-launch-token' }))
         })
@@ -277,11 +277,11 @@ describe('AgentHookServer listener replay', () => {
       try {
         const env = server.buildPtyEnv()
         const postHook = (payload: Record<string, unknown>): Promise<Response> =>
-          fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/${kind}`, {
+          fetch(`http://127.0.0.1:${env.MCODE_AGENT_HOOK_PORT}/hook/${kind}`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+              'X-MCode-Agent-Hook-Token': env.MCODE_AGENT_HOOK_TOKEN
             },
             body: JSON.stringify(buildBody(payload, { launchToken: `retired-${kind}-token` }))
           })
@@ -312,11 +312,11 @@ describe('AgentHookServer listener replay', () => {
     try {
       const env = server.buildPtyEnv()
       const postHook = (payload: Record<string, unknown>): Promise<Response> =>
-        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/pi`, {
+        fetch(`http://127.0.0.1:${env.MCODE_AGENT_HOOK_PORT}/hook/pi`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+            'X-MCode-Agent-Hook-Token': env.MCODE_AGENT_HOOK_TOKEN
           },
           body: JSON.stringify(buildBody(payload, { launchToken: 'idle-reattach-token' }))
         })
@@ -348,11 +348,11 @@ describe('AgentHookServer listener replay', () => {
     try {
       const env = server.buildPtyEnv()
       const postHook = (payload: Record<string, unknown>): Promise<Response> =>
-        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/pi`, {
+        fetch(`http://127.0.0.1:${env.MCODE_AGENT_HOOK_PORT}/hook/pi`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+            'X-MCode-Agent-Hook-Token': env.MCODE_AGENT_HOOK_TOKEN
           },
           body: JSON.stringify(buildBody(payload, { launchToken: 'closed-tab-token' }))
         })
@@ -382,11 +382,11 @@ describe('AgentHookServer listener replay', () => {
       const detachedPane = makePaneKey('tab-2', LEAF_2)
       const env = server.buildPtyEnv()
       const postHook = (payload: Record<string, unknown>): Promise<Response> =>
-        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/pi`, {
+        fetch(`http://127.0.0.1:${env.MCODE_AGENT_HOOK_PORT}/hook/pi`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+            'X-MCode-Agent-Hook-Token': env.MCODE_AGENT_HOOK_TOKEN
           },
           body: JSON.stringify(buildBody(payload, { launchToken: 'detached-token' }))
         })
@@ -416,11 +416,11 @@ describe('AgentHookServer listener replay', () => {
       const legacyPane = 'tab-1:0'
       const env = server.buildPtyEnv()
       const postHook = (payload: Record<string, unknown>): Promise<Response> =>
-        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/pi`, {
+        fetch(`http://127.0.0.1:${env.MCODE_AGENT_HOOK_PORT}/hook/pi`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+            'X-MCode-Agent-Hook-Token': env.MCODE_AGENT_HOOK_TOKEN
           },
           body: JSON.stringify(
             buildBody(payload, { paneKey: legacyPane, launchToken: 'legacy-token' })
@@ -452,11 +452,11 @@ describe('AgentHookServer listener replay', () => {
       const detachedPane = makePaneKey('tab-2', LEAF_2)
       const env = server.buildPtyEnv()
       const postHook = (payload: Record<string, unknown>): Promise<Response> =>
-        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/pi`, {
+        fetch(`http://127.0.0.1:${env.MCODE_AGENT_HOOK_PORT}/hook/pi`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+            'X-MCode-Agent-Hook-Token': env.MCODE_AGENT_HOOK_TOKEN
           },
           body: JSON.stringify(buildBody(payload, { launchToken: 'detached-closed-token' }))
         })
@@ -486,11 +486,11 @@ describe('AgentHookServer listener replay', () => {
       const detachedPane = makePaneKey('tab-2', LEAF_2)
       const env = server.buildPtyEnv()
       const postHook = (payload: Record<string, unknown>): Promise<Response> =>
-        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/pi`, {
+        fetch(`http://127.0.0.1:${env.MCODE_AGENT_HOOK_PORT}/hook/pi`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+            'X-MCode-Agent-Hook-Token': env.MCODE_AGENT_HOOK_TOKEN
           },
           body: JSON.stringify(buildBody(payload, { launchToken: 'reopen-origin-token' }))
         })
@@ -525,11 +525,11 @@ describe('AgentHookServer listener replay', () => {
         payload: Record<string, unknown>,
         overrides: Record<string, unknown> = {}
       ): Promise<Response> =>
-        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/pi`, {
+        fetch(`http://127.0.0.1:${env.MCODE_AGENT_HOOK_PORT}/hook/pi`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+            'X-MCode-Agent-Hook-Token': env.MCODE_AGENT_HOOK_TOKEN
           },
           body: JSON.stringify(buildBody(payload, { launchToken: 'evict-token', ...overrides }))
         })
@@ -565,11 +565,11 @@ describe('AgentHookServer listener replay', () => {
       const detachedPane = makePaneKey('tab-2', LEAF_2)
       const env = server.buildPtyEnv()
       const postHook = (payload: Record<string, unknown>): Promise<Response> =>
-        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/pi`, {
+        fetch(`http://127.0.0.1:${env.MCODE_AGENT_HOOK_PORT}/hook/pi`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+            'X-MCode-Agent-Hook-Token': env.MCODE_AGENT_HOOK_TOKEN
           },
           body: JSON.stringify(
             buildBody(payload, { paneKey: legacyPane, launchToken: 'legacy-cross-tab-token' })
@@ -600,11 +600,11 @@ describe('AgentHookServer listener replay', () => {
       const reboundPane = makePaneKey('tab-1', LEAF_3)
       const env = server.buildPtyEnv()
       const postHook = (payload: Record<string, unknown>): Promise<Response> =>
-        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/pi`, {
+        fetch(`http://127.0.0.1:${env.MCODE_AGENT_HOOK_PORT}/hook/pi`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+            'X-MCode-Agent-Hook-Token': env.MCODE_AGENT_HOOK_TOKEN
           },
           body: JSON.stringify(
             buildBody(payload, { paneKey: legacyPane, launchToken: 'rebind-token' })
@@ -632,11 +632,11 @@ describe('AgentHookServer listener replay', () => {
     try {
       const env = server.buildPtyEnv()
       const postHook = (payload: Record<string, unknown>): Promise<Response> =>
-        fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
+        fetch(`http://127.0.0.1:${env.MCODE_AGENT_HOOK_PORT}/hook/claude`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN
+            'X-MCode-Agent-Hook-Token': env.MCODE_AGENT_HOOK_TOKEN
           },
           body: JSON.stringify(buildBody(payload, { launchToken: 'retired-launch-token' }))
         })

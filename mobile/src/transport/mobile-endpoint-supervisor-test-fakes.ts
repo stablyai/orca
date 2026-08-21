@@ -154,8 +154,8 @@ export class FakeLogicalClient extends FakeSession implements StableLogicalRpcCl
 
 export const relay = {
   v: 1 as const,
-  directorUrl: 'https://relay.onorca.dev',
-  cellUrl: 'https://relay-c1.onorca.dev',
+  directorUrl: 'https://relay.mcode.dev',
+  cellUrl: 'https://relay-c1.mcode.dev',
   assignmentEpoch: 7,
   relayHostId: 'AbCdEf0123_-xyZ9',
   e2eeFraming: 2 as const
@@ -169,7 +169,7 @@ export const host: HostProfile = {
   lastConnected: 1,
   endpoints: [
     { id: 'direct-primary', kind: 'lan', url: 'ws://192.168.1.10:6768' },
-    { id: 'relay-primary', kind: 'relay', url: 'wss://relay-c1.onorca.dev/v1/connect/id' }
+    { id: 'relay-primary', kind: 'relay', url: 'wss://relay-c1.mcode.dev/v1/connect/id' }
   ],
   relayHostId: relay.relayHostId,
   relay

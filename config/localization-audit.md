@@ -1,6 +1,6 @@
 # Localization Audit
 
-This is the pre-work artifact for migrating Orca to a localized UI. The goal is
+This is the pre-work artifact for migrating MCode to a localized UI. The goal is
 to make coverage repeatable: every detected user-facing string is either moved
 behind the localization layer or explicitly excluded with a reason.
 

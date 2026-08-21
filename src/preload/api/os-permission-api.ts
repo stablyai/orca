@@ -29,7 +29,7 @@ export type NotificationsApi = {
 }
 
 export type MacosTccPromptsApi = {
-  /** Fires once macOS has raised its Nth consent dialog naming Orca (#9756). */
+  /** Fires once macOS has raised its Nth consent dialog naming MCode (#9756). */
   onThreshold: (callback: (payload: { promptCount: number }) => void) => () => void
   consumePending: () => Promise<{ claimId: number; promptCount: number } | null>
   acknowledgePending: (claimId: number) => Promise<void>

@@ -27,7 +27,7 @@ describe('DevinHookService', () => {
   let homeDir: string
 
   beforeEach(() => {
-    homeDir = mkdtempSync(join(tmpdir(), 'orca-devin-home-'))
+    homeDir = mkdtempSync(join(tmpdir(), 'mcode-devin-home-'))
     homedirMock.mockReturnValue(homeDir)
     vi.stubEnv('APPDATA', join(homeDir, 'AppData', 'Roaming'))
   })
@@ -164,7 +164,7 @@ describe('DevinHookService', () => {
     const previous = process.platform
     Object.defineProperty(process, 'platform', { value: 'win32' })
     try {
-      const scriptPath = 'C:\\Users\\Ada Lovelace\\.orca\\agent-hooks\\devin-hook.cmd'
+      const scriptPath = 'C:\\Users\\Ada Lovelace\\.mcode\\agent-hooks\\devin-hook.cmd'
       const command = getDevinManagedCommand(scriptPath)
       const encoded = command.match(/ -EncodedCommand (\S+)$/)?.[1]
       expect(encoded).toBeDefined()

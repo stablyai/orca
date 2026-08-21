@@ -93,7 +93,7 @@ concurrency:
 
 jobs:
   build-win:
-    if: github.repository == 'stablyai/orca'
+    if: github.repository == 'mcode-ide/mcode'
     # Why the same environment as the mac workflows: this needs the App token
     # that can write to the dev-channel repos, and it should be reachable from
     # exactly the same place those secrets already live.
@@ -154,11 +154,11 @@ jobs:
           git init -q --bare "$scratch"
           git -C "$scratch" fetch -q --filter=tree:0 "$REPO_URL" '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
           if ! git -C "$scratch" rev-parse --verify --quiet "$REQUESTED_SHA^{commit}" >/dev/null; then
-            echo "::error::Commit $REQUESTED_SHA is not in stablyai/orca."
+            echo "::error::Commit $REQUESTED_SHA is not in mcode-ide/mcode."
             exit 1
           fi
           if [[ -z "$(git -C "$scratch" for-each-ref --contains "$REQUESTED_SHA" refs/heads refs/tags | head -1)" ]]; then
-            echo "::error::Commit $REQUESTED_SHA is not reachable from any branch or tag of stablyai/orca; refusing to build it."
+            echo "::error::Commit $REQUESTED_SHA is not reachable from any branch or tag of mcode-ide/mcode; refusing to build it."
             exit 1
           fi
           echo "Vetted $CHANNEL $TAG at $REQUESTED_SHA"
@@ -167,7 +167,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref }}
-          # This job only reads stablyai/orca and never pushes; every write goes
+          # This job only reads mcode-ide/mcode and never pushes; every write goes
           # to the dev-channel repo through a minted App token passed by env
           # (zizmor: artipacked).
           persist-credentials: false
@@ -175,15 +175,15 @@ jobs:
       # Why a guard and not just a build: the workflow file comes from the
       # dispatch ref, but the packaging config comes from the *built* commit. A
       # branch cut before Windows dev builds landed has a config that ignores
-      # ORCA_WIN_*, which would resolve publish.repo to the main repo. Say that
+      # MCODE_WIN_*, which would resolve publish.repo to the main repo. Say that
       # in one sentence here rather than failing deep inside electron-builder.
       - name: Resolve the dev-channel packaging identity
         shell: bash
         run: |
           set -euo pipefail
           upper="$(printf '%s' "$CHANNEL" | tr '[:lower:]' '[:upper:]')"
-          echo "ORCA_WIN_${upper}=1" >>"$GITHUB_ENV"
-          echo "ORCA_${upper}_BUILD_VERSION=${VERSION}" >>"$GITHUB_ENV"
+          echo "MCODE_WIN_${upper}=1" >>"$GITHUB_ENV"
+          echo "MCODE_${upper}_BUILD_VERSION=${VERSION}" >>"$GITHUB_ENV"
           if [[ ! -f config/scripts/verify-dev-channel-packaging.mjs ]]; then
             echo "::error::$TAG was built from a commit with no config/scripts/verify-dev-channel-packaging.mjs; that commit predates Windows dev builds, so it cannot produce one."
             exit 1
@@ -234,10 +234,10 @@ jobs:
         shell: bash
         run: pnpm build:release
         env:
-          # Why unset ORCA_BUILD_IDENTITY: telemetry's transport gate accepts only
+          # Why unset MCODE_BUILD_IDENTITY: telemetry's transport gate accepts only
           # 'stable' or 'rc', so leaving it unset keeps dev builds silent — which
           # is correct for unvetted artifacts. Same as the mac dev channels.
-          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+          MCODE_DIAGNOSTICS_TOKEN_URL: https://www.mcode.dev/diagnostics/token
 
       # Why the token is minted here and not at the top: installation tokens live
       # one hour and nothing before this point writes anything.
@@ -248,7 +248,7 @@ jobs:
           app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
           private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
           owner: stablyai
-          repositories: orca-${{ inputs.channel }}
+          repositories: mcode-${{ inputs.channel }}
 
       # Why: electron-builder's publisher creates a release when it cannot find
       # the tag ("publish: always"). If the mac leg failed and discarded its draft
@@ -260,8 +260,8 @@ jobs:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
         run: |
           set -euo pipefail
-          if ! gh release view "$TAG" --repo "stablyai/orca-$CHANNEL" --json tagName >/dev/null 2>&1; then
-            echo "::error::Release $TAG no longer exists in stablyai/orca-$CHANNEL; the mac leg most likely failed and discarded it. Not creating a Windows-only release."
+          if ! gh release view "$TAG" --repo "mcode-ide/mcode-$CHANNEL" --json tagName >/dev/null 2>&1; then
+            echo "::error::Release $TAG no longer exists in mcode-ide/mcode-$CHANNEL; the mac leg most likely failed and discarded it. Not creating a Windows-only release."
             exit 1
           fi
 
@@ -275,7 +275,7 @@ jobs:
           command: node config/scripts/ensure-native-runtime.mjs --runtime=electron; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish always
         env:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
-          ORCA_BUILD_COMMIT: ${{ inputs.ref }}
+          MCODE_BUILD_COMMIT: ${{ inputs.ref }}
           # Why: electron-publish refuses to upload into a release published more
           # than two hours ago (gitHubPublisher.getOrCreateRelease). The mac leg
           # publishes the draft live as soon as *it* finishes, so a slow notary
@@ -292,10 +292,10 @@ jobs:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
         run: |
           set -euo pipefail
-          assets="$(gh release view "$TAG" --repo "stablyai/orca-$CHANNEL" --json assets --jq '.assets[].name')"
+          assets="$(gh release view "$TAG" --repo "mcode-ide/mcode-$CHANNEL" --json assets --jq '.assets[].name')"
           echo "Assets on $TAG:"
           echo "$assets"
-          for required in latest.yml orca-windows-setup.exe; do
+          for required in latest.yml mcode-windows-setup.exe; do
             if ! grep -qx "$required" <<<"$assets"; then
               echo "::error::$TAG is missing $required; Windows could not install this build."
               exit 1

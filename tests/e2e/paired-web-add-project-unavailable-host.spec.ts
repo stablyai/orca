@@ -1,5 +1,5 @@
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import {
   launchHeadlessPairedRuntimeHost,
   type HeadlessPairedRuntimeHost
@@ -13,8 +13,8 @@ import {
 import { waitForSessionReady } from './helpers/store'
 
 test.skip(
-  process.env.ORCA_E2E_WEB_CLIENT !== '1',
-  'Run with ORCA_E2E_WEB_CLIENT=1 so the paired web client is built'
+  process.env.MCODE_E2E_WEB_CLIENT !== '1',
+  'Run with MCODE_E2E_WEB_CLIENT=1 so the paired web client is built'
 )
 
 type HostHealth = 'blocked' | 'disconnected'
@@ -81,7 +81,7 @@ async function assertCreationActionsDisabled(args: {
     .locator('[cmdk-item][aria-disabled="true"]')
     .filter({ hasText: args.hostName })
   await expect(hostOption).toHaveAttribute('aria-disabled', 'true')
-  await expect(hostOption).toContainText(args.health === 'blocked' ? 'Update Orca' : 'Disconnected')
+  await expect(hostOption).toContainText(args.health === 'blocked' ? 'Update MCode' : 'Disconnected')
   await args.page.keyboard.press('Escape')
   await args.page.screenshot({
     path: args.testInfo.outputPath(`${args.topology}-paired-web-add-project-${args.health}.png`),
@@ -126,11 +126,11 @@ async function runUnavailableHostJourney(args: {
 
 test('disables paired-web Add Project for a blocked or unavailable headed host @headful', async ({
   electronApp,
-  orcaPage
+  mcodePage
 }, testInfo) => {
   test.setTimeout(240_000)
-  await waitForSessionReady(orcaPage)
-  const offer = await createRuntimeDesktopPairingOffer(orcaPage)
+  await waitForSessionReady(mcodePage)
+  const offer = await createRuntimeDesktopPairingOffer(mcodePage)
   await runUnavailableHostJourney({
     app: electronApp,
     offer,

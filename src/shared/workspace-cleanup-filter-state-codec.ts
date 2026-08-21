@@ -32,7 +32,7 @@ const REVIEW_PROVIDER_VALUES: HostedReviewProvider[] = [
 ]
 
 /**
- * Tolerant by design: this reads user data written by older (and newer) Orca
+ * Tolerant by design: this reads user data written by older (and newer) MCode
  * builds, so anything unrecognized falls back to the default rather than
  * throwing away the whole persisted filter state.
  */

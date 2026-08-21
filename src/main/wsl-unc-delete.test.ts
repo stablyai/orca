@@ -99,7 +99,7 @@ describe('tryDeleteWslUncPath', () => {
 
   it('rejects an inspection failure instead of falling back to direct rm', async () => {
     execFileMock.mockImplementation((_cmd, _args, _opts, cb) => {
-      cb(new Error('Command failed'), '', 'ORCA_WSL_DELETE_REJECT:inspection')
+      cb(new Error('Command failed'), '', 'MCODE_WSL_DELETE_REJECT:inspection')
     })
 
     await withPlatform('win32', async () => {

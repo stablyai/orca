@@ -467,7 +467,7 @@ describe('sshConfigHostsToTargets', () => {
 })
 
 describe('sshConfigHostsToSummaries', () => {
-  it('maps hosts for the picker and flags aliases already in Orca', () => {
+  it('maps hosts for the picker and flags aliases already in MCode', () => {
     const hosts = [
       {
         host: 'staging',
@@ -488,7 +488,7 @@ describe('sshConfigHostsToSummaries', () => {
         port: 22,
         username: 'ubuntu',
         identityFile: '/home/me/.ssh/staging',
-        alreadyInOrca: true
+        alreadyInMCode: true
       },
       {
         alias: 'prod',
@@ -496,7 +496,7 @@ describe('sshConfigHostsToSummaries', () => {
         port: 2222,
         username: 'ops',
         jumpHost: 'bastion',
-        alreadyInOrca: false
+        alreadyInMCode: false
       }
     ])
   })
@@ -514,7 +514,7 @@ describe('sshConfigHostsToSummaries', () => {
       hostname: 'box',
       port: 22,
       username: '',
-      alreadyInOrca: false
+      alreadyInMCode: false
     })
     expect(summaries[1].alias).toBe('other')
   })

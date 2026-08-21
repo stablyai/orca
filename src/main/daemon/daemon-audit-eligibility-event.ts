@@ -8,7 +8,7 @@ import { PROTOCOL_VERSION } from './daemon-protocol-version'
 // repeats are re-sent only as an occasional heartbeat — the shared per-session telemetry
 // ceiling is 1,000 events for the whole app and audit data must not crowd it out.
 const REPEATED_OBSERVATION_INTERVAL_MS = 5 * 60_000
-const INCARNATION_CORRELATION_DOMAIN = 'orca:daemon-audit-eligibility:incarnation:v1'
+const INCARNATION_CORRELATION_DOMAIN = 'mcode:daemon-audit-eligibility:incarnation:v1'
 type AuditEligibilityCommonProperties = Omit<
   Extract<EventProps<'daemon_audit_eligibility'>, { exact_incarnation: 'unavailable' }>,
   'exact_incarnation'

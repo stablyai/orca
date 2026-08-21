@@ -8,9 +8,9 @@ describe('expandWindowsEnvironmentVariables', () => {
   it('expands names case-insensitively and preserves unknown variables', () => {
     expect(
       expandWindowsEnvironmentVariables('%localappdata%\\agy\\bin;%MISSING%\\bin', {
-        LOCALAPPDATA: 'C:\\Users\\orca\\AppData\\Local'
+        LOCALAPPDATA: 'C:\\Users\\mcode\\AppData\\Local'
       })
-    ).toBe('C:\\Users\\orca\\AppData\\Local\\agy\\bin;%MISSING%\\bin')
+    ).toBe('C:\\Users\\mcode\\AppData\\Local\\agy\\bin;%MISSING%\\bin')
   })
 
   it('expands variables with empty values', () => {
@@ -23,21 +23,21 @@ describe('expandWindowsEnvironmentVariables', () => {
 describe('expandWindowsPathEnvironmentVariables', () => {
   it('expands every Windows PATH casing without changing other variables', () => {
     const env = {
-      ORCA_PATH_ROOT: 'C:\\Users\\orca',
-      Path: '%ORCA_PATH_ROOT%\\bin',
-      PATH: '%orca_path_root%\\tools',
-      TEMPLATE: '%ORCA_PATH_ROOT%\\template'
+      MCODE_PATH_ROOT: 'C:\\Users\\mcode',
+      Path: '%MCODE_PATH_ROOT%\\bin',
+      PATH: '%mcode_path_root%\\tools',
+      TEMPLATE: '%MCODE_PATH_ROOT%\\template'
     }
 
     expandWindowsPathEnvironmentVariables(env, 'win32')
 
-    expect(env.Path).toBe('C:\\Users\\orca\\bin')
-    expect(env.PATH).toBe('C:\\Users\\orca\\tools')
-    expect(env.TEMPLATE).toBe('%ORCA_PATH_ROOT%\\template')
+    expect(env.Path).toBe('C:\\Users\\mcode\\bin')
+    expect(env.PATH).toBe('C:\\Users\\mcode\\tools')
+    expect(env.TEMPLATE).toBe('%MCODE_PATH_ROOT%\\template')
   })
 
   it('leaves non-Windows PATH values unchanged', () => {
-    const env = { ROOT: '/opt/orca', PATH: '%ROOT%/bin:/usr/bin' }
+    const env = { ROOT: '/opt/mcode', PATH: '%ROOT%/bin:/usr/bin' }
 
     expandWindowsPathEnvironmentVariables(env, 'linux')
 

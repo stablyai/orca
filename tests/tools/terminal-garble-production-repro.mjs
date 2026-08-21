@@ -25,9 +25,9 @@ import {
   findPersistentCellDivergences
 } from './terminal-garble-frame-analysis.mjs'
 
-const DEFAULT_EXECUTABLE = '/Applications/Orca.app/Contents/MacOS/Orca'
-const DEFAULT_PROFILE = path.join(os.homedir(), 'Library', 'Application Support', 'orca')
-const URL = 'https://example.com/orca-terminal-garble-repro'
+const DEFAULT_EXECUTABLE = '/Applications/MCode.app/Contents/MacOS/MCode'
+const DEFAULT_PROFILE = path.join(os.homedir(), 'Library', 'Application Support', 'mcode')
+const URL = 'https://example.com/mcode-terminal-garble-repro'
 const MODIFIER = process.platform === 'darwin' ? 'Meta' : 'Control'
 const replayRoot = path.join(os.tmpdir(), 'garble-rig')
 const REPLAY_A = path.join(replayRoot, 'frames-A.jsonl')
@@ -62,13 +62,13 @@ const allowOpenUrl = process.argv.includes('--allow-open-url')
 const stubOpenUrl = !allowOpenUrl || process.argv.includes('--stub-open-url')
 const stubOpenUrlAfterFirst = process.argv.includes('--stub-open-url-after-first')
 const focusChurn = process.argv.includes('--focus-churn')
-const runRoot = mkdtempSync(path.join(os.tmpdir(), 'orca-terminal-garble-'))
+const runRoot = mkdtempSync(path.join(os.tmpdir(), 'mcode-terminal-garble-'))
 const userDataDir = path.join(runRoot, 'user-data')
 const evidenceDir = path.join(runRoot, 'evidence')
 mkdirSync(userDataDir, { recursive: true })
 mkdirSync(evidenceDir, { recursive: true })
 function sanitizeProfile() {
-  const sourceDataPath = path.join(sourceProfile, 'orca-data.json')
+  const sourceDataPath = path.join(sourceProfile, 'mcode-data.json')
   const data = JSON.parse(readFileSync(sourceDataPath, 'utf8'))
   const repo = createSeededRepo(path.join(runRoot, 'fixture-repo'))
 
@@ -85,7 +85,7 @@ function sanitizeProfile() {
     repos: [repo]
   }
   const serialized = `${JSON.stringify(profile)}\n`
-  writeFileSync(path.join(userDataDir, 'orca-data.json'), serialized)
+  writeFileSync(path.join(userDataDir, 'mcode-data.json'), serialized)
 
   for (const file of ['Preferences', 'Local State']) {
     const source = path.join(sourceProfile, file)
@@ -485,8 +485,8 @@ try {
     ...launchTarget,
     env: {
       ...cleanEnv,
-      ORCA_E2E_USER_DATA_DIR: userDataDir,
-      ...(mainPath ? { NODE_ENV: 'development', ORCA_E2E_HEADFUL: '1' } : {})
+      MCODE_E2E_USER_DATA_DIR: userDataDir,
+      ...(mainPath ? { NODE_ENV: 'development', MCODE_E2E_HEADFUL: '1' } : {})
     }
   })
   page = await app.firstWindow({ timeout: 120_000 })

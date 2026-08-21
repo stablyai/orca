@@ -196,7 +196,7 @@ describe('repo slice runtime folder fallback', () => {
     expect(toastError).toHaveBeenCalledWith(
       'Failed to add project',
       expect.objectContaining({
-        description: 'Update Orca server to open non-Git folders on this runtime.'
+        description: 'Update MCode server to open non-Git folders on this runtime.'
       })
     )
   })
@@ -283,7 +283,7 @@ describe('repo slice runtime folder fallback', () => {
   it('adds a local non-git folder directly without runtime metadata or a worktree', async () => {
     // Local analogue of the runtime fallback above: with no active runtime the add
     // routes through window.api.repos.add (not runtime RPC). A non-git path returns
-    // Orca's own "Not a valid git repository" sentinel, so addRepoPath surfaces the
+    // MCode's own "Not a valid git repository" sentinel, so addRepoPath surfaces the
     // confirmation modal with no runtime/SSH metadata instead of throwing.
     const folderRepo: Repo = {
       id: 'local-folder',

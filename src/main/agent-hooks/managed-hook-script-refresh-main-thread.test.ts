@@ -47,7 +47,7 @@ vi.mock('node:os', async (importOriginal) => {
   return { ...actual, default: actual, homedir: () => state.home }
 })
 
-vi.mock('electron', () => ({ app: { getPath: () => '/tmp/orca-user-data' } }))
+vi.mock('electron', () => ({ app: { getPath: () => '/tmp/mcode-user-data' } }))
 
 import { MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS } from './managed-agent-hook-registry'
 
@@ -59,7 +59,7 @@ function syncCallsUnderHome(): string[] {
 
 describe('managed hook script refresh stays off the main thread', () => {
   beforeEach(async () => {
-    state.home = await mkdtemp(join(tmpdir(), 'orca-hook-refresh-main-thread-'))
+    state.home = await mkdtemp(join(tmpdir(), 'mcode-hook-refresh-main-thread-'))
     state.syncCalls = []
     state.blockAsyncReads = false
   })
@@ -70,7 +70,7 @@ describe('managed hook script refresh stays off the main thread', () => {
   })
 
   it('uses no synchronous HOME filesystem calls for missing or stale scripts', async () => {
-    const hooksDir = join(state.home, '.orca', 'agent-hooks')
+    const hooksDir = join(state.home, '.mcode', 'agent-hooks')
     const claudeScript = join(
       hooksDir,
       process.platform === 'win32' ? 'claude-hook.cmd' : 'claude-hook.sh'

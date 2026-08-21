@@ -23,10 +23,10 @@ import {
 import { shutdownBufferCaptures } from '../components/terminal-pane/shutdown-buffer-captures'
 import { dispatchWindowCloseRequest } from '../components/window-close-request-coordinator'
 import {
-  ORCA_APP_RESTART_ABORTED_EVENT,
-  ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
+  MCODE_APP_RESTART_ABORTED_EVENT,
+  MCODE_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
 } from '../../../shared/updater-renderer-events'
-import { ORCA_RENDERER_UNLOAD_PREVENTED_EVENT } from '../../../shared/renderer-shutdown-events'
+import { MCODE_RENDERER_UNLOAD_PREVENTED_EVENT } from '../../../shared/renderer-shutdown-events'
 import type { RemoteWorkspacePatchResult } from '../../../shared/remote-workspace-types'
 
 // Why: bound the resume-record loss window on a hard kill to ~1 min; capture skips unchanged records so per-tick cost is negligible.
@@ -164,17 +164,17 @@ export function useAppSessionPersistence(): void {
     })
     const persistBeforeUnload = createShutdownCheckpointBeforeUnloadHandler(shutdownCheckpoint)
     window.addEventListener('beforeunload', persistBeforeUnload)
-    window.addEventListener(ORCA_APP_RESTART_ABORTED_EVENT, shutdownCheckpoint.reset)
-    window.addEventListener(ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT, shutdownCheckpoint.reset)
-    window.addEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, shutdownCheckpoint.reset)
+    window.addEventListener(MCODE_APP_RESTART_ABORTED_EVENT, shutdownCheckpoint.reset)
+    window.addEventListener(MCODE_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT, shutdownCheckpoint.reset)
+    window.addEventListener(MCODE_RENDERER_UNLOAD_PREVENTED_EVENT, shutdownCheckpoint.reset)
     return () => {
       window.removeEventListener('beforeunload', persistBeforeUnload)
-      window.removeEventListener(ORCA_APP_RESTART_ABORTED_EVENT, shutdownCheckpoint.reset)
+      window.removeEventListener(MCODE_APP_RESTART_ABORTED_EVENT, shutdownCheckpoint.reset)
       window.removeEventListener(
-        ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
+        MCODE_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
         shutdownCheckpoint.reset
       )
-      window.removeEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, shutdownCheckpoint.reset)
+      window.removeEventListener(MCODE_RENDERER_UNLOAD_PREVENTED_EVENT, shutdownCheckpoint.reset)
     }
   }, [])
 

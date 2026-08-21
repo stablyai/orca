@@ -61,8 +61,8 @@ beforeEach(() => {
   setSettings.mockReset().mockResolvedValue(undefined)
   getInstructions.mockReset().mockResolvedValue({
     ok: true,
-    command: 'sudo apt-get install -y /tmp/orca_1.4.200_amd64.deb',
-    packageFileName: 'orca_1.4.200_amd64.deb'
+    command: 'sudo apt-get install -y /tmp/mcode_1.4.200_amd64.deb',
+    packageFileName: 'mcode_1.4.200_amd64.deb'
   })
   Object.defineProperty(window, 'api', {
     configurable: true,
@@ -93,7 +93,7 @@ afterEach(() => {
 describe('UpdateCard Windows signature failures', () => {
   it('does not offer the rejected version as a manual publisher-check bypass', () => {
     const message =
-      'New version 1.4.200 is not signed by the application owner: publisherNames: Orca'
+      'New version 1.4.200 is not signed by the application owner: publisherNames: MCode'
     renderAfterAvailableStatus()
 
     act(() => useAppStore.getState().setUpdateStatus({ state: 'error', message }))
@@ -103,7 +103,7 @@ describe('UpdateCard Windows signature failures', () => {
     expect(screen.queryByText(message)).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'Check official releases' }))
-    expect(openUrl).toHaveBeenCalledWith('https://github.com/stablyai/orca/releases')
+    expect(openUrl).toHaveBeenCalledWith('https://github.com/mcode-ide/mcode/releases')
     expect(openUrl).not.toHaveBeenCalledWith(expect.stringContaining('/tag/'))
   })
 
@@ -131,14 +131,14 @@ describe('UpdateCard Windows signature failures', () => {
   // An install failure now carries the updater's own text, so it can reach these branches too.
   it('routes a signature verdict raised during install to the security-stop card', () => {
     const message =
-      'New version 1.4.200 is not signed by the application owner: publisherNames: Orca'
+      'New version 1.4.200 is not signed by the application owner: publisherNames: MCode'
     renderAfterAvailableStatus()
 
     act(() => useAppStore.getState().setUpdateStatus({ state: 'error', message }))
 
     expect(screen.getByText("Update Wasn't Installed")).toBeTruthy()
     // The generic restart advice must not be prefixed onto a security stop.
-    expect(screen.queryByText(/Quit and reopen Orca/)).toBeNull()
+    expect(screen.queryByText(/Quit and reopen MCode/)).toBeNull()
   })
 })
 
@@ -160,7 +160,7 @@ describe('UpdateCard hourly builds', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Release notes' }))
     expect(openUrl).toHaveBeenCalledWith(
-      'https://github.com/stablyai/orca-hourly/releases/tag/v1.4.160-hourly.202607281400'
+      'https://github.com/mcode-ide/mcode-hourly/releases/tag/v1.4.160-hourly.202607281400'
     )
   })
 })
@@ -242,7 +242,7 @@ describe('UpdateCard Linux package-install recovery', () => {
 
     expect(getInstructions).toHaveBeenCalledTimes(1)
     expect(writeClipboardText).toHaveBeenCalledWith(
-      'sudo apt-get install -y /tmp/orca_1.4.200_amd64.deb'
+      'sudo apt-get install -y /tmp/mcode_1.4.200_amd64.deb'
     )
   })
 
@@ -259,7 +259,7 @@ describe('UpdateCard Linux package-install recovery', () => {
     await flushActions()
 
     fireEvent.click(screen.getByRole('button', { name: 'Download Manually' }))
-    expect(openUrl).toHaveBeenCalledWith('https://github.com/stablyai/orca/releases/tag/v1.4.200')
+    expect(openUrl).toHaveBeenCalledWith('https://github.com/mcode-ide/mcode/releases/tag/v1.4.200')
   })
 
   it('keeps generic errors on the generic card when no recovery is attached', () => {
@@ -275,7 +275,7 @@ describe('UpdateCard Linux package-install recovery', () => {
 
   it('shows the appended install cause behind the generic card details', () => {
     const message =
-      'Could not start the update installer. Orca remains open. (Command failed: pkexec must be setuid root)'
+      'Could not start the update installer. MCode remains open. (Command failed: pkexec must be setuid root)'
     renderAfterAvailableStatus()
 
     act(() => useAppStore.getState().setUpdateStatus({ state: 'error', message }))

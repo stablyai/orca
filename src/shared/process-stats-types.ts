@@ -25,7 +25,7 @@ export type AppMemory = UsageValues & {
   main: UsageValues
   renderer: UsageValues
   other: UsageValues
-  /** Oldest-first memory samples (bytes) for the whole Orca app; empty before the first snapshot. */
+  /** Oldest-first memory samples (bytes) for the whole MCode app; empty before the first snapshot. */
   history: number[]
 }
 

@@ -18,7 +18,7 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
     title: translate('auto.components.settings.general.search.14e46c745b', 'Auto Save Delay'),
     description: translate(
       'auto.components.settings.general.search.8ea61ad55c',
-      'How long Orca waits after your last edit before saving automatically.'
+      'How long MCode waits after your last edit before saving automatically.'
     ),
     keywords: [
       ...translateSearchKeyword('auto.components.settings.general.search.86f54575c7', 'autosave'),

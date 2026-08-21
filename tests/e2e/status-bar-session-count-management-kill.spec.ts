@@ -3,7 +3,7 @@
  *
  * `pty:management:killOne` tears a session down with `adapter.shutdown()`. The daemon only fans
  * `exit` to the clients attached to that session, so when the killed session belongs to *another*
- * daemon client (a previous app generation, `orca serve`, a second Orca client) this window's main
+ * daemon client (a previous app generation, `mcode serve`, a second MCode client) this window's main
  * process never emits `pty:exit`. The status-bar chip is an event-sourced cache: with no lifecycle
  * event and no interval it kept painting the pre-kill count until the Resource Manager popover was
  * opened — and opening the popover refreshes, which is exactly why this spec never opens it.
@@ -19,7 +19,7 @@
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { Page } from '@stablyai/playwright-test'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import { DaemonClient } from '../../src/main/daemon/client'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
@@ -73,7 +73,7 @@ async function waitForStableSessionIds(page: Page, expected: number): Promise<vo
 
 test.describe('Status bar CLI session count', () => {
   test('drops after Manage Sessions kills a foreign daemon session, popover never opened', async ({
-    orcaPage: page,
+    mcodePage: page,
     electronApp
   }) => {
     test.skip(
@@ -94,7 +94,7 @@ test.describe('Status bar CLI session count', () => {
     )
     await waitForPaneCount(page, 1, 30_000)
 
-    // A second daemon client, connected to the app's own daemon exactly as another Orca client
+    // A second daemon client, connected to the app's own daemon exactly as another MCode client
     // would be. Its session is live and listed, but this app never attaches to it.
     const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
     const runtimeDir = path.join(userDataDir, 'daemon')

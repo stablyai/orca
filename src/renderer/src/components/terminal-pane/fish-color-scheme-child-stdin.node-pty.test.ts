@@ -1,5 +1,5 @@
 /**
- * Real-fish regression for #9993: Orca must never write `CSI ?997;Nn` into a PTY
+ * Real-fish regression for #9993: MCode must never write `CSI ?997;Nn` into a PTY
  * because fish armed DECSET 2031 around a prompt.
  *
  * fish toggles `?2031h ... ?2031l` in tty_handoff.rs every time it paints a prompt and
@@ -34,7 +34,7 @@ const FISH = resolveFishBinary(4)
 const FISH_BIN = FISH.path
 const itWithFish = FISH.available ? it : it.skip
 
-const PROMPT_MARK = 'ORCA997> '
+const PROMPT_MARK = 'MCODE997> '
 const COLOR_SCHEME_REPORT_PREFIX = '\x1b[?997'
 const ARM_2031 = '\x1b[?2031h'
 const WITHDRAW_2031 = '\x1b[?2031l'
@@ -472,7 +472,7 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
       const { connectPanePty } = await import('./pty-connection')
       const nodePty = await import('node-pty')
 
-      configHome = mkdtempSync(path.join(tmpdir(), 'orca-fish-2031-'))
+      configHome = mkdtempSync(path.join(tmpdir(), 'mcode-fish-2031-'))
       mkdirSync(path.join(configHome, 'fish'), { recursive: true })
       // Plain prompt, no user config: fish core toggles DEC 2031 regardless of the prompt.
       writeFileSync(
@@ -514,8 +514,8 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
           LANG: 'en_US.UTF-8',
           XDG_CONFIG_HOME: configHome,
           XDG_DATA_HOME: path.join(configHome, 'data'),
-          ORCA_NODE_BIN: process.execPath,
-          ORCA_CHILD_SCRIPT: childScript
+          MCODE_NODE_BIN: process.execPath,
+          MCODE_CHILD_SCRIPT: childScript
         }
       })
 
@@ -562,7 +562,7 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
         term.write('sleep 0.4\r')
         // Withdrawal #1: `sleep` owns the tty now, so the next line is typed ahead.
         expect(await waitUntil(() => countOf(rendered, WITHDRAW_2031) >= 1, 5_000)).toBe(true)
-        term.write('"$ORCA_NODE_BIN" "$ORCA_CHILD_SCRIPT"\r')
+        term.write('"$MCODE_NODE_BIN" "$MCODE_CHILD_SCRIPT"\r')
         // Withdrawal #2: fish re-armed for the prompt and accepted the child command.
         expect(await waitUntil(() => countOf(rendered, WITHDRAW_2031) >= 2, 5_000)).toBe(true)
         // DECSET withdrawal precedes fish's child spawn; the child's marker is the ownership signal.

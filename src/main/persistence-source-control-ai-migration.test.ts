@@ -55,7 +55,7 @@ vi.mock('./telemetry/cohort-classifier', () => ({
 
 describe('Store', () => {
   beforeEach(() => {
-    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+    testState.dir = mkdtempSync(join(tmpdir(), 'mcode-test-'))
     trackMock.mockReset()
     getCohortAtEmitMock.mockReset()
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
@@ -347,7 +347,7 @@ describe('Store', () => {
       customAgentCommand: 'claude'
     })
     store.flush()
-    const persisted = JSON.parse(readFileSync(join(testState.dir, 'orca-data.json'), 'utf-8'))
+    const persisted = JSON.parse(readFileSync(join(testState.dir, 'mcode-data.json'), 'utf-8'))
     expect(persisted.settings.sourceControlAi.actions.commitMessage).toEqual({
       agentId: 'claude',
       commandInputTemplate: '{basePrompt}\n\nRollback commit prompt'
@@ -506,7 +506,7 @@ describe('Store', () => {
     })
 
     const store = await createStore()
-    expect(store.getSettings().terminalShortcutPolicy).toBe('orca-first')
+    expect(store.getSettings().terminalShortcutPolicy).toBe('mcode-first')
   })
 
   it('normalizes malformed source control group order on load', async () => {

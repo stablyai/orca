@@ -1,19 +1,19 @@
-// Why: relay-side equivalent of Orca's local agent integration installers.
-// OpenCode still needs a config overlay, while Pi/OMP now get Orca-managed
+// Why: relay-side equivalent of MCode's local agent integration installers.
+// OpenCode still needs a config overlay, while Pi/OMP now get MCode-managed
 // extension files installed into the remote agent homes. Host paths from the
 // renderer are meaningless on SSH targets, so the relay performs the remote
 // filesystem work itself.
 //
 // Plugin source strings ship over the JSON-RPC channel at session-ready —
 // they are NOT bundled with the relay binary because the relay is versioned
-// independently from Orca and the plugin source changes frequently as new
+// independently from MCode and the plugin source changes frequently as new
 // agent events get added; bundling would make every such change a relay
 // redeploy, and an old relay would silently serve stale plugin code.
 //
 // We deliberately do not reuse OpenCodeHookService / PiTitlebarExtensionService
-// directly: those modules import `electron` and ride on Orca's userData
+// directly: those modules import `electron` and ride on MCode's userData
 // path. The relay's electron-free constraint forces a thin parallel
-// implementation rooted at $HOME/.orca-relay/ for OpenCode and at the remote
+// implementation rooted at $HOME/.mcode-relay/ for OpenCode and at the remote
 // Pi/OMP homes for those agents.
 
 import { createHash } from 'node:crypto'
@@ -34,24 +34,24 @@ import type { PiAgentKind } from '../shared/pi-agent-kind'
 
 type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent'>
 
-const RELAY_HOOKS_DIR = '.orca-relay'
+const RELAY_HOOKS_DIR = '.mcode-relay'
 const OPENCODE_OVERLAY_SUBDIR = 'opencode-overlays'
 const PI_OVERLAY_SUBDIR_BY_KIND: Record<LegacyOverlayAgentKind, string> = {
   pi: 'pi-overlays',
   omp: 'omp-overlays'
 }
-const OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
-const PI_EXTENSION_FILE = 'orca-agent-status.ts'
+const OPENCODE_PLUGIN_FILE = 'mcode-opencode-status.js'
+const PI_EXTENSION_FILE = 'mcode-agent-status.ts'
 const PI_AGENT_SUBDIR = 'agent'
-// Why: bare-shell OMP still needs ORCA_OMP_STATUS_EXTENSION without mkdir ~/.omp.
+// Why: bare-shell OMP still needs MCODE_OMP_STATUS_EXTENSION without mkdir ~/.omp.
 // Mirror local userData/omp-managed-status-extension under the relay home root.
 const OMP_MANAGED_STATUS_EXTENSION_DIR = 'omp-managed-status-extension'
-const ORCA_MANAGED_EXTENSION_MARKER = '@orca-managed-pi-extension'
+const MCODE_MANAGED_EXTENSION_MARKER = '@mcode-managed-pi-extension'
 
-function withOrcaManagedPiExtensionMarker(source: string): string {
-  return source.includes(ORCA_MANAGED_EXTENSION_MARKER)
+function withMCodeManagedPiExtensionMarker(source: string): string {
+  return source.includes(MCODE_MANAGED_EXTENSION_MARKER)
     ? source
-    : `// ${ORCA_MANAGED_EXTENSION_MARKER}\n${source}`
+    : `// ${MCODE_MANAGED_EXTENSION_MARKER}\n${source}`
 }
 // Why: source-dir resolution is keyed off the launching agent (Pi or OMP).
 // Both consume `PI_CODING_AGENT_DIR` but default to different `~/.<kind>/agent`
@@ -67,7 +67,7 @@ const PI_AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
 
 function safeDirName(input: string): string {
   // Why: paneKey embeds tabId:paneId where tabId may itself contain
-  // filesystem-unsafe characters in some Orca builds. Hash to a fixed-width
+  // filesystem-unsafe characters in some MCode builds. Hash to a fixed-width
   // hex name so any input produces a portable directory name.
   return createHash('sha256').update(input).digest('hex').slice(0, 32)
 }
@@ -77,13 +77,13 @@ function isUsableId(id: string): boolean {
 }
 
 export type PluginSources = {
-  /** Source body of `orca-opencode-status.js` to drop into <overlay>/plugins/. */
+  /** Source body of `mcode-opencode-status.js` to drop into <overlay>/plugins/. */
   opencodePluginSource?: string
-  /** Source body of Pi's `orca-agent-status.ts` to drop into <overlay>/extensions/. */
+  /** Source body of Pi's `mcode-agent-status.ts` to drop into <overlay>/extensions/. */
   piExtensionSource?: string
-  /** Source body of OMP's `orca-agent-status.ts` to drop into <overlay>/extensions/. */
+  /** Source body of OMP's `mcode-agent-status.ts` to drop into <overlay>/extensions/. */
   ompExtensionSource?: string
-  /** Source body of Prime Agent's `orca-agent-status.ts` to install in its real agent dir. */
+  /** Source body of Prime Agent's `mcode-agent-status.ts` to install in its real agent dir. */
   primeAgentExtensionSource?: string
 }
 
@@ -91,7 +91,7 @@ export type PluginSources = {
 export type MaterializePiResult = {
   /** Real agent dir when extensions were installed there. Absent for OMP status-only fallback. */
   sourceAgentDir?: string
-  /** Absolute path to orca-agent-status.ts (real home or relay-managed fallback). */
+  /** Absolute path to mcode-agent-status.ts (real home or relay-managed fallback). */
   statusExtensionPath?: string
 }
 
@@ -122,9 +122,9 @@ export class PluginOverlayManager {
     }
   }
 
-  /** Replace the cached source bodies. Called from relay.ts when Orca sends
+  /** Replace the cached source bodies. Called from relay.ts when MCode sends
    *  `agent_hook.installPlugins`. The first install enables the augmenter
-   *  output; subsequent installs (e.g. Orca version upgrade in flight) refresh
+   *  output; subsequent installs (e.g. MCode version upgrade in flight) refresh
    *  the cached source so future spawns see the new strings.
    *  Note: existing running agents keep whatever source they loaded at
    *  process start. Future PTYs pick up the refreshed source when the relay
@@ -134,13 +134,13 @@ export class PluginOverlayManager {
       this.opencodePluginSource = sources.opencodePluginSource
     }
     if (typeof sources.piExtensionSource === 'string') {
-      this.piExtensionSources.pi = withOrcaManagedPiExtensionMarker(sources.piExtensionSource)
+      this.piExtensionSources.pi = withMCodeManagedPiExtensionMarker(sources.piExtensionSource)
     }
     if (typeof sources.ompExtensionSource === 'string') {
-      this.piExtensionSources.omp = withOrcaManagedPiExtensionMarker(sources.ompExtensionSource)
+      this.piExtensionSources.omp = withMCodeManagedPiExtensionMarker(sources.ompExtensionSource)
     }
     if (typeof sources.primeAgentExtensionSource === 'string') {
-      this.piExtensionSources['prime-agent'] = withOrcaManagedPiExtensionMarker(
+      this.piExtensionSources['prime-agent'] = withMCodeManagedPiExtensionMarker(
         sources.primeAgentExtensionSource
       )
     }
@@ -229,7 +229,7 @@ export class PluginOverlayManager {
           return null
         }
         // Why: OPENCODE_CONFIG_DIR is a single config root. Mirror the user's
-        // remote root into the overlay before adding Orca's plugin so status
+        // remote root into the overlay before adding MCode's plugin so status
         // reporting does not hide their auth, models, keybinds, or plugins.
         this.mirrorOpenCodeConfig(existingConfigDir, dir)
       }
@@ -249,7 +249,7 @@ export class PluginOverlayManager {
 
   private canOverwritePiExtension(path: string): boolean {
     try {
-      return readFileSync(path, 'utf8').includes(ORCA_MANAGED_EXTENSION_MARKER)
+      return readFileSync(path, 'utf8').includes(MCODE_MANAGED_EXTENSION_MARKER)
     } catch {
       return true
     }
@@ -280,7 +280,7 @@ export class PluginOverlayManager {
    *  When `materializeDefaultHome` is false (bare shells), missing default
    *  homes are left alone so unused agents do not recreate `~/.<agent>` (#10196).
    *  For OMP, a relay-owned status file is still written so bare shells can
-   *  export ORCA_OMP_STATUS_EXTENSION without ORCA_OMP_SOURCE_AGENT_DIR. */
+   *  export MCODE_OMP_STATUS_EXTENSION without MCODE_OMP_SOURCE_AGENT_DIR. */
   materializePi(
     id: string,
     existingAgentDir?: string,

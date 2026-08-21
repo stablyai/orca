@@ -7,9 +7,9 @@ vi.mock('fs', () => ({
 }))
 vi.mock('./relay-protocol', () => ({
   RELAY_VERSION: '0.1.0',
-  RELAY_REMOTE_DIR: '.orca-remote',
+  RELAY_REMOTE_DIR: '.mcode-remote',
   parseUnameToRelayPlatform: vi.fn().mockReturnValue('linux-x64'),
-  RELAY_SENTINEL: 'ORCA-RELAY v0.1.0 READY\n',
+  RELAY_SENTINEL: 'MCODE-RELAY v0.1.0 READY\n',
   RELAY_SENTINEL_TIMEOUT_MS: 10_000
 }))
 vi.mock('./ssh-relay-deploy-helpers', () => ({
@@ -27,7 +27,7 @@ vi.mock('./ssh-remote-node-resolution', () => ({
 }))
 vi.mock('./ssh-relay-versioned-install', () => ({
   readLocalFullVersion: vi.fn().mockReturnValue('0.1.0+gc-retry'),
-  computeRemoteRelayDir: (home: string, version: string) => `${home}/.orca-remote/relay-${version}`,
+  computeRemoteRelayDir: (home: string, version: string) => `${home}/.mcode-remote/relay-${version}`,
   isRelayAlreadyInstalled: vi.fn().mockResolvedValue(true),
   finalizeInstall: vi.fn(),
   abandonInstall: vi.fn(),
@@ -83,14 +83,14 @@ describe('relay GC deploy retry', () => {
     const conn = makeConnection()
     vi.mocked(tryAcquireRelayRepairLock).mockResolvedValueOnce('gc')
     vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
-      if (command.includes('__ORCA_REMOTE_PLATFORM__')) {
-        return '__ORCA_REMOTE_PLATFORM__ Linux x86_64'
+      if (command.includes('__MCODE_REMOTE_PLATFORM__')) {
+        return '__MCODE_REMOTE_PLATFORM__ Linux x86_64'
       }
       if (command === 'echo $HOME') {
         return '/home/user'
       }
       if (command.includes('node-pty')) {
-        return 'ORCA-NATIVE-DEPS-OK'
+        return 'MCODE-NATIVE-DEPS-OK'
       }
       if (command.includes('var s=require("net").connect')) {
         return 'READY'
@@ -115,14 +115,14 @@ describe('relay GC deploy retry', () => {
       .mockResolvedValueOnce(false)
       .mockResolvedValue(true)
     vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
-      if (command.includes('__ORCA_REMOTE_PLATFORM__')) {
-        return '__ORCA_REMOTE_PLATFORM__ Linux x86_64'
+      if (command.includes('__MCODE_REMOTE_PLATFORM__')) {
+        return '__MCODE_REMOTE_PLATFORM__ Linux x86_64'
       }
       if (command === 'echo $HOME') {
         return '/home/user'
       }
       if (command.includes('node-pty')) {
-        return 'ORCA-NATIVE-DEPS-OK'
+        return 'MCODE-NATIVE-DEPS-OK'
       }
       if (command.includes('var s=require("net").connect')) {
         return 'READY'
@@ -152,14 +152,14 @@ describe('relay GC deploy retry', () => {
         })
     )
     vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
-      if (command.includes('__ORCA_REMOTE_PLATFORM__')) {
-        return '__ORCA_REMOTE_PLATFORM__ Linux x86_64'
+      if (command.includes('__MCODE_REMOTE_PLATFORM__')) {
+        return '__MCODE_REMOTE_PLATFORM__ Linux x86_64'
       }
       if (command === 'echo $HOME') {
         return '/home/user'
       }
       if (command.includes('node-pty')) {
-        return 'ORCA-NATIVE-DEPS-OK'
+        return 'MCODE-NATIVE-DEPS-OK'
       }
       if (command.includes('var s=require("net").connect')) {
         return 'READY'
@@ -191,14 +191,14 @@ describe('relay GC deploy retry', () => {
     const conn = makeConnection()
     vi.mocked(waitForSentinel).mockRejectedValueOnce(new Error('launch failed'))
     vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
-      if (command.includes('__ORCA_REMOTE_PLATFORM__')) {
-        return '__ORCA_REMOTE_PLATFORM__ Linux x86_64'
+      if (command.includes('__MCODE_REMOTE_PLATFORM__')) {
+        return '__MCODE_REMOTE_PLATFORM__ Linux x86_64'
       }
       if (command === 'echo $HOME') {
         return '/home/user'
       }
       if (command.includes('node-pty')) {
-        return 'ORCA-NATIVE-DEPS-OK'
+        return 'MCODE-NATIVE-DEPS-OK'
       }
       if (command.includes('var s=require("net").connect')) {
         return 'READY'
@@ -220,14 +220,14 @@ describe('relay GC deploy retry', () => {
     vi.mocked(tryAcquireRelayRepairLock).mockResolvedValueOnce('busy')
     vi.mocked(waitForSentinel).mockRejectedValueOnce(new Error('launch failed'))
     vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
-      if (command.includes('__ORCA_REMOTE_PLATFORM__')) {
-        return '__ORCA_REMOTE_PLATFORM__ Linux x86_64'
+      if (command.includes('__MCODE_REMOTE_PLATFORM__')) {
+        return '__MCODE_REMOTE_PLATFORM__ Linux x86_64'
       }
       if (command === 'echo $HOME') {
         return '/home/user'
       }
       if (command.includes('node-pty')) {
-        return 'ORCA-NATIVE-DEPS-OK'
+        return 'MCODE-NATIVE-DEPS-OK'
       }
       if (command.includes('var s=require("net").connect')) {
         return 'READY'
@@ -252,14 +252,14 @@ describe('relay GC deploy retry', () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValue('launch-token')
     vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
-      if (command.includes('__ORCA_REMOTE_PLATFORM__')) {
-        return '__ORCA_REMOTE_PLATFORM__ Linux x86_64'
+      if (command.includes('__MCODE_REMOTE_PLATFORM__')) {
+        return '__MCODE_REMOTE_PLATFORM__ Linux x86_64'
       }
       if (command === 'echo $HOME') {
         return '/home/user'
       }
       if (command.includes('node-pty')) {
-        return 'ORCA-NATIVE-DEPS-OK'
+        return 'MCODE-NATIVE-DEPS-OK'
       }
       if (command.includes('var s=require("net").connect')) {
         return 'READY'

@@ -35,7 +35,7 @@ export function getKimiRuntimeTarget(
 }
 
 /**
- * Resolve a runtime target to the Kimi home Orca should read (UNC path for WSL).
+ * Resolve a runtime target to the Kimi home MCode should read (UNC path for WSL).
  * Async because it runs on every quota poll: the sync `wsl.exe` probes park
  * Electron's main process for up to 5s each cycle while a distro is stopped.
  */

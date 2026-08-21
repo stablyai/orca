@@ -217,7 +217,7 @@ describe('connectPanePty', () => {
         state: 'working',
         prompt: 'Fix the status',
         agentType: 'command-code',
-        // Why: Orca launched this agent, so the seed predates any provider signal (STA-4293).
+        // Why: MCode launched this agent, so the seed predates any provider signal (STA-4293).
         observation: expect.objectContaining({ origin: 'launch', kind: 'transition' })
       },
       undefined,

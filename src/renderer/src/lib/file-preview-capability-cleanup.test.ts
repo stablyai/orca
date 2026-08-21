@@ -66,7 +66,7 @@ describe('paired HTML side-preview capability cleanup', () => {
     })
 
     await vi.waitFor(() =>
-      expect(mocks.toastError).toHaveBeenCalledWith('Unable to open this file in Orca Browser.')
+      expect(mocks.toastError).toHaveBeenCalledWith('Unable to open this file in MCode Browser.')
     )
     expect(mocks.closeEmptyGroup).not.toHaveBeenCalled()
     expect(mocks.createBrowserTab).not.toHaveBeenCalled()

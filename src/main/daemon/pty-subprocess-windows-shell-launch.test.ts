@@ -77,7 +77,7 @@ import { createPtySubprocess } from './pty-subprocess'
 import { mockPtyProcess, useDaemonPtySubprocessEnv } from './pty-subprocess-test-harness'
 
 const POWERSHELL_OSC133_COMMAND_ARGS = ['-NoLogo', '-NoExit', '-EncodedCommand', expect.any(String)]
-const CODEX_LAUNCH_PREFLIGHT = 'C:\\Program Files\\Orca\\orca.exe'
+const CODEX_LAUNCH_PREFLIGHT = 'C:\\Program Files\\MCode\\mcode.exe'
 
 describe('createPtySubprocess', () => {
   useDaemonPtySubprocessEnv({
@@ -221,7 +221,7 @@ describe('createPtySubprocess', () => {
         rows: 24,
         shellOverride: 'cmd.exe',
         terminalWindowsPowerShellImplementation: 'pwsh.exe',
-        env: { ORCA_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT }
+        env: { MCODE_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT }
       })
     } finally {
       if (platform) {
@@ -233,10 +233,10 @@ describe('createPtySubprocess', () => {
       'cmd.exe',
       [
         '/K',
-        'chcp 65001 > nul & if defined ORCA_CODEX_LAUNCH_PREFLIGHT call %ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE%%ORCA_CODEX_LAUNCH_PREFLIGHT%%ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE% agent hooks prepare-codex > nul 2>&1'
+        'chcp 65001 > nul & if defined MCODE_CODEX_LAUNCH_PREFLIGHT call %MCODE_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE%%MCODE_CODEX_LAUNCH_PREFLIGHT%%MCODE_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE% agent hooks prepare-codex > nul 2>&1'
       ],
       expect.objectContaining({
-        env: expect.objectContaining({ ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE: '"' })
+        env: expect.objectContaining({ MCODE_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE: '"' })
       })
     )
   })
@@ -254,7 +254,7 @@ describe('createPtySubprocess', () => {
         sessionId: 'test',
         cols: 80,
         rows: 24,
-        cwd: 'C:\\repo\\orca',
+        cwd: 'C:\\repo\\mcode',
         shellOverride: 'powershell.exe',
         command: "& 'codex' '--no-alt-screen'"
       })
@@ -284,10 +284,10 @@ describe('createPtySubprocess', () => {
         sessionId: 'test',
         cols: 80,
         rows: 24,
-        cwd: 'C:\\repo\\orca',
+        cwd: 'C:\\repo\\mcode',
         shellOverride: 'cmd.exe',
         command: `codex ${'x'.repeat(7000)}`,
-        env: { ORCA_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT }
+        env: { MCODE_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT }
       })
     } finally {
       if (platform) {
@@ -299,7 +299,7 @@ describe('createPtySubprocess', () => {
       'cmd.exe',
       [
         '/K',
-        'chcp 65001 > nul & if defined ORCA_CODEX_LAUNCH_PREFLIGHT call %ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE%%ORCA_CODEX_LAUNCH_PREFLIGHT%%ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE% agent hooks prepare-codex > nul 2>&1'
+        'chcp 65001 > nul & if defined MCODE_CODEX_LAUNCH_PREFLIGHT call %MCODE_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE%%MCODE_CODEX_LAUNCH_PREFLIGHT%%MCODE_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE% agent hooks prepare-codex > nul 2>&1'
       ],
       expect.any(Object)
     )
@@ -320,7 +320,7 @@ describe('createPtySubprocess', () => {
         rows: 24,
         cwd: 'C:\\Users\\jin\\repo',
         shellOverride: 'C:\\PortableGit\\bin\\bash.exe',
-        env: { ORCA_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT }
+        env: { MCODE_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT }
       })
     } finally {
       if (platform) {
@@ -340,7 +340,7 @@ describe('createPtySubprocess', () => {
         cwd: 'C:\\Users\\jin\\repo',
         env: expect.objectContaining({
           CHERE_INVOKING: '1',
-          ORCA_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT
+          MCODE_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT
         })
       })
     )
@@ -356,10 +356,10 @@ describe('createPtySubprocess', () => {
           sessionId: 'test',
           cols: 80,
           rows: 24,
-          cwd: 'C:\\definitely-missing-orca-cwd',
+          cwd: 'C:\\definitely-missing-mcode-cwd',
           shellOverride: 'powershell.exe'
         })
-      ).rejects.toThrow(/Working directory "C:\\definitely-missing-orca-cwd" does not exist/)
+      ).rejects.toThrow(/Working directory "C:\\definitely-missing-mcode-cwd" does not exist/)
     } finally {
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
@@ -407,8 +407,8 @@ describe('createPtySubprocess', () => {
     spawnMock.mockImplementation(() => {
       throw new Error('File not found: ')
     })
-    const previousVersion = process.env.ORCA_APP_VERSION
-    process.env.ORCA_APP_VERSION = '1.4.178-test'
+    const previousVersion = process.env.MCODE_APP_VERSION
+    process.env.MCODE_APP_VERSION = '1.4.178-test'
 
     try {
       await expect(
@@ -419,13 +419,13 @@ describe('createPtySubprocess', () => {
           shellOverride: 'not-a-real-shell.exe'
         })
       ).rejects.toThrow(
-        /Daemon failed to spawn shell "not-a-real-shell\.exe" with cwd ".+": File not found:.*orca: 1\.4\.178-test/
+        /Daemon failed to spawn shell "not-a-real-shell\.exe" with cwd ".+": File not found:.*mcode: 1\.4\.178-test/
       )
     } finally {
       if (previousVersion === undefined) {
-        delete process.env.ORCA_APP_VERSION
+        delete process.env.MCODE_APP_VERSION
       } else {
-        process.env.ORCA_APP_VERSION = previousVersion
+        process.env.MCODE_APP_VERSION = previousVersion
       }
       if (platform) {
         Object.defineProperty(process, 'platform', platform)

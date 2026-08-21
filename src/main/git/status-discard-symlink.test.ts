@@ -12,7 +12,7 @@ async function createRepoWithOutsideDirectory(): Promise<{
   outsideDir: string
   outsideFile: string
 }> {
-  const root = await mkdtemp(path.join(tmpdir(), 'orca-discard-symlink-'))
+  const root = await mkdtemp(path.join(tmpdir(), 'mcode-discard-symlink-'))
   tempRoots.push(root)
   const repo = path.join(root, 'repo')
   const outsideDir = path.join(root, 'outside')

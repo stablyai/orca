@@ -5,7 +5,7 @@ import { buildShortcutDefinitionCatalog } from './shortcut-definition-catalog'
 import { groupDefinitions } from './shortcut-groups'
 
 const pluginDefinition: KeybindingDefinition = {
-  id: 'plugin:orca-samples.tasks/open',
+  id: 'plugin:mcode-samples.tasks/open',
   title: 'Open Tasks — Tasks',
   group: 'Plugins',
   scope: 'global',
@@ -31,7 +31,7 @@ describe('shortcut groups', () => {
 
   it('reports a plugin default that shadows a built-in shortcut', () => {
     const command: ActivePluginCommand = {
-      pluginKey: 'orca-samples.tasks',
+      pluginKey: 'mcode-samples.tasks',
       pluginName: 'Tasks',
       id: 'open',
       title: 'Open Tasks',
@@ -48,7 +48,7 @@ describe('shortcut groups', () => {
       missionControlConflictMessage: 'Blocked by Mission Control.'
     })
 
-    expect(catalog.conflictByAction.get('plugin:orca-samples.tasks/open')).toEqual([
+    expect(catalog.conflictByAction.get('plugin:mcode-samples.tasks/open')).toEqual([
       expect.stringContaining('Go to File')
     ])
   })

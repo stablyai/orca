@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Why: invoked via ~/.local/bin/mcode-ide symlink (from CliInstaller); resolve it
+# so APP_DIR points at the real install, not the symlink's parent.
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+	DIR="$(cd "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+	SOURCE="$(readlink "$SOURCE")"
+	[[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$(cd "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+RESOURCES_DIR="$(cd "$SCRIPT_DIR/.." >/dev/null 2>&1 && pwd)"
+APP_DIR="$(cd "$RESOURCES_DIR/.." >/dev/null 2>&1 && pwd)"
+
+# Why: Linux executableName is `mcode-ide` (avoids Ubuntu GNOME MCode conflict);
+# `-f` rejects a same-named directory that `-x` alone would accept.
+ELECTRON=""
+for candidate in mcode-ide mcode MCode; do
+	if [ -f "$APP_DIR/$candidate" ] && [ -x "$APP_DIR/$candidate" ]; then
+		ELECTRON="$APP_DIR/$candidate"
+		break
+	fi
+done
+
+if [ -z "$ELECTRON" ]; then
+	echo "Unable to locate the MCode executable next to $RESOURCES_DIR" >&2
+	exit 1
+fi
+
+# Why: MCode packages the CLI entrypoint outside app.asar so the public shell
+# command can execute it directly with ELECTRON_RUN_AS_NODE, mirroring the same
+# launcher model used on macOS instead of maintaining a separate Node binary.
+CLI="$RESOURCES_DIR/app.asar.unpacked/out/cli/index.js"
+
+export MCODE_NODE_OPTIONS="${NODE_OPTIONS-}"
+export MCODE_NODE_REPL_EXTERNAL_MODULE="${NODE_REPL_EXTERNAL_MODULE-}"
+unset NODE_OPTIONS
+unset NODE_REPL_EXTERNAL_MODULE
+
+ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" "$@"

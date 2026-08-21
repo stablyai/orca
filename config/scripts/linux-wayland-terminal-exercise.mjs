@@ -331,7 +331,7 @@ export async function assertScrollbackBufferWorks(page, ptyId, runId, logPhase) 
 }
 
 export async function assertKeyboardInputWorks(page, ptyId, repoPath, runId, logPhase) {
-  const scriptPath = path.join(repoPath, `.orca-wayland-typing-${runId}.mjs`)
+  const scriptPath = path.join(repoPath, `.mcode-wayland-typing-${runId}.mjs`)
   writeFileSync(scriptPath, interactivePromptScript(runId))
   logPhase('typing.prompt-send')
   await sendToTerminal(page, ptyId, `node ${JSON.stringify(scriptPath)}\r`)

@@ -6,14 +6,14 @@ import { cleanup, render, screen, waitFor, within } from '@testing-library/react
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MobileRelayStatus } from '../../../../shared/mobile-relay-status'
-import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles'
+import type { MCodeProfileAuthStatus } from '../../../../shared/mcode-profiles'
 import { MobilePairingConnectionOptions } from './MobilePairingConnectionOptions'
 
 type MobileRelayStoreState = {
-  orcaProfileAuthStatus: OrcaProfileAuthStatus | null
-  orcaProfileConnecting: boolean
-  connectCurrentOrcaProfile: () => Promise<null>
-  fetchOrcaProfileAuthStatus: () => Promise<OrcaProfileAuthStatus | null>
+  mcodeProfileAuthStatus: MCodeProfileAuthStatus | null
+  mcodeProfileConnecting: boolean
+  connectCurrentMCodeProfile: () => Promise<null>
+  fetchMCodeProfileAuthStatus: () => Promise<MCodeProfileAuthStatus | null>
 }
 
 const mocks = vi.hoisted(() => ({
@@ -51,26 +51,26 @@ describe('MobilePairingConnectionOptions', () => {
       }
     })
     mocks.state = {
-      orcaProfileAuthStatus: {
+      mcodeProfileAuthStatus: {
         activeProfileId: 'profile-1',
         configured: true,
         state: 'local',
         persistence: 'none'
       },
-      orcaProfileConnecting: false,
-      connectCurrentOrcaProfile: connect,
-      fetchOrcaProfileAuthStatus: fetchAuthStatus
+      mcodeProfileConnecting: false,
+      connectCurrentMCodeProfile: connect,
+      fetchMCodeProfileAuthStatus: fetchAuthStatus
     }
   })
 
   afterEach(() => cleanup())
 
-  it('shows Sign in directly under Orca Relay, above LAN', async () => {
+  it('shows Sign in directly under MCode Relay, above LAN', async () => {
     const user = userEvent.setup()
     const onChange = vi.fn()
     render(<MobilePairingConnectionOptions value="automatic" onChange={onChange} />)
 
-    const relay = screen.getByRole('radio', { name: /Orca Relay/i })
+    const relay = screen.getByRole('radio', { name: /MCode Relay/i })
     const lan = screen.getByRole('radio', { name: /^LAN\b/i })
     const signInPanel = screen.getByTestId('anywhere-sign-in-panel')
     const signIn = screen.getByRole('button', { name: 'Sign in for Relay' })
@@ -105,7 +105,7 @@ describe('MobilePairingConnectionOptions', () => {
   it('shows Unavailable instead of a dead Sign in on unconfigured builds', () => {
     mocks.state = {
       ...mocks.state,
-      orcaProfileAuthStatus: {
+      mcodeProfileAuthStatus: {
         activeProfileId: 'profile-1',
         configured: false,
         state: 'unconfigured',
@@ -117,7 +117,7 @@ describe('MobilePairingConnectionOptions', () => {
     // No Relay endpoint to sign into — the Sign in CTA must not appear.
     expect(screen.queryByTestId('anywhere-sign-in-panel')).toBeNull()
     expect(screen.queryByRole('button', { name: /Sign in/i })).toBeNull()
-    const relay = screen.getByRole('radio', { name: /Orca Relay/i })
+    const relay = screen.getByRole('radio', { name: /MCode Relay/i })
     expect(relay).toHaveTextContent('Unavailable')
     expect(relay).toHaveTextContent(/isn’t available in this build/i)
   })
@@ -125,7 +125,7 @@ describe('MobilePairingConnectionOptions', () => {
   it('keeps Relay unavailable and unselectable while LAN is selected', async () => {
     mocks.state = {
       ...mocks.state,
-      orcaProfileAuthStatus: {
+      mcodeProfileAuthStatus: {
         activeProfileId: 'profile-1',
         configured: false,
         state: 'unconfigured',
@@ -137,7 +137,7 @@ describe('MobilePairingConnectionOptions', () => {
     render(<MobilePairingConnectionOptions value="local-only" onChange={onChange} />)
 
     // Availability follows the build, not the selected path.
-    const relay = screen.getByRole('radio', { name: /Orca Relay/i })
+    const relay = screen.getByRole('radio', { name: /MCode Relay/i })
     expect(relay).toHaveTextContent('Unavailable')
     expect(relay).toHaveTextContent(/isn’t available in this build/i)
     expect(relay).toHaveAttribute('aria-disabled', 'true')
@@ -155,7 +155,7 @@ describe('MobilePairingConnectionOptions', () => {
     const onChange = vi.fn()
     render(<MobilePairingConnectionOptions value="automatic" onChange={onChange} />)
 
-    screen.getByRole('radio', { name: /Orca Relay/i }).focus()
+    screen.getByRole('radio', { name: /MCode Relay/i }).focus()
     await user.keyboard('{ArrowDown}')
     expect(onChange).toHaveBeenCalledWith('local-only')
   })
@@ -184,31 +184,31 @@ describe('MobilePairingConnectionOptions', () => {
       )
     ).toBeVisible()
 
-    await user.click(screen.getByRole('radio', { name: /Orca Relay/i }))
+    await user.click(screen.getByRole('radio', { name: /MCode Relay/i }))
     expect(onChange).toHaveBeenCalledWith('automatic')
   })
 
   it('refreshes auth status when it is missing on mount', () => {
     mocks.state = {
       ...mocks.state,
-      orcaProfileAuthStatus: null
+      mcodeProfileAuthStatus: null
     }
     render(<MobilePairingConnectionOptions value="automatic" onChange={vi.fn()} />)
     expect(fetchAuthStatus).toHaveBeenCalledOnce()
     expect(screen.getByTestId('anywhere-sign-in-panel')).toBeVisible()
   })
 
-  it('shows relay status when signed in on Orca Relay', async () => {
+  it('shows relay status when signed in on MCode Relay', async () => {
     mocks.state = {
-      orcaProfileAuthStatus: {
+      mcodeProfileAuthStatus: {
         activeProfileId: 'profile-1',
         configured: true,
         state: 'connected',
         persistence: 'encrypted'
       },
-      orcaProfileConnecting: false,
-      connectCurrentOrcaProfile: connect,
-      fetchOrcaProfileAuthStatus: fetchAuthStatus
+      mcodeProfileConnecting: false,
+      connectCurrentMCodeProfile: connect,
+      fetchMCodeProfileAuthStatus: fetchAuthStatus
     }
     const onChange = vi.fn()
     const user = userEvent.setup()
@@ -225,7 +225,7 @@ describe('MobilePairingConnectionOptions', () => {
   it('keeps LAN available while Relay is retrying', async () => {
     mocks.state = {
       ...mocks.state,
-      orcaProfileAuthStatus: {
+      mcodeProfileAuthStatus: {
         activeProfileId: 'profile-1',
         configured: true,
         state: 'connected',
@@ -244,7 +244,7 @@ describe('MobilePairingConnectionOptions', () => {
     )
 
     expect(screen.getByText('Retrying')).toBeVisible()
-    const relay = screen.getByRole('radio', { name: /Orca Relay/i })
+    const relay = screen.getByRole('radio', { name: /MCode Relay/i })
     const lan = screen.getByRole('radio', { name: /^LAN\b/i })
     expect(relay).toHaveAttribute('aria-disabled', 'true')
     expect(lan).toHaveAttribute('aria-disabled', 'false')

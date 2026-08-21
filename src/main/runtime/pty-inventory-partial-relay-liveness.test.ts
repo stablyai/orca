@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import { makePaneKey } from '../../shared/stable-pane-id'
-import { OrcaRuntimeService } from './orca-runtime'
+import { MCodeRuntimeService } from './mcode-runtime'
 
 // STA-517: the worktree.ps liveness refresh is the only thing that retires an exited PTY, and
 // mobile renders "active" straight off the summary it produces. It must reach the providers
@@ -64,7 +64,7 @@ function createRuntime(options: { sessions?: unknown[]; vouchesForRetainedPty?: 
     flushOrThrow: () => {}
   } as never
   const calls: ListCall[] = []
-  const runtime = new OrcaRuntimeService(store)
+  const runtime = new MCodeRuntimeService(store)
   runtime.setPtyController({
     write: () => true,
     kill: () => true,

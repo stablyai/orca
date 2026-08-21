@@ -2,9 +2,9 @@ import { getDefaultRepoHookSettings } from '../shared/constants'
 import { resolveHookCommandSourcePolicy } from '../shared/hook-command-source-policy'
 import type {
   HookCommandSourcePolicy,
-  OrcaHooks,
+  MCodeHooks,
   SetupRunPolicy
-} from '../shared/orca-yaml-hook-types'
+} from '../shared/mcode-yaml-hook-types'
 import type { Repo } from '../shared/repo-types'
 import type { SetupDecision } from '../shared/worktree/create-types'
 import type { WorktreeDefaultTabsLaunch } from '../shared/worktree/launch-types'
@@ -30,8 +30,8 @@ function getEffectiveHookScript(
 
 export function getEffectiveHooksFromConfig(
   repo: Repo,
-  yamlHooks: OrcaHooks | null
-): OrcaHooks | null {
+  yamlHooks: MCodeHooks | null
+): MCodeHooks | null {
   const localSetup = repo.hookSettings?.scripts.setup
   const localArchive = repo.hookSettings?.scripts.archive
   const rawPolicy = repo.hookSettings?.commandSourcePolicy
@@ -48,7 +48,7 @@ export function getEffectiveHooksFromConfig(
     return null
   }
 
-  // Why: committed `orca.yaml` and local Settings can coexist; the source policy decides which is authoritative.
+  // Why: committed `mcode.yaml` and local Settings can coexist; the source policy decides which is authoritative.
   return {
     scripts: {
       ...(setup ? { setup } : {}),
@@ -77,7 +77,7 @@ export function shouldRunSetupForCreate(repo: Repo, decision: SetupDecision = 'i
   return policy === 'run-by-default'
 }
 
-export function getDefaultTabCommandTrustContent(hooks: OrcaHooks | null): string {
+export function getDefaultTabCommandTrustContent(hooks: MCodeHooks | null): string {
   const commands = (hooks?.defaultTabs ?? [])
     .map((tab, index) => {
       const command = tab.command?.trim()
@@ -92,7 +92,7 @@ export function getDefaultTabCommandTrustContent(hooks: OrcaHooks | null): strin
 }
 
 export function getDefaultTabsLaunch(
-  hooks: OrcaHooks | null,
+  hooks: MCodeHooks | null,
   repo: Repo,
   decision: SetupDecision = 'inherit'
 ): WorktreeDefaultTabsLaunch | undefined {
@@ -107,7 +107,7 @@ export function getDefaultTabsLaunch(
       hasLocalScript: Boolean(repo.hookSettings?.scripts.setup?.trim())
     }
   )
-  // Why: local-only repos may use shared tab titles/colors but must not run the committed orca.yaml commands.
+  // Why: local-only repos may use shared tab titles/colors but must not run the committed mcode.yaml commands.
   const canRunSharedCommands = sharedCommandPolicy !== 'local-only'
   const runCommands =
     hasCommands && canRunSharedCommands ? shouldRunSetupForCreate(repo, decision) : false

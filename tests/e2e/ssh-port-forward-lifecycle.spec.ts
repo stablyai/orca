@@ -1,6 +1,6 @@
 import { createServer } from 'node:net'
 
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   cleanupDockerSshRelayTarget,
@@ -39,19 +39,19 @@ import {
   trustDockerSshHost
 } from './helpers/ssh-port-forward-transport-evidence'
 
-const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
-const FORCE_SYSTEM_SSH = process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT === '1'
+const RUN_DOCKER_SSH = process.env.MCODE_E2E_SSH_DOCKER === '1'
+const FORCE_SYSTEM_SSH = process.env.MCODE_SSH_FORCE_SYSTEM_TRANSPORT === '1'
 const REMOTE_PORT = 7860
 const REFRESH_BARRIER_PORT = 7861
 const SCAN_REFRESH_PORT = 7862
 
 test.describe('Docker SSH port-forward lifecycle', () => {
-  test.skip(!RUN_DOCKER_SSH, 'Set ORCA_E2E_SSH_DOCKER=1 to run Docker-backed SSH tests.')
+  test.skip(!RUN_DOCKER_SSH, 'Set MCODE_E2E_SSH_DOCKER=1 to run Docker-backed SSH tests.')
   test.skip(process.platform === 'win32', 'Docker SSH lifecycle uses POSIX process inspection.')
 
   test('keeps a user-forwarded listener live across scan refresh @headful', async ({
     electronApp,
-    orcaPage
+    mcodePage
   }, testInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
@@ -59,27 +59,27 @@ test.describe('Docker SSH port-forward lifecycle', () => {
     const unrelatedLocalPortReservation = await reserveLocalPort()
     const localPort = localPortReservation.port
     const unrelatedLocalPort = unrelatedLocalPortReservation.port
-    const marker = `ORCA_FORWARD_${Date.now()}`
+    const marker = `MCODE_FORWARD_${Date.now()}`
     const unrelatedMarker = `${marker}_UNRELATED`
     try {
       target = startDockerSshRelayTarget(testInfo)
       const systemSshInvocationLogPath = await trustDockerSshHost(electronApp, target)
       await installLifecycleWarningCapture(electronApp)
-      await waitForSessionReady(orcaPage)
-      await waitForActiveWorktree(orcaPage)
-      const remote = await connectDockerSshRelayTarget(orcaPage, target)
+      await waitForSessionReady(mcodePage)
+      await waitForActiveWorktree(mcodePage)
+      const remote = await connectDockerSshRelayTarget(mcodePage, target)
       const remotePid = startRemoteHttpListener(target, REMOTE_PORT, marker)
       const unrelatedRemotePid = startRemoteHttpListener(
         target,
         REFRESH_BARRIER_PORT,
         unrelatedMarker
       )
-      await openPortsPanel(orcaPage)
+      await openPortsPanel(mcodePage)
 
       await expect
         .poll(
           () =>
-            orcaPage.evaluate(
+            mcodePage.evaluate(
               ({ targetId, port }) =>
                 window.api.ssh
                   .listDetectedPorts({ targetId })
@@ -89,11 +89,11 @@ test.describe('Docker SSH port-forward lifecycle', () => {
           { timeout: 45_000, message: 'remote HTTP listener was not detected' }
         )
         .toBe(remotePid)
-      await expect(orcaPage.getByText(`:${REMOTE_PORT}`, { exact: true })).toBeVisible()
+      await expect(mcodePage.getByText(`:${REMOTE_PORT}`, { exact: true })).toBeVisible()
       await expect
         .poll(
           () =>
-            orcaPage.evaluate(
+            mcodePage.evaluate(
               ({ targetId, port }) =>
                 window.api.ssh
                   .listDetectedPorts({ targetId })
@@ -103,19 +103,19 @@ test.describe('Docker SSH port-forward lifecycle', () => {
           { timeout: 45_000, message: 'scan-refresh barrier listener was not detected' }
         )
         .toBe(true)
-      await expect(orcaPage.getByText(`:${REFRESH_BARRIER_PORT}`, { exact: true })).toBeVisible()
+      await expect(mcodePage.getByText(`:${REFRESH_BARRIER_PORT}`, { exact: true })).toBeVisible()
 
       await installSshPortForwardSnapshotBarrier(electronApp, remote.targetId)
-      await orcaPage.evaluate(() => window.dispatchEvent(new Event('beforeunload')))
-      await orcaPage.reload()
-      await waitForSessionReady(orcaPage, 60_000)
+      await mcodePage.evaluate(() => window.dispatchEvent(new Event('beforeunload')))
+      await mcodePage.reload()
+      await waitForSessionReady(mcodePage, 60_000)
       await expect
-        .poll(() => waitForActiveWorktree(orcaPage), { timeout: 60_000 })
+        .poll(() => waitForActiveWorktree(mcodePage), { timeout: 60_000 })
         .toBe(remote.worktreeId)
       await expect
         .poll(
           () =>
-            orcaPage.evaluate(
+            mcodePage.evaluate(
               (targetId) => window.__store?.getState().sshConnectionStates.get(targetId)?.status,
               remote.targetId
             ),
@@ -129,16 +129,16 @@ test.describe('Docker SSH port-forward lifecycle', () => {
         })
         .toEqual({ captured: true, released: false })
 
-      await installRendererForwardCapture(orcaPage)
-      await openPortsPanel(orcaPage)
+      await installRendererForwardCapture(mcodePage)
+      await openPortsPanel(mcodePage)
       await localPortReservation.release()
-      await forwardPortFromPanel(orcaPage, localPort, REMOTE_PORT)
-      await expect(orcaPage.getByText('Forwarded', { exact: true })).toBeVisible()
+      await forwardPortFromPanel(mcodePage, localPort, REMOTE_PORT)
+      await expect(mcodePage.getByText('Forwarded', { exact: true })).toBeVisible()
       await expect(
-        orcaPage.getByText(`:${localPort} → :${REMOTE_PORT}`, { exact: true })
+        mcodePage.getByText(`:${localPort} → :${REMOTE_PORT}`, { exact: true })
       ).toBeVisible()
       await expect.poll(() => requestForward(localPort)).toContain(marker)
-      await expectForwardEvidence(orcaPage, remote.targetId, [
+      await expectForwardEvidence(mcodePage, remote.targetId, [
         { localPort, remotePort: REMOTE_PORT }
       ])
       if (FORCE_SYSTEM_SSH) {
@@ -150,15 +150,15 @@ test.describe('Docker SSH port-forward lifecycle', () => {
       }
 
       await releaseSshPortForwardSnapshotBarrier(electronApp)
-      const postHydrationRoundTripForwards = await orcaPage.evaluate(
+      const postHydrationRoundTripForwards = await mcodePage.evaluate(
         (targetId) => window.api.ssh.listPortForwards({ targetId }),
         remote.targetId
       )
       expect(postHydrationRoundTripForwards).toContainEqual(
         expect.objectContaining({ localPort, remotePort: REMOTE_PORT })
       )
-      await expect(orcaPage.getByText(`:${REFRESH_BARRIER_PORT}`, { exact: true })).toBeVisible()
-      const staleSnapshotEvidence = await readPortForwardEvidence(orcaPage, remote.targetId)
+      await expect(mcodePage.getByText(`:${REFRESH_BARRIER_PORT}`, { exact: true })).toBeVisible()
+      const staleSnapshotEvidence = await readPortForwardEvidence(mcodePage, remote.targetId)
       const staleSnapshotIdentity = readRemoteListenerIdentity(target, REMOTE_PORT)
       const staleSnapshotWarnings = await readLifecycleWarnings(electronApp)
       expect(staleSnapshotEvidence.managerForwards).toContainEqual(
@@ -177,9 +177,9 @@ test.describe('Docker SSH port-forward lifecycle', () => {
         []
       )
       await expect(
-        orcaPage.getByText(`:${localPort} → :${REMOTE_PORT}`, { exact: true })
+        mcodePage.getByText(`:${localPort} → :${REMOTE_PORT}`, { exact: true })
       ).toBeVisible()
-      await expectForwardEvidence(orcaPage, remote.targetId, [
+      await expectForwardEvidence(mcodePage, remote.targetId, [
         { localPort, remotePort: REMOTE_PORT }
       ])
       await restoreSshPortForwardSnapshotHandler(electronApp)
@@ -188,7 +188,7 @@ test.describe('Docker SSH port-forward lifecycle', () => {
       await expect
         .poll(
           () =>
-            orcaPage.evaluate(
+            mcodePage.evaluate(
               ({ targetId, port }) =>
                 window.api.ssh
                   .listDetectedPorts({ targetId })
@@ -198,38 +198,38 @@ test.describe('Docker SSH port-forward lifecycle', () => {
           { timeout: 45_000, message: 'scan-refresh listener was not detected in main' }
         )
         .toBe(true)
-      await expect(orcaPage.getByText(`:${SCAN_REFRESH_PORT}`, { exact: true })).toBeVisible()
+      await expect(mcodePage.getByText(`:${SCAN_REFRESH_PORT}`, { exact: true })).toBeVisible()
 
       await unrelatedLocalPortReservation.release()
-      const unrelatedForward = await addPortForward(orcaPage, {
+      const unrelatedForward = await addPortForward(mcodePage, {
         targetId: remote.targetId,
         localPort: unrelatedLocalPort,
         remotePort: REFRESH_BARRIER_PORT,
         label: 'unrelated-listener'
       })
-      await expectForwardEvidence(orcaPage, remote.targetId, [
+      await expectForwardEvidence(mcodePage, remote.targetId, [
         { localPort, remotePort: REMOTE_PORT },
         { localPort: unrelatedLocalPort, remotePort: REFRESH_BARRIER_PORT }
       ])
       await expect.poll(() => requestForward(unrelatedLocalPort)).toContain(unrelatedMarker)
 
-      await forceDockerSshRelayChannelReconnect(orcaPage, target, remote.targetId)
-      await expectForwardEvidence(orcaPage, remote.targetId, [
+      await forceDockerSshRelayChannelReconnect(mcodePage, target, remote.targetId)
+      await expectForwardEvidence(mcodePage, remote.targetId, [
         { localPort, remotePort: REMOTE_PORT },
         { localPort: unrelatedLocalPort, remotePort: REFRESH_BARRIER_PORT }
       ])
       await expect.poll(() => requestForward(localPort)).toContain(marker)
       await expect.poll(() => requestForward(unrelatedLocalPort)).toContain(unrelatedMarker)
 
-      const authorityBeforeTransportReconnect = await orcaPage.evaluate(
+      const authorityBeforeTransportReconnect = await mcodePage.evaluate(
         (targetId) => window.__store?.getState().sshConnectionStates.get(targetId),
         remote.targetId
       )
-      await reconnectDockerSshRelayTarget(orcaPage, remote.targetId)
+      await reconnectDockerSshRelayTarget(mcodePage, remote.targetId)
       await expect
         .poll(
           async () => {
-            const state = await orcaPage.evaluate(
+            const state = await mcodePage.evaluate(
               (targetId) => window.__store?.getState().sshConnectionStates.get(targetId),
               remote.targetId
             )
@@ -243,17 +243,17 @@ test.describe('Docker SSH port-forward lifecycle', () => {
           { timeout: 30_000, message: 'renderer did not observe the reconnected SSH authority' }
         )
         .toBe(true)
-      await expectForwardEvidence(orcaPage, remote.targetId, [
+      await expectForwardEvidence(mcodePage, remote.targetId, [
         { localPort, remotePort: REMOTE_PORT },
         { localPort: unrelatedLocalPort, remotePort: REFRESH_BARRIER_PORT }
       ])
       await expect.poll(() => requestForward(localPort)).toContain(marker)
       await expect.poll(() => requestForward(unrelatedLocalPort)).toContain(unrelatedMarker)
       await expect(
-        orcaPage.getByText(`:${localPort} → :${REMOTE_PORT}`, { exact: true })
+        mcodePage.getByText(`:${localPort} → :${REMOTE_PORT}`, { exact: true })
       ).toBeVisible()
       await expect(
-        orcaPage.getByText(`:${unrelatedLocalPort} → :${REFRESH_BARRIER_PORT}`, { exact: true })
+        mcodePage.getByText(`:${unrelatedLocalPort} → :${REFRESH_BARRIER_PORT}`, { exact: true })
       ).toBeVisible()
 
       const collisionServer = createServer()
@@ -266,7 +266,7 @@ test.describe('Docker SSH port-forward lifecycle', () => {
         throw new Error('Unable to reserve a collision port')
       }
       try {
-        const collisionResult = await orcaPage.evaluate(
+        const collisionResult = await mcodePage.evaluate(
           async ({ targetId, localPort, remotePort }) => {
             try {
               await window.api.ssh.addPortForward({
@@ -294,29 +294,29 @@ test.describe('Docker SSH port-forward lifecycle', () => {
           collisionServer.close((error) => (error ? reject(error) : resolve()))
         )
       }
-      await expectForwardEvidence(orcaPage, remote.targetId, [
+      await expectForwardEvidence(mcodePage, remote.targetId, [
         { localPort, remotePort: REMOTE_PORT },
         { localPort: unrelatedLocalPort, remotePort: REFRESH_BARRIER_PORT }
       ])
 
-      const primaryRow = orcaPage
+      const primaryRow = mcodePage
         .getByText(`:${localPort} → :${REMOTE_PORT}`, { exact: true })
         .locator('../../..')
       await primaryRow.getByTitle('Remove').click()
       await expect(
-        orcaPage.getByText(`:${localPort} → :${REMOTE_PORT}`, { exact: true })
+        mcodePage.getByText(`:${localPort} → :${REMOTE_PORT}`, { exact: true })
       ).not.toBeVisible()
-      await expectForwardEvidence(orcaPage, remote.targetId, [
+      await expectForwardEvidence(mcodePage, remote.targetId, [
         { localPort: unrelatedLocalPort, remotePort: REFRESH_BARRIER_PORT }
       ])
       await expect(requestForward(localPort)).rejects.toThrow()
       await expect.poll(() => requestForward(unrelatedLocalPort)).toContain(unrelatedMarker)
 
-      const evidence = await readPortForwardEvidence(orcaPage, remote.targetId)
+      const evidence = await readPortForwardEvidence(mcodePage, remote.targetId)
       const identity = readRemoteListenerIdentity(target, REMOTE_PORT)
       const unrelatedIdentity = readRemoteListenerIdentity(target, REFRESH_BARRIER_PORT)
       const warnings = await readLifecycleWarnings(electronApp)
-      const relayReconnectStates = await readSshStateCapture(orcaPage)
+      const relayReconnectStates = await readSshStateCapture(mcodePage)
       testInfo.annotations.push({
         type: 'ssh-port-forward-evidence',
         description: JSON.stringify({

@@ -13,5 +13,5 @@ export function relayTestSocketPath(dir: string, name = 'relay.sock'): string {
 
   // Why: Node's net server requires Windows IPC endpoints to be named pipes;
   // filesystem-style .sock paths fail with EACCES on Windows hosts.
-  return `\\\\.\\pipe\\orca-relay-test-${suffix}`
+  return `\\\\.\\pipe\\mcode-relay-test-${suffix}`
 }

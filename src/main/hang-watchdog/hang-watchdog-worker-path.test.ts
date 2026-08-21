@@ -4,7 +4,7 @@ import { resolveHangWatchdogWorkerPath } from './hang-watchdog-worker-path'
 
 describe('resolveHangWatchdogWorkerPath', () => {
   it('resolves packaged workers inside app.asar', () => {
-    const appPath = join('/apps', 'orca', 'app.asar')
+    const appPath = join('/apps', 'mcode', 'app.asar')
     expect(resolveHangWatchdogWorkerPath(appPath, true)).toBe(
       join(appPath, 'out', 'main', 'main-thread-hang-watchdog-entry.js')
     )
@@ -18,7 +18,7 @@ describe('resolveHangWatchdogWorkerPath', () => {
   })
 
   it('resolves through out/main from a dev project root', () => {
-    const appPath = join('/repo', 'orca')
+    const appPath = join('/repo', 'mcode')
     expect(resolveHangWatchdogWorkerPath(appPath, false, () => false)).toBe(
       join(appPath, 'out', 'main', 'main-thread-hang-watchdog-entry.js')
     )

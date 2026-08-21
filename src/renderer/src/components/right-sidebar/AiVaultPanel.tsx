@@ -34,7 +34,7 @@ import {
   useAiVaultSessionWorktreeMap,
   withAiVaultCurrentWorktreeStatus
 } from './ai-vault-session-worktree'
-import { openAiVaultSessionLogInOrca } from './ai-vault-session-log-open'
+import { openAiVaultSessionLogInMCode } from './ai-vault-session-log-open'
 import { useAiVaultOriginalPaneActions } from './ai-vault-original-pane-actions'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
@@ -382,7 +382,7 @@ export default function AiVaultPanel(): React.JSX.Element {
             translate('auto.components.right.sidebar.AiVaultPanel.logPath', 'Log path')
           )
         }
-        onOpenLog={(session) => void openAiVaultSessionLogInOrca(session)}
+        onOpenLog={(session) => void openAiVaultSessionLogInMCode(session)}
         onRevealLog={(session) => void window.api.shell.openPath(session.filePath)}
         onOpenCwd={(session) => {
           if (session.cwd) {

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
-import type { OrcaRuntimeService, RuntimeTerminalDataMeta } from '../orca-runtime'
+import type { MCodeRuntimeService, RuntimeTerminalDataMeta } from '../mcode-runtime'
 import { TERMINAL_METHODS } from './methods/terminal'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
@@ -417,7 +417,7 @@ describe('terminal multiplex RPC', () => {
           fitListener?.({ mode: 'desktop-fit', cols: 100, rows: 30 })
           driverListener?.({ kind: 'transition-during-snapshot' })
           return { tail: [], truncated: false } as unknown as Awaited<
-            ReturnType<OrcaRuntimeService['readTerminal']>
+            ReturnType<MCodeRuntimeService['readTerminal']>
           >
         }),
         subscribeToFitOverrideChanges: vi.fn((_ptyId, listener) => {

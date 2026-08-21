@@ -7,7 +7,7 @@ import { main } from './check-reliability-gates.mjs'
 const tempDirs = []
 
 function makeTempRoot(manifest) {
-  const root = mkdtempSync(path.join(tmpdir(), 'orca-reliability-gates-'))
+  const root = mkdtempSync(path.join(tmpdir(), 'mcode-reliability-gates-'))
   tempDirs.push(root)
   const configDir = path.join(root, 'config')
   mkdirSync(configDir, { recursive: true })
@@ -42,7 +42,7 @@ function validManifest(overrides = {}) {
           coveredPlatforms: ['macos'],
           coveredProviders: ['local'],
           coverageNotes: 'One local macOS unit run covers the local decision-layer fixture only.',
-          motivatingLinks: ['https://github.com/stablyai/orca/issues/6773'],
+          motivatingLinks: ['https://github.com/mcode-ide/mcode/issues/6773'],
           invariant: 'A stale snapshot cannot close a newer binding.',
           oracle: 'The test rejects reconciliation when the binding is newer than the snapshot.',
           commands: ['pnpm exec vitest run some.test.ts'],
@@ -427,7 +427,7 @@ describe('check-reliability-gates', () => {
 
   it('rejects missing manifests with a structured error', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    const root = mkdtempSync(path.join(tmpdir(), 'orca-reliability-gates-'))
+    const root = mkdtempSync(path.join(tmpdir(), 'mcode-reliability-gates-'))
     tempDirs.push(root)
 
     await expect(main(root)).resolves.toBe(1)

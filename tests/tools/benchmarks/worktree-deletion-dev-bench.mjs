@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * A/B benchmark for worktree deletion against real Orca dev instances.
+ * A/B benchmark for worktree deletion against real MCode dev instances.
  *
  * Usage:
  *   pnpm bench:worktree-deletion -- --instance baseline=/path/to/main \
@@ -110,16 +110,16 @@ function run(command, args, cwd) {
 }
 
 function createFixture(instanceLabel) {
-  const root = mkdtempSync(path.join(os.tmpdir(), `orca-delete-bench-${instanceLabel}-`))
+  const root = mkdtempSync(path.join(os.tmpdir(), `mcode-delete-bench-${instanceLabel}-`))
   const repoPath = path.join(root, 'repo')
   const userDataPath = path.join(root, 'user-data')
   mkdirSync(repoPath)
   mkdirSync(userDataPath)
   // Git 2.25 lacks `git init --initial-branch`; rename after the first commit below.
   run('git', ['init'], repoPath)
-  run('git', ['config', 'user.email', 'worktree-delete-bench@orca.invalid'], repoPath)
-  run('git', ['config', 'user.name', 'Orca Worktree Delete Bench'], repoPath)
-  writeFileSync(path.join(repoPath, 'README.md'), '# Orca worktree deletion benchmark\n')
+  run('git', ['config', 'user.email', 'worktree-delete-bench@mcode.invalid'], repoPath)
+  run('git', ['config', 'user.name', 'MCode Worktree Delete Bench'], repoPath)
+  writeFileSync(path.join(repoPath, 'README.md'), '# MCode worktree deletion benchmark\n')
   run('git', ['add', 'README.md'], repoPath)
   run('git', ['commit', '-m', 'Initialize benchmark fixture', '--no-gpg-sign'], repoPath)
   run('git', ['branch', '-m', 'main'], repoPath)
@@ -133,7 +133,7 @@ function launchDevInstance({ label, repoRoot }, fixture, port) {
   }
   const env = {
     ...process.env,
-    ORCA_DEV_USER_DATA_PATH: fixture.userDataPath,
+    MCODE_DEV_USER_DATA_PATH: fixture.userDataPath,
     REMOTE_DEBUGGING_PORT: String(port)
   }
   delete env.ELECTRON_RUN_AS_NODE
@@ -159,7 +159,7 @@ function appendLog(current, chunk) {
   return `${current}${String(chunk)}`.slice(-30_000)
 }
 
-async function connectToOrca(instance) {
+async function connectToMCode(instance) {
   const deadline = Date.now() + START_TIMEOUT_MS
   let lastError = null
   while (Date.now() < deadline) {
@@ -172,8 +172,8 @@ async function connectToOrca(instance) {
       const browser = await chromium.connectOverCDP(instance.endpoint)
       try {
         // CDP answers long before the renderer exposes window.__store; without this, every
-        // findOrcaPage timeout drops a live browser handle and leaks a connection per retry.
-        const page = await findOrcaPage(browser)
+        // findMCodePage timeout drops a live browser handle and leaks a connection per retry.
+        const page = await findMCodePage(browser)
         return { browser, page }
       } catch (error) {
         await browser.close().catch(() => undefined)
@@ -189,7 +189,7 @@ async function connectToOrca(instance) {
   )
 }
 
-async function findOrcaPage(browser) {
+async function findMCodePage(browser) {
   const deadline = Date.now() + 30_000
   while (Date.now() < deadline) {
     for (const context of browser.contexts()) {
@@ -204,7 +204,7 @@ async function findOrcaPage(browser) {
     }
     await delay(250)
   }
-  throw new Error('Orca renderer with window.__store was not found')
+  throw new Error('MCode renderer with window.__store was not found')
 }
 
 async function addFixtureRepo(page, repoPath) {
@@ -430,7 +430,7 @@ async function verifyRestart(instanceConfig, fixture, port, repoId) {
   const relaunched = launchDevInstance(instanceConfig, fixture, port)
   let browser = null
   try {
-    const connection = await connectToOrca(relaunched)
+    const connection = await connectToMCode(relaunched)
     browser = connection.browser
     const { page } = connection
     const state = await page.evaluate(async (fixtureRepoId) => {
@@ -481,7 +481,7 @@ async function benchmarkInstance(instanceConfig, index, options) {
     run('git', ['remote', 'set-url', 'origin', delayedFetchServer.url], fixture.repoPath)
     const port = await findAvailablePort(CDP_START_PORT + index)
     instance = launchDevInstance(instanceConfig, fixture, port)
-    const { browser: connectedBrowser, page } = await connectToOrca(instance)
+    const { browser: connectedBrowser, page } = await connectToMCode(instance)
     browser = connectedBrowser
     const repoState = await addFixtureRepo(page, fixture.repoPath)
     const iterations = []

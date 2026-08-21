@@ -33,7 +33,7 @@ describe('spurious shell readings on Codex-launched panes', () => {
             id: 'tab-1',
             ptyId,
             worktreeId: 'wt1',
-            title: 'orca-1',
+            title: 'mcode-1',
             customTitle: null,
             color: null,
             sortOrder: 0,
@@ -145,7 +145,7 @@ describe('spurious shell readings on Codex-launched panes', () => {
     expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
   })
 
-  it('never spends the fresh scan on a pane Orca did not launch Codex in', async () => {
+  it('never spends the fresh scan on a pane MCode did not launch Codex in', async () => {
     seedPane()
 
     await markLiveCodexSessionsForRestart({

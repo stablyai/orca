@@ -57,10 +57,10 @@ function bitbucketPr(id = 7) {
 describe('Bitbucket client', () => {
   beforeEach(() => {
     process.env = { ...OLD_ENV }
-    process.env.ORCA_BITBUCKET_API_BASE_URL = 'https://api.test.local/2.0'
-    process.env.ORCA_BITBUCKET_EMAIL = 'user@example.com'
-    process.env.ORCA_BITBUCKET_API_TOKEN = 'token'
-    delete process.env.ORCA_BITBUCKET_ACCESS_TOKEN
+    process.env.MCODE_BITBUCKET_API_BASE_URL = 'https://api.test.local/2.0'
+    process.env.MCODE_BITBUCKET_EMAIL = 'user@example.com'
+    process.env.MCODE_BITBUCKET_API_TOKEN = 'token'
+    delete process.env.MCODE_BITBUCKET_ACCESS_TOKEN
     gitExecFileAsyncMock.mockReset()
     gitExecFileAsyncMock.mockResolvedValue({
       stdout: 'git@bitbucket.org:team/repo.git\n',
@@ -165,8 +165,8 @@ describe('Bitbucket client', () => {
   })
 
   it('returns null instead of querying anonymously when no credential resolves', async () => {
-    delete process.env.ORCA_BITBUCKET_EMAIL
-    delete process.env.ORCA_BITBUCKET_API_TOKEN
+    delete process.env.MCODE_BITBUCKET_EMAIL
+    delete process.env.MCODE_BITBUCKET_API_TOKEN
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
 

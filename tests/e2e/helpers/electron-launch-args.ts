@@ -1,6 +1,6 @@
 import { dirname } from 'node:path'
 
-export function getOrcaElectronLaunchArgs(mainPath: string, headful: boolean): string[] {
+export function getMCodeElectronLaunchArgs(mainPath: string, headful: boolean): string[] {
   // Launch through package.json so app version and resource paths match a packaged app.
   const appPath = dirname(dirname(dirname(mainPath)))
   if (headful || process.platform !== 'linux') {

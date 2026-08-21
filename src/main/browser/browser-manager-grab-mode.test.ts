@@ -66,7 +66,7 @@ describe('browserManager grab operations', () => {
       const result = await browserManager.setGrabMode('tab-1', true, guest)
       expect(result).toBe(true)
       expect(guestExecuteJavaScriptMock).toHaveBeenCalledTimes(1)
-      expect(guestExecuteJavaScriptMock.mock.calls[0][0]).toContain('__orca-grab-host')
+      expect(guestExecuteJavaScriptMock.mock.calls[0][0]).toContain('__mcode-grab-host')
     })
 
     it('cancels active grab op when disabling', async () => {

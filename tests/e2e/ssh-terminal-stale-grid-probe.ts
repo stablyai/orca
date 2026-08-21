@@ -5,8 +5,8 @@ import {
   writeDockerSshRelayTargetFile
 } from './helpers/docker-ssh-relay-target'
 
-export const REMOTE_MONITOR_PATH = '/tmp/orca-idle-grid-monitor.mjs'
-export const REMOTE_STATE_PATH = '/tmp/orca-idle-grid-state.json'
+export const REMOTE_MONITOR_PATH = '/tmp/mcode-idle-grid-monitor.mjs'
+export const REMOTE_STATE_PATH = '/tmp/mcode-idle-grid-state.json'
 
 export type Grid = { cols: number; rows: number }
 

@@ -80,7 +80,7 @@ export async function waitForPtyShellEcho(
   ptyId: string,
   timeoutMs: number
 ): Promise<void> {
-  const marker = `ORCA_PTY_READY_${randomUUID()}`
+  const marker = `MCODE_PTY_READY_${randomUUID()}`
   const deadline = Date.now() + timeoutMs
   await waitForPtyPaneMounted(page, ptyId, Math.min(10_000, timeoutMs))
   while (Date.now() < deadline) {

@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { OrcaRuntimeService } from './orca-runtime'
+import { MCodeRuntimeService } from './mcode-runtime'
 import { AGENT_STATUS_STALE_AFTER_MS, type AgentStatusEntry } from '../../shared/agent-status-types'
 
 // Timings below are the measured deltas from a real `claude` 2.1.234 parked on a
 // Write permission prompt (epoch ms, one capture of two with identical structure):
 //   ...900370  PreToolUse Write
 //   ...900382  title "◐ Claude Code" → "✳ Claude Code"    settle, working→idle
-//   ...900421  PermissionRequest Write                     the hook Orca reports as `waiting`
+//   ...900421  PermissionRequest Write                     the hook MCode reports as `waiting`
 //   ...900544  title → "✳ probe2.txt Write tool file"      same idle class, last write
 //   then 31s of silence with the prompt still up.
 // The trailing same-class repaint is the whole defect: it advances lastOscTitleEpochMs
@@ -24,7 +24,7 @@ type TitleRenewal = (
 ) => AgentStatusEntry | null
 
 function renewFromPtyTitle(): TitleRenewal {
-  const runtime = new OrcaRuntimeService()
+  const runtime = new MCodeRuntimeService()
   const renew = (runtime as unknown as { renewMobileAgentStatusFromPtyTitle: TitleRenewal })
     .renewMobileAgentStatusFromPtyTitle
   return (status, pty, options) => renew.call(runtime, status, pty, options ?? {})

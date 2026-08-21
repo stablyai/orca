@@ -38,7 +38,7 @@ import {
   UserCog,
   Wrench
 } from 'lucide-react'
-import { OrcaLogoSettingsIcon } from '@/components/settings/orca-logo-settings-icon'
+import { MCodeLogoSettingsIcon } from '@/components/settings/mcode-logo-settings-icon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import type { Repo } from '../../../shared/repo-types'
 import { getRepoKindLabel } from '../../../shared/repo-kind'
@@ -64,7 +64,7 @@ import { getOrchestrationPaneSearchEntries } from '@/components/settings/orchest
 import { getArtifactsSettingsSearchEntries } from '@/components/settings/artifacts-settings-search'
 import { getShareSkillsSettingsSearchEntries } from '@/components/settings/share-skills-settings-search'
 import { getAutomationsSettingsSearchEntries } from '@/components/settings/automations-settings-search'
-import { getOrcaAccountSettingsSearchEntries } from '@/components/settings/orca-account-settings-search'
+import { getMCodeAccountSettingsSearchEntries } from '@/components/settings/mcode-account-settings-search'
 import { getLinearAgentSkillPaneSearchEntries } from '@/components/settings/linear-agent-skill-search'
 import {
   getRuntimeEnvironmentsSearchEntry,
@@ -199,7 +199,7 @@ export function buildSettingsNavigationMetadata({
       title: translate('auto.hooks.useSettingsNavigationMetadata.58a868e8e4', 'Orchestration'),
       description: translate(
         'auto.hooks.useSettingsNavigationMetadata.cd50cec5d7',
-        'Coordinate multiple coding agents through Orca.'
+        'Coordinate multiple coding agents through MCode.'
       ),
       icon: Network,
       searchEntries: getOrchestrationPaneSearchEntries(),
@@ -214,7 +214,7 @@ export function buildSettingsNavigationMetadata({
             title: translate('auto.hooks.useSettingsNavigationMetadata.linearTitle', 'Linear'),
             description: translate(
               'auto.hooks.useSettingsNavigationMetadata.linearDescription',
-              'How Linear works in Orca, setup checklist, agent skill, and example prompts.'
+              'How Linear works in MCode, setup checklist, agent skill, and example prompts.'
             ),
             icon: LinearIcon,
             searchEntries: getLinearAgentSkillPaneSearchEntries(),
@@ -251,14 +251,14 @@ export function buildSettingsNavigationMetadata({
     ...(showDesktopOnlySettings
       ? [
           {
-            id: 'orca-account',
-            title: translate('auto.components.settings.orcaAccount.title', 'Orca Account'),
+            id: 'mcode-account',
+            title: translate('auto.components.settings.mcodeAccount.title', 'MCode Account'),
             description: translate(
-              'auto.components.settings.orcaAccount.description',
-              'Share work instantly and reach your desktop from Orca Mobile wherever you are.'
+              'auto.components.settings.mcodeAccount.description',
+              'Share work instantly and reach your desktop from MCode Mobile wherever you are.'
             ),
             icon: CircleUserRound,
-            searchEntries: getOrcaAccountSettingsSearchEntries(),
+            searchEntries: getMCodeAccountSettingsSearchEntries(),
             group: 'setup'
           }
         ]
@@ -271,9 +271,9 @@ export function buildSettingsNavigationMetadata({
       ),
       description: translate(
         'auto.hooks.useSettingsNavigationMetadata.5f32ac08f3',
-        'Finish the onboarding checklist for core Orca workflows.'
+        'Finish the onboarding checklist for core MCode workflows.'
       ),
-      icon: OrcaLogoSettingsIcon,
+      icon: MCodeLogoSettingsIcon,
       searchEntries: [
         {
           title: translate(
@@ -288,7 +288,7 @@ export function buildSettingsNavigationMetadata({
             translate('auto.hooks.useSettingsNavigationMetadata.ea0b1bc7b8', 'setup guide'),
             translate(
               'auto.hooks.useSettingsNavigationMetadata.0505d0df29',
-              'get started with Orca'
+              'get started with MCode'
             ),
             translate('auto.hooks.useSettingsNavigationMetadata.724c440e72', 'getting started')
           ]
@@ -448,7 +448,7 @@ export function buildSettingsNavigationMetadata({
             ),
             description: translate(
               'auto.hooks.useSettingsNavigationMetadata.3d65d3f1b9',
-              'Configure mobile emulator support for Orca and coding agents.'
+              'Configure mobile emulator support for MCode and coding agents.'
             ),
             icon: TabletSmartphone,
             searchEntries: getMobileEmulatorSearchEntries(),
@@ -537,7 +537,7 @@ export function buildSettingsNavigationMetadata({
       title: translate('auto.hooks.useSettingsNavigationMetadata.d72a58b5b9', 'Stats & Usage'),
       description: translate(
         'auto.hooks.useSettingsNavigationMetadata.b351014180',
-        'Orca stats plus Claude, Codex, OpenCode token analytics and Grok subscription usage.'
+        'MCode stats plus Claude, Codex, OpenCode token analytics and Grok subscription usage.'
       ),
       icon: BarChart3,
       searchEntries: getStatsPaneSearchEntries(),
@@ -562,11 +562,11 @@ export function buildSettingsNavigationMetadata({
       id: 'servers',
       title: translate(
         'auto.hooks.useSettingsNavigationMetadata.de0c2907a1',
-        'Remote Orca Servers'
+        'Remote MCode Servers'
       ),
       description: isWebClient
-        ? 'Connect this browser to a saved Orca server.'
-        : 'Pair remote Orca runtimes for persistent sessions, richer remote state, and web or mobile handoff.',
+        ? 'Connect this browser to a saved MCode server.'
+        : 'Pair remote MCode runtimes for persistent sessions, richer remote state, and web or mobile handoff.',
       icon: Server,
       searchEntries: [runtimeEnvironmentsSearchEntry],
       group: 'remote',
@@ -657,7 +657,7 @@ export function buildSettingsNavigationMetadata({
             title: translate('auto.hooks.useSettingsNavigationMetadata.pluginsTitle', 'Plugins'),
             description: translate(
               'auto.hooks.useSettingsNavigationMetadata.pluginsDescription',
-              'Install and manage experimental Orca plugins.'
+              'Install and manage experimental MCode plugins.'
             ),
             icon: Blocks,
             searchEntries: getPluginsPaneSearchEntries(),
@@ -666,7 +666,7 @@ export function buildSettingsNavigationMetadata({
         ]
       : []),
     // Why: one nav row per project, not per repo row — a project set up on
-    // multiple hosts (local + a Remote Orca Server, or two clones) collapses to
+    // multiple hosts (local + a Remote MCode Server, or two clones) collapses to
     // a single entry. Derived from repos alone so this list matches the panes.
     ...buildSettingsProjectList(repos).map(({ project, representativeRepoId, setups }) => {
       const representativeRepo = reposById.get(representativeRepoId) ?? repos[0]

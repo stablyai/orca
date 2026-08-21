@@ -8,8 +8,8 @@ import {
 } from './setup-runner-command'
 
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
-export const SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV = 'ORCA_SEQUENCED_STARTUP_COMMAND'
-export const SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV = 'ORCA_SEQUENCED_STARTUP_SCRIPT'
+export const SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV = 'MCODE_SEQUENCED_STARTUP_COMMAND'
+export const SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV = 'MCODE_SEQUENCED_STARTUP_SCRIPT'
 
 export type SequencedSetupAgentCommands = {
   setupCommand: string
@@ -199,9 +199,9 @@ function buildWindowsSetupCommand(
     'Remove-Item -LiteralPath $marker, $tmp -Force -ErrorAction SilentlyContinue',
     '$processInfo = [System.Diagnostics.ProcessStartInfo]::new()',
     '$processInfo.FileName = $env:ComSpec',
-    '$processInfo.Arguments = \'/d /s /v:on /c ""!ORCA_SETUP_RUNNER!""\'',
+    '$processInfo.Arguments = \'/d /s /v:on /c ""!MCODE_SETUP_RUNNER!""\'',
     '$processInfo.UseShellExecute = $false',
-    '$processInfo.EnvironmentVariables["ORCA_SETUP_RUNNER"] = $runner',
+    '$processInfo.EnvironmentVariables["MCODE_SETUP_RUNNER"] = $runner',
     '$process = [System.Diagnostics.Process]::Start($processInfo)',
     '$process.WaitForExit()',
     '$setupStatus = $process.ExitCode',

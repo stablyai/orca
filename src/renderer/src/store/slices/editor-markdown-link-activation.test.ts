@@ -280,8 +280,8 @@ describe('createEditorSlice activateMarkdownLink', () => {
 
     store.getState().openFile(
       {
-        filePath: '/remote/.orca/drops/log.txt',
-        relativePath: '.orca/drops/log.txt',
+        filePath: '/remote/.mcode/drops/log.txt',
+        relativePath: '.mcode/drops/log.txt',
         worktreeId: 'wt-1',
         language: 'text',
         mode: 'edit'
@@ -290,7 +290,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
     )
 
     expect(store.getState().openFiles[0]).toMatchObject({
-      filePath: '/remote/.orca/drops/log.txt'
+      filePath: '/remote/.mcode/drops/log.txt'
     })
     expect(store.getState().openFiles[0]?.runtimeEnvironmentId).toBeNull()
   })
@@ -497,7 +497,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
     })
   })
 
-  it('opens in-worktree file links in Orca', async () => {
+  it('opens in-worktree file links in MCode', async () => {
     const store = createEditorStore()
     await store.getState().activateMarkdownLink('./image.png', {
       sourceFilePath: '/repo/docs/note.md',
@@ -540,7 +540,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
     })
   })
 
-  it('opens explicit file URLs inside the worktree in Orca', async () => {
+  it('opens explicit file URLs inside the worktree in MCode', async () => {
     const store = createEditorStore()
     await store.getState().activateMarkdownLink('file:///repo/docs/image.png', {
       sourceFilePath: '/repo/docs/note.md',
@@ -558,7 +558,7 @@ describe('createEditorSlice activateMarkdownLink', () => {
     expect(openFileUriMock).not.toHaveBeenCalled()
   })
 
-  it('opens explicit file URLs outside the worktree in Orca after authorizing them', async () => {
+  it('opens explicit file URLs outside the worktree in MCode after authorizing them', async () => {
     const store = createEditorStore()
     await store.getState().activateMarkdownLink('file:///tmp/image.png', {
       sourceFilePath: '/repo/docs/note.md',

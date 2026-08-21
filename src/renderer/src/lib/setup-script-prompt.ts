@@ -1,7 +1,7 @@
 import { getDefaultRepoHookSettings } from '../../../shared/constants'
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import type { SetupScriptImportCandidate } from '../../../shared/setup-script-imports'
-import type { RepoHookSettings } from '../../../shared/orca-yaml-hook-types'
+import type { RepoHookSettings } from '../../../shared/mcode-yaml-hook-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { HookCheckResult } from '@/runtime/runtime-hooks-client'
 import { isRuntimeScopeForbiddenError } from '@/runtime/runtime-rpc-client'

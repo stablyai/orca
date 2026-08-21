@@ -46,7 +46,7 @@ export function resolveAutomationRunTarget(
     return {
       ok: false,
       error:
-        'Remote-server automation scheduling is not available from this Orca client yet. Run this automation on the remote server or update Orca when durable remote scheduling is available.'
+        'Remote-server automation scheduling is not available from this MCode client yet. Run this automation on the remote server or update MCode when durable remote scheduling is available.'
     }
   }
 

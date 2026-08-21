@@ -42,7 +42,7 @@ export async function trustDockerSshHost(
   )
   chmodSync(wrapperPath, 0o755)
   await electronApp.evaluate((_electron, path) => {
-    process.env.ORCA_SYSTEM_SSH_PATH = path
+    process.env.MCODE_SYSTEM_SSH_PATH = path
   }, wrapperPath)
   return invocationLogPath
 }

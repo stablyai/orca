@@ -7,7 +7,7 @@
 // size. Constraints honored:
 //  - keeps working when the launch fd is a pipe/redirect on Linux/macOS/Windows
 //    (append-only, no fd tricks; a rotation failure falls back to the prior fd);
-//  - the diagnostics tail (`tail -100 ~/.orca-remote/relay-*/relay.log`) keeps
+//  - the diagnostics tail (`tail -100 ~/.mcode-remote/relay-*/relay.log`) keeps
 //    working because the CURRENT log is always at relay.log;
 //  - crash-safe: writes and rotation are guarded so logging never throws, and
 //    rotation renames (never deletes the live file) so no window loses logging.

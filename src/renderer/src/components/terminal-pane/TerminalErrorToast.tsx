@@ -24,7 +24,7 @@ const TERMINAL_HOST_GONE_SOURCE = '(^|[^a-z0-9_])terminal_host_gone(?=$|[^a-z0-9
 const TERMINAL_HOST_GONE_PATTERN = new RegExp(TERMINAL_HOST_GONE_SOURCE)
 const TERMINAL_HOST_GONE_REPLACE_PATTERN = new RegExp(TERMINAL_HOST_GONE_SOURCE, 'g')
 const LEGACY_TERMINAL_HOST_GONE_PATTERN =
-  /(^|[^a-z])connect (?:ENOENT|ECONNREFUSED) [^\r\n]*orca-terminal-host-v[^\r\n]*/i
+  /(^|[^a-z])connect (?:ENOENT|ECONNREFUSED) [^\r\n]*mcode-terminal-host-v[^\r\n]*/i
 // A reattach the host answered "no such session" for: the SSH provider's expiry token, or the relay's
 // raw not-found string when nothing mapped it. Both carry an internal PTY id, and neither is proof the
 // remote shell died — the copy says only that this pane lost its session. Same lastIndex hazard as above.
@@ -82,7 +82,7 @@ export function isExplainedTerminalError(error: string): boolean {
 function humanizeUnreattachableSession(error: string): string {
   const explanation = translate(
     'auto.components.terminal.pane.TerminalErrorToast.sessionUnavailable',
-    "Orca couldn't reattach to this pane's terminal session on the host. Open a new terminal to continue."
+    "MCode couldn't reattach to this pane's terminal session on the host. Open a new terminal to continue."
   )
   // Why a replacer: a translation containing `$&` or `$1` would otherwise be read as a substitution.
   return UNREATTACHABLE_SESSION_REPLACE_PATTERNS.reduce(
@@ -99,7 +99,7 @@ export function humanizeTerminalError(error: string): string {
       PANE_OWNER_UNVERIFIED_MARKER,
       translate(
         'auto.components.terminal.pane.TerminalErrorToast.7ee11bc0db',
-        "Orca couldn't confirm whether this terminal's previous session is still running, so it left the session untouched. Reopen this pane to retry."
+        "MCode couldn't confirm whether this terminal's previous session is still running, so it left the session untouched. Reopen this pane to retry."
       )
     )
   }
@@ -200,7 +200,7 @@ export function TerminalErrorToast({
                 'If this persists, please'
               )}{' '}
               <a
-                href="https://github.com/stablyai/orca/issues"
+                href="https://github.com/mcode-ide/mcode/issues"
                 style={{ color: '#fca5a5', textDecoration: 'underline' }}
               >
                 {translate(

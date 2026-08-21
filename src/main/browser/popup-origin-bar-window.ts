@@ -89,8 +89,8 @@ function clampPopupContentSize(options: PopupChildWindowOptions): {
 }
 
 /**
- * Hosts a guest-opened popup inside an Orca-built window whose top strip is a
- * separate, Orca-controlled WebContentsView showing the popup's current
+ * Hosts a guest-opened popup inside an MCode-built window whose top strip is a
+ * separate, MCode-controlled WebContentsView showing the popup's current
  * origin. A default Electron child window has no address bar, so arbitrary
  * web content could open windows whose destination the user cannot verify.
  */
@@ -114,7 +114,7 @@ export function openPopupWithOriginBar(
     title: initialOrigin.label
   })
 
-  // Why: the origin bar renders only Orca's own data: URL and must stay
+  // Why: the origin bar renders only MCode's own data: URL and must stay
   // isolated from the (arbitrary) popup content below it.
   const originBarView = new WebContentsView({
     webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true }

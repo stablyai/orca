@@ -58,18 +58,18 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
   const description = isRuntimeOwnedSshTargetId(sshConnectionId)
     ? translate(
         'auto.components.sidebar.RemoveFolderDialog.removeDescriptionVmRecipe',
-        'This removes {{name}} from Orca. Its VM recipe determines whether the environment and its files are permanently deleted.',
+        'This removes {{name}} from MCode. Its VM recipe determines whether the environment and its files are permanently deleted.',
         { name: NAME_TOKEN }
       )
     : sshHostLabel
       ? translate(
           'auto.components.sidebar.RemoveFolderDialog.removeDescriptionSsh',
-          'This only removes {{name}} from Orca. Its files stay on {{host}} — re-add that SSH host to recover it.',
+          'This only removes {{name}} from MCode. Its files stay on {{host}} — re-add that SSH host to recover it.',
           { name: NAME_TOKEN, host: sshHostLabel }
         )
       : translate(
           'auto.components.sidebar.RemoveFolderDialog.removeDescriptionLocal',
-          'This only removes {{name}} from Orca. It is still on your disk.',
+          'This only removes {{name}} from MCode. It is still on your disk.',
           { name: NAME_TOKEN }
         )
   const [descriptionBeforeName, descriptionAfterName] = description.split(NAME_TOKEN)

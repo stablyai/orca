@@ -21,7 +21,7 @@ afterEach(async () => {
 
 describe('getBranchCompare real refs', () => {
   it('preserves the raw oid of a remote-tracking ref that stores an annotated tag', async () => {
-    const root = await mkdtemp(path.join(tmpdir(), 'orca-branch-compare-ref-'))
+    const root = await mkdtemp(path.join(tmpdir(), 'mcode-branch-compare-ref-'))
     tempRoots.push(root)
     const source = path.join(root, 'source')
     const client = path.join(root, 'client')

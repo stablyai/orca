@@ -54,9 +54,9 @@ function parseArgs(argv) {
   return result
 }
 
-function withoutOrcaEnvironment(extra = {}) {
+function withoutMCodeEnvironment(extra = {}) {
   return {
-    ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('ORCA_'))),
+    ...Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('MCODE_'))),
     ...extra
   }
 }
@@ -124,7 +124,7 @@ function assertProtocolStdout(fileName, stdout) {
 }
 
 function readGeneratedScripts(home, minMtime) {
-  const hooksDir = join(home, '.orca', 'agent-hooks')
+  const hooksDir = join(home, '.mcode', 'agent-hooks')
   return MANAGED_SCRIPTS.map(([fileName, source]) => {
     const path = join(hooksDir, fileName)
     const stats = statSync(path)
@@ -193,7 +193,7 @@ function nextRequest(server) {
 }
 
 async function verifyNoOpWrites(scripts, home, payload) {
-  const commandCodeBin = mkdtempSync(join(tmpdir(), 'orca-hook-command-code-bin-'))
+  const commandCodeBin = mkdtempSync(join(tmpdir(), 'mcode-hook-command-code-bin-'))
   symlinkSync('/bin/cat', join(commandCodeBin, 'cat'))
   try {
     for (const script of scripts) {
@@ -204,10 +204,10 @@ async function verifyNoOpWrites(scripts, home, payload) {
       const result = await runShell(
         ['/bin/sh ', JSON.stringify(script.path)].join(''),
         payload,
-        withoutOrcaEnvironment({
+        withoutMCodeEnvironment({
           HOME: home,
           PATH: path,
-          ORCA_AGENT_HOOK_ENDPOINT: ''
+          MCODE_AGENT_HOOK_ENDPOINT: ''
         })
       )
       assertSuccessfulWrite(result, [script.fileName, ' no-op'].join(''))
@@ -238,13 +238,13 @@ async function verifyClaudeDevinSkip(scripts, home, payload) {
     const result = await runShell(
       ['/bin/sh ', JSON.stringify(claude.path)].join(''),
       payload,
-      withoutOrcaEnvironment({
+      withoutMCodeEnvironment({
         DEVIN_PROJECT_DIR: join(home, 'devin-project'),
         HOME: home,
-        ORCA_AGENT_HOOK_ENDPOINT: '',
-        ORCA_AGENT_HOOK_PORT: String(address.port),
-        ORCA_AGENT_HOOK_TOKEN: 'electron-verification-token',
-        ORCA_PANE_KEY: 'electron-verification-pane'
+        MCODE_AGENT_HOOK_ENDPOINT: '',
+        MCODE_AGENT_HOOK_PORT: String(address.port),
+        MCODE_AGENT_HOOK_TOKEN: 'electron-verification-token',
+        MCODE_PANE_KEY: 'electron-verification-pane'
       })
     )
     assertSuccessfulWrite(result, 'Claude Devin-import skip')
@@ -272,18 +272,18 @@ async function verifyForwarding(scripts, home, payload) {
       const result = await runShell(
         ['/bin/sh ', JSON.stringify(script.path)].join(''),
         payload,
-        withoutOrcaEnvironment({
+        withoutMCodeEnvironment({
           HOME: home,
-          ORCA_AGENT_HOOK_ENDPOINT: '',
-          ORCA_AGENT_HOOK_PORT: String(address.port),
-          ORCA_AGENT_HOOK_TOKEN: 'electron-verification-token',
-          ORCA_PANE_KEY: 'electron-verification-pane',
-          ORCA_TAB_ID: 'electron-verification-tab',
-          ORCA_WORKTREE_ID: 'electron-verification-worktree',
-          ORCA_AGENT_HOOK_ENV: 'test',
-          ORCA_AGENT_HOOK_VERSION: '1',
-          ORCA_ANTIGRAVITY_EVENT: 'PostInvocation',
-          ORCA_COPILOT_HOOK_EVENT: 'PostToolUse'
+          MCODE_AGENT_HOOK_ENDPOINT: '',
+          MCODE_AGENT_HOOK_PORT: String(address.port),
+          MCODE_AGENT_HOOK_TOKEN: 'electron-verification-token',
+          MCODE_PANE_KEY: 'electron-verification-pane',
+          MCODE_TAB_ID: 'electron-verification-tab',
+          MCODE_WORKTREE_ID: 'electron-verification-worktree',
+          MCODE_AGENT_HOOK_ENV: 'test',
+          MCODE_AGENT_HOOK_VERSION: '1',
+          MCODE_ANTIGRAVITY_EVENT: 'PostInvocation',
+          MCODE_COPILOT_HOOK_EVENT: 'PostToolUse'
         })
       )
       assertSuccessfulWrite(result, [script.fileName, ' forwarding'].join(''))
@@ -297,7 +297,7 @@ async function verifyForwarding(scripts, home, payload) {
           )
         )
       }
-      if (request.headers['x-orca-agent-hook-token'] !== 'electron-verification-token') {
+      if (request.headers['x-mcode-agent-hook-token'] !== 'electron-verification-token') {
         throw new Error([script.fileName, ' lost the hook token header'].join(''))
       }
       if (form.get('payload') !== payload) {
@@ -320,29 +320,29 @@ async function verifyInstalledLauncher(home, payload) {
   )
   if (
     !command ||
-    !command.includes('"${HOME-}/.orca/agent-hooks/claude-hook.sh"') ||
+    !command.includes('"${HOME-}/.mcode/agent-hooks/claude-hook.sh"') ||
     !command.includes('] && [ -r ') ||
     !command.includes('else { command -p cat')
   ) {
     throw new Error('Electron did not install the guarded Claude launcher')
   }
-  const scratch = mkdtempSync(join(tmpdir(), 'orca-hook-launcher-'))
+  const scratch = mkdtempSync(join(tmpdir(), 'mcode-hook-launcher-'))
   try {
     const missingResult = await runShell(
       command,
       payload,
-      withoutOrcaEnvironment({ HOME: scratch })
+      withoutMCodeEnvironment({ HOME: scratch })
     )
     assertSuccessfulWrite(missingResult, 'installed missing-script launcher')
 
-    const failingPath = join(scratch, '.orca', 'agent-hooks', 'claude-hook.sh')
-    mkdirSync(join(scratch, '.orca', 'agent-hooks'), { recursive: true })
+    const failingPath = join(scratch, '.mcode', 'agent-hooks', 'claude-hook.sh')
+    mkdirSync(join(scratch, '.mcode', 'agent-hooks'), { recursive: true })
     writeFileSync(failingPath, '#!/bin/sh\ncat >/dev/null\nexit 7\n', 'utf8')
     chmodSync(failingPath, 0o755)
     const failingResult = await runShell(
       command,
       payload,
-      withoutOrcaEnvironment({ HOME: scratch })
+      withoutMCodeEnvironment({ HOME: scratch })
     )
     if (failingResult.exitCode !== 7 || failingResult.stdinErrors.length > 0) {
       throw new Error('Installed launcher did not preserve a running script failure')

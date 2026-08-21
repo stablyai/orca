@@ -41,7 +41,7 @@ const FALLBACK_FONTS = [
   'Consolas', // Windows Vista+
   'DejaVu Sans Mono', // Linux (common)
   'Liberation Mono', // Linux (common)
-  'Orca Nerd Font Symbols', // bundled PUA fallback for OMP/Powerline glyphs
+  'MCode Nerd Font Symbols', // bundled PUA fallback for OMP/Powerline glyphs
   'Symbols Nerd Font Mono', // purpose-built Nerd Fonts symbols-only fallback
   'MesloLGS Nerd Font', // p10k's recommended font; very common on zsh setups
   'JetBrainsMono Nerd Font', // widely installed; Ghostty ships a JBM-derived font

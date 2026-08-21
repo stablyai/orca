@@ -12,7 +12,7 @@ const entrypoint = valueAfter('--entrypoint') ?? 'app'
 const intDelivery = valueAfter('--int-delivery') ?? 'foreground-process-group'
 const launcherExecOverlay = args.includes('--launcher-exec-overlay')
 if (!appImageArg) {
-  fail('Usage: run-headless-serve-shutdown-docker.mjs --appimage /path/to/orca.AppImage')
+  fail('Usage: run-headless-serve-shutdown-docker.mjs --appimage /path/to/mcode.AppImage')
 }
 if (!['app', 'serving-electron'].includes(signalTarget)) {
   fail(`Unsupported --signal-target: ${signalTarget}`)
@@ -38,8 +38,8 @@ if (!existsSync(appImage)) {
 }
 
 const suffix = `${process.pid}-${Date.now()}`
-const image = `orca-headless-serve-shutdown:${suffix}`
-const artifactVolume = `orca-headless-serve-shutdown-${suffix}`
+const image = `mcode-headless-serve-shutdown:${suffix}`
+const artifactVolume = `mcode-headless-serve-shutdown-${suffix}`
 const sha256 = createHash('sha256').update(readFileSync(appImage)).digest('hex')
 
 try {
@@ -62,15 +62,15 @@ try {
     '--entrypoint',
     'bash',
     '-v',
-    `${appImage}:/input/orca.AppImage:ro`,
+    `${appImage}:/input/mcode.AppImage:ro`,
     '-v',
     `${artifactVolume}:/artifacts`,
     image,
     '-lc',
     [
-      '7z x /input/orca.AppImage -o/artifacts/root -y >/dev/null',
+      '7z x /input/mcode.AppImage -o/artifacts/root -y >/dev/null',
       launcherExecOverlay
-        ? "sed -i 's/^ELECTRON_RUN_AS_NODE=1 /export ELECTRON_RUN_AS_NODE=1\\nexec /' /artifacts/root/resources/bin/orca-ide"
+        ? "sed -i 's/^ELECTRON_RUN_AS_NODE=1 /export ELECTRON_RUN_AS_NODE=1\\nexec /' /artifacts/root/resources/bin/mcode-ide"
         : ':',
       'chmod -R a+rX /artifacts/root'
     ].join(' && ')
@@ -100,13 +100,13 @@ try {
         '--shm-size',
         '256m',
         '--name',
-        `orca-headless-serve-shutdown-${signal.toLowerCase()}-${suffix}`,
+        `mcode-headless-serve-shutdown-${signal.toLowerCase()}-${suffix}`,
         '-e',
-        `ORCA_SIGNAL_TARGET=${signalTarget}`,
+        `MCODE_SIGNAL_TARGET=${signalTarget}`,
         '-e',
-        `ORCA_TEST_ENTRYPOINT=${entrypoint}`,
+        `MCODE_TEST_ENTRYPOINT=${entrypoint}`,
         '-e',
-        `ORCA_INT_DELIVERY=${intDelivery}`,
+        `MCODE_INT_DELIVERY=${intDelivery}`,
         '-v',
         `${artifactVolume}:/artifacts:ro`,
         image,

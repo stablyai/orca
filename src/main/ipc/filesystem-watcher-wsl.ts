@@ -3,7 +3,7 @@
  *
  * Why: polling \\wsl.localhost from Windows keeps waking the distro after
  * `wsl --shutdown`, which can make WSL look wedged. Keep the polling process
- * inside the distro so shutdown kills it instead of Orca restarting WSL.
+ * inside the distro so shutdown kills it instead of MCode restarting WSL.
  */
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'

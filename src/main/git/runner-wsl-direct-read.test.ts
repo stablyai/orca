@@ -39,8 +39,8 @@ const LOGIN_ENVIRONMENT = {
 
 /** Stand in for the guest shell: rc chatter first, then the payload inside the command's own fence. */
 function fencedProbeStdout(command: unknown, payload: string): string {
-  const nonce = /__ORCA_WSL_CAPTURE_BEGIN_([^_]+)__/.exec(String(command))?.[1] ?? ''
-  return `profile banner\n__ORCA_WSL_CAPTURE_BEGIN_${nonce}__${payload}__ORCA_WSL_CAPTURE_END_${nonce}__`
+  const nonce = /__MCODE_WSL_CAPTURE_BEGIN_([^_]+)__/.exec(String(command))?.[1] ?? ''
+  return `profile banner\n__MCODE_WSL_CAPTURE_BEGIN_${nonce}__${payload}__MCODE_WSL_CAPTURE_END_${nonce}__`
 }
 
 const LOGIN_ENVIRONMENT_FIELDS = `${LOGIN_ENVIRONMENT.path}\0${LOGIN_ENVIRONMENT.gitPath}\0${LOGIN_ENVIRONMENT.home}`

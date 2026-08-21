@@ -169,7 +169,7 @@ describe('connectPanePty', () => {
       createDeps({ startup: { command: "claude 'say test'" } }) as never
     )
     await flushAsyncTicks()
-    capturedDataCallback.current?.('\x1b]777;orca-shell-ready\x07user@remote $ ')
+    capturedDataCallback.current?.('\x1b]777;mcode-shell-ready\x07user@remote $ ')
 
     expect(createdTransportOptions[0]).toEqual(
       expect.objectContaining({
@@ -251,7 +251,7 @@ describe('connectPanePty', () => {
         launchAgent: 'codex',
         launchConfig: { agentArgs: '', agentEnv: {} },
         launchToken: 'launch-token-1',
-        draftPrompt: 'https://github.com/stablyai/orca/issues/42'
+        draftPrompt: 'https://github.com/mcode-ide/mcode/issues/42'
       }
     })
     vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('codex')
@@ -279,12 +279,12 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
 
     expect(transport.sendInputAccepted).toHaveBeenCalledWith(
-      '\x1b[200~https://github.com/stablyai/orca/issues/42\x1b[201~'
+      '\x1b[200~https://github.com/mcode-ide/mcode/issues/42\x1b[201~'
     )
     expect(transport.sendInput.mock.calls.map(([data]) => data)).toEqual([
       '\x1b[I',
       'USER_DRAFT',
-      '\x1b[200~https://github.com/stablyai/orca/issues/42\x1b[201~'
+      '\x1b[200~https://github.com/mcode-ide/mcode/issues/42\x1b[201~'
     ])
     expect(window.api.pty.writeAccepted).not.toHaveBeenCalled()
     expect(mockStoreState.recordTerminalInput).toHaveBeenCalledOnce()
@@ -379,7 +379,7 @@ describe('connectPanePty', () => {
           launchAgent: 'codex',
           launchConfig: { agentArgs: '', agentEnv: {} },
           launchToken: 'launch-token-1',
-          draftPrompt: 'https://github.com/stablyai/orca/issues/42'
+          draftPrompt: 'https://github.com/mcode-ide/mcode/issues/42'
         }
       }) as never
     )
@@ -556,7 +556,7 @@ describe('connectPanePty', () => {
       }
       expect(transport.sendInput).not.toHaveBeenCalled()
 
-      capturedDataCallback.current?.('\x1b]777;orca-shell-ready\x07user@remote $ ')
+      capturedDataCallback.current?.('\x1b]777;mcode-shell-ready\x07user@remote $ ')
       for (const fn of pendingTimeouts.splice(0)) {
         fn()
       }
@@ -619,7 +619,7 @@ describe('connectPanePty', () => {
       }
       expect(transport.sendInput).not.toHaveBeenCalled()
 
-      capturedDataCallback.current?.('\x1b]777;orca-shell-ready\x07user@remote $ ')
+      capturedDataCallback.current?.('\x1b]777;mcode-shell-ready\x07user@remote $ ')
       for (const fn of pendingTimeouts.splice(0)) {
         fn()
       }

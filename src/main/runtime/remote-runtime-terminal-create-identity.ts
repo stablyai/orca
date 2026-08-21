@@ -6,7 +6,7 @@ export function deriveRemoteRuntimeTerminalCreateHandle(
   clientMutationId: string
 ): string {
   const digest = createHash('sha256')
-    .update('orca.remote-terminal-create.v2\0')
+    .update('mcode.remote-terminal-create.v2\0')
     .update(clientIdentity)
     .update('\0')
     .update(worktreeId)

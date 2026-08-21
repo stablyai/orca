@@ -1,24 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import {
-  appendOrcaRpcOutput,
-  resolveOrcaCliCommand,
-  resolveOrcaCliInvocation
+  appendMCodeRpcOutput,
+  resolveMCodeCliCommand,
+  resolveMCodeCliInvocation
 } from './live-remote-freeze-rpc.mjs'
 
 describe('live remote freeze RPC', () => {
-  it('resolves the Orca CLI for managed, dev, Linux, and default runtimes', () => {
-    expect(resolveOrcaCliCommand({ env: { ORCA_CLI_COMMAND: 'custom-orca' } })).toBe('custom-orca')
-    expect(resolveOrcaCliCommand({ env: { ORCA_DEV_REPO_ROOT: '/repo' } })).toBe('orca-dev')
-    expect(resolveOrcaCliCommand({ env: {}, platform: 'linux' })).toBe('orca-ide')
-    expect(resolveOrcaCliCommand({ env: {}, platform: 'win32' })).toBe('orca')
+  it('resolves the MCode CLI for managed, dev, Linux, and default runtimes', () => {
+    expect(resolveMCodeCliCommand({ env: { MCODE_CLI_COMMAND: 'custom-mcode' } })).toBe('custom-mcode')
+    expect(resolveMCodeCliCommand({ env: { MCODE_DEV_REPO_ROOT: '/repo' } })).toBe('mcode-dev')
+    expect(resolveMCodeCliCommand({ env: {}, platform: 'linux' })).toBe('mcode-ide')
+    expect(resolveMCodeCliCommand({ env: {}, platform: 'win32' })).toBe('mcode')
   })
 
   it('bypasses the Windows dev cmd shim with the built Node CLI', () => {
-    const invocation = resolveOrcaCliInvocation({
+    const invocation = resolveMCodeCliInvocation({
       env: {
         APPDATA: 'C:\\Users\\dev\\AppData\\Roaming',
-        ORCA_CLI_COMMAND: 'C:\\repo\\out\\bin\\orca-dev.cmd',
-        ORCA_DEV_REPO_ROOT: 'C:\\repo'
+        MCODE_CLI_COMMAND: 'C:\\repo\\out\\bin\\mcode-dev.cmd',
+        MCODE_DEV_REPO_ROOT: 'C:\\repo'
       },
       platform: 'win32',
       nodeExecutable: 'C:\\Program Files\\nodejs\\node.exe'
@@ -28,19 +28,19 @@ describe('live remote freeze RPC', () => {
       command: 'C:\\Program Files\\nodejs\\node.exe',
       prefixArgs: ['C:\\repo\\out\\cli\\index.js'],
       env: {
-        ORCA_USER_DATA_PATH: 'C:\\Users\\dev\\AppData\\Roaming\\orca-dev',
-        ORCA_DEV_CLI_INVOCATION: '1',
-        ORCA_APP_EXECUTABLE: 'C:\\repo\\node_modules\\electron\\dist\\electron.exe',
-        ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT: '1'
+        MCODE_USER_DATA_PATH: 'C:\\Users\\dev\\AppData\\Roaming\\mcode-dev',
+        MCODE_DEV_CLI_INVOCATION: '1',
+        MCODE_APP_EXECUTABLE: 'C:\\repo\\node_modules\\electron\\dist\\electron.exe',
+        MCODE_APP_EXECUTABLE_NEEDS_APP_ROOT: '1'
       }
     })
   })
 
   it('caps combined asynchronous output before retaining the overflow chunk', () => {
-    const first = appendOrcaRpcOutput('', '1234', 0, 5)
+    const first = appendMCodeRpcOutput('', '1234', 0, 5)
     expect(first).toEqual({ output: '1234', bytes: 4, exceeded: false })
 
-    const overflow = appendOrcaRpcOutput(first.output, '67', first.bytes, 5)
+    const overflow = appendMCodeRpcOutput(first.output, '67', first.bytes, 5)
     expect(overflow).toEqual({ output: '1234', bytes: 6, exceeded: true })
   })
 })

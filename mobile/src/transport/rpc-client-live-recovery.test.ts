@@ -6,8 +6,8 @@
 //
 // Opt-in because the quick scenario takes ~15s wall-clock and the full
 // parked-loop scenario ~8 minutes:
-//   ORCA_MOBILE_LIVE_REPRO=1 pnpm vitest run src/transport/rpc-client-live-recovery.test.ts
-//   ORCA_MOBILE_LIVE_REPRO_FULL=1 ... (adds the 8-minute parked-loop case)
+//   MCODE_MOBILE_LIVE_REPRO=1 pnpm vitest run src/transport/rpc-client-live-recovery.test.ts
+//   MCODE_MOBILE_LIVE_REPRO_FULL=1 ... (adds the 8-minute parked-loop case)
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { randomBytes } from 'node:crypto'
 import type { AddressInfo } from 'node:net'
@@ -23,8 +23,8 @@ vi.mock('expo-crypto', () => ({
 }))
 
 const RUN_LIVE =
-  process.env.ORCA_MOBILE_LIVE_REPRO === '1' || !!process.env.ORCA_MOBILE_LIVE_REPRO_FULL
-const RUN_FULL = process.env.ORCA_MOBILE_LIVE_REPRO_FULL === '1'
+  process.env.MCODE_MOBILE_LIVE_REPRO === '1' || !!process.env.MCODE_MOBILE_LIVE_REPRO_FULL
+const RUN_FULL = process.env.MCODE_MOBILE_LIVE_REPRO_FULL === '1'
 
 const AUTH_TOKEN = 'repro-device-token'
 
@@ -201,7 +201,7 @@ describe.runIf(RUN_LIVE)('live foreground recovery (issue #5049)', () => {
 
 // Why: vitest fails a file with zero tests; keep a sentinel for default runs.
 describe.runIf(!RUN_LIVE)('live foreground recovery (skipped)', () => {
-  it('is opt-in via ORCA_MOBILE_LIVE_REPRO=1', () => {
+  it('is opt-in via MCODE_MOBILE_LIVE_REPRO=1', () => {
     expect(true).toBe(true)
   })
 })

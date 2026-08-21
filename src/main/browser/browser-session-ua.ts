@@ -9,14 +9,14 @@ import {
 } from './browser-google-auth-ua'
 
 // Why: Electron's default UA includes "Electron/X.X.X" and the app name
-// (e.g. "orca/1.2.3"), which Cloudflare Turnstile and other bot detectors
+// (e.g. "mcode/1.2.3"), which Cloudflare Turnstile and other bot detectors
 // flag as non-human traffic. Strip those tokens so the webview's UA and
 // sec-ch-ua Client Hints look like standard Chrome.
 export function cleanElectronUserAgent(ua: string): string {
   return (
     ua
       .replace(/\s+Electron\/\S+/, '')
-      // Why: \S+ matches any non-whitespace token (e.g. "orca/1.3.8-rc.0")
+      // Why: \S+ matches any non-whitespace token (e.g. "mcode/1.3.8-rc.0")
       // including pre-release semver strings that [\d.]+ would miss.
       .replace(/(\)\s+)\S+\s+(Chrome\/)/, '$1$2')
   )

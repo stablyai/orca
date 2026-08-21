@@ -56,7 +56,7 @@ vi.mock('./telemetry/cohort-classifier', () => ({
 
 describe('Store', () => {
   beforeEach(() => {
-    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+    testState.dir = mkdtempSync(join(tmpdir(), 'mcode-test-'))
     trackMock.mockReset()
     getCohortAtEmitMock.mockReset()
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
@@ -697,7 +697,7 @@ describe('Store', () => {
       sshPtyConsumerRecoveries: { ownerLease: string }[]
     }
     expect(persisted.sshPtyConsumerRecoveries[0]?.ownerLease).not.toBe('secret-owner-lease')
-    expect(existsSync(join(testState.dir, 'orca-github-cache.json'))).toBe(false)
+    expect(existsSync(join(testState.dir, 'mcode-github-cache.json'))).toBe(false)
 
     const reloaded = await createStore()
     expect(reloaded.getSshPtyConsumerRecovery('ssh-1')).toEqual({
@@ -739,7 +739,7 @@ describe('Store', () => {
       label: 'SSH 1',
       host: 'example.test',
       port: 22,
-      username: 'orca'
+      username: 'mcode'
     })
     await store.upsertSshPtyConsumerRecovery({
       targetId: 'ssh-1',

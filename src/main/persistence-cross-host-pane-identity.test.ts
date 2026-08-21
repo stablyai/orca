@@ -43,7 +43,7 @@ function makeLegacyPaneSession(repoId: string, ptyId: string): WorkspaceSessionS
 
 describe('cross-host pane identity migration', () => {
   beforeEach(() => {
-    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+    testState.dir = mkdtempSync(join(tmpdir(), 'mcode-test-'))
   })
 
   afterEach(() => {

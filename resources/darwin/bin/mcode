@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+function app_realpath() {
+	SOURCE=$1
+	while [ -h "$SOURCE" ]; do
+		DIR=$(dirname "$SOURCE")
+		SOURCE=$(readlink "$SOURCE")
+		[[ $SOURCE != /* ]] && SOURCE=$DIR/$SOURCE
+	done
+	SOURCE_DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+	echo "${SOURCE_DIR%%${SOURCE_DIR#*.app}}"
+}
+
+APP_PATH="$(app_realpath "${BASH_SOURCE[0]}")"
+if [ -z "$APP_PATH" ]; then
+	echo "Unable to determine MCode.app path from symlink: ${BASH_SOURCE[0]}"
+	exit 1
+fi
+
+CONTENTS="$APP_PATH/Contents"
+ELECTRON="$CONTENTS/MacOS/MCode"
+# Why: MCode packages the CLI entrypoint outside app.asar so the public shell
+# command can execute it directly with ELECTRON_RUN_AS_NODE, mirroring VS Code's
+# launcher model instead of requiring a separate npm-distributed binary.
+CLI="$CONTENTS/Resources/app.asar.unpacked/out/cli/index.js"
+
+export MCODE_NODE_OPTIONS="${NODE_OPTIONS-}"
+export MCODE_NODE_REPL_EXTERNAL_MODULE="${NODE_REPL_EXTERNAL_MODULE-}"
+unset NODE_OPTIONS
+unset NODE_REPL_EXTERNAL_MODULE
+
+ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" "$@"

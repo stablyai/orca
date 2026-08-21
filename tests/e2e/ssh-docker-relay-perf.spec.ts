@@ -1,4 +1,4 @@
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './helpers/mcode-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   execInTerminal,
@@ -20,7 +20,7 @@ import {
   reconnectDockerSshRelayTarget
 } from './helpers/docker-ssh-relay-connection'
 
-const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
+const RUN_DOCKER_SSH = process.env.MCODE_E2E_SSH_DOCKER === '1'
 const KEY_LATENCY_SAMPLES = 'abcdefghij'
 const MAX_MEDIAN_KEY_LATENCY_MS = 500
 const MAX_WORST_KEY_LATENCY_MS = 2_000
@@ -145,27 +145,27 @@ async function stopRemoteLoad(page: Page, ptyId: string): Promise<void> {
 }
 
 test.describe('Docker SSH relay perf', () => {
-  test.skip(!RUN_DOCKER_SSH, 'Set ORCA_E2E_SSH_DOCKER=1 to run Docker-backed SSH relay perf.')
+  test.skip(!RUN_DOCKER_SSH, 'Set MCODE_E2E_SSH_DOCKER=1 to run Docker-backed SSH relay perf.')
   test.skip(process.platform === 'win32', 'Docker SSH relay perf uses POSIX ssh tooling.')
 
   test('keeps remote typing responsive while the Linux relay streams TUI output', async ({
-    orcaPage
+    mcodePage
   }, testInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
     try {
       target = startDockerSshRelayTarget(testInfo)
-      await waitForSessionReady(orcaPage)
-      await waitForActiveWorktree(orcaPage)
-      await connectDockerSshRelayTarget(orcaPage, target)
-      await ensureTerminalVisible(orcaPage, 45_000)
-      await waitForActiveTerminalManager(orcaPage, 60_000)
-      const ptyId = await waitForActivePanePtyId(orcaPage, 60_000)
+      await waitForSessionReady(mcodePage)
+      await waitForActiveWorktree(mcodePage)
+      await connectDockerSshRelayTarget(mcodePage, target)
+      await ensureTerminalVisible(mcodePage, 45_000)
+      await waitForActiveTerminalManager(mcodePage, 60_000)
+      const ptyId = await waitForActivePanePtyId(mcodePage, 60_000)
 
       const runId = String(Date.now())
-      await execInTerminal(orcaPage, ptyId, `node -e ${shellQuote(remoteTypingLoadScript(runId))}`)
-      await waitForTerminalOutput(orcaPage, `REMOTE_TUI_READY_${runId}`, 30_000, 80_000)
-      const measurement = await measureRemoteTyping(orcaPage, ptyId, runId)
+      await execInTerminal(mcodePage, ptyId, `node -e ${shellQuote(remoteTypingLoadScript(runId))}`)
+      await waitForTerminalOutput(mcodePage, `REMOTE_TUI_READY_${runId}`, 30_000, 80_000)
+      const measurement = await measureRemoteTyping(mcodePage, ptyId, runId)
       const summary = `median=${measurement.medianLatencyMs.toFixed(
         1
       )}ms worst=${measurement.worstLatencyMs.toFixed(1)}ms samples=${measurement.latencies
@@ -178,14 +178,14 @@ test.describe('Docker SSH relay perf', () => {
       })
       expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
       expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
-      await stopRemoteLoad(orcaPage, ptyId)
+      await stopRemoteLoad(mcodePage, ptyId)
     } finally {
       cleanupDockerSshRelayTarget(target)
     }
   })
 
   test('keeps active remote typing responsive while a background SSH PTY stream is ACK-stalled', async ({
-    orcaPage
+    mcodePage
   }, testInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
@@ -193,37 +193,37 @@ test.describe('Docker SSH relay perf', () => {
     let activePtyId: string | null = null
     try {
       target = startDockerSshRelayTarget(testInfo)
-      await waitForSessionReady(orcaPage)
-      await waitForActiveWorktree(orcaPage)
-      await connectDockerSshRelayTarget(orcaPage, target)
-      await ensureTerminalVisible(orcaPage, 45_000)
-      await waitForActiveTerminalManager(orcaPage, 60_000)
-      backgroundPtyId = await waitForActivePanePtyId(orcaPage, 60_000)
+      await waitForSessionReady(mcodePage)
+      await waitForActiveWorktree(mcodePage)
+      await connectDockerSshRelayTarget(mcodePage, target)
+      await ensureTerminalVisible(mcodePage, 45_000)
+      await waitForActiveTerminalManager(mcodePage, 60_000)
+      backgroundPtyId = await waitForActivePanePtyId(mcodePage, 60_000)
 
       const runId = String(Date.now())
       await execInTerminal(
-        orcaPage,
+        mcodePage,
         backgroundPtyId,
         `node -e ${shellQuote(remoteBackgroundFloodScript(runId))}`
       )
-      await waitForTerminalOutput(orcaPage, `REMOTE_ACK_FLOOD_READY_${runId}`, 30_000, 80_000)
-      await holdSshPtyAckGate(orcaPage, [backgroundPtyId])
-      await orcaPage.evaluate((ptyId) => window.api.pty.write(ptyId, 'g'), backgroundPtyId)
+      await waitForTerminalOutput(mcodePage, `REMOTE_ACK_FLOOD_READY_${runId}`, 30_000, 80_000)
+      await holdSshPtyAckGate(mcodePage, [backgroundPtyId])
+      await mcodePage.evaluate((ptyId) => window.api.pty.write(ptyId, 'g'), backgroundPtyId)
 
-      await splitActiveTerminalPane(orcaPage, 'vertical')
-      await focusLastTerminalPane(orcaPage)
-      activePtyId = await waitForActivePanePtyId(orcaPage, 60_000)
+      await splitActiveTerminalPane(mcodePage, 'vertical')
+      await focusLastTerminalPane(mcodePage)
+      activePtyId = await waitForActivePanePtyId(mcodePage, 60_000)
       expect(activePtyId).not.toBe(backgroundPtyId)
 
       const activeRunId = `${runId}_active`
       await execInTerminal(
-        orcaPage,
+        mcodePage,
         activePtyId,
         `node -e ${shellQuote(remoteTypingLoadScript(activeRunId))}`
       )
-      await waitForTerminalOutput(orcaPage, `REMOTE_TUI_READY_${activeRunId}`, 30_000, 80_000)
+      await waitForTerminalOutput(mcodePage, `REMOTE_TUI_READY_${activeRunId}`, 30_000, 80_000)
       const heldAckPressure = expect.poll(
-        async () => (await readSshPtyAckGate(orcaPage))?.heldAckChars ?? 0,
+        async () => (await readSshPtyAckGate(mcodePage))?.heldAckChars ?? 0,
         {
           timeout: 30_000,
           message: 'remote background SSH PTY stream did not build held ACK pressure'
@@ -231,8 +231,8 @@ test.describe('Docker SSH relay perf', () => {
       )
       await heldAckPressure.toBe(MIN_HELD_SSH_ACK_CHARS)
 
-      const measurement = await measureRemoteTyping(orcaPage, activePtyId, activeRunId)
-      const ackGate = await readSshPtyAckGate(orcaPage)
+      const measurement = await measureRemoteTyping(mcodePage, activePtyId, activeRunId)
+      const ackGate = await readSshPtyAckGate(mcodePage)
       const summary = `median=${measurement.medianLatencyMs.toFixed(
         1
       )}ms worst=${measurement.worstLatencyMs.toFixed(1)}ms heldAckChars=${
@@ -249,54 +249,54 @@ test.describe('Docker SSH relay perf', () => {
       expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
       expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
 
-      await releaseSshPtyAckGate(orcaPage)
-      const releasedAckGate = await readSshPtyAckGate(orcaPage)
+      await releaseSshPtyAckGate(mcodePage)
+      const releasedAckGate = await readSshPtyAckGate(mcodePage)
       expect(releasedAckGate?.heldAckChars ?? 0).toBe(0)
     } finally {
-      await releaseSshPtyAckGate(orcaPage).catch(() => undefined)
+      await releaseSshPtyAckGate(mcodePage).catch(() => undefined)
       if (activePtyId) {
-        await stopRemoteLoad(orcaPage, activePtyId).catch(() => undefined)
+        await stopRemoteLoad(mcodePage, activePtyId).catch(() => undefined)
       }
       if (backgroundPtyId) {
-        await stopRemoteLoad(orcaPage, backgroundPtyId).catch(() => undefined)
+        await stopRemoteLoad(mcodePage, backgroundPtyId).catch(() => undefined)
       }
       cleanupDockerSshRelayTarget(target)
     }
   })
 
   test('keeps remote typing responsive while relay file streams and git churn are active', async ({
-    orcaPage
+    mcodePage
   }, testInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
     try {
       target = startDockerSshRelayTarget(testInfo)
-      await waitForSessionReady(orcaPage)
-      await waitForActiveWorktree(orcaPage)
-      const remote = await connectDockerSshRelayTarget(orcaPage, target)
-      await ensureTerminalVisible(orcaPage, 45_000)
-      await waitForActiveTerminalManager(orcaPage, 60_000)
-      const ptyId = await waitForActivePanePtyId(orcaPage, 60_000)
+      await waitForSessionReady(mcodePage)
+      await waitForActiveWorktree(mcodePage)
+      const remote = await connectDockerSshRelayTarget(mcodePage, target)
+      await ensureTerminalVisible(mcodePage, 45_000)
+      await waitForActiveTerminalManager(mcodePage, 60_000)
+      const ptyId = await waitForActivePanePtyId(mcodePage, 60_000)
 
       const runId = String(Date.now())
       // Large remote binaries: each read streams ~8MB of fs.streamChunk frames
       // over the same SSH channel that carries the pty echo.
-      const loadFile = `/tmp/orca-relay-load-${runId}.png`
+      const loadFile = `/tmp/mcode-relay-load-${runId}.png`
       const loadFiles = [loadFile, loadFile]
       await execInTerminal(
-        orcaPage,
+        mcodePage,
         ptyId,
         `dd if=/dev/urandom of=${shellQuote(loadFile)} bs=1M count=8 status=none && ` +
           `echo LOAD_FILES_READY_${runId}`
       )
-      await waitForTerminalOutput(orcaPage, `LOAD_FILES_READY_${runId}`, 60_000, 80_000)
+      await waitForTerminalOutput(mcodePage, `LOAD_FILES_READY_${runId}`, 60_000, 80_000)
 
-      await execInTerminal(orcaPage, ptyId, `node -e ${shellQuote(remoteTypingLoadScript(runId))}`)
-      await waitForTerminalOutput(orcaPage, `REMOTE_TUI_READY_${runId}`, 30_000, 80_000)
+      await execInTerminal(mcodePage, ptyId, `node -e ${shellQuote(remoteTypingLoadScript(runId))}`)
+      await waitForTerminalOutput(mcodePage, `REMOTE_TUI_READY_${runId}`, 30_000, 80_000)
 
       // Background relay pressure: continuous large file reads plus git status
       // refreshes, mirroring file preview + source-control churn while typing.
-      await orcaPage.evaluate(
+      await mcodePage.evaluate(
         ({ targetId, files, repoPath }) => {
           const state = { stopped: false, reads: 0, errors: [] as string[] }
           ;(window as unknown as { __sshRelayLoad: typeof state }).__sshRelayLoad = state
@@ -323,10 +323,10 @@ test.describe('Docker SSH relay perf', () => {
         }
       )
       // Let the bulk load ramp before measuring.
-      await orcaPage.waitForTimeout(1_000)
+      await mcodePage.waitForTimeout(1_000)
 
-      const measurement = await measureRemoteTyping(orcaPage, ptyId, runId)
-      const load = await orcaPage.evaluate(() => {
+      const measurement = await measureRemoteTyping(mcodePage, ptyId, runId)
+      const load = await mcodePage.evaluate(() => {
         const state = (
           window as unknown as {
             __sshRelayLoad: { stopped: boolean; reads: number; errors: string[] }
@@ -353,30 +353,30 @@ test.describe('Docker SSH relay perf', () => {
       expect(load.reads).toBeGreaterThan(0)
       expect(measurement.medianLatencyMs).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
       expect(measurement.worstLatencyMs).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
-      await stopRemoteLoad(orcaPage, ptyId)
+      await stopRemoteLoad(mcodePage, ptyId)
     } finally {
       cleanupDockerSshRelayTarget(target)
     }
   })
 
   test('keeps an SSH workspace terminal usable after disconnect and reconnect', async ({
-    orcaPage
+    mcodePage
   }, testInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
     try {
       target = startDockerSshRelayTarget(testInfo)
-      await waitForSessionReady(orcaPage)
-      await waitForActiveWorktree(orcaPage)
-      const remote = await connectDockerSshRelayTarget(orcaPage, target)
-      await ensureTerminalVisible(orcaPage, 45_000)
-      await waitForActiveTerminalManager(orcaPage, 60_000)
-      const beforePtyId = await waitForActivePanePtyId(orcaPage, 60_000)
+      await waitForSessionReady(mcodePage)
+      await waitForActiveWorktree(mcodePage)
+      const remote = await connectDockerSshRelayTarget(mcodePage, target)
+      await ensureTerminalVisible(mcodePage, 45_000)
+      await waitForActiveTerminalManager(mcodePage, 60_000)
+      const beforePtyId = await waitForActivePanePtyId(mcodePage, 60_000)
       const beforeMarker = `SSH_RECONNECT_BEFORE_${Date.now()}`
       const beforeCommand = encodedRemoteNodeCommand(`process.stdout.write('${beforeMarker}\\n')`)
       expect(beforeCommand).not.toContain(beforeMarker)
-      await execInTerminal(orcaPage, beforePtyId, beforeCommand)
-      await waitForTerminalOutput(orcaPage, beforeMarker, 20_000, 60_000)
+      await execInTerminal(mcodePage, beforePtyId, beforeCommand)
+      await waitForTerminalOutput(mcodePage, beforeMarker, 20_000, 60_000)
       const recoveryStartedMarker = `SSH_RECONNECT_RECOVERY_STARTED_${Date.now()}`
       const recoveryMarker = `SSH_RECONNECT_RECOVERY_${Date.now()}`
       const recoveryScript = [
@@ -392,14 +392,14 @@ test.describe('Docker SSH relay perf', () => {
       const recoveryCommand = encodedRemoteNodeCommand(recoveryScript)
       expect(recoveryCommand).not.toContain(recoveryStartedMarker)
       expect(recoveryCommand).not.toContain(recoveryMarker)
-      await execInTerminal(orcaPage, beforePtyId, recoveryCommand)
-      await waitForTerminalOutput(orcaPage, recoveryStartedMarker, 30_000, 80_000)
+      await execInTerminal(mcodePage, beforePtyId, recoveryCommand)
+      await waitForTerminalOutput(mcodePage, recoveryStartedMarker, 30_000, 80_000)
 
-      await reconnectDockerSshRelayTarget(orcaPage, remote.targetId)
-      await ensureTerminalVisible(orcaPage, 45_000)
-      await waitForActiveTerminalManager(orcaPage, 60_000)
-      const afterPtyId = await waitForActivePanePtyId(orcaPage, 60_000)
-      await waitForTerminalOutput(orcaPage, recoveryMarker, 30_000, 80_000)
+      await reconnectDockerSshRelayTarget(mcodePage, remote.targetId)
+      await ensureTerminalVisible(mcodePage, 45_000)
+      await waitForActiveTerminalManager(mcodePage, 60_000)
+      const afterPtyId = await waitForActivePanePtyId(mcodePage, 60_000)
+      await waitForTerminalOutput(mcodePage, recoveryMarker, 30_000, 80_000)
       const afterMarker = `SSH_RECONNECT_AFTER_${Date.now()}`
       const remoteProofPath = `/tmp/${afterMarker}`
       const afterCommand = encodedRemoteNodeCommand(
@@ -411,8 +411,8 @@ test.describe('Docker SSH relay perf', () => {
         ].join(';')
       )
       expect(afterCommand).not.toContain(afterMarker)
-      await execInTerminal(orcaPage, afterPtyId, afterCommand)
-      await waitForTerminalOutput(orcaPage, afterMarker, 20_000, 60_000)
+      await execInTerminal(mcodePage, afterPtyId, afterCommand)
+      await waitForTerminalOutput(mcodePage, afterMarker, 20_000, 60_000)
       expect(execDockerSshRelayTargetCommand(target, `cat ${shellQuote(remoteProofPath)}`)).toBe(
         afterMarker
       )

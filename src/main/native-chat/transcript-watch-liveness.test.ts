@@ -44,7 +44,7 @@ afterEach(async () => {
 })
 
 async function tempFile(initial: string): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-watch-liveness-'))
+  const root = await mkdtemp(join(tmpdir(), 'mcode-native-chat-watch-liveness-'))
   roots.push(root)
   const filePath = join(root, 'transcript.jsonl')
   await writeFile(filePath, initial)

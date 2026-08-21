@@ -2,7 +2,7 @@ import { writeFileSync, mkdirSync } from 'node:fs'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { toWebTerminalSurfaceTabId } from '../../../src/shared/terminal-surface-id'
-import { expect } from './orca-app'
+import { expect } from './mcode-app'
 import { createRemoteSessionBulkOpenFixture } from './remote-session-bulk-open-fixture'
 import { startRendererLagProbe } from '../paired-runtime-retention-metrics'
 import { closeStreamingTerminals } from './streaming-terminal-cleanup'
@@ -256,7 +256,7 @@ export async function runBulkOpenFreezeOracle(
     sessionCount: sessions.length,
     worktreeCount: worktreeIds.length,
     topology: opts.topology,
-    versionHint: opts.versionHint ?? process.env.ORCA_VERSION ?? 'unknown',
+    versionHint: opts.versionHint ?? process.env.MCODE_VERSION ?? 'unknown',
     notes
   }
 

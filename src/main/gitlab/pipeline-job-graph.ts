@@ -11,7 +11,7 @@ import {
 // ── Pipeline jobs ──────────────────────────────────────────────────
 // Why: GitLab's `/pipelines/:id/jobs` only returns jobs owned by that pipeline.
 // Trigger/include bridges live under `/bridges` and their real CI jobs live on
-// the child pipeline — Orca used to show only the parent (often just SAST), so
+// the child pipeline — MCode used to show only the parent (often just SAST), so
 // Checks looked empty next to gitlab.com's full graph.
 
 const PIPELINE_JOB_PAGE_SIZE = 100

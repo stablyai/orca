@@ -52,8 +52,8 @@ class FakeSocket {
 
 const relay = {
   v: 1 as const,
-  directorUrl: 'https://relay.onorca.dev',
-  cellUrl: 'https://relay-c1.onorca.dev',
+  directorUrl: 'https://relay.mcode.dev',
+  cellUrl: 'https://relay-c1.mcode.dev',
   assignmentEpoch: 7,
   relayHostId: 'AbCdEf0123_-xyZ9',
   inviteToken: 'abcdefghijklmnopqrstuvwxyzABCDEFGH012345678',
@@ -81,7 +81,7 @@ describe('mobile relay physical pairing client', () => {
       }
     })
     socket.onopen?.()
-    expect(openedUrl).toBe('wss://relay-c1.onorca.dev/v1/connect/AbCdEf0123_-xyZ9')
+    expect(openedUrl).toBe('wss://relay-c1.mcode.dev/v1/connect/AbCdEf0123_-xyZ9')
     expect(openedUrl).not.toContain('?')
     expect(JSON.parse(socket.sent[0] as string)).toEqual({
       type: 'relay-auth',
@@ -158,11 +158,11 @@ describe('mobile relay physical pairing client', () => {
     client.close()
 
     expect(entries.map((entry) => `${entry.level}|${entry.message}|${entry.detail}`)).toEqual([
-      'info|Relay: dialing cell|relay-c1.onorca.dev',
+      'info|Relay: dialing cell|relay-c1.mcode.dev',
       'info|Relay: cell socket open|Sending relay credential',
       'info|Relay: cell accepted credential|Starting E2EE handshake',
       'success|Relay: authenticated|Channel ready for RPC',
-      'info|Relay: pairing socket closed|relay-c1.onorca.dev'
+      'info|Relay: pairing socket closed|relay-c1.mcode.dev'
     ])
     expect(JSON.stringify(entries)).not.toContain(relay.inviteToken)
   })

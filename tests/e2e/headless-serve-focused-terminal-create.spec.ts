@@ -1,7 +1,7 @@
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
 
-// Why (#10333): a windowless `orca serve` host answered every focus-requested
+// Why (#10333): a windowless `mcode serve` host answered every focus-requested
 // create with "No renderer window available", so `terminal create --focus` had
 // no workaround. Drive the real RPC a remote CLI sends, against a real serve
 // process, so the degrade is proven on the topology that broke.
@@ -29,13 +29,13 @@ test('creates a focus-requested terminal against a headless serve host', async (
       )
       .not.toBe('')
 
-    // Exactly what `orca --environment <remote> terminal create --worktree <wt>
+    // Exactly what `mcode --environment <remote> terminal create --worktree <wt>
     // --command "echo test" --focus --json` puts on the wire.
     const created = await host.client.call<{
       terminal: { handle: string; worktreeId: string; ptyId?: string }
     }>('terminal.create', {
       worktree: `id:${worktreeId}`,
-      command: 'echo orca-10333-focus',
+      command: 'echo mcode-10333-focus',
       focus: true,
       presentation: 'focused'
     })

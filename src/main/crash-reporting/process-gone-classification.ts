@@ -7,7 +7,7 @@ const RECOVERABLE_UTILITY_SERVICE_NAMES = new Set([
   'audio.mojom.AudioService',
   'network.mojom.NetworkService',
   // Why: Windows media/screen capture can churn this Chromium utility without
-  // taking down Orca; prompting users for those child exits is noise.
+  // taking down MCode; prompting users for those child exits is noise.
   'video_capture.mojom.VideoCaptureService'
 ])
 const RECOVERABLE_CHILD_PROCESS_REASONS = new Set(['abnormal-exit', 'crashed', 'killed'])

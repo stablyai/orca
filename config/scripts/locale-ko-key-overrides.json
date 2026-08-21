@@ -1,6 +1,6 @@
 {
   "auto.App.03a14f6b5b": {
-    "ko": "페이지를 다시 시도하거나 다른 Orca 화면으로 이동하세요."
+    "ko": "페이지를 다시 시도하거나 다른 MCode 화면으로 이동하세요."
   },
   "auto.App.8d1e160ed1": {
     "ko": "사이드바를 다시 시도하거나 탭을 전환해 이 화면을 다시 불러오세요."
@@ -537,7 +537,7 @@
     "ko": "Enter"
   },
   "auto.components.WorktreeJumpPalette.f7fda8d562": {
-    "ko": "워크트리를 만들거나 Orca에서 탭을 열어 시작하세요."
+    "ko": "워크트리를 만들거나 MCode에서 탭을 열어 시작하세요."
   },
   "auto.components.WorktreeJumpPalette.paletteHostBadge": {
     "ko": "호스트: {{value0}}"
@@ -585,7 +585,7 @@
     "ko": "워크트리"
   },
   "auto.components.automations.AutomationMissedRunGraceField.3d70c185c8": {
-    "ko": "Orca 또는 실행 호스트를 예약된 시간에 사용할 수 없었다면, 이 기간 안에 다시 사용 가능해졌을 때 Orca가 놓친 실행을 한 번 실행합니다. 더 오래된 놓친 실행은 건너뜁니다."
+    "ko": "MCode 또는 실행 호스트를 예약된 시간에 사용할 수 없었다면, 이 기간 안에 다시 사용 가능해졌을 때 MCode가 놓친 실행을 한 번 실행합니다. 더 오래된 놓친 실행은 건너뜁니다."
   },
   "auto.components.automations.AutomationMissedRunGraceField.529dc6c0b7": {
     "ko": "유예 없음"
@@ -966,16 +966,16 @@
     "ko": "토글 텍스트"
   },
   "auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.5c59ea96ca": {
-    "ko": "모바일 에뮬레이터 Orca CLI 스킬 설정"
+    "ko": "모바일 에뮬레이터 MCode CLI 스킬 설정"
   },
   "auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.bff5341ac3": {
-    "ko": "모바일 에뮬레이터 Orca CLI 스킬 설치 terminal"
+    "ko": "모바일 에뮬레이터 MCode CLI 스킬 설치 terminal"
   },
   "auto.components.emulator.pane.emulator.pane.toolbar.868c0f2938": {
     "ko": "작업 중…"
   },
   "auto.components.feature.tips.CliSkillSetupTerminal.1953e90447": {
-    "ko": "Enter를 눌러 agents 용 Orca CLI 오케스트레이션 스킬을 설치하세요."
+    "ko": "Enter를 눌러 agents 용 MCode CLI 오케스트레이션 스킬을 설치하세요."
   },
   "auto.components.feature.tips.CmdJPaletteFeatureTipVisual.379d776971": {
     "ko": "입력 중"
@@ -1020,7 +1020,7 @@
     "ko": "클릭 전송됨"
   },
   "auto.components.feature.wall.ConnectIntegrationsList.33b650af52": {
-    "ko": "팀이 작업을 추적하는 서비스를 연결하세요. Orca는 이슈 제목, 링크, 컨텍스트가 이미 첨부된 워크스페이스를 시작합니다."
+    "ko": "팀이 작업을 추적하는 서비스를 연결하세요. MCode는 이슈 제목, 링크, 컨텍스트가 이미 첨부된 워크스페이스를 시작합니다."
   },
   "auto.components.feature.wall.ConnectIntegrationsList.3dddb2d565": {
     "ko": "작업용으로 연결됨"
@@ -1038,13 +1038,13 @@
     "ko": ", 그리고 "
   },
   "auto.components.feature.wall.ConnectIntegrationsList.review_step_description": {
-    "ko": "Orca가 PR 또는 MR 상태, 체크, 리뷰를 표시할 수 있도록 리뷰 공급자를 연결하세요."
+    "ko": "MCode가 PR 또는 MR 상태, 체크, 리뷰를 표시할 수 있도록 리뷰 공급자를 연결하세요."
   },
   "auto.components.feature.wall.ConnectIntegrationsList.review_step_title": {
     "ko": "agents가 작업하는 동안 PR 상태 보기"
   },
   "auto.components.feature.wall.ConnectIntegrationsList.task_step_title": {
-    "ko": "Orca를 떠나지 않고 작업에서 agents 시작"
+    "ko": "MCode를 떠나지 않고 작업에서 agents 시작"
   },
   "auto.components.feature.wall.EditorAnimatedVisual.22ae7b4d9d": {
     "ko": "팀을 위한 간단한 메모 - 출시하기 전에 남은 항목을 정리합니다."
@@ -1329,7 +1329,7 @@
     "ko": "GitHub 검색, 예: assignee:@me is:open"
   },
   "auto.components.github.project.ProjectViewWrapper.1850fceac8": {
-    "ko": "{{value0}}/{{value1}}이(가) Orca에 추가되어 있지 않습니다. 작업을 시작하려면 추가하거나 GitHub에서 여세요."
+    "ko": "{{value0}}/{{value1}}이(가) MCode에 추가되어 있지 않습니다. 작업을 시작하려면 추가하거나 GitHub에서 여세요."
   },
   "auto.components.github.project.ProjectViewWrapper.1aa7c952b9": {
     "ko": "프로젝트 보기"
@@ -1458,7 +1458,7 @@
     "ko": "pnpm test --filter mobile"
   },
   "auto.components.mobile.slides.TerminalSlide.e0f98be657": {
-    "ko": "orca/feat-mobile-page"
+    "ko": "mcode/feat-mobile-page"
   },
   "auto.components.mobile.slides.TerminalSlide.e4befee569": {
     "ko": "셸"
@@ -1503,7 +1503,7 @@
     "ko": "로그인 중"
   },
   "auto.components.onboarding.OnboardingFlow.322fc50a18": {
-    "ko": "Orca는 모든 CLI agent와 함께 작동합니다. 가장 자주 사용할 agent를 선택하세요. 언제든지 전환할 수 있습니다."
+    "ko": "MCode는 모든 CLI agent와 함께 작동합니다. 가장 자주 사용할 agent를 선택하세요. 언제든지 전환할 수 있습니다."
   },
   "auto.components.onboarding.OnboardingFlow.a5e5da02f7": {
     "ko": "연동"
@@ -1860,10 +1860,10 @@
     "ko": "이 repos"
   },
   "auto.components.right.sidebar.SourceControlAgentActionDialogForm.1bb611240f": {
-    "ko": "Orca 기본 프롬프트를 사용하려면 {basePrompt}를 사용하세요."
+    "ko": "MCode 기본 프롬프트를 사용하려면 {basePrompt}를 사용하세요."
   },
   "auto.components.right.sidebar.SourceControlAgentActionDialogForm.23280cbab1": {
-    "ko": "이 템플릿에는 {basePrompt}가 포함되어 있지 않아 agent가 Orca 기본 프롬프트를 받지 못합니다."
+    "ko": "이 템플릿에는 {basePrompt}가 포함되어 있지 않아 agent가 MCode 기본 프롬프트를 받지 못합니다."
   },
   "auto.components.right.sidebar.SourceControlAgentActionDialogForm.6cefcdfba1": {
     "ko": "나중에 Source Control AI 설정에서 변경할 수 있습니다."
@@ -1872,7 +1872,7 @@
     "ko": "이 프롬프트를 저장하고 다음에는 이 리뷰를 표시하지 않기"
   },
   "auto.components.right.sidebar.SourceControlAgentActionDialogForm.d8f40128ee": {
-    "ko": "{basePrompt}는 Orca 기본 프롬프트입니다."
+    "ko": "{basePrompt}는 MCode 기본 프롬프트입니다."
   },
   "auto.components.right.sidebar.SourceControlAgentActionDialogForm.f4f3c9ca4a": {
     "ko": "프롬프트 템플릿"
@@ -2103,7 +2103,7 @@
     "ko": "Agent 권한"
   },
   "auto.components.settings.AgentsPane.agentPermissionsDescription": {
-    "ko": "Orca가 agents를 실행할 때 권한 프롬프트를 줄일지, 수동 확인을 유지할지 선택합니다."
+    "ko": "MCode가 agents를 실행할 때 권한 프롬프트를 줄일지, 수동 확인을 유지할지 선택합니다."
   },
   "auto.components.settings.AgentsPane.agentPermissionsInfo": {
     "ko": "Agent 권한 정보"
@@ -2124,7 +2124,7 @@
     "ko": "{firstPrompt}"
   },
   "auto.components.settings.AutoRenameBranchFromWorkSetting.69bf4830c2": {
-    "ko": "Orca의 항목을 포함하도록"
+    "ko": "MCode의 항목을 포함하도록"
   },
   "auto.components.settings.AutoRenameBranchFromWorkSetting.800edb1e54": {
     "ko": "fix-login-flow"
@@ -2133,7 +2133,7 @@
     "ko": "{assistantMessage}"
   },
   "auto.components.settings.AutoRenameBranchFromWorkSetting.d9b65054ef": {
-    "ko": ") 작업을 요약하는 짧은 이름으로 변경됩니다. Orca가 직접 이름 붙인 브랜치만 이름을 바꾸며, 푸시된 후에는 이름을 바꾸지 않습니다."
+    "ko": ") 작업을 요약하는 짧은 이름으로 변경됩니다. MCode가 직접 이름 붙인 브랜치만 이름을 바꾸며, 푸시된 후에는 이름을 바꾸지 않습니다."
   },
   "auto.components.settings.AutoRenameBranchPromptEditor.ebb942a2ec": {
     "ko": "fix-login-flow"
@@ -2154,7 +2154,7 @@
     "ko": "이 컴퓨터"
   },
   "auto.components.settings.BrowserPane.c0f85056d9": {
-    "ko": "이 Orca 서버의 브라우저 프로필입니다."
+    "ko": "이 MCode 서버의 브라우저 프로필입니다."
   },
   "auto.components.settings.BrowserPane.cd47bc9622": {
     "ko": "새 브라우저 탭의 기본 프로필을 선택합니다. 쿠키를 가져오고 탭별로 프로필을 전환하려면 다음을 이용하세요:"
@@ -2201,8 +2201,8 @@
   "auto.components.settings.DefaultWindowsProjectRuntimeSetting.wslUnavailable": {
     "ko": "WSL을 사용할 수 없습니다. WSL을 상속하는 프로젝트는 복구가 필요합니다."
   },
-  "auto.components.settings.DevToolsPane.orcaCloudDescription": {
-    "ko": "자사 클라우드 로그인의 개발자 전용 미리보기. 프로덕션에서는 숨겨집니다. 개발 환경에서는 ORCA_CLOUD_API_URL과 ORCA_CLOUD_CLIENT_ID가 설정되면 사이드바 계정 전환기에도 표시됩니다."
+  "auto.components.settings.DevToolsPane.mcodeCloudDescription": {
+    "ko": "자사 클라우드 로그인의 개발자 전용 미리보기. 프로덕션에서는 숨겨집니다. 개발 환경에서는 MCODE_CLOUD_API_URL과 MCODE_CLOUD_CLIENT_ID가 설정되면 사이드바 계정 전환기에도 표시됩니다."
   },
   "auto.components.settings.DeveloperPermissionsPane.16381e040a": {
     "ko": "마이크"
@@ -2211,7 +2211,7 @@
     "ko": "자동화"
   },
   "auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesDescription": {
-    "ko": "완료된 백그라운드 agent를 Orca가 최대 절전 모드로 전환하기 전에 기다릴 유휴 시간(분)입니다."
+    "ko": "완료된 백그라운드 agent를 MCode가 최대 절전 모드로 전환하기 전에 기다릴 유휴 시간(분)입니다."
   },
   "auto.components.settings.ExperimentalPane.agentHibernation.idleMinutesLabel": {
     "ko": "최대 절전까지"
@@ -2250,7 +2250,7 @@
     "ko": "별도로 재정의하지 않은 로컬 Windows 프로젝트의 기본 런타임입니다."
   },
   "auto.components.settings.GeneralSupportSection.6922c1fa2b": {
-    "ko": "GitHub에서 Orca 스타 누르기"
+    "ko": "GitHub에서 MCode 스타 누르기"
   },
   "auto.components.settings.GeneralSupportSection.964acc6bb4": {
     "ko": "스타"
@@ -2268,10 +2268,10 @@
     "ko": "Git 사용자 이름"
   },
   "auto.components.settings.GitPane.36e3de3619": {
-    "ko": "오래된 기록과 비교하지 않도록 합니다. Orca는 해당 브랜치에 commits 되지 않은 변경 사항이나 로컬 전용 commits이 있으면 업데이트를 건너뜁니다."
+    "ko": "오래된 기록과 비교하지 않도록 합니다. MCode는 해당 브랜치에 commits 되지 않은 변경 사항이나 로컬 전용 commits이 있으면 업데이트를 건너뜁니다."
   },
   "auto.components.settings.GitPane.976afc6b3e": {
-    "ko": "워크스페이스를 만들면 Orca가 원격 기준 브랜치를 새로고침하고, 일치하는 로컬 브랜치를 안전하게 fast-forward합니다. 예:"
+    "ko": "워크스페이스를 만들면 MCode가 원격 기준 브랜치를 새로고침하고, 일치하는 로컬 브랜치를 안전하게 fast-forward합니다. 예:"
   },
   "auto.components.settings.GitPane.b9c011fbc2": {
     "ko": "속도 제한"
@@ -2295,16 +2295,16 @@
     "ko": "GitHub CLI가 설치되어 있지만 인증되지 않았습니다. terminal에서 다음 명령을 실행하세요."
   },
   "auto.components.settings.IntegrationsPane.1683acbac4": {
-    "ko": "Orca가 PR, MR, 체크, 리뷰 상태에 사용할 소스 호스트를 연결합니다."
+    "ko": "MCode가 PR, MR, 체크, 리뷰 상태에 사용할 소스 호스트를 연결합니다."
   },
   "auto.components.settings.IntegrationsPane.1a62c295c6": {
-    "ko": "Gitea 자격 증명이 구성되었지만 인증할 수 없습니다. 토큰, API 기본 URL, repos 권한을 확인한 후 환경 변수가 변경된 경우 Orca를 다시 시작하세요."
+    "ko": "Gitea 자격 증명이 구성되었지만 인증할 수 없습니다. 토큰, API 기본 URL, repos 권한을 확인한 후 환경 변수가 변경된 경우 MCode를 다시 시작하세요."
   },
   "auto.components.settings.IntegrationsPane.2c0330ec3e": {
     "ko": "비공개 repos의 경우, 그리고"
   },
   "auto.components.settings.IntegrationsPane.3ba07f933b": {
-    "ko": "Orca가 작업을 탐색하고 연결된 컨텍스트로 워크스페이스를 시작하는 데 사용할 이슈 트래커를 연결합니다."
+    "ko": "MCode가 작업을 탐색하고 연결된 컨텍스트로 워크스페이스를 시작하는 데 사용할 이슈 트래커를 연결합니다."
   },
   "auto.components.settings.IntegrationsPane.67a9f26a80": {
     "ko": ". 설정"
@@ -2331,7 +2331,7 @@
     "ko": "SSH repos는 원격 파일 시스템을 통해 읽힙니다. 스타터 생성은 워크스페이스 루트 구성으로 제한됩니다."
   },
   "auto.components.settings.MobileEmulatorExamples.4daa95f25a": {
-    "ko": "Orca CLI 스킬이 설치된 프로젝트의 Claude Code, Codex 또는 다른 agent에 이들 중 하나를 붙여넣으세요."
+    "ko": "MCode CLI 스킬이 설치된 프로젝트의 Claude Code, Codex 또는 다른 agent에 이들 중 하나를 붙여넣으세요."
   },
   "auto.components.settings.MobileEmulatorSettingsPane.a4f1c82d90": {
     "ko": "비활성화됨"
@@ -2340,7 +2340,7 @@
     "ko": "가용성"
   },
   "auto.components.settings.MobilePane.35100bca5d": {
-    "ko": "휴대폰에서 terminals을 사용하는 동안 Orca는 휴대폰 화면에 맞게 terminals을 축소합니다. 앱을 닫거나 다른 곳으로 전환하면 terminals이 휴대폰 크기로 유지되는지(대화형 CLI 도구가 리플로우되지 않음) 또는 데스크탑으로 다시 크기가 조정되는지 여부가 제어됩니다. 배너에서 '이 terminals 복원' 또는 '모든 terminals 복원'을 사용해 언제든지 수동으로 크기를 조정할 수 있습니다."
+    "ko": "휴대폰에서 terminals을 사용하는 동안 MCode는 휴대폰 화면에 맞게 terminals을 축소합니다. 앱을 닫거나 다른 곳으로 전환하면 terminals이 휴대폰 크기로 유지되는지(대화형 CLI 도구가 리플로우되지 않음) 또는 데스크탑으로 다시 크기가 조정되는지 여부가 제어됩니다. 배너에서 '이 terminals 복원' 또는 '모든 terminals 복원'을 사용해 언제든지 수동으로 크기를 조정할 수 있습니다."
   },
   "auto.components.settings.MobileSettingsPane.b0088412a1": {
     "ko": "또는 다음에서 Android APK를 받으세요"
@@ -2439,10 +2439,10 @@
     "ko": "템플릿"
   },
   "auto.components.settings.RepositoryHooksSection.a3fc966677": {
-    "ko": "# 예: pnpm install cp \"$ORCA_ROOT_PATH/.env\" \"$ORCA_WORKTREE_PATH/.env\""
+    "ko": "# 예: pnpm install cp \"$MCODE_ROOT_PATH/.env\" \"$MCODE_WORKTREE_PATH/.env\""
   },
   "auto.components.settings.RepositoryHooksSection.b20c5df6ca": {
-    "ko": "이 repo의 공유 설정, 아카이브 또는 이슈 자동화 기본값을 사용하려면 `orca.yaml` 파일을 추가하세요. 예제 템플릿:"
+    "ko": "이 repo의 공유 설정, 아카이브 또는 이슈 자동화 기본값을 사용하려면 `mcode.yaml` 파일을 추가하세요. 예제 템플릿:"
   },
   "auto.components.settings.RepositoryHooksSection.b5e3e77e89": {
     "ko": "작업"
@@ -2529,13 +2529,13 @@
     "ko": "같은 프로젝트를 연결된 다른 호스트에도 추가합니다."
   },
   "auto.components.settings.RepositoryPane.hostSetupBlockedVersion": {
-    "ko": "Orca 서버 버전이 호환되지 않습니다."
+    "ko": "MCode 서버 버전이 호환되지 않습니다."
   },
   "auto.components.settings.RepositoryPane.hostSetupCheckingCapability": {
     "ko": "호스트 기능 확인 중"
   },
   "auto.components.settings.RepositoryPane.hostSetupMissingCapability": {
-    "ko": "프로젝트를 설정하려면 이 호스트의 Orca를 업데이트하세요."
+    "ko": "프로젝트를 설정하려면 이 호스트의 MCode를 업데이트하세요."
   },
   "auto.components.settings.RepositoryPane.hostSetupStateError": {
     "ko": "오류"
@@ -2628,7 +2628,7 @@
     "ko": "terminal에서 실행되는 개발자 도구의 macOS 개인정보 보호 접근 권한입니다."
   },
   "auto.components.settings.Settings.b5ee17826b": {
-    "ko": "지속 세션, 더 풍부한 원격 상태, 웹 또는 모바일 핸드오프를 위해 원격 Orca 런타임을 페어링합니다."
+    "ko": "지속 세션, 더 풍부한 원격 상태, 웹 또는 모바일 핸드오프를 위해 원격 MCode 런타임을 페어링합니다."
   },
   "auto.components.settings.Settings.b79b5b31e9": {
     "ko": "셸, 렌더러, 세션, terminal 동작."
@@ -2655,7 +2655,7 @@
     "ko": "명령 또는 키 검색"
   },
   "auto.components.settings.ShortcutTerminalPolicyControl.0f55c6f15c": {
-    "ko": "단축키가 겹칠 때 Orca와 포커스된 terminal 중 어느 쪽이 우선할지 선택합니다."
+    "ko": "단축키가 겹칠 때 MCode와 포커스된 terminal 중 어느 쪽이 우선할지 선택합니다."
   },
   "auto.components.settings.ShortcutsPane.4b7ae34062": {
     "ko": "직접."
@@ -2700,7 +2700,7 @@
     "ko": "이 SSH 대상의 원격 릴레이를 강제로 중지합니다. 이 대상의 활성 원격 terminals과 포트 포워딩이 종료됩니다."
   },
   "auto.components.settings.SshTargetForm.137e88ce8d": {
-    "ko": "Orca가 이 호스트에서 연결 해제된 뒤에도 원격 터미널은 계속 실행됩니다."
+    "ko": "MCode가 이 호스트에서 연결 해제된 뒤에도 원격 터미널은 계속 실행됩니다."
   },
   "auto.components.settings.SshTargetForm.2ee9bcd2e8": {
     "ko": "server, deploy@server:2222, ssh://server"
@@ -2820,7 +2820,7 @@
     "ko": "라이트 모드에서 패널 사이의 분할 구분선을 제어합니다."
   },
   "auto.components.settings.TerminalThemeSections.d56af60e6f": {
-    "ko": "Orca가 라이트 모드일 때 사용되는 테마를 선택합니다."
+    "ko": "MCode가 라이트 모드일 때 사용되는 테마를 선택합니다."
   },
   "auto.components.settings.TerminalThemeSections.d76f60c9cc": {
     "ko": "라이트 모드에서 별도 테마 사용"
@@ -2871,7 +2871,7 @@
     "ko": "추출 중"
   },
   "auto.components.settings.WarpThemeImportModal.builtin_themes_hint": {
-    "ko": "Warp의 사전 로드 테마는 Warp 앱의 일부라 디스크에서 읽을 수 없습니다. Orca에는 Dracula, Gruvbox, Solarized, Tokyo Night 등 대부분의 테마가 이미 포함되어 있습니다."
+    "ko": "Warp의 사전 로드 테마는 Warp 앱의 일부라 디스크에서 읽을 수 없습니다. MCode에는 Dracula, Gruvbox, Solarized, Tokyo Night 등 대부분의 테마가 이미 포함되어 있습니다."
   },
   "auto.components.settings.WarpThemeImportModal.choose_file": {
     "ko": "파일 선택"
@@ -2892,7 +2892,7 @@
     "ko": "사용자 지정 및 커뮤니티 테마는 자동 가져오기가 찾을 수 있도록 Warp 테마 폴더에 YAML 파일로 있어야 합니다. Warp의 공개 테마 repo를 클론했다면 Choose Folder를 사용해 해당 체크아웃을 가져오세요."
   },
   "auto.components.settings.WarpThemeImportModal.description": {
-    "ko": "Warp 테마를 Orca terminal 테마로 가져옵니다."
+    "ko": "Warp 테마를 MCode terminal 테마로 가져옵니다."
   },
   "auto.components.settings.WarpThemeImportModal.found_in_source": {
     "ko": "{{value0}}에서"
@@ -2931,7 +2931,7 @@
     "ko": "Warp에서 테마 가져오기"
   },
   "auto.components.settings.WarpThemeImportModal.yaml_description": {
-    "ko": "YAML 파일(Warp 형식)을 Orca terminal 테마로 가져옵니다."
+    "ko": "YAML 파일(Warp 형식)을 MCode terminal 테마로 가져옵니다."
   },
   "auto.components.settings.WarpThemeImportModal.yaml_no_themes_found": {
     "ko": "선택한 파일에서 테마를 찾을 수 없습니다."
@@ -2958,7 +2958,7 @@
     "ko": "WSL에 `{{value0}}`을(를) 등록하지 못했습니다."
   },
   "auto.components.settings.WslCliRegistration.7ee4e52b99": {
-    "ko": "Orca는 명령이 WSL terminals에서 작동하도록 {{value0}}을(를) 등록합니다."
+    "ko": "MCode는 명령이 WSL terminals에서 작동하도록 {{value0}}을(를) 등록합니다."
   },
   "auto.components.settings.WslCliRegistration.951536dda5": {
     "ko": "WSL에 `{{value0}}`을(를) 등록했습니다."
@@ -3168,7 +3168,7 @@
     "ko": "이 기기"
   },
   "auto.components.settings.computerUseSummary.checkingDescription": {
-    "ko": "Orca가 Computer Use 도우미의 macOS 개인정보 보호 권한을 확인하고 있습니다."
+    "ko": "MCode가 Computer Use 도우미의 macOS 개인정보 보호 권한을 확인하고 있습니다."
   },
   "auto.components.settings.computerUseSummary.checkingTitle": {
     "ko": "Computer Use 액세스 확인 중입니다."
@@ -3270,7 +3270,7 @@
     "ko": "트리"
   },
   "auto.components.settings.general.search.36a72f0d9e": {
-    "ko": "GitHub에서 Orca에 스타 주기"
+    "ko": "GitHub에서 MCode에 스타 주기"
   },
   "auto.components.settings.general.search.3a73054565": {
     "ko": "우회"
@@ -3339,7 +3339,7 @@
     "ko": "전환"
   },
   "auto.components.settings.git.search.0e993bf00f": {
-    "ko": "워크스페이스를 만들면 Orca가 원격 기준 브랜치를 새로고침하고, main 또는 master처럼 일치하는 로컬 브랜치를 안전하게 fast-forward합니다. 이렇게 하면 git diff main...HEAD 같은 명령이 오래된 기록과 비교되지 않습니다. 해당 브랜치에 commits 되지 않은 변경 사항이나 로컬 전용 commits이 있으면 Orca가 업데이트를 건너뜁니다."
+    "ko": "워크스페이스를 만들면 MCode가 원격 기준 브랜치를 새로고침하고, main 또는 master처럼 일치하는 로컬 브랜치를 안전하게 fast-forward합니다. 이렇게 하면 git diff main...HEAD 같은 명령이 오래된 기록과 비교되지 않습니다. 해당 브랜치에 commits 되지 않은 변경 사항이나 로컬 전용 commits이 있으면 MCode가 업데이트를 건너뜁니다."
   },
   "auto.components.settings.git.search.1d2fae1fa2": {
     "ko": "Git 사용자 이름"
@@ -3438,7 +3438,7 @@
     "ko": "런타임"
   },
   "auto.components.settings.mobile.emulator.search.d4b7833894": {
-    "ko": "orca cli"
+    "ko": "mcode cli"
   },
   "auto.components.settings.mobile.emulator.search.ea1f51b980": {
     "ko": "Xcode, simctl, serve-sim 및 에뮬레이터 장치가 준비되었는지 확인하세요."
@@ -3531,22 +3531,22 @@
     "ko": "사용량"
   },
   "auto.components.settings.providerAccountScope.localCredentials": {
-    "ko": "이 제공자의 자격 증명과 계정 확인은 이 데스크톱 클라이언트가 소유합니다. 서버 소유 자격 증명은 설정 > 원격 Orca 서버 > 고급에서 편집하세요."
+    "ko": "이 제공자의 자격 증명과 계정 확인은 이 데스크톱 클라이언트가 소유합니다. 서버 소유 자격 증명은 설정 > 원격 MCode 서버 > 고급에서 편집하세요."
   },
   "auto.components.settings.providerAccountScope.localMac": {
     "ko": "로컬 Mac"
   },
   "auto.components.settings.providerAccountScope.localRateLimit": {
-    "ko": "{{value0}} API 예산은 이 데스크톱 클라이언트의 CLI에서 가져옵니다. 서버 소유 예산을 보려면 설정 > 원격 Orca 서버 > 고급을 사용하세요."
+    "ko": "{{value0}} API 예산은 이 데스크톱 클라이언트의 CLI에서 가져옵니다. 서버 소유 예산을 보려면 설정 > 원격 MCode 서버 > 고급을 사용하세요."
   },
   "auto.components.settings.providerAccountScope.remoteServer": {
     "ko": "원격 서버: {{value0}}"
   },
   "auto.components.settings.providerAccountScope.remoteServerCredentials": {
-    "ko": "이 공급자의 자격 증명과 계정 확인은 이 원격 서버가 소유합니다. 다른 기본 런타임 범위를 편집하려면 설정 > 원격 Orca 서버 > 고급을 사용하세요."
+    "ko": "이 공급자의 자격 증명과 계정 확인은 이 원격 서버가 소유합니다. 다른 기본 런타임 범위를 편집하려면 설정 > 원격 MCode 서버 > 고급을 사용하세요."
   },
   "auto.components.settings.providerAccountScope.remoteServerRateLimit": {
-    "ko": "{{value0}} API 예산은 이 원격 서버의 CLI에서 가져옵니다. 다른 기본 런타임 예산을 보려면 설정 > 원격 Orca 서버 > 고급을 사용하세요."
+    "ko": "{{value0}} API 예산은 이 원격 서버의 CLI에서 가져옵니다. 다른 기본 런타임 예산을 보려면 설정 > 원격 MCode 서버 > 고급을 사용하세요."
   },
   "auto.components.settings.quick.commands.search.2d8aff42be": {
     "ko": "실행"
@@ -3660,13 +3660,13 @@
     "ko": "TUI"
   },
   "auto.components.settings.shortcuts.search.afda131738": {
-    "ko": "Orca 먼저"
+    "ko": "MCode 먼저"
   },
   "auto.components.settings.shortcuts.search.ca6a0c2df7": {
     "ko": "단축키"
   },
   "auto.components.settings.shortcuts.search.ebd7d81e1d": {
-    "ko": "단축키가 겹칠 때 Orca와 포커스된 terminal 중 어느 쪽이 우선할지 선택합니다."
+    "ko": "단축키가 겹칠 때 MCode와 포커스된 terminal 중 어느 쪽이 우선할지 선택합니다."
   },
   "auto.components.settings.shortcuts.search.f1adebbe8c": {
     "ko": "셸"
@@ -3783,7 +3783,7 @@
     "ko": "Mac"
   },
   "auto.components.settings.terminal.search.1dee533bd9": {
-    "ko": "Orca가 라이트 모드일 때 사용되는 테마를 선택합니다."
+    "ko": "MCode가 라이트 모드일 때 사용되는 테마를 선택합니다."
   },
   "auto.components.settings.terminal.search.20ce287cc6": {
     "ko": "두께"
@@ -3936,13 +3936,13 @@
     "ko": "버퍼"
   },
   "auto.components.settings.terminal.search.warp_import.description": {
-    "ko": "Warp 테마를 Orca terminal 테마로 가져옵니다."
+    "ko": "Warp 테마를 MCode terminal 테마로 가져옵니다."
   },
   "auto.components.settings.terminal.search.warp_import.title": {
     "ko": "Warp에서 테마 가져오기"
   },
   "auto.components.settings.terminal.search.yaml_import.description": {
-    "ko": "테마 YAML 파일을 Orca terminal 테마로 가져옵니다."
+    "ko": "테마 YAML 파일을 MCode terminal 테마로 가져옵니다."
   },
   "auto.components.settings.terminal.search.yaml_import.title": {
     "ko": "YAML에서 가져오기"
@@ -3987,7 +3987,7 @@
     "ko": "PR 및 빌드 상태"
   },
   "auto.components.settings.token.source.control.integration.cards.19fb419c12": {
-    "ko": "Gitea 자격 증명이 구성되어 있지만 인증할 수 없습니다. 토큰, API 기본 URL, repos 권한을 확인하고, 환경 변수가 변경되었다면 Orca를 다시 시작하세요."
+    "ko": "Gitea 자격 증명이 구성되어 있지만 인증할 수 없습니다. 토큰, API 기본 URL, repos 권한을 확인하고, 환경 변수가 변경되었다면 MCode를 다시 시작하세요."
   },
   "auto.components.settings.token.source.control.integration.cards.1a9475dace": {
     "ko": "자세히 알아보기"
@@ -3996,7 +3996,7 @@
     "ko": "이 런타임에서는 아직 Bitbucket 상태를 사용할 수 없습니다."
   },
   "auto.components.settings.token.source.control.integration.cards.40f678df73": {
-    "ko": "Azure DevOps 자격 증명이 구성되어 있지만 인증할 수 없습니다. 토큰, API 기본 URL, repos 권한을 확인하고, 환경 변수가 변경되었다면 Orca를 다시 시작하세요."
+    "ko": "Azure DevOps 자격 증명이 구성되어 있지만 인증할 수 없습니다. 토큰, API 기본 URL, repos 권한을 확인하고, 환경 변수가 변경되었다면 MCode를 다시 시작하세요."
   },
   "auto.components.settings.token.source.control.integration.cards.52f75876be": {
     "ko": "감지된 repos의 PR 및 commit 상태"
@@ -4005,10 +4005,10 @@
     "ko": "감지된 Azure Repos의 PR 및 빌드 상태"
   },
   "auto.components.settings.token.source.control.integration.cards.60708f23da": {
-    "ko": "Orca가 원격에서 API URL을 추론할 수 없는 경우에만 사용하세요."
+    "ko": "MCode가 원격에서 API URL을 추론할 수 없는 경우에만 사용하세요."
   },
   "auto.components.settings.token.source.control.integration.cards.6154b02093": {
-    "ko": "Bitbucket 자격 증명이 구성되어 있지만 인증할 수 없습니다. 토큰과 repos 권한을 확인하고, 환경 변수가 변경되었다면 Orca를 다시 시작하세요."
+    "ko": "Bitbucket 자격 증명이 구성되어 있지만 인증할 수 없습니다. 토큰과 repos 권한을 확인하고, 환경 변수가 변경되었다면 MCode를 다시 시작하세요."
   },
   "auto.components.settings.token.source.control.integration.cards.6da9dfa5de": {
     "ko": "비공개 repos의 경우, 그리고"
@@ -4017,7 +4017,7 @@
     "ko": "다시 확인"
   },
   "auto.components.settings.token.source.control.integration.cards.7bd345e3f6": {
-    "ko": "Orca가 Git 원격에서 API 기본 URL을 추론할 수 없는 경우에만 사용하세요."
+    "ko": "MCode가 Git 원격에서 API 기본 URL을 추론할 수 없는 경우에만 사용하세요."
   },
   "auto.components.settings.token.source.control.integration.cards.a924e8dcd1": {
     "ko": "Bitbucket Cloud API 토큰을 통한 PR 및 빌드 상태입니다."
@@ -4155,7 +4155,7 @@
     "ko": "{{value0}}을(를) 제거할까요?"
   },
   "auto.components.sidebar.HostRemoveDialog.4d5e6f7a8b": {
-    "ko": "이 작업은 이 서버를 제거할 수 있는 Orca 서버 설정을 엽니다."
+    "ko": "이 작업은 이 서버를 제거할 수 있는 MCode 서버 설정을 엽니다."
   },
   "auto.components.sidebar.HostRemoveDialog.5e6f7a8b9c": {
     "ko": "이 컴퓨터에서 저장된 SSH 호스트와 인증 정보를 제거합니다. 원격 파일은 삭제되지 않습니다."
@@ -4229,13 +4229,13 @@
   "auto.components.sidebar.NonGitFolderDialog.c49fb13492": {
     "ko": "이 호스트에 폴더를 추가하지 못했습니다."
   },
-  "auto.components.sidebar.OrcaYamlTrustDialog.43b7bec4cd": {
+  "auto.components.sidebar.MCodeYamlTrustDialog.43b7bec4cd": {
     "ko": "실행 안 함"
   },
-  "auto.components.sidebar.OrcaYamlTrustDialog.531689199b": {
+  "auto.components.sidebar.MCodeYamlTrustDialog.531689199b": {
     "ko": "항상 신뢰"
   },
-  "auto.components.sidebar.OrcaYamlTrustDialog.831f2cd9f0": {
+  "auto.components.sidebar.MCodeYamlTrustDialog.831f2cd9f0": {
     "ko": "내 컴퓨터에서 실행"
   },
   "auto.components.sidebar.PendingWorktreeRow.af21e953d1": {
@@ -4347,7 +4347,7 @@
     "ko": "업데이트 필요"
   },
   "auto.components.sidebar.WorktreeList.b667b59632": {
-    "ko": "일부 프로젝트를 Orca에서 제거하지 못했습니다."
+    "ko": "일부 프로젝트를 MCode에서 제거하지 못했습니다."
   },
   "auto.components.sidebar.WorktreeList.bfbedc547b": {
     "ko": "워크트리"
@@ -4368,13 +4368,13 @@
     "ko": "저장, 줄 바꿈은 Shift+Enter."
   },
   "auto.components.sidebar.WorktreeOpenInMenu.0bed8727db": {
-    "ko": "이동되었거나 삭제되었을 수 있습니다. 워크스페이스를 새로고침하거나 Orca에서 제거하세요."
+    "ko": "이동되었거나 삭제되었을 수 있습니다. 워크스페이스를 새로고침하거나 MCode에서 제거하세요."
   },
   "auto.components.sidebar.WorktreeTitleInlineRename.2f42ae024f": {
     "ko": "읽지 않음:"
   },
   "auto.components.sidebar.WorktreeVisibilityDialog.83a5ba8dd1": {
-    "ko": "Orca 외부 워크트리"
+    "ko": "MCode 외부 워크트리"
   },
   "auto.components.sidebar.add.repo.local.start.actions.runtimeBrowseDescription": {
     "ko": "이 호스트의 기존 Git 리포지토리 또는 폴더"
@@ -4458,7 +4458,7 @@
     "ko": "src/renderer packages/ui"
   },
   "auto.components.star.nag.StarNagToastHost.body": {
-    "ko": "Orca가 마음에 드신다면 GitHub 별표가 다른 개발자가 Orca를 발견하는 데 도움이 됩니다."
+    "ko": "MCode가 마음에 드신다면 GitHub 별표가 다른 개발자가 MCode를 발견하는 데 도움이 됩니다."
   },
   "auto.components.star.nag.StarNagToastHost.githubOpened": {
     "ko": "GitHub 열림"
@@ -4560,13 +4560,13 @@
     "ko": "합계"
   },
   "auto.components.stats.share.card.utils.19f4b4dc75": {
-    "ko": "github.com/stablyai/orca"
+    "ko": "github.com/mcode-ide/mcode"
   },
   "auto.components.stats.share.card.utils.7080aeaebb": {
     "ko": "추론"
   },
   "auto.components.stats.stats.search.26bb901fcd": {
-    "ko": "Orca 통계, Claude/Codex/OpenCode 통합 사용량 분석, 토큰, 캐시, 모델, 세션"
+    "ko": "MCode 통계, Claude/Codex/OpenCode 통합 사용량 분석, 토큰, 캐시, 모델, 세션"
   },
   "auto.components.stats.usage.overview.sections.1dd166c920": {
     "ko": "적음"
@@ -4845,7 +4845,7 @@
     "ko": "일치하는 GitHub 작업 없음"
   },
   "auto.components.taskPageEmptyState.noProjectSourcesDescription": {
-    "ko": "Orca가 어느 호스트/계정에서 작업을 가져올지 알 수 있도록 프로젝트 소스를 하나 이상 선택하세요."
+    "ko": "MCode가 어느 호스트/계정에서 작업을 가져올지 알 수 있도록 프로젝트 소스를 하나 이상 선택하세요."
   },
   "auto.components.taskPageEmptyState.noProjectSourcesTitle": {
     "ko": "선택한 프로젝트 소스 없음"
@@ -4941,7 +4941,7 @@
     "ko": "SSH를 통해 기존 머신의 파일, terminals, Git, 워크스페이스를 사용합니다."
   },
   "auto.hooks.useSettingsNavigationMetadata.3d65d3f1b9": {
-    "ko": "Orca 및 코딩 agents의 모바일 에뮬레이터 지원을 구성합니다."
+    "ko": "MCode 및 코딩 agents의 모바일 에뮬레이터 지원을 구성합니다."
   },
   "auto.hooks.useSettingsNavigationMetadata.40d80bad8a": {
     "ko": "베타"
@@ -4992,10 +4992,10 @@
     "ko": "선택한 호스트에 경로를 입력하려면 프로젝트 추가를 사용하세요."
   },
   "auto.store.slices.worktrees.903b51c2ed": {
-    "ko": "{{value0}}에서 워크스페이스를 만들었지만 {{value2}} 때문에 Orca가 로컬 {{value1}}을(를) fast-forward할 수 없습니다."
+    "ko": "{{value0}}에서 워크스페이스를 만들었지만 {{value2}} 때문에 MCode가 로컬 {{value1}}을(를) fast-forward할 수 없습니다."
   },
   "auto.store.slices.worktrees.d1d78a7baa": {
-    "ko": "Git이 \"{{value0}}\"{{value1}} 브랜치를 안전하게 삭제할 수 없어, 로컬 commits 손실을 방지하기 위해 Orca가 브랜치를 유지했습니다."
+    "ko": "Git이 \"{{value0}}\"{{value1}} 브랜치를 안전하게 삭제할 수 없어, 로컬 commits 손실을 방지하기 위해 MCode가 브랜치를 유지했습니다."
   },
   "auto.store.slices.worktrees.fa9299a66f": {
     "ko": "새 워크트리는 최신이지만 로컬 {{value0}}은(는) {{value1}} {{value2}} 뒤처져 있습니다. AI diff가 최근 commits을 놓칠 수 있습니다."
@@ -5007,7 +5007,7 @@
     "ko": "리소스 관리자를 표시합니다. 클릭하면 CPU, 메모리, 세션, 데몬 제어, 워크스페이스 디스크 스캔을 볼 수 있습니다."
   },
   "settings.appearance.statusBar.sshToggleDescription": {
-    "ko": "사용 가능한 SSH 및 원격 Orca 호스트가 있으면 표시합니다."
+    "ko": "사용 가능한 SSH 및 원격 MCode 호스트가 있으면 표시합니다."
   },
   "auto.components.right.sidebar.AiVaultPanelControls.selectAllAgents": {
     "ko": "모두 선택"

@@ -5,7 +5,7 @@ import { MemoryRemoteProvider, jsonLines } from './remote-session-scanner-test-f
 import { primeAgentFixture } from './session-scanner-prime-agent-fixtures'
 
 describe('scanRemoteAiVaultSessions', () => {
-  it('parses remote default and Orca-managed Codex homes with SSH host ids', async () => {
+  it('parses remote default and MCode-managed Codex homes with SSH host ids', async () => {
     const provider = new MemoryRemoteProvider()
     provider.addFile(
       '/home/ada/.codex/session_index.jsonl',
@@ -33,7 +33,7 @@ describe('scanRemoteAiVaultSessions', () => {
       10
     )
     provider.addFile(
-      '/home/ada/.local/share/orca/codex-runtime-home/home/sessions/runtime.jsonl',
+      '/home/ada/.local/share/mcode/codex-runtime-home/home/sessions/runtime.jsonl',
       jsonLines([
         {
           timestamp: '2026-07-04T02:00:00.000Z',
@@ -80,9 +80,9 @@ describe('scanRemoteAiVaultSessions', () => {
     expect(
       result.sessions.find((session) => session.sessionId === 'runtime-session')
     ).toMatchObject({
-      codexHome: '/home/ada/.local/share/orca/codex-runtime-home/home',
+      codexHome: '/home/ada/.local/share/mcode/codex-runtime-home/home',
       resumeCommand:
-        "cd '/home/ada/runtime-repo' && CODEX_HOME='/home/ada/.local/share/orca/codex-runtime-home/home' codex resume 'runtime-session'"
+        "cd '/home/ada/runtime-repo' && CODEX_HOME='/home/ada/.local/share/mcode/codex-runtime-home/home' codex resume 'runtime-session'"
     })
   })
 
@@ -98,7 +98,7 @@ describe('scanRemoteAiVaultSessions', () => {
     // Same rollout name in both homes — the in-distro bridge/backfill hardlink.
     provider.addFile(`/home/ada/.codex/sessions/2026/07/04/${rolloutName}`, transcript, 3_000)
     provider.addFile(
-      `/home/ada/.local/share/orca/codex-runtime-home/home/sessions/2026/07/04/${rolloutName}`,
+      `/home/ada/.local/share/mcode/codex-runtime-home/home/sessions/2026/07/04/${rolloutName}`,
       transcript,
       3_000
     )
@@ -113,10 +113,10 @@ describe('scanRemoteAiVaultSessions', () => {
     expect(result.issues).toEqual([])
     expect(result.sessions).toHaveLength(1)
     // Remote lanes have not flipped to the real home: the managed runtime-home
-    // row stays canonical so resume keeps Orca-refreshed auth, as today.
+    // row stays canonical so resume keeps MCode-refreshed auth, as today.
     expect(result.sessions[0]).toMatchObject({
       sessionId: '019f0000-1111-7222-8333-444444444444',
-      codexHome: '/home/ada/.local/share/orca/codex-runtime-home/home'
+      codexHome: '/home/ada/.local/share/mcode/codex-runtime-home/home'
     })
   })
 

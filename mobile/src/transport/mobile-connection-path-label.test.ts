@@ -5,6 +5,6 @@ describe('mobile connection path label', () => {
   it('distinguishes LAN, Tailscale, and the relay without exposing transport errors', () => {
     expect(mobileConnectionPathLabel('lan')).toBe('Direct · LAN')
     expect(mobileConnectionPathLabel('tailscale')).toBe('Direct · Tailscale')
-    expect(mobileConnectionPathLabel('relay')).toBe('Orca Relay')
+    expect(mobileConnectionPathLabel('relay')).toBe('MCode Relay')
   })
 })

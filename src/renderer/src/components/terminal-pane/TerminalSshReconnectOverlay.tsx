@@ -32,7 +32,7 @@ type TerminalSshReconnectOverlayProps = {
   // remove the workspace instead of a Connect button that can only fail.
   targetRemoved?: boolean
   worktreeId?: string
-  // Set when the SSH target belongs to a remote Orca server (runtime
+  // Set when the SSH target belongs to a remote MCode server (runtime
   // environment): Connect and the failed-connect resync then route to that
   // environment's runtime RPC and bucket instead of the local ssh.* API.
   sshOwnerEnvironmentId?: string | null

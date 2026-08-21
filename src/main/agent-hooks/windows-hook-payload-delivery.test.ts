@@ -18,7 +18,7 @@ const { homedirMock } = vi.hoisted(() => ({
 
 vi.mock('electron', () => ({
   app: {
-    getPath: () => '/tmp/orca-user-data'
+    getPath: () => '/tmp/mcode-user-data'
   }
 }))
 
@@ -65,7 +65,7 @@ async function startHookListener(): Promise<{
       posts.push({
         payload: form.get('payload'),
         paneKey: form.get('paneKey'),
-        token: req.headers['x-orca-agent-hook-token'] as string | null
+        token: req.headers['x-mcode-agent-hook-token'] as string | null
       })
       res.writeHead(200, { 'content-type': 'application/json' })
       res.end('{}')
@@ -123,7 +123,7 @@ function runHookCommand(
 
 function hookEnvironment(extra: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const base = Object.fromEntries(
-    Object.entries(process.env).filter(([key]) => !key.startsWith('ORCA_'))
+    Object.entries(process.env).filter(([key]) => !key.startsWith('MCODE_'))
   )
   return { ...base, ...extra }
 }
@@ -133,7 +133,7 @@ describe('Windows managed hook launcher', () => {
   // this keeps a ConPTY host from being reintroduced unnoticed by a POSIX-only CI leg.
   it('does not re-host the hook on a pseudoconsole', () => {
     const hook = getWindowsManagedLifecycleHook(
-      'C:\\Users\\alice\\.orca\\agent-hooks\\claude-hook.cmd'
+      'C:\\Users\\alice\\.mcode\\agent-hooks\\claude-hook.cmd'
     )
     expect(hook.command).not.toMatch(/conhost/i)
     expect(hook.args).toBeUndefined()
@@ -155,7 +155,7 @@ describe.skipIf(process.platform !== 'win32')('Windows managed hook payload deli
   })
 
   it('delivers the piped payload to the hook listener through cmd.exe and Git Bash', async () => {
-    home = mkdtempSync(join(tmpdir(), 'orca-hook-payload-'))
+    home = mkdtempSync(join(tmpdir(), 'mcode-hook-payload-'))
     homedirMock.mockReturnValue(home)
     expect(new ClaudeHookService().install().state).toBe('installed')
 
@@ -171,9 +171,9 @@ describe.skipIf(process.platform !== 'win32')('Windows managed hook payload deli
     const env = hookEnvironment({
       USERPROFILE: home,
       HOME: home,
-      ORCA_AGENT_HOOK_PORT: String(listener.port),
-      ORCA_AGENT_HOOK_TOKEN: HOOK_TOKEN,
-      ORCA_PANE_KEY: PANE_KEY
+      MCODE_AGENT_HOOK_PORT: String(listener.port),
+      MCODE_AGENT_HOOK_TOKEN: HOOK_TOKEN,
+      MCODE_PANE_KEY: PANE_KEY
     })
 
     const shells = [

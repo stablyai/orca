@@ -27,7 +27,7 @@ describe('loadGitLabJobLogDetails', () => {
       name: 'verify',
       status: 'completed',
       conclusion: 'failure',
-      url: 'https://github.com/acme/orca/runs/1',
+      url: 'https://github.com/acme/mcode/runs/1',
       checkRunId: 7
     }
 
@@ -66,12 +66,12 @@ describe('loadGitLabJobLogDetails', () => {
       repoId: 'repo-1',
       settings: { activeRuntimeEnvironmentId: null },
       check: gitLabCheck,
-      projectRef: { host: 'gitlab.example.test', path: 'contributor/orca' }
+      projectRef: { host: 'gitlab.example.test', path: 'contributor/mcode' }
     })
 
     expect(jobTrace).toHaveBeenCalledWith(
       expect.objectContaining({
-        projectRef: { host: 'gitlab.example.test', path: 'contributor/orca' }
+        projectRef: { host: 'gitlab.example.test', path: 'contributor/mcode' }
       })
     )
   })

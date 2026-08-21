@@ -31,7 +31,7 @@ describe('derivedBundleName', () => {
   })
 
   it('distinguishes bundles by their first skill and how many others ride along', () => {
-    const bundle = [skill('agent-discord'), skill('agent-slack'), skill('orca-cli')]
+    const bundle = [skill('agent-discord'), skill('agent-slack'), skill('mcode-cli')]
     expect(derivedBundleName(bundle)).toBe('agent-discord-and-2-more')
   })
 

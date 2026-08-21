@@ -119,7 +119,7 @@ export async function installPluginFromGit(input: {
     return { ok: false, error: 'plugin Git URL must use HTTPS or SSH' }
   }
   return serializePluginMutation(input.pluginsDir, async () => {
-    const stagingDir = await mkdtemp(join(tmpdir(), 'orca-plugin-install-'))
+    const stagingDir = await mkdtemp(join(tmpdir(), 'mcode-plugin-install-'))
     try {
       const ref = input.ref.trim()
       const resolvedCommit = await checkoutPluginGitSource({
@@ -165,7 +165,7 @@ export async function installPluginFromMarketplace(input: {
     return { ok: false, error: 'invalid previewed plugin commit' }
   }
   return serializePluginMutation(input.pluginsDir, async () => {
-    const stagingDir = await mkdtemp(join(tmpdir(), 'orca-plugin-marketplace-install-'))
+    const stagingDir = await mkdtemp(join(tmpdir(), 'mcode-plugin-marketplace-install-'))
     try {
       const resolvedCommit = await checkoutPluginGitSource({
         url: input.plugin.url,
@@ -207,7 +207,7 @@ export async function rollbackInstalledPlugin(input: {
   }
   const blockedReason = input.blockedPluginReason?.(input.pluginKey)
   if (blockedReason) {
-    return { ok: false, error: `plugin is blocked by Orca's safety list: ${blockedReason}` }
+    return { ok: false, error: `plugin is blocked by MCode's safety list: ${blockedReason}` }
   }
   return serializePluginMutation(input.pluginsDir, async () => {
     const pluginDir = join(input.pluginsDir, input.pluginKey)

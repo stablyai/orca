@@ -4,7 +4,7 @@
  */
 
 import type { ElectronApplication } from '@stablyai/playwright-test'
-import { expect, test } from './helpers/orca-app'
+import { expect, test } from './helpers/mcode-app'
 import { waitForSessionReady } from './helpers/store'
 import {
   addSshHostFormFields,
@@ -52,28 +52,28 @@ async function seedPairConfig(
 }
 
 test.describe('SSH config host picker', () => {
-  test.beforeEach(async ({ orcaPage }) => {
-    await waitForSessionReady(orcaPage)
+  test.beforeEach(async ({ mcodePage }) => {
+    await waitForSessionReady(mcodePage)
   })
 
-  test.afterEach(async ({ orcaPage }) => {
-    await closeOpenDialogs(orcaPage).catch(() => undefined)
-    await removeSshTargetsByPrefix(orcaPage, HOST_PREFIX).catch(() => undefined)
+  test.afterEach(async ({ mcodePage }) => {
+    await closeOpenDialogs(mcodePage).catch(() => undefined)
+    await removeSshTargetsByPrefix(mcodePage, HOST_PREFIX).catch(() => undefined)
   })
 
   // ── P1 ─────────────────────────────────────────────────────────────
-  test('P1: empty config shows empty state; Back returns to blank form', async ({ orcaPage }) => {
+  test('P1: empty config shows empty state; Back returns to blank form', async ({ mcodePage }) => {
     // Isolated HOME has no ~/.ssh/config by default.
-    const picker = await openSshConfigHostPicker(orcaPage)
+    const picker = await openSshConfigHostPicker(mcodePage)
     await expect(picker.getByRole('heading', { name: 'Choose from ~/.ssh/config' })).toBeVisible()
     await expect(picker.getByText('No hosts in ~/.ssh/config')).toBeVisible()
     await expect(
       picker.getByText('Add a Host entry there, or go back and type the details manually.')
     ).toBeVisible()
-    await expect(picker.getByRole('button', { name: 'Add all to Orca' })).toBeDisabled()
+    await expect(picker.getByRole('button', { name: 'Add all to MCode' })).toBeDisabled()
 
     await picker.getByRole('button', { name: 'Back' }).click()
-    const form = orcaPage.getByRole('dialog', { name: 'Add SSH host' })
+    const form = mcodePage.getByRole('dialog', { name: 'Add SSH host' })
     await expect(form.getByRole('heading', { name: 'Add SSH host' })).toBeVisible()
     const fields = addSshHostFormFields(form)
     await expect(fields.host).toHaveValue('')
@@ -84,10 +84,10 @@ test.describe('SSH config host picker', () => {
   // ── P2 ─────────────────────────────────────────────────────────────
   test('P2: seeded hosts list with summary lines and Add all enabled', async ({
     electronApp,
-    orcaPage
+    mcodePage
   }) => {
     const hosts = await seedPairConfig(electronApp, HOST_PREFIX)
-    const picker = await openSshConfigHostPicker(orcaPage)
+    const picker = await openSshConfigHostPicker(mcodePage)
 
     const hostList = picker.getByRole('list', { name: 'SSH config hosts' })
     await expect(hostList).toBeVisible()
@@ -99,13 +99,13 @@ test.describe('SSH config host picker', () => {
     await expect(
       hostList.getByText(hostEndpointSummary(hosts.bravo), { exact: true })
     ).toBeVisible()
-    await expect(picker.getByRole('button', { name: 'Add all 2 to Orca' })).toBeEnabled()
+    await expect(picker.getByRole('button', { name: 'Add all 2 to MCode' })).toBeEnabled()
   })
 
   // ── P3 + N3 ────────────────────────────────────────────────────────
   test('P3: select host prefills form; Save persists; N3 identity hint', async ({
     electronApp,
-    orcaPage
+    mcodePage
   }) => {
     const prod: SeededSshConfigHost = {
       alias: `${HOST_PREFIX}-prod`,
@@ -115,10 +115,10 @@ test.describe('SSH config host picker', () => {
     }
     await seedIsolatedSshConfig(electronApp, buildSshConfigBody([prod]))
 
-    const picker = await openSshConfigHostPicker(orcaPage)
+    const picker = await openSshConfigHostPicker(mcodePage)
     await configHostRow(picker, prod).click()
 
-    const form = orcaPage.getByRole('dialog', { name: 'Add SSH host' })
+    const form = mcodePage.getByRole('dialog', { name: 'Add SSH host' })
     await expect(form.getByRole('heading', { name: 'Add SSH host' })).toBeVisible({
       timeout: 10_000
     })
@@ -133,21 +133,21 @@ test.describe('SSH config host picker', () => {
       form.getByText(new RegExp(`Left empty on purpose:.*${escapeRegExp(prod.alias)}`, 'i'))
     ).toBeVisible()
     await expect(
-      orcaPage.getByText(new RegExp(`Filled from ${escapeRegExp(prod.alias)}`, 'i'))
+      mcodePage.getByText(new RegExp(`Filled from ${escapeRegExp(prod.alias)}`, 'i'))
     ).toBeVisible({ timeout: 5_000 })
 
     await form.getByRole('button', { name: 'Save' }).click()
     await expect(form).toBeHidden({ timeout: 10_000 })
 
     // The saved settings card is durable; the success toast is not.
-    const sshSection = await openSshHostSettings(orcaPage)
+    const sshSection = await openSshHostSettings(mcodePage)
     await expectSshHostListedInSettings(sshSection, prod)
   })
 
   // ── P4 ─────────────────────────────────────────────────────────────
-  test('P4: filter narrows host list', async ({ electronApp, orcaPage }) => {
+  test('P4: filter narrows host list', async ({ electronApp, mcodePage }) => {
     const hosts = await seedPairConfig(electronApp, HOST_PREFIX)
-    const picker = await openSshConfigHostPicker(orcaPage)
+    const picker = await openSshConfigHostPicker(mcodePage)
 
     await expect(configHostRow(picker, hosts.alpha)).toBeVisible()
     await expect(configHostRow(picker, hosts.bravo)).toBeVisible()
@@ -166,19 +166,19 @@ test.describe('SSH config host picker', () => {
   })
 
   // ── P8 ─────────────────────────────────────────────────────────────
-  test('P8: Back without select leaves form empty', async ({ electronApp, orcaPage }) => {
+  test('P8: Back without select leaves form empty', async ({ electronApp, mcodePage }) => {
     const hosts = await seedPairConfig(electronApp, HOST_PREFIX)
-    const picker = await openSshConfigHostPicker(orcaPage)
+    const picker = await openSshConfigHostPicker(mcodePage)
     await expect(configHostRow(picker, hosts.alpha)).toBeVisible()
 
     await picker.getByRole('button', { name: 'Back' }).click()
-    const form = orcaPage.getByRole('dialog', { name: 'Add SSH host' })
+    const form = mcodePage.getByRole('dialog', { name: 'Add SSH host' })
     await expect(form.getByRole('heading', { name: 'Add SSH host' })).toBeVisible()
     const fields = addSshHostFormFields(form)
     await expect(fields.host).toHaveValue('')
     await expect(fields.username).toHaveValue('')
     await expect(fields.label).toHaveValue('')
-    await expect(orcaPage.getByText(/Filled from /i)).toHaveCount(0)
+    await expect(mcodePage.getByText(/Filled from /i)).toHaveCount(0)
   })
 })
 

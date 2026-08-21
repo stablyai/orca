@@ -12,7 +12,7 @@ import type { GlobalSettings } from '../shared/global-settings-types'
 import type { Repo } from '../shared/repo-types'
 import { parseWslPath } from './wsl'
 
-export const WORKTREE_TRASH_DIR_NAME = '.orca-worktree-trash'
+export const WORKTREE_TRASH_DIR_NAME = '.mcode-worktree-trash'
 
 // `<epoch-ms>-<nonce>`: the nonce keeps concurrent removals of same-named worktrees from colliding.
 const TRASH_ENTRY_PATTERN = /^wt-\d+-[0-9a-f]{8}$/
@@ -153,7 +153,7 @@ async function collectExistingTrashRoots(workspaceRoots: readonly string[]): Pro
   return [...trashRoots]
 }
 
-/** Workspace roots of local git repos — the only places Orca creates worktree trash. */
+/** Workspace roots of local git repos — the only places MCode creates worktree trash. */
 export function collectWorktreeTrashSweepRoots(
   repos: readonly Repo[],
   settings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces'>

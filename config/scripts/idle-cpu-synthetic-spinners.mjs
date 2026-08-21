@@ -6,10 +6,10 @@ export async function installSyntheticVisibleSpinners(page, count, animation, st
     animation === 'steps' ? `1s steps(${steps}, end) infinite` : '1s linear infinite'
   await page.addStyleTag({
     content: `
-      @keyframes orca-idle-bench-spin {
+      @keyframes mcode-idle-bench-spin {
         to { transform: rotate(360deg); }
       }
-      .orca-idle-bench-spinner-host {
+      .mcode-idle-bench-spinner-host {
         position: fixed;
         top: 16px;
         right: 16px;
@@ -19,24 +19,24 @@ export async function installSyntheticVisibleSpinners(page, count, animation, st
         gap: 8px;
         pointer-events: none;
       }
-      .orca-idle-bench-spinner {
+      .mcode-idle-bench-spinner {
         width: 10px;
         height: 10px;
         border: 2px solid rgb(234 179 8);
         border-top-color: transparent;
         border-radius: 9999px;
-        animation: orca-idle-bench-spin ${animationTiming};
+        animation: mcode-idle-bench-spin ${animationTiming};
       }
     `
   })
   await page.evaluate((spinnerCount) => {
-    document.querySelector('[data-orca-idle-bench-spinners]')?.remove()
+    document.querySelector('[data-mcode-idle-bench-spinners]')?.remove()
     const host = document.createElement('div')
-    host.className = 'orca-idle-bench-spinner-host'
-    host.setAttribute('data-orca-idle-bench-spinners', String(spinnerCount))
+    host.className = 'mcode-idle-bench-spinner-host'
+    host.setAttribute('data-mcode-idle-bench-spinners', String(spinnerCount))
     for (let index = 0; index < spinnerCount; index += 1) {
       const spinner = document.createElement('div')
-      spinner.className = 'orca-idle-bench-spinner'
+      spinner.className = 'mcode-idle-bench-spinner'
       host.appendChild(spinner)
     }
     document.body.appendChild(host)

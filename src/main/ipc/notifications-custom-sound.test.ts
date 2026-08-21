@@ -34,7 +34,7 @@ describe('registerNotificationHandlers', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-03-28T16:00:00Z'))
-    tempDir = mkdtempSync(join(tmpdir(), 'orca-notification-test-'))
+    tempDir = mkdtempSync(join(tmpdir(), 'mcode-notification-test-'))
     resetNotificationDispatchMocks()
   })
 
@@ -61,8 +61,8 @@ describe('registerNotificationHandlers', () => {
       const handler = getDispatchHandler()
       expect(await handler({}, { source: 'test' })).toEqual({ delivered: true })
       expect(notificationCtorMock).toHaveBeenCalledWith({
-        title: 'Orca notifications are on',
-        body: 'This is a test notification from Orca.',
+        title: 'MCode notifications are on',
+        body: 'This is a test notification from MCode.',
         sound: 'default'
       })
     } finally {
@@ -89,8 +89,8 @@ describe('registerNotificationHandlers', () => {
       const handler = getDispatchHandler()
       expect(await handler({}, { source: 'test' })).toEqual({ delivered: true })
       expect(notificationCtorMock).toHaveBeenCalledWith({
-        title: 'Orca notifications are on',
-        body: 'This is a test notification from Orca.',
+        title: 'MCode notifications are on',
+        body: 'This is a test notification from MCode.',
         silent: true
       })
     } finally {
@@ -114,8 +114,8 @@ describe('registerNotificationHandlers', () => {
     const handler = getDispatchHandler()
     expect(await handler({}, { source: 'test' })).toEqual({ delivered: true })
     expect(notificationCtorMock).toHaveBeenCalledWith({
-      title: 'Orca notifications are on',
-      body: 'This is a test notification from Orca.',
+      title: 'MCode notifications are on',
+      body: 'This is a test notification from MCode.',
       silent: true
     })
   })

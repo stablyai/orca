@@ -132,7 +132,7 @@ describe('PR E2E gate contract', () => {
   })
 
   it('maps SSH source edits onto the Docker-backed specs they can break', () => {
-    // Why: the Docker-SSH specs self-skip without ORCA_E2E_SSH_DOCKER, and the only
+    // Why: the Docker-SSH specs self-skip without MCODE_E2E_SSH_DOCKER, and the only
     // trigger used to be "someone edited a spec" — four pane-restore regressions shipped
     // through that hole. Each mapped spec must exist, or the lane runs an empty file list.
     const sshSourceAuthorities = [
@@ -158,7 +158,7 @@ describe('PR E2E gate contract', () => {
       expect(existsSync(join(projectDir, spec)), spec).toBe(true)
       // Why: a spec that stops reading the flag would silently run without Docker.
       if (spec !== 'tests/e2e/ssh-startup-exec-readiness.spec.ts') {
-        expect(readFileSync(join(projectDir, spec), 'utf8'), spec).toContain('ORCA_E2E_SSH_DOCKER')
+        expect(readFileSync(join(projectDir, spec), 'utf8'), spec).toContain('MCODE_E2E_SSH_DOCKER')
       }
     }
 
@@ -182,7 +182,7 @@ describe('PR E2E gate contract', () => {
   it('scopes the VM rollback oracle to the PR range and recipe schema authorities', () => {
     expect(rollbackStep.run).toContain('--merge-base "$BASE_SHA" "$HEAD_SHA"')
     expect(rollbackStep.run).toContain('src/shared/ephemeral-vm-recipes.ts')
-    expect(rollbackStep.run).toContain('src/shared/orca-yaml-hook-types.ts')
-    expect(filterStep.run).toContain('ephemeral-vm-recipes|orca-yaml-hook-types')
+    expect(rollbackStep.run).toContain('src/shared/mcode-yaml-hook-types.ts')
+    expect(filterStep.run).toContain('ephemeral-vm-recipes|mcode-yaml-hook-types')
   })
 })

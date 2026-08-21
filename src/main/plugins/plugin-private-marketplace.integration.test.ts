@@ -15,7 +15,7 @@ const temporaryRoots: string[] = []
 const savedEnvironment = {
   GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND,
   GIT_SSH_VARIANT: process.env.GIT_SSH_VARIANT,
-  ORCA_TEST_SSH_REPOSITORIES: process.env.ORCA_TEST_SSH_REPOSITORIES
+  MCODE_TEST_SSH_REPOSITORIES: process.env.MCODE_TEST_SSH_REPOSITORIES
 }
 
 async function runGit(cwd: string, args: string[]): Promise<void> {
@@ -39,9 +39,9 @@ async function createGitRepository(
   await runGit(repository, ['add', '--all'])
   await runGit(repository, [
     '-c',
-    'user.name=Orca Test',
+    'user.name=MCode Test',
     '-c',
-    'user.email=orca-test@example.invalid',
+    'user.email=mcode-test@example.invalid',
     'commit',
     '--quiet',
     '-m',
@@ -69,19 +69,19 @@ afterEach(async () => {
 
 describe('private Git marketplace integration', () => {
   it('uses the caller SSH environment for marketplace preview and install', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-private-marketplace-'))
+    const root = await mkdtemp(join(tmpdir(), 'mcode-private-marketplace-'))
     temporaryRoots.push(root)
     const pluginKey = 'private.private-locale'
     const pluginUrl = 'ssh://git@example.invalid/private/locale.git'
     const marketplaceUrl = 'ssh://git@example.invalid/private/marketplace.git'
     const pluginRepository = await createGitRepository(root, 'locale-source', {
-      'orca-plugin.json': JSON.stringify({
+      'mcode-plugin.json': JSON.stringify({
         manifestVersion: 1,
         id: 'private-locale',
         publisher: 'private',
         name: 'Private Locale',
         version: '1.0.0',
-        engines: { orca: '>=1.4.0' },
+        engines: { mcode: '>=1.4.0' },
         pluginApi: 1,
         contributes: {
           languagePacks: [{ locale: 'pt-BR', path: 'locale.json' }]
@@ -93,7 +93,7 @@ describe('private Git marketplace integration', () => {
       })
     })
     const marketplaceRepository = await createGitRepository(root, 'marketplace-source', {
-      'orca-marketplace.json': JSON.stringify({
+      'mcode-marketplace.json': JSON.stringify({
         name: 'Private Team Plugins',
         owner: 'private-team',
         plugins: [
@@ -113,7 +113,7 @@ describe('private Git marketplace integration', () => {
     )
     process.env.GIT_SSH_COMMAND = `${shellQuote(process.execPath.replaceAll('\\', '/'))} ${shellQuote(sshShim.replaceAll('\\', '/'))}`
     process.env.GIT_SSH_VARIANT = 'ssh'
-    process.env.ORCA_TEST_SSH_REPOSITORIES = JSON.stringify({
+    process.env.MCODE_TEST_SSH_REPOSITORIES = JSON.stringify({
       '/private/locale.git': pluginRepository,
       '/private/marketplace.git': marketplaceRepository
     })

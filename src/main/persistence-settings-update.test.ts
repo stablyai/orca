@@ -57,7 +57,7 @@ vi.mock('./telemetry/cohort-classifier', () => ({
 
 describe('Store', () => {
   beforeEach(() => {
-    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+    testState.dir = mkdtempSync(join(tmpdir(), 'mcode-test-'))
     trackMock.mockReset()
     getCohortAtEmitMock.mockReset()
     getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
@@ -405,7 +405,7 @@ describe('Store', () => {
 
   it('normalizes disabled TUI agents on load and update', async () => {
     writeFileSync(
-      join(testState.dir, 'orca-data.json'),
+      join(testState.dir, 'mcode-data.json'),
       JSON.stringify({
         settings: {
           disabledTuiAgents: ['codex', 'not-real', 'codex', 'claude']
@@ -431,7 +431,7 @@ describe('Store', () => {
 
   it('migrates yolo default args onto untouched agent launch settings', async () => {
     writeFileSync(
-      join(testState.dir, 'orca-data.json'),
+      join(testState.dir, 'mcode-data.json'),
       JSON.stringify({
         settings: {
           agentCmdOverrides: {}
@@ -453,7 +453,7 @@ describe('Store', () => {
 
   it('does not add yolo defaults for legacy agents with command overrides', async () => {
     writeFileSync(
-      join(testState.dir, 'orca-data.json'),
+      join(testState.dir, 'mcode-data.json'),
       JSON.stringify({
         settings: {
           agentCmdOverrides: {
@@ -472,7 +472,7 @@ describe('Store', () => {
 
   it('removes unsupported TUI skip-permissions args from migrated profiles', async () => {
     writeFileSync(
-      join(testState.dir, 'orca-data.json'),
+      join(testState.dir, 'mcode-data.json'),
       JSON.stringify({
         settings: {
           agentYoloDefaultsMigrated: true,
@@ -500,7 +500,7 @@ describe('Store', () => {
 
   it('normalizes app icon on load and update', async () => {
     writeFileSync(
-      join(testState.dir, 'orca-data.json'),
+      join(testState.dir, 'mcode-data.json'),
       JSON.stringify({
         settings: {
           appIcon: 'not-real'
@@ -654,7 +654,7 @@ describe('Store', () => {
     expect(store.getSettings().terminalShortcutPolicy).toBe('terminal-first')
 
     store.updateSettings({ terminalShortcutPolicy: 'terminal-maybe' as never })
-    expect(store.getSettings().terminalShortcutPolicy).toBe('orca-first')
+    expect(store.getSettings().terminalShortcutPolicy).toBe('mcode-first')
   })
 
   it('reloads sourceControlViewMode from global settings without touching workspace state', async () => {

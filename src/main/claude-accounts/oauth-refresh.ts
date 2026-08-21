@@ -3,7 +3,7 @@ import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
 
 // Why: the OAuth client id and token endpoint are the public Claude Code
 // values, verified against the installed `claude` binary (2.1.177) and the
-// claude-swap reference tool. Orca owns the refresh so a single-use refresh
+// claude-swap reference tool. MCode owns the refresh so a single-use refresh
 // token is rotated and persisted atomically, instead of being scraped back
 // after the CLI rotates it (the lossy path that strands stale tokens).
 const OAUTH_TOKEN_URL = 'https://platform.claude.com/v1/oauth/token'

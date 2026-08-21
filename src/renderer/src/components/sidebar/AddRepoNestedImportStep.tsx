@@ -121,7 +121,7 @@ export function AddRepoNestedImportStep({
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.sidebar.AddRepoNestedImportStep.d75170194e',
-              'Choose this if these projects belong together — a monorepo, or just a set of related repos. Orca will group them and let you work from the parent folder.'
+              'Choose this if these projects belong together — a monorepo, or just a set of related repos. MCode will group them and let you work from the parent folder.'
             )}
           </p>
         </div>

@@ -6,7 +6,7 @@ import { basename, dirname, join } from 'node:path'
 import { parse, stringify } from 'yaml'
 import {
   LOCAL_BUILD_COMPATIBILITY_FILENAME,
-  ORCA_APP_ID,
+  MCODE_APP_ID,
   parseLocalBuildCompatibility,
   type LocalBuildCompatibility
 } from '../../shared/local-build-compatibility'
@@ -115,7 +115,7 @@ function extractCompatibility(zipFile: FileHandle): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(
       '/usr/bin/unzip',
-      ['-p', '/dev/fd/3', `Orca.app/Contents/Resources/${LOCAL_BUILD_COMPATIBILITY_FILENAME}`],
+      ['-p', '/dev/fd/3', `MCode.app/Contents/Resources/${LOCAL_BUILD_COMPATIBILITY_FILENAME}`],
       { stdio: ['ignore', 'pipe', 'ignore', zipFile.fd] }
     )
     const chunks: Buffer[] = []
@@ -193,7 +193,7 @@ async function validateArtifact(
       throw new Error(`SHA-512 verification failed for ${manifestFile.url}.`)
     }
     const compatibility = await compatibilityReader(file)
-    if (compatibility.appId !== ORCA_APP_ID || compatibility.version !== manifestVersion) {
+    if (compatibility.appId !== MCODE_APP_ID || compatibility.version !== manifestVersion) {
       throw new Error('The selected ZIP does not match its update manifest.')
     }
     return { compatibility, file, size: fileStats.size }
@@ -251,7 +251,7 @@ export async function loadLocalBuildCandidate(
     .filter((entry) => entry.compatibility.architecture === architecture)
   if (matching.length !== 1) {
     await Promise.all(validated.map((entry) => entry.file.close()))
-    throw new Error(`The manifest must contain exactly one ${architecture} Orca ZIP.`)
+    throw new Error(`The manifest must contain exactly one ${architecture} MCode ZIP.`)
   }
   const target = matching[0]
   await Promise.all(

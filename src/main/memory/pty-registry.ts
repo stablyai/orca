@@ -10,7 +10,7 @@
  * `unregister` on teardown.
  *
  * Scope: local PTYs only. SSH-backed PTYs execute on a remote host, so
- * their memory does not contribute to Orca's process footprint and
+ * their memory does not contribute to MCode's process footprint and
  * cannot be queried with our local `ps` tree.
  */
 

@@ -2,7 +2,7 @@
 
 ## Context
 
-Orca Mobile currently has two terminal input modes:
+MCode Mobile currently has two terminal input modes:
 
 - Buffered command input: a visible command text field sends its content with Enter.
 - Direct terminal input: a hidden capture field forwards keyboard bytes directly to the PTY.
@@ -79,5 +79,5 @@ touch source-control provider behavior.
   - newly discovered handles are still enabled.
 - Unit test stale-handle pruning from the terminal lifetime list.
 - Run focused mobile terminal tests.
-- Launch Orca Mobile in the iOS simulator, reach the session terminal screen, and capture a
+- Launch MCode Mobile in the iOS simulator, reach the session terminal screen, and capture a
   screenshot showing the direct-input bar as the default terminal input surface.

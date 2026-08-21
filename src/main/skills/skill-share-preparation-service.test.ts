@@ -9,7 +9,7 @@ import { writeSkillInstallReceipt } from './skill-install-provenance'
 const temporaryDirectories: string[] = []
 
 async function createSource(): Promise<{ root: string; source: string }> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-skill-share-preparation-'))
+  const root = await mkdtemp(join(tmpdir(), 'mcode-skill-share-preparation-'))
   temporaryDirectories.push(root)
   const source = join(root, 'source')
   await mkdir(source)

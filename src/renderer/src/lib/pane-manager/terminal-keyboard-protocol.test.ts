@@ -39,7 +39,7 @@ describe('shouldDisableKittyKeyboardForTerminal', () => {
   it('keeps Kitty keyboard for Grok on a local Windows ConPTY pane', () => {
     // Why: Grok needs KKP to distinguish Ctrl+Enter (interject) / Shift+Enter
     // from plain Enter. Global ConPTY withhold must not apply when the pane's
-    // known agent is Grok (Orca launchAgent or equivalent).
+    // known agent is Grok (MCode launchAgent or equivalent).
     expect(
       shouldDisableKittyKeyboardForTerminal({
         ...localWindowsConpty,

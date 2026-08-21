@@ -44,7 +44,7 @@ export function TerminalSessionStateSaveFailureDialog({
           <DialogDescription className="text-xs leading-5">
             {translate(
               'auto.components.terminal.pane.TerminalSessionStateSaveFailureDialog.e2fcf07c0d',
-              'Orca could not save this terminal session because local storage is full or not writable. Open the disk space analyzer to find workspace storage you can clean up.'
+              'MCode could not save this terminal session because local storage is full or not writable. Open the disk space analyzer to find workspace storage you can clean up.'
             )}
           </DialogDescription>
         </DialogHeader>

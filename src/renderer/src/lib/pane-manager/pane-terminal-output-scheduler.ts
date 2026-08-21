@@ -122,10 +122,10 @@ const CURSOR_HIDE_SEQUENCE = '\x1b[?25l'
 const SYNCHRONIZED_OUTPUT_END_SEQUENCE = '\x1b[?2026l'
 // Why: leading CAN aborts any partial escape sequence before the style reset so the backlog warning renders cleanly.
 const BACKGROUND_BACKLOG_WARNING =
-  '\x18\x1b[0m\r\n[Orca skipped hidden terminal output because the backlog grew too large.]\r\n'
+  '\x18\x1b[0m\r\n[MCode skipped hidden terminal output because the backlog grew too large.]\r\n'
 // Why a separate foreground message: a visible pane hitting the cap means the drain couldn't keep up with a flood (starved renderer), not merely output produced while hidden.
 const FOREGROUND_BACKLOG_WARNING =
-  '\x18\x1b[0m\r\n[Orca skipped a burst of terminal output because the backlog grew too large.]\r\n'
+  '\x18\x1b[0m\r\n[MCode skipped a burst of terminal output because the backlog grew too large.]\r\n'
 const ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY = (): boolean => true
 
 const queuedByTerminal = new Map<TerminalOutputTarget, QueueEntry>()

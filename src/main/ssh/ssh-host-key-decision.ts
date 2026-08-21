@@ -14,7 +14,7 @@ export type HostKeyDecision = {
   action: HostKeyAction
   outcome: KnownHostsOutcome
   /** Which source disagreed, so the failure message can point at a remedy that exists. */
-  disagreeingSource?: 'orca-store' | 'known-hosts'
+  disagreeingSource?: 'mcode-store' | 'known-hosts'
   /** Non-null only when the connection must fail; already user-facing. */
   reason?: string
 }
@@ -207,7 +207,7 @@ export function decideHostKey(input: HostKeyDecisionInput): HostKeyDecision {
     return {
       action: 'reject',
       outcome: 'mismatch',
-      disagreeingSource: 'orca-store',
+      disagreeingSource: 'mcode-store',
       reason: rejection(
         displayHost,
         `The key changed since you last connected. ${changedKeyHint(hostKeyStoreFile)}`
@@ -229,7 +229,7 @@ export function decideHostKey(input: HostKeyDecisionInput): HostKeyDecision {
     return {
       action: 'reject',
       outcome: 'unknown-type-known-host',
-      disagreeingSource: fromKnownHosts ? 'known-hosts' : 'orca-store',
+      disagreeingSource: fromKnownHosts ? 'known-hosts' : 'mcode-store',
       reason: rejection(
         displayHost,
         // Verified live against OpenSSH 10.2p1: an ed25519 key offered where known_hosts holds only
@@ -253,7 +253,7 @@ export function decideHostKey(input: HostKeyDecisionInput): HostKeyDecision {
   // all, and OpenSSH itself treats a CA-covered host that presents a plain key as first contact and
   // connects (verified live). Refusing was stricter than ssh and, because `@cert-authority *` is the
   // normal Teleport/Vault-SSH/Smallstep shape, it failed EVERY target for those users — with an
-  // escape hatch that is an environment variable, unreachable when Orca is launched from the Dock.
+  // escape hatch that is an environment variable, unreachable when MCode is launched from the Dock.
   // The residual risk is real and accepted: for a CA-protected host we accept a plain key we cannot
   // tie to the CA. The outcome is preserved so the decision is still auditable.
   if (STRICT_VALUES.has(strict)) {

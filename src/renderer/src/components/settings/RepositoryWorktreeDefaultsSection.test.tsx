@@ -177,7 +177,7 @@ describe('RepositoryWorktreeDefaultsSection — external visibility', () => {
   it('shows the inherited effective value without stamping the repo', () => {
     render(BASE_REPO, vi.fn(), {
       settings: {
-        workspaceDir: '/home/user/orca/workspaces',
+        workspaceDir: '/home/user/mcode/workspaces',
         worktreeVisibilityDefaults: { external: 'show' }
       }
     })

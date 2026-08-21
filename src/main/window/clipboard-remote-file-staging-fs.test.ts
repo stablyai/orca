@@ -10,7 +10,7 @@ import {
   RemoteClipboardStagingRootUnsafeError
 } from './clipboard-remote-file-staging'
 
-const FIXTURE_PREFIX = 'orca-clipboard-staging-test-'
+const FIXTURE_PREFIX = 'mcode-clipboard-staging-test-'
 const NOW_MS = 1_760_000_000_000
 const fixtures: string[] = []
 

@@ -18,7 +18,7 @@ import type { CrashReportCreateInput } from '../../shared/crash-reporting'
 const tempDirs: string[] = []
 
 async function createStore(): Promise<{ store: CrashReportStore; filePath: string }> {
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'orca-crash-reports-'))
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'mcode-crash-reports-'))
   tempDirs.push(dir)
   const filePath = path.join(dir, 'crash-reports.json')
   return { store: new CrashReportStore(filePath), filePath }
@@ -241,7 +241,7 @@ describe('CrashReportStore', () => {
       const report = await store.record(input())
 
       const updated = await store.attachDetails(report.id, {
-        minidumpPath: '/Users/alice/Library/Application Support/Orca/reports/abc.dmp'
+        minidumpPath: '/Users/alice/Library/Application Support/MCode/reports/abc.dmp'
       })
 
       expect(updated?.details.minidumpPath).toBe('[redacted-path]')

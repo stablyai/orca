@@ -10,7 +10,7 @@ describe('plugin worker shutdown', () => {
 
     await runtime.handleMessage({
       type: 'init',
-      pluginId: 'orca-samples.demo',
+      pluginId: 'mcode-samples.demo',
       pluginRoot: join('plugin-root'),
       mainEntry: 'nested\\worker.js',
       grantedCapabilities: []
@@ -38,7 +38,7 @@ describe('plugin worker shutdown', () => {
     })
     await runtime.handleMessage({
       type: 'init',
-      pluginId: 'orca-samples.demo',
+      pluginId: 'mcode-samples.demo',
       pluginRoot: '/plugin',
       mainEntry: 'worker.js',
       grantedCapabilities: []
@@ -63,7 +63,7 @@ describe('plugin worker shutdown', () => {
     })
     await runtime.handleMessage({
       type: 'init',
-      pluginId: 'orca-samples.demo',
+      pluginId: 'mcode-samples.demo',
       pluginRoot: '/plugin',
       mainEntry: 'worker.js',
       grantedCapabilities: []

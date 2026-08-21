@@ -1,6 +1,6 @@
 // Claude-family harnesses record a slash input's user turn as a command
 // envelope (`<command-name>/x</command-name>…`), not as the typed text. The
-// noise filter rightly hides those for catalog commands — Orca shows a local
+// noise filter rightly hides those for catalog commands — MCode shows a local
 // `Ran /x` line instead — but a skill invocation IS the user's chat turn, so
 // dropping its envelope makes the assistant appear to answer an empty
 // conversation. Surface non-catalog envelopes back as plain user text.

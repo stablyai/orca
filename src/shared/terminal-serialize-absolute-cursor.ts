@@ -2,7 +2,7 @@
 // RELATIVE moves (CUD/CUB) computed from where it assumes replay leaves the
 // cursor. When the final content row is filled exactly to the right margin,
 // replay leaves the fresh terminal wrap-pending (internal x == cols), so the
-// relative math lands one column short of the real cursor. Every Orca buffer
+// relative math lands one column short of the real cursor. Every MCode buffer
 // snapshot that will be replayed into another terminal must therefore end
 // with an absolute CUP derived from the SOURCE terminal's authoritative
 // cursor position. Snapshot producers that also need the VT100 DECSC

@@ -42,7 +42,7 @@ export function matchesWorkspaceCleanupActivity(
     return true
   }
   const signalAt = getIdleSignalAt(facets, filter)
-  // Why: a missing signal means Orca has no evidence of recent use, so it
+  // Why: a missing signal means MCode has no evidence of recent use, so it
   // reads as maximally idle rather than being filtered out.
   return signalAt === null || now - signalAt >= filter.idleMinDays * WORKSPACE_CLEANUP_DAY_MS
 }

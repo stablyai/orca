@@ -1,7 +1,7 @@
-// Why: single boundary between raw RPC frames and OrcaRuntimeService; keeps schema, handler, and result type on one object.
+// Why: single boundary between raw RPC frames and MCodeRuntimeService; keeps schema, handler, and result type on one object.
 import { ZodError, type ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
-import type { OrcaRuntimeService, OrchestrationCompatibilityCallerAuthority } from '../orca-runtime'
+import type { MCodeRuntimeService, OrchestrationCompatibilityCallerAuthority } from '../mcode-runtime'
 import type {
   DeviceCredentialInstalled,
   PairingGetEndpointsParams,
@@ -62,7 +62,7 @@ export type LegacyCoordinatorAuthorityProof = Readonly<{
 }>
 
 export type RpcContext = {
-  runtime: OrcaRuntimeService
+  runtime: MCodeRuntimeService
   // Why: lets long-poll handlers release immediately on client disconnect instead of running down timeoutMs. See design doc §3.1.
   signal?: AbortSignal
   // Why: per-WebSocket key so the server reaps a closing socket's subscriptions without touching sibling sockets sharing the deviceToken.
