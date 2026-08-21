@@ -180,6 +180,40 @@ describe('buildWorktreeChecksReviewIndex', () => {
     expect(reviews.get(sshWorktree)).toMatchObject({ provider: 'github', number: 42 })
   })
 
+  it('does not expose a physical SSH review to its runtime-owned worktree', () => {
+    const runtimeRepo: Repo = {
+      ...repo,
+      path: '/runtime/orca',
+      executionHostId: 'runtime:paired-host'
+    }
+    const runtimeWorktree: Worktree = {
+      ...worktree,
+      runtimeOwnerEnvironmentId: 'paired-host'
+    }
+    const physicalKey = getGitHubPRCacheKey(
+      repo.path,
+      repo.id,
+      'feature/search',
+      null,
+      repo.connectionId,
+      repo.executionHostId,
+      true
+    )
+
+    const reviews = buildWorktreeChecksReviewIndex({
+      worktrees: [runtimeWorktree],
+      repoByHostIdentity: new Map([
+        [getRepoHostIdentity(repo), repo],
+        [getRepoHostIdentity(runtimeRepo), runtimeRepo]
+      ]),
+      prCache: { [physicalKey]: { data: makePR(), fetchedAt: 1 } },
+      hostedReviewCache: {},
+      settings: null
+    })
+
+    expect(reviews.has(runtimeWorktree)).toBe(false)
+  })
+
   it('skips a branch-less worktree instead of throwing', () => {
     // Why: Cmd+J builds this index for every worktree before any query is typed,
     // so a folder workspace (empty branch) or a partially hydrated row reaches it.
