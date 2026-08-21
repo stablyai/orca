@@ -1010,3 +1010,69 @@ isolation and failed only in a saturated 6000-file sweep. They are deliberately
 they fail, and a machine-specific timing artifact is not a contract.
 `resolve-7za-path`'s case downloads a toolset with a cold cache, so it is
 network-dependent as well as load-dependent.
+
+---
+
+## Final result — 2026-08-21
+
+```
+Test Files  6040 passed | 66 skipped (6106)
+     Tests  56158 passed | 918 skipped (57082)
+```
+
+Zero failures, run from PowerShell. Baseline re-recorded as `{}` — from here any
+failure is a regression, which is what makes the comparison a real gate.
+
+Started at 99 files / 289 tests failing.
+
+### The three that closed it, and what each really was
+
+| Symptom | First diagnosis | Actual cause |
+| --- | --- | --- |
+| `updater.startup-scheduling`, `expected 2 got 3` | `vi.waitFor`'s 1s budget crossing the silent-settle deadline | a **ghost module instance**: `vi.resetModules()` discards the module but not its pending real-clock timers, and one fired inside a later test, arming a 24h check on *that* test's fake clock |
+| `ssh-remote-commands` relay GC | slow I/O under load, needed a longer timeout | the test asserted an **enumeration order** the command never promises; NTFS returned the two entries reversed |
+| `orca-runtime` 30s hang | resource starvation | a **1ms timer race** whose margin Node cannot actually resolve |
+
+Every first diagnosis was wrong. Each one fit the evidence available at the time,
+and fitting is not the same as being the cause.
+
+### Why the static analysis kept failing
+
+Two independent passes concluded the `orca-runtime` retire timer (49ms) must
+always beat the waiter's rejection (50ms), because no `await` separates their
+registration so both should share one cached loop time. Reading Node's
+`_idleStart` directly refuted it:
+
+```
+setTimeout(f,50); burn(2ms); setTimeout(f,49)   →  _idleStart 18, 20  →  deadlines 68, 69
+```
+
+The deadline is `libuvNow(at insertion) + delay`, and `libuvNow` advances
+mid-turn. The 0.1–1.7ms of synchronous work between the two calls consumes the
+whole 1ms margin whenever it crosses a millisecond boundary. Both timers also
+land in per-duration lists shared with unrelated timers — one of them
+`SESSION_TABS_FLUSH_MS = 50`, armed by the same test.
+
+**Rule:** a sub-millisecond timer margin is not a margin. Anchor the ordering to
+a causal event.
+
+### The instrument decides what you can see
+
+`orca-runtime` passes **8/8** under 16-core CPU saturation and hangs **8/18**
+under 5–6 concurrent Vitest workers. Burners deschedule the process in whole
+quanta *between* loop turns; they cannot stretch a 0.2ms in-process synchronous
+window past 1ms. Three sessions concluded "not load-related" from the wrong
+instrument.
+
+The right harness reproduced in ~5 minutes instead of a 45-minute sweep.
+
+### Statistical discipline
+
+Sample sizes of 4–5 produced two contradictory conclusions about the same
+change. One proposed fix measured 4/8 → 4/8 — zero effect — and would have been
+committed as a success on a smaller sample.
+
+**Rule, enforced as a gate:** every variant is compared against a pristine
+baseline measured with the same sample size in the same session, minimum 8 runs.
+State the confidence: the runtime fix is 8/18 → 0/36 *and* has a deterministic
+RED, which is what makes it conclusive rather than merely encouraging.
