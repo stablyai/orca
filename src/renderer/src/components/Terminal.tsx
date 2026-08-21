@@ -98,6 +98,7 @@ import {
   takeAllPendingBackgroundTerminalWorktreeMounts,
   takePendingBackgroundTerminalWorktreeMount
 } from './terminal/background-terminal-worktree-mount'
+import { restrictTerminalTabsToHostSnapshot } from './terminal/paired-runtime-terminal-mount'
 import { hasRegisteredRuntimeTerminalTab } from '../runtime/sync-runtime-graph'
 import {
   getEffectiveLayoutForWorktree as getEffectiveLayout,
@@ -156,6 +157,11 @@ import {
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
+import {
+  hasAcceptedWebSessionTabsSnapshot,
+  isRuntimeTerminalTabForEnvironment,
+  useAcceptedWebSessionTabsSnapshotRevision
+} from '@/runtime/web-session-tabs-sync'
 import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
@@ -329,6 +335,7 @@ function Terminal(): React.JSX.Element | null {
   const terminalParkingEnabled = useAppStore((s) => s.settings?.terminalHiddenViewParking !== false)
   const terminalSshParkingEnabled = useAppStore((s) => s.settings?.terminalSshViewParking !== false)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  useAcceptedWebSessionTabsSnapshotRevision()
   const pairedRuntimeParkingEnvironmentIds = useMemo(
     () => selectPairedRuntimeParkingEnvironmentIds(runtimeStatusByEnvironmentId),
     [runtimeStatusByEnvironmentId]
@@ -1282,6 +1289,27 @@ function Terminal(): React.JSX.Element | null {
   ) {
     // Why: mounting every saved tab at once (scrollback replay + WebGL + sync-IPC snapshot per pane) freezes the renderer, so hidden tabs defer and mount on first reveal.
     const worktreeTabs = tabsByWorktree[renderedActiveWorktreeId] ?? []
+    const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(renderedActiveWorktreeId)
+    const runtimeStatus = runtimeEnvironmentId
+      ? runtimeStatusByEnvironmentId.get(runtimeEnvironmentId)
+      : undefined
+    const pairedRuntimeActive =
+      runtimeEnvironmentId !== null && isWebRuntimeSessionActive(runtimeEnvironmentId)
+    const hostSnapshotAccepted =
+      runtimeEnvironmentId !== null &&
+      isWebRuntimeSessionActive(runtimeEnvironmentId) &&
+      hasAcceptedWebSessionTabsSnapshot(
+        runtimeEnvironmentId,
+        renderedActiveWorktreeId,
+        runtimeStatus?.status?.runtimeId ?? null,
+        runtimeStatus?.connectionGeneration ?? 0
+      )
+    const hostMountableTabIds =
+      hostSnapshotAccepted && runtimeEnvironmentId
+        ? worktreeTabs
+            .filter((tab) => isRuntimeTerminalTabForEnvironment(tab, runtimeEnvironmentId))
+            .map((tab) => tab.id)
+        : []
     const coldActivationDeferralEnabled =
       terminalParkingEnabled && terminalTitleSnapshotAuthorityEnabled
     const immediateTabIds = new Set<string>()
@@ -1379,6 +1407,18 @@ function Terminal(): React.JSX.Element | null {
         worktreeId: renderedActiveWorktreeId,
         allTabIds: worktreeTabs.map((tab) => tab.id),
         immediateTabIds
+      })
+    }
+    if (pairedRuntimeActive) {
+      if (!hostSnapshotAccepted) {
+        lastActivationWorktreeIdRef.current = null
+      }
+      restrictTerminalTabsToHostSnapshot({
+        restrictions: backgroundMountTabIdsByWorktreeRef.current,
+        deferredMountTabIdsByWorktree: activationDeferredMountTabIdsByWorktreeRef.current,
+        worktreeId: renderedActiveWorktreeId,
+        allTabIds: worktreeTabs.map((tab) => tab.id),
+        hostTabIds: hostMountableTabIds
       })
     }
     mountedWorktreeIdsRef.current.add(renderedActiveWorktreeId)

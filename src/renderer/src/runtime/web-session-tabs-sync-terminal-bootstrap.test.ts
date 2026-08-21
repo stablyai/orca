@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   shouldSyncAllRuntimeSessionTabs,
   shouldApplyWebSessionTabsSnapshot,
+  hasAcceptedWebSessionTabsSnapshot,
   shouldBootstrapInitialWebRuntimeTerminal,
   shouldRespawnWebRuntimeTerminalAfterWake,
   shouldSyncRuntimeSessionTabs
@@ -24,6 +25,18 @@ vi.mock('../store', () => ({
 describe('applyWebSessionTabsSnapshot', () => {
   beforeEach(resetWebSessionTabsSyncTestState)
 
+  it('binds mount authority to the accepted host connection', () => {
+    const freshEmpty = makeSnapshot([], {
+      activeGroupId: null,
+      activeTabId: null,
+      activeTabType: null
+    })
+    const connection = { runtimeId: 'runtime-1', connectionGeneration: 1 }
+    expect(hasAcceptedWebSessionTabsSnapshot(ENV, WT, 'runtime-1', 1)).toBe(false)
+    expect(shouldApplyWebSessionTabsSnapshot(freshEmpty, ENV, connection)).toBe(true)
+    expect(hasAcceptedWebSessionTabsSnapshot(ENV, WT, 'runtime-1', 1)).toBe(true)
+    expect(hasAcceptedWebSessionTabsSnapshot(ENV, WT, 'runtime-1', 2)).toBe(false)
+  })
   it('does not bootstrap a terminal from a stale empty active-worktree snapshot', () => {
     const ready = makeSnapshot([
       {

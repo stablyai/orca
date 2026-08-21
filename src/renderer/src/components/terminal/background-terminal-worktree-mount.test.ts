@@ -22,6 +22,7 @@ import {
   takeAllPendingBackgroundTerminalWorktreeMounts,
   shouldMountBackgroundWorktreeTab
 } from './background-terminal-worktree-mount'
+import { restrictTerminalTabsToHostSnapshot } from './paired-runtime-terminal-mount'
 
 describe('terminal workspace startup mount gate', () => {
   it('waits for hydration unless startup entered degraded mode', () => {
@@ -222,6 +223,23 @@ describe('cold activation tab deferral', () => {
       })
     ).toBe(false)
     expect(canDeferColdActivationTabsForHost({ executionHostId: null })).toBe(false)
+  })
+
+  it('keeps restored PTY-less tabs withheld after an empty host snapshot', () => {
+    const allTabIds = tabIds(8)
+    const restrictions = new Map<string, ReadonlySet<string>>([['wt-1', new Set(allTabIds)]])
+    const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
+
+    restrictTerminalTabsToHostSnapshot({
+      restrictions,
+      deferredMountTabIdsByWorktree,
+      worktreeId: 'wt-1',
+      allTabIds,
+      hostTabIds: []
+    })
+
+    expect(restrictions.get('wt-1')).toEqual(new Set())
+    expect(deferredMountTabIdsByWorktree.get('wt-1')).toEqual(new Set(allTabIds))
   })
 
   it('mounts everything at once when few tabs would defer', () => {
