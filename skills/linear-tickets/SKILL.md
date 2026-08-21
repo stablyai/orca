@@ -43,8 +43,21 @@ Below, `ORCA` is a placeholder for the executable you resolved. Substitute it be
 running anything; do not create a shell variable or run `ORCA` literally. This works the
 same way in POSIX shells, PowerShell, and cmd.exe.
 
-If the selected executable cannot run, report its exact error and stop. Do not fall through
-to another executable, which could silently target a different Orca build.
+If the selected executable cannot run, do not fall through to another executable, which
+could silently target a different Orca build. In a managed sandbox, follow the recovery
+below before reporting failure; otherwise, report the exact error and stop.
+
+## Managed sandboxes
+
+If the agent runner restricts local IPC or process inspection, run Orca through its approved
+host/external-access mechanism. A sandboxed `runtime_unavailable` response is an access
+failure, not proof that Orca is unavailable; retry the same selected executable with host
+access before switching executables, starting Orca, or reporting it unavailable. Start or
+restart Orca only after a host-access `ORCA status --json` confirms that it is stopped.
+
+`linear_no_linked_issue` means only that `--current` could not resolve a ticket. If the task
+or branch names an issue identifier, retry with that explicit id instead of reporting Linear
+unavailable.
 
 ## Load the full guide before running Orca commands
 
