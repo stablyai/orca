@@ -22,9 +22,61 @@
   font-size: 16px;
   margin: 12px 0 4px;
 }
+.officePreview h1.title {
+  font-size: 28px;
+  margin: 20px 0 10px;
+}
+.officePreview p.subtitle {
+  color: var(--muted-foreground);
+  font-size: 14px;
+  margin: 4px 0 16px;
+}
+.officePreview blockquote {
+  margin: 12px 0;
+  padding: 6px 14px;
+  border-left: 3px solid var(--border);
+  color: var(--muted-foreground);
+}
+.officePreview blockquote.intenseQuote {
+  border-left-color: var(--primary);
+  color: var(--foreground);
+}
 .officePreview p {
   margin: 8px 0;
   line-height: 1.5;
+}
+.officePreview p.empty {
+  margin: 6px 0;
+  min-height: 1em;
+}
+.officePreview p.listParagraph,
+.officePreview p.noSpacing {
+  margin: 0;
+}
+.officePreview div.alignmentLeft {
+  text-align: left;
+}
+.officePreview div.alignmentCenter {
+  text-align: center;
+}
+.officePreview div.alignmentRight {
+  text-align: right;
+}
+.officePreview div.alignmentJustify {
+  text-align: justify;
+}
+.officePreview u {
+  text-decoration: underline;
+}
+.officePreview s {
+  text-decoration: line-through;
+}
+.officePreview a {
+  color: var(--primary);
+  text-decoration: none;
+}
+.officePreview a:hover {
+  text-decoration: underline;
 }
 .officePreview ul,
 .officePreview ol {
@@ -35,15 +87,30 @@
   border-collapse: collapse;
   width: 100%;
   margin: 12px 0;
+  table-layout: fixed;
 }
 .officePreview th,
 .officePreview td {
   border: 1px solid var(--border);
   padding: 6px 10px;
   text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .officePreview tr:nth-child(even) td {
   background: var(--muted);
+}
+/* ponytail: SheetJS first row is conventionally a header — bold + muted bg. */
+.officePreview tr.firstRow th,
+.officePreview tr.firstRow td {
+  background: var(--muted);
+  font-weight: 600;
+  color: var(--foreground);
+}
+.officePreview td[data-t='n'] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .errorBox {
