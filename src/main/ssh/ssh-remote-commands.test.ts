@@ -296,7 +296,12 @@ describe('ssh remote command builders', () => {
       const output = await runShellCommand(listRelayBaseDirsCommand(posix, root))
       const entries = output.trim().split('\n')
 
-      expect(entries).toEqual(['relay-0.1.0+aaa', 'relay-0.1.0+bbb'])
+      // Why sorted: the command prints what `find` enumerated, and the awk filter
+      // preserves that order rather than imposing one. Enumeration order is the
+      // filesystem's business — NTFS returned these reversed — and the caller
+      // only slices the first MAX_RELAY_GC_LISTING_ENTRIES, so nothing downstream
+      // depends on it either.
+      expect([...entries].sort()).toEqual(['relay-0.1.0+aaa', 'relay-0.1.0+bbb'])
       expect(Buffer.byteLength(output)).toBeLessThan(1_024)
       expect(entries.length).toBeLessThanOrEqual(MAX_RELAY_GC_LISTING_ENTRIES)
     } finally {
