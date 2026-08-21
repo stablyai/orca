@@ -19,6 +19,7 @@ import type {
   GitUpstreamStatus
 } from '../../shared/git-status-types'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
+import { PREVIEWABLE_BINARY_MIME_TYPES } from '../../shared/previewable-binary-mime-types'
 import {
   getEffectiveGitUpstreamStatus,
   getGitUpstreamStatusForUpstreamName,
@@ -1999,18 +2000,6 @@ type GitBlobReadResult = {
   content: string
   isBinary: boolean
   exists: boolean
-}
-
-const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.svg': 'image/svg+xml',
-  '.webp': 'image/webp',
-  '.bmp': 'image/bmp',
-  '.ico': 'image/x-icon',
-  '.pdf': 'application/pdf'
 }
 
 /**
