@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { isPaletteCurrentWorktree, resolvePaletteRepoForWorktree } from './palette-repo-resolution'
+import {
+  buildPaletteWorktreeIndex,
+  isPaletteCurrentWorktree,
+  resolvePaletteRepoForWorktree,
+  resolvePaletteWorktree
+} from './palette-repo-resolution'
 
 describe('palette repo and current-worktree resolution', () => {
   const local = { id: 'repo-1', displayName: 'Local repo' }
@@ -29,5 +34,29 @@ describe('palette repo and current-worktree resolution', () => {
         'runtime:paired-host'
       )
     ).toBe(true)
+  })
+
+  it('resolves a paired SSH worktree through its runtime owner alias', () => {
+    const localWorktree = {
+      ...worktree,
+      hostId: 'local' as const,
+      displayName: 'Local workspace'
+    }
+    const pairedWorktree = {
+      ...worktree,
+      hostId: 'ssh:private-target' as const,
+      runtimeOwnerEnvironmentId: 'paired-host',
+      displayName: 'Remote workspace'
+    }
+    const index = buildPaletteWorktreeIndex([localWorktree, pairedWorktree])
+
+    expect(resolvePaletteWorktree(index, worktree.id, 'runtime:paired-host')).toBe(pairedWorktree)
+  })
+
+  it('does not fall back to another host for an explicit owner', () => {
+    const localWorktree = { ...worktree, hostId: 'local' as const }
+    const index = buildPaletteWorktreeIndex([localWorktree])
+
+    expect(resolvePaletteWorktree(index, worktree.id, 'runtime:missing-host')).toBeUndefined()
   })
 })

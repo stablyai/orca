@@ -27,7 +27,7 @@
       "providers": ["local", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "ssh", "remote-runtime"],
-      "coverageNotes": "Deterministic candidate-builder contracts inject local and paired-runtime worktrees with the same bare id into the real aggregated tab buckets, including a paired runtime transporting an SSH-owned worktree. A mirror contract preserves distinct same-id runtime tabs. A paired Electron journey verifies both visible browser rows and both visible simulator rows, then requires each selection to render its owning active tab and update backing host-qualified state.",
+      "coverageNotes": "Deterministic candidate-builder contracts inject local and paired-runtime worktrees with the same bare id into the real aggregated tab buckets, including folder workspaces and a paired runtime transporting an SSH-owned worktree. A mirror contract preserves distinct same-id runtime tabs. A paired Electron journey verifies both visible browser rows and both visible simulator rows, then requires each selection to render its owning active tab and update backing host-qualified state.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4965",
         "https://github.com/stablyai/orca/pull/15371"
@@ -35,6 +35,7 @@
       "invariant": "Candidate identity is the tuple of execution-host identity and worktree identity: same-id sibling hosts retain separate correct browser, simulator, and workspace tabs, each tab appears exactly once, and selection activates its owning host.",
       "oracle": "Aggregate two hosts' tabs under one intentionally colliding worktree id, stamp each unified tab with its execution host, and require exactly one candidate per owner. Repeat with an SSH physical owner transported by a paired-runtime alias. Independently require each browser and simulator Cmd-J selection to update activeWorkspaceExecutionHostId plus its owning workspace/group and render the selected tab active. Ambiguous legacy tabs without ownership fail closed.",
       "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
@@ -70,6 +71,20 @@
           "file": "src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts",
           "assertions": [
             "active local tab creation stamps local ownership instead of leaving a same-id row ambiguous"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/palette-repo-resolution.test.ts",
+          "assertions": [
+            "paired SSH rows resolve display metadata through their runtime owner alias",
+            "an explicit unknown owner never borrows another host's metadata"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts",
+          "assertions": [
+            "same-id folder simulator reuse selects the active owning host",
+            "inactive local simulator creation remains host-stamped amid a collision"
           ]
         },
         {
@@ -160,10 +175,37 @@
           "date": "2026-08-20",
           "runner": "local",
           "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts",
+          "result": "failed",
+          "durationSeconds": 0.8,
+          "summary": "The final-review oracle failed 4/16 before the follow-up: same-id folder simulator reuse selected no owning tab, inactive local simulator creation was unstamped, the paired SSH/runtime alias resolved local metadata, and an explicit unknown owner fell back locally."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+          "result": "passed",
+          "durationSeconds": 3.2,
+          "summary": "The final-review-hardened candidate passed 194/194 focused contracts, including folder workspaces, inactive local simulator creation, paired SSH/runtime display metadata, and explicit-owner fail-closed resolution."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
           "command": "pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
           "result": "passed",
           "durationSeconds": 36.7,
           "summary": "A fresh e2e-mode Electron build passed the paired journey: each remote/local browser and simulator candidate appeared exactly once, selected the owning host plus workspace or group tab, and rendered that tab active. The group active-tab oracle remains stable while asynchronous paired session mirroring updates the legacy bare-worktree activeTabType field."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 25.0,
+          "summary": "A fresh build after final-review hardening passed the paired browser/simulator Cmd-J journey with rendered active-tab and backing execution-host assertions."
         }
       ],
       "runtimeBudget": {
@@ -176,7 +218,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "Byte-identical browser and simulator candidate tests failed 4/28 on affected baseline 012e9f410c, passed 28/28 on candidate fe45b73c20, failed the same 4/28 when only the two candidate filters were disabled, and returned to 28/28 after restoration. Review-round topology contracts then failed 4/40 before the alias/generic/local-stamping follow-up and passed in the final 189/189 suite."
+        "evidence": "Byte-identical browser and simulator candidate tests failed 4/28 on affected baseline 012e9f410c, passed 28/28 on candidate fe45b73c20, failed the same 4/28 when only the two candidate filters were disabled, and returned to 28/28 after restoration. Review-round topology contracts failed 4/40 before the alias/generic/local-stamping follow-up; final-review contracts then failed 4/16 before folder/background/metadata hardening. The completed focused suite passes 194/194."
       },
       "performanceBudget": {
         "required": true,

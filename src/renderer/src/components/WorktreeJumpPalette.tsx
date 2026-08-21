@@ -101,8 +101,10 @@ import {
 } from '@/lib/browser-palette-search'
 import { buildSearchableBrowserPages } from '@/lib/browser-palette-page-entries'
 import {
+  buildPaletteWorktreeIndex,
   isPaletteCurrentWorktree,
-  resolvePaletteRepoForWorktree
+  resolvePaletteRepoForWorktree,
+  resolvePaletteWorktree
 } from '@/lib/palette-repo-resolution'
 import { activateBrowserPagePaletteResult } from '@/lib/browser-page-palette-activation'
 import { activateSimulatorTabPaletteResult } from '@/lib/simulator-tab-palette-activation'
@@ -139,10 +141,7 @@ import {
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { buildSidebarHostOptions } from '@/components/sidebar/sidebar-host-options'
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
-import {
-  composeWorktreeHostIdentity,
-  getWorktreeHostIdentity
-} from '../../../shared/worktree/host-qualified-identity'
+import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { findRepoForHost, getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import type { Repo } from '../../../shared/repo-types'
 import {
@@ -1070,34 +1069,16 @@ function WorktreeJumpPaletteContent({
     [hasQuery, browserSortedWorktrees, searchScopeWorktrees]
   )
 
-  // Why: browser search includes archived worktrees, so this map must cover all worktrees, not just non-archived.
-  // Why keyed on the host identity (STA-4343): `repoId::path` repeats across hosts, so a bare
-  // id lets the last host inserted win and both rows then resolve to the same workspace.
-  const worktreeMap = useMemo(() => {
-    const map = new Map<string, Worktree>()
-    for (const worktree of browserSortedWorktrees) {
-      map.set(getWorktreeHostIdentity(worktree), worktree)
-    }
-    return map
-  }, [browserSortedWorktrees])
-
-  // Why a bare-id fallback: rows built before a host was stamped carry none, and dropping
-  // them would be a worse regression than resolving them the old ambiguous way.
-  const worktreeByBareId = useMemo(() => {
-    const map = new Map<string, Worktree>()
-    for (const worktree of browserSortedWorktrees) {
-      if (!map.has(worktree.id)) {
-        map.set(worktree.id, worktree)
-      }
-    }
-    return map
-  }, [browserSortedWorktrees])
+  // Why browser search includes archived worktrees, so its host-qualified metadata index must too.
+  const paletteWorktreeIndex = useMemo(
+    () => buildPaletteWorktreeIndex(browserSortedWorktrees),
+    [browserSortedWorktrees]
+  )
 
   const resolveWorktree = useCallback(
     (worktreeId: string, hostId: ExecutionHostId | undefined): Worktree | undefined =>
-      worktreeMap.get(composeWorktreeHostIdentity(hostId, worktreeId)) ??
-      worktreeByBareId.get(worktreeId),
-    [worktreeByBareId, worktreeMap]
+      resolvePaletteWorktree(paletteWorktreeIndex, worktreeId, hostId),
+    [paletteWorktreeIndex]
   )
 
   const worktreeOrder = useMemo(

@@ -34,6 +34,7 @@ import type { UpdateStatus } from '../../../shared/update-status-types'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { DirectSshAuthority, SshConnectionState } from '../../../shared/ssh-types'
 import {
+  LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
@@ -2407,7 +2408,10 @@ export function useIpcEvents(): void {
           rememberPrelaunchedSimulatorSession(worktreeId, info)
           return
         }
-        ensureSimulatorTab(worktreeId, { surfacePane: false })
+        ensureSimulatorTab(worktreeId, {
+          surfacePane: false,
+          executionHostId: LOCAL_EXECUTION_HOST_ID
+        })
         // Why: watcher may detect a helper while a simulator tab is already mounted; push stream info so the pane updates without re-attach.
         window.setTimeout(() => {
           window.dispatchEvent(
@@ -2426,7 +2430,10 @@ export function useIpcEvents(): void {
       if (isRuntimeEnvironmentActive()) {
         return
       }
-      ensureSimulatorTab(worktreeId, { surfacePane: true })
+      ensureSimulatorTab(worktreeId, {
+        surfacePane: true,
+        executionHostId: LOCAL_EXECUTION_HOST_ID
+      })
     })
     if (unsubscribeEmulatorPaneFocus) {
       unsubs.push(unsubscribeEmulatorPaneFocus)
