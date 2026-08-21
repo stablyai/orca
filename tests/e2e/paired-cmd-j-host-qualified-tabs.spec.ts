@@ -48,7 +48,7 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
     if (drawHintVisible) {
       await drawHintDismiss.click()
     }
-    const remoteHostId = `runtime:${encodeURIComponent(client.environmentId)}`
+    const remoteHostId = `runtime:${encodeURIComponent(client.environmentId)}` as const
     await expect
       .poll(
         () =>
