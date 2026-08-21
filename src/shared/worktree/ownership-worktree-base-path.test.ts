@@ -78,6 +78,54 @@ describe('repo-specific worktree ownership layouts', () => {
     ).toBe('external')
   })
 
+  it('resolves an absolute Linux base path of a WSL repo into its distro layout (STA-4772)', () => {
+    const repo = makeRepo({
+      path: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\jin\\src\\repo',
+      worktreeBasePath: '/home/jin/src/.orca-worktrees'
+    })
+    const settings = makeSettings({ workspaceDir: 'C:\\global' })
+    const layouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
+
+    expect(layouts[0]).toEqual({
+      path: '//wsl.localhost/Ubuntu-24.04/home/jin/src/.orca-worktrees',
+      nestWorkspaces: true
+    })
+    expect(
+      classifyWorktreeOwnership({
+        repo,
+        settings,
+        worktree: makeWorktree(
+          '\\\\wsl.localhost\\Ubuntu-24.04\\home\\jin\\src\\.orca-worktrees\\repo\\feature'
+        ),
+        knownOrcaLayouts: layouts
+      })
+    ).toBe('external')
+  })
+
+  it('classifies worktrees under a dotted Linux base exactly where creation collapses it', () => {
+    const repo = makeRepo({
+      path: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\jin\\src\\repo',
+      worktreeBasePath: '/home/jin/src/../.orca-worktrees'
+    })
+    const settings = makeSettings({ workspaceDir: 'C:\\global' })
+    const layouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
+
+    expect(layouts[0]).toEqual({
+      path: '//wsl.localhost/Ubuntu-24.04/home/jin/.orca-worktrees',
+      nestWorkspaces: true
+    })
+    expect(
+      classifyWorktreeOwnership({
+        repo,
+        settings,
+        worktree: makeWorktree(
+          '\\\\wsl.localhost\\Ubuntu-24.04\\home\\jin\\.orca-worktrees\\repo\\feature'
+        ),
+        knownOrcaLayouts: layouts
+      })
+    ).toBe('external')
+  })
+
   it('includes relative global layouts for SSH repos without applying absolute desktop paths', () => {
     const repo = makeRepo({ path: '/remote/repo', connectionId: 'ssh-1' })
     const relativeSettings = makeSettings({ workspaceDir: '../worktrees' })

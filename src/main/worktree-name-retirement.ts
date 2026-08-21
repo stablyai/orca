@@ -1,6 +1,3 @@
-import { readdir } from 'node:fs/promises'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import {
   getRepoExecutionHostId,
   isRuntimeOwnedSshTargetId,
@@ -18,10 +15,6 @@ import { isFolderRepo } from '../shared/repo-kind'
 import type { GlobalSettings } from '../shared/global-settings-types'
 import type { Repo } from '../shared/repo-types'
 import {
-  encodeClaudeProjectPaths,
-  isClaudeProjectDirInScope
-} from './ai-vault/claude-project-dir-encoding'
-import {
   computeRemoteWorktreePath,
   computeWorktreePathAsync,
   getWorktreePathSettings,
@@ -34,10 +27,11 @@ import {
   retirementNamespaceKeysToRead,
   type SshTargetLookup
 } from './worktree-retirement-namespace'
+import { discoverRetiredWorktreeNames } from './worktree-retirement-discovery'
+import { runRetirementBackfillScan } from './worktree-retirement-backfill-scan'
 import { hasCachedWslHome, parseWslPath } from './wsl'
 
 const RETIREMENT_PROBE_NAME = 'orca-retirement-probe'
-const scansByStore = new WeakMap<object, Map<string, Promise<Set<string>>>>()
 
 type RetirementReadStore = {
   getRetiredWorktreeNameRegistry(repoId: string): RetiredNameRegistry
@@ -65,45 +59,6 @@ export function normalizeRetirableGeneratedName(name: string): string | null {
  *  occupied even though creation rejected. */
 export function failedWorktreeCreationNeedsRetirement(error: unknown): boolean {
   return typeof error === 'object' && error !== null && Reflect.get(error, 'cleanupFailed') === true
-}
-
-/** Why: over-retiring costs one name from a 552-entry pool; under-retiring reissues a path whose
- *  agent history is still on disk. So this matches generously and never tries to be exact. */
-export function collectRetiredNamesFromLeafNames(leafNames: Iterable<string>): Set<string> {
-  const retired = new Set<string>()
-  for (const leafName of leafNames) {
-    if (typeof leafName !== 'string' || leafName.length === 0) {
-      continue
-    }
-    const normalized = normalizeRetirableGeneratedName(leafName)
-    if (normalized) {
-      retired.add(normalized)
-    }
-  }
-  return retired
-}
-
-/** The workspace leaf is whatever the bucket has beyond its encoded parent. Deriving it from
- *  trailing dash segments instead makes a numerically named workspace retire its parent
- *  directory's name — and `orca` is in the pool. The first segment is also offered because an
- *  agent run from a subdirectory buckets the whole subpath. */
-export function extractBucketLeafCandidates(
-  bucketName: string,
-  encodedParents: readonly string[]
-): string[] {
-  const bucket = bucketName.toLowerCase()
-  for (const parent of encodedParents) {
-    if (!parent || bucket === parent || !isClaudeProjectDirInScope(bucket, [parent])) {
-      continue
-    }
-    const remainder = bucket.slice(parent.length + 1)
-    if (!remainder) {
-      continue
-    }
-    const firstSegment = remainder.split('-')[0]
-    return remainder === firstSegment ? [remainder] : [remainder, firstSegment]
-  }
-  return []
 }
 
 async function getRetirementProbePath(
@@ -308,70 +263,11 @@ export async function ensureRetiredWorktreeNamesBackfilled(
     getWorktreePathSettings(repo, settings)
   )
   const scanKey = `${getRepoExecutionHostId(repo)}:${worktreePathComparisonKey(probePath)}`
-  let storeScans = scansByStore.get(store)
-  if (!storeScans) {
-    storeScans = new Map()
-    scansByStore.set(store, storeScans)
-  }
-  let scan = storeScans.get(scanKey)
-  if (!scan) {
-    scan = discoverRetiredWorktreeNames({ workspaceRoots: [parentPath(probePath)] })
-    storeScans.set(scanKey, scan)
-  }
+  const names = await runRetirementBackfillScan(store, scanKey, () =>
+    discoverRetiredWorktreeNames({ workspaceRoots: [parentPath(probePath)] })
+  )
   // Why the merge sits outside the cached scan: the scan is per cwd namespace but the registry is
   // per repo, so every repo that asks must receive it — not only the one that triggered it.
-  store.mergeRetiredWorktreeNames(repo.id, await scan)
+  store.mergeRetiredWorktreeNames(repo.id, names)
   return scanKey
-}
-
-async function readDirectoryNames(path: string): Promise<string[]> {
-  try {
-    const entries = await readdir(path, { withFileTypes: true })
-    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
-  } catch {
-    // Missing or unreadable roots are normal: the agent may never have run on this machine.
-    return []
-  }
-}
-
-/** Claude buckets its per-conversation state under a directory derived from the workspace cwd. A
- *  bucket surviving its workspace is exactly the evidence we need: the name was used, the
- *  directory is gone, and reissuing the name would hand the next occupant that conversation.
- *  CLAUDE_CONFIG_DIR relocates the whole state root, buckets included.
- *
- *  Codex is deliberately not scanned: it records the cwd inside
- *  `sessions/YYYY/MM/DD/rollout-*.jsonl` rather than in a directory name, so seeding from it would
- *  mean parsing user conversation files. Names spent only under Codex before this feature shipped
- *  stay issuable; every name spent after it is recorded at create time regardless of agent. */
-function getClaudeProjectsDir(home: string, env: NodeJS.ProcessEnv): string {
-  const override = env.CLAUDE_CONFIG_DIR?.trim()
-  return override ? join(override, 'projects') : join(home, '.claude', 'projects')
-}
-
-/** Discovers names already spent for a repo, for the one-time seed of the retirement registry.
- *  Local and best-effort by design — agent state for an SSH workspace lives on the execution host,
- *  so names used only there stay issuable until this host observes them. */
-export async function discoverRetiredWorktreeNames(args: {
-  workspaceRoots: readonly string[]
-  home?: string
-  env?: NodeJS.ProcessEnv
-}): Promise<Set<string>> {
-  const leafNames: string[] = []
-  for (const root of args.workspaceRoots) {
-    leafNames.push(...(await readDirectoryNames(root)))
-  }
-
-  // Lowercased on both sides: the recorded cwd can differ in case from ours on case-insensitive
-  // filesystems, and a missed bucket reissues a live path while a spurious one costs one name.
-  const encodedParents = args.workspaceRoots
-    .filter((root) => root.length > 0)
-    .flatMap((root) => encodeClaudeProjectPaths(root).map((path) => path.toLowerCase()))
-  if (encodedParents.length > 0) {
-    const projectsDir = getClaudeProjectsDir(args.home ?? homedir(), args.env ?? process.env)
-    for (const bucket of await readDirectoryNames(projectsDir)) {
-      leafNames.push(...extractBucketLeafCandidates(bucket, encodedParents))
-    }
-  }
-
-  return collectRetiredNamesFromLeafNames(leafNames)
 }

@@ -320,6 +320,53 @@ describe('connectPanePty', () => {
 
         // Scope to this pane's pty id: a delayed confirm for another test's pane can fire during this advance.
         expect(window.api.pty.confirmForegroundProcess).not.toHaveBeenCalledWith(ptyId)
+        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+          agent: 'droid',
+          routingRevoked: true,
+          shellForeground: false
+        })
+        expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('alt-enter')
+      } finally {
+        restoreUserAgent()
+      }
+    })
+
+    it('does not confirm foreground routing for a global Windows WSL shell', async () => {
+      vi.useFakeTimers()
+      const restoreUserAgent = temporarilySetNavigatorUserAgent(
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+      )
+      const ptyId = 'pty-global-wsl-no-confirm'
+      const tabId = `tab-${ptyId}`
+      mockStoreState.tabsByWorktree = {
+        'wt-1': [{ id: tabId, ptyId }]
+      }
+      mockStoreState.settings = {
+        ...mockStoreState.settings,
+        terminalWindowsShell: 'wsl.exe'
+      }
+
+      try {
+        const { binding, cacheKey } = await connectRestoredPaneForForegroundSampling({
+          ptyId,
+          tabId
+        })
+        mockStoreState.paneForegroundAgentByPaneKey[cacheKey] = {
+          agent: 'droid',
+          routingTrusted: true,
+          shellForeground: false
+        }
+
+        binding.sampleForegroundAgentOnFocus()
+        await vi.advanceTimersByTimeAsync(10_000)
+
+        expect(window.api.pty.confirmForegroundProcess).not.toHaveBeenCalledWith(ptyId)
+        expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+          agent: 'droid',
+          routingRevoked: true,
+          shellForeground: false
+        })
+        expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('alt-enter')
       } finally {
         restoreUserAgent()
       }
@@ -359,8 +406,10 @@ describe('connectPanePty', () => {
       expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
         agent: 'droid',
         routingRevoked: true,
+        routingConfirmationPending: true,
         shellForeground: false
       })
+      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('csi-u')
 
       await vi.advanceTimersByTimeAsync(350)
       await flushAsyncTicks()
@@ -402,9 +451,10 @@ describe('connectPanePty', () => {
       expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
         agent: 'pi',
         routingRevoked: true,
+        routingConfirmationPending: true,
         shellForeground: false
       })
-      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('alt-enter')
+      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('csi-u')
 
       await vi.advanceTimersByTimeAsync(
         VISIBLE_PTY_SETTLE_MS + WRAPPER_RESOLVE_RETRY_MS + SECOND_WRAPPER_RETRY_MS
@@ -440,12 +490,19 @@ describe('connectPanePty', () => {
       const tabId = `tab-${ptyId}`
       mockStoreState.tabsByWorktree = { 'wt-1': [{ id: tabId, ptyId }] }
 
-      const { cacheKey } = await connectRestoredPaneForForegroundSampling({
+      const { binding, cacheKey } = await connectRestoredPaneForForegroundSampling({
         ptyId,
         tabId,
         launchAgent: 'droid'
       })
       expect(mockStoreState.registerAgentLaunchConfig).not.toHaveBeenCalled()
+      expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
+        agent: 'droid',
+        shellForeground: false
+      })
+      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('alt-enter')
+
+      binding.sampleForegroundAgentOnFocus()
       expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
         agent: 'droid',
         shellForeground: false

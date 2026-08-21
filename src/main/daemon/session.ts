@@ -12,14 +12,13 @@ import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID } from 'node:crypto'
 import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
-import { takeLiveQueryReply } from '../../shared/terminal-query-reply'
+
 import type {
   SessionState,
   ShellReadyState,
   TakePendingOutputResult,
   TerminalSnapshot
 } from './types'
-import { createPtySlaveEchoProbe } from '../../shared/pty-slave-line-discipline-echo'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 export class Session {
@@ -74,13 +73,11 @@ export class Session {
       acceptStartupIngress: (data) => this.startupIngress.accept(data)
     })
 
-    const echoProbe = createPtySlaveEchoProbe(this.subprocess.slavePath)
     this.startupIngress = new PtyStartupIngress({
       ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
       ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
       write: (data) => this.subprocess.write(data),
-      onEmission: (emission) => this.output.emit(emission),
-      ...(echoProbe ? { echoProbe } : {})
+      onEmission: (emission) => this.output.emit(emission)
     })
     this.shellReady.startPromptReadinessProbe()
     this.subprocess.onData((data) => this.handleSubprocessData(data))
@@ -132,7 +129,8 @@ export class Session {
     }
 
     // Daemon POSIX PTYs need the local provider's cooked-echo containment (#13137).
-    if (takeLiveQueryReply(this.startupIngress, data)) {
+    // DA1/CPR stay immediate unless an echo-risk reply is already held (#13892, #15559).
+    if (this.startupIngress.answerLiveQueryReply(data)) {
       return
     }
 
