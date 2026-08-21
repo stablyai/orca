@@ -1018,6 +1018,23 @@ async function performAddWorktree(
   })
 
   if (options.checkoutExistingBranch) {
+    // Why (#15645): the just-created worktree owns the branch now, so the
+    // refresh's owner path fast-forwards it in place (reset --hard inside the
+    // owning worktree is the one mutation git permits here). Skipping this
+    // left a pre-existing local branch checked out at its own stale commit —
+    // with no upstream, nothing ever signalled the staleness.
+    if (refreshLocalBaseRef && baseBranch) {
+      const effectiveExistingBase = await resolveWorktreeAddBaseRef(baseBranch, (qualifiedRef) =>
+        hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
+      )
+      localBaseRefRefresh = await refreshLocalBaseRefForWorktreeCreate(
+        repoPath,
+        baseBranch,
+        effectiveExistingBase,
+        options.remoteTrackingBase,
+        options
+      )
+    }
     return localBaseRefRefresh ? { localBaseRefRefresh } : {}
   }
 

@@ -42,6 +42,45 @@ describe('addWorktree', () => {
     translateWslOutputPathsMock.mockClear()
   })
 
+
+  it('fast-forwards a checked-out existing branch inside the new worktree (#15645)', async () => {
+    // The branch pre-exists locally, is behind origin, and the new worktree just
+    // checked it out — so the branch is OWNED by /repo-feature now.
+    const worktreeListOutput =
+      'worktree /repo\nHEAD aaa111\nbranch refs/heads/main\n\nworktree /repo-feature\nHEAD old-tip\nbranch refs/heads/feature\n'
+    gitExecFileAsyncMock
+      .mockResolvedValueOnce({ stdout: '' }) // worktree add /repo-feature feature
+      .mockResolvedValueOnce({ stdout: 'remote-tip\n' }) // resolveWorktreeAddBaseRef existence probe (OID required)
+      .mockResolvedValueOnce({ stdout: '0\t2\n' }) // rev-list --left-right --count (behind only)
+      .mockResolvedValueOnce({ stdout: 'old-tip\n' }) // rev-parse refs/heads/feature^{commit}
+      .mockResolvedValueOnce({ stdout: 'remote-tip\n' }) // rev-parse remote tracking ref^{commit}
+      .mockResolvedValueOnce({ stdout: '' }) // merge-base --is-ancestor
+      .mockResolvedValueOnce({ stdout: worktreeListOutput }) // worktree list --porcelain
+      .mockResolvedValueOnce({ stdout: '' }) // status --porcelain (in /repo-feature, clean)
+      .mockResolvedValueOnce({ stdout: worktreeListOutput }) // worktree list recheck
+      .mockResolvedValueOnce({ stdout: '' }) // status recheck (still clean)
+      .mockResolvedValueOnce({ stdout: '' }) // reset --hard remote-tip (in /repo-feature)
+
+    const result = await addWorktree(
+      '/repo',
+      '/repo-feature',
+      'feature',
+      'origin/feature',
+      true,
+      false,
+      { checkoutExistingBranch: true }
+    )
+
+    // eslint-disable-next-line no-console
+    console.log('CALLS', JSON.stringify(gitExecFileAsyncMock.mock.calls.map((c) => c[0])))
+    expect(result.localBaseRefRefresh).toMatchObject({ status: 'updated' })
+    const reset = gitExecFileAsyncMock.mock.calls.find(
+      (call) => call[0][0] === 'reset'
+    ) as unknown as [string[], { cwd?: string }]
+    expect(reset[0]).toEqual(['reset', '--hard', 'remote-tip'])
+    expect(reset[1].cwd).toBe('/repo-feature')
+  })
+
   it('fast-forwards with reset --hard when localBranch is checked out in primary worktree', async () => {
     const worktreeListOutput =
       'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /repo-other\nHEAD def456\nbranch refs/heads/feature\n'
