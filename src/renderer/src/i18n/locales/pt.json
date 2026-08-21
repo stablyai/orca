@@ -3733,8 +3733,8 @@
             "manager": {
               "terminal": {
                 "copy": {
-                  "terminalSessionCount_one": "{{count}} terminal session",
-                  "terminalSessionCount_other": "{{count}} terminal sessions",
+                  "terminalSessionCount_one": "{{count}} sessão de terminal",
+                  "terminalSessionCount_other": "{{count}} sessões de terminal",
                   "memoryUnavailable": "memória indisponível",
                   "tooltipSummary": "Gerenciador de Recursos - {{memory}} - {{sessions}}",
                   "spaceScanReady": "Análise do Space pronta",
