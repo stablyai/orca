@@ -215,14 +215,18 @@ export function useGlobalKeybindings(args: {
 
       // Plugin chords are user-reviewed instructional content. They win over
       // built-in defaults only in app focus; terminal/editor/browser handlers
-      // retain their own shortcut authority.
-      if (context === 'app') {
+      // retain their own shortcut authority — except bindings that explicitly
+      // opted into terminal focus, which would otherwise have no reachable
+      // trigger at all (#15642). No capture toast here: the command visibly
+      // runs, so the terminal losing the chord is self-evident.
+      if (context === 'app' || context === 'terminal') {
         const pluginCommand = findPluginCommandForKeybinding(
           pluginCommands,
           input,
           shortcutPlatform,
           keybindings,
-          Boolean(activeWorktreeId)
+          Boolean(activeWorktreeId),
+          context === 'terminal' ? { requireAllowInTerminal: true } : {}
         )
         if (pluginCommand) {
           input.preventDefault()

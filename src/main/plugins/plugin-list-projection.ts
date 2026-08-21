@@ -62,7 +62,7 @@ export type PluginListEntry = {
     title: string
     context: 'global' | 'worktree'
     handler: { type: 'built-in'; action: PluginCommandAliasActionId } | { type: 'worker' }
-    keybindings: { key: string; when: 'global' | 'worktree' }[]
+    keybindings: { key: string; when: 'global' | 'worktree'; allowInTerminal?: boolean }[]
   }[]
   hasWorker: boolean
   vmRecipes: {
