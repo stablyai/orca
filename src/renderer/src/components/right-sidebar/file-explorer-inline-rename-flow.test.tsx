@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { useRef } from 'react'
-import { InlineInputRow } from './FileExplorerRow'
+import { InlineInputRow } from './file-explorer-inline-input-row'
 import { createFileExplorerRowProjection } from './file-explorer-row-projection'
 import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerInlineInput } from './useFileExplorerInlineInput'

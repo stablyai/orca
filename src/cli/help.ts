@@ -23,10 +23,15 @@ Accounts:
   account list              List managed Claude and Codex accounts on this Orca host
 
 Skills:
+  skills installed          List installed skill selectors
+  skills share              Publish selected skills behind one unlisted link
   skills list               List version-matched skill guides bundled with this Orca CLI
   skills get                Print a version-matched skill guide as Markdown
   skills install            Install bundled Orca skills globally via the community skills CLI
   skills update             Update already-installed Orca skills via the community skills CLI
+
+Hosts:
+  host list                 List targetable machines and how to name each one
 
 Environments:
   environment add           Save a remote Orca runtime from a pairing code
@@ -223,6 +228,7 @@ Common Commands:
   orca agent-context [--json]
   orca account add [--agent claude|codex] [--json]
   orca account list [--json]
+  orca host list [--json]
   orca environment add --name <name> --pairing-code <code> [--json]
   orca environment list [--json]
   orca environment show --environment <selector> [--json]

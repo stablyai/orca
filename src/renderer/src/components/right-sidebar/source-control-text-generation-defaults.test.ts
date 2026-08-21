@@ -5,7 +5,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import {
   generationParamsToActionRecipe,
   sourceControlTextGenerationDefaultsMatchTarget
-} from './source-control-text-generation-defaults'
+} from './source-control/ai/text-generation-defaults'
 
 function settings(): GlobalSettings {
   const base = getDefaultSettings('/tmp')

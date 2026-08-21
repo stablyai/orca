@@ -36,9 +36,9 @@ vi.mock('./remote-workspace-events', () => ({
 
 import {
   _resetRemoteWorkspaceCachesForTests,
-  registerRemoteWorkspaceHandlers,
-  remoteWorkspaceSessionMatchesSnapshot
+  registerRemoteWorkspaceHandlers
 } from './remote-workspace'
+import { remoteWorkspaceSessionMatchesSnapshot } from './remote-workspace-snapshot-normalization'
 
 function snapshot(session: RemoteWorkspaceSession, revision = 7): RemoteWorkspaceSnapshot {
   return {

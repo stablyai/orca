@@ -716,7 +716,9 @@ describe('launchAgentInNewTab', () => {
       {
         state: 'working',
         prompt: 'large generated prompt',
-        agentType: 'command-code'
+        agentType: 'command-code',
+        // Why: seeded from Orca's own prompt delivery, not a provider hook (STA-4293).
+        observation: expect.objectContaining({ origin: 'process', kind: 'transition' })
       },
       undefined,
       undefined,

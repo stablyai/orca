@@ -10,13 +10,18 @@ const packageJson = JSON.parse(readFileSync('package.json', 'utf8'))
 const shellContractFiles = [
   'src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts',
   'src/main/daemon/shell-ready.test.ts',
-  'src/main/providers/local-pty-shell-ready.test.ts',
+  'src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts',
   'src/main/providers/__tests__/shell-ready-framework-example.test.ts',
+  'src/main/shell-startup-feature-channel.test.ts',
+  'src/main/zsh-scoped-histfile.live-shell.test.ts',
+  'src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts',
+  'src/main/zsh-wrapper-version-mismatch.live-shell.test.ts',
   'src/shared/posix-command-path-lookup.test.ts'
 ]
 const patchedNodePtyContractFiles = [
   'src/main/daemon/node-pty-fd-leak.test.ts',
-  'src/main/pty/omp-shell-wrapper.node-pty.test.ts'
+  'src/main/pty/omp-shell-wrapper.node-pty.test.ts',
+  'src/shared/fish-query-reply-child-stdin.node-pty.test.ts'
 ]
 const nativeShellContractFiles = [...shellContractFiles, ...patchedNodePtyContractFiles]
 const testFilePatterns = [
@@ -25,8 +30,12 @@ const testFilePatterns = [
   'tests/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}',
   'tests/tools/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'
 ]
+// Why the harness import counts: the zsh startup hook runs from a `precmd`, so
+// its tests drive a real zsh through a PTY in zsh-startup-hook-pty-harness
+// rather than calling spawnSync('zsh') themselves. Without this branch the rule
+// silently stops noticing the very tests that need the lane's zsh install.
 const realZshUsage =
-  /(?:spawnSync|execFileSync|spawn)\(\s*['"](?:\/(?:usr\/)?bin\/)?zsh['"]|spawnSync\(\s*['"]which['"]\s*,\s*\[\s*['"]zsh['"]|name:\s*['"]zsh['"]\s*,\s*path:\s*executablePath/
+  /(?:spawnSync|execFileSync|spawn)\(\s*['"](?:\/(?:usr\/)?bin\/)?zsh['"]|spawnSync\(\s*['"]which['"]\s*,\s*\[\s*['"]zsh['"]|name:\s*['"]zsh['"]\s*,\s*path:\s*executablePath|from '[^']*zsh-startup-hook-pty-harness'/
 
 describe('PR workflow parallelism', () => {
   it('cancels superseded runs for the same pull request', () => {
@@ -92,8 +101,65 @@ describe('PR workflow parallelism', () => {
     }
   })
 
+  it('refreshes the apt index once while adding the fish PPA', () => {
+    const installStep = workflow.jobs.shell_contracts.steps.find(
+      (step) => step.name === 'Install zsh and fish'
+    )
+    // Comment lines mention both commands by name, so count the executed ones only.
+    const commands = installStep.run
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('#'))
+      .join('\n')
+    const updates = commands.match(/apt-get update/g) ?? []
+    // Anchored to the start of a line so the retry message that names the command in
+    // prose is not mistaken for an invocation of it.
+    const addRepoCalls = commands
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => /^(sudo\s+)?add-apt-repository\b/.test(line))
+
+    // add-apt-repository refreshes every configured repo unless told not to, so an
+    // update on each side of it made this step pay for three full passes.
+    expect(updates).toHaveLength(1)
+    expect(addRepoCalls.length).toBeGreaterThan(0)
+    for (const call of addRepoCalls) {
+      expect(call.split(/\s+/)).toContain('-n')
+    }
+    // The one remaining update has to come after the PPA is on the list, or the fish
+    // index it exists to fetch would not be there yet.
+    expect(commands.lastIndexOf('add-apt-repository')).toBeLessThan(
+      commands.indexOf('apt-get update')
+    )
+  })
+
+  it('bounds the shell lane so a stalled apt mirror cannot hold the run open', () => {
+    const job = workflow.jobs.shell_contracts
+    // A passing run of this job takes ~4.5 minutes, almost all of it package download.
+    // Without a job bound a stalled mirror runs to GitHub's 6h default, and because this
+    // is a required check it holds the whole run open and blocks `gh run rerun --failed`.
+    expect(job['timeout-minutes']).toBeGreaterThan(0)
+    expect(job['timeout-minutes']).toBeLessThanOrEqual(30)
+
+    const installStep = job.steps.find((step) => step.name === 'Install zsh and fish')
+    // apt applies no wall-clock bound to a stalled mirror on its own. These turn an
+    // unbounded hang into a bounded, retried, legible failure.
+    expect(installStep.run).toMatch(/Acquire::http::Timeout/)
+    expect(installStep.run).toMatch(/Acquire::https::Timeout/)
+    expect(installStep.run).toMatch(/Acquire::Retries/)
+    // Retries multiply: a first attempt at 30s x 3 retries across every index file turned
+    // a dead mirror into a ~15 minute stall. One attempt, then move on.
+    expect(installStep.run).toMatch(/Acquire::Retries "1"/)
+    // Acquire timeouts are per-connection, so they cannot bound the command as a whole.
+    // Only a wall-clock bound can, and both apt invocations need one.
+    expect(installStep.run).toMatch(/timeout \d+ sudo apt-get update/)
+    expect(installStep.run).toMatch(/timeout \d+ sudo apt-get install/)
+  })
+
   it('keeps every real-zsh test in the dedicated shell lane', () => {
     const discoveredFiles = globSync(testFilePatterns)
+      // Why this file is excluded: it carries the detector pattern as a literal
+      // and would otherwise match itself.
+      .filter((testFile) => testFile !== 'config/scripts/pr-workflow-parallelism.test.mjs')
       .filter((testFile) => realZshUsage.test(readFileSync(testFile, 'utf8')))
       .sort()
 
@@ -167,7 +233,12 @@ describe('PR workflow parallelism', () => {
         (step) => step.uses === './.github/actions/install-node-dependencies'
       )
 
-    for (const jobName of ['static_analysis', 'typecheck', 'git_compatibility']) {
+    for (const jobName of [
+      'static_analysis',
+      'typecheck',
+      'git_compatibility',
+      'xterm_patch_sync'
+    ]) {
       expect(installFor(jobName).with, jobName).toBeUndefined()
     }
     expect(installFor('shell_contracts').with['native-runtime']).toBe('node')
@@ -180,7 +251,12 @@ describe('PR workflow parallelism', () => {
     const dependencyInstall = dependencyAction.runs.steps.find(
       (step) => step.name === 'Install dependencies'
     )
-    expect(dependencyInstall.run).toContain('--no-frozen-lockfile')
+    // Why frozen: re-resolving the graph costs a minute per job and the `git diff`
+    // guard below already fails the run when the lockfile is stale, so the slow
+    // resolution can never legitimately change anything.
+    expect(dependencyInstall.run).toContain('--frozen-lockfile')
+    expect(dependencyInstall.run).not.toContain('--no-frozen-lockfile')
+    expect(dependencyInstall.run).toContain('git diff --exit-code package.json pnpm-lock.yaml')
     expect(dependencyInstall.run).toContain('--ignore-scripts')
     expect(dependencyInstall.run).not.toContain('--os=')
     expect(dependencyInstall.run).not.toContain('--cpu=')
@@ -207,12 +283,64 @@ describe('PR workflow parallelism', () => {
     expect(packageStep.env.ORCA_REUSE_PREPARED_NATIVE_RUNTIME).toBe('1')
   })
 
+  it('restores compiled native modules after the install that strips them', () => {
+    const steps = dependencyAction.runs.steps
+    const installIndex = steps.findIndex((step) => step.name === 'Install dependencies')
+    const cacheIndex = steps.findIndex((step) => step.name === 'Restore compiled native modules')
+    const prepareIndex = steps.findIndex((step) => step.name === 'Prepare native runtime')
+
+    // `--ignore-scripts` leaves no build/, so a restore before the install would be
+    // overwritten and one after the rebuild would never save a hit.
+    expect(installIndex).toBeLessThan(cacheIndex)
+    expect(cacheIndex).toBeLessThan(prepareIndex)
+    expect(steps[cacheIndex].if).toBe("inputs.native-runtime != 'none'")
+    // Native artifacts are ABI-bound: a key missing either dimension serves a build
+    // that cannot load, and ensure-native-runtime would recompile it anyway.
+    expect(steps[cacheIndex].with.key).toContain('${{ inputs.native-runtime }}')
+    expect(steps[cacheIndex].with.key).toContain('steps.requested-node.outputs.node-version')
+    expect(steps[cacheIndex].with.key).toContain('config/patches/node-pty@1.1.0.patch')
+    // No restore-keys: a partial-match key is exactly the ABI-mismatched build above.
+    expect(steps[cacheIndex].with['restore-keys']).toBeUndefined()
+  })
+
+  it('reuses TypeScript incremental state across typecheck runs', () => {
+    const steps = workflow.jobs.typecheck.steps
+    const cacheIndex = steps.findIndex((step) => step.name === 'Cache TypeScript incremental state')
+    const checkIndex = steps.findIndex((step) => step.run === 'pnpm run typecheck')
+
+    expect(cacheIndex).toBeGreaterThanOrEqual(0)
+    expect(cacheIndex).toBeLessThan(checkIndex)
+    expect(steps[cacheIndex].with.path).toBe('config/*.tsbuildinfo')
+    // Why restore-keys matter here: an exact-key miss is the normal case (the key is
+    // per-SHA), so without them the cache would never once be read.
+    expect(steps[cacheIndex].with['restore-keys']).toBeTruthy()
+    // The buildinfo is only reusable while the compiler options that produced it hold.
+    expect(steps[cacheIndex].with.key).toContain(
+      "hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json')"
+    )
+  })
+
+  it('checks out full history without historical blobs', () => {
+    const fullHistoryCheckouts = Object.values(workflow.jobs)
+      .flatMap((job) => job.steps ?? [])
+      .filter(
+        (step) => step.uses?.startsWith('actions/checkout@') && step.with?.['fetch-depth'] === 0
+      )
+
+    expect(fullHistoryCheckouts.length).toBeGreaterThan(0)
+    for (const checkout of fullHistoryCheckouts) {
+      expect(checkout.with.filter).toBe('blob:none')
+    }
+  })
+
   it('keeps verify as the aggregate required check', () => {
     expect(workflow.jobs.verify.needs).toEqual([
+      'code_paths',
       'static_analysis',
       'root_directory_guard',
       'typecheck',
       'git_compatibility',
+      'xterm_patch_sync',
       'shell_contracts',
       'test',
       'managed_hook_node18',

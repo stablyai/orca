@@ -34,6 +34,7 @@ import {
 // Why: re-export so callers keep one import surface; the registry split only breaks the store-slice import cycle.
 export {
   captureParkedTerminalPaneCandidates,
+  collectParkedTerminalWatcherPtyIds,
   disposeAllParkedTerminalWatchers,
   disposeRemovedWorktreeParkedTerminalWatchers,
   disposeParkedTerminalWatchersForPtyIds,

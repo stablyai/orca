@@ -270,6 +270,8 @@ Recovery is conditional, never a fixed destructive sequence:
 
 Low-level `worktree create`, `terminal create`, and `dispatch --inject` remain valid recipes for custom argv or topology that `worker-start` does not express.
 
+`dispatch --inject` deliberately keeps an operator-started terminal unsupervised: it never creates a `worker_dispatches` row and `worker-stop`/`worker-abandon` never close that process. The dispatch context is still authoritative, so `worker-show`, `worker-read`, and `worker-list` report it as `unsupervised`; settled `worker-retain` and `worker-release` report `retained` with `no_owned_resource` and take no process action. Use `worker-start --terminal <handle>` when supervision and worker lifecycle state are required.
+
 ## Gates And Legacy Inspection
 
 ```bash

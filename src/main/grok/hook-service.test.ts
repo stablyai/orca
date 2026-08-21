@@ -23,7 +23,14 @@ import { POSIX_HOOK_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
 
 const GROK_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'grok-hook.cmd' : 'grok-hook.sh'
 const WINDOWS_POWERSHELL_LAUNCHER =
-  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand \S+$/
+
+// Why (#14828): Windows registers the bare script path when it is cmd-safe and only falls back
+// to the encoded launcher for a profile path that is not (#6078). windows-hook-launcher-chain
+// .test.ts pins which branch applies; these cases only care that Orca's hook is present.
+function registersManagedGrokScript(command: string): boolean {
+  return command.includes(GROK_SCRIPT_FILE_NAME) || WINDOWS_POWERSHELL_LAUNCHER.test(command)
+}
 
 type WindowsGrokHookRun = {
   status: number | null
@@ -118,7 +125,7 @@ describe('GrokHookService', () => {
     expect(script).toContain('set "ORCA_GROK_HOME="')
     expect(script).toContain('if not defined GROK_HOME goto :orca_grok_home_ready')
     expect(script).toContain('%GROK_HOME:~4096,1%')
-    expect(script).toContain('set "ORCA_GROK_HOME=%GROK_HOME%"')
+    expect(script).toContain('set "ORCA_GROK_HOME=%GROK_HOME:"=%"')
     expect(script).toContain('%ORCA_GROK_HOME:~4096,1%')
     expect(script).toContain(':orca_grok_home_ready')
     expect(script).toContain('if not defined ORCA_GROK_HOME goto :orca_grok_home_ready')
@@ -253,9 +260,7 @@ describe('GrokHookService', () => {
     // Why: build the invalid pattern at runtime so static lint does not flag it.
     const bareStar = ['*', ''].join('')
     expect(() => new RegExp(bareStar)).toThrow()
-    expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(
-      process.platform === 'win32' ? WINDOWS_POWERSHELL_LAUNCHER : /grok-hook/
-    )
+    expect(registersManagedGrokScript(config.hooks.PreToolUse[0].hooks[0].command)).toBe(true)
     if (process.platform !== 'win32') {
       expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(join(homeDir, '.orca'))
     }
@@ -269,7 +274,7 @@ describe('GrokHookService', () => {
       expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
       // Why: windows-grok-hook-script.test.ts pins the GROK_HOME guard shape itself,
       // and does so on every platform rather than only on Windows runners.
-      expect(script).toContain('set "ORCA_GROK_HOME=%GROK_HOME%"')
+      expect(script).toContain('set "ORCA_GROK_HOME=%GROK_HOME:"=%"')
       expect(script).toContain('--data-urlencode "grokHome=%ORCA_GROK_HOME%"')
     } else {
       // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
@@ -343,7 +348,11 @@ describe('GrokHookService', () => {
       `${JSON.stringify(
         {
           hooks: {
-            Notification: [{ hooks: [{ type: 'command', command: '/usr/local/bin/user-hook' }] }]
+            Notification: [
+              {
+                hooks: [{ type: 'command', command: '/usr/local/bin/user-hook' }]
+              }
+            ]
           }
         },
         null,
@@ -360,12 +369,6 @@ describe('GrokHookService', () => {
       definition.hooks.map((hook) => hook.command)
     )
     expect(commands).toContain('/usr/local/bin/user-hook')
-    expect(
-      commands.some((command) =>
-        process.platform === 'win32'
-          ? WINDOWS_POWERSHELL_LAUNCHER.test(command)
-          : command.includes(GROK_SCRIPT_FILE_NAME)
-      )
-    ).toBe(true)
+    expect(commands.some(registersManagedGrokScript)).toBe(true)
   })
 })

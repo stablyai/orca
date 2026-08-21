@@ -32,6 +32,11 @@ import type {
 } from '../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
+import {
+  omitPairingLocalUiFields,
+  type PairedUiState,
+  type PairingLocalUiField
+} from '../../../shared/pairing-local-ui-fields'
 import type { MemorySnapshot, StatsSummary } from '../../../shared/process-stats-types'
 import type { Repo } from '../../../shared/repo-types'
 import type {
@@ -582,6 +587,10 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       recoverLegacyWorkerTerminalsForRendererStartup: () => Promise.resolve(),
       startupDiagnostic: () => Promise.resolve(),
       getKeyboardInputSourceId: () => Promise.resolve(null),
+      // The web client cannot inspect local Mission Control shortcuts.
+      getMacCapturedDigitRowChords: () => Promise.resolve([]),
+      getKeyboardLayoutSnapshot: () => Promise.resolve(null),
+      onKeyboardLayoutChanged: () => () => undefined,
       setUnreadDockBadgeCount: () => Promise.resolve(),
       getFloatingTerminalCwd: () => Promise.resolve(''),
       getFloatingMarkdownDirectory: () => Promise.resolve(''),
@@ -938,6 +947,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       drop: () => {},
       dropByTabPrefix: () => {},
       retirePaneAuthority: () => {},
+      restorePaneAuthority: () => {},
       transferPaneAuthority: () => {}
     },
     mobile: {
@@ -2697,11 +2707,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
   return {
     get: async () => {
       try {
-        const result = await callRuntimeResult<{ ui: PersistedUIState }>(
-          'ui.get',
-          undefined,
-          15_000
-        )
+        const result = await callRuntimeResult<{ ui: PairedUiState }>('ui.get', undefined, 15_000)
         const local = readLocalWebUIState()
         const next = {
           ...mergeHostWebUIState(local, result.ui),
@@ -2726,9 +2732,9 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
       zoomLevel = next.uiZoomLevel
-      const { hideWorkspacesFromOtherDevices: _clientLocalWorkspaceFilter, ...hostUpdates } =
-        updates
-      void _clientLocalWorkspaceFilter
+      // Why strip here too when the host also strips: an old host predating that strip would
+      // otherwise persist this browser's runtime:web-* keys over the desktop profile's order.
+      const hostUpdates = omitPairingLocalUiFields(updates)
       try {
         await callRuntimeResult('ui.set', hostUpdates, 15_000)
       } catch {
@@ -2750,7 +2756,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       })
       writeJson(UI_STORAGE_KEY, optimistic)
       try {
-        const result = await callRuntimeResult<{ ui: PersistedUIState }>(
+        const result = await callRuntimeResult<{ ui: PairedUiState }>(
           'ui.recordFeatureInteraction',
           id,
           15_000
@@ -2819,6 +2825,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onOpenSettings: () => noopUnsubscribe,
     // Why: the web client has no native tray/menu bar, so there's never a queued open-settings intent to consume.
     consumePendingOpenSettings: () => Promise.resolve(false),
+    onOpenSkillShare: () => noopUnsubscribe,
+    consumePendingSkillShare: () => Promise.resolve(null),
     onOpenSetupGuide: () => noopUnsubscribe,
     onOpenFeatureTour: () => noopUnsubscribe,
     onOpenCrashReport: () => noopUnsubscribe,
@@ -2875,6 +2883,8 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onFocusTerminal: () => noopUnsubscribe,
     onFocusEditorTab: () => noopUnsubscribe,
     onCloseSessionTab: () => noopUnsubscribe,
+    onSessionTabCloseRequest: () => noopUnsubscribe,
+    respondSessionTabClose: () => {},
     onMoveSessionTab: () => noopUnsubscribe,
     onOpenFileFromMobile: () => noopUnsubscribe,
     onOpenDiffFromMobile: () => noopUnsubscribe,
@@ -3130,6 +3140,37 @@ function createSkillsApi(): NonNullable<Partial<PreloadApi>['skills']> {
     cancelUpdateRun: () => Promise.resolve(),
     acknowledgeUpdateRun: () => Promise.resolve(),
     getUpdateRun: () => Promise.resolve({ state: 'idle' as const }),
+    prepareShare: () => Promise.reject(new Error('Skill publishing requires the desktop app.')),
+    publishShare: () => Promise.reject(new Error('Skill publishing requires the desktop app.')),
+    cancelShare: () => Promise.resolve(),
+    releaseShare: () => Promise.resolve(),
+    resolveShare: () => Promise.reject(new Error('Skill share links require the desktop app.')),
+    installShare: () => Promise.reject(new Error('Skill installation requires the desktop app.')),
+    installBundleShare: () =>
+      Promise.reject(new Error('Skill installation requires the desktop app.')),
+    installPackageVersion: () =>
+      Promise.reject(new Error('Skill installation requires the desktop app.')),
+    installBundlePackageVersion: () =>
+      Promise.reject(new Error('Skill installation requires the desktop app.')),
+    cancelInstall: () => Promise.resolve({ cancelled: false }),
+    previewInstall: () => Promise.reject(new Error('Skill installation requires the desktop app.')),
+    previewBundleInstall: () =>
+      Promise.reject(new Error('Skill installation requires the desktop app.')),
+    removeInstall: () => Promise.reject(new Error('Skill installation requires the desktop app.')),
+    listManagedInstalls: () =>
+      Promise.reject(new Error('Skill installation requires the desktop app.')),
+    getPackage: () => Promise.reject(new Error('Skill installation requires the desktop app.')),
+    listOwnedShares: () =>
+      Promise.reject(new Error('Skill package management requires the desktop app.')),
+    revokeShare: () =>
+      Promise.reject(new Error('Skill package management requires the desktop app.')),
+    deletePackageVersion: () =>
+      Promise.reject(new Error('Skill package management requires the desktop app.')),
+    deletePackage: () =>
+      Promise.reject(new Error('Skill package management requires the desktop app.')),
+    listWslDistros: () => Promise.resolve([]),
+    onInstallProgress: () => () => {},
+    onShareProgress: () => () => {},
     onUpdateRun: () => () => {}
   }
 }
@@ -3888,6 +3929,9 @@ async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
     if (typeof result.settings.artifactSharingEnabled === 'boolean') {
       runtimeSettings.artifactSharingEnabled = result.settings.artifactSharingEnabled
     }
+    if (typeof result.settings.agentSkillSharingEnabled === 'boolean') {
+      runtimeSettings.agentSkillSharingEnabled = result.settings.agentSkillSharingEnabled
+    }
     const next = mergeSettings(local, runtimeSettings)
     writeStoredSettings(next)
     return settingsForActiveVisibilityOwner(next)
@@ -4123,14 +4167,18 @@ function mergeWebUIState(
   }
 }
 
-function mergeHostWebUIState(
-  local: PersistedUIState,
-  incoming: PersistedUIState
-): PersistedUIState {
-  return {
-    ...mergeWebUIState(local, incoming),
-    hideWorkspacesFromOtherDevices: local.hideWorkspacesFromOtherDevices === true
-  }
+// Why pin instead of trusting the host's strip: an old host still returns these fields, and for a
+// profile a pre-fix drag poisoned they echo back the same runtime:web-* keys this browser minted,
+// which then match its own repos and beat every newer drag.
+function mergeHostWebUIState(local: PersistedUIState, incoming: PairedUiState): PersistedUIState {
+  // Why `satisfies Record<...>` rather than a `Pick<...>` annotation: every member is optional in
+  // PersistedUIState, so Pick would accept a literal that silently skipped a newly added member.
+  const pinned = {
+    hideWorkspacesFromOtherDevices: local.hideWorkspacesFromOtherDevices === true,
+    manualRepoOrder: local.manualRepoOrder,
+    workspaceHostOrder: local.workspaceHostOrder
+  } satisfies Record<PairingLocalUiField, unknown> & Partial<PersistedUIState>
+  return { ...mergeWebUIState(local, incoming), ...pinned }
 }
 
 function mergeFeatureInteractionState(

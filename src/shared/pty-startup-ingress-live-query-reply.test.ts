@@ -1,10 +1,8 @@
-// #13137: live color replies need startup's cooked-echo containment.
-import { afterEach, describe, expect, it, vi } from 'vitest'
+// Live query replies: written in the caller's turn, with their echo shapes armed.
+// Withholding used to live here (#13137); it was deleted because deferring the write is
+// what let one reply overtake another and land in the next program's stdin (#15559).
+import { describe, expect, it } from 'vitest'
 import { PtyStartupIngress, type PtyIngressEmission } from './pty-startup-ingress'
-import type {
-  PtySlaveEchoProbe,
-  PtySlaveLineDisciplineEcho
-} from './pty-slave-line-discipline-echo'
 import { mode2031SequenceFor } from './terminal-color-scheme-protocol'
 import {
   extractOnlyCookedEchoSafeQueryReplies,
@@ -12,243 +10,181 @@ import {
 } from './terminal-query-reply'
 
 const COLOR_SCHEME_REPLY = mode2031SequenceFor('dark')
-// CSI has only a caret echo; OSC also has readline's rewritten echo.
-const POSIX_CSI_COOKED_ECHO = (reply: string): string => reply.replaceAll('\x1b', '^[')
 const OSC_COLOR_REPLY = '\x1b]11;rgb:00/00/00\x07'
-const POSIX_OSC_COOKED_ECHOES = [
-  (reply: string): string => reply.replaceAll('\x1b', '^['),
-  (reply: string): string => reply.replaceAll('\x1b]', '\x07').replaceAll('\x1b\\', '')
-]
+const CPR_REPLY = '\x1b[6;1R'
+const DA1_REPLY = '\x1b[?1;2c'
+const caretEcho = (reply: string): string => reply.replaceAll('\x1b', '^[')
+const readlineEcho = (reply: string): string =>
+  reply.replaceAll('\x1b]', '\x07').replaceAll('\x1b\\', '')
 
-function scriptedEchoProbe(...states: PtySlaveLineDisciplineEcho[]) {
-  let index = 0
-  const probe: PtySlaveEchoProbe & { calls: number } = Object.assign(
-    async () => {
-      probe.calls += 1
-      return states[Math.min(index++, states.length - 1)] ?? 'unknown'
-    },
-    { calls: 0 }
-  )
-  return probe
+function harness(): {
+  ingress: PtyStartupIngress
+  writes: string[]
+  emissions: PtyIngressEmission[]
+} {
+  const writes: string[] = []
+  const emissions: PtyIngressEmission[] = []
+  const ingress = new PtyStartupIngress({
+    ownerBackend: 'posix-pty',
+    write: (data) => void writes.push(data),
+    onEmission: (emission) => void emissions.push(emission)
+  })
+  return { ingress, writes, emissions }
 }
 
-function visible(emissions: readonly PtyIngressEmission[]): string {
-  return emissions.map((emission) => emission.data).join('')
-}
+const visible = (emissions: readonly PtyIngressEmission[]): string =>
+  emissions.map((emission) => emission.data).join('')
 
-afterEach(() => vi.useRealTimers())
-
-describe('PtyStartupIngress live query replies (#13137)', () => {
+describe('live query replies', () => {
   it('classifies the real mode-2031 reply as cooked-echo-risk', () => {
     expect(COLOR_SCHEME_REPLY).toBe('\x1b[?997;1n')
     expect(needsCookedEchoSafeQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
     expect(needsCookedEchoSafeQueryReply(mode2031SequenceFor('light'))).toBe(true)
   })
 
-  it('swallows a live color-scheme DSR caret echo after query authority closes', () => {
-    vi.useFakeTimers()
-    const writes: string[] = []
-    const emissions: PtyIngressEmission[] = []
-    let ingress: PtyStartupIngress | undefined
-    ingress = new PtyStartupIngress({
-      ownerBackend: 'posix-pty',
-      write: (data) => {
-        writes.push(data)
-        ingress?.accept(POSIX_CSI_COOKED_ECHO(data))
-      },
-      onEmission: (emission) => emissions.push(emission)
-    })
-
-    expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
-    vi.advanceTimersByTime(0)
-    expect(writes).toEqual([COLOR_SCHEME_REPLY])
-    expect(visible(emissions)).toBe('')
-    expect(visible(emissions)).not.toContain('997;1n')
-    expect(visible(emissions)).not.toContain(COLOR_SCHEME_REPLY)
-
-    ingress.accept('Ok to proceed? (y) ')
-    expect(visible(emissions)).toBe('Ok to proceed? (y) ')
-    expect(visible(emissions)).not.toContain('997')
-    expect(writes).toEqual([COLOR_SCHEME_REPLY])
+  it('writes an echo-risk reply in the calling turn', () => {
+    const { ingress, writes } = harness()
+    expect(ingress.answerLiveQueryReply(OSC_COLOR_REPLY)).toBe(true)
+    // No timer advance: the whole point is that there is nothing to wait for.
+    expect(writes).toEqual([OSC_COLOR_REPLY])
     ingress.drainAndClose()
   })
 
-  it('swallows OSC color reply echoes under both POSIX projections', () => {
-    vi.useFakeTimers()
-    for (const echoOf of POSIX_OSC_COOKED_ECHOES) {
-      const writes: string[] = []
-      const emissions: PtyIngressEmission[] = []
-      let ingress: PtyStartupIngress | undefined
-      ingress = new PtyStartupIngress({
-        ownerBackend: 'posix-pty',
-        write: (data) => {
-          writes.push(data)
-          ingress?.accept(echoOf(data))
-        },
-        onEmission: (emission) => emissions.push(emission)
-      })
+  it('answers repeated identical replies without collapsing them', () => {
+    const { ingress, writes } = harness()
+    expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
+    expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
+    expect(writes).toEqual([COLOR_SCHEME_REPLY, COLOR_SCHEME_REPLY])
+    ingress.drainAndClose()
+  })
 
+  it('swallows the caret echo of a live DSR reply', () => {
+    let ingress!: PtyStartupIngress
+    const emissions: PtyIngressEmission[] = []
+    ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => ingress.accept(caretEcho(data)),
+      onEmission: (emission) => void emissions.push(emission)
+    })
+    expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
+    expect(visible(emissions)).toBe('')
+
+    ingress.accept('Ok to proceed? (y) ')
+    expect(visible(emissions)).toBe('Ok to proceed? (y) ')
+    ingress.drainAndClose()
+  })
+
+  it('swallows an OSC reply echo under every POSIX shape', () => {
+    for (const echoOf of [caretEcho, readlineEcho, (reply: string) => reply]) {
+      const { ingress, writes, emissions } = harness()
       expect(ingress.answerLiveQueryReply(OSC_COLOR_REPLY)).toBe(true)
-      vi.advanceTimersByTime(0)
       expect(writes).toEqual([OSC_COLOR_REPLY])
-      expect(visible(emissions)).toBe('')
+      ingress.accept(echoOf(OSC_COLOR_REPLY))
+      expect(visible(emissions), echoOf(OSC_COLOR_REPLY)).toBe('')
       ingress.drainAndClose()
     }
   })
 
-  it('defers a live query reply while the slave is still echoing', async () => {
-    vi.useFakeTimers()
-    const writes: string[] = []
-    const probe = scriptedEchoProbe('echoing', 'echoing', 'quiet')
-    const ingress = new PtyStartupIngress({
-      ownerBackend: 'posix-pty',
-      echoProbe: probe,
-      write: (data) => writes.push(data),
-      onEmission: () => {}
-    })
-
-    expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(writes).toEqual([])
-    await vi.advanceTimersByTimeAsync(20)
-    expect(writes).toEqual([])
-    await vi.advanceTimersByTimeAsync(20)
-    expect(writes).toEqual([COLOR_SCHEME_REPLY])
-    expect(probe.calls).toBe(3)
-    await vi.advanceTimersByTimeAsync(200)
-    expect(writes).toEqual([COLOR_SCHEME_REPLY])
-    ingress.drainAndClose()
-  })
-
-  it('writes within the echo budget when a probe never settles', async () => {
-    vi.useFakeTimers()
-    const writes: string[] = []
-    const echoProbe: PtySlaveEchoProbe = () => new Promise(() => {})
-    const ingress = new PtyStartupIngress({
-      ownerBackend: 'posix-pty',
-      echoProbe,
-      write: (data) => writes.push(data),
-      onEmission: () => {}
-    })
-
-    expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
-    await vi.advanceTimersByTimeAsync(199)
-    expect(writes).toEqual([])
-    await vi.advanceTimersByTimeAsync(1)
-    expect(writes).toEqual([COLOR_SCHEME_REPLY])
-    ingress.drainAndClose()
-  })
-
-  it('caps probe subprocess starts across live reply bursts', async () => {
-    vi.useFakeTimers()
-    const writes: string[] = []
-    const probe = scriptedEchoProbe('echoing')
-    const ingress = new PtyStartupIngress({
-      ownerBackend: 'posix-pty',
-      echoProbe: probe,
-      write: (data) => writes.push(data),
-      onEmission: () => {}
-    })
-
-    expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
-    await vi.advanceTimersByTimeAsync(200)
-    expect(probe.calls).toBe(10)
-    expect(writes).toEqual([COLOR_SCHEME_REPLY])
-
-    expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(probe.calls).toBe(10)
-    expect(writes).toEqual([COLOR_SCHEME_REPLY, COLOR_SCHEME_REPLY])
-    ingress.drainAndClose()
-  })
-
-  it('does not route ordinary keystrokes through the echo-safe reply path', () => {
-    expect(needsCookedEchoSafeQueryReply('y')).toBe(false)
-    expect(needsCookedEchoSafeQueryReply('yes\r')).toBe(false)
-    expect(needsCookedEchoSafeQueryReply('\x1b[A')).toBe(false)
-    expect(needsCookedEchoSafeQueryReply('\x1b[3;1R')).toBe(false)
-  })
-
-  it('swallows a pre-coalesced repeated ?997 payload on the host write path', () => {
-    vi.useFakeTimers()
+  it('never holds a partial verbatim echo, so a torn query is still answered', () => {
     const writes: string[] = []
     const emissions: PtyIngressEmission[] = []
-    let ingress: PtyStartupIngress | undefined
-    ingress = new PtyStartupIngress({
+    const ingress = new PtyStartupIngress({
+      // Query authority open, so a query that survives the read boundary gets answered.
+      intent: { colors: { foreground: '#2e3434', background: '#ffffff' }, deadlineMs: 5_000 },
       ownerBackend: 'posix-pty',
-      write: (data) => {
-        writes.push(data)
-        ingress?.accept(POSIX_CSI_COOKED_ECHO(data))
-      },
-      onEmission: (emission) => emissions.push(emission)
+      write: (data) => void writes.push(data),
+      onEmission: (emission) => void emissions.push(emission)
     })
+    expect(ingress.answerLiveQueryReply(OSC_COLOR_REPLY)).toBe(true)
+    writes.length = 0
 
-    const coalesced = COLOR_SCHEME_REPLY + COLOR_SCHEME_REPLY
-    expect(needsCookedEchoSafeQueryReply(coalesced)).toBe(false)
-    expect(extractOnlyCookedEchoSafeQueryReplies(coalesced)).toEqual([
+    // The verbatim shape starts with ESC, so any read ending on a bare ESC is a strict
+    // prefix of it. Holding that would take the ESC from the query parser and an expired
+    // hold would release it raw — the query would never be answered. Complete-match-only
+    // is what makes the shape safe to project at all.
+    ingress.accept('output so far\x1b')
+    ingress.accept(']11;?\x07')
+    // Answered: the ESC reached the query parser. Were the verbatim shape prefix-held as
+    // an echo candidate, that ESC would have been taken and the query lost.
+    expect(writes).toEqual(['\x1b]11;rgb:ffff/ffff/ffff\x1b\\'])
+    // And the query itself is suppressed from the visible stream, not echoed to the user.
+    expect(visible(emissions)).toBe('output so far')
+    ingress.drainAndClose()
+  })
+
+  it('leaves ordinary keystrokes alone', () => {
+    for (const keystroke of ['y', 'gh auth login\r', '\x1b[A', '\x1b', '\x03']) {
+      expect(needsCookedEchoSafeQueryReply(keystroke)).toBe(false)
+    }
+    const { ingress, writes } = harness()
+    expect(ingress.answerLiveQueryReply('ls\r')).toBe(false)
+    expect(writes).toEqual([])
+    ingress.drainAndClose()
+  })
+
+  it('swallows a pre-coalesced repeated ?997 payload', () => {
+    const doubled = COLOR_SCHEME_REPLY + COLOR_SCHEME_REPLY
+    expect(extractOnlyCookedEchoSafeQueryReplies(doubled)).toEqual([
       COLOR_SCHEME_REPLY,
       COLOR_SCHEME_REPLY
     ])
-    expect(ingress.answerLiveQueryReply(coalesced)).toBe(true)
-    vi.advanceTimersByTime(0)
-    expect(writes).toEqual([COLOR_SCHEME_REPLY, COLOR_SCHEME_REPLY])
-    expect(visible(emissions)).toBe('')
-    expect(visible(emissions)).not.toContain('997')
-    ingress.drainAndClose()
-  })
-
-  it('preserves identical replies after a quiet CSI write', async () => {
-    vi.useFakeTimers()
-    const writes: string[] = []
-    const probe = scriptedEchoProbe('quiet')
-    const ingress = new PtyStartupIngress({
-      ownerBackend: 'posix-pty',
-      echoProbe: probe,
-      write: (data) => writes.push(data),
-      onEmission: () => {}
-    })
-
-    expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(writes).toEqual([COLOR_SCHEME_REPLY])
-
-    expect(ingress.answerLiveQueryReply(COLOR_SCHEME_REPLY)).toBe(true)
-    await vi.advanceTimersByTimeAsync(0)
+    const { ingress, writes } = harness()
+    expect(ingress.answerLiveQueryReply(doubled)).toBe(true)
     expect(writes).toEqual([COLOR_SCHEME_REPLY, COLOR_SCHEME_REPLY])
     ingress.drainAndClose()
   })
 
-  it('bounds pending writes and unmatched live echo projections', async () => {
-    vi.useFakeTimers()
+  it('leaves latency-critical replies on the host path, in call order', () => {
+    const { ingress, writes } = harness()
+    // CPR and DA1 need no echo containment, so the delivery declines them and the host
+    // writes them itself — which is what keeps them behind the daemon's post-ready flush
+    // gate instead of splicing into a buffered startup command.
+    for (const reply of [CPR_REPLY, DA1_REPLY, OSC_COLOR_REPLY + DA1_REPLY]) {
+      expect(ingress.answerLiveQueryReply(reply)).toBe(false)
+    }
+    expect(writes).toEqual([])
+    ingress.drainAndClose()
+  })
+
+  it('bounds unmatched echo projections instead of shadowing the session', () => {
+    const { ingress, writes, emissions } = harness()
+    for (let index = 0; index < 200; index += 1) {
+      ingress.answerLiveQueryReply(`\x1b]11;rgb:${String(index).padStart(2, '0')}\x07`)
+    }
+    expect(writes).toHaveLength(200)
+    // A projection that never lands must age out, or it keeps deleting matching spans
+    // out of ordinary output forever.
+    ingress.accept('x'.repeat(300_000))
+    ingress.accept(caretEcho('\x1b]11;rgb:00\x07'))
+    expect(visible(emissions)).toContain(caretEcho('\x1b]11;rgb:00\x07'))
+    ingress.drainAndClose()
+  })
+  // The self-heal for the one case an immediate write cannot serve: a program that
+  // queries while cooked and then arms raw mode with TCSAFLUSH discards the reply along
+  // with the rest of its input queue. Measured on a real pty; TCSANOW/TCSADRAIN (libuv,
+  // so every Node agent) keep it. Such a program re-queries after its own timeout, and
+  // the re-query must NOT be swallowed as already-answered — it is passed downstream so
+  // the renderer's emulator answers it, by which point the program is raw.
+  it('passes a duplicate query downstream instead of swallowing it', () => {
     const writes: string[] = []
     const emissions: PtyIngressEmission[] = []
     const ingress = new PtyStartupIngress({
+      intent: { colors: { foreground: '#2e3434', background: '#ffffff' }, deadlineMs: 5_000 },
       ownerBackend: 'posix-pty',
-      write: (data) => writes.push(data),
-      onEmission: (emission) => emissions.push(emission)
+      write: (data) => void writes.push(data),
+      onEmission: (emission) => void emissions.push(emission)
     })
-    const replies = Array.from(
-      { length: 65 },
-      (_, index) => `\x1b]10;rgb:${index.toString().padStart(2, '0')}\x07`
-    )
 
-    for (const reply of replies) {
-      expect(ingress.answerLiveQueryReply(reply)).toBe(true)
-    }
-    // The 65th enqueue forces the bounded pending set to flush without dropping data.
-    expect(writes).toHaveLength(64)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(writes).toEqual(replies)
+    ingress.accept('\x1b]11;?\x07')
+    expect(writes).toEqual(['\x1b]11;rgb:ffff/ffff/ffff\x1b\\'])
+    // Answered here, so the query itself is consumed and never rendered.
+    expect(visible(emissions)).toBe('')
 
-    const firstReply = replies[0]
-    const lastReply = replies.at(-1)
-    if (!firstReply || !lastReply) {
-      throw new Error('expected bounded reply fixture')
-    }
-    ingress.accept(POSIX_CSI_COOKED_ECHO(firstReply))
-    ingress.accept(POSIX_CSI_COOKED_ECHO(lastReply))
-    expect(visible(emissions)).toContain('rgb:00')
-    expect(visible(emissions)).not.toContain('rgb:64')
+    ingress.accept('\x1b]11;?\x07')
+    // Not answered twice — a duplicate reply corrupts a parser already mid-read — but
+    // forwarded verbatim, so the downstream emulator can answer the retry.
+    expect(writes).toHaveLength(1)
+    expect(visible(emissions)).toBe('\x1b]11;?\x07')
     ingress.drainAndClose()
   })
 })

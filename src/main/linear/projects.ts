@@ -18,14 +18,9 @@ import {
   LINEAR_ISSUE_API_PAGE_SIZE_MAX,
   clampLinearIssueListLimit
 } from '../../shared/linear/issue-read-limits'
-import {
-  acquire,
-  clearToken,
-  getClients,
-  isAuthError,
-  release,
-  type LinearClientForWorkspace
-} from './client'
+import { acquire, release } from './linear-request-concurrency'
+import { clearToken } from './linear-token-store'
+import { getClients, isAuthError, type LinearClientForWorkspace } from './client'
 
 type LinearRawVariables = Record<string, unknown>
 

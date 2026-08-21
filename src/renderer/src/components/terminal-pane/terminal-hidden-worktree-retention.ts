@@ -1,4 +1,5 @@
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { terminalProviderHasAuthoritativeSnapshot } from '../terminal/terminal-provider-snapshot-capability'
 import {
@@ -9,7 +10,6 @@ import {
 } from './terminal-hidden-view-parking'
 import {
   hasTerminalParkPtyOwnerAuthority,
-  isSnapshotBackedTerminalPty,
   type TerminalParkPaneIdentity,
   type TerminalParkWorktreeOwner
 } from './terminal-park-pty-restore-eligibility'
@@ -59,16 +59,90 @@ export function isEvictionExemptTerminalPty(
   worktreeOwner: TerminalParkWorktreeOwner,
   paneIdentity: TerminalParkPaneIdentity
 ): boolean {
+  return classifyEvictionExemptTerminalPty(ptyId, worktreeId, worktreeOwner, paneIdentity) !== null
+}
+
+export type EvictionExemptTerminalPtyRoute =
+  | 'fail-open'
+  | 'foreign-worktree'
+  | 'capability-unknown'
+  | 'remote-unowned'
+
+// Why routes: an all-exempt force-park frees nothing, and only per-route
+// counts in the field can say whether daemon fail-open ids, unresolved
+// snapshot capability, or an unproven remote owner dominates that degenerate
+// case.
+export function classifyEvictionExemptTerminalPty(
+  ptyId: string | null | undefined,
+  worktreeId: string,
+  worktreeOwner: TerminalParkWorktreeOwner,
+  paneIdentity: TerminalParkPaneIdentity
+): EvictionExemptTerminalPtyRoute | null {
   if (!ptyId) {
-    return false
+    return null
   }
   if (isRemoteRuntimePtyId(ptyId) || parseAppSshPtyId(ptyId)) {
-    return !hasTerminalParkPtyOwnerAuthority(ptyId, worktreeId, worktreeOwner, paneIdentity)
+    return hasTerminalParkPtyOwnerAuthority(ptyId, worktreeId, worktreeOwner, paneIdentity)
+      ? null
+      : 'remote-unowned'
   }
-  return (
-    !isSnapshotBackedTerminalPty(ptyId, worktreeId) ||
-    !terminalProviderHasAuthoritativeSnapshot(ptyId)
-  )
+  const separatorIdx = ptyId.lastIndexOf(PTY_SESSION_ID_SEPARATOR)
+  if (separatorIdx === -1) {
+    return 'fail-open'
+  }
+  if (ptyId.slice(0, separatorIdx) !== worktreeId) {
+    return 'foreign-worktree'
+  }
+  return terminalProviderHasAuthoritativeSnapshot(ptyId) ? null : 'capability-unknown'
+}
+
+export type EvictionExemptRouteCounts = {
+  failOpen: number
+  foreignWorktree: number
+  capabilityUnknown: number
+  remoteUnowned: number
+  /** Tab-level pty classifies clean, so the exemption came from a split pane's pty. */
+  splitPane: number
+}
+
+export function countEvictionExemptTabRoutes(
+  tabs: readonly Pick<TerminalTab, 'id' | 'ptyId'>[],
+  worktreeId: string,
+  worktreeOwner: TerminalParkWorktreeOwner
+): EvictionExemptRouteCounts {
+  const counts: EvictionExemptRouteCounts = {
+    failOpen: 0,
+    foreignWorktree: 0,
+    capabilityUnknown: 0,
+    remoteUnowned: 0,
+    splitPane: 0
+  }
+  for (const tab of tabs) {
+    // leafId null because this walks tab-level ptys; a split pane's pty lands in splitPane.
+    const identity: TerminalParkPaneIdentity = { tabId: tab.id, leafId: null }
+    switch (classifyEvictionExemptTerminalPty(tab.ptyId, worktreeId, worktreeOwner, identity)) {
+      case 'fail-open':
+        counts.failOpen += 1
+        break
+      case 'foreign-worktree':
+        counts.foreignWorktree += 1
+        break
+      case 'capability-unknown':
+        counts.capabilityUnknown += 1
+        break
+      case 'remote-unowned':
+        counts.remoteUnowned += 1
+        break
+      case null:
+        counts.splitPane += 1
+        break
+    }
+  }
+  return counts
+}
+
+export function formatEvictionExemptRouteCounts(counts: EvictionExemptRouteCounts): string {
+  return `routes=fail-open:${counts.failOpen},foreign:${counts.foreignWorktree},capability:${counts.capabilityUnknown},remote-unowned:${counts.remoteUnowned},split-pane:${counts.splitPane}`
 }
 
 export type TerminalWorktreeRetentionCandidate = {

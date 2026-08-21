@@ -53,7 +53,7 @@ on:
         default: ''
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-cut
@@ -68,6 +68,8 @@ jobs:
     if: github.repository == 'stablyai/orca'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: write
     outputs:
       tag: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
       should_release: ${{ steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '' }}
@@ -923,6 +925,87 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  skill-sharing-release-gate:
+    needs: cut
+    if: needs.cut.outputs.should_release == 'true'
+    name: skill sharing release gate ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            platform: mac
+          - os: windows-2022
+            platform: windows
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ needs.cut.outputs.tag }}
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+
+      - name: Install Electron package binary for tests
+        run: node config/scripts/install-electron-package-binary.mjs
+
+      - name: Run skill package, transaction, and compatibility suites
+        env:
+          ORCA_REAL_PROCESS_SKILL_TEST: '1'
+          ORCA_REAL_WINDOWS_SKILL_TEST: ${{ runner.os == 'Windows' && '1' || '0' }}
+        run: pnpm test:skill-sharing:release --reporter=json --outputFile=skill-sharing-release-results.json
+
+      - name: Archive bounded skill-sharing results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: skill-sharing-release-${{ matrix.platform }}
+          path: skill-sharing-release-results.json
+          retention-days: 14
+          if-no-files-found: error
+
+  skill-sharing-linux-floor-release-gate:
+    needs: cut
+    if: needs.cut.outputs.should_release == 'true'
+    name: skill sharing release gate linux-glibc-2.31
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container: ubuntu:20.04
+
+    steps:
+      - name: Install Ubuntu 20.04 prerequisites
+        run: apt-get update && apt-get install -y build-essential ca-certificates git python3
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ needs.cut.outputs.tag }}
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+
+      - name: Install Electron package binary for tests
+        run: node config/scripts/install-electron-package-binary.mjs
+
+      - name: Run skill package, transaction, and compatibility suites
+        env:
+          ORCA_REAL_PROCESS_SKILL_TEST: '1'
+        run: pnpm test:skill-sharing:release --reporter=json --outputFile=skill-sharing-release-results.json
+
+      - name: Archive bounded skill-sharing results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: skill-sharing-release-linux-glibc-2.31
+          path: skill-sharing-release-results.json
+          retention-days: 14
+          if-no-files-found: error
+
   # Why: these broader terminal rendering repros are useful release evidence,
   # but they include heavier app-like flows and must not block publishing.
   terminal-rendering-release-evidence:
@@ -1026,12 +1109,14 @@ jobs:
           - os: ubuntu-latest
             platform: linux-x64
             release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --x64 --publish always
+            unpacked_dir: dist/linux-unpacked
             eb_cache_path: |
               ~/.cache/electron
               ~/.cache/electron-builder
           - os: ubuntu-24.04-arm
             platform: linux-arm64
             release_command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_LINUX_ARM64_RELEASE=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --arm64 --publish always
+            unpacked_dir: dist/linux-arm64-unpacked
             eb_cache_path: |
               ~/.cache/electron
               ~/.cache/electron-builder
@@ -1208,6 +1293,17 @@ jobs:
           command: ${{ matrix.release_command }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Load packaged node-pty on the Linux floor
+        if: matrix.platform == 'linux-x64' || matrix.platform == 'linux-arm64'
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: >-
+            node config/scripts/run-linux-packaged-node-pty-floor-smoke.mjs
+            --app-dir ${{ matrix.unpacked_dir }}
 
       # Why: SignPath signs GitHub workflow artifacts, so Windows builds must
       # upload only after the production-signed installer has been returned.
@@ -1896,6 +1992,8 @@ jobs:
       - cut
       - build
       - build-mac
+      - skill-sharing-linux-floor-release-gate
+      - skill-sharing-release-gate
       - terminal-rendering-golden
     runs-on: ubuntu-latest
     permissions:

@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import { TerminalHost } from './terminal-host'
 
-function createClaimedSubprocess(): SubprocessHandle & { exit: () => void } {
+function createClaimedSubprocess(): SubprocessHandle & {
+  emitData: (data: string) => void
+  exit: () => void
+} {
+  let onData: ((data: string) => void) | null = null
   let onExit: ((code: number) => void) | null = null
   return {
     pid: 99_999,
@@ -12,11 +16,14 @@ function createClaimedSubprocess(): SubprocessHandle & { exit: () => void } {
     kill: vi.fn(),
     forceKill: vi.fn(),
     signal: vi.fn(),
-    onData: vi.fn(),
+    onData: (listener) => {
+      onData = listener
+    },
     onExit: (listener) => {
       onExit = listener
     },
     dispose: vi.fn(),
+    emitData: (data) => onData?.(data),
     exit: () => onExit?.(0)
   }
 }
@@ -80,5 +87,93 @@ describe('TerminalHost agent-session claims', () => {
       owner: { ptyId: 'session-claimed-first', surface }
     })
     expect(spawnSubprocess).toHaveBeenCalledOnce()
+  })
+
+  it('rejects a competing claim without replacing the winning stream', async () => {
+    let releaseSpawn: () => void = () => {}
+    const spawnGate = new Promise<void>((resolve) => {
+      releaseSpawn = resolve
+    })
+    host = new TerminalHost({
+      spawnSubprocess: async () => {
+        await spawnGate
+        subprocess = createClaimedSubprocess()
+        return subprocess
+      }
+    })
+    const winningData = vi.fn()
+    const competingData = vi.fn()
+
+    const winning = host.createOrAttach({
+      sessionId: 'shared-requested-id',
+      cols: 80,
+      rows: 24,
+      streamClient: { onData: winningData, onExit: vi.fn() },
+      agentSessionEnsure: { claim, surface }
+    })
+    const competing = host.createOrAttach({
+      sessionId: 'shared-requested-id',
+      cols: 80,
+      rows: 24,
+      streamClient: { onData: competingData, onExit: vi.fn() },
+      agentSessionEnsure: {
+        claim: {
+          ...claim,
+          keyId: 'other-key',
+          identityDigest: 'ccccccccccccccccccccccccccccccccccccccccccc'
+        },
+        surface: { ...surface, terminalHandle: 'term_competing' }
+      }
+    })
+
+    releaseSpawn()
+    await expect(winning).resolves.toMatchObject({ isNew: true })
+    await expect(competing).rejects.toThrow('agent_session_claim_unavailable')
+
+    subprocess?.emitData('winner-only')
+    expect(winningData).toHaveBeenCalledExactlyOnceWith('winner-only')
+    expect(competingData).not.toHaveBeenCalled()
+  })
+
+  it('does not attach a canceled adopter after waiting for a reservation', async () => {
+    let releaseSpawn: () => void = () => {}
+    const spawnGate = new Promise<void>((resolve) => {
+      releaseSpawn = resolve
+    })
+    host = new TerminalHost({
+      spawnSubprocess: async () => {
+        await spawnGate
+        subprocess = createClaimedSubprocess()
+        return subprocess
+      }
+    })
+    const winningData = vi.fn()
+    const canceledData = vi.fn()
+    let canceled = false
+
+    const winning = host.createOrAttach({
+      sessionId: 'reservation-owner',
+      cols: 80,
+      rows: 24,
+      streamClient: { onData: winningData, onExit: vi.fn() },
+      agentSessionEnsure: { claim, surface }
+    })
+    const adopter = host.createOrAttach({
+      sessionId: 'reservation-adopter',
+      cols: 80,
+      rows: 24,
+      streamClient: { onData: canceledData, onExit: vi.fn() },
+      agentSessionEnsure: { claim, surface },
+      isCanceled: () => canceled
+    })
+
+    canceled = true
+    releaseSpawn()
+    await expect(winning).resolves.toMatchObject({ isNew: true })
+    await expect(adopter).rejects.toThrow('Attach canceled for session reservation-owner')
+
+    subprocess?.emitData('winner-only')
+    expect(winningData).toHaveBeenCalledExactlyOnceWith('winner-only')
+    expect(canceledData).not.toHaveBeenCalled()
   })
 })

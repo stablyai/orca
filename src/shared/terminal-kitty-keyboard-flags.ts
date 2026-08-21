@@ -1,3 +1,13 @@
+export const KITTY_DISAMBIGUATE_ESCAPE_CODES = 0b00001
+export const KITTY_REPORT_EVENT_TYPES = 0b00010
+export const KITTY_REPORT_ALTERNATE_KEYS = 0b00100
+export const KITTY_REPORT_ALL_KEYS_AS_ESCAPE_CODES = 0b01000
+export const KITTY_REPORT_ASSOCIATED_TEXT = 0b10000
+
+export function kittyReportsAllKeysAsEscapeCodes(flags: number): boolean {
+  return (flags & KITTY_REPORT_ALL_KEYS_AS_ESCAPE_CODES) !== 0
+}
+
 /**
  * Boundary validation for the optional `kittyKeyboardFlags` snapshot field
  * shared by Electron IPC, remote JSON decoding, and tracker restore.
