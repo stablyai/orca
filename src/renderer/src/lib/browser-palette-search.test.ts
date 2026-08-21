@@ -363,6 +363,37 @@ describe('browser-palette-search', () => {
     expect(results[1].pageId).toBe('page-other')
   })
 
+  it('breaks a rank tie between equally-matching pages by recency', () => {
+    // Ids are ordered so an id-only tiebreak would flip this expectation.
+    const entries = [
+      makeEntry({
+        page: makePage({ id: 'page-a-older', title: 'React Docs' }),
+        workspace: makeWorkspace({ id: 'ws-1' }),
+        worktree: makeWorktree(),
+        repoName: 'repo',
+        worktreeSortIndex: 0,
+        isCurrentPage: false,
+        isCurrentWorktree: false,
+        lastActiveAt: 1000
+      }),
+      makeEntry({
+        page: makePage({ id: 'page-z-newer', title: 'React Docs' }),
+        workspace: makeWorkspace({ id: 'ws-2' }),
+        worktree: makeWorktree(),
+        repoName: 'repo',
+        worktreeSortIndex: 0,
+        isCurrentPage: false,
+        isCurrentWorktree: false,
+        lastActiveAt: 5000
+      })
+    ]
+
+    const results = searchBrowserPages(entries, 'react')
+
+    expect(results.map((result) => result.pageId)).toEqual(['page-z-newer', 'page-a-older'])
+    expect(results[0].lastActiveAt).toBe(5000)
+  })
+
   it('matches the visible workspace label in browser search', () => {
     const results = searchBrowserPages(
       [

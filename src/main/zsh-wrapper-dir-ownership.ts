@@ -43,15 +43,22 @@ function usableInheritedZdotdir(value: string | undefined): string | null {
   return value
 }
 
-export function resolveInheritedZdotdir(env: EnvLike, homeFallback = ''): string {
+/**
+ * The ZDOTDIR the user genuinely has, or null.
+ *
+ * Why null rather than a $HOME fallback: the wrapper hands this value straight
+ * back to the shell, and a user with no ZDOTDIR must end up with none — not with
+ * one Orca invented. `ZDOTDIR=$HOME` and an unset ZDOTDIR look identical to zsh
+ * when it reads startup files, but they are different environments for
+ * everything the pane goes on to launch.
+ */
+export function resolveInheritedZdotdir(env: EnvLike): string | null {
   return (
-    usableInheritedZdotdir(env.ZDOTDIR) ??
-    usableInheritedZdotdir(env.ORCA_ORIG_ZDOTDIR) ??
-    env.HOME ??
-    homeFallback
+    usableInheritedZdotdir(env.ZDOTDIR) ?? usableInheritedZdotdir(env.ORCA_ORIG_ZDOTDIR) ?? null
   )
 }
 
-export function resolveInheritedZshenvSourceDir(env: EnvLike, homeFallback = ''): string {
-  return usableInheritedZdotdir(env.ZDOTDIR) ?? env.HOME ?? homeFallback
+/** Spawn-env entry for the wrapper's ZDOTDIR handback; absent when there is none. */
+export function inheritedZdotdirEnv(inherited: string | null): Record<string, string> {
+  return inherited ? { ORCA_ORIG_ZDOTDIR: inherited } : {}
 }

@@ -82,6 +82,42 @@ function makeEntry(entry: Omit<SearchableSimulatorTab, 'document'>): SearchableS
   }
 }
 
+describe('simulator-palette-search lastActiveAt', () => {
+  function entryFor(overrides: Partial<Tab>): SearchableSimulatorTab {
+    return makeEntry({
+      tab: makeTab(overrides),
+      worktree: makeWorktree(),
+      repoName: 'repo/mobile',
+      worktreeSortIndex: 0,
+      isCurrentTab: false,
+      isCurrentWorktree: true
+    })
+  }
+
+  it('is null when the tab was never focused', () => {
+    expect(searchSimulatorTabs([entryFor({})], '')[0].lastActiveAt).toBeNull()
+  })
+
+  it('carries the tab focus timestamp, never older than the tab itself', () => {
+    expect(
+      searchSimulatorTabs([entryFor({ createdAt: 5000, lastFocusedAt: 9000 })], '')[0].lastActiveAt
+    ).toBe(9000)
+    expect(
+      searchSimulatorTabs([entryFor({ createdAt: 5000, lastFocusedAt: 1000 })], '')[0].lastActiveAt
+    ).toBe(5000)
+  })
+
+  it('breaks a rank tie between equally-matching tabs by recency', () => {
+    // Ids are ordered so an id-only tiebreak would flip this expectation.
+    const older = entryFor({ id: 'sim-a-older', lastFocusedAt: 1000 })
+    const newer = entryFor({ id: 'sim-z-newer', lastFocusedAt: 5000 })
+
+    const results = searchSimulatorTabs([older, newer], 'emulator')
+
+    expect(results.map((result) => result.tabId)).toEqual(['sim-z-newer', 'sim-a-older'])
+  })
+})
+
 describe('simulator-palette-search', () => {
   it('keeps empty-query ordering deterministic and context-first', () => {
     const results = searchSimulatorTabs(

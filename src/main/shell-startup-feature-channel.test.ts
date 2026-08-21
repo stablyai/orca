@@ -16,6 +16,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { selectShellStartupFeatures } from './shell-startup-features'
+import { runZshPty } from './zsh-startup-hook-pty-harness'
 import { ZSH_WRAPPER_DIR_MARKER_FILE } from './shell-templates'
 import {
   importFreshLocalPtyShellReady,
@@ -160,15 +161,19 @@ describePosix('zsh launch config', () => {
     try {
       const { getShellLaunchConfig } = await importFreshLocalPtyShellReady()
 
-      // Empty dir: not a config root whoever wrote it.
-      expect(getShellLaunchConfig('/bin/zsh', ['history']).env.ORCA_ORIG_ZDOTDIR).toBe(home)
+      // Empty dir: not a config root whoever wrote it. Absent rather than $HOME
+      // because the wrapper hands this value straight back to the shell, and a
+      // user with no ZDOTDIR must end up with none.
+      expect(getShellLaunchConfig('/bin/zsh', ['history']).env.ORCA_ORIG_ZDOTDIR).toBeUndefined()
 
       // Stamped as Orca-owned: rejected by positive identification, even though
       // the path shape is not one of Orca's.
       writeFileSync(join(foreignWrapper, '.zshrc'), '')
       writeFileSync(join(foreignWrapper, ZSH_WRAPPER_DIR_MARKER_FILE), '')
       const stamped = await importFreshLocalPtyShellReady()
-      expect(stamped.getShellLaunchConfig('/bin/zsh', ['history']).env.ORCA_ORIG_ZDOTDIR).toBe(home)
+      expect(
+        stamped.getShellLaunchConfig('/bin/zsh', ['history']).env.ORCA_ORIG_ZDOTDIR
+      ).toBeUndefined()
 
       // A real user config dir still round-trips.
       rmSync(join(foreignWrapper, ZSH_WRAPPER_DIR_MARKER_FILE))
@@ -238,35 +243,26 @@ describePosix('epilogue under hostile user shell options', () => {
       const { getShellLaunchConfig } = await importFreshLocalPtyShellReady()
       const launch = getShellLaunchConfig(ZSH_PATH, features)
 
-      const output = execFileSync(
-        ZSH_PATH,
-        [
-          ...(launch.args ?? ['-l']),
-          '-i',
-          '-c',
-          'print -r -- "LINEINIT=${widgets[zle-line-init]:-none}"; ' +
-            'print -r -- "PRECMD=${precmd_functions[*]:-none}"; ' +
-            'print -r -- "OPENCODE=${OPENCODE_CONFIG_DIR:-none}"; ' +
-            'print -r -- "ZDOTDIR=${ZDOTDIR:-}"; print -r -- "HISTFILE=${HISTFILE:-}"'
-        ],
-        {
-          encoding: 'utf8',
-          timeout: 20_000,
-          env: {
-            PATH: '/usr/bin:/bin',
-            ...spawnEnv,
-            ...launch.env,
-            ORCA_ORIG_ZDOTDIR: home,
-            ORCA_ZSHENV_SOURCE_DIR: home
-          }
-        }
-      )
+      // Why a PTY: every feature is delivered from a precmd hook, and a shell
+      // started with -c never reaches a prompt to run one.
+      const { values } = await runZshPty({
+        env: {
+          PATH: '/usr/bin:/bin',
+          ...spawnEnv,
+          ...launch.env,
+          ORCA_ORIG_ZDOTDIR: home
+        },
+        report: ['LINEINIT', 'PRECMD', 'OPENCODE_CONFIG_DIR', 'ZDOTDIR', 'HISTFILE'],
+        commands: [
+          'LINEINIT="${widgets[zle-line-init]:-none}"; PRECMD="${precmd_functions[*]:-none}"'
+        ]
+      })
 
-      expect(output).toContain('LINEINIT=user:__orca_prompt_mark')
-      expect(output).toContain('PRECMD=__orca_osc133_precmd')
-      expect(output).toContain(`OPENCODE=${opencodeDir}`)
-      expect(output).toContain(`ZDOTDIR=${home}`)
-      expect(output).toContain(`HISTFILE=${scoped}`)
+      expect(values.LINEINIT).toBe('user:__orca_prompt_mark')
+      expect(values.PRECMD).toContain('__orca_osc133_precmd')
+      expect(values.OPENCODE_CONFIG_DIR).toBe(opencodeDir)
+      expect(values.ZDOTDIR).toBe(home)
+      expect(values.HISTFILE).toBe(scoped)
     }
   )
 })
@@ -295,13 +291,10 @@ describePosix('history-only pane in a real zsh', () => {
     rmSync(home, { recursive: true, force: true })
   })
 
-  const OBSERVABLES =
-    'print -r -- "PRECMD=${precmd_functions[*]}"; ' +
-    'print -r -- "PREEXEC=${preexec_functions[*]}"; ' +
-    'print -r -- "LINEINIT=${widgets[zle-line-init]:-none}"; ' +
-    'print -r -- "ZDOTDIR=$ZDOTDIR"; ' +
-    'print -r -- "FEATURES=[${ORCA_SHELL_FEATURES:-}]"; ' +
-    'print -r -- "ORCA_HISTFILE=[${ORCA_HISTFILE:-}]"'
+  function withoutInheritedZdotdir(env: Record<string, string>): Record<string, string> {
+    const { ORCA_ORIG_ZDOTDIR: _inherited, ...rest } = env
+    return rest
+  }
 
   async function launchHistoryOnly(): Promise<{
     args: string[]
@@ -327,11 +320,11 @@ describePosix('history-only pane in a real zsh', () => {
       env: {
         PATH: '/usr/bin:/bin',
         ...spawnEnv,
-        ...launch.env,
-        // Why override: the launch config reads the real process env, and this
-        // run must resolve the user's config against the sandbox home.
-        ORCA_ORIG_ZDOTDIR: home,
-        ORCA_ZSHENV_SOURCE_DIR: home
+        // Why ORCA_ORIG_ZDOTDIR is stripped: the launch config computes it from
+        // the real process env, which would leak the developer's own ZDOTDIR
+        // into the run. This sandbox home has none, so the pane must end up with
+        // none — which is also what makes it comparable to an unwrapped pane.
+        ...withoutInheritedZdotdir(launch.env)
       },
       zdotdir: launch.env.ZDOTDIR
     }
@@ -357,34 +350,38 @@ describePosix('history-only pane in a real zsh', () => {
     expect(output).not.toContain('history')
   })
 
-  itWithZsh('emits no OSC 133 and matches an unwrapped pane', async () => {
-    const { args, env } = await launchHistoryOnly()
+  itWithZsh(
+    'emits no OSC 133 and leaves a pane observably identical to an unwrapped one',
+    async () => {
+      // Why a PTY: the hook runs from the first prompt's precmd sweep, so a shell
+      // started with -c would report a pane Orca had not finished setting up.
+      const { env } = await launchHistoryOnly()
+      const capture = [
+        'PRECMD="${precmd_functions[*]}"; PREEXEC="${preexec_functions[*]}"',
+        'LINEINIT="${widgets[zle-line-init]:-none}"'
+      ]
+      const report = ['PRECMD', 'PREEXEC', 'LINEINIT', 'ZDOTDIR', 'ORCA_SHELL_FEATURES']
 
-    const wrapped = execFileSync(ZSH_PATH, [...args, '-i', '-c', OBSERVABLES], {
-      encoding: 'utf8',
-      timeout: 20_000,
-      env
-    })
-    const unwrapped = execFileSync(ZSH_PATH, ['-l', '-i', '-c', OBSERVABLES], {
-      encoding: 'utf8',
-      timeout: 20_000,
-      env: { PATH: '/usr/bin:/bin', HOME: home }
-    })
+      const wrapped = await runZshPty({ env, commands: capture, report })
+      const unwrapped = await runZshPty({
+        env: { PATH: '/usr/bin:/bin', HOME: home },
+        commands: capture,
+        report
+      })
 
-    expect(wrapped).not.toContain('\x1b]133;')
-    expect(wrapped).toContain('PRECMD=\n')
-    expect(wrapped).toContain('LINEINIT=none')
-    // Startup files run in the same order with the same hooks, so the pane is
-    // observably what it was before it got wrapped.
-    const comparable = (output: string): string[] =>
-      output
-        .split('\n')
-        .filter((line) => !line.startsWith('ORCA_HISTFILE=') && !line.startsWith('ZDOTDIR='))
-    expect(comparable(wrapped)).toEqual(comparable(unwrapped))
-    // The one carried-over difference, unchanged from every pane Orca already
-    // wrapped: ZDOTDIR ends up explicitly set to the user's config dir, which
-    // is the value zsh itself defaults to when it is unset.
-    expect(wrapped).toContain(`ZDOTDIR=${home}`)
-    expect(unwrapped).toContain('ZDOTDIR=\n')
-  })
+      expect(wrapped.output).not.toContain('\x1b]133;')
+      // The whole point of removing the hook rather than parking a no-op in its
+      // place: a history-only pane leaves no Orca name in the user's hook arrays.
+      expect(wrapped.values.PRECMD).toBe(unwrapped.values.PRECMD)
+      expect(wrapped.values.PREEXEC).toBe(unwrapped.values.PREEXEC)
+      // Why compared and not pinned to 'none': a host whose global zsh config
+      // installs its own zle-line-init widget has one either way, and what Orca
+      // owes is that it looks the same wrapped as unwrapped.
+      expect(wrapped.values.LINEINIT).toBe(unwrapped.values.LINEINIT)
+      expect(wrapped.values.PRECMD).not.toContain('orca')
+      // ZDOTDIR matches too, because the wrapper hands back exactly what it found.
+      expect(wrapped.values.ZDOTDIR).toBe(unwrapped.values.ZDOTDIR)
+      expect(wrapped.values.ORCA_SHELL_FEATURES).toBe('UNSET')
+    }
+  )
 })
