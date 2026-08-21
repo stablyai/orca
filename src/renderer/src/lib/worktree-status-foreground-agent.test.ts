@@ -46,10 +46,16 @@ function tab(overrides: Partial<TerminalTab> = {}): TerminalTab {
 // the word "claude". Process-table identity settles ownership without the title.
 describe('worktree dot attributes a title status to the pane process running the agent', () => {
   it('spins when the pane foreground process is an agent and the title never names one', () => {
-    const status = getWorktreeStatus([tab({ title: CLAUDE_BUSY_TITLE })], [], livePty(), undefined, {
-      foregroundAgentPaneIdsByTabId: { 'tab-1': new Set([LEAF_A]) },
-      terminalLayoutRootsByTabId: { 'tab-1': singleLeafLayout().root }
-    })
+    const status = getWorktreeStatus(
+      [tab({ title: CLAUDE_BUSY_TITLE })],
+      [],
+      livePty(),
+      undefined,
+      {
+        foregroundAgentPaneIdsByTabId: { 'tab-1': new Set([LEAF_A]) },
+        terminalLayoutRootsByTabId: { 'tab-1': singleLeafLayout().root }
+      }
+    )
 
     expect(status).toBe('working')
   })
@@ -78,9 +84,9 @@ describe('worktree dot attributes a title status to the pane process running the
   // Control: the pre-existing named-title path resolves the same way, so the fix
   // closes a gap rather than changing what a named title means.
   it('spins without process evidence when the title happens to name the agent', () => {
-    expect(getWorktreeStatus([tab({ title: CLAUDE_BUSY_TITLE_NAMING_CLAUDE })], [], livePty())).toBe(
-      'working'
-    )
+    expect(
+      getWorktreeStatus([tab({ title: CLAUDE_BUSY_TITLE_NAMING_CLAUDE })], [], livePty())
+    ).toBe('working')
   })
 
   it('attributes per pane, so a sibling pane spinner is not covered by another pane process', () => {
@@ -93,6 +99,35 @@ describe('worktree dot attributes a title status to the pane process running the
         foregroundAgentPaneIdsByTabId: { 'tab-1': new Set([LEAF_A]) },
         terminalLayoutRootsByTabId: { 'tab-1': splitLayout().root }
       }
+    )
+
+    expect(status).toBe('active')
+  })
+
+  // Why: process evidence is keyed by stable leaf id, so a runtime pane title that
+  // arrives before the layout (SSH/replay) has nothing to match against. One title and
+  // one agent pane pair unambiguously — mirrors the agent-row branch's same fallback.
+  it('attributes a lone pane title to a lone agent pane before the layout hydrates', () => {
+    const status = getWorktreeStatus(
+      [tab()],
+      [],
+      livePty(),
+      { 'tab-1': { 1: CLAUDE_BUSY_TITLE } },
+      {
+        foregroundAgentPaneIdsByTabId: { 'tab-1': new Set([LEAF_A]) }
+      }
+    )
+
+    expect(status).toBe('working')
+  })
+
+  it('does not guess when an unhydrated tab reports more than one pane title', () => {
+    const status = getWorktreeStatus(
+      [tab()],
+      [],
+      livePty(),
+      { 'tab-1': { 1: CLAUDE_BUSY_TITLE, 2: CLAUDE_BUSY_TITLE } },
+      { foregroundAgentPaneIdsByTabId: { 'tab-1': new Set([LEAF_A]) } }
     )
 
     expect(status).toBe('active')

@@ -137,6 +137,8 @@ type ForegroundAgentPaneIdsCache = {
 // every tab's selector on every store write.
 let foregroundAgentPaneIdsCache: ForegroundAgentPaneIdsCache | null = null
 
+/** Buckets process-table pane identity by tab, once per store snapshot. Mirrors the
+ *  sidebar summary's index so the tab dot and the worktree dot attribute alike. */
 function getForegroundAgentPaneIdsByTabId(
   paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry> | undefined
 ): Map<string, Set<string>> {

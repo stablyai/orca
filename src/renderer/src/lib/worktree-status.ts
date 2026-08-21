@@ -93,9 +93,17 @@ function tabHasStatus(
       ) {
         continue
       }
+      // Why: same layout-hydration gap the agent-row branch above covers — process
+      // evidence is keyed by stable leaf id, so before the layout lands there is
+      // nothing to match a numeric runtime pane id against. With one title and one
+      // agent pane the pairing is unambiguous, so attribute it instead of stalling
+      // the spinner until hydration.
+      const hasSingleUnmappedForegroundAgentPane =
+        leafId === null && foregroundAgentPaneIds?.size === 1 && paneTitleEntries.length === 1
       const paneRunsAgentProcess =
         foregroundAgentPaneIds?.has(runtimePaneId) === true ||
-        (leafId !== null && foregroundAgentPaneIds?.has(leafId) === true)
+        (leafId !== null && foregroundAgentPaneIds?.has(leafId) === true) ||
+        hasSingleUnmappedForegroundAgentPane
       if (
         classifyTitleActivity(title) === status &&
         titleStatusIsAgentAttributable(title, tab.launchAgent, paneRunsAgentProcess)

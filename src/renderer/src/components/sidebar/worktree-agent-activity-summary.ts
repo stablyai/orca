@@ -290,6 +290,8 @@ function addAgentStatusPaneId(
   paneIds.add(paneId)
 }
 
+/** Records a pane whose foreground process is a recognized agent, so the status
+ *  dot can attribute a bare agent status title to the pane that owns it. */
 function addForegroundAgentPaneId(
   summary: WorktreeAgentActivitySummary,
   tabId: string,
