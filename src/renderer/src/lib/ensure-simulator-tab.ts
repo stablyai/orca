@@ -3,7 +3,12 @@ import { findReusableRightSplitGroupId } from './emulator-right-split-target'
 import { cancelPendingSimulatorPaneShutdown } from './simulator-pane-shutdown-scheduler'
 import { shouldShutdownSimulatorForPaneUnmountFromTabs } from './simulator-tab-shutdown'
 import { translate } from '@/i18n/i18n'
-import { findAmbiguousWorktreeIds, isUnifiedTabOwnedByWorktree } from './unified-tab-host-ownership'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import {
+  findAmbiguousWorktreeIds,
+  isExecutionHostAliasForWorktree,
+  isUnifiedTabOwnedByWorktree
+} from './unified-tab-host-ownership'
 
 type EnsureSimulatorTabOptions = {
   targetGroupId?: string
@@ -21,16 +26,20 @@ type ExistingSimulatorTab = {
 export function getSimulatorTabForWorktree(worktreeId: string): ExistingSimulatorTab | null {
   const state = useAppStore.getState()
   const worktrees = state.allWorktrees?.().filter((worktree) => worktree.id === worktreeId) ?? []
-  const activeWorktree = worktrees.find(
-    (worktree) => worktree.hostId === state.activeWorkspaceExecutionHostId
+  const activeExecutionHostId = state.activeWorkspaceExecutionHostId ?? LOCAL_EXECUTION_HOST_ID
+  const activeWorktree = worktrees.find((worktree) =>
+    isExecutionHostAliasForWorktree(activeExecutionHostId, worktree)
   )
-  const target = activeWorktree ?? worktrees[0]
-  if (!target) {
+  if (worktrees.length === 0) {
     return (
       (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
         (tab) => tab.contentType === 'simulator'
       ) ?? null
     )
+  }
+  const target = activeWorktree ?? (worktrees.length === 1 ? worktrees[0] : null)
+  if (!target) {
+    return null
   }
   const ambiguousWorktreeIds = findAmbiguousWorktreeIds(worktrees)
   return (

@@ -18,7 +18,11 @@ import {
 import type { MatchRange } from './palette-match/normalized-text'
 import type { PaletteDocument, PaletteDocumentRank } from './palette-match/palette-document'
 import type { PaletteResultQualityClass } from './palette-match/match-quality'
-import { findAmbiguousWorktreeIds, isUnifiedTabOwnedByWorktree } from './unified-tab-host-ownership'
+import {
+  findAmbiguousWorktreeIds,
+  getUnifiedTabPaletteExecutionHostId,
+  isUnifiedTabOwnedByWorktree
+} from './unified-tab-host-ownership'
 
 const NO_RANGES: readonly MatchRange[] = []
 
@@ -131,7 +135,7 @@ export function simulatorPaletteTabTitle(tab: Tab): string {
 
 function baseResult(entry: SearchableSimulatorTab): SimulatorPaletteSearchResult {
   return {
-    executionHostId: entry.worktree.hostId,
+    executionHostId: getUnifiedTabPaletteExecutionHostId(entry.tab, entry.worktree),
     tabId: entry.tab.id,
     worktreeId: entry.worktree.id,
     groupId: entry.tab.groupId,

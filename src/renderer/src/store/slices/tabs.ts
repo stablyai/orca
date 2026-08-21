@@ -37,6 +37,7 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import {
   addAdditionalValidWorkspaceKeys,
   type WorkspaceSessionHydrationOptions
@@ -865,8 +866,10 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         worktreeId,
         ...(init?.executionHostId
           ? { executionHostId: init.executionHostId }
-          : state.activeWorktreeId === worktreeId && state.activeWorkspaceExecutionHostId
-            ? { executionHostId: state.activeWorkspaceExecutionHostId }
+          : state.activeWorktreeId === worktreeId
+            ? {
+                executionHostId: state.activeWorkspaceExecutionHostId ?? LOCAL_EXECUTION_HOST_ID
+              }
             : {}),
         contentType,
         label:
@@ -943,8 +946,10 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         worktreeId,
         ...(init?.executionHostId
           ? { executionHostId: init.executionHostId }
-          : state.activeWorktreeId === worktreeId && state.activeWorkspaceExecutionHostId
-            ? { executionHostId: state.activeWorkspaceExecutionHostId }
+          : state.activeWorktreeId === worktreeId
+            ? {
+                executionHostId: state.activeWorkspaceExecutionHostId ?? LOCAL_EXECUTION_HOST_ID
+              }
             : {}),
         contentType,
         label:

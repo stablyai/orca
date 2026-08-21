@@ -12,39 +12,63 @@
   "gates": [
     {
       "id": "cmd-j-tabs.host-qualified-candidate-ownership",
-      "title": "Cmd-J browser and simulator candidates retain execution-host ownership",
+      "title": "Cmd-J tab candidates retain execution-host ownership",
       "maturity": "experimental",
       "protection": "partial",
       "owner": "renderer-workspace-tabs",
       "layer": "renderer-state-and-navigation",
-      "surfaces": ["Cmd-J browser tabs", "Cmd-J simulator tabs", "paired-runtime tab mirror"],
+      "surfaces": [
+        "Cmd-J browser tabs",
+        "Cmd-J simulator tabs",
+        "Cmd-J workspace tabs",
+        "paired-runtime tab mirror"
+      ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
-      "coveredProviders": ["local", "remote-runtime"],
-      "coverageNotes": "Deterministic candidate-builder contracts inject local and paired-runtime worktrees with the same bare id into the real aggregated tab buckets. A paired Electron journey verifies the visible browser and simulator rows separately and asserts the selected tab's owning host in renderer state.",
+      "coveredProviders": ["local", "ssh", "remote-runtime"],
+      "coverageNotes": "Deterministic candidate-builder contracts inject local and paired-runtime worktrees with the same bare id into the real aggregated tab buckets, including a paired runtime transporting an SSH-owned worktree. A mirror contract preserves distinct same-id runtime tabs. A paired Electron journey verifies both visible browser rows and both visible simulator rows, then requires each selection to render its owning active tab and update backing host-qualified state.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4965",
         "https://github.com/stablyai/orca/pull/15371"
       ],
-      "invariant": "Candidate identity is the tuple of execution-host identity and worktree identity: same-id sibling hosts retain separate correct browser and simulator tabs, each tab appears exactly once, and selection activates its owning host.",
-      "oracle": "Aggregate two hosts' tabs under one intentionally colliding worktree id, stamp each unified tab with its execution host, and require exactly one candidate per owner. Independently require Cmd-J selection to update activeWorkspaceExecutionHostId and the owning browser workspace or simulator group. Ambiguous legacy tabs without ownership fail closed.",
+      "invariant": "Candidate identity is the tuple of execution-host identity and worktree identity: same-id sibling hosts retain separate correct browser, simulator, and workspace tabs, each tab appears exactly once, and selection activates its owning host.",
+      "oracle": "Aggregate two hosts' tabs under one intentionally colliding worktree id, stamp each unified tab with its execution host, and require exactly one candidate per owner. Repeat with an SSH physical owner transported by a paired-runtime alias. Independently require each browser and simulator Cmd-J selection to update activeWorkspaceExecutionHostId plus its owning workspace/group and render the selected tab active. Ambiguous legacy tabs without ownership fail closed.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
         "pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
+        "src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts",
         "src/renderer/src/lib/browser-palette-page-entries.test.ts",
         "src/renderer/src/lib/simulator-palette-search.test.ts",
+        "src/renderer/src/lib/workspace-tab-palette-search.test.ts",
+        "src/renderer/src/lib/browser-page-palette-activation.test.ts",
+        "src/renderer/src/lib/simulator-tab-palette-activation.test.ts",
         "src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts",
+        "src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts",
         "src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts",
         "src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts",
         "src/shared/workspace-session-schema.test.ts",
         "tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts",
+          "assertions": [
+            "browser, simulator, and workspace candidates recognize a paired-runtime alias for an SSH-owned worktree"
+          ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts",
+          "assertions": [
+            "active local tab creation stamps local ownership instead of leaving a same-id row ambiguous"
+          ]
+        },
         {
           "file": "src/renderer/src/lib/browser-palette-page-entries.test.ts",
           "assertions": [
@@ -60,12 +84,21 @@
         {
           "file": "tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts",
           "assertions": [
-            "browser selection activates the paired runtime host and remote browser workspace",
-            "simulator selection activates the local host and owning simulator group"
+            "both browser selections activate and render their owning host and workspace",
+            "both simulator selections activate and render their owning host and group"
           ]
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts",
+          "result": "failed",
+          "durationSeconds": 1.8,
+          "summary": "The first review-round oracle failed 4/40: browser and simulator dropped the SSH worktree's paired-runtime-owned tab, generic workspace rows attributed the remote tab to local, and active local tab creation left ownership unstamped."
+        },
         {
           "date": "2026-08-20",
           "runner": "local",
@@ -110,6 +143,24 @@
           "result": "failed",
           "durationSeconds": 0.5,
           "summary": "The same oracle on fe45b73c20 with only browser-palette-page-entries.ts and simulator-palette-search.ts restored from origin/main failed the same 4 tests and passed 24; restored candidate files passed all 28."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+          "result": "passed",
+          "durationSeconds": 3.6,
+          "summary": "The review-hardened candidate passed 166/166 focused contracts, including SSH plus paired-runtime aliases, generic workspace rows, simulator reuse, local creation stamping, activation, and same-id distinct-runtime mirror preservation."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 24.3,
+          "summary": "A fresh e2e-mode Electron build passed the paired journey: each remote/local browser and simulator candidate appeared exactly once, selected the owning host plus workspace or group tab, and rendered that tab active. The group active-tab oracle remains stable while asynchronous paired session mirroring updates the legacy bare-worktree activeTabType field."
         }
       ],
       "runtimeBudget": {
@@ -122,7 +173,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "Byte-identical browser and simulator candidate tests failed 4/28 on affected baseline 012e9f410c, passed 28/28 on candidate fe45b73c20, failed the same 4/28 when only the two candidate filters were disabled, and returned to 28/28 after restoration."
+        "evidence": "Byte-identical browser and simulator candidate tests failed 4/28 on affected baseline 012e9f410c, passed 28/28 on candidate fe45b73c20, failed the same 4/28 when only the two candidate filters were disabled, and returned to 28/28 after restoration. Review-round topology contracts then failed 4/40 before the alias/generic/local-stamping follow-up and passed in the final 166/166 suite."
       },
       "performanceBudget": {
         "required": true,
@@ -130,11 +181,12 @@
       },
       "promotionCriteria": [
         "Collect paired Electron CI soak history without unexplained flakes.",
-        "Add live SSH coverage if Cmd-J begins publishing SSH-owned mirrored tabs through a distinct path."
+        "Add a live paired-runtime-over-SSH journey when the E2E harness can provision that combined topology."
       ],
       "knownGaps": [
-        "Live Linux, Windows, and SSH journeys are not collected.",
+        "Live Linux, Windows, and paired-runtime-over-SSH journeys are not collected; the SSH/runtime dual-owner topology is deterministic renderer coverage.",
         "The paired Electron simulator path seeds renderer state because remote web clients cannot launch a native emulator.",
+        "The paired Electron journey proves a real host mirror stamp before injecting the same-id sibling state; it does not create the collision through the wire.",
         "Mixed-version behavior is covered by optional-field parsing and fail-closed legacy ambiguity, not a live old-client/new-host matrix."
       ],
       "demotionRule": "Cannot promote if a same-id sibling tab duplicates, disappears, activates another host, or if ambiguous unstamped ownership is guessed."

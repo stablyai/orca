@@ -4,7 +4,9 @@ const mockStoreState = vi.hoisted(() => ({
   activeGroupIdByWorktree: {} as Record<string, string>,
   activeWorkspaceExecutionHostId: null as string | null,
   activeWorktreeId: 'wt-1',
-  allWorktrees: vi.fn(() => [] as { id: string; hostId?: string }[]),
+  allWorktrees: vi.fn(
+    () => [] as { id: string; hostId?: string; runtimeOwnerEnvironmentId?: string }[]
+  ),
   activateTab: vi.fn(),
   createEmptySplitGroup: vi.fn(),
   createUnifiedTab: vi.fn(),
@@ -99,6 +101,33 @@ describe('ensureSimulatorTab', () => {
 
     expect(ensureSimulatorTab('wt-1')).toBe('sim-remote')
     expect(mockStoreState.createUnifiedTab).toHaveBeenCalled()
+  })
+
+  it('reuses a simulator through an SSH worktree paired-runtime owner alias', async () => {
+    mockStoreState.activeWorkspaceExecutionHostId = 'runtime:paired-host'
+    mockStoreState.allWorktrees.mockReturnValue([
+      { id: 'wt-1', hostId: 'local' },
+      {
+        id: 'wt-1',
+        hostId: 'ssh:private-target',
+        runtimeOwnerEnvironmentId: 'paired-host'
+      }
+    ])
+    mockStoreState.unifiedTabsByWorktree = {
+      'wt-1': [
+        {
+          id: 'sim-remote',
+          groupId: 'group-1',
+          worktreeId: 'wt-1',
+          executionHostId: 'runtime:paired-host',
+          contentType: 'simulator'
+        }
+      ]
+    }
+    const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
+
+    expect(ensureSimulatorTab('wt-1')).toBe('sim-remote')
+    expect(mockStoreState.createUnifiedTab).not.toHaveBeenCalled()
   })
 
   it('cancels pending managed shutdown when surfacing a simulator tab', async () => {

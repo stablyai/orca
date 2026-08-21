@@ -22,6 +22,11 @@ import type {
   SearchableWorkspaceTab,
   WorkspaceTabContentType
 } from './workspace-tab-palette-search'
+import {
+  findAmbiguousWorktreeIds,
+  getUnifiedTabPaletteExecutionHostId,
+  isUnifiedTabOwnedByWorktree
+} from './unified-tab-host-ownership'
 
 function getActiveUnifiedTabId({
   worktreeId,
@@ -137,13 +142,14 @@ export function buildSearchableWorkspaceTabEntries({
   paneForegroundAgentByPaneKey
 }: BuildSearchableWorkspaceTabsOptions): SearchableWorkspaceTab[] {
   const entries: SearchableWorkspaceTab[] = []
-  const seenTabIds = new Set<string>()
+  const seenTabIdentities = new Set<string>()
   const openFilesById = new Map(openFiles.map((file) => [file.id, file]))
   const agentIndex = buildAgentMetadataTabIndex({
     agentStatusByPaneKey,
     retainedAgentsByPaneKey,
     sleepingAgentSessionsByPaneKey
   })
+  const ambiguousWorktreeIds = findAmbiguousWorktreeIds(worktrees)
 
   for (const worktree of worktrees) {
     const repoName =
@@ -172,10 +178,20 @@ export function buildSearchableWorkspaceTabEntries({
     const terminalTabs = new Map((tabsByWorktree[worktree.id] ?? []).map((tab) => [tab.id, tab]))
 
     for (const rawTab of unifiedTabsByWorktree[worktree.id] ?? []) {
-      if (!isWorkspaceTabContentType(rawTab.contentType) || seenTabIds.has(rawTab.id)) {
+      if (
+        !isWorkspaceTabContentType(rawTab.contentType) ||
+        !isUnifiedTabOwnedByWorktree(rawTab, worktree, ambiguousWorktreeIds)
+      ) {
         continue
       }
       const tab = rawTab as Tab & { contentType: WorkspaceTabContentType }
+      const tabIdentity = JSON.stringify([
+        getUnifiedTabPaletteExecutionHostId(tab, worktree) ?? null,
+        tab.id
+      ])
+      if (seenTabIdentities.has(tabIdentity)) {
+        continue
+      }
       const baseEntry = {
         tab,
         worktree,
@@ -217,7 +233,7 @@ export function buildSearchableWorkspaceTabEntries({
           generatedTitlesEnabled,
           terminalTitle
         )
-        seenTabIds.add(tab.id)
+        seenTabIdentities.add(tabIdentity)
         entries.push({
           ...baseEntry,
           title,
@@ -254,7 +270,7 @@ export function buildSearchableWorkspaceTabEntries({
         continue
       }
       const title = getEditorDisplayLabel(file)
-      seenTabIds.add(tab.id)
+      seenTabIdentities.add(tabIdentity)
       entries.push({
         ...baseEntry,
         title,

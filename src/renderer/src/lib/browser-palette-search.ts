@@ -26,6 +26,7 @@ export type SearchableBrowserPage = {
   worktree: Worktree
   repoName: string
   worktreeSortIndex: number
+  executionHostId?: ExecutionHostId
   isCurrentPage: boolean
   isCurrentWorktree: boolean
   /** Last time the owning browser workspace was focused; null when never focused. */
@@ -144,7 +145,7 @@ function positionScore(entry: SearchableBrowserPage): number {
 function baseResult(entry: SearchableBrowserPage): BrowserPaletteSearchResult {
   const formattedUrl = formatBrowserPaletteUrl(entry.page.url)
   return {
-    ...(entry.worktree.hostId ? { executionHostId: entry.worktree.hostId } : {}),
+    ...(entry.executionHostId ? { executionHostId: entry.executionHostId } : {}),
     pageId: entry.page.id,
     workspaceId: entry.workspace.id,
     worktreeId: entry.worktree.id,

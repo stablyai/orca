@@ -68,6 +68,12 @@ describe('TabsSlice', () => {
       )
     })
 
+    it('stamps active local tabs when the local host field is null', () => {
+      store.setState({ activeWorktreeId: WT, activeWorkspaceExecutionHostId: null })
+
+      expect(store.getState().createUnifiedTab(WT, 'browser').executionHostId).toBe('local')
+    })
+
     it('activates the newly created tab', () => {
       const tab1 = store.getState().createUnifiedTab(WT, 'terminal')
       const tab2 = store.getState().createUnifiedTab(WT, 'terminal')

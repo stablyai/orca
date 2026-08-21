@@ -8,7 +8,11 @@ import {
   buildSearchableBrowserPageDocument,
   type SearchableBrowserPage
 } from './browser-palette-search'
-import { findAmbiguousWorktreeIds, isUnifiedTabOwnedByWorktree } from './unified-tab-host-ownership'
+import {
+  findAmbiguousWorktreeIds,
+  getUnifiedTabPaletteExecutionHostId,
+  isUnifiedTabOwnedByWorktree
+} from './unified-tab-host-ownership'
 
 type BrowserPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'
 
@@ -78,6 +82,7 @@ export function buildSearchableBrowserPages({
           worktree,
           repoName,
           worktreeSortIndex,
+          executionHostId: getUnifiedTabPaletteExecutionHostId(unifiedTab, worktree),
           isCurrentPage:
             isPaletteCurrentWorktree(worktree, activeWorktreeId, activeWorkspaceExecutionHostId) &&
             activeTabType === 'browser' &&
