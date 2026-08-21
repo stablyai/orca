@@ -15,10 +15,12 @@ Verified identical on `main` and on `Sylen00/pet-overlay-animations` — the sam
 99 files, the same 289 tests. None of this comes from feature work; it is
 accumulated platform rot.
 
-> **Current state (2026-08-21):** 9 files / 22 tests, of which four files are
-> load-dependent flakes that pass in isolation. See
-> [Run 2 results](#run-2-results--2026-08-21) at the end for what each of the
-> nine was and how it resolved.
+> **Closed (2026-08-21): 0 failures.** 6040 files / 56158 tests pass on Windows.
+> The baseline is now `{}`, so any failure is a regression. See
+> [Run 2 results](#run-2-results--2026-08-21) and
+> [Final result](#final-result--2026-08-21) for what each remaining failure
+> turned out to be — and why the first diagnosis of the last three was wrong
+> every time.
 
 ## Why this exists
 
