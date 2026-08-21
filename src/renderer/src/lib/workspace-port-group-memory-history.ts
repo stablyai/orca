@@ -46,16 +46,17 @@ function sumMemory(ports: readonly { pid?: number; memory?: number }[]): number 
   let hasValue = false
   const seenPids = new Set<number>()
   for (const port of ports) {
+    if (port.memory == null) {
+      continue
+    }
     if (port.pid != null) {
       if (seenPids.has(port.pid)) {
         continue
       }
       seenPids.add(port.pid)
     }
-    if (port.memory != null) {
-      sum += port.memory
-      hasValue = true
-    }
+    sum += port.memory
+    hasValue = true
   }
   return hasValue ? sum : null
 }

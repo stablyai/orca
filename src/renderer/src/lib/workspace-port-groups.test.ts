@@ -88,6 +88,33 @@ describe('sortWorkspacePortGroupsByMetric', () => {
     expect(sorted.map((g) => g.worktreeId)).toEqual(['wt-single', 'wt-dup'])
   })
 
+  it('still counts a duplicate pid whose first row has no memory sample', () => {
+    // Regression: dedup marked the pid "seen" on the first row even when that
+    // row had no memory value, so a later row for the same pid with a real
+    // value was skipped and the group's memory looked lower than it is.
+    const groups: WorkspacePortGroup[] = [
+      {
+        worktreeId: 'wt-dup',
+        repoId: 'repo',
+        displayName: 'dup',
+        ports: [
+          port({ id: 'd1', pid: 7, memory: undefined }),
+          port({ id: 'd2', pid: 7, memory: 1000 })
+        ]
+      },
+      {
+        worktreeId: 'wt-single',
+        repoId: 'repo',
+        displayName: 'single',
+        ports: [port({ id: 's1', pid: 99, memory: 500 })]
+      }
+    ]
+
+    const sorted = sortWorkspacePortGroupsByMetric(groups, 'memory')
+
+    expect(sorted.map((g) => g.worktreeId)).toEqual(['wt-dup', 'wt-single'])
+  })
+
   it('always keeps ports grouped under their project, never flattened', () => {
     const groups: WorkspacePortGroup[] = [
       {

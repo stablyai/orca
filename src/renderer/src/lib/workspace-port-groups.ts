@@ -116,17 +116,18 @@ function sumPortMetric(
   let hasValue = false
   const seenPids = new Set<number>()
   for (const port of ports) {
+    const value = pick(port)
+    if (value == null) {
+      continue
+    }
     if (port.pid != null) {
       if (seenPids.has(port.pid)) {
         continue
       }
       seenPids.add(port.pid)
     }
-    const value = pick(port)
-    if (value != null) {
-      sum += value
-      hasValue = true
-    }
+    sum += value
+    hasValue = true
   }
   return hasValue ? sum : null
 }

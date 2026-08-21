@@ -75,6 +75,15 @@ describe('workspace port group memory history', () => {
     expect(readWorkspacePortMemoryHistory('wt-1')).toEqual([1000])
   })
 
+  it('still counts a duplicate pid whose first row has no memory sample', () => {
+    // Regression: dedup marked the pid "seen" on the first row even when that
+    // row had no memory value, so a later row for the same pid with a real
+    // value was skipped and the sample undercounted the group's memory.
+    recordWorkspacePortMemorySamples([group('wt-1', [undefined, 1000], [42, 42])], [])
+
+    expect(readWorkspacePortMemoryHistory('wt-1')).toEqual([1000])
+  })
+
   it('does not record a false zero sample when every port lacks a memory value', () => {
     // Regression: a failed metadata probe leaves every port's memory
     // undefined; summing that to 0 and recording it looks like a real drop.
