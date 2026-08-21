@@ -144,8 +144,9 @@ function positionScore(entry: SearchableBrowserPage): number {
 
 function baseResult(entry: SearchableBrowserPage): BrowserPaletteSearchResult {
   const formattedUrl = formatBrowserPaletteUrl(entry.page.url)
+  const executionHostId = entry.executionHostId ?? entry.worktree.hostId
   return {
-    ...(entry.executionHostId ? { executionHostId: entry.executionHostId } : {}),
+    ...(executionHostId ? { executionHostId } : {}),
     pageId: entry.page.id,
     workspaceId: entry.workspace.id,
     worktreeId: entry.worktree.id,
