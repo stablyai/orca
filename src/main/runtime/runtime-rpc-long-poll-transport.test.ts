@@ -667,6 +667,49 @@ describe('OrcaRuntimeRpcServer', () => {
       }
     })
 
+
+  it('starts keepalive for a slow non-long-poll dispatch instead of letting the idle reaper drop it (#15663)', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      keepaliveIntervalMs: 20,
+      slowDispatchKeepaliveDelayMs: 10
+    })
+    await server.start()
+
+    // A "short" RPC that stays silent well past the lazy threshold — the shape
+    // of a forced worktree.rm killing PTYs and running git over a large tree.
+    const originalDispatch = server['dispatcher'].dispatch.bind(server['dispatcher'])
+    server['dispatcher'].dispatch = vi.fn().mockImplementation(
+      (request: { id: string }) =>
+        new Promise((resolve) => setTimeout(() => resolve({ id: request.id, ok: true }), 120))
+    )
+
+    try {
+      const metadata = readRuntimeMetadata(userDataPath)
+      const session = openFramedSession(metadata!.transports[0]!.endpoint, {
+        id: 'req_slow',
+        authToken: metadata!.authToken,
+        method: 'status.get'
+      })
+      await session.done
+
+      const keepalives = session.frames.filter((f) => f._keepalive === true)
+      const terminals = session.frames.filter((f) => f.ok !== undefined)
+      expect(terminals).toHaveLength(1)
+      expect(terminals[0]).toMatchObject({ id: 'req_slow', ok: true })
+      // Why: 120ms dispatch, keepalive armed at 10ms, frames every 20ms →
+      // several frames must have kept the connection alive; assert ≥2 to
+      // tolerate scheduler jitter.
+      expect(keepalives.length).toBeGreaterThanOrEqual(2)
+    } finally {
+      server['dispatcher'].dispatch = originalDispatch
+      await server.stop()
+    }
+  })
+
     it('returns an internal_error envelope when the dispatcher throws', async () => {
       // Why: handlers are designed to return error envelopes, never to throw,
       // but a bug somewhere in the RPC stack (e.g. JSON.stringify choking on

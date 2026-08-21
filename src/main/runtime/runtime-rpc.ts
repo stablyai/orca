@@ -76,6 +76,8 @@ type OrcaRuntimeRpcServerOptions = {
   webClientRoot?: string
   // Why: test-only overrides for the two constants below; production must not pass these (defaults set by §3.1).
   keepaliveIntervalMs?: number
+  /** How long a non-long-poll dispatch may stay silent before keepalive frames start (#15663). */
+  slowDispatchKeepaliveDelayMs?: number
   longPollCap?: number
   // Why: test-only override for the ownership reclaim cadence.
   metadataOwnershipPollMs?: number
@@ -149,6 +151,12 @@ export type MobilePairingConnectionContext = Readonly<{
 
 // Why: keepalive frames count as socket activity, resetting both idle timers so long-polls outlive the 30s/60s idle caps. See §3.1.
 const KEEPALIVE_INTERVAL_MS = 10_000
+// Why (#15663): the transport idle-reaper closes a silent connection after 30s,
+// and "short" RPCs are not all short — a forced worktree.rm (PTY kills plus
+// `git worktree remove` over a large tree) can run far past that while writing
+// zero bytes. Well under the 30s deadline, a still-pending dispatch starts
+// writing keepalive frames; fast dispatches clear the one-shot timer first.
+const SLOW_DISPATCH_KEEPALIVE_DELAY_MS = 10_000
 
 // Why: cap long-polls at half the 32-slot connection budget so they can't starve short RPCs; overflow → runtime_busy. See §7 risk #2.
 const LONG_POLL_CAP = 16
@@ -498,6 +506,7 @@ export class OrcaRuntimeRpcServer {
   private stopping = false
   private readonly authToken = randomBytes(24).toString('hex')
   private readonly keepaliveIntervalMs: number
+  private readonly slowDispatchKeepaliveDelayMs: number
   private readonly longPollCap: number
   private readonly metadataOwnershipPollMs: number
   private readonly askLongPollCap: number
@@ -548,6 +557,7 @@ export class OrcaRuntimeRpcServer {
     exposeNetworkByDefault = false,
     webClientRoot,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
+    slowDispatchKeepaliveDelayMs = SLOW_DISPATCH_KEEPALIVE_DELAY_MS,
     longPollCap = LONG_POLL_CAP,
     metadataOwnershipPollMs = RUNTIME_METADATA_OWNERSHIP_POLL_MS
   }: OrcaRuntimeRpcServerOptions) {
@@ -562,6 +572,7 @@ export class OrcaRuntimeRpcServer {
     this.exposeNetworkByDefault = exposeNetworkByDefault
     this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
+    this.slowDispatchKeepaliveDelayMs = slowDispatchKeepaliveDelayMs
     this.longPollCap = longPollCap
     this.metadataOwnershipPollMs = metadataOwnershipPollMs
     // Why: derived, not configurable — the reservation must hold for whatever cap a caller picks.
@@ -1540,8 +1551,26 @@ export class OrcaRuntimeRpcServer {
       return this.buildError(request.id, 'runtime_busy', rejection)
     }
     if (longPoll) {
-      // Why: arm keepalive only for long-polls; short RPCs never create the setInterval. See §3.1.
+      // Why: arm keepalive immediately for long-polls. See §3.1.
       context?.startKeepalive()
+    } else if (context) {
+      // Why (#15663): a non-long-poll dispatch can still outlive the transport's
+      // 30s idle reaper while writing zero bytes (forced worktree removal over a
+      // large tree). Arm keepalive lazily: fast dispatches pay one cleared
+      // setTimeout, and any dispatch still silent near the idle deadline starts
+      // writing frames instead of losing its connection.
+      const lazyKeepalive = setTimeout(() => {
+        context.startKeepalive()
+      }, this.slowDispatchKeepaliveDelayMs)
+      lazyKeepalive.unref?.()
+      try {
+        return await this.dispatcher.dispatch(request, {
+          signal: longPoll ? context?.signal : undefined
+        })
+      } finally {
+        clearTimeout(lazyKeepalive)
+        this.releaseLongPoll(longPoll)
+      }
     }
 
     try {
