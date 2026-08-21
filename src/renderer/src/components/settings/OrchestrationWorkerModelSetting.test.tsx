@@ -118,6 +118,32 @@ describe('OrchestrationWorkerModelSetting', () => {
     ])
   })
 
+  it('validates a preserved effort against a discovered model catalog', () => {
+    const codex = getWorkerModelAgents({
+      codex: [
+        {
+          id: 'gpt-account-model',
+          label: 'GPT Account Model',
+          thinkingLevels: [{ id: 'ultra', label: 'Ultra' }]
+        }
+      ]
+    }).find((agent) => agent.id === 'codex')!
+    const discoveredModel = codex.models.find((model) => model.id === 'gpt-account-model')!
+
+    expect(
+      updateOrchestrationWorkerModel(
+        { codex: 'gpt-5.6-luna' },
+        { codex: 'ultra' },
+        'codex',
+        'gpt-account-model',
+        discoveredModel
+      )
+    ).toEqual({
+      models: { codex: 'gpt-account-model' },
+      efforts: { codex: 'ultra' }
+    })
+  })
+
   it('keeps all three controls visible when no provider is selected', () => {
     const markup = renderToStaticMarkup(
       <OrchestrationWorkerModelSetting

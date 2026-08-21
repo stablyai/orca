@@ -16,7 +16,7 @@ describe('orchestration worker launch preferences', () => {
   it.each([
     {
       label: 'agent',
-      defaults: { agent: 'codex' as const, models: {}, efforts: {} },
+      defaults: { agent: 'codex' as const, models: {}, efforts: { codex: 'max' } },
       expected: {
         agent: 'codex' as const,
         model: undefined,
@@ -102,6 +102,23 @@ describe('orchestration worker launch preferences', () => {
     })
   })
 
+  it('does not inject model preferences for an agent without launch support', () => {
+    expect(
+      resolveOrchestrationWorkerLaunchDefaults({
+        defaults: {
+          agent: 'gemini',
+          models: { gemini: 'gemini-3-pro-preview' },
+          efforts: { gemini: 'high' }
+        }
+      })
+    ).toEqual({
+      agent: 'gemini',
+      model: undefined,
+      effort: undefined,
+      applied: { agent: true, model: false, effort: false }
+    })
+  })
+
   it('does not apply stored defaults when reusing a terminal', () => {
     expect(
       resolveOrchestrationWorkerLaunchDefaults({
@@ -139,6 +156,33 @@ describe('orchestration worker launch preferences', () => {
     expect(resolved).toMatchObject({ agent: 'codex' })
     expect(resolved).not.toHaveProperty('model')
     expect(resolved).not.toHaveProperty('effort')
+  })
+
+  it('preserves explicit federated preferences when defaults were not applied', () => {
+    const params = WorkerStartParams.parse({
+      task: 'task_1',
+      from: 'term_coord',
+      on: 'windows',
+      worktree: 'new-top-level',
+      agent: 'codex',
+      model: 'gpt-5.5',
+      effort: 'high'
+    })
+
+    expect(
+      resolveFederatedWorkerLaunchParams({
+        params,
+        capabilities: [],
+        defaultsApplied: { agent: false, model: false, effort: false }
+      })
+    ).toBe(params)
+    expect(
+      resolveFederatedWorkerLaunchParams({
+        params,
+        capabilities: [ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY],
+        defaultsApplied: { agent: true, model: true, effort: true }
+      })
+    ).toBe(params)
   })
 
   it('passes an opaque Claude model and portable effort through the shared catalog', () => {

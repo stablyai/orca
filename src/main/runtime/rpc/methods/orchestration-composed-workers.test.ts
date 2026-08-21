@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../core'
 import { createOrchestrationRpcHarness } from './orchestration-rpc-test-harness'
 import type { OrchestrationDb } from '../../orchestration/db'
-import type { OrcaRuntimeService } from '../../orca-runtime'
+import { OrcaRuntimeService } from '../../orca-runtime'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 describe('orchestration RPC methods', () => {
@@ -118,6 +118,18 @@ describe('orchestration RPC methods', () => {
         call('orchestration.workerStart', { task: task.id, from: 'term_coord' })
       ).rejects.toMatchObject({ code: 'agent_unconfigured' })
       expect(runtime.createTerminal).not.toHaveBeenCalled()
+    })
+
+    it('returns empty worker defaults when the RuntimeStore settings omit them', () => {
+      const runtimeWithoutWorkerSettings = new OrcaRuntimeService({
+        getSettings: () => ({})
+      } as never)
+
+      expect(runtimeWithoutWorkerSettings.getOrchestrationWorkerLaunchDefaults()).toEqual({
+        agent: null,
+        models: {},
+        efforts: {}
+      })
     })
 
     it('applies and reports opaque per-invocation model preferences', async () => {

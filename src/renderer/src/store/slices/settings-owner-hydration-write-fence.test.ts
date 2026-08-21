@@ -1,5 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { AppState } from '../types'
 import { createTestStore } from './store-test-helpers'
 import { markRuntimeEnvironmentCompatible } from '@/runtime/runtime-rpc-client'
 
@@ -23,6 +24,33 @@ it('does not overwrite a settings write with an older owner hydration', async ()
   await hydration
 
   expect(store.getState().settings?.pluginSystemEnabled).toBe(true)
+})
+
+it('normalizes orchestration worker preferences before renderer IPC', async () => {
+  const settingsSet = vi.fn().mockResolvedValue(undefined)
+  vi.stubGlobal('window', { api: { settings: { set: settingsSet } } })
+  const store = createTestStore()
+  store.setState({ settings: { notifications: {} } as AppState['settings'] })
+
+  await store.getState().updateSettingsOrThrow({
+    orchestrationDefaultWorkerAgent: 'unknown' as never,
+    orchestrationWorkerModels: {
+      codex: ' gpt-5.5 ',
+      claude: ' opus ',
+      gemini: 'unsupported'
+    } as never,
+    orchestrationWorkerEfforts: {
+      codex: ' max ',
+      claude: ' high ',
+      gemini: 'high'
+    } as never
+  })
+
+  expect(settingsSet).toHaveBeenCalledWith({
+    orchestrationDefaultWorkerAgent: null,
+    orchestrationWorkerModels: { codex: 'gpt-5.5', claude: 'opus' },
+    orchestrationWorkerEfforts: { claude: 'high' }
+  })
 })
 
 it('preserves host defaults added while owner hydration is in flight', async () => {
