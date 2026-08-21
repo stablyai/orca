@@ -2734,6 +2734,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         ? getLinearLinkedWorkItemBranchName(linkedWorkItem)
         : undefined
       setRepoId(value)
+      // Why: unlike the GitHub PR ref (retargeted below), a pending GitLab MR
+      // resolution has no per-repo retarget path — its identity token must
+      // never survive a repo change, preserveStartFrom or not, or a stale
+      // .then/.catch could apply the old repo's base/compare/push target here.
+      smartGitLabMrStartPointSelectionRef.current = null
       if (!options.preserveStartFrom) {
         setSelectedProjectHostSetupOverrideId(null)
       }
@@ -2840,6 +2845,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   )
   const handleProjectChange = useCallback(
     (projectId: string): void => {
+      // Why: the folder-project branch below mutates repoId/start-point state
+      // directly instead of going through handleRepoChange, so it needs its own
+      // invalidation before a pending PR/MR resolution can land against the
+      // project being left.
+      invalidateSmartStartPointSelections()
       initialProjectGroupAppliedRef.current = true
       const projectGroupId = getProjectGroupIdFromNewWorkspaceOptionId(projectId)
       if (projectGroupId) {
@@ -2906,6 +2916,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       eligibleRepos,
       actionableHostIds,
       handleRepoChange,
+      invalidateSmartStartPointSelections,
       isProjectGroupTarget,
       linkedWorkItem,
       projectGroups,

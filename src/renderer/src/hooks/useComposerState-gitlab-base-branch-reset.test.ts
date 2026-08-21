@@ -90,6 +90,7 @@ describe('useComposerState invalidates both PR/MR start-point refs together', ()
       'const handleRemoveLinkedWorkItem = useCallback((): void => {',
       'const handleRepoChange = useCallback(',
       'const handleFolderSourceRepoChange = useCallback(',
+      'const handleProjectChange = useCallback(',
       'const handleBaseBranchChange = useCallback(',
       'const handleSmartGitHubItemSelect = useCallback(',
       'const handleSmartGitLabItemSelect = useCallback(',
@@ -105,5 +106,28 @@ describe('useComposerState invalidates both PR/MR start-point refs together', ()
       const section = sourceBetween(HOOK_SOURCE, start, end)
       expect(section).toContain('invalidateSmartStartPointSelections()')
     }
+  })
+
+  it('drops a pending GitLab MR resolution even when a repo change preserves the GitHub Start-from selection', () => {
+    // Why: unlike the GitHub PR ref (retargeted to the new repo below), a
+    // GitLab MR resolution has no per-repo retarget path. Before this fix the
+    // preserveStartFrom branch only retargeted the GitHub ref, so a pending
+    // GitLab MR .then/.catch kept its old token and could apply the prior
+    // repo's base/compare/push target after the switch.
+    const section = sourceBetween(
+      HOOK_SOURCE,
+      'const handleRepoChange = useCallback(',
+      'const handleFolderSourceRepoChange = useCallback('
+    )
+    const setRepoIdAt = section.indexOf('setRepoId(value)')
+    const dropGitLabRefAt = section.indexOf('smartGitLabMrStartPointSelectionRef.current = null')
+    const retargetBranchAt = section.indexOf(
+      'if (options.preserveStartFrom && smartGitHubPrStartPointSelectionRef.current) {'
+    )
+    expect(setRepoIdAt).toBeGreaterThanOrEqual(0)
+    expect(dropGitLabRefAt).toBeGreaterThan(setRepoIdAt)
+    // Not nested inside the `!options.preserveStartFrom` guard, and runs ahead of
+    // (independent from) the GitHub-only retarget branch.
+    expect(dropGitLabRefAt).toBeLessThan(retargetBranchAt)
   })
 })
