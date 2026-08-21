@@ -94,10 +94,56 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       expect.anything(),
       'local',
       'branchName',
-      expect.objectContaining({ id: REPO_ID })
+      expect.objectContaining({ id: REPO_ID }),
+      expect.objectContaining({ preferredAgentId: undefined })
     )
     expect(setDisplayName).toHaveBeenCalledWith(WORKTREE_ID, 'Fix auth')
     expect(onRenamed).toHaveBeenCalledWith(REPO_ID)
+  })
+
+  it('prefers the workspace agent over the configured Source Control AI default', async () => {
+    // Issue #11009: Codex is the SC AI default (out of usage) but Claude was selected
+    // for the new workspace — rename must generate with Claude, not Codex.
+    resolveTextGenerationParamsMock.mockReturnValue({
+      ok: true,
+      params: { agentId: 'claude', model: 'sonnet' }
+    })
+    const { deps } = makeDeps()
+    await maybeAutoRenameBranchOnFirstWork(workingEvent({ agentType: 'claude' }), deps)
+    expect(resolveTextGenerationParamsMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'local',
+      'branchName',
+      expect.objectContaining({ id: REPO_ID }),
+      { preferredAgentId: 'claude' }
+    )
+    expect(generateBranchNameMock).toHaveBeenCalledWith(
+      expect.anything(),
+      { agentId: 'claude', model: 'sonnet' },
+      expect.anything()
+    )
+  })
+
+  it('falls back to the configured agent when the workspace agent is unsupported', async () => {
+    resolveTextGenerationParamsMock.mockReturnValue({
+      ok: true,
+      params: { agentId: 'codex', model: 'gpt-5.5' }
+    })
+    const { deps } = makeDeps()
+    // claude-agent-teams is launchable but has no non-interactive generation contract.
+    await maybeAutoRenameBranchOnFirstWork(workingEvent({ agentType: 'claude-agent-teams' }), deps)
+    expect(resolveTextGenerationParamsMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'local',
+      'branchName',
+      expect.objectContaining({ id: REPO_ID }),
+      { preferredAgentId: undefined }
+    )
+    expect(generateBranchNameMock).toHaveBeenCalledWith(
+      expect.anything(),
+      { agentId: 'codex', model: 'gpt-5.5' },
+      expect.anything()
+    )
   })
 
   it('asks to align the on-disk folder with the generated slug after renaming', async () => {
@@ -227,10 +273,38 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       expect.anything(),
       'local',
       'branchName',
-      null
+      null,
+      expect.objectContaining({ preferredAgentId: undefined })
     )
     expect(setDisplayName).toHaveBeenCalledWith(FOLDER_WORKTREE_ID, 'Fix auth')
     expect(onRenamed).toHaveBeenCalledWith(FOLDER_WORKTREE_ID)
+  })
+
+  it('prefers the workspace agent when renaming a folder workspace title', async () => {
+    resolveTextGenerationParamsMock.mockReturnValue({
+      ok: true,
+      params: { agentId: 'claude', model: 'sonnet' }
+    })
+    const { deps, setDisplayName } = makeDeps({
+      resolveWorktreeIdForTab: () => FOLDER_WORKTREE_ID,
+      getFolderWorkspacePath: () => '/workspace/platform',
+      isPendingFirstAgentMessageRename: () => true,
+      getCurrentDisplayName: () => 'Platform workspace'
+    })
+
+    await maybeAutoRenameBranchOnFirstWork(
+      workingEvent({ prompt: 'Fix auth from note #1', agentType: 'claude' }),
+      deps
+    )
+
+    expect(resolveTextGenerationParamsMock).toHaveBeenCalledWith(
+      expect.anything(),
+      'local',
+      'branchName',
+      null,
+      { preferredAgentId: 'claude' }
+    )
+    expect(setDisplayName).toHaveBeenCalledWith(FOLDER_WORKTREE_ID, 'Fix auth')
   })
 
   it('does not rename folder workspace titles without the pending marker', async () => {

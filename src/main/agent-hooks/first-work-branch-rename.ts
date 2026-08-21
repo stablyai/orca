@@ -26,6 +26,7 @@ import {
 } from '../text-generation/commit-message-text-generation'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import type { AgentGenerationFailureOutput } from '../text-generation/agent-failure-output'
+import { asSupportedBranchRenameAgent } from './branch-rename-generation-agent'
 import { resolveGenerationTarget } from './first-work-generation-target'
 import { runFolderWorkspaceTitleAutoRename } from './first-work-workspace-title-rename'
 
@@ -38,6 +39,8 @@ export type FirstWorkBranchRenameEvent = {
   prompt: string | undefined
   assistantMessage: string | undefined
   isReplay: boolean | undefined
+  /** Agent that did the first work (status hook); preferred for rename generation. */
+  agentType?: string
 }
 
 export type FirstWorkBranchRenameDeps = {
@@ -120,7 +123,13 @@ export async function maybeAutoRenameBranchOnFirstWork(
   inFlightWorktreeIds.add(worktreeId)
   try {
     // settled = definitive verdict (renamed/ineligible); false = transient bail to retry later.
-    const settled = await runAutoRename(worktreeId, prompt, event.assistantMessage, deps)
+    const settled = await runAutoRename(
+      worktreeId,
+      prompt,
+      event.assistantMessage,
+      deps,
+      event.agentType
+    )
     if (settled) {
       rememberSettledWorktreeId(worktreeId)
     }
@@ -137,7 +146,8 @@ async function runAutoRename(
   worktreeId: string,
   prompt: string,
   assistantMessage: string | undefined,
-  deps: FirstWorkBranchRenameDeps
+  deps: FirstWorkBranchRenameDeps,
+  workspaceAgentType: string | undefined
 ): Promise<boolean> {
   // `stop` = permanent skip (logs which gate bailed); `retry` = transient; `clearError` drops a stale "rename failed" badge on a benign final state.
   const stop = (reason: string, clearError = false): true => {
@@ -160,7 +170,8 @@ async function runAutoRename(
       assistantMessage,
       deps,
       stop,
-      retry
+      retry,
+      workspaceAgentType
     )
   }
 
@@ -209,7 +220,11 @@ async function runAutoRename(
 
   const settings = deps.getSettings()
   const hostKey = getCommitMessageModelDiscoveryHostKey(repo.connectionId ?? null)
-  const resolvedParams = resolveTextGenerationParams(settings, hostKey, 'branchName', repo)
+  // Prefer the agent that actually did first work over the global SC AI default.
+  const preferredAgentId = asSupportedBranchRenameAgent(workspaceAgentType)
+  const resolvedParams = resolveTextGenerationParams(settings, hostKey, 'branchName', repo, {
+    preferredAgentId
+  })
   if (!resolvedParams.ok) {
     // Why: a generation-step failure (vs a benign skip) is user-actionable, so surface it on the card.
     deps.setRenameError(worktreeId, resolvedParams.error)

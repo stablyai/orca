@@ -66,6 +66,38 @@ describe('source-control AI resolution', () => {
     expect(resolve('branchName').params.model).toBe('gpt-5.5')
   })
 
+  it('prefers a supported preferredAgentId over the configured SC AI agent', () => {
+    // First-work branch rename: workspace selected Claude while SC AI default is Codex.
+    const result = resolveSourceControlAiForOperation({
+      settings: settings(),
+      repo: null,
+      operation: 'branchName',
+      discoveryHostKey: 'local',
+      preferredAgentId: 'claude'
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+    expect(result.value.params.agentId).toBe('claude')
+    expect(result.value.params.model).toBeTruthy()
+  })
+
+  it('ignores preferredAgentId when the agent lacks a generation contract', () => {
+    const result = resolveSourceControlAiForOperation({
+      settings: settings(),
+      repo: null,
+      operation: 'branchName',
+      discoveryHostKey: 'local',
+      preferredAgentId: 'claude-agent-teams'
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+    expect(result.value.params.agentId).toBe('codex')
+  })
+
   it('resolves generation config and PR defaults when Source Control AI actions are hidden', () => {
     const base = settings()
     base.sourceControlAi = {
