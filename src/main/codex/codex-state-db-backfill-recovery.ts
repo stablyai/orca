@@ -8,6 +8,7 @@ import { withManagedHookInstallLock } from '../agent-hooks/managed-hook-install-
 import { readManagedHookHostIdentity } from '../agent-hooks/managed-hook-owner-identity'
 import { buildWslCodexAppServerArgs } from '../codex-accounts/wsl-codex-command'
 import { resolveCodexCommand } from '../codex-cli/command'
+import { CODEX_READ_ONLY_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
 import { terminateCodexProbeChild } from '../rate-limits/codex-probe-termination'
 import { getSpawnArgsForWindows } from '../win32-utils'
 import { getOrcaUserDataPath } from './codex-home-paths'
@@ -25,7 +26,6 @@ const RECOVERY_MAX_COORDINATOR_FAILURES = 5
 const RECOVERY_MAX_SPAWNS = 5
 const RECOVERY_MAX_TOTAL_MS = 60 * 60_000
 const RECOVERY_OWNER_CHECK_TIMEOUT_MS = 1_000
-const RECOVERY_CODEX_ARGS = ['-s', 'read-only', '-a', 'untrusted', 'app-server'] as const
 
 export type CodexStateDbBackfillRecoverySummary = {
   outcome: 'completed' | 'already-complete' | 'not-needed' | 'unreadable' | 'stopped' | 'gave-up'
@@ -99,7 +99,9 @@ function spawnRecoveryProcess(
     )
   }
   const command = dependencies.resolveCommand()
-  const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, [...RECOVERY_CODEX_ARGS])
+  const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, [
+    ...CODEX_READ_ONLY_APP_SERVER_ARGS
+  ])
   return dependencies.spawnProcess(spawnCmd, spawnArgs, {
     cwd: codexHomePath,
     stdio: ['pipe', 'ignore', 'ignore'],

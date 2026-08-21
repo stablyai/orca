@@ -12,6 +12,7 @@ import {
   withCodexBackfillSupervisorLock
 } from './codex-state-db-backfill-recovery'
 import type { CodexStateDbBackfillStatus } from './codex-state-db'
+import { getCmdExePath } from '../win32-utils'
 
 const temporaryRoots: string[] = []
 const originalPlatform = process.platform
@@ -365,6 +366,51 @@ describe('Codex state DB backfill recovery', () => {
       })
     ).resolves.toEqual({ outcome: 'completed', spawnCount: 1 })
     expect(terminate).toHaveBeenCalledWith(child)
+  })
+
+  it('uses batch-safe read-only arguments for native Windows recovery', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const child = createFakeChild()
+    const spawnProcess = vi.fn(() => child)
+    const codexCommand = 'C:\\Users\\alice\\AppData\\Roaming\\npm\\codex.cmd'
+    const readStatus = vi
+      .fn()
+      .mockReturnValueOnce({ kind: 'incomplete', stateDbPath: 'state.sqlite', status: 'running' })
+      .mockReturnValue({ kind: 'complete', stateDbPath: 'state.sqlite' })
+
+    await runCodexStateDbBackfillRecovery(
+      'C:\\Users\\alice\\.codex',
+      new AbortController().signal,
+      {
+        spawnProcess: spawnProcess as never,
+        resolveCommand: () => codexCommand,
+        readStatus,
+        terminate: vi.fn(async () => {}),
+        sleep: vi.fn(async () => {}),
+        now: vi.fn(() => 1_000)
+      }
+    )
+
+    const [spawnFile, spawnArgs, spawnOptions] = spawnProcess.mock.calls[0] as unknown as [
+      string,
+      string[],
+      { cwd?: string; env?: NodeJS.ProcessEnv }
+    ]
+    expect(spawnFile).toBe(getCmdExePath())
+    expect(spawnArgs).toEqual([
+      '/d',
+      '/c',
+      codexCommand,
+      '-c',
+      'approval_policy=never',
+      '-s',
+      'read-only',
+      '-a',
+      'never',
+      'app-server'
+    ])
+    expect(spawnOptions.cwd).toBe('C:\\Users\\alice\\.codex')
+    expect(spawnOptions.env?.CODEX_HOME).toBe('C:\\Users\\alice\\.codex')
   })
 
   it('retries a live foreign lease until one durable claimant can recover it', async () => {
