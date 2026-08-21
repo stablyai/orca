@@ -31,6 +31,16 @@ describe('palette repo and current-worktree resolution', () => {
     ).toBe(remote)
   })
 
+  it('does not borrow repo metadata when the runtime owner is unavailable', () => {
+    expect(
+      resolvePaletteRepoForWorktree(
+        { ...worktree, runtimeOwnerEnvironmentId: 'missing-host' },
+        new Map([['repo-1', local]]),
+        new Map([['ssh:box\u0000repo-1', remote]])
+      )
+    ).toBeUndefined()
+  })
+
   it('does not mark a same-id worktree on another host current', () => {
     expect(isPaletteCurrentWorktree(worktree, worktree.id, 'local')).toBe(false)
     expect(isPaletteCurrentWorktree(worktree, worktree.id, 'ssh:box')).toBe(true)

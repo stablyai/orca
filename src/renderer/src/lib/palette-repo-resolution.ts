@@ -57,19 +57,18 @@ export function resolvePaletteRepoForWorktree<T extends { displayName?: string |
   repoMap: ReadonlyMap<string, T>,
   repoMapByHostIdentity?: ReadonlyMap<string, T>
 ): T | undefined {
+  if (worktree.runtimeOwnerEnvironmentId) {
+    return repoMapByHostIdentity?.get(
+      getRepoHostIdentityForParts(
+        worktree.repoId,
+        toRuntimeExecutionHostId(worktree.runtimeOwnerEnvironmentId)
+      )
+    )
+  }
   return (
-    (worktree.runtimeOwnerEnvironmentId
-      ? repoMapByHostIdentity?.get(
-          getRepoHostIdentityForParts(
-            worktree.repoId,
-            toRuntimeExecutionHostId(worktree.runtimeOwnerEnvironmentId)
-          )
-        )
-      : undefined) ??
     repoMapByHostIdentity?.get(
       getRepoHostIdentityForParts(worktree.repoId, worktree.hostId ?? LOCAL_EXECUTION_HOST_ID)
-    ) ??
-    repoMap.get(worktree.repoId)
+    ) ?? repoMap.get(worktree.repoId)
   )
 }
 

@@ -79,6 +79,7 @@
           "assertions": [
             "paired SSH rows resolve display metadata through their runtime owner alias",
             "paired SSH worktrees resolve their runtime-owned repository metadata",
+            "an unavailable explicit runtime owner never borrows physical-host or bare repository metadata",
             "an explicit unknown owner never borrows another host's metadata"
           ]
         },
@@ -188,8 +189,8 @@
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
           "result": "passed",
-          "durationSeconds": 3.8,
-          "summary": "The final-review-hardened candidate passed 195/195 focused contracts, including folder workspaces, inactive local simulator creation, paired SSH/runtime display metadata, and explicit-owner fail-closed resolution."
+          "durationSeconds": 2.8,
+          "summary": "The final-review-hardened candidate passed 196/196 focused contracts, including folder workspaces, inactive local simulator creation, paired SSH/runtime display metadata, and explicit-owner fail-closed resolution."
         },
         {
           "date": "2026-08-20",
@@ -199,6 +200,15 @@
           "result": "failed",
           "durationSeconds": 0.1,
           "summary": "The final reviewer repo-label oracle failed 1/6 before the follow-up: a paired SSH worktree resolved the local bare-id repository instead of its runtime-owned repository."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/palette-repo-resolution.test.ts",
+          "result": "failed",
+          "durationSeconds": 0.1,
+          "summary": "The final clean-round fail-closed oracle failed 1/7 before the follow-up: an unavailable explicit runtime owner borrowed physical SSH repository metadata."
         },
         {
           "date": "2026-08-20",
@@ -229,7 +239,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "Byte-identical browser and simulator candidate tests failed 4/28 on affected baseline 012e9f410c, passed 28/28 on candidate fe45b73c20, failed the same 4/28 when only the two candidate filters were disabled, and returned to 28/28 after restoration. Review-round topology contracts failed 4/40 before the alias/generic/local-stamping follow-up; final-review contracts then failed 4/16 before folder/background/worktree-metadata hardening and 1/6 before paired repository-metadata hardening. The completed focused suite passes 195/195."
+        "evidence": "Byte-identical browser and simulator candidate tests failed 4/28 on affected baseline 012e9f410c, passed 28/28 on candidate fe45b73c20, failed the same 4/28 when only the two candidate filters were disabled, and returned to 28/28 after restoration. Review-round topology contracts failed 4/40 before the alias/generic/local-stamping follow-up; final-review contracts then failed 4/16 before folder/background/worktree-metadata hardening, 1/6 before paired repository-metadata hardening, and 1/7 before unavailable-runtime fail-closed hardening. The completed focused suite passes 196/196."
       },
       "performanceBudget": {
         "required": true,
