@@ -4,10 +4,21 @@
 .officePreview {
   max-width: 900px;
   margin: 0 auto;
-  padding: 16px 24px;
+  padding: 48px 56px;
   overflow: auto;
   color: var(--foreground);
   background: var(--background);
+  /* Why: Word's default body is Calibri 11pt; Carlito is the metric-compatible open font Linux distros ship. Inter fallback matches Orca's shadcn UI. */
+  font-family:
+    'Carlito',
+    'Calibri',
+    'Inter',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .officePreview h1 {
@@ -92,11 +103,12 @@
 .officePreview th,
 .officePreview td {
   border: 1px solid var(--border);
-  padding: 6px 10px;
+  padding: 4px 8px;
   text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 13px;
 }
 .officePreview tr:nth-child(even) td {
   background: var(--muted);
