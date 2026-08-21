@@ -210,6 +210,8 @@ describe('ClaudeAgentTeamsService', () => {
       ])
     ).resolves.toMatchObject({ exitCode: 0 })
 
+    // Why: `cat` holds the placeholder pane open under sh; PowerShell's `cat` prompts for a path.
+    expect(splitCalls[0]?.command).toBe('Wait-Event')
     expect(splitCalls.at(-1)?.command).toBe(
       "Set-Location 'C:\\repo'; $env:CLAUDECODE = '1'; & 'C:\\claude.exe' '--agent-id' 'a'"
     )

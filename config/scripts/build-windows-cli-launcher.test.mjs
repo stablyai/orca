@@ -158,12 +158,16 @@ describe('Windows CLI launcher', () => {
 
       // Why: the copy sits outside the app tree, so an unqualified shim bin leaves it
       // nothing to resolve the CLI from — refuse rather than guess an install path.
-      const unqualified = spawnSync(shimPath, tmuxArgs, {
-        encoding: 'utf8',
-        env: { ...process.env, ORCA_AGENT_TEAMS_SHIM_BIN: 'orca' }
-      })
-      expect(unqualified.status).toBe(127)
-      expect(unqualified.stderr).toContain('must be an absolute path')
+      // `\orca.exe` and `C:orca.exe` are rooted but still resolve against a working
+      // directory this shim does not control, so they are refused as well.
+      for (const unqualifiedShimBin of ['orca', '\\orca.exe', 'C:orca.exe']) {
+        const unqualified = spawnSync(shimPath, tmuxArgs, {
+          encoding: 'utf8',
+          env: { ...process.env, ORCA_AGENT_TEAMS_SHIM_BIN: unqualifiedShimBin }
+        })
+        expect(unqualified.status, unqualifiedShimBin).toBe(127)
+        expect(unqualified.stderr).toContain('must be an absolute path')
+      }
     } finally {
       removeFixtureTree(appRoot)
     }

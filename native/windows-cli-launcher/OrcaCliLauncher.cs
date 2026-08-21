@@ -90,11 +90,32 @@ internal static class OrcaCliLauncher
     private static string ResolveTmuxShimLauncherDirectory()
     {
         string shimBin = Environment.GetEnvironmentVariable("ORCA_AGENT_TEAMS_SHIM_BIN");
-        if (String.IsNullOrEmpty(shimBin) || !Path.IsPathRooted(shimBin))
+        if (String.IsNullOrEmpty(shimBin) || !IsFullyQualifiedPath(shimBin))
         {
             return null;
         }
         return Path.GetDirectoryName(shimBin);
+    }
+
+    // Why: .NET Framework has no Path.IsPathFullyQualified, and Path.IsPathRooted accepts
+    // drive-relative (`C:orca.exe`) and root-relative (`\orca.exe`) paths that still resolve
+    // against a working directory this shim does not control.
+    private static bool IsFullyQualifiedPath(string path)
+    {
+        if (path.Length >= 2 && IsDirectorySeparator(path[0]) && IsDirectorySeparator(path[1]))
+        {
+            return true;
+        }
+        return path.Length >= 3
+            && Char.IsLetter(path[0])
+            && path[1] == ':'
+            && IsDirectorySeparator(path[2]);
+    }
+
+    private static bool IsDirectorySeparator(char character)
+    {
+        return character == Path.DirectorySeparatorChar
+            || character == Path.AltDirectorySeparatorChar;
     }
 
     private static string[] PrependTmuxShimCommand(string[] args)
