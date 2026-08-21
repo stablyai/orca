@@ -441,3 +441,40 @@ describe('selectWorktreeAgentActivitySummary', () => {
     expect(summary.agentStatusPaneIdsByTabId['tab-parent']).toEqual(new Set([LEAF_ID]))
   })
 })
+
+// Why: process-table identity is what lets the dot attribute a bare agent status
+// title to the pane that owns it, so the summary must carry it per worktree.
+describe('selectWorktreeAgentActivitySummary foreground agent panes', () => {
+  const worktreeId = 'repo::/wt-1'
+
+  function stateWithForegroundAgent(
+    agent: 'claude' | null
+  ): Parameters<typeof selectWorktreeAgentActivitySummary>[0] {
+    return {
+      tabsByWorktree: { [worktreeId]: [makeTab('tab-1', worktreeId)] },
+      agentStatusEpoch: 0,
+      agentStatusByPaneKey: {},
+      migrationUnsupportedByPtyId: {},
+      runtimeAgentOrchestrationByPaneKey: {},
+      retainedAgentsByPaneKey: {},
+      paneForegroundAgentByPaneKey: {
+        [makePaneKey('tab-1', LEAF_ID)]: { agent, shellForeground: false }
+      }
+    }
+  }
+
+  it('indexes a recognized foreground agent by tab and pane', () => {
+    const summary = selectWorktreeAgentActivitySummary(
+      stateWithForegroundAgent('claude'),
+      worktreeId
+    )
+
+    expect(summary.foregroundAgentPaneIdsByTabId['tab-1']?.has(LEAF_ID)).toBe(true)
+  })
+
+  it('ignores a pane whose foreground process is not an agent', () => {
+    const summary = selectWorktreeAgentActivitySummary(stateWithForegroundAgent(null), worktreeId)
+
+    expect(summary.foregroundAgentPaneIdsByTabId['tab-1']).toBeUndefined()
+  })
+})
