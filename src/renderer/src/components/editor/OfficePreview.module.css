@@ -1,0 +1,57 @@
+/* Why: mammoth/xlsx emit raw HTML we inject, so it needs descendant selectors
+   rather than Tailwind utilities. Scoped to a module to avoid leaking globally. */
+
+.officePreview {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 16px 24px;
+  overflow: auto;
+  color: var(--foreground);
+  background: var(--background);
+}
+
+.officePreview h1 {
+  font-size: 24px;
+  margin: 16px 0 8px;
+}
+.officePreview h2 {
+  font-size: 20px;
+  margin: 14px 0 6px;
+}
+.officePreview h3 {
+  font-size: 16px;
+  margin: 12px 0 4px;
+}
+.officePreview p {
+  margin: 8px 0;
+  line-height: 1.5;
+}
+.officePreview ul,
+.officePreview ol {
+  padding-left: 24px;
+  margin: 8px 0;
+}
+.officePreview table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0;
+}
+.officePreview th,
+.officePreview td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+}
+.officePreview tr:nth-child(even) td {
+  background: var(--muted);
+}
+
+.errorBox {
+  max-width: 600px;
+  margin: 24px auto;
+  padding: 16px;
+  border: 1px solid var(--destructive);
+  border-radius: 6px;
+  color: var(--destructive);
+  background: var(--muted);
+}
