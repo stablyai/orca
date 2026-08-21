@@ -30,6 +30,7 @@
       "invariant": "Candidate identity is the tuple of execution-host identity and worktree identity: same-id sibling hosts retain separate correct browser and simulator tabs, each tab appears exactly once, and selection activates its owning host.",
       "oracle": "Aggregate two hosts' tabs under one intentionally colliding worktree id, stamp each unified tab with its execution host, and require exactly one candidate per owner. Independently require Cmd-J selection to update activeWorkspaceExecutionHostId and the owning browser workspace or simulator group. Ambiguous legacy tabs without ownership fail closed.",
       "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
         "pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
@@ -69,6 +70,15 @@
           "date": "2026-08-20",
           "runner": "local",
           "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts",
+          "result": "failed",
+          "durationSeconds": 0.5,
+          "summary": "The byte-identical oracle on affected baseline 012e9f410c failed 4 tests and passed 24: each same-id browser and simulator tab was routed through both hosts, and ambiguous unstamped rows were duplicated instead of failing closed."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
           "result": "passed",
           "durationSeconds": 2.3,
@@ -82,6 +92,24 @@
           "result": "passed",
           "durationSeconds": 12.7,
           "summary": "The paired Electron journey passed real host browser publication, same-id collision injection, separate browser/simulator Cmd-J rows, and selected-host backing-state assertions."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 24.1,
+          "summary": "A fresh electron-vite --mode e2e build passed the paired journey: the visible Cmd-J list retained one owning browser/simulator row and each selection changed the execution host plus its owning workspace or group."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts",
+          "result": "failed",
+          "durationSeconds": 0.5,
+          "summary": "The same oracle on fe45b73c20 with only browser-palette-page-entries.ts and simulator-palette-search.ts restored from origin/main failed the same 4 tests and passed 24; restored candidate files passed all 28."
         }
       ],
       "runtimeBudget": {
@@ -93,15 +121,14 @@
         "evidence": "The candidate contract has no timers. Initial Electron attempts exposed seeded-worktree discovery and programmatic keyboard-selection harness races before the ownership assertions; soak history is not yet available."
       },
       "redGreenEvidence": {
-        "status": "partial",
-        "evidence": "Final byte-identical baseline/candidate/fix-disabled measurements are required before promotion."
+        "status": "complete",
+        "evidence": "Byte-identical browser and simulator candidate tests failed 4/28 on affected baseline 012e9f410c, passed 28/28 on candidate fe45b73c20, failed the same 4/28 when only the two candidate filters were disabled, and returned to 28/28 after restoration."
       },
       "performanceBudget": {
         "required": true,
         "evidence": "Candidate construction adds bounded in-memory ownership filtering over the already-read worktree tab bucket and introduces no polling or network work."
       },
       "promotionCriteria": [
-        "Record byte-identical affected-baseline, candidate, and fix-disabled results.",
         "Collect paired Electron CI soak history without unexplained flakes.",
         "Add live SSH coverage if Cmd-J begins publishing SSH-owned mirrored tabs through a distinct path."
       ],
