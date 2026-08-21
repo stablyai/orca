@@ -364,6 +364,29 @@ describe('readOpenCodeTranscriptPage', () => {
       { type: 'tool-call', name: 'read', input: undefined }
     ])
   })
+
+  it('surfaces a tool error string as the result output', () => {
+    const { db, path } = createTempDb()
+    applySchema(db)
+    insertMessage(db, { id: 'msg-1', time: 1, role: 'assistant' })
+    insertPart(db, {
+      id: 'prt-tool-error',
+      messageId: 'msg-1',
+      time: 1,
+      data: {
+        type: 'tool',
+        tool: 'bash',
+        callID: 'call-1',
+        state: { status: 'error', input: { command: 'ls' }, error: 'exit 1: boom' }
+      }
+    })
+
+    const page = readOpenCodeTranscriptPage({ dbPath: path, sessionId: 'ses-1', limit: 10 })
+    expect(page!.items[0]!.message.blocks).toEqual([
+      { type: 'tool-call', name: 'bash', input: { command: 'ls' } },
+      { type: 'tool-result', output: 'exit 1: boom', isError: true }
+    ])
+  })
 })
 
 describe('readOpenCodeTranscriptSignal', () => {

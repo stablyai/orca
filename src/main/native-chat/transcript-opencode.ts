@@ -222,7 +222,6 @@ export function subscribeOpenCodeNativeChatTranscript(
         scheduleTick()
         return
       }
-      lastSignal = fingerprint
       const page = await readPage({
         dbPath,
         sessionId: args.sessionId,
@@ -236,6 +235,9 @@ export function subscribeOpenCodeNativeChatTranscript(
         scheduleTick()
         return
       }
+      // Why: latch only after the read succeeds — a latched-but-failed first
+      // read would stall forever on the unchanged fingerprint.
+      lastSignal = fingerprint
       if (firstSnapshot) {
         rememberItems(page.items)
         args.onInitialSnapshot?.(
@@ -251,29 +253,18 @@ export function subscribeOpenCodeNativeChatTranscript(
           item.rowid <= lastEmittedRowId && fingerprints.get(item.rowid) !== item.fingerprint
       )
       if (changed) {
-        // Why: an already-rendered message went stale (tool-result backfill);
-        // re-read the same initial window the engine's replace path uses —
-        // bounded reads on the serial worker shared with the AI-Vault scanner.
-        const replacement = await readPage({
-          dbPath,
-          sessionId: args.sessionId,
-          limit: initialLimit
-        })
-        if (closed) {
-          return
-        }
-        if (replacement) {
-          rememberItems(replacement.items)
-          args.onReplace?.(
-            replacement.items.map((item) => item.message),
-            replacement.hasMore,
-            replacement.beforeMessageRowId ?? 0
-          )
-        }
+        // Why: an already-rendered message went stale (tool-result backfill).
+        await replaceWithInitialWindow(dbPath)
         scheduleTick()
         return
       }
       const appended = page.items.filter((item) => item.rowid > lastEmittedRowId)
+      // Why: zero overlap = window overflow; advancing would drop rows — re-read wider.
+      if (appended.length > 0 && appended.length === page.items.length && page.hasMore) {
+        await replaceWithInitialWindow(dbPath)
+        scheduleTick()
+        return
+      }
       if (appended.length > 0) {
         rememberItems(appended)
         args.onAppend(appended.map((item) => item.message))
@@ -297,6 +288,26 @@ export function subscribeOpenCodeNativeChatTranscript(
       if (item.rowid > lastEmittedRowId) {
         lastEmittedRowId = item.rowid
       }
+    }
+  }
+
+  // Bounded reads on the worker thread shared with the AI-Vault scanner.
+  async function replaceWithInitialWindow(db: string): Promise<void> {
+    const replacement = await readPage({
+      dbPath: db,
+      sessionId: args.sessionId,
+      limit: initialLimit
+    })
+    if (closed) {
+      return
+    }
+    if (replacement) {
+      rememberItems(replacement.items)
+      args.onReplace?.(
+        replacement.items.map((item) => item.message),
+        replacement.hasMore,
+        replacement.beforeMessageRowId ?? 0
+      )
     }
   }
 

@@ -109,7 +109,15 @@ function opencodeToolBlocks(part: Record<string, unknown>): NativeChatBlock[] {
   }
   blocks.push({
     type: 'tool-result',
-    output: typeof output === 'string' ? output : '',
+    // Why: the error is the output — an errored tool must show a reason.
+    output:
+      typeof output === 'string'
+        ? output
+        : typeof error === 'string'
+          ? error
+          : error != null
+            ? JSON.stringify(error)
+            : '',
     ...(error != null ? { isError: true } : {})
   })
   return blocks

@@ -505,4 +505,56 @@ describe('worker transcript reads (opencode SQLite)', () => {
       )
     ).resolves.toEqual({ ok: false, reason: 'transcript_unreadable', warnings: [] })
   })
+
+  it('advances the initial cursor past rows interleaved between signal and page', async () => {
+    const { db, path } = createDb()
+    for (const id of ['user-1', 'user-2', 'user-3']) {
+      insertMessage(db, id, 1_000)
+      insertTextPart(db, `prt-${id}`, id, `text ${id}`)
+    }
+    const staleMax = rawRowid(db, 'user-2')
+    // A row lands after the signal read but before the page read.
+    insertMessage(db, 'user-4', 2_000)
+    insertTextPart(db, 'prt-user-4', 'user-4', 'text user-4')
+
+    const deps: WorkerTranscriptReadDeps = {
+      opencode: {
+        resolveDbPath: async () => path,
+        // First signal is stale (user-2 era); later reads see the real DB.
+        readSignal: (() => {
+          let signalReads = 0
+          return () => {
+            signalReads++
+            if (signalReads === 1) {
+              return Promise.resolve({
+                messageCount: 2,
+                partCount: 2,
+                maxMessageRowId: staleMax,
+                maxPartTimeUpdated: 1_000
+              })
+            }
+            return Promise.resolve(readOpenCodeTranscriptSignal(path, 'ses-1'))
+          }
+        })(),
+        readPage: (args) => Promise.resolve(readOpenCodeTranscriptPage(args)),
+        readPageAfter: (args) => Promise.resolve(readOpenCodeTranscriptPageAfter(args))
+      }
+    }
+
+    const initial = await readWorkerTranscript({ agent: 'opencode', sessionId: 'ses-1' }, deps)
+    if (!initial.ok) {
+      throw new Error('Expected the initial opencode page')
+    }
+    // The cursor must cover the interleaved row.
+    expect(initial.nextOffset).toBe(rawRowid(db, 'user-4'))
+
+    const continuation = await readWorkerTranscript(
+      { agent: 'opencode', sessionId: 'ses-1', offset: initial.nextOffset },
+      deps
+    )
+    if (!continuation.ok) {
+      throw new Error('Expected the opencode continuation')
+    }
+    expect(continuation.messages).toEqual([])
+  })
 })

@@ -313,4 +313,98 @@ describe('subscribeOpenCodeNativeChatTranscript (live)', () => {
       subscription.unsubscribe()
     }
   })
+
+  it('retries a vanished first page as a first snapshot instead of stalling', async () => {
+    const { db, path } = createDb()
+    insertMessage(db, 'msg-1', 1_000, 'user')
+    insertPart(db, 'prt-1', 'msg-1', 1_000, { type: 'text', text: 'first prompt' })
+
+    let pageReads = 0
+    const snapshots: NativeChatMessage[][] = []
+    const subscription = subscribeOpenCodeNativeChatTranscript(
+      {
+        agent: 'opencode',
+        sessionId: 'ses-1',
+        resolvePollIntervalMs: 20,
+        onInitialSnapshot: (messages) => snapshots.push(messages),
+        onAppend: () => {}
+      },
+      undefined,
+      {
+        resolveDbPath: async () => path,
+        readSignal: (dbPath, sessionId) =>
+          Promise.resolve(readOpenCodeTranscriptSignal(dbPath, sessionId)),
+        // First page read misses — the next tick must retry as a first snapshot.
+        readPage: (args) => {
+          pageReads++
+          if (pageReads === 1) {
+            return Promise.resolve(null)
+          }
+          return Promise.resolve(
+            readOpenCodeTranscriptPage(args as Parameters<typeof readOpenCodeTranscriptPage>[0])
+          )
+        }
+      }
+    )
+    try {
+      await vi.waitFor(
+        () => {
+          expect(snapshots.length).toBeGreaterThanOrEqual(1)
+        },
+        { timeout: 3_000, interval: 20 }
+      )
+      expect(snapshots[0]!.map((message) => message.id)).toEqual(['msg-1'])
+    } finally {
+      subscription.unsubscribe()
+    }
+  })
+
+  it('replaces the window when a poll gap skips more rows than the diff window', async () => {
+    const { db, path } = createDb()
+    insertMessage(db, 'msg-1', 1_000, 'user')
+    insertPart(db, 'prt-1', 'msg-1', 1_000, { type: 'text', text: 'seed' })
+
+    const frames: {
+      kind: 'snapshot' | 'appended' | 'replaced'
+      messages: NativeChatMessage[]
+    }[] = []
+    const subscription = subscribeOpenCodeNativeChatTranscript(
+      {
+        agent: 'opencode',
+        sessionId: 'ses-1',
+        initialLimit: 250,
+        resolvePollIntervalMs: 20,
+        onInitialSnapshot: (messages) => frames.push({ kind: 'snapshot', messages }),
+        onAppend: (messages) => frames.push({ kind: 'appended', messages }),
+        onReplace: (messages) => frames.push({ kind: 'replaced', messages })
+      },
+      undefined,
+      depsFor(path)
+    )
+    try {
+      await vi.waitFor(
+        () => {
+          expect(frames.some((frame) => frame.kind === 'snapshot')).toBe(true)
+        },
+        { timeout: 3_000, interval: 20 }
+      )
+
+      // Land >WATCH_DIFF_WINDOW rows in one gap — overflow must surface via replace.
+      for (let n = 2; n <= 130; n++) {
+        insertMessage(db, `msg-${n}`, 2_000 + n, 'user')
+        insertPart(db, `prt-${n}`, `msg-${n}`, 2_000 + n, { type: 'text', text: `body ${n}` })
+      }
+      await vi.waitFor(
+        () => {
+          expect(frames.some((frame) => frame.kind === 'replaced')).toBe(true)
+        },
+        { timeout: 3_000, interval: 20 }
+      )
+      const replaced = frames.find((frame) => frame.kind === 'replaced')!
+      expect(replaced.messages.map((message) => message.id)).toContain('msg-2')
+      expect(replaced.messages).toHaveLength(130)
+    } finally {
+      subscription.unsubscribe()
+    }
+  })
 })

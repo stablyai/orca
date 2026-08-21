@@ -19,7 +19,8 @@ vi.mock('./transcript-reader', async (importOriginal) => {
 
 // The opencode route must bypass the file resolver entirely (its transcript is a
 // SQLite DB), so stub the SQLite reader and assert the cached call returns it.
-vi.mock('./transcript-opencode', () => ({
+vi.mock('./transcript-opencode', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   readOpenCodeNativeChatTranscriptFull: vi.fn(async () => ({ error: 'opencode-routed' }))
 }))
 

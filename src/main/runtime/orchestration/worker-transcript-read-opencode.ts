@@ -110,8 +110,10 @@ export async function readOpenCodeWorkerTranscript(
         ok: true,
         filePath: dbPath,
         messages: bounded.messages,
-        // Continue from the newest RAW rowid (covers non-renderable rows too).
-        nextOffset: args.endOffset ?? signal.maxMessageRowId,
+        // Newest RAW rowid (covers non-renderable rows), maxed with the page's
+        // newest — a row can interleave between readSignal and readPage.
+        nextOffset:
+          args.endOffset ?? Math.max(signal.maxMessageRowId, page.items.at(-1)?.rowid ?? 0),
         limited: page.hasMore || bounded.limited,
         warnings: bounded.warnings
       }
