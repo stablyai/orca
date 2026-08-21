@@ -70,6 +70,13 @@ import {
 } from '@/lib/pr-comment-audience-labels'
 import { setPRBotAuthorOverride, usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
 import {
+  filterPRCommentsByScope,
+  getPrCommentScopeFilters,
+  getPRCommentScopeCounts,
+  getPRCommentScopeEmptyLabel,
+  type PRCommentScopeFilter
+} from '@/lib/pr-comment-scope'
+import {
   getPRCommentGroupId,
   groupPRComments,
   type PRCommentGroup
@@ -2449,6 +2456,7 @@ export function PRCommentsList({
   ) => Promise<boolean>
 }): React.JSX.Element {
   const presentation = React.useMemo(() => getPRCommentPresentationClasses(), [])
+  const [scopeFilter, setScopeFilter] = useState<PRCommentScopeFilter>('feedback')
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
   const [displayMode, setDisplayMode] = useState<PRCommentsListDisplayMode>('triage')
   const [replyingCommentId, setReplyingCommentId] = useState<number | null>(null)
@@ -2456,9 +2464,16 @@ export function PRCommentsList({
   const addCommentSurfaceRef = useRef<HTMLDivElement>(null)
   const shouldScrollAddCommentRef = useRef(false)
   const botAuthorOverrides = usePRBotAuthorOverrides()
+  const scopeCounts = React.useMemo(() => getPRCommentScopeCounts(comments), [comments])
+  const effectiveScopeFilter =
+    scopeFilter === 'feedback' && scopeCounts.feedback === 0 ? 'all' : scopeFilter
+  const scopedComments = React.useMemo(
+    () => filterPRCommentsByScope(comments, effectiveScopeFilter),
+    [comments, effectiveScopeFilter]
+  )
   const commentCounts = React.useMemo(
-    () => getPRCommentAudienceCounts(comments, botAuthorOverrides),
-    [botAuthorOverrides, comments]
+    () => getPRCommentAudienceCounts(scopedComments, botAuthorOverrides),
+    [botAuthorOverrides, scopedComments]
   )
   const {
     isSelectingForAI,
@@ -2469,10 +2484,10 @@ export function PRCommentsList({
     addGroupToSelection,
     clearSelection,
     toggleGroupSelection
-  } = usePRCommentsListSelection(comments, selectionContextKey, selectionClearRequest)
+  } = usePRCommentsListSelection(scopedComments, selectionContextKey, selectionClearRequest)
   const visibleComments = React.useMemo(
-    () => filterPRCommentsByAudience(comments, commentFilter, botAuthorOverrides),
-    [botAuthorOverrides, commentFilter, comments]
+    () => filterPRCommentsByAudience(scopedComments, commentFilter, botAuthorOverrides),
+    [botAuthorOverrides, commentFilter, scopedComments]
   )
   const groups = React.useMemo(() => groupPRComments(visibleComments), [visibleComments])
   const triageGroups = React.useMemo(
@@ -2820,6 +2835,30 @@ export function PRCommentsList({
         </div>
         {comments.length > 0 && (
           <div className={presentation.audienceTabs}>
+            {getPrCommentScopeFilters().map((filter) => {
+              const isActive = effectiveScopeFilter === filter.value
+              const isDisabled = filter.value === 'feedback' && scopeCounts.feedback === 0
+              return (
+                <button
+                  key={filter.value}
+                  type="button"
+                  className={cn(
+                    presentation.audienceTab,
+                    isActive && presentation.audienceTabActive
+                  )}
+                  aria-pressed={isActive}
+                  disabled={isDisabled}
+                  onClick={() => setScopeFilter(filter.value)}
+                >
+                  <span>{filter.label}</span>
+                  <span className="tabular-nums">{scopeCounts[filter.value]}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+        {comments.length > 0 && (
+          <div className={cn(presentation.audienceTabs, 'mt-1')}>
             {getPrCommentAudienceFilters().map((filter) => {
               const isActive = commentFilter === filter.value
               return (
@@ -2868,7 +2907,9 @@ export function PRCommentsList({
         )
       ) : visibleComments.length === 0 ? (
         <div className="flex items-center justify-center py-5 text-[11px] text-muted-foreground">
-          {getPRCommentAudienceEmptyLabel(commentFilter)}
+          {scopedComments.length === 0
+            ? getPRCommentScopeEmptyLabel(effectiveScopeFilter)
+            : getPRCommentAudienceEmptyLabel(commentFilter)}
         </div>
       ) : (
         <div className={presentation.list}>

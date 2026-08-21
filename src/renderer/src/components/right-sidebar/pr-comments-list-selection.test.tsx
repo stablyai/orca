@@ -291,6 +291,34 @@ describe('PRCommentsList comment resolution selection', () => {
     )
   })
 
+  it('uses the active feedback scope for bulk agent resolution', () => {
+    const onResolveSelectedCommentsWithAI = vi.fn()
+    renderList({
+      comments: [
+        comment({
+          id: 1,
+          body: 'Top-level context.',
+          url: 'https://github.com/acme/widgets/pull/42#issuecomment-1'
+        }),
+        comment({
+          id: 2,
+          body: 'Inline feedback.',
+          threadId: 'thread-1',
+          path: 'src/a.ts',
+          isResolved: false
+        })
+      ],
+      onResolveSelectedCommentsWithAI
+    })
+
+    clickButton('Send unresolved PR comments')
+
+    expect(onResolveSelectedCommentsWithAI).toHaveBeenCalledTimes(1)
+    const selectedGroups = onResolveSelectedCommentsWithAI.mock.calls[0]?.[0] as PRCommentGroup[]
+    expect(selectedGroups).toHaveLength(1)
+    expect(selectedGroups[0]?.kind === 'thread' ? selectedGroups[0].threadId : '').toBe('thread-1')
+  })
+
   it('lets a user queue one eligible comment thread for the agent from the visible row action', () => {
     const onResolveSelectedCommentsWithAI = vi.fn()
     renderList({

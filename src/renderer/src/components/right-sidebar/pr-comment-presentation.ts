@@ -142,7 +142,15 @@ export function resolvePRCommentPresentationVariant(): PRCommentPresentationVari
   if (typeof window === 'undefined') {
     return DEFAULT_PR_COMMENT_PRESENTATION_VARIANT
   }
-  const stored = window.localStorage.getItem(STORAGE_KEY)
+  // Why: tests, private windows, and remote shells can expose window without
+  // usable storage; presentation should degrade to the default variant.
+  const stored = (() => {
+    try {
+      return window.localStorage?.getItem(STORAGE_KEY) ?? null
+    } catch {
+      return null
+    }
+  })()
   if (isVariant(stored)) {
     return stored
   }

@@ -605,6 +605,14 @@
               "human": "No human comments.",
               "all": "No comments yet."
             }
+          },
+          "scope": {
+            "feedback": "Feedback",
+            "all": "All",
+            "empty": {
+              "feedback": "No review feedback.",
+              "all": "No comments yet."
+            }
           }
         },
         "bot": {

@@ -498,6 +498,14 @@
               "human": "사람 댓글이 없습니다.",
               "all": "아직 댓글이 없습니다."
             }
+          },
+          "scope": {
+            "feedback": "Feedback",
+            "all": "All",
+            "empty": {
+              "feedback": "No review feedback.",
+              "all": "No comments yet."
+            }
           }
         },
         "bot": {

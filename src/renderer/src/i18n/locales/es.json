@@ -498,6 +498,14 @@
               "human": "Sin comentarios humanos.",
               "all": "Aún no hay comentarios."
             }
+          },
+          "scope": {
+            "feedback": "Feedback",
+            "all": "All",
+            "empty": {
+              "feedback": "No review feedback.",
+              "all": "No comments yet."
+            }
           }
         },
         "bot": {
