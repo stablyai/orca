@@ -23,7 +23,7 @@ export function boundedLinearString(
   const normalized = normalizeLinearLineEndings(value)
   // Why: count and digest the complete text so recovery can prove equality even when `value` is capped.
   return {
-    value: normalized.slice(0, cap),
+    value: normalized.slice(0, safeSliceEnd(normalized, cap)),
     truncated: normalized.length > cap,
     chars: normalized.length,
     sha256: linearSha256Hex(normalized)
@@ -67,4 +67,16 @@ function compareIds(left: string, right: string): number {
     return 0
   }
   return left < right ? -1 : 1
+}
+
+/**
+ * Why: slicing between a surrogate pair emits a lone half, which is not valid UTF-8 —
+ * strict JSON readers (Rust's serde_json) reject the whole payload rather than the char.
+ */
+function safeSliceEnd(value: string, cap: number): number {
+  if (cap <= 0 || cap >= value.length) {
+    return cap
+  }
+  const last = value.charCodeAt(cap - 1)
+  return last >= 0xd800 && last <= 0xdbff ? cap - 1 : cap
 }

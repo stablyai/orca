@@ -219,7 +219,7 @@ describe('SSH Linear project update add argument rejection', () => {
       ])
     ).rejects.toMatchObject({
       code: 'invalid_argument',
-      message: '--health must be on-track, at-risk, off-track'
+      message: '--health must be one of on-track, at-risk, off-track'
     })
   })
 
@@ -247,7 +247,7 @@ describe('SSH Linear project update add argument rejection', () => {
       dispatchProjectWrite(['linear', 'project', 'update', 'add', '--body', 'Done'])
     ).rejects.toMatchObject({
       code: 'invalid_argument',
-      message: 'Pass a project as a positional argument or --id <project>'
+      message: 'Pass a Linear project UUID, slugId, URL, or exact name positionally or as --id'
     })
   })
 
@@ -394,8 +394,6 @@ describe('SSH Linear project create dispatch', () => {
       '2026-04-01',
       '--color',
       '#A1B2C3',
-      '--icon',
-      'Rocket',
       '--workspace',
       'workspace-1',
       '--json'
@@ -416,7 +414,6 @@ describe('SSH Linear project create dispatch', () => {
         startDate: '2026-03-01',
         targetDate: '2026-04-01',
         color: '#A1B2C3',
-        icon: 'Rocket',
         writeId: undefined,
         workspaceId: 'workspace-1'
       }
@@ -507,6 +504,15 @@ describe('SSH Linear project create argument rejection', () => {
     })
   })
 
+  it('rejects --content-file - when the piped stdin is empty or blank', async () => {
+    await expect(dispatchProjectWrite([...base, '--content-file', '-'], '')).rejects.toMatchObject({
+      code: 'invalid_argument'
+    })
+    await expect(
+      dispatchProjectWrite([...base, '--content-file', '-'], '\n  \t')
+    ).rejects.toMatchObject({ code: 'invalid_argument' })
+  })
+
   it('rejects --content together with --content-file', async () => {
     await expect(
       dispatchProjectWrite([...base, '--content', 'x', '--content-file', '-'], 'piped')
@@ -521,7 +527,7 @@ describe('SSH Linear project create argument rejection', () => {
 
     await expect(dispatchProjectWrite([...base, '--write-id', generic])).rejects.toMatchObject({
       code: 'linear_invalid_write_id',
-      message: '--write-id must be a UUID v4'
+      message: '--write-id must be a UUID v4 for Linear project create'
     })
 
     const { dispatch } = await dispatchProjectWrite([
@@ -541,10 +547,10 @@ describe('SSH Linear project create argument rejection', () => {
   it('requires --name and at least one --team', async () => {
     await expect(
       dispatchProjectWrite(['linear', 'project', 'create', '--team', 'ENG'])
-    ).rejects.toMatchObject({ code: 'invalid_argument', message: 'Missing --name' })
+    ).rejects.toMatchObject({ code: 'invalid_argument', message: 'Missing required --name' })
     await expect(
       dispatchProjectWrite(['linear', 'project', 'create', '--name', '   ', '--team', 'ENG'])
-    ).rejects.toMatchObject({ code: 'invalid_argument', message: '--name must not be empty' })
+    ).rejects.toMatchObject({ code: 'invalid_argument', message: '--name must not be blank' })
     await expect(
       dispatchProjectWrite(['linear', 'project', 'create', '--name', 'Launch'])
     ).rejects.toMatchObject({ code: 'invalid_argument', message: 'Missing required --team' })
@@ -582,7 +588,7 @@ describe('SSH Linear project create argument rejection', () => {
       message: '--priority must be none, low, medium, high, or urgent'
     })
     await expect(dispatchProjectWrite([...base, '--color', 'A1B2C3'])).rejects.toMatchObject({
-      message: '--color must be #RRGGBB'
+      message: '--color must be #RRGGBB, quoted so the shell keeps the leading #'
     })
     await expect(
       dispatchProjectWrite([...base, '--start-date', '2026-02-30'])
@@ -590,6 +596,62 @@ describe('SSH Linear project create argument rejection', () => {
     await expect(
       dispatchProjectWrite([...base, '--target-date', '04-01-2026'])
     ).rejects.toMatchObject({ message: '--target-date must use YYYY-MM-DD' })
+  })
+})
+
+describe('SSH Linear project edit routing beside the other project writes', () => {
+  it('routes edit through the Linear write dispatcher without touching create or update add', async () => {
+    const { dispatch, dispatcher } = createDispatcher()
+
+    await tryDispatchRemoteLinearWriteCli(
+      dispatcher,
+      parseRemoteCliArgs(['linear', 'project', 'edit', 'launch-a1b2', '--clear-lead']),
+      {},
+      undefined
+    )
+
+    expect(dispatch.mock.calls[0][0]).toMatchObject({
+      method: 'linear.agentProjectEdit',
+      params: { input: 'launch-a1b2', lead: null }
+    })
+  })
+
+  it('keeps the create v4 write-id rule and the update add generic write-id rule', async () => {
+    const generic = '3f2504e0-4f89-11d3-9a0c-0305e82c3301'
+
+    await expect(
+      dispatchProjectWrite([
+        'linear',
+        'project',
+        'create',
+        '--name',
+        'Launch',
+        '--team',
+        'ENG',
+        '--write-id',
+        generic
+      ])
+    ).rejects.toMatchObject({ code: 'linear_invalid_write_id' })
+
+    const { dispatch } = await dispatchProjectWrite([
+      'linear',
+      'project',
+      'update',
+      'add',
+      'launch-a1b2',
+      '--body',
+      'Done',
+      '--write-id',
+      generic
+    ])
+    expect(dispatch.mock.calls[0][0].params).toMatchObject({ writeId: generic })
+
+    await expect(
+      dispatchProjectWrite(['linear', 'project', 'edit', 'launch-a1b2', '--write-id', generic])
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: 'Unknown flag --write-id for command: linear project edit'
+    })
   })
 })
 

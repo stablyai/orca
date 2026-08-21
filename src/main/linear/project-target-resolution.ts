@@ -168,7 +168,7 @@ function mergeTargetCandidates(
   return { candidates: [...candidates.values()], slugMatchIds, ambiguous }
 }
 
-export function ambiguousLinearProject(
+function ambiguousLinearProject(
   input: string,
   candidates: LinearProjectTargetCandidate[]
 ): LinearAgentAccessError {
@@ -182,7 +182,7 @@ export function ambiguousLinearProject(
   )
 }
 
-export function missingLinearProject(
+function missingLinearProject(
   input: string,
   candidates: LinearProjectTargetCandidate[]
 ): LinearAgentAccessError {

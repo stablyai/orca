@@ -270,6 +270,16 @@ describe('createManagedCommandMatcher', () => {
     expect(match(command)).toBe(true)
   })
 
+  it('matches the pre-default-form launcher so upgrades replace it instead of duplicating', () => {
+    // Why: installs before the ${VAR-} conversion emitted bare $HOME/$SYSTEMROOT. The sweep must
+    // still recognize them, or an upgrade would leave the stale entry beside the new one.
+    expect(
+      match(
+        'if [ -z "$HOME" ]; then :; else if [ -f "$HOME/.orca/agent-hooks/claude-hook.sh" ]; then /bin/sh "$HOME/.orca/agent-hooks/claude-hook.sh"; fi; fi'
+      )
+    ).toBe(true)
+  })
+
   it('matches PowerShell and POSIX variants across Copilot platform switches', () => {
     const matchPosix = createManagedCommandMatcher('copilot-hook.sh')
     const matchPowerShell = createManagedCommandMatcher('copilot-hook.ps1')
@@ -516,6 +526,37 @@ describe('wrapPosixHookCommand', () => {
     }
   )
 
+  it('emits a fallback response before draining when the caller supplies one', () => {
+    const cmd = wrapPosixHookCommand('/does/not/exist.sh', {}, { fallbackStdout: '{"a":"b"}' })
+    expect(cmd).toBe(
+      `if [ -f '/does/not/exist.sh' ] && [ -r '/does/not/exist.sh' ] && [ -x '/does/not/exist.sh' ]; then /bin/sh '/does/not/exist.sh'; else printf '%s\\n' '{"a":"b"}'; ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
+    )
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'writes the fallback response and still drains a large stdin payload',
+    () => {
+      const cmd = wrapPosixHookCommand('/does/not/exist.sh', {}, { fallbackStdout: '{"a":"b"}' })
+      const result = spawnSync('/bin/sh', ['-c', cmd], {
+        input: Buffer.alloc(1_000_000, 'x'),
+        encoding: 'utf8'
+      })
+      expect(result.status).toBe(0)
+      expect(result.stdout).toBe('{"a":"b"}\n')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'runs the script instead of the fallback when the script is present',
+    () => {
+      const scriptPath = join(tmpDir, 'present-hook.sh')
+      writeFileSync(scriptPath, "#!/bin/sh\nprintf 'from-script\\n'\n", { mode: 0o755 })
+      const cmd = wrapPosixHookCommand(scriptPath, {}, { fallbackStdout: '{"a":"b"}' })
+      const result = spawnSync('/bin/sh', ['-c', cmd], { encoding: 'utf8' })
+      expect(result.stdout).toBe('from-script\n')
+    }
+  )
+
   it.skipIf(process.platform === 'win32')(
     'drains stdin when a directory occupies the managed script path',
     () => {
@@ -678,12 +719,28 @@ describe('wrapRuntimeHomeHookCommand', () => {
     const command = wrapRuntimeHomeHookCommand('claude-hook')
 
     expect(command).toContain('case "${OSTYPE-}" in msys*|cygwin*|win32*)')
-    expect(command).toContain('case "$HOME" in *\\&*|*\\^*|*\\(*|*\\)*|*\\;*|*,*|*=*|*%*|*\\!*)')
+    expect(command).toContain('case "${HOME-}" in *\\&*|*\\^*|*\\(*|*\\)*|*\\;*|*,*|*=*|*%*|*\\!*)')
     expect(command).not.toContain('uname')
-    expect(command).toContain('"$HOME/.orca/agent-hooks/claude-hook.cmd"')
-    expect(command).toContain('/bin/sh "$HOME/.orca/agent-hooks/claude-hook.sh"')
+    expect(command).toContain('"${HOME-}/.orca/agent-hooks/claude-hook.cmd"')
+    expect(command).toContain('/bin/sh "${HOME-}/.orca/agent-hooks/claude-hook.sh"')
     expect(command).not.toMatch(/[A-Z]:[\\/]|\/Users\/|\/home\//)
   })
+
+  // Why: a static hook precheck (Grok) rejects the whole command on any bare reference it cannot
+  // resolve, including one in a branch that platform never takes.
+  it.each([
+    ['default', undefined],
+    ['neutral-json', { neutralJsonWhenMissing: true }]
+  ])(
+    'references every variable in default form (%s) so a static precheck cannot reject it',
+    (_label, options) => {
+      const command = wrapRuntimeHomeHookCommand('claude-hook', options)
+
+      expect(command).toContain('"${SYSTEMROOT-}/System32/WindowsPowerShell/v1.0/powershell.exe"')
+      expect(command).not.toMatch(/\$(?!\{)[A-Za-z_]/)
+      expect(command).not.toMatch(/\$\{[A-Za-z_][A-Za-z0-9_]*\}/)
+    }
+  )
 
   it('rejects a script base name that could inject shell syntax', () => {
     expect(() => wrapRuntimeHomeHookCommand('claude-hook; echo injected')).toThrow(

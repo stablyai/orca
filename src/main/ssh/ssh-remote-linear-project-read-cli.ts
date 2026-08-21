@@ -99,7 +99,7 @@ function buildRemoteLinearProjectShowRequest(parsed: ParsedRemoteCli): LinearPro
   if (!input) {
     throw new RemoteCliArgumentError(
       'invalid_argument',
-      'Pass a project as a positional argument or --id <project>'
+      'Pass a Linear project UUID, slugId, URL, or exact name positionally or as --id'
     )
   }
   const requestedLimit = optionalRemoteProjectPositiveInteger(parsed.flags, 'updates-limit')

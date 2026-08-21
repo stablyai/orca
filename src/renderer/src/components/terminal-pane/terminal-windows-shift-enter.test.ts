@@ -83,6 +83,19 @@ describe('resolveWindowsShiftEnterEncoding', () => {
     expect(resolveWindowsShiftEnterEncodingForPane(state, 'tab:pane', 'Pi ready')).toBe('alt-enter')
   })
 
+  it('keeps the last CSI-u capability while revocation confirmation is pending', () => {
+    expect(
+      resolveWindowsShiftEnterEncoding({
+        foreground: {
+          agent: 'pi',
+          routingRevoked: true,
+          routingConfirmationPending: true,
+          shellForeground: false
+        }
+      })
+    ).toBe('csi-u')
+  })
+
   it('keeps legacy bytes for plain shell and unsupported-agent titles', () => {
     const state = {
       paneForegroundAgentByPaneKey: {},

@@ -42,7 +42,8 @@ describe('useMobileNativeChatDrafts', () => {
     messages = [],
     launchDraft = null,
     chatActive = true,
-    transcriptLoading = false
+    transcriptLoading = false,
+    transcriptSettled = !transcriptLoading
   }: {
     tabId: string
     sessionId?: string | null
@@ -50,6 +51,7 @@ describe('useMobileNativeChatDrafts', () => {
     launchDraft?: string | null
     chatActive?: boolean
     transcriptLoading?: boolean
+    transcriptSettled?: boolean
   }): null {
     state = useMobileNativeChatDrafts({
       hostId: 'host',
@@ -59,7 +61,8 @@ describe('useMobileNativeChatDrafts', () => {
       messages,
       launchDraft,
       chatActive,
-      transcriptLoading
+      transcriptLoading,
+      transcriptSettled
     })
     return null
   }

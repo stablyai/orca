@@ -194,7 +194,13 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'environment',
-    keys: ['environment add', 'environment list', 'environment show', 'environment rm'],
+    keys: [
+      'host list',
+      'environment add',
+      'environment list',
+      'environment show',
+      'environment rm'
+    ],
     load: async () => (await import('./handlers/environment.js')).ENVIRONMENT_HANDLERS
   },
   {
@@ -238,7 +244,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'linear-project-writes',
-    keys: ['linear project create', 'linear project update add'],
+    keys: ['linear project create', 'linear project edit', 'linear project update add'],
     load: async () =>
       (await import('./handlers/linear-project-writes.js')).LINEAR_PROJECT_WRITES_HANDLERS
   },

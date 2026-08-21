@@ -238,7 +238,7 @@ async function call(
 function requiredString(flags: Map<string, string | boolean>, name: string): string {
   const value = optionalString(flags, name)
   if (!value) {
-    throw new RemoteCliArgumentError('invalid_argument', `Missing --${name}`)
+    throw new RemoteCliArgumentError('invalid_argument', `Missing required --${name}`)
   }
   return value
 }

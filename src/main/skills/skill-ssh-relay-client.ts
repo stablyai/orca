@@ -9,12 +9,14 @@ const DEVELOPMENT_DOWNLOAD_POLICY_FAILURES = new Set([
 ])
 
 export type SkillSshRelayClient = NonNullable<IPtyProvider['requestHostRpc']>
+export type SkillSshProviderSource = IPtyProvider | (() => IPtyProvider)
 
-export function requireSkillSshRelayClient(provider: IPtyProvider): SkillSshRelayClient {
+export function requireSkillSshRelayClient(source: SkillSshProviderSource): SkillSshRelayClient {
+  const provider = typeof source === 'function' ? source() : source
   if (!provider.requestHostRpc) {
     throw new Error('skill-install-ssh-relay-unavailable')
   }
-  return provider.requestHostRpc
+  return provider.requestHostRpc.bind(provider)
 }
 
 export function shouldUseSkillSshClientTransfer(error: unknown, requireHttps: boolean): boolean {

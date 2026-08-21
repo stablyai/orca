@@ -9,6 +9,7 @@ function makeStore() {
       AppState,
       | 'pinnedTabCloseConfirm'
       | 'requestPinnedTabCloseConfirm'
+      | 'cancelPinnedTabCloseRequest'
       | 'confirmPinnedTabClose'
       | 'dismissPinnedTabClose'
     >
@@ -133,6 +134,25 @@ describe('createPinnedTabCloseConfirmSlice', () => {
 
     expect(firstCancel).toHaveBeenCalledTimes(1)
     expect(store.getState().pinnedTabCloseConfirm?.tabLabel).toBe('Second terminal')
+  })
+
+  it('cancels a specific visible or queued request without invoking its callbacks', () => {
+    const store = makeStore()
+    const first = { tabLabel: 'First', onConfirm: vi.fn(), onCancel: vi.fn() }
+    const second = { tabLabel: 'Second', onConfirm: vi.fn(), onCancel: vi.fn() }
+    const third = { tabLabel: 'Third', onConfirm: vi.fn(), onCancel: vi.fn() }
+    store.getState().requestPinnedTabCloseConfirm(first)
+    store.getState().requestPinnedTabCloseConfirm(second)
+    store.getState().requestPinnedTabCloseConfirm(third)
+
+    store.getState().cancelPinnedTabCloseRequest(second)
+    store.getState().cancelPinnedTabCloseRequest(first)
+
+    expect(store.getState().pinnedTabCloseConfirm).toBe(third)
+    expect(first.onConfirm).not.toHaveBeenCalled()
+    expect(first.onCancel).not.toHaveBeenCalled()
+    expect(second.onConfirm).not.toHaveBeenCalled()
+    expect(second.onCancel).not.toHaveBeenCalled()
   })
 
   it('ignores a rapid second action on the newly advanced request', () => {

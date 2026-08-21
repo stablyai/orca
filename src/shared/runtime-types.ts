@@ -39,6 +39,7 @@ import type { RemoteServerUpdateSupport } from './remote-server-update'
 import type { ExecutionHostId } from './execution-host'
 import type { PtyIncarnationId } from './pty-incarnation'
 import type { RasterImageDimensions } from './raster-image-dimensions'
+import type { TerminalExitCause } from './terminal-exit-cause'
 
 export type { RuntimeMarkdownReadTabResult, RuntimeMarkdownSaveTabResult }
 
@@ -104,8 +105,13 @@ export type CliRuntimeState =
   | 'stale_bootstrap'
 
 export type CliStatusResult = {
+  // Why: every field below describes ONE machine. When the CLI targets a paired server the
+  // whole result is about that server, and callers were reading `app` as if it described their
+  // own laptop. Naming the subject removes the ambiguity; absent means local.
+  target?: { kind: 'local' } | { kind: 'environment'; environment: string }
   app: {
     running: boolean
+    // Null whenever the pid is not knowable, which includes every remote target.
     pid: number | null
     desktopWindowStatus?: RuntimeDesktopWindowStatus
   }
@@ -380,6 +386,7 @@ export type RuntimeFileListResult = {
   files: RuntimeFileListEntry[]
   totalCount: number
   truncated: boolean
+  quickOpenSearchVersion?: number
 }
 
 export type RuntimeFileOpenResult = {
@@ -465,6 +472,13 @@ export type RuntimeTerminalSummary = {
   writable: boolean
   lastOutputAt: number | null
   preview: string
+  /** Why this terminal's process is gone. Absent while it is still running, and
+   *  absent from a host predating the field — never read an absent value as a
+   *  clean finish (STA-4536). */
+  exitCause?: TerminalExitCause
+  /** Where this terminal actually runs. Absent when the host predates the field
+   *  or could not name the host — never read an absent value as local. */
+  executionHostId?: ExecutionHostId
 }
 
 export type RuntimeTerminalVisualTerminalNode = {
@@ -515,12 +529,24 @@ export type RuntimeTerminalVisualLayout = {
   root: RuntimeTerminalVisualLayoutNode
 }
 
+/** Which execution hosts a listing answered for, so an empty or partial result
+ *  reads as "none here" instead of "none anywhere". Host ids are as the
+ *  answering runtime names them — `_meta.runtimeId` says which runtime that is. */
+export type RuntimeTerminalListHostScope = {
+  hostIds: ExecutionHostId[]
+  /** Known hosts this listing skipped; a live terminal on one of them can be
+   *  absent from `terminals` without having exited. */
+  omittedHostIds: ExecutionHostId[]
+}
+
 export type RuntimeTerminalListResult = {
   terminals: RuntimeTerminalSummary[]
   visualLayouts?: RuntimeTerminalVisualLayout[]
   topologyRevisions?: Record<string, number>
   totalCount: number
   truncated: boolean
+  /** Absent from hosts that predate the field — treat that scope as unverifiable. */
+  hostScope?: RuntimeTerminalListHostScope
 }
 
 export type RuntimeTerminalOrphanAdoptionClaim = {
@@ -588,10 +614,29 @@ export type RuntimeWorktreeTerminalSleepResult = {
     }
 )
 
+/** Evidence class that proved a pane is parked on a prompt only a human can answer.
+ *  Never inferred from silence: `hook` is an agent-reported blocked/waiting state,
+ *  `prompt-text` is a matched prompt in the retained tail, `title` is a live OSC title. */
+export type RuntimeTerminalInteractiveWaitSource = 'hook' | 'prompt-text' | 'title'
+
+/** Present only while the wait is live. A `null` field means the pane was evaluated and nothing
+ *  proves a wait; an absent field means it was never evaluated — an older host, an unverifiable
+ *  worker identity, an unreadable pane, or an agent probe that did not answer in time. Absence
+ *  is never "not waiting". */
+export type RuntimeTerminalInteractiveWait = {
+  source: RuntimeTerminalInteractiveWaitSource
+  /** Named prompt when the tail identified one. Absent for hook and title evidence. */
+  reason?: RuntimeTerminalWaitBlockedReason
+  /** ms epoch the wait was first observed, when the evidence carries a timestamp. */
+  since?: number
+}
+
 export type RuntimeTerminalShow = RuntimeTerminalSummary & {
   paneRuntimeId: number
   ptyId: string | null
   rendererGraphEpoch: number
+  /** Null when nothing proves an interactive wait. Absent on hosts that predate the field. */
+  agentWait?: RuntimeTerminalInteractiveWait | null
 }
 
 export type RuntimeTerminalState = 'running' | 'exited' | 'unknown'
@@ -606,6 +651,13 @@ export type RuntimeTerminalRead = {
   nextCursor: string | null
   latestCursor?: string
   returnedLineCount?: number
+  // Why: these are two different questions and they disagree whenever a program repaints.
+  // `stream` is the accumulated pty output with escapes stripped, so a redrawn line arrives as
+  // stacked fragments; `screen` is what the terminal actually renders. Naming the source keeps
+  // a caller that asked for one and got the other from reading the answer as the wrong thing.
+  // `screen-unavailable` means a screen was asked for, none could be rendered, and this is the
+  // stream instead — distinct from `stream`, which is the caller getting what they asked for.
+  source?: 'stream' | 'screen' | 'screen-unavailable'
 }
 
 export type RuntimeTerminalRename = {
@@ -719,9 +771,19 @@ export type RuntimeTerminalClose = {
   /** Present for the durable whole-tab lifecycle without changing legacy receipts. */
   closeMode?: 'tab'
   ptyKilled: boolean
+  /**
+   * Why the PTY was not killed, when we know. Absent means today's answer —
+   * nothing observed either way — so older clients reading only `ptyKilled` are
+   * unaffected. `exited` never appears here: that is what `ptyKilled` reports.
+   */
+  ptyStopVerdict?: 'live' | 'unverifiable'
+  /** Set with `ptyStopVerdict: 'unverifiable'`; names what we lost contact with. */
+  ptyStopReason?: string
 }
 
 export type RuntimeTerminalWaitCondition = 'exit' | 'tui-idle'
+/** The `codex-` prefixes are historical: these startup prompts are matched by shape, not by
+ *  vendor, so they also fire for Claude and Cursor. Renaming them would break paired hosts. */
 export type RuntimeTerminalWaitBlockedReason =
   | 'codex-update-prompt'
   | 'codex-trust-workspace'
@@ -729,6 +791,7 @@ export type RuntimeTerminalWaitBlockedReason =
   | 'codex-model-migration-prompt'
   | 'codex-hooks-review-prompt'
   | 'codex-interactive-prompt'
+  | 'agent-approval-prompt'
 
 export type RuntimeTerminalWait = {
   handle: string
@@ -736,6 +799,8 @@ export type RuntimeTerminalWait = {
   satisfied: boolean
   status: RuntimeTerminalState
   exitCode: number | null
+  /** Why it exited. `exitCode` alone cannot answer that — see {@link TerminalExitCause}. */
+  exitCause?: TerminalExitCause
   blockedReason?: RuntimeTerminalWaitBlockedReason
 }
 

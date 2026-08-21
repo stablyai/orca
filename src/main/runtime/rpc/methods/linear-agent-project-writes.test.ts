@@ -14,7 +14,8 @@ function makeRuntime(): OrcaRuntimeService {
   return {
     getRuntimeId: () => 'test-runtime',
     linearProjectUpdateAddForAgents: vi.fn().mockResolvedValue({ ok: true }),
-    linearProjectCreateForAgents: vi.fn().mockResolvedValue({ ok: true })
+    linearProjectCreateForAgents: vi.fn().mockResolvedValue({ ok: true }),
+    linearProjectEditForAgents: vi.fn().mockResolvedValue({ ok: true })
   } as unknown as OrcaRuntimeService
 }
 
@@ -231,7 +232,6 @@ describe('linear.agentProjectCreate params', () => {
         startDate: '2026-01-05',
         targetDate: '2026-02-28',
         color: '#5E6AD2',
-        icon: 'Rocket',
         writeId: WRITE_ID,
         workspaceId: 'workspace-1'
       })
@@ -251,7 +251,6 @@ describe('linear.agentProjectCreate params', () => {
       startDate: '2026-01-05',
       targetDate: '2026-02-28',
       color: '#5E6AD2',
-      icon: 'Rocket',
       writeId: WRITE_ID,
       workspaceId: 'workspace-1'
     })
@@ -290,6 +289,43 @@ describe('linear.agentProjectCreate params', () => {
       description: ''
     })
   })
+
+  // Why: every reference costs one sequential Linear round-trip on a shared
+  // limiter, so an unbounded array would pin Linear access for the whole runtime.
+  it('rejects a reference list past the per-field cap before reaching the runtime', async () => {
+    const runtime = makeRuntime()
+    const dispatcher = makeDispatcher(runtime)
+
+    const response = await dispatcher.dispatch(
+      makeRequest('linear.agentProjectCreate', {
+        name: 'Aurora',
+        teams: ['ENG'],
+        members: Array.from({ length: 51 }, (_, index) => `user-${index}`)
+      })
+    )
+
+    expect(errorMessage(response)).toContain('members accepts at most 50 values')
+    expect(runtime.linearProjectCreateForAgents).not.toHaveBeenCalled()
+  })
+
+  // Why: an out-of-range month made an Invalid Date whose toISOString() threw from
+  // inside refine(); safeParse does not contain that, and on the WebSocket transport
+  // the dispatch has no catch, so the request was never answered at all.
+  it.each(['2026-13-01', '2026-00-10', '2026-01-32', '2026-02-30'])(
+    'rejects the impossible date %s without throwing',
+    async (startDate) => {
+      const runtime = makeRuntime()
+      const dispatcher = makeDispatcher(runtime)
+
+      const response = await dispatcher.dispatch(
+        makeRequest('linear.agentProjectCreate', { name: 'Aurora', teams: ['ENG'], startDate })
+      )
+
+      expect(response.ok).toBe(false)
+      expect(errorMessage(response)).toContain('--start-date must be a real YYYY-MM-DD date')
+      expect(runtime.linearProjectCreateForAgents).not.toHaveBeenCalled()
+    }
+  )
 
   it('rejects a blank name, a missing name, and a missing or empty team set', async () => {
     const runtime = makeRuntime()
@@ -407,5 +443,212 @@ describe('linear.agentProjectCreate params', () => {
       '--workspace all is only valid for project list, statuses, and labels'
     )
     expect(runtime.linearProjectCreateForAgents).not.toHaveBeenCalled()
+  })
+})
+
+describe('linear.agentProjectEdit params', () => {
+  it('registers project edit in the default RPC method set', async () => {
+    const runtime = makeRuntime()
+    const dispatcher = new RpcDispatcher({ runtime })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('linear.agentProjectEdit', { input: 'Launch', priority: 0 })
+    )
+
+    expect(errorCode(response)).not.toBe('method_not_found')
+    expect(response.ok).toBe(true)
+  })
+
+  it('trims the target and name, keeps prose untrimmed, and forwards references as user input', async () => {
+    const runtime = makeRuntime()
+    const response = await makeDispatcher(runtime).dispatch(
+      makeRequest('linear.agentProjectEdit', {
+        input: '  Launch  ',
+        name: '  Aurora Launch  ',
+        description: '  short summary  ',
+        content: '  # Overview  ',
+        status: 'In Progress',
+        lead: 'me',
+        members: ['ada@example.com'],
+        teams: ['ENG'],
+        labels: ['Launch'],
+        priority: 0,
+        startDate: '2026-01-05',
+        targetDate: '2026-02-28',
+        color: '#5E6AD2',
+        workspaceId: 'workspace-1'
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    expect(runtime.linearProjectEditForAgents).toHaveBeenCalledWith({
+      input: 'Launch',
+      name: 'Aurora Launch',
+      description: '  short summary  ',
+      content: '  # Overview  ',
+      status: 'In Progress',
+      lead: 'me',
+      members: ['ada@example.com'],
+      teams: ['ENG'],
+      labels: ['Launch'],
+      priority: 0,
+      startDate: '2026-01-05',
+      targetDate: '2026-02-28',
+      color: '#5E6AD2',
+      workspaceId: 'workspace-1'
+    })
+  })
+
+  it('rejects an edit that requests no field at all', async () => {
+    const runtime = makeRuntime()
+    const dispatcher = makeDispatcher(runtime)
+
+    const bare = await dispatcher.dispatch(
+      makeRequest('linear.agentProjectEdit', { input: 'Launch' })
+    )
+    const workspaceOnly = await dispatcher.dispatch(
+      makeRequest('linear.agentProjectEdit', { input: 'Launch', workspaceId: 'workspace-1' })
+    )
+
+    expect(errorMessage(bare)).toContain('At least one field to edit is required')
+    expect(workspaceOnly.ok).toBe(false)
+    expect(runtime.linearProjectEditForAgents).not.toHaveBeenCalled()
+  })
+
+  it('rejects a blank name instead of reading it as an absent field', async () => {
+    const runtime = makeRuntime()
+    const dispatcher = makeDispatcher(runtime)
+
+    const empty = await dispatcher.dispatch(
+      makeRequest('linear.agentProjectEdit', { input: 'Launch', name: '' })
+    )
+    const whitespace = await dispatcher.dispatch(
+      makeRequest('linear.agentProjectEdit', { input: 'Launch', name: '   ' })
+    )
+
+    expect(errorMessage(empty)).toContain('Missing project name')
+    expect(errorMessage(whitespace)).toContain('Missing project name')
+    expect(runtime.linearProjectEditForAgents).not.toHaveBeenCalled()
+  })
+
+  it('rejects an empty team replacement while accepting empty member and label clears', async () => {
+    const runtime = makeRuntime()
+    const dispatcher = makeDispatcher(runtime)
+
+    const emptyTeams = await dispatcher.dispatch(
+      makeRequest('linear.agentProjectEdit', { input: 'Launch', teams: [] })
+    )
+    const clears = await dispatcher.dispatch(
+      makeRequest('linear.agentProjectEdit', { input: 'Launch', members: [], labels: [] })
+    )
+
+    expect(errorMessage(emptyTeams)).toContain('At least one team is required')
+    expect(clears.ok).toBe(true)
+    expect(runtime.linearProjectEditForAgents).toHaveBeenCalledWith({
+      input: 'Launch',
+      members: [],
+      labels: []
+    })
+  })
+
+  it('keeps an empty description, because that is the description clear', async () => {
+    const runtime = makeRuntime()
+    const response = await makeDispatcher(runtime).dispatch(
+      makeRequest('linear.agentProjectEdit', { input: 'Launch', description: '' })
+    )
+
+    expect(response.ok).toBe(true)
+    expect(runtime.linearProjectEditForAgents).toHaveBeenCalledWith({
+      input: 'Launch',
+      description: ''
+    })
+  })
+
+  it('keeps null clears for content, lead, and dates', async () => {
+    const runtime = makeRuntime()
+    const response = await makeDispatcher(runtime).dispatch(
+      makeRequest('linear.agentProjectEdit', {
+        input: 'Launch',
+        content: null,
+        lead: null,
+        startDate: null,
+        targetDate: null
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    expect(runtime.linearProjectEditForAgents).toHaveBeenCalledWith({
+      input: 'Launch',
+      content: null,
+      lead: null,
+      startDate: null,
+      targetDate: null
+    })
+  })
+
+  it('normalizes CRLF and lone CR in description and content at the RPC layer', async () => {
+    const runtime = makeRuntime()
+    const response = await makeDispatcher(runtime).dispatch(
+      makeRequest('linear.agentProjectEdit', {
+        input: 'Launch',
+        description: 'one\r\ntwo',
+        content: 'alpha\rbeta\r\ngamma'
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    expect(runtime.linearProjectEditForAgents).toHaveBeenCalledWith({
+      input: 'Launch',
+      description: 'one\ntwo',
+      content: 'alpha\nbeta\ngamma'
+    })
+  })
+
+  it('bounds priority to 0-4, rejects bad dates and colors, and rejects workspace all', async () => {
+    const runtime = makeRuntime()
+    const dispatcher = makeDispatcher(runtime)
+    const base = { input: 'Launch' }
+
+    const highPriority = await dispatcher.dispatch(
+      makeRequest('linear.agentProjectEdit', { ...base, priority: 5 })
+    )
+    const impossibleDate = await dispatcher.dispatch(
+      makeRequest('linear.agentProjectEdit', { ...base, targetDate: '2026-02-31' })
+    )
+    const badColor = await dispatcher.dispatch(
+      makeRequest('linear.agentProjectEdit', { ...base, color: '5E6AD2' })
+    )
+    const blankTeam = await dispatcher.dispatch(
+      makeRequest('linear.agentProjectEdit', { ...base, teams: ['  '] })
+    )
+    const workspaceAll = await dispatcher.dispatch(
+      makeRequest('linear.agentProjectEdit', { ...base, priority: 1, workspaceId: 'all' })
+    )
+
+    expect(highPriority.ok).toBe(false)
+    expect(impossibleDate.ok).toBe(false)
+    expect(badColor.ok).toBe(false)
+    expect(blankTeam.ok).toBe(false)
+    expect(errorMessage(workspaceAll)).toContain(
+      '--workspace all is only valid for project list, statuses, and labels'
+    )
+    expect(runtime.linearProjectEditForAgents).not.toHaveBeenCalled()
+  })
+
+  it('has no write id at all: a supplied one never reaches the runtime', async () => {
+    const runtime = makeRuntime()
+    const response = await makeDispatcher(runtime).dispatch(
+      makeRequest('linear.agentProjectEdit', {
+        input: 'Launch',
+        priority: 2,
+        writeId: WRITE_ID
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    expect(runtime.linearProjectEditForAgents).toHaveBeenCalledWith({
+      input: 'Launch',
+      priority: 2
+    })
   })
 })

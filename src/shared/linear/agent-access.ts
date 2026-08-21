@@ -138,12 +138,16 @@ export type {
   LinearWorkspaceFanoutMeta
 } from './project-agent-access'
 export {
+  LINEAR_PROJECT_EDITABLE_FIELDS,
   LINEAR_PROJECT_UPDATE_HEALTH_CLI_VALUES,
   toLinearProjectUpdateHealth
 } from './project-agent-writes'
 export type {
   LinearProjectCreateRequest,
   LinearProjectCreateResult,
+  LinearProjectEditableField,
+  LinearProjectEditRequest,
+  LinearProjectEditResult,
   LinearProjectUpdateAddRequest,
   LinearProjectUpdateAddResult,
   LinearProjectUpdateHealthInput

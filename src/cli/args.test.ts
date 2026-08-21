@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { CommandSpec } from './args'
 import {
+  argvRequestsJson,
   findCommandSpec,
   normalizeCommandPositionals,
   parseArgs,
@@ -345,4 +346,62 @@ describe('validateCommandAndFlags', () => {
       expect(data?.nextSteps[0]).toContain('orca worktree rm')
     }
   })
+})
+
+/**
+ * `--flag=value` is split before the boolean lookup, so an uncoerced boolean flag
+ * landed as the string `'true'` and read as off wherever a consumer tests `=== true`.
+ */
+describe('parseArgs boolean flags in the = form', () => {
+  it.each(['true', 'TRUE', '1', 'yes', 'on'])('reads --json=%s as true', (value) => {
+    expect(parseArgs(['worktree', 'list', `--json=${value}`]).flags.get('json')).toBe(true)
+  })
+
+  // Why: other consumers read a boolean flag as mere presence, so a negated flag has to
+  // leave no entry at all rather than a falsy one that still counts as requested.
+  it.each(['false', 'FALSE', '0', 'no', 'off'])('drops --json=%s entirely', (value) => {
+    expect(parseArgs(['worktree', 'list', `--json=${value}`]).flags.has('json')).toBe(false)
+  })
+
+  it('rejects a value that is not a boolean spelling', () => {
+    expect(() => parseArgs(['worktree', 'list', '--json=sometimes'])).toThrow(
+      '--json is a boolean flag; pass --json on its own, or --json=true or --json=false.'
+    )
+  })
+
+  it('leaves a non-boolean flag value untouched', () => {
+    expect(parseArgs(['terminal', 'send', '--text=true']).flags.get('text')).toBe('true')
+  })
+
+  it('lets a later occurrence win in either direction', () => {
+    expect(parseArgs(['worktree', 'list', '--json=false', '--json']).flags.get('json')).toBe(true)
+    expect(parseArgs(['worktree', 'list', '--json', '--json=false']).flags.has('json')).toBe(false)
+  })
+
+  // Why: a negated boolean leaves no entry in the flag map, but it was still typed —
+  // validation reads the recorded occurrences so it cannot slip past as allowed.
+  it('still rejects a negated flag the command does not accept', () => {
+    const specs: CommandSpec[] = [
+      { path: ['worktree', 'list'], summary: '', usage: '', allowedFlags: [] }
+    ]
+
+    expect(() =>
+      validateCommandAndFlags(specs, parseArgs(['worktree', 'list', '--all=false']))
+    ).toThrow('Unknown flag --all for command: worktree list')
+  })
+})
+
+describe('argvRequestsJson', () => {
+  it.each([['--json'], ['--json=true'], ['--json=1']])('is true for %s', (token) => {
+    expect(argvRequestsJson(['worktree', 'list', token])).toBe(true)
+  })
+
+  // Why: the pre-parse error path reports in this mode, so it has to agree with the flag
+  // map — otherwise a --json caller gets an unparseable human-readable error.
+  it.each([['--json=false'], ['--json=0'], ['--jsonx'], ['--not-json']])(
+    'is false for %s',
+    (token) => {
+      expect(argvRequestsJson(['worktree', 'list', token])).toBe(false)
+    }
+  )
 })

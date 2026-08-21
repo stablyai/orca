@@ -195,7 +195,9 @@ describe('group help through main', () => {
     expect(output).toContain('statuses')
     expect(callMock).not.toHaveBeenCalled()
     expect(constructorArgsMock).not.toHaveBeenCalled()
-    expect(process.exitCode).toBeUndefined()
+    // Why: a bare group path is still an incomplete command — scripts that check
+    // the exit code must see failure, not the success of a real command.
+    expect(process.exitCode).toBe(1)
   })
 
   it('keeps the top-level linear group help listing its nested commands', async () => {

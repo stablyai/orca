@@ -8,6 +8,7 @@ import {
 import {
   cleanupCompletedWorkerFixture,
   clearCompletedWorkerLedger,
+  completedWorkerFakeCodexCommand,
   completedWorkerLaunchEnv,
   listRuntimeTerminals,
   readCompletedWorkerDispatchCapability,
@@ -45,12 +46,13 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
     await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage)
     await waitForActivePanePtyId(orcaPage)
-    await orcaPage.evaluate(async () => {
+    await orcaPage.evaluate(async (agentCommand) => {
       await window.__store?.getState().updateSettings({
+        agentCmdOverrides: { codex: agentCommand },
         disabledTuiAgents: [],
         terminalHiddenViewParking: false
       })
-    })
+    }, completedWorkerFakeCodexCommand)
 
     const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
     const isolatedHome = await electronApp.evaluate(({ app }) => app.getPath('home'))

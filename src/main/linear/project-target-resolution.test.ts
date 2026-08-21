@@ -190,6 +190,20 @@ describe('Linear project target resolution', () => {
     await expect(resolve('Launch')).rejects.toMatchObject({ code: 'linear_invalid_project' })
   })
 
+  // Why: create's team-disambiguation needs every exact-name row, not just enough
+  // to prove more than one exists — a `first: 2` cap made 3+ same-named projects
+  // fail closed before team filtering ever ran, even when exactly one matched
+  // the target team. The query fetches a bounded 50 rows so realistic cross-team
+  // name collisions resolve in one round trip.
+  it('fetches exact-name matches beyond the first two rows', async () => {
+    rawRequestAcme.mockResolvedValueOnce(exactResponse({ bySlug: [projectNode()] }))
+    rawRequestGlobex.mockResolvedValueOnce(exactResponse({}))
+
+    await resolve('launch-abc')
+
+    expect(rawRequestAcme.mock.calls[0][0]).toContain('first: 50')
+  })
+
   it('reports duplicate names across workspaces with workspace-qualified candidates', async () => {
     rawRequestAcme.mockResolvedValueOnce(exactResponse({ byName: [projectNode()] }))
     rawRequestGlobex.mockResolvedValueOnce(
@@ -322,6 +336,35 @@ describe('Linear project target resolution', () => {
     expect(result.candidates.map((candidate) => candidate.id)).toEqual(['project-1', 'project-2'])
     expect(result.candidates[0].teams).toEqual([{ id: 'team-1', name: 'Core', key: 'CORE' }])
     expect([...result.slugMatchIds]).toEqual(['project-1'])
+    expect(result.ambiguous).toBe(false)
+  })
+
+  // Why: pins the regression where a `first: 2` exact-name cap declared 3+
+  // same-named projects ambiguous before create's team filter ever ran, even
+  // though only one of them belonged to the target team.
+  it('reports every exact-name row within the bound as non-ambiguous for create resolution', async () => {
+    rawRequestAcme.mockResolvedValueOnce(
+      exactResponse({
+        byName: [
+          projectNode({ id: 'project-1', name: 'Platform', teams: { nodes: [] } }),
+          projectNode({
+            id: 'project-2',
+            name: 'Platform',
+            teams: { nodes: [{ id: 'team-eng', name: 'Engineering', key: 'ENG' }] }
+          }),
+          projectNode({ id: 'project-3', name: 'Platform', teams: { nodes: [] } })
+        ]
+      })
+    )
+    const { findLinearProjectTargetCandidates } = await import('./project-target-resolution')
+
+    const result = await findLinearProjectTargetCandidates('Platform', 'workspace-acme')
+
+    expect(result.candidates.map((candidate) => candidate.id)).toEqual([
+      'project-1',
+      'project-2',
+      'project-3'
+    ])
     expect(result.ambiguous).toBe(false)
   })
 })

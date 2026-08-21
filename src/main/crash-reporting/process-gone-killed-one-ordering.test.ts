@@ -85,12 +85,7 @@ describe('recordProcessGoneCrash killed/1 ordering', () => {
 
     recordProcessGoneCrash({ record } as never, gpuKill, dedupe)
     recordProcessGoneCrash({ record } as never, networkServiceKill, dedupe)
-    recordProcessGoneCrash(
-      { record, attachDetails } as never,
-      rendererKill,
-      dedupe,
-      noMinidump
-    )
+    recordProcessGoneCrash({ record, attachDetails } as never, rendererKill, dedupe, noMinidump)
 
     expect(record).toHaveBeenCalledOnce()
     // Timing proximity is evidence, not authority to discard an ambiguous report.

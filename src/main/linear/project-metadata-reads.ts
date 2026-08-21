@@ -16,6 +16,10 @@ export type LinearProjectLabelRow = LinearProjectLabelSummary & {
 }
 
 const LABEL_PAGE_SIZE = 50
+// Why: only a backstop against a cursor cycle, never a real limit — derived with 50x
+// headroom over the pages a capped discovery read needs so that raising the scan cap
+// cannot silently start truncating discovery instead.
+const LABEL_PAGE_LIMIT = Math.ceil(LINEAR_PROJECT_LABEL_SCAN_CAP / LABEL_PAGE_SIZE) * 50
 
 // Why: Organization.projectStatuses is an unpaginated array — no connection arguments exist.
 const PROJECT_STATUSES_QUERY = `
@@ -112,8 +116,10 @@ export async function readProjectStatusRows(
 }
 
 /**
- * Pages project labels for one workspace. `scanCap` bounds discovery reads;
- * write resolution passes `Infinity` because it must prove exact uniqueness.
+ * Pages project labels for one workspace. `scanCap` bounds discovery reads; write
+ * resolution passes `Infinity` because it must prove exact uniqueness. `Infinity`
+ * is not unbounded: `LABEL_PAGE_LIMIT` still stops the walk, and the returned
+ * `hasMore` is how an uncapped caller learns its scan never finished.
  */
 export async function readProjectLabelRows(
   entry: LinearClientForWorkspace,
@@ -129,7 +135,12 @@ export async function readProjectLabelRows(
   let after: string | undefined
   let hasMore = false
 
-  while (scanned < scanCap) {
+  // Why: `scanned` bounds every caller but the label lookup, which scans without a
+  // cap; cursor equality only catches a self-loop, so an A->B->A cycle there would
+  // page forever. Bound the walk itself.
+  let pages = 0
+  while (scanned < scanCap && pages < LABEL_PAGE_LIMIT) {
+    pages += 1
     const first = Math.min(LABEL_PAGE_SIZE, scanCap - scanned)
     const connection = await runLinearProjectRead(entry, options.signal, async (client) => {
       const result = await client.client.rawRequest<

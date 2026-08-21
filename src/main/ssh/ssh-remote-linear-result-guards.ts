@@ -9,6 +9,7 @@ import type {
   LinearIssueTaskUpdateResult,
   LinearIssueRelationWriteResult,
   LinearProjectCreateResult,
+  LinearProjectEditResult,
   LinearProjectListResult,
   LinearProjectLabelsResult,
   LinearProjectShowResult,
@@ -131,6 +132,21 @@ export function isLinearProjectCreateResult(result: unknown): result is LinearPr
     typeof result.meta.workspaceId === 'string' &&
     typeof result.meta.writeId === 'string' &&
     typeof result.meta.deduplicated === 'boolean'
+  )
+}
+
+// Why: `changed` plus `meta.noop` is what separates an edit result from every other project write.
+export function isLinearProjectEditResult(result: unknown): result is LinearProjectEditResult {
+  return (
+    isRecord(result) &&
+    isRecord(result.project) &&
+    isRecord(result.meta) &&
+    isRecord(result.previous) &&
+    isRecord(result.current) &&
+    Array.isArray(result.changed) &&
+    typeof result.project.slugId === 'string' &&
+    typeof result.meta.workspaceId === 'string' &&
+    typeof result.meta.noop === 'boolean'
   )
 }
 

@@ -139,8 +139,7 @@ describe('Linear project create', () => {
         labelIds: ['label-1'],
         startDate: '2026-01-01',
         targetDate: '2026-02-01',
-        color: '#5e6ad2',
-        icon: 'Rocket'
+        color: '#5e6ad2'
       }),
       'workspace-1'
     )
@@ -159,8 +158,7 @@ describe('Linear project create', () => {
       priority: 0,
       startDate: '2026-01-01',
       targetDate: '2026-02-01',
-      color: '#5e6ad2',
-      icon: 'Rocket'
+      color: '#5e6ad2'
     })
   })
 
@@ -266,7 +264,9 @@ describe('Linear project create', () => {
     await expect(getProjectByIdForAgent('project-1', 'workspace-1')).rejects.toThrow('fetch failed')
   })
 
-  it('deduplicates only when every requested field matches the existing project', async () => {
+  // Why: the pinned-id probe compares this snapshot against the create intent, so its
+  // prose has to arrive LF-normalized rather than as Linear returned it.
+  it('reads a pinned write id back as an LF-normalized snapshot', async () => {
     rawRequest.mockResolvedValue({
       data: {
         project: projectNode({
@@ -278,24 +278,14 @@ describe('Linear project create', () => {
         })
       }
     })
-    const { getProjectByIdForAgent, matchesLinearProjectCreateIntent } =
-      await import('./project-create')
+    const { getProjectByIdForAgent } = await import('./project-create')
 
     const record = await getProjectByIdForAgent(WRITE_ID, 'workspace-1')
-    const requested = fields({ description: 'Overview\n', priority: 3, leadId: 'user-1' })
 
-    expect(record && matchesLinearProjectCreateIntent(requested, record)).toBe(true)
-    // Why: an unrequested field must not block dedup; a requested mismatch must.
-    expect(record && matchesLinearProjectCreateIntent(fields(), record)).toBe(true)
-    expect(
-      record && matchesLinearProjectCreateIntent(fields({ ...requested, priority: 1 }), record)
-    ).toBe(false)
-    expect(
-      record && matchesLinearProjectCreateIntent(fields({ teamIds: ['team-2'] }), record)
-    ).toBe(false)
-    expect(
-      record && matchesLinearProjectCreateIntent(fields({ memberIds: ['user-9'] }), record)
-    ).toBe(false)
+    expect(record?.project.id).toBe(WRITE_ID)
+    expect(record?.fields.description).toBe('Overview\n')
+    expect(record?.fields.priority).toBe(3)
+    expect(record?.fields.lead?.id).toBe('user-1')
   })
 
   it('propagates the abort signal to the mutation and the read-back client', async () => {

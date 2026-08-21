@@ -73,6 +73,9 @@ Commands:
   project show       Read a Linear project
   project statuses   List Linear project statuses
   project labels     List Linear project labels
+  project create     Create a Linear project
+  project edit       Edit Linear project fields
+  project update add Post a Linear project update
   list               List Linear issues
   assignee set       Set a Linear issue assignee
   assignee clear     Clear a Linear issue assignee
@@ -184,6 +187,7 @@ Commands:
   labels        List Linear project labels
   list          List connected Linear projects
   create        Create a Linear project
+  edit          Edit Linear project fields
   update        Linear project update commands
 
 Run \`orca linear project <command> --help\` for command-specific usage.`

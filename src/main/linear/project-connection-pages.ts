@@ -32,6 +32,9 @@ export const PROJECT_LABEL_FIELDS = `
 `
 
 const PROJECT_CONNECTION_PAGE_SIZE = 50
+// Why: cursor equality only catches a self-loop; an A->B->A cycle would page forever
+// and grow `rows` until the main process dies, so the walk is hard-bounded too.
+const PROJECT_CONNECTION_PAGE_LIMIT = 200
 
 const PROJECT_CONNECTION_QUERIES: Record<LinearProjectConnectionField, string> = {
   members: connectionPageQuery('OrcaLinearProjectMemberPage', 'members', PROJECT_MEMBER_FIELDS),
@@ -75,7 +78,9 @@ export async function readProjectConnectionRows<TNode, TRow>(args: {
   let after = args.initial?.pageInfo?.endCursor ?? undefined
   let hasNextPage = args.initial?.pageInfo?.hasNextPage === true
 
-  while (hasNextPage && after) {
+  let pages = 0
+  while (hasNextPage && after && pages < PROJECT_CONNECTION_PAGE_LIMIT) {
+    pages += 1
     const cursor = after
     const connection = await runLinearProjectRead(args.entry, args.signal, async (client) => {
       const result = await client.client.rawRequest<
@@ -92,7 +97,7 @@ export async function readProjectConnectionRows<TNode, TRow>(args: {
     rows.push(...nodes.map(args.map))
 
     const nextCursor = connection?.pageInfo?.endCursor ?? undefined
-    // Why: cursor-equality and empty-page guards keep a misbehaving connection from looping forever.
+    // Why: stop on a repeated or absent cursor; the page limit above covers longer cycles.
     if (!nextCursor || nextCursor === cursor || nodes.length === 0) {
       break
     }

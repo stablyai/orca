@@ -31,10 +31,7 @@ export function recordFlagOccurrence(
   flags.set(name, value)
 }
 
-export function repeatableFlagsForPath(
-  specs: CommandSpec[],
-  commandPath: string[]
-): readonly string[] {
+function repeatableFlagsForPath(specs: CommandSpec[], commandPath: string[]): readonly string[] {
   const spec = specs.find((candidate) =>
     specPaths(candidate).some(
       (path) =>

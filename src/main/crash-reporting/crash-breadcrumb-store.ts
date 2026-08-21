@@ -6,10 +6,8 @@ import {
 } from '../../shared/crash-reporting'
 
 const MAX_BREADCRUMBS = 30
-// Why: preserve four memory highwaters and one named singleton within the 30-entry snapshot.
-const MAX_RETAINED_BREADCRUMBS = 5
-const MAX_RETAINED_MEMORY_BREADCRUMBS = 4
-const RETAINED_SINGLETON_BREADCRUMB_NAMES = new Set(['terminal_parking_pass'])
+// Why: retain two thresholds for each renderer surface without growing the ring.
+const MAX_RETAINED_BREADCRUMBS = 4
 // Why: coalesceKey embeds an open-string agentType (length-trimmed only, never
 // enum-checked), so the key space is unbounded over a long multi-agent/SSH session.
 // Bound the coalesce map the same way ProcessGoneDedupe bounds its key map.
@@ -39,9 +37,6 @@ let retainedBreadcrumbs = new Map<string, CrashReportBreadcrumb>()
 let coalescedBreadcrumbs = new Map<string, CoalescedBreadcrumbState>()
 
 function retainedBreadcrumbKey(breadcrumb: CrashReportBreadcrumb): string | null {
-  if (RETAINED_SINGLETON_BREADCRUMB_NAMES.has(breadcrumb.name)) {
-    return breadcrumb.name
-  }
   if (breadcrumb.name !== 'renderer_memory_highwater') {
     return null
   }
@@ -70,15 +65,6 @@ export function recordCrashBreadcrumb(
   if (retainedKey) {
     retainedBreadcrumbs.delete(retainedKey)
     retainedBreadcrumbs.set(retainedKey, breadcrumb)
-    const memoryKeys = [...retainedBreadcrumbs.entries()]
-      .filter(([, retained]) => retained.name === 'renderer_memory_highwater')
-      .map(([key]) => key)
-    while (memoryKeys.length > MAX_RETAINED_MEMORY_BREADCRUMBS) {
-      const oldestMemoryKey = memoryKeys.shift()
-      if (oldestMemoryKey) {
-        retainedBreadcrumbs.delete(oldestMemoryKey)
-      }
-    }
     while (retainedBreadcrumbs.size > MAX_RETAINED_BREADCRUMBS) {
       const oldestKey = retainedBreadcrumbs.keys().next()
       if (oldestKey.done) {

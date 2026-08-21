@@ -2,6 +2,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { normalizeRightSidebarRoute } from '../right-sidebar-route'
+import { settleEvictedModalData } from './modal-slot-dismissal'
 import {
   findPrevLiveNonTaskStackHistoryIndex,
   findPrevLiveWorktreeHistoryIndex
@@ -136,6 +137,7 @@ import { getRepoHostIdentity } from './repo-host-identity'
 
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
+  executionHostId?: ExecutionHostId
   behavior: 'auto' | 'smooth'
   highlight?: boolean
   beginRename?: boolean
@@ -974,6 +976,7 @@ export type UISlice = {
       behavior?: PendingSidebarWorktreeReveal['behavior']
       highlight?: boolean
       beginRename?: boolean
+      executionHostId?: ExecutionHostId
     }
   ) => void
   revealSidebarRow: (
@@ -1619,12 +1622,18 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     if (modal === 'add-repo' || modal === 'create-worktree') {
       get().recordFeatureInteraction?.('workspace-creation')
     }
+    const evicted = get().modalData
     set({
       activeModal: modal,
       modalData: data
     })
+    settleEvictedModalData(evicted)
   },
-  closeModal: () => set({ activeModal: 'none', modalData: {} }),
+  closeModal: () => {
+    const evicted = get().modalData
+    set({ activeModal: 'none', modalData: {} })
+    settleEvictedModalData(evicted)
+  },
   featureTipsSeenIds: [],
   markFeatureTipsSeen: (ids) =>
     set((s) => {
@@ -2401,6 +2410,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({
       pendingRevealWorktree: {
         worktreeId,
+        ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {}),
         behavior: options?.behavior ?? 'smooth',
         ...(options?.highlight ? { highlight: true } : {}),
         ...(options?.beginRename ? { beginRename: true } : {})

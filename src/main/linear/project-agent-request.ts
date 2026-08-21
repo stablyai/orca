@@ -39,10 +39,3 @@ export function isLinearProjectLookupMiss(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
   return message.includes('Entity not found') || message.includes('Could not find referenced')
 }
-
-export function linearProjectWorkspaceCandidate(entry: LinearClientForWorkspace): {
-  id: string
-  name: string
-} {
-  return { id: entry.workspace.id, name: entry.workspace.organizationName }
-}

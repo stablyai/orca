@@ -1,5 +1,7 @@
 import type { RpcResponse } from '../runtime/rpc/core'
 import type { RpcDispatcher } from '../runtime/rpc/dispatcher'
+import { linearProjectTextCapError } from '../../shared/linear/project-agent-writes'
+import { normalizeLinearLineEndings } from '../linear/linear-text-digest'
 import { isLinearUuid, isLinearUuidV4 } from '../../shared/linear/uuid'
 
 type ParsedRemoteCli = {
@@ -91,6 +93,14 @@ export function readRemoteBody(
         `SSH Linear writes require stdin when using --${textFlags.file} -.`
       )
     }
+    // Why: a body sourced from a pipe is almost never meant to be blank — see the
+    // matching guard in the local CLI's readLinearBodyFile.
+    if (stdin.trim() === '') {
+      throw new RemoteLinearWriteArgumentError(
+        'invalid_argument',
+        `stdin for --${textFlags.file} - was empty or blank; refusing to write an empty body`
+      )
+    }
     return stdin
   }
   if (!hasValue) {
@@ -134,16 +144,34 @@ export function optionalWriteIdV4(flags: Map<string, string | boolean>): string 
   if (!isLinearUuidV4(writeId)) {
     throw new RemoteLinearWriteArgumentError(
       'linear_invalid_write_id',
-      '--write-id must be a UUID v4'
+      '--write-id must be a UUID v4 for Linear project create'
     )
   }
   return writeId
 }
 
+/** Mirrors the local CLI cap so an over-long value fails the same way over SSH. */
+export function assertRemoteProjectTextCap(
+  value: string,
+  cap: number,
+  flag: 'name' | 'description'
+): void {
+  // Why: the host counts the LF-normalized text it actually sends, so measuring the
+  // raw value here would reject a CRLF description the host would have accepted.
+  const measured = flag === 'description' ? normalizeLinearLineEndings(value) : value
+  const failure = linearProjectTextCapError(measured, cap, flag)
+  if (failure) {
+    throw new RemoteLinearWriteArgumentError('invalid_argument', failure)
+  }
+}
+
 export function hexColorFlag(flags: Map<string, string | boolean>, name: string): string {
   const value = requiredString(flags, name)
   if (!/^#[0-9A-Fa-f]{6}$/.test(value)) {
-    throw new RemoteLinearWriteArgumentError('invalid_argument', `--${name} must be #RRGGBB`)
+    throw new RemoteLinearWriteArgumentError(
+      'invalid_argument',
+      `--${name} must be #RRGGBB, quoted so the shell keeps the leading #`
+    )
   }
   return value
 }
@@ -190,8 +218,6 @@ export function calendarDateFlag(flags: Map<string, string | boolean>, name: str
   }
   return value
 }
-
-export const dueDateFlag = calendarDateFlag
 
 export function repeatedString(flags: Map<string, string | boolean>, name: string): string[] {
   const value = optionalString(flags, name)
@@ -256,7 +282,7 @@ export function remotePositional(parsed: ParsedRemoteCli, startIndex: number): s
 export function requiredString(flags: Map<string, string | boolean>, name: string): string {
   const value = optionalString(flags, name)
   if (!value) {
-    throw new RemoteLinearWriteArgumentError('invalid_argument', `Missing --${name}`)
+    throw new RemoteLinearWriteArgumentError('invalid_argument', `Missing required --${name}`)
   }
   return value
 }
@@ -269,7 +295,7 @@ export function requiredStringAllowingEmpty(
   if (typeof value === 'string') {
     return value
   }
-  throw new RemoteLinearWriteArgumentError('invalid_argument', `Missing --${name}`)
+  throw new RemoteLinearWriteArgumentError('invalid_argument', `Missing required --${name}`)
 }
 
 export function optionalString(

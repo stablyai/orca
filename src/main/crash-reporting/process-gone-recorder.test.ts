@@ -439,7 +439,9 @@ describe('recordProcessGoneCrash', () => {
   // Why child kills: the decode gate is source-agnostic and reads
   // process.platform synchronously at record time, so the platform stub is
   // still in force when it runs.
-  const nonRecoverableChildKill = (overrides: Partial<ProcessGoneCrashEvent>): ProcessGoneCrashEvent =>
+  const nonRecoverableChildKill = (
+    overrides: Partial<ProcessGoneCrashEvent>
+  ): ProcessGoneCrashEvent =>
     event({
       source: 'child',
       processType: 'Utility',

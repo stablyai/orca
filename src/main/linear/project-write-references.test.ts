@@ -155,6 +155,48 @@ describe('Linear project write reference resolution', () => {
     expect(rawRequestAcme).toHaveBeenCalledTimes(5)
   })
 
+  // Why: cursor equality only catches a self-loop, so an A->B->A cycle used to page
+  // forever growing `rows` until the main process died.
+  it('stops a cursor cycle instead of paging forever', async () => {
+    let page = 0
+    rawRequestAcme.mockImplementation(() => {
+      page += 1
+      return Promise.resolve(
+        labelResponse([labelNode({ id: `label-${page}`, name: 'Infra', isGroup: true })], {
+          hasNextPage: true,
+          endCursor: page % 2 === 0 ? 'cursor-a' : 'cursor-b'
+        })
+      )
+    })
+    const { resolveProjectLabelsForWrite } = await import('./project-write-references')
+
+    await expect(resolveProjectLabelsForWrite(['Infra'], 'workspace-acme')).rejects.toMatchObject({
+      code: 'linear_invalid_label'
+    })
+    expect(rawRequestAcme.mock.calls.length).toBeLessThanOrEqual(200)
+  })
+
+  // Why: with no scan cap, a truncated walk means uniqueness was never proven — a lone
+  // match could be one of several, so answering from the partial set applies a guess.
+  it('fails closed rather than answering from a truncated label scan', async () => {
+    let page = 0
+    rawRequestAcme.mockImplementation(() => {
+      page += 1
+      return Promise.resolve(
+        labelResponse(
+          [labelNode({ id: page === 1 ? 'label-1' : `other-${page}`, name: 'Infra' })],
+          { hasNextPage: true, endCursor: page % 2 === 0 ? 'cursor-a' : 'cursor-b' }
+        )
+      )
+    })
+    const { resolveProjectLabelsForWrite } = await import('./project-write-references')
+
+    await expect(resolveProjectLabelsForWrite(['Infra'], 'workspace-acme')).rejects.toMatchObject({
+      code: 'linear_invalid_label',
+      message: 'Could not prove "Infra" matches exactly one Linear project label.'
+    })
+  })
+
   it('resolves labels, dedupes inputs and rejects group labels', async () => {
     rawRequestAcme.mockResolvedValueOnce(labelResponse([labelNode()]))
     const { resolveProjectLabelsForWrite } = await import('./project-write-references')

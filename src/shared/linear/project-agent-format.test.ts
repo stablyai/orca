@@ -8,6 +8,7 @@ import type {
 import {
   LINEAR_PROJECT_STATUSES_NOUN,
   formatLinearProjectCreate,
+  formatLinearProjectEdit,
   formatLinearProjectLabels,
   formatLinearProjectShow,
   formatLinearProjectStatuses,
@@ -16,6 +17,7 @@ import {
 } from './project-agent-format'
 import type {
   LinearProjectCreateResult,
+  LinearProjectEditResult,
   LinearProjectUpdateAddResult
 } from './project-agent-writes'
 
@@ -163,6 +165,47 @@ const UPDATE_ADD_FIXTURE: LinearProjectUpdateAddResult = {
   }
 }
 
+const EDIT_FIXTURE: LinearProjectEditResult = {
+  project: {
+    id: 'project-1',
+    name: '\u001b[31mLaunch Q4\u001b[0m',
+    slugId: 'launch-q3',
+    url: 'https://linear.app/acme/project/launch-q3-1a2b3c'
+  },
+  changed: ['name', 'description', 'content', 'status', 'lead', 'members', 'priority', 'startDate'],
+  previous: {
+    name: 'Launch Q3',
+    description: boundedString('Ship it'),
+    content: { value: null, truncated: false, chars: 0, sha256: '' },
+    status: { id: 'status-1', name: 'Backlog', type: 'backlog', color: '#00ff00' },
+    lead: null,
+    members: collection([]),
+    teams: collection([{ id: 'team-1', name: 'Engineering', key: 'ENG' }]),
+    labels: collection([{ id: 'label-1', name: 'Launch', color: '#ff0000', parent: null }]),
+    priority: 3,
+    startDate: null,
+    targetDate: '2026-03-01',
+    color: '#112233',
+    icon: null
+  },
+  current: {
+    name: 'Launch Q4',
+    description: boundedString('Ship it now'),
+    content: boundedString('Notes'),
+    status: { id: 'status-2', name: 'In Progress', type: 'started', color: '#00ff00' },
+    lead: { id: 'user-1', displayName: 'Ada', avatarUrl: null },
+    members: collection([{ id: 'user-1', displayName: 'Ada', avatarUrl: null }]),
+    teams: collection([{ id: 'team-1', name: 'Engineering', key: 'ENG' }]),
+    labels: collection([{ id: 'label-1', name: 'Launch', color: '#ff0000', parent: null }]),
+    priority: 2,
+    startDate: '2026-01-01',
+    targetDate: '2026-03-01',
+    color: '#112233',
+    icon: 'Rocket'
+  },
+  meta: { workspaceId: 'workspace-1', noop: false }
+}
+
 // Why: the golden text both the local CLI and the SSH shim must print; drift here is drift between them.
 describe('shared project rendering', () => {
   it('renders the canonical project show block', () => {
@@ -267,6 +310,64 @@ describe('shared project rendering', () => {
 
   it('strips terminal control sequences from the project-update post block', () => {
     expect(formatLinearProjectUpdateAdd(UPDATE_ADD_FIXTURE)).not.toContain('\u001b')
+  })
+
+  it('renders the canonical project edit block with previous -> current per field', () => {
+    expect(formatLinearProjectEdit(EDIT_FIXTURE)).toBe(
+      [
+        'Edited Linear project Launch Q4 (launch-q3)',
+        'URL: https://linear.app/acme/project/launch-q3-1a2b3c',
+        'Project id: project-1',
+        'Workspace: workspace-1',
+        'Changed: name, description, content, status, lead, members, priority, startDate',
+        '  name: Launch Q3 -> Launch Q4',
+        `  description: 7 chars sha256 ${'c'.repeat(64)} -> 11 chars sha256 ${'c'.repeat(64)}`,
+        `  content: none -> 5 chars sha256 ${'c'.repeat(64)}`,
+        '  status: Backlog -> In Progress',
+        '  lead: none -> Ada',
+        `  members (replaced): 0 sha256 ${'d'.repeat(64)} -> 1 sha256 ${'d'.repeat(64)}`,
+        `  teams (replaced): 1 sha256 ${'d'.repeat(64)} -> 1 sha256 ${'d'.repeat(64)} (unchanged)`,
+        `  labels (replaced): 1 sha256 ${'d'.repeat(64)} -> 1 sha256 ${'d'.repeat(64)} (unchanged)`,
+        '  priority: medium -> high',
+        '  startDate: none -> 2026-01-01',
+        '  targetDate: 2026-03-01 -> 2026-03-01 (unchanged)',
+        '  color: #112233 -> #112233 (unchanged)'
+      ].join('\n')
+    )
+  })
+
+  it('marks a no-op edit instead of claiming a write, and strips control bytes', () => {
+    const output = formatLinearProjectEdit({
+      ...EDIT_FIXTURE,
+      changed: [],
+      previous: { priority: 2 },
+      current: { priority: 2 },
+      meta: { workspaceId: 'workspace-1', noop: true }
+    })
+
+    expect(output).toBe(
+      [
+        'No changes to Linear project Launch Q4 (launch-q3)',
+        'No-op: every requested field already held the requested value; no write was sent.',
+        'URL: https://linear.app/acme/project/launch-q3-1a2b3c',
+        'Project id: project-1',
+        'Workspace: workspace-1',
+        'Changed: none',
+        '  priority: high -> high (unchanged)'
+      ].join('\n')
+    )
+    expect(output).not.toContain('\u001b')
+  })
+
+  it('reports a field the host never returned as unset rather than none', () => {
+    const output = formatLinearProjectEdit({
+      ...EDIT_FIXTURE,
+      changed: ['color'],
+      previous: {},
+      current: { color: '#112233' }
+    })
+
+    expect(output).toContain('  color: unset -> #112233')
   })
 
   it('emits truncation, workspace-error and partial warning lines in order', () => {

@@ -845,9 +845,7 @@ export function commandBackslashMode(
   target: CommitMessageGenerationTarget,
   platform: NodeJS.Platform = process.platform
 ): CommandTemplateBackslash {
-  return platform === 'win32' && target.kind === 'local' && !target.wslDistro
-    ? 'literal'
-    : 'escape'
+  return platform === 'win32' && target.kind === 'local' && !target.wslDistro ? 'literal' : 'escape'
 }
 
 type LocalGenerationTarget = Extract<CommitMessageGenerationTarget, { kind: 'local' }>

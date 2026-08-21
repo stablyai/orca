@@ -4,7 +4,7 @@ import {
   RemoteLinearWriteArgumentError,
   buildRemoteContext,
   call,
-  dueDateFlag,
+  calendarDateFlag,
   nonNegativeIntegerFlag,
   optionalString,
   optionalWriteId,
@@ -124,5 +124,5 @@ function nullableDueDate(
   if (value === undefined) {
     return undefined
   }
-  return value === 'null' ? null : dueDateFlag(flags, name)
+  return value === 'null' ? null : calendarDateFlag(flags, name)
 }

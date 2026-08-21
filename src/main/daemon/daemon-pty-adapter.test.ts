@@ -698,14 +698,19 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
   describe('onExit', () => {
     it('routes exit events from daemon', async () => {
-      const exits: { id: string; code: number }[] = []
+      const exits: { id: string; code: number; cause?: unknown }[] = []
       adapter.onExit((payload) => exits.push(payload))
 
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
       lastSubprocess._simulateExit(42)
 
       await waitFor(() => exits.length > 0)
-      expect(exits[0]).toEqual({ id, code: 42, incarnationId: expect.any(String) })
+      expect(exits[0]).toEqual({
+        id,
+        code: 42,
+        incarnationId: expect.any(String),
+        cause: { kind: 'exited', exitCode: 42 }
+      })
     })
   })
 

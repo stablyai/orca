@@ -28,7 +28,7 @@ function installResult(paths: string[]): SkillInstallResult {
   }
 }
 
-function discovery(rootPaths: string[]): SkillDiscoveryResult {
+function discovery(rootPaths: string[], unavailableRoots: string[] = []): SkillDiscoveryResult {
   return {
     skills: [
       {
@@ -46,7 +46,17 @@ function discovery(rootPaths: string[]): SkillDiscoveryResult {
         updatedAt: null
       }
     ],
-    sources: [],
+    // A root that did not answer reports `exists` — the host cannot prove otherwise.
+    sources: unavailableRoots.map((path) => ({
+      id: path,
+      label: 'Agent skills home',
+      path,
+      sourceKind: 'home' as const,
+      providers: ['agent-skills' as const],
+      owner: null,
+      exists: true,
+      skippedReason: 'unavailable' as const
+    })),
     scannedAt: 1
   }
 }
@@ -120,6 +130,45 @@ describe('WSL install discovery verification', () => {
     expect(discoverSkillsInWslMock).toHaveBeenCalledWith(
       expect.objectContaining({ providerRootOverrides: { claude: managedRoot } })
     )
+  })
+
+  // Discovery serves an unanswered root's last completed scan so an installed skill
+  // does not flip to "Install". Verification must not read that as proof: it is the
+  // state before this install wrote, so a reinstall would verify without reading disk.
+  it('does not verify a placement backed only by a root that did not answer', async () => {
+    discoverSkillsInWslMock.mockResolvedValue(
+      discovery(['/home/alice/.agents/skills'], ['/home/alice/.agents/skills'])
+    )
+    const result = await verifySkillInstallDiscovery({
+      result: installResult(['\\\\wsl.localhost\\Ubuntu\\home\\alice\\.agents\\skills\\review']),
+      scope: 'global',
+      homeDirectory: '\\\\wsl.localhost\\Ubuntu\\home\\alice',
+      wslDistro: 'Ubuntu'
+    })
+
+    expect(result).toMatchObject({
+      status: 'failed',
+      errorCategory: 'skill-discovery-canonical-missing'
+    })
+    expect(result.placements[0].failure?.retryable).toBe(true)
+  })
+
+  it('still verifies through a co-owning root that did answer', async () => {
+    discoverSkillsInWslMock.mockResolvedValue(
+      // The symlinked Claude root answered, so the placement is proven, not retained.
+      discovery(
+        ['/home/alice/.agents/skills', '/home/alice/.claude/skills'],
+        ['/home/alice/.agents/skills']
+      )
+    )
+    const result = await verifySkillInstallDiscovery({
+      result: installResult(['\\\\wsl.localhost\\Ubuntu\\home\\alice\\.claude\\skills\\review']),
+      scope: 'global',
+      homeDirectory: '\\\\wsl.localhost\\Ubuntu\\home\\alice',
+      wslDistro: 'Ubuntu'
+    })
+
+    expect(result.status).toBe('installed')
   })
 
   it('fails verification without scanning a mismatched UNC distro', async () => {

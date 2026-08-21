@@ -11,6 +11,7 @@ import {
   readProjectStatusRows,
   type LinearProjectLabelRow
 } from './project-metadata-reads'
+import { dedupeLinearReferenceInputs } from './project-reference-inputs'
 import { selectLinearProjectWorkspaces } from './project-workspace-scope'
 
 const WRITE_ACTION = 'a project write'
@@ -50,8 +51,9 @@ export async function resolveProjectStatusForWrite(
 }
 
 /**
- * Exact label matches for a write. Unlike discovery this pages without a scan
- * cap, because uniqueness has to be proven rather than sampled.
+ * Exact label matches for a write. Unlike discovery this pages without a scan cap,
+ * because uniqueness has to be proven rather than sampled — and when the page bound
+ * cuts that scan short it fails rather than answering from a partial set.
  */
 export async function resolveProjectLabelsForWrite(
   inputs: string[],
@@ -60,7 +62,7 @@ export async function resolveProjectLabelsForWrite(
 ): Promise<LinearProjectLabelRef[]> {
   const entry = writeEntry(workspaceId)
   const resolved = new Map<string, LinearProjectLabelRow>()
-  for (const input of dedupeInputs(inputs)) {
+  for (const input of dedupeLinearReferenceInputs(inputs)) {
     const match = await resolveOneProjectLabel(entry, input, options.signal)
     resolved.set(match.id, match)
   }
@@ -73,11 +75,17 @@ async function resolveOneProjectLabel(
   input: string,
   signal: AbortSignal | undefined
 ): Promise<LinearProjectLabelRow> {
-  const { rows } = await readProjectLabelRows(entry, {
+  const { rows, hasMore } = await readProjectLabelRows(entry, {
     filter: isLinearUuid(input) ? { id: { eq: input } } : { name: { eqIgnoreCase: input } },
     scanCap: Number.POSITIVE_INFINITY,
     signal
   })
+  // Why: with no scan cap, `hasMore` can only mean the page bound cut the walk short,
+  // so uniqueness is unproven — a lone match here could be one of several, and no
+  // match could be a false miss. Applying a guessed label is worse than failing.
+  if (hasMore) {
+    throw labelError(`Could not prove "${input}" matches exactly one Linear project label.`, [])
+  }
   const assignable = rows.filter(isAssignableProjectLabel)
   if (assignable.length === 1) {
     return assignable[0]
@@ -112,21 +120,6 @@ function assertNoExclusiveGroupConflict(rows: LinearProjectLabelRow[]): void {
     }
     byGroup.set(row.parent.id, row)
   }
-}
-
-function dedupeInputs(inputs: string[]): string[] {
-  const seen = new Set<string>()
-  const unique: string[] = []
-  for (const input of inputs) {
-    const trimmed = input.trim()
-    const key = trimmed.toLowerCase()
-    if (!trimmed || seen.has(key)) {
-      continue
-    }
-    seen.add(key)
-    unique.push(trimmed)
-  }
-  return unique
 }
 
 function labelError(message: string, candidates: LinearProjectLabelRow[]): LinearAgentAccessError {

@@ -2648,7 +2648,7 @@
               "346d409ab2": "agent 선택",
               "0adba8fa0c": "에이전트",
               "ec8f081919": "작업",
-              "ed04233b3e": "빠른 액세스를 위해 terminal 명령이나 agent 프롬프트를 저장하세요.",
+              "ed04233b3e": "저장한 항목은 탭 바 메뉴에 표시되어 한 번의 클릭으로 실행할 수 있습니다.",
               "ca414324ee": "명령 텍스트",
               "dc921c17ee": "프롬프트",
               "5b3f634a55": "빠른 명령 추가",
@@ -3278,7 +3278,9 @@
             "antigravityUsageDetails": "Antigravity 사용량 세부 정보 열기",
             "grokUsageAria": "Grok 사용량 세부 정보 열기",
             "grokUsageMenu": "Grok 사용량",
-            "floatingTerminalNewActivity": "{{label}}, 새 활동"
+            "floatingTerminalNewActivity": "{{label}}, 새 활동",
+            "codexSignInSuccess": "Codex에 로그인했습니다",
+            "codexSignInError": "Codex 로그인에 실패했습니다. 다시 시도해 주세요."
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "계정 연결",
@@ -5059,6 +5061,12 @@
           "5e1b8d3f62": "외부 워크트리를 영구적으로 숨기기",
           "c3e8a1f4b2": "다시 표시하지 않기"
         },
+        "NoticeHostGlyph": {
+          "hostDisconnected": "{{hostName}} 연결 끊김",
+          "sshHostProject": "SSH 호스트 {{hostName}}의 프로젝트",
+          "localHostProject": "이 호스트의 프로젝트",
+          "runtimeHostProject": "{{hostName}}의 프로젝트"
+        },
         "newExternalWorktreesInboxActions": {
           "a11c2f6d89": "외부 워크트리를 숨김 상태로 유지할 수 없습니다. 다시 시도하세요.",
           "b7e4d1a062": "외부 워크트리를 가져올 수 없습니다. 다시 시도하세요.",
@@ -5325,6 +5333,7 @@
           "codexSystemDefaultNeedsSignIn": "{{value0}}에 대한 Codex 로그인을 찾을 수 없습니다.",
           "codexConfigSyncMissingSource": "Codex is still using the settings it last synced because {{value0}} is missing. Restore that file to resume syncing.",
           "codexConfigSyncBlankSource": "Codex is still using the settings it last synced because {{value0}} is empty. That is expected while a synced folder finishes downloading.",
+          "codexConfigSyncManagedHomeUnavailable": "현재 Orca가 이 계정의 Codex 파일을 읽을 수 없어 설정이 동기화되지 않을 수 있습니다. 바이러스 백신이나 백업 도구가 파일을 잠시 잠근 경우가 많으며, 일반적으로 자동으로 해결됩니다.",
           "codexConfigSyncUnreadableSource": "Codex is still using the settings it last synced because {{value0}} could not be read. Check that file's permissions."
         },
         "AdvancedPane": {
@@ -13658,6 +13667,7 @@
           "e46c1aa9ad": "생성",
           "a9d9dccf77": "저장",
           "777548c2d6": "변경 사항 저장",
+          "e8c2a14f70": "저장하면 일시 중지될 때까지 자동으로 실행됩니다.",
           "ff5db28639": "기존의"
         },
         "AutomationEditorDialogHeader": {
@@ -13948,6 +13958,19 @@
         },
         "AutomationListLocalRows": {
           "c92c9463c6": "자동화 작업"
+        },
+        "AutomationListFilterMenu": {
+          "926e785e4d": "agents 검색...",
+          "491043ee45": "검색어와 일치하는 agents가 없습니다.",
+          "agent": "에이전트",
+          "lastRun": "마지막 실행",
+          "all": "전체",
+          "failed": "실패",
+          "succeeded": "성공",
+          "neverRan": "실행 안 함",
+          "filters": "필터",
+          "clear": "필터 지우기",
+          "removeFilter": "{{value0}} 필터 제거"
         }
       },
       "agent": {
@@ -14291,6 +14314,13 @@
         "pendingChip": "{{value0}} 보류 중",
         "needsActionChip": "{{value0}}개 조치 필요",
         "unresolvedChip": "{{value0}}개 미해결"
+      },
+      "artifacts": {
+        "ArtifactsPage": {
+          "deleteTitle": "아티팩트를 삭제할까요?",
+          "deleteDescription": "“{{name}}”은(는) 공개 링크에서 더 이상 사용할 수 없습니다.",
+          "delete": "삭제"
+        }
       }
     },
     "i18n": {

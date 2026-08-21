@@ -159,6 +159,11 @@ export function buildHostCliEnv(args: {
   // subprocess cwd cannot be chdir'd there; ORCA_CLI_CWD carries it for
   // cwd-based selectors like `--worktree active`.
   env.ORCA_CLI_CWD = args.remoteCwd
+  // Why: the WSL bridge also sets ORCA_CLI_CWD, but its cwd is a UNC path the host
+  // process can still read directly — only this SSH passthrough's cwd is unreachable
+  // from the host's filesystem, so guards against reading local paths need a marker
+  // narrower than "ORCA_CLI_CWD is set".
+  env.ORCA_CLI_SSH_REMOTE = '1'
   // Why: same node-mode hygiene as the shipped CLI launchers — stash and clear
   // NODE_OPTIONS so Electron's node bootstrap does not inherit them.
   env.ORCA_NODE_OPTIONS = args.hostEnv.NODE_OPTIONS ?? ''

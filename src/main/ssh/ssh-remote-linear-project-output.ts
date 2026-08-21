@@ -2,6 +2,7 @@ import {
   LINEAR_PROJECT_LABELS_NOUN,
   LINEAR_PROJECT_STATUSES_NOUN,
   formatLinearProjectCreate,
+  formatLinearProjectEdit,
   formatLinearProjectLabels,
   formatLinearProjectShow,
   formatLinearProjectStatuses,
@@ -10,6 +11,7 @@ import {
 } from '../../shared/linear/project-agent-format'
 import {
   isLinearProjectCreateResult,
+  isLinearProjectEditResult,
   isLinearProjectLabelsResult,
   isLinearProjectShowResult,
   isLinearProjectStatusesResult,
@@ -39,6 +41,9 @@ export function formatRemoteLinearProjectCli(
   }
   if (isLinearProjectUpdateAddResult(result)) {
     return { stdout: `${formatLinearProjectUpdateAdd(result)}\n`, stderr: '' }
+  }
+  if (isLinearProjectEditResult(result)) {
+    return { stdout: `${formatLinearProjectEdit(result)}\n`, stderr: '' }
   }
   if (isLinearProjectCreateResult(result)) {
     return { stdout: `${formatLinearProjectCreate(result)}\n`, stderr: '' }

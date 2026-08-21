@@ -2,7 +2,13 @@ import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
 import { findTransport } from '../../shared/runtime-bootstrap'
 import { tryReadMetadata } from './metadata'
 import { sendRequest } from './transport'
+import {
+  projectRemoteAppStatus,
+  resolveDesktopWindowStatus
+} from '../../shared/cli-app-status-projection'
 import { RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
+
+export { projectRemoteAppStatus, resolveDesktopWindowStatus }
 
 export async function getCliStatus(
   userDataPath: string
@@ -75,24 +81,11 @@ export async function getCliStatus(
   }
 }
 
-export function resolveDesktopWindowStatus(
-  status: RuntimeStatus
-): CliStatusResult['app']['desktopWindowStatus'] {
-  if (status.desktopWindowStatus) {
-    return status.desktopWindowStatus
-  }
-  // Why: older desktop runtimes predate the explicit status but a positive
-  // Electron id still proves that a real window owns the graph.
-  return status.authoritativeWindowId !== null && status.authoritativeWindowId > 0
-    ? 'available'
-    : undefined
-}
-
 function buildCliStatusResponse(result: CliStatusResult): RuntimeRpcSuccess<CliStatusResult> {
   return {
     id: 'local-status',
     ok: true,
-    result,
+    result: { target: { kind: 'local' }, ...result },
     _meta: {
       runtimeId: result.runtime.runtimeId ?? 'none'
     }

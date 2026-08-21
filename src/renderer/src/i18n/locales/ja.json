@@ -2646,7 +2646,7 @@
               "346d409ab2": "Agent を選択",
               "0adba8fa0c": "Agent",
               "ec8f081919": "操作",
-              "ed04233b3e": "ターミナルコマンドまたは Agent プロンプトを保存して、すぐにアクセスできるようにします。",
+              "ed04233b3e": "保存した項目はタブバーのメニューに表示され、ワンクリックで実行できます。",
               "ca414324ee": "コマンドテキスト",
               "dc921c17ee": "プロンプト",
               "5b3f634a55": "クイックコマンドを追加",
@@ -3276,7 +3276,9 @@
             "antigravityUsageDetails": "Antigravity の使用状況詳細を開く",
             "grokUsageAria": "Grok の使用状況詳細を開く",
             "grokUsageMenu": "Grok の使用状況",
-            "floatingTerminalNewActivity": "{{label}}、新規アクティビティ"
+            "floatingTerminalNewActivity": "{{label}}、新規アクティビティ",
+            "codexSignInSuccess": "Codex にサインインしました",
+            "codexSignInError": "Codex のサインインに失敗しました。もう一度お試しください。"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "アカウントを接続する",
@@ -5057,6 +5059,12 @@
           "5e1b8d3f62": "外部ワークツリーを完全に非表示にする",
           "c3e8a1f4b2": "今後表示しない"
         },
+        "NoticeHostGlyph": {
+          "hostDisconnected": "{{hostName}} が切断されました",
+          "sshHostProject": "SSH ホスト {{hostName}} 上のプロジェクト",
+          "localHostProject": "このホスト上のプロジェクト",
+          "runtimeHostProject": "{{hostName}} 上のプロジェクト"
+        },
         "newExternalWorktreesInboxActions": {
           "a11c2f6d89": "外部ワークツリーを非表示のままにできませんでした。もう一度お試しください。",
           "b7e4d1a062": "外部ワークツリーをインポートできませんでした。もう一度お試しください。",
@@ -5323,6 +5331,7 @@
           "codexSystemDefaultNeedsSignIn": "{{value0}} の Codex サインインが見つかりません。",
           "codexConfigSyncMissingSource": "{{value0}} が見つからないため、Codex は最後に同期した設定を使い続けています。同期を再開するには、そのファイルを復元してください。",
           "codexConfigSyncBlankSource": "{{value0}} が空のため、Codex は最後に同期した設定を使い続けています。同期フォルダーのダウンロードが完了するまでは正常な状態です。",
+          "codexConfigSyncManagedHomeUnavailable": "Orca は現在このアカウントの Codex ファイルを読み取れないため、設定が同期されていない可能性があります。ウイルス対策ソフトやバックアップツールによる一時的なロックが原因で、通常は自動的に解消されます。",
           "codexConfigSyncUnreadableSource": "{{value0}} を読み取れなかったため、Codex は最後に同期した設定を使い続けています。そのファイルの権限を確認してください。"
         },
         "AdvancedPane": {
@@ -13629,6 +13638,7 @@
           "e46c1aa9ad": "作成",
           "a9d9dccf77": "保存",
           "777548c2d6": "変更を保存",
+          "e8c2a14f70": "保存すると、一時停止するまで自動的に実行されます。",
           "ff5db28639": "既存 "
         },
         "AutomationEditorDialogHeader": {
@@ -13919,6 +13929,19 @@
         },
         "AutomationListLocalRows": {
           "c92c9463c6": "自動化の操作"
+        },
+        "AutomationListFilterMenu": {
+          "926e785e4d": "Agent を検索…",
+          "491043ee45": "検索に一致する Agent はありません。",
+          "agent": "Agent",
+          "lastRun": "前回の実行",
+          "all": "すべて",
+          "failed": "失敗",
+          "succeeded": "成功",
+          "neverRan": "未実行",
+          "filters": "フィルター",
+          "clear": "フィルターをクリア",
+          "removeFilter": "{{value0}} フィルターを解除"
         }
       },
       "agent": {
@@ -14262,6 +14285,13 @@
         "pendingChip": "{{value0}} 件保留中",
         "needsActionChip": "{{value0}} 件の対応が必要",
         "unresolvedChip": "{{value0}} 件未解決"
+      },
+      "artifacts": {
+        "ArtifactsPage": {
+          "deleteTitle": "成果物を削除しますか？",
+          "deleteDescription": "「{{name}}」は公開リンクで利用できなくなります。",
+          "delete": "削除"
+        }
       }
     },
     "i18n": {

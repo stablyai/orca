@@ -10,6 +10,7 @@ import type { LinearProjectUpdateAddResult } from '../shared/linear/project-agen
 import {
   escapeJsonControlCharacters,
   formatLinearProjectCreate,
+  formatLinearProjectEdit,
   formatLinearProjectLabels,
   formatLinearProjectShow,
   formatLinearProjectStatuses,
@@ -146,6 +147,7 @@ describe('shared renderer delegation', () => {
     expect(formatLinearProjectLabels).toBe(sharedProjectFormat.formatLinearProjectLabels)
     expect(formatLinearProjectUpdateAdd).toBe(sharedProjectFormat.formatLinearProjectUpdateAdd)
     expect(formatLinearProjectCreate).toBe(sharedProjectFormat.formatLinearProjectCreate)
+    expect(formatLinearProjectEdit).toBe(sharedProjectFormat.formatLinearProjectEdit)
     expect(sanitizeLinearProjectText).toBe(sharedProjectFormat.sanitizeLinearProjectText)
     expect(toSingleLineLinearProjectText).toBe(sharedProjectFormat.toSingleLineLinearProjectText)
   })
@@ -342,6 +344,24 @@ describe('terminal-control safety', () => {
     result.project.name = CURSOR_ATTACK
 
     const output = formatLinearProjectUpdateAdd(result)
+
+    expect(hasTerminalControlBytes(output)).toBe(false)
+    expect(output).toContain('maliciousoverwritten')
+  })
+
+  it('leaves no cursor-moving byte in a human project edit summary', () => {
+    const output = formatLinearProjectEdit({
+      project: {
+        id: 'project-1',
+        name: CURSOR_ATTACK,
+        slugId: 'launch-q3',
+        url: 'https://linear.app/acme/project/launch-q3-1a2b3c'
+      },
+      changed: ['name'],
+      previous: { name: C1_ATTACK },
+      current: { name: CURSOR_ATTACK },
+      meta: { workspaceId: 'workspace-1', noop: false }
+    })
 
     expect(hasTerminalControlBytes(output)).toBe(false)
     expect(output).toContain('maliciousoverwritten')

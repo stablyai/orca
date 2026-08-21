@@ -52,7 +52,8 @@ function registerSharingHandlers(
     {
       publishVersion: (request) => runtime.publishSkillPackageVersion(request),
       createShare: (packageId, request) => runtime.createSkillPackageShare(packageId, request)
-    }
+    },
+    { installStateDirectory: join(app.getPath('userData'), 'skill-installs') }
   )
   handleMainWindowSkillIpc('skills:prepareShare', async (_event, value: unknown) => {
     const input = skillSharePrepareIpcSchema.parse(value)

@@ -5,6 +5,9 @@ import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { isHiddenRendererPty } from './pty-hidden-delivery-gate'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { registerPtyHandlers } from './pty'
+import { join } from 'node:path'
+// Why resolved rather than hardcoded: the wrapper tree is content-addressed.
+import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -412,8 +415,9 @@ describe('registerPtyHandlers', () => {
           cwd: '/tmp',
           env: expect.objectContaining({
             ORCA_OPENCODE_CONFIG_DIR: '/tmp/orca-opencode-config',
-            ORCA_SHELL_READY_MARKER: '0',
-            ZDOTDIR: '/tmp/orca-user-data/shell-ready/zsh'
+            // No `ready`: the fallback shell carries an overlay, not a startup command.
+            ORCA_SHELL_FEATURES: 'overlay,history,markers',
+            ZDOTDIR: join(getShellReadyWrapperRoot(), 'zsh')
           })
         })
       )

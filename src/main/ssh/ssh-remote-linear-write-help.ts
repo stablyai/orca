@@ -69,6 +69,9 @@ export function getRemoteLinearWriteHelp(parsed: ParsedRemoteCli): string | null
   if (matchesRemoteCommand(path, 'linear', 'project', 'create')) {
     return LINEAR_PROJECT_CREATE_HELP
   }
+  if (matchesRemoteCommand(path, 'linear', 'project', 'edit')) {
+    return LINEAR_PROJECT_EDIT_HELP
+  }
   if (matchesRemoteCommand(path, 'linear', 'attach')) {
     return LINEAR_ATTACH_HELP
   }
@@ -96,6 +99,7 @@ const LINEAR_LABEL_REMOVE_HELP = `orca linear label remove\n\nUsage: orca linear
 const LINEAR_LABEL_SET_HELP = `orca linear label set\n\nUsage: orca linear label set [<id>] [--current] --label <labelId-or-exact-name>... [--workspace <id>] [--json]\n\nReplace labels on a Linear issue`
 const LINEAR_COMMENT_HELP = `orca linear comment add\n\nUsage: orca linear comment add [<id>] [--current] (--body <text> | --body-file -) [--reply-to <commentId>] [--write-id <uuid>] [--workspace <id>] [--json]\n\nAdd a comment to a Linear issue`
 const LINEAR_PROJECT_UPDATE_ADD_HELP = `orca linear project update add\n\nUsage: orca linear project update add (<project> | --id <project>) (--body <text> | --body-file -) [--health on-track|at-risk|off-track] [--hide-diff] [--write-id <uuid>] [--workspace <id>] [--json]\n\nPost a Linear project update`
-const LINEAR_PROJECT_CREATE_HELP = `orca linear project create\n\nUsage: orca linear project create --name <title> --team <team>... [--description <text>] [--content <text> | --content-file -] [--status <status>] [--lead me|<user>] [--member <user>]... [--label <label>]... [--priority none|low|medium|high|urgent] [--start-date <yyyy-mm-dd>] [--target-date <yyyy-mm-dd>] [--color <#RRGGBB>] [--icon <icon>] [--write-id <uuid-v4>] [--workspace <id>] [--json]\n\nCreate a Linear project`
+const LINEAR_PROJECT_CREATE_HELP = `orca linear project create\n\nUsage: orca linear project create --name <title> --team <team>... [--description <text>] [--content <text> | --content-file -] [--status <status>] [--lead me|<user>] [--member <user>]... [--label <label>]... [--priority none|low|medium|high|urgent] [--start-date <yyyy-mm-dd>] [--target-date <yyyy-mm-dd>] [--color <#RRGGBB>] [--write-id <uuid-v4>] [--workspace <id>] [--json]\n\nCreate a Linear project`
+const LINEAR_PROJECT_EDIT_HELP = `orca linear project edit\n\nUsage: orca linear project edit (<project> | --id <project>) [--name <title>] [--description <text> | --clear-description] [--content <text> | --content-file - | --clear-content] [--status <status>] [--lead me|<user> | --clear-lead] [--member <user>... | --clear-members] [--team <team>...] [--label <label>... | --clear-labels] [--priority none|low|medium|high|urgent] [--start-date <yyyy-mm-dd> | --clear-start-date] [--target-date <yyyy-mm-dd> | --clear-target-date] [--color <#RRGGBB>] [--workspace <id>] [--json]\n\nEdit Linear project fields\n\nRepeated --member, --team and --label replace the complete collection; use --clear-members or --clear-labels to empty one. Status, color and teams have no clear flag. There is no --write-id: the edit is verified by reading every requested field back.`
 const LINEAR_ATTACH_HELP = `orca linear attach\n\nUsage: orca linear attach [<id>] [--current] --url <url> [--title <title>] [--write-id <uuid>] [--workspace <id>] [--json]\n\nAttach a link to a Linear issue`
 const LINEAR_CREATE_HELP = `orca linear create\n\nUsage: orca linear create --title <title> [--body <text> | --body-file -] [--team <key|id>] [--project <projectId-or-exact-name>] [--state <stateId|exact-name>] [--assignee me|<userId>] [--priority none|low|medium|high|urgent] [--estimate <number>] [--due-date <yyyy-mm-dd>] [--label <labelId-or-exact-name>]... [--parent <id> | --parent-current] [--write-id <uuid>] [--workspace <id>] [--json]\n\nCreate a Linear issue`

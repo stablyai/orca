@@ -13,7 +13,10 @@ import type {
   LinearProjectUpdateAddRequest
 } from '../shared/linear/project-agent-writes'
 import {
+  LINEAR_PROJECT_DESCRIPTION_CAP,
+  LINEAR_PROJECT_NAME_CAP,
   LINEAR_PROJECT_UPDATE_HEALTH_CLI_VALUES,
+  linearProjectTextCapError,
   toLinearProjectUpdateHealth
 } from '../shared/linear/project-agent-writes'
 import { isLinearUuidV4 } from '../shared/linear/uuid'
@@ -93,6 +96,9 @@ export async function buildProjectUpdateAddRequest(
   flags: Map<string, string | boolean>,
   cwd: string
 ): Promise<LinearProjectUpdateAddRequest> {
+  // Why: posting an update is a write, so `--workspace all` fails with the write wording
+  // rather than the read wording in the shared target builder.
+  rejectAllWorkspaceForWrite(flags)
   const target = buildProjectTargetRequest(flags)
   const writeId = getOptionalWriteId(flags)
   const health = readProjectUpdateHealth(flags)
@@ -126,30 +132,29 @@ export async function buildProjectCreateRequest(
   if (name.length === 0) {
     throw new RuntimeClientError('invalid_argument', '--name must not be blank')
   }
+  assertProjectTextCap(name, LINEAR_PROJECT_NAME_CAP, 'name')
   const teams = uniqueReferences(getRequiredRepeatedStringFlag(flags, 'team'))
   const writeId = getProjectCreateWriteId(flags)
   const priority = flags.has('priority') ? getPriorityFlag(flags, 'priority') : undefined
   const startDate = flags.has('start-date') ? getDueDateFlag(flags, 'start-date') : undefined
   const targetDate = flags.has('target-date') ? getDueDateFlag(flags, 'target-date') : undefined
   const color = getProjectColor(flags)
+  // Why: the description has no file form, so reading and capping it here still
+  // precedes the content read that may consume a piped stdin.
+  const description = readLinearProjectDescription(flags)
   return {
     name,
     teams,
-    description: await readLinearProjectDescription(flags, cwd),
+    description,
     content: await readLinearContent(flags, cwd),
-    status: getOptionalStringFlag(flags, 'status'),
-    lead: getOptionalStringFlag(flags, 'lead'),
-    members: flags.has('member')
-      ? uniqueReferences(getRepeatedStringFlag(flags, 'member'))
-      : undefined,
-    labels: flags.has('label')
-      ? uniqueReferences(getRepeatedStringFlag(flags, 'label'))
-      : undefined,
+    status: readOptionalReference(flags, 'status'),
+    lead: readOptionalReference(flags, 'lead'),
+    members: readOptionalReferences(flags, 'member'),
+    labels: readOptionalReferences(flags, 'label'),
     priority,
     startDate,
     targetDate,
     color,
-    icon: getOptionalStringFlag(flags, 'icon'),
     writeId,
     workspaceId: getOptionalStringFlag(flags, 'workspace')
   }
@@ -177,13 +182,13 @@ export async function readLinearContent(
   if (typeof value !== 'string' || (hasContentFile && value.length === 0)) {
     throw new RuntimeClientError('invalid_argument', `--${flag} requires a value`)
   }
-  return await readLinearProse(cwd, hasContent ? 'body' : 'body-file', value)
+  return await readLinearProse(cwd, hasContent ? 'body' : 'body-file', value, CONTENT_LABELS)
 }
 
-async function readLinearProjectDescription(
-  flags: Map<string, string | boolean>,
-  cwd: string
-): Promise<string | undefined> {
+/** `--description` is short prose, so it has no file form; empty text stays meaningful. */
+export function readLinearProjectDescription(
+  flags: Map<string, string | boolean>
+): string | undefined {
   if (!flags.has('description')) {
     return undefined
   }
@@ -191,20 +196,40 @@ async function readLinearProjectDescription(
   if (typeof value !== 'string') {
     throw new RuntimeClientError('invalid_argument', '--description requires a value')
   }
-  return await readLinearProse(cwd, 'body', value)
+  // Why: the shared reader caps at the 65,000-char body limit, so the 255-char
+  // description cap has to be checked first or the error names the wrong limit.
+  const description = normalizeLinearProjectLineEndings(value)
+  assertProjectTextCap(description, LINEAR_PROJECT_DESCRIPTION_CAP, 'description')
+  return description
+}
+
+/** Linear enforces both caps server-side; failing locally keeps the error actionable. */
+export function assertProjectTextCap(
+  value: string,
+  cap: number,
+  flag: 'name' | 'description'
+): void {
+  const failure = linearProjectTextCapError(value, cap, flag)
+  if (failure) {
+    throw new RuntimeClientError('invalid_argument', failure)
+  }
 }
 
 /** Reuses the shared body reader so every prose flag shares one stdin path and cap. */
 function readLinearProse(
   cwd: string,
   source: 'body' | 'body-file',
-  value: string
+  value: string,
+  labels: { value: string; file: string; noun: string }
 ): Promise<string> {
   return readLinearBody(new Map<string, string | boolean>([[source, value]]), cwd, {
     required: true,
-    normalize: normalizeLinearProjectLineEndings
+    normalize: normalizeLinearProjectLineEndings,
+    labels
   })
 }
+
+const CONTENT_LABELS = { value: 'content', file: 'content-file', noun: 'content' }
 
 /** Project creation pins `ProjectCreateInput.id`, which Linear documents as UUID v4. */
 function getProjectCreateWriteId(flags: Map<string, string | boolean>): string | undefined {
@@ -221,7 +246,7 @@ function getProjectCreateWriteId(flags: Map<string, string | boolean>): string |
   return writeId
 }
 
-function getProjectColor(flags: Map<string, string | boolean>): string | undefined {
+export function getProjectColor(flags: Map<string, string | boolean>): string | undefined {
   if (!flags.has('color')) {
     return undefined
   }
@@ -240,8 +265,44 @@ function uniqueReferences(values: string[]): string[] {
   return [...new Set(values)]
 }
 
+/**
+ * Why: `--lead=` from an unset shell variable parses to an absent flag, and silently
+ * creating the project without that lead is worse than failing — `edit` rejects it.
+ */
+function readOptionalReference(
+  flags: Map<string, string | boolean>,
+  name: string
+): string | undefined {
+  if (!flags.has(name)) {
+    return undefined
+  }
+  const value = getOptionalStringFlag(flags, name)
+  if (value === undefined) {
+    throw new RuntimeClientError('invalid_argument', `--${name} needs a value`)
+  }
+  return value
+}
+
+/**
+ * Why: `--member=` parses to no values, and silently creating the project without
+ * that member is worse than failing — `edit` already rejects the same input.
+ */
+function readOptionalReferences(
+  flags: Map<string, string | boolean>,
+  name: string
+): string[] | undefined {
+  if (!flags.has(name)) {
+    return undefined
+  }
+  const values = uniqueReferences(getRepeatedStringFlag(flags, name))
+  if (values.length === 0) {
+    throw new RuntimeClientError('invalid_argument', `--${name} needs at least one value`)
+  }
+  return values
+}
+
 /** CRLF and lone CR become LF; no trimming and no Unicode normalization. */
-export function normalizeLinearProjectLineEndings(value: string): string {
+function normalizeLinearProjectLineEndings(value: string): string {
   return value.replace(/\r\n?/g, '\n')
 }
 

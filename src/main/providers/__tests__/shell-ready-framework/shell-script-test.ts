@@ -2,8 +2,10 @@ import { tmpdir } from 'node:os'
 import { join, basename } from 'node:path'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
-import { getShellReadyLaunchConfig } from '../../local-pty-shell-ready'
+import { getShellLaunchConfig } from '../../local-pty-shell-ready'
+import { selectShellStartupFeatures } from '../../../shell-startup-features'
 import { escapeRegex } from '../../../../shared/string-utils'
+import { getShellReadyWrapperRoot } from '../../local-pty-shell-ready-wrapper-root'
 
 const RUN_MARKER = /^[ \t]*#[ \t]*Run:.*$/m
 
@@ -58,12 +60,25 @@ export async function shellScriptTest(
     const runScript = hasRunMarker ? parts[1].trim() : script.trim()
 
     const wrapperShell = detectShellFromCommand(runScript, options.shell || '/bin/zsh')
-    const config = getShellReadyLaunchConfig(wrapperShell)
+    const config = getShellLaunchConfig(
+      wrapperShell,
+      selectShellStartupFeatures({
+        shellPath: wrapperShell,
+        env: {},
+        hasStartupCommand: true,
+        waitsForShellReady: true,
+        emitsStartupIdentity: true
+      })
+    )
 
     const env: Record<string, string> = {
       ...config.env,
-      // Why: these examples inspect startup-file discovery, not the PTY-owner protocol stream.
-      ORCA_SHELL_STARTUP_IDENTITY: '0',
+      // Why: these examples inspect startup-file discovery, not the PTY-owner
+      // protocol stream, so drop the tokens that write to stdout.
+      ORCA_SHELL_FEATURES: (config.env.ORCA_SHELL_FEATURES ?? '')
+        .split(',')
+        .filter((feature) => feature !== 'identity' && feature !== 'markers')
+        .join(','),
       // Why: the framework creates user startup files under testHome after
       // computing the wrapper config; route wrapper discovery to that fixture.
       HOME: testHome,
@@ -130,7 +145,11 @@ function normalizeOutput(
     return output
   }
 
-  const wrapperDir = join(ctx.userDataPath, 'shell-ready', ctx.shellName)
+  // Why resolved rather than rebuilt: the wrapper tree is content-addressed, so
+  // rebuilding it from userDataPath yields a directory that never appears in the
+  // output and the placeholder silently stops substituting -- which would bake a
+  // machine-specific, hash-bearing path into the next inline snapshot.
+  const wrapperDir = join(getShellReadyWrapperRoot(), ctx.shellName)
 
   const paths: { path: string; placeholder: string }[] = [
     { path: wrapperDir, placeholder: '<WRAPPER_DIR>' },

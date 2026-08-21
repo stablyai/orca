@@ -46,15 +46,20 @@ const PROJECT_TARGET_BY_ID_QUERY = `
   }
 `
 
-// Why: two rows per exact filter is all it takes to tell zero, one, and many
-// apart; `hasNextPage` proves ambiguity without enumerating the connection.
+// Why: a read target only needs to know zero vs. one vs. many, but a create
+// target disambiguates by team — that needs every exact-name row, not just
+// enough to prove more-than-one exists. `first: 50` covers realistic
+// cross-team name collisions in one round trip; `hasNextPage` still catches
+// the pathological case beyond that bound.
+const PROJECT_EXACT_TARGET_MAX_ROWS = 50
+
 const PROJECT_EXACT_TARGET_QUERY = `
   query OrcaLinearProjectExactTarget($term: String!) {
-    bySlug: projects(filter: { slugId: { eqIgnoreCase: $term } }, first: 2) {
+    bySlug: projects(filter: { slugId: { eqIgnoreCase: $term } }, first: ${PROJECT_EXACT_TARGET_MAX_ROWS}) {
       nodes { ${PROJECT_TARGET_FIELDS} }
       pageInfo { hasNextPage }
     }
-    byName: projects(filter: { name: { eqIgnoreCase: $term } }, first: 2) {
+    byName: projects(filter: { name: { eqIgnoreCase: $term } }, first: ${PROJECT_EXACT_TARGET_MAX_ROWS}) {
       nodes { ${PROJECT_TARGET_FIELDS} }
       pageInfo { hasNextPage }
     }

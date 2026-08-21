@@ -9,7 +9,7 @@ import {
   buildRemoteContext,
   buildRemoteTargetRequest,
   call,
-  dueDateFlag,
+  calendarDateFlag,
   isRemoteCommand,
   nonNegativeIntegerFlag,
   optionalString,
@@ -176,7 +176,7 @@ export async function tryDispatchRemoteLinearWriteCli(
     return await call(dispatcher, 'linear.issueUpdateTask', {
       ...buildRemoteTargetRequest(parsed, env, 3),
       operation: 'dueDate',
-      dueDate: dueDateFlag(parsed.flags, 'to')
+      dueDate: calendarDateFlag(parsed.flags, 'to')
     })
   }
   if (isRemoteCommand(parsed, 'linear', 'due-date', 'clear')) {
@@ -249,7 +249,9 @@ export async function tryDispatchRemoteLinearWriteCli(
       estimate: parsed.flags.has('estimate')
         ? nonNegativeIntegerFlag(parsed.flags, 'estimate')
         : undefined,
-      dueDate: parsed.flags.has('due-date') ? dueDateFlag(parsed.flags, 'due-date') : undefined,
+      dueDate: parsed.flags.has('due-date')
+        ? calendarDateFlag(parsed.flags, 'due-date')
+        : undefined,
       labels: repeatedString(parsed.flags, 'label'),
       parentInput,
       parentCurrent,

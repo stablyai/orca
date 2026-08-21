@@ -1,3 +1,7 @@
+import {
+  cliBooleanFlagValueError,
+  parseCliBooleanFlagValue
+} from '../shared/cli-boolean-flag-value'
 import { RuntimeClientError } from './runtime/types'
 import { unknownCommandData, unknownFlagData } from './command-suggestion'
 import { specPaths, type CommandSpec } from './command-spec'
@@ -22,6 +26,13 @@ export const BOOLEAN_FLAGS = new Set([
   'all',
   'attachments',
   'children',
+  'clear-content',
+  'clear-description',
+  'clear-labels',
+  'clear-lead',
+  'clear-members',
+  'clear-start-date',
+  'clear-target-date',
   'comments',
   'connect',
   'current',
@@ -43,6 +54,7 @@ export const BOOLEAN_FLAGS = new Set([
   'mobile',
   'mobile-pairing',
   'no-pairing',
+  'screen',
   'parent-current',
   'provision',
   'ready',
@@ -100,7 +112,23 @@ export function parseArgs(argv: string[], commandPaths?: readonly string[][]): P
     // treats a `--`-leading next token as a new flag, so it can't express one.
     const equalsIndex = assignment.indexOf('=')
     if (equalsIndex !== -1) {
-      setFlag(assignment.slice(0, equalsIndex), assignment.slice(equalsIndex + 1))
+      const name = assignment.slice(0, equalsIndex)
+      // Why: consumers test boolean flags with `=== true`, so `--hide-diff=true` would
+      // parse to the string 'true' and read as off — silently doing the opposite.
+      if (BOOLEAN_FLAGS.has(name)) {
+        const enabled = parseCliBooleanFlagValue(assignment.slice(equalsIndex + 1))
+        if (enabled === null) {
+          throw new RuntimeClientError('invalid_argument', cliBooleanFlagValueError(name))
+        }
+        setFlag(name, enabled)
+        // Why: other consumers read a boolean flag as mere presence, so `=false` has to
+        // leave no entry at all; the occurrence above still carries it to flag validation.
+        if (!enabled) {
+          flags.delete(name)
+        }
+        continue
+      }
+      setFlag(name, assignment.slice(equalsIndex + 1))
       continue
     }
 
@@ -137,6 +165,23 @@ export function resolveHelpPath(parsed: ParsedArgs): string[] | null {
     return parsed.commandPath
   }
   return null
+}
+
+/**
+ * Whether raw argv asked for JSON, for error paths that run before the flag map
+ * exists. Kept in step with `flags.has('json')`: `--json=false` leaves no entry,
+ * so it must not read as a JSON request here either.
+ */
+export function argvRequestsJson(argv: string[]): boolean {
+  return argv.some((token) => {
+    if (token === '--json') {
+      return true
+    }
+    if (!token.startsWith('--json=')) {
+      return false
+    }
+    return parseCliBooleanFlagValue(token.slice('--json='.length)) === true
+  })
 }
 
 export function matches(actual: string[], expected: string[]): boolean {
@@ -264,7 +309,11 @@ export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs
   }
 
   const pageAllowed = supportsBrowserPageFlag(spec.path)
-  for (const [flag, value] of parsed.flags) {
+  // Why: a `--flag=false` boolean leaves no entry in the map, but it was still typed —
+  // it has to keep failing as an unknown flag rather than slipping past validation.
+  const typedFlags = new Set([...parsed.flags.keys(), ...(parsed.flagOccurrences?.keys() ?? [])])
+  for (const flag of typedFlags) {
+    const value = parsed.flags.get(flag)
     const isGlobalFlag = GLOBAL_FLAGS.includes(flag)
     if (GLOBAL_VALUE_FLAGS.has(flag) && (typeof value !== 'string' || value.length === 0)) {
       throw new RuntimeClientError('invalid_argument', `Flag --${flag} requires a value.`)

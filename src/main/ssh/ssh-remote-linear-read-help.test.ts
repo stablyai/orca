@@ -20,6 +20,8 @@ describe('SSH Linear read help', () => {
     expect(help).toContain('statuses')
     expect(help).toContain('labels')
     expect(help).toContain('update')
+    expect(help).toContain('create        Create a Linear project')
+    expect(help).toContain('edit          Edit Linear project fields')
   })
 
   it('prints project update group help without claiming a read command', () => {
@@ -54,6 +56,7 @@ describe('SSH Linear read help', () => {
     )
     expect(getRemoteLinearReadHelp(['linear', 'issue'])).toContain('Usage: orca linear issue')
     expect(getRemoteLinearReadHelp(['linear', 'project', 'create'])).toBeNull()
+    expect(getRemoteLinearReadHelp(['linear', 'project', 'edit'])).toBeNull()
     expect(getRemoteLinearReadHelp(['linear', 'project', 'update', 'add'])).toBeNull()
   })
 })

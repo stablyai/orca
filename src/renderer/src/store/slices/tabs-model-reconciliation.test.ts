@@ -108,6 +108,69 @@ describe('TabsSlice', () => {
       expect(result.renderableTabCount).toBe(1)
     })
 
+    // A session mirrored from a runtime host used to append a fresh leaf for a
+    // group the layout already held, so returning to a split workspace showed the
+    // same tab strip in several columns. Reconciliation collapses the repeats.
+    it('collapses a layout that repeats one group across leaves', () => {
+      const groupId = 'g-1'
+      store.setState({
+        unifiedTabsByWorktree: {
+          [WT]: [
+            {
+              id: 'terminal-1',
+              entityId: 'terminal-1',
+              groupId,
+              worktreeId: WT,
+              contentType: 'terminal',
+              label: 'Terminal 1',
+              customLabel: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        tabsByWorktree: {
+          [WT]: [
+            {
+              id: 'terminal-1',
+              ptyId: 'pty-1',
+              worktreeId: WT,
+              title: 'Terminal 1',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        ptyIdsByTabId: { 'terminal-1': ['pty-1'] },
+        groupsByWorktree: {
+          [WT]: [
+            { id: groupId, worktreeId: WT, activeTabId: 'terminal-1', tabOrder: ['terminal-1'] }
+          ]
+        },
+        activeGroupIdByWorktree: { [WT]: groupId },
+        layoutByWorktree: {
+          [WT]: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', groupId },
+            second: {
+              type: 'split',
+              direction: 'horizontal',
+              first: { type: 'leaf', groupId },
+              second: { type: 'leaf', groupId }
+            }
+          }
+        }
+      })
+
+      store.getState().reconcileWorktreeTabModel(WT)
+
+      expect(store.getState().layoutByWorktree[WT]).toEqual({ type: 'leaf', groupId })
+    })
+
     it('keeps simulator tabs because they reconnect their own backing stream', () => {
       const terminalGroupId = 'g-terminal'
       const simulatorGroupId = 'g-simulator'

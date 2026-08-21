@@ -54,7 +54,7 @@ export const LINEAR_PROJECT_COMMAND_SPECS: CommandSpec[] = [
     path: ['linear', 'project', 'create'],
     summary: 'Create a Linear project',
     usage:
-      'orca linear project create --name <title> --team <team>... [--description <text>] [--content <text> | --content-file <path|->] [--status <status>] [--lead me|<user>] [--member <user>...] [--label <label>...] [--priority none|low|medium|high|urgent] [--start-date <yyyy-mm-dd>] [--target-date <yyyy-mm-dd>] [--color <#RRGGBB>] [--icon <icon>] [--write-id <uuid-v4>] [--workspace <id>] [--json]',
+      'orca linear project create --name <title> --team <team>... [--description <text>] [--content <text> | --content-file <path|->] [--status <status>] [--lead me|<user>] [--member <user>...] [--label <label>...] [--priority none|low|medium|high|urgent] [--start-date <yyyy-mm-dd>] [--target-date <yyyy-mm-dd>] [--color <#RRGGBB>] [--write-id <uuid-v4>] [--workspace <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'name',
@@ -70,7 +70,6 @@ export const LINEAR_PROJECT_COMMAND_SPECS: CommandSpec[] = [
       'start-date',
       'target-date',
       'color',
-      'icon',
       'write-id',
       'workspace'
     ],
@@ -86,6 +85,58 @@ export const LINEAR_PROJECT_COMMAND_SPECS: CommandSpec[] = [
       'Use --content-file - to read the long Markdown overview from stdin; over SSH only - is accepted.',
       '--color needs shell quoting because # starts a shell comment.',
       '--write-id must be a UUID v4 and pins the created project id so a retry cannot create a second project.',
+      '--workspace all is not valid for a project write.'
+    ]
+  },
+  {
+    path: ['linear', 'project', 'edit'],
+    summary: 'Edit Linear project fields',
+    usage:
+      'orca linear project edit (<project> | --id <project>) [--name <title>] [--description <text> | --clear-description] [--content <text> | --content-file <path|-> | --clear-content] [--status <status>] [--lead me|<user> | --clear-lead] [--member <user>... | --clear-members] [--team <team>...] [--label <label>... | --clear-labels] [--priority none|low|medium|high|urgent] [--start-date <yyyy-mm-dd> | --clear-start-date] [--target-date <yyyy-mm-dd> | --clear-target-date] [--color <#RRGGBB>] [--workspace <id>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'name',
+      'description',
+      'clear-description',
+      'content',
+      'content-file',
+      'clear-content',
+      'status',
+      'lead',
+      'clear-lead',
+      'member',
+      'clear-members',
+      'team',
+      'label',
+      'clear-labels',
+      'priority',
+      'start-date',
+      'clear-start-date',
+      'target-date',
+      'clear-target-date',
+      'color',
+      'workspace',
+      'id'
+    ],
+    repeatableFlags: ['team', 'member', 'label'],
+    positionalArgs: ['id'],
+    examples: [
+      'orca linear project edit launch-q3 --status "In Progress" --target-date 2026-10-01',
+      'orca linear project edit launch-q3 --member ada --member grace --clear-labels',
+      'orca linear project edit --id launch-q3 --content-file - --clear-lead --json'
+    ],
+    notes: [
+      PROJECT_TARGET_NOTE,
+      'At least one field flag or --clear-* flag is required; each --clear-* flag is exclusive with its value flag.',
+      'Repeated --member, --team, and --label REPLACE the whole collection; they never append.',
+      'Use --clear-members or --clear-labels to empty a collection; --team always needs at least one team, and status and color have no clear form.',
+      '--clear-content empties the overview to blank text; Linear cannot restore it to unset once a project has had content.',
+      'Only requested fields change; when they all already match, the edit is a no-op and no write is sent.',
+      'There is no --write-id: Linear cannot dedup a project field edit, so every edit is verified by reading the fields back.',
+      'Linear reformats --content Markdown as it stores it (it autolinks bare URLs and strips trailing whitespace), so the stored text in `current` can differ from what was sent; the edit still counts as applied.',
+      'Use --content-file - to read the long Markdown overview from stdin; over SSH only - is accepted.',
+      '--color needs shell quoting because # starts a shell comment.',
+      'Re-run `orca linear project show <project> --json` to confirm the result of an unconfirmed edit.',
       '--workspace all is not valid for a project write.'
     ]
   },

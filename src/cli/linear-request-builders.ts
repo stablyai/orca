@@ -227,7 +227,12 @@ type ReadLinearBodyOptions = {
   // Why: the cap is defined over the normalized text, so normalization has to
   // run before the length check rather than after the value is returned.
   normalize?: (value: string) => string
+  // Why: project prose reuses this reader through synthesized flags, so errors
+  // have to name the flag the caller actually typed.
+  labels?: { value: string; file: string; noun: string }
 }
+
+const DEFAULT_BODY_LABELS = { value: 'body', file: 'body-file', noun: 'body' }
 
 export function readLinearBody(
   flags: Map<string, string | boolean>,
@@ -244,40 +249,88 @@ export async function readLinearBody(
   cwd: string,
   options: ReadLinearBodyOptions
 ): Promise<string | undefined> {
+  const labels = options.labels ?? DEFAULT_BODY_LABELS
   const hasBody = flags.has('body')
   const hasBodyFile = flags.has('body-file')
   if (hasBody && hasBodyFile) {
-    throw new RuntimeClientError('invalid_argument', 'Use either --body or --body-file, not both')
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `Use either --${labels.value} or --${labels.file}, not both`
+    )
   }
   if (!hasBody && !hasBodyFile) {
     if (options.required) {
-      throw new RuntimeClientError('invalid_argument', 'Missing --body or --body-file')
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `Missing --${labels.value} or --${labels.file}`
+      )
     }
     return undefined
   }
   const raw = hasBody
     ? getRequiredStringFlagAllowingEmpty(flags, 'body')
-    : await readLinearBodyFile(getRequiredStringFlag(flags, 'body-file'), cwd)
+    : await readLinearBodyFile(getRequiredStringFlag(flags, 'body-file'), cwd, labels)
   const body = options.normalize ? options.normalize(raw) : raw
   if (body.length > LINEAR_WRITE_BODY_CAP) {
     throw new RuntimeClientError(
       'linear_body_too_large',
-      `Linear body must be at most ${LINEAR_WRITE_BODY_CAP} characters`
+      `Linear ${labels.noun} must be at most ${LINEAR_WRITE_BODY_CAP} characters`
     )
   }
   return body
 }
 
-async function readLinearBodyFile(path: string, cwd: string): Promise<string> {
+async function readLinearBodyFile(
+  path: string,
+  cwd: string,
+  labels: { value: string; file: string; noun: string }
+): Promise<string> {
   if (path !== '-') {
-    return await readFile(isAbsolute(path) ? path : join(cwd, path), 'utf8')
+    // Why: over SSH, orca runs on the desktop host with ORCA_CLI_SSH_REMOTE set —
+    // a file path here would read the host's disk, not the remote's. (The WSL
+    // bridge sets the shared ORCA_CLI_CWD too, but its UNC cwd stays host-readable,
+    // so it must not trip this SSH-only guard.)
+    if (process.env.ORCA_CLI_SSH_REMOTE === '1') {
+      throw new RuntimeClientError(
+        'invalid_environment',
+        `A --${labels.file} path reads from the machine running orca, not this SSH remote. Pipe the file over stdin and pass - instead.`
+      )
+    }
+    const content = await readFile(isAbsolute(path) ? path : join(cwd, path), 'utf8')
+    return rejectBlankLinearBodyFile(stripBom(content), `--${labels.file} ${path}`, labels.noun)
   }
   if (process.stdin.isTTY) {
-    throw new RuntimeClientError('invalid_argument', 'stdin body requested but stdin is a TTY')
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `stdin ${labels.noun} requested but stdin is a TTY`
+    )
   }
   const chunks: Buffer[] = []
   for await (const chunk of process.stdin) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
   }
-  return Buffer.concat(chunks).toString('utf8')
+  const content = Buffer.concat(chunks).toString('utf8')
+  return rejectBlankLinearBodyFile(stripBom(content), 'stdin', labels.noun)
+}
+
+/**
+ * Why: PowerShell and Notepad write UTF-8 with a BOM, and a leading U+FEFF would travel
+ * into the body — poisoning the digest and making a re-send read as a change.
+ */
+function stripBom(value: string): string {
+  return value.charCodeAt(0) === 0xfeff ? value.slice(1) : value
+}
+
+// Why: a body sourced from a file or pipe is almost never meant to be blank — an
+// empty/whitespace-only source is nearly always an accident (empty variable,
+// generator that produced nothing, forgotten pipe), unlike an inline --body/--content
+// value, which can deliberately be empty text.
+function rejectBlankLinearBodyFile(content: string, source: string, noun: string): string {
+  if (content.trim() === '') {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `${source} was empty or blank; refusing to write an empty ${noun}`
+    )
+  }
+  return content
 }

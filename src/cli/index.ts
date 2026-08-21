@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import {
+  argvRequestsJson,
   findCommandSpec,
   normalizeCommandPositionals,
   parseArgs,
@@ -9,10 +10,16 @@ import {
 } from './args'
 import { isCommandPathGroup } from './command-path-groups'
 import { dispatch } from './dispatch'
+import {
+  assertEnvironmentSelectorResolvable,
+  resolveHostFlagEnvironmentId
+} from './execution-host-flag'
+import { listSshTargets } from './host-selector-alternatives'
 import { reportCliError } from './format'
 import { printHelp } from './help'
 import { foldRepeatableFlags } from './repeatable-flags'
 import type { RuntimeClient } from './runtime-client'
+import { RuntimeClientError } from './runtime/types'
 import { COMMAND_SPECS } from './specs'
 
 export { COMMAND_SPECS } from './specs'
@@ -65,8 +72,18 @@ export async function main(
   // Why: repeated values collect only for flags the resolved command declares
   // repeatable, so the fold has to sit after command resolution and before any
   // handler or validation reads the flag map.
-  const resolved = normalizeCommandPositionals(COMMAND_SPECS, parseArgs(argv, COMMAND_PATHS))
-  const parsed = { ...resolved, flags: foldRepeatableFlags(COMMAND_SPECS, resolved) }
+  // Why: parsing runs before the main error boundary below, which needs `parsed` to
+  // build its context — so a usage error thrown here has to be reported on its own or
+  // it escapes main as an unhandled exception instead of a formatted CLI error.
+  let parsed: ReturnType<typeof normalizeCommandPositionals>
+  try {
+    const resolved = normalizeCommandPositionals(COMMAND_SPECS, parseArgs(argv, COMMAND_PATHS))
+    parsed = { ...resolved, flags: foldRepeatableFlags(COMMAND_SPECS, resolved) }
+  } catch (error) {
+    reportCliError(error, argvRequestsJson(argv), { commandPath: [] })
+    process.exitCode = 1
+    return
+  }
   const helpPath = resolveHelpPath(parsed)
   if (helpPath !== null) {
     printHelp(COMMAND_SPECS, helpPath)
@@ -83,16 +100,32 @@ export async function main(
     printHelp(COMMAND_SPECS, [])
     return
   }
+  const json = parsed.flags.has('json')
   // Why: a bare group path names a namespace, not a command — print its help
-  // before any runtime client exists so no RPC is attempted.
+  // before any runtime client exists so no RPC is attempted. It is still an
+  // incomplete command, so the exit code matches the sibling --help-triggered
+  // branch above rather than reporting success; a --json caller gets the same
+  // JSON error envelope as any other invalid command instead of unparseable
+  // human-readable help text.
   if (
     !findCommandSpec(COMMAND_SPECS, parsed.commandPath) &&
     isCommandPathGroup(COMMAND_SPECS, parsed.commandPath)
   ) {
-    printHelp(COMMAND_SPECS, parsed.commandPath)
+    if (json) {
+      reportCliError(
+        new RuntimeClientError(
+          'invalid_argument',
+          `Pass a subcommand: ${parsed.commandPath.join(' ')} <command>`
+        ),
+        true,
+        { commandPath: parsed.commandPath }
+      )
+    } else {
+      printHelp(COMMAND_SPECS, parsed.commandPath)
+    }
+    process.exitCode = 1
     return
   }
-  const json = parsed.flags.has('json')
 
   try {
     // Why: CLI syntax and flag errors should be reported before any runtime
@@ -103,10 +136,52 @@ export async function main(
     const ignoreRemoteSelection = shouldIgnoreRemoteSelection(parsed.commandPath)
     const pairingCode = ignoreRemoteSelection ? null : parsed.flags.get('pairing-code')
     const environmentSelector = ignoreRemoteSelection ? null : parsed.flags.get('environment')
+    // Why: only the explicit flag is asserted eagerly. An ambient ORCA_ENVIRONMENT is background
+    // config, and failing local-only commands because of a stale one would be a regression; the
+    // explicit flag means the caller named that machine, so a bad name should fail immediately
+    // with the cross-kind hint rather than a bare store error at first use.
+    const listSshTargetsForSuggestion = async (): Promise<{ id: string; label: string }[]> =>
+      listSshTargets(new RuntimeClientClass(undefined, undefined, null, null))
+    if (typeof environmentSelector === 'string') {
+      await assertEnvironmentSelectorResolvable(environmentSelector, listSshTargetsForSuggestion)
+    }
+    // Why: --host runtime:<id> names a paired server, not a filter over this
+    // runtime's rows, so it has to pick the connection before the client exists.
+    // An ambient ORCA_ENVIRONMENT is checked for disagreement too — silently
+    // retargeting a mutation to another server is the bug this flag already had.
+    // An ambient pairing code cannot be resolved to an id to compare, so the
+    // explicit flag simply wins there.
+    const hostEnvironmentId = ignoreRemoteSelection
+      ? null
+      : await resolveHostFlagEnvironmentId(parsed.flags, {
+          // Why: only consulted when the name missed, and against this machine's own runtime —
+          // SSH targets are registered there, not in the paired server we failed to find.
+          listSshTargets: listSshTargetsForSuggestion,
+          pairingCode: typeof pairingCode === 'string' ? pairingCode : null,
+          environmentSelector:
+            typeof environmentSelector === 'string'
+              ? { value: environmentSelector, label: '--environment' }
+              : process.env.ORCA_ENVIRONMENT
+                ? { value: process.env.ORCA_ENVIRONMENT, label: 'ORCA_ENVIRONMENT' }
+                : null
+        })
+    // Why: --host runtime:<name> is canonicalized to the environment's id so downstream host-id
+    // comparisons against stored rows still match; rewrite the flag once, here, rather than
+    // resolving the name again at every consumer.
+    if (hostEnvironmentId !== null) {
+      parsed.flags.set('host', `runtime:${hostEnvironmentId}`)
+    }
     // Why: pass `null` (not `undefined`) when remote selection is suppressed
     // so the RuntimeClient default parameter does not re-activate the
     // ORCA_PAIRING_CODE / ORCA_ENVIRONMENT env-var fallback for commands
     // that must run locally (environment / serve).
+    const suppressed = ignoreRemoteSelection ? null : undefined
+    // An explicit --host runtime:<id> outranks an ambient pairing code or environment.
+    const remotePairingCode =
+      hostEnvironmentId !== null ? null : typeof pairingCode === 'string' ? pairingCode : suppressed
+    const remoteEnvironment =
+      hostEnvironmentId ??
+      (typeof environmentSelector === 'string' ? environmentSelector : suppressed)
     let client: RuntimeClient | undefined
     await dispatch(parsed.commandPath, {
       flags: parsed.flags,
@@ -115,12 +190,8 @@ export async function main(
         client ??= new RuntimeClientClass(
           undefined,
           undefined,
-          typeof pairingCode === 'string' ? pairingCode : ignoreRemoteSelection ? null : undefined,
-          typeof environmentSelector === 'string'
-            ? environmentSelector
-            : ignoreRemoteSelection
-              ? null
-              : undefined
+          remotePairingCode,
+          remoteEnvironment
         )
         return client
       },

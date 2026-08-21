@@ -216,7 +216,7 @@ describe('SSH Linear project reads', () => {
   it('requires a project target for project show', async () => {
     await expect(dispatchProjectArgv(['linear', 'project', 'show'])).rejects.toMatchObject({
       code: 'invalid_argument',
-      message: 'Pass a project as a positional argument or --id <project>'
+      message: 'Pass a Linear project UUID, slugId, URL, or exact name positionally or as --id'
     })
   })
 

@@ -27,9 +27,49 @@ describe('SSH remote command grammar', () => {
       'member',
       'team'
     ])
+    expect([...remoteRepeatableFlags(['linear', 'project', 'edit', 'launch'])].sort()).toEqual([
+      'label',
+      'member',
+      'team'
+    ])
     expect([...remoteRepeatableFlags(['linear', 'label', 'add', 'ENG-1'])]).toEqual(['label'])
     expect([...remoteRepeatableFlags(['linear', 'project', 'update', 'add'])]).toEqual([])
     expect([...remoteRepeatableFlags(['tab', 'profile', 'create'])]).toEqual([])
+  })
+
+  it('scopes the project edit clear flags to that command only', () => {
+    const clearFlags = [
+      'clear-description',
+      'clear-content',
+      'clear-lead',
+      'clear-members',
+      'clear-labels',
+      'clear-start-date',
+      'clear-target-date'
+    ]
+    for (const flag of clearFlags) {
+      expect(isRemoteBooleanFlag(flag, ['linear', 'project', 'edit'])).toBe(true)
+      expect(isRemoteBooleanFlag(flag, ['linear', 'project', 'create'])).toBe(false)
+      expect(isRemoteBooleanFlag(flag, ['linear', 'project'])).toBe(false)
+    }
+  })
+
+  it('keeps a project edit clear flag from consuming the following token', () => {
+    const parsed = parseRemoteCliArgs([
+      'linear',
+      'project',
+      'edit',
+      '--clear-members',
+      'launch-a1b2',
+      '--member',
+      'ada',
+      '--member',
+      'bo'
+    ])
+
+    expect(parsed.commandPath).toEqual(['linear', 'project', 'edit', 'launch-a1b2'])
+    expect(parsed.flags.get('clear-members')).toBe(true)
+    expect(parsed.flags.get('member')).toBe(`ada${REPEATED_FLAG_SEPARATOR}bo`)
   })
 
   it('folds only declared repeatable flags and keeps last-value-wins elsewhere', () => {
@@ -45,6 +85,21 @@ describe('SSH remote command grammar', () => {
 
     expect(folded.get('team')).toBe(`ENG${REPEATED_FLAG_SEPARATOR}DES`)
     expect(folded.get('name')).toBe('Second')
+  })
+
+  // Why: the local parser drops valueless occurrences, so a trailing `--member`
+  // must not wipe the members already collected — that would create the project
+  // without them, exit 0, and say nothing.
+  it('keeps collected values when a repeatable flag ends with no value', () => {
+    const folded = foldRemoteFlagOccurrences(
+      ['linear', 'project', 'create'],
+      [
+        { name: 'member', value: 'ada' },
+        { name: 'member', value: true }
+      ]
+    )
+
+    expect(folded.get('member')).toBe('ada')
   })
 
   it('does not leak project-create repeatability into other commands', () => {

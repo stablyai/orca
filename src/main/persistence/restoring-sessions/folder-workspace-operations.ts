@@ -69,8 +69,8 @@ export class FolderWorkspacePersistenceOperations {
     // Why trim: the guard below accepts a padded path, so persist the same value it validated.
     const folderPath =
       typeof input.folderPath === 'string' && input.folderPath.trim().length > 0
-        ? input.folderPath.trim()
-        : group?.parentPath
+        ? input.folderPath
+        : group?.parentPath?.trim()
     if (!group || !folderPath) {
       throw new Error('Folder-backed project group not found.')
     }
@@ -138,7 +138,7 @@ export class FolderWorkspacePersistenceOperations {
       workspace.name = normalizeFolderWorkspaceName(updates.name, workspace.name)
     }
     if (typeof updates.folderPath === 'string' && updates.folderPath.trim().length > 0) {
-      workspace.folderPath = updates.folderPath.trim()
+      workspace.folderPath = updates.folderPath
     }
     if (updates.linkedTask !== undefined) {
       workspace.linkedTask = normalizeWorkspaceLinkedItem(updates.linkedTask)

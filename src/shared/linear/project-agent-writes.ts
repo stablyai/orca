@@ -1,4 +1,5 @@
 import type {
+  LinearProjectFieldSnapshot,
   LinearProjectRef,
   LinearProjectTargetRequest,
   LinearProjectUpdateHealth,
@@ -17,6 +18,11 @@ const HEALTH_BY_CLI_VALUE: Record<LinearProjectUpdateHealthInput, LinearProjectU
 
 /** Returns null for anything else, including the camelCase API spellings. */
 export function toLinearProjectUpdateHealth(value: string): LinearProjectUpdateHealth | null {
+  // Why: a plain-object lookup reaches Object.prototype, so `constructor` and
+  // `toString` would answer with a truthy function and pass for a real health value.
+  if (!Object.hasOwn(HEALTH_BY_CLI_VALUE, value)) {
+    return null
+  }
   return HEALTH_BY_CLI_VALUE[value as LinearProjectUpdateHealthInput] ?? null
 }
 
@@ -41,7 +47,6 @@ export type LinearProjectCreateRequest = {
   startDate?: string
   targetDate?: string
   color?: string
-  icon?: string
   writeId?: string
   workspaceId?: string
 }
@@ -66,4 +71,80 @@ export type LinearProjectUpdateAddResult = {
     /** True when a pinned write id matched an existing post with the same intent. */
     deduplicated: boolean
   }
+}
+
+/**
+ * Linear rejects longer values with `Argument Validation Error`, on create and on
+ * edit alike. Both caps count Unicode code points, not the UTF-16 units
+ * `String.length` returns: 255 emoji are accepted and 256 are not.
+ */
+export const LINEAR_PROJECT_NAME_CAP = 80
+export const LINEAR_PROJECT_DESCRIPTION_CAP = 255
+
+export function linearProjectTextLength(value: string): number {
+  return [...value].length
+}
+
+/** Null when the value fits; otherwise the message naming the cap and the overage. */
+export function linearProjectTextCapError(
+  value: string,
+  cap: number,
+  flag: 'name' | 'description'
+): string | null {
+  const length = linearProjectTextLength(value)
+  if (length <= cap) {
+    return null
+  }
+  const recovery =
+    flag === 'description' ? '; use --content for the long-form project overview' : ''
+  return `--${flag} must be at most ${cap} characters, but is ${length}${recovery}`
+}
+
+export const LINEAR_PROJECT_EDITABLE_FIELDS = [
+  'name',
+  'description',
+  'content',
+  'status',
+  'lead',
+  'members',
+  'teams',
+  'labels',
+  'priority',
+  'startDate',
+  'targetDate',
+  'color'
+] as const
+export type LinearProjectEditableField = (typeof LINEAR_PROJECT_EDITABLE_FIELDS)[number]
+
+/**
+ * Only the keys present were requested. `description` clears to `''`; `lead` and the
+ * dates clear to `null`; `members` and `labels` clear to `[]`.
+ * `content` is requested as `null` but lands as `''`: Linear ignores a null or
+ * empty content write, so the host sends whitespace and the field never returns
+ * to `null` once it has been set. `status` and `color` are non-null on `Project`
+ * and have no clear form, and a team replacement may never be empty.
+ */
+export type LinearProjectEditRequest = LinearProjectTargetRequest & {
+  name?: string
+  description?: string
+  content?: string | null
+  status?: string
+  lead?: string | null
+  members?: string[]
+  teams?: string[]
+  labels?: string[]
+  priority?: number
+  startDate?: string | null
+  targetDate?: string | null
+  color?: string
+}
+
+export type LinearProjectEditResult = {
+  project: LinearProjectRef
+  /** Only fields whose value actually changed, in LINEAR_PROJECT_EDITABLE_FIELDS order. */
+  changed: LinearProjectEditableField[]
+  previous: Partial<LinearProjectFieldSnapshot>
+  current: Partial<LinearProjectFieldSnapshot>
+  /** `noop` means every requested field already held the requested value; no mutation ran. */
+  meta: { workspaceId: string; noop: boolean }
 }

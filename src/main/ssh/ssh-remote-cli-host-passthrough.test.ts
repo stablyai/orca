@@ -106,6 +106,7 @@ describe('buildHostCliEnv', () => {
     expect(env.PATH).toBe('/host/bin')
     expect(env.ORCA_USER_DATA_PATH).toBe('/host/user-data')
     expect(env.ORCA_CLI_CWD).toBe('/home/alice/wt/sub')
+    expect(env.ORCA_CLI_SSH_REMOTE).toBe('1')
     expect(env.ELECTRON_RUN_AS_NODE).toBe('1')
     expect(env.NODE_OPTIONS).toBeUndefined()
     expect(env.ORCA_NODE_OPTIONS).toBe('--inspect')
