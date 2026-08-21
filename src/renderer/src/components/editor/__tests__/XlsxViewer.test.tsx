@@ -65,7 +65,7 @@ describe('XlsxViewer', () => {
     })
   })
 
-  it('shows empty message for a sheet with no rows', async () => {
+  it('shows the CsvViewer empty state for a sheet with no rows', async () => {
     render(
       <XlsxViewer
         filePath="/tmp/worktree/empty.xlsx"
@@ -73,8 +73,11 @@ describe('XlsxViewer', () => {
         content={fixtureBase64('empty.xlsx')}
       />
     )
+    // Why: table rendering is delegated to CsvViewer — verify it owns the
+    // empty-sheet surface so a custom empty message doesn't drift away from
+    // the csv code path.
     await waitFor(() => {
-      expect(screen.getByText(/空 sheet/)).toBeInTheDocument()
+      expect(screen.getByText(/Empty file/)).toBeInTheDocument()
     })
   })
 

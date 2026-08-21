@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 // CVE-2023-30533 / CVE-2024-22363 in the 0.18.5 npm release, which npm-registry
 // `^0.18.5` cannot reach.
 import * as XLSX from 'xlsx'
+import CsvViewer from './CsvViewer'
 import styles from './OfficePreview.module.css'
 
 export type XlsxViewerProps = {
@@ -14,7 +15,7 @@ export type XlsxViewerProps = {
 
 type SheetData = {
   name: string
-  rows: (string | number | null)[][]
+  csv: string
 }
 
 type Status = { kind: 'loading' } | { kind: 'ready'; sheets: SheetData[] } | { kind: 'error' }
@@ -46,19 +47,6 @@ function isZipBuffer(buffer: ArrayBuffer): boolean {
   )
 }
 
-function formatCell(value: unknown): string {
-  if (value === null || value === undefined) {
-    return ''
-  }
-  if (value instanceof Date) {
-    const yyyy = value.getFullYear()
-    const mm = String(value.getMonth() + 1).padStart(2, '0')
-    const dd = String(value.getDate()).padStart(2, '0')
-    return `${yyyy}-${mm}-${dd}`
-  }
-  return String(value)
-}
-
 export function XlsxViewer({ filePath, fileName, content }: XlsxViewerProps): React.JSX.Element {
   const [status, setStatus] = useState<Status>({ kind: 'loading' })
   const [activeSheet, setActiveSheet] = useState<string>('')
@@ -72,15 +60,13 @@ export function XlsxViewer({ filePath, fileName, content }: XlsxViewerProps): Re
         if (!isZipBuffer(buffer)) {
           throw new Error('not a zip archive')
         }
-        const wb = XLSX.read(buffer, { type: 'array', cellDates: true })
+        const wb = XLSX.read(buffer, { type: 'array' })
         const sheets: SheetData[] = wb.SheetNames.map((name) => {
           const ws = wb.Sheets[name]
-          const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, {
-            header: 1,
-            raw: false,
-            defval: ''
-          }) as (string | number | null)[][]
-          return { name, rows }
+          // Why: delegate the actual table rendering to CsvViewer — same parser
+          // would otherwise be reimplemented here with hand-rolled date formatting
+          // and number column styling. The CSV form keeps one rendering path.
+          return { name, csv: XLSX.utils.sheet_to_csv(ws) }
         })
         if (cancelled) {
           return
@@ -111,12 +97,7 @@ export function XlsxViewer({ filePath, fileName, content }: XlsxViewerProps): Re
     )
   }
 
-  if (status.sheets.length === 0) {
-    return <div className={styles.emptyMsg}>空工作簿</div>
-  }
-
-  const current = status.sheets.find((s) => s.name === activeSheet)
-  const isEmpty = current && current.rows.length === 0
+  const current = status.sheets.find((s) => s.name === activeSheet) ?? status.sheets[0]
 
   return (
     <div>
@@ -134,28 +115,11 @@ export function XlsxViewer({ filePath, fileName, content }: XlsxViewerProps): Re
           </button>
         ))}
       </div>
-      {isEmpty ? (
-        <div className={styles.emptyMsg}>空 sheet</div>
-      ) : (
-        <div className={styles.officePreview}>
-          <table>
-            <tbody>
-              {current?.rows.map((row, ri) => (
-                <tr key={ri}>
-                  {row.map((cell, ci) => (
-                    <td
-                      key={ci}
-                      className={typeof cell === 'number' ? styles.cellNumber : undefined}
-                    >
-                      {formatCell(cell)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <CsvViewer
+        key={current.name}
+        content={current.csv}
+        filePath={`${fileName}#${current.name}`}
+      />
     </div>
   )
 }
