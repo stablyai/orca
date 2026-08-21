@@ -25,7 +25,7 @@ import {
   RELAY_UPLOAD_STAGE_SLOT_COUNT
 } from './ssh-relay-upload-stage-commands'
 import { canCreateFileSymlink } from '../../shared/symlink-capability'
-import { findPosixShell } from '../../shared/posix-shell'
+import { findPosixShell, posixShellEnvironment } from '../../shared/posix-shell'
 
 const posix = getRemoteHostPlatform('linux-x64')
 const windows = getRemoteHostPlatform('win32-x64')
@@ -76,7 +76,10 @@ function runCommand(host: RemoteHostPlatform, command: string, prefix = '') {
   if (!shell) {
     throw new Error('No POSIX shell is available')
   }
-  return spawnSync(shell, ['-c', `${prefix}\n${command}`], { encoding: 'utf8' })
+  return spawnSync(shell, ['-c', `${prefix}\n${command}`], {
+    encoding: 'utf8',
+    env: posixShellEnvironment()
+  })
 }
 
 function createStage(

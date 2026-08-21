@@ -1,11 +1,12 @@
 import { execFile as execFileCallback, spawn, type SpawnOptions } from 'node:child_process'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 import type * as GitRunner from '../git/runner'
+import { removeHostTree } from '../host-tree-removal'
 
 const { wslAwareSpawnMock } = vi.hoisted(() => ({
   wslAwareSpawnMock: vi.fn()
@@ -64,7 +65,12 @@ describe('filesystem-list-files real git fallback', () => {
 
   afterEach(async () => {
     if (tempDir) {
-      await rm(tempDir, { recursive: true, force: true })
+      // Why removeHostTree and not rm: a cancelled scan only *asks* its sibling
+      // git to stop, and until that process is really gone it still holds the
+      // repo as its cwd — which Windows reports as EBUSY on the directory.
+      // Detaching from a stubborn child is deliberate here, so the cleanup is
+      // what has to tolerate the overlap.
+      await removeHostTree(tempDir)
       tempDir = null
     }
     vi.clearAllMocks()
@@ -155,6 +161,11 @@ describe('filesystem-list-files real git fallback', () => {
     await expect(listQuickOpenFiles(repoPath, makeStore(repoPath))).rejects.toThrow(
       'git ls-files exited with code'
     )
+
+    // Why assert the removal here too: this is the case that leaves a sibling
+    // git alive, and it is what surfaced the EBUSY. Going through the retrying
+    // removal proves the directory is releasable rather than permanently held.
+    await expect(removeHostTree(repoPath)).resolves.toBeUndefined()
   })
 
   it('resolves an empty repo as an empty list', async () => {

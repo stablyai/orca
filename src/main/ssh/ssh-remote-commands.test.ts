@@ -1,5 +1,5 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { findPosixShell } from '../../shared/posix-shell'
+import { findPosixShell, posixShellEnvironment } from '../../shared/posix-shell'
 import {
   existsSync,
   mkdirSync,
@@ -75,7 +75,8 @@ function requirePosixShell(): string {
 function runShellCommand(command: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(requirePosixShell(), ['-c', command], {
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: posixShellEnvironment()
     })
     let stdout = ''
     let stderr = ''

@@ -9,14 +9,17 @@
 //   node config/scripts/windows-suite-baseline.mjs --record
 //   node config/scripts/windows-suite-baseline.mjs --compare
 //   node config/scripts/windows-suite-baseline.mjs --compare --from-log <path>
+//   node config/scripts/windows-suite-baseline.mjs --record --log <path>
 //
 // `--from-log` reads a log a previous run already produced. The full sweep
 // takes about 40 minutes, so re-parsing beats re-running whenever the tree has
-// not changed since.
+// not changed since — including after an interrupted run, because a run streams
+// to `--log` as it goes rather than being held until it finishes.
 
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { closeSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 
 export const BASELINE_PATH = 'config/windows-suite-baseline.json'
@@ -78,20 +81,43 @@ export function diffBaselines(baseline, current) {
   }
 }
 
-function runSuite() {
-  const result = spawnSync(
-    process.execPath,
-    [resolve('node_modules/vitest/vitest.mjs'), 'run', '--config', 'config/vitest.config.ts'],
-    { encoding: 'utf8', maxBuffer: 512 * 1024 * 1024 }
-  )
-  if (result.error) {
-    throw result.error
-  }
-  return `${result.stdout ?? ''}\n${result.stderr ?? ''}`
+const DEFAULT_RUN_LOG = join(tmpdir(), 'orca-windows-suite.log')
+
+/** Where a fresh run writes, decided before the run starts.
+ *
+ *  Outside the repo by default: a forty-minute sweep should not leave an
+ *  untracked artifact behind, but it must land somewhere nameable so an
+ *  interrupted run can be replayed with `--from-log` instead of repeated. */
+export function resolveRunLogPath(argv) {
+  const index = argv.indexOf('--log')
+  return index === -1 ? DEFAULT_RUN_LOG : argv[index + 1]
 }
 
-function readLog(fromLog) {
-  return fromLog ? readFileSync(fromLog, 'utf8') : runSuite()
+function runSuite(logPath) {
+  mkdirSync(dirname(logPath), { recursive: true })
+  // Why a file descriptor and not a captured pipe: the first version buffered
+  // the whole sweep in memory and printed at the end, so an interrupted run
+  // lost every minute of it. Handing the child the fd streams straight to disk,
+  // which leaves even a killed run parseable.
+  const log = openSync(logPath, 'w')
+  try {
+    console.log(`Streaming the run to ${logPath}`)
+    const result = spawnSync(
+      process.execPath,
+      [resolve('node_modules/vitest/vitest.mjs'), 'run', '--config', 'config/vitest.config.ts'],
+      { stdio: ['ignore', log, log] }
+    )
+    if (result.error) {
+      throw result.error
+    }
+  } finally {
+    closeSync(log)
+  }
+  return readFileSync(logPath, 'utf8')
+}
+
+function readLog(fromLog, argv) {
+  return fromLog ? readFileSync(fromLog, 'utf8') : runSuite(resolveRunLogPath(argv))
 }
 
 function total(failures) {
@@ -111,7 +137,7 @@ function report(label, rows) {
 function main(argv) {
   const fromLogIndex = argv.indexOf('--from-log')
   const fromLog = fromLogIndex === -1 ? null : argv[fromLogIndex + 1]
-  const failures = parseFailures(readLog(fromLog))
+  const failures = parseFailures(readLog(fromLog, argv))
 
   if (argv.includes('--record')) {
     mkdirSync(dirname(BASELINE_PATH), { recursive: true })

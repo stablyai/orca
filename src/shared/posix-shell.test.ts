@@ -1,6 +1,26 @@
 import { spawnSync } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { delimiter, isAbsolute, join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { findPosixShell, hasPosixShellAtCanonicalPath } from './posix-shell'
+import { findPosixShell, hasPosixShellAtCanonicalPath, posixShellEnvironment } from './posix-shell'
+
+/** A copy of the environment with every PATH entry holding a shell removed.
+ *
+ *  Windows env keys are case-insensitive, so `Path` has to go too — leaving it
+ *  behind would hand the child the original list under the other spelling. */
+function environmentWithoutShellOnPath(): NodeJS.ProcessEnv {
+  const stripped = (process.env.PATH ?? '')
+    .split(delimiter)
+    .filter(
+      (entry) => entry && !existsSync(join(entry, 'sh.exe')) && !existsSync(join(entry, 'sh'))
+    )
+    .join(delimiter)
+  const environment = Object.fromEntries(
+    Object.entries(process.env).filter(([name]) => !/^path$/i.test(name))
+  )
+  return { ...environment, PATH: stripped }
+}
 
 describe('findPosixShell', () => {
   it('returns a shell that can actually run a command', () => {
@@ -22,6 +42,77 @@ describe('findPosixShell', () => {
     }
 
     expect(findPosixShell()).toBe('/bin/sh')
+  })
+
+  it.runIf(process.platform === 'win32')('finds one with no shell anywhere on PATH', () => {
+    // Why this case: Git for Windows puts `cmd/` on PATH but not `usr/bin/`, so
+    // a run started from cmd.exe or PowerShell resolves `git` and not `sh`. The
+    // search answered "none" there, and eleven ssh tests failed on the spawn
+    // rather than on the commands they meant to check — while passing when the
+    // same suite was started from Git Bash. The answer must not depend on that.
+    const environment = environmentWithoutShellOnPath()
+    const onPath = spawnSync('sh', ['-c', 'exit 0'], { env: environment, stdio: 'ignore' })
+    expect((onPath.error as NodeJS.ErrnoException | undefined)?.code).toBe('ENOENT')
+
+    // Why a child process: the search caches its answer for the life of a
+    // process, so the stripped PATH only means anything to a fresh one.
+    const url = pathToFileURL(join(__dirname, 'posix-shell.ts')).href
+    const probe = spawnSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '--eval',
+        `const m = await import(${JSON.stringify(url)})
+         process.stdout.write(m.findPosixShell() ?? '')`
+      ],
+      { encoding: 'utf8', env: environment }
+    )
+
+    expect(probe.stdout.trim()).not.toBe('')
+    expect(spawnSync(probe.stdout.trim(), ['-c', 'exit 0'], { stdio: 'ignore' }).status).toBe(0)
+  })
+})
+
+describe('posixShellEnvironment', () => {
+  it('reaches the utilities a generated script actually calls', () => {
+    const shell = findPosixShell()
+    if (!shell) {
+      return
+    }
+
+    const probe = spawnSync(shell, ['-c', `printf 'a b\\n' | awk '{print $2}'`], {
+      encoding: 'utf8',
+      env: posixShellEnvironment()
+    })
+
+    expect(probe.stdout.trim()).toBe('b')
+  })
+
+  it('puts those utilities ahead of the same-named Windows ones', () => {
+    const shell = findPosixShell()
+    if (!shell || !isAbsolute(shell)) {
+      return
+    }
+
+    // Why `find` specifically: Windows ships its own find.exe in System32, and
+    // it is not remotely the same program. A script that reaches it fails
+    // strangely — "File not found - relay-*" — rather than loudly.
+    const resolvedFind = spawnSync(shell, ['-c', 'command -v find'], {
+      encoding: 'utf8',
+      env: posixShellEnvironment()
+    })
+
+    expect(resolvedFind.stdout.trim().toLowerCase()).not.toContain('system32')
+  })
+
+  it('leaves the caller’s own environment untouched', () => {
+    const before = process.env.PATH
+
+    posixShellEnvironment()
+
+    // Why: one suite prepending Git's tools process-wide would change what
+    // `find` means for every other suite sharing the worker.
+    expect(process.env.PATH).toBe(before)
   })
 })
 

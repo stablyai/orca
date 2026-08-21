@@ -1,5 +1,7 @@
+import { tmpdir } from 'node:os'
+import { isAbsolute } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { diffBaselines, parseFailures } from './windows-suite-baseline.mjs'
+import { diffBaselines, parseFailures, resolveRunLogPath } from './windows-suite-baseline.mjs'
 
 const ANSI = '[31m'
 const RESET = '[0m'
@@ -93,5 +95,26 @@ describe('diffBaselines', () => {
     const diff = diffBaselines({}, { 'src/z.test.ts': 1, 'src/a.test.ts': 1 })
 
     expect(diff.newlyFailing.map((entry) => entry.file)).toEqual(['src/a.test.ts', 'src/z.test.ts'])
+  })
+})
+
+// Why this is tested at all: the sweep takes about forty minutes, and the first
+// version of this script held its output in memory until the run finished — an
+// interrupted run lost every minute of it. The log path is what makes a killed
+// run recoverable, so it has to be decided before the run starts.
+describe('resolveRunLogPath', () => {
+  it('defaults somewhere outside the repo so a sweep leaves no artifact behind', () => {
+    const path = resolveRunLogPath([])
+
+    expect(isAbsolute(path)).toBe(true)
+    expect(path.startsWith(tmpdir())).toBe(true)
+  })
+
+  it('takes an explicit --log over the default', () => {
+    expect(resolveRunLogPath(['--record', '--log', 'out/sweep.log'])).toBe('out/sweep.log')
+  })
+
+  it('is stable across calls, so an interrupted run can be replayed by name', () => {
+    expect(resolveRunLogPath([])).toBe(resolveRunLogPath([]))
   })
 })
