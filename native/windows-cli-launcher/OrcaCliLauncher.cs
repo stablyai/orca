@@ -9,7 +9,24 @@ internal static class OrcaCliLauncher
     {
         try
         {
-            string launcherDirectory = Path.GetDirectoryName(typeof(OrcaCliLauncher).Assembly.Location);
+            string launcherPath = typeof(OrcaCliLauncher).Assembly.Location;
+            // Why: Claude Code spawns `tmux` with no shell, and Node refuses to spawn .cmd that way
+            // (CVE-2024-27980), so Orca installs a copy of this launcher named tmux.exe as the shim.
+            bool isTmuxShim = String.Equals(
+                Path.GetFileNameWithoutExtension(launcherPath),
+                "tmux",
+                StringComparison.OrdinalIgnoreCase
+            );
+            string launcherDirectory = isTmuxShim
+                ? ResolveTmuxShimLauncherDirectory()
+                : Path.GetDirectoryName(launcherPath);
+            if (launcherDirectory == null)
+            {
+                Console.Error.WriteLine(
+                    "orca agent-teams tmux shim: ORCA_AGENT_TEAMS_SHIM_BIN must be an absolute path"
+                );
+                return 127;
+            }
             string resourcesDirectory = Directory.GetParent(launcherDirectory).FullName;
             string appDirectory = Directory.GetParent(resourcesDirectory).FullName;
             string electronPath = Path.Combine(appDirectory, "Orca.exe");
@@ -36,7 +53,7 @@ internal static class OrcaCliLauncher
             ProcessStartInfo startInfo = new ProcessStartInfo
             {
                 FileName = electronPath,
-                Arguments = BuildArguments(cliPath, args),
+                Arguments = BuildArguments(cliPath, isTmuxShim ? PrependTmuxShimCommand(args) : args),
                 UseShellExecute = false
             };
 
@@ -65,6 +82,27 @@ internal static class OrcaCliLauncher
             Console.Error.WriteLine("Unable to start the Orca CLI: {0}", error.Message);
             return 1;
         }
+    }
+
+    // Why: the shim runs from Orca's shim directory, not from resources\bin, so its own location
+    // says nothing about where the app lives. ORCA_AGENT_TEAMS_SHIM_BIN is the qualified CLI path
+    // the team launch already published; anything unqualified is refused rather than guessed.
+    private static string ResolveTmuxShimLauncherDirectory()
+    {
+        string shimBin = Environment.GetEnvironmentVariable("ORCA_AGENT_TEAMS_SHIM_BIN");
+        if (String.IsNullOrEmpty(shimBin) || !Path.IsPathRooted(shimBin))
+        {
+            return null;
+        }
+        return Path.GetDirectoryName(shimBin);
+    }
+
+    private static string[] PrependTmuxShimCommand(string[] args)
+    {
+        string[] forwarded = new string[args.Length + 1];
+        forwarded[0] = "agent-teams-tmux";
+        args.CopyTo(forwarded, 1);
+        return forwarded;
     }
 
     private static void MoveEnvironmentVariable(string sourceName, string targetName)

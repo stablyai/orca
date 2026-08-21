@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ClaudeAgentTeamsService, type AgentTeamsTerminalApi } from './claude-agent-teams-service'
+import type { AgentStartupShell } from '../../shared/tui-agent-startup-shell'
 
-function createServiceWithLeader(): {
+function createServiceWithLeader(paneShell: AgentStartupShell = 'posix'): {
   service: ClaudeAgentTeamsService
   teamId: string
   token: string
@@ -14,7 +15,8 @@ function createServiceWithLeader(): {
     leaderHandle: 'leader-handle',
     baseEnv: { PATH: '/usr/bin' },
     shimDir: '/tmp/orca-shim',
-    shimBin: '/usr/bin/orca'
+    shimBin: '/usr/bin/orca',
+    paneShell
   })
   expect(launch.env.ORCA_AGENT_TEAMS_SHIM_DIR).toBe('/tmp/orca-shim')
   const splitCalls: { handle: string; direction?: string; command?: string; envPane?: string }[] =
@@ -187,6 +189,30 @@ describe('ClaudeAgentTeamsService', () => {
 
     await request(['kill-pane', '-t', '%2'])
     expect(api.closeTerminal).toHaveBeenLastCalledWith('teammate-2')
+  })
+
+  it('re-spells the teammate command for PowerShell panes', async () => {
+    const { service, teamId, token, leaderPane, api, splitCalls } =
+      createServiceWithLeader('powershell')
+    const request = (argv: string[], envPane = leaderPane) =>
+      service.handleTmuxCompat({ teamId, token, envPane, argv }, api)
+
+    await request(['split-window', '-d', '-t', leaderPane, '-h', '-P', '-F', '#{pane_id}', '--', 'cat'])
+    await request(['set-option', '-p', '-t', '%2', 'remain-on-exit', 'failed'])
+    await expect(
+      request([
+        'respawn-pane',
+        '-k',
+        '-t',
+        '%2',
+        '--',
+        "cd 'C:\\repo' && env CLAUDECODE=1 'C:\\claude.exe' --agent-id a"
+      ])
+    ).resolves.toMatchObject({ exitCode: 0 })
+
+    expect(splitCalls.at(-1)?.command).toBe(
+      "Set-Location 'C:\\repo'; $env:CLAUDECODE = '1'; & 'C:\\claude.exe' '--agent-id' 'a'"
+    )
   })
 
   it('removes the pane when replacement split fails after a confirmed placeholder stop', async () => {

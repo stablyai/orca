@@ -65,8 +65,8 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     detectCmdAliases: ['orca-dev', 'orca-ide'],
     // Why: require Claude too so fresh installs (Orca shim always present) don't report Agent Teams without an agent CLI.
     detectRequiredCommands: ['claude'],
-    // Why: Windows/WSL use Claude's in-process Agent Teams fallback, not this Orca native-pane/tmux-shim wrapper.
-    detectUnsupportedRuntimes: ['win32', 'wsl'],
+    // Why: WSL uses Claude's in-process Agent Teams fallback, not this Orca native-pane/tmux-shim wrapper.
+    detectUnsupportedRuntimes: ['wsl'],
     launchCmd: 'orca claude-teams',
     launchCmdByPlatform: {
       linux: `${getOrcaCliCommandNameForPlatform('linux')} claude-teams`,

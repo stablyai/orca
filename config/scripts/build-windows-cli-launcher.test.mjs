@@ -127,6 +127,48 @@ describe('Windows CLI launcher', () => {
     }
   })
 
+  itWindows('forwards tmux argv to the CLI when copied into the Agent Teams shim dir', () => {
+    const appRoot = mkdtempSync(join(tmpdir(), 'orca teams shim launcher '))
+    try {
+      const resourcesPath = join(appRoot, 'resources')
+      const launcherPath = join(resourcesPath, 'bin', 'orca.exe')
+      const cliPath = join(resourcesPath, 'app.asar.unpacked', 'out', 'cli', 'index.js')
+      const shimPath = join(appRoot, 'claude-agent-teams-bin', 'tmux.exe')
+      mkdirSync(join(resourcesPath, 'bin'), { recursive: true })
+      mkdirSync(dirname(cliPath), { recursive: true })
+      mkdirSync(dirname(shimPath), { recursive: true })
+      copyFileSync(process.execPath, join(appRoot, 'Orca.exe'))
+      writeFileSync(cliPath, 'process.stdout.write(JSON.stringify(process.argv.slice(2)))\n', 'utf8')
+
+      const build = spawnSync(
+        process.execPath,
+        ['config/scripts/build-windows-cli-launcher.mjs', '--output', launcherPath],
+        { cwd: projectRoot, encoding: 'utf8' }
+      )
+      expect(build.status, `${build.stdout}\n${build.stderr}`).toBe(0)
+      copyFileSync(launcherPath, shimPath)
+
+      const tmuxArgs = ['display-message', '-p', '#{pane_id}']
+      const forwarded = spawnSync(shimPath, tmuxArgs, {
+        encoding: 'utf8',
+        env: { ...process.env, ORCA_AGENT_TEAMS_SHIM_BIN: launcherPath }
+      })
+      expect(forwarded.status, forwarded.stderr).toBe(0)
+      expect(JSON.parse(forwarded.stdout)).toEqual(['agent-teams-tmux', ...tmuxArgs])
+
+      // Why: the copy sits outside the app tree, so an unqualified shim bin leaves it
+      // nothing to resolve the CLI from — refuse rather than guess an install path.
+      const unqualified = spawnSync(shimPath, tmuxArgs, {
+        encoding: 'utf8',
+        env: { ...process.env, ORCA_AGENT_TEAMS_SHIM_BIN: 'orca' }
+      })
+      expect(unqualified.status).toBe(127)
+      expect(unqualified.stderr).toContain('must be an absolute path')
+    } finally {
+      removeFixtureTree(appRoot)
+    }
+  })
+
   itWindows('survives an inherited environment block containing PATH and Path', () => {
     const appRoot = mkdtempSync(join(tmpdir(), 'orca duplicate path launcher '))
     try {
