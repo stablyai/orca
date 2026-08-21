@@ -85,6 +85,7 @@ function state(
     terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
     ptyIdsByTabId: Record<string, string[]>
     runtimePaneTitlesByTabId: Record<string, Record<number, string>>
+    generatedTabTitlesEnabled: boolean
   }> = {}
 ): NotesSendAgentTargetState {
   const terminalLayoutsByTabId = overrides.terminalLayoutsByTabId ?? {}
@@ -132,6 +133,148 @@ describe('notes send agent targets', () => {
         status: 'eligible'
       }
     ])
+  })
+
+  it('names a status-backed target after its tab, not the live agent title', () => {
+    const paneKey = makePaneKey(STATUS_TAB_ID, LEAF_A)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: { [paneKey]: entry(paneKey, 'done') },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [
+            tab(STATUS_TAB_ID, {
+              title: '✳ Add validation to prevent deleting live attractions',
+              customTitle: 'Designer'
+            })
+          ]
+        },
+        terminalLayoutsByTabId: { [STATUS_TAB_ID]: leafLayout(LEAF_A, 'pty-a') }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets[0].tabTitle).toBe('Designer')
+  })
+
+  it('names a title-hint target after its tab, not the live agent title', () => {
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        tabsByWorktree: {
+          [WORKTREE_ID]: [
+            tab(LAUNCH_TAB_ID, {
+              title: 'Codex ready',
+              customTitle: 'Import Parks',
+              launchAgent: 'codex'
+            })
+          ]
+        },
+        terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
+        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'Codex ready' } }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets[0].tabTitle).toBe('Import Parks')
+  })
+
+  // Why: the menu row renders the provider icon, so the agent's own leading
+  // status glyph would read as a second icon — the same reason SortableTab
+  // strips it. Every agent that decorates its OSC title is affected, not Claude
+  // alone, so the shared decoration table is exercised here.
+  it.each([
+    ['Claude', '✳ Say hello world', 'Say hello world'],
+    ['Gemini', '◇ Refactor the parser', 'Refactor the parser'],
+    ['Gemini clock', '⏲ Refactor the parser', 'Refactor the parser'],
+    ['braille spinner', '⠋ Refactor the parser', 'Refactor the parser'],
+    ['Claude text prefix', '* Refactor the parser', 'Refactor the parser']
+  ])('strips the %s status glyph from a live-title target name', (_agent, liveTitle, expected) => {
+    const paneKey = makePaneKey(STATUS_TAB_ID, LEAF_A)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: { [paneKey]: entry(paneKey, 'done') },
+        tabsByWorktree: { [WORKTREE_ID]: [tab(STATUS_TAB_ID, { title: liveTitle })] },
+        terminalLayoutsByTabId: { [STATUS_TAB_ID]: leafLayout(LEAF_A, 'pty-a') }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets[0].tabTitle).toBe(expected)
+  })
+
+  it('keeps a manual rename that starts with a status glyph intact', () => {
+    const paneKey = makePaneKey(STATUS_TAB_ID, LEAF_A)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: { [paneKey]: entry(paneKey, 'done') },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [
+            tab(STATUS_TAB_ID, { title: '✳ Say hello world', customTitle: '✳ my own label' })
+          ]
+        },
+        terminalLayoutsByTabId: { [STATUS_TAB_ID]: leafLayout(LEAF_A, 'pty-a') }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets[0].tabTitle).toBe('✳ my own label')
+  })
+
+  it('keeps a glyph-only live title rather than collapsing the name to empty', () => {
+    const paneKey = makePaneKey(STATUS_TAB_ID, LEAF_A)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: { [paneKey]: entry(paneKey, 'done') },
+        tabsByWorktree: { [WORKTREE_ID]: [tab(STATUS_TAB_ID, { title: '✳' })] },
+        terminalLayoutsByTabId: { [STATUS_TAB_ID]: leafLayout(LEAF_A, 'pty-a') }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets[0].tabTitle).toBe('✳')
+  })
+
+  // Why: an empty name is the signal the menu row uses to promote the harness
+  // label to its title line, so a whitespace-only title must not survive as one.
+  it('resolves a whitespace-only live title to an empty name', () => {
+    const paneKey = makePaneKey(STATUS_TAB_ID, LEAF_A)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: { [paneKey]: entry(paneKey, 'done') },
+        tabsByWorktree: { [WORKTREE_ID]: [tab(STATUS_TAB_ID, { title: '   ' })] },
+        terminalLayoutsByTabId: { [STATUS_TAB_ID]: leafLayout(LEAF_A, 'pty-a') }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets[0].tabTitle).toBe('')
+  })
+
+  it('uses the generated tab title only while generated titles are enabled', () => {
+    const paneKey = makePaneKey(STATUS_TAB_ID, LEAF_A)
+    const titleFor = (generatedTabTitlesEnabled: boolean): string =>
+      deriveNotesSendAgentTargets(
+        state({
+          generatedTabTitlesEnabled,
+          agentStatusByPaneKey: { [paneKey]: entry(paneKey, 'done') },
+          tabsByWorktree: {
+            [WORKTREE_ID]: [
+              tab(STATUS_TAB_ID, { title: 'Codex ready', generatedTitle: 'Refactor auth' })
+            ]
+          },
+          terminalLayoutsByTabId: { [STATUS_TAB_ID]: leafLayout(LEAF_A, 'pty-a') }
+        }),
+        WORKTREE_ID,
+        NOW
+      )[0].tabTitle
+
+    expect(titleFor(true)).toBe('Refactor auth')
+    expect(titleFor(false)).toBe('Codex ready')
   })
 
   it('keeps permission status-backed targets visible but disabled', () => {

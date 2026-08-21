@@ -392,6 +392,70 @@ describe('ReviewNotesSendMenuContent', () => {
     expect(collectText(items[1])).toContain('Codex')
   })
 
+  it('leads with the tab name and demotes the agent harness to the detail line', () => {
+    const paneKey = makePaneKey(TAB_A, LEAF_A)
+    harness.worktreeAgentRows = [
+      agentRow({
+        paneKey,
+        tabId: TAB_A,
+        title: 'teste',
+        agentType: 'claude',
+        state: 'idle',
+        startedAt: harness.now
+      })
+    ]
+    setStore({
+      tabsByWorktree: { 'wt-1': [tab(TAB_A, { title: 'teste' })] },
+      terminalLayoutsByTabId: { [TAB_A]: leafLayout(LEAF_A, 'pty-a') }
+    })
+    harness.noteTargets = [
+      {
+        paneKey,
+        tabId: TAB_A,
+        leafId: LEAF_A,
+        agentType: 'claude',
+        tabTitle: 'teste',
+        status: 'eligible'
+      }
+    ]
+
+    const spans = findAllByType(findByType(render(), 'DropdownMenuItem'), 'span')
+    const primary = spans.find((span) => span.props.className === 'truncate')
+    const secondary = spans.find((span) =>
+      String(span.props.className ?? '').includes('text-muted-foreground')
+    )
+
+    expect(collectText(primary)).toBe('teste')
+    expect(collectText(secondary)).toBe('Claude · Idle · just now')
+  })
+
+  it('falls back to the agent label when the target has no tab name', () => {
+    const paneKey = makePaneKey(TAB_A, LEAF_A)
+    setStore({
+      tabsByWorktree: { 'wt-1': [tab(TAB_A, { title: '' })] },
+      terminalLayoutsByTabId: { [TAB_A]: leafLayout(LEAF_A, 'pty-a') }
+    })
+    harness.noteTargets = [
+      {
+        paneKey,
+        tabId: TAB_A,
+        leafId: LEAF_A,
+        agentType: 'claude',
+        tabTitle: '',
+        status: 'eligible'
+      }
+    ]
+
+    const spans = findAllByType(findByType(render(), 'DropdownMenuItem'), 'span')
+    const primary = spans.find((span) => span.props.className === 'truncate')
+    const secondary = spans.find((span) =>
+      String(span.props.className ?? '').includes('text-muted-foreground')
+    )
+
+    expect(collectText(primary)).toBe('Claude')
+    expect(collectText(secondary)).toBe('Idle')
+  })
+
   it('orders send targets by the current worktree agent rows and shows status timing', () => {
     const paneKeyA = makePaneKey(TAB_A, LEAF_A)
     const paneKeyB = makePaneKey(TAB_B, LEAF_B)
