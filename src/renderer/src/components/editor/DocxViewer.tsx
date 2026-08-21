@@ -85,10 +85,7 @@ const DOCX_ALLOWED_TAGS = [
 ]
 const DOCX_ALLOWED_ATTR = ['href', 'id', 'class', 'rel', 'target', 'title']
 
-// Why: happy-dom's HTML parser (used in this project's vitest env) hands
-// DOMPurify a tree where javascript: hrefs survive the default URI filter.
-// Re-scrub the post-sanitize string so the test asserting no javascript:
-// anchors can pass against the same DOM that production will use.
+// Why: happy-dom's parser hands DOMPurify a tree where javascript: hrefs survive the default URI filter; re-scrub the post-sanitize string.
 function stripJavaScriptHrefs(html: string): string {
   return html.replace(/(\s+href=)(["'])\s*javascript:[^"']*\2/gi, '$1$2#$2')
 }
@@ -114,8 +111,7 @@ export function DocxViewer({ filePath, fileName, content }: DocxViewerProps): Re
         const result = await mammoth.convertToHtml(source, {
           includeDefaultStyleMap: true,
           styleMap: officeDocumentStyleMap,
-          // Why: mammoth defaults ignoreEmptyParagraphs to true, which drops
-          // blank paragraphs (e.g. between sections). Users notice the gap.
+          // Why: mammoth defaults ignoreEmptyParagraphs:true, dropping blank paragraphs users notice between sections.
           ignoreEmptyParagraphs: false,
           transformDocument: alignTransform as (element: unknown) => unknown
         })

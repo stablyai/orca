@@ -16,8 +16,7 @@ function fixtureBase64(name: string): string {
   return readFileSync(join(FIXTURE_DIR, name)).toString('base64')
 }
 
-// ponytail: build xlsx in-memory so the markup-cell test doesn't need a
-// checked-in fixture. SheetJS writes the buffer with default cell formats.
+// ponytail: build xlsx in-memory so the markup-cell test doesn't need a checked-in fixture.
 function buildXlsxBase64(rows: string[][]): string {
   const ws = XLSX.utils.aoa_to_sheet(rows)
   const wb = XLSX.utils.book_new()
@@ -152,10 +151,7 @@ describe('XlsxViewer', () => {
     })
     const preview = container.querySelector('[data-testid="xlsx-preview"]')
     expect(preview).toBeTruthy()
-    // Why: SheetJS escapehtml escapes angle brackets so the literal text renders
-    // as a text node. Assert no <b> or <script> element appears anywhere inside
-    // the preview pane — a DOM node from a cell value would mean the escape
-    // step regressed and the XSS trust boundary silently opened.
+    // Why: escapehtml escapes angle brackets so the literal text becomes a text node; no <b>/<script> elements must appear in the preview pane.
     expect(preview?.querySelector('b')).toBeNull()
     expect(preview?.querySelector('script')).toBeNull()
   })

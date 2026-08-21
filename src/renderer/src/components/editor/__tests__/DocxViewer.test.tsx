@@ -66,12 +66,7 @@ describe('DocxViewer', () => {
   })
 
   it('strips javascript: hyperlinks from mammoth output', async () => {
-    // Why: mammoth relays .docx hyperlinks verbatim into the HTML payload, so a
-    // crafted file can carry a `javascript:` URL and reach the renderer. The
-    // viewer must sanitize before dangerouslySetInnerHTML. vi.resetModules
-    // + dynamic import ensure the mocked mammoth module reaches the freshly
-    // loaded viewer; the static import at the top would otherwise pin the
-    // real mammoth before vi.doMock runs.
+    // Why: vi.resetModules + dynamic import ensure the mocked mammoth reaches the freshly loaded viewer; static import at the top would otherwise pin the real mammoth first.
     vi.resetModules()
     vi.doMock('mammoth', () => ({
       convertToHtml: vi.fn().mockResolvedValue({
