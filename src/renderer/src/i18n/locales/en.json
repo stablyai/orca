@@ -16262,6 +16262,17 @@
         "days": "{{value0}}d",
         "underOneMinute": "<1m"
       }
+    },
+    "sidebar": {
+      "projectGroups": {
+        "newGroupLabel": "New Group",
+        "createDialogTitle": "New Project Group",
+        "createDialogDescription": "Create a group to organize your projects in the sidebar."
+      },
+      "addRepo": {
+        "groupSelectorLabel": "Add to group (optional)",
+        "groupSelectorNoGroup": "No group"
+      }
     }
   },
   "dashboardPopout": {

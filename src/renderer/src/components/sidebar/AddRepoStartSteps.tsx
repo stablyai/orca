@@ -67,6 +67,7 @@ type AddRepoLocalStartStepProps = {
   nestedScanInProgress: boolean
   nestedScanId: string | null
   hostSelector?: ReactNode
+  groupSelector?: ReactNode
   showRemoteAction?: boolean
   canCreateProject?: boolean
   actionsDisabled?: boolean
@@ -86,6 +87,7 @@ export function AddRepoLocalStartStep({
   nestedScanInProgress,
   nestedScanId,
   hostSelector,
+  groupSelector,
   showRemoteAction = true,
   canCreateProject = true,
   actionsDisabled = false,
@@ -173,6 +175,7 @@ export function AddRepoLocalStartStep({
         onKeyDown={handleArrowNavigation}
       >
         {hostSelector}
+        {groupSelector}
         <AddRepoPrimaryStartAction
           icon={primaryAction.icon}
           title={primaryAction.title}

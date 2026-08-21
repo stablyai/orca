@@ -14522,6 +14522,17 @@
       "sent": "El contexto de la sesión se envió a {{agent}} en una sesión nueva.",
       "deliveryFailed": "La nueva sesión de {{agent}} se inició, pero no se pudo enviar su contexto.",
       "launchFailed": "No se pudo iniciar una sesión nueva de {{agent}}."
+    },
+    "sidebar": {
+      "projectGroups": {
+        "newGroupLabel": "Nuevo grupo",
+        "createDialogTitle": "Nuevo grupo de proyectos",
+        "createDialogDescription": "Crea un grupo para organizar tus proyectos en la barra lateral."
+      },
+      "addRepo": {
+        "groupSelectorLabel": "Añadir al grupo (opcional)",
+        "groupSelectorNoGroup": "Sin grupo"
+      }
     }
   },
   "dashboardPopout": {

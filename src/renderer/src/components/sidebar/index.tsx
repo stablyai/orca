@@ -16,6 +16,8 @@ import { useWorkspaceBoardPanel } from './useWorkspaceBoardPanel'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
+import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
+import { translate } from '@/i18n/i18n'
 
 const WorktreeMetaDialog = lazyWithRetry(() => import('./WorktreeMetaDialog'))
 const RemoveFolderDialog = lazyWithRetry(() => import('./RemoveFolderDialog'))
@@ -56,6 +58,8 @@ function Sidebar({
     () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark),
     [settings, systemPrefersDark]
   ) as React.CSSProperties | undefined
+  const createProjectGroup = useAppStore((s) => s.createProjectGroup)
+  const [createGroupDialogOpen, setCreateGroupDialogOpen] = React.useState(false)
   const { nativeDropTarget, dropHandlers, affordance } = useSidebarProjectDrop()
   const {
     workspaceBoardOpen,
@@ -115,7 +119,10 @@ function Sidebar({
           <>
             {/* Fixed controls */}
             <SidebarNav />
-            <SidebarHeader onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen} />
+            <SidebarHeader
+              onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen}
+              onCreateGroup={() => setCreateGroupDialogOpen(true)}
+            />
 
             <WorktreeList
               scrollOffsetRef={worktreeScrollOffsetRef}
@@ -177,6 +184,20 @@ function Sidebar({
 
       {/* Dialogs render outside sidebar to avoid clipping. Lazy-load them only
       for the modal that needs their flow-specific hooks and UI. */}
+      <ProjectGroupNameDialog
+        open={createGroupDialogOpen}
+        title={translate('components.sidebar.projectGroups.createDialogTitle', 'New Project Group')}
+        description={translate(
+          'components.sidebar.projectGroups.createDialogDescription',
+          'Create a group to organize your projects in the sidebar.'
+        )}
+        initialName=""
+        confirmLabel="Create"
+        onOpenChange={setCreateGroupDialogOpen}
+        onSubmit={async (name) => {
+          await createProjectGroup(name)
+        }}
+      />
       <React.Suspense fallback={null}>
         {activeModal === 'edit-meta' ? <WorktreeMetaDialog /> : null}
         {activeModal === 'confirm-remove-folder' ? <RemoveFolderDialog /> : null}

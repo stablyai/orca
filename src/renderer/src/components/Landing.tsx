@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus, Star, X } from 'lucide-react'
+import {
+  AlertTriangle,
+  ExternalLink,
+  FolderPlus,
+  GitBranchPlus,
+  Layers,
+  Star,
+  X
+} from 'lucide-react'
 import { cn } from '../lib/utils'
 import { useAppStore } from '../store'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -16,6 +24,7 @@ import logo from '../../../../resources/logo.svg'
 import { translate } from '@/i18n/i18n'
 import { hasGitHubBackedProject, type PreflightIssue } from './landing-preflight-issues'
 import { useLandingPreflightRuntime } from './landing-preflight-runtime'
+import { ProjectGroupNameDialog } from './sidebar/ProjectGroupNameDialog'
 
 type ShortcutItem = {
   id: string
@@ -228,6 +237,8 @@ function PreflightBanner({
 export default function Landing(): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
   const openModal = useAppStore((s) => s.openModal)
+  const createProjectGroup = useAppStore((s) => s.createProjectGroup)
+  const [createGroupDialogOpen, setCreateGroupDialogOpen] = useState(false)
 
   const createTargetLabel =
     repos.length > 0 && repos.every((repo) => isGitRepoKind(repo)) ? 'Worktree' : 'Workspace'
@@ -282,9 +293,9 @@ export default function Landing(): React.JSX.Element {
               : translate('auto.components.Landing.cd21242762', 'Add a project to get started.')}
           </p>
 
-          <div className="flex items-center justify-center gap-2.5 flex-wrap">
+          <div className="flex items-center justify-center gap-2.5">
             <button
-              className="inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-4 py-2 rounded-md cursor-pointer hover:bg-accent transition-colors"
+              className="inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-3 py-1.5 rounded-md cursor-pointer hover:bg-accent transition-colors"
               onClick={() => openModal('add-repo')}
             >
               <FolderPlus className="size-3.5" />
@@ -292,14 +303,40 @@ export default function Landing(): React.JSX.Element {
             </button>
 
             <button
-              className="inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-4 py-2 rounded-md cursor-pointer hover:bg-accent transition-colors"
+              className="inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-3 py-1.5 rounded-md cursor-pointer hover:bg-accent transition-colors"
               onClick={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
             >
               <GitBranchPlus className="size-3.5" />
               {translate('auto.components.Landing.76a95f7f47', 'Create')}{' '}
               {createTargetLabel.toLowerCase()}
             </button>
+
+            <button
+              className="inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-3 py-1.5 rounded-md cursor-pointer hover:bg-accent transition-colors"
+              onClick={() => setCreateGroupDialogOpen(true)}
+            >
+              <Layers className="size-3.5" />
+              {translate('components.sidebar.projectGroups.newGroupLabel', 'New Group')}
+            </button>
           </div>
+
+          <ProjectGroupNameDialog
+            open={createGroupDialogOpen}
+            title={translate(
+              'components.sidebar.projectGroups.createDialogTitle',
+              'New Project Group'
+            )}
+            description={translate(
+              'components.sidebar.projectGroups.createDialogDescription',
+              'Create a group to organize your projects in the sidebar.'
+            )}
+            initialName=""
+            confirmLabel="Create"
+            onOpenChange={setCreateGroupDialogOpen}
+            onSubmit={async (name) => {
+              await createProjectGroup(name)
+            }}
+          />
 
           <div className="mt-6 w-full max-w-xs space-y-2">
             {shortcuts.map((shortcut) => (
