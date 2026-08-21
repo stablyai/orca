@@ -14642,6 +14642,8 @@
     },
     "settingsLabel": "에이전트 대시보드 설정",
     "settings": {
+      "defaultWorktreeView": "워크트리 뷰를 기본으로 열기",
+      "defaultWorktreeViewCopy": "대시보드를 열 때 상태 보드 대신 Agent Map을 표시합니다. 끄면 기존 기본값이 유지됩니다.",
       "showIdle": "유휴 에이전트 표시",
       "showIdleCopy": "완료를 보고하지 않은 채 30분 동안 조용한 에이전트를 포함합니다. 기본적으로 숨겨집니다."
     }

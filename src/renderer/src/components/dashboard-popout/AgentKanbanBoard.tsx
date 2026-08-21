@@ -8,6 +8,7 @@ import {
   type DashboardSnapshot,
   type DashboardSpawnAgentArgs
 } from '../../../../shared/dashboard-snapshot'
+import type { AgentDashboardView } from '../../../../shared/agent-dashboard-default-view'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { cn } from '@/lib/utils'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -25,7 +26,7 @@ import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 
-export type AgentDashboardView = 'map' | 'board'
+export type { AgentDashboardView }
 
 const AgentDashboardMapView = lazyWithRetry(
   () =>

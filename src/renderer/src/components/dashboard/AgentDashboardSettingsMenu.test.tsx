@@ -4,22 +4,21 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const updateSettings = vi.fn()
+const settings = {
+  experimentalAgentDashboardMode: 'in-window' as const,
+  experimentalAgentDashboardShowIdle: false,
+  experimentalAgentDashboardDefaultWorktreeView: false
+}
 
 vi.mock('@/store', () => ({
   useAppStore: (
     selector: (state: {
-      settings: {
-        experimentalAgentDashboardMode: 'in-window'
-        experimentalAgentDashboardShowIdle: boolean
-      }
+      settings: typeof settings
       updateSettings: typeof updateSettings
     }) => unknown
   ) =>
     selector({
-      settings: {
-        experimentalAgentDashboardMode: 'in-window',
-        experimentalAgentDashboardShowIdle: false
-      },
+      settings,
       updateSettings
     })
 }))
@@ -67,5 +66,25 @@ describe('AgentDashboardSettingsMenu', () => {
     act(() => toggle?.click())
 
     expect(updateSettings).toHaveBeenCalledWith({ experimentalAgentDashboardShowIdle: true })
+  })
+
+  it('owns the default worktree-view setting', () => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    act(() => {
+      root?.render(<AgentDashboardSettingsMenu onSwitchToPopout={vi.fn()} onOpenChange={vi.fn()} />)
+    })
+
+    const toggle = container.querySelector<HTMLButtonElement>(
+      'button[role="switch"][aria-label="Open in Worktree View by default"]'
+    )
+    expect(toggle).not.toBeNull()
+
+    act(() => toggle?.click())
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      experimentalAgentDashboardDefaultWorktreeView: true
+    })
   })
 })

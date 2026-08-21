@@ -85,6 +85,16 @@ describe('AgentDashboardDrawer', () => {
     expect(useAppStore.getState().agentDashboardDrawerOpen).toBe(false)
   })
 
+  it('opens the worktree map when that persisted default is on', () => {
+    useAppStore.setState({
+      settings: { experimentalAgentDashboardDefaultWorktreeView: true } as never
+    })
+    render(<AgentDashboardDrawer statusBarVisible />)
+
+    act(() => useAppStore.setState({ agentDashboardDrawerOpen: true }))
+    expect(mocks.boardProps?.initialView).toBe('map')
+  })
+
   it('hands map rendering to the dedicated popout', () => {
     const openPopout = vi.mocked(window.api.dashboard.openPopout)
     render(<AgentDashboardDrawer statusBarVisible />)

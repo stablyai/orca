@@ -14613,6 +14613,8 @@
     },
     "settingsLabel": "Agent ダッシュボード設定",
     "settings": {
+      "defaultWorktreeView": "デフォルトで Worktree View を開く",
+      "defaultWorktreeViewCopy": "ダッシュボード起動時にステータスボードではなく Agent Map を表示します。オフのときは従来の既定値のままです。",
       "showIdle": "アイドル状態の Agent を表示",
       "showIdleCopy": "完了を報告せずに30分間停止している Agent を含めます。デフォルトでは非表示です。"
     }

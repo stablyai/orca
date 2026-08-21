@@ -416,6 +416,8 @@ export type GlobalSettings = {
   experimentalAgentDashboardMode?: AgentDashboardMode
   /** Includes stale quiet agents as a fourth Agent Dashboard column. */
   experimentalAgentDashboardShowIdle?: boolean
+  /** Opens the Agent Dashboard on the worktree map. Unset/false keeps the status board. */
+  experimentalAgentDashboardDefaultWorktreeView?: boolean
   /** One-shot migration guard for defaulting the Agents view off; later explicit opt-ins persist normally. */
   experimentalActivityDefaultedOffForAllUsers?: boolean
   /** Experimental: persistent terminal-pane attention ring for bell + agent-completion events. Opt-in while tuning signal/noise. */

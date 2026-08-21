@@ -173,6 +173,7 @@ describe('ExperimentalPane', () => {
     )
 
     expect(markup).not.toContain('Show idle agents')
+    expect(markup).not.toContain('Open in Worktree View by default')
   })
 
   it('renders Cloud VM as an off-by-default experimental subsection', () => {

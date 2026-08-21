@@ -143,8 +143,12 @@ import {
 
 type FakeWindow = InstanceType<typeof BrowserWindowMock>
 
-function makeStore(ui: Record<string, unknown> = {}): {
+function makeStore(
+  ui: Record<string, unknown> = {},
+  settings: Record<string, unknown> = {}
+): {
   getUI: () => Record<string, unknown>
+  getSettings: () => Record<string, unknown>
   updateUI: ReturnType<typeof vi.fn>
   onUIChanged: ReturnType<typeof vi.fn>
   emitUIChanged: (next: Record<string, unknown>) => void
@@ -154,6 +158,7 @@ function makeStore(ui: Record<string, unknown> = {}): {
   const uiChangeUnsubscribe = vi.fn()
   return {
     getUI: () => ui,
+    getSettings: () => settings,
     updateUI: vi.fn(),
     onUIChanged: vi.fn((listener: (next: Record<string, unknown>) => void) => {
       listeners.push(listener)
@@ -233,6 +238,23 @@ describe('createOrFocusDashboardPopout', () => {
 
   it('opens on the current dashboard view by default', () => {
     createOrFocusDashboardPopout(makeStore() as never)
+
+    expect(instances[0].loadFile.mock.calls[0][1]).toEqual({ search: 'view=board' })
+  })
+
+  it('opens the worktree map when that persisted default is on', () => {
+    createOrFocusDashboardPopout(
+      makeStore({}, { experimentalAgentDashboardDefaultWorktreeView: true }) as never
+    )
+
+    expect(instances[0].loadFile.mock.calls[0][1]).toEqual({ search: 'view=map' })
+  })
+
+  it('keeps an explicit popout view over the persisted worktree-view default', () => {
+    createOrFocusDashboardPopout(
+      makeStore({}, { experimentalAgentDashboardDefaultWorktreeView: true }) as never,
+      'board'
+    )
 
     expect(instances[0].loadFile.mock.calls[0][1]).toEqual({ search: 'view=board' })
   })

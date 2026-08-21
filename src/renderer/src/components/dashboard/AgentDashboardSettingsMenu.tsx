@@ -30,6 +30,9 @@ export function AgentDashboardSettingsMenu({
 }: AgentDashboardSettingsMenuProps): React.JSX.Element {
   const mode = useAppStore((s) => s.settings?.experimentalAgentDashboardMode ?? 'in-window')
   const showIdle = useAppStore((s) => s.settings?.experimentalAgentDashboardShowIdle === true)
+  const defaultWorktreeView = useAppStore(
+    (s) => s.settings?.experimentalAgentDashboardDefaultWorktreeView === true
+  )
   const updateSettings = useAppStore((s) => s.updateSettings)
 
   const handleModeChange = (next: AgentDashboardMode): void => {
@@ -104,6 +107,35 @@ export function AgentDashboardSettingsMenu({
                 )
               }
             ]}
+          />
+        </div>
+        <DropdownMenuSeparator />
+        <div className="flex items-start justify-between gap-3 rounded-md px-1.5 py-1.5">
+          <span className="min-w-0 space-y-0.5">
+            <span className="block text-[12px] font-medium leading-4 text-foreground">
+              {translate(
+                'dashboardPopout.settings.defaultWorktreeView',
+                'Open in Worktree View by default'
+              )}
+            </span>
+            <span className="block text-[11px] leading-4 text-muted-foreground">
+              {translate(
+                'dashboardPopout.settings.defaultWorktreeViewCopy',
+                'Open Agent Map when the dashboard starts. The status board stays the default when this is off.'
+              )}
+            </span>
+          </span>
+          <SettingsSwitch
+            checked={defaultWorktreeView}
+            onChange={() => {
+              void updateSettings({
+                experimentalAgentDashboardDefaultWorktreeView: !defaultWorktreeView
+              })
+            }}
+            ariaLabel={translate(
+              'dashboardPopout.settings.defaultWorktreeView',
+              'Open in Worktree View by default'
+            )}
           />
         </div>
         <DropdownMenuSeparator />

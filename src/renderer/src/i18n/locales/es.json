@@ -14613,6 +14613,8 @@
     },
     "settingsLabel": "Configuración del Panel de agentes",
     "settings": {
+      "defaultWorktreeView": "Abrir en vista de worktree de forma predeterminada",
+      "defaultWorktreeViewCopy": "Muestra el mapa de agentes al abrir el panel. Si está desactivado, se mantiene el tablero de estado.",
       "showIdle": "Mostrar agentes inactivos",
       "showIdleCopy": "Incluye agentes que han permanecido inactivos durante 30 minutos sin informar que finalizaron. Ocultos de forma predeterminada."
     }

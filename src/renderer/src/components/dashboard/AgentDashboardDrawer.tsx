@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { resolveAgentDashboardInitialView } from '../../../../shared/agent-dashboard-default-view'
 import { AgentKanbanBoard } from '../dashboard-popout/AgentKanbanBoard'
 import type { AgentRevealArgs } from '../dashboard-popout/AgentTerminalDialog'
 import {
@@ -40,6 +41,10 @@ function AgentDashboardDrawerBody({
   onMenuOpenChange: (open: boolean) => void
 }): React.JSX.Element {
   const snapshot = useLiveDashboardSnapshot()
+  const defaultWorktreeView = useAppStore(
+    (s) => s.settings?.experimentalAgentDashboardDefaultWorktreeView === true
+  )
+  const initialView = resolveAgentDashboardInitialView({ defaultWorktreeView })
 
   // In-window ack/reveal act on the local store directly — the pop-out's IPC
   // relay is gated to the pop-out renderer and would reject calls from here.
@@ -70,7 +75,7 @@ function AgentDashboardDrawerBody({
   return (
     <AgentKanbanBoard
       snapshot={snapshot}
-      initialView="board"
+      initialView={initialView}
       // Why: bg-transparent lets the sheet's worktree-sidebar surface through
       // so the board reads as the same companion panel as the workspace board.
       containerClassName="h-full w-full bg-transparent"

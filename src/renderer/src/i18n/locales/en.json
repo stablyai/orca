@@ -16356,6 +16356,8 @@
     "total": "{{count}} total",
     "close": "Close dashboard",
     "settings": {
+      "defaultWorktreeView": "Open in Worktree View by default",
+      "defaultWorktreeViewCopy": "Open Agent Map when the dashboard starts. The status board stays the default when this is off.",
       "showIdle": "Show idle agents",
       "showIdleCopy": "Include agents that have gone quiet for 30 minutes without reporting completion. Hidden by default."
     },

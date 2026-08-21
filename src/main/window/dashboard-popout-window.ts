@@ -5,6 +5,7 @@ import type { Store } from '../persistence'
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
+import { resolveAgentDashboardInitialView } from '../../shared/agent-dashboard-default-view'
 import { stepUIZoomLevel, type UIZoomDirection } from '../../shared/ui-zoom-level'
 import { nativeZoomCommandMatchesKeybindings } from '../../shared/window-shortcut-policy'
 import {
@@ -18,7 +19,6 @@ const MIN_WIDTH = 480
 const MIN_HEIGHT = 360
 const DEFAULT_WIDTH = 960
 const DEFAULT_HEIGHT = 720
-const DEFAULT_VIEW = 'board'
 const DASHBOARD_POPOUT_PARTITION = 'orca-dashboard-popout'
 
 // Why: singleton — the dashboard is a companion surface, so a second "Pop Out"
@@ -152,7 +152,11 @@ export function createOrFocusDashboardPopout(
     return dashboardPopoutWindow
   }
 
-  const initialView = view ?? DEFAULT_VIEW
+  const initialView =
+    view ??
+    resolveAgentDashboardInitialView({
+      defaultWorktreeView: store?.getSettings().experimentalAgentDashboardDefaultWorktreeView
+    })
 
   const savedBounds = resolveRestoredBounds(store)
 

@@ -14633,6 +14633,8 @@
     },
     "settingsLabel": "智能体仪表盘设置",
     "settings": {
+      "defaultWorktreeView": "默认在工作树视图中打开",
+      "defaultWorktreeViewCopy": "打开仪表盘时显示 Agent Map。关闭后仍使用原来的状态看板。",
       "showIdle": "显示空闲智能体",
       "showIdleCopy": "包括已安静 30 分钟且未报告完成的智能体。默认隐藏。"
     }
