@@ -1,6 +1,6 @@
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
-import { getRequiredStringFlag } from '../flags'
+import { getRequiredStringFlag, getRequiredStringFlagAllowingEmpty } from '../flags'
 import { getBrowserCommandTarget } from '../selectors'
 
 export const BROWSER_STORAGE_HANDLERS: Record<string, CommandHandler> = {
@@ -12,7 +12,9 @@ export const BROWSER_STORAGE_HANDLERS: Record<string, CommandHandler> = {
   },
   'storage local set': async ({ flags, client, cwd, json }) => {
     const key = getRequiredStringFlag(flags, 'key')
-    const value = getRequiredStringFlag(flags, 'value')
+    // Why: the server's StorageKeyValue schema accepts any string value (empty included),
+    // so `--value ""` must reach it — setItem(key, '') differs from leaving the key unset.
+    const value = getRequiredStringFlagAllowingEmpty(flags, 'value')
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<unknown>('browser.storage.local.set', {
       key,
@@ -34,7 +36,9 @@ export const BROWSER_STORAGE_HANDLERS: Record<string, CommandHandler> = {
   },
   'storage session set': async ({ flags, client, cwd, json }) => {
     const key = getRequiredStringFlag(flags, 'key')
-    const value = getRequiredStringFlag(flags, 'value')
+    // Why: mirrors the local-storage set — the server accepts an empty value, so `--value ""`
+    // must pass through instead of being rejected as missing.
+    const value = getRequiredStringFlagAllowingEmpty(flags, 'value')
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<unknown>('browser.storage.session.set', {
       key,
