@@ -2939,20 +2939,28 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
     }
   }, [])
 
-  const handleBaseBranchChange = useCallback((next: string | undefined): void => {
-    smartGitHubPrStartPointSelectionRef.current = null
-    setBaseBranch(next)
-    setCompareBaseRef(undefined)
-    setPushTarget(undefined)
-    setBranchNameOverride(undefined)
-    // Why (#5181): Start-from means "new branch from this base", so it never reuses — clear reuse state from a prior smart-field branch pick.
-    setBranchNameOverridePreservesNameEdits(false)
-    setReuseEligibleBranch(null)
-    setReuseSelectedBranch(false)
-    setForkPushWarning(null)
-    branchAutoNameRef.current = ''
-    setStartFromResetHint(null)
-  }, [])
+  const handleBaseBranchChange = useCallback(
+    (next: string | undefined): void => {
+      smartGitHubPrStartPointSelectionRef.current = null
+      setBaseBranch(next)
+      setCompareBaseRef(undefined)
+      setPushTarget(undefined)
+      // Why: a linked task's branch name (e.g. Linear's canonical branch) is
+      // independent of the base it's cut from — a base pick here must not
+      // wipe it, unlike a bare "Start-from" branch pick.
+      if (!linkedWorkItem) {
+        setBranchNameOverride(undefined)
+        // Why (#5181): Start-from means "new branch from this base", so it never reuses — clear reuse state from a prior smart-field branch pick.
+        setBranchNameOverridePreservesNameEdits(false)
+        setReuseEligibleBranch(null)
+        setReuseSelectedBranch(false)
+        branchAutoNameRef.current = ''
+      }
+      setForkPushWarning(null)
+      setStartFromResetHint(null)
+    },
+    [linkedWorkItem]
+  )
 
   const handleBaseBranchPrSelect = useCallback(
     (

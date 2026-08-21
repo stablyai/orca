@@ -6,7 +6,7 @@ import type { AutomationWorkspaceMode } from '../../../../shared/automations-typ
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS, Field } from './automation-page-parts'
-import { CreateFromPicker } from './CreateFromPicker'
+import { BranchFromPicker } from '@/components/new-workspace/BranchFromPicker'
 import { WorkspaceCombobox } from './WorkspaceCombobox'
 import type { AutomationDraft } from './AutomationEditorDialog'
 
@@ -107,7 +107,7 @@ export function AutomationWorkspaceField({
               }
             />
           ) : (
-            <CreateFromPicker
+            <BranchFromPicker
               // Why: branch search state belongs to the selected project,
               // so repo switches should reset it before the next paint.
               key={draft.projectId}
