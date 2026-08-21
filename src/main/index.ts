@@ -2907,7 +2907,13 @@ void app.whenReady().then(async () => {
       worktreeId: enriched.worktreeId ?? null,
       paneKey: enriched.paneKey,
       state: enriched.payload.state,
-      receivedAt: enriched.receivedAt
+      receivedAt: enriched.receivedAt,
+      ...(enriched.providerSession?.id
+        ? { sessionId: enriched.providerSession.id }
+        : {}),
+      ...(enriched.providerSession?.transcriptPath
+        ? { transcriptPath: enriched.providerSession.transcriptPath }
+        : {})
     })
   })
   runtimeService.onWorktreeLifecycle((event) => {
