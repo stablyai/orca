@@ -142,10 +142,7 @@ async function main() {
   const loginProbe = buildWslLoginShellCommand(
     `printf '\\n__ORCA_PATH__%s\\n__ORCA_GIT__%s\\n__ORCA_HOME__%s\\n' "$PATH" "$(command -v git)" "$HOME"`
   )
-  const probe = await run(
-    'wsl.exe',
-    wslArgs(distro, ['/bin/sh', '-lc', loginProbe])
-  )
+  const probe = await run('wsl.exe', wslArgs(distro, ['/bin/sh', '-lc', loginProbe]))
   const probeText = probe.stdout.toString('utf8')
   const loginPath = /__ORCA_PATH__(.*)/.exec(probeText)?.[1]?.trim()
   const gitPath = /__ORCA_GIT__(.*)/.exec(probeText)?.[1]?.trim()
@@ -167,10 +164,7 @@ async function main() {
       ].join(' ')
       const delay = options.loginDelayMs > 0 ? `sleep ${options.loginDelayMs / 1_000}; ` : ''
       const script = `${delay}${buildWslLoginShellCommand(command)}`
-      result = await run(
-        'wsl.exe',
-        wslArgs(distro, ['/bin/sh', '-lc', script])
-      )
+      result = await run('wsl.exe', wslArgs(distro, ['/bin/sh', '-lc', script]))
       const markerOffset = result.stdout.indexOf(outputMarker)
       if (markerOffset === -1) {
         throw new Error('Login shell did not emit the Git output marker')

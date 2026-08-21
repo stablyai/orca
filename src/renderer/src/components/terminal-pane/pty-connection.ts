@@ -3102,6 +3102,16 @@ export function connectPanePty(
     // Why: Command Code has no prompt-start hook. Seed the visible working row
     // once the PTY exists, then let real hook events refine or complete it.
     bindActivePanePty(ptyId, { seedInitialAgentStatus: true })
+    // Spend the queued command only after this pane has a bound PTY. Retired panes never reach
+    // this point, and the pending entry keeps the worktree from being force-parked during spawn.
+    // This marks spawn, not delivery: Windows may run argv-embedded commands earlier, while POSIX
+    // delivery can still be waiting for shell-ready.
+    try {
+      deps.onQueuedStartupSpawned?.()
+    } catch {
+      // Why swallowed: this callback runs inside the connect promise, so a throw would reject the
+      // spawn and strand the pane with no pty at all — a far worse failure than a stale entry.
+    }
   }
   const onPtyRebind = (ptyId: string, replacedPtyId: string): void => {
     if (!canAdoptCapturedDirectSshRetryPty(ptyId)) {
