@@ -18,8 +18,8 @@ vi.mock('./local-builds/local-build-switch', () => moduleFactories.localBuildSwi
 vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
 
 describe('updater', () => {
-  beforeEach(() => {
-    resetUpdaterMocks()
+  beforeEach(async () => {
+    await resetUpdaterMocks()
   })
 
   it('retries a prerelease check once against the previous feed tag when the manifest is missing', async () => {

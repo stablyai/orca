@@ -24,8 +24,8 @@ vi.mock('./local-builds/local-build-switch', () => moduleFactories.localBuildSwi
 vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
 
 describe('updater', () => {
-  beforeEach(() => {
-    resetUpdaterMocks()
+  beforeEach(async () => {
+    await resetUpdaterMocks()
   })
 
   it('ignores stale updater events while a new check is still in feed preflight', async () => {

@@ -168,8 +168,8 @@ function probeRevalidation(): RevalidationProbe {
 }
 
 describe('updater', () => {
-  beforeEach(() => {
-    resetUpdaterMocks()
+  beforeEach(async () => {
+    await resetUpdaterMocks()
   })
 
   describe('linux root package install recovery', () => {

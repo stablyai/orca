@@ -131,6 +131,7 @@ let pendingCheckFailurePromise: Promise<void> | null = null
 let autoUpdateCheckTimer: ReturnType<typeof setTimeout> | null = null
 let nudgeCheckTimer: ReturnType<typeof setTimeout> | null = null
 let pendingQuitAndInstallTimer: ReturnType<typeof setTimeout> | null = null
+let pendingUserInitiatedCheckLaunchTimer: ReturnType<typeof setTimeout> | null = null
 let quitAndInstallInProgress = false
 // Why: the pre-install digest re-proof streams the whole package, so a second install request can
 // arrive while it runs — after the quit timer was cleared but before the handoff owns the process.
@@ -392,7 +393,8 @@ function getUpdateCheckVariant(options?: UpdateCheckOptions): UpdateCheckVariant
 
 function launchPendingUserInitiatedCheckAfterInFlight(variant: UpdateCheckVariant): void {
   pendingUserInitiatedCheckAfterInFlight = null
-  setTimeout(() => {
+  pendingUserInitiatedCheckLaunchTimer = setTimeout(() => {
+    pendingUserInitiatedCheckLaunchTimer = null
     // Why: defer one tick after electron-updater clears its in-flight promise so the queued modifier check starts fresh instead of deduping into the stable one.
     if (currentStatus.state === 'checking') {
       currentStatus = { state: 'idle' }
@@ -424,6 +426,25 @@ function clearUpdateCheckSilentSettleTimer(): void {
 function clearUpdateCheckTimers(): void {
   clearUpdateCheckStallTimer()
   clearUpdateCheckSilentSettleTimer()
+}
+
+/** Why: a torn-down main process must release the updater's background timers, or they outlive it. */
+export function disposeAutoUpdaterTimers(): void {
+  clearUpdateCheckTimers()
+  for (const timer of [
+    autoUpdateCheckTimer,
+    nudgeCheckTimer,
+    pendingQuitAndInstallTimer,
+    pendingUserInitiatedCheckLaunchTimer
+  ]) {
+    if (timer) {
+      clearTimeout(timer)
+    }
+  }
+  autoUpdateCheckTimer = null
+  nudgeCheckTimer = null
+  pendingQuitAndInstallTimer = null
+  pendingUserInitiatedCheckLaunchTimer = null
 }
 
 function finishActiveUpdateCheckAttempt(): void {

@@ -25,8 +25,8 @@ vi.mock('./local-builds/local-build-switch', () => moduleFactories.localBuildSwi
 vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
 
 describe('updater', () => {
-  beforeEach(() => {
-    resetUpdaterMocks()
+  beforeEach(async () => {
+    await resetUpdaterMocks()
   })
 
   // Why: native github provider + allowPrerelease traps RC users on the RC channel, so resolve the newest tag ourselves and pin the generic feed to it.
