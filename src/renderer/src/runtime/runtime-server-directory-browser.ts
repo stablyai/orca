@@ -1,19 +1,22 @@
-import type { DirEntry } from '../../../shared/types'
+import type { DirEntry, FilesystemPathFlavor } from '../../../shared/filesystem-entry-types'
+import { sortDirEntries } from '../../../shared/file-name-sort'
 import { callRuntimeRpc } from './runtime-rpc-client'
 
 export type RuntimeServerDirectoryListing = {
   resolvedPath: string
   entries: DirEntry[]
+  pathFlavor: FilesystemPathFlavor
 }
 
 export async function browseRuntimeServerDirectory(
   environmentId: string,
   path: string
 ): Promise<RuntimeServerDirectoryListing> {
-  return callRuntimeRpc<RuntimeServerDirectoryListing>(
+  const listing = await callRuntimeRpc<RuntimeServerDirectoryListing>(
     { kind: 'environment', environmentId },
     'files.browseServerDir',
     { path },
     { timeoutMs: 15_000 }
   )
+  return { ...listing, entries: sortDirEntries(listing.entries) }
 }

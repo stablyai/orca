@@ -16,7 +16,9 @@ describe('git RPC methods', () => {
         entries: [],
         conflictOperation: 'unknown',
         branch: 'main',
-        head: 'abc'
+        head: 'abc',
+        didHitLimit: true,
+        statusLength: 1_001
       })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
@@ -26,7 +28,7 @@ describe('git RPC methods', () => {
     expect(runtime.getRuntimeGitStatus).toHaveBeenCalledWith('id:wt-1')
     expect(response).toMatchObject({
       ok: true,
-      result: { entries: [], branch: 'main' }
+      result: { entries: [], branch: 'main', didHitLimit: true, statusLength: 1_001 }
     })
   })
 
@@ -177,7 +179,14 @@ describe('git RPC methods', () => {
       })
     )
 
-    expect(runtime.getRuntimeGitDiff).toHaveBeenCalledWith('id:wt-1', 'src/index.ts', false, true)
+    // A local dispatch sets no clientKind, so the transport budget stays undefined.
+    expect(runtime.getRuntimeGitDiff).toHaveBeenCalledWith(
+      'id:wt-1',
+      'src/index.ts',
+      false,
+      true,
+      undefined
+    )
     expect(response).toMatchObject({
       ok: true,
       result: { kind: 'text', modifiedContent: 'hello' }
@@ -528,7 +537,6 @@ describe('git RPC methods', () => {
         worktree: 'id:wt-1',
         commitMessageAi,
         agentCmdOverrides,
-        enableGitHubAttribution: true,
         commitMessageDiscoveryHostKey: 'runtime:env-1'
       })
     )
@@ -536,7 +544,6 @@ describe('git RPC methods', () => {
     expect(runtime.generateRuntimeCommitMessage).toHaveBeenCalledWith('id:wt-1', {
       commitMessageAi,
       agentCmdOverrides,
-      enableGitHubAttribution: true,
       commitMessageDiscoveryHostKey: 'runtime:env-1'
     })
   })

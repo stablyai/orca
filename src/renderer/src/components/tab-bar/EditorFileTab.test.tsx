@@ -73,6 +73,12 @@ vi.mock('lucide-react', () => ({
   Columns2: function Columns2(props: Record<string, unknown>) {
     return { type: 'Columns2', props }
   },
+  CopyX: function CopyX(props: Record<string, unknown>) {
+    return { type: 'CopyX', props }
+  },
+  PanelLeftClose: function PanelLeftClose(props: Record<string, unknown>) {
+    return { type: 'PanelLeftClose', props }
+  },
   Copy: function Copy(props: Record<string, unknown>) {
     return { type: 'Copy', props }
   },
@@ -248,10 +254,14 @@ async function renderEditorFileTab(
     isActive: true,
     isPinned: false,
     hasTabsToRight: false,
+    hasTabsToLeft: false,
+    tabCount: 1,
     statusByRelativePath: new Map(),
     onActivate,
     onClose: () => {},
+    onCloseOthers: () => {},
     onCloseToRight: () => {},
+    onCloseToLeft: () => {},
     onCloseAll: () => {},
     onMakePermanent,
     onTogglePin: () => {},

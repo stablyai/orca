@@ -14,7 +14,7 @@ export const troubleshootCommonIssues: TroubleshootSection[] = [
     icon: <WifiOff size={16} color={colors.textSecondary} />,
     title: 'Different WiFi Networks',
     steps: [
-      'Both devices must be on the same local network (unless connected through Tailscale).',
+      'Both devices must be on the same LAN (unless connected through Tailscale).',
       'Ethernet and WiFi must share the same subnet.',
       'Try reconnecting WiFi on both devices.'
     ]

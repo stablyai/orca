@@ -17,6 +17,7 @@ const {
   getAzureDevOpsAuthStatusMock,
   getGiteaAuthStatusMock,
   detectCommandsInInstallDirsMock,
+  mergePersistedWindowsPathAsyncMock,
   mergePersistedWindowsPathMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -29,6 +30,7 @@ const {
   getAzureDevOpsAuthStatusMock: vi.fn(),
   getGiteaAuthStatusMock: vi.fn(),
   detectCommandsInInstallDirsMock: vi.fn(),
+  mergePersistedWindowsPathAsyncMock: vi.fn(),
   mergePersistedWindowsPathMock: vi.fn()
 }))
 
@@ -60,6 +62,7 @@ vi.mock('./local-agent-install-dir-detection', () => ({
 
 // Win32 preflight env merge reads persisted registry PATH; stub it out.
 vi.mock('../pty/windows-environment-path', () => ({
+  mergePersistedWindowsPathAsync: mergePersistedWindowsPathAsyncMock,
   mergePersistedWindowsPath: mergePersistedWindowsPathMock
 }))
 

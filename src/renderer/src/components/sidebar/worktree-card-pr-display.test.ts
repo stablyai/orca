@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { PRInfo } from '../../../../shared/types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import {
   getWorktreeCardPrDisplay,
   isCachedMergedBranchPRCurrentForWorktree
@@ -68,6 +68,42 @@ describe('getWorktreeCardPrDisplay', () => {
     expect(
       getWorktreeCardPrDisplay(pr, null, null, null, null, null, {
         reviewHintKey: 'github:123'
+      })
+    ).toBeNull()
+  })
+
+  it('keeps an unlinked GitHub PR visible when branch provenance names the same PR', () => {
+    expect(
+      getWorktreeCardPrDisplay(pr, null, null, null, null, null, {
+        reviewHintKey: 'github:123',
+        branchLookupGitHubPRNumber: 123
+      })
+    ).toBe(pr)
+  })
+
+  it('still suppresses unlinked linked-lookup details when branch provenance names a different PR', () => {
+    expect(
+      getWorktreeCardPrDisplay(pr, null, null, null, null, null, {
+        reviewHintKey: 'github:123',
+        branchLookupGitHubPRNumber: 999
+      })
+    ).toBeNull()
+  })
+
+  it('does not let a GitHub branch PR number corroborate an unlinked GitLab MR', () => {
+    expect(
+      getWorktreeCardPrDisplay(gitLabReview, null, null, null, null, null, {
+        reviewHintKey: 'gitlab:321',
+        branchLookupGitHubPRNumber: 321
+      })
+    ).toBeNull()
+  })
+
+  it('does not let branch provenance override linked non-GitHub review metadata', () => {
+    expect(
+      getWorktreeCardPrDisplay(pr, null, 321, null, null, null, {
+        reviewHintKey: 'gitlab:321',
+        branchLookupGitHubPRNumber: 123
       })
     ).toBeNull()
   })

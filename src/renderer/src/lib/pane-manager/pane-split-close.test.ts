@@ -146,7 +146,7 @@ describe('splitManagedPane', () => {
       panes,
       root: root as unknown as HTMLElement,
       styleOptions: {},
-      managerOptions: {},
+      managerOptions: { linkOpenHint: () => '' },
       createPaneInternal: () => {
         panes.set(newPane.id, newPane)
         return newPane

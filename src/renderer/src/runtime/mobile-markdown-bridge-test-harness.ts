@@ -60,8 +60,18 @@ export function resetEditorState(): void {
   useAppStore.setState({
     openFiles: [],
     editorDrafts: {},
-    worktreesByRepo: { repo: [{ id: 'wt-1', repoId: 'repo', path: '/repo', branch: 'main' }] },
-    repos: [{ id: 'repo', path: '/repo', displayName: 'repo', kind: 'git' }]
+    worktreesByRepo: {
+      repo: [{ id: 'wt-1', repoId: 'repo', path: '/repo', branch: 'main', hostId: 'local' }]
+    },
+    repos: [
+      {
+        id: 'repo',
+        path: '/repo',
+        displayName: 'repo',
+        kind: 'git',
+        executionHostId: 'local'
+      }
+    ]
   } as never)
 }
 

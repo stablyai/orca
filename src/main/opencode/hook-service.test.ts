@@ -32,10 +32,23 @@ describe('OpenCode hook plugin source', () => {
     const source = _internals.getOpenCodePluginSource()
 
     expect(source).toContain('async function isChildSession(client, sessionID)')
-    expect(source).toContain('const sessions = await client.session.list();')
-    expect(source).toContain('const isChild = !!session?.parentID;')
-    expect(source).toContain('if (sessionID && (await isChildSession(client, sessionID))) {')
-    expect(source).toContain('return true;')
+    expect(source).toContain('walkSessionParents(client, sessionID, controller.signal)')
+    expect(source).toContain('currentSessionID = session.parentID;')
+    expect(source).toContain('rememberSessionRoot(id, currentSessionID)')
+    expect(source).toContain('{ path: { id: sessionID }, signal }')
+    expect(source).toContain('[{ sessionID }, { signal }]')
+    expect(source.indexOf('[{ sessionID }, { signal }]')).toBeLessThan(
+      source.indexOf('{ path: { id: sessionID }, signal }')
+    )
+    expect(source).toContain('return client.session.list({}, { signal });')
+    expect(source).toContain('return client.session.list({ signal });')
+    expect(source).toContain('return rootSessionID === null ? null : rootSessionID !== sessionID;')
+    expect(source).toContain(
+      'if (sessionID && (await isChildSession(client, sessionID)) !== false) {'
+    )
+    expect(source).toContain(
+      'if (sessionID && (await isChildSession(client, sessionID)) !== false) {\n      return;\n    }'
+    )
   })
 
   it('still accepts an optional opaque plugin context instead of destructuring', () => {
@@ -86,20 +99,27 @@ describe('OpenCode hook plugin source', () => {
     // Why: forward question.asked too (not just permission.asked), else the pane stays "working" while the agent idles on a human reply.
     const source = _internals.getOpenCodePluginSource()
 
-    expect(source).toContain('if (event.type === "question.asked")')
-    expect(source).toContain('await post("AskUserQuestion", event.properties || {});')
+    expect(source).toContain('event.type === "question.asked"')
+    expect(source).toContain(
+      'event.type === "permission.asked" ? "PermissionRequest" : "AskUserQuestion"'
+    )
+    expect(source).toContain('await setAttention(')
   })
 
   it('forwards sessionID on status and message posts for resume metadata', () => {
     const source = _internals.getOpenCodePluginSource()
 
     expect(source).toContain(
-      'await post("MessagePart", { role, text: capMessagePartText(part.text), messageID: part.messageID, sessionID });'
+      '{ role, text: capMessagePartText(part.text), messageID: part.messageID, sessionID },'
     )
     expect(source).toContain('messageID: pending.messageID,')
     expect(source).toContain('sessionID: pending.sessionID,')
-    expect(source).toContain('await setStatus("busy", { sessionID });')
-    expect(source.match(/await setStatus\("idle", \{ sessionID \}\);/g) ?? []).toHaveLength(2)
+    expect(source).toContain(
+      'await setStatus("busy", { sessionID: busyOwner.sessionID }, busyOwner.factoryID);'
+    )
+    expect(source).toContain(
+      'await setStatus("idle", { sessionID: preferredSessionID }, fallbackFactoryID);'
+    )
   })
 
   it('guards endpoint-file parse warnings with a process-lifetime latch', () => {

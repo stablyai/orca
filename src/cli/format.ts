@@ -2,7 +2,7 @@ import type { CliStatusResult } from '../shared/runtime-types'
 import { computerUseErrorRecoveryData } from '../shared/computer-use-error-recovery'
 import { prepareComputerCliJsonResult } from './computer-format'
 import type { RuntimeRpcFailure, RuntimeRpcSuccess } from './runtime-client'
-import { RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
+import { RuntimeClientError, RuntimeRpcFailureError } from './runtime/types'
 
 export {
   formatBrowserProfileList,
@@ -78,6 +78,9 @@ export function printResult<TResult>(
 export function formatCliError(error: unknown, context: CliErrorContext = {}): string {
   const message = error instanceof Error ? error.message : String(error)
   if (error instanceof RuntimeClientError && error.code === 'runtime_unavailable') {
+    if (hasOrchestrationRequestId(error.data)) {
+      return message
+    }
     return `${message}\nOrca is not running. Run 'orca open' first.`
   }
   // Why: error-specific recovery must win over the generic computer fallback.
@@ -103,6 +106,14 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
     return formatMessageWithNextSteps(message, nextStepsFromData(error.response.error.data))
   }
   return message
+}
+
+function hasOrchestrationRequestId(data: unknown): boolean {
+  return (
+    data !== null &&
+    typeof data === 'object' &&
+    typeof (data as { orchestrationRequestId?: unknown }).orchestrationRequestId === 'string'
+  )
 }
 
 export function reportCliError(error: unknown, json: boolean, context: CliErrorContext = {}): void {
@@ -164,8 +175,31 @@ function localCliErrorData(error: unknown, context: CliErrorContext): unknown {
   return undefined
 }
 
+export type HostListEntry = {
+  kind: 'local' | 'ssh' | 'environment'
+  name: string
+  id: string
+  selector: string
+}
+
+// Why: the selector column is the point of this command — the name alone is what callers already
+// had, and passing it on the wrong axis is the mistake this output exists to prevent.
+export function formatHostList(result: { hosts: HostListEntry[] }): string {
+  const kindLabel: Record<HostListEntry['kind'], string> = {
+    local: 'local',
+    ssh: 'ssh target',
+    environment: 'orca server'
+  }
+  return result.hosts
+    .map((host) => `${kindLabel[host.kind].padEnd(11)} ${host.name}  ->  ${host.selector}`)
+    .join('\n')
+}
+
 export function formatCliStatus(status: CliStatusResult): string {
   return [
+    ...(status.target && status.target.kind === 'environment'
+      ? [`target: environment ${status.target.environment}`]
+      : []),
     `appRunning: ${status.app.running}`,
     `pid: ${status.app.pid ?? 'none'}`,
     `desktopWindowStatus: ${status.app.desktopWindowStatus ?? 'unknown'}`,

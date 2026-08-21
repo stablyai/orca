@@ -1,5 +1,5 @@
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type {
+  AiVaultAgent,
   AiVaultScanIssue,
   AiVaultSession,
   AiVaultSessionPreviewMessage
@@ -10,6 +10,9 @@ export type AiVaultScanOptions = {
   claudeProjectsDir?: string
   codexSessionsDir?: string
   additionalCodexSessionsDirs?: readonly string[]
+  // Why: tests inject a sandbox "real ~/.codex" so real-home attribution
+  // (codexHome null → unprefixed resume) is testable without the user's home.
+  defaultCodexHomeDir?: string
   wslHomeDirs?: readonly string[]
   geminiSessionsDir?: string
   antigravityBrainDir?: string
@@ -27,16 +30,21 @@ export type AiVaultScanOptions = {
   openclawLegacyStateDir?: string
   piSessionsDir?: string
   ompSessionsDir?: string
+  primeAgentSessionsDir?: string
   droidSessionsDir?: string
   droidProjectsDir?: string
   kimiSessionsDir?: string
   limit?: number
+  unlimited?: boolean
   limitPerAgent?: number
   // Active workspace/project paths whose sessions must be included regardless of
   // the recency cap (see discoverInScopeClaudeFiles).
   scopePaths?: readonly string[]
   platform?: NodeJS.Platform
   executionHostId?: ExecutionHostId
+  // Superseded/cancelled scans stop between parse batches instead of parsing
+  // every remaining transcript for a caller that already left.
+  signal?: AbortSignal
 }
 
 export type FileWithMtime = {
@@ -45,8 +53,13 @@ export type FileWithMtime = {
   modifiedAt: string
   // Present when discovery statted the file; lets the parse cache detect
   // unchanged/truncated files without a second stat. Synthetic candidates
-  // (OpenCode SQLite rows, remote files) omit it.
+  // such as OpenCode SQLite rows omit it.
   sizeBytes?: number
+  // Present when discovery can prove filesystem identity. Codex dual-root
+  // scans use a multi-link inode to collapse only actual hardlink aliases.
+  dev?: number
+  ino?: number
+  nlink?: number
 }
 
 export type SessionFileCandidate = {
@@ -102,6 +115,11 @@ export type SessionAccumulator = {
   messageCount: number
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
+  // True once an older message fell out of the newest-N preview window, so the
+  // earliest preview turn is no longer the session's opening ask.
+  previewMessagesTruncated: boolean
+  firstUserPrompt: string | null
+  lastUserPrompt: string | null
   // Recoverable signal for a zero-turn transcript (see AiVaultSession).
   queuedMessageCount: number
   subagentTranscriptCount: number

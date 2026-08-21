@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../src/shared/types'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 
 // Why: mobile tests run from the mobile package only, so runtime imports of
 // desktop shared modules can break Vitest transforms in CI. Keep this list
@@ -13,8 +13,10 @@ export const MOBILE_TUI_AGENT_AUTO_PICK_ORDER = [
   'opencode',
   'mimo-code',
   'ante',
+  'trae',
   'pi',
   'omp',
+  'prime-agent',
   'gemini',
   'antigravity',
   'aider',
@@ -50,8 +52,10 @@ export const MOBILE_TUI_AGENT_LABELS: Record<TuiAgent, string> = {
   opencode: 'OpenCode',
   'mimo-code': 'MiMo Code',
   ante: 'Ante',
+  trae: 'Trae',
   pi: 'Pi',
   omp: 'OMP',
+  'prime-agent': 'Prime Agent',
   gemini: 'Gemini',
   antigravity: 'Antigravity',
   aider: 'Aider',
@@ -84,7 +88,9 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
   opencode: 'opencode.ai',
   'mimo-code': 'mimo.xiaomi.com',
   ante: 'antigma.ai',
+  trae: 'www.trae.cn',
   omp: 'omp.sh',
+  'prime-agent': 'primeintellect.ai',
   gemini: 'gemini.google.com',
   antigravity: 'antigravity.google',
   goose: 'goose-docs.ai',
@@ -107,44 +113,6 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
   hermes: 'nousresearch.com',
   devin: 'devin.ai',
   openclaw: 'openclaw.ai'
-}
-
-export const MOBILE_TUI_AGENT_LAUNCH_COMMANDS: Record<TuiAgent, string> = {
-  claude: 'claude',
-  'claude-agent-teams': 'orca claude-teams',
-  openclaude: 'openclaude',
-  codex: 'codex',
-  grok: 'grok',
-  copilot: 'copilot',
-  opencode: 'opencode',
-  'mimo-code': 'mimo',
-  ante: 'ante',
-  pi: 'pi',
-  omp: 'omp',
-  gemini: 'gemini',
-  antigravity: 'agy',
-  aider: 'aider',
-  goose: 'goose',
-  amp: 'amp',
-  kilo: 'kilo',
-  kiro: 'kiro-cli',
-  crush: 'crush',
-  aug: 'auggie',
-  autohand: 'autohand',
-  cline: 'cline',
-  codebuff: 'codebuff',
-  'command-code': 'command-code',
-  continue: 'continue',
-  cursor: 'cursor-agent',
-  droid: 'droid',
-  kimi: 'kimi',
-  'mistral-vibe': 'mistral-vibe',
-  // Why: QwenLM/qwen-code installs its CLI executable as `qwen`, not `qwen-code`.
-  'qwen-code': 'qwen',
-  rovo: 'rovo',
-  hermes: 'hermes',
-  devin: 'devin',
-  openclaw: 'openclaw'
 }
 
 export function isMobileTuiAgent(value: unknown): value is TuiAgent {

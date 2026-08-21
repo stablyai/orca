@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PRComment } from '../../../src/shared/types'
+import type { PRComment } from '../../../src/shared/github/comment-types'
 import {
   buildAddRootCommentParams,
   buildDeleteCommentParams,
@@ -134,13 +134,19 @@ describe('canEditComment / canDeleteComment', () => {
 
 describe('buildEditCommentParams / buildDeleteCommentParams', () => {
   it('build slug-addressed params', () => {
-    const slug = { owner: 'o', repo: 'r' }
+    const slug = { owner: 'o', repo: 'r', host: 'github.acme.test' }
     expect(buildEditCommentParams(slug, 42, 'new body')).toEqual({
       owner: 'o',
       repo: 'r',
+      host: 'github.acme.test',
       commentId: 42,
       body: 'new body'
     })
-    expect(buildDeleteCommentParams(slug, 42)).toEqual({ owner: 'o', repo: 'r', commentId: 42 })
+    expect(buildDeleteCommentParams(slug, 42)).toEqual({
+      owner: 'o',
+      repo: 'r',
+      host: 'github.acme.test',
+      commentId: 42
+    })
   })
 })

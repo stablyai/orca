@@ -1,11 +1,27 @@
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { getProjectIdentityKey } from '../../../shared/project-host-setup-projection'
-import type { Repo } from '../../../shared/types'
+import {
+  getProjectIdentityKey,
+  hasProjectRemoteIdentity,
+  isProjectRemoteIdentityPending
+} from '../../../shared/project-host-setup-projection'
+import { isGitRepoKind } from '../../../shared/repo-kind'
+import type { Repo } from '../../../shared/repo-types'
 
 export type TaskProjectPickerGroup = {
   projectKey: string
   repo: Repo
   sources: Repo[]
+}
+
+// Why: a repo whose identity probe has not answered (offline SSH host, cold
+// launch) is unknown, not ineligible — hiding it made non-GitHub repos vanish
+// with no explanation. Only a settled "no usable remote" is filtered out.
+export function getTaskEligibleRepos(repos: readonly Repo[]): Repo[] {
+  return repos.filter(
+    (repo) =>
+      isGitRepoKind(repo) &&
+      (hasProjectRemoteIdentity(repo) || isProjectRemoteIdentityPending(repo))
+  )
 }
 
 export function getDefaultTaskRepoSelection(repos: readonly Repo[]): Set<string> {

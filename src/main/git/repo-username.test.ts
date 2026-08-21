@@ -14,6 +14,7 @@ vi.mock('./runner', async () => {
 })
 
 import {
+  isBranchSafeHostedLogin,
   resolveLocalGitUsername,
   resolveLocalGitUsernameDetailed,
   resetGhLoginCacheForTests
@@ -21,10 +22,42 @@ import {
 
 function makeExecError(
   message: string,
-  extra: { code?: string; killed?: boolean; signal?: string; stderr?: string } = {}
+  extra: {
+    code?: string
+    killed?: boolean
+    signal?: string
+    stdout?: string
+    stderr?: string
+  } = {}
 ): Error {
   return Object.assign(new Error(message), { stdout: '', stderr: '', ...extra })
 }
+
+describe('isBranchSafeHostedLogin', () => {
+  it.each(['demo', 'demo-user', 'demo_user', 'demo.user', 'a', 'FOO.LOCK'])(
+    'accepts %s',
+    (login) => {
+      expect(isBranchSafeHostedLogin(login)).toBe(true)
+    }
+  )
+
+  it.each(['foo.', 'foo..bar', 'foo.lock', 'a.b.lock', '.foo', '-foo', 'foo bar'])(
+    'rejects the git check-ref-format-invalid %s',
+    (login) => {
+      expect(isBranchSafeHostedLogin(login)).toBe(false)
+    }
+  )
+
+  // Length is Orca's defensive bound, not a check-ref-format rule: a login is one
+  // branch component, so a loose ref stores it as a single 255-byte-max filename.
+  it('accepts long provider-agnostic logins up to the loose-ref filename cap', () => {
+    expect(isBranchSafeHostedLogin('a'.repeat(255))).toBe(true)
+  })
+
+  it('rejects logins past the loose-ref filename cap', () => {
+    expect(isBranchSafeHostedLogin('a'.repeat(256))).toBe(false)
+  })
+})
 
 describe('resolveLocalGitUsername', () => {
   let gitConfig: Record<string, string>
@@ -98,6 +131,15 @@ describe('resolveLocalGitUsername', () => {
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
+  it('falls through config values git rejects as branch components', async () => {
+    originRemoteUrl = 'https://github.com/stablyai/orca.git'
+    gitConfig['github.user'] = 'foo.lock'
+    gitConfig['user.username'] = 'foo..bar'
+    ghExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'gh-demo\n', stderr: '' })
+
+    await expect(resolveLocalGitUsername('/repo')).resolves.toBe('gh-demo')
+  })
+
   it('uses GitHub CLI login for GitHub remotes instead of repo-local author identity', async () => {
     originRemoteUrl = 'https://github.com/stablyai/orca.git'
     gitConfig['user.email'] = 'demo@example.com'
@@ -158,6 +200,19 @@ describe('resolveLocalGitUsername', () => {
     for (const [, options] of ghExecFileAsyncMock.mock.calls) {
       expect(options).toMatchObject({ timeout: 2500 })
     }
+  })
+
+  it('ignores rate-limit JSON bodies from gh api user so they never become branch prefixes', async () => {
+    originRemoteUrl = 'https://github.com/stablyai/orca.git'
+    const rateLimitJson = JSON.stringify({
+      message: 'API rate limit exceeded for user ID 6427696',
+      status: '403'
+    })
+    ghExecFileAsyncMock
+      .mockRejectedValueOnce(makeExecError('gh api failed', { stdout: rateLimitJson }))
+      .mockRejectedValueOnce(makeExecError('gh auth status failed'))
+
+    await expect(resolveLocalGitUsername('/repo')).resolves.toBe('')
   })
 
   it('skips auth status fallback when GitHub CLI API lookup times out', async () => {

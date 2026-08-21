@@ -1,16 +1,20 @@
 import { memo, useState } from 'react'
 import { Image, Linking, Pressable, Text, View } from 'react-native'
 import { Check, CornerDownRight, ExternalLink, Pencil, Trash2, Undo2 } from 'lucide-react-native'
-import type { GitHubReaction, GitHubReactionContent, PRComment } from '../../../../src/shared/types'
+import type {
+  GitHubReaction,
+  GitHubReactionContent,
+  PRComment
+} from '../../../../src/shared/github/comment-types'
 import { colors } from '../../theme/mobile-theme'
 import { canEditComment, isResolvableComment } from '../../session/pr-comment-actions'
 import { ConfirmModal } from '../ConfirmModal'
 import { CommentMarkdown } from './CommentMarkdown'
 import { PRCommentComposer } from './PRCommentComposer'
-import { formatPrCommentRelativeTime } from './pr-comment-time'
+import { formatPrCommentRelativeTime } from '../../../../src/shared/pr-comment-time'
 import { prCommentsStyles as styles } from './pr-comments-styles'
 
-export type PRCommentRepoSlug = { owner: string; repo: string }
+export type PRCommentRepoSlug = { owner: string; repo: string; host?: string }
 
 // Action handlers are passed from the comment actions hook (stable callbacks), so
 // adding them keeps the memo'd card from re-rendering on unrelated timeline changes.

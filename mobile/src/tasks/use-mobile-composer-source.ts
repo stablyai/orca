@@ -1,10 +1,8 @@
-import { useCallback, useRef, useState } from 'react'
-import type {
-  ClickUpTask,
-  GitHubWorkItem,
-  GitLabWorkItem,
-  LinearIssue
-} from '../../../src/shared/types'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import type { ClickUpTask } from '../../../src/shared/clickup-types'
+import type { GitHubWorkItem } from '../../../src/shared/github/work-item-types'
+import type { GitLabWorkItem } from '../../../src/shared/gitlab-types'
+import type { LinearIssue } from '../../../src/shared/linear/issue-types'
 import { resolveComposerManualBranchNameChange } from '../../../src/shared/composer-branch-selection'
 import { resolveGitHubWorkItemIdentity } from '../../../src/shared/new-workspace/github-work-item-identity'
 import { getForkPushWarning } from '../../../src/shared/new-workspace/fork-push-warning'

@@ -80,7 +80,7 @@ function openUrlAt(
   openUrlMock.mockReset()
   const opened = openHttpLinkAtBufferPosition(buffer, { x, y }, cols, {
     worktreeId: 'wt-repro-8832',
-    forceSystemBrowser: true
+    modifierHeld: true
   })
   return { opened, url: openUrlMock.mock.calls[0]?.[0] as string | undefined }
 }

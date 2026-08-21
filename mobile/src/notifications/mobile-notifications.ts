@@ -1,228 +1,37 @@
-import * as Notifications from 'expo-notifications'
-import { Platform } from 'react-native'
 import type { RpcClient } from '../transport/rpc-client'
-import { loadPushNotificationsEnabled } from '../storage/preferences'
-import { buildLocalNotificationData, type DesktopNotificationSource } from './notification-routing'
+// Re-exported so the existing importers (and their vi.mock paths) keep working.
+export {
+  ensureNotificationPermissions,
+  getNotificationPermissionState,
+  type NotificationPermissionState
+} from './notification-permissions'
+export { setScheduledNotificationsMaxForTests } from './local-notification-scheduling'
 import {
-  createSeenNotificationGuard,
-  loadLastSeenSeq,
-  saveLastSeenSeq,
-  seenKeyForEvent
+  configureNotificationChannel,
+  dismissLocalNotification,
+  showLocalNotification,
+  type DismissNotificationEvent,
+  type NotificationEvent
+} from './local-notification-scheduling'
+import {
+  adoptNotificationEpoch,
+  catchUpWatermarkSeq,
+  enqueueHostDelivery,
+  getHostNotificationSession,
+  quarantineCatchUpWatermark,
+  releaseQueuedShowNotificationId,
+  resolveCatchUpQuarantine,
+  saveWatermark,
+  seedWatermarkFromStorage,
+  seenKeyForEvent,
+  shouldQueueShowForNotificationId
 } from './notification-reconnect-catchup'
-
-type NotificationEvent = {
-  type: 'notification'
-  source: DesktopNotificationSource
-  title: string
-  body: string
-  worktreeId?: string
-  notificationId?: string
-  // Desktop-assigned seq for reconnect catch-up (#8129); optional since older runtimes may omit it.
-  notificationSeq?: number
-}
-
-type DismissNotificationEvent = {
-  type: 'dismiss'
-  notificationId: string
-  notificationSeq?: number
-}
 
 type SubscribeResult = {
   type: 'ready'
   subscriptionId: string
-}
-
-type ScheduledNotificationState = {
-  identifier?: string
-  pending?: Promise<string | null>
-  dismissAfterSchedule?: boolean
-}
-
-const scheduledNotificationsByHostAndNotificationId = new Map<string, ScheduledNotificationState>()
-
-// Why: keys never repeat and are only freed on desktop dismiss (which remote users often miss), so bound the map to stop unbounded growth.
-const MAX_SCHEDULED_NOTIFICATIONS = 256
-let maxScheduledNotifications = MAX_SCHEDULED_NOTIFICATIONS
-
-function getStoredNotificationKey(hostId: string, notificationId: string): string {
-  return `${encodeURIComponent(hostId)}:${encodeURIComponent(notificationId)}`
-}
-
-// Evict oldest settled entries (never mid-schedule); Map iteration is insertion order so the first match is oldest.
-function boundScheduledNotifications(): void {
-  while (scheduledNotificationsByHostAndNotificationId.size > maxScheduledNotifications) {
-    let evicted = false
-    for (const [key, state] of scheduledNotificationsByHostAndNotificationId) {
-      if (!state.pending) {
-        scheduledNotificationsByHostAndNotificationId.delete(key)
-        evicted = true
-        break
-      }
-    }
-    if (!evicted) {
-      break
-    }
-  }
-}
-
-/** Test-only: override the cap (pass no arg to restore the default). */
-export function setScheduledNotificationsMaxForTests(max?: number): void {
-  maxScheduledNotifications = max ?? MAX_SCHEDULED_NOTIFICATIONS
-}
-
-export type NotificationPermissionState = {
-  granted: boolean
-  status: string
-  canAskAgain: boolean
-  authorizationReflectsUserChoice: boolean
-}
-
-export async function getNotificationPermissionState(): Promise<NotificationPermissionState> {
-  const { status, canAskAgain } = await Notifications.getPermissionsAsync()
-  return {
-    granted: status === 'granted',
-    status,
-    canAskAgain,
-    // Why: Android <33 has no runtime notification permission, so "granted" is capability, not user consent.
-    authorizationReflectsUserChoice:
-      status === 'granted' && (Platform.OS !== 'android' || Number(Platform.Version) >= 33)
-  }
-}
-
-// Why: re-read OS state every call — users can change it in Settings while Orca is backgrounded.
-export async function ensureNotificationPermissions(): Promise<boolean> {
-  const existing = await getNotificationPermissionState()
-  if (existing.granted) {
-    return true
-  }
-
-  const { status } = await Notifications.requestPermissionsAsync()
-  return status === 'granted'
-}
-
-function configureNotificationChannel(): void {
-  if (Platform.OS === 'android') {
-    void Notifications.setNotificationChannelAsync('orca-desktop', {
-      name: 'Desktop Notifications',
-      importance: Notifications.AndroidImportance.HIGH,
-      vibrationPattern: [0, 250],
-      lightColor: '#6366f1'
-    })
-  }
-}
-
-async function showLocalNotification(event: NotificationEvent, hostId: string): Promise<void> {
-  const storedKey = event.notificationId
-    ? getStoredNotificationKey(hostId, event.notificationId)
-    : null
-
-  if (!storedKey) {
-    const enabled = await loadPushNotificationsEnabled()
-    if (!enabled) {
-      return
-    }
-
-    const granted = await ensureNotificationPermissions()
-    if (!granted) {
-      return
-    }
-
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: event.title,
-        body: event.body,
-        data: buildLocalNotificationData(event, hostId),
-        ...(Platform.OS === 'android' ? { channelId: 'orca-desktop' } : {})
-      },
-      trigger: null
-    })
-    return
-  }
-
-  let state = scheduledNotificationsByHostAndNotificationId.get(storedKey)
-  if (state?.pending) {
-    return
-  }
-  if (!state) {
-    state = {}
-    scheduledNotificationsByHostAndNotificationId.set(storedKey, state)
-  }
-  const notificationState = state
-
-  const pending = (async () => {
-    const enabled = await loadPushNotificationsEnabled()
-    if (!enabled) {
-      return null
-    }
-
-    const granted = await ensureNotificationPermissions()
-    if (!granted) {
-      return null
-    }
-
-    if (notificationState.identifier) {
-      await Notifications.dismissNotificationAsync(notificationState.identifier).catch(() => {})
-      notificationState.identifier = undefined
-    }
-
-    return Notifications.scheduleNotificationAsync({
-      content: {
-        title: event.title,
-        body: event.body,
-        data: buildLocalNotificationData(event, hostId),
-        ...(Platform.OS === 'android' ? { channelId: 'orca-desktop' } : {})
-      },
-      trigger: null
-    })
-  })()
-  notificationState.pending = pending
-
-  try {
-    const scheduledIdentifier = await pending
-    if (!scheduledIdentifier) {
-      if (!notificationState.identifier) {
-        scheduledNotificationsByHostAndNotificationId.delete(storedKey)
-      }
-      return
-    }
-    if (notificationState.dismissAfterSchedule) {
-      notificationState.dismissAfterSchedule = false
-      scheduledNotificationsByHostAndNotificationId.delete(storedKey)
-      await Notifications.dismissNotificationAsync(scheduledIdentifier).catch(() => {})
-      return
-    }
-    notificationState.identifier = scheduledIdentifier
-    boundScheduledNotifications()
-  } finally {
-    if (notificationState.pending === pending) {
-      notificationState.pending = undefined
-      notificationState.dismissAfterSchedule = false
-    }
-  }
-}
-
-async function dismissLocalNotification(
-  event: DismissNotificationEvent,
-  hostId: string
-): Promise<void> {
-  if (!event.notificationId) {
-    return
-  }
-  const storedKey = getStoredNotificationKey(hostId, event.notificationId)
-  const state = scheduledNotificationsByHostAndNotificationId.get(storedKey)
-  if (!state) {
-    return
-  }
-  if (state.pending) {
-    // Why: dismiss can arrive while the OS is still scheduling; defer it so no stale banner survives.
-    state.dismissAfterSchedule = true
-    return
-  }
-  if (!state.identifier) {
-    return
-  }
-  scheduledNotificationsByHostAndNotificationId.delete(storedKey)
-  await Notifications.dismissNotificationAsync(state.identifier).catch(() => {})
+  // Desktop counter lifetime (#8591); absent from runtimes that predate it.
+  epoch?: string
 }
 
 // Per-connection subscription; a reconnect `ready` triggers watermarked catch-up (#8129) so already-pushed events aren't re-sent.
@@ -231,68 +40,172 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
 
   let subscriptionId: string | null = null
   let disposed = false
-  // Highest seq delivered (live or replay) this connection; persisted per-host so cold start resumes from the right cut.
-  let lastDeliveredSeq = 0
-  // Why: defense-in-depth dedup for replayed events if the desktop's bounded buffer evicted across a reconnect boundary.
-  const seenReplay = createSeenNotificationGuard()
+  // Why (#8591): survives the unsubscribe/resubscribe the app performs on every
+  // socket drop, so a reconnect still knows its watermark and that it reconnected.
+  const session = getHostNotificationSession(hostId)
 
-  function deliverLive(
+  /**
+   * Queue one delivery on the host chain, dropping a show whose notificationId
+   * already has one queued.
+   *
+   * Why the claim is taken HERE and not inside deliverLive (#8591): the point of
+   * the dedup is to notice a second event arriving while the first is still
+   * outstanding. Inside the queued task the first has already finished, so the
+   * overlap is no longer observable — it has to be checked before enqueueing.
+   */
+  function queueDelivery(
     type: 'notification' | 'dismiss',
     event: NotificationEvent | DismissNotificationEvent
   ): Promise<void> {
-    if (event.notificationSeq != null && event.notificationSeq > lastDeliveredSeq) {
-      lastDeliveredSeq = event.notificationSeq
-      void saveLastSeenSeq(hostId, lastDeliveredSeq)
+    if (
+      type === 'notification' &&
+      !shouldQueueShowForNotificationId(session, event.notificationId)
+    ) {
+      return Promise.resolve()
     }
-    // Why (#8129): mark seen on the live path too, so a later replay of an already-pushed id dedups instead of double-pushing.
-    const key = seenKeyForEvent(event)
-    if (key) {
-      seenReplay.add(key)
-    }
-    if (type === 'notification') {
-      return showLocalNotification(event as NotificationEvent, hostId)
-    }
-    return dismissLocalNotification(event as DismissNotificationEvent, hostId)
+    return enqueueHostDelivery(session, async () => {
+      try {
+        await deliverLive(type, event)
+      } finally {
+        if (type === 'notification') {
+          releaseQueuedShowNotificationId(session, event.notificationId)
+        }
+      }
+      // Why swallowed: the caller is an un-awaited handler, so a rejected show would
+      // surface as an unhandled rejection (a RN redbox) instead of being retried by
+      // the next catch-up — which is now possible, since `seen` is marked after the show.
+    }).catch(() => {})
   }
 
-  // Why: desktop cuts by seq > lastSeenSeq, so re-fetching from the watermark is idempotent (seenReplay guards residual overlap).
+  async function deliverLive(
+    type: 'notification' | 'dismiss',
+    event: NotificationEvent | DismissNotificationEvent
+  ): Promise<void> {
+    adoptNotificationEpoch(session, hostId, event.notificationEpoch)
+    const epochAtDelivery = session.lastDeliveredEpoch
+    if (type === 'notification') {
+      await showLocalNotification(event as NotificationEvent, hostId)
+    } else {
+      await dismissLocalNotification(event as DismissNotificationEvent, hostId)
+    }
+    // Why after the await, exactly like the watermark below: `seen` asserts this event
+    // reached the user (#8129). Marked before, a rejected show leaves the key behind and
+    // every later replay is dropped as a duplicate — loss the quarantine cannot recover,
+    // since the first event to drain a batch lifts it past the one never shown.
+    const key = seenKeyForEvent(event)
+    // A mid-flight epoch adoption already cleared the counter lifetime this key indexes.
+    if (key && session.lastDeliveredEpoch === epochAtDelivery) {
+      session.seen.add(key)
+    }
+    // Why after the await (#8591): the watermark is a promise that everything up
+    // to this seq has been shown. Advancing it before the local notification lands
+    // means a process death in between silently drops it — the next launch asks the
+    // desktop for seq greater than one the user never saw.
+    if (event.notificationSeq != null && event.notificationSeq > session.lastDeliveredSeq) {
+      session.lastDeliveredSeq = event.notificationSeq
+      // Why clamped: while a failed catch-up's range is still unrecovered, persisting
+      // the live seq would let the next catch-up ask from above the gap and the desktop
+      // would cut it. resolveCatchUpQuarantine writes the held-back value on success.
+      void saveWatermark(hostId, {
+        seq: catchUpWatermarkSeq(session),
+        epoch: session.lastDeliveredEpoch
+      })
+    }
+  }
+
+  // Claimed inline rather than via queueDelivery: the batch is already one queue
+  // entry, and re-enqueueing per item is what let a live event cut in.
+  async function deliverMissedEvent(
+    event: NotificationEvent | DismissNotificationEvent
+  ): Promise<void> {
+    // No pre-marking here either: deliverLive marks the key once the show lands.
+    const key = seenKeyForEvent(event)
+    if (key && session.seen.has(key)) {
+      return
+    }
+    if (event.type === 'notification') {
+      if (!shouldQueueShowForNotificationId(session, event.notificationId)) {
+        return
+      }
+      try {
+        await deliverLive('notification', event)
+      } finally {
+        releaseQueuedShowNotificationId(session, event.notificationId)
+      }
+      return
+    }
+    if (event.type === 'dismiss') {
+      await deliverLive('dismiss', event)
+    }
+  }
+
+  // Why: desktop cuts by seq > lastSeenSeq, so re-fetching from the watermark is idempotent (session.seen guards residual overlap).
   async function fetchMissed(): Promise<void> {
     if (disposed) {
       return
     }
+    // Captured before the request: everything at or below it is known delivered, so
+    // it is the floor the watermark falls back to if this catch-up never completes.
+    const askFrom = catchUpWatermarkSeq(session)
     const missed = await client
-      .sendRequest('notifications.getMissedSince', { lastSeenSeq: lastDeliveredSeq })
+      .sendRequest('notifications.getMissedSince', {
+        lastSeenSeq: askFrom,
+        // Why: sending the epoch lets the desktop reject a watermark from a counter
+        // it no longer has and return the whole retained buffer instead of nothing.
+        ...(session.lastDeliveredEpoch != null ? { epoch: session.lastDeliveredEpoch } : {})
+      })
       .then((response) => {
         if (!response.ok) {
-          return []
+          return null
         }
-        const result = response.result as { notifications?: unknown[] } | undefined
+        const result = response.result as { notifications?: unknown[]; epoch?: string } | undefined
+        adoptNotificationEpoch(session, hostId, result?.epoch)
         return Array.isArray(result?.notifications) ? result.notifications : []
       })
-      .catch(() => [])
-    for (const raw of missed) {
-      const event = raw as NotificationEvent | DismissNotificationEvent
-      const key = seenKeyForEvent(event)
-      if (key && seenReplay.has(key)) {
-        continue
-      }
-      if (key) {
-        seenReplay.add(key)
-      }
-      if (event.type === 'notification') {
-        await deliverLive('notification', event)
-      } else if (event.type === 'dismiss') {
-        await deliverLive('dismiss', event)
-      }
+      .catch(() => null)
+    if (missed == null) {
+      // Why quarantine rather than retry: the range this catch-up abandoned stays
+      // unrecovered until SOME later one succeeds, and a live seq persisting past it
+      // meanwhile would make the desktop cut it forever.
+      quarantineCatchUpWatermark(session, hostId, askFrom)
+      return
     }
+    // Why the whole batch is ONE queue entry (#8591): awaiting per event returns to
+    // the event loop between replays, so a live seq 11 slots into the chain between
+    // seq 6 and 7 and persists a watermark past a notification still unshown. Why the
+    // request stays OUTSIDE the queue: sendRequest waits up to 30s, and holding the
+    // chain for that would stall live delivery on a slow link.
+    await enqueueHostDelivery(session, async () => {
+      // Advances only past events this batch settled, so a teardown or a failing show
+      // quarantines the true contiguous point instead of the range it never reached.
+      let contiguousSeq = askFrom
+      let drained = false
+      try {
+        for (const raw of missed) {
+          // Re-checked per event: the batch can start before a teardown and still be
+          // draining after it, and a torn-down host must stop pushing.
+          if (disposed) {
+            return
+          }
+          const event = raw as NotificationEvent | DismissNotificationEvent
+          await deliverMissedEvent(event)
+          contiguousSeq = event.notificationSeq ?? contiguousSeq
+        }
+        drained = true
+      } finally {
+        if (drained) {
+          resolveCatchUpQuarantine(session, hostId)
+        } else {
+          quarantineCatchUpWatermark(session, hostId, contiguousSeq)
+        }
+      }
+      // Why swallowed here: the `finally` above already recorded the contiguous point,
+      // and the only caller is an un-awaited 'ready' continuation — letting a failed
+      // show escape turns every one into an unhandled rejection (a RN redbox).
+    }).catch(() => {})
   }
 
-  // Why: seed the watermark lazily so subscribe() doesn't block on an AsyncStorage read.
-  let watermarkLoaded = false
-  void loadLastSeenSeq(hostId).then((seq) => {
-    lastDeliveredSeq = Math.max(lastDeliveredSeq, seq)
-    watermarkLoaded = true
-  })
+  seedWatermarkFromStorage(session, hostId)
 
   function unsubscribeServer(id: string) {
     if (client.getState() === 'connected') {
@@ -300,7 +213,6 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
     }
   }
 
-  let reconnectReadyCount = 0
   const unsubscribeStream = client.subscribe('notifications.subscribe', {}, (data: unknown) => {
     const event = data as
       | NotificationEvent
@@ -309,16 +221,34 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
       | { type: 'end' }
     if (event.type === 'ready') {
       subscriptionId = (event as SubscribeResult).subscriptionId
-      reconnectReadyCount += 1
+      const isReconnect = session.connectedBefore
+      session.connectedBefore = true
       if (disposed) {
         unsubscribeServer(subscriptionId)
         unsubscribeStream()
         return
       }
-      // Why: only reconnects fetch missed; watermarkLoaded guards against fetching from a stale 0 (which re-pushes everything).
-      if (reconnectReadyCount > 1 && watermarkLoaded) {
-        void fetchMissed()
-      }
+      const readyEpoch = (event as SubscribeResult).epoch
+      // Why (#8591) the await: on a cold app open the persisted read is still in
+      // flight, so deciding here would see watermarkLoaded false and skip catch-up —
+      // which is precisely the post-upgrade / post-process-death case that loses
+      // every notification between the stored watermark and the next live seq.
+      void (async () => {
+        await session.watermarkSeeded
+        if (disposed) {
+          return
+        }
+        // Why before fetchMissed: adopting the epoch here is what voids a watermark
+        // left over from a previous desktop lifetime, so the catch-up request carries
+        // a watermark that means something against the counter now answering it.
+        adoptNotificationEpoch(session, hostId, readyEpoch)
+        // A reconnect always catches up. A cold open catches up only when this device
+        // has delivered for this host before — a first-ever pairing must not be handed
+        // the desktop's whole retained buffer.
+        if (isReconnect || session.hadStoredWatermark) {
+          await fetchMissed()
+        }
+      })()
       return
     }
     if (event.type === 'end') {
@@ -330,11 +260,27 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
     if (disposed) {
       return
     }
-    if (event.type === 'notification') {
-      void deliverLive('notification', event as NotificationEvent)
-    } else if (event.type === 'dismiss') {
-      void deliverLive('dismiss', event as DismissNotificationEvent)
+    if (event.type !== 'notification' && event.type !== 'dismiss') {
+      return
     }
+    // Why the await (#8591): deliverLive advances the watermark. A live event landing
+    // while the persisted read is still in flight would push it past the buffered seqs
+    // the catch-up is about to ask for, and getMissedSince would cut them. Ordering is
+    // preserved — every handler waits on the same promise, and the 'ready' continuation
+    // registered on it first, so catch-up still builds its request before any live seq.
+    const liveEvent = event
+    void (async () => {
+      await session.watermarkSeeded
+      if (disposed) {
+        return
+      }
+      // Why the queue (#8591): a live event must not overtake an in-flight
+      // catch-up replay, or it persists a watermark past seqs still unshown.
+      await queueDelivery(
+        liveEvent.type === 'notification' ? 'notification' : 'dismiss',
+        liveEvent as NotificationEvent | DismissNotificationEvent
+      )
+    })()
   })
 
   return () => {

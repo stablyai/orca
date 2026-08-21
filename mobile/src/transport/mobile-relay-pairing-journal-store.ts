@@ -1,5 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import * as SecureStore from 'expo-secure-store'
 import { Platform } from 'react-native'
 import {
   MobileRelayPairingJournalMetadataSchema,
@@ -7,12 +6,15 @@ import {
   type MobileRelayPairingJournal,
   type MobileRelayPairingJournalMetadata
 } from './mobile-relay-pairing-journal'
+import {
+  deletePairingKeychainItem,
+  readPairingKeychainItem,
+  resetPairingKeychainForTests,
+  writePairingKeychainItem
+} from './pairing-keychain'
 
 const JOURNAL_STORAGE_KEY = 'orca:mobile-relay:pairing-journal:v1'
 const JOURNAL_SECRET_KEY = 'orca.mobile-relay.pairing-journal.v1'
-const KEYCHAIN_OPTIONS: SecureStore.SecureStoreOptions = {
-  keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY
-}
 let journalMutation: Promise<void> = Promise.resolve()
 
 export async function saveMobileRelayPairingJournal(
@@ -39,7 +41,7 @@ export async function saveMobileRelayPairingJournal(
     // Why: metadata-first makes a crash before the keychain write recover as
     // an incomplete journal, never as an untracked bearer secret.
     await AsyncStorage.setItem(JOURNAL_STORAGE_KEY, JSON.stringify(metadata))
-    await SecureStore.setItemAsync(JOURNAL_SECRET_KEY, JSON.stringify(secrets), KEYCHAIN_OPTIONS)
+    await writePairingKeychainItem(JOURNAL_SECRET_KEY, JSON.stringify(secrets))
   })
   journalMutation = mutation.catch(() => {})
   return mutation
@@ -50,7 +52,7 @@ export async function loadMobileRelayPairingJournal(): Promise<MobileRelayPairin
   const load = journalMutation.then(async () => {
     const rawMetadata = await AsyncStorage.getItem(JOURNAL_STORAGE_KEY)
     if (rawMetadata === null) {
-      await SecureStore.deleteItemAsync(JOURNAL_SECRET_KEY, KEYCHAIN_OPTIONS).catch(() => {})
+      await deletePairingKeychainItem(JOURNAL_SECRET_KEY).catch(() => {})
       return null
     }
     const metadata = parseMetadata(rawMetadata)
@@ -58,7 +60,7 @@ export async function loadMobileRelayPairingJournal(): Promise<MobileRelayPairin
       await removeIncompleteJournal()
       return null
     }
-    const rawSecrets = await SecureStore.getItemAsync(JOURNAL_SECRET_KEY, KEYCHAIN_OPTIONS)
+    const rawSecrets = await readPairingKeychainItem(JOURNAL_SECRET_KEY)
     if (rawSecrets === null) {
       await AsyncStorage.removeItem(JOURNAL_STORAGE_KEY)
       return null
@@ -83,7 +85,7 @@ async function removeIncompleteJournal(): Promise<void> {
   // Why: metadata is the discoverable cleanup pointer; remove it before the
   // native secret so a second crash can only leave a self-cleaning orphan.
   await AsyncStorage.removeItem(JOURNAL_STORAGE_KEY)
-  await SecureStore.deleteItemAsync(JOURNAL_SECRET_KEY, KEYCHAIN_OPTIONS).catch(() => {})
+  await deletePairingKeychainItem(JOURNAL_SECRET_KEY).catch(() => {})
 }
 
 export async function updateMobileRelayPairingJournal(
@@ -114,7 +116,7 @@ export async function clearMobileRelayPairingJournal(journalId: string): Promise
       throw new Error('stale mobile relay pairing journal')
     }
     await AsyncStorage.removeItem(JOURNAL_STORAGE_KEY)
-    await SecureStore.deleteItemAsync(JOURNAL_SECRET_KEY, KEYCHAIN_OPTIONS)
+    await deletePairingKeychainItem(JOURNAL_SECRET_KEY)
   })
   journalMutation = mutation.catch(() => {})
   return mutation
@@ -147,4 +149,5 @@ function requireNativeSecretStore(): void {
 /** Test-only: drain the module mutation chain between cases. */
 export function resetMobileRelayPairingJournalStoreForTests(): void {
   journalMutation = Promise.resolve()
+  resetPairingKeychainForTests()
 }

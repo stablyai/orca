@@ -9,7 +9,8 @@ import type {
   SleepingAgentSessionRecord
 } from '../../../shared/agent-session-resume'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import type { TerminalTab, TuiAgent } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import { resolveTabAgentFromSignals, useTabAgent } from './use-tab-agent'
 
 const initialAppState = useAppStore.getInitialState()
@@ -84,9 +85,7 @@ describe('resolveTabAgentFromSignals sleeping-session precedence', () => {
     ).toBe('codex')
   })
 
-  it('keeps an explicit title ahead of a conflicting sleeping-session record', () => {
-    // Why: sleeping identity ranks below title — a live/last-known explicit title
-    // is at least as fresh as the hibernation snapshot.
+  it('keeps current sleeping ownership ahead of an unversioned conflicting title', () => {
     expect(
       resolveTabAgentFromSignals({
         hasObservedAgentSignal: true,
@@ -96,7 +95,7 @@ describe('resolveTabAgentFromSignals sleeping-session precedence', () => {
         sleepingSessionAgent: 'gemini',
         launchAgent: 'codex'
       })
-    ).toBe('claude')
+    ).toBe('gemini')
   })
 
   it('keeps a genuine tab icon when its sleeping record matches the launchAgent', () => {

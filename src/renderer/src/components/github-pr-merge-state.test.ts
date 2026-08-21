@@ -6,7 +6,7 @@ function pr(overrides: Partial<GitHubPRMergeStateInput> = {}): GitHubPRMergeStat
     state: 'open',
     mergeable: 'MERGEABLE',
     mergeStateStatus: 'CLEAN',
-    checksSummary: { state: 'success', total: 1, passed: 1, failed: 0, pending: 0 },
+    checksSummary: { state: 'success', total: 1, passed: 1, failed: 0, pending: 0, neutral: 0 },
     autoMergeAllowed: true,
     ...overrides
   }
@@ -44,7 +44,14 @@ describe('presentGitHubPRMergeState', () => {
       presentGitHubPRMergeState(
         pr({
           mergeStateStatus: 'BLOCKED',
-          checksSummary: { state: 'pending', total: 1, passed: 0, failed: 0, pending: 1 }
+          checksSummary: {
+            state: 'pending',
+            total: 1,
+            passed: 0,
+            failed: 0,
+            pending: 1,
+            neutral: 0
+          }
         })
       ).autoMergeAction
     ).toMatchObject({ kind: 'enable', label: 'Enable auto-merge' })
@@ -53,7 +60,16 @@ describe('presentGitHubPRMergeState', () => {
   it('does not offer enable auto-merge when only optional checks are pending', () => {
     expect(
       presentGitHubPRMergeState(
-        pr({ checksSummary: { state: 'pending', total: 1, passed: 0, failed: 0, pending: 1 } })
+        pr({
+          checksSummary: {
+            state: 'pending',
+            total: 1,
+            passed: 0,
+            failed: 0,
+            pending: 1,
+            neutral: 0
+          }
+        })
       )
     ).toMatchObject({
       label: 'Checks pending',
@@ -68,7 +84,14 @@ describe('presentGitHubPRMergeState', () => {
         pr({
           mergeable: 'UNKNOWN',
           mergeStateStatus: 'UNSTABLE',
-          checksSummary: { state: 'failure', total: 1, passed: 0, failed: 1, pending: 0 }
+          checksSummary: {
+            state: 'failure',
+            total: 1,
+            passed: 0,
+            failed: 1,
+            pending: 0,
+            neutral: 0
+          }
         })
       ).autoMergeAction
     ).toBeNull()
@@ -110,7 +133,7 @@ describe('presentGitHubPRMergeState', () => {
     expect(
       presentGitHubPRMergeState({
         state: 'open',
-        checksSummary: { state: 'success', total: 1, passed: 1, failed: 0, pending: 0 }
+        checksSummary: { state: 'success', total: 1, passed: 1, failed: 0, pending: 0, neutral: 0 }
       })
     ).toMatchObject({ label: 'Checks passed', directMergeAvailable: true, autoMergeAction: null })
     expect(presentGitHubPRMergeState(pr())).toMatchObject({
@@ -135,12 +158,30 @@ describe('presentGitHubPRMergeState', () => {
     })
     expect(
       presentGitHubPRMergeState(
-        pr({ checksSummary: { state: 'pending', total: 1, passed: 0, failed: 0, pending: 1 } })
+        pr({
+          checksSummary: {
+            state: 'pending',
+            total: 1,
+            passed: 0,
+            failed: 0,
+            pending: 1,
+            neutral: 0
+          }
+        })
       )
     ).toMatchObject({ label: 'Checks pending', directMergeAvailable: true })
     expect(
       presentGitHubPRMergeState(
-        pr({ checksSummary: { state: 'failure', total: 1, passed: 0, failed: 1, pending: 0 } })
+        pr({
+          checksSummary: {
+            state: 'failure',
+            total: 1,
+            passed: 0,
+            failed: 1,
+            pending: 0,
+            neutral: 0
+          }
+        })
       )
     ).toMatchObject({ label: 'Checks failed', directMergeAvailable: true })
     expect(presentGitHubPRMergeState(pr())).toMatchObject({
@@ -155,7 +196,14 @@ describe('presentGitHubPRMergeState', () => {
         pr({
           mergeable: 'UNKNOWN',
           mergeStateStatus: null,
-          checksSummary: { state: 'pending', total: 1, passed: 0, failed: 0, pending: 1 }
+          checksSummary: {
+            state: 'pending',
+            total: 1,
+            passed: 0,
+            failed: 0,
+            pending: 1,
+            neutral: 0
+          }
         })
       )
     ).toMatchObject({
@@ -168,7 +216,7 @@ describe('presentGitHubPRMergeState', () => {
     expect(
       presentGitHubPRMergeState({
         state: 'open',
-        checksSummary: { state: 'success', total: 3, passed: 3, failed: 0, pending: 0 }
+        checksSummary: { state: 'success', total: 3, passed: 3, failed: 0, pending: 0, neutral: 0 }
       })
     ).toMatchObject({
       label: 'Checks passed',
@@ -179,7 +227,14 @@ describe('presentGitHubPRMergeState', () => {
         pr({
           mergeable: 'UNKNOWN',
           mergeStateStatus: null,
-          checksSummary: { state: 'success', total: 3, passed: 3, failed: 0, pending: 0 }
+          checksSummary: {
+            state: 'success',
+            total: 3,
+            passed: 3,
+            failed: 0,
+            pending: 0,
+            neutral: 0
+          }
         })
       )
     ).toMatchObject({

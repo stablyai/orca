@@ -1,13 +1,17 @@
+import { execFile } from 'node:child_process'
 import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
 import { BUNDLED_SKILL_GUIDES } from '../../src/cli/bundled-skill-guides'
 import {
   CANONICAL_GUIDE_NAMES,
   GUIDE_ALIASES,
+  STUB_TOPICS,
   assertAliasContract,
   buildArtifacts,
+  frontmatterBlock,
   normalizeMarkdown,
   parseFrontmatter,
   verifyArtifacts,
@@ -16,12 +20,16 @@ import {
 
 const projectDir = path.resolve(import.meta.dirname, '..', '..')
 const temporaryDirectories = []
+const execFileAsync = promisify(execFile)
 
 async function createFixture() {
   const root = await mkdtemp(path.join(tmpdir(), 'orca-bundled-skill-guides-'))
   temporaryDirectories.push(root)
   await Promise.all([
     cp(path.join(projectDir, 'skill-guides'), path.join(root, 'skill-guides'), {
+      recursive: true
+    }),
+    cp(path.join(projectDir, 'skill-stubs'), path.join(root, 'skill-stubs'), {
       recursive: true
     }),
     cp(path.join(projectDir, 'skills'), path.join(root, 'skills'), { recursive: true }),
@@ -37,13 +45,105 @@ afterEach(async () => {
 })
 
 describe('bundled skill guide generator', () => {
-  it('keeps every first-phase fat projection byte-identical to its authoritative source', async () => {
+  it('keeps every fat (non-stub) projection byte-identical to its authoritative source', async () => {
     for (const name of CANONICAL_GUIDE_NAMES) {
+      if (STUB_TOPICS.includes(name)) {
+        continue
+      }
       const source = await readFile(path.join(projectDir, 'skill-guides', `${name}.md`))
       const projection = await readFile(path.join(projectDir, 'skills', name, 'SKILL.md'))
       expect(projection, name).toEqual(source)
     }
   })
+
+  it('projects stub topics as hybrid discovery stubs that reuse the guide frontmatter', async () => {
+    expect(STUB_TOPICS.length).toBeGreaterThan(0)
+    for (const name of STUB_TOPICS) {
+      const source = await readFile(path.join(projectDir, 'skill-guides', `${name}.md`), 'utf8')
+      const projection = await readFile(path.join(projectDir, 'skills', name, 'SKILL.md'), 'utf8')
+
+      // The routing frontmatter is the unchanged discovery surface.
+      expect(projection.startsWith(frontmatterBlock(source, `${name}.md`))).toBe(true)
+      // The stub is a thin hybrid pointer, not the full guide.
+      expect(projection).not.toEqual(source)
+      expect(projection.length).toBeLessThan(source.length)
+      expect(projection).toContain('discovery stub')
+      expect(projection).toContain(`skills get ${name}`)
+    }
+  })
+
+  it('keeps pre-guide fallback useful and read-only for every converted domain', async () => {
+    const expectedFallbackCommands = {
+      'computer-use': ['ORCA computer capabilities --json', 'ORCA computer list-apps --json'],
+      'linear-tickets': ['ORCA linear --help', 'ORCA linear issue --current --full --json'],
+      'orca-emulator': ['ORCA emulator list --json'],
+      'orca-emulator-android': ['ORCA emulator devices --json'],
+      'orca-linear': ['ORCA linear --help', 'ORCA linear issue --current --full --json'],
+      'orca-per-workspace-env': ['ORCA vm recipe doctor <recipe-id> --repo-path <repo> --json'],
+      orchestration: ['ORCA orchestration task-list --json', 'ORCA terminal list --json']
+    }
+
+    for (const [name, commands] of Object.entries(expectedFallbackCommands)) {
+      const stub = await readFile(path.join(projectDir, 'skill-stubs', `${name}.md`), 'utf8')
+      const fallback = stub.split('## If an older Orca does not recognize `skills get`')[1]
+
+      expect(fallback, name).toBeDefined()
+      for (const command of commands) {
+        expect(fallback, name).toContain(command)
+      }
+      expect(fallback, name).not.toContain('ORCA worktree ps --json')
+    }
+  })
+
+  it('uses the exported recipe id variable in per-workspace environment examples', async () => {
+    const source = await readFile(
+      path.join(projectDir, 'skill-guides', 'orca-per-workspace-env.md'),
+      'utf8'
+    )
+
+    expect(source).toContain('ORCA_RECIPE_ID')
+    expect(source).not.toContain('ORCA_VM_RECIPE_ID')
+    expect(source).toContain('recipe_id="${recipe_id//./-}"')
+    expect(source).toContain('max_recipe_id_length=$((128 - ${#instance_id} - 6))')
+    expect(source).toContain('name="orca-${recipe_id:0:max_recipe_id_length}-${instance_id}"')
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps Vercel sandbox names valid while preserving the instance suffix',
+    async () => {
+      const source = await readFile(
+        path.join(projectDir, 'skill-guides', 'orca-per-workspace-env.md'),
+        'utf8'
+      )
+      const startMarker = 'recipe_id="${ORCA_RECIPE_ID:-vercel-sandbox}"'
+      const endMarker = 'name="orca-${recipe_id:0:max_recipe_id_length}-${instance_id}"'
+      const start = source.indexOf(startMarker)
+      const endStart = source.indexOf(endMarker, start)
+      expect(start).toBeGreaterThanOrEqual(0)
+      expect(endStart).toBeGreaterThan(start)
+      const script = `${source.slice(start, endStart + endMarker.length)}\nprintf '%s' "$name"`
+      const renderName = async (recipeId, instanceId) =>
+        (
+          await execFileAsync('bash', ['-u', '-c', script], {
+            env: { ...process.env, ORCA_RECIPE_ID: recipeId, ORCA_VM_INSTANCE_ID: instanceId }
+          })
+        ).stdout
+
+      const instanceId = 'orca-123e4567-e89b-12d3-a456-426614174000'
+      const dotted = await renderName('provider.cloud_sandbox', instanceId)
+      const maximum = await renderName(`a${'.'.repeat(63)}`, instanceId)
+      const longInstanceId = 'i'.repeat(100)
+      const capped = await renderName(
+        'provider.cloud_sandbox.with.a.long.recipe.identifier',
+        longInstanceId
+      )
+
+      expect(dotted).toBe(`orca-provider-cloud_sandbox-${instanceId}`)
+      expect(maximum).toMatch(/^[a-zA-Z0-9_-]{1,128}$/u)
+      expect(capped).toHaveLength(128)
+      expect(capped.endsWith(`-${longInstanceId}`)).toBe(true)
+    }
+  )
 
   it('embeds canonical names, discovery descriptions, Markdown, and append-only aliases', async () => {
     expect(BUNDLED_SKILL_GUIDES.map((guide) => guide.name)).toEqual(
@@ -96,6 +196,11 @@ describe('bundled skill guide generator', () => {
       const source = await readFile(sourcePath, 'utf8')
       await writeFile(sourcePath, source.replaceAll('\n', '\r\n'))
     }
+    for (const name of STUB_TOPICS) {
+      const stubPath = path.join(root, 'skill-stubs', `${name}.md`)
+      const stubSource = await readFile(stubPath, 'utf8')
+      await writeFile(stubPath, stubSource.replaceAll('\n', '\r\n'))
+    }
 
     const actual = await buildArtifacts(root)
     expect(actual.map((artifact) => artifact.content)).toEqual(
@@ -106,6 +211,7 @@ describe('bundled skill guide generator', () => {
   it('pins guide sources, projections, and embedded output to LF in Git', async () => {
     const attributes = await readFile(path.join(projectDir, '.gitattributes'), 'utf8')
     expect(normalizeMarkdown(attributes)).toContain('/skill-guides/*.md text eol=lf\n')
+    expect(normalizeMarkdown(attributes)).toContain('/skill-stubs/*.md text eol=lf\n')
     expect(normalizeMarkdown(attributes)).toContain('/skills/*/SKILL.md text eol=lf\n')
     expect(normalizeMarkdown(attributes)).toContain(
       '/src/cli/bundled-skill-guides.ts text eol=lf\n'

@@ -1,0 +1,540 @@
+name: Daily macOS Dev Build
+
+# Why: gives developers a signed macOS build of main once a day that the in-app
+# updater can install directly, without waiting for an RC cut — less noise than
+# hourly.
+#
+# Schedule is a single UTC cron (GH Actions has no timezone-aware schedules).
+# 18:15 UTC is late morning Pacific year-round (10:15am PST / 11:15am PDT). Minute
+# 15 avoids stacking with hourly-mac-build, which fires at minute 0 every hour.
+#
+# Deliberately narrow scope:
+#   - macOS only. Other platforms keep using RC/stable.
+#   - No tests or lint on the build job. After a live publish we fire-and-forget
+#     the full E2E workflow at the cut SHA (same detached dispatch as
+#     release-cut). A red suite must not fail or delay the daily.
+#   - PR CI and release-cut remain the gates that matter.
+#   - Signed AND notarized, exactly like a release. The notary round trip is the
+#     one slow step kept: macOS anchors a notarized app's TCC grants on identifier
+#     + team rather than on its cdhash, so those grants survive an update. Without
+#     a ticket every daily reads as a new client and silently loses file access
+#     under Documents/Desktop/Downloads.
+#
+# Artifacts publish to stablyai/orca-daily, never to stablyai/orca: the main
+# repo's releases atom feed exposes only its 10 newest entries, so high-volume
+# dev tags would evict every stable/RC entry and break updates for real users.
+# Separate from orca-hourly so someone riding main's hourlies never sees the
+# sparse daily series mixed into that list.
+#
+# GITHUB_TOKEN is scoped to this repo and cannot publish there, so writes use the
+# same GitHub App as hourly (installed on orca-daily with Contents: Read and
+# write). Provision the App secrets with
+# `bash config/scripts/setup-hourly-release-token.sh`, then grant the App access
+# to orca-daily with `bash config/scripts/setup-daily-release-repo.sh`:
+#   HOURLY_RELEASE_APP_ID           the App's numeric id (shared with hourly/adhoc)
+#   HOURLY_RELEASE_APP_PRIVATE_KEY  the App's .pem private key
+#
+# Installation tokens live one hour, which is why this mints three times. Install
+# and build need no token at all, and notarization can hold the publish step for
+# tens of minutes; minting again once the build is done starts the clock at the
+# first call that actually uses it rather than burning a third of it on
+# `pnpm install`. The upload step's own retry budget (2x45m) can outlive that
+# second token, so a third is minted after it for verify/publish/prune/cleanup —
+# without it a stuck notary run would strand a draft that cleanup gets a 401 on.
+# The release stays an unpublished draft until the manifest check passes, so the
+# worst case is still an invisible draft — and the build-number query counts
+# drafts, so it holds its number and the next run does not reuse it.
+
+on:
+  schedule:
+    # Once a day, late morning Pacific. Single cron — no DST twin, no clock gate.
+    - cron: '15 18 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Build even if main has not moved since the last daily
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-mac-build
+  cancel-in-progress: false
+
+env:
+  DAILY_REPO: stablyai/orca-daily
+  # Keep ~30 days so a regression can be bisected without holding a full year.
+  DAILY_RETAIN_COUNT: 30
+
+jobs:
+  build-daily-mac:
+    if: github.repository == 'stablyai/orca'
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.daily.outputs.version }}
+      head_sha: ${{ steps.freshness.outputs.head_sha }}
+      published: ${{ steps.publish_live.outcome == 'success' && 'true' || 'false' }}
+    runs-on: blacksmith-6vcpu-macos-15
+    # Why 150: it must exceed the worst case the retry budgets below can produce
+    # (install 3x10 + publish 2x45 = 120, plus ~25 for checkout/build/verify), or
+    # the job is killed mid-retry and no cleanup step runs at all. A typical run
+    # is far shorter — this is the notary queue's tail, not its median.
+    timeout-minutes: 150
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+          # Why: this job only reads stablyai/orca and never pushes; every write
+          # goes to the daily repo through a minted App token passed by env.
+          # Not persisting the checkout credential shrinks the blast radius if a
+          # build step is compromised (zizmor: artipacked).
+          persist-credentials: false
+
+      - name: Mint daily repo token
+        id: app_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
+          private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
+          owner: stablyai
+          repositories: orca-daily
+
+      # Why: main is often idle. Rebuilding an unchanged commit burns a runner
+      # hour and adds a redundant tag to the retention window.
+      - name: Check whether main moved since the last daily
+        id: freshness
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          FORCED: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
+        run: |
+          set -euo pipefail
+          head_sha="$(git rev-parse HEAD)"
+          echo "head_sha=$head_sha" >>"$GITHUB_OUTPUT"
+          if [[ "$FORCED" == "true" ]]; then
+            echo "should_build=true" >>"$GITHUB_OUTPUT"
+            echo "Forced dispatch; building $head_sha."
+            exit 0
+          fi
+          # The previous daily records its source commit in the release body.
+          # Drafts are excluded: an unpublished leftover never shipped, so treating
+          # it as "the last build" would skip a build that never actually happened.
+          last_body="$(gh release list --repo "$DAILY_REPO" --limit 20 --json tagName,isDraft \
+            --jq 'map(select(.isDraft | not)) | .[0].tagName // empty' 2>/dev/null || true)"
+          if [[ -z "$last_body" ]]; then
+            echo "should_build=true" >>"$GITHUB_OUTPUT"
+            echo "No prior daily release found; building $head_sha."
+            exit 0
+          fi
+          last_sha="$(gh release view "$last_body" --repo "$DAILY_REPO" --json body \
+            --jq '.body | capture("commit `(?<sha>[0-9a-f]{7,40})`") | .sha' 2>/dev/null || true)"
+          if [[ -n "$last_sha" && "$head_sha" == "$last_sha"* ]]; then
+            echo "should_build=false" >>"$GITHUB_OUTPUT"
+            echo "main is unchanged since $last_body ($last_sha); skipping."
+          else
+            echo "should_build=true" >>"$GITHUB_OUTPUT"
+            echo "main moved to $head_sha (last daily built $last_sha); building."
+          fi
+
+      - name: Setup pnpm
+        if: steps.freshness.outputs.should_build == 'true'
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        if: steps.freshness.outputs.should_build == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: Cache electron-builder downloads
+        if: steps.freshness.outputs.should_build == 'true'
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: electron-builder-mac-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-builder-mac-
+
+      - name: Install dependencies
+        if: steps.freshness.outputs.should_build == 'true'
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: pnpm install --frozen-lockfile
+
+      # Why: signing is what makes a daily installable over an existing Orca, so
+      # a missing cert must fail here rather than after a 20-minute build.
+      - name: Verify macOS signing environment
+        if: steps.freshness.outputs.should_build == 'true'
+        run: node config/scripts/verify-macos-release-env.mjs
+        env:
+          CSC_LINK: ${{ secrets.MAC_CERTS }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Compute daily version
+        id: daily
+        if: steps.freshness.outputs.should_build == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          MAIN_REPO_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Existing titles, which carry the build number this series continues
+          # from. The script picks the number, because it restarts per base version
+          # and only the script knows which base this build resolved to.
+          #
+          # Why drafts count here but not in the freshness check: that check asks
+          # "did this commit ship", where a draft is a no. This one asks "is the
+          # number free", where a stranded draft still holds one.
+          names="$(gh release list --repo "$DAILY_REPO" --limit 200 --json name \
+            --jq '.[].name // empty')"
+          # Why the main repo's tags decide the base version rather than
+          # package.json: main's version only moves on `release:` commits, and
+          # stable patches are cut from release branches that never merge back, so
+          # package.json can sit several patches behind what users are running. A
+          # separate token because GH_TOKEN above is the App's, scoped to the
+          # daily repo. Empty on failure — the script then falls back to
+          # package.json, which is stale but never wrong enough to fail a build.
+          published="$(GH_TOKEN="$MAIN_REPO_TOKEN" gh release list \
+            --repo "$GITHUB_REPOSITORY" --limit 100 --exclude-drafts \
+            --json tagName --jq '.[].tagName' || true)"
+          echo "Highest published tag seen: $(head -1 <<<"$published")"
+          ORCA_PUBLISHED_VERSIONS="$published" ORCA_DAILY_RELEASE_NAMES="$names" \
+            node config/scripts/daily-build-version.mjs \
+            >"$RUNNER_TEMP/daily-identity.txt"
+          grep -E '^(version|build_number)=' "$RUNNER_TEMP/daily-identity.txt"
+          # Why check rather than trust: the checkout above pins `ref: main`, but a
+          # workflow_dispatch runs this file from whatever branch was dispatched. A
+          # branch that edits this step while main still has the old script yields
+          # an empty name and an untitled release — silent, and only visible once
+          # someone opens the releases page. Fail here instead.
+          if ! grep -q '^name=' "$RUNNER_TEMP/daily-identity.txt"; then
+            echo "::error::daily-build-version.mjs emitted no release name; this workflow and main's copy of the script are out of sync."
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/daily-identity.txt" >>"$GITHUB_OUTPUT"
+
+      - name: Build app
+        if: steps.freshness.outputs.should_build == 'true'
+        run: pnpm build:release
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+          # Why: daily builds are not an official channel — telemetry's transport
+          # gate accepts only 'stable' or 'rc', so leaving this unset keeps them
+          # silent, which is correct for unvetted dev artifacts.
+          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+
+      # Why a second mint: everything from here on writes to the daily repo, and
+      # the notary round trip inside the publish step can be tens of minutes. The
+      # token minted at the top has already spent install + build of its one hour
+      # on steps that never touched it; restarting the clock here gives the slow
+      # part the full budget.
+      - name: Re-mint daily repo token for publish
+        id: app_token_publish
+        if: steps.freshness.outputs.should_build == 'true'
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
+          private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
+          owner: stablyai
+          repositories: orca-daily
+
+      - name: Create daily release
+        id: release
+        if: steps.freshness.outputs.should_build == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
+          TAG: v${{ steps.daily.outputs.version }}
+          NAME: ${{ steps.daily.outputs.name }}
+          SHA: ${{ steps.freshness.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          # Kept at 12 even though the title shows 7: the freshness check above
+          # parses this back out of the body to decide whether main has moved.
+          short_sha="${SHA:0:12}"
+          # Why a file rather than an inline string: the publish step re-asserts
+          # this same body, and the freshness check only works if the two agree
+          # exactly. One source, written once, read twice.
+          notes_file="$RUNNER_TEMP/daily-release-notes.md"
+          cat >"$notes_file" <<EOF
+          Automated daily macOS and Windows dev build from commit \`$short_sha\`.
+
+          Built from [\`stablyai/orca@$short_sha\`](https://github.com/stablyai/orca/commit/$SHA).
+
+          **Unvetted.** No tests ran. The macOS build is signed and notarized like a
+          release, so it installs through Orca's in-app updater and opens from a manual
+          download without a Gatekeeper prompt — but nothing here has been reviewed.
+
+          **Windows builds are unsigned.** They install and update normally once you
+          are on one, but a signed Stable or RC build cannot install one through the
+          in-app updater — download \`orca-windows-setup.exe\` below and run it once
+          (SmartScreen will warn about an unknown publisher). Every later switch,
+          including back to Stable, works in-app from there.
+          EOF
+          # Why create it up front: electron-builder then uploads into a known tag
+          # rather than inferring one from package.json.
+          #
+          # Why --draft: everything between here and the manifest check is a window
+          # where the release exists but has no installable assets. A draft is
+          # absent from the releases list and from listReleaseBuilds, so a job that
+          # dies in that window — including a hard kill by the job timeout, which
+          # runs no cleanup step at all — leaves something invisible rather than a
+          # tag the picker offers and the download 404s on. It is flipped live only
+          # after the manifest is verified.
+          gh release create "$TAG" \
+            --repo "$DAILY_REPO" \
+            --title "$NAME" \
+            --draft \
+            --notes-file "$notes_file"
+          echo "tag=$TAG" >>"$GITHUB_OUTPUT"
+          echo "notes_file=$notes_file" >>"$GITHUB_OUTPUT"
+
+
+      - name: Publish daily macOS artifacts
+        if: steps.freshness.outputs.should_build == 'true'
+        uses: nick-fields/retry@v4
+        with:
+          # Why 45 like the release pipeline: an attempt is pack + notarize +
+          # upload, and the notary queue is the unbounded part. Why 2 attempts and
+          # not 3: a missed daily costs a day, and a third attempt buys less than
+          # it costs in runner time once the notary is that stuck.
+          timeout_minutes: 45
+          max_attempts: 2
+          retry_wait_seconds: 30
+          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_DAILY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
+        env:
+          # Why: electron-builder's github publisher targets the repo named in the
+          # config; the token must therefore carry write access to orca-daily.
+          GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
+          ORCA_DAILY_BUILD_VERSION: ${{ steps.daily.outputs.version }}
+          ORCA_BUILD_COMMIT: ${{ steps.daily.outputs.commit }}
+          CSC_LINK: ${{ secrets.MAC_CERTS }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
+          # Why all three: electron-builder's notarize step authenticates to the
+          # Apple notary service with the app-specific password, not with the
+          # signing cert. Omitting them fails the build rather than skipping it,
+          # since `notarize` is now on for this path.
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      # Why a third mint: the upload step above allows two 45-minute attempts, so
+      # it can outlive the one-hour token minted before it. Every remaining step
+      # writes to the daily repo, including the failure path that discards the
+      # draft — a 401 there is exactly the stranded draft nobody can clean up.
+      #
+      # Why always(): a failed or cancelled upload is the case that needs this
+      # most, since the cleanup step below runs only on that path.
+      - name: Re-mint daily repo token for verify and cleanup
+        id: app_token_final
+        if: always() && steps.freshness.outputs.should_build == 'true'
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
+          private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
+          owner: stablyai
+          repositories: orca-daily
+
+      # Why: the updater resolves a tag, then fetches latest-mac.yml from it. A
+      # release missing that manifest is a tag the picker offers and the download
+      # 404s on, so fail loudly instead of leaving a broken entry.
+      - name: Verify update manifest published
+        if: steps.freshness.outputs.should_build == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token_final.outputs.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          assets="$(gh release view "$TAG" --repo "$DAILY_REPO" --json assets --jq '.assets[].name')"
+          echo "Published assets:"
+          echo "$assets"
+          # Why exit 1 without deleting here: the release is still a draft, so it is
+          # already invisible to users, and the failure handler below owns cleanup.
+          # Deleting inline under `set -e` would also let the delete's exit code
+          # preempt this explicit failure.
+          for required in latest-mac.yml; do
+            if ! grep -qx "$required" <<<"$assets"; then
+              echo "::error::Daily draft $TAG is missing $required; the updater could not install it."
+              exit 1
+            fi
+          done
+          if ! grep -q '\.zip$' <<<"$assets"; then
+            echo "::error::Daily draft $TAG has no ZIP artifact for the updater to download."
+            exit 1
+          fi
+
+      # Why this is the last mutating step: publishing the draft is what makes the
+      # build visible to listReleaseBuilds. Doing it only after the manifest check
+      # means the picker can never offer a release whose assets are incomplete.
+      - name: Publish the verified release
+        id: publish_live
+        if: steps.freshness.outputs.should_build == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token_final.outputs.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+          NAME: ${{ steps.daily.outputs.name }}
+          NOTES_FILE: ${{ steps.release.outputs.notes_file }}
+        run: |
+          set -euo pipefail
+          # --title again: electron-builder resolves this draft by tag and may
+          # rewrite its title on upload. Re-asserting here means the name the
+          # picker reads is the one composed above, whatever it did in between.
+          # --notes-file for the same reason, and it matters more: the next run's
+          # freshness check parses the source commit back out of this body, so a
+          # body the publisher overwrote would rebuild an unchanged main daily.
+          gh release edit "$TAG" --repo "$DAILY_REPO" --draft=false --prerelease \
+            --title "$NAME" --notes-file "$NOTES_FILE"
+          echo "Published $TAG as \"$NAME\""
+
+      # Why: a draft left behind by a failed publish is invisible to users but still
+      # holds its tag name, so the next run for the same minute would collide.
+      #
+      # Why it is gated on publish_live not having succeeded: a later failure (the
+      # prune step) must not delete a release that already went live and that users
+      # may already be installing. A job killed by the outer timeout runs no steps
+      # at all — which is exactly why the release stays a draft until verified.
+      # Why cancelled() too: a run stopped from the Actions UI is not a failure(),
+      # so without it a manual cancel mid-publish would strand the draft.
+      - name: Discard the draft release on failure
+        if: >-
+          (failure() || cancelled()) && steps.release.outputs.tag != '' &&
+          steps.publish_live.outcome != 'success'
+        shell: bash
+        env:
+          # Fall back to the publish token: if the re-mint itself is what failed,
+          # the older token is the only one left and may still have time on it.
+          GH_TOKEN: ${{ steps.app_token_final.outputs.token || steps.app_token_publish.outputs.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -uo pipefail
+          # No --cleanup-tag: an unpublished draft never created a git tag.
+          echo "Run failed before publish; discarding draft $TAG"
+          gh release delete "$TAG" --repo "$DAILY_REPO" --yes ||
+            echo "::warning::Could not discard draft $TAG; remove it manually."
+
+      - name: Prune old daily releases
+        # Only after a live publish: $TAG is then a non-draft we must not delete,
+        # and failed runs should not reshuffle retention around a draft that the
+        # failure path is about to discard.
+        if: steps.publish_live.outcome == 'success'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token_final.outputs.token }}
+          # Protect the tag this run just shipped; at the retain cap, a bad sort
+          # can otherwise mark the newest release as stale and delete it.
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          # Why: --cleanup-tag so pruning does not leave orphan tags behind that
+          # keep showing up in tag lists with no release or assets attached.
+          # Drafts are excluded so retention counts shipped builds only; a stale
+          # draft is handled by the failure path, not by the retention window.
+          #
+          # Sort by publishedAt (not createdAt). Many non-draft dailies can share
+          # one createdAt (bulk import / re-create), so createdAt ranking is
+          # unstable. publishedAt is real recency; tagName (...YYYYMMDDHHMM) is
+          # the deterministic tie-break.
+          #
+          # Why force $TAG to the front before slicing: a hard retain-window seat
+          # for this run's release. Dropping $TAG from the list *before* the slice
+          # would permanently keep retain+1 releases; skipping it only in the
+          # delete loop would under-prune when the sort is still wrong. Partition
+          # keeps relative order of every other tag.
+          jq_filter='map(select(.isDraft | not)) | sort_by(.publishedAt // "", .tagName) | reverse'
+          if [[ -n "${TAG:-}" ]]; then
+            jq_filter+=" | (map(select(.tagName == \"${TAG//\"/\\\"}\")) + map(select(.tagName != \"${TAG//\"/\\\"}\")))"
+          fi
+          jq_filter+=" | .[${DAILY_RETAIN_COUNT}:] | .[].tagName"
+          stale="$(gh release list --repo "$DAILY_REPO" --limit 200 --json tagName,publishedAt,isDraft \
+            --jq "$jq_filter")"
+          if [[ -z "$stale" ]]; then
+            echo "Nothing to prune; at or under $DAILY_RETAIN_COUNT retained builds."
+            exit 0
+          fi
+          while read -r tag; do
+            [[ -n "$tag" ]] || continue
+            # Belt-and-suspenders: partition above should already exclude $TAG.
+            if [[ -n "${TAG:-}" && "$tag" == "$TAG" ]]; then
+              echo "::warning::Prune list still included just-published $tag after protect; skipping delete."
+              continue
+            fi
+            echo "Pruning $tag"
+            gh release delete "$tag" --repo "$DAILY_REPO" --yes --cleanup-tag || \
+              echo "::warning::Could not prune $tag"
+          done <<<"$stale"
+
+  # Why detached dispatch, not a reusable workflow in this graph: the full suite
+  # is currently red on main. Inlining it here would fail the daily after the
+  # signed build already published. Same pattern as release-cut's post-release-e2e.
+  #
+  # Why --ref main plus the SHA input: daily tags live on orca-daily, not this
+  # repo, so there is no cut tag for `gh workflow run --ref`. The workflow file
+  # comes from main; checkout uses the exact commit this daily built.
+  post-daily-e2e:
+    needs: build-daily-mac
+    if: ${{ needs.build-daily-mac.outputs.published == 'true' && needs.build-daily-mac.outputs.head_sha != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch cut-scoped E2E
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ needs.build-daily-mac.outputs.head_sha }}
+        run: |
+          for attempt in 1 2 3; do
+            if gh workflow run e2e.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              --raw-field "ref=$SHA"; then
+              echo "Dispatched post-daily E2E for $SHA."
+              exit 0
+            fi
+            [[ "$attempt" -eq 3 ]] || sleep "$((attempt * 5))"
+          done
+          echo "::warning::Failed to dispatch post-daily E2E for $SHA after 3 attempts."
+
+  # Why this runs after the mac leg rather than beside it: the tag and version
+  # are computed inside that job, so until it has run nothing else can name the
+  # release to upload into. The cost is small enough not to matter — the Windows
+  # leg measures ~7.5 min (install 2m45, build 35s, NSIS package 3m) against a
+  # ~9.5 min mac run, which keeps a daily run far inside its interval.
+  #
+  # Why `./` rather than a pinned `@main`: `uses:` resolves against the ref this
+  # file itself came from, which for an ordinary dispatch is main. Someone who
+  # deliberately points the Actions "Use workflow from" picker at a branch
+  # already gets that branch's copy of this entire file, so this follows the same
+  # rule instead of inventing a second one.
+  build-daily-win:
+    needs: build-daily-mac
+    # Only once the mac release is actually live: there is no release to upload
+    # into otherwise, and the Windows workflow refuses to create one.
+    if: needs.build-daily-mac.outputs.published == 'true'
+    uses: ./.github/workflows/dev-channel-win-build.yml
+    secrets: inherit
+    with:
+      channel: daily
+      tag: ${{ needs.build-daily-mac.outputs.tag }}
+      ref: ${{ needs.build-daily-mac.outputs.head_sha }}
+      version: ${{ needs.build-daily-mac.outputs.version }}

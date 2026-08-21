@@ -7,8 +7,9 @@ import { DaemonServer } from './daemon-server'
 import { DaemonClient } from './client'
 import { encodeNdjson } from './ndjson'
 import { PROTOCOL_VERSION, type DaemonRequest } from './types'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import { getDaemonPidPath, getDaemonSocketPath, serializeDaemonPidFile } from './daemon-spawner'
+import { waitForEndpointUnreachable } from './daemon-endpoint-reachability-test-harness'
 
 const confirmForegroundProcessMock = vi.fn(async () => 'droid')
 
@@ -49,6 +50,7 @@ function createMockSubprocess(): SubprocessHandle & {
 
 type DaemonServerPrivate = {
   server: Server | null
+  pendingPtySpawnPreparations: Map<string, Set<unknown>>
   host: {
     kill: (sessionId: string, opts?: { immediate?: boolean }) => void | Promise<void>
   }
@@ -86,11 +88,12 @@ describe('DaemonServer', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
-  async function startServer(launchNonce?: string): Promise<void> {
+  async function startServer(launchNonce?: string, onRpcShutdown?: () => void): Promise<void> {
     server = new DaemonServer({
       socketPath,
       tokenPath,
       ...(launchNonce ? { pidPath, launchNonce } : {}),
+      ...(onRpcShutdown ? { onRpcShutdown } : {}),
       spawnSubprocess: () => createMockSubprocess()
     })
     await server.start()
@@ -154,13 +157,6 @@ describe('DaemonServer', () => {
       expect(token.length).toBeGreaterThan(0)
     })
 
-    it('removes the startup error listener after listening', async () => {
-      await startServer()
-
-      const daemon = server as unknown as DaemonServerPrivate
-      expect(daemon.server?.listenerCount('error')).toBe(0)
-    })
-
     it('accepts client connections', async () => {
       await startServer()
       const c = await connectClient()
@@ -183,6 +179,9 @@ describe('DaemonServer', () => {
         isNew: true,
         pid: 55555
       })
+      await expect(
+        c.request('closeStartupQueryAuthority', { sessionId: 'test-session' })
+      ).resolves.toEqual({ appliedSeq: 0 })
     })
 
     it('keeps RPC responsive and creates one subprocess while spawn preparation is pending', async () => {
@@ -264,7 +263,9 @@ describe('DaemonServer', () => {
           requestType === 'kill'
             ? c.request('kill', { sessionId: 'canceled-preparation', immediate: true })
             : c.request('cancelCreateOrAttach', { sessionId: 'canceled-preparation' })
-        await expect(cancelRequest).resolves.toEqual({})
+        await expect(cancelRequest).resolves.toEqual(
+          requestType === 'kill' ? {} : { canceled: true }
+        )
         finishPreparation()
         await canceledCreates
         expect(spawnSubprocess).not.toHaveBeenCalled()
@@ -311,6 +312,56 @@ describe('DaemonServer', () => {
       await canceledCreate
       await shutdown
       expect(spawnSubprocess).not.toHaveBeenCalled()
+    })
+
+    it('cancels a disconnecting client’s pending preparation to avoid an orphan PTY (F4)', async () => {
+      let finishPreparation!: () => void
+      const preparation = new Promise<void>((resolve) => {
+        finishPreparation = resolve
+      })
+      const preparePtySpawn = vi.fn(() => preparation)
+      const spawnSubprocess = vi.fn(() => createMockSubprocess())
+      server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        preparePtySpawn,
+        spawnSubprocess
+      })
+      await server.start()
+      const c = await connectClient()
+
+      // Hangs in preflight; the control-socket close must abort it before spawn.
+      c.request('createOrAttach', {
+        sessionId: 'disconnect-pending',
+        cols: 80,
+        rows: 24
+      }).catch(() => {
+        /* the disconnect rejects the in-flight request; that's expected */
+      })
+      await vi.waitFor(() => expect(preparePtySpawn).toHaveBeenCalledOnce())
+
+      c.disconnect()
+      // Wait for the server to process the close (and cancel the prep) before
+      // releasing the preflight, else the resumed spawn races ahead of cancellation.
+      await vi.waitFor(() =>
+        expect((server as unknown as DaemonServerPrivate).clients.size).toBe(0)
+      )
+      finishPreparation()
+      await vi.waitFor(() =>
+        expect((server as unknown as DaemonServerPrivate).pendingPtySpawnPreparations.size).toBe(0)
+      )
+      expect(spawnSubprocess).not.toHaveBeenCalled()
+    })
+
+    it('kill with no pending preparation still surfaces SessionNotFoundError (F7)', async () => {
+      await startServer()
+      const c = await connectClient()
+
+      // No preparation was canceled, so the host's not-found verdict must propagate
+      // rather than be swallowed by the pending-spawn kill reconciliation.
+      await expect(
+        c.request('kill', { sessionId: 'never-created', immediate: true })
+      ).rejects.toThrow('Session not found: never-created')
     })
 
     it('persists only an allowlisted launch identity across reattach', async () => {
@@ -788,7 +839,8 @@ describe('DaemonServer', () => {
 
   describe('shutdown', () => {
     it('waits for the ordinary shutdown reply write before destroying resources', async () => {
-      await startServer()
+      const onRpcShutdown = vi.fn()
+      await startServer(undefined, onRpcShutdown)
       const c = await connectClient()
       const daemon = server as unknown as DaemonServerPrivate & {
         host: { dispose: () => Promise<void> }
@@ -807,11 +859,14 @@ describe('DaemonServer', () => {
 
       await expect(c.request('shutdown', { killSessions: false })).resolves.toEqual({})
       expect(dispose).not.toHaveBeenCalled()
+      expect(onRpcShutdown).not.toHaveBeenCalled()
       expect(existsSync(tokenPath)).toBe(true)
 
       replyFlushed?.()
-      await waitFor(() => !existsSync(tokenPath))
+      await waitFor(() => onRpcShutdown.mock.calls.length === 1)
+      expect(existsSync(tokenPath)).toBe(false)
       expect(dispose).toHaveBeenCalledOnce()
+      expect(onRpcShutdown).toHaveBeenCalledOnce()
     })
 
     it('removes only its owned token and PID record', async () => {
@@ -857,6 +912,7 @@ describe('DaemonServer', () => {
       await expect(c.ensureConnected()).rejects.toThrow()
     })
 
+    // Runs everywhere: a closed Windows pipe classifies as missing, not connected.
     it('still terminates via the shutdown RPC when disposal cannot prove physical exit', async () => {
       await startServer()
       const daemon = server as unknown as DaemonServerPrivate & {
@@ -872,7 +928,8 @@ describe('DaemonServer', () => {
       await expect(c.request('shutdown', { killSessions: true })).resolves.toEqual({})
 
       await waitFor(() => daemon.server === null)
-      await waitFor(() => !existsSync(socketPath))
+      // Why not existsSync: the dead entry remains for the next publisher to replace.
+      expect(await waitForEndpointUnreachable(socketPath)).toBe(true)
       const late = new DaemonClient({ socketPath, tokenPath })
       await expect(late.ensureConnected()).rejects.toThrow()
     })

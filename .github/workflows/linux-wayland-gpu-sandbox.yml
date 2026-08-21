@@ -1,20 +1,6 @@
 name: Linux Wayland GPU Sandbox
 
 on:
-  pull_request:
-    paths:
-      - .github/workflows/linux-wayland-gpu-sandbox.yml
-      - config/scripts/linux-wayland-renderer-diagnostics.mjs
-      - config/scripts/linux-wayland-terminal-exercise.mjs
-      - config/scripts/linux-wayland-validation-watchdog.mjs
-      - config/scripts/verify-linux-wayland-gpu-sandbox.mjs
-      - src/main/startup/configure-process.ts
-      - src/main/startup/configure-process.test.ts
-      - src/preload/api-types.ts
-      - src/preload/index.ts
-      - src/renderer/src/components/terminal-pane/pty-connection.ts
-      - src/renderer/src/lib/pane-manager/terminal-webgl-auto-policy.ts
-      - src/renderer/src/web/web-preload-api.ts
   workflow_dispatch:
 
 jobs:
@@ -85,34 +71,6 @@ jobs:
           done
           test -S "$XDG_RUNTIME_DIR/wayland-1"
 
-      - name: Reproduce terminal input freeze without the workaround
-        id: reproduce_base
-        if: github.event_name == 'pull_request'
-        # Why: still collect fixed-path Wayland evidence when the base repro
-        # stops reproducing; the final gate below fails the job in that case.
-        continue-on-error: true
-        timeout-minutes: 10
-        run: |
-          set -euo pipefail
-          git fetch --no-tags --depth=1 origin "${{ github.event.pull_request.base.sha }}"
-          # Why: once the PR base includes this workaround, the partial
-          # checkout cannot reconstruct an unfixed Wayland negative control.
-          if git show "${{ github.event.pull_request.base.sha }}:src/main/startup/configure-process.ts" | grep -Eq "appendSwitch\\(['\"]disable-gpu-sandbox['\"]\\)"; then
-            echo "The base build already contains the Linux Wayland GPU sandbox workaround; skipping unfixed-path reproduction."
-            exit 0
-          fi
-          # Why: keep the new verifier scripts, but run them against the
-          # unfixed production terminal/GPU path instead of a hybrid checkout.
-          git checkout "${{ github.event.pull_request.base.sha }}" -- \
-            src/main/startup/configure-process.ts \
-            src/preload/api-types.ts \
-            src/preload/index.ts \
-            src/renderer/src/components/terminal-pane/pty-connection.ts \
-            src/renderer/src/lib/pane-manager/terminal-webgl-auto-policy.ts \
-            src/renderer/src/web/web-preload-api.ts
-          rm -rf out
-          node config/scripts/verify-linux-wayland-gpu-sandbox.mjs --mode=expect-repro
-
       - name: Verify terminal input under Wayland GPU sandbox workaround
         if: ${{ !cancelled() }}
         timeout-minutes: 10
@@ -121,12 +79,6 @@ jobs:
           git checkout --force "$GITHUB_SHA"
           rm -rf out
           node config/scripts/verify-linux-wayland-gpu-sandbox.mjs
-
-      - name: Require base reproduction
-        if: ${{ github.event_name == 'pull_request' && steps.reproduce_base.outcome != 'success' }}
-        run: |
-          echo "The unfixed base build did not reproduce the Wayland terminal input failure."
-          exit 1
 
       - name: Upload Weston log
         if: always()

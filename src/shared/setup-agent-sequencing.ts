@@ -1,11 +1,15 @@
+import { encodePowerShellCommand } from './powershell-command-encoding'
 import {
+  nativeWindowsPathToPosixShellPath,
   resolveSetupRunnerCommand,
   type SetupRunnerCommandPlatform,
-  type SetupRunnerCommandShell
+  type SetupRunnerCommandShell,
+  type SetupRunnerShell
 } from './setup-runner-command'
 
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
 export const SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV = 'ORCA_SEQUENCED_STARTUP_COMMAND'
+export const SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV = 'ORCA_SEQUENCED_STARTUP_SCRIPT'
 
 export type SequencedSetupAgentCommands = {
   setupCommand: string
@@ -33,19 +37,32 @@ export function createSequencedSetupAgentCommands(args: {
   runnerScriptPath: string
   startupCommand: string
   platform: SetupRunnerCommandPlatform
+  shell?: SetupRunnerShell
   nonce?: string
   waitTimeoutSeconds?: number
 }): SequencedSetupAgentCommands {
   const nonce = args.nonce ?? createSetupAgentSequenceNonce()
-  const resolution = resolveSetupRunnerCommand(args.runnerScriptPath, args.platform)
+  const resolution = resolveSetupRunnerCommand(args.runnerScriptPath, args.platform, args.shell)
+  // Why: the gate is typed into the terminal pane and `startupCommand` is already quoted for that
+  // pane, so a batch runner launched from a Git Bash pane still needs the bash gate — PowerShell's
+  // `Invoke-Expression` cannot parse the POSIX `'\''` escaping the pane's quoting produces. The
+  // runner itself still launches through `resolution.command`, never through bash.
+  const posixGateForWindowsRunner = resolution.shell === 'windows' && args.shell?.family === 'posix'
+  const markerBasePath = posixGateForWindowsRunner
+    ? nativeWindowsPathToPosixShellPath(resolution.runnerScriptPathForShell)
+    : resolution.runnerScriptPathForShell
   // Why: overlapping gated launches of the same setup runner must not race on
   // a shared completion marker.
-  const markerPath = `${resolution.runnerScriptPathForShell}.${nonce}.done`
+  const markerPath = `${markerBasePath}.${nonce}.done`
   const waitTimeoutSeconds = args.waitTimeoutSeconds ?? DEFAULT_WAIT_TIMEOUT_SECONDS
 
-  if (resolution.shell === 'windows') {
+  if (resolution.shell === 'windows' && !posixGateForWindowsRunner) {
     return {
-      setupCommand: buildWindowsSetupCommand(resolution.command, markerPath, nonce),
+      setupCommand: buildWindowsSetupCommand(
+        resolution.runnerScriptPathForShell,
+        markerPath,
+        nonce
+      ),
       startupCommand: buildWindowsStartupCommand(markerPath, nonce, waitTimeoutSeconds),
       startupEnv: {
         [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: args.startupCommand
@@ -53,16 +70,19 @@ export function createSequencedSetupAgentCommands(args: {
     }
   }
 
+  const startupScript = buildPosixStartupScript(
+    args.startupCommand,
+    markerPath,
+    nonce,
+    waitTimeoutSeconds
+  )
   return {
     setupCommand: buildPosixSetupCommand(resolution.command, markerPath, nonce),
-    startupCommand: buildPosixStartupCommand(
-      args.startupCommand,
-      markerPath,
-      nonce,
-      waitTimeoutSeconds
-    ),
+    // Why: long worktree paths can push the gate past a PTY's canonical input cap and drop its submit byte.
+    startupCommand: `bash -lc 'eval "$${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}"'`,
     startupEnv: {
-      [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: args.startupCommand
+      [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: args.startupCommand,
+      [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: startupScript
     }
   }
 }
@@ -84,7 +104,7 @@ function buildPosixSetupCommand(setupCommand: string, markerPath: string, nonce:
   return `bash -lc ${quotePosixArg(script)}`
 }
 
-function buildPosixStartupCommand(
+function buildPosixStartupScript(
   startupCommand: string,
   markerPath: string,
   nonce: string,
@@ -119,7 +139,7 @@ function buildPosixStartupCommand(
     'done'
   ].join(' ')
 
-  return `bash -lc ${quotePosixArg(script)}`
+  return script
 }
 
 function buildPosixStartupSuccessCommand(startupCommand: string): string {
@@ -165,17 +185,33 @@ function hasUnquotedPosixCommandSeparator(command: string): boolean {
   return false
 }
 
-function buildWindowsSetupCommand(setupCommand: string, markerPath: string, nonce: string): string {
-  return wrapCmd([
-    `set "ORCA_SETUP_MARKER=${escapeCmdSetValue(markerPath)}"`,
-    `set "ORCA_SETUP_NONCE=${escapeCmdSetValue(nonce)}"`,
-    'del /f /q "!ORCA_SETUP_MARKER!" "!ORCA_SETUP_MARKER!.tmp" 2>nul',
-    `call ${setupCommand}`,
-    'set "ORCA_SETUP_STATUS=!ERRORLEVEL!"',
-    '> "!ORCA_SETUP_MARKER!.tmp" echo !ORCA_SETUP_NONCE!:!ORCA_SETUP_STATUS!',
-    'move /y "!ORCA_SETUP_MARKER!.tmp" "!ORCA_SETUP_MARKER!" >nul',
-    'exit /b !ORCA_SETUP_STATUS!'
-  ])
+function buildWindowsSetupCommand(
+  runnerScriptPath: string,
+  markerPath: string,
+  nonce: string
+): string {
+  // Why: delayed expansion keeps path metacharacters as data when cmd invokes the batch runner.
+  const script = [
+    `$runner = ${quotePowerShellString(runnerScriptPath)}`,
+    `$marker = ${quotePowerShellString(markerPath)}`,
+    '$tmp = $marker + ".tmp"',
+    `$nonce = ${quotePowerShellString(nonce)}`,
+    'Remove-Item -LiteralPath $marker, $tmp -Force -ErrorAction SilentlyContinue',
+    '$processInfo = [System.Diagnostics.ProcessStartInfo]::new()',
+    '$processInfo.FileName = $env:ComSpec',
+    '$processInfo.Arguments = \'/d /s /v:on /c ""!ORCA_SETUP_RUNNER!""\'',
+    '$processInfo.UseShellExecute = $false',
+    '$processInfo.EnvironmentVariables["ORCA_SETUP_RUNNER"] = $runner',
+    '$process = [System.Diagnostics.Process]::Start($processInfo)',
+    '$process.WaitForExit()',
+    '$setupStatus = $process.ExitCode',
+    '$utf8 = [System.Text.UTF8Encoding]::new($false)',
+    '[System.IO.File]::WriteAllText($tmp, ($nonce + ":" + $setupStatus + [Environment]::NewLine), $utf8)',
+    'Move-Item -LiteralPath $tmp -Destination $marker -Force',
+    'exit $setupStatus'
+  ].join('; ')
+
+  return encodePowerShellInvocation(script)
 }
 
 function buildWindowsStartupCommand(
@@ -187,10 +223,15 @@ function buildWindowsStartupCommand(
   // Why: native Windows setup runners launch through cmd.exe, but PowerShell
   // gives us safe bounded file polling/parsing without a fragile batch label loop.
   const script = [
-    '$marker = $env:ORCA_SETUP_MARKER',
+    `$marker = ${quotePowerShellString(markerPath)}`,
+    'if ([string]::IsNullOrWhiteSpace($marker)) {',
+    '  [Console]::Error.WriteLine("Missing setup marker path.")',
+    '  exit 1',
+    '}',
     '$tmp = $marker + ".tmp"',
-    '$nonce = $env:ORCA_SETUP_NONCE',
+    `$nonce = ${quotePowerShellString(nonce)}`,
     `$deadline = (Get-Date).AddSeconds(${timeout})`,
+    '[Console]::Error.WriteLine("Waiting for setup to finish before starting agent...")',
     'while ($true) {',
     '  if (Test-Path -LiteralPath $marker) {',
     '    $content = Get-Content -LiteralPath $marker -TotalCount 1',
@@ -220,18 +261,11 @@ function buildWindowsStartupCommand(
     '}'
   ].join('; ')
 
-  return wrapCmd([
-    `set "ORCA_SETUP_MARKER=${escapeCmdSetValue(markerPath)}"`,
-    `set "ORCA_SETUP_NONCE=${escapeCmdSetValue(nonce)}"`,
-    'echo Waiting for setup to finish before starting agent... 1>&2',
-    `powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ${quoteWindowsArg(script)}`,
-    'set "ORCA_SETUP_STATUS=!ERRORLEVEL!"',
-    'exit /b !ORCA_SETUP_STATUS!'
-  ])
+  return encodePowerShellInvocation(script)
 }
 
-function wrapCmd(parts: string[]): string {
-  return `cmd.exe /d /s /v:on /c ${quoteWindowsArg(parts.join(' & '))}`
+function encodePowerShellInvocation(script: string): string {
+  return `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand ${encodePowerShellCommand(script)}`
 }
 
 function quotePosixArg(value: string): string {
@@ -241,12 +275,8 @@ function quotePosixArg(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`
 }
 
-function quoteWindowsArg(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`
-}
-
-function escapeCmdSetValue(value: string): string {
-  return value.replace(/"/g, '""').replace(/[%!^]/g, (char) => `^${char}`)
+function quotePowerShellString(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`
 }
 
 export function getSetupAgentSequenceShellForTests(

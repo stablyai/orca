@@ -2,53 +2,60 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { normalizeRightSidebarRoute } from '../right-sidebar-route'
+import { settleEvictedModalData } from './modal-slot-dismissal'
 import {
   findPrevLiveNonTaskStackHistoryIndex,
   findPrevLiveWorktreeHistoryIndex
 } from './worktree-nav-history'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { JiraIssue } from '../../../../shared/jira-types'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { PersistedTrustedOrcaHooks } from '../../../../shared/orca-yaml-hook-types'
+import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import type { CustomPet } from '../../../../shared/pet-types'
+import type { TaskProvider } from '../../../../shared/task-providers'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
-  ChangelogData,
-  CustomPet,
-  GitHubWorkItem,
-  JiraIssue,
-  LinearIssue,
+  AgentActivityDisplayMode,
   ManualRepoOrderEntry,
-  PersistedTrustedOrcaHooks,
-  PersistedUIState,
+  ProjectOrderBy,
   StatusBarItem,
-  TaskProvider,
   TaskResumeState,
   TaskViewPresetId,
-  TuiAgent,
-  UpdateStatus,
-  WorkspaceStatusDefinition,
-  AgentActivityDisplayMode,
-  ProjectOrderBy,
-  WorktreeCardProperty,
-  WorktreeCardMode,
+  TopLevelView,
+  VisibleWorkspaceHostIds,
   WorkspaceHostOrder,
   WorkspaceHostScope,
-  VisibleWorkspaceHostIds,
-  TopLevelView
-} from '../../../../shared/types'
+  WorktreeCardMode,
+  WorktreeCardProperty
+} from '../../../../shared/ui-chrome-types'
+import type { ChangelogData, UpdateStatus } from '../../../../shared/update-status-types'
+import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
 import {
   applyManualRepoOrder,
   normalizeManualRepoOrder
 } from '../../../../shared/manual-repo-order'
 import { isTopLevelView } from '../../../../shared/top-level-view'
+import { isReleaseChannel, type ReleaseChannel } from '../../../../shared/release-channel'
 import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import {
   DEFAULT_USAGE_PERCENTAGE_DISPLAY,
   normalizeUsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
+import {
+  DEFAULT_STATUS_BAR_USAGE_MODE,
+  normalizeStatusBarUsageMode,
+  type StatusBarUsageMode
+} from '../../../../shared/status-bar-usage-mode'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/types'
+import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/pet-types'
 import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
   type WorkspaceCleanupDismissal
 } from '../../../../shared/workspace-cleanup'
+import { normalizeWorkspaceCleanupBrowseState } from '../../../../shared/workspace-cleanup-browse-state'
 import { normalizeFeatureTipIds, type FeatureTipId } from '../../../../shared/feature-tips'
 import {
   hasFeatureInteraction,
@@ -96,9 +103,13 @@ import {
   normalizeWorkspaceStatuses
 } from '../../../../shared/workspace-statuses'
 import { clampMarkdownTocPanelWidth } from '../../../../shared/markdown-toc-panel-width'
+import { clampCombinedDiffFileTreeWidth } from '../../../../shared/combined-diff-file-tree-width'
 import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
 import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
-import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
+import {
+  isSettingsNavigationTarget,
+  type SettingsNavigationTarget
+} from '@/lib/settings-navigation-types'
 import {
   filterSetupScriptPromptDismissalsToValidRepos,
   getSetupScriptPromptDismissalKey,
@@ -122,9 +133,11 @@ import {
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { translate } from '@/i18n/i18n'
+import { getRepoHostIdentity } from './repo-host-identity'
 
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
+  executionHostId?: ExecutionHostId
   behavior: 'auto' | 'smooth'
   highlight?: boolean
   beginRename?: boolean
@@ -308,7 +321,8 @@ const VALID_LINEAR_PRESETS = new Set<NonNullable<TaskResumeState['linearPreset']
 const VALID_LINEAR_MODES = new Set<NonNullable<TaskResumeState['linearMode']>>([
   'issues',
   'projects',
-  'views'
+  'views',
+  'in-orca'
 ])
 const VALID_JIRA_PRESETS = new Set<NonNullable<TaskResumeState['jiraPreset']>>([
   'assigned',
@@ -588,6 +602,11 @@ export type UISlice = {
   openAgentSendPopoverTargetMode: (args: OpenAgentSendPopoverTargetModeArgs) => void
   closeAgentSendPopoverTargetMode: (id?: string, instanceId?: string) => void
   sendPromptToSidebarAgentTarget: (paneKey: string) => Promise<boolean>
+  /** Bumped to ask the active worktree's Source Control notes send menu to open (keyboard shortcut). `issuedAt` bounds staleness so a request the menu never consumed can't reopen it much later. */
+  diffNotesSendMenuOpenRequest: { worktreeId: string; nonce: number; issuedAt: number } | null
+  /** Reveal Source Control and request its notes send menu open; returns false (no-op) when the active worktree has no unsent notes. */
+  openDiffNotesSendMenuForActiveWorktree: () => boolean
+  consumeDiffNotesSendMenuOpenRequest: (worktreeId: string) => void
   /** Per-agent "I've looked at this" timestamps (paneKey → ts). A row is unvisited when no ack exists or stateStartedAt is newer than the last ack. Persisted so visited rows don't return bold on relaunch. */
   acknowledgedAgentsByPaneKey: Record<string, number>
   acknowledgeAgents: (paneKeys: string[]) => void
@@ -600,6 +619,7 @@ export type UISlice = {
     | 'automations'
     | 'space'
     | 'skills'
+    | 'artifacts'
     | 'mobile'
   previousViewBeforeSettings:
     | 'terminal'
@@ -608,6 +628,7 @@ export type UISlice = {
     | 'automations'
     | 'space'
     | 'skills'
+    | 'artifacts'
     | 'mobile'
   previousViewBeforeActivity:
     | 'terminal'
@@ -616,6 +637,7 @@ export type UISlice = {
     | 'automations'
     | 'space'
     | 'skills'
+    | 'artifacts'
     | 'mobile'
   previousViewBeforeAutomations:
     | 'terminal'
@@ -624,6 +646,7 @@ export type UISlice = {
     | 'activity'
     | 'space'
     | 'skills'
+    | 'artifacts'
     | 'mobile'
   previousViewBeforeSpace:
     | 'terminal'
@@ -632,6 +655,7 @@ export type UISlice = {
     | 'activity'
     | 'automations'
     | 'skills'
+    | 'artifacts'
     | 'mobile'
   previousViewBeforeSkills:
     | 'terminal'
@@ -640,6 +664,7 @@ export type UISlice = {
     | 'activity'
     | 'automations'
     | 'space'
+    | 'artifacts'
     | 'mobile'
   previousViewBeforeMobile:
     | 'terminal'
@@ -649,6 +674,16 @@ export type UISlice = {
     | 'automations'
     | 'space'
     | 'skills'
+    | 'artifacts'
+  previousViewBeforeArtifacts:
+    | 'terminal'
+    | 'settings'
+    | 'tasks'
+    | 'activity'
+    | 'automations'
+    | 'space'
+    | 'skills'
+    | 'mobile'
   setActiveView: (view: UISlice['activeView']) => void
   taskPageData: {
     preselectedRepoId?: string
@@ -666,6 +701,8 @@ export type UISlice = {
   }
   taskResumeState: TaskResumeState | undefined
   setTaskResumeState: (updates: Partial<TaskResumeState>) => void
+  taskListPosition: { contextKey: string; page: number; scrollTop: number } | null
+  setTaskListPosition: (position: UISlice['taskListPosition']) => void
   githubTaskDrawerWorkItem: GitHubWorkItem | null
   setGithubTaskDrawerWorkItem: (item: GitHubWorkItem | null) => void
   newWorkspaceDraft: {
@@ -680,15 +717,19 @@ export type UISlice = {
     note: string
     attachments: string[]
     linkedWorkItem: {
+      provider?: 'github' | 'gitlab' | 'linear' | 'jira'
       type: 'issue' | 'pr' | 'mr'
       number: number
       title: string
       url: string
       linearIdentifier?: string
       linearBranchName?: string
+      jiraIdentifier?: string
+      repoId?: string
     } | null
     /** Preserve where provider data came from, separately from the host chosen to run the workspace. */
     taskSourceContext?: TaskSourceContext | null
+    linkedTaskSourceContext?: TaskSourceContext | null
     agent: TuiAgent
     linkedIssue: string
     linkedPR: number | null
@@ -723,23 +764,32 @@ export type UISlice = {
   closeSpacePage: () => void
   openSkillsPage: () => void
   closeSkillsPage: () => void
+  pendingSkillShareId: string | null
+  openSkillShare: (shareId: string) => void
+  clearPendingSkillShare: () => void
+  /** Set when another surface links straight to the page's shared-links view. */
+  pendingSkillsSharedView: boolean
+  openSkillsSharedLinks: () => void
+  clearPendingSkillsSharedView: () => void
+  openArtifactsPage: () => void
+  closeArtifactsPage: () => void
   openMobilePage: () => void
   closeMobilePage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
   clearNewWorkspaceDraft: () => void
   openSettingsPage: () => void
   closeSettingsPage: () => void
-  settingsNavigationTarget: {
-    pane: SettingsNavTarget
-    repoId: string | null
-    sectionId?: string
-    intent?: 'add-quick-command'
-  } | null
+  settingsNavigationTarget: SettingsNavigationTarget | null
   openSettingsTarget: (target: NonNullable<UISlice['settingsNavigationTarget']>) => void
   clearSettingsTarget: () => void
   /** Which host the Projects Settings pane shows per project (keyed by projectId). Ephemeral on purpose — never persisted, so reload reopens on the effective host. */
   settingsProjectHostSelection: Record<string, ExecutionHostId>
-  setSettingsProjectHostSelection: (projectId: string, hostId: ExecutionHostId) => void
+  settingsProjectSetupSelection: Record<string, string>
+  setSettingsProjectHostSelection: (
+    projectId: string,
+    hostId: ExecutionHostId,
+    setupId?: string
+  ) => void
   /** One-shot Appearance accordion to expand for nested Settings deep links (e.g. Usage percentages under Window & Sidebar). Cleared when Appearance consumes it. */
   appearanceAccordionDeepLink: 'interface' | 'terminal' | 'window' | null
   setAppearanceAccordionDeepLink: (
@@ -751,6 +801,7 @@ export type UISlice = {
     | 'create-worktree'
     | 'edit-meta'
     | 'delete-worktree'
+    | 'preserved-branch-review'
     | 'forget-ssh-workspace'
     | 'confirm-add-project-from-folder'
     | 'confirm-non-git-folder'
@@ -811,8 +862,8 @@ export type UISlice = {
   ) => void
   markOrcaHookRepoAlwaysTrusted: (repoId: string) => void
   clearOrcaHookTrustForRepo: (repoId: string) => void
-  setupScriptPromptDismissedRepoIds: string[]
-  dismissSetupScriptPrompt: (repoId: string) => void
+  setupScriptPromptDismissedRepoIds: readonly string[]
+  dismissSetupScriptPrompt: (repoHostIdentity: string) => void
   setupGuideSidebarDismissed: boolean
   setSetupGuideSidebarDismissed: (dismissed: boolean) => void
   setupGuideBrowserMilestoneMigrated: boolean
@@ -851,11 +902,19 @@ export type UISlice = {
   setHideDefaultBranchWorkspace: (v: boolean) => void
   hideAutomationGeneratedWorkspaces: boolean
   setHideAutomationGeneratedWorkspaces: (v: boolean) => void
+  hideCliCreatedWorkspaces: boolean
+  setHideCliCreatedWorkspaces: (v: boolean) => void
+  hideDetachedHeadWorkspaces: boolean
+  setHideDetachedHeadWorkspaces: (v: boolean) => void
+  hideWorkspacesFromOtherDevices: boolean
+  setHideWorkspacesFromOtherDevices: (v: boolean) => void
+  alwaysShowDefaultBranchWorkspace: boolean
+  setAlwaysShowDefaultBranchWorkspace: (v: boolean) => void
   showDotfilesByWorktree: Record<string, boolean>
   setShowDotfilesForWorktree: (worktreeId: string, showDotfiles: boolean) => void
   toggleShowDotfilesForWorktree: (worktreeId: string) => void
-  filterRepoIds: string[]
-  setFilterRepoIds: (ids: string[]) => void
+  filterRepoIds: readonly string[]
+  setFilterRepoIds: (ids: readonly string[]) => void
   collapsedGroups: Set<string>
   toggleCollapsedGroup: (key: string) => void
   worktreeCardProperties: WorktreeCardProperty[]
@@ -872,12 +931,17 @@ export type UISlice = {
   setWorkspaceBoardColumnWidth: (width: number) => void
   syncTaskStatusFromWorkspaceBoard: boolean
   setSyncTaskStatusFromWorkspaceBoard: (enabled: boolean) => void
+  /** Transient: the in-window Agent Dashboard companion drawer is open. Not persisted. */
+  agentDashboardDrawerOpen: boolean
+  setAgentDashboardDrawerOpen: (open: boolean) => void
   statusBarItems: StatusBarItem[]
   toggleStatusBarItem: (item: StatusBarItem) => void
   statusBarVisible: boolean
   setStatusBarVisible: (v: boolean) => void
   usagePercentageDisplay: UsagePercentageDisplay
   setUsagePercentageDisplay: (display: UsagePercentageDisplay) => void
+  statusBarUsageMode: StatusBarUsageMode
+  setStatusBarUsageMode: (mode: StatusBarUsageMode) => void
   workspacePortScan: { key: string; result: WorkspacePortScanResult } | null
   workspacePortScansByKey: Record<string, WorkspacePortScanResult>
   workspacePortScanRefreshing: boolean
@@ -912,6 +976,7 @@ export type UISlice = {
       behavior?: PendingSidebarWorktreeReveal['behavior']
       highlight?: boolean
       beginRename?: boolean
+      executionHostId?: ExecutionHostId
     }
   ) => void
   revealSidebarRow: (
@@ -941,11 +1006,17 @@ export type UISlice = {
   dismissedUpdateVersion: string | null
   dismissUpdate: (versionOverride?: string) => void
   clearDismissedUpdateVersion: () => void
+  /** Dev-only channel override; null follows the running build's own channel. */
+  releaseChannelOverride: ReleaseChannel | null
+  setReleaseChannelOverride: (channel: ReleaseChannel | null) => void
   // Why: ephemeral, renderer-only — never persisted; resets each session and on every phase transition (see setUpdateStatus).
   updateCardCollapsed: boolean
   setUpdateCardCollapsed: (collapsed: boolean) => void
   updateReassuranceSeen: boolean
   markUpdateReassuranceSeen: () => void
+  /** True on the launch where the OSC 52 default-on migration overrode a persisted `false`. */
+  osc52ClipboardDefaultOnNoticePending: boolean
+  clearOsc52ClipboardDefaultOnNotice: () => void
   isFullScreen: boolean
   setIsFullScreen: (v: boolean) => void
   /** URL opened when a new browser tab is created. Null = blank tab (default). */
@@ -996,6 +1067,32 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       get().revealWorktreeInSidebar(args.worktreeId, { behavior: 'auto', highlight: true })
     }
   },
+  diffNotesSendMenuOpenRequest: null,
+  openDiffNotesSendMenuForActiveWorktree: () => {
+    const worktreeId = get().activeWorktreeId
+    if (!worktreeId) {
+      return false
+    }
+    // Why: no unsent notes means nothing to send, so don't hijack focus or reveal the panel.
+    if (
+      !get()
+        .getDiffComments(worktreeId)
+        .some((comment) => !comment.sentAt)
+    ) {
+      return false
+    }
+    get().setRightSidebarTab('source-control')
+    get().setRightSidebarOpen(true)
+    const nonce = (get().diffNotesSendMenuOpenRequest?.nonce ?? 0) + 1
+    set({ diffNotesSendMenuOpenRequest: { worktreeId, nonce, issuedAt: Date.now() } })
+    return true
+  },
+  consumeDiffNotesSendMenuOpenRequest: (worktreeId) =>
+    set((s) =>
+      s.diffNotesSendMenuOpenRequest?.worktreeId === worktreeId
+        ? { diffNotesSendMenuOpenRequest: null }
+        : s
+    ),
   closeAgentSendPopoverTargetMode: (id, instanceId) =>
     set((s) => {
       if (!s.agentSendPopoverTargetMode) {
@@ -1171,10 +1268,14 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   previousViewBeforeAutomations: 'terminal',
   previousViewBeforeSpace: 'terminal',
   previousViewBeforeSkills: 'terminal',
+  pendingSkillShareId: null,
+  pendingSkillsSharedView: false,
   previousViewBeforeMobile: 'terminal',
+  previousViewBeforeArtifacts: 'terminal',
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
   taskResumeState: undefined,
+  taskListPosition: null,
   githubTaskDrawerWorkItem: null,
   newWorkspaceDraft: null,
   openTaskPage: (data = {}, options = {}) => {
@@ -1329,6 +1430,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       window.api.ui.set({ taskResumeState: next }).catch(console.error)
       return { taskResumeState: next }
     }),
+  setTaskListPosition: (taskListPosition) => set({ taskListPosition }),
   setGithubTaskDrawerWorkItem: (item) => set({ githubTaskDrawerWorkItem: item }),
   closeTaskPage: () =>
     set((state) => {
@@ -1417,6 +1519,32 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set((state) => ({
       activeView: state.previousViewBeforeSkills
     })),
+  openSkillShare: (shareId) =>
+    set((state) => ({
+      activeView: 'skills',
+      previousViewBeforeSkills:
+        state.activeView === 'skills' ? state.previousViewBeforeSkills : state.activeView,
+      pendingSkillShareId: shareId
+    })),
+  clearPendingSkillShare: () => set({ pendingSkillShareId: null }),
+  openSkillsSharedLinks: () =>
+    set((state) => ({
+      activeView: 'skills',
+      previousViewBeforeSkills:
+        state.activeView === 'skills' ? state.previousViewBeforeSkills : state.activeView,
+      pendingSkillsSharedView: true
+    })),
+  clearPendingSkillsSharedView: () => set({ pendingSkillsSharedView: false }),
+  openArtifactsPage: () =>
+    set((state) => ({
+      activeView: 'artifacts',
+      previousViewBeforeArtifacts:
+        state.activeView === 'artifacts' ? state.previousViewBeforeArtifacts : state.activeView
+    })),
+  closeArtifactsPage: () =>
+    set((state) => ({
+      activeView: state.previousViewBeforeArtifacts
+    })),
   openMobilePage: () =>
     set((state) => ({
       activeView: 'mobile',
@@ -1449,21 +1577,41 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       return { activeView: previousView }
     }),
   settingsNavigationTarget: null,
-  openSettingsTarget: (target) => set({ settingsNavigationTarget: target }),
+  openSettingsTarget: (target) => {
+    if (!isSettingsNavigationTarget(target)) {
+      if (import.meta.env.DEV) {
+        throw new TypeError('openSettingsTarget received an invalid navigation target')
+      }
+      return
+    }
+    set({ settingsNavigationTarget: target })
+  },
   clearSettingsTarget: () => set({ settingsNavigationTarget: null }),
   settingsProjectHostSelection: {},
+  settingsProjectSetupSelection: {},
   // Why: renderer-only, never persisted — no window.api.ui.set, and absent from the debounced UI writer in App.tsx.
-  setSettingsProjectHostSelection: (projectId, hostId) =>
-    set((s) =>
-      s.settingsProjectHostSelection[projectId] === hostId
-        ? s
-        : {
-            settingsProjectHostSelection: {
-              ...s.settingsProjectHostSelection,
-              [projectId]: hostId
-            }
-          }
-    ),
+  setSettingsProjectHostSelection: (projectId, hostId, setupId) =>
+    set((s) => {
+      const nextSetupSelections = { ...s.settingsProjectSetupSelection }
+      if (setupId) {
+        nextSetupSelections[projectId] = setupId
+      } else {
+        delete nextSetupSelections[projectId]
+      }
+      if (
+        s.settingsProjectHostSelection[projectId] === hostId &&
+        s.settingsProjectSetupSelection[projectId] === setupId
+      ) {
+        return s
+      }
+      return {
+        settingsProjectHostSelection: {
+          ...s.settingsProjectHostSelection,
+          [projectId]: hostId
+        },
+        settingsProjectSetupSelection: nextSetupSelections
+      }
+    }),
   appearanceAccordionDeepLink: null,
   setAppearanceAccordionDeepLink: (section) => set({ appearanceAccordionDeepLink: section }),
   clearAppearanceAccordionDeepLink: () => set({ appearanceAccordionDeepLink: null }),
@@ -1474,12 +1622,18 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     if (modal === 'add-repo' || modal === 'create-worktree') {
       get().recordFeatureInteraction?.('workspace-creation')
     }
+    const evicted = get().modalData
     set({
       activeModal: modal,
       modalData: data
     })
+    settleEvictedModalData(evicted)
   },
-  closeModal: () => set({ activeModal: 'none', modalData: {} }),
+  closeModal: () => {
+    const evicted = get().modalData
+    set({ activeModal: 'none', modalData: {} })
+    settleEvictedModalData(evicted)
+  },
   featureTipsSeenIds: [],
   markFeatureTipsSeen: (ids) =>
     set((s) => {
@@ -1819,10 +1973,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       return { trustedOrcaHooks: next }
     }),
   setupScriptPromptDismissedRepoIds: [],
-  dismissSetupScriptPrompt: (repoId) =>
+  dismissSetupScriptPrompt: (repoHostIdentity) =>
     set((s) => {
-      const dismissalKey = getSetupScriptPromptDismissalKey(repoId)
-      if (!repoId || s.setupScriptPromptDismissedRepoIds.includes(dismissalKey)) {
+      const dismissalKey = getSetupScriptPromptDismissalKey(repoHostIdentity)
+      if (!repoHostIdentity || s.setupScriptPromptDismissedRepoIds.includes(dismissalKey)) {
         return s
       }
       const next = [...s.setupScriptPromptDismissedRepoIds, dismissalKey]
@@ -1968,6 +2122,14 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setHideDefaultBranchWorkspace: (v) => set({ hideDefaultBranchWorkspace: v }),
   hideAutomationGeneratedWorkspaces: false,
   setHideAutomationGeneratedWorkspaces: (v) => set({ hideAutomationGeneratedWorkspaces: v }),
+  hideCliCreatedWorkspaces: false,
+  setHideCliCreatedWorkspaces: (v) => set({ hideCliCreatedWorkspaces: v }),
+  hideDetachedHeadWorkspaces: false,
+  setHideDetachedHeadWorkspaces: (v) => set({ hideDetachedHeadWorkspaces: v }),
+  hideWorkspacesFromOtherDevices: false,
+  setHideWorkspacesFromOtherDevices: (v) => set({ hideWorkspacesFromOtherDevices: v }),
+  alwaysShowDefaultBranchWorkspace: true,
+  setAlwaysShowDefaultBranchWorkspace: (v) => set({ alwaysShowDefaultBranchWorkspace: v }),
 
   showDotfilesByWorktree: {},
   setShowDotfilesForWorktree: (worktreeId, showDotfiles) =>
@@ -2089,6 +2251,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       return { statusBarItems: updated }
     }),
 
+  agentDashboardDrawerOpen: false,
+  setAgentDashboardDrawerOpen: (open) => set({ agentDashboardDrawerOpen: open }),
   statusBarVisible: true,
   setStatusBarVisible: (v) => {
     window.api.ui.set({ statusBarVisible: v }).catch(console.error)
@@ -2108,6 +2272,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       usagePercentageDisplay: normalized,
       usagePercentageDisplayChangeNoticeDismissed: true
     })
+  },
+  statusBarUsageMode: DEFAULT_STATUS_BAR_USAGE_MODE,
+  setStatusBarUsageMode: (mode) => {
+    const normalized = normalizeStatusBarUsageMode(mode)
+    window.api.ui.set({ statusBarUsageMode: normalized }).catch(console.error)
+    set({ statusBarUsageMode: normalized })
   },
   workspacePortScan: null,
   workspacePortScansByKey: {},
@@ -2240,6 +2410,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({
       pendingRevealWorktree: {
         worktreeId,
+        ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {}),
         behavior: options?.behavior ?? 'smooth',
         ...(options?.highlight ? { highlight: true } : {}),
         ...(options?.beginRename ? { beginRename: true } : {})
@@ -2268,6 +2439,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       const manualRepoOrder = normalizeManualRepoOrder(ui.manualRepoOrder)
       const orderedRepos = applyManualRepoOrder(s.repos, manualRepoOrder)
       const validRepoIds = new Set(s.repos.map((repo) => repo.id))
+      const validRepoHostIdentities = new Set(s.repos.map(getRepoHostIdentity))
       const persistedFilterRepoIds = sanitizePersistedRepoIds(ui.filterRepoIds)
       // Why: pre-rename builds used sidekick* keys; read as fallback only so new pet* writes win after upgrade.
       const customPets = Array.isArray(ui.customPets)
@@ -2339,6 +2511,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           undefined,
           s.markdownTocPanelWidth
         ),
+        combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
+          ui.combinedDiffFileTreeWidth,
+          undefined,
+          s.combinedDiffFileTreeWidth
+        ),
         rightSidebarOpen: typeof ui.rightSidebarOpen === 'boolean' ? ui.rightSidebarOpen : true,
         rightSidebarTab: rightSidebarRoute.rightSidebarTab,
         rightSidebarExplorerView: rightSidebarRoute.rightSidebarExplorerView,
@@ -2358,6 +2535,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         repos: orderedRepos,
         hideDefaultBranchWorkspace: ui.hideDefaultBranchWorkspace ?? false,
         hideAutomationGeneratedWorkspaces: ui.hideAutomationGeneratedWorkspaces === true,
+        hideCliCreatedWorkspaces: ui.hideCliCreatedWorkspaces === true,
+        hideDetachedHeadWorkspaces: ui.hideDetachedHeadWorkspaces === true,
+        hideWorkspacesFromOtherDevices: ui.hideWorkspacesFromOtherDevices === true,
+        // Why !== false: profiles written before #8873 have no key, and they are
+        // precisely the ones showing the bug, so absence must mean "exempt".
+        alwaysShowDefaultBranchWorkspace: ui.alwaysShowDefaultBranchWorkspace !== false,
         showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree),
         // Why: startup hydrates UI before repo catalogs, so defer repo-filter validation to the all-host refresh.
         filterRepoIds:
@@ -2377,6 +2560,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         statusBarItems: statusBarItemsWithGrok,
         statusBarVisible: ui.statusBarVisible ?? true,
         usagePercentageDisplay: normalizeUsagePercentageDisplay(ui.usagePercentageDisplay),
+        statusBarUsageMode: normalizeStatusBarUsageMode(ui.statusBarUsageMode),
         // Why: default true so existing users see the pet on first enabling the flag; only an explicit Hide persists false.
         petVisible: ui.petVisible ?? ui.sidekickVisible ?? true,
         petSize: clampPetSize(ui.petSize ?? ui.sidekickSize ?? PET_SIZE_DEFAULT),
@@ -2396,7 +2580,14 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           return DEFAULT_PET_ID
         })(),
         dismissedUpdateVersion: ui.dismissedUpdateVersion ?? null,
+        // Why: a persisted value from a build that knew a different channel set
+        // would otherwise survive as-is; activeChannel only falls back on null,
+        // so an unknown string reaches listBuilds and the segmented control.
+        releaseChannelOverride: isReleaseChannel(ui.releaseChannelOverride)
+          ? ui.releaseChannelOverride
+          : null,
         updateReassuranceSeen: ui.updateReassuranceSeen ?? false,
+        osc52ClipboardDefaultOnNoticePending: ui.osc52ClipboardDefaultOnNoticePending === true,
         browserDefaultUrl: ui.browserDefaultUrl ?? null,
         browserDefaultSearchEngine: ui.browserDefaultSearchEngine ?? null,
         browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(ui.browserDefaultZoomLevel),
@@ -2411,11 +2602,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
             : null,
         trustedOrcaHooks: hydrateTrustedOrcaHooks(ui.trustedOrcaHooks, validRepoIds),
         setupScriptPromptDismissedRepoIds:
-          validRepoIds.size === 0
+          validRepoHostIdentities.size === 0
             ? sanitizeSetupScriptPromptDismissals(ui.setupScriptPromptDismissedRepoIds)
             : filterSetupScriptPromptDismissalsToValidRepos(
                 ui.setupScriptPromptDismissedRepoIds,
-                validRepoIds
+                validRepoHostIdentities
               ),
         setupGuideSidebarDismissed: ui.setupGuideSidebarDismissed === true,
         setupGuideBrowserMilestoneMigrated: ui.setupGuideBrowserMilestoneMigrated === true,
@@ -2438,6 +2629,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         workspaceCleanupDismissals: sanitizeWorkspaceCleanupDismissals(
           ui.workspaceCleanup?.dismissals
         ),
+        // Why the normalizer rather than a cast: this blob is hand-editable and
+        // may come from an older or newer build; it degrades field by field
+        // instead of bricking the cleanup dialog.
+        workspaceCleanupBrowse: normalizeWorkspaceCleanupBrowseState(ui.workspaceCleanup?.browse),
         // Why: restore only on startup; on 'sync' broadcasts it would clobber the window's current per-window view.
         activeView:
           source === 'startup'
@@ -2489,6 +2684,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   clearDismissedUpdateVersion: () => {
     set({ dismissedUpdateVersion: null })
   },
+  releaseChannelOverride: null,
+  setReleaseChannelOverride: (channel) => {
+    void window.api.ui.set({ releaseChannelOverride: channel }).catch(console.error)
+    set({ releaseChannelOverride: channel })
+  },
   dismissUpdate: (versionOverride?: string) =>
     set((s) => {
       // Why: the 'error' variant has no version field, so the card passes it via versionOverride.
@@ -2498,6 +2698,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         'activeNudgeId' in s.updateStatus ? (s.updateStatus.activeNudgeId ?? null) : null
       // Why: persist dismissal so relaunch doesn't immediately re-show the same card until a newer release.
       void window.api.ui.set({ dismissedUpdateVersion }).catch(console.error)
+      // Why: main can't otherwise tell an offered update was abandoned, which keeps a local-build session pinned and stalls background checks.
+      void window.api.updater.dismissAvailableUpdate().catch(console.error)
       // Why: only consume the nudge campaign for cards from a nudge cycle, not ordinary dismissals.
       if (activeNudgeId) {
         void window.api.updater.dismissNudge().catch(console.error)
@@ -2510,6 +2712,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   markUpdateReassuranceSeen: () => {
     void window.api.ui.set({ updateReassuranceSeen: true }).catch(console.error)
     set({ updateReassuranceSeen: true })
+  },
+  osc52ClipboardDefaultOnNoticePending: false,
+  clearOsc52ClipboardDefaultOnNotice: () => {
+    // Why clear locally first: a failed persist must not re-toast this session. It will
+    // re-arm on the next launch, which is the safe direction for a one-shot notice.
+    set({ osc52ClipboardDefaultOnNoticePending: false })
+    void window.api.ui.set({ osc52ClipboardDefaultOnNoticePending: false }).catch(console.error)
   },
   isFullScreen: false,
   setIsFullScreen: (v) => set({ isFullScreen: v }),

@@ -7,7 +7,9 @@ import {
   ORCA_PROFILE_INDEX_SCHEMA_VERSION,
   type OrcaProfileIndex
 } from '../../shared/orca-profiles'
-import type { PersistedState, Repo, WorktreeMeta } from '../../shared/types'
+import type { PersistedState } from '../../shared/persisted-state-types'
+import type { Repo } from '../../shared/repo-types'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { SshTarget } from '../../shared/ssh-types'
 
 const testState = { dir: '' }
@@ -126,6 +128,10 @@ describe('profile project transfer', () => {
             }
           ]
         },
+        retiredWorktreeNamesByRepo: { 'repo-1': { exhaustedTiers: 0, names: ['nautilus'] } },
+        retiredWorktreeNamesByNamespace: {
+          'ssh:ssh-1:/workspace/orca-nautilus': { exhaustedTiers: 0, names: ['seahorse'] }
+        },
         worktreeMeta: {
           [sourceWorktreeId]: makeWorktreeMeta({ projectHostSetupId: 'repo-1' })
         },
@@ -177,6 +183,13 @@ describe('profile project transfer', () => {
     expect(target.sparsePresetsByRepo[targetRepoId]).toEqual([
       expect.objectContaining({ id: 'preset-1', repoId: targetRepoId })
     ])
+    // Why: without the re-key the destination profile reissues a name whose old directory may
+    // still hold the previous occupant's agent conversation.
+    expect(target.retiredWorktreeNamesByRepo?.[targetRepoId]).toEqual({
+      exhaustedTiers: 0,
+      names: ['nautilus']
+    })
+    expect(target.retiredWorktreeNamesByNamespace).toEqual({})
     expect(target.workspaceSession.tabsByWorktree).toEqual({})
     expect(readProfileState('personal').repos.map((repo) => repo.id)).toEqual(['repo-1'])
   })
@@ -202,6 +215,12 @@ describe('profile project transfer', () => {
           })
         ],
         sshTargets: [sshTarget],
+        retiredWorktreeNamesByNamespace: {
+          'ssh:ssh-1:posix:/srv/orca-orca-retirement-probe': {
+            exhaustedTiers: 0,
+            names: ['seahorse']
+          }
+        },
         worktreeMeta: {
           [sourceWorktreeId]: makeWorktreeMeta({ projectHostSetupId: 'repo-ssh' })
         },
@@ -257,6 +276,13 @@ describe('profile project transfer', () => {
       executionHostId: 'ssh:ssh-1'
     })
     expect(target.sshTargets).toEqual([sshTarget])
+    // The source key predates endpoint identity; the transfer folds it onto the canonical one.
+    expect(target.retiredWorktreeNamesByNamespace).toEqual({
+      'ssh:builder.example.com|22|dev:posix:/srv/orca-orca-retirement-probe': {
+        exhaustedTiers: 0,
+        names: ['seahorse']
+      }
+    })
     expect(target.workspaceSession.browserTabsByWorktree?.[sourceWorktreeId]?.[0]).toMatchObject({
       worktreeId: sourceWorktreeId,
       sessionProfileId: null,

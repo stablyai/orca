@@ -1,5 +1,5 @@
 diff --git a/binding.gyp b/binding.gyp
-index 5f63978b07ab50aaf7523219a2170ec737a6b5db..b3309a07ef99dea7967d7bdd04b9fc3500acacae 100644
+index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc835f1479ab 100644
 --- a/binding.gyp
 +++ b/binding.gyp
 @@ -5,9 +5,6 @@
@@ -12,6 +12,23 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..b3309a07ef99dea7967d7bdd04b9fc35
          'msvs_settings': {
              'VCCLCompilerTool': {
                'AdditionalOptions': [
+@@ -88,6 +85,16 @@
+               'libraries!': [
+                 '-lutil'
+               ]
++            }],
++            # Orca: pair with the .symver pins in pty.cc. Force the real
++            # libutil.so.1/libpthread.so.0 into DT_NEEDED (gcc's default
++            # --as-needed drops them because the pinned symbols resolve from
++            # libc's compat aliases at build time) so openpty/forkpty/
++            # pthread_sigmask still resolve on Ubuntu 20.04 (glibc 2.31).
++            ['OS=="linux"', {
++              'ldflags': [
++                '-Wl,--no-as-needed,-l:libutil.so.1,-l:libpthread.so.0,--as-needed'
++              ]
+             }]
+           ]
+         }
 diff --git a/deps/winpty/src/winpty.gyp b/deps/winpty/src/winpty.gyp
 index 1ac5758bedd8cf54f32280dea4e4aeb5afdee30d..e619813759c6f14694838bdfbd0ea5f8360130ef 100644
 --- a/deps/winpty/src/winpty.gyp
@@ -54,6 +71,27 @@ index 1ac5758bedd8cf54f32280dea4e4aeb5afdee30d..e619813759c6f14694838bdfbd0ea5f8
              'msvs_settings': {
                  # Specify this setting here to override a setting from somewhere
                  # else, such as node's common.gypi.
+diff --git a/lib/conpty_console_list_agent.js b/lib/conpty_console_list_agent.js
+index 8c4fca9022a6d6f015bca87f61625cde2278f428..0a01730616488119aa21ef441cf3c441e02a974c 100644
+--- a/lib/conpty_console_list_agent.js
++++ b/lib/conpty_console_list_agent.js
+@@ -10,7 +10,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
+ var utils_1 = require("./utils");
+ var getConsoleProcessList = utils_1.loadNativeModule('conpty_console_list').module.getConsoleProcessList;
+ var shellPid = parseInt(process.argv[2], 10);
+-var consoleProcessList = getConsoleProcessList(shellPid);
++var consoleProcessList;
++try {
++    consoleProcessList = getConsoleProcessList(shellPid);
++}
++catch (_a) {
++    // Why: AttachConsole can fail after the shell exits; parent already has this fallback.
++    consoleProcessList = [shellPid];
++}
+ process.send({ consoleProcessList: consoleProcessList });
+ process.exit(0);
+ //# sourceMappingURL=conpty_console_list_agent.js.map
+\ No newline at end of file
 diff --git a/lib/unixTerminal.js b/lib/unixTerminal.js
 index 1ec12f796a822c78fba9ad7f6448c3987e325c23..cec8b67aef02f8199e5606a0d257088bf1865877 100644
 --- a/lib/unixTerminal.js
@@ -73,31 +111,12 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..cec8b67aef02f8199e5606a0d257088b
  var DEFAULT_FILE = 'sh';
  var DEFAULT_NAME = 'xterm';
  var DESTROY_SOCKET_TIMEOUT_MS = 200;
-diff --git a/lib/conpty_console_list_agent.js b/lib/conpty_console_list_agent.js
-index ccc111c9e03a4a661ccfd5d8e8f0ee699571b5dd..f92c6bef7d46dc35c941c87ef186aa46d8ed9c44 100644
---- a/lib/conpty_console_list_agent.js
-+++ b/lib/conpty_console_list_agent.js
-@@ -9,7 +9,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
- var utils_1 = require("./utils");
- var getConsoleProcessList = utils_1.loadNativeModule('conpty_console_list').module.getConsoleProcessList;
- var shellPid = parseInt(process.argv[2], 10);
--var consoleProcessList = getConsoleProcessList(shellPid);
-+var consoleProcessList;
-+try {
-+    consoleProcessList = getConsoleProcessList(shellPid);
-+}
-+catch (_a) {
-+    // Why: AttachConsole can fail after the shell exits; parent already has this fallback.
-+    consoleProcessList = [shellPid];
-+}
- process.send({ consoleProcessList: consoleProcessList });
- process.exit(0);
- //# sourceMappingURL=conpty_console_list_agent.js.map
 diff --git a/src/conpty_console_list_agent.ts b/src/conpty_console_list_agent.ts
-index f6a653893e0b9b548c514db29d75599538ee1acb..1d5400489f200ef0161ca687e672e1cc02d29c95 100644
+index 181ccabbbe9c4948a9725fb1db907a68e9de01fc..67f31facf85562b67adbfbd04ce28ddd8eeb4a79 100644
 --- a/src/conpty_console_list_agent.ts
 +++ b/src/conpty_console_list_agent.ts
-@@ -11,5 +11,11 @@ import { loadNativeModule } from './utils';
+@@ -10,6 +10,12 @@ import { loadNativeModule } from './utils';
+
  const getConsoleProcessList = loadNativeModule('conpty_console_list').module.getConsoleProcessList;
  const shellPid = parseInt(process.argv[2], 10);
 -const consoleProcessList = getConsoleProcessList(shellPid);
@@ -111,7 +130,7 @@ index f6a653893e0b9b548c514db29d75599538ee1acb..1d5400489f200ef0161ca687e672e1cc
  process.send!({ consoleProcessList });
  process.exit(0);
 diff --git a/src/unix/pty.cc b/src/unix/pty.cc
-index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca850564e6368d9 100644
+index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d15c4dd44 100644
 --- a/src/unix/pty.cc
 +++ b/src/unix/pty.cc
 @@ -23,7 +23,9 @@
@@ -124,7 +143,33 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
  #include <thread>
 
  #include <sys/types.h>
-@@ -237,13 +239,23 @@ pty_getproc(int, char *);
+@@ -47,6 +49,25 @@
+ #include <termios.h>
+ #endif
+
++/* Orca: glibc 2.32-2.34 relocated pthread_sigmask/openpty/forkpty into libc
++ * under new symbol versions, so building on a newer glibc produces references
++ * (GLIBC_2.32/2.34) absent on Ubuntu 20.04 (glibc 2.31) and the app fails to
++ * launch. Pin these to the pre-merge version glibc still ships as a compat
++ * alias; the binding.gyp ldflags force libutil/libpthread into DT_NEEDED so
++ * those aliases are actually loaded on the target. */
++#if defined(__linux__)
++#  if defined(__x86_64__)
++#    define ORCA_GLIBC_COMPAT_VERSION "GLIBC_2.2.5"
++#  elif defined(__aarch64__)
++#    define ORCA_GLIBC_COMPAT_VERSION "GLIBC_2.17"
++#  endif
++#  ifdef ORCA_GLIBC_COMPAT_VERSION
++__asm__(".symver openpty,openpty@" ORCA_GLIBC_COMPAT_VERSION);
++__asm__(".symver forkpty,forkpty@" ORCA_GLIBC_COMPAT_VERSION);
++__asm__(".symver pthread_sigmask,pthread_sigmask@" ORCA_GLIBC_COMPAT_VERSION);
++#  endif
++#endif
++
+ /* Some platforms name VWERASE and VDISCARD differently */
+ #if !defined(VWERASE) && defined(VWERSE)
+ #define VWERASE	VWERSE
+@@ -237,13 +258,23 @@ pty_getproc(int, char *);
  #endif
 
  #if defined(__APPLE__) || defined(__OpenBSD__)
@@ -149,7 +194,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
  #endif
 
  struct DelBuf {
-@@ -367,10 +379,11 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+@@ -367,10 +398,11 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
      argv[i + 3] = strdup(arg.c_str());
    }
 
@@ -165,7 +210,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
    }
    if (pty_nonblock(master) == -1) {
      throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
-@@ -684,15 +697,73 @@ pty_getproc(int fd, char *tty) {
+@@ -684,15 +716,73 @@ pty_getproc(int fd, char *tty) {
  #endif
 
  #if defined(__APPLE__)
@@ -241,25 +286,25 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..61f39f0cbb91faa2c515f35d2ca85056
 
    for (; count < 3; count++) {
      low_fds[count] = posix_openpt(O_RDWR);
-@@ -706,80 +777,118 @@ pty_posix_spawn(char** argv, char** env,
+@@ -706,80 +796,118 @@ pty_posix_spawn(char** argv, char** env,
                POSIX_SPAWN_SETSID;
    *master = posix_openpt(O_RDWR);
    if (*master == -1) {
 -    return;
 +    pty_set_spawn_error(err, "posix_openpt", errno);
 +    goto done;
-+  }
-+
-+  res = grantpt(*master);
-+  if (res == -1) {
-+    pty_set_spawn_error(err, "grantpt", errno);
-+    goto done;
    }
 
 -  int res = grantpt(*master) || unlockpt(*master);
-+  res = unlockpt(*master);
++  res = grantpt(*master);
    if (res == -1) {
 -    return;
++    pty_set_spawn_error(err, "grantpt", errno);
++    goto done;
++  }
++
++  res = unlockpt(*master);
++  if (res == -1) {
 +    pty_set_spawn_error(err, "unlockpt", errno);
 +    goto done;
    }

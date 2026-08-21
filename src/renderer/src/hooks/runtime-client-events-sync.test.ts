@@ -57,6 +57,70 @@ describe('createRuntimeClientEventsSync', () => {
     expect(h.recordsFor('A')[0].unsubscribe).toHaveBeenCalledTimes(1)
   })
 
+  it('rekeys only the environment whose transport generation changed', async () => {
+    const keys = new Map([
+      ['A', 'A:1'],
+      ['B', 'B:1']
+    ])
+    const records: SubscribeRecord[] = []
+    const subscribe = vi.fn((environmentId: string) => {
+      const unsubscribe = vi.fn()
+      let resolveFn!: (handle: RuntimeClientEventSubscriptionHandle) => void
+      const promise = new Promise<RuntimeClientEventSubscriptionHandle>((resolve) => {
+        resolveFn = resolve
+      })
+      records.push({ environmentId, resolveWith: () => resolveFn({ unsubscribe }), unsubscribe })
+      return promise
+    })
+    const sync = createRuntimeClientEventsSync({
+      getDesiredEnvironmentIds: () => ['A', 'B'],
+      getSubscriptionKey: (environmentId) => keys.get(environmentId) ?? environmentId,
+      subscribe,
+      onEvent: vi.fn()
+    })
+
+    sync.sync()
+    records.forEach((record) => record.resolveWith())
+    await flush()
+
+    keys.set('A', 'A:2')
+    sync.sync()
+
+    const aRecords = records.filter((record) => record.environmentId === 'A')
+    const bRecords = records.filter((record) => record.environmentId === 'B')
+    expect(aRecords).toHaveLength(2)
+    expect(aRecords[0].unsubscribe).toHaveBeenCalledTimes(1)
+    expect(bRecords).toHaveLength(1)
+    expect(bRecords[0].unsubscribe).not.toHaveBeenCalled()
+
+    aRecords[1].resolveWith()
+    await flush()
+    expect(aRecords[1].unsubscribe).not.toHaveBeenCalled()
+  })
+
+  it('discards an in-flight subscription after its transport generation changes', async () => {
+    let subscriptionKey = 'A:1'
+    const h = makeHarness(['A'])
+    const sync = createRuntimeClientEventsSync({
+      getDesiredEnvironmentIds: () => ['A'],
+      getSubscriptionKey: () => subscriptionKey,
+      subscribe: h.subscribe,
+      onEvent: vi.fn()
+    })
+
+    sync.sync()
+    subscriptionKey = 'A:2'
+    sync.sync()
+
+    expect(h.recordsFor('A')).toHaveLength(2)
+    h.recordsFor('A')[0].resolveWith()
+    h.recordsFor('A')[1].resolveWith()
+    await flush()
+
+    expect(h.recordsFor('A')[0].unsubscribe).toHaveBeenCalledTimes(1)
+    expect(h.recordsFor('A')[1].unsubscribe).not.toHaveBeenCalled()
+  })
+
   it('does not leak an orphaned subscription when an env is toggled off then on mid-subscribe', async () => {
     // 'B' stays subscribed throughout so subscriptions is never empty — this is
     // what prevents the generation from bumping and exposes the overwrite race.
@@ -271,6 +335,42 @@ describe('createRuntimeClientEventsSync', () => {
       expect(subscribe).toHaveBeenCalledTimes(4)
       await vi.advanceTimersByTimeAsync(1)
       expect(subscribe).toHaveBeenCalledTimes(5)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('starts a fresh backoff epoch after the transport generation changes', async () => {
+    vi.useFakeTimers()
+    try {
+      let subscriptionKey = 'A:1'
+      const subscribe = vi.fn(
+        (): Promise<RuntimeClientEventSubscriptionHandle> =>
+          Promise.reject(new Error('unreachable'))
+      )
+      const sync = createRuntimeClientEventsSync({
+        getDesiredEnvironmentIds: () => ['A'],
+        getSubscriptionKey: () => subscriptionKey,
+        subscribe,
+        onEvent: vi.fn(),
+        retryDelayMs: 10,
+        random: () => 1
+      })
+
+      sync.sync()
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.advanceTimersByTimeAsync(10)
+      expect(subscribe).toHaveBeenCalledTimes(2)
+
+      subscriptionKey = 'A:2'
+      sync.sync()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(subscribe).toHaveBeenCalledTimes(3)
+
+      await vi.advanceTimersByTimeAsync(9)
+      expect(subscribe).toHaveBeenCalledTimes(3)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(subscribe).toHaveBeenCalledTimes(4)
     } finally {
       vi.useRealTimers()
     }

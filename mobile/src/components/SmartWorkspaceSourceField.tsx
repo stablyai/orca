@@ -1,4 +1,4 @@
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import {
   CircleDot,
   ExternalLink,
@@ -16,6 +16,10 @@ type Props = {
   composer: MobileComposerSource
   label: string
   disabled?: boolean
+  // Why: only the active form view may focus this field. While the source drawer
+  // is open/closing this stays non-focusable so the drawer's dismiss (which
+  // restores native focus back here) can't re-fire onFocus and reopen the drawer.
+  interactive: boolean
   onBeforeOpen?: () => void
   onOpenDrawer: () => void
 }
@@ -40,6 +44,7 @@ export function SmartWorkspaceSourceField({
   composer,
   label,
   disabled,
+  interactive,
   onBeforeOpen,
   onOpenDrawer
 }: Props) {
@@ -77,18 +82,24 @@ export function SmartWorkspaceSourceField({
           </Pressable>
         </View>
       ) : (
-        <Pressable
+        // Why: real TextInput (not a Pressable fake) so the typed value is the
+        // same composer.name the source drawer docks — focus handoff keeps the
+        // string continuous even though native focus moves to the docked field.
+        <TextInput
           style={[styles.input, disabled && styles.disabled]}
-          disabled={disabled}
-          onPress={openDrawer}
-        >
-          <Text
-            style={[styles.inputText, !composer.name && styles.inputPlaceholder]}
-            numberOfLines={1}
-          >
-            {composer.name || 'Type a name or search a source'}
-          </Text>
-        </Pressable>
+          value={composer.name}
+          onChangeText={composer.setName}
+          onFocus={openDrawer}
+          editable={!disabled && interactive}
+          placeholder="Type a name or search a source"
+          placeholderTextColor={colors.textMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          // Why: form field is a portal into the picker; return should not
+          // submit the create form while the drawer is about to open.
+          blurOnSubmit={false}
+          showSoftInputOnFocus={false}
+        />
       )}
     </View>
   )
@@ -114,17 +125,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
     borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  disabled: {
-    opacity: 0.55
-  },
-  inputText: {
+    borderColor: colors.borderSubtle,
     fontSize: typography.bodySize,
     color: colors.textPrimary
   },
-  inputPlaceholder: {
-    color: colors.textMuted
+  disabled: {
+    opacity: 0.55
   },
   pill: {
     flexDirection: 'row',

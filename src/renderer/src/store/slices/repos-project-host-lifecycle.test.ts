@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Project, ProjectHostSetup, Repo } from '../../../../shared/types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -126,7 +127,13 @@ describe('repo slice project host setup lifecycle', () => {
       })
     ).resolves.toEqual({
       project,
-      setup: { ...runtimeSetup, displayName: 'GPU VM renamed' },
+      setup: {
+        ...runtimeSetup,
+        displayName: 'GPU VM renamed',
+        executionHostId: 'runtime:env-1',
+        runtimeOwnerEnvironmentId: 'env-1',
+        connectionId: null
+      },
       repo: undefined
     })
 

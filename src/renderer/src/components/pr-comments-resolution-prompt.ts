@@ -1,5 +1,5 @@
-import type { PRComment } from '../../../shared/types'
-import type { PRCommentGroup } from '@/lib/pr-comment-groups'
+import type { PRComment } from '../../../shared/github/comment-types'
+import type { PRCommentGroup } from '../../../shared/pr-comment-groups'
 
 export type PRCommentsResolutionReviewKind = 'PR' | 'MR'
 
@@ -150,7 +150,7 @@ export function buildPRCommentsResolutionPrompt({
     '- For outdated comments, inspect the current file and nearby code before editing. Apply the reviewer intent only if it still matches the current code.',
     '- Keep changes minimal and coherent. If multiple selected comments conflict or require a larger design decision, stop and report the tradeoff instead of guessing.',
     '- Preserve unrelated staged and unstaged work. Do not run destructive cleanup commands such as git reset --hard, git checkout ., git restore ., or git stash.',
-    '- Host thread resolution is handled by Orca after launch. Do not resolve or unresolve threads on the host, reply on the host, edit host comments, or use provider APIs/CLIs just to change review state.',
+    '- Orca acknowledges this feedback on the host itself after launch. Do not resolve or unresolve threads on the host, reply on the host, edit host comments, or use provider APIs/CLIs just to change review state.',
     '- Do not push, create commits, or rewrite history.',
     '- Run git diff --check before finishing. Run the most focused relevant tests, typecheck, or lint command you can reasonably identify; if validation is impractical, explain why.',
     '',

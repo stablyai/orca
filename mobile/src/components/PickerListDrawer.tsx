@@ -3,9 +3,12 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 
 import { colors, spacing, typography } from '../theme/mobile-theme'
-import { BottomDrawer, BOTTOM_DRAWER_HIDE_DURATION_MS } from './BottomDrawer'
+import { BottomDrawer } from './BottomDrawer'
+import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
 
-type Props<T extends { id: string; label: string }> = {
+type PickerListItem = { id: string; label: string; detail?: string }
+
+type Props<T extends PickerListItem> = {
   visible: boolean
   title: string
   items: T[]
@@ -15,7 +18,7 @@ type Props<T extends { id: string; label: string }> = {
   renderIcon?: (item: T) => ReactNode
 }
 
-export function PickerListDrawer<T extends { id: string; label: string }>({
+export function PickerListDrawer<T extends PickerListItem>({
   visible,
   title,
   items,
@@ -86,12 +89,19 @@ export function PickerListDrawer<T extends { id: string; label: string }>({
               onPress={() => closeThenSelect(item)}
             >
               {renderIcon?.(item)}
-              <Text
-                style={[styles.itemText, selected && styles.itemTextSelected]}
-                numberOfLines={1}
-              >
-                {item.label}
-              </Text>
+              <View style={styles.itemCopy}>
+                <Text
+                  style={[styles.itemText, selected && styles.itemTextSelected]}
+                  numberOfLines={1}
+                >
+                  {item.label}
+                </Text>
+                {item.detail ? (
+                  <Text style={styles.itemDetail} numberOfLines={1}>
+                    {item.detail}
+                  </Text>
+                ) : null}
+              </View>
               {selected && <Check size={14} color={colors.textPrimary} />}
             </Pressable>
           )
@@ -141,9 +151,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bgRaised
   },
   itemText: {
-    flex: 1,
     fontSize: typography.bodySize,
     color: colors.textPrimary
+  },
+  itemCopy: {
+    flex: 1,
+    minWidth: 0
+  },
+  itemDetail: {
+    fontSize: typography.metaSize,
+    color: colors.textMuted,
+    marginTop: 1
   },
   itemTextSelected: {
     fontWeight: '600'

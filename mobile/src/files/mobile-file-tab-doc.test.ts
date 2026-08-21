@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { RpcResponse } from '../transport/types'
 import { resolveMobileFileTabDoc } from './mobile-file-tab-doc'
 
+const PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/l8sm7wAAAABJRU5ErkJggg=='
+
 function ok(result: unknown): RpcResponse {
   return { id: 'x', ok: true, result, _meta: { runtimeId: 'r' } }
 }
@@ -49,8 +52,8 @@ describe('resolveMobileFileTabDoc', () => {
     const client = clientOf({
       'git.diff': ok({
         kind: 'binary',
-        originalContent: 'b2xk',
-        modifiedContent: 'bmV3',
+        originalContent: PNG_BASE64,
+        modifiedContent: PNG_BASE64,
         modifiedIsBinary: true,
         isImage: true,
         mimeType: 'image/png'
@@ -61,7 +64,11 @@ describe('resolveMobileFileTabDoc', () => {
       relativePath: 'm1.png',
       diffSource: 'unstaged'
     })
-    expect(doc).toEqual({ status: 'ready', kind: 'image', dataUri: 'data:image/png;base64,bmV3' })
+    expect(doc).toEqual({
+      status: 'ready',
+      kind: 'image',
+      dataUri: `data:image/png;base64,${PNG_BASE64}`
+    })
   })
 
   it('throws binary_file for an image modify whose bytes are empty (no stale fallback)', async () => {
@@ -89,10 +96,14 @@ describe('resolveMobileFileTabDoc', () => {
 
   it('renders a live image preview via files.readPreview', async () => {
     const client = clientOf({
-      'files.readPreview': ok({ content: 'bmV3', isImage: true, mimeType: 'image/png' })
+      'files.readPreview': ok({ content: PNG_BASE64, isImage: true, mimeType: 'image/png' })
     })
     const doc = await resolveMobileFileTabDoc(client, { ...WT, relativePath: 'logo.png' })
-    expect(doc).toEqual({ status: 'ready', kind: 'image', dataUri: 'data:image/png;base64,bmV3' })
+    expect(doc).toEqual({
+      status: 'ready',
+      kind: 'image',
+      dataUri: `data:image/png;base64,${PNG_BASE64}`
+    })
     expect(client.calls).toEqual(['files.readPreview'])
   })
 
@@ -125,6 +136,17 @@ describe('resolveMobileFileTabDoc', () => {
       truncated: true,
       byteLength: 5
     })
+  })
+
+  // Why: the host now caps oversized diffs with an error envelope, and a client that knows nothing
+  // about the code must still surface the message instead of rendering an empty diff.
+  it('propagates a host diff_too_large failure instead of rendering an empty diff', async () => {
+    const client = clientOf({
+      'git.diff': fail('diff_too_large', 'This diff is too large to open over a remote connection.')
+    })
+    await expect(
+      resolveMobileFileTabDoc(client, { ...WT, relativePath: 'a.ts', diffSource: 'staged' })
+    ).rejects.toThrow('This diff is too large to open over a remote connection.')
   })
 
   it('propagates the RPC error message when a read fails', async () => {

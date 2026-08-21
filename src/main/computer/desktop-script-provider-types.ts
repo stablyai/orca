@@ -134,6 +134,7 @@ export type BridgeRequest = {
   to_y?: number
   click_count?: number
   mouse_button?: string
+  modifiers?: string
   action?: string
   direction?: string
   pages?: number

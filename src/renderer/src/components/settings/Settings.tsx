@@ -10,7 +10,10 @@ import {
   type MutableRefObject
 } from 'react'
 import { toast } from 'sonner'
-import type { GlobalSettings, OrcaHooks, ProjectHostSetup, Repo } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 import type { SpeechModelState } from '../../../../shared/speech-types'
 import type {
   SourceControlAiSettings,
@@ -22,7 +25,7 @@ import { useAppStore } from '../../store'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { applyDocumentTheme } from '@/lib/document-theme'
-import { useConfirmationDialog } from '@/components/confirmation-dialog'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import {
   SCROLLBACK_PRESETS_ROWS,
   getFallbackTerminalFonts,
@@ -51,8 +54,13 @@ import { NotificationsPane } from './NotificationsPane'
 import { VoicePane } from './VoicePane'
 import { SshPane } from './SshPane'
 import { ExperimentalPane } from './ExperimentalPane'
+import { PluginsSettingsSection } from './PluginsSettingsSection'
 import { AgentsPane } from './AgentsPane'
 import { OrchestrationPane } from './OrchestrationPane'
+import { ArtifactsSettingsPane } from './ArtifactsSettingsPane'
+import { ShareSkillsSettingsPane } from './ShareSkillsSettingsPane'
+import { AutomationsSettingsPane } from './AutomationsSettingsPane'
+import { OrcaAccountSettingsPane } from './OrcaAccountSettingsPane'
 import { LinearAgentSkillPane } from './LinearAgentSkillPane'
 import { AccountsPane } from './AccountsPane'
 import { StatsPane } from '../stats/StatsPane'
@@ -76,9 +84,11 @@ import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import { registerWindowCloseGuard } from '../window-close-request-coordinator'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
 import {
-  getWindowsTerminalCapabilityOwnerKey,
+  isWindowsTerminalCapabilityHost,
+  useLocalWindowsTerminalCapabilities,
   useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
+import { useWindowsTerminalCapabilityOwnerKey } from '@/hooks/useWindowsTerminalCapabilityOwnerKey'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
@@ -118,6 +128,7 @@ import {
   buildRepoIdToRepresentative,
   buildSettingsProjectList,
   getSettingsProjectHostRepo,
+  getSettingsTargetHostSelection,
   removeSettingsProjectFromAllHosts,
   resolveSettingsTargetRepoId
 } from './settings-project-list'
@@ -173,12 +184,13 @@ const SETTINGS_NAV_GROUP_BY_ID = new Map<string, SettingsNavGroupDefinition>(
 
 const SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID = 'shortcuts-escape-confirm'
 const SHORTCUTS_ESCAPE_CONFIRM_WINDOW_MS = 2200
+const SETTINGS_TARGET_HIGHLIGHT_MS = 3_000
 
 function getSettingsSectionId(
   pane: SettingsNavTarget,
   repoId: string | null,
   repoIdToRepresentative: Map<string, string>
-): string {
+) {
   if (pane === 'repo' && repoId) {
     // Why: Settings renders one collapsed pane per project, so resolve a repoId target to its project's representative section.
     return `repo-${repoIdToRepresentative.get(repoId) ?? repoId}`
@@ -280,7 +292,10 @@ function Settings(): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
   const keybindings = useAppStore((s) => s.keybindings)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const switchRuntimeEnvironment = useAppStore((s) => s.switchRuntimeEnvironment)
+  const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
+  const setActiveRuntimeEnvironmentPreference = useAppStore(
+    (s) => s.setActiveRuntimeEnvironmentPreference
+  )
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const fetchKeybindings = useAppStore((s) => s.fetchKeybindings)
   const closeSettingsPage = useAppStore((s) => s.closeSettingsPage)
@@ -293,6 +308,7 @@ function Settings(): React.JSX.Element {
   const settingsNavigationTarget = useAppStore((s) => s.settingsNavigationTarget)
   const clearSettingsTarget = useAppStore((s) => s.clearSettingsTarget)
   const settingsProjectHostSelection = useAppStore((s) => s.settingsProjectHostSelection)
+  const settingsProjectSetupSelection = useAppStore((s) => s.settingsProjectSetupSelection)
   const setSettingsProjectHostSelection = useAppStore((s) => s.setSettingsProjectHostSelection)
   const settingsSearchInputQuery = useAppStore((s) => s.settingsSearchInputQuery)
   const settingsSearchQuery = useAppStore((s) => s.settingsSearchQuery)
@@ -343,9 +359,8 @@ function Settings(): React.JSX.Element {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
-  // Why: skill freshness only covers the validated global rail (not WSL), so the nav pill stays presence-only under WSL.
-  const { inventory: skillFreshnessInventory } = useSkillFreshness()
-  const skillFreshnessApplies = activeSkillRuntime.agentRuntime?.runtime !== 'wsl'
+  const skillFreshnessApplies = activeSkillRuntime.canUseLocalSkillFreshness
+  const { inventory: skillFreshnessInventory } = useSkillFreshness(skillFreshnessApplies)
   const [voiceModelStatesLoading, setVoiceModelStatesLoading] = useState(showDesktopOnlySettings)
   // Why: trim platform-only Terminal entries from the shared search index so search never reveals hidden controls.
   const [scrollbackMode, setScrollbackMode] = useState<'preset' | 'custom'>('preset')
@@ -365,7 +380,12 @@ function Settings(): React.JSX.Element {
     getInitialMountedSectionIds
   )
   const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
+  const [highlightedSettingsTargetId, setHighlightedSettingsTargetId] = useState<string | null>(
+    null
+  )
   const [quickCommandAddIntentSignal, setQuickCommandAddIntentSignal] = useState(0)
+  const [sshHostAddIntentSignal, setSshHostAddIntentSignal] = useState(0)
+  const [remoteServerAddIntentSignal, setRemoteServerAddIntentSignal] = useState(0)
   const [hasUnsavedCommitPromptChanges, setHasUnsavedCommitPromptChanges] = useState(false)
   const [hasUnsavedBranchPromptChanges, setHasUnsavedBranchPromptChanges] = useState(false)
   const [sourceControlAiPromptDiscardSignal, setSourceControlAiPromptDiscardSignal] = useState(0)
@@ -436,6 +456,17 @@ function Settings(): React.JSX.Element {
       settingsMountedRef.current = false
     }
   }, [])
+
+  useEffect(() => {
+    if (!highlightedSettingsTargetId) {
+      return
+    }
+    const timeout = window.setTimeout(
+      () => setHighlightedSettingsTargetId(null),
+      SETTINGS_TARGET_HIGHLIGHT_MS
+    )
+    return () => window.clearTimeout(timeout)
+  }, [highlightedSettingsTargetId])
 
   const requestFontSuggestions = useCallback((): void => {
     if (installedFontsLoadedRef.current || installedFontsLoadPromiseRef.current) {
@@ -623,7 +654,7 @@ function Settings(): React.JSX.Element {
     }
 
     const paneSectionId = getSettingsSectionId(
-      settingsNavigationTarget.pane as SettingsNavTarget,
+      settingsNavigationTarget.pane,
       settingsNavigationTarget.repoId,
       repoIdToRepresentative
     )
@@ -633,14 +664,31 @@ function Settings(): React.JSX.Element {
       repoIdToHostSelection.keys()
     )
     if (targetRepoId) {
-      const hostSelection = repoIdToHostSelection.get(targetRepoId)
+      const hostSelection = settingsNavigationTarget.hostId
+        ? getSettingsTargetHostSelection(
+            settingsProjectList,
+            targetRepoId,
+            settingsNavigationTarget.hostId
+          )
+        : repoIdToHostSelection.get(targetRepoId)
       if (hostSelection) {
-        setSettingsProjectHostSelection(hostSelection.projectId, hostSelection.hostId)
+        setSettingsProjectHostSelection(
+          hostSelection.projectId,
+          hostSelection.hostId,
+          'setupId' in hostSelection && typeof hostSelection.setupId === 'string'
+            ? hostSelection.setupId
+            : undefined
+        )
       }
     }
     pendingNavSectionRef.current = paneSectionId
     pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
-    // Why: force Appearance's collapsed status-bar accordion open before scrolling so the row is visible.
+    setHighlightedSettingsTargetId(
+      settingsNavigationTarget.pane === 'developer-permissions'
+        ? (settingsNavigationTarget.sectionId ?? null)
+        : null
+    )
+    // Why: ensure Appearance's nested status-bar section is open before scrolling so the row is visible.
     if (settingsNavigationTarget.pane === 'appearance') {
       const accordion = resolveAppearanceAccordionDeepLink(settingsNavigationTarget.sectionId)
       if (accordion) {
@@ -649,6 +697,10 @@ function Settings(): React.JSX.Element {
     }
     if (settingsNavigationTarget.intent === 'add-quick-command') {
       setQuickCommandAddIntentSignal((signal) => signal + 1)
+    } else if (settingsNavigationTarget.intent === 'add-ssh-host') {
+      setSshHostAddIntentSignal((signal) => signal + 1)
+    } else if (settingsNavigationTarget.intent === 'add-remote-orca-server') {
+      setRemoteServerAddIntentSignal((signal) => signal + 1)
     }
     setMountedSectionIds((previous) => {
       if (previous.has(paneSectionId)) {
@@ -665,6 +717,7 @@ function Settings(): React.JSX.Element {
     repoIdToRepresentative,
     setSettingsProjectHostSelection,
     settings,
+    settingsProjectList,
     settingsNavigationTarget
   ])
 
@@ -823,32 +876,59 @@ function Settings(): React.JSX.Element {
       }),
     [activeSectionId, mountedSectionIds, navSections, settingsSearchQuery, visibleSectionIds]
   )
-  const windowsTerminalCapabilityOwnerKey = getWindowsTerminalCapabilityOwnerKey(
+  const windowsTerminalCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
     settings?.activeRuntimeEnvironmentId
   )
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
+  const capabilityLoadTarget = useMemo(
+    () => (isWebClient ? { kind: 'local' as const } : runtimeTarget),
+    [isWebClient, runtimeTarget]
+  )
   const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
   const needsRepoWindowsRuntimeCapabilities = [...neededSectionIds].some((sectionId) =>
     sectionId.startsWith('repo-')
   )
+  const needsLocalWindowsRuntimeCapabilities =
+    (isWindows || isWebClient) &&
+    (neededSectionIds.has('agents') || neededSectionIds.has('general'))
   const shouldLoadWindowsTerminalCapabilities =
     hasActiveRuntimeEnvironment ||
     ((isWindows || isWebClient) &&
       (neededSectionIds.has('terminal') ||
-        neededSectionIds.has('general') ||
         neededSectionIds.has('accounts') ||
-        neededSectionIds.has('agents') ||
-        needsRepoWindowsRuntimeCapabilities))
-  // Why: General owns the Orca CLI controls, including WSL skill-location setup.
+        needsRepoWindowsRuntimeCapabilities ||
+        (runtimeTarget.kind === 'local' && needsLocalWindowsRuntimeCapabilities)))
+  // Why: terminal, account, and repository settings describe the active execution host.
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     shouldLoadWindowsTerminalCapabilities,
     true,
     windowsTerminalCapabilityOwnerKey,
-    runtimeTarget
+    capabilityLoadTarget
   )
+  // Why: global agent and project defaults belong to the desktop, not its active remote.
+  const remoteViewLocalWindowsRuntimeCapabilities = useLocalWindowsTerminalCapabilities(
+    needsLocalWindowsRuntimeCapabilities && runtimeTarget.kind === 'environment' && !isWebClient,
+    true,
+    'local'
+  )
+  const localWindowsRuntimeCapabilities =
+    runtimeTarget.kind === 'local' || isWebClient
+      ? windowsTerminalCapabilities
+      : remoteViewLocalWindowsRuntimeCapabilities
   // Why: only supported-but-unavailable WSL (Windows) should render disabled controls, not unsupported WSL (macOS/Linux).
-  const wslSupportedPlatform = isWindows || windowsTerminalCapabilities.hostPlatform === 'win32'
-  const isWindowsTerminalHost = isWindows || windowsTerminalCapabilities.hostPlatform === 'win32'
+  const runtimeWslSupportedPlatform = isWindowsTerminalCapabilityHost({
+    isWindowsRenderer: isWindows,
+    isWebClient,
+    target: runtimeTarget,
+    hostPlatform: windowsTerminalCapabilities.hostPlatform
+  })
+  const localWslSupportedPlatform = isWindowsTerminalCapabilityHost({
+    isWindowsRenderer: isWindows,
+    isWebClient,
+    target: { kind: 'local' },
+    hostPlatform: localWindowsRuntimeCapabilities.hostPlatform
+  })
+  const isWindowsTerminalHost = runtimeWslSupportedPlatform
 
   if ([...neededSectionIds].some((id) => !mountedSectionIds.has(id))) {
     // Why: record newly needed sections during render so panes don't wait for a follow-up Effect.
@@ -865,14 +945,21 @@ function Settings(): React.JSX.Element {
       const repo = getSettingsProjectHostRepo(
         settingsProject,
         repos,
-        settingsProjectHostSelection[settingsProject.projectId]
+        settingsProjectHostSelection[settingsProject.projectId],
+        settingsProjectSetupSelection[settingsProject.projectId]
       )
       if (repo) {
         reposByHostIdentity.set(getRepoHostIdentity(repo), repo)
       }
     }
     return [...reposByHostIdentity.values()]
-  }, [neededSectionIds, repos, settingsProjectHostSelection, settingsProjectList])
+  }, [
+    neededSectionIds,
+    repos,
+    settingsProjectHostSelection,
+    settingsProjectList,
+    settingsProjectSetupSelection
+  ])
 
   useEffect(() => {
     const repoHostIdentitySet = new Set(repos.map(getRepoHostIdentity))
@@ -958,7 +1045,7 @@ function Settings(): React.JSX.Element {
     const scrollTargetId = pendingScrollTargetRef.current
     const pendingNavSectionId = pendingNavSectionRef.current
 
-    // Why: subsection deep links clear a stale filter that could hide the target row; pane-level links keep it to force-open the matching accordion.
+    // Why: subsection deep links clear a stale filter that could hide the target row; pane-level links keep it to force-open the matching section.
     if (
       scrollTargetId &&
       pendingNavSectionId &&
@@ -1121,6 +1208,8 @@ function Settings(): React.JSX.Element {
         hasRepos={repos.length > 0}
         searchQuery={settingsSearchInputQuery}
         searchInputRef={searchInputRef}
+        // Why: deep-links open panes/modals that own focus; plain entry lands in search.
+        searchAutoFocus={settingsNavigationTarget == null}
         onBack={closeSettingsPageWithPromptGuard}
         onSearchChange={setSettingsSearchQuery}
         onSelectSection={scrollToSection}
@@ -1165,10 +1254,10 @@ function Settings(): React.JSX.Element {
                     <AgentsPane
                       settings={settings}
                       updateSettings={updateSettings}
-                      wslSupportedPlatform={wslSupportedPlatform}
-                      wslAvailable={windowsTerminalCapabilities.wslAvailable}
-                      wslDistros={windowsTerminalCapabilities.wslDistros}
-                      wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
+                      wslSupportedPlatform={localWslSupportedPlatform}
+                      wslAvailable={localWindowsRuntimeCapabilities.wslAvailable}
+                      wslDistros={localWindowsRuntimeCapabilities.wslDistros}
+                      wslCapabilitiesLoading={localWindowsRuntimeCapabilities.isLoading}
                     />
                   ) : null}
                 </SettingsSection>
@@ -1193,7 +1282,7 @@ function Settings(): React.JSX.Element {
                     <AccountsPane
                       settings={settings}
                       updateSettings={updateSettings}
-                      wslSupportedPlatform={wslSupportedPlatform}
+                      wslSupportedPlatform={runtimeWslSupportedPlatform}
                       wslAvailable={windowsTerminalCapabilities.wslAvailable}
                       wslDistros={windowsTerminalCapabilities.wslDistros}
                       wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
@@ -1220,7 +1309,7 @@ function Settings(): React.JSX.Element {
                     title={translate('auto.components.settings.Settings.linearTitle', 'Linear')}
                     description={translate(
                       'auto.components.settings.Settings.linearDescription',
-                      'Give agents the skill to read and update your linked Linear tickets.'
+                      'How Linear works in Orca, setup checklist, agent skill, and example prompts.'
                     )}
                     searchEntries={getSectionSearchEntries('linear')}
                   >
@@ -1261,6 +1350,20 @@ function Settings(): React.JSX.Element {
                   </>
                 ) : null}
 
+                {showDesktopOnlySettings ? (
+                  <SettingsSection
+                    id="orca-account"
+                    title={translate('auto.components.settings.orcaAccount.title', 'Orca Account')}
+                    description={translate(
+                      'auto.components.settings.orcaAccount.description',
+                      'Share work instantly and reach your desktop from Orca Mobile wherever you are.'
+                    )}
+                    searchEntries={getSectionSearchEntries('orca-account')}
+                  >
+                    {isSectionMounted('orca-account') ? <OrcaAccountSettingsPane /> : null}
+                  </SettingsSection>
+                ) : null}
+
                 <SettingsSection
                   id="setup-guide"
                   title={translate(
@@ -1290,10 +1393,13 @@ function Settings(): React.JSX.Element {
                     <GeneralPane
                       settings={settings}
                       updateSettings={updateSettings}
-                      wslSupportedPlatform={wslSupportedPlatform}
-                      wslAvailable={windowsTerminalCapabilities.wslAvailable}
-                      wslDistros={windowsTerminalCapabilities.wslDistros}
-                      wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
+                      updateSettingsOrThrow={updateSettingsOrThrow}
+                      fontSuggestions={terminalFontSuggestions}
+                      onRequestFontSuggestions={requestFontSuggestions}
+                      wslSupportedPlatform={localWslSupportedPlatform}
+                      wslAvailable={localWindowsRuntimeCapabilities.wslAvailable}
+                      wslDistros={localWindowsRuntimeCapabilities.wslDistros}
+                      wslCapabilitiesLoading={localWindowsRuntimeCapabilities.isLoading}
                     />
                   ) : null}
                 </SettingsSection>
@@ -1327,6 +1433,48 @@ function Settings(): React.JSX.Element {
                 ) : null}
 
                 <SettingsSection
+                  id="automations"
+                  title={translate('auto.components.settings.automations.title', 'Automations')}
+                  description={translate(
+                    'auto.components.settings.automations.description',
+                    'Schedule agent work and choose whether Automations appears in the sidebar.'
+                  )}
+                  searchEntries={getSectionSearchEntries('automations')}
+                >
+                  {isSectionMounted('automations') ? (
+                    <AutomationsSettingsPane settings={settings} updateSettings={updateSettings} />
+                  ) : null}
+                </SettingsSection>
+
+                <SettingsSection
+                  id="artifacts"
+                  title={translate('auto.components.settings.artifacts.title', 'Artifacts')}
+                  badge="Beta"
+                  description={translate(
+                    'auto.components.settings.artifacts.description',
+                    'Share HTML and Markdown files with your team and manage their public links.'
+                  )}
+                  searchEntries={getSectionSearchEntries('artifacts')}
+                >
+                  {isSectionMounted('artifacts') ? (
+                    <ArtifactsSettingsPane settings={settings} updateSettings={updateSettings} />
+                  ) : null}
+                </SettingsSection>
+
+                <SettingsSection
+                  id="share-skills"
+                  title={translate('auto.components.settings.shareSkills.title', 'Share Skills')}
+                  badge="Beta"
+                  description={translate(
+                    'auto.components.settings.shareSkills.description',
+                    'Share your skills with an unlisted link. Anyone who has it can install them.'
+                  )}
+                  searchEntries={getSectionSearchEntries('share-skills')}
+                >
+                  {isSectionMounted('share-skills') ? <ShareSkillsSettingsPane /> : null}
+                </SettingsSection>
+
+                <SettingsSection
                   id="git"
                   title={translate(
                     'auto.components.settings.Settings.70100f94c7',
@@ -1334,7 +1482,7 @@ function Settings(): React.JSX.Element {
                   )}
                   description={translate(
                     'auto.components.settings.Settings.cfa34f4465',
-                    'Branch naming, base refs, attribution, and Git AI Author.'
+                    'Branch naming, base refs, and Git AI Author.'
                   )}
                   searchEntries={getSectionSearchEntries('git')}
                   forceVisible={hasUnsavedSourceControlAiPromptChanges}
@@ -1368,8 +1516,8 @@ function Settings(): React.JSX.Element {
                   id="tasks"
                   title={translate('auto.components.settings.Settings.11faa2f7dd', 'Task Sources')}
                   description={translate(
-                    'auto.components.settings.Settings.dd72ed437a',
-                    'Choose which task providers appear in the Tasks page and sidebar.'
+                    'auto.components.settings.Settings.tasksDescription',
+                    'Connect providers, install the Linear skill, and choose what appears in Tasks.'
                   )}
                   searchEntries={getSectionSearchEntries('tasks')}
                 >
@@ -1418,7 +1566,6 @@ function Settings(): React.JSX.Element {
                   {isSectionMounted('quick-commands') ? (
                     <QuickCommandsPane
                       settings={settings}
-                      updateSettings={updateSettings}
                       addCommandIntentSignal={quickCommandAddIntentSignal}
                     />
                   ) : null}
@@ -1596,9 +1743,10 @@ function Settings(): React.JSX.Element {
                   {isSectionMounted('servers') ? (
                     <RuntimeEnvironmentsPane
                       settings={settings}
-                      switchRuntimeEnvironment={switchRuntimeEnvironment}
+                      setActiveRuntimeEnvironmentPreference={setActiveRuntimeEnvironmentPreference}
                       canGeneratePairingUrl={!isWebClient}
                       allowLocalRuntime={!isWebClient}
+                      addServerIntentSignal={remoteServerAddIntentSignal}
                     />
                   ) : null}
                 </SettingsSection>
@@ -1613,7 +1761,9 @@ function Settings(): React.JSX.Element {
                     )}
                     searchEntries={getSectionSearchEntries('ssh')}
                   >
-                    {isSectionMounted('ssh') ? <SshPane /> : null}
+                    {isSectionMounted('ssh') ? (
+                      <SshPane addTargetIntentSignal={sshHostAddIntentSignal} />
+                    ) : null}
                   </SettingsSection>
                 ) : null}
 
@@ -1631,7 +1781,9 @@ function Settings(): React.JSX.Element {
                     searchEntries={getSectionSearchEntries('developer-permissions')}
                   >
                     {isSectionMounted('developer-permissions') ? (
-                      <DeveloperPermissionsPane />
+                      <DeveloperPermissionsPane
+                        highlightedSettingId={highlightedSettingsTargetId}
+                      />
                     ) : null}
                   </SettingsSection>
                 ) : null}
@@ -1703,13 +1855,22 @@ function Settings(): React.JSX.Element {
                   ) : null}
                 </SettingsSection>
 
+                {showDesktopOnlySettings ? (
+                  <PluginsSettingsSection
+                    mounted={isSectionMounted('plugins')}
+                    settings={settings}
+                    updateSettings={updateSettingsOrThrow}
+                  />
+                ) : null}
+
                 {settingsProjectList.map((settingsProject) => {
                   const repoSectionId = `repo-${settingsProject.representativeRepoId}`
                   // Why: use the switcher-selected host's repo so identity/host-specific edits follow "Available Hosts".
                   const repo = getSettingsProjectHostRepo(
                     settingsProject,
                     repos,
-                    settingsProjectHostSelection[settingsProject.projectId]
+                    settingsProjectHostSelection[settingsProject.projectId],
+                    settingsProjectSetupSelection[settingsProject.projectId]
                   )
                   if (!repo) {
                     return null
@@ -1742,6 +1903,9 @@ function Settings(): React.JSX.Element {
                           updateRepo={updateRepo}
                           removeProject={() => void removeProjectAllHosts(settingsProject.setups)}
                           project={project}
+                          selectedProjectSetupId={
+                            settingsProjectSetupSelection[settingsProject.projectId]
+                          }
                           isLocalWindowsProject={
                             getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
                             isWindowsTerminalHost

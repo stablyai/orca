@@ -69,7 +69,7 @@ export function createSidebarDragPreview(args: {
   pointerX: number
   pointerY: number
   draggedCount: number
-}): { preview: HTMLElement; offsetX: number; offsetY: number } {
+}): { preview: HTMLElement; offsetX: number; offsetY: number; height: number } {
   const rect = args.sourceRow.getBoundingClientRect()
   const preview = document.createElement('div')
   const clone = args.sourceRow.cloneNode(true) as HTMLElement
@@ -103,5 +103,5 @@ export function createSidebarDragPreview(args: {
     offsetY
   })
   document.body.appendChild(preview)
-  return { preview, offsetX, offsetY }
+  return { preview, offsetX, offsetY, height: rect.height }
 }

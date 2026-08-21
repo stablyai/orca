@@ -1,5 +1,5 @@
-import { exec, spawn } from 'node:child_process'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { execFile, spawn } from 'node:child_process'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ChildProcess from 'node:child_process'
 import { createFakeChild, createHandlers, requestContext } from './agent-exec-handler-test-harness'
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../shared/terminal-git-credential-guard'
@@ -8,20 +8,39 @@ vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcess>()
   return {
     ...actual,
-    exec: vi.fn(),
+    execFile: vi.fn(),
     spawn: vi.fn()
   }
 })
 
 const spawnMock = vi.mocked(spawn)
-const execMock = vi.mocked(exec)
+const execFileMock = vi.mocked(execFile)
 
 type AgentExecResult = { exitCode: number | null; timedOut: boolean }
 
+const GUARD_OWNED_ENV_RE = /^(?:GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)|WSLENV)$/
+
 describe('AgentExecHandler', () => {
+  let ambientGuardEnv: Record<string, string | undefined> = {}
+
   beforeEach(() => {
     spawnMock.mockReset()
-    execMock.mockReset()
+    execFileMock.mockReset()
+    // Why: the guard rewrites these, so an already-guarded runner (Orca guards
+    // its own agent terminals) would not see its ambient values passed through.
+    ambientGuardEnv = {}
+    for (const key of Object.keys(process.env).filter((name) => GUARD_OWNED_ENV_RE.test(name))) {
+      ambientGuardEnv[key] = process.env[key]
+      delete process.env[key]
+    }
+  })
+
+  afterEach(() => {
+    for (const [key, value] of Object.entries(ambientGuardEnv)) {
+      if (value !== undefined) {
+        process.env[key] = value
+      }
+    }
   })
 
   it('executes a non-interactive command with captured output and stdin', async () => {
@@ -204,7 +223,11 @@ describe('AgentExecHandler', () => {
     ).resolves.toEqual({ canceled: true })
 
     if (process.platform === 'win32') {
-      expect(execMock).toHaveBeenCalledWith('taskkill /pid 12345 /T /F', expect.any(Function))
+      expect(execFileMock).toHaveBeenCalledWith(
+        'taskkill',
+        ['/pid', '12345', '/T', '/F'],
+        expect.any(Function)
+      )
     } else {
       expect(child.kill).toHaveBeenCalledWith('SIGKILL')
     }
@@ -257,8 +280,16 @@ describe('AgentExecHandler', () => {
     ).resolves.toEqual({ canceled: true })
 
     if (process.platform === 'win32') {
-      expect(execMock).toHaveBeenCalledWith('taskkill /pid 12345 /T /F', expect.any(Function))
-      expect(execMock).not.toHaveBeenCalledWith('taskkill /pid 12346 /T /F', expect.any(Function))
+      expect(execFileMock).toHaveBeenCalledWith(
+        'taskkill',
+        ['/pid', '12345', '/T', '/F'],
+        expect.any(Function)
+      )
+      expect(execFileMock).not.toHaveBeenCalledWith(
+        'taskkill',
+        ['/pid', '12346', '/T', '/F'],
+        expect.any(Function)
+      )
     } else {
       expect(commitChild.kill).toHaveBeenCalledWith('SIGKILL')
       expect(pullRequestChild.kill).not.toHaveBeenCalled()
@@ -303,7 +334,11 @@ describe('AgentExecHandler', () => {
     controller.abort()
 
     if (process.platform === 'win32') {
-      expect(execMock).toHaveBeenCalledWith('taskkill /pid 12345 /T /F', expect.any(Function))
+      expect(execFileMock).toHaveBeenCalledWith(
+        'taskkill',
+        ['/pid', '12345', '/T', '/F'],
+        expect.any(Function)
+      )
     } else {
       expect(child.kill).toHaveBeenCalledWith('SIGKILL')
     }
@@ -351,8 +386,16 @@ describe('AgentExecHandler', () => {
     )
 
     if (process.platform === 'win32') {
-      expect(execMock).toHaveBeenCalledWith('taskkill /pid 12345 /T /F', expect.any(Function))
-      expect(execMock).not.toHaveBeenCalledWith('taskkill /pid 12346 /T /F', expect.any(Function))
+      expect(execFileMock).toHaveBeenCalledWith(
+        'taskkill',
+        ['/pid', '12345', '/T', '/F'],
+        expect.any(Function)
+      )
+      expect(execFileMock).not.toHaveBeenCalledWith(
+        'taskkill',
+        ['/pid', '12346', '/T', '/F'],
+        expect.any(Function)
+      )
     } else {
       expect(firstChild.kill).toHaveBeenCalledWith('SIGKILL')
       expect(secondChild.kill).not.toHaveBeenCalled()
@@ -366,7 +409,11 @@ describe('AgentExecHandler', () => {
     ).resolves.toEqual({ canceled: true })
 
     if (process.platform === 'win32') {
-      expect(execMock).toHaveBeenCalledWith('taskkill /pid 12346 /T /F', expect.any(Function))
+      expect(execFileMock).toHaveBeenCalledWith(
+        'taskkill',
+        ['/pid', '12346', '/T', '/F'],
+        expect.any(Function)
+      )
     } else {
       expect(secondChild.kill).toHaveBeenCalledWith('SIGKILL')
     }
@@ -411,7 +458,11 @@ describe('AgentExecHandler', () => {
 
       expect(outcome).toBe('timed-out:null')
       if (process.platform === 'win32') {
-        expect(execMock).toHaveBeenCalledWith('taskkill /pid 12345 /T /F', expect.any(Function))
+        expect(execFileMock).toHaveBeenCalledWith(
+          'taskkill',
+          ['/pid', '12345', '/T', '/F'],
+          expect.any(Function)
+        )
       } else {
         expect(child.kill).toHaveBeenCalledWith('SIGKILL')
       }

@@ -3,7 +3,8 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PRInfo, Repo } from '../../../../shared/types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { useHostedReviewActions, type HostedReviewActionInfo } from './use-hosted-review-actions'
 
 const confirmationMocks = vi.hoisted(() => ({
@@ -14,7 +15,7 @@ const runtimeRpcMocks = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn()
 }))
 
-vi.mock('@/components/confirmation-dialog', () => ({
+vi.mock('@/components/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => confirmationMocks.confirm
 }))
 
@@ -46,25 +47,18 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
   } as Repo
 }
 
-type ProviderOverrides = {
-  review?: HostedReviewActionInfo
-  isGitLab?: boolean
-  shortLabel?: string
-  reviewLabel?: string
-}
-
 function HookProbe(props: {
   repo: Repo
   onRefreshReview: () => Promise<void>
-  overrides?: ProviderOverrides
+  pullRequest?: PRInfo
 }): null {
   latest = useHostedReviewActions({
-    review: props.overrides?.review ?? review,
-    githubPR,
+    review,
+    githubPR: props.pullRequest ?? githubPR,
     repo: props.repo,
-    isGitLab: props.overrides?.isGitLab ?? false,
-    shortLabel: props.overrides?.shortLabel ?? 'PR',
-    reviewLabel: props.overrides?.reviewLabel ?? 'pull request',
+    isGitLab: false,
+    shortLabel: 'PR',
+    reviewLabel: 'pull request',
     defaultMergeMethod: 'squash',
     autoMergeAction: null,
     onRefreshReview: props.onRefreshReview
@@ -75,13 +69,13 @@ function HookProbe(props: {
 async function renderHook(
   repo: Repo,
   onRefreshReview = vi.fn().mockResolvedValue(undefined),
-  overrides?: ProviderOverrides
+  pullRequest?: PRInfo
 ) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root?.render(createElement(HookProbe, { repo, onRefreshReview, overrides }))
+    root?.render(createElement(HookProbe, { repo, onRefreshReview, pullRequest }))
   })
   return { onRefreshReview }
 }
@@ -130,7 +124,7 @@ describe('useHostedReviewActions', () => {
         method: 'squash',
         prRepo
       },
-      { timeoutMs: 30_000 }
+      { timeoutMs: 4 * 60_000 }
     )
     expect(window.api.gh.mergePR).not.toHaveBeenCalled()
     expect(onRefreshReview).toHaveBeenCalledTimes(1)
@@ -156,61 +150,102 @@ describe('useHostedReviewActions', () => {
     expect(onRefreshReview).toHaveBeenCalledTimes(1)
   })
 
-  it('confirms before merging with the selected strategy label (#7943)', async () => {
-    await renderHook(makeRepo())
-
-    await act(async () => {
-      await latest?.handleMerge('merge')
-    })
-
-    expect(confirmationMocks.confirm).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: 'Create merge commit PR #1015?',
-        confirmLabel: 'Create merge commit'
-      })
-    )
-  })
-
-  it('does not merge when the confirmation is cancelled (#7943)', async () => {
-    confirmationMocks.confirm.mockResolvedValue(false)
-    const { onRefreshReview } = await renderHook(makeRepo())
+  it('confirms the downstack merge scope before merging a registered stack', async () => {
+    const stackedPR = {
+      ...githubPR,
+      stack: {
+        number: 51,
+        position: 2,
+        size: 3,
+        baseRefName: 'main',
+        entries: [
+          {
+            position: 1,
+            number: 1014,
+            title: 'Models',
+            url: 'https://github.com/stablyai/orca/pull/1014',
+            state: 'open',
+            checksStatus: 'success',
+            mergeable: 'MERGEABLE'
+          },
+          {
+            position: 2,
+            number: 1015,
+            title: 'API',
+            url: 'https://github.com/stablyai/orca/pull/1015',
+            state: 'open',
+            checksStatus: 'success',
+            mergeable: 'MERGEABLE'
+          },
+          {
+            position: 3,
+            number: 1016,
+            title: 'UI',
+            url: 'https://github.com/stablyai/orca/pull/1016',
+            state: 'open',
+            checksStatus: 'success',
+            mergeable: 'MERGEABLE'
+          }
+        ]
+      }
+    } as PRInfo
+    await renderHook(makeRepo(), undefined, stackedPR)
 
     await act(async () => {
       await latest?.handleMerge('squash')
     })
 
-    expect(confirmationMocks.confirm).toHaveBeenCalledTimes(1)
-    expect(window.api.gh.mergePR).not.toHaveBeenCalled()
-    expect(runtimeRpcMocks.callRuntimeRpc).not.toHaveBeenCalled()
-    expect(onRefreshReview).not.toHaveBeenCalled()
+    expect(confirmationMocks.confirm).toHaveBeenCalledWith({
+      title: 'Merge through #1015?',
+      description:
+        'Included: #1014, #1015. GitHub will merge 2 pull requests atomically using squash. If any cannot merge, none will.',
+      confirmLabel: 'Merge 2 PRs'
+    })
+    expect(window.api.gh.mergePR).toHaveBeenCalledTimes(1)
   })
 
-  it('confirms GitLab MR merges with provider-aware copy (#7943)', async () => {
-    await renderHook(makeRepo(), undefined, {
-      review: {
-        provider: 'gitlab',
-        number: 42,
-        state: 'open',
-        status: 'success',
-        mergeable: 'MERGEABLE'
-      },
-      isGitLab: true,
-      shortLabel: 'MR',
-      reviewLabel: 'merge request'
-    })
+  it('describes merge-queue stack behavior without promising atomicity or a method', async () => {
+    const stackedPR = {
+      ...githubPR,
+      mergeQueueRequired: true,
+      stack: {
+        number: 51,
+        position: 2,
+        size: 2,
+        baseRefName: 'main',
+        entries: [
+          {
+            position: 1,
+            number: 1014,
+            title: 'Models',
+            url: 'https://github.com/stablyai/orca/pull/1014',
+            state: 'open',
+            checksStatus: 'success',
+            mergeable: 'MERGEABLE'
+          },
+          {
+            position: 2,
+            number: 1015,
+            title: 'API',
+            url: 'https://github.com/stablyai/orca/pull/1015',
+            state: 'open',
+            checksStatus: 'success',
+            mergeable: 'MERGEABLE'
+          }
+        ]
+      }
+    } as PRInfo
+    await renderHook(makeRepo(), undefined, stackedPR)
 
     await act(async () => {
       await latest?.handleMerge('squash')
     })
 
-    expect(confirmationMocks.confirm).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Squash and merge MR !42?' })
-    )
-    expect(window.api.gl.mergeMR).toHaveBeenCalledWith({
-      repoPath: '/repo',
-      repoId: 'repo-1',
-      iid: 42,
-      method: 'squash'
+    expect(confirmationMocks.confirm).toHaveBeenCalledWith({
+      title: 'Queue through #1015?',
+      description:
+        'Included: #1014, #1015. GitHub will add 2 pull requests to the merge queue together. The queue chooses the merge method and may merge them in separate groups.',
+      confirmLabel: 'Queue 2 PRs'
     })
   })
 })

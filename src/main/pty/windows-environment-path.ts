@@ -1,10 +1,23 @@
-import { execFileSync } from 'node:child_process'
+import type { execFile, execFileSync } from 'node:child_process'
+import { expandWindowsEnvironmentVariables } from '../../shared/windows-environment-expansion'
+import { getRegExePath } from '../win32-utils'
+import { mergeWindowsPathSegments } from './windows-path-segment-merge'
+import {
+  WindowsPathRegistryFallback,
+  type RegistryPathRead
+} from './windows-path-registry-fallback'
+import { readWindowsPathRegistry } from './windows-path-registry-reader'
 
+export { resolvePathEnvKey } from './windows-path-segment-merge'
+
+type ExecFile = typeof execFile
 type ExecFileSync = typeof execFileSync
 
 type ReadWindowsPathOptions = {
+  execFile?: ExecFile
   execFileSync?: ExecFileSync
   env?: NodeJS.ProcessEnv
+  forceRefresh?: boolean
   platform?: NodeJS.Platform
 }
 
@@ -14,6 +27,10 @@ const WINDOWS_PATH_REGISTRY_KEYS = [
 ] as const
 
 const PERSISTED_WINDOWS_PATH_CACHE_TTL_MS = 30_000
+const PERSISTED_WINDOWS_PATH_QUERY_TIMEOUT_MS = 5_000
+const windowsPathRegistryFallback = new WindowsPathRegistryFallback(
+  WINDOWS_PATH_REGISTRY_KEYS.length
+)
 
 let persistedWindowsPathCache:
   | {
@@ -21,6 +38,10 @@ let persistedWindowsPathCache:
       segments: string[]
     }
   | undefined
+let pendingPersistedWindowsPathRefresh: Promise<string[]> | undefined
+let persistedWindowsPathCacheGeneration = 0
+let persistedWindowsPathReadSequence = 0
+let persistedWindowsPathCommittedSequence = 0
 
 function parseRegistryPathValue(output: string, valueName: string): string | null {
   const valuePattern = new RegExp(`^\\s*${valueName}\\s+REG_\\w+\\s+(.*)$`, 'i')
@@ -31,14 +52,6 @@ function parseRegistryPathValue(output: string, valueName: string): string | nul
     }
   }
   return null
-}
-
-function expandWindowsEnvironmentVariables(value: string, env: NodeJS.ProcessEnv): string {
-  return value.replace(/%([^%]+)%/g, (match, rawName: string) => {
-    const name = rawName.toLowerCase()
-    const envKey = Object.keys(env).find((key) => key.toLowerCase() === name)
-    return envKey && env[envKey] ? env[envKey] : match
-  })
 }
 
 function getPathDelimiter(platform: NodeJS.Platform): string {
@@ -52,6 +65,74 @@ function splitPathSegments(pathValue: string, pathDelimiter: string): string[] {
     .filter(Boolean)
 }
 
+function registryOutputSegments(
+  output: string,
+  valueName: string,
+  env: NodeJS.ProcessEnv,
+  pathDelimiter: string
+): string[] {
+  const value = parseRegistryPathValue(output, valueName)
+  return value
+    ? splitPathSegments(expandWindowsEnvironmentVariables(value, env), pathDelimiter)
+    : []
+}
+
+function readNativeRegistryPaths(
+  env: NodeJS.ProcessEnv,
+  pathDelimiter: string
+): RegistryPathRead[] {
+  return readWindowsPathRegistry().map((read) => ({
+    failed: read.failed,
+    segments:
+      read.value === null
+        ? []
+        : splitPathSegments(expandWindowsEnvironmentVariables(read.value, env), pathDelimiter)
+  }))
+}
+
+function cachePersistedWindowsPathReads(reads: RegistryPathRead[], readSequence: number): string[] {
+  if (readSequence < persistedWindowsPathCommittedSequence) {
+    // Why: a slower async read must not replace a newer synchronous refresh.
+    return persistedWindowsPathCache ? [...persistedWindowsPathCache.segments] : []
+  }
+  persistedWindowsPathCommittedSequence = readSequence
+  const segments = windowsPathRegistryFallback.commitReads(reads)
+  if (!segments) {
+    // Why: unresolved hives preserve ordering, but still need negative caching on the PTY hot path.
+    persistedWindowsPathCache = { readAt: Date.now(), segments: [] }
+    return []
+  }
+  persistedWindowsPathCache = { readAt: Date.now(), segments: [...segments] }
+  return [...segments]
+}
+
+function readRegistryPathAsync(
+  run: ExecFile,
+  executable: string,
+  registryValue: readonly [key: string, valueName: string],
+  env: NodeJS.ProcessEnv,
+  pathDelimiter: string
+): Promise<RegistryPathRead> {
+  const [key, valueName] = registryValue
+  return new Promise((resolve) => {
+    run(
+      executable,
+      ['query', key, '/v', valueName],
+      { encoding: 'utf8', timeout: PERSISTED_WINDOWS_PATH_QUERY_TIMEOUT_MS, windowsHide: true },
+      (error, stdout) => {
+        if (error) {
+          resolve({ failed: true, segments: [] })
+          return
+        }
+        resolve({
+          failed: false,
+          segments: registryOutputSegments(String(stdout), valueName, env, pathDelimiter)
+        })
+      }
+    )
+  })
+}
+
 export function readPersistedWindowsPathSegments(options: ReadWindowsPathOptions = {}): string[] {
   const platform = options.platform ?? process.platform
   if (platform !== 'win32') {
@@ -59,11 +140,13 @@ export function readPersistedWindowsPathSegments(options: ReadWindowsPathOptions
   }
 
   const useProductionCache =
+    options.execFile === undefined &&
     options.execFileSync === undefined &&
     options.env === undefined &&
     options.platform === undefined
   const now = Date.now()
   if (
+    !options.forceRefresh &&
     useProductionCache &&
     persistedWindowsPathCache &&
     now - persistedWindowsPathCache.readAt < PERSISTED_WINDOWS_PATH_CACHE_TTL_MS
@@ -71,44 +154,127 @@ export function readPersistedWindowsPathSegments(options: ReadWindowsPathOptions
     return [...persistedWindowsPathCache.segments]
   }
 
-  const run = options.execFileSync ?? execFileSync
+  if (!options.forceRefresh && useProductionCache && pendingPersistedWindowsPathRefresh) {
+    // Why: synchronous PTY construction cannot await the active refresh; its stale cache is
+    // safer than duplicating the registry read on Electron's main thread.
+    return persistedWindowsPathCache ? [...persistedWindowsPathCache.segments] : []
+  }
+
   const env = options.env ?? process.env
   const pathDelimiter = getPathDelimiter(platform)
-  const segments: string[] = []
-
-  for (const [key, valueName] of WINDOWS_PATH_REGISTRY_KEYS) {
-    try {
-      const output = run('reg.exe', ['query', key, '/v', valueName], {
-        encoding: 'utf8',
-        windowsHide: true
+  const readSequence = useProductionCache ? ++persistedWindowsPathReadSequence : 0
+  const reads = options.execFileSync
+    ? WINDOWS_PATH_REGISTRY_KEYS.map(([key, valueName]) => {
+        try {
+          const output = options.execFileSync!(
+            getRegExePath(env),
+            ['query', key, '/v', valueName],
+            {
+              encoding: 'utf8',
+              timeout: PERSISTED_WINDOWS_PATH_QUERY_TIMEOUT_MS,
+              windowsHide: true
+            }
+          )
+          return {
+            failed: false,
+            segments: registryOutputSegments(output, valueName, env, pathDelimiter)
+          }
+        } catch {
+          return { failed: true, segments: [] }
+        }
       })
-      const value = parseRegistryPathValue(output, valueName)
-      if (value) {
-        segments.push(
-          ...splitPathSegments(expandWindowsEnvironmentVariables(value, env), pathDelimiter)
+    : readNativeRegistryPaths(env, pathDelimiter)
+  const segments = reads.flatMap((read) => read.segments)
+  if (!useProductionCache) {
+    return segments
+  }
+
+  // Why: local PTY spawn is a hot path on Windows, and each uncached refresh performs two
+  // synchronous native registry reads. A short TTL keeps terminal bursts cheap while still
+  // picking up newly installed CLIs soon.
+  return cachePersistedWindowsPathReads(reads, readSequence)
+}
+
+export async function readPersistedWindowsPathSegmentsAsync(
+  options: ReadWindowsPathOptions = {}
+): Promise<string[]> {
+  const platform = options.platform ?? process.platform
+  if (platform !== 'win32') {
+    return []
+  }
+
+  const useProductionCache =
+    options.execFile === undefined &&
+    options.execFileSync === undefined &&
+    options.env === undefined &&
+    options.platform === undefined
+  const now = Date.now()
+  if (
+    !options.forceRefresh &&
+    useProductionCache &&
+    persistedWindowsPathCache &&
+    now - persistedWindowsPathCache.readAt < PERSISTED_WINDOWS_PATH_CACHE_TTL_MS
+  ) {
+    return [...persistedWindowsPathCache.segments]
+  }
+  if (useProductionCache && pendingPersistedWindowsPathRefresh) {
+    return [...(await pendingPersistedWindowsPathRefresh)]
+  }
+
+  const env = options.env ?? process.env
+  const pathDelimiter = getPathDelimiter(platform)
+  const cacheGeneration = persistedWindowsPathCacheGeneration
+  const readSequence = useProductionCache ? ++persistedWindowsPathReadSequence : 0
+  const refresh = (
+    options.execFile
+      ? Promise.all(
+          WINDOWS_PATH_REGISTRY_KEYS.map((registryValue) =>
+            readRegistryPathAsync(
+              options.execFile!,
+              getRegExePath(env),
+              registryValue,
+              env,
+              pathDelimiter
+            )
+          )
         )
-      }
-    } catch {
-      // Registry access can fail in stripped test containers or remote-like
-      // Windows contexts. Existing PATH remains the fallback in those cases.
+      : Promise.resolve(readNativeRegistryPaths(env, pathDelimiter))
+  ).then((reads) => {
+    const segments = reads.flatMap((read) => read.segments)
+    if (!useProductionCache) {
+      return segments
+    }
+    if (cacheGeneration !== persistedWindowsPathCacheGeneration) {
+      // Why: callers must not merge or inspect a snapshot invalidated while its queries ran.
+      return readPersistedWindowsPathSegmentsAsync()
+    }
+    return cachePersistedWindowsPathReads(reads, readSequence)
+  })
+
+  if (!useProductionCache) {
+    return refresh
+  }
+  pendingPersistedWindowsPathRefresh = refresh
+  try {
+    return [...(await refresh)]
+  } finally {
+    if (pendingPersistedWindowsPathRefresh === refresh) {
+      pendingPersistedWindowsPathRefresh = undefined
     }
   }
-
-  if (useProductionCache) {
-    // Why: local PTY spawn is a hot path on Windows, and each uncached read
-    // runs two synchronous `reg.exe query` subprocesses. A short TTL keeps
-    // terminal bursts cheap while still picking up newly installed CLIs soon.
-    persistedWindowsPathCache = {
-      readAt: now,
-      segments: [...segments]
-    }
-  }
-
-  return segments
 }
 
 export function __resetPersistedWindowsPathCacheForTests(): void {
+  invalidatePersistedWindowsPathCache()
+  windowsPathRegistryFallback.reset()
+  persistedWindowsPathReadSequence = 0
+  persistedWindowsPathCommittedSequence = 0
+}
+
+export function invalidatePersistedWindowsPathCache(): void {
+  persistedWindowsPathCacheGeneration += 1
   persistedWindowsPathCache = undefined
+  pendingPersistedWindowsPathRefresh = undefined
 }
 
 export function mergePersistedWindowsPath(
@@ -120,27 +286,20 @@ export function mergePersistedWindowsPath(
     return
   }
 
-  const pathKey = env.Path !== undefined ? 'Path' : env.PATH !== undefined ? 'PATH' : 'Path'
-  const pathDelimiter = getPathDelimiter(platform)
   const sourceEnv = options.env ?? process.env
-  const currentPath = env[pathKey] ?? sourceEnv.PATH ?? sourceEnv.Path ?? ''
-  const currentSegments = splitPathSegments(currentPath, pathDelimiter)
-  const existing = new Set(currentSegments.map((segment) => segment.toLowerCase()))
-  const missing = readPersistedWindowsPathSegments(options).filter((segment) => {
-    const normalized = segment.toLowerCase()
-    if (existing.has(normalized)) {
-      return false
-    }
-    existing.add(normalized)
-    return true
-  })
+  // Why: append-only merging lets stale entries shadow newly installed executables.
+  mergeWindowsPathSegments(env, readPersistedWindowsPathSegments(options), platform, sourceEnv)
+}
 
-  if (missing.length === 0) {
+export async function mergePersistedWindowsPathAsync(
+  env: NodeJS.ProcessEnv,
+  options: ReadWindowsPathOptions = {}
+): Promise<void> {
+  const platform = options.platform ?? process.platform
+  if (platform !== 'win32') {
     return
   }
-
-  // Why: Windows broadcasts PATH changes to future processes, but a running
-  // Electron app keeps its old environment. Append the persisted additions so
-  // newly installed CLIs resolve without unexpectedly reordering existing PATH.
-  env[pathKey] = [...currentSegments, ...missing].join(pathDelimiter)
+  const sourceEnv = options.env ?? process.env
+  const persistedSegments = await readPersistedWindowsPathSegmentsAsync(options)
+  mergeWindowsPathSegments(env, persistedSegments, platform, sourceEnv)
 }

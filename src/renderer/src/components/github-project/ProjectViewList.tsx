@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import ColumnResizeHandle from './ColumnResizeHandle'
 import ProjectGroupHeader from './ProjectGroupHeader'
 import ProjectRow from './ProjectRow'
-import { groupRows, sortRows } from '../../../../shared/github-project-group-sort'
+import { groupRows, sortRows } from '../../../../shared/github/project-group-sort'
 import { getAvailableColumns, loadHiddenColumns, saveHiddenColumns } from './columns'
 import {
   ACTION_COLUMN_WIDTH,
@@ -21,8 +21,8 @@ import type {
   GitHubProjectRow,
   GitHubProjectSortDirection,
   GitHubProjectTable
-} from '../../../../shared/github-project-types'
-import type { GlobalSettings } from '../../../../shared/types'
+} from '../../../../shared/github/project-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 
 type SortOverride = { fieldId: string; direction: GitHubProjectSortDirection }
@@ -258,6 +258,7 @@ export default function ProjectViewList({
                     onEditIssueType={(issueType) => onEditIssueType?.(row, issueType)}
                     onStartWork={() => onStartWork?.(row)}
                     onOpenInBrowser={() => onOpenInBrowser?.(row)}
+                    sourceHost={table.project.host}
                     sourceSettings={sourceSettings}
                   />
                 ))

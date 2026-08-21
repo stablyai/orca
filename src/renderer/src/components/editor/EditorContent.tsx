@@ -14,7 +14,8 @@ import {
   getNextConflictNavigationIndex
 } from './ConflictComponents'
 import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
-import type { GitStatusEntry, GitDiffResult } from '../../../../shared/types'
+import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { getMarkdownRenderMode } from './markdown-render-mode'
 import { getMarkdownRichModeUnsupportedMessage } from './markdown-rich-mode'
 import { exceedsMarkdownRichModeSizeLimit } from './markdown-rich-size-limit'
@@ -33,7 +34,9 @@ import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
 const MonacoEditor = lazy(() => import('./MonacoEditor'))
 const DiffViewer = lazy(() => import('./DiffViewer'))
 const CombinedDiffViewer = lazy(() => import('./CombinedDiffViewer'))
-const RichMarkdownEditor = lazy(() => import('./RichMarkdownEditor'))
+const RichMarkdownEditor = lazy(() => import('./RichMarkdownEditor'), {
+  reloadKey: 'rich-markdown-editor'
+})
 const MarkdownPreview = lazy(() => import('./MarkdownPreview'))
 const ImageViewer = lazy(() => import('./ImageViewer'))
 const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
@@ -43,7 +46,7 @@ const IpynbViewer = lazy(() => import('./IpynbViewer'))
 
 // Why: module-level for a stable no-op identity so read-only tabs don't rebuild callbacks each render.
 const noopEditorContentChange = (_content: string): void => {}
-const noopEditorSave = (_content: string): void => {}
+const noopEditorSave = async (_content: string): Promise<boolean> => false
 
 export function getMarkdownSourceLineOffset(frontMatterRaw: string): number {
   let offset = 0
@@ -164,8 +167,8 @@ export function EditorContent({
   handleContentChange: (content: string) => void
   handleContentChangeForFile: (file: OpenFile, content: string) => void
   handleDirtyStateHint: (dirty: boolean) => void
-  handleSave: (content: string) => Promise<void>
-  handleSaveForFile: (file: OpenFile, content: string) => Promise<void>
+  handleSave: (content: string) => Promise<boolean>
+  handleSaveForFile: (file: OpenFile, content: string) => Promise<boolean>
   reloadContent: (file: OpenFile) => void
 }): React.JSX.Element {
   const editorViewStateKey =
@@ -178,6 +181,12 @@ export function EditorContent({
     viewStateScopeId === activeFile.id
       ? `${activeFile.id}:preview`
       : `${activeFile.id}::${viewStateScopeId}:preview`
+  // Why: only the single-pane edit path gets PDF scroll memory — the diff and
+  // conflict-review paths mount several viewers on one path (see PdfViewer).
+  const pdfViewStateKey =
+    viewStateScopeId === activeFile.id
+      ? `${activeFile.filePath}:pdf`
+      : `${activeFile.filePath}::${viewStateScopeId}:pdf`
   const monacoLanguage = resolvedLanguage === 'notebook' ? 'json' : resolvedLanguage
 
   const openConflictReviewFile = useAppStore((s) => s.openConflictReviewFile)
@@ -307,6 +316,7 @@ export function EditorContent({
       fileId={activeFile.id}
       filePath={activeFile.filePath}
       viewStateKey={editorViewStateKey}
+      viewStateId={viewStateScopeId}
       relativePath={activeFile.relativePath}
       content={editBuffers[activeFile.id] ?? fc.content}
       language={monacoLanguage}
@@ -376,7 +386,7 @@ export function EditorContent({
         : handleContentChange
 
       const onSaveWithFm = fm
-        ? (body: string): Promise<void> => md.mdSave(prependFrontMatter(fm.raw, body))
+        ? (body: string): Promise<boolean> => md.mdSave(prependFrontMatter(fm.raw, body))
         : md.mdSave
 
       return (
@@ -386,9 +396,11 @@ export function EditorContent({
             <RichMarkdownErrorBoundary key={viewStateScopeId} fileId={activeFile.id}>
               <RichMarkdownEditor
                 fileId={activeFile.id}
+                viewStateId={viewStateScopeId}
                 content={editorContent}
                 filePath={activeFile.filePath}
                 worktreeId={activeFile.worktreeId}
+                externalSshTargetId={activeFile.externalSshTargetId}
                 runtimeEnvironmentId={activeFile.runtimeEnvironmentId}
                 scrollCacheKey={`${editorViewStateKey}:rich`}
                 onContentChange={onContentChangeWithFm}
@@ -735,7 +747,12 @@ export function EditorContent({
     if (fc.isBinary) {
       if (fc.isImage) {
         return (
-          <ImageViewer content={fc.content} filePath={activeFile.filePath} mimeType={fc.mimeType} />
+          <ImageViewer
+            content={fc.content}
+            filePath={activeFile.filePath}
+            mimeType={fc.mimeType}
+            scrollCacheKey={pdfViewStateKey}
+          />
         )
       }
       return (

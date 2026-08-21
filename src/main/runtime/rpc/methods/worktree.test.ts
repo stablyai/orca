@@ -45,7 +45,8 @@ describe('worktree RPC methods', () => {
     expect(response).toMatchObject({ ok: true })
     expect(runtime.activateManagedWorktree).toHaveBeenCalledWith('id:wt-1', {
       notifyClients: false,
-      clientKind: undefined
+      clientKind: undefined,
+      navigation: 'caller'
     })
   })
 
@@ -70,28 +71,9 @@ describe('worktree RPC methods', () => {
 
     expect(runtime.activateManagedWorktree).toHaveBeenCalledWith('id:wt-1', {
       notifyClients: false,
-      clientKind: 'mobile'
+      clientKind: 'mobile',
+      navigation: 'caller'
     })
-  })
-
-  it('routes dirty-file force to the runtime server', async () => {
-    const runtime = {
-      getRuntimeId: () => 'test-runtime',
-      dedupeWorktreeCreate: passthroughDedupe,
-      removeManagedWorktree: vi.fn().mockResolvedValue({})
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
-
-    const response = await dispatcher.dispatch(
-      makeRequest('worktree.rm', {
-        worktree: 'id:wt-1',
-        force: true,
-        runHooks: false
-      })
-    )
-
-    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith('id:wt-1', true, false)
-    expect(response).toMatchObject({ ok: true, result: { removed: true } })
   })
 
   it('routes create options to the runtime server', async () => {
@@ -149,9 +131,11 @@ describe('worktree RPC methods', () => {
       pushTarget: { remoteName: 'fork', branchName: 'feature' },
       runHooks: false,
       activate: false,
+      navigation: 'all',
       setupDecision: 'skip',
       createdWithAgent: undefined,
       automationProvenance: undefined,
+      creatorProvenance: { kind: 'host' },
       startup: undefined,
       startupDraft: undefined,
       lineage: {

@@ -14,8 +14,11 @@ import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-
 import { useGitStatusFileWatchRefresh } from './git-status-file-watch-refresh'
 import { useGitStatusPushSignalRefresh } from './git-status-push-signal-refresh'
 import { useStaleConflictOperationPolling } from './stale-conflict-operation-poll'
+import { useGitStatusUpstreamRefWatch } from './use-git-status-upstream-ref-watch'
 import {
+  createGitStatusRefreshPacing,
   createGitStatusRefreshScheduler,
+  type GitStatusRefreshPacing,
   type GitStatusRefreshReason,
   type GitStatusRefreshScheduler
 } from './git-status-refresh-scheduler'
@@ -100,6 +103,13 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     activeGitStatusPollingArgs
   )
 
+  const publishUpstreamRefWatch = useGitStatusUpstreamRefWatch({
+    enabled: canFetchActiveWorktreeGitStatus,
+    executionHostId: activeExecutionHostId,
+    worktreeId: activeWorktreeId,
+    worktreePath
+  })
+
   const runFetchStatus = useCallback(
     async (request: {
       reason: GitStatusRefreshReason
@@ -119,8 +129,9 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
       }
       try {
         const connectionId = getConnectionId(activeWorktreeId) ?? undefined
+        const runtimeSettings = getRightSidebarWorktreeRuntimeSettings(activeWorktreeId)
         await refreshGitStatusForWorktree({
-          settings: getRightSidebarWorktreeRuntimeSettings(activeWorktreeId),
+          settings: runtimeSettings,
           worktreeId: activeWorktreeId,
           worktreePath,
           connectionId,
@@ -134,7 +145,8 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
           request: {
             ...(request.reason === 'safety' ? { reuseLineStats: true } : {}),
             signal: request.signal,
-            shouldApply: request.shouldApply
+            shouldApply: request.shouldApply,
+            onStatusAccepted: publishUpstreamRefWatch
           }
         })
       } catch {
@@ -146,6 +158,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
       activeWorktreeId,
       fetchUpstreamStatus,
       canFetchActiveWorktreeGitStatus,
+      publishUpstreamRefWatch,
       worktreePath,
       setGitStatus,
       setUpstreamStatus,
@@ -162,8 +175,22 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   const statusRefreshGenerationRef = useRef(0)
 
   const statusSchedulerRef = useRef<GitStatusRefreshScheduler | null>(null)
+  // Why: pacing belongs to the current worktree, not to scheduler instances —
+  // execution-host/push-target rebuilds must not reset it, or a flapping host id
+  // lets sustained change signals run git at the bare debounce.
+  const statusPacingRef = useRef<{
+    key: string
+    pacing: GitStatusRefreshPacing
+  } | null>(null)
   useEffect(() => {
     const generation = ++statusRefreshGenerationRef.current
+    const pacingKey = `${activeWorktreeId}\0${worktreePath}`
+    let pacing =
+      statusPacingRef.current?.key === pacingKey ? statusPacingRef.current.pacing : undefined
+    if (!pacing) {
+      pacing = createGitStatusRefreshPacing()
+      statusPacingRef.current = { key: pacingKey, pacing }
+    }
     const scheduler = createGitStatusRefreshScheduler(
       ({ reason, signal }) =>
         runFetchStatusRef.current({
@@ -179,7 +206,8 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
         safetyIntervalMs: STATUS_SAFETY_INTERVAL_MS,
         activityDebounceMs: STATUS_ACTIVITY_DEBOUNCE_MS,
         activityMinGapMs: STATUS_ACTIVITY_MIN_GAP_MS,
-        slowTaskBackoff: SLOW_GIT_POLL_BACKOFF
+        slowTaskBackoff: SLOW_GIT_POLL_BACKOFF,
+        pacing
       }
     )
     statusSchedulerRef.current = scheduler

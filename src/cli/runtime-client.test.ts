@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createServer, type Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RuntimeClient, RuntimeRpcFailureError } from './runtime-client'
+import { ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY } from '../shared/protocol-version'
+import { RuntimeClient, RuntimeClientError, RuntimeRpcFailureError } from './runtime-client'
 import { launchOrcaApp } from './runtime/launch'
 
 vi.mock('./runtime/launch', () => ({
@@ -74,6 +75,107 @@ function findUnusedPid(seed = 200_000): number {
 // Windows does not support Unix domain sockets in the same way, causing
 // EACCES errors on listen(), so the suite is skipped on that platform.
 describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
+  it('adds an opaque durable request ID only to orchestration mutations', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const endpoint = join(userDataPath, 'runtime.sock')
+    const requests: Record<string, unknown>[] = []
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', (data) => {
+        const request = JSON.parse(String(data).trim()) as Record<string, unknown>
+        requests.push(request)
+        const result =
+          request.method === 'status.get'
+            ? { capabilities: [ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY] }
+            : {}
+        socket.write(
+          `${JSON.stringify({
+            id: request.id,
+            ok: true,
+            result,
+            _meta: { runtimeId: 'runtime-1' }
+          })}\n`
+        )
+      })
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+    writeMetadata(userDataPath, endpoint)
+
+    const priorLaunchToken = process.env.ORCA_AGENT_LAUNCH_TOKEN
+    process.env.ORCA_AGENT_LAUNCH_TOKEN = 'launch-secret'
+    const client = new RuntimeClient(userDataPath, 500)
+    try {
+      await client.call(
+        'orchestration.send',
+        { subject: 'hello' },
+        {
+          orchestrationRequestId: 'mutation_explicit'
+        }
+      )
+      await client.call('orchestration.taskList', {})
+      const secondClient = new RuntimeClient(userDataPath, 500)
+      await secondClient.call('orchestration.taskList', {})
+    } finally {
+      if (priorLaunchToken === undefined) {
+        delete process.env.ORCA_AGENT_LAUNCH_TOKEN
+      } else {
+        process.env.ORCA_AGENT_LAUNCH_TOKEN = priorLaunchToken
+      }
+    }
+
+    expect(requests[0]?.method).toBe('status.get')
+    expect(requests[0]?.compatibilityInvocationId).toBeUndefined()
+    expect(requests[1]?.orchestrationRequestId).toBe('mutation_explicit')
+    expect(requests[1]?.orchestrationContractVersion).toBe(1)
+    expect(requests[1]?.compatibilityInvocationId).toBe('mutation_explicit')
+    expect(requests[1]?.orchestrationCompatibilityEvidence).toMatchObject({
+      launchToken: 'launch-secret'
+    })
+    expect(requests[2]?.orchestrationRequestId).toBeUndefined()
+    expect(requests[2]?.compatibilityInvocationId).not.toBe(requests[1]?.compatibilityInvocationId)
+    expect(requests[3]?.method).toBe('orchestration.taskList')
+    expect(requests[3]?.compatibilityInvocationId).not.toBe(requests[1]?.compatibilityInvocationId)
+  })
+
+  it('rejects an old local runtime before sending an orchestration mutation', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const endpoint = join(userDataPath, 'runtime.sock')
+    const requests: Record<string, unknown>[] = []
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', (data) => {
+        const request = JSON.parse(String(data).trim()) as Record<string, unknown>
+        requests.push(request)
+        socket.write(
+          `${JSON.stringify({
+            id: request.id,
+            ok: true,
+            result: { capabilities: [] },
+            _meta: { runtimeId: 'runtime-1' }
+          })}\n`
+        )
+      })
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+    writeMetadata(userDataPath, endpoint)
+
+    const client = new RuntimeClient(userDataPath, 500)
+    await expect(client.call('orchestration.send', { subject: 'hello' })).rejects.toMatchObject({
+      code: 'orchestration_migration_required',
+      data: {
+        reason: 'runtime_capability_missing',
+        effectsApplied: false,
+        nextCommandArgs: ['skills', 'get', 'orchestration', '--full']
+      }
+    })
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.method).toBe('status.get')
+  })
+
   it('returns the full RPC envelope for successful calls', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
     const endpoint = join(userDataPath, 'runtime.sock')
@@ -114,6 +216,7 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
     const status = await client.getCliStatus()
 
     expect(status.result).toEqual({
+      target: { kind: 'local' },
       app: {
         running: false,
         pid: null
@@ -311,6 +414,36 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
     await expect(client.call('status.get')).rejects.toMatchObject({
       code: 'runtime_timeout'
     })
+  })
+
+  it('preserves a dropped read-only orchestration failure exactly', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const endpoint = join(userDataPath, 'runtime.sock')
+    let request: Record<string, unknown> | undefined
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', (data) => {
+        request = JSON.parse(String(data).trim()) as Record<string, unknown>
+        socket.end()
+      })
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+    writeMetadata(userDataPath, endpoint)
+    const client = new RuntimeClient(userDataPath, 100)
+
+    const failure = await client
+      .call('orchestration.workerShow', { dispatch: 'ctx_1' })
+      .catch((error: unknown) => error)
+
+    expect(failure).toBeInstanceOf(RuntimeClientError)
+    expect((failure as RuntimeClientError).message).toBe(
+      'The Orca runtime closed the connection before responding. Restart Orca and try again.'
+    )
+    expect((failure as RuntimeClientError).data).toBeUndefined()
+    expect(request).toMatchObject({ method: 'orchestration.workerShow' })
+    expect(request).not.toHaveProperty('orchestrationRequestId')
   })
 
   it('allows a per-call timeout override for long runtime requests', async () => {

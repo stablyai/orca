@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { app } from 'electron'
-import type { ClaudeManagedAccount } from '../../shared/types'
+import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 import type { Store } from '../persistence'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import type { ClaudeEnvPatch } from './environment'
@@ -13,6 +13,7 @@ import {
   writeClaudeManagedAuthFile
 } from './managed-auth-path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import { resolveLocalAccountRuntimeTarget } from '../../shared/local-account-runtime'
 import { getDefaultWslDistro, getWslHome, toWindowsWslPath } from '../wsl'
 import { buildEncodedWslBashCommand } from '../wsl-bash-command'
 import { hasLiveClaudePtys } from './live-pty-gate'
@@ -150,8 +151,8 @@ export class ClaudeRuntimeAuthService {
     })
   }
 
-  getRuntimeConfigDir(): string {
-    return this.pathResolver.getRuntimePaths().configDir
+  getRuntimeConfigDir(target?: ClaudeAccountSelectionTarget): string {
+    return this.getPreparation(target).configDir
   }
 
   private initializeLastSyncedState(): void {
@@ -683,9 +684,10 @@ export class ClaudeRuntimeAuthService {
   private getDefaultAccountSelectionTarget(
     settings = this.store.getSettings()
   ): ClaudeAccountSelectionTarget {
-    if (process.platform === 'win32' && settings.localAccountRuntime === 'wsl') {
-      // Why: auth defaults follow account runtime settings, not legacy terminal WSL settings that can outlive the Terminal UI.
-      return { runtime: 'wsl', wslDistro: settings.localAccountWslDistro ?? null }
+    // Why: Windows auth follows the resolved account runtime; stale cross-platform WSL pins must stay local-host.
+    const resolved = resolveLocalAccountRuntimeTarget(settings)
+    if (process.platform === 'win32' && resolved.runtime === 'wsl') {
+      return { runtime: 'wsl', wslDistro: resolved.wslDistro }
     }
     return { runtime: 'host' }
   }
@@ -1088,7 +1090,7 @@ export class ClaudeRuntimeAuthService {
             [
               '-d',
               wslInfo.distro,
-              '--',
+              '--exec',
               'bash',
               '-lc',
               buildEncodedWslBashCommand(

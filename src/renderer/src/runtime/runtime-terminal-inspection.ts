@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { RuntimeTerminalSend } from '../../../shared/runtime-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { isTerminalInputTooLargeWithDeferredMeasurement } from '../../../shared/terminal-input'
@@ -12,6 +12,8 @@ import {
 export type RuntimeTerminalProcessInspection = {
   foregroundProcess: string | null
   hasChildProcesses: boolean
+  // Why: callers must not treat a stale remote handle as authoritative idle evidence.
+  unavailable?: true
 }
 
 const REMOTE_PTY_ID_PREFIX = 'remote:'
@@ -34,6 +36,7 @@ function isTerminalGoneError(error: unknown): boolean {
         ? String((error as { code?: unknown }).code)
         : ''
   return (
+    code === 'no_connected_pty' ||
     code === 'terminal_handle_stale' ||
     code === 'terminal_exited' ||
     code === 'terminal_gone' ||
@@ -74,11 +77,7 @@ export async function inspectRuntimeTerminalProcess(
     : getActiveRuntimeTarget(settings)
   const terminal = getRemoteRuntimeTerminalHandle(ptyId)
   if (target.kind !== 'environment' || !terminal) {
-    const [foregroundProcess, hasChildProcesses] = await Promise.all([
-      window.api.pty.getForegroundProcess(ptyId),
-      window.api.pty.hasChildProcesses(ptyId)
-    ])
-    return { foregroundProcess, hasChildProcesses }
+    return window.api.pty.inspectProcess(ptyId)
   }
 
   try {
@@ -91,10 +90,36 @@ export async function inspectRuntimeTerminalProcess(
     return result.process
   } catch (error) {
     if (isTerminalGoneError(error)) {
-      return { foregroundProcess: null, hasChildProcesses: false }
+      return { foregroundProcess: null, hasChildProcesses: false, unavailable: true }
     }
     throw error
   }
+}
+
+/**
+ * Forces a fresh, uncached foreground scan for a pane whose cached inspection
+ * is suspect (issue #11064: the cached read can flap to the shell for a live
+ * agent). Local/daemon panes only — runtime environments expose no fresh-scan
+ * RPC, and an SSH provider without confirm support answers null, which callers
+ * must read as "no new evidence", never as a shell confirmation.
+ */
+export async function confirmRuntimeTerminalForegroundProcess(
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  ptyId: string
+): Promise<string | null> {
+  const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
+  const target = ownerEnvironmentId
+    ? ({ kind: 'environment', environmentId: ownerEnvironmentId } as const)
+    : getActiveRuntimeTarget(settings)
+  if (target.kind === 'environment' && getRemoteRuntimeTerminalHandle(ptyId)) {
+    return null
+  }
+  const confirmForegroundProcess = window.api.pty.confirmForegroundProcess
+  // Why the shape check: a preload older than this handler has no such method.
+  if (typeof confirmForegroundProcess !== 'function') {
+    return null
+  }
+  return confirmForegroundProcess(ptyId).catch(() => null)
 }
 
 export function sendRuntimePtyInput(

@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events'
 import type * as Fs from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
 import type * as FilesystemAuth from '../ipc/filesystem-auth'
-import type { FsChangeEvent } from '../../shared/types'
+import type { FsChangeEvent } from '../../shared/filesystem-entry-types'
 import { WatcherProcessFailure } from '../ipc/parcel-watcher-process-failure'
 import { acquireWatcherRemovalGate } from '../ipc/watcher-removal-gate'
 
@@ -54,7 +54,8 @@ vi.mock('../ipc/filesystem-auth', async () => {
 })
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: getSshFilesystemProviderMock
+  getSshFilesystemProvider: getSshFilesystemProviderMock,
+  onSshFilesystemProviderRegistered: () => () => undefined
 }))
 
 import {

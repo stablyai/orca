@@ -1,9 +1,11 @@
 import type { RpcClient } from '../transport/rpc-client'
+import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
 
 export const MOBILE_CLIPBOARD_IMAGE_MAX_BASE64_CHARS = 24 * 1024 * 1024
 export const MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
 export const MOBILE_CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS = 256 * 1024
+const MOBILE_CLIPBOARD_IMAGE_UPLOAD_CUTOVER_MAX_RETRIES = 1
 // Why: PNG bytes don't scale exactly with pixel area, so undershoot the target on
 // each pass and let the bounded retry below converge instead of distorting in one shot.
 const MOBILE_CLIPBOARD_IMAGE_DOWNSCALE_SAFETY = 0.85
@@ -106,6 +108,26 @@ export async function saveMobileClipboardImageAsTempFile(
 ): Promise<string> {
   const contentBase64 = normalizeMobileClipboardImageBase64(imageData)
   const connectionId = args?.connectionId ?? null
+  for (let retry = 0; ; retry += 1) {
+    try {
+      return await uploadMobileClipboardImageTransaction(client, contentBase64, connectionId)
+    } catch (error) {
+      if (
+        !isLogicalClientCutoverError(error) ||
+        retry >= MOBILE_CLIPBOARD_IMAGE_UPLOAD_CUTOVER_MAX_RETRIES
+      ) {
+        throw error
+      }
+      // Why: upload replay can create only temp state; terminal input is sent after this returns.
+    }
+  }
+}
+
+async function uploadMobileClipboardImageTransaction(
+  client: Pick<RpcClient, 'sendRequest'>,
+  contentBase64: string,
+  connectionId: string | null
+): Promise<string> {
   const startResponse = await client.sendRequest('clipboard.startImageUpload', {
     expectedBase64Length: contentBase64.length,
     connectionId

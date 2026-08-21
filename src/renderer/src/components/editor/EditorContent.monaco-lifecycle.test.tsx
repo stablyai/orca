@@ -7,7 +7,12 @@ const lifecycle = vi.hoisted(() => ({
   events: [] as string[],
   diffModelKeys: [] as string[],
   models: new Map<string, { content: string; undo: string[] }>(),
-  mountedProps: [] as { filePath: string; readOnly?: boolean; liveTail?: boolean }[]
+  mountedProps: [] as {
+    filePath: string
+    readOnly?: boolean
+    liveTail?: boolean
+    viewStateId?: string
+  }[]
 }))
 
 vi.mock('@/lib/lazy-with-retry', async () => {
@@ -37,6 +42,7 @@ vi.mock('@/lib/lazy-with-retry', async () => {
         content: string
         readOnly?: boolean
         liveTail?: boolean
+        viewStateId?: string
       }) {
         /* oxlint-disable react-hooks/exhaustive-deps -- Mount-only by design: a prop-effect would hide a missing outer React remount. */
         React.useEffect(() => {
@@ -44,7 +50,8 @@ vi.mock('@/lib/lazy-with-retry', async () => {
           lifecycle.mountedProps.push({
             filePath: props.filePath,
             readOnly: props.readOnly,
-            liveTail: props.liveTail
+            liveTail: props.liveTail,
+            viewStateId: props.viewStateId
           })
           const retained = lifecycle.models.get(props.filePath) ?? { content: '', undo: [] }
           const model = {
@@ -241,7 +248,17 @@ describe('EditorContent Monaco lifecycle boundary', () => {
     render(<EditorContent {...props(liveLog, 'session content')} />)
 
     expect(lifecycle.mountedProps).toEqual([
-      { filePath: liveLog.filePath, readOnly: true, liveTail: true }
+      { filePath: liveLog.filePath, readOnly: true, liveTail: true, viewStateId: 'same-pane' }
     ])
+  })
+
+  it('tells Monaco which pane it is so it can retire an explicit focus handoff', () => {
+    const source = file('/repo/main.ts')
+
+    render(<EditorContent {...props(source, 'source content')} />)
+
+    // Why: without the pane id Monaco cannot match the handoff, so it silently leaves the request
+    // armed and a later rich-mode remount of this pane steals focus back.
+    expect(lifecycle.mountedProps.at(0)?.viewStateId).toBe('same-pane')
   })
 })

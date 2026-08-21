@@ -35,5 +35,9 @@ describe('ProjectHeaderActions', () => {
     expect(actions?.className).toContain('group-hover:pointer-events-auto')
     expect(actions?.className).toContain('has-[:focus-visible]:pointer-events-auto')
     expect(actions?.className).toContain('has-[button[data-state=open]]:pointer-events-auto')
+    // Why: title drag surface is cursor-grab; actions must override so hovering
+    // … / + never shows the reorder hand.
+    expect(actions?.className).toContain('cursor-pointer')
+    expect(actions?.className).toContain('self-stretch')
   })
 })

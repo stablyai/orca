@@ -1,5 +1,10 @@
-import type { LinearLabel, LinearMember, LinearTeam, LinearWorkflowState } from '../../shared/types'
-import { buildLinearTeamUrl } from '../../shared/linear-links'
+import type {
+  LinearLabel,
+  LinearMember,
+  LinearTeam,
+  LinearWorkflowState
+} from '../../shared/linear/workspace-types'
+import { buildLinearTeamUrl } from '../../shared/linear/links'
 import type { LinearClientForWorkspace } from './client'
 
 const TEAM_PAGE_SIZE = 100
@@ -19,6 +24,8 @@ type TeamLabelNode = {
 type TeamMemberNode = {
   id: string
   displayName: string
+  name?: string | null
+  email?: string | null
   avatarUrl?: string | null
 }
 
@@ -89,6 +96,8 @@ export async function fetchAllTeamMembers(team: {
   return members.nodes.map((m) => ({
     id: m.id,
     displayName: m.displayName,
+    name: m.name ?? undefined,
+    email: m.email ?? undefined,
     avatarUrl: m.avatarUrl ?? undefined
   }))
 }

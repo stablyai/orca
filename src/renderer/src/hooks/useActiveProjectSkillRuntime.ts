@@ -1,8 +1,13 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import type { SkillDiscoveryTarget } from '../../../shared/skills'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { useActiveSkillDiscoveryRuntimeTarget } from './use-active-skill-discovery-runtime-target'
+import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
+import {
+  getGlobalWindowsExecutionRuntimeContext,
+  getLocalProjectExecutionRuntimeContext
+} from '@/lib/local-preflight-context'
 import {
   getProjectAgentSkillRuntime,
   getProjectAgentSkillTerminalShellOverride,
@@ -19,11 +24,45 @@ type ActiveProjectSkillRuntime = {
   agentRuntime?: ProjectAgentSkillRuntime
   terminalShellOverride?: string
   installDisabledReason: string | null
+  canUseLocalSkillFreshness: boolean
 }
 
 const EMPTY_ACTIVE_PROJECT_SKILL_RUNTIME: ActiveProjectSkillRuntime = Object.freeze({
-  installDisabledReason: null
+  installDisabledReason: null,
+  canUseLocalSkillFreshness: false
 })
+
+export function shouldUseLocalSkillFreshness(
+  runtimeTarget: RuntimeClientTarget | null,
+  agentRuntime?: ProjectAgentSkillRuntime
+): boolean {
+  return runtimeTarget?.kind === 'local' && agentRuntime?.runtime !== 'wsl'
+}
+
+export function hasLocalSkillRuntimeAuthority(runtimeTarget: RuntimeClientTarget | null): boolean {
+  return runtimeTarget?.kind === 'local'
+}
+
+// Why: on Windows the runtime resolution is rebuilt from scratch on every
+// worktree-store change, so a same-runtime result still arrives with a fresh
+// identity. Downstream skill discovery keys effects off `discoveryTarget`, so
+// that churn would re-run a scan (and blink its loading state) per store update.
+// Serializing the whole value (rather than picking fields) keeps the comparison
+// honest if the resolution grows a field the runtime cache keys do not encode.
+function activeProjectSkillRuntimeIdentity(runtime: ActiveProjectSkillRuntime): string {
+  return JSON.stringify(runtime)
+}
+
+/** Keeps only a WSL-targeting resolution; a windows-host one is the same as having none here. */
+function wslOnly(
+  resolution: ProjectExecutionRuntimeResolution | undefined
+): ProjectExecutionRuntimeResolution | undefined {
+  if (!resolution) {
+    return undefined
+  }
+  const targetsWsl = resolution.status === 'repair-required' || resolution.runtime.kind === 'wsl'
+  return targetsWsl ? resolution : undefined
+}
 
 export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
   const runtimeState = useAppStore(
@@ -38,19 +77,46 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
   )
   const currentPlatform = getCurrentPlatform()
   const windowsCapabilities = useWindowsTerminalCapabilities(currentPlatform === 'win32')
+  const runtimeTarget = useActiveSkillDiscoveryRuntimeTarget()
 
-  return useMemo(() => {
-    const projectRuntime = getLocalProjectExecutionRuntimeContext(
-      runtimeState,
-      undefined,
-      currentPlatform,
-      {
-        wslAvailable: windowsCapabilities.isLoading ? undefined : windowsCapabilities.wslAvailable,
-        availableWslDistros: windowsCapabilities.isLoading ? null : windowsCapabilities.wslDistros
-      }
-    )
+  const resolved = useMemo(() => {
+    const wslContext = {
+      wslAvailable: windowsCapabilities.isLoading ? undefined : windowsCapabilities.wslAvailable,
+      availableWslDistros: windowsCapabilities.isLoading ? null : windowsCapabilities.wslDistros
+    }
+    const projectRuntime =
+      getLocalProjectExecutionRuntimeContext(
+        runtimeState,
+        undefined,
+        currentPlatform,
+        wslContext
+      ) ??
+      // Global WSL is the only no-project default that changes the install target (#12103).
+      (hasLocalSkillRuntimeAuthority(runtimeTarget)
+        ? wslOnly(
+            getGlobalWindowsExecutionRuntimeContext(
+              runtimeState,
+              undefined,
+              currentPlatform,
+              wslContext
+            )
+          )
+        : undefined)
     if (!projectRuntime) {
-      return EMPTY_ACTIVE_PROJECT_SKILL_RUNTIME
+      // Why: buildSkillCommandForRuntime still builds a Windows host command
+      // without a project runtime, so the terminal has to match that shell.
+      const terminalShellOverride = hasLocalSkillRuntimeAuthority(runtimeTarget)
+        ? getProjectAgentSkillTerminalShellOverride(
+            currentPlatform,
+            runtimeState.settings,
+            undefined
+          )
+        : undefined
+      const canUseLocalSkillFreshness = shouldUseLocalSkillFreshness(runtimeTarget)
+      if (!terminalShellOverride && !canUseLocalSkillFreshness) {
+        return EMPTY_ACTIVE_PROJECT_SKILL_RUNTIME
+      }
+      return { installDisabledReason: null, terminalShellOverride, canUseLocalSkillFreshness }
     }
 
     const agentRuntime = getProjectAgentSkillRuntime(projectRuntime, currentPlatform)
@@ -63,9 +129,20 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
         runtimeState.settings,
         agentRuntime
       ),
-      installDisabledReason: getProjectSkillInstallDisabledReason(projectRuntime)
+      installDisabledReason: getProjectSkillInstallDisabledReason(projectRuntime),
+      canUseLocalSkillFreshness: shouldUseLocalSkillFreshness(runtimeTarget, agentRuntime)
     }
-  }, [currentPlatform, runtimeState, windowsCapabilities])
+  }, [currentPlatform, runtimeState, runtimeTarget, windowsCapabilities])
+
+  // Content-equal runtimes keep one reference so effect keys do not thrash.
+  // Adjust during render (not a ref write) when serialized identity changes.
+  const [stable, setStable] = useState(resolved)
+  const stableIdentity = activeProjectSkillRuntimeIdentity(stable)
+  const resolvedIdentity = activeProjectSkillRuntimeIdentity(resolved)
+  if (stableIdentity !== resolvedIdentity) {
+    setStable(resolved)
+  }
+  return stableIdentity === resolvedIdentity ? stable : resolved
 }
 
 function getCurrentPlatform(): NodeJS.Platform {

@@ -37,6 +37,9 @@ const store = {
   getWorktreeMeta: () => undefined,
   setWorktreeMeta: () => undefined as never,
   removeWorktreeMeta: () => {},
+  getRetiredWorktreeNameRegistry: () => ({ exhaustedTiers: 0, names: [] }),
+  addRetiredWorktreeName: () => {},
+  mergeRetiredWorktreeNames: () => false,
   getGitHubCache: () => ({ pr: {}, issue: {} }) as never,
   getSettings: () => ({
     workspaceDir: '/tmp/workspaces',
@@ -245,6 +248,21 @@ describe('reply ownership matrix', () => {
     expect(runtime.hasRemoteTerminalViewSubscriber('pty-m')).toBe(true)
     releaseB()
     expect(runtime.hasRemoteTerminalViewSubscriber('pty-m')).toBe(false)
+  })
+
+  it('keeps raw preview presence separate from terminal query authority', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    markHiddenRendererPty('pty-preview')
+    const release = runtime.registerRawTerminalViewSubscriber('pty-preview')
+
+    expect(runtime.hasRawTerminalViewSubscriber('pty-preview')).toBe(true)
+    expect(runtime.hasRemoteTerminalViewSubscriber('pty-preview')).toBe(false)
+    runtime.onPtyData('pty-preview', DA1, Date.now())
+    await settle(runtime, 'pty-preview')
+    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?1;2c'])
+
+    release()
+    expect(runtime.hasRawTerminalViewSubscriber('pty-preview')).toBe(false)
   })
 
   it('treats mobile subscriber records as remote view subscribers', async () => {

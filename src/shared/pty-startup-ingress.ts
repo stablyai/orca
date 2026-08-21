@@ -4,66 +4,33 @@ import {
   type TerminalOscColorQuerySlot
 } from './terminal-osc-color-reply'
 import type { PtyStartupIngressIntent } from './pty-startup-ingress-intent'
+import type { PtyOwnerBackend } from './pty-owner-backend'
+import { PtyStartupReplyDelivery } from './pty-startup-reply-delivery'
+import { deliverTerminalQueryReplyPayload } from './terminal-query-reply-delivery'
+import {
+  combinePtyIngressSourceSpans,
+  slicePtyIngressSourceSpan,
+  type PtyIngressEmission,
+  type PtyIngressSourceSpan,
+  type PtyStartupIngressOperation,
+  type PtyStartupIngressOptions
+} from './pty-startup-ingress-contract'
 
 export {
   PTY_STARTUP_INGRESS_VERSION,
   parsePtyStartupIngressIntent
 } from './pty-startup-ingress-intent'
 export type { PtyStartupIngressIntent } from './pty-startup-ingress-intent'
-
-export type PtyIngressEmission = {
-  data: string
-  rawStartSeq: number
-  rawEndSeq: number
-  transformed: boolean
-}
-
-type PtyIngressSourceChunk = {
-  data: string
-  rawStartSeq: number
-  rawEndSeq: number
-}
-
-type PendingOperation =
-  | { kind: 'data'; chunk: PtyIngressSourceChunk }
-  | { kind: 'close-query' }
-  | { kind: 'snapshot' }
-  | { kind: 'teardown' }
-  | { kind: 'expire' }
-
-type PendingSpan = PtyIngressSourceChunk
-
-export type PtyStartupIngressOptions = {
-  intent?: PtyStartupIngressIntent
-  write: (data: string) => void
-  onEmission: (emission: PtyIngressEmission) => void
-}
+export type { PtyIngressEmission, PtyStartupIngressOptions } from './pty-startup-ingress-contract'
 
 const MAX_QUERY_CANDIDATE_CHARS = 64
-
-function spanSlice(span: PendingSpan, start: number, end = span.data.length): PendingSpan {
-  return {
-    data: span.data.slice(start, end),
-    rawStartSeq: span.rawStartSeq + start,
-    rawEndSeq: span.rawStartSeq + end
-  }
-}
-
-function combineSpans(first: PendingSpan | null, second: PendingSpan): PendingSpan {
-  if (!first) {
-    return second
-  }
-  return {
-    data: first.data + second.data,
-    rawStartSeq: first.rawStartSeq,
-    rawEndSeq: second.rawEndSeq
-  }
-}
-
-function projectedWindowsConptyReply(reply: string): string {
-  // Why: the native provider harness observes ConPTY's cooked echo with ESC removed.
-  return reply.replaceAll('\x1b', '')
-}
+// Why this long: a torn echo whose halves straddle this window is released raw, so
+// anything under relay jitter reinstates the leak (#12112). Almost nothing is risked
+// by waiting, because the timer is rarely what ends a hold — the next read is, and
+// the startup deadline and snapshot barrier both cap the wait independently. The
+// exposure is at most one projection's worth of echo-shaped bytes on an already idle
+// pane, which is why the guess is allowed to be slow rather than tight.
+const ECHO_CONTINUATION_HOLD_MS = 500
 
 /**
  * Serialized source-side startup classifier. Its raw sequence begins after
@@ -71,22 +38,24 @@ function projectedWindowsConptyReply(reply: string): string {
  */
 export class PtyStartupIngress {
   private readonly intent: PtyStartupIngressIntent | undefined
-  private readonly writeProvider: (data: string) => void
+  private readonly ownerBackend: PtyOwnerBackend
+  private readonly delivery: PtyStartupReplyDelivery
   private readonly onEmission: (emission: PtyIngressEmission) => void
-  private readonly operations: PendingOperation[] = []
+  private readonly operations: PtyStartupIngressOperation[] = []
   private readonly answeredSlots = new Set<TerminalOscColorQuerySlot>()
-  private readonly expectedEchoes: string[] = []
   private processing = false
   private closed = false
   private queryOpen: boolean
   private rawHighWater = 0
-  private queryPending: PendingSpan | null = null
-  private echoPending: PendingSpan | null = null
+  private queryPending: PtyIngressSourceSpan | null = null
+  private echoPending: PtyIngressSourceSpan | null = null
+  private echoHoldTimer: ReturnType<typeof setTimeout> | null = null
   private deadlineTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(options: PtyStartupIngressOptions) {
     this.intent = options.intent
-    this.writeProvider = options.write
+    this.ownerBackend = options.ownerBackend ?? 'posix-pty'
+    this.delivery = new PtyStartupReplyDelivery(this.ownerBackend, options.write)
     this.onEmission = options.onEmission
     this.queryOpen = options.intent !== undefined
     if (options.intent) {
@@ -124,12 +93,19 @@ export class PtyStartupIngress {
     return this.rawHighWater
   }
 
+  // Query replies stay ordered when an earlier cooked-echo-risk reply is held (#13137, #13892).
+  answerLiveQueryReply(reply: string): boolean {
+    return !this.closed && reply.length > 0
+      ? deliverTerminalQueryReplyPayload(reply, this.delivery)
+      : false
+  }
+
   drainAndClose(): number {
     this.enqueue({ kind: 'teardown' })
     return this.rawHighWater
   }
 
-  private enqueue(operation: PendingOperation): void {
+  private enqueue(operation: PtyStartupIngressOperation): void {
     if (this.closed) {
       return
     }
@@ -139,7 +115,7 @@ export class PtyStartupIngress {
     }
     this.processing = true
     try {
-      let next: PendingOperation | undefined
+      let next: PtyStartupIngressOperation | undefined
       while ((next = this.operations.shift())) {
         this.applyOperation(next)
       }
@@ -148,91 +124,147 @@ export class PtyStartupIngress {
     }
   }
 
-  private applyOperation(operation: PendingOperation): void {
+  private applyOperation(operation: PtyStartupIngressOperation): void {
     switch (operation.kind) {
       case 'data':
         this.processEchoSpan(operation.chunk)
         return
       case 'close-query':
-        this.queryOpen = false
-        this.releaseQueryPending()
+        if (this.ownerBackend !== 'windows-conpty') {
+          this.queryOpen = false
+          // Why the echo hold deliberately survives this, unlike `snapshot`: the
+          // handoff ends query *authority*, but a reply already on the wire is still
+          // Orca's to swallow. Releasing here would show the first half of an echo
+          // split across the boundary and orphan the second.
+          this.releaseQueryPending()
+        }
+        // Why: ConPTY cannot safely transfer color-query authority to a downstream view.
         return
       case 'expire':
         this.queryOpen = false
-        this.releaseAllPending()
-        this.expectedEchoes.length = 0
+        this.releasePendingInSourceOrder(false)
+        this.delivery.reset()
         this.clearDeadline()
         return
       case 'snapshot':
-        this.releaseSnapshotPending()
+      case 'release-echo':
+        this.releasePendingInSourceOrder(false)
         return
       case 'teardown':
         this.queryOpen = false
-        this.releaseAllPending()
-        this.expectedEchoes.length = 0
+        this.releasePendingInSourceOrder(true)
+        this.delivery.close()
         this.clearDeadline()
         this.closed = true
     }
   }
 
-  private processEchoSpan(span: PendingSpan): void {
-    let input = combineSpans(this.echoPending, span)
-    this.echoPending = null
-
-    while (this.expectedEchoes.length > 0) {
-      const expected = this.expectedEchoes[0]
-      const compared = Math.min(input.data.length, expected.length)
-      let matching = 0
-      while (matching < compared && input.data[matching] === expected[matching]) {
-        matching += 1
-      }
-      if (matching < compared) {
-        this.expectedEchoes.shift()
-        this.processQuerySpan(input)
-        return
-      }
-      if (input.data.length < expected.length) {
-        this.echoPending = input
-        return
-      }
-
-      this.expectedEchoes.shift()
-      this.emit(spanSlice(input, 0, expected.length), true, '')
-      input = spanSlice(input, expected.length)
-      if (input.data.length === 0) {
-        return
-      }
+  /**
+   * One PTY read. The charge is in `finally` because every path below can return
+   * early: charging after the match gives a real echo the whole read it arrives in,
+   * and charging unconditionally means a projection that never lands still ages out
+   * on the reads that end mid-candidate rather than shadowing the rest of the session.
+   * It charges the read, never the held-bytes-plus-read span, so a tail that waits
+   * across several reads is not billed again on each one.
+   */
+  private processEchoSpan(span: PtyIngressSourceSpan): void {
+    try {
+      this.classifyRead(span)
+    } finally {
+      this.delivery.chargeEchoSearch(span.data.length)
     }
-
-    this.processQuerySpan(input)
   }
 
-  private processQuerySpan(span: PendingSpan): void {
-    const input = combineSpans(this.queryPending, span)
+  private classifyRead(span: PtyIngressSourceSpan): void {
+    let input = combinePtyIngressSourceSpans(this.takeEchoPending(), span)
+
+    while (this.delivery.hasExpectedEcho && input.data.length > 0) {
+      const match = this.delivery.matchEcho(input.data)
+      if (match.kind !== 'complete') {
+        // Why hold from the match rather than only at offset 0: the tty coalesces its
+        // echo with whatever the shell printed around it, so a split echo almost
+        // always arrives behind other bytes. Those bytes are emitted now and only the
+        // candidate tail waits, so recognition survives a split at any boundary
+        // without stalling real output.
+        if (match.kind === 'partial') {
+          const tail = slicePtyIngressSourceSpan(input, match.offset)
+          if (match.offset > 0) {
+            this.processQuerySpan(slicePtyIngressSourceSpan(input, 0, match.offset))
+          }
+          // A still-torn query outranks the echo only while it can still become one:
+          // the tail may open with the BEL that terminates it, since the readline
+          // projection starts with one. Re-parsing it against the tail is what tells
+          // the two apart — a candidate the tail *disproves* is ordinary output that
+          // would otherwise absorb the echo behind it and dump both raw (#12112).
+          //
+          // `partial` counts as viable, not just `match`: the terminator can arrive a
+          // read later, and demoting it would emit a bare ESC and leave a real query
+          // unanswered until the program's own timeout. On ConPTY that costs an echo,
+          // because the ESC-stripped projection shares the `]10;` prefix with a real
+          // query and so keeps re-parsing as `partial` — a hang is the worse of the two.
+          if (this.queryPending) {
+            const resolved = combinePtyIngressSourceSpans(this.queryPending, tail)
+            if (parseTerminalOscColorQuery(resolved.data, 0).kind !== 'none') {
+              this.processQuerySpan(tail)
+              return
+            }
+            // Unconditional, unlike `releasePendingInSourceOrder`, which withholds a
+            // ConPTY candidate: that one releases candidates still *undetermined*,
+            // and on ConPTY an undetermined candidate may be a query it is meant to
+            // suppress. Here the candidate and the tail together parse as `none`, so
+            // whatever the candidate is, the bytes behind it are not its body — which
+            // is what makes it safe to stop holding the echo hostage to it.
+            this.releaseQueryPending()
+          }
+          this.echoPending = tail
+          this.armEchoHold()
+          return
+        }
+        break
+      }
+      if (match.offset > 0) {
+        this.processQuerySpan(slicePtyIngressSourceSpan(input, 0, match.offset))
+      }
+      // Why release first: a retained torn candidate cannot straddle the suppressed
+      // range without desynchronizing its raw sequence arithmetic.
+      this.releaseQueryPending()
+      const echoEnd = match.offset + match.length
+      this.emit(slicePtyIngressSourceSpan(input, match.offset, echoEnd), true, '')
+      input = slicePtyIngressSourceSpan(input, echoEnd)
+    }
+
+    if (input.data.length > 0) {
+      this.processQuerySpan(input)
+    }
+  }
+
+  private processQuerySpan(span: PtyIngressSourceSpan): void {
+    const input = combinePtyIngressSourceSpans(this.queryPending, span)
     this.queryPending = null
-    if (!this.queryOpen || !this.intent) {
+    const suppressConptyQuery = this.ownerBackend === 'windows-conpty'
+    if ((!this.queryOpen || !this.intent) && !suppressConptyQuery) {
       this.emit(input, false)
       return
     }
 
-    let offset = 0
-    while (offset < input.data.length) {
-      const candidateIndex = input.data.indexOf('\x1b', offset)
+    let scanOffset = 0
+    let emittedOffset = 0
+    while (scanOffset < input.data.length) {
+      const candidateIndex = input.data.indexOf('\x1b', scanOffset)
       if (candidateIndex === -1) {
-        this.emit(spanSlice(input, offset), false)
+        this.emit(slicePtyIngressSourceSpan(input, emittedOffset), false)
         return
-      }
-      if (candidateIndex > offset) {
-        this.emit(spanSlice(input, offset, candidateIndex), false)
       }
       const query = parseTerminalOscColorQuery(input.data, candidateIndex)
       if (query.kind === 'none') {
-        this.emit(spanSlice(input, candidateIndex, candidateIndex + 1), false)
-        offset = candidateIndex + 1
+        scanOffset = candidateIndex + 1
         continue
       }
       if (query.kind === 'partial') {
-        const candidate = spanSlice(input, candidateIndex)
+        if (candidateIndex > emittedOffset) {
+          this.emit(slicePtyIngressSourceSpan(input, emittedOffset, candidateIndex), false)
+        }
+        const candidate = slicePtyIngressSourceSpan(input, candidateIndex)
         if (candidate.data.length <= MAX_QUERY_CANDIDATE_CHARS) {
           this.queryPending = candidate
         } else {
@@ -241,13 +273,18 @@ export class PtyStartupIngress {
         return
       }
 
-      const querySpan = spanSlice(input, candidateIndex, query.endIndex)
-      if (!this.answerQuery(query.slots)) {
-        this.emit(querySpan, false)
-      } else {
-        this.emit(querySpan, true, '')
+      if (candidateIndex > emittedOffset) {
+        this.emit(slicePtyIngressSourceSpan(input, emittedOffset, candidateIndex), false)
       }
-      offset = query.endIndex
+      const querySpan = slicePtyIngressSourceSpan(input, candidateIndex, query.endIndex)
+      const answered = this.queryOpen && this.intent && this.answerQuery(query.slots)
+      if (answered || suppressConptyQuery) {
+        this.emit(querySpan, true, '')
+      } else {
+        this.emit(querySpan, false)
+      }
+      scanOffset = query.endIndex
+      emittedOffset = query.endIndex
     }
   }
 
@@ -267,24 +304,15 @@ export class PtyStartupIngress {
         return wroteAny
       }
       this.answeredSlots.add(slot)
-      const projected =
-        this.intent.echoProjection === 'windows-conpty-esc-stripped'
-          ? projectedWindowsConptyReply(reply)
-          : null
-      if (projected) {
-        // Why: register before write because node-pty can synchronously re-enter onData.
-        this.expectedEchoes.push(projected)
-      }
-      try {
-        this.writeProvider(reply)
-        wroteAny = true
-      } catch {
+      // Why per slot: the replies to one query are written independently, so a
+      // deferred write that fails after reporting success invalidates only its own
+      // claim. Dropping every claim would let a slot that did land be answered a
+      // second time, and a duplicate reply corrupts a parser already mid-read.
+      if (!this.delivery.answer(reply)) {
         this.answeredSlots.delete(slot)
-        if (projected) {
-          this.expectedEchoes.pop()
-        }
         return wroteAny
       }
+      wroteAny = true
     }
 
     if (this.answeredSlots.has(10) && this.answeredSlots.has(11)) {
@@ -294,47 +322,56 @@ export class PtyStartupIngress {
   }
 
   private releaseQueryPending(): void {
-    if (!this.queryPending) {
-      return
-    }
     const pending = this.queryPending
-    this.queryPending = null
-    this.emit(pending, false)
-  }
-
-  private releaseAllPending(): void {
-    const pending = this.echoPending ?? this.queryPending
-    this.echoPending = null
     this.queryPending = null
     if (pending) {
       this.emit(pending, false)
     }
   }
 
-  private releaseSnapshotPending(): void {
-    if (this.echoPending) {
-      const pending = this.echoPending
-      this.echoPending = null
-      this.expectedEchoes.shift()
+  /**
+   * Why this order: were both ever live, queryPending would hold the earlier source
+   * bytes. `classifyRead` only ever arms one — it either keeps a viable query and
+   * returns, or releases a disproven one before holding the echo — so this is defense
+   * against a future second arming site, not a live inversion.
+   */
+  private releasePendingInSourceOrder(includeConptyQuery: boolean): void {
+    if (includeConptyQuery || this.ownerBackend !== 'windows-conpty') {
+      this.releaseQueryPending()
+    }
+    const pending = this.takeEchoPending()
+    if (pending) {
       this.emit(pending, false)
     }
-    this.releaseQueryPending()
   }
 
-  private emit(span: PendingSpan, transformed: boolean, data = span.data): void {
-    this.onEmission({
-      data,
-      rawStartSeq: span.rawStartSeq,
-      rawEndSeq: span.rawEndSeq,
-      transformed
-    })
+  private takeEchoPending(): PtyIngressSourceSpan | null {
+    const pending = this.echoPending
+    this.echoPending = null
+    if (this.echoHoldTimer) {
+      clearTimeout(this.echoHoldTimer)
+      this.echoHoldTimer = null
+    }
+    return pending
+  }
+
+  private armEchoHold(): void {
+    if (this.echoHoldTimer) {
+      return
+    }
+    this.echoHoldTimer = setTimeout(
+      () => this.enqueue({ kind: 'release-echo' }),
+      ECHO_CONTINUATION_HOLD_MS
+    )
+    this.echoHoldTimer.unref?.()
+  }
+
+  private emit(span: PtyIngressSourceSpan, transformed: boolean, data = span.data): void {
+    this.onEmission({ data, rawStartSeq: span.rawStartSeq, rawEndSeq: span.rawEndSeq, transformed })
   }
 
   private clearDeadline(): void {
-    if (!this.deadlineTimer) {
-      return
-    }
-    clearTimeout(this.deadlineTimer)
+    clearTimeout(this.deadlineTimer ?? undefined)
     this.deadlineTimer = null
   }
 }

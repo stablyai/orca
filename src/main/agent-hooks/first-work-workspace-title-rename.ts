@@ -1,4 +1,4 @@
-import { deriveWorkspaceDisplayName } from '../../shared/display-name-from-work'
+import { humanizeBranchSlug } from '../../shared/branch-name-from-work'
 import {
   generateBranchNameFromContext,
   resolveTextGenerationParams
@@ -56,7 +56,7 @@ export async function runFolderWorkspaceTitleAutoRename(
     return retry(`generation failed: ${generated.error}`)
   }
 
-  const newDisplayName = deriveWorkspaceDisplayName({ prompt, slug: generated.slug })
+  const newDisplayName = humanizeBranchSlug(generated.slug)
   deps.setDisplayName(worktreeId, newDisplayName)
   deps.setRenameError(worktreeId, null)
   deps.onRenamed(worktreeId)

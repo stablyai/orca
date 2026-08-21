@@ -1,11 +1,11 @@
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { resetWebRuntimeWakeTerminalRespawnForTests } from '@/runtime/web-runtime-wake-terminal-respawn'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync'
 import { useAppStore } from '@/store'
-import { ensureWebRuntimeWorktreeTerminalAfterWake } from './worktree-activation'
+import { ensureWebRuntimeWorktreeTerminalAfterWake } from './web-runtime-worktree-terminal-after-wake'
 
 const initialAppStoreState = useAppStore.getState()
 const WORKTREE_PATH = path.join('workspace', 'feature')
@@ -39,7 +39,9 @@ function makeWorktree(): Worktree {
     isPinned: false,
     sortOrder: 0,
     lastActivityAt: 0,
-    createdWithAgent: 'codex'
+    createdWithAgent: 'codex',
+    hostId: 'local',
+    runtimeOwnerEnvironmentId: 'web-runtime-1'
   }
 }
 
@@ -107,7 +109,9 @@ describe('empty remote worktree activation', () => {
         method: 'session.tabs.createTerminal',
         params: expect.objectContaining({
           worktree: `id:${worktree.id}`,
-          activate: true
+          activate: false,
+          select: true,
+          navigation: 'caller'
         })
       })
     )

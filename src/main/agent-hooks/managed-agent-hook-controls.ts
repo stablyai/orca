@@ -1,93 +1,44 @@
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
-import type { HookInstallAgent } from '../../shared/telemetry-events'
-import type { GlobalSettings } from '../../shared/types'
-import { ampHookService } from '../amp/hook-service'
-import { antigravityHookService } from '../antigravity/hook-service'
-import { claudeHookService } from '../claude/hook-service'
-import { codexHookService } from '../codex/hook-service'
-import { copilotHookService } from '../copilot/hook-service'
-import { cursorHookService } from '../cursor/hook-service'
-import { droidHookService } from '../droid/hook-service'
-import { commandCodeHookService } from '../command-code/hook-service'
-import { geminiHookService } from '../gemini/hook-service'
-import { devinHookService } from '../devin/hook-service'
-import { grokHookService } from '../grok/hook-service'
-import { hermesHookService } from '../hermes/hook-service'
-import { kimiHookService } from '../kimi/hook-service'
-import { openClaudeHookService } from '../openclaude/hook-service'
+import type { AgentHookInstallStatus, AgentHookTarget } from '../../shared/agent-hook-types'
+import {
+  getManagedAgentHookTarget,
+  isManagedAgentHookTarget
+} from '../../shared/managed-agent-hook-targets'
+import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
+import {
+  MANAGED_AGENT_HOOK_INSTALLERS,
+  MANAGED_AGENT_HOOK_REMOVERS,
+  MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS,
+  MANAGED_AGENT_HOOK_STATUS_READERS,
+  type ManagedAgentHookInstaller
+} from './managed-agent-hook-registry'
 
-export type ManagedAgentHookInstaller = readonly [HookInstallAgent, () => void]
-type ManagedHookRemover = readonly [HookInstallAgent, () => AgentHookInstallStatus]
-type ManagedHookStatusReader = readonly [HookInstallAgent, () => AgentHookInstallStatus]
+export { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-registry'
+export { prepareManagedCodexHomeBeforeShellLaunch } from '../codex/managed-home-shell-preflight'
 
-export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[] = [
-  ['claude', () => claudeHookService.install()],
-  ['openclaude', () => openClaudeHookService.install()],
-  ['codex', () => codexHookService.install()],
-  ['gemini', () => geminiHookService.install()],
-  ['antigravity', () => antigravityHookService.install()],
-  ['amp', () => ampHookService.install()],
-  ['cursor', () => cursorHookService.install()],
-  ['droid', () => droidHookService.install()],
-  ['command-code', () => commandCodeHookService.install()],
-  ['grok', () => grokHookService.install()],
-  ['copilot', () => copilotHookService.install()],
-  ['hermes', () => hermesHookService.install()],
-  ['devin', () => devinHookService.install()],
-  ['kimi', () => kimiHookService.install()]
-]
+type ManagedHookSettings = Partial<
+  Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>
+> | null
 
-const LOCAL_MANAGED_HOOK_REMOVERS: readonly ManagedHookRemover[] = [
-  ['claude', () => claudeHookService.remove()],
-  ['openclaude', () => openClaudeHookService.remove()],
-  ['codex', () => codexHookService.remove()],
-  ['gemini', () => geminiHookService.remove()],
-  ['antigravity', () => antigravityHookService.remove()],
-  ['amp', () => ampHookService.remove()],
-  ['cursor', () => cursorHookService.remove()],
-  ['droid', () => droidHookService.remove()],
-  ['command-code', () => commandCodeHookService.remove()],
-  ['grok', () => grokHookService.remove()],
-  ['copilot', () => copilotHookService.remove()],
-  ['hermes', () => hermesHookService.remove()],
-  ['devin', () => devinHookService.remove()],
-  ['kimi', () => kimiHookService.remove()]
-]
+type InstallOptions = {
+  shouldHydrateShellPath?: boolean
+  onInstallError?: (agent: AgentHookTarget, error: unknown) => void
+  shouldContinue?: (agent: AgentHookTarget) => boolean
+  agents?: readonly AgentHookTarget[]
+}
 
-const LOCAL_MANAGED_HOOK_STATUS_READERS: readonly ManagedHookStatusReader[] = [
-  ['claude', () => claudeHookService.getStatus()],
-  ['openclaude', () => openClaudeHookService.getStatus()],
-  ['codex', () => codexHookService.getStatus()],
-  ['gemini', () => geminiHookService.getStatus()],
-  ['antigravity', () => antigravityHookService.getStatus()],
-  ['amp', () => ampHookService.getStatus()],
-  ['cursor', () => cursorHookService.getStatus()],
-  ['droid', () => droidHookService.getStatus()],
-  ['grok', () => grokHookService.getStatus()],
-  ['command-code', () => commandCodeHookService.getStatus()],
-  ['copilot', () => copilotHookService.getStatus()],
-  ['hermes', () => hermesHookService.getStatus()],
-  ['devin', () => devinHookService.getStatus()],
-  ['kimi', () => kimiHookService.getStatus()]
-]
+type RemoveOptions = {
+  agents?: readonly AgentHookTarget[]
+}
 
 export function isAgentStatusHooksEnabled(
-  settings: Pick<GlobalSettings, 'agentStatusHooksEnabled'> | null | undefined
+  settings: Partial<Pick<GlobalSettings, 'agentStatusHooksEnabled'>> | null | undefined
 ): boolean {
   return settings?.agentStatusHooksEnabled !== false
 }
 
-export function installManagedAgentHooks(): void {
-  for (const [agent, install] of MANAGED_AGENT_HOOK_INSTALLERS) {
-    try {
-      install()
-    } catch (error) {
-      console.warn(`[agent-hooks] Failed to install ${agent} managed hooks:`, error)
-    }
-  }
-}
-
-function errorStatus(agent: HookInstallAgent, error: unknown): AgentHookInstallStatus {
+function errorStatus(agent: AgentHookTarget, error: unknown): AgentHookInstallStatus {
   return {
     agent,
     state: 'error',
@@ -97,8 +48,129 @@ function errorStatus(agent: HookInstallAgent, error: unknown): AgentHookInstallS
   }
 }
 
-export function removeManagedAgentHooks(): AgentHookInstallStatus[] {
-  return LOCAL_MANAGED_HOOK_REMOVERS.map(([agent, remove]) => {
+function skippedStatus(
+  agent: AgentHookTarget,
+  skipReason: NonNullable<AgentHookInstallStatus['skipReason']>,
+  detail: string
+): AgentHookInstallStatus {
+  return {
+    agent,
+    state: 'skipped',
+    configPath: '',
+    managedHooksPresent: false,
+    detail,
+    skipReason
+  }
+}
+
+function selectedInstallers(options: InstallOptions): readonly ManagedAgentHookInstaller[] {
+  if (!options.agents) {
+    return MANAGED_AGENT_HOOK_INSTALLERS
+  }
+  const allowed = new Set(options.agents)
+  return MANAGED_AGENT_HOOK_INSTALLERS.filter(([agent]) => allowed.has(agent))
+}
+
+function runInstaller(
+  entry: ManagedAgentHookInstaller,
+  onInstallError: InstallOptions['onInstallError']
+): AgentHookInstallStatus {
+  const [agent, install] = entry
+  try {
+    return install()
+  } catch (error) {
+    console.error(`[agent-hooks] Failed to install ${agent} managed hooks:`, error)
+    try {
+      onInstallError?.(agent, error)
+    } catch (telemetryError) {
+      console.error('[agent-hooks] Failed to record install-failure telemetry:', telemetryError)
+    }
+    return errorStatus(agent, error)
+  }
+}
+
+// Why (#11549 aftermath): a CLI that falls off PATH keeps its user-wide config invoking
+// Orca's script, but the presence gate below then skips install() forever, freezing the
+// script at whatever Orca generated last. Existing scripts are Orca-owned, so bring them
+// current before any gating; creating new ones remains install()'s presence-gated job.
+async function refreshExistingManagedScripts(options: InstallOptions): Promise<void> {
+  const allowed = options.agents ? new Set(options.agents) : null
+  for (const [agent, refresh] of MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS) {
+    if (allowed !== null && !allowed.has(agent)) {
+      continue
+    }
+    try {
+      await refresh()
+    } catch (error) {
+      console.error(`[agent-hooks] Failed to refresh ${agent} managed script:`, error)
+    }
+  }
+}
+
+export async function installManagedAgentHooks(
+  settings: ManagedHookSettings = null,
+  options: InstallOptions = {}
+): Promise<AgentHookInstallStatus[]> {
+  await refreshExistingManagedScripts(options)
+  const installers = selectedInstallers(options)
+  const disabled = new Set(normalizeDisabledTuiAgents(settings?.disabledTuiAgents))
+  const enabledInstallers = installers.filter(([agent]) => !disabled.has(agent))
+  const targets = enabledInstallers.flatMap(([agent]) => {
+    const target = getManagedAgentHookTarget(agent)
+    return target ? [target] : []
+  })
+  let presenceByAgent
+  try {
+    presenceByAgent = await detectLocalManagedAgentCliPresence(targets, settings, {
+      shouldHydrateShellPath: options.shouldHydrateShellPath
+    })
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    return installers.map(([agent]) =>
+      disabled.has(agent)
+        ? skippedStatus(agent, 'agent_disabled', 'Agent is disabled in Settings.')
+        : skippedStatus(agent, 'cli_presence_unknown', detail)
+    )
+  }
+
+  const results: AgentHookInstallStatus[] = []
+  for (const entry of installers) {
+    const [agent] = entry
+    if (disabled.has(agent)) {
+      results.push(skippedStatus(agent, 'agent_disabled', 'Agent is disabled in Settings.'))
+      continue
+    }
+    if (options.shouldContinue && !options.shouldContinue(agent)) {
+      results.push(
+        skippedStatus(
+          agent,
+          'hooks_disabled',
+          'Agent status hooks were disabled before install completed.'
+        )
+      )
+      continue
+    }
+    const presence = presenceByAgent[agent]
+    if (presence?.state !== 'found') {
+      results.push(
+        skippedStatus(
+          agent,
+          presence?.state === 'unknown' ? 'cli_presence_unknown' : 'cli_not_found',
+          'CLI not found; managed hook install skipped.'
+        )
+      )
+      continue
+    }
+    results.push(runInstaller(entry, options.onInstallError))
+  }
+  return results
+}
+
+export function removeManagedAgentHooks(options: RemoveOptions = {}): AgentHookInstallStatus[] {
+  const allowed = options.agents ? new Set(options.agents) : null
+  return MANAGED_AGENT_HOOK_REMOVERS.filter(
+    ([agent]) => allowed === null || allowed.has(agent)
+  ).map(([agent, remove]) => {
     try {
       return remove()
     } catch (error) {
@@ -108,7 +180,7 @@ export function removeManagedAgentHooks(): AgentHookInstallStatus[] {
 }
 
 export function getManagedAgentHookStatuses(): AgentHookInstallStatus[] {
-  return LOCAL_MANAGED_HOOK_STATUS_READERS.map(([agent, getStatus]) => {
+  return MANAGED_AGENT_HOOK_STATUS_READERS.map(([agent, getStatus]) => {
     try {
       return getStatus()
     } catch (error) {
@@ -117,10 +189,26 @@ export function getManagedAgentHookStatuses(): AgentHookInstallStatus[] {
   })
 }
 
-export function applyAgentStatusHooksEnabled(enabled: boolean): AgentHookInstallStatus[] {
-  if (enabled) {
-    installManagedAgentHooks()
-    return getManagedAgentHookStatuses()
+export async function applyAgentStatusHooksEnabled(
+  enabled: boolean,
+  settings: ManagedHookSettings = null,
+  options: InstallOptions = {}
+): Promise<AgentHookInstallStatus[]> {
+  if (!enabled) {
+    return removeManagedAgentHooks()
   }
-  return removeManagedAgentHooks()
+  const disabled = normalizeDisabledTuiAgents(settings?.disabledTuiAgents).filter(
+    isManagedAgentHookTarget
+  )
+  const installed = await installManagedAgentHooks(settings, options)
+  const disabledToRemove = options.shouldContinue
+    ? disabled.filter((agent) => !options.shouldContinue?.(agent))
+    : disabled
+  if (disabledToRemove.length === 0) {
+    return installed
+  }
+  const removed = new Map(
+    removeManagedAgentHooks({ agents: disabledToRemove }).map((status) => [status.agent, status])
+  )
+  return installed.map((status) => removed.get(status.agent) ?? status)
 }

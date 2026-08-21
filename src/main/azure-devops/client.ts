@@ -1,10 +1,12 @@
 import {
   deriveAzureDevOpsStatus,
   mapAzureDevOpsPullRequest,
+  mapAzureDevOpsPullRequestState,
   type AzureDevOpsPullRequestInfo,
   type RawAzureDevOpsPullRequest,
   type RawAzureDevOpsStatus
 } from './pull-request-mappers'
+import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-default-branch'
 import { getAzureDevOpsRepoRef, type AzureDevOpsRepoRef } from './repository-ref'
 import {
   getHostedReviewLocalGitOptions,
@@ -230,7 +232,20 @@ export async function getAzureDevOpsPullRequestForBranch(
     )
     const raw = (list?.value ?? []).sort(sortPullRequestsForBranch)[0]
     if (raw) {
-      return normalizePullRequest(repo, repository.idOrName, repository.webBaseUrl, raw)
+      // Why (#9171): discard a non-open implicit branch match on the repo
+      // default branch and fall through to the linked-number fallback below.
+      const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
+        state: mapAzureDevOpsPullRequestState(raw),
+        reviewNumber: raw.pullRequestId ?? null,
+        linkedReviewNumber: linkedPRNumber,
+        branchName,
+        repoPath,
+        connectionId,
+        localGitOptions: getHostedReviewLocalGitOptions(options)
+      })
+      if (!hideOnDefaultBranch) {
+        return normalizePullRequest(repo, repository.idOrName, repository.webBaseUrl, raw)
+      }
     }
   }
 

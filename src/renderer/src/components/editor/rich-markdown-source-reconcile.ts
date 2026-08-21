@@ -5,6 +5,10 @@ import {
   makeDiff,
   makePatches
 } from '@sanity/diff-match-patch'
+import {
+  getUtf8ByteLengthForCodePoint,
+  readUtf8CodePointAt
+} from '../../../../shared/utf8-byte-limits'
 
 // Why: cap document size in UTF-16 code units (`.length`) since re-parse cost scales with length — the per-commit throwaway TipTap safety re-parse (~50-67ms here) must stay under the 300ms serialize debounce so it can't stall the main thread on slow/SSH hosts.
 const RECONCILE_SIZE_CAP_CODE_UNITS = 50_000
@@ -24,6 +28,10 @@ export type ReconcileSerializedMarkdownParams = {
    * Returns null when the throwaway serializer fails (treated as a safety mismatch → canonical fallback).
    */
   roundTrip: (markdown: string) => string | null
+}
+
+export function restoreMarkdownSourceEol(markdown: string, source: string): string {
+  return restoreEol(toLf(markdown), detectDominantEol(source))
 }
 
 /**
@@ -80,6 +88,15 @@ export function reconcileSerializedMarkdown({
     diffs = cleanupEfficiency(diffs)
   }
   const patches = makePatches(baseLf, diffs)
+  // Why: applyPatches decodes starts as UTF-8 offsets even though makePatches returns UTF-16 indices; encode against the divergent text being patched so decoding preserves the fuzzy-match seed.
+  const utf8Offsets = getUtf8OffsetsAtCodeUnitIndices(
+    originalSourceLf,
+    patches.flatMap((patch) => [patch.start1, patch.start2])
+  )
+  for (const patch of patches) {
+    patch.start1 = utf8Offsets.get(patch.start1) ?? 0
+    patch.start2 = utf8Offsets.get(patch.start2) ?? 0
+  }
   const [reconciledLf, results] = applyPatches(patches, originalSourceLf)
 
   // Branch 5: a hunk failed to locate in the non-canonical source → unreliable fuzzy match, fall back to canonical.
@@ -120,6 +137,26 @@ function restoreEol(lfText: string, eol: '\n' | '\r\n'): string {
 function normalizeForSafety(text: string): string {
   // Why: compare exactly (only CRLF-normalized) — a trailing `\n\n` empty paragraph is semantic, so a lenient trimEnd would mask the trailing-block drift branch 6 must catch.
   return text.replace(/\r\n/g, '\n')
+}
+
+function getUtf8OffsetsAtCodeUnitIndices(
+  text: string,
+  codeUnitIndices: number[]
+): Map<number, number> {
+  const targets = [...new Set(codeUnitIndices)].sort((a, b) => a - b)
+  const offsets = new Map<number, number>()
+  let codeUnitIndex = 0
+  let byteOffset = 0
+  for (const target of targets) {
+    const boundedTarget = Math.max(0, Math.min(target, text.length))
+    while (codeUnitIndex < boundedTarget) {
+      const codePoint = readUtf8CodePointAt(text, codeUnitIndex)
+      byteOffset += getUtf8ByteLengthForCodePoint(codePoint)
+      codeUnitIndex += codePoint > 0xffff ? 2 : 1
+    }
+    offsets.set(target, byteOffset)
+  }
+  return offsets
 }
 
 function hasRepeatedHalfMatchSeed(textA: string, textB: string): boolean {

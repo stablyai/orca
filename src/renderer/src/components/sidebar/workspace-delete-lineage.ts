@@ -1,21 +1,10 @@
-import type { Worktree, WorktreeLineage } from '../../../../shared/types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { getProjectedWorktreeLineageChildrenByParentId } from './worktree-lineage-projection'
 
 type WorkspaceDeleteLineage = {
   descendants: Worktree[]
   deleteAllTargets: Worktree[]
-}
-
-function isValidLineageLink(
-  child: Worktree,
-  parent: Worktree | undefined,
-  lineage: WorktreeLineage | undefined
-): parent is Worktree {
-  return Boolean(
-    lineage &&
-    parent &&
-    child.instanceId === lineage.worktreeInstanceId &&
-    parent.instanceId === lineage.parentWorktreeInstanceId
-  )
 }
 
 export function getWorkspaceDeleteLineage(
@@ -23,19 +12,31 @@ export function getWorkspaceDeleteLineage(
   worktrees: readonly Worktree[],
   lineageById: Record<string, WorktreeLineage>
 ): WorkspaceDeleteLineage {
-  const worktreeById = new Map(worktrees.map((worktree) => [worktree.id, worktree]))
-  const childrenByParentId = new Map<string, Worktree[]>()
-
+  // Why (STA-4343): lineage is recorded against the bare `repoId::path` id, so a
+  // colliding id resolves to one of two hosts here. A lineage child of a workspace
+  // on host X is on host X, so prefer the parent's host — otherwise "delete all"
+  // could route a descendant's removal at the other machine's checkout.
+  const worktreeById = new Map<string, Worktree>()
   for (const worktree of worktrees) {
-    const lineage = lineageById[worktree.id]
-    const lineageParent = lineage ? worktreeById.get(lineage.parentWorktreeId) : undefined
-    if (!isValidLineageLink(worktree, lineageParent, lineage)) {
+    const claimed = worktreeById.get(worktree.id)
+    if (claimed && claimed.hostId === parent.hostId && worktree.hostId !== parent.hostId) {
       continue
     }
-    const children = childrenByParentId.get(lineageParent.id) ?? []
-    children.push(worktree)
-    childrenByParentId.set(lineageParent.id, children)
+    worktreeById.set(worktree.id, worktree)
   }
+  const lineageForSelectedRows: Record<string, WorktreeLineage> = {}
+  for (const worktree of worktreeById.values()) {
+    const projected = lineageById[worktree.id]
+    const inline = (worktree as Worktree & { lineage?: WorktreeLineage | null }).lineage
+    const lineage = projected?.worktreeInstanceId === worktree.instanceId ? projected : inline
+    if (lineage) {
+      lineageForSelectedRows[worktree.id] = lineage
+    }
+  }
+  const childrenByParentId = getProjectedWorktreeLineageChildrenByParentId(
+    lineageForSelectedRows,
+    worktreeById
+  )
 
   const descendants: Worktree[] = []
   const childFirstTargets: Worktree[] = []

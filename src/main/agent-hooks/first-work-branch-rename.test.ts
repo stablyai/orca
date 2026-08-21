@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GlobalSettings, Repo } from '../../shared/types'
-import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree-id'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { Repo } from '../../shared/repo-types'
+import { WORKTREE_ID_SEPARATOR } from '../../shared/worktree/id'
 
 const {
   gitExecFileAsyncMock,
@@ -82,9 +83,9 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
     )
   })
 
-  it('renames a fresh creature branch and its display name from the generated slug', async () => {
+  it('keeps incidental work-item markers from overriding the generated display name', async () => {
     const { deps, onRenamed, setDisplayName } = makeDeps()
-    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    await maybeAutoRenameBranchOnFirstWork(workingEvent({ prompt: 'Fix auth from note #1' }), deps)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['branch', '-m', 'you/fix-auth'],
       expect.objectContaining({ cwd: '/repo/wt' })
@@ -219,7 +220,7 @@ describe('maybeAutoRenameBranchOnFirstWork', () => {
       getCurrentDisplayName: () => 'Platform workspace'
     })
 
-    await maybeAutoRenameBranchOnFirstWork(workingEvent(), deps)
+    await maybeAutoRenameBranchOnFirstWork(workingEvent({ prompt: 'Fix auth from note #1' }), deps)
 
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
     expect(resolveTextGenerationParamsMock).toHaveBeenCalledWith(

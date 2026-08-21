@@ -1,5 +1,11 @@
 /* GitLab-specific shared types, split from `./types` to avoid merge conflicts on upstream syncs; re-exported from `./types` for import stability. */
-import type { CheckStatus, ClassifiedError, PRConflictSummary } from './types'
+import type { ClassifiedError } from './classified-error'
+import type {
+  CheckStatus,
+  PRConflictSummary,
+  ProviderCheckSummary
+} from './github/pull-request-types'
+import type { HostedReviewDecision } from './hosted-review'
 
 // Why: flat owner/repo is inadequate — projects nest (`group/subgroup/project`) and self-hosted hosts must travel with the path for URL/glab targeting.
 export type GitLabProjectRef = { host: string; path: string }
@@ -36,6 +42,8 @@ export type MRInfo = {
   pipelineStatus: CheckStatus
   updatedAt: string
   mergeable: MRMergeableState
+  /** GitLab `detailed_merge_status` (or a short alias) for UI that needs more than MERGEABLE/CONFLICTING/UNKNOWN. */
+  mergeStateStatus?: string | null
   /** Full markdown description. Optional — list endpoints omit it; populated on single-MR fetch (`getMR`). */
   description?: string
   /** Author username (GitLab `username`). Optional for the same reason. */
@@ -172,6 +180,10 @@ export type GitLabWorkItem = {
   repoId: string
   /** Exact GitLab project that produced this row — mutations/details use it instead of re-resolving the repo preference. */
   projectRef?: GitLabProjectRef
+  checksSummary?: ProviderCheckSummary
+  mergeable?: MRMergeableState
+  reviewDecision?: HostedReviewDecision
+  reviewerCount?: number
 }
 
 export type GitLabMRFile = {
@@ -208,7 +220,7 @@ export type GitLabTodo = {
   id: number
   /** Free-form GitLab action name, e.g. 'assigned', 'mentioned', 'build_failed', 'review_requested'. */
   actionName: string
-  targetType: GitLabTodoTargetType | string
+  targetType: GitLabTodoTargetType | (string & {})
   /** iid for MR/Issue targets; absent for Commit/Note targets where the identifier is a SHA or note ID. */
   targetIid: number | null
   targetTitle: string

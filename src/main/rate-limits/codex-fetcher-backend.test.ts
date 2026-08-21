@@ -81,6 +81,7 @@ describe('Codex backend rate-limit requests', () => {
         availableCount: 1,
         nextExpiresAt: Date.parse('2027-01-15T12:00:00Z')
       },
+      planType: 'plus',
       status: 'ok'
     })
 
@@ -94,6 +95,46 @@ describe('Codex backend rate-limit requests', () => {
         signal: expect.any(AbortSignal)
       })
     )
+  })
+
+  it('classifies a sole seven-day backend primary window as weekly', async () => {
+    readFileMock.mockResolvedValue(
+      JSON.stringify({
+        tokens: { access_token: 'access-token', account_id: 'account-id' }
+      })
+    )
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          plan_type: 'plus',
+          rate_limit: {
+            primary_window: {
+              used_percent: 37,
+              limit_window_seconds: 7 * 24 * 60 * 60,
+              reset_at: 1_800_000_000
+            },
+            secondary_window: null
+          }
+        })
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ available_count: 0, credits: [] })
+      } as Response)
+
+    await expect(
+      fetchCodexRateLimits({
+        codexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\account\\home'
+      })
+    ).resolves.toMatchObject({
+      session: null,
+      weekly: { usedPercent: 37, windowMinutes: 10_080, resetsAt: 1_800_000_000_000 },
+      status: 'ok'
+    })
+
+    expect(childSpawnMock).not.toHaveBeenCalled()
+    expect(ptySpawnMock).not.toHaveBeenCalled()
   })
 
   it('aborts callers while sharing one stalled backend auth read', async () => {

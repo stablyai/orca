@@ -131,6 +131,18 @@ export function isToolResultBlock(block: NativeChatBlock): block is NativeChatTo
   return block.type === 'tool-result'
 }
 
+/** The provider-authored interrupt row the transcript decoders emit (Claude's
+ *  `interruptedMessageId` record, Codex's `turn_aborted`). The turn it ends
+ *  never delivers results for the tool calls it left in flight. */
+export function isInterruptedStatusMessage(message: NativeChatMessage): boolean {
+  return (
+    message.role === 'system' &&
+    message.blocks.some(
+      (block) => block.type === 'text' && block.text === NATIVE_CHAT_INTERRUPTED_STATUS_TEXT
+    )
+  )
+}
+
 export function isImageRefBlock(block: NativeChatBlock): block is NativeChatImageRefBlock {
   return block.type === 'image-ref'
 }

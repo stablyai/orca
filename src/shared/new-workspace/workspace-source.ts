@@ -1,5 +1,9 @@
-import { getLinearOrganizationUrlKeyFromIssueUrl } from '../linear-links'
-import type { FolderWorkspaceLinkedTask, LinearIssue } from '../types'
+import { getLinearOrganizationUrlKeyFromIssueUrl } from '../linear/links'
+import type { FolderWorkspaceLinkedTask } from '../folder-workspace-types'
+import { isClickUpHost } from '../clickup-task-url'
+import type { ClickUpTask } from '../clickup-types'
+import type { JiraIssue } from '../jira-types'
+import type { LinearIssue } from '../linear/issue-types'
 import {
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName,
@@ -30,6 +34,11 @@ export type LinearWorkspaceSource = WorkspaceSourceLinkedItem & {
   type: 'issue'
 }
 
+export type JiraWorkspaceSource = WorkspaceSourceLinkedItem & {
+  provider: 'jira'
+  type: 'issue'
+}
+
 export type ClickUpWorkspaceSource = WorkspaceSourceLinkedItem & {
   provider: 'clickup'
   type: 'issue'
@@ -46,8 +55,8 @@ export type WorkspaceSourceSelectionKind =
   | 'gitlab-issue'
   | 'branch'
   | 'linear'
-  | 'clickup'
   | 'jira'
+  | 'clickup'
 
 export type WorkspaceSourceSelection = {
   kind: WorkspaceSourceSelectionKind
@@ -77,6 +86,14 @@ function isJiraIssueUrl(url: string): boolean {
   }
 }
 
+function isClickUpTaskUrl(url: string): boolean {
+  try {
+    return isClickUpHost(new URL(url).hostname)
+  } catch {
+    return false
+  }
+}
+
 export function getWorkspaceSourceProvider(item: WorkspaceSourceItemLike): WorkspaceSourceProvider {
   if (item.provider) {
     return item.provider
@@ -84,7 +101,7 @@ export function getWorkspaceSourceProvider(item: WorkspaceSourceItemLike): Works
   if (item.linearIdentifier) {
     return 'linear'
   }
-  if (item.clickUpTaskId) {
+  if (item.clickupIdentifier || isClickUpTaskUrl(item.url)) {
     return 'clickup'
   }
   if (item.jiraIdentifier || isJiraIssueUrl(item.url)) {
@@ -146,6 +163,33 @@ export function buildLinearWorkspaceSource(
   }
 }
 
+export function buildJiraWorkspaceSource(
+  issue: Pick<JiraIssue, 'key' | 'title' | 'url'>
+): JiraWorkspaceSource {
+  return {
+    provider: 'jira',
+    type: 'issue',
+    number: 0,
+    title: issue.title,
+    url: issue.url,
+    jiraIdentifier: issue.key
+  }
+}
+
+export function buildClickUpWorkspaceSource(
+  task: Pick<ClickUpTask, 'id' | 'customId' | 'name' | 'url'>
+): ClickUpWorkspaceSource {
+  return {
+    provider: 'clickup',
+    type: 'issue',
+    // Why: ClickUp identifies tasks by string id; numeric issue metadata stays empty.
+    number: 0,
+    title: task.name,
+    url: task.url,
+    clickupIdentifier: task.customId ?? task.id
+  }
+}
+
 export function shouldApplyWorkspaceSourceAutoName(args: {
   currentName: string
   lastAutoName: string
@@ -185,10 +229,10 @@ export function buildWorkspaceSourceSelection(args: {
   const kind: WorkspaceSourceSelectionKind =
     provider === 'linear'
       ? 'linear'
-      : provider === 'clickup'
-        ? 'clickup'
-        : provider === 'jira'
-          ? 'jira'
+      : provider === 'jira'
+        ? 'jira'
+        : provider === 'clickup'
+          ? 'clickup'
           : provider === 'gitlab'
             ? linkedWorkItem.type === 'mr'
               ? 'gitlab-mr'
@@ -200,8 +244,8 @@ export function buildWorkspaceSourceSelection(args: {
     kind,
     label:
       provider === 'linear' ||
-      provider === 'clickup' ||
       provider === 'jira' ||
+      provider === 'clickup' ||
       linkedWorkItem.number === 0
         ? linkedWorkItem.title
         : `#${linkedWorkItem.number} ${linkedWorkItem.title}`,
@@ -216,5 +260,5 @@ export function shouldPreserveWorkspaceSourceOnRepoChange(
     return false
   }
   const provider = getWorkspaceSourceProvider(item)
-  return provider === 'linear' || provider === 'clickup' || provider === 'jira'
+  return provider === 'linear' || provider === 'jira' || provider === 'clickup'
 }

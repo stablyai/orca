@@ -1,0 +1,94 @@
+name: Install Node dependencies
+description: Installs the Node toolchain and repository dependencies for Linux CI jobs.
+
+inputs:
+  native-runtime:
+    description: Native runtime to prepare after the script-free install (none, node, or electron).
+    required: false
+    default: none
+  node-version:
+    description: Node.js version override; defaults to the version declared in package.json.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    # setup-node needs pnpm on PATH to locate and restore its store.
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v6
+      with:
+        run_install: false
+
+    - name: Setup Node.js
+      id: default-node
+      if: inputs.node-version == ''
+      uses: actions/setup-node@v6
+      with:
+        node-version-file: package.json
+        cache: pnpm
+
+    - name: Setup requested Node.js
+      id: requested-node
+      if: inputs.node-version != ''
+      uses: actions/setup-node@v6
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: pnpm
+
+    - name: Validate native runtime
+      shell: bash
+      env:
+        NATIVE_RUNTIME: ${{ inputs.native-runtime }}
+      run: |
+        case "$NATIVE_RUNTIME" in
+          none|node|electron) ;;
+          *)
+            echo "::error::native-runtime must be none, node, or electron"
+            exit 2
+            ;;
+        esac
+
+    # pnpm's bundled gyp_main.py is not executable on fresh Linux runners.
+    - name: Use external node-gyp
+      if: inputs.native-runtime != 'none'
+      shell: bash
+      run: |
+        npm install -g node-gyp@11.5.0
+        echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+
+    - name: Prepare dependency install
+      shell: bash
+      run: |
+        if [ -e node_modules ]; then
+          ls -ld node_modules
+          rm -rf node_modules
+        fi
+
+    # Why --frozen-lockfile: re-resolving pulls ~62 MB of registry packuments per job
+    # (measured) to recompute what the lockfile already pins, and the `git diff` guard
+    # below fails the run whenever that recomputation would have changed anything. The
+    # guard stays so a stale lockfile still fails by name rather than by resolver error.
+    - name: Install dependencies
+      shell: bash
+      run: |
+        pnpm install --frozen-lockfile --ignore-scripts
+        git diff --exit-code package.json pnpm-lock.yaml
+
+    # Why cached: `--ignore-scripts` leaves node-pty without build/Release, so
+    # ensure-native-runtime node-gyp-compiles it in every job that asks for a runtime.
+    # The artifacts are ABI-bound, so the key carries the target runtime, the resolved
+    # Node version, and the patch whose contents the build has to match.
+    - name: Restore compiled native modules
+      if: inputs.native-runtime != 'none'
+      uses: actions/cache@v5
+      with:
+        path: node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
+        key: native-modules-${{ runner.os }}-${{ runner.arch }}-${{ inputs.native-runtime }}-node${{ steps.default-node.outputs.node-version }}${{ steps.requested-node.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', 'config/patches/node-pty@1.1.0.patch') }}
+
+    - name: Prepare native runtime
+      if: inputs.native-runtime != 'none'
+      shell: bash
+      env:
+        NATIVE_RUNTIME: ${{ inputs.native-runtime }}
+      run: node config/scripts/ensure-native-runtime.mjs --runtime="$NATIVE_RUNTIME"

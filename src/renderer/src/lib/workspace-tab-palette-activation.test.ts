@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => {
     repos: unknown[]
     settings: Record<string, unknown>
     activeGroupIdByWorktree: Record<string, string>
+    getKnownWorktreeById: ReturnType<typeof vi.fn>
     focusGroup: ReturnType<typeof vi.fn>
     activateTab: ReturnType<typeof vi.fn>
     setActiveTab: ReturnType<typeof vi.fn>
@@ -50,6 +51,7 @@ const mocks = vi.hoisted(() => {
     repos: [],
     settings: {},
     activeGroupIdByWorktree: { 'wt-1': 'group-1' },
+    getKnownWorktreeById: vi.fn(),
     focusGroup: vi.fn(),
     activateTab: vi.fn(),
     setActiveTab: vi.fn(),
@@ -100,17 +102,23 @@ function makeResult(
     worktreeId: 'wt-1',
     groupId: 'group-1',
     contentType: 'terminal',
+    occupantAgent: null,
     title: 'Terminal',
-    secondaryText: 'Terminal tab',
+    secondaryText: '',
     repoName: 'repo/orca',
     worktreeName: 'Palette Worktree',
-    titleRange: null,
-    secondaryRange: null,
-    repoRange: null,
-    worktreeRange: null,
+    branchName: 'main',
+    titleRanges: [],
+    secondaryRanges: [],
+    repoRanges: [],
+    worktreeRanges: [],
+    branchRanges: [],
     isCurrentTab: false,
     isCurrentWorktree: false,
     score: 0,
+    qualityClass: null,
+    rank: null,
+    lastActiveAt: null,
     ...overrides
   }
 }
@@ -152,6 +160,11 @@ describe('activateWorkspaceTabPaletteResult', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetStore()
+    mocks.store.getKnownWorktreeById.mockImplementation((worktreeId: string) =>
+      Object.values(mocks.store.worktreesByRepo)
+        .flat()
+        .find((worktree) => worktree.id === worktreeId)
+    )
     mocks.activateAndRevealWorktree.mockReturnValue(true)
     mocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue('runtime-1')
     mocks.isWebRuntimeSessionActive.mockReturnValue(false)
@@ -166,6 +179,25 @@ describe('activateWorkspaceTabPaletteResult', () => {
     expect(mocks.store.setActiveTab).toHaveBeenCalledWith('terminal-1')
     expect(mocks.store.setActiveTabType).toHaveBeenCalledWith('terminal')
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1')
+  })
+
+  it('scopes activation to the host carried by the search result', () => {
+    const executionHostId = 'runtime:host-1' as const
+
+    expect(activateWorkspaceTabPaletteResult({ ...makeResult(), executionHostId })).toEqual({
+      status: 'activated'
+    })
+
+    expect(mocks.store.getKnownWorktreeById).toHaveBeenCalledWith('wt-1', executionHostId)
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', { executionHostId })
+  })
+
+  it('activates tabs in known folder or detected workspaces', () => {
+    mocks.store.worktreesByRepo = {}
+    mocks.store.getKnownWorktreeById.mockReturnValue({ id: 'wt-1', repoId: 'repo-1' })
+
+    expect(activateWorkspaceTabPaletteResult(makeResult())).toEqual({ status: 'activated' })
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1')
   })
 
   it('uses the web-runtime terminal activation path when active', () => {

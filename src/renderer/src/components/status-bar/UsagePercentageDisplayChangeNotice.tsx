@@ -100,7 +100,13 @@ export function UsagePercentageDisplayChangeNotice({
     }
 
     const update = (): void => {
-      setAnchorPosition(measureAnchorPosition(anchor))
+      const next = measureAnchorPosition(anchor)
+      // Why: ResizeObserver/resize fire on every reflow, but measureAnchorPosition
+      // returns a fresh object each time; bail on unchanged geometry so equal
+      // deliveries don't churn re-renders (avoids feeding a layout-effect loop).
+      setAnchorPosition((prev) =>
+        prev && prev.bottom === next.bottom && prev.left === next.left ? prev : next
+      )
     }
     update()
 

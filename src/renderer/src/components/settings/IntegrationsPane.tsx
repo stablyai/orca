@@ -54,8 +54,8 @@ export function IntegrationsPane(): React.JSX.Element {
         </div>
         <div className="space-y-3">
           <LinearIntegrationCard />
-          <ClickUpIntegrationCard />
           <JiraIntegrationCard />
+          <ClickUpIntegrationCard />
         </div>
       </section>
     </div>

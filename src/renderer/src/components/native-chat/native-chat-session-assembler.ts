@@ -7,7 +7,7 @@ import {
   type NativeChatSessionStatus
 } from '../../../../shared/native-chat-types'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
-import { normalizeImageTranscriptMessages } from './native-chat-image-transcript-markers'
+import { normalizeImageTranscriptMessages } from '../../../../shared/native-chat-image-transcript-markers'
 import { isLaunchPromptMessageId, isPendingMessageId } from './native-chat-pending'
 
 /** Messages grouped by source. Higher-priority sources (transcript > hook >

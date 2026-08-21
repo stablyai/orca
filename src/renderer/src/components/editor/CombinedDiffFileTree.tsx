@@ -10,7 +10,8 @@ import {
   compactSourceControlTree,
   flattenSourceControlTree
 } from '@/components/right-sidebar/source-control-tree'
-import type { GitBranchChangeEntry, GitStagingArea, GitStatusEntry } from '../../../../shared/types'
+import type { GitBranchChangeEntry } from '../../../../shared/git-diff-compare-types'
+import type { GitStagingArea, GitStatusEntry } from '../../../../shared/git-status-types'
 import {
   getEntryExtension,
   getFilteredCombinedDiffFileTreeEntries,
@@ -20,6 +21,7 @@ import {
   type CombinedDiffFileTreeMode
 } from './combined-diff-file-tree-model'
 import { CombinedDiffFileTreeRow, type CombinedDiffTreeNode } from './combined-diff-file-tree-row'
+import { useCombinedDiffFileTreeResize } from './use-combined-diff-file-tree-resize'
 import { translate } from '@/i18n/i18n'
 
 export {
@@ -100,6 +102,8 @@ export function CombinedDiffFileTree({
   const [query, setQuery] = React.useState('')
   const [excludedExtensions, setExcludedExtensions] = React.useState<Set<string>>(() => new Set())
   const [includeViewed, setIncludeViewed] = React.useState(true)
+  const { handleResizeKeyDown, handleResizeStart, maxWidth, minWidth, treeRef, width } =
+    useCombinedDiffFileTreeResize(collapsed)
   const toggleDirectory = React.useCallback((key: string) => {
     setCollapsedDirectoryKeys((prev) => {
       const next = new Set(prev)
@@ -169,7 +173,11 @@ export function CombinedDiffFileTree({
   return (
     // Why: this column must be height-bounded so the file list, not the page,
     // owns overflow when review diffs have more files than fit on screen.
-    <aside className="flex min-h-0 w-64 shrink-0 flex-col overflow-hidden border-r border-border bg-background">
+    // Why: useSidebarResize owns the inline width so a rerender mid-drag can't snap it back.
+    <aside
+      ref={treeRef}
+      className="relative flex min-h-0 shrink-0 flex-col overflow-hidden border-r border-border bg-background"
+    >
       <div className="sticky top-0 z-20 shrink-0 bg-background">
         <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
           <div className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
@@ -343,6 +351,24 @@ export function CombinedDiffFileTree({
             />
           ))
         )}
+      </div>
+      <div
+        role="separator"
+        aria-label={translate(
+          'auto.components.editor.CombinedDiffFileTree.resizeFileTree',
+          'Resize file tree'
+        )}
+        aria-orientation="vertical"
+        aria-valuemax={Math.round(maxWidth)}
+        aria-valuemin={Math.round(minWidth)}
+        aria-valuenow={Math.round(width)}
+        tabIndex={0}
+        className="group absolute inset-y-0 right-0 z-30 w-1 cursor-col-resize outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        onMouseDown={handleResizeStart}
+        onKeyDown={handleResizeKeyDown}
+      >
+        {/* Why: the aside clips the focus ring, so the divider line carries the focus state too. */}
+        <div className="ml-auto h-full w-px bg-transparent transition-colors group-hover:bg-ring/50 group-active:bg-ring group-focus-visible:bg-ring" />
       </div>
     </aside>
   )

@@ -3,6 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
+  createDefaultLocalOrcaProfile,
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
   DEFAULT_LOCAL_ORCA_PROFILE_NAME,
   ORCA_PROFILE_INDEX_SCHEMA_VERSION,
@@ -152,6 +153,27 @@ describe('profile index store', () => {
     const { setActiveOrcaProfile } = await loadProfileIndexStore()
 
     expect(() => setActiveOrcaProfile('missing-profile')).toThrow('unknown_orca_profile')
+  })
+
+  const posixIt = process.platform === 'win32' ? it.skip : it
+  posixIt('writes a fresh profile index when umask removes owner-write permission', async () => {
+    const store = await loadProfileIndexStore()
+    const indexPath = store.getOrcaProfileIndexPath()
+    const profile = createDefaultLocalOrcaProfile(1)
+    const index: OrcaProfileIndex = {
+      schemaVersion: ORCA_PROFILE_INDEX_SCHEMA_VERSION,
+      activeProfileId: profile.id,
+      profiles: [profile]
+    }
+    const originalUmask = process.umask(0o200)
+
+    try {
+      expect(() => store.writeProfileIndex(indexPath, index)).not.toThrow()
+    } finally {
+      process.umask(originalUmask)
+    }
+
+    expect(readJson(indexPath)).toEqual(index)
   })
 
   it('recovers a corrupted profile index from the backup copy', async () => {

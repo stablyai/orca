@@ -4,7 +4,7 @@ import type {
   LinearIssueCommentNode,
   LinearIssueContextResult,
   LinearIssueSummary
-} from '../../shared/linear-agent-access'
+} from '../../shared/linear/agent-access'
 import { collectInlineMedia } from './issue-context'
 
 function summary(overrides: Partial<LinearIssueSummary>): LinearIssueSummary {
@@ -28,7 +28,13 @@ function resultWith(overrides: Partial<LinearIssueContextResult>): LinearIssueCo
     meta: {
       requested: {
         current: false,
-        include: { comments: true, children: true, attachments: false, relations: false },
+        include: {
+          comments: true,
+          children: true,
+          attachments: false,
+          relations: false,
+          activity: false
+        },
         depth: 3
       },
       resolved: {

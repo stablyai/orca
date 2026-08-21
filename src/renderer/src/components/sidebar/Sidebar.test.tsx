@@ -1,11 +1,22 @@
+// @vitest-environment happy-dom
+
 import type { CSSProperties, ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+import { tmpdir } from 'node:os'
+import { cleanup, render } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 const mocks = vi.hoisted(() => ({
-  state: {} as Record<string, unknown>
+  state: {} as Record<string, unknown>,
+  // Stable callback identities so companion-board Effects only re-run on real state changes.
+  closeWorkspaceBoard: vi.fn(),
+  panel: {
+    workspaceBoardOpen: false,
+    workspaceBoardRenderedOpen: true,
+    workspaceBoardDragPreviewOpen: false
+  }
 }))
 
 vi.mock('@/store', () => ({
@@ -70,14 +81,12 @@ vi.mock('./useSidebarProjectDrop', () => ({
 
 vi.mock('./useWorkspaceBoardPanel', () => ({
   useWorkspaceBoardPanel: () => ({
-    workspaceBoardOpen: false,
-    workspaceBoardRenderedOpen: true,
-    workspaceBoardDragPreviewOpen: false,
+    ...mocks.panel,
     workspaceBoardMenuOpen: false,
     toggleWorkspaceBoard: vi.fn(),
     handleWorkspaceBoardOpenChange: vi.fn(),
     setWorkspaceBoardMenuOpen: vi.fn(),
-    closeWorkspaceBoard: vi.fn(),
+    closeWorkspaceBoard: mocks.closeWorkspaceBoard,
     previewWorkspaceBoardFromDrag: vi.fn(),
     solidifyWorkspaceBoardFromDrag: vi.fn(),
     cancelWorkspaceBoardDragPreview: vi.fn()
@@ -89,6 +98,8 @@ import Sidebar from './index'
 function setSidebarState(settings: GlobalSettings, statusBarVisible = true): void {
   mocks.state = {
     activeModal: null,
+    agentDashboardDrawerOpen: false,
+    setAgentDashboardDrawerOpen: vi.fn(),
     fetchAllWorktrees: vi.fn(),
     repos: [],
     setSidebarWidth: vi.fn(),
@@ -105,10 +116,38 @@ function renderSidebar(): string {
   )
 }
 
+function sidebarElement(): ReactNode {
+  return (
+    <Sidebar worktreeScrollOffsetRef={{ current: 0 }} worktreeScrollAnchorRef={{ current: null }} />
+  )
+}
+
+beforeEach(() => {
+  mocks.closeWorkspaceBoard.mockClear()
+  mocks.panel = {
+    workspaceBoardOpen: false,
+    workspaceBoardRenderedOpen: true,
+    workspaceBoardDragPreviewOpen: false
+  }
+})
+
+afterEach(cleanup)
+
 describe('Sidebar', () => {
+  it('anchors the setup script popup to the bottom toolbar', () => {
+    setSidebarState(getDefaultSettings(tmpdir()))
+    const view = render(sidebarElement())
+    const prompt = view.getByTestId('setup-script-prompt-card')
+    const toolbar = view.getByTestId('sidebar-toolbar')
+
+    expect(prompt.parentElement).toBe(toolbar.parentElement)
+    expect(prompt.parentElement?.classList.contains('relative')).toBe(true)
+    expect(prompt.parentElement?.classList.contains('shrink-0')).toBe(true)
+  })
+
   it('applies left sidebar appearance variables to the workspace sidebar surface', () => {
     setSidebarState({
-      ...getDefaultSettings('/tmp'),
+      ...getDefaultSettings(tmpdir()),
       leftSidebarAppearanceMode: 'match-terminal',
       terminalColorOverrides: {
         background: '#101820',
@@ -125,11 +164,59 @@ describe('Sidebar', () => {
   })
 
   it('passes status bar visibility into the workspace board drawer', () => {
-    setSidebarState(getDefaultSettings('/tmp'), false)
+    setSidebarState(getDefaultSettings(tmpdir()), false)
 
     const markup = renderSidebar()
 
     expect(markup).toContain('data-testid="workspace-kanban-drawer"')
     expect(markup).toContain('data-status-bar-visible="false"')
+  })
+
+  it('does not start a full worktree scan while the startup session is hydrating', () => {
+    setSidebarState(getDefaultSettings(tmpdir()))
+    const fetchAllWorktrees = vi.fn().mockResolvedValue(undefined)
+    mocks.state = {
+      ...mocks.state,
+      fetchAllWorktrees,
+      repos: [],
+      startupWorktreeRefreshCompleted: false
+    }
+    const view = render(sidebarElement())
+
+    mocks.state = { ...mocks.state, repos: [{ id: 'repo-a' }] }
+    view.rerender(sidebarElement())
+    expect(fetchAllWorktrees).not.toHaveBeenCalled()
+
+    mocks.state = { ...mocks.state, startupWorktreeRefreshCompleted: true }
+    view.rerender(sidebarElement())
+    expect(fetchAllWorktrees).not.toHaveBeenCalled()
+
+    mocks.state = { ...mocks.state, repos: [{ id: 'repo-a' }, { id: 'repo-b' }] }
+    view.rerender(sidebarElement())
+    expect(fetchAllWorktrees).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not scan all hosts when runtime connection status flaps', () => {
+    setSidebarState(getDefaultSettings(tmpdir()))
+    const fetchAllWorktrees = vi.fn().mockResolvedValue(undefined)
+    mocks.state = {
+      ...mocks.state,
+      fetchAllWorktrees,
+      runtimeStatusByEnvironmentId: new Map(),
+      startupWorktreeRefreshCompleted: true
+    }
+    const view = render(sidebarElement())
+
+    for (let index = 0; index < 5; index += 1) {
+      mocks.state = {
+        ...mocks.state,
+        runtimeStatusByEnvironmentId: new Map([
+          ['runtime-a', { status: index % 2 === 0 ? 'connected' : null }]
+        ])
+      }
+      view.rerender(sidebarElement())
+    }
+
+    expect(fetchAllWorktrees).not.toHaveBeenCalled()
   })
 })

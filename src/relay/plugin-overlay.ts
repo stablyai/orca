@@ -4,11 +4,11 @@
 // renderer are meaningless on SSH targets, so the relay performs the remote
 // filesystem work itself.
 //
-// Plugin source strings ship over the JSON-RPC channel at session-ready
-// (commit #7) — they are NOT bundled with the relay binary because the
-// relay is versioned independently from Orca and the plugin source changes
-// frequently as new agent events get added (see docs/design/agent-status-
-// over-ssh.md §4 "Why ship the plugin source over the wire").
+// Plugin source strings ship over the JSON-RPC channel at session-ready —
+// they are NOT bundled with the relay binary because the relay is versioned
+// independently from Orca and the plugin source changes frequently as new
+// agent events get added; bundling would make every such change a relay
+// redeploy, and an old relay would silently serve stale plugin code.
 //
 // We deliberately do not reuse OpenCodeHookService / PiTitlebarExtensionService
 // directly: those modules import `electron` and ride on Orca's userData
@@ -32,15 +32,20 @@ import { join } from 'node:path'
 import { mirrorEntry, safeRemoveOverlay } from '../main/pty/overlay-mirror'
 import type { PiAgentKind } from '../shared/pi-agent-kind'
 
+type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent'>
+
 const RELAY_HOOKS_DIR = '.orca-relay'
 const OPENCODE_OVERLAY_SUBDIR = 'opencode-overlays'
-const PI_OVERLAY_SUBDIR_BY_KIND: Record<PiAgentKind, string> = {
+const PI_OVERLAY_SUBDIR_BY_KIND: Record<LegacyOverlayAgentKind, string> = {
   pi: 'pi-overlays',
   omp: 'omp-overlays'
 }
 const OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
 const PI_EXTENSION_FILE = 'orca-agent-status.ts'
 const PI_AGENT_SUBDIR = 'agent'
+// Why: bare-shell OMP still needs ORCA_OMP_STATUS_EXTENSION without mkdir ~/.omp.
+// Mirror local userData/omp-managed-status-extension under the relay home root.
+const OMP_MANAGED_STATUS_EXTENSION_DIR = 'omp-managed-status-extension'
 const ORCA_MANAGED_EXTENSION_MARKER = '@orca-managed-pi-extension'
 
 function withOrcaManagedPiExtensionMarker(source: string): string {
@@ -56,7 +61,8 @@ function withOrcaManagedPiExtensionMarker(source: string): string {
 // are installed).
 const PI_AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
   pi: '.pi',
-  omp: '.omp'
+  omp: '.omp',
+  'prime-agent': '.prime'
 }
 
 function safeDirName(input: string): string {
@@ -77,21 +83,34 @@ export type PluginSources = {
   piExtensionSource?: string
   /** Source body of OMP's `orca-agent-status.ts` to drop into <overlay>/extensions/. */
   ompExtensionSource?: string
+  /** Source body of Prime Agent's `orca-agent-status.ts` to install in its real agent dir. */
+  primeAgentExtensionSource?: string
 }
 
-export function getRelayPiStatusExtensionPath(agentDir: string): string {
-  return join(agentDir, 'extensions', PI_EXTENSION_FILE)
+/** Result of installing Pi-compatible status into a real agent home or OMP fallback path. */
+export type MaterializePiResult = {
+  /** Real agent dir when extensions were installed there. Absent for OMP status-only fallback. */
+  sourceAgentDir?: string
+  /** Absolute path to orca-agent-status.ts (real home or relay-managed fallback). */
+  statusExtensionPath?: string
+}
+
+/** Presence of this file is what makes an overlay usable — a rebuild that failed
+ *  after the wipe leaves the dir itself present but the plugin missing. */
+export function getRelayOpenCodePluginPath(overlayDir: string): string {
+  return join(overlayDir, 'plugins', OPENCODE_PLUGIN_FILE)
 }
 
 export class PluginOverlayManager {
   private opencodePluginSource: string | null = null
   private piExtensionSources: Record<PiAgentKind, string | null> = {
     pi: null,
-    omp: null
+    omp: null,
+    'prime-agent': null
   }
   private homeDir: string
   private opencodeRoot: string
-  private piRoots: Record<PiAgentKind, string>
+  private piRoots: Record<LegacyOverlayAgentKind, string>
 
   constructor(opts?: { homeDir?: string }) {
     const home = opts?.homeDir ?? homedir()
@@ -120,6 +139,11 @@ export class PluginOverlayManager {
     if (typeof sources.ompExtensionSource === 'string') {
       this.piExtensionSources.omp = withOrcaManagedPiExtensionMarker(sources.ompExtensionSource)
     }
+    if (typeof sources.primeAgentExtensionSource === 'string') {
+      this.piExtensionSources['prime-agent'] = withOrcaManagedPiExtensionMarker(
+        sources.primeAgentExtensionSource
+      )
+    }
   }
 
   hasOpenCodeSource(): boolean {
@@ -130,11 +154,12 @@ export class PluginOverlayManager {
     if (kind) {
       return this.getPiExtensionSource(kind) !== null
     }
-    return this.piExtensionSources.pi !== null || this.piExtensionSources.omp !== null
+    return Object.values(this.piExtensionSources).some((source) => source !== null)
   }
 
   private getPiExtensionSource(kind: PiAgentKind): string | null {
-    return this.piExtensionSources[kind] ?? this.piExtensionSources.pi
+    const source = this.piExtensionSources[kind]
+    return source ?? (kind === 'omp' ? this.piExtensionSources.pi : null)
   }
 
   private mirrorOpenCodeConfig(sourceDir: string, overlayDir: string): void {
@@ -230,10 +255,38 @@ export class PluginOverlayManager {
     }
   }
 
-  /** Install the Pi/OMP status extension into the remote real agent dir and
-   *  return that directory. `kind` selects which Pi-compatible agent's default
-   *  dir to use when `existingAgentDir` is not supplied. */
-  materializePi(id: string, existingAgentDir?: string, kind: PiAgentKind = 'pi'): string | null {
+  private writeOmpManagedStatusExtension(extensionSource: string): string | null {
+    const fallbackDir = join(this.homeDir, RELAY_HOOKS_DIR, OMP_MANAGED_STATUS_EXTENSION_DIR)
+    try {
+      mkdirSync(fallbackDir, { recursive: true })
+      const fallbackPath = join(fallbackDir, PI_EXTENSION_FILE)
+      if (!this.canOverwritePiExtension(fallbackPath)) {
+        return null
+      }
+      writeFileSync(fallbackPath, extensionSource)
+      return fallbackPath
+    } catch (err) {
+      process.stderr.write(
+        `[plugin-overlay] failed to write OMP managed status extension: ${err instanceof Error ? err.message : String(err)}\n`
+      )
+      return null
+    }
+  }
+
+  /** Install the Pi/OMP status extension into the remote real agent dir.
+   *  `kind` selects which Pi-compatible agent's default dir to use when
+   *  `existingAgentDir` is not supplied.
+   *
+   *  When `materializeDefaultHome` is false (bare shells), missing default
+   *  homes are left alone so unused agents do not recreate `~/.<agent>` (#10196).
+   *  For OMP, a relay-owned status file is still written so bare shells can
+   *  export ORCA_OMP_STATUS_EXTENSION without ORCA_OMP_SOURCE_AGENT_DIR. */
+  materializePi(
+    id: string,
+    existingAgentDir?: string,
+    kind: PiAgentKind = 'pi',
+    options?: { materializeDefaultHome?: boolean }
+  ): MaterializePiResult | null {
     const extensionSource = this.getPiExtensionSource(kind)
     if (!extensionSource || !isUsableId(id)) {
       return null
@@ -243,6 +296,16 @@ export class PluginOverlayManager {
       if (existingAgentDir && !existsSync(existingAgentDir)) {
         return null
       }
+      const materializeDefaultHome = options?.materializeDefaultHome !== false
+      if (!existingAgentDir && !existsSync(sourceAgentDir) && !materializeDefaultHome) {
+        // Why: match local titlebar-extension-service bare-shell OMP policy —
+        // status wrapper only, never mkdir ~/.omp for unused agents.
+        if (kind === 'omp') {
+          const statusExtensionPath = this.writeOmpManagedStatusExtension(extensionSource)
+          return statusExtensionPath ? { statusExtensionPath } : null
+        }
+        return null
+      }
       const extensionsDir = join(sourceAgentDir, 'extensions')
       mkdirSync(extensionsDir, { recursive: true })
       const extensionPath = join(extensionsDir, PI_EXTENSION_FILE)
@@ -250,7 +313,10 @@ export class PluginOverlayManager {
         return null
       }
       writeFileSync(extensionPath, extensionSource)
-      return sourceAgentDir
+      return {
+        sourceAgentDir,
+        statusExtensionPath: extensionPath
+      }
     } catch (err) {
       process.stderr.write(
         `[plugin-overlay] failed to install ${kind} extension: ${err instanceof Error ? err.message : String(err)}\n`

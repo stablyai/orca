@@ -1,11 +1,14 @@
 import type { AppState } from '@/store/types'
-import type { Repo, Worktree, WorktreeLineage, WorkspaceLineage } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   buildParentPrChecksRows,
   type ParentPrChecksRow
 } from '@/components/right-sidebar/parent-pr-checks-rows'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
+import { getProjectedWorktreeLineageChildrenByParentId } from './worktree-lineage-projection'
 
 type FolderWorkspaceCardPrDisplayArgs = {
   folderWorkspaceId: string
@@ -77,21 +80,18 @@ function getAttachedWorktreesForFolderWorkspaceCard({
     .filter((worktree): worktree is Worktree => worktree !== null)
 
   const included = new Map(directChildren.map((worktree) => [worktree.id, worktree]))
-  let added = true
-
-  while (added) {
-    added = false
-    for (const lineage of Object.values(worktreeLineageById ?? {})) {
-      if (included.has(lineage.worktreeId) || !included.has(lineage.parentWorktreeId)) {
-        continue
-      }
-      const parent = worktreeMap.get(lineage.parentWorktreeId)
-      const child = worktreeMap.get(lineage.worktreeId)
-      if (!isCurrentLineagePair(parent, child, lineage)) {
+  const childrenByParentId = getProjectedWorktreeLineageChildrenByParentId(
+    worktreeLineageById ?? {},
+    worktreeMap
+  )
+  const queue = [...directChildren]
+  for (let index = 0; index < queue.length; index += 1) {
+    for (const child of childrenByParentId.get(queue[index].id) ?? []) {
+      if (child.isArchived || included.has(child.id)) {
         continue
       }
       included.set(child.id, child)
-      added = true
+      queue.push(child)
     }
   }
 
@@ -128,21 +128,6 @@ function getWorkspaceLineageChild(
     return null
   }
   return worktree
-}
-
-function isCurrentLineagePair(
-  parent: Worktree | undefined,
-  child: Worktree | undefined,
-  lineage: WorktreeLineage
-): child is Worktree {
-  return Boolean(
-    parent &&
-    child &&
-    !parent.isArchived &&
-    !child.isArchived &&
-    child.instanceId === lineage.worktreeInstanceId &&
-    parent.instanceId === lineage.parentWorktreeInstanceId
-  )
 }
 
 function compareReviewDisplays(left: WorktreeCardPrDisplay, right: WorktreeCardPrDisplay): number {

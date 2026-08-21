@@ -6,9 +6,16 @@ import {
 import { MobileRelayE2eeLink } from './mobile-relay-e2ee-link'
 import { MobileRelayRpcStreams } from './mobile-relay-rpc-streams'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
+import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
+import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import { isRpcResponse } from './rpc-response-shape'
+import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
 import type { RpcClient } from './rpc-client'
 import type { ConnectionState, RpcResponse } from './types'
+
+const RELAY_PROBE_TIMEOUT_MS = 4_000
+const RELAY_MISSED_PROBE_LIMIT = 2
+const RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS = 10_000
 
 type PendingRequest = {
   resolve: (response: RpcResponse) => void
@@ -17,7 +24,10 @@ type PendingRequest = {
 }
 
 export type MobileRelayRpcSession = RpcClient & {
-  getLeaseExpiresAt(): number | null
+  // The cell's attach-reservation deadline (~10s). Diagnostics only — never
+  // schedule anything from it; rotation keys off getResumeExpiresAt().
+  getAttachDeadlineAt(): number | null
+  getResumeExpiresAt(): number | null
   getResumeConfirmation(): DeviceResumeConfirmed | null
   getFailure(): Error | null
 }
@@ -38,10 +48,12 @@ export function connectMobileRelayRpcSession(args: {
   let state: ConnectionState = 'connecting'
   let requestCounter = 0
   let lastConnectedAt: number | null = null
-  let leaseExpiresAt: number | null = null
+  let attachDeadlineAt: number | null = null
+  let resumeExpiresAt: number | null = null
   let resumeConfirmation: DeviceResumeConfirmed | null = null
   let failure: Error | null = null
   let closed = false
+  const livenessIdentity = {}
   const streams = new MobileRelayRpcStreams({
     nextId,
     sendFrame,
@@ -63,19 +75,27 @@ export function connectMobileRelayRpcSession(args: {
         fail(new Error('relay resume credential version mismatch'))
         return
       }
-      leaseExpiresAt = hello.leaseExpiresAt
+      attachDeadlineAt = hello.leaseExpiresAt
+      resumeExpiresAt = hello.resumeExpiresAt
       publishState('handshaking')
     },
     onAuthenticated: () => void confirmResume(),
-    onText: handleText,
-    onBinary: handleBinary,
+    onText: (plaintext) => {
+      livenessWatchdog.noteAuthenticatedInbound(livenessIdentity)
+      handleText(plaintext)
+    },
+    onBinary: (plaintext) => {
+      livenessWatchdog.noteAuthenticatedInbound(livenessIdentity)
+      handleBinary(plaintext)
+    },
     onError: fail
   })
 
   const client: MobileRelayRpcSession = {
     async sendRequest(method, params, options) {
-      await waitForConnected(options?.timeoutMs)
-      return sendRpc(method, params, options?.timeoutMs)
+      const budget = openRpcRequestBudget(options)
+      await waitForConnected(budget.timeoutMs)
+      return sendRpc(method, params, resolvePostConnectRequestTimeout(budget, requestTimeoutMs))
     },
 
     subscribe(method, params, listener, options) {
@@ -91,25 +111,42 @@ export function connectMobileRelayRpcSession(args: {
     getState: () => state,
     getReconnectAttempt: () => 0,
     getLastConnectedAt: () => lastConnectedAt,
+    getLastInboundAt: () => livenessWatchdog.getLastInboundAt() || null,
     onStateChange(listener) {
       stateListeners.add(listener)
       return () => stateListeners.delete(listener)
     },
-    notifyForeground: () => {},
+    notifyForeground: (reason) => {
+      if (state === 'connected' && reason !== 'network-change') {
+        livenessWatchdog.probeNow(livenessIdentity)
+      }
+    },
     close() {
       if (closed) {
         return
       }
       closed = true
+      livenessWatchdog.stop(livenessIdentity)
       link.close()
       rejectPending(new Error('Client closed'))
       streams.clear()
       publishState('disconnected')
     },
-    getLeaseExpiresAt: () => leaseExpiresAt,
+    getAttachDeadlineAt: () => attachDeadlineAt,
+    getResumeExpiresAt: () => resumeExpiresAt,
     getResumeConfirmation: () => resumeConfirmation,
     getFailure: () => failure
   }
+  const livenessWatchdog = new RpcSessionLivenessWatchdog({
+    transport: 'relay',
+    idleProbeMs: null,
+    probeTimeoutMs: RELAY_PROBE_TIMEOUT_MS,
+    missedProbeLimit: RELAY_MISSED_PROBE_LIMIT,
+    voluntaryProbeMinIntervalMs: RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS,
+    sendProbe: () =>
+      state === 'connected' && sendFrame({ id: nextId(), method: 'status.get', params: undefined }),
+    terminate: () => fail(new Error('relay session liveness timeout'))
+  })
   return client
 
   async function confirmResume(): Promise<void> {
@@ -128,7 +165,9 @@ export function connectMobileRelayRpcSession(args: {
         throw new Error('relay resume confirmation missing')
       }
       resumeConfirmation = result.resumeConfirmation
+      resumeExpiresAt = result.resumeConfirmation.resumeExpiresAt
       lastConnectedAt = Date.now()
+      livenessWatchdog.start(livenessIdentity)
       publishState('connected')
     } catch (error) {
       fail(asError(error))
@@ -148,7 +187,8 @@ export function connectMobileRelayRpcSession(args: {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.delete(id)
-        reject(new Error(`relay RPC timed out: ${method}`))
+        // Why: the frame was written long ago — the desktop may have processed it.
+        reject(markRpcDeliveryUnknown(new Error(`relay RPC timed out: ${method}`)))
       }, timeoutMs)
       pending.set(id, { resolve, reject, timer })
       if (!sendFrame({ id, method, params })) {
@@ -231,12 +271,20 @@ export function connectMobileRelayRpcSession(args: {
     }
     closed = true
     failure = error
+    livenessWatchdog.stop(livenessIdentity)
     link.close()
     rejectPending(error)
     publishState(error instanceof MobileE2EEAuthenticationError ? 'auth-failed' : 'disconnected')
   }
 
   function rejectPending(error: Error): void {
+    if (pending.size === 0) {
+      return
+    }
+    // Why: pending entries only exist after their frame reached the authenticated
+    // link (sendFrame failures delete them synchronously), so the desktop may
+    // have processed them — mark the ambiguity for callers.
+    markRpcDeliveryUnknown(error)
     for (const request of pending.values()) {
       clearTimeout(request.timer)
       request.reject(error)

@@ -10,7 +10,9 @@ import {
   findIndexedFolderWorkspaceOwner,
   findIndexedProjectGroupOwner,
   findIndexedRepoOwner,
-  findIndexedWorktreeOwner
+  findIndexedRepoOwnerForHost,
+  findIndexedWorktreeOwner,
+  findIndexedWorktreeOwnerForHost
 } from './worktree-runtime-owner-index'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner'
 
@@ -18,11 +20,19 @@ function getResolvedFolderHost(
   state: WorktreeRuntimeOwnerState,
   folderWorkspaceId: string
 ): ExecutionHostId | null {
-  const folder = findIndexedFolderWorkspaceOwner(state.folderWorkspaces, folderWorkspaceId)
+  const preferredHostId =
+    state.activeWorktreeId === folderWorkspaceKey(folderWorkspaceId)
+      ? (state.activeWorkspaceExecutionHostId ?? undefined)
+      : undefined
+  const folder = findIndexedFolderWorkspaceOwner(
+    state.folderWorkspaces,
+    folderWorkspaceId,
+    preferredHostId
+  )
   const group = folder
-    ? findIndexedProjectGroupOwner(state.projectGroups, folder.projectGroupId)
+    ? findIndexedProjectGroupOwner(state.projectGroups, folder.projectGroupId, preferredHostId)
     : null
-  const explicitHost = parseExecutionHostId(group?.executionHostId)
+  const explicitHost = parseExecutionHostId(folder?.executionHostId ?? group?.executionHostId)
   if (explicitHost) {
     return explicitHost.id
   }
@@ -36,7 +46,7 @@ function getResolvedFolderHost(
   if (restoredHost?.kind === 'runtime') {
     return restoredHost.id
   }
-  return folder && group ? LOCAL_EXECUTION_HOST_ID : null
+  return folder && (group || preferredHostId) ? (preferredHostId ?? LOCAL_EXECUTION_HOST_ID) : null
 }
 
 /**
@@ -57,7 +67,13 @@ export function getResolvedExecutionHostIdForWorktree(
   if (scope?.type === 'folder') {
     return getResolvedFolderHost(state, scope.folderWorkspaceId)
   }
-  const worktree = findIndexedWorktreeOwner(state.worktreesByRepo, worktreeId)
+  const preferredHostId =
+    state.activeWorktreeId === worktreeId
+      ? (state.activeWorkspaceExecutionHostId ?? undefined)
+      : undefined
+  const worktree = preferredHostId
+    ? findIndexedWorktreeOwnerForHost(state.worktreesByRepo, worktreeId, preferredHostId)
+    : findIndexedWorktreeOwner(state.worktreesByRepo, worktreeId)
   const worktreeHost = parseExecutionHostId(worktree?.hostId)
   if (worktreeHost) {
     return worktreeHost.id
@@ -65,7 +81,9 @@ export function getResolvedExecutionHostIdForWorktree(
   if (!worktree) {
     return null
   }
-  const repo = findIndexedRepoOwner(state.repos, worktree.repoId)
+  const repo = preferredHostId
+    ? findIndexedRepoOwnerForHost(state.repos, worktree.repoId, preferredHostId)
+    : findIndexedRepoOwner(state.repos, worktree.repoId)
   if (!repo) {
     return null
   }

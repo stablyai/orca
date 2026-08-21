@@ -6,13 +6,13 @@ import type {
   LinearIssueRequest,
   LinearIssueTaskUpdateRequest,
   LinearWriteTargetRequest
-} from '../shared/linear-agent-access'
+} from '../shared/linear/agent-access'
 import {
   LINEAR_CHILDREN_MAX_DEPTH,
   LINEAR_WRITE_BODY_CAP,
   clampLinearIssueDepth
-} from '../shared/linear-agent-access'
-import { isLinearUuid } from '../shared/linear-uuid'
+} from '../shared/linear/agent-access'
+import { isLinearUuid } from '../shared/linear/uuid'
 import {
   getOptionalNonNegativeIntegerFlag,
   getOptionalStringFlag,
@@ -122,7 +122,8 @@ export function buildIssueRequest(
     comments: full || flags.get('comments') === true,
     children: full || flags.get('children') === true,
     attachments: full || flags.get('attachments') === true,
-    relations: full || flags.get('relations') === true
+    relations: full || flags.get('relations') === true,
+    activity: full || flags.get('activity') === true
   }
   if (flags.has('depth') && !includes.children) {
     throw new RuntimeClientError('invalid_argument', '--depth requires --children or --full')

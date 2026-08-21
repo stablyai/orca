@@ -15,8 +15,14 @@ import {
   computeDiff,
   branchCompare as branchCompareOp,
   branchDiffEntries,
-  validateGitExecArgs
+  validateGitExecArgs,
+  type GitExec
 } from './git-handler-ops'
+import {
+  branchDiffEntryAtPinnedOids,
+  isFullGitObjectId,
+  parseOptionalBranchDiffHeadOid
+} from './git-handler-branch-diff-ops'
 import {
   buildSubmoduleInnerCommitRangeDiff,
   computeSubmodulePointerDiff,
@@ -42,9 +48,11 @@ import { forceDeletePreservedRelayBranch } from './git-handler-branch-cleanup'
 import { refreshLocalBaseRefForWorktreeCreateOp } from './git-handler-local-base-ref-refresh'
 import { gitExecMutatesRepository } from '../shared/git-exec-mutation'
 import { detectConflictOperation, getStatusOp } from './git-handler-status-ops'
+import { capGitStatusEntries, resolveGitStatusLimit } from '../shared/git-status-limit'
 import { checkIgnoredPathsOp } from './git-handler-check-ignore'
 import { resolveRelayPushTarget } from './git-handler-push-target'
 import {
+  isExecKilledError,
   isNoUpstreamError,
   normalizeGitErrorMessage,
   runPullWithDivergenceFallback
@@ -53,7 +61,7 @@ import { upstreamOnlyCommitsArePatchEquivalent } from '../shared/git-upstream-st
 import { assertGitPushTargetShape } from '../shared/git-push-target-validation'
 import { getPublishTargetStatus, type GitCommandRunner } from '../shared/git-publish-target-status'
 import { resolveGitRemoteRebaseSource } from '../shared/git-rebase-source'
-import type { GitPushTarget } from '../shared/types'
+import type { GitPushTarget } from '../shared/worktree/types'
 import {
   getEffectiveGitUpstreamStatus,
   resolveEffectiveGitUpstream
@@ -69,6 +77,14 @@ import { syncForkDefaultBranch, validateGitForkSyncExpectedUpstream } from '../s
 import { InFlightPromiseDedupe, stableInFlightKey } from '../shared/in-flight-promise-dedupe'
 import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../shared/git-fetch-auto-maintenance'
 import { GitCapabilityCache } from '../shared/git-capability-cache'
+import {
+  githubPullRequestHeadLocalRef,
+  gitlabMergeRequestHeadLocalRef,
+  isSafeReviewHeadFetchRemote,
+  isValidReviewHeadNumber,
+  reviewHeadRemoteRefComponent,
+  REVIEW_HEAD_FETCH_TIMEOUT_MS
+} from '../shared/review-head-tracking-ref'
 import type { RelayFilesystemWatchRegistry } from './relay-filesystem-watch-registry'
 import {
   hasUnsupportedRevParsePathFormatEcho,
@@ -78,6 +94,8 @@ import { GitResponseStreamRegistry } from './git-response-stream'
 import { GIT_RESPONSE_STREAM_THRESHOLD } from './protocol'
 import { endSubprocessStdin } from '../shared/subprocess-stdin-write'
 import { clearGitStatusLineStatsCache } from '../shared/git-status-line-stats-cache'
+import { invalidateGitBranchLineTotalInFlight } from '../shared/git-branch-line-total'
+import { streamRelayGitStdout } from './git-stdout-stream'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
@@ -100,7 +118,7 @@ function resolveRelayPath(repoPath: string, value: string): string {
   if (path.posix.isAbsolute(value) || path.win32.isAbsolute(value)) {
     return value
   }
-  // Old git ignores `--path-format=absolute`; resolve relative toplevel/git-dir against repoPath, picking the win32/posix resolver by its shape.
+  // Old Git ignores `--path-format=absolute`; resolve relative paths against repoPath by path shape.
   return isWindowsAbsolutePath(repoPath)
     ? path.win32.resolve(repoPath, value)
     : path.posix.resolve(repoPath, value)
@@ -164,10 +182,10 @@ export class GitHandler {
   private dispatcher: RelayDispatcher
   private readonly gitDiffReadDedupe = new InFlightPromiseDedupe<unknown>()
   private readonly gitCapabilities = new GitCapabilityCache()
-  // Why: large diff/exec responses go on the bulk lane so they don't head-of-line-block interactive pty.data echo on the shared SSH channel.
+  // Why: use the bulk lane so large responses do not block interactive PTY echo.
   private readonly responseStreams = new GitResponseStreamRegistry()
 
-  // Why: instance-level TTL cache avoids re-reading `.gitmodules` per diff click over SSH; per-instance so it can't leak across tests.
+  // Why: cache .gitmodules per instance to avoid SSH reads and test leakage.
   private submodulePathsCache: SubmodulePathsCache = createSubmodulePathsCache()
 
   // Why: RelayContext accepted for protocol back-compat (docs/relay-fs-allowlist-removal.md) but no longer consulted on git ops.
@@ -189,7 +207,9 @@ export class GitHandler {
 
   private registerHandlers(): void {
     this.dispatcher.onRequest('git.status', (p, context) => this.getStatus(p, context))
-    this.dispatcher.onRequest('git.submoduleStatus', (p) => this.getSubmoduleStatus(p))
+    this.dispatcher.onRequest('git.submoduleStatus', (p, context) =>
+      this.getSubmoduleStatus(p, context)
+    )
     this.dispatcher.onRequest('git.checkIgnored', (p) => this.checkIgnored(p))
     this.dispatcher.onRequest('git.history', (p) => this.history(p))
     this.dispatcher.onRequest('git.commit', (p) => this.commit(p))
@@ -211,7 +231,18 @@ export class GitHandler {
     this.dispatcher.onRequest('git.fetch', (p) => this.fetch(p))
     this.dispatcher.onRequest('git.forkSync', (p, context) => this.forkSync(p, context))
     this.dispatcher.onRequest('git.fetchRemoteTrackingRef', (p) => this.fetchRemoteTrackingRef(p))
+    this.dispatcher.onRequest('git.fetchGitHubPullRequestHead', (p) =>
+      this.fetchGitHubPullRequestHead(p)
+    )
     this.dispatcher.onRequest('git.fetchGitLabMergeRequestHead', (p) =>
+      this.fetchGitLabMergeRequestHead(p)
+    )
+    // Why: the durable-ref variant is a distinct method name so an old relay
+    // (which only knows FETCH_HEAD-semantics git.fetchGitLabMergeRequestHead)
+    // returns -32601 and the client can prompt a reconnect instead of silently
+    // resolving a stale/missing ref. Both names share the durable handler: a
+    // refspec fetch still writes FETCH_HEAD, so old clients keep their semantics.
+    this.dispatcher.onRequest('git.fetchGitLabMergeRequestHeadRef', (p) =>
       this.fetchGitLabMergeRequestHead(p)
     )
     this.dispatcher.onRequest('git.push', (p) => this.push(p))
@@ -273,6 +304,7 @@ export class GitHandler {
 
   private clearGitMutationReadCaches(): void {
     this.gitDiffReadDedupe.clear()
+    invalidateGitBranchLineTotalInFlight()
     clearGitStatusLineStatsCache()
     clearSubmodulePathsCache(this.submodulePathsCache)
   }
@@ -330,43 +362,55 @@ export class GitHandler {
 
   private async getStatus(params: Record<string, unknown>, context: RequestContext) {
     this.gitDiffReadDedupe.clear()
-    return getStatusOp(this.git.bind(this), params, { signal: context.signal })
+    return getStatusOp(this.git.bind(this), streamRelayGitStdout, params, {
+      signal: context.signal
+    })
   }
 
-  // Why: parent status lists one gitlink row per submodule; fetch inner per-file changes by running status inside the submodule's own worktree.
-  private async getSubmoduleStatus(params: Record<string, unknown>) {
+  // Why: fetch per-file submodule changes from the submodule worktree.
+  private async getSubmoduleStatus(params: Record<string, unknown>, context: RequestContext) {
     const worktreePath = params.worktreePath as string
     const submodulePath = params.submodulePath as string
     const area = resolveSubmoduleStatusArea(params)
     const staged = area === 'staged'
     const resolved = resolveSubmoduleWorktreePath(worktreePath, submodulePath)
-    const workingResult = await getStatusOp(this.git.bind(this), {
-      ...params,
-      worktreePath: resolved
-    })
-    // Why: a moved gitlink (clean worktree) has no uncommitted rows; surface files changed between recorded and checked-out commits so it isn't empty.
+    const limit = resolveGitStatusLimit(params.limit)
+    // Why: staged expansion only represents HEAD→index; scanning the submodule worktree is wasted work.
+    const workingResult = staged
+      ? { entries: [], conflictOperation: 'unknown' }
+      : await getStatusOp(
+          this.git.bind(this),
+          streamRelayGitStdout,
+          {
+            ...params,
+            worktreePath: resolved
+          },
+          { signal: context.signal }
+        )
+    // Why: pointer/range probes are part of the same SSH request and must not outlive its cancellation.
+    const requestGit: GitExec = (args, cwd, options) =>
+      this.git(args, cwd, { ...options, signal: context.signal })
+    // Why: moved clean gitlinks need committed changes surfaced.
     const { fromOid, toOid } = await resolveSubmoduleCommitRange(
-      this.git.bind(this),
+      requestGit,
       worktreePath,
       submodulePath,
       staged
     )
     if (fromOid && toOid && fromOid !== toOid) {
-      const rangeEntries = await computeSubmoduleRangeEntries(
-        this.git.bind(this),
-        resolved,
-        fromOid,
-        toOid
-      )
+      const rangeEntries = await computeSubmoduleRangeEntries(requestGit, resolved, fromOid, toOid)
       if (staged) {
-        return { ...workingResult, entries: rangeEntries }
+        return { ...workingResult, ...capGitStatusEntries(rangeEntries, limit) }
       }
       const rangePaths = new Set(rangeEntries.map((entry) => entry.path))
       const entries = [
         ...rangeEntries,
         ...workingResult.entries.filter((entry) => !rangePaths.has(entry.path))
       ]
-      return { ...workingResult, entries }
+      return {
+        ...workingResult,
+        ...capGitStatusEntries(entries, limit, workingResult)
+      }
     }
     if (staged) {
       return { ...workingResult, entries: [] }
@@ -389,7 +433,7 @@ export class GitHandler {
   private async getDiff(params: Record<string, unknown>, context?: RequestContext) {
     const worktreePath = params.worktreePath as string
     const filePath = params.filePath as string
-    // Why: filePath is relative and joined for readWorkingFile; validate or `../../etc/passwd` traverses outside the worktree.
+    // Why: validate relative paths to prevent traversal outside the worktree.
     const resolved = path.resolve(worktreePath, filePath)
     const rel = path.relative(path.resolve(worktreePath), resolved)
     if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
@@ -397,11 +441,11 @@ export class GitHandler {
     }
     const staged = params.staged as boolean
     const compareAgainstHead = params.compareAgainstHead as boolean | undefined
-    // Why: register the in-flight dedupe synchronously (before any await) so concurrent identical reads coalesce; submodule routing happens inside.
+    // Why: register dedupe before awaiting so identical reads coalesce.
     const result = await this.gitDiffReadDedupe.run(
       stableInFlightKey(['diff', worktreePath, filePath, staged, compareAgainstHead]),
       async () => {
-        // Why: gitlinks can't be read as blobs, so route the gitlink root to a pointer diff and inner files into the submodule's own worktree.
+        // Why: route gitlink roots to pointer diffs and inner files to their submodule worktree.
         const submodulePaths = await listSubmodulePathsCached(
           this.git.bind(this),
           worktreePath,
@@ -738,21 +782,23 @@ export class GitHandler {
   private async branchCompare(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
     const baseRef = params.baseRef as string
-    // Why: a baseRef starting with '-' would be read as a git rev-parse flag, potentially leaking environment variables or config.
+    // Why: reject flag-like base refs to prevent rev-parse option injection.
     if (baseRef.startsWith('-')) {
       throw new Error('Base ref must not start with "-"')
     }
     const gitBound = this.git.bind(this)
     return branchCompareOp(gitBound, worktreePath, baseRef, async (mergeBase, headOid) => {
-      // Why: -c core.quotePath=false keeps non-ASCII filenames as raw UTF-8; without it parseBranchDiff would get C-style octal-escaped paths.
-      const { stdout } = await gitBound(
-        ['-c', 'core.quotePath=false', 'diff', '--name-status', '-M', '-C', mergeBase, headOid],
-        worktreePath
-      )
-      const { stdout: numstat } = await gitBound(
-        ['-c', 'core.quotePath=false', 'diff', '--numstat', '-M', '-C', mergeBase, headOid],
-        worktreePath
-      )
+      // Why: preserve non-ASCII filenames as UTF-8 for parseBranchDiff.
+      const [{ stdout }, { stdout: numstat }] = await Promise.all([
+        gitBound(
+          ['-c', 'core.quotePath=false', 'diff', '--name-status', '-M', '-C', mergeBase, headOid],
+          worktreePath
+        ),
+        gitBound(
+          ['-c', 'core.quotePath=false', 'diff', '--numstat', '-M', '-C', mergeBase, headOid],
+          worktreePath
+        )
+      ])
       return parseBranchDiff(stdout, parseNumstat(numstat))
     })
   }
@@ -782,7 +828,7 @@ export class GitHandler {
         (upstreamName) => this.getBehindCommitsArePatchEquivalent(worktreePath, upstreamName)
       )
     } catch (error) {
-      // Why: swallow only 'no upstream configured' (an expected state); other errors (auth, corruption, network) must surface to the user.
+      // Why: suppress only the expected no-upstream error; surface all others.
       if (isNoUpstreamError(error)) {
         return { hasUpstream: false, ahead: 0, behind: 0 }
       }
@@ -912,38 +958,94 @@ export class GitHandler {
     }
   }
 
+  // Why: the durable review-head ref embeds the remote's identity, and a
+  // missing remote must fail with an actionable message, not a raw fetch error.
+  private async reviewHeadRemoteComponent(worktreePath: string, remote: string): Promise<string> {
+    let remoteUrl: string
+    try {
+      const { stdout } = await this.git(['remote', 'get-url', remote], worktreePath)
+      remoteUrl = stdout.trim()
+    } catch {
+      remoteUrl = ''
+    }
+    if (!remoteUrl) {
+      throw new Error(`Remote "${remote}" is not configured.`)
+    }
+    return reviewHeadRemoteRefComponent(remote, remoteUrl)
+  }
+
   private async fetchGitLabMergeRequestHead(params: Record<string, unknown>) {
     this.clearGitMutationReadCaches()
     const worktreePath = params.worktreePath as string
     const remote = params.remote
     const mrIid = params.mrIid
     try {
-      if (typeof remote !== 'string') {
-        throw new Error('Invalid GitLab merge request fetch request.')
-      }
-      if (typeof mrIid !== 'number' || !Number.isSafeInteger(mrIid) || mrIid <= 0) {
+      if (typeof remote !== 'string' || !isValidReviewHeadNumber(mrIid)) {
         throw new Error('Invalid GitLab merge request fetch request.')
       }
       const mergeRequestIid = mrIid
-      if (remote.startsWith('-')) {
+      if (!isSafeReviewHeadFetchRemote(remote)) {
         throw new Error('GitLab merge request fetch remote must not start with "-".')
       }
 
       try {
-        const { stdout } = await this.git(['remote'], worktreePath)
-        const remotes = stdout
-          .split(/\r?\n/)
-          .map((line) => line.trim())
-          .filter(Boolean)
-        if (!remotes.includes(remote)) {
-          throw new Error(`Remote "${remote}" is not configured.`)
-        }
-        // Why: GitLab MR heads aren't refs/heads/*, so the remote-tracking fetch RPC can't represent fork MRs; keep this write path MR-only.
+        const remoteComponent = await this.reviewHeadRemoteComponent(worktreePath, remote)
+        // Why: GitLab fork heads need a dedicated write RPC and ref outside refs/heads/*.
+        // Return the exact written path so the client does not re-hash a second get-url.
+        const localRef = gitlabMergeRequestHeadLocalRef(remoteComponent, mergeRequestIid)
         await this.git(
-          ['fetch', '--no-tags', remote, `refs/merge-requests/${mergeRequestIid}/head`],
-          worktreePath
+          [
+            'fetch',
+            '--no-tags',
+            remote,
+            `+refs/merge-requests/${mergeRequestIid}/head:${localRef}`
+          ],
+          worktreePath,
+          { timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
         )
+        return { localRef }
       } catch (error) {
+        // Why: a timeout kill has no git stderr; name it so the client can classify it as transient.
+        if (isExecKilledError(error)) {
+          throw new Error(
+            `Fetching refs/merge-requests/${mergeRequestIid}/head from "${remote}" timed out.`
+          )
+        }
+        throw new Error(normalizeGitErrorMessage(error, 'fetch'))
+      }
+    } finally {
+      this.clearGitMutationReadCaches()
+    }
+  }
+
+  private async fetchGitHubPullRequestHead(params: Record<string, unknown>) {
+    this.clearGitMutationReadCaches()
+    const worktreePath = params.worktreePath as string
+    const remote = params.remote
+    const prNumber = params.prNumber
+    try {
+      if (typeof remote !== 'string' || !isValidReviewHeadNumber(prNumber)) {
+        throw new Error('Invalid GitHub pull request fetch request.')
+      }
+      if (!isSafeReviewHeadFetchRemote(remote)) {
+        throw new Error('GitHub pull request fetch remote must not start with "-".')
+      }
+
+      try {
+        const remoteComponent = await this.reviewHeadRemoteComponent(worktreePath, remote)
+        // Why: return the written path so resolve can rev-parse the same ref the host wrote.
+        const localRef = githubPullRequestHeadLocalRef(remoteComponent, prNumber)
+        await this.git(
+          ['fetch', '--no-tags', remote, `+refs/pull/${prNumber}/head:${localRef}`],
+          worktreePath,
+          { timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS }
+        )
+        return { localRef }
+      } catch (error) {
+        // Why: a timeout kill has no git stderr; name it so the client can classify it as transient.
+        if (isExecKilledError(error)) {
+          throw new Error(`Fetching refs/pull/${prNumber}/head from "${remote}" timed out.`)
+        }
         throw new Error(normalizeGitErrorMessage(error, 'fetch'))
       }
     } finally {
@@ -1018,7 +1120,7 @@ export class GitHandler {
   }
 
   private async pull(params: Record<string, unknown>) {
-    // Why: plain `git pull` honors the user's merge/rebase/ff policy; with none, Git's policy error is normalized with setup guidance.
+    // Why: plain `git pull` honors user merge/rebase/ff policy.
     await this.pullWithArgs(params, [])
   }
 
@@ -1051,6 +1153,7 @@ export class GitHandler {
     if (baseRef.startsWith('-')) {
       throw new Error('Base ref must not start with "-"')
     }
+    const headOid = parseOptionalBranchDiffHeadOid(params)
     const options = {
       includePatch: params.includePatch as boolean | undefined,
       filePath: params.filePath as string | undefined,
@@ -1061,18 +1164,36 @@ export class GitHandler {
         'branchDiff',
         worktreePath,
         baseRef,
+        headOid ?? null,
         options.includePatch ?? null,
         options.filePath ?? null,
         options.oldPath ?? null
       ]),
-      () =>
-        branchDiffEntries(
+      () => {
+        if (
+          headOid &&
+          isFullGitObjectId(baseRef) &&
+          options.includePatch === true &&
+          typeof options.filePath === 'string' &&
+          options.filePath.length > 0
+        ) {
+          return branchDiffEntryAtPinnedOids(
+            this.gitBuffer.bind(this),
+            worktreePath,
+            baseRef,
+            headOid,
+            options.filePath,
+            options.oldPath
+          )
+        }
+        return branchDiffEntries(
           this.git.bind(this),
           this.gitBuffer.bind(this),
           worktreePath,
           baseRef,
           options
         )
+      }
     )
     return this.maybeStreamResponse(result, params, context)
   }

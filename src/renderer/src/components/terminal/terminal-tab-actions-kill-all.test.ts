@@ -29,8 +29,8 @@ import { closeTerminalTab } from './terminal-tab-actions'
 function baseState(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     settings: { activeRuntimeEnvironmentId: null, confirmClosePinnedTab: true },
-    repos: [],
-    worktreesByRepo: {},
+    repos: [{ id: 'repo', executionHostId: 'local', connectionId: null }],
+    worktreesByRepo: { repo: [{ id: 'wt', repoId: 'repo' }] },
     tabsByWorktree: { wt: [{ id: 'terminal-1' }] },
     unifiedTabsByWorktree: {},
     activeWorktreeId: 'wt',

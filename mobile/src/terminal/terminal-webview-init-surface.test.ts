@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { XTERM_HTML } from './terminal-webview-html'
 
 function iifeSource(): string {
@@ -15,8 +15,18 @@ function bodyMarkup(): string {
 }
 
 type TerminalStub = ReturnType<typeof makeTerminal>
+type TerminalOptions = {
+  cursorInactiveStyle?: string
+  cursorStyle?: string
+  showCursorImmediately?: boolean
+}
+type RegisteredWindowListener = {
+  listener: EventListenerOrEventListenerObject
+  options?: boolean | AddEventListenerOptions
+  type: string
+}
 
-function makeTerminal(writeCallbacks: Array<() => void>) {
+function makeTerminal(writeCallbacks: Array<() => void>, writes: string[]) {
   const terminal = {
     cols: 80,
     rows: 24,
@@ -35,7 +45,8 @@ function makeTerminal(writeCallbacks: Array<() => void>) {
         getLine: () => null
       }
     },
-    write(_data: string, callback?: () => void) {
+    write(data: string, callback?: () => void) {
+      writes.push(data)
       if (callback) {
         writeCallbacks.push(callback)
       }
@@ -79,13 +90,28 @@ function dispatchInit(cols: number, initialData: string): void {
 
 describe('terminal WebView init surface replacement', () => {
   let animationFrames: Array<() => void>
+  let registeredWindowListeners: RegisteredWindowListener[]
+  let terminalOptions: TerminalOptions[]
   let terminals: TerminalStub[]
   let writeCallbacks: Array<() => void>
+  let writes: string[]
 
   beforeEach(() => {
     animationFrames = []
+    registeredWindowListeners = []
+    terminalOptions = []
     terminals = []
     writeCallbacks = []
+    writes = []
+    const addWindowEventListener = window.addEventListener.bind(window)
+    vi.spyOn(window, 'addEventListener').mockImplementation(((
+      type: string,
+      listener: EventListenerOrEventListenerObject,
+      options?: boolean | AddEventListenerOptions
+    ) => {
+      registeredWindowListeners.push({ type, listener, options })
+      addWindowEventListener(type, listener, options)
+    }) as typeof window.addEventListener)
     vi.stubGlobal('requestAnimationFrame', (callback: () => void) => {
       animationFrames.push(callback)
       return animationFrames.length
@@ -93,18 +119,48 @@ describe('terminal WebView init surface replacement', () => {
     Object.defineProperty(window, 'innerWidth', { value: 381, configurable: true })
     Object.defineProperty(window, 'innerHeight', { value: 612, configurable: true })
     const webWindow = window as unknown as {
-      Terminal: new () => TerminalStub
+      Terminal: new (options: TerminalOptions) => TerminalStub
       ReactNativeWebView: { postMessage: (data: string) => void }
     }
-    webWindow.Terminal = function () {
-      const terminal = makeTerminal(writeCallbacks)
+    webWindow.Terminal = function (options: TerminalOptions) {
+      terminalOptions.push(options)
+      const terminal = makeTerminal(writeCallbacks, writes)
       terminals.push(terminal)
       return terminal
-    } as unknown as new () => TerminalStub
+    } as unknown as new (options: TerminalOptions) => TerminalStub
     webWindow.ReactNativeWebView = { postMessage: vi.fn() }
     document.body.innerHTML = bodyMarkup()
     // eslint-disable-next-line no-new-func
     new Function(iifeSource())()
+  })
+
+  afterEach(() => {
+    for (const { type, listener, options } of registeredWindowListeners) {
+      window.removeEventListener(type, listener as EventListener, options)
+    }
+    vi.restoreAllMocks()
+  })
+
+  it("keeps xterm's inactive cursor visible across replacement surfaces", () => {
+    dispatchInit(120, 'desktop')
+    dispatchInit(51, 'phone-resize')
+    dispatchInit(51, 'phone-scrollback')
+
+    expect(terminalOptions).toHaveLength(3)
+    for (const options of terminalOptions) {
+      expect(options).toMatchObject({
+        cursorStyle: 'bar',
+        cursorInactiveStyle: 'block',
+        showCursorImmediately: true
+      })
+    }
+  })
+
+  it('grounds the initial replay without clearing the host live pen', () => {
+    dispatchInit(80, '\x1b[1mBOLD-RUN-LEFT-OPEN')
+    animationFrames.shift()?.()
+
+    expect(writes).toEqual(['\x1b[0m\x1b[1mBOLD-RUN-LEFT-OPEN'])
   })
 
   it('commits only the newest surface when phone-fit init calls overlap', () => {

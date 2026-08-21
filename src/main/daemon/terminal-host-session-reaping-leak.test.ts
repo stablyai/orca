@@ -3,8 +3,8 @@
  *
  * SessionIds are minted fresh per pane and never reused, so a `TerminalHost`
  * that never removes exited sessions from its `sessions` map leaks one dead
- * `Session` — each pinning a `@xterm/headless` emulator with ~5000 rows of
- * scrollback — per terminal for the lifetime of the long-lived daemon process.
+ * `Session` and its `@xterm/headless` scrollback grid per terminal for the
+ * lifetime of the long-lived daemon process.
  *
  * The fix wires a Session `onExit` hook to `TerminalHost.reapSession`, which
  * disposes the emulator and drops the entry from the map. These tests assert the
@@ -12,8 +12,13 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalHost } from './terminal-host'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import { HeadlessEmulator } from './headless-emulator'
+
+const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
+vi.mock('../pty-descendant-termination', () => ({
+  killWithDescendantSweep: killWithDescendantSweepMock
+}))
 
 function createMockSubprocess(): SubprocessHandle & {
   _onExitCb: ((code: number) => void) | null
@@ -50,8 +55,14 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
   let host: TerminalHost
   let lastSubprocess: ReturnType<typeof createMockSubprocess>
   let emulatorDispose: ReturnType<typeof vi.spyOn>
+  let platformDescriptor: PropertyDescriptor | undefined
 
   beforeEach(() => {
+    // Pin POSIX so immediate force-kill teardown is deterministic across host OSes; the
+    // Windows taskkill tree-kill path is covered in terminal-session-teardown.test.ts.
+    platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+    killWithDescendantSweepMock.mockReset()
     emulatorDispose = vi.spyOn(HeadlessEmulator.prototype, 'dispose')
     const spawnFn = vi.fn(() => {
       lastSubprocess = createMockSubprocess()
@@ -63,6 +74,9 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
   afterEach(async () => {
     await host.dispose()
     emulatorDispose.mockRestore()
+    if (platformDescriptor) {
+      Object.defineProperty(process, 'platform', platformDescriptor)
+    }
   })
 
   function streamClient() {
@@ -117,6 +131,11 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
 
     const killed = host.kill('session-1', { immediate: true })
 
+    // Immediate teardown skips the graceful kill and force-kills the child directly. On POSIX
+    // that reaches the child pgroup, so no Windows taskkill /T /F descendant sweep is needed.
+    expect(lastSubprocess.kill).not.toHaveBeenCalled()
+    expect(lastSubprocess.forceKill).toHaveBeenCalled()
+    expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
     expect(emulatorDispose).not.toHaveBeenCalled()
     expect(host.listSessions()).toHaveLength(1)
     lastSubprocess._onExitCb?.(137)
@@ -125,6 +144,7 @@ describe('TerminalHost dead-session reaping (leak regression)', () => {
     // Emulator freed and session dropped from the map (no lingering dead entry).
     expect(emulatorDispose).toHaveBeenCalledTimes(1)
     expect(host.listSessions()).toHaveLength(0)
+    expect(host.isKilled('session-1')).toBe(true)
   })
 
   it('retains a graceful-timeout session until the forced child physically exits', async () => {

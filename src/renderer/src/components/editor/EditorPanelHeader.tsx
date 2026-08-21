@@ -17,6 +17,9 @@ import { EditorPanelHeaderPath } from './EditorPanelHeaderPath'
 import { useDiffNavigation } from './diff-navigation-context'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import type { ArtifactWriteRequest } from '../../../../shared/artifacts'
+import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
+import { markdownArtifactSourceKey } from './markdown-artifact-upload'
 
 type EditorPanelHeaderProps = {
   activeFile: OpenFile
@@ -50,6 +53,7 @@ type EditorPanelHeaderProps = {
   onToggleMarkdownTableOfContents: () => void
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
+  createMarkdownArtifactRequest?: () => Promise<ArtifactWriteRequest>
 }
 
 export function EditorPanelHeader({
@@ -83,13 +87,16 @@ export function EditorPanelHeader({
   onEditorToggleChange,
   onToggleMarkdownTableOfContents,
   onToggleMarkdownFrontmatter,
-  onExportMarkdownToPdf
+  onExportMarkdownToPdf,
+  createMarkdownArtifactRequest
 }: EditorPanelHeaderProps): React.JSX.Element {
   const diffComments = useAppStore((s) =>
     selectWorktreeDiffCommentsOrEmpty(s, activeFile.worktreeId)
   )
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[activeFile.worktreeId])
   const diffWordWrap = useAppStore((s) => s.settings?.diffWordWrap === true)
+  // Why: undefined/true mean wrap on; only explicit false turns wrap off (#9974).
+  const editorWordWrap = useAppStore((s) => s.settings?.editorWordWrap !== false)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const fileDiffComments = useMemo(
     () => diffComments.filter((comment) => comment.filePath === activeFile.relativePath),
@@ -309,15 +316,24 @@ export function EditorPanelHeader({
           </Tooltip>
         </TooltipProvider>
       )}
+      {isMarkdown && !isDiffSurface && createMarkdownArtifactRequest ? (
+        <ArtifactPublishButton
+          sourceKey={markdownArtifactSourceKey(activeFile)}
+          className="size-6 [&_svg]:size-3.5!"
+          createRequest={createMarkdownArtifactRequest}
+        />
+      ) : null}
       <EditorPanelMarkdownActionsMenu
         isMarkdown={isMarkdown}
         isDiffSurface={isDiffSurface}
         diffWordWrap={diffWordWrap}
+        editorWordWrap={editorWordWrap}
         shouldShowMarkdownExportAction={shouldShowMarkdownExportAction}
         canExportMarkdownToPdf={canExportMarkdownToPdf}
         canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
         markdownFrontmatterVisible={markdownFrontmatterVisible}
         onToggleDiffWordWrap={() => void updateSettings({ diffWordWrap: !diffWordWrap })}
+        onToggleEditorWordWrap={() => void updateSettings({ editorWordWrap: !editorWordWrap })}
         onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
         onExportMarkdownToPdf={onExportMarkdownToPdf}
       />

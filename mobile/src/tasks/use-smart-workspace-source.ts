@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { GitHubWorkItem, GitLabWorkItem } from '../../../src/shared/types'
+import type { GitHubWorkItem } from '../../../src/shared/github/work-item-types'
+import type { GitLabWorkItem } from '../../../src/shared/gitlab-types'
 import {
   buildSmartWorkspaceSourceRows,
   getSmartWorkspaceEmptyHint,
@@ -22,7 +23,11 @@ const DEBOUNCE_MS = 200
 const RESULT_LIMIT = 36
 
 export type SmartCrossRepoPrompt = {
-  link: { slug: { owner: string; repo: string }; number: number; type: 'issue' | 'pr' }
+  link: {
+    slug: { owner: string; repo: string; host?: string }
+    number: number
+    type: 'issue' | 'pr'
+  }
   matchingRepo: PasteRepoCandidate
 }
 
@@ -78,7 +83,9 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
   // the mode/repo changes so one provider's rows never render under another tab.
   const scopeRef = useRef('')
   const dismissedPasteRef = useRef<string>('')
-  const repoSlugCacheRef = useRef<Map<string, { owner: string; repo: string } | null>>(new Map())
+  const repoSlugCacheRef = useRef<
+    Map<string, { owner: string; repo: string; host?: string } | null>
+  >(new Map())
 
   useEffect(() => {
     if (!client || !enabled || mode === 'text') {
@@ -198,7 +205,7 @@ async function runSmartSearch(args: {
   clickUpWorkspaceId: string | null | undefined
   repos: readonly PasteRepoCandidate[]
   dismissedPasteRef: { current: string }
-  repoSlugCache: Map<string, { owner: string; repo: string } | null>
+  repoSlugCache: Map<string, { owner: string; repo: string; host?: string } | null>
 }): Promise<{
   fan: SmartFanOutResult
   paste: PasteResolved

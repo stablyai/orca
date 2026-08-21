@@ -18,6 +18,7 @@ import {
 } from './ssh-system-fallback'
 import { resolveWithSshG, type SshResolvedConfig } from './ssh-config-parser'
 import { removeControlSocketPath } from './ssh-control-socket'
+import { isOpenSshConfigBackedTarget } from './system-ssh-args'
 import {
   INITIAL_RETRY_ATTEMPTS,
   INITIAL_RETRY_DELAY_MS,
@@ -31,25 +32,74 @@ import {
   isPassphraseError,
   sleep,
   buildConnectConfig,
-  resolveEffectiveProxy,
-  spawnProxyCommand,
   wrapRemoteCommandForPosixShell,
   createSshOperationAbortError,
   type SshExecOptions,
   type SshConnectionCallbacks
 } from './ssh-connection-utils'
+import { resolveEffectiveProxy, spawnProxyCommand } from './ssh-proxy-command'
+import {
+  createHostKeyVerifier,
+  DEFAULT_SERVER_HOST_KEY_ALGORITHMS,
+  orderServerHostKeyAlgorithms
+} from './ssh-host-key-verifier'
+import { HostKeyVerificationError, isHostKeyVerificationError } from './ssh-host-key-decision'
+import { siteConfigMayRestrictHostKeys, sshGArgsForHost } from './ssh-g-config-resolution'
+import {
+  boundSshHostKeyStoreFile,
+  loadTrustedHostKeys,
+  matchTrustedHostKeys,
+  storedKeyTypesForEndpoint,
+  trustHostKey
+} from './ssh-host-key-store'
+import {
+  loadKnownHostsEvidence,
+  resolveKnownHostsFiles,
+  resolveKnownHostsLookupHost
+} from './ssh-known-hosts-source'
+import {
+  createCancelledConnectAttemptError,
+  isCancelledConnectAttemptError
+} from './ssh-connect-attempt-cancellation'
+import {
+  isDefiniteSystemSshHostFailure,
+  isTransientReconnectError
+} from './ssh-reconnect-error-classification'
+import { SshReconnectLadder } from './ssh-reconnect-ladder'
+import { getPassphrasePrivateKeyPath } from './ssh-private-key-authentication'
+import {
+  requiresSystemSshForSecurityKey,
+  shouldUseSystemSshTransport
+} from './ssh-transport-selection'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
+import {
+  resolveSftpTransferPathIfMapped,
+  type SftpNamespacePathMapping
+} from './sftp-namespace-resolution'
 import type { FileUploadSession } from '../providers/types'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
+import { withTimeout } from '../../shared/promise-timeout-fallback'
 import {
   createLinkedSshFileTransferSignal,
   raceSftpFileTransferWithAbort
 } from './ssh-file-transfer-abort'
 export type { SshConnectionCallbacks } from './ssh-connection-utils'
 
+type HostKeyTrustSources = {
+  /** Whether the system-wide ssh_config could be restricting host keys; doubt reads as true. */
+  siteMayRestrict: boolean
+  knownHostsEvidence: Awaited<ReturnType<typeof loadKnownHostsEvidence>>
+  trustedHostKeys: Awaited<ReturnType<typeof loadTrustedHostKeys>>
+}
+
 type SshRemoteFileOptions = {
   hostPlatform?: RemoteHostPlatform
+  // Only uploadDirectory and writeFile honor this, and only on the non-Windows ssh2 branch.
+  sftpNamespace?: SftpNamespacePathMapping
 }
+
+/** Bounds the trust-source reads that run before the handshake, which nothing else times out. */
+const HOST_KEY_SOURCE_READ_TIMEOUT_MS = 5_000
 
 // Upper bound on waiting for an aborted channel's open/close to settle before rejecting anyway.
 const ABORTED_CHANNEL_CLOSE_GRACE_MS = 5_000
@@ -62,7 +112,48 @@ function cloneResolvedConfig(config: SshResolvedConfig | null): SshResolvedConfi
   if (!config) {
     return null
   }
-  return { ...config, identityFile: [...config.identityFile] }
+  // Every array field needs its own copy — a shared reference lets one connection's clone mutate
+  // another's view of which files were consulted.
+  return {
+    ...config,
+    identityFile: [...config.identityFile],
+    userKnownHostsFiles: [...config.userKnownHostsFiles],
+    globalKnownHostsFiles: [...config.globalKnownHostsFiles]
+  }
+}
+
+function isGitHubRestrictedShellProbeSuccess(
+  target: SshTarget,
+  resolvedConfig: SshResolvedConfig | null,
+  code: number | null,
+  stderr: string
+): boolean {
+  if (code !== 1) {
+    return false
+  }
+
+  const effectiveUser = (
+    isOpenSshConfigBackedTarget(target) && resolvedConfig
+      ? resolvedConfig.user?.trim() || target.username?.trim()
+      : target.username?.trim() || resolvedConfig?.user?.trim()
+  )?.toLowerCase()
+  if (effectiveUser !== 'git') {
+    return false
+  }
+
+  // GitHub appends git:// advisory lines after the invalid-command line (issue #6988), so match the first line only.
+  const firstLine = stderr.split('\n', 1)[0]?.trim()
+  if (firstLine !== 'Invalid command: echo ORCA-SYSTEM-SSH-OK') {
+    return false
+  }
+
+  const resolvedHost = resolvedConfig?.hostname?.trim()
+  const hostCandidates = resolvedHost ? [resolvedHost] : [target.host, target.configHost]
+
+  return hostCandidates.some((host) => {
+    const normalizedHost = host?.trim().toLowerCase()
+    return normalizedHost === 'github.com' || normalizedHost === 'ssh.github.com'
+  })
 }
 
 export class SshConnection {
@@ -72,6 +163,21 @@ export class SshConnection {
   private systemCommandChannels = new Set<ClientChannel>()
   private systemOperationAbortController = new AbortController()
   private systemSshResolvedConfig: SshResolvedConfig | null = null
+  /** Set by attemptConnect so doSsh2Connect can build a verifier without threading it through. */
+  private hostKeyResolvedConfig: SshResolvedConfig | null = null
+  /**
+   * The trust sources for ONE connect attempt, keyed by its generation.
+   *
+   * doSsh2Connect runs up to five times per attemptConnect as the credential ladder advances, and
+   * each run re-read every known_hosts file, re-read the store, and on the -F path re-scanned the
+   * system config. The answer cannot change between rungs of the same attempt — nothing writes these
+   * while a handshake is in flight — so it is read once. Keyed by generation rather than cleared,
+   * because a superseded attempt must never hand its sources to the live one.
+   */
+  private hostKeyTrustSources: {
+    generation: number
+    sources: Promise<HostKeyTrustSources>
+  } | null = null
   private systemSshControlMasterDisabledForSession = false
   private systemSshGssapiOnlyForSession = false
   private useSystemSshTransport = false
@@ -79,9 +185,11 @@ export class SshConnection {
   private callbacks: SshConnectionCallbacks
   private target: SshTarget
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private readonly reconnectLadder = new SshReconnectLadder()
   private disposed = false
   private cachedPassphrase: string | null = null
   private cachedPassword: string | null = null
+  private hostKeyFingerprint: string | undefined
   private connectGeneration = 0
 
   constructor(target: SshTarget, callbacks: SshConnectionCallbacks) {
@@ -120,6 +228,11 @@ export class SshConnection {
   }
   getSystemSshResolvedConfig(): SshResolvedConfig | null {
     return cloneResolvedConfig(this.systemSshResolvedConfig)
+  }
+  getHostKeyFingerprint(): string | undefined {
+    // Why: system SSH does not expose its negotiated key; a fingerprint from a
+    // failed ssh2 attempt may identify a different load-balanced execution host.
+    return this.useSystemSshTransport ? undefined : this.hostKeyFingerprint
   }
 
   setCallbacks(callbacks: SshConnectionCallbacks): void {
@@ -386,15 +499,20 @@ export class SshConnection {
         sftp.on('error', swallowLateSftpError)
         sftp.once('close', () => sftp.removeListener('error', swallowLateSftpError))
         try {
-          const { uploadDirectory } = await import('./ssh-relay-deploy-helpers')
-          await raceSftpFileTransferWithAbort(
-            uploadDirectory(sftp, localDir, remoteDir),
-            linkedSignal.signal,
-            (onClose) => {
-              sftp.once('close', onClose)
-              endSftp()
-            }
-          )
+          // Why: resolve on the same session that transfers — a later session is not authoritative for this one's namespace.
+          const transfer = (async (): Promise<void> => {
+            const targetDir = await resolveSftpTransferPathIfMapped(sftp, remoteDir, options)
+            linkedSignal.signal.throwIfAborted()
+            const { uploadDirectory } = await import('./ssh-relay-deploy-helpers')
+            await uploadDirectory(sftp, localDir, targetDir, localDir, {
+              signal: linkedSignal.signal
+            })
+          })()
+          await raceSftpFileTransferWithAbort(transfer, linkedSignal.signal, (onClose) => {
+            sftp.once('close', onClose)
+            endSftp()
+            return () => sftp.removeListener('close', onClose)
+          })
         } finally {
           endSftp()
         }
@@ -482,38 +600,17 @@ export class SshConnection {
         sftp.on('error', swallowLateSftpError)
         sftp.once('close', () => sftp.removeListener('error', swallowLateSftpError))
         try {
-          const write = new Promise<void>((resolve, reject) => {
-            const ws = sftp.createWriteStream(remotePath)
-            let settled = false
-            const cleanup = (): void => {
-              sftp.removeListener('error', onError)
-              ws.removeListener('close', onClose)
-              ws.removeListener('error', onError)
-            }
-            const onClose = (): void => {
-              if (settled) {
-                return
-              }
-              settled = true
-              cleanup()
-              resolve()
-            }
-            const onError = (err: Error): void => {
-              if (settled) {
-                return
-              }
-              settled = true
-              cleanup()
-              reject(err)
-            }
-            sftp.prependOnceListener('error', onError)
-            ws.once('close', onClose)
-            ws.once('error', onError)
-            ws.end(contents)
-          })
+          // Why: resolve on the same session that writes — a later session is not authoritative for this one's namespace.
+          const write = (async (): Promise<void> => {
+            const targetPath = await resolveSftpTransferPathIfMapped(sftp, remotePath, options)
+            linkedSignal.signal.throwIfAborted()
+            const { writeStringViaSftp } = await import('./sftp-upload')
+            await writeStringViaSftp(sftp, targetPath, contents)
+          })()
           await raceSftpFileTransferWithAbort(write, linkedSignal.signal, (onClose) => {
             sftp.once('close', onClose)
             endSftp()
+            return () => sftp.removeListener('close', onClose)
           })
         } finally {
           endSftp()
@@ -562,14 +659,25 @@ export class SshConnection {
     let lastError: Error | null = null
 
     for (let attempt = 0; attempt < INITIAL_RETRY_ATTEMPTS; attempt++) {
+      const connectGeneration = ++this.connectGeneration
       try {
-        await this.attemptConnect()
+        await this.attemptConnect(connectGeneration)
+        this.reconnectLadder.reset()
+        this.reconnectLadder.markConnected(Date.now())
         return
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err))
 
         // Why: a concurrent disconnect() already set 'disconnected'; a cancelled attempt's late error must not overwrite it with auth-failed/error.
         if (this.disposed) {
+          throw lastError
+        }
+
+        // Why: a newer attempt owns the connection now and publishes its own outcome; retrying here would fight it.
+        if (
+          !this.isCurrentConnectAttempt(connectGeneration) ||
+          isCancelledConnectAttemptError(lastError)
+        ) {
           throw lastError
         }
 
@@ -594,21 +702,54 @@ export class SshConnection {
     throw finalError
   }
 
-  private async attemptConnect(): Promise<void> {
+  // Why: callers claim the generation so their catch can tell their own failure from a superseded one.
+  /**
+   * A credential prompt, unless this attempt has already been superseded.
+   *
+   * Gated here rather than at each ladder rung because every rung ends in this one call, and the
+   * rungs below the first are exactly where the generation check was missing: a superseded attempt
+   * is denied by the verifier WITHOUT a recorded decision (deliberate — a dead attempt must not
+   * clobber the live one's outcome), so `isHostKeyVerificationError` reads false and the fallback
+   * runs on. The user then gets a passphrase dialog for a connection nobody is waiting on, possibly
+   * racing the live attempt's own. Returning undefined drops each rung through to its throw.
+   */
+  private async requestCredential(
+    kind: 'passphrase' | 'password',
+    detail: string,
+    connectGeneration: number
+  ): Promise<string | null | undefined> {
+    if (this.disposed || connectGeneration !== this.connectGeneration) {
+      return undefined
+    }
+    return this.callbacks.onCredentialRequest?.(this.target.id, kind, detail)
+  }
+
+  private async attemptConnect(connectGeneration = ++this.connectGeneration): Promise<void> {
     this.setState('connecting')
     this.proxyProcess?.kill()
     this.proxyProcess = null
-    const connectGeneration = ++this.connectGeneration
 
     const resolved = await resolveWithSshG(this.target.configHost || this.target.label).catch(
       () => null
     )
-    if (shouldUseSystemSshTransport(this.target, resolved)) {
+    this.hostKeyResolvedConfig = resolved
+    const usesConfiguredSystemTransport = shouldUseSystemSshTransport(this.target, resolved)
+    const requiresSecurityKeyTransport = usesConfiguredSystemTransport
+      ? false
+      : await requiresSystemSshForSecurityKey(this.target, resolved)
+    if (!this.isCurrentConnectAttempt(connectGeneration)) {
+      throw this.createCancelledConnectAttemptError()
+    }
+    if (usesConfiguredSystemTransport || requiresSecurityKeyTransport) {
       await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved)
       return
     }
     // Why: ssh2 lacks gssapi-with-mic; GSSAPIAuthentication hosts try Kerberos SSO via system OpenSSH first, then fall through to key/credential auth.
-    if (this.target.gssapiAuthentication === true) {
+    if (
+      isOpenSshConfigBackedTarget(this.target) && resolved
+        ? resolved.gssapiAuthentication === true
+        : this.target.gssapiAuthentication === true
+    ) {
       try {
         await this.doSystemSshProbeWithControlMasterRetry(connectGeneration, resolved, true)
         return
@@ -645,6 +786,30 @@ export class SshConnection {
       await this.doSsh2Connect(config, connectGeneration)
     } catch (err) {
       if (!(err instanceof Error)) {
+        this.proxyProcess?.kill()
+        this.proxyProcess = null
+        throw err
+      }
+
+      // Why generation and not the error: a superseded attempt's host key denial is deliberately
+      // NOT recorded — the verifier withholds it so a dead attempt cannot clobber the live one's
+      // outcome — so nothing about the error identifies it, and ssh2's generic handshake failure
+      // reads as an ordinary fault. Everything below either offers a credential or probes another
+      // transport, and doing that for a connection nobody is waiting on can put a passphrase prompt
+      // in front of a host we just refused. Checking the generation catches it whatever the error
+      // turned out to be, and leaves what connect() rejects with unchanged.
+      if (this.disposed || connectGeneration !== this.connectGeneration) {
+        this.proxyProcess?.kill()
+        this.proxyProcess = null
+        throw err
+      }
+
+      // Why first: everything below this line either offers a credential or retries on another
+      // transport. We have just decided this host may not be the one it claims to be, so prompting
+      // would collect the user's passphrase or password on its behalf, and the system-ssh probe
+      // would connect anyway whenever the disagreement is with our own store rather than
+      // known_hosts. A denied key is final for this attempt.
+      if (isHostKeyVerificationError(err)) {
         this.proxyProcess?.kill()
         this.proxyProcess = null
         throw err
@@ -690,25 +855,28 @@ export class SshConnection {
             await this.doSsh2Connect(keyConfig, connectGeneration)
             return
           } catch (keyErr) {
-            if (!(keyErr instanceof Error)) {
+            // Same reason as above: the retry re-runs the handshake, so it can be the attempt that
+            // denies the key, and the passphrase prompt is directly below.
+            if (!(keyErr instanceof Error) || isHostKeyVerificationError(keyErr)) {
               this.proxyProcess?.kill()
               this.proxyProcess = null
               throw keyErr
             }
             authError = keyErr
+            const passphraseKeyPath = getPassphrasePrivateKeyPath(keyConfig)
             // Why: with GSSAPI enabled, let the reactive system-ssh probe try a Kerberos ticket before prompting for the passphrase; the prompt still runs if it fails.
             if (
-              isPassphraseError(authError) &&
+              (isPassphraseError(authError) || passphraseKeyPath) &&
               !this.cachedPassphrase &&
               !isGssapiSystemSshFallbackCandidate(authError, this.target, resolved)
             ) {
               passphrasePromptHandled = true
-              const detail = this.target.identityFile || resolved?.identityFile?.[0] || '(unknown)'
-              const val = await this.callbacks.onCredentialRequest?.(
-                this.target.id,
-                'passphrase',
-                detail
-              )
+              const detail =
+                passphraseKeyPath ||
+                this.target.identityFile ||
+                resolved?.identityFile?.[0] ||
+                '(unknown)'
+              const val = await this.requestCredential('passphrase', detail, connectGeneration)
               if (val) {
                 this.cachedPassphrase = val
                 keyConfig.passphrase = val
@@ -747,9 +915,18 @@ export class SshConnection {
       }
 
       // Why: prompt for passphrase on encrypted-key error, then retry with a fresh proxy socket (ssh2 may have destroyed the original).
-      if (isPassphraseError(authError) && !this.cachedPassphrase && !passphrasePromptHandled) {
-        const detail = this.target.identityFile || resolved?.identityFile?.[0] || '(unknown)'
-        const val = await this.callbacks.onCredentialRequest(this.target.id, 'passphrase', detail)
+      const passphraseKeyPath = getPassphrasePrivateKeyPath(credentialRetryConfig)
+      if (
+        (isPassphraseError(authError) || passphraseKeyPath) &&
+        !this.cachedPassphrase &&
+        !passphrasePromptHandled
+      ) {
+        const detail =
+          passphraseKeyPath ||
+          this.target.identityFile ||
+          resolved?.identityFile?.[0] ||
+          '(unknown)'
+        const val = await this.requestCredential('passphrase', detail, connectGeneration)
         if (val) {
           this.cachedPassphrase = val
           credentialRetryConfig.passphrase = val
@@ -760,10 +937,10 @@ export class SshConnection {
       }
       // Why: an agent socket failure can still be recovered by password auth, but the retry must use the no-agent config selected above.
       if (isAgentFallbackError(authError) && !this.cachedPassword) {
-        const val = await this.callbacks.onCredentialRequest(
-          this.target.id,
+        const val = await this.requestCredential(
           'password',
-          config.host || this.target.label
+          config.host || this.target.label,
+          connectGeneration
         )
         if (val) {
           this.cachedPassword = val
@@ -790,8 +967,9 @@ export class SshConnection {
     // Why: OS sleep/wake can leave ssh2 thinking a dead TCP socket is still connected; tear down and reconnect so the relay can reattach remote PTYs.
     this.closeTransportsForReconnect()
     this.state.reconnectAttempt = 0
+    this.reconnectLadder.reset()
     this.setState('reconnecting')
-    await this.runReconnectAttempt(0)
+    await this.runReconnectAttempt()
   }
 
   private async doSystemSshProbe(connectGeneration: number): Promise<void> {
@@ -837,19 +1015,27 @@ export class SshConnection {
         const onClose = (code: number | null): void => {
           settle(() => {
             if (this.disposed || connectGeneration !== this.connectGeneration) {
-              reject(new Error('SSH connection attempt was cancelled'))
+              reject(this.createCancelledConnectAttemptError())
               return
             }
-            if (code !== 0 || !stdout.includes('ORCA-SYSTEM-SSH-OK')) {
-              reject(
-                new Error(
-                  `System SSH probe failed${code != null ? ` (exit ${code})` : ''}.${stderr ? ` stderr: ${stderr.trim()}` : ''}`
-                )
+            if (
+              (code === 0 && stdout.includes('ORCA-SYSTEM-SSH-OK')) ||
+              isGitHubRestrictedShellProbeSuccess(
+                this.target,
+                this.systemSshResolvedConfig,
+                code,
+                stderr
               )
+            ) {
+              this.setState('connected')
+              resolve()
               return
             }
-            this.setState('connected')
-            resolve()
+            reject(
+              new Error(
+                `System SSH probe failed${code != null ? ` (exit ${code})` : ''}.${stderr ? ` stderr: ${stderr.trim()}` : ''}`
+              )
+            )
           })
         }
         const timeout = setTimeout(() => {
@@ -890,6 +1076,13 @@ export class SshConnection {
         throw err
       }
       removeControlSocketPath(controlPath)
+      // Why: a timeout retry doubles the ladder step, but a stuck master can cause the first timeout.
+      if (
+        isDefiniteSystemSshHostFailure(err) ||
+        (err instanceof Error && (isAuthError(err) || isPassphraseError(err)))
+      ) {
+        throw err
+      }
       this.systemSshResolvedConfig = cloneResolvedConfig(resolved)
       this.systemSshControlMasterDisabledForSession = true
       try {
@@ -915,6 +1108,12 @@ export class SshConnection {
         throw err
       }
       removeControlSocketPath(controlPath)
+      if (
+        isDefiniteSystemSshHostFailure(err) ||
+        (err instanceof Error && (isAuthError(err) || isPassphraseError(err)))
+      ) {
+        throw err
+      }
       this.systemSshControlMasterDisabledForSession = true
       if (!this.isCurrentConnectAttempt(connectGeneration)) {
         throw this.createCancelledConnectAttemptError()
@@ -1012,7 +1211,7 @@ export class SshConnection {
   }
 
   private createCancelledConnectAttemptError(): Error {
-    return new Error('SSH connection attempt was cancelled')
+    return createCancelledConnectAttemptError()
   }
 
   private spawnTrackedSystemSshCommand(command: string, options?: SshExecOptions): ClientChannel {
@@ -1070,10 +1269,171 @@ export class SshConnection {
     config.sock = p.sock
   }
 
-  private doSsh2Connect(config: ConnectConfig, connectGeneration: number): Promise<void> {
+  /** Reads known_hosts, our store and the site policy once per connect attempt. */
+  private loadHostKeyTrustSources(
+    connectGeneration: number,
+    hostKeyResolved: SshResolvedConfig | null,
+    sshGSuppressedSiteConfig: boolean
+  ): Promise<HostKeyTrustSources> {
+    if (this.hostKeyTrustSources?.generation === connectGeneration) {
+      return this.hostKeyTrustSources.sources
+    }
+    const sources = (async (): Promise<HostKeyTrustSources> => {
+      const [siteMayRestrict, knownHostsEvidence, trustedHostKeys] = await Promise.all([
+        // Doubt wins on timeout for the same reason it wins on an unreadable file.
+        sshGSuppressedSiteConfig
+          ? withTimeout(siteConfigMayRestrictHostKeys(), HOST_KEY_SOURCE_READ_TIMEOUT_MS, true)
+          : Promise.resolve(false),
+        // Why bounded: these reads sit AHEAD of client.connect, and readyTimeout only covers the
+        // handshake — nothing else wraps attemptConnect. A home directory on a stalled NFS or SMB
+        // mount makes readFile hang indefinitely, which left the connection wedged in `connecting`
+        // with no ladder entry and no recovery. The fallback is the one an unreadable file already
+        // produces: evidence withheld, so we connect as ssh does but record nothing, rather than the
+        // far worse "no hosts known" that would let a changed key through as first contact.
+        withTimeout(
+          resolveKnownHostsFiles(hostKeyResolved).then(loadKnownHostsEvidence),
+          HOST_KEY_SOURCE_READ_TIMEOUT_MS,
+          { entries: [], unreadableFileCount: 1 }
+        ),
+        // The catch sits INSIDE the timeout on purpose: withTimeout absorbs rejections into its
+        // fallback, so wrapping the other way round would silently swallow the warning below — the
+        // one signal that the store is unwired rather than merely slow.
+        withTimeout(
+          loadTrustedHostKeys().catch((err) => {
+            // Losing our own records is not a security regression: known_hosts is still consulted,
+            // so a changed key is still refused. A host trusted only by us degrades to first contact
+            // and is re-recorded, which reaches the same decision. Loud because it means the store
+            // is unwired.
+            console.warn('[ssh] host key store unavailable; falling back to known_hosts only:', err)
+            return []
+          }),
+          HOST_KEY_SOURCE_READ_TIMEOUT_MS,
+          []
+        )
+      ])
+      return { siteMayRestrict, knownHostsEvidence, trustedHostKeys }
+    })()
+    this.hostKeyTrustSources = { generation: connectGeneration, sources }
+    return sources
+  }
+
+  private async doSsh2Connect(config: ConnectConfig, connectGeneration: number): Promise<void> {
+    const hostKeyResolved = this.hostKeyResolvedConfig
+    const { host: hostKeyLookupHost, isHostKeyAlias } = resolveKnownHostsLookupHost(
+      hostKeyResolved,
+      config.host ?? ''
+    )
+    // `-F` suppresses /etc/ssh/ssh_config, so a site-wide StrictHostKeyChecking is invisible to us
+    // on that path. Joined below with the other way a source can go silent: an unreadable file.
+    //
+    // Gated on `ssh -G` having actually produced something. sshGArgsForHost only reports which args
+    // WOULD be used, so without this a machine where ssh is missing, broken or timed out was judged
+    // by whether it happens to have a ~/.ssh/config — incoherently, since the same broken machine
+    // WITHOUT one was fully permissive. The flag is a claim about a config file we could not read,
+    // and when ssh never ran there is no such claim to make.
+    const sshGSuppressedSiteConfig =
+      hostKeyResolved !== null &&
+      sshGArgsForHost(this.target.configHost || this.target.label).includes('-F')
+    // Being blind to the site policy is only a reason to refuse if the site config could actually be
+    // setting one. ssh cannot answer that — `-F` excludes the system config as surely as the user's,
+    // and `-F /dev/null` reports built-in defaults rather than inverting the exclusion — so the file
+    // is read instead, conservatively: any doubt keeps the refusal.
+    const { siteMayRestrict, knownHostsEvidence, trustedHostKeys } =
+      await this.loadHostKeyTrustSources(
+        connectGeneration,
+        hostKeyResolved,
+        sshGSuppressedSiteConfig
+      )
+    const siteConfigSuppressed = siteMayRestrict
+    const knownHostsEntries = knownHostsEvidence.entries
+    // Null means ssh2's own list was unreadable, so there is nothing safe to reorder against and
+    // ssh2 keeps proposing whatever it supports.
+    const serverHostKeyOrder = DEFAULT_SERVER_HOST_KEY_ALGORITHMS
+      ? orderServerHostKeyAlgorithms(
+          knownHostsEntries,
+          hostKeyLookupHost,
+          config.port ?? 22,
+          DEFAULT_SERVER_HOST_KEY_ALGORITHMS,
+          storedKeyTypesForEndpoint(trustedHostKeys, hostKeyLookupHost, config.port ?? 22),
+          isHostKeyAlias
+        )
+      : undefined
     return new Promise<void>((resolve, reject) => {
       const client = new SshClient()
       let settled = false
+      // Local to this attempt: an instance field would let a superseded attempt's rejection replace
+      // the live attempt's error, and substituting a new Error drops ssh2's `code`, so a transient
+      // ECONNRESET would stop being classified as retryable.
+      let hostKeyRejection: HostKeyVerificationError | null = null
+
+      // Why the fingerprint is still recorded: the relay uses the negotiated server key to isolate
+      // shared-home install locks without comparing PIDs from an unrelated SSH host. Its format is
+      // load-bearing across versions, which is a second reason never to set ssh2's `hostHash`.
+      config.hostVerifier = createHostKeyVerifier({
+        host: hostKeyLookupHost,
+        port: config.port ?? 22,
+        // The name we looked up, not the label: the mismatch message prints `ssh-keygen -R <host>`
+        // and a label removes nothing from known_hosts.
+        displayHost: hostKeyLookupHost,
+        hostKeyStoreFile: boundSshHostKeyStoreFile() ?? undefined,
+        strictHostKeyChecking: hostKeyResolved?.strictHostKeyChecking ?? 'ask',
+        isHostKeyAlias,
+        isEphemeralRuntimeTarget: this.target.owner?.type === 'on-demand-runtime',
+        siteConfigSuppressed,
+        // A file that EXISTS and will not open is the absence of evidence, not evidence of a new
+        // host — the entry that would have said "this key changed" may be in it. An ABSENT file is
+        // not this: that is the normal state for a fresh profile and genuinely means nothing is
+        // known. The decision connects anyway, as ssh does, but records nothing.
+        knownHostsUnreadable: knownHostsEvidence.unreadableFileCount > 0,
+        entries: knownHostsEntries,
+        // The store's own matcher, against records preloaded above because ssh2's verifier decides
+        // synchronously. Reimplementing the comparison here is exactly how the type downgrade got
+        // in, and how the host normalisation drifted from the one used to write the records.
+        isTrusted: (query) => matchTrustedHostKeys(trustedHostKeys, query),
+        rememberHostKey: (record) => {
+          void trustHostKey({
+            host: record.host,
+            port: record.port,
+            keyType: record.keyType,
+            key: record.key
+          }).catch((err) => {
+            // A failed write must not fail the connection: we verified the key, we just could not
+            // record it, so the next connect re-derives the same answer from known_hosts.
+            console.warn('[ssh] failed to record accepted host key:', err)
+          })
+        },
+        isCurrentAttempt: () => !this.disposed && connectGeneration === this.connectGeneration,
+        onDecision: (decision) => {
+          // Empty when the blob was not a readable host key: there is nothing to identify, and the
+          // relay uses this fingerprint to isolate install locks, so blanking it would be worse
+          // than leaving the previous one. A REJECTED key is excluded for the same reason read the
+          // other way: we refused to talk to that host, so adopting its fingerprint would scope the
+          // relay's locks to a host we never accepted.
+          if (
+            decision.fingerprint &&
+            decision.action !== 'reject' &&
+            !this.disposed &&
+            connectGeneration === this.connectGeneration
+          ) {
+            this.hostKeyFingerprint = decision.fingerprint
+          }
+          if (decision.action === 'reject') {
+            hostKeyRejection = new HostKeyVerificationError(
+              decision.reason ?? 'Host key verification failed.',
+              decision.outcome
+            )
+          }
+        }
+      })
+
+      if (serverHostKeyOrder) {
+        config.algorithms = {
+          ...config.algorithms,
+          serverHostKey: serverHostKeyOrder as NonNullable<
+            NonNullable<ConnectConfig['algorithms']>['serverHostKey']
+          >
+        }
+      }
 
       const cleanupStartupListeners = (): void => {
         client.off('ready', onReady)
@@ -1097,7 +1457,7 @@ export class SshConnection {
           cleanupStartupListeners()
           client.end()
           client.destroy()
-          reject(new Error('SSH connection attempt was cancelled'))
+          reject(this.createCancelledConnectAttemptError())
           return
         }
         settled = true
@@ -1125,7 +1485,10 @@ export class SshConnection {
         cleanupStartupListeners()
         settled = true
         client.destroy()
-        reject(err)
+        // Why replace the error: ssh2 reports a denied host key as a generic handshake failure,
+        // which the reconnect ladder cannot distinguish from a transient fault and would retry
+        // forever against a decision that will never change.
+        reject(hostKeyRejection ?? err)
       }
 
       client.on('ready', onReady)
@@ -1159,40 +1522,55 @@ export class SshConnection {
     if (this.disposed || this.reconnectTimer) {
       return
     }
-    const attempt = this.state.reconnectAttempt
-    if (attempt >= RECONNECT_BACKOFF_MS.length) {
+    const decision = this.reconnectLadder.next(Date.now())
+    if (decision.kind === 'give-up') {
       this.setState('reconnection-failed', 'Max reconnection attempts reached')
       return
     }
+    this.state.reconnectAttempt = decision.attemptIndex
     this.setState('reconnecting')
+    console.warn(
+      `[ssh] Reconnecting to ${this.target.label} in ${decision.delayMs}ms (delay step ${decision.attemptIndex + 1}/${RECONNECT_BACKOFF_MS.length}, failed handshakes ${this.reconnectLadder.failedAttemptStreak}/${RECONNECT_BACKOFF_MS.length})`
+    )
     this.reconnectTimer = setTimeout(async () => {
       this.reconnectTimer = null
       if (this.disposed) {
         return
       }
-      await this.runReconnectAttempt(attempt)
-    }, RECONNECT_BACKOFF_MS[attempt])
+      await this.runReconnectAttempt()
+    }, decision.delayMs)
   }
 
-  private async runReconnectAttempt(attempt: number): Promise<void> {
+  private async runReconnectAttempt(): Promise<void> {
+    const connectGeneration = ++this.connectGeneration
     try {
       // Why: reset before connecting so the 'connected' broadcast carries reconnectAttempt=0, which ssh.ts uses to trigger relay re-establishment.
       this.state.reconnectAttempt = 0
-      await this.attemptConnect()
+      await this.attemptConnect(connectGeneration)
+      if (!this.isCurrentConnectAttempt(connectGeneration)) {
+        return
+      }
+      // Why: attemptConnect resolves only after a real handshake on either transport; the system-ssh probe's 'connected' must not clear the failure streak.
+      this.reconnectLadder.markConnected(Date.now())
     } catch (err) {
-      if (this.disposed) {
+      // Why: a superseded attempt has no outcome to publish — the attempt that claimed the generation owns the state, and cancellation is that supersession.
+      if (this.disposed || !this.isCurrentConnectAttempt(connectGeneration)) {
         return
       }
       const error = err instanceof Error ? err : new Error(String(err))
+      if (isCancelledConnectAttemptError(error)) {
+        return
+      }
       if (isAuthError(error) || isPassphraseError(error)) {
         this.setState('auth-failed', error.message)
         return
       }
-      if (!isTransientError(error)) {
+      // Why: the system-SSH transport reports timeouts as prose, so the narrow code table would strand FIDO2 targets in 'error' forever.
+      if (!isTransientReconnectError(error)) {
         this.setState('error', error.message)
         return
       }
-      this.state.reconnectAttempt = attempt + 1
+      this.reconnectLadder.markAttemptFailed()
       this.scheduleReconnect()
     }
   }
@@ -1303,6 +1681,7 @@ export class SshConnection {
     this.systemSshControlMasterDisabledForSession = false
     this.systemSshGssapiOnlyForSession = false
     this.useSystemSshTransport = false
+    this.reconnectLadder.reset()
     this.setState('disconnected')
   }
 
@@ -1317,18 +1696,4 @@ export class SshConnection {
   }
 }
 
-export function shouldUseSystemSshTransport(
-  target: SshTarget,
-  resolved: Pick<SshResolvedConfig, 'proxyUseFdpass' | 'proxyCommand' | 'proxyJump'> | null
-): boolean {
-  return (
-    process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT === '1' ||
-    target.proxyCommand != null ||
-    target.jumpHost != null ||
-    resolved?.proxyUseFdpass === true ||
-    resolved?.proxyCommand != null ||
-    resolved?.proxyJump != null
-  )
-}
-
-export { SshConnectionManager } from './ssh-connection-manager'
+export { shouldUseSystemSshTransport } from './ssh-transport-selection'

@@ -1,14 +1,26 @@
 import { z } from 'zod'
+import {
+  PAIRING_DEVICE_TOKEN_MAX_CHARACTERS,
+  PAIRING_ENDPOINT_MAX_CHARACTERS,
+  PAIRING_PUBLIC_KEY_MAX_CHARACTERS,
+  PAIRING_RELAY_URL_MAX_CHARACTERS
+} from './mobile-pairing-protocol-limits'
 
 export const PAIRING_OFFER_VERSION = 2
 const PairingScopeSchema = z.enum(['mobile', 'runtime'])
 const BASE64URL_16_PATTERN = /^[A-Za-z0-9_-]{16}$/
 const BASE64URL_43_PATTERN = /^[A-Za-z0-9_-]{43}$/
-const MAX_RELAY_URL_BYTES = 2048
 const MAX_INVITE_TTL_MS = 10 * 60 * 1000
+// The cell stamps expiry from its own clock; without leeway, a cell clock
+// even slightly ahead of this machine makes every invite fail validation
+// (same class as the host-proof freshness incident).
+const INVITE_EXPIRY_CLOCK_SKEW_MS = 30 * 1000
 
 function isCanonicalHttpsOrigin(value: string): boolean {
-  if (new TextEncoder().encode(value).length > MAX_RELAY_URL_BYTES) {
+  if (
+    value.length > PAIRING_RELAY_URL_MAX_CHARACTERS ||
+    new TextEncoder().encode(value).length > PAIRING_RELAY_URL_MAX_CHARACTERS
+  ) {
     return false
   }
   try {
@@ -47,7 +59,10 @@ export function createPairingOfferSchema(now: () => number = () => Date.now()) {
       .int()
       .refine((value) => {
         const currentTime = now()
-        return value > currentTime && value <= currentTime + MAX_INVITE_TTL_MS
+        return (
+          value > currentTime &&
+          value <= currentTime + MAX_INVITE_TTL_MS + INVITE_EXPIRY_CLOCK_SKEW_MS
+        )
       }, 'Expected a future invite expiry no more than 10 minutes away'),
     e2eeFraming: z.literal(2)
   })
@@ -55,11 +70,12 @@ export function createPairingOfferSchema(now: () => number = () => Date.now()) {
   return z
     .object({
       v: z.literal(PAIRING_OFFER_VERSION),
-      endpoint: z.string().min(1),
-      deviceToken: z.string().min(1),
+      endpoint: z.string().min(1).max(PAIRING_ENDPOINT_MAX_CHARACTERS),
+      deviceToken: z.string().min(1).max(PAIRING_DEVICE_TOKEN_MAX_CHARACTERS),
       // Why: the desktop's Curve25519 public key is pinned by the pairing
       // offer, while relayHostId is verified from its decoded bytes later.
-      publicKeyB64: z.string().min(1),
+      publicKeyB64: z.string().min(1).max(PAIRING_PUBLIC_KEY_MAX_CHARACTERS),
+      pairedDeviceId: z.string().min(1).max(128).optional(),
       scope: PairingScopeSchema.optional(),
       relay: relaySchema.optional()
     })

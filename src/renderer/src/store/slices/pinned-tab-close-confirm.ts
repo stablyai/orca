@@ -12,6 +12,7 @@ export type PinnedTabCloseConfirmRequest = {
 export type PinnedTabCloseConfirmSlice = {
   pinnedTabCloseConfirm: PinnedTabCloseConfirmRequest | null
   requestPinnedTabCloseConfirm: (request: PinnedTabCloseConfirmRequest) => void
+  cancelPinnedTabCloseRequest: (request: PinnedTabCloseConfirmRequest) => void
   confirmPinnedTabClose: () => void
   dismissPinnedTabClose: () => void
 }
@@ -31,6 +32,11 @@ export const createPinnedTabCloseConfirmSlice: StateCreator<
     set({ pinnedTabCloseConfirm: next })
     return next !== null
   }
+  const advanceAfterAction = (): void => {
+    if (advanceRequest()) {
+      nextRequestActionAllowedAt = Date.now() + INTER_REQUEST_ACTION_GUARD_MS
+    }
+  }
 
   return {
     pinnedTabCloseConfirm: null,
@@ -46,6 +52,17 @@ export const createPinnedTabCloseConfirmSlice: StateCreator<
       set({ pinnedTabCloseConfirm: request })
     },
 
+    cancelPinnedTabCloseRequest: (request) => {
+      if (get().pinnedTabCloseConfirm === request) {
+        advanceAfterAction()
+        return
+      }
+      const index = queuedRequests.indexOf(request)
+      if (index !== -1) {
+        queuedRequests.splice(index, 1)
+      }
+    },
+
     confirmPinnedTabClose: () => {
       if (Date.now() < nextRequestActionAllowedAt) {
         return
@@ -56,9 +73,7 @@ export const createPinnedTabCloseConfirmSlice: StateCreator<
       }
       // Why: advance before running onConfirm so a re-entrant close queues
       // behind the next real request instead of seeing the stale one.
-      if (advanceRequest()) {
-        nextRequestActionAllowedAt = Date.now() + INTER_REQUEST_ACTION_GUARD_MS
-      }
+      advanceAfterAction()
       request.onConfirm()
     },
 
@@ -71,9 +86,7 @@ export const createPinnedTabCloseConfirmSlice: StateCreator<
         return
       }
       // Why: CLI close requests wait for a response even when the user cancels.
-      if (advanceRequest()) {
-        nextRequestActionAllowedAt = Date.now() + INTER_REQUEST_ACTION_GUARD_MS
-      }
+      advanceAfterAction()
       request.onCancel?.()
     }
   }

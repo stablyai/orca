@@ -1,12 +1,11 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useThrottledLatestValue } from './use-throttled-latest-value'
 
 describe('useThrottledLatestValue', () => {
   let renderer: ReactTestRenderer | null = null
   let latest: string | undefined
-  let consoleSpy: MockInstance
 
   function Harness({ value }: { value: string | undefined }): null {
     latest = useThrottledLatestValue(value, 50)
@@ -25,22 +24,13 @@ describe('useThrottledLatestValue', () => {
 
   beforeEach(() => {
     vi.useFakeTimers()
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     latest = undefined
-    const original = console.error
-    consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...args)
-    })
   })
 
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
     vi.useRealTimers()
-    consoleSpy.mockRestore()
   })
 
   it('emits the first frame immediately', () => {

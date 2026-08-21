@@ -16,7 +16,8 @@ vi.mock('./parcel-watcher-process', () => ({
 }))
 vi.mock('./filesystem-watcher-wsl', () => ({ createWslWatcher: vi.fn() }))
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: vi.fn()
+  getSshFilesystemProvider: vi.fn(),
+  onSshFilesystemProviderRegistered: () => () => {}
 }))
 
 import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'
@@ -27,7 +28,7 @@ import {
   WatcherChildCapacityError
 } from './parcel-watcher-child-registry'
 
-type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>
+type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
 function fillWatcherChildCapacity(): (() => void)[] {
   return Array.from({ length: MAX_PHYSICAL_WATCHER_CHILDREN }, () => {

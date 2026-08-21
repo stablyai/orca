@@ -7,9 +7,15 @@ import type {
   GitHubPRRefreshReason,
   GitHubPRRefreshSkippedReason,
   PRRefreshOutcome
-} from '../../shared/types'
+} from '../../shared/github/pull-request-refresh-types'
 import { getPRForBranchOutcome, type GitHubPRBranchLookupOptions } from './client'
-import { getRateLimit, noteRateLimitSpend, rateLimitGuard } from './rate-limit'
+import { getOriginGitHubApiRepository } from './github-api-repository'
+import { ghRepoExecOptions, githubRepoContext } from './gh-utils'
+import { getRateLimit, repositoryRateLimitGuard, spendsSharedGitHubComQuota } from './rate-limit'
+import {
+  lookupBackoffDelayMs,
+  NO_REVIEW_REFRESH_INTERVAL_MS
+} from '../source-control/hosted-review-refresh-pacing'
 import { recordCoalescedCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
 
@@ -67,8 +73,6 @@ const BACKGROUND_BUDGET_WINDOW_MS = 5 * 60_000
 const MIN_BACKGROUND_SPACING_MS = 10_000
 const BACKGROUND_BUDGET_MAX = 20
 const POST_PUSH_DELAY_MS = 2_500
-const BACKOFF_BASE_MS = 60_000
-const BACKOFF_MAX_MS = 15 * 60_000
 const DIAGNOSTIC_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 const ACTIVE_BURST_WINDOW_MS = 30_000
 const ACTIVE_BURST_MAX = 3
@@ -417,8 +421,7 @@ function removeQueuedAliasForInvalidCandidate(key: string, alias: GitHubPRRefres
  */
 function nextVisibleErrorRetryAt(key: string): number {
   const failures = (errorBackoff.get(key)?.failures ?? 0) + 1
-  const retryAt =
-    Date.now() + Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** Math.min(failures - 1, 4))
+  const retryAt = Date.now() + lookupBackoffDelayMs(failures)
   errorBackoff.set(key, { failures, retryAt })
   return retryAt
 }
@@ -502,7 +505,7 @@ function refreshIntervalForCandidate(candidate: GitHubPRRefreshCandidate): numbe
     return 30 * 60_000
   }
   if (candidate.cachedHasPR === false) {
-    return 15 * 60_000
+    return NO_REVIEW_REFRESH_INTERVAL_MS
   }
   if (
     candidate.cachedHasPR === true &&
@@ -728,11 +731,26 @@ async function drainQueue(): Promise<void> {
       )
 
       if (isBackground(next.reason)) {
-        // Why: the probe only warms rateLimitGuard's cache, so it must fail open — GHES with rate limiting disabled 404s every probe (#7553).
-        await getRateLimit()
+        const executionOptions = ghRepoExecOptions(
+          githubRepoContext(
+            next.candidate.repoPath,
+            next.candidate.connectionId,
+            next.candidate.localGitOptions
+          )
+        )
+        const repository = await getOriginGitHubApiRepository(
+          next.candidate.repoPath,
+          next.candidate.connectionId,
+          executionOptions
+        )
+        // Why: only native github.com uses the singleton snapshot; scoped breakers protect GHES and WSL.
+        if (spendsSharedGitHubComQuota(repository, executionOptions)) {
+          // Why: the probe only warms the cache, so failures must fail open (#7553).
+          await getRateLimit()
+        }
         const buckets = backgroundRefreshBuckets()
         const blockedGuard = buckets
-          .map((bucket) => rateLimitGuard(bucket))
+          .map((bucket) => repositoryRateLimitGuard(repository, bucket, executionOptions))
           .find((guard) => guard.blocked)
         if (blockedGuard?.blocked) {
           const retryAt = blockedGuard.resetAt * 1000
@@ -754,9 +772,8 @@ async function drainQueue(): Promise<void> {
           // Why: tab/worktree churn can enqueue many distinct active refreshes that each probe local Git.
           noteActiveStart(next)
         }
-        for (const bucket of buckets) {
-          noteRateLimitSpend(bucket)
-        }
+        // Why (#11532): the lookup itself now debits the snapshot, so every
+        // caller is accounted for; debiting here too would double-count.
       }
 
       const outcome = await getPRForBranchOutcome(
@@ -922,8 +939,16 @@ export async function refreshPRNow(candidate: GitHubPRRefreshCandidate): Promise
   }
 
   // Why: enforce the rate-limit gate so a stale renderer can't bypass it; refuse without spending quota until the later of the two cooldowns.
+  const manualExecutionOptions = ghRepoExecOptions(
+    githubRepoContext(candidate.repoPath, candidate.connectionId, candidate.localGitOptions)
+  )
+  const manualRepository = await getOriginGitHubApiRepository(
+    candidate.repoPath,
+    candidate.connectionId,
+    manualExecutionOptions
+  )
   const manualBlockedGuard = backgroundRefreshBuckets()
-    .map((bucket) => rateLimitGuard(bucket))
+    .map((bucket) => repositoryRateLimitGuard(manualRepository, bucket, manualExecutionOptions))
     .find((guard) => guard.blocked)
   const secondaryGateUntil = manualRetryGates.get(key)
   const gateUntil = Math.max(

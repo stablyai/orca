@@ -14,6 +14,7 @@ import {
   X
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
 import { Button } from '@/components/ui/button'
@@ -54,22 +55,31 @@ import { JiraIcon } from '@/components/icons/JiraIcon'
 import { ClickUpIcon } from '@/components/icons/ClickUpIcon'
 import { searchRuntimeRepoBaseRefDetails } from '@/runtime/runtime-repo-client'
 import {
+  buildJiraIssueSearchJql,
   buildSmartWorkspaceSourceRows,
   getBranchSearchRequest,
   getSmartWorkspaceEmptyHint,
   getVisibleBranchResults,
-  isSmartWorkspaceSourceQueryWithinLimit,
+  getVisibleHeldProviderResults,
+  isBlockingJiraUrlIntent,
   type SmartNameMode,
   type SmartWorkspaceSourceRow
 } from './smart-workspace-source-results'
+import {
+  getSmartWorkspaceLinearSearchQuery,
+  isBlockingLinearUrlIntent,
+  isSmartWorkspaceLinearIssueIntentMatch,
+  parseBoundedSmartWorkspaceLinearIssueInput,
+  parseBoundedSmartWorkspaceLinearIssueUrlIntent,
+  prioritizeSmartWorkspaceLinearIssueResults
+} from '../../../../shared/new-workspace/smart-workspace-linear-intent'
+import { isSmartWorkspaceSourceQueryWithinLimit } from '../../../../shared/new-workspace/smart-workspace-source-query'
 import { filterAvailableTaskProviders } from '../../../../shared/task-providers'
-import type {
-  BaseRefSearchResult,
-  ClickUpTask,
-  GitHubWorkItem,
-  GitLabWorkItem,
-  LinearIssue
-} from '../../../../shared/types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
+import type { JiraIssue, JiraSite } from '../../../../shared/jira-types'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { BaseRefSearchResult } from '../../../../shared/repo-types'
 import { resolveSmartWorkspaceCommandValue } from './smart-workspace-command-value'
 import { isComposerFieldToFieldFocus } from './smart-workspace-source-popover-focus'
 import { translate } from '@/i18n/i18n'
@@ -80,15 +90,38 @@ import {
 } from './smart-workspace-localized-options'
 import {
   buildTaskSourceContextFromRepo,
+  getTaskSourceCacheScope,
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import {
+  getGitHubRuntimeRepoId,
+  getGitHubSourceRuntimeTarget
+} from '@/lib/github-source-runtime-context'
+import { useJiraSourceConnection } from './use-jira-source-connection'
+import {
+  bindJiraIssueSourceContext,
+  useJiraUrlSource,
+  type JiraUrlSourceState
+} from './use-jira-url-source'
+import {
+  applyWorkspaceEmojiSuggestion,
+  getActiveWorkspaceEmojiShortcode,
+  replaceCompletedWorkspaceEmojiShortcode,
+  searchWorkspaceEmojiShortcodes,
+  type WorkspaceEmojiReplacement,
+  type WorkspaceEmojiSuggestion
+} from '@/lib/workspace-emoji-shortcodes'
+import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/WorkspaceEmojiSuggestionPopover'
+import { lookupLinearIssueUrl } from '@/lib/linear-issue-url-lookup'
 
 type RepoOption = ReturnType<typeof useAppStore.getState>['repos'][number]
 const EMPTY_REPO_SEARCH_REPOS: readonly RepoOption[] = []
 
 type SmartWorkspaceNameFieldProps = {
-  repos: RepoOption[]
+  repos: readonly RepoOption[]
   repoId: string
   onRepoChange: (repoId: string) => void
   value: string
@@ -98,10 +131,12 @@ type SmartWorkspaceNameFieldProps = {
   onGitLabItemSelect?: (item: GitLabWorkItem) => void
   onBranchSelect: (refName: string, localBranchName: string) => void
   onLinearIssueSelect: (issue: LinearIssue) => void
-  onClickUpTaskSelect?: (task: ClickUpTask) => void
+  onJiraIssueSelect?: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
+  onOpenJiraSettings?: () => void
   selectedSource: SmartWorkspaceNameSelection | null
   onClearSelectedSource: () => void
   githubSourceContext?: TaskSourceContext | null
+  jiraSourceContext?: TaskSourceContext | null
   inputRef?: React.RefObject<HTMLInputElement | null>
   onPlainEnter?: () => void
   disabled?: boolean
@@ -148,9 +183,50 @@ export function canUseGitLabSmartSource({
   return parsedHost?.kind === 'ssh' || parsedHost?.kind === 'runtime' || localGitlabAvailable
 }
 
-type RowEntry = SmartWorkspaceSourceRow
+type RowEntry = SmartWorkspaceSourceRow | { kind: 'jira-account'; value: string; site: JiraSite }
 
 const ROW_ITEM_CLASS_NAME = 'gap-2 px-3 py-2 text-xs'
+
+function getJiraSourceStatusMessage(jiraSource: JiraUrlSourceState): string {
+  if (jiraSource.loading) {
+    return translate(
+      'auto.components.new.workspace.SmartWorkspaceNameField.loadingJira',
+      'Loading Jira issue…'
+    )
+  }
+  switch (jiraSource.errorKind) {
+    case 'disconnected':
+      return translate(
+        'auto.components.new.workspace.SmartWorkspaceNameField.jiraDisconnected',
+        'Connect Jira in Settings to link this issue'
+      )
+    case 'site-not-connected':
+      return translate(
+        'auto.components.new.workspace.SmartWorkspaceNameField.jiraSiteNotConnected',
+        'This Jira site is not connected'
+      )
+    case 'update-runtime':
+      return translate(
+        'auto.components.new.workspace.SmartWorkspaceNameField.jiraRuntimeUpdate',
+        'Update the remote runtime to link Jira'
+      )
+    case 'read-failed':
+      return translate(
+        'auto.components.new.workspace.SmartWorkspaceNameField.jiraReadFailed',
+        'Couldn’t load this Jira issue'
+      )
+    case null:
+      return jiraSource.accountChoices.length > 0
+        ? translate(
+            'auto.components.new.workspace.SmartWorkspaceNameField.chooseJiraAccount',
+            'Choose a Jira account'
+          )
+        : translate(
+            'auto.components.new.workspace.SmartWorkspaceNameField.jiraLoaded',
+            'Jira issue loaded'
+          )
+  }
+}
 
 function isTypedTextSourceRow(row: RowEntry): boolean {
   return row.kind === 'use-name' || row.kind === 'create-branch'
@@ -173,10 +249,12 @@ export default function SmartWorkspaceNameField({
   onGitLabItemSelect,
   onBranchSelect,
   onLinearIssueSelect,
-  onClickUpTaskSelect,
+  onJiraIssueSelect,
+  onOpenJiraSettings,
   selectedSource,
   onClearSelectedSource,
   githubSourceContext: githubSourceContextOverride,
+  jiraSourceContext = null,
   inputRef,
   onPlainEnter,
   disabled = false,
@@ -197,6 +275,7 @@ export default function SmartWorkspaceNameField({
     checkClickUpConnection,
     fetchWorkItems,
     fetchWorkItemsAcrossRepos,
+    fetchLinearIssue,
     getCachedWorkItems,
     linearStatus,
     linearStatusChecked,
@@ -206,6 +285,7 @@ export default function SmartWorkspaceNameField({
     preflightStatusContextKey,
     expectedPreflightContextKey,
     refreshPreflightStatus,
+    searchJiraIssues,
     searchLinearIssues,
     clickUpStatus,
     clickUpStatusChecked,
@@ -219,6 +299,7 @@ export default function SmartWorkspaceNameField({
       checkClickUpConnection: s.checkClickUpConnection,
       fetchWorkItems: s.fetchWorkItems,
       fetchWorkItemsAcrossRepos: s.fetchWorkItemsAcrossRepos,
+      fetchLinearIssue: s.fetchLinearIssue,
       getCachedWorkItems: s.getCachedWorkItems,
       linearStatus: s.linearStatus,
       linearStatusChecked: s.linearStatusChecked,
@@ -228,6 +309,7 @@ export default function SmartWorkspaceNameField({
       preflightStatusContextKey: s.preflightStatusContextKey,
       expectedPreflightContextKey: localPreflightContextKey(getLocalPreflightContext(s)),
       refreshPreflightStatus: s.refreshPreflightStatus,
+      searchJiraIssues: s.searchJiraIssues,
       searchLinearIssues: s.searchLinearIssues,
       clickUpStatus: s.clickUpStatus,
       clickUpStatusChecked: s.clickUpStatusChecked,
@@ -329,17 +411,23 @@ export default function SmartWorkspaceNameField({
     query: string
   } | null>(null)
   const [linearIssues, setLinearIssues] = useState<LinearIssue[]>([])
-  const [clickUpTasks, setClickUpTasks] = useState<ClickUpTask[]>([])
+  const [jiraIssues, setJiraIssues] = useState<JiraIssue[]>([])
   const [githubLoading, setGithubLoading] = useState(false)
   const [gitlabLoading, setGitlabLoading] = useState(false)
   const [branchesLoading, setBranchesLoading] = useState(false)
   const [linearLoading, setLinearLoading] = useState(false)
-  const [clickUpLoading, setClickUpLoading] = useState(false)
+  const [linearUrlLoadingFeedbackQuery, setLinearUrlLoadingFeedbackQuery] = useState<string | null>(
+    null
+  )
+  const [settledLinearUrlQuery, setSettledLinearUrlQuery] = useState<string | null>(null)
+  const [jiraLoading, setJiraLoading] = useState(false)
   const [commandValue, setCommandValue] = useState('')
+  const [emojiCommandValue, setEmojiCommandValue] = useState('')
+  const [emojiCursor, setEmojiCursor] = useState<number | null>(null)
   const localInputRef = useRef<HTMLInputElement | null>(null)
   const focusedSelectedSourceKeyRef = useRef<string | null>(null)
   const tabsListRef = useRef<HTMLDivElement | null>(null)
-  const repoSlugCacheRef = useRef<Map<string, RepoSlug | null>>(new Map())
+  const repoSlugCacheRef = useRef<Map<string, RepoSlug>>(new Map())
   const handledCrossRepoUrlRef = useRef<string | null>(null)
   const localInputFocusFrameRef = useRef<number | null>(null)
   // Why: Electron makes programmatic .focus() look user-initiated, so gate the source popover until real interaction.
@@ -348,6 +436,24 @@ export default function SmartWorkspaceNameField({
     link: NonNullable<ReturnType<typeof parseGitHubIssueOrPRLink>>
     matchingRepo: RepoOption | null
   } | null>(null)
+  // Why: read Jira status when the composer mounts so an already-configured source is available
+  // before users start typing, without showing Jira for hosts where it is not configured.
+  const jiraConnection = useJiraSourceConnection({
+    enabled: !disabled && !textOnly && jiraSourceContext !== null,
+    sourceContext: jiraSourceContext
+  })
+  const jiraConnectionStatus = jiraConnection.status
+  const jiraSource = useJiraUrlSource({
+    value,
+    enabled:
+      !disabled && !textOnly && (mode === 'smart' || mode === 'jira') && selectedSource === null,
+    sourceContext: jiraSourceContext,
+    connection: jiraConnection
+  })
+  const jiraSourceConnected = jiraConnectionStatus?.connected === true
+  const showJiraSiteContext = mode === 'jira' && jiraConnectionStatus?.selectedSiteId === 'all'
+  const jiraStatusId = React.useId()
+  const linearStatusId = React.useId()
 
   useEffect(() => {
     onActiveSourceModeChange?.(mode)
@@ -385,8 +491,8 @@ export default function SmartWorkspaceNameField({
     if (item.id === 'linear') {
       return linearAvailable
     }
-    if (item.id === 'clickup') {
-      return clickUpAvailable
+    if (item.id === 'jira') {
+      return jiraSourceConnected
     }
     if (item.id === 'branches') {
       return branchesEnabled && !repoBackedSourcesDisabled
@@ -530,10 +636,10 @@ export default function SmartWorkspaceNameField({
     setMode('smart')
     setGitlabItems([])
     setLinearIssues([])
-    setClickUpTasks([])
+    setJiraIssues([])
     setGitlabLoading(false)
     setLinearLoading(false)
-    setClickUpLoading(false)
+    setJiraLoading(false)
     setCommandValue('')
   }, [clickUpAvailable, gitlabSourceAvailable, linearAvailable, mode, textOnly])
 
@@ -547,12 +653,12 @@ export default function SmartWorkspaceNameField({
     setBranches([])
     setBranchResultsSource(null)
     setLinearIssues([])
-    setClickUpTasks([])
+    setJiraIssues([])
     setGithubLoading(false)
     setGitlabLoading(false)
     setBranchesLoading(false)
     setLinearLoading(false)
-    setClickUpLoading(false)
+    setJiraLoading(false)
     setCommandValue('')
     setCrossRepoPrompt(null)
   }, [disabled])
@@ -574,22 +680,46 @@ export default function SmartWorkspaceNameField({
     () => (sourceQueryWithinLimit ? parseGitHubIssueOrPRLink(debouncedQuery) : null),
     [debouncedQuery, sourceQueryWithinLimit]
   )
+  const linearUrlIntent = useMemo(
+    () => parseBoundedSmartWorkspaceLinearIssueUrlIntent(value),
+    [value]
+  )
+  const linearUrlIntentOwnsInput =
+    linearUrlIntent !== null && (mode === 'smart' || mode === 'linear')
+  const linearQuery = linearUrlIntentOwnsInput ? value : debouncedQuery
+  useEffect(() => {
+    if (!linearUrlIntentOwnsInput || !linearLoading) {
+      setLinearUrlLoadingFeedbackQuery(null)
+      return
+    }
+    setLinearUrlLoadingFeedbackQuery(null)
+    const timer = window.setTimeout(() => setLinearUrlLoadingFeedbackQuery(linearQuery), 200)
+    return () => window.clearTimeout(timer)
+  }, [linearLoading, linearQuery, linearUrlIntentOwnsInput])
   const shouldQueryGithub =
     sourceQueryWithinLimit &&
     !repoBackedSourcesDisabled &&
+    !jiraSource.intent &&
+    !linearUrlIntentOwnsInput &&
     !textOnly &&
     repoBackedSearchTargets.length > 0 &&
     (mode === 'smart' || mode === 'github')
   const shouldQueryLinear =
-    sourceQueryWithinLimit &&
+    isSmartWorkspaceSourceQueryWithinLimit(linearQuery) &&
+    !jiraSource.intent &&
     !textOnly &&
     linearAvailable &&
     (mode === 'smart' || mode === 'linear')
-  const shouldQueryClickUp =
-    sourceQueryWithinLimit &&
+  const jiraSearchJql =
+    mode === 'jira' && !jiraSource.intent && sourceQueryWithinLimit
+      ? buildJiraIssueSearchJql(debouncedQuery)
+      : null
+  const shouldQueryJira =
+    !disabled &&
     !textOnly &&
-    clickUpAvailable &&
-    (mode === 'smart' || mode === 'clickup')
+    jiraSourceConnected &&
+    jiraSourceContext !== null &&
+    jiraSearchJql !== null
 
   useEffect(() => {
     if (disabled || !shouldQueryGithub) {
@@ -598,17 +728,13 @@ export default function SmartWorkspaceNameField({
       return
     }
     let stale = false
+    // Why: empty-query search must not briefly paint the previous non-empty result set
+    // once debounce catches a cleared field.
+    if (debouncedQuery.trim() === '') {
+      setGithubItems([])
+    }
     const directNumber = normalizedGhQuery.directNumber
     const directLink = parsedGhLink
-    const searchTargetForRepo = (repo: RepoOption) =>
-      repoBackedSearchTargets.find((target) => target.repo.id === repo.id) ?? {
-        repo,
-        githubSourceContext: buildTaskSourceContextFromRepo({
-          provider: 'github' as const,
-          projectId: repo.id,
-          repo
-        })
-      }
     if (directLink !== null && handledCrossRepoUrlRef.current !== debouncedQuery.trim()) {
       setGithubLoading(true)
       const directLookup = async (): Promise<{
@@ -619,34 +745,43 @@ export default function SmartWorkspaceNameField({
         } | null
       }> => {
         if (crossRepoSwitchTarget === 'task-source') {
-          const matchingRepo = await findMatchingRepoForSlug(
-            repoBackedSearchTargets.map((target) => target.repo),
+          const matchingTarget = await findMatchingRepoForSlug(
+            repoBackedSearchTargets.map((target) => ({
+              repo: target.repo,
+              sourceContext: target.githubSourceContext
+            })),
             directLink.slug,
             repoSlugCacheRef.current
           )
-          handledCrossRepoUrlRef.current = debouncedQuery.trim()
-          if (!matchingRepo) {
+          if (!matchingTarget) {
             return { items: [], prompt: null }
           }
-          const target = searchTargetForRepo(matchingRepo)
           const item = await lookupGitHubWorkItemByOwnerRepoForSource({
-            repoPath: target.repo.path,
-            repoId: target.repo.id,
-            sourceContext: target.githubSourceContext,
+            repoPath: matchingTarget.repo.path,
+            repoId: matchingTarget.repo.id,
+            sourceContext: matchingTarget.sourceContext,
             owner: directLink.slug.owner,
             repo: directLink.slug.repo,
+            ...(directLink.slug.host ? { host: directLink.slug.host } : {}),
             number: directLink.number,
             type: directLink.type
           })
+          // Why: only suppress re-tries once resolution succeeded — a transient
+          // GHES slug failure (matchingTarget === null) must stay retryable.
+          handledCrossRepoUrlRef.current = debouncedQuery.trim()
           return {
-            items: item ? [{ ...item, repoId: target.repo.id } as GitHubWorkItem] : [],
+            items: item ? [{ ...item, repoId: matchingTarget.repo.id } as GitHubWorkItem] : [],
             prompt: null
           }
         }
         if (!selectedRepo?.path) {
           return { items: [], prompt: null }
         }
-        const selectedSlug = await getRepoSlugCached(selectedRepo, repoSlugCacheRef.current)
+        const selectedSlug = await getRepoSlugCached(
+          selectedRepo,
+          githubSourceContext,
+          repoSlugCacheRef.current
+        )
         if (!selectedSlug || sameSlug(selectedSlug, directLink.slug)) {
           handledCrossRepoUrlRef.current = debouncedQuery.trim()
           const item = await lookupSmartGitHubSubmitItem({
@@ -657,6 +792,7 @@ export default function SmartWorkspaceNameField({
               kind: 'link',
               owner: directLink.slug.owner,
               repo: directLink.slug.repo,
+              ...(directLink.slug.host ? { host: directLink.slug.host } : {}),
               number: directLink.number,
               type: directLink.type
             },
@@ -665,12 +801,22 @@ export default function SmartWorkspaceNameField({
           })
           return { items: item ? [item] : [], prompt: null }
         }
-        const matchingRepo = await findMatchingRepoForSlug(
-          repos,
+        const matchingTarget = await findMatchingRepoForSlug(
+          repos.map((repo) => ({
+            repo,
+            sourceContext: buildTaskSourceContextFromRepo({
+              provider: 'github',
+              projectId: repo.id,
+              repo
+            })
+          })),
           directLink.slug,
           repoSlugCacheRef.current
         )
-        return { items: [], prompt: { link: directLink, matchingRepo } }
+        return {
+          items: [],
+          prompt: { link: directLink, matchingRepo: matchingTarget?.repo ?? null }
+        }
       }
       void directLookup()
         .then((result) => {
@@ -705,6 +851,7 @@ export default function SmartWorkspaceNameField({
               kind: 'link' as const,
               owner: directLink.slug.owner,
               repo: directLink.slug.repo,
+              ...(directLink.slug.host ? { host: directLink.slug.host } : {}),
               number: directLink.number,
               type: directLink.type
             }
@@ -833,7 +980,7 @@ export default function SmartWorkspaceNameField({
   const branchSearchRequest = useMemo(
     () =>
       getBranchSearchRequest({
-        disabled,
+        disabled: disabled || jiraSource.intent || linearUrlIntentOwnsInput,
         branchesEnabled: branchesEnabled && !repoBackedSourcesDisabled,
         textOnly,
         mode,
@@ -845,6 +992,8 @@ export default function SmartWorkspaceNameField({
       branchesEnabled,
       debouncedQuery,
       disabled,
+      jiraSource.intent,
+      linearUrlIntentOwnsInput,
       mode,
       repoBackedSourcesDisabled,
       selectedRepo?.id,
@@ -860,8 +1009,8 @@ export default function SmartWorkspaceNameField({
       return
     }
     let stale = false
-    setBranches([])
-    setBranchResultsSource(null)
+    // Why: keep prior branch rows until this request settles; visibility already
+    // holds the last list while the user types ahead of the debounced query.
     setBranchesLoading(true)
     void searchRuntimeRepoBaseRefDetails(
       selectedRepoOwnerSettings,
@@ -898,17 +1047,32 @@ export default function SmartWorkspaceNameField({
     if (disabled || !shouldQueryLinear || !linearStatus.connected) {
       setLinearIssues([])
       setLinearLoading(false)
+      setSettledLinearUrlQuery(null)
       return
     }
     let stale = false
     setLinearLoading(true)
-    const trimmed = debouncedQuery.trim()
-    const request = trimmed
-      ? searchLinearIssues(trimmed, RESULT_LIMIT, { sourceContext: linearSourceContext })
-      : listLinearIssues(
-          { kind: 'list', filter: 'assigned', limit: RESULT_LIMIT },
-          { sourceContext: linearSourceContext }
-        ).then((result) => result.items)
+    setSettledLinearUrlQuery(null)
+    const trimmed = linearQuery.trim()
+    // Why: empty-query list must not briefly paint the previous non-empty result set.
+    if (trimmed === '') {
+      setLinearIssues([])
+    }
+    const request = linearUrlIntent
+      ? lookupLinearIssueUrl({
+          intent: linearUrlIntent,
+          knownStatus: linearStatus,
+          sourceContext: linearSourceContext,
+          fetchLinearIssue
+        }).then((issue) => (issue ? [issue] : []))
+      : trimmed
+        ? searchLinearIssues(getSmartWorkspaceLinearSearchQuery(trimmed), RESULT_LIMIT, {
+            sourceContext: linearSourceContext
+          })
+        : listLinearIssues(
+            { kind: 'list', filter: 'assigned', limit: RESULT_LIMIT },
+            { sourceContext: linearSourceContext }
+          ).then((result) => result.items)
     void request
       .then((issues) => {
         if (!stale) {
@@ -923,6 +1087,7 @@ export default function SmartWorkspaceNameField({
       .finally(() => {
         if (!stale) {
           setLinearLoading(false)
+          setSettledLinearUrlQuery(linearUrlIntent ? trimmed : null)
         }
       })
     return () => {
@@ -930,7 +1095,52 @@ export default function SmartWorkspaceNameField({
     }
     // Why: list/search are stable store methods; depending on them would refetch on unrelated store writes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debouncedQuery, disabled, linearSourceContext, linearStatus.connected, shouldQueryLinear])
+  }, [disabled, linearQuery, linearSourceContext, linearStatus, linearUrlIntent, shouldQueryLinear])
+
+  useEffect(() => {
+    if (!shouldQueryJira || !jiraSourceContext || !jiraSearchJql) {
+      setJiraIssues([])
+      setJiraLoading(false)
+      return
+    }
+    let stale = false
+    // Why: a superseded query must release its slot in the shared Jira request pool immediately.
+    const controller = new AbortController()
+    setJiraLoading(true)
+    const siteId =
+      jiraConnectionStatus?.selectedSiteId ?? jiraConnectionStatus?.activeSiteId ?? null
+    void searchJiraIssues(jiraSearchJql, RESULT_LIMIT, {
+      sourceContext: jiraSourceContext,
+      siteId,
+      signal: controller.signal
+    })
+      .then((issues) => {
+        if (!stale) {
+          setJiraIssues(issues)
+        }
+      })
+      .catch(() => {
+        if (!stale) {
+          setJiraIssues([])
+        }
+      })
+      .finally(() => {
+        if (!stale) {
+          setJiraLoading(false)
+        }
+      })
+    return () => {
+      stale = true
+      controller.abort()
+    }
+  }, [
+    jiraConnectionStatus?.activeSiteId,
+    jiraConnectionStatus?.selectedSiteId,
+    jiraSearchJql,
+    jiraSourceContext,
+    searchJiraIssues,
+    shouldQueryJira
+  ])
 
   useEffect(() => {
     if (disabled || !shouldQueryClickUp || !clickUpStatus.connected) {
@@ -975,6 +1185,8 @@ export default function SmartWorkspaceNameField({
   const shouldQueryGitlab =
     sourceQueryWithinLimit &&
     !repoBackedSourcesDisabled &&
+    !jiraSource.intent &&
+    !linearUrlIntentOwnsInput &&
     !textOnly &&
     gitlabSourceAvailable &&
     repoBackedSearchTargets.length > 0 &&
@@ -1055,6 +1267,10 @@ export default function SmartWorkspaceNameField({
     setGitlabLoading(true)
     // Why: thread the typed query so the GitLab API filters MRs by name/number (shouldQueryGitlab already gates oversized queries).
     const trimmedQuery = debouncedQuery.trim() || undefined
+    // Why: empty-query list must not briefly paint the previous non-empty result set.
+    if (trimmedQuery === undefined) {
+      setGitlabItems([])
+    }
     void Promise.all(
       repoBackedSearchTargets.map((target) =>
         listGitLabMRsForSource({
@@ -1103,43 +1319,79 @@ export default function SmartWorkspaceNameField({
     shouldQueryGitlab
   ])
 
-  const rows = useMemo<RowEntry[]>(
-    () =>
-      buildSmartWorkspaceSourceRows({
-        branches: getVisibleBranchResults({
-          branches,
-          mode,
-          resultRepoId: branchResultsSource?.repoId ?? null,
-          resultQuery: branchResultsSource?.query ?? null,
-          selectedRepoId: selectedRepo?.id ?? null,
-          value
-        }),
-        githubItems,
-        gitlabAvailable: gitlabSourceAvailable,
-        gitlabItems,
-        linearAvailable,
-        linearIssues,
-        clickUpAvailable,
-        clickUpTasks,
+  const linearUrlLookupFailed =
+    linearUrlIntentOwnsInput &&
+    settledLinearUrlQuery === linearQuery.trim() &&
+    !linearLoading &&
+    linearIssues.length === 0
+  const rows = useMemo<RowEntry[]>(() => {
+    if (jiraSource.intent && jiraSource.accountChoices.length > 0) {
+      return jiraSource.accountChoices.map((site) => ({
+        kind: 'jira-account' as const,
+        value: `jira-account-${site.id}`,
+        site
+      }))
+    }
+    return buildSmartWorkspaceSourceRows({
+      branches: getVisibleBranchResults({
+        branches,
         mode,
-        resultLimit: RESULT_LIMIT,
+        resultRepoId: branchResultsSource?.repoId ?? null,
+        resultQuery: branchResultsSource?.query ?? null,
+        selectedRepoId: selectedRepo?.id ?? null,
         value
       }),
-    [
-      branches,
-      branchResultsSource,
-      githubItems,
-      gitlabSourceAvailable,
-      gitlabItems,
-      linearAvailable,
-      linearIssues,
-      clickUpAvailable,
-      clickUpTasks,
+      githubItems: getVisibleHeldProviderResults({
+        items: githubItems,
+        value,
+        debouncedQuery
+      }),
+      gitlabAvailable: gitlabSourceAvailable,
+      gitlabItems: getVisibleHeldProviderResults({
+        items: gitlabItems,
+        value,
+        debouncedQuery
+      }),
+      jiraIntent: jiraSource.intent,
+      jiraIssue: jiraSource.issue,
+      jiraIssues: getVisibleHeldProviderResults({
+        items: jiraIssues,
+        value,
+        debouncedQuery
+      }),
+      linearAvailable: linearAvailable && !linearUrlLookupFailed,
+      linearIssues: prioritizeSmartWorkspaceLinearIssueResults(
+        value,
+        getVisibleHeldProviderResults({
+          items: linearIssues,
+          value,
+          debouncedQuery: linearUrlIntentOwnsInput ? value : debouncedQuery
+        })
+      ),
+      linearUrlIntentOwnsResults: true,
       mode,
-      selectedRepo?.id,
+      resultLimit: RESULT_LIMIT,
       value
-    ]
-  )
+    })
+  }, [
+    branches,
+    branchResultsSource,
+    debouncedQuery,
+    githubItems,
+    gitlabSourceAvailable,
+    gitlabItems,
+    jiraSource.accountChoices,
+    jiraSource.intent,
+    jiraSource.issue,
+    jiraIssues,
+    linearAvailable,
+    linearIssues,
+    linearUrlLookupFailed,
+    linearUrlIntentOwnsInput,
+    mode,
+    selectedRepo?.id,
+    value
+  ])
   const { typedTextActionRow, searchResultRows } = useMemo(() => {
     const typedTextRow = rows.find(isTypedTextSourceRow) ?? null
     return {
@@ -1148,15 +1400,16 @@ export default function SmartWorkspaceNameField({
     }
   }, [rows])
 
-  // Why: source rows lag debouncedQuery, so keep Enter off a stale row.
+  // Why: live input leads debounced search; freeze highlight until the query catches up.
   const valueWithinSourceLimit = isSmartWorkspaceSourceQueryWithinLimit(value)
   const debouncedQueryWithinSourceLimit = isSmartWorkspaceSourceQueryWithinLimit(debouncedQuery)
   const trimmedValue = valueWithinSourceLimit ? value.trim() : ''
   const trimmedDebouncedQuery = debouncedQueryWithinSourceLimit ? debouncedQuery.trim() : ''
-  const isQueryStale = trimmedValue.length > 0 && trimmedDebouncedQuery !== trimmedValue
+  const isQueryStale =
+    !linearUrlIntentOwnsInput && trimmedValue.length > 0 && trimmedDebouncedQuery !== trimmedValue
 
   // Why: when the typed value is an unambiguous source ref, snap the highlight to that row so Enter picks it over the typed-text fallback.
-  const sourceIntent = useMemo<'github' | 'gitlab' | 'linear' | 'clickup' | null>(() => {
+  const sourceIntent = useMemo<'github' | 'gitlab' | 'linear' | 'jira' | null>(() => {
     if (!isSmartWorkspaceSourceQueryWithinLimit(value)) {
       return null
     }
@@ -1164,8 +1417,8 @@ export default function SmartWorkspaceNameField({
     if (!trimmed) {
       return null
     }
-    if (mode === 'clickup' && clickUpAvailable) {
-      return 'clickup'
+    if (jiraSource.intent) {
+      return 'jira'
     }
     if (/^#\d+$/.test(trimmed) || parseGitHubIssueOrPRLink(trimmed) !== null) {
       return 'github'
@@ -1173,11 +1426,25 @@ export default function SmartWorkspaceNameField({
     if (parseGitLabIssueOrMRLink(trimmed) !== null) {
       return 'gitlab'
     }
-    if (linearAvailable && /^[A-Za-z][A-Za-z0-9_]*-\d+$/.test(trimmed)) {
-      return 'linear'
+    if (linearAvailable) {
+      const linearIntent = parseBoundedSmartWorkspaceLinearIssueInput(trimmed)
+      if (
+        linearIntent &&
+        rows.some(
+          (row) =>
+            row.kind === 'linear' && isSmartWorkspaceLinearIssueIntentMatch(linearIntent, row.issue)
+        )
+      ) {
+        return 'linear'
+      }
     }
     return null
-  }, [clickUpAvailable, linearAvailable, mode, value])
+  }, [jiraSource.intent, linearAvailable, rows, value])
+  const unresolvedLinearUrlIntent =
+    linearUrlIntentOwnsInput &&
+    linearAvailable &&
+    sourceIntent !== 'linear' &&
+    (linearLoading || settledLinearUrlQuery !== linearQuery.trim())
 
   const resolvedCommandValue = resolveSmartWorkspaceCommandValue({
     currentValue: commandValue,
@@ -1185,13 +1452,65 @@ export default function SmartWorkspaceNameField({
     isQueryStale,
     sourceIntent
   })
+  // Why: while isQueryStale, cmdk onValueChange is ignored; keep the stored arm
+  // aligned too so a stale provider cannot reappear when the query settles.
+  useEffect(() => {
+    if (commandValue === resolvedCommandValue) {
+      return
+    }
+    setCommandValue(resolvedCommandValue)
+  }, [commandValue, resolvedCommandValue])
+  const activeEmojiShortcode = useMemo(
+    () => getActiveWorkspaceEmojiShortcode(value, emojiCursor),
+    [emojiCursor, value]
+  )
+  const emojiSuggestions = useMemo(
+    () =>
+      activeEmojiShortcode
+        ? searchWorkspaceEmojiShortcodes(activeEmojiShortcode.query)
+        : ([] as WorkspaceEmojiSuggestion[]),
+    [activeEmojiShortcode]
+  )
+  const emojiMenuOpen =
+    !disabled &&
+    selectedSource === null &&
+    activeEmojiShortcode !== null &&
+    emojiSuggestions.length > 0
+  const resolvedEmojiCommandValue = emojiSuggestions.some(
+    (suggestion) => `emoji:${suggestion.shortcode}` === emojiCommandValue
+  )
+    ? emojiCommandValue
+    : emojiSuggestions[0]
+      ? `emoji:${emojiSuggestions[0].shortcode}`
+      : ''
+  const selectedEmojiSuggestion =
+    emojiSuggestions.find(
+      (suggestion) => `emoji:${suggestion.shortcode}` === resolvedEmojiCommandValue
+    ) ?? null
 
-  const loading =
-    githubLoading || gitlabLoading || branchesLoading || linearLoading || clickUpLoading
-  const ActiveInputIcon = mode === 'text' ? CaseSensitive : loading ? LoaderCircle : Search
+  const showLinearUrlLoadingFeedback =
+    linearLoading && linearUrlIntentOwnsInput && linearUrlLoadingFeedbackQuery === linearQuery
+  const visibleLinearLoading =
+    linearLoading && (!linearUrlIntentOwnsInput || showLinearUrlLoadingFeedback)
+  const loading = jiraSource.intent
+    ? jiraSource.loading
+    : githubLoading || gitlabLoading || branchesLoading || visibleLinearLoading || jiraLoading
+  const reserveLinearLoadingResults = unresolvedLinearUrlIntent && searchResultRows.length === 0
+  // Why: only spin on first load — not on every in-flight refresh while rows stay visible.
+  const showSearchSpinner = loading && searchResultRows.length === 0
+  const ActiveInputIcon =
+    mode === 'text' ? CaseSensitive : showSearchSpinner ? LoaderCircle : Search
+  const selectJiraAccount = jiraSource.selectAccount
+  const jiraBoundSourceContext = jiraSource.boundSourceContext
 
   const handleSelect = useCallback(
     (row: RowEntry) => {
+      if (row.kind === 'jira-account') {
+        selectJiraAccount(row.site.id)
+        return
+      }
+      // Why: select what is shown — held provider rows stay visible while the
+      // query is ahead of debounce, so blocking them made click/Enter no-ops.
       if (row.kind === 'use-name' || row.kind === 'create-branch') {
         // Why: "create new branch" has no ref to base from, so it uses the typed-name path (default base).
         onValueChange(row.name)
@@ -1202,7 +1521,28 @@ export default function SmartWorkspaceNameField({
         onGitLabItemSelect?.(row.item)
       } else if (row.kind === 'branch') {
         onBranchSelect(row.refName, row.localBranchName)
-      } else if (row.kind === 'linear') {
+      } else if (row.kind === 'jira') {
+        const sites = jiraConnectionStatus?.sites ?? []
+        const site =
+          sites.find((candidate) => candidate.id === row.issue.siteId) ??
+          (sites.length === 1 ? sites[0] : null)
+        const sourceContext =
+          jiraBoundSourceContext ??
+          (jiraSourceContext && site
+            ? bindJiraIssueSourceContext(jiraSourceContext, site, row.issue)
+            : null)
+        if (!sourceContext) {
+          // Why: closing without accept left users thinking the issue was linked.
+          toast.error(
+            translate(
+              'auto.components.new.workspace.SmartWorkspaceNameField.jiraSelectBindFailed',
+              'Couldn’t link this Jira issue. Pick the matching site or reconnect Jira, then try again.'
+            )
+          )
+          return
+        }
+        onJiraIssueSelect?.(row.issue, sourceContext)
+      } else {
         onLinearIssueSelect(row.issue)
       } else {
         onClickUpTaskSelect?.(row.task)
@@ -1210,13 +1550,47 @@ export default function SmartWorkspaceNameField({
       setOpen(false)
     },
     [
+      jiraBoundSourceContext,
+      jiraConnectionStatus?.sites,
+      jiraSourceContext,
       onBranchSelect,
-      onClickUpTaskSelect,
       onGitHubItemSelect,
       onGitLabItemSelect,
+      onJiraIssueSelect,
       onLinearIssueSelect,
-      onValueChange
+      onValueChange,
+      selectJiraAccount
     ]
+  )
+
+  const openSelectedSource = useCallback((): void => {
+    if (selectedSource?.url) {
+      void window.api.shell.openUrl(selectedSource.url)
+    }
+  }, [selectedSource?.url])
+
+  const applyEmojiReplacement = useCallback(
+    (replacement: WorkspaceEmojiReplacement): void => {
+      onValueChange(replacement.value)
+      setEmojiCursor(null)
+      cancelLocalInputFocusFrame()
+      localInputFocusFrameRef.current = requestAnimationFrame(() => {
+        localInputFocusFrameRef.current = null
+        localInputRef.current?.focus({ preventScroll: true })
+        localInputRef.current?.setSelectionRange(replacement.cursor, replacement.cursor)
+      })
+    },
+    [cancelLocalInputFocusFrame, onValueChange]
+  )
+
+  const handleEmojiSelect = useCallback(
+    (suggestion: WorkspaceEmojiSuggestion): void => {
+      if (!activeEmojiShortcode) {
+        return
+      }
+      applyEmojiReplacement(applyWorkspaceEmojiSuggestion(value, activeEmojiShortcode, suggestion))
+    },
+    [activeEmojiShortcode, applyEmojiReplacement, value]
   )
 
   const acceptGitHubLink = useCallback(
@@ -1238,6 +1612,7 @@ export default function SmartWorkspaceNameField({
           sourceContext,
           owner: crossRepoPrompt.link.slug.owner,
           repo: crossRepoPrompt.link.slug.repo,
+          ...(crossRepoPrompt.link.slug.host ? { host: crossRepoPrompt.link.slug.host } : {}),
           number: crossRepoPrompt.link.number,
           type: crossRepoPrompt.link.type
         })
@@ -1271,8 +1646,12 @@ export default function SmartWorkspaceNameField({
     if (!added) {
       return
     }
-    repoSlugCacheRef.current.delete(added.id)
-    const slug = await getRepoSlugCached(added, repoSlugCacheRef.current)
+    const sourceContext = buildTaskSourceContextFromRepo({
+      provider: 'github',
+      projectId: added.id,
+      repo: added
+    })
+    const slug = await getRepoSlugCached(added, sourceContext, repoSlugCacheRef.current)
     if (slug && sameSlug(slug, crossRepoPrompt.link.slug)) {
       await acceptGitHubLink(added)
     }
@@ -1287,7 +1666,7 @@ export default function SmartWorkspaceNameField({
     ? linearAvailable
       ? translate(
           'auto.components.new.workspace.SmartWorkspaceNameField.placeholderNameOrLinearUrl',
-          'Type a name or Linear URL'
+          'Type a name, Linear URL, or Jira URL'
         )
       : translate(
           'auto.components.new.workspace.SmartWorkspaceNameField.placeholderWorkspaceName',
@@ -1297,20 +1676,20 @@ export default function SmartWorkspaceNameField({
       ? branchesEnabled
         ? translate(
             'auto.components.new.workspace.SmartWorkspaceNameField.placeholderSmartWithBranchGitLabLinear',
-            'Type a name, #1234, branch, GitHub/GitLab or Linear URL'
+            'Type a name, #1234, branch, GitHub/GitLab, Linear, or Jira URL'
           )
         : translate(
             'auto.components.new.workspace.SmartWorkspaceNameField.placeholderSmartGitLabLinear',
-            'Type a name, #1234, GitHub/GitLab or Linear URL'
+            'Type a name, #1234, GitHub/GitLab, Linear, or Jira URL'
           )
       : branchesEnabled
         ? translate(
             'auto.components.new.workspace.SmartWorkspaceNameField.placeholderSmartWithBranchGitLab',
-            'Type a name, #1234, branch, GitHub or GitLab URL'
+            'Type a name, #1234, branch, GitHub, GitLab, or Jira URL'
           )
         : translate(
             'auto.components.new.workspace.SmartWorkspaceNameField.placeholderSmartGitLab',
-            'Type a name, #1234, GitHub or GitLab URL'
+            'Type a name, #1234, GitHub, GitLab, or Jira URL'
           )
   const crossRepoSwitchIsTaskSource = crossRepoSwitchTarget === 'task-source'
   const crossRepoSwitchTitle = crossRepoSwitchIsTaskSource
@@ -1366,10 +1745,10 @@ export default function SmartWorkspaceNameField({
                   'auto.components.new.workspace.SmartWorkspaceNameField.searchLinear',
                   'Search Linear issues'
                 )
-              : mode === 'clickup'
+              : mode === 'jira'
                 ? translate(
-                    'auto.components.new.workspace.SmartWorkspaceNameField.searchClickUp',
-                    'Search ClickUp tasks'
+                    'auto.components.new.workspace.SmartWorkspaceNameField.searchJira',
+                    'Search Jira issues or paste an issue URL'
                   )
                 : translate(
                     'auto.components.new.workspace.SmartWorkspaceNameField.workspaceName',
@@ -1403,7 +1782,7 @@ export default function SmartWorkspaceNameField({
             <TabsList
               ref={tabsListRef}
               variant="line"
-              className="h-7 w-full justify-start gap-4 px-0"
+              className="h-7 w-full justify-start gap-4 overflow-x-auto overflow-y-hidden px-0 scrollbar-sleek"
               onFocusCapture={(event) => {
                 // Why: Radix Tabs roving focus re-applies tabindex=0 to the active trigger (races React commits), so forward Tab to the input.
                 const previous = event.relatedTarget as HTMLElement | null
@@ -1442,7 +1821,14 @@ export default function SmartWorkspaceNameField({
       >
         <Command
           value={resolvedCommandValue}
-          onValueChange={setCommandValue}
+          onValueChange={(next) => {
+            // Why: cmdk re-emits when the item list reshapes; ignore while the query
+            // lags so the highlight cannot thrash mid-typing.
+            if (isQueryStale) {
+              return
+            }
+            setCommandValue(next)
+          }}
           shouldFilter={false}
           className="overflow-visible bg-transparent"
         >
@@ -1454,9 +1840,42 @@ export default function SmartWorkspaceNameField({
                   ref={setSelectedSourceNode}
                   data-workspace-source-pill="true"
                   tabIndex={0}
+                  aria-keyshortcuts={
+                    selectedSource.url ? 'Alt+Enter Backspace Delete' : 'Backspace Delete'
+                  }
                   onKeyDown={(event) => {
+                    if (event.currentTarget !== event.target) {
+                      return
+                    }
                     if (
-                      event.currentTarget !== event.target ||
+                      (event.key === 'Backspace' || event.key === 'Delete') &&
+                      !event.metaKey &&
+                      !event.ctrlKey &&
+                      !event.shiftKey &&
+                      !event.altKey
+                    ) {
+                      event.preventDefault()
+                      onClearSelectedSource()
+                      cancelLocalInputFocusFrame()
+                      localInputFocusFrameRef.current = requestAnimationFrame(() => {
+                        localInputFocusFrameRef.current = null
+                        localInputRef.current?.focus({ preventScroll: true })
+                      })
+                      return
+                    }
+                    if (
+                      event.key === 'Enter' &&
+                      event.altKey &&
+                      !event.metaKey &&
+                      !event.ctrlKey &&
+                      !event.shiftKey &&
+                      selectedSource.url
+                    ) {
+                      event.preventDefault()
+                      openSelectedSource()
+                      return
+                    }
+                    if (
                       event.key !== 'Enter' ||
                       event.metaKey ||
                       event.ctrlKey ||
@@ -1468,7 +1887,7 @@ export default function SmartWorkspaceNameField({
                     event.preventDefault()
                     onPlainEnter?.()
                   }}
-                  className="flex h-9 w-full min-w-0 items-center gap-2 rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs outline-none focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50"
+                  className="flex h-9 w-full min-w-0 items-center gap-2 rounded-md border border-input bg-background px-2.5 text-sm shadow-xs outline-none focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30"
                 >
                   <SelectionIcon kind={selectedSource.kind} />
                   <span className="min-w-0 flex-1 truncate font-medium leading-none text-foreground">
@@ -1481,7 +1900,8 @@ export default function SmartWorkspaceNameField({
                           type="button"
                           variant="ghost"
                           size="icon-xs"
-                          onClick={() => void window.api.shell.openUrl(selectedSource.url!)}
+                          tabIndex={-1}
+                          onClick={openSelectedSource}
                           className="size-6 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
                           aria-label={translate(
                             'auto.components.new.workspace.SmartWorkspaceNameField.2c69728c2a',
@@ -1505,6 +1925,7 @@ export default function SmartWorkspaceNameField({
                         type="button"
                         variant="ghost"
                         size="icon-xs"
+                        tabIndex={-1}
                         onClick={onClearSelectedSource}
                         className="size-6 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
                         aria-label={translate(
@@ -1528,7 +1949,7 @@ export default function SmartWorkspaceNameField({
                   <ActiveInputIcon
                     className={cn(
                       'pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground',
-                      loading && mode !== 'text' && 'animate-spin'
+                      showSearchSpinner && mode !== 'text' && 'animate-spin'
                     )}
                   />
                   <Input
@@ -1541,8 +1962,37 @@ export default function SmartWorkspaceNameField({
                         setOpen(true)
                       }
                     }}
+                    onClick={(event) => setEmojiCursor(event.currentTarget.selectionStart)}
                     onChange={(event) => {
-                      onValueChange(event.target.value)
+                      const nextValue = event.target.value
+                      const nextCursor = event.target.selectionStart
+                      const completedEmoji = replaceCompletedWorkspaceEmojiShortcode(
+                        nextValue,
+                        nextCursor
+                      )
+                      if (completedEmoji) {
+                        applyEmojiReplacement(completedEmoji)
+                        return
+                      }
+                      onValueChange(nextValue)
+                      setEmojiCursor(nextCursor)
+                      if (!disabled && mode !== 'text') {
+                        markSourcePopoverUserEngaged()
+                        setOpen(true)
+                      }
+                    }}
+                    onPaste={(event) => {
+                      // Why: a pasted issue URL is the whole intent — don't splice it into a name.
+                      const pasted = event.clipboardData.getData('text')
+                      if (
+                        !pasted ||
+                        (!isBlockingJiraUrlIntent(mode, pasted) &&
+                          !isBlockingLinearUrlIntent(mode, pasted))
+                      ) {
+                        return
+                      }
+                      event.preventDefault()
+                      onValueChange(pasted)
                       if (!disabled && mode !== 'text') {
                         markSourcePopoverUserEngaged()
                         setOpen(true)
@@ -1551,8 +2001,10 @@ export default function SmartWorkspaceNameField({
                     onFocus={(event) => {
                       // Why: only open on focus from another composer control (Tab); dialog autofocus from outside stays suppressed.
                       if (!isComposerFieldToFieldFocus(event)) {
+                        setEmojiCursor(event.currentTarget.selectionStart)
                         return
                       }
+                      setEmojiCursor(event.currentTarget.selectionStart)
                       markSourcePopoverUserEngaged()
                       tryOpenSourcePopover()
                     }}
@@ -1566,6 +2018,20 @@ export default function SmartWorkspaceNameField({
                           activeTrigger.focus()
                           return
                         }
+                      }
+                      if (emojiMenuOpen && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        const selectedIndex = emojiSuggestions.findIndex(
+                          (suggestion) =>
+                            `emoji:${suggestion.shortcode}` === resolvedEmojiCommandValue
+                        )
+                        const direction = event.key === 'ArrowDown' ? 1 : -1
+                        const nextIndex =
+                          (selectedIndex + direction + emojiSuggestions.length) %
+                          emojiSuggestions.length
+                        setEmojiCommandValue(`emoji:${emojiSuggestions[nextIndex].shortcode}`)
+                        return
                       }
                       if (
                         event.key === 'Enter' &&
@@ -1581,6 +2047,16 @@ export default function SmartWorkspaceNameField({
                         if (isImeCompositionKeyDown(event)) {
                           return
                         }
+                        if (emojiMenuOpen && selectedEmojiSuggestion) {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          handleEmojiSelect(selectedEmojiSuggestion)
+                          return
+                        }
+                        if (unresolvedLinearUrlIntent) {
+                          event.preventDefault()
+                          return
+                        }
                         if (open && rows.length > 0) {
                           const row = rows.find((entry) => entry.value === resolvedCommandValue)
                           if (row) {
@@ -1588,9 +2064,29 @@ export default function SmartWorkspaceNameField({
                             handleSelect(row)
                             return
                           }
-                          // No highlighted row (e.g. cleared stale GitHub/Linear results); fall through to onPlainEnter so the keypress isn't inert.
+                          // No highlighted row; fall through to onPlainEnter so the keypress isn't inert.
+                        }
+                        if (mode === 'jira' || jiraSource.intent) {
+                          event.preventDefault()
+                          return
                         }
                         onPlainEnter?.()
+                      }
+                      if (
+                        event.key === 'Tab' &&
+                        !event.shiftKey &&
+                        emojiMenuOpen &&
+                        selectedEmojiSuggestion
+                      ) {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        handleEmojiSelect(selectedEmojiSuggestion)
+                        return
+                      }
+                      if (event.key === 'Escape' && emojiMenuOpen) {
+                        event.stopPropagation()
+                        setEmojiCursor(null)
+                        return
                       }
                       if (event.key === 'Escape' && open) {
                         event.stopPropagation()
@@ -1599,15 +2095,30 @@ export default function SmartWorkspaceNameField({
                     }}
                     placeholder={placeholder}
                     disabled={disabled}
-                    className="h-9 pl-8 text-sm"
+                    aria-busy={
+                      (jiraSource.intent && jiraSource.loading) || unresolvedLinearUrlIntent
+                    }
+                    aria-describedby={
+                      jiraSource.intent
+                        ? jiraStatusId
+                        : unresolvedLinearUrlIntent
+                          ? linearStatusId
+                          : undefined
+                    }
+                    // Why: match the project/run-on comboboxes' solid `bg-background` — the input's
+                    // default transparent fill made it read a different color on light mode.
+                    className="h-9 bg-background pl-8 text-sm"
                   />
                 </>
               )}
             </div>
           </PopoverAnchor>
           <PopoverContent
+            data-workspace-source-suggestions="true"
             align="start"
+            side="bottom"
             sideOffset={4}
+            avoidCollisions={false}
             className="popover-scroll-content flex w-[var(--radix-popover-trigger-width)] flex-col p-0"
             // Why: capped height so the result list can't cover the create-workspace dialog's submit footer while typing.
             style={{ maxHeight: 'min(var(--radix-popover-content-available-height,7rem),7rem)' }}
@@ -1669,23 +2180,35 @@ export default function SmartWorkspaceNameField({
                   </CommandItem>
                 </div>
               ) : null}
-              {loading && searchResultRows.length === 0 ? (
-                <div className="space-y-1 p-1">
+              {jiraSource.errorKind ? null : reserveLinearLoadingResults ? (
+                <div
+                  aria-hidden="true"
+                  className={cn('space-y-1 p-1', !showLinearUrlLoadingFeedback && 'invisible')}
+                >
+                  {[0, 1, 2].map((index) => (
+                    <div
+                      key={index}
+                      className={cn(
+                        'h-8 rounded bg-muted/40',
+                        showLinearUrlLoadingFeedback && 'animate-pulse'
+                      )}
+                    />
+                  ))}
+                </div>
+              ) : showSearchSpinner ? (
+                <div aria-hidden="true" className="space-y-1 p-1">
                   {[0, 1, 2].map((index) => (
                     <div key={index} className="h-8 animate-pulse rounded bg-muted/40" />
                   ))}
                 </div>
               ) : searchResultRows.length === 0 && !typedTextActionRow ? (
                 <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-                  {mode === 'linear' && linearStatusChecked && !linearStatus.connected
-                    ? translate(
-                        'auto.components.new.workspace.SmartWorkspaceNameField.3e8bb1176a',
-                        'Connect Linear in Settings to search issues.'
-                      )
-                    : mode === 'clickup' && clickUpStatusChecked && !clickUpStatus.connected
+                  {jiraSource.intent
+                    ? null
+                    : mode === 'linear' && linearStatusChecked && !linearStatus.connected
                       ? translate(
-                          'auto.components.new.workspace.SmartWorkspaceNameField.connectClickUp',
-                          'Connect ClickUp in Settings to search tasks.'
+                          'auto.components.new.workspace.SmartWorkspaceNameField.3e8bb1176a',
+                          'Connect Linear in Settings to search issues.'
                         )
                       : getSmartWorkspaceEmptyHint(mode)}
                 </div>
@@ -1699,7 +2222,17 @@ export default function SmartWorkspaceNameField({
                       className={getRowItemClassName(row)}
                     >
                       <RowIcon row={row} />
-                      <RowLabel row={row} />
+                      <RowLabel
+                        row={row}
+                        jiraSite={
+                          showJiraSiteContext && row.kind === 'jira'
+                            ? (jiraConnectionStatus?.sites?.find(
+                                (site) => site.id === row.issue.siteId
+                              ) ?? null)
+                            : null
+                        }
+                        showJiraSiteContext={showJiraSiteContext}
+                      />
                     </CommandItem>
                   ))}
                 </CommandGroup>
@@ -1708,14 +2241,67 @@ export default function SmartWorkspaceNameField({
           </PopoverContent>
         </Command>
       </Popover>
+      {jiraSource.intent ? (
+        <div
+          id={jiraStatusId}
+          role="status"
+          aria-live="polite"
+          className={cn(
+            'flex items-center justify-between gap-2 px-1 text-xs text-muted-foreground',
+            !jiraSource.loading &&
+              !jiraSource.errorKind &&
+              jiraSource.accountChoices.length === 0 &&
+              'sr-only'
+          )}
+        >
+          <span>{getJiraSourceStatusMessage(jiraSource)}</span>
+          {jiraSource.errorKind === 'disconnected' && onOpenJiraSettings ? (
+            <Button type="button" variant="link" size="xs" onClick={onOpenJiraSettings}>
+              {translate(
+                'auto.components.new.workspace.SmartWorkspaceNameField.openSettings',
+                'Settings'
+              )}
+            </Button>
+          ) : jiraSource.errorKind === 'read-failed' ? (
+            <Button type="button" variant="link" size="xs" onClick={jiraSource.retry}>
+              {translate(
+                'auto.components.new.workspace.SmartWorkspaceNameField.retryJira',
+                'Retry'
+              )}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+      {unresolvedLinearUrlIntent ? (
+        <div id={linearStatusId} role="status" aria-live="polite" className="sr-only">
+          {translate(
+            'auto.components.new.workspace.SmartWorkspaceNameField.loadingLinearIssue',
+            'Loading Linear issue…'
+          )}
+        </div>
+      ) : null}
+      <WorkspaceEmojiSuggestionPopover
+        anchorRef={localInputRef}
+        open={emojiMenuOpen}
+        commandValue={resolvedEmojiCommandValue}
+        heading={translate('auto.components.new.workspace.SmartWorkspaceNameField.emoji', 'Emoji')}
+        suggestions={emojiSuggestions}
+        onCommandValueChange={setEmojiCommandValue}
+        onSelect={handleEmojiSelect}
+        onOpenChange={(next) => {
+          if (!next) {
+            setEmojiCursor(null)
+          }
+        }}
+      />
       <Dialog
         open={crossRepoPrompt !== null}
         onOpenChange={(next) => !next && dismissCrossRepoPrompt()}
       >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
+        <DialogContent className="min-w-0 sm:max-w-md">
+          <DialogHeader className="min-w-0">
             <DialogTitle>{crossRepoSwitchTitle}</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="break-words">
               {translate(
                 'auto.components.new.workspace.SmartWorkspaceNameField.ad188067ae',
                 'The GitHub URL points to'
@@ -1724,27 +2310,38 @@ export default function SmartWorkspaceNameField({
               {crossRepoSwitchDescriptionSuffix}
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
+          <DialogFooter className="min-w-0 sm:flex-wrap">
             <Button variant="outline" onClick={dismissCrossRepoPrompt}>
               {translate(
                 'auto.components.new.workspace.SmartWorkspaceNameField.6859e2896c',
                 'Cancel'
               )}
             </Button>
-            <Button variant="outline" onClick={() => void handleUseCurrentRepo()}>
-              {translate(
-                'auto.components.new.workspace.SmartWorkspaceNameField.eadf877af5',
-                'Keep'
-              )}{' '}
-              {selectedRepo?.displayName ?? crossRepoSwitchFallbackLabel}
+            <Button
+              variant="outline"
+              className="min-w-0 max-w-full"
+              onClick={() => void handleUseCurrentRepo()}
+            >
+              <span className="min-w-0 truncate">
+                {translate(
+                  'auto.components.new.workspace.SmartWorkspaceNameField.eadf877af5',
+                  'Keep'
+                )}{' '}
+                {selectedRepo?.displayName ?? crossRepoSwitchFallbackLabel}
+              </span>
             </Button>
             {crossRepoPrompt?.matchingRepo ? (
-              <Button onClick={() => void acceptGitHubLink(crossRepoPrompt.matchingRepo!)}>
-                {translate(
-                  'auto.components.new.workspace.SmartWorkspaceNameField.a76fcb4fa0',
-                  'Switch to'
-                )}{' '}
-                {crossRepoPrompt.matchingRepo.displayName}
+              <Button
+                className="min-w-0 max-w-full"
+                onClick={() => void acceptGitHubLink(crossRepoPrompt.matchingRepo!)}
+              >
+                <span className="min-w-0 truncate">
+                  {translate(
+                    'auto.components.new.workspace.SmartWorkspaceNameField.a76fcb4fa0',
+                    'Switch to'
+                  )}{' '}
+                  {crossRepoPrompt.matchingRepo.displayName}
+                </span>
               </Button>
             ) : allowCrossRepoProjectAdd ? (
               <Button onClick={() => void handleAddMatchingRepo()}>
@@ -1786,8 +2383,8 @@ function RowIcon({ row }: { row: RowEntry }): React.JSX.Element {
   if (row.kind === 'branch') {
     return <GitBranch className="size-3.5 shrink-0 text-muted-foreground" />
   }
-  if (row.kind === 'clickup') {
-    return <ClickUpIcon className="size-3.5 shrink-0 text-muted-foreground" />
+  if (row.kind === 'jira' || row.kind === 'jira-account') {
+    return <JiraIcon className="size-3.5 shrink-0 text-muted-foreground" />
   }
   return <LinearIcon className="size-3.5 shrink-0 text-muted-foreground" />
 }
@@ -1815,7 +2412,15 @@ function SelectionIcon({ kind }: { kind: SmartWorkspaceNameSelection['kind'] }):
   return <LinearIcon className="size-3.5 shrink-0 text-muted-foreground" />
 }
 
-function RowLabel({ row }: { row: RowEntry }): React.JSX.Element {
+function RowLabel({
+  row,
+  jiraSite = null,
+  showJiraSiteContext = false
+}: {
+  row: RowEntry
+  jiraSite?: JiraSite | null
+  showJiraSiteContext?: boolean
+}): React.JSX.Element {
   if (row.kind === 'use-name') {
     return (
       <span className="min-w-0 truncate">
@@ -1866,11 +2471,24 @@ function RowLabel({ row }: { row: RowEntry }): React.JSX.Element {
   if (row.kind === 'branch') {
     return <span className="min-w-0 truncate font-mono text-[11px]">{row.refName}</span>
   }
-  if (row.kind === 'clickup') {
+  if (row.kind === 'jira') {
+    const siteLabel = jiraSite
+      ? `${jiraSite.displayName} — ${jiraSite.email || jiraSite.siteUrl}`
+      : row.issue.siteName
     return (
       <span className="min-w-0 truncate">
-        <span className="font-medium text-foreground">{row.task.customId ?? row.task.id}</span>{' '}
-        {row.task.name}
+        <span className="font-medium text-foreground">{row.issue.key}</span> {row.issue.title}
+        {showJiraSiteContext && siteLabel ? (
+          <span className="text-muted-foreground"> — {siteLabel}</span>
+        ) : null}
+      </span>
+    )
+  }
+  if (row.kind === 'jira-account') {
+    return (
+      <span className="min-w-0 truncate">
+        <span className="font-medium text-foreground">{row.site.displayName}</span>
+        {row.site.email ? ` — ${row.site.email}` : ''}
       </span>
     )
   }
@@ -1882,39 +2500,54 @@ function RowLabel({ row }: { row: RowEntry }): React.JSX.Element {
 }
 
 function sameSlug(left: RepoSlug, right: RepoSlug): boolean {
-  return (
-    left.owner.toLowerCase() === right.owner.toLowerCase() &&
-    left.repo.toLowerCase() === right.repo.toLowerCase()
-  )
+  return githubRepoIdentityKey(left) === githubRepoIdentityKey(right)
 }
 
-async function getRepoSlugCached(
-  repo: RepoOption,
-  cache: Map<string, RepoSlug | null>
+export async function getRepoSlugCached(
+  repo: Pick<RepoOption, 'id' | 'path'>,
+  sourceContext: TaskSourceContext | null | undefined,
+  cache: Map<string, RepoSlug>
 ): Promise<RepoSlug | null> {
-  const cacheKey = repo.id
+  const cacheKey = sourceContext
+    ? `${getTaskSourceCacheScope(sourceContext)}\0${repo.path}`
+    : `local:${repo.id}\0${repo.path}`
   if (cache.has(cacheKey)) {
     return cache.get(cacheKey) ?? null
   }
   try {
-    const slug = await window.api.gh.repoSlug({ repoPath: repo.path, repoId: repo.id })
-    cache.set(cacheKey, slug)
+    const target = getGitHubSourceRuntimeTarget(sourceContext)
+    const slug =
+      target.kind === 'environment'
+        ? await callRuntimeRpc<RepoSlug | null>(
+            target,
+            'github.repoSlug',
+            { repo: getGitHubRuntimeRepoId(sourceContext, repo.id) },
+            { timeoutMs: 30_000 }
+          )
+        : await window.api.gh.repoSlug({ repoPath: repo.path, repoId: repo.id })
+    if (slug) {
+      cache.set(cacheKey, slug)
+    }
     return slug
   } catch {
-    cache.set(cacheKey, null)
     return null
   }
 }
 
+type RepoSlugTarget = {
+  repo: RepoOption
+  sourceContext: TaskSourceContext | null | undefined
+}
+
 async function findMatchingRepoForSlug(
-  repos: RepoOption[],
+  targets: RepoSlugTarget[],
   slug: RepoSlug,
-  cache: Map<string, RepoSlug | null>
-): Promise<RepoOption | null> {
-  for (const repo of repos) {
-    const candidate = await getRepoSlugCached(repo, cache)
+  cache: Map<string, RepoSlug>
+): Promise<RepoSlugTarget | null> {
+  for (const target of targets) {
+    const candidate = await getRepoSlugCached(target.repo, target.sourceContext, cache)
     if (candidate && sameSlug(candidate, slug)) {
-      return repo
+      return target
     }
   }
   return null

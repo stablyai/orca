@@ -16,6 +16,7 @@ vi.mock('os', async () => {
 })
 
 import { CursorHookService } from './hook-service'
+import { POSIX_HOOK_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
 
 const CURSOR_EVENTS = [
   'beforeSubmitPrompt',
@@ -30,7 +31,7 @@ const CURSOR_EVENTS = [
 
 const CURSOR_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'cursor-hook.cmd' : 'cursor-hook.sh'
 const WINDOWS_POWERSHELL_LAUNCHER =
-  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand \S+$/
 
 describe('CursorHookService', () => {
   let homeDir: string
@@ -79,7 +80,7 @@ describe('CursorHookService', () => {
     } else {
       // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
       // on the curl command line (EDR oversized-command-line false positive).
-      expect(script).toContain('payload=$(cat)')
+      expect(script).toContain(`payload=$(${POSIX_HOOK_STDIN_READER})`)
       expect(script).toContain('printf \'%s\' "$payload" | curl')
       expect(script).toContain('--data-urlencode "payload@-"')
       expect(script).not.toContain('--data-urlencode "payload=${payload}"')

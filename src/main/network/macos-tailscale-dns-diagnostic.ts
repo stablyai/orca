@@ -19,7 +19,7 @@ const NETWORK_LOOKUP_FAILURE_RE =
 
 function globalDnsSection(scutilOutput: string): string {
   const scopedStart = scutilOutput.indexOf('\nDNS configuration (for scoped queries)')
-  return scopedStart >= 0 ? scutilOutput.slice(0, scopedStart) : scutilOutput
+  return scopedStart !== -1 ? scutilOutput.slice(0, scopedStart) : scutilOutput
 }
 
 export function parseMacTailscaleDnsDiagnostic(scutilOutput: string): DnsDiagnostic | null {

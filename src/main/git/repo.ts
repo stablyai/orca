@@ -2,7 +2,7 @@
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { gitExecFileSync, gitExecFileAsync } from './runner'
-import type { BaseRefSearchResult } from '../../shared/types'
+import type { BaseRefSearchResult } from '../../shared/repo-types'
 import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
 import { normalizeRuntimePathSeparators } from '../../shared/cross-platform-path'
 import { isForEachRefExcludeUnsupportedError } from '../../shared/git-ref-command-capabilities'
@@ -153,6 +153,52 @@ export function getGitRepoRoot(path: string): string {
     return normalizeGitRepoRootForInputPath(path, markerScan.rootPath)
   }
   return path
+}
+
+function canonicalizeGitDirPath(path: string): string {
+  return resolveRealPathSync(path) ?? path
+}
+
+/**
+ * Main-checkout path when `path` is a *linked* worktree, else null (main worktree, bare repo,
+ * non-repo, or any git failure). A linked worktree's `--git-dir` is `<common>/worktrees/<name>`
+ * while the main worktree's equals `--git-common-dir`; comparing the two from one invocation is
+ * git's own canonical test and avoids symlink-canonicalization mismatches. Baseline-safe: both
+ * flags long predate Git 2.25, and a relative answer resolves against `path` as old Git reports it.
+ */
+export function getLinkedWorktreeMainRepoRoot(path: string): string | null {
+  try {
+    if (!existsSync(path) || !statSync(path).isDirectory()) {
+      return null
+    }
+    if (gitExecFileSync(['rev-parse', '--is-inside-work-tree'], { cwd: path }).trim() !== 'true') {
+      return null
+    }
+    const [gitDir, commonDir] = gitExecFileSync(['rev-parse', '--git-dir', '--git-common-dir'], {
+      cwd: path
+    })
+      .split('\n')
+      .map((line) => line.trim())
+    if (!gitDir || !commonDir) {
+      return null
+    }
+    // Why realpath both: git answers one flag absolutely (already symlink-resolved) and the other
+    // relative to cwd, so a repo under a symlinked root (macOS /var -> /private/var) compares
+    // unequal on raw strings and a main checkout gets misread as a linked worktree.
+    const absoluteCommonDir = canonicalizeGitDirPath(resolve(path, commonDir))
+    if (canonicalizeGitDirPath(resolve(path, gitDir)) === absoluteCommonDir) {
+      return null
+    }
+    // A bare/separate git dir has no adjacent working checkout to point at.
+    if (basename(absoluteCommonDir) !== '.git') {
+      return null
+    }
+    // Re-resolve through getGitRepoRoot so the returned path matches the canonical form
+    // add-project stores for the main checkout (symlinks resolved the way git reports them).
+    return getGitRepoRoot(dirname(absoluteCommonDir))
+  } catch {
+    return null
+  }
 }
 
 export function normalizeGitRepoRootForInputPath(inputPath: string, rootPath: string): string {
@@ -489,17 +535,21 @@ export async function getBaseRefDefault(
 /**
  * Return { ahead, behind } (merge-base-symmetric delta) for localRef vs remoteRef, or null on failure.
  * ahead = commits on localRef not in remoteRef; behind = the reverse. Used by the stale-base dispatch guard (§3.1).
+ * Async because this runs before every orchestration dispatch on Electron main.
  */
-export function getRemoteDrift(
+export async function getRemoteDrift(
   repoPath: string,
   localRef: string,
   remoteRef: string,
   options: LocalGitExecOptions = {}
-): { ahead: number; behind: number } | null {
+): Promise<{ ahead: number; behind: number } | null> {
   try {
-    const stdout = gitExecFileSync(
+    const { stdout } = await gitExecFileAsync(
       ['rev-list', '--left-right', '--count', `${localRef}...${remoteRef}`],
-      gitExecOptions(repoPath, options)
+      {
+        ...gitExecOptions(repoPath, options),
+        timeout: DEFAULT_BASE_REF_PROBE_TIMEOUT_MS
+      }
     )
     const counts = parseGitRevListAheadBehindCounts(stdout)
     if (counts.status !== 'ok') {
@@ -515,17 +565,20 @@ export function getRemoteDrift(
  * Up to `limit` commit subjects on remoteRef but not localRef, recency order; [] on git failure.
  * Powers the preamble drift section (§3.2) so a worker sees whether stale-base drift touches its area.
  */
-export function getRecentDriftSubjects(
+export async function getRecentDriftSubjects(
   repoPath: string,
   localRef: string,
   remoteRef: string,
   limit: number,
   options: LocalGitExecOptions = {}
-): string[] {
+): Promise<string[]> {
   try {
-    const stdout = gitExecFileSync(
+    const { stdout } = await gitExecFileAsync(
       ['log', '--format=%s', '-n', String(limit), `${localRef}..${remoteRef}`],
-      gitExecOptions(repoPath, options)
+      {
+        ...gitExecOptions(repoPath, options),
+        timeout: DEFAULT_BASE_REF_PROBE_TIMEOUT_MS
+      }
     )
     return stdout.split('\n').filter((s) => s.trim().length > 0)
   } catch {
@@ -865,14 +918,6 @@ async function listRemoteNames(path: string, options: LocalGitExecOptions = {}):
   }
 }
 
-/**
- * Parse `git for-each-ref --format=%(refname)%00%(refname:short)` stdout into a deduped list of short
- * refs, dropping `<remote>/HEAD` pseudo-refs. Shared with the SSH branch in ipc/repos.ts so filtering can't drift.
- */
-export function parseAndFilterSearchRefs(stdout: string, limit: number): string[] {
-  return parseAndFilterSearchRefDetails(stdout, limit).map((entry) => entry.refName)
-}
-
 export function parseAndFilterSearchRefDetails(
   stdout: string,
   limit: number,
@@ -887,7 +932,7 @@ export function parseAndFilterSearchRefDetails(
       .filter((line) => line.length > 0)
       .map((line) => {
         const nul = line.indexOf('\0')
-        if (nul < 0) {
+        if (nul === -1) {
           // Why: no NUL means an unexpected %(refname) format; drop it rather than hand callers an unusable "short" ref.
           return null
         }

@@ -44,6 +44,14 @@ const PARCEL_WATCHER_PLATFORM_PREFIX_BY_PLATFORM = {
   linux: 'watcher-linux',
   win32: 'watcher-win32'
 }
+const ELECTRON_ARCHITECTURE_BY_ENUM = {
+  0: 'ia32',
+  1: 'x64',
+  2: 'arm',
+  3: 'arm64',
+  4: 'universal'
+}
+const PACKAGED_NATIVE_ARCHITECTURES = new Set(['ia32', 'x64', 'arm', 'arm64'])
 const TYPE_DECLARATION_ARTIFACT_RE = /\.d\.(?:c|m)?ts(?:\.map)?$/
 const VERSIONED_ONNXRUNTIME_DYLIB_RE = /^libonnxruntime\.\d[\d.]*\.dylib$/
 
@@ -170,7 +178,7 @@ function collectPackagedRuntimePackages(electronPlatformName = process.platform)
   // optionalDependency (e.g. @parcel/watcher-linux-x64-glibc) that the
   // dependencies graph above never reaches. Include the ones installed for the
   // build's supported architectures; afterPack pruning trims non-target
-  // platforms. Without this the packaged main bundle's import of
+  // platform/architecture variants. Without this the packaged main bundle's import of
   // '@parcel/watcher' resolves at runtime but throws loading its binary.
   const parcelWatcherDir = packages.get('@parcel/watcher')
   if (parcelWatcherDir) {
@@ -246,13 +254,44 @@ function verifyPackagedMainRuntimeDeps(resourcesDir, asar = require('@electron/a
 }
 
 function normalizeNodePtyWindowsArch(electronArch) {
-  if (electronArch === 'x64' || electronArch === 1) {
-    return 'x64'
+  const architecture = normalizeElectronArchitecture(electronArch)
+  if (architecture !== 'x64' && architecture !== 'arm64') {
+    throw new Error(`Unsupported packaged node-pty Windows architecture: ${architecture}`)
   }
-  if (electronArch === 'arm64' || electronArch === 3) {
-    return 'arm64'
+  return architecture
+}
+
+function normalizeElectronArchitecture(electronArch) {
+  const architecture =
+    typeof electronArch === 'number'
+      ? ELECTRON_ARCHITECTURE_BY_ENUM[electronArch]
+      : electronArch === 'armv7l'
+        ? 'arm'
+        : electronArch
+  if (!PACKAGED_NATIVE_ARCHITECTURES.has(architecture)) {
+    throw new Error(`Unsupported packaged runtime architecture: ${String(electronArch)}`)
   }
-  return process.arch === 'arm64' ? 'arm64' : 'x64'
+  return architecture
+}
+
+function pruneNodePtyNativeDirectories(directory, platformPrefix, electronArch, allowsSuffix) {
+  if (!existsSync(directory)) {
+    return
+  }
+  const architecture = normalizeElectronArchitecture(electronArch)
+  const targetPrefix = `${platformPrefix}${architecture}`
+  const platformPrefixes = Object.values(NODE_PTY_PREBUILD_PREFIX_BY_PLATFORM)
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !platformPrefixes.some((prefix) => entry.name.startsWith(prefix))) {
+      continue
+    }
+    const matchesTarget =
+      entry.name.startsWith(platformPrefix) &&
+      (entry.name === targetPrefix || (allowsSuffix && entry.name.startsWith(`${targetPrefix}-`)))
+    if (!matchesTarget) {
+      rmSync(join(directory, entry.name), { recursive: true, force: true })
+    }
+  }
 }
 
 function findNodePtyConptySourceDir(nodePtyDir, windowsArch) {
@@ -308,14 +347,19 @@ function prunePackagedNodePty(resourcesDir, electronPlatformName, electronArch) 
 
   const allowedPrebuildPrefix = NODE_PTY_PREBUILD_PREFIX_BY_PLATFORM[electronPlatformName]
   if (allowedPrebuildPrefix) {
-    const prebuildsDir = join(nodePtyDir, 'prebuilds')
-    if (existsSync(prebuildsDir)) {
-      for (const entry of readdirSync(prebuildsDir, { withFileTypes: true })) {
-        if (entry.isDirectory() && !entry.name.startsWith(allowedPrebuildPrefix)) {
-          rmSync(join(prebuildsDir, entry.name), { recursive: true, force: true })
-        }
-      }
-    }
+    pruneNodePtyNativeDirectories(
+      join(nodePtyDir, 'prebuilds'),
+      allowedPrebuildPrefix,
+      electronArch,
+      false
+    )
+    // Why: sequential cross-arch rebuilds accumulate ABI-tagged outputs here.
+    pruneNodePtyNativeDirectories(
+      join(nodePtyDir, 'bin'),
+      allowedPrebuildPrefix,
+      electronArch,
+      true
+    )
   }
 
   if (electronPlatformName === 'win32') {
@@ -328,7 +372,7 @@ function prunePackagedNodePty(resourcesDir, electronPlatformName, electronArch) 
   }
 }
 
-function prunePackagedParcelWatcher(resourcesDir, electronPlatformName) {
+function prunePackagedParcelWatcher(resourcesDir, electronPlatformName, electronArch) {
   const parcelDir = join(resourcesDir, 'node_modules', '@parcel')
   if (!existsSync(parcelDir)) {
     return
@@ -336,9 +380,11 @@ function prunePackagedParcelWatcher(resourcesDir, electronPlatformName) {
 
   // Why: we package every installed @parcel/watcher-<platform> optional
   // subpackage (supportedArchitectures fetches all), but each build only needs
-  // its own platform's binary. Keep the core package and the matching platform
-  // subpackages; drop the rest so a Linux serve doesn't ship macOS/Windows .node.
+  // its own platform/architecture binaries. Keep the core package and matching
+  // native variants; drop the rest.
   const keepPrefix = PARCEL_WATCHER_PLATFORM_PREFIX_BY_PLATFORM[electronPlatformName]
+  const architecture = normalizeElectronArchitecture(electronArch)
+  const targetPrefix = keepPrefix ? `${keepPrefix}-${architecture}` : null
   for (const entry of readdirSync(parcelDir, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.name === 'watcher') {
       continue
@@ -348,7 +394,11 @@ function prunePackagedParcelWatcher(resourcesDir, electronPlatformName) {
     if (!entry.name.startsWith('watcher-')) {
       continue
     }
-    if (keepPrefix && entry.name.startsWith(keepPrefix)) {
+    if (
+      keepPrefix &&
+      entry.name.startsWith(keepPrefix) &&
+      (entry.name === targetPrefix || entry.name.startsWith(`${targetPrefix}-`))
+    ) {
       continue
     }
     rmSync(join(parcelDir, entry.name), { recursive: true, force: true })
@@ -395,8 +445,9 @@ function prunePackagedZodSources(resourcesDir) {
 }
 
 function prunePackagedRuntimeNodeModules(resourcesDir, electronPlatformName, electronArch) {
-  prunePackagedNodePty(resourcesDir, electronPlatformName, electronArch)
-  prunePackagedParcelWatcher(resourcesDir, electronPlatformName)
+  const architecture = normalizeElectronArchitecture(electronArch)
+  prunePackagedNodePty(resourcesDir, electronPlatformName, architecture)
+  prunePackagedParcelWatcher(resourcesDir, electronPlatformName, architecture)
   prunePackagedRuntimeTypeDeclarations(resourcesDir)
   prunePackagedSherpaOnnx(resourcesDir, electronPlatformName)
   prunePackagedZodSources(resourcesDir)

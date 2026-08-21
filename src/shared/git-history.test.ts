@@ -263,3 +263,65 @@ describe('git history loader', () => {
     expect(executor).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('symbolic full-name resolution', () => {
+  // Why: `rev-parse --verify` swallows --end-of-options, but --symbolic-full-name
+  // deliberately echoes it. Taking the first line made every branch and tag fall
+  // through gitHistoryRefFromFullName's prefix checks into the "commits" category.
+  function executorEmitting(symbolicStdout: string): GitHistoryExecutor {
+    return vi.fn(async (args: string[]) => {
+      if (args[0] === 'rev-parse' && args.includes('--symbolic-full-name')) {
+        return { stdout: symbolicStdout }
+      }
+      if (args[0] === 'rev-parse') {
+        return { stdout: `${HEAD_OID}\n` }
+      }
+      if (args[0] === 'symbolic-ref') {
+        return { stdout: 'main\n' }
+      }
+      if (args[0] === 'for-each-ref' || args[0] === 'merge-base') {
+        return { stdout: '' }
+      }
+      if (args[0] === 'log') {
+        return { stdout: logRecord({ hash: HEAD_OID, message: 'only' }) }
+      }
+      return { stdout: '' }
+    }) as unknown as GitHistoryExecutor
+  }
+
+  it('categorizes a branch when git echoes the option marker', async () => {
+    const executor = executorEmitting('--end-of-options\nrefs/heads/feature\n')
+
+    const result = await loadGitHistoryFromExecutor(executor, '/repo', { baseRef: 'feature' })
+
+    expect(result.baseRef).toMatchObject({
+      id: 'refs/heads/feature',
+      name: 'feature',
+      category: 'branches'
+    })
+  })
+
+  it('categorizes a tag when git echoes the option marker', async () => {
+    const executor = executorEmitting('--end-of-options\nrefs/tags/v1.0.0\n')
+
+    const result = await loadGitHistoryFromExecutor(executor, '/repo', { baseRef: 'v1.0.0' })
+
+    expect(result.baseRef).toMatchObject({ id: 'refs/tags/v1.0.0', category: 'tags' })
+  })
+
+  it('still resolves when git does not echo the marker', async () => {
+    const executor = executorEmitting('refs/heads/feature\n')
+
+    const result = await loadGitHistoryFromExecutor(executor, '/repo', { baseRef: 'feature' })
+
+    expect(result.baseRef).toMatchObject({ id: 'refs/heads/feature', category: 'branches' })
+  })
+
+  it('falls back to the commits category for a bare revision', async () => {
+    const executor = executorEmitting('--end-of-options\n')
+
+    const result = await loadGitHistoryFromExecutor(executor, '/repo', { baseRef: 'some-rev' })
+
+    expect(result.baseRef).toMatchObject({ category: 'commits' })
+  })
+})

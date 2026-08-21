@@ -65,4 +65,14 @@ describe('new workspace create gates', () => {
       true
     )
   })
+
+  it('blocks full and quick create synchronously for unresolved source intent', () => {
+    const blocked = { ...readyInput, sourceIntentBlocksCreate: true }
+
+    expect(getFullComposerCreateDisabled(blocked)).toBe(true)
+    expect(getQuickComposerCreateDisabled(blocked)).toBe(true)
+    expect(getQuickComposerCreateDisabled({ ...blocked, sourceIntentBlocksCreate: false })).toBe(
+      false
+    )
+  })
 })

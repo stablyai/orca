@@ -6,9 +6,10 @@ import * as path from 'node:path'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { parseUnmergedEntry } from './git-handler-utils'
-import { parseStatusOutput } from './git-status-output-parser'
 import type { GitExec } from './git-handler-ops'
-import type { GitUpstreamStatus } from '../shared/types'
+import type { RelayGitStreamExec } from './git-stdout-stream'
+import type { GitUpstreamStatus } from '../shared/git-status-types'
+import { StatusPorcelainParser } from '../shared/git-status-porcelain-parser'
 import { splitRemoteBranchName } from '../shared/git-effective-upstream'
 import { readOrProbeNoEffectiveUpstreamStatus } from './git-status-upstream-negative-cache'
 import {
@@ -17,12 +18,17 @@ import {
   parseNumstat,
   type GitLineStats
 } from '../shared/git-uncommitted-line-stats'
-import { DEFAULT_GIT_STATUS_LIMIT } from '../shared/git-status-limit'
+import { resolveGitStatusLimit } from '../shared/git-status-limit'
 import {
   beginGitStatusLineStatsCacheWrite,
   clearGitStatusLineStatsCacheKey,
   reuseOrRecomputeGitStatusLineStats
 } from '../shared/git-status-line-stats-cache'
+import {
+  readGitBranchLineTotalMergeBaseParam,
+  type GitBranchLineTotal
+} from '../shared/git-branch-line-total'
+import { buildBranchLineTotalInput } from './git-status-branch-line-total'
 
 export async function resolveGitDir(worktreePath: string): Promise<string> {
   const dotGitPath = path.join(worktreePath, '.git')
@@ -61,6 +67,7 @@ export async function detectConflictOperation(worktreePath: string): Promise<str
 
 export async function getStatusOp(
   git: GitExec,
+  streamGit: RelayGitStreamExec,
   params: Record<string, unknown>,
   options: { signal?: AbortSignal } = {}
 ): Promise<{
@@ -72,18 +79,48 @@ export async function getStatusOp(
   ignoredPaths?: string[]
   didHitLimit?: boolean
   statusLength?: number
+  branchLineTotal?: GitBranchLineTotal
 }> {
   const worktreePath = params.worktreePath as string
   const lineStatsCacheKey = `relay\0${worktreePath}`
   const lineStatsWriteToken = beginGitStatusLineStatsCacheWrite(lineStatsCacheKey)
   const includeIgnored = params.includeIgnored === true
+  // Why: untrusted RPC input spliced into a git argv — only an OID shape may pass.
+  const branchLineTotalMergeBase = readGitBranchLineTotalMergeBaseParam(
+    params.branchLineTotalMergeBase
+  )
   // Why: reject NaN/negative limits — NaN would silently disable capping, negatives would over-truncate.
-  const rawLimit = params.limit
-  const limit =
-    typeof rawLimit === 'number' && Number.isFinite(rawLimit) && rawLimit >= 0
-      ? Math.floor(rawLimit)
-      : DEFAULT_GIT_STATUS_LIMIT
-  const conflictOperation = await detectConflictOperation(worktreePath)
+  const limit = resolveGitStatusLimit(params.limit)
+  const conflictPromise = detectConflictOperation(worktreePath)
+  // Why: core.quotePath=false keeps non-ASCII filenames as raw UTF-8 instead of octal escapes that render as gibberish.
+  const statusArgs = [
+    '-c',
+    'core.quotePath=false',
+    'status',
+    '--porcelain=v2',
+    '--branch',
+    '--untracked-files=all'
+  ]
+  if (includeIgnored) {
+    statusArgs.push('--ignored=matching')
+  }
+  // Why: attach rejection ownership before awaiting marker I/O, so a fast Git failure cannot become unhandled.
+  const statusSettlementPromise = Promise.allSettled([
+    (async () => {
+      const parser = new StatusPorcelainParser()
+      const result = await streamGit(statusArgs, worktreePath, {
+        // Why: status polling is read-like; avoid racing terminal Git on .git/worktrees/*/index.lock.
+        disableOptionalLocks: true,
+        signal: options.signal,
+        onStdout: (chunk) => parser.update(chunk, limit)
+      })
+      if (!result.stoppedEarly) {
+        parser.finish()
+      }
+      return { parser, stoppedEarly: result.stoppedEarly }
+    })()
+  ])
+  const conflictOperation = await conflictPromise
   const entries: Record<string, unknown>[] = []
   let head: string | undefined
   let branch: string | undefined
@@ -91,49 +128,37 @@ export async function getStatusOp(
   let ignoredPaths: string[] = []
   let didHitLimit = false
   let statusLength = 0
+  let statusSucceeded = false
+  let branchLineTotal: GitBranchLineTotal | undefined
 
   try {
-    // Why: core.quotePath=false keeps non-ASCII filenames as raw UTF-8 instead of octal escapes that render as gibberish.
-    const statusArgs = [
-      '-c',
-      'core.quotePath=false',
-      'status',
-      '--porcelain=v2',
-      '--branch',
-      '--untracked-files=all'
-    ]
-    if (includeIgnored) {
-      statusArgs.push('--ignored=matching')
+    const [statusResult] = await statusSettlementPromise
+    if (statusResult.status === 'rejected') {
+      throw statusResult.reason
     }
-    const { stdout } = await git(statusArgs, worktreePath, {
-      // Why: status polling is read-like; avoid racing terminal Git on .git/worktrees/*/index.lock.
-      disableOptionalLocks: true,
-      signal: options.signal
-    })
-    const parsed = parseStatusOutput(stdout)
-    head = parsed.head
-    branch = parsed.branch
-    upstreamStatus = parsed.upstreamStatus
-    ignoredPaths = parsed.ignoredPaths
-    statusLength = parsed.entries.length
-    // Why: cap entry count so an enormous un-ignored folder can't push tens of thousands of rows through every poll.
-    if (limit !== 0 && parsed.entries.length > limit) {
-      didHitLimit = true
-      for (let i = 0; i < limit; i++) {
-        entries.push(parsed.entries[i])
-      }
-    } else {
-      for (const entry of parsed.entries) {
-        entries.push(entry)
-      }
-    }
+    const { parser, stoppedEarly } = statusResult.value
+    head = parser.branch.head
+    branch = parser.branch.branch
+    ignoredPaths = parser.ignoredPaths
+    statusLength = parser.statusLength
+    didHitLimit = stoppedEarly
+    statusSucceeded = true
+    const { upstreamName, upstreamAheadBehind } = parser.branch
+    upstreamStatus = upstreamName
+      ? {
+          hasUpstream: true,
+          upstreamName,
+          ahead: upstreamAheadBehind?.ahead ?? 0,
+          behind: upstreamAheadBehind?.behind ?? 0
+        }
+      : { hasUpstream: false, ahead: 0, behind: 0 }
 
     if (!didHitLimit) {
       if (shouldProbeEffectiveUpstreamStatus(branch, upstreamStatus?.upstreamName)) {
         const branchName = getShortBranchName(branch)
         if (branchName) {
           try {
-            // Why: this probe coalesces across concurrent status reads, so one request's abort must not reject the shared in-flight promise.
+            // Why: one request's abort must not reject this shared status probe.
             upstreamStatus = await readOrProbeNoEffectiveUpstreamStatus(
               { worktreePath, branchName, upstreamName: upstreamStatus?.upstreamName },
               (args) => git(args, worktreePath),
@@ -146,9 +171,18 @@ export async function getStatusOp(
           }
         }
       }
+    }
 
-      for (const uLine of parsed.unmergedLines) {
-        const entry = parseUnmergedEntry(worktreePath, uLine)
+    // Why: resolve deferred conflicts in Git's output order so the cap cannot hide
+    // an early conflict behind ordinary rows that appeared later in the stream.
+    for (const record of parser.statusRecords) {
+      if (didHitLimit && entries.length >= limit) {
+        break
+      }
+      if (record.type === 'entry') {
+        entries.push(record.entry as Record<string, unknown>)
+      } else {
+        const entry = parseUnmergedEntry(worktreePath, record.line)
         if (entry) {
           entries.push(entry)
         }
@@ -162,17 +196,28 @@ export async function getStatusOp(
     // not a git repo or git not available
   }
 
-  // Why: skip line-stats when the limit was hit — numstat over a huge change set would reintroduce the cost the limit avoids.
+  // Why: skip numstat after the limit to avoid reintroducing its cost.
   if (!didHitLimit) {
-    await reuseOrRecomputeGitStatusLineStats({
+    const branchLineTotalInput = buildBranchLineTotalInput(
+      git,
+      worktreePath,
+      entries,
+      // Why: a failed scan leaves the untracked list untrustworthy, so the total
+      // would under-count — omit it rather than publish a confident wrong number.
+      statusSucceeded ? branchLineTotalMergeBase : undefined,
+      options.signal
+    )
+    // Why: passed in so the ranged diff runs alongside the per-area numstats, not after them.
+    ;({ branchLineTotal } = await reuseOrRecomputeGitStatusLineStats({
       cacheKey: lineStatsCacheKey,
       head,
       entries,
       writeToken: lineStatsWriteToken,
       reuse: params.reuseLineStats === true,
       isAborted: () => options.signal?.aborted === true,
-      recompute: () => attachLineStats(git, worktreePath, entries, options.signal)
-    })
+      recompute: () => attachLineStats(git, worktreePath, entries, options.signal),
+      ...(branchLineTotalInput ? { branchLineTotal: branchLineTotalInput } : {})
+    }))
   } else {
     clearGitStatusLineStatsCacheKey(lineStatsCacheKey, lineStatsWriteToken)
   }
@@ -191,7 +236,8 @@ export async function getStatusOp(
     branch,
     upstreamStatus,
     ...(includeIgnored ? { ignoredPaths } : {}),
-    ...(didHitLimit ? { didHitLimit: true, statusLength } : {})
+    ...(didHitLimit ? { didHitLimit: true, statusLength } : {}),
+    ...(branchLineTotal ? { branchLineTotal } : {})
   }
 }
 

@@ -1,9 +1,7 @@
-import type {
-  ClickUpTask,
-  GitHubWorkItem,
-  GitLabWorkItem,
-  LinearIssue
-} from '../../../src/shared/types'
+import type { ClickUpTask } from '../../../src/shared/clickup-types'
+import type { GitHubWorkItem } from '../../../src/shared/github/work-item-types'
+import type { GitLabWorkItem } from '../../../src/shared/gitlab-types'
+import type { LinearIssue } from '../../../src/shared/linear/issue-types'
 import { getLinearIssueWorkspaceName } from '../../../src/shared/workspace-name'
 import {
   buildGitHubWorkspaceSource,
@@ -58,8 +56,8 @@ export function buildClickUpLinkedWorkItem(task: ClickUpTask): MobileLinkedWorkI
     number: 0,
     title: `${reference} ${task.name}`,
     url: task.url,
-    clickUpTaskId: task.id,
-    clickUpWorkspaceId: task.workspaceId
+    clickupIdentifier: task.id,
+    clickupWorkspaceId: task.workspaceId
   }
 }
 

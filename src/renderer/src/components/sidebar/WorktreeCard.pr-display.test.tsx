@@ -2,14 +2,12 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type {
-  GlobalSettings,
-  PRInfo,
-  Repo,
-  Worktree,
-  WorktreeCardProperty
-} from '../../../../shared/types'
-import { COMPACT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/worktree-card-properties'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { COMPACT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/worktree/card-properties'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
 const fetchHostedReviewForBranch = vi.fn()
@@ -70,10 +68,6 @@ vi.mock('./CacheTimer', () => ({
 
 vi.mock('./WorktreeCardAgents', () => ({
   default: () => null
-}))
-
-vi.mock('./SshDisconnectedDialog', () => ({
-  SshDisconnectedDialog: () => null
 }))
 
 vi.mock('./WorktreeContextMenu', () => ({
@@ -265,6 +259,12 @@ describe('WorktreeCard linked PR display', () => {
         linkedReviewHintKey: 'github:456'
       }
     }
+    prCache = {
+      'repo-1::feature/local-branch': {
+        data: makePRInfo({ number: 456, title: 'Stale branch PR' }),
+        fetchedAt: Date.now()
+      }
+    }
     const { default: WorktreeCard } = await import('./WorktreeCard')
 
     const markup = renderWorktreeCardMarkup(
@@ -285,7 +285,14 @@ describe('WorktreeCard linked PR display', () => {
       'local::repo-1::feature/local-branch': {
         data: makeHostedReview({ number: 456, title: 'Branch PR', state: 'open' }),
         fetchedAt: Date.now(),
-        linkedReviewHintKey: ''
+        linkedReviewHintKey: 'github:456',
+        branchLookupGitHubPRNumber: 456
+      }
+    }
+    prCache = {
+      'repo-1::feature/local-branch': {
+        data: makePRInfo({ number: 456, title: 'Branch PR' }),
+        fetchedAt: Date.now()
       }
     }
     const { default: WorktreeCard } = await import('./WorktreeCard')

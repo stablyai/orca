@@ -25,6 +25,7 @@ const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 export default function TabGroupPanel({
   groupId,
   worktreeId,
+  isVisible,
   isFocused,
   hasSplitGroups,
   touchesRightEdge,
@@ -40,6 +41,7 @@ export default function TabGroupPanel({
 }: {
   groupId: string
   worktreeId: string
+  isVisible: boolean
   isFocused: boolean
   hasSplitGroups: boolean
   touchesRightEdge: boolean
@@ -103,6 +105,12 @@ export default function TabGroupPanel({
         const item = resolveGroupTabFromVisibleId(model.groupTabs, visibleId)
         if (item) {
           commands.closeToRight(item.id)
+        }
+      }}
+      onCloseToLeft={(visibleId) => {
+        const item = resolveGroupTabFromVisibleId(model.groupTabs, visibleId)
+        if (item) {
+          commands.closeToLeft(item.id)
         }
       }}
       onNewTerminalTab={commands.newTerminalTab}
@@ -318,7 +326,12 @@ export default function TabGroupPanel({
                   </div>
                 }
               >
-                <EditorPanel activeFileId={activeTab.entityId} activeViewStateId={activeTab.id} />
+                <EditorPanel
+                  activeFileId={activeTab.entityId}
+                  activeViewStateId={activeTab.id}
+                  isVisible={isVisible}
+                  isCmdSaveOwner={isFocused}
+                />
               </Suspense>
             </div>
           )}

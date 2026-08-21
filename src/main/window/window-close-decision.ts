@@ -18,8 +18,10 @@ export type WindowCloseState = {
  * therefore cannot answer — bypassing it for a merely-unresponsive renderer is
  * what silently destroyed other sessions in #5787. An unresponsive-but-alive
  * renderer (rendererProcessGone=false, isRendererCrashed=false) still resolves
- * to 'request-confirmation' so the save guard runs. A genuinely gone renderer
- * still bypasses so the window stays closable (#5144/#5314).
+ * to 'request-confirmation' so the save guard runs. App-wide quit separately
+ * bounds failure to acknowledge that request; ordinary window close does not.
+ * A genuinely gone renderer still bypasses so the window stays closable
+ * (#5144/#5314).
  */
 export function resolveWindowCloseAction(state: WindowCloseState): WindowCloseAction {
   if (state.windowCloseConfirmed) {

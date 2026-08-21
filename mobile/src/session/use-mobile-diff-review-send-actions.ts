@@ -1,6 +1,6 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import * as Clipboard from 'expo-clipboard'
-import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/types'
+import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/diff-comment-types'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import { triggerSuccess } from '../platform/haptics'
@@ -11,6 +11,7 @@ import {
   readMobileReviewTerminalSendAccepted,
   readMobileReviewTerminalTabs
 } from './mobile-diff-review-rpc'
+import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
 import type { ReviewScreenState, SendSheetState } from './mobile-diff-review-screen-model'
 
 type SendActionsInput = {
@@ -74,6 +75,11 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       if (!client || connState !== 'connected') {
         throw new Error('Waiting for desktop...')
       }
+      // Marked by terminal handle, not by surface, so a paste orphaned here by native
+      // chat would ride along with these notes (#10228). Diff review carries no device token.
+      if (!(await healMobileNativeChatStaleInput({ client, terminal, deviceToken: null }))) {
+        throw new Error('Failed to send notes')
+      }
       const response = await client.sendRequest('terminal.send', {
         terminal,
         text: formatMobileDiffReviewPrompt(comments),
@@ -99,7 +105,10 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
         throw new Error('Waiting for desktop...')
       }
       const response = await client.sendRequest('session.tabs.createTerminal', {
-        worktree: `id:${worktreeId}`
+        worktree: `id:${worktreeId}`,
+        activate: false,
+        select: true,
+        navigation: 'caller'
       })
       if (!response.ok) {
         throw new Error(response.error?.message || 'Failed to create terminal')

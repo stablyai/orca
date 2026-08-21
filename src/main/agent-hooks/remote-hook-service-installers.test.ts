@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { parse as parseJsonc } from 'jsonc-parser'
 import type { SFTPWrapper } from 'ssh2'
 
 vi.mock('electron', () => ({
@@ -7,33 +8,20 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { CodexHookService } from '../codex/hook-service'
-import { DroidHookService } from '../droid/hook-service'
-import { CursorHookService } from '../cursor/hook-service'
-import { CommandCodeHookService } from '../command-code/hook-service'
-import { GeminiHookService } from '../gemini/hook-service'
-import { AntigravityHookService } from '../antigravity/hook-service'
-import { AmpHookService } from '../amp/hook-service'
-import { ClaudeHookService } from '../claude/hook-service'
-import { GrokHookService } from '../grok/hook-service'
-import { CopilotHookService } from '../copilot/hook-service'
-import { HermesHookService } from '../hermes/hook-service'
-import { DevinHookService } from '../devin/hook-service'
-import { KimiHookService } from '../kimi/hook-service'
+import { CodexHookService, codexHookService } from '../codex/hook-service'
+import { DroidHookService, droidHookService } from '../droid/hook-service'
+import { CursorHookService, cursorHookService } from '../cursor/hook-service'
+import { CommandCodeHookService, commandCodeHookService } from '../command-code/hook-service'
+import { GeminiHookService, geminiHookService } from '../gemini/hook-service'
+import { AntigravityHookService, antigravityHookService } from '../antigravity/hook-service'
+import { AmpHookService, ampHookService } from '../amp/hook-service'
+import { ClaudeHookService, claudeHookService } from '../claude/hook-service'
+import { GrokHookService, grokHookService } from '../grok/hook-service'
+import { CopilotHookService, copilotHookService } from '../copilot/hook-service'
+import { HermesHookService, hermesHookService } from '../hermes/hook-service'
+import { DevinHookService, devinHookService } from '../devin/hook-service'
+import { KimiHookService, kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
-import { ampHookService } from '../amp/hook-service'
-import { antigravityHookService } from '../antigravity/hook-service'
-import { claudeHookService } from '../claude/hook-service'
-import { codexHookService } from '../codex/hook-service'
-import { copilotHookService } from '../copilot/hook-service'
-import { cursorHookService } from '../cursor/hook-service'
-import { droidHookService } from '../droid/hook-service'
-import { commandCodeHookService } from '../command-code/hook-service'
-import { geminiHookService } from '../gemini/hook-service'
-import { devinHookService } from '../devin/hook-service'
-import { grokHookService } from '../grok/hook-service'
-import { hermesHookService } from '../hermes/hook-service'
-import { kimiHookService } from '../kimi/hook-service'
 import { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-controls'
 import {
   installRemoteManagedAgentHooks,
@@ -355,14 +343,20 @@ describe('remote hook service installers', () => {
       expect(command).toContain('/home/dev/.orca/agent-hooks/antigravity-hook.sh')
       expect(command).toContain(`ORCA_ANTIGRAVITY_EVENT='${eventName}'`)
     }
-    expect(antigravityConfig['orca-status'].PreToolUse).toBeUndefined()
-    for (const eventName of ['PostToolUse']) {
+    for (const eventName of ['PreToolUse', 'PostToolUse']) {
       const definition = antigravityConfig['orca-status'][eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(definition?.matcher).toBe('*')
       expect(command).toContain('/home/dev/.orca/agent-hooks/antigravity-hook.sh')
       expect(command).toContain(`ORCA_ANTIGRAVITY_EVENT='${eventName}'`)
     }
+    // Why: #2426 was an SSH report — a remote host missing the script must still answer the gate, not deny every tool.
+    expect(antigravityConfig['orca-status'].PreToolUse[0].hooks?.[0]?.command).toContain(
+      `printf '%s\\n' '{"decision":"ask"}'`
+    )
+    expect(antigravityConfig['orca-status'].PostToolUse[0].hooks?.[0]?.command).not.toContain(
+      '{"decision"'
+    )
 
     const ampPlugin = amp.fs.files.get('/home/dev/.config/amp/plugins/orca-agent-status.ts')
     expect(ampPlugin).toContain('/hook/amp')
@@ -428,7 +422,11 @@ describe('remote hook service installers', () => {
     expect(grokConfig.hooks.PostToolUse?.[0]?.matcher).toBe('.*')
     expect(grokConfig.hooks.StopFailure?.[0]?.matcher).toBeUndefined()
 
-    const devinConfig = JSON.parse(devin.fs.files.get('/home/dev/.config/devin/config.json')!) as {
+    const devinText = devin.fs.files.get('/home/dev/.config/devin/config.json')!
+    // Why: Devin config.json is JSONC — parse it as such, and assert the user's comment
+    // survived. Asserting with JSON.parse would only pass if the install had stripped it.
+    expect(devinText).toContain('// Existing Devin config comment')
+    const devinConfig = parseJsonc(devinText) as {
       permissions: { mode: string }
       hooks: Record<string, { matcher?: string; hooks?: { command: string }[] }[]>
     }
@@ -535,7 +533,7 @@ describe('remote hook service installers', () => {
     }
   })
 
-  it('removes stale remote Antigravity PreToolUse hooks while installing SSH hooks', async () => {
+  it('replaces stale remote Antigravity PreToolUse hooks while installing SSH hooks', async () => {
     const { sftp, fs } = createFakeSftp()
     fs.files.set(
       '/home/dev/.gemini/config/hooks.json',
@@ -576,7 +574,12 @@ describe('remote hook service installers', () => {
     const config = JSON.parse(fs.files.get('/home/dev/.gemini/config/hooks.json')!) as {
       'orca-status': Record<string, { hooks?: { command: string }[] }[]>
     }
-    expect(config['orca-status'].PreToolUse).toBeUndefined()
+    const preToolCommands = config['orca-status'].PreToolUse.flatMap((definition) =>
+      (definition.hooks ?? []).map((hook) => hook.command)
+    )
+    expect(preToolCommands).toHaveLength(1)
+    expect(preToolCommands[0]).toContain('/home/dev/.orca/agent-hooks/antigravity-hook.sh')
+    expect(preToolCommands).not.toContain('/tmp/old/agent-hooks/antigravity-hook.sh')
     const postToolCommands = config['orca-status'].PostToolUse.flatMap((definition) =>
       (definition.hooks ?? []).map((hook) => hook.command)
     )
@@ -720,10 +723,71 @@ describe('remote hook service installers', () => {
 
   it('installs Droid and Copilot when running the aggregate remote installer (issue #7253)', async () => {
     const { sftp } = createFakeSftp()
-    const results = await installRemoteManagedAgentHooks(sftp, '/home/dev')
+    const results = await installRemoteManagedAgentHooks(sftp, '/home/dev', {
+      agents: REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
+    })
     const byAgent = new Map(results.map((r) => [r.agent, r.state]))
     expect(byAgent.get('droid')).toBe('installed')
     expect(byAgent.get('copilot')).toBe('installed')
+  })
+
+  it('installs only positively detected remote agents', async () => {
+    const { sftp, fs } = createFakeSftp()
+
+    const results = await installRemoteManagedAgentHooks(sftp, '/home/dev', {
+      agents: ['codex']
+    })
+
+    expect(results.map((result) => result.agent)).toEqual(['codex'])
+    const paths = [...fs.files.keys(), ...fs.dirs]
+    for (const unusedHome of ['.factory', '.gemini', '.grok', '.hermes', '.commandcode']) {
+      expect(paths.some((path) => path.includes(`/home/dev/${unusedHome}`))).toBe(false)
+    }
+  })
+
+  it('fails closed when the agent allowlist is omitted or empty (issue #11641)', async () => {
+    const { sftp, fs } = createFakeSftp()
+
+    await expect(installRemoteManagedAgentHooks(sftp, '/home/dev')).resolves.toEqual([])
+    await expect(
+      installRemoteManagedAgentHooks(sftp, '/home/dev', { agents: [] })
+    ).resolves.toEqual([])
+
+    // Why: fake SFTP seeds '/' only; no agent config homes or files may appear.
+    expect([...fs.files.keys()]).toEqual([])
+    expect([...fs.dirs]).toEqual(['/'])
+  })
+
+  it('stops before the next installer when its relay request is cancelled', async () => {
+    const controller = new AbortController()
+    const claudeInstall = vi
+      .spyOn(claudeHookService, 'installRemote')
+      .mockImplementation(async () => {
+        controller.abort()
+        return {
+          agent: 'claude',
+          state: 'installed',
+          configPath: '/home/dev/.claude/settings.json',
+          managedHooksPresent: true,
+          detail: null
+        }
+      })
+    const openClaudeInstall = vi.spyOn(openClaudeHookService, 'installRemote')
+    try {
+      const { sftp } = createFakeSftp()
+
+      await expect(
+        installRemoteManagedAgentHooks(sftp, '/home/dev', {
+          signal: controller.signal,
+          agents: REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
+        })
+      ).rejects.toMatchObject({ name: 'AbortError' })
+      expect(claudeInstall).toHaveBeenCalledTimes(1)
+      expect(openClaudeInstall).not.toHaveBeenCalled()
+    } finally {
+      claudeInstall.mockRestore()
+      openClaudeInstall.mockRestore()
+    }
   })
 
   it('installs remote Droid hooks into Factory settings.json (issue #7253)', async () => {

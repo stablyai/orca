@@ -8,6 +8,7 @@ afterEach(() => {
 describe('isCodexAuthError', () => {
   it('matches Codex authentication refresh failures', () => {
     expect(isCodexAuthError('Access token could not be refreshed')).toBe(true)
+    expect(isCodexAuthError('Sign in with ChatGPT')).toBe(true)
     expect(isCodexAuthError('plain provider error')).toBe(false)
     expect(isCodexAuthError(null)).toBe(false)
   })

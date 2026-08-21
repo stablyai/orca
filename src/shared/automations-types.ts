@@ -1,4 +1,5 @@
-import type { SetupDecision, TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
+import type { SetupDecision } from './worktree/create-types'
 import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
 
 export type AutomationWorkspaceMode = 'existing' | 'new_per_run'
@@ -253,6 +254,7 @@ export type ExternalAutomationJob = {
   lastError: string | null
   workdir: string | null
   runCount: number
+  runCountSaturated?: true
   runs: ExternalAutomationRun[]
 }
 
@@ -277,6 +279,7 @@ export type ExternalAutomationRunsPage = {
   page: number
   pageSize: number
   total: number
+  totalSaturated?: true
   runs: ExternalAutomationRun[]
 }
 

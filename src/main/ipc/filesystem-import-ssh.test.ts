@@ -47,6 +47,7 @@ import {
   registerSshFilesystemProvider,
   unregisterSshFilesystemProvider
 } from '../providers/ssh-filesystem-dispatch'
+import { resetSshConnectionGenerations } from '../ssh/ssh-connection-generation'
 
 const store = {
   getRepos: () => [
@@ -113,12 +114,22 @@ describe('fs:importExternalPaths — SSH routing & connection', () => {
     })
   }
   const invoke = (args: Record<string, unknown>) =>
-    handlers.get('fs:importExternalPaths')!(null, args) as Promise<{
+    handlers.get('fs:importExternalPaths')!(
+      null,
+      typeof args.connectionId === 'string'
+        ? {
+            ...args,
+            expectedSshTargetId: args.connectionId,
+            expectedSshConnectionGeneration: 0
+          }
+        : args
+    ) as Promise<{
       results: Record<string, unknown>[]
     }>
 
   beforeEach(() => {
     handlers.clear()
+    resetSshConnectionGenerations()
     ;[
       handleMock,
       lstatMock,

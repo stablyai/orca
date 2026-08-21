@@ -1,8 +1,23 @@
-export function encodeNdjson(msg: unknown): string {
-  return `${JSON.stringify(msg)}\n`
+export const NDJSON_MAX_LINE_BYTES = 16 * 1024 * 1024
+
+export class NdjsonLineTooLongError extends Error {
+  constructor(
+    readonly lineBytes: number,
+    readonly maxLineBytes: number
+  ) {
+    super(`NDJSON line exceeds max ${maxLineBytes} bytes (${lineBytes} bytes encoded)`)
+    this.name = 'NdjsonLineTooLongError'
+  }
 }
 
-export const NDJSON_MAX_LINE_BYTES = 16 * 1024 * 1024
+export function encodeNdjson(msg: unknown, maxLineBytes = NDJSON_MAX_LINE_BYTES): string {
+  const line = JSON.stringify(msg)
+  const lineBytes = Buffer.byteLength(line, 'utf8')
+  if (lineBytes > maxLineBytes) {
+    throw new NdjsonLineTooLongError(lineBytes, maxLineBytes)
+  }
+  return `${line}\n`
+}
 
 export type NdjsonParser = {
   feed(chunk: string): void

@@ -2,9 +2,9 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  statSync,
   writeFileSync,
   chmodSync,
-  copyFileSync,
   renameSync,
   unlinkSync
 } from 'node:fs'
@@ -13,11 +13,14 @@ import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
-import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
+import { resolveHooksJsonWritePath } from './hook-config-write-path'
+import { writeRollingFileBackup } from '../rolling-file-backup'
+import { wrapWindowsPowerShellEncodedCommand } from './windows-powershell-hook-launcher'
 
 export type HookCommandConfig = {
   type: 'command'
   command: string
+  args?: string[]
   timeout?: number
   async?: boolean
   statusMessage?: string
@@ -55,22 +58,12 @@ export function buildManagedCommandDefinition(command: string): HookDefinition {
   return { command, timeout: MANAGED_HOOK_TIMEOUT_SECONDS }
 }
 
-export function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-export function readHooksJson(configPath: string): HooksConfig | null {
-  if (!existsSync(configPath)) {
-    return {}
-  }
-
-  try {
-    const parsed = JSON.parse(readFileSync(configPath, 'utf-8'))
-    return isPlainObject(parsed) ? parsed : null
-  } catch {
-    return null
-  }
-}
+export {
+  isPlainObject,
+  readHooksJson,
+  readHooksJsonWithRaw,
+  type HooksJsonSnapshot
+} from './hooks-json-read'
 
 // Why: match by script file name, not exact command, so a fresh install sweeps stale entries from old/parallel installs.
 export function createManagedCommandMatcher(
@@ -112,31 +105,16 @@ export function getSharedManagedScriptPath(scriptFileName: string): string {
   return join(homedir(), '.orca', 'agent-hooks', scriptFileName)
 }
 
-function quotePosixShellString(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`
-}
+export { wrapPosixHookCommand } from './posix-hook-command'
 
-// Why: guard for a readable executable so a stale entry at a missing script becomes a silent no-op, not an exit-127 failure on every tool call.
-export function wrapPosixHookCommand(scriptPath: string, env: Record<string, string> = {}): string {
-  // Why: single-quote escape so $, `, ", \ in scriptPath stay literal — avoids shell injection from an arbitrary path.
-  const quoted = quotePosixShellString(scriptPath)
-  const envPrefix = Object.entries(env)
-    .map(([key, value]) => `${key}='${value.replaceAll("'", "'\\''")}'`)
-    .join(' ')
-  const invocation = envPrefix ? `${envPrefix} /bin/sh ${quoted}` : `/bin/sh ${quoted}`
-  return `if [ -f ${quoted} ] && [ -r ${quoted} ] && [ -x ${quoted} ]; then ${invocation}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
-}
-
-function quotePowerShellString(value: string): string {
+export function quotePowerShellString(value: string): string {
   return `'${value.replaceAll("'", "''")}'`
 }
 
-function getWindowsPowerShellExecutablePath(): string {
-  const systemRoot = process.env.SystemRoot || 'C:\\Windows'
-  // Why: PATH lookup lets a worktree-local powershell.exe hijack hook payloads.
-  // Forward slashes keep this absolute path shell-friendly for cmd.exe and Git Bash.
-  return `${systemRoot.replaceAll('\\', '/')}/System32/WindowsPowerShell/v1.0/powershell.exe`
-}
+export {
+  wrapWindowsPowerShellEncodedCommand,
+  WINDOWS_POWERSHELL_HOOK_SWITCHES
+} from './windows-powershell-hook-launcher'
 
 export function wrapWindowsHookCommand(
   scriptPath: string,
@@ -148,8 +126,7 @@ export function wrapWindowsHookCommand(
     .map(([key, value]) => `$env:${key} = ${quotePowerShellString(value)}; `)
     .join('')
   const command = `${envPrefix}if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; exit 0`
-  const encodedCommand = Buffer.from(command, 'utf16le').toString('base64')
-  return `${getWindowsPowerShellExecutablePath()} -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encodedCommand}`
+  return wrapWindowsPowerShellEncodedCommand(command)
 }
 
 export const WINDOWS_CMD_SAFE_PATH = /^[A-Za-z0-9_.:\\~-]+$/
@@ -159,17 +136,14 @@ export function wrapWindowsCmdHookCommand(scriptPath: string): string {
   return WINDOWS_CMD_SAFE_PATH.test(scriptPath) ? scriptPath : wrapWindowsHookCommand(scriptPath)
 }
 
-export const WINDOWS_GIT_BASH_SAFE_PATH = /^[A-Za-z0-9_.:/~-]+$/
-
-export function wrapWindowsGitBashHookCommand(scriptPath: string): string {
-  const bashPath = scriptPath.replaceAll('\\', '/')
-  // Why: Claude's Git Bash runner can execute a forward-slash .cmd directly; unsafe paths stay encoded.
-  return WINDOWS_GIT_BASH_SAFE_PATH.test(bashPath)
-    ? `if [ -f ${quotePosixShellString(bashPath)} ]; then ${quotePosixShellString(bashPath)}; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
-    : wrapWindowsHookCommand(scriptPath)
-}
-
-export function buildWindowsAgentHookPostCommand(source: AgentHookSource): string {
+/**
+ * Extra form lines inserted before the final `payload@-` line (each should end with ` ^`).
+ * Used by Grok to attach `grokHome` without fragile string replace on the shared template.
+ */
+export function buildWindowsAgentHookPostCommand(
+  source: AgentHookSource,
+  extraFormLines: readonly string[] = []
+): string {
   // Why: PowerShell startup makes inline per-turn Codex hooks visibly slow, so mirror the POSIX curl path.
   // Why: fully-qualify curl so a repo-local curl.exe can't hijack hook payloads.
   return [
@@ -183,6 +157,7 @@ export function buildWindowsAgentHookPostCommand(source: AgentHookSource): strin
     '  --data-urlencode "worktreeId=%ORCA_WORKTREE_ID%" ^',
     '  --data-urlencode "env=%ORCA_AGENT_HOOK_ENV%" ^',
     '  --data-urlencode "version=%ORCA_AGENT_HOOK_VERSION%" ^',
+    ...extraFormLines,
     '  --data-urlencode "payload@-" >nul 2>nul'
   ].join('\r\n')
 }
@@ -215,7 +190,8 @@ export function removeManagedCommands(
     const directManagedKeys = directCommandKeys.filter((key) => isManagedCommand(definition[key]))
     const hasNestedHooks = Array.isArray(definition.hooks)
     const hasManagedNestedHook =
-      hasNestedHooks && definition.hooks!.some((hook) => isManagedCommand(hook.command))
+      hasNestedHooks &&
+      definition.hooks!.some((hook) => hookHasManagedCommand(hook, isManagedCommand))
 
     if (directManagedKeys.length === 0 && !hasManagedNestedHook) {
       return [definition]
@@ -227,7 +203,9 @@ export function removeManagedCommands(
     }
 
     if (hasManagedNestedHook) {
-      const filteredHooks = definition.hooks!.filter((hook) => !isManagedCommand(hook.command))
+      const filteredHooks = definition.hooks!.filter(
+        (hook) => !hookHasManagedCommand(hook, isManagedCommand)
+      )
       if (filteredHooks.length > 0) {
         nextDefinition.hooks = filteredHooks
       } else {
@@ -246,6 +224,11 @@ export function removeManagedCommands(
   })
 }
 
+function hookHasManagedCommand(hook: HookCommandConfig, matches: (value?: string) => boolean) {
+  const args = Array.isArray(hook.args) ? hook.args : []
+  return matches(hook.command) || args.some((arg) => typeof arg === 'string' && matches(arg))
+}
+
 export function hookDefinitionHasManagedCommand(
   definition: HookDefinition,
   isManagedCommand: (command: string | undefined) => boolean
@@ -255,7 +238,7 @@ export function hookDefinitionHasManagedCommand(
     isManagedCommand(definition.bash) ||
     isManagedCommand(definition.powershell) ||
     (Array.isArray(definition.hooks) &&
-      definition.hooks.some((hook) => isManagedCommand(hook.command)))
+      definition.hooks.some((hook) => hookHasManagedCommand(hook, isManagedCommand)))
   )
 }
 
@@ -314,19 +297,31 @@ function writeScriptWithAclRetry(scriptPath: string, content: string): void {
   }
 }
 
-export function writeHooksJson(configPath: string, config: HooksConfig): void {
-  const dir = dirname(configPath)
+export function writeHooksJson(
+  configPath: string,
+  config: HooksConfig,
+  // Why: `serialized` lets a JSONC config (Devin) supply text edited in place, so the
+  // atomic write + rolling backup below stay shared instead of being reimplemented.
+  options?: { preserveMode?: boolean; serialized?: string }
+): void {
+  const writePath = resolveHooksJsonWritePath(configPath)
+  const dir = dirname(writePath)
   mkdirSync(dir, { recursive: true })
 
   // Why: temp+rename leaves the original untouched on a crash/disk-full mid-write.
   // Why randomUUID: avoids tmp-path collisions when two install() calls fire in the same millisecond.
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
-  const serialized = `${JSON.stringify(config, null, 2)}\n`
+  const serialized = options?.serialized ?? `${JSON.stringify(config, null, 2)}\n`
+  const existingMode =
+    options?.preserveMode === true && existsSync(writePath) ? statSync(writePath).mode : undefined
 
-  // Why: skip identical writes so repeated install() calls don't roll the .bak forward and destroy the last recoverable copy.
-  if (existsSync(configPath)) {
+  // Why: skip the write (and therefore the .bak rotation) when the on-disk
+  // content is already identical. Without this, every install() rewrites the
+  // file and rolls the backup forward, which can silently destroy the last
+  // recoverable copy if install() is called repeatedly (e.g. on app start).
+  if (existsSync(writePath)) {
     try {
-      if (readFileSync(configPath, 'utf-8') === serialized) {
+      if (readFileSync(writePath, 'utf-8') === serialized) {
         return
       }
     } catch {
@@ -335,12 +330,14 @@ export function writeHooksJson(configPath: string, config: HooksConfig): void {
   }
 
   try {
-    writeFileSync(tmpPath, serialized, 'utf-8')
-    // Why: single rolling backup so a merge-logic bug producing bad JSON stays recoverable from <configPath>.bak until the next write.
-    if (existsSync(configPath)) {
-      copyFileSync(configPath, `${configPath}.bak`)
+    writeFileSync(tmpPath, serialized, { encoding: 'utf-8', mode: existingMode })
+    // Why: single rolling backup — one file, no accumulation in ~/.claude.
+    // Protects against a merge-logic bug producing bad JSON; the original is
+    // always recoverable from <configPath>.bak until the next write.
+    if (existsSync(writePath)) {
+      writeRollingFileBackup(writePath, `${writePath}.bak`)
     }
-    renameSync(tmpPath, configPath)
+    renameSync(tmpPath, writePath)
   } finally {
     // Clean up temp file if rename failed.
     if (existsSync(tmpPath)) {

@@ -1,4 +1,4 @@
-/* eslint-disable max-lines -- Why: model download, checksum, extraction, and cleanup share one state machine so progress/error transitions stay coupled. */
+/* eslint-disable max-lines -- Why: model download, checksum, retry, and cleanup share one state machine so progress/error transitions stay coupled. */
 import { app, net } from 'electron'
 import { join, resolve, relative } from 'node:path'
 import {
@@ -9,10 +9,9 @@ import {
   rmSync,
   statSync
 } from 'node:fs'
-import { readdir, rm } from 'node:fs/promises'
+import { rename, rm } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { pipeline } from 'node:stream/promises'
-import { spawn } from 'node:child_process'
 import type {
   SpeechModelManifest,
   SpeechModelState,
@@ -20,7 +19,6 @@ import type {
 } from '../../shared/speech-types'
 import { SPEECH_MODEL_CATALOG, getCatalogModel, isLocalSpeechModel } from './model-catalog'
 import { hasOpenAiSpeechApiKey } from './openai-api-key-store'
-import { resolveTarExecutable } from './tar-executable'
 import {
   getSpeechModelCacheDirCandidates,
   migrateSpeechModelCacheIfNeeded,
@@ -42,7 +40,11 @@ type HttpStatusError = Error & {
   retryAfterMs?: number
   retryable?: boolean
 }
-type DownloadTotals = { totalBytes: number }
+type DownloadTotals = {
+  totalBytes: number
+  completedBytes: number
+  modelTotalBytes: number
+}
 type ContentRange = { start: number; end: number; totalBytes?: number }
 
 const DOWNLOAD_IDLE_TIMEOUT_MS = 120_000
@@ -254,10 +256,16 @@ export class ModelManager {
   }
 
   private validateModelFiles(manifest: SpeechModelManifest, modelDir: string): boolean {
-    if (!manifest.files) {
+    if (!manifest.downloadFiles) {
       return false
     }
-    return manifest.files.every((f) => existsSync(join(modelDir, f)))
+    return manifest.downloadFiles.every(({ name, sizeBytes }) => {
+      try {
+        return statSync(join(modelDir, name)).size === sizeBytes
+      } catch {
+        return false
+      }
+    })
   }
 
   async downloadModel(modelId: string): Promise<void> {
@@ -273,7 +281,7 @@ export class ModelManager {
     if (!isLocalSpeechModel(manifest)) {
       throw new Error(`Model does not support downloads: ${modelId}`)
     }
-    if (!manifest.downloadUrl || !manifest.archiveSha256 || !manifest.sizeBytes) {
+    if (!manifest.downloadFiles?.length || !manifest.sizeBytes) {
       throw new Error(`Model download metadata missing: ${modelId}`)
     }
 
@@ -285,15 +293,16 @@ export class ModelManager {
 
     this.updateState(modelId, 'downloading', 0)
 
-    const archivePath = join(this.modelsDir, `${modelId}.tar.bz2`)
-    // Why: resume appends, so a leftover archive from a crashed run would corrupt the download.
+    const stagingDir = `${modelDir}.partial`
+    const legacyArchivePath = join(this.modelsDir, `${modelId}.tar.bz2`)
+    // Why: resuming an unverified file left by a crashed process could preserve corrupt bytes.
+    rmSync(stagingDir, { recursive: true, force: true })
     try {
-      if (existsSync(archivePath)) {
-        rmSync(archivePath)
-      }
+      rmSync(legacyArchivePath, { force: true })
     } catch {
-      // best-effort; the first (non-resumed) attempt truncates on write
+      // best-effort legacy cleanup
     }
+    mkdirSync(stagingDir, { recursive: true })
     let aborted = false
     const abortController = new AbortController()
 
@@ -307,69 +316,34 @@ export class ModelManager {
     this.activeDownloads.set(modelId, handle)
 
     try {
-      await this.downloadArchiveWithRetry(
-        manifest.downloadUrl,
-        archivePath,
-        manifest.sizeBytes,
+      await this.downloadModelFiles(
+        manifest,
+        stagingDir,
         modelId,
         () => aborted,
         abortController.signal
       )
 
       if (aborted) {
-        this.cleanup(modelId, archivePath)
         return
       }
 
-      await this.verifyArchiveSha256(archivePath, manifest.archiveSha256)
-
-      if (aborted) {
-        this.cleanup(modelId, archivePath)
-        return
-      }
-
-      this.updateState(modelId, 'extracting')
-      await this.extractArchive(archivePath, this.modelsDir, modelId, () => aborted)
-
-      if (aborted) {
-        this.cleanup(modelId, archivePath)
-        return
-      }
-
-      if (!this.validateModelFiles(manifest, modelDir)) {
-        // Why: some archives nest files in a subdir; scan one level down and move them up.
-        await this.flattenNestedDir(modelDir, manifest)
-      }
-
-      if (aborted) {
-        this.cleanup(modelId, archivePath)
-        return
-      }
-
-      if (!this.validateModelFiles(manifest, modelDir)) {
-        throw new Error('Model files missing after extraction')
-      }
-
+      await rm(modelDir, { recursive: true, force: true })
+      await rename(stagingDir, modelDir)
       this.updateState(modelId, 'ready')
     } catch (err) {
       if (!aborted) {
         console.error('[speech] Model download failed:', modelId, err)
         this.updateState(modelId, 'error', undefined, String(err))
       }
-      this.cleanup(modelId, archivePath)
+      this.removeModelDownloadFiles(modelDir, stagingDir, legacyArchivePath)
       if (!aborted) {
         // Why: the settings UI awaits this to surface failures; stay quiet on cancellation, rethrow real errors.
         throw err
       }
     } finally {
       this.activeDownloads.delete(modelId)
-      try {
-        if (existsSync(archivePath)) {
-          rmSync(archivePath)
-        }
-      } catch {
-        // best-effort archive cleanup
-      }
+      this.removeModelDownloadStaging(stagingDir, legacyArchivePath)
     }
   }
 
@@ -395,6 +369,8 @@ export class ModelManager {
     if (existsSync(modelDir)) {
       await rm(modelDir, { recursive: true, force: true })
     }
+    await rm(`${modelDir}.partial`, { recursive: true, force: true })
+    await rm(join(this.modelsDir, `${modelId}.tar.bz2`), { force: true })
     // Why: also delete the pre-migration copy, or the next launch re-migrates it and resurrects the model.
     if (this.migrationSourceDir) {
       const sourceModelDir = this.getSafeModelDir(modelId, this.migrationSourceDir)
@@ -411,37 +387,98 @@ export class ModelManager {
     progress?: number,
     error?: string
   ): void {
-    const state: SpeechModelState = { id: modelId, status, progress, error }
+    const previous = this.modelStates.get(modelId)
+    // Whole-percent state matches the UI and prevents chunk-level IPC/poll churn.
+    const reportedProgress =
+      status === 'downloading' && progress !== undefined
+        ? Math.round(progress * 100) / 100
+        : progress
+    if (
+      status === 'downloading' &&
+      previous?.status === 'downloading' &&
+      previous.error === error &&
+      previous.progress === reportedProgress
+    ) {
+      return
+    }
+    const state: SpeechModelState = { id: modelId, status, progress: reportedProgress, error }
     this.modelStates.set(modelId, state)
-    // Why: notify on every state change (not just progress) so extracting/ready/error transitions reach the UI.
-    const progressValue = progress ?? (status === 'extracting' ? 0.95 : -1)
+    // Repeated non-download states can be the requesting window's only resync signal.
+    const progressValue = reportedProgress ?? (status === 'extracting' ? 0.95 : -1)
     for (const callback of this.progressCallbacks) {
       callback(modelId, progressValue)
     }
   }
 
-  private getPartialArchiveBytes(archivePath: string): number {
+  private async downloadModelFiles(
+    manifest: SpeechModelManifest,
+    stagingDir: string,
+    modelId: string,
+    isAborted: () => boolean,
+    signal: AbortSignal
+  ): Promise<void> {
+    if (!manifest.downloadFiles?.length || !manifest.sizeBytes) {
+      throw new Error(`Model download metadata missing: ${modelId}`)
+    }
+
+    let completedBytes = 0
+    for (const file of manifest.downloadFiles) {
+      if (
+        !file.name ||
+        file.name === '.' ||
+        file.name === '..' ||
+        file.name.includes('/') ||
+        file.name.includes('\\')
+      ) {
+        throw new Error(`Invalid model download filename: ${file.name}`)
+      }
+      const filePath = join(stagingDir, file.name)
+      await this.downloadFileWithRetry(
+        file.url,
+        filePath,
+        file.sizeBytes,
+        modelId,
+        isAborted,
+        signal,
+        completedBytes,
+        manifest.sizeBytes
+      )
+      if (isAborted()) {
+        return
+      }
+      await this.verifyFileSha256(filePath, file.sha256)
+      completedBytes += file.sizeBytes
+    }
+
+    if (!this.validateModelFiles(manifest, stagingDir)) {
+      throw new Error('Model files missing after download')
+    }
+  }
+
+  private getPartialDownloadBytes(filePath: string): number {
     try {
-      return statSync(archivePath).size
+      return statSync(filePath).size
     } catch {
       return 0
     }
   }
 
-  private async downloadArchiveWithRetry(
+  private async downloadFileWithRetry(
     url: string,
-    archivePath: string,
+    filePath: string,
     expectedSize: number,
     modelId: string,
     isAborted: () => boolean,
-    signal: AbortSignal
+    signal: AbortSignal,
+    completedBytes = 0,
+    modelTotalBytes = expectedSize
   ): Promise<void> {
     let requestCount = 0
     let noProgressStreak = 0
-    const totals: DownloadTotals = { totalBytes: expectedSize }
+    const totals: DownloadTotals = { totalBytes: expectedSize, completedBytes, modelTotalBytes }
     for (;;) {
       requestCount += 1
-      const offset = this.getPartialArchiveBytes(archivePath)
+      const offset = this.getPartialDownloadBytes(filePath)
       // Why: transport can fail after the last byte hits disk; the SHA-256 check is the real completion test.
       if (offset === totals.totalBytes) {
         return
@@ -459,7 +496,7 @@ export class ModelManager {
         // Why: restart from the canonical URL, not the last redirect, because signed CDN redirect URLs expire.
         await this.downloadFile(
           url,
-          archivePath,
+          filePath,
           expectedSize,
           modelId,
           isAborted,
@@ -468,7 +505,7 @@ export class ModelManager {
           offset,
           totals
         )
-        const receivedBytes = this.getPartialArchiveBytes(archivePath)
+        const receivedBytes = this.getPartialDownloadBytes(filePath)
         if (receivedBytes === totals.totalBytes) {
           return
         }
@@ -492,7 +529,7 @@ export class ModelManager {
         if (isAborted() || signal.aborted) {
           throw err
         }
-        const receivedBytes = this.getPartialArchiveBytes(archivePath)
+        const receivedBytes = this.getPartialDownloadBytes(filePath)
         if (receivedBytes === totals.totalBytes) {
           return
         }
@@ -666,7 +703,7 @@ export class ModelManager {
           (parsedLength <= 0 || parsedLength === contentRange.end - contentRange.start + 1)
 
         if (resumeOffset > 0 && response.statusCode === 206 && !resumed) {
-          // Why: appending an unverified range can silently corrupt the archive; discard and retry from byte zero.
+          // Why: appending an unverified range can silently corrupt the file; discard and retry from byte zero.
           try {
             rmSync(dest)
           } catch {
@@ -728,7 +765,11 @@ export class ModelManager {
             return
           }
           downloaded += chunk.length
-          const progress = Math.min(0.9, (progressBase + downloaded) / totalSize)
+          const progress = Math.min(
+            0.9,
+            ((totals?.completedBytes ?? 0) + progressBase + downloaded) /
+              (totals?.modelTotalBytes ?? totalSize)
+          )
           this.updateState(modelId, 'downloading', progress)
         }
 
@@ -765,10 +806,10 @@ export class ModelManager {
     })
   }
 
-  private verifyArchiveSha256(archivePath: string, expectedSha256: string): Promise<void> {
+  private verifyFileSha256(filePath: string, expectedSha256: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const hash = createHash('sha256')
-      const stream = createReadStream(archivePath)
+      const stream = createReadStream(filePath)
       let settled = false
 
       const cleanup = (): void => {
@@ -801,8 +842,8 @@ export class ModelManager {
       const onEnd = (): void => {
         const actualSha256 = hash.digest('hex')
         if (actualSha256 !== expectedSha256.toLowerCase()) {
-          // Why: archives feed native parsers, so verify contents against compromised/redirected release assets.
-          settleReject(new Error('Downloaded model archive failed integrity verification'))
+          // Why: model artifacts feed native runtimes, so verify every downloaded file before installation.
+          settleReject(new Error('Downloaded model file failed integrity verification'))
           return
         }
         settleResolve()
@@ -814,125 +855,24 @@ export class ModelManager {
     })
   }
 
-  private extractArchive(
-    archivePath: string,
-    destDir: string,
-    modelId: string,
-    isAborted: () => boolean
-  ): Promise<void> {
-    const modelDir = join(destDir, modelId)
-    mkdirSync(modelDir, { recursive: true })
-
-    return new Promise((resolve, reject) => {
-      // Why: spawn (not exec) so slow bzip2 stderr can't overflow exec's 1MB maxBuffer and silently kill the process.
-      const tarExecutable = resolveTarExecutable()
-      const child = spawn(
-        tarExecutable,
-        ['-xjf', archivePath, '-C', modelDir, '--strip-components=1'],
-        {
-          stdio: ['ignore', 'ignore', 'pipe'],
-          windowsHide: true
-        }
-      )
-
-      let stderr = ''
-      let settled = false
-      let timeout: ReturnType<typeof setTimeout> | null = null
-      let abortPoll: ReturnType<typeof setInterval> | null = null
-      const cleanup = (): void => {
-        if (timeout) {
-          clearTimeout(timeout)
-          timeout = null
-        }
-        if (abortPoll) {
-          clearInterval(abortPoll)
-          abortPoll = null
-        }
-        child.stderr?.off('data', onStderrData)
-        child.off('close', onClose)
-        child.off('error', onError)
-      }
-      const fail = (error: Error, killChild = false): void => {
-        if (settled) {
-          return
-        }
-        settled = true
-        cleanup()
-        if (killChild) {
-          child.kill('SIGKILL')
-        }
-        reject(error)
-      }
-      const onStderrData = (chunk: Buffer): void => {
-        stderr += chunk.toString()
-      }
-      const onClose = (code: number | null): void => {
-        if (settled) {
-          return
-        }
-        settled = true
-        cleanup()
-        if (code === 0) {
-          resolve()
-        } else {
-          reject(new Error(`tar exited with code ${code}: ${stderr.slice(0, 500)}`))
-        }
-      }
-      const onError = (err: Error): void => {
-        fail(err)
-      }
-
-      child.stderr?.on('data', onStderrData)
-      timeout = setTimeout(() => {
-        fail(new Error('Extraction timed out after 10 minutes'), true)
-      }, 600_000)
-      abortPoll = setInterval(() => {
-        if (isAborted()) {
-          // Why: a wedged child may never emit close/error, so abort must kill it here.
-          fail(new Error('Aborted'), true)
-        }
-      }, 250)
-
-      child.on('close', onClose)
-      child.on('error', onError)
-    })
-  }
-
-  private async flattenNestedDir(modelDir: string, manifest: SpeechModelManifest): Promise<void> {
-    if (!manifest.files) {
-      return
-    }
-    const entries = await readdir(modelDir, { withFileTypes: true })
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        const nestedDir = join(modelDir, entry.name)
-        const nestedFiles = await readdir(nestedDir)
-        const hasExpected = manifest.files.some((f) => nestedFiles.includes(f))
-        if (hasExpected) {
-          const { rename: fsRename } = await import('node:fs/promises')
-          for (const file of nestedFiles) {
-            await fsRename(join(nestedDir, file), join(modelDir, file))
-          }
-          await rm(nestedDir, { recursive: true, force: true })
-          return
-        }
+  private removeModelDownloadStaging(stagingDir: string, legacyArchivePath: string): void {
+    for (const path of [stagingDir, legacyArchivePath]) {
+      try {
+        rmSync(path, { recursive: true, force: true })
+      } catch {
+        // best-effort
       }
     }
   }
 
-  private cleanup(modelId: string, archivePath: string): void {
+  private removeModelDownloadFiles(
+    modelDir: string,
+    stagingDir: string,
+    legacyArchivePath: string
+  ): void {
+    this.removeModelDownloadStaging(stagingDir, legacyArchivePath)
     try {
-      if (existsSync(archivePath)) {
-        rmSync(archivePath)
-      }
-    } catch {
-      // best-effort
-    }
-    const modelDir = this.getModelDir(modelId)
-    try {
-      if (existsSync(modelDir)) {
-        rmSync(modelDir, { recursive: true })
-      }
+      rmSync(modelDir, { recursive: true, force: true })
     } catch {
       // best-effort
     }

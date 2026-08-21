@@ -17,11 +17,18 @@ import {
   UI_LANGUAGE_KOREAN,
   UI_LANGUAGE_SPANISH
 } from '../../shared/ui-language'
-import { ensureMainI18n, setMainUiLanguage, translateMain } from './main-i18n'
+import {
+  ensureMainI18n,
+  setMainPluginLanguagePacks,
+  setMainUiLanguage,
+  translateMain
+} from './main-i18n'
+import { pluginLanguageResourceId } from '../../shared/plugins/plugin-language-pack-artifact'
 
 describe('main-i18n lazy locale loading', () => {
   beforeEach(async () => {
     await ensureMainI18n()
+    setMainPluginLanguagePacks([])
     await setMainUiLanguage(UI_LANGUAGE_ENGLISH)
   })
 
@@ -51,11 +58,36 @@ describe('main-i18n lazy locale loading', () => {
     expect(translateMain('menu.file', 'File')).not.toBe('File')
   })
 
+  it('uses caller English when a target catalog omits a key', async () => {
+    await setMainUiLanguage(UI_LANGUAGE_SPANISH)
+    expect(translateMain('missing.main.feature', 'English fallback')).toBe('English fallback')
+  })
+
   it('returns to English from a lazily-loaded locale', async () => {
     await setMainUiLanguage(UI_LANGUAGE_SPANISH)
     expect(translateMain('menu.file', 'File')).toBe('Archivo')
 
     await setMainUiLanguage(UI_LANGUAGE_ENGLISH)
+    expect(translateMain('menu.file', 'File')).toBe('File')
+  })
+
+  it('loads a contributed catalog for native menus and dialogs', async () => {
+    const id = 'plugin:orca-samples.portuguese/pt-BR' as const
+    setMainPluginLanguagePacks([
+      {
+        id,
+        resourceLanguage: pluginLanguageResourceId(id),
+        pluginKey: 'orca-samples.portuguese',
+        locale: 'pt-BR',
+        catalog: { menu: { file: 'Arquivo Orca' } }
+      }
+    ])
+
+    await setMainUiLanguage(id)
+    expect(translateMain('menu.file', 'File')).toBe('Arquivo Orca')
+
+    setMainPluginLanguagePacks([])
+    expect(await setMainUiLanguage(id)).toBe('en')
     expect(translateMain('menu.file', 'File')).toBe('File')
   })
 })

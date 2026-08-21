@@ -1,5 +1,5 @@
 import type { AddressInfo } from 'node:net'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { encodePairingOffer, parsePairingCode, type PairingOffer } from './pairing'
 import {
@@ -11,11 +11,19 @@ import {
   publicKeyToBase64
 } from './e2ee-crypto'
 import { RemoteRuntimeRequestConnection } from './remote-runtime-request-connection'
+import {
+  AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+  WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+  WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
+} from './protocol-version'
+import { SKILL_INSTALL_RESULT_V2_CAPABILITY } from './skill-install-capability'
 
 type TestServer = {
   wss: WebSocketServer
   pairing: PairingOffer
   requests: unknown[]
+  auths: unknown[]
   connectionCount: () => number
 }
 
@@ -54,10 +62,44 @@ describe('RemoteRuntimeRequestConnection', () => {
       _meta: { runtimeId: 'runtime-test' }
     })
     expect(server.connectionCount()).toBe(1)
+    expect(server.auths).toContainEqual(
+      expect.objectContaining({
+        clientCapabilities: [
+          SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+          AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+          SKILL_INSTALL_RESULT_V2_CAPABILITY,
+          WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+          WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
+        ]
+      })
+    )
     expect(server.requests).toMatchObject([
       { method: 'status.get' },
       { method: 'terminal.send', params: { terminal: 't1', text: 'ab' } }
     ])
+
+    connection.close()
+  })
+
+  it('aborts one request without closing the cached connection', async () => {
+    const server = await createServer()
+    const connection = new RemoteRuntimeRequestConnection(server.pairing)
+    const controller = new AbortController()
+    const pending = connection.request('test.hang', undefined, 60_000, controller.signal)
+    await vi.waitFor(() =>
+      expect(server.requests).toContainEqual(expect.objectContaining({ method: 'test.hang' }))
+    )
+
+    controller.abort()
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    expect(
+      (connection as unknown as { pendingRequests: Map<string, unknown> }).pendingRequests.size
+    ).toBe(0)
+    await expect(connection.request('status.get', undefined, 1000)).resolves.toMatchObject({
+      ok: true,
+      result: { method: 'status.get' }
+    })
+    expect(server.connectionCount()).toBe(1)
 
     connection.close()
   })
@@ -66,6 +108,7 @@ describe('RemoteRuntimeRequestConnection', () => {
 async function createServer(): Promise<TestServer> {
   const serverKeyPair = generateKeyPair()
   const requests: unknown[] = []
+  const auths: unknown[] = []
   let connectionCount = 0
   const wss = new WebSocketServer({ port: 0 })
   servers.push(wss)
@@ -94,7 +137,18 @@ async function createServer(): Promise<TestServer> {
       }
       if (!authenticated) {
         const auth = JSON.parse(plaintext) as { type: string; deviceToken: string }
-        expect(auth).toEqual({ type: 'e2ee_auth', deviceToken: 'device-token' })
+        auths.push(auth)
+        expect(auth).toEqual({
+          type: 'e2ee_auth',
+          deviceToken: 'device-token',
+          clientCapabilities: [
+            SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+            AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+            SKILL_INSTALL_RESULT_V2_CAPABILITY,
+            WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+            WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
+          ]
+        })
         authenticated = true
         sendEncrypted(ws, sharedKey, { type: 'e2ee_authenticated' })
         return
@@ -106,6 +160,9 @@ async function createServer(): Promise<TestServer> {
         params?: unknown
       }
       requests.push(request)
+      if (request.method === 'test.hang') {
+        return
+      }
       sendEncrypted(ws, sharedKey, {
         id: request.id,
         ok: true,
@@ -133,6 +190,7 @@ async function createServer(): Promise<TestServer> {
     wss,
     pairing,
     requests,
+    auths,
     connectionCount: () => connectionCount
   }
 }

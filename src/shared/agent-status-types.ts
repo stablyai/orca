@@ -3,12 +3,15 @@
 // a narrow interrupt fallback synthesizes a final `done` when an agent misses its cancellation hook.
 
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { WithAgentStatusObservation } from './agent-status-observation'
 import {
   normalizeInteractivePromptField,
   normalizeOptionalField,
   normalizeOptionalMultilineField,
-  normalizePromptField
+  normalizePromptField,
+  normalizeTurnCompletedAtField
 } from './agent-status-field-normalization'
+import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 
 export { AGENT_STATUS_MAX_FIELD_LENGTH } from './agent-status-field-normalization'
 
@@ -30,18 +33,22 @@ export type WellKnownAgentType =
   | 'aider'
   | 'pi'
   | 'omp'
+  | 'prime-agent'
   | 'droid'
   | 'command-code'
   | 'grok'
   | 'hermes'
   | 'devin'
   | 'ante'
+  | 'trae'
   | 'unknown'
 export type AgentType = WellKnownAgentType | (string & {})
 
 /** A snapshot of a previous agent state, used to render activity blocks.
  *  Why: intentionally narrower than AgentStatusEntry — tool/assistant context is
- *  per-turn, not meaningful on a historical snapshot, and would bloat memory. */
+ *  per-turn, not meaningful on a historical snapshot, and would bloat memory.
+ *  Coalesced-turn output lives in AgentStatusEntry.lastCompletedAssistantMessage,
+ *  one copy per pane, so it can't multiply by AGENT_STATE_HISTORY_MAX. */
 export type AgentStateHistoryEntry = {
   state: AgentStatusState
   prompt: string
@@ -58,6 +65,8 @@ export const AGENT_STATE_HISTORY_MAX = 20
 export type AgentStatusOrchestrationContext = {
   taskId: string
   dispatchId: string
+  /** Runtime-authoritative lifecycle state. Hook-only contexts may omit it. */
+  dispatchStatus?: 'pending' | 'dispatched' | 'completed' | 'failed' | 'circuit_broken'
   taskTitle?: string
   displayName?: string
   parentTerminalHandle?: string
@@ -66,14 +75,16 @@ export type AgentStatusOrchestrationContext = {
   orchestrationRunId?: string
 }
 
-export type AgentSubagentState = 'working' | 'idle'
+export type AgentSubagentState = 'working' | 'blocked' | 'waiting' | 'idle'
 
-/** A live in-process subagent/teammate of the pane's session (Claude Subagent hooks +
- *  the `background_tasks` field on Stop). Rendered as an indented child row with no PTY of its own. */
+/** A live in-process child of the pane's provider session. Rendered as an
+ *  indented child row with no PTY of its own. */
 export type AgentSubagentSnapshot = {
-  /** Provider-assigned id (Claude hook `agent_id`). */
+  /** Provider-assigned lifecycle id. */
   id: string
   agentType?: string
+  /** Provider model used by this child, when exposed by its lifecycle event. */
+  model?: string
   description?: string
   state: AgentSubagentState
   /** Timestamp (ms) when this subagent was first observed. */
@@ -91,6 +102,8 @@ export type AgentStatusEntry = {
    *  Why: separate from updatedAt so tool/prompt pings (which reset updatedAt) don't move it. */
   stateStartedAt: number
   agentType?: AgentType
+  /** Provider model currently used by this session. */
+  model?: string
   /** Composite key: `${tabId}:${leafId}` where leafId is a stable UUID layout leaf. */
   paneKey: string
   /** Runtime terminal handle for matching retained parent rows when the parent
@@ -115,9 +128,15 @@ export type AgentStatusEntry = {
   interactivePrompt?: string
   /** Most recent assistant message preview, when the hook carried one. */
   lastAssistantMessage?: string
+  /** Output of the newest completed (non-boundary) turn, kept across the next `working`.
+   *  Why: batched publications can fold a whole done→working turn into one notification,
+   *  so `lastAssistantMessage` is already cleared by the time a subscriber observes it. */
+  lastCompletedAssistantMessage?: string
   /** True when this `done` was reached via interrupt, not normal completion
    *  (agent-reported or Orca's guarded fallback). Undefined otherwise. */
   interrupted?: boolean
+  /** True when this `done` is a session boundary, not a completed turn. See AgentStatusPayload. */
+  sessionBoundary?: boolean
   /** Orchestration dispatch context for panes spawned by another agent.
    *  Why: parent/child hierarchy is pane-level state, not worktree lineage — workers often share the coordinator's worktree. */
   orchestration?: AgentStatusOrchestrationContext
@@ -129,7 +148,11 @@ export type AgentStatusEntry = {
   providerSession?: AgentProviderSessionMetadata
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
-}
+  /** True for a nonterminal state hydrated from last-status.json with no live hook since:
+   *  the transition may have been missed while no receiver was up, so freshness gates
+   *  treat the row as stale immediately. Cleared by any accepted live event. */
+  restoredUnconfirmed?: boolean
+} & WithAgentStatusObservation
 
 export type MigrationUnsupportedPtyEntry = {
   ptyId: string
@@ -150,6 +173,7 @@ export type AgentStatusPayload = {
   state: AgentStatusState
   prompt?: string
   agentType?: AgentType
+  model?: string
   toolName?: string
   toolInput?: string
   /** JSON string of the AskUserQuestion tool input, captured live. See the
@@ -157,7 +181,16 @@ export type AgentStatusPayload = {
   interactivePrompt?: string
   lastAssistantMessage?: string
   interrupted?: boolean
-  /** Live subagents/teammates of the reporting session. See AgentStatusEntry. */
+  /** True when this `done` marks a session boundary (connect/resume/clear landing idle,
+   *  e.g. Claude SessionStart — STA-3386), not a completed turn. Consumers that react to
+   *  completions (notifications, automation runs, unread badges, finished timestamps)
+   *  must ignore it. Only meaningful on `done`. */
+  sessionBoundary?: boolean
+  /** Wall-clock ms when the lead turn ended while Claude background inventory kept the pane `working`.
+   *  `stateStartedAt` stays pinned for that whole working run, so this is the per-turn identity.
+   *  Present on the gated `working` row and that turn's later all-clear `done`. Event-only — not stored on AgentStatusEntry. */
+  turnCompletedAt?: number
+  /** Live in-process children of the reporting session. See AgentStatusEntry. */
   subagents?: AgentSubagentSnapshot[]
 }
 
@@ -167,6 +200,33 @@ export type AgentStatusPayload = {
  * absence ("no new info") from an explicit empty string.
  */
 export type ParsedAgentStatusPayload = Omit<AgentStatusPayload, 'prompt'> & { prompt: string }
+
+/**
+ * Narrow an `AgentStatusIpcPayload` (or any superset) down to the status fields alone.
+ * Why: the IPC shape is flattened, so a spread cannot be narrowed structurally — copying
+ * a hook row into a client-visible projection would otherwise ship `launchToken`,
+ * `connectionId`, `promptInteractionKey` and `providerSessionOnly` to every paired client.
+ */
+export function pickParsedAgentStatusPayload(
+  row: ParsedAgentStatusPayload
+): ParsedAgentStatusPayload {
+  return {
+    state: row.state,
+    prompt: row.prompt,
+    ...(row.agentType !== undefined ? { agentType: row.agentType } : {}),
+    ...(row.model !== undefined ? { model: row.model } : {}),
+    ...(row.toolName !== undefined ? { toolName: row.toolName } : {}),
+    ...(row.toolInput !== undefined ? { toolInput: row.toolInput } : {}),
+    ...(row.interactivePrompt !== undefined ? { interactivePrompt: row.interactivePrompt } : {}),
+    ...(row.lastAssistantMessage !== undefined
+      ? { lastAssistantMessage: row.lastAssistantMessage }
+      : {}),
+    ...(row.interrupted !== undefined ? { interrupted: row.interrupted } : {}),
+    ...(row.sessionBoundary !== undefined ? { sessionBoundary: row.sessionBoundary } : {}),
+    ...(row.turnCompletedAt !== undefined ? { turnCompletedAt: row.turnCompletedAt } : {}),
+    ...(row.subagents !== undefined ? { subagents: row.subagents } : {})
+  }
+}
 
 /**
  * Wire shape for agent-status IPC. Both `agentStatus:set` and `agentStatus:getSnapshot`
@@ -179,7 +239,7 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   tabId?: string
   worktreeId?: string
   /** Identifies the SSH connection the event arrived on, or null for local.
-   *  Only the remote-ingest path (`ingestRemote`) can stamp it; the HTTP path always sets null. See docs/design/agent-status-over-ssh.md §5. */
+   *  Only the remote-ingest path (`ingestRemote`) can stamp it from mux identity; the HTTP path has no mux and always sets null. */
   connectionId: string | null
   /** Timestamp (ms) when the hook server received this latest status event. */
   receivedAt: number
@@ -191,7 +251,9 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   providerSessionOnly?: boolean
   /** Live-only Command Code turn boundary key; not persisted to last-status.json. */
   promptInteractionKey?: string
-}
+  /** See AgentStatusEntry.restoredUnconfirmed — hydrated nonterminal provenance. */
+  restoredUnconfirmed?: boolean
+} & WithAgentStatusObservation
 
 /** Wire shape for ordinary pane teardown or a stamped SSH disconnect batch. */
 export type AgentStatusClearIpcPayload =
@@ -219,21 +281,32 @@ export const AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH = 16000
 export const AGENT_STATUS_STALE_AFTER_MS = 30 * 60 * 1000
 
 export function isFreshNonDoneAgentStatus(
-  entry: Pick<AgentStatusEntry, 'state' | 'updatedAt'> | undefined,
+  entry: Pick<AgentStatusEntry, 'state' | 'updatedAt' | 'restoredUnconfirmed'> | undefined,
   now = Date.now(),
   staleAfterMs = AGENT_STATUS_STALE_AFTER_MS
 ): boolean {
-  return Boolean(entry && entry.state !== 'done' && now - entry.updatedAt <= staleAfterMs)
+  // Why: an unconfirmed hydrated row may describe a turn that ended while no receiver was up; never fresh.
+  return Boolean(
+    entry &&
+    entry.state !== 'done' &&
+    entry.restoredUnconfirmed !== true &&
+    now - entry.updatedAt <= staleAfterMs
+  )
 }
 
 // Why: ReadonlySet<string> so .has() accepts any string without a cast here; the narrowing cast stays on the return line where it's proven safe.
 const VALID_STATES: ReadonlySet<string> = new Set<string>(AGENT_STATUS_STATES)
 /** Maximum character length for the agentType label. Truncated on parse. */
 export const AGENT_TYPE_MAX_LENGTH = 40
+export const AGENT_MODEL_MAX_LENGTH = 120
 
 /** Maximum subagent child rows carried per status entry. Bounds per-pane cache
  *  and IPC fanout against a runaway spawner. */
 export const AGENT_STATUS_MAX_SUBAGENTS = 32
+export const AGENT_STATUS_JSON_STRUCTURE_LIMITS = {
+  structuralTokens: 4096,
+  nestingDepth: 16
+} as const
 const AGENT_SUBAGENT_ID_MAX_LENGTH = 64
 
 function normalizeSubagentSnapshot(value: unknown): AgentSubagentSnapshot | null {
@@ -248,7 +321,12 @@ function normalizeSubagentSnapshot(value: unknown): AgentSubagentSnapshot | null
   if (id.length === 0 || id.length > AGENT_SUBAGENT_ID_MAX_LENGTH) {
     return null
   }
-  if (obj.state !== 'working' && obj.state !== 'idle') {
+  if (
+    obj.state !== 'working' &&
+    obj.state !== 'blocked' &&
+    obj.state !== 'waiting' &&
+    obj.state !== 'idle'
+  ) {
     return null
   }
   return {
@@ -257,6 +335,7 @@ function normalizeSubagentSnapshot(value: unknown): AgentSubagentSnapshot | null
     startedAt:
       typeof obj.startedAt === 'number' && Number.isFinite(obj.startedAt) ? obj.startedAt : 0,
     agentType: normalizeOptionalField(obj.agentType, AGENT_TYPE_MAX_LENGTH),
+    model: normalizeOptionalField(obj.model, AGENT_MODEL_MAX_LENGTH),
     description: normalizeOptionalField(obj.description, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH)
   }
 }
@@ -298,6 +377,7 @@ export function agentSubagentsEqual(
       x.state !== y.state ||
       x.startedAt !== y.startedAt ||
       x.agentType !== y.agentType ||
+      x.model !== y.model ||
       x.description !== y.description
     ) {
       return false
@@ -330,6 +410,7 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     prompt: normalizePromptField(obj.prompt),
     // Why: normalize like the other single-line fields so embedded newlines (e.g. `agentType: "claude\nrogue"`) can't break single-line UI and equality checks.
     agentType: normalizeOptionalField(obj.agentType, AGENT_TYPE_MAX_LENGTH),
+    model: normalizeOptionalField(obj.model, AGENT_MODEL_MAX_LENGTH),
     toolName: normalizeOptionalField(obj.toolName, AGENT_STATUS_TOOL_NAME_MAX_LENGTH),
     toolInput: normalizeOptionalField(obj.toolInput, AGENT_STATUS_TOOL_INPUT_MAX_LENGTH),
     interactivePrompt: normalizeInteractivePromptField(
@@ -342,6 +423,8 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
     ),
     // Why: only meaningful on `done`; coerce to undefined elsewhere so it can't leak stale truth across transitions.
     interrupted: obj.interrupted === true && state === 'done' ? true : undefined,
+    sessionBoundary: obj.sessionBoundary === true && state === 'done' ? true : undefined,
+    turnCompletedAt: normalizeTurnCompletedAtField(obj.turnCompletedAt, state),
     subagents: normalizeSubagentsField(obj.subagents)
   }
 }
@@ -362,6 +445,7 @@ export function normalizeAgentStatusPayload(payload: unknown): ParsedAgentStatus
  */
 export function parseAgentStatusPayload(json: string): ParsedAgentStatusPayload | null {
   try {
+    assertJsonTextStructureWithinLimits(json, AGENT_STATUS_JSON_STRUCTURE_LIMITS)
     return normalizeAgentStatusObject(JSON.parse(json))
   } catch {
     return null

@@ -1,5 +1,12 @@
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 import { isTuiAgentEnabled } from './tui-agent-selection'
+import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+import {
+  CLAUDE_MODEL_LIST_ARGS,
+  CLAUDE_MODEL_LIST_STDIN,
+  parseClaudeModelList
+} from './claude-model-list-probe'
+import { labelFromModelId } from './model-id-label'
 
 /* eslint-disable max-lines -- Why: this is the single registry for non-interactive commit-message agents, their model discovery parsers, and UI capabilities. */
 
@@ -15,10 +22,17 @@ export type CommitMessageModel = {
   id: string
   /** Visible label in the model dropdown. */
   label: string
+  /** Discovery-provided detail, e.g. what a CLI alias resolves to on this host. */
+  description?: string
   /** Omit when the model does not expose an effort selector — the UI then hides the dropdown. */
   thinkingLevels?: ThinkingLevel[]
   /** Required when thinkingLevels is present. */
   defaultThinkingLevel?: string
+  /** Whether the model exposes Claude's mid-session Fast mode toggle. */
+  supportsFastMode?: boolean
+  /** Set when the listing marks this as the id the CLI runs with no --model flag.
+   *  Optional so an older remote host that never reports it simply omits it. */
+  isDefault?: boolean
 }
 
 export type CommitMessageAgentSpec = {
@@ -30,12 +44,18 @@ export type CommitMessageAgentSpec = {
   /** Where the prompt is delivered. Large diffs go via stdin to avoid argv limits. */
   promptDelivery: 'argv' | 'stdin'
   buildArgs: (params: { prompt: string; model: string; thinkingLevel?: string }) => string[]
+  /** Alias groups the CLI accepts at most once. Recipe CLI arguments repeating one
+   *  replace the generated flag instead of being appended: yargs-based CLIs collapse
+   *  a repeated flag into an array and crash. Defaults to the model flag alone. */
+  singletonOptions?: readonly (readonly string[])[]
   /** Whether the model list is static or discovered from the agent CLI. */
   modelSource: 'static' | 'dynamic'
   /** Command used by the main process to discover models when modelSource is dynamic. */
   modelDiscovery?: {
     binary: string
     args: string[]
+    /** Written to the CLI's stdin, for CLIs whose listing is request-driven. */
+    stdinPayload?: string
     parse: (stdout: string) => CommitMessageModel[]
   }
   models: CommitMessageModel[]
@@ -45,8 +65,12 @@ export type CommitMessageAgentSpec = {
 export type CommitMessageModelCapability = {
   id: string
   label: string
+  description?: string
   thinkingLevels?: ThinkingLevel[]
   defaultThinkingLevel?: string
+  supportsFastMode?: boolean
+  /** Absent from an older remote host, which simply yields no default to display. */
+  isDefault?: boolean
 }
 
 export type CommitMessageAgentCapability = {
@@ -56,6 +80,11 @@ export type CommitMessageAgentCapability = {
   models: CommitMessageModelCapability[]
   defaultModelId: string
 }
+
+export const COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS = {
+  structuralTokens: 64 * 1024,
+  nestingDepth: 16
+} as const
 
 const BASIC_THINKING_LEVELS: ThinkingLevel[] = [
   { id: 'low', label: 'Low' },
@@ -77,21 +106,6 @@ const CLAUDE_THINKING_LEVELS: ThinkingLevel[] = [
   { id: 'xhigh', label: 'Extra High' },
   { id: 'max', label: 'Max' }
 ]
-
-function labelFromModelId(id: string): string {
-  return id
-    .split(/[/-]/)
-    .filter(Boolean)
-    .map((part) => {
-      if (/^gpt$/i.test(part)) {
-        return 'GPT'
-      }
-      return part.length <= 3 && /^\d/.test(part)
-        ? part.toUpperCase()
-        : part.charAt(0).toUpperCase() + part.slice(1)
-    })
-    .join(' ')
-}
 
 function uniqueModels(models: CommitMessageModel[]): CommitMessageModel[] {
   const seen = new Set<string>()
@@ -133,8 +147,33 @@ function withOpenAiThinking(
     : {}
 }
 
+export function parseClaudeModels(stdout: string): CommitMessageModel[] {
+  return uniqueModels(
+    parseClaudeModelList(stdout).map((model) => {
+      const thinkingLevels = CLAUDE_THINKING_LEVELS.filter((level) =>
+        model.effortLevels.includes(level.id)
+      )
+      return {
+        id: model.id,
+        label: model.label,
+        ...(model.description ? { description: model.description } : {}),
+        ...(thinkingLevels.length > 0
+          ? {
+              thinkingLevels,
+              defaultThinkingLevel: thinkingLevels.some((level) => level.id === 'low')
+                ? 'low'
+                : thinkingLevels[0].id
+            }
+          : {}),
+        ...(model.supportsFastMode ? { supportsFastMode: true } : {})
+      }
+    })
+  )
+}
+
 export function parseCodexModels(stdout: string): CommitMessageModel[] {
   try {
+    assertJsonTextStructureWithinLimits(stdout, COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS)
     const parsed = JSON.parse(stdout) as {
       models?: {
         slug?: string
@@ -304,7 +343,16 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
       'plan',
       ...(thinkingLevel ? ['--effort', thinkingLevel] : [])
     ],
-    modelSource: 'static',
+    modelSource: 'dynamic',
+    // Why: the Claude CLI has no listing subcommand; one list_models control
+    // request over --print stream-json returns the /model picker catalog.
+    // Older CLIs answer with a control error and exit 0, keeping the fallback.
+    modelDiscovery: {
+      binary: 'claude',
+      args: [...CLAUDE_MODEL_LIST_ARGS],
+      stdinPayload: CLAUDE_MODEL_LIST_STDIN,
+      parse: parseClaudeModels
+    },
     models: [
       {
         // Why: Claude Code aliases track the account/provider's supported
@@ -348,6 +396,8 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
       model,
       ...(thinkingLevel ? ['-c', `model_reasoning_effort=${thinkingLevel}`] : [])
     ],
+    // `-c` is intentionally absent: Codex accepts repeated overrides.
+    singletonOptions: [['--model', '-m']],
     modelSource: 'dynamic',
     modelDiscovery: {
       binary: 'codex',
@@ -417,6 +467,7 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
       'default',
       ...(thinkingLevel ? ['--variant', thinkingLevel] : [])
     ],
+    singletonOptions: [['--model', '-m'], ['--agent'], ['--format'], ['--variant']],
     modelSource: 'dynamic',
     modelDiscovery: { binary: 'opencode', args: ['models'], parse: parseLineModels },
     models: [
@@ -480,6 +531,8 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
       model,
       ...(thinkingLevel ? ['--effort', thinkingLevel] : [])
     ],
+    // Amp selects the model with `--mode`, not `--model`.
+    singletonOptions: [['--mode']],
     modelSource: 'static',
     models: [
       { id: 'smart', label: 'Smart' },
@@ -524,9 +577,12 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     id: 'kimi',
     label: 'Kimi',
     binary: 'kimi',
-    promptDelivery: 'stdin',
-    buildArgs: ({ model, thinkingLevel }) => [
-      '--print',
+    // Why: kimi-code accepts the generation prompt only via --prompt/-p (Claude's
+    // --print is rejected). Deliver on argv so --prompt receives the text (#11669).
+    promptDelivery: 'argv',
+    buildArgs: ({ prompt, model, thinkingLevel }) => [
+      '--prompt',
+      prompt,
       '--quiet',
       ...(model && model !== 'default' ? ['--model', model] : []),
       ...(thinkingLevel === 'on'
@@ -737,8 +793,10 @@ function toCommitMessageAgentCapability(
     models: spec.models.map((model) => ({
       id: model.id,
       label: model.label,
+      ...(model.description ? { description: model.description } : {}),
       ...(model.thinkingLevels ? { thinkingLevels: [...model.thinkingLevels] } : {}),
-      ...(model.defaultThinkingLevel ? { defaultThinkingLevel: model.defaultThinkingLevel } : {})
+      ...(model.defaultThinkingLevel ? { defaultThinkingLevel: model.defaultThinkingLevel } : {}),
+      ...(model.supportsFastMode ? { supportsFastMode: true } : {})
     }))
   }
 }

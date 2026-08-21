@@ -1,3 +1,4 @@
+import { isAskUserQuestionTool } from '../../../../shared/agent-question-answered-intent'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
 import { getSyntheticAgentTitleProfile } from '../../../../shared/synthetic-agent-title'
 import { resolveTuiAgentPermissionMode } from '../../../../shared/tui-agent-permissions'
@@ -26,6 +27,10 @@ export function shouldSuppressCodexAutoApprovalStatus(
   context: CodexAutoApprovalStatusContext
 ): boolean {
   if (payload.agentType !== 'codex' || !isCodexAutoApprovedPermissionState(payload.state)) {
+    return false
+  }
+  // Why: request_user_input waits are real questions the user must answer — yolo auto-approval never resolves them, so they must keep driving status.
+  if (isAskUserQuestionTool(payload.toolName)) {
     return false
   }
 

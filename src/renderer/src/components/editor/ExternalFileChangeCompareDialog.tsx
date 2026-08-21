@@ -60,7 +60,8 @@ export function ExternalFileChangeCompareDialog({
       filePath: file.filePath,
       relativePath: file.relativePath,
       worktreeId: file.worktreeId,
-      connectionId: getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined
+      connectionId: getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined,
+      expectedExternalSshTargetId: file.externalSshTargetId
     })
       .then((result) => {
         if (cancelled) {
@@ -82,7 +83,14 @@ export function ExternalFileChangeCompareDialog({
     return () => {
       cancelled = true
     }
-  }, [open, file.filePath, file.relativePath, file.worktreeId, file.runtimeEnvironmentId])
+  }, [
+    open,
+    file.filePath,
+    file.relativePath,
+    file.worktreeId,
+    file.runtimeEnvironmentId,
+    file.externalSshTargetId
+  ])
 
   const language = detectLanguage(file.relativePath)
 

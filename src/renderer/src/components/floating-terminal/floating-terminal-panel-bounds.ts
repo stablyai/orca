@@ -60,7 +60,7 @@ function clampValue(value: number, min: number, max: number): number {
 }
 
 function getWindowStorage(): Storage | null {
-  return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
+  return typeof window !== 'undefined' && window.localStorage !== undefined
     ? window.localStorage
     : null
 }

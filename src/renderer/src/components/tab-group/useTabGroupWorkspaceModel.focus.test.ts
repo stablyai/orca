@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   createBrowserTab: vi.fn(),
   createEmptySplitGroup: vi.fn(),
   createTab: vi.fn(),
+  createWebRuntimeSessionTerminal: vi.fn(),
   destroyWorkspaceWebviews: vi.fn(),
   dispatchEvent: vi.fn(),
   dropUnifiedTab: vi.fn(),
@@ -71,7 +72,7 @@ vi.mock('../../runtime/web-runtime-session', () => ({
   activateWebRuntimeSessionTab: mocks.activateWebRuntimeSessionTab,
   closeWebRuntimeSessionTab: mocks.closeWebRuntimeSessionTab,
   createWebRuntimeSessionBrowserTab: vi.fn(),
-  createWebRuntimeSessionTerminal: vi.fn(),
+  createWebRuntimeSessionTerminal: mocks.createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive: mocks.isWebRuntimeSessionActive,
   toHostSessionTabId: (tabId: string) => tabId
 }))
@@ -164,6 +165,10 @@ function resetStore(): void {
 describe('useTabGroupWorkspaceModel terminal activation focus', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.createWebRuntimeSessionTerminal.mockResolvedValue({
+      status: 'failed',
+      message: 'The workspace is not connected to a remote Orca host.'
+    })
     resetStore()
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0)
@@ -189,6 +194,18 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     expect(mocks.setActiveTab).toHaveBeenCalledWith('terminal-1')
     expect(mocks.setActiveTabType).toHaveBeenCalledWith('terminal')
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('terminal-1', null)
+  })
+
+  it('falls back to a local shell when the typed remote-create outcome is unavailable', async () => {
+    mocks.createTab.mockReturnValue({ id: 'terminal-new' })
+    const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
+    const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
+
+    model.commands.newTerminalWithShell('zsh')
+    await vi.waitFor(() => expect(mocks.createTab).toHaveBeenCalled())
+
+    expect(mocks.createTab).toHaveBeenCalledWith('wt-1', 'group-1', 'zsh')
+    expect(mocks.setActiveTab).toHaveBeenCalledWith('terminal-new')
   })
 
   it('returns keyboard focus to the active split pane leaf when a terminal tab is activated', async () => {
@@ -296,7 +313,8 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     expect(mocks.closeWebRuntimeSessionTab).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       tabId: 'terminal-2',
-      environmentId: 'env-1'
+      environmentId: 'env-1',
+      reason: 'user'
     })
   })
 

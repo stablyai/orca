@@ -6,15 +6,11 @@ import {
 export type PtyStartupIngressIntent = {
   colors: TerminalOscColorQueryReplyColors
   deadlineMs: number
-  echoProjection?: 'windows-conpty-esc-stripped'
 }
 
-export const PTY_STARTUP_INGRESS_VERSION = 1
+export const PTY_STARTUP_INGRESS_VERSION = 2
 
-export function parsePtyStartupIngressIntent(
-  value: unknown,
-  options: { allowWindowsEchoProjection: boolean }
-): PtyStartupIngressIntent | undefined {
+export function parsePtyStartupIngressIntent(value: unknown): PtyStartupIngressIntent | undefined {
   if (!value || typeof value !== 'object') {
     return undefined
   }
@@ -37,16 +33,8 @@ export function parsePtyStartupIngressIntent(
   ) {
     return undefined
   }
-  const projection = record.echoProjection
-  if (
-    projection !== undefined &&
-    (projection !== 'windows-conpty-esc-stripped' || !options.allowWindowsEchoProjection)
-  ) {
-    return undefined
-  }
   return {
     colors: normalizedColors,
-    deadlineMs: record.deadlineMs,
-    ...(projection === 'windows-conpty-esc-stripped' ? { echoProjection: projection } : {})
+    deadlineMs: record.deadlineMs
   }
 }

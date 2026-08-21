@@ -117,6 +117,14 @@ vi.mock('./hosted-review', () => ({
 
 import { createHostedReview, getHostedReviewCreationEligibility } from './hosted-review-creation'
 
+import { _resetOriginGitHubApiRepositoryCache } from '../github/github-api-repository'
+
+// The origin-repository cache is module-level state; reset it so slugs
+// resolved by one test cannot leak into the next.
+beforeEach(() => {
+  _resetOriginGitHubApiRepositoryCache()
+})
+
 function resetMocks(): void {
   for (const mock of [
     createGitHubPullRequestMock,
@@ -155,10 +163,17 @@ function mockGitHubProvider(): void {
 // resolver claims the repo and reports the host for the gh auth probe (#8312).
 function mockGitHubEnterpriseProvider(): void {
   getProjectSlugMock.mockResolvedValue(null)
-  getRepoSlugMock.mockResolvedValue(null)
+  // Why: getRepoSlug resolves hosted identities itself now — a GHES remote
+  // comes back host-qualified instead of null + separate enterprise fallback.
+  getRepoSlugMock.mockResolvedValue({
+    owner: 'acme',
+    repo: 'orca',
+    host: 'github.acme-corp.com'
+  })
   getBitbucketRepoSlugMock.mockResolvedValue(null)
   getAzureDevOpsRepoSlugMock.mockResolvedValue(null)
   getGiteaRepoSlugMock.mockResolvedValue(null)
+  // The auth gate still keys off the enterprise resolver (authed-GHES signal).
   getEnterpriseGitHubRepoSlugMock.mockResolvedValue({
     owner: 'acme',
     repo: 'orca',
@@ -457,29 +472,31 @@ describe('getHostedReviewCreationEligibility', () => {
       blockedReason: null,
       nextAction: null,
       defaultBaseRef: 'origin/main',
-      head: 'feature/create-pr'
+      head: 'feature/create-pr',
+      stackedCreationSupported: true
     })
   })
 
   it('detects a GitHub Enterprise Server branch as the GitHub provider (#8312)', async () => {
     mockGitHubEnterpriseProvider()
 
-    await expect(
-      getHostedReviewCreationEligibility({
-        repoPath: '/repo',
-        branch: 'feature/create-pr',
-        base: 'origin/main',
-        hasUncommittedChanges: false,
-        hasUpstream: true,
-        ahead: 0,
-        behind: 0
-      })
-    ).resolves.toMatchObject({
+    const result = await getHostedReviewCreationEligibility({
+      repoPath: '/repo',
+      branch: 'feature/create-pr',
+      base: 'origin/main',
+      hasUncommittedChanges: false,
+      hasUpstream: true,
+      ahead: 0,
+      behind: 0
+    })
+
+    expect(result).toMatchObject({
       provider: 'github',
       canCreate: true,
       blockedReason: null,
       nextAction: null
     })
+    expect(result).not.toHaveProperty('stackedCreationSupported')
 
     // Enterprise auth was already confirmed during detection; the gate must not
     // fire a redundant gh probe.

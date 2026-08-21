@@ -2,7 +2,8 @@ import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard
 import type {
   GitHubProjectSettings,
   GitHubProjectSummary
-} from '../../../../shared/github-project-types'
+} from '../../../../shared/github/project-types'
+import { githubProjectIdentityKey } from '../../../../shared/github/project-identity'
 
 export const GITHUB_PROJECT_PICKER_QUERY_MAX_BYTES = 2 * 1024
 
@@ -14,9 +15,9 @@ export function isGitHubProjectPickerQueryTooLarge(
 }
 
 function getProjectKey(
-  project: Pick<GitHubProjectSummary, 'ownerType' | 'owner' | 'number'>
+  project: Pick<GitHubProjectSummary, 'ownerType' | 'owner' | 'number' | 'host'>
 ): string {
-  return `${project.ownerType}:${project.owner}:${project.number}`
+  return githubProjectIdentityKey(project)
 }
 
 export function filterGitHubProjectPickerProjects({

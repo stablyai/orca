@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AlertCircle, FileCode2, LoaderCircle, Plus, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import type { Repo, Worktree } from '../../../../shared/types'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import {
   canInspectLocalMcpConfigRoot,
   inspectMcpConfigContent,
@@ -19,6 +20,7 @@ import { McpConfigFileRow, type LoadedMcpConfigInspection } from './McpConfigFil
 import { McpMissingConfigList } from './McpMissingConfigList'
 import { loadMcpConfigInspections } from './mcp-config-inspection'
 import { translate } from '@/i18n/i18n'
+import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 
 type McpConfigSectionProps = {
   repo: Repo
@@ -192,9 +194,17 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
 
     const target = joinPath(targetRootPath, '.mcp.json')
     try {
+      const sshExpectation = connectionId
+        ? captureDirectSshMutationExpectation(useAppStore.getState(), connectionId)
+        : {}
       // Why: v1 only creates the root workspace config so we do not need to
       // guess per-agent directory layouts or mutate agent-specific files.
-      await window.api.fs.writeFile({ filePath: target, content: MCP_STARTER_CONFIG, connectionId })
+      await window.api.fs.writeFile({
+        filePath: target,
+        content: MCP_STARTER_CONFIG,
+        connectionId,
+        ...sshExpectation
+      })
       clearCreateConfirmResetTimer()
       if (mountedRef.current) {
         setCreateConfirm(false)

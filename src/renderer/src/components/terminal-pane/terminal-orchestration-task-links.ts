@@ -68,7 +68,7 @@ export async function focusRuntimeOrchestrationTask(
   }
   // Why: task IDs are stable orchestration DB records, but terminal.focus owns
   // the app-side navigation contract for local and SSH runtime terminals.
-  await callRuntimeRpc(target, 'terminal.focus', { terminal })
+  await callRuntimeRpc(target, 'terminal.focus', { terminal, navigation: 'host' })
 }
 
 function findOrchestrationTaskTokenEnd(lineText: string, startIndex: number): number {

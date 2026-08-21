@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  hasSleepableWorkspaceActivity,
   isContextWorktreeDeletable,
   shouldUseNativeContextMenu,
   shouldIgnoreNestedWorktreeContextMenuScope,
@@ -9,9 +8,38 @@ import {
   shouldContinueDeleteSiblingPositionRestore,
   getWorktreeParentPickerAnchor,
   getWorktreeParentPickerLabel,
+  hasWorktreeParentLink,
   isWorktreeParentPickerDisabled,
-  selectMenuScopedMap
+  planWorkspaceStatusAssignment,
+  selectMenuScopedMap,
+  shouldRevealWorktreeDeveloperMenu
 } from './WorktreeContextMenu'
+import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+
+describe('shouldRevealWorktreeDeveloperMenu', () => {
+  it('stays hidden for an ordinary right-click', () => {
+    expect(
+      shouldRevealWorktreeDeveloperMenu({ developerMenuRevealed: false, isMultiContext: false })
+    ).toBe(false)
+  })
+
+  it('reveals when Option/Alt was held at open time', () => {
+    expect(
+      shouldRevealWorktreeDeveloperMenu({ developerMenuRevealed: true, isMultiContext: false })
+    ).toBe(true)
+  })
+
+  // Why: the parking action targets one workspace, so it must not appear for a
+  // multi-select context even with the modifier held.
+  it('stays hidden for a multi-workspace selection', () => {
+    expect(
+      shouldRevealWorktreeDeveloperMenu({ developerMenuRevealed: true, isMultiContext: true })
+    ).toBe(false)
+  })
+})
 
 describe('selectMenuScopedMap (delete-teardown re-render guard)', () => {
   // Why: the closed menu wrapper must stay inert to delete teardown's high-churn
@@ -38,6 +66,31 @@ describe('selectMenuScopedMap (delete-teardown re-render guard)', () => {
     // The render where menuOpen flips true must read real data so menu items
     // (sleep/delete/lineage) reflect live tabs/ptys/delete state.
     expect(selectMenuScopedMap(true, live, empty)).toBe(live)
+  })
+})
+
+describe('getDeleteStateForWorktreeHost', () => {
+  const local = { id: 'repo::path', hostId: 'local' } as unknown as Worktree
+  const ssh = { id: 'repo::path', hostId: 'ssh:box' } as unknown as Worktree
+  const sshDelete = {
+    isDeleting: true,
+    executionHostId: 'ssh:box' as const,
+    error: null,
+    canForceDelete: false,
+    forceDeleteReason: null
+  }
+
+  it('keeps host-qualified pending state on its matching row only', () => {
+    const states = { [getWorktreeHostIdentity(ssh)]: sshDelete }
+    expect(getDeleteStateForWorktreeHost(ssh, states)).toBe(sshDelete)
+    expect(getDeleteStateForWorktreeHost(local, states)).toBeUndefined()
+  })
+
+  it('retains legacy unqualified state', () => {
+    const legacyDelete = { ...sshDelete, executionHostId: undefined }
+    const states = { [local.id]: legacyDelete }
+    expect(getDeleteStateForWorktreeHost(local, states)).toBe(legacyDelete)
+    expect(getDeleteStateForWorktreeHost(ssh, states)).toBe(legacyDelete)
   })
 })
 
@@ -139,6 +192,26 @@ describe('shouldContinueDeleteSiblingPositionRestore', () => {
 })
 
 describe('parent picker context menu affordance', () => {
+  it('offers unlink for valid inline-only legacy lineage after stable-update hydration', () => {
+    const parent = { id: 'repo::parent', instanceId: 'parent-instance' }
+    const lineage: WorktreeLineage = {
+      worktreeId: 'repo::child',
+      worktreeInstanceId: 'child-instance',
+      parentWorktreeId: parent.id,
+      parentWorktreeInstanceId: parent.instanceId,
+      origin: 'cli',
+      capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+      createdAt: 1
+    }
+    const child = {
+      id: lineage.worktreeId,
+      instanceId: lineage.worktreeInstanceId,
+      lineage
+    } as Worktree & { lineage: WorktreeLineage }
+
+    expect(hasWorktreeParentLink(child, {}, {})).toBe(true)
+  })
+
   it('uses set/change labels based on valid parent presence', () => {
     expect(getWorktreeParentPickerLabel(null)).toBe('Set Parent Worktree...')
     expect(getWorktreeParentPickerLabel('parent-1')).toBe('Change Parent Worktree...')
@@ -171,28 +244,6 @@ describe('parent picker context menu affordance', () => {
   })
 })
 
-describe('hasSleepableWorkspaceActivity', () => {
-  it('treats preserved empty PTY arrays as slept, not live', () => {
-    expect(
-      hasSleepableWorkspaceActivity('wt-1', { 'wt-1': [{ id: 'tab-1' }] }, { 'tab-1': [] }, {})
-    ).toBe(false)
-  })
-
-  it('detects live terminal and browser activity', () => {
-    expect(
-      hasSleepableWorkspaceActivity(
-        'wt-1',
-        { 'wt-1': [{ id: 'tab-1' }] },
-        { 'tab-1': ['pty-1'] },
-        {}
-      )
-    ).toBe(true)
-    expect(hasSleepableWorkspaceActivity('wt-1', {}, {}, { 'wt-1': [{ id: 'browser-1' }] })).toBe(
-      true
-    )
-  })
-})
-
 describe('project removal from workspace context menus', () => {
   it('routes primary workspace rows to project removal in non-repo grouped views', () => {
     const gitRepo = { id: 'repo-1' }
@@ -210,5 +261,51 @@ describe('project removal from workspace context menus', () => {
     expect(isContextWorktreeDeletable({ isMainWorktree: false }, folderRepo)).toBe(true)
     expect(isContextWorktreeDeletable({ isMainWorktree: true }, folderRepo)).toBe(false)
     expect(isContextWorktreeDeletable({ isMainWorktree: false }, null)).toBe(false)
+  })
+})
+
+describe('planWorkspaceStatusAssignment (context-menu "Move to Status" routing)', () => {
+  // Why: this is the exact branch #10175 regressed on — the board must funnel
+  // through the Linear-sync callback, the sidebar list must stay local-only. A
+  // silent flip of either branch re-introduces the bug, so pin both here.
+  const statuses: WorkspaceStatusDefinition[] = [
+    { id: 'todo', label: 'Todo' },
+    { id: 'in-review', label: 'In review' }
+  ]
+  const wt = (id: string, workspaceStatus: string): Worktree =>
+    ({ id, workspaceStatus }) as Worktree
+
+  it('routes to board Linear-sync with ALL selected ids when the board wired a callback', () => {
+    // The board path forwards every id; moveWorktreesToStatus filters no-ops downstream.
+    expect(
+      planWorkspaceStatusAssignment(
+        [wt('a', 'todo'), wt('b', 'in-review')],
+        'in-review',
+        statuses,
+        true
+      )
+    ).toEqual({ kind: 'board-sync', worktreeIds: ['a', 'b'] })
+  })
+
+  it('falls back to local-only writes of only status-changed worktrees off the board', () => {
+    expect(
+      planWorkspaceStatusAssignment(
+        [wt('a', 'todo'), wt('b', 'in-review')],
+        'in-review',
+        statuses,
+        false
+      )
+    ).toEqual({ kind: 'local-only', localWriteIds: ['a'] })
+  })
+
+  it('writes nothing on the local-only path when every worktree already has the target status', () => {
+    expect(
+      planWorkspaceStatusAssignment(
+        [wt('a', 'in-review'), wt('b', 'in-review')],
+        'in-review',
+        statuses,
+        false
+      )
+    ).toEqual({ kind: 'local-only', localWriteIds: [] })
   })
 })

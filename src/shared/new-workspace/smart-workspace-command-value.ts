@@ -5,6 +5,8 @@ export type SmartWorkspaceCommandRowKind =
   | 'gitlab'
   | 'branch'
   | 'linear'
+  | 'jira'
+  | 'jira-account'
   | 'clickup'
 
 export type SmartWorkspaceCommandRow = {
@@ -12,7 +14,7 @@ export type SmartWorkspaceCommandRow = {
   value: string
 }
 
-export type SmartWorkspaceSourceIntent = 'github' | 'gitlab' | 'linear' | 'clickup' | null
+export type SmartWorkspaceSourceIntent = 'github' | 'gitlab' | 'linear' | 'jira' | 'clickup' | null
 
 export function resolveSmartWorkspaceCommandValue({
   currentValue,
@@ -29,9 +31,14 @@ export function resolveSmartWorkspaceCommandValue({
     return currentValue
   }
 
+  // Why: freeze the arm while the live input is ahead of debounced search so the
+  // highlight does not thrash to use-name / empty / first-row on every keystroke.
   if (isQueryStale) {
     const typedTextRow = rows.find((row) => row.kind === 'use-name' || row.kind === 'create-branch')
-    return typedTextRow?.value ?? ''
+    if (typedTextRow) {
+      return typedTextRow.value
+    }
+    return rows.some((row) => row.value === currentValue) ? currentValue : (rows[0]?.value ?? '')
   }
 
   if (sourceIntent === 'github') {
@@ -48,6 +55,11 @@ export function resolveSmartWorkspaceCommandValue({
     const linearRow = rows.find((row) => row.kind === 'linear')
     if (linearRow) {
       return linearRow.value
+    }
+  } else if (sourceIntent === 'jira') {
+    const jiraRow = rows.find((row) => row.kind === 'jira')
+    if (jiraRow) {
+      return jiraRow.value
     }
   } else if (sourceIntent === 'clickup') {
     const clickUpRow = rows.find((row) => row.kind === 'clickup')

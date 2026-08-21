@@ -218,6 +218,21 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(matchesSettingsSearch('compact', getAppearancePaneSearchEntries())).toBe(true)
   })
 
+  // The notice tells users to "turn it off in Terminal settings", so the product names in
+  // the copy have to be the ones that find it.
+  it.each(['zellij', 'grok', 'tmux', 'osc 52'])(
+    'finds the OSC 52 clipboard setting by searching %s',
+    (query) => {
+      const entries = getTerminalPaneSearchEntries({ isWindows: false, isMac: true })
+      const osc52 = entries.filter((entry) =>
+        entry.title.includes('Allow TUI Clipboard Writes (OSC 52)')
+      )
+
+      expect(osc52).toHaveLength(1)
+      expect(matchesSettingsSearch(query, osc52)).toBe(true)
+    }
+  )
+
   it('includes pinned worktree duplicate display in sidebar and Appearance search', () => {
     const entry = getShowPinnedWorktreesInGroupsEntry()
 

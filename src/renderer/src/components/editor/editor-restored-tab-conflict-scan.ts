@@ -28,6 +28,15 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
   let activeVerifyReads = 0
   let disposed = false
 
+  const getFileConnectionId = (file: OpenFile): string | undefined => {
+    const connectionId = getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined
+    const externalSshTargetId = file.externalSshTargetId?.trim()
+    if (externalSshTargetId && connectionId !== externalSshTargetId) {
+      throw new Error('External SSH file owner changed')
+    }
+    return connectionId
+  }
+
   // Only local/SSH paths can be probed: for runtime-owned files window.api.fs would stat the client path and misreport it as gone.
   const probeFileMissing = async (file: OpenFile): Promise<boolean> => {
     const settings = settingsForRuntimeOwner(store.getState().settings, file.runtimeEnvironmentId)
@@ -37,7 +46,7 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
     try {
       const exists = await globalThis.window?.api?.fs?.pathExists?.({
         filePath: file.filePath,
-        connectionId: getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined
+        connectionId: getFileConnectionId(file)
       })
       return exists === false
     } catch {
@@ -56,7 +65,8 @@ export function attachRestoredTabConflictScan(store: AppStoreApi): () => void {
         filePath: file.filePath,
         relativePath: file.relativePath,
         worktreeId: file.worktreeId,
-        connectionId: getConnectionIdForFile(file.worktreeId, file.filePath) ?? undefined
+        connectionId: getFileConnectionId(file),
+        expectedExternalSshTargetId: file.externalSshTargetId
       })
       if (disposed) {
         return

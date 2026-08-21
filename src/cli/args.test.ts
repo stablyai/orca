@@ -232,6 +232,11 @@ describe('supportsBrowserPageFlag', () => {
   it('does not expose browser page targeting on local agent discovery', () => {
     expect(supportsBrowserPageFlag(['agent-context'])).toBe(false)
   })
+
+  it('does not expose browser page targeting on host-local account commands', () => {
+    expect(supportsBrowserPageFlag(['account', 'add'])).toBe(false)
+    expect(supportsBrowserPageFlag(['account', 'list'])).toBe(false)
+  })
 })
 
 describe('validateCommandAndFlags', () => {

@@ -4,11 +4,13 @@ import type { StateCreator } from 'zustand'
 import type {
   CreateHostedReviewInput,
   CreateHostedReviewResult,
+  CreateStackedHostedReviewInput,
+  CreateStackedHostedReviewResult,
   HostedReviewCreationEligibility,
   HostedReviewCreationEligibilityArgs,
   HostedReviewInfo
 } from '../../../../shared/hosted-review'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type { AppState } from '../types'
 import {
@@ -21,14 +23,27 @@ import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared
 
 export { getHostedReviewCacheKey, linkedReviewHintKey } from './hosted-review-cache-identity'
 
-type CacheEntry<T> = { data: T | null; fetchedAt: number; linkedReviewHintKey?: string }
+type CacheEntry<T> = {
+  data: T | null
+  fetchedAt: number
+  linkedReviewHintKey?: string
+  branchLookupGitHubPRNumber?: number
+}
 type FetchOptions = {
   force?: boolean
   repoId?: string
   staleWhileRevalidate?: boolean
   currentHeadOid?: string | null
+  /**
+   * Pass from surfaces that only render the selected worktree. The host re-checks
+   * that branch per minute and paces the O(N) card list far slower (#11532).
+   */
+  active?: boolean
 }
 type CreateHostedReviewStoreInput = CreateHostedReviewInput & { repoId?: string | null }
+type CreateStackedHostedReviewStoreInput = CreateStackedHostedReviewInput & {
+  repoId?: string | null
+}
 
 const CACHE_TTL_MS = 60_000
 const HOSTED_REVIEW_CACHE_MAX = 500
@@ -232,6 +247,10 @@ export type HostedReviewSlice = {
     repoPath: string,
     input: CreateHostedReviewStoreInput
   ) => Promise<CreateHostedReviewResult>
+  createStackedHostedReview: (
+    repoPath: string,
+    input: CreateStackedHostedReviewStoreInput
+  ) => Promise<CreateStackedHostedReviewResult>
   fetchHostedReviewForBranch: (
     repoPath: string,
     branch: string,
@@ -329,6 +348,33 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
     })
   },
 
+  createStackedHostedReview: async (repoPath, input) => {
+    const settings = get().settings
+    const repo = findHostedReviewRepoByPath(get().repos, repoPath, input.repoId)
+    const ownerSettings = settingsForHostedReviewActionOwner(settings, repo)
+    const target = getActiveRuntimeTarget(ownerSettings)
+    const { repoId: inputRepoId, ...hostedReviewInput } = input
+    if (target.kind === 'environment') {
+      const { worktreePath, ...runtimeInput } = hostedReviewInput
+      return callRuntimeRpc<CreateStackedHostedReviewResult>(
+        target,
+        'hostedReview.createStacked',
+        {
+          repo: repo?.id ?? repoPath,
+          ...(worktreePath ? { worktree: `path:${worktreePath}` } : {}),
+          ...runtimeInput
+        },
+        { timeoutMs: 90_000 }
+      )
+    }
+    return window.api.hostedReview.createStacked({
+      repoPath,
+      repoId: repo?.id ?? inputRepoId ?? undefined,
+      connectionId: repo?.connectionId ?? null,
+      ...hostedReviewInput
+    })
+  },
+
   fetchHostedReviewForBranch: async (
     repoPath,
     branch,
@@ -382,6 +428,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
             branch,
             ...(options?.repoId !== undefined ? { repoId: options.repoId } : {}),
             currentHeadOid: options?.currentHeadOid ?? null,
+            ...(options?.active === true ? { active: true } : {}),
             linkedGitHubPR: options?.linkedGitHubPR ?? null,
             ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
             linkedGitLabMR: options?.linkedGitLabMR ?? null,
@@ -448,7 +495,16 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
                 hostedReviewCache: withHostedReviewCacheEntry(state.hostedReviewCache, cacheKey, {
                   data: review,
                   fetchedAt: Date.now(),
-                  linkedReviewHintKey: hintKey
+                  linkedReviewHintKey: hintKey,
+                  // Why: fallback PR hints come from this branch's PR cache; preserve that provenance separately from request identity.
+                  ...(review?.provider === 'github' &&
+                  options?.linkedGitHubPR == null &&
+                  options?.linkedGitLabMR == null &&
+                  options?.linkedBitbucketPR == null &&
+                  options?.linkedAzureDevOpsPR == null &&
+                  options?.linkedGiteaPR == null
+                    ? { branchLookupGitHubPRNumber: review.number }
+                    : {})
                 })
               }
             })

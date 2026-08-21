@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { SOURCE_CONTROL_ACTION_VARIABLES } from './source-control-ai-action-variables'
 import {
   normalizeSourceControlAiActionDefaults,
-  SOURCE_CONTROL_ACTION_VARIABLES,
   SOURCE_CONTROL_LAUNCH_ACTION_IDS,
   SOURCE_CONTROL_LAUNCH_ACTION_LABELS,
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,

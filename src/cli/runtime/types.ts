@@ -1,4 +1,5 @@
 import type { RuntimeRpcFailure } from '../../shared/runtime-rpc-envelope'
+import { redactOrchestrationCompatibilitySecrets } from '../../shared/orchestration-compatibility-evidence'
 
 export type {
   RuntimeRpcFailure,
@@ -15,7 +16,7 @@ export class RuntimeClientError extends Error {
   constructor(code: string, message: string, data?: unknown) {
     super(message)
     this.code = code
-    this.data = data
+    this.data = redactOrchestrationCompatibilitySecrets(data)
   }
 }
 
@@ -25,6 +26,12 @@ export class RuntimeRpcFailureError extends RuntimeClientError {
   constructor(response: RuntimeRpcFailure) {
     // Why: all client errors expose recovery through the same inherited channel.
     super(response.error.code, response.error.message, response.error.data)
-    this.response = response
+    this.response = {
+      ...response,
+      error: {
+        ...response.error,
+        ...(response.error.data === undefined ? {} : { data: this.data })
+      }
+    }
   }
 }

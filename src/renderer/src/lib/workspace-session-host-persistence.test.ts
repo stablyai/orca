@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { WorkspaceSessionState } from '../../../shared/types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   buildHostIdByWorktreeId,
@@ -435,6 +435,33 @@ describe('fetchWorkspaceSessionFromHosts', () => {
     expect(setSync.mock.calls).toEqual(
       snapshots.map((snapshot) => [snapshot.state, snapshot.hostId])
     )
+  })
+})
+
+describe('buildHostIdByWorktreeId nested ownership', () => {
+  it('persists an SSH worktree in its paired HUB session partition', () => {
+    const worktreeId = 'nested-repo::/srv/remote-wt'
+    const owner = buildHostIdByWorktreeId({
+      repos: [
+        {
+          id: 'nested-repo',
+          connectionId: 'hub-private-ssh',
+          executionHostId: 'runtime:owner-hub'
+        }
+      ],
+      worktreesByRepo: {
+        'nested-repo': [
+          {
+            id: worktreeId,
+            repoId: 'nested-repo',
+            hostId: 'ssh:hub-private-ssh',
+            runtimeOwnerEnvironmentId: 'owner-hub'
+          }
+        ]
+      }
+    })
+
+    expect(owner(worktreeId)).toBe('runtime:owner-hub')
   })
 })
 

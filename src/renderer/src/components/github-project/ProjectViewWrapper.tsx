@@ -32,16 +32,18 @@ import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { projectViewCacheKey } from '@/store/slices/github'
 import type {
-  GetProjectViewTableResult,
   GitHubIssueType,
   GitHubProjectFieldMutationValue,
   GitHubProjectRow,
   GitHubProjectTable,
+  GitHubProjectViewSummary
+} from '../../../../shared/github/project-types'
+import type {
+  GetProjectViewTableResult,
   GitHubProjectViewError,
-  GitHubProjectViewSummary,
   ListProjectViewsResult
-} from '../../../../shared/github-project-types'
-import type { GitHubWorkItem } from '../../../../shared/types'
+} from '../../../../shared/github/project-result-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import ProjectPicker, { type ResolvedProjectSelection } from './ProjectPicker'
 import ProjectViewList from './ProjectViewList'
 import ProjectItemSlugDialog from './ProjectItemSlugDialog'
@@ -61,6 +63,11 @@ import {
 } from './project-visible-table-cache'
 import { translate } from '@/i18n/i18n'
 import { buildTaskSourceContextFromRepo } from '../../../../shared/task-source-context'
+import {
+  githubProjectHost,
+  githubProjectIdentityKey
+} from '../../../../shared/github/project-identity'
+import { buildProjectWorkItem } from './project-work-item'
 
 type Props = {
   selectedRepoIds: ReadonlySet<string>
@@ -70,7 +77,12 @@ const ORCA_FEATURE_REQUEST_URL = 'https://github.com/stablyai/orca/issues/new'
 
 function listProjectViewsForRuntime(
   settings: Parameters<typeof getActiveRuntimeTarget>[0],
-  args: { owner: string; ownerType: 'organization' | 'user'; projectNumber: number }
+  args: {
+    owner: string
+    ownerType: 'organization' | 'user'
+    projectNumber: number
+    host?: string
+  }
 ): Promise<ListProjectViewsResult> {
   const target = getActiveRuntimeTarget(settings)
   return target.kind === 'environment'
@@ -95,7 +107,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
   const patchProjectRowIssueType = useAppStore((s) => s.patchProjectRowIssueType)
   const addRepoFromStore = useAppStore((s) => s.addRepo)
   const repos = useAppStore((s) => s.repos)
-  const { lookupSlug, ready: slugIndexReady } = useRepoSlugIndex()
+  const { lookupSlug, lookupSlugMatches, ready: slugIndexReady } = useRepoSlugIndex()
   const mountedRef = useMountedRef()
 
   const activeProject = settings?.githubProjects?.activeProject ?? null
@@ -134,6 +146,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
             owner: selection.owner,
             ownerType: selection.ownerType,
             projectNumber: selection.projectNumber,
+            host: githubProjectHost(selection.host),
             ...(selection.viewId ? { viewId: selection.viewId } : {}),
             ...(queryOverride !== undefined ? { queryOverride } : {})
           },
@@ -167,7 +180,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
     if (!activeProject) {
       return
     }
-    const key = `${activeProject.ownerType}:${activeProject.owner}:${activeProject.number}`
+    const key = githubProjectIdentityKey(activeProject)
     const viewId = lastViewByProject[key]?.viewId
     if (!viewId) {
       return
@@ -180,7 +193,8 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
       activeProject.number,
       viewId,
       queryOverride,
-      projectViewSourceScope
+      projectViewSourceScope,
+      activeProject.host
     )
     if (projectViewCache[cacheKey]?.data) {
       return
@@ -190,6 +204,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
         owner: activeProject.owner,
         ownerType: activeProject.ownerType,
         projectNumber: activeProject.number,
+        host: githubProjectHost(activeProject.host),
         viewId
       },
       false,
@@ -209,7 +224,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
     if (!activeProject) {
       return
     }
-    const projectKey = `${projectViewSourceScope}:${activeProject.ownerType}:${activeProject.owner}:${activeProject.number}`
+    const projectKey = `${projectViewSourceScope}:${githubProjectIdentityKey(activeProject)}`
     if (viewListByProject[projectKey]) {
       return
     }
@@ -217,7 +232,8 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
     void listProjectViewsForRuntime(settings, {
       owner: activeProject.owner,
       ownerType: activeProject.ownerType,
-      projectNumber: activeProject.number
+      projectNumber: activeProject.number,
+      host: githubProjectHost(activeProject.host)
     })
       .then((res) => {
         if (cancelled) {
@@ -246,7 +262,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
       if (!activeProject) {
         return
       }
-      const projectKey = `${activeProject.ownerType}:${activeProject.owner}:${activeProject.number}`
+      const projectKey = githubProjectIdentityKey(activeProject)
       const current = lastViewByProject[projectKey]?.viewId
       if (current === viewId) {
         return
@@ -272,6 +288,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
         owner: activeProject.owner,
         ownerType: activeProject.ownerType,
         projectNumber: activeProject.number,
+        host: githubProjectHost(activeProject.host),
         viewId
       })
     },
@@ -282,7 +299,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
     if (!activeProject) {
       return null
     }
-    const key = `${activeProject.ownerType}:${activeProject.owner}:${activeProject.number}`
+    const key = githubProjectIdentityKey(activeProject)
     const viewId = lastViewByProject[key]?.viewId
     if (!viewId) {
       return null
@@ -298,7 +315,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
     if (!activeProject) {
       return null
     }
-    const key = `${activeProject.ownerType}:${activeProject.owner}:${activeProject.number}`
+    const key = githubProjectIdentityKey(activeProject)
     const viewId = lastViewByProject[key]?.viewId
     if (!viewId) {
       return null
@@ -309,7 +326,8 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
       activeProject.number,
       viewId,
       currentAppliedOverride,
-      projectViewSourceScope
+      projectViewSourceScope,
+      activeProject.host
     )
   }, [activeProject, lastViewByProject, currentAppliedOverride, projectViewSourceScope])
 
@@ -323,9 +341,14 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
   const filteredTable = useMemo(
     () =>
       table && slugIndexReady
-        ? filterProjectTableRowsBySelectedRepos(table, lookupSlug, slugIndexReady, selectedRepoIds)
+        ? filterProjectTableRowsBySelectedRepos(
+            table,
+            lookupSlugMatches,
+            slugIndexReady,
+            selectedRepoIds
+          )
         : null,
-    [table, slugIndexReady, lookupSlug, selectedRepoIds]
+    [table, slugIndexReady, lookupSlugMatches, selectedRepoIds]
   )
   const lastFilteredTableRef = useRef<CachedVisibleProjectTable | null>(null)
   // Why: ref-cache prevents a blank table while the slug index rebuilds, without forcing a second render.
@@ -384,6 +407,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
   const [repoNotInOrca, setRepoNotInOrca] = useState<{
     owner: string
     repo: string
+    host?: string
     url: string | null
   } | null>(null)
   const liveRepoIds = useMemo(() => new Set(repos.map((repo) => repo.id)), [repos])
@@ -423,37 +447,6 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
     setRepoNotInOrca(resolvedMissingRepoDialogs.repoNotInOrca)
   }
 
-  const buildWorkItem = useCallback(
-    (row: GitHubProjectRow, repoId: string): GitHubWorkItem | null => {
-      if (row.itemType !== 'ISSUE' && row.itemType !== 'PULL_REQUEST') {
-        return null
-      }
-      if (row.content.number == null || !row.content.url) {
-        return null
-      }
-      return {
-        id: `${row.itemType === 'PULL_REQUEST' ? 'pr' : 'issue'}:${row.content.number}`,
-        type: row.itemType === 'PULL_REQUEST' ? 'pr' : 'issue',
-        number: row.content.number,
-        title: row.content.title,
-        state:
-          row.content.state === 'MERGED'
-            ? 'merged'
-            : row.content.state === 'CLOSED'
-              ? 'closed'
-              : row.content.isDraft
-                ? 'draft'
-                : 'open',
-        url: row.content.url,
-        labels: row.content.labels.map((l) => l.name),
-        updatedAt: row.updatedAt,
-        author: null,
-        repoId
-      }
-    },
-    []
-  )
-
   const buildOrigin = useCallback(
     (
       row: GitHubProjectRow,
@@ -473,6 +466,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
       return {
         owner,
         repo,
+        host: githubProjectHost(table.project.host),
         number: row.content.number,
         type: row.itemType === 'PULL_REQUEST' ? 'pr' : 'issue',
         projectId: table.project.id,
@@ -505,7 +499,8 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
       }
       const resolution = resolveSelectedProjectRowRepo({
         row,
-        lookupSlug,
+        lookupSlugMatches,
+        host: table.project.host,
         slugIndexReady,
         selectedRepoIds
       })
@@ -520,7 +515,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
         return
       }
       if (resolution.status === 'selected_match') {
-        const workItem = buildWorkItem(row, resolution.repo.id)
+        const workItem = buildProjectWorkItem(row, resolution.repo.id, table.project.host)
         if (workItem) {
           setDialogRepoItem({
             workItem,
@@ -560,11 +555,10 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
       currentCacheKey,
       table,
       buildOrigin,
-      lookupSlug,
+      lookupSlugMatches,
       slugIndexReady,
       selectedRepoIds,
-      openProjectRowUrlWithToast,
-      buildWorkItem
+      openProjectRowUrlWithToast
     ]
   )
 
@@ -579,7 +573,8 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
       }
       const resolution = resolveSelectedProjectRowRepo({
         row,
-        lookupSlug,
+        lookupSlugMatches,
+        host: table.project.host,
         slugIndexReady,
         selectedRepoIds
       })
@@ -597,6 +592,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
         setRepoNotInOrca({
           owner: origin.owner,
           repo: origin.repo,
+          host: origin.host,
           url: row.content.url ?? null
         })
         return
@@ -624,7 +620,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
       if (resolution.status !== 'selected_match') {
         return
       }
-      const workItem = buildWorkItem(row, resolution.repo.id)
+      const workItem = buildProjectWorkItem(row, resolution.repo.id, table.project.host)
       if (!workItem) {
         return
       }
@@ -646,11 +642,10 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
       currentCacheKey,
       table,
       buildOrigin,
-      lookupSlug,
+      lookupSlugMatches,
       slugIndexReady,
       selectedRepoIds,
-      openProjectRowUrlWithToast,
-      buildWorkItem
+      openProjectRowUrlWithToast
     ]
   )
 
@@ -729,13 +724,15 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
                   owner: activeProject.owner,
                   ownerType: activeProject.ownerType,
                   number: activeProject.number,
+                  host: githubProjectHost(activeProject.host),
                   title: table.project.title
                 }
               : activeProject
                 ? {
                     owner: activeProject.owner,
                     ownerType: activeProject.ownerType,
-                    number: activeProject.number
+                    number: activeProject.number,
+                    host: githubProjectHost(activeProject.host)
                   }
                 : null
           }
@@ -751,7 +748,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
               if (!activeProject) {
                 return
               }
-              const key = `${activeProject.ownerType}:${activeProject.owner}:${activeProject.number}`
+              const key = githubProjectIdentityKey(activeProject)
               const viewId = lastViewByProject[key]?.viewId
               if (!viewId) {
                 return
@@ -771,6 +768,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
                   owner: activeProject.owner,
                   ownerType: activeProject.ownerType,
                   projectNumber: activeProject.number,
+                  host: githubProjectHost(activeProject.host),
                   viewId
                 },
                 true,
@@ -806,7 +804,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
                 if (!activeProject || !currentCacheKey) {
                   return
                 }
-                const key = `${activeProject.ownerType}:${activeProject.owner}:${activeProject.number}`
+                const key = githubProjectIdentityKey(activeProject)
                 const viewId = lastViewByProject[key]?.viewId
                 if (!viewId) {
                   return
@@ -816,6 +814,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
                     owner: activeProject.owner,
                     ownerType: activeProject.ownerType,
                     projectNumber: activeProject.number,
+                    host: githubProjectHost(activeProject.host),
                     viewId
                   },
                   true,
@@ -855,7 +854,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
 
       {activeProject
         ? (() => {
-            const projectKey = `${activeProject.ownerType}:${activeProject.owner}:${activeProject.number}`
+            const projectKey = githubProjectIdentityKey(activeProject)
             const scopedProjectKey = `${projectViewSourceScope}:${projectKey}`
             const views = viewListByProject[scopedProjectKey] ?? []
             const activeViewId = lastViewByProject[projectKey]?.viewId ?? null
@@ -882,6 +881,7 @@ export default function ProjectViewWrapper({ selectedRepoIds }: Props): React.JS
         <ErrorState
           error={error.error}
           totalCount={error.totalCount}
+          host={activeProject.host}
           onOpenInGitHub={() => {
             if (selectedViewUrl) {
               void window.api.shell.openUrl(selectedViewUrl)
@@ -1238,10 +1238,12 @@ function ViewTabStrip({
 function ErrorState({
   error,
   totalCount,
+  host,
   onOpenInGitHub
 }: {
   error: GitHubProjectViewError
   totalCount?: number
+  host?: string
   onOpenInGitHub: () => void
 }): React.JSX.Element {
   // Auth/scope errors get a richer `gh auth status` remediation UI; bail early before the generic block.
@@ -1250,6 +1252,7 @@ function ErrorState({
       <div className="flex flex-1 flex-col items-start gap-3 p-6 text-sm">
         <GhAuthErrorHelp
           error={error as GitHubProjectViewError & { type: 'auth_required' | 'scope_missing' }}
+          host={host}
         />
         <Button size="sm" variant="outline" onClick={onOpenInGitHub}>
           <ExternalLink className="mr-1 size-3.5" />{' '}

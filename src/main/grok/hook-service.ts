@@ -5,34 +5,32 @@ import { resolveGrokHomeDir } from '../../shared/grok-session-paths'
 import {
   buildManagedCommandHook,
   createManagedCommandMatcher,
-  buildWindowsAgentHookPostCommand,
   getSharedManagedScriptPath,
   readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
-  wrapWindowsHookCommand,
+  wrapWindowsCmdHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
 } from '../agent-hooks/installer-utils'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import {
   readHooksJsonRemote,
   writeHooksJsonRemote,
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
+import { buildPosixHookPayloadCapture } from '../agent-hooks/hook-stdin-contract'
 import {
-  buildPosixHookPayloadCapture,
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
-} from '../agent-hooks/hook-stdin-contract'
+  buildWindowsGrokHookScript,
+  GROK_HOME_ENVELOPE_MAX_LENGTH
+} from './windows-grok-hook-script'
 
 // Why: Grok's tool-event matcher is a real regex (see Grok hooks docs). Bare
 // `*` is not a valid "match all" pattern and can fail to load/match, so tool
 // lifecycle hooks never fire. `.*` matches every tool name (same as Command
 // Code's managed hooks).
 const GROK_TOOL_EVENT_MATCHER = '.*'
-const GROK_HOME_ENVELOPE_MAX_LENGTH = 4096
-const WINDOWS_HOOK_PAYLOAD_FORM_LINE = '  --data-urlencode "payload@-" >nul 2>nul'
 
 const GROK_EVENTS = [
   { eventName: 'SessionStart', definition: { hooks: [{ type: 'command', command: '' }] } },
@@ -95,11 +93,6 @@ function hasControlCharacter(value: string): boolean {
   })
 }
 
-const WINDOWS_GROK_HOOK_POST_COMMAND = buildWindowsAgentHookPostCommand('grok').replace(
-  WINDOWS_HOOK_PAYLOAD_FORM_LINE,
-  `  --data-urlencode "grokHome=%ORCA_GROK_HOME%" ^\r\n${WINDOWS_HOOK_PAYLOAD_FORM_LINE}`
-)
-
 function getManagedScriptFileName(): string {
   return process.platform === 'win32' ? 'grok-hook.cmd' : 'grok-hook.sh'
 }
@@ -109,28 +102,28 @@ function getManagedScriptPath(): string {
 }
 
 function getManagedCommand(scriptPath: string): string {
+  // Why (#14828): Grok runs a hook command containing a space as `pwsh -Command <cmd>`, so the
+  // encoded PowerShell launcher cost two interpreters before reaching the script —
+  // `grok.exe -> pwsh.exe -> powershell.exe -> cmd.exe`, ~610ms per event, and the agent's hook
+  // console stays up for all of it. A cmd-safe bare path is spawned directly
+  // (`grok.exe -> cmd.exe`, ~110ms), the same shape Codex/Devin/Antigravity already register
+  // (#8430). Paths that are not cmd-safe still fall back to the encoded launcher (#6078).
+  // Tradeoff, as for those agents: a bare path cannot carry the launcher's missing-script
+  // guard, so a deleted script surfaces as a per-event `command not found` in the agent's log
+  // instead of a silent drain. Grok fails open — the tool still runs, including on PreToolUse.
   return process.platform === 'win32'
-    ? wrapWindowsHookCommand(scriptPath)
+    ? wrapWindowsCmdHookCommand(scriptPath)
     : wrapPosixHookCommand(scriptPath)
+}
+
+/** Test seam: the command registered for `scriptPath` on the current platform. */
+export function getManagedCommandForTests(scriptPath: string): string {
+  return getManagedCommand(scriptPath)
 }
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   if (target === 'local' && process.platform === 'win32') {
-    return [
-      '@echo off',
-      'setlocal',
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
-      ...buildWindowsHookEnvironmentGuardLines(),
-      'set "ORCA_GROK_HOME=%GROK_HOME%"',
-      `if not "%GROK_HOME:~${GROK_HOME_ENVELOPE_MAX_LENGTH},1%"=="" set "ORCA_GROK_HOME="`,
-      // Why: a trailing backslash escapes curl's closing argv quote on Windows,
-      // merging the payload option into grokHome and dropping the hook body.
-      'if "%ORCA_GROK_HOME:~-1%"=="\\" set "ORCA_GROK_HOME=%ORCA_GROK_HOME%."',
-      WINDOWS_GROK_HOOK_POST_COMMAND,
-      'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
-      ''
-    ].join('\r\n')
+    return buildWindowsGrokHookScript()
   }
 
   return [
@@ -204,6 +197,10 @@ function buildInstalledConfig(
 }
 
 export class GrokHookService {
+  async refreshManagedScripts(): Promise<void> {
+    await refreshManagedScriptIfPresent(getManagedScriptPath(), getManagedScript())
+  }
+
   getStatus(): AgentHookInstallStatus {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()

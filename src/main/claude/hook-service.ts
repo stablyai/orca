@@ -1,34 +1,47 @@
+import { existsSync, rmSync, writeFileSync } from 'node:fs'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
 import {
+  buildManagedCommandHook,
   buildWindowsAgentHookCurlPostCommand,
   readHooksJson,
   writeHooksJson,
-  writeManagedScript
+  writeManagedScript,
+  type HooksConfig
 } from '../agent-hooks/installer-utils'
 import {
   readHooksJsonRemote,
   writeHooksJsonRemote,
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import {
   buildPosixHookPayloadCapture,
   buildWindowsHookEnvironmentGuardLines,
   buildWindowsHookStdinDrainEpilogue,
   WINDOWS_HOOK_STDIN_DRAIN_LABEL
 } from '../agent-hooks/hook-stdin-contract'
+import { getManagedStatusLineScript } from './statusline-script'
 import {
   applyManagedHooks,
+  applyManagedStatusLine,
   CLAUDE_EVENTS,
   CLAUDE_HOOK_SETTINGS,
   getManagedScriptFileName,
   getConfigPath,
   getManagedCommand,
+  getManagedLifecycleHook,
   getManagedScriptPath,
   getPosixManagedScriptFileName,
   getRemoteConfigPath,
   getRemoteManagedCommand,
+  getStatusLineInstallMarkerPath,
+  getStatusLineScriptFileName,
+  getStatusLineScriptPath,
+  getStatusLineSlotState,
+  hasSameManagedHookInvocation,
   removeManagedHooks,
+  removeManagedStatusLine,
   type ClaudeCompatibleHookSettings
 } from './hook-settings'
 
@@ -52,16 +65,25 @@ function getManagedScript(
     return [
       '@echo off',
       'setlocal',
+      // Why: Claude-compatible permission hooks fail closed on empty stdout (#14818).
+      'echo {}',
+      // Why: refresh endpoint coordinates for PTYs surviving an Orca restart.
+      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
+      // Why (#11549): the env guards must outrank the Devin skip — the Devin skip parks in more.com,
+      // and outside an Orca pane the caller can abandon stdin, so more.com never returns.
+      ...buildWindowsHookEnvironmentGuardLines(),
+      // Why: a backgrounded session runs in a daemon worker that inherited the dispatching
+      // pane's env, so ORCA_PANE_KEY names a pane this session does not run in (#9236).
+      // Why exit, not the drain label: the drain parks in more.com and a worker is outside
+      // an Orca pane — the abandoned-stdin hang #11549 guards against.
+      'if not "%CLAUDE_JOB_DIR%"=="" exit /b 0',
       ...(options.skipWhenDevinImportsClaude
         ? [
             // Why: Devin imports .claude hooks by default; skip Orca's managed hook there so status posts stay attributed to Devin.
             `if not "%DEVIN_PROJECT_DIR%"=="" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`
           ]
         : []),
-      // Why: call the endpoint file to refresh port/token — a PTY that survived an Orca restart carries stale env; falls through to PTY env if missing.
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
-      ...buildWindowsHookEnvironmentGuardLines(),
-      // Why: post via curl.exe, not PowerShell — Claude's launcher is already encoded PowerShell, so a PS post would double interpreter startups per hook.
+      // Why: use curl.exe to avoid an extra PowerShell startup per hook.
       buildWindowsAgentHookCurlPostCommand('claude'),
       'exit /b 0',
       ...buildWindowsHookStdinDrainEpilogue(),
@@ -71,6 +93,8 @@ function getManagedScript(
 
   return [
     '#!/bin/sh',
+    // Why: Claude-compatible permission hooks fail closed on empty stdout (#14818).
+    'printf "{}\\n"',
     ...buildPosixHookPayloadCapture(),
     ...(options.skipWhenDevinImportsClaude
       ? [
@@ -80,16 +104,21 @@ function getManagedScript(
           'fi'
         ]
       : []),
-    // Why: source the endpoint file to refresh port/token — a PTY that survived an Orca restart carries stale env; falls back to PTY env if missing.
-    // Why: suppress stderr / || : so a stray parse error (TOCTOU or CRLF) can't leak into hook output or trip an outer set -e.
+    // Why: a backgrounded session runs in a daemon worker that inherited the dispatching
+    // pane's env, so ORCA_PANE_KEY names a pane this session does not run in (#9236).
+    'if [ -n "$CLAUDE_JOB_DIR" ]; then',
+    '  exit 0',
+    'fi',
+    // Why: refresh endpoint coordinates for PTYs surviving an Orca restart.
+    // Why: suppress parse errors so they neither leak nor trip outer set -e.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
     '  exit 0',
     'fi',
-    // Why: paths can hold quotes/newlines, so hand-building JSON in shell is unsafe; post the raw payload + metadata as form fields for the receiver to parse.
-    // Why: pipe payload to curl stdin (`payload@-`), not an inline arg, so large tool output stays off the command line (EDR false positives).
+    // Why: post form fields because path-bearing payloads are unsafe in hand-built JSON.
+    // Why: pipe payload to curl stdin to keep large output off the command line.
     'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/claude" \\',
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
@@ -127,8 +156,8 @@ export class ClaudeHookService {
       }
     }
 
-    // Why: report `partial` when only some events are registered so the sidebar shows a degraded install, not a false-positive `installed`.
-    const command = getManagedCommand(scriptPath)
+    // Why: report partial registration instead of a false installed state.
+    const expectedHook = getManagedLifecycleHook(scriptPath, this.options.settings)
     const missing: string[] = []
     let presentCount = 0
     for (const event of CLAUDE_EVENTS) {
@@ -136,7 +165,7 @@ export class ClaudeHookService {
         ? config.hooks![event.eventName]!
         : []
       const hasCommand = definitions.some((definition) =>
-        (definition.hooks ?? []).some((hook) => hook.command === command)
+        (definition.hooks ?? []).some((hook) => hasSameManagedHookInvocation(hook, expectedHook))
       )
       if (hasCommand) {
         presentCount += 1
@@ -160,6 +189,18 @@ export class ClaudeHookService {
     return { agent: this.options.agent, state, configPath, managedHooksPresent, detail }
   }
 
+  async refreshManagedScripts(): Promise<void> {
+    await refreshManagedScriptIfPresent(
+      getManagedScriptPath(this.options.settings),
+      getManagedScript('local', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
+    )
+    // Why: no agent gate — the statusline script only ever exists for claude, so presence is the gate.
+    await refreshManagedScriptIfPresent(
+      getStatusLineScriptPath(this.options.settings),
+      getManagedStatusLineScript('local')
+    )
+  }
+
   install(): AgentHookInstallStatus {
     const configPath = getConfigPath(this.options.settings)
     const scriptPath = getManagedScriptPath(this.options.settings)
@@ -174,27 +215,55 @@ export class ClaudeHookService {
       }
     }
 
-    const command = getManagedCommand(scriptPath)
-    const nextConfig = applyManagedHooks(
+    const hook = getManagedLifecycleHook(scriptPath, this.options.settings)
+    let nextConfig = applyManagedHooks(
       config,
-      command,
+      hook,
       getManagedScriptFileName(this.options.settings)
     )
     writeManagedScript(
       scriptPath,
       getManagedScript('local', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
     )
+    // Why: the statusline usage feed is Claude-only — OpenClaude data would be misattributed to the Claude provider.
+    if (this.options.agent === 'claude') {
+      nextConfig = this.installManagedStatusLine(nextConfig)
+    }
     writeHooksJson(configPath, nextConfig)
     return this.getStatus()
   }
 
+  // Why: the statusline feed is opportunistic (usage display, not agent status); a user who deleted the
+  // managed entry has opted out, and the marker distinguishes that deletion from a first install.
+  private installManagedStatusLine(config: HooksConfig): HooksConfig {
+    const scriptFileName = getStatusLineScriptFileName(this.options.settings)
+    const markerPath = getStatusLineInstallMarkerPath(this.options.settings)
+    const slot = getStatusLineSlotState(config, scriptFileName)
+    if (slot === 'user' || (slot === 'empty' && existsSync(markerPath))) {
+      return config
+    }
+    const statusLineScriptPath = getStatusLineScriptPath(this.options.settings)
+    writeManagedScript(statusLineScriptPath, getManagedStatusLineScript('local'))
+    const next = applyManagedStatusLine(
+      config,
+      getManagedCommand(statusLineScriptPath),
+      scriptFileName
+    )
+    try {
+      writeFileSync(markerPath, '')
+    } catch {
+      // Best-effort: a missing marker only means one future user deletion gets re-installed once.
+    }
+    return next
+  }
+
   // Why: install the Claude hook on the remote box (via SFTP); POSIX-only by design (Windows-remote deferred).
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
-    // Why: remote-Windows is out of scope; ship POSIX paths. process.platform here is the local box, not the remote, so it can't gate this.
+    // Why: remote Windows is unsupported; local process.platform cannot identify the remote OS.
     const remoteConfigPath = getRemoteConfigPath(remoteHome, this.options.settings)
     const remoteScriptFileName = getPosixManagedScriptFileName(this.options.settings)
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
-    // Why: SFTP I/O fails often (network/EACCES/disk); wrap install so transient failures surface as structured state:'error' rather than an unhandled rejection.
+    // Why: surface fallible SFTP installs as structured errors.
     try {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)
       if (!config) {
@@ -207,17 +276,20 @@ export class ClaudeHookService {
         }
       }
 
-      // Why: the POSIX wrapper is identical regardless of where the script lands; only the path differs.
-      const command = getRemoteManagedCommand(remoteScriptPath)
-      const nextConfig = applyManagedHooks(config, command, remoteScriptFileName)
+      // Why: settings resolve HOME at runtime while SFTP still targets the discovered remote home.
+      const hook = buildManagedCommandHook(getRemoteManagedCommand(remoteScriptPath))
+      const nextConfig = applyManagedHooks(config, hook, remoteScriptFileName)
 
-      // Why: write script before settings — a mid-install failure then leaves a harmless orphan script, not settings.json pointing at a missing one.
-      // Why: SSH remotes use POSIX `.sh` paths even when Orca runs on Windows; never derive remote script syntax from the local OS.
+      // Why: write scripts before settings to avoid settings pointing to missing scripts.
+      // Why: SSH scripts always use POSIX .sh paths, regardless of the local OS.
       await writeManagedScriptRemote(
         sftp,
         remoteScriptPath,
         getManagedScript('posix', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
       )
+      // Why: no statusline install here — this path serves SSH remotes and WSL guests, whose relay hook
+      // listener doesn't route /statusline/claude, and an SSH box's Claude login can be a different
+      // account than the locally selected one, so its usage must not feed the local bar (live feed is host-local only).
       await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig)
 
       return {
@@ -250,12 +322,24 @@ export class ClaudeHookService {
         detail: `Could not parse ${this.options.displayName} settings.json`
       }
     }
-    const { config: nextConfig, changed } = removeManagedHooks(
+    const { config: hooksRemoved, changed: hooksChanged } = removeManagedHooks(
       config,
       getManagedScriptFileName(this.options.settings)
     )
-    if (changed) {
+    const { config: nextConfig, changed: statusLineChanged } = removeManagedStatusLine(
+      hooksRemoved,
+      getStatusLineScriptFileName(this.options.settings)
+    )
+    if (hooksChanged || statusLineChanged) {
       writeHooksJson(configPath, nextConfig)
+    }
+    if (this.options.agent === 'claude') {
+      try {
+        // Why: an Orca-level uninstall resets the opt-out memory so a later re-enable installs the statusline again.
+        rmSync(getStatusLineInstallMarkerPath(this.options.settings), { force: true })
+      } catch {
+        // ignore — marker cleanup is best-effort
+      }
     }
     return this.getStatus()
   }

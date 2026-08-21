@@ -33,23 +33,31 @@ export function startRemoteRuntimeSocketLiveness(args: {
   const pingIntervalMs = args.options?.pingIntervalMs ?? REMOTE_RUNTIME_SOCKET_PING_INTERVAL_MS
   const livenessTimeoutMs =
     args.options?.livenessTimeoutMs ?? REMOTE_RUNTIME_SOCKET_LIVENESS_TIMEOUT_MS
-  let lastActivityAt = now()
+  let lastTickAt = now()
+  let probeSentAt: number | null = null
   let stopped = false
 
   const timer = setInterval(() => {
     if (stopped) {
       return
     }
-    if (now() - lastActivityAt > livenessTimeoutMs) {
+    const tickAt = now()
+    const tickElapsedMs = tickAt - lastTickAt
+    lastTickAt = tickAt
+    // Why: sleep and background throttling age sockets without giving them a chance to answer.
+    if (tickElapsedMs < 0 || tickElapsedMs > pingIntervalMs * 1.5) {
+      probeSentAt = tickAt
+      tryPing()
+      return
+    }
+    if (probeSentAt !== null && tickAt - probeSentAt > livenessTimeoutMs) {
       stop()
       args.onDead()
       return
     }
-    try {
-      args.ping()
-    } catch {
-      // Why: ping() can throw while a socket is mid-teardown; the liveness
-      // window (or the close handler) settles the socket's fate either way.
+    if (probeSentAt === null) {
+      probeSentAt = tickAt
+      tryPing()
     }
   }, pingIntervalMs)
   // Why: mobile typechecks shared code with DOM timer types where unref is absent.
@@ -66,9 +74,17 @@ export function startRemoteRuntimeSocketLiveness(args: {
     clearInterval(timer)
   }
 
+  function tryPing(): void {
+    try {
+      args.ping()
+    } catch {
+      // Why: ping() can throw while a socket is mid-teardown; the probe deadline still settles it.
+    }
+  }
+
   return {
     noteActivity: () => {
-      lastActivityAt = now()
+      probeSentAt = null
     },
     stop
   }

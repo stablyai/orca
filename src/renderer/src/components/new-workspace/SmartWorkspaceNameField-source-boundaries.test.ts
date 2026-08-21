@@ -37,18 +37,33 @@ describe('SmartWorkspaceNameField repo-backed source boundaries', () => {
     )
     expect(availableModesSection).toContain('return !repoBackedSourcesDisabled')
     expect(availableModesSection).toContain('return gitlabSourceAvailable')
+    expect(availableModesSection).toContain("item.id === 'jira'")
+    expect(availableModesSection).toContain('return jiraSourceConnected')
     expect(availableModesSection).toContain('branchesEnabled && !repoBackedSourcesDisabled')
     expect(FIELD_SOURCE).toContain('repoBackedSourcesDisabled')
     expect(FIELD_SOURCE).toContain('!textOnly &&\n    gitlabSourceAvailable')
+
+    const jiraLookupSection = sourceBetween(
+      FIELD_SOURCE,
+      'const jiraSource = useJiraUrlSource({',
+      'const jiraStatusId'
+    )
+    expect(jiraLookupSection).toContain("mode === 'smart' || mode === 'jira'")
+    expect(jiraLookupSection).toContain('sourceContext: jiraSourceContext')
+    expect(FIELD_SOURCE).toContain('const shouldQueryJira =')
+    expect(FIELD_SOURCE).toContain('searchJiraIssues(jiraSearchJql, RESULT_LIMIT')
 
     const placeholderSection = sourceBetween(
       FIELD_SOURCE,
       'const smartPlaceholder = repoBackedSourcesDisabled',
       'return ('
     )
-    expect(placeholderSection).toContain('Type a name or Linear URL')
+    expect(placeholderSection).toContain('Type a name, Linear URL, or Jira URL')
     expect(placeholderSection).toContain('Type a workspace name')
-    expect(placeholderSection).toContain('Type a name, #1234, branch, GitHub/GitLab or Linear URL')
+    expect(placeholderSection).toContain(
+      'Type a name, #1234, branch, GitHub/GitLab, Linear, or Jira URL'
+    )
+    expect(placeholderSection).toContain('Search Jira issues or paste an issue URL')
     expect(placeholderSection).toContain('Search GitLab MRs and issues')
   })
 
@@ -84,6 +99,31 @@ describe('SmartWorkspaceNameField repo-backed source boundaries', () => {
     expect(githubLookupSection).toContain('repoBackedSearchTargets.map')
   })
 
+  it('does not fan decisive Linear URLs out to unrelated providers', () => {
+    const githubGate = sourceBetween(
+      FIELD_SOURCE,
+      'const shouldQueryGithub =',
+      'const shouldQueryLinear ='
+    )
+    const branchGate = sourceBetween(
+      FIELD_SOURCE,
+      'const branchSearchRequest = useMemo',
+      'useEffect(() => {\n    if (!branchSearchRequest)'
+    )
+    const gitlabGate = sourceBetween(
+      FIELD_SOURCE,
+      'const shouldQueryGitlab =',
+      'useEffect(() => {\n    if (!shouldQueryGitlab'
+    )
+
+    expect(FIELD_SOURCE).toContain(
+      "linearUrlIntent !== null && (mode === 'smart' || mode === 'linear')"
+    )
+    expect(githubGate).toContain('!linearUrlIntentOwnsInput')
+    expect(branchGate).toContain('linearUrlIntentOwnsInput')
+    expect(gitlabGate).toContain('!linearUrlIntentOwnsInput')
+  })
+
   it('reports the active source mode without lifting source search state', () => {
     expect(FIELD_SOURCE).toContain('onActiveSourceModeChange?: (mode: SmartNameMode) => void')
     expect(FIELD_SOURCE).toContain('onActiveSourceModeChange')
@@ -97,5 +137,9 @@ describe('SmartWorkspaceNameField repo-backed source boundaries', () => {
     expect(FIELD_SOURCE).toContain('isComposerFieldToFieldFocus')
     expect(FIELD_SOURCE).toContain('onPointerDown={() => {')
     expect(FIELD_SOURCE).toContain('markSourcePopoverUserEngaged()')
+  })
+
+  it('confines source-mode overflow to the source strip', () => {
+    expect(FIELD_SOURCE).toContain('overflow-x-auto overflow-y-hidden px-0 scrollbar-sleek')
   })
 })

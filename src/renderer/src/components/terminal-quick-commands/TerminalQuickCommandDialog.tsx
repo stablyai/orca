@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react'
 import type {
-  Repo,
   TerminalQuickCommand,
   TerminalQuickCommandScope
-} from '../../../../shared/types'
+} from '../../../../shared/terminal-quick-command-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   getTerminalQuickCommandAction,
   getTerminalQuickCommandScope,
@@ -21,7 +22,6 @@ import {
 import { Label } from '@/components/ui/label'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import type { TuiAgent } from '../../../../shared/types'
 import { TerminalQuickCommandActionToggle } from './TerminalQuickCommandActionToggle'
 import { TerminalQuickCommandAdvancedSection } from './TerminalQuickCommandAdvancedSection'
 import { TerminalQuickCommandContentSection } from './TerminalQuickCommandContentSection'
@@ -39,7 +39,10 @@ type TerminalQuickCommandDialogProps = {
   open: boolean
   mode: TerminalQuickCommandDialogMode
   command: TerminalQuickCommand
-  repos?: Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
+  repos?: readonly Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
+  /** Settings has no ambient workspace to imply scope from, so it opens the
+   *  Advanced section up front. In-workspace entry points leave it collapsed. */
+  defaultAdvancedOpen?: boolean
   onOpenChange: (open: boolean) => void
   onSave: (command: TerminalQuickCommand) => void
 }
@@ -63,6 +66,7 @@ export function TerminalQuickCommandDialog({
   mode,
   command,
   repos = EMPTY_REPOS,
+  defaultAdvancedOpen = false,
   onOpenChange,
   onSave
 }: TerminalQuickCommandDialogProps): React.JSX.Element {
@@ -76,7 +80,7 @@ export function TerminalQuickCommandDialog({
   const lastRepoScopeIdRef = useRef<string | null>(
     initialScope.type === 'repo' ? initialScope.repoId : null
   )
-  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [advancedOpen, setAdvancedOpen] = useState(defaultAdvancedOpen)
   const selectedAction = getTerminalQuickCommandAction(draft)
   const selectedScope = getTerminalQuickCommandScope(draft)
   const isAgentAction = isTerminalAgentQuickCommand(draft)
@@ -95,7 +99,7 @@ export function TerminalQuickCommandDialog({
     draftMemoryRef.current = createTerminalQuickCommandDialogDraftMemory(command, fallbackAgent)
     const commandScope = getTerminalQuickCommandScope(command)
     lastRepoScopeIdRef.current = commandScope.type === 'repo' ? commandScope.repoId : null
-    setAdvancedOpen(false)
+    setAdvancedOpen(defaultAdvancedOpen)
     setDraft({ ...command })
   }
 
@@ -164,8 +168,12 @@ export function TerminalQuickCommandDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md sm:max-w-md" showCloseButton={false}>
-        <DialogHeader>
+      {/* Why: fixed large width so Terminal ↔ Agent content swaps never reflow the shell. */}
+      <DialogContent
+        className="flex max-h-[min(90vh,52rem)] w-full max-w-4xl flex-col gap-0 overflow-hidden p-0 sm:max-w-4xl"
+        showCloseButton={false}
+      >
+        <DialogHeader className="px-6 pt-6 pb-0">
           <DialogTitle className="text-sm">
             {mode === 'edit'
               ? translate(
@@ -180,13 +188,13 @@ export function TerminalQuickCommandDialog({
           <DialogDescription className="text-xs">
             {translate(
               'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.ed04233b3e',
-              'Save terminal commands or agent prompts for quick access.'
+              'Saved items appear in the tab bar menu for one-click run.'
             )}
           </DialogDescription>
         </DialogHeader>
 
         <div
-          className="space-y-4"
+          className="scrollbar-sleek flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-5"
           onKeyDown={(event) => {
             if (isScreenSubmitShortcut(event) && canSave) {
               event.preventDefault()
@@ -194,19 +202,20 @@ export function TerminalQuickCommandDialog({
             }
           }}
         >
-          <TerminalQuickCommandLabelField label={draft.label} setDraft={setDraft} />
-
-          <div className="space-y-2">
-            <Label>
-              {translate(
-                'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.ec8f081919',
-                'Action'
-              )}
-            </Label>
-            <TerminalQuickCommandActionToggle
-              selectedAction={selectedAction}
-              onActionChange={setAction}
-            />
+          <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <TerminalQuickCommandLabelField label={draft.label} setDraft={setDraft} />
+            <div className="space-y-2">
+              <Label>
+                {translate(
+                  'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.ec8f081919',
+                  'Action'
+                )}
+              </Label>
+              <TerminalQuickCommandActionToggle
+                selectedAction={selectedAction}
+                onActionChange={setAction}
+              />
+            </div>
           </div>
 
           <TerminalQuickCommandContentSection
@@ -215,19 +224,19 @@ export function TerminalQuickCommandDialog({
             selectedAgent={selectedAgent}
             draftMemoryRef={draftMemoryRef}
             setDraft={setDraft}
+            toggleAppendEnter={toggleAppendEnter}
           />
 
           <TerminalQuickCommandAdvancedSection
-            draft={draft}
             repos={repos}
             advancedOpen={advancedOpen}
             selectedScope={selectedScope}
+            selectedRepo={selectedRepo}
             selectedRepoId={selectedRepoId}
             selectedRepoMissing={selectedRepoMissing}
             lastRepoScopeIdRef={lastRepoScopeIdRef}
             setAdvancedOpen={setAdvancedOpen}
             setDraft={setDraft}
-            toggleAppendEnter={toggleAppendEnter}
           />
         </div>
 

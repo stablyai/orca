@@ -7,19 +7,39 @@ import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 
 let container: HTMLDivElement
 let root: Root
+let unmounted: boolean
 
 beforeEach(() => {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
+  unmounted = false
 })
 
 afterEach(() => {
+  if (!unmounted) {
+    act(() => {
+      root.unmount()
+    })
+  }
+  container.remove()
+})
+
+// Why: some tests observe the flush that runs when the field unmounts
+// mid-composition; unmount explicitly and let afterEach skip the double-unmount.
+function unmountNow(): void {
   act(() => {
     root.unmount()
   })
-  container.remove()
-})
+  unmounted = true
+}
+
+// Why: React routes onBlur through the bubbling focusout event.
+function blurInput(): void {
+  act(() => {
+    getInput().dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
+  })
+}
 
 function render(props: {
   repoId: string
@@ -208,5 +228,61 @@ describe('RepoSettingsDraftInput', () => {
 
     expect(onTextChange).toHaveBeenCalledTimes(1)
     expect(onTextChange).toHaveBeenCalledWith('Renamed Repo Two')
+  })
+
+  it('flushes an abandoned IME composition on blur', () => {
+    const onTextChange = vi.fn()
+    render({ repoId: 'repo-1', storeValue: '', onTextChange })
+
+    // Hangul: type a syllable but leave it unconfirmed, then blur the field
+    // (no compositionend) — the last syllable must still be persisted.
+    compositionStart()
+    composingInput('홍')
+    expect(onTextChange).not.toHaveBeenCalled()
+
+    blurInput()
+
+    expect(onTextChange).toHaveBeenCalledTimes(1)
+    expect(onTextChange).toHaveBeenCalledWith('홍')
+  })
+
+  it('flushes an abandoned IME composition when the field unmounts', () => {
+    const onTextChange = vi.fn()
+    render({ repoId: 'repo-1', storeValue: '', onTextChange })
+
+    // The user navigates back out of project settings before confirming the
+    // syllable: the field unmounts with no compositionend.
+    compositionStart()
+    composingInput('홍')
+    expect(onTextChange).not.toHaveBeenCalled()
+
+    unmountNow()
+
+    expect(onTextChange).toHaveBeenCalledTimes(1)
+    expect(onTextChange).toHaveBeenCalledWith('홍')
+  })
+
+  it('does not re-persist a confirmed value on blur or unmount', () => {
+    const onTextChange = vi.fn()
+    render({ repoId: 'repo-1', storeValue: '', onTextChange })
+
+    compositionStart()
+    composingInput('홍')
+    compositionEnd('홍')
+    blurInput()
+    unmountNow()
+
+    expect(onTextChange).toHaveBeenCalledTimes(1)
+    expect(onTextChange).toHaveBeenCalledWith('홍')
+  })
+
+  it('does not persist on blur or unmount when nothing was edited', () => {
+    const onTextChange = vi.fn()
+    render({ repoId: 'repo-1', storeValue: 'seed', onTextChange })
+
+    blurInput()
+    unmountNow()
+
+    expect(onTextChange).not.toHaveBeenCalled()
   })
 })

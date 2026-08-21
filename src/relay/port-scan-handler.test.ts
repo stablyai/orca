@@ -1,6 +1,167 @@
-import { describe, expect, it, vi } from 'vitest'
-import { parseHexAddress } from './port-scan-handler'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { MethodHandler, RequestContext } from './dispatcher'
+
+const { readFileMock, readdirMock, readlinkMock } = vi.hoisted(() => ({
+  readFileMock: vi.fn(),
+  readdirMock: vi.fn(),
+  readlinkMock: vi.fn()
+}))
+
+vi.mock('node:fs/promises', () => ({
+  readFile: readFileMock,
+  readdir: readdirMock,
+  readlink: readlinkMock
+}))
+
+import { parseHexAddress, PortScanHandler } from './port-scan-handler'
 import { parseWindowsNetstatOutput, parseWindowsPowerShellPortRows } from './windows-port-scan'
+
+// The scanner skips any pid matching the relay process or its parent, so a fixture pid
+// range that covers the vitest worker's own pid silently drops the row and the assertion
+// sees no ports. Shift the whole range past a colliding pid so the walk stays hermetic.
+const MAX_FIXTURE_PIDS = 1_000
+
+const PID_BASE = (() => {
+  let base = 1_000
+  while ([process.pid, process.ppid].some((pid) => pid >= base && pid < base + MAX_FIXTURE_PIDS)) {
+    base += MAX_FIXTURE_PIDS
+  }
+  return base
+})()
+
+const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+})
+
+afterEach(() => {
+  if (originalPlatformDescriptor) {
+    Object.defineProperty(process, 'platform', originalPlatformDescriptor)
+  }
+})
+
+function capturePortDetectHandler(): MethodHandler {
+  let handler: MethodHandler | undefined
+  new PortScanHandler({
+    onRequest: (method, nextHandler) => {
+      expect(method).toBe('ports.detect')
+      handler = nextHandler
+    }
+  })
+  if (!handler) {
+    throw new Error('ports.detect handler was not registered')
+  }
+  return handler
+}
+
+function requestContext(signal?: AbortSignal): RequestContext {
+  return { clientId: 1, isStale: () => signal?.aborted ?? false, signal }
+}
+
+function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve = (_value: T): void => {
+    throw new Error('deferred promise was not initialized')
+  }
+  const promise = new Promise<T>((nextResolve) => {
+    resolve = nextResolve
+  })
+  return { promise, resolve }
+}
+
+function mockLinuxProcScan({
+  pidCount,
+  fdCount,
+  firstReadlink
+}: {
+  pidCount: number
+  fdCount: number
+  firstReadlink?: Promise<string>
+}): void {
+  const tcpHeader =
+    'sl local_address rem_address st tx_queue rx_queue tr tm->when retrnsmt uid timeout inode'
+  const tcpRow =
+    '0: 0100007F:0BB8 00000000:0000 0A 00000000:00000000 00:00000000 00000000 1000 0 11111'
+  readFileMock.mockImplementation(async (path: string) => {
+    if (path === '/proc/net/tcp') {
+      return `${tcpHeader}\n${tcpRow}\n`
+    }
+    if (path === '/proc/net/tcp6') {
+      return `${tcpHeader}\n`
+    }
+    if (path.endsWith('/cmdline')) {
+      return '/usr/bin/node\0server.js'
+    }
+    throw new Error(`unexpected readFile: ${path}`)
+  })
+
+  const pids = Array.from({ length: pidCount }, (_, index) => String(PID_BASE + index))
+  const fds = Array.from({ length: fdCount }, (_, index) => String(index))
+  readdirMock.mockImplementation(async (path: string) => {
+    if (path === '/proc') {
+      return pids
+    }
+    if (path.endsWith('/fd')) {
+      return fds
+    }
+    throw new Error(`unexpected readdir: ${path}`)
+  })
+
+  let first = true
+  readlinkMock.mockImplementation(() => {
+    if (first && firstReadlink) {
+      first = false
+      return firstReadlink
+    }
+    first = false
+    return Promise.resolve('socket:[11111]')
+  })
+}
+
+describe('PortScanHandler Linux cancellation', () => {
+  it('does not touch procfs for an already-cancelled request', async () => {
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      capturePortDetectHandler()({}, requestContext(controller.signal))
+    ).rejects.toMatchObject({ name: 'AbortError' })
+
+    expect(readFileMock).not.toHaveBeenCalled()
+    expect(readdirMock).not.toHaveBeenCalled()
+    expect(readlinkMock).not.toHaveBeenCalled()
+  })
+
+  it('stops a large pid and fd walk at the filesystem operation already in flight', async () => {
+    const firstReadlink = createDeferred<string>()
+    mockLinuxProcScan({ pidCount: 1_000, fdCount: 100, firstReadlink: firstReadlink.promise })
+    const controller = new AbortController()
+    const scan = capturePortDetectHandler()({}, requestContext(controller.signal))
+
+    await vi.waitFor(() => expect(readlinkMock).toHaveBeenCalledTimes(1))
+    controller.abort()
+    firstReadlink.resolve('socket:[11111]')
+
+    await expect(scan).rejects.toMatchObject({ name: 'AbortError' })
+    expect(readdirMock).toHaveBeenCalledTimes(2)
+    expect(readdirMock).toHaveBeenNthCalledWith(1, '/proc')
+    expect(readdirMock).toHaveBeenNthCalledWith(2, `/proc/${PID_BASE}/fd`)
+    expect(readlinkMock).toHaveBeenCalledTimes(1)
+    expect(readlinkMock).toHaveBeenCalledWith(`/proc/${PID_BASE}/fd/0`)
+  })
+
+  it('preserves detected port results when the request stays live', async () => {
+    mockLinuxProcScan({ pidCount: 1, fdCount: 1 })
+
+    await expect(
+      capturePortDetectHandler()({}, requestContext(new AbortController().signal))
+    ).resolves.toEqual({
+      ports: [{ host: '127.0.0.1', port: 3000, pid: PID_BASE, processName: 'node' }],
+      platform: 'linux'
+    })
+  })
+})
 
 describe('parseHexAddress', () => {
   it('parses IPv4 localhost (127.0.0.1)', () => {

@@ -23,11 +23,22 @@ import {
 } from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import {
   createTestStore,
+  makeWorktree,
   makeTab,
   makeTabGroup,
   makeUnifiedTab,
   seedStore
 } from './store-test-helpers'
+
+function createRetirementStore() {
+  const store = createTestStore()
+  seedStore(store, {
+    worktreesByRepo: {
+      repo1: [makeWorktree({ id: 'wt-1', repoId: 'repo1', path: '/repo/wt-1' })]
+    }
+  })
+  return store
+}
 
 function sleepingRecord(paneKey: string, tabId: string): SleepingAgentSessionRecord {
   return {
@@ -58,7 +69,7 @@ describe('terminal tab retirement store boundary', () => {
   })
 
   it('retires split, relay, deferred, and pending sessions for a parked tab', async () => {
-    const store = createTestStore()
+    const store = createRetirementStore()
     const dispose = vi.fn()
     const siblingRecord = sleepingRecord('tab-2:leaf-2', 'tab-2')
     seedStore(store, {
@@ -110,7 +121,7 @@ describe('terminal tab retirement store boundary', () => {
   })
 
   it('routes runtime handles to runtime close and preserves shared PTYs', async () => {
-    const store = createTestStore()
+    const store = createRetirementStore()
     seedStore(store, {
       tabsByWorktree: {
         'wt-1': [
@@ -135,7 +146,7 @@ describe('terminal tab retirement store boundary', () => {
   })
 
   it('preserves shared-owner snapshots while closing the source tab', async () => {
-    const store = createTestStore()
+    const store = createRetirementStore()
     const snapshot = { snapshot: 'shared snapshot' }
     const coldRestore = { scrollback: 'shared scrollback', cwd: 'C:\\workspace' }
     seedStore(store, {
@@ -159,7 +170,7 @@ describe('terminal tab retirement store boundary', () => {
   })
 
   it('reconciles natural exit without issuing teardown or revoking resume authority', async () => {
-    const store = createTestStore()
+    const store = createRetirementStore()
     const record = sleepingRecord('tab-1:leaf-1', 'tab-1')
     seedStore(store, {
       tabsByWorktree: {
@@ -178,7 +189,7 @@ describe('terminal tab retirement store boundary', () => {
   })
 
   it('does not recreate PTY indexes for a tab that no longer exists', () => {
-    const store = createTestStore()
+    const store = createRetirementStore()
 
     store.getState().updateTabPtyId('closed-tab', 'pty-after-close')
 
@@ -187,7 +198,7 @@ describe('terminal tab retirement store boundary', () => {
   })
 
   it('retires a unified-only terminal instead of removing only its wrapper', async () => {
-    const store = createTestStore()
+    const store = createRetirementStore()
     const unified = makeUnifiedTab({
       id: 'unified-tab-1',
       entityId: 'terminal-tab-1',
@@ -218,7 +229,7 @@ describe('terminal tab retirement store boundary', () => {
   })
 
   it('lets a paired host own runtime teardown while pruning local state', async () => {
-    const store = createTestStore()
+    const store = createRetirementStore()
     seedStore(store, {
       tabsByWorktree: {
         'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1', ptyId: 'remote:terminal-1' })]
@@ -234,7 +245,7 @@ describe('terminal tab retirement store boundary', () => {
   })
 
   it('keeps the tab retired and reports provider rejection without an unhandled promise', async () => {
-    const store = createTestStore()
+    const store = createRetirementStore()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     mockKill.mockRejectedValueOnce(new Error('provider unavailable'))
     seedStore(store, {

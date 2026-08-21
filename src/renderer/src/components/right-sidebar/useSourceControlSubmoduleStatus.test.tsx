@@ -14,8 +14,8 @@ vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => undefined })
 import {
   useSourceControlSubmoduleStatus,
   type UseSourceControlSubmoduleStatusResult
-} from './useSourceControlSubmoduleStatus'
-import type { GitStatusEntry } from '../../../../shared/types'
+} from './source-control/listing/use-submodule-status'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 
 const roots: Root[] = []
 
@@ -231,7 +231,10 @@ describe('useSourceControlSubmoduleStatus', () => {
   })
 
   it('passes the row area when expanding a staged submodule row', async () => {
-    mocks.getRuntimeGitSubmoduleStatus.mockResolvedValue({ entries: [innerEntry('from-index.ts')] })
+    mocks.getRuntimeGitSubmoduleStatus.mockResolvedValue({
+      entries: [innerEntry('from-index.ts')],
+      didHitLimit: true
+    })
 
     const container = document.createElement('div')
     const root = createRoot(container)
@@ -253,7 +256,8 @@ describe('useSourceControlSubmoduleStatus', () => {
     )
     expect(latest?.submoduleStatusByKey['staged::sub']).toEqual({
       status: 'loaded',
-      entries: [innerEntry('from-index.ts')]
+      entries: [innerEntry('from-index.ts')],
+      didHitLimit: true
     })
   })
 })

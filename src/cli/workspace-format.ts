@@ -10,19 +10,23 @@ import type {
   RuntimeWorktreePsResult,
   RuntimeWorktreeRecord
 } from '../shared/runtime-types'
-import type { MemorySnapshot, WorktreeMemory } from '../shared/types'
+import type { MemorySnapshot, WorktreeMemory } from '../shared/process-stats-types'
 
 export function formatMemorySnapshot(snapshot: MemorySnapshot): string {
   const topWorktrees = [...snapshot.worktrees].sort((a, b) => b.memory - a.memory).slice(0, 10)
+  const hostAvailable = snapshot.host.availableMemory ?? snapshot.host.freeMemory
+  const hostAvailableSource = snapshot.host.availableMemorySource ?? 'free-memory'
   const lines = [
     `collectedAt: ${new Date(snapshot.collectedAt).toISOString()}`,
     `totalMemory: ${formatByteCount(snapshot.totalMemory)}`,
+    `processMemoryMetric: ${formatProcessMemoryMetric(snapshot.processMemoryMetric)}`,
     `totalCpu: ${formatCpu(snapshot.totalCpu)}`,
     [
       `hostUsed: ${formatByteCount(snapshot.host.usedMemory)}`,
       `/ ${formatByteCount(snapshot.host.totalMemory)}`,
       `(${snapshot.host.memoryUsagePercent.toFixed(1)}%)`
     ].join(' '),
+    [`hostAvailable: ${formatByteCount(hostAvailable)}`, `(${hostAvailableSource})`].join(' '),
     [
       `app: ${formatByteCount(snapshot.app.memory)}`,
       `(main ${formatByteCount(snapshot.app.main.memory)},`,
@@ -58,6 +62,12 @@ function formatWorktreeMemoryLine(worktree: WorktreeMemory): string {
 
 function formatCpu(cpu: number): string {
   return `${cpu.toFixed(1)}%`
+}
+
+function formatProcessMemoryMetric(metric: MemorySnapshot['processMemoryMetric']): string {
+  return metric === 'working-set'
+    ? 'summed working set; shared pages may repeat'
+    : 'summed RSS; shared or aliased pages may repeat'
 }
 
 function formatByteCount(bytes: number): string {

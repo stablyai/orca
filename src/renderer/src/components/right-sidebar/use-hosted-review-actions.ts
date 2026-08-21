@@ -1,17 +1,17 @@
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
-import { useConfirmationDialog } from '@/components/confirmation-dialog'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import type { GitHubPRAutoMergeAction } from '@/components/github-pr-merge-state'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { PRInfo, Repo } from '../../../../shared/types'
-import type { GitHubPRMergeMethod } from '../../../../shared/types'
-import { GITHUB_PR_MERGE_METHOD_LABELS } from '../../../../shared/github-pr-merge-methods'
+import type { GitHubPRMergeMethod, PRInfo } from '../../../../shared/github/pull-request-types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   mergeGitHubHostedReview,
   setGitHubHostedReviewAutoMerge,
   updateGitHubHostedReviewState
 } from './hosted-review-github-actions'
 import { translate } from '@/i18n/i18n'
+import { buildGitHubPRStackMergeConfirmation } from './github-pr-stack-confirmation'
 
 export type HostedReviewActionInfo = Pick<
   HostedReviewInfo,
@@ -64,20 +64,20 @@ export function useHostedReviewActions({
 
   const handleMerge = useCallback(
     async (method: GitHubPRMergeMethod = defaultMergeMethod) => {
-      // Why: choosing a strategy from the merge dropdown must not merge on its
-      // own — confirm first, matching every other PR/MR merge surface (#7943).
-      const label = GITHUB_PR_MERGE_METHOD_LABELS[method]
-      const confirmed = await confirm({
-        title: `${label} ${shortLabel} ${isGitLab ? '!' : '#'}${review.number}?`,
-        description: translate(
-          'auto.components.right.sidebar.use.hosted.review.actions.e475c29b17',
-          'This will merge the {{value0}}.',
-          { value0: reviewLabel }
-        ),
-        confirmLabel: label
-      })
-      if (!confirmed) {
-        return
+      if (!isGitLab && githubPR?.stack) {
+        const usesMergeQueue =
+          review.mergeQueueRequired === true || githubPR.mergeQueueRequired === true
+        const confirmed = await confirm(
+          buildGitHubPRStackMergeConfirmation({
+            stack: githubPR.stack,
+            currentPRNumber: review.number,
+            method,
+            usesMergeQueue
+          })
+        )
+        if (!confirmed) {
+          return
+        }
       }
       setMerging(true)
       setActionError(null)
@@ -109,12 +109,13 @@ export function useHostedReviewActions({
     [
       confirm,
       githubPR?.prRepo,
+      githubPR?.mergeQueueRequired,
+      githubPR?.stack,
       isGitLab,
-      shortLabel,
-      reviewLabel,
       defaultMergeMethod,
       onRefreshReview,
       repo,
+      review.mergeQueueRequired,
       review.number
     ]
   )
@@ -198,6 +199,7 @@ export function useHostedReviewActions({
           : await updateGitHubHostedReviewState({
               repo,
               prNumber: review.number,
+              prRepo: githubPR?.prRepo ?? null,
               nextState
             })
         if (!result.ok) {
@@ -207,7 +209,7 @@ export function useHostedReviewActions({
           toast.success(
             isClosing
               ? translate(
-                  'auto.components.right.sidebar.HostedReviewActions.fa3ee9a515',
+                  'auto.components.right.sidebar.HostedReviewActions.closedToast',
                   '{{value0}} closed',
                   { value0: shortLabel }
                 )
@@ -230,6 +232,7 @@ export function useHostedReviewActions({
     },
     [
       confirm,
+      githubPR?.prRepo,
       isGitLab,
       onRefreshReview,
       repo,

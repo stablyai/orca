@@ -1,13 +1,15 @@
 import { app, ipcMain } from 'electron'
 import type { Store } from '../persistence'
-import { loadHooks } from '../hooks'
 import {
   getEphemeralVmRecipeResultConnection,
-  getEphemeralVmRecipeResultWarnings,
-  redactEphemeralVmRecipeDiagnosticText,
-  type EphemeralVmRecipeResultWarning,
   type EphemeralVmRecipeDoctorResult
 } from '../../shared/ephemeral-vm-recipes'
+import {
+  getEphemeralVmRecipeResultWarnings,
+  redactEphemeralVmRecipeDiagnosticText,
+  type EphemeralVmRecipeResultWarning
+} from '../../shared/ephemeral-vm-recipe-diagnostics'
+import { getProvisionedRootRecipeRepoUrl } from '../../shared/ephemeral-vm-recipe-repo-url'
 // Why: import directly from the doctor module (not the barrel) — it uses Node
 // fs/path and must stay out of the browser bundle that imports the barrel.
 import { doctorEphemeralVmRecipe } from '../../shared/ephemeral-vm-recipe-doctor'
@@ -27,9 +29,13 @@ import {
   getRecipeRepo,
   listRecipeCatalog,
   listRecipes,
+  resolveRecipeForRepo,
   type EphemeralVmRecipeCatalogEntry
 } from './ephemeral-vm-recipe-context'
 import { registerEphemeralVmRuntimeHandlers } from './ephemeral-vm-runtime-handlers'
+import type { PluginService } from '../plugins/plugin-service'
+import { getApprovedPluginVmRecipes } from '../plugins/plugin-approved-vm-recipes'
+import { resolveProvisionedRootSource } from '../ephemeral-vm-provisioned-root-source'
 
 const activeProvisionControllers = new Map<string, AbortController>()
 
@@ -47,6 +53,7 @@ export type EphemeralVmProvisionIpcResult =
       connectionType: 'ssh'
       runtime: EphemeralVmRuntimeRecord
       sshTargetId: string
+      expectedRefHead?: string
       stderr: string
       warnings: EphemeralVmRecipeResultWarning[]
     }
@@ -57,7 +64,7 @@ export type EphemeralVmProvisionIpcResult =
       stdout: string
     }
 
-export function registerEphemeralVmHandlers(store: Store): void {
+export function registerEphemeralVmHandlers(store: Store, pluginService?: PluginService): void {
   ipcMain.removeHandler('ephemeralVm:listRecipes')
   ipcMain.removeHandler('ephemeralVm:listRecipeCatalog')
   ipcMain.removeHandler('ephemeralVm:doctor')
@@ -65,25 +72,32 @@ export function registerEphemeralVmHandlers(store: Store): void {
   ipcMain.removeHandler('ephemeralVm:cancelProvision')
   registerEphemeralVmRuntimeHandlers(store)
 
-  ipcMain.handle('ephemeralVm:listRecipes', (_event, args: { repoId: string }) => {
-    return listRecipes(store, args.repoId)
-  })
-
-  ipcMain.handle('ephemeralVm:listRecipeCatalog', (): EphemeralVmRecipeCatalogEntry[] => {
-    return listRecipeCatalog(store)
+  ipcMain.handle('ephemeralVm:listRecipes', async (_event, args: { repoId: string }) => {
+    return listRecipes(store, args.repoId, await getApprovedPluginVmRecipes(pluginService))
   })
 
   ipcMain.handle(
+    'ephemeralVm:listRecipeCatalog',
+    async (): Promise<EphemeralVmRecipeCatalogEntry[]> => {
+      return listRecipeCatalog(store, await getApprovedPluginVmRecipes(pluginService))
+    }
+  )
+
+  ipcMain.handle(
     'ephemeralVm:doctor',
-    (_event, args: { repoId: string; recipeId: string }): EphemeralVmRecipeDoctorResult => {
+    async (
+      _event,
+      args: { repoId: string; recipeId: string }
+    ): Promise<EphemeralVmRecipeDoctorResult> => {
       const repo = getRecipeRepo(store, args.repoId)
       if (!repo.ok) {
         return repo.doctor(args.recipeId)
       }
+      const pluginRecipes = await getApprovedPluginVmRecipes(pluginService)
       return doctorEphemeralVmRecipe({
         repoPath: repo.repo.path,
         recipeId: args.recipeId,
-        recipes: loadHooks(repo.repo.path)?.environmentRecipes ?? [],
+        recipes: listRecipes(store, args.repoId, pluginRecipes).recipes,
         localExecutionSupported: true
       })
     }
@@ -99,6 +113,8 @@ export function registerEphemeralVmHandlers(store: Store): void {
         workspaceName?: string
         projectId?: string
         workspaceId?: string
+        branch?: string
+        ref?: string
         provisionId?: string
       }
     ): Promise<EphemeralVmProvisionIpcResult> => {
@@ -106,8 +122,10 @@ export function registerEphemeralVmHandlers(store: Store): void {
       if (!repo.ok) {
         return { ok: false, error: repo.message, stdout: '', stderr: '' }
       }
-      const recipe = (loadHooks(repo.repo.path)?.environmentRecipes ?? []).find(
-        (entry) => entry.id === args.recipeId
+      const recipe = resolveRecipeForRepo(
+        repo.repo.path,
+        args.recipeId,
+        await getApprovedPluginVmRecipes(pluginService)
       )
       if (!recipe) {
         return { ok: false, error: `Recipe not found: ${args.recipeId}`, stdout: '', stderr: '' }
@@ -131,6 +149,34 @@ export function registerEphemeralVmHandlers(store: Store): void {
       // abort during the up-to-10s SSH connect window. Removing it in the provision
       // promise's own .finally() would deregister it before SSH connect even starts.
       try {
+        let recipeRepoUrl = repo.repo.gitRemoteIdentity?.remoteUrl
+        let sourceRef = args.ref
+        let expectedRefHead: string | undefined
+        if (recipe.checkoutMode === 'provisioned-root') {
+          const source = await resolveProvisionedRootSource(
+            store,
+            repo.repo,
+            args.ref,
+            controller?.signal
+          )
+          if (controller?.signal.aborted) {
+            return { ok: false, error: 'Provisioning cancelled.', stdout: '', stderr: '' }
+          }
+          if (!source) {
+            return {
+              ok: false,
+              error: args.ref
+                ? `Could not resolve provisioned-root start ref: ${args.ref}`
+                : 'Could not resolve a default provisioned-root start ref.',
+              stdout: '',
+              stderr: ''
+            }
+          }
+          sourceRef = source.ref
+          expectedRefHead = source.head
+          recipeRepoUrl = source.remoteUrl ?? recipeRepoUrl
+        }
+        const repoUrl = getProvisionedRootRecipeRepoUrl(recipe.checkoutMode, recipeRepoUrl)
         const result = await provisionEphemeralVmRuntime({
           userDataPath: app.getPath('userData'),
           repoPath: repo.repo.path,
@@ -139,6 +185,10 @@ export function registerEphemeralVmHandlers(store: Store): void {
           projectId: args.projectId,
           workspaceId: args.workspaceId,
           workspaceName: args.workspaceName,
+          ...(repoUrl ? { repoUrl } : {}),
+          ...(args.branch ? { branch: args.branch } : {}),
+          ...(sourceRef ? { ref: sourceRef } : {}),
+          ...(expectedRefHead ? { expectedRefHead } : {}),
           ...(controller ? { signal: controller.signal } : {}),
           onStdout: (chunk) => sendProvisionEvent('stdout', chunk),
           onStderr: (chunk) => sendProvisionEvent('stderr', chunk)
@@ -171,6 +221,7 @@ export function registerEphemeralVmHandlers(store: Store): void {
               connectionType: 'ssh',
               runtime,
               sshTargetId: ssh.targetId,
+              ...(expectedRefHead ? { expectedRefHead } : {}),
               stderr: redactEphemeralVmRecipeDiagnosticText(result.start.stderr),
               warnings: getEphemeralVmRecipeResultWarnings(result.start.result)
             }

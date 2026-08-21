@@ -1,17 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { _getRemoteDetectPromiseCountForTest, createDetectedAgentsSlice } from './detected-agents'
 import {
-  _getRemoteDetectPromiseCountForTest,
   _getRuntimeDetectPromiseCountForTest,
-  createDetectedAgentsSlice
-} from './detected-agents'
+  createRuntimeDetectedAgentsSlice
+} from './runtime-detected-agents'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../../shared/protocol-version'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 const detectAgents = vi.fn()
 const refreshAgents = vi.fn()
@@ -38,7 +40,8 @@ function createTestStore(initial?: Partial<AppState>) {
   const store = create<AppState>()(
     (...a) =>
       ({
-        ...createDetectedAgentsSlice(...a)
+        ...createDetectedAgentsSlice(...a),
+        ...createRuntimeDetectedAgentsSlice(...a)
       }) as AppState
   )
   store.setState({
@@ -136,6 +139,59 @@ describe('createDetectedAgentsSlice WSL context', () => {
         }
       }
     })
+  })
+
+  it('publishes a Floating-first host probe to a later ordinary local caller', async () => {
+    let resolveDetection: (agents: string[]) => void = () => {}
+    detectAgents.mockReturnValueOnce(
+      new Promise<string[]>((resolve) => {
+        resolveDetection = resolve
+      })
+    )
+    const store = createTestStore()
+
+    const floating = store.getState().ensureDetectedAgents(FLOATING_TERMINAL_WORKTREE_ID)
+    const ordinary = store.getState().ensureDetectedAgents()
+
+    expect(detectAgents).toHaveBeenCalledTimes(1)
+    expect(store.getState().isDetectingAgents).toBe(true)
+    resolveDetection(['codex'])
+    await expect(Promise.all([floating, ordinary])).resolves.toEqual([['codex'], ['codex']])
+    expect(store.getState().detectedAgentIds).toEqual(['codex'])
+    expect(store.getState().isDetectingAgents).toBe(false)
+  })
+
+  it('restores the legacy inventory when returning to a cached local context', async () => {
+    detectAgents.mockImplementation(async (context) =>
+      context?.projectRuntime?.runtime.kind === 'wsl' ? ['claude'] : ['codex']
+    )
+    const store = createTestStore({
+      repos: [makeRepo({ id: 'repo-1', path: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo' })],
+      activeRepoId: 'repo-1',
+      activeWorktreeId: null
+    })
+
+    await store.getState().ensureDetectedAgents()
+    store.setState({ activeRepoId: null })
+    await store.getState().ensureDetectedAgents()
+    store.setState({ activeRepoId: 'repo-1' })
+
+    await expect(store.getState().ensureDetectedAgents()).resolves.toEqual(['claude'])
+    expect(detectAgents).toHaveBeenCalledTimes(2)
+    expect(store.getState().detectedAgentIds).toEqual(['claude'])
+  })
+
+  it('retries a local context after a transient detection failure', async () => {
+    detectAgents
+      .mockRejectedValueOnce(new Error('cold-start timeout'))
+      .mockResolvedValueOnce(['codex'])
+    const store = createTestStore()
+
+    await expect(store.getState().ensureDetectedAgents()).resolves.toEqual([])
+    await expect(store.getState().ensureDetectedAgents()).resolves.toEqual(['codex'])
+
+    expect(detectAgents).toHaveBeenCalledTimes(2)
+    expect(store.getState().detectedAgentIds).toEqual(['codex'])
   })
 
   it('refreshes local agents inside the active WSL repo distro when no worktree is selected', async () => {
@@ -326,6 +382,10 @@ describe('createDetectedAgentsSlice WSL context', () => {
       projects: [
         {
           id: 'repo-1',
+          displayName: 'repo-1',
+          badgeColor: 'blue',
+          createdAt: 1,
+          updatedAt: 1,
           sourceRepoIds: ['repo-1'],
           localWindowsRuntimePreference: { kind: 'windows-host' }
         }
@@ -478,6 +538,46 @@ describe('createDetectedAgentsSlice remote detection', () => {
     expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
   })
 
+  it('deduplicates concurrent SSH refreshes', async () => {
+    const store = createTestStore()
+    store.setState({ remoteDetectedAgentIds: { 'ssh-1': ['claude'] } } as Partial<AppState>)
+    let resolveRemote: (ids: string[]) => void = () => {}
+    detectRemoteAgents.mockReturnValueOnce(
+      new Promise<string[]>((resolve) => {
+        resolveRemote = resolve
+      })
+    )
+
+    const first = store.getState().refreshRemoteDetectedAgents('ssh-1')
+    const second = store.getState().refreshRemoteDetectedAgents('ssh-1')
+
+    expect(second).toBe(first)
+    expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
+    expect(store.getState().remoteDetectedAgentIds['ssh-1']).toEqual(['claude'])
+
+    resolveRemote(['codex'])
+    await expect(first).resolves.toEqual(['codex'])
+    expect(store.getState().remoteDetectedAgentIds['ssh-1']).toEqual(['codex'])
+  })
+
+  it('does not restore an SSH cache entry after it is cleared mid-detection', async () => {
+    const store = createTestStore()
+    let resolveRemote: (ids: string[]) => void = () => {}
+    detectRemoteAgents.mockReturnValueOnce(
+      new Promise<string[]>((resolve) => {
+        resolveRemote = resolve
+      })
+    )
+
+    const pending = store.getState().ensureRemoteDetectedAgents('ssh-1')
+    store.getState().clearRemoteDetectedAgents('ssh-1')
+    resolveRemote(['claude'])
+
+    await expect(pending).resolves.toEqual(['claude'])
+    expect(store.getState().remoteDetectedAgentIds).not.toHaveProperty('ssh-1')
+    expect(store.getState().isDetectingRemoteAgents).not.toHaveProperty('ssh-1')
+  })
+
   it('re-runs remote detection after an empty result instead of pinning it', async () => {
     const store = createTestStore()
     // An empty [] is truthy, so a prior "no agents found" must not be cached:
@@ -560,5 +660,221 @@ describe('createDetectedAgentsSlice remote detection', () => {
     await expect(store.getState().ensureRuntimeDetectedAgents('env-1')).resolves.toEqual(['kilo'])
     expect(store.getState().runtimeDetectedAgentIds['env-1']).toEqual(['kilo'])
     expect(detectCalls).toBe(2)
+  })
+
+  it('refreshes runtime agents through preflight.refreshAgents on the owning runtime', async () => {
+    const store = createTestStore()
+    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
+      let result: unknown
+      if (method === 'status.get') {
+        result = {
+          runtimeId: 'remote-runtime',
+          rendererGraphEpoch: 1,
+          graphStatus: 'ready',
+          authoritativeWindowId: null,
+          liveTabCount: 0,
+          liveLeafCount: 0,
+          runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+          minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+        }
+      } else if (method === 'preflight.refreshAgents') {
+        result = {
+          agents: ['claude', 'gemini'],
+          addedPathSegments: [],
+          shellHydrationOk: true,
+          pathSource: 'shell_hydrate',
+          pathFailureReason: 'none'
+        }
+      } else {
+        result = ['codex']
+      }
+      return Promise.resolve({
+        id: method,
+        ok: true,
+        result,
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+    })
+
+    const first = store.getState().refreshRuntimeDetectedAgents('env-1')
+    const second = store.getState().refreshRuntimeDetectedAgents('env-1')
+
+    expect(store.getState().isRefreshingRuntimeAgents['env-1']).toBe(true)
+    await expect(first).resolves.toEqual(['claude', 'gemini'])
+    await expect(second).resolves.toEqual(['claude', 'gemini'])
+    expect(store.getState().runtimeDetectedAgentIds['env-1']).toEqual(['claude', 'gemini'])
+    expect(store.getState().isRefreshingRuntimeAgents['env-1']).toBe(false)
+    expect(
+      runtimeEnvironmentCall.mock.calls.filter(
+        ([{ method }]) => method === 'preflight.refreshAgents'
+      )
+    ).toHaveLength(1)
+  })
+
+  it('keeps a late initial detect from overwriting a runtime refresh', async () => {
+    const store = createTestStore()
+    let resolveDetect: (value: unknown) => void = () => {}
+    let resolveRefresh: (value: unknown) => void = () => {}
+    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
+      if (method === 'status.get') {
+        return Promise.resolve({
+          id: method,
+          ok: true,
+          result: {
+            runtimeId: 'remote-runtime',
+            rendererGraphEpoch: 1,
+            graphStatus: 'ready',
+            authoritativeWindowId: null,
+            liveTabCount: 0,
+            liveLeafCount: 0,
+            runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+            minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+          },
+          _meta: { runtimeId: 'remote-runtime' }
+        })
+      }
+      return new Promise((resolve) => {
+        if (method === 'preflight.detectAgents') {
+          resolveDetect = resolve
+        } else {
+          resolveRefresh = resolve
+        }
+      })
+    })
+
+    const detect = store.getState().ensureRuntimeDetectedAgents('env-1')
+    await vi.waitFor(() => {
+      expect(
+        runtimeEnvironmentCall.mock.calls.filter(
+          ([{ method }]) => method === 'preflight.detectAgents'
+        )
+      ).toHaveLength(1)
+    })
+
+    const refresh = store.getState().refreshRuntimeDetectedAgents('env-1')
+    expect(store.getState().ensureRuntimeDetectedAgents('env-1')).toBe(refresh)
+    expect(store.getState().isDetectingRuntimeAgents['env-1']).toBe(true)
+    expect(store.getState().isRefreshingRuntimeAgents['env-1']).toBe(true)
+    await vi.waitFor(() => {
+      expect(
+        runtimeEnvironmentCall.mock.calls.filter(
+          ([{ method }]) => method === 'preflight.refreshAgents'
+        )
+      ).toHaveLength(1)
+    })
+    resolveRefresh({
+      id: 'preflight.refreshAgents',
+      ok: true,
+      result: {
+        agents: ['kilo'],
+        addedPathSegments: [],
+        shellHydrationOk: true,
+        pathSource: 'shell_hydrate',
+        pathFailureReason: 'none'
+      },
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    await expect(refresh).resolves.toEqual(['kilo'])
+
+    resolveDetect({
+      id: 'preflight.detectAgents',
+      ok: true,
+      result: ['claude'],
+      _meta: { runtimeId: 'remote-runtime' }
+    })
+    await expect(detect).resolves.toEqual(['claude'])
+
+    expect(store.getState().runtimeDetectedAgentIds['env-1']).toEqual(['kilo'])
+    expect(store.getState().isDetectingRuntimeAgents['env-1']).toBe(false)
+    expect(store.getState().isRefreshingRuntimeAgents['env-1']).toBe(false)
+    expect(
+      runtimeEnvironmentCall.mock.calls.filter(
+        ([{ method }]) => method === 'preflight.refreshAgents'
+      )
+    ).toHaveLength(1)
+  })
+
+  it('falls back to plain runtime re-detection when the server lacks preflight.refreshAgents', async () => {
+    const store = createTestStore()
+    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
+      if (method === 'preflight.refreshAgents') {
+        return Promise.resolve({
+          id: method,
+          ok: false,
+          error: { code: 'method_not_found', message: `Unknown method: ${method}` },
+          _meta: { runtimeId: 'remote-runtime' }
+        })
+      }
+      const result =
+        method === 'status.get'
+          ? {
+              runtimeId: 'remote-runtime',
+              rendererGraphEpoch: 1,
+              graphStatus: 'ready',
+              authoritativeWindowId: null,
+              liveTabCount: 0,
+              liveLeafCount: 0,
+              runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+              minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+            }
+          : ['kilo']
+      return Promise.resolve({
+        id: method,
+        ok: true,
+        result,
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+    })
+
+    await expect(store.getState().refreshRuntimeDetectedAgents('env-1')).resolves.toEqual(['kilo'])
+    expect(store.getState().runtimeDetectedAgentIds['env-1']).toEqual(['kilo'])
+    expect(store.getState().isRefreshingRuntimeAgents['env-1']).toBe(false)
+  })
+
+  it('does not retry ordinary runtime refresh failures with a second RPC', async () => {
+    const store = createTestStore()
+    store.setState({ runtimeDetectedAgentIds: { 'env-1': ['claude'] } } as Partial<AppState>)
+    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
+      if (method === 'status.get') {
+        return Promise.resolve({
+          id: method,
+          ok: true,
+          result: {
+            runtimeId: 'remote-runtime',
+            rendererGraphEpoch: 1,
+            graphStatus: 'ready',
+            authoritativeWindowId: null,
+            liveTabCount: 0,
+            liveLeafCount: 0,
+            runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+            minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+          },
+          _meta: { runtimeId: 'remote-runtime' }
+        })
+      }
+      if (method === 'preflight.refreshAgents') {
+        return Promise.resolve({
+          id: method,
+          ok: false,
+          error: { code: 'runtime_error', message: 'runtime disconnected' },
+          _meta: { runtimeId: 'remote-runtime' }
+        })
+      }
+      return Promise.resolve({
+        id: method,
+        ok: true,
+        result: ['codex'],
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+    })
+
+    await expect(store.getState().refreshRuntimeDetectedAgents('env-1')).resolves.toEqual([
+      'claude'
+    ])
+    expect(store.getState().runtimeDetectedAgentIds['env-1']).toEqual(['claude'])
+    expect(store.getState().isRefreshingRuntimeAgents['env-1']).toBe(false)
+    expect(
+      runtimeEnvironmentCall.mock.calls.filter(([{ method }]) => method.startsWith('preflight.'))
+    ).toHaveLength(1)
   })
 })

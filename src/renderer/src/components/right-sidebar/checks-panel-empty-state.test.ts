@@ -129,6 +129,55 @@ describe('getChecksPanelReviewState — precedence', () => {
     )
   })
 
+  it('existing_review with a fetch in flight shows Checking status, not the terminal card', () => {
+    // Regression (#9428): the terminal "already exists" card short-circuited the
+    // in-flight fetch window, so the panel stalled until a manual refresh.
+    const state = getChecksPanelReviewState(
+      input({ eligibilityBlockedReason: 'existing_review', refresh: { status: 'in-flight' } })
+    )
+    expect(state.title).toBe('Checking pull request status')
+    expect(state.renderReview).toBe(false)
+    expect(state.recovery).toEqual([])
+  })
+
+  it('positive_unresolved with a queued fetch shows Checking status', () => {
+    const state = getChecksPanelReviewState(
+      input({ reviewLookup: 'positive_unresolved', refresh: { status: 'queued' } })
+    )
+    expect(state.title).toBe('Checking pull request status')
+  })
+
+  it('existing_review with no active fetch keeps the terminal already-exists card', () => {
+    const state = getChecksPanelReviewState(
+      input({ eligibilityBlockedReason: 'existing_review', openReviewUrl: 'https://x/pull/1' })
+    )
+    expect(state.title).toBe('Pull request already exists')
+    expect(state.recovery).toContain('open_review')
+  })
+
+  it('a concurrent branch blocker still owns the copy over an in-flight fetch', () => {
+    const state = getChecksPanelReviewState(
+      input({
+        eligibilityBlockedReason: 'no_upstream',
+        reviewLookup: 'positive_unresolved',
+        hasUpstream: false,
+        refresh: { status: 'in-flight' }
+      })
+    )
+    expect(state.title).toBe('No upstream configured')
+  })
+
+  it('a safety blocker still owns the copy over positive evidence and an in-flight fetch', () => {
+    const state = getChecksPanelReviewState(
+      input({
+        eligibilityBlockedReason: 'dirty',
+        reviewLookup: 'positive_unresolved',
+        refresh: { status: 'in-flight' }
+      })
+    )
+    expect(state.title).toBe('Commit changes first')
+  })
+
   it('hard refresh error hides the composer', () => {
     const state = getChecksPanelReviewState(
       input({ refresh: { status: 'error', errorType: 'auth' } })

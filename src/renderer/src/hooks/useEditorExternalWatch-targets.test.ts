@@ -73,6 +73,8 @@ describe('getEditorExternalWatchTargets', () => {
     rightSidebarExplorerView: args.rightSidebarExplorerView ?? 'files',
     gitStatusHugeByWorktree: args.gitStatusHugeByWorktree ?? {},
     sshConnectionStates: args.sshConnectionStates ?? new Map(),
+    folderWorkspaces: [],
+    projectGroups: [],
     settings:
       args.runtimeEnvironmentId === undefined
         ? null
@@ -101,6 +103,162 @@ describe('getEditorExternalWatchTargets', () => {
       }
     ])
   })
+
+  it('enables WSL aliases for a proven-local Windows drive watcher', () => {
+    const repo = makeRepo('repo-local-drive', null, 'local')
+    const worktree = makeWorktree(repo.id, 'wt-local-drive')
+    worktree.path = 'C:\\repo'
+    worktree.hostId = 'local'
+    const state = makeState({ repo, worktree, openFiles: [makeOpenFile(worktree.id)] })
+    state.repos = [makeRepo(repo.id, 'ssh-1', 'ssh:ssh-1'), repo]
+
+    expect(getEditorExternalWatchTargets(state).targets).toEqual([
+      {
+        worktreeId: 'wt-local-drive',
+        worktreePath: 'C:\\repo',
+        connectionId: undefined,
+        runtimeEnvironmentId: null,
+        allowLocalWindowsWslAliases: true
+      }
+    ])
+  })
+
+  it('does not infer a local alias owner while repo metadata is missing', () => {
+    const repo = makeRepo('repo-unresolved', null, 'local')
+    const worktree = makeWorktree(repo.id, 'wt-unresolved')
+    worktree.path = 'C:\\repo'
+    worktree.hostId = 'local'
+    const state = makeState({ repo, worktree, openFiles: [makeOpenFile(worktree.id)] })
+    state.repos = []
+
+    expect(getEditorExternalWatchTargets(state).targets).toEqual([
+      {
+        worktreeId: 'wt-unresolved',
+        worktreePath: 'C:\\repo',
+        connectionId: undefined,
+        runtimeEnvironmentId: null
+      }
+    ])
+  })
+
+  it.each(['worktree', 'repo'] as const)(
+    'does not grant local aliases while the %s host stamp is missing',
+    (stampOwner) => {
+      const repo = makeRepo('repo-missing-host', null, 'local')
+      const worktree = makeWorktree(repo.id, 'wt-missing-host')
+      worktree.path = 'C:\\repo'
+      worktree.hostId = 'local'
+      if (stampOwner === 'worktree') {
+        worktree.hostId = undefined
+      } else {
+        repo.executionHostId = undefined
+      }
+
+      const target = getEditorExternalWatchTargets(
+        makeState({ repo, worktree, openFiles: [makeOpenFile(worktree.id)] })
+      ).targets[0]
+
+      expect(target).not.toHaveProperty('allowLocalWindowsWslAliases')
+    }
+  )
+
+  it.each(['worktree', 'repo'] as const)(
+    'does not grant local aliases for an unknown %s host stamp',
+    (stampOwner) => {
+      const repo = makeRepo('repo-unknown-host')
+      const worktree = makeWorktree(repo.id, 'wt-unknown-host')
+      worktree.path = 'C:\\repo'
+      worktree.hostId = 'local'
+      repo.executionHostId = 'local'
+      if (stampOwner === 'worktree') {
+        worktree.hostId = 'future:host' as never
+      } else {
+        repo.executionHostId = 'future:host' as never
+      }
+
+      const target = getEditorExternalWatchTargets(
+        makeState({ repo, worktree, openFiles: [makeOpenFile(worktree.id)] })
+      ).targets[0]
+
+      expect(target).not.toHaveProperty('allowLocalWindowsWslAliases')
+    }
+  )
+
+  it('enables WSL aliases for a proven-local folder workspace', () => {
+    const repo = makeRepo('unused', null, 'local')
+    const worktree = makeWorktree(repo.id)
+    const folderWorkspaceId = 'folder-local'
+    const workspaceKey = `folder:${folderWorkspaceId}`
+    const state = makeState({
+      repo,
+      worktree,
+      openFiles: [makeOpenFile(workspaceKey)]
+    })
+    state.folderWorkspaces = [
+      {
+        id: folderWorkspaceId,
+        projectGroupId: 'group-local',
+        folderPath: 'C:\\folder',
+        executionHostId: 'local'
+      } as EditorExternalWatchTargetState['folderWorkspaces'][number]
+    ]
+    state.projectGroups = [
+      {
+        id: 'group-local',
+        executionHostId: 'runtime:env-1'
+      } as EditorExternalWatchTargetState['projectGroups'][number],
+      {
+        id: 'group-local',
+        executionHostId: 'local'
+      } as EditorExternalWatchTargetState['projectGroups'][number]
+    ]
+
+    expect(getEditorExternalWatchTargets(state).targets).toEqual([
+      {
+        worktreeId: workspaceKey,
+        worktreePath: 'C:\\folder',
+        connectionId: undefined,
+        runtimeEnvironmentId: null,
+        allowLocalWindowsWslAliases: true
+      }
+    ])
+  })
+
+  it.each(['ssh', 'missing-group'] as const)(
+    'does not grant local aliases for a %s folder workspace owner',
+    (ownerCase) => {
+      const repo = makeRepo('unused', null, 'local')
+      const worktree = makeWorktree(repo.id)
+      const folderWorkspaceId = `folder-${ownerCase}`
+      const workspaceKey = `folder:${folderWorkspaceId}`
+      const state = makeState({
+        repo,
+        worktree,
+        openFiles: [makeOpenFile(workspaceKey)]
+      })
+      state.folderWorkspaces = [
+        {
+          id: folderWorkspaceId,
+          projectGroupId: `group-${ownerCase}`,
+          folderPath: 'C:\\folder',
+          executionHostId: ownerCase === 'ssh' ? 'ssh:target-1' : 'local'
+        } as EditorExternalWatchTargetState['folderWorkspaces'][number]
+      ]
+      state.projectGroups =
+        ownerCase === 'ssh'
+          ? [
+              {
+                id: 'group-ssh',
+                executionHostId: 'ssh:target-1'
+              } as EditorExternalWatchTargetState['projectGroups'][number]
+            ]
+          : []
+
+      expect(getEditorExternalWatchTargets(state).targets[0]).not.toHaveProperty(
+        'allowLocalWindowsWslAliases'
+      )
+    }
+  )
 
   it('does not watch the active worktree while the sidebar is hidden', () => {
     const repo = makeRepo('repo-active')
@@ -235,6 +393,32 @@ describe('getEditorExternalWatchTargets', () => {
         worktreePath: '/repo-source-control-ssh-connected/worktree',
         connectionId: 'ssh-1',
         runtimeEnvironmentId: null
+      }
+    ])
+  })
+
+  it('keeps a paired runtime SSH Source Control watcher routed through its runtime repo', () => {
+    const repo = makeRepo('repo-paired', null, 'runtime:env-1')
+    const worktree = makeWorktree(repo.id, 'wt-paired')
+    worktree.hostId = 'ssh:private-target'
+    worktree.runtimeOwnerEnvironmentId = 'env-1'
+
+    expect(
+      getEditorExternalWatchTargets(
+        makeState({
+          repo,
+          worktree,
+          activeWorktreeId: worktree.id,
+          rightSidebarOpen: true,
+          rightSidebarTab: 'source-control'
+        })
+      ).targets
+    ).toEqual([
+      {
+        worktreeId: 'wt-paired',
+        worktreePath: '/repo-paired/worktree',
+        connectionId: undefined,
+        runtimeEnvironmentId: 'env-1'
       }
     ])
   })

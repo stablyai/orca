@@ -1,5 +1,7 @@
 // ─── Events (Daemon → Client, on stream socket) ────────────────────
 import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
+import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 export type DataEvent = {
   type: 'event'
@@ -19,7 +21,9 @@ export type ExitEvent = {
   type: 'event'
   event: 'exit'
   sessionId: string
-  payload: { code: number }
+  /** `cause` is additive: a daemon predating it omits the field and readers fall
+   *  back to `unknown` rather than reading meaning into `code` (STA-4536). */
+  payload: { code: number; incarnationId?: PtyIncarnationId; cause?: TerminalExitCause }
 }
 
 export type TerminalErrorEvent = {
@@ -40,12 +44,17 @@ export type TerminalErrorEvent = {
  *  exactly this position so no fact double-fires or goes missing.
  *  scanSeedAnsi (un-background only) carries the emulator's dangling
  *  incomplete escape so main can prime its fresh scanner carry — a sequence
- *  split across the handoff must not mint a phantom bell or lose its fact. */
+ *  split across the handoff must not mint a phantom bell or lose its fact.
+ *  mode2031PendingSubscribe preserves a subscribe deferred behind that tail. */
 export type SessionBackgroundMarkerEvent = {
   type: 'event'
   event: 'sessionBackgroundMarker'
   sessionId: string
-  payload: { background: boolean; scanSeedAnsi?: string }
+  payload: {
+    background: boolean
+    scanSeedAnsi?: string
+    mode2031PendingSubscribe?: true
+  }
 }
 
 /** A backgrounded session's oldest undelivered output was dropped at the
@@ -68,6 +77,7 @@ export type DaemonTransientFact =
   | { kind: 'command-finished'; exitCode: number | null }
   | { kind: 'pr-link'; link: TerminalGitHubPRLink }
   | { kind: '2031-subscribe' }
+  | { kind: '2031-unsubscribe' }
 
 export type TransientFactEvent = {
   type: 'event'

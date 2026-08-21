@@ -1,29 +1,15 @@
 import { useCallback, useState } from 'react'
-import { getConnectionId } from '@/lib/connection-context'
-import { detectLanguage } from '@/lib/language-detect'
 import { dirname, joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
-import {
-  createRuntimePath,
-  renameRuntimePath,
-  runtimePathExists
-} from '@/runtime/runtime-file-client'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import { createRuntimePath, runtimePathExists } from '@/runtime/runtime-file-client'
+import { executeOpenEditorPathMove } from '@/lib/execute-open-editor-path-move'
+import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
 import { requestEditorFileSave, requestEditorSaveQuiesce } from './editor-autosave'
 import { getUntitledFileRoot } from './untitled-file-rename-path'
 
 type UseUntitledFileRenameParams = {
   openFiles: OpenFile[]
-  closeFile: (filePath: string) => void
-  openFile: (file: {
-    filePath: string
-    relativePath: string
-    worktreeId: string
-    runtimeEnvironmentId?: string | null
-    language: string
-    mode: 'edit'
-  }) => void
   clearUntitled: (fileId: string) => void
 }
 
@@ -38,8 +24,6 @@ type UseUntitledFileRenameResult = {
 
 export function useUntitledFileRename({
   openFiles,
-  closeFile,
-  openFile,
   clearUntitled
 }: UseUntitledFileRenameParams): UseUntitledFileRenameResult {
   const [renameDialogFileId, setRenameDialogFileId] = useState<string | null>(null)
@@ -61,16 +45,11 @@ export function useUntitledFileRename({
       const oldPath = renameDialogFile.filePath
       const worktreeRoot = getUntitledFileRoot(renameDialogFile)
       const newPath = joinPath(worktreeRoot, newRelPath)
-      const connectionId = getConnectionId(renameDialogFile.worktreeId) ?? undefined
-      const fileContext = {
-        settings: settingsForRuntimeOwner(
-          useAppStore.getState().settings,
-          renameDialogFile.runtimeEnvironmentId
-        ),
-        worktreeId: renameDialogFile.worktreeId,
-        worktreePath: worktreeRoot,
-        connectionId
-      }
+      const fileContext = getEditorFileOperationContext(
+        useAppStore.getState(),
+        renameDialogFile,
+        worktreeRoot
+      )
 
       if (newPath !== oldPath && (await runtimePathExists(fileContext, newPath))) {
         setRenameError('A file with that name already exists')
@@ -100,24 +79,22 @@ export function useUntitledFileRename({
       }
 
       try {
-        await renameRuntimePath(fileContext, oldPath, newPath)
+        // Retarget the untitled tab in place (the coordinator's rekey consumes
+        // its untitled status on this explicit rename), instead of close+reopen.
+        await executeOpenEditorPathMove({
+          context: fileContext,
+          fromPath: oldPath,
+          toPath: newPath,
+          worktreeId: renameDialogFile.worktreeId,
+          worktreePath: worktreeRoot
+        })
       } catch (err) {
         setRenameError(err instanceof Error ? err.message : 'Failed to rename file')
         return
       }
-
-      closeFile(renameDialogFile.id)
-      openFile({
-        filePath: newPath,
-        relativePath: newRelPath,
-        worktreeId: renameDialogFile.worktreeId,
-        runtimeEnvironmentId: renameDialogFile.runtimeEnvironmentId,
-        language: detectLanguage(newRelPath),
-        mode: 'edit'
-      })
       closeRenameDialog()
     },
-    [clearUntitled, closeFile, closeRenameDialog, openFile, renameDialogFile]
+    [clearUntitled, closeRenameDialog, renameDialogFile]
   )
 
   return {

@@ -9,3 +9,7 @@ export type GetForegroundProcessRequest = {
 export type ConfirmForegroundProcessRequest = Omit<GetForegroundProcessRequest, 'type'> & {
   type: 'confirmForegroundProcess'
 }
+
+export type InspectProcessRequest = Omit<GetForegroundProcessRequest, 'type'> & {
+  type: 'inspectProcess'
+}

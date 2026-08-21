@@ -17,6 +17,11 @@ import {
 import { RelayControlRequests } from './relay-control-requests'
 import type { DeviceCredentialInstallAuthorization } from './relay-control-requests'
 import { answerRelayHostChallenge } from './relay-host-proof'
+import {
+  RELAY_CONTROL_SILENCE_LIMIT_MS,
+  RelayControlSilenceWatchdog
+} from './relay-control-silence-watchdog'
+import { controlWebSocketUrl } from './relay-control-url'
 
 type RelayControlState = 'idle' | 'opening' | 'proving' | 'active' | 'draining' | 'closed'
 
@@ -34,23 +39,11 @@ type RelayControlClientOptions = {
   onDrain: (message: RelayDrainMessage) => void
   onClose: (code: number) => void
   createSocket?: (url: string, relayJwt: string) => WebSocket
+  connectDeadlineMs?: number
+  silenceLimitMs?: number
 }
 
-function controlWebSocketUrl(cellUrl: string): { origin: string; url: string } {
-  const parsed = new URL(cellUrl)
-  if (parsed.pathname !== '/' || parsed.search || parsed.hash) {
-    throw new Error('relay_cell_url_must_be_an_origin')
-  }
-  const origin = parsed.origin
-  if (parsed.protocol === 'https:') {
-    parsed.protocol = 'wss:'
-  } else if (parsed.protocol === 'http:') {
-    parsed.protocol = 'ws:'
-  } else {
-    throw new Error('relay_cell_url_must_use_http')
-  }
-  return { origin, url: `${parsed.origin}/v1/host/control` }
-}
+const RELAY_CONTROL_CONNECT_DEADLINE_MS = 15_000
 
 export class RelayControlClient {
   private readonly options: RelayControlClientOptions
@@ -62,12 +55,18 @@ export class RelayControlClient {
   private state: RelayControlState = 'idle'
   private connectResolve: ((ack: RelayHostHelloAckMessage) => void) | null = null
   private connectReject: ((error: Error) => void) | null = null
+  private connectTimer: ReturnType<typeof setTimeout> | null = null
+  private readonly silenceWatchdog: RelayControlSilenceWatchdog
 
   constructor(options: RelayControlClientOptions) {
     this.options = options
     const endpoint = controlWebSocketUrl(options.cellUrl)
     this.relayOrigin = endpoint.origin
     this.controlUrl = endpoint.url
+    this.silenceWatchdog = new RelayControlSilenceWatchdog(
+      options.silenceLimitMs ?? RELAY_CONTROL_SILENCE_LIMIT_MS,
+      () => this.socket?.terminate()
+    )
     this.createSocket =
       options.createSocket ??
       ((url, token) =>
@@ -87,6 +86,7 @@ export class RelayControlClient {
     this.socket = socket
     socket.once('open', () => this.sendHostHello())
     socket.on('message', (raw, isBinary) => {
+      this.silenceWatchdog.noteInbound()
       if (isBinary) {
         this.failProtocol('binary control message')
         return
@@ -100,6 +100,12 @@ export class RelayControlClient {
       }
     })
     socket.once('close', (code) => this.handleClose(code))
+    // Recovery cannot advance while an upgrade/proof promise remains pending forever.
+    this.connectTimer = setTimeout(
+      () => this.expireConnect(),
+      this.options.connectDeadlineMs ?? RELAY_CONTROL_CONNECT_DEADLINE_MS
+    )
+    this.connectTimer.unref()
     return new Promise((resolve, reject) => {
       this.connectResolve = resolve
       this.connectReject = reject
@@ -108,6 +114,14 @@ export class RelayControlClient {
 
   get pendingRequestCount(): number {
     return this.requests.size
+  }
+
+  isLive(): boolean {
+    return (
+      (this.state === 'active' || this.state === 'draining') &&
+      this.socket !== null &&
+      this.socket.readyState === WebSocket.OPEN
+    )
   }
 
   refreshAuthorization(relayJwt: string): void {
@@ -153,7 +167,13 @@ export class RelayControlClient {
   }
 
   closeNow(): void {
+    const wasConnecting = this.state === 'opening' || this.state === 'proving'
     this.state = 'closed'
+    this.silenceWatchdog.stop()
+    if (wasConnecting) {
+      this.connectReject?.(new Error('relay_control_closed'))
+      this.clearConnectPromise()
+    }
     this.requests.rejectAll(new Error('relay_control_closed'))
     this.socket?.terminate()
     this.socket = null
@@ -220,6 +240,7 @@ export class RelayControlClient {
   private handleProofMessage(message: Record<string, unknown>): void {
     const challenge = RelayHostChallengeMessageSchema.safeParse(message)
     if (challenge.success) {
+      let invalidReason = 'unknown'
       const proofB64 = answerRelayHostChallenge(challenge.data, {
         relayOrigin: this.relayOrigin,
         ...this.options.identity,
@@ -228,10 +249,14 @@ export class RelayControlClient {
         hostSecretKey: this.options.keypair.secretKey,
         assignmentEpoch: this.options.assignmentEpoch,
         previousGeneration: this.options.previousGeneration,
-        resumeRequested: Boolean(this.options.controlResumeSecret)
+        resumeRequested: Boolean(this.options.controlResumeSecret),
+        onInvalid: (reason) => {
+          invalidReason = reason
+        }
       })
       if (!proofB64) {
-        this.failProtocol('invalid host challenge')
+        // Reason names the failing check only; field values never surface here.
+        this.failProtocol(`invalid host challenge: ${invalidReason} origin=${this.relayOrigin}`)
         return
       }
       this.socket?.send(
@@ -249,6 +274,7 @@ export class RelayControlClient {
       return
     }
     this.state = 'active'
+    this.silenceWatchdog.start()
     this.connectResolve?.(ack.data)
     this.clearConnectPromise()
   }
@@ -269,6 +295,7 @@ export class RelayControlClient {
   private handleClose(code: number): void {
     const wasConnecting = this.state === 'opening' || this.state === 'proving'
     this.state = 'closed'
+    this.silenceWatchdog.stop()
     if (wasConnecting) {
       this.connectReject?.(new Error(`relay_control_closed_${code}`))
       this.clearConnectPromise()
@@ -277,7 +304,20 @@ export class RelayControlClient {
     this.options.onClose(code)
   }
 
+  private expireConnect(): void {
+    if (this.state !== 'opening' && this.state !== 'proving') {
+      return
+    }
+    this.connectReject?.(new Error('relay_control_connect_timeout'))
+    this.clearConnectPromise()
+    this.socket?.terminate()
+  }
+
   private clearConnectPromise(): void {
+    if (this.connectTimer) {
+      clearTimeout(this.connectTimer)
+      this.connectTimer = null
+    }
     this.connectResolve = null
     this.connectReject = null
   }

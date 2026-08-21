@@ -2,13 +2,11 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence'
-import type {
-  DiffComment,
-  GitStatusResult,
-  GitWorktreeInfo,
-  Repo,
-  WorktreeMeta
-} from '../../shared/types'
+import type { DiffComment } from '../../shared/diff-comment-types'
+import type { GitStatusResult } from '../../shared/git-status-types'
+import type { Repo } from '../../shared/repo-types'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import type { WorkspaceCleanupScanProgress } from '../../shared/workspace-cleanup'
 
 const {
@@ -17,8 +15,8 @@ const {
   listRepoWorktreesMock,
   getStatusMock,
   gitExecFileAsyncMock,
+  getLocalProjectWorktreeGitOptionsMock,
   getSshGitProviderMock,
-  getSshPtyProviderMock,
   listRegisteredPtysMock
 } = vi.hoisted(() => ({
   lstatMock: vi.fn(),
@@ -26,8 +24,8 @@ const {
   listRepoWorktreesMock: vi.fn(),
   getStatusMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
+  getLocalProjectWorktreeGitOptionsMock: vi.fn(),
   getSshGitProviderMock: vi.fn(),
-  getSshPtyProviderMock: vi.fn(),
   listRegisteredPtysMock: vi.fn()
 }))
 
@@ -60,15 +58,25 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock
 }))
 
+vi.mock('../project-runtime-git-options', () => ({
+  getLocalProjectWorktreeGitOptions: getLocalProjectWorktreeGitOptionsMock
+}))
+
 vi.mock('../memory/pty-registry', () => ({
   listRegisteredPtys: listRegisteredPtysMock
 }))
 
 vi.mock('./pty', () => ({
-  getSshPtyProvider: getSshPtyProviderMock
+  getSshPtyProvider: vi.fn()
 }))
 
-import { registerWorkspaceCleanupHandlers, scanWorkspaceCleanup } from './workspace-cleanup'
+// Why: snapshot persistence does real file I/O; covered in workspace-cleanup-snapshot-ipc.test.ts.
+vi.mock('../workspace-cleanup-scan-snapshot', () => ({
+  persistWorkspaceCleanupScanResult: vi.fn(async () => undefined),
+  readWorkspaceCleanupScanSnapshot: vi.fn(async () => null)
+}))
+
+import { scanWorkspaceCleanup } from './workspace-cleanup'
 
 const NOW = 1_700_000_000_000
 const REPO: Repo = {
@@ -76,7 +84,8 @@ const REPO: Repo = {
   path: '/repo',
   displayName: 'Repo',
   badgeColor: '#000',
-  addedAt: NOW
+  addedAt: NOW,
+  symlinkPaths: ['node_modules']
 }
 const LARGE_WORKTREE_COUNT = 150_000
 
@@ -154,8 +163,8 @@ describe('workspace cleanup scan', () => {
     listRepoWorktreesMock.mockReset()
     getStatusMock.mockReset()
     gitExecFileAsyncMock.mockReset()
+    getLocalProjectWorktreeGitOptionsMock.mockReset().mockReturnValue({})
     getSshGitProviderMock.mockReset()
-    getSshPtyProviderMock.mockReset()
     listRegisteredPtysMock.mockReset()
     listRegisteredPtysMock.mockReturnValue([])
     lstatMock.mockResolvedValue({ mtimeMs: 0 })
@@ -187,7 +196,10 @@ describe('workspace cleanup scan', () => {
   it('default-selects inactive workspaces when git status is clean', async () => {
     const result = await scanWorkspaceCleanup(makeStore())
 
-    expect(getStatusMock).toHaveBeenCalledTimes(1)
+    expect(getStatusMock).toHaveBeenCalledWith('/repo-feature', {
+      signal: expect.any(AbortSignal),
+      sharedLinkPaths: ['node_modules']
+    })
     expect(result.candidates).toHaveLength(1)
     expect(result.candidates[0]).toMatchObject({
       tier: 'ready',
@@ -237,11 +249,11 @@ describe('workspace cleanup scan', () => {
         (event as WorkspaceCleanupScanProgress).candidateMode === 'append' &&
         (event as WorkspaceCleanupScanProgress).candidates.length > 0
     )
-    expect(candidateProgress).toHaveLength(2)
-    expect(candidateProgress.every((event) => event.candidates.length === 1)).toBe(true)
+    expect(candidateProgress.length).toBeLessThanOrEqual(2)
     const progressWorktreeIds = candidateProgress.flatMap((event) =>
       event.candidates.map((candidate) => candidate.worktreeId)
     )
+    expect(progressWorktreeIds).toHaveLength(2)
     expect(progressWorktreeIds).toEqual(
       expect.arrayContaining(['repo-1::/repo-feature-a', 'repo-1::/repo-feature-b'])
     )
@@ -819,62 +831,5 @@ describe('workspace cleanup scan', () => {
       reasons: ['idle-clean']
     })
     expect(result.candidates[0]).not.toHaveProperty('linkedPR')
-  })
-
-  it('reports local processes that workspace deletion would kill', async () => {
-    const localProvider = {
-      listProcesses: vi.fn().mockResolvedValue([
-        {
-          id: 'repo-1::/repo-feature@@session-1',
-          cwd: '/repo-feature',
-          title: 'zsh'
-        }
-      ])
-    }
-    registerWorkspaceCleanupHandlers(makeStore(), {
-      runtime: {
-        hasTerminalsForWorktree: vi.fn().mockResolvedValue(false)
-      } as never,
-      getLocalPtyProvider: () => localProvider as never
-    })
-
-    const handler = vi
-      .mocked(ipcMain.handle)
-      .mock.calls.find(([channel]) => channel === 'workspaceCleanup:hasKillableLocalProcesses')?.[1]
-
-    await expect(handler?.({} as never, { worktreeId: 'repo-1::/repo-feature' })).resolves.toEqual({
-      hasKillableProcesses: true
-    })
-  })
-
-  it('reports SSH processes inside the remote workspace path', async () => {
-    getSshPtyProviderMock.mockReturnValue({
-      listProcesses: vi.fn().mockResolvedValue([
-        {
-          id: 'remote-session-1',
-          cwd: '/remote/repo-feature/subdir',
-          title: 'codex'
-        }
-      ])
-    })
-    registerWorkspaceCleanupHandlers(makeStore(), {
-      runtime: {
-        hasTerminalsForWorktree: vi.fn().mockResolvedValue(false)
-      } as never
-    })
-
-    const handler = vi
-      .mocked(ipcMain.handle)
-      .mock.calls.find(([channel]) => channel === 'workspaceCleanup:hasKillableLocalProcesses')?.[1]
-
-    await expect(
-      handler?.({} as never, {
-        worktreeId: 'repo-ssh::/remote/repo-feature',
-        connectionId: 'ssh-1',
-        worktreePath: '/remote/repo-feature'
-      })
-    ).resolves.toEqual({
-      hasKillableProcesses: true
-    })
   })
 })

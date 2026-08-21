@@ -1,7 +1,7 @@
 import type React from 'react'
 import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
 import openClaudeLogoUrl from '../../../../resources/openclaude-logo.png?url'
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import {
   AgentLetterIcon,
@@ -105,6 +105,15 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://github.com/AntigmaLabs/ante-preview'
   },
   {
+    id: 'trae',
+    label: translate('auto.lib.agent.catalog.060d152fb5', 'Trae'),
+    // Why: matches TUI_AGENT_CONFIG.trae.detectCmd, not the ambiguous `trae-cli` — see the Why there.
+    cmd: 'traecli',
+    // Why: bare `trae.cn` 404s on Google's favicon service.
+    faviconDomain: 'www.trae.cn',
+    homepageUrl: 'https://docs.trae.cn/cli_get-started-with-trae-cli'
+  },
+  {
     id: 'pi',
     label: translate('auto.lib.agent.catalog.302934c5d9', 'Pi'),
     cmd: 'pi',
@@ -117,6 +126,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     // Why: no faviconDomain — omp renders the hand-authored OmpIcon glyph, so a
     // favicon fallback would never be reached.
     homepageUrl: 'https://omp.sh'
+  },
+  {
+    id: 'prime-agent',
+    label: translate('auto.lib.agent.catalog.d443a47995', 'Prime Agent'),
+    cmd: 'prime-agent',
+    faviconDomain: 'primeintellect.ai',
+    homepageUrl: 'https://github.com/PrimeIntellect-ai/prime-agent'
   },
   {
     id: 'gemini',

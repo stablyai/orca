@@ -1,7 +1,8 @@
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import type { AutomationTerminalOwnership } from '@/lib/automation-terminal-ownership'
 
 export type LaunchAgentBackgroundSessionArgs = {
   agent: TuiAgent
@@ -19,4 +20,5 @@ export type LaunchAgentBackgroundSessionResult = {
   paneKey: string
   ptyId: string
   startupPlan: AgentStartupPlan
+  terminalOwnership: AutomationTerminalOwnership | null
 }

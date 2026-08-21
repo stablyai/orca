@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore, makeWorktree } from './store-test-helpers'
-import type { Project, ProjectHostSetup, Repo } from '../../../../shared/types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -23,6 +24,16 @@ const remoteDuplicate: Repo = {
   badgeColor: '#111',
   addedAt: 2,
   executionHostId: 'runtime:env-1'
+}
+
+const sshDuplicate: Repo = {
+  id: 'same-repo',
+  path: '/ssh',
+  displayName: 'SSH',
+  badgeColor: '#222',
+  addedAt: 3,
+  connectionId: 'server',
+  executionHostId: 'ssh:server'
 }
 
 const reposRemove = vi.fn()
@@ -185,6 +196,7 @@ describe('repo slice host identity routing', () => {
 
     expect(reposUpdate).toHaveBeenCalledWith({
       repoId: 'same-repo',
+      hostId: 'local',
       updates: { displayName: 'Local via host' }
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
@@ -193,6 +205,26 @@ describe('repo slice host identity routing', () => {
     expect(store.getState().repos).toEqual([
       { ...localDuplicate, displayName: 'Local via host' },
       remoteDuplicate
+    ])
+  })
+
+  it('updateRepo preserves an explicit SSH host through local IPC', async () => {
+    reposUpdate.mockResolvedValue(undefined)
+    const store = createTestStore()
+    store.setState({ repos: [localDuplicate, sshDuplicate] })
+
+    await store
+      .getState()
+      .updateRepo('same-repo', { displayName: 'SSH Renamed' }, { hostId: 'ssh:server' })
+
+    expect(reposUpdate).toHaveBeenCalledWith({
+      repoId: 'same-repo',
+      hostId: 'ssh:server',
+      updates: { displayName: 'SSH Renamed' }
+    })
+    expect(store.getState().repos).toEqual([
+      localDuplicate,
+      { ...sshDuplicate, displayName: 'SSH Renamed' }
     ])
   })
 

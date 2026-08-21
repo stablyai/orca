@@ -1,8 +1,9 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
-import type { TerminalQuickCommand } from '../../../src/shared/types'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import type { RpcClient } from '../transport/rpc-client'
+import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { useQuickCommands } from './use-quick-commands'
 
@@ -48,24 +49,10 @@ function deferred<T>() {
 describe('useQuickCommands', () => {
   let renderer: ReactTestRenderer | null = null
   let state: ReturnType<typeof useQuickCommands> | null = null
-  let consoleSpy: MockInstance
-
-  beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
-    const original = console.error
-    consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...args)
-    })
-  })
-
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
     state = null
-    consoleSpy.mockRestore()
   })
 
   async function mount(client: RpcClient, enabled = true): Promise<void> {
@@ -86,6 +73,79 @@ describe('useQuickCommands', () => {
 
     expect(client.sendRequest).not.toHaveBeenCalled()
     expect(state?.ready).toBe(false)
+  })
+
+  it('replays the load after a connection-migration cutover', async () => {
+    const client = {
+      sendRequest: vi
+        .fn()
+        .mockRejectedValueOnce(new LogicalClientCutoverError())
+        .mockResolvedValueOnce(success([FIRST]))
+    } as unknown as RpcClient
+
+    await mount(client)
+
+    expect(client.sendRequest).toHaveBeenCalledTimes(2)
+    expect(state?.commands).toEqual([FIRST])
+    expect(state?.ready).toBe(true)
+    expect(state?.error).toBeNull()
+  })
+
+  it('surfaces the cutover error once replays are exhausted', async () => {
+    const client = {
+      sendRequest: vi.fn(() => Promise.reject(new LogicalClientCutoverError()))
+    } as unknown as RpcClient
+
+    await mount(client)
+
+    // Initial attempt + 5 replays, then give up rather than loop forever.
+    expect(client.sendRequest).toHaveBeenCalledTimes(6)
+    expect(state?.ready).toBe(false)
+    expect(state?.error).toBe('RPC interrupted by connection migration')
+  })
+
+  it('does not replay non-cutover load failures', async () => {
+    const client = {
+      sendRequest: vi.fn(() => Promise.reject(new Error('boom')))
+    } as unknown as RpcClient
+
+    await mount(client)
+
+    expect(client.sendRequest).toHaveBeenCalledTimes(1)
+    expect(state?.ready).toBe(false)
+    expect(state?.error).toBe('boom')
+  })
+
+  it('stops replaying a cutover-interrupted load after the sheet closes', async () => {
+    let rejectLoad: (error: Error) => void = () => {}
+    const client = {
+      sendRequest: vi.fn(
+        () =>
+          new Promise<RpcResponse>((_resolve, reject) => {
+            rejectLoad = reject
+          })
+      )
+    } as unknown as RpcClient
+
+    function Harness({ enabled }: { enabled: boolean }): null {
+      state = useQuickCommands({ client, enabled })
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness, { enabled: true }))
+      await Promise.resolve()
+    })
+    await act(async () => {
+      renderer!.update(createElement(Harness, { enabled: false }))
+      await Promise.resolve()
+    })
+    await act(async () => {
+      rejectLoad(new LogicalClientCutoverError())
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(client.sendRequest).toHaveBeenCalledTimes(1)
   })
 
   it('keeps mutations disabled when the remote list could not be loaded', async () => {

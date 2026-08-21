@@ -6,6 +6,8 @@ import { test, expect } from './helpers/orca-app'
 import {
   ensureTerminalVisible,
   getActiveTabId,
+  getAllWorktreeIds,
+  switchToWorktree,
   waitForActiveWorktree,
   waitForSessionReady
 } from './helpers/store'
@@ -49,13 +51,17 @@ const PARKED_MEMORY_TEST_TIMEOUT_MS = 300_000
 // Why: mixed-width content (ASCII, CJK wide cells, emoji, box drawing) makes
 // each xterm hold realistic narrow+wide buffer rows, so released parked-tab
 // memory reflects real agent output rather than uniform filler.
-function writeScrollbackFillScript(scriptPath: string, runId: string): void {
+function writeScrollbackFillScript(
+  scriptPath: string,
+  runId: string,
+  lineCount: number = SCROLLBACK_LINE_COUNT
+): void {
   const script = [
     `const tabIndex = process.argv[2] ?? '0'`,
     `const wide = '統合端末記憶計測'`,
     `const emoji = ['🟢', '🟡', '🔵', '🟣']`,
     `const lines = []`,
-    `for (let i = 0; i < ${SCROLLBACK_LINE_COUNT}; i += 1) {`,
+    `for (let i = 0; i < ${lineCount}; i += 1) {`,
     `  const ascii = ('tab ' + tabIndex + ' line ' + String(i).padStart(4, '0') + ' ').padEnd(48, 'abcdefghijklmnopqrstuvwxyz')`,
     `  const box = '│' + '─'.repeat(8 + (i % 24)) + '│'`,
     `  lines.push(ascii + ' ' + wide.repeat(1 + (i % 3)) + ' ' + emoji[i % 4] + ' ' + box)`,
@@ -364,6 +370,409 @@ test.describe('Terminal parked memory', () => {
       expect((await readTerminalTabViewState(orcaPage, visibleTab.tabId)).hasManager).toBe(true)
       expect(metrics.livePaneManagers).toBe(SCROLLBACK_TAB_COUNT + 1)
       expect(metrics.liveTerminals).toBe(SCROLLBACK_TAB_COUNT + 1)
+    } finally {
+      rmSync(scriptPath, { force: true })
+    }
+  })
+})
+
+// ─────────────────────── C1 retention budget outcome ───────────────────────
+// The tests above assert the parking MECHANISM. This one asserts the OUTCOME
+// the retention budget exists for: hidden worktrees ordinary parking can never
+// evict actually release their buffers once the budget engages, with the
+// budget flip as the only change between the two samples.
+//
+// Honest caveats:
+//  - The un-parkable class is staged by rewriting tabsByWorktree[*].ptyId to a
+//    remote-runtime-shaped id. That is a fidelity proxy: park-restorability and
+//    eviction-exemption are decided from that field alone, but the transports
+//    underneath stay real LOCAL PTYs — this is not a live remote runtime.
+//  - The primary gate is retained xterm buffer CELLS (deterministic), not RSS.
+//    xterm rows are typed arrays outside the V8 heap, so usedJSHeapSize misses
+//    most of what is released; renderer RSS is recorded and only gated as
+//    non-growth because it moves with GC timing and compositor allocations.
+const RETENTION_TAB_COUNT = 4
+const RETENTION_FILL_LINE_COUNT = 12_000
+const RETENTION_SCROLLBACK_ROWS = 25_000
+// Why 12: xterm packs each cell as 3 uint32s in the BufferLine typed array.
+const XTERM_BYTES_PER_CELL = 12
+// Why 40: this staging measures ~87 MB of retained buffer, so half of that is a
+// floor that fails loudly if the fill silently stops producing scrollback.
+const MIN_STAGED_BUFFER_MB = 40
+// Why 2s: force-park is a synchronous verdict re-run on the setting flip and
+// measured 23-25ms locally; anything near a timer/TTL wait blows this budget.
+const MAX_FORCE_PARK_EVICTION_MS = 2_000
+// Why 0.05: only the exempt decoy's unfilled pane may survive (~0.1% of the
+// baseline). One retained filled pane would be ~25%, so this fails on a partial
+// eviction instead of passing it.
+const MAX_RETAINED_CELL_FRACTION = 0.05
+// Why a band, not zero: RSS is sampled and moved only -0.7 to -3.0 MB on a
+// ~453 MB baseline across runs, so "must not grow" would flake on noise. 5 MB
+// still fails loudly if an eviction starts planting 512KB/pane capture strings.
+const RENDERER_RSS_NOISE_MB = 5
+const RETENTION_TEST_TIMEOUT_MS = 420_000
+const UNPARKABLE_PTY_PREFIX = 'remote:e2e-retention-'
+
+type RetainedBufferSample = {
+  cells: number
+  rows: number
+  panes: number
+}
+
+// Why walk the buffers instead of trusting a heap delta: xterm rows live in
+// typed arrays outside the V8 heap, so retained cells are the only
+// deterministic measure of what a force-park actually released.
+async function readRetainedTerminalBufferCells(page: Page): Promise<RetainedBufferSample> {
+  return page.evaluate(() => {
+    let cells = 0
+    let rows = 0
+    let panes = 0
+    for (const manager of window.__paneManagers?.values() ?? []) {
+      for (const pane of manager.getPanes?.() ?? []) {
+        const buffer = pane.terminal?.buffer?.active
+        if (!buffer) {
+          continue
+        }
+        panes += 1
+        rows += buffer.length
+        cells += buffer.length * pane.terminal.cols
+      }
+    }
+    return { cells, rows, panes }
+  })
+}
+
+// Why host-side RSS: the renderer process' resident set is the figure the C1
+// crash reports are measured in, and performance.memory cannot see it.
+async function readRendererResidentMb(page: Page): Promise<number | null> {
+  return page.evaluate(async () => {
+    const snapshot = await window.api?.memory?.getSnapshot?.()
+    const bytes = snapshot?.app?.renderer?.memory
+    return typeof bytes === 'number' && bytes > 0 ? bytes / (1024 * 1024) : null
+  })
+}
+
+type RetentionMemorySample = {
+  buffers: RetainedBufferSample
+  bufferMb: number
+  heapUsedMb: number
+  rendererMb: number | null
+  livePaneManagers: number
+}
+
+async function readRetentionMemorySample(page: Page): Promise<RetentionMemorySample> {
+  const metrics = await sampleParkedMemoryMetrics(page)
+  const buffers = await readRetainedTerminalBufferCells(page)
+  return {
+    buffers,
+    bufferMb: (buffers.cells * XTERM_BYTES_PER_CELL) / (1024 * 1024),
+    heapUsedMb: metrics.heapUsedMB,
+    rendererMb: await readRendererResidentMb(page),
+    livePaneManagers: metrics.livePaneManagers
+  }
+}
+
+function formatRetentionSample(label: string, sample: RetentionMemorySample): string {
+  return [
+    `${label}.cells=${sample.buffers.cells}`,
+    `${label}.rows=${sample.buffers.rows}`,
+    `${label}.panes=${sample.buffers.panes}`,
+    `${label}.bufferMB=${sample.bufferMb.toFixed(1)}`,
+    `${label}.heapMB=${sample.heapUsedMb.toFixed(1)}`,
+    `${label}.rendererRssMB=${sample.rendererMb === null ? 'n/a' : sample.rendererMb.toFixed(1)}`,
+    `${label}.paneManagers=${sample.livePaneManagers}`
+  ].join(' ')
+}
+
+// Why rewrite only tab.ptyId: canPark* eligibility is decided from it, so a
+// remote-runtime-shaped id makes the worktree un-parkable. Layout leaf maps
+// stay on real local transports so live panes keep their bindings; watcher
+// coverage may still read those locals, but eligibility already fails.
+async function stageUnparkableWorktreeTabs(page: Page, worktreeId: string): Promise<number> {
+  return page.evaluate(
+    ({ worktreeId, prefix }) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('stageUnparkableWorktreeTabs: window.__store is unavailable')
+      }
+      const state = store.getState()
+      const tabs = state.tabsByWorktree[worktreeId] ?? []
+      if (tabs.length === 0) {
+        throw new Error(`stageUnparkableWorktreeTabs: ${worktreeId} has no terminal tabs`)
+      }
+      const staged = tabs.map((tab) =>
+        typeof tab.ptyId === 'string' && tab.ptyId.startsWith(prefix)
+          ? tab
+          : { ...tab, ptyId: `${prefix}${tab.id}` }
+      )
+      ;(store as unknown as { setState: (partial: unknown) => void }).setState({
+        tabsByWorktree: { ...state.tabsByWorktree, [worktreeId]: staged }
+      })
+      return staged.length
+    },
+    { worktreeId, prefix: UNPARKABLE_PTY_PREFIX }
+  )
+}
+
+// Why: bind/reconcile can rewrite tab.ptyId after staging. Poll so ordinary
+// parking cannot regain park-restorable eligibility mid control-arm wait.
+async function waitForUnparkableWorktreeTabs(page: Page, worktreeId: string): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          ({ worktreeId, prefix }) => {
+            const tabs = window.__store?.getState().tabsByWorktree[worktreeId] ?? []
+            return (
+              tabs.length > 0 &&
+              tabs.every((tab) => typeof tab.ptyId === 'string' && tab.ptyId.startsWith(prefix))
+            )
+          },
+          { worktreeId, prefix: UNPARKABLE_PTY_PREFIX }
+        ),
+      {
+        timeout: 5_000,
+        message: `worktree ${worktreeId} did not keep un-parkable remote: pty ids after staging`
+      }
+    )
+    .toBe(true)
+}
+
+// Why not getTerminalContent: it serializes the whole scrollback, which is
+// megabytes of string per poll tick at RETENTION_SCROLLBACK_ROWS. The fill
+// marker is the last line written, so scanning the buffer tail is enough.
+async function waitForFillMarkerInTab(page: Page, tabId: string, marker: string): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          ({ tabId, marker }) => {
+            const manager = window.__paneManagers?.get(tabId)
+            const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+            const buffer = pane?.terminal?.buffer?.active
+            if (!buffer) {
+              return false
+            }
+            const firstRow = Math.max(0, buffer.length - 200)
+            for (let row = buffer.length - 1; row >= firstRow; row -= 1) {
+              if (buffer.getLine(row)?.translateToString(true).includes(marker) === true) {
+                return true
+              }
+            }
+            return false
+          },
+          { tabId, marker }
+        ),
+      { timeout: 90_000, message: `scrollback fill marker ${marker} did not render` }
+    )
+    .toBe(true)
+}
+
+async function updateTerminalSettings(
+  page: Page,
+  patch: { terminalHiddenWorktreeRetentionBudget?: boolean; terminalScrollbackRows?: number }
+): Promise<void> {
+  await page.evaluate(async (patch) => {
+    const store = window.__store
+    if (!store) {
+      throw new Error('updateTerminalSettings: window.__store is unavailable')
+    }
+    await store.getState().updateSettings(patch)
+  }, patch)
+}
+
+async function waitForRetentionBudgetSetting(page: Page, enabled: boolean): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () => window.__store?.getState().settings?.terminalHiddenWorktreeRetentionBudget
+        ),
+      { timeout: 5_000, message: `terminalHiddenWorktreeRetentionBudget did not become ${enabled}` }
+    )
+    .toBe(enabled)
+}
+
+test.describe('Terminal hidden worktree retention budget', () => {
+  test.use({
+    orcaAppExtraEnv: {
+      ORCA_E2E_TERMINAL_PARKING_DELAY_MS: String(PARKING_DELAY_MS),
+      // Why limit=1: the retention TTL is absolute production timing (45min) and
+      // the parking-delay override deliberately no longer shrinks it, so the
+      // COUNT CAP is the only knob a test can drive. With a budget of 1 the
+      // newest hidden un-parkable worktree takes the last-active exemption and
+      // the older one force-parks — cap and exemption proven in one run.
+      ORCA_E2E_TERMINAL_RETENTION_LIMIT: '1'
+    },
+    orcaAppExtraArgs: ['--enable-precise-memory-info']
+  })
+
+  test('releases un-parkable hidden worktree buffers only once the retention budget engages', async ({
+    orcaPage,
+    testRepoPath
+  }, testInfo: TestInfo) => {
+    test.setTimeout(RETENTION_TEST_TIMEOUT_MS)
+    await waitForSessionReady(orcaPage)
+    const victimWorktreeId = await waitForActiveWorktree(orcaPage)
+    await skipUnlessParkingWired(orcaPage)
+
+    const decoyWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
+      (worktreeId) => worktreeId !== victimWorktreeId
+    )
+    if (!decoyWorktreeId) {
+      throw new Error('retention budget spec: the fixture seeded only one worktree')
+    }
+
+    // Budget OFF for the whole staging phase: that is the control arm proving
+    // ordinary parking can never evict this class, and it makes the release
+    // below attributable to the flip alone.
+    await updateTerminalSettings(orcaPage, {
+      terminalHiddenWorktreeRetentionBudget: false,
+      terminalScrollbackRows: RETENTION_SCROLLBACK_ROWS
+    })
+    await waitForRetentionBudgetSetting(orcaPage, false)
+
+    const runId = randomUUID()
+    const scriptPath = path.join(testRepoPath, `.orca-retention-memory-${runId}.mjs`)
+    writeScrollbackFillScript(scriptPath, runId, RETENTION_FILL_LINE_COUNT)
+    try {
+      await ensureTerminalVisible(orcaPage)
+      await waitForActiveTerminalManager(orcaPage, 30_000)
+      const baselineSnapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
+      const baselinePtyId = baselineSnapshot.panes[0]?.ptyId
+      if (!baselinePtyId) {
+        throw new Error('retention budget spec: baseline terminal tab did not bind a PTY')
+      }
+
+      const victimTabs: ScrollbackTab[] = [{ tabId: baselineSnapshot.tabId, ptyId: baselinePtyId }]
+      for (let tabIndex = 0; tabIndex < RETENTION_TAB_COUNT; tabIndex += 1) {
+        if (tabIndex > 0) {
+          victimTabs.push(await createActiveTerminalTab(orcaPage, victimWorktreeId))
+        }
+        const tab = victimTabs[tabIndex]
+        await sendToTerminal(
+          orcaPage,
+          tab.ptyId,
+          `node ${JSON.stringify(scriptPath)} ${tabIndex}\r`
+        )
+        await waitForFillMarkerInTab(
+          orcaPage,
+          tab.tabId,
+          `PARKED_MEMORY_FILL_DONE_${runId}_${tabIndex}`
+        )
+        // Why stage after every fill rather than once at the end: each later
+        // fill takes seconds, and ordinary TAB-level parking would evict the
+        // already-hidden earlier tabs inside that window.
+        await stageUnparkableWorktreeTabs(orcaPage, victimWorktreeId)
+      }
+
+      // Hiding the victim first makes the decoy the more-recently-hidden
+      // candidate, so the cap's last-active exemption lands on the decoy.
+      await switchToWorktree(orcaPage, decoyWorktreeId)
+      await expect
+        .poll(() => orcaPage.evaluate(() => window.__store?.getState().activeWorktreeId), {
+          timeout: 5_000,
+          message: 'decoy worktree did not become active before staging'
+        })
+        .toBe(decoyWorktreeId)
+      await ensureTerminalVisible(orcaPage)
+      await waitForActiveTerminalManager(orcaPage, 30_000)
+      // Why the active snapshot (not getWorktreeTabs alone): only tabs that
+      // actually bound a PaneManager can prove retention; empty/deferred ids
+      // would make the control arm look like a budget failure.
+      const decoySnapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
+      const decoyTabIds = [decoySnapshot.tabId]
+      expect(await countMountedPaneManagers(orcaPage, decoyTabIds)).toBe(1)
+
+      // Leaving the terminal view hides BOTH worktrees while keeping them
+      // mounted (App.tsx hides the workbench, it does not unmount it).
+      await orcaPage.evaluate(() => {
+        window.__store?.getState().setActiveView('tasks')
+      })
+      // Why stage AFTER hide: while a pane is visible/active, bind can rewrite
+      // our remote: fake ids back onto tab/layout state, so the decoy looks
+      // park-restorable and ordinary parking unmounts it during the control
+      // arm. Staging only once both are hidden keeps classification stable.
+      await stageUnparkableWorktreeTabs(orcaPage, victimWorktreeId)
+      await stageUnparkableWorktreeTabs(orcaPage, decoyWorktreeId)
+      await waitForUnparkableWorktreeTabs(orcaPage, victimWorktreeId)
+      await waitForUnparkableWorktreeTabs(orcaPage, decoyWorktreeId)
+
+      const victimTabIds = victimTabs.map((tab) => tab.tabId)
+      expect(victimTabIds).toHaveLength(RETENTION_TAB_COUNT)
+      // Control arm: stay hidden past the ordinary parking window with budget
+      // still off. Re-stage inside the poll so a late bind cannot restore
+      // park-restorable+coverable ids and unmount mid-wait.
+      const controlArmStartedAt = Date.now()
+      await expect
+        .poll(
+          async () => {
+            await stageUnparkableWorktreeTabs(orcaPage, victimWorktreeId)
+            await stageUnparkableWorktreeTabs(orcaPage, decoyWorktreeId)
+            const victimMounted = await countMountedPaneManagers(orcaPage, victimTabIds)
+            const decoyMounted = await countMountedPaneManagers(orcaPage, decoyTabIds)
+            const heldLongEnough = Date.now() - controlArmStartedAt >= PARKING_DELAY_MS * 4
+            return {
+              victimMounted,
+              decoyMounted,
+              heldLongEnough
+            }
+          },
+          {
+            timeout: Math.max(30_000, PARKING_DELAY_MS * 10),
+            message:
+              'control arm: un-parkable hidden worktrees did not stay mounted for the parking window'
+          }
+        )
+        .toEqual({
+          victimMounted: RETENTION_TAB_COUNT,
+          decoyMounted: 1,
+          heldLongEnough: true
+        })
+      await waitForUnparkableWorktreeTabs(orcaPage, victimWorktreeId)
+      await waitForUnparkableWorktreeTabs(orcaPage, decoyWorktreeId)
+
+      const before = await readRetentionMemorySample(orcaPage)
+      expect(before.bufferMb).toBeGreaterThan(MIN_STAGED_BUFFER_MB)
+
+      const flipStartedAt = Date.now()
+      await updateTerminalSettings(orcaPage, { terminalHiddenWorktreeRetentionBudget: true })
+      await waitForRetentionBudgetSetting(orcaPage, true)
+      await expect
+        .poll(() => countMountedPaneManagers(orcaPage, victimTabIds), {
+          timeout: 30_000,
+          message: 'retention budget did not force-park the older hidden un-parkable worktree'
+        })
+        .toBe(0)
+      const evictionMs = Date.now() - flipStartedAt
+
+      const after = await readRetentionMemorySample(orcaPage)
+      testInfo.annotations.push({
+        type: 'terminal-retention-budget-memory',
+        description: [
+          `stagedTabs=${RETENTION_TAB_COUNT}`,
+          `scrollbackRows=${RETENTION_SCROLLBACK_ROWS}`,
+          formatRetentionSample('before', before),
+          formatRetentionSample('after', after),
+          `releasedBufferMB=${(before.bufferMb - after.bufferMb).toFixed(1)}`,
+          `evictionMs=${evictionMs}`
+        ].join(' ')
+      })
+
+      // Primary gate: the staged buffers are gone, not merely hidden.
+      expect(after.buffers.cells).toBeLessThan(before.buffers.cells * MAX_RETAINED_CELL_FRACTION)
+      // The decoy holds the cap's last-active exemption, so it stays mounted —
+      // this is the same run proving the cap did not simply evict everything.
+      expect(await countMountedPaneManagers(orcaPage, decoyTabIds)).toBe(decoyTabIds.length)
+      // Secondary only: freed typed arrays return to the allocator's free lists,
+      // not the OS, so RSS fell just 0.7-3.0 MB locally while 87 MB of buffer was
+      // released — a strict non-growth assertion would be reading sampling noise.
+      // What this CAN catch is the inverse regression the capture path risks:
+      // force-park planting serialized scrollback in the store as it evicts.
+      if (before.rendererMb !== null && after.rendererMb !== null) {
+        expect(after.rendererMb).toBeLessThanOrEqual(before.rendererMb + RENDERER_RSS_NOISE_MB)
+      }
+      expect(evictionMs).toBeLessThan(MAX_FORCE_PARK_EVICTION_MS)
     } finally {
       rmSync(scriptPath, { force: true })
     }

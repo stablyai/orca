@@ -9,7 +9,7 @@
 // not a sweep across renderer + main.
 
 import type { AgentKind } from './telemetry-events'
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 
 type ConcreteAgentKind = Exclude<AgentKind, 'other'>
 
@@ -23,6 +23,7 @@ const TUI_AGENT_KIND_BY_AGENT = {
   'mimo-code': 'mimo-code',
   pi: 'pi',
   omp: 'omp',
+  'prime-agent': 'prime-agent',
   gemini: 'gemini',
   antigravity: 'antigravity',
   aider: 'aider',
@@ -47,7 +48,8 @@ const TUI_AGENT_KIND_BY_AGENT = {
   copilot: 'copilot',
   grok: 'grok',
   devin: 'devin',
-  ante: 'ante'
+  ante: 'ante',
+  trae: 'trae'
 } satisfies Record<TuiAgent, ConcreteAgentKind>
 
 // Why: `satisfies Record<TuiAgent, …>` makes the lookup exhaustive at compile

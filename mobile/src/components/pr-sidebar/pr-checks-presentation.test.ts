@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PRCheckDetail } from '../../../../src/shared/types'
+import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
 import {
   checkOutcome,
   firstFailingCheckKey,
@@ -21,8 +21,8 @@ function check(over: Partial<PRCheckDetail>): PRCheckDetail {
 }
 
 describe('checkOutcome', () => {
-  it('treats a completed null-conclusion check as pending, not failure', () => {
-    expect(checkOutcome(check({ status: 'completed', conclusion: null }))).toBe('pending')
+  it('treats a completed null-conclusion check as neutral, not failure', () => {
+    expect(checkOutcome(check({ status: 'completed', conclusion: null }))).toBe('neutral')
   })
   it('treats queued/in_progress as pending', () => {
     expect(checkOutcome(check({ status: 'queued', conclusion: null }))).toBe('pending')
@@ -33,9 +33,12 @@ describe('checkOutcome', () => {
     expect(checkOutcome(check({ conclusion: 'cancelled' }))).toBe('failure')
     expect(checkOutcome(check({ conclusion: 'timed_out' }))).toBe('failure')
   })
-  it('maps neutral/skipped to neutral (non-blocking)', () => {
+  it('maps a merge-blocking action_required gate to failure', () => {
+    expect(checkOutcome(check({ conclusion: 'action_required' }))).toBe('failure')
+  })
+  it('maps skipped to success and neutral to neutral (desktop parity)', () => {
+    expect(checkOutcome(check({ conclusion: 'skipped' }))).toBe('success')
     expect(checkOutcome(check({ conclusion: 'neutral' }))).toBe('neutral')
-    expect(checkOutcome(check({ conclusion: 'skipped' }))).toBe('neutral')
   })
 })
 
@@ -112,7 +115,7 @@ describe('summarizePRChecks', () => {
   it('reports a neutral-only set as neutral with a labeled count (not empty success)', () => {
     const summary = summarizePRChecks([
       check({ conclusion: 'neutral' }),
-      check({ conclusion: 'skipped' })
+      check({ conclusion: 'neutral' })
     ])
     expect(summary).toMatchObject({
       total: 2,
@@ -122,6 +125,15 @@ describe('summarizePRChecks', () => {
       outcome: 'neutral'
     })
     expect(summary.label).toBe('2 neutral')
+  })
+  it('counts skipped as passed so the sidebar matches desktop and the tasks grid', () => {
+    const summary = summarizePRChecks([
+      check({ conclusion: 'success' }),
+      check({ conclusion: 'success' }),
+      check({ conclusion: 'skipped' })
+    ])
+    expect(summary).toMatchObject({ total: 3, passed: 3, outcome: 'success' })
+    expect(summary.label).toBe('3 passed')
   })
 })
 

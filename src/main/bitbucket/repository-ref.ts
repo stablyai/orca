@@ -1,5 +1,4 @@
-import { gitExecFileAsync } from '../git/runner'
-import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import { createRemoteRefProbeCache } from '../git/remote-ref-probe-cache'
 
 export type BitbucketRepoRef = {
   workspace: string
@@ -10,28 +9,16 @@ type LocalGitExecOptions = {
   wslDistro?: string
 }
 
-const REPO_REF_CACHE_MAX_ENTRIES = 512
-const repoRefCache = new Map<string, BitbucketRepoRef | null>()
+const repoRefProbeCache = createRemoteRefProbeCache(parseBitbucketRepoRef)
 
 /** @internal - exposed for tests only */
 export function _resetBitbucketRepoRefCache(): void {
-  repoRefCache.clear()
+  repoRefProbeCache.clear()
 }
 
 /** @internal - exposed for tests only */
 export function _getBitbucketRepoRefCacheSize(): number {
-  return repoRefCache.size
-}
-
-function rememberRepoRefCacheEntry(cacheKey: string, value: BitbucketRepoRef | null): void {
-  repoRefCache.set(cacheKey, value)
-  while (repoRefCache.size > REPO_REF_CACHE_MAX_ENTRIES) {
-    const oldestKey = repoRefCache.keys().next().value
-    if (oldestKey === undefined) {
-      return
-    }
-    repoRefCache.delete(oldestKey)
-  }
+  return repoRefProbeCache.size()
 }
 
 function decodeSegment(value: string): string {
@@ -86,34 +73,7 @@ export async function getBitbucketRepoRefForRemote(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<BitbucketRepoRef | null> {
-  const runtimeKey = connectionId ?? `local:${localGitOptions.wslDistro ?? 'host'}`
-  const cacheKey = `${runtimeKey}\0${repoPath}\0${remoteName}`
-  if (repoRefCache.has(cacheKey)) {
-    return repoRefCache.get(cacheKey)!
-  }
-  try {
-    const sshGitProvider = connectionId ? getSshGitProvider(connectionId) : null
-    if (connectionId && !sshGitProvider) {
-      return null
-    }
-    const { stdout } = sshGitProvider
-      ? await sshGitProvider.exec(['remote', 'get-url', remoteName], repoPath)
-      : await gitExecFileAsync(['remote', 'get-url', remoteName], {
-          cwd: repoPath,
-          ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
-        })
-    const result = parseBitbucketRepoRef(stdout)
-    rememberRepoRefCacheEntry(cacheKey, result)
-    return result
-  } catch {
-    if (connectionId) {
-      // Why: SSH provider failures are often transient reconnect/tunnel states;
-      // caching them as "not Bitbucket" would poison the repo for the session.
-      return null
-    }
-    rememberRepoRefCacheEntry(cacheKey, null)
-    return null
-  }
+  return repoRefProbeCache.get(repoPath, remoteName, connectionId, localGitOptions)
 }
 
 export async function getBitbucketRepoRef(

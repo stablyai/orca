@@ -3,11 +3,16 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import os from 'node:os'
 import path from 'node:path'
 import { _electron as electron, type ElectronApplication } from '@stablyai/playwright-test'
-import { test, expect } from './helpers/orca-app'
+import { test, expect, forwardElectronProcessLogs } from './helpers/orca-app'
 import { TEST_REPO_PATH_FILE } from './global-setup'
 import { getE2ECompletedOnboardingProfile } from './helpers/e2e-completed-onboarding-profile'
 import { getOrcaElectronLaunchArgs } from './helpers/electron-launch-args'
 import { cleanupE2EDaemons, closeElectronAppForE2E } from './helpers/electron-process-shutdown'
+import {
+  assertElectronResolvedIsolatedHome,
+  createElectronHomeIsolation,
+  type ElectronHomeIsolation
+} from './helpers/electron-home-isolation'
 import {
   discoverActivePtyId,
   execInTerminal,
@@ -18,12 +23,15 @@ import {
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { RuntimeClient } from '../../src/cli/runtime/client'
+import { RuntimeClientError } from '../../src/cli/runtime/types'
 import type {
   RuntimeStatus,
   RuntimeTerminalCreate,
   RuntimeTerminalRead
 } from '../../src/shared/runtime-types'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
+import { parsePaneKey } from '../../src/shared/stable-pane-id'
+import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 
 const electronPackageDir = path.join(process.cwd(), 'node_modules', 'electron')
 const electronPath = path.join(
@@ -32,18 +40,21 @@ const electronPath = path.join(
   readFileSync(path.join(electronPackageDir, 'path.txt'), 'utf8').trim()
 )
 
-function createLaunchEnv(userDataDir: string): NodeJS.ProcessEnv {
+function createHeadlessLaunchIsolation(userDataDir: string): ElectronHomeIsolation {
   const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
   void _unused
-  return {
-    ...cleanEnv,
-    NODE_ENV: 'development',
-    ORCA_E2E_USER_DATA_DIR: userDataDir,
-    ORCA_E2E_HEADLESS: '1',
-    // Why: production builds always use the lock; this opt-in makes the dev
-    // E2E bundle exercise the same second-instance ownership path.
-    ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK: '1'
-  }
+  return createElectronHomeIsolation({
+    inheritedEnv: cleanEnv,
+    launchEnv: {
+      NODE_ENV: 'development',
+      ORCA_E2E_HEADLESS: '1',
+      // Why: production builds always use the lock; this opt-in makes the dev
+      // E2E bundle exercise the same second-instance ownership path.
+      ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK: '1'
+    },
+    extraEnv: {},
+    userDataDir
+  })
 }
 
 function readDaemonPid(userDataDir: string): number {
@@ -56,6 +67,35 @@ function readDaemonPid(userDataDir: string): number {
     throw new Error(`Daemon pid file did not contain a numeric pid: ${raw}`)
   }
   return parsed.pid
+}
+
+function readPersistedPromotionBinding(
+  userDataDir: string,
+  worktreeId: string,
+  tabId: string,
+  leafId: string
+): { tabId: string; leafId: string; ptyId: string } | null {
+  try {
+    const persisted = JSON.parse(
+      readFileSync(
+        path.join(userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID, 'orca-data.json'),
+        'utf8'
+      )
+    ) as {
+      workspaceSession?: {
+        tabsByWorktree?: Record<string, { id?: string; ptyId?: string | null }[]>
+        terminalLayoutsByTabId?: Record<string, { ptyIdsByLeafId?: Record<string, string | null> }>
+      }
+    }
+    const tab = persisted.workspaceSession?.tabsByWorktree?.[worktreeId]?.find(
+      (candidate) => candidate.id === tabId
+    )
+    const ptyId =
+      persisted.workspaceSession?.terminalLayoutsByTabId?.[tabId]?.ptyIdsByLeafId?.[leafId]
+    return tab && ptyId ? { tabId, leafId, ptyId } : null
+  } catch {
+    return null
+  }
 }
 
 async function waitForProcessExit(child: ChildProcess, timeoutMs: number): Promise<boolean> {
@@ -78,7 +118,7 @@ async function waitForProcessExit(child: ChildProcess, timeoutMs: number): Promi
 test.describe.configure({ mode: 'serial' })
 
 test('promotes the headless owner without replacing its daemon terminal', async (// oxlint-disable-next-line no-empty-pattern -- This lifecycle test owns both launches and intentionally opts out of the default app fixture.
-{}) => {
+{}, testInfo) => {
   const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf8').trim()
   if (!repoPath || !existsSync(repoPath)) {
     test.skip(true, 'Global setup did not produce a seeded test repo')
@@ -87,7 +127,8 @@ test('promotes the headless owner without replacing its daemon terminal', async 
 
   const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-serve-promotion-'))
-  const env = createLaunchEnv(userDataDir)
+  const homeIsolation = createHeadlessLaunchIsolation(userDataDir)
+  const env = homeIsolation.env
   let serveApp: ElectronApplication | null = null
   let activatingProcess: ChildProcess | null = null
 
@@ -101,14 +142,30 @@ test('promotes the headless owner without replacing its daemon terminal', async 
       args: [...getOrcaElectronLaunchArgs(mainPath, false), '--serve', '--serve-no-pairing'],
       env
     })
+    const resolvedHome = await serveApp.evaluate(({ app }) => app.getPath('home'))
+    assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
+    // Why: this spec bypasses the app fixture, so opt into its gated Electron log capture for CI failures.
+    forwardElectronProcessLogs(serveApp, testInfo)
     const ownerPid = serveApp.process().pid
     const client = new RuntimeClient(userDataDir, 5_000)
 
     await expect
-      .poll(async () => (await client.getCliStatus()).result.app.desktopWindowStatus, {
-        timeout: 60_000,
-        message: 'headless serve never became safely openable'
-      })
+      .poll(
+        async () => {
+          try {
+            return (await client.getCliStatus()).result.app.desktopWindowStatus
+          } catch (error) {
+            if (error instanceof RuntimeClientError && error.code === 'runtime_unavailable') {
+              return 'starting'
+            }
+            throw error
+          }
+        },
+        {
+          timeout: 60_000,
+          message: 'headless serve never became safely openable'
+        }
+      )
       .toBe('openable')
 
     const beforeStatus = await client.call<RuntimeStatus>('status.get')
@@ -119,8 +176,11 @@ test('promotes the headless owner without replacing its daemon terminal', async 
       title: 'Serve promotion continuity'
     })
     const terminal = created.result.terminal
-    if (!terminal.ptyId) {
-      throw new Error('Headless terminal did not expose its daemon PTY id')
+    const originalPtyId = terminal.ptyId
+    const originalTabId = terminal.tabId
+    const paneIdentity = terminal.paneKey ? parsePaneKey(terminal.paneKey) : null
+    if (!originalPtyId || !originalTabId || !paneIdentity) {
+      throw new Error('Headless terminal did not expose its durable pane and daemon PTY identity')
     }
 
     const beforeMarker = `SERVE_PROMOTION_BEFORE_${Date.now()}`
@@ -142,13 +202,46 @@ test('promotes the headless owner without replacing its daemon terminal', async 
       )
       .toContain(beforeMarker)
 
+    const forwardAppLogs = process.env.ORCA_E2E_FORWARD_APP_LOGS === '1'
     activatingProcess = spawn(electronPath, getOrcaElectronLaunchArgs(mainPath, false), {
       env,
-      stdio: 'ignore'
+      stdio: forwardAppLogs ? 'pipe' : 'ignore'
     })
     activatingProcess.on('error', (error) => {
       console.error('[e2e] activating process failed to spawn:', error)
     })
+    if (forwardAppLogs) {
+      const prefix = '[e2e] activating process'
+      activatingProcess.stdout?.on('data', (chunk: Buffer) => {
+        console.log(`${prefix} stdout: ${chunk.toString().trimEnd()}`)
+      })
+      activatingProcess.stderr?.on('data', (chunk: Buffer) => {
+        console.error(`${prefix} stderr: ${chunk.toString().trimEnd()}`)
+      })
+      activatingProcess.on('exit', (code, signal) => {
+        console.log(`${prefix} exit: code=${code ?? 'null'} signal=${signal ?? 'null'}`)
+      })
+    }
+
+    await expect
+      .poll(
+        () =>
+          readPersistedPromotionBinding(
+            userDataDir,
+            terminal.worktreeId,
+            originalTabId,
+            paneIdentity.leafId
+          ),
+        {
+          timeout: 15_000,
+          message: 'headless terminal binding was not persisted during desktop promotion'
+        }
+      )
+      .toEqual({
+        tabId: originalTabId,
+        leafId: paneIdentity.leafId,
+        ptyId: originalPtyId
+      })
 
     const page = await serveApp.firstWindow({ timeout: 60_000 })
     await page.waitForLoadState('domcontentloaded')
@@ -183,6 +276,6 @@ test('promotes the headless owner without replacing its daemon terminal', async 
       await closeElectronAppForE2E(serveApp)
     }
     await cleanupE2EDaemons(userDataDir)
-    rmSync(userDataDir, { recursive: true, force: true })
+    rmSync(userDataDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 })
   }
 })

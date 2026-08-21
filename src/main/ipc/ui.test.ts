@@ -36,6 +36,7 @@ vi.mock('electron', () => ({
 
 import {
   clearTrustedUIRendererWebContentsId,
+  getTrustedUIRendererWindow,
   registerUIHandlers,
   sendToTrustedUIRenderer,
   setTrustedUIRendererWebContentsId
@@ -68,6 +69,12 @@ function getNativePasteHandler():
   | ((event: ReturnType<typeof makeUIEvent>, options?: { mode?: unknown }) => void)
   | undefined {
   return onMock.mock.calls.find(([channel]) => channel === 'ui:performNativePaste')?.[1]
+}
+
+function getNativeSelectionActionHandler():
+  | ((event: ReturnType<typeof makeUIEvent>, action: unknown) => void)
+  | undefined {
+  return onMock.mock.calls.find(([channel]) => channel === 'ui:performNativeSelectionAction')?.[1]
 }
 
 describe('UI IPC', () => {
@@ -110,6 +117,20 @@ describe('UI IPC', () => {
     expect(rendererSend).toHaveBeenCalledWith('gh:prRefreshEvent', { sequence: 1 })
     expect(getAllWebContentsMock).not.toHaveBeenCalled()
     expect(guestSends.reduce((total, send) => total + send.mock.calls.length, 0)).toBe(0)
+  })
+
+  it('resolves only the BrowserWindow that owns the trusted renderer', () => {
+    const renderer = { id: 17, isDestroyed: () => false }
+    const mainWindow = { id: 'main' }
+    fromIdMock.mockReturnValue(renderer)
+    fromWebContentsMock.mockReturnValue(mainWindow)
+    setTrustedUIRendererWebContentsId(17)
+
+    expect(getTrustedUIRendererWindow()).toBe(mainWindow)
+    expect(fromWebContentsMock).toHaveBeenCalledWith(renderer)
+
+    fromIdMock.mockReturnValue({ id: 17, isDestroyed: () => true })
+    expect(getTrustedUIRendererWindow()).toBeNull()
   })
 
   it('skips missing, destroyed, and originating renderers', () => {
@@ -170,6 +191,44 @@ describe('UI IPC', () => {
     expect(fromWebContentsMock).toHaveBeenCalledWith(sender)
     expect(paste).toHaveBeenCalledTimes(1)
     expect(pasteAndMatchStyle).toHaveBeenCalledTimes(1)
+  })
+
+  it('routes native selection fallbacks to the requesting webContents', () => {
+    const copy = vi.fn()
+    const selectAll = vi.fn()
+    const event = makeUIEvent()
+    setTrustedUIRendererWebContentsId(17)
+    fromWebContentsMock.mockReturnValue({ webContents: { copy, selectAll } })
+
+    registerUIHandlers(makeStore() as never)
+
+    expect(removeAllListenersMock).toHaveBeenCalledWith('ui:performNativeSelectionAction')
+    const handler = getNativeSelectionActionHandler()
+    handler?.(event, 'copy')
+    handler?.(event, 'select-all')
+    handler?.(event, 'invalid')
+
+    expect(copy).toHaveBeenCalledOnce()
+    expect(selectAll).toHaveBeenCalledOnce()
+  })
+
+  it('allows native selection fallback from the exact dashboard popout renderer', () => {
+    const copy = vi.fn()
+    const selectAll = vi.fn()
+    const event = makeUIEvent({ id: 42 })
+    const isDashboardPopoutRenderer = vi.fn((sender: unknown) => sender === event.sender)
+    fromWebContentsMock.mockReturnValue({ webContents: { copy, selectAll } })
+
+    registerUIHandlers(makeStore() as never, { isDashboardPopoutRenderer })
+
+    const handler = getNativeSelectionActionHandler()
+    handler?.(event, 'copy')
+    handler?.(event, 'select-all')
+    handler?.(makeUIEvent({ id: 43 }), 'copy')
+
+    expect(isDashboardPopoutRenderer).toHaveBeenCalledWith(event.sender)
+    expect(copy).toHaveBeenCalledOnce()
+    expect(selectAll).toHaveBeenCalledOnce()
   })
 
   it('ignores native paste fallback from stale or browser senders', () => {

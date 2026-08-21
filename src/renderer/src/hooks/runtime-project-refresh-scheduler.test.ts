@@ -1,5 +1,71 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createRuntimeProjectRefreshScheduler } from './runtime-project-refresh-scheduler'
+import {
+  createRuntimeProjectRefreshScheduler,
+  refreshRuntimeProjectWorktrees,
+  refreshRuntimeProjectWorktreesAndLineage
+} from './runtime-project-refresh-scheduler'
+
+describe('refreshRuntimeProjectWorktrees', () => {
+  it('deduplicates same-host repo IDs and pins the refresh to the event runtime', async () => {
+    const fetchWorktrees = vi.fn().mockResolvedValue(true)
+
+    await refreshRuntimeProjectWorktrees(
+      'env-1',
+      [{ id: 'same-repo' }, { id: 'same-repo' }],
+      fetchWorktrees
+    )
+
+    expect(fetchWorktrees).toHaveBeenCalledTimes(1)
+    expect(fetchWorktrees).toHaveBeenCalledWith('same-repo', {
+      executionHostId: 'runtime:env-1',
+      suppressRemoteLineageRefresh: true
+    })
+  })
+
+  it('runs one final host lineage refresh after a repo failure', async () => {
+    const error = new Error('repo refresh failed')
+    const fetchWorktrees = vi.fn().mockResolvedValueOnce(true).mockRejectedValueOnce(error)
+    const fetchWorktreeLineage = vi.fn().mockResolvedValue(undefined)
+
+    await expect(
+      refreshRuntimeProjectWorktreesAndLineage(
+        'env-1',
+        [{ id: 'repo-1' }, { id: 'repo-2' }],
+        fetchWorktrees,
+        fetchWorktreeLineage
+      )
+    ).rejects.toThrow('Failed to refresh 1 runtime project worktree(s): repo-2')
+
+    expect(fetchWorktrees).toHaveBeenCalledTimes(2)
+    expect(fetchWorktreeLineage).toHaveBeenCalledTimes(1)
+    expect(fetchWorktreeLineage).toHaveBeenCalledWith({
+      executionHostId: 'runtime:env-1'
+    })
+  })
+
+  it('retains both repo and final lineage failures', async () => {
+    const repoError = new Error('repo refresh failed')
+    const lineageError = new Error('lineage refresh failed')
+    const fetchWorktrees = vi.fn().mockRejectedValue(repoError)
+    const fetchWorktreeLineage = vi.fn().mockRejectedValue(lineageError)
+
+    const rejection = await refreshRuntimeProjectWorktreesAndLineage(
+      'env-1',
+      [{ id: 'repo-1' }],
+      fetchWorktrees,
+      fetchWorktreeLineage
+    ).catch((error: unknown) => error)
+
+    expect(rejection).toBeInstanceOf(AggregateError)
+    expect((rejection as AggregateError).errors).toEqual([
+      expect.objectContaining({
+        message: 'Failed to refresh 1 runtime project worktree(s): repo-1',
+        errors: [repoError]
+      }),
+      lineageError
+    ])
+  })
+})
 
 describe('createRuntimeProjectRefreshScheduler', () => {
   beforeEach(() => {

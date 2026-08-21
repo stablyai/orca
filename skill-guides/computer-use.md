@@ -25,7 +25,7 @@ Use this skill for desktop UI through `orca computer`. When the requested target
   name a specific shell. Replace it with that chosen executable before running the command;
   do not create a shell variable or run `ORCA` literally. Blocks that name no shell are
   intentionally shell-neutral for POSIX shells, PowerShell, and cmd.exe.
-- Prefer `--json`. Screenshot bytes are omitted from JSON and written to `screenshot.path`.
+- Prefer `--json`; see Screenshots below for image output.
 - Do not push, submit forms, send messages, buy items, delete data, change account settings, or expose secrets unless the user explicitly asked for that action.
 - If an app contains sensitive content, read only what the user requested.
 
@@ -69,6 +69,9 @@ ORCA computer get-app-state --app <app> --json
 ORCA computer get-app-state --app <app> --restore-window --json
 ORCA computer click --app <app> --element-index <index> --json
 ORCA computer click --app <app> --x 100 --y 100 --json
+ORCA computer click --app <app> --x 100 --y 100 --modifiers CmdOrCtrl+Shift --json
+ORCA computer click --app <app> --element-index <index> --mouse-button right --json
+ORCA computer click --app <app> --element-index <index> --mouse-button middle --json
 ORCA computer perform-secondary-action --app <app> --element-index <index> --action <name> --json
 ORCA computer set-value --app <app> --element-index <index> --value "text" --json
 ORCA computer type-text --app <app> --text "text" --json
@@ -91,17 +94,28 @@ printf '%s' "$TEXT" | ORCA computer set-value --app <app> --element-index <index
 
 ## Action Rules
 
+- Read every action's verification separately from whether its provider call succeeded:
+  - `verified` means the changed value was read back.
+  - `unverified (accessibility action unasserted)` means the accessibility call succeeded but no post-state assertion was made.
+  - `unverified (synthetic input)` means input was fired into the void and is unverifiable.
+  - Missing verification metadata is unverified, including responses from older runtimes.
 - Prefer semantic actions: `set-value` for editable fields, `click` for controls, `perform-secondary-action` only for listed action names.
 - After any UI-changing action, use the returned state or rerun `get-app-state` before choosing the next element index.
 - Use `type-text` only after focusing a field and confirming the app has a focused text receiver; synthetic keyboard delivery is reported as unverified, so inspect the returned state before assuming text landed.
 - Use `press-key` for single/navigation keys such as Return, Escape, Tab, and arrows. Use `hotkey` only for one modifier chord plus one key, such as `CmdOrCtrl+A` or `CmdOrCtrl+Shift+P`; prefer `CmdOrCtrl+...` for cross-platform combos.
+- Use `click --modifiers <chord>` for modifier-clicks. Never synthesize separate modifier-down and modifier-up commands around a click; interruption can leave a modifier logically held.
 - Some actions work in background apps, but this is app-dependent. If success does not change the UI, refresh state and choose a more semantic action or restore/focus the window.
 - Prefer `set-value` for text fields that expose values; it can report verified value writes when the provider can read the refreshed value.
 - Coordinates are window-local; use coordinates from the latest screenshot/state for the same target window.
 
 ## Screenshots
 
-`get-app-state` returns tree+screenshot. Use the tree for indexes/actions and the screenshot for visual confirmation; failed capture usually means hidden, minimized, off-screen, or permission-blocked.
+`get-app-state` and actions request screenshots by default unless `--no-screenshot` is
+passed. A successful `--json` capture is normally saved at `result.screenshot.path`; if that
+path is absent, use the inline base64 `result.screenshot.data`. Pretty output does not save
+images.
+
+Use the tree for indexes/actions and the screenshot for visual confirmation; failed capture usually means hidden, minimized, off-screen, or permission-blocked.
 
 Coordinates passed to `click`, `scroll`, and `drag` are window-local action coordinates. If the screenshot reports `scale` other than `1`, convert visual screenshot pixels before acting:
 

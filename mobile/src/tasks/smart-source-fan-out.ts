@@ -1,10 +1,8 @@
-import type {
-  BaseRefSearchResult,
-  ClickUpTask,
-  GitHubWorkItem,
-  GitLabWorkItem,
-  LinearIssue
-} from '../../../src/shared/types'
+import type { ClickUpTask } from '../../../src/shared/clickup-types'
+import type { GitHubWorkItem } from '../../../src/shared/github/work-item-types'
+import type { GitLabWorkItem } from '../../../src/shared/gitlab-types'
+import type { LinearIssue } from '../../../src/shared/linear/issue-types'
+import type { BaseRefSearchResult } from '../../../src/shared/repo-types'
 import {
   isSmartWorkspaceSourceQueryWithinLimit,
   type SmartNameMode
@@ -69,7 +67,7 @@ type FanOutArgs = {
   clickUpAvailable: boolean
   mrStateFilter: MrStateFilter
   linearWorkspaceId: string | null | undefined
-  clickUpWorkspaceId: string | null | undefined
+  clickupWorkspaceId: string | null | undefined
 }
 
 // Runs every provider search the active mode needs, concurrently. Smart mode is
@@ -107,7 +105,7 @@ export async function fanOutSmartSearch(args: FanOutArgs): Promise<SmartFanOutRe
       ? searchLinearIssues(client, query, args.linearWorkspaceId)
       : null,
     clickup: shouldSearchClickUp(mode, clickUpAvailable)
-      ? searchClickUpTasks(client, query, args.clickUpWorkspaceId)
+      ? searchClickUpTasks(client, query, args.clickupWorkspaceId)
       : null,
     branches:
       shouldSearchBranches(mode, query) && repoId ? searchBranches(client, repoId, query) : null

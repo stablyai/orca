@@ -22,10 +22,10 @@ type GitResponseStreamEntry = {
 /** Serialized git responses are chunked as base64 so multi-byte UTF-8
  * sequences never split across a chunk boundary (the client concatenates the
  * decoded bytes and parses once). */
-function encodeChunks(payload: Buffer): string[] {
+function encodeChunks(payload: Buffer, chunkBytes = GIT_RESPONSE_CHUNK_SIZE): string[] {
   const chunks: string[] = []
-  for (let offset = 0; offset < payload.length; offset += GIT_RESPONSE_CHUNK_SIZE) {
-    chunks.push(payload.subarray(offset, offset + GIT_RESPONSE_CHUNK_SIZE).toString('base64'))
+  for (let offset = 0; offset < payload.length; offset += chunkBytes) {
+    chunks.push(payload.subarray(offset, offset + chunkBytes).toString('base64'))
   }
   return chunks
 }
@@ -116,7 +116,18 @@ export class GitResponseStreamRegistry {
     context: RequestContext
   ): GitResponseStreamMarker {
     const streamId = this.register(context.clientId)
-    const chunks = encodeChunks(payload)
+    const base64Budget =
+      dispatcher.producerDataBudget?.(
+        'git.responseChunk',
+        { streamId, seq: payload.length },
+        context.clientId
+      ) ?? Number.MAX_SAFE_INTEGER
+    const sinkChunkBytes = Math.floor(Math.max(0, base64Budget) / 4) * 3
+    if (sinkChunkBytes === 0) {
+      this.streams.delete(streamId)
+      throw new Error('Git response stream has no encoded producer capacity')
+    }
+    const chunks = encodeChunks(payload, Math.min(GIT_RESPONSE_CHUNK_SIZE, sinkChunkBytes))
     // Why: kick the pump off the response task so the client sees the sentinel
     // (and can subscribe/reassemble) before the first chunk frame arrives.
     setImmediate(() => {

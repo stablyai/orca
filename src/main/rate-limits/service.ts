@@ -1,14 +1,16 @@
 /* eslint-disable max-lines -- Why: centralizes polling, stale-data handling, account-switch fetch semantics, and renderer push coordination in one place */
 import type { BrowserWindow } from 'electron'
-import { randomUUID } from 'node:crypto'
 import type {
   CodexRateLimitResetResult,
   RateLimitState,
   ProviderRateLimits,
-  InactiveAccountUsage
+  InactiveAccountUsage,
+  RateLimitRuntimeTarget
 } from '../../shared/rate-limit-types'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
 import type { InactiveClaudeAccountInfo } from './claude-fetcher'
+import { mapClaudeUsageWindow } from './claude-usage-window'
+import type { ClaudeStatusLineRateLimits } from '../../shared/claude-statusline-rate-limits'
 import { consumeCodexRateLimitResetCredit, fetchCodexRateLimits } from './codex-fetcher'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import type { NetworkProxySettings } from '../../shared/network-proxy'
@@ -19,6 +21,7 @@ import {
 } from '../claude-accounts/runtime-selection'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
+import type { KimiHomeResolution } from '../kimi/kimi-runtime-home'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
@@ -29,13 +32,15 @@ import {
   type CodexAccountSelectionTarget,
   type NormalizedCodexAccountSelectionTarget
 } from '../codex-accounts/runtime-selection'
+import type { CodexRateLimitHomeResolution } from '../codex-accounts/runtime-home-service'
 
 export type InactiveCodexAccountInfo = {
   id: string
-  managedHomePath: string
+  resolveHome: () => { kind: 'ready'; managedHomePath: string } | { kind: 'skip' }
 }
 
-type CodexHomePathResolver = (target?: CodexAccountSelectionTarget) => string | null
+type CodexHomePathResolver = (target?: CodexAccountSelectionTarget) => CodexRateLimitHomeResolution
+type KimiHomeResolver = () => Promise<KimiHomeResolution>
 type ClaudeAuthPreparationResolver = (
   target?: ClaudeAccountSelectionTarget
 ) => Promise<ClaudeRuntimeAuthPreparation>
@@ -83,7 +88,15 @@ const INDIVIDUALLY_REFRESHABLE_PROVIDERS: ReadonlySet<ActiveRateLimitProvider> =
   'grok'
 ])
 const STALE_THRESHOLD_MS = 30 * 60 * 1000 // 30 minutes — after this, stale data is dropped
+// Why: usage-endpoint 429 windows can outlast the generic threshold (Retry-After ~1h); quota is informational, so a stale snapshot beats a bare "Limited".
+const RATE_LIMITED_STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000
+// Why: statusline posts arrive on every turn; skip renderer pushes for identical windows so streaming sessions don't spam state updates.
+const LIVE_CLAUDE_INGEST_DEDUPE_MS = 30 * 1000
 const INACTIVE_FETCH_DEBOUNCE_MS = 60 * 1000 // 60 seconds — debounce fetch-on-open
+// Why: each inactive Codex probe spawns a real codex process inside that
+// account's live credential home; pace them out instead of bursting every
+// account the moment the switcher opens.
+const INACTIVE_CODEX_PROBE_STAGGER_MS = 2_000
 const DEFERRED_STARTUP_ACTIVE_REFRESH_MS = 1000
 
 // Why: inactive account arrays are derived from provider caches on demand in getState()/pushToRenderer().
@@ -118,6 +131,39 @@ function isSystemDefaultClaudeAuth(
 
 function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+function normalizeClaudeConfigDir(dir: string | null | undefined): string | null {
+  // Why: normalize mixed Windows separators for path attribution; preserve Linux case sensitivity.
+  const trimmed = dir?.trim().replace(/\\/g, '/').replace(/\/+$/, '')
+  return trimmed || null
+}
+
+function delayUnlessAborted(ms: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) {
+    return Promise.resolve()
+  }
+  return new Promise((resolve) => {
+    const onAbort = (): void => {
+      clearTimeout(timer)
+      resolve()
+    }
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    signal.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
+function isSameUsageWindow(
+  a: ProviderRateLimits['session'],
+  b: ProviderRateLimits['session']
+): boolean {
+  if (!a || !b) {
+    return a === b
+  }
+  return a.usedPercent === b.usedPercent && a.resetsAt === b.resetsAt
 }
 
 export class RateLimitService {
@@ -168,6 +214,8 @@ export class RateLimitService {
   private fetchIdleResolvers: (() => void)[] = []
   private codexFetchGeneration = 0
   private claudeFetchGeneration = 0
+  // Why: statusline ingest must attribute live windows to the selected account without re-running the side-effectful auth sync per post.
+  private lastClaudeAuthSnapshot: { configDir: string | null; provenance: string } | null = null
   private opencodeFetchGeneration = 0
   private minimaxFetchGeneration = 0
   private lastOpencodeConfigHash = ''
@@ -177,6 +225,8 @@ export class RateLimitService {
     runtime: 'host',
     wslDistro: null
   }
+  // Why: resolved per cycle — the local-account runtime policy can flip between fetches.
+  private kimiHomeResolver: KimiHomeResolver | null = null
   private claudeAuthPreparationResolver: ClaudeAuthPreparationResolver | null = null
   private claudeFetchTarget: NormalizedClaudeAccountSelectionTarget = {
     runtime: 'host',
@@ -192,6 +242,7 @@ export class RateLimitService {
   private inactiveCodexCache = new Map<string, ProviderRateLimits>()
   private inactiveClaudeFetching = new Set<string>()
   private inactiveCodexFetching = new Set<string>()
+  private inactiveCodexFetchInFlight = false
   private lastInactiveClaudeFetchAt = 0
   private inactiveClaudeAccountsGeneration = 0
   private lastInactiveCodexFetchAt = 0
@@ -211,8 +262,36 @@ export class RateLimitService {
     this.codexHomePathResolver = resolver
   }
 
+  // Why: `skip` and a `ready` null are different answers — null still means the
+  // system-default lane, so it must never stand in for "don't fetch" (#STA-4422).
+  private resolveCodexHome(target?: CodexAccountSelectionTarget): {
+    skip: boolean
+    homePath: string | null
+  } {
+    const resolution = this.codexHomePathResolver?.(target)
+    if (!resolution) {
+      return { skip: false, homePath: null }
+    }
+    return resolution.kind === 'skip'
+      ? { skip: true, homePath: null }
+      : { skip: false, homePath: resolution.codexHomePath }
+  }
+
   setCodexFetchTarget(target?: CodexAccountSelectionTarget): void {
     this.codexFetchTarget = normalizeCodexAccountSelectionTarget(target)
+  }
+
+  setKimiHomeResolver(resolver: KimiHomeResolver): void {
+    this.kimiHomeResolver = resolver
+  }
+
+  // Why: resolving a WSL home probes wsl.exe, so it must not run before the other
+  // providers' fetches are started; chaining keeps the no-resolver path immediate.
+  private fetchKimiWithResolvedHome(): Promise<ProviderRateLimits> {
+    const pendingHome = this.kimiHomeResolver?.()
+    return pendingHome
+      ? pendingHome.then((home) => fetchKimiRateLimits({ home }))
+      : fetchKimiRateLimits({ home: undefined })
   }
 
   setClaudeAuthPreparationResolver(resolver: ClaudeAuthPreparationResolver): void {
@@ -354,9 +433,11 @@ export class RateLimitService {
     target?: CodexAccountSelectionTarget
   ): Promise<RateLimitState> {
     const nextTarget = normalizeCodexAccountSelectionTarget(target)
+    // Why: weekly-only plans report no session window, so gating on session alone
+    // dropped their snapshot and left the switcher's inline bars empty.
     if (
       outgoingAccountId &&
-      this.state.codex?.session &&
+      (this.state.codex?.session || this.state.codex?.weekly) &&
       this.isSameCodexTarget(this.codexFetchTarget, nextTarget)
     ) {
       this.inactiveCodexCache.set(outgoingAccountId, this.state.codex)
@@ -367,7 +448,10 @@ export class RateLimitService {
     this.activeFailureStreakByProvider.codex = 0
     this.inactiveCodexAccountsGeneration += 1
     this.pruneInactiveCodexState()
-    this.lastInactiveCodexFetchAt = 0
+    // Why: the switch must NOT reset the inactive-fetch debounce — re-probing
+    // every inactive account per switch spawns codex in each credential home
+    // and endangers rotating refresh tokens; the switcher shows the cached
+    // snapshot (seeded above for the outgoing account) until the debounce ends.
     // Why: clear the old Codex view immediately, else the previous account's limits show under the newly selected identity until the next poll.
     this.updateState({
       ...this.state,
@@ -391,25 +475,38 @@ export class RateLimitService {
     return this.getState()
   }
 
-  async consumeCodexRateLimitResetCredit(): Promise<CodexRateLimitResetResult> {
-    const codexTarget = this.codexFetchTarget
-    const codexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
+  async consumeCodexRateLimitResetCredit(options: {
+    idempotencyKey: string
+    target: RateLimitRuntimeTarget
+    codexHomePath: string | null
+  }): Promise<CodexRateLimitResetResult> {
+    const codexTarget = normalizeCodexAccountSelectionTarget(options.target)
+    const codexHomePath = options.codexHomePath
+    const scopedStateBeforeReset = this.getState()
     const missingWslCodexHome = codexHomePath
       ? null
       : this.getMissingWslCodexHomeResult(codexTarget)
     if (missingWslCodexHome) {
-      await this.fetchCodexOnly({ force: true })
+      if (this.isSameCodexTarget(this.codexFetchTarget, codexTarget)) {
+        await this.fetchCodexOnly({ force: true })
+      }
       throw new Error(missingWslCodexHome.error ?? 'Codex home unavailable')
     }
     try {
       const outcome = await consumeCodexRateLimitResetCredit({
         codexHomePath,
-        idempotencyKey: randomUUID()
+        idempotencyKey: options.idempotencyKey
       })
-      await this.fetchCodexOnly({ force: true })
-      return { outcome, state: this.getState() }
+      const state = await this.fetchCodexResetResultState(
+        codexTarget,
+        codexHomePath,
+        scopedStateBeforeReset
+      )
+      return { outcome, state }
     } catch (error) {
-      await this.fetchCodexOnly({ force: true })
+      if (this.isSameCodexTarget(this.codexFetchTarget, codexTarget)) {
+        await this.fetchCodexOnly({ force: true })
+      }
       throw error
     }
   }
@@ -433,6 +530,8 @@ export class RateLimitService {
     this.claudeFetchGeneration += 1
     // Why: a new account/target starts with a clean retry schedule.
     this.activeFailureStreakByProvider.claude = 0
+    // Why: statusline posts from the outgoing account's sessions must not land on the incoming account's bar mid-switch.
+    this.lastClaudeAuthSnapshot = null
     this.lastInactiveClaudeFetchAt = 0
     this.updateState({
       ...this.state,
@@ -448,12 +547,27 @@ export class RateLimitService {
     this.claudeFetchTarget = nextTarget
     this.claudeFetchGeneration += 1
     this.activeFailureStreakByProvider.claude = 0
+    if (targetChanged) {
+      // Why: statusline posts from the outgoing target's sessions must not land on the incoming target's bar mid-switch.
+      this.lastClaudeAuthSnapshot = null
+    }
     this.updateState({
       ...this.state,
       claude: this.withFetchingStatus(targetChanged ? null : this.state.claude, 'claude')
     })
     await this.fetchClaudeOnly({ force: true })
     return this.getState()
+  }
+
+  async refreshAfterClaudeLivePtysDrained(): Promise<void> {
+    // Why: "Waiting for Claude session" can only recover once no live claude
+    // owns the credentials. Refetch on the last PTY exit instead of leaving
+    // the stale terminal error up until the failure backoff elapses.
+    if (!this.state.claude?.usageMetadata?.deferredByLiveClaudeSession) {
+      return
+    }
+    this.activeFailureStreakByProvider.claude = 0
+    await this.fetchClaudeOnly({ force: true })
   }
 
   async fetchInactiveClaudeAccountsOnOpen(): Promise<void> {
@@ -538,7 +652,7 @@ export class RateLimitService {
       return
     }
     this.pruneInactiveCodexState()
-    if (this.inactiveCodexFetching.size > 0) {
+    if (this.inactiveCodexFetchInFlight) {
       return
     }
     const accounts = this.inactiveCodexAccountsResolver?.() ?? []
@@ -549,12 +663,9 @@ export class RateLimitService {
     const fetchGeneration = this.inactiveCodexAccountsGeneration
     const controller = this.beginFetchCycle()
     const signal = controller.signal
+    this.inactiveCodexFetchInFlight = true
 
-    for (const account of accounts) {
-      this.inactiveCodexFetching.add(account.id)
-    }
-    this.pushToRenderer()
-
+    let staggerNextProbe = false
     try {
       for (const account of accounts) {
         if (
@@ -569,11 +680,34 @@ export class RateLimitService {
           this.pushToRenderer()
           continue
         }
+        if (staggerNextProbe) {
+          await delayUnlessAborted(INACTIVE_CODEX_PROBE_STAGGER_MS, signal)
+          // Why: the account set can change while the stagger delay runs.
+          if (
+            signal.aborted ||
+            fetchGeneration !== this.inactiveCodexAccountsGeneration ||
+            !this.isCurrentInactiveCodexAccount(account.id)
+          ) {
+            this.inactiveCodexFetching.delete(account.id)
+            if (!this.isCurrentInactiveCodexAccount(account.id)) {
+              this.inactiveCodexCache.delete(account.id)
+            }
+            this.pushToRenderer()
+            continue
+          }
+        }
+        const home = account.resolveHome()
+        if (home.kind === 'skip') {
+          continue
+        }
+        staggerNextProbe = true
+        this.inactiveCodexFetching.add(account.id)
+        this.pushToRenderer()
         try {
           // Why: point fetchCodexRateLimits at the managed home directly, avoiding materializing credentials into the shared runtime location.
           // Why: no PTY fallback — the switcher preview shouldn't spawn hidden PTYs per account (can crash ConPTY on Windows); RPC-only is enough.
           const fresh = await fetchCodexRateLimits({
-            codexHomePath: account.managedHomePath,
+            codexHomePath: home.managedHomePath,
             allowPtyFallback: false,
             signal
           })
@@ -609,6 +743,7 @@ export class RateLimitService {
         this.lastInactiveCodexFetchAt = Date.now()
       }
     } finally {
+      this.inactiveCodexFetchInFlight = false
       this.finishFetchCycle(controller)
     }
   }
@@ -758,6 +893,10 @@ export class RateLimitService {
       }
       // Why: a failed startup read is not fresh data; keep it eligible for activation recovery, throttled per provider.
       if (limits.status === 'error') {
+        // Why: the server told us when to come back (Retry-After); retrying earlier burns the endpoint's budget and keeps the 429 alive.
+        if (this.isRetryAfterActive(limits)) {
+          continue
+        }
         const lastRetryAt = this.lastActiveFailureRetryAtByProvider[provider]
         const throttleMs = INDIVIDUALLY_REFRESHABLE_PROVIDERS.has(provider)
           ? Math.min(
@@ -847,11 +986,14 @@ export class RateLimitService {
 
     try {
       let shouldContinue = true
+      // Why: only user-directed (force) fetches may bypass a provider's Retry-After gate; queued reruns inherit force because only forced calls queue them.
+      let cycleForce = options?.force ?? false
       while (shouldContinue) {
         const signal = await this.runWithFetchAbortSignal((fetchSignal) =>
-          this.runFetchAllCycle(fetchSignal)
+          this.runFetchAllCycle(fetchSignal, { force: cycleForce })
         )
         shouldContinue = false
+        cycleForce = true
         if (signal.aborted) {
           break
         }
@@ -872,7 +1014,7 @@ export class RateLimitService {
         if (this.claudeOnlyFetchQueued) {
           this.claudeOnlyFetchQueued = false
           const claudeSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
-            this.runFetchClaudeOnlyCycle(fetchSignal)
+            this.runFetchClaudeOnlyCycle(fetchSignal, { force: true })
           )
           if (claudeSignal.aborted) {
             break
@@ -917,7 +1059,7 @@ export class RateLimitService {
         if (this.fullFetchQueued) {
           this.fullFetchQueued = false
           const fullSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
-            this.runFetchAllCycle(fetchSignal)
+            this.runFetchAllCycle(fetchSignal, { force: true })
           )
           if (fullSignal.aborted) {
             break
@@ -931,7 +1073,7 @@ export class RateLimitService {
         if (this.claudeOnlyFetchQueued) {
           this.claudeOnlyFetchQueued = false
           const claudeSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
-            this.runFetchClaudeOnlyCycle(fetchSignal)
+            this.runFetchClaudeOnlyCycle(fetchSignal, { force: true })
           )
           if (claudeSignal.aborted) {
             break
@@ -965,18 +1107,21 @@ export class RateLimitService {
 
     try {
       let shouldContinue = true
+      // Why: only user-directed (force) fetches may bypass a provider's Retry-After gate; queued reruns inherit force because only forced calls queue them.
+      let cycleForce = options?.force ?? false
       while (shouldContinue) {
         const signal = await this.runWithFetchAbortSignal((fetchSignal) =>
-          this.runFetchClaudeOnlyCycle(fetchSignal)
+          this.runFetchClaudeOnlyCycle(fetchSignal, { force: cycleForce })
         )
         shouldContinue = false
+        cycleForce = true
         if (signal.aborted) {
           break
         }
         if (this.fullFetchQueued) {
           this.fullFetchQueued = false
           const fullSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
-            this.runFetchAllCycle(fetchSignal)
+            this.runFetchAllCycle(fetchSignal, { force: true })
           )
           if (fullSignal.aborted) {
             break
@@ -1035,7 +1180,7 @@ export class RateLimitService {
         if (this.fullFetchQueued) {
           this.fullFetchQueued = false
           const fullSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
-            this.runFetchAllCycle(fetchSignal)
+            this.runFetchAllCycle(fetchSignal, { force: true })
           )
           if (fullSignal.aborted) {
             break
@@ -1058,7 +1203,7 @@ export class RateLimitService {
         if (this.claudeOnlyFetchQueued) {
           this.claudeOnlyFetchQueued = false
           const claudeSignal = await this.runWithFetchAbortSignal((fetchSignal) =>
-            this.runFetchClaudeOnlyCycle(fetchSignal)
+            this.runFetchClaudeOnlyCycle(fetchSignal, { force: true })
           )
           if (claudeSignal.aborted) {
             break
@@ -1186,6 +1331,57 @@ export class RateLimitService {
     }
   }
 
+  private async fetchCodexResetResultState(
+    target: NormalizedCodexAccountSelectionTarget,
+    codexHomePath: string | null,
+    stateBeforeReset: RateLimitState
+  ): Promise<RateLimitState> {
+    const controller = this.beginFetchCycle()
+    let fresh: ProviderRateLimits
+    try {
+      fresh = await fetchCodexRateLimits({
+        codexHomePath,
+        allowPtyFallback: this.shouldAllowCodexPtyFallback(),
+        signal: controller.signal
+      })
+    } catch (error) {
+      fresh = {
+        provider: 'codex',
+        session: null,
+        weekly: null,
+        updatedAt: Date.now(),
+        error: toErrorMessage(error),
+        status: 'error'
+      }
+    } finally {
+      this.finishFetchCycle(controller)
+    }
+
+    const scopedCodex = this.applyStalePolicy(fresh, stateBeforeReset.codex)
+    const currentCodexHome = this.resolveCodexHome(target)
+    // Why: a skip has no provenance to compare, so treat it as no longer active
+    // rather than publishing this result against the system-default lane.
+    const stillActive =
+      !currentCodexHome.skip &&
+      this.isSameCodexTarget(this.codexFetchTarget, target) &&
+      this.getCodexProvenance(target, currentCodexHome.homePath) ===
+        this.getCodexProvenance(target, codexHomePath)
+    if (stillActive) {
+      // Why: this post-redemption read is newer than every Codex fetch that
+      // started before it, so invalidate those results before publishing it.
+      this.codexFetchGeneration += 1
+      this.trackActiveFailureStreak('codex', fresh)
+      this.updateState({
+        ...this.state,
+        codex: this.applyStalePolicy(fresh, this.state.codex)
+      })
+    }
+
+    // Why: the caller must receive the redeemed target even if the global UI
+    // switched targets while the provider mutation was in flight.
+    return { ...stateBeforeReset, codex: scopedCodex, codexTarget: target }
+  }
+
   private shouldAllowCodexPtyFallback(): boolean {
     // Why: hidden PTY fallback can crash inside ConPTY on Windows; prefer RPC-only degradation there for background quota refresh.
     return process.platform !== 'win32'
@@ -1242,6 +1438,119 @@ export class RateLimitService {
     }
   }
 
+  // Why: hitting a usage endpoint before its Retry-After expires burns the budget for nothing and keeps the 429 window alive.
+  private isRetryAfterActive(limits: ProviderRateLimits | null): boolean {
+    return Boolean(
+      limits?.status === 'error' &&
+      limits.usageMetadata?.retryAtMs &&
+      limits.usageMetadata.retryAtMs > Date.now()
+    )
+  }
+
+  // Why: a live Claude session already streams fresh usage windows; spending the OAuth usage endpoint's tight budget on the same data invites 429s.
+  private isLiveClaudeUsageFresh(limits: ProviderRateLimits | null): boolean {
+    return Boolean(
+      limits?.status === 'ok' &&
+      limits.usageMetadata?.source === 'live-session' &&
+      Date.now() - limits.updatedAt < MIN_REFETCH_MS
+    )
+  }
+
+  private shouldSkipAutomatedClaudeFetch(limits: ProviderRateLimits | null): boolean {
+    return this.isRetryAfterActive(limits) || this.isLiveClaudeUsageFresh(limits)
+  }
+
+  private resolveClaudeFetchApply(
+    fresh: ProviderRateLimits,
+    previous: ProviderRateLimits | null
+  ): ProviderRateLimits {
+    // Why: a live statusline post can land while an OAuth cycle is in flight; a failed fetch must not
+    // roll the bar back to the pre-cycle snapshot or flip the just-refreshed live data to error.
+    const current = this.state.claude
+    if (fresh.status !== 'ok' && current && this.isLiveClaudeUsageFresh(current)) {
+      return current
+    }
+    return this.applyStalePolicy(fresh, previous)
+  }
+
+  private rememberClaudeAuthSnapshot(
+    authPreparation: ClaudeRuntimeAuthPreparation | undefined,
+    claudeGeneration: number,
+    claudeTarget: NormalizedClaudeAccountSelectionTarget
+  ): void {
+    // Why: an account switch during the resolver await already cleared the snapshot; restoring the outgoing account's configDir here would cross-attribute its live posts to the new bar.
+    if (
+      claudeGeneration !== this.claudeFetchGeneration ||
+      !this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
+    ) {
+      return
+    }
+    this.lastClaudeAuthSnapshot = {
+      configDir: normalizeClaudeConfigDir(authPreparation?.envPatch.CLAUDE_CONFIG_DIR),
+      provenance: authPreparation?.provenance ?? 'system'
+    }
+  }
+
+  /** Live usage windows forwarded from a Claude session's statusLine command. */
+  ingestLiveClaudeRateLimits(event: ClaudeStatusLineRateLimits): void {
+    // Why: attribution needs the selected account's config dir; until a fetch cycle captures it, drop posts rather than guess the account.
+    const snapshot = this.lastClaudeAuthSnapshot
+    if (!snapshot) {
+      // Why: breadcrumbs make a silently dark live feed diagnosable — dropped posts are otherwise invisible.
+      console.debug('[rate-limits] dropped live Claude usage: no auth snapshot yet', {
+        eventConfigDir: event.configDir
+      })
+      return
+    }
+    // Why: sessions of other accounts (or other runtimes) report their own quota; mixing them into the active account's bar would lie.
+    if (normalizeClaudeConfigDir(event.configDir) !== snapshot.configDir) {
+      console.debug('[rate-limits] dropped live Claude usage: configDir mismatch', {
+        eventConfigDir: event.configDir,
+        snapshotConfigDir: snapshot.configDir
+      })
+      return
+    }
+    const freshSession = mapClaudeUsageWindow(event.fiveHour ?? undefined, 300)
+    const freshWeekly = mapClaudeUsageWindow(event.sevenDay ?? undefined, 10080)
+    if (!freshSession && !freshWeekly) {
+      return
+    }
+    const previous = this.state.claude
+    // Why: statusline payloads can carry a single window; an absent one means "no update", not "cleared" — keep the other bar populated.
+    const session = freshSession ?? previous?.session ?? null
+    const weekly = freshWeekly ?? previous?.weekly ?? null
+    if (
+      previous?.status === 'ok' &&
+      previous.usageMetadata?.source === 'live-session' &&
+      Date.now() - previous.updatedAt < LIVE_CLAUDE_INGEST_DEDUPE_MS &&
+      isSameUsageWindow(previous.session, session) &&
+      isSameUsageWindow(previous.weekly, weekly)
+    ) {
+      return
+    }
+    this.activeFailureStreakByProvider.claude = 0
+    this.updateState({
+      ...this.state,
+      claude: {
+        provider: 'claude',
+        session,
+        weekly,
+        // Why: the statusline payload has no Fable scoped window; keep the last OAuth-provided one visible.
+        // Tradeoff: while live posts keep the OAuth poll gated, fableWeekly stays frozen until the session idles past the freshness window.
+        fableWeekly: previous?.fableWeekly ?? null,
+        updatedAt: Date.now(),
+        error: null,
+        status: 'ok',
+        usageMetadata: {
+          source: 'live-session',
+          lastSuccessfulSource: 'live-session',
+          credentialSource: previous?.usageMetadata?.credentialSource,
+          authProvenance: snapshot.provenance
+        }
+      }
+    })
+  }
+
   private trackActiveFailureStreak(
     provider: ActiveRateLimitProvider,
     fresh: ProviderRateLimits
@@ -1287,22 +1596,35 @@ export class RateLimitService {
     return { ...current, status: 'fetching' }
   }
 
-  private async runFetchAllCycle(signal: AbortSignal): Promise<void> {
+  private async runFetchAllCycle(
+    signal: AbortSignal,
+    options?: { force?: boolean }
+  ): Promise<void> {
     if (signal.aborted) {
       return
     }
     const claudeTarget = this.claudeFetchTarget
+    // Why: capture before the resolver await so an account switch during it invalidates both the snapshot and the state apply.
+    const claudeGeneration = this.claudeFetchGeneration
     const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
       return
     }
+    this.rememberClaudeAuthSnapshot(claudeAuthPreparation, claudeGeneration, claudeTarget)
     const claudeProvenance = claudeAuthPreparation?.provenance ?? 'system'
-    const claudeGeneration = this.claudeFetchGeneration
     const codexTarget = this.codexFetchTarget
-    const codexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
-    const codexProvenance = this.getCodexProvenance(codexTarget, codexHomePath)
-    const codexGeneration = this.codexFetchGeneration
     const previousState = this.state
+    // Why: a skipped Codex poll must not stop the other providers' cycle, so gate
+    // only the Codex slot instead of returning early (#STA-4422).
+    const codexHome = this.resolveCodexHome(codexTarget)
+    const codexFetchGated = codexHome.skip
+    const codexHomePath = codexHome.homePath
+    const codexStateBeforeFetch =
+      previousState.codex?.status === 'fetching' ? null : previousState.codex
+    const codexProvenance = codexFetchGated
+      ? null
+      : this.getCodexProvenance(codexTarget, codexHomePath)
+    const codexGeneration = this.codexFetchGeneration
     const openCodeGoConfig = this.openCodeGoConfigResolver?.()
     const cookie = openCodeGoConfig?.sessionCookie ?? ''
     const workspaceIdOverride = openCodeGoConfig?.workspaceIdOverride ?? ''
@@ -1336,7 +1658,10 @@ export class RateLimitService {
     this.updateState({
       ...previousState,
       claude: this.withFetchingStatus(previousState.claude, 'claude'),
-      codex: this.withFetchingStatus(previousState.codex, 'codex'),
+      // Why: a gated Codex cycle makes no attempt; a "fetching" chip would never settle.
+      codex: codexFetchGated
+        ? codexStateBeforeFetch
+        : this.withFetchingStatus(previousState.codex, 'codex'),
       gemini: this.withFetchingStatus(previousState.gemini, 'gemini'),
       opencodeGo: opencodeConfigChanged
         ? this.withFetchingStatus(null, 'opencode-go')
@@ -1349,9 +1674,8 @@ export class RateLimitService {
       grok: this.withFetchingStatus(previousState.grok, 'grok')
     })
 
-    const missingWslCodexHome = codexHomePath
-      ? null
-      : this.getMissingWslCodexHomeResult(codexTarget)
+    const missingWslCodexHome =
+      codexFetchGated || codexHomePath ? null : this.getMissingWslCodexHomeResult(codexTarget)
     const grokResultPromise = fetchGrokRateLimits({
       signal,
       authReadResult: grokAuthReadResult
@@ -1360,24 +1684,36 @@ export class RateLimitService {
       (reason) => ({ status: 'rejected', reason }) as const
     )
 
+    // Why: skip automated Claude fetches while a Retry-After window is open or a live session feed is fresher than the OAuth poll would be.
+    const claudeFetchGated =
+      !options?.force && this.shouldSkipAutomatedClaudeFetch(previousState.claude)
+
     const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
       await Promise.allSettled([
-        fetchClaudeRateLimits({
-          authPreparation: claudeAuthPreparation,
-          allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-          allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
-          networkProxySettings: this.networkProxySettingsResolver?.(),
-          signal
-        }),
-        missingWslCodexHome ??
-          fetchCodexRateLimits({
-            codexHomePath,
-            allowPtyFallback: this.shouldAllowCodexPtyFallback(),
-            signal
-          }),
+        claudeFetchGated
+          ? Promise.resolve(previousState.claude as ProviderRateLimits)
+          : fetchClaudeRateLimits({
+              authPreparation: claudeAuthPreparation,
+              allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+              allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+              networkProxySettings: this.networkProxySettingsResolver?.(),
+              signal
+            }),
+        codexFetchGated
+          ? Promise.resolve(previousState.codex as ProviderRateLimits)
+          : (missingWslCodexHome ??
+            fetchCodexRateLimits({
+              codexHomePath,
+              allowPtyFallback: this.shouldAllowCodexPtyFallback(),
+              signal
+            })),
         fetchGeminiRateLimits(geminiCliOAuthEnabled),
-        fetchOpenCodeGoRateLimits(cookie, workspaceIdOverride || undefined),
-        fetchKimiRateLimits(),
+        fetchOpenCodeGoRateLimits(
+          cookie,
+          workspaceIdOverride || undefined,
+          this.networkProxySettingsResolver?.()
+        ),
+        this.fetchKimiWithResolvedHome(),
         miniMaxConfigResult.error
           ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
           : fetchMiniMaxRateLimits({
@@ -1479,16 +1815,24 @@ export class RateLimitService {
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    const latestCodexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
+    const latestCodexHome = this.resolveCodexHome(codexTarget)
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
       return
     }
     const latestClaudeProvenance = latestClaudeAuthPreparation?.provenance ?? 'system'
-    const latestCodexProvenance = this.getCodexProvenance(codexTarget, latestCodexHomePath)
+    // Why: a finishing skip has no provenance, so an in-flight result must never be
+    // applied as though the target had become the system default (#STA-4422).
     const shouldApplyCodex =
-      codexGeneration === this.codexFetchGeneration && codexProvenance === latestCodexProvenance
+      !codexFetchGated &&
+      !latestCodexHome.skip &&
+      codexGeneration === this.codexFetchGeneration &&
+      codexProvenance === this.getCodexProvenance(codexTarget, latestCodexHome.homePath)
+    const codexBecameUnavailable =
+      !codexFetchGated && latestCodexHome.skip && codexGeneration === this.codexFetchGeneration
+    // Why: a gated cycle made no Claude attempt; applying its passthrough result would grow the failure streak and reset stale-policy clocks for free.
     const shouldApplyClaude =
+      !claudeFetchGated &&
       claudeGeneration === this.claudeFetchGeneration &&
       claudeProvenance === latestClaudeProvenance &&
       this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
@@ -1515,11 +1859,13 @@ export class RateLimitService {
     this.updateState({
       ...this.state,
       claude: shouldApplyClaude
-        ? this.applyStalePolicy(claude, previousState.claude)
+        ? this.resolveClaudeFetchApply(claude, previousState.claude)
         : this.state.claude,
       codex: shouldApplyCodex
         ? this.applyStalePolicy(codex, previousState.codex)
-        : this.state.codex,
+        : codexBecameUnavailable
+          ? codexStateBeforeFetch
+          : this.state.codex,
       gemini: this.applyStalePolicy(gemini, previousState.gemini),
       opencodeGo: shouldApplyOpencode
         ? opencodeConfigChanged
@@ -1562,9 +1908,20 @@ export class RateLimitService {
       return
     }
     const codexTarget = this.codexFetchTarget
-    const codexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
-    const codexProvenance = this.getCodexProvenance(codexTarget, codexHomePath)
     const codexGeneration = this.codexFetchGeneration
+    const codexHome = this.resolveCodexHome(codexTarget)
+    // Why: return before the "fetching" mark — a skipped cycle never settles it (#STA-4422).
+    if (codexHome.skip) {
+      if (
+        codexGeneration === this.codexFetchGeneration &&
+        this.state.codex?.status === 'fetching'
+      ) {
+        this.updateState({ ...this.state, codex: null })
+      }
+      return
+    }
+    const codexHomePath = codexHome.homePath
+    const codexProvenance = this.getCodexProvenance(codexTarget, codexHomePath)
     const previousState = this.state
 
     this.updateState({
@@ -1598,10 +1955,18 @@ export class RateLimitService {
       return
     }
 
-    const latestCodexHomePath = this.codexHomePathResolver?.(codexTarget) ?? null
-    const latestCodexProvenance = this.getCodexProvenance(codexTarget, latestCodexHomePath)
+    const latestCodexHome = this.resolveCodexHome(codexTarget)
+    if (latestCodexHome.skip && codexGeneration === this.codexFetchGeneration) {
+      this.updateState({
+        ...this.state,
+        codex: previousState.codex?.status === 'fetching' ? null : previousState.codex
+      })
+      return
+    }
     const shouldApplyCodex =
-      codexGeneration === this.codexFetchGeneration && codexProvenance === latestCodexProvenance
+      !latestCodexHome.skip &&
+      codexGeneration === this.codexFetchGeneration &&
+      codexProvenance === this.getCodexProvenance(codexTarget, latestCodexHome.homePath)
 
     if (shouldApplyCodex) {
       this.trackActiveFailureStreak('codex', codex)
@@ -1612,17 +1977,26 @@ export class RateLimitService {
     })
   }
 
-  private async runFetchClaudeOnlyCycle(signal: AbortSignal): Promise<void> {
+  private async runFetchClaudeOnlyCycle(
+    signal: AbortSignal,
+    options?: { force?: boolean }
+  ): Promise<void> {
     if (signal.aborted) {
       return
     }
+    // Why: skip automated Claude fetches while a Retry-After window is open or a live session feed is fresher than the OAuth poll would be.
+    if (!options?.force && this.shouldSkipAutomatedClaudeFetch(this.state.claude)) {
+      return
+    }
     const claudeTarget = this.claudeFetchTarget
+    // Why: capture before the resolver await so an account switch during it invalidates both the snapshot and the state apply.
+    const claudeGeneration = this.claudeFetchGeneration
     const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
       return
     }
+    this.rememberClaudeAuthSnapshot(claudeAuthPreparation, claudeGeneration, claudeTarget)
     const claudeProvenance = claudeAuthPreparation?.provenance ?? 'system'
-    const claudeGeneration = this.claudeFetchGeneration
     const previousState = this.state
 
     this.updateState({
@@ -1667,7 +2041,7 @@ export class RateLimitService {
     this.updateState({
       ...this.state,
       claude: shouldApplyClaude
-        ? this.applyStalePolicy(claude, previousState.claude)
+        ? this.resolveClaudeFetchApply(claude, previousState.claude)
         : this.state.claude
     })
   }
@@ -1745,7 +2119,11 @@ export class RateLimitService {
     }
 
     // Previous data is too old — don't show stale data
-    if (Date.now() - previous.updatedAt > STALE_THRESHOLD_MS) {
+    const staleThresholdMs =
+      fresh.usageMetadata?.failureKind === 'rate-limited'
+        ? RATE_LIMITED_STALE_THRESHOLD_MS
+        : STALE_THRESHOLD_MS
+    if (Date.now() - previous.updatedAt > staleThresholdMs) {
       return fresh
     }
 

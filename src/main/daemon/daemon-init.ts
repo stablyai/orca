@@ -3,7 +3,7 @@ restart, teardown); the "swap the provider atomically" invariant keeps restart +
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { app } from 'electron'
-import { mkdirSync, existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, existsSync, readFileSync, unlinkSync } from 'node:fs'
 import { fork, type ChildProcess } from 'node:child_process'
 import { connect } from 'node:net'
 import {
@@ -11,12 +11,14 @@ import {
   getDaemonPidPath,
   getDaemonSocketPath,
   getDaemonTokenPath,
-  serializeDaemonPidFile,
+  replaceDaemonPidFile,
   unlinkOwnedDaemonPidFile,
   type DaemonLauncher,
+  type DaemonPidFile,
   type DaemonProcessHandle
 } from './daemon-spawner'
-import { DaemonPtyAdapter } from './daemon-pty-adapter'
+import { DAEMON_EXIT_ENDPOINT_OCCUPIED } from './daemon-endpoint-ownership'
+import { DaemonPtyAdapter, type DaemonRespawnReason } from './daemon-pty-adapter'
 import { DaemonPtyRouter } from './daemon-pty-router'
 import { DaemonClient } from './client'
 import {
@@ -25,20 +27,23 @@ import {
   PROTOCOL_VERSION,
   type ListSessionsResult
 } from './types'
+import { getMacDaemonSystemResolverHealth, checkDaemonHealth } from './daemon-health'
 import {
-  getMacDaemonSystemResolverHealth,
-  getDaemonLaunchIdentity,
-  checkDaemonHealth,
-  isDaemonStaleForCurrentBundle,
-  killStaleDaemon,
-  parseDaemonPidFile
-} from './daemon-health'
+  getMacDaemonTccAttributionHealth,
+  type MacDaemonTccAttributionHealth
+} from './daemon-tcc-attribution'
+import { getDaemonLaunchIdentity } from './daemon-pid-identity'
+import { isDaemonStaleForCurrentBundle } from './daemon-bundle-staleness'
+import { killStaleDaemon } from './daemon-stale-kill'
+import { parseDaemonPidFile } from './daemon-pid-file-parse'
 import {
   collectPinnedDaemonVersions,
   materializeRelocatedDaemonHost,
   pruneOldDaemonHosts
 } from './daemon-host-relocation'
 import { DegradedDaemonPtyProvider } from './degraded-daemon-pty-provider'
+import { trackDaemonReplaced, trackDaemonRetired } from './daemon-lifecycle-event'
+import type { DaemonReplaceReason } from '../../shared/daemon-lifecycle-telemetry'
 import {
   getLocalPtyProvider,
   setLocalPtyProvider,
@@ -51,11 +56,16 @@ import {
   confirmSeededClaudeLivePtys,
   hasSeededUnconfirmedClaudePtys
 } from '../claude-accounts/live-pty-gate'
+import { parseDaemonReadyIdentity, readDaemonProcessIncarnation } from './daemon-ready-identity'
+import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 
 // Why: daemon init runs concurrent with window load, so an in-process t timestamp (not harness stderr timing) measures cold-start.
 function logDaemonMilestone(event: string, details: Record<string, unknown> = {}): void {
   if (isStartupDiagnosticsEnabled()) {
-    logStartupDiagnostic(event, { t: Math.round(performance.now()), ...details })
+    logStartupDiagnostic(event, {
+      t: Math.round(performance.now()),
+      ...details
+    })
   }
 }
 
@@ -64,6 +74,24 @@ export const WEDGED_DAEMON_GRACE_RETRIES = 11
 const DAEMON_SELF_SHUTDOWN_WAIT_MS = 5_000
 const DAEMON_CHILD_TERMINATION_GRACE_MS = 5_000
 const DAEMON_CHILD_FORCE_EXIT_WAIT_MS = 1_000
+
+class DaemonEndpointOwnershipError extends Error {}
+
+/**
+ * The one method the ownership checks need from a connected client.
+ *
+ * Why: naming the capability instead of casting DaemonClient to Partial keeps a rename from
+ * silently turning the fence into a no-op — the compiler now rejects a client without it.
+ */
+type DaemonEndpointIdentityReader = {
+  getDaemonIdentity?: () => DaemonEndpointIdentity | null
+}
+
+function readDaemonEndpointIdentity(
+  client: DaemonEndpointIdentityReader
+): DaemonEndpointIdentity | null {
+  return client.getDaemonIdentity?.() ?? null
+}
 
 let spawner: DaemonSpawner | null = null
 type DaemonProvider = DaemonPtyRouter | DaemonPtyAdapter | DegradedDaemonPtyProvider
@@ -181,17 +209,104 @@ async function holdDaemonAdoptionLease(
   handle: DaemonProcessHandle,
   socketPath: string,
   tokenPath: string,
-  connectedClient?: DaemonClient
+  connectedClient?: DaemonClient,
+  expectedIdentity?: DaemonEndpointIdentity,
+  pidPath?: string
 ): Promise<DaemonProcessHandle> {
   const client = connectedClient ?? new DaemonClient({ socketPath, tokenPath })
   try {
     await client.ensureConnected()
+    if (expectedIdentity) {
+      const actualIdentity = readDaemonEndpointIdentity(client)
+      if (
+        !actualIdentity ||
+        actualIdentity.pid !== expectedIdentity.pid ||
+        actualIdentity.startedAtMs !== expectedIdentity.startedAtMs ||
+        actualIdentity.launchNonce !== expectedIdentity.launchNonce
+      ) {
+        throw new DaemonEndpointOwnershipError('Daemon endpoint ownership changed during startup')
+      }
+    }
+    await reconcileDaemonPidOwnership(client, pidPath)
   } catch (error) {
     client.disconnect()
     throw error
   }
   handle.releaseAdoptionLease = () => client.disconnect()
   return handle
+}
+
+async function reconcileDaemonPidOwnership(
+  client: DaemonEndpointIdentityReader,
+  pidPath?: string
+): Promise<void> {
+  const endpointIdentity = readDaemonEndpointIdentity(client)
+  if (!pidPath || !endpointIdentity || pidRecordMatchesEndpoint(pidPath, endpointIdentity)) {
+    return
+  }
+  // Why: the mismatched record's metadata describes a different daemon and must not be copied
+  // onto this one. Re-derive it from the authenticated owner instead, so the repaired record
+  // keeps the fields freshness, host pinning and pid-recycle detection depend on.
+  const { pid, startedAtMs, launchNonce } = endpointIdentity
+  const ownerMetadata = await readDaemonOwnerMetadata(endpointIdentity)
+  if (!replaceDaemonPidFile(pidPath, { pid, startedAtMs, launchNonce, ...ownerMetadata })) {
+    // Why: fail open. A record that disagrees with the endpoint is a diagnosable nuisance;
+    // abandoning a healthy adoptable daemon over a failed file write costs the user every
+    // persistent terminal on the machine.
+    console.warn(
+      '[daemon] Could not repair daemon PID ownership; adopting the authenticated endpoint anyway'
+    )
+    return
+  }
+  console.warn('[daemon] Repaired daemon PID ownership to match the authenticated endpoint')
+}
+
+/**
+ * Recovers the owning daemon's launch metadata.
+ *
+ * Why: `entryPath`/`appVersion` gate bundle-freshness and (on Windows) which relocated daemon
+ * host directories are pinned against pruning, and the Linux pair gates pid-recycle detection.
+ * Publishing a repaired record without them makes a healthy daemon look permanently stale.
+ * The values come from the authenticated hello rather than the owner's command line: a command
+ * line is a single space-joined string, so any install path containing a space (`C:\Program
+ * Files\...`, `/Applications/Orca 2.app/...`) cannot be split back into argv unambiguously.
+ */
+async function readDaemonOwnerMetadata(
+  identity: DaemonEndpointIdentity
+): Promise<Partial<DaemonPidFile>> {
+  const metadata: Partial<DaemonPidFile> = {}
+  if (identity.entryPath) {
+    metadata.entryPath = identity.entryPath
+  }
+  if (identity.appVersion) {
+    metadata.appVersion = identity.appVersion
+  }
+  if (identity.spawnerExecPath) {
+    metadata.spawnerExecPath = identity.spawnerExecPath
+  }
+  const incarnation = await readDaemonProcessIncarnation(identity.pid)
+  if (incarnation) {
+    metadata.linuxStartTicks = incarnation.linuxStartTicks
+    metadata.bootId = incarnation.bootId
+  }
+  return metadata
+}
+
+function pidRecordMatchesEndpoint(pidPath: string, identity: DaemonEndpointIdentity): boolean {
+  try {
+    const record = JSON.parse(readFileSync(pidPath, 'utf8')) as {
+      pid?: unknown
+      startedAtMs?: unknown
+      launchNonce?: unknown
+    }
+    return (
+      record.pid === identity.pid &&
+      record.startedAtMs === identity.startedAtMs &&
+      record.launchNonce === identity.launchNonce
+    )
+  } catch {
+    return false
+  }
 }
 
 function releaseDaemonAdoptionLease(handle: DaemonProcessHandle | null): void {
@@ -321,15 +436,40 @@ async function shouldPreserveDaemonWithLiveSessions(
   return true
 }
 
-function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
+// Why: the adapter decides a runtime resolver replacement, but the launcher completes it — and by
+// then the daemon has usually self-retired (dropping its last authenticated client is enough), so
+// there is nothing left to kill and the launcher's own confirmed-kill gate would report nothing.
+// The adapter hands the reason across so the launch it triggers reports what actually drove it.
+let attributedReplaceReason: DaemonReplaceReason | null = null
+
+function createOutOfProcessLauncher(
+  runtimeDir: string,
+  macosLoginSessionWatch = false
+): DaemonLauncher {
   return async (socketPath, tokenPath, suppliedPidPath, suppliedLaunchNonce) => {
     const entryPath = getDaemonEntryPath()
     const pidPath = suppliedPidPath ?? getDaemonPidPath(runtimeDir)
     const launchNonce = suppliedLaunchNonce ?? randomUUID()
-    let adoptionClient: DaemonClient | null = new DaemonClient({ socketPath, tokenPath })
+    // One-shot: whichever launch consumes it owns the attribution, so a later unrelated launch can't
+    // reuse it. The write in the respawn closure reaches here without an intervening await, which is
+    // what makes a bare module-scoped slot safe — keep it that way or a concurrent launch can steal it.
+    const attributedReason = attributedReplaceReason
+    attributedReplaceReason = null
+    let pendingReplacement:
+      | {
+          reason: Parameters<typeof trackDaemonReplaced>[0]
+          liveSessionCount: number | null
+        }
+      | undefined
+    let confirmedReplacement = false
+    let adoptionClient: DaemonClient | null = new DaemonClient({
+      socketPath,
+      tokenPath
+    })
     try {
       // Why: acquire the full pair before control-only probes so an expired inherited deadline can't fire in the probe-to-adoption gap.
       await adoptionClient.ensureConnected()
+      await reconcileDaemonPidOwnership(adoptionClient, pidPath)
     } catch {
       adoptionClient.disconnect()
       adoptionClient = null
@@ -343,7 +483,9 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
         createPreservedDaemonHandle(runtimeDir, PROTOCOL_VERSION, mode),
         socketPath,
         tokenPath,
-        connectedClient
+        connectedClient,
+        undefined,
+        pidPath
       )
     }
     try {
@@ -361,7 +503,12 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
             return preserveDaemon()
           }
           console.warn('[daemon] Replacing daemon with unavailable macOS system resolver')
-          await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
+          pendingReplacement = {
+            reason: 'unhealthy_resolver',
+            liveSessionCount
+          }
+          confirmedReplacement = (await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION))
+            .cleaned
         } else {
           // Why: a protocol-healthy daemon can outlive its launching app bundle (dev worktree rebuild, or packaged update replacing the app path).
           const identity = await getDaemonLaunchIdentity(
@@ -393,10 +540,38 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
                 ? '[daemon] Replacing daemon launched before the current app bundle was installed'
                 : '[daemon] Replacing daemon launched from a different app path'
             )
-            await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
+            // liveSessionCount is 0: shouldPreserveDaemonWithLiveSessions() only falls through at exactly 0.
+            pendingReplacement = {
+              reason: stalePackagedBundle ? 'stale_bundle' : 'different_app_path',
+              liveSessionCount: 0
+            }
+            confirmedReplacement = (await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION))
+              .cleaned
           } else {
-            // Why: healthy daemon from a previous session answered a protocol ping — safe to reuse.
-            return preserveDaemon()
+            const attributionHealth = await getMacDaemonTccAttributionHealth(
+              runtimeDir,
+              socketPath,
+              tokenPath
+            )
+            if (attributionHealth === 'severed') {
+              // Why: replacing with live sessions would kill them; Settings → Developer
+              // Permissions surfaces the Manage Sessions → Restart remedy instead.
+              const liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath)
+              if (liveSessionCount === 0) {
+                console.warn(
+                  '[daemon] Replacing daemon whose macOS TCC attribution is severed (spawning app binary no longer exists)'
+                )
+                pendingReplacement = { reason: 'severed_tcc_attribution', liveSessionCount }
+                confirmedReplacement = (
+                  await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
+                ).cleaned
+              } else {
+                return preserveDaemon()
+              }
+            } else {
+              // Why: healthy daemon from a previous session answered a protocol ping — safe to reuse.
+              return preserveDaemon()
+            }
           }
         }
       } else {
@@ -425,12 +600,66 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
           )
           return preserveDaemon()
         }
+        // Why: the sibling replace branches announce themselves, but this one used
+        // to kill a daemon silently — leaving no way to tell a replacement apart
+        // from an adoption after the fact. A cold start also lands here with
+        // nothing to replace, so only speak up once something actually answered:
+        // a probe that returned a count, a socket that survived a grace retry, or
+        // a refused hello.
+        if (liveSessionCount !== null || graceRetry > 0 || health === 'rejected') {
+          console.warn(
+            `[daemon] Replacing daemon that failed the health check (health=${health}, liveSessions=${liveSessionCount ?? 'unverifiable'}, graceRetries=${graceRetry})`
+          )
+        }
+        // Why: unlike the log above, telemetry gates on confirmedReplacement below — the
+        // post-kill truth — so a cold start that killed nothing never reports a replacement.
+        pendingReplacement = {
+          reason: 'failed_health_check',
+          liveSessionCount
+        }
       }
 
       // Why: a raw socket can outlive a broken daemon; kill by PID before respawn so the new daemon doesn't race the stale one.
       adoptionClient?.disconnect()
       adoptionClient = null
-      await killStaleDaemon(runtimeDir, socketPath, tokenPath)
+      const killOutcome = await killStaleDaemon(runtimeDir, socketPath, tokenPath)
+      if (killOutcome.liveOwnerSurvived) {
+        // Why: forking beside a daemon we could not prove dead is precisely how the endpoint
+        // owner and the session host diverge. But refusing outright would leave the user with
+        // no daemon at all, and we have just proved something still answers the endpoint —
+        // so adopt it in degraded mode: existing sessions keep working, new PTYs run locally.
+        console.warn(
+          '[daemon] DEGRADED MODE: adopting a daemon that could not be confirmed stopped. Existing sessions keep working; fresh terminals run on the local provider WITHOUT daemon persistence until you restart the daemon (Manage Sessions → Restart).'
+        )
+        try {
+          return await preserveDaemon('degraded-new-pty-fallback')
+        } catch {
+          // It died between the probe and the adoption; the endpoint is genuinely free now.
+          throw new DaemonEndpointOwnershipError(
+            'Daemon replacement aborted: the existing daemon could not be confirmed stopped'
+          )
+        }
+      }
+      confirmedReplacement = killOutcome.killed || confirmedReplacement
+      // Why: rank by how well each reason is evidenced. A confirmed kill whose reason positively
+      // identified the daemon outranks the attribution, so a stale bundle caught here is not billed
+      // to the resolver. failed_health_check is the residual "couldn't tell" bucket though — it also
+      // absorbs wedges and crashes — so the adapter's attribution beats it. That case is not exotic:
+      // the same dead login session that fails the resolver also fails the PTY spawn probe, and with
+      // zero live sessions that lands here rather than in the degraded preserve above.
+      const identifiedReplacement =
+        pendingReplacement &&
+        confirmedReplacement &&
+        pendingReplacement.reason !== 'failed_health_check'
+          ? pendingReplacement
+          : null
+      if (identifiedReplacement) {
+        trackDaemonReplaced(identifiedReplacement.reason, identifiedReplacement.liveSessionCount)
+      } else if (attributedReason) {
+        trackDaemonReplaced(attributedReason, 0)
+      } else if (pendingReplacement && confirmedReplacement) {
+        trackDaemonReplaced(pendingReplacement.reason, pendingReplacement.liveSessionCount)
+      }
 
       const userDataPath = app.getPath('userData')
       // Why: on win32 packaged, stage a daemon-host copy in userData so its image escapes the NSIS updater's kill zone; lazy so it's off first-paint. Fail-open: null → in-dir host.
@@ -448,6 +677,13 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
           pidPath,
           '--launch-nonce',
           launchNonce,
+          '--entry-path',
+          entryPath,
+          '--app-version',
+          app.getVersion(),
+          '--spawner-exec-path',
+          process.execPath,
+          ...(macosLoginSessionWatch ? ['--login-session-watch'] : []),
           ...daemonLogArgs()
         ],
         {
@@ -490,7 +726,9 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
       }
 
       // Wait for the daemon to signal readiness via IPC
-      await new Promise<void>((resolve, reject) => {
+      let launchedIdentity: DaemonEndpointIdentity | null = null
+      let endpointUnavailableReason: string | null = null
+      const startupSignal = new Promise<void>((resolve, reject) => {
         let timer: ReturnType<typeof setTimeout> | undefined
         let settled = false
         function cleanupStartupListeners(): void {
@@ -527,40 +765,36 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
             )
             return
           }
+          if (Number.isSafeInteger(child.pid) && (child.pid as number) > 0) {
+            unlinkOwnedDaemonPidFile(pidPath, child.pid as number, launchNonce)
+          }
           reject(startupError)
         }
         function onReadyMessage(msg: unknown): void {
+          if (
+            msg &&
+            typeof msg === 'object' &&
+            (msg as { type?: string }).type === 'endpoint-unavailable'
+          ) {
+            // Why: the child lost the endpoint race rather than crashing. Record it so the
+            // launcher can adopt the winner instead of reporting a generic startup failure.
+            endpointUnavailableReason = (msg as { reason?: string }).reason ?? 'occupied'
+            void fail(new Error(`Daemon could not take the endpoint: ${endpointUnavailableReason}`))
+            return
+          }
           if (msg && typeof msg === 'object' && (msg as { type?: string }).type === 'ready') {
             if (settled) {
               return
             }
-            const selfReported = (msg as { startedAtMs?: unknown }).startedAtMs
-            if (
-              !Number.isSafeInteger(child.pid) ||
-              (child.pid as number) <= 0 ||
-              typeof selfReported !== 'number' ||
-              !Number.isFinite(selfReported) ||
-              selfReported <= 0
-            ) {
+            const readyIdentity = parseDaemonReadyIdentity(msg)
+            if (!Number.isSafeInteger(child.pid) || (child.pid as number) <= 0 || !readyIdentity) {
               void fail(new Error('Daemon readiness identity is incomplete'))
               return
             }
-            try {
-              // Why: pid record shares the daemon's self time and nonce so cleanup can identify this exact process incarnation.
-              writeFileSync(
-                pidPath,
-                serializeDaemonPidFile({
-                  pid: child.pid as number,
-                  startedAtMs: selfReported,
-                  entryPath,
-                  appVersion: app.getVersion(),
-                  launchNonce
-                }),
-                { mode: 0o600, flag: 'wx' }
-              )
-            } catch (error) {
-              void fail(error instanceof Error ? error : new Error(String(error)))
-              return
+            launchedIdentity = {
+              pid: child.pid as number,
+              ...readyIdentity,
+              launchNonce
             }
             settled = true
             // Why: daemon is detached after readiness; detach startup listeners so the launch promise closure isn't retained.
@@ -578,6 +812,11 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
         }
 
         function onStartupExit(code: number | null): void {
+          if (code === DAEMON_EXIT_ENDPOINT_OCCUPIED) {
+            // Why here and not only on the IPC message: the exit is the event this wait settles
+            // on, so keying off it cannot lose to a notification still in the channel.
+            endpointUnavailableReason = 'occupied'
+          }
           void fail(new Error(`Daemon exited during startup with code ${code}`))
         }
 
@@ -591,14 +830,51 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
       })
 
       try {
+        await startupSignal
+      } catch (error) {
+        if (endpointUnavailableReason !== 'occupied') {
+          throw error
+        }
+        // Why adopt rather than retry: another daemon proved it owns the endpoint and is
+        // answering on it. Forking again would lose the same race, and reporting a startup
+        // failure strands this app on local non-persistent PTYs beside a healthy daemon.
+        console.warn(
+          '[daemon] Endpoint was taken by another daemon during startup — adopting it instead'
+        )
+        // Why pidPath: adopting reconciles the PID record against the identity the daemon
+        // reports over hello, repairing a record that names the wrong incarnation. Every other
+        // adoption path passes it; this one skipped it, so the incumbent we adopt here was the
+        // only one whose record never got that repair.
+        return await holdDaemonAdoptionLease(
+          createPreservedDaemonHandle(runtimeDir),
+          socketPath,
+          tokenPath,
+          undefined,
+          undefined,
+          pidPath
+        )
+      }
+
+      try {
+        if (!launchedIdentity) {
+          throw new Error('Daemon readiness identity is incomplete')
+        }
         return await holdDaemonAdoptionLease(
           {
             shutdown: () => terminateLaunchedDaemonChild(child)
           },
           socketPath,
-          tokenPath
+          tokenPath,
+          undefined,
+          launchedIdentity,
+          pidPath
         )
       } catch (error) {
+        if (error instanceof DaemonEndpointOwnershipError) {
+          await terminateLaunchedDaemonChild(child)
+          unlinkOwnedDaemonPidFile(pidPath, child.pid as number, launchNonce)
+          throw error
+        }
         // Why: another client may have adopted this live process; keep its pid record until exit, but remove one published after an early exit.
         let pidRecordRemoved = false
         const removeExitedPidRecord = (): void => {
@@ -620,12 +896,32 @@ function createOutOfProcessLauncher(runtimeDir: string): DaemonLauncher {
       }
     } catch (error) {
       adoptionClient?.disconnect()
+      adoptionClient = null
+      // Why: the launcher may now fork onto an endpoint it could not classify, because the
+      // publisher is the real guard — and that guard works by refusing to overwrite what it
+      // cannot prove dead, so the child exits instead of splitting the brain. Correct, but
+      // giving up here costs the user every persistent session for the whole run. Something
+      // answering the endpoint now is a daemon worth adopting, not a reason to fall back to
+      // local PTYs.
+      if (await probeSocket(socketPath)) {
+        console.warn(
+          '[daemon] DEGRADED MODE: adopting the daemon that owns the endpoint after a replacement could not publish onto it. Existing sessions keep working; fresh terminals run on the local provider WITHOUT daemon persistence until you restart the daemon (Manage Sessions → Restart).'
+        )
+        try {
+          return await preserveDaemon('degraded-new-pty-fallback')
+        } catch {
+          // It stopped answering between the probe and the adoption; report the launch failure.
+        }
+      }
       throw error
     }
   }
 }
 
-export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void> {
+export async function initDaemonPtyProvider(
+  signal?: AbortSignal,
+  options: { macosLoginSessionWatch?: boolean } = {}
+): Promise<void> {
   logDaemonMilestone('daemon-init-start')
   // Why: e2e coverage for the startup PTY gate (#5232) needs a daemon init that deterministically outlasts the first-window timeout.
   const e2eInitDelayMs = Number(process.env.ORCA_E2E_DAEMON_INIT_DELAY_MS)
@@ -636,7 +932,7 @@ export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void>
 
   const newSpawner = new DaemonSpawner({
     runtimeDir,
-    launcher: createOutOfProcessLauncher(runtimeDir)
+    launcher: createOutOfProcessLauncher(runtimeDir, options.macosLoginSessionWatch ?? false)
   })
 
   // Why: assign the module-level spawner/adapter only after both succeed, so a failed ensureRunning() leaves no stale spawner.
@@ -649,7 +945,10 @@ export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void>
     // Why: fail-open may already have spawned fallback PTYs; don't install late, but retire an empty daemon (live sessions reject it and survive).
     const abortedStartupAdapter = new DaemonPtyAdapter({
       socketPath: info.socketPath,
-      tokenPath: info.tokenPath
+      tokenPath: info.tokenPath,
+      pidPath: getDaemonPidPath(runtimeDir),
+      profileScope: runtimeDir,
+      runtimeDir
     })
     releaseDaemonAdoptionLease(newSpawner.getHandle())
     await abortedStartupAdapter.disconnectOnly()
@@ -659,10 +958,28 @@ export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void>
   const newAdapter = new DaemonPtyAdapter({
     socketPath: info.socketPath,
     tokenPath: info.tokenPath,
+    pidPath: getDaemonPidPath(runtimeDir),
+    profileScope: runtimeDir,
+    runtimeDir,
+    packagedAppVersion: process.platform === 'darwin' && app.isPackaged ? app.getVersion() : null,
     historyPath: getHistoryDir(),
     // Why: on daemon death, ensureConnected() detects the dead socket and calls this to fork a replacement before retrying.
-    respawn: async () => {
-      console.warn('[daemon] Daemon process died — respawning')
+    respawn: async (reason: DaemonRespawnReason) => {
+      // Why: attribute rather than emit — the launcher below is the one that completes the
+      // replacement, and emitting here would fire before the outcome is known.
+      // Caveat: a wedged-but-alive daemon (#8689) can still report died_respawn here and
+      // failed_health_check from the launcher — the app cannot tell wedged from dead at this point.
+      if (reason === 'daemon_died') {
+        console.warn('[daemon] Daemon process died — respawning')
+        // Why: a manual restart tears the daemon down under a still-live adapter, so a pane
+        // respawning on its synthetic exit would bill a user action to the crash bucket.
+        if (!restartInFlight) {
+          trackDaemonRetired('died_respawn')
+        }
+      } else {
+        // Must reach the launcher below without an await in between; see the consume site.
+        attributedReplaceReason = reason
+      }
       newSpawner.resetHandle()
       await newSpawner.ensureRunning()
       return takeDaemonAdoptionLeaseRelease(newSpawner.getHandle())
@@ -681,7 +998,9 @@ export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void>
         ? new DegradedDaemonPtyProvider({
             current: newAdapter,
             legacy: legacyAdapters,
-            fallback: getLocalPtyProvider()
+            fallback: getLocalPtyProvider(),
+            probeCurrentDaemonSpawn: async () =>
+              (await checkDaemonHealth(info.socketPath, info.tokenPath)) === 'healthy'
           })
         : legacyAdapters.length > 0
           ? new DaemonPtyRouter({
@@ -713,7 +1032,9 @@ export async function initDaemonPtyProvider(signal?: AbortSignal): Promise<void>
   setLocalPtyProvider(routedAdapter)
   // Why: the first window may register PTY listeners before daemon init finishes; rebind so daemon PTYs still fan out events.
   rebindLocalProviderListeners()
-  logDaemonMilestone('daemon-init-done', { legacyAdapters: legacyAdapters.length })
+  logDaemonMilestone('daemon-init-done', {
+    legacyAdapters: legacyAdapters.length
+  })
   await reconcileSeededClaudeLivePtys(routedAdapter)
 }
 
@@ -746,6 +1067,37 @@ async function reconcileSeededClaudeLivePtys(provider: DaemonProvider): Promise<
 // Why: a narrow getter (not a raw export) keeps the "swap on restart" invariant in one place (replaceDaemonProvider).
 export function getDaemonProvider(): DaemonProvider | null {
   return adapter
+}
+
+// Why: computed from the pid record on demand (not cached at adoption) so the Settings
+// remedy surface always reflects the daemon actually serving terminals right now.
+export async function getCurrentDaemonMacTccAttributionHealth(): Promise<MacDaemonTccAttributionHealth> {
+  const runtimeDir = getRuntimeDir()
+  return getMacDaemonTccAttributionHealth(
+    runtimeDir,
+    getDaemonSocketPath(runtimeDir),
+    getDaemonTokenPath(runtimeDir)
+  )
+}
+
+/** Returns null unless every daemon generation supplied an authoritative inventory. */
+export async function listLiveDaemonPtyIds(): Promise<string[] | null> {
+  if (!adapter) {
+    return null
+  }
+  const adapters =
+    adapter instanceof DaemonPtyRouter || adapter instanceof DegradedDaemonPtyProvider
+      ? adapter.getAllAdapters()
+      : [adapter]
+  const inventories = await Promise.allSettled(
+    adapters.map((daemonAdapter) => daemonAdapter.listProcesses())
+  )
+  if (inventories.some((inventory) => inventory.status === 'rejected')) {
+    return null
+  }
+  return inventories.flatMap((inventory) =>
+    inventory.status === 'fulfilled' ? inventory.value.map((process) => process.id) : []
+  )
 }
 
 // Why: keep the module-level adapter and ipc/pty.ts's localProvider in sync so app-quit can't dispose a stale reference.
@@ -842,9 +1194,27 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
   const newCurrent = new DaemonPtyAdapter({
     socketPath: info.socketPath,
     tokenPath: info.tokenPath,
+    pidPath: getDaemonPidPath(runtimeDir),
+    profileScope: runtimeDir,
+    runtimeDir,
+    packagedAppVersion: process.platform === 'darwin' && app.isPackaged ? app.getVersion() : null,
     historyPath: getHistoryDir(),
-    respawn: async () => {
-      console.warn('[daemon] Daemon process died — respawning')
+    respawn: async (reason: DaemonRespawnReason) => {
+      // Why: attribute rather than emit — the launcher below is the one that completes the
+      // replacement, and emitting here would fire before the outcome is known.
+      // Caveat: a wedged-but-alive daemon (#8689) can still report died_respawn here and
+      // failed_health_check from the launcher — the app cannot tell wedged from dead at this point.
+      if (reason === 'daemon_died') {
+        console.warn('[daemon] Daemon process died — respawning')
+        // Why: a manual restart tears the daemon down under a still-live adapter, so a pane
+        // respawning on its synthetic exit would bill a user action to the crash bucket.
+        if (!restartInFlight) {
+          trackDaemonRetired('died_respawn')
+        }
+      } else {
+        // Must reach the launcher below without an await in between; see the consume site.
+        attributedReplaceReason = reason
+      }
       currentSpawner.resetHandle()
       await currentSpawner.ensureRunning()
       return takeDaemonAdoptionLeaseRelease(currentSpawner.getHandle())
@@ -930,14 +1300,6 @@ export async function cleanupDaemonForProtocol(
       // Endpoint absence doesn't prove the PID record belongs to the current protocol; leave artifact cleanup to the owning daemon.
       return { cleaned: false, killedCount: 0 }
     }
-    // Best-effort remove a stale socket so a future launch doesn't hit EADDRINUSE on bind.
-    if (process.platform !== 'win32' && existsSync(socketPath)) {
-      try {
-        unlinkSync(socketPath)
-      } catch {
-        // Best-effort
-      }
-    }
     try {
       unlinkSync(pidPath)
     } catch {
@@ -964,7 +1326,16 @@ export async function cleanupDaemonForProtocol(
     didRequestShutdown = true
   } catch {
     // Previous-protocol daemons may be wedged or too old for the RPC path; fall back to PID cleanup (only unlinks a live socket after proving the process is killed).
-    didKillStaleDaemon = await killStaleDaemon(runtimeDir, socketPath, tokenPath, protocolVersion)
+    const killOutcome = await killStaleDaemon(runtimeDir, socketPath, tokenPath, protocolVersion)
+    didKillStaleDaemon = killOutcome.killed
+    if (killOutcome.liveOwnerSurvived) {
+      // Why: something still owns the endpoint. Returning as if it were cleaned lets restart
+      // fork a replacement that cannot publish onto the held name, leaving the user with no
+      // daemon instead of the one still running.
+      throw new DaemonEndpointOwnershipError(
+        'Daemon cleanup aborted: the existing daemon could not be confirmed stopped'
+      )
+    }
   } finally {
     client.disconnect()
   }
@@ -977,14 +1348,6 @@ export async function cleanupDaemonForProtocol(
     return { cleaned: true, killedCount }
   }
 
-  // Defensively unlink the socket: the daemon normally removes it after `shutdown`, but on some crash paths it lingers and blocks a later rebind.
-  if (didRequestShutdown && process.platform !== 'win32' && existsSync(socketPath)) {
-    try {
-      unlinkSync(socketPath)
-    } catch {
-      // Best-effort
-    }
-  }
   try {
     unlinkSync(pidPath)
   } catch {
@@ -1020,7 +1383,11 @@ function legacyDaemonProcessMayBeAlive(runtimeDir: string, protocolVersion: numb
   }
 }
 
-async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPtyAdapter[]> {
+// Why: callers that own an isolated runtime namespace must keep discovery history out of app userData.
+export async function createLegacyDaemonAdapters(
+  runtimeDir: string,
+  historyPath = getHistoryDir()
+): Promise<DaemonPtyAdapter[]> {
   const adapters: DaemonPtyAdapter[] = []
   for (const protocolVersion of PREVIOUS_DAEMON_PROTOCOL_VERSIONS) {
     const socketPath = getDaemonSocketPath(runtimeDir, protocolVersion)
@@ -1038,13 +1405,6 @@ async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPty
             // Best-effort
           }
         }
-        if (process.platform !== 'win32' && existsSync(socketPath)) {
-          try {
-            unlinkSync(socketPath)
-          } catch {
-            // Best-effort
-          }
-        }
       }
       continue
     }
@@ -1054,8 +1414,11 @@ async function createLegacyDaemonAdapters(runtimeDir: string): Promise<DaemonPty
       new DaemonPtyAdapter({
         socketPath,
         tokenPath,
+        pidPath: getDaemonPidPath(runtimeDir, protocolVersion),
+        profileScope: runtimeDir,
+        runtimeDir,
         protocolVersion,
-        historyPath: getHistoryDir()
+        historyPath
       })
     )
   }

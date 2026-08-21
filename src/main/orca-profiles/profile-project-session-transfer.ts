@@ -1,14 +1,12 @@
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type { BrowserPage, BrowserWorkspace } from '../../shared/browser-workspace-types'
+import type { Tab, TabGroup } from '../../shared/tab-types'
+import type { TerminalTab } from '../../shared/terminal-tab-types'
 import type {
-  BrowserPage,
-  BrowserWorkspace,
   PersistedOpenFile,
-  Tab,
-  TabGroup,
-  TerminalTab,
   WorkspaceSessionState
-} from '../../shared/types'
+} from '../../shared/workspace-session-state-types'
 import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
 import {
   isRepoWorktreeId,
@@ -40,7 +38,8 @@ function hasTransferredSessionState(session: WorkspaceSessionState): boolean {
     Object.keys(session.openFilesByWorktree ?? {}).length > 0 ||
     Object.keys(session.browserTabsByWorktree ?? {}).length > 0 ||
     Object.keys(session.unifiedTabs ?? {}).length > 0 ||
-    Object.keys(session.tabGroups ?? {}).length > 0
+    Object.keys(session.tabGroups ?? {}).length > 0 ||
+    Object.keys(session.terminalTopologyRevisionByRepoId ?? {}).length > 0
   )
 }
 
@@ -120,6 +119,10 @@ export function extractSessionForTransfer(
     source.defaultTerminalTabsAppliedByWorktreeId,
     (value) => structuredClone(value)
   )
+  transferred.terminalTopologyRevisionByRepoId = mapOwnerRecord(
+    source.terminalTopologyRevisionByRepoId,
+    (value) => value
+  )
   transferred.terminalLayoutsByTabId = {}
   for (const tabId of copiedTerminalTabIds) {
     const layout = source.terminalLayoutsByTabId[tabId]
@@ -127,6 +130,28 @@ export function extractSessionForTransfer(
       transferred.terminalLayoutsByTabId[tabId] = structuredClone(layout)
     }
   }
+  transferred.terminalPtyIncarnationsByPaneKey = Object.fromEntries(
+    Object.entries(source.terminalPtyIncarnationsByPaneKey ?? {}).filter(([paneKey]) => {
+      const separator = paneKey.lastIndexOf(':')
+      return separator > 0 && copiedTerminalTabIds.has(paneKey.slice(0, separator))
+    })
+  )
+  transferred.terminalSurfaceTombstonesByPaneKey = Object.fromEntries(
+    Object.entries(source.terminalSurfaceTombstonesByPaneKey ?? {}).flatMap(
+      ([paneKey, tombstone]) =>
+        isRepoWorktreeId(oldRepoId, tombstone.worktreeId)
+          ? [
+              [
+                paneKey,
+                {
+                  ...structuredClone(tombstone),
+                  worktreeId: rekeyWorktreeId(oldRepoId, newRepoId, tombstone.worktreeId)
+                }
+              ] as const
+            ]
+          : []
+    )
+  )
   transferred.activeWorktreeIdsOnShutdown = source.activeWorktreeIdsOnShutdown
     ?.filter((worktreeId) => isRepoWorktreeId(oldRepoId, worktreeId))
     .map((worktreeId) => rekeyWorktreeId(oldRepoId, newRepoId, worktreeId))

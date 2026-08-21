@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ConnectionState, RpcResponse } from './types'
 import type { RpcClient } from './rpc-client'
+import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import {
   createStableLogicalRpcClient,
-  LogicalClientCutoverError
+  LogicalClientCutoverError,
+  type MobileConnectionPath
 } from './stable-logical-rpc-client'
 
 class FakeSession implements RpcClient {
@@ -56,13 +58,32 @@ function success(value: unknown): RpcResponse {
 
 function deferred<T>() {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((resolvePromise) => {
+  let reject!: (error: Error) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise
+    reject = rejectPromise
   })
-  return { promise, resolve }
+  return { promise, resolve, reject }
 }
 
 describe('stable logical RPC client', () => {
+  it('advertises source-default support on worktree catalog requests', async () => {
+    const session = new FakeSession('connected')
+    session.sendRequest.mockResolvedValue(success([]))
+    const client = createStableLogicalRpcClient(session, 'lan')
+
+    await client.sendRequest('worktree.ps', { limit: 10_000 })
+    await client.sendRequest('status.get')
+
+    expect(session.sendRequest).toHaveBeenNthCalledWith(
+      1,
+      'worktree.ps',
+      { limit: 10_000, supportsWorktreeVisibilitySourceDefaults: true },
+      undefined
+    )
+    expect(session.sendRequest).toHaveBeenNthCalledWith(2, 'status.get', undefined, undefined)
+  })
+
   it('makes before break, rejects in-flight work, and replays subscriptions', async () => {
     const oldSession = new FakeSession('connected')
     const nextSession = new FakeSession('connecting')
@@ -141,6 +162,241 @@ describe('stable logical RPC client', () => {
       undefined
     )
     await expect(client.sendRequest('status.get')).resolves.toEqual(success('next'))
+  })
+
+  it('preserves delivery ambiguity without replaying a mutation after relay replacement', async () => {
+    const session = new FakeSession('connected')
+    const replacement = new FakeSession('connected')
+    const inFlight = deferred<RpcResponse>()
+    session.sendRequest.mockReturnValue(inFlight.promise)
+    // Mirror the real physical contract: close() rejects post-write pendings
+    // with a delivery-unknown-marked error.
+    const closeError = markRpcDeliveryUnknown(new Error('Client closed'))
+    session.close.mockImplementation(() => inFlight.reject(closeError))
+    const client = createStableLogicalRpcClient(session, 'relay')
+    const request = client.sendRequest('terminal.send', { terminal: 'term', text: 'hi' })
+
+    client.suspendActiveSession()
+
+    await expect(request).rejects.toBe(closeError)
+    await expect(request.catch((error: unknown) => isRpcDeliveryUnknown(error))).resolves.toBe(true)
+    await client.migrateTo(replacement, 'relay')
+    expect(replacement.sendRequest).not.toHaveBeenCalled()
+    replacement.sendRequest.mockResolvedValue(success('next'))
+    await expect(client.sendRequest('status.get')).resolves.toEqual(success('next'))
+  })
+
+  it('lets the physical close settle in-flight requests on close, keeping pre-write failures definite', async () => {
+    const session = new FakeSession('connected')
+    const inFlight = deferred<RpcResponse>()
+    session.sendRequest.mockReturnValue(inFlight.promise)
+    // A request still waiting for connect never wrote its frame — the physical
+    // layer rejects it unmarked and that must survive the logical close.
+    const preWriteError = new Error('Connection closed')
+    session.close.mockImplementation(() => inFlight.reject(preWriteError))
+    const client = createStableLogicalRpcClient(session, 'lan')
+    const request = client.sendRequest('terminal.send', { terminal: 'term', text: 'hi' })
+
+    client.close()
+
+    await expect(request).rejects.toBe(preWriteError)
+    await expect(request.catch((error: unknown) => isRpcDeliveryUnknown(error))).resolves.toBe(
+      false
+    )
+  })
+
+  it('publishes the replacement dial phases while the client is suspended', async () => {
+    const oldSession = new FakeSession('connected')
+    const replacement = new FakeSession('connecting')
+    const client = createStableLogicalRpcClient(oldSession, 'relay')
+    const states: ConnectionState[] = []
+    client.onStateChange((next) => states.push(next))
+
+    client.suspendActiveSession()
+    expect(client.getPendingPath()).toBeNull()
+
+    const migrating = client.migrateTo(replacement, 'relay')
+    replacement.setState('connecting')
+    expect(client.getState()).toBe('connecting')
+    expect(client.getPendingPath()).toBe('relay')
+    replacement.setState('handshaking')
+    expect(client.getState()).toBe('handshaking')
+    replacement.setState('connected')
+    await migrating
+
+    expect(states).toEqual(['disconnected', 'connecting', 'handshaking', 'connected'])
+    expect(client.getPendingPath()).toBeNull()
+    expect(client.getActivePath()).toBe('relay')
+  })
+
+  // A replacement relay session that retries internally publishes 'reconnecting' as one of
+  // its own dial phases. Forwarding it is the point: amber "Reconnecting…" beats the grey
+  // the suspended client would otherwise hold for the whole dial.
+  it('forwards a reconnecting phase published by the dialing session itself', async () => {
+    const oldSession = new FakeSession('connected')
+    const replacement = new FakeSession('connecting')
+    const client = createStableLogicalRpcClient(oldSession, 'relay')
+    client.suspendActiveSession()
+    const states: ConnectionState[] = []
+    client.onStateChange((next) => states.push(next))
+
+    const migrating = client.migrateTo(replacement, 'relay')
+    replacement.setState('connecting')
+    replacement.setState('reconnecting')
+    expect(client.getState()).toBe('reconnecting')
+    replacement.setState('handshaking')
+    replacement.setState('connected')
+    await migrating
+
+    expect(states).toEqual(['connecting', 'reconnecting', 'handshaking', 'connected'])
+  })
+
+  // The dominant relay case: the direct dial failed, so the client sits in 'reconnecting'
+  // (never 'disconnected') while its retry loop lives. The dot is already amber there, so
+  // nothing is forwarded — but the pending path must still name what is being dialed.
+  it('names a relay dial started from reconnecting without disturbing the state', async () => {
+    const direct = new FakeSession('connected')
+    const replacement = new FakeSession('connecting')
+    const client = createStableLogicalRpcClient(direct, 'lan')
+    direct.setState('reconnecting')
+    const states: ConnectionState[] = []
+    const paths: (MobileConnectionPath | null)[] = []
+    client.onStateChange((next) => states.push(next))
+    client.onConnectionPathChange(() => paths.push(client.getPendingPath()))
+
+    const migrating = client.migrateTo(replacement, 'relay')
+    expect(client.getPendingPath()).toBe('relay')
+    expect(paths).toEqual(['relay'])
+    replacement.setState('connecting')
+    replacement.setState('handshaking')
+
+    // The still-bound direct session keeps cycling; the forwarder must not fight it.
+    expect(client.getState()).toBe('reconnecting')
+    expect(states).toEqual([])
+
+    replacement.setState('connected')
+    await migrating
+
+    expect(states).toEqual(['connected'])
+    expect(client.getPendingPath()).toBeNull()
+    expect(client.getActivePath()).toBe('relay')
+  })
+
+  it('publishes recovery-path changes and keeps Relay pending between failed dials', async () => {
+    const direct = new FakeSession('reconnecting')
+    const replacement = new FakeSession('connecting')
+    const client = createStableLogicalRpcClient(direct, 'tailscale')
+    const paths: (MobileConnectionPath | null)[] = []
+    client.onConnectionPathChange(() => paths.push(client.getPendingPath()))
+
+    client.setRecoveryPath('relay')
+    const migrating = client.migrateTo(replacement, 'relay')
+    replacement.setState('disconnected')
+    await expect(migrating).rejects.toThrow(/disconnected/)
+
+    expect(client.getPendingPath()).toBe('relay')
+    expect(paths).toEqual(['relay'])
+
+    client.setRecoveryPath(null)
+    expect(client.getPendingPath()).toBeNull()
+    expect(paths).toEqual(['relay', null])
+  })
+
+  it('publishes supervisor Relay attempts without replacing the physical retry count', () => {
+    const direct = new FakeSession('reconnecting')
+    direct.getReconnectAttempt = () => 5
+    const client = createStableLogicalRpcClient(direct, 'tailscale')
+    const attempts: number[] = []
+    client.onConnectionPathChange(() => attempts.push(client.getReconnectAttempt()))
+
+    client.setRecoveryPath('relay', 3)
+    expect(client.getReconnectAttempt()).toBe(5)
+
+    client.setRecoveryAttempt(7)
+    expect(client.getReconnectAttempt()).toBe(7)
+    expect(attempts).toEqual([5, 7])
+
+    client.setRecoveryPath(null)
+    expect(client.getReconnectAttempt()).toBe(5)
+    expect(attempts).toEqual([5, 7, 5])
+  })
+
+  it('notifies connection-path subscribers when the pairing-rejected latch flips', () => {
+    const direct = new FakeSession('reconnecting')
+    const client = createStableLogicalRpcClient(direct, 'tailscale')
+    const rejected: boolean[] = []
+    client.onConnectionPathChange(() => rejected.push(client.isPairingRejected()))
+
+    client.setPairingRejected(true)
+    client.setPairingRejected(true)
+    client.setPairingRejected(false)
+
+    expect(rejected).toEqual([true, false])
+  })
+
+  it('does not revive a stale recovery path after a connection later drops', () => {
+    const direct = new FakeSession('reconnecting')
+    const client = createStableLogicalRpcClient(direct, 'tailscale')
+
+    client.setRecoveryPath('relay')
+    direct.setState('connected')
+    direct.setState('reconnecting')
+
+    expect(client.getPendingPath()).toBeNull()
+  })
+
+  it('drops the pending path when the previous session recovers mid-dial', async () => {
+    const direct = new FakeSession('connected')
+    const replacement = new FakeSession('connecting')
+    const client = createStableLogicalRpcClient(direct, 'lan')
+    direct.setState('reconnecting')
+
+    const migrating = client.migrateTo(replacement, 'relay')
+    expect(client.getPendingPath()).toBe('relay')
+
+    direct.setState('connected')
+    expect(client.getPendingPath()).toBeNull()
+
+    replacement.setState('connected')
+    await migrating
+  })
+
+  it('never downgrades a live session while a make-before-break replacement dials', async () => {
+    const oldSession = new FakeSession('connected')
+    const replacement = new FakeSession('connecting')
+    const client = createStableLogicalRpcClient(oldSession, 'relay')
+    const states: ConnectionState[] = []
+    client.onStateChange((next) => states.push(next))
+
+    const migrating = client.migrateTo(replacement, 'relay')
+    replacement.setState('connecting')
+    replacement.setState('handshaking')
+
+    expect(client.getState()).toBe('connected')
+    expect(client.getPendingPath()).toBeNull()
+
+    replacement.setState('connected')
+    await migrating
+
+    expect(states).toEqual(['connected'])
+  })
+
+  it('restores disconnected when a dial it was narrating fails', async () => {
+    const session = new FakeSession('connected')
+    const replacement = new FakeSession('connecting')
+    const client = createStableLogicalRpcClient(session, 'relay')
+    client.suspendActiveSession()
+    const states: ConnectionState[] = []
+    client.onStateChange((next) => states.push(next))
+
+    const migrating = client.migrateTo(replacement, 'relay')
+    replacement.setState('handshaking')
+    replacement.setState('disconnected')
+
+    await expect(migrating).rejects.toThrow(/disconnected/)
+    expect(states).toEqual(['handshaking', 'disconnected'])
+    expect(client.getState()).toBe('disconnected')
+    expect(client.getPendingPath()).toBeNull()
   })
 
   it('closes a replacement that fails authentication and preserves the active session', async () => {

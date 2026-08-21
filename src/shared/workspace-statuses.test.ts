@@ -10,6 +10,29 @@ import {
 } from './workspace-statuses'
 
 describe('workspace status visuals', () => {
+  it.each([13, 20, 21, 64])('keeps all %i authored columns in order', (count) => {
+    const authored = Array.from({ length: count }, (_, index) => ({
+      id: `state-${index + 1}`,
+      label: `State ${index + 1}`
+    }))
+
+    const statuses = normalizeWorkspaceStatuses(authored)
+
+    expect(statuses).toHaveLength(count)
+    expect(statuses.map((status) => status.id)).toEqual(authored.map((status) => status.id))
+  })
+
+  it('normalizes every valid status without truncating the workflow', () => {
+    const authored = Array.from({ length: 500 }, (_, index) => ({
+      id: `state-${index}`,
+      label: `State ${index}`
+    }))
+
+    expect(normalizeWorkspaceStatuses(authored).map((status) => status.id)).toEqual(
+      authored.map((status) => status.id)
+    )
+  })
+
   it('keeps the default workflow order', () => {
     expect(cloneDefaultWorkspaceStatuses().map((status) => status.id)).toEqual([
       'todo',

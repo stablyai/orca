@@ -1,0 +1,15 @@
+{
+  "manifestVersion": 1,
+  "id": "orca-portuguese",
+  "publisher": "stablyai",
+  "name": "Português do Brasil",
+  "version": "1.0.0",
+  "description": "Brazilian Portuguese translations for common Orca navigation.",
+  "repository": "https://github.com/stablyai/orca-portuguese",
+  "engines": { "orca": ">=1.4.0" },
+  "pluginApi": 1,
+  "contributes": {
+    "languagePacks": [{ "locale": "pt-BR", "path": "locales/pt-BR.json" }]
+  },
+  "capabilities": []
+}

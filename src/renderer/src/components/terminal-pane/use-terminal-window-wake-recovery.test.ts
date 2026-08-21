@@ -79,6 +79,22 @@ describe('useTerminalWindowWakeRecovery', () => {
     })
   })
 
+  it('preserves the glyph atlas when a fullscreen Space becomes visible', () => {
+    renderWakeRecoveryHook()
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      value: 'visible'
+    })
+
+    document.dispatchEvent(new Event('visibilitychange'))
+
+    expect(recoverVisibleTerminalWindowWakeMock).toHaveBeenLastCalledWith({
+      manager,
+      isActive: true,
+      clearGlyphAtlases: false
+    })
+  })
+
   it('records a wake-recovery breadcrumb with the trigger source and atlas decision', () => {
     // Why: a post-wake garble report attributes to the trigger that ran (or its
     // absence). Pin that focus records source=focus/atlas=false and system
@@ -95,6 +111,59 @@ describe('useTerminalWindowWakeRecovery', () => {
       ['wake-recovery:focus', { clearGlyphAtlases: false }],
       ['wake-recovery:system-resumed', { clearGlyphAtlases: true }]
     ])
+  })
+
+  it('reasserts pane PTY sizes after the window-focus fit', () => {
+    const reassertPtySizeAfterWindowWake = vi.fn()
+    renderHook(() =>
+      useTerminalWindowWakeRecovery({
+        isVisible: true,
+        managerRef: { current: manager },
+        isActiveRef: { current: true },
+        isVisibleRef: { current: true },
+        panePtyBindingsRef: {
+          current: new Map([[1, { dispose: vi.fn(), reassertPtySizeAfterWindowWake }]]) as never
+        }
+      })
+    )
+
+    window.dispatchEvent(new Event('focus'))
+
+    expect(reassertPtySizeAfterWindowWake).toHaveBeenCalledTimes(1)
+    expect(recoverVisibleTerminalWindowWakeMock.mock.invocationCallOrder[0]).toBeLessThan(
+      reassertPtySizeAfterWindowWake.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
+    )
+  })
+
+  it('reasserts once after the settled fit when animation frames are available', () => {
+    const scheduled: { settle: FrameRequestCallback | null } = { settle: null }
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      scheduled.settle = callback
+      return 1
+    })
+    const reassertPtySizeAfterWindowWake = vi.fn()
+    renderHook(() =>
+      useTerminalWindowWakeRecovery({
+        isVisible: true,
+        managerRef: { current: manager },
+        isActiveRef: { current: true },
+        isVisibleRef: { current: true },
+        panePtyBindingsRef: {
+          current: new Map([[1, { dispose: vi.fn(), reassertPtySizeAfterWindowWake }]]) as never
+        }
+      })
+    )
+
+    window.dispatchEvent(new Event('focus'))
+    expect(reassertPtySizeAfterWindowWake).not.toHaveBeenCalled()
+    expect(scheduled.settle).not.toBeNull()
+
+    scheduled.settle?.(performance.now())
+
+    expect(reassertPtySizeAfterWindowWake).toHaveBeenCalledTimes(1)
+    expect(recoverVisibleTerminalWindowWakeMock.mock.invocationCallOrder.at(-1)).toBeLessThan(
+      reassertPtySizeAfterWindowWake.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY
+    )
   })
 
   it('unsubscribes from the system resume event on cleanup', () => {

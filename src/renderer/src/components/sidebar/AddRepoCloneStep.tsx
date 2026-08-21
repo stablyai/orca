@@ -137,12 +137,17 @@ export function CloneStep({
               value={cloneDestination}
               onChange={(e) => onDestChange(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={translate(
+              placeholder={
                 isRemoteClone
-                  ? 'auto.components.sidebar.AddRepoSteps.remoteCloneParentPlaceholder'
-                  : 'auto.components.sidebar.AddRepoSteps.2ce3f6edf8',
-                isRemoteClone ? '/home/user/projects' : '/path/to/destination'
-              )}
+                  ? translate(
+                      'auto.components.sidebar.AddRepoSteps.remoteCloneParentPlaceholder',
+                      '/home/user/projects'
+                    )
+                  : translate(
+                      'auto.components.sidebar.AddRepoSteps.2ce3f6edf8',
+                      '/path/to/destination'
+                    )
+              }
               className="h-8 text-xs flex-1"
               disabled={isCloning}
             />

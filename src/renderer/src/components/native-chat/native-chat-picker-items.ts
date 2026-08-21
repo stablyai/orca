@@ -4,6 +4,14 @@ import {
   isSafeDisplayCharacter,
   stripUnsafeDisplayCharacters
 } from '../../../../shared/skill-display-text'
+import { compareBaseSensitivityLocaleText } from '@/lib/locale-text-collators'
+
+// Send classification lives in shared so mobile gates optimistic echoes with
+// the same rules; re-exported here to keep renderer import paths stable.
+export {
+  classifyNativeChatSend,
+  type NativeChatSendClassification
+} from '../../../../shared/native-chat-slash-commands'
 
 export type NativeChatPickerItem =
   | {
@@ -184,7 +192,7 @@ function sanitizePickerText(value: string, maxLength: number): string {
 function compareDiscoveredSkills(a: DiscoveredSkill, b: DiscoveredSkill): number {
   return (
     SCOPE_PRIORITY[a.sourceKind] - SCOPE_PRIORITY[b.sourceKind] ||
-    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) ||
+    compareBaseSensitivityLocaleText(a.name, b.name) ||
     a.skillFilePath.localeCompare(b.skillFilePath)
   )
 }
@@ -195,7 +203,7 @@ function comparePickerSkills(
 ): number {
   return (
     SCOPE_PRIORITY[a.sources[0].sourceKind] - SCOPE_PRIORITY[b.sources[0].sourceKind] ||
-    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    compareBaseSensitivityLocaleText(a.name, b.name)
   )
 }
 
@@ -216,33 +224,4 @@ export function applyPickerSuggestion(
   const insertedToken = `${prefix}${item.name}`
   const nextBefore = `${before.slice(0, tokenStart)}${insertedToken} `
   return { draft: nextBefore + after, caret: nextBefore.length, insertedToken }
-}
-
-export type NativeChatSendClassification = 'chat' | 'command' | 'unknown-token'
-
-export function classifyNativeChatSend(
-  draft: string,
-  commands: readonly SlashCommandSuggestion[],
-  pickerSkillOriginToken: string | null,
-  skillPrefix: '/' | '$' | null
-): NativeChatSendClassification {
-  // Why: the supported TUIs only treat a line-leading token as a command, so a
-  // draft with leading whitespace is prose; trimming here would claim a "Ran"
-  // line for text the agent never dispatched.
-  const firstToken = draft.split(/\s/, 1)[0] ?? ''
-  if (pickerSkillOriginToken && firstToken === pickerSkillOriginToken) {
-    return 'chat'
-  }
-  if (commands.some((command) => firstToken === `/${command.name}`)) {
-    return 'command'
-  }
-  if (firstToken.startsWith('/')) {
-    return 'unknown-token'
-  }
-  // Why: `$` is Codex grammar only. For other agents a leading `$PATH`-style
-  // token is ordinary prose and must keep its bubble and attachments.
-  if (skillPrefix === '$' && firstToken.startsWith('$')) {
-    return 'unknown-token'
-  }
-  return 'chat'
 }

@@ -5,13 +5,14 @@ import {
   type LinearMutationResult,
   type RuntimeLinearSettings
 } from '@/runtime/runtime-linear-client'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { LinearWorkflowState } from '../../../../shared/linear/workspace-types'
 import type {
-  LinearIssue,
-  LinearWorkflowState,
   WorkspaceStatus,
   WorkspaceStatusDefinition,
   Worktree
-} from '../../../../shared/types'
+} from '../../../../shared/worktree/types'
+import { getWorkspaceStatus } from '../../../../shared/workspace-statuses'
 import type { RuntimeClickUpSettings } from '@/runtime/runtime-clickup-client'
 import {
   DEFAULT_WORKSPACE_BOARD_CLICKUP_STATUS_SYNC_DEPS,

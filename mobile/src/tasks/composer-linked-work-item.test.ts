@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type {
-  ClickUpTask,
-  GitHubWorkItem,
-  GitLabWorkItem,
-  LinearIssue
-} from '../../../src/shared/types'
+import type { ClickUpTask } from '../../../src/shared/clickup-types'
+import type { GitHubWorkItem } from '../../../src/shared/github/work-item-types'
+import type { GitLabWorkItem } from '../../../src/shared/gitlab-types'
+import type { LinearIssue } from '../../../src/shared/linear/issue-types'
 import {
   buildClickUpLinkedWorkItem,
   buildGitHubLinkedWorkItem,
@@ -74,8 +72,8 @@ describe('linked work item builders', () => {
     expect(linked).toMatchObject({
       provider: 'clickup',
       title: 'CU-42 Ship mobile parity',
-      clickUpTaskId: '86abc123',
-      clickUpWorkspaceId: 'team-1'
+      clickupIdentifier: '86abc123',
+      clickupWorkspaceId: 'team-1'
     })
   })
 })
@@ -164,7 +162,7 @@ describe('buildSmartNameSelection', () => {
           type: 'issue',
           number: 0,
           title: 'CU-42 Ship',
-          clickUpTaskId: '86abc123'
+          clickupIdentifier: '86abc123'
         }),
         baseBranch: undefined
       })

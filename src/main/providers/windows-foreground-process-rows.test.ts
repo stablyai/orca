@@ -11,6 +11,7 @@ vi.mock('child_process', () => ({ execFile: execFileMock }))
 
 import {
   queryWindowsProcessDescendants,
+  queryWindowsProcessRowsFresh,
   resetWindowsProcessRowsSnapshotForTests
 } from './windows-foreground-process-rows'
 
@@ -95,5 +96,47 @@ describe('windows foreground process rows spawn options', () => {
 
     expect(candidates?.[0]?.pid).toBe(200)
     expect(optionsForCommand('wmic')).toMatchObject({ windowsHide: true })
+  })
+})
+
+// Regression guard: the PID-identity probe that gates `taskkill /T /F` needs rows
+// from a scan started after it asked, but worktree delete tears down PTYs 32-wide.
+// Reading the table uncached would fork 32 powershell cold-starts per delete.
+describe('queryWindowsProcessRowsFresh', () => {
+  let platform: PropertyDescriptor | undefined
+
+  beforeEach(() => {
+    execFileMock.mockReset()
+    resetWindowsProcessRowsSnapshotForTests()
+    platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    execFileMock.mockImplementation((_cmd: string, _args, _opts, cb: ExecFileCallback) => {
+      cb(null, { stdout: POWERSHELL_ROWS_JSON, stderr: '' })
+    })
+  })
+
+  afterEach(() => {
+    if (platform) {
+      Object.defineProperty(process, 'platform', platform)
+    }
+  })
+
+  const powershellScanCount = (): number =>
+    execFileMock.mock.calls.filter((call) => call[0] === 'powershell.exe').length
+
+  it('collapses a burst of concurrent identity probes into one scan', async () => {
+    const rows = await Promise.all(Array.from({ length: 32 }, () => queryWindowsProcessRowsFresh()))
+
+    expect(powershellScanCount()).toBe(1)
+    expect(rows[31]?.map((row) => row.pid)).toEqual([100, 200])
+  })
+
+  it('never answers from the TTL cache, which can predate the recycle it detects', async () => {
+    await queryWindowsProcessDescendants(100)
+    expect(powershellScanCount()).toBe(1)
+
+    await queryWindowsProcessRowsFresh()
+
+    expect(powershellScanCount()).toBe(2)
   })
 })

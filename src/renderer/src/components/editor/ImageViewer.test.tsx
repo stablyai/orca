@@ -144,6 +144,61 @@ async function renderExpandedImageViewer(content: string): Promise<unknown> {
   )
 }
 
+function pngBase64(width: number): string {
+  const bytes = Buffer.alloc(24)
+  Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(bytes)
+  bytes.writeUInt32BE(13, 8)
+  bytes.write('IHDR', 12, 'ascii')
+  bytes.writeUInt32BE(width, 16)
+  bytes.writeUInt32BE(1, 20)
+  return bytes.toString('base64')
+}
+
+async function renderPdfViewerProps(
+  scrollCacheKey?: string | null
+): Promise<Record<string, unknown>> {
+  reactHookRuntime.index = 0
+  const module = await import('./ImageViewer')
+  const rendered = expandNode(
+    module.default({
+      content: 'JVBERi0xLjQK',
+      filePath: '/repo/report.pdf',
+      mimeType: 'application/pdf',
+      ...(scrollCacheKey === undefined ? {} : { scrollCacheKey })
+    })
+  )
+  const [pdf] = findElementsByType(rendered, 'PdfViewer')
+  if (!pdf) {
+    throw new Error('PdfViewer not rendered')
+  }
+  return pdf.props
+}
+
+describe('ImageViewer PDF scroll cache key', () => {
+  beforeEach(() => {
+    reactHookRuntime.states = []
+    reactHookRuntime.index = 0
+    vi.clearAllMocks()
+  })
+
+  // Why: nothing else pins the wiring, so a dropped prop anywhere between
+  // EditorContent and PdfViewer would ship as silently amnesiac scrolling.
+  it('forwards the scroll cache key to PdfViewer', async () => {
+    expect(await renderPdfViewerProps('/repo/report.pdf::tab-2:pdf')).toMatchObject({
+      filePath: '/repo/report.pdf',
+      scrollCacheKey: '/repo/report.pdf::tab-2:pdf'
+    })
+  })
+
+  it('passes null when no key is supplied, so unkeyed callers stay opted out', async () => {
+    expect((await renderPdfViewerProps()).scrollCacheKey).toBeNull()
+  })
+
+  it('passes an explicit null through unchanged', async () => {
+    expect((await renderPdfViewerProps(null)).scrollCacheKey).toBeNull()
+  })
+})
+
 describe('ImageViewer preview source retry', () => {
   beforeEach(() => {
     reactHookRuntime.states = []
@@ -152,8 +207,8 @@ describe('ImageViewer preview source retry', () => {
   })
 
   it('retries an earlier failed source after a later source loads successfully', async () => {
-    const failedContent = 'failed-source'
-    const loadedContent = 'loaded-source'
+    const failedContent = pngBase64(1)
+    const loadedContent = pngBase64(2)
 
     const firstRender = await renderExpandedImageViewer(failedContent)
     const firstImage = findPreviewImage(firstRender)
@@ -175,5 +230,12 @@ describe('ImageViewer preview source retry', () => {
     const retryRender = await renderExpandedImageViewer(failedContent)
     const retryImage = findPreviewImage(retryRender)
     expect(retryImage.props.src).toBe(`data:image/png;base64,${failedContent}`)
+  })
+
+  it('shows a failure instead of loading an unsafe raster forever', async () => {
+    const rendered = await renderExpandedImageViewer(pngBase64(32_769))
+
+    expect(findElementsByType(rendered, 'Image')).toHaveLength(1)
+    expect(findElementsByType(rendered, 'img')).toHaveLength(0)
   })
 })

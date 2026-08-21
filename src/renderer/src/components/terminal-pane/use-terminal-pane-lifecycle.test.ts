@@ -1,18 +1,166 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  applyTerminalPaneCloseRequest,
   applyTerminalScrollbackRowsToMountedPanes,
   clearQueuedInitialCwdAfterFirstPane,
+  createQueuedStartupConsumer,
   getPreviousVisibleForTerminalPane,
   isTerminalPaneVisibilityResume,
+  isTouchIOSUserAgent,
   mapRestoredPaneTitlesByPaneId,
+  paneOwnsQueuedStartup,
   resolvePaneLinkCwd,
   resolvePaneSeedCwd,
   resolveQueuedInitialCwd,
+  replayLayoutWithOneShotParkIntent,
   resetTerminalKeyboardProtocolAfterInterrupt,
+  retireMountedTerminalPaneSurface,
   shouldDetachPaneTransportOnUnmount,
   splitPaneWithOneShotStartup,
   suppressIntentionalPaneCloseExit
 } from './use-terminal-pane-lifecycle'
+
+describe('applyTerminalPaneCloseRequest', () => {
+  it('detaches a rolled-back split surface without closing its PTY', () => {
+    const manager = {
+      getPanes: vi.fn(() => [{ id: 1 }, { id: 2 }]),
+      getNumericIdForLeaf: vi.fn(() => 2),
+      closePane: vi.fn(),
+      detachPaneForExternalMove: vi.fn(() => true),
+      retirePanePreservingPty: vi.fn(() => true)
+    }
+    const closeTab = vi.fn()
+    const closeTabPreservingPty = vi.fn()
+
+    expect(
+      applyTerminalPaneCloseRequest({
+        detail: {
+          tabId: 'legacy-worker',
+          leafId: '11111111-1111-4111-8111-111111111111',
+          preservePty: true
+        },
+        manager,
+        closeTab,
+        closeTabPreservingPty
+      })
+    ).toBe('pane')
+    expect(manager.detachPaneForExternalMove).toHaveBeenCalledWith(2)
+    expect(manager.closePane).not.toHaveBeenCalled()
+    expect(closeTab).not.toHaveBeenCalled()
+    expect(closeTabPreservingPty).not.toHaveBeenCalled()
+  })
+
+  it('uses non-destructive tab close semantics for the last rolled-back pane', () => {
+    const closeTab = vi.fn()
+    const closeTabPreservingPty = vi.fn()
+
+    expect(
+      applyTerminalPaneCloseRequest({
+        detail: {
+          tabId: 'legacy-worker',
+          paneRuntimeId: 1,
+          preservePty: true
+        },
+        manager: {
+          getPanes: vi.fn(() => [{ id: 1 }]),
+          getNumericIdForLeaf: vi.fn(() => 1),
+          closePane: vi.fn(),
+          detachPaneForExternalMove: vi.fn(() => true),
+          retirePanePreservingPty: vi.fn(() => true)
+        },
+        closeTab,
+        closeTabPreservingPty
+      })
+    ).toBe('tab')
+    expect(closeTabPreservingPty).toHaveBeenCalledOnce()
+    expect(closeTab).not.toHaveBeenCalled()
+  })
+
+  it('ignores a delayed rollback after the pane PTY identity changed', () => {
+    const manager = {
+      getPanes: vi.fn(() => [{ id: 1 }]),
+      getNumericIdForLeaf: vi.fn(() => 1),
+      closePane: vi.fn(),
+      detachPaneForExternalMove: vi.fn(() => true),
+      retirePanePreservingPty: vi.fn(() => true)
+    }
+    const closeTab = vi.fn()
+    const closeTabPreservingPty = vi.fn()
+
+    expect(
+      applyTerminalPaneCloseRequest({
+        detail: {
+          tabId: 'legacy-worker',
+          leafId: '11111111-1111-4111-8111-111111111111',
+          preservePty: true,
+          expectedPtyId: 'pty-legacy'
+        },
+        manager,
+        closeTab,
+        closeTabPreservingPty,
+        getPtyIdForLeaf: () => 'pty-replacement'
+      })
+    ).toBe('ignored')
+    expect(manager.detachPaneForExternalMove).not.toHaveBeenCalled()
+    expect(closeTabPreservingPty).not.toHaveBeenCalled()
+  })
+
+  it('retires a mounted rollback pane without detaching it as a movable surface', () => {
+    const manager = {
+      getPanes: vi.fn(() => [{ id: 1 }, { id: 2 }]),
+      getNumericIdForLeaf: vi.fn(() => 2),
+      closePane: vi.fn(),
+      detachPaneForExternalMove: vi.fn(() => true),
+      retirePanePreservingPty: vi.fn(() => true)
+    }
+
+    expect(
+      applyTerminalPaneCloseRequest({
+        detail: {
+          tabId: 'legacy-worker',
+          leafId: '11111111-1111-4111-8111-111111111111',
+          preservePty: true,
+          retireSurface: true,
+          expectedPtyId: 'pty-legacy'
+        },
+        manager,
+        closeTab: vi.fn(),
+        closeTabPreservingPty: vi.fn(),
+        getPtyIdForLeaf: () => 'pty-legacy'
+      })
+    ).toBe('pane')
+    expect(manager.retirePanePreservingPty).toHaveBeenCalledWith(2)
+    expect(manager.detachPaneForExternalMove).not.toHaveBeenCalled()
+    expect(manager.closePane).not.toHaveBeenCalled()
+  })
+
+  it('retires mounted authority and binding while preserving the process and sleeping fence', () => {
+    const retireAgentPaneAuthority = vi.fn()
+    const syncPanePtyLayoutBinding = vi.fn()
+    const clearTabPtyId = vi.fn()
+    const transport = { detach: vi.fn(), destroy: vi.fn() }
+
+    retireMountedTerminalPaneSurface({
+      paneKey: 'legacy-worker:11111111-1111-4111-8111-111111111111',
+      paneId: 2,
+      tabId: 'legacy-worker',
+      ptyId: 'pty-legacy',
+      retireAgentPaneAuthority,
+      syncPanePtyLayoutBinding,
+      clearTabPtyId,
+      transport
+    })
+
+    expect(retireAgentPaneAuthority).toHaveBeenCalledWith(
+      'legacy-worker:11111111-1111-4111-8111-111111111111',
+      { preserveSleepingAgentSession: true }
+    )
+    expect(syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, null)
+    expect(clearTabPtyId).toHaveBeenCalledWith('legacy-worker', 'pty-legacy')
+    expect(transport.detach).toHaveBeenCalledOnce()
+    expect(transport.destroy).not.toHaveBeenCalled()
+  })
+})
 
 describe('resetTerminalKeyboardProtocolAfterInterrupt', () => {
   it('does not write to an xterm whose pipeline is certified dead', async () => {
@@ -28,6 +176,128 @@ describe('resetTerminalKeyboardProtocolAfterInterrupt', () => {
     } finally {
       _resetWritePipelineHealthForTests(terminal)
     }
+  })
+})
+
+// Why: onPaneCreated uses paneOwnsQueuedStartup to decide whether a pane may spend the tab's queued
+// startup command. Setup/issue splits borrow the same deps.startup field for their own one-shot
+// payload, so a looser test would let a split pane spend a command it never runs — re-breaking
+// STA-4876 for split-setup worktrees.
+describe('paneOwnsQueuedStartup', () => {
+  it('grants ownership only to the pane still holding the queued object', () => {
+    const queuedStartup = { command: 'echo queued' }
+    const deps: { startup?: { command: string; env?: Record<string, string> } | null } = {
+      startup: queuedStartup
+    }
+    const ownershipAtConnect: boolean[] = []
+    const observeConnect = (): void => {
+      ownershipAtConnect.push(paneOwnsQueuedStartup(deps.startup, queuedStartup))
+    }
+
+    // Primary pane connects first and owns the queued command.
+    observeConnect()
+    // connectPanePty took it; the lifecycle nulls the outer slot so splits cannot replay it.
+    deps.startup = null
+    splitPaneWithOneShotStartup(deps, { command: 'orca setup' }, () => {
+      observeConnect()
+      return { id: 2 }
+    })
+    splitPaneWithOneShotStartup(deps, { command: 'orca issue' }, () => {
+      observeConnect()
+      return { id: 3 }
+    })
+
+    expect(ownershipAtConnect).toEqual([true, false, false])
+  })
+
+  // Why this case matters: a truthiness regression ("has a startup") passes the test above, because
+  // the split payload is non-null there too. Only a structurally-identical payload separates them.
+  it('denies ownership to a split payload structurally identical to the queued command', () => {
+    const queuedStartup = { command: 'orca setup' }
+
+    expect(paneOwnsQueuedStartup({ command: 'orca setup' }, queuedStartup)).toBe(false)
+    expect(paneOwnsQueuedStartup(queuedStartup, queuedStartup)).toBe(true)
+  })
+
+  it('denies ownership when the tab queued nothing, so an unrelated pane cannot spend a slot', () => {
+    expect(paneOwnsQueuedStartup(null, null)).toBe(false)
+    expect(paneOwnsQueuedStartup(undefined, undefined)).toBe(false)
+    expect(paneOwnsQueuedStartup({ command: 'orca setup' }, null)).toBe(false)
+  })
+})
+
+describe('createQueuedStartupConsumer', () => {
+  it('withholds the consumer from a pane that does not own the queued command', () => {
+    const queuedStartup = { command: 'echo queued' }
+    const consume = vi.fn()
+
+    // A setup split's borrowed payload, structurally identical to the queued command.
+    expect(
+      createQueuedStartupConsumer({ command: 'echo queued' }, queuedStartup, consume, () => true)
+    ).toBeUndefined()
+    expect(createQueuedStartupConsumer(null, queuedStartup, consume, () => true)).toBeUndefined()
+    expect(consume).not.toHaveBeenCalled()
+  })
+
+  // Why: onPtySpawn fires again on hibernation wake and the respawn ladder. Spending the slot on a
+  // later spawn would drop a command queued after the first launch, without ever delivering it.
+  it('spends the queued command at most once across repeated spawns', () => {
+    const queuedStartup = { command: 'echo queued' }
+    const consume = vi.fn()
+
+    const consumer = createQueuedStartupConsumer(queuedStartup, queuedStartup, consume, () => true)
+    expect(consumer).toBeTypeOf('function')
+
+    consumer?.()
+    consumer?.()
+    consumer?.()
+
+    expect(consume).toHaveBeenCalledTimes(1)
+  })
+
+  // Why: a replacement can land before this pane's own spawn, so the one-shot guard alone still lets
+  // the callback delete a command it never launched (STA-4876).
+  it('leaves a command that replaced the captured one queued for its own launch', () => {
+    const capturedStartup = { command: 'echo captured' }
+    let pending: object | null = capturedStartup
+    const consume = vi.fn(() => {
+      pending = null
+    })
+
+    const consumer = createQueuedStartupConsumer(
+      capturedStartup,
+      capturedStartup,
+      consume,
+      () => pending === capturedStartup
+    )
+    const replacement = { command: 'echo replacement' }
+    pending = replacement
+
+    consumer?.()
+
+    expect(consume).not.toHaveBeenCalled()
+    expect(pending).toBe(replacement)
+  })
+
+  // Why: the replacement belongs to the launch that queued it, so this pane's respawn ladder must not
+  // reach for it after skipping its own spent chance.
+  it('does not spend a replacement on a later spawn of the same pane', () => {
+    const capturedStartup = { command: 'echo captured' }
+    let pending: object | null = { command: 'echo replacement' }
+    const consume = vi.fn()
+
+    const consumer = createQueuedStartupConsumer(
+      capturedStartup,
+      capturedStartup,
+      consume,
+      () => pending === capturedStartup
+    )
+
+    consumer?.()
+    pending = capturedStartup
+    consumer?.()
+
+    expect(consume).not.toHaveBeenCalled()
   })
 })
 
@@ -101,6 +371,35 @@ describe('splitPaneWithOneShotStartup', () => {
 
     expect(splitPane).toHaveBeenCalledTimes(1)
     expect(deps.startup).toBeNull()
+  })
+})
+
+describe('replayLayoutWithOneShotParkIntent', () => {
+  it('exposes park intent to replayed panes and clears it before later splits', () => {
+    const deps = { mountFollowsTerminalPark: true }
+    const observedByReplayedPane: boolean[] = []
+
+    const restored = replayLayoutWithOneShotParkIntent(deps, () => {
+      observedByReplayedPane.push(deps.mountFollowsTerminalPark)
+      return 'restored-panes'
+    })
+
+    expect(restored).toBe('restored-panes')
+    expect(observedByReplayedPane).toEqual([true])
+    // A split after replay reads the same deps object, so it must see ordinary reconnect semantics.
+    expect(deps.mountFollowsTerminalPark).toBe(false)
+  })
+
+  it('clears park intent even when layout replay throws', () => {
+    const deps = { mountFollowsTerminalPark: true }
+
+    expect(() =>
+      replayLayoutWithOneShotParkIntent(deps, () => {
+        throw new Error('replay failed')
+      })
+    ).toThrow('replay failed')
+
+    expect(deps.mountFollowsTerminalPark).toBe(false)
   })
 })
 
@@ -189,6 +488,28 @@ describe('shouldDetachPaneTransportOnUnmount', () => {
         worktreeTabs: []
       })
     ).toBe(false)
+  })
+
+  it('detaches a removed automation pane after closeTab takes teardown authority', () => {
+    expect(
+      shouldDetachPaneTransportOnUnmount({
+        tabStillExists: false,
+        tabId: 'automation-tab',
+        ptyId: 'automation-pty',
+        worktreeTabs: [
+          {
+            id: 'unrelated-tab',
+            ptyId: 'unrelated-pty',
+            worktreeId: 'wt-1',
+            title: 'Terminal 1',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      })
+    ).toBe(true)
   })
 })
 
@@ -351,5 +672,41 @@ describe('terminal pane visibility resume tracking', () => {
       false
     )
     expect(isTerminalPaneVisibilityResume({ previousIsVisible: false, isVisible: true })).toBe(true)
+  })
+})
+
+describe('isTouchIOSUserAgent', () => {
+  it('is false for a real Mac (Macintosh UA, no touch points)', () => {
+    expect(
+      isTouchIOSUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15', 0)
+    ).toBe(false)
+  })
+
+  it('is true for iPadOS desktop-mode Safari (Macintosh UA plus touch points)', () => {
+    expect(
+      isTouchIOSUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15', 5)
+    ).toBe(true)
+  })
+
+  it('is true for iPhone Safari ("like Mac OS X" UA plus touch points)', () => {
+    expect(
+      isTouchIOSUserAgent(
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15',
+        5
+      )
+    ).toBe(true)
+  })
+
+  it('is false for non-Mac UAs regardless of touch points', () => {
+    expect(isTouchIOSUserAgent('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36', 5)).toBe(false)
+    expect(
+      isTouchIOSUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 5)
+    ).toBe(false)
+  })
+
+  it('keeps the forwarder on a Mac whose touch peripheral reports a single point', () => {
+    expect(
+      isTouchIOSUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15', 1)
+    ).toBe(false)
   })
 })

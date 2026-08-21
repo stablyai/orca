@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { FolderWorkspace } from './types'
+import type { FolderWorkspace } from './folder-workspace-types'
 import { folderWorkspaceToWorktree } from './folder-workspace-worktree'
 
 function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
@@ -81,24 +81,39 @@ describe('folderWorkspaceToWorktree', () => {
     expect(worktree.linkedGitLabMR).toBeNull()
   })
 
-  it('projects ClickUp tasks with their owning Workspace', () => {
+  it('projects durable Jira item and source context without legacy issue zero', () => {
+    const linkedTaskSourceContext = {
+      kind: 'task-source' as const,
+      provider: 'jira' as const,
+      projectId: 'group-1',
+      hostId: 'local' as const,
+      providerIdentity: {
+        provider: 'jira' as const,
+        siteId: 'site-1',
+        siteUrl: 'https://company.atlassian.net',
+        projectKey: 'ORCA'
+      }
+    }
     const worktree = folderWorkspaceToWorktree(
       makeFolderWorkspace({
         linkedTask: {
-          provider: 'clickup',
+          provider: 'jira',
           type: 'issue',
           number: 0,
-          title: 'Polish folder workspaces',
-          url: 'https://app.clickup.com/t/86abc123',
-          clickUpTaskId: '86abc123',
-          clickUpWorkspaceId: 'team-1'
-        }
+          title: 'ORCA-123 Link Jira',
+          url: 'https://company.atlassian.net/browse/ORCA-123',
+          jiraIdentifier: 'ORCA-123'
+        },
+        linkedTaskSourceContext
       })
     )
 
-    expect(worktree.linkedClickUpTaskId).toBe('86abc123')
-    expect(worktree.linkedClickUpWorkspaceId).toBe('team-1')
-    expect(worktree.linkedLinearIssue).toBeNull()
+    expect(worktree.linkedIssue).toBeNull()
+    expect(worktree.linkedWorkItem).toMatchObject({
+      provider: 'jira',
+      jiraIdentifier: 'ORCA-123'
+    })
+    expect(worktree.linkedTaskSourceContext).toEqual(linkedTaskSourceContext)
   })
 
   it('projects first-message rename state for folder workspace cards', () => {
@@ -114,6 +129,17 @@ describe('folderWorkspaceToWorktree', () => {
       createdWithAgent: 'codex',
       pendingFirstAgentMessageRename: true,
       firstAgentMessageRenameError: 'No model configured'
+    })
+  })
+
+  it('projects runtime ownership from the folder execution host', () => {
+    const worktree = folderWorkspaceToWorktree(
+      makeFolderWorkspace({ executionHostId: 'runtime:shared%20server' })
+    )
+
+    expect(worktree).toMatchObject({
+      hostId: 'runtime:shared%20server',
+      runtimeOwnerEnvironmentId: 'shared server'
     })
   })
 

@@ -628,13 +628,13 @@
   padding-left: 0.75em;
 }
 
-.rich-markdown-editor ul[data-type='taskList'] li {
+.rich-markdown-editor ul[data-type='taskList'] > li {
   display: flex;
   align-items: flex-start;
   gap: 6px;
 }
 
-.rich-markdown-editor ul[data-type='taskList'] li > label {
+.rich-markdown-editor ul[data-type='taskList'] > li > label {
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -643,7 +643,7 @@
   user-select: none;
 }
 
-.rich-markdown-editor ul[data-type='taskList'] li > label input[type='checkbox'] {
+.rich-markdown-editor ul[data-type='taskList'] > li > label input[type='checkbox'] {
   appearance: none;
   width: 16px;
   height: 16px;
@@ -657,12 +657,12 @@
   flex-shrink: 0;
 }
 
-.rich-markdown-editor ul[data-type='taskList'] li > label input[type='checkbox']:checked {
+.rich-markdown-editor ul[data-type='taskList'] > li > label input[type='checkbox']:checked {
   background: var(--primary);
   border-color: var(--primary);
 }
 
-.rich-markdown-editor ul[data-type='taskList'] li > label input[type='checkbox']:checked::after {
+.rich-markdown-editor ul[data-type='taskList'] > li > label input[type='checkbox']:checked::after {
   content: '';
   position: absolute;
   left: 4px;
@@ -677,16 +677,16 @@
   transform: rotate(45deg);
 }
 
-.rich-markdown-editor ul[data-type='taskList'] li > div {
+.rich-markdown-editor ul[data-type='taskList'] > li > div {
   flex: 1;
   min-width: 0;
 }
 
-.rich-markdown-editor ul[data-type='taskList'] li > div > p {
+.rich-markdown-editor ul[data-type='taskList'] > li > div > p {
   margin: 0;
 }
 
-.rich-markdown-editor ul[data-type='taskList'] li[data-checked='true'] > div {
+.rich-markdown-editor ul[data-type='taskList'] > li[data-checked='true'] > div {
   text-decoration: line-through;
   color: var(--muted-foreground);
 }
@@ -807,6 +807,7 @@
   margin: 1em 0;
   border-collapse: collapse;
   font-size: 0.95em;
+  table-layout: auto;
 }
 
 .rich-markdown-editor th,
@@ -815,6 +816,7 @@
   border: 1px solid var(--border);
   text-align: left;
   vertical-align: top;
+  overflow-wrap: break-word;
 }
 
 .rich-markdown-editor th {
@@ -828,6 +830,109 @@
    shaded band directly adjacent to the header. */
 .rich-markdown-editor tr:nth-child(odd) td {
   background: color-mix(in srgb, var(--foreground) 1.5%, transparent);
+}
+
+.rich-markdown-table-controls {
+  position: absolute;
+  inset: 0;
+  /* Why: the slash (30), emoji (31) and doc-link (30) menus share this stacking
+     context, so hover affordances must stay under them — above editor content
+     chrome such as the code-block language selector (1). */
+  z-index: 10;
+  pointer-events: none;
+}
+
+.rich-markdown-table-control {
+  position: absolute;
+  z-index: 1;
+  border-radius: 0;
+  color: var(--muted-foreground);
+  pointer-events: auto;
+  backdrop-filter: blur(8px);
+}
+
+.rich-markdown-table-control::before {
+  position: absolute;
+  inset: -8px;
+  content: '';
+}
+
+.rich-markdown-table-axis-control {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  opacity: 1;
+}
+
+.rich-markdown-table-axis-control::after {
+  position: absolute;
+  content: '';
+  background: color-mix(in srgb, var(--foreground) 18%, transparent);
+  transition: background-color 120ms ease;
+}
+
+.rich-markdown-table-axis-control[data-axis='column'] {
+  height: 14px;
+}
+
+.rich-markdown-table-axis-control[data-axis='column']::after {
+  right: 4px;
+  left: 4px;
+  height: 2px;
+}
+
+.rich-markdown-table-axis-control[data-axis='row'] {
+  width: 14px;
+}
+
+.rich-markdown-table-axis-control[data-axis='row']::after {
+  top: 4px;
+  bottom: 4px;
+  width: 2px;
+}
+
+.rich-markdown-table-axis-control svg {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.rich-markdown-table-axis-control:hover,
+.rich-markdown-table-axis-control:focus-visible,
+.rich-markdown-table-axis-control[data-state='open'] {
+  border: 1px solid color-mix(in srgb, var(--border) 76%, transparent);
+  background: color-mix(in srgb, var(--background) 88%, transparent);
+  color: var(--foreground);
+  opacity: 1;
+}
+
+.rich-markdown-table-axis-control:hover::after,
+.rich-markdown-table-axis-control:focus-visible::after,
+.rich-markdown-table-axis-control[data-state='open']::after {
+  background: transparent;
+}
+
+.rich-markdown-table-axis-control:hover svg,
+.rich-markdown-table-axis-control:focus-visible svg,
+.rich-markdown-table-axis-control[data-state='open'] svg {
+  opacity: 1;
+}
+
+.rich-markdown-table-add-control {
+  border-color: color-mix(in srgb, var(--border) 76%, transparent);
+  background: transparent;
+  color: var(--muted-foreground);
+  opacity: 0.76;
+}
+
+.rich-markdown-table-add-control:hover,
+.rich-markdown-table-add-control:focus-visible {
+  background: color-mix(in srgb, var(--foreground) 5%, transparent);
+  color: var(--foreground);
+  opacity: 1;
+}
+
+.rich-markdown-editor .rich-markdown-table-control-active {
+  background: color-mix(in srgb, var(--primary) 12%, transparent) !important;
 }
 
 .rich-markdown-editor code {

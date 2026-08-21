@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-react'
 import type { CmdJQuickActionAvailability, CmdJQuickActionContext } from './quick-action-context'
 import {
   getCurrentWorkspaceActionAvailability,
+  getBrowserWorkspaceActionAvailability,
   getWorkspaceScopedActionAvailability
 } from './quick-action-context'
 import { translate } from '@/i18n/i18n'
@@ -36,6 +37,12 @@ function currentWorkspaceActionAvailability(
   ctx: CmdJQuickActionContext
 ): CmdJQuickActionAvailability {
   return getCurrentWorkspaceActionAvailability(ctx)
+}
+
+function browserWorkspaceActionAvailability(
+  ctx: CmdJQuickActionContext
+): CmdJQuickActionAvailability {
+  return getBrowserWorkspaceActionAvailability(ctx)
 }
 
 async function runWorkspaceAction(
@@ -72,8 +79,14 @@ export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] 
       translate('auto.components.cmd.j.quick.actions.verbs.openBrowser', 'open browser'),
       translate('auto.components.cmd.j.quick.actions.verbs.browserTab', 'browser tab')
     ],
-    isAvailable: workspaceActionAvailability,
-    run: (ctx) => runWorkspaceAction(ctx, ctx.openNewBrowserTab)
+    isAvailable: browserWorkspaceActionAvailability,
+    run: async (ctx) => {
+      const availability = browserWorkspaceActionAvailability(ctx)
+      if (!availability.available) {
+        return { status: 'unavailable', reason: availability.reason }
+      }
+      return runWorkspaceAction(ctx, ctx.openNewBrowserTab)
+    }
   },
   {
     id: 'new-markdown-file',

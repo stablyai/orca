@@ -19,7 +19,7 @@ import { spawn } from 'node:child_process'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
@@ -198,6 +198,22 @@ describeIfBuilt('orca orchestration reset subprocess', () => {
     const runtime = new OrcaRuntimeService()
     const db = new OrchestrationDb(':memory:')
     runtime.setOrchestrationDb(db)
+    const coordinatorPaneKey = 'tab_cli:11111111-1111-4111-8111-111111111111'
+    vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+      handle === 'term_cli'
+        ? coordinatorPaneKey
+        : handle === 'term_target'
+          ? 'tab_target:33333333-3333-4333-8333-333333333333'
+          : null
+    )
+    vi.spyOn(runtime, 'getLiveTerminalPaneKey').mockImplementation((handle) =>
+      runtime.getTerminalPaneKey(handle)
+    )
+    db.createRun({
+      objective: 'CLI reset subprocess fixture',
+      coordinatorHandle: 'term_cli',
+      coordinatorPaneKey
+    })
     const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
     await server.start()
 
@@ -218,6 +234,8 @@ describeIfBuilt('orca orchestration reset subprocess', () => {
         'task-create',
         '--spec',
         'throwaway task',
+        '--from',
+        'term_cli',
         '--json'
       ])
       expect(create.exitCode, create.stderr).toBe(0)
@@ -253,22 +271,140 @@ describeIfBuilt('orca orchestration reset subprocess', () => {
       expect(db.getInbox()).toHaveLength(1)
       expect(db.listTasks()).toHaveLength(0)
 
+      // Why: task resets intentionally remove Runs, so recreate the caller's
+      // normal binding before exercising task creation again.
+      db.createRun({
+        objective: 'CLI reset subprocess fixture after reset',
+        coordinatorHandle: 'term_cli',
+        coordinatorPaneKey
+      })
       const recreate = await runBuiltCli(userDataPath, [
         'orchestration',
         'task-create',
         '--spec',
         'throwaway task after partial reset',
+        '--from',
+        'term_cli',
         '--json'
       ])
       expect(recreate.exitCode, recreate.stderr).toBe(0)
       expect(db.getInbox()).toHaveLength(1)
       expect(db.listTasks()).toHaveLength(1)
 
-      const resetAll = await runBuiltCli(userDataPath, ['orchestration', 'reset', '--json'])
+      const bareReset = await runBuiltCli(userDataPath, ['orchestration', 'reset', '--json'])
+      expect(bareReset.exitCode).toBe(1)
+      expect(JSON.parse(bareReset.stdout)).toMatchObject({
+        ok: false,
+        error: { code: 'invalid_argument' }
+      })
+      expect(db.getInbox()).toHaveLength(1)
+      expect(db.listTasks()).toHaveLength(1)
+
+      const resetAll = await runBuiltCli(userDataPath, [
+        'orchestration',
+        'reset',
+        '--all',
+        '--json'
+      ])
       expect(resetAll.exitCode, resetAll.stderr).toBe(0)
       expect(JSON.parse(resetAll.stdout)).toMatchObject({ ok: true, result: { reset: 'all' } })
       expect(db.getInbox()).toHaveLength(0)
       expect(db.listTasks()).toHaveLength(0)
+    } finally {
+      db.close()
+      await server.stop()
+      rmSync(userDataPath, { recursive: true, force: true })
+    }
+  }, 30_000)
+})
+
+describeIfBuilt('orca orchestration task readiness subprocess', () => {
+  it('creates a late dependent as ready through the built CLI and runtime', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-cli-task-readiness-'))
+    const dbPath = join(userDataPath, 'orchestration.db')
+    const runtime = new OrcaRuntimeService()
+    const db = new OrchestrationDb(dbPath)
+    runtime.setOrchestrationDb(db)
+    const coordinatorPaneKey = 'tab_cli:22222222-2222-4222-8222-222222222222'
+    vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+      handle === 'term_cli' ? coordinatorPaneKey : null
+    )
+    db.createRun({
+      objective: 'CLI late dependency readiness fixture',
+      coordinatorHandle: 'term_cli',
+      coordinatorPaneKey
+    })
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+    await server.start()
+
+    try {
+      const dependencyCreate = await runBuiltCli(userDataPath, [
+        'orchestration',
+        'task-create',
+        '--spec',
+        'dependency',
+        '--from',
+        'term_cli',
+        '--json'
+      ])
+      expect(dependencyCreate.exitCode, dependencyCreate.stderr).toBe(0)
+      const dependencyPayload = JSON.parse(dependencyCreate.stdout) as {
+        result: { task: { id: string; status: string } }
+      }
+      const dependencyId = dependencyPayload.result.task.id
+
+      const dependencyComplete = await runBuiltCli(userDataPath, [
+        'orchestration',
+        'task-update',
+        '--id',
+        dependencyId,
+        '--status',
+        'completed',
+        '--from',
+        'term_cli',
+        '--json'
+      ])
+      expect(dependencyComplete.exitCode, dependencyComplete.stderr).toBe(0)
+
+      const childCreate = await runBuiltCli(userDataPath, [
+        'orchestration',
+        'task-create',
+        '--spec',
+        'late dependent',
+        '--deps',
+        JSON.stringify([dependencyId]),
+        '--from',
+        'term_cli',
+        '--json'
+      ])
+      expect(childCreate.exitCode, childCreate.stderr).toBe(0)
+      const childPayload = JSON.parse(childCreate.stdout) as {
+        result: { task: { id: string; status: string } }
+      }
+      const child = childPayload.result.task
+      expect(child.status).toBe('ready')
+
+      const taskList = await runBuiltCli(userDataPath, [
+        'orchestration',
+        'task-list',
+        '--from',
+        'term_cli',
+        '--json'
+      ])
+      expect(taskList.exitCode, taskList.stderr).toBe(0)
+      const taskListPayload = JSON.parse(taskList.stdout) as {
+        result: { tasks: { id: string; status: string }[] }
+      }
+      expect(taskListPayload.result.tasks).toContainEqual(
+        expect.objectContaining({ id: child.id, status: 'ready' })
+      )
+
+      const persisted = new OrchestrationDb(dbPath)
+      try {
+        expect(persisted.getTask(child.id)?.status).toBe('ready')
+      } finally {
+        persisted.close()
+      }
     } finally {
       db.close()
       await server.stop()

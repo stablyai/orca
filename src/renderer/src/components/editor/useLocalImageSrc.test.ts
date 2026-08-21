@@ -223,6 +223,23 @@ describe('loadLocalImageSrc', () => {
     expect(readFile).toHaveBeenCalledTimes(2)
   })
 
+  it('does not load an external SSH image through a replacement target', async () => {
+    const readFile = vi.fn().mockResolvedValue(binaryPreview())
+    setReadFile(readFile)
+
+    await expect(
+      loadLocalImageSrc('diagram.png', '/tmp/readme.md', null, {
+        settings: { activeRuntimeEnvironmentId: null },
+        worktreeId: 'wt-1',
+        worktreePath: '/repo',
+        connectionId: 'ssh-2',
+        expectedExternalSshTargetId: 'ssh-1'
+      })
+    ).resolves.toBeNull()
+
+    expect(readFile).not.toHaveBeenCalled()
+  })
+
   it('does not update mounted hook state after unmount', async () => {
     const read = deferred<PreviewResult>()
     const readFile = vi.fn().mockReturnValue(read.promise)

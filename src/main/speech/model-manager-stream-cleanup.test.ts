@@ -64,8 +64,8 @@ describe('ModelManager stream cleanup', () => {
       const manager = new ModelManager(dir) as unknown as ModelManagerInternals
 
       const download = manager.downloadFile(
-        'https://example.com/model.tar.bz2',
-        join(dir, 'model.tar.bz2'),
+        'https://example.com/model.bin',
+        join(dir, 'model.bin'),
         4,
         'm',
         () => false

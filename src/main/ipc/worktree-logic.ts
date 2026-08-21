@@ -1,14 +1,20 @@
 import { resolve, relative, isAbsolute, posix, sep, win32 } from 'node:path'
-import type { GlobalSettings, OrcaWorkspaceLayout, Repo } from '../../shared/types'
+import type { GlobalSettings, OrcaWorkspaceLayout } from '../../shared/global-settings-types'
+import type { Repo } from '../../shared/repo-types'
 import { isWindowsAbsolutePathLike, resolveRuntimePath } from '../../shared/cross-platform-path'
-import { isWslUncPath } from '../../shared/wsl-paths'
-import { splitWorktreeId } from '../../shared/worktree-id'
-import { getWslHome, parseWslPath } from '../wsl'
+import { isWslUncPath, resolveWslRepoWorktreeBasePath } from '../../shared/wsl-paths'
+import { splitWorktreeId } from '../../shared/worktree/id'
+import { replaceKnownEmojiWithShortcodes } from '../../shared/emoji-shortcode-catalog'
+import { getWslHome, getWslHomeAsync, parseWslPath } from '../wsl'
 
 type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'>
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
 
-export { computeBranchName, getConfiguredBranchPrefix } from './worktree-branch-name'
+export {
+  computeBranchName,
+  getConfiguredBranchPrefix,
+  computeValidatedBranchName
+} from './worktree-branch-name'
 export { mergeWorktree } from './worktree-metadata-merge'
 export { areWorktreePathsEqual } from './worktree-path-comparison'
 
@@ -21,7 +27,7 @@ export function sanitizeWorktreeName(input: string): string {
   // name workspaces in their own language. Git ref-format permits non-ASCII
   // bytes, and modern filesystems handle UTF-8 paths. Only strip characters
   // git or the filesystem actually rejects.
-  const sanitized = input
+  const sanitized = replaceKnownEmojiWithShortcodes(input)
     .trim()
     .replace(/[^\p{L}\p{N}._-]+/gu, '-')
     .replace(/-+/g, '-')
@@ -33,11 +39,21 @@ export function sanitizeWorktreeName(input: string): string {
     .replace(/\.{2,}/g, '.')
     .replace(/^[.-]+|[.-]+$/g, '')
 
+  if (!sanitized && containsEmoji(input)) {
+    return 'workspace'
+  }
+
   if (!sanitized || sanitized === '.' || sanitized === '..') {
     throw new Error('Invalid worktree name')
   }
 
   return sanitized
+}
+
+function containsEmoji(input: string): boolean {
+  return /[\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Regional_Indicator}\u20e3]/u.test(
+    input
+  )
 }
 
 export function sanitizeWorktreeDisplayName(input: string): string | undefined {
@@ -97,6 +113,37 @@ export function computeWorktreePath(
   return pathOps.join(workspaceRoot, sanitizedName)
 }
 
+/** Async twin of computeWorktreePath. Same result; resolves the WSL home without blocking the main
+ *  thread, so callers off the create path never freeze the app on a stopped distro. */
+export async function computeWorktreePathAsync(
+  sanitizedName: string,
+  repoPath: string,
+  settings: WorktreePathSettings
+): Promise<string> {
+  const workspaceRoot = await computeWorkspaceRootAsync(repoPath, settings)
+  const pathOps = getRuntimePathOps(repoPath, workspaceRoot)
+
+  if (settings.nestWorkspaces) {
+    const repoName = pathOps.basename(repoPath).replace(/\.git$/, '')
+    return pathOps.join(workspaceRoot, repoName, sanitizedName)
+  }
+  return pathOps.join(workspaceRoot, sanitizedName)
+}
+
+async function computeWorkspaceRootAsync(
+  repoPath: string,
+  settings: { workspaceDir: string }
+): Promise<string> {
+  const wsl = parseWslPath(repoPath)
+  if (wsl && shouldMirrorWorkspaceDirInsideWsl(repoPath, settings.workspaceDir)) {
+    const wslHome = await getWslHomeAsync(wsl.distro)
+    if (wslHome) {
+      return win32.join(wslHome, 'orca', 'workspaces')
+    }
+  }
+  return resolveWorkspaceDirForRepo(repoPath, settings.workspaceDir)
+}
+
 export function computeWorkspaceRoot(repoPath: string, settings: { workspaceDir: string }): string {
   const wsl = parseWslPath(repoPath)
   if (wsl && shouldMirrorWorkspaceDirInsideWsl(repoPath, settings.workspaceDir)) {
@@ -125,9 +172,10 @@ export function computeRemoteWorktreePath(
     return computeWorktreePath(sanitizedName, repoPath, settings)
   }
   // Why: absolute global workspaceDir values belong to the desktop machine.
-  // SSH worktrees keep the legacy repo-sibling root unless a repo-specific
-  // path opts into a remote-host location.
-  return getRuntimePathOps(repoPath, repoPath).join(repoPath, '..', sanitizedName)
+  // SSH falls back to repo-qualified sibling paths so origin/main is not shared.
+  const pathOps = getRuntimePathOps(repoPath, repoPath)
+  const repoName = pathOps.basename(repoPath).replace(/\.git$/, '')
+  return pathOps.join(repoPath, '..', `${repoName}-${sanitizedName}`)
 }
 
 export function getWorktreePathSettings(
@@ -178,7 +226,11 @@ function getEffectiveWorktreeBasePath(
   repo: WorktreeBasePathRepo,
   settings: WorktreePathSettings
 ): string {
-  return getRepoWorktreeBasePath(repo) ?? settings.workspaceDir
+  const basePath = getRepoWorktreeBasePath(repo)
+  if (basePath === undefined) {
+    return settings.workspaceDir
+  }
+  return resolveWslRepoWorktreeBasePath(repo.path, basePath)
 }
 
 function getRepoWorktreeBasePath(repo: Pick<Repo, 'worktreeBasePath'>): string | undefined {

@@ -10,6 +10,7 @@ import type { DiffContent, FileContent } from './editor-panel-content-types'
 import type { EditorToggleValue } from './EditorViewToggle'
 import { getUntitledFileRoot } from './untitled-file-rename-path'
 import { translate } from '@/i18n/i18n'
+import type { ArtifactWriteRequest } from '../../../../shared/artifacts'
 
 type EditorPanelRenderModel = ReturnType<typeof getEditorPanelRenderModel>
 
@@ -41,11 +42,12 @@ type EditorPanelShellProps = {
   onToggleMarkdownTableOfContents: () => void
   onToggleMarkdownFrontmatter: () => void
   onExportMarkdownToPdf: () => void
+  createMarkdownArtifactRequest?: () => Promise<ArtifactWriteRequest>
   onContentChange: (content: string) => void
   onContentChangeForFile: (file: OpenFile, content: string) => void
   onDirtyStateHint: (dirty: boolean) => void
-  onSave: (content: string) => Promise<void>
-  onSaveForFile: (file: OpenFile, content: string) => Promise<void>
+  onSave: (content: string) => Promise<boolean>
+  onSaveForFile: (file: OpenFile, content: string) => Promise<boolean>
   onReloadContent: (file: OpenFile) => void
   onCloseMarkdownTableOfContents: () => void
   onCloseRenameDialog: () => void
@@ -81,6 +83,7 @@ export function EditorPanelShell({
   onToggleMarkdownTableOfContents,
   onToggleMarkdownFrontmatter,
   onExportMarkdownToPdf,
+  createMarkdownArtifactRequest,
   onContentChange,
   onContentChangeForFile,
   onDirtyStateHint,
@@ -127,6 +130,7 @@ export function EditorPanelShell({
           onToggleMarkdownTableOfContents={onToggleMarkdownTableOfContents}
           onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
           onExportMarkdownToPdf={onExportMarkdownToPdf}
+          createMarkdownArtifactRequest={createMarkdownArtifactRequest}
         />
       )}
       <Suspense fallback={<EditorLoadingFallback />}>

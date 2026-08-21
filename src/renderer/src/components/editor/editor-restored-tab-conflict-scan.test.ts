@@ -250,6 +250,27 @@ describe('attachRestoredTabConflictScan', () => {
     }
   })
 
+  it('does not verify an external SSH file through a replacement target', async () => {
+    const store = createEditorStore()
+    openRestoredDirtyTab(store, '/tmp/external.ts', 'original baseline')
+    store.setState({
+      openFiles: store
+        .getState()
+        .openFiles.map((file) => ({ ...file, externalSshTargetId: 'ssh-original' }))
+    } as never)
+    mocks.getConnectionIdForFile.mockReturnValue('ssh-replacement')
+
+    const detach = attachRestoredTabConflictScan(store)
+    try {
+      await vi.advanceTimersByTimeAsync(10)
+      expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
+      expect(mocks.pathExists).not.toHaveBeenCalled()
+      expect(store.getState().openFiles[0]?.pendingDiskBaselineVerification).toBe(true)
+    } finally {
+      detach()
+    }
+  })
+
   it('caps concurrent verification reads and drains the queue without dropping tabs', async () => {
     // Why: a restored session with many dirty tabs must not fire one disk
     // read per tab at once — on SSH/remote runtimes that competes with

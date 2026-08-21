@@ -16,12 +16,14 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   aider: 'Aider',
   pi: 'Pi',
   omp: 'OMP',
+  'prime-agent': 'Prime Agent',
   droid: 'Droid',
   'command-code': 'Command Code',
   grok: 'Grok',
   hermes: 'Hermes',
   devin: 'Devin',
   ante: 'Ante',
+  trae: 'Trae',
   kimi: 'Kimi'
 }
 

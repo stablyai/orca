@@ -3,9 +3,10 @@ import {
   formatNativeChatEmptyStateCopy,
   type NativeChatEmptyStateCopy
 } from '../../../src/shared/native-chat-empty-state'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { foldToolMessages } from './mobile-native-chat-blocks'
-import { stripNoiseMessages } from './mobile-native-chat-noise'
+import { stripNoiseMessages } from '../../../src/shared/native-chat-noise'
+import { foldToolMessages } from '../../../src/shared/native-chat-tool-fold'
+import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { normalizeImageTranscriptMessages } from './mobile-native-chat-image-transcript-markers'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 
 /** The centered empty-state copy for a chat with no messages, mirroring the
@@ -34,41 +35,57 @@ export function mobileNativeChatEmptyState(
   }
 }
 
-/** Derive the list data from the raw transcript: fold tool turns into the
- *  assistant turn, optionally append a synthetic streaming bubble, then the
- *  route-owned optimistic "queued" messages at the tail. Returns the
- *  intermediate `folded`/`streaming` so the caller can memoize on them. */
-export function buildMobileNativeChatData({
-  messages,
-  streamingText,
-  pending
-}: {
-  messages: NativeChatMessage[]
-  streamingText?: string
-  pending: Array<{ id: string; text: string }>
-}): { folded: NativeChatMessage[]; streaming: string | null; data: NativeChatMessage[] } {
-  const folded = foldMobileNativeChatMessages(messages)
-  return buildMobileNativeChatTransientData({ folded, streamingText, pending })
+/** An optimistic user echo: the text and/or the local preview URIs of any images
+ *  ridden along on the send, shown until the transcript catches up. */
+export type MobileNativeChatPendingItem = {
+  id: string
+  text: string
+  images?: string[]
 }
 
 export function foldMobileNativeChatMessages(messages: NativeChatMessage[]): NativeChatMessage[] {
-  return foldToolMessages(stripNoiseMessages(messages))
+  // Normalize first (desktop assembler parity): image marker turns fold into
+  // image-ref blocks instead of rendering as raw `[Image: …]` text.
+  return foldToolMessages(stripNoiseMessages(normalizeImageTranscriptMessages(messages)))
 }
 
+/** Assemble the list data the chat renders: the folded transcript, then a
+ *  synthetic bubble for the streaming text the gate let through, then the
+ *  route-owned accepted optimistic messages at the tail. */
 export function buildMobileNativeChatTransientData({
   folded,
-  streamingText,
-  pending
+  streaming,
+  pending,
+  imagePreviewsByMessageId
 }: {
   folded: NativeChatMessage[]
-  streamingText?: string
-  pending: Array<{ id: string; text: string }>
+  /** Streaming bubble text, already gated by `deriveMobileNativeChatStreaming`. */
+  streaming: string | null
+  pending: MobileNativeChatPendingItem[]
+  imagePreviewsByMessageId?: Record<string, string[]>
 }): { folded: NativeChatMessage[]; streaming: string | null; data: NativeChatMessage[] } {
-  // Only show the streaming bubble while its text leads the transcript — once the
-  // real assistant turn lands with the same text, drop the synthetic one.
-  const streaming = deriveStreaming(folded, streamingText)
+  const renderedFolded = folded.map((message) => {
+    const previews = imagePreviewsByMessageId?.[message.id]
+    if (message.role !== 'user' || !previews?.length) {
+      return message
+    }
+    let previewIndex = 0
+    const blocks = message.blocks.map((block) => {
+      if (!isImageRefBlock(block)) {
+        return block
+      }
+      const url = previews[previewIndex]
+      previewIndex += 1
+      return url ? { ...block, url } : block
+    })
+    while (previewIndex < previews.length) {
+      blocks.push({ type: 'image-ref', url: previews[previewIndex] })
+      previewIndex += 1
+    }
+    return { ...message, blocks }
+  })
   const data: NativeChatMessage[] = [
-    ...folded,
+    ...renderedFolded,
     ...(streaming
       ? [
           {
@@ -83,33 +100,15 @@ export function buildMobileNativeChatTransientData({
     ...pending.map((p) => ({
       id: p.id,
       role: 'user' as const,
-      blocks: [{ type: 'text' as const, text: p.text }],
+      // Text first (when present), then a thumbnail per ridden-along image so the
+      // sent photo shows immediately, before the transcript echo lands.
+      blocks: [
+        ...(p.text ? [{ type: 'text' as const, text: p.text }] : []),
+        ...(p.images ?? []).map((uri) => ({ type: 'image-ref' as const, url: uri }))
+      ],
       timestamp: null,
       source: 'transcript' as const
     }))
   ]
-  return { folded, streaming, data }
-}
-
-function deriveStreaming(folded: NativeChatMessage[], streamingText?: string): string | null {
-  const text = streamingText?.trim()
-  if (!text) {
-    return null
-  }
-  const last = folded[folded.length - 1]
-  const lastText =
-    last?.role === 'assistant'
-      ? last.blocks
-          .filter((b) => b.type === 'text')
-          .map((b) => (b.type === 'text' ? b.text : ''))
-          .join('')
-          .trim()
-      : ''
-  // Hide the synthetic bubble only once the real turn has landed leading with the
-  // streamed text. A bare length compare would suppress a short new reply behind a
-  // longer previous turn; a completed prior turn won't start with the new prefix.
-  if (lastText.startsWith(text)) {
-    return null
-  }
-  return text
+  return { folded: renderedFolded, streaming, data }
 }

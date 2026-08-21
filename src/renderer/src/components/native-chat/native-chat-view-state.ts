@@ -30,6 +30,13 @@ export function selectNativeChatViewState(session: NativeChatSession): NativeCha
   if (session.status === 'loading') {
     return { kind: 'loading' }
   }
+  // A KNOWN session working with nothing to show is a transcript that has not
+  // flushed yet, so hold the loading surface rather than flashing empty (#11032).
+  // The status stays 'working', so the composer keeps Stop the moment a bubble
+  // lands — forcing 'loading' upstream instead rendered an idle pane mid-turn.
+  if (session.status === 'working' && session.sessionId !== null) {
+    return { kind: 'loading' }
+  }
   // Empty wins over a transient 'working' hook so a just-toggled, pre-session
   // pane shows a clear empty state instead of a spinner over nothing.
   return { kind: 'empty' }

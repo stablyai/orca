@@ -1,8 +1,7 @@
 import { z } from 'zod'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import type { TuiAgent } from '../../../../shared/types'
-import { workspaceSourceSchema } from '../../../../shared/telemetry-events'
-import { sleepingAgentLaunchConfigSchema } from '../../../../shared/workspace-session-sleeping-agents'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import { RUNTIME_NAVIGATION_TARGETS } from '../../../../shared/runtime-navigation'
 import {
   OptionalBoolean,
   OptionalFiniteNumber,
@@ -10,8 +9,24 @@ import {
   OptionalString,
   TriStateLinkedIssue
 } from '../schemas'
+import { TaskSourceContextSchema } from '../../../../shared/task-source-context-schema'
+import { WorkspaceLinkedItemSchema } from '../../../../shared/workspace-linked-item-schema'
+import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-linked-item-source-context'
+import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 
-const OptionalTuiAgent = z
+const OptionalExecutionHostId = z
+  .string()
+  .transform((value, ctx) => {
+    const hostId = normalizeExecutionHostId(value)
+    if (!hostId) {
+      ctx.addIssue({ code: 'custom', message: 'Invalid host id' })
+      return z.NEVER
+    }
+    return hostId
+  })
+  .optional()
+
+export const OptionalTuiAgent = z
   .unknown()
   .superRefine((value, ctx) => {
     if (value !== undefined && !isTuiAgent(value)) {
@@ -21,11 +36,18 @@ const OptionalTuiAgent = z
   .transform((value): TuiAgent | undefined => (isTuiAgent(value) ? value : undefined))
   .optional()
 
-const AutomationWorkspaceProvenanceRequest = z.object({
+export const AutomationWorkspaceProvenanceRequest = z.object({
   automationId: z.string(),
   automationRunId: z.string(),
   dispatchToken: z.string(),
   createRequestId: z.string()
+})
+
+// Why no dispatch token (unlike automation provenance): this is a descriptive
+// origin marker for sidebar filtering, not an authority grant. The host stamps
+// createdAt itself so a client clock can't skew sort order.
+export const CliWorkspaceProvenanceRequest = z.object({
+  callerTerminalHandle: OptionalString
 })
 
 export const WorktreeListParams = z.object({
@@ -40,8 +62,15 @@ export const WorktreeDetectedListParams = z.object({
     .pipe(z.string().min(1, 'Missing repo selector'))
 })
 
+export const WorktreeTeardownMissingTerminalsParams = WorktreeDetectedListParams.extend({
+  worktreeIds: z.array(z.string().min(1)).max(10_000),
+  connectionId: z.string().nullable().optional()
+})
+
 export const WorktreePsParams = z.object({
-  limit: OptionalFiniteNumber
+  limit: OptionalFiniteNumber,
+  afterSnapshotId: z.string().min(1).max(128).nullable().optional(),
+  supportsWorktreeVisibilitySourceDefaults: z.literal(true).optional()
 })
 
 export const WorktreeSortOrder = z.object({
@@ -56,131 +85,35 @@ export const WorktreeSelector = z.object({
 })
 
 export const WorktreeActivate = WorktreeSelector.extend({
-  notifyClients: OptionalBoolean
+  notifyClients: OptionalBoolean,
+  navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional()
 })
 
-export const WorktreeCreate = z
-  .object({
-    repo: z
-      .unknown()
-      .transform((v) => (typeof v === 'string' ? v : ''))
-      .pipe(z.string().min(1, 'Missing repo selector')),
-    name: OptionalString,
-    baseBranch: OptionalString,
-    compareBaseRef: OptionalString,
-    branchNameOverride: OptionalString,
-    linkedIssue: TriStateLinkedIssue,
-    linkedPR: TriStateLinkedIssue,
-    linkedLinearIssue: z.string().optional(),
-    linkedLinearIssueWorkspaceId: z.union([z.string(), z.null()]).optional(),
-    linkedLinearIssueOrganizationUrlKey: z.union([z.string(), z.null()]).optional(),
-    linkedClickUpTaskId: z.string().optional(),
-    linkedClickUpWorkspaceId: z.union([z.string(), z.null()]).optional(),
-    linkedGitLabMR: TriStateLinkedIssue,
-    linkedGitLabIssue: TriStateLinkedIssue,
-    linkedBitbucketPR: TriStateLinkedIssue,
-    linkedAzureDevOpsPR: TriStateLinkedIssue,
-    linkedGiteaPR: TriStateLinkedIssue,
-    comment: OptionalString,
-    displayName: OptionalString,
-    telemetrySource: z
-      .unknown()
-      .transform((value) => {
-        const parsed = workspaceSourceSchema.safeParse(value)
-        return parsed.success ? parsed.data : undefined
-      })
-      .optional(),
-    workspaceStatus: OptionalString,
-    manualOrder: OptionalFiniteNumber,
-    sparseCheckout: z
-      .object({
-        directories: z.array(z.string()),
-        presetId: OptionalString
-      })
-      .optional(),
-    pushTarget: z
-      .object({
-        remoteName: z.string(),
-        branchName: z.string(),
-        remoteUrl: OptionalString
-      })
-      .optional(),
-    runHooks: OptionalBoolean,
-    activate: OptionalBoolean,
-    parentWorkspace: OptionalString,
-    envParentWorkspace: OptionalString,
-    parentWorktree: OptionalString,
-    cwdParentWorktree: OptionalString,
-    noParent: OptionalBoolean,
-    callerTerminalHandle: OptionalString,
-    orchestrationContext: z
-      .object({
-        parentWorktreeId: OptionalString,
-        orchestrationRunId: OptionalString,
-        taskId: OptionalString,
-        coordinatorHandle: OptionalString
-      })
-      .optional(),
-    setupDecision: z
-      .unknown()
-      .transform((v) =>
-        typeof v === 'string' && (v === 'run' || v === 'skip' || v === 'inherit') ? v : undefined
-      )
-      .pipe(z.union([z.enum(['run', 'skip', 'inherit']), z.undefined()]))
-      .optional(),
-    // Why: mobile clients pass a startup command (e.g. 'claude') so the first
-    // terminal pane launches the selected agent instead of an idle shell.
-    startupCommand: OptionalString,
-    startupEnv: z.record(z.string(), z.string()).optional(),
-    startupLaunchConfig: sleepingAgentLaunchConfigSchema,
-    startupCommandDelivery: z.enum(['fast', 'shell-ready']).optional(),
-    // Why: CLI clients should not hardcode agent launch quoting because SSH
-    // workspaces execute in a different shell than the client process.
-    startupAgent: OptionalTuiAgent,
-    startupPrompt: OptionalString,
-    // Why: task-driven mobile creates need desktop parity: the host chooses
-    // the same default/detected agent and drafts the linked issue/PR URL into it.
-    startupDraft: OptionalString,
-    createdWithAgent: z
-      .unknown()
-      .transform((value) => (isTuiAgent(value) ? value : undefined))
-      .optional(),
-    // Why: mobile retries a create interrupted by a connection migration with the
-    // same key so the host dedupes instead of spawning a duplicate worktree.
-    clientMutationId: z.string().min(1).max(128).optional(),
-    automationProvenanceRequest: AutomationWorkspaceProvenanceRequest.optional()
-  })
-  .superRefine((params, ctx) => {
-    if ((params.parentWorkspace || params.parentWorktree) && params.noParent === true) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Choose either one parent selector or --no-parent.'
-      })
-    }
-    if (params.parentWorkspace && params.parentWorktree) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'Choose either one parent selector or --no-parent.'
-      })
-    }
-    if (params.startupPrompt !== undefined && params.startupAgent === undefined) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'startupPrompt requires startupAgent'
-      })
-    }
-  })
-
-export const WorktreePrefetchCreateBase = z.object({
-  repo: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing repo selector')),
-  baseBranch: OptionalString
-})
+/** Shared by WorktreeCreate and WorktreeSet so the two error messages cannot drift. */
+export function assertLinkedWorkItemSourceContextMatch(
+  params: {
+    linkedWorkItem?: z.infer<typeof WorkspaceLinkedItemSchema> | null
+    linkedTaskSourceContext?: z.infer<typeof TaskSourceContextSchema> | null
+  },
+  ctx: z.RefinementCtx
+): void {
+  if (
+    params.linkedWorkItem &&
+    params.linkedTaskSourceContext &&
+    !isWorkspaceLinkedItemSourceContextMatch(params.linkedWorkItem, params.linkedTaskSourceContext)
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Linked work item and source context identities must match'
+    })
+  }
+}
 
 export const WorktreeSet = WorktreeSelector.extend({
-  displayName: OptionalString,
+  // Why: '' is the blanking contract — "fall back to the branch/folder name".
+  // OptionalString coerced it to undefined, so on remote/SSH hosts clearing the
+  // name was dropped here and the old name came back on the next refresh.
+  displayName: OptionalPlainString,
   // Why: empty comments are meaningful metadata updates, so use the plain
   // string parser instead of OptionalString's empty-as-undefined behavior.
   comment: OptionalPlainString,
@@ -196,6 +129,8 @@ export const WorktreeSet = WorktreeSelector.extend({
   linkedBitbucketPR: TriStateLinkedIssue,
   linkedAzureDevOpsPR: TriStateLinkedIssue,
   linkedGiteaPR: TriStateLinkedIssue,
+  linkedWorkItem: WorkspaceLinkedItemSchema.nullable().optional(),
+  linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
   isArchived: OptionalBoolean,
   isUnread: OptionalBoolean,
   isPinned: OptionalBoolean,
@@ -221,6 +156,7 @@ export const WorktreeSet = WorktreeSelector.extend({
   parentWorktree: OptionalString,
   noParent: OptionalBoolean
 }).superRefine((params, ctx) => {
+  assertLinkedWorkItemSourceContextMatch(params, ctx)
   if (params.parentWorktree && params.noParent === true) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -230,11 +166,17 @@ export const WorktreeSet = WorktreeSelector.extend({
 })
 
 export const WorktreeRemove = WorktreeSelector.extend({
+  hostId: OptionalExecutionHostId,
   force: OptionalBoolean,
+  // Why (#11960): the CLI's --force is an unambiguous force affordance, but the
+  // desktop sets `force` for an ordinary confirmed delete too, so the PTY-stop
+  // waiver travels on its own field.
+  allowUnverifiedPtyStop: OptionalBoolean,
   runHooks: OptionalBoolean
 })
 
 export const WorktreeForceDeleteBranch = WorktreeSelector.extend({
+  hostId: OptionalString,
   branchName: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))

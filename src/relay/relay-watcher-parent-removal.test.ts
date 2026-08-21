@@ -27,6 +27,16 @@ function context(clientId: number): RequestContext {
   return { clientId, isStale: () => false }
 }
 
+function watchDispatcher() {
+  return {
+    notify: vi.fn(),
+    notifyClient: vi.fn(),
+    onClientDetached: vi.fn(),
+    broadcastProducerFrameCapacity: vi.fn(() => Number.MAX_SAFE_INTEGER),
+    notificationFrameBytes: vi.fn(() => 64)
+  }
+}
+
 describe('RelayFilesystemWatchRegistry parent removal', () => {
   it.each([
     ['/repo', '/repo/nested', '/repo-sibling'],
@@ -35,7 +45,7 @@ describe('RelayFilesystemWatchRegistry parent removal', () => {
     'closes descendant watches before deleting parent %s and preserves siblings',
     async (parent, descendant, sibling) => {
       const pool = new ParentRemovalPool()
-      const dispatcher = { notify: vi.fn(), notifyClient: vi.fn(), onClientDetached: vi.fn() }
+      const dispatcher = watchDispatcher()
       const registry = new RelayFilesystemWatchRegistry(
         dispatcher as unknown as RelayDispatcher,
         pool
@@ -60,7 +70,7 @@ describe('RelayFilesystemWatchRegistry parent removal', () => {
 
   it('waits for a descendant setup and closes its published subscription before removal', async () => {
     const pool = new ParentRemovalPool()
-    const dispatcher = { notify: vi.fn(), notifyClient: vi.fn(), onClientDetached: vi.fn() }
+    const dispatcher = watchDispatcher()
     const registry = new RelayFilesystemWatchRegistry(
       dispatcher as unknown as RelayDispatcher,
       pool
@@ -90,7 +100,7 @@ describe('RelayFilesystemWatchRegistry parent removal', () => {
 
   it('waits for an already-retiring descendant before removal', async () => {
     const pool = new ParentRemovalPool()
-    const dispatcher = { notify: vi.fn(), notifyClient: vi.fn(), onClientDetached: vi.fn() }
+    const dispatcher = watchDispatcher()
     const registry = new RelayFilesystemWatchRegistry(
       dispatcher as unknown as RelayDispatcher,
       pool

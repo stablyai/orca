@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import {
   getRemoteRuntimeSessionTabsInFlightCountForTests,
+  listRemoteRuntimeSessionTabsAfterCurrentInFlight,
   listRemoteRuntimeSessionTabsDeduped
 } from './remote-runtime-session-tabs-inflight'
 
@@ -66,5 +67,43 @@ describe('remote runtime session-tabs in-flight requests', () => {
     ])
 
     expect(load).toHaveBeenCalledTimes(3)
+  })
+
+  it('waits out an older request before sharing a post-operation inventory', async () => {
+    let resolveCurrent: (snapshot: RuntimeMobileSessionTabsResult) => void = () => {}
+    const currentLoad = vi.fn(
+      () =>
+        new Promise<RuntimeMobileSessionTabsResult>((resolve) => {
+          resolveCurrent = resolve
+        })
+    )
+    let resolveFresh: (snapshot: RuntimeMobileSessionTabsResult) => void = () => {}
+    const freshLoad = vi.fn(
+      () =>
+        new Promise<RuntimeMobileSessionTabsResult>((resolve) => {
+          resolveFresh = resolve
+        })
+    )
+    const ownership = { environmentId: 'env-1', worktreeId: 'wt-1' }
+
+    const current = listRemoteRuntimeSessionTabsDeduped({ ...ownership, load: currentLoad })
+    const firstFresh = listRemoteRuntimeSessionTabsAfterCurrentInFlight({
+      ...ownership,
+      load: freshLoad
+    })
+    const secondFresh = listRemoteRuntimeSessionTabsAfterCurrentInFlight({
+      ...ownership,
+      load: freshLoad
+    })
+
+    expect(freshLoad).not.toHaveBeenCalled()
+    resolveCurrent(SNAPSHOT)
+    await expect(current).resolves.toBe(SNAPSHOT)
+    await vi.waitFor(() => expect(freshLoad).toHaveBeenCalledOnce())
+    resolveFresh({ ...SNAPSHOT, snapshotVersion: 2 })
+    await expect(Promise.all([firstFresh, secondFresh])).resolves.toEqual([
+      { ...SNAPSHOT, snapshotVersion: 2 },
+      { ...SNAPSHOT, snapshotVersion: 2 }
+    ])
   })
 })

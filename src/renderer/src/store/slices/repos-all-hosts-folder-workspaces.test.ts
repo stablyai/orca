@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from './store-test-helpers'
-import type { FolderWorkspace, ProjectGroup, Repo } from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -201,6 +203,60 @@ describe('all-host folder workspace startup catalogs', () => {
     })
   })
 
+  it('accumulates folder catalogs from concurrent runtime hosts', async () => {
+    const secondRemoteGroup: ProjectGroup = {
+      ...remoteProjectGroup,
+      id: 'remote-group-2',
+      executionHostId: 'runtime:env-2'
+    }
+    const secondRemoteFolder: FolderWorkspace = {
+      ...remoteFolderWorkspace,
+      id: 'remote-folder-2',
+      projectGroupId: secondRemoteGroup.id
+    }
+    runtimeEnvironmentsList.mockResolvedValue([
+      { id: 'env-1', name: 'lobster' },
+      { id: 'env-2', name: 'shrimp' }
+    ])
+    runtimeEnvironmentCall.mockImplementation(
+      (args: RuntimeEnvironmentCallRequest & { selector: string }) => {
+        if (args.method === 'folderWorkspace.list') {
+          const folderWorkspaces =
+            args.selector === 'env-2' ? [secondRemoteFolder] : [remoteFolderWorkspace]
+          return {
+            id: `rpc-folder-workspace-list-${args.selector}`,
+            ok: true,
+            result: { folderWorkspaces },
+            _meta: { runtimeId: `runtime-${args.selector}` }
+          }
+        }
+        return {
+          id: `rpc-other-${args.selector}`,
+          ok: true,
+          result: { projects: [], setups: [] },
+          _meta: { runtimeId: `runtime-${args.selector}` }
+        }
+      }
+    )
+    const store = createTestStore()
+    store.setState({
+      projectGroups: [
+        { ...localProjectGroup, executionHostId: 'local' },
+        { ...remoteProjectGroup, executionHostId: 'runtime:env-1' },
+        secondRemoteGroup
+      ]
+    })
+
+    await store.getState().fetchFolderWorkspacesForAllHosts()
+
+    expect(
+      store
+        .getState()
+        .folderWorkspaces.map((workspace) => workspace.id)
+        .sort()
+    ).toEqual(['local-folder', 'remote-folder', 'remote-folder-2'])
+  })
+
   it('keeps local project groups and folder workspaces when a runtime is unreachable', async () => {
     runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
       if (args.method === 'projectGroup.list' || args.method === 'folderWorkspace.list') {
@@ -222,7 +278,9 @@ describe('all-host folder workspace startup catalogs', () => {
     expect(store.getState().projectGroups).toEqual([
       { ...localProjectGroup, executionHostId: 'local' }
     ])
-    expect(store.getState().folderWorkspaces).toEqual([localFolderWorkspace])
+    expect(store.getState().folderWorkspaces).toEqual([
+      { ...localFolderWorkspace, executionHostId: 'local' }
+    ])
   })
 
   it('does not repeat offline runtime compatibility probes across startup catalog loads', async () => {
@@ -251,7 +309,9 @@ describe('all-host folder workspace startup catalogs', () => {
       expect(store.getState().projectGroups).toEqual([
         { ...localProjectGroup, executionHostId: 'local' }
       ])
-      expect(store.getState().folderWorkspaces).toEqual([localFolderWorkspace])
+      expect(store.getState().folderWorkspaces).toEqual([
+        { ...localFolderWorkspace, executionHostId: 'local' }
+      ])
       expect(runtimeEnvironmentTransportCall.mock.calls.map((call) => call[0].method)).toEqual([
         'status.get'
       ])

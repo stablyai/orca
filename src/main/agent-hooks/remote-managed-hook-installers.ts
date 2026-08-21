@@ -1,5 +1,5 @@
 import type { SFTPWrapper } from 'ssh2'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type { AgentHookInstallStatus, AgentHookTarget } from '../../shared/agent-hook-types'
 import { ampHookService } from '../amp/hook-service'
 import { claudeHookService } from '../claude/hook-service'
 import { codexHookService } from '../codex/hook-service'
@@ -23,6 +23,12 @@ export type RemoteManagedHookInstallOptions = {
   codexHomeDir?: string
   /** Explicit GROK_HOME for remote runtimes that redirect Grok's config. */
   grokHomeDir?: string
+  /** Stops before starting the next installer when the owning relay request
+   *  is cancelled. Individual filesystem mutations remain atomic. */
+  signal?: AbortSignal
+  /** Positively detected and enabled agents allowed to mutate config.
+   *  Required for any install: omit/empty fails closed (no config mutation). */
+  agents?: readonly AgentHookTarget[]
 }
 
 type RemoteManagedHookInstaller = readonly [
@@ -76,8 +82,20 @@ export async function installRemoteManagedAgentHooks(
   remoteHome: string,
   options?: RemoteManagedHookInstallOptions
 ): Promise<AgentHookInstallStatus[]> {
+  // Why: omit/empty allowlist must never mean "install every agent" — that
+  // recreates config homes for CLIs the user never installed (issue #11641).
+  const allowedAgents = new Set(options?.agents ?? [])
+  if (allowedAgents.size === 0) {
+    return []
+  }
   const results: AgentHookInstallStatus[] = []
   for (const [agent, install] of REMOTE_MANAGED_HOOK_INSTALLERS) {
+    if (!allowedAgents.has(agent)) {
+      continue
+    }
+    // Why: relay requests can disappear during reconnect; do not start more
+    // user-config mutations after their client has gone away.
+    options?.signal?.throwIfAborted()
     try {
       const result = await install(sftp, remoteHome, options)
       results.push(result)

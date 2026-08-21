@@ -2,7 +2,6 @@ import {
   collectCompactWorkspaceWords,
   foldWorkspaceNameWhitespaceToHyphen
 } from './workspace-name-text-scanner'
-import { formatIdentifierFirst } from './work-item-reference'
 
 function normalizeApostrophes(input: string): string {
   return input.replace(/[‘’]/g, "'")
@@ -47,10 +46,10 @@ export type WorkspaceIntentWorkItem = {
   type: 'issue' | 'pr' | 'mr'
   number: number
   title: string
-  provider?: 'github' | 'gitlab' | 'linear' | 'clickup' | 'jira'
+  provider?: 'github' | 'gitlab' | 'linear' | 'jira' | 'clickup'
   linearIdentifier?: string
   jiraIdentifier?: string
-  clickUpTaskId?: string
+  clickupIdentifier?: string
 }
 
 export type WorkspaceIntentName = {
@@ -142,7 +141,7 @@ function escapeRegExp(input: string): string {
 }
 
 function compactWorkItemTitle(title: string, item: WorkspaceIntentWorkItem): string {
-  const identifier = item.linearIdentifier ?? item.jiraIdentifier ?? item.clickUpTaskId
+  const identifier = item.linearIdentifier ?? item.jiraIdentifier ?? item.clickupIdentifier
   let withoutPrefix = title
     .trim()
     .replace(/^(?:issue|pr|pull request|mr|merge request)\s*[#!]?\d+\s*[:-]\s*/i, '')
@@ -167,9 +166,6 @@ function workItemIdentity(item: WorkspaceIntentWorkItem): string {
   if (item.jiraIdentifier) {
     return item.jiraIdentifier.toUpperCase()
   }
-  if (item.clickUpTaskId) {
-    return item.clickUpTaskId.toUpperCase()
-  }
   if (item.type === 'pr') {
     return `PR ${item.number}`
   }
@@ -182,7 +178,7 @@ function workItemIdentity(item: WorkspaceIntentWorkItem): string {
 export function getLinkedWorkItemWorkspaceName(
   item: WorkspaceIntentWorkItem
 ): WorkspaceIntentName | null {
-  const identifier = item.linearIdentifier ?? item.jiraIdentifier ?? item.clickUpTaskId
+  const identifier = item.linearIdentifier ?? item.jiraIdentifier ?? item.clickupIdentifier
   let subject = getLinkedWorkItemTitleSubject(item) || item.title.trim()
   if (identifier) {
     subject = subject
@@ -219,10 +215,7 @@ export function getWorkspaceIntentName(args: {
     const action = detectIntentAction(sourceText) ?? defaultActionForWorkItem(item)
     const identity = workItemIdentity(item)
     if (action) {
-      // Identifier-first so the sidebar leads with the searchable token
-      // (`PR 1033 - Review`); the shared formatIdentifierFirst keeps first-create,
-      // auto-rename, and tab-title names on one format.
-      displayName = formatIdentifierFirst(identity, action)
+      displayName = `${action} ${identity}`
     } else {
       const subject = compactWorkItemTitle(item.title, item)
       displayName = [identity, subject].filter(Boolean).join(' ')

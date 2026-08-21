@@ -1,9 +1,6 @@
-const ANTE_HEADLESS_PROMPT_FLAGS = new Set(['--prompt', '-p'])
+import { optionName } from './print-mode-headless-command'
 
-function optionName(token: string): string {
-  const eq = token.indexOf('=')
-  return eq === -1 ? token : token.slice(0, eq)
-}
+const ANTE_HEADLESS_PROMPT_FLAGS = new Set(['--prompt', '-p'])
 
 function isAnteHeadlessPromptFlag(token: string): boolean {
   const name = optionName(token)

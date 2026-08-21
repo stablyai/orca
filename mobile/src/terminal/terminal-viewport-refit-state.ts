@@ -7,6 +7,7 @@ export type TerminalViewportRefitTargetState = {
   expectedHandle: string
   currentRef: unknown
   expectedRef: unknown
+  nativeChatCovered: boolean
   disposed: boolean
   runSeq: number
   currentRunSeq: number
@@ -94,6 +95,7 @@ export function isTerminalViewportRefitTargetCurrent(
   state: TerminalViewportRefitTargetState
 ): boolean {
   return (
+    !state.nativeChatCovered &&
     !state.disposed &&
     state.runSeq === state.currentRunSeq &&
     state.activeHandle === state.expectedHandle &&

@@ -1,4 +1,4 @@
-import type { JiraIssue } from '../../../shared/types'
+import type { JiraIssue } from '../../../shared/jira-types'
 
 export type TaskPageJiraLoadError = {
   title: string

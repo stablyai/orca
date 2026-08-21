@@ -39,7 +39,7 @@ function snapshotFrame(entries: [type: string, mtime: string, path: string][]): 
     .join('')}${SNAPSHOT_END}`
 }
 
-type ScheduleBatchFlush = (rootKey: string, root: WatchedRoot) => void
+type ScheduleBatchFlush = (root: WatchedRoot) => void
 type ScheduleBatchFlushMock = ReturnType<typeof vi.fn<ScheduleBatchFlush>>
 
 function makeDeps(
@@ -92,7 +92,7 @@ describe('createWslWatcher', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'sh', '-s', '--', '/home/me/repo'],
+      ['-d', 'Ubuntu', '--exec', 'sh', '-s', '--', '/home/me/repo'],
       expect.objectContaining({
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true

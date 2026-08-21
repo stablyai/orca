@@ -72,6 +72,28 @@ describe('resolveRightSidebarEffectiveTab', () => {
     ).toBe('explorer')
   })
 
+  it('keeps a plugin tab active while its panel is still contributed', () => {
+    expect(
+      resolveRightSidebarEffectiveTab({
+        normalizedActiveTab: 'plugin:orca-samples.my-plugin/dashboard',
+        visibleItems: [...gitVisibleItems, { id: 'plugin:orca-samples.my-plugin/dashboard' }],
+        activeFolderWorkspaceKey: null,
+        rememberedFolderTab: null
+      })
+    ).toBe('plugin:orca-samples.my-plugin/dashboard')
+  })
+
+  it('falls back to the first visible item when a plugin tab was uninstalled', () => {
+    expect(
+      resolveRightSidebarEffectiveTab({
+        normalizedActiveTab: 'plugin:orca-samples.my-plugin/dashboard',
+        visibleItems: gitVisibleItems,
+        activeFolderWorkspaceKey: null,
+        rememberedFolderTab: null
+      })
+    ).toBe('explorer')
+  })
+
   it('treats empty visible items as an invariant failure', () => {
     expect(() =>
       resolveRightSidebarEffectiveTab({

@@ -23,11 +23,14 @@ describe('diagnostics RPC methods', () => {
       host: {
         totalMemory: 4096,
         freeMemory: 1024,
+        availableMemory: 1024,
+        availableMemorySource: 'free-memory',
         usedMemory: 3072,
         memoryUsagePercent: 75,
         cpuCoreCount: 8,
         loadAverage1m: 1.25
       },
+      processMemoryMetric: 'rss',
       totalCpu: 1,
       totalMemory: 1024,
       collectedAt: 123

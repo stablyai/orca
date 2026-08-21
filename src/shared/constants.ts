@@ -1,22 +1,20 @@
 /* eslint-disable max-lines -- Why: default persisted settings live in one schema-shaped object so migrations and tests compare against one source of truth. */
-import type {
-  GlobalSettings,
-  NotificationSettings,
-  OnboardingChecklistState,
-  OnboardingState,
-  PersistedState,
-  PersistedUIState,
-  RepoHookSettings,
-  WorkspaceSessionState,
-  AgentActivityDisplayMode
-} from './types'
+import type { GlobalSettings } from './global-settings-types'
+import type { NotificationSettings } from './notification-settings-types'
+import type { OnboardingChecklistState, OnboardingState } from './onboarding-state-types'
+import type { RepoHookSettings } from './orca-yaml-hook-types'
+import type { PersistedState } from './persisted-state-types'
+import type { PersistedUIState } from './persisted-ui-state-types'
+import type { AgentActivityDisplayMode } from './ui-chrome-types'
+import type { WorkspaceSessionState } from './workspace-session-state-types'
+import { EMPTY_CODEX_RESET_CREDIT_ATTEMPT_LEDGER } from './codex-reset-credit-attempt-ledger'
 import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
-import { DEFAULT_TERMINAL_FONT_WEIGHT } from './terminal-fonts'
+import { DEFAULT_TERMINAL_FONT_WEIGHT, DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from './terminal-fonts'
 import { getDefaultTerminalQuickCommands } from './terminal-quick-commands'
 import type { VoiceSettings } from './speech-types'
 import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
 import { TASK_PROVIDERS } from './task-providers'
-import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree-card-properties'
+import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree/card-properties'
 import { getDefaultSourceControlAiSettings } from './source-control-ai'
 import { DEFAULT_APP_ICON_ID } from './app-icon'
 import { DEFAULT_OPEN_IN_APPLICATIONS } from './open-in-applications'
@@ -32,6 +30,7 @@ import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control-group-order
 import { DEFAULT_SETUP_AGENT_STARTUP_POLICY } from './setup-agent-startup-policy'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
 import { DEFAULT_USAGE_PERCENTAGE_DISPLAY } from './usage-percentage-display'
+import { DEFAULT_STATUS_BAR_USAGE_MODE } from './status-bar-usage-mode'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
@@ -42,13 +41,14 @@ export {
   getWorktreeCardModeUpdates,
   isDefaultedCompactWorktreeCardProperties,
   normalizeWorktreeCardProperties
-} from './worktree-card-properties'
+} from './worktree/card-properties'
 
 export const SCHEMA_VERSION = 1
 export const DEFAULT_APP_FONT_FAMILY = 'Geist'
 export const DEFAULT_SHOW_SLEEPING_WORKSPACES = true
 export const DEFAULT_HIDE_SLEEPING_WORKSPACES = false
 export const DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE: AgentActivityDisplayMode = 'compact'
+export const DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY = 0.9
 
 export function normalizeAgentActivityDisplayMode(value: unknown): AgentActivityDisplayMode {
   return value === 'full' || value === 'compact' ? value : DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
@@ -171,6 +171,7 @@ function getDefaultWorkspaceDir(homeDir: string): string {
 export function getDefaultSettings(homedir: string): GlobalSettings {
   return {
     workspaceDir: getDefaultWorkspaceDir(homedir),
+    worktreeVisibilityDefaults: { external: 'hide' },
     nestWorkspaces: true,
     workspaceDirHistory: [],
     refreshLocalBaseRefOnWorktreeCreate: false,
@@ -179,7 +180,6 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     autoRenameBranchFromWorkDefaultedOn: true,
     branchPrefix: 'git-username',
     branchPrefixCustom: '',
-    enableGitHubAttribution: false,
     theme: 'system',
     leftSidebarAppearanceMode: 'default',
     leftSidebarTintColor: DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
@@ -190,6 +190,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     editorAutoSave: false,
     editorAutoSaveDelayMs: DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
     editorMinimapEnabled: false,
+    // Why empty: the editor keeps following the terminal font unless the user opts in.
+    editorFontFamily: '',
     editorWordWrap: true,
     richMarkdownSpellcheckEnabled: true,
     markdownReviewToolsEnabled: true,
@@ -201,6 +203,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalFontSize: 14,
     terminalFontFamily: defaultTerminalFontFamily(),
     terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT,
+    terminalFontWeightBold: DEFAULT_TERMINAL_FONT_WEIGHT_BOLD,
     terminalLineHeight: 1,
     terminalScrollSensitivity: 1.15,
     terminalFastScrollSensitivity: 5,
@@ -219,7 +222,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalThemeLight: 'Builtin Tango Light',
     terminalCustomThemes: [],
     terminalDividerColorLight: '#d4d4d8',
-    terminalInactivePaneOpacity: 0.8,
+    terminalInactivePaneOpacity: DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY,
     terminalActivePaneOpacity: 1,
     terminalPaneOpacityTransitionMs: 140,
     terminalDividerThicknessPx: 3,
@@ -228,7 +231,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalRightClickToPasteDefaultedForPlatform: true,
     terminalWindowsShell: 'powershell.exe',
     terminalWindowsWslDistro: null,
-    localAccountRuntime: 'host',
+    localAccountRuntime: 'auto',
+    localAccountRuntimeDefaultedToAutoForAllUsers: true,
     localAccountWslDistro: null,
     localWindowsRuntimeDefault: { kind: 'windows-host' },
     // Why: prefer modern PowerShell when installed, falling back to inbox Windows PowerShell.
@@ -242,8 +246,13 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // Why: default-on everywhere so it round-trips across platforms; only darwin acts on it.
     showMenuBarIcon: true,
     terminalClipboardOnSelect: false,
-    // Why: OSC 52 is a clipboard data-exfiltration vector; default off (query stays disabled separately).
-    terminalAllowOsc52Clipboard: false,
+    // Why: default on so Zellij/tmux/nvim copy works out of the box. Query
+    // replies stay disabled and payload size is capped in the OSC 52 handler.
+    // This default only covers new profiles; existing ones persisted `false`
+    // and are flipped once by the stamp below (shared/osc52-clipboard-settings.ts,
+    // applied by both the Electron store and the web client's localStorage store).
+    terminalAllowOsc52Clipboard: true,
+    terminalAllowOsc52ClipboardDefaultedOnForAllUsers: true,
     claudeAgentTeamsMode: 'off',
     setupScriptLaunchMode: 'new-tab',
     terminalScrollbackRows: DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT,
@@ -253,6 +262,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     openLinksInApp: false,
     localhostWorktreeLabelsEnabled: false,
     openLinksInAppPreferencePrompted: false,
+    openLinksInAppModifierInverts: false,
+    terminalLinkActionPopoverEnabled: true,
     openAgentTabsInChatByDefault: false,
     experimentalNativeChat: false,
     nativeChatSessionOptions: {},
@@ -265,6 +276,11 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     showTitlebarAppName: true,
     showTasksButton: true,
     showAutomationsButton: true,
+    artifactsEnabled: true,
+    artifactSharingEnabled: false,
+    agentSkillSharingEnabled: false,
+    showArtifactsButton: false,
+    showSkillsButton: false,
     showMobileButton: true,
     showPinnedWorktreesInGroups: false,
     ctrlTabOrderMode: 'mru',
@@ -290,15 +306,25 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     activeClaudeManagedAccountId: null,
     terminalScopeHistoryByWorktree: true,
     terminalHiddenViewParking: true,
+    // C1 kill switches — runtime reads stay `!== false` so older persisted
+    // settings objects (which omit them) keep the default-on behavior.
+    terminalSshViewParking: true,
+    terminalHiddenWorktreeRetentionBudget: true,
+    browserGuestWorktreeRetentionBudget: true,
     terminalMainSideEffectAuthority: true,
     terminalHiddenDeliveryGate: true,
     terminalModelQueryAuthority: true,
     defaultTuiAgent: null,
     disabledTuiAgents: [...DEFAULT_DISABLED_TUI_AGENTS],
+    pluginSystemEnabled: false,
+    disabledPlugins: [],
+    pluginConsents: {},
+    devPluginPaths: [],
     claudeAgentTeamsDefaultDisabledMigrated: true,
     skipDeleteWorktreeConfirm: false,
     skipCloseTerminalWithRunningProcessConfirm: false,
     skipDeleteAutomationConfirm: false,
+    skipDeleteArtifactConfirm: false,
     skipCodexRateLimitResetConfirm: false,
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
@@ -332,6 +358,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     mobileAutoRestoreFitMs: null,
     // Why: Anywhere (Relay + local) is the default; local-only is written only on explicit same-network choice.
     mobilePairingConnectionMode: 'automatic',
+    mobilePairingCustomAddress: null,
+    mobilePairingCustomAddresses: [],
     // Why: off keeps the cosmetic overlay unmounted for users who never opt in.
     experimentalPet: false,
     experimentalActivity: false,
@@ -377,7 +405,9 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     dictationMode: 'toggle' as const,
     terminalConfirmBeforeInsert: false,
     userModels: [],
-    openAiApiKeyConfigured: false
+    openAiApiKeyConfigured: false,
+    microphoneDeviceId: null,
+    microphoneDeviceLabel: null
   }
 }
 
@@ -402,6 +432,8 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
     projectGroups: [],
     folderWorkspaces: [],
     sparsePresetsByRepo: {},
+    retiredWorktreeNamesByRepo: {},
+    retiredWorktreeNamesByNamespace: {},
     worktreeMeta: {},
     worktreeLineageById: {},
     workspaceLineageByChildKey: {},
@@ -413,13 +445,15 @@ export function getDefaultPersistedState(homedir: string): PersistedState {
     sshTargets: [],
     deletedSshConfigAliases: [],
     sshRemotePtyLeases: [],
+    sshPtyConsumerRecoveries: [],
     claudeLivePtySessionIds: [],
     migrationUnsupportedPtyEntries: [],
     legacyPaneKeyAliasEntries: [],
     automations: [],
     automationRuns: [],
     onboarding: getDefaultOnboardingState(),
-    featureInteractionTelemetryBuckets: {}
+    featureInteractionTelemetryBuckets: {},
+    codexResetCreditAttemptLedger: structuredClone(EMPTY_CODEX_RESET_CREDIT_ATTEMPT_LEDGER)
   }
 }
 
@@ -434,6 +468,7 @@ export function getDefaultUIState(): PersistedUIState {
     rightSidebarExplorerView: 'files',
     rightSidebarWidth: 350,
     markdownTocPanelWidth: 240,
+    combinedDiffFileTreeWidth: 256,
     groupBy: 'repo',
     sortBy: 'recent',
     projectOrderBy: 'manual',
@@ -446,6 +481,10 @@ export function getDefaultUIState(): PersistedUIState {
     showSleepingWorkspaces: DEFAULT_SHOW_SLEEPING_WORKSPACES,
     hideDefaultBranchWorkspace: false,
     hideAutomationGeneratedWorkspaces: false,
+    hideCliCreatedWorkspaces: false,
+    hideDetachedHeadWorkspaces: false,
+    hideWorkspacesFromOtherDevices: false,
+    alwaysShowDefaultBranchWorkspace: true,
     showDotfilesByWorktree: {},
     filterRepoIds: [],
     collapsedGroups: [],
@@ -465,6 +504,7 @@ export function getDefaultUIState(): PersistedUIState {
     statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
     statusBarVisible: true,
     usagePercentageDisplay: DEFAULT_USAGE_PERCENTAGE_DISPLAY,
+    statusBarUsageMode: DEFAULT_STATUS_BAR_USAGE_MODE,
     dismissedUpdateVersion: null,
     lastUpdateCheckAt: null,
     trustedOrcaHooks: {},
@@ -475,6 +515,8 @@ export function getDefaultUIState(): PersistedUIState {
     setupGuideBrowserMilestoneLegacyComplete: false,
     browserImportHintHidden: false,
     trayMinimizeNoticeShown: false,
+    // Why: fresh profiles start on the new default, so nothing was overridden to report.
+    osc52ClipboardDefaultOnNoticePending: false,
     mobileEmulatorTabIntroDismissed: false,
     mobileEmulatorAgentSetupDismissed: false,
     // Why: only upgraded profiles saw the old ordering, so only they get the one-time notice.

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChecksPanelReviewHeader } from './ChecksPanel'
+import type { ChecksPanelHostedReviewModifierDestination } from './checks-panel-hosted-review-click-routing'
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -30,11 +31,11 @@ afterEach(() => {
 function renderHeader({
   canUnlinkPullRequest = true,
   provider = 'github',
-  showSystemBrowserHint = true
+  modifierHintDestination = 'system-browser'
 }: {
   canUnlinkPullRequest?: boolean
   provider?: 'github' | 'gitlab'
-  showSystemBrowserHint?: boolean
+  modifierHintDestination?: ChecksPanelHostedReviewModifierDestination
 } = {}): string {
   const isGitLab = provider === 'gitlab'
   return renderToStaticMarkup(
@@ -53,7 +54,7 @@ function renderHeader({
       }}
       isRefreshing={false}
       canUnlinkPullRequest={canUnlinkPullRequest}
-      showSystemBrowserHint={showSystemBrowserHint}
+      modifierHintDestination={modifierHintDestination}
       onRefresh={vi.fn()}
       onOpenReview={vi.fn()}
       onUnlinkPullRequest={vi.fn()}
@@ -79,12 +80,23 @@ describe('ChecksPanelReviewHeader', () => {
     expect(markup).not.toContain('lucide-external-link')
   })
 
-  it('omits the system-browser hint when plain clicks already open externally', () => {
-    const markup = renderHeader({ showSystemBrowserHint: false })
+  it('omits the modifier hint when it lands where a plain click already does', () => {
+    const markup = renderHeader({ modifierHintDestination: null })
 
     expect(markup).toContain('Open on GitHub')
     expect(markup).not.toContain('system browser')
     expect(markup).not.toContain('⇧⌘+click')
+  })
+
+  // Why: with inverting on and Link Routing off the modifier reaches Orca here, so the
+  // hint must name Orca rather than the destination a plain click already uses.
+  it('names Orca when the modifier inverts toward the built-in browser', () => {
+    expect(renderHeader({ modifierHintDestination: 'orca' })).toContain('⇧⌘+click to open in Orca')
+
+    vi.stubGlobal('navigator', { userAgent: 'Windows' })
+    expect(renderHeader({ modifierHintDestination: 'orca' })).toContain(
+      'Shift+Ctrl+click to open in Orca'
+    )
   })
 
   it('shows the Ctrl system-browser hint off macOS', () => {

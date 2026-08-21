@@ -1,4 +1,5 @@
-import type { GlobalSettings, Repo } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import { lookupReposBySlugFromCache } from '@/lib/repo-slug-cache'
 
@@ -15,11 +16,17 @@ export function settingsForProjectRowOwner(
   state: RepoOwnerState,
   owner: string,
   repo: string,
+  host?: string,
   fallbackSettings:
     | Pick<GlobalSettings, 'activeRuntimeEnvironmentId'>
     | null
     | undefined = state.settings
 ): Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined {
-  const matchedRepo = lookupReposBySlugFromCache(state.repos, state.settings, `${owner}/${repo}`)[0]
+  const matchedRepo = lookupReposBySlugFromCache(
+    state.repos,
+    state.settings,
+    `${owner}/${repo}`,
+    host
+  )[0]
   return matchedRepo ? getSettingsForRepoRuntimeOwner(state, matchedRepo.id) : fallbackSettings
 }

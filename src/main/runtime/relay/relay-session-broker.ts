@@ -45,6 +45,7 @@ export class RelaySessionBroker {
       mobileSocketWiring: options.mobileSocketWiring,
       isCurrent: () => this.isCurrent(),
       onStatus: (status) => this.publishStatus(status),
+      resolvePreferredRegion: options.resolvePreferredRegion,
       fetch: options.fetch,
       createControlSocket: options.createControlSocket,
       createDataSocket: options.createDataSocket,
@@ -75,6 +76,10 @@ export class RelaySessionBroker {
   get ownerIdentityKey(): string {
     const identity = this.options.identity
     return `${identity.userId}\0${identity.profileId}\0${identity.organizationId}`
+  }
+
+  isLive(): boolean {
+    return !this.closed && this.originPool.hasLiveControl()
   }
 
   get endpoint(): MobileRelayEndpoint | null {
@@ -193,17 +198,25 @@ export class RelaySessionBroker {
 
   private async open(accessToken: string): Promise<void> {
     this.publishStatus('connecting')
-    const authorization = await exchangeRelayAuthorization({
-      endpoint: this.options.authConfig.relayTokenEndpoint,
-      accessToken,
-      keypair: this.options.keypair,
-      fetch: this.options.fetch
-    })
+    const [authorization, preferredRegion] = await Promise.all([
+      exchangeRelayAuthorization({
+        endpoint: this.options.authConfig.relayTokenEndpoint,
+        accessToken,
+        keypair: this.options.keypair,
+        fetch: this.options.fetch
+      }),
+      this.options.resolvePreferredRegion?.().catch(() => undefined) ?? Promise.resolve(undefined)
+    ])
     this.assertCurrent()
     const assignment = await requestRelayAssignment({
       directorUrl: this.options.authConfig.relayDirectorUrl,
       relayToken: authorization.relayToken,
       relayHostId: this.relayHostId,
+      // Any previously paired host likely holds a durable assignment; the
+      // director verifies the claim, and first-ever pairing simply falls
+      // through to the placement lane.
+      reconnect: true,
+      preferredRegion,
       fetch: this.options.fetch
     })
     this.assertCurrent()

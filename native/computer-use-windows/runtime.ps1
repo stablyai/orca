@@ -16,6 +16,7 @@ Add-Type -AssemblyName System.Windows.Forms
 
 Add-Type -TypeDefinition @"
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 public static class OrcaDesktopWin32 {
@@ -31,6 +32,39 @@ public static class OrcaDesktopWin32 {
     public struct POINT {
         public int X;
         public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct INPUT {
+        public uint type;
+        public INPUTUNION data;
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    public struct INPUTUNION {
+        [FieldOffset(0)]
+        public MOUSEINPUT mouse;
+        [FieldOffset(0)]
+        public KEYBDINPUT keyboard;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MOUSEINPUT {
+        public int dx;
+        public int dy;
+        public uint mouseData;
+        public uint flags;
+        public uint time;
+        public UIntPtr extraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct KEYBDINPUT {
+        public ushort virtualKey;
+        public ushort scanCode;
+        public uint flags;
+        public uint time;
+        public UIntPtr extraInfo;
     }
 
     [DllImport("user32.dll")]
@@ -56,6 +90,54 @@ public static class OrcaDesktopWin32 {
 
     [DllImport("user32.dll")]
     public static extern void mouse_event(uint dwFlags, uint dx, uint dy, int dwData, UIntPtr dwExtraInfo);
+
+    [DllImport("user32.dll")]
+    public static extern uint SendInput(uint count, INPUT[] inputs, int size);
+
+    public static void SendModifiedClick(byte[] modifiers, uint mouseDown, uint mouseUp) {
+        const uint keyboardInput = 1;
+        const uint mouseInput = 0;
+        const uint keyUp = 0x0002;
+        var inputs = new List<INPUT>();
+        foreach (var modifier in modifiers) {
+            inputs.Add(KeyboardInput(keyboardInput, modifier, 0));
+        }
+        inputs.Add(MouseInput(mouseInput, mouseDown));
+        inputs.Add(MouseInput(mouseInput, mouseUp));
+        for (var index = modifiers.Length - 1; index >= 0; index--) {
+            inputs.Add(KeyboardInput(keyboardInput, modifiers[index], keyUp));
+        }
+        var values = inputs.ToArray();
+        var sent = SendInput((uint)values.Length, values, Marshal.SizeOf(typeof(INPUT)));
+        if (sent != (uint)values.Length) {
+            var releases = new List<INPUT>();
+            releases.Add(MouseInput(mouseInput, mouseUp));
+            for (var index = modifiers.Length - 1; index >= 0; index--) {
+                releases.Add(KeyboardInput(keyboardInput, modifiers[index], keyUp));
+            }
+            var releaseValues = releases.ToArray();
+            SendInput((uint)releaseValues.Length, releaseValues, Marshal.SizeOf(typeof(INPUT)));
+            throw new InvalidOperationException("SendInput did not complete the modified click");
+        }
+    }
+
+    private static INPUT KeyboardInput(uint type, byte virtualKey, uint flags) {
+        return new INPUT {
+            type = type,
+            data = new INPUTUNION {
+                keyboard = new KEYBDINPUT { virtualKey = virtualKey, flags = flags }
+            }
+        };
+    }
+
+    private static INPUT MouseInput(uint type, uint flags) {
+        return new INPUT {
+            type = type,
+            data = new INPUTUNION {
+                mouse = new MOUSEINPUT { flags = flags }
+            }
+        };
+    }
 }
 "@
 
@@ -97,6 +179,7 @@ $MouseEvents = @{
     MiddleDown = 0x0020
     MiddleUp = 0x0040
     Wheel = 0x0800
+    HorizontalWheel = 0x01000
 }
 
 function Write-OrcaJson($Payload) {
@@ -479,10 +562,12 @@ function Render-OrcaTree($RootElement, $WindowFrame, [bool]$CompactBrowserTabs =
         $title = if ([string]::IsNullOrWhiteSpace($record.name)) { $record.automationId } else { $record.name }
         $role = if ([string]::IsNullOrWhiteSpace($record.localizedControlType)) { $record.controlType } else { $record.localizedControlType }
         $roleKey = $role.ToLowerInvariant()
-        $snippets = @(Get-OrcaTextSnippets $Node 8 4)
         $genericSummary = $null
-        if (($roleKey -in @("pane", "group", "custom", "unknown")) -and [string]::IsNullOrWhiteSpace($title) -and [string]::IsNullOrWhiteSpace($record.value) -and $snippets.Count -ge 2 -and (Test-OrcaPlainTextSubtree $Node)) {
-            $genericSummary = ($snippets -join " ")
+        if (($roleKey -in @("pane", "group", "custom", "unknown")) -and [string]::IsNullOrWhiteSpace($title) -and [string]::IsNullOrWhiteSpace($record.value)) {
+            $snippets = @(Get-OrcaTextSnippets $Node 8 4)
+            if ($snippets.Count -ge 2 -and (Test-OrcaPlainTextSubtree $Node)) {
+                $genericSummary = ($snippets -join " ")
+            }
         }
         if (($roleKey -in @("pane", "group", "custom", "unknown")) -and [string]::IsNullOrWhiteSpace($title) -and [string]::IsNullOrWhiteSpace($record.value) -and $meaningfulActions.Count -eq 0 -and $null -eq $genericSummary -and $children.Count -le 1) {
             for ($i = 0; $i -lt $children.Count; $i++) {
@@ -912,7 +997,7 @@ function Get-OrcaElementScreenPoint($Element) {
     $null
 }
 
-function Send-OrcaMouseClick([IntPtr]$WindowHandle, [int]$ScreenX, [int]$ScreenY, [string]$Button, [int]$Count) {
+function Send-OrcaMouseClick([IntPtr]$WindowHandle, [int]$ScreenX, [int]$ScreenY, [string]$Button, [int]$Count, [string]$Modifiers) {
     [void][OrcaDesktopWin32]::SetForegroundWindow($WindowHandle)
     [void][OrcaDesktopWin32]::SetCursorPos($ScreenX, $ScreenY)
     $buttonName = if ([string]::IsNullOrWhiteSpace($Button)) { "left" } else { $Button.ToLowerInvariant() }
@@ -923,10 +1008,23 @@ function Send-OrcaMouseClick([IntPtr]$WindowHandle, [int]$ScreenX, [int]$ScreenY
         default { throw "unsupported mouse button: $Button" }
     }
 
-    for ($i = 0; $i -lt (Get-OrcaPositiveInteger $Count "click_count"); $i++) {
-        [OrcaDesktopWin32]::mouse_event($down, 0, 0, 0, [UIntPtr]::Zero)
-        Start-Sleep -Milliseconds 35
-        [OrcaDesktopWin32]::mouse_event($up, 0, 0, 0, [UIntPtr]::Zero)
+    $modifierKeys = @(Get-OrcaClickModifierVirtualKeys $Modifiers)
+    $clickCount = Get-OrcaPositiveInteger $Count "click_count"
+    if ($modifierKeys.Count -eq 0) {
+        for ($i = 0; $i -lt $clickCount; $i++) {
+            [OrcaDesktopWin32]::mouse_event($down, 0, 0, 0, [UIntPtr]::Zero)
+            Start-Sleep -Milliseconds 35
+            [OrcaDesktopWin32]::mouse_event($up, 0, 0, 0, [UIntPtr]::Zero)
+        }
+        return
+    }
+    for ($i = 0; $i -lt $clickCount; $i++) {
+        [OrcaDesktopWin32]::SendModifiedClick(
+            [byte[]]$modifierKeys,
+            [uint32]$down,
+            [uint32]$up
+        )
+        if ($i + 1 -lt $clickCount) { Start-Sleep -Milliseconds 35 }
     }
 }
 
@@ -988,6 +1086,16 @@ function Get-OrcaModifierVirtualKey([string]$Modifier) {
         { $_ -in @("meta", "super", "win", "cmd", "command") } { return 0x5B }
         default { throw "Unsupported modifier: $Modifier" }
     }
+}
+
+function Get-OrcaClickModifierVirtualKeys([string]$Modifiers) {
+    if ([string]::IsNullOrWhiteSpace($Modifiers)) { return @() }
+    $parts = @($Modifiers.Split("+") | ForEach-Object { $_.Trim() })
+    $emptyParts = @($parts | Where-Object { [string]::IsNullOrWhiteSpace($_) })
+    if ($parts.Count -eq 0 -or $emptyParts.Count -gt 0) {
+        throw "Click modifiers require modifier keys only"
+    }
+    @($parts | ForEach-Object { Get-OrcaModifierVirtualKey $_ })
 }
 
 function Send-OrcaHotkey([IntPtr]$WindowHandle, [string]$KeySpec) {
@@ -1106,13 +1214,14 @@ function Invoke-OrcaOperation($Operation) {
             Restore-OrcaWindow $process
             $handledByPattern = $false
             $clickCount = Get-OrcaPositiveInteger $Operation.click_count "click_count"
-            if ($null -ne $element -and $Operation.mouse_button -ne "right" -and $Operation.mouse_button -ne "middle" -and $clickCount -le 1) {
+            $hasModifiers = -not [string]::IsNullOrWhiteSpace([string]$Operation.modifiers)
+            if (-not $hasModifiers -and $null -ne $element -and $Operation.mouse_button -ne "right" -and $Operation.mouse_button -ne "middle" -and $clickCount -le 1) {
                 $handledByPattern = Invoke-OrcaPrimaryAction $element
             }
             if (-not $handledByPattern) {
                 $point = Get-OrcaElementScreenPoint $element
                 if ($null -eq $point) { $point = Get-OrcaScreenPoint $Operation $windowFrame }
-                Send-OrcaMouseClick $handle $point.x $point.y $Operation.mouse_button $clickCount
+                Send-OrcaMouseClick $handle $point.x $point.y $Operation.mouse_button $clickCount $Operation.modifiers
                 $action = [pscustomobject]@{ path = "synthetic"; actionName = $null; fallbackReason = "actionUnsupported" }
             } else {
                 $action = [pscustomobject]@{ path = "accessibility"; actionName = "primaryAction"; fallbackReason = $null }
@@ -1127,16 +1236,22 @@ function Invoke-OrcaOperation($Operation) {
         }
         "scroll" {
             $delta = 120 * [int][Math]::Ceiling((Get-OrcaPositiveNumber $Operation.pages "pages"))
-            if ($Operation.direction -eq "down" -or $Operation.direction -eq "right") {
+            $mouseEvent = $MouseEvents.Wheel
+            if ($Operation.direction -eq "down") {
                 $delta = -1 * $delta
-            } elseif ($Operation.direction -ne "up" -and $Operation.direction -ne "left") {
+            } elseif ($Operation.direction -eq "left") {
+                $mouseEvent = $MouseEvents.HorizontalWheel
+                $delta = -1 * $delta
+            } elseif ($Operation.direction -eq "right") {
+                $mouseEvent = $MouseEvents.HorizontalWheel
+            } elseif ($Operation.direction -ne "up") {
                 throw "unsupported scroll direction: $($Operation.direction)"
             }
             $point = Get-OrcaElementScreenPoint $element
             if ($null -eq $point) { $point = Get-OrcaScreenPoint $Operation $windowFrame }
             [void][OrcaDesktopWin32]::SetForegroundWindow($handle)
             [void][OrcaDesktopWin32]::SetCursorPos([int]$point.x, [int]$point.y)
-            [OrcaDesktopWin32]::mouse_event($MouseEvents.Wheel, 0, 0, $delta, [UIntPtr]::Zero)
+            [OrcaDesktopWin32]::mouse_event($mouseEvent, 0, 0, $delta, [UIntPtr]::Zero)
             $action = [pscustomobject]@{ path = "synthetic"; actionName = "scroll"; fallbackReason = $null }
         }
         "drag" {

@@ -1,0 +1,36 @@
+{
+  "settings": {
+    "appearance": {
+      "language": {
+        "title": "Idioma",
+        "description": "Escolha o idioma usado na interface do Orca.",
+        "system": "Sistema",
+        "english": "Inglês",
+        "chinese": "Chinês simplificado",
+        "korean": "Coreano",
+        "japanese": "Japonês",
+        "spanish": "Espanhol"
+      }
+    }
+  },
+  "menu": {
+    "checkForUpdates": "Verificar atualizações...",
+    "settings": "Configurações",
+    "file": "Arquivo",
+    "exit": "Sair",
+    "edit": "Editar",
+    "appearance": "Aparência",
+    "view": "Visualizar",
+    "reload": "Recarregar",
+    "window": "Janela",
+    "help": "Ajuda",
+    "paste": "Colar"
+  },
+  "tray": {
+    "openOrca": "Abrir o Orca",
+    "quit": "Encerrar",
+    "minimizeNotice": {
+      "body": "O Orca continua em execução na bandeja do sistema"
+    }
+  }
+}

@@ -11,7 +11,12 @@ import {
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { getGitRepoRoot, isGitRepo, normalizeGitRepoRootForInputPath } from './repo'
+import {
+  getGitRepoRoot,
+  getLinkedWorktreeMainRepoRoot,
+  isGitRepo,
+  normalizeGitRepoRootForInputPath
+} from './repo'
 
 function git(cwd: string, args: string[]): string {
   return execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] })
@@ -326,6 +331,85 @@ describe('isGitRepo', () => {
     git(tmpDir, ['init', '--bare', '--quiet', bareRepo])
 
     expect(getGitRepoRoot(bareRepo)).toBe(bareRepo)
+  })
+})
+
+describe('getLinkedWorktreeMainRepoRoot', () => {
+  let tmpDir: string
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(path.join(tmpdir(), 'orca-linked-worktree-'))
+  })
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  function initRepoWithCommit(repoRoot: string): void {
+    mkdirSync(repoRoot, { recursive: true })
+    git(repoRoot, ['init', '--quiet'])
+    git(repoRoot, ['config', 'user.email', 'test@orca.test'])
+    git(repoRoot, ['config', 'user.name', 'Orca Test'])
+    writeFileSync(path.join(repoRoot, 'README.md'), 'seed\n')
+    git(repoRoot, ['add', 'README.md'])
+    git(repoRoot, ['commit', '--quiet', '-m', 'seed'])
+  }
+
+  it('resolves a linked worktree back to its main checkout', () => {
+    const repoRoot = path.join(tmpDir, 'repo')
+    initRepoWithCommit(repoRoot)
+    const linked = path.join(tmpDir, 'linked')
+    git(repoRoot, ['worktree', 'add', '--quiet', '-b', 'feature', linked])
+
+    const expectedMainRoot = git(repoRoot, ['rev-parse', '--show-toplevel'])
+      .trim()
+      .replace(/\\/g, '/')
+    expect(getLinkedWorktreeMainRepoRoot(linked)).toBe(expectedMainRoot)
+  })
+
+  it('returns null for the main checkout itself', () => {
+    const repoRoot = path.join(tmpDir, 'repo')
+    initRepoWithCommit(repoRoot)
+
+    expect(getLinkedWorktreeMainRepoRoot(repoRoot)).toBeNull()
+  })
+
+  it('returns null for a nested directory inside the main checkout', () => {
+    const repoRoot = path.join(tmpDir, 'repo')
+    initRepoWithCommit(repoRoot)
+    const nested = path.join(repoRoot, 'packages', 'web')
+    mkdirSync(nested, { recursive: true })
+
+    expect(getLinkedWorktreeMainRepoRoot(nested)).toBeNull()
+  })
+
+  it('returns null for a bare repository', () => {
+    const bareRepo = path.join(tmpDir, 'bare.git')
+    git(tmpDir, ['init', '--bare', '--quiet', bareRepo])
+
+    expect(getLinkedWorktreeMainRepoRoot(bareRepo)).toBeNull()
+  })
+
+  it('returns null for a non-repository directory', () => {
+    const plain = path.join(tmpDir, 'plain')
+    mkdirSync(plain)
+
+    expect(getLinkedWorktreeMainRepoRoot(plain)).toBeNull()
+  })
+
+  it('returns null for a missing path', () => {
+    expect(getLinkedWorktreeMainRepoRoot(path.join(tmpDir, 'does-not-exist'))).toBeNull()
+  })
+
+  it('returns null when git cannot be run rather than guessing a main checkout', () => {
+    const repoRoot = path.join(tmpDir, 'repo')
+    initRepoWithCommit(repoRoot)
+    const linked = path.join(tmpDir, 'linked')
+    git(repoRoot, ['worktree', 'add', '--quiet', '-b', 'feature', linked])
+
+    withGitUnavailable(() => {
+      expect(getLinkedWorktreeMainRepoRoot(linked)).toBeNull()
+    })
   })
 })
 

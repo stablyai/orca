@@ -4,8 +4,10 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { useAppStore } from '@/store'
 import { FeatureSetupInlineTerminal } from '../onboarding/FeatureSetupInlineTerminal'
+import type { OnboardingFeatureSetupRuntimeContext } from '../onboarding/onboarding-feature-setup-runtime'
 import {
   runOnboardingFeatureSetup,
   type OnboardingFeatureSetupSelection
@@ -14,9 +16,15 @@ import {
   promptForSetupGuideProject,
   useSetupTargetWorktree
 } from './FeatureWallSetupWorkflowActions'
+import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 
 export function BrowserAction(props: { done: boolean }): React.JSX.Element {
   const targetWorktree = useSetupTargetWorktree()
+  const browserCreationEnabled = useAppStore(
+    (state) =>
+      getClientCreationActionPolicy(state, targetWorktree?.id ?? null)['managed-browser'].state ===
+      'enabled'
+  )
   const openModal = useAppStore((s) => s.openModal)
   const closeModal = useAppStore((s) => s.closeModal)
   const openNewBrowserTabInActiveWorkspace = useAppStore(
@@ -29,7 +37,7 @@ export function BrowserAction(props: { done: boolean }): React.JSX.Element {
       return
     }
     closeModal()
-    activateAndRevealWorktree(targetWorktree.id)
+    activateAndRevealWorktree(targetWorktree.id, { providesInitialSurface: true })
     const state = useAppStore.getState()
     // Why: open the browser into the worktree's active group so it lands beside
     // the user's current work rather than spawning a detached surface.
@@ -37,7 +45,9 @@ export function BrowserAction(props: { done: boolean }): React.JSX.Element {
       state.activeGroupIdByWorktree[targetWorktree.id] ??
       state.groupsByWorktree[targetWorktree.id]?.[0]?.id
     if (groupId) {
-      void openNewBrowserTabInActiveWorkspace(groupId)
+      void openNewBrowserTabInActiveWorkspace(groupId).catch((error) => {
+        toast.error(error instanceof Error ? error.message : String(error))
+      })
     } else {
       toast.warning(
         translate(
@@ -56,7 +66,7 @@ export function BrowserAction(props: { done: boolean }): React.JSX.Element {
 
   return (
     <div className="flex flex-wrap items-center gap-2.5">
-      {props.done ? null : (
+      {props.done || !browserCreationEnabled ? null : (
         <Button type="button" size="sm" className="w-fit gap-2" onClick={handleTryIt}>
           <ArrowUpRight className="size-3.5" />
           {translate(
@@ -84,7 +94,11 @@ const BROWSER_ONLY_FEATURE_SETUP: OnboardingFeatureSetupSelection = {
 function BrowserSkillInstallButton(): React.JSX.Element {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [command, setCommand] = useState<string | null>(null)
+  const [runtimeContext, setRuntimeContext] = useState<OnboardingFeatureSetupRuntimeContext | null>(
+    null
+  )
   const [busy, setBusy] = useState(false)
+  const activeSkillRuntime = useActiveProjectSkillRuntime()
 
   const handleInstall = useCallback(async () => {
     if (busy || command !== null) {
@@ -92,7 +106,11 @@ function BrowserSkillInstallButton(): React.JSX.Element {
     }
     setBusy(true)
     try {
-      const result = await runOnboardingFeatureSetup(BROWSER_ONLY_FEATURE_SETUP)
+      const result = await runOnboardingFeatureSetup(
+        BROWSER_ONLY_FEATURE_SETUP,
+        undefined,
+        activeSkillRuntime
+      )
       recordFeatureInteraction('agent-browser-setup')
       const firstWarning = result.warnings[0]
       if (firstWarning) {
@@ -118,6 +136,7 @@ function BrowserSkillInstallButton(): React.JSX.Element {
         )
       }
       if (result.skillInstallCommand) {
+        setRuntimeContext(activeSkillRuntime)
         setCommand(result.skillInstallCommand)
       }
     } catch (error) {
@@ -140,10 +159,16 @@ function BrowserSkillInstallButton(): React.JSX.Element {
     } finally {
       setBusy(false)
     }
-  }, [busy, command, recordFeatureInteraction])
+  }, [activeSkillRuntime, busy, command, recordFeatureInteraction])
 
   if (command) {
-    return <FeatureSetupInlineTerminal command={command} selection={BROWSER_ONLY_FEATURE_SETUP} />
+    return (
+      <FeatureSetupInlineTerminal
+        command={command}
+        runtimeContext={runtimeContext ?? undefined}
+        selection={BROWSER_ONLY_FEATURE_SETUP}
+      />
+    )
   }
 
   return (

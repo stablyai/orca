@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -6,7 +6,8 @@ import {
   decodeTerminalStreamText,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
-  encodeTerminalStreamText
+  encodeTerminalStreamText,
+  TERMINAL_STREAM_JSON_STRUCTURE_LIMITS
 } from './terminal-stream-protocol'
 
 describe('terminal-stream-protocol', () => {
@@ -136,6 +137,19 @@ describe('terminal-stream-protocol', () => {
     expect(ack?.opcode).toBe(TerminalStreamOpcode.Ack)
     expect(ack?.streamId).toBe(12)
     expect(ack && decodeTerminalStreamJson(ack.payload)).toEqual({ bytes: 4096 })
+  })
+
+  it('rejects excessive JSON nesting before JSON.parse', () => {
+    const parseSpy = vi.spyOn(JSON, 'parse')
+    try {
+      const depth = TERMINAL_STREAM_JSON_STRUCTURE_LIMITS.nestingDepth + 1
+      const payload = new TextEncoder().encode(`${'['.repeat(depth)}0${']'.repeat(depth)}`)
+
+      expect(decodeTerminalStreamJson(payload)).toBeNull()
+      expect(parseSpy).not.toHaveBeenCalled()
+    } finally {
+      parseSpy.mockRestore()
+    }
   })
 
   it('rejects unknown frame versions and opcodes', () => {

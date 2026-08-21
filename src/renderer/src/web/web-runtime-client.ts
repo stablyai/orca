@@ -2,6 +2,7 @@
 import type { RuntimeRpcResponse, RuntimeRpcSuccess } from '../../../shared/runtime-rpc-envelope'
 import { isKeepaliveFrame } from '../../../shared/runtime-rpc-envelope'
 import type { WebPairingOffer } from './web-pairing'
+import { installWindowVisibilityInterval } from '../lib/window-visibility-interval'
 import { withRemoteRuntimeTailscaleHint } from '../../../shared/remote-runtime-tailscale-hint'
 import {
   decrypt,
@@ -13,6 +14,14 @@ import {
   publicKeyFromBase64,
   publicKeyToBase64
 } from './web-e2ee'
+import {
+  AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+  WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+  WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
+import { createWebRuntimeUnauthorizedError } from './web-runtime-client-error'
+import { withReconnectJitter } from '../../../shared/reconnect-jitter'
 
 type WebRuntimeConnectionState =
   | 'disconnected'
@@ -76,7 +85,7 @@ export class WebRuntimeClient {
   private connectTimer: number | null = null
   private handshakeTimer: number | null = null
   private reconnectTimer: number | null = null
-  private heartbeatTimer: number | null = null
+  private heartbeatCleanup: (() => void) | null = null
   private lastInboundFrameAt = 0
   // Timestamp of an outstanding liveness probe (null = none); dead-close fires only on an unanswered sent probe.
   private heartbeatProbeSentAt: number | null = null
@@ -449,7 +458,16 @@ export class WebRuntimeClient {
       try {
         const control = JSON.parse(raw) as { type?: unknown }
         if (control.type === 'e2ee_ready') {
-          this.sendEncrypted({ type: 'e2ee_auth', deviceToken: this.pairing.deviceToken })
+          this.sendEncrypted({
+            type: 'e2ee_auth',
+            deviceToken: this.pairing.deviceToken,
+            clientCapabilities: [
+              SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+              AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+              WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
+              WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
+            ]
+          })
           return
         }
       } catch {
@@ -472,7 +490,7 @@ export class WebRuntimeClient {
         } else if (control.type === 'e2ee_error' || control.error?.code === 'unauthorized') {
           this.intentionallyClosed = true
           this.setState('auth-failed')
-          this.rejectAllPending('Unauthorized. Pair this web client again.')
+          this.rejectAllPending(createWebRuntimeUnauthorizedError())
           this.notifySubscriptionsError('unauthorized', 'Unauthorized. Pair this web client again.')
           this.ws?.close()
         }
@@ -524,7 +542,7 @@ export class WebRuntimeClient {
     if (isRuntimeFailureResponse(response) && response.error.code === 'unauthorized') {
       this.intentionallyClosed = true
       this.setState('auth-failed')
-      this.rejectAllPending('Unauthorized. Pair this web client again.')
+      this.rejectAllPending(createWebRuntimeUnauthorizedError())
       this.notifySubscriptionsError('unauthorized', 'Unauthorized. Pair this web client again.')
       this.ws?.close()
       return
@@ -578,7 +596,7 @@ export class WebRuntimeClient {
       return Promise.resolve()
     }
     if (this.state === 'auth-failed') {
-      return Promise.reject(new Error('Unauthorized. Pair this web client again.'))
+      return Promise.reject(createWebRuntimeUnauthorizedError())
     }
     if (this.intentionallyClosed) {
       return Promise.reject(new Error('Remote Orca runtime connection closed.'))
@@ -634,8 +652,9 @@ export class WebRuntimeClient {
     if (this.reconnectTimer || this.intentionallyClosed) {
       return
     }
-    const delay =
+    const delay = withReconnectJitter(
       RECONNECT_DELAYS_MS[Math.min(this.reconnectAttempt, RECONNECT_DELAYS_MS.length - 1)]
+    )
     this.reconnectAttempt += 1
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null
@@ -652,7 +671,7 @@ export class WebRuntimeClient {
         waiter.resolve()
       }
     } else if (next === 'auth-failed') {
-      this.rejectAllWaiters(new Error('Unauthorized. Pair this web client again.'))
+      this.rejectAllWaiters(createWebRuntimeUnauthorizedError())
     }
   }
 
@@ -661,8 +680,8 @@ export class WebRuntimeClient {
     return `web-rpc-${this.requestCounter}-${Date.now()}`
   }
 
-  private rejectAllPending(reason: string): void {
-    const error = new Error(reason)
+  private rejectAllPending(reason: string | Error): void {
+    const error = typeof reason === 'string' ? new Error(reason) : reason
     for (const [id, pending] of this.pending) {
       this.pending.delete(id)
       window.clearTimeout(pending.timeout)
@@ -765,18 +784,32 @@ export class WebRuntimeClient {
 
   private startHeartbeat(): void {
     this.clearHeartbeatTimer()
+    // Why: this runs at 'connected', right after the handshake's inbound frames — a genuine liveness
+    // baseline. Only the fresh-connect moment resets lastInboundFrameAt; the visible re-arm below must not.
     const now = this.now()
     this.lastInboundFrameAt = now
     this.lastHeartbeatTickAt = now
     this.heartbeatProbeSentAt = null
-    this.heartbeatTimer = window.setInterval(() => this.runHeartbeatTick(), HEARTBEAT_INTERVAL_MS)
+    this.heartbeatCleanup = installWindowVisibilityInterval({
+      run: () => this.runHeartbeatTick(),
+      runOnVisible: () => this.rebaselineHeartbeat(),
+      intervalMs: HEARTBEAT_INTERVAL_MS
+    })
+  }
+
+  private rebaselineHeartbeat(): void {
+    // Why: the interval is merely parked while hidden, so on becoming visible reset the tick clock (don't
+    // let the parked gap trip the suspended-loop rebaseline) and drop a probe that was in flight when we
+    // hid. But PRESERVE lastInboundFrameAt: if the socket went silent while hidden, keeping the real
+    // last-heard time lets the next tick detect the staleness and probe promptly, instead of masking a
+    // dead connection for another full idle window (#9883 review).
+    this.lastHeartbeatTickAt = this.now()
+    this.heartbeatProbeSentAt = null
   }
 
   private clearHeartbeatTimer(): void {
-    if (this.heartbeatTimer) {
-      window.clearInterval(this.heartbeatTimer)
-      this.heartbeatTimer = null
-    }
+    this.heartbeatCleanup?.()
+    this.heartbeatCleanup = null
     this.heartbeatProbeSentAt = null
   }
 

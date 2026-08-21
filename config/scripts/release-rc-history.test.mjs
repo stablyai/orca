@@ -53,6 +53,29 @@ describe('release RC history', () => {
     expect(rcNumberFromReleaseSubject('1.4.36', 'fix: v1.4.36-rc.6')).toBeNull()
   })
 
+  it('counts a suffixed side-branch RC from its subject as well as its tag', () => {
+    expect(rcNumberFromTag('1.4.36', 'v1.4.36-rc.6.perf')).toBe(6)
+    expect(rcNumberFromReleaseSubject('1.4.36', 'release: v1.4.36-rc.6.perf')).toBe(6)
+    expect(
+      rcNumberFromReleaseSubject('1.4.36', 'release: v1.4.36-rc.6.perf [rc-slot:2026-05-30-03]')
+    ).toBe(6)
+  })
+
+  it('keeps a suffixed RC counted once its tag is deleted', () => {
+    withGitRepo((repo) => {
+      commit(repo, 'initial')
+      commit(repo, 'release: v1.4.36-rc.5')
+      git(repo, ['tag', 'v1.4.36-rc.5'])
+      // Why this case: the subject is the only record left after the tag goes,
+      // and that is precisely when release-cut's explicit-version gate reads
+      // this. Under-reporting rc.6 here lets an explicit 1.4.36-rc.6 cut land
+      // below the v1.4.36-rc.6.perf build that clients already run.
+      commit(repo, 'release: v1.4.36-rc.6.perf')
+
+      expect(highestRcForBase('1.4.36', { cwd: repo })).toBe(6)
+    })
+  })
+
   it('keeps RC numbers monotonic after a stale tag is deleted', () => {
     withGitRepo((repo) => {
       commit(repo, 'initial')
