@@ -10,6 +10,14 @@ const ENV_ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/
 const SH_OPERATOR = /[;&|<>]/
 
 /**
+ * Claude Code holds a placeholder pane open with `cat` until `respawn-pane`
+ * replaces it. PowerShell's `cat` is Get-Content, which blocks on a prompt for
+ * its mandatory Path instead — alive, but showing the user a stray prompt that
+ * would read a file if anything typed into it. Wait-Event blocks silently.
+ */
+const POWERSHELL_HOLDING_COMMAND = 'Wait-Event'
+
+/**
  * True when Orca can express a teammate pane command in this shell. `cmd` is
  * excluded because its `set "NAME=value"` form cannot carry a `"`, `%` or `!`
  * safely, and a mis-quoted teammate launch is worse than the in-process fallback.
@@ -71,11 +79,13 @@ export function retargetClaudeAgentTeamsPaneCommand(
   if (tokens.length === 0 || tokens.some((token) => SH_OPERATOR.test(token))) {
     return null
   }
+  const body =
+    tokens.length === 1 && tokens[0] === 'cat'
+      ? POWERSHELL_HOLDING_COMMAND
+      : buildShellCommandFromArgv(tokens, shell)
   return [
     ...(directory === null ? [] : [`Set-Location ${quoteStartupArg(directory, shell)}`]),
-    ...assignments.map(
-      (each) => `$env:${each.name} = ${quoteStartupArg(each.value, shell)}`
-    ),
-    buildShellCommandFromArgv(tokens, shell)
+    ...assignments.map((each) => `$env:${each.name} = ${quoteStartupArg(each.value, shell)}`),
+    body
   ].join(commandSeparator(shell))
 }
