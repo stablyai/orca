@@ -141,6 +141,7 @@
     "@floating-ui/dom": "1.7.6",
     "@linear/sdk": "^82.1.0",
     "@parcel/watcher": "^2.5.6",
+    "@vscode/ripgrep": "^1.18.0",
     "@xterm/addon-serialize": "0.15.0-beta.287",
     "@xterm/headless": "6.1.0-beta.287",
     "agent-browser": "~0.27.0",

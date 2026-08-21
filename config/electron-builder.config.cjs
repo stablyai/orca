@@ -188,6 +188,8 @@ module.exports = {
   // disappears from Agent Session History in packaged builds only. Worker
   // entries reached solely from the Electron main process stay packed, since
   // asar redirects their app.asar paths.
+  // Why: the bundled ripgrep is an executable spawned by Quick Open; it must sit
+  // on disk (and keep its +x bit) rather than inside app.asar.
   asarUnpack: [
     'out/package.json',
     'out/cli/**',
@@ -216,7 +218,8 @@ module.exports = {
     'node_modules/tweetnacl/**',
     'node_modules/zod/**',
     'node_modules/yaml/**',
-    'node_modules/sherpa-onnx*/**'
+    'node_modules/sherpa-onnx*/**',
+    'node_modules/@vscode/ripgrep-*/**'
   ],
   afterPack: async (context) => {
     // Why: a Linux runner-image glibc bump silently shipped a node-pty pty.node

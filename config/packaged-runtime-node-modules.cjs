@@ -405,6 +405,30 @@ function prunePackagedParcelWatcher(resourcesDir, electronPlatformName, electron
   }
 }
 
+function prunePackagedRipgrep(resourcesDir, electronPlatformName, electronArch) {
+  // Why: the bundled rg is asarUnpacked, so it lands beside app.asar rather than in
+  // the extraResources node_modules the other pruners walk.
+  const vscodeDir = join(resourcesDir, 'app.asar.unpacked', 'node_modules', '@vscode')
+  if (!existsSync(vscodeDir)) {
+    return
+  }
+
+  // Why: supportedArchitectures installs every @vscode/ripgrep-<platform>-<arch>
+  // optional subpackage, and electron-builder's collector does not filter by the
+  // os/cpu fields — without this each build ships ~25MB of foreign binaries.
+  const architecture = normalizeElectronArchitecture(electronArch)
+  const targetPackage = `ripgrep-${electronPlatformName}-${architecture}`
+  for (const entry of readdirSync(vscodeDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.startsWith('ripgrep-')) {
+      continue
+    }
+    if (entry.name === targetPackage) {
+      continue
+    }
+    rmSync(join(vscodeDir, entry.name), { recursive: true, force: true })
+  }
+}
+
 function prunePackagedRuntimeTypeDeclarations(resourcesDir) {
   const nodeModulesDir = join(resourcesDir, 'node_modules')
   if (!existsSync(nodeModulesDir)) {
@@ -448,6 +472,7 @@ function prunePackagedRuntimeNodeModules(resourcesDir, electronPlatformName, ele
   const architecture = normalizeElectronArchitecture(electronArch)
   prunePackagedNodePty(resourcesDir, electronPlatformName, architecture)
   prunePackagedParcelWatcher(resourcesDir, electronPlatformName, architecture)
+  prunePackagedRipgrep(resourcesDir, electronPlatformName, architecture)
   prunePackagedRuntimeTypeDeclarations(resourcesDir)
   prunePackagedSherpaOnnx(resourcesDir, electronPlatformName)
   prunePackagedZodSources(resourcesDir)
@@ -472,6 +497,7 @@ module.exports = {
   packageNameFromSpecifier,
   prunePackagedNodePty,
   prunePackagedParcelWatcher,
+  prunePackagedRipgrep,
   prunePackagedRuntimeNodeModules,
   prunePackagedSherpaOnnx,
   prunePackagedRuntimeTypeDeclarations,

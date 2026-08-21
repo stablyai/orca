@@ -3,6 +3,7 @@ import type { ChildProcess } from 'node:child_process'
 import type { Store } from '../persistence'
 import { resolveAuthorizedPath } from './filesystem-auth'
 import { checkRgAvailable } from './rg-availability'
+import { resolveRgCommand } from './bundled-ripgrep'
 import { wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
 import { getLocalGitOptionsForRegisteredWorktree } from './local-worktree-runtime-options'
@@ -77,6 +78,10 @@ export async function listQuickOpenFiles(
     return listWithoutRipgrep()
   }
 
+  const rgCommand = resolveRgCommand({
+    cwd: authorizedRootPath,
+    wslDistro: localGitOptions.wslDistro
+  })
   const files = new Set<string>()
   let serializedBytes = 2 // []
   const children: {
@@ -141,7 +146,7 @@ export async function listQuickOpenFiles(
         return maxResults !== undefined && files.size >= maxResults
       }
 
-      const child = wslAwareSpawn('rg', args, {
+      const child = wslAwareSpawn(rgCommand, args, {
         cwd: authorizedRootPath,
         ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
         stdio: ['ignore', 'pipe', 'pipe']

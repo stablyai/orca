@@ -1,4 +1,5 @@
 import { wslAwareSpawn } from '../git/runner'
+import { resolveRgCommand } from './bundled-ripgrep'
 
 const RG_AVAILABILITY_TIMEOUT_MS = 5000
 
@@ -19,7 +20,7 @@ export function checkRgAvailable(searchPath?: string, wslDistro?: string): Promi
     let settled = false
     // Why: pass cwd plus project-runtime distro so WSL projects are checked
     // inside their distro even when the search root is a Windows path.
-    const child = wslAwareSpawn('rg', ['--version'], {
+    const child = wslAwareSpawn(resolveRgCommand({ cwd: searchPath, wslDistro }), ['--version'], {
       ...(searchPath ? { cwd: searchPath } : {}),
       ...(wslDistro ? { wslDistro } : {}),
       stdio: 'ignore'

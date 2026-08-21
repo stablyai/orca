@@ -11,6 +11,7 @@ vi.mock('../git/runner', () => ({
 }))
 
 import { checkRgAvailable } from './rg-availability'
+import { resolveRgCommand } from './bundled-ripgrep'
 
 function createMockProcess(): ChildProcess {
   const child = new EventEmitter() as unknown as ChildProcess
@@ -31,10 +32,15 @@ describe('checkRgAvailable', () => {
     child.emit('close', 0)
 
     await expect(promise).resolves.toBe(true)
-    expect(wslAwareSpawnMock).toHaveBeenCalledWith('rg', ['--version'], {
-      cwd: '/repo',
-      stdio: 'ignore'
-    })
+    // Why: a local probe now runs the bundled binary, so it no longer depends on PATH.
+    expect(wslAwareSpawnMock).toHaveBeenCalledWith(
+      resolveRgCommand({ cwd: '/repo' }),
+      ['--version'],
+      {
+        cwd: '/repo',
+        stdio: 'ignore'
+      }
+    )
   })
 
   it('settles and detaches when rg availability check ignores timeout kills', async () => {

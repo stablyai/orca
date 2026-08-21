@@ -60,6 +60,7 @@ import { limitQuickOpenFilesBySerializedBytes } from '../../shared/quick-open-tr
 import { searchWithGitGrep } from '../ipc/filesystem-search-git'
 import { getLocalGitOptionsForRegisteredWorktree } from '../ipc/local-worktree-runtime-options'
 import { checkRgAvailable } from '../ipc/rg-availability'
+import { resolveRgCommand } from '../ipc/bundled-ripgrep'
 import {
   absorbPendingRipgrepSpawnError,
   isRipgrepUnavailableExit,
@@ -2185,6 +2186,11 @@ export class RuntimeFileCommands {
       return searchWithGitGrep(authorizedRootPath, options, maxResults, localGitOptions)
     }
 
+    const rgCommand = resolveRgCommand({
+      cwd: authorizedRootPath,
+      wslDistro: localGitOptions.wslDistro
+    })
+
     return new Promise<SearchResult>((resolvePromise) => {
       const searchKey = `${this.host.getRuntimeId()}:${authorizedRootPath}`
       const rgArgs = buildRgArgs(options.query, authorizedRootPath, options)
@@ -2249,7 +2255,7 @@ export class RuntimeFileCommands {
         }
       }
 
-      const nextChild = wslAwareSpawn('rg', rgArgs, {
+      const nextChild = wslAwareSpawn(rgCommand, rgArgs, {
         cwd: authorizedRootPath,
         ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
         stdio: ['ignore', 'pipe', 'pipe']
