@@ -68,7 +68,9 @@ export function XlsxViewer({ filePath, fileName, content }: XlsxViewerProps): Re
 
   useEffect(() => {
     let cancelled = false
-    setStatus({ kind: 'loading' })
+    // Why: the initial state is already {kind:'loading'}; flipping to it again
+    // on every prop change forces an extra re-render before parsing completes.
+    setStatus((prev) => (prev.kind === 'loading' ? prev : { kind: 'loading' }))
     ;(async () => {
       try {
         const buffer = base64ToArrayBuffer(content)

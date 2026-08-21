@@ -85,7 +85,9 @@ export function DocxViewer({ filePath, fileName, content }: DocxViewerProps): Re
 
   useEffect(() => {
     let cancelled = false
-    setStatus({ kind: 'loading' })
+    // Why: the initial state is already {kind:'loading'}; flipping to it again
+    // on every prop change forces an extra re-render before parsing completes.
+    setStatus((prev) => (prev.kind === 'loading' ? prev : { kind: 'loading' }))
     ;(async () => {
       try {
         const arrayBuffer = base64ToArrayBuffer(content)
