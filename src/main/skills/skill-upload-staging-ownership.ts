@@ -27,6 +27,10 @@ export class SkillUploadStagingOwnership {
 
   async initialize(initializeRoot?: () => Promise<void>): Promise<void> {
     await (initializeRoot ? initializeRoot() : mkdir(this.root, { recursive: true, mode: 0o700 }))
+    const rootStats = await lstat(this.root)
+    if (!rootStats.isDirectory() || rootStats.isSymbolicLink()) {
+      throw new Error('skill-upload-staging-root-invalid')
+    }
     await this.cleanupAbandonedOwners()
     await mkdir(this.directory, { recursive: true, mode: 0o700 })
   }

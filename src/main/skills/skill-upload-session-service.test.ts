@@ -1,5 +1,15 @@
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rename,
+  rm,
+  stat,
+  symlink,
+  writeFile
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -52,6 +62,21 @@ describe('SkillUploadSessionService', () => {
     await expect(service.begin(request)).rejects.toThrow('transient-init-failure')
     await expect(service.begin(request)).resolves.toMatchObject({ acknowledgedOffset: 0 })
     expect(initializeRoot).toHaveBeenCalledTimes(2)
+  })
+
+  it('rejects a staging root that redirects through a symlink or junction', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-session-'))
+    roots.push(root)
+    const outside = join(root, 'outside')
+    const uploads = join(root, 'uploads')
+    await mkdir(outside)
+    await symlink(outside, uploads, process.platform === 'win32' ? 'junction' : 'dir')
+    const service = new SkillUploadSessionService(uploads)
+
+    await expect(service.begin({ package: identity(Buffer.from('new package')) })).rejects.toThrow(
+      'skill-upload-staging-root-invalid'
+    )
+    expect(await readdir(outside)).toEqual([])
   })
 
   it('removes only staging owned by an exited process when a fresh service starts', async () => {
@@ -333,6 +358,34 @@ describe('SkillUploadSessionService', () => {
       expect.objectContaining({ acknowledgedOffset: 0 })
     )
     await service.dispose()
+  })
+
+  it('retains failed archive cleanup within the four-path admission bound', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-session-'))
+    roots.push(root)
+    const uploads = join(root, 'uploads')
+    const service = new SkillUploadSessionService(uploads)
+    const begun = await service.begin({ package: identity(Buffer.from('retained')) })
+    const [archivePath] = await stagedArchives(uploads)
+    const retainedPath = `${archivePath}.retained`
+    await rename(archivePath!, retainedPath)
+    await mkdir(archivePath!)
+
+    await expect(service.cancel(begun.uploadId)).rejects.toThrow()
+    const replacements = await Promise.all(
+      Array.from({ length: 3 }, (_, index) =>
+        service.begin({ package: identity(Buffer.from(`replacement-${index}`)) })
+      )
+    )
+    expect(replacements).toHaveLength(3)
+    await expect(service.begin({ package: identity(Buffer.from('over-budget')) })).rejects.toThrow(
+      'skill-upload-session-limit'
+    )
+
+    await rm(archivePath!, { recursive: true })
+    await rename(retainedPath, archivePath!)
+    await service.dispose()
+    expect(await readdir(uploads)).toEqual([])
   })
 
   it('rejects gaps, changed retries, and an archive hash mismatch', async () => {

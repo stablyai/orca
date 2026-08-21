@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { build } from 'esbuild'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { spawnRelay, type RelayProcess } from './subprocess-test-utils'
@@ -147,6 +147,8 @@ describe('skill upload ownership across relay processes', () => {
       .soft(ownerEntries.some((entry) => entry.name.startsWith(`owner-${second.proc.pid}-`)))
       .toBe(true)
     expect.soft(archives).toHaveLength(2)
+    expect.soft(basename(dirname(firstPath!))).toMatch(new RegExp(`^owner-${first.proc.pid}-`))
+    expect.soft(basename(dirname(secondPath!))).toMatch(new RegExp(`^owner-${second.proc.pid}-`))
     expect.soft(firstStagedBytes).toEqual(firstBytes.subarray(0, 5))
     expect.soft(secondStagedBytes).toEqual(secondBytes)
     await request(second, 'skills.cancelUpload', { uploadId: secondUpload.uploadId })

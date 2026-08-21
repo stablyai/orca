@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { open, rm } from 'node:fs/promises'
+import { open } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   SKILL_UPLOAD_CHUNK_MAX_BYTES,
@@ -10,6 +10,7 @@ import {
 import { SkillUploadStagingOwnership } from './skill-upload-staging-ownership'
 import { hashSkillUploadArchive } from './skill-upload-archive-hash'
 import { SkillUploadOperationLifecycle } from './skill-upload-operation-lifecycle'
+import { SkillUploadRetainedPaths } from './skill-upload-retained-paths'
 import type { SkillUploadSessionServiceOptions } from './skill-upload-session-service-options'
 import {
   skillUploadBeginResult,
@@ -24,7 +25,7 @@ export class SkillUploadSessionService {
   private initialized: Promise<void> | null = null
   private readonly idleMs: number
   private readonly ownership: SkillUploadStagingOwnership
-  private readonly transferredPaths = new Set<string>()
+  private readonly retainedPaths = new SkillUploadRetainedPaths()
   private readonly operations = new SkillUploadOperationLifecycle()
   private disposal: Promise<void> | null = null
   private disposed = false
@@ -53,7 +54,7 @@ export class SkillUploadSessionService {
         this.touch(existing)
         return skillUploadBeginResult(existing)
       }
-      if (this.sessions.size >= MAX_SESSIONS) {
+      if (this.sessions.size + this.retainedPaths.failedCleanupCount >= MAX_SESSIONS) {
         throw new Error('skill-upload-session-limit')
       }
       const id = randomUUID()
@@ -150,7 +151,7 @@ export class SkillUploadSessionService {
       try {
         identity = await (this.options.hashArchive ?? hashSkillUploadArchive)(session.path)
       } catch (error) {
-        await this.cancelSession(uploadId)
+        await this.cancelSession(uploadId).catch(() => undefined)
         throw error
       }
       if (identity !== session.package.archiveSha256) {
@@ -184,13 +185,13 @@ export class SkillUploadSessionService {
       }
       this.sessions.delete(uploadId)
       this.clearIdleTimer(session)
-      this.transferredPaths.add(session.path)
+      this.retainedPaths.retainTransferred(session.path)
       let cleanup: Promise<void> | null = null
       return {
         archivePath: session.path,
         cleanup: async () => {
           if (!cleanup) {
-            cleanup = this.cleanupTransferredPath(session.path).catch((error) => {
+            cleanup = this.cleanupRetainedPath(session.path).catch((error) => {
               cleanup = null
               throw error
             })
@@ -225,7 +226,8 @@ export class SkillUploadSessionService {
 
   private async disposeOwnedStaging(): Promise<void> {
     await this.operations.settle()
-    await Promise.all([...this.sessions.keys()].map((id) => this.cancelSession(id)))
+    await Promise.allSettled([...this.sessions.keys()].map((id) => this.cancelSession(id)))
+    await this.retainedPaths.removeAllFailedCleanup()
     await this.removeOwnershipIfDisposed()
   }
 
@@ -236,8 +238,9 @@ export class SkillUploadSessionService {
     }
     this.sessions.delete(uploadId)
     this.clearIdleTimer(session)
+    this.retainedPaths.retainFailedCleanup(session.path)
     await session.handle?.close().catch(() => undefined)
-    await rm(session.path, { force: true })
+    await this.retainedPaths.removeFailedCleanup(session.path)
   }
 
   private async requireActive(uploadId: string): Promise<SkillUploadSessionRecord> {
@@ -296,15 +299,14 @@ export class SkillUploadSessionService {
       this.disposed &&
       !this.operations.hasInFlight &&
       this.sessions.size === 0 &&
-      this.transferredPaths.size === 0
+      this.retainedPaths.isEmpty
     ) {
       await this.ownership.remove()
     }
   }
 
-  private async cleanupTransferredPath(path: string): Promise<void> {
-    await rm(path, { force: true })
-    this.transferredPaths.delete(path)
+  private async cleanupRetainedPath(path: string): Promise<void> {
+    await this.retainedPaths.removeTransferred(path)
     await this.removeOwnershipIfDisposed()
   }
 
