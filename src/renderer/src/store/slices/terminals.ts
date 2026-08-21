@@ -2782,7 +2782,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         const nextTabs = [...tabs]
         nextTabs[tabIndex] = {
           ...nextTabs[tabIndex],
-          ptyId: remainingPtyIds.at(-1) ?? null
+          // Why: a completed agent hibernated as the tab's sole pane must keep
+          // its session id as the wake hint (like manual worktree-sleep does),
+          // not null. Nulling it orphans the tab, so reactivation deletes the
+          // layout wake-hint and cold-restores nothing — a blank terminal
+          // instead of the finished transcript. Multi-pane tabs still fall back
+          // to the last surviving live pty.
+          ptyId: remainingPtyIds.at(-1) ?? opts.ptyId
         }
         nextTabsByWorktree[worktreeId] = nextTabs
       }

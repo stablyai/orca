@@ -519,6 +519,58 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     expect(mockApi.pty.kill).not.toHaveBeenCalled()
   })
 
+  it('preserves the wake hint so a hibernated sole completed-agent tab stays cold-restorable', async () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const targetLeaf = '11111111-1111-4111-8111-111111111111'
+    const targetPaneKey = `tab-1:${targetLeaf}`
+
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [makeTab({ id: 'tab-1', worktreeId: wt, title: 'Codex', ptyId: 'pty-agent' })]
+      },
+      terminalLayoutsByTabId: {
+        'tab-1': {
+          root: { type: 'leaf', leafId: targetLeaf },
+          activeLeafId: targetLeaf,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [targetLeaf]: 'pty-agent' }
+        }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-agent'] }
+    })
+    store
+      .getState()
+      .setAgentStatus(
+        targetPaneKey,
+        { state: 'done', prompt: 'resume target', agentType: 'codex' },
+        'Codex',
+        { updatedAt: 2000, stateStartedAt: 1000 },
+        { tabId: 'tab-1', worktreeId: wt },
+        { providerSession: { key: 'session_id', id: 'target-session' } }
+      )
+
+    await store.getState().shutdownCompletedAgentPaneForHibernation(wt, {
+      paneKey: targetPaneKey,
+      tabId: 'tab-1',
+      leafId: targetLeaf,
+      ptyId: 'pty-agent'
+    })
+
+    // Worktree is now sleeping: the sole pane's live PTY is gone.
+    expect(store.getState().ptyIdsByTabId['tab-1']).toEqual([])
+    // Core of the fix: the hibernated session id survives as the tab's wake hint
+    // (mirroring manual worktree-sleep) instead of being nulled to orphan the tab.
+    expect(store.getState().tabsByWorktree[wt]?.[0]?.ptyId).toBe('pty-agent')
+    // Because the wake hint survived, the tab is not an orphan, so reactivation
+    // cold-restores the finished transcript instead of dropping to a blank
+    // terminal. A null wake hint would make reconcile report 0 renderable tabs.
+    expect(store.getState().reconcileWorktreeTabModel(wt).renderableTabCount).toBe(1)
+  })
+
   it('clears stale relay wake hints when pane hibernation leaves no live PTYs in the tab', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
