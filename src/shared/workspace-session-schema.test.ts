@@ -197,6 +197,88 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
+  it('preserves a Side Quest provider thread reference on a terminal tab', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: 'tab1',
+      tabsByWorktree: {
+        wt: [
+          {
+            id: 'tab1',
+            ptyId: null,
+            worktreeId: 'wt',
+            title: 'Side Quest',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 100,
+            sideQuestSession: {
+              id: 'side-quest-1',
+              provider: 'codex',
+              providerThreadId: 'thread-1',
+              status: 'ready',
+              error: null,
+              createdAt: 100,
+              updatedAt: 200
+            }
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {}
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.tabsByWorktree.wt[0].sideQuestSession).toEqual({
+        id: 'side-quest-1',
+        provider: 'codex',
+        providerThreadId: 'thread-1',
+        status: 'ready',
+        error: null,
+        createdAt: 100,
+        updatedAt: 200
+      })
+    }
+  })
+
+  it('drops an unknown Side Quest provider without failing the workspace session', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {
+        wt: [
+          {
+            id: 'tab1',
+            ptyId: null,
+            worktreeId: 'wt',
+            title: 'Side Quest',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 100,
+            sideQuestSession: {
+              id: 'side-quest-1',
+              provider: 'future-provider',
+              providerThreadId: null,
+              status: 'starting',
+              error: null,
+              createdAt: 100,
+              updatedAt: 100
+            }
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {}
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.tabsByWorktree.wt[0].sideQuestSession).toBeUndefined()
+    }
+  })
+
   it('drops a tab where ptyId is a number (schema drift) without failing the session', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

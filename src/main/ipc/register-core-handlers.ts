@@ -26,6 +26,7 @@ import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
 import { registerEphemeralVmHandlers } from './ephemeral-vm'
 import { registerAiVaultHandlers } from './ai-vault'
 import { registerNativeChatHandlers } from './native-chat'
+import { registerSideQuestHandlers } from './side-quest'
 import { registerNotificationHandlers } from './notifications'
 import { registerNotebookHandlers } from './notebook'
 import { registerOnboardingHandlers } from './onboarding'
@@ -225,6 +226,10 @@ export function registerCoreHandlers(
       prepareRuntimeAiVaultSessionResume(app.getPath('userData'), environmentId, args)
   })
   registerNativeChatHandlers()
+  const disposeSideQuests = registerSideQuestHandlers()
+  // Why: the warm provider process is app-scoped rather than tab-scoped, so
+  // closing one Side Quest must not stop it; app shutdown is its owner boundary.
+  app.once('before-quit', disposeSideQuests)
   registerClipboardHandlers(store)
   registerUpdaterHandlers(store)
   registerSpeechHandlers(store)

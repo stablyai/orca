@@ -127,6 +127,26 @@ describe('TerminalContextMenu', () => {
     expect(onForkAgentSession).not.toHaveBeenCalled()
   })
 
+  it('renders Add to Side Quest when a selection is present', () => {
+    const onStart = vi.fn()
+    renderMenu({
+      sideQuest: { enabled: true, includesSelection: true, onStart }
+    })
+
+    const item = items.list.find((entry) => childrenText(entry.children) === 'Add to Side Quest')
+    expect(item).toBeDefined()
+    item?.onSelect?.()
+    expect(onStart).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders New Side Quest when there is no selection', () => {
+    renderMenu({
+      sideQuest: { enabled: true, includesSelection: false, onStart: vi.fn() }
+    })
+
+    expect(items.list.some((entry) => childrenText(entry.children) === 'New Side Quest')).toBe(true)
+  })
+
   it('shows new-session continuation only for eligible agent panes', () => {
     const onContinueAgentSessionInNewSession = vi.fn()
     renderMenu({

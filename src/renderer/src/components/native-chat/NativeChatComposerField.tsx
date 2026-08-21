@@ -18,6 +18,9 @@ import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../shared/native-chat-session-options'
+import type { SideQuestQuotedContext } from '@/lib/side-quest-context'
+import { SideQuestQuoteCard } from './SideQuestQuoteCard'
+import type { NativeChatSideQuestReadiness } from './use-native-chat-side-quest-context'
 
 export type NativeChatComposerFieldProps = {
   textareaRef: RefObject<HTMLTextAreaElement | null>
@@ -28,6 +31,8 @@ export type NativeChatComposerFieldProps = {
   autocomplete: ComposerAutocomplete
   activeSuggestion: number
   notice: string | null
+  sideQuestContext?: SideQuestQuotedContext | null
+  sideQuestReadiness?: NativeChatSideQuestReadiness
   imageAttachments: readonly NativeChatComposerImageAttachment[]
   sendButtonDisabled: boolean
   isWorking: boolean
@@ -46,6 +51,7 @@ export type NativeChatComposerFieldProps = {
   onRetrySkills: () => void
   onAcceptMention: () => void
   onRemoveImageAttachment: (id: string) => void
+  onRemoveSideQuestContext?: () => void
   onAttach: () => void
   onDictationToggle: () => void
   onDictationHoldStart: () => void
@@ -70,6 +76,8 @@ export function NativeChatComposerField({
   autocomplete,
   activeSuggestion,
   notice,
+  sideQuestContext = null,
+  sideQuestReadiness = 'not-side-quest',
   imageAttachments,
   sendButtonDisabled,
   isWorking,
@@ -88,6 +96,7 @@ export function NativeChatComposerField({
   onRetrySkills,
   onAcceptMention,
   onRemoveImageAttachment,
+  onRemoveSideQuestContext,
   onAttach,
   onDictationToggle,
   onDictationHoldStart,
@@ -130,6 +139,15 @@ export function NativeChatComposerField({
               'bg-muted/50 dark:bg-input/40'
             )}
           >
+            {sideQuestContext && onRemoveSideQuestContext ? (
+              <div className="mb-2 px-1">
+                <SideQuestQuoteCard
+                  sourceLabel={sideQuestContext.sourceLabel}
+                  text={sideQuestContext.text}
+                  onRemove={onRemoveSideQuestContext}
+                />
+              </div>
+            ) : null}
             {imageAttachments.length > 0 ? (
               <div className="mb-2 flex flex-wrap gap-1.5 px-1">
                 {imageAttachments.map((attachment) => (
@@ -185,7 +203,7 @@ export function NativeChatComposerField({
                   ? `${pickerListboxId}-option-${Math.min(activeSuggestion, autocomplete.items.length - 1)}`
                   : undefined
               }
-              placeholder={nativeChatComposerPlaceholder(hasPty, canSend)}
+              placeholder={nativeChatComposerPlaceholder(hasPty, canSend, sideQuestReadiness)}
               // Why: coarse-pointer min-height follows the app's touch target convention.
               // field-sizing:content grows the field with the draft; the 8lh cap (plus
               // py-1) turns further growth into internal scrolling, and scrollbar-sleek
@@ -197,6 +215,21 @@ export function NativeChatComposerField({
                 'placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50'
               )}
             />
+            {sideQuestReadiness === 'starting' ? (
+              <p className="px-2 pb-1 text-xs text-muted-foreground" role="status">
+                {translate(
+                  'components.native-chat.sideQuest.starting',
+                  'Starting the Side Quest agent… You can draft while it gets ready.'
+                )}
+              </p>
+            ) : sideQuestReadiness === 'failed' ? (
+              <p className="px-2 pb-1 text-xs text-destructive" role="alert">
+                {translate(
+                  'components.native-chat.sideQuest.startFailed',
+                  'The agent did not become ready. Switch to Terminal to inspect it.'
+                )}
+              </p>
+            ) : null}
             <div className="flex flex-wrap items-center gap-2 pt-0.5">
               <NativeChatComposerActions
                 attachDisabled={attachDisabled}

@@ -32,6 +32,7 @@ import type { KeybindingOverrides } from '../../../../shared/keybindings'
 import { translate } from '@/i18n/i18n'
 import { isMacPlatform, nativeChatToggleShortcutLabel } from '../native-chat/native-chat-shortcut'
 import { AgentSessionContinuationMenuItem } from './AgentSessionContinuationMenuItem'
+import { TerminalSideQuestMenuItem } from './TerminalSideQuestMenuItem'
 import type { TerminalQuickCommandMenuHost } from '@/hooks/use-terminal-quick-command-hosts'
 import { TerminalQuickCommandsSubmenu } from './TerminalQuickCommandsSubmenu'
 
@@ -60,6 +61,11 @@ type TerminalContextMenuProps = {
   isNativeChatView: boolean
   onToggleNativeChat: () => void
   onCopyAgentSessionContext: () => void
+  sideQuest?: {
+    enabled: boolean
+    includesSelection: boolean
+    onStart: () => void
+  }
   quickCommandHosts: TerminalQuickCommandMenuHost[]
   quickCommandHostLoadFailed: boolean
   quickCommandHostOwnershipPending: boolean
@@ -99,6 +105,7 @@ export default function TerminalContextMenu({
   isNativeChatView,
   onToggleNativeChat,
   onCopyAgentSessionContext,
+  sideQuest,
   quickCommandHosts,
   quickCommandHostLoadFailed,
   quickCommandHostOwnershipPending,
@@ -215,6 +222,12 @@ export default function TerminalContextMenu({
             'Copy Context'
           )}
         </DropdownMenuItem>
+        {sideQuest?.enabled ? (
+          <TerminalSideQuestMenuItem
+            includesSelection={sideQuest.includesSelection}
+            onSelect={sideQuest.onStart}
+          />
+        ) : null}
         {canToggleNativeChat ? (
           <DropdownMenuItem onSelect={onToggleNativeChat}>
             {isNativeChatView ? <SquareTerminal /> : <MessageSquare />}

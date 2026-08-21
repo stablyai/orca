@@ -28,6 +28,7 @@ import {
 } from './workspace-session-browser-schema'
 import { sleepingAgentSessionsByPaneKeySchema } from './workspace-session-sleeping-agents'
 import { salvagedField, salvagedOptional, salvagingArray, salvagingRecord } from './zod-salvage'
+import { sideQuestSessionReferenceSchema } from './side-quest-session-schema'
 
 // ─── Terminal pane layout (recursive) ───────────────────────────────
 
@@ -103,7 +104,10 @@ const terminalTabSchema = z.object({
   launchAgent: z
     .custom<TuiAgent>((v) => isTuiAgent(v))
     .optional()
-    .catch(undefined)
+    .catch(undefined),
+  // Why: an older Orca build must still restore every terminal if a newer
+  // build persisted a provider or lifecycle state it does not recognize.
+  sideQuestSession: sideQuestSessionReferenceSchema.optional().catch(undefined)
 })
 
 // ─── Unified tab model ──────────────────────────────────────────────

@@ -11,7 +11,14 @@ export type NativeChatResolvedTarget = {
  *  pathological clipboard can't stall the round-trip. */
 export const NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES = 16 * 1024 * 1024
 
-export function nativeChatComposerPlaceholder(hasPty: boolean, canSend: boolean): string {
+export function nativeChatComposerPlaceholder(
+  hasPty: boolean,
+  canSend: boolean,
+  sideQuestReadiness: 'not-side-quest' | 'starting' | 'ready' | 'failed' = 'not-side-quest'
+): string {
+  if (sideQuestReadiness === 'failed') {
+    return translate('components.native-chat.sideQuest.failedPlaceholder', 'Agent unavailable')
+  }
   if (!hasPty) {
     return translate(
       'components.native-chat.composer.noPty',

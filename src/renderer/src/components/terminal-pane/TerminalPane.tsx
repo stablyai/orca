@@ -68,6 +68,16 @@ import {
   clearPaneTitleOverlayRects
 } from './pane-title-overlay-rects'
 import NativeChatView from '../native-chat/NativeChatView'
+import { ProviderSideQuestView } from '../native-chat/ProviderSideQuestView'
+import { resolveSideQuestAgent } from '@/lib/side-quest-agent'
+import { startTerminalSideQuest } from '@/lib/start-terminal-side-quest'
+import { useDetectedAgents } from '@/hooks/useDetectedAgents'
+import { translate } from '@/i18n/i18n'
+import { TerminalSideQuestSelectionAction } from './TerminalSideQuestSelectionAction'
+import {
+  captureTerminalSideQuestSelection,
+  type TerminalSideQuestSelection
+} from './terminal-side-quest-selection'
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
@@ -718,6 +728,7 @@ function TerminalPane(
   const openSpacePage = useAppStore((store) => store.openSpacePage)
   const refreshWorkspaceSpace = useAppStore((store) => store.refreshWorkspaceSpace)
   const settings = useAppStore((store) => store.settings)
+  const { detectedIds: sideQuestAvailableAgents } = useDetectedAgents(sshReconnectTargetId ?? null)
   const updateSettings = useAppStore((store) => store.updateSettings)
   const requestLinkRoutingPreference = useLinkRoutingPreferenceDialog()
   const keybindings = useAppStore((store) => store.keybindings)
@@ -2589,18 +2600,113 @@ function TerminalPane(
       refreshQuickCommandRemoteHost()
     }
   }, [contextMenu.open, refreshQuickCommandRemoteHost])
-  const getContextMenuLeafId = useCallback((): string | null => {
+  const getContextMenuPane = useCallback((): ManagedPane | null => {
     const paneId = contextMenu.menuPaneId
     const manager = managerRef.current
     if (!manager) {
       return null
     }
     if (paneId !== null) {
-      return manager.getPanes().find((pane) => pane.id === paneId)?.leafId ?? null
+      return manager.getPanes().find((pane) => pane.id === paneId) ?? null
     }
-    return manager.getActivePane()?.leafId ?? null
+    return manager.getActivePane() ?? null
   }, [contextMenu.menuPaneId])
+  const getContextMenuLeafId = useCallback(
+    (): string | null => getContextMenuPane()?.leafId ?? null,
+    [getContextMenuPane]
+  )
   const contextMenuLeafId = getContextMenuLeafId()
+  const contextMenuPane = getContextMenuPane()
+  const resolveSideQuestAgentForLeaf = useCallback(
+    (leafId: string | null) =>
+      resolveSideQuestAgent({
+        detectedAgent: leafId ? tabAgentTypeByLeaf[leafId] : null,
+        launchedAgent: terminalTab?.launchAgent,
+        defaultAgent: settings?.defaultTuiAgent,
+        availableAgents: sideQuestAvailableAgents,
+        disabledAgents: settings?.disabledTuiAgents
+      }),
+    [
+      settings?.defaultTuiAgent,
+      settings?.disabledTuiAgents,
+      sideQuestAvailableAgents,
+      tabAgentTypeByLeaf,
+      terminalTab?.launchAgent
+    ]
+  )
+  const contextMenuSideQuestAgent = resolveSideQuestAgentForLeaf(contextMenuLeafId)
+  const contextMenuSelection = contextMenuPane?.terminal.getSelection() ?? ''
+  const [sideQuestSelection, setSideQuestSelection] = useState<TerminalSideQuestSelection | null>(
+    null
+  )
+  const sideQuestEnabled =
+    isActive && isVisible && nativeChatEnabled && quickCommandGroupId !== null
+  const sourceLabelForPane = useCallback(
+    (pane: ManagedPane): string =>
+      paneTitlesRef.current[pane.id] ||
+      unifiedTabLabel ||
+      terminalTab?.title ||
+      translate('components.native-chat.sideQuest.terminalSource', 'Terminal'),
+    [terminalTab?.title, unifiedTabLabel]
+  )
+  const handleStartSideQuest = useCallback(() => {
+    const pane = getContextMenuPane()
+    const agent = resolveSideQuestAgentForLeaf(pane?.leafId ?? null)
+    if (!pane || !agent) {
+      return
+    }
+    startTerminalSideQuest({
+      worktreeId,
+      sourceGroupId: quickCommandGroupId,
+      agent,
+      capturedText: pane.terminal.getSelection().trim(),
+      sourceLabel: sourceLabelForPane(pane)
+    })
+  }, [
+    getContextMenuPane,
+    quickCommandGroupId,
+    resolveSideQuestAgentForLeaf,
+    sourceLabelForPane,
+    worktreeId
+  ])
+  const handleTerminalPointerUp = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>): void => {
+      if (
+        event.button !== 0 ||
+        !sideQuestEnabled ||
+        (event.target instanceof Element &&
+          event.target.closest('[data-terminal-side-quest-selection-action="true"]'))
+      ) {
+        return
+      }
+      const selection = captureTerminalSideQuestSelection({
+        manager: managerRef.current,
+        target: event.target,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        sourceLabelForPane
+      })
+      const agent = selection ? resolveSideQuestAgentForLeaf(selection.leafId) : null
+      setSideQuestSelection(agent ? selection : null)
+    },
+    [resolveSideQuestAgentForLeaf, sideQuestEnabled, sourceLabelForPane]
+  )
+  const handleStartSelectedSideQuest = useCallback((): void => {
+    if (!sideQuestSelection) {
+      return
+    }
+    const agent = resolveSideQuestAgentForLeaf(sideQuestSelection.leafId)
+    if (agent) {
+      startTerminalSideQuest({
+        worktreeId,
+        sourceGroupId: quickCommandGroupId,
+        agent,
+        capturedText: sideQuestSelection.capturedText,
+        sourceLabel: sideQuestSelection.sourceLabel
+      })
+    }
+    setSideQuestSelection(null)
+  }, [quickCommandGroupId, resolveSideQuestAgentForLeaf, sideQuestSelection, worktreeId])
   const contextMenuIsChatView = effectiveChatViewMode && contextMenuLeafId === chatLeafId
   const handleContextMenuToggleNativeChat = useCallback(() => {
     const leafId = getContextMenuLeafId()
@@ -2958,6 +3064,18 @@ function TerminalPane(
   // Each toggle gates on its own leaf (header=active, menu=opened-over), so mixed splits show it only where chat can render.
   const activePaneCanToggleChat = canToggleChatForLeaf(activePane?.leafId ?? null)
   const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
+  const sideQuestSelectionPane = sideQuestSelection
+    ? managedPanes.find((pane) => pane.id === sideQuestSelection.paneId)
+    : null
+  // Why: background TerminalPane instances stay mounted; requiring both the
+  // active surface and its live selection prevents a stale fixed action.
+  const showSideQuestSelectionAction = Boolean(
+    isActive &&
+    isVisible &&
+    sideQuestEnabled &&
+    sideQuestSelection &&
+    sideQuestSelectionPane?.terminal.getSelection().trim() === sideQuestSelection.capturedText
+  )
   return (
     <>
       <div
@@ -2971,6 +3089,7 @@ function TerminalPane(
         onContextMenuCapture={contextMenu.onContextMenuCapture}
         onMouseDownCapture={handlePrimarySelectionMiddleMouseDown}
         onAuxClickCapture={handlePrimarySelectionAuxClick}
+        onPointerUp={handleTerminalPointerUp}
         onDragOver={(e) => {
           if (
             e.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME) ||
@@ -3004,6 +3123,13 @@ function TerminalPane(
           })
         }}
       />
+      {showSideQuestSelectionAction && sideQuestSelection ? (
+        <TerminalSideQuestSelectionAction
+          point={sideQuestSelection.point}
+          onStart={handleStartSelectedSideQuest}
+          onDismiss={() => setSideQuestSelection(null)}
+        />
+      ) : null}
       {managedPanes.map((pane) => {
         const ptyId =
           paneTransportsRef.current.get(pane.id)?.getPtyId() ??
@@ -3074,44 +3200,52 @@ function TerminalPane(
       {effectiveChatViewMode && chatPane?.container
         ? createPortal(
             <div className="absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background">
-              <NativeChatView
-                terminalTabId={tabId}
-                isVisible={isRendererVisible}
-                paneKey={makePaneKey(tabId, chatPane.leafId)}
-                targetPtyId={chatPanePtyId}
-                launchAgent={chatPaneLaunchAgent}
-                resolvedAgent={chatPaneResolvedAgent}
-                onSwitchToTerminal={switchNativeChatToTerminal}
-                readTerminalScreen={readNativeChatTerminalScreen}
-                contextMenuActions={{
-                  onSplitRight: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitRight),
-                  onSplitDown: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitDown),
-                  canEqualizePaneSizes: managedPanes.length > 1 && expandedPaneId === null,
-                  onEqualizePaneSizes: () =>
-                    contextMenu.runForPane(chatPane.id, contextMenu.onEqualizePaneSizes),
-                  canExpandPane: managedPanes.length > 1,
-                  isPaneExpanded: expandedPaneId === chatPane.id,
-                  onToggleExpand: () =>
-                    contextMenu.runForPane(chatPane.id, contextMenu.onToggleExpand),
-                  canContinueAgentSessionInNewSession: canContinueAgentSessionInNewSession(
-                    resolveAgentForLeaf(chatPane.leafId)
-                  ),
-                  onContinueAgentSessionInNewSession: () =>
-                    contextMenu.runForPane(
-                      chatPane.id,
-                      contextMenu.onContinueAgentSessionInNewSession
+              {terminalTab?.sideQuestSession ? (
+                <ProviderSideQuestView
+                  terminalTabId={tabId}
+                  sessionReference={terminalTab.sideQuestSession}
+                />
+              ) : (
+                <NativeChatView
+                  terminalTabId={tabId}
+                  isVisible={isRendererVisible}
+                  paneKey={makePaneKey(tabId, chatPane.leafId)}
+                  targetPtyId={chatPanePtyId}
+                  launchAgent={chatPaneLaunchAgent}
+                  resolvedAgent={chatPaneResolvedAgent}
+                  onSwitchToTerminal={switchNativeChatToTerminal}
+                  readTerminalScreen={readNativeChatTerminalScreen}
+                  contextMenuActions={{
+                    onSplitRight: () =>
+                      contextMenu.runForPane(chatPane.id, contextMenu.onSplitRight),
+                    onSplitDown: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitDown),
+                    canEqualizePaneSizes: managedPanes.length > 1 && expandedPaneId === null,
+                    onEqualizePaneSizes: () =>
+                      contextMenu.runForPane(chatPane.id, contextMenu.onEqualizePaneSizes),
+                    canExpandPane: managedPanes.length > 1,
+                    isPaneExpanded: expandedPaneId === chatPane.id,
+                    onToggleExpand: () =>
+                      contextMenu.runForPane(chatPane.id, contextMenu.onToggleExpand),
+                    canContinueAgentSessionInNewSession: canContinueAgentSessionInNewSession(
+                      resolveAgentForLeaf(chatPane.leafId)
                     ),
-                  onForkAgentSession: () =>
-                    void contextMenu.runForPane(chatPane.id, contextMenu.onForkAgentSession),
-                  onSetTitle: () => contextMenu.runForPane(chatPane.id, contextMenu.onSetTitle),
-                  onCopyTerminalId: () =>
-                    void contextMenu.runForPane(chatPane.id, contextMenu.onCopyTerminalId),
-                  onCopyPaneId: () =>
-                    void contextMenu.runForPane(chatPane.id, contextMenu.onCopyPaneId),
-                  canClosePane: managedPanes.length > 1,
-                  onClosePane: () => contextMenu.runForPane(chatPane.id, contextMenu.onClosePane)
-                }}
-              />
+                    onContinueAgentSessionInNewSession: () =>
+                      contextMenu.runForPane(
+                        chatPane.id,
+                        contextMenu.onContinueAgentSessionInNewSession
+                      ),
+                    onForkAgentSession: () =>
+                      void contextMenu.runForPane(chatPane.id, contextMenu.onForkAgentSession),
+                    onSetTitle: () => contextMenu.runForPane(chatPane.id, contextMenu.onSetTitle),
+                    onCopyTerminalId: () =>
+                      void contextMenu.runForPane(chatPane.id, contextMenu.onCopyTerminalId),
+                    onCopyPaneId: () =>
+                      void contextMenu.runForPane(chatPane.id, contextMenu.onCopyPaneId),
+                    canClosePane: managedPanes.length > 1,
+                    onClosePane: () => contextMenu.runForPane(chatPane.id, contextMenu.onClosePane)
+                  }}
+                />
+              )}
             </div>,
             chatPane.container,
             `native-chat-${tabId}-${chatPane.leafId}`
@@ -3144,6 +3278,12 @@ function TerminalPane(
         isNativeChatView={contextMenuIsChatView}
         onToggleNativeChat={handleContextMenuToggleNativeChat}
         onCopyAgentSessionContext={() => void contextMenu.onCopyAgentSessionContext()}
+        sideQuest={{
+          enabled:
+            nativeChatEnabled && quickCommandGroupId !== null && contextMenuSideQuestAgent !== null,
+          includesSelection: contextMenuSelection.trim().length > 0,
+          onStart: handleStartSideQuest
+        }}
         quickCommandHosts={visibleQuickCommandHosts}
         quickCommandHostLoadFailed={quickCommandHostLoadFailed}
         quickCommandHostOwnershipPending={quickCommandHostOwnershipPending}

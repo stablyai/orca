@@ -2,31 +2,18 @@ import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState
 import { useAppStore } from '../../store'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
-import {
-  sendNativeChatMessage,
-  sendNativeChatTypedCommand,
-  sendNativeChatMessageWithImageAttachments,
-  submitNativeChatPrompt
-} from './native-chat-runtime-send'
-import type { NativeChatSendHandle } from './native-chat-runtime-send'
-import { resolveNativeChatLaunchDraftSend } from './native-chat-launch-draft-send'
 import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
-import { isSlashCommandDraft } from '../../../../shared/native-chat-slash-commands'
-import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
+import { submitNativeChatComposerMessage } from './native-chat-composer-submit'
 import {
   applyMentionSuggestion,
   EMPTY_HISTORY,
-  pushHistory,
   type HistoryState
 } from './native-chat-composer-state'
 import { readNativeChatDraftCache } from './native-chat-draft-cache'
 import { useNativeChatDraft } from './use-native-chat-draft'
 import { useNativeChatLaunchDraftAdoption } from './use-native-chat-launch-draft-adoption'
 import { NativeChatComposerField } from './NativeChatComposerField'
-import {
-  nativeChatComposerTargetIsRemote,
-  type NativeChatResolvedTarget
-} from './native-chat-composer-target'
+import type { NativeChatResolvedTarget } from './native-chat-composer-target'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
 import { useNativeChatComposerPaste } from './use-native-chat-composer-paste'
 import { useNativeChatExternalAttachments } from './use-native-chat-external-attachments'
@@ -39,6 +26,10 @@ import { useNativeChatSessionOptionCommand } from './use-native-chat-session-opt
 import { useNativeChatPickerState } from './use-native-chat-picker-state'
 import { useNativeChatPickerCommandDispatch } from './use-native-chat-picker-command-dispatch'
 import { useNativeChatTypedInsertion } from './use-native-chat-typed-insertion'
+import {
+  isNativeChatSideQuestDraftEmpty,
+  useNativeChatSideQuestComposer
+} from './native-chat-side-quest-send'
 import type {
   NativeChatComposerHandle,
   NativeChatComposerProps
@@ -89,6 +80,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
     // the PTY id. Pane identity is the stable ownership key for unsent input.
     const draftScopeKey = paneKey
     const { draft, setDraft } = useNativeChatDraft(draftScopeKey)
+    const sideQuest = useNativeChatSideQuestComposer(terminalTabId)
     const [caret, setCaret] = useState(draft.length)
     useNativeChatLaunchDraftAdoption({
       terminalTabId,
@@ -178,7 +170,9 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       })
     const sendButtonDisabled = isWorking
       ? !hasPty || !onStop
-      : disabled || (draft.trim() === '' && imageAttachments.length === 0)
+      : disabled ||
+        sideQuest.submitBlocked ||
+        isNativeChatSideQuestDraftEmpty(draft, sideQuest.context, imageAttachments.length)
 
     const { insertTypedText, focus } = useNativeChatTypedInsertion({
       textareaRef,
@@ -237,81 +231,32 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       })
 
     const send = useCallback(() => {
-      const text = draft
-      const imagePaths = imageAttachments.map((attachment) => attachment.path)
-      if ((text.trim() === '' && imagePaths.length === 0) || disabled) {
-        return
-      }
-      // Why: block a normal send while a session-option command (e.g. /model) is
-      // still writing its body+delayed-Enter to the same pty, so the two write
-      // sequences can't interleave on one input line.
-      if (isDispatchingSessionOption) {
-        return
-      }
-      const target = resolveTarget()
-      if (!target) {
-        return
-      }
-      const classification = classifySend(text)
-      // A parked launch draft must be cleared line-by-line before the body.
-      const { sendOptions } = resolveNativeChatLaunchDraftSend({
+      submitNativeChatComposerMessage({
+        text: draft,
+        imagePaths: imageAttachments.map((attachment) => attachment.path),
+        disabled,
+        submitBlocked: sideQuest.submitBlocked,
+        isDispatchingSessionOption,
+        resolveTarget,
+        classifySend,
+        wrapSubmittedText: sideQuest.wrapSubmittedText,
         launchDraft,
         launchDraftResolved,
         agent,
-        readScreen: () => readTerminalScreen?.()
+        readTerminalScreen,
+        trackPendingSend,
+        onSlashCommand,
+        recordOutgoingCommand: (command) => sessionOptionsSurface?.recordOutgoingCommand(command),
+        onOptimisticSend,
+        clearContext: sideQuest.clearContext,
+        setHistory,
+        setDraft,
+        setCaret,
+        clearSkillOrigin,
+        clearImageAttachments,
+        setNotice,
+        terminalTabId
       })
-      let pendingHandle: NativeChatSendHandle | null = null
-      // Why: image attachments take the attachment send path even for a
-      // command/unknown send, otherwise `clearImageAttachments()` below drops
-      // them silently when the text starts with the agent's slash/skill prefix.
-      if (classification !== 'chat' && imagePaths.length === 0) {
-        pendingHandle =
-          agent === 'codex' && isSlashCommandDraft(text)
-            ? sendNativeChatTypedCommand(target.settings, target.ptyId, text)
-            : sendNativeChatMessage(target.settings, target.ptyId, text, sendOptions)
-      } else if (imagePaths.length > 0) {
-        pendingHandle = sendNativeChatMessageWithImageAttachments(
-          target.settings,
-          target.ptyId,
-          text,
-          imagePaths,
-          sendOptions
-        )
-      } else if (text.trim().length > 0) {
-        pendingHandle = sendNativeChatMessage(target.settings, target.ptyId, text, sendOptions)
-      } else {
-        submitNativeChatPrompt(target.settings, target.ptyId)
-      }
-      if (classification !== 'chat') {
-        if (pendingHandle) {
-          trackPendingSend(pendingHandle)
-        }
-        // Why: only verified catalog commands can truthfully claim they ran or
-        // mutate session-option state; unknown slash-like text has no such proof.
-        if (classification === 'command') {
-          onSlashCommand?.(text.trim())
-          sessionOptionsSurface?.recordOutgoingCommand(text.trim())
-        }
-      } else {
-        const pendingId = onOptimisticSend?.(text, imagePaths)
-        if (pendingHandle) {
-          trackPendingSend(pendingHandle, pendingId)
-        }
-      }
-      // Why: U10 telemetry — record adoption + local-vs-remote runtime split. The
-      // agent prop is the loose AgentType; the emitter narrows unknowns to 'other'.
-      emitNativeChatMessageSent({
-        agent,
-        runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
-      })
-      setHistory((prev) => pushHistory(prev, text))
-      setDraft('')
-      setCaret(0)
-      clearSkillOrigin()
-      clearImageAttachments()
-      setNotice(null)
-      // The send cleared the TUI input line before its body, so retire the seed.
-      useAppStore.getState().clearNativeChatLaunchDraft(terminalTabId)
     }, [
       agent,
       classifySend,
@@ -320,6 +265,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       draft,
       imageAttachments,
       disabled,
+      sideQuest,
       isDispatchingSessionOption,
       launchDraft,
       launchDraftResolved,
@@ -401,6 +347,8 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         autocomplete={autocomplete}
         activeSuggestion={activeSuggestion}
         notice={notice}
+        sideQuestContext={sideQuest.context}
+        sideQuestReadiness={sideQuest.readiness}
         imageAttachments={imageAttachments}
         sendButtonDisabled={sendButtonDisabled}
         isWorking={isWorking}
@@ -440,6 +388,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
           requestAnimationFrame(() => textarea?.setSelectionRange(result.caret, result.caret))
         }}
         onRemoveImageAttachment={(id) => removeImageAttachment(id)}
+        onRemoveSideQuestContext={sideQuest.clearContext}
         onAttach={pickAttachment}
         onDictationToggle={toggleDictation}
         onDictationHoldStart={startHoldDictation}

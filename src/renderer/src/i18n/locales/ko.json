@@ -314,6 +314,18 @@
       }
     },
     "lib": {
+      "start": {
+        "terminal": {
+          "side": {
+            "quest": {
+              "runtime": {
+                "unsupported": "Side Quests are not available in runtime-hosted workspaces yet."
+              },
+              "failed": "Could not start a Side Quest."
+            }
+          }
+        }
+      },
       "agent": {
         "catalog": {
           "5dff448636": "OpenClaw",
@@ -2734,7 +2746,9 @@
             "c2f0b72b8d": "삽입",
             "925f49f210": "창 확장",
             "df766809e0": "창 축소",
-            "cff67afad1": "컨텍스트 복사"
+            "cff67afad1": "컨텍스트 복사",
+            "addSelectionToSideQuest": "Add to Side Quest",
+            "newSideQuest": "New Side Quest"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "데몬 재시작",
@@ -14496,7 +14510,20 @@
         "allow": "허용하다",
         "deny": "부인하다"
       },
-      "launchPromptNotDelivered": "전달되지 않음 — 터미널을 확인하세요"
+      "launchPromptNotDelivered": "전달되지 않음 — 터미널을 확인하세요",
+      "quoteCard": {
+        "contextFrom": "Context from {{value0}}",
+        "remove": "Remove context from {{value0}}",
+        "showLess": "Show less",
+        "showMore": "Show more"
+      },
+      "sideQuest": {
+        "terminalSource": "Terminal",
+        "starting": "Starting the Side Quest agent… You can draft while it gets ready.",
+        "startFailed": "The agent did not become ready. Switch to Terminal to inspect it.",
+        "draftPlaceholder": "Draft your question…",
+        "failedPlaceholder": "Agent unavailable"
+      }
     },
     "tab": {
       "bar": {

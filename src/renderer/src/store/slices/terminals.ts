@@ -43,6 +43,7 @@ import {
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
+import type { SideQuestSessionReference } from '../../../../shared/side-quest-types'
 import type { SessionOptionValue } from '../../../../shared/native-chat-session-options'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../shared/local-windows-terminal-runtime'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../shared/windows-terminal-shell'
@@ -659,6 +660,8 @@ export type TerminalSlice = {
   ) => void
   setGeneratedTabTitlesFromAgentPrompts: (updates: readonly GeneratedTabTitleUpdate[]) => void
   clearTabLaunchAgent: (tabId: string) => void
+  /** Persist or clear the provider conversation bound to a Side Quest terminal. */
+  setTabSideQuestSession: (tabId: string, session: SideQuestSessionReference | null) => void
   setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
   /** Mark a tab unread (agent working→idle); skipped when the tab is visible, since a "seen" flag would never clear. */
@@ -2074,6 +2077,31 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       nextTabs[tabIndex] = tabWithoutLaunchAgent
       scheduleRuntimeGraphSync()
       return { tabsByWorktree: { ...s.tabsByWorktree, [ownerWorktreeId]: nextTabs } }
+    })
+  },
+
+  setTabSideQuestSession: (tabId, session) => {
+    set((state) => {
+      const worktreeId = getTerminalTabOwnerWorktreeId(state.tabsByWorktree, tabId)
+      if (!worktreeId) {
+        return state
+      }
+      const tabs = state.tabsByWorktree[worktreeId] ?? []
+      const tabIndex = tabs.findIndex((tab) => tab.id === tabId)
+      const currentTab = tabs[tabIndex]
+      if (!currentTab || currentTab.sideQuestSession === session) {
+        return state
+      }
+      if (!currentTab.sideQuestSession && !session) {
+        return state
+      }
+      const { sideQuestSession: _removed, ...baseTab } = currentTab
+      void _removed
+      const nextTabs = [...tabs]
+      nextTabs[tabIndex] = session ? { ...baseTab, sideQuestSession: session } : baseTab
+      return {
+        tabsByWorktree: { ...state.tabsByWorktree, [worktreeId]: nextTabs }
+      }
     })
   },
 

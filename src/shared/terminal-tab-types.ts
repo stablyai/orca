@@ -1,4 +1,5 @@
 import type { AiVaultSessionTitle } from './ai-vault-session-title'
+import type { SideQuestSessionReference } from './side-quest-types'
 import type { TuiAgent } from './tui-agent'
 
 // ─── Terminal Tab (legacy — used by persistence and TerminalContentSlice) ─
@@ -43,6 +44,8 @@ export type TerminalTab = {
    *  hook status overrides this once the agent does anything. Plain terminals
    *  and manually-started agents omit it. */
   launchAgent?: TuiAgent
+  /** Provider-owned Side Quest conversation bound to this terminal tab. */
+  sideQuestSession?: SideQuestSessionReference
   /** Why: when `setActiveWorktree` bumps generation on all-dead tabs to drive a
    *  TerminalPane remount, the fresh PTY that results is caused by navigation,
    *  not by the user doing work. Without this flag the resulting

@@ -46,6 +46,8 @@ export type LaunchAgentInNewTabArgs = {
   launchSource?: LaunchSource
   /** User-authored Quick Command label for local tabs created from the tab bar. */
   quickCommandLabel?: string | null
+  /** Skip configured command overrides that may embed unrestricted flags. */
+  ignoreConfiguredAgentCommand?: boolean
   /** Shell platform for the startup command; defaults to renderer OS. SSH/WSL worktrees run Linux even from Windows. */
   launchPlatform?: NodeJS.Platform
   /** Called after the prompt is actually delivered to the agent input path. */
@@ -80,6 +82,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     promptDelivery = 'auto-submit',
     launchSource,
     quickCommandLabel,
+    ignoreConfiguredAgentCommand,
     launchPlatform,
     onPromptDelivered
   } = args
@@ -101,7 +104,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     isRemote,
     terminalWindowsShell: store.settings?.terminalWindowsShell
   })
-  const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
+  const cmdOverrides = ignoreConfiguredAgentCommand ? {} : (store.settings?.agentCmdOverrides ?? {})
   const effectiveAgentArgs =
     agentArgs !== undefined
       ? agentArgs

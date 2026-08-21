@@ -314,6 +314,18 @@
       }
     },
     "lib": {
+      "start": {
+        "terminal": {
+          "side": {
+            "quest": {
+              "runtime": {
+                "unsupported": "Side Quests are not available in runtime-hosted workspaces yet."
+              },
+              "failed": "Could not start a Side Quest."
+            }
+          }
+        }
+      },
       "agent": {
         "catalog": {
           "5dff448636": "OpenClaw",
@@ -2732,7 +2744,9 @@
             "c2f0b72b8d": "Insertar",
             "925f49f210": "Expandir panel",
             "df766809e0": "Contraer panel",
-            "cff67afad1": "Copiar contexto"
+            "cff67afad1": "Copiar contexto",
+            "addSelectionToSideQuest": "Añadir a Side Quest",
+            "newSideQuest": "Nueva Side Quest"
           },
           "TerminalErrorToast": {
             "e4aa243f8c": "Reiniciar servicio",
@@ -14467,7 +14481,20 @@
         "allow": "Permitir",
         "deny": "Denegar"
       },
-      "launchPromptNotDelivered": "No entregado — revisa la terminal"
+      "launchPromptNotDelivered": "No entregado — revisa la terminal",
+      "quoteCard": {
+        "contextFrom": "Contexto de {{value0}}",
+        "remove": "Quitar contexto de {{value0}}",
+        "showLess": "Mostrar menos",
+        "showMore": "Mostrar más"
+      },
+      "sideQuest": {
+        "terminalSource": "Terminal",
+        "starting": "Starting the Side Quest agent… You can draft while it gets ready.",
+        "startFailed": "The agent did not become ready. Switch to Terminal to inspect it.",
+        "draftPlaceholder": "Draft your question…",
+        "failedPlaceholder": "Agent unavailable"
+      }
     },
     "tab": {
       "bar": {
