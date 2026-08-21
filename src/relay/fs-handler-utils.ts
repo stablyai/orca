@@ -14,6 +14,10 @@ import {
   ingestRgJsonLine,
   SEARCH_TIMEOUT_MS as SHARED_SEARCH_TIMEOUT_MS
 } from '../shared/text-search'
+import {
+  MAX_PREVIEWABLE_BINARY_BYTES,
+  MAX_TEXT_FILE_BYTES
+} from '../shared/previewable-binary-mime-types'
 import { IMAGE_FILE_MIME_TYPES } from '../shared/image-file-extensions'
 import type { SearchResult as SharedSearchResult } from '../shared/code-search-types'
 import {
@@ -26,14 +30,11 @@ import {
 
 // ─── Constants ───────────────────────────────────────────────────────
 
-// Why: remote reads still travel through bounded JSON-RPC frames, but matching
-// the old 5MB search cap would block common JSON/log files before Monaco's
-// large-file optimizations can handle them.
-export const MAX_TEXT_FILE_SIZE = 10 * 1024 * 1024
-// Why: matches the local cap (src/main/ipc/filesystem.ts MAX_PREVIEWABLE_BINARY_SIZE).
-// Reads above the legacy 16MB single-frame budget go through fs.readFileStream,
-// which chunks at STREAM_CHUNK_SIZE; see docs/relay-file-stream-design.md.
-export const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024
+// Why: re-export under the relay's existing names so downstream callers don't
+// change. Canonical values now live in shared/previewable-binary-mime-types so
+// local IPC, runtime host, relay, and SSH host all agree on the same caps.
+export const MAX_TEXT_FILE_SIZE = MAX_TEXT_FILE_BYTES
+export const MAX_PREVIEWABLE_BINARY_SIZE = MAX_PREVIEWABLE_BINARY_BYTES
 export const BINARY_PROBE_BYTES = 8192
 export const SEARCH_TIMEOUT_MS = SHARED_SEARCH_TIMEOUT_MS
 export const DEFAULT_MAX_RESULTS = 2000

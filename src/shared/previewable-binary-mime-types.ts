@@ -15,3 +15,7 @@ export const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
 // path produced it (local IPC, SSH relay, runtime host). Both consumers must
 // import this — never declare a local copy.
 export const MAX_PREVIEWABLE_BINARY_BYTES = 50 * 1024 * 1024 // 50 MiB
+
+// Why: relay and SSH host read paths also need a text-file cap. Kept next to
+// MAX_PREVIEWABLE_BINARY_BYTES so a future bump happens in one place.
+export const MAX_TEXT_FILE_BYTES = 10 * 1024 * 1024 // 10 MiB
