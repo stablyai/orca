@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { buildPetFromImage } from './pet-from-image'
+import { createHash } from 'node:crypto'
+import { buildPetFromImage, type BuildPetResult } from './pet-from-image'
 import { blankImage } from './pet-raster-transform'
 import { SHEET_COLUMNS, SHEET_ROWS } from './pet-sheet-composer'
 import { BUNDLED_PET_RIGS } from './pet-rigs'
@@ -85,6 +86,25 @@ function noisyPhoto(width = 60, height = 90): RgbaImage {
     }
   }
   return img
+}
+
+// Why a digest and not toEqual: a built sheet carries several megabytes of
+// pixels, and deep-comparing two of them element by element — while vitest
+// builds a diff for a failure that will not happen — took over thirty seconds
+// and timed the case out. Identical bytes are what these assert; a hash says
+// that in one pass and reports a readable value when it is wrong.
+function builtPetFingerprint(result: BuildPetResult): string {
+  if (!result.ok) {
+    return `rejected:${result.reason}`
+  }
+  const { sheet } = result
+  return [
+    result.mode,
+    sheet.width,
+    sheet.height,
+    createHash('sha256').update(Buffer.from(sheet.data)).digest('hex'),
+    JSON.stringify(result.manifest)
+  ].join('|')
 }
 
 describe('buildPetFromImage', () => {
@@ -311,7 +331,9 @@ describe('buildPetFromImage crop', () => {
       crop: { x: 0, y: 0, width: plain.width, height: plain.height }
     })
 
-    expect(cropped).toEqual(buildPetFromImage(plain, DEFAULT_PET_ID))
+    expect(builtPetFingerprint(cropped)).toBe(
+      builtPetFingerprint(buildPetFromImage(plain, DEFAULT_PET_ID))
+    )
   })
 })
 
@@ -389,9 +411,11 @@ describe('buildPetFromImage background tolerance', () => {
     const plain = uploadedCharacter()
 
     expect(
-      buildPetFromImage(plain, DEFAULT_PET_ID, {
-        backgroundTolerance: BACKGROUND_TOLERANCE.default
-      })
-    ).toEqual(buildPetFromImage(plain, DEFAULT_PET_ID))
+      builtPetFingerprint(
+        buildPetFromImage(plain, DEFAULT_PET_ID, {
+          backgroundTolerance: BACKGROUND_TOLERANCE.default
+        })
+      )
+    ).toBe(builtPetFingerprint(buildPetFromImage(plain, DEFAULT_PET_ID)))
   })
 })
