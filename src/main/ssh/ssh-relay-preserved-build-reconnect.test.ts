@@ -97,9 +97,11 @@ describe('preserved relay build reconnect', () => {
     vi.mocked(resolveRemoteNodePath).mockReset().mockResolvedValue('/usr/bin/node')
   })
 
-  it('reconnects the persisted relay before deploying a new content hash', async () => {
+  it.each([
+    ['without a version prefix', '0.1.0+111111111111'],
+    ['with a version prefix', 'v0.1.0+111111111111']
+  ])('reconnects the persisted relay $label', async (_label, previousBuildId) => {
     const conn = makeMockConnection()
-    const previousBuildId = '0.1.0+111111111111'
     vi.mocked(execCommand)
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
       .mockResolvedValueOnce('/home/user')
