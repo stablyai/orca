@@ -4,8 +4,9 @@ import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import type { OpenFile, PendingEditorReveal } from '@/store/slices/editor'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import { isMediaPreviewMimeType } from '../../../../shared/media-file-extensions'
 import { ConflictBanner, ConflictPlaceholderView, ConflictReviewPanel } from './ConflictComponents'
-import { ImageViewer, MonacoEditor } from './editor-lazy-views'
+import { ImageViewer, MediaViewer, MonacoEditor } from './editor-lazy-views'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
 import type { FileContent } from './editor-panel-content-types'
 import { translate } from '@/i18n/i18n'
@@ -138,6 +139,17 @@ export function EditorConflictReviewSurface({
     }
     if (fileContent.isBinary) {
       if (fileContent.isImage) {
+        if (fileContent.mimeType && isMediaPreviewMimeType(fileContent.mimeType)) {
+          return (
+            <div className={className}>
+              <MediaViewer
+                content={fileContent.content}
+                filePath={contentFile.filePath}
+                mimeType={fileContent.mimeType}
+              />
+            </div>
+          )
+        }
         return (
           <div className={className}>
             <ImageViewer

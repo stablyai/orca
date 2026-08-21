@@ -9,6 +9,7 @@ import {
   IMAGE_MIME_TYPES,
   MAX_PREVIEWABLE_BINARY_SIZE,
   MAX_TEXT_FILE_SIZE,
+  STREAM_PREVIEWABLE_MIME_TYPES,
   isBinaryBuffer,
   isBinaryFilePrefix
 } from './fs-handler-utils'
@@ -79,7 +80,7 @@ export async function readRelayFileStreamMetadata(
   pumpOptions?: StreamPumpOptions
 ): Promise<StreamMetadata> {
   const stats = await stat(filePath)
-  const mimeType = IMAGE_MIME_TYPES[extname(filePath).toLowerCase()]
+  const mimeType = STREAM_PREVIEWABLE_MIME_TYPES[extname(filePath).toLowerCase()]
   const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
   if (stats.size > sizeLimit) {
     throw new Error(
