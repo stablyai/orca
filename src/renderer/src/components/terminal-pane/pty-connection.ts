@@ -708,6 +708,8 @@ type PanePtyBinding = IDisposable & {
   sampleForegroundAgentOnFocus: () => void
   /** Reconfirm after direct shortcut input, which bypasses PTY onData. */
   requestWindowsShiftEnterReconfirmation: () => void
+  /** Refresh interactive redraw scheduling after captured shortcut input. */
+  markShortcutTerminalInputSent: () => void
   reconcileIfSessionDead: (liveSessionIds: Set<string>, snapshotRequestedAt?: number) => void
   reconcileIfSessionMissing: (hasPty: HasPty, livenessRequestedAt?: number) => void
 }
@@ -3828,15 +3830,23 @@ export function connectPanePty(
     Boolean(connectionId) && !shouldDeliverStartupViaTerminalPaste
   const hadExistingPaneTransportAtConnect = deps.paneTransportsRef.current.size > 0
   let lastTerminalInputAt = Number.NEGATIVE_INFINITY
+  // Why: separate from lastTerminalInputAt because onExit reads that one as
+  // "the user never typed into this pane" to keep a dead newborn pane mounted.
+  // Captured shortcuts must open the redraw window without arming that teardown.
+  let lastInteractiveRedrawInputAt = Number.NEGATIVE_INFINITY
   let hasReceivedPtyOutput = false
   let deferredReattachLiveData: DeferredReattachLiveDataQueue | null = null
   let reattachLiveDataDeferralDepth = 0
   let deferredReattachLiveDataOwners = new Map<number, { failed: boolean }>()
   let transportStreamGeneration = 0
-  const markTerminalInputSent = (): void => {
-    lastTerminalInputAt = performance.now()
+  const markInteractiveRedrawInput = (): void => {
+    lastInteractiveRedrawInputAt = performance.now()
     // Why: input must probe a wedged xterm even when the PTY produces no renderer output.
     requestTerminalWritePipelineProbe(pane.terminal)
+  }
+  const markTerminalInputSent = (): void => {
+    lastTerminalInputAt = performance.now()
+    markInteractiveRedrawInput()
   }
   const recordTerminalInputForHibernation = (): void => {
     useAppStore.getState().recordTerminalInput(cacheKey)
@@ -6347,7 +6357,7 @@ export function connectPanePty(
         return consumeForegroundImmediateBudget(data.length)
       }
       const recentInput =
-        performance.now() - lastTerminalInputAt <= FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
+        performance.now() - lastInteractiveRedrawInputAt <= FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
       if (
         recentInput &&
         data.length <= FOREGROUND_INTERACTIVE_REDRAW_CHARS &&
@@ -6387,7 +6397,7 @@ export function connectPanePty(
     } {
       const rewriteOutputPrefersRenderRefresh = foregroundRewriteOutputPrefersRenderRefresh(data)
       const recentInput =
-        performance.now() - lastTerminalInputAt <= FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
+        performance.now() - lastInteractiveRedrawInputAt <= FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
       if (foregroundRendererRiskOutputPrefersRenderRefresh(data)) {
         return {
           refresh: true,
@@ -6517,7 +6527,7 @@ export function connectPanePty(
       // Why: recompute the latch on every synchronized START so each frame's interactivity is judged by its own open time and can't leak across a same-chunk close+open; clear only on leaving synchronized output.
       if (synchronizedForegroundOutput && synchronizedOutputStarted) {
         synchronizedForegroundFrameInteractive =
-          performance.now() - lastTerminalInputAt <=
+          performance.now() - lastInteractiveRedrawInputAt <=
           FOREGROUND_SYNCHRONIZED_FRAME_INTERACTIVE_WINDOW_MS
       } else if (!nextSynchronizedForegroundOutputActive && !synchronizedOutputEnded) {
         synchronizedForegroundFrameInteractive = false
@@ -9483,6 +9493,9 @@ export function connectPanePty(
         requestKnownWindowsShiftEnterReconfirmation()
         sampleVisiblePaneForegroundAgent()
       }, SHIFT_ENTER_RECONFIRM_IDLE_MS)
+    },
+    markShortcutTerminalInputSent() {
+      markInteractiveRedrawInput()
     },
     reconcileIfSessionDead,
     reconcileIfSessionMissing,
