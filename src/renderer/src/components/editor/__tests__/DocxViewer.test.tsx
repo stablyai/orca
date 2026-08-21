@@ -111,6 +111,37 @@ describe('DocxViewer', () => {
     })
   })
 
+  it('strips javascript: hyperlinks from mammoth output', async () => {
+    // Why: mammoth relays .docx hyperlinks verbatim into the HTML payload, so a
+    // crafted file can carry a `javascript:` URL and reach the renderer. The
+    // viewer must sanitize before dangerouslySetInnerHTML.
+    vi.doMock('mammoth', () => ({
+      convertToHtml: vi.fn().mockResolvedValue({
+        value: '<p><a href="javascript:alert(1)">click me</a></p>'
+      })
+    }))
+    try {
+      const { DocxViewer: SanitizedDocxViewer } = await import('../DocxViewer')
+      mockPreview(fixtureBase64('tiny.docx'))
+      const { container } = render(
+        <SanitizedDocxViewer
+          filePath="/tmp/worktree/js.docx"
+          fileName="js.docx"
+          runtimeContext={RUNTIME_CONTEXT}
+        />
+      )
+      await waitFor(() => {
+        expect(screen.getByTestId('docx-preview')).toBeInTheDocument()
+      })
+      const anchor = container.querySelector('a')
+      const href = anchor?.getAttribute('href')
+      expect(href === null || !/^javascript:/i.test(href)).toBe(true)
+    } finally {
+      vi.doUnmock('mammoth')
+      vi.resetModules()
+    }
+  })
+
   it('shows an error alert when the preview read fails', async () => {
     vi.mocked(readRuntimeFilePreview).mockRejectedValue(new Error('file_too_large'))
     render(

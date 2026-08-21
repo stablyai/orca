@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import * as mammoth from 'mammoth'
+import DOMPurify from 'dompurify'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import { readRuntimeFilePreview } from '@/runtime/runtime-file-client'
 import styles from './OfficePreview.module.css'
@@ -48,7 +49,12 @@ export function DocxViewer({
         if (cancelled) {
           return
         }
-        setStatus({ kind: 'ready', html: result.value || '<p>文档为空</p>' })
+        setStatus({
+          kind: 'ready',
+          html: DOMPurify.sanitize(result.value || '<p>文档为空</p>', {
+            USE_PROFILES: { html: true }
+          })
+        })
       })
       .catch(() => {
         if (cancelled) {
