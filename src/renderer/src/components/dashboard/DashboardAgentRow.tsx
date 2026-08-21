@@ -14,6 +14,7 @@ import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardD
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
+import { agentRowOrchestrationDataProps } from '@/components/sidebar/worktree-agent-orchestration-menu'
 
 // Why: narrow the dashboard's rollup states to shared dot states, defaulting unknowns to 'idle' so a row never crashes.
 function asDotState(state: AgentStatusState | 'idle'): AgentDotState {
@@ -200,6 +201,16 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       )}
       data-focused-agent-pane={isFocusedPane ? 'true' : undefined}
       data-agent-send-target={sendTargetStatus}
+      // Why: WorktreeContextMenu reads these attrs to surface Orchestration
+      // actions for the right-clicked agent without a nested context menu.
+      {...agentRowOrchestrationDataProps({
+        paneKey: agent.paneKey,
+        worktreeId: agent.entry.worktreeId ?? agent.tab.worktreeId,
+        coordinatorHandle: agent.entry.orchestration?.coordinatorHandle,
+        dispatchId: agent.entry.orchestration?.dispatchId,
+        taskId: agent.entry.orchestration?.taskId,
+        dispatchStatus: agent.entry.orchestration?.dispatchStatus
+      })}
       title={titleParts.length > 0 ? titleParts.join(' • ') : undefined}
       role={participatesInLineage ? 'treeitem' : undefined}
       aria-level={participatesInLineage ? (lineage?.depth ?? 0) + 1 : undefined}
