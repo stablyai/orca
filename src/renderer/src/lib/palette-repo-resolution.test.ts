@@ -20,4 +20,14 @@ describe('palette repo and current-worktree resolution', () => {
     expect(isPaletteCurrentWorktree(worktree, worktree.id, 'local')).toBe(false)
     expect(isPaletteCurrentWorktree(worktree, worktree.id, 'ssh:box')).toBe(true)
   })
+
+  it('recognizes the paired-runtime alias of an SSH worktree as current', () => {
+    expect(
+      isPaletteCurrentWorktree(
+        { ...worktree, runtimeOwnerEnvironmentId: 'paired-host' },
+        worktree.id,
+        'runtime:paired-host'
+      )
+    ).toBe(true)
+  })
 })

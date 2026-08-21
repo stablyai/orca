@@ -166,6 +166,7 @@ function baseResult(entry: SearchableSimulatorTab): SimulatorPaletteSearchResult
 function getActiveUnifiedTabId({
   worktreeId,
   worktreeHostId,
+  worktreeRuntimeOwnerEnvironmentId,
   activeWorktreeId,
   activeWorkspaceExecutionHostId,
   activeTabType,
@@ -177,12 +178,17 @@ function getActiveUnifiedTabId({
 > & {
   worktreeId: string
   worktreeHostId?: Worktree['hostId']
+  worktreeRuntimeOwnerEnvironmentId?: Worktree['runtimeOwnerEnvironmentId']
   activeGroupId?: string
   groups?: readonly TabGroup[]
 }): string | null {
   if (
     !isPaletteCurrentWorktree(
-      { id: worktreeId, hostId: worktreeHostId },
+      {
+        id: worktreeId,
+        hostId: worktreeHostId,
+        runtimeOwnerEnvironmentId: worktreeRuntimeOwnerEnvironmentId
+      },
       activeWorktreeId,
       activeWorkspaceExecutionHostId
     ) ||
@@ -220,6 +226,7 @@ export function buildSearchableSimulatorTabs({
     const activeUnifiedTabId = getActiveUnifiedTabId({
       worktreeId: worktree.id,
       worktreeHostId: worktree.hostId,
+      worktreeRuntimeOwnerEnvironmentId: worktree.runtimeOwnerEnvironmentId,
       activeWorktreeId,
       activeWorkspaceExecutionHostId,
       activeTabType,

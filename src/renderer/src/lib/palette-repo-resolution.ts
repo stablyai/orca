@@ -1,6 +1,7 @@
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
 import type { Worktree } from '../../../shared/worktree/types'
+import { isExecutionHostAliasForWorktree } from './worktree-execution-host-alias'
 
 /** Resolve the repo that owns a worktree, preserving host collisions. */
 export function resolvePaletteRepoForWorktree<T extends { displayName?: string | null }>(
@@ -16,7 +17,7 @@ export function resolvePaletteRepoForWorktree<T extends { displayName?: string |
 }
 
 export function isPaletteCurrentWorktree(
-  worktree: Pick<Worktree, 'id' | 'hostId'>,
+  worktree: Pick<Worktree, 'id' | 'hostId' | 'runtimeOwnerEnvironmentId'>,
   activeWorktreeId: string | null,
   activeWorkspaceExecutionHostId?: ExecutionHostId | null
 ): boolean {
@@ -25,7 +26,9 @@ export function isPaletteCurrentWorktree(
   }
   return (
     activeWorktreeId === worktree.id &&
-    (worktree.hostId ?? LOCAL_EXECUTION_HOST_ID) ===
-      (activeWorkspaceExecutionHostId ?? LOCAL_EXECUTION_HOST_ID)
+    isExecutionHostAliasForWorktree(
+      activeWorkspaceExecutionHostId ?? LOCAL_EXECUTION_HOST_ID,
+      worktree
+    )
   )
 }

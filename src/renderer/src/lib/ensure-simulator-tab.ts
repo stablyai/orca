@@ -4,11 +4,8 @@ import { cancelPendingSimulatorPaneShutdown } from './simulator-pane-shutdown-sc
 import { shouldShutdownSimulatorForPaneUnmountFromTabs } from './simulator-tab-shutdown'
 import { translate } from '@/i18n/i18n'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import {
-  findAmbiguousWorktreeIds,
-  isExecutionHostAliasForWorktree,
-  isUnifiedTabOwnedByWorktree
-} from './unified-tab-host-ownership'
+import { findAmbiguousWorktreeIds, isUnifiedTabOwnedByWorktree } from './unified-tab-host-ownership'
+import { isExecutionHostAliasForWorktree } from './worktree-execution-host-alias'
 
 type EnsureSimulatorTabOptions = {
   targetGroupId?: string

@@ -4,7 +4,6 @@ import {
   resolveUnifiedTabLabel
 } from '../../../shared/tab-title-resolution'
 import type { Tab, TabContentType } from '../../../shared/tab-types'
-import type { Worktree } from '../../../shared/worktree/types'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { buildPaletteTabDocument } from './palette-match/tab-document'
 import { isPaletteCurrentWorktree, resolvePaletteRepoForWorktree } from './palette-repo-resolution'
@@ -30,27 +29,15 @@ import {
 
 function getActiveUnifiedTabId({
   worktreeId,
-  worktreeHostId,
-  activeWorktreeId,
-  activeWorkspaceExecutionHostId,
+  isCurrentWorktree,
   activeTabType,
   activeGroupIdByWorktree,
   groupsByWorktree
 }: Pick<
   BuildSearchableWorkspaceTabsOptions,
-  | 'activeGroupIdByWorktree'
-  | 'activeTabType'
-  | 'activeWorktreeId'
-  | 'activeWorkspaceExecutionHostId'
-  | 'groupsByWorktree'
-> & { worktreeId: string; worktreeHostId?: Worktree['hostId'] }): string | null {
-  if (
-    !isPaletteCurrentWorktree(
-      { id: worktreeId, hostId: worktreeHostId },
-      activeWorktreeId,
-      activeWorkspaceExecutionHostId
-    )
-  ) {
+  'activeGroupIdByWorktree' | 'activeTabType' | 'groupsByWorktree'
+> & { worktreeId: string; isCurrentWorktree: boolean }): string | null {
+  if (!isCurrentWorktree) {
     return null
   }
   const activeGroupId = activeGroupIdByWorktree[worktreeId]
@@ -63,9 +50,7 @@ function getActiveUnifiedTabId({
 
 function isCurrentWorkspaceTab({
   tab,
-  worktreeHostId,
-  activeWorktreeId,
-  activeWorkspaceExecutionHostId,
+  isCurrentWorktree,
   activeTabType,
   activeTabId,
   activeTabIdByWorktree,
@@ -81,20 +66,12 @@ function isCurrentWorkspaceTab({
   | 'activeTabIdByWorktree'
   | 'activeTabType'
   | 'activeTabTypeByWorktree'
-  | 'activeWorktreeId'
-  | 'activeWorkspaceExecutionHostId'
 > & {
   tab: Tab & { contentType: WorkspaceTabContentType }
-  worktreeHostId?: Worktree['hostId']
+  isCurrentWorktree: boolean
   activeUnifiedTabId: string | null
 }): boolean {
-  if (
-    !isPaletteCurrentWorktree(
-      { id: tab.worktreeId, hostId: worktreeHostId },
-      activeWorktreeId,
-      activeWorkspaceExecutionHostId
-    )
-  ) {
+  if (!isCurrentWorktree) {
     return false
   }
   if (activeUnifiedTabId) {
@@ -160,11 +137,14 @@ export function buildSearchableWorkspaceTabEntries({
       worktreeOrder.get(getWorktreeHostIdentity(worktree)) ??
       worktreeOrder.get(worktree.id) ??
       Number.MAX_SAFE_INTEGER
+    const isCurrentWorktree = isPaletteCurrentWorktree(
+      worktree,
+      activeWorktreeId,
+      activeWorkspaceExecutionHostId
+    )
     const activeUnifiedTabId = getActiveUnifiedTabId({
       worktreeId: worktree.id,
-      worktreeHostId: worktree.hostId,
-      activeWorktreeId,
-      activeWorkspaceExecutionHostId,
+      isCurrentWorktree,
       activeTabType,
       activeGroupIdByWorktree,
       groupsByWorktree
@@ -201,9 +181,7 @@ export function buildSearchableWorkspaceTabEntries({
         tabSortIndex: tabOrder.get(tab.id) ?? tab.sortOrder,
         isCurrentTab: isCurrentWorkspaceTab({
           tab,
-          worktreeHostId: worktree.hostId,
-          activeWorktreeId,
-          activeWorkspaceExecutionHostId,
+          isCurrentWorktree,
           activeTabType,
           activeTabId,
           activeTabIdByWorktree,
@@ -212,11 +190,7 @@ export function buildSearchableWorkspaceTabEntries({
           activeTabTypeByWorktree,
           activeUnifiedTabId
         }),
-        isCurrentWorktree: isPaletteCurrentWorktree(
-          worktree,
-          activeWorktreeId,
-          activeWorkspaceExecutionHostId
-        )
+        isCurrentWorktree
       }
       if (tab.contentType === 'terminal') {
         const terminalTab = terminalTabs.get(tab.entityId)

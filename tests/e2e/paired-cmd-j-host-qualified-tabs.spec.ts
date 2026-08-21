@@ -388,7 +388,11 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
     palette = page.getByRole('dialog', { name: 'Jump to...' })
     input = palette.getByPlaceholder('Search chats, terminals, worktrees, settings, and actions...')
     await input.fill('Local emulator proof')
-    await palette.locator('[cmdk-item][data-value="simulator-tab:simulator-local"]').click()
+    const localSimulatorRow = palette.locator(
+      '[cmdk-item][data-value="simulator-tab:simulator-local"]'
+    )
+    await expect(localSimulatorRow).toHaveCount(1)
+    await localSimulatorRow.click()
     await expect
       .poll(() =>
         page.evaluate((worktreeId) => {

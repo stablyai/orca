@@ -126,19 +126,25 @@ describe('Cmd-J host-qualified candidate ownership', () => {
           })
         ]
       },
-      activeBrowserTabId: null,
-      activeWorktreeId: null,
-      activeTabType: 'terminal'
+      activeBrowserTabId: remoteWorkspace.id,
+      activeWorktreeId: SHARED_WORKTREE_ID,
+      activeWorkspaceExecutionHostId: RUNTIME_HOST_ID,
+      activeTabType: 'browser'
     })
 
     expect(
-      searchBrowserPages(entries, 'docs').map((result) => [
-        result.workspaceId,
-        result.executionHostId
-      ])
+      searchBrowserPages(entries, 'docs')
+        .map((result) => [result.workspaceId, result.executionHostId])
+        .sort(([left], [right]) => String(left).localeCompare(String(right)))
     ).toEqual([
       [localWorkspace.id, 'local'],
       [remoteWorkspace.id, RUNTIME_HOST_ID]
+    ])
+    expect(
+      entries.map((entry) => [entry.workspace.id, entry.isCurrentWorktree, entry.isCurrentPage])
+    ).toEqual([
+      [localWorkspace.id, false, false],
+      [remoteWorkspace.id, true, true]
     ])
   })
 
@@ -152,6 +158,7 @@ describe('Cmd-J host-qualified candidate ownership', () => {
           makeTab({
             id: 'local-simulator',
             entityId: 'local-simulator',
+            groupId: 'group-local',
             contentType: 'simulator',
             executionHostId: 'local',
             label: 'Local emulator'
@@ -159,16 +166,33 @@ describe('Cmd-J host-qualified candidate ownership', () => {
           makeTab({
             id: 'remote-simulator',
             entityId: 'remote-simulator',
+            groupId: 'group-remote',
             contentType: 'simulator',
             executionHostId: RUNTIME_HOST_ID,
             label: 'Remote emulator'
           })
         ]
       },
-      activeGroupIdByWorktree: {},
-      groupsByWorktree: {},
-      activeWorktreeId: null,
-      activeTabType: 'terminal'
+      activeGroupIdByWorktree: { [SHARED_WORKTREE_ID]: 'group-remote' },
+      groupsByWorktree: {
+        [SHARED_WORKTREE_ID]: [
+          {
+            id: 'group-local',
+            worktreeId: SHARED_WORKTREE_ID,
+            activeTabId: 'local-simulator',
+            tabOrder: ['local-simulator']
+          },
+          {
+            id: 'group-remote',
+            worktreeId: SHARED_WORKTREE_ID,
+            activeTabId: 'remote-simulator',
+            tabOrder: ['remote-simulator']
+          }
+        ]
+      },
+      activeWorktreeId: SHARED_WORKTREE_ID,
+      activeWorkspaceExecutionHostId: RUNTIME_HOST_ID,
+      activeTabType: 'simulator'
     })
 
     expect(
@@ -177,8 +201,14 @@ describe('Cmd-J host-qualified candidate ownership', () => {
         result.executionHostId
       ])
     ).toEqual([
-      ['local-simulator', 'local'],
-      ['remote-simulator', RUNTIME_HOST_ID]
+      ['remote-simulator', RUNTIME_HOST_ID],
+      ['local-simulator', 'local']
+    ])
+    expect(
+      entries.map((entry) => [entry.tab.id, entry.isCurrentWorktree, entry.isCurrentTab])
+    ).toEqual([
+      ['local-simulator', false, false],
+      ['remote-simulator', true, true]
     ])
   })
 
@@ -268,5 +298,28 @@ describe('Cmd-J host-qualified candidate ownership', () => {
     })
 
     expect(entries.map((entry) => entry.tab.id)).toEqual(['legacy-simulator'])
+  })
+
+  it('rejects an explicit owner that a hostless legacy worktree cannot verify', () => {
+    const entries = buildSearchableSimulatorTabs({
+      worktrees: [makeWorktree({ hostId: undefined })],
+      repoMap: new Map(),
+      worktreeOrder: new Map(),
+      unifiedTabsByWorktree: {
+        [SHARED_WORKTREE_ID]: [
+          makeTab({
+            id: 'unverifiable-simulator',
+            contentType: 'simulator',
+            executionHostId: RUNTIME_HOST_ID
+          })
+        ]
+      },
+      activeGroupIdByWorktree: {},
+      groupsByWorktree: {},
+      activeWorktreeId: null,
+      activeTabType: 'terminal'
+    })
+
+    expect(entries).toEqual([])
   })
 })

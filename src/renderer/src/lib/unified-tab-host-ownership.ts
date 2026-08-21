@@ -1,10 +1,7 @@
 import type { Tab } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  toRuntimeExecutionHostId,
-  type ExecutionHostId
-} from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import { isExecutionHostAliasForWorktree } from './worktree-execution-host-alias'
 
 export function findAmbiguousWorktreeIds(
   worktrees: readonly Pick<Worktree, 'id'>[]
@@ -20,17 +17,6 @@ export function findAmbiguousWorktreeIds(
   return ambiguous
 }
 
-export function isExecutionHostAliasForWorktree(
-  executionHostId: ExecutionHostId,
-  worktree: Pick<Worktree, 'hostId' | 'runtimeOwnerEnvironmentId'>
-): boolean {
-  const runtimeOwner = worktree.runtimeOwnerEnvironmentId?.trim()
-  return (
-    executionHostId === (worktree.hostId ?? LOCAL_EXECUTION_HOST_ID) ||
-    Boolean(runtimeOwner && executionHostId === toRuntimeExecutionHostId(runtimeOwner))
-  )
-}
-
 export function isUnifiedTabOwnedByWorktree(
   tab: Pick<Tab, 'executionHostId' | 'worktreeId'> | undefined,
   worktree: Pick<Worktree, 'hostId' | 'id' | 'runtimeOwnerEnvironmentId'>,
@@ -40,11 +26,7 @@ export function isUnifiedTabOwnedByWorktree(
     return false
   }
   if (tab.executionHostId) {
-    const runtimeOwner = worktree.runtimeOwnerEnvironmentId?.trim()
-    if (isExecutionHostAliasForWorktree(tab.executionHostId, worktree)) {
-      return true
-    }
-    return !worktree.hostId && !runtimeOwner && !ambiguousWorktreeIds.has(worktree.id)
+    return isExecutionHostAliasForWorktree(tab.executionHostId, worktree)
   }
   return !ambiguousWorktreeIds.has(worktree.id)
 }
