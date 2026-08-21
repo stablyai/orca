@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { monaco } from '@/lib/monaco-setup'
+import {
+  defineTestBenchThemes,
+  MONACO_THEME_DARK,
+  MONACO_THEME_LIGHT
+} from './monaco-testbench-theme'
 import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 import { resolveDocumentTheme } from '@/lib/document-theme'
 import { useAppStore } from '@/store'
@@ -57,7 +62,8 @@ export default function MonacoCodeExcerpt({
   const [htmlLines, setHtmlLines] = useState<string[]>(() => lines.map(() => ''))
 
   useEffect(() => {
-    monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
+    defineTestBenchThemes(monaco)
+    monaco.editor.setTheme(isDark ? MONACO_THEME_DARK : MONACO_THEME_LIGHT)
   }, [isDark])
 
   useEffect(() => {

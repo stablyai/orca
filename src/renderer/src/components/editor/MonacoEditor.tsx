@@ -6,6 +6,11 @@ import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types
 import { useAppStore } from '@/store'
 import '@/lib/monaco-setup'
 import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
+import {
+  defineTestBenchThemes,
+  MONACO_THEME_DARK,
+  MONACO_THEME_LIGHT
+} from './monaco-testbench-theme'
 
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
@@ -231,7 +236,8 @@ export default function MonacoEditor({
         language={language}
         // Why: defaultValue, not controlled value — MCode owns post-mount content sync; a controlled path would double setValue.
         defaultValue={content}
-        theme={isDark ? 'vs-dark' : 'vs'}
+        theme={isDark ? MONACO_THEME_DARK : MONACO_THEME_LIGHT}
+        beforeMount={defineTestBenchThemes}
         onChange={contentSync.handleChange}
         onMount={handleMount}
         options={{
@@ -253,8 +259,8 @@ export default function MonacoEditor({
               }
             : undefined,
           smoothScrolling: true,
-          cursorSmoothCaretAnimation: 'off',
-          padding: { top: 0 },
+          cursorSmoothCaretAnimation: 'on',
+          padding: { top: 10, bottom: 12 },
           find: monacoFindOptions,
           // Why: Monaco owns its rendered line surface, so align its selection-clipboard with the app opt-out (the global DOM hook can't).
           selectionClipboard: settings?.primarySelectionMiddleClickPaste ?? isLinuxUserAgent()

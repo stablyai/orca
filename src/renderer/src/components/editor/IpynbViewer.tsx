@@ -13,6 +13,7 @@ import React, {
   type MutableRefObject
 } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
+import { defineTestBenchThemes, MONACO_THEME_DARK, MONACO_THEME_LIGHT } from './monaco-testbench-theme'
 import DOMPurify from 'dompurify'
 import Markdown from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
@@ -371,7 +372,8 @@ function CodeCell({
   }, [])
 
   useEffect(() => {
-    monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
+    defineTestBenchThemes(monaco)
+    monaco.editor.setTheme(isDark ? MONACO_THEME_DARK : MONACO_THEME_LIGHT)
   }, [isDark])
 
   if (!active) {
@@ -404,7 +406,8 @@ function CodeCell({
         height={editorHeight}
         defaultLanguage={cell.language}
         language={cell.language}
-        theme={isDark ? 'vs-dark' : 'vs'}
+        theme={isDark ? MONACO_THEME_DARK : MONACO_THEME_LIGHT}
+        beforeMount={defineTestBenchThemes}
         value={source}
         onMount={handleMount}
         onChange={(value) => onChange(value ?? '')}

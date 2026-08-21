@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
+import { defineTestBenchThemes, MONACO_THEME_DARK, MONACO_THEME_LIGHT } from './monaco-testbench-theme'
 import type { editor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { diffViewStateCache, setWithLRU } from '@/lib/scroll-cache'
@@ -408,7 +409,8 @@ export default function DiffViewer({
             language={language}
             original={originalContent}
             modified={modifiedContent}
-            theme={isDark ? 'vs-dark' : 'vs'}
+            theme={isDark ? MONACO_THEME_DARK : MONACO_THEME_LIGHT}
+            beforeMount={defineTestBenchThemes}
             onMount={handleMount}
             // Why: a file can have multiple live diff tabs, so key models off tab identity (not file path) to avoid cross-tab reuse.
             // Why: Changes mode rotates only the original-side model after HEAD moves, preserving the modified side's undo stack.

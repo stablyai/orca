@@ -265,7 +265,11 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     openLinksInAppModifierInverts: false,
     terminalLinkActionPopoverEnabled: true,
     openAgentTabsInChatByDefault: false,
-    experimentalNativeChat: false,
+    /* Why: native chat is a mature subsystem (transcript parsing, approval
+       cards, question cards, diffs, shortcuts) and is the primary surface
+       this fork's owner wants for agent work. It stays a visible off-switch
+       in Settings → Experimental rather than a hidden gate. */
+    experimentalNativeChat: true,
     nativeChatSessionOptions: {},
     openInApplications: [...DEFAULT_OPEN_IN_APPLICATIONS],
     rightSidebarOpenByDefault: true,

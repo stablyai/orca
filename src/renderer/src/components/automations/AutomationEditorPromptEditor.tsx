@@ -1,5 +1,6 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
+import { defineTestBenchThemes, MONACO_THEME_DARK, MONACO_THEME_LIGHT } from '../editor/monaco-testbench-theme'
 import type { editor } from 'monaco-editor'
 import { installMonacoEditorFindShortcut } from '@/components/editor/editor-shortcuts'
 import { syncContentOnMount, syncContentUpdate } from '@/components/editor/monaco-content-sync'
@@ -155,7 +156,8 @@ export function AutomationEditorPromptEditor({
           // Why: defaultValue, not controlled value — this surface owns
           // post-mount sync so React cannot wipe Monaco's undo stack.
           defaultValue={value}
-          theme={isDark ? 'vs-dark' : 'vs'}
+          theme={isDark ? MONACO_THEME_DARK : MONACO_THEME_LIGHT}
+            beforeMount={defineTestBenchThemes}
           onChange={handleChange}
           onMount={handleMount}
           options={options}
