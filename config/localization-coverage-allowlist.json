@@ -68,13 +68,5 @@
     "text": "ghostty",
     "dynamic": false,
     "count": 1
-  },
-  {
-    "filePath": "src/renderer/src/components/editor/EditorContent.tsx",
-    "kind": "jsx-text",
-    "text": "Loading…",
-    "dynamic": false,
-    "count": 4,
-    "reason": "Inline Suspense fallback text; removed in M3 which lets EditorPanelShell's shared fallback own the surface."
   }
 ]

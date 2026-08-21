@@ -511,26 +511,22 @@ export function EditorContent({
       if (fc.mimeType === DOCX_MIME) {
         return (
           <div className={className}>
-            <React.Suspense fallback={<div>Loading…</div>}>
-              <DocxViewer
-                filePath={contentFile.filePath}
-                fileName={basename(contentFile.filePath)}
-                content={fc.content}
-              />
-            </React.Suspense>
+            <DocxViewer
+              filePath={contentFile.filePath}
+              fileName={basename(contentFile.filePath)}
+              content={fc.content}
+            />
           </div>
         )
       }
       if (fc.mimeType === XLSX_MIME) {
         return (
           <div className={className}>
-            <React.Suspense fallback={<div>Loading…</div>}>
-              <XlsxViewer
-                filePath={contentFile.filePath}
-                fileName={basename(contentFile.filePath)}
-                content={fc.content}
-              />
-            </React.Suspense>
+            <XlsxViewer
+              filePath={contentFile.filePath}
+              fileName={basename(contentFile.filePath)}
+              content={fc.content}
+            />
           </div>
         )
       }
@@ -782,24 +778,20 @@ export function EditorContent({
     if (fc.isBinary) {
       if (fc.mimeType === DOCX_MIME) {
         return (
-          <React.Suspense fallback={<div>Loading…</div>}>
-            <DocxViewer
-              filePath={activeFile.filePath}
-              fileName={activeFileName}
-              content={fc.content}
-            />
-          </React.Suspense>
+          <DocxViewer
+            filePath={activeFile.filePath}
+            fileName={activeFileName}
+            content={fc.content}
+          />
         )
       }
       if (fc.mimeType === XLSX_MIME) {
         return (
-          <React.Suspense fallback={<div>Loading…</div>}>
-            <XlsxViewer
-              filePath={activeFile.filePath}
-              fileName={activeFileName}
-              content={fc.content}
-            />
-          </React.Suspense>
+          <XlsxViewer
+            filePath={activeFile.filePath}
+            fileName={activeFileName}
+            content={fc.content}
+          />
         )
       }
       if (fc.isImage) {
