@@ -142,7 +142,7 @@ import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { buildSidebarHostOptions } from '@/components/sidebar/sidebar-host-options'
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
 import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
-import { findRepoForHost, getRepoHostIdentity } from '@/store/slices/repo-host-identity'
+import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import type { Repo } from '../../../shared/repo-types'
 import {
   getSettingsFocusedExecutionHostId,
@@ -831,16 +831,12 @@ function WorktreeJumpPaletteContent({
     () => new Map(repos.map((repo) => [getRepoHostIdentity(repo), repo])),
     [repos]
   )
-  // Why not repoMap.get(worktree.repoId): one repo id can be registered on two hosts, so the
-  // bare map is last-wins and one side of the collision renders the other host's repo — wrong
-  // name, wrong badge, and a false SSH chip on a purely local workspace. Falls back to the
-  // bare lookup so a worktree with no host, or no repo on its host, keeps its badge.
+  // Why one resolver: a runtime-owned SSH row must not bypass fail-closed ownership through its physical host.
   const resolveRepoForWorktree = useCallback(
-    (worktree: Pick<Worktree, 'id' | 'repoId' | 'hostId'>): Repo | undefined =>
-      (worktree.hostId
-        ? findRepoForHost(repos, worktree.repoId, { hostId: worktree.hostId, settings })
-        : null) ?? resolvePaletteRepoForWorktree(worktree, repoMap, repoByHostIdentity),
-    [repoByHostIdentity, repoMap, repos, settings]
+    (
+      worktree: Pick<Worktree, 'id' | 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'>
+    ): Repo | undefined => resolvePaletteRepoForWorktree(worktree, repoMap, repoByHostIdentity),
+    [repoByHostIdentity, repoMap]
   )
 
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
