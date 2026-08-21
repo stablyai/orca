@@ -6,7 +6,7 @@ import {
   relativePathInsideRoot,
   resolveRuntimePath
 } from '../cross-platform-path'
-import { parseWslUncPath } from '../wsl-paths'
+import { parseWslUncPath, resolveWslRepoWorktreeBasePath } from '../wsl-paths'
 import {
   isAgentScratchWorktreePath,
   type AgentScratchWorktreePathMatcher
@@ -87,10 +87,15 @@ function appendWorkspaceLayouts(
 }
 
 function getRepoWorktreeBasePath(
-  repo: Pick<Repo, 'worktreeBasePath'> | undefined
+  repo: Pick<Repo, 'path' | 'worktreeBasePath'> | undefined
 ): string | undefined {
   const trimmed = repo?.worktreeBasePath?.trim()
-  return trimmed || undefined
+  if (!repo || !trimmed) {
+    return undefined
+  }
+  // Why: creation resolves Linux base paths of WSL repos to their UNC form,
+  // so ownership layouts must match or those worktrees would never classify.
+  return resolveWslRepoWorktreeBasePath(repo.path, trimmed)
 }
 
 function resolveWorkspaceLayoutPath(repoPath: string, layoutPath: string): string {
