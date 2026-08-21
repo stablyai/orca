@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { getActiveRuntimeTarget } from '../runtime/runtime-rpc-client'
 import {
   canUseGitHubRepoContext,
