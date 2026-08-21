@@ -180,11 +180,11 @@ Dispatch rules:
 
 Use `worker-start` for the normal supervised path. It composes the existing worktree, terminal, readiness, and dispatch primitives while returning exact created/reused effects. Agents still choose placement and concurrency; Orca does not schedule workers or infer conflicts.
 
-Unless the user or task requests a specific agent, model, or effort, omit `--agent`, `--model`, and `--effort` from `worker-start`. Omitted fields use the user's Settings > Orchestration Worker defaults; inspect `launch.requested` and `launch.effective` in the receipt to confirm the applied values. Specify `--agent` when intentionally mixing agents (for example, parallel Codex + Claude review) or when the user names an agent.
+Unless the user or task requests a specific agent, model, or effort, omit `--agent`, `--model`, and `--effort` from `worker-start`. Omitted fields use the user's Settings > Orchestration Worker defaults; inspect `launch.requested` and `launch.effective` in the receipt to confirm the applied values. Specify these flags only when the user requests that choice or the task requires a specific agent's unique capability. A coordinator's quality judgment—results seem shallow, a deeper second pass or retry seems useful, or a stronger model seems preferable—is not permission to override the user's defaults; if a stronger model is genuinely needed, ask the user through `ask` or a decision gate. Mixing agents counts as an exception only when the user requests multiple agents or the task specifies them; do not mix agents for coordinator-chosen diversity.
 
 Create the Run and every independent Task first, then start all independent workers before waiting:
 
-For intentionally mixed-agent parallel work, specify each agent:
+For user-requested or task-specified mixed-agent parallel work, specify each agent:
 
 ```bash
 orca orchestration run-create --objective "<objective>" --json
@@ -196,7 +196,7 @@ orca orchestration worker-start --task <task_b> --worktree current --agent claud
 
 `current` and exact existing worktrees create a fresh agent terminal and do not rerun setup. Reuse an existing agent only with `--terminal <handle>`; reusing a terminal does not inject the configured worker defaults.
 
-For a per-invocation Claude, Codex, or Cursor launch, pass an opaque provider model id with `--model`; add `--effort` only when that agent/model supports the level. These options apply only to fresh agent terminals, override general agent default arguments, and are reported under `launch.requested` and `launch.effective` in the receipt:
+For a per-invocation Claude, Codex, or Cursor launch requested by the user (or required by the task's agent-specific capability), pass an opaque provider model id with `--model`; add `--effort` only when that agent/model supports the level. These options apply only to fresh agent terminals, override general agent default arguments, and are reported under `launch.requested` and `launch.effective` in the receipt. For example, use the following only when the user has specifically requested Claude `opus` at high effort:
 
 ```bash
 orca orchestration worker-start --task <task_id> --worktree current --agent claude --model opus --effort high --json
@@ -268,7 +268,7 @@ orca orchestration reply --id <message_id> --body "<answer>" --json
 Recovery is conditional, never a fixed destructive sequence:
 
 - `worker-show --dispatch <id>` says `ready`: keep waiting or read bounded output.
-- It proves `failed` or `stopped`: start a replacement with `worker-start --task <task> --retry-of <id>` plus an explicit `--on`/`--worktree` and `--agent`/`--terminal` choice. Retry does not silently inherit placement.
+- It proves `failed` or `stopped`: start a replacement with `worker-start --task <task> --retry-of <id>` plus explicit `--on`/`--worktree` placement and an explicit choice between a new agent terminal (omit `--terminal`) and an existing terminal (`--terminal <handle>`). A new launch still follows the defaults rule above for `--agent`, `--model`, and `--effort`; a failed worker is not a reason to promote its model. Retry does not silently inherit placement.
 - It remains `outcome_unknown`: either `worker-stop --dispatch <id>` and inspect again, or explicitly `worker-abandon --dispatch <id>` while accepting that resources may still be live. Abandon performs no remote, process, or filesystem action.
 - `worker-stop` closes only the exact supervised agent terminal. It never deletes the worktree, setup terminal, configured tabs, or unrelated processes.
 

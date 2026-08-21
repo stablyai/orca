@@ -285,6 +285,9 @@ describe('orchestration skill guidance', () => {
     expect(workerLoop).toContain('opaque provider model id with `--model`')
     expect(workerLoop).toContain('`--effort` requires `--model`')
     expect(workerLoop).toContain('neither option can combine with `--terminal`')
+    expect(workerLoop).toContain(
+      'use the following only when the user has specifically requested Claude `opus` at high effort'
+    )
     expect(workerLoop).toContain('--agent claude --model opus --effort high --json')
     expect(workerLoop).toContain('`launch.requested` and `launch.effective`')
   })
@@ -301,7 +304,16 @@ describe('orchestration skill guidance', () => {
     )
     expect(workerLoop).toContain('inspect `launch.requested` and `launch.effective` in the receipt')
     expect(workerLoop).toContain(
-      'Specify `--agent` when intentionally mixing agents (for example, parallel Codex + Claude review)'
+      "Specify these flags only when the user requests that choice or the task requires a specific agent's unique capability."
+    )
+    expect(workerLoop).toContain(
+      "A coordinator's quality judgment—results seem shallow, a deeper second pass or retry seems useful, or a stronger model seems preferable—is not permission to override the user's defaults"
+    )
+    expect(workerLoop).toContain(
+      'if a stronger model is genuinely needed, ask the user through `ask` or a decision gate'
+    )
+    expect(workerLoop).toContain(
+      'Mixing agents counts as an exception only when the user requests multiple agents or the task specifies them; do not mix agents for coordinator-chosen diversity.'
     )
     expect(workerLoop).toContain(
       'reusing a terminal does not inject the configured worker defaults.'
@@ -309,6 +321,19 @@ describe('orchestration skill guidance', () => {
     expect(workerLoop).toContain(
       'orca orchestration worker-start --task <task_id> --worktree new-child --name <name> --setup run --json'
     )
+  })
+
+  it('keeps retries on configured agent, model, and effort defaults', () => {
+    const workerLoop = getSection(readSkill(), 'Preferred Supervised Worker Loop')
+
+    expect(workerLoop).toContain(
+      'explicit `--on`/`--worktree` placement and an explicit choice between a new agent terminal (omit `--terminal`) and an existing terminal (`--terminal <handle>`)'
+    )
+    expect(workerLoop).toContain(
+      'A new launch still follows the defaults rule above for `--agent`, `--model`, and `--effort`'
+    )
+    expect(workerLoop).toContain('a failed worker is not a reason to promote its model')
+    expect(workerLoop).toContain('Retry does not silently inherit placement.')
   })
 
   it('never authorizes release from idle, timeout, or worker-side triggers', () => {
