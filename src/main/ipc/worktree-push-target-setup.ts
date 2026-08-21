@@ -1,38 +1,19 @@
-// Why: preparing a fork-PR push target means adding (or reusing) the contributor's
-// fork as a git remote, fetching the head, and wiring the new branch's upstream.
-// The git-driven core lives here behind an injectable `execGit` seam so the
-// remote-reuse / unique-naming / fetch behavior is unit-testable without a real
-// repo. The store-aware ownership decision stays with the caller via a predicate.
+// The typed git boundary keeps local and SSH push-target setup on one workflow.
 
 import type { GitPushTarget } from '../../shared/worktree/types'
-import { parseGitHubOwnerRepo } from '../github/gh-utils'
-import type { GitRemoteExec } from './worktree-push-target-cleanup'
+import { sameGitHubRemoteUrl } from '../../shared/git-push-target-remote-url'
+import { MAX_GIT_REMOTE_NAME_LENGTH } from '../../shared/git-push-target-validation'
+import type { WorktreePushTargetGit } from './worktree-push-target-git'
 
 export async function findRemoteForUrl(
-  execGit: GitRemoteExec,
+  git: WorktreePushTargetGit,
   repoPath: string,
   remoteUrl: string
 ): Promise<string | null> {
-  const target = parseGitHubOwnerRepo(remoteUrl)
   try {
-    const { stdout } = await execGit(['remote'], repoPath)
-    for (const remote of stdout
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)) {
+    for (const remote of await git.listRemotes(repoPath)) {
       try {
-        const { stdout: urlStdout } = await execGit(['remote', 'get-url', remote], repoPath)
-        const candidateUrl = urlStdout.trim()
-        const candidate = parseGitHubOwnerRepo(candidateUrl)
-        if (
-          target &&
-          candidate &&
-          target.owner.toLowerCase() === candidate.owner.toLowerCase() &&
-          target.repo.toLowerCase() === candidate.repo.toLowerCase()
-        ) {
-          return remote
-        }
-        if (candidateUrl === remoteUrl) {
+        if (sameGitHubRemoteUrl(await git.getRemoteUrl(repoPath, remote), remoteUrl)) {
           return remote
         }
       } catch {
@@ -46,22 +27,18 @@ export async function findRemoteForUrl(
 }
 
 export async function ensureUniqueRemoteName(
-  execGit: GitRemoteExec,
+  git: WorktreePushTargetGit,
   repoPath: string,
   preferred: string
 ): Promise<string> {
-  const { stdout } = await execGit(['remote'], repoPath)
-  const existing = new Set(
-    stdout
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-  )
+  const existing = new Set(await git.listRemotes(repoPath))
   if (!existing.has(preferred)) {
     return preferred
   }
   for (let suffix = 2; suffix < 100; suffix += 1) {
-    const candidate = `${preferred}-${suffix}`
+    const suffixText = `-${suffix}`
+    const maxBaseLength = MAX_GIT_REMOTE_NAME_LENGTH - suffixText.length
+    const candidate = `${preferred.slice(0, maxBaseLength).replace(/\/$/, '')}${suffixText}`
     if (!existing.has(candidate)) {
       return candidate
     }
@@ -69,56 +46,59 @@ export async function ensureUniqueRemoteName(
   throw new Error(`Could not find an available remote name for ${preferred}.`)
 }
 
-// Exported for unit tests: the `execGit` seam drives the remote add/reuse/fetch
-// behavior without a real repo. `isRemoteCreatedByKnownWorktree` lets the caller
-// inject the store-aware ownership decision for the reuse case.
-export async function prepareWorktreePushTargetWithExec(
-  execGit: GitRemoteExec,
+export async function prepareWorktreePushTargetWithGit(
+  git: WorktreePushTargetGit,
   repoPath: string,
   target: GitPushTarget,
-  isRemoteCreatedByKnownWorktree: (existingRemote: string) => boolean
+  isRemoteCreatedByKnownWorktree: (existingRemote: string) => boolean,
+  onRemoteAdded?: (addedRemote: GitPushTarget & { remoteUrl: string }) => void
 ): Promise<GitPushTarget> {
+  await git.validateTarget(repoPath, target)
   const { remoteCreated: _ignoredRemoteCreated, ...sanitizedTarget } = target
   let remoteName = target.remoteName
   let remoteCreated = false
+  let addedRemote: (GitPushTarget & { remoteUrl: string }) | undefined
   if (target.remoteUrl) {
-    const existingRemote = await findRemoteForUrl(execGit, repoPath, target.remoteUrl)
+    const existingRemote = await findRemoteForUrl(git, repoPath, target.remoteUrl)
     if (existingRemote) {
       remoteName = existingRemote
       // Why: if a later PR worktree reuses an Orca-created fork remote, it
       // must inherit ownership so deleting the final user can remove it.
       remoteCreated = isRemoteCreatedByKnownWorktree(existingRemote)
     } else {
-      remoteName = await ensureUniqueRemoteName(execGit, repoPath, target.remoteName)
-      await execGit(['remote', 'add', remoteName, target.remoteUrl], repoPath)
+      remoteName = await ensureUniqueRemoteName(git, repoPath, target.remoteName)
+      await git.addRemote(repoPath, { ...sanitizedTarget, remoteName, remoteUrl: target.remoteUrl })
       remoteCreated = true
+      addedRemote = { ...sanitizedTarget, remoteName, remoteUrl: target.remoteUrl }
+      onRemoteAdded?.(addedRemote)
     }
   }
 
-  await execGit(
-    [
-      'fetch',
-      remoteName,
-      `+refs/heads/${target.branchName}:refs/remotes/${remoteName}/${target.branchName}`
-    ],
-    repoPath
-  )
+  const preparedTarget = { ...sanitizedTarget, remoteName }
+  try {
+    await git.fetchRemoteTrackingRef(repoPath, preparedTarget)
+  } catch (error) {
+    if (addedRemote) {
+      try {
+        await git.removeRemoteIfMatches(repoPath, addedRemote)
+      } catch {
+        // Preserve the fetch error when best-effort cleanup fails.
+      }
+    }
+    throw error
+  }
   return {
-    ...sanitizedTarget,
-    remoteName,
+    ...preparedTarget,
     ...(remoteCreated ? { remoteCreated: true } : {})
   }
 }
 
-export async function configureCreatedWorktreePushTargetWithExec(
-  execGit: GitRemoteExec,
+export async function configureCreatedWorktreePushTargetWithGit(
+  git: WorktreePushTargetGit,
   worktreePath: string,
   branchName: string,
   target: GitPushTarget
 ): Promise<GitPushTarget> {
-  await execGit(
-    ['branch', '--set-upstream-to', `${target.remoteName}/${target.branchName}`, branchName],
-    worktreePath
-  )
+  await git.configureUpstream(worktreePath, branchName, target)
   return target
 }

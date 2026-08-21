@@ -127,7 +127,7 @@ import {
   createLocalWorktree,
   createRemoteWorktree,
   cleanupUnusedWorktreePushTargetRemote,
-  cleanupUnusedWorktreePushTargetRemoteSsh,
+  cleanupUnusedRemoteWorktreePushTarget,
   notifyWorktreesChanged
 } from './worktree-remote'
 import { registerWorktreeChangeInvalidator } from './worktree-change-invalidators'
@@ -2630,7 +2630,7 @@ export function registerWorktreeHandlers(
                   getSshPtyProvider(repo.connectionId),
                   args.worktreeId
                 )
-                await cleanupUnusedWorktreePushTargetRemoteSsh(
+                await cleanupUnusedRemoteWorktreePushTarget(
                   provider!,
                   repo.path,
                   args.worktreeId,
@@ -2746,7 +2746,7 @@ export function registerWorktreeHandlers(
                   getSshPtyProvider(repo.connectionId),
                   args.worktreeId
                 )
-                await cleanupUnusedWorktreePushTargetRemoteSsh(
+                await cleanupUnusedRemoteWorktreePushTarget(
                   provider!,
                   repo.path,
                   args.worktreeId,
@@ -2917,7 +2917,7 @@ export function registerWorktreeHandlers(
               rawRemovalResult,
               registeredWorktree.head
             )
-            await cleanupUnusedWorktreePushTargetRemoteSsh(
+            await cleanupUnusedRemoteWorktreePushTarget(
               provider!,
               repo.path,
               args.worktreeId,
@@ -3306,7 +3306,7 @@ export function registerWorktreeHandlers(
           cleanupTarget.branchName,
           cleanupTarget.head
         )
-        await cleanupUnusedWorktreePushTargetRemoteSsh(
+        await cleanupUnusedRemoteWorktreePushTarget(
           provider,
           repo.path,
           args.worktreeId,

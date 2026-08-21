@@ -3,6 +3,7 @@ import type { GitPushTarget } from './worktree/types'
 const SAFE_REMOTE_NAME_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 const GITHUB_CLONE_URL = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\.git$/
 const GITHUB_SSH_URL = /^git@github\.com:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\.git$/
+export const MAX_GIT_REMOTE_NAME_LENGTH = 100
 
 function assertString(value: unknown, name: string): asserts value is string {
   if (typeof value !== 'string') {
@@ -11,7 +12,7 @@ function assertString(value: unknown, name: string): asserts value is string {
 }
 
 function isSafeRemoteName(remoteName: string): boolean {
-  if (remoteName.length === 0 || remoteName.length > 100) {
+  if (remoteName.length === 0 || remoteName.length > MAX_GIT_REMOTE_NAME_LENGTH) {
     return false
   }
   return remoteName.split('/').every((segment) => {

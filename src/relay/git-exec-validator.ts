@@ -1,3 +1,5 @@
+import { isSafeGitRefName } from '../shared/git-status-upstream-ref'
+
 /**
  * Git exec argument validation for the relay's git.exec handler.
  *
@@ -55,7 +57,10 @@ const BRANCH_DESTRUCTIVE_FLAGS = new Set([
   '--move',
   '-c',
   '-C',
-  '--copy'
+  '--copy',
+  '--set-upstream-to',
+  '-u',
+  '--unset-upstream'
 ])
 
 // Why: these flags are dangerous across ALL subcommands — --output writes to
@@ -124,10 +129,34 @@ function matchesDeniedFlag(arg: string, denySet: Set<string>): boolean {
     return true
   }
   const eqIdx = arg.indexOf('=')
-  if (eqIdx > 0) {
-    return denySet.has(arg.slice(0, eqIdx))
+  const option = eqIdx > 0 ? arg.slice(0, eqIdx) : arg
+  for (const denied of denySet) {
+    if (denied.startsWith('--')) {
+      // Git accepts unambiguous long-option abbreviations.
+      if (option.length > 2 && option.startsWith('--') && denied.startsWith(option)) {
+        return true
+      }
+    } else if (denied.length === 2 && option.startsWith(denied)) {
+      // Short options that take values accept attached arguments, e.g. -uorigin/main.
+      return true
+    }
   }
   return false
+}
+
+function isLegacySetUpstreamCommand(args: string[]): boolean {
+  if (args.length !== 4 || args[1] !== '--set-upstream-to') {
+    return false
+  }
+  const [upstream, branchName] = args.slice(2)
+  return Boolean(
+    upstream &&
+    branchName &&
+    !upstream.startsWith('-') &&
+    !branchName.startsWith('-') &&
+    isSafeGitRefName(`refs/remotes/${upstream}`) &&
+    isSafeGitRefName(`refs/heads/${branchName}`)
+  )
 }
 
 export function validateGitExecArgs(args: string[]): void {
@@ -167,6 +196,9 @@ export function validateGitExecArgs(args: string[]): void {
     validateCommitArgs(args)
   }
   if (subcommand === 'branch') {
+    if (isLegacySetUpstreamCommand(args)) {
+      return
+    }
     if (restArgs.some((a) => matchesDeniedFlag(a, BRANCH_DESTRUCTIVE_FLAGS))) {
       throw new Error('Destructive git branch flags are not allowed via exec')
     }

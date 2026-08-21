@@ -16,11 +16,13 @@ import {
   type MockDispatcher,
   type RelayDispatcher
 } from './git-handler-test-setup'
+import { REMOTE_TRACKING_FETCH_TIMEOUT_MS } from '../shared/git-remote-tracking-fetch-timeout'
 import {
   createGitHandlerRelay,
   createGitTempDir,
   normalizeGitFileText,
-  removeGitTempDir
+  removeGitTempDir,
+  type GitSpyTarget
 } from './git-handler-test-harness'
 
 describe('GitHandler', () => {
@@ -60,6 +62,10 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.fetch')
     expect(methods).toContain('git.forkSync')
     expect(methods).toContain('git.fetchRemoteTrackingRef')
+    expect(methods).toContain('git.worktreePushTargetCapabilities')
+    expect(methods).toContain('git.addWorktreePushTargetRemote')
+    expect(methods).toContain('git.configureWorktreePushTarget')
+    expect(methods).toContain('git.removeWorktreePushTargetRemote')
     expect(methods).toContain('git.fetchGitHubPullRequestHead')
     expect(methods).toContain('git.fetchGitLabMergeRequestHead')
     expect(methods).toContain('git.fetchGitLabMergeRequestHeadRef')
@@ -78,6 +84,71 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.exec')
     expect(methods).toContain('git.clone')
     expect(methods).toContain('git.isGitRepo')
+  })
+
+  it('passes request cancellation to push-target mutations', async () => {
+    const controller = new AbortController()
+    const git = vi
+      .spyOn(handler as unknown as GitSpyTarget, 'git')
+      .mockResolvedValue({ stdout: '', stderr: '' })
+
+    await dispatcher.callRequest(
+      'git.configureWorktreePushTarget',
+      {
+        worktreePath: '/repo-feature',
+        branchName: 'feature',
+        target: { remoteName: 'origin', branchName: 'feature' }
+      },
+      { isStale: () => false, signal: controller.signal }
+    )
+
+    expect(git).toHaveBeenCalledWith(
+      ['branch', '--set-upstream-to', 'origin/feature', 'feature'],
+      '/repo-feature',
+      { signal: controller.signal }
+    )
+  })
+
+  it('bounds and cancels remote tracking fetches', async () => {
+    const controller = new AbortController()
+    const git = vi
+      .spyOn(handler as unknown as GitSpyTarget, 'git')
+      .mockResolvedValue({ stdout: 'origin\n', stderr: '' })
+
+    await dispatcher.callRequest(
+      'git.fetchRemoteTrackingRef',
+      {
+        worktreePath: '/repo',
+        remote: 'origin',
+        branch: 'feature',
+        ref: 'refs/remotes/origin/feature'
+      },
+      { isStale: () => false, signal: controller.signal }
+    )
+
+    expect(git).toHaveBeenLastCalledWith(
+      ['fetch', '--no-tags', 'origin', '+refs/heads/feature:refs/remotes/origin/feature'],
+      '/repo',
+      { signal: controller.signal, timeout: REMOTE_TRACKING_FETCH_TIMEOUT_MS }
+    )
+  })
+
+  it('reports a killed remote tracking fetch as a timeout', async () => {
+    const killed = Object.assign(new Error('spawn killed'), { killed: true })
+    vi.spyOn(handler as unknown as GitSpyTarget, 'git').mockImplementation(async (args) =>
+      (args as string[]).includes('fetch')
+        ? Promise.reject(killed)
+        : { stdout: 'origin\n', stderr: '' }
+    )
+
+    await expect(
+      dispatcher.callRequest('git.fetchRemoteTrackingRef', {
+        worktreePath: '/repo',
+        remote: 'origin',
+        branch: 'feature',
+        ref: 'refs/remotes/origin/feature'
+      })
+    ).rejects.toThrow('Fetching "feature" from "origin" timed out.')
   })
 
   it('runs remote worktree deletion inside the relay watcher fence', async () => {

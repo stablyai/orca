@@ -23,7 +23,7 @@ export type GitSpyTarget = {
   git(
     args: string[],
     cwd: string,
-    opts?: { signal?: AbortSignal }
+    opts?: { signal?: AbortSignal; timeout?: number }
   ): Promise<{ stdout: string; stderr: string }>
 }
 

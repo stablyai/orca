@@ -52,6 +52,8 @@ function isJsonRpcMethodNotFoundError(error: unknown): boolean {
   return (error as { code?: unknown }).code === JsonRpcErrorCode.MethodNotFound
 }
 
+export class SshWorktreePushTargetRelayUnavailableError extends Error {}
+
 // Why: the relay returns the durable ref it wrote; re-deriving it on the client
 // can disagree (URL normalization) and leave resolve looking at the wrong path.
 function readDurableReviewHeadLocalRef(
@@ -94,6 +96,7 @@ export class SshGitProvider implements IGitProvider {
   private connectionId: string
   private mux: SshChannelMultiplexer
   private nonInteractiveExecQueues = new Map<string, NonInteractiveExecQueueEntry[]>()
+  private worktreePushTargetSupportProbe?: Promise<void>
 
   private async runWithGitReadInvalidation<T>(run: () => Promise<T>): Promise<T> {
     this.invalidateGitReads()
@@ -603,6 +606,91 @@ export class SshGitProvider implements IGitProvider {
         ref,
         ...(options?.skipAutoMaintenance ? { skipAutoMaintenance: true } : {})
       })
+    })
+  }
+
+  async ensureWorktreePushTargetMutationSupport(): Promise<void> {
+    const probe =
+      this.worktreePushTargetSupportProbe ??
+      (this.worktreePushTargetSupportProbe = this.mux
+        .request('git.worktreePushTargetCapabilities', {})
+        .then(() => undefined))
+    try {
+      await probe
+    } catch (error) {
+      if (this.worktreePushTargetSupportProbe === probe) {
+        this.worktreePushTargetSupportProbe = undefined
+      }
+      if (isJsonRpcMethodNotFoundError(error)) {
+        throw new SshWorktreePushTargetRelayUnavailableError(
+          'This SSH host is running an older Orca relay that cannot configure review worktrees. Reconnect to deploy the latest relay, then try again.'
+        )
+      }
+      throw error
+    }
+  }
+
+  private async requestWorktreePushTargetMutation(
+    method:
+      | 'git.addWorktreePushTargetRemote'
+      | 'git.configureWorktreePushTarget'
+      | 'git.removeWorktreePushTargetRemote',
+    params: Record<string, unknown>
+  ): Promise<void> {
+    try {
+      await this.runWithGitReadInvalidation(async () => {
+        await this.mux.request(method, params)
+      })
+    } catch (error) {
+      if (isJsonRpcMethodNotFoundError(error)) {
+        throw new SshWorktreePushTargetRelayUnavailableError(
+          'This SSH host is running an older Orca relay that cannot configure review worktrees. Reconnect to deploy the latest relay, then try again.'
+        )
+      }
+      throw error
+    }
+  }
+
+  async addWorktreePushTargetRemote(
+    repoPath: string,
+    target: GitPushTarget & { remoteUrl: string }
+  ): Promise<void> {
+    await this.requestWorktreePushTargetMutation('git.addWorktreePushTargetRemote', {
+      repoPath,
+      target
+    })
+  }
+
+  async configureWorktreePushTarget(
+    worktreePath: string,
+    branchName: string,
+    target: GitPushTarget
+  ): Promise<void> {
+    try {
+      await this.requestWorktreePushTargetMutation('git.configureWorktreePushTarget', {
+        worktreePath,
+        branchName,
+        target
+      })
+    } catch (error) {
+      if (!(error instanceof SshWorktreePushTargetRelayUnavailableError)) {
+        throw error
+      }
+      // Older relays still allow this validated upstream-only branch mutation.
+      await this.exec(
+        ['branch', '--set-upstream-to', `${target.remoteName}/${target.branchName}`, branchName],
+        worktreePath
+      )
+    }
+  }
+
+  async removeWorktreePushTargetRemote(
+    repoPath: string,
+    target: GitPushTarget & { remoteUrl: string }
+  ): Promise<void> {
+    await this.requestWorktreePushTargetMutation('git.removeWorktreePushTargetRemote', {
+      repoPath,
+      target
     })
   }
 

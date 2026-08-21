@@ -1,33 +1,13 @@
-// Why: fork-PR worktrees can add a contributor's fork as a git remote. When such
-// a worktree is deleted we prune that remote, but only when it's truly unused.
-// This module holds that decision logic behind an injectable `execGit` boundary so
-// the multi-fork cleanup matrix is unit-testable without a real repo.
+// Fork remotes are removed only after shared ownership and git-config checks.
 
 import type { Store } from '../persistence'
 import type { GitPushTarget } from '../../shared/worktree/types'
-import { parseGitHubOwnerRepo } from '../github/gh-utils'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { sameGitHubRemoteUrl } from '../../shared/git-push-target-remote-url'
 import { iterateProcessOutputLines } from '../../shared/process-output-field-scanner'
+import type { WorktreePushTargetGit } from './worktree-push-target-git'
 
-export type GitRemoteExec = (
-  args: string[],
-  cwd: string
-) => Promise<{ stdout: string; stderr?: string }>
 export type WorktreePushTargetStore = Pick<Store, 'getAllWorktreeMeta'>
-
-export function sameGitHubRemoteUrl(left: string, right: string): boolean {
-  if (left === right) {
-    return true
-  }
-  const parsedLeft = parseGitHubOwnerRepo(left)
-  const parsedRight = parseGitHubOwnerRepo(right)
-  return Boolean(
-    parsedLeft &&
-    parsedRight &&
-    parsedLeft.owner.toLowerCase() === parsedRight.owner.toLowerCase() &&
-    parsedLeft.repo.toLowerCase() === parsedRight.repo.toLowerCase()
-  )
-}
 
 function isPushTargetUsedByAnotherWorktree(
   store: WorktreePushTargetStore,
@@ -54,15 +34,12 @@ function isPushTargetUsedByAnotherWorktree(
 }
 
 async function hasBranchConfigUsingRemote(
-  execGit: GitRemoteExec,
+  git: WorktreePushTargetGit,
   repoPath: string,
   target: GitPushTarget
 ): Promise<boolean> {
   try {
-    const { stdout } = await execGit(
-      ['config', '--get-regexp', '^branch\\..*\\.(remote|pushRemote)$'],
-      repoPath
-    )
+    const stdout = await git.readBranchRemoteConfig(repoPath)
     // Why: git config output can be large; avoid materializing line/split arrays here.
     for (const line of iterateProcessOutputLines(stdout)) {
       const value = readBranchRemoteConfigValue(line)
@@ -103,14 +80,12 @@ function isBranchConfigSeparator(code: number): boolean {
   return code === 32 || (code >= 9 && code <= 13)
 }
 
-// Exported for unit tests: the `execGit` seam lets tests drive the multi-fork
-// cleanup matrix without touching a real repo.
-export async function cleanupUnusedWorktreePushTargetRemoteWithExec(
+export async function cleanupUnusedWorktreePushTargetRemoteWithGit(
   repoPath: string,
   removedWorktreeId: string,
   target: GitPushTarget | undefined,
   store: WorktreePushTargetStore,
-  execGit: GitRemoteExec
+  git: WorktreePushTargetGit
 ): Promise<void> {
   if (
     !target?.remoteCreated ||
@@ -123,21 +98,9 @@ export async function cleanupUnusedWorktreePushTargetRemoteWithExec(
   if (isPushTargetUsedByAnotherWorktree(store, removedWorktreeId, target)) {
     return
   }
-  if (await hasBranchConfigUsingRemote(execGit, repoPath, target)) {
+  if (await hasBranchConfigUsingRemote(git, repoPath, target)) {
     return
   }
 
-  let configuredRemoteUrl: string
-  try {
-    configuredRemoteUrl = (
-      await execGit(['remote', 'get-url', target.remoteName], repoPath)
-    ).stdout.trim()
-  } catch {
-    return
-  }
-  if (!sameGitHubRemoteUrl(configuredRemoteUrl, target.remoteUrl)) {
-    return
-  }
-
-  await execGit(['remote', 'remove', target.remoteName], repoPath)
+  await git.removeRemoteIfMatches(repoPath, { ...target, remoteUrl: target.remoteUrl })
 }

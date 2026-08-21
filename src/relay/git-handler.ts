@@ -96,6 +96,12 @@ import { endSubprocessStdin } from '../shared/subprocess-stdin-write'
 import { clearGitStatusLineStatsCache } from '../shared/git-status-line-stats-cache'
 import { invalidateGitBranchLineTotalInFlight } from '../shared/git-branch-line-total'
 import { streamRelayGitStdout } from './git-stdout-stream'
+import {
+  addWorktreePushTargetRemoteOp,
+  configureWorktreePushTargetOp,
+  removeWorktreePushTargetRemoteOp
+} from './git-handler-worktree-push-target'
+import { REMOTE_TRACKING_FETCH_TIMEOUT_MS } from '../shared/git-remote-tracking-fetch-timeout'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
@@ -230,7 +236,34 @@ export class GitHandler {
     this.dispatcher.onRequest('git.upstreamStatus', (p) => this.upstreamStatus(p))
     this.dispatcher.onRequest('git.fetch', (p) => this.fetch(p))
     this.dispatcher.onRequest('git.forkSync', (p, context) => this.forkSync(p, context))
-    this.dispatcher.onRequest('git.fetchRemoteTrackingRef', (p) => this.fetchRemoteTrackingRef(p))
+    this.dispatcher.onRequest('git.fetchRemoteTrackingRef', (p, context) =>
+      this.fetchRemoteTrackingRef(p, context)
+    )
+    this.dispatcher.onRequest('git.worktreePushTargetCapabilities', async () => ({ version: 1 }))
+    this.dispatcher.onRequest('git.addWorktreePushTargetRemote', (p, context) =>
+      this.runWithGitReadCacheClear(() =>
+        addWorktreePushTargetRemoteOp(
+          (args, cwd) => this.git(args, cwd, { signal: context.signal }),
+          p
+        )
+      )
+    )
+    this.dispatcher.onRequest('git.configureWorktreePushTarget', (p, context) =>
+      this.runWithGitReadCacheClear(() =>
+        configureWorktreePushTargetOp(
+          (args, cwd) => this.git(args, cwd, { signal: context.signal }),
+          p
+        )
+      )
+    )
+    this.dispatcher.onRequest('git.removeWorktreePushTargetRemote', (p, context) =>
+      this.runWithGitReadCacheClear(() =>
+        removeWorktreePushTargetRemoteOp(
+          (args, cwd) => this.git(args, cwd, { signal: context.signal }),
+          p
+        )
+      )
+    )
     this.dispatcher.onRequest('git.fetchGitHubPullRequestHead', (p) =>
       this.fetchGitHubPullRequestHead(p)
     )
@@ -907,7 +940,7 @@ export class GitHandler {
     })
   }
 
-  private async fetchRemoteTrackingRef(params: Record<string, unknown>) {
+  private async fetchRemoteTrackingRef(params: Record<string, unknown>, context?: RequestContext) {
     this.clearGitMutationReadCaches()
     const worktreePath = params.worktreePath as string
     const remote = params.remote
@@ -929,7 +962,9 @@ export class GitHandler {
       }
 
       try {
-        const { stdout } = await this.git(['remote'], worktreePath)
+        const git = (args: string[], opts: { timeout?: number } = {}) =>
+          this.git(args, worktreePath, { signal: context?.signal, ...opts })
+        const { stdout } = await git(['remote'])
         const remotes = stdout
           .split(/\r?\n/)
           .map((line) => line.trim())
@@ -937,9 +972,9 @@ export class GitHandler {
         if (!remotes.includes(remote)) {
           throw new Error(`Remote "${remote}" is not configured.`)
         }
-        await this.git(['check-ref-format', `refs/heads/${branch}`], worktreePath)
-        await this.git(['check-ref-format', ref], worktreePath)
-        await this.git(
+        await git(['check-ref-format', `refs/heads/${branch}`])
+        await git(['check-ref-format', ref])
+        await git(
           [
             ...(skipAutoMaintenance ? GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS : []),
             'fetch',
@@ -947,9 +982,13 @@ export class GitHandler {
             remote,
             `+refs/heads/${branch}:${ref}`
           ],
-          worktreePath
+          { timeout: REMOTE_TRACKING_FETCH_TIMEOUT_MS }
         )
       } catch (error) {
+        // Why: a timeout kill has no git stderr; name it so the client can classify it as transient.
+        if (isExecKilledError(error)) {
+          throw new Error(`Fetching "${branch}" from "${remote}" timed out.`)
+        }
         // Why: create-worktree needs a write-capable fetch that generic git.exec rejects; narrow RPC keeps the allowlist tight.
         throw new Error(normalizeGitErrorMessage(error, 'fetch'))
       }

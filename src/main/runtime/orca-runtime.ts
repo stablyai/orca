@@ -1065,7 +1065,7 @@ import { deleteWorktreeHistoryDir } from '../terminal-history-deletion'
 import { deleteRemoteWorktreeHistory } from '../remote-worktree-history-cleanup'
 import {
   cleanupUnusedWorktreePushTargetRemote,
-  cleanupUnusedWorktreePushTargetRemoteSsh,
+  cleanupUnusedRemoteWorktreePushTarget,
   createRemoteWorktree,
   configureCreatedWorktreePushTarget,
   prepareWorktreePushTarget
@@ -26795,7 +26795,7 @@ export class OrcaRuntimeService {
         cleanupTarget.branchName,
         cleanupTarget.head
       )
-      await cleanupUnusedWorktreePushTargetRemoteSsh(
+      await cleanupUnusedRemoteWorktreePushTarget(
         provider,
         repo.path,
         removalTarget.id,
@@ -27064,7 +27064,7 @@ export class OrcaRuntimeService {
               } finally {
                 await removalGate.finish(removalCompleted)
               }
-              await cleanupUnusedWorktreePushTargetRemoteSsh(
+              await cleanupUnusedRemoteWorktreePushTarget(
                 provider!,
                 repo.path,
                 removalTarget.id,
@@ -27166,7 +27166,7 @@ export class OrcaRuntimeService {
             // Finish runtime metadata cleanup without requiring force or touching
             // any unregistered path that still exists.
             await (repo.connectionId
-              ? cleanupUnusedWorktreePushTargetRemoteSsh(
+              ? cleanupUnusedRemoteWorktreePushTarget(
                   provider!,
                   repo.path,
                   removalTarget.id,
@@ -27272,7 +27272,7 @@ export class OrcaRuntimeService {
             rawRemovalResult,
             registeredWorktree.head
           )
-          await cleanupUnusedWorktreePushTargetRemoteSsh(
+          await cleanupUnusedRemoteWorktreePushTarget(
             provider!,
             repo.path,
             removalTarget.id,

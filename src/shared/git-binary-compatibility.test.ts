@@ -232,6 +232,26 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
     await runGit(['-C', worktree, 'update-ref', '-d', backupRef, backupOid])
   })
 
+  it('supports worktree push-target remote and upstream commands', async () => {
+    const branch = (await runGit(['branch', '--show-current'])).stdout.trim()
+    const remote = 'compat-review-target'
+
+    await runGit(['remote', 'add', remote, '.'])
+    try {
+      await runGit(['fetch', remote, `+refs/heads/${branch}:refs/remotes/${remote}/${branch}`])
+      await runGit(['branch', '--set-upstream-to', `${remote}/${branch}`, branch])
+      await expect(runGit(['config', '--get', `branch.${branch}.remote`])).resolves.toMatchObject({
+        stdout: `${remote}\n`
+      })
+      await expect(runGit(['remote', 'get-url', remote])).resolves.toMatchObject({
+        stdout: '.\n'
+      })
+    } finally {
+      // Why: the suite shares one repository, so a mid-test failure must not leave this remote behind.
+      await expect(runGit(['remote', 'remove', remote])).resolves.toBeDefined()
+    }
+  })
+
   it('degrades indexed credential config safely at the Git 2.31 boundary', async () => {
     const guardEnv = gitCredentialPromptGuardEnv({}, 'linux')
     await expect(runGit(['status', '--short'], guardEnv)).resolves.toBeDefined()

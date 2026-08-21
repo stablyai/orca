@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git-fetch-auto-maintenance'
+import { REMOTE_TRACKING_FETCH_TIMEOUT_MS } from '../../shared/git-remote-tracking-fetch-timeout'
 import {
   setPlatform,
   listWorktreesMock,
@@ -185,11 +187,16 @@ describe('registerWorktreeHandlers', () => {
     )
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       [
+        ...GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS,
         'fetch',
         'pr-contributor-orca',
         '+refs/heads/contributor/wsl-fork:refs/remotes/pr-contributor-orca/contributor/wsl-fork'
       ],
-      { cwd: '/workspace/repo', wslDistro: 'Ubuntu' }
+      {
+        cwd: '/workspace/repo',
+        wslDistro: 'Ubuntu',
+        timeout: REMOTE_TRACKING_FETCH_TIMEOUT_MS
+      }
     )
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['branch', '--set-upstream-to', 'pr-contributor-orca/contributor/wsl-fork', 'wsl-fork'],
