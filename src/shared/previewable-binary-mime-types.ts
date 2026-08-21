@@ -9,3 +9,9 @@ export const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 }
+
+// Why: base64 inflates the on-the-wire payload 4/3; cap the binary size so a
+// single previewable file can't exceed one transport frame regardless of which
+// path produced it (local IPC, SSH relay, runtime host). Both consumers must
+// import this — never declare a local copy.
+export const MAX_PREVIEWABLE_BINARY_BYTES = 50 * 1024 * 1024 // 50 MiB

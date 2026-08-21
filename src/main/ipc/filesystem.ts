@@ -140,7 +140,7 @@ import { registerFilesystemDownloadFolderHandlers } from './filesystem-download-
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
 import { QuickOpenPathRanker } from '../../shared/quick-open-path-search'
-import { PREVIEWABLE_BINARY_MIME_TYPES } from '../../shared/previewable-binary-mime-types'
+import { PREVIEWABLE_BINARY_MIME_TYPES, MAX_PREVIEWABLE_BINARY_BYTES } from '../../shared/previewable-binary-mime-types'
 import {
   applyGitStatusUpstreamRefWatchRequest,
   type GitStatusUpstreamRefWatchRequest
@@ -152,8 +152,9 @@ const BINARY_PROBE_BYTES = 8192
 const FULL_GIT_OBJECT_ID_PATTERN = /^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/
 // 32 visible matches plus one truncation sentinel stays below the legacy frame ceiling.
 const QUICK_OPEN_SSH_LEGACY_RESULT_LIMIT = 33
-// Why: previewable binaries are base64 blobs (not parsed as text), and local IPC has no frame limit (unlike the relay's 10MB), so 50MB is safe.
-const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024 // 50MB
+// Why: previewable binaries are base64 blobs (not parsed as text); the cap lives in
+// shared/previewable-binary-mime-types so local IPC, SSH relay, and runtime host all agree.
+const MAX_PREVIEWABLE_BINARY_SIZE = MAX_PREVIEWABLE_BINARY_BYTES
 async function readLocalLogSnapshot(filePath: string): Promise<{
   content: string
   isBinary: boolean
