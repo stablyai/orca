@@ -3161,9 +3161,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       // Why: MR metadata can be sourced from one host/account while the workspace is created on another for the same logical project.
       const runRepo = selectedRepo ?? eligibleRepos.find((repo) => repo.id === item.repoId)
       if (item.type !== 'mr' || !runRepo) {
+        setBaseBranch(undefined)
         setCompareBaseRef(undefined)
         return
       }
+      setBaseBranch(undefined)
       setCompareBaseRef(undefined)
       const itemRepoSettings = getSettingsForRepoRuntimeOwner(
         { repos: [runRepo], settings },

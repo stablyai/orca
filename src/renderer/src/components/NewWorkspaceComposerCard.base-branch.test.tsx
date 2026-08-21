@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import React, { act } from 'react'
-import { createRoot } from 'react-dom/client'
+import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import NewWorkspaceComposerCard from './NewWorkspaceComposerCard'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
@@ -69,7 +69,7 @@ const projectOptions: NewWorkspaceProjectOption[] = [
 
 function renderCard(
   overrides: Partial<React.ComponentProps<typeof NewWorkspaceComposerCard>> = {}
-): HTMLDivElement {
+): { container: HTMLDivElement; root: Root } {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
@@ -137,7 +137,7 @@ function renderCard(
       />
     )
   })
-  return container
+  return { container, root }
 }
 
 function hasBranchFromLabel(container: HTMLElement): boolean {
@@ -147,57 +147,60 @@ function hasBranchFromLabel(container: HTMLElement): boolean {
 }
 
 describe('NewWorkspaceComposerCard base branch picker', () => {
-  let container: HTMLDivElement | null = null
+  let current: { container: HTMLDivElement; root: Root } | null = null
 
   afterEach(() => {
-    container?.remove()
-    container = null
+    if (current) {
+      act(() => current?.root.unmount())
+      current.container.remove()
+      current = null
+    }
   })
 
   it('shows Branch from for a GitHub issue source', () => {
-    container = renderCard({
+    current = renderCard({
       smartNameSelection: { kind: 'github-issue', label: '#7 Fix', url: 'https://example.com/i/7' }
     })
 
-    expect(hasBranchFromLabel(container)).toBe(true)
+    expect(hasBranchFromLabel(current.container)).toBe(true)
   })
 
   it('shows Branch from for a Linear source', () => {
-    container = renderCard({
+    current = renderCard({
       smartNameSelection: { kind: 'linear', label: 'ENG-42' }
     })
 
-    expect(hasBranchFromLabel(container)).toBe(true)
+    expect(hasBranchFromLabel(current.container)).toBe(true)
   })
 
   it('omits Branch from for a GitHub PR source', () => {
-    container = renderCard({
+    current = renderCard({
       smartNameSelection: { kind: 'github-pr', label: '#42 Fix', url: 'https://example.com/pr/42' }
     })
 
-    expect(hasBranchFromLabel(container)).toBe(false)
+    expect(hasBranchFromLabel(current.container)).toBe(false)
   })
 
   it('omits Branch from for a bare branch source', () => {
-    container = renderCard({
+    current = renderCard({
       smartNameSelection: { kind: 'branch', label: 'main' }
     })
 
-    expect(hasBranchFromLabel(container)).toBe(false)
+    expect(hasBranchFromLabel(current.container)).toBe(false)
   })
 
   it('omits Branch from when nothing is selected', () => {
-    container = renderCard({ smartNameSelection: null })
+    current = renderCard({ smartNameSelection: null })
 
-    expect(hasBranchFromLabel(container)).toBe(false)
+    expect(hasBranchFromLabel(current.container)).toBe(false)
   })
 
   it('omits Branch from for non-git projects even with a task source', () => {
-    container = renderCard({
+    current = renderCard({
       selectedRepoIsGit: false,
       smartNameSelection: { kind: 'github-issue', label: '#7 Fix', url: 'https://example.com/i/7' }
     })
 
-    expect(hasBranchFromLabel(container)).toBe(false)
+    expect(hasBranchFromLabel(current.container)).toBe(false)
   })
 })
