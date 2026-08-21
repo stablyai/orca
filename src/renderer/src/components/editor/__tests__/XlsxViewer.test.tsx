@@ -112,7 +112,7 @@ describe('XlsxViewer', () => {
     expect(html).toMatch(/<tr[^>]*class="[^"]*firstRow/)
   })
 
-  it('escapes HTML in cell text via DOMPurify', async () => {
+  it('escapes HTML in cell text via SheetJS escapehtml', async () => {
     const { container } = render(
       <XlsxViewer
         filePath="/tmp/worktree/tiny.xlsx"
@@ -123,7 +123,9 @@ describe('XlsxViewer', () => {
     await waitFor(() => {
       expect(screen.getByText('A1')).toBeInTheDocument()
     })
-    // SheetJS escapes cell text; verify no raw <script>/<iframe> slips in.
+    // Why: SheetJS sheet_to_html runs `escapehtml` on every cell value; DOMPurify
+    // is intentionally NOT used because it strips <table> in v3. The test name
+    // and comment must reflect what actually sanitizes the payload.
     const html = container.querySelector('[data-testid="xlsx-preview"]')?.innerHTML ?? ''
     expect(html).not.toMatch(/<script/i)
     expect(html).not.toMatch(/<iframe/i)
