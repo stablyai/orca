@@ -55,3 +55,42 @@
   color: var(--destructive);
   background: var(--muted);
 }
+
+.sheetTabs {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  padding: 8px 24px 0;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  background: var(--muted);
+}
+
+.sheetTab {
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  cursor: pointer;
+  background: transparent;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+
+.sheetTab[data-active='true'] {
+  background: var(--background);
+  border-color: var(--border);
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.cellNumber {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.emptyMsg {
+  padding: 24px;
+  text-align: center;
+  color: var(--muted-foreground);
+}
