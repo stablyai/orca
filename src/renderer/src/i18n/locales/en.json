@@ -11305,6 +11305,21 @@
         },
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "Blocked by Mission Control. Remap here or change it in System Settings."
+        },
+        "tab-status-emoji-copy": {
+          "title": "Show agent state in tab titles",
+          "description": "Prefix a tab with ⚙ while its agent works, ✋ when it needs you, and ✅ when it finishes."
+        },
+        "tab": {
+          "status": {
+            "emoji": {
+              "emoji": "emoji",
+              "status": "status",
+              "indicator": "indicator",
+              "working": "working",
+              "done": "done"
+            }
+          }
         }
       },
       "right": {
