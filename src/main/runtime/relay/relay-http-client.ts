@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 import type { RelayRegion } from './relay-region-preference'
+import { firstPartyFetch } from '../first-party-fetch'
 
 const RELAY_HTTP_REQUEST_DEADLINE_MS = 15_000
 const RELAY_RETRY_AFTER_MAX_MS = 5 * 60_000
@@ -91,7 +92,7 @@ export async function exchangeRelayAuthorization(input: {
   requestDeadlineMs?: number
 }): Promise<RelayAuthorization> {
   const relayHostId = deriveRelayHostId(input.keypair.publicKey)
-  const response = await (input.fetch ?? globalThis.fetch)(input.endpoint, {
+  const response = await (input.fetch ?? firstPartyFetch)(input.endpoint, {
     method: 'POST',
     headers: {
       authorization: `Bearer ${input.accessToken}`,
@@ -125,7 +126,7 @@ export async function requestRelayAssignment(input: {
   if (!isAllowedRelayOrigin(input.directorUrl)) {
     throw new RelayHttpError('assignment', 400)
   }
-  const response = await (input.fetch ?? globalThis.fetch)(`${input.directorUrl}/v1/assign`, {
+  const response = await (input.fetch ?? firstPartyFetch)(`${input.directorUrl}/v1/assign`, {
     method: 'POST',
     headers: {
       authorization: `Bearer ${input.relayToken}`,

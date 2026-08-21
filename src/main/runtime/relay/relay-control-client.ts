@@ -22,6 +22,7 @@ import {
   RelayControlSilenceWatchdog
 } from './relay-control-silence-watchdog'
 import { controlWebSocketUrl } from './relay-control-url'
+import * as firstPartyRelay from '../first-party-relay-websocket'
 
 type RelayControlState = 'idle' | 'opening' | 'proving' | 'active' | 'draining' | 'closed'
 
@@ -68,20 +69,20 @@ export class RelayControlClient {
       () => this.socket?.terminate()
     )
     this.createSocket =
-      options.createSocket ??
-      ((url, token) =>
-        new WebSocket(url, {
-          headers: { authorization: `Bearer ${token}` },
-          perMessageDeflate: false,
-          maxPayload: 64 * 1024
-        }))
+      options.createSocket ?? firstPartyRelay.createFirstPartyRelayControlWebSocket
   }
 
-  connect(): Promise<RelayHostHelloAckMessage> {
+  async connect(): Promise<RelayHostHelloAckMessage> {
     if (this.state !== 'idle') {
-      return Promise.reject(new Error('relay_control_already_started'))
+      throw new Error('relay_control_already_started')
     }
     this.state = 'opening'
+    if (!this.options.createSocket) {
+      firstPartyRelay.prepareFirstPartyRelayWebSocketTrust(this.controlUrl)
+    }
+    if (this.state !== 'opening') {
+      throw new Error('relay_control_closed')
+    }
     const socket = this.createSocket(this.controlUrl, this.options.relayJwt)
     this.socket = socket
     socket.once('open', () => this.sendHostHello())

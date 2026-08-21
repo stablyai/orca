@@ -1,5 +1,6 @@
 import type { ArtifactWriteRequest } from '../../shared/artifacts'
 import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
+import { firstPartyFetch } from '../runtime/first-party-fetch'
 
 export type ArtifactWriteBody = {
   content: string
@@ -23,7 +24,7 @@ export async function artifactRequest<T>(
   path: string,
   options: { method?: string; body?: unknown; editToken?: string; idempotencyKey?: string } = {}
 ): Promise<T> {
-  const response = await fetch(`${apiUrl}/v1/artifacts${path}`, {
+  const response = await firstPartyFetch(`${apiUrl}/v1/artifacts${path}`, {
     method: options.method ?? 'GET',
     headers: {
       authorization: `Bearer ${token}`,

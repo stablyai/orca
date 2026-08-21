@@ -7,6 +7,7 @@ import type {
 import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import type { OrcaCloudSession } from './profile-cloud-session-store'
 import { OrcaCloudRequestError } from './profile-cloud-client'
+import { firstPartyFetch } from '../runtime/first-party-fetch'
 
 const CLOUD_REQUEST_TIMEOUT_MS = 30_000
 const ORG_ROLES: readonly OrcaOrgRole[] = ['owner', 'admin', 'member']
@@ -141,7 +142,7 @@ async function requestOrgMembers<T>(
   init: RequestInit,
   parse: (value: unknown) => T
 ): Promise<T> {
-  const response = await fetch(url, init)
+  const response = await firstPartyFetch(url, init)
   if (!response.ok) {
     throw new OrcaCloudRequestError(response.status, await extractErrorCode(response))
   }

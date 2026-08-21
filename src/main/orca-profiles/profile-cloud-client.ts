@@ -7,6 +7,7 @@ import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import type { OrcaCloudSession } from './profile-cloud-session-store'
 import type { OrcaCloudSessionExchangeResponse } from './profile-cloud-session-exchange'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import { firstPartyFetch } from '../runtime/first-party-fetch'
 
 type ExchangeCodeArgs = {
   code: string
@@ -160,7 +161,7 @@ function normalizeSessionResponse(value: unknown): OrcaCloudSessionExchangeRespo
 const CLOUD_REQUEST_TIMEOUT_MS = 30_000
 
 async function postJson<T>(url: string, body: unknown, accessToken?: string): Promise<T> {
-  const response = await fetch(url, {
+  const response = await firstPartyFetch(url, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',

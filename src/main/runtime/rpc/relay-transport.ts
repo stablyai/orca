@@ -1,9 +1,13 @@
-import WebSocket, { type RawData } from 'ws'
+import type WebSocket from 'ws'
+import type { RawData } from 'ws'
 import { forEachWithConcurrency } from '../../../shared/map-with-concurrency'
 import type { RpcTransport } from './transport'
 import type { MobileSocketTransport, MobileSocketTransportMetadata } from './mobile-socket-wiring'
+import {
+  createFirstPartyRelayDataWebSocket,
+  prepareFirstPartyRelayWebSocketTrust
+} from '../first-party-relay-websocket'
 
-const MAX_RELAY_MESSAGE_BYTES = 1024 * 1024
 // Why: terminate() normally emits 'close' within one tick; 5s covers slow
 // teardown without letting a dead socket hold stop() (and app quit) hostage.
 export const RELAY_SOCKET_CLOSE_TIMEOUT_MS = 5_000
@@ -47,6 +51,7 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
   private readonly relayHostId: string
   private generation: number
   private readonly createSocket: (url: string) => WebSocket
+  private readonly usesFirstPartySocket: boolean
   private readonly onConnectionClosed: ((connectionId: string) => void) | undefined
   private readonly socketsByConnectionId = new Map<string, WebSocket>()
   private readonly metadataBySocket = new Map<WebSocket, MobileSocketTransportMetadata>()
@@ -62,10 +67,8 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
     this.relayHostId = options.relayHostId
     this.generation = options.generation
     this.onConnectionClosed = options.onConnectionClosed
-    this.createSocket =
-      options.createSocket ??
-      ((url) =>
-        new WebSocket(url, { perMessageDeflate: false, maxPayload: MAX_RELAY_MESSAGE_BYTES }))
+    this.usesFirstPartySocket = !options.createSocket
+    this.createSocket = options.createSocket ?? createFirstPartyRelayDataWebSocket
   }
 
   onMessage(handler: Parameters<MobileSocketTransport['onMessage']>[0]): void {
@@ -115,6 +118,9 @@ export class CloudRelayTransport implements RpcTransport, MobileSocketTransport 
   }
 
   async start(): Promise<void> {
+    if (this.usesFirstPartySocket) {
+      prepareFirstPartyRelayWebSocketTrust(this.cellWebSocketOrigin)
+    }
     this.stopped = false
   }
 

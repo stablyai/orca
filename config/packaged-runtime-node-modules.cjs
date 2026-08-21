@@ -27,6 +27,7 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   'qrcode',
   'ssh2',
   'tweetnacl',
+  'undici',
   'ws',
   'yaml',
   'zod'
