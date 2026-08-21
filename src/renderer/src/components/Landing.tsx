@@ -254,64 +254,84 @@ export default function Landing(): React.JSX.Element {
   }, [createTargetLabel, createWorktreeShortcut, nextWorktreeShortcut, previousWorktreeShortcut])
 
   return (
-    <div className="absolute inset-0 flex items-center justify-center bg-background">
-      <div className="w-full max-w-lg px-6">
-        <div className="flex flex-col items-center gap-4 py-8">
-          <div
-            className="flex items-center justify-center size-20 rounded-2xl border border-border/80 shadow-lg shadow-black/40"
-            style={{ backgroundColor: '#12181e' }}
-          >
-            <img
-              src={logo}
-              alt={translate('auto.components.Landing.520304a067', 'MCode logo')}
-              className="size-12"
-            />
-          </div>
-          <h1 className="text-4xl font-bold text-foreground tracking-tight">
-            {translate('auto.components.Landing.6ca6ff404e', 'MCODE')}
-          </h1>
-
-          {preflightIssues.length > 0 && <PreflightBanner issues={preflightIssues} repos={repos} />}
-
-          <p className="text-sm text-muted-foreground text-center">
-            {hasProjects
-              ? translate(
-                  'auto.components.Landing.9c00bd4adf',
-                  'Select a workspace from the sidebar to begin.'
-                )
-              : translate('auto.components.Landing.cd21242762', 'Add a project to get started.')}
-          </p>
-
-          <div className="flex items-center justify-center gap-2.5 flex-wrap">
-            <button
-              className="inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-4 py-2 rounded-md cursor-pointer hover:bg-accent transition-colors"
-              onClick={() => openModal('add-repo')}
+    <div className="absolute inset-0 overflow-hidden bg-background">
+      {/* Bench field: calibrated graticule, faded toward the center so the
+        content column stays clean. Measurement-surface use only. */}
+      <div
+        aria-hidden
+        className="graticule pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_70%_65%_at_50%_42%,transparent_25%,black_100%)]"
+      />
+      <div className="relative flex h-full items-center justify-center px-6">
+        <div className="w-full max-w-xl pb-10">
+          <div className="flex flex-col items-center gap-7 py-10 text-center">
+            <div
+              className="flex size-14 items-center justify-center rounded-xl border border-border bg-card shadow-lg shadow-black/20"
+              style={{ backgroundColor: '#12181e' }}
             >
-              <FolderPlus className="size-3.5" />
-              {translate('auto.components.Landing.f9eaa9e12d', 'Add Project')}
-            </button>
+              <img
+                src={logo}
+                alt={translate('auto.components.Landing.520304a067', 'MCode logo')}
+                className="size-9"
+              />
+            </div>
 
-            <button
-              className="inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-4 py-2 rounded-md cursor-pointer hover:bg-accent transition-colors"
-              onClick={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
-            >
-              <GitBranchPlus className="size-3.5" />
-              {translate('auto.components.Landing.76a95f7f47', 'Create')}{' '}
-              {createTargetLabel.toLowerCase()}
-            </button>
-          </div>
+            <h1 className="max-w-md text-balance text-[2.75rem] font-semibold leading-[1.08] tracking-tight text-foreground">
+              {translate('auto.components.Landing.headline', 'Every agent. One bench.')}
+            </h1>
 
-          <div className="mt-6 w-full max-w-xs space-y-2">
-            {shortcuts.map((shortcut) => (
-              <div key={shortcut.id} className="grid grid-cols-[1fr_auto] items-center gap-3">
-                <span className="text-sm text-muted-foreground">{shortcut.action}</span>
-                <ShortcutKeyCombo
-                  keys={shortcut.shortcut.keys}
-                  doubleTap={shortcut.shortcut.doubleTap}
-                  separatorClassName="mx-0.5 text-[10px] text-muted-foreground"
-                />
-              </div>
-            ))}
+            {preflightIssues.length > 0 && (
+              <PreflightBanner issues={preflightIssues} repos={repos} />
+            )}
+
+            <p className="max-w-sm text-balance text-[15px] leading-relaxed text-muted-foreground">
+              {hasProjects
+                ? translate(
+                    'auto.components.Landing.9c00bd4adf',
+                    'Select a workspace from the sidebar to begin.'
+                  )
+                : translate(
+                    'auto.components.Landing.cd21242762',
+                    'Add a project to get started.'
+                  )}
+            </p>
+
+            <div className="flex items-center justify-center gap-2.5">
+              <button
+                className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-md bg-primary px-5 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                onClick={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
+              >
+                <GitBranchPlus className="size-4" />
+                Create {createTargetLabel.toLowerCase()}
+              </button>
+              <button
+                className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-md border border-border text-foreground text-sm font-medium px-4 transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                onClick={() => openModal('add-repo')}
+              >
+                <FolderPlus className="size-4" />
+                {translate('auto.components.Landing.f9eaa9e12d', 'Add Project')}
+              </button>
+            </div>
+
+            <div className="mt-1 flex items-center justify-center">
+              {shortcuts.map((shortcut, index) => (
+                <div
+                  key={shortcut.id}
+                  className={cn(
+                    'flex items-center gap-2.5 px-5',
+                    index > 0 && 'border-l border-border'
+                  )}
+                >
+                  <span className="whitespace-nowrap text-xs text-muted-foreground">
+                    {shortcut.action}
+                  </span>
+                  <ShortcutKeyCombo
+                    keys={shortcut.shortcut.keys}
+                    doubleTap={shortcut.shortcut.doubleTap}
+                    separatorClassName="mx-0.5 text-[10px] text-muted-foreground"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
