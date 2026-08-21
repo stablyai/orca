@@ -15,6 +15,11 @@ Verified identical on `main` and on `Sylen00/pet-overlay-animations` — the sam
 99 files, the same 289 tests. None of this comes from feature work; it is
 accumulated platform rot.
 
+> **Current state (2026-08-21):** 9 files / 22 tests, of which four files are
+> load-dependent flakes that pass in isolation. See
+> [Run 2 results](#run-2-results--2026-08-21) at the end for what each of the
+> nine was and how it resolved.
+
 ## Why this exists
 
 `.github/workflows/pr.yml` runs the full suite **only on `ubuntu-latest`**. The
@@ -902,3 +907,106 @@ so the PATH prepends re-read from `process.env` and the scrub has to outlive tha
 fallback. If it does not on Windows, a stale attribution shim survives into
 terminals there — worth confirming against the real daemon path before deciding
 whether the test or the scrub is wrong.
+
+---
+
+## Run 2 results — 2026-08-21
+
+Second full sweep, same host, after phases 0–10:
+
+```
+Test Files  9 failed | 6022 passed | 66 skipped (6097)
+     Tests  22 failed | 56054 passed | 918 skipped (57000)
+  Duration  2610s
+```
+
+From 99 files / 289 tests to 9 files / 22 tests. What the nine were, and what
+each turned out to be:
+
+| File | Fails | Verdict | Outcome |
+| --- | --- | --- | --- |
+| `ssh-relay-upload-stage-commands.test.ts` | 9 | **P** (in the probe) | fixed |
+| `pty-subprocess-foreground-scan-cadence.test.ts` | 4 | load flake | passes alone |
+| `pet-from-image.test.ts` | 2 | **T** | already fixed after the run started |
+| `ssh-remote-commands.test.ts` | 2 | **P** (in the probe) | fixed |
+| `wsl-login-shell-command.test.ts` | 1 | load flake | passes alone |
+| `updater.startup-scheduling.test.ts` | 1 | load flake | passes alone |
+| `filesystem-list-files-git-fallback-real.test.ts` | 1 | **T** | fixed |
+| `windows-user-path-registry.test.ts` | 1 | **C** | fixed (toolchain) |
+| `resolve-7za-path.test.mjs` | 1 | network | passes alone |
+
+### The POSIX shell probe was gated on the wrong thing
+
+The eleven ssh failures were one bug in `src/shared/posix-shell.ts`, and it is
+the exact mistake this plan's decision rule warns about — a capability gate that
+is really an environment gate.
+
+`findPosixShell()` tried `/bin/sh` and then `sh`. Git for Windows ships a POSIX
+shell at `<root>/usr/bin/sh.exe` but only puts `<root>/cmd` on PATH, so:
+
+- started from **Git Bash**, `/usr/bin` is on PATH → `sh` resolves → tests run;
+- started from **cmd.exe or PowerShell**, it does not → the probe answers "no
+  shell" → the ungated cases throw `No POSIX shell is available`.
+
+Every earlier verification had been run from Git Bash, so the probe looked
+correct. The detached sweep ran from cmd.exe and exposed it. CI would have hit
+the same thing.
+
+Fixed by asking `git --exec-path` where Git lives and climbing to `usr/bin/sh`,
+so the answer is a property of the machine rather than of the parent process.
+That alone was not enough: the shell's own utilities live in that same
+directory, so a generated script found no `awk` and reached **System32's
+`find.exe`** instead of the POSIX one — failing as `File not found - relay-*`
+rather than loudly. `posixShellEnvironment()` prepends the directory onto the
+spawn's PATH only, never onto `process.env`, so one suite cannot change what
+`find` means for another.
+
+**Rule to carry forward:** a capability probe must be verified from every shell
+that can start the suite. Answering differently under cmd.exe and Git Bash is
+the same defect class as answering differently under Windows and Linux.
+
+### EBUSY on cleanup is not always a product bug
+
+`filesystem-list-files-git-fallback-real.test.ts` failed its `afterEach` with
+`EBUSY: rmdir`. The mechanism is real — a rejected scan cancels its sibling git
+pass with `child.kill()`, which only *asks*, and until that process exits it
+still holds the repo as its cwd, which Windows will not remove.
+
+The first fix attempt made `listFilesWithGit` await its children's exit. That
+was wrong, and the suite said so: there is a case named *"settles and detaches
+git fallback scans that ignore timeout kills"*. Detaching is deliberate — Quick
+Open must not hang behind a stuck git — and the wait also deadlocked under the
+fake timers those cases use.
+
+So the verdict is **T**, and the cleanup is what has to tolerate the overlap.
+`removeHostTree` already exists for exactly this and carries the retries.
+
+**Rule to carry forward:** before "fixing" a race in production, check whether a
+neighbouring test already names the behaviour as intended.
+
+### The toolchain gap was real
+
+`windows-user-path-registry.test.ts` was not a test problem: `windows-native-registry`
+had never been compiled, because no MSVC toolset was installed. Four install
+attempts failed for four different reasons; the last three were diagnosable only
+from `%TEMP%\dd_installer_*.log`:
+
+1. the installer's own self-update gate (`Status changed to UpdateAvailable`);
+2. `--wait` is not a valid argument to `setup.exe modify` (exit 87);
+3. `Start-Process -ArgumentList` did not quote `C:\Program Files (x86)\...`, so
+   the installer received `installPath: C:\Program` and reported *"An installed
+   product matching the following parameters cannot be found"*.
+
+Targeting the product by `--channelId` / `--productId` avoids the space
+entirely. Worth remembering: `vswhere` reported `isComplete: False` throughout,
+which was a symptom of the partial install rather than its cause.
+
+### Remaining: four load-dependent flakes
+
+`pty-subprocess-foreground-scan-cadence` (4), `wsl-login-shell-command` (1),
+`updater.startup-scheduling` (1) and `resolve-7za-path` (1) all pass in
+isolation and failed only in a saturated 6000-file sweep. They are deliberately
+**not** in the baseline: recording them would make the baseline assert that
+they fail, and a machine-specific timing artifact is not a contract.
+`resolve-7za-path`'s case downloads a toolset with a cold cache, so it is
+network-dependent as well as load-dependent.
