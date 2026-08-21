@@ -12,6 +12,9 @@
 /src/cli/bundled-skill-guides.ts text eol=lf
 # Bundled plugin trees are byte-hashed; CRLF checkout would break the pinned hash.
 /resources/plugins/** text eol=lf
+# Generated skill artifacts are compared to freshly serialized JSON as exact text, so a
+# CRLF checkout fails verify:skill-bundle-manifest on Windows.
+/resources/skills/*.json text eol=lf
 # pnpm hashes every patch byte-for-byte, so a CRLF checkout breaks the install.
 /config/patches/*.patch -text
 # The xterm bundle hunks also make a diff nobody can read; review the hand-written
