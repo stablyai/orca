@@ -308,6 +308,33 @@ describe('SkillUploadSessionService', () => {
     }
   })
 
+  it('releases a session when archive hashing fails after its handle closes', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-session-'))
+    roots.push(root)
+    const uploads = join(root, 'uploads')
+    const hashFailure = new Error('injected-hash-failure')
+    const service = new SkillUploadSessionService(uploads, {
+      hashArchive: vi.fn().mockRejectedValue(hashFailure)
+    })
+    const bytes = Buffer.from('unreadable package')
+    const begun = await service.begin({ package: identity(bytes) })
+    await service.append({
+      uploadId: begun.uploadId,
+      offset: 0,
+      bytesBase64: bytes.toString('base64')
+    })
+
+    await expect(service.commit(begun.uploadId)).rejects.toBe(hashFailure)
+    await expect(
+      service.append({ uploadId: begun.uploadId, offset: bytes.length, bytesBase64: 'YQ==' })
+    ).rejects.toThrow('skill-upload-session-unavailable')
+    expect(await stagedArchives(uploads)).toEqual([])
+    await expect(service.begin({ package: identity(Buffer.from('replacement')) })).resolves.toEqual(
+      expect.objectContaining({ acknowledgedOffset: 0 })
+    )
+    await service.dispose()
+  })
+
   it('rejects gaps, changed retries, and an archive hash mismatch', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-session-'))
     roots.push(root)

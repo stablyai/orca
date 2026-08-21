@@ -13673,6 +13673,7 @@
             "five concurrent begins admit exactly four sessions and disposal removes them",
             "disposal waits for an initializing begin and leaves no owner",
             "concurrent disposal callers join the same exact cleanup promise",
+            "archive hashing failure releases the session and rejects later appends",
             "cancellation and disposal reduce exact archive and owner counts",
             "one abandoned-owner sweep removes at most 64 entries and retry completes"
           ]
@@ -13701,7 +13702,7 @@
           "result": "passed",
           "command": "ORCA_REAL_PROCESS_SKILL_TEST=1 pnpm exec vitest run --config config/vitest.config.ts src/main/skills/skill-upload-session-service.test.ts src/main/skills/skill-upload-process-restart.integration.test.ts src/main/skills/skill-upload-process-restart-child.test.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
           "durationSeconds": 3.5,
-          "summary": "Twelve service tests, four crash-boundary cases, and one two-current-relay topology passed; the child fixture and two explicitly separate mixed-version cases skipped."
+          "summary": "Thirteen service tests, four crash-boundary cases, and one two-current-relay topology passed; the child fixture and two explicitly separate mixed-version cases skipped."
         },
         {
           "date": "2026-08-20",

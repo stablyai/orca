@@ -7,13 +7,14 @@ import {
   type SkillUploadBeginResult,
   type SkillUploadChunkRequest
 } from '../../shared/skill-upload-session-contract'
-import {
-  SkillUploadStagingOwnership,
-  type SkillUploadStagingOwnershipOptions
-} from './skill-upload-staging-ownership'
+import { SkillUploadStagingOwnership } from './skill-upload-staging-ownership'
 import { hashSkillUploadArchive } from './skill-upload-archive-hash'
 import { SkillUploadOperationLifecycle } from './skill-upload-operation-lifecycle'
-import type { SkillUploadSessionRecord } from './skill-upload-session-record'
+import type { SkillUploadSessionServiceOptions } from './skill-upload-session-service-options'
+import {
+  skillUploadBeginResult,
+  type SkillUploadSessionRecord
+} from './skill-upload-session-record'
 
 const MAX_SESSIONS = 4
 const SESSION_IDLE_MS = 10 * 60_000
@@ -30,11 +31,7 @@ export class SkillUploadSessionService {
 
   constructor(
     root: string,
-    private readonly options: {
-      idleMs?: number
-      initializeRoot?: () => Promise<void>
-      ownership?: SkillUploadStagingOwnershipOptions
-    } = {}
+    private readonly options: SkillUploadSessionServiceOptions = {}
   ) {
     this.idleMs = options.idleMs ?? SESSION_IDLE_MS
     this.ownership = new SkillUploadStagingOwnership(root, options.ownership)
@@ -54,7 +51,7 @@ export class SkillUploadSessionService {
           throw new Error('skill-upload-transfer-mismatch')
         }
         this.touch(existing)
-        return this.beginResult(existing)
+        return skillUploadBeginResult(existing)
       }
       if (this.sessions.size >= MAX_SESSIONS) {
         throw new Error('skill-upload-session-limit')
@@ -75,7 +72,7 @@ export class SkillUploadSessionService {
       }
       this.sessions.set(id, session)
       this.touch(session)
-      return this.beginResult(session)
+      return skillUploadBeginResult(session)
     } finally {
       leaveOperation()
       await this.removeOwnershipIfDisposed()
@@ -112,7 +109,11 @@ export class SkillUploadSessionService {
       if (session.bytesReceived + bytes.length > session.package.compressedBytes) {
         throw new Error('skill-upload-size-limit')
       }
-      const write = await session.handle!.write(bytes, 0, bytes.length, request.offset)
+      const handle = session.handle
+      if (!handle) {
+        throw new Error('skill-upload-session-unavailable')
+      }
+      const write = await handle.write(bytes, 0, bytes.length, request.offset)
       if (write.bytesWritten !== bytes.length) {
         throw new Error('skill-upload-write-incomplete')
       }
@@ -145,7 +146,13 @@ export class SkillUploadSessionService {
       await session.handle.sync()
       await session.handle.close()
       session.handle = null
-      const identity = await hashSkillUploadArchive(session.path)
+      let identity: string
+      try {
+        identity = await (this.options.hashArchive ?? hashSkillUploadArchive)(session.path)
+      } catch (error) {
+        await this.cancelSession(uploadId)
+        throw error
+      }
       if (identity !== session.package.archiveSha256) {
         await this.cancelSession(uploadId)
         throw new Error('skill-upload-archive-hash-mismatch')
@@ -247,14 +254,6 @@ export class SkillUploadSessionService {
 
   private expired(session: SkillUploadSessionRecord): boolean {
     return Date.now() - session.touchedAt >= this.idleMs
-  }
-
-  private beginResult(session: SkillUploadSessionRecord): SkillUploadBeginResult {
-    return {
-      uploadId: session.id,
-      chunkBytes: SKILL_UPLOAD_CHUNK_MAX_BYTES,
-      acknowledgedOffset: session.bytesReceived
-    }
   }
 
   private touch(session: SkillUploadSessionRecord): void {
