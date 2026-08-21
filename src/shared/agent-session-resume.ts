@@ -14,7 +14,8 @@ export const RESUMABLE_TUI_AGENTS = [
   'grok',
   'devin',
   'omp',
-  'prime-agent'
+  'prime-agent',
+  'hermes'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -225,6 +226,10 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['session_id', 'sessionId'])
       return id ? { key: 'session_id', id } : null
     }
+    case 'hermes': {
+      const id = readSessionId(payload, ['session_id'])
+      return id ? { key: 'session_id', id } : null
+    }
     // Why: OMP's managed extension reports the authoritative CLI resume id.
     case 'omp': {
       const id = readSessionId(payload, ['session_id'])
@@ -234,7 +239,6 @@ export function extractAgentProviderSession(
     case 'cursor':
     case 'command-code':
     case 'copilot':
-    case 'hermes':
       return null
   }
 }
@@ -276,5 +280,7 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id'
         ? ['omp', '--resume', ompResumeFilePath?.trim() || id]
         : null
+    case 'hermes':
+      return providerSession.key === 'session_id' ? ['hermes', '--resume', id] : null
   }
 }

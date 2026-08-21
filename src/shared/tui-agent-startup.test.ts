@@ -605,6 +605,74 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("codex --profile work 'fix it'")
   })
 
+  it('builds POSIX Hermes TUI resume plans from the provider session id', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'hermes',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("hermes --tui '--resume' 's1'")
+    expect(plan?.launchCommand).toContain('--tui')
+    expect(plan?.launchCommand).toContain('--resume')
+    expect(plan?.launchCommand).toContain('s1')
+    expect(plan?.launchCommand).not.toContain('chat')
+    expect(plan?.launchCommand).not.toContain('--query')
+    expect(plan?.launchCommand).not.toContain('ORCA_HERMES_STARTUP_QUERY')
+    expect(plan?.followupPrompt).toBeNull()
+    expect(plan?.env?.ORCA_HERMES_STARTUP_QUERY).toBeUndefined()
+    expect(plan?.launchConfig.agentCommand).toBe('hermes --tui')
+  })
+
+  it('builds Windows Hermes TUI resume plans that PowerShell can invoke', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'hermes',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      platform: 'win32'
+    })
+
+    expect(plan?.launchCommand).toBe("hermes --tui '--resume' 's1'")
+    expect(plan?.launchCommand).toContain('--tui')
+    expect(plan?.launchCommand).toContain('--resume')
+    expect(plan?.followupPrompt).toBeNull()
+    expect(plan?.launchConfig.agentCommand).toBe('hermes --tui')
+  })
+
+  it('quotes Windows Hermes TUI resume argv for cmd.exe when shell is cmd', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'hermes',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      platform: 'win32',
+      shell: 'cmd'
+    })
+
+    expect(plan?.launchCommand).toBe('hermes --tui "--resume" "s1"')
+    expect(plan?.launchCommand).toContain('--tui')
+    expect(plan?.launchCommand).toContain('--resume')
+    expect(plan?.followupPrompt).toBeNull()
+    expect(plan?.launchConfig.agentCommand).toBe('hermes --tui')
+  })
+
+  it('keeps --tui when a persisted Hermes agentCommand is used for resume', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'hermes',
+      providerSession: { key: 'session_id', id: 's1' },
+      cmdOverrides: {},
+      agentCommand: 'hermes --tui',
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toBe("hermes --tui '--resume' 's1'")
+    expect(plan?.launchCommand).toContain('--tui')
+    expect(plan?.launchCommand).toContain('--resume')
+    expect(plan?.launchCommand).not.toContain('chat')
+    expect(plan?.followupPrompt).toBeNull()
+    expect(plan?.launchConfig.agentCommand).toBe('hermes --tui')
+  })
+
   it('builds Windows resume plans that PowerShell can invoke', () => {
     const plan = buildAgentResumeStartupPlan({
       agent: 'codex',

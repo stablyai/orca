@@ -19,6 +19,40 @@ describe('shared agent-hook-listener', () => {
     vi.unstubAllEnvs()
   })
 
+  it('captures Hermes session_id as providerSession on on_session_start and pre_llm_call', () => {
+    const start = normalizeHookPayload(
+      state,
+      'hermes',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'on_session_start',
+          session_id: 'hermes-session'
+        }
+      },
+      'production'
+    )
+    expect(start?.providerSession).toEqual({ key: 'session_id', id: 'hermes-session' })
+    expect(start?.payload.agentType).toBe('hermes')
+
+    const pre = normalizeHookPayload(
+      state,
+      'hermes',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'pre_llm_call',
+          session_id: 'hermes-session',
+          user_message: 'ship the Hermes support'
+        }
+      },
+      'production'
+    )
+    expect(pre?.providerSession).toEqual({ key: 'session_id', id: 'hermes-session' })
+    expect(pre?.payload.state).toBe('working')
+    expect(pre?.payload.prompt).toBe('ship the Hermes support')
+  })
+
   it('normalizes Hermes pre_llm_call to a working turn with prompt text', () => {
     const event = normalizeHookPayload(
       state,
