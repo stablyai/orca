@@ -20665,6 +20665,108 @@ describe('OrcaRuntimeService', () => {
     expect(serializeProviderBuffer).not.toHaveBeenCalled()
   })
 
+  it('reveals an unresolvable provider read after its tui-idle waiter times out first', async () => {
+    const workerLeafId = HEADLESS_LEAF_ID
+    const workerPaneKey = `legacy-worker:${workerLeafId}`
+    const incarnationId = '55555555-5555-4555-8555-555555555555'
+    const session: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      activeWorktreeId: TEST_WORKTREE_ID,
+      tabsByWorktree: { [TEST_WORKTREE_ID]: [] },
+      sleepingAgentSessionsByPaneKey: {
+        [workerPaneKey]: {
+          paneKey: workerPaneKey,
+          tabId: 'legacy-worker',
+          worktreeId: TEST_WORKTREE_ID,
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'legacy-codex-session' },
+          prompt: 'continue',
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1,
+          origin: 'live'
+        }
+      }
+    }
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
+    const runtime = new OrcaRuntimeService(
+      { ...runtimeStore, flushOrThrow: vi.fn() } as never,
+      undefined,
+      { canRecoverPersistentLocalPtys: () => true }
+    )
+    runtime.setOrchestrationDb({
+      getActiveDispatchForTerminal: () => undefined,
+      listLegacyWorkerTerminalRecoveryRows: () => [
+        {
+          dispatch_id: 'dispatch-stuck',
+          task_id: 'task-stuck',
+          dispatch_status: 'completed',
+          contract_version: 0,
+          assignee_handle: 'term_legacy',
+          assignee_pane_key: workerPaneKey,
+          process_incarnation: `pty-legacy:${incarnationId}`,
+          worker_state: 'ready',
+          worktree_id: TEST_WORKTREE_ID,
+          agent_terminal_handle: 'term_legacy'
+        }
+      ]
+    } as unknown as OrchestrationDb)
+    // A provider capture that never answers: the probe joins it and can only ever be released
+    // by a retire, so whoever retires it decides whether a later read blocks forever.
+    const serializeProviderBuffer = vi.fn(() => new Promise<never>(() => {}))
+    runtime.setPtyController({
+      write: vi.fn(() => true),
+      kill: vi.fn(() => true),
+      getForegroundProcess: async () => null,
+      hasRendererSerializer: () => false,
+      serializeProviderBuffer,
+      hasPty: (ptyId) => ptyId === 'pty-legacy',
+      listProcesses: async () => [
+        {
+          id: 'pty-legacy',
+          incarnationId,
+          terminalHandle: 'term_legacy',
+          title: 'Legacy worker',
+          cwd: TEST_WORKTREE_PATH,
+          worktreeId: TEST_WORKTREE_ID,
+          wslDistro: null
+        }
+      ]
+    })
+    runtime.setNotifier({
+      revealTerminalSession: vi.fn().mockImplementation(() =>
+        publishLegacyWorkerReveal(
+          runtime,
+          {
+            worktreeId: TEST_WORKTREE_ID,
+            tabId: 'legacy-worker',
+            leafId: workerLeafId,
+            ptyId: 'pty-legacy'
+          },
+          'Legacy worker'
+        )
+      ),
+      resolveLegacyWorkerTerminalRecovery: vi.fn()
+    } as never)
+
+    runtime.prepareLegacyWorkerTerminalRecovery()
+    await runtime.reconcileLegacyWorkerTerminals({ materializeRenderer: true })
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    // Why timeoutMs 1: it clamps the probe's snapshot timeout to 0ms, which Node normalizes into
+    // the same 1ms timer list as the waiter's own timeout. Same list means insertion order, and
+    // the waiter is inserted first — so this pins the losing order the race only reaches by luck.
+    await expect(
+      runtime.waitForTerminal(terminal!.handle, { condition: 'tui-idle', timeoutMs: 1 })
+    ).rejects.toThrow('timeout')
+    await expect(runtime.readTerminal(terminal!.handle)).resolves.toMatchObject({ tail: [] })
+
+    // Why: release what the reveal left live — a stuck provider capture and a coalesced
+    // session-tabs notify — so the fake-timer suites later in this file see no stray timer.
+    runtime.onPtyExit('pty-legacy', 0, incarnationId)
+    runtime.notifyMobileSessionTabsChanged(TEST_WORKTREE_ID)
+  }, 5000)
+
   it('retries renderer reveal before clearing an adopted legacy worker resume fence', async () => {
     const workerPaneKey = `legacy-worker:${HEADLESS_LEAF_ID}`
     const incarnationId = '44444444-4444-4444-8444-444444444444'

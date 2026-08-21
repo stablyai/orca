@@ -1800,6 +1800,14 @@ type ProviderBufferAcquisition = {
   timedOut: boolean
 }
 
+type ProviderBufferWait = {
+  timeoutMs?: number
+  retireOnTimeout?: boolean
+  // Why: hands back the exact acquisition this caller joined, so it can retire that one later
+  // instead of guessing which acquisition the map still holds by then.
+  onAcquisition?: (ptyId: string, acquisition: ProviderBufferAcquisition) => void
+}
+
 type RuntimeTerminalBufferSnapshot = {
   data: string
   /** Live state that can be restored without an alternate-screen frame. */
@@ -2326,6 +2334,7 @@ type TerminalWaiter = {
   timeout: NodeJS.Timeout | null
   pollInterval: NodeJS.Timeout | null
   abortCleanup: (() => void) | null
+  probedAcquisition: { ptyId: string; acquisition: ProviderBufferAcquisition } | null
 }
 
 type MessageWaiter = OrchestrationMessageWaiter & {
@@ -13215,7 +13224,7 @@ export class OrcaRuntimeService {
   private async serializeProviderTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number } = {},
-    wait: { timeoutMs?: number; retireOnTimeout?: boolean } = {}
+    wait: ProviderBufferWait = {}
   ): Promise<PtyProviderBufferSnapshot | null> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const scrollbackRows = Math.max(0, Math.floor(opts.scrollbackRows ?? 0))
@@ -13234,6 +13243,7 @@ export class OrcaRuntimeService {
         }
       })
     }
+    wait.onAcquisition?.(ptyId, acquisition)
     if (acquisition.timedOut) {
       return null
     }
@@ -13324,7 +13334,7 @@ export class OrcaRuntimeService {
     ptyId: string,
     read: RuntimeTerminalRead,
     opts: { cursor?: number; limit?: number } = {},
-    providerWait: { timeoutMs?: number; retireOnTimeout?: boolean } = {}
+    providerWait: ProviderBufferWait = {}
   ): Promise<RuntimeTerminalRead> {
     if (typeof opts.cursor === 'number') {
       return read
@@ -13382,7 +13392,7 @@ export class OrcaRuntimeService {
   private async readProviderTerminalTailLines(
     ptyId: string,
     limit: number | undefined,
-    wait: { timeoutMs?: number; retireOnTimeout?: boolean } = {}
+    wait: ProviderBufferWait = {}
   ): Promise<string[]> {
     const lineLimit = terminalReadLimit(limit, DEFAULT_TERMINAL_READ_LIMIT)
     const snapshot = await this.serializeProviderTerminalBuffer(
@@ -18451,7 +18461,7 @@ export class OrcaRuntimeService {
   async readTerminal(
     handle: string,
     opts: { cursor?: number; limit?: number; screen?: boolean } = {},
-    providerWait: { timeoutMs?: number; retireOnTimeout?: boolean } = {}
+    providerWait: ProviderBufferWait = {}
   ): Promise<RuntimeTerminalRead> {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
@@ -19645,7 +19655,8 @@ export class OrcaRuntimeService {
           reject,
           timeout: null,
           pollInterval: null,
-          abortCleanup: null
+          abortCleanup: null,
+          probedAcquisition: null
         }
         if (!this.bindTerminalWaiterAbort(waiter, options?.signal)) {
           reject(new Error('request_aborted'))
@@ -19653,6 +19664,7 @@ export class OrcaRuntimeService {
         }
         if (effectiveTimeoutMs > 0) {
           waiter.timeout = setTimeout(() => {
+            this.retireProbedProviderBuffer(waiter)
             this.removeWaiter(waiter)
             reject(new Error('timeout'))
           }, effectiveTimeoutMs)
@@ -19742,7 +19754,8 @@ export class OrcaRuntimeService {
         reject,
         timeout: null,
         pollInterval: null,
-        abortCleanup: null
+        abortCleanup: null,
+        probedAcquisition: null
       }
 
       if (!this.bindTerminalWaiterAbort(waiter, options?.signal)) {
@@ -19752,6 +19765,7 @@ export class OrcaRuntimeService {
 
       if (effectiveTimeoutMs > 0) {
         waiter.timeout = setTimeout(() => {
+          this.retireProbedProviderBuffer(waiter)
           this.removeWaiter(waiter)
           reject(new Error('timeout'))
         }, effectiveTimeoutMs)
@@ -35563,7 +35577,10 @@ export class OrcaRuntimeService {
         {},
         {
           timeoutMs: snapshotTimeoutMs,
-          retireOnTimeout: true
+          retireOnTimeout: true,
+          onAcquisition: (ptyId, acquisition) => {
+            waiter.probedAcquisition = { ptyId, acquisition }
+          }
         }
       ),
       snapshotTimeoutMs,
@@ -35662,6 +35679,20 @@ export class OrcaRuntimeService {
   private rejectAllWaiters(code: string): void {
     for (const handle of [...this.waitersByHandle.keys()]) {
       this.rejectWaitersForHandle(handle, code)
+    }
+  }
+
+  // Why: the probe's own retire timer is scheduled 1ms ahead of this waiter's timeout, but Node
+  // resolves that margin at coarser-than-1ms granularity — deadlines come off a libuv clock that
+  // advances mid-turn, and both timers land in per-duration lists shared with unrelated timers —
+  // so either order happens. Anchoring the retire to the waiter's death makes it causal rather
+  // than a race; do not re-express this as a timer.
+  private retireProbedProviderBuffer(waiter: TerminalWaiter): void {
+    const probed = waiter.probedAcquisition
+    waiter.probedAcquisition = null
+    // Only the acquisition this probe joined: a newer one belongs to a caller still awaiting it.
+    if (probed && this.providerBufferAcquisitionsByPtyId.get(probed.ptyId) === probed.acquisition) {
+      probed.acquisition.timedOut = true
     }
   }
 
