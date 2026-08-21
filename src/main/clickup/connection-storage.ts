@@ -1,11 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { safeStorage } from 'electron'
+
 import {
   CredentialDecryptionError,
   credentialFileHasContent,
-  readStoredCredentialToken
+  readStoredCredentialToken,
+  writeEncryptedCredential
 } from '../integration-credential-file'
 import type { ClickUpViewer, ClickUpWorkspace, ClickUpWorkspaceSelection } from '../../shared/clickup-types'
 export type ClickUpAccountFile = {
@@ -155,12 +156,10 @@ export function readClickUpToken(): string | null {
 
 export function saveClickUpToken(token: string): void {
   ensureOrcaDirectory()
-  if (safeStorage.isEncryptionAvailable()) {
-    writeFileSync(tokenPath(), safeStorage.encryptString(token), { mode: 0o600 })
-  } else {
-    console.warn('[clickup] safeStorage encryption unavailable — storing token in plaintext')
-    writeFileSync(tokenPath(), token, { encoding: 'utf8', mode: 0o600 })
-  }
+  // Why: the shared writer publishes through a temp file + fsync + rename, so a
+  // failed or interrupted write cannot truncate the saved credential (STA-3941),
+  // and it re-applies 0600 to an already-existing file.
+  writeEncryptedCredential('ClickUp', tokenPath(), token)
   cachedToken = token
   credentialError = undefined
 }
