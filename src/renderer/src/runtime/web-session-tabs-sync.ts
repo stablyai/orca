@@ -6,9 +6,11 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
+  pickParsedAgentStatusPayload,
   type AgentStatusEntry
 } from '../../../shared/agent-status-types'
 import { agentEntryCompletionAt } from '../../../shared/agent-completion-time'
+import { normalizeTurnCompletedAtField } from '../../../shared/agent-status-field-normalization'
 import { agentProviderSessionsEqual } from '../../../shared/agent-session-resume'
 import type {
   RuntimeMobileSessionTabsResult,
@@ -28,6 +30,10 @@ import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-type
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { OpenFile } from '../store/slices/editor'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
+import {
+  buildRetiredTerminalTabStateSweepPatch,
+  type RetiredTerminalTabSweepState
+} from '../store/slices/retired-terminal-tab-state-sweep'
 import { getRemoteRuntimePtyEnvironmentId, toRemoteRuntimePtyId } from './runtime-terminal-stream'
 import { sanitizeTerminalLayoutPaneTitlesForLabels } from '@/lib/terminal-pane-title-sanitization'
 import { terminalLayoutEqual } from '@/lib/terminal-layout-equality'
@@ -96,6 +102,7 @@ import {
   resetWebSessionBrowserPlacementsForTests
 } from './web-session-browser-placement'
 import { suppressE2eWebRuntimeBrowserSnapshot } from './web-runtime-browser-creation-e2e-fault'
+import { observeAgentHookCompletionForNotification } from '@/hooks/agent-hook-completion-notifications'
 import {
   buildWebSessionExistingTabIndex,
   type WebSessionExistingTabIndex
@@ -158,6 +165,17 @@ const hostSessionTabMappingKeysByEnvironmentAndWorktree = new Map<
   string,
   Map<string, Set<string>>
 >()
+// Why: a delayed host stamp belongs to the client boundary seen with its preceding ordered frame.
+const hostWorkingClientBoundaryByPaneKey = new Map<
+  string,
+  {
+    hostStateStartedAt: number
+    hostPrompt: string
+    clientStateStartedAt: number
+    stamped: boolean
+  }
+>()
+const HOST_WORKING_CLIENT_BOUNDARY_LIMIT = 512
 let receivedSessionTabsFrameSequence = 0
 
 type TerminalSurface = RuntimeMobileSessionTerminalClientTab
@@ -218,7 +236,21 @@ export type WebSessionTabsSyncState = Pick<
   | 'unreadTerminalTabs'
   | 'sortEpoch'
 > &
-  Partial<Pick<AppState, 'automaticAgentResumeClaimsByTabId' | 'pendingStartupByTabId'>>
+  Partial<
+    Pick<
+      AppState,
+      | 'acknowledgedAgentsByPaneKey'
+      | 'agentLaunchConfigByPaneKey'
+      | 'automaticAgentResumeClaimsByTabId'
+      | 'migrationUnsupportedByPtyId'
+      | 'paneForegroundAgentByPaneKey'
+      | 'pendingStartupByTabId'
+      | 'recentlyClosedAgentStatusTabIds'
+      | 'recentlyRetiredAgentStatusPaneKeys'
+      | 'retainedAgentsByPaneKey'
+      | 'retentionSuppressedPaneKeys'
+    >
+  >
 
 type WebSessionTabsBatchRecordKey =
   | 'activeBrowserTabIdByWorktree'
@@ -450,6 +482,17 @@ function removeWebSessionTabsEnvironment(environmentId: string, worktreeId: stri
   }
 }
 
+const VISIBILITY_INVENTORY_REMOVAL_EPOCH = 'visibility-inventory-removal'
+
+// Why: a tombstone empties the whole worktree mirror — including tabs a still-live sibling environment publishes — so it is a
+// visibility fact, never evidence that the host closed anything.
+function isWebSessionTabsWorktreeRemovalFrame(snapshot: RuntimeMobileSessionTabsResult): boolean {
+  return (
+    (snapshot as { removed?: unknown }).removed === true ||
+    snapshot.publicationEpoch === VISIBILITY_INVENTORY_REMOVAL_EPOCH
+  )
+}
+
 // Why: omission means removal only because `listAllMobileSessionTabs` publishes every worktree it knows unfiltered; if a host ever
 // scopes that map, this turns live worktrees into tombstones, so the fence below is deliberately short-lived.
 function buildMissingWebSessionTabsRemovals(
@@ -470,7 +513,7 @@ function buildMissingWebSessionTabsRemovals(
       trackedWorktree,
       snapshot: {
         worktree: trackedWorktree.worktree,
-        publicationEpoch: 'visibility-inventory-removal',
+        publicationEpoch: VISIBILITY_INVENTORY_REMOVAL_EPOCH,
         snapshotVersion: 0,
         removed: true,
         activeGroupId: null,
@@ -644,6 +687,7 @@ export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   lastHostTerminalTabCountByWorktree.clear()
   hostSessionTabIdByLocalKey.clear()
   hostSessionTabMappingKeysByEnvironmentAndWorktree.clear()
+  hostWorkingClientBoundaryByPaneKey.clear()
   resetWebSessionBrowserPlacementsForTests()
 }
 
@@ -1165,7 +1209,77 @@ function updateBatchAgentPaneKey(
   }
 }
 
-/** Generates a state patch for mirrored agent statuses, merging host entries with client overrides. */
+// Why: the closed-tab marker has no TTL, and setAgentStatus hard-drops writes for a
+// marked tab id — for a stable mirrored id that returns, that is a permanent silent
+// blackhole unless presence in a snapshot lifts it.
+function buildRemirroredClosedTabMarkerLiftPatch(
+  recentlyClosedAgentStatusTabIds: WebSessionTabsSyncState['recentlyClosedAgentStatusTabIds'],
+  mirroredTerminalIds: ReadonlySet<string>
+): Partial<WebSessionTabsSyncState> | null {
+  let next: WebSessionTabsSyncState['recentlyClosedAgentStatusTabIds'] | null = null
+  for (const tabId of mirroredTerminalIds) {
+    if (tabId in (recentlyClosedAgentStatusTabIds ?? {})) {
+      next ??= { ...recentlyClosedAgentStatusTabIds }
+      delete next[tabId]
+    }
+  }
+  return next ? { recentlyClosedAgentStatusTabIds: next } : null
+}
+
+/**
+ * A host retraction owes the retracted tab closeTab's renderer-state sweep: without it,
+ * client-owned rows (STA-3107-exempt in the mirror's delete loop) and retention promotions
+ * outlive the tab forever (STA-4593).
+ */
+function buildRetractedMirroredTabSweepPatch(
+  state: WebSessionTabsSyncState,
+  worktreeId: string,
+  nextTabsByWorktree: WebSessionTabsSyncState['tabsByWorktree'],
+  agentStatusPatch: Pick<
+    WebSessionTabsSyncState,
+    'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'
+  > | null,
+  removedTerminalResourceIds: readonly string[],
+  batchContext?: WebSessionTabsBatchContext
+): Partial<WebSessionTabsSyncState> | null {
+  // Why: only a mirrored id the host stopped publishing is a retraction — a local or provisional
+  // tab in this list is being renamed into its mirror, and a rename must keep its rows.
+  const retractedTabIds = removedTerminalResourceIds.filter(isMirroredTerminalSurfaceId)
+  if (retractedTabIds.length === 0) {
+    return null
+  }
+  const sweepState: RetiredTerminalTabSweepState = {
+    acknowledgedAgentsByPaneKey: state.acknowledgedAgentsByPaneKey ?? {},
+    agentLaunchConfigByPaneKey: state.agentLaunchConfigByPaneKey ?? {},
+    agentStatusByPaneKey: agentStatusPatch?.agentStatusByPaneKey ?? state.agentStatusByPaneKey,
+    agentStatusEpoch: agentStatusPatch?.agentStatusEpoch ?? state.agentStatusEpoch,
+    migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId ?? {},
+    paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey ?? {},
+    recentlyClosedAgentStatusTabIds: state.recentlyClosedAgentStatusTabIds ?? {},
+    recentlyRetiredAgentStatusPaneKeys: state.recentlyRetiredAgentStatusPaneKeys ?? {},
+    retainedAgentsByPaneKey: state.retainedAgentsByPaneKey ?? {},
+    retentionSuppressedPaneKeys: state.retentionSuppressedPaneKeys ?? {},
+    sortEpoch: agentStatusPatch?.sortEpoch ?? state.sortEpoch,
+    // Why: the drop's completed-orphan rule reads "keyed under a tab this worktree no longer has",
+    // so it must see the post-removal tab list, not the one the snapshot replaced.
+    tabsByWorktree: nextTabsByWorktree
+  }
+  const sweep = buildRetiredTerminalTabStateSweepPatch(sweepState, retractedTabIds, worktreeId)
+  if (!sweep?.agentStatusByPaneKey || !batchContext) {
+    return sweep ?? null
+  }
+  // Why: the batch republishes its own record copy at the end, which would undo the sweep.
+  const mutableState = state as unknown as Record<string, unknown>
+  mutableState.agentStatusByPaneKey = sweep.agentStatusByPaneKey
+  batchContext.changedRecords.add('agentStatusByPaneKey')
+  for (const paneKey of Object.keys(sweepState.agentStatusByPaneKey)) {
+    if (!(paneKey in sweep.agentStatusByPaneKey)) {
+      updateBatchAgentPaneKey(paneKey, false, batchContext)
+    }
+  }
+  return sweep
+}
+
 function buildMirroredAgentStatusPatch(
   state: WebSessionTabsSyncState,
   currentTerminalTabs: readonly TerminalTab[],
@@ -1232,7 +1346,13 @@ function buildMirroredAgentStatusPatch(
             tabId: entry.tabId,
             providerSession:
               existing.providerSession ??
-              (hostIdentityPredatesCurrentTurn ? undefined : entry.providerSession)
+              (hostIdentityPredatesCurrentTurn ? undefined : entry.providerSession),
+            // Why: hook-only content the byte pipeline can never see, and every OSC
+            // write blanks it, so a fenced pane's message line stayed empty forever
+            // (#12906). Host-first unlike providerSession: only the host can mint one.
+            lastAssistantMessage:
+              (hostIdentityPredatesCurrentTurn ? undefined : entry.lastAssistantMessage) ??
+              existing.lastAssistantMessage
           }
         : entry
     nextByPaneKey.set(entry.paneKey, nextEntry)
@@ -1642,6 +1762,24 @@ function pruneTabGroupLayout(
   return first ?? second
 }
 
+function dropTabGroupLayoutGroups(
+  layout: TabGroupLayoutNode | null,
+  excludedGroupIds: ReadonlySet<string>
+): TabGroupLayoutNode | null {
+  if (!layout) {
+    return null
+  }
+  if (layout.type === 'leaf') {
+    return excludedGroupIds.has(layout.groupId) ? null : layout
+  }
+  const first = dropTabGroupLayoutGroups(layout.first, excludedGroupIds)
+  const second = dropTabGroupLayoutGroups(layout.second, excludedGroupIds)
+  if (first && second) {
+    return { ...layout, first, second }
+  }
+  return first ?? second
+}
+
 function appendTabGroupLayout(
   first: TabGroupLayoutNode | null,
   second: TabGroupLayoutNode | null
@@ -1652,11 +1790,18 @@ function appendTabGroupLayout(
   if (!second) {
     return first
   }
+  // Why: a group already placed by `first` must not gain a second leaf — two
+  // leaves for one group render the same tab strip in two columns, and each
+  // later snapshot appends another copy.
+  const appended = dropTabGroupLayoutGroups(second, collectLayoutGroupIds(first))
+  if (!appended) {
+    return first
+  }
   return {
     type: 'split',
     direction: 'horizontal',
     first,
-    second
+    second: appended
   }
 }
 
@@ -3243,9 +3388,32 @@ function applyWebSessionTabsSnapshotWithContext(
     now,
     batchContext
   )
+  // Why: only a host snapshot that omits a tab is a retraction; a tombstone clears the mirror
+  // for every environment at once, and sweeping there erases rows a live sibling still owns.
+  const retractedTabSweepPatch = isWebSessionTabsWorktreeRemovalFrame(snapshot)
+    ? null
+    : buildRetractedMirroredTabSweepPatch(
+        state,
+        worktreeId,
+        nextTabsByWorktree,
+        agentStatusPatch,
+        removedTerminalResourceIds,
+        batchContext
+      )
+  // Why: mirrored ids are stable, so a published-again id proves the tab is not closed —
+  // a lingering closed-tab marker would blackhole its byte-derived status for the whole
+  // session (host-restart subset frames, cross-host collision replays). The close-intent
+  // filter already holds genuinely closing tabs out of the snapshot.
+  const remirroredClosedTabLiftPatch = buildRemirroredClosedTabMarkerLiftPatch(
+    retractedTabSweepPatch?.recentlyClosedAgentStatusTabIds ??
+      state.recentlyClosedAgentStatusTabIds,
+    mirroredTerminalIds
+  )
 
   const patch: Partial<WebSessionTabsSyncState> = {
     ...agentStatusPatch,
+    ...retractedTabSweepPatch,
+    ...remirroredClosedTabLiftPatch,
     ...(nextOpenFiles !== state.openFiles ? { openFiles: nextOpenFiles } : {}),
     ...(nextTabsByWorktree !== state.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {}),
     ...(nextBrowserTabsByWorktree !== state.browserTabsByWorktree
@@ -3407,17 +3575,137 @@ function applyWebSessionTabsSnapshotOperations(
 }
 
 export function applyWebSessionTabsStorePatch(
-  buildPatch: (state: AppState) => WebSessionTabsSyncState | Partial<WebSessionTabsSyncState>
+  buildPatch: (state: AppState) => WebSessionTabsSyncState | Partial<WebSessionTabsSyncState>,
+  agentStatusSnapshots?: RuntimeMobileSessionTabsResult | readonly RuntimeMobileSessionTabsResult[],
+  allowCompletionNotification = false
 ): void {
   let mirroredAgentStatusChanged = false
+  const acceptedNotificationStatuses: {
+    paneKey: string
+    worktreeId: string
+    seedOnly?: true
+    payload: ReturnType<typeof pickParsedAgentStatusPayload> & {
+      stateStartedAt: number
+      localStateStartedAt?: number
+    }
+  }[] = []
   useAppStore.setState((state) => {
     const patch = buildPatch(state)
     mirroredAgentStatusChanged = patch !== state && Object.hasOwn(patch, 'agentStatusByPaneKey')
+    if (agentStatusSnapshots) {
+      const nextAgentStatuses = patch.agentStatusByPaneKey ?? state.agentStatusByPaneKey
+      const snapshots = Array.isArray(agentStatusSnapshots)
+        ? agentStatusSnapshots
+        : [agentStatusSnapshots]
+      for (const snapshot of snapshots) {
+        for (const surface of snapshot.tabs) {
+          if (surface.type !== 'terminal') {
+            continue
+          }
+          const remapped = remapHostAgentStatus(surface)
+          const accepted = remapped ? nextAgentStatuses[remapped.paneKey] : undefined
+          const turnCompletedAt = remapped
+            ? normalizeTurnCompletedAtField(surface.turnCompletedAt, remapped.state)
+            : undefined
+          if (remapped?.state === 'done' && turnCompletedAt === undefined) {
+            hostWorkingClientBoundaryByPaneKey.delete(remapped.paneKey)
+          }
+          // Why: client OSC owns display state, but only the host hook stream carries background-turn stamps.
+          const clientOwnedNotification = Boolean(
+            remapped &&
+            isClientAuthoritativeAgentStatusPane(remapped.paneKey) &&
+            (remapped.state === 'working' || turnCompletedAt !== undefined)
+          )
+          if (
+            !remapped ||
+            (!clientOwnedNotification &&
+              (!accepted ||
+                accepted === state.agentStatusByPaneKey[remapped.paneKey] ||
+                !agentStatusEntryEqual(accepted, remapped)))
+          ) {
+            continue
+          }
+          const notificationStatus = clientOwnedNotification ? remapped : accepted
+          if (!notificationStatus) {
+            continue
+          }
+          const currentClientStateStartedAt = clientOwnedNotification
+            ? state.agentStatusByPaneKey[notificationStatus.paneKey]?.stateStartedAt
+            : undefined
+          let localStateStartedAt = currentClientStateStartedAt
+          if (
+            clientOwnedNotification &&
+            notificationStatus.state === 'working' &&
+            currentClientStateStartedAt !== undefined
+          ) {
+            if (turnCompletedAt === undefined) {
+              const retainedBoundary = hostWorkingClientBoundaryByPaneKey.get(
+                notificationStatus.paneKey
+              )
+              if (
+                !retainedBoundary ||
+                retainedBoundary.hostStateStartedAt !== notificationStatus.stateStartedAt ||
+                retainedBoundary.hostPrompt !== notificationStatus.prompt ||
+                retainedBoundary.stamped
+              ) {
+                hostWorkingClientBoundaryByPaneKey.delete(notificationStatus.paneKey)
+                hostWorkingClientBoundaryByPaneKey.set(notificationStatus.paneKey, {
+                  hostStateStartedAt: notificationStatus.stateStartedAt,
+                  hostPrompt: notificationStatus.prompt,
+                  clientStateStartedAt: currentClientStateStartedAt,
+                  stamped: false
+                })
+                if (hostWorkingClientBoundaryByPaneKey.size > HOST_WORKING_CLIENT_BOUNDARY_LIMIT) {
+                  const oldestPaneKey = hostWorkingClientBoundaryByPaneKey.keys().next().value
+                  if (oldestPaneKey !== undefined) {
+                    hostWorkingClientBoundaryByPaneKey.delete(oldestPaneKey)
+                  }
+                }
+              }
+            } else {
+              const retainedBoundary = hostWorkingClientBoundaryByPaneKey.get(
+                notificationStatus.paneKey
+              )
+              if (
+                retainedBoundary?.hostStateStartedAt === notificationStatus.stateStartedAt &&
+                retainedBoundary.hostPrompt === notificationStatus.prompt
+              ) {
+                localStateStartedAt = retainedBoundary.clientStateStartedAt
+                retainedBoundary.stamped = true
+              }
+            }
+          }
+          if (!allowCompletionNotification && notificationStatus.state !== 'working') {
+            continue
+          }
+          acceptedNotificationStatuses.push({
+            paneKey: notificationStatus.paneKey,
+            worktreeId: notificationStatus.worktreeId ?? snapshot.worktree,
+            ...(!allowCompletionNotification ? { seedOnly: true as const } : {}),
+            payload: {
+              ...pickParsedAgentStatusPayload({
+                ...notificationStatus,
+                ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {})
+              }),
+              stateStartedAt: notificationStatus.stateStartedAt,
+              ...(clientOwnedNotification
+                ? {
+                    localStateStartedAt
+                  }
+                : {})
+            }
+          })
+        }
+      }
+    }
     return patch
   })
   // Why: paired-web snapshots bypass setAgentStatus, so arm the stale-boundary timer explicitly like local hook events do.
   if (mirroredAgentStatusChanged) {
     useAppStore.getState().scheduleAgentStatusFreshness()
+  }
+  for (const status of acceptedNotificationStatuses) {
+    observeAgentHookCompletionForNotification(status)
   }
 }
 
@@ -3485,8 +3773,9 @@ function loadInitialWebSessionTabs(
               receivedFrames[index]!
             )
         )
-        applyWebSessionTabsStorePatch((state) =>
-          applyFreshWebSessionTabsSnapshots(state, applicable, environmentId)
+        applyWebSessionTabsStorePatch(
+          (state) => applyFreshWebSessionTabsSnapshots(state, applicable, environmentId),
+          applicable
         )
       } finally {
         for (const finishRecovery of finishRecoveries) {
@@ -3793,8 +4082,9 @@ export function useWebSessionTabsSync(): void {
         batch.deferredRepairWorktrees.delete(worktreeId)
       }
       if (operations.length > 0) {
-        applyWebSessionTabsStorePatch((state) =>
-          applyWebSessionTabsSnapshotOperations(state, operations)
+        applyWebSessionTabsStorePatch(
+          (state) => applyWebSessionTabsSnapshotOperations(state, operations),
+          operations.map(({ snapshot }) => snapshot)
         )
       }
       finishVisibilityResumeBatchIfIdle(batch)
@@ -4103,8 +4393,10 @@ export function useWebSessionTabsSync(): void {
                             : []
                         )
                         if (freshSnapshots.length > 0) {
-                          applyWebSessionTabsStorePatch((state) =>
-                            applyWebSessionTabsSnapshots(state, freshSnapshots, environmentId)
+                          applyWebSessionTabsStorePatch(
+                            (state) =>
+                              applyWebSessionTabsSnapshots(state, freshSnapshots, environmentId),
+                            freshSnapshots
                           )
                         }
                         const freshSnapshotSet = new Set(freshSnapshots)
@@ -4173,8 +4465,10 @@ export function useWebSessionTabsSync(): void {
                         acceptReplayedWebSessionTabsSnapshot(environmentId, recovered.worktree)
                       }
                       if (shouldApplyWebSessionTabsSnapshot(recovered, environmentId)) {
-                        applyWebSessionTabsStorePatch((state) =>
-                          applyWebSessionTabsSnapshot(state, recovered, environmentId)
+                        applyWebSessionTabsStorePatch(
+                          (state) => applyWebSessionTabsSnapshot(state, recovered, environmentId),
+                          recovered,
+                          event.type === 'updated' && !replayed
                         )
                         recordVisibilityResumeSnapshot(environmentId, recovered, receivedFrame)
                       }
@@ -4296,8 +4590,11 @@ export function useWebSessionTabsSync(): void {
         skipWakeRespawn: shouldSkipWebRuntimeWakeTerminalRespawn(activeWorktreeId)
       })
       if (fresh) {
-        applyWebSessionTabsStorePatch((state) =>
-          applyWebSessionTabsSnapshot(state, recovered, environmentId)
+        const replayed = isRuntimeSubscriptionReplayResponse(response)
+        applyWebSessionTabsStorePatch(
+          (state) => applyWebSessionTabsSnapshot(state, recovered, environmentId),
+          recovered,
+          event.type === 'updated' && !replayed
         )
         recordVisibilityResumeSnapshotRef.current(environmentId, recovered, receivedFrame)
       }

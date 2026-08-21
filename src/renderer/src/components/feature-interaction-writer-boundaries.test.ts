@@ -216,7 +216,7 @@ describe('feature interaction writer boundaries', () => {
   })
 
   it('records browser annotation agent handoff only from the prompt-delivered callback', () => {
-    const source = componentSource('browser-pane/BrowserPane.tsx')
+    const source = componentSource('browser-pane/annotate/use-browser-page-annotation-send.ts')
     expect(
       source.match(/recordFeatureInteraction\('browser-annotations-sent-to-agent'\)/g)
     ).toHaveLength(1)

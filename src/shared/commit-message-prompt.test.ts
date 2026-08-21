@@ -367,3 +367,58 @@ describe('planCustomCommand', () => {
     }
   })
 })
+
+describe('Windows command overrides keep native path separators (#11375)', () => {
+  const WINDOWS_PATH = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
+  it('eats backslashes under the POSIX default, which is what broke Windows paths', () => {
+    // Pinned as the reason 'literal' exists, not as desired behavior.
+    const posix = tokenizeCustomCommandTemplate(WINDOWS_PATH)
+
+    expect(posix.ok && posix.tokens).toEqual([
+      'C:WindowsSystem32WindowsPowerShellv1.0powershell.exe'
+    ])
+  })
+
+  it('keeps a native absolute path intact in literal mode', () => {
+    const literal = tokenizeCustomCommandTemplate(WINDOWS_PATH, 'literal')
+
+    expect(literal.ok && literal.tokens).toEqual([WINDOWS_PATH])
+  })
+
+  it('still splits on whitespace and honours quotes in literal mode', () => {
+    const quoted = tokenizeCustomCommandTemplate(
+      '"C:\\Program Files\\Git\\bin\\bash.exe" --login -i',
+      'literal'
+    )
+
+    expect(quoted.ok && quoted.tokens).toEqual([
+      'C:\\Program Files\\Git\\bin\\bash.exe',
+      '--login',
+      '-i'
+    ])
+  })
+
+  it('leaves a trailing backslash alone instead of swallowing the delimiter', () => {
+    const trailing = tokenizeCustomCommandTemplate('C:\\tools\\ --flag', 'literal')
+
+    expect(trailing.ok && trailing.tokens).toEqual(['C:\\tools\\', '--flag'])
+  })
+
+  it('keeps POSIX escaping the default so `foo\\ bar` stays one token', () => {
+    const posix = tokenizeCustomCommandTemplate('/usr/local/my\\ agent/bin --flag')
+
+    expect(posix.ok && posix.tokens).toEqual(['/usr/local/my agent/bin', '--flag'])
+  })
+
+  it('substitutes {prompt} as one argument with a Windows binary path', () => {
+    const plan = planCustomCommand(
+      `${WINDOWS_PATH} -Command {prompt}`,
+      'write a commit message',
+      'literal'
+    )
+
+    expect(plan.ok && plan.binary).toBe(WINDOWS_PATH)
+    expect(plan.ok && plan.args).toEqual(['-Command', 'write a commit message'])
+  })
+})

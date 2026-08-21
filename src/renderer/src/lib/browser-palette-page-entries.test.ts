@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
+import type { Tab } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { buildSearchableBrowserPages } from './browser-palette-page-entries'
 import { searchBrowserPages } from './browser-palette-search'
@@ -189,6 +190,53 @@ describe('buildSearchableBrowserPages', () => {
     })
 
     expect(entries[0].worktreeSortIndex).toBe(Number.MAX_SAFE_INTEGER)
+  })
+
+  it('reads page recency from the owning workspace unified tab, clamped to page age', () => {
+    function browserTab(overrides: Partial<Tab>): Tab {
+      return {
+        id: 'tab-ws-1',
+        entityId: 'ws-1',
+        groupId: 'group-1',
+        worktreeId: 'wt-1',
+        contentType: 'browser',
+        label: 'Example',
+        customLabel: null,
+        color: null,
+        sortOrder: 0,
+        createdAt: 0,
+        ...overrides
+      }
+    }
+
+    const [unfocused] = buildSearchableBrowserPages({
+      worktrees: [worktreeA],
+      repoMap,
+      worktreeOrder,
+      browserTabsByWorktree: { 'wt-1': [makeWorkspace()] },
+      browserPagesByWorkspace: { 'ws-1': [makePage()] },
+      unifiedTabsByWorktree: { 'wt-1': [browserTab({})] },
+      activeBrowserTabId: null,
+      activeWorktreeId: null,
+      activeTabType: 'browser'
+    })
+    expect(unfocused.lastActiveAt).toBeNull()
+
+    const entries = buildSearchableBrowserPages({
+      worktrees: [worktreeA],
+      repoMap,
+      worktreeOrder,
+      browserTabsByWorktree: { 'wt-1': [makeWorkspace({ pageIds: ['page-1', 'page-2'] })] },
+      browserPagesByWorkspace: {
+        'ws-1': [makePage(), makePage({ id: 'page-2', createdAt: 9000 })]
+      },
+      unifiedTabsByWorktree: { 'wt-1': [browserTab({ lastFocusedAt: 4000 })] },
+      activeBrowserTabId: null,
+      activeWorktreeId: null,
+      activeTabType: 'browser'
+    })
+
+    expect(entries.map((entry) => entry.lastActiveAt)).toEqual([4000, 9000])
   })
 
   it('feeds Cmd+J browser search the same ranking as the inline builder did', () => {

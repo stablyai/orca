@@ -3,12 +3,23 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import type { TextInput } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLiveInputSender } from './terminal-live-input-sender'
-import { TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS } from './terminal-live-hangul-mirror'
+import { TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS } from './terminal-live-preedit-mirror'
 import { useTerminalLiveInputCommit } from './use-terminal-live-input-commit'
+
+type TerminalLiveInputCommitHandlers = ReturnType<typeof useTerminalLiveInputCommit<string>>
+
+/** `isComposing` omitted models a platform that reports no marked-text range. */
+function changeLiveInput(
+  handlers: TerminalLiveInputCommitHandlers,
+  text: string,
+  isComposing?: boolean
+): void {
+  handlers.handleLiveInputChange({ nativeEvent: { text, isComposing } })
+}
 
 type TerminalLiveInputCommitHarness = {
   readonly captures: readonly string[]
-  readonly handlers: ReturnType<typeof useTerminalLiveInputCommit<string>>
+  readonly handlers: TerminalLiveInputCommitHandlers
   readonly sent: readonly string[]
   readonly setActiveSessionTabType: (next: string | undefined) => void
   readonly setConnected: (next: boolean) => void
@@ -46,7 +57,7 @@ function createTerminalLiveInputCommitHarness({
   // Refs never re-render; only these variables re-run the hook's clear effects.
   let currentActiveSessionTabType: string | undefined = 'terminal'
   let currentConnected = true
-  let handlers: ReturnType<typeof useTerminalLiveInputCommit<string>> | null = null
+  let handlers: TerminalLiveInputCommitHandlers | null = null
   let renderer: ReactTestRenderer | null = null
 
   function Harness(): null {
@@ -105,29 +116,59 @@ describe('terminal live input commit hook', () => {
     vi.useRealTimers()
   })
 
-  it('Given Hangul composition When steps arrive Then streams the stable prefix and never leaks jamo', async () => {
+  it('Given Hangul composition and no marked-text report When steps arrive Then no jamo leaks', async () => {
     // Given
     vi.useFakeTimers()
     const { handlers, sent } = createTerminalLiveInputCommitHarness()
 
     // When: ㅎ→하→한→한ㄱ→한그→한글 (no settle pause between steps)
     for (const fieldText of ['ㅎ', '하', '한', '한ㄱ', '한그', '한글']) {
-      handlers.handleLiveInputChange(fieldText)
+      changeLiveInput(handlers, fieldText)
       await vi.advanceTimersByTimeAsync(50)
     }
 
-    // Then: only the stable prefix went out; the trailing syllable is held
-    await vi.waitFor(() => expect(sent).toEqual(['한']))
+    // Then: the settle timer commits the run intact; no jamo and no DEL repair
+    await vi.waitFor(() => expect(sent).toEqual(['한글']))
+  })
+
+  it('Given Japanese romaji When the marked-text range is reported Then no reading reaches the terminal', async () => {
+    // Given
+    vi.useFakeTimers()
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+
+    // When: `sa` reads as さ, converts to 桜, and only then commits
+    for (const fieldText of ['s', 'さ', 'さく', 'さくら']) {
+      changeLiveInput(handlers, fieldText, true)
+      await vi.advanceTimersByTimeAsync(50)
+    }
+    await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS * 4)
+    changeLiveInput(handlers, '桜', false)
+
+    // Then: the reading never reached the PTY, so nothing had to be erased
+    await vi.waitFor(() => expect(sent).toEqual(['桜']))
+  })
+
+  it('Given a reported preedit that goes idle When the settle delay passes Then nothing is committed on a timer', async () => {
+    // Given: preedit is not text yet, so no timer may promote it
+    vi.useFakeTimers()
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+
+    // When
+    changeLiveInput(handlers, 'nihao', true)
+    await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS * 10)
+
+    // Then
+    expect(sent).toEqual([])
   })
 
   it('Given a held syllable When the settle timer elapses Then commits it to the terminal', async () => {
     // Given
     vi.useFakeTimers()
     const { handlers, sent } = createTerminalLiveInputCommitHarness()
-    handlers.handleLiveInputChange('한')
+    changeLiveInput(handlers, '한')
 
     // When
-    await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS)
+    await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS)
 
     // Then
     await vi.waitFor(() => expect(sent).toEqual(['한']))
@@ -137,13 +178,13 @@ describe('terminal live input commit hook', () => {
     // Given
     vi.useFakeTimers()
     const { handlers, sent } = createTerminalLiveInputCommitHarness()
-    handlers.handleLiveInputChange('하')
-    await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS)
+    changeLiveInput(handlers, '하')
+    await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS)
     await vi.waitFor(() => expect(sent).toEqual(['하']))
 
     // When
-    handlers.handleLiveInputChange('한')
-    await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS)
+    changeLiveInput(handlers, '한')
+    await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS)
 
     // Then
     await vi.waitFor(() => expect(sent).toEqual(['하', '\x7f', '한']))
@@ -152,7 +193,7 @@ describe('terminal live input commit hook', () => {
   it('Given Hangul pending text When submit is requested Then sends composed text before carriage return', async () => {
     // Given
     const { handlers, sent } = createTerminalLiveInputCommitHarness()
-    handlers.handleLiveInputChange('한')
+    changeLiveInput(handlers, '한')
 
     // When
     handlers.handleLiveInputSubmit()
@@ -175,7 +216,7 @@ describe('terminal live input commit hook', () => {
   it('Given a rejected held-text send When submit is requested Then suppresses the carriage return', async () => {
     // Given
     const { handlers, sent } = createTerminalLiveInputCommitHarness({ sendResult: false })
-    handlers.handleLiveInputChange('한')
+    changeLiveInput(handlers, '한')
 
     // When
     handlers.handleLiveInputSubmit()
@@ -191,8 +232,8 @@ describe('terminal live input commit hook', () => {
     const { handlers, sent } = createTerminalLiveInputCommitHarness()
 
     // When
-    handlers.handleLiveInputChange('a')
-    handlers.handleLiveInputChange('ab')
+    changeLiveInput(handlers, 'a')
+    changeLiveInput(handlers, 'ab')
 
     // Then
     await vi.waitFor(() => expect(sent).toEqual(['a', 'b']))
@@ -203,7 +244,7 @@ describe('terminal live input commit hook', () => {
     const { captures, handlers, sent } = createTerminalLiveInputCommitHarness()
 
     // When: iOS smart punctuation rewrote "--" into an en dash inside the field
-    handlers.handleLiveInputChange('a–')
+    changeLiveInput(handlers, 'a–')
 
     // Then: writing "a--" back into the controlled value would kill an active
     // iOS dictation/IME session, so the capture must keep what iOS produced
@@ -216,8 +257,8 @@ describe('terminal live input commit hook', () => {
     const { captures, handlers, sent } = createTerminalLiveInputCommitHarness()
 
     // When: iOS dictation replaces its hypothesis as recognition refines
-    handlers.handleLiveInputChange('high')
-    handlers.handleLiveInputChange('hi there')
+    changeLiveInput(handlers, 'high')
+    changeLiveInput(handlers, 'hi there')
 
     // Then: captures only echo the field; the mirror repairs the PTY with DELs
     expect(captures).toEqual(['high', 'hi there'])
@@ -227,10 +268,10 @@ describe('terminal live input commit hook', () => {
   it('Given a trailing space after Hangul When the change arrives Then the space commits the held syllable', async () => {
     // Given
     const { handlers, sent } = createTerminalLiveInputCommitHarness()
-    handlers.handleLiveInputChange('한')
+    changeLiveInput(handlers, '한')
 
     // When
-    handlers.handleLiveInputChange('한 ')
+    changeLiveInput(handlers, '한 ')
 
     // Then
     await vi.waitFor(() => expect(sent).toEqual(['한 ']))
@@ -239,7 +280,7 @@ describe('terminal live input commit hook', () => {
   it('Given Hangul pending text When an external terminal send is requested Then flushes composed text first', async () => {
     // Given
     const { handlers, sent } = createTerminalLiveInputCommitHarness()
-    handlers.handleLiveInputChange('한')
+    changeLiveInput(handlers, '한')
 
     // When
     const flushed = await handlers.flushPendingLiveInputBeforeExternalSend('terminal-a')
@@ -252,7 +293,7 @@ describe('terminal live input commit hook', () => {
   it('Given pending text cannot be sent When an external terminal send is requested Then reports failure', async () => {
     // Given
     const { handlers, sent } = createTerminalLiveInputCommitHarness({ sendResult: false })
-    handlers.handleLiveInputChange('한')
+    changeLiveInput(handlers, '한')
 
     // When
     const flushed = await handlers.flushPendingLiveInputBeforeExternalSend('terminal-a')
@@ -267,7 +308,7 @@ describe('terminal live input commit hook', () => {
     const { handlers, sent } = createTerminalLiveInputCommitHarness()
 
     // When
-    handlers.handleLiveInputChange('你好')
+    changeLiveInput(handlers, '你好')
 
     // Then
     await vi.waitFor(() => expect(sent).toEqual(['你好']))
@@ -277,7 +318,7 @@ describe('terminal live input commit hook', () => {
     // Given
     vi.useFakeTimers()
     const { handlers, sent, unmount } = createTerminalLiveInputCommitHarness()
-    handlers.handleLiveInputChange('한')
+    changeLiveInput(handlers, '한')
 
     // When
     unmount()
@@ -290,7 +331,7 @@ describe('terminal live input commit hook', () => {
   it('Given Backspace with field text When the key arrives Then edits locally without terminal bytes', async () => {
     // Given
     const { handlers, sent } = createTerminalLiveInputCommitHarness()
-    handlers.handleLiveInputChange('한')
+    changeLiveInput(handlers, '한')
 
     // When
     handlers.handleLiveInputKeyPress({ nativeEvent: { key: 'Backspace' } })
@@ -302,7 +343,7 @@ describe('terminal live input commit hook', () => {
   it('Given Tab with a held syllable When the key arrives Then commits the syllable before the tab bytes', async () => {
     // Given
     const { handlers, sent } = createTerminalLiveInputCommitHarness()
-    handlers.handleLiveInputChange('한')
+    changeLiveInput(handlers, '한')
 
     // When
     handlers.handleLiveInputKeyPress({ nativeEvent: { key: 'Tab' } })
@@ -314,7 +355,7 @@ describe('terminal live input commit hook', () => {
   it('Given Hangul pending When the tab type lags to undefined Then keeps the composition state', async () => {
     // Given: '한' held while the active tab is still a terminal
     const { handlers, sent, setActiveSessionTabType } = createTerminalLiveInputCommitHarness()
-    handlers.handleLiveInputChange('한')
+    changeLiveInput(handlers, '한')
 
     // When: the mobile tab list momentarily yields no active tab object
     setActiveSessionTabType(undefined)
@@ -327,7 +368,7 @@ describe('terminal live input commit hook', () => {
   it('Given Hangul pending When the tab genuinely changes to non-terminal Then clears the composition state', async () => {
     // Given: '한' held while the active tab is still a terminal
     const { handlers, sent, setActiveSessionTabType } = createTerminalLiveInputCommitHarness()
-    handlers.handleLiveInputChange('한')
+    changeLiveInput(handlers, '한')
 
     // When: the active tab actually becomes a non-terminal (chat) tab
     setActiveSessionTabType('chat')
@@ -341,7 +382,7 @@ describe('terminal live input commit hook', () => {
     // Given: a stalled link — the mirror sends but the PTY never accepts (#6713 second defect)
     const { captures, handlers, sent, setConnected, setSendResult } =
       createTerminalLiveInputCommitHarness({ sendResult: false })
-    handlers.handleLiveInputChange('XYZZY')
+    changeLiveInput(handlers, 'XYZZY')
     await vi.waitFor(() => expect(sent).toEqual(['XYZZY']))
 
     // When: the outage is finally detected, then the link recovers
@@ -353,7 +394,7 @@ describe('terminal live input commit hook', () => {
     // 'XYZZY…' replayed and not DELs erasing PTY chars that never arrived
     expect(captures.at(-1)).toBe('')
     const sentBeforeRecovery = sent.length
-    handlers.handleLiveInputChange('echo CLEANLINE')
+    changeLiveInput(handlers, 'echo CLEANLINE')
     await vi.waitFor(() => expect(sent.slice(sentBeforeRecovery)).toEqual(['echo CLEANLINE']))
   })
 
@@ -363,11 +404,11 @@ describe('terminal live input commit hook', () => {
     const { handlers, sent, setConnected } = createTerminalLiveInputCommitHarness({
       sendResult: false
     })
-    handlers.handleLiveInputChange('한')
+    changeLiveInput(handlers, '한')
 
     // When
     setConnected(false)
-    await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_SYLLABLE_COMMIT_DELAY_MS)
+    await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS)
 
     // Then: the outage cleared the held text before the timer could send it
     expect(sent).toEqual([])

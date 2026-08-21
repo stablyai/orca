@@ -122,7 +122,8 @@ export function createPtyIpcSpawnDrivers(ctx: {
     statSyncMock.mockImplementation((target: string) => ({
       isDirectory: () => target !== BUNDLED_CLI_PATH,
       isFile: () => target === BUNDLED_CLI_PATH,
-      mode: 0o755
+      mode: 0o755,
+      size: 1
     }))
     if (!launcherExecutable) {
       accessSyncMock.mockImplementation((target: string) => {

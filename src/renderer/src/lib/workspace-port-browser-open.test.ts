@@ -197,7 +197,9 @@ describe('openWorkspacePortInBrowser', () => {
 
     const result = await openWorkspacePortInBrowser(args)
 
-    expect(activateAndRevealWorktreeMock).toHaveBeenCalledWith('wt-1')
+    expect(activateAndRevealWorktreeMock).toHaveBeenCalledWith('wt-1', {
+      providesInitialSurface: true
+    })
     expect(createBrowserTab).toHaveBeenCalledWith('wt-1', 'http://127.0.0.1:5199', {
       activate: true
     })

@@ -22,6 +22,24 @@ function identity(bytes: Buffer) {
 }
 
 describe('SkillUploadSessionService', () => {
+  it('retries initialization after a transient failure', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-session-'))
+    roots.push(root)
+    const uploads = join(root, 'uploads')
+    const initializeRoot = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValueOnce(new Error('transient-init-failure'))
+      .mockImplementationOnce(async () => {
+        await mkdir(uploads, { recursive: true })
+      })
+    const service = new SkillUploadSessionService(uploads, { initializeRoot })
+    const request = { package: identity(Buffer.from('new package')) }
+
+    await expect(service.begin(request)).rejects.toThrow('transient-init-failure')
+    await expect(service.begin(request)).resolves.toMatchObject({ acknowledgedOffset: 0 })
+    expect(initializeRoot).toHaveBeenCalledTimes(2)
+  })
+
   it('removes abandoned staging bytes when a runtime starts a fresh service', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-session-'))
     roots.push(root)

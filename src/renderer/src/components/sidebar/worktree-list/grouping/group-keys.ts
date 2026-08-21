@@ -2,6 +2,7 @@ import { CircleX, FolderTree, List, Pin } from 'lucide-react'
 import type React from 'react'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { branchName } from '../../../../lib/git-utils'
 import {
   ConductorDoneIcon,
@@ -19,6 +20,12 @@ import { translate } from '@/i18n/i18n'
 export type PRGroupKey = 'done' | 'in-review' | 'in-progress' | 'closed'
 
 export const PR_GROUP_ORDER: PRGroupKey[] = ['done', 'in-review', 'in-progress', 'closed']
+
+/** Section key for a PR lane. Shared so worktree and folder-workspace bucketing
+ *  cannot drift onto different prefixes. */
+export function getPRLaneKey(prGroup: PRGroupKey): string {
+  return `pr:${prGroup}`
+}
 
 export const PR_GROUP_META: Record<
   PRGroupKey,
@@ -91,6 +98,10 @@ export const LINEAGE_GROUP_PREFIX = 'lineage:'
 
 export function getLineageGroupKey(worktreeId: string): string {
   return `${LINEAGE_GROUP_PREFIX}${worktreeId}`
+}
+
+export function getWorktreeLineageGroupKey(worktree: Pick<Worktree, 'id' | 'hostId'>): string {
+  return getLineageGroupKey(worktree.hostId ? getWorktreeHostIdentity(worktree) : worktree.id)
 }
 
 export function getPRGroupKey(

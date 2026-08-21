@@ -22,6 +22,7 @@ type TerminalHostSessionCreateDependencies = {
   onDeadSessionRemoved: (sessionId: string) => void
   onSessionCreated: (sessionId: string, generation: string | undefined, isAlive: boolean) => void
   onSessionExit: (sessionId: string, generation: string | undefined) => void
+  reportReadinessEvent?: (event: string, details: Record<string, unknown>) => void
 }
 
 export async function createOrAttachTerminalSession(
@@ -94,7 +95,8 @@ async function spawnAndPublishSession(
     shellOverride: opts.shellOverride,
     terminalWindowsWslDistro: opts.terminalWindowsWslDistro,
     terminalWindowsPowerShellImplementation: opts.terminalWindowsPowerShellImplementation,
-    isCanceled: opts.isCanceled
+    isCanceled: opts.isCanceled,
+    ...(opts.cancelSignal ? { cancelSignal: opts.cancelSignal } : {})
   })
 
   // Why: a fallback shell does not emit the preferred shell's ready marker;
@@ -120,6 +122,7 @@ async function spawnAndPublishSession(
     ...(opts.startupIngress ? { startupIngress: opts.startupIngress } : {}),
     wslDistro,
     onExit: () => deps.onSessionExit(opts.sessionId, opts.agentSessionGeneration),
+    ...(deps.reportReadinessEvent ? { reportReadinessEvent: deps.reportReadinessEvent } : {}),
     ...(opts.shellReadyTimeoutMs !== undefined
       ? { shellReadyTimeoutMs: opts.shellReadyTimeoutMs }
       : {})

@@ -401,9 +401,11 @@ test.describe('Source Control AI PR generation worktree switching', () => {
     await installDelayedCommitMessageGenerator(orcaPage, generatorScriptPath, callLogPath)
 
     await openSourceControl(orcaPage, commitWorktreeId)
-    await expect(orcaPage.getByText('e2e-commit-message-generation.txt')).toBeVisible({
-      timeout: 10_000
-    })
+    await expect(
+      orcaPage
+        .getByTestId('source-control-entry')
+        .getByText('e2e-commit-message-generation.txt', { exact: true })
+    ).toBeVisible({ timeout: 10_000 })
     const generate = orcaPage.getByRole('button', {
       name: 'Generate commit message with AI'
     })

@@ -109,7 +109,10 @@ describe('CodexRuntimeHomeService', () => {
     expect(service.beginHostSystemDefaultSessionMigrationLaunch(getRuntimeCodexHomePath())).toBe(
       true
     )
-    expect(service.prepareForRateLimitFetch()).toBe(getRuntimeCodexHomePath())
+    expect(service.prepareForRateLimitFetch()).toEqual({
+      kind: 'ready',
+      codexHomePath: getRuntimeCodexHomePath()
+    })
     expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([getRuntimeCodexHomePath()])
     expect(existsSync(getRuntimeCodexHomePath())).toBe(true)
   })
@@ -176,13 +179,19 @@ describe('CodexRuntimeHomeService', () => {
     try {
       // Background fetchers prefer ambient CODEX_HOME when passed null, so an
       // explicit path proves nested Orca launches cannot poll the managed home.
-      expect(service.prepareForRateLimitFetch()).toBe(getSystemCodexHomePath())
+      expect(service.prepareForRateLimitFetch()).toEqual({
+        kind: 'ready',
+        codexHomePath: getSystemCodexHomePath()
+      })
       process.env.CODEX_HOME = getSystemCodexHomePath()
       delete process.env.ORCA_CODEX_HOME
       expect(service.isHostSystemDefaultRealHome()).toBe(true)
       process.env.CODEX_HOME = join(testState.fakeHomeDir, 'user-owned-codex-home')
       expect(service.isHostSystemDefaultRealHome()).toBe(false)
-      expect(service.prepareForRateLimitFetch()).toBe(getRuntimeCodexHomePath())
+      expect(service.prepareForRateLimitFetch()).toEqual({
+        kind: 'ready',
+        codexHomePath: getRuntimeCodexHomePath()
+      })
     } finally {
       if (previousCodexHome === undefined) {
         delete process.env.CODEX_HOME
@@ -242,7 +251,10 @@ describe('CodexRuntimeHomeService', () => {
 
       service.reconcileLegacySharedHomeForRetainedPanes()
       expect(service.prepareForCodexLaunch()).toBeNull()
-      expect(service.prepareForRateLimitFetch()).toBe(getSystemCodexHomePath())
+      expect(service.prepareForRateLimitFetch()).toEqual({
+        kind: 'ready',
+        codexHomePath: getSystemCodexHomePath()
+      })
 
       expect(syncLegacySharedCodexConfigForRetainedPanes).not.toHaveBeenCalled()
       expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(retainedAuth)

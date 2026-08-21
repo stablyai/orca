@@ -204,6 +204,34 @@ describe('SkillInstallDialog', () => {
     expect(request.providers).toContain('droid')
   })
 
+  it('pins installation to the version shown for review', async () => {
+    const skills = installApi(
+      vi.fn().mockResolvedValue({
+        status: 'ok',
+        value: {
+          name: 'private-skill',
+          packageDigest: DIGEST,
+          destinationIdentity: 'global:local',
+          currentState: 'missing',
+          providers: []
+        }
+      })
+    )
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { skills, preflight: detectionApi(['codex']) }
+    })
+    render(<SkillInstallDialog open onOpenChange={() => undefined} />)
+    await inspectSkill()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Install skill' }))
+
+    await waitFor(() => expect(skills.installShare).toHaveBeenCalled())
+    expect(skills.installShare).toHaveBeenCalledWith(
+      expect.objectContaining({ shareId: 'share_1', versionId: 'ver_1' })
+    )
+  })
+
   // Why: checking agents the machine does not have would write placements no
   // agent reads, and make the user opt out of tools they never installed.
   it('starts from the agents the target machine has', async () => {
@@ -253,6 +281,8 @@ describe('SkillInstallDialog', () => {
     const description = screen.getByText(sharedVersion.description)
     expect(description.className).toContain('line-clamp-1')
     expect(description.className).toContain('group-data-[state=open]/row:line-clamp-none')
+    expect(description.className).toContain('group-data-[state=open]/row:max-h-none')
+    expect(description.className).not.toContain('group-data-[state=open]/row:max-h-40')
   })
 
   // Why: "view the full skill contents" is the point of the row — the file list
@@ -293,7 +323,7 @@ describe('SkillInstallDialog', () => {
     expect(screen.queryByText(char.repeat(64))).toBeNull()
     expect(screen.queryByText('Immutable version')).toBeNull()
     expect(screen.queryByText('0 scripts')).toBeNull()
-    expect(screen.getAllByText(/Instructions only/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/^1 file$/).length).toBeGreaterThan(0)
   })
 
   it('warns about supporting files without blocking installation', async () => {
@@ -321,6 +351,8 @@ describe('SkillInstallDialog', () => {
     render(<SkillInstallDialog open onOpenChange={() => undefined} />)
 
     await inspectSkill()
+    expect(screen.getByText(/^2 files$/)).toBeTruthy()
+    expect(screen.queryByText(/supporting$/, { selector: 'span' })).toBeNull()
     expect(screen.getByText('Includes supporting files')).toBeTruthy()
     expect(screen.getByText(/include 1 file beyond SKILL.md/)).toBeTruthy()
     expect(screen.queryByRole('checkbox', { name: /I trust the sender/ })).toBeNull()
@@ -475,7 +507,7 @@ describe('SkillInstallDialog', () => {
 
     await screen.findByText('Skills installed and verified.')
     expect(skills.installBundleShare).toHaveBeenCalledWith(
-      expect.objectContaining({ selectedSkillIds: ['skill-beta'] })
+      expect.objectContaining({ selectedSkillIds: ['skill-beta'], versionId: 'ver_1' })
     )
   })
 

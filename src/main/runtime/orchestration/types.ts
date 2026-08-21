@@ -1,3 +1,4 @@
+import type { TerminalExitCause } from '../../../shared/terminal-exit-cause'
 export const MESSAGE_TYPES = [
   'status',
   'dispatch',
@@ -274,6 +275,9 @@ export type DispatchContextRow = {
   status: DispatchStatus
   failure_count: number
   last_failure: string | null
+  /** Why the dispatch ended, when Orca could establish it — `operator_close`,
+   *  `signaled`, `exited`, `unknown`. Null on rows written before STA-4603. */
+  termination_reason: TerminalExitCause['kind'] | null
   dispatched_at: string | null
   completed_at: string | null
   created_at: string

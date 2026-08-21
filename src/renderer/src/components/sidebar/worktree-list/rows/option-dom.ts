@@ -21,7 +21,16 @@ export function markSidebarWorktreeActiveImmediately(
   primaryRowKey?: string
 ): void {
   const sidebar = document.querySelector<HTMLElement>('[data-worktree-sidebar]')
-  const nextOptions = getMountedWorktreeOptions(worktreeId, sidebar)
+  const matchingIdOptions = getMountedWorktreeOptions(worktreeId, sidebar)
+  const primaryOption = primaryRowKey
+    ? matchingIdOptions.find((option) => option.dataset.worktreeRowKey === primaryRowKey)
+    : matchingIdOptions[0]
+  const primaryHostIdentity = primaryOption?.dataset.worktreeHostIdentity
+  const nextOptions = primaryHostIdentity
+    ? matchingIdOptions.filter(
+        (option) => option.dataset.worktreeHostIdentity === primaryHostIdentity
+      )
+    : matchingIdOptions
   const nextOption = nextOptions[0]
   if (!nextOption) {
     return

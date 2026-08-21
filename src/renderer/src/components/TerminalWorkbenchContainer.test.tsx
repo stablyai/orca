@@ -20,7 +20,7 @@ vi.mock('../store', () => ({
 // the wiring under test unproven, which is the whole point of this file.
 const { setDriverForBrowserPage } = await import('../lib/pane-manager/browser-mobile-driver-state')
 const { acquireBrowserAutomationVisibility, releaseBrowserAutomationVisibility } =
-  await import('./browser-pane/browser-automation-visibility')
+  await import('./browser-pane/host-guest/browser-automation-visibility')
 const { TerminalWorkbenchContainer } = await import('./TerminalWorkbenchContainer')
 
 const PAGE_ID = 'page-1'

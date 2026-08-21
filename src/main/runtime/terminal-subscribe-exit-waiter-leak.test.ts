@@ -4,8 +4,10 @@
  * Without an AbortSignal that waiter is only removed on real PTY exit, so for a
  * never-exiting agent terminal every remote/mobile reconnect and tab-switch
  * re-subscribe leaked a waiter (and the closed-connection handler context it
- * captures). The subscribe paths now pass a signal — this pins that a signalled
- * exit-waiter is released when the signal aborts, and an unsignalled one is not.
+ * captures). The subscribe paths now observe pty exit directly instead, so this
+ * pins the runtime contract the other waitForTerminal callers still rely on: a
+ * signalled exit-waiter is released when the signal aborts, an unsignalled one
+ * is not.
  */
 import { describe, expect, it } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'

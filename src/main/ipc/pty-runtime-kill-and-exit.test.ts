@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { spawnMock } from './pty-ipc-mock-registry'
 import { makeDeferred } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
+import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../shared/execution-host'
 import {
   registerPtyHandlers,
   registerSshPtyProvider,
@@ -102,11 +103,16 @@ describe('registerPtyHandlers', () => {
     })
     registerSshPtyProvider('ssh-a', { listProcesses: sshAList } as never)
     registerSshPtyProvider('ssh-b', { listProcesses: sshBList } as never)
-    const runtime = { setPtyController: vi.fn() }
+    setPtyOwnership('ssh-b-pty', 'ssh-b')
+    const runtime = {
+      setPtyController: vi.fn(),
+      markPtyLivenessUnverifiable: vi.fn()
+    }
     handlers.clear()
     registerPtyHandlers(mainWindow as never, runtime as never)
     const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
       listProcesses(connectionId?: string | null): Promise<{ id: string }[]>
+      listProcessesWithHostScope(): Promise<{ processes: { id: string }[]; hostIds: string[] }>
     }
 
     await expect(controller.listProcesses(null)).resolves.toEqual([
@@ -120,7 +126,25 @@ describe('registerPtyHandlers', () => {
     expect(sshAList).toHaveBeenCalledOnce()
     expect(sshBList).not.toHaveBeenCalled()
 
-    await expect(controller.listProcesses()).rejects.toThrow('ssh-b unavailable')
+    // STA-517: the aggregate used to propagate ssh-b's failure, which cost the runtime the
+    // whole liveness inventory — so no PTY was ever proven dead and mobile kept every
+    // retained pane "active". One unreachable relay now drops out of the answer instead.
+    await expect(controller.listProcesses()).resolves.toEqual([
+      { id: 'local-pty', title: 'Local', cwd: '/local' },
+      { id: 'ssh-a-pty' }
+    ])
+    expect(sshBList).toHaveBeenCalledOnce()
+    expect(runtime.markPtyLivenessUnverifiable).toHaveBeenCalledWith(
+      'ssh-b-pty',
+      'ssh-b unavailable'
+    )
+
+    await expect(controller.listProcessesWithHostScope()).resolves.toEqual({
+      processes: [{ id: 'local-pty', title: 'Local', cwd: '/local' }, { id: 'ssh-a-pty' }],
+      hostIds: [LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId('ssh-a')]
+    })
+    expect(sshBList).toHaveBeenCalledTimes(2)
+    deletePtyOwnership('ssh-b-pty')
   })
   it('returns unavailable runtime confirmation for unsupported or missing providers', async () => {
     registerSshPtyProvider('ssh-1', {} as never)
@@ -263,7 +287,7 @@ describe('registerPtyHandlers', () => {
     await handlers.get('pty:kill')!(null, { id: 'local-pty' })
 
     expect(runtime.onPtyExit).toHaveBeenCalledTimes(1)
-    expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0, undefined)
+    expect(runtime.onPtyExit).toHaveBeenCalledWith('local-pty', 0, undefined, undefined)
     expect(mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')).toEqual(
       [['pty:exit', { id: 'local-pty', code: 0 }]]
     )
@@ -505,7 +529,7 @@ describe('registerPtyHandlers', () => {
         seq: 13,
         rawLength: 'daemon output'.length
       })
-      expect(runtime.onPtyExit).toHaveBeenCalledWith(result.id, 0, undefined)
+      expect(runtime.onPtyExit).toHaveBeenCalledWith(result.id, 0, undefined, undefined)
       expect(mainWindow.webContents.send).toHaveBeenCalledWith('pty:exit', {
         id: result.id,
         code: 0

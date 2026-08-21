@@ -90,6 +90,10 @@ class FakeRelaySession extends FakeSession implements MobileRelayRpcSession {
 
 class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
   private path: MobileConnectionPath
+  private recoveryPath: MobileConnectionPath | null = null
+  private recoveryAttempt = 0
+  private generation = 1
+  private readonly pathListeners = new Set<() => void>()
 
   constructor(state: ConnectionState, path: MobileConnectionPath) {
     super(state)
@@ -102,10 +106,63 @@ class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
       throw new Error(`replacement session ${session.getState()}`)
     }
     this.path = path
+    this.recoveryPath = null
+    this.recoveryAttempt = 0
+    this.generation += 1
+    // Connected-state publication carries the migration cleanup.
     this.publishState('connected')
   })
   suspendActiveSession = vi.fn(() => this.publishState('disconnected'))
+  getReconnectAttempt = () => (this.getPendingPath() === 'relay' ? this.recoveryAttempt : 0)
   getActivePath = () => this.path
+  getPendingPath = () => (this.getState() === 'connected' ? null : this.recoveryPath)
+  setRecoveryPath = vi.fn((path: MobileConnectionPath | null, attempt?: number) => {
+    const previous = this.getPendingPath()
+    const previousAttempt = this.getReconnectAttempt()
+    this.recoveryPath = path
+    if (path === null) {
+      this.recoveryAttempt = 0
+    } else if (attempt !== undefined) {
+      this.recoveryAttempt = attempt
+    }
+    if (previous !== this.getPendingPath() || previousAttempt !== this.getReconnectAttempt()) {
+      for (const listener of this.pathListeners) {
+        listener()
+      }
+    }
+  })
+  private pairingRejected = false
+  setPairingRejected = vi.fn((rejected: boolean) => {
+    if (this.pairingRejected === rejected) {
+      return
+    }
+    this.pairingRejected = rejected
+    for (const listener of this.pathListeners) {
+      listener()
+    }
+  })
+  isPairingRejected = () => this.pairingRejected
+  // Mirrors LogicalClientConnectionPath.clearAfterConnected.
+  publishState(state: ConnectionState): void {
+    if (state === 'connected') {
+      this.pairingRejected = false
+    }
+    super.publishState(state)
+  }
+  setRecoveryAttempt = vi.fn((attempt: number) => {
+    const previous = this.getReconnectAttempt()
+    this.recoveryAttempt = attempt
+    if (previous !== this.getReconnectAttempt()) {
+      for (const listener of this.pathListeners) {
+        listener()
+      }
+    }
+  })
+  onConnectionPathChange = vi.fn((listener: () => void) => {
+    this.pathListeners.add(listener)
+    return () => this.pathListeners.delete(listener)
+  })
+  getGeneration = () => this.generation
 }
 
 const relay = {
@@ -237,12 +294,15 @@ describe('relay runtime recovery without direct connectivity', () => {
     await supervisor.start()
     await vi.advanceTimersByTimeAsync(0)
     expect(deps.openRelay).not.toHaveBeenCalled()
+    expect(logical.setRecoveryPath).not.toHaveBeenCalledWith('relay')
+    expect(logical.getPendingPath()).toBeNull()
 
     readBundle.mockImplementation(async () => bundleWith(3, Number.MAX_SAFE_INTEGER))
     // Pre-fix, an expired bundle produced a silent no-op with nothing scheduled.
     await vi.advanceTimersByTimeAsync(60_000)
 
     expect(deps.openRelay).toHaveBeenCalledOnce()
+    expect(logical.setRecoveryPath).toHaveBeenCalledWith('relay', 0)
     expect(logical.getActivePath()).toBe('relay')
     supervisor.stop()
   })

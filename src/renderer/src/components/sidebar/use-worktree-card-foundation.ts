@@ -17,6 +17,7 @@ import {
   selectRuntimeAwareSshTargetRemoved
 } from '@/store/slices/runtime-environment-ssh'
 import { EMPTY_WORKSPACE_PORTS, type WorktreeCardProps } from './worktree-card-model'
+import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 
 export function useWorktreeCardFoundation({
   worktree,
@@ -122,7 +123,9 @@ export function useWorktreeCardFoundation({
     ]
   )
 
-  const deleteState = useAppStore((s) => s.deleteStateByWorktreeId[worktree.id])
+  const deleteState = useAppStore((s) => {
+    return getDeleteStateForWorktreeHost(worktree, s.deleteStateByWorktreeId)
+  })
   const conflictOperation = useAppStore((s) => s.gitConflictOperationByWorktree[worktree.id])
   const remoteBranchConflict = useAppStore((s) => s.remoteBranchConflictByWorktreeId[worktree.id])
   const workspacePorts = useAppStore(

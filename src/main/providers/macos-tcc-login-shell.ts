@@ -318,6 +318,20 @@ export async function probeMacosLoginSessionAlive(
  * No-op off macOS, when already wrapped, when disabled via {@link DISABLE_ENV_VAR},
  * or when the login(1) PAM preflight rejects this process's user.
  */
+/**
+ * Whether a PTY spawned on `file` reports its own child's exit status.
+ *
+ * login(1) forks the shell, waits, then exits with its own status — it forwards
+ * neither the shell's exit code nor its signal. Proved with node-pty: a raw
+ * `sh -c 'exit 42'` reports `{exitCode: 42}` and a self-SIGKILL reports
+ * `{signal: 9}`, while the same commands behind this wrapper both report
+ * `{exitCode: 0, signal: 0}`. Callers must not read a status from a wrapped
+ * spawn — say `unknown` instead (STA-4536).
+ */
+export function hostReportsChildExitStatus(file: string): boolean {
+  return file !== MACOS_LOGIN_PATH
+}
+
 export function wrapShellSpawnForMacosTccAttribution(
   file: string,
   args: string[],
