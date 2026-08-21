@@ -79,4 +79,11 @@ describe('palette repo and current-worktree resolution', () => {
 
     expect(resolvePaletteWorktree(index, worktree.id, 'runtime:missing-host')).toBeUndefined()
   })
+
+  it('resolves a hostless legacy worktree for a local-owned tab', () => {
+    const localWorktree = { ...worktree, hostId: undefined }
+    const index = buildPaletteWorktreeIndex([localWorktree])
+
+    expect(resolvePaletteWorktree(index, worktree.id, 'local')).toBe(localWorktree)
+  })
 })

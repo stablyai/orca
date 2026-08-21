@@ -46,9 +46,15 @@ export function resolvePaletteWorktree<T extends PaletteWorktreeIdentity>(
   worktreeId: string,
   executionHostId: ExecutionHostId | undefined
 ): T | undefined {
-  return executionHostId
-    ? index.byHostIdentity.get(composeWorktreeHostIdentity(executionHostId, worktreeId))
-    : index.byBareId.get(worktreeId)
+  if (!executionHostId) {
+    return index.byBareId.get(worktreeId)
+  }
+  return (
+    index.byHostIdentity.get(composeWorktreeHostIdentity(executionHostId, worktreeId)) ??
+    (executionHostId === LOCAL_EXECUTION_HOST_ID
+      ? index.byHostIdentity.get(composeWorktreeHostIdentity(undefined, worktreeId))
+      : undefined)
+  )
 }
 
 /** Resolve the repo that owns a worktree, preserving host collisions. */

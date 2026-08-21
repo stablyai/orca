@@ -31,6 +31,13 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
   try {
     client = await launchPairedElectronClient(offer, testInfo, 'Cmd-J host-qualified tabs')
     const page = client.page
+    await page.evaluate(() => {
+      window.localStorage.setItem('orca.browser.markup-draw-hint-seen', 'true')
+    })
+    const drawHintDismiss = page.getByRole('button', { name: 'Got it', exact: true })
+    if (await drawHintDismiss.isVisible()) {
+      await drawHintDismiss.click()
+    }
     const remoteHostId = `runtime:${encodeURIComponent(client.environmentId)}`
     await expect
       .poll(
@@ -176,7 +183,9 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
           },
           browserPagesByWorkspace: {
             ...state.browserPagesByWorkspace,
-            [remoteBrowser.id]: [{ ...remotePage, title: 'Remote browser proof' }],
+            [remoteBrowser.id]: [
+              { ...remotePage, url: 'data:text/html,', title: 'Remote browser proof' }
+            ],
             'browser-local': [
               {
                 id: 'page-local',
