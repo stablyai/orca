@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { Layers } from 'lucide-react'
 import {
   Select,
@@ -23,9 +24,10 @@ export function AddRepoGroupSelectorSlot({
   selectedGroupId,
   onGroupChange
 }: AddRepoGroupSelectorSlotProps): React.JSX.Element {
+  const id = useId()
   return (
     <div className="space-y-1">
-      <Label className="text-[11px] text-muted-foreground">
+      <Label htmlFor={id} className="text-[11px] text-muted-foreground">
         <Layers className="mr-1 inline size-3" />
         {translate('components.sidebar.addRepo.groupSelectorLabel', 'Add to group (optional)')}
       </Label>
@@ -33,7 +35,7 @@ export function AddRepoGroupSelectorSlot({
         value={selectedGroupId ?? NO_GROUP_VALUE}
         onValueChange={(value) => onGroupChange(value === NO_GROUP_VALUE ? null : value)}
       >
-        <SelectTrigger size="sm" className="w-full text-xs">
+        <SelectTrigger id={id} size="sm" className="w-full text-xs">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

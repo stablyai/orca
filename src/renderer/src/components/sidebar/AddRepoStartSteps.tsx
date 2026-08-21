@@ -129,6 +129,12 @@ export function AddRepoLocalStartStep({
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
       return
     }
+    if (
+      !(event.target instanceof HTMLElement) ||
+      !event.target.closest('button[data-add-repo-action]')
+    ) {
+      return
+    }
     const buttons = Array.from(
       actionsRef.current?.querySelectorAll<HTMLButtonElement>('button[data-add-repo-action]') ?? []
     )

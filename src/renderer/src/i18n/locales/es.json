@@ -14527,7 +14527,8 @@
       "projectGroups": {
         "newGroupLabel": "Nuevo grupo",
         "createDialogTitle": "Nuevo grupo de proyectos",
-        "createDialogDescription": "Crea un grupo para organizar tus proyectos en la barra lateral."
+        "createDialogDescription": "Crea un grupo para organizar tus proyectos en la barra lateral.",
+        "createDialogConfirmLabel": "Crear"
       },
       "addRepo": {
         "groupSelectorLabel": "Añadir al grupo (opcional)",

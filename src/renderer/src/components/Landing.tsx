@@ -331,7 +331,10 @@ export default function Landing(): React.JSX.Element {
               'Create a group to organize your projects in the sidebar.'
             )}
             initialName=""
-            confirmLabel="Create"
+            confirmLabel={translate(
+              'components.sidebar.projectGroups.createDialogConfirmLabel',
+              'Create'
+            )}
             onOpenChange={setCreateGroupDialogOpen}
             onSubmit={async (name) => {
               await createProjectGroup(name)

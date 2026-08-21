@@ -16267,7 +16267,8 @@
       "projectGroups": {
         "newGroupLabel": "New Group",
         "createDialogTitle": "New Project Group",
-        "createDialogDescription": "Create a group to organize your projects in the sidebar."
+        "createDialogDescription": "Create a group to organize your projects in the sidebar.",
+        "createDialogConfirmLabel": "Create"
       },
       "addRepo": {
         "groupSelectorLabel": "Add to group (optional)",
