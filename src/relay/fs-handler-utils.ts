@@ -38,10 +38,10 @@ export const BINARY_PROBE_BYTES = 8192
 export const SEARCH_TIMEOUT_MS = SHARED_SEARCH_TIMEOUT_MS
 export const DEFAULT_MAX_RESULTS = 2000
 
-export const IMAGE_MIME_TYPES: Record<string, string> = {
-  ...IMAGE_FILE_MIME_TYPES,
-  '.pdf': 'application/pdf'
-}
+// Why: this const is image-only because the only consumer (terminal-artifact
+// image MIME) wants image data, not PDF or office binaries. File-read paths
+// must use PREVIEWABLE_BINARY_MIME_TYPES so .docx/.xlsx reach the renderer.
+export const IMAGE_MIME_TYPES = IMAGE_FILE_MIME_TYPES
 
 // ─── Binary detection ────────────────────────────────────────────────
 

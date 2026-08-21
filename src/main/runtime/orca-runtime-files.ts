@@ -36,6 +36,13 @@ import {
 } from '../../shared/remote-rpc-content-budget'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { sortDirEntries } from '../../shared/file-name-sort'
+import { PREVIEWABLE_BINARY_MIME_TYPES } from '../../shared/previewable-binary-mime-types'
+
+// Why: runtime host exposes the same whitelist as local IPC and the SSH relay
+// so a remote worktree preview of a .docx does not silently fall back to
+// "Binary file — cannot display". Re-exported for callers that already import
+// the runtime const; new code should import from the shared module directly.
+export const RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES = PREVIEWABLE_BINARY_MIME_TYPES
 import type {
   RuntimeFileListResult,
   RuntimeFileOpenResult,
@@ -256,20 +263,6 @@ function isMobilePreviewableImagePath(relativePath: string): boolean {
     return false
   }
   return MOBILE_PREVIEWABLE_IMAGE_EXTENSIONS.has(basename.slice(dotIndex).toLowerCase())
-}
-
-export const RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.svg': 'image/svg+xml',
-  '.webp': 'image/webp',
-  '.bmp': 'image/bmp',
-  '.ico': 'image/x-icon',
-  '.pdf': 'application/pdf',
-  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 }
 
 function trackRuntimeFileWatcherUnsubscribe(

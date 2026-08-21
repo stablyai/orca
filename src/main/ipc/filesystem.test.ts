@@ -363,6 +363,16 @@ describe('registerFilesystemHandlers', () => {
       ext: 'svg',
       mime: 'image/svg+xml',
       data: Array.from(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" />'))
+    },
+    {
+      ext: 'docx',
+      mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      data: [0x50, 0x4b, 0x03, 0x04, 0x00]
+    },
+    {
+      ext: 'xlsx',
+      mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      data: [0x50, 0x4b, 0x03, 0x04, 0x00]
     }
   ])('returns base64 content for supported $ext binaries', async ({ ext, mime, data }) => {
     const buf = Buffer.from(data)
