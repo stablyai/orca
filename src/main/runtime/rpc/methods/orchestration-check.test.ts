@@ -214,6 +214,39 @@ describe('orchestration RPC methods', () => {
       ).rejects.toMatchObject({ code: 'waiter_exists' })
     })
 
+    it('names sibling-run unread instead of returning a silent empty check', async () => {
+      setup()
+      const stale = db.createRun({
+        objective: 'Stale counsel run',
+        coordinatorHandle: 'term_coord',
+        coordinatorPaneKey: 'tab_stale:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+      })
+      db.insertMessage({
+        from: 'term_worker',
+        to: `run:${stale.id}`,
+        subject: 'Finished on the old run',
+        type: 'worker_done',
+        runId: stale.id
+      })
+
+      const result = (await call('orchestration.check', {
+        terminal: 'term_coord',
+        peek: true
+      })) as {
+        runId: string
+        count: number
+        messages: unknown[]
+        crossRunUnread?: { runId: string; count: number }[]
+      }
+
+      expect(result).toMatchObject({
+        runId: activeRunId,
+        count: 0,
+        messages: [],
+        crossRunUnread: [{ runId: stale.id, count: 1 }]
+      })
+    })
+
     it('rejects stale Delivery acknowledgment without consuming queued mail', async () => {
       setup()
       db.insertMessage({

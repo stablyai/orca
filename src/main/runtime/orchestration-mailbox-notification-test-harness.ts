@@ -69,6 +69,7 @@ export type MailboxCheckResult = {
   count: number
   messages: unknown[]
   acknowledged?: string | null
+  crossRunUnread?: { runId: string; count: number }[]
 }
 
 export type MailboxCheckOptions = {

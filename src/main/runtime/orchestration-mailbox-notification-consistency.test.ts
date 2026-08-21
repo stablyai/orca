@@ -70,6 +70,33 @@ describe('orchestration notification mailbox consistency', () => {
     db.close()
   })
 
+  it('does not nag a rebound pane about unread on the previous Run', async () => {
+    vi.useFakeTimers()
+    const db = createDatabase('orca-mailbox-cross-run-nag-')
+    const harness = createRuntime(db)
+    const runB = createBoundRun(db, 'Run B')
+    db.insertMessage({
+      from: 'term_worker',
+      to: `run:${runB.id}`,
+      subject: 'Finished on B',
+      type: 'worker_done',
+      runId: runB.id
+    })
+    const runA = createBoundRun(db, 'Run A')
+
+    await driveToLiveIdle(harness.runtime)
+    const checked = await checkBoundMailbox(harness.runtime)
+
+    expect(pointerCount(harness.write)).toBe(0)
+    expect(checked).toMatchObject({
+      runId: runA.id,
+      count: 0,
+      messages: [],
+      crossRunUnread: [{ runId: runB.id, count: 1 }]
+    })
+    db.close()
+  })
+
   it('does not point unbound direct mail that a later Run binding would hide', async () => {
     vi.useFakeTimers()
     const db = createDatabase('orca-mailbox-unbound-bind-race-')

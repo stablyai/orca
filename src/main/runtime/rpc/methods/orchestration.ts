@@ -28,6 +28,7 @@ import {
   type SendRecipientWarning
 } from './orchestration-recipient-routing'
 import { resolveRunScope } from './orchestration-run-scope'
+import { listCrossRunUnread, withCrossRunUnread } from '../../orchestration/cross-run-unread'
 import { ORCHESTRATION_RUN_METHODS } from './orchestration-runs'
 import { ORCHESTRATION_WORKER_METHODS } from './orchestration-worker-methods'
 import { ORCHESTRATION_FEDERATION_METHODS } from './orchestration-federation-methods'
@@ -937,6 +938,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         })
         const generation = run.consumer_generation
         const address = `run:${run.id}`
+        const decorate = <T extends object>(result: T) =>
+          withCrossRunUnread(result, listCrossRunUnread(db, handle, run.id))
         runtime.ensureOrchestrationFederationRelay(run.id)
         await routeDirectSnapshot(run.id, handle, (throughSequence) =>
           db.routeUnreadDirectMessagesToRunMailbox(run.id, handle, throughSequence)
@@ -984,24 +987,25 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             acknowledged: acknowledged?.delivery.id ?? null
           }
           if (params.format || params.inject) {
-            return {
+            return decorate({
               ...result,
               formatted: messages.map(formatMessageBanner).join('\n\n'),
               runId: run.id
-            }
+            })
           }
-          return { ...result, runId: run.id }
+          return decorate({ ...result, runId: run.id })
         }
 
-        const peekResult = (messages: MessageRow[]) => ({
-          runId: run.id,
-          messages,
-          count: messages.length,
-          acknowledged: acknowledged?.delivery.id ?? null,
-          ...(params.format || params.inject
-            ? { formatted: messages.map(formatMessageBanner).join('\n\n') }
-            : {})
-        })
+        const peekResult = (messages: MessageRow[]) =>
+          decorate({
+            runId: run.id,
+            messages,
+            count: messages.length,
+            acknowledged: acknowledged?.delivery.id ?? null,
+            ...(params.format || params.inject
+              ? { formatted: messages.map(formatMessageBanner).join('\n\n') }
+              : {})
+          })
         const readPeek = () => db.getUnreadRunMailbox(run.id, 100, typeFilter)
         const readDelivery = (wakeTypes?: MessageType[]) =>
           db.getOrCreateRunDelivery({
@@ -1015,7 +1019,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
         let current = params.peek ? undefined : readDelivery(params.wait ? typeFilter : undefined)
         if (current) {
-          return {
+          return decorate({
             runId: run.id,
             deliveryId: current.delivery.id,
             messages: current.messages,
@@ -1028,13 +1032,13 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             ...(params.format || params.inject
               ? { formatted: current.messages.map(formatMessageBanner).join('\n\n') }
               : {})
-          }
+          })
         }
         if (!params.wait) {
           if (params.peek) {
             return peekResult([])
           }
-          return {
+          return decorate({
             runId: run.id,
             deliveryId: null,
             messages: [],
@@ -1043,7 +1047,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             timedOut: false,
             cancelled: false,
             connectionLost: false
-          }
+          })
         }
 
         const waitResult = await runtime.waitForMessage(address, {
@@ -1083,7 +1087,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           if (params.peek) {
             return { ...peekResult([]), timedOut: true, cancelled: false, connectionLost: false }
           }
-          return {
+          return decorate({
             runId: run.id,
             deliveryId: null,
             messages: [],
@@ -1092,7 +1096,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             timedOut: true,
             cancelled: false,
             connectionLost: false
-          }
+          })
         }
         if (waitResult === 'cancelled') {
           if (params.peek) {
@@ -1103,7 +1107,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
               connectionLost: signal?.aborted === true
             }
           }
-          return {
+          return decorate({
             runId: run.id,
             deliveryId: null,
             messages: [],
@@ -1112,7 +1116,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             timedOut: false,
             cancelled: true,
             connectionLost: signal?.aborted === true
-          }
+          })
         }
 
         if (params.peek) {
@@ -1125,7 +1129,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           }
         }
         current = readDelivery(typeFilter)
-        return {
+        return decorate({
           runId: run.id,
           deliveryId: current?.delivery.id ?? null,
           messages: current?.messages ?? [],
@@ -1138,7 +1142,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           ...(params.format && current
             ? { formatted: current.messages.map(formatMessageBanner).join('\n\n') }
             : {})
-        }
+        })
       }
 
       const activeDispatch = db.getActiveDispatchForIdentity(handle, paneKey ?? undefined)

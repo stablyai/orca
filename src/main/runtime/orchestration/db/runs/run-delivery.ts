@@ -235,6 +235,32 @@ export function getUnreadRunMailbox(
   )
 }
 
+// Why: bound-run check / peek only see to_handle=run:<id>. Sibling Runs that
+// still belong to this coordinator can hold unread current_delivery mail.
+export function listUnreadRunMailboxesForCoordinator(
+  this: OrchestrationDb,
+  coordinatorHandle: string,
+  exceptRunId: string
+): { runId: string; count: number }[] {
+  return (
+    this.db
+      .prepare(
+        `SELECT messages.run_id AS runId, COUNT(*) AS count
+         FROM messages
+         INNER JOIN run_coordinator_handles AS coordinator
+           ON coordinator.run_id = messages.run_id
+         WHERE coordinator.terminal_handle = ?
+           AND messages.run_id != ?
+           AND messages.read = 0
+           AND messages.delivery_contract = 'current_delivery'
+           AND messages.to_handle = 'run:' || messages.run_id
+         GROUP BY messages.run_id
+         ORDER BY messages.run_id`
+      )
+      .all(coordinatorHandle, exceptRunId) as { runId: string; count: number }[]
+  ).map((row) => ({ runId: row.runId, count: Number(row.count) }))
+}
+
 export function hasOutstandingRunDelivery(this: OrchestrationDb, runId: string): boolean {
   return Boolean(
     this.db
@@ -251,6 +277,7 @@ export type RunDeliveryMethods = {
   acknowledgeRunDelivery: typeof acknowledgeRunDelivery
   getRunMailboxHistory: typeof getRunMailboxHistory
   getUnreadRunMailbox: typeof getUnreadRunMailbox
+  listUnreadRunMailboxesForCoordinator: typeof listUnreadRunMailboxesForCoordinator
   hasOutstandingRunDelivery: typeof hasOutstandingRunDelivery
 }
 
@@ -263,6 +290,7 @@ export function attachRunDelivery(ctor: { prototype: object }): void {
     acknowledgeRunDelivery,
     getRunMailboxHistory,
     getUnreadRunMailbox,
+    listUnreadRunMailboxesForCoordinator,
     hasOutstandingRunDelivery
   })
 }
