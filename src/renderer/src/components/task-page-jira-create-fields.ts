@@ -17,6 +17,31 @@ export function jiraCreateFieldNeedsAssignableUsersPicker(field: JiraCreateField
   return isUserField && !field.allowedValues?.length
 }
 
+/**
+ * Identifier the picker should offer as a manual entry, or `null` when the list can answer.
+ *
+ * Every visible create field is required, so a user field whose assignable-user lookup came
+ * back empty (or failed) would otherwise be unfillable and block submit with no way out.
+ * Treating the typed search text as an identifier keeps that recovery path open — an
+ * accountId on Cloud, a username on Server/DC — and it still flows through
+ * `buildJiraCreateFieldValue`, so the payload shape stays correct.
+ *
+ * @param params.query Current search box text
+ * @param params.loading Whether a lookup is in flight
+ * @param params.hasResults Whether the lookup returned at least one user
+ */
+export function getJiraCreateUserFieldManualIdentifier(params: {
+  query: string
+  loading: boolean
+  hasResults: boolean
+}): string | null {
+  if (params.loading || params.hasResults) {
+    return null
+  }
+  const trimmed = params.query.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
 /** Multi-user drafts are stored as a comma-separated list of picked identifiers. */
 export function parseJiraCreateMultiUserDraft(draftValue: string): string[] {
   return splitJiraCreateArrayDraft(draftValue)

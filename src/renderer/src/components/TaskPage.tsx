@@ -470,6 +470,7 @@ import {
 import {
   buildJiraCreateCustomFields,
   getJiraCreateAllowedValueLabel,
+  getJiraCreateUserFieldManualIdentifier,
   isJiraCreateMultiUserField,
   isVisibleJiraCreateField,
   jiraCreateFieldNeedsAssignableUsersPicker,
@@ -6167,6 +6168,17 @@ export default function TaskPage(): React.JSX.Element {
     [newJiraIssueCustomFieldValues, visibleJiraCreateFields]
   )
 
+  // Why: an empty or failed user lookup must not strand a required field the form insists on.
+  const jiraCreateUserFieldManualIdentifier = useMemo(
+    () =>
+      getJiraCreateUserFieldManualIdentifier({
+        query: jiraCreateAssignableUsersQuery,
+        loading: jiraCreateAssignableUsersLoading,
+        hasResults: jiraCreateAssignableUsers.length > 0
+      }),
+    [jiraCreateAssignableUsers, jiraCreateAssignableUsersLoading, jiraCreateAssignableUsersQuery]
+  )
+
   useEffect(() => {
     if (!newJiraIssueProjectComboboxOpen) {
       return
@@ -6199,6 +6211,21 @@ export default function TaskPage(): React.JSX.Element {
       setJiraCreateAssignableUsersQuery('')
     }
   }, [])
+
+  const handleJiraCreateUserFieldSelect = useCallback(
+    (fieldKey: string, multiUserField: boolean, identifier: string) => {
+      setNewJiraIssueCustomFieldValues((prev) => ({
+        ...prev,
+        [fieldKey]: multiUserField
+          ? toggleJiraCreateMultiUserDraft(prev[fieldKey] ?? '', identifier)
+          : identifier
+      }))
+      if (!multiUserField) {
+        setJiraCreateUserFieldPopoverKey(null)
+      }
+    },
+    []
+  )
 
   const handleNewJiraIssueProjectComboboxOpenChange = useCallback(
     (open: boolean) => {
@@ -13654,55 +13681,87 @@ export default function TaskPage(): React.JSX.Element {
                                       'Loading users…'
                                     )}
                                   </div>
-                                ) : jiraCreateAssignableUsersError ? (
-                                  <div className="px-3 py-2 text-xs text-destructive">
-                                    {jiraCreateAssignableUsersError}
-                                  </div>
-                                ) : jiraCreateAssignableUsers.length === 0 ? (
-                                  <CommandEmpty>
-                                    {translate(
-                                      'auto.components.TaskPage.edf4bc4135',
-                                      'No assignable users.'
-                                    )}
-                                  </CommandEmpty>
                                 ) : (
-                                  jiraCreateAssignableUsers.map((user) => (
-                                    <CommandItem
-                                      key={user.accountId}
-                                      value={user.accountId}
-                                      onSelect={() => {
-                                        setNewJiraIssueCustomFieldValues((prev) => ({
-                                          ...prev,
-                                          [field.key]: multiUserField
-                                            ? toggleJiraCreateMultiUserDraft(
-                                                prev[field.key] ?? '',
-                                                user.accountId
-                                              )
-                                            : user.accountId
-                                        }))
-                                        if (!multiUserField) {
-                                          setJiraCreateUserFieldPopoverKey(null)
-                                        }
-                                      }}
-                                      className="items-center gap-2 px-3 py-2 text-xs"
-                                    >
-                                      <Check
-                                        className={cn(
-                                          'size-3.5 text-foreground',
-                                          (
-                                            multiUserField
-                                              ? selectedUserIds.includes(user.accountId)
-                                              : user.accountId === fieldValue
+                                  <>
+                                    {jiraCreateAssignableUsersError ? (
+                                      <div className="px-3 py-2 text-xs text-destructive">
+                                        {jiraCreateAssignableUsersError}
+                                      </div>
+                                    ) : null}
+                                    {jiraCreateAssignableUsers.map((user) => (
+                                      <CommandItem
+                                        key={user.accountId}
+                                        value={user.accountId}
+                                        onSelect={() =>
+                                          handleJiraCreateUserFieldSelect(
+                                            field.key,
+                                            multiUserField,
+                                            user.accountId
                                           )
-                                            ? 'opacity-100'
-                                            : 'opacity-0'
+                                        }
+                                        className="items-center gap-2 px-3 py-2 text-xs"
+                                      >
+                                        <Check
+                                          className={cn(
+                                            'size-3.5 text-foreground',
+                                            (
+                                              multiUserField
+                                                ? selectedUserIds.includes(user.accountId)
+                                                : user.accountId === fieldValue
+                                            )
+                                              ? 'opacity-100'
+                                              : 'opacity-0'
+                                          )}
+                                        />
+                                        <span className="min-w-0 flex-1 truncate">
+                                          {user.displayName}
+                                        </span>
+                                      </CommandItem>
+                                    ))}
+                                    {jiraCreateUserFieldManualIdentifier ? (
+                                      <CommandItem
+                                        value={`manual:${jiraCreateUserFieldManualIdentifier}`}
+                                        onSelect={() =>
+                                          handleJiraCreateUserFieldSelect(
+                                            field.key,
+                                            multiUserField,
+                                            jiraCreateUserFieldManualIdentifier
+                                          )
+                                        }
+                                        className="items-center gap-2 px-3 py-2 text-xs"
+                                      >
+                                        <Check
+                                          className={cn(
+                                            'size-3.5 text-foreground',
+                                            (
+                                              multiUserField
+                                                ? selectedUserIds.includes(
+                                                    jiraCreateUserFieldManualIdentifier
+                                                  )
+                                                : jiraCreateUserFieldManualIdentifier === fieldValue
+                                            )
+                                              ? 'opacity-100'
+                                              : 'opacity-0'
+                                          )}
+                                        />
+                                        <span className="min-w-0 flex-1 truncate">
+                                          {translate(
+                                            'jira.createIssue.userField.useTypedIdentifier',
+                                            'Use “{{value0}}”',
+                                            { value0: jiraCreateUserFieldManualIdentifier }
+                                          )}
+                                        </span>
+                                      </CommandItem>
+                                    ) : jiraCreateAssignableUsers.length === 0 &&
+                                      !jiraCreateAssignableUsersError ? (
+                                      <CommandEmpty>
+                                        {translate(
+                                          'jira.createIssue.userField.empty',
+                                          'No assignable users. Type an account ID or username to use it.'
                                         )}
-                                      />
-                                      <span className="min-w-0 flex-1 truncate">
-                                        {user.displayName}
-                                      </span>
-                                    </CommandItem>
-                                  ))
+                                      </CommandEmpty>
+                                    ) : null}
+                                  </>
                                 )}
                               </CommandList>
                             </Command>

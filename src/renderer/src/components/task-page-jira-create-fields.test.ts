@@ -6,6 +6,7 @@ import {
   findJiraCreateAllowedValue,
   getJiraCreateAllowedValueLabel,
   getJiraCreateOptionPayload,
+  getJiraCreateUserFieldManualIdentifier,
   isJiraCreateMultiUserField,
   isVisibleJiraCreateField,
   jiraCreateFieldNeedsAssignableUsersPicker,
@@ -79,6 +80,33 @@ describe('jiraCreateFieldNeedsAssignableUsersPicker', () => {
         field({ schema: { type: 'array', items: 'option' } })
       )
     ).toBe(false)
+  })
+})
+
+describe('getJiraCreateUserFieldManualIdentifier', () => {
+  it('offers the typed identifier once an empty lookup leaves nothing to pick', () => {
+    expect(
+      getJiraCreateUserFieldManualIdentifier({
+        query: ' jsmith ',
+        loading: false,
+        hasResults: false
+      })
+    ).toBe('jsmith')
+  })
+
+  it('stays out of the way while the lookup can still answer', () => {
+    expect(
+      getJiraCreateUserFieldManualIdentifier({ query: 'jsmith', loading: true, hasResults: false })
+    ).toBeNull()
+    expect(
+      getJiraCreateUserFieldManualIdentifier({ query: 'jsmith', loading: false, hasResults: true })
+    ).toBeNull()
+  })
+
+  it('needs typed text to work with', () => {
+    expect(
+      getJiraCreateUserFieldManualIdentifier({ query: '   ', loading: false, hasResults: false })
+    ).toBeNull()
   })
 })
 

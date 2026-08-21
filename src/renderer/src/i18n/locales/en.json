@@ -16435,10 +16435,12 @@
   "jira": {
     "createIssue": {
       "userField": {
+        "empty": "No assignable users. Type an account ID or username to use it.",
         "loadError": "Failed to load assignable Jira users.",
         "loading": "Loading users…",
         "placeholder": "Select {{value0}}",
-        "searchPlaceholder": "Search users..."
+        "searchPlaceholder": "Search users...",
+        "useTypedIdentifier": "Use “{{value0}}”"
       }
     }
   },
