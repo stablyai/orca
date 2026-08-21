@@ -21,6 +21,16 @@ describe('palette repo and current-worktree resolution', () => {
     ).toBe(remote)
   })
 
+  it('uses the runtime-owned repo for a paired SSH worktree', () => {
+    expect(
+      resolvePaletteRepoForWorktree(
+        { ...worktree, runtimeOwnerEnvironmentId: 'paired-host' },
+        new Map([['repo-1', local]]),
+        new Map([['runtime:paired-host\u0000repo-1', remote]])
+      )
+    ).toBe(remote)
+  })
+
   it('does not mark a same-id worktree on another host current', () => {
     expect(isPaletteCurrentWorktree(worktree, worktree.id, 'local')).toBe(false)
     expect(isPaletteCurrentWorktree(worktree, worktree.id, 'ssh:box')).toBe(true)

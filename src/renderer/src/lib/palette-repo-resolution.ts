@@ -53,14 +53,23 @@ export function resolvePaletteWorktree<T extends PaletteWorktreeIdentity>(
 
 /** Resolve the repo that owns a worktree, preserving host collisions. */
 export function resolvePaletteRepoForWorktree<T extends { displayName?: string | null }>(
-  worktree: Pick<Worktree, 'id' | 'repoId' | 'hostId'>,
+  worktree: Pick<Worktree, 'id' | 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'>,
   repoMap: ReadonlyMap<string, T>,
   repoMapByHostIdentity?: ReadonlyMap<string, T>
 ): T | undefined {
   return (
+    (worktree.runtimeOwnerEnvironmentId
+      ? repoMapByHostIdentity?.get(
+          getRepoHostIdentityForParts(
+            worktree.repoId,
+            toRuntimeExecutionHostId(worktree.runtimeOwnerEnvironmentId)
+          )
+        )
+      : undefined) ??
     repoMapByHostIdentity?.get(
       getRepoHostIdentityForParts(worktree.repoId, worktree.hostId ?? LOCAL_EXECUTION_HOST_ID)
-    ) ?? repoMap.get(worktree.repoId)
+    ) ??
+    repoMap.get(worktree.repoId)
   )
 }
 
