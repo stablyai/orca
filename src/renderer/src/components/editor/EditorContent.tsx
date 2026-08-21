@@ -3,7 +3,11 @@ import React from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { detectLanguage } from '@/lib/language-detect'
-import { joinPath } from '@/lib/path'
+import { joinPath, basename } from '@/lib/path'
+import { getConnectionId } from '@/lib/connection-context'
+import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import { selectMarkdownDocumentWorktreePath } from './markdown-document-worktree-path-selector'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { ChangesModeView } from './ChangesModeView'
@@ -43,6 +47,8 @@ const ImageDiffViewer = lazy(() => import('./ImageDiffViewer'))
 const MermaidViewer = lazy(() => import('./MermaidViewer'))
 const CsvViewer = lazy(() => import('./CsvViewer'))
 const IpynbViewer = lazy(() => import('./IpynbViewer'))
+const DocxViewer = lazy(() => import('./DocxViewer').then((m) => ({ default: m.DocxViewer })))
+const XlsxViewer = lazy(() => import('./XlsxViewer').then((m) => ({ default: m.XlsxViewer })))
 
 // Why: module-level for a stable no-op identity so read-only tabs don't rebuild callbacks each render.
 const noopEditorContentChange = (_content: string): void => {}
@@ -199,6 +205,23 @@ export function EditorContent({
     Record<string, number>
   >({})
   const md = useMarkdownDocuments(activeFile, isMarkdown, mdViewMode, handleSave)
+  const settings = useAppStore((s) => s.settings)
+  const worktreePath = useAppStore((s) =>
+    selectMarkdownDocumentWorktreePath(s, activeFile.worktreeId)
+  )
+  const connectionId = getConnectionId(activeFile.worktreeId) ?? undefined
+  // Why: viewers consume the context via JSON.stringify, so stable identity here
+  // is a perf bonus, not a correctness requirement.
+  const runtimeContext = React.useMemo<RuntimeFileOperationArgs>(
+    () => ({
+      settings: settingsForRuntimeOwner(settings, activeFile.runtimeEnvironmentId),
+      worktreeId: activeFile.worktreeId,
+      worktreePath,
+      connectionId
+    }),
+    [settings, activeFile.runtimeEnvironmentId, activeFile.worktreeId, worktreePath, connectionId]
+  )
+  const activeFileName = React.useMemo(() => basename(activeFile.filePath), [activeFile.filePath])
   const activeConflictEntry =
     worktreeEntries.find((entry) => entry.path === activeFile.relativePath) ?? null
   const selectedConflictReviewFile =
@@ -499,6 +522,34 @@ export function EditorContent({
       )
     }
     if (fc.isBinary) {
+      if (
+        fc.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ) {
+        return (
+          <div className={className}>
+            <React.Suspense fallback={<div>Loading…</div>}>
+              <DocxViewer
+                filePath={contentFile.filePath}
+                fileName={basename(contentFile.filePath)}
+                runtimeContext={runtimeContext}
+              />
+            </React.Suspense>
+          </div>
+        )
+      }
+      if (fc.mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+        return (
+          <div className={className}>
+            <React.Suspense fallback={<div>Loading…</div>}>
+              <XlsxViewer
+                filePath={contentFile.filePath}
+                fileName={basename(contentFile.filePath)}
+                runtimeContext={runtimeContext}
+              />
+            </React.Suspense>
+          </div>
+        )
+      }
       if (fc.isImage) {
         return (
           <div className={className}>
@@ -745,6 +796,30 @@ export function EditorContent({
       return <FileLoadErrorView message={fc.loadError} onRetry={() => reloadContent(activeFile)} />
     }
     if (fc.isBinary) {
+      if (
+        fc.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ) {
+        return (
+          <React.Suspense fallback={<div>Loading…</div>}>
+            <DocxViewer
+              filePath={activeFile.filePath}
+              fileName={activeFileName}
+              runtimeContext={runtimeContext}
+            />
+          </React.Suspense>
+        )
+      }
+      if (fc.mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+        return (
+          <React.Suspense fallback={<div>Loading…</div>}>
+            <XlsxViewer
+              filePath={activeFile.filePath}
+              fileName={activeFileName}
+              runtimeContext={runtimeContext}
+            />
+          </React.Suspense>
+        )
+      }
       if (fc.isImage) {
         return (
           <ImageViewer
