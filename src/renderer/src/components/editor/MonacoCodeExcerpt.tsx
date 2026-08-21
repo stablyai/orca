@@ -5,8 +5,8 @@ import {
   MONACO_THEME_DARK,
   MONACO_THEME_LIGHT
 } from './monaco-testbench-theme'
+import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
-import { resolveDocumentTheme } from '@/lib/document-theme'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 
@@ -57,7 +57,9 @@ export default function MonacoCodeExcerpt({
     editorFontZoomLevel
   )
   const fontFamily = resolveEditorFontFamily(settings)
-  const isDark = resolveDocumentTheme(settings?.theme ?? 'system')
+  const systemPrefersDark = useSystemPrefersDark()
+  const isDark =
+    settings?.theme === 'dark' || (settings?.theme === 'system' ? systemPrefersDark : false)
   const code = useMemo(() => lines.join('\n'), [lines])
   const [htmlLines, setHtmlLines] = useState<string[]>(() => lines.map(() => ''))
 

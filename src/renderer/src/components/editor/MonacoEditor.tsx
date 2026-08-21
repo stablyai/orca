@@ -11,6 +11,7 @@ import {
   MONACO_THEME_DARK,
   MONACO_THEME_LIGHT
 } from './monaco-testbench-theme'
+import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
@@ -119,9 +120,12 @@ export default function MonacoEditor({
   const [gutterMenuOpen, setGutterMenuOpen] = useState(false)
   const [gutterMenuPoint, setGutterMenuPoint] = useState({ x: 0, y: 0 })
   const [gutterMenuLine, setGutterMenuLine] = useState(1)
+  // Why: subscribe to the OS signal instead of reading matchMedia at render
+  // time — in "system" theme the editor must re-render when the OS flips.
+  const systemPrefersDark = useSystemPrefersDark()
   const isDark =
     settings?.theme === 'dark' ||
-    (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+    (settings?.theme === 'system' ? systemPrefersDark : false)
 
   const { queueReveal, cancelScheduledReveal, clearTransientRevealHighlight } =
     useMonacoRevealScheduler()

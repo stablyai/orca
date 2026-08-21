@@ -14,6 +14,7 @@ import React, {
 } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import { defineTestBenchThemes, MONACO_THEME_DARK, MONACO_THEME_LIGHT } from './monaco-testbench-theme'
+import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import DOMPurify from 'dompurify'
 import Markdown from 'react-markdown'
 import rehypeRaw from 'rehype-raw'
@@ -39,7 +40,6 @@ import {
   resolveEditorFontFamilyOrInherit
 } from '@/lib/editor-font-zoom'
 import { getConnectionId } from '@/lib/connection-context'
-import { resolveDocumentTheme } from '@/lib/document-theme'
 import { useAppStore } from '@/store'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import { cn } from '@/lib/utils'
@@ -345,7 +345,9 @@ function CodeCell({
   onSaveRequestRef.current = onSaveRequest
   const fontSize = computeEditorFontSize(settings?.terminalFontSize ?? 13, editorFontZoomLevel)
   const editorHeight = getIpynbCodeCellEditorHeight(source, fontSize)
-  const isDark = resolveDocumentTheme(settings?.theme ?? 'system')
+  const systemPrefersDark = useSystemPrefersDark()
+  const isDark =
+    settings?.theme === 'dark' || (settings?.theme === 'system' ? systemPrefersDark : false)
   const lines = useMemo(() => getIpynbCodeCellPreviewLines(source), [source])
   const handleMount: OnMount = useCallback((editorInstance, monacoInstance) => {
     editorInstance.focus()
