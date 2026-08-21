@@ -235,10 +235,8 @@ export function subscribeOpenCodeNativeChatTranscript(
         scheduleTick()
         return
       }
-      // Why: latch only after the read succeeds — a latched-but-failed first
-      // read would stall forever on the unchanged fingerprint.
-      lastSignal = fingerprint
       if (firstSnapshot) {
+        lastSignal = fingerprint
         rememberItems(page.items)
         args.onInitialSnapshot?.(
           page.items.map((item) => item.message),
@@ -254,14 +252,18 @@ export function subscribeOpenCodeNativeChatTranscript(
       )
       if (changed) {
         // Why: an already-rendered message went stale (tool-result backfill).
-        await replaceWithInitialWindow(dbPath)
+        if (await replaceWithInitialWindow(dbPath)) {
+          lastSignal = fingerprint
+        }
         scheduleTick()
         return
       }
       const appended = page.items.filter((item) => item.rowid > lastEmittedRowId)
       // Why: zero overlap = window overflow; advancing would drop rows — re-read wider.
       if (appended.length > 0 && appended.length === page.items.length && page.hasMore) {
-        await replaceWithInitialWindow(dbPath)
+        if (await replaceWithInitialWindow(dbPath)) {
+          lastSignal = fingerprint
+        }
         scheduleTick()
         return
       }
@@ -269,6 +271,7 @@ export function subscribeOpenCodeNativeChatTranscript(
         rememberItems(appended)
         args.onAppend(appended.map((item) => item.message))
       }
+      lastSignal = fingerprint
       scheduleTick()
     } catch (err) {
       // Why: a transient worker failure must not kill the poll loop; surface
@@ -292,23 +295,25 @@ export function subscribeOpenCodeNativeChatTranscript(
   }
 
   // Bounded reads on the worker thread shared with the AI-Vault scanner.
-  async function replaceWithInitialWindow(db: string): Promise<void> {
+  async function replaceWithInitialWindow(db: string): Promise<boolean> {
     const replacement = await readPage({
       dbPath: db,
       sessionId: args.sessionId,
       limit: initialLimit
     })
     if (closed) {
-      return
+      return false
     }
-    if (replacement) {
-      rememberItems(replacement.items)
-      args.onReplace?.(
-        replacement.items.map((item) => item.message),
-        replacement.hasMore,
-        replacement.beforeMessageRowId ?? 0
-      )
+    if (!replacement) {
+      return false
     }
+    rememberItems(replacement.items)
+    args.onReplace?.(
+      replacement.items.map((item) => item.message),
+      replacement.hasMore,
+      replacement.beforeMessageRowId ?? 0
+    )
+    return true
   }
 
   function unsubscribe(): void {

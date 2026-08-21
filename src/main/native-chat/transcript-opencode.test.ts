@@ -407,4 +407,74 @@ describe('subscribeOpenCodeNativeChatTranscript (live)', () => {
       subscription.unsubscribe()
     }
   })
+
+  it('retries a failed replacement read on the next poll', async () => {
+    const { db, path } = createDb()
+    insertMessage(db, 'msg-1', 1_000, 'user')
+    insertPart(db, 'prt-1', 'msg-1', 1_000, { type: 'text', text: 'first prompt' })
+    insertMessage(db, 'msg-2', 2_000, 'assistant')
+    insertPart(db, 'prt-2', 'msg-2', 2_000, {
+      type: 'tool',
+      tool: 'bash',
+      state: { status: 'running', input: { command: 'ls' } }
+    })
+
+    let windowReads = 0
+    const frames: NativeChatMessage[][] = []
+    const subscription = subscribeOpenCodeNativeChatTranscript(
+      {
+        agent: 'opencode',
+        sessionId: 'ses-1',
+        initialLimit: 10,
+        resolvePollIntervalMs: 20,
+        onInitialSnapshot: (messages) => frames.push(messages),
+        onAppend: () => {},
+        onReplace: (messages) => frames.push(messages)
+      },
+      undefined,
+      {
+        resolveDbPath: async () => path,
+        readSignal: (dbPath, sessionId) =>
+          Promise.resolve(readOpenCodeTranscriptSignal(dbPath, sessionId)),
+        readPage: (args) => {
+          if (args.limit === 10) {
+            windowReads++
+            if (windowReads === 2) {
+              return Promise.resolve(null)
+            }
+          }
+          return Promise.resolve(
+            readOpenCodeTranscriptPage(args as Parameters<typeof readOpenCodeTranscriptPage>[0])
+          )
+        }
+      }
+    )
+    try {
+      await vi.waitFor(
+        () => {
+          expect(frames.length).toBeGreaterThanOrEqual(1)
+        },
+        { timeout: 3_000, interval: 20 }
+      )
+
+      db.prepare('UPDATE part SET time_updated = ?, data = ? WHERE id = ?').run(
+        4_000,
+        JSON.stringify({
+          type: 'tool',
+          tool: 'bash',
+          state: { status: 'completed', input: { command: 'ls' }, output: 'file list' }
+        }),
+        'prt-2'
+      )
+      await vi.waitFor(
+        () => {
+          expect(frames.length).toBeGreaterThanOrEqual(2)
+        },
+        { timeout: 3_000, interval: 20 }
+      )
+      expect(windowReads).toBe(3)
+    } finally {
+      subscription.unsubscribe()
+    }
+  })
 })
