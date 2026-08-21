@@ -16368,6 +16368,17 @@
         "days": "{{value0}}d",
         "underOneMinute": "<1m"
       }
+    },
+    "settings": {
+      "agentGeneratedTerminalTitles": {
+        "title": "Auto-generate terminal titles",
+        "description": "Name each terminal in a split from the agent running in it, so a tab full of sessions reads at a glance. Manual renames always win.",
+        "keyword": {
+          "terminal": "terminal",
+          "pane": "pane",
+          "split": "split"
+        }
+      }
     }
   },
   "dashboardPopout": {

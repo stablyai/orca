@@ -26,7 +26,7 @@ function createPane(id: number): SessionRestoredBannerPane {
   container.className = 'pane'
   container.dataset.leafId = `leaf-${id}`
   document.body.appendChild(container)
-  return { id, container }
+  return { id, container, leafId: `leaf-${id}` as SessionRestoredBannerPane['leafId'] }
 }
 
 async function renderPortals(
@@ -98,6 +98,25 @@ describe('session restored banner pane state', () => {
     expect(needsFit).toBe(false)
     expect(activePane.container.hasAttribute('data-has-title')).toBe(false)
     expect(secondPane.container.hasAttribute('data-has-title')).toBe(false)
+  })
+
+  it('reserves title space for an agent-generated pane name', () => {
+    const generatedPane = createPane(1)
+    const plainPane = createPane(2)
+
+    const needsFit = syncSessionRestoredBannerTitleSpace({
+      panes: [generatedPane, plainPane],
+      paneTitles: {},
+      generatedPaneTitlesByLeaf: { 'leaf-1': 'Fix the flaky upload test' },
+      renamingPaneId: null,
+      sessionRestoredBannerPaneIds: new Map()
+    })
+
+    expect(needsFit).toBe(true)
+    // Why: the bar is absolutely positioned over xterm, so without the reservation
+    // the generated name would sit on top of the terminal's first row.
+    expect(generatedPane.container.hasAttribute('data-has-title')).toBe(true)
+    expect(plainPane.container.hasAttribute('data-has-title')).toBe(false)
   })
 
   it('reserves title space for explicit titles and inline rename', () => {

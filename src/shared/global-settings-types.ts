@@ -369,6 +369,9 @@ export type GlobalSettings = {
   dismissedSkillFreshnessNudges?: string[]
   /** Why: generated tab titles are subjective, so they stay opt-in and manual renames win. */
   tabAutoGenerateTitle: boolean
+  /** Why: a titled pane reserves header height and refits its PTY, so naming the
+   *  terminals inside a split stays opt-in and separate from the tab setting. */
+  terminalAutoGenerateTitle: boolean
   /** Why: pinned tabs can still be closed via keyboard/native-menu; this gates that behind a confirmation. Defaults on. */
   confirmClosePinnedTab: boolean
   /** When true, Orca requests local awake assertions while hook-reported agents are working. */

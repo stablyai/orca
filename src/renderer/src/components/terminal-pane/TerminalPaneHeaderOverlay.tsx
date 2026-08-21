@@ -32,6 +32,8 @@ type TerminalPaneHeaderOverlayProps = {
   activePaneId: number | null | undefined
   panes: readonly ManagedPane[]
   paneTitles: Readonly<Record<number, string>>
+  /** Agent-derived names keyed by leaf id, shown only where the pane has no manual title. */
+  generatedPaneTitlesByLeaf: Readonly<Record<string, string>>
   paneTitleOverlayRects: Readonly<Record<number, PaneTitleOverlayRect>>
   renamingPaneId: number | null
   renameValue: string
@@ -75,6 +77,7 @@ export default function TerminalPaneHeaderOverlay({
   activePaneId,
   panes,
   paneTitles,
+  generatedPaneTitlesByLeaf,
   paneTitleOverlayRects,
   renamingPaneId,
   renameValue,
@@ -118,7 +121,8 @@ export default function TerminalPaneHeaderOverlay({
       }}
     >
       {panes.map((pane) => {
-        const title = paneTitles[pane.id]
+        const manualTitle = paneTitles[pane.id]
+        const title = manualTitle || generatedPaneTitlesByLeaf[pane.leafId]
         const isEditing = renamingPaneId === pane.id
         const overlayRect = paneTitleOverlayRects[pane.id]
         const isActivePane = activePaneId === pane.id
@@ -338,7 +342,7 @@ export default function TerminalPaneHeaderOverlay({
                       </TooltipContent>
                     </Tooltip>
                   ) : null}
-                  {title ? (
+                  {manualTitle ? (
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
@@ -353,7 +357,7 @@ export default function TerminalPaneHeaderOverlay({
                           aria-label={translate(
                             'auto.components.terminal.pane.TerminalPane.f984ab2a30',
                             'Remove pane title: {{value0}}',
-                            { value0: title }
+                            { value0: manualTitle }
                           )}
                         >
                           <X className="size-3" />

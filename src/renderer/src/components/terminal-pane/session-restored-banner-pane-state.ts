@@ -1,6 +1,6 @@
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 
-export type SessionRestoredBannerPane = Pick<ManagedPane, 'id' | 'container'>
+export type SessionRestoredBannerPane = Pick<ManagedPane, 'id' | 'container' | 'leafId'>
 
 /** `resume-unavailable`: the pane asked to resume a provider session Orca could not
  *  verify, so it launched a fresh one — silence would read as a successful restore. */
@@ -93,6 +93,7 @@ export function seedStartupSessionRestoredBanner(
 export function syncSessionRestoredBannerTitleSpace(args: {
   panes: readonly SessionRestoredBannerPane[]
   paneTitles: Readonly<Record<number, string>>
+  generatedPaneTitlesByLeaf?: Readonly<Record<string, string>>
   renamingPaneId: number | null
   sessionRestoredBannerPaneIds: SessionRestoredBannerPaneReasons
 }): boolean {
@@ -100,6 +101,9 @@ export function syncSessionRestoredBannerTitleSpace(args: {
   for (const pane of args.panes) {
     const shouldShow =
       !!args.paneTitles[pane.id] ||
+      // Why: a generated name fills the same header bar, so the pane owes it the
+      // same reserved height or the bar would cover the terminal's first row.
+      !!args.generatedPaneTitlesByLeaf?.[pane.leafId] ||
       args.renamingPaneId === pane.id ||
       args.sessionRestoredBannerPaneIds.has(pane.id)
     const hadTitle = pane.container.hasAttribute('data-has-title')
