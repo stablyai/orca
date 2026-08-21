@@ -12,8 +12,8 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
   return source.slice(start, end)
 }
 
-describe('useComposerState clears a stale base branch on GitLab item selection', () => {
-  it('clears baseBranch on both the issue short-circuit and the MR resolution path', () => {
+describe('useComposerState clears stale start-point state on GitLab item selection', () => {
+  it('clears baseBranch and pushTarget on both the issue short-circuit and the MR resolution path', () => {
     const section = sourceBetween(
       HOOK_SOURCE,
       'const handleSmartGitLabItemSelect = useCallback(',
@@ -21,18 +21,21 @@ describe('useComposerState clears a stale base branch on GitLab item selection',
     )
 
     // Why: without this, selecting a GitLab issue/MR after a Start-from branch (or a
-    // prior PR/MR) pick kept the old baseBranch and would branch the workspace from
-    // the wrong place — mirrors handleSmartGitHubItemSelect's setBaseBranch(undefined)
-    // on both sides of its type check.
+    // prior PR/MR) pick kept the old baseBranch/pushTarget — the workspace could branch
+    // from the wrong place, or a stale fork pushTarget from an earlier GitHub PR could
+    // leak into a GitLab create. Mirrors handleSmartGitHubItemSelect's
+    // setBaseBranch/setPushTarget(undefined) on both sides of its type check.
     const shortCircuit = sourceBetween(
       section,
       "if (item.type !== 'mr' || !runRepo) {",
       '}'
     )
     expect(shortCircuit).toContain('setBaseBranch(undefined)')
+    expect(shortCircuit).toContain('setPushTarget(undefined)')
 
     const afterShortCircuit = section.slice(section.indexOf(shortCircuit) + shortCircuit.length)
     const mrPath = sourceBetween(afterShortCircuit, '', 'const itemRepoSettings =')
     expect(mrPath).toContain('setBaseBranch(undefined)')
+    expect(mrPath).toContain('setPushTarget(undefined)')
   })
 })

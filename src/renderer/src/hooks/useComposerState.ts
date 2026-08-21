@@ -3163,10 +3163,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       if (item.type !== 'mr' || !runRepo) {
         setBaseBranch(undefined)
         setCompareBaseRef(undefined)
+        setPushTarget(undefined)
         return
       }
       setBaseBranch(undefined)
       setCompareBaseRef(undefined)
+      setPushTarget(undefined)
       const itemRepoSettings = getSettingsForRepoRuntimeOwner(
         { repos: [runRepo], settings },
         runRepo.id
