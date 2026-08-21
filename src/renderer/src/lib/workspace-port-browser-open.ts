@@ -79,6 +79,19 @@ async function openInSystemBrowser(
   }
 }
 
+function closeRemoteBrowserPage(
+  runtimeTarget: RuntimeClientTarget & { kind: 'environment' },
+  worktreeId: string,
+  remotePageId: string
+): void {
+  void callRuntimeRpc(
+    runtimeTarget,
+    'browser.tabClose',
+    { worktree: toRuntimeWorktreeSelector(worktreeId), page: remotePageId },
+    { timeoutMs: 15_000 }
+  ).catch(() => {})
+}
+
 async function openInEnvironmentBrowser(args: {
   runtimeTarget: RuntimeClientTarget & { kind: 'environment' }
   worktreeId: string
@@ -86,13 +99,14 @@ async function openInEnvironmentBrowser(args: {
   createBrowserTab: BrowserTabCreator
   setRemoteBrowserPageHandle: RemoteBrowserPageHandleSetter
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
+  let remotePage: { browserPageId: string } | undefined
   try {
     await assertRuntimeEnvironmentCapability(
       args.runtimeTarget.environmentId,
       BROWSER_SCREENCAST_RUNTIME_CAPABILITY,
       RUNTIME_BROWSER_UNAVAILABLE_MESSAGE
     )
-    const remotePage = await callRuntimeRpc<{ browserPageId: string }>(
+    remotePage = await callRuntimeRpc<{ browserPageId: string }>(
       args.runtimeTarget,
       'browser.tabCreate',
       { worktree: toRuntimeWorktreeSelector(args.worktreeId), url: args.url },
@@ -103,6 +117,7 @@ async function openInEnvironmentBrowser(args: {
       browserRuntimeEnvironmentId: args.runtimeTarget.environmentId
     })
     if (!tab.activePageId) {
+      closeRemoteBrowserPage(args.runtimeTarget, args.worktreeId, remotePage.browserPageId)
       return { ok: false, reason: 'Failed to create a browser page.' }
     }
     args.setRemoteBrowserPageHandle(tab.activePageId, {
@@ -111,6 +126,9 @@ async function openInEnvironmentBrowser(args: {
     })
     return { ok: true }
   } catch (error) {
+    if (remotePage) {
+      closeRemoteBrowserPage(args.runtimeTarget, args.worktreeId, remotePage.browserPageId)
+    }
     return { ok: false, reason: toFailureReason(error, 'Failed to open remote browser.') }
   }
 }

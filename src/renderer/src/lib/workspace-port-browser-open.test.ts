@@ -295,7 +295,7 @@ describe('openWorkspacePortInBrowser', () => {
     expect(result).toEqual({ ok: true })
   })
 
-  it('fails when the environment browser tab has no active page id', async () => {
+  it('fails when the environment browser tab has no active page id, and closes the orphaned remote page', async () => {
     assertRuntimeEnvironmentCapabilityMock.mockResolvedValue(undefined)
     callRuntimeRpcMock.mockResolvedValue({ browserPageId: 'remote-page-1' })
     const createBrowserTab = vi.fn().mockReturnValue({ activePageId: undefined })
@@ -305,6 +305,29 @@ describe('openWorkspacePortInBrowser', () => {
       ok: false,
       reason: 'Failed to create a browser page.'
     })
+    expect(callRuntimeRpcMock).toHaveBeenCalledWith(
+      environmentTarget,
+      'browser.tabClose',
+      { worktree: 'id:wt-1', page: 'remote-page-1' },
+      { timeoutMs: 15_000 }
+    )
+  })
+
+  it('closes the orphaned remote page when creating the local tab throws', async () => {
+    assertRuntimeEnvironmentCapabilityMock.mockResolvedValue(undefined)
+    callRuntimeRpcMock.mockResolvedValue({ browserPageId: 'remote-page-1' })
+    const createBrowserTab = vi.fn().mockImplementation(() => {
+      throw new Error('tab failed')
+    })
+    const args = baseArgs({ runtimeTarget: environmentTarget, createBrowserTab })
+
+    expect(await openWorkspacePortInBrowser(args)).toEqual({ ok: false, reason: 'tab failed' })
+    expect(callRuntimeRpcMock).toHaveBeenCalledWith(
+      environmentTarget,
+      'browser.tabClose',
+      { worktree: 'id:wt-1', page: 'remote-page-1' },
+      { timeoutMs: 15_000 }
+    )
   })
 
   it('reports a failure reason when the environment capability check rejects', async () => {
