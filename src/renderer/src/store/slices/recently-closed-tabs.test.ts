@@ -267,6 +267,53 @@ describe('reopenClosedTerminalTab', () => {
     expect(store.getState().reopenClosedTerminalTab(WT)).toBe(true)
     expect(store.getState().tabsByWorktree[WT]?.[0]?.startupCwd).toBe('/remote/wt1/packages/app')
   })
+
+  it('resumes a closed agent tab via provider session instead of a bare shell', () => {
+    const store = makeSeededStore()
+    const tab = store
+      .getState()
+      .createTab(WT, undefined, undefined, { startupCwd: '/path/wt1/src' })
+    store.getState().setTabCustomTitle(tab.id, 'claude work')
+    store.setState({
+      agentStatusByPaneKey: {
+        [`${tab.id}:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa`]: {
+          state: 'idle',
+          prompt: 'hello',
+          updatedAt: 1,
+          stateStartedAt: 1,
+          agentType: 'claude',
+          paneKey: `${tab.id}:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa`,
+          providerSession: { key: 'session_id', id: 'claude-session-xyz' }
+        }
+      }
+    })
+
+    store.getState().closeTab(tab.id)
+
+    const snapshot = store.getState().recentlyClosedTerminalTabsByWorktree[WT]?.[0]
+    expect(snapshot).toMatchObject({
+      startupCwd: '/path/wt1/src',
+      customTitle: 'claude work',
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'claude-session-xyz' }
+    })
+
+    expect(store.getState().reopenClosedTerminalTab(WT)).toBe(true)
+    const restored = store.getState().tabsByWorktree[WT]?.[0]
+    expect(restored).toMatchObject({
+      launchAgent: 'claude',
+      customTitle: 'claude work',
+      startupCwd: '/path/wt1/src'
+    })
+    const pending = store.getState().pendingStartupByTabId[restored!.id]
+    expect(pending).toMatchObject({
+      launchAgent: 'claude',
+      resumeProviderSession: { key: 'session_id', id: 'claude-session-xyz' },
+      showSessionRestoredBanner: true
+    })
+    expect(pending?.command).toContain('claude')
+    expect(pending?.command).toContain('--resume')
+  })
 })
 
 describe('restoreRecentlyClosedTabPosition', () => {
