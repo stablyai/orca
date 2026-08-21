@@ -6,7 +6,7 @@ settings:
 
 overrides:
   monaco-editor>dompurify: 3.4.13
-  xlsx: https://cdn.sheetjs.com/xlsx-latest/xlsx-latest.tgz
+  xlsx: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
 
 patchedDependencies:
   '@xterm/addon-ligatures@0.11.0-beta.287':
@@ -98,9 +98,6 @@ importers:
       ws:
         specifier: ^8.21.0
         version: 8.21.0
-      xlsx:
-        specifier: https://cdn.sheetjs.com/xlsx-latest/xlsx-latest.tgz
-        version: https://cdn.sheetjs.com/xlsx-latest/xlsx-latest.tgz
       yaml:
         specifier: ^2.8.4
         version: 2.8.4
@@ -3391,6 +3388,7 @@ packages:
   '@xmldom/xmldom@0.8.13':
     resolution: {integrity: sha512-KRYzxepc14G/CEpEGc3Yn+JKaAeT63smlDr+vjB8jRfgTBBI9wRj/nkQEO+ucV8p8I9bfKLWp37uHgFrbntPvw==}
     engines: {node: '>=10.0.0'}
+    deprecated: this version has critical issues, please update to the latest version
 
   '@xterm/addon-fit@0.12.0-beta.287':
     resolution: {integrity: sha512-2MDj+J4x67bjOS/SuBPxSYEWH38NbX6ENV18RbKVOhfRYCX3yERnuHBOrgH9hYdY8rCtsLQmuVgF6cmvCJiV2w==}
@@ -6842,12 +6840,6 @@ packages:
   wsl-utils@0.3.1:
     resolution: {integrity: sha512-g/eziiSUNBSsdDJtCLB8bdYEUMj4jR7AGeUo96p/3dTafgjHhpF4RiCFPiRILwjQoDXx5MqkBr4fwWtR3Ky4Wg==}
     engines: {node: '>=20'}
-
-  xlsx@https://cdn.sheetjs.com/xlsx-latest/xlsx-latest.tgz:
-    resolution: {tarball: https://cdn.sheetjs.com/xlsx-latest/xlsx-latest.tgz}
-    version: 0.20.3
-    engines: {node: '>=0.8'}
-    hasBin: true
 
   xml-js@1.6.11:
     resolution: {integrity: sha512-7rVi2KMfwfWFl+GpPg6m80IVMWXLRjO+PxTq7V2CDhoGak0wzYzFgUY2m4XJ47OGdXd8eLE8EmwfAmdjw7lC1g==}
@@ -13710,8 +13702,6 @@ snapshots:
     dependencies:
       is-wsl: 3.1.1
       powershell-utils: 0.1.0
-
-  xlsx@https://cdn.sheetjs.com/xlsx-latest/xlsx-latest.tgz: {}
 
   xml-js@1.6.11:
     dependencies:

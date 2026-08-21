@@ -23,7 +23,12 @@ function alignTransform(element: unknown): unknown {
   if (!element || typeof element !== 'object') {
     return element
   }
-  const node = element as { type?: string; children?: unknown[]; alignment?: string; styleId?: string }
+  const node = element as {
+    type?: string
+    children?: unknown[]
+    alignment?: string
+    styleId?: string
+  }
   if (node.children) {
     node.children = node.children.map(alignTransform)
   }
@@ -80,6 +85,14 @@ const DOCX_ALLOWED_TAGS = [
 ]
 const DOCX_ALLOWED_ATTR = ['href', 'id', 'class', 'rel', 'target', 'title']
 
+// Why: happy-dom's HTML parser (used in this project's vitest env) hands
+// DOMPurify a tree where javascript: hrefs survive the default URI filter.
+// Re-scrub the post-sanitize string so the test asserting no javascript:
+// anchors can pass against the same DOM that production will use.
+function stripJavaScriptHrefs(html: string): string {
+  return html.replace(/(\s+href=)(["'])\s*javascript:[^"']*\2/gi, '$1$2#$2')
+}
+
 export function DocxViewer({ filePath, fileName, content }: DocxViewerProps): React.JSX.Element {
   const [status, setStatus] = useState<Status>({ kind: 'loading' })
 
@@ -101,6 +114,9 @@ export function DocxViewer({ filePath, fileName, content }: DocxViewerProps): Re
         const result = await mammoth.convertToHtml(source, {
           includeDefaultStyleMap: true,
           styleMap: officeDocumentStyleMap,
+          // Why: mammoth defaults ignoreEmptyParagraphs to true, which drops
+          // blank paragraphs (e.g. between sections). Users notice the gap.
+          ignoreEmptyParagraphs: false,
           transformDocument: alignTransform as (element: unknown) => unknown
         })
         if (cancelled) {
@@ -108,13 +124,15 @@ export function DocxViewer({ filePath, fileName, content }: DocxViewerProps): Re
         }
         setStatus({
           kind: 'ready',
-          html: DOMPurify.sanitize(
-            result.value ||
-              `<p>${translate('auto.components.editor.DocxViewer.m4e7f2a1c8', 'Empty document')}</p>`,
-            {
-              ALLOWED_TAGS: DOCX_ALLOWED_TAGS,
-              ALLOWED_ATTR: DOCX_ALLOWED_ATTR
-            }
+          html: stripJavaScriptHrefs(
+            DOMPurify.sanitize(
+              result.value ||
+                `<p>${translate('auto.components.editor.DocxViewer.m4e7f2a1c8', 'Empty document')}</p>`,
+              {
+                ALLOWED_TAGS: DOCX_ALLOWED_TAGS,
+                ALLOWED_ATTR: DOCX_ALLOWED_ATTR
+              }
+            )
           )
         })
       } catch {

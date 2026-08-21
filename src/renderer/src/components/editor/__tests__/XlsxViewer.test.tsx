@@ -5,6 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import * as XLSX from 'xlsx'
 
 import { XlsxViewer } from '../XlsxViewer'
 
@@ -13,6 +14,15 @@ const FIXTURE_DIR = join(process.cwd(), 'src/renderer/src/components/editor/__te
 
 function fixtureBase64(name: string): string {
   return readFileSync(join(FIXTURE_DIR, name)).toString('base64')
+}
+
+// ponytail: build xlsx in-memory so the markup-cell test doesn't need a
+// checked-in fixture. SheetJS writes the buffer with default cell formats.
+function buildXlsxBase64(rows: string[][]): string {
+  const ws = XLSX.utils.aoa_to_sheet(rows)
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'First')
+  return Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })).toString('base64')
 }
 
 describe('XlsxViewer', () => {
@@ -129,5 +139,24 @@ describe('XlsxViewer', () => {
     const html = container.querySelector('[data-testid="xlsx-preview"]')?.innerHTML ?? ''
     expect(html).not.toMatch(/<script/i)
     expect(html).not.toMatch(/<iframe/i)
+  })
+
+  it('keeps literal markup in cell text without creating DOM nodes', async () => {
+    const markup = '<b>not-bold</b> & <script>alert(1)</script>'
+    const content = buildXlsxBase64([['Header'], [markup]])
+    const { container } = render(
+      <XlsxViewer filePath="/tmp/worktree/markup.xlsx" fileName="markup.xlsx" content={content} />
+    )
+    await waitFor(() => {
+      expect(screen.getByText(markup)).toBeInTheDocument()
+    })
+    const preview = container.querySelector('[data-testid="xlsx-preview"]')
+    expect(preview).toBeTruthy()
+    // Why: SheetJS escapehtml escapes angle brackets so the literal text renders
+    // as a text node. Assert no <b> or <script> element appears anywhere inside
+    // the preview pane — a DOM node from a cell value would mean the escape
+    // step regressed and the XSS trust boundary silently opened.
+    expect(preview?.querySelector('b')).toBeNull()
+    expect(preview?.querySelector('script')).toBeNull()
   })
 })

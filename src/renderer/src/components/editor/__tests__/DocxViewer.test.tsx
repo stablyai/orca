@@ -35,6 +35,8 @@ async function buildDocxBase64(children: DocxParagraph[]): Promise<string> {
 describe('DocxViewer', () => {
   afterEach(() => {
     cleanup()
+    vi.doUnmock('mammoth')
+    vi.resetModules()
   })
 
   it('renders html from a valid docx fixture', async () => {
@@ -66,31 +68,30 @@ describe('DocxViewer', () => {
   it('strips javascript: hyperlinks from mammoth output', async () => {
     // Why: mammoth relays .docx hyperlinks verbatim into the HTML payload, so a
     // crafted file can carry a `javascript:` URL and reach the renderer. The
-    // viewer must sanitize before dangerouslySetInnerHTML.
+    // viewer must sanitize before dangerouslySetInnerHTML. vi.resetModules
+    // + dynamic import ensure the mocked mammoth module reaches the freshly
+    // loaded viewer; the static import at the top would otherwise pin the
+    // real mammoth before vi.doMock runs.
+    vi.resetModules()
     vi.doMock('mammoth', () => ({
       convertToHtml: vi.fn().mockResolvedValue({
-        value: '<p><a href="javascript:alert(1)">click me</a></p>'
+        value: '<p>safe <a href="javascript:alert(1)">click me</a> tail</p>'
       })
     }))
-    try {
-      const { DocxViewer: SanitizedDocxViewer } = await import('../DocxViewer')
-      const { container } = render(
-        <SanitizedDocxViewer
-          filePath="/tmp/worktree/js.docx"
-          fileName="js.docx"
-          content={fixtureBase64('tiny.docx')}
-        />
-      )
-      await waitFor(() => {
-        expect(screen.getByTestId('docx-preview')).toBeInTheDocument()
-      })
-      const anchor = container.querySelector('a')
-      const href: string | null = anchor ? anchor.getAttribute('href') : null
-      expect(href === null || !/^javascript:/i.test(href)).toBe(true)
-    } finally {
-      vi.doUnmock('mammoth')
-      vi.resetModules()
-    }
+    const { DocxViewer: SanitizedDocxViewer } = await import('../DocxViewer')
+    const { container } = render(
+      <SanitizedDocxViewer
+        filePath="/tmp/worktree/js.docx"
+        fileName="js.docx"
+        content={fixtureBase64('tiny.docx')}
+      />
+    )
+    await waitFor(() => {
+      expect(screen.getByTestId('docx-preview')).toBeInTheDocument()
+    })
+    const anchor = container.querySelector('a')
+    expect(anchor).not.toBeNull()
+    expect(anchor?.getAttribute('href') ?? '').not.toMatch(/^javascript:/i)
   })
 
   // Why: kept DOCX_MIME referenced above so test consumers can assert the

@@ -440,7 +440,7 @@ describe('registerFilesystemHandlers', () => {
 
     await expect(
       handlers.get('fs:readFile')!(null, { filePath: path.resolve('/workspace/repo/huge.json') })
-    ).rejects.toThrow('exceeds 50MB limit')
+    ).rejects.toThrow('exceeds 10MB limit')
 
     expect(readFileMock).not.toHaveBeenCalled()
   })

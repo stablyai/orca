@@ -140,14 +140,18 @@ import { registerFilesystemDownloadFolderHandlers } from './filesystem-download-
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
 import { QuickOpenPathRanker } from '../../shared/quick-open-path-search'
-import { PREVIEWABLE_BINARY_MIME_TYPES, MAX_PREVIEWABLE_BINARY_BYTES } from '../../shared/previewable-binary-mime-types'
+import {
+  PREVIEWABLE_BINARY_MIME_TYPES,
+  MAX_PREVIEWABLE_BINARY_BYTES,
+  MAX_TEXT_FILE_BYTES
+} from '../../shared/previewable-binary-mime-types'
 import {
   applyGitStatusUpstreamRefWatchRequest,
   type GitStatusUpstreamRefWatchRequest
 } from './git-status-upstream-ref-watch-request'
 
 // Why: Monaco degrades features on large files like VS Code, so a 5MB block would needlessly lock out ordinary JSON/log files.
-const MAX_TEXT_FILE_SIZE = 50 * 1024 * 1024 // 50MB
+const MAX_TEXT_FILE_SIZE = MAX_TEXT_FILE_BYTES
 const BINARY_PROBE_BYTES = 8192
 const FULL_GIT_OBJECT_ID_PATTERN = /^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/
 // 32 visible matches plus one truncation sentinel stays below the legacy frame ceiling.

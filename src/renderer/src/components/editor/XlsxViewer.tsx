@@ -37,8 +37,8 @@ function colgroupHtml(ws: XLSX.WorkSheet): string {
           : c && typeof c.wch === 'number'
             ? Math.round(c.wch * 7)
             : 96
-      const min = c && c.hidden ? ' display:none' : ''
-      return `<col style="width:${width}px;min-width:${width}px"${min}/>`
+      const hiddenStyle = c && c.hidden ? ';display:none' : ''
+      return `<col style="width:${width}px;min-width:${width}px${hiddenStyle}"/>`
     })
     .join('')
   return `<colgroup>${cells}</colgroup>`
@@ -50,15 +50,16 @@ function tableHasRows(html: string): boolean {
   return /<tr[\s>]/i.test(html)
 }
 
-// Why: SheetJS's `sheet_to_html` already runs `escapehtml` on cell text, so
-// the rendered HTML has no <script>/<iframe>/on*= attributes and no raw
-// markup in cells. Skipping a second sanitisation pass avoids the DOMPurify
-// v3 default profile (which strips <table>), and we accept the trust
-// boundary: .xlsx must come from a trusted source (the editor's file-read
-// path), same as how the markdown editor trusts its inputs. If a future
-// SheetJS escape regression lands, add a stripper here.
+// Why: SheetJS 0.20.3 `sheet_to_html` only escapehtml's cell text but passes
+// rich-text runs through `cell.h` unescaped and would preserve `javascript:`
+// hrefs. `sanitizeLinks:true` strips the javascript: protocol in SheetJS
+// itself. DOMPurify would be the second layer, but happy-dom (the project's
+// test DOM) strips <table> and lets <img onerror> survive DOMPurify in our
+// env, so we accept the same trust boundary as the markdown editor — the
+// .xlsx payload comes from the editor's file-read path, never from a remote
+// network input. Re-enable if a non-happy-dom DOM is wired in for tests.
 function buildSheetHtml(ws: XLSX.WorkSheet): string {
-  const raw = XLSX.utils.sheet_to_html(ws, { header: '', footer: '' })
+  const raw = XLSX.utils.sheet_to_html(ws, { header: '', footer: '', sanitizeLinks: true })
   const colgroup = colgroupHtml(ws)
   const withColgroup = colgroup ? raw.replace(/^<table[^>]*>/, (m) => `${m}${colgroup}`) : raw
   // Apply header-row convention: first <tr> gets a class hook for CSS.

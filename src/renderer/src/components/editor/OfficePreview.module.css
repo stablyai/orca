@@ -10,8 +10,8 @@
   background: var(--background);
   /* Why: Word's default body is Calibri 11pt; Carlito is the metric-compatible open font Linux distros ship. Geist is the Orca sans fallback (--font-sans) per STYLEGUIDE.md §3. */
   font-family:
-    'Carlito',
-    'Calibri',
+    Carlito,
+    Calibri,
     var(--font-sans),
     -apple-system,
     BlinkMacSystemFont,
