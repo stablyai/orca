@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-18",
+  "updatedAt": "2026-08-20",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -13625,6 +13625,144 @@
         "The reverted-source failure is established from the old process-wide call path but was not executed."
       ],
       "demotionRule": "Demote if unrelated reattach joins a stalled session tail, overlay or periodic work exceeds its admission bound, a deadline cancels durable work, final checkpoints defer, or failures and deadline fallbacks lose their diagnostic breadcrumbs."
+    },
+    {
+      "id": "skill-upload.cross-process-staging-ownership",
+      "title": "Concurrent runtime and relay uploads retain exact staging ownership",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "skill-upload-session-service",
+      "layer": "host-filesystem-lifecycle",
+      "surfaces": [
+        "paired-runtime skill upload",
+        "SSH relay skill upload",
+        "upload cancellation",
+        "process restart and disposal"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["orca-server", "ssh"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["ssh"],
+      "coverageNotes": "Two independent services share one parent under controlled ordering, four real crash boundaries run in child processes, and two bundled relays share one isolated home through distinct socket and hook endpoints. A current relay also shares that home safely with the originating relay in both launch orders. Graceful relay and desktop-runtime disposal join service cleanup. Linux, Windows, and paired headed/headless runtime process evidence remain uncollected; the change is host-local and changes no wire payload.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-4967",
+        "https://github.com/stablyai/orca/pull/14934"
+      ],
+      "invariant": "Initialization, cleanup, or disposal by one service process can never remove bytes owned by a still-live upload in another process. Each service owns one atomic PID-and-UUID namespace, serializes begin admission at four active sessions, and retains the package-size limit. Abandoned owner cleanup inspects at most 64 entries per attempt, and success, failure, cancellation, restart, and disposal release only their exact owned paths.",
+      "oracle": "Begin and partially append upload A, then begin and append upload B from an independent service or relay sharing the same parent. Require two exact PID-and-UUID owner directories, two upload-ID archives, and byte-for-byte survival of both. Cancel B then A and require archive counts 1 then 0. Stage two more live uploads, terminate relay A, and require relay B's exact owner, archive, and bytes to survive before B terminates and the root becomes empty. Kill real child owners at begun, partial, uploaded, and committed boundaries and require a fresh owner to remove only exited-process staging and complete its own transfer. Seed 65 exited owners, require one attempt to remove exactly 64 and reject before adding bytes, then require retry to drain the final stale owner and begin normally.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/skills/skill-upload-session-service.test.ts --reporter=verbose",
+        "ORCA_REAL_PROCESS_SKILL_TEST=1 pnpm exec vitest run --config config/vitest.config.ts src/main/skills/skill-upload-process-restart.integration.test.ts src/main/skills/skill-upload-process-restart-child.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
+        "pnpm exec vitest run --config config/vitest.config.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
+        "ORCA_REAL_PROCESS_SKILL_TEST=1 pnpm exec vitest run --config config/vitest.config.ts src/main/skills/skill-upload-session-service.test.ts src/main/skills/skill-upload-process-restart.integration.test.ts src/main/skills/skill-upload-process-restart-child.test.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
+        "ORCA_SKILL_UPLOAD_LEGACY_RELAY_ENTRY=<fa9b20cb4163-relay.js> pnpm exec vitest run --config config/vitest.config.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
+        "ORCA_SKILL_UPLOAD_RELAY_ENTRY=<fa9b20cb4163-relay.js;sha256=4db8609c4e1772f1efa9b0c0cf6affa8f64ff9ebc8e2b6f9e71678992ccdcf1a> pnpm exec vitest run --config config/vitest.config.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
+        "ORCA_SKILL_UPLOAD_RELAY_ENTRY=<012e9f410c-fix-reverted-relay.js;sha256=ca03bf47d93828ec30473391b542d945df887b7881cce3df17e95d90226e34fb> pnpm exec vitest run --config config/vitest.config.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose"
+      ],
+      "testFiles": [
+        "src/main/skills/skill-upload-session-service.test.ts",
+        "src/main/skills/skill-upload-process-restart.integration.test.ts",
+        "src/main/skills/skill-upload-process-restart-child.test.ts",
+        "src/relay/skill-upload-multi-relay.integration.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/skills/skill-upload-session-service.test.ts",
+          "assertions": [
+            "a second service preserves the first service's exact file and bytes",
+            "five concurrent begins admit exactly four sessions and disposal removes them",
+            "disposal waits for an initializing begin and leaves no owner",
+            "concurrent disposal callers join the same exact cleanup promise",
+            "archive hashing failure releases the session and rejects later appends",
+            "symlink or junction staging roots are rejected before cleanup or admission",
+            "failed archive removal remains owned and counts toward the four-path bound",
+            "cancellation and disposal reduce exact archive and owner counts",
+            "one abandoned-owner sweep removes at most 64 entries and retry completes"
+          ]
+        },
+        {
+          "file": "src/main/skills/skill-upload-process-restart.integration.test.ts",
+          "assertions": [
+            "begun, partial, uploaded, and committed crash residue is reclaimed",
+            "the replacement transfer completes and leaves no owner directory"
+          ]
+        },
+        {
+          "file": "src/relay/skill-upload-multi-relay.integration.test.ts",
+          "assertions": [
+            "two bundled relay PIDs retain separate archives under one account home",
+            "current and originating relay bundles retain separate archives in both launch orders",
+            "relay cancellation and live-upload graceful shutdown clean only the exact owner"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "ORCA_REAL_PROCESS_SKILL_TEST=1 pnpm exec vitest run --config config/vitest.config.ts src/main/skills/skill-upload-session-service.test.ts src/main/skills/skill-upload-process-restart.integration.test.ts src/main/skills/skill-upload-process-restart-child.test.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
+          "durationSeconds": 5.95,
+          "summary": "Fifteen service tests, four crash-boundary cases, and one two-current-relay topology passed; the child fixture and two explicitly separate mixed-version cases skipped."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "ORCA_SKILL_UPLOAD_LEGACY_RELAY_ENTRY=<fa9b20cb4163-relay.js> pnpm exec vitest run --config config/vitest.config.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
+          "durationSeconds": 0.9,
+          "summary": "The current/current case and both originating/current mixed-version launch orders passed with exact per-root archive bytes."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "result": "failed",
+          "command": "ORCA_SKILL_UPLOAD_RELAY_ENTRY=<fa9b20cb4163-relay.js;sha256=4db8609c4e1772f1efa9b0c0cf6affa8f64ff9ebc8e2b6f9e71678992ccdcf1a> pnpm exec vitest run --config config/vitest.config.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
+          "durationSeconds": 0.4,
+          "summary": "Expected red: zero PID/UUID owner directories and one archive were observed where two each were required; relay A's exact first five bytes were missing."
+        },
+        {
+          "date": "2026-08-20",
+          "runner": "local",
+          "platform": "macos",
+          "result": "failed",
+          "command": "ORCA_SKILL_UPLOAD_RELAY_ENTRY=<012e9f410c-fix-reverted-relay.js;sha256=ca03bf47d93828ec30473391b542d945df887b7881cce3df17e95d90226e34fb> pnpm exec vitest run --config config/vitest.config.ts src/relay/skill-upload-multi-relay.integration.test.ts --pool=forks --maxWorkers=1 --no-file-parallelism --reporter=verbose",
+          "durationSeconds": 0.4,
+          "summary": "Expected red: zero PID/UUID owner directories and one archive were observed where two each were required; relay A's exact first five bytes were missing."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 15,
+        "scope": "focused service, four child-process restarts, and two bundled relays"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "The barriers are request acknowledgements, filesystem state, and process exit; CI and soak history have not started."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The byte-identical two-relay oracle failed at the exact two-owner count on originating merge fa9b20cb4163 and latest-main/reverted source 012e9f410c76, each observing one shared-root entry after relay B began. The candidate passed with two owner directories, two archives, A-byte survival, 1-to-0 cancellation cleanup, and 1-to-0 owner disposal cleanup."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Initialization scans at most 64 direct parent entries, creates one owner directory per live service, retains the existing four active sessions and package-size caps, and adds no polling, timer, subprocess, wire field, renderer work, or provider fanout. An over-budget parent rejects before creating new staged bytes."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive focused CI passes or 14 days without an unexplained flake.",
+        "Run the same two-owner relay topology on Linux and Windows.",
+        "Run paired headed and headless runtime uploads under one OS account.",
+        "Keep exact owner/file counts, byte survival, bounded sweep, and all four crash boundaries green."
+      ],
+      "knownGaps": [
+        "The live two-relay and crash evidence was collected on macOS; Linux and Windows process/filesystem behavior remains CI coverage.",
+        "The service is shared by paired runtimes, but separate headed and headless paired-runtime process journeys were not run.",
+        "PID reuse is handled conservatively: an abandoned namespace whose PID is currently occupied is preserved until a later process generation rather than risking deletion of live bytes.",
+        "The legacy remote-uploads root is intentionally not reclaimed while a mixed-version relay may still own bytes there; eventual legacy-root retirement requires a separate compatibility decision."
+      ],
+      "demotionRule": "Demote if one live owner can remove another owner's bytes, cleanup exceeds 64 inspected entries per attempt, a lifecycle path retains its exact owned archive after settlement, or the process oracle flakes without an identified harness or product defect."
     }
   ]
 }
