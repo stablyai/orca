@@ -105,14 +105,23 @@ function portDisplayName(port: WorkspacePort): string {
   return port.processName ?? (port.pid != null ? `PID ${port.pid}` : '')
 }
 
-/** Sum of a per-port metric across a group; `null` when no port has a sample. */
+/** Sum of a per-port metric across a group; `null` when no port has a sample.
+ *  Dedupes by pid first — a process bound to multiple ports (e.g. IPv4 + IPv6)
+ *  reports the same process-level cpu/memory on each of its WorkspacePort rows. */
 function sumPortMetric(
   ports: readonly WorkspacePort[],
   pick: (port: WorkspacePort) => number | null | undefined
 ): number | null {
   let sum = 0
   let hasValue = false
+  const seenPids = new Set<number>()
   for (const port of ports) {
+    if (port.pid != null) {
+      if (seenPids.has(port.pid)) {
+        continue
+      }
+      seenPids.add(port.pid)
+    }
     const value = pick(port)
     if (value != null) {
       sum += value

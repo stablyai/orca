@@ -7,7 +7,11 @@ import {
 } from './workspace-port-group-memory-history'
 import type { WorkspacePortGroup } from './workspace-port-groups'
 
-function group(worktreeId: string, memoryValues: number[]): WorkspacePortGroup {
+function group(
+  worktreeId: string,
+  memoryValues: (number | undefined)[],
+  pids: (number | undefined)[] = []
+): WorkspacePortGroup {
   return {
     worktreeId,
     repoId: 'repo',
@@ -20,6 +24,7 @@ function group(worktreeId: string, memoryValues: number[]): WorkspacePortGroup {
       protocol: 'http' as const,
       kind: 'workspace' as const,
       memory,
+      pid: pids[index],
       owner: {
         worktreeId,
         repoId: 'repo',
@@ -60,6 +65,22 @@ describe('workspace port group memory history', () => {
 
   it('returns an empty array for a key with no recorded samples', () => {
     expect(readWorkspacePortMemoryHistory('unknown')).toEqual([])
+  })
+
+  it('counts a process bound to multiple ports only once', () => {
+    // Regression: a dev server on IPv4 + IPv6 reports the same process-level
+    // memory on both WorkspacePort rows — summing both double-counts it.
+    recordWorkspacePortMemorySamples([group('wt-1', [1000, 1000], [42, 42])], [])
+
+    expect(readWorkspacePortMemoryHistory('wt-1')).toEqual([1000])
+  })
+
+  it('does not record a false zero sample when every port lacks a memory value', () => {
+    // Regression: a failed metadata probe leaves every port's memory
+    // undefined; summing that to 0 and recording it looks like a real drop.
+    recordWorkspacePortMemorySamples([group('wt-1', [undefined, undefined])], [])
+
+    expect(readWorkspacePortMemoryHistory('wt-1')).toEqual([])
   })
 
   it('drops a stale ring instead of reviving it when the same group reappears', () => {

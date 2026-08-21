@@ -39,18 +39,31 @@ function sweepStale(now: number): void {
   }
 }
 
-function sumMemory(ports: readonly { memory?: number }[]): number {
+/** Sum of memory across ports; `null` when no port has a sample. Dedupes by pid —
+ *  a process bound to multiple ports reports the same process-level memory on each row. */
+function sumMemory(ports: readonly { pid?: number; memory?: number }[]): number | null {
   let sum = 0
+  let hasValue = false
+  const seenPids = new Set<number>()
   for (const port of ports) {
-    sum += port.memory ?? 0
+    if (port.pid != null) {
+      if (seenPids.has(port.pid)) {
+        continue
+      }
+      seenPids.add(port.pid)
+    }
+    if (port.memory != null) {
+      sum += port.memory
+      hasValue = true
+    }
   }
-  return sum
+  return hasValue ? sum : null
 }
 
 /** Records one sample per workspace group plus one for the external-ports bucket. */
 export function recordWorkspacePortMemorySamples(
   groups: readonly WorkspacePortGroup[],
-  externalPorts: readonly { memory?: number }[]
+  externalPorts: readonly { pid?: number; memory?: number }[]
 ): void {
   const now = Date.now()
   // Why: sweep before pushing — otherwise a group untouched for 10+ minutes
@@ -59,10 +72,16 @@ export function recordWorkspacePortMemorySamples(
   // render as a misleading gap-free sparkline.
   sweepStale(now)
   for (const group of groups) {
-    pushSample(group.worktreeId, sumMemory(group.ports), now)
+    const memory = sumMemory(group.ports)
+    if (memory != null) {
+      pushSample(group.worktreeId, memory, now)
+    }
   }
   if (externalPorts.length > 0) {
-    pushSample(EXTERNAL_PORTS_HISTORY_KEY, sumMemory(externalPorts), now)
+    const memory = sumMemory(externalPorts)
+    if (memory != null) {
+      pushSample(EXTERNAL_PORTS_HISTORY_KEY, memory, now)
+    }
   }
 }
 

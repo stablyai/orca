@@ -64,6 +64,30 @@ describe('sortWorkspacePortGroupsByMetric', () => {
     expect(sorted.map((g) => g.worktreeId)).toEqual(['wt-old', 'wt-recent'])
   })
 
+  it('counts a process bound to multiple ports only once when summing memory', () => {
+    // Regression: a dev server on IPv4 + IPv6 reports the same process-level
+    // memory on both rows — summing both would double-count it and let this
+    // group (1000+1000=2000, buggy) outrank the single-port group (1500).
+    const groups: WorkspacePortGroup[] = [
+      {
+        worktreeId: 'wt-dup',
+        repoId: 'repo',
+        displayName: 'dup',
+        ports: [port({ id: 'd1', pid: 7, memory: 1000 }), port({ id: 'd2', pid: 7, memory: 1000 })]
+      },
+      {
+        worktreeId: 'wt-single',
+        repoId: 'repo',
+        displayName: 'single',
+        ports: [port({ id: 's1', pid: 99, memory: 1500 })]
+      }
+    ]
+
+    const sorted = sortWorkspacePortGroupsByMetric(groups, 'memory')
+
+    expect(sorted.map((g) => g.worktreeId)).toEqual(['wt-single', 'wt-dup'])
+  })
+
   it('always keeps ports grouped under their project, never flattened', () => {
     const groups: WorkspacePortGroup[] = [
       {
