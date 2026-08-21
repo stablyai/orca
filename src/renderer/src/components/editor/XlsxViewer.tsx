@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 // `^0.18.5` cannot reach.
 import * as XLSX from 'xlsx'
 import { translate } from '@/i18n/i18n'
+import { isZipBuffer } from '@shared/zip-magic'
 import styles from './OfficePreview.module.css'
 
 export type XlsxViewerProps = {
@@ -28,24 +29,6 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
     bytes[i] = binary.charCodeAt(i)
   }
   return bytes.buffer
-}
-
-// Why: xlsx files are ZIP archives; .xlsx.read is lenient and happily
-// produces a single empty "Sheet1" on a non-ZIP buffer, so we check the
-// archive signature ourselves before parsing.
-const ZIP_MAGIC = [0x50, 0x4b, 0x03, 0x04]
-
-function isZipBuffer(buffer: ArrayBuffer): boolean {
-  if (buffer.byteLength < 4) {
-    return false
-  }
-  const head = new Uint8Array(buffer, 0, 4)
-  return (
-    head[0] === ZIP_MAGIC[0] &&
-    head[1] === ZIP_MAGIC[1] &&
-    head[2] === ZIP_MAGIC[2] &&
-    head[3] === ZIP_MAGIC[3]
-  )
 }
 
 // ponytail: SheetJS's html output doesn't include <colgroup> widths; build one

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import * as mammoth from 'mammoth'
 import DOMPurify from 'dompurify'
 import { translate } from '@/i18n/i18n'
+import { isZipBuffer } from '@shared/zip-magic'
 import { officeDocumentStyleMap } from './office-document-style-map'
 import styles from './OfficePreview.module.css'
 
@@ -97,6 +98,9 @@ export function DocxViewer({ filePath, fileName, content }: DocxViewerProps): Re
     ;(async () => {
       try {
         const arrayBuffer = base64ToArrayBuffer(content)
+        if (!isZipBuffer(arrayBuffer)) {
+          throw new Error('not a zip archive')
+        }
         // Why: mammoth's browser build reads `arrayBuffer`, its node build reads `buffer`.
         // Vite picks the browser build for the renderer; Vitest resolves the node one.
         // Its types only describe the node `Buffer` form, so narrow to the browser shape.
