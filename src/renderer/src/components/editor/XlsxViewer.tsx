@@ -152,7 +152,6 @@ export function XlsxViewer({ filePath, fileName, content }: XlsxViewerProps): Re
         </div>
       ) : (
         <div
-          key={current.name}
           className={styles.officePreview}
           data-testid="xlsx-preview"
           dangerouslySetInnerHTML={{ __html: current.html }}
