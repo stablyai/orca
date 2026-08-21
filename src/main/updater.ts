@@ -150,6 +150,8 @@ let backgroundCheckLaunchPending = false
 let backgroundCheckPromotedToUserInitiated = false
 let updateCheckStallTimer: ReturnType<typeof setTimeout> | null = null
 let updateCheckSilentSettleTimer: ReturnType<typeof setTimeout> | null = null
+// Why: tests with a fake clock advance hours in one tick; the 1s grace must be injectable to outlast that window.
+let updateCheckSilentSettleDelayMs = UPDATE_CHECK_SILENT_SETTLE_DELAY_MS
 let updateCheckAttemptSequence = 0
 let activeUpdateCheckAttemptId: number | null = null
 let activeUpdateCheckLaunchAttemptId: number | null = null
@@ -600,7 +602,7 @@ function handleSettledUpdateCheckPromise(attemptId: number): void {
   updateCheckSilentSettleTimer = setTimeout(() => {
     updateCheckSilentSettleTimer = null
     settleSilentUpdateCheck(attemptId, getSettledCheckUserInitiated())
-  }, UPDATE_CHECK_SILENT_SETTLE_DELAY_MS)
+  }, updateCheckSilentSettleDelayMs)
 }
 
 function shouldHandleUpdaterErrorEvent(): boolean {
@@ -2169,6 +2171,7 @@ export function setupAutoUpdater(
     setDismissedUpdateNudgeId?: (id: string | null) => void
     getReleaseChannelOverride?: () => ReleaseChannel | null
     installMode?: UpdateInstallMode
+    silentSettleDelayMs?: number
   }
 ): void {
   mainWindowRef = mainWindow
@@ -2181,6 +2184,7 @@ export function setupAutoUpdater(
   _setDismissedUpdateNudgeId = opts?.setDismissedUpdateNudgeId ?? null
   getReleaseChannelOverride = opts?.getReleaseChannelOverride ?? null
   updateInstallMode = opts?.installMode ?? 'interactive'
+  updateCheckSilentSettleDelayMs = opts?.silentSettleDelayMs ?? UPDATE_CHECK_SILENT_SETTLE_DELAY_MS
   lastInstallDeferralVersion = { download: null, install: null }
 
   const serveHandoffFailure = getServeUpdateHandoffFailure()
