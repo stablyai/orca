@@ -1283,6 +1283,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       repoId: selectedRepo?.id ?? initialRepoId
     })
   )
+  // Why: resolveMrBase resolves async — a stale promise from a since-superseded
+  // GitLab item pick must not restore an old baseBranch/pushTarget/linkedWorkItem
+  // over whatever the user selected next (mirrors the GitHub PR ref above).
+  const smartGitLabMrStartPointSelectionRef = useRef<object | null>(null)
   useEffect(() => {
     const clearAutoManagedName = (): void => {
       if (nameRef.current === lastAutoNameRef.current) {
@@ -3131,6 +3135,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // Why: GitLab parallel of handleSmartGitHubItemSelect — resolves MR base via worktrees:resolveMrBase (refs/merge-requests/<iid>/head); issues short-circuit.
   const handleSmartGitLabItemSelect = useCallback(
     (item: GitLabWorkItem): void => {
+      // Why: invalidate any in-flight MR base resolution from a prior selection
+      // before doing anything else, so its eventual .then/.catch is a no-op.
+      smartGitLabMrStartPointSelectionRef.current = null
       if (isProjectGroupTarget) {
         const linkedItem = toGitLabLinkedWorkItem(item)
         setLinkedGitLabIssue(item.type === 'issue' ? item.number : null)
@@ -3169,6 +3176,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setBaseBranch(undefined)
       setCompareBaseRef(undefined)
       setPushTarget(undefined)
+      const mrStartPointSelection = {}
+      smartGitLabMrStartPointSelectionRef.current = mrStartPointSelection
       const itemRepoSettings = getSettingsForRepoRuntimeOwner(
         { repos: [runRepo], settings },
         runRepo.id
@@ -3204,6 +3213,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             )
       void resolveMrBase
         .then((result) => {
+          if (smartGitLabMrStartPointSelectionRef.current !== mrStartPointSelection) {
+            return
+          }
           if ('error' in result) {
             // Why: an unsurfaced failure silently falls back to the repo default branch, so clear stale base state and toast — mirrors the GitHub PR path.
             setBaseBranch(undefined)
@@ -3220,6 +3232,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           )
         })
         .catch((error: unknown) => {
+          if (smartGitLabMrStartPointSelectionRef.current !== mrStartPointSelection) {
+            return
+          }
           setBaseBranch(undefined)
           setCompareBaseRef(undefined)
           setPushTarget(undefined)

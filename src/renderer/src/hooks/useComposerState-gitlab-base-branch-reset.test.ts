@@ -38,4 +38,37 @@ describe('useComposerState clears stale start-point state on GitLab item selecti
     expect(mrPath).toContain('setBaseBranch(undefined)')
     expect(mrPath).toContain('setPushTarget(undefined)')
   })
+
+  it('ignores a stale resolveMrBase result from a superseded GitLab item pick', () => {
+    const section = sourceBetween(
+      HOOK_SOURCE,
+      'const handleSmartGitLabItemSelect = useCallback(',
+      'const handleSmartBranchSelect = useCallback('
+    )
+
+    // Why: resolveMrBase resolves async — without a per-call token, selecting a
+    // second GitLab item while the first MR's resolution is still in flight let
+    // the stale .then/.catch overwrite the newer selection's baseBranch,
+    // pushTarget, and linked work item (mirrors the GitHub PR ref's guard).
+    const invalidateAt = section.indexOf('smartGitLabMrStartPointSelectionRef.current = null')
+    const projectGroupCheckAt = section.indexOf('if (isProjectGroupTarget) {')
+    expect(invalidateAt).toBeGreaterThanOrEqual(0)
+    expect(invalidateAt).toBeLessThan(projectGroupCheckAt)
+
+    const mintAt = section.indexOf('const mrStartPointSelection = {}')
+    const assignAt = section.indexOf(
+      'smartGitLabMrStartPointSelectionRef.current = mrStartPointSelection'
+    )
+    expect(mintAt).toBeGreaterThan(invalidateAt)
+    expect(assignAt).toBeGreaterThan(mintAt)
+
+    const thenSection = sourceBetween(section, '.then((result) => {', '.catch((error: unknown) => {')
+    expect(thenSection).toContain(
+      'if (smartGitLabMrStartPointSelectionRef.current !== mrStartPointSelection) {'
+    )
+    const catchSection = section.slice(section.indexOf(thenSection) + thenSection.length)
+    expect(catchSection).toContain(
+      'if (smartGitLabMrStartPointSelectionRef.current !== mrStartPointSelection) {'
+    )
+  })
 })
