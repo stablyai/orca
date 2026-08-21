@@ -90,7 +90,11 @@ function spawnRecoveryProcess(
   if (wslHome) {
     return dependencies.spawnProcess(
       'wsl.exe',
-      buildWslCodexAppServerArgs(wslHome.distro, wslHome.linuxPath),
+      buildWslCodexAppServerArgs(
+        wslHome.distro,
+        wslHome.linuxPath,
+        CODEX_READ_ONLY_APP_SERVER_ARGS
+      ),
       {
         stdio: ['pipe', 'ignore', 'ignore'],
         windowsHide: true,

@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as ownerIdentity from '../agent-hooks/managed-hook-owner-identity'
+import { CODEX_READ_ONLY_APP_SERVER_ARGS } from '../codex-cli/codex-read-only-app-server-args'
+import { getCmdExePath } from '../win32-utils'
 import {
   _internals,
   resolveCodexBackfillSupervisorLockRoot,
@@ -12,7 +14,6 @@ import {
   withCodexBackfillSupervisorLock
 } from './codex-state-db-backfill-recovery'
 import type { CodexStateDbBackfillStatus } from './codex-state-db'
-import { getCmdExePath } from '../win32-utils'
 
 const temporaryRoots: string[] = []
 const originalPlatform = process.platform
@@ -477,6 +478,9 @@ describe('Codex state DB backfill recovery', () => {
     const command = spawnCall[1].join(' ')
     expect(command).toContain('export CODEX_HOME=')
     expect(command).toContain('/home/alice/.codex')
+    for (const arg of CODEX_READ_ONLY_APP_SERVER_ARGS) {
+      expect(command).toContain(arg)
+    }
   })
 })
 
