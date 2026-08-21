@@ -117,3 +117,37 @@ describe('acknowledgedAgentsByPaneKey cleanup on teardown', () => {
     expect(ackAt < newEntry.stateStartedAt).toBe(true)
   })
 })
+
+// #15445: acknowledging from the Activity page must also retire the unread
+// completion marker. Leaving it set kept the sidebar badge counting panes
+// whose threads were already read — the terminal view's
+// useAutoAckViewedAgent cleared it, but this path did not.
+describe('acknowledgeAgents clears unreadAgentCompletionPanes (#15445)', () => {
+  it('removes the acknowledged pane keys from the completion map', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store.setState({
+      unreadAgentCompletionPanes: {
+        'tab-1:0': { at: 1_000 },
+        'tab-2:0': { at: 1_100 }
+      }
+    } as never)
+
+    store.getState().acknowledgeAgents(['tab-1:0'])
+
+    const panes = store.getState().unreadAgentCompletionPanes
+    expect(panes['tab-1:0']).toBeUndefined()
+    expect(panes['tab-2:0']).toBeDefined()
+  })
+
+  it('leaves the map untouched (same reference) when nothing matched', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const before: Record<string, { at: number }> = { 'tab-2:0': { at: 1_100 } }
+    store.setState({ unreadAgentCompletionPanes: before } as never)
+
+    store.getState().acknowledgeAgents(['tab-1:0'])
+
+    expect(store.getState().unreadAgentCompletionPanes).toBe(before)
+  })
+})

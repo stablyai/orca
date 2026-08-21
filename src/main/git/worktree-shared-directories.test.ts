@@ -1,8 +1,8 @@
 import { execFileSync } from 'node:child_process'
 import { lstatSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { devNull, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearConfiguredWorktreeSharedDirectoriesCacheForTests,
   getConfiguredWorktreeSharedDirectories,
@@ -16,14 +16,25 @@ import {
 import { assertWorktreeCleanForRemoval } from './worktree'
 import { getStatus } from './status'
 
+// Isolate git config with real empty files. os.devNull resolves to a
+// Windows device path Git rejects as a config path ("fatal: unable to
+// access '//./nul': Invalid argument") — every git call in this file
+// failed on Windows while CI's Linux/macOS runners accepted /dev/null
+// and stayed green (#15409).
+const configDir = mkdtempSync(join(tmpdir(), 'orca-git-config-'))
+const emptyGlobalConfig = join(configDir, 'global.gitconfig')
+const emptySystemConfig = join(configDir, 'system.gitconfig')
+writeFileSync(emptyGlobalConfig, '')
+writeFileSync(emptySystemConfig, '')
+
 const git = (args: string[], cwd: string): void => {
   execFileSync('git', args, {
     cwd,
     stdio: 'ignore',
     env: {
       ...process.env,
-      GIT_CONFIG_GLOBAL: devNull,
-      GIT_CONFIG_SYSTEM: devNull
+      GIT_CONFIG_GLOBAL: emptyGlobalConfig,
+      GIT_CONFIG_SYSTEM: emptySystemConfig
     }
   })
 }
@@ -50,8 +61,12 @@ describe('resolveWorktreeSharedDirectories', () => {
   })
 
   afterEach(() => {
-    warn.mockRestore()
-    rmSync(repo, { recursive: true, force: true })
+    warn?.mockRestore?.()
+    if (repo) rmSync(repo, { recursive: true, force: true })
+  })
+
+  afterAll(() => {
+    rmSync(configDir, { recursive: true, force: true })
   })
 
   it('returns gitignored directories listed under worktree.sharedDirectories', async () => {
