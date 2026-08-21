@@ -1287,6 +1287,14 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // GitLab item pick must not restore an old baseBranch/pushTarget/linkedWorkItem
   // over whatever the user selected next (mirrors the GitHub PR ref above).
   const smartGitLabMrStartPointSelectionRef = useRef<object | null>(null)
+  // Why: any competing selection (a different work item, a manual base/branch
+  // pick, a repo change, or clearing the source) must invalidate BOTH pending
+  // async resolutions together, or whichever one is still in flight can land
+  // after the fact and overwrite the newer selection's state.
+  const invalidateSmartStartPointSelections = useCallback((): void => {
+    smartGitHubPrStartPointSelectionRef.current = null
+    smartGitLabMrStartPointSelectionRef.current = null
+  }, [])
   useEffect(() => {
     const clearAutoManagedName = (): void => {
       if (nameRef.current === lastAutoNameRef.current) {
@@ -2337,7 +2345,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // Why: review routing prefers one provider identity — clear the opposite provider slots so stale hidden fields can't win later.
   const applyLinkedGitLabWorkItem = useCallback(
     (item: GitLabWorkItem): void => {
-      smartGitHubPrStartPointSelectionRef.current = null
+      invalidateSmartStartPointSelections()
       if (item.type === 'issue') {
         setLinkedGitLabIssue(item.number)
         setLinkedGitLabMR(null)
@@ -2383,19 +2391,19 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setBranchNameOverridePreservesNameEdits(false)
       branchAutoNameRef.current = ''
     },
-    [name]
+    [invalidateSmartStartPointSelections, name]
   )
 
   const handleSelectLinkedItem = useCallback(
     (item: GitHubWorkItem): void => {
-      smartGitHubPrStartPointSelectionRef.current = null
+      invalidateSmartStartPointSelections()
       applyLinkedWorkItem(item)
       setLinkPopoverOpen(false)
       setLinkQuery('')
       setLinkDebouncedQuery('')
       setLinkDirectItem(null)
     },
-    [applyLinkedWorkItem]
+    [applyLinkedWorkItem, invalidateSmartStartPointSelections]
   )
 
   const handleLinkPopoverChange = useCallback((open: boolean): void => {
@@ -2408,7 +2416,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   }, [])
 
   const handleRemoveLinkedWorkItem = useCallback((): void => {
-    smartGitHubPrStartPointSelectionRef.current = null
+    invalidateSmartStartPointSelections()
     const removedLinearItem = isLinearLinkedWorkItem(linkedWorkItem)
     setLinkedWorkItem(null)
     setLinkedTaskSourceContext(null)
@@ -2424,7 +2432,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setBranchNameOverridePreservesNameEdits(false)
       branchAutoNameRef.current = ''
     }
-  }, [linkedWorkItem, name])
+  }, [invalidateSmartStartPointSelections, linkedWorkItem, name])
 
   const handleNameValueChange = useCallback(
     (nextName: string): void => {
@@ -2743,7 +2751,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setForkPushWarning(null)
       }
       if (!options.preserveStartFrom) {
-        smartGitHubPrStartPointSelectionRef.current = null
+        invalidateSmartStartPointSelections()
         setLinkedIssue('')
         setLinkedPR(null)
         setLinkedGitLabIssue(null)
@@ -2776,7 +2784,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setStartFromResetHint(hint)
       }
     },
-    [baseBranch, linkedWorkItem, repoId, setRepoId]
+    [baseBranch, invalidateSmartStartPointSelections, linkedWorkItem, repoId, setRepoId]
   )
   const handleFolderSourceRepoChange = useCallback(
     (value: string): void => {
@@ -2784,7 +2792,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         return
       }
       setRepoId(value)
-      smartGitHubPrStartPointSelectionRef.current = null
+      invalidateSmartStartPointSelections()
       setLinkedWorkItem((current) =>
         current && !shouldPreserveWorkspaceSourceOnRepoChange(current) ? null : current
       )
@@ -2796,7 +2804,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setLinkedGitLabIssue(null)
       setLinkedGitLabMR(null)
     },
-    [folderSourceRepos, linkedWorkItem, setRepoId]
+    [folderSourceRepos, invalidateSmartStartPointSelections, linkedWorkItem, setRepoId]
   )
   const handleProjectHostSetupChange = useCallback(
     (setupId: string): void => {
@@ -2945,7 +2953,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const handleBaseBranchChange = useCallback(
     (next: string | undefined): void => {
-      smartGitHubPrStartPointSelectionRef.current = null
+      invalidateSmartStartPointSelections()
       setBaseBranch(next)
       setCompareBaseRef(undefined)
       setPushTarget(undefined)
@@ -2963,7 +2971,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setForkPushWarning(null)
       setStartFromResetHint(null)
     },
-    [linkedWorkItem]
+    [invalidateSmartStartPointSelections, linkedWorkItem]
   )
 
   const handleBaseBranchPrSelect = useCallback(
@@ -3026,6 +3034,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const handleSmartGitHubItemSelect = useCallback(
     (item: GitHubWorkItem): void => {
+      // Why: invalidate any in-flight PR/MR base resolution from a prior
+      // selection before doing anything else, so a stale one is a no-op.
+      invalidateSmartStartPointSelections()
       const identity = resolveGitHubWorkItemIdentity(item)
       const normalizedItem: GitHubWorkItem = {
         ...item,
@@ -3058,7 +3069,6 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setBranchNameOverridePreservesNameEdits(false)
       setForkPushWarning(null)
       branchAutoNameRef.current = ''
-      smartGitHubPrStartPointSelectionRef.current = null
       // Why: provider items can come from a different source host than the run host — resolve refs against the run repo, keep item metadata for provider identity.
       const runRepo = selectedRepo ?? eligibleRepos.find((repo) => repo.id === item.repoId)
       applyLinkedWorkItem(normalizedItem)
@@ -3124,6 +3134,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       applyLinkedWorkItem,
       eligibleRepos,
       handleBaseBranchPrSelect,
+      invalidateSmartStartPointSelections,
       isProjectGroupTarget,
       name,
       selectedRepo,
@@ -3135,9 +3146,9 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
   // Why: GitLab parallel of handleSmartGitHubItemSelect — resolves MR base via worktrees:resolveMrBase (refs/merge-requests/<iid>/head); issues short-circuit.
   const handleSmartGitLabItemSelect = useCallback(
     (item: GitLabWorkItem): void => {
-      // Why: invalidate any in-flight MR base resolution from a prior selection
+      // Why: invalidate any in-flight PR/MR base resolution from a prior selection
       // before doing anything else, so its eventual .then/.catch is a no-op.
-      smartGitLabMrStartPointSelectionRef.current = null
+      invalidateSmartStartPointSelections()
       if (isProjectGroupTarget) {
         const linkedItem = toGitLabLinkedWorkItem(item)
         setLinkedGitLabIssue(item.type === 'issue' ? item.number : null)
@@ -3249,6 +3260,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       applyLinkedGitLabWorkItem,
       eligibleRepos,
       handleBaseBranchMrSelect,
+      invalidateSmartStartPointSelections,
       isProjectGroupTarget,
       name,
       selectedRepo,
@@ -3258,7 +3270,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const handleSmartBranchSelect = useCallback(
     (refName: string, localBranchName: string): void => {
-      smartGitHubPrStartPointSelectionRef.current = null
+      invalidateSmartStartPointSelections()
       const selection = resolveComposerBranchPick({
         refName,
         localBranchName,
@@ -3287,7 +3299,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         branchAutoNameRef.current = selection.branchNameOverride ? selection.branchAutoName : ''
       }
     },
-    [name, worktreesByRepo, repoId]
+    [invalidateSmartStartPointSelections, name, worktreesByRepo, repoId]
   )
 
   const handleReuseSelectedBranchChange = useCallback(
@@ -3308,6 +3320,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
 
   const handleSmartLinearIssueSelect = useCallback(
     (issue: LinearIssue): void => {
+      invalidateSmartStartPointSelections()
       if (isProjectGroupTarget) {
         const linkedItem = toLinearLinkedWorkItem(issue)
         setLinkedIssue('')
@@ -3356,11 +3369,12 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       branchAutoNameRef.current = linearBranchName ?? ''
       // Why: don't prefill the note for a Linear pick — that would turn a source selection into user-authored instructions (matches the GitHub flow).
     },
-    [isProjectGroupTarget, name]
+    [invalidateSmartStartPointSelections, isProjectGroupTarget, name]
   )
 
   const handleSmartJiraIssueSelect = useCallback(
     (issue: JiraIssue, sourceContext: TaskSourceContext): void => {
+      invalidateSmartStartPointSelections()
       const linkedItem: LinkedWorkItemSummary = buildJiraWorkspaceSource(issue)
       setLinkedIssue('')
       setLinkedPR(null)
@@ -3390,11 +3404,11 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         lastAutoNameRef.current = suggestedName
       }
     },
-    [name]
+    [invalidateSmartStartPointSelections, name]
   )
 
   const handleClearSmartNameSelection = useCallback((): void => {
-    smartGitHubPrStartPointSelectionRef.current = null
+    invalidateSmartStartPointSelections()
     setLinkedIssue('')
     setLinkedPR(null)
     setLinkedGitLabIssue(null)
@@ -3419,7 +3433,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       setNote('')
       lastAutoNoteRef.current = ''
     }
-  }, [name])
+  }, [invalidateSmartStartPointSelections, name])
 
   const smartNameSelection = useMemo<SmartWorkspaceNameSelection | null>(() => {
     if (isProjectGroupTarget) {

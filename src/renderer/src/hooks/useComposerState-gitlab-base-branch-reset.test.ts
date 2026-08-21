@@ -25,11 +25,7 @@ describe('useComposerState clears stale start-point state on GitLab item selecti
     // from the wrong place, or a stale fork pushTarget from an earlier GitHub PR could
     // leak into a GitLab create. Mirrors handleSmartGitHubItemSelect's
     // setBaseBranch/setPushTarget(undefined) on both sides of its type check.
-    const shortCircuit = sourceBetween(
-      section,
-      "if (item.type !== 'mr' || !runRepo) {",
-      '}'
-    )
+    const shortCircuit = sourceBetween(section, "if (item.type !== 'mr' || !runRepo) {", '}')
     expect(shortCircuit).toContain('setBaseBranch(undefined)')
     expect(shortCircuit).toContain('setPushTarget(undefined)')
 
@@ -50,7 +46,7 @@ describe('useComposerState clears stale start-point state on GitLab item selecti
     // second GitLab item while the first MR's resolution is still in flight let
     // the stale .then/.catch overwrite the newer selection's baseBranch,
     // pushTarget, and linked work item (mirrors the GitHub PR ref's guard).
-    const invalidateAt = section.indexOf('smartGitLabMrStartPointSelectionRef.current = null')
+    const invalidateAt = section.indexOf('invalidateSmartStartPointSelections()')
     const projectGroupCheckAt = section.indexOf('if (isProjectGroupTarget) {')
     expect(invalidateAt).toBeGreaterThanOrEqual(0)
     expect(invalidateAt).toBeLessThan(projectGroupCheckAt)
@@ -70,5 +66,44 @@ describe('useComposerState clears stale start-point state on GitLab item selecti
     expect(catchSection).toContain(
       'if (smartGitLabMrStartPointSelectionRef.current !== mrStartPointSelection) {'
     )
+  })
+})
+
+describe('useComposerState invalidates both PR/MR start-point refs together', () => {
+  it('defines one helper that nulls the GitHub PR and GitLab MR refs together', () => {
+    const helper = sourceBetween(
+      HOOK_SOURCE,
+      'const invalidateSmartStartPointSelections = useCallback((): void => {',
+      '}, [])'
+    )
+    expect(helper).toContain('smartGitHubPrStartPointSelectionRef.current = null')
+    expect(helper).toContain('smartGitLabMrStartPointSelectionRef.current = null')
+  })
+
+  it('calls the shared invalidator from every competing selection, not just a GitLab item pick', () => {
+    // Why: a pending GitLab MR (or GitHub PR) base resolution is async — any other
+    // action that changes what's selected (a different provider's item, a manual
+    // base/branch pick, a repo change, or clearing the source) must invalidate it
+    // too, or the stale .then/.catch can still land and restore old state.
+    const handlers = [
+      'const handleSelectLinkedItem = useCallback(',
+      'const handleRemoveLinkedWorkItem = useCallback((): void => {',
+      'const handleRepoChange = useCallback(',
+      'const handleFolderSourceRepoChange = useCallback(',
+      'const handleBaseBranchChange = useCallback(',
+      'const handleSmartGitHubItemSelect = useCallback(',
+      'const handleSmartGitLabItemSelect = useCallback(',
+      'const handleSmartBranchSelect = useCallback(',
+      'const handleSmartLinearIssueSelect = useCallback(',
+      'const handleSmartJiraIssueSelect = useCallback(',
+      'const handleClearSmartNameSelection = useCallback((): void => {'
+    ]
+
+    for (let i = 0; i < handlers.length; i += 1) {
+      const start = handlers[i]
+      const end = handlers[i + 1] ?? 'const smartNameSelection = useMemo<SmartWorkspaceNameSelection | null>('
+      const section = sourceBetween(HOOK_SOURCE, start, end)
+      expect(section).toContain('invalidateSmartStartPointSelections()')
+    }
   })
 })

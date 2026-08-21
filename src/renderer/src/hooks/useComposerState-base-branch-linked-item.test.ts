@@ -29,13 +29,13 @@ describe('useComposerState base-branch picks preserve a linked task branch name'
     expect(section).toContain('setReuseEligibleBranch(null)')
     expect(section).toContain('setReuseSelectedBranch(false)')
     expect(section).toContain("branchAutoNameRef.current = ''")
-    // compareBaseRef/pushTarget/the GitHub PR start-point ref clear unconditionally.
-    expect(section.indexOf('smartGitHubPrStartPointSelectionRef.current = null')).toBeLessThan(
+    // compareBaseRef/pushTarget/both PR/MR start-point refs clear unconditionally.
+    expect(section.indexOf('invalidateSmartStartPointSelections()')).toBeLessThan(
       section.indexOf('if (!linkedWorkItem) {')
     )
     expect(section.indexOf('setCompareBaseRef(undefined)')).toBeLessThan(
       section.indexOf('if (!linkedWorkItem) {')
     )
-    expect(section).toContain('[linkedWorkItem]')
+    expect(section).toContain('[invalidateSmartStartPointSelections, linkedWorkItem]')
   })
 })
