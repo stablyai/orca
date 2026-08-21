@@ -307,7 +307,7 @@
   --input: rgb(255 255 255 / 0.16);
   /* Focus = Ch2 trace cyan on slate ground. */
   --ring: #53c6d8;
-  --terminal-pane-locate: var(--color-blue-400);
+  --terminal-pane-locate: #53c6d8;
   /* Interactive accent = Ch2 cyan. */
   --ai-action-accent: #53c6d8;
   /* "An agent is asking you something" — channel Ch3 magenta, separable from
