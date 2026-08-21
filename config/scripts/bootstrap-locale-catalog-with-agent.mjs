@@ -80,8 +80,10 @@ function restorePlaceholders(text, tokens) {
   return result
 }
 
-function countPlaceholders(text) {
-  return (text.match(PLACEHOLDER_RE) ?? []).length
+function hasMatchingPlaceholders(source, translated) {
+  const sourcePlaceholders = (source.match(PLACEHOLDER_RE) ?? []).sort()
+  const translatedPlaceholders = (translated.match(PLACEHOLDER_RE) ?? []).sort()
+  return JSON.stringify(sourcePlaceholders) === JSON.stringify(translatedPlaceholders)
 }
 
 async function callAgent(prompt) {
@@ -131,7 +133,7 @@ ${JSON.stringify(payload)}`
           throw new Error(`missing translation for index ${entry.index}`)
         }
         const restored = restorePlaceholders(raw, entry.tokens)
-        if (countPlaceholders(restored) !== countPlaceholders(entry.value)) {
+        if (!hasMatchingPlaceholders(entry.value, restored)) {
           // Why: a dropped/mangled placeholder breaks interpolation at
           // render time — fall back to English for just this one string
           // rather than failing (or shipping broken output for) the batch.
