@@ -88,6 +88,41 @@ type FileContent = {
 
 const noopCloseMarkdownTableOfContents = (): void => {}
 
+// Why: docx/xlsx/image binaries share the same dispatch shape (mimeType → viewer)
+// across the active-file and conflict-review branches. Centralize so adding a
+// new previewable MIME touches one place instead of two parallel if-ladders.
+function renderBinaryViewer(
+  fc: FileContent,
+  filePath: string,
+  fileName: string,
+  imageViewerScrollKey: string | undefined
+): React.JSX.Element {
+  if (fc.mimeType === DOCX_MIME) {
+    return <DocxViewer filePath={filePath} fileName={fileName} content={fc.content} />
+  }
+  if (fc.mimeType === XLSX_MIME) {
+    return <XlsxViewer filePath={filePath} fileName={fileName} content={fc.content} />
+  }
+  if (fc.isImage) {
+    return (
+      <ImageViewer
+        content={fc.content}
+        filePath={filePath}
+        mimeType={fc.mimeType}
+        scrollCacheKey={imageViewerScrollKey}
+      />
+    )
+  }
+  return (
+    <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+      {translate(
+        'auto.components.editor.EditorContent.b9de81ba52',
+        'Binary file — cannot display'
+      )}
+    </div>
+  )
+}
+
 function matchesPendingEditorReveal(
   reveal: PendingEditorReveal | null,
   file: Pick<OpenFile, 'id' | 'filePath'>
@@ -508,47 +543,14 @@ export function EditorContent({
       )
     }
     if (fc.isBinary) {
-      if (fc.mimeType === DOCX_MIME) {
-        return (
-          <div className={className}>
-            <DocxViewer
-              filePath={contentFile.filePath}
-              fileName={basename(contentFile.filePath)}
-              content={fc.content}
-            />
-          </div>
-        )
-      }
-      if (fc.mimeType === XLSX_MIME) {
-        return (
-          <div className={className}>
-            <XlsxViewer
-              filePath={contentFile.filePath}
-              fileName={basename(contentFile.filePath)}
-              content={fc.content}
-            />
-          </div>
-        )
-      }
-      if (fc.isImage) {
-        return (
-          <div className={className}>
-            <ImageViewer
-              content={fc.content}
-              filePath={contentFile.filePath}
-              mimeType={fc.mimeType}
-            />
-          </div>
-        )
-      }
       return (
         <div className={className}>
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-            {translate(
-              'auto.components.editor.EditorContent.b9de81ba52',
-              'Binary file — cannot display'
-            )}
-          </div>
+          {renderBinaryViewer(
+            fc,
+            contentFile.filePath,
+            basename(contentFile.filePath),
+            undefined
+          )}
         </div>
       )
     }
@@ -776,42 +778,7 @@ export function EditorContent({
       return <FileLoadErrorView message={fc.loadError} onRetry={() => reloadContent(activeFile)} />
     }
     if (fc.isBinary) {
-      if (fc.mimeType === DOCX_MIME) {
-        return (
-          <DocxViewer
-            filePath={activeFile.filePath}
-            fileName={activeFileName}
-            content={fc.content}
-          />
-        )
-      }
-      if (fc.mimeType === XLSX_MIME) {
-        return (
-          <XlsxViewer
-            filePath={activeFile.filePath}
-            fileName={activeFileName}
-            content={fc.content}
-          />
-        )
-      }
-      if (fc.isImage) {
-        return (
-          <ImageViewer
-            content={fc.content}
-            filePath={activeFile.filePath}
-            mimeType={fc.mimeType}
-            scrollCacheKey={pdfViewStateKey}
-          />
-        )
-      }
-      return (
-        <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-          {translate(
-            'auto.components.editor.EditorContent.b9de81ba52',
-            'Binary file — cannot display'
-          )}
-        </div>
-      )
+      return renderBinaryViewer(fc, activeFile.filePath, activeFileName, pdfViewStateKey)
     }
     const externalChangeBanner =
       activeFile.externalMutation === 'changed' ? (
