@@ -295,6 +295,27 @@ describe('skill discovery', () => {
     )
   })
 
+
+  it('discovers a Hermes-native skill from ~/.hermes/skills (#15628)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
+    const home = join(root, 'home')
+    const hermesSkills = join(home, '.hermes', 'skills')
+    await mkdir(join(hermesSkills, 'research'), { recursive: true })
+    await writeFile(join(hermesSkills, 'research', 'SKILL.md'), '# research')
+
+    const result = await discoverSkills({ homeDir: home, repos: [], includeCwd: false })
+
+    const skill = result.skills.find((entry) => entry.name === 'research')
+    expect(skill).toMatchObject({
+      name: 'research',
+      providers: ['agent-skills']
+    })
+    expect(result.sources.find((source) => source.id === 'home-hermes')).toMatchObject({
+      owner: 'hermes',
+      exists: true
+    })
+  })
+
   it('keys every deduped root to an owning source so per-agent coverage resolves', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
     const home = join(root, 'home')
@@ -364,6 +385,7 @@ describe('skill discovery', () => {
     expect(rootPaths).toEqual(
       expect.arrayContaining([
         '/home/test/.grok/skills',
+        '/home/test/.hermes/skills',
         '/home/test/.config/opencode/skills',
         '/home/test/.pi/agent/skills',
         '/home/test/.omp/agent/skills',
