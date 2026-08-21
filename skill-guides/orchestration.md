@@ -184,6 +184,16 @@ Unless the user or task requests a specific agent, model, or effort, omit `--age
 
 Create the Run and every independent Task first, then start all independent workers before waiting:
 
+For the usual configured-default launch, omit launch preference flags:
+
+```bash
+orca orchestration run-create --objective "<objective>" --json
+orca orchestration task-create --spec "<worker A task>" --json
+orca orchestration task-create --spec "<worker B task>" --json
+orca orchestration worker-start --task <task_a> --worktree current --json
+orca orchestration worker-start --task <task_b> --worktree current --json
+```
+
 For user-requested or task-specified mixed-agent parallel work, specify each agent:
 
 ```bash
@@ -271,6 +281,12 @@ Recovery is conditional, never a fixed destructive sequence:
 - It proves `failed` or `stopped`: start a replacement with `worker-start --task <task> --retry-of <id>` plus explicit `--on`/`--worktree` placement and an explicit choice between a new agent terminal (omit `--terminal`) and an existing terminal (`--terminal <handle>`). A new launch still follows the defaults rule above for `--agent`, `--model`, and `--effort`; a failed worker is not a reason to promote its model. Retry does not silently inherit placement.
 - It remains `outcome_unknown`: either `worker-stop --dispatch <id>` and inspect again, or explicitly `worker-abandon --dispatch <id>` while accepting that resources may still be live. Abandon performs no remote, process, or filesystem action.
 - `worker-stop` closes only the exact supervised agent terminal. It never deletes the worktree, setup terminal, configured tabs, or unrelated processes.
+
+For a new retry in the current worktree:
+
+```bash
+orca orchestration worker-start --task <task_id> --retry-of <dispatch_id> --worktree current --json
+```
 
 Low-level `worktree create`, `terminal create`, and `dispatch --inject` remain valid recipes for custom argv or topology that `worker-start` does not express.
 

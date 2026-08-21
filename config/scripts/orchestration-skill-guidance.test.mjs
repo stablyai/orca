@@ -24,6 +24,38 @@ function getSection(markdown, heading) {
   return match?.[1] ?? ''
 }
 
+function getBashCodeBlock(markdown, marker) {
+  const codeBlock = [...markdown.matchAll(/```bash\r?\n([\s\S]*?)\r?\n```/g)].find(([, content]) =>
+    content.includes(marker)
+  )?.[1]
+
+  expect(codeBlock).toBeDefined()
+
+  return codeBlock ?? ''
+}
+
+function getOrchestrationCommandLines(codeBlock) {
+  return codeBlock
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('orca orchestration '))
+}
+
+function getWorkerStartCommandLines(codeBlock) {
+  return getOrchestrationCommandLines(codeBlock).filter((line) =>
+    line.startsWith('orca orchestration worker-start ')
+  )
+}
+
+function expectDefaultWorkerStartCommands(codeBlock, expectedCommands) {
+  const commands = getWorkerStartCommandLines(codeBlock)
+
+  expect(commands).not.toEqual(
+    expect.arrayContaining([expect.stringMatching(/\s--(?:agent|model|effort)(?:\s|$)/)])
+  )
+  expect(commands).toEqual(expectedCommands)
+}
+
 describe('orchestration skill guidance', () => {
   it('requires Orca runtime state before claiming a worker was orchestrated', () => {
     const skill = readSkill()
@@ -281,6 +313,10 @@ describe('orchestration skill guidance', () => {
 
   it('documents per-invocation model and effort for supervised workers', () => {
     const workerLoop = getSection(readSkill(), 'Preferred Supervised Worker Loop')
+    const overrideExample = getBashCodeBlock(
+      workerLoop,
+      'orca orchestration worker-start --task <task_id> --worktree current --agent claude --model opus --effort high --json'
+    )
 
     expect(workerLoop).toContain('opaque provider model id with `--model`')
     expect(workerLoop).toContain('`--effort` requires `--model`')
@@ -289,11 +325,26 @@ describe('orchestration skill guidance', () => {
       'use the following only when the user has specifically requested Claude `opus` at high effort'
     )
     expect(workerLoop).toContain('--agent claude --model opus --effort high --json')
+    expect(getOrchestrationCommandLines(overrideExample)).toEqual([
+      'orca orchestration worker-start --task <task_id> --worktree current --agent claude --model opus --effort high --json'
+    ])
     expect(workerLoop).toContain('`launch.requested` and `launch.effective`')
   })
 
   it('prefers configured worker defaults for ordinary supervised launches', () => {
     const workerLoop = getSection(readSkill(), 'Preferred Supervised Worker Loop')
+    const ordinaryExample = getBashCodeBlock(
+      workerLoop,
+      'orca orchestration worker-start --task <task_a> --worktree current'
+    )
+    const mixedAgentExample = getBashCodeBlock(
+      workerLoop,
+      'orca orchestration worker-start --task <task_a> --worktree current --agent codex --json'
+    )
+    const newWorktreeExample = getBashCodeBlock(
+      workerLoop,
+      'orca orchestration worker-start --task <task_id> --worktree new-child'
+    )
 
     expect(workerLoop).toContain(
       'Unless the user or task requests a specific agent, model, or effort, omit `--agent`, ' +
@@ -318,13 +369,51 @@ describe('orchestration skill guidance', () => {
     expect(workerLoop).toContain(
       'reusing a terminal does not inject the configured worker defaults.'
     )
-    expect(workerLoop).toContain(
+    expectDefaultWorkerStartCommands(ordinaryExample, [
+      'orca orchestration worker-start --task <task_a> --worktree current --json',
+      'orca orchestration worker-start --task <task_b> --worktree current --json'
+    ])
+    expect(getOrchestrationCommandLines(ordinaryExample)).toEqual([
+      'orca orchestration run-create --objective "<objective>" --json',
+      'orca orchestration task-create --spec "<worker A task>" --json',
+      'orca orchestration task-create --spec "<worker B task>" --json',
+      'orca orchestration worker-start --task <task_a> --worktree current --json',
+      'orca orchestration worker-start --task <task_b> --worktree current --json'
+    ])
+    expect(
+      workerLoop.indexOf(
+        'orca orchestration worker-start --task <task_a> --worktree current --json'
+      )
+    ).toBeLessThan(
+      workerLoop.indexOf(
+        'orca orchestration worker-start --task <task_a> --worktree current --agent codex --json'
+      )
+    )
+    expect(getWorkerStartCommandLines(mixedAgentExample)).toEqual([
+      'orca orchestration worker-start --task <task_a> --worktree current --agent codex --json',
+      'orca orchestration worker-start --task <task_b> --worktree current --agent claude --json'
+    ])
+    expect(
+      getWorkerStartCommandLines(mixedAgentExample).every((command) => command.includes('--agent'))
+    ).toBe(true)
+    expectDefaultWorkerStartCommands(newWorktreeExample, [
+      'orca orchestration worker-start --task <task_id> --worktree new-child --name <name> --setup run --json',
+      'orca orchestration worker-start --task <task_id> --worktree new-top-level --name <name> --setup run --json'
+    ])
+    expect(getWorkerStartCommandLines(newWorktreeExample)).toContain(
       'orca orchestration worker-start --task <task_id> --worktree new-child --name <name> --setup run --json'
+    )
+    expect(getWorkerStartCommandLines(newWorktreeExample)).toContain(
+      'orca orchestration worker-start --task <task_id> --worktree new-top-level --name <name> --setup run --json'
     )
   })
 
   it('keeps retries on configured agent, model, and effort defaults', () => {
     const workerLoop = getSection(readSkill(), 'Preferred Supervised Worker Loop')
+    const retryExample = getBashCodeBlock(
+      workerLoop,
+      'orca orchestration worker-start --task <task_id> --retry-of <dispatch_id> --worktree current'
+    )
 
     expect(workerLoop).toContain(
       'explicit `--on`/`--worktree` placement and an explicit choice between a new agent terminal (omit `--terminal`) and an existing terminal (`--terminal <handle>`)'
@@ -334,6 +423,9 @@ describe('orchestration skill guidance', () => {
     )
     expect(workerLoop).toContain('a failed worker is not a reason to promote its model')
     expect(workerLoop).toContain('Retry does not silently inherit placement.')
+    expectDefaultWorkerStartCommands(retryExample, [
+      'orca orchestration worker-start --task <task_id> --retry-of <dispatch_id> --worktree current --json'
+    ])
   })
 
   it('never authorizes release from idle, timeout, or worker-side triggers', () => {
