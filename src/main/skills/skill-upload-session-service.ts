@@ -25,6 +25,7 @@ export class SkillUploadSessionService {
   private readonly ownership: SkillUploadStagingOwnership
   private readonly transferredPaths = new Set<string>()
   private readonly operations = new SkillUploadOperationLifecycle()
+  private disposal: Promise<void> | null = null
   private disposed = false
 
   constructor(
@@ -207,13 +208,15 @@ export class SkillUploadSessionService {
     }
   }
 
-  async dispose(): Promise<void> {
-    if (this.disposed) {
-      await this.operations.settle()
-      await this.removeOwnershipIfDisposed()
-      return
+  dispose(): Promise<void> {
+    if (!this.disposal) {
+      this.disposed = true
+      this.disposal = this.disposeOwnedStaging()
     }
-    this.disposed = true
+    return this.disposal
+  }
+
+  private async disposeOwnedStaging(): Promise<void> {
     await this.operations.settle()
     await Promise.all([...this.sessions.keys()].map((id) => this.cancelSession(id)))
     await this.removeOwnershipIfDisposed()

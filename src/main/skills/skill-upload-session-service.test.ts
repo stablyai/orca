@@ -154,6 +154,21 @@ describe('SkillUploadSessionService', () => {
     expect(await readdir(uploads)).toEqual([])
   })
 
+  it('joins concurrent disposal callers through exact cleanup completion', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-session-'))
+    roots.push(root)
+    const uploads = join(root, 'uploads')
+    const service = new SkillUploadSessionService(uploads)
+    await service.begin({ package: identity(Buffer.from('closing package')) })
+
+    const first = service.dispose()
+    const second = service.dispose()
+
+    expect(second).toBe(first)
+    await Promise.all([first, second])
+    expect(await readdir(uploads)).toEqual([])
+  })
+
   it('bounds each abandoned-owner sweep and can resume cleanup on retry', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-session-'))
     roots.push(root)
