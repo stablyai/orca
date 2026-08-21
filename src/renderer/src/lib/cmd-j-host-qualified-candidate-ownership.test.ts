@@ -7,6 +7,7 @@ import { buildSearchableBrowserPages } from './browser-palette-page-entries'
 import { searchBrowserPages } from './browser-palette-search'
 import { buildSearchableSimulatorTabs, searchSimulatorTabs } from './simulator-palette-search'
 import { buildSearchableWorkspaceTabs, searchWorkspaceTabs } from './workspace-tab-palette-search'
+import { buildOpenTabSearchEntries } from '../components/tab-bar/open-tab-search-entries'
 
 const SHARED_WORKTREE_ID = 'repo-shared::/workspace'
 const RUNTIME_HOST_ID = 'runtime:paired-host'
@@ -298,6 +299,75 @@ describe('Cmd-J host-qualified candidate ownership', () => {
     })
 
     expect(entries.map((entry) => entry.tab.id)).toEqual(['legacy-simulator'])
+  })
+
+  it('keeps hidden same-id hosts in the legacy ownership ambiguity set', () => {
+    const ownershipWorktrees = pairedWorktrees()
+    const browserWorkspace = makeBrowserWorkspace('legacy-browser')
+    const unifiedTabsByWorktree = {
+      [SHARED_WORKTREE_ID]: [
+        makeTab({
+          id: 'legacy-browser-tab',
+          entityId: browserWorkspace.id,
+          contentType: 'browser',
+          executionHostId: undefined
+        }),
+        makeTab({ id: 'legacy-simulator', contentType: 'simulator', executionHostId: undefined }),
+        makeTab({ id: 'legacy-terminal', entityId: 'legacy-terminal', executionHostId: undefined })
+      ]
+    }
+    const entries = buildOpenTabSearchEntries(
+      {
+        activeBrowserTabId: null,
+        activeFileId: null,
+        activeFileIdByWorktree: {},
+        activeGroupIdByWorktree: {},
+        activeTabId: null,
+        activeTabIdByWorktree: {},
+        activeTabType: 'terminal',
+        activeTabTypeByWorktree: {},
+        activeWorktreeId: null,
+        browserPagesByWorkspace: {
+          [browserWorkspace.id]: [makeBrowserPage(browserWorkspace)]
+        },
+        browserTabsByWorktree: { [SHARED_WORKTREE_ID]: [browserWorkspace] },
+        executionHostId: 'local',
+        generatedTitlesEnabled: true,
+        groupsByWorktree: {},
+        openFiles: [],
+        ownershipWorktrees,
+        repo: null,
+        tabsByWorktree: {
+          [SHARED_WORKTREE_ID]: [
+            {
+              id: 'legacy-terminal',
+              ptyId: 'legacy-pty',
+              worktreeId: SHARED_WORKTREE_ID,
+              title: 'Legacy shell',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        },
+        unifiedTabsByWorktree,
+        worktree: ownershipWorktrees[0]
+      },
+      {
+        agentStatusByPaneKey: {},
+        paneForegroundAgentByPaneKey: {},
+        retainedAgentsByPaneKey: {},
+        sleepingAgentSessionsByPaneKey: {},
+        terminalLayoutsByTabId: {}
+      }
+    )
+
+    expect(entries).toEqual({
+      browserPages: [],
+      simulatorTabs: [],
+      workspaceTabs: []
+    })
   })
 
   it('rejects an explicit owner that a hostless legacy worktree cannot verify', () => {

@@ -95,6 +95,7 @@ function isWorkspaceTabContentType(
 
 export function buildSearchableWorkspaceTabEntries({
   worktrees,
+  ownershipWorktrees,
   repoMap,
   repoMapByHostIdentity,
   worktreeOrder,
@@ -126,7 +127,7 @@ export function buildSearchableWorkspaceTabEntries({
     retainedAgentsByPaneKey,
     sleepingAgentSessionsByPaneKey
   })
-  const ambiguousWorktreeIds = findAmbiguousWorktreeIds(worktrees)
+  const ambiguousWorktreeIds = findAmbiguousWorktreeIds(ownershipWorktrees ?? worktrees)
 
   for (const worktree of worktrees) {
     const repoName =

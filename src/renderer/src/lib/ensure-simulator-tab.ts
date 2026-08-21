@@ -4,7 +4,11 @@ import { cancelPendingSimulatorPaneShutdown } from './simulator-pane-shutdown-sc
 import { shouldShutdownSimulatorForPaneUnmountFromTabs } from './simulator-tab-shutdown'
 import { translate } from '@/i18n/i18n'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import { findAmbiguousWorktreeIds, isUnifiedTabOwnedByWorktree } from './unified-tab-host-ownership'
+import {
+  findAmbiguousWorktreeIds,
+  getActiveExecutionHostIdForWorktree,
+  isUnifiedTabOwnedByWorktree
+} from './unified-tab-host-ownership'
 import { isExecutionHostAliasForWorktree } from './worktree-execution-host-alias'
 import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
 
@@ -35,11 +39,7 @@ function resolveSimulatorExecutionHostId(
   requestedHostId?: ExecutionHostId
 ): ExecutionHostId | undefined {
   const worktrees = getSimulatorWorktrees(state, worktreeId)
-  const preferredHostId =
-    requestedHostId ??
-    (state.activeWorktreeId === worktreeId
-      ? (state.activeWorkspaceExecutionHostId ?? LOCAL_EXECUTION_HOST_ID)
-      : undefined)
+  const preferredHostId = requestedHostId ?? getActiveExecutionHostIdForWorktree(state, worktreeId)
   if (
     preferredHostId &&
     worktrees.some((worktree) => isExecutionHostAliasForWorktree(preferredHostId, worktree))
@@ -59,10 +59,7 @@ export function getSimulatorTabForWorktree(
   const state = useAppStore.getState()
   const worktrees = getSimulatorWorktrees(state, worktreeId)
   const activeExecutionHostId =
-    executionHostId ??
-    (state.activeWorktreeId === worktreeId
-      ? (state.activeWorkspaceExecutionHostId ?? LOCAL_EXECUTION_HOST_ID)
-      : undefined)
+    executionHostId ?? getActiveExecutionHostIdForWorktree(state, worktreeId)
   const activeWorktree = worktrees.find((worktree) =>
     activeExecutionHostId ? isExecutionHostAliasForWorktree(activeExecutionHostId, worktree) : false
   )

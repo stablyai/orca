@@ -85,6 +85,7 @@ export function isSimulatorPaletteQueryTooLarge(
 
 export type BuildSearchableSimulatorTabsOptions = {
   worktrees: readonly Worktree[]
+  ownershipWorktrees?: readonly Pick<Worktree, 'id'>[]
   repoMap: ReadonlyMap<string, { displayName?: string | null }>
   repoMapByHostIdentity?: ReadonlyMap<string, { displayName?: string | null }>
   worktreeOrder: ReadonlyMap<string, number>
@@ -204,6 +205,7 @@ function getActiveUnifiedTabId({
 
 export function buildSearchableSimulatorTabs({
   worktrees,
+  ownershipWorktrees,
   repoMap,
   repoMapByHostIdentity,
   worktreeOrder,
@@ -215,7 +217,7 @@ export function buildSearchableSimulatorTabs({
   activeTabType
 }: BuildSearchableSimulatorTabsOptions): SearchableSimulatorTab[] {
   const entries: SearchableSimulatorTab[] = []
-  const ambiguousWorktreeIds = findAmbiguousWorktreeIds(worktrees)
+  const ambiguousWorktreeIds = findAmbiguousWorktreeIds(ownershipWorktrees ?? worktrees)
   for (const worktree of worktrees) {
     const repoName =
       resolvePaletteRepoForWorktree(worktree, repoMap, repoMapByHostIdentity)?.displayName ?? ''

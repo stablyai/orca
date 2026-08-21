@@ -18,6 +18,7 @@ type BrowserPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulato
 
 export type BuildSearchableBrowserPagesOptions = {
   worktrees: readonly Worktree[]
+  ownershipWorktrees?: readonly Pick<Worktree, 'id'>[]
   repoMap: ReadonlyMap<string, { displayName?: string | null }>
   repoMapByHostIdentity?: ReadonlyMap<string, { displayName?: string | null }>
   worktreeOrder: ReadonlyMap<string, number>
@@ -33,6 +34,7 @@ export type BuildSearchableBrowserPagesOptions = {
 
 export function buildSearchableBrowserPages({
   worktrees,
+  ownershipWorktrees,
   repoMap,
   repoMapByHostIdentity,
   worktreeOrder,
@@ -45,7 +47,7 @@ export function buildSearchableBrowserPages({
   activeTabType
 }: BuildSearchableBrowserPagesOptions): SearchableBrowserPage[] {
   const entries: SearchableBrowserPage[] = []
-  const ambiguousWorktreeIds = findAmbiguousWorktreeIds(worktrees)
+  const ambiguousWorktreeIds = findAmbiguousWorktreeIds(ownershipWorktrees ?? worktrees)
   for (const worktree of worktrees) {
     const repoName =
       resolvePaletteRepoForWorktree(worktree, repoMap, repoMapByHostIdentity)?.displayName ?? ''

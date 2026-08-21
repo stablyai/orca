@@ -240,21 +240,25 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
       }
     )
 
-    const backing = await page.evaluate((worktreeId) => {
-      const state = window.__store!.getState()
-      return {
-        browserCount: state.browserTabsByWorktree[worktreeId]?.length,
-        owners: state.unifiedTabsByWorktree[worktreeId]?.map((tab) => [
-          tab.id,
-          tab.executionHostId,
-          tab.worktreeId
-        ]),
-        workspaceOwners: state.browserTabsByWorktree[worktreeId]?.map((workspace) => [
-          workspace.id,
-          workspace.worktreeId
-        ])
+    const backing = await page.evaluate(
+      ({ tabIds, worktreeId }) => {
+        const state = window.__store!.getState()
+        return {
+          browserCount: state.browserTabsByWorktree[worktreeId]?.length,
+          owners: state.unifiedTabsByWorktree[worktreeId]
+            ?.filter((tab) => tabIds.includes(tab.id))
+            .map((tab) => [tab.id, tab.executionHostId, tab.worktreeId]),
+          workspaceOwners: state.browserTabsByWorktree[worktreeId]?.map((workspace) => [
+            workspace.id,
+            workspace.worktreeId
+          ])
+        }
+      },
+      {
+        tabIds: ['browser-tab-local', seeded.remoteTabId, 'simulator-local', 'simulator-remote'],
+        worktreeId: seeded.sharedWorktreeId
       }
-    }, seeded.sharedWorktreeId)
+    )
     expect(backing).toEqual({
       browserCount: 2,
       owners: [

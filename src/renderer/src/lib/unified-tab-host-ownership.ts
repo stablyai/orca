@@ -1,6 +1,6 @@
 import type { Tab } from '../../../shared/tab-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { isExecutionHostAliasForWorktree } from './worktree-execution-host-alias'
 
 export function findAmbiguousWorktreeIds(
@@ -15,6 +15,18 @@ export function findAmbiguousWorktreeIds(
     seen.add(worktree.id)
   }
   return ambiguous
+}
+
+export function getActiveExecutionHostIdForWorktree(
+  state: {
+    activeWorktreeId: string | null
+    activeWorkspaceExecutionHostId?: ExecutionHostId | null
+  },
+  worktreeId: string
+): ExecutionHostId | undefined {
+  return state.activeWorktreeId === worktreeId
+    ? (state.activeWorkspaceExecutionHostId ?? LOCAL_EXECUTION_HOST_ID)
+    : undefined
 }
 
 export function isUnifiedTabOwnedByWorktree(

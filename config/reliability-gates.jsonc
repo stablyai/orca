@@ -43,13 +43,14 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/WorktreeJumpPalette.test.tsx src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/WorktreeJumpPalette.test.tsx src/renderer/src/components/tab-bar/use-open-tab-search.test.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
         "pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts",
         "src/renderer/src/components/WorktreeJumpPalette.test.tsx",
+        "src/renderer/src/components/tab-bar/use-open-tab-search.test.ts",
         "src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts",
         "src/renderer/src/lib/palette-repo-resolution.test.ts",
         "src/renderer/src/lib/browser-palette-page-entries.test.ts",
@@ -82,7 +83,8 @@
           "file": "src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts",
           "assertions": [
             "browser, simulator, and workspace candidates recognize a paired-runtime alias for an SSH-owned worktree",
-            "paired-runtime aliases retain current-row state and unverifiable explicit legacy owners fail closed"
+            "paired-runtime aliases retain current-row state and unverifiable explicit legacy owners fail closed",
+            "host filtering and scoped open-tab search cannot hide a same-id sibling from the legacy ownership ambiguity set"
           ]
         },
         {
@@ -201,13 +203,13 @@
           "summary": "The final-review oracle failed 4/16 before the follow-up: same-id folder simulator reuse selected no owning tab, inactive local simulator creation was unstamped, the paired SSH/runtime alias resolved local metadata, and an explicit unknown owner fell back locally."
         },
         {
-          "date": "2026-08-20",
+          "date": "2026-08-21",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/WorktreeJumpPalette.test.tsx src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/cmd-j/worktree-checks-review-index.test.ts src/renderer/src/components/WorktreeJumpPalette.test.tsx src/renderer/src/components/tab-bar/use-open-tab-search.test.ts src/renderer/src/lib/cmd-j-host-qualified-candidate-ownership.test.ts src/renderer/src/lib/palette-repo-resolution.test.ts src/renderer/src/lib/browser-palette-page-entries.test.ts src/renderer/src/lib/browser-palette-search.test.ts src/renderer/src/lib/simulator-palette-search.test.ts src/renderer/src/lib/workspace-tab-palette-search.test.ts src/renderer/src/lib/browser-page-palette-activation.test.ts src/renderer/src/lib/simulator-tab-palette-activation.test.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts src/renderer/src/store/slices/tabs-open-close-lifecycle.test.ts src/renderer/src/store/slices/tabs-pane-layout-operations.test.ts src/shared/workspace-session-schema.test.ts",
           "result": "passed",
-          "durationSeconds": 9.5,
-          "summary": "The final-review-hardened candidate passed 214/214 focused contracts, including review-cache ownership, rendered palette repo metadata, folder workspaces, inactive local simulator creation, paired SSH/runtime display metadata, and explicit-owner fail-closed resolution."
+          "durationSeconds": 24.3,
+          "summary": "The OpenCode-review-hardened candidate passed 225/225 focused contracts, including unfiltered ownership ambiguity under host filters and scoped open-tab search, review-cache ownership, rendered palette repo metadata, folder workspaces, inactive local simulator creation, paired SSH/runtime display metadata, and explicit-owner fail-closed resolution."
         },
         {
           "date": "2026-08-20",
@@ -264,13 +266,13 @@
           "summary": "A fresh e2e-mode Electron build passed the paired journey: each remote/local browser and simulator candidate appeared exactly once, selected the owning host plus workspace or group tab, and rendered that tab active. The group active-tab oracle remains stable while asynchronous paired session mirroring updates the legacy bare-worktree activeTabType field."
         },
         {
-          "date": "2026-08-20",
+          "date": "2026-08-21",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-cmd-j-host-qualified-tabs.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
           "result": "passed",
-          "durationSeconds": 26.4,
-          "summary": "A fresh build after final-review hardening passed the paired browser/simulator Cmd-J journey with rendered active-tab and backing execution-host assertions."
+          "durationSeconds": 20.6,
+          "summary": "After a fresh build exposed an unrelated mirrored terminal entering the broad backing-state diagnostic, the exact built candidate passed with that oracle scoped to the four seeded browser/simulator tabs; rendered active-tab and backing execution-host assertions remained green."
         }
       ],
       "runtimeBudget": {
@@ -283,7 +285,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "Byte-identical browser and simulator candidate tests failed 4/28 on affected baseline 012e9f410c, passed 28/28 on candidate fe45b73c20, failed the same 4/28 when only the two candidate filters were disabled, and returned to 28/28 after restoration. Review-round topology contracts failed 4/40 before the alias/generic/local-stamping follow-up; final-review contracts then failed 4/16 before folder/background/worktree-metadata hardening, 1/6 before paired repository-metadata hardening, 1/7 before unavailable-runtime fail-closed hardening, 1/12 with the component's physical-host bypass restored, 1/6 before review-cache ownership used the same resolver, and 1/6 before the downstream document rejected a remote owner's unqualified legacy cache entry. The completed focused suite passes 214/214."
+        "evidence": "Byte-identical browser and simulator candidate tests failed 4/28 on affected baseline 012e9f410c, passed 28/28 on candidate fe45b73c20, failed the same 4/28 when only the two candidate filters were disabled, and returned to 28/28 after restoration. Review-round topology contracts failed 4/40 before the alias/generic/local-stamping follow-up; final-review contracts then failed 4/16 before folder/background/worktree-metadata hardening, 1/6 before paired repository-metadata hardening, 1/7 before unavailable-runtime fail-closed hardening, 1/12 with the component's physical-host bypass restored, 1/6 before review-cache ownership used the same resolver, 1/6 before the downstream document rejected a remote owner's unqualified legacy cache entry, and 1/6 when a host filter or scoped open-tab search hid the same-id sibling from legacy ambiguity detection. The completed focused suite passes 225/225."
       },
       "performanceBudget": {
         "required": true,

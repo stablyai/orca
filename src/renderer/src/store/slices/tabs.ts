@@ -37,7 +37,7 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { getActiveExecutionHostIdForWorktree } from '@/lib/unified-tab-host-ownership'
 import {
   addAdditionalValidWorkspaceKeys,
   type WorkspaceSessionHydrationOptions
@@ -859,18 +859,14 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
 
       const shouldActivate = init?.activate ?? true
       const createdAt = Date.now()
+      const executionHostId =
+        init?.executionHostId ?? getActiveExecutionHostIdForWorktree(state, worktreeId)
       created = {
         id,
         entityId: init?.entityId ?? id,
         groupId: group.id,
         worktreeId,
-        ...(init?.executionHostId
-          ? { executionHostId: init.executionHostId }
-          : state.activeWorktreeId === worktreeId
-            ? {
-                executionHostId: state.activeWorkspaceExecutionHostId ?? LOCAL_EXECUTION_HOST_ID
-              }
-            : {}),
+        ...(executionHostId ? { executionHostId } : {}),
         contentType,
         label:
           init?.label ?? (contentType === 'terminal' ? `Terminal ${existingTabs.length + 1}` : id),
@@ -939,18 +935,14 @@ export const createTabsSlice: StateCreator<AppState, [], [], TabsSlice> = (set, 
         state.layoutByWorktree[worktreeId] ??
         ({ type: 'leaf', groupId: target.sourceGroupId } as const)
       const createdAt = Date.now()
+      const executionHostId =
+        init?.executionHostId ?? getActiveExecutionHostIdForWorktree(state, worktreeId)
       const createdTab: Tab = {
         id,
         entityId: init?.entityId ?? id,
         groupId: newGroupId,
         worktreeId,
-        ...(init?.executionHostId
-          ? { executionHostId: init.executionHostId }
-          : state.activeWorktreeId === worktreeId
-            ? {
-                executionHostId: state.activeWorkspaceExecutionHostId ?? LOCAL_EXECUTION_HOST_ID
-              }
-            : {}),
+        ...(executionHostId ? { executionHostId } : {}),
         contentType,
         label:
           init?.label ?? (contentType === 'terminal' ? `Terminal ${existingTabs.length + 1}` : id),

@@ -1168,6 +1168,7 @@ function WorktreeJumpPaletteContent({
     }
     return buildSearchableBrowserPages({
       worktrees: browserSortedWorktrees,
+      ownershipWorktrees: allWorktrees,
       repoMap,
       repoMapByHostIdentity: repoByHostIdentity,
       worktreeOrder,
@@ -1185,6 +1186,7 @@ function WorktreeJumpPaletteContent({
     activeTabType,
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
+    allWorktrees,
     browserPagesByWorkspace,
     browserTabsByWorktree,
     browserSortedWorktrees,
@@ -1205,6 +1207,7 @@ function WorktreeJumpPaletteContent({
     }
     return buildSearchableSimulatorTabs({
       worktrees: browserSortedWorktrees,
+      ownershipWorktrees: allWorktrees,
       repoMap,
       repoMapByHostIdentity: repoByHostIdentity,
       worktreeOrder,
@@ -1221,6 +1224,7 @@ function WorktreeJumpPaletteContent({
     activeTabType,
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
+    allWorktrees,
     browserSortedWorktrees,
     groupsByWorktree,
     repoMap,
@@ -1240,6 +1244,7 @@ function WorktreeJumpPaletteContent({
     }
     return buildSearchableWorkspaceTabs({
       worktrees: browserSortedWorktrees,
+      ownershipWorktrees: allWorktrees,
       repoMap,
       repoMapByHostIdentity: repoByHostIdentity,
       worktreeOrder,
@@ -1275,6 +1280,7 @@ function WorktreeJumpPaletteContent({
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
     agentStatusByPaneKey,
+    allWorktrees,
     browserSortedWorktrees,
     groupsByWorktree,
     openFiles,
