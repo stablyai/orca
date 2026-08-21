@@ -20,8 +20,8 @@ describe('task providers', () => {
       'github',
       'gitlab',
       'linear',
-      'clickup',
-      'jira'
+      'jira',
+      'clickup'
     ])
   })
 
