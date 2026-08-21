@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import * as mammoth from 'mammoth'
 import DOMPurify from 'dompurify'
 import { translate } from '@/i18n/i18n'
-import { isZipBuffer } from '@shared/zip-magic'
+import { isZipBuffer, base64ToArrayBuffer } from '@shared/zip-magic'
 import { officeDocumentStyleMap } from './office-document-style-map'
 import styles from './OfficePreview.module.css'
 
@@ -79,15 +79,6 @@ const DOCX_ALLOWED_TAGS = [
   'ul'
 ]
 const DOCX_ALLOWED_ATTR = ['href', 'id', 'class', 'rel', 'target', 'title']
-
-function base64ToArrayBuffer(base64: string): ArrayBuffer {
-  const binary = atob(base64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i)
-  }
-  return bytes.buffer
-}
 
 export function DocxViewer({ filePath, fileName, content }: DocxViewerProps): React.JSX.Element {
   const [status, setStatus] = useState<Status>({ kind: 'loading' })

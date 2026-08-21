@@ -15,3 +15,15 @@ export function isZipBuffer(buffer: ArrayBuffer): boolean {
     head[3] === ZIP_MAGIC[3]
   )
 }
+
+// Why: base64 payloads from the IPC/relay/runtime file-read path arrive as
+// strings. DocxViewer and XlsxViewer both need raw bytes; hoist one helper
+// so a future fix (whitespace tolerance, URL-safe alphabet) lands in one place.
+export function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return bytes.buffer
+}

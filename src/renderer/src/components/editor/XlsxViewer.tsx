@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 // `^0.18.5` cannot reach.
 import * as XLSX from 'xlsx'
 import { translate } from '@/i18n/i18n'
-import { isZipBuffer } from '@shared/zip-magic'
+import { isZipBuffer, base64ToArrayBuffer } from '@shared/zip-magic'
 import styles from './OfficePreview.module.css'
 
 export type XlsxViewerProps = {
@@ -21,15 +21,6 @@ type SheetData = {
 }
 
 type Status = { kind: 'loading' } | { kind: 'ready'; sheets: SheetData[] } | { kind: 'error' }
-
-function base64ToArrayBuffer(base64: string): ArrayBuffer {
-  const binary = atob(base64)
-  const bytes = new Uint8Array(binary.length)
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i)
-  }
-  return bytes.buffer
-}
 
 // ponytail: SheetJS's html output doesn't include <colgroup> widths; build one
 // ourselves from ws['!cols'] so columns honour the original cell widths.
