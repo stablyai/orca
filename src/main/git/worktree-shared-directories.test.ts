@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { lstatSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   clearConfiguredWorktreeSharedDirectoriesCacheForTests,
   getConfiguredWorktreeSharedDirectories,
@@ -20,26 +20,41 @@ import { getStatus } from './status'
 // it as a config path — `fatal: unable to access '//./nul': Invalid argument`. POSIX resolves it
 // to /dev/null, which Git accepts, so this only ever failed on Windows. Empty files are portable,
 // and are how skill-git-tree-identity and skill-windows-workspace already isolate git config.
+//
+// Why process.env and not only the helper below: resolveWorktreeSharedDirectories runs its own
+// `git check-ignore` through the production runner, which inherits process.env. Overriding just
+// the setup helper left the code under test reading the host's real config, so a developer with
+// `core.excludesFile` set saw a fixture that is not gitignored come back as ignored.
 const gitConfigRoot = mkdtempSync(join(tmpdir(), 'orca-shared-dirs-gitconfig-'))
 const emptyGlobalGitConfig = join(gitConfigRoot, 'global.gitconfig')
-const emptySystemGitConfig = join(gitConfigRoot, 'system.gitconfig')
 writeFileSync(emptyGlobalGitConfig, '')
-writeFileSync(emptySystemGitConfig, '')
+
+let previousGitConfigGlobal: string | undefined
+let previousGitConfigNosystem: string | undefined
+
+beforeAll(() => {
+  previousGitConfigGlobal = process.env.GIT_CONFIG_GLOBAL
+  previousGitConfigNosystem = process.env.GIT_CONFIG_NOSYSTEM
+  process.env.GIT_CONFIG_GLOBAL = emptyGlobalGitConfig
+  process.env.GIT_CONFIG_NOSYSTEM = '1'
+})
 
 afterAll(() => {
+  restoreEnv('GIT_CONFIG_GLOBAL', previousGitConfigGlobal)
+  restoreEnv('GIT_CONFIG_NOSYSTEM', previousGitConfigNosystem)
   rmSync(gitConfigRoot, { recursive: true, force: true })
 })
 
+function restoreEnv(key: string, previous: string | undefined): void {
+  if (previous === undefined) {
+    delete process.env[key]
+    return
+  }
+  process.env[key] = previous
+}
+
 const git = (args: string[], cwd: string): void => {
-  execFileSync('git', args, {
-    cwd,
-    stdio: 'ignore',
-    env: {
-      ...process.env,
-      GIT_CONFIG_GLOBAL: emptyGlobalGitConfig,
-      GIT_CONFIG_SYSTEM: emptySystemGitConfig
-    }
-  })
+  execFileSync('git', args, { cwd, stdio: 'ignore' })
 }
 
 describe('resolveWorktreeSharedDirectories', () => {
