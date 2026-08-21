@@ -45,9 +45,12 @@ import {
 import { getCodexManagedHookInstallMaterial } from './hook-service'
 import { _internals as rebaseInternals } from './codex-user-hook-trust-rebase'
 
+const HOOK_SCOPE_ENV = 'ORCA_CODEX_SYSTEM_DEFAULT_HOOK_SCOPE'
+
 let fakeHomeDir: string
 let userDataDir: string
 let previousUserDataPath: string | undefined
+let previousHookScope: string | undefined
 
 function getRealHooksJsonPath(): string {
   return join(fakeHomeDir, '.codex', 'hooks.json')
@@ -75,12 +78,21 @@ function grantUnavailable(): void {
   grantMock.mockReturnValue({ lane: 'fallback', reason: 'unsupported' })
 }
 
+/** Real-home enrollment tests pin the opt-in all-sessions scope. */
+function useAllSessionsScope(): void {
+  process.env[HOOK_SCOPE_ENV] = 'all-sessions'
+}
+
 beforeEach(() => {
   grantMock.mockReset()
   fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-real-home-hooks-home-'))
   userDataDir = mkdtempSync(join(tmpdir(), 'orca-real-home-hooks-user-data-'))
   previousUserDataPath = process.env.ORCA_USER_DATA_PATH
+  previousHookScope = process.env[HOOK_SCOPE_ENV]
   process.env.ORCA_USER_DATA_PATH = userDataDir
+  // Why: install-path suites cover all-sessions enrollment; scope-default
+  // suites clear this env and assert the safer orca-sessions product default.
+  useAllSessionsScope()
   homedirMock.mockReturnValue(fakeHomeDir)
   mkdirSync(join(fakeHomeDir, '.codex'), { recursive: true })
   _internals.setLaneForTesting('pending')
@@ -95,6 +107,11 @@ afterEach(() => {
     delete process.env.ORCA_USER_DATA_PATH
   } else {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
+  }
+  if (previousHookScope === undefined) {
+    delete process.env[HOOK_SCOPE_ENV]
+  } else {
+    process.env[HOOK_SCOPE_ENV] = previousHookScope
   }
   vi.clearAllMocks()
 })
@@ -537,5 +554,77 @@ describe('ensureRealHomeCodexHookState (opt-out sweep)', () => {
     const trust = readHookTrustEntries(getRealConfigTomlPath())
     expect(trust.has(computeTrustKey(entries[0]!))).toBe(true)
     expect(trust.has(computeTrustKey(entries[1]!))).toBe(false)
+  })
+})
+
+describe('ensureRealHomeCodexHookState (orca-sessions scope default)', () => {
+  beforeEach(() => {
+    delete process.env[HOOK_SCOPE_ENV]
+  })
+
+  it('does not write hooks.json and reports the orca-sessions lane', () => {
+    grantSucceeds()
+
+    const lane = ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+
+    expect(lane).toBe('orca-sessions')
+    expect(getRealHomeCodexHookLane()).toBe('orca-sessions')
+    expect(existsSync(getRealHooksJsonPath())).toBe(false)
+    expect(grantMock).not.toHaveBeenCalled()
+  })
+
+  it('sweeps a prior real-home Orca install when scope prefers managed', () => {
+    useAllSessionsScope()
+    grantSucceeds()
+    ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+    expect(existsSync(getRealHooksJsonPath())).toBe(true)
+    const userStop = {
+      matcher: 'deploy-*',
+      hooks: [{ type: 'command', command: 'my-stop-hook.sh' }]
+    }
+    const installed = readRealHooksJson()
+    installed.hooks = {
+      ...installed.hooks,
+      Stop: [userStop, ...(installed.hooks?.Stop ?? [])]
+    }
+    writeFileSync(getRealHooksJsonPath(), `${JSON.stringify(installed, null, 2)}\n`, 'utf-8')
+
+    delete process.env[HOOK_SCOPE_ENV]
+    _internals.setLaneForTesting('pending')
+
+    expect(ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })).toBe(
+      'orca-sessions'
+    )
+
+    expect(readRealHooksJson().hooks?.Stop).toEqual([userStop])
+    const material = getCodexManagedHookInstallMaterial()
+    for (const eventName of material.events) {
+      if (eventName === 'Stop') {
+        continue
+      }
+      expect(readRealHooksJson().hooks?.[eventName]).toBeUndefined()
+    }
+  })
+
+  it('keeps the real home free when config.toml already declares user hooks', () => {
+    useAllSessionsScope()
+    grantSucceeds()
+    writeFileSync(
+      getRealConfigTomlPath(),
+      [
+        '[[hooks.Stop]]',
+        '[[hooks.Stop.hooks]]',
+        'type = "command"',
+        'command = "mine.sh"',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+
+    const lane = ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+
+    expect(lane).toBe('unavailable')
+    expect(existsSync(getRealHooksJsonPath())).toBe(false)
+    expect(grantMock).not.toHaveBeenCalled()
   })
 })
