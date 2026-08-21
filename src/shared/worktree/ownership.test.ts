@@ -481,6 +481,29 @@ describe('external worktree visibility policy', () => {
 describe('agent scratch worktrees', () => {
   const scratchPath = '/repos/app/.claude/worktrees/agent-a04ccaaa55ddadb91'
 
+  it('classifies Codex home-level capsules as agent-scratch and hides them', () => {
+    const repo = makeRepo()
+    const settings = makeSettings()
+    const path = '/Users/dev/.codex/worktrees/1621/app'
+    expect(
+      classifyWorktreeOwnership({
+        repo,
+        settings,
+        worktree: makeWorktree({ path, isMainWorktree: false }),
+        knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
+      })
+    ).toBe('agent-scratch')
+    const detected = toDetectedWorktree({
+      repo,
+      settings,
+      worktree: makeWorktree({ path, isMainWorktree: false }),
+      knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
+    })
+    expect(detected.ownership).toBe('agent-scratch')
+    expect(detected.visible).toBe(false)
+    expect(detected.visibilitySource).toEqual({ kind: 'built-in', id: 'codex' })
+  })
+
   it('classifies sub-agent scratch paths as agent-scratch without metadata', () => {
     const repo = makeRepo()
     const settings = makeSettings()

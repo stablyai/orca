@@ -4711,6 +4711,7 @@
         "WorktreeVisibilitySourceList": {
           "claude": "Claude Code",
           "gsd": "GSD",
+          "codex": "Codex",
           "other": "其他位置",
           "custom": "自定义位置",
           "otherPath": "所列来源之外",

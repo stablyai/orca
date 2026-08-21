@@ -650,7 +650,7 @@ describe('WorktreeVisibilityDialog', () => {
     expect(intro).not.toBeUndefined()
     expect(
       [...(intro?.nextElementSibling?.querySelectorAll('li') ?? [])].map((item) => item.textContent)
-    ).toEqual(['Claude CodeShow', 'GSDHide', 'Other locationsHide'])
+    ).toEqual(['Claude CodeShow', 'GSDHide', 'CodexHide', 'Other locationsHide'])
     expect(buttonWithText('Manage in Global Settings')).not.toBeNull()
   })
 
@@ -688,7 +688,7 @@ describe('WorktreeVisibilityDialog', () => {
 
     expect(mocks.state.updateRepo).toHaveBeenCalledWith('repo-1', {
       agentWorktreeVisibility: null,
-      worktreeVisibilitySourcePreferences: { builtIn: { gsd: 'show' } }
+      worktreeVisibilitySourcePreferences: { builtIn: { gsd: 'show', codex: 'show' } }
     })
   })
 
@@ -698,19 +698,20 @@ describe('WorktreeVisibilityDialog', () => {
     mocks.state.settings = {
       worktreeVisibilityDefaults: {
         external: 'hide',
-        sourcePreferences: { builtIn: { claude: 'show', gsd: 'show' } }
+        sourcePreferences: { builtIn: { claude: 'show', gsd: 'show', codex: 'show' } }
       }
     }
     await renderDialog()
 
     expect(sourceSwitch('Claude Code').getAttribute('aria-checked')).toBe('true')
     expect(sourceSwitch('GSD').getAttribute('aria-checked')).toBe('true')
+    expect(sourceSwitch('Codex').getAttribute('aria-checked')).toBe('true')
 
     await click(sourceSegment('Claude Code', 'hide'))
 
     expect(mocks.state.updateRepo).toHaveBeenCalledWith('repo-1', {
       worktreeVisibilitySourcePreferences: {
-        builtIn: { claude: 'hide', gsd: 'show' }
+        builtIn: { claude: 'hide', gsd: 'show', codex: 'show' }
       }
     })
   })

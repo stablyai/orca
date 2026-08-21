@@ -5931,6 +5931,7 @@
         "WorktreeVisibilitySourceList": {
           "claude": "Claude Code",
           "gsd": "GSD",
+          "codex": "Codex",
           "other": "Other locations",
           "custom": "Custom location",
           "otherPath": "Outside listed sources",

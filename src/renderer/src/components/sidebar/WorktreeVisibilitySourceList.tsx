@@ -66,9 +66,13 @@ const VISIBILITY_SEGMENTS: readonly ExternalWorktreeVisibility[] = ['show', 'hid
 
 export function getWorktreeVisibilitySourceLabel(source: WorktreeVisibilitySourceRow): string {
   if (source.kind === 'built-in') {
-    return source.id === 'claude'
-      ? translate('auto.components.sidebar.WorktreeVisibilitySourceList.claude', 'Claude Code')
-      : translate('auto.components.sidebar.WorktreeVisibilitySourceList.gsd', 'GSD')
+    if (source.id === 'claude') {
+      return translate('auto.components.sidebar.WorktreeVisibilitySourceList.claude', 'Claude Code')
+    }
+    if (source.id === 'codex') {
+      return translate('auto.components.sidebar.WorktreeVisibilitySourceList.codex', 'Codex')
+    }
+    return translate('auto.components.sidebar.WorktreeVisibilitySourceList.gsd', 'GSD')
   }
   if (source.kind === 'other') {
     return translate(
@@ -84,7 +88,9 @@ export function getWorktreeVisibilitySourceLabel(source: WorktreeVisibilitySourc
 
 function getSourcePath(source: WorktreeVisibilitySourceRow): string {
   if (source.kind === 'built-in') {
-    return source.id === 'claude' ? '.claude/worktrees/*' : '.gsd-workspaces/*'
+    if (source.id === 'claude') return '.claude/worktrees/*'
+    if (source.id === 'codex') return '.codex/worktrees/*'
+    return '.gsd-workspaces/*'
   }
   if (source.kind === 'other') {
     return translate(
@@ -178,6 +184,7 @@ export default function WorktreeVisibilitySourceList({
     () => [
       { kind: 'built-in', id: 'claude' },
       { kind: 'built-in', id: 'gsd' },
+      { kind: 'built-in', id: 'codex' },
       ...customSources.map((source) => ({ kind: 'custom' as const, source })),
       { kind: 'other' }
     ],

@@ -69,6 +69,7 @@ export function listInheritedWorktreeVisibilitySources(
   const sources: WorktreeVisibilitySourceRow[] = [
     { kind: 'built-in', id: 'claude' },
     { kind: 'built-in', id: 'gsd' },
+    { kind: 'built-in', id: 'codex' },
     ...(normalizeCustomWorktreeVisibilitySources(defaults.customSources) ?? []).map((source) => ({
       kind: 'custom' as const,
       source
