@@ -4,10 +4,6 @@ import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { detectLanguage } from '@/lib/language-detect'
 import { joinPath, basename } from '@/lib/path'
-import { getConnectionId } from '@/lib/connection-context'
-import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
-import { selectMarkdownDocumentWorktreePath } from './markdown-document-worktree-path-selector'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { ChangesModeView } from './ChangesModeView'
@@ -211,22 +207,6 @@ export function EditorContent({
     Record<string, number>
   >({})
   const md = useMarkdownDocuments(activeFile, isMarkdown, mdViewMode, handleSave)
-  const settings = useAppStore((s) => s.settings)
-  const worktreePath = useAppStore((s) =>
-    selectMarkdownDocumentWorktreePath(s, activeFile.worktreeId)
-  )
-  const connectionId = getConnectionId(activeFile.worktreeId) ?? undefined
-  // Why: viewers consume the context via JSON.stringify, so stable identity here
-  // is a perf bonus, not a correctness requirement.
-  const runtimeContext = React.useMemo<RuntimeFileOperationArgs>(
-    () => ({
-      settings: settingsForRuntimeOwner(settings, activeFile.runtimeEnvironmentId),
-      worktreeId: activeFile.worktreeId,
-      worktreePath,
-      connectionId
-    }),
-    [settings, activeFile.runtimeEnvironmentId, activeFile.worktreeId, worktreePath, connectionId]
-  )
   const activeFileName = React.useMemo(() => basename(activeFile.filePath), [activeFile.filePath])
   const activeConflictEntry =
     worktreeEntries.find((entry) => entry.path === activeFile.relativePath) ?? null
@@ -535,7 +515,7 @@ export function EditorContent({
               <DocxViewer
                 filePath={contentFile.filePath}
                 fileName={basename(contentFile.filePath)}
-                runtimeContext={runtimeContext}
+                content={fc.content}
               />
             </React.Suspense>
           </div>
@@ -548,7 +528,7 @@ export function EditorContent({
               <XlsxViewer
                 filePath={contentFile.filePath}
                 fileName={basename(contentFile.filePath)}
-                runtimeContext={runtimeContext}
+                content={fc.content}
               />
             </React.Suspense>
           </div>
@@ -806,7 +786,7 @@ export function EditorContent({
             <DocxViewer
               filePath={activeFile.filePath}
               fileName={activeFileName}
-              runtimeContext={runtimeContext}
+              content={fc.content}
             />
           </React.Suspense>
         )
@@ -817,7 +797,7 @@ export function EditorContent({
             <XlsxViewer
               filePath={activeFile.filePath}
               fileName={activeFileName}
-              runtimeContext={runtimeContext}
+              content={fc.content}
             />
           </React.Suspense>
         )

@@ -1,16 +1,15 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 // Why: pnpm overrides pulls xlsx from the SheetJS CDN tarball (>= 0.20.3) to avoid
 // CVE-2023-30533 / CVE-2024-22363 in the 0.18.5 npm release, which npm-registry
 // `^0.18.5` cannot reach.
 import * as XLSX from 'xlsx'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
-import { readRuntimeFilePreview } from '@/runtime/runtime-file-client'
 import styles from './OfficePreview.module.css'
 
 export type XlsxViewerProps = {
   filePath: string
   fileName: string
-  runtimeContext: RuntimeFileOperationArgs
+  /** Base64-encoded .xlsx payload, supplied by EditorContent's file preview cache. */
+  content: string
 }
 
 type SheetData = {
@@ -60,26 +59,16 @@ function formatCell(value: unknown): string {
   return String(value)
 }
 
-export function XlsxViewer({
-  filePath,
-  fileName,
-  runtimeContext
-}: XlsxViewerProps): React.JSX.Element {
+export function XlsxViewer({ filePath, fileName, content }: XlsxViewerProps): React.JSX.Element {
   const [status, setStatus] = useState<Status>({ kind: 'loading' })
   const [activeSheet, setActiveSheet] = useState<string>('')
-  // Why: callers pass an inline context object, so keying the effect on identity
-  // would re-issue the preview RPC on every parent render.
-  const contextKey = JSON.stringify(runtimeContext)
-  const contextRef = useRef(runtimeContext)
-  contextRef.current = runtimeContext
 
   useEffect(() => {
     let cancelled = false
     setStatus({ kind: 'loading' })
-    readRuntimeFilePreview(contextRef.current, filePath)
-      .then((preview) => {
-        // Why: the preview RPC returns whitelisted binaries base64-encoded in `content`.
-        const buffer = base64ToArrayBuffer(preview.content)
+    ;(async () => {
+      try {
+        const buffer = base64ToArrayBuffer(content)
         if (!isZipBuffer(buffer)) {
           throw new Error('not a zip archive')
         }
@@ -98,17 +87,17 @@ export function XlsxViewer({
         }
         setStatus({ kind: 'ready', sheets })
         setActiveSheet(sheets[0]?.name ?? '')
-      })
-      .catch(() => {
+      } catch {
         if (cancelled) {
           return
         }
         setStatus({ kind: 'error' })
-      })
+      }
+    })()
     return () => {
       cancelled = true
     }
-  }, [filePath, contextKey])
+  }, [filePath, content])
 
   if (status.kind === 'loading') {
     return <div className={styles.officePreview}>正在加载 {fileName}…</div>

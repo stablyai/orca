@@ -1,14 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import * as mammoth from 'mammoth'
 import DOMPurify from 'dompurify'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
-import { readRuntimeFilePreview } from '@/runtime/runtime-file-client'
 import styles from './OfficePreview.module.css'
 
 export type DocxViewerProps = {
   filePath: string
   fileName: string
-  runtimeContext: RuntimeFileOperationArgs
+  /** Base64-encoded .docx payload, supplied by EditorContent's file preview cache. */
+  content: string
 }
 
 type Status = { kind: 'loading' } | { kind: 'ready'; html: string } | { kind: 'error' }
@@ -22,25 +21,15 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
   return bytes.buffer
 }
 
-export function DocxViewer({
-  filePath,
-  fileName,
-  runtimeContext
-}: DocxViewerProps): React.JSX.Element {
+export function DocxViewer({ filePath, fileName, content }: DocxViewerProps): React.JSX.Element {
   const [status, setStatus] = useState<Status>({ kind: 'loading' })
-  // Why: callers pass an inline context object, so keying the effect on identity
-  // would re-issue the preview RPC on every parent render.
-  const contextKey = JSON.stringify(runtimeContext)
-  const contextRef = useRef(runtimeContext)
-  contextRef.current = runtimeContext
 
   useEffect(() => {
     let cancelled = false
     setStatus({ kind: 'loading' })
-    readRuntimeFilePreview(contextRef.current, filePath)
-      .then(async (preview) => {
-        // Why: the preview RPC returns whitelisted binaries base64-encoded in `content`.
-        const arrayBuffer = base64ToArrayBuffer(preview.content)
+    ;(async () => {
+      try {
+        const arrayBuffer = base64ToArrayBuffer(content)
         // Why: mammoth's browser build reads `arrayBuffer`, its node build reads `buffer`.
         // Vite picks the browser build for the renderer; Vitest resolves the node one.
         // Its types only describe the node `Buffer` form, so narrow to the browser shape.
@@ -55,17 +44,17 @@ export function DocxViewer({
             USE_PROFILES: { html: true }
           })
         })
-      })
-      .catch(() => {
+      } catch {
         if (cancelled) {
           return
         }
         setStatus({ kind: 'error' })
-      })
+      }
+    })()
     return () => {
       cancelled = true
     }
-  }, [filePath, contextKey])
+  }, [filePath, content])
 
   if (status.kind === 'loading') {
     return <div className={styles.officePreview}>正在加载 {fileName}…</div>
