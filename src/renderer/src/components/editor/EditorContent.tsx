@@ -34,6 +34,12 @@ import { getDiffContentSignature } from './diff-content-signature'
 import { translate } from '@/i18n/i18n'
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
 import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
+// Why: keep MIME literals in sync with the main-process whitelist so the
+// renderer's dispatch matches the bytes the read path actually delivers.
+import { PREVIEWABLE_BINARY_MIME_TYPES } from '../../../../shared/previewable-binary-mime-types'
+
+const DOCX_MIME = PREVIEWABLE_BINARY_MIME_TYPES['.docx']
+const XLSX_MIME = PREVIEWABLE_BINARY_MIME_TYPES['.xlsx']
 
 const MonacoEditor = lazy(() => import('./MonacoEditor'))
 const DiffViewer = lazy(() => import('./DiffViewer'))
@@ -522,9 +528,7 @@ export function EditorContent({
       )
     }
     if (fc.isBinary) {
-      if (
-        fc.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-      ) {
+      if (fc.mimeType === DOCX_MIME) {
         return (
           <div className={className}>
             <React.Suspense fallback={<div>Loading…</div>}>
@@ -537,7 +541,7 @@ export function EditorContent({
           </div>
         )
       }
-      if (fc.mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+      if (fc.mimeType === XLSX_MIME) {
         return (
           <div className={className}>
             <React.Suspense fallback={<div>Loading…</div>}>
@@ -796,9 +800,7 @@ export function EditorContent({
       return <FileLoadErrorView message={fc.loadError} onRetry={() => reloadContent(activeFile)} />
     }
     if (fc.isBinary) {
-      if (
-        fc.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-      ) {
+      if (fc.mimeType === DOCX_MIME) {
         return (
           <React.Suspense fallback={<div>Loading…</div>}>
             <DocxViewer
@@ -809,7 +811,7 @@ export function EditorContent({
           </React.Suspense>
         )
       }
-      if (fc.mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+      if (fc.mimeType === XLSX_MIME) {
         return (
           <React.Suspense fallback={<div>Loading…</div>}>
             <XlsxViewer
