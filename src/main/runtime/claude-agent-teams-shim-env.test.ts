@@ -39,10 +39,15 @@ describe('claude agent teams shim env', () => {
     }
 
     let capturedShimBin = ''
+    if (process.platform === 'win32') {
+      // Why: the native path needs the spawnable shim the packaged app installs; dev builds have none.
+      await writeFile(join(root, 'tmux.exe'), 'MZ', 'utf8')
+    }
     const plan = await buildClaudeAgentTeamsLaunchPlan({
       command: "claude 'hello'",
       mode: 'native-panes-shim',
       baseEnv: { PATH: root },
+      shimRoot: root,
       createTeamEnv: (shimDir, shimBin) => {
         capturedShimBin = shimBin
         return {
@@ -53,21 +58,12 @@ describe('claude agent teams shim env', () => {
       }
     })
 
-    if (process.platform === 'win32') {
-      expect(plan).toMatchObject({
-        command: "claude --teammate-mode in-process 'hello'",
-        env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' }
-      })
-      expect(plan?.envToDelete).toBeUndefined()
-      expect(capturedShimBin).toBe('')
-    } else {
-      expect(plan).toMatchObject({
-        command: "claude --teammate-mode auto 'hello'",
-        env: expect.objectContaining({ TMUX_PANE: '%1' }),
-        envToDelete: ['TERM_PROGRAM']
-      })
-      expect(capturedShimBin).toBe(cliPath)
-    }
+    expect(plan).toMatchObject({
+      command: "claude --teammate-mode auto 'hello'",
+      env: expect.objectContaining({ TMUX_PANE: '%1' }),
+      envToDelete: ['TERM_PROGRAM']
+    })
+    expect(capturedShimBin).toBe(cliPath)
 
     await expect(
       buildClaudeAgentTeamsLaunchPlan({
@@ -78,6 +74,57 @@ describe('claude agent teams shim env', () => {
       })
     ).resolves.toBeNull()
   })
+
+  it('falls back to in-process teammates when the panes speak cmd', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-agent-teams-cli-'))
+    roots.push(root)
+    const cliPath = join(root, process.platform === 'win32' ? 'orca-dev.cmd' : 'orca-dev')
+    await writeFile(cliPath, '#!/usr/bin/env sh\n', 'utf8')
+    if (process.platform !== 'win32') {
+      await chmod(cliPath, 0o755)
+    }
+
+    await expect(
+      buildClaudeAgentTeamsLaunchPlan({
+        command: 'claude',
+        mode: 'native-panes-shim',
+        baseEnv: { PATH: root },
+        paneShell: 'cmd',
+        shimRoot: root,
+        createTeamEnv: () => {
+          throw new Error('cmd panes cannot run the sh command Claude Code writes')
+        }
+      })
+    ).resolves.toEqual({
+      command: 'claude --teammate-mode in-process',
+      env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' }
+    })
+  })
+
+  it.skipIf(process.platform !== 'win32')(
+    'falls back to in-process teammates when no spawnable Windows shim is installed',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-agent-teams-cli-'))
+      roots.push(root)
+      const cliPath = join(root, 'orca-dev.cmd')
+      await writeFile(cliPath, '@echo off\r\n', 'utf8')
+
+      await expect(
+        buildClaudeAgentTeamsLaunchPlan({
+          command: 'claude',
+          mode: 'native-panes-shim',
+          baseEnv: { PATH: root },
+          shimRoot: root,
+          createTeamEnv: () => {
+            throw new Error('Claude Code cannot spawn tmux.cmd, so panes are unreachable')
+          }
+        })
+      ).resolves.toEqual({
+        command: 'claude --teammate-mode in-process',
+        env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' }
+      })
+    }
+  )
 
   it('resolves the dev CLI wrapper for the tmux callback binary', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-agent-teams-cli-'))

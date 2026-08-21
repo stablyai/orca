@@ -4,6 +4,7 @@ import * as dependencies from './orca-runtime-create-terminal-dependencies'
 import { createDesktopTerminal } from './orca-runtime-create-terminal-desktop'
 import { buildRuntimeAgentTeamsLaunchPlan } from './orca-runtime-agent-teams-launch-plan'
 import { createPtySpawnCommitReporter } from './orca-runtime-report-pty-spawn-commit'
+import { resolveClaudeAgentTeamsPaneShell } from './claude-agent-teams-shim-env'
 
 export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreateDeduplication {
   async createTerminal(
@@ -78,6 +79,9 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
           ...(launchToken ? { ORCA_AGENT_LAUNCH_TOKEN: launchToken } : {})
         }
         const claudeAgentTeamsMode = this.store?.getSettings?.().claudeAgentTeamsMode
+        const agentTeamsPaneShell = resolveClaudeAgentTeamsPaneShell(
+          this.store?.getSettings?.().terminalWindowsShell
+        )
         let agentTeamsPlan: Awaited<ReturnType<typeof dependencies.buildClaudeAgentTeamsLaunchPlan>>
         let sequencedStartupCommand: string | undefined
         let effectiveLaunchConfig = launchOpts.launchConfig
@@ -89,12 +93,14 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
             claudeAgentTeamsMode,
             baseEnv: { ...process.env, ...baseEnv },
             adoptedBeforeLaunch,
+            paneShell: agentTeamsPaneShell,
             createTeamEnv: (shimDir, shimBin) =>
               this.claudeAgentTeams.createLaunchEnv({
                 leaderHandle: preAllocatedHandle,
                 baseEnv: { ...process.env, ...baseEnv },
                 shimDir,
-                shimBin
+                shimBin,
+                paneShell: agentTeamsPaneShell
               }).env
           })
           agentTeamsPlan = agentTeams.plan

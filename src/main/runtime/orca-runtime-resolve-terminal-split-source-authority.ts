@@ -12,6 +12,7 @@ import type {
 } from './claude-agent-teams-service'
 import {
   ensureClaudeAgentTeamsShimDir,
+  resolveClaudeAgentTeamsPaneShell,
   resolveClaudeAgentTeamsShimBin
 } from './claude-agent-teams-shim-env'
 
@@ -134,7 +135,8 @@ export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRunt
       leaderHandle: args.handle,
       baseEnv,
       shimDir,
-      shimBin
+      shimBin,
+      paneShell: resolveClaudeAgentTeamsPaneShell(this.store?.getSettings?.().terminalWindowsShell)
     })
   }
 

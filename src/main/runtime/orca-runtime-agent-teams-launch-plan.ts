@@ -1,5 +1,6 @@
 // @ts-nocheck -- the launch-plan adapter is kept independent from the runtime mixin chain.
 import type { ClaudeAgentTeamsMode } from '../../shared/claude-agent-teams-tmux-compat'
+import type { AgentStartupShell } from '../../shared/tui-agent-startup-shell'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import {
   addClaudeTeammateModeAuto,
@@ -15,6 +16,8 @@ export async function buildRuntimeAgentTeamsLaunchPlan(args: {
   claudeAgentTeamsMode?: ClaudeAgentTeamsMode
   baseEnv: Record<string, string | undefined>
   adoptedBeforeLaunch: boolean
+  /** Shell the panes type into; decides whether Orca can spell the teammate command. */
+  paneShell?: AgentStartupShell
   createTeamEnv: (shimDir: string, shimBin: string) => Record<string, string>
 }): Promise<{
   plan: Awaited<ReturnType<typeof buildClaudeAgentTeamsLaunchPlan>> | undefined
@@ -34,6 +37,7 @@ export async function buildRuntimeAgentTeamsLaunchPlan(args: {
         command: sourceCommand,
         mode,
         baseEnv: args.baseEnv,
+        paneShell: args.paneShell,
         createTeamEnv: args.createTeamEnv
       })
   const sequencedStartupCommand =
