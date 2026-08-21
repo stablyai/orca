@@ -5,6 +5,13 @@ const EMOJI_PRESENTATION_PATTERN = /\p{Emoji_Presentation}/u
 const ESCAPE_CHARACTER = String.fromCharCode(0x1b)
 const REWRITE_CSI_SCAN_TAIL_MAX_CHARS = 64
 const SGR_SEQUENCE_PATTERN = new RegExp(`${ESCAPE_CHARACTER}\\[([0-9:;]*)m`, 'g')
+// Why: renderer-risk SGR alone is too broad (most TUIs emit color constantly).
+// Pair it with an in-place rewrite — cursor move (H/f), erase (J/K), CR, or
+// backspace — so only repaint-in-place frames (the HUD corruption shape), not
+// ordinary colored scrollback, schedule recovery.
+const CSI_REWRITE_SEQUENCE_PATTERN = new RegExp(
+  `${ESCAPE_CHARACTER}\\[[0-9;?]*(?:[HJfK])|\\r|\\x08`
+)
 
 function containsStandaloneCarriageReturn(data: string): boolean {
   let index = data.indexOf('\r')
@@ -75,18 +82,26 @@ function sgrParamCode(param: string | undefined): number | null {
   return Number.isFinite(value) ? value : null
 }
 
-function sgrSequenceSetsBackground(params: string): boolean {
+type SgrRiskFlags = {
+  hasBackground: boolean
+  hasInverseVideo: boolean
+}
+
+// Why: a single SGR pass tracks both background fills and inverse video so the
+// hot foreground path walks each chunk's SGR matches once instead of twice.
+function collectSgrRiskFlags(params: string, flags: SgrRiskFlags): void {
   const parts = params.split(';')
   for (let i = 0; i < parts.length; i += 1) {
     const value = sgrParamCode(parts[i])
     if (value === null) {
       continue
     }
-    if (isInRange(value, 40, 47) || isInRange(value, 100, 107)) {
-      return true
-    }
-    if (value === 48) {
-      return true
+    if (value === 7) {
+      // Why: inverse video (SGR 7) is how OMP's HUD paints its selected/cursor
+      // rows; it fills the cell background and is a prime atlas-corruption shape.
+      flags.hasInverseVideo = true
+    } else if (isInRange(value, 40, 47) || isInRange(value, 100, 107) || value === 48) {
+      flags.hasBackground = true
     }
     if (value === 38 && !parts[i]?.includes(':')) {
       const mode = sgrParamCode(parts[i + 1])
@@ -99,21 +114,22 @@ function sgrSequenceSetsBackground(params: string): boolean {
       }
     }
   }
-  return false
 }
 
-function containsBackgroundSgr(data: string): boolean {
+function scanSgrRiskFlags(data: string): SgrRiskFlags {
+  const flags: SgrRiskFlags = { hasBackground: false, hasInverseVideo: false }
   SGR_SEQUENCE_PATTERN.lastIndex = 0
   for (
     let match = SGR_SEQUENCE_PATTERN.exec(data);
     match;
     match = SGR_SEQUENCE_PATTERN.exec(data)
   ) {
-    if (sgrSequenceSetsBackground(match[1] ?? '')) {
-      return true
+    collectSgrRiskFlags(match[1] ?? '', flags)
+    if (flags.hasBackground && flags.hasInverseVideo) {
+      break
     }
   }
-  return false
+  return flags
 }
 
 function containsRewriteEraseSequence(data: string): boolean {
@@ -231,7 +247,11 @@ export function nativeWindowsRewriteNeedsFollowupRenderRefresh(args: {
 }
 
 export function terminalOutputPrefersRenderRefresh(data: string): boolean {
-  if (containsBackgroundSgr(data)) {
+  const sgrFlags = scanSgrRiskFlags(data)
+  if (sgrFlags.hasBackground) {
+    return true
+  }
+  if (sgrFlags.hasInverseVideo && CSI_REWRITE_SEQUENCE_PATTERN.test(data)) {
     return true
   }
 

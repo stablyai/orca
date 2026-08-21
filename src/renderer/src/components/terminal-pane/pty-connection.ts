@@ -5553,7 +5553,12 @@ export function connectPanePty(
     let foregroundRefreshRiskScanTail = ''
 
     function trailingIncompleteCsiSequence(data: string): string {
-      const escapeIndex = data.lastIndexOf('\x1b')
+      // Why: a chunk can end on a lone ESC whose `[...` continuation arrives in
+      // the next chunk. Carry the dangling ESC so the split CSI start survives.
+      if (data.endsWith('\x1b')) {
+        return '\x1b'
+      }
+      const escapeIndex = data.lastIndexOf('\x1b[')
       if (escapeIndex === -1) {
         return ''
       }
@@ -5580,6 +5585,9 @@ export function connectPanePty(
       const scanData = foregroundRefreshRiskScanTail
         ? `${foregroundRefreshRiskScanTail}${data}`
         : data
+      // Why: complex/wide/RTL script redraws corrupt the atlas without any CSI
+      // sequence, so admit non-ASCII chunks too. Plain-ASCII output with no CSI
+      // still short-circuits here to keep the foreground hot path cheap.
       const prefersRefresh =
         (scanData.includes('\x1b[') || containsNonAsciiOutput(scanData)) &&
         terminalOutputPrefersRenderRefresh(scanData)
