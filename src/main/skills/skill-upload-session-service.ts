@@ -1,14 +1,17 @@
-import { createHash, randomUUID } from 'node:crypto'
-import { createReadStream } from 'node:fs'
-import { mkdir, open, rm, stat, type FileHandle } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { open, rm, type FileHandle } from 'node:fs/promises'
 import { join } from 'node:path'
-import { SKILL_PACKAGE_MAX_COMPRESSED_BYTES } from '../../shared/skill-package-manifest'
 import {
   SKILL_UPLOAD_CHUNK_MAX_BYTES,
   type SkillUploadBeginRequest,
   type SkillUploadBeginResult,
   type SkillUploadChunkRequest
 } from '../../shared/skill-upload-session-contract'
+import {
+  SkillUploadStagingOwnership,
+  type SkillUploadStagingOwnershipOptions
+} from './skill-upload-staging-ownership'
+import { hashSkillUploadArchive } from './skill-upload-archive-hash'
 
 const MAX_SESSIONS = 4
 const SESSION_IDLE_MS = 10 * 60_000
@@ -29,47 +32,64 @@ export class SkillUploadSessionService {
   private readonly sessions = new Map<string, UploadSession>()
   private initialized: Promise<void> | null = null
   private readonly idleMs: number
+  private readonly ownership: SkillUploadStagingOwnership
+  private readonly transferredPaths = new Set<string>()
+  private pendingBegins = 0
+  private disposed = false
 
   constructor(
-    private readonly root: string,
-    private readonly options: { idleMs?: number; initializeRoot?: () => Promise<void> } = {}
+    root: string,
+    private readonly options: {
+      idleMs?: number
+      initializeRoot?: () => Promise<void>
+      ownership?: SkillUploadStagingOwnershipOptions
+    } = {}
   ) {
     this.idleMs = options.idleMs ?? SESSION_IDLE_MS
+    this.ownership = new SkillUploadStagingOwnership(root, options.ownership)
   }
 
   async begin(request: SkillUploadBeginRequest): Promise<SkillUploadBeginResult> {
-    await this.initialize()
-    await this.prune()
-    const existing = request.transferId
-      ? [...this.sessions.values()].find((session) => session.transferId === request.transferId)
-      : undefined
-    if (existing) {
-      if (JSON.stringify(existing.package) !== JSON.stringify(request.package)) {
-        throw new Error('skill-upload-transfer-mismatch')
+    this.assertAvailable()
+    this.pendingBegins += 1
+    try {
+      await this.initialize()
+      this.assertAvailable()
+      await this.prune()
+      const existing = request.transferId
+        ? [...this.sessions.values()].find((session) => session.transferId === request.transferId)
+        : undefined
+      if (existing) {
+        if (JSON.stringify(existing.package) !== JSON.stringify(request.package)) {
+          throw new Error('skill-upload-transfer-mismatch')
+        }
+        this.touch(existing)
+        return this.beginResult(existing)
       }
-      this.touch(existing)
-      return this.beginResult(existing)
+      if (this.sessions.size >= MAX_SESSIONS) {
+        throw new Error('skill-upload-session-limit')
+      }
+      const id = randomUUID()
+      const path = join(this.ownership.directory, `${id}.tar.gz`)
+      const handle = await open(path, 'wx+', 0o600)
+      const session: UploadSession = {
+        id,
+        path,
+        package: request.package,
+        transferId: request.transferId ?? null,
+        handle,
+        idleTimer: null,
+        bytesReceived: 0,
+        touchedAt: Date.now(),
+        committed: false
+      }
+      this.sessions.set(id, session)
+      this.touch(session)
+      return this.beginResult(session)
+    } finally {
+      this.pendingBegins -= 1
+      await this.removeOwnershipIfDisposed()
     }
-    if (this.sessions.size >= MAX_SESSIONS) {
-      throw new Error('skill-upload-session-limit')
-    }
-    const id = randomUUID()
-    const path = join(this.root, `${id}.tar.gz`)
-    const handle = await open(path, 'wx+', 0o600)
-    const session: UploadSession = {
-      id,
-      path,
-      package: request.package,
-      transferId: request.transferId ?? null,
-      handle,
-      idleTimer: null,
-      bytesReceived: 0,
-      touchedAt: Date.now(),
-      committed: false
-    }
-    this.sessions.set(id, session)
-    this.touch(session)
-    return this.beginResult(session)
   }
 
   async append(request: SkillUploadChunkRequest): Promise<{ acknowledgedOffset: number }> {
@@ -128,7 +148,7 @@ export class SkillUploadSessionService {
     await session.handle.sync()
     await session.handle.close()
     session.handle = null
-    const identity = await this.hash(session.path)
+    const identity = await hashSkillUploadArchive(session.path)
     if (identity !== session.package.archiveSha256) {
       await this.cancel(uploadId)
       throw new Error('skill-upload-archive-hash-mismatch')
@@ -155,15 +175,18 @@ export class SkillUploadSessionService {
     }
     this.sessions.delete(uploadId)
     this.clearIdleTimer(session)
-    let cleaned = false
+    this.transferredPaths.add(session.path)
+    let cleanup: Promise<void> | null = null
     return {
       archivePath: session.path,
       cleanup: async () => {
-        if (cleaned) {
-          return
+        if (!cleanup) {
+          cleanup = this.cleanupTransferredPath(session.path).catch((error) => {
+            cleanup = null
+            throw error
+          })
         }
-        cleaned = true
-        await rm(session.path, { force: true })
+        await cleanup
       }
     }
   }
@@ -177,6 +200,12 @@ export class SkillUploadSessionService {
     this.clearIdleTimer(session)
     await session.handle?.close().catch(() => undefined)
     await rm(session.path, { force: true })
+  }
+
+  async dispose(): Promise<void> {
+    this.disposed = true
+    await Promise.all([...this.sessions.keys()].map((id) => this.cancel(id)))
+    await this.removeOwnershipIfDisposed()
   }
 
   private async requireActive(uploadId: string): Promise<UploadSession> {
@@ -221,14 +250,7 @@ export class SkillUploadSessionService {
 
   private async initialize(): Promise<void> {
     if (!this.initialized) {
-      const initialization = (async () => {
-        if (this.options.initializeRoot) {
-          await this.options.initializeRoot()
-        } else {
-          await rm(this.root, { recursive: true, force: true })
-          await mkdir(this.root, { recursive: true, mode: 0o700 })
-        }
-      })()
+      const initialization = this.ownership.initialize(this.options.initializeRoot)
       this.initialized = initialization
       void initialization.catch(() => {
         if (this.initialized === initialization) {
@@ -239,22 +261,33 @@ export class SkillUploadSessionService {
     await this.initialized
   }
 
+  private assertAvailable(): void {
+    if (this.disposed) {
+      throw new Error('skill-upload-service-disposed')
+    }
+  }
+
+  private async removeOwnershipIfDisposed(): Promise<void> {
+    if (
+      this.disposed &&
+      this.pendingBegins === 0 &&
+      this.sessions.size === 0 &&
+      this.transferredPaths.size === 0
+    ) {
+      await this.ownership.remove()
+    }
+  }
+
+  private async cleanupTransferredPath(path: string): Promise<void> {
+    await rm(path, { force: true })
+    this.transferredPaths.delete(path)
+    await this.removeOwnershipIfDisposed()
+  }
+
   private async prune(): Promise<void> {
     const expired = [...this.sessions.values()]
       .filter((session) => this.expired(session))
       .map((session) => session.id)
     await Promise.all(expired.map((id) => this.cancel(id)))
-  }
-
-  private async hash(path: string): Promise<string> {
-    const size = (await stat(path)).size
-    if (size < 1 || size > SKILL_PACKAGE_MAX_COMPRESSED_BYTES) {
-      throw new Error('skill-upload-size-limit')
-    }
-    const hash = createHash('sha256')
-    for await (const chunk of createReadStream(path)) {
-      hash.update(chunk as Buffer)
-    }
-    return hash.digest('hex')
   }
 }
