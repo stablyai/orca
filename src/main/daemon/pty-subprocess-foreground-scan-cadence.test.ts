@@ -88,12 +88,24 @@ async function readForegroundAt(
   return foreground
 }
 
+// Why a bare name: the POSIX cases drive production down a branch that resolves
+// an absolute shell against the filesystem, and none of /bin/zsh, /bin/bash or
+// /bin/sh exist on Windows. Left unpinned the outcome came from the developer's
+// own $SHELL — set by Git Bash, unset by cmd.exe and PowerShell — so the same
+// suite passed or failed by accident of what had launched it. A bare command is
+// returned untouched by `resolveUnixShellPath`, which keeps these cases about
+// scan cadence rather than about shell discovery.
+const PINNED_SHELL = 'zsh'
+
 describe('daemon pty foreground scan cadence', () => {
   let platform: PropertyDescriptor | undefined
   let previousUserDataPath: string | undefined
+  let previousShell: string | undefined
   let userDataPath: string
 
   beforeEach(() => {
+    previousShell = process.env.SHELL
+    process.env.SHELL = PINNED_SHELL
     spawnMock.mockReset()
     isPwshAvailableMock.mockReset()
     isPwshAvailableMock.mockReturnValue(false)
@@ -110,6 +122,11 @@ describe('daemon pty foreground scan cadence', () => {
     vi.useRealTimers()
     if (platform) {
       Object.defineProperty(process, 'platform', platform)
+    }
+    if (previousShell === undefined) {
+      delete process.env.SHELL
+    } else {
+      process.env.SHELL = previousShell
     }
     if (previousUserDataPath === undefined) {
       delete process.env.ORCA_USER_DATA_PATH

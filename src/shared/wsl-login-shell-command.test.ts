@@ -10,6 +10,7 @@ import {
   buildWslLoginShellCommand,
   quotePosixShell
 } from './wsl-login-shell-command'
+import { findPosixShell, posixShellEnvironment } from './posix-shell'
 
 const WSL_TEST_COMMAND_TIMEOUT_MS = 10_000
 let wslShAvailable: boolean | null = null
@@ -323,19 +324,28 @@ describe('in-guest wrapper root resolution', () => {
     expect(script).toContain('elif [ -n "${ORCA_USER_DATA_PATH:-}" ]; then')
   })
 
-  it('resolves the published root ahead of the legacy path under a real shell', () => {
-    const script = buildWslInteractiveLoginShellCommand()
-    // Run only the root-resolution prologue, then report what it picked.
-    const prologue = script.split('_orca_wsl_shell_name=')[0] as string
-    const probe = [
-      'ORCA_SHELL_READY_ROOT=/mnt/c/ud/shell-wrappers/deadbeefdeadbeef/shell-ready',
-      'ORCA_USER_DATA_PATH=/mnt/c/ud',
-      'export ORCA_SHELL_READY_ROOT ORCA_USER_DATA_PATH',
-      prologue,
-      'printf "%s" "$_orca_shell_ready_root"'
-    ].join('\n')
-    const result = spawnSync('sh', ['-c', probe], { encoding: 'utf8' })
-    expect(result.status).toBe(0)
-    expect(result.stdout).toBe('/mnt/c/ud/shell-wrappers/deadbeefdeadbeef/shell-ready')
-  })
+  // Why the probe and not a bare 'sh': Git for Windows ships a POSIX shell but
+  // keeps it off PATH, so this case passed when the suite was started from Git
+  // Bash and failed from cmd.exe with a null exit status.
+  it.skipIf(!findPosixShell())(
+    'resolves the published root ahead of the legacy path under a real shell',
+    () => {
+      const script = buildWslInteractiveLoginShellCommand()
+      // Run only the root-resolution prologue, then report what it picked.
+      const prologue = script.split('_orca_wsl_shell_name=')[0] as string
+      const probe = [
+        'ORCA_SHELL_READY_ROOT=/mnt/c/ud/shell-wrappers/deadbeefdeadbeef/shell-ready',
+        'ORCA_USER_DATA_PATH=/mnt/c/ud',
+        'export ORCA_SHELL_READY_ROOT ORCA_USER_DATA_PATH',
+        prologue,
+        'printf "%s" "$_orca_shell_ready_root"'
+      ].join('\n')
+      const result = spawnSync(findPosixShell() as string, ['-c', probe], {
+        encoding: 'utf8',
+        env: posixShellEnvironment()
+      })
+      expect(result.status).toBe(0)
+      expect(result.stdout).toBe('/mnt/c/ud/shell-wrappers/deadbeefdeadbeef/shell-ready')
+    }
+  )
 })
