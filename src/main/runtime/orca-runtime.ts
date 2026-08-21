@@ -907,6 +907,7 @@ import {
   sanitizeLinearErrorMessage
 } from '../linear/issue-context-errors'
 import { listMcpIssues } from '../linear/mcp-issue-list'
+import { linearPriorityLabel } from '../../shared/linear/priority-label'
 import { writeIssueRelation } from '../linear/issue-relation-write'
 import {
   createProject as createLinearProject,
@@ -35847,14 +35848,16 @@ export class OrcaRuntimeService {
         code: this.linearWorkspaceErrorCode(error.type),
         message: sanitizeLinearErrorMessage(error.message)
       }))
+      const hasMore = result.hasMore === true || result.items.length > limit
       return {
         projects,
+        truncated: hasMore,
         meta: {
           query: params.query,
           workspaceId: params.workspaceId,
           limit,
           returned: projects.length,
-          hasMore: result.hasMore === true || result.items.length > limit,
+          hasMore,
           partial: workspaceErrors.length > 0,
           workspaceErrors
         }
@@ -35894,11 +35897,13 @@ export class OrcaRuntimeService {
           estimate: issue.estimate,
           dueDate: issue.dueDate,
           updatedAt: issue.updatedAt,
+          priorityLabel: linearPriorityLabel(issue.priority),
           workspace: {
             id: issue.workspaceId ?? workspaceId ?? '',
             name: issue.workspaceName ?? issue.workspaceId ?? workspaceId ?? ''
           }
         })),
+        truncated: result.hasMore === true,
         meta: {
           filter,
           workspaceId,

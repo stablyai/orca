@@ -24,8 +24,12 @@ export type LinearMcpIssueListRequest = {
 
 export type LinearMcpIssueListResult = {
   issues: (LinearIssueSummary & { workspace: LinearWorkspaceCandidate })[]
+  // Optional on the wire: a remote host that predates the field sends nothing, and readers
+  // must fall back to meta rather than read absence as "complete".
+  truncated?: boolean
   meta: {
-    limit: number
+    // null when the caller set no --limit, i.e. every matching issue was read.
+    limit: number | null
     returned: number
     hasMore: boolean
     nextCursor?: string
