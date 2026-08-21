@@ -1,0 +1,57 @@
+{
+  "title": "MCode visual world",
+  "question": "The roll assigned Test Bench. Keep it, take an alternate, re-roll, or take the category standard.",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "Test Bench",
+      "kicker": "THE ROLL",
+      "lineage": "Electronics workbench instruments: oscilloscope, bench supply, signal generator",
+      "thesis": "MCode is a calibrated measurement instrument for your agent fleet: every agent is a channel, every run a trace.",
+      "palette": ["#2E3138", "#D9D5CC", "#E8C33C", "#4FB6C9", "#D96BA0"],
+      "materials": [
+        "powder-coated faceplates, silkscreened legends, engraved hairlines",
+        "scope graticule behind graphs; LED status windows; four-trace channel coding (Ch1 yellow, Ch2 cyan, Ch3 magenta, Ch4 green) assigned to agents/worktrees"
+      ],
+      "viewport": "App shell as instrument panel: left rail is the channel strip (trace-color LEDs + live activity meters per worktree/agent), center surface sits on a faint graticule, top bar reads like a scope header with Run/Hold semantics for agent state.",
+      "risk": "Instrument skeuomorphs could feel gimmicky if pushed past micro-details; the counter-move is calm chrome with the character living in readouts, tabular numerals, and channel color discipline.",
+      "sketch": ".impeccable/sketches/assigned.webp"
+    },
+    {
+      "id": "challenger-phosphor",
+      "label": "Phosphor Terminal",
+      "lineage": "green-phosphor CRT in a midnight machine room",
+      "thesis": "The whole app is one continuous glowing transcript.",
+      "case": "Highest instant identification with terminal culture, but it IS the AI-tool monoculture - near-black plus neon glow is exactly the cluster every agent tool ships; fuses poorly because MCode's value is the orchestration surface around terminals, not only the terminal.",
+      "sketch": ".impeccable/sketches/challenger-phosphor.webp",
+      "hero": "https://impeccable.style/worlds/cards/signals-instruments-phosphor-terminal-midnight-hero.webp"
+    },
+    {
+      "id": "challenger-ticket-wallet",
+      "label": "Jet-Age Ticket Wallet",
+      "lineage": "carbon-copy airline coupons and baggage tags",
+      "thesis": "Every agent run is a coupon leg that tears off when done; states stamp, nothing vanishes.",
+      "case": "Beautiful fit for run-history and DONE/VOID state stamps, but fuses poorly at density: coupon chrome eats vertical space a 20-worktree sidebar cannot spare.",
+      "sketch": ".impeccable/sketches/challenger-ticket-wallet.webp",
+      "hero": "https://impeccable.style/worlds/cards/vernacular-ephemera-jet-age-ticket-wallet-hero.webp"
+    },
+    {
+      "id": "challenger-onebit",
+      "label": "One-Bit Desktop",
+      "lineage": "early black-and-white Macintosh desktop",
+      "thesis": "Two colors, dither for everything, marching ants for selection.",
+      "case": "Memorable and technically playful (steps() animations), but two-color grammar cannot carry diff colors, git-lane semantics, or agent status without breaking its own law; wrong trade for a daily-driver Operate tool.",
+      "sketch": ".impeccable/sketches/challenger-onebit.webp",
+      "hero": "https://impeccable.style/worlds/cards/medium-native-one-bit-desktop-hero.webp"
+    }
+  ],
+  "reroll": true,
+  "canon": true,
+  "canonCard": {
+    "label": "The category standard",
+    "thesis": "What every dev-tool ships - Linear-grade dark minimalism - executed impeccably.",
+    "viewport": "The arrangement you expect from a modern IDE, at full craft.",
+    "sketch": ".impeccable/sketches/canon.webp"
+  },
+  "steer": true
+}

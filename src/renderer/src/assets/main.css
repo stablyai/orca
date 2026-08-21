@@ -129,84 +129,103 @@
 /* ── Light Mode ──────────────────────────────────────── */
 
 :root {
+  /*
+   * MCode visual world: "Test Bench".
+   * THESIS: MCode is a calibrated measurement instrument for an agent fleet —
+   * every agent is a channel, every run a trace. Refuses the AI-default
+   * near-black-plus-neon look and stark-white SaaS dashboards alike.
+   * OWN-WORLD: dark = deep cool slate (bench at night); light = warm putty
+   * enamel faceplate; four-trace channel coding carries semantics:
+   * Ch2 cyan = interactive/focus, Ch1 amber = working, Ch3 magenta = agent
+   * asks you, Ch4 green = success. Chrome stays calm; character lives in
+   * readouts, tabular numerals, and channel discipline.
+   * FORM: assigned direction #5 of grounded list, seed key f13c0254.
+   * FINISH: unreviewed and undocumented is unfinished; this build ends with
+   * the finish review, the verdict, and DESIGN.md.
+   */
   --app-font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-sans: var(--app-font-family);
   --font-mono:
     'SF Mono', SFMono-Regular, ui-monospace, 'Cascadia Code', Menlo, Consolas, 'Liberation Mono',
     monospace;
-  --radius: 0.625rem;
-  --mcode-security-background: #fff;
-  --mcode-security-foreground: #0a0a0a;
-  --mcode-security-card: #fff;
-  --mcode-security-card-foreground: #0a0a0a;
-  --mcode-security-popover: #fff;
-  --mcode-security-popover-foreground: #0a0a0a;
-  --mcode-security-primary: #171717;
-  --mcode-security-primary-foreground: #fafafa;
-  --mcode-security-secondary: #f5f5f5;
-  --mcode-security-secondary-foreground: #171717;
-  --mcode-security-muted: #f5f5f5;
-  --mcode-security-muted-foreground: #737373;
-  --mcode-security-accent: #f5f5f5;
-  --mcode-security-accent-foreground: #171717;
-  --mcode-security-border: #e5e5e5;
-  --mcode-security-input: #e5e5e5;
-  --mcode-security-ring: #a1a1a1;
-  --background: #fff;
-  --editor-surface: #ffffff;
-  --foreground: #0a0a0a;
-  --card: #fff;
-  --card-foreground: #0a0a0a;
-  --popover: #fff;
-  --popover-foreground: #0a0a0a;
-  --primary: #171717;
-  --primary-foreground: #fafafa;
-  --secondary: #f5f5f5;
-  --secondary-foreground: #171717;
-  --muted: #f5f5f5;
-  --muted-foreground: #737373;
-  --accent: #f5f5f5;
-  --accent-foreground: #171717;
-  --destructive: #e40014;
-  --destructive-foreground: #fcf3f3;
-  --border: #e5e5e5;
-  --input: #e5e5e5;
-  --ring: #a1a1a1;
-  --terminal-pane-locate: var(--color-blue-600);
-  --ai-action-accent: var(--color-violet-500);
+  --radius: 0.5rem;
+  /* Scope graticule line — only for measuring surfaces (charts, git graph). */
+  --graticule-line: rgb(25 28 33 / 0.05);
+  --mcode-security-background: #f1f0eb;
+  --mcode-security-foreground: #191c21;
+  --mcode-security-card: #faf9f6;
+  --mcode-security-card-foreground: #191c21;
+  --mcode-security-popover: #ffffff;
+  --mcode-security-popover-foreground: #191c21;
+  --mcode-security-primary: #22262d;
+  --mcode-security-primary-foreground: #f6f5f1;
+  --mcode-security-secondary: #e7e6df;
+  --mcode-security-secondary-foreground: #22262d;
+  --mcode-security-muted: #e7e6df;
+  --mcode-security-muted-foreground: #5b6270;
+  --mcode-security-accent: #e3e2da;
+  --mcode-security-accent-foreground: #22262d;
+  --mcode-security-border: #dbdad2;
+  --mcode-security-input: #cfcec6;
+  --mcode-security-ring: #0e7c90;
+  --background: #f1f0eb;
+  --editor-surface: #fbfaf7;
+  --foreground: #191c21;
+  --card: #faf9f6;
+  --card-foreground: #191c21;
+  --popover: #ffffff;
+  --popover-foreground: #191c21;
+  --primary: #22262d;
+  --primary-foreground: #f6f5f1;
+  --secondary: #e7e6df;
+  --secondary-foreground: #22262d;
+  --muted: #e7e6df;
+  --muted-foreground: #5b6270;
+  --accent: #e3e2da;
+  --accent-foreground: #22262d;
+  --destructive: #d70015;
+  --destructive-foreground: #fdf2f2;
+  --border: #dbdad2;
+  --input: #cfcec6;
+  /* Focus = Ch2 trace cyan, deepened for ≥3:1 on enamel ground. */
+  --ring: #0e7c90;
+  --terminal-pane-locate: #0e7c90;
+  /* Interactive accent = Ch2 cyan (light-theme depth). */
+  --ai-action-accent: #0e7c90;
   /* "An agent is asking you something" — one hue for every surface that shows
-     it (sidebar, tabs, dashboard, agent map). Orange, not amber: on the map it
-     has to stay separable from working-yellow at a glance. */
-  --agent-question: var(--color-orange-600);
+     it (sidebar, tabs, dashboard, agent map). Channel Ch3 magenta, not amber:
+     it must stay separable from working-yellow at a glance. */
+  --agent-question: #c2317f;
   /* Legible weight for text/glyphs on a tinted --agent-question surface. */
-  --agent-question-text: var(--color-orange-700);
-  --status-success: #15803d;
+  --agent-question-text: #961f60;
+  --status-success: #1a7f42;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
   /* Workspace PR-state tones: same hue in both themes so a status keeps its
-     identity when the theme flips. */
-  --workspace-status-done: #c7a594;
-  --workspace-status-review: #16a34a;
-  --workspace-status-progress: #d4a300;
-  --chart-1: var(--color-blue-300);
-  --chart-2: var(--color-blue-500);
-  --chart-3: var(--color-blue-600);
-  --chart-4: var(--color-blue-700);
-  --chart-5: var(--color-blue-800);
-  --worktree-sidebar: #f5f5f5;
-  --worktree-sidebar-foreground: #0a0a0a;
-  --worktree-sidebar-accent: #eaeaea;
-  --worktree-sidebar-accent-foreground: #171717;
-  --worktree-sidebar-border: #e5e5e5;
-  --worktree-sidebar-ring: #a1a1a1;
-  --sidebar: #fafafa;
-  --sidebar-foreground: #0a0a0a;
-  --sidebar-primary: #171717;
-  --sidebar-primary-foreground: #fafafa;
-  --sidebar-accent: #f5f5f5;
-  --sidebar-accent-foreground: #171717;
-  --sidebar-border: #e5e5e5;
-  --sidebar-ring: #a1a1a1;
+     identity when the theme flips. Light theme gets ink-deepened channels. */
+  --workspace-status-done: #a08a76;
+  --workspace-status-review: #1a7f42;
+  --workspace-status-progress: #8a6a00;
+  /* Chart series = the four traces + violet spare, darkened for enamel ground. */
+  --chart-1: #0e7c90;
+  --chart-2: #8a6a00;
+  --chart-3: #ab3d74;
+  --chart-4: #217a41;
+  --chart-5: #664dc0;
+  --worktree-sidebar: #f5f4ef;
+  --worktree-sidebar-foreground: #191c21;
+  --worktree-sidebar-accent: #e7e6df;
+  --worktree-sidebar-accent-foreground: #22262d;
+  --worktree-sidebar-border: #dbdad2;
+  --worktree-sidebar-ring: #0e7c90;
+  --sidebar: #eae9e2;
+  --sidebar-foreground: #191c21;
+  --sidebar-primary: #22262d;
+  --sidebar-primary-foreground: #f6f5f1;
+  --sidebar-accent: #e3e2da;
+  --sidebar-accent-foreground: #22262d;
+  --sidebar-border: #dbdad2;
+  --sidebar-ring: #0e7c90;
   --terminal-pane-title-on-dark-fg: rgb(255 255 255 / 0.52);
   --terminal-pane-title-on-dark-input-fg: rgb(255 255 255 / 0.7);
   --terminal-pane-title-on-dark-placeholder: rgb(255 255 255 / 0.38);
@@ -228,17 +247,18 @@
   --git-decoration-untracked: #007100;
   --git-decoration-copied: #007acc;
   --git-decoration-ignored: #8c8c8c;
-  --git-graph-ref: #007acc;
-  --git-graph-remote-ref: #b66dff;
-  --git-graph-base-ref: #ea5c00;
-  --git-graph-lane-1: #ffb000;
-  --git-graph-lane-2: #dc267f;
-  --git-graph-lane-3: #994f00;
-  --git-graph-lane-4: #40b0a6;
-  --git-graph-lane-5: #b66dff;
-  --annotation-highlight: #f59e0b;
-  --markdown-search-match: #facc15;
-  --markdown-search-match-active: #fb923c;
+  --git-graph-ref: #0e7c90;
+  --git-graph-remote-ref: #664dc0;
+  --git-graph-base-ref: #b35501;
+  /* Git lanes ride the trace palette so branch color == channel color. */
+  --git-graph-lane-1: #8a6a00;
+  --git-graph-lane-2: #ab3d74;
+  --git-graph-lane-3: #217a41;
+  --git-graph-lane-4: #0e7c90;
+  --git-graph-lane-5: #664dc0;
+  --annotation-highlight: #d9a813;
+  --markdown-search-match: #ecd444;
+  --markdown-search-match-active: #f0a04a;
   /* Why: tab-group splits use a dedicated divider — `--border` is too faint on
      card/editor surfaces when panes are side-by-side or stacked. Default must
      meet >=3:1 against `--card`, not only the hover/drag strong state. */
@@ -249,76 +269,84 @@
 /* ── Dark Mode ───────────────────────────────────────── */
 
 .dark {
-  --mcode-security-background: #0a0a0a;
-  --mcode-security-foreground: #fafafa;
-  --mcode-security-card: #171717;
-  --mcode-security-card-foreground: #fafafa;
-  --mcode-security-popover: #171717;
-  --mcode-security-popover-foreground: #fafafa;
-  --mcode-security-primary: #e5e5e5;
-  --mcode-security-primary-foreground: #171717;
-  --mcode-security-secondary: #262626;
-  --mcode-security-secondary-foreground: #fafafa;
-  --mcode-security-muted: #262626;
-  --mcode-security-muted-foreground: #a1a1a1;
-  --mcode-security-accent: #404040;
-  --mcode-security-accent-foreground: #fafafa;
-  --mcode-security-border: rgb(255 255 255 / 0.07);
-  --mcode-security-input: rgb(255 255 255 / 0.15);
-  --mcode-security-ring: #737373;
-  --background: #0a0a0a;
-  --editor-surface: #1e1e1e;
-  --foreground: #fafafa;
-  --card: #171717;
-  --card-foreground: #fafafa;
-  --popover: #171717;
-  --popover-foreground: #fafafa;
-  --primary: #e5e5e5;
-  --primary-foreground: #171717;
-  --secondary: #262626;
-  --secondary-foreground: #fafafa;
-  --muted: #262626;
-  --muted-foreground: #a1a1a1;
-  --accent: #404040;
-  --accent-foreground: #fafafa;
-  --destructive: #ff6568;
-  --destructive-foreground: #df2225;
-  --border: rgb(255 255 255 / 0.07);
-  --input: rgb(255 255 255 / 0.15);
-  --ring: #737373;
+  --mcode-security-background: #12151b;
+  --mcode-security-foreground: #e9edf2;
+  --mcode-security-card: #1a1f28;
+  --mcode-security-card-foreground: #e9edf2;
+  --mcode-security-popover: #1a1f28;
+  --mcode-security-popover-foreground: #e9edf2;
+  --mcode-security-primary: #dfe4ec;
+  --mcode-security-primary-foreground: #14181f;
+  --mcode-security-secondary: #232936;
+  --mcode-security-secondary-foreground: #e9edf2;
+  --mcode-security-muted: #232936;
+  --mcode-security-muted-foreground: #9ba5b4;
+  --mcode-security-accent: #242b3a;
+  --mcode-security-accent-foreground: #e9edf2;
+  --mcode-security-border: rgb(255 255 255 / 0.08);
+  --mcode-security-input: rgb(255 255 255 / 0.16);
+  --mcode-security-ring: #53c6d8;
+  --background: #12151b;
+  --editor-surface: #171b23;
+  --foreground: #e9edf2;
+  --card: #1a1f28;
+  --card-foreground: #e9edf2;
+  --popover: #1a1f28;
+  --popover-foreground: #e9edf2;
+  --primary: #dfe4ec;
+  --primary-foreground: #14181f;
+  --secondary: #232936;
+  --secondary-foreground: #e9edf2;
+  --muted: #232936;
+  --muted-foreground: #9ba5b4;
+  --accent: #242b3a;
+  --accent-foreground: #e9edf2;
+  --destructive: #ff6b70;
+  --destructive-foreground: #2a0a0c;
+  --border: rgb(255 255 255 / 0.08);
+  --input: rgb(255 255 255 / 0.16);
+  /* Focus = Ch2 trace cyan on slate ground. */
+  --ring: #53c6d8;
   --terminal-pane-locate: var(--color-blue-400);
-  --ai-action-accent: var(--color-violet-400);
-  --agent-question: var(--color-orange-500);
-  --agent-question-text: var(--color-orange-300);
-  --status-success: #86efac;
+  /* Interactive accent = Ch2 cyan. */
+  --ai-action-accent: #53c6d8;
+  /* "An agent is asking you something" — channel Ch3 magenta, separable from
+     working-yellow at a glance. */
+  --agent-question: #e06ca8;
+  /* Legible weight for text/glyphs on a tinted --agent-question surface. */
+  --agent-question-text: #f3b8d7;
+  --status-success: #63d48e;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
-  --workspace-status-done: #c7a594;
-  --workspace-status-review: #16a34a;
-  --workspace-status-progress: #d4a300;
-  --chart-1: var(--color-blue-300);
-  --chart-2: var(--color-blue-500);
-  --chart-3: var(--color-blue-600);
-  --chart-4: var(--color-blue-700);
-  --chart-5: var(--color-blue-800);
-  /* Why: light mode sets worktree-sidebar to secondary (#f5f5f5); mirror that
-     lift in dark mode so the panel reads clearly above #0a0a0a canvas. */
-  --worktree-sidebar: #2a2a2a;
-  --worktree-sidebar-foreground: #fafafa;
-  --worktree-sidebar-accent: #353535;
-  --worktree-sidebar-accent-foreground: #fafafa;
-  /* Match --border / --sidebar-border (7%) so the left sidebar's divider lines
+  /* Workspace PR-state tones: same hue in both themes so a status keeps its
+     identity when the theme flips. */
+  --workspace-status-done: #a08a76;
+  --workspace-status-review: #4cc476;
+  --workspace-status-progress: #e3b341;
+  /* Chart series = the four traces + violet spare. */
+  --chart-1: #53c6d8;
+  --chart-2: #e3b341;
+  --chart-3: #e06ca8;
+  --chart-4: #63d48e;
+  --chart-5: #9e86ff;
+  /* Why: light mode sets worktree-sidebar to secondary; mirror that lift in
+     dark mode so the panel reads clearly above the canvas. */
+  --worktree-sidebar: #1d232e;
+  --worktree-sidebar-foreground: #e9edf2;
+  --worktree-sidebar-accent: #262d3b;
+  --worktree-sidebar-accent-foreground: #e9edf2;
+  /* Match --border / --sidebar-border so the left sidebar's divider lines
      aren't brighter than the rest of the UI in dark mode (#5906). */
-  --worktree-sidebar-border: rgb(255 255 255 / 0.07);
-  --worktree-sidebar-ring: #737373;
-  --sidebar: #171717;
-  --sidebar-foreground: #fafafa;
-  --sidebar-primary: #1447e6;
-  --sidebar-primary-foreground: #fafafa;
-  --sidebar-accent: #262626;
-  --sidebar-accent-foreground: #fafafa;
-  --sidebar-border: rgb(255 255 255 / 0.07);
-  --sidebar-ring: #525252;
+  --worktree-sidebar-border: rgb(255 255 255 / 0.08);
+  --worktree-sidebar-ring: #53c6d8;
+  --sidebar: #161a21;
+  --sidebar-foreground: #e9edf2;
+  --sidebar-primary: #dfe4ec;
+  --sidebar-primary-foreground: #14181f;
+  --sidebar-accent: #242b3a;
+  --sidebar-accent-foreground: #e9edf2;
+  --sidebar-border: rgb(255 255 255 / 0.08);
+  --sidebar-ring: #53c6d8;
   --terminal-pane-title-on-dark-fg: rgb(255 255 255 / 0.52);
   --terminal-pane-title-on-dark-input-fg: rgb(255 255 255 / 0.7);
   --terminal-pane-title-on-dark-placeholder: rgb(255 255 255 / 0.38);
@@ -340,20 +368,26 @@
   --git-decoration-untracked: #73c991;
   --git-decoration-copied: #73c991;
   --git-decoration-ignored: #6e6e6e;
-  --git-graph-ref: #3794ff;
-  --git-graph-remote-ref: #b66dff;
-  --git-graph-base-ref: #ea5c00;
-  --git-graph-lane-1: #ffb000;
-  --git-graph-lane-2: #dc267f;
-  --git-graph-lane-3: #ce9178;
-  --git-graph-lane-4: #40b0a6;
-  --git-graph-lane-5: #b66dff;
-  --annotation-highlight: #fbbf24;
-  --markdown-search-match: #facc15;
-  --markdown-search-match-active: #fb923c;
+  --git-graph-ref: #58b7c9;
+  --git-graph-remote-ref: #9e86ff;
+  --git-graph-base-ref: #e8863c;
+  /* Git lanes ride the trace palette so branch color == channel color. */
+  --git-graph-lane-1: #e3b341;
+  --git-graph-lane-2: #e06ca8;
+  --git-graph-lane-3: #8fd9a8;
+  --git-graph-lane-4: #53c6d8;
+  --git-graph-lane-5: #9e86ff;
+  --annotation-highlight: #e3b341;
+  --markdown-search-match: #ecd444;
+  --markdown-search-match-active: #f0a04a;
   /* Brighter than terminal defaults so the always-visible line clears 3:1 on `--card`. */
   --tab-group-split-divider: #71717a;
   --tab-group-split-divider-strong: #a1a1aa;
+}
+
+.dark {
+  /* Scope graticule line — only for measuring surfaces (charts, git graph). */
+  --graticule-line: rgb(255 255 255 / 0.045);
 }
 
 .plugin-security-chrome {
@@ -496,6 +530,28 @@
 
   :where(button:disabled) {
     cursor: default;
+  }
+
+  /* Test Bench signature: text selection carries the Ch2 trace cyan. */
+  ::selection {
+    background: color-mix(in srgb, var(--ai-action-accent) 30%, transparent);
+  }
+
+  /* Instrument readout: measurement figures get tabular numerals so values
+     tick in place instead of jittering. Use for counts, durations, diffs. */
+  .readout {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+  }
+
+  /* Scope graticule: faint calibrated grid for measuring surfaces only
+     (charts, git graph). Never on text-heavy or chrome surfaces. */
+  .graticule {
+    background-image:
+      linear-gradient(var(--graticule-line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--graticule-line) 1px, transparent 1px);
+    background-size: 12px 12px;
   }
 }
 
