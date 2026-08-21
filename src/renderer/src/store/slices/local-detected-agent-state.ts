@@ -37,7 +37,9 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
         }
         return inflightRefresh
       }
-      if (existing != null && !failedDetectContextKeys.has(contextKey)) {
+      // Why: [] is truthy; WSL cold-start soft-fails must not pin an empty
+      // cache. Match remote/runtime non-sticky empty (#8366 / #8391).
+      if (existing?.length && !failedDetectContextKeys.has(contextKey)) {
         if (!isFloating) {
           detectedContextKey = contextKey
           const state = get()
@@ -148,7 +150,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
       const context = getLocalAgentPreflightContext(get(), undefined, undefined, worktreeId)
       const contextKey = localPreflightContextKey(context)
       const cached = get().localDetectedAgentIdsByContext[contextKey]
-      const hadUsableCache = cached != null && !failedDetectContextKeys.has(contextKey)
+      const hadUsableCache = Boolean(cached?.length) && !failedDetectContextKeys.has(contextKey)
       const requestGeneration = localDetectionGeneration
       const exposeInflightToLegacy = (): void => {
         if (!isFloating) {

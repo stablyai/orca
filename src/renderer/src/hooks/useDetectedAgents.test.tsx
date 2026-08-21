@@ -253,6 +253,45 @@ describe('useDetectedAgents (unresolved target)', () => {
   })
 })
 
+describe('useDetectedAgents (local call site)', () => {
+  it('fires local detection once on mount and does not thrash after an empty result', async () => {
+    detectLocalAgents.mockReset().mockResolvedValue([])
+    const root = await renderProbe({ kind: 'local' })
+
+    expect(detectLocalAgents).toHaveBeenCalledTimes(1)
+    expect(useAppStore.getState().detectedAgentIds).toEqual([])
+
+    await act(async () => {
+      root.render(createElement(HookProbe, { target: { kind: 'local' } }))
+    })
+    await flushEffects()
+
+    // Same mounted surface: empty remount-retry marks once; re-render must not thrash.
+    expect(detectLocalAgents).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries a cached empty local result when the launch surface is reopened', async () => {
+    // Why: WSL/local cold-start soft-fails to [] (#8366). Reopening TabBar /
+    // QuickLaunch must re-enter ensureDetectedAgents without a project switch.
+    detectLocalAgents.mockReset().mockResolvedValue([])
+    const firstRoot = await renderProbe({ kind: 'local' })
+
+    expect(detectLocalAgents).toHaveBeenCalledTimes(1)
+    expect(useAppStore.getState().detectedAgentIds).toEqual([])
+
+    await act(async () => {
+      firstRoot.unmount()
+    })
+    roots.splice(roots.indexOf(firstRoot), 1)
+    detectLocalAgents.mockResolvedValueOnce(['grok'])
+
+    await renderProbe({ kind: 'local' })
+
+    expect(detectLocalAgents).toHaveBeenCalledTimes(2)
+    expect(useAppStore.getState().detectedAgentIds).toEqual(['grok'])
+  })
+})
+
 describe('useDetectedAgents (runtime call site)', () => {
   it('distinguishes an initial remote failure from the pre-effect loading state', async () => {
     runtimeEnvironmentCall.mockRejectedValue(new Error('runtime disconnected'))

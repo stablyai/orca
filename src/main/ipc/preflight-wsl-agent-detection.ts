@@ -40,10 +40,41 @@ export async function detectWslCommandsOnPath(
     // Why: WSL cold-start plus many parallel wsl.exe probes can timeout and
     // cache an empty result. One probe through the distro user's login shell
     // matches zsh/bash PATH customizations from their normal terminals.
-    const { stdout } = await execWslAgentDetectionCommand(wslTarget, script)
+    // One ETIMEDOUT/killed retry absorbs a single cold-start miss without
+    // turning every hard shell failure into a multi-second hang.
+    const { stdout } = await execWslAgentDetectionCommandWithColdStartRetry(wslTarget, script)
     return parseWslDetectedCommands(stdout)
   } catch {
     return new Set()
+  }
+}
+
+function isWslAgentDetectionTimeoutError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') {
+    return false
+  }
+  const code = (error as { code?: unknown }).code
+  // Why: the two cold-start timeout paths surface differently — the Promise.race
+  // wrapper rejects with code=ETIMEDOUT, while Node's execFile `timeout` kills the
+  // child (code=null, killed=true). Retry on both; a real shell failure (non-zero
+  // exit / ENOENT) matches neither and propagates without a wasted retry.
+  if (code === 'ETIMEDOUT') {
+    return true
+  }
+  return (error as { killed?: unknown }).killed === true
+}
+
+async function execWslAgentDetectionCommandWithColdStartRetry(
+  target: WslPreflightTarget,
+  command: string
+): Promise<{ stdout: string; stderr: string }> {
+  try {
+    return await execWslAgentDetectionCommand(target, command)
+  } catch (error) {
+    if (!isWslAgentDetectionTimeoutError(error)) {
+      throw error
+    }
+    return await execWslAgentDetectionCommand(target, command)
   }
 }
 
