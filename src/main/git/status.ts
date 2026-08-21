@@ -20,6 +20,7 @@ import type {
 } from '../../shared/git-status-types'
 import type { CommitMessageDraftContext } from '../../shared/commit-message-generation'
 import { PREVIEWABLE_BINARY_MIME_TYPES } from '../../shared/previewable-binary-mime-types'
+import { IMAGE_FILE_MIME_TYPES } from '../../shared/image-file-extensions'
 import {
   getEffectiveGitUpstreamStatus,
   getGitUpstreamStatusForUpstreamName,
@@ -1963,14 +1964,25 @@ function buildDiffResult(
     const mimeType = filePath
       ? PREVIEWABLE_BINARY_MIME_TYPES[path.extname(filePath).toLowerCase()]
       : undefined
+    // Why: renderer routes dc.isImage=true to ImageDiffViewer, which decodes
+    // bytes through the image pipeline (PDFs reuse it for preview). With
+    // .docx/.xlsx now in the shared whitelist we'd mark office binaries as
+    // "image" and ImageDiffViewer would render garbled bytes. Narrow isImage
+    // to image MIME + PDF so office binaries fall through to "Binary file
+    // changed" while keeping the existing PDF preview contract intact.
+    const ext = filePath ? path.extname(filePath).toLowerCase() : ''
+    const isImage = mimeType
+      ? Boolean(IMAGE_FILE_MIME_TYPES[ext]) || ext === '.pdf'
+      : false
     return {
       kind: 'binary',
       originalContent,
       modifiedContent,
       originalIsBinary,
       modifiedIsBinary,
-      // Why: renderer still checks legacy `isImage` before previewing, so set it for PDFs too until the contract is renamed.
-      ...(mimeType ? { isImage: true, mimeType } : {})
+      // Why: renderer still uses legacy `isImage` flag before previewing; keep
+      // it populated for actual image MIME + PDF only.
+      ...(mimeType ? { isImage, mimeType } : {})
     } as GitDiffResult
   }
 
