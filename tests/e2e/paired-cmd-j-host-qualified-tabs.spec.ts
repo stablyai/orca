@@ -1,3 +1,4 @@
+import { errors } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import {
   createRuntimeDesktopPairingOffer,
@@ -35,10 +36,15 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
       window.localStorage.setItem('orca.browser.markup-draw-hint-seen', 'true')
     })
     const drawHintDismiss = page.getByRole('button', { name: 'Got it', exact: true })
-    const drawHintVisible = await expect(drawHintDismiss)
-      .toBeVisible({ timeout: 2_000 })
+    const drawHintVisible = await drawHintDismiss
+      .waitFor({ state: 'visible', timeout: 2_000 })
       .then(() => true)
-      .catch(() => false)
+      .catch((error: unknown) => {
+        if (error instanceof errors.TimeoutError) {
+          return false
+        }
+        throw error
+      })
     if (drawHintVisible) {
       await drawHintDismiss.click()
     }
