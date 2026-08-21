@@ -22,7 +22,7 @@ function alignTransform(element: unknown): unknown {
   if (!element || typeof element !== 'object') {
     return element
   }
-  const node = element as { type?: string; children?: unknown[]; alignment?: string }
+  const node = element as { type?: string; children?: unknown[]; alignment?: string; styleId?: string }
   if (node.children) {
     node.children = node.children.map(alignTransform)
   }
@@ -35,7 +35,11 @@ function alignTransform(element: unknown): unknown {
     }
     const styleId = idMap[node.alignment]
     if (styleId) {
-      return { ...node, styleId, styleName: node.alignment }
+      // Why: only set styleId — preserve the paragraph's original styleName so
+      // mammoth rules like `p[style-name='Quote']` still match when the user
+      // also centered the Quote. The styleMap also has `p.AlgnCenter => ...`
+      // keyed on styleId for the alignment-only case.
+      return { ...node, styleId }
     }
   }
   return node
