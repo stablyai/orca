@@ -25,6 +25,9 @@ import {
   formatAgentTypeLabel,
   agentTypeToIconAgent
 } from '@/lib/agent-status'
+import { agentRowOwnsTabName, agentRowPrimaryLabel } from '@/lib/agent-row-display-name'
+import { getAgentRowConversationName } from '../../../../shared/agent-row-conversation-name'
+import type { AgentType } from '../../../../shared/agent-status-types'
 import { track } from '@/lib/telemetry'
 import { useNow } from '@/components/dashboard/useNow'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
@@ -37,6 +40,7 @@ import { translate } from '@/i18n/i18n'
 type OrderedSendTarget = {
   target: NotesSendAgentTarget
   agent: DashboardAgentRowData | null
+  name: string
 }
 
 export function ReviewNotesSendMenuContent({
@@ -76,8 +80,7 @@ export function ReviewNotesSendMenuContent({
         tabsByWorktree,
         terminalLayoutsByTabId,
         ptyIdsByTabId,
-        runtimePaneTitlesByTabId,
-        generatedTabTitlesEnabled
+        runtimePaneTitlesByTabId
       },
       worktreeId
     )
@@ -90,12 +93,11 @@ export function ReviewNotesSendMenuContent({
     terminalLayoutsByTabId,
     runtimePaneTitlesByTabId,
     ptyIdsByTabId,
-    generatedTabTitlesEnabled,
     worktreeId
   ])
   const orderedSendTargets = useMemo(
-    () => orderSendTargetsByWorktreeAgentRows(sendTargets, agentRows),
-    [agentRows, sendTargets]
+    () => orderSendTargetsByWorktreeAgentRows(sendTargets, agentRows, generatedTabTitlesEnabled),
+    [agentRows, sendTargets, generatedTabTitlesEnabled]
   )
 
   const runNotesSend = useCallback(
@@ -186,11 +188,12 @@ export function ReviewNotesSendMenuContent({
       <DropdownMenuLabel>
         {translate('auto.components.editor.ReviewNotesSendMenuContent.03378aea75', 'Send notes to')}
       </DropdownMenuLabel>
-      {orderedSendTargets.map(({ target, agent }) => (
+      {orderedSendTargets.map(({ target, agent, name }) => (
         <AgentTargetMenuItem
           key={target.paneKey}
           target={target}
           agent={agent}
+          name={name}
           now={now}
           disabled={!hasPrompt || target.status !== 'eligible'}
           onSend={sendToAgentTarget}
@@ -217,13 +220,9 @@ function resolveCurrentSendTargetEligibility(
   target: NotesSendAgentTarget,
   worktreeId: string
 ): { status: 'eligible' } | { status: 'disabled'; disabledReason: string } {
-  const state = useAppStore.getState()
-  // Why: this re-check only reads eligibility, but pass the title flag anyway so
-  // it can never derive a different label than the row the user just clicked.
-  const currentTarget = deriveNotesSendAgentTargets(
-    { ...state, generatedTabTitlesEnabled: state.settings?.tabAutoGenerateTitle === true },
-    worktreeId
-  ).find((candidate) => candidate.paneKey === target.paneKey)
+  const currentTarget = deriveNotesSendAgentTargets(useAppStore.getState(), worktreeId).find(
+    (candidate) => candidate.paneKey === target.paneKey
+  )
   if (currentTarget) {
     return currentTarget.status === 'eligible'
       ? { status: 'eligible' }
@@ -239,42 +238,54 @@ function resolveCurrentSendTargetEligibility(
 function AgentTargetMenuItem({
   target,
   agent,
+  name,
   now,
   disabled,
   onSend
 }: {
   target: NotesSendAgentTarget
   agent: DashboardAgentRowData | null
+  name: string
   now: number
   disabled: boolean
   onSend: (target: NotesSendAgentTarget) => void
 }): React.JSX.Element {
-  const tabTitle = target.tabTitle.trim()
   const state = asDotState(agent?.state ?? 'idle')
   const timeAgo = agent ? formatAgentRelativeTime(agent, now) : null
   const agentLabel = formatAgentTypeLabel(target.agentType ?? agent?.agentType)
-  // Why: the tab name is what the user picks between — several targets can share
-  // the same harness — so it leads and the harness drops to the detail line.
+  // Why: the name is what the user picks between — several targets can share the
+  // same harness — so it leads and the harness drops to the detail line. With no
+  // name the harness label moves up rather than being repeated on both lines.
   const secondaryParts = [
-    ...(tabTitle ? [agentLabel] : []),
+    ...(name ? [agentLabel] : []),
     agentStateLabel(state),
     ...(timeAgo ? [timeAgo] : [])
   ]
+  const disabledReason = target.status === 'disabled' ? target.disabledReason : undefined
   return (
     <DropdownMenuItem
       disabled={disabled}
       onSelect={() => onSend(target)}
       // Why: surface the ineligibility reason (permission/stale/no-terminal) as a
       // hover tooltip rather than inline text, matching DashboardAgentRow's
-      // title-attribute treatment of the same disabledReason.
-      title={target.status === 'disabled' ? target.disabledReason : undefined}
+      // title-attribute treatment of the same disabledReason. The name can be a
+      // live prompt, so it needs the same hover treatment once it is elided.
+      title={disabledReason ?? (name || undefined)}
       className="min-w-[240px] gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
     >
       <AgentStateDot state={state} size="sm" className="shrink-0" />
       <AgentIcon agent={agentTypeToIconAgent(target.agentType ?? agent?.agentType)} size={14} />
-      <span className="grid min-w-0 flex-1 text-left">
-        <span className="truncate">{tabTitle || agentLabel}</span>
-        <span className="truncate text-[11px] font-normal text-muted-foreground">
+      {/* Why: the menu has no max width, so an unbounded name would widen the
+          whole dropdown instead of eliding — bound it the way every other menu
+          label does (TabBarQuickCommandsMenu, PRFilterDropdowns). */}
+      <span className="grid max-w-[240px] min-w-0 flex-1 text-left">
+        <span className="truncate" data-testid="send-target-name">
+          {name || agentLabel}
+        </span>
+        <span
+          className="truncate text-[11px] font-normal text-muted-foreground"
+          data-testid="send-target-detail"
+        >
           {secondaryParts.join(' · ')}
         </span>
       </span>
@@ -282,9 +293,31 @@ function AgentTargetMenuItem({
   )
 }
 
+// Why: the row already carries the provider icon and harness name, so a title
+// that only echoes identity or status is no name at all. Fall through to what
+// the agent is working on — the same text the sidebar row shows for it — and
+// then to the tab's stable ordinal so two unnamed idle tabs stay distinct.
+function sendTargetName(
+  target: NotesSendAgentTarget,
+  agent: DashboardAgentRowData | null,
+  agentType: AgentType | null | undefined,
+  generatedTitlesEnabled: boolean
+): string {
+  const conversationName =
+    agent && !agentRowOwnsTabName(agent)
+      ? null
+      : getAgentRowConversationName(target.tab, agentType, generatedTitlesEnabled)
+  const named = agent ? agentRowPrimaryLabel(agent, conversationName) : (conversationName ?? '')
+  return named.trim() || target.tab.defaultTitle?.trim() || ''
+}
+
+// Why: names resolve here, not in the derivation — this is the only place the
+// agent type is reconciled against the row that renders, so a name resolved
+// against a different harness than the row shows is impossible by construction.
 function orderSendTargetsByWorktreeAgentRows(
   sendTargets: NotesSendAgentTarget[],
-  agentRows: DashboardAgentRowData[]
+  agentRows: DashboardAgentRowData[],
+  generatedTitlesEnabled: boolean
 ): OrderedSendTarget[] {
   const targetsByPaneKey = new Map(sendTargets.map((target) => [target.paneKey, target]))
   const usedPaneKeys = new Set<string>()
@@ -295,13 +328,22 @@ function orderSendTargetsByWorktreeAgentRows(
     if (!target) {
       continue
     }
-    ordered.push({ target: { ...target, agentType: agent.agentType }, agent })
+    const reconciled = { ...target, agentType: agent.agentType }
+    ordered.push({
+      target: reconciled,
+      agent,
+      name: sendTargetName(reconciled, agent, agent.agentType, generatedTitlesEnabled)
+    })
     usedPaneKeys.add(target.paneKey)
   }
 
   for (const target of sendTargets) {
     if (!usedPaneKeys.has(target.paneKey)) {
-      ordered.push({ target, agent: null })
+      ordered.push({
+        target,
+        agent: null,
+        name: sendTargetName(target, null, target.agentType, generatedTitlesEnabled)
+      })
     }
   }
 

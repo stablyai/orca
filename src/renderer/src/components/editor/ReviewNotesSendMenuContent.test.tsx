@@ -1,20 +1,27 @@
-import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agent-status-types'
 import type { TuiAgent } from '../../../../shared/types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { ReviewNotesSendMenuContent } from './ReviewNotesSendMenuContent'
+import {
+  buildSingleTargetScenario,
+  collectText,
+  createAgentRowFactory,
+  expand,
+  findAllByType,
+  findByType,
+  leafLayout,
+  sendTargetRowText,
+  tab,
+  JUNK_TITLES,
+  type SingleTargetScenario,
+  LEAF_A,
+  LEAF_B,
+  TAB_A,
+  TAB_B
+} from './notes-send-menu-test-fixtures'
 
-type ReactElementLike = {
-  type: unknown
-  props: Record<string, unknown>
-}
-
-const TAB_A = 'tab-a'
-const TAB_B = 'tab-b'
-const LEAF_A = '11111111-1111-4111-8111-111111111111'
-const LEAF_B = '22222222-2222-4222-8222-222222222222'
+const agentRow = createAgentRowFactory(600_000)
 
 const hookRuntime = vi.hoisted(() => ({
   states: [] as unknown[],
@@ -33,7 +40,7 @@ const harness = vi.hoisted(() => ({
     tabId: string
     leafId: string
     agentType: TuiAgent
-    tabTitle: string
+    tab: ReturnType<typeof tab>
     status: 'eligible' | 'disabled'
     disabledReason?: string
   }[],
@@ -171,72 +178,6 @@ vi.mock('sonner', () => ({
   }
 }))
 
-function agentEntry(
-  paneKey: string,
-  agentType: TuiAgent,
-  state: AgentStatusState = 'done',
-  stateStartedAt = harness.now
-): AgentStatusEntry {
-  return {
-    paneKey,
-    state,
-    prompt: '',
-    updatedAt: stateStartedAt,
-    stateStartedAt,
-    agentType,
-    stateHistory: []
-  }
-}
-
-function agentRow({
-  paneKey,
-  tabId,
-  title,
-  agentType,
-  state = 'done',
-  startedAt = harness.now
-}: {
-  paneKey: string
-  tabId: string
-  title: string
-  agentType: TuiAgent
-  state?: AgentStatusState | 'idle'
-  startedAt?: number
-}): DashboardAgentRowData {
-  const entryState: AgentStatusState = state === 'idle' ? 'working' : state
-  return {
-    paneKey,
-    entry: agentEntry(paneKey, agentType, entryState, startedAt),
-    tab: tab(tabId, { title }) as DashboardAgentRowData['tab'],
-    agentType,
-    state,
-    startedAt
-  }
-}
-
-function tab(id: string, overrides: Record<string, unknown> = {}) {
-  return {
-    id,
-    worktreeId: 'wt-1',
-    ptyId: null,
-    title: id,
-    customTitle: null,
-    color: null,
-    sortOrder: 0,
-    createdAt: 1,
-    ...overrides
-  }
-}
-
-function leafLayout(leafId: string, ptyId: string) {
-  return {
-    root: { type: 'leaf', leafId },
-    activeLeafId: leafId,
-    expandedLeafId: null,
-    ptyIdsByLeafId: { [leafId]: ptyId }
-  }
-}
-
 function setStore(overrides: Record<string, unknown> = {}): void {
   harness.storeState = {
     activeWorktreeId: 'wt-1',
@@ -248,81 +189,6 @@ function setStore(overrides: Record<string, unknown> = {}): void {
     runtimePaneTitlesByTabId: {},
     ...overrides
   }
-}
-
-function expand(node: unknown): unknown {
-  if (node == null || typeof node === 'string' || typeof node === 'number') {
-    return node
-  }
-  if (Array.isArray(node)) {
-    return node.map((entry) => expand(entry))
-  }
-  if (!React.isValidElement(node)) {
-    if (typeof node === 'object' && 'props' in node) {
-      const element = node as ReactElementLike
-      return { ...element, props: { ...element.props, children: expand(element.props.children) } }
-    }
-    return node
-  }
-  const element = node as React.ReactElement<Record<string, unknown>>
-  if (typeof element.type === 'function') {
-    const Component = element.type as (props: Record<string, unknown>) => unknown
-    return expand(Component(element.props))
-  }
-  return {
-    type: element.type,
-    props: { ...element.props, children: expand(element.props.children) }
-  }
-}
-
-function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
-  if (node == null || typeof node === 'string' || typeof node === 'number') {
-    return
-  }
-  if (Array.isArray(node)) {
-    node.forEach((entry) => visit(entry, cb))
-    return
-  }
-  const element = node as ReactElementLike
-  cb(element)
-  if (element.props?.children) {
-    visit(element.props.children, cb)
-  }
-}
-
-function findAllByType(node: unknown, type: unknown): ReactElementLike[] {
-  const found: ReactElementLike[] = []
-  visit(node, (entry) => {
-    if (entry.type === type) {
-      found.push(entry)
-    }
-  })
-  return found
-}
-
-function findByType(node: unknown, type: unknown): ReactElementLike {
-  const found = findAllByType(node, type)[0]
-  if (!found) {
-    throw new Error(`element not found: ${String(type)}`)
-  }
-  return found
-}
-
-function collectText(node: unknown): string {
-  if (node == null || typeof node === 'boolean') {
-    return ''
-  }
-  if (typeof node === 'string') {
-    return node
-  }
-  if (typeof node === 'number') {
-    return String(node)
-  }
-  if (Array.isArray(node)) {
-    return node.map(collectText).join('')
-  }
-  const element = node as ReactElementLike
-  return collectText(element.props?.children)
 }
 
 function render(props: Record<string, unknown> = {}): unknown {
@@ -371,7 +237,7 @@ describe('ReviewNotesSendMenuContent', () => {
         tabId: TAB_A,
         leafId: LEAF_A,
         agentType: 'claude',
-        tabTitle: 'Terminal 1',
+        tab: tab(TAB_A),
         status: 'eligible'
       },
       {
@@ -379,7 +245,7 @@ describe('ReviewNotesSendMenuContent', () => {
         tabId: TAB_B,
         leafId: LEAF_B,
         agentType: 'codex',
-        tabTitle: 'Codex',
+        tab: tab(TAB_B),
         status: 'eligible'
       }
     ]
@@ -393,68 +259,174 @@ describe('ReviewNotesSendMenuContent', () => {
     expect(collectText(items[1])).toContain('Codex')
   })
 
+  function renderSingleTarget(scenario: SingleTargetScenario): { name: string; detail: string } {
+    const built = buildSingleTargetScenario(scenario, makePaneKey(TAB_A, LEAF_A), agentRow)
+    harness.worktreeAgentRows = built.agentRows
+    setStore(built.store)
+    harness.noteTargets = built.noteTargets as typeof harness.noteTargets
+    return sendTargetRowText(findByType(render(), 'DropdownMenuItem'))
+  }
+
   it('leads with the tab name and demotes the agent harness to the detail line', () => {
-    const paneKey = makePaneKey(TAB_A, LEAF_A)
-    harness.worktreeAgentRows = [
-      agentRow({
-        paneKey,
-        tabId: TAB_A,
-        title: 'teste',
-        agentType: 'claude',
-        state: 'idle',
-        startedAt: harness.now
-      })
-    ]
-    setStore({
-      tabsByWorktree: { 'wt-1': [tab(TAB_A, { title: 'teste' })] },
-      terminalLayoutsByTabId: { [TAB_A]: leafLayout(LEAF_A, 'pty-a') }
-    })
-    harness.noteTargets = [
-      {
-        paneKey,
-        tabId: TAB_A,
-        leafId: LEAF_A,
-        agentType: 'claude',
-        tabTitle: 'teste',
-        status: 'eligible'
-      }
-    ]
+    const row = renderSingleTarget({ title: 'teste', agentType: 'claude' })
 
-    const spans = findAllByType(findByType(render(), 'DropdownMenuItem'), 'span')
-    const primary = spans.find((span) => span.props.className === 'truncate')
-    const secondary = spans.find((span) =>
-      String(span.props.className ?? '').includes('text-muted-foreground')
-    )
-
-    expect(collectText(primary)).toBe('teste')
-    expect(collectText(secondary)).toBe('Claude · Idle · just now')
+    expect(row.name).toBe('teste')
+    expect(row.detail).toBe('Claude · Idle · just now')
   })
 
-  it('falls back to the agent label when the target has no tab name', () => {
-    const paneKey = makePaneKey(TAB_A, LEAF_A)
-    setStore({
-      tabsByWorktree: { 'wt-1': [tab(TAB_A, { title: '' })] },
-      terminalLayoutsByTabId: { [TAB_A]: leafLayout(LEAF_A, 'pty-a') }
-    })
-    harness.noteTargets = [
-      {
-        paneKey,
-        tabId: TAB_A,
-        leafId: LEAF_A,
-        agentType: 'claude',
-        tabTitle: '',
-        status: 'eligible'
-      }
-    ]
+  it.each(JUNK_TITLES)(
+    'falls through a %s to what the agent is working on',
+    (_case, title, agentType) => {
+      const row = renderSingleTarget({ title, agentType, prompt: 'fix the login bug' })
 
-    const spans = findAllByType(findByType(render(), 'DropdownMenuItem'), 'span')
-    const primary = spans.find((span) => span.props.className === 'truncate')
-    const secondary = spans.find((span) =>
-      String(span.props.className ?? '').includes('text-muted-foreground')
+      expect(row.name).toBe('fix the login bug')
+    }
+  )
+
+  it.each(JUNK_TITLES)(
+    'falls through a %s to the tab ordinal when there is no live work',
+    (_case, title, agentType) => {
+      const row = renderSingleTarget({ title, agentType })
+
+      expect(row.name).toBe('Terminal 3')
+    }
+  )
+
+  it('falls through to the tab ordinal for a title-hint target with no agent row', () => {
+    const row = renderSingleTarget({
+      title: '✳ Claude',
+      agentType: 'claude',
+      withAgentRow: false
+    })
+
+    expect(row.name).toBe('Terminal 3')
+    expect(row.detail).toBe('Claude · Idle')
+  })
+
+  it('keeps a manual rename, a quick-command label, and a generated title', () => {
+    expect(
+      renderSingleTarget({
+        title: '✳ Add validation',
+        agentType: 'claude',
+        prompt: 'fix the login bug',
+        tabOverrides: { customTitle: 'Designer' }
+      }).name
+    ).toBe('Designer')
+    expect(
+      renderSingleTarget({
+        title: '✳ Add validation',
+        agentType: 'claude',
+        prompt: 'fix the login bug',
+        tabOverrides: { quickCommandLabel: 'Run tests' }
+      }).name
+    ).toBe('Run tests')
+    expect(
+      renderSingleTarget({
+        title: 'Codex ready',
+        agentType: 'codex',
+        prompt: 'fix the login bug',
+        tabOverrides: { generatedTitle: 'Refactor auth' },
+        generatedTitlesEnabled: true
+      }).name
+    ).toBe('Refactor auth')
+    // Why: with the setting off the generated title must not resurface — and the
+    // stale synthetic status behind it is not a name either.
+    expect(
+      renderSingleTarget({
+        title: 'Codex ready',
+        agentType: 'codex',
+        prompt: 'fix the login bug',
+        tabOverrides: { generatedTitle: 'Refactor auth' }
+      }).name
+    ).toBe('fix the login bug')
+  })
+
+  it('keeps three unnamed idle tabs distinguishable by their ordinals', () => {
+    const tabs = [
+      { tabId: TAB_A, leafId: LEAF_A, ordinal: 'Terminal 3' },
+      { tabId: TAB_B, leafId: LEAF_B, ordinal: 'Terminal 4' },
+      { tabId: 'tab-c', leafId: '33333333-3333-4333-8333-333333333333', ordinal: 'Terminal 5' }
+    ]
+    harness.worktreeAgentRows = []
+    setStore({
+      tabsByWorktree: {
+        'wt-1': tabs.map((t) => tab(t.tabId, { title: '✳ Claude', defaultTitle: t.ordinal }))
+      },
+      terminalLayoutsByTabId: Object.fromEntries(
+        tabs.map((t) => [t.tabId, leafLayout(t.leafId, `pty-${t.tabId}`)])
+      )
+    })
+    harness.noteTargets = tabs.map((t) => ({
+      paneKey: makePaneKey(t.tabId, t.leafId),
+      tabId: t.tabId,
+      leafId: t.leafId,
+      agentType: 'claude' as TuiAgent,
+      tab: tab(t.tabId, { title: '✳ Claude', defaultTitle: t.ordinal }),
+      status: 'eligible' as const
+    }))
+
+    const names = findAllByType(render(), 'DropdownMenuItem').map(
+      (item) => sendTargetRowText(item).name
     )
 
-    expect(collectText(primary)).toBe('Claude')
-    expect(collectText(secondary)).toBe('Idle')
+    expect(names).toEqual(['Terminal 3', 'Terminal 4', 'Terminal 5'])
+  })
+
+  it('does not repeat the parent tab name on a same-tab child row', () => {
+    const parentPaneKey = makePaneKey(TAB_A, LEAF_A)
+    const childPaneKey = makePaneKey(TAB_A, LEAF_B)
+    const parentTab = tab(TAB_A, { customTitle: 'Designer' })
+    const child = agentRow({
+      paneKey: childPaneKey,
+      tabId: TAB_A,
+      title: '✳ Claude',
+      agentType: 'claude',
+      state: 'idle',
+      prompt: 'write the docs',
+      tabOverrides: { customTitle: 'Designer' }
+    })
+    child.lineage = { depth: 1, isFirstSibling: true, isLastSibling: true, childCount: 0 }
+    child.entry.orchestration = { parentPaneKey, taskId: 'task-1', dispatchId: 'dispatch-1' }
+    harness.worktreeAgentRows = [
+      agentRow({
+        paneKey: parentPaneKey,
+        tabId: TAB_A,
+        title: '✳ Claude',
+        agentType: 'claude',
+        state: 'idle',
+        tabOverrides: { customTitle: 'Designer' }
+      }),
+      child
+    ]
+    setStore({
+      tabsByWorktree: { 'wt-1': [parentTab] },
+      terminalLayoutsByTabId: { [TAB_A]: leafLayout(LEAF_A, 'pty-a') }
+    })
+    harness.noteTargets = [parentPaneKey, childPaneKey].map((paneKey, index) => ({
+      paneKey,
+      tabId: TAB_A,
+      leafId: index === 0 ? LEAF_A : LEAF_B,
+      agentType: 'claude' as TuiAgent,
+      tab: parentTab,
+      status: 'eligible' as const
+    }))
+
+    const names = findAllByType(render(), 'DropdownMenuItem').map(
+      (item) => sendTargetRowText(item).name
+    )
+
+    expect(names).toEqual(['Designer', 'write the docs'])
+  })
+
+  it('promotes the harness label when the target has no name at all', () => {
+    const row = renderSingleTarget({
+      title: '',
+      agentType: 'claude',
+      tabOverrides: { defaultTitle: undefined }
+    })
+
+    expect(row.name).toBe('Claude')
+    expect(row.detail).toBe('Idle · just now')
   })
 
   it('orders send targets by the current worktree agent rows and shows status timing', () => {
@@ -491,7 +463,7 @@ describe('ReviewNotesSendMenuContent', () => {
         tabId: TAB_A,
         leafId: LEAF_A,
         agentType: 'claude',
-        tabTitle: 'First session',
+        tab: tab(TAB_A, { title: 'First session' }),
         status: 'eligible'
       },
       {
@@ -499,7 +471,7 @@ describe('ReviewNotesSendMenuContent', () => {
         tabId: TAB_B,
         leafId: LEAF_B,
         agentType: 'codex',
-        tabTitle: 'Second session',
+        tab: tab(TAB_B, { title: 'Second session' }),
         status: 'eligible'
       }
     ]
@@ -563,7 +535,7 @@ describe('ReviewNotesSendMenuContent', () => {
         tabId: TAB_B,
         leafId: LEAF_B,
         agentType: 'codex',
-        tabTitle: 'Codex',
+        tab: tab(TAB_B),
         status: 'disabled',
         disabledReason: 'Agent needs permission'
       }
@@ -618,7 +590,7 @@ describe('ReviewNotesSendMenuContent', () => {
         tabId: TAB_A,
         leafId: LEAF_A,
         agentType: 'claude',
-        tabTitle: 'Terminal 1',
+        tab: tab(TAB_A),
         status: 'eligible'
       }
     ]
@@ -644,7 +616,7 @@ describe('ReviewNotesSendMenuContent', () => {
         tabId: TAB_A,
         leafId: LEAF_A,
         agentType: 'codex',
-        tabTitle: 'Codex',
+        tab: tab(TAB_A),
         status: 'disabled',
         disabledReason: 'Agent status is stale'
       }
@@ -671,7 +643,7 @@ describe('ReviewNotesSendMenuContent', () => {
         tabId: TAB_A,
         leafId: LEAF_A,
         agentType: 'claude',
-        tabTitle: 'Terminal 1',
+        tab: tab(TAB_A),
         status: 'eligible'
       }
     ]
@@ -707,7 +679,7 @@ describe('ReviewNotesSendMenuContent', () => {
         tabId: TAB_A,
         leafId: LEAF_A,
         agentType: 'claude',
-        tabTitle: 'Terminal 1',
+        tab: tab(TAB_A),
         status: 'eligible'
       }
     ]
@@ -735,7 +707,7 @@ describe('ReviewNotesSendMenuContent', () => {
         tabId: TAB_A,
         leafId: LEAF_A,
         agentType: 'claude',
-        tabTitle: 'Terminal 1',
+        tab: tab(TAB_A),
         status: 'eligible'
       }
     ]
@@ -761,7 +733,7 @@ describe('ReviewNotesSendMenuContent', () => {
         tabId: TAB_A,
         leafId: LEAF_A,
         agentType: 'claude',
-        tabTitle: 'Terminal 1',
+        tab: tab(TAB_A),
         status: 'eligible'
       }
     ]
@@ -773,7 +745,7 @@ describe('ReviewNotesSendMenuContent', () => {
         tabId: TAB_A,
         leafId: LEAF_A,
         agentType: 'claude',
-        tabTitle: 'Terminal 1',
+        tab: tab(TAB_A),
         status: 'disabled',
         disabledReason: 'Agent status is stale'
       }
@@ -797,7 +769,7 @@ describe('ReviewNotesSendMenuContent', () => {
         tabId: TAB_A,
         leafId: LEAF_A,
         agentType: 'claude',
-        tabTitle: 'Terminal 1',
+        tab: tab(TAB_A),
         status: 'eligible'
       }
     ]
@@ -823,7 +795,7 @@ describe('ReviewNotesSendMenuContent', () => {
         tabId: TAB_A,
         leafId: LEAF_A,
         agentType: 'claude',
-        tabTitle: 'Terminal 1',
+        tab: tab(TAB_A),
         status: 'eligible'
       }
     ]

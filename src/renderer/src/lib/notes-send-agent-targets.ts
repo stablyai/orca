@@ -1,8 +1,6 @@
 import type { AgentType } from '../../../shared/agent-status-types'
 import type { AppState } from '@/store/types'
-import { stripLeadingAgentTitleDecoration } from '../../../shared/agent-title-decoration'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
-import { resolveTerminalTabTitle } from '../../../shared/tab-title-resolution'
 import { resolveTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
 import type { TerminalTab } from '../../../shared/types'
 import { detectAgentSendTitleStatus } from './agent-send-title-status'
@@ -16,18 +14,16 @@ import {
 } from './running-agent-targets'
 
 export type NotesSendAgentTargetState = RunningAgentTargetState &
-  Pick<AppState, 'runtimePaneTitlesByTabId'> & {
-    /** Why: the one setting this derivation reads, not the whole settings object
-     *  — selecting the object would re-derive on every unrelated settings write. */
-    generatedTabTitlesEnabled?: boolean
-  }
+  Pick<AppState, 'runtimePaneTitlesByTabId'>
 
 export type NotesSendAgentTarget = {
   paneKey: string
   tabId: string
   leafId: string
   agentType: AgentType | null | undefined
-  tabTitle: string
+  /** Why: identity, not a name. The menu resolves the label where the agent type
+   *  is final, so this record never carries presentation. */
+  tab: TerminalTab
   status: 'eligible' | 'disabled'
   disabledReason?: string
 }
@@ -35,19 +31,6 @@ export type NotesSendAgentTarget = {
 type AgentTitleEvidence = {
   status: NonNullable<ReturnType<typeof detectAgentSendTitleStatus>>
   title: string
-}
-
-// Why: name each target the way its tab is named in the tab bar. `tab.title` is
-// the agent's live OSC title, so a manual rename or generated title would be
-// dropped and the menu would disagree with the tab the user is looking at.
-// Stripping the leading status glyph mirrors SortableTab: every row here renders
-// the provider icon, so the agent's own glyph would read as a second one. A
-// manual rename is the user's text and is never stripped.
-function resolveTargetTabTitle(state: NotesSendAgentTargetState, tab: TerminalTab): string {
-  // Why: no fallback — the resolver only reaches it once the trimmed live title
-  // is empty, so passing `tab.title` back would only ever restore whitespace.
-  const title = resolveTerminalTabTitle(tab, state.generatedTabTitlesEnabled === true)
-  return tab.customTitle?.trim() ? title : stripLeadingAgentTitleDecoration(title)
 }
 
 function detectTitleHintPaneEvidence(
@@ -94,7 +77,7 @@ export function deriveNotesSendAgentTargets(
       tabId: target.tabId,
       leafId: target.leafId,
       agentType: resolveNotesTargetAgentType(target.entry.agentType, target.tab.launchAgent),
-      tabTitle: resolveTargetTabTitle(state, target.tab),
+      tab: target.tab,
       status: target.status,
       ...(target.disabledReason ? { disabledReason: target.disabledReason } : {})
     })
@@ -161,7 +144,7 @@ function deriveTitleHintAgentTarget(
     tabId: tab.id,
     leafId,
     agentType: tab.launchAgent ?? resolveTerminalTitleAgentType(titleEvidence.title),
-    tabTitle: resolveTargetTabTitle(state, tab),
+    tab,
     status: disabledReason ? 'disabled' : 'eligible',
     ...(disabledReason ? { disabledReason } : {})
   }
@@ -198,8 +181,7 @@ function mergeLaunchAgentTitleTarget(
       agentType:
         existing.agentType && existing.agentType !== 'unknown'
           ? existing.agentType
-          : target.agentType,
-      tabTitle: existing.tabTitle || target.tabTitle
+          : target.agentType
     }
     return
   }
