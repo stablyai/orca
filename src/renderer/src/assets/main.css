@@ -1266,21 +1266,18 @@ html.native-shell .app-layout {
   background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
 }
 
-/* Why: the brighter border carries the selected state; a translucent wash keeps
-   card text legible instead of lifting the surface toward the foreground color. */
+/* Why: the active worktree is the "locked trace" — the Ch2 cyan border signals
+   the live channel; a translucent wash keeps card text legible instead of
+   lifting the surface toward the foreground color. */
 [data-worktree-card-surface][data-worktree-card-active='primary'] {
-  border-color: color-mix(in srgb, var(--worktree-sidebar-border) 40%, transparent);
-  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 8%, transparent);
+  border-color: color-mix(in srgb, var(--ai-action-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--ai-action-accent) 5%, transparent);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 4%, transparent);
 }
 
 .dark [data-worktree-card-surface][data-worktree-card-active='primary'] {
-  border-color: color-mix(
-    in srgb,
-    var(--worktree-sidebar-foreground) 18%,
-    var(--worktree-sidebar-border)
-  );
-  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 10%, transparent);
+  border-color: color-mix(in srgb, var(--ai-action-accent) 42%, transparent);
+  background: color-mix(in srgb, var(--ai-action-accent) 7%, transparent);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 3%, transparent);
 }
 

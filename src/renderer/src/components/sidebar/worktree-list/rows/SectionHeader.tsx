@@ -322,7 +322,9 @@ export function renderWorktreeSectionHeaderRow(args: {
 
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-1.5">
-              <div className="min-w-0 truncate text-[13px] font-semibold leading-none">
+              {/* Test Bench legend: section headers are instrument labels —
+                  uppercase micro-type so worktree rows own the hierarchy. */}
+              <div className="min-w-0 truncate text-[11px] font-semibold uppercase leading-none tracking-[0.08em] text-muted-foreground">
                 {row.label}
               </div>
               <RepoForkIndicator upstream={row.repo?.upstream} />
