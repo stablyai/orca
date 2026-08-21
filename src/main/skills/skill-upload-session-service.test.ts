@@ -103,6 +103,57 @@ describe('SkillUploadSessionService', () => {
     expect(await readdir(uploads)).toEqual([])
   })
 
+  it('serializes concurrent admission at four sessions', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-session-'))
+    roots.push(root)
+    const uploads = join(root, 'uploads')
+    const service = new SkillUploadSessionService(uploads)
+    const results = await Promise.allSettled(
+      Array.from({ length: 5 }, (_, index) =>
+        service.begin({
+          package: identity(Buffer.from(`package-${index}`)),
+          transferId: `operation-${index}`
+        })
+      )
+    )
+
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(4)
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1)
+    expect(await stagedArchives(uploads)).toHaveLength(4)
+    await service.dispose()
+    expect(await readdir(uploads)).toEqual([])
+  })
+
+  it('waits for an initializing begin before disposal removes ownership', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-session-'))
+    roots.push(root)
+    const uploads = join(root, 'uploads')
+    let releaseInitialization!: () => void
+    const initializationReleased = new Promise<void>((resolve) => {
+      releaseInitialization = resolve
+    })
+    let markInitializationStarted!: () => void
+    const initializationStarted = new Promise<void>((resolve) => {
+      markInitializationStarted = resolve
+    })
+    const service = new SkillUploadSessionService(uploads, {
+      initializeRoot: async () => {
+        await mkdir(uploads, { recursive: true })
+        markInitializationStarted()
+        await initializationReleased
+      }
+    })
+    const begin = service.begin({ package: identity(Buffer.from('closing package')) })
+    await initializationStarted
+
+    const disposal = service.dispose()
+    releaseInitialization()
+
+    await expect(begin).rejects.toThrow('skill-upload-service-disposed')
+    await disposal
+    expect(await readdir(uploads)).toEqual([])
+  })
+
   it('bounds each abandoned-owner sweep and can resume cleanup on retry', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-upload-session-'))
     roots.push(root)

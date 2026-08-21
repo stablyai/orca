@@ -3661,6 +3661,7 @@ export class OrcaRuntimeService {
   private skillCloudService: SkillCloudService | null = null
   private agentSkillShareInProgress = false
   private skillUploadSessions: SkillUploadSessionService | null = null
+  private skillUploadSessionsDisposed = false
   private readonly skillTransactionRecovery: Promise<unknown>
   private readonly skillInstallOperations = new Map<string, AbortController>()
   private readonly skillInstallProgress = new Map<string, SkillBundleInstallProgress>()
@@ -5696,10 +5697,20 @@ export class OrcaRuntimeService {
   }
 
   private requireSkillUploadSessions(): SkillUploadSessionService {
+    if (this.skillUploadSessionsDisposed) {
+      throw new Error('skill-upload-service-disposed')
+    }
     this.skillUploadSessions ??= new SkillUploadSessionService(
       join(app.getPath('userData'), 'skill-installs', SKILL_UPLOAD_STAGING_ROOT_NAME)
     )
     return this.skillUploadSessions
+  }
+
+  async disposeSkillUploadSessions(): Promise<void> {
+    this.skillUploadSessionsDisposed = true
+    const sessions = this.skillUploadSessions
+    this.skillUploadSessions = null
+    await sessions?.dispose()
   }
 
   getRuntimeId(): string {

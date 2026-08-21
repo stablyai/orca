@@ -58,9 +58,12 @@ async function request(
 }
 
 async function stagedArchives(uploadRoot: string): Promise<string[]> {
-  const owners = await readdir(uploadRoot, { withFileTypes: true })
+  const entries = await readdir(uploadRoot, { withFileTypes: true })
+  const rootArchives = entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.tar.gz'))
+    .map((entry) => join(uploadRoot, entry.name))
   const archives = await Promise.all(
-    owners
+    entries
       .filter((entry) => entry.isDirectory())
       .map(async (entry) =>
         (await readdir(join(uploadRoot, entry.name)))
@@ -68,7 +71,7 @@ async function stagedArchives(uploadRoot: string): Promise<string[]> {
           .map((name) => join(uploadRoot, entry.name, name))
       )
   )
-  return archives.flat().sort()
+  return [...rootArchives, ...archives.flat()].sort()
 }
 
 async function uploadRootForOracle(home: string): Promise<string> {
@@ -81,7 +84,7 @@ function packageIdentity(bytes: Buffer, suffix: string) {
   return {
     packageId: `package_${suffix}`,
     versionId: `version_${suffix}`,
-    packageDigest: 'a'.repeat(64),
+    packageDigest: createHash('sha256').update(`manifest-${suffix}`).digest('hex'),
     archiveSha256: createHash('sha256').update(bytes).digest('hex'),
     compressedBytes: bytes.length
   }
@@ -119,23 +122,69 @@ describe('skill upload ownership across relay processes', () => {
     const secondUpload = (await request(second, 'skills.beginUpload', {
       package: packageIdentity(secondBytes, 'second')
     })) as { uploadId: string }
+    await request(second, 'skills.uploadChunk', {
+      uploadId: secondUpload.uploadId,
+      offset: 0,
+      bytesBase64: secondBytes.toString('base64')
+    })
     const uploadRoot = await uploadRootForOracle(home)
+    const ownerEntries = (await readdir(uploadRoot, { withFileTypes: true })).filter((entry) =>
+      entry.isDirectory()
+    )
     const archives = await stagedArchives(uploadRoot)
     const firstPath = archives.find((path) => path.endsWith(`${firstUpload.uploadId}.tar.gz`))
+    const secondPath = archives.find((path) => path.endsWith(`${secondUpload.uploadId}.tar.gz`))
+    const firstStagedBytes = firstPath ? await readFile(firstPath) : null
+    const secondStagedBytes = secondPath ? await readFile(secondPath) : null
+    const ownerPattern = /^owner-\d+-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-    expect(await readdir(uploadRoot)).toHaveLength(2)
-    expect(archives).toHaveLength(2)
-    expect(firstPath).toBeDefined()
-    await expect(readFile(firstPath!)).resolves.toEqual(firstBytes.subarray(0, 5))
+    expect.soft(ownerEntries).toHaveLength(2)
+    expect.soft(ownerEntries.every((entry) => ownerPattern.test(entry.name))).toBe(true)
+    expect
+      .soft(ownerEntries.some((entry) => entry.name.startsWith(`owner-${first.proc.pid}-`)))
+      .toBe(true)
+    expect
+      .soft(ownerEntries.some((entry) => entry.name.startsWith(`owner-${second.proc.pid}-`)))
+      .toBe(true)
+    expect.soft(archives).toHaveLength(2)
+    expect.soft(firstStagedBytes).toEqual(firstBytes.subarray(0, 5))
+    expect.soft(secondStagedBytes).toEqual(secondBytes)
     await request(second, 'skills.cancelUpload', { uploadId: secondUpload.uploadId })
     expect(await stagedArchives(uploadRoot)).toEqual([firstPath])
     await request(first, 'skills.cancelUpload', { uploadId: firstUpload.uploadId })
     expect(await stagedArchives(uploadRoot)).toEqual([])
 
+    const firstDisposalBytes = Buffer.from('first relay disposal upload')
+    const secondDisposalBytes = Buffer.from('second relay disposal upload')
+    const firstDisposalUpload = (await request(first, 'skills.beginUpload', {
+      package: packageIdentity(firstDisposalBytes, 'first_disposal')
+    })) as { uploadId: string }
+    await request(first, 'skills.uploadChunk', {
+      uploadId: firstDisposalUpload.uploadId,
+      offset: 0,
+      bytesBase64: firstDisposalBytes.toString('base64')
+    })
+    const secondDisposalUpload = (await request(second, 'skills.beginUpload', {
+      package: packageIdentity(secondDisposalBytes, 'second_disposal')
+    })) as { uploadId: string }
+    await request(second, 'skills.uploadChunk', {
+      uploadId: secondDisposalUpload.uploadId,
+      offset: 0,
+      bytesBase64: secondDisposalBytes.toString('base64')
+    })
+    const disposalArchives = await stagedArchives(uploadRoot)
+    const secondDisposalPath = disposalArchives.find((path) =>
+      path.endsWith(`${secondDisposalUpload.uploadId}.tar.gz`)
+    )
+
     first.kill('SIGTERM')
     await first.waitForExit()
     relays.splice(relays.indexOf(first), 1)
-    expect(await readdir(uploadRoot)).toHaveLength(1)
+    expect(await readdir(uploadRoot)).toEqual([
+      expect.stringMatching(new RegExp(`^owner-${second.proc.pid}-`))
+    ])
+    expect(await stagedArchives(uploadRoot)).toEqual([secondDisposalPath])
+    await expect(readFile(secondDisposalPath!)).resolves.toEqual(secondDisposalBytes)
     second.kill('SIGTERM')
     await second.waitForExit()
     relays.splice(relays.indexOf(second), 1)
