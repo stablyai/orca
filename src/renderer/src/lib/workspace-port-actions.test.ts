@@ -96,11 +96,7 @@ describe('refreshWorkspacePortScanAfterStop', () => {
   })
 
   it('publishes the settled scan under the plain host key, not a synthetic aggregate, for a single tracked host', async () => {
-    // Regression for a bug where currentScans always contained the entry this
-    // same publish had just written, so ">0 keys" was true even with one
-    // host. That routed every Stop click through 'all-hosts:all' and merged
-    // the settled (process gone) scan back with the first (process present)
-    // scan, resurrecting the just-killed port as a ghost row.
+    // Regression for the ghost-duplicate-row bug: a single host was wrongly treated as multi-host.
     runWorkspacePortScanForTargetMock
       .mockResolvedValueOnce(scanWithPort(port('tcp:5199'), 1))
       .mockResolvedValueOnce(scanWithPort(null, 2))
