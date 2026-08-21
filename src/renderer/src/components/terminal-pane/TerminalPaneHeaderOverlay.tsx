@@ -15,6 +15,12 @@ import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import type { PtyTransport } from './pty-transport'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
 
+/** True when the event started on one of the header's action buttons, whose own
+ *  double-click must not be reinterpreted as a rename. */
+function isPaneTitleActionTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest('.pane-title-actions') !== null
+}
+
 export type PaneTitleOverlayRect = {
   left: number
   top: number
@@ -176,6 +182,17 @@ export default function TerminalPaneHeaderOverlay({
               })
             }}
             onContextMenuCapture={(event) => onPaneTitleContextMenu(event, pane.id)}
+            onDoubleClick={(event) => {
+              // Why: an untitled pane renders no title button, so renaming it
+              // otherwise needs the context menu. Double-clicking the bar — the
+              // drag-handle strip included — is the gesture users already try.
+              if (isEditing || isPaneTitleActionTarget(event.target)) {
+                return
+              }
+              event.preventDefault()
+              onActivatePaneTitleInteraction(pane.id)
+              onStartRename(pane.id)
+            }}
             style={{
               left: overlayRect.left,
               top: overlayRect.top,

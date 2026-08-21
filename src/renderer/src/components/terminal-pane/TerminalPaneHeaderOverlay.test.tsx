@@ -47,6 +47,7 @@ function renderOverlay({
   onClosePane = vi.fn(),
   onRemoveTitle = vi.fn(),
   onRenameSubmit = vi.fn(),
+  onStartRename = vi.fn(),
   canContinueAgentSessionInNewSession = false,
   onContinueAgentSessionInNewSession = vi.fn(),
   renameValue = '',
@@ -59,6 +60,7 @@ function renderOverlay({
   onClosePane?: ReturnType<typeof vi.fn>
   onRemoveTitle?: ReturnType<typeof vi.fn>
   onRenameSubmit?: ReturnType<typeof vi.fn>
+  onStartRename?: ReturnType<typeof vi.fn>
   canContinueAgentSessionInNewSession?: boolean
   onContinueAgentSessionInNewSession?: ReturnType<typeof vi.fn>
   renameValue?: string
@@ -68,6 +70,7 @@ function renderOverlay({
   onClosePane: ReturnType<typeof vi.fn>
   onRemoveTitle: ReturnType<typeof vi.fn>
   onRenameSubmit: ReturnType<typeof vi.fn>
+  onStartRename: ReturnType<typeof vi.fn>
 } {
   const panes = [makePane(1), makePane(2)]
   const container = document.createElement('div')
@@ -106,7 +109,7 @@ function renderOverlay({
         onBeginPaneDrag={vi.fn()}
         onActivatePaneTitleInteraction={vi.fn()}
         onPaneTitleContextMenu={vi.fn()}
-        onStartRename={vi.fn()}
+        onStartRename={onStartRename as (paneId: number) => void}
         onRemoveTitle={onRemoveTitle as (paneId: number) => void}
         onClosePane={onClosePane as (paneId: number) => void}
         onRenameValueChange={vi.fn()}
@@ -117,7 +120,7 @@ function renderOverlay({
     )
   })
   mounted.push({ container, root })
-  return { container, onClosePane, onRemoveTitle, onRenameSubmit }
+  return { container, onClosePane, onRemoveTitle, onRenameSubmit, onStartRename }
 }
 
 function pressInputKey(
@@ -185,6 +188,59 @@ describe('TerminalPaneHeaderOverlay', () => {
     })
 
     expect(container.querySelector('button[aria-label="Split Terminal Right"]')).toBeNull()
+  })
+
+  it('starts a rename when an untitled pane header is double-clicked', () => {
+    const { container, onStartRename } = renderOverlay({ paneTitles: {} })
+    const header = container.querySelector<HTMLElement>('.pane-title-bar')
+    expect(header).not.toBeNull()
+
+    act(() => {
+      header!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    })
+
+    expect(onStartRename).toHaveBeenCalledWith(1)
+  })
+
+  it('starts a rename from the drag-handle strip, which is not a title button', () => {
+    const { container, onStartRename } = renderOverlay({
+      paneTitles: { 1: 'Build' },
+      showAlwaysOnHeaders: false
+    })
+    const handle = container.querySelector<HTMLElement>('.pane-title-drag-handle')
+    expect(handle).not.toBeNull()
+
+    act(() => {
+      handle!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    })
+
+    expect(onStartRename).toHaveBeenCalledWith(1)
+  })
+
+  it('leaves header action buttons alone on double-click', () => {
+    const { container, onStartRename } = renderOverlay({ paneTitles: { 1: 'Build' } })
+    const action = container.querySelector<HTMLElement>('.pane-title-actions button')
+    expect(action).not.toBeNull()
+
+    act(() => {
+      action!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    })
+
+    expect(onStartRename).not.toHaveBeenCalled()
+  })
+
+  it('does not restart a rename that is already open', () => {
+    const { container, onStartRename } = renderOverlay({
+      paneTitles: { 1: 'Build' },
+      renamingPaneId: 1
+    })
+    const header = container.querySelector<HTMLElement>('.pane-title-bar')
+
+    act(() => {
+      header!.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+    })
+
+    expect(onStartRename).not.toHaveBeenCalled()
   })
 
   it('ignores IME composition Enter before submitting a pane title rename', () => {
