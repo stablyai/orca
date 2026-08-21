@@ -1,9 +1,11 @@
-import type { Dirent } from 'node:fs'
-import { open, readdir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { app } from 'electron'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
+import {
+  findNewestAntigravityCliLogNames,
+  readAntigravityLogTail
+} from './antigravity-log-discovery'
 import {
   fetchAntigravityQuotaEndpoint,
   getAntigravityCliLogDirectory,
@@ -16,10 +18,8 @@ import {
   type AntigravityLoopbackProtocol
 } from './antigravity-loopback-client'
 
-const CLI_LOG_LIMIT = 12
 const ENDPOINT_ATTEMPT_LIMIT = 8
 const FETCH_TIMEOUT_MS = 6_000
-const LOG_TAIL_LIMIT_BYTES = 128 * 1024
 const FETCH_TIMEOUT_MESSAGE = 'Antigravity usage lookup timed out'
 
 type FetchAttempt = {
@@ -35,42 +35,16 @@ export type AntigravityUsageFetchOptions = {
   platform?: NodeJS.Platform
 }
 
-/** Bounds discovery reads so stale logs cannot cause unbounded allocation. */
-async function readLogTail(filePath: string, signal: AbortSignal): Promise<string> {
-  signal.throwIfAborted()
-  const handle = await open(filePath, 'r')
-  try {
-    const stats = await handle.stat()
-    if (!stats.isFile()) {
-      throw new Error('Antigravity log target is not a file')
-    }
-    const byteLength = Math.min(stats.size, LOG_TAIL_LIMIT_BYTES)
-    if (byteLength === 0) {
-      return ''
-    }
-    const buffer = Buffer.allocUnsafe(byteLength)
-    const { bytesRead } = await handle.read(buffer, 0, byteLength, stats.size - byteLength)
-    signal.throwIfAborted()
-    return buffer.subarray(0, bytesRead).toString('utf8')
-  } finally {
-    await handle.close()
-  }
-}
-
 /** Tries newest CLI runtimes first so older processes cannot replace the active account. */
 async function fetchFromCliLogs(homePath: string, signal: AbortSignal): Promise<FetchAttempt> {
   const logDirectory = getAntigravityCliLogDirectory(homePath)
-  let entries: Dirent[]
+  let logNames: string[]
   try {
-    entries = await readdir(logDirectory, { withFileTypes: true })
+    logNames = await findNewestAntigravityCliLogNames(logDirectory, signal)
   } catch {
+    signal.throwIfAborted()
     return { discovered: false, answered: false, limits: null }
   }
-  const logNames = entries
-    .filter((entry) => entry.isFile() && /^cli-.*\.log$/i.test(entry.name))
-    .map((entry) => entry.name)
-    .sort((a, b) => b.localeCompare(a))
-    .slice(0, CLI_LOG_LIMIT)
   const attemptedEndpoints = new Set<string>()
   let discovered = false
 
@@ -78,7 +52,7 @@ async function fetchFromCliLogs(homePath: string, signal: AbortSignal): Promise<
     signal.throwIfAborted()
     let log: string
     try {
-      log = await readLogTail(join(logDirectory, logName), signal)
+      log = await readAntigravityLogTail(join(logDirectory, logName), signal)
     } catch {
       signal.throwIfAborted()
       // Why: AGY rotates logs between directory listing and reading; one
@@ -108,7 +82,7 @@ async function fetchFromCliLogs(homePath: string, signal: AbortSignal): Promise<
           return { discovered: true, answered: true, limits }
         }
       } catch (error) {
-        answered ||= error instanceof AntigravityLoopbackResponseError
+        answered ||= error instanceof AntigravityLoopbackResponseError && error.responseCompleted
         signal.throwIfAborted()
         // A newer one-shot AGY command can leave a stale log above a live session.
       }
@@ -132,7 +106,7 @@ async function fetchFromDesktopApp(
   let port: number | null
   try {
     const logPath = getAntigravityLanguageServerLogPath(platform, homePath, appDataPath)
-    port = parseAntigravityLanguageServerPort(await readLogTail(logPath, signal))
+    port = parseAntigravityLanguageServerPort(await readAntigravityLogTail(logPath, signal))
   } catch {
     signal.throwIfAborted()
     return { discovered: false, answered: false, limits: null }
@@ -149,7 +123,7 @@ async function fetchFromDesktopApp(
       return { discovered: true, answered: true, limits }
     }
   } catch (error) {
-    answered ||= error instanceof AntigravityLoopbackResponseError
+    answered ||= error instanceof AntigravityLoopbackResponseError && error.responseCompleted
     signal.throwIfAborted()
   }
 
@@ -162,7 +136,7 @@ async function fetchFromDesktopApp(
       : null
     return { discovered: true, answered: true, limits }
   } catch (error) {
-    answered ||= error instanceof AntigravityLoopbackResponseError
+    answered ||= error instanceof AntigravityLoopbackResponseError && error.responseCompleted
     signal.throwIfAborted()
     return { discovered: true, answered, limits: null }
   }

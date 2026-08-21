@@ -38,7 +38,8 @@ describe('Antigravity loopback request closure', () => {
       )
     ).rejects.toThrow(
       new AntigravityLoopbackResponseError(
-        'Antigravity quota request closed before the response completed'
+        'Antigravity quota request closed before the response completed',
+        false
       )
     )
   })
@@ -74,9 +75,11 @@ describe('Antigravity loopback request closure', () => {
       '/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary',
       new AbortController().signal
     )
-    const rejection = expect(result).rejects.toThrow(
-      new AntigravityLoopbackResponseError('Antigravity quota response timed out')
-    )
+    const rejection = expect(result).rejects.toMatchObject({
+      name: 'AntigravityLoopbackResponseError',
+      message: 'Antigravity quota response timed out',
+      responseCompleted: false
+    })
     await vi.advanceTimersByTimeAsync(1_249)
     expect(destroy).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
@@ -104,7 +107,8 @@ describe('Antigravity loopback request closure', () => {
     )
     await expect(result).rejects.toThrow(
       new AntigravityLoopbackResponseError(
-        'Antigravity quota request closed before the response completed'
+        'Antigravity quota request closed before the response completed',
+        false
       )
     )
     await vi.advanceTimersByTimeAsync(1_250)

@@ -21,9 +21,12 @@ export type AntigravityServerPorts = {
   https: number | null
 }
 
-/** Marks a request failure that occurred after a loopback service answered. */
+/** Distinguishes a complete service reply from a partial response that may be stale. */
 export class AntigravityLoopbackResponseError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly responseCompleted = true
+  ) {
     super(message)
     this.name = 'AntigravityLoopbackResponseError'
   }
@@ -188,7 +191,10 @@ export function requestAntigravityLoopbackPage(
           byteLength += chunk.length
           if (byteLength > MAX_RESPONSE_BYTES) {
             req.destroy(
-              new AntigravityLoopbackResponseError('Antigravity quota response exceeded size limit')
+              new AntigravityLoopbackResponseError(
+                'Antigravity quota response exceeded size limit',
+                false
+              )
             )
             return
           }
@@ -211,7 +217,8 @@ export function requestAntigravityLoopbackPage(
           clearRequestDeadline()
           reject(
             new AntigravityLoopbackResponseError(
-              `Antigravity quota response ended unexpectedly: ${error.message}`
+              `Antigravity quota response ended unexpectedly: ${error.message}`,
+              false
             )
           )
         })
@@ -223,7 +230,7 @@ export function requestAntigravityLoopbackPage(
       () =>
         req.destroy(
           responseStarted
-            ? new AntigravityLoopbackResponseError('Antigravity quota response timed out')
+            ? new AntigravityLoopbackResponseError('Antigravity quota response timed out', false)
             : new Error('Antigravity quota request timed out')
         ),
       REQUEST_TIMEOUT_MS
@@ -232,7 +239,7 @@ export function requestAntigravityLoopbackPage(
     req.on('timeout', () =>
       req.destroy(
         responseStarted
-          ? new AntigravityLoopbackResponseError('Antigravity quota response timed out')
+          ? new AntigravityLoopbackResponseError('Antigravity quota response timed out', false)
           : new Error('Antigravity quota request timed out')
       )
     )
@@ -245,7 +252,8 @@ export function requestAntigravityLoopbackPage(
       ) {
         reject(
           new AntigravityLoopbackResponseError(
-            `Antigravity quota response failed: ${error.message}`
+            `Antigravity quota response failed: ${error.message}`,
+            false
           )
         )
         return
@@ -259,7 +267,8 @@ export function requestAntigravityLoopbackPage(
         // forwarding a separate response error.
         reject(
           new AntigravityLoopbackResponseError(
-            'Antigravity quota request closed before the response completed'
+            'Antigravity quota request closed before the response completed',
+            false
           )
         )
       }
