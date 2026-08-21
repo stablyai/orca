@@ -464,6 +464,69 @@ describe('Store', () => {
     expect(updated.orchestrationWorkerEfforts).toEqual({ claude: 'high' })
   })
 
+  it('revalidates stored efforts when only the worker model changes', async () => {
+    writeDataFile({
+      settings: {
+        orchestrationWorkerModels: { codex: 'gpt-5.6-luna' },
+        orchestrationWorkerEfforts: { codex: 'max' }
+      }
+    })
+    const store = await createStore()
+    const listener = vi.fn()
+    store.onSettingsChanged(listener)
+
+    store.updateSettings(
+      { orchestrationWorkerModels: { codex: 'gpt-5.5' } },
+      { notifyListeners: true }
+    )
+    store.flush()
+
+    expect(readDataFile()).toMatchObject({
+      settings: {
+        orchestrationWorkerModels: { codex: 'gpt-5.5' },
+        orchestrationWorkerEfforts: {}
+      }
+    })
+    expect(listener).toHaveBeenCalledWith(
+      {
+        orchestrationWorkerModels: { codex: 'gpt-5.5' },
+        orchestrationWorkerEfforts: {}
+      },
+      expect.objectContaining({ orchestrationWorkerEfforts: {} }),
+      undefined
+    )
+  })
+
+  it('does not rewrite valid stored efforts when only the worker model changes', async () => {
+    writeDataFile({
+      settings: {
+        orchestrationWorkerModels: { codex: 'gpt-5.6-luna' },
+        orchestrationWorkerEfforts: { codex: 'high' }
+      }
+    })
+    const store = await createStore()
+    const listener = vi.fn()
+    store.onSettingsChanged(listener)
+
+    store.updateSettings(
+      { orchestrationWorkerModels: { codex: 'gpt-5.5' } },
+      { notifyListeners: true }
+    )
+    store.flush()
+
+    expect(readDataFile()).toMatchObject({
+      settings: {
+        orchestrationWorkerModels: { codex: 'gpt-5.5' },
+        orchestrationWorkerEfforts: { codex: 'high' }
+      }
+    })
+    expect(listener).toHaveBeenCalledWith(
+      { orchestrationWorkerModels: { codex: 'gpt-5.5' } },
+      expect.objectContaining({ orchestrationWorkerEfforts: { codex: 'high' } }),
+      undefined
+    )
+  })
+
   it('drops persisted efforts that exceed their stored model ceiling', async () => {
     writeFileSync(
       join(testState.dir, 'orca-data.json'),

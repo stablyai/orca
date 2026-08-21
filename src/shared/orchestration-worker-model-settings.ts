@@ -22,6 +22,21 @@ type PersistedOrchestrationWorkerPreferences = {
   orchestrationWorkerEfforts?: unknown
 }
 
+type OrchestrationWorkerPreferenceUpdateInput = {
+  orchestrationWorkerModels?: unknown
+  orchestrationWorkerEfforts?: unknown
+}
+
+type NormalizedOrchestrationWorkerPreferenceUpdates = {
+  orchestrationWorkerModels?: OrchestrationWorkerModels
+  orchestrationWorkerEfforts?: OrchestrationWorkerEfforts
+}
+
+type CurrentOrchestrationWorkerPreferences = {
+  orchestrationWorkerModels?: OrchestrationWorkerModels
+  orchestrationWorkerEfforts?: unknown
+}
+
 export function normalizeOrchestrationDefaultWorkerAgent(value: unknown): TuiAgent | null {
   return typeof value === 'string' && isTuiAgent(value) ? value : null
 }
@@ -42,6 +57,32 @@ function persistedOrchestrationWorkerMapMatches(
         Object.hasOwn(normalized, agent) && normalized[agent] === modelOrEffort
     )
   )
+}
+
+export function normalizeOrchestrationWorkerPreferenceUpdates(
+  updates: OrchestrationWorkerPreferenceUpdateInput,
+  current: CurrentOrchestrationWorkerPreferences | null | undefined
+): NormalizedOrchestrationWorkerPreferenceUpdates {
+  const hasModels = 'orchestrationWorkerModels' in updates
+  const models = hasModels
+    ? normalizeOrchestrationWorkerModels(updates.orchestrationWorkerModels)
+    : current?.orchestrationWorkerModels
+  const normalized: NormalizedOrchestrationWorkerPreferenceUpdates = {}
+  if (hasModels) {
+    normalized.orchestrationWorkerModels = models
+  }
+  if ('orchestrationWorkerEfforts' in updates) {
+    normalized.orchestrationWorkerEfforts = normalizeOrchestrationWorkerEfforts(
+      updates.orchestrationWorkerEfforts,
+      models
+    )
+  } else if (hasModels && current?.orchestrationWorkerEfforts !== undefined) {
+    const efforts = normalizeOrchestrationWorkerEfforts(current.orchestrationWorkerEfforts, models)
+    if (!persistedOrchestrationWorkerMapMatches(current.orchestrationWorkerEfforts, efforts)) {
+      normalized.orchestrationWorkerEfforts = efforts
+    }
+  }
+  return normalized
 }
 
 export function persistedOrchestrationWorkerPreferencesRepaired(

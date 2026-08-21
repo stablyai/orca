@@ -11,8 +11,7 @@ import { normalizeDesktopTerminalScrollbackRows } from '../../../shared/terminal
 import { normalizeTaskProviderSettings } from '../../../shared/task-providers'
 import {
   normalizeOrchestrationDefaultWorkerAgent,
-  normalizeOrchestrationWorkerEfforts,
-  normalizeOrchestrationWorkerModels
+  normalizeOrchestrationWorkerPreferenceUpdates
 } from '../../../shared/orchestration-worker-model-settings'
 import { normalizeOpenInApplications } from '../../../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
@@ -98,19 +97,10 @@ export function updateSettings(
       updates.orchestrationDefaultWorkerAgent
     )
   }
-  const orchestrationWorkerModels =
-    'orchestrationWorkerModels' in updates
-      ? normalizeOrchestrationWorkerModels(updates.orchestrationWorkerModels)
-      : operations.state.settings.orchestrationWorkerModels
-  if ('orchestrationWorkerModels' in updates) {
-    sanitizedUpdates.orchestrationWorkerModels = orchestrationWorkerModels
-  }
-  if ('orchestrationWorkerEfforts' in updates) {
-    sanitizedUpdates.orchestrationWorkerEfforts = normalizeOrchestrationWorkerEfforts(
-      updates.orchestrationWorkerEfforts,
-      orchestrationWorkerModels
-    )
-  }
+  Object.assign(
+    sanitizedUpdates,
+    normalizeOrchestrationWorkerPreferenceUpdates(updates, operations.state.settings)
+  )
   if ('agentDefaultEnv' in updates) {
     sanitizedUpdates.agentDefaultEnv = normalizeTuiAgentEnvRecord(updates.agentDefaultEnv)
     sanitizedUpdates.agentYoloDefaultsMigrated = true

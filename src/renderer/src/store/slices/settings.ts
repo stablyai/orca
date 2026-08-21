@@ -30,8 +30,7 @@ import {
 } from '../../../../shared/mobile-pairing-custom-address'
 import {
   normalizeOrchestrationDefaultWorkerAgent,
-  normalizeOrchestrationWorkerEfforts,
-  normalizeOrchestrationWorkerModels
+  normalizeOrchestrationWorkerPreferenceUpdates
 } from '../../../../shared/orchestration-worker-model-settings'
 import {
   hydrateOwnerWorktreeVisibilityDefaults,
@@ -115,17 +114,10 @@ function normalizeSettingsUpdates(
       updates.orchestrationDefaultWorkerAgent
     )
   }
-  if ('orchestrationWorkerModels' in updates) {
-    sanitizedUpdates.orchestrationWorkerModels = normalizeOrchestrationWorkerModels(
-      updates.orchestrationWorkerModels
-    )
-  }
-  if ('orchestrationWorkerEfforts' in updates) {
-    sanitizedUpdates.orchestrationWorkerEfforts = normalizeOrchestrationWorkerEfforts(
-      updates.orchestrationWorkerEfforts,
-      sanitizedUpdates.orchestrationWorkerModels ?? currentSettings?.orchestrationWorkerModels
-    )
-  }
+  Object.assign(
+    sanitizedUpdates,
+    normalizeOrchestrationWorkerPreferenceUpdates(updates, currentSettings)
+  )
   if ('agentDefaultEnv' in updates) {
     sanitizedUpdates.agentDefaultEnv = normalizeTuiAgentEnvRecord(updates.agentDefaultEnv)
     sanitizedUpdates.agentYoloDefaultsMigrated = true

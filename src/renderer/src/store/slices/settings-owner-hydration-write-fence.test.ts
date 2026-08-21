@@ -53,6 +53,49 @@ it('normalizes orchestration worker preferences before renderer IPC', async () =
   })
 })
 
+it('revalidates stored efforts when only the worker model changes', async () => {
+  const settingsSet = vi.fn().mockResolvedValue(undefined)
+  vi.stubGlobal('window', { api: { settings: { set: settingsSet } } })
+  const store = createTestStore()
+  store.setState({
+    settings: {
+      notifications: {},
+      orchestrationWorkerModels: { codex: 'gpt-5.6-luna' },
+      orchestrationWorkerEfforts: { codex: 'max' }
+    } as AppState['settings']
+  })
+
+  await store.getState().updateSettingsOrThrow({
+    orchestrationWorkerModels: { codex: 'gpt-5.5' }
+  })
+
+  expect(settingsSet).toHaveBeenCalledWith({
+    orchestrationWorkerModels: { codex: 'gpt-5.5' },
+    orchestrationWorkerEfforts: {}
+  })
+})
+
+it('does not rewrite valid stored efforts when only the worker model changes', async () => {
+  const settingsSet = vi.fn().mockResolvedValue(undefined)
+  vi.stubGlobal('window', { api: { settings: { set: settingsSet } } })
+  const store = createTestStore()
+  store.setState({
+    settings: {
+      notifications: {},
+      orchestrationWorkerModels: { codex: 'gpt-5.6-luna' },
+      orchestrationWorkerEfforts: { codex: 'high' }
+    } as AppState['settings']
+  })
+
+  await store.getState().updateSettingsOrThrow({
+    orchestrationWorkerModels: { codex: 'gpt-5.5' }
+  })
+
+  expect(settingsSet).toHaveBeenCalledWith({
+    orchestrationWorkerModels: { codex: 'gpt-5.5' }
+  })
+})
+
 it('preserves host defaults added while owner hydration is in flight', async () => {
   markRuntimeEnvironmentCompatible('env-1')
   let resolveOwnerRead!: (value: unknown) => void
