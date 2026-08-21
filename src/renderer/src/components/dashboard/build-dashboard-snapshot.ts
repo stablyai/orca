@@ -16,6 +16,7 @@ import {
 } from './dashboard-card-terminal-input'
 import { readDashboardClientHost } from './dashboard-client-host'
 import { getAgentRowConversationName } from '../../../../shared/agent-row-conversation-name'
+import { agentRowOwnsTabName } from '@/lib/agent-row-display-name'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { applyAgentRowLineage } from './agent-row-lineage'
 import { lastEnteredDoneAt } from './agent-finished-timestamp'
@@ -98,19 +99,13 @@ function boundedLabelOrUndefined(value: string | undefined): string | undefined 
   return value === undefined ? undefined : boundedLabel(value)
 }
 
-/** Mirrors useAgentRowConversationName so the board and the sidebar label the
- *  same agent with the same name. */
+/** Shares agentRowOwnsTabName with the sidebar so the board and the sidebar
+ *  label the same agent with the same name. */
 function rowConversationName(
   row: DashboardAgentRow,
   generatedTitlesEnabled: boolean
 ): string | undefined {
-  const parentPaneKey = row.entry.orchestration?.parentPaneKey
-  // Why: a child row rendered on its parent's tab does not own that tab's name.
-  if (
-    row.lineage?.depth === 1 &&
-    parentPaneKey !== undefined &&
-    parsePaneKey(parentPaneKey)?.tabId === row.tab.id
-  ) {
+  if (!agentRowOwnsTabName(row)) {
     return undefined
   }
   return getAgentRowConversationName(row.tab, row.agentType, generatedTitlesEnabled) ?? undefined

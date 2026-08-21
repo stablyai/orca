@@ -10,7 +10,7 @@ import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingCo
 import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
-import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
+import { agentRowPrimaryLabel } from '@/lib/agent-row-display-name'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
 
 // Why: narrow the dashboard's rollup states to shared dot states, defaulting unknowns to 'idle' so a row never crashes.
@@ -157,9 +157,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const startedAt = agent.startedAt > 0 ? agent.startedAt : null
   const doneAt = lastEnteredDoneAt(agent)
   const conversationName = useAgentRowConversationName(agent)
-  const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
-  // Why: prompt is '' when unknown, so fall back to the state label to keep the row labeled.
-  const displayLabel = prompt || agentStateLabel(asDotState(agent.state))
+  // Why: the name is '' when unknown, so fall back to the state label to keep the row labeled.
+  const displayLabel =
+    agentRowPrimaryLabel(agent, conversationName) || agentStateLabel(asDotState(agent.state))
   const model = agent.entry.model?.trim() ?? ''
   // Why: gate tool fields on 'working' — a stale tool line on a done row reads as still-running.
   const isWorking = agent.state === 'working'

@@ -7,7 +7,7 @@ import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
 import { cn } from '@/lib/utils'
 import { getAgentDotState } from './worktree-card-agent-summary'
 import { translate } from '@/i18n/i18n'
-import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
+import { agentRowPrimaryLabel } from '@/lib/agent-row-display-name'
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
@@ -32,8 +32,7 @@ function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
   conversationName: string | null
 ): string {
-  const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
-  return prompt || agentStateLabel(getAgentDotState(agent))
+  return agentRowPrimaryLabel(agent, conversationName) || agentStateLabel(getAgentDotState(agent))
 }
 
 function getCompactAgentSecondary(agent: DashboardAgentRowData): string {
