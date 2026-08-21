@@ -11,6 +11,8 @@ export type {
   ForeignDirectMailboxRoutingPage,
   MailboxRoutingPage
 } from './db/messages/mailbox-routing-page'
+export type { MessageInsert } from './db/messages/message-insert'
+export type { LegacyAdoptedMailboxOwner } from './db/runs/run-lookup'
 
 export type {
   MessageType,

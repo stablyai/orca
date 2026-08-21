@@ -29,7 +29,6 @@ inline src/main/git/repo.ts
 inline src/main/git/runner.ts
 inline src/main/git/status.ts
 inline src/main/git/worktree.ts
-inline src/main/github/client.ts
 inline src/main/github/pr-refresh-coordinator.ts
 inline src/main/github/project-view.ts
 inline src/main/github/project-view/mutations.ts
@@ -98,7 +97,6 @@ inline src/renderer/src/components/UpdateCard.tsx
 inline src/renderer/src/components/WorktreeJumpPalette.tsx
 inline src/renderer/src/components/activity/ActivityPrototypePage.tsx
 inline src/renderer/src/components/automations/AutomationsPage.tsx
-inline src/renderer/src/components/browser-pane/BrowserPane.tsx
 inline src/renderer/src/components/editor/CombinedDiffViewer.tsx
 inline src/renderer/src/components/editor/EditorContent.tsx
 inline src/renderer/src/components/editor/IpynbViewer.tsx

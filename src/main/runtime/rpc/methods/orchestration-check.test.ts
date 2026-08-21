@@ -659,6 +659,9 @@ describe('orchestration RPC methods', () => {
 
     it('keeps waiting for requested types when an unrelated status arrives', async () => {
       setup()
+      vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+        handle === 'coord' ? 'tab_wait:leaf_wait' : null
+      )
 
       const waitPromise = call('orchestration.check', {
         terminal: 'coord',

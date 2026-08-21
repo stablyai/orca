@@ -335,6 +335,34 @@ describe('connectPanePty', () => {
     expect(manager.closePane).not.toHaveBeenCalled()
   })
 
+  it('keeps a worktree sole terminal mounted when only a captured shortcut preceded the exit', async () => {
+    // Why (regression): captured shortcuts refresh the redraw window, but that must not
+    // count as "the user typed into this pane" — otherwise Shift+Enter before a direnv
+    // failure closes the tab and bounces the user to Landing.
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('tab-pty')
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1)
+    const deps = createDeps()
+
+    const binding = connectPanePty(
+      createPane(1) as never,
+      manager as never,
+      deps as never
+    ) as unknown as { markShortcutTerminalInputSent: () => void }
+    const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+      | ((ptyId: string) => void)
+      | undefined
+    const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
+
+    onPtySpawn?.('tab-pty')
+    binding.markShortcutTerminalInputSent()
+    onPtyExit?.('tab-pty')
+
+    expect(deps.onPtyExitRef.current).not.toHaveBeenCalled()
+    expect(manager.closePane).not.toHaveBeenCalled()
+  })
+
   it('tears down the sole terminal when a freshly-spawned PTY exits after the user typed input', async () => {
     // Why: an explicit `exit` (or any typed input) is a deliberate close, not a failed-startup shell, so the worktree should deactivate as before.
     const { connectPanePty } = await import('./pty-connection')

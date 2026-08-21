@@ -1,0 +1,304 @@
+name: Dev Channel Windows Build
+
+# Why its own file rather than steps inlined into hourly/daily/adhoc: one copy of
+# the Windows leg instead of three, and it stays dispatchable on its own so a
+# Windows artifact can be rebuilt for an existing tag without paying for the mac
+# leg's packaging and notarization again.
+#
+# Each mac workflow calls this as a `needs:`-gated job once its release is live,
+# passing the tag it created. Both legs land in that one release, so a tag
+# carries every platform it managed to build. Measured cost of the Windows leg is
+# ~7.5 min (install 2m45, build 35s, NSIS package 3m) against a mac run of ~9.5
+# min, so running it after the mac job keeps an hourly well inside its cron.
+#
+# Why unsigned: Windows release installers are signed by SignPath *after*
+# packaging, and release-cut budgets 1h + 4h for those approval waits. That does
+# not fit an hourly cadence and it does not fit "dispatch an adhoc build and go
+# get coffee". So dev-channel Windows builds ship unsigned, which has one real
+# consequence, handled in `src/shared/release-channel.ts`:
+#
+#   electron-updater Authenticode-verifies every installer it downloads against
+#   the publisherName baked into the *installed* app's app-update.yml. Stable and
+#   RC carry 'SignPath Foundation', so they reject an unsigned dev installer and
+#   no future build can fix the copies already installed. Dev builds omit the
+#   name (config/electron-builder.config.cjs), so verification is skipped there.
+#
+# Net effect: the way *into* a dev channel on Windows is a one-time manual
+# installer run. Every way out — to another dev build, or back to Stable — works
+# through the in-app updater. The picker offers a download for exactly that jump.
+#
+# Called as a job by each mac workflow once its release is live, and separately
+# dispatchable by hand to rebuild a Windows artifact for an existing tag without
+# re-running the mac leg's twenty minutes of packaging and notarization:
+#
+#   gh workflow run dev-channel-win-build.yml --ref main \
+#     -f channel=adhoc -f tag=v1.4.178-adhoc.20260819010203 \
+#     -f ref=<sha> -f version=1.4.178-adhoc.20260819010203
+
+on:
+  # Why the inputs are duplicated: workflow_call does not accept `type: choice`,
+  # and workflow_dispatch wants it so the Actions UI offers a menu instead of a
+  # free-text box. The channel allowlist below is what actually enforces the set,
+  # since a workflow_call caller can pass any string.
+  workflow_call:
+    inputs:
+      channel:
+        description: Dev channel whose release this build uploads into
+        required: true
+        type: string
+      tag:
+        description: Existing release tag in the channel repo
+        required: true
+        type: string
+      ref:
+        description: Commit SHA to build — must be the exact commit the mac leg built
+        required: true
+        type: string
+      version:
+        description: Version to package, without the leading v
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: Dev channel whose release this build uploads into
+        required: true
+        type: choice
+        options:
+          - hourly
+          - daily
+          - adhoc
+      tag:
+        description: Existing release tag in the channel repo (e.g. v1.4.178-adhoc.20260819010203)
+        required: true
+        type: string
+      ref:
+        description: Commit SHA to build — must be the exact commit the mac leg built
+        required: true
+        type: string
+      version:
+        description: Version to package, without the leading v
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # Keyed on the tag: re-dispatching the same tag must not race two uploads into
+  # one release, but two different channels (or two adhoc branches) are the
+  # ordinary case and must not wait on each other.
+  group: dev-channel-win-build-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  build-win:
+    if: github.repository == 'stablyai/orca'
+    # Why the same environment as the mac workflows: this needs the App token
+    # that can write to the dev-channel repos, and it should be reachable from
+    # exactly the same place those secrets already live.
+    environment: adhoc-mac-build
+    # Why windows-2022 and not windows-latest: windows-latest moved to the
+    # Windows 2025 / VS 2026 image before node-gyp could detect VS 18, breaking
+    # native dependency install. release-cut pins the same image.
+    runs-on: windows-2022
+    timeout-minutes: 90
+    env:
+      NODE_OPTIONS: --max-old-space-size=4096
+      CHANNEL: ${{ inputs.channel }}
+      TAG: ${{ inputs.tag }}
+      VERSION: ${{ inputs.version }}
+
+    steps:
+      # Why vet before checkout: everything after this runs the checked-out code
+      # with a token that can write to a release repo. The mac leg already vetted
+      # the ref it resolved, but this workflow is dispatchable on its own, so it
+      # re-derives the same guarantee rather than trusting its caller.
+      - name: Vet the requested inputs
+        id: vetted
+        shell: bash
+        env:
+          REQUESTED_SHA: ${{ inputs.ref }}
+          REPO_URL: https://github.com/${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # workflow_call takes channel as a free-text string, so the set is
+          # enforced here rather than by the input type.
+          case "$CHANNEL" in
+            hourly|daily|adhoc) ;;
+            *)
+              echo "::error::Unknown dev channel '$CHANNEL'; expected hourly, daily, or adhoc."
+              exit 1
+              ;;
+          esac
+          if [[ ! "$REQUESTED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::ref must be a full 40-character commit SHA, got '$REQUESTED_SHA'. The dispatching workflow passes the commit it resolved."
+            exit 1
+          fi
+          # The tag must name the version being packaged, or the artifacts would
+          # land in a release describing a different build.
+          if [[ "$TAG" != "v$VERSION" ]]; then
+            echo "::error::tag '$TAG' does not match version '$VERSION'."
+            exit 1
+          fi
+          # And the version must carry the channel's own prerelease identifier,
+          # so an hourly artifact can never be uploaded into an adhoc release.
+          if [[ "$VERSION" != *"-$CHANNEL."* ]]; then
+            echo "::error::version '$VERSION' is not a $CHANNEL version."
+            exit 1
+          fi
+          # Reachability is the trust test: GitHub serves PR-only commits by SHA,
+          # so resolving the object is not proof a branch or tag of this repo
+          # reaches it. Bare + tree:0 keeps this to the commit graph.
+          scratch="$RUNNER_TEMP/vet-requested-ref"
+          git init -q --bare "$scratch"
+          git -C "$scratch" fetch -q --filter=tree:0 "$REPO_URL" '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
+          if ! git -C "$scratch" rev-parse --verify --quiet "$REQUESTED_SHA^{commit}" >/dev/null; then
+            echo "::error::Commit $REQUESTED_SHA is not in stablyai/orca."
+            exit 1
+          fi
+          if [[ -z "$(git -C "$scratch" for-each-ref --contains "$REQUESTED_SHA" refs/heads refs/tags | head -1)" ]]; then
+            echo "::error::Commit $REQUESTED_SHA is not reachable from any branch or tag of stablyai/orca; refusing to build it."
+            exit 1
+          fi
+          echo "Vetted $CHANNEL $TAG at $REQUESTED_SHA"
+
+      - name: Checkout the built commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          # This job only reads stablyai/orca and never pushes; every write goes
+          # to the dev-channel repo through a minted App token passed by env
+          # (zizmor: artipacked).
+          persist-credentials: false
+
+      # Why a guard and not just a build: the workflow file comes from the
+      # dispatch ref, but the packaging config comes from the *built* commit. A
+      # branch cut before Windows dev builds landed has a config that ignores
+      # ORCA_WIN_*, which would resolve publish.repo to the main repo. Say that
+      # in one sentence here rather than failing deep inside electron-builder.
+      - name: Resolve the dev-channel packaging identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          upper="$(printf '%s' "$CHANNEL" | tr '[:lower:]' '[:upper:]')"
+          echo "ORCA_WIN_${upper}=1" >>"$GITHUB_ENV"
+          echo "ORCA_${upper}_BUILD_VERSION=${VERSION}" >>"$GITHUB_ENV"
+          if [[ ! -f config/scripts/verify-dev-channel-packaging.mjs ]]; then
+            echo "::error::$TAG was built from a commit with no config/scripts/verify-dev-channel-packaging.mjs; that commit predates Windows dev builds, so it cannot produce one."
+            exit 1
+          fi
+
+      # pnpm must be on PATH before setup-node so setup-node can locate the store.
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      # Caches the Electron binary and electron-builder's tool downloads (nsis,
+      # winCodeSign). Same key shape as release-cut's Windows leg.
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-builder-win-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-builder-win-
+
+      # Why retried: pnpm install triggers electron's postinstall, which pulls the
+      # Electron binary from GitHub release assets, and that CDN returns transient
+      # 504s often enough to lose a build to it.
+      - name: Install dependencies
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: pnpm install --frozen-lockfile
+
+      # Why the packaging check runs before the 20-minute build: it only needs
+      # node_modules, and a stale config should cost seconds rather than a build.
+      - name: Verify dev-channel packaging identity
+        shell: bash
+        run: node config/scripts/verify-dev-channel-packaging.mjs --channel="$CHANNEL" --platform=win32
+
+      - name: Build app
+        shell: bash
+        run: pnpm build:release
+        env:
+          # Why unset ORCA_BUILD_IDENTITY: telemetry's transport gate accepts only
+          # 'stable' or 'rc', so leaving it unset keeps dev builds silent — which
+          # is correct for unvetted artifacts. Same as the mac dev channels.
+          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+
+      # Why the token is minted here and not at the top: installation tokens live
+      # one hour and nothing before this point writes anything.
+      - name: Mint dev channel repo token
+        id: app_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.HOURLY_RELEASE_APP_ID }}
+          private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
+          owner: stablyai
+          repositories: orca-${{ inputs.channel }}
+
+      # Why: electron-builder's publisher creates a release when it cannot find
+      # the tag ("publish: always"). If the mac leg failed and discarded its draft
+      # while this was building, that would mint a fresh, untitled, Windows-only
+      # release. Check first and fail instead.
+      - name: Confirm the target release still exists
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$TAG" --repo "stablyai/orca-$CHANNEL" --json tagName >/dev/null 2>&1; then
+            echo "::error::Release $TAG no longer exists in stablyai/orca-$CHANNEL; the mac leg most likely failed and discarded it. Not creating a Windows-only release."
+            exit 1
+          fi
+
+      - name: Publish Windows artifacts
+        uses: nick-fields/retry@v4
+        with:
+          # 30 is the pack + upload budget; there is no notary queue on this leg.
+          timeout_minutes: 30
+          max_attempts: 2
+          retry_wait_seconds: 30
+          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish always
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+          ORCA_BUILD_COMMIT: ${{ inputs.ref }}
+          # Why: electron-publish refuses to upload into a release published more
+          # than two hours ago (gitHubPublisher.getOrCreateRelease). The mac leg
+          # publishes the draft live as soon as *it* finishes, so a slow notary
+          # queue plus a slow Windows build can cross that line and silently drop
+          # every Windows asset. This is the documented escape hatch.
+          EP_GH_IGNORE_TIME: 'true'
+
+      # Why: the updater resolves a tag, then fetches latest.yml from it. A
+      # release carrying the installer but not the manifest is one the picker
+      # offers and the update 404s on, so assert both.
+      - name: Verify Windows update manifest published
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
+        run: |
+          set -euo pipefail
+          assets="$(gh release view "$TAG" --repo "stablyai/orca-$CHANNEL" --json assets --jq '.assets[].name')"
+          echo "Assets on $TAG:"
+          echo "$assets"
+          for required in latest.yml orca-windows-setup.exe; do
+            if ! grep -qx "$required" <<<"$assets"; then
+              echo "::error::$TAG is missing $required; Windows could not install this build."
+              exit 1
+            fi
+          done
+          echo "Windows artifacts verified on $TAG."

@@ -73,6 +73,8 @@ jobs:
   build-daily-mac:
     if: github.repository == 'stablyai/orca'
     outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.daily.outputs.version }}
       head_sha: ${{ steps.freshness.outputs.head_sha }}
       published: ${{ steps.publish_live.outcome == 'success' && 'true' || 'false' }}
     runs-on: blacksmith-6vcpu-macos-15
@@ -274,13 +276,19 @@ jobs:
           # exactly. One source, written once, read twice.
           notes_file="$RUNNER_TEMP/daily-release-notes.md"
           cat >"$notes_file" <<EOF
-          Automated daily macOS dev build from commit \`$short_sha\`.
+          Automated daily macOS and Windows dev build from commit \`$short_sha\`.
 
           Built from [\`stablyai/orca@$short_sha\`](https://github.com/stablyai/orca/commit/$SHA).
 
-          **Unvetted.** No tests ran. Signed and notarized like a release, so it
-          installs through Orca's in-app updater and opens from a manual download
-          without a Gatekeeper prompt — but nothing here has been reviewed.
+          **Unvetted.** No tests ran. The macOS build is signed and notarized like a
+          release, so it installs through Orca's in-app updater and opens from a manual
+          download without a Gatekeeper prompt — but nothing here has been reviewed.
+
+          **Windows builds are unsigned.** They install and update normally once you
+          are on one, but a signed Stable or RC build cannot install one through the
+          in-app updater — download \`orca-windows-setup.exe\` below and run it once
+          (SmartScreen will warn about an unknown publisher). Every later switch,
+          including back to Stable, works in-app from there.
           EOF
           # Why create it up front: electron-builder then uploads into a known tag
           # rather than inferring one from package.json.
@@ -299,6 +307,7 @@ jobs:
             --notes-file "$notes_file"
           echo "tag=$TAG" >>"$GITHUB_OUTPUT"
           echo "notes_file=$notes_file" >>"$GITHUB_OUTPUT"
+
 
       - name: Publish daily macOS artifacts
         if: steps.freshness.outputs.should_build == 'true'
@@ -505,3 +514,27 @@ jobs:
             [[ "$attempt" -eq 3 ]] || sleep "$((attempt * 5))"
           done
           echo "::warning::Failed to dispatch post-daily E2E for $SHA after 3 attempts."
+
+  # Why this runs after the mac leg rather than beside it: the tag and version
+  # are computed inside that job, so until it has run nothing else can name the
+  # release to upload into. The cost is small enough not to matter — the Windows
+  # leg measures ~7.5 min (install 2m45, build 35s, NSIS package 3m) against a
+  # ~9.5 min mac run, which keeps a daily run far inside its interval.
+  #
+  # Why `./` rather than a pinned `@main`: `uses:` resolves against the ref this
+  # file itself came from, which for an ordinary dispatch is main. Someone who
+  # deliberately points the Actions "Use workflow from" picker at a branch
+  # already gets that branch's copy of this entire file, so this follows the same
+  # rule instead of inventing a second one.
+  build-daily-win:
+    needs: build-daily-mac
+    # Only once the mac release is actually live: there is no release to upload
+    # into otherwise, and the Windows workflow refuses to create one.
+    if: needs.build-daily-mac.outputs.published == 'true'
+    uses: ./.github/workflows/dev-channel-win-build.yml
+    secrets: inherit
+    with:
+      channel: daily
+      tag: ${{ needs.build-daily-mac.outputs.tag }}
+      ref: ${{ needs.build-daily-mac.outputs.head_sha }}
+      version: ${{ needs.build-daily-mac.outputs.version }}

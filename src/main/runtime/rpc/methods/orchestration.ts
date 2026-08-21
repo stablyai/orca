@@ -23,6 +23,10 @@ import {
 } from '../../../../shared/orchestration-rpc-contract'
 import { clampOrchestrationAskTimeoutMs } from '../../../../shared/orchestration-ask-timeout'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
+import {
+  resolveBareOrchestrationRecipient,
+  type SendRecipientWarning
+} from './orchestration-recipient-routing'
 import { resolveRunScope } from './orchestration-run-scope'
 import { ORCHESTRATION_RUN_METHODS } from './orchestration-runs'
 import { ORCHESTRATION_WORKER_METHODS } from './orchestration-worker-methods'
@@ -445,6 +449,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         legacyCoordinatorRunId,
         revalidateLegacyCoordinator,
         orchestrationCompatibilityCallerAuthority,
+        recordMutationReceipt,
         signal
       }
     ) => {
@@ -592,8 +597,35 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         )
       }
 
+      const sendWarnings: SendRecipientWarning[] = []
+      let messageRunId = routing.run?.id
+      if (!isGroupAddress(to) && !to.startsWith('run:') && !to.startsWith('dispatch:')) {
+        const recipient = resolveBareOrchestrationRecipient({
+          runtime,
+          db,
+          handle: to,
+          senderRunId: routing.run?.id,
+          explicitRunId: params.run
+        })
+        if (!recipient.ok) {
+          throw new OrchestrationError(recipient.code, recipient.message)
+        }
+        to = recipient.to
+        messageRunId = recipient.runId
+        if (recipient.warning) {
+          sendWarnings.push(recipient.warning)
+        }
+      }
+      const withSendWarnings = <T extends object>(
+        receipt: T
+      ): T & {
+        warnings?: SendRecipientWarning[]
+      } => (sendWarnings.length > 0 ? { ...receipt, warnings: sendWarnings } : receipt)
+
       if (!isGroupAddress(to)) {
-        const federatedDispatchId = routing.dispatchId
+        const federatedDispatchId = to.startsWith('dispatch:')
+          ? to.slice('dispatch:'.length)
+          : undefined
         const federatedTarget =
           federatedDispatchId && to === `dispatch:${federatedDispatchId}`
             ? db.getFederatedDispatch(federatedDispatchId)
@@ -636,8 +668,8 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
               payload: params.payload ?? null
             })
           })
-          runtime.ensureOrchestrationFederationRelay(routing.run?.id)
-          return {
+          runtime.ensureOrchestrationFederationRelay(messageRunId)
+          return withSendWarnings({
             relay: {
               messageId: relay.message_id,
               sequence: relay.sequence,
@@ -645,7 +677,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
               destination: 'worker',
               accepted: true
             }
-          }
+          })
         }
         // Point-to-point — existing single-recipient behavior
         revalidateLegacyCoordinator?.()
@@ -665,10 +697,10 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             ? bindCoordinatorMutationPayload(messageType, params.payload, dispatch.id)
             : params.payload,
           senderPaneKey,
-          runId: routing.run?.id,
+          runId: messageRunId,
           deliveryContract: legacyWorkerDeliveryContract(
             runtime,
-            routing.run?.id ?? legacyCoordinatorRunId,
+            messageRunId ?? legacyCoordinatorRunId,
             to
           )
         })
@@ -738,14 +770,14 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             const rejection =
               db.convertLifecycleMessageToRejection(msg.id, code, authority.reason) ?? msg
             runtime.notifyMessageArrived(rejection.to_handle, rejection.type)
-            return {
+            return withSendWarnings({
               message: rejection,
               lifecycle: {
                 action: 'rejected',
                 code,
                 reason: authority.reason
               }
-            }
+            })
           }
         }
         // Why: reconcile releases the dispatch lock before waking recipients, else a woken coordinator re-dispatches while the lock is still held.
@@ -753,20 +785,20 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           const reconciled = reconcileLifecycleMessage(db, msg)
           // Why: a suppressed message is already read, so skip the notify that would wake a check --wait waiter to an empty result.
           if (reconciled.action === 'suppressed') {
-            return { message: msg }
+            return withSendWarnings({ message: msg })
           }
           if (reconciled.action === 'rejected') {
             const rejection = db.getMessageById(msg.id) ?? msg
             runtime.notifyMessageArrived(rejection.to_handle, rejection.type)
-            return { message: rejection, lifecycle: reconciled }
+            return withSendWarnings({ message: rejection, lifecycle: reconciled })
           }
           runtime.notifyMessageArrived(msg.to_handle, msg.type)
-          return msg.type === 'worker_done'
-            ? { message: msg, lifecycle: reconciled }
-            : { message: msg }
+          return withSendWarnings(
+            msg.type === 'worker_done' ? { message: msg, lifecycle: reconciled } : { message: msg }
+          )
         }
         runtime.notifyMessageArrived(msg.to_handle, msg.type)
-        return { message: msg }
+        return withSendWarnings({ message: msg })
       }
 
       // Why: fan out one message per recipient (independent read-tracking) but share a thread_id for correlation (Section 4.5).
@@ -781,12 +813,57 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         throw new Error(`No recipients resolved for group address: ${to}`)
       }
 
+      const legacyAdoptedMailboxOwner = db.getLegacyAdoptedRunMailboxOwner()
+      const resolvedRecipients = handles.map((handle) => ({
+        handle,
+        resolution: resolveBareOrchestrationRecipient({
+          runtime,
+          db,
+          handle,
+          senderRunId: routing.run?.id,
+          explicitRunId: params.run,
+          legacyAdoptedMailboxOwner
+        })
+      }))
+      const deliverableRecipients = resolvedRecipients.filter(
+        (
+          recipient
+        ): recipient is typeof recipient & {
+          resolution: { ok: true; to: string; runId?: string; warning?: SendRecipientWarning }
+        } => recipient.resolution.ok
+      )
+      const senderRecipient = resolveBareOrchestrationRecipient({
+        runtime,
+        db,
+        handle: from,
+        senderRunId: routing.run?.id,
+        legacyAdoptedMailboxOwner
+      })
+      const senderMailboxKey = senderRecipient.ok
+        ? `${senderRecipient.runId ?? ''}\u0000${senderRecipient.to}`
+        : undefined
+      const seenMailboxes = new Set<string>()
+      const uniqueRecipients = deliverableRecipients.filter(({ resolution }) => {
+        const mailboxKey = `${resolution.runId ?? ''}\u0000${resolution.to}`
+        if (mailboxKey === senderMailboxKey || seenMailboxes.has(mailboxKey)) {
+          return false
+        }
+        seenMailboxes.add(mailboxKey)
+        return true
+      })
+      if (uniqueRecipients.length === 0) {
+        throw new OrchestrationError(
+          'terminal_not_found',
+          `No recipient of ${to} resolved to a live terminal or durable Run/Dispatch mailbox.`
+        )
+      }
+
       revalidateLegacyCoordinator?.()
       const threadId = params.threadId ?? `thread_${Date.now()}`
-      const messages = handles.map((handle) =>
-        db.insertMessage({
+      const messages = db.insertMessages(
+        uniqueRecipients.map(({ resolution }) => ({
           from,
-          to: handle,
+          to: resolution.to,
           subject: params.subject,
           body: params.body,
           type: params.type as MessageType,
@@ -794,19 +871,27 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           threadId,
           payload: params.payload,
           senderPaneKey,
-          runId: routing.run?.id,
+          runId: resolution.runId,
           deliveryContract: legacyWorkerDeliveryContract(
             runtime,
-            routing.run?.id ?? legacyCoordinatorRunId,
-            handle
+            resolution.runId ?? legacyCoordinatorRunId,
+            resolution.to
           )
-        })
+        }))
       )
+      const groupWarnings = resolvedRecipients.flatMap(({ resolution }) =>
+        resolution.ok ? (resolution.warning ? [resolution.warning] : []) : [resolution.warning]
+      )
+      const receipt = {
+        messages,
+        recipients: messages.length,
+        ...(groupWarnings.length > 0 ? { warnings: groupWarnings } : {})
+      }
+      recordMutationReceipt?.(receipt)
       for (const message of messages) {
         runtime.notifyMessageArrived(message.to_handle, message.type)
       }
-
-      return { messages, recipients: handles.length }
+      return receipt
     }
   }),
 

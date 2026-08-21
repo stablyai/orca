@@ -100,17 +100,17 @@ export function updateAutomation(
     ...current,
     ...definedUpdates,
     name: updates.name !== undefined ? updates.name.trim() || 'Untitled automation' : current.name,
-    precheck: Object.hasOwn(updates, 'precheck')
-      ? normalizeAutomationPrecheck(updates.precheck)
+    precheck: Object.hasOwn(definedUpdates, 'precheck')
+      ? normalizeAutomationPrecheck(definedUpdates.precheck)
       : normalizeAutomationPrecheck(current.precheck),
     projectId: repoId,
-    runContext: Object.hasOwn(updates, 'runContext')
-      ? (updates.runContext ?? null)
+    runContext: Object.hasOwn(definedUpdates, 'runContext')
+      ? (definedUpdates.runContext ?? null)
       : updates.projectId !== undefined
         ? contexts.runContext
         : (current.runContext ?? contexts.runContext),
-    sourceContext: Object.hasOwn(updates, 'sourceContext')
-      ? (updates.sourceContext ?? null)
+    sourceContext: Object.hasOwn(definedUpdates, 'sourceContext')
+      ? (definedUpdates.sourceContext ?? null)
       : updates.projectId !== undefined
         ? contexts.sourceContext
         : (current.sourceContext ?? contexts.sourceContext),
@@ -120,20 +120,23 @@ export function updateAutomation(
     workspaceMode,
     workspaceId:
       workspaceMode === 'existing'
-        ? Object.hasOwn(updates, 'workspaceId')
-          ? (updates.workspaceId ?? null)
+        ? Object.hasOwn(definedUpdates, 'workspaceId')
+          ? (definedUpdates.workspaceId ?? null)
           : current.workspaceId
         : null,
     baseBranch:
       workspaceMode === 'new_per_run'
-        ? Object.hasOwn(updates, 'baseBranch')
-          ? (updates.baseBranch ?? null)
+        ? Object.hasOwn(definedUpdates, 'baseBranch')
+          ? (definedUpdates.baseBranch ?? null)
           : (current.baseBranch ?? null)
         : null,
     setupDecision:
       workspaceMode === 'new_per_run'
-        ? Object.hasOwn(updates, 'setupDecision')
-          ? normalizeAutomationSetupDecisionForWorkspaceMode(workspaceMode, updates.setupDecision)
+        ? Object.hasOwn(definedUpdates, 'setupDecision')
+          ? normalizeAutomationSetupDecisionForWorkspaceMode(
+              workspaceMode,
+              definedUpdates.setupDecision
+            )
           : normalizeAutomationSetupDecisionForWorkspaceMode(workspaceMode, current.setupDecision)
         : undefined,
     reuseSession:

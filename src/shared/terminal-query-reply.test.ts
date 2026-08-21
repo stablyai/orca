@@ -1,10 +1,12 @@
 import { Terminal } from '@xterm/headless'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   extractOnlyCookedEchoSafeQueryReplies,
+  extractOnlyTerminalQueryReplies,
   isTerminalQueryReply,
   needsCookedEchoSafeQueryReply
 } from './terminal-query-reply'
+import { PtyStartupIngress } from './pty-startup-ingress'
 
 describe('isTerminalQueryReply', () => {
   it('matches synthetic query replies that must be sent immediately', () => {
@@ -87,6 +89,15 @@ describe('isTerminalQueryReply', () => {
       '\x1b[?997;1n'
     ])
     expect(extractOnlyCookedEchoSafeQueryReplies('\x1b[?997;1ny')).toBe(null)
+    expect(extractOnlyTerminalQueryReplies('\x1b[?1;2c\x1b[1;1R')).toEqual([
+      '\x1b[?1;2c',
+      '\x1b[1;1R'
+    ])
+    expect(extractOnlyTerminalQueryReplies('\x1b]11;rgb:2828/2c2c/3434\x1b\\\x1b[?1;2c')).toEqual([
+      '\x1b]11;rgb:2828/2c2c/3434\x1b\\',
+      '\x1b[?1;2c'
+    ])
+    expect(extractOnlyTerminalQueryReplies('\x1b[?1;2chello')).toBe(null)
   })
 
   it('does NOT match ordinary typed input or navigation sequences', () => {
@@ -123,5 +134,99 @@ describe('isTerminalQueryReply', () => {
     // Incomplete / non-terminated OSC and DCS must not match.
     expect(isTerminalQueryReply('\x1b]11;rgb:2828/2c2c/3434')).toBe(false)
     expect(isTerminalQueryReply('\x1bP1$r2 q')).toBe(false)
+  })
+})
+
+// Regression for the `gh auth login` report: termenv writes `OSC 11 ;? ST` then
+// `CSI 6n` and reads exactly one response, treating a CPR-first answer as "no OSC
+// support" without draining further. Orca defers the color reply behind an ECHO
+// probe, so a CPR taken straight to the PTY overtakes it and leaves `ESC ]` in the
+// tty for the next program — bubbletea then dies with
+// "unexpected escape sequence from terminal: ['\x1b' ']']".
+describe('query reply ordering (termenv OSC-then-CPR)', () => {
+  const OSC_11_REPLY = '\x1b]11;rgb:1e1e/1e1e/1e1e\x1b\\'
+  const CPR_REPLY = '\x1b[1;1R'
+
+  function hostWrites(ingress: PtyStartupIngress, pty: string[]) {
+    return (data: string): void => {
+      if (!ingress.answerLiveQueryReply(data)) {
+        pty.push(data)
+      }
+    }
+  }
+
+  it('delivers the color reply before the CPR the querying program stops at', async () => {
+    vi.useFakeTimers()
+    const pty: string[] = []
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => pty.push(data),
+      onEmission: () => {}
+    })
+    const write = hostWrites(ingress, pty)
+
+    write(OSC_11_REPLY)
+    write(CPR_REPLY)
+    await vi.advanceTimersByTimeAsync(200)
+
+    expect(pty).toEqual([OSC_11_REPLY, CPR_REPLY])
+    // Nothing survives the CPR, so the next program's stdin opens clean.
+    expect(pty.slice(1).join('')).not.toContain('\x1b]')
+    ingress.drainAndClose()
+    vi.useRealTimers()
+  })
+
+  it('keeps a CPR immediate when no color reply is deferred', () => {
+    vi.useFakeTimers()
+    const pty: string[] = []
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => pty.push(data),
+      onEmission: () => {}
+    })
+
+    hostWrites(ingress, pty)(CPR_REPLY)
+    expect(pty).toEqual([CPR_REPLY])
+    ingress.drainAndClose()
+    vi.useRealTimers()
+  })
+
+  it('never takes ordinary typed input', () => {
+    const pty: string[] = []
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: (data) => pty.push(data),
+      onEmission: () => {}
+    })
+
+    for (const keystroke of ['y', 'gh auth login\r', '\x1b[A', '\x1b', '\x03']) {
+      expect(ingress.answerLiveQueryReply(keystroke)).toBe(false)
+    }
+    ingress.drainAndClose()
+  })
+})
+
+// Known limitation, tracked for follow-up: the guarantee is FIFO among recognised
+// query replies, not over every byte written to the pty. Both branches of
+// takeLiveQueryReply match whole strings, so a coalesced payload is not a reply, and
+// ordinary input never rides the queue at all. Pinned so the boundary is explicit —
+// if a change makes these take the ordered path, that is an improvement, not a break.
+describe('writes that still bypass the ordered queue', () => {
+  const BYPASSING = [
+    { what: 'reply coalesced with a keystroke', data: '\x1b[6;1Ry' },
+    { what: 'keystroke coalesced with a reply', data: 'y\x1b[6;1R' },
+    { what: 'ordinary typed input', data: 'ls\r' }
+  ]
+
+  it.each(BYPASSING)('does not take $what', ({ data }) => {
+    const ingress = new PtyStartupIngress({
+      ownerBackend: 'posix-pty',
+      write: () => {},
+      onEmission: () => {}
+    })
+    // Deferral is open, so an ordered write WOULD be queued here.
+    expect(ingress.answerLiveQueryReply('\x1b]11;rgb:00/00/00\x07')).toBe(true)
+    expect(ingress.answerLiveQueryReply(data)).toBe(false)
+    ingress.drainAndClose()
   })
 })

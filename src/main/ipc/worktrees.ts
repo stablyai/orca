@@ -215,21 +215,15 @@ function getRepoForWorktreeRemoval(
   repoId: string,
   hostId?: ExecutionHostId
 ): Repo | undefined {
-  const matches = store
-    .getRepos()
-    .filter((repo) => repo.id === repoId && (!hostId || getRepoExecutionHostId(repo) === hostId))
   // Why: deletion must never guess between host owners; legacy unscoped calls work only while the repo id has one unique owner.
-  if (matches.length === 1) {
-    return matches[0]
-  }
-  if (matches.length > 1) {
-    return undefined
-  }
-  const legacyMatch = store.getRepo(repoId)
-  return legacyMatch && (!hostId || getRepoExecutionHostId(legacyMatch) === hostId)
-    ? legacyMatch
-    : undefined
+  const owner = resolveWorktreeRemovalRepoOwner(store, repoId, hostId)
+  return owner.kind === 'resolved' ? owner.repo : undefined
 }
+import {
+  hasWorktreeRemovalRepoOwnerOnOtherHost,
+  resolveWorktreeRemovalMetadata,
+  resolveWorktreeRemovalRepoOwner
+} from '../worktree-removal-repo-owner'
 import { classifyWorkspaceCreateError } from './workspace-create-error-classifier'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import { localhostWorktreeLabelProxy } from '../localhost-worktree-label-proxy'
@@ -329,8 +323,8 @@ function resolveWorktreeRemovalOwnerHostId(
   fallbackHostId?: ExecutionHostId
 ): ExecutionHostId | undefined {
   return (
-    store.getWorktreeMeta(worktreeId)?.hostId ??
-    (repo ? getRepoExecutionHostId(repo) : fallbackHostId)
+    fallbackHostId ??
+    (repo ? getRepoExecutionHostId(repo) : store.getWorktreeMeta(worktreeId)?.hostId)
   )
 }
 
@@ -340,19 +334,28 @@ function removeWorktreeMetadataAndTransientState(
   hostId?: ExecutionHostId,
   snapshotPruneBatchId?: string
 ): void {
+  const persistedHostId = store.getWorktreeMeta(worktreeId)?.hostId
+  const repoId = getRepoIdFromWorktreeId(worktreeId)
+  const preservesSameIdOwner = Boolean(
+    hostId &&
+    ((persistedHostId && persistedHostId !== hostId) ||
+      hasWorktreeRemovalRepoOwnerOnOtherHost(store, repoId, hostId))
+  )
   // Why: worktree IDs are path-derived and reusable; drop process-local caches before the same ID can map to a new workspace.
   if (hostId) {
     store.removeWorktreeMeta(worktreeId, hostId)
   } else {
     store.removeWorktreeMeta(worktreeId)
   }
-  advertisedUrlWatcher.forgetWorktree(worktreeId)
-  // Why: drop this worktree's localhost label routes so they don't accumulate in the proxy's route maps all session.
-  localhostWorktreeLabelProxy.unregisterWorktree(worktreeId)
-  // Why: schedule async history tree removal — never recursive-rmSync on the delete critical path.
-  deleteWorktreeHistoryDir(worktreeId)
-  // Why: release the removed worktree's PR-refresh aliases so coalesced queue entries don't retain it all session (memory creep).
-  pruneWorktreePRRefreshAliases(worktreeId)
+  if (!preservesSameIdOwner) {
+    advertisedUrlWatcher.forgetWorktree(worktreeId)
+    // Why: drop this worktree's localhost label routes so they don't accumulate in the proxy's route maps all session.
+    localhostWorktreeLabelProxy.unregisterWorktree(worktreeId)
+    // Why: schedule async history tree removal — never recursive-rmSync on the delete critical path.
+    deleteWorktreeHistoryDir(worktreeId)
+    // Why: release the removed worktree's PR-refresh aliases so coalesced queue entries don't retain it all session (memory creep).
+    pruneWorktreePRRefreshAliases(worktreeId)
+  }
   // Why: removed workspaces must never resurrect from the persisted cleanup/space scan snapshots.
   const snapshotDirectory = store.getProfileStorageDirectory()
   if (snapshotPruneBatchId) {
@@ -2551,7 +2554,12 @@ export function registerWorktreeHandlers(
             : hasLocalWorktreeGitOptions
               ? await listGitWorktreesStrict(repo.path, localWorktreeGitOptions)
               : await listGitWorktreesStrict(repo.path)
-          const removedMeta = store.getWorktreeMeta(args.worktreeId)
+          const removedMeta = resolveWorktreeRemovalMetadata(
+            store,
+            repoId,
+            args.worktreeId,
+            removalHostId
+          )
           const removedPushTarget = removedMeta?.pushTarget
           const registeredWorktree = findRegisteredDeletableWorktree(
             repo.path,
@@ -3162,13 +3170,19 @@ export function registerWorktreeHandlers(
       args: Pick<RemoveWorktreeArgs, 'worktreeId' | 'hostId' | 'snapshotPruneBatchId'>
     ): Promise<RemoveWorktreeResult> => {
       const { repoId } = parseWorktreeId(args.worktreeId)
-      const repo = getRepoForWorktreeRemoval(store, repoId, args.hostId)
+      const repoOwner = resolveWorktreeRemovalRepoOwner(store, repoId, args.hostId)
+      if (!args.hostId && repoOwner.kind === 'ambiguous') {
+        throw new Error(
+          `Workspace identity is ambiguous across hosts: ${args.worktreeId}. Retry with an explicit host.`
+        )
+      }
+      const repo = repoOwner.kind === 'resolved' ? repoOwner.repo : undefined
       // Repo-first (unlike owner resolution below) so this key matches worktrees:remove's; meta only covers ownerless forgets.
       const inFlightKey = getWorktreeRemovalInFlightKey(
         args.worktreeId,
         repo
           ? getRepoExecutionHostId(repo)
-          : (store.getWorktreeMeta(args.worktreeId)?.hostId ?? args.hostId)
+          : (args.hostId ?? store.getWorktreeMeta(args.worktreeId)?.hostId)
       )
       const optionsKey = 'forget-local'
       const inFlight = worktreeRemovalsInFlight.get(inFlightKey)
@@ -3180,10 +3194,14 @@ export function registerWorktreeHandlers(
       }
 
       const forget = (async (): Promise<RemoveWorktreeResult> => {
-        // Ambiguous repo lookup must not bypass a live folder root's deletion guard.
         const isFolderRootOf = (candidate: Repo): boolean =>
           isFolderRepo(candidate) && args.worktreeId === getFolderWorkspaceRootId(candidate)
-        if (repo ? isFolderRootOf(repo) : store.getRepos().some(isFolderRootOf)) {
+        const fallbackRepos = args.hostId
+          ? store
+              .getRepos()
+              .filter((candidate) => getRepoExecutionHostId(candidate) === args.hostId)
+          : store.getRepos()
+        if (repo ? isFolderRootOf(repo) : fallbackRepos.some(isFolderRootOf)) {
           throw new Error(
             'Cannot delete the project root workspace. Remove the folder project instead.'
           )

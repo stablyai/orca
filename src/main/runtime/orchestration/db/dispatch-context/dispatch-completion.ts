@@ -77,7 +77,7 @@ export function failDispatch(
   this: OrchestrationDb,
   ctxId: string,
   error: string,
-  options: { workerProcessExited?: boolean } = {}
+  options: { workerProcessExited?: boolean; terminationReason?: string } = {}
 ): DispatchContextRow | undefined {
   this.db.exec(`SAVEPOINT ${FAIL_DISPATCH_SAVEPOINT}`)
   try {
@@ -86,6 +86,7 @@ export function failDispatch(
         `UPDATE dispatch_contexts
          SET status = CASE WHEN failure_count + 1 >= ? THEN 'circuit_broken' ELSE 'failed' END,
              failure_count = failure_count + 1, last_failure = ?,
+             termination_reason = COALESCE(?, termination_reason),
              completed_at = COALESCE(completed_at, datetime('now')),
              capability_revoked_at = COALESCE(capability_revoked_at, datetime('now'))
          WHERE id = ? AND status IN ('pending', 'dispatched')
@@ -95,7 +96,13 @@ export function failDispatch(
                AND worker.state NOT IN ('failed', 'succeeded', 'stopped', 'abandoned')
            ))`
       )
-      .run(DISPATCH_CIRCUIT_BREAK_FAILURES, error, ctxId, options.workerProcessExited ? 1 : 0)
+      .run(
+        DISPATCH_CIRCUIT_BREAK_FAILURES,
+        error,
+        options.terminationReason ?? null,
+        ctxId,
+        options.workerProcessExited ? 1 : 0
+      )
     const ctx = this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
       | DispatchContextRow
       | undefined

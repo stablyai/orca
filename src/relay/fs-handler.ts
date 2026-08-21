@@ -26,6 +26,8 @@ import {
 } from './fs-path-mutation-requests'
 import { buildExcludePathPrefixes } from '../shared/quick-open-filter'
 import { readRelayFileContent, readRelayFileStreamMetadata } from './fs-handler-file-read'
+import { readRelayFileRange } from './fs-handler-file-range'
+import { FileRangeReadRequestError } from '../shared/file-range-read'
 import {
   readVerifiedTerminalArtifact,
   writeVerifiedTerminalArtifact
@@ -66,6 +68,7 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.readDir', (p) => readRelayDir(p))
     this.dispatcher.onRequest('fs.readFile', (p) => this.readFile(p))
     this.dispatcher.onRequest('fs.readFileStream', (p, c) => this.readFileStream(p, c))
+    this.dispatcher.onRequest('fs.readFileRange', (p) => this.readFileRange(p))
     this.dispatcher.onRequest('fs.readTerminalArtifact', (p) => this.readTerminalArtifact(p))
     this.dispatcher.onRequest('fs.tempDir', () => this.tempDir())
     this.dispatcher.onRequest('fs.writeFile', (p) => writeRelayFile(p))
@@ -81,6 +84,10 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.copy', (p) => copyRelayPath(p))
     this.dispatcher.onRequest('fs.realpath', (p) => realpathRelayPath(p))
     this.dispatcher.onRequest('fs.search', (p) => this.search(p))
+    this.dispatcher.onRequest('fs.getCapabilities', async () => ({
+      quickOpenSearchVersion: 1,
+      rangedReadVersion: 1
+    }))
     this.dispatcher.onRequest('fs.listFiles', (p, c) => this.listFiles(p, c))
     this.dispatcher.onRequest('fs.workspaceSpaceScan', (p, c) => this.workspaceSpaceScan(p, c))
     this.dispatcher.onRequest('fs.watch', (p, context) =>
@@ -103,6 +110,15 @@ export class FsHandler {
   private async readFile(params: Record<string, unknown>) {
     const filePath = expandTilde(params.filePath as string)
     return readRelayFileContent(filePath)
+  }
+
+  // Why hand-checked: relay params arrive as raw casts with no schema. The
+  // offsets are validated inside readRelayFileRange, next to the read syscall.
+  private async readFileRange(params: Record<string, unknown>) {
+    if (typeof params.filePath !== 'string' || params.filePath.length === 0) {
+      throw new FileRangeReadRequestError('fs.readFileRange requires a filePath')
+    }
+    return readRelayFileRange(expandTilde(params.filePath), params.position, params.length)
   }
 
   private async readTerminalArtifact(params: Record<string, unknown>) {
@@ -189,6 +205,10 @@ export class FsHandler {
       params.maxResults > 0
         ? Math.min(params.maxResults, 20_001)
         : undefined
+    const searchQuery =
+      typeof params.searchQuery === 'string' && params.searchQuery.trim().length > 0
+        ? params.searchQuery
+        : undefined
     // Why: the main-to-relay RPC adds excludePaths so nested linked worktrees
     // don't get double-scanned. The shared helper validates the shape and
     // normalizes into root-relative prefixes; malformed input yields [] so
@@ -199,9 +219,10 @@ export class FsHandler {
     // aborting a stale scan when the workspace changes or the host cancels.
     return this.listFilesScans.run({
       clientId: context?.clientId ?? 0,
-      key: JSON.stringify([rootPath, excludePathPrefixes, maxResults]),
+      key: JSON.stringify([rootPath, excludePathPrefixes, maxResults, searchQuery]),
       signal: context?.signal,
-      start: (signal) => runListFilesScan(rootPath, excludePathPrefixes, signal, maxResults)
+      start: (signal) =>
+        runListFilesScan(rootPath, excludePathPrefixes, signal, maxResults, searchQuery)
     })
   }
 

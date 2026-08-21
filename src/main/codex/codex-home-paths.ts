@@ -1,6 +1,5 @@
 import {
   cpSync,
-  existsSync,
   lstatSync,
   mkdirSync,
   readFileSync,
@@ -18,6 +17,7 @@ import {
   markCopiedResource,
   targetIsOwnedFallbackCopy
 } from './codex-managed-home-resource-copy-marker'
+import { observe, observeResolvedPathEntry } from './codex-path-observation'
 
 const CODEX_GLOBAL_INSTRUCTIONS_ENTRY = 'AGENTS.md'
 
@@ -103,11 +103,20 @@ function linkSystemCodexResource(
 ): void {
   const sourcePath = join(systemHomePath, entryName)
   const targetPath = join(managedHomePath, entryName)
-  if (!existsSync(sourcePath)) {
+  // Why: both branches below DELETE Orca's mirrored copy because the system
+  // resource "is not there". `existsSync` and the old `catch { return false }`
+  // both reported that for a source we merely could not read, so one denied
+  // read on ~/.codex/AGENTS.md removed the managed copy on the next launch.
+  // One resolved stat now answers reachability and regular-file-ness together.
+  const sourceObservation = observeResolvedPathEntry(sourcePath)
+  if (sourceObservation.kind === 'indeterminate') {
+    return
+  }
+  if (sourceObservation.kind === 'absent') {
     removeCopiedResourceIfOwned(targetPath, managedHomePath, entryName, sourcePath)
     return
   }
-  if (entryName === CODEX_GLOBAL_INSTRUCTIONS_ENTRY && !systemResourceIsRegularFile(sourcePath)) {
+  if (entryName === CODEX_GLOBAL_INSTRUCTIONS_ENTRY && !sourceObservation.value.isFile()) {
     removeCopiedResourceIfOwned(targetPath, managedHomePath, entryName, sourcePath)
     console.warn('[codex-home] Ignoring non-file system Codex resource:', entryName)
     return
@@ -119,23 +128,28 @@ function linkSystemCodexResource(
       return
     }
   }
-  const shouldRefreshFallbackCopy = targetIsOwnedFallbackCopy(
-    targetPath,
-    managedHomePath,
-    entryName,
-    sourcePath
-  )
-  if (pathEntryExists(targetPath) && !shouldRefreshFallbackCopy) {
+  // Why: an unreadable target is not a missing target; do not let the fallback
+  // copier remove it merely because existsSync/lstatSync collapsed the error.
+  const targetObservation = observe(() => lstatSync(targetPath))
+  if (targetObservation.kind === 'indeterminate') {
+    return
+  }
+  const shouldRefreshFallbackCopy =
+    targetObservation.kind === 'present' &&
+    targetIsOwnedFallbackCopy(targetPath, managedHomePath, entryName, sourcePath)
+  if (targetObservation.kind === 'present' && !shouldRefreshFallbackCopy) {
     return
   }
   if (shouldRefreshFallbackCopy) {
     // Why: WSL launch preparation runs before every Codex start. Avoid
     // rewriting an unchanged file across the UNC boundary on every launch.
-    if (
-      entryName === CODEX_GLOBAL_INSTRUCTIONS_ENTRY &&
-      copiedFileContentsMatch(sourcePath, targetPath)
-    ) {
-      return
+    if (entryName === CODEX_GLOBAL_INSTRUCTIONS_ENTRY) {
+      const contentsMatch = copiedFileContentsMatch(sourcePath, targetPath)
+      if (contentsMatch === 'match' || contentsMatch === 'indeterminate') {
+        // Why: a failed comparison is not permission to remove the only
+        // readable copy; leave it in place for the next launch.
+        return
+      }
     }
     rmSync(targetPath, { recursive: true, force: true })
   }
@@ -205,33 +219,19 @@ function copySystemCodexResourceAsOwnedFallback(
   }
 }
 
-function systemResourceIsRegularFile(sourcePath: string): boolean {
-  try {
-    return statSync(sourcePath).isFile()
-  } catch {
-    return false
-  }
-}
-
-function pathEntryExists(entryPath: string): boolean {
-  try {
-    lstatSync(entryPath)
-    return true
-  } catch {
-    return false
-  }
-}
-
-function copiedFileContentsMatch(sourcePath: string, targetPath: string): boolean {
+function copiedFileContentsMatch(
+  sourcePath: string,
+  targetPath: string
+): 'match' | 'different' | 'indeterminate' {
   try {
     // Why: reading a FIFO or device synchronously can block Codex launch.
     // Follow source symlinks, but only compare two regular files.
     if (!statSync(sourcePath).isFile() || !lstatSync(targetPath).isFile()) {
-      return false
+      return 'different'
     }
-    return readFileSync(sourcePath).equals(readFileSync(targetPath))
+    return readFileSync(sourcePath).equals(readFileSync(targetPath)) ? 'match' : 'different'
   } catch {
-    return false
+    return 'indeterminate'
   }
 }
 

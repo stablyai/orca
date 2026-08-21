@@ -29,6 +29,13 @@ describe('createHookStatusSessionTabsInvalidator', () => {
     expect(changed(working())).toBe(false)
   })
 
+  it('invalidates when a restored row is confirmed by live activity', () => {
+    const changed = createHookStatusSessionTabsInvalidator()
+    changed(working({ restoredUnconfirmed: true }))
+
+    expect(changed(working())).toBe(true)
+  })
+
   it.each([
     ['state', { state: 'waiting' as const }],
     ['prompt', { prompt: 'ship it' }],

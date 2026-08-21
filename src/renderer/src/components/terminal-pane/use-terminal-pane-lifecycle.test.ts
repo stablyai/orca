@@ -3,9 +3,12 @@ import {
   applyTerminalPaneCloseRequest,
   applyTerminalScrollbackRowsToMountedPanes,
   clearQueuedInitialCwdAfterFirstPane,
+  createQueuedStartupConsumer,
   getPreviousVisibleForTerminalPane,
   isTerminalPaneVisibilityResume,
+  isTouchIOSUserAgent,
   mapRestoredPaneTitlesByPaneId,
+  paneOwnsQueuedStartup,
   resolvePaneLinkCwd,
   resolvePaneSeedCwd,
   resolveQueuedInitialCwd,
@@ -173,6 +176,128 @@ describe('resetTerminalKeyboardProtocolAfterInterrupt', () => {
     } finally {
       _resetWritePipelineHealthForTests(terminal)
     }
+  })
+})
+
+// Why: onPaneCreated uses paneOwnsQueuedStartup to decide whether a pane may spend the tab's queued
+// startup command. Setup/issue splits borrow the same deps.startup field for their own one-shot
+// payload, so a looser test would let a split pane spend a command it never runs — re-breaking
+// STA-4876 for split-setup worktrees.
+describe('paneOwnsQueuedStartup', () => {
+  it('grants ownership only to the pane still holding the queued object', () => {
+    const queuedStartup = { command: 'echo queued' }
+    const deps: { startup?: { command: string; env?: Record<string, string> } | null } = {
+      startup: queuedStartup
+    }
+    const ownershipAtConnect: boolean[] = []
+    const observeConnect = (): void => {
+      ownershipAtConnect.push(paneOwnsQueuedStartup(deps.startup, queuedStartup))
+    }
+
+    // Primary pane connects first and owns the queued command.
+    observeConnect()
+    // connectPanePty took it; the lifecycle nulls the outer slot so splits cannot replay it.
+    deps.startup = null
+    splitPaneWithOneShotStartup(deps, { command: 'orca setup' }, () => {
+      observeConnect()
+      return { id: 2 }
+    })
+    splitPaneWithOneShotStartup(deps, { command: 'orca issue' }, () => {
+      observeConnect()
+      return { id: 3 }
+    })
+
+    expect(ownershipAtConnect).toEqual([true, false, false])
+  })
+
+  // Why this case matters: a truthiness regression ("has a startup") passes the test above, because
+  // the split payload is non-null there too. Only a structurally-identical payload separates them.
+  it('denies ownership to a split payload structurally identical to the queued command', () => {
+    const queuedStartup = { command: 'orca setup' }
+
+    expect(paneOwnsQueuedStartup({ command: 'orca setup' }, queuedStartup)).toBe(false)
+    expect(paneOwnsQueuedStartup(queuedStartup, queuedStartup)).toBe(true)
+  })
+
+  it('denies ownership when the tab queued nothing, so an unrelated pane cannot spend a slot', () => {
+    expect(paneOwnsQueuedStartup(null, null)).toBe(false)
+    expect(paneOwnsQueuedStartup(undefined, undefined)).toBe(false)
+    expect(paneOwnsQueuedStartup({ command: 'orca setup' }, null)).toBe(false)
+  })
+})
+
+describe('createQueuedStartupConsumer', () => {
+  it('withholds the consumer from a pane that does not own the queued command', () => {
+    const queuedStartup = { command: 'echo queued' }
+    const consume = vi.fn()
+
+    // A setup split's borrowed payload, structurally identical to the queued command.
+    expect(
+      createQueuedStartupConsumer({ command: 'echo queued' }, queuedStartup, consume, () => true)
+    ).toBeUndefined()
+    expect(createQueuedStartupConsumer(null, queuedStartup, consume, () => true)).toBeUndefined()
+    expect(consume).not.toHaveBeenCalled()
+  })
+
+  // Why: onPtySpawn fires again on hibernation wake and the respawn ladder. Spending the slot on a
+  // later spawn would drop a command queued after the first launch, without ever delivering it.
+  it('spends the queued command at most once across repeated spawns', () => {
+    const queuedStartup = { command: 'echo queued' }
+    const consume = vi.fn()
+
+    const consumer = createQueuedStartupConsumer(queuedStartup, queuedStartup, consume, () => true)
+    expect(consumer).toBeTypeOf('function')
+
+    consumer?.()
+    consumer?.()
+    consumer?.()
+
+    expect(consume).toHaveBeenCalledTimes(1)
+  })
+
+  // Why: a replacement can land before this pane's own spawn, so the one-shot guard alone still lets
+  // the callback delete a command it never launched (STA-4876).
+  it('leaves a command that replaced the captured one queued for its own launch', () => {
+    const capturedStartup = { command: 'echo captured' }
+    let pending: object | null = capturedStartup
+    const consume = vi.fn(() => {
+      pending = null
+    })
+
+    const consumer = createQueuedStartupConsumer(
+      capturedStartup,
+      capturedStartup,
+      consume,
+      () => pending === capturedStartup
+    )
+    const replacement = { command: 'echo replacement' }
+    pending = replacement
+
+    consumer?.()
+
+    expect(consume).not.toHaveBeenCalled()
+    expect(pending).toBe(replacement)
+  })
+
+  // Why: the replacement belongs to the launch that queued it, so this pane's respawn ladder must not
+  // reach for it after skipping its own spent chance.
+  it('does not spend a replacement on a later spawn of the same pane', () => {
+    const capturedStartup = { command: 'echo captured' }
+    let pending: object | null = { command: 'echo replacement' }
+    const consume = vi.fn()
+
+    const consumer = createQueuedStartupConsumer(
+      capturedStartup,
+      capturedStartup,
+      consume,
+      () => pending === capturedStartup
+    )
+
+    consumer?.()
+    pending = capturedStartup
+    consumer?.()
+
+    expect(consume).not.toHaveBeenCalled()
   })
 })
 
@@ -547,5 +672,41 @@ describe('terminal pane visibility resume tracking', () => {
       false
     )
     expect(isTerminalPaneVisibilityResume({ previousIsVisible: false, isVisible: true })).toBe(true)
+  })
+})
+
+describe('isTouchIOSUserAgent', () => {
+  it('is false for a real Mac (Macintosh UA, no touch points)', () => {
+    expect(
+      isTouchIOSUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15', 0)
+    ).toBe(false)
+  })
+
+  it('is true for iPadOS desktop-mode Safari (Macintosh UA plus touch points)', () => {
+    expect(
+      isTouchIOSUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15', 5)
+    ).toBe(true)
+  })
+
+  it('is true for iPhone Safari ("like Mac OS X" UA plus touch points)', () => {
+    expect(
+      isTouchIOSUserAgent(
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15',
+        5
+      )
+    ).toBe(true)
+  })
+
+  it('is false for non-Mac UAs regardless of touch points', () => {
+    expect(isTouchIOSUserAgent('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36', 5)).toBe(false)
+    expect(
+      isTouchIOSUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', 5)
+    ).toBe(false)
+  })
+
+  it('keeps the forwarder on a Mac whose touch peripheral reports a single point', () => {
+    expect(
+      isTouchIOSUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15', 1)
+    ).toBe(false)
   })
 })

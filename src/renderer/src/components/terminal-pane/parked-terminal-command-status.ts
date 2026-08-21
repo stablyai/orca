@@ -10,6 +10,7 @@ import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
+import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
 import { useAppStore } from '@/store'
 import {
   cancelCommandCodeDoneSettle,
@@ -127,7 +128,12 @@ export function createParkedTerminalCommandStatusPolicy(options: {
       {
         state: 'done',
         prompt: currentPrompt || normalizedPrompt,
-        agentType: 'command-code'
+        agentType: 'command-code',
+        observation: rendererAgentStatusObservations.observe(paneKey, {
+          origin: 'process',
+          observedAt: Date.now(),
+          kind: 'transition'
+        })
       },
       currentTitle,
       undefined,
@@ -189,7 +195,12 @@ export function createParkedTerminalCommandStatusPolicy(options: {
           state: 'working',
           prompt:
             normalizedPrompt || (currentEntry?.state === 'working' ? currentEntry.prompt : ''),
-          agentType: 'command-code'
+          agentType: 'command-code',
+          observation: rendererAgentStatusObservations.observe(paneKey, {
+            origin: 'process',
+            observedAt: Date.now(),
+            kind: 'transition'
+          })
         },
         currentTitle,
         undefined,

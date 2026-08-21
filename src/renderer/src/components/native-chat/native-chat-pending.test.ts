@@ -2,24 +2,26 @@ import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import {
   appendPendingSendCache,
-  appendCommandMarkerCache,
-  applyCommandMarkerBoundaries,
-  clearCommandMarkerCacheForTests,
   clearPendingSendCacheForTests,
-  commandMarkersAsMessages,
-  isCommandMarkerId,
   isLaunchPromptMessageId,
   isPendingMessageId,
   launchPromptAsMessage,
   nextNativeChatPendingSendId,
   pendingSendsAsMessages,
   prunePendingSends,
-  readCommandMarkerCache,
   readPendingSendCache,
   shouldPruneLaunchPrompt,
   writePendingSendCache,
   type NativeChatPendingSend
 } from './native-chat-pending'
+import {
+  appendCommandMarkerCache,
+  applyCommandMarkerBoundaries,
+  clearCommandMarkerCacheForTests,
+  commandMarkersAsMessages,
+  isCommandMarkerId,
+  readCommandMarkerCache
+} from './native-chat-command-marker'
 import { stripNoiseMessages } from './native-chat-noise'
 
 function userMessage(id: string, text: string, timestamp = 1): NativeChatMessage {
@@ -329,6 +331,84 @@ describe('glued rapid sends', () => {
 
     expect(prunePendingSends(pending, history)).toEqual(pending)
     expect(pendingSendsAsMessages(pending, history)).toHaveLength(2)
+  })
+
+  // A row that already existed when a send was issued can never be that send's
+  // echo — for EVERY queued send, not just the oldest one the glue run starts at.
+  const mixedAgeGlue = (): { messages: NativeChatMessage[]; pending: NativeChatPendingSend[] } => {
+    const gluedRow = userMessage('glue-row', 'fix the bug', 6000)
+    return {
+      messages: [
+        GLUE_BOUNDARY,
+        gluedRow,
+        assistantMessage('glue-answer', 'fixed', 6100),
+        userMessage('later-history', 'anything', 6200)
+      ],
+      // 'fix the' was queued before the row landed; 'bug' only after it.
+      pending: [
+        gluePending('p1', 'fix the'),
+        {
+          id: 'p2',
+          text: 'bug',
+          sentAt: 7000,
+          afterMessageId: 'glue-answer',
+          afterMessageTimestamp: 6100
+        }
+      ]
+    }
+  }
+
+  it('keeps a queued send whose own boundary is newer than the glued row (STA-4477)', () => {
+    const { messages, pending } = mixedAgeGlue()
+
+    expect(prunePendingSends(pending, messages)).toEqual(pending)
+  })
+
+  // Separate from the prune case on purpose: the render path is what makes the
+  // bubble visually vanish, and a shared `it` would mask it behind the first
+  // failing assertion.
+  it('still renders a queued send whose own boundary is newer than the row (STA-4477)', () => {
+    const { messages, pending } = mixedAgeGlue()
+
+    expect(pendingSendsAsMessages(pending, messages)).toHaveLength(2)
+  })
+
+  // Glue is adjacency: a send the row predates ends the run rather than being
+  // skipped, so a row must never bridge across a send it cannot represent.
+  it('never glues across a send the row cannot represent (STA-4477)', () => {
+    const gluedRow = userMessage('glue-row', 'alpha gamma', 6000)
+    const messages = [GLUE_BOUNDARY, gluedRow, assistantMessage('glue-answer', 'ok', 6100)]
+    const pending = [
+      gluePending('p1', 'alpha'),
+      // Queued after the row landed, so the row is not its echo...
+      {
+        id: 'p2',
+        text: 'beta',
+        sentAt: 7000,
+        afterMessageId: 'glue-row',
+        afterMessageTimestamp: 6000
+      },
+      // ...and 'alpha'+'gamma' must not close over the gap it leaves.
+      gluePending('p3', 'gamma')
+    ]
+
+    expect(prunePendingSends(pending, messages)).toEqual(pending)
+    expect(pendingSendsAsMessages(pending, messages)).toHaveLength(3)
+  })
+
+  it('still retires the leading run the glued row did land after (STA-4477)', () => {
+    const gluedRow = userMessage('glue-row', 'first second', 6000)
+    const messages = [GLUE_BOUNDARY, gluedRow, assistantMessage('glue-answer', 'done', 6100)]
+    const third = {
+      id: 'p3',
+      text: 'third',
+      sentAt: 7000,
+      afterMessageId: 'glue-row',
+      afterMessageTimestamp: gluedRow.timestamp
+    }
+    const pending = [gluePending('p1', 'first'), gluePending('p2', 'second'), third]
+
+    expect(prunePendingSends(pending, messages)).toEqual([third])
   })
 })
 

@@ -42,7 +42,7 @@ function readlineEchoOf(reply: string): string {
 type StartupTty = {
   /** A writer (main ingress or renderer) pushes bytes at the PTY master. */
   writeToPty: (data: string) => void
-  /** Bytes the querying program actually read in raw mode. */
+  /** Bytes the querying program actually read. */
   programInput: () => string
   onPtyOutput: (sink: (data: string) => void) => void
   emitStartupBurst: () => void
@@ -66,6 +66,13 @@ function createStartupTty(): StartupTty {
         received += data
         return
       }
+      // A cooked-mode master write is BOTH echoed and delivered: ECHO copies the bytes
+      // to the master without consuming them from the slave's input queue, so a program
+      // arming raw mode with TCSANOW/TCSADRAIN (libuv's setRawMode, hence every Node
+      // agent) still reads them. Measured on a real pty: TCSANOW receives the reply,
+      // only TCSAFLUSH discards it. The leak #12112 reported is the ECHO, which the
+      // projections below suppress — not a delivery failure.
+      received += data
       sink(readlineEchoOf(data))
     },
     programInput: () => received,

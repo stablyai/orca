@@ -263,6 +263,13 @@ export default function HomeScreen() {
     () => Object.fromEntries(allClients.map(({ hostId, pendingPath }) => [hostId, pendingPath])),
     [allClients]
   )
+  const hostPairingRejected = useMemo(
+    () =>
+      Object.fromEntries(
+        allClients.map(({ hostId, pairingRejected }) => [hostId, pairingRejected])
+      ),
+    [allClients]
+  )
   const disconnectHostClient = useDisconnectHostClient()
   const forgetHostClient = useForgetHostClient()
   const forceReconnectHost = useForceReconnect()
@@ -770,7 +777,8 @@ export default function HomeScreen() {
               reconnectAttempts: attempts,
               lastConnectedAt,
               endpoint: item.endpoint,
-              pendingPath: hostPendingPaths[item.id] ?? null
+              pendingPath: hostPendingPaths[item.id] ?? null,
+              pairingRejected: hostPairingRejected[item.id] ?? false
             })
             return (
               <MobileHostCard

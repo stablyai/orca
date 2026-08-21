@@ -33,11 +33,23 @@ describe('updater', () => {
   })
 
   it.each([
-    ['hourly', 'v1.4.160-hourly.202607281400', 'Hourly builds are produced only for macOS.'],
-    ['daily', 'v1.4.160-daily.202607281300', 'Daily builds are produced only for macOS.'],
-    ['adhoc', 'v1.4.160-adhoc.20260728140533', 'Adhoc builds are produced only for macOS.']
+    [
+      'hourly',
+      'v1.4.160-hourly.202607281400',
+      'Hourly builds are produced only for macOS and Windows.'
+    ],
+    [
+      'daily',
+      'v1.4.160-daily.202607281300',
+      'Daily builds are produced only for macOS and Windows.'
+    ],
+    [
+      'adhoc',
+      'v1.4.160-adhoc.20260728140533',
+      'Adhoc builds are produced only for macOS and Windows.'
+    ]
   ] as const)(
-    'uses the display label in the mac-only %s pinned-build error',
+    'uses the display label in the unsupported-platform %s pinned-build error',
     async (channel, tag, message) => {
       const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
       try {
@@ -55,6 +67,65 @@ describe('updater', () => {
           userInitiated: true
         })
         expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+      } finally {
+        platformSpy.mockRestore()
+      }
+    }
+  )
+
+  // Why this refuses rather than trying: electron-updater would download the
+  // whole installer and then fail it with a raw ERR_UPDATER_INVALID_SIGNATURE,
+  // because a signed build verifies every installer against the publisherName
+  // baked into its own app-update.yml. The picker disables this, but IPC is
+  // reachable regardless.
+  it('refuses to pin a Windows dev build from a signed build, and says what to do', async () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    try {
+      appMock.getVersion.mockReturnValue('1.4.160')
+      const send = vi.fn()
+      const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+      setupAutoUpdater({ webContents: { send } } as never, {
+        getLastUpdateCheckAt: () => Date.now()
+      })
+
+      checkForUpdatesFromMenu({ channel: 'adhoc', targetTag: 'v1.4.160-adhoc.20260728140533' })
+
+      expect(send).toHaveBeenCalledWith('updater:status', {
+        state: 'error',
+        message: expect.stringContaining('Download the installer from the release page'),
+        userInitiated: true
+      })
+      expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
+
+  // The way out of a dev channel must stay in-app: an unsigned build carries no
+  // publisherName, so electron-updater skips verification entirely.
+  it.each([
+    ['another dev build', 'adhoc', 'v1.4.160-adhoc.20260728140533'],
+    ['back to stable', 'stable', 'v1.4.160']
+  ] as const)(
+    'still pins %s from an unsigned Windows dev build',
+    async (_label, channel, targetTag) => {
+      const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+      try {
+        appMock.getVersion.mockReturnValue('1.4.160-hourly.202607281400')
+        const send = vi.fn()
+        const { setupAutoUpdater, checkForUpdatesFromMenu } = await import('./updater')
+        setupAutoUpdater({ webContents: { send } } as never, {
+          getLastUpdateCheckAt: () => Date.now()
+        })
+
+        checkForUpdatesFromMenu({ channel, targetTag })
+
+        expect(send).not.toHaveBeenCalledWith('updater:status', {
+          state: 'error',
+          message: expect.stringContaining('Download the installer'),
+          userInitiated: true
+        })
+        expect(autoUpdaterMock.allowDowngrade).toBe(true)
       } finally {
         platformSpy.mockRestore()
       }

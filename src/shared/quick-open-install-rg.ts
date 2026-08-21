@@ -87,3 +87,11 @@ export async function buildInstallRgMessage(
     `Install ripgrep ${location} to enable fast, gitignore-aware listing: ${cmd}`
   )
 }
+
+export async function buildRipgrepRequiredMessage(
+  host: 'local' | 'remote' = 'local'
+): Promise<string> {
+  const cmd = await detectInstallCommand()
+  const location = host === 'local' ? 'on the host running Quick Open' : 'on the remote'
+  return `Quick Open search requires ripgrep ${location} to stay resource-bounded. Install it with: ${cmd}`
+}

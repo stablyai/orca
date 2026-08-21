@@ -334,7 +334,9 @@ async function pumpChunks(
 
 // Why: fs.read() may return fewer bytes than requested before EOF. Fill each
 // protocol chunk so strict clients reject corruption, not valid short reads.
-async function readFullStreamChunk(
+// Shared with fs.readFileRange, where the same rule makes a short result mean
+// EOF and nothing else.
+export async function readFullStreamChunk(
   handle: StreamChunkReader,
   buffer: Buffer,
   length: number,

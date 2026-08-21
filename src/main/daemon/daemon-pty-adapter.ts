@@ -24,6 +24,7 @@ import {
   GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
+  DAEMON_UNAVAILABLE_RECONNECT_MESSAGE,
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
   supportsMode2031UnsubscribeFact,
@@ -93,6 +94,7 @@ import {
 import type { DaemonEvidenceSource, ExactDaemonIncarnation } from './daemon-incarnation-evidence'
 import { createDaemonAuditEligibilityTracker } from './daemon-audit-eligibility-event'
 import { normalizeDesktopTerminalSnapshotRows } from '../../shared/terminal-scrollback-policy'
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 type PendingDaemonSpawnOperation = {
   exitsBySessionId: Map<string, { incarnationId?: string }[]>
@@ -260,6 +262,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
     id: string
     code: number
     incarnationId?: PtyIncarnationId
+    cause?: TerminalExitCause
   }) => void)[] = []
   private backgroundStreamListeners: ((payload: PtyBackgroundStreamEvent) => void)[] = []
   // Why: lets main fan a dead-endpoint signal to every affected pane, not just the written one (STA-2373 sibling-freeze).
@@ -2998,7 +3001,8 @@ export class DaemonPtyAdapter implements IPtyProvider {
           listener({
             id: event.sessionId,
             code: event.payload.code,
-            ...(event.payload.incarnationId ? { incarnationId: event.payload.incarnationId } : {})
+            ...(event.payload.incarnationId ? { incarnationId: event.payload.incarnationId } : {}),
+            ...(event.payload.cause ? { cause: event.payload.cause } : {})
           })
         }
       }
@@ -3101,7 +3105,8 @@ export function isDaemonGoneError(err: unknown): boolean {
     msg === 'Connection lost' ||
     msg === 'Not connected' ||
     msg === 'Hello response timed out' ||
-    msg === 'Daemon temporarily unavailable; reconnect' ||
+    // Both the daemon's own drain refusal and the client's wedged-daemon signal.
+    msg === DAEMON_UNAVAILABLE_RECONNECT_MESSAGE ||
     // Why retry: the daemon refused because the endpoint now resolves elsewhere. Reconnecting
     // reaches whoever owns it; surfacing this to the user would strand the request instead.
     msg === DAEMON_ENDPOINT_LOST_MESSAGE
