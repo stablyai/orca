@@ -337,6 +337,34 @@ export function AppearanceWindowSidebarSection({
                       }
                     />
                   </SearchableSetting>
+
+                  <SearchableSetting
+                    title={translate(
+                      'auto.components.settings.AppearancePane.pinMainWorkspaceFirst.title',
+                      'Keep main workspaces at the top'
+                    )}
+                    keywords={['main', 'primary', 'worktree', 'workspace', 'order', 'sort', 'pin']}
+                  >
+                    <SettingsSwitchRow
+                      label={translate(
+                        'auto.components.settings.AppearancePane.pinMainWorkspaceFirst.title',
+                        'Keep main workspaces at the top'
+                      )}
+                      // Why: repos group their canonical workspace first by default so the
+                      // anchor row never moves; turning this off lets the chosen sort
+                      // (Smart/Recent) rank it like any other workspace (#15770).
+                      description={translate(
+                        'auto.components.settings.AppearancePane.pinMainWorkspaceFirst.description',
+                        'Each project’s main workspace stays at the top of its group. Turn off to let the workspace sort order rank it like any other.'
+                      )}
+                      checked={settings.pinMainWorkspaceFirst !== false}
+                      onChange={() =>
+                        updateSettings({
+                          pinMainWorkspaceFirst: !(settings.pinMainWorkspaceFirst !== false)
+                        })
+                      }
+                    />
+                  </SearchableSetting>
                 </div>
               </div>
             ) : null}

@@ -225,7 +225,8 @@ export function buildRows(
     lineageById,
     worktreeMap,
     nestLineage,
-    cyclicLineageIds
+    cyclicLineageIds,
+    pinMainWorktreeFirst: settings?.pinMainWorkspaceFirst !== false
   }
 
   if (groupBy !== 'repo' || projectGroups.length === 0) {
