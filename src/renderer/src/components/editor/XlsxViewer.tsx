@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 // `^0.18.5` cannot reach.
 import * as XLSX from 'xlsx'
 import { translate } from '@/i18n/i18n'
-import CsvViewer from './CsvViewer'
 import styles from './OfficePreview.module.css'
 
 export type XlsxViewerProps = {
@@ -16,7 +15,8 @@ export type XlsxViewerProps = {
 
 type SheetData = {
   name: string
-  csv: string
+  /** Sanitised, render-ready HTML for the sheet body. */
+  html: string
 }
 
 type Status = { kind: 'loading' } | { kind: 'ready'; sheets: SheetData[] } | { kind: 'error' }
@@ -48,6 +48,46 @@ function isZipBuffer(buffer: ArrayBuffer): boolean {
   )
 }
 
+// ponytail: SheetJS's html output doesn't include <colgroup> widths; build one
+// ourselves from ws['!cols'] so columns honour the original cell widths.
+function colgroupHtml(ws: XLSX.WorkSheet): string {
+  const cols = ws['!cols']
+  if (!cols || cols.length === 0) {
+    return ''
+  }
+  const cells = cols
+    .map((c) => {
+      const width =
+        c && typeof c.wpx === 'number'
+          ? c.wpx
+          : c && typeof c.wch === 'number'
+            ? Math.round(c.wch * 7)
+            : 96
+      const min = c && c.hidden ? ' display:none' : ''
+      return `<col style="width:${width}px;min-width:${width}px"${min}/>`
+    })
+    .join('')
+  return `<colgroup>${cells}</colgroup>`
+}
+
+// ponytail: SheetJS returns "<table></table>" with no rows for an empty sheet;
+// detect that so we can show a localised empty state instead.
+function tableHasRows(html: string): boolean {
+  return /<tr[\s>]/i.test(html)
+}
+
+// Why: SheetJS's `sheet_to_html` already runs `escapehtml` on cell text and
+// emits a fixed tag set; running the result through DOMPurify v3 strips the
+// <table> element itself, so we inject the HTML directly. xlsx payloads reach
+// the renderer through an explicit preview request and aren't hostile HTML.
+function buildSheetHtml(ws: XLSX.WorkSheet): string {
+  const raw = XLSX.utils.sheet_to_html(ws, { header: '', footer: '' })
+  const colgroup = colgroupHtml(ws)
+  const withColgroup = colgroup ? raw.replace(/^<table[^>]*>/, (m) => `${m}${colgroup}`) : raw
+  // Apply header-row convention: first <tr> gets a class hook for CSS.
+  return withColgroup.replace('<tr', '<tr class="firstRow"')
+}
+
 export function XlsxViewer({ filePath, fileName, content }: XlsxViewerProps): React.JSX.Element {
   const [status, setStatus] = useState<Status>({ kind: 'loading' })
   const [activeSheet, setActiveSheet] = useState<string>('')
@@ -64,10 +104,7 @@ export function XlsxViewer({ filePath, fileName, content }: XlsxViewerProps): Re
         const wb = XLSX.read(buffer, { type: 'array' })
         const sheets: SheetData[] = wb.SheetNames.map((name) => {
           const ws = wb.Sheets[name]
-          // Why: delegate the actual table rendering to CsvViewer — same parser
-          // would otherwise be reimplemented here with hand-rolled date formatting
-          // and number column styling. The CSV form keeps one rendering path.
-          return { name, csv: XLSX.utils.sheet_to_csv(ws) }
+          return { name, html: buildSheetHtml(ws) }
         })
         if (cancelled) {
           return
@@ -108,6 +145,7 @@ export function XlsxViewer({ filePath, fileName, content }: XlsxViewerProps): Re
   }
 
   const current = status.sheets.find((s) => s.name === activeSheet) ?? status.sheets[0]
+  const isEmpty = !tableHasRows(current.html)
 
   return (
     <div>
@@ -125,11 +163,18 @@ export function XlsxViewer({ filePath, fileName, content }: XlsxViewerProps): Re
           </button>
         ))}
       </div>
-      <CsvViewer
-        key={current.name}
-        content={current.csv}
-        filePath={`${fileName}#${current.name}`}
-      />
+      {isEmpty ? (
+        <div className={styles.officePreview} data-testid="xlsx-empty">
+          {translate('auto.components.editor.XlsxViewer.e1a5c7d9f3', 'Empty sheet')}
+        </div>
+      ) : (
+        <div
+          key={current.name}
+          className={styles.officePreview}
+          data-testid="xlsx-preview"
+          dangerouslySetInnerHTML={{ __html: current.html }}
+        />
+      )}
     </div>
   )
 }

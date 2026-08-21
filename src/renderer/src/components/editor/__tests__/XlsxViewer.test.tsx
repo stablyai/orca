@@ -36,7 +36,7 @@ describe('XlsxViewer', () => {
   })
 
   it('shows first sheet content by default', async () => {
-    render(
+    const { container } = render(
       <XlsxViewer
         filePath="/tmp/worktree/tiny.xlsx"
         fileName="tiny.xlsx"
@@ -46,6 +46,9 @@ describe('XlsxViewer', () => {
     await waitFor(() => {
       expect(screen.getByText('A1')).toBeInTheDocument()
     })
+    const preview = container.querySelector('[data-testid="xlsx-preview"]')
+    expect(preview).toBeTruthy()
+    expect(preview?.querySelector('table')).toBeTruthy()
   })
 
   it('switches to the clicked sheet and renders its content', async () => {
@@ -65,7 +68,7 @@ describe('XlsxViewer', () => {
     })
   })
 
-  it('shows the CsvViewer empty state for a sheet with no rows', async () => {
+  it('shows a localized empty state for a sheet with no rows', async () => {
     render(
       <XlsxViewer
         filePath="/tmp/worktree/empty.xlsx"
@@ -73,11 +76,11 @@ describe('XlsxViewer', () => {
         content={fixtureBase64('empty.xlsx')}
       />
     )
-    // Why: table rendering is delegated to CsvViewer — verify it owns the
-    // empty-sheet surface so a custom empty message doesn't drift away from
-    // the csv code path.
     await waitFor(() => {
-      expect(screen.getByText(/Empty file/)).toBeInTheDocument()
+      // ponytail: SheetJS returns "<table></table>" for an empty sheet; the
+      // viewer renders an inline empty-state message above (or instead of)
+      // the table so the user understands the file isn't broken.
+      expect(screen.getByTestId('xlsx-empty')).toHaveTextContent(/Empty sheet/)
     })
   })
 
@@ -92,5 +95,37 @@ describe('XlsxViewer', () => {
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent(/Unable to parse/)
     })
+  })
+
+  it('tags the first row as a header for bold/sticky styling', async () => {
+    const { container } = render(
+      <XlsxViewer
+        filePath="/tmp/worktree/tiny.xlsx"
+        fileName="tiny.xlsx"
+        content={fixtureBase64('tiny.xlsx')}
+      />
+    )
+    await waitFor(() => {
+      expect(screen.getByText('A1')).toBeInTheDocument()
+    })
+    const html = container.querySelector('[data-testid="xlsx-preview"]')?.innerHTML ?? ''
+    expect(html).toMatch(/<tr[^>]*class="[^"]*firstRow/)
+  })
+
+  it('escapes HTML in cell text via DOMPurify', async () => {
+    const { container } = render(
+      <XlsxViewer
+        filePath="/tmp/worktree/tiny.xlsx"
+        fileName="tiny.xlsx"
+        content={fixtureBase64('tiny.xlsx')}
+      />
+    )
+    await waitFor(() => {
+      expect(screen.getByText('A1')).toBeInTheDocument()
+    })
+    // SheetJS escapes cell text; verify no raw <script>/<iframe> slips in.
+    const html = container.querySelector('[data-testid="xlsx-preview"]')?.innerHTML ?? ''
+    expect(html).not.toMatch(/<script/i)
+    expect(html).not.toMatch(/<iframe/i)
   })
 })
