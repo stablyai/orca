@@ -325,10 +325,25 @@ function mapCreateField(value: unknown, fallbackKey = ''): JiraCreateField | nul
     schema: {
       type: asString(schema.type) || undefined,
       items: asString(schema.items) || undefined,
-      custom: asString(schema.custom) || undefined
+      custom: asString(schema.custom) || undefined,
+      system: asString(schema.system) || undefined
     },
     allowedValues
   }
+}
+
+function mapTransitionFields(fields: unknown): JiraCreateField[] | undefined {
+  if (!fields || typeof fields !== 'object' || Array.isArray(fields)) {
+    return undefined
+  }
+  const mapped: JiraCreateField[] = []
+  for (const [key, value] of Object.entries(fields as JiraRecord)) {
+    const field = mapCreateField(value, key)
+    if (field) {
+      mapped.push(field)
+    }
+  }
+  return mapped.length > 0 ? mapped : undefined
 }
 
 function getCreateFieldRecords(response: JiraPagedResponse<JiraRecord>): JiraRecord[] {
@@ -790,9 +805,22 @@ export async function updateIssue(
       })
     }
     if (updates.transitionId) {
+      const transitionBody: JiraRecord = {
+        transition: { id: updates.transitionId }
+      }
+      const transitionFields = updates.transitionFields
+      if (transitionFields && Object.keys(transitionFields).length > 0) {
+        transitionBody.fields = transitionFields
+      }
+      const transitionComment = updates.transitionComment?.trim()
+      if (transitionComment) {
+        transitionBody.update = {
+          comment: [{ add: { body: toBodyText(entry.site, transitionComment) } }]
+        }
+      }
       await jiraRequest(entry, `${issueBase}/transitions`, {
         method: 'POST',
-        body: JSON.stringify({ transition: { id: updates.transitionId } })
+        body: JSON.stringify(transitionBody)
       })
     }
     return { ok: true }
@@ -1140,6 +1168,15 @@ export async function listAssignableUsers(
   }
 }
 
+function mapTransitions(response: { transitions?: JiraRecord[] }): JiraTransition[] {
+  return (response.transitions ?? []).map((transition) => ({
+    id: asString(transition.id),
+    name: asString(transition.name),
+    to: mapStatus(transition.to),
+    fields: mapTransitionFields(transition.fields)
+  }))
+}
+
 export async function listTransitions(
   key: string,
   siteId?: string | null
@@ -1150,22 +1187,26 @@ export async function listTransitions(
   }
   await acquire()
   try {
-    const response = await jiraRequest<{ transitions?: JiraRecord[] }>(
-      entry,
-      `${apiBasePath(entry.site)}/issue/${encodeURIComponent(key)}/transitions`
-    )
-    return (response.transitions ?? []).map((transition) => ({
-      id: asString(transition.id),
-      name: asString(transition.name),
-      to: mapStatus(transition.to)
-    }))
+    const basePath = `${apiBasePath(entry.site)}/issue/${encodeURIComponent(key)}/transitions`
+    const expandedPath = `${basePath}?expand=${encodeURIComponent('transitions.fields')}`
+    try {
+      return mapTransitions(await jiraRequest<{ transitions?: JiraRecord[] }>(entry, expandedPath))
+    } catch (expandError) {
+      // Why: older Jira/permissions may reject expand; degrade to bare IDs.
+      if (isAuthError(expandError)) {
+        clearToken(entry.site.id)
+        throw expandError
+      }
+      console.warn('[jira] listTransitions expand failed, retrying without fields:', expandError)
+      return mapTransitions(await jiraRequest<{ transitions?: JiraRecord[] }>(entry, basePath))
+    }
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.site.id)
       throw error
     }
     console.warn('[jira] listTransitions failed:', error)
-    return []
+    throw error
   } finally {
     release()
   }

@@ -80,6 +80,17 @@ function normalizeIssueUpdate(value: unknown): JiraIssueUpdate | null {
   if (input.transitionId !== undefined && typeof input.transitionId !== 'string') {
     return null
   }
+  if (
+    input.transitionFields !== undefined &&
+    (input.transitionFields === null ||
+      typeof input.transitionFields !== 'object' ||
+      Array.isArray(input.transitionFields))
+  ) {
+    return null
+  }
+  if (input.transitionComment !== undefined && typeof input.transitionComment !== 'string') {
+    return null
+  }
   return input
 }
 

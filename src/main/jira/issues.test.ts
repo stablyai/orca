@@ -380,7 +380,8 @@ describe('Jira issue operations', () => {
         schema: {
           type: 'option',
           custom: 'com.atlassian.jira.plugin.system.customfieldtypes:select',
-          items: undefined
+          items: undefined,
+          system: undefined
         },
         allowedValues: [{ id: 'option-1', value: 'High', name: undefined }]
       }
@@ -781,6 +782,184 @@ describe('Jira issue operations', () => {
       expect.anything(),
       'https://example.atlassian.net/rest/api/3/attachment/content/20002?redirect=false'
     )
+  })
+
+  describe('listTransitions', () => {
+    it('requests expand=transitions.fields and maps required field metadata', async () => {
+      jiraRequestMock.mockResolvedValueOnce({
+        transitions: [
+          {
+            id: '31',
+            name: 'Done',
+            to: {
+              id: '3',
+              name: 'Done',
+              statusCategory: { key: 'done', name: 'Done' }
+            },
+            fields: {
+              resolution: {
+                required: true,
+                name: 'Resolution',
+                schema: { type: 'resolution', system: 'resolution' },
+                allowedValues: [{ id: '10000', name: 'Done' }]
+              },
+              comment: {
+                required: false,
+                name: 'Comment',
+                schema: { type: 'string', system: 'comment' }
+              }
+            }
+          },
+          {
+            id: '11',
+            name: 'In Progress',
+            to: {
+              id: '2',
+              name: 'In Progress',
+              statusCategory: { key: 'indeterminate', name: 'In Progress' }
+            }
+          }
+        ]
+      })
+      const { listTransitions } = await import('./issues')
+
+      await expect(listTransitions('ALP-1', 'site-1')).resolves.toEqual([
+        {
+          id: '31',
+          name: 'Done',
+          to: {
+            id: '3',
+            name: 'Done',
+            categoryKey: 'done',
+            categoryName: 'Done',
+            colorName: undefined
+          },
+          fields: [
+            {
+              key: 'resolution',
+              name: 'Resolution',
+              required: true,
+              schema: {
+                type: 'resolution',
+                system: 'resolution',
+                items: undefined,
+                custom: undefined
+              },
+              allowedValues: [{ id: '10000', name: 'Done', value: undefined }]
+            },
+            {
+              key: 'comment',
+              name: 'Comment',
+              required: false,
+              schema: {
+                type: 'string',
+                system: 'comment',
+                items: undefined,
+                custom: undefined
+              },
+              allowedValues: undefined
+            }
+          ]
+        },
+        {
+          id: '11',
+          name: 'In Progress',
+          to: {
+            id: '2',
+            name: 'In Progress',
+            categoryKey: 'indeterminate',
+            categoryName: 'In Progress',
+            colorName: undefined
+          },
+          fields: undefined
+        }
+      ])
+
+      expect(String(jiraRequestMock.mock.calls[0][1])).toBe(
+        '/rest/api/3/issue/ALP-1/transitions?expand=transitions.fields'
+      )
+    })
+
+    it('degrades to a bare transition list when expand is unavailable', async () => {
+      jiraRequestMock
+        .mockRejectedValueOnce(new Error('expand not supported'))
+        .mockResolvedValueOnce({
+          transitions: [
+            {
+              id: '21',
+              name: 'Close',
+              to: {
+                id: '6',
+                name: 'Closed',
+                statusCategory: { key: 'done', name: 'Done' }
+              }
+            }
+          ]
+        })
+      const { listTransitions } = await import('./issues')
+
+      await expect(listTransitions('ALP-1', 'site-1')).resolves.toMatchObject([
+        { id: '21', name: 'Close', fields: undefined }
+      ])
+      expect(String(jiraRequestMock.mock.calls[1][1])).toBe('/rest/api/3/issue/ALP-1/transitions')
+    })
+
+    it('surfaces listTransitions operational failures to the caller', async () => {
+      jiraRequestMock
+        .mockRejectedValueOnce(new Error('expand failed'))
+        .mockRejectedValueOnce(new Error('Service Unavailable'))
+      const { listTransitions } = await import('./issues')
+
+      await expect(listTransitions('ALP-1', 'site-1')).rejects.toThrow('Service Unavailable')
+    })
+  })
+
+  describe('updateIssue transitions', () => {
+    it('posts transition fields and update.comment when provided', async () => {
+      jiraRequestMock.mockResolvedValue(null)
+      const { updateIssue } = await import('./issues')
+
+      await expect(
+        updateIssue(
+          'ALP-1',
+          {
+            transitionId: '31',
+            transitionFields: { resolution: { id: '10000' } },
+            transitionComment: 'Closing after verification'
+          },
+          'site-1'
+        )
+      ).resolves.toEqual({ ok: true })
+
+      const body = JSON.parse((jiraRequestMock.mock.calls[0][2] as { body: string }).body) as {
+        transition: { id: string }
+        fields: { resolution: { id: string } }
+        update: { comment: { add: { body: unknown } }[] }
+      }
+      expect(body).toMatchObject({
+        transition: { id: '31' },
+        fields: { resolution: { id: '10000' } }
+      })
+      expect(body.update.comment[0].add.body).toMatchObject({
+        type: 'doc',
+        version: 1
+      })
+    })
+
+    it('posts a bare transition id when no fields are supplied', async () => {
+      jiraRequestMock.mockResolvedValue(null)
+      const { updateIssue } = await import('./issues')
+
+      await updateIssue('ALP-1', { transitionId: '11' }, 'site-1')
+
+      expect(jiraRequestMock).toHaveBeenCalledWith(
+        expect.anything(),
+        '/rest/api/3/issue/ALP-1/transitions',
+        expect.objectContaining({
+          body: JSON.stringify({ transition: { id: '11' } })
+        })
+      )
+    })
   })
 
   describe('getProjectStatusOrder', () => {

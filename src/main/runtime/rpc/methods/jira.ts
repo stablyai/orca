@@ -67,7 +67,9 @@ const IssueUpdate = z.object({
     labels: z.array(z.string()).optional(),
     assigneeAccountId: z.union([z.string(), z.null()]).optional(),
     priorityId: z.union([z.string(), z.null()]).optional(),
-    transitionId: OptionalString
+    transitionId: OptionalString,
+    transitionFields: z.record(z.string(), z.unknown()).optional(),
+    transitionComment: OptionalPlainString
   })
 })
 

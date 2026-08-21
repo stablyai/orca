@@ -4,6 +4,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowRight,
+  ChevronDown,
   Clipboard,
   ExternalLink,
   GitBranch,
@@ -42,11 +43,19 @@ import {
 import type {
   JiraComment,
   JiraIssue,
+  JiraIssueUpdate,
   JiraPriority,
   JiraTransition,
   JiraUser
 } from '../../../shared/jira-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
+import {
+  buildResolutionFieldValue,
+  classifyTransitionRequirements,
+  transitionAllowedValueKey,
+  transitionAllowedValueLabel,
+  type JiraTransitionRequirement
+} from '../../../shared/jira-transition-fields'
 import { translate } from '@/i18n/i18n'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 
@@ -116,6 +125,19 @@ export default function JiraIssueWorkspace({
   const [commentsLoading, setCommentsLoading] = useState(false)
   const [commentsError, setCommentsError] = useState<string | null>(null)
   const [transitions, setTransitions] = useState<JiraTransition[]>([])
+  const [transitionsError, setTransitionsError] = useState<string | null>(null)
+  const [transitionsLoading, setTransitionsLoading] = useState(false)
+  const [statusPopoverOpen, setStatusPopoverOpen] = useState(false)
+  const [transitionForm, setTransitionForm] = useState<{
+    transition: JiraTransition
+    requirement: Extract<JiraTransitionRequirement, { kind: 'form' }>
+  } | null>(null)
+  const [unsupportedTransition, setUnsupportedTransition] = useState<{
+    transition: JiraTransition
+    fields: { key: string; name: string }[]
+  } | null>(null)
+  const [resolutionDraft, setResolutionDraft] = useState('')
+  const [transitionCommentDraft, setTransitionCommentDraft] = useState('')
   const [priorities, setPriorities] = useState<JiraPriority[]>([])
   const [users, setUsers] = useState<JiraUser[]>([])
   const [pendingField, setPendingField] = useState<string | null>(null)
@@ -164,6 +186,13 @@ export default function JiraIssueWorkspace({
       setComments([])
       setCommentsError(null)
       setTransitions([])
+      setTransitionsError(null)
+      setTransitionsLoading(false)
+      setStatusPopoverOpen(false)
+      setTransitionForm(null)
+      setUnsupportedTransition(null)
+      setResolutionDraft('')
+      setTransitionCommentDraft('')
       setPriorities([])
       setUsers([])
       setCommentDraft('')
@@ -179,6 +208,14 @@ export default function JiraIssueWorkspace({
     setLabelsDraft(issue.labels.join(', '))
     setComments([])
     setCommentsError(null)
+    setTransitions([])
+    setTransitionsError(null)
+    setTransitionsLoading(true)
+    setStatusPopoverOpen(false)
+    setTransitionForm(null)
+    setUnsupportedTransition(null)
+    setResolutionDraft('')
+    setTransitionCommentDraft('')
     setIssueLoading(true)
 
     void jiraGetIssue(providerSettings, issue.key, issue.siteId)
@@ -200,19 +237,45 @@ export default function JiraIssueWorkspace({
       })
 
     void Promise.all([
-      jiraListTransitions(providerSettings, issue.key, issue.siteId),
       jiraListPriorities(providerSettings, issue.siteId),
       jiraListAssignableUsers(providerSettings, issue.key, undefined, issue.siteId)
     ])
-      .then(([nextTransitions, nextPriorities, nextUsers]) => {
+      .then(([nextPriorities, nextUsers]) => {
         if (requestId !== requestIdRef.current) {
           return
         }
-        setTransitions(nextTransitions)
         setPriorities(nextPriorities)
         setUsers(nextUsers)
       })
       .catch(() => {})
+
+    void jiraListTransitions(providerSettings, issue.key, issue.siteId)
+      .then((nextTransitions) => {
+        if (requestId !== requestIdRef.current) {
+          return
+        }
+        setTransitions(nextTransitions)
+        setTransitionsError(null)
+      })
+      .catch((error) => {
+        if (requestId !== requestIdRef.current) {
+          return
+        }
+        setTransitions([])
+        setTransitionsError(
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.JiraIssueWorkspace.transitionsLoadFailed',
+                'Failed to load status transitions.'
+              )
+        )
+      })
+      .finally(() => {
+        if (requestId === requestIdRef.current) {
+          setTransitionsLoading(false)
+        }
+      })
 
     void loadComments(issue, requestId)
   }, [issue, loadComments, providerSettings])
@@ -235,11 +298,11 @@ export default function JiraIssueWorkspace({
   const mutateIssue = useCallback(
     async (
       field: string,
-      updates: Parameters<typeof jiraUpdateIssue>[2],
+      updates: JiraIssueUpdate,
       optimistic?: Partial<JiraIssue>
-    ): Promise<void> => {
+    ): Promise<boolean> => {
       if (!displayed || pendingField) {
-        return
+        return false
       }
       setPendingField(field)
       const previous = displayed
@@ -253,6 +316,7 @@ export default function JiraIssueWorkspace({
           throw new Error(result.error)
         }
         await refreshIssue()
+        return true
       } catch (error) {
         setFullIssue(previous)
         patchJiraIssue(previous.key, previous, { sourceContext })
@@ -264,12 +328,134 @@ export default function JiraIssueWorkspace({
                 'Failed to update Jira issue.'
               )
         )
+        return false
       } finally {
         setPendingField(null)
       }
     },
     [displayed, patchJiraIssue, pendingField, refreshIssue, providerSettings, siteId, sourceContext]
   )
+
+  const resetTransitionPopover = useCallback((): void => {
+    setTransitionForm(null)
+    setUnsupportedTransition(null)
+    setResolutionDraft('')
+    setTransitionCommentDraft('')
+  }, [])
+
+  const reloadTransitions = useCallback(async (): Promise<void> => {
+    if (!displayed) {
+      return
+    }
+    setTransitionsLoading(true)
+    setTransitionsError(null)
+    try {
+      const nextTransitions = await jiraListTransitions(
+        providerSettings,
+        displayed.key,
+        displayed.siteId
+      )
+      setTransitions(nextTransitions)
+      setTransitionsError(null)
+    } catch (error) {
+      setTransitions([])
+      setTransitionsError(
+        error instanceof Error
+          ? error.message
+          : translate(
+              'auto.components.JiraIssueWorkspace.transitionsLoadFailed',
+              'Failed to load status transitions.'
+            )
+      )
+    } finally {
+      setTransitionsLoading(false)
+    }
+  }, [displayed, providerSettings])
+
+  const applyTransition = useCallback(
+    async (transition: JiraTransition, updates?: Partial<JiraIssueUpdate>): Promise<boolean> => {
+      return mutateIssue(
+        'transition',
+        { transitionId: transition.id, ...updates },
+        { status: transition.to }
+      )
+    },
+    [mutateIssue]
+  )
+
+  const handleSelectTransition = useCallback(
+    (transition: JiraTransition): void => {
+      const requirement = classifyTransitionRequirements(transition)
+      if (requirement.kind === 'none') {
+        void applyTransition(transition).then((ok) => {
+          if (ok) {
+            setStatusPopoverOpen(false)
+            resetTransitionPopover()
+          }
+        })
+        return
+      }
+      if (requirement.kind === 'unsupported') {
+        setTransitionForm(null)
+        setUnsupportedTransition({
+          transition,
+          fields: requirement.fields.map((field) => ({ key: field.key, name: field.name }))
+        })
+        return
+      }
+      setUnsupportedTransition(null)
+      setTransitionForm({ transition, requirement })
+      const firstResolution = requirement.resolution?.allowedValues?.[0]
+      setResolutionDraft(firstResolution ? transitionAllowedValueKey(firstResolution) : '')
+      setTransitionCommentDraft('')
+    },
+    [applyTransition, resetTransitionPopover]
+  )
+
+  const handleSubmitTransitionForm = useCallback(async (): Promise<void> => {
+    if (!transitionForm) {
+      return
+    }
+    const { transition, requirement } = transitionForm
+    const updates: Partial<JiraIssueUpdate> = {}
+    if (requirement.resolution) {
+      const resolutionValue = buildResolutionFieldValue(requirement.resolution, resolutionDraft)
+      if (!resolutionValue) {
+        toast.error(
+          translate(
+            'auto.components.JiraIssueWorkspace.resolutionRequired',
+            'Select a resolution to continue.'
+          )
+        )
+        return
+      }
+      updates.transitionFields = { resolution: resolutionValue }
+    }
+    const comment = transitionCommentDraft.trim()
+    if (requirement.commentRequired && !comment) {
+      toast.error(
+        translate(
+          'auto.components.JiraIssueWorkspace.transitionCommentRequired',
+          'A comment is required for this transition.'
+        )
+      )
+      return
+    }
+    if (comment) {
+      updates.transitionComment = comment
+    }
+    const ok = await applyTransition(transition, updates)
+    if (ok) {
+      setStatusPopoverOpen(false)
+      resetTransitionPopover()
+    }
+  }, [
+    applyTransition,
+    resetTransitionPopover,
+    resolutionDraft,
+    transitionCommentDraft,
+    transitionForm
+  ])
 
   const handleSaveTitle = useCallback(() => {
     if (!displayed) {
@@ -449,42 +635,198 @@ export default function JiraIssueWorkspace({
             </div>
 
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/60 px-4 py-2.5">
-              <Popover>
+              <Popover
+                open={statusPopoverOpen}
+                onOpenChange={(open) => {
+                  setStatusPopoverOpen(open)
+                  if (!open) {
+                    resetTransitionPopover()
+                  }
+                }}
+              >
                 <PopoverTrigger asChild>
                   <button
                     type="button"
-                    disabled={pendingField === 'transition' || transitions.length === 0}
+                    title={transitionsError ?? undefined}
+                    disabled={
+                      pendingField === 'transition' ||
+                      (transitions.length === 0 && !transitionsError && !transitionsLoading)
+                    }
                     className={cn(
                       'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium transition hover:opacity-80 disabled:opacity-50',
-                      jiraStatusClass(displayed.status.categoryKey)
+                      jiraStatusClass(displayed.status.categoryKey),
+                      transitionsError && 'border-destructive/40'
                     )}
                   >
                     {displayed.status.name}
-                    {pendingField === 'transition' ? (
+                    {pendingField === 'transition' || transitionsLoading ? (
                       <LoaderCircle className="size-3 animate-spin" />
-                    ) : null}
+                    ) : (
+                      <ChevronDown className="size-3 opacity-70" />
+                    )}
                   </button>
                 </PopoverTrigger>
                 <PopoverContent
-                  className="popover-scroll-content scrollbar-sleek w-52 p-1"
+                  className={cn(
+                    'popover-scroll-content scrollbar-sleek p-1',
+                    transitionForm || unsupportedTransition || transitionsError ? 'w-72' : 'w-52'
+                  )}
                   align="start"
                 >
-                  {transitions.map((transition) => (
-                    <button
-                      key={transition.id}
-                      type="button"
-                      onClick={() =>
-                        void mutateIssue(
-                          'transition',
-                          { transitionId: transition.id },
-                          { status: transition.to }
-                        )
-                      }
-                      className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-[12px] hover:bg-accent"
-                    >
-                      {transition.name}
-                    </button>
-                  ))}
+                  {transitionsError ? (
+                    <div className="space-y-2 px-2 py-1.5">
+                      <p className="text-[12px] text-destructive">{transitionsError}</p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-7 w-full text-[12px]"
+                        onClick={() => void reloadTransitions()}
+                        disabled={transitionsLoading}
+                      >
+                        {transitionsLoading ? (
+                          <LoaderCircle className="size-3 animate-spin" />
+                        ) : (
+                          <RefreshCw className="size-3" />
+                        )}
+                        {translate('auto.components.JiraIssueWorkspace.retryTransitions', 'Retry')}
+                      </Button>
+                    </div>
+                  ) : unsupportedTransition ? (
+                    <div className="space-y-2 px-2 py-1.5">
+                      <p className="text-[12px] font-medium text-foreground">
+                        {translate(
+                          'auto.components.JiraIssueWorkspace.unsupportedTransitionTitle',
+                          'Complete “{{value0}}” in Jira',
+                          { value0: unsupportedTransition.transition.name }
+                        )}
+                      </p>
+                      <p className="text-[11px] leading-relaxed text-muted-foreground">
+                        {translate(
+                          'auto.components.JiraIssueWorkspace.unsupportedTransitionBody',
+                          'This transition requires fields Orca cannot collect yet: {{value0}}.',
+                          {
+                            value0: unsupportedTransition.fields
+                              .map((field) => field.name)
+                              .join(', ')
+                          }
+                        )}
+                      </p>
+                      <div className="flex gap-1.5">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 flex-1 text-[12px]"
+                          onClick={() => setUnsupportedTransition(null)}
+                        >
+                          {translate('auto.components.JiraIssueWorkspace.back', 'Back')}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-7 flex-1 gap-1 text-[12px]"
+                          onClick={() => window.api.shell.openUrl(displayed.url)}
+                        >
+                          <ExternalLink className="size-3" />
+                          {translate(
+                            'auto.components.JiraIssueWorkspace.69da9a208c',
+                            'Open in Jira'
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : transitionForm ? (
+                    <div className="space-y-2 px-2 py-1.5">
+                      <p className="text-[12px] font-medium text-foreground">
+                        {transitionForm.transition.name}
+                      </p>
+                      {transitionForm.requirement.resolution ? (
+                        <label className="block space-y-1">
+                          <span className="text-[11px] text-muted-foreground">
+                            {transitionForm.requirement.resolution.name}
+                          </span>
+                          <select
+                            value={resolutionDraft}
+                            onChange={(event) => setResolutionDraft(event.target.value)}
+                            className="h-8 w-full rounded-md border border-input bg-transparent px-2 text-[12px] outline-none focus-visible:border-ring"
+                          >
+                            {(transitionForm.requirement.resolution.allowedValues ?? []).map(
+                              (value) => {
+                                const optionValue = transitionAllowedValueKey(value)
+                                return (
+                                  <option key={optionValue} value={optionValue}>
+                                    {transitionAllowedValueLabel(value)}
+                                  </option>
+                                )
+                              }
+                            )}
+                          </select>
+                        </label>
+                      ) : null}
+                      {transitionForm.requirement.commentRequired ? (
+                        <label className="block space-y-1">
+                          <span className="text-[11px] text-muted-foreground">
+                            {translate(
+                              'auto.components.JiraIssueWorkspace.transitionComment',
+                              'Comment'
+                            )}
+                          </span>
+                          <textarea
+                            value={transitionCommentDraft}
+                            onChange={(event) => setTransitionCommentDraft(event.target.value)}
+                            rows={3}
+                            className="w-full resize-none rounded-md border border-input bg-transparent px-2 py-1.5 text-[12px] outline-none focus-visible:border-ring"
+                          />
+                        </label>
+                      ) : null}
+                      <div className="flex gap-1.5 pt-0.5">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 flex-1 text-[12px]"
+                          onClick={() => resetTransitionPopover()}
+                          disabled={pendingField === 'transition'}
+                        >
+                          {translate('auto.components.JiraIssueWorkspace.back', 'Back')}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-7 flex-1 text-[12px]"
+                          onClick={() => void handleSubmitTransitionForm()}
+                          disabled={pendingField === 'transition'}
+                        >
+                          {pendingField === 'transition' ? (
+                            <LoaderCircle className="size-3 animate-spin" />
+                          ) : null}
+                          {translate(
+                            'auto.components.JiraIssueWorkspace.applyTransition',
+                            'Transition'
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : transitions.length === 0 ? (
+                    <p className="px-2 py-1.5 text-[12px] text-muted-foreground">
+                      {translate(
+                        'auto.components.JiraIssueWorkspace.noTransitions',
+                        'No transitions available.'
+                      )}
+                    </p>
+                  ) : (
+                    transitions.map((transition) => (
+                      <button
+                        key={transition.id}
+                        type="button"
+                        onClick={() => handleSelectTransition(transition)}
+                        className="flex w-full items-center rounded-sm px-2 py-1.5 text-left text-[12px] hover:bg-accent"
+                      >
+                        {transition.name}
+                      </button>
+                    ))
+                  )}
                 </PopoverContent>
               </Popover>
 

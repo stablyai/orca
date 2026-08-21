@@ -62,6 +62,7 @@ export type JiraCreateField = {
     type?: string
     items?: string
     custom?: string
+    system?: string
   }
   allowedValues?: JiraCreateFieldAllowedValue[]
 }
@@ -95,6 +96,8 @@ export type JiraTransition = {
   id: string
   name: string
   to: JiraStatus
+  /** Present when listTransitions requested expand=transitions.fields. */
+  fields?: JiraCreateField[]
 }
 
 export type JiraIssue = {
@@ -130,6 +133,10 @@ export type JiraIssueUpdate = {
   assigneeAccountId?: string | null
   priorityId?: string | null
   transitionId?: string
+  /** Values for transition-required fields (e.g. resolution: { id }). */
+  transitionFields?: Record<string, unknown>
+  /** Comment attached to the transition via update.comment. */
+  transitionComment?: string
 }
 
 export type JiraIssueFilter = 'assigned' | 'reported' | 'all' | 'done'
