@@ -70,7 +70,7 @@ function toTaskItem(item: MobileLinkedWorkItem, targetRepoId: string): Workspace
     }
   }
   if (item.provider === 'clickup') {
-    const taskId = item.clickUpTaskId?.trim()
+    const taskId = item.clickupIdentifier?.trim()
     if (!taskId) {
       throw new Error('The ClickUp workspace source is missing its task ID.')
     }
@@ -80,7 +80,7 @@ function toTaskItem(item: MobileLinkedWorkItem, targetRepoId: string): Workspace
         taskId,
         title: item.title,
         url: item.url,
-        ...(item.clickUpWorkspaceId ? { workspaceId: item.clickUpWorkspaceId } : {})
+        ...(item.clickupWorkspaceId ? { workspaceId: item.clickupWorkspaceId } : {})
       }
     }
   }

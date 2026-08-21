@@ -1,22 +1,22 @@
-const CLICKUP_TASK_ID_PATTERN = /^[A-Za-z0-9_-]+$/
+import { parseClickUpTaskInput } from '../shared/clickup-task-url'
 
+/**
+ * Normalize a CLI task argument to the identifier ClickUp routes on.
+ *
+ * Delegates to the shared URL parser so the CLI, the composer, and worktree
+ * linking agree on what a task reference is — notably that
+ * `/t/<workspaceId>/<ABC-12>` names the custom id, not the Workspace.
+ */
 export function parseClickUpTaskReference(value: string): string | null {
   const input = value.trim()
-  try {
-    const url = new URL(input)
-    if (
-      url.protocol !== 'https:' ||
-      url.hostname !== 'app.clickup.com' ||
-      url.port ||
-      url.username ||
-      url.password
-    ) {
-      return null
-    }
-    const match = /^\/t\/([^/]+)(?:\/.*)?$/.exec(url.pathname)
-    const taskId = match?.[1] ? decodeURIComponent(match[1]) : ''
-    return CLICKUP_TASK_ID_PATTERN.test(taskId) ? taskId : null
-  } catch {
-    return CLICKUP_TASK_ID_PATTERN.test(input) ? input : null
+  if (!input) {
+    return null
   }
+  const parsed = parseClickUpTaskInput(input)
+  if (parsed) {
+    return parsed.taskId
+  }
+  // A bare native task id never reaches the URL parser, which only accepts
+  // URLs and custom ids.
+  return /^[0-9a-z]{6,24}$/.test(input) ? input : null
 }

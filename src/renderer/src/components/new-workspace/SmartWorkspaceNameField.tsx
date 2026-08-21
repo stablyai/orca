@@ -77,6 +77,7 @@ import { isSmartWorkspaceSourceQueryWithinLimit } from '../../../../shared/new-w
 import { filterAvailableTaskProviders } from '../../../../shared/task-providers'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
+import type { ClickUpTask } from '../../../../shared/clickup-types'
 import type { JiraIssue, JiraSite } from '../../../../shared/jira-types'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { BaseRefSearchResult } from '../../../../shared/repo-types'
@@ -132,6 +133,7 @@ type SmartWorkspaceNameFieldProps = {
   onBranchSelect: (refName: string, localBranchName: string) => void
   onLinearIssueSelect: (issue: LinearIssue) => void
   onJiraIssueSelect?: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
+  onClickUpTaskSelect?: (task: ClickUpTask, sourceContext: TaskSourceContext) => void
   onOpenJiraSettings?: () => void
   selectedSource: SmartWorkspaceNameSelection | null
   onClearSelectedSource: () => void
@@ -250,6 +252,7 @@ export default function SmartWorkspaceNameField({
   onBranchSelect,
   onLinearIssueSelect,
   onJiraIssueSelect,
+  onClickUpTaskSelect,
   onOpenJiraSettings,
   selectedSource,
   onClearSelectedSource,
@@ -412,6 +415,7 @@ export default function SmartWorkspaceNameField({
   } | null>(null)
   const [linearIssues, setLinearIssues] = useState<LinearIssue[]>([])
   const [jiraIssues, setJiraIssues] = useState<JiraIssue[]>([])
+  const [clickUpTasks, setClickUpTasks] = useState<ClickUpTask[]>([])
   const [githubLoading, setGithubLoading] = useState(false)
   const [gitlabLoading, setGitlabLoading] = useState(false)
   const [branchesLoading, setBranchesLoading] = useState(false)
@@ -421,6 +425,7 @@ export default function SmartWorkspaceNameField({
   )
   const [settledLinearUrlQuery, setSettledLinearUrlQuery] = useState<string | null>(null)
   const [jiraLoading, setJiraLoading] = useState(false)
+  const [clickUpLoading, setClickUpLoading] = useState(false)
   const [commandValue, setCommandValue] = useState('')
   const [emojiCommandValue, setEmojiCommandValue] = useState('')
   const [emojiCursor, setEmojiCursor] = useState<number | null>(null)
@@ -471,10 +476,9 @@ export default function SmartWorkspaceNameField({
     () =>
       filterAvailableTaskProviders(['github', 'gitlab', 'linear', 'clickup'], {
         gitlabInstalled: gitlabSourceAvailable,
-        linearConnected: linearStatus.connected === true,
-        clickUpConnected: clickUpStatus.connected === true
+        linearConnected: linearStatus.connected === true
       }),
-    [clickUpStatus.connected, gitlabSourceAvailable, linearStatus.connected]
+    [gitlabSourceAvailable, linearStatus.connected]
   )
   const linearAvailable = availableTaskProviders.includes('linear')
   const clickUpAvailable = availableTaskProviders.includes('clickup')
@@ -720,6 +724,12 @@ export default function SmartWorkspaceNameField({
     jiraSourceConnected &&
     jiraSourceContext !== null &&
     jiraSearchJql !== null
+  const shouldQueryClickUp =
+    !disabled &&
+    !textOnly &&
+    sourceQueryWithinLimit &&
+    clickUpAvailable &&
+    (mode === 'smart' || mode === 'clickup')
 
   useEffect(() => {
     if (disabled || !shouldQueryGithub) {
@@ -1346,6 +1356,12 @@ export default function SmartWorkspaceNameField({
         value,
         debouncedQuery
       }),
+      clickUpAvailable,
+      clickUpTasks: getVisibleHeldProviderResults({
+        items: clickUpTasks,
+        value,
+        debouncedQuery
+      }),
       gitlabAvailable: gitlabSourceAvailable,
       gitlabItems: getVisibleHeldProviderResults({
         items: gitlabItems,
@@ -1376,6 +1392,8 @@ export default function SmartWorkspaceNameField({
   }, [
     branches,
     branchResultsSource,
+    clickUpAvailable,
+    clickUpTasks,
     debouncedQuery,
     githubItems,
     gitlabSourceAvailable,
@@ -1494,7 +1512,12 @@ export default function SmartWorkspaceNameField({
     linearLoading && (!linearUrlIntentOwnsInput || showLinearUrlLoadingFeedback)
   const loading = jiraSource.intent
     ? jiraSource.loading
-    : githubLoading || gitlabLoading || branchesLoading || visibleLinearLoading || jiraLoading
+    : githubLoading ||
+      gitlabLoading ||
+      branchesLoading ||
+      visibleLinearLoading ||
+      jiraLoading ||
+      clickUpLoading
   const reserveLinearLoadingResults = unresolvedLinearUrlIntent && searchResultRows.length === 0
   // Why: only spin on first load — not on every in-flight refresh while rows stay visible.
   const showSearchSpinner = loading && searchResultRows.length === 0
@@ -1542,10 +1565,20 @@ export default function SmartWorkspaceNameField({
           return
         }
         onJiraIssueSelect?.(row.issue, sourceContext)
+      } else if (row.kind === 'clickup') {
+        if (!clickUpSourceContext) {
+          // Why: closing without accept left users thinking the task was linked.
+          toast.error(
+            translate(
+              'auto.components.new.workspace.SmartWorkspaceNameField.clickUpSelectBindFailed',
+              'Couldn’t link this ClickUp task. Reconnect ClickUp, then try again.'
+            )
+          )
+          return
+        }
+        onClickUpTaskSelect?.(row.task, clickUpSourceContext)
       } else {
         onLinearIssueSelect(row.issue)
-      } else {
-        onClickUpTaskSelect?.(row.task)
       }
       setOpen(false)
     },
@@ -1556,6 +1589,8 @@ export default function SmartWorkspaceNameField({
       onBranchSelect,
       onGitHubItemSelect,
       onGitLabItemSelect,
+      clickUpSourceContext,
+      onClickUpTaskSelect,
       onJiraIssueSelect,
       onLinearIssueSelect,
       onValueChange,
@@ -2489,6 +2524,16 @@ function RowLabel({
       <span className="min-w-0 truncate">
         <span className="font-medium text-foreground">{row.site.displayName}</span>
         {row.site.email ? ` — ${row.site.email}` : ''}
+      </span>
+    )
+  }
+  if (row.kind === 'clickup') {
+    return (
+      <span className="min-w-0 truncate">
+        <span className="font-medium text-foreground">
+          {row.task.customId ?? row.task.id}
+        </span>{' '}
+        {row.task.name}
       </span>
     )
   }

@@ -1,4 +1,4 @@
-import type { ClickUpTask } from '../../../../shared/types'
+import type { ClickUpTask } from '../../../../shared/clickup-types'
 import type { CacheEntry } from './github'
 
 // Why: an explicit marker keeps the local runtime scope distinct from every task-source scope.

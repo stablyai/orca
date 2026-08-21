@@ -42,7 +42,6 @@ import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { OrcaHooks, SetupAgentStartupPolicy } from '../../../shared/orca-yaml-hook-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { SparsePreset } from '../../../shared/worktree/create-types'
-import { filterEnabledTuiAgents } from '../../../shared/tui-agent-selection'
 import type { ClickUpTask } from '../../../shared/clickup-types'
 import SparseCheckoutPresetSelect from '@/components/sparse/SparseCheckoutPresetSelect'
 import SmartWorkspaceNameField, {
@@ -119,7 +118,7 @@ type NewWorkspaceComposerCardProps = {
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   onSmartJiraIssueSelect?: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
   onOpenJiraSettings?: () => void
-  onSmartClickUpTaskSelect?: (task: ClickUpTask) => void
+  onSmartClickUpTaskSelect?: (task: ClickUpTask, sourceContext: TaskSourceContext) => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void
   /** True when an existing local branch is selected and can be reused. */

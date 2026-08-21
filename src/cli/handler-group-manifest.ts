@@ -237,6 +237,24 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/linear.js')).LINEAR_HANDLERS
   },
   {
+    name: 'clickup',
+    keys: [
+      'clickup workspace list',
+      'clickup destination list',
+      'clickup list',
+      'clickup search',
+      'clickup task',
+      'clickup status set',
+      'clickup priority set',
+      'clickup priority clear',
+      'clickup due-date set',
+      'clickup due-date clear',
+      'clickup comment add',
+      'clickup create'
+    ],
+    load: async () => (await import('./handlers/clickup.js')).CLICKUP_HANDLERS
+  },
+  {
     name: 'vm',
     keys: ['vm recipe doctor'],
     load: async () => (await import('./handlers/vm.js')).VM_HANDLERS

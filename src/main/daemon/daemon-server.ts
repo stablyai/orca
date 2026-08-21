@@ -1257,11 +1257,6 @@ export class DaemonServer {
           appliedSeq: this.host.closeStartupQueryAuthority(request.payload.sessionId)
         }
 
-      case 'closeStartupQueryAuthority':
-        return {
-          appliedSeq: this.host.closeStartupQueryAuthority(request.payload.sessionId)
-        }
-
       case 'write':
         try {
           this.lastInputAtBySessionId.set(request.payload.sessionId, performance.now())

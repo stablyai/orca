@@ -164,24 +164,33 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   const draftContent = await getDirectWorkItemDraftContent(item, repoConnectionId)
   let startupPlanFailed = false
   try {
-    const result = await store.createWorktree({
+    const result = await store.createWorktree(
       repoId,
-      name: workspaceName,
-      baseBranch: resolvedBaseBranch,
-      setupDecision: finalSetupDecision,
+      workspaceName,
+      resolvedBaseBranch,
+      finalSetupDecision,
+      undefined,
       telemetrySource,
-      displayName: workspaceIntentName?.displayName ?? item.title,
-      linkedIssue: itemType === 'issue' && itemNumber ? itemNumber : undefined,
-      linkedPR: itemType === 'pr' && itemNumber ? itemNumber : undefined,
-      pushTarget: resolvedPushTarget,
-      linkedLinearIssue: item.linearIdentifier,
-      branchNameOverride: resolvedBranchNameOverride,
-      linkedGitLabMR: itemType === 'mr' && itemNumber ? itemNumber : undefined,
-      linkedGitLabIssue: gitLabIssueNumber({ ...item, type: itemType, number: itemNumber }),
-      linkedLinearIssueWorkspaceId: item.linearWorkspaceId,
-      linkedLinearIssueOrganizationUrlKey: item.linearOrganizationUrlKey,
-      compareBaseRef: resolvedCompareBaseRef
-    })
+      workspaceIntentName?.displayName ?? item.title,
+      itemType === 'issue' && itemNumber ? itemNumber : undefined,
+      itemType === 'pr' && itemNumber ? itemNumber : undefined,
+      resolvedPushTarget,
+      undefined,
+      item.linearIdentifier,
+      resolvedBranchNameOverride,
+      undefined,
+      itemType === 'mr' && itemNumber ? itemNumber : undefined,
+      gitLabIssueNumber({ ...item, type: itemType, number: itemNumber }),
+      undefined,
+      undefined,
+      undefined,
+      item.linearWorkspaceId,
+      item.linearOrganizationUrlKey,
+      undefined,
+      undefined,
+      undefined,
+      resolvedCompareBaseRef
+    )
     worktreeId = result.worktree.id
     const worktreePath = result.worktree.path
 

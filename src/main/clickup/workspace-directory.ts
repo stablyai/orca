@@ -1,9 +1,4 @@
-import type {
-  ClickUpList,
-  ClickUpTag,
-  ClickUpUser,
-  ClickUpWorkspaceSelection
-} from '../../shared/types'
+import type { ClickUpList, ClickUpTag, ClickUpUser, ClickUpWorkspaceSelection } from '../../shared/clickup-types'
 import {
   clickUpRequest,
   requireClickUpClient,

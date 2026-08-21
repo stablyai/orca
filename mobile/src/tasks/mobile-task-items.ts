@@ -1,4 +1,4 @@
-import type { ClickUpTask } from '../../../src/shared/types'
+import type { ClickUpTask } from '../../../src/shared/clickup-types'
 import type { LinearMobileIssue } from './linear-mobile-issue-read'
 
 export type GitHubAssignableUser = {

@@ -138,8 +138,8 @@ export function buildTaskWorkspaceCreateParams(args: {
             number: 0,
             title: item.source.title,
             url: item.source.url,
-            clickUpTaskId: item.source.taskId,
-            clickUpWorkspaceId: item.source.workspaceId
+            clickupIdentifier: item.source.taskId,
+            clickupWorkspaceId: item.source.workspaceId
           })
         : getWorkspaceSourceName({ provider: item.provider, ...item.source })
   const displayName = nameIsAutoManaged

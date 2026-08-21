@@ -1,4 +1,4 @@
-import type { ClickUpTask, ClickUpTaskFilter } from '../../../shared/types'
+import type { ClickUpTask, ClickUpTaskFilter } from '../../../shared/clickup-types'
 import { translate } from '@/i18n/i18n'
 
 export function getClickUpFilters(): { value: ClickUpTaskFilter; label: string }[] {

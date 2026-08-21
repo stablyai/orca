@@ -30,8 +30,11 @@ export function parseClickUpTaskUrl(value: string): ParsedClickUpTaskUrl | null 
   } catch {
     return null
   }
+  // Why: ClickUp is https-only, so accepting http would let a downgraded link
+  // resolve to a task reference the CLI and composer then treat as trusted.
   if (
-    (url.protocol !== 'http:' && url.protocol !== 'https:') ||
+    url.protocol !== 'https:' ||
+    url.port.length > 0 ||
     url.username.length > 0 ||
     url.password.length > 0 ||
     !isClickUpHost(url.hostname)
@@ -53,18 +56,20 @@ export function parseClickUpTaskUrl(value: string): ParsedClickUpTaskUrl | null 
       : null
   }
   if (segments.length === 3) {
-    const workspaceId = segments[1]
-    const taskId = segments[2]
-    // Why: the two-segment form always leads with the numeric workspace id, so
-    // anything else is a different ClickUp route (a view, a doc) and not a task.
-    if (!/^\d+$/.test(workspaceId)) {
-      return null
+    const [, first, second] = segments
+    // The custom-id route leads with the numeric Workspace id: /t/<team>/<ABC-12>.
+    if (/^\d+$/.test(first)) {
+      if (CLICKUP_CUSTOM_TASK_ID_PATTERN.test(second)) {
+        return { taskId: second.toUpperCase(), isCustomId: true, workspaceId: first, origin }
+      }
+      return CLICKUP_TASK_ID_PATTERN.test(second)
+        ? { taskId: second, isCustomId: false, workspaceId: first, origin }
+        : null
     }
-    if (CLICKUP_CUSTOM_TASK_ID_PATTERN.test(taskId)) {
-      return { taskId: taskId.toUpperCase(), isCustomId: true, workspaceId, origin }
-    }
-    return CLICKUP_TASK_ID_PATTERN.test(taskId)
-      ? { taskId, isCustomId: false, workspaceId, origin }
+    // Why: ClickUp also appends a human-readable slug to a native task URL
+    // (/t/<taskId>/<slug>); the id still leads, so the slug is ignored.
+    return CLICKUP_TASK_ID_PATTERN.test(first)
+      ? { taskId: first, isCustomId: false, workspaceId: null, origin }
       : null
   }
   return null

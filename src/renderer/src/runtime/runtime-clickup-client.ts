@@ -1,20 +1,5 @@
-import type {
-  ClickUpComment,
-  ClickUpCommentResult,
-  ClickUpConnectionStatus,
-  ClickUpCreateTaskArgs,
-  ClickUpCreateTaskResult,
-  ClickUpList,
-  ClickUpMutationResult,
-  ClickUpTag,
-  ClickUpTask,
-  ClickUpTaskFilter,
-  ClickUpTaskUpdate,
-  ClickUpUser,
-  ClickUpViewer,
-  ClickUpWorkspaceSelection,
-  GlobalSettings
-} from '../../../shared/types'
+import type { ClickUpComment, ClickUpCommentResult, ClickUpConnectionStatus, ClickUpCreateTaskArgs, ClickUpCreateTaskResult, ClickUpList, ClickUpMutationResult, ClickUpTag, ClickUpTask, ClickUpTaskFilter, ClickUpTaskUpdate, ClickUpUser, ClickUpViewer, ClickUpWorkspaceSelection } from '../../../shared/clickup-types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { callRuntimeRpc, getActiveRuntimeTarget } from './runtime-rpc-client'
 import {
   getTaskSourceRuntimeSettings,

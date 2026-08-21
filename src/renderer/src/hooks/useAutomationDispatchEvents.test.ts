@@ -249,7 +249,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     await registerAndDispatch()
 
     expect(mockCreateWorktree).toHaveBeenCalled()
-    expect(mockCreateWorktree.mock.calls[0][0]).toMatchObject({ setupDecision: 'run' })
+    expect(mockCreateWorktree.mock.calls[0][3]).toBe('run')
     expect(mockLaunchWorktreeBackgroundTerminals).toHaveBeenCalledWith({
       worktreeId: 'wt-created',
       setup: setupLaunch,
@@ -310,7 +310,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
   it('defaults legacy automations without a setup choice to skipping setup', async () => {
     await registerAndDispatch(makeAutomation({ setupDecision: undefined }))
 
-    expect(mockCreateWorktree.mock.calls[0][0]).toMatchObject({ setupDecision: 'skip' })
+    expect(mockCreateWorktree.mock.calls[0][3]).toBe('skip')
     expect(mockLaunchAgentBackgroundSession).toHaveBeenCalled()
   })
 

@@ -257,13 +257,11 @@ describe('runBackgroundWorktreeCreation', () => {
       provisionId: 'creation-1',
       setupExistingFolder: store.setupProjectExistingFolder
     })
-    const createOptions = store.createWorktree.mock.calls[0] as unknown as [unknown]
-    expect(createOptions[0]).toMatchObject({
-      repoId: 'repo-runtime',
-      name: 'feature',
-      baseBranch: undefined,
-      creationId: 'creation-1'
-    })
+    const createCall = store.createWorktree.mock.calls[0] as unknown[]
+    expect(createCall[0]).toBe('repo-runtime')
+    expect(createCall[1]).toBe('feature')
+    expect(createCall[2]).toBeUndefined()
+    expect(createCall).toContain('creation-1')
     expect(window.api.ephemeralVm.attachWorkspace).toHaveBeenCalledWith({
       runtimeId: 'runtime-1',
       workspaceId: 'repo-runtime::/workspace/repo/worktree'
@@ -310,12 +308,10 @@ describe('runBackgroundWorktreeCreation', () => {
     )
 
     await vi.waitFor(() => expect(store.createWorktree).toHaveBeenCalled())
-    const createOptions = store.createWorktree.mock.calls[0] as unknown as [unknown]
-    expect(createOptions[0]).toMatchObject({
-      repoId: 'repo-runtime',
-      baseBranch: 'abc123',
-      compareBaseRef: 'refs/remotes/origin/main'
-    })
+    const createCall = store.createWorktree.mock.calls[0] as unknown[]
+    expect(createCall[0]).toBe('repo-runtime')
+    expect(createCall[2]).toBe('abc123')
+    expect(createCall[24]).toBe('refs/remotes/origin/main')
   })
 
   it('appends stderr provisioning events for the active VM recipe create', async () => {
@@ -441,13 +437,12 @@ describe('staged background worktree creation', () => {
     )
     await Promise.resolve()
     expect(store.createWorktree).toHaveBeenCalledTimes(1)
-    const createOptions = store.createWorktree.mock.calls[0] as unknown as [unknown]
-    expect(createOptions[0]).toMatchObject({
-      repoId: 'repo-1',
-      name: 'feature',
-      setupDecision: 'run',
-      creationId: 'creation-1'
-    })
+    const createCall = store.createWorktree.mock.calls[0] as unknown[] | undefined
+    expect(createCall).toBeDefined()
+    expect(createCall?.[0]).toBe('repo-1')
+    expect(createCall?.[1]).toBe('feature')
+    expect(createCall?.[3]).toBe('run')
+    expect(createCall?.[18]).toBe('creation-1')
     expect(store.setActivePendingWorktreeCreation).toHaveBeenCalledWith('creation-1')
     expect(store.setActiveView).toHaveBeenCalledWith('terminal')
     expect(store.setSidebarOpen).toHaveBeenCalledWith(true)

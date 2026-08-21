@@ -14,7 +14,9 @@ export type ClickUpWorkspace = {
   memberCount?: number
 }
 
-export type ClickUpWorkspaceSelection = string | 'all'
+// Why: `string & {}` keeps 'all' visible in autocomplete instead of widening
+// the whole union to string, matching JiraSiteSelection.
+export type ClickUpWorkspaceSelection = (string & {}) | 'all'
 
 export type ClickUpConnectionStatus = {
   connected: boolean

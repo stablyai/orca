@@ -145,8 +145,8 @@ describe('createWorkspaceFromComposerSource', () => {
         number: 0,
         title: 'CU-42 Ship mobile parity',
         url: 'https://app.clickup.com/t/86abc123',
-        clickUpTaskId: '86abc123',
-        clickUpWorkspaceId: 'team-1'
+        clickupIdentifier: '86abc123',
+        clickupWorkspaceId: 'team-1'
       }
     }
     await createWorkspaceFromComposerSource({ client, selection, ...baseArgs })

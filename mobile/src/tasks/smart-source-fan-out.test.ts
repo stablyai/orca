@@ -32,7 +32,7 @@ const smartArgs = {
   clickUpAvailable: true,
   mrStateFilter: 'opened' as const,
   linearWorkspaceId: null,
-  clickUpWorkspaceId: null
+  clickupWorkspaceId: null
 }
 
 describe('fanOutSmartSearch', () => {

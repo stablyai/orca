@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowRight, ExternalLink, Loader2, MessageSquare } from 'lucide-react'
-import type { ClickUpComment, ClickUpList, ClickUpTask } from '../../../shared/types'
+import type { ClickUpComment, ClickUpList, ClickUpTask } from '../../../shared/clickup-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import {
   clickUpAddTaskComment,
@@ -24,7 +24,6 @@ import {
   Sheet,
   SheetContent,
   SheetDescription,
-  SheetFooter,
   SheetHeader,
   SheetTitle
 } from '@/components/ui/sheet'
@@ -298,7 +297,13 @@ export function ClickUpTaskDetailSheet({
                   {comments.map((item) => (
                     <div key={item.id} className="rounded-md border border-border p-3">
                       <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                        <span>{item.user?.username ?? 'ClickUp user'}</span>
+                        <span>
+                          {item.user?.username ??
+                            translate(
+                              'auto.components.ClickUpTaskDetailSheet.unknownCommentAuthor',
+                              'ClickUp user'
+                            )}
+                        </span>
                         <span>{new Date(item.createdAt).toLocaleString()}</span>
                       </div>
                       <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">
@@ -310,7 +315,7 @@ export function ClickUpTaskDetailSheet({
               </section>
               {error ? <p className="text-xs text-destructive">{error}</p> : null}
             </div>
-            <SheetFooter className="flex-row justify-between border-t border-border">
+            <div className="flex flex-row items-center justify-between gap-2 border-t border-border p-4">
               <Button variant="outline" onClick={() => void window.api.shell.openUrl(task.url)}>
                 <ExternalLink />
                 {translate('auto.components.clickup.detail.open', 'Open in ClickUp')}
@@ -325,7 +330,7 @@ export function ClickUpTaskDetailSheet({
                   {translate('auto.components.clickup.detail.save', 'Save')}
                 </Button>
               </div>
-            </SheetFooter>
+            </div>
           </>
         ) : null}
       </SheetContent>

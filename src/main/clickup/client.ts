@@ -1,11 +1,6 @@
 import { net, session } from 'electron'
 import { ensureElectronProxyFromEnvironment } from '../network/proxy-settings'
-import type {
-  ClickUpConnectionStatus,
-  ClickUpViewer,
-  ClickUpWorkspace,
-  ClickUpWorkspaceSelection
-} from '../../shared/types'
+import type { ClickUpConnectionStatus, ClickUpViewer, ClickUpWorkspace, ClickUpWorkspaceSelection } from '../../shared/clickup-types'
 import {
   deleteStoredClickUpConnection,
   getClickUpCredentialError,

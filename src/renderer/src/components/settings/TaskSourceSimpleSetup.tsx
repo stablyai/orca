@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ClickUpConnectDialog } from '@/components/clickup-connect-dialog'
+import { ClickUpApiTokenDialog } from '@/components/clickup-api-token-dialog'
 import { JiraConnectDialog } from '@/components/jira-connect-dialog'
 import { Button } from '@/components/ui/button'
 import { TaskSourceShowInTasksStep } from './TaskSourceShowInTasksStep'
@@ -165,7 +165,7 @@ export function ClickUpSetupSteps(
           onToggleVisible={props.onToggleVisible}
         />
       </ol>
-      <ClickUpConnectDialog
+      <ClickUpApiTokenDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onConnected={props.onConnected}

@@ -27,9 +27,9 @@ export function useTaskSourceProviderReadiness(
   const jiraStatus = useAppStore((s) => s.jiraStatus)
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
-  const clickupStatus = useAppStore((s) => s.clickupStatus)
-  const clickupStatusChecked = useAppStore((s) => s.clickupStatusChecked)
-  const clickupStatusContextKey = useAppStore((s) => s.clickupStatusContextKey)
+  const clickUpStatus = useAppStore((s) => s.clickUpStatus)
+  const clickUpStatusChecked = useAppStore((s) => s.clickUpStatusChecked)
+  const clickUpStatusContextKey = useAppStore((s) => s.clickUpStatusContextKey)
   const linearConnected = useLinearProviderConnected()
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
@@ -62,8 +62,8 @@ export function useTaskSourceProviderReadiness(
   const jiraChecking = jiraStatusContextKey !== providerRuntimeContextKey || !jiraStatusChecked
   const jiraConnected = !jiraChecking && jiraStatus.connected === true
   const clickupChecking =
-    clickupStatusContextKey !== providerRuntimeContextKey || !clickupStatusChecked
-  const clickupConnected = !clickupChecking && clickupStatus.connected === true
+    clickUpStatusContextKey !== providerRuntimeContextKey || !clickUpStatusChecked
+  const clickupConnected = !clickupChecking && clickUpStatus.connected === true
   const linearChecking =
     linearStatusContextKey !== providerRuntimeContextKey || !linearStatusChecked
   // Normalization returns a new array, so memoize by provider contents.

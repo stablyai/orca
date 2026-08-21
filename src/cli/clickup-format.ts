@@ -1,5 +1,4 @@
-import type { ClickUpConnectionStatus, ClickUpList, ClickUpTask } from '../shared/types'
-
+import type { ClickUpConnectionStatus, ClickUpList, ClickUpTask } from '../shared/clickup-types'
 function taskReference(task: ClickUpTask): string {
   return task.customId ?? task.id
 }

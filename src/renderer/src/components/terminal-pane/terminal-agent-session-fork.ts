@@ -237,15 +237,19 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
   const forkName = buildForkWorkspaceName(sourceWorktree.displayName || sourceBranch)
   let created: Awaited<ReturnType<typeof store.createWorktree>>
   try {
-    created = await store.createWorktree({
-      repoId: sourceWorktree.repoId,
-      name: forkName,
-      baseBranch: sourceBranch,
-      setupDecision: 'inherit',
-      telemetrySource: 'terminal_context_menu',
-      displayName: `Fork of ${sourceWorktree.displayName || forkName}`,
-      createdWithAgent: fork.agent ?? undefined
-    })
+    created = await store.createWorktree(
+      sourceWorktree.repoId,
+      forkName,
+      sourceBranch,
+      'inherit',
+      undefined,
+      'terminal_context_menu',
+      `Fork of ${sourceWorktree.displayName || forkName}`,
+      undefined,
+      undefined,
+      undefined,
+      fork.agent ?? undefined
+    )
   } catch (error) {
     toast.error(
       error instanceof Error

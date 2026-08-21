@@ -43,7 +43,7 @@ export type UseSmartWorkspaceSourceArgs = {
   clickUpAvailable: boolean
   mrStateFilter: MrStateFilter
   linearWorkspaceId?: string | null
-  clickUpWorkspaceId?: string | null
+  clickupWorkspaceId?: string | null
   repos: readonly PasteRepoCandidate[]
 }
 
@@ -72,7 +72,7 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
     clickUpAvailable,
     mrStateFilter,
     linearWorkspaceId,
-    clickUpWorkspaceId,
+    clickupWorkspaceId,
     repos
   } = args
   const [fan, setFan] = useState<SmartFanOutResult>(EMPTY_FAN)
@@ -117,7 +117,7 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
         clickUpAvailable,
         mrStateFilter,
         linearWorkspaceId,
-        clickUpWorkspaceId,
+        clickupWorkspaceId,
         repos,
         dismissedPasteRef,
         repoSlugCache: repoSlugCacheRef.current
@@ -153,7 +153,7 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
     clickUpAvailable,
     mrStateFilter,
     linearWorkspaceId,
-    clickUpWorkspaceId,
+    clickupWorkspaceId,
     repos
   ])
 
@@ -202,7 +202,7 @@ async function runSmartSearch(args: {
   clickUpAvailable: boolean
   mrStateFilter: MrStateFilter
   linearWorkspaceId: string | null | undefined
-  clickUpWorkspaceId: string | null | undefined
+  clickupWorkspaceId: string | null | undefined
   repos: readonly PasteRepoCandidate[]
   dismissedPasteRef: { current: string }
   repoSlugCache: Map<string, { owner: string; repo: string; host?: string } | null>

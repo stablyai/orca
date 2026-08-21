@@ -3,6 +3,7 @@ import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { LinearWorkflowState } from '../../../../shared/linear/workspace-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
 import type { LinearMutationResult } from '@/runtime/runtime-linear-client'
+import type { ClickUpMutationResult, ClickUpTask } from '../../../../shared/clickup-types'
 import {
   getWorkspaceBoardTaskStatusSyncRequest,
   syncWorkspaceBoardTaskStatuses

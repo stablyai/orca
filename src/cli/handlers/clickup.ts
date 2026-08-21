@@ -1,11 +1,4 @@
-import type {
-  ClickUpConnectionStatus,
-  ClickUpCreateTaskResult,
-  ClickUpList,
-  ClickUpMutationResult,
-  ClickUpTask,
-  ClickUpTaskFilter
-} from '../../shared/types'
+import type { ClickUpConnectionStatus, ClickUpCreateTaskResult, ClickUpList, ClickUpMutationResult, ClickUpTask, ClickUpTaskFilter } from '../../shared/clickup-types'
 import type { RuntimeWorktreeRecord } from '../../shared/runtime-types'
 import { parseClickUpTaskReference } from '../clickup-task-reference'
 import type { CommandHandler } from '../dispatch'

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import type { ClickUpTask, ClickUpViewer } from '../../../../shared/types'
+import type { ClickUpTask, ClickUpViewer } from '../../../../shared/clickup-types'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext

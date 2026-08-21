@@ -292,6 +292,12 @@ import type {
   JiraIssueUpdate,
   JiraSiteSelection
 } from '../../shared/jira-types'
+import type {
+  ClickUpCreateTaskArgs,
+  ClickUpTaskFilter,
+  ClickUpTaskUpdate,
+  ClickUpWorkspaceSelection
+} from '../../shared/clickup-types'
 import type { LinearCustomViewModel, LinearProjectSummary } from '../../shared/linear/project-types'
 import type { LinearWorkspaceSelection } from '../../shared/linear/workspace-types'
 import type {

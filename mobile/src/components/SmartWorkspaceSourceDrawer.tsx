@@ -44,7 +44,7 @@ type Props = {
   repoId: string | null
   repos: readonly PasteRepoCandidate[]
   linearWorkspaceId?: string | null
-  clickUpWorkspaceId?: string | null
+  clickupWorkspaceId?: string | null
   sshReady: boolean
   onRepoChange: (repoId: string) => void
   onClose: () => void
@@ -58,7 +58,7 @@ export function SmartWorkspaceSourceDrawer({
   repoId,
   repos,
   linearWorkspaceId,
-  clickUpWorkspaceId,
+  clickupWorkspaceId,
   sshReady,
   onRepoChange,
   onClose
@@ -127,7 +127,7 @@ export function SmartWorkspaceSourceDrawer({
     clickUpAvailable: availability.clickUpAvailable,
     mrStateFilter,
     linearWorkspaceId,
-    clickUpWorkspaceId,
+    clickupWorkspaceId,
     repos
   })
 

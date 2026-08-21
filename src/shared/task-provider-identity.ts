@@ -32,8 +32,10 @@ export type JiraTaskProviderIdentity = {
 export type ClickUpTaskProviderIdentity = {
   provider: 'clickup'
   workspaceId?: string | null
+  workspaceName?: string | null
   spaceId?: string | null
   listId?: string | null
+  listName?: string | null
 }
 
 export type TaskProviderIdentity =
@@ -91,8 +93,10 @@ export function normalizeTaskProviderIdentity(
       return {
         provider,
         workspaceId: normalizeNonEmptyString(raw.workspaceId),
+        workspaceName: normalizeNonEmptyString(raw.workspaceName),
         spaceId: normalizeNonEmptyString(raw.spaceId),
-        listId: normalizeNonEmptyString(raw.listId)
+        listId: normalizeNonEmptyString(raw.listId),
+        listName: normalizeNonEmptyString(raw.listName)
       }
   }
 }
@@ -128,7 +132,7 @@ export function isStoredTaskProviderIdentity(provider: TaskProvider, identity: u
     case 'jira':
       return ['siteId', 'siteUrl', 'projectKey'].every((key) => isNullableOptionalString(raw[key]))
     case 'clickup':
-      return ['workspaceId', 'spaceId', 'listId'].every((key) =>
+      return ['workspaceId', 'workspaceName', 'spaceId', 'listId', 'listName'].every((key) =>
         isNullableOptionalString(raw[key])
       )
   }
@@ -139,7 +143,7 @@ const TASK_PROVIDER_IDENTITY_FIELDS: Record<TaskProvider, readonly string[]> = {
   gitlab: ['projectId', 'namespace', 'project', 'webUrl'],
   linear: ['workspaceId', 'workspaceName', 'teamId', 'teamKey'],
   jira: ['siteId', 'siteUrl', 'projectKey'],
-  clickup: ['workspaceId', 'spaceId', 'listId']
+  clickup: ['workspaceId', 'workspaceName', 'spaceId', 'listId', 'listName']
 }
 
 export function areTaskProviderIdentitiesEqual(

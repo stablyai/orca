@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Loader2 } from 'lucide-react'
-import type { ClickUpList, ClickUpTask, ClickUpWorkspaceSelection } from '../../../shared/types'
+import type { ClickUpList, ClickUpTask, ClickUpWorkspaceSelection } from '../../../shared/clickup-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { clickUpCreateTask, clickUpListLists } from '@/runtime/runtime-clickup-client'
 import { Button } from '@/components/ui/button'

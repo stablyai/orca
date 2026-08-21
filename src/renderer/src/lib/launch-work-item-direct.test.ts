@@ -307,16 +307,15 @@ describe('launchWorkItemDirect', () => {
 
     expect(mocks.resolvePrBase).not.toHaveBeenCalled()
     expect(openModalFallback).not.toHaveBeenCalled()
-    expect(mocks.createWorktree.mock.calls[0]?.[0]).toMatchObject({
-      name: 'issue-6933',
-      baseBranch: undefined,
-      displayName: 'Issue 6933',
-      linkedIssue: 6933,
-      linkedPR: undefined,
-      pushTarget: undefined,
-      branchNameOverride: undefined,
-      compareBaseRef: undefined
-    })
+    const createArgs = mocks.createWorktree.mock.calls[0]
+    expect(createArgs?.[1]).toBe('issue-6933')
+    expect(createArgs?.[2]).toBeUndefined()
+    expect(createArgs?.[6]).toBe('Issue 6933')
+    expect(createArgs?.[7]).toBe(6933)
+    expect(createArgs?.[8]).toBeUndefined()
+    expect(createArgs?.[9]).toBeUndefined()
+    expect(createArgs?.[12]).toBeUndefined()
+    expect(createArgs?.[24]).toBeUndefined()
   })
 
   it('uses the Linear identifier in direct-launch workspace names', async () => {
@@ -336,24 +335,33 @@ describe('launchWorkItemDirect', () => {
       }
     })
 
-    expect(mocks.createWorktree).toHaveBeenCalledWith({
-      repoId: 'repo-1',
-      name: 'eng-42-ship-linear-parity',
-      baseBranch: undefined,
-      setupDecision: 'inherit',
-      telemetrySource: 'sidebar',
-      displayName: 'Ship Linear parity',
-      linkedIssue: undefined,
-      linkedPR: undefined,
-      pushTarget: undefined,
-      linkedLinearIssue: 'ENG-42',
-      branchNameOverride: undefined,
-      linkedGitLabMR: undefined,
-      linkedGitLabIssue: undefined,
-      linkedLinearIssueWorkspaceId: undefined,
-      linkedLinearIssueOrganizationUrlKey: undefined,
-      compareBaseRef: undefined
-    })
+    expect(mocks.createWorktree).toHaveBeenCalledWith(
+      'repo-1',
+      'eng-42-ship-linear-parity',
+      undefined,
+      'inherit',
+      undefined,
+      'sidebar',
+      'Ship Linear parity',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      'ENG-42',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined
+    )
   })
 
   it('prefills a link-only Linear reference without source context', async () => {

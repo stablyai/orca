@@ -147,7 +147,11 @@ export function ClickUpIntegrationCard(): React.JSX.Element {
             <div className={rowClass}>
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-foreground">
-                  {status.viewer?.username ?? 'ClickUp'}
+                  {status.viewer?.username ??
+                    translate(
+                      'auto.components.settings.clickup.integration.card.unknownAccount',
+                      'ClickUp'
+                    )}
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
                   {workspaces.map((workspace) => workspace.name).join(' · ')}

@@ -1,4 +1,4 @@
-import type { ClickUpComment, ClickUpCommentResult } from '../../shared/types'
+import type { ClickUpComment, ClickUpCommentResult } from '../../shared/clickup-types'
 import { clickUpRequest, requireClickUpClient } from './client'
 import {
   asRecord,

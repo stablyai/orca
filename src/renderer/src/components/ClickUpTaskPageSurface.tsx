@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ArrowRight, ExternalLink, Loader2, Plus, RefreshCw, Search, X } from 'lucide-react'
-import type {
-  ClickUpTask,
-  ClickUpTaskFilter,
-  ClickUpWorkspaceSelection
-} from '../../../shared/types'
+import type { ClickUpTask, ClickUpTaskFilter, ClickUpWorkspaceSelection } from '../../../shared/clickup-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { getLinkedWorkItemSuggestedName } from '../../../shared/workspace-name'
@@ -131,8 +127,8 @@ export function ClickUpTaskPageSurface({
         number: 0,
         title: `${clickUpTaskReference(task)} ${task.name}`,
         url: task.url,
-        clickUpTaskId: task.id,
-        clickUpWorkspaceId: task.workspaceId,
+        clickupIdentifier: task.id,
+        clickupWorkspaceId: task.workspaceId,
         linkedContext: {
           provider: 'clickup',
           version: 1,

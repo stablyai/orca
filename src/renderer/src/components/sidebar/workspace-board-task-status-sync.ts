@@ -12,7 +12,6 @@ import type {
   WorkspaceStatusDefinition,
   Worktree
 } from '../../../../shared/worktree/types'
-import { getWorkspaceStatus } from '../../../../shared/workspace-statuses'
 import type { RuntimeClickUpSettings } from '@/runtime/runtime-clickup-client'
 import {
   DEFAULT_WORKSPACE_BOARD_CLICKUP_STATUS_SYNC_DEPS,

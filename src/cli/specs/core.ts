@@ -155,8 +155,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     ],
     notes: [
       'Workspace status ids match the board columns (defaults: todo, in-progress, in-review, completed); custom statuses use their configured id.',
-      'Pass --linear-issue null to clear the Linear issue link.',
-      'Pass --clickup-task null to clear the ClickUp task link.'
+      'Pass --linear-issue null or --clickup-task null to clear that task link.'
     ],
     examples: [
       'orca worktree set --worktree active --linear-issue STA-335 --json',

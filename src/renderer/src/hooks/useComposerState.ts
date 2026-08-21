@@ -3938,31 +3938,29 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
       }
       const result = await createWorktree(
         repoId,
-        name: workspaceName,
-        baseBranch: selectedRepoIsGit ? submitBaseBranch : undefined,
-        setupDecision: effectiveSetupDecision,
-        sparseCheckout:
-          selectedRepoIsGit && sparseEnabled
-            ? {
-                directories: normalizedSparseDirectories,
-                ...(effectivePresetId ? { presetId: effectivePresetId } : {})
-              }
-            : undefined,
+        workspaceName,
+        selectedRepoIsGit ? submitBaseBranch : undefined,
+        effectiveSetupDecision,
+        selectedRepoIsGit && sparseEnabled
+          ? {
+              directories: normalizedSparseDirectories,
+              ...(effectivePresetId ? { presetId: effectivePresetId } : {})
+            }
+          : undefined,
         telemetrySource,
-        displayName: createDisplayName,
-        linkedIssue: submitLinkedIssueNumber ?? undefined,
-        linkedPR: submitLinkedPR ?? undefined,
-        pushTarget: submitPushTarget,
-        createdWithAgent: tuiAgent,
+        createDisplayName,
+        submitLinkedIssueNumber ?? undefined,
+        submitLinkedPR ?? undefined,
+        submitPushTarget,
+        tuiAgent,
         linkedLinearIssue,
-        branchNameOverride: effectiveBranchNameOverride,
-        workspaceStatus: resolvedInitialWorkspaceStatus,
-        linkedGitLabMR:
-          smartGitHubResolution.kind === 'none' ? (linkedGitLabMR ?? undefined) : undefined,
-        linkedGitLabIssue:
-          smartGitHubResolution.kind === 'none' ? (linkedGitLabIssue ?? undefined) : undefined,
-        startup: backendStartup,
+        effectiveBranchNameOverride,
+        resolvedInitialWorkspaceStatus,
+        smartGitHubResolution.kind === 'none' ? (linkedGitLabMR ?? undefined) : undefined,
+        smartGitHubResolution.kind === 'none' ? (linkedGitLabIssue ?? undefined) : undefined,
+        backendStartup,
         pendingFirstAgentMessageRename,
+        undefined,
         linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey,
         undefined,
@@ -3973,6 +3971,8 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
           linkedWorkItem: toFolderWorkspaceLinkedTask(submitLinkedWorkItem),
           linkedTaskSourceContext: taskSourceContext,
           nameWasGenerated,
+          ...(linkedClickUpTaskId ? { linkedClickUpTaskId } : {}),
+          ...(linkedClickUpWorkspaceId !== undefined ? { linkedClickUpWorkspaceId } : {}),
           ...(!backendStartup && startupPlan?.draftPrompt
             ? { startupDraft: startupPlan.draftPrompt }
             : {})
