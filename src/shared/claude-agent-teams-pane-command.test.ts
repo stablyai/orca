@@ -31,8 +31,12 @@ describe('retargetClaudeAgentTeamsPaneCommand', () => {
     expect(supportsClaudeAgentTeamsPaneCommand('posix')).toBe(true)
   })
 
+  it('keeps the holding pane blocking instead of prompting for a Get-Content path', () => {
+    expect(retargetClaudeAgentTeamsPaneCommand('cat', 'powershell')).toBe('Wait-Event')
+  })
+
   it('handles a bare command with neither prefix', () => {
-    expect(retargetClaudeAgentTeamsPaneCommand('cat', 'powershell')).toBe("& 'cat'")
+    expect(retargetClaudeAgentTeamsPaneCommand('sleep 1', 'powershell')).toBe("& 'sleep' '1'")
   })
 
   it('keeps the cd prefix optional', () => {
