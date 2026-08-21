@@ -13,3 +13,5 @@ export { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
 export { decodeCodexTranscriptLine } from './transcript-line-decoders-codex'
 export { decodeGrokTranscriptLine } from './transcript-line-decoders-grok'
 export { decodeOmpTranscriptLine } from './transcript-line-decoders-omp'
+export { decodeAntigravityTranscriptLine } from './transcript-line-decoders-antigravity'
+

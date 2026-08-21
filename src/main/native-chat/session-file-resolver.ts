@@ -57,6 +57,10 @@ function ompSessionsDir(): string {
   )
 }
 
+function antigravityBrainDir(): string {
+  return join(homedir(), '.gemini', 'antigravity-cli', 'brain')
+}
+
 export type ResolveSessionFileOptions = {
   /** Override the Claude projects root (used by tests / isolated scans). */
   claudeProjectsDir?: string
@@ -67,6 +71,8 @@ export type ResolveSessionFileOptions = {
   grokSessionsDir?: string
   /** Override the omp sessions root (`~/.omp/agent/sessions`). */
   ompSessionsDir?: string
+  /** Override the Antigravity brain root (`~/.gemini/antigravity-cli/brain`). */
+  antigravityBrainDir?: string
   /** Authoritative transcript path reported by the agent hook
    *  (`providerSession.transcriptPath`). When set and the file exists, it is used
    *  directly — recent Claude Code names the transcript with a UUID that differs
@@ -157,6 +163,13 @@ async function resolveSessionFileById(
   }
   if (transcriptAgent === 'omp') {
     return resolveOmpSessionFile(trimmedId, options.ompSessionsDir ?? ompSessionsDir(), signal)
+  }
+  if (transcriptAgent === 'antigravity') {
+    return resolveAntigravitySessionFile(
+      trimmedId,
+      options.antigravityBrainDir ?? antigravityBrainDir(),
+      signal
+    )
   }
   // Why: a new transcript agent must pick its own resolver. Falling through to
   // OMP's scan would search the wrong root with a foreign session id, so fail
@@ -287,4 +300,15 @@ async function resolveOmpSessionFile(
     signal
   })
   return files[0] ?? null
+}
+
+async function resolveAntigravitySessionFile(
+  sessionId: string,
+  brainDir: string,
+  signal?: AbortSignal
+): Promise<string | null> {
+  const directPath = join(brainDir, sessionId, '.system_generated', 'logs', 'transcript.jsonl')
+  signal?.throwIfAborted()
+  const readable = await toHostReadableTranscriptPath(directPath, { signal })
+  return readable ?? null
 }
