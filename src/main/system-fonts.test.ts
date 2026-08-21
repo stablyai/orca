@@ -9,6 +9,14 @@ vi.mock('child_process', () => ({
   execFile: execFileMock
 }))
 
+const WIN32_FALLBACK_FONTS = [
+  'Cascadia Mono',
+  'Consolas',
+  'Lucida Console',
+  'JetBrains Mono',
+  'Fira Code'
+]
+
 function expectedFallbackFont(platform = process.platform): string {
   if (platform === 'darwin') {
     return 'SF Mono'
@@ -32,9 +40,26 @@ async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>):
   }
 }
 
+function mockSpawnSuccess(...lines: string[]): void {
+  execFileMock.mockImplementation(
+    (_command, _args, _options, callback: (error: Error | null, stdout: string) => void) => {
+      callback(null, `${lines.join('\n')}\n`)
+    }
+  )
+}
+
+function mockSpawnError(error: Error): void {
+  execFileMock.mockImplementation(
+    (_command, _args, _options, callback: (error: Error | null, stdout?: string) => void) => {
+      callback(error)
+    }
+  )
+}
+
 async function expectFontCommandTimeout(
   platform: NodeJS.Platform,
-  timeoutMs: number
+  timeoutMs: number,
+  expectedKills: number
 ): Promise<void> {
   await withPlatform(platform, async () => {
     vi.useFakeTimers()
@@ -50,12 +75,12 @@ async function expectFontCommandTimeout(
     await vi.advanceTimersByTimeAsync(timeoutMs - 1)
 
     expect(resolvedFonts).toBeNull()
-    expect(killMock).not.toHaveBeenCalled()
+    expect(killMock).toHaveBeenCalledTimes(expectedKills - 1)
 
     await vi.advanceTimersByTimeAsync(1)
 
     await expect(fontsPromise).resolves.toContain(expectedFallbackFont(platform))
-    expect(killMock).toHaveBeenCalledOnce()
+    expect(killMock).toHaveBeenCalledTimes(expectedKills)
   })
 }
 
@@ -97,21 +122,104 @@ describe('listSystemFontFamilies', () => {
       resolvedFonts = fonts
     })
 
-    await vi.advanceTimersByTimeAsync(60_000)
+    // Windows retries a second PowerShell candidate, so its chain needs 30s;
+    // 60s covers every host platform.
+    const totalTimeout = process.platform === 'win32' ? 30_000 : 60_000
+    await vi.advanceTimersByTimeAsync(totalTimeout)
 
     expect(resolvedFonts).not.toBeNull()
     expect(resolvedFonts).toContain(expectedFallbackFont())
-    expect(killMock).toHaveBeenCalledOnce()
+    expect(killMock).toHaveBeenCalledTimes(process.platform === 'win32' ? 2 : 1)
   })
 
   it('uses the longer timeout for macOS profiler scans', async () => {
-    await expectFontCommandTimeout('darwin', 45_000)
+    await expectFontCommandTimeout('darwin', 45_000, 1)
   })
 
   it.each([
-    ['linux' as NodeJS.Platform, 15_000],
-    ['win32' as NodeJS.Platform, 15_000]
-  ])('keeps the %s font command timeout short', async (platform, timeoutMs) => {
-    await expectFontCommandTimeout(platform, timeoutMs)
+    ['linux' as NodeJS.Platform, 15_000, 1],
+    ['win32' as NodeJS.Platform, 30_000, 2]
+  ])(
+    'falls back when the %s font command times out',
+    async (platform, timeoutMs, expectedKills) => {
+      await expectFontCommandTimeout(platform, timeoutMs, expectedKills)
+    }
+  )
+
+  describe('on Windows', () => {
+    it('tries pwsh.exe first and stops once it succeeds', async () => {
+      await withPlatform('win32', async () => {
+        mockSpawnSuccess('Cascadia Mono', 'Consolas')
+
+        const { listSystemFontFamilies } = await import('./system-fonts')
+        const fonts = await listSystemFontFamilies()
+
+        expect(execFileMock).toHaveBeenCalledTimes(1)
+        expect(execFileMock.mock.calls[0][0]).toBe('pwsh.exe')
+        expect(fonts).toEqual(['Cascadia Mono', 'Consolas'])
+      })
+    })
+
+    it('falls back to the absolute Windows PowerShell path when pwsh is unavailable', async () => {
+      await withPlatform('win32', async () => {
+        const originalWindir = process.env.WINDIR
+        process.env.WINDIR = 'C:\\Windows'
+        try {
+          execFileMock.mockImplementation(
+            (
+              command,
+              _args,
+              _options,
+              callback: (error: Error | null, stdout?: string) => void
+            ) => {
+              if (command === 'pwsh.exe') {
+                callback(new Error('spawn pwsh.exe ENOENT'))
+                return
+              }
+              callback(null, 'Cascadia Mono\nConsolas\n')
+            }
+          )
+
+          const { listSystemFontFamilies } = await import('./system-fonts')
+          const fonts = await listSystemFontFamilies()
+
+          expect(execFileMock).toHaveBeenCalledTimes(2)
+          expect(execFileMock.mock.calls[0][0]).toBe('pwsh.exe')
+          expect(execFileMock.mock.calls[1][0]).toBe(
+            'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+          )
+          expect(fonts).toEqual(['Cascadia Mono', 'Consolas'])
+        } finally {
+          if (originalWindir === undefined) {
+            delete process.env.WINDIR
+          } else {
+            process.env.WINDIR = originalWindir
+          }
+        }
+      })
+    })
+
+    it('falls back to hardcoded fonts and logs the real error when every candidate fails', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        await withPlatform('win32', async () => {
+          const spawnError = new Error('spawn UNKNOWN (errno -4094)')
+          mockSpawnError(spawnError)
+
+          const { listSystemFontFamilies } = await import('./system-fonts')
+          const fonts = await listSystemFontFamilies()
+
+          expect(execFileMock).toHaveBeenCalledTimes(2)
+          expect(fonts).toEqual(WIN32_FALLBACK_FONTS)
+          expect(warnSpy).toHaveBeenCalledTimes(1)
+          expect(warnSpy).toHaveBeenCalledWith(
+            '[system-fonts] failed to enumerate Windows fonts, using fallback:',
+            spawnError
+          )
+        })
+      } finally {
+        warnSpy.mockRestore()
+      }
+    })
   })
 })

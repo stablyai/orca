@@ -76,6 +76,33 @@ function listLinuxFonts(): Promise<string[]> {
   )
 }
 
+// Why: the machine PATH resolves powershell.exe to the 5.1 launcher that Group
+// Policy can block. Prefer pwsh (PowerShell 7), then the absolute 5.1 path so
+// PATH resolution never decides the outcome (GH-11771).
+function windowsPowerShellCandidates(): string[] {
+  const windir = process.env.WINDIR ?? 'C:\\Windows'
+  return ['pwsh.exe', `${windir}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`]
+}
+
+// Why: a blocked or missing first candidate must not fail the whole lookup;
+// try each command in order and surface only the last error once all failed.
+async function execFileTextFirst(
+  commands: string[],
+  args: string[],
+  maxBuffer: number,
+  timeoutMs = SYSTEM_FONT_LIST_TIMEOUT_MS
+): Promise<string> {
+  let lastError: unknown
+  for (const command of commands) {
+    try {
+      return await execFileText(command, args, maxBuffer, timeoutMs)
+    } catch (error) {
+      lastError = error
+    }
+  }
+  throw lastError
+}
+
 function listWindowsFonts(): Promise<string[]> {
   // Why: PowerShell 5.1 emits redirected stdout in the OEM code page; pin UTF-8
   // before the first name is written or localized families arrive as mojibake (#12590).
@@ -86,18 +113,25 @@ $fonts = New-Object System.Drawing.Text.InstalledFontCollection
 $fonts.Families | ForEach-Object { $_.Name }
 `
 
-  return execFileText(
-    'powershell.exe',
+  return execFileTextFirst(
+    windowsPowerShellCandidates(),
     ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
     8 * 1024 * 1024
-  ).then((output) =>
-    uniqueSorted(
-      output
-        .split('\n')
-        .map((name) => name.trim())
-        .filter(Boolean)
-    )
   )
+    .then((output) =>
+      uniqueSorted(
+        output
+          .split('\n')
+          .map((name) => name.trim())
+          .filter(Boolean)
+      )
+    )
+    .catch((error: unknown) => {
+      // Why: a GP-blocked PowerShell used to degrade to 5 hardcoded fonts with
+      // no trace; surface the real spawn error so managed hosts are diagnosable.
+      console.warn('[system-fonts] failed to enumerate Windows fonts, using fallback:', error)
+      throw error
+    })
 }
 
 function execFileText(
