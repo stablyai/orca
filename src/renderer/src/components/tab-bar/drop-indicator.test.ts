@@ -10,7 +10,7 @@ describe('getDropIndicatorClasses', () => {
   it('returns left pseudo-element classes for "left" indicator', () => {
     const classes = getDropIndicatorClasses('left')
     expect(classes).toContain('before:left-0')
-    expect(classes).toContain('before:bg-blue-500')
+    expect(classes).toContain('before:bg-[var(--ai-action-accent)]')
     expect(classes).toContain('before:w-[2px]')
     expect(classes).toContain('before:absolute')
     expect(classes).toContain('before:inset-y-0')
@@ -20,7 +20,7 @@ describe('getDropIndicatorClasses', () => {
   it('returns right pseudo-element classes for "right" indicator', () => {
     const classes = getDropIndicatorClasses('right')
     expect(classes).toContain('after:right-0')
-    expect(classes).toContain('after:bg-blue-500')
+    expect(classes).toContain('after:bg-[var(--ai-action-accent)]')
     expect(classes).toContain('after:w-[2px]')
     expect(classes).toContain('after:absolute')
     expect(classes).toContain('after:inset-y-0')
@@ -43,13 +43,11 @@ describe('getDropIndicatorClasses', () => {
 })
 
 describe('ACTIVE_TAB_INDICATOR_CLASSES', () => {
-  it('renders a neutral 2px bottom-edge marker without shifting layout', () => {
+  it('renders a Ch2 cyan 2px bottom-edge marker without shifting layout', () => {
     expect(ACTIVE_TAB_INDICATOR_CLASSES).toContain('absolute')
     expect(ACTIVE_TAB_INDICATOR_CLASSES).toContain('bottom-0')
     expect(ACTIVE_TAB_INDICATOR_CLASSES).toContain('h-[2px]')
-    expect(ACTIVE_TAB_INDICATOR_CLASSES).toContain(
-      'bg-[color-mix(in_srgb,var(--foreground)_60%,var(--card))]'
-    )
+    expect(ACTIVE_TAB_INDICATOR_CLASSES).toContain('bg-[var(--ai-action-accent)]')
     expect(ACTIVE_TAB_INDICATOR_CLASSES).toContain('pointer-events-none')
     expect(ACTIVE_TAB_INDICATOR_CLASSES).not.toContain('-top-px')
     expect(ACTIVE_TAB_INDICATOR_CLASSES).not.toContain('bg-[#1e3d9c]')
