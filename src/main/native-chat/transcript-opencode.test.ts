@@ -473,6 +473,11 @@ describe('subscribeOpenCodeNativeChatTranscript (live)', () => {
         { timeout: 3_000, interval: 20 }
       )
       expect(windowReads).toBe(3)
+      const retried = frames.at(-1)!
+      const completedTool = retried
+        .find((message) => message.id === 'msg-2')!
+        .blocks.find((block) => block.type === 'tool-result')
+      expect(completedTool).toMatchObject({ type: 'tool-result', output: 'file list' })
     } finally {
       subscription.unsubscribe()
     }
