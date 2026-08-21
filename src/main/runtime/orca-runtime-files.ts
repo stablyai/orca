@@ -36,13 +36,17 @@ import {
 } from '../../shared/remote-rpc-content-budget'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { sortDirEntries } from '../../shared/file-name-sort'
-import { PREVIEWABLE_BINARY_MIME_TYPES, MAX_PREVIEWABLE_BINARY_BYTES } from '../../shared/previewable-binary-mime-types'
+import {
+  PREVIEWABLE_BINARY_MIME_TYPES,
+  MAX_PREVIEWABLE_BINARY_BYTES
+} from '../../shared/previewable-binary-mime-types'
 
 // Why: runtime host exposes the same whitelist as local IPC and the SSH relay
 // so a remote worktree preview of a .docx does not silently fall back to
 // "Binary file — cannot display". Re-exported for callers that already import
 // the runtime const; new code should import from the shared module directly.
 export const RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES = PREVIEWABLE_BINARY_MIME_TYPES
+
 import type {
   RuntimeFileListResult,
   RuntimeFileOpenResult,

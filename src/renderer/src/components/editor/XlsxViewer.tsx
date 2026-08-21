@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-// Why: pnpm overrides pulls xlsx from the SheetJS CDN tarball (>= 0.20.3) to avoid
+// Why: pnpm overrides pins xlsx to the SheetJS CDN tarball at 0.20.3 to avoid
 // CVE-2023-30533 / CVE-2024-22363 in the 0.18.5 npm release, which npm-registry
 // `^0.18.5` cannot reach.
 import * as XLSX from 'xlsx'
@@ -50,10 +50,13 @@ function tableHasRows(html: string): boolean {
   return /<tr[\s>]/i.test(html)
 }
 
-// Why: SheetJS's `sheet_to_html` already runs `escapehtml` on cell text and
-// emits a fixed tag set; running the result through DOMPurify v3 strips the
-// <table> element itself, so we inject the HTML directly. xlsx payloads reach
-// the renderer through an explicit preview request and aren't hostile HTML.
+// Why: SheetJS's `sheet_to_html` already runs `escapehtml` on cell text, so
+// the rendered HTML has no <script>/<iframe>/on*= attributes and no raw
+// markup in cells. Skipping a second sanitisation pass avoids the DOMPurify
+// v3 default profile (which strips <table>), and we accept the trust
+// boundary: .xlsx must come from a trusted source (the editor's file-read
+// path), same as how the markdown editor trusts its inputs. If a future
+// SheetJS escape regression lands, add a stripper here.
 function buildSheetHtml(ws: XLSX.WorkSheet): string {
   const raw = XLSX.utils.sheet_to_html(ws, { header: '', footer: '' })
   const colgroup = colgroupHtml(ws)
@@ -116,6 +119,14 @@ export function XlsxViewer({ filePath, fileName, content }: XlsxViewerProps): Re
           'auto.components.editor.XlsxViewer.q7c1e3f5b9',
           'Unable to parse this .xlsx file — it may be corrupt or encrypted.'
         )}
+      </div>
+    )
+  }
+
+  if (status.kind === 'ready' && status.sheets.length === 0) {
+    return (
+      <div className={styles.officePreview}>
+        {translate('auto.components.editor.XlsxViewer.e1a5c7d9f3', 'Empty sheet')}
       </div>
     )
   }

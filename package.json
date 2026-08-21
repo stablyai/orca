@@ -158,7 +158,6 @@
     "ssh2": "^1.17.0",
     "tweetnacl": "^1.0.3",
     "ws": "^8.21.0",
-    "xlsx": "^0.18.5",
     "yaml": "^2.8.4",
     "zod": "~4.4.3"
   },
@@ -290,7 +289,7 @@
   "pnpm": {
     "overrides": {
       "monaco-editor>dompurify": "3.4.13",
-      "xlsx": "https://cdn.sheetjs.com/xlsx-latest/xlsx-latest.tgz"
+      "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
     },
     "supportedArchitectures": {
       "os": [
