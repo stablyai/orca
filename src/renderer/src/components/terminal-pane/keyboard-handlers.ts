@@ -21,7 +21,8 @@ import { createTerminalImeDeferredChordSender } from './terminal-ime-deferred-ch
 import { hasPendingTerminalImeComposition } from './terminal-ime-composition-route'
 import {
   requestCapturedTerminalReconfirmation,
-  sendCapturedTerminalInput
+  sendCapturedTerminalInput,
+  type TerminalCapturedInputBinding
 } from './terminal-captured-input-dispatch'
 import {
   keybindingMatchesAction,
@@ -457,7 +458,7 @@ export function useTerminalKeyboardShortcuts({
       const capturedTransport = paneTransportsRef.current.get(pane.id)
       const capturedPtyId = capturedTransport?.getPtyId() ?? null
       const capturedBinding = panePtyBindingsRef.current.get(pane.id) as
-        | (IDisposable & { requestWindowsShiftEnterReconfirmation?: () => void })
+        | (IDisposable & TerminalCapturedInputBinding)
         | undefined
       const getCurrentManager = () => managerRef.current
       const getCurrentTransport = () => paneTransportsRef.current.get(pane.id)
@@ -473,7 +474,12 @@ export function useTerminalKeyboardShortcuts({
           currentTransport: getCurrentTransport(),
           capturedTransport,
           capturedPtyId,
-          data: overrideData
+          data: overrideData,
+          onAccepted: () => {
+            if (getCurrentBinding() === capturedBinding) {
+              capturedBinding?.markShortcutTerminalInputSent?.()
+            }
+          }
         })
         if (sent) {
           recordTerminalUserInputForLeaf(tabId, pane.leafId)
