@@ -35,7 +35,11 @@ test('routes same-id browser and simulator Cmd-J rows to their owning paired hos
       window.localStorage.setItem('orca.browser.markup-draw-hint-seen', 'true')
     })
     const drawHintDismiss = page.getByRole('button', { name: 'Got it', exact: true })
-    if (await drawHintDismiss.isVisible()) {
+    const drawHintVisible = await expect(drawHintDismiss)
+      .toBeVisible({ timeout: 2_000 })
+      .then(() => true)
+      .catch(() => false)
+    if (drawHintVisible) {
       await drawHintDismiss.click()
     }
     const remoteHostId = `runtime:${encodeURIComponent(client.environmentId)}`
