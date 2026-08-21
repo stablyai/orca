@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+// Why: pnpm overrides pulls xlsx from the SheetJS CDN tarball (>= 0.20.3) to avoid
+// CVE-2023-30533 / CVE-2024-22363 in the 0.18.5 npm release, which npm-registry
+// `^0.18.5` cannot reach.
 import * as XLSX from 'xlsx'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import { readRuntimeFilePreview } from '@/runtime/runtime-file-client'
