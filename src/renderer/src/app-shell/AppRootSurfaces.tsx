@@ -7,9 +7,6 @@ import { CrashReportDialog } from '../components/crash-report/CrashReportDialog'
 import { MarkdownTemplatePicker } from '../components/editor/MarkdownTemplatePicker'
 import RecentTabSwitcher from '../components/tab-bar/RecentTabSwitcher'
 import { SkillFreshnessUpdateDialog } from '../components/skills/SkillFreshnessUpdateDialog'
-import { StarNagCard } from '../components/StarNagCard'
-import { StarNagAgentValueMomentObserver } from '../components/star-nag/StarNagAgentValueMomentObserver'
-import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { TelemetryFirstLaunchSurface } from '../components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from '../components/ZoomOverlay'
 import { shouldRenderPetOverlay } from '../components/pet/pet-overlay-visibility'
@@ -273,13 +270,7 @@ export function AppRootSurfaces(props: {
           </OverlayBoundary>
         </Suspense>
       ) : null}
-      <OverlayBoundary boundaryId="overlay.star-nag" resetKey={activeView}>
-        <StarNagCard />
-      </OverlayBoundary>
-      <OverlayBoundary boundaryId="overlay.star-nag-toast" resetKey={activeView}>
-        <StarNagToastHost />
-      </OverlayBoundary>
-      <StarNagAgentValueMomentObserver />
+      {/* Test Bench: GitHub-star nags removed by owner request. */}
       {/* Why: mount at App root to render once per session; internal cohort gate limits it to pre-telemetry users — see telemetry-plan.md §First-launch experience. */}
       <OverlayBoundary
         boundaryId="overlay.telemetry-first-launch"
