@@ -2134,7 +2134,10 @@ export function connectPanePty(
       userAgent: navigator.userAgent,
       connectionId: getConnectionId(deps.worktreeId) ?? null,
       cwd: deps.cwd,
-      shellOverride: tab?.shellOverride,
+      shellOverride: resolveWindowsShellOverride(
+        tab?.shellOverride,
+        state.settings?.terminalWindowsShell
+      ),
       executionHostId: getExecutionHostIdForWorktree(state, deps.worktreeId)
     })
   }
@@ -2168,6 +2171,18 @@ export function connectPanePty(
     onVisibleForegroundSettled: (outcome) => {
       visibleForegroundSamplePending = false
       visibleForegroundSampleSettled = outcome !== 'inconclusive'
+      if (outcome !== 'inconclusive') {
+        return
+      }
+      const foreground = useAppStore.getState().paneForegroundAgentByPaneKey[cacheKey]
+      if (foreground?.routingConfirmationPending !== true) {
+        return
+      }
+      useAppStore.getState().setPaneForegroundAgent(cacheKey, {
+        agent: foreground.agent,
+        routingRevoked: true,
+        shellForeground: foreground.shellForeground
+      })
     }
   })
   // Why: one command-finished policy whether the signal arrives as bytes
@@ -2241,28 +2256,37 @@ export function connectPanePty(
   }
   requestKnownWindowsShiftEnterReconfirmation = () => {
     const foreground = useAppStore.getState().paneForegroundAgentByPaneKey[cacheKey]
-    // Why: daemon reattach/launch metadata is display-only until a live
-    // provider read confirms it. Submit/interrupt/title-exit evidence must
-    // revoke that launch-only hint too, otherwise Shift+Enter can route bytes
-    // to an agent that already exited before confirmation ever ran.
+    // Why: daemon reattach/launch metadata is display-only until a live provider
+    // read confirms it, so only proven trust may be revoked-and-retained here. A
+    // pending entry must never qualify: re-arming itself would let one old read
+    // authorize CSI-u forever on a shell that emits no OSC boundary to publish over.
     if (
       !foreground?.agent ||
+      foreground.routingTrusted !== true ||
       TUI_AGENT_CONFIG[foreground.agent].windowsShiftEnterEncoding !== 'csi-u'
     ) {
       return
     }
-    // Why: cmd.exe and Git Bash have no OSC command boundaries. Keep the icon
-    // as a hint, but revoke bytes until one current provider confirmation lands.
-    useAppStore.getState().setPaneForegroundAgent(cacheKey, {
+    const revokedEntry = {
       agent: foreground.agent,
       routingRevoked: true,
       shellForeground: false
-    })
+    }
+    useAppStore.getState().setPaneForegroundAgent(cacheKey, revokedEntry)
     visibleForegroundSamplePending = false
     visibleForegroundSampleSettled = false
     // Why: hook rows can suppress display-only sampling, but cannot restore
     // byte authority after this function explicitly revoked routing trust.
     sampleVisiblePaneForegroundAgent(true)
+    // Why: cmd.exe and Git Bash have no OSC command boundaries, so retain the prior
+    // CSI-u capability across the async read rather than let the gap send Esc+CR.
+    // Only while a read is genuinely in flight — nothing else ever clears the flag.
+    if (paneForegroundAgentTracker.hasReadInFlight()) {
+      useAppStore.getState().setPaneForegroundAgent(cacheKey, {
+        ...revokedEntry,
+        routingConfirmationPending: true
+      })
+    }
   }
   const commandLifecycle = createTerminalCommandLifecycle({
     onCommandStarted: () => {
