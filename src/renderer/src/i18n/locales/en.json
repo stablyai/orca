@@ -14572,6 +14572,15 @@
           "insertColumnRight": "Insert column right",
           "deleteRow": "Delete row",
           "deleteColumn": "Delete column"
+        },
+        "DocxViewer": {
+          "k1a3b5c7d9": "Loading {fileName}…",
+          "m4e7f2a1c8": "Empty document",
+          "p6b9d3e5f1": "Unable to parse this .docx file — it may be corrupt or encrypted."
+        },
+        "XlsxViewer": {
+          "l2c4d6f8a0": "Loading {fileName}…",
+          "q7c1e3f5b9": "Unable to parse this .xlsx file — it may be corrupt or encrypted."
         }
       },
       "diff": {

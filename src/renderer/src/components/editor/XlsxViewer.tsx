@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 // CVE-2023-30533 / CVE-2024-22363 in the 0.18.5 npm release, which npm-registry
 // `^0.18.5` cannot reach.
 import * as XLSX from 'xlsx'
+import { translate } from '@/i18n/i18n'
 import CsvViewer from './CsvViewer'
 import styles from './OfficePreview.module.css'
 
@@ -86,13 +87,22 @@ export function XlsxViewer({ filePath, fileName, content }: XlsxViewerProps): Re
   }, [filePath, content])
 
   if (status.kind === 'loading') {
-    return <div className={styles.officePreview}>正在加载 {fileName}…</div>
+    return (
+      <div className={styles.officePreview}>
+        {translate('auto.components.editor.XlsxViewer.l2c4d6f8a0', 'Loading {fileName}…', {
+          fileName
+        })}
+      </div>
+    )
   }
 
   if (status.kind === 'error') {
     return (
       <div className={styles.errorBox} role="alert">
-        无法解析此 .xlsx 文件, 可能已损坏或加密。
+        {translate(
+          'auto.components.editor.XlsxViewer.q7c1e3f5b9',
+          'Unable to parse this .xlsx file — it may be corrupt or encrypted.'
+        )}
       </div>
     )
   }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import * as mammoth from 'mammoth'
 import DOMPurify from 'dompurify'
+import { translate } from '@/i18n/i18n'
 import styles from './OfficePreview.module.css'
 
 export type DocxViewerProps = {
@@ -40,9 +41,13 @@ export function DocxViewer({ filePath, fileName, content }: DocxViewerProps): Re
         }
         setStatus({
           kind: 'ready',
-          html: DOMPurify.sanitize(result.value || '<p>文档为空</p>', {
-            USE_PROFILES: { html: true }
-          })
+          html: DOMPurify.sanitize(
+            result.value ||
+              `<p>${translate('auto.components.editor.DocxViewer.m4e7f2a1c8', 'Empty document')}</p>`,
+            {
+              USE_PROFILES: { html: true }
+            }
+          )
         })
       } catch {
         if (cancelled) {
@@ -57,13 +62,22 @@ export function DocxViewer({ filePath, fileName, content }: DocxViewerProps): Re
   }, [filePath, content])
 
   if (status.kind === 'loading') {
-    return <div className={styles.officePreview}>正在加载 {fileName}…</div>
+    return (
+      <div className={styles.officePreview}>
+        {translate('auto.components.editor.DocxViewer.k1a3b5c7d9', 'Loading {fileName}…', {
+          fileName
+        })}
+      </div>
+    )
   }
 
   if (status.kind === 'error') {
     return (
       <div className={styles.errorBox} role="alert">
-        无法解析此 .docx 文件, 可能已损坏或加密。
+        {translate(
+          'auto.components.editor.DocxViewer.p6b9d3e5f1',
+          'Unable to parse this .docx file — it may be corrupt or encrypted.'
+        )}
       </div>
     )
   }

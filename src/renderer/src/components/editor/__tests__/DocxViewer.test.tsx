@@ -44,7 +44,7 @@ describe('DocxViewer', () => {
       />
     )
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent(/无法解析/)
+      expect(screen.getByRole('alert')).toHaveTextContent(/Unable to parse/)
     })
   })
 
