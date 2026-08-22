@@ -39960,8 +39960,13 @@ function findAntigravityReadyPromptIndex(normalized: string): number | null {
       }
       if (
         promptIndex === null &&
-        trimmedEnd - trimmedStart === 1 &&
-        normalized.charCodeAt(trimmedStart) === 62
+        // Why: the idle composer line. Older CLI builds render a bare `>` line;
+        // 1.1.17 renders `> Accept-edits mode: … (shift+tab to cycle)` — accept
+        // any line whose first non-space char is `>` (the composer prompt) and
+        // whose remaining text carries no question/danger shape (#15838).
+        trimmedEnd > trimmedStart &&
+        normalized.charCodeAt(trimmedStart) === 62 &&
+        !isAntigravityComposerNonIdleLine(normalized, trimmedStart, trimmedEnd)
       ) {
         promptIndex = trimmedStart
       }
@@ -39970,6 +39975,19 @@ function findAntigravityReadyPromptIndex(normalized: string): number | null {
   }
 
   return modelIndex !== null && promptIndex !== null ? Math.max(modelIndex, promptIndex) : null
+}
+
+// Why (#15838): the composer line doubles as a mode banner in newer builds, but
+// an interactive question rendered below it (mode picker, confirmation) is NOT
+// an idle composer. Lines asking a question or offering shift+tab-style mode
+// choices keep waiting; the plain mode banner does not.
+function isAntigravityComposerNonIdleLine(
+  normalized: string,
+  start: number,
+  end: number
+): boolean {
+  const line = normalized.slice(start + 1, end)
+  return /\?\s*(for shortcuts|$)/.test(line) || line.includes('? for shortcuts')
 }
 
 function isTerminalWaitWhitespace(value: string, index: number): boolean {

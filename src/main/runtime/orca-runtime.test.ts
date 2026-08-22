@@ -1044,6 +1044,19 @@ function antigravityReadyScreen(model = 'Gemini 3.5 Flash (High)'): string {
   ].join('\n')
 }
 
+function antigravityComposerBannerReadyScreen(model = 'Gemini 3.7 Flash (High)'): string {
+  // Why (#15838): CLI 1.1.17 renders the idle composer as a mode banner line
+  // instead of a bare `>`, followed by the shortcuts hint.
+  return [
+    'Antigravity CLI 1.1.17',
+    'user@example.com (Antigravity Business)',
+    model,
+    '~/orca/workspaces/orca/agy-dispatch-issue',
+    '> Accept-edits mode: file edits auto-approved (shift+tab to cycle)',
+    '? for shortcuts'
+  ].join('\n')
+}
+
 function antigravityPromptBeforeModelReadyScreen(model = 'Gemini 3.5 Flash (High)'): string {
   return [
     'Antigravity CLI 1.0.3',
@@ -16398,6 +16411,49 @@ describe('OrcaRuntimeService', () => {
       ]
     })
     runtime.onPtyData('pty-1', antigravityReadyScreen(), Date.now())
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(
+      runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+    ).resolves.toMatchObject({
+      handle: terminal.handle,
+      condition: 'tui-idle',
+      status: 'running'
+    })
+  })
+
+  it('resolves tui-idle from the Antigravity 1.1.17 composer-banner prompt (#15838)', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.attachWindow(1)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-agy117' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Terminal',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-agy117',
+          paneTitle: null
+        }
+      ]
+    })
+    runtime.onPtyData('pty-agy117', antigravityComposerBannerReadyScreen(), Date.now())
     const [terminal] = (await runtime.listTerminals()).terminals
 
     await expect(
