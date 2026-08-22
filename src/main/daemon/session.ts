@@ -8,6 +8,7 @@ import {
 } from './session-termination-controller'
 import { nudgePowerShellPromptRepaint } from './session-powershell-prompt-repaint'
 import type { SubprocessHandle } from './session-subprocess-handle'
+import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID } from 'node:crypto'
@@ -121,6 +122,11 @@ export class Session {
 
   get pid(): number {
     return this.subprocess.pid
+  }
+
+  /** Terminate this session's pty job object. `unavailable` is not proof of death. */
+  terminateOwnedTree(): JobTerminationOutcome {
+    return this.subprocess.terminateOwnedTree()
   }
 
   write(data: string): void {
