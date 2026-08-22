@@ -267,7 +267,7 @@ describe('project keyboard cycling', () => {
 
   it('resolves the active project with host-qualified worktree selection', () => {
     const hostWorktrees = [
-      { id: 'shared', repoId: 'repo-a', hostId: 'local', isArchived: false },
+      { id: 'shared', repoId: 'repo-a', isArchived: false },
       { id: 'shared', repoId: 'repo-b', isArchived: false }
     ] as never[]
 

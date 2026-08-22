@@ -81,11 +81,8 @@ export function getActiveProjectKey(args: {
     (worktree) =>
       worktree.id === args.activeWorktreeId &&
       (!args.activeWorkspaceExecutionHostId ||
-        getWorktreeExecutionHostId(
-          worktree,
-          args.repoMap.get(worktree.repoId),
-          args.activeWorkspaceExecutionHostId
-        ) === args.activeWorkspaceExecutionHostId)
+        getWorktreeExecutionHostId(worktree, args.repoMap.get(worktree.repoId)) ===
+          args.activeWorkspaceExecutionHostId)
   )
   if (!activeWorktree) {
     return null

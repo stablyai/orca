@@ -4,7 +4,6 @@ import type { Virtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import {
-  getSettingsFocusedExecutionHostId,
   getWorktreeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
@@ -150,11 +149,7 @@ export function useWorktreeListKeyboardNavigation(args: {
         return
       }
 
-      const targetExecutionHostId = getWorktreeExecutionHostId(
-        target,
-        repoMap.get(target.repoId),
-        getSettingsFocusedExecutionHostId(state.settings)
-      )
+      const targetExecutionHostId = getWorktreeExecutionHostId(target, repoMap.get(target.repoId))
       activateAndRevealWorktree(target.id, { executionHostId: targetExecutionHostId })
       const rowIndex = findPreferredRenderRowIndexForWorktreeIdentity(
         renderRows,

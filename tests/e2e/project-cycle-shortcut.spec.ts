@@ -82,7 +82,10 @@ test.describe('Project cycle shortcuts', () => {
     await orcaPage.keyboard.press(`${primaryModifier}+Shift+ArrowRight`)
     await expect(targetRow).toHaveAttribute('aria-current', 'page')
 
-    await orcaPage.keyboard.press(`${primaryModifier}+Shift+ArrowLeft`)
+    await orcaPage.keyboard.press(`${primaryModifier}+Shift+ArrowRight`)
     await expect(sourceRow).toHaveAttribute('aria-current', 'page')
+
+    await orcaPage.keyboard.press(`${primaryModifier}+Shift+ArrowLeft`)
+    await expect(targetRow).toHaveAttribute('aria-current', 'page')
   })
 })
